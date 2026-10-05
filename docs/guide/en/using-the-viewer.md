@@ -183,11 +183,12 @@ while the city's drawing is prepared for the cut, and the city keeps
 moving meanwhile — buildings just outside the cut still cast their
 shadows over its edge); and *Bild speichern*.
 
-**Trees follow the scale**, as on a drawn plan: up to 1 : 5 000 every
-tree stands in the picture; zooming further out thins them until, from
-1 : 9 000 on, about a third of them stand, their crowns drawn wider so a
-wood still reads as a wood — at any scale, the whole city included.
-Zooming back in brings the same trees back. The bridges stand at every
+**Trees stand at every scale.** Close up every tree is in the picture;
+where the city is drawn coarser — zoomed far out, the whole city at
+once, or when the device has to save memory — a third of them stand, their
+crowns drawn wider so a wood still reads as a wood, each where its tree
+stood. The same happens in the distance on foot and in flight. The
+bridges stand at every
 scale, a road bridge with its footways, kerbs and carriageway, the stone
 ones in courses of dressed stone.
 

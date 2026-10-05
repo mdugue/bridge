@@ -1016,6 +1016,29 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   daylight ramp — until plan 020 on one shadow-map sample 2 m toward the sun,
   which a node material cannot reach: node lights keep their shadow map to
   themselves, so a crown behind a building now glows too).
+- **The coarse level's trees** (2026-10-05) — each terrain level carries
+  its own trees. The fine level draws every tree (the tiers above). The
+  coarse level, which the tile renderer shows wherever the fine one is
+  not loaded — in the distance and from the air, in a Modell picture past
+  2.5 m/px, at any scale on a phone whose memory governor coarsens the
+  stream, and while fine tiles load — draws a fixed third of them, chosen
+  by a hash of where each stands (`drawnCoarse`,
+  `lib/city/coarse-crowns.ts`): as tall, their crowns √3 wider
+  (`COARSE_TREE_WIDEN`) so a wood covers what the whole one did, in the
+  same colours (NDVI, the register's foliage) and seasons, on the scene's
+  crown material, the far crown's geometry one subdivision coarser and
+  without trunks (`coarse-crowns-layer.ts`). The build step runs the fine
+  level's own placement over each tile's tree files (the packed canopy as
+  the browser unpacks it, the scan crowns, the rows, the register and the
+  orchards, its veto, on the fine level's ground;
+  `lib/city/tree-placement.ts`, `lib/city/tree-inventory.ts`,
+  `scripts/coarse-crowns.ts`) and packs that third, 20 bytes a crown
+  (`crowns_<t>.crw.gz`, ≈ 136 000 crowns and 1.5 MB gzipped for
+  Dresden's fifteen tiles). The coarse level fetches it with its other
+  side files and builds it with its dressing, whatever the mode or scale,
+  so a tree stays where it stood when the level changes and no scale and
+  no device is left without trees. The cost of the switch: where the
+  levels meet, a wood goes from all its trees to a third of them, wider.
 - **Canopy motion** — per-frame in `buildCrownMaterial`, **main pass only** (the
   shadow pass draws the rigid `castShadowPositionNode` → no shadow-pass cost, no
   extra buffers):
@@ -2295,36 +2318,11 @@ removed, not tuned.
 - **Shadow study sheet** — the sun (`suncalc`) at 9, 12, 15, 18 Uhr on
   21.3., 21.6., 21.12. of the shown year, one capture each, as a 3 × 4
   sheet with the legend (`image-export.ts`, `lib/city/image-export.ts`).
-- **Trees by scale** — Modell generalizes the trees by selection, as a
-  plan does: every tree up to 1 : 5 000 (`MODEL_TREES_ALL`), fewer until
-  1 : 9 000 (`MODEL_TREES_FEW`), and from there a floor of them, 30 %
-  (`MODEL_TREES_FLOOR`), at any smaller scale — the share eased along the
-  scale's logarithm (`lib/city/model-view.ts` `treeShare`; in the dolly
-  zoom by its progress). The crown shader (`vegetation-layer.ts`
-  `crownKept`) keeps a tree while its rank — three's PCG hash of the
-  float bits of where it stands (`treeRank`, `lib/city/coarse-crowns.ts`,
-  the CPU twin) — is below the share, folds the others onto their origin
-  (no triangle, no shadow; trunks go with their crowns), and widens the
-  kept crowns sideways by 1/√share (`treeSpread`), so a thinned wood
-  covers what the whole one did. The rank is where the tree stands, not
-  its slot, so every level and the build rank a tree alike.
-  An earlier version thinned to none at 1 : 9 000 — discontinued: past
-  it a picture of the city showed no tree at all, the Großer Garten a
-  flat green.
-- **The trees on the coarse level** — the fine terrain, which carries the
-  trees, gives way at 2.5 m/px (≈ 1 : 9 450). The build step runs the fine
-  level's own placement over each tile's tree files (the packed canopy as
-  the browser unpacks it, the scan crowns, the rows, the register and the
-  orchards, its veto, on the fine level's ground; `lib/city/tree-placement.ts`,
-  `lib/city/tree-inventory.ts`) and keeps the crowns its far tier draws
-  — dense chunks thinned and widened as there — whose rank is below the
-  floor (`coarseCrowns`), packed 20 bytes a crown (`crowns_<t>.crw.gz`,
-  ≈ 88 000 crowns and 1 MB gzipped for Dresden's fifteen tiles). The
-  coarse level fetches and builds them only once Modell thins the trees
-  (`coarse-crowns-layer.ts`), with the far crown's geometry one step
-  coarser, the same colours (NDVI, the register's foliage), seasons and
-  scene-wide material: the trees stay where they stand when the level
-  changes, and an overview of the whole city still shows its trees.
+- **Trees at every scale** — Modell draws the trees of the terrain
+  level under the picture, as every mode does (✅ *The coarse level's
+  trees*, Vegetation): every tree where the fine level is loaded, a
+  third of them, wider, where the coarse one shows. No scale thins them
+  of its own (🗃️ *Modell's trees thinned by scale*).
 - **Bridges on both terrain levels** — the coarse level draws its tile's
   bridges as the fine one does (`buildRail` with the decks alone: deck,
   parapets, piers or arches, the measured steel; no rails), and they are
@@ -2471,6 +2469,7 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
+| **Modell's trees thinned by scale** (2026-10-04 → 2026-10-05: every tree to 1 : 5 000, fewer to 1 : 9 000, a floor of 30 % beyond, the kept crowns widened by 1/√share — `treeShare`, `treeSpread`, the crown shader's `crownKept` folding the others onto their origin; the coarse level's crowns, the floor's selection, fetched only once Modell thinned. The version before it thinned to none at 1 : 9 000) | Two rules for one picture: the scale set the share, the tile renderer the level, and the two disagree. The coarse level shows wherever the fine one is not loaded, not only past 2.5 m/px — at 1 : 3 000 on a phone whose memory governor coarsens the stream, or while fine tiles load — and there the picture showed no tree at all, since its crowns came only once Modell thinned (maintainer, 2026-10-05: trees at large and at small scales, none at 1 : 3 000). The version before showed no tree in an overview of the city. | Each terrain level carries its own trees, whatever the mode or scale (✅ *The coarse level's trees*): the fine level all, the coarse one a fixed third. A generalization by scale, if it comes back, has to follow the level the renderer shows, not run as a second rule beside it. |
 | **Pedestrian counts** (for the traffic data layers, 2026-10-01) | No open measured source for the site: the only pedestrian counter, hystreet.com's laser count on the Prager Straße, is commercial (access on request); the city's "Fußgängerquerung St. Petersburger Straße" is a *bicycle* counter. A density modelled from stops, shops and census cells would be a model drawn as if measured. | Revisit with an open counter network (Telraam sensors in the site, if any, through its API with a key). |
 | **Live tram positions** (GTFS-RT, the TLMS radio telegrams) | gtfs.de's realtime feed is one protobuf for all of Germany, too heavy for a browser to poll; TLMS (`wss://socket.tlm.solutions`) is a volunteer service whose coverage and uptime the viewer cannot vouch for. | The timetable runs instead (✅ *Trams by timetable*); delays could come from the VVO's departure monitor (`webapi.vvo-online.de/dm`, answers any origin) per stop — 📋. |
 | **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). Text now appears only on demand, in the inquiry card ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md)). |

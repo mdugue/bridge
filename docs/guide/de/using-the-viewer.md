@@ -191,12 +191,12 @@ für den Schnitt vorbereitet wird, und sie bewegt sich dabei weiter —
 Gebäude knapp außerhalb werfen ihren Schatten noch über seinen Rand); und
 *Bild speichern*.
 
-**Die Bäume folgen dem Maßstab**, wie auf einem gezeichneten Plan: Bis
-1 : 5 000 steht jeder Baum im Bild; zoomst du weiter hinaus, werden es
-weniger, bis ab 1 : 9 000 etwa ein Drittel von ihnen steht, die Kronen
-breiter gezeichnet, damit ein Wald ein Wald bleibt — in jedem Maßstab,
-auch über der ganzen Stadt. Zoomst du wieder hinein, kommen dieselben
-Bäume zurück. Die Brücken stehen in jedem Maßstab, eine Straßenbrücke mit
+**Die Bäume stehen in jedem Maßstab.** Nah heran steht jeder Baum im
+Bild; wo die Stadt gröber gezeichnet wird — weit hinausgezoomt, die
+ganze Stadt auf einmal, oder wenn das Gerät Speicher sparen muss — steht
+ein Drittel von ihnen, die Kronen breiter gezeichnet, damit ein Wald ein
+Wald bleibt, jeder dort, wo sein Baum stand. Dasselbe gilt in der Ferne
+zu Fuß und im Flug. Die Brücken stehen in jedem Maßstab, eine Straßenbrücke mit
 ihren Gehwegen, Bordsteinen und der Fahrbahn, die steinernen in Lagen aus
 behauenem Stein.
 

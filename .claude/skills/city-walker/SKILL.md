@@ -197,14 +197,14 @@ chip. Every tile change re-renders the shadow map. The layers:
   The planner styles *Strich* and *Schwarzplan* are rows of the style
   table and kinds of the paper swap (`paper-scene.ts`: `paper`, `line`,
   `figure`; the ground's `paperGroundOn` = 1, 2, 3).
-  Trees follow the scale (`treeShare`: all to 1 : 5 000, a floor of
-  30 % from 1 : 9 000, widened by `treeSpread`; the crown shader's
-  `crownKept` folds the rest onto their origin by `treeRank`, a hash of
-  where each tree stands) — the fine terrain that carries them leaves the
-  parallel picture at 2.5 m/px, so the coarse level draws the floor's
-  crowns the build baked (`crowns_<t>.crw.gz`, `coarse-crowns-layer.ts`,
-  fetched once Modell thins the trees); anything else on the fine level
-  vanishes there at once; a two-finger twist turns the ground with the fingers
+  Each terrain level carries its trees, in every mode: the fine one
+  all of them, the coarse one a fixed third (`drawnCoarse`, a hash of
+  where each stands), √3 wider, baked by the build from the fine level's
+  placement (`crowns_<t>.crw.gz`, `coarse-crowns-layer.ts`) — the coarse
+  level shows past 2.5 m/px and wherever the memory governor or a load
+  leaves the fine one out, at any scale, so never tie a layer's trees to
+  Modell's scale; anything else on the fine level vanishes there at
+  once. A two-finger twist turns the ground with the fingers
   (`twistedTurn`).
 - Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
   AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,

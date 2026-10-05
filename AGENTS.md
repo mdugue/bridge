@@ -139,8 +139,8 @@ config change.
     `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
     the street-tree cadastre's silhouettes, `crown-season.ts`, the
     crowns' autumn colour and bare winter stipple,
-    `coarse-crowns-layer.ts`, the crowns the coarse level draws once
-    Modell thins the trees, and `low-vegetation-layer.ts`, the OSM
+    `coarse-crowns-layer.ts`, the coarse terrain level's trees — a
+    third of them, wider —, and `low-vegetation-layer.ts`, the OSM
     hedges), `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
@@ -250,8 +250,8 @@ config change.
   the measured step), `fences.ts` (fence panels and gate gaps),
   `tree-inventory.ts` (the cadastre's archetypes and veto),
   `tree-placement.ts` (where the canopy and row trees stand — the layer's
-  and the build's one placement), `coarse-crowns.ts` (Modell's selection
-  of the trees: their rank, the floor's crowns per tile, their file),
+  and the build's one placement), `coarse-crowns.ts` (the coarse
+  level's third of the trees, per tile, and their file),
   `tree-season.ts`
   (per-genus leaf-out, autumn and leaf fall), `building-tint.ts` (the
   per-building clay tint, storey height, roof palette), `small-buildings.ts`

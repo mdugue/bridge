@@ -137,6 +137,7 @@ is the codebook.
 | Crown colour | NDVI 5×5 footprint max, recentred on the median; where the DOP has no near-IR (Munich) the GLI from its RGB, mapped onto the NDVI's scale | DOP | `crownColor` (+ hash sage fallback) |
 | Crown motion | wind sway (vertex), leaf flutter, sway-coupled brightness | — | (*Blattflimmern*, *Windhelligkeit*) |
 | Crown detail | three tiers per 250 m chunk, decided over the whole site each frame: rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `updateVegetationLod` (*Multi-Tuft-Kronen (nah)*) |
+| Coarse-level trees | a fixed third of the fine level's trees (a hash of where each stands), as tall, crowns √3 wider, in their colours and season, no trunks — wherever the tile renderer shows the coarse terrain: far off, from the air, in Modell past 2.5 m/px or wherever a coarsened stream or a load leaves the fine level out, at any scale; the fine level draws every tree | where each tree stands (`drawnCoarse`) | `coarse-crowns-layer.ts`, `lib/city/coarse-crowns.ts`, `scripts/coarse-crowns.ts`, `crowns_<t>.crw.gz` |
 | Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; trunk diameter `t` → trunk girth (fitted to the drawn trunk's radius at 1.3 m, flared foot included, × 1.3; else from the height); drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes; OSM `natural=tree` (`s: "osm"`) fills in where the register has no tree within 3 m | Stadtbaumkataster Dresden, OSM | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Crown season | scene date (calendar day) + genus `gn` (± 6 days per tree) → `{ leaf, autumn }` (`lib/city/tree-season.ts`); `autumn` mixes the per-instance colour toward the genus hue, `aBare` = 1 − leaf discards the crown down to a 25 % grey-brown twig stipple (a hashed alpha test in crown space, ~1.25 px cells at every distance) and thins the shadow through the same discard in a custom depth material; evergreens constant, canopy/row trees a generic curve; written on a day change, never per frame | Stadtbaumkataster (genus), OSM | `crown-season.ts`, `vegetation-layer.ts` `buildCrownMaterial(…, bare)` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
@@ -198,7 +199,6 @@ is the codebook.
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `post-stack.ts` (*Papierkorn*) |
 | Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier, Strich, Schwarzplan — one post pass over the finished frame (below); Papier and Strich also swap every surface for one white paper material for the frame (Papier's ground keeps its paint and water as greys, Strich's turns plan-coloured), the Schwarzplan draws the buildings unlit black and hides everything but them and the white ground; remembered per browser | sun altitude (noir's dusk exposure) | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts`, `style-memory.ts` |
 | Modell's picture | a parallel camera (`model-camera.ts`, sheared for the Militärperspektive) at a scale (metres per CSS px ↔ 1 : n at 96 dpi); the post passes read it through the view lens; DoF, grading and vignette off, the distance fog open, the sky dome hidden, the background the style's paper; the shadow frustum fits the picture's footprint | the view (pivot, turn, tilt, scale) | `lib/city/model-view.ts`, `model-rig.ts`, `view-lens.ts`, ADR 0044 |
-| Modell's trees | every tree up to 1 : 5 000, fewer until 1 : 9 000, then 30 % of them at any smaller scale, their crowns widened by 1/√share so a wood stays closed; a tree not kept is folded onto its origin in the vertex stage (no triangle, no shadow), its trunk with it; past the fine level's 2.5 m/px the coarse level draws the same crowns | the view's scale; the hash of where each tree stands (`treeRank`) | `lib/city/model-view.ts` `treeShare` `treeSpread`, `vegetation-layer.ts` `crownKept`, `coarse-crowns-layer.ts`, `lib/city/coarse-crowns.ts`, `crowns_<t>.crw.gz` |
 | Schnitt | the near plane through the pivot; the clay drawn two-sided with its back faces near-black (the poché, `clayPoche`), the ground's profile along the cut as a poché strip from the terrain heights | the terrain heights | `visual-style.ts` `setClaySection`, `model-cuts.ts`, `lib/city/section.ts` |
 | Ausschnitt | the city's group in a `ClippingGroup` with the rectangle's four planes, shown once its programs are compiled and held off the frames (`holdCut`); shadows not clipped; a plinth of four poché strips from the ground down to a common base | the terrain heights | `model-cuts.ts`, `lib/city/section.ts`, `post-stack.ts` |
 | Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: comic and Papier sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; faded by the scene's fog factor | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
@@ -413,22 +413,17 @@ Nothing is built for Modell.
   half-octave steps (110–1600 m; 880 m on phones); vegetation tiers, lamp
   lights, the map overlay and the soundscape read an eye over the pivot at
   the equivalent distance.
-- **Trees by scale.** The picture loads one terrain level across the
-  sheet (the tile renderer's error for a parallel camera is the
+- **Trees at every scale.** The picture loads one terrain level across
+  the sheet (the tile renderer's error for a parallel camera is the
   geometric error over the pixel size): fine below 2.5 m/px, coarse
-  above — and the trees ride on the fine level. Modell thins them as a
-  plan generalizes its trees, from every one at 1 : 5 000 to a floor of
-  30 % from 1 : 9 000 on (`treeShare`), the kept crowns widened by
-  1/√share (`treeSpread`). One uniform on the crown material drives
-  every crown set; a tree not kept collapses to its instance origin in
-  the position node (its trunk too), so it costs no fragment and no
-  shadow, and the material keeps its early depth test. Which trees stay
-  is a hash of where each stands (`treeRank`), and the build step bakes
-  exactly the floor's crowns of the fine level's far tier per tile
-  (`crowns_<t>.crw.gz`): the coarse level fetches them once Modell thins
-  the trees and draws them as the fine level did, so the trees stay put
-  when the level changes. The bridges ride on both levels (the coarse
-  one draws its decks too), so no river crossing goes with the level.
+  above — and below it too wherever the memory governor has raised the
+  error target (×4: from ≈ 1 : 2 400) or the fine tiles are still on
+  their way. Each level carries its own trees: the fine one every tree,
+  the coarse one a fixed third of them, √3 wider, baked by the build
+  from the same placement (`crowns_<t>.crw.gz`). So whichever level the
+  renderer shows has its trees, and Modell has no tree rule of its own.
+  The bridges ride on both levels as well (the coarse one draws its
+  decks too), so no river crossing goes with the level.
 - **The Ausschnitt compiles ahead.** A `ClippingGroup` changes the build
   of every drawable under it, and three keeps one render object per
   drawable for both sides: switching it rebuilds the whole city's
@@ -491,6 +486,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | ≈ 130–200 k |
 | canopy points (fine level) | 0.6–9.5 MB raw (forest tiles top) | up to 81 k trees: ≈ 9 MB of instance data once built (trunks, mid and rich crowns share one matrix buffer) |
 | cadastre trees, scan trees, hedges (fine level) | 0.4–0.8 / 0.65 (spawn only) / ≤ 0.03 MB raw | — |
+| coarse crowns (coarse level) | 0.04–0.29 MB (0.07–0.56 MB raw) | 3 700–27 900 crowns, 20 tris each: ≈ 90 B of instance data a crown once built (matrix, tint, season) |
 
 Before the tileset a tile was ≈1.0 MB of buildings plus a 1.1 MB
 heightfield; quantised meshes cost more on the wire than a height blob,
