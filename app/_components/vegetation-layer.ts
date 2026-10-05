@@ -8,6 +8,7 @@ import {
   type Material,
   Matrix4,
   MeshStandardNodeMaterial,
+  type Node,
   Object3D,
   Quaternion,
   type UniformNode,
@@ -21,8 +22,8 @@ import {
   float,
   floor,
   fract,
+  floatBitsToUint,
   hash as hashNode,
-  instanceIndex,
   length,
   materialColor,
   max,
@@ -36,6 +37,8 @@ import {
   select,
   sin,
   smoothstep,
+  sqrt,
+  uint,
   uniform,
   varying,
   vec2,
@@ -44,14 +47,14 @@ import {
 } from "three/tsl";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import {
   LOOK_DEFAULTS,
   type LookValues,
   type VegetationLookKey,
 } from "@/lib/city/look-controls";
+import { MODEL_TREES_FLOOR } from "@/lib/city/model-view";
 import { decodeGreyPng } from "@/lib/city/png-raster";
-import { samplePolyline } from "@/lib/city/polyline";
 import {
   maxWindowSampler,
   type RasterSampler,
@@ -63,6 +66,15 @@ import {
   TRUNK_TOP_R,
   trunkFlare,
 } from "@/lib/city/tree-inventory";
+import {
+  bucketByCell,
+  canopyPlacements,
+  cellKey,
+  hash,
+  type Placement,
+  rowPlacements,
+  type TreeVeto,
+} from "@/lib/city/tree-placement";
 import { seasonJitter } from "@/lib/city/tree-season";
 import {
   CROWN_BASE_COLOR,
@@ -77,6 +89,7 @@ import {
 import {
   type ChunkLodState,
   type CrownTier,
+  FAR_THIN_WIDEN,
   keepInFarTier,
   planCrownTiers,
   RICH_IN_M,
@@ -92,12 +105,7 @@ import {
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
-/**
- * Veto on a row or canopy tree at EPSG (x, y) with its measured height `h`
- * (canopy points only): false drops it because a surveyed inventory tree
- * already stands there (tree-inventory-layer.ts).
- */
-export type TreeVeto = (x: number, y: number, h?: number) => boolean;
+export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
 
 /**
  * A tree placed by precomputed transforms rather than a uniform scale — the
@@ -157,8 +165,6 @@ export interface VegetationContext extends GroundContext {
  */
 export const LOD_NEAR_IN_M = RICH_IN_M;
 export const LOD_NEAR_OUT_M = RICH_OUT_M;
-/** Far-tier crowns of a thinned (dense) chunk are drawn this much wider. */
-const FAR_THIN_WIDEN = 1.35;
 
 /**
  * Runtime handle for a loaded vegetation group: a per-frame LOD swap plus live
@@ -189,6 +195,12 @@ export interface VegetationControl {
   group: Group;
   /** whether the look allows the rich crown (the multi-tuft toggle) */
   multiTuft: () => boolean;
+  /** frees what the control holds beyond its group (a load in flight);
+   *  the group itself goes with the dressing's parts */
+  dispose?: () => void;
+  /** geometry bytes it built after its dressing was weighed (a late
+   *  load), for the tile cache (tile-stream.ts calculateBytesUsed) */
+  lateBytes?: () => number;
   /** advance the wind-sway animation (call per frame with elapsed seconds) */
   setTime: (seconds: number) => void;
   /** the share of the trees drawn (Modell's selection; 1 = all) */
@@ -313,104 +325,10 @@ export function swapCrownLod(
   return changed;
 }
 
-const TREE_SPACING = 9; // metres between trees along a row
-const HEDGE_SPACING = 1.1; // metres between hedge segments
-/**
- * Edge length (m) of a vegetation chunk. Each chunk is its own Instances set
- * with a tight bounding sphere, so three frustum-culls whole chunks that are
- * behind or beside the camera out of BOTH the main and the shadow pass —
- * instead of the old all-or-nothing "one mesh per tile". Trades a few hundred
- * (mostly-culled) draw calls for a large drop in processed triangles.
- */
-export const CHUNK_SIZE = 250;
 export const TRUNK_H = 2.4;
 const CROWN_R = 2.1;
 const HEDGE_H = 1.3;
 const HEDGE_W = 0.9;
-/** Approx visual height of an unscaled tree; canopy scale = h / this. */
-const BASE_TREE_H = 5.8;
-
-/** Deterministic [0,1) jitter so the layer rebuilds identically. */
-export function hash(i: number): number {
-  const s = Math.sin(i * 12.9898) * 43_758.5453;
-  return s - Math.floor(s);
-}
-
-export interface Placement {
-  /** DOP NDVI 0..1 at this point (lush↔dry crown colour); undefined = no raster */
-  ndvi?: number;
-  rot: number;
-  s: number;
-  x: number;
-  y: number;
-  z: number;
-}
-
-/** Resamples every line and drops each point onto the terrain (EPSG -> world). */
-function collectPlacements(
-  features: VegRowFeature[],
-  ctx: VegetationContext,
-  ndviAt?: RasterSampler,
-  keepTree?: TreeVeto
-): { hedges: Placement[]; trees: Placement[] } {
-  const { offset } = ctx;
-  const trees: Placement[] = [];
-  const hedges: Placement[] = [];
-  for (const f of features) {
-    if (f.geometry?.type !== "LineString") {
-      continue;
-    }
-    const isHedge = f.properties?.kind === "hedge";
-    const pts = samplePolyline(
-      f.geometry.coordinates,
-      isHedge ? HEDGE_SPACING : TREE_SPACING
-    );
-    for (let i = 0; i < pts.length; i++) {
-      const [ex, ey] = pts[i];
-      if (!isHedge && keepTree && !keepTree(ex, ey)) {
-        continue; // an inventory tree stands here
-      }
-      const ground = ctx.heightAt(ex, ey);
-      if (ground === null) {
-        continue; // off-tile or NoData
-      }
-      const seed = ex * 0.13 + ey * 0.07 + i;
-      const w = epsgToWorld(ex, ey, offset);
-      const place: Placement = {
-        x: w.x,
-        y: ground,
-        z: w.z,
-        rot: isHedge ? hash(seed) * 0.3 : hash(seed * 1.7) * Math.PI,
-        s: isHedge ? 1 : 0.8 + hash(seed) * 0.6,
-        ndvi: ndviAt?.(ex, ey),
-      };
-      (isHedge ? hedges : trees).push(place);
-    }
-  }
-  return { trees, hedges };
-}
-
-/** The CHUNK_SIZE cell a Y-up world position falls in. */
-function cellKey(x: number, z: number): string {
-  return `${Math.floor(x / CHUNK_SIZE)},${Math.floor(z / CHUNK_SIZE)}`;
-}
-
-/** Groups Y-up items into CHUNK_SIZE cells so each becomes its own mesh. */
-export function bucketByCell<T extends { x: number; z: number }>(
-  items: T[]
-): T[][] {
-  const cells = new Map<string, T[]>();
-  for (const p of items) {
-    const key = cellKey(p.x, p.z);
-    const cell = cells.get(key);
-    if (cell) {
-      cell.push(p);
-    } else {
-      cells.set(key, [p]);
-    }
-  }
-  return [...cells.values()];
-}
 
 /** One chunk's trees: the uniform-scale placements plus the precomputed ones. */
 interface TreeCell {
@@ -795,19 +713,44 @@ function crownLight(
   };
 }
 
+/** A float's bits as a uint. A cast, not a conversion: the bitcast node's
+ *  typings lack the node operators it has. */
+const bitsOf = (v: F): Node<"uint"> =>
+  floatBitsToUint(v) as unknown as Node<"uint">;
+
 /**
- * Whether the drawn crown is among Modell's selection (lib/city/model-view.ts
- * `treeShare`): 1 while its rank is below the share, else 0 — and the
- * material folds a 0 crown onto its own origin, a point that draws no
- * triangle and casts no shadow. The rank is a stable hash of the instance,
- * raised to the crown's size, so the small crowns go first and the same
- * ones come back as the scale grows again. A share of 1 keeps every crown
- * (the rank is below 1): off Modell nothing changes.
+ * The drawn tree's rank among Modell's selection (lib/city/coarse-crowns.ts
+ * `treeRank`, its CPU twin): three's PCG hash of the float bits of where
+ * the instance stands (its matrix's translation, x and z) — not of its slot,
+ * so a tree is ranked alike on the fine level, the coarse level and in the
+ * build step that chooses the coarse level's crowns.
  */
-function crownKept(share: Live): F {
-  const size = clamp(length(instanceColumn(0).xyz), 0.5, 3);
-  const rank = pow(hashNode(instanceIndex), size);
-  return select(rank.lessThan(share), float(1), float(0));
+function treeRankNode(): F {
+  const at = instanceColumn(3);
+  return hashNode(bitsOf(at.x).bitXor(bitsOf(at.z).mul(uint(0x9e_37_79_b1))));
+}
+
+/**
+ * Whether the drawn tree is among Modell's selection (lib/city/model-view.ts
+ * `treeShare`): 1 while its rank is below the share, else 0 — and the
+ * material folds a 0 crown (or trunk) onto its own origin, a point that
+ * draws no triangle and casts no shadow. The same ones come back as the
+ * scale grows again. A share of 1 keeps every tree (the rank is below 1):
+ * off Modell nothing changes.
+ */
+function treeKept(share: Live): F {
+  return select(treeRankNode().lessThan(share), float(1), float(0));
+}
+
+/**
+ * A kept crown in its own space: folded away when it is not kept, and
+ * widened sideways by the share lost (lib/city/model-view.ts `treeSpread`,
+ * the same 1/√share), so the crowns Modell keeps cover the ground all of
+ * them did — a thinned wood stays a closed wood.
+ */
+function crownKept(local: V3, share: Live): V3 {
+  const spread = float(1).div(sqrt(clamp(share, MODEL_TREES_FLOOR, 1)));
+  return local.mul(vec3(spread, 1, spread)).mul(treeKept(share));
 }
 
 /**
@@ -834,9 +777,10 @@ export function buildCrownMaterial(
   m.name = bare ? "crown-bare" : "crown-leafy";
   m.userData.crownUniforms = u;
   const sway = crownSway(u.time);
-  const kept = crownKept(u.treeShare);
-  m.positionNode = instancePosition(sway.local.mul(kept));
-  m.castShadowPositionNode = instancePosition(positionLocal.mul(kept));
+  m.positionNode = instancePosition(crownKept(sway.local, u.treeShare));
+  m.castShadowPositionNode = instancePosition(
+    crownKept(positionLocal, u.treeShare)
+  );
   const crownScale = varying(length(instanceColumn(0).xyz));
   const gust = varying(sway.gust);
   const tinted = materialColor.mul(instanceTint());
@@ -907,13 +851,17 @@ export function buildTrunkGeo(): BufferGeometry {
 /**
  * Trunk material with a gentle vertical value gradient (darker rooted
  * base), from the geometry's own height (before the instance scale).
- * Scene-wide: it carries nothing of a tile.
+ * Scene-wide: it carries nothing of a tile. A trunk goes with its crown
+ * when Modell thins the trees (`treeKept`: the same rank, from the same
+ * place).
  */
-export function buildTrunkMaterial(): MeshStandardNodeMaterial {
+export function buildTrunkMaterial(
+  u: Pick<CrownUniforms, "treeShare">
+): MeshStandardNodeMaterial {
   return sceneMaterial("vegetation-trunk", () => {
     const m = new MeshStandardNodeMaterial({ color: 0x8a_7c_68, roughness: 1 });
     m.name = "trunk";
-    m.positionNode = instancePosition();
+    m.positionNode = instancePosition(positionLocal.mul(treeKept(u.treeShare)));
     const tg = clamp(varying(positionGeometry.y).div(TRUNK_H), 0, 1);
     m.colorNode = materialColor.mul(mix(0.74, 1.05, smoothstep(0, 0.6, tg)));
     return m;
@@ -1137,7 +1085,7 @@ export function buildCrownWarmup(): CrownWarmup {
 function buildTrees(
   trees: Placement[],
   extras: TreeInstance[],
-  crownMats: CrownMaterials
+  crownMats: SceneCrowns
 ): {
   chunks: VegetationChunk[];
   meshes: Instances[];
@@ -1152,7 +1100,7 @@ function buildTrees(
     rich: buildCrownGeoRich(),
     trunk: buildTrunkGeo(),
   };
-  const trunkMat = buildTrunkMaterial();
+  const trunkMat = buildTrunkMaterial(crownMats.uniforms);
 
   const meshes: Instances[] = [];
   const chunks: VegetationChunk[] = [];
@@ -1224,47 +1172,6 @@ export async function loadNdviSampler(
   }
 }
 
-/** Canopy points (DOM1-derived) → height-scaled tree placements. */
-function collectCanopy(
-  features: CanopyFeature[],
-  ctx: VegetationContext,
-  ndviAt?: RasterSampler,
-  keepTree?: TreeVeto
-): Placement[] {
-  const { offset } = ctx;
-  const out: Placement[] = [];
-  for (const f of features) {
-    if (f.geometry?.type !== "Point") {
-      continue;
-    }
-    const [ex, ey] = f.geometry.coordinates;
-    if (keepTree && !keepTree(ex, ey, f.properties?.h)) {
-      continue; // an inventory tree stands here
-    }
-    const ground = ctx.heightAt(ex, ey);
-    if (ground === null) {
-      continue;
-    }
-    // A point missing a numeric `h` (only the TS type, not the JSON, promises
-    // one) would make scale NaN; Math.max/min don't clamp NaN, so the NaN
-    // matrix poisons the chunk's bounding sphere and the whole cell culls.
-    const rawH = f.properties?.h ?? Number.NaN;
-    const h = Number.isFinite(rawH) ? rawH : BASE_TREE_H;
-    const seed = ex * 0.13 + ey * 0.07;
-    const w = epsgToWorld(ex, ey, offset);
-    out.push({
-      x: w.x,
-      y: ground,
-      z: w.z,
-      rot: hash(seed * 1.7) * Math.PI,
-      // Scale the whole tree to the measured canopy height (± a touch).
-      s: Math.min(Math.max(h / BASE_TREE_H, 0.5), 7) * (0.9 + hash(seed) * 0.2),
-      ndvi: ndviAt?.(ex, ey),
-    });
-  }
-  return out;
-}
-
 /**
  * Builds stylized vegetation from the ATKIS veg04 rows GeoJSON (hedges + tree
  * rows) and, when given, the DOM1-derived canopy GeoJSON (area trees scaled to
@@ -1300,13 +1207,8 @@ export function buildVegetation(
   let seasons: SeasonalCrowns[] = [];
 
   const { ndviAt, keepTree } = features;
-  const { trees, hedges } = collectPlacements(
-    features.rows,
-    ctx,
-    ndviAt,
-    keepTree
-  );
-  trees.push(...collectCanopy(features.canopy, ctx, ndviAt, keepTree));
+  const { trees, hedges } = rowPlacements(features.rows, ctx, ndviAt, keepTree);
+  trees.push(...canopyPlacements(features.canopy, ctx, ndviAt, keepTree));
   const extras = features.extraTrees ?? [];
   if (trees.length + extras.length > 0) {
     const built = buildTrees(trees, extras, crownMats);

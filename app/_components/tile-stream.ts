@@ -18,7 +18,6 @@ import type {
   AreaFeature,
   BridgeFeature,
   CanopyExtraFeature,
-  CanopyFeature,
   CultivatedFeature,
   FurnitureFeature,
   LampFeature,
@@ -34,9 +33,10 @@ import type {
 import { orchardTrees, vineRows } from "@/lib/city/cultivated";
 import type { LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
-import { onRelief } from "@/lib/city/monuments";
 import { pointFeatures, unpackPoints } from "@/lib/city/point-pack";
 import { type SportTable, sportFixtures } from "@/lib/city/sport";
+import { offMonuments } from "@/lib/city/tree-placement";
+import { unpackCrowns } from "@/lib/city/coarse-crowns";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   type CityExtras,
@@ -49,6 +49,7 @@ import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
 import { askSets, type AskSet } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { type CityLayer, dressCity } from "./city-layer";
+import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
 import {
@@ -314,6 +315,7 @@ export function showDataLayers(
 }
 
 function disposeDressing(d: TileDressing): void {
+  d.vegetation?.dispose?.();
   d.lamps?.dispose();
   d.monuments?.dispose();
   d.sport?.dispose();
@@ -321,24 +323,6 @@ function disposeDressing(d: TileDressing): void {
     part.removeFromParent();
     disposeObject3D(part);
   }
-}
-
-/** The canopy without the "trees" the DOM1 bake planted on a measured
- *  monument (lib/city/monuments.ts `onRelief`). */
-function offMonuments(
-  canopy: CanopyFeature[],
-  monuments: MonumentFeature[]
-): CanopyFeature[] {
-  const reliefs = monuments.flatMap((m) =>
-    m.properties?.relief ? [m.properties.relief] : []
-  );
-  if (reliefs.length === 0) {
-    return canopy;
-  }
-  return canopy.filter((f) => {
-    const [x, y] = f.geometry.coordinates;
-    return !onRelief(reliefs, x, y);
-  });
 }
 
 /** The goals, posts and nets of the grounds this tile owns (a ground on a
@@ -455,10 +439,12 @@ const nextTask = () =>
  * level's reach does — the counted traffic, built coarser (traffic-layer.ts
  * `TrafficDetail`) on the coarse ground it is drawn over, so the flows
  * reach every tile in view and not just the ones the fine level has
- * loaded; and the bridges (decks, piers, the measured steel, no rails):
- * the LoD2 leaves them out of the buildings (city-mesh.ts), so without
- * them every river crossing vanished past the fine level's reach — in the
- * air beyond ≈1.2 km, and from 2.5 m/px on in a whole Modell picture.
+ * loaded; the bridges (decks, piers, the measured steel, no rails): the
+ * LoD2 leaves them out of the buildings (city-mesh.ts), so without them
+ * every river crossing vanished past the fine level's reach — in the air
+ * beyond ≈1.2 km, and from 2.5 m/px on in a whole Modell picture; and the
+ * crowns a small-scale Modell picture keeps (coarse-crowns-layer.ts),
+ * fetched only once Modell thins the trees.
  */
 async function buildCoarseDressing(
   terrain: TerrainLayer,
@@ -515,11 +501,32 @@ async function buildCoarseDressing(
   const asks = [flows, decks].filter(
     (a): a is AskSet<FeatureInquiry> => a !== undefined && a !== null
   );
+  const crownsFile = files.crowns;
+  const vegetation = crownsFile
+    ? buildCoarseCrowns(
+        async (crownSignal) => {
+          const buffer = await fetchOptionalBinary(
+            url(crownsFile),
+            crownSignal
+          );
+          return (buffer && unpackCrowns(buffer)) ?? [];
+        },
+        {
+          compile: ctx.compile,
+          heightAt: terrain.heightAt,
+          offset,
+          onChange: ctx.onChange,
+          season: ctx.season,
+          sunDirection: ctx.sunDirection,
+        }
+      )
+    : undefined;
   return {
     asks: asks.length > 0 ? asks : undefined,
     rail: rail && rail.children.length > 0 ? rail : undefined,
     tile,
     traffic: bands,
+    vegetation,
   };
 }
 
@@ -848,7 +855,10 @@ export class DressingPlugin {
   calculateBytesUsed(_tile: object, scene: Object3D | null): number {
     const dressed = scene ? this.dressed.get(scene) : undefined;
     const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
-    return rasters + (dressed?.dressingBytes ?? 0);
+    // what a dressing loads late (Modell's coarse crowns) counts from the
+    // next recalculation (every dressing that lands asks for one)
+    const late = dressed?.dressing?.vegetation?.lateBytes?.() ?? 0;
+    return rasters + (dressed?.dressingBytes ?? 0) + late;
   }
 
   /** `scene`'s terrain takes up (or lets go of) its rasters; the other

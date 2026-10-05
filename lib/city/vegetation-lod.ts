@@ -76,6 +76,8 @@ export function planCrownTiers(chunks: readonly ChunkLodState[]): CrownTier[] {
 
 /** Chunks at least this dense (trees per chunk) are thinned in the far tier. */
 export const FAR_THIN_MIN_TREES = 400;
+/** Far-tier crowns of a thinned (dense) chunk are drawn this much wider. */
+export const FAR_THIN_WIDEN = 1.35;
 
 /**
  * Whether tree `i` of a chunk stays in the far tier: all of a sparse chunk,

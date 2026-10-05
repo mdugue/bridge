@@ -10,24 +10,20 @@ import {
   Vector3,
 } from "three/webgpu";
 import type { TreeFeature } from "@/lib/city/features";
-import { epsgToWorld } from "@/lib/city/ground-clamp";
 import {
   LOOK_DEFAULTS,
   type VegetationLookKey,
 } from "@/lib/city/look-controls";
 import type { Live } from "./shader-chunks";
 import {
-  ARCHETYPE_SHAPE,
-  archetypeOf,
   CROWN_SHAPES,
   type CrownShape,
-  footprintIndex,
-  footprintRadius,
+  inventoryCovers,
+  type InventoryTree,
+  inventoryTrees,
   type TreeExtents,
-  treeExtents,
   trunkGirth,
 } from "@/lib/city/tree-inventory";
-import { seasonJitter } from "@/lib/city/tree-season";
 import {
   type CrownMaterials,
   type CrownSeasonKey,
@@ -284,60 +280,9 @@ function buildShapeGeos(): ShapeGeos {
   return out;
 }
 
-/** One inventory tree in the Y-up scene frame. */
-interface InventoryTree {
-  colour: number;
-  /** measured trunk diameter at breast height (cm) */
-  dbh?: number;
-  ext: TreeExtents;
-  ground: number;
-  leaf: "d" | "e";
-  ndvi?: number;
-  rot: number;
-  /** genus, leaf type and jitter: how the crown follows the year */
-  season: CrownSeasonKey;
-  shape: CrownShape;
-  x: number;
-  z: number;
-}
-
-function collectTrees(
-  features: TreeFeature[],
-  ctx: VegetationContext,
-  ndviAt?: RasterSampler
-): InventoryTree[] {
-  const out: InventoryTree[] = [];
-  for (const f of features) {
-    if (f.geometry?.type !== "Point" || !f.properties) {
-      continue;
-    }
-    const [ex, ey] = f.geometry.coordinates;
-    const ground = ctx.heightAt(ex, ey);
-    if (ground === null) {
-      continue;
-    }
-    const p = f.properties;
-    const archetype = archetypeOf(p.a);
-    const w = epsgToWorld(ex, ey, ctx.offset);
-    out.push({
-      x: w.x,
-      z: w.z,
-      ground,
-      rot: hash(ex * 0.13 + ey * 0.07) * Math.PI * 2,
-      ext: treeExtents(p.h, p.d, archetype, p.g === 1),
-      shape: ARCHETYPE_SHAPE[archetype],
-      leaf: p.l === "e" ? "e" : "d",
-      season: {
-        genus: p.gn ?? 0,
-        evergreen: p.l === "e",
-        jitter: seasonJitter(hash(ex * 0.29 + ey * 0.53 + 3.7)),
-      },
-      colour: p.c ?? 0,
-      dbh: p.t,
-      ndvi: ndviAt?.(ex, ey),
-    });
-  }
-  return out;
+/** How a register tree's crown follows the year (its genus and leaf). */
+function seasonKeyOf(t: InventoryTree): CrownSeasonKey {
+  return { genus: t.genus, evergreen: t.leaf === "e", jitter: t.jitter };
 }
 
 const Y_AXIS = new Vector3(0, 1, 0);
@@ -366,8 +311,13 @@ function trunkMatrix(t: InventoryTree): Matrix4 {
   );
 }
 
+/** Where a crown stands and how far it reaches. */
+type CrownPlace = Pick<InventoryTree, "ground" | "rot" | "x" | "z"> & {
+  ext: Pick<TreeExtents, "crownBase" | "crownTop" | "crownWidth">;
+};
+
 /** The crown's local box fitted to the tree's crown (see writeCrowns). */
-function crownMatrix(t: InventoryTree, fit: FittedGeo): Matrix4 {
+function crownMatrix(t: CrownPlace, fit: Omit<FittedGeo, "geo">): Matrix4 {
   const sy = (t.ext.crownTop - t.ext.crownBase) / fit.height;
   const sxz = t.ext.crownWidth / fit.width;
   return new Matrix4().compose(
@@ -375,6 +325,23 @@ function crownMatrix(t: InventoryTree, fit: FittedGeo): Matrix4 {
     new Quaternion().setFromAxisAngle(Y_AXIS, t.rot),
     new Vector3(sxz, sy, sxz)
   );
+}
+
+let broadFit: Omit<FittedGeo, "geo"> | null = null;
+
+/**
+ * A register tree's broadleaf crown as the canopy's chunks place it (its
+ * cheap matrix, `canopyInstances`): what the coarse level draws for a
+ * register tree (coarse-crowns-layer.ts), whatever its silhouette.
+ */
+export function registerCrownMatrix(t: CrownPlace): Matrix4 {
+  if (!broadFit) {
+    const geo = buildCrownGeo();
+    const { height, minY, width } = fitted(geo);
+    geo.dispose();
+    broadFit = { height, minY, width };
+  }
+  return crownMatrix(t, broadFit);
 }
 
 /**
@@ -395,7 +362,7 @@ function canopyInstances(
         cheap: crownMatrix(t, broad.cheap),
         rich: crownMatrix(t, broad.rich),
         colour,
-        season: t.season,
+        season: seasonKeyOf(t),
       };
     }
     return out;
@@ -408,7 +375,11 @@ function canopyInstances(
  * canopy trees' own NDVI remap (vegetation-layer crownColor) otherwise, so
  * an inventory lime and a canopy lime read as the same tree.
  */
-function inventoryColor(col: Color, t: InventoryTree, v: number): void {
+export function inventoryColor(
+  col: Color,
+  t: Pick<InventoryTree, "colour" | "ground" | "leaf" | "ndvi" | "x" | "z">,
+  v: number
+): void {
   if (t.colour === 1) {
     col.setHSL(0.97 + v * 0.02, 0.2, 0.47 + v * 0.06); // copper / plum
   } else if (t.colour === 2) {
@@ -455,7 +426,7 @@ function crownPair(
   // the cheap tier is the season's "mid": the pair shares one tint buffer
   const season = seasonCrowns(
     { mid: cheap, rich },
-    items.map((t) => t.season),
+    items.map(seasonKeyOf),
     materials
   );
   return { lod: { cheap, rich }, season };
@@ -499,24 +470,9 @@ export function buildTreeInventory(
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   const counts = { broad: 0, spindle: 0, cone: 0, weep: 0 };
 
-  // A tree in DLM forest/copse (the bake's `f`) vetoes nothing: there the
-  // measured canopy is denser than the register, and letting the register
-  // thin it made parks and woods visibly sparser.
-  const covers = footprintIndex(
-    features.flatMap((f) =>
-      f.geometry?.type === "Point" && f.properties && f.properties.f !== 1
-        ? [
-            {
-              x: f.geometry.coordinates[0],
-              y: f.geometry.coordinates[1],
-              r: footprintRadius(f.properties.d),
-              h: f.properties.h,
-            },
-          ]
-        : []
-    )
-  );
-  const trees = collectTrees(features, ctx, ndviAt);
+  // A tree in DLM forest/copse vetoes nothing (inventoryCovers).
+  const covers = inventoryCovers(features);
+  const trees = inventoryTrees(features, ctx, ndviAt);
   const cells: CellLod[] = [];
   const seasons: SeasonalCrowns[] = [];
   let instances: TreeInstance[] = [];

@@ -1,4 +1,9 @@
+import type { TreeFeature } from "./features";
+import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { clamp } from "./math";
+import type { RasterSampler } from "./raster-sampler";
+import { hash } from "./tree-placement";
+import { seasonJitter } from "./tree-season";
 /**
  * Pure placement math for individually surveyed trees — a tree inventory such
  * as the Dresden street-tree cadastre (pipeline/bake/trees.py): each tree's
@@ -243,4 +248,96 @@ export function footprintIndex(
     }
     return false;
   };
+}
+
+/**
+ * Where the register's trees stand: `covers(x, y, h)` (footprintIndex) over
+ * every tree outside DLM forest/copse. A tree in forest or copse (the
+ * bake's `f`) vetoes nothing: there the measured canopy is denser than the
+ * register, and letting the register thin it made parks and woods visibly
+ * sparser.
+ */
+export function inventoryCovers(
+  features: TreeFeature[]
+): (x: number, y: number, h?: number) => boolean {
+  return footprintIndex(
+    features.flatMap((f) =>
+      f.geometry?.type === "Point" && f.properties && f.properties.f !== 1
+        ? [
+            {
+              x: f.geometry.coordinates[0],
+              y: f.geometry.coordinates[1],
+              r: footprintRadius(f.properties.d),
+              h: f.properties.h,
+            },
+          ]
+        : []
+    )
+  );
+}
+
+/** One register tree in the Y-up scene frame. */
+export interface InventoryTree {
+  /** the register's foliage colour (0 = none, 1 = copper, 2 = golden) */
+  colour: number;
+  /** measured trunk diameter at breast height (cm) */
+  dbh?: number;
+  ext: TreeExtents;
+  /** TREE_GENERA index (lib/city/tree-season.ts); 0 = other deciduous */
+  genus: number;
+  ground: number;
+  /** its own offset in the year (days, seasonJitter) */
+  jitter: number;
+  leaf: "d" | "e";
+  ndvi?: number;
+  rot: number;
+  shape: CrownShape;
+  /** the float32 the instance matrices hold (as tree-placement.ts) */
+  x: number;
+  z: number;
+}
+
+/**
+ * The register's trees placed on the ground (EPSG → world), in file order;
+ * one off the ground is left out. The tree layer draws them
+ * (app/_components/tree-inventory-layer.ts); the build step reads the same
+ * to choose a small-scale picture's trees (lib/city/coarse-crowns.ts).
+ */
+export function inventoryTrees(
+  features: TreeFeature[],
+  ctx: {
+    heightAt: (x: number, y: number) => number | null;
+    offset: RecenterOffset;
+  },
+  ndviAt?: RasterSampler
+): InventoryTree[] {
+  const out: InventoryTree[] = [];
+  for (const f of features) {
+    if (f.geometry?.type !== "Point" || !f.properties) {
+      continue;
+    }
+    const [ex, ey] = f.geometry.coordinates;
+    const ground = ctx.heightAt(ex, ey);
+    if (ground === null) {
+      continue;
+    }
+    const p = f.properties;
+    const archetype = archetypeOf(p.a);
+    const w = epsgToWorld(ex, ey, ctx.offset);
+    out.push({
+      x: Math.fround(w.x),
+      z: Math.fround(w.z),
+      ground,
+      rot: hash(ex * 0.13 + ey * 0.07) * Math.PI * 2,
+      ext: treeExtents(p.h, p.d, archetype, p.g === 1),
+      shape: ARCHETYPE_SHAPE[archetype],
+      leaf: p.l === "e" ? "e" : "d",
+      genus: p.gn ?? 0,
+      jitter: seasonJitter(hash(ex * 0.29 + ey * 0.53 + 3.7)),
+      colour: p.c ?? 0,
+      dbh: p.t,
+      ndvi: ndviAt?.(ex, ey),
+    });
+  }
+  return out;
 }

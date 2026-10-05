@@ -458,30 +458,46 @@ export function withPreset(view: ModelView, preset: ModelPresetId): ModelView {
 /** Up to this scale every tree stands in the picture, as on foot. */
 export const MODEL_TREES_ALL = 5_000;
 /**
- * From this scale on no single tree does: the vegetation is the ground's
- * green — forest, meadow, urban green — as in an overview plan. Smaller
- * than the scale where the fine terrain, which carries the trees, gives way
- * to the coarse one (2.5 m/px, about 1 : 9 450 — `COARSE_TERRAIN_ERROR`
- * over the tile renderer's error target), so no tree is still standing
- * when its tile's level changes.
+ * From this scale on the picture keeps its fewest trees, MODEL_TREES_FLOOR
+ * of them — an overview plan still shows its trees, generalized: the
+ * selection thins them, the crowns widen (`treeSpread`) so a wood stays a
+ * wood. Smaller than the scale where the fine terrain, which carries the
+ * trees, gives way to the coarse one (2.5 m/px, about 1 : 9 450 —
+ * `COARSE_TERRAIN_ERROR` over the tile renderer's error target): the
+ * coarse level's crowns are exactly that selection (lib/city/coarse-crowns.ts),
+ * so the trees stay put when the level changes.
  */
-export const MODEL_TREES_NONE = 9_000;
+export const MODEL_TREES_FEW = 9_000;
+/** The share of the trees the smallest scales keep. */
+export const MODEL_TREES_FLOOR = 0.3;
 
 /**
  * The share of the trees a picture at 1 : `denominator` draws: a plan
  * generalizes its trees by selection as its scale shrinks — every one up
- * to MODEL_TREES_ALL, fewer and fewer (the small ones first, the crown
- * shader picks) until MODEL_TREES_NONE, none beyond. Eased along the
- * scale's logarithm, the way the wheel and the scale steps move it.
+ * to MODEL_TREES_ALL, fewer and fewer until MODEL_TREES_FEW, then
+ * MODEL_TREES_FLOOR of them at any smaller scale. Which trees go is a
+ * stable hash of where each stands (`treeRank`), so the same ones come
+ * back as the scale grows again. Eased along the scale's logarithm, the
+ * way the wheel and the scale steps move it.
  */
 export function treeShare(denominator: number): number {
   const t = clamp(
     Math.log(denominator / MODEL_TREES_ALL) /
-      Math.log(MODEL_TREES_NONE / MODEL_TREES_ALL),
+      Math.log(MODEL_TREES_FEW / MODEL_TREES_ALL),
     0,
     1
   );
-  return 1 - t * t * (3 - 2 * t);
+  return 1 - (1 - MODEL_TREES_FLOOR) * t * t * (3 - 2 * t);
+}
+
+/**
+ * How much wider a kept crown is drawn at a share: by the square root of
+ * the share lost, so the ground the crowns cover stays what all of them
+ * covered — a wood thinned to a third is three times fewer, wider crowns,
+ * still closed. The crown shader's twin (vegetation-layer.ts `crownKept`).
+ */
+export function treeSpread(share: number): number {
+  return 1 / Math.sqrt(clamp(share, MODEL_TREES_FLOOR, 1));
 }
 
 // --- footprint and shadows -------------------------------------------------

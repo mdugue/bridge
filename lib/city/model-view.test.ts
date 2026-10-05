@@ -14,7 +14,8 @@ import {
   MODEL_SHADOW_MAX,
   MODEL_SHADOW_MIN,
   MODEL_TREES_ALL,
-  MODEL_TREES_NONE,
+  MODEL_TREES_FEW,
+  MODEL_TREES_FLOOR,
   type ModelPresetId,
   type ModelView,
   metresPerPixelOf,
@@ -31,6 +32,7 @@ import {
   snapTilt,
   snapTurn,
   treeShare,
+  treeSpread,
   twistedTurn,
   viewBetween,
   withPreset,
@@ -259,27 +261,37 @@ describe("pan, zoom, turn and tilt", () => {
 });
 
 describe("trees by scale", () => {
-  test("every tree up to a site plan's scale, none in an overview, fewer between", () => {
+  test("every tree up to a site plan's scale, a floor of them in an overview, fewer between", () => {
     expect(treeShare(MODEL_SCALE_MIN)).toBe(1);
     expect(treeShare(MODEL_TREES_ALL)).toBe(1);
-    expect(treeShare(MODEL_TREES_NONE)).toBe(0);
-    expect(treeShare(MODEL_SCALE_MAX)).toBe(0);
+    expect(treeShare(MODEL_TREES_FEW)).toBeCloseTo(MODEL_TREES_FLOOR, 12);
+    expect(treeShare(MODEL_SCALE_MAX)).toBeCloseTo(MODEL_TREES_FLOOR, 12);
     let last = 1;
-    for (let s = MODEL_TREES_ALL; s <= MODEL_TREES_NONE; s *= 1.05) {
+    for (let s = MODEL_TREES_ALL; s <= MODEL_TREES_FEW; s *= 1.05) {
       const share = treeShare(s);
       expect(share).toBeLessThanOrEqual(last);
       last = share;
     }
-    const middle = treeShare(Math.sqrt(MODEL_TREES_ALL * MODEL_TREES_NONE));
-    expect(middle).toBeCloseTo(0.5, 6);
+    const middle = treeShare(Math.sqrt(MODEL_TREES_ALL * MODEL_TREES_FEW));
+    expect(middle).toBeCloseTo((1 + MODEL_TREES_FLOOR) / 2, 6);
   });
 
-  test("the trees are gone before their terrain level gives way", () => {
+  test("the kept crowns cover what all of them covered", () => {
+    expect(treeSpread(1)).toBe(1);
+    for (const share of [1, 0.8, 0.5, MODEL_TREES_FLOOR]) {
+      // crowns × crown area (spread², the crown widened both ways)
+      expect(share * treeSpread(share) ** 2).toBeCloseTo(1, 12);
+    }
+    expect(treeSpread(0)).toBe(treeSpread(MODEL_TREES_FLOOR));
+  });
+
+  test("the selection reaches its floor before the terrain level gives way", () => {
     // the fine terrain (and its trees) leaves a parallel picture at this
     // many metres per pixel: the coarse level's error over the tile
-    // renderer's error target (its default, 16 px)
+    // renderer's error target (its default, 16 px); the coarse level's
+    // crowns are the floor's selection
     const coarseFrom = COARSE_TERRAIN_ERROR / 16;
-    expect(metresPerPixelOf(MODEL_TREES_NONE)).toBeLessThan(coarseFrom);
+    expect(metresPerPixelOf(MODEL_TREES_FEW)).toBeLessThan(coarseFrom);
   });
 });
 
