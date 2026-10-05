@@ -5,11 +5,13 @@ import type {
   BridgeFeature,
   RailFeature,
 } from "@/lib/city/features";
+import { deckMaterial, stoneMaterial } from "./bridge-surface";
 import {
   approaches,
   buildBallast,
   buildDeckTable,
   buildRail,
+  COLORS,
   type RailContext,
 } from "./rail-layer";
 import { deckLift, ringToWorld } from "@/lib/city/decks";
@@ -519,4 +521,32 @@ test("the lift table carries the approaches for what rides up to a deck", () => 
   expect(deckLift(decks, 20, 0, undefined, "decks")).toBeCloseTo(101, 5);
   // without the ground, only the decks
   expect(buildDeckTable([bridge], { offset: ctx.offset }).length).toBe(1);
+});
+
+test("a deck's top is laid out by its frame; its stone is dressed", () => {
+  const built = buildRail({ ...empty, bridges: [deck({})] }, ctx);
+  const [top, stone] = built.children as Mesh[];
+  expect(top.material).toBe(deckMaterial("road", COLORS.deckRoad));
+  expect(stone.material).toBe(stoneMaterial(COLORS.deckStone));
+  const pos = top.geometry.getAttribute("position");
+  const frame = top.geometry.getAttribute("aDeck");
+  expect(frame.itemSize).toBe(4);
+  expect(frame.count).toBe(pos.count);
+  for (let i = 0; i < frame.count; i++) {
+    // the station runs along the axis (x here), the offset across it
+    // (left of the axis is north: −z), the edges are the outline's
+    expect(frame.getX(i)).toBeCloseTo(pos.getX(i), 6);
+    expect(frame.getY(i)).toBeCloseTo(-pos.getZ(i), 6);
+    expect(frame.getZ(i)).toBeCloseTo(6, 6);
+    expect(frame.getW(i)).toBeCloseTo(-6, 6);
+  }
+  // an older file without an axis keeps its colour: no frame to lay out
+  const plain = buildRail(
+    { ...empty, bridges: [deck({ axis: undefined, line: undefined })] },
+    ctx
+  ).children[0] as Mesh;
+  const zeros = plain.geometry.getAttribute("aDeck");
+  for (let i = 0; i < zeros.count; i++) {
+    expect(zeros.getZ(i) - zeros.getW(i)).toBe(0);
+  }
 });

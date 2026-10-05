@@ -3,6 +3,7 @@ import {
   Color,
   Float32BufferAttribute,
   Group,
+  type Material,
   Mesh,
   MeshStandardNodeMaterial,
   ShapeUtils,
@@ -58,6 +59,7 @@ import {
 } from "@/lib/city/levels";
 import { DECK_REACH_M, RIDES } from "@/lib/city/line-levels";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
+import { type DeckKind, deckMaterial, stoneMaterial } from "./bridge-surface";
 import { sceneMaterial } from "./three-utils";
 
 /**
@@ -170,6 +172,9 @@ export const COLORS = {
 
 /** Accumulates a non-indexed triangle soup (positions + per-vertex normals). */
 export interface Mesh3 {
+  /** per vertex, a bridge deck's frame (bridge-surface.ts `aDeck`): its
+   *  station, offset, and the outline's left and right offsets there */
+  deck?: number[];
   nrm: number[];
   pos: number[];
 }
@@ -275,6 +280,9 @@ function finishGeo(acc: Mesh3): BufferGeometry | null {
   const g = new BufferGeometry();
   g.setAttribute("position", new Float32BufferAttribute(acc.pos, 3));
   g.setAttribute("normal", new Float32BufferAttribute(acc.nrm, 3));
+  if (acc.deck?.length === (acc.pos.length / 3) * 4) {
+    g.setAttribute("aDeck", new Float32BufferAttribute(acc.deck, 4));
+  }
   g.computeBoundingSphere();
   return g;
 }
@@ -1024,7 +1032,13 @@ export function addRibbon(
 export function meshFrom(
   acc: Mesh3,
   color: number,
-  opts: { cast: boolean; offsetUnits?: number; roughness?: number }
+  opts: {
+    cast: boolean;
+    /** a material of its own (the bridges' surfaces) instead of the plain one */
+    material?: Material;
+    offsetUnits?: number;
+    roughness?: number;
+  }
 ): Mesh | null {
   const geo = finishGeo(acc);
   if (!geo) {
@@ -1032,10 +1046,11 @@ export function meshFrom(
   }
   const m = new Mesh(
     geo,
-    material(color, {
-      offsetUnits: opts.offsetUnits,
-      roughness: opts.roughness,
-    })
+    opts.material ??
+      material(color, {
+        offsetUnits: opts.offsetUnits,
+        roughness: opts.roughness,
+      })
   );
   m.castShadow = opts.cast;
   m.receiveShadow = true;
@@ -1096,6 +1111,31 @@ interface BridgeMeshes {
   tops: Record<string, Mesh3>;
 }
 
+/**
+ * The deck's frame on the top mesh's vertices from `first` on (its slab
+ * and approaches): each vertex's station and offset on the axis and the
+ * outline's edges there, which the deck's surface is laid out by
+ * (bridge-surface.ts). Linear in the position along a straight axis, so it
+ * interpolates truly across the slab's long triangles. Zeros without a
+ * frame (an older file): the surface keeps its plain colour.
+ */
+function addDeckFrame(
+  top: Mesh3,
+  first: number,
+  frame: BridgeFrame | null
+): void {
+  top.deck ??= [];
+  for (let v = first; v < top.pos.length / 3; v++) {
+    if (!frame) {
+      top.deck.push(0, 0, 0, 0);
+      continue;
+    }
+    const { s, offset } = frame.project(top.pos[v * 3], top.pos[v * 3 + 2]);
+    const { left, right } = frame.edgesAt(s);
+    top.deck.push(s, offset, left, right);
+  }
+}
+
 /** Draws one bridge: deck, parapets, whatever carries it and stands on it. */
 function drawBridge(
   f: BridgeFeature,
@@ -1106,11 +1146,13 @@ function drawBridge(
 ): void {
   const { kind, structure, depth } = bridgeProps(f);
   const top = out.tops[kind] ?? out.tops.other;
-  addFootprint(top, ring, topY, depth, true);
   const frame = bridgeFrame(f, ctx);
+  const first = top.pos.length / 3;
+  addFootprint(top, ring, topY, depth, true);
   for (const a of approaches(ring, topY, kind, frame?.ringS, ctx, out.decks)) {
     addApproach(top, out.stone, a, DECK_DEPTH);
   }
+  addDeckFrame(top, first, frame);
   // where a frame stands on the deck's edge it is the railing: a parapet
   // beside it read as a second strip along the roadway
   if (!drawsFrames(f.properties ?? {})) {
@@ -1179,9 +1221,10 @@ function buildBridges(
     path: COLORS.deckPath,
     other: COLORS.deckStone,
   };
-  for (const kind of Object.keys(out.tops)) {
+  for (const kind of Object.keys(out.tops) as DeckKind[]) {
     const m = meshFrom(out.tops[kind], topColor[kind], {
       cast: true,
+      material: deckMaterial(kind, topColor[kind]),
     });
     if (m) {
       meshes.push(m);
@@ -1189,6 +1232,7 @@ function buildBridges(
   }
   const stoneMesh = meshFrom(out.stone, COLORS.deckStone, {
     cast: true,
+    material: stoneMaterial(COLORS.deckStone),
   });
   if (stoneMesh) {
     meshes.push(stoneMesh);
@@ -1222,6 +1266,8 @@ interface BridgeFrame {
   /** the deck's edges at station `s`: its outline's offsets there (a
    *  curved deck around a straight axis is narrower locally than `edges`) */
   edgesAt(s: number): { left: number; right: number };
+  /** a world (Y-up) point's station and offset (left > 0) */
+  project(x: number, z: number): { offset: number; s: number };
 }
 
 function bridgeFrame(f: BridgeFeature, ctx: RailContext): BridgeFrame | null {
@@ -1259,6 +1305,7 @@ function bridgeFrame(f: BridgeFeature, ctx: RailContext): BridgeFrame | null {
       const w = epsgToWorld(x, y, ctx.offset);
       return { x: w.x, z: w.z };
     },
+    project: (x, z) => axis.project(x + ctx.offset.cx, ctx.offset.cy - z),
     groundAt: (s, offset) => {
       const [x, y] = axis.at(s, offset);
       return ctx.heightAt(x, y);
@@ -2363,8 +2410,14 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   if (rails) {
     group.add(rails);
   }
-  const spanTop = meshFrom(spans.top, COLORS.deckRail, { cast: true });
-  const spanStone = meshFrom(spans.stone, COLORS.deckStone, { cast: true });
+  const spanTop = meshFrom(spans.top, COLORS.deckRail, {
+    cast: true,
+    material: deckMaterial("rail", COLORS.deckRail),
+  });
+  const spanStone = meshFrom(spans.stone, COLORS.deckStone, {
+    cast: true,
+    material: stoneMaterial(COLORS.deckStone),
+  });
   for (const m of [spanTop, spanStone]) {
     if (m) {
       group.add(m);
