@@ -695,7 +695,13 @@ soon as the spawn tile's buildings and any of its terrain levels are on
 screen; `startStreaming` then opens the dressing gate, and vegetation,
 lamps and rails are built tile by tile behind a HUD chip (stairs, walls,
 kerbs and fences are baked into the fine terrain glTF and arrive with it)
-(the streaming pill). `onLoaded` flips it to `ready` once the
+(the streaming pill). After the gate a terrain level that replaces its
+tile's other level on screen waits for its dressing before it counts as
+loaded, so the renderer keeps the old level (and its trees) drawn until
+the new one is complete (`DressingPlugin.handsOver`); the dressing is
+compiled off the scene and hung on the content root at the renderer's
+`load-model`, after it has recorded the content's materials.
+`onLoaded` flips it to `ready` once the
 spawn tile is dressed, the renderer is idle and no dressing is pending.
 Anything added to the scene after the first frame must re-render the shadow
 map (`invalidateShadows()`, which the stream's change handler does) and

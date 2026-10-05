@@ -54,7 +54,13 @@ heavy part (vegetation incl. the street-tree cadastre and the OSM hedges,
 lamps, rails on the fine terrain level; its walls
 and stairs are baked into the glTF) waits
 behind the HUD's gate and is built one tile at a time behind the streaming
-chip. Every tile change re-renders the shadow map. The layers:
+chip. A terrain level that takes over from its tile's other level on
+screen is loaded only once its dressing is built and compiled
+(`handsOver`): the renderer keeps the old level, trees and all, drawn
+until then, so a change of level never blinks the trees away. The
+dressing is compiled off the scene and hung at the renderer's
+`load-model` — never before it records the content's materials, which it
+disposes with the tile. Every tile change re-renders the shadow map. The layers:
 
 - `city-layer.ts` — `dressCity` on a building tile: one glTF mesh per tile
   with a per-vertex feature id (`EXT_mesh_features`); the per-object table

@@ -1037,8 +1037,13 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   Dresden's fifteen tiles). The coarse level fetches it with its other
   side files and builds it with its dressing, whatever the mode or scale,
   so a tree stays where it stood when the level changes and no scale and
-  no device is left without trees. The cost of the switch: where the
-  levels meet, a wood goes from all its trees to a third of them, wider.
+  no device is left without trees. A level that takes over from the
+  other on screen shows only once its trees are built (`handsOver`,
+  `tile-stream.ts`): the old level's trees stay until the new level's
+  arrive, in the same frame — first built, the new level showed bare and
+  its trees followed a moment later, a blink at every change of level.
+  The cost of the switch: where the levels meet, a wood goes from all its
+  trees to a third of them, wider.
 - **Canopy motion** — per-frame in `buildCrownMaterial`, **main pass only** (the
   shadow pass draws the rigid `castShadowPositionNode` → no shadow-pass cost, no
   extra buffers):

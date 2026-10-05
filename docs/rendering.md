@@ -604,7 +604,17 @@ new casters are the exception: they compile in the frame that first draws
 them. The heavy dressing — vegetation,
 lamps, monuments, rails — waits behind a gate the HUD opens after the handover
 (`startStreaming`, [ADR 0008](./adr/0008-progressive-two-phase-boot.md)'s
-second phase) and is built one tile at a time. **Ready** (`onLoaded`,
+second phase) and is built one tile at a time. A tile with nothing on
+screen shows at once, bare, and is dressed after; a terrain level that
+takes over from its tile's other level on screen — the fine one replacing
+the coarse one as the view comes closer, or back — is loaded only once
+its dressing is built and compiled too (`handsOver`, at most 10 s), and
+the dressing hangs on it in the task the renderer records it, before any
+frame. The renderer keeps the old level drawn until the new one is loaded
+(3D Tiles' REPLACE refinement, both ways), so one level's trees, lamps
+and bridges leave in the frame the next level's arrive; the old way, the
+new level showed bare first and its trees came after — a blink of no
+trees at every change of level. **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile
 is dressed, the renderer is idle and no dressing is pending; it also lifts
 the fog clamp. A tile that fails to load leaves a hole and one `onError`
