@@ -2,9 +2,9 @@
  * A tile's coarse crowns (lib/city/coarse-crowns.ts) from its committed
  * tree files: the fine level's own placement — the same packed canopy the
  * browser unpacks, the same register veto, the same rows, on the fine
- * level's own ground — and the selection a small-scale Modell picture
- * keeps. Run by prepare-data.ts; the file it returns is published as the
- * tile's `crowns`.
+ * level's own ground — and the third of them the coarse level draws. Run
+ * by prepare-data.ts; the file it returns is published as the tile's
+ * `crowns`.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { coarseCrowns, packCrowns } from "../lib/city/coarse-crowns";

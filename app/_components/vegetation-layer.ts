@@ -8,7 +8,6 @@ import {
   type Material,
   Matrix4,
   MeshStandardNodeMaterial,
-  type Node,
   Object3D,
   Quaternion,
   type UniformNode,
@@ -22,8 +21,6 @@ import {
   float,
   floor,
   fract,
-  floatBitsToUint,
-  hash as hashNode,
   length,
   materialColor,
   max,
@@ -31,14 +28,10 @@ import {
   normalize,
   normalWorldGeometry,
   positionGeometry,
-  positionLocal,
   positionWorld,
   pow,
-  select,
   sin,
   smoothstep,
-  sqrt,
-  uint,
   uniform,
   varying,
   vec2,
@@ -53,7 +46,6 @@ import {
   type LookValues,
   type VegetationLookKey,
 } from "@/lib/city/look-controls";
-import { MODEL_TREES_FLOOR } from "@/lib/city/model-view";
 import { decodeGreyPng } from "@/lib/city/png-raster";
 import {
   maxWindowSampler,
@@ -89,7 +81,6 @@ import {
 import {
   type ChunkLodState,
   type CrownTier,
-  FAR_THIN_WIDEN,
   keepInFarTier,
   planCrownTiers,
   RICH_IN_M,
@@ -165,6 +156,8 @@ export interface VegetationContext extends GroundContext {
  */
 export const LOD_NEAR_IN_M = RICH_IN_M;
 export const LOD_NEAR_OUT_M = RICH_OUT_M;
+/** Far-tier crowns of a thinned (dense) chunk are drawn this much wider. */
+const FAR_THIN_WIDEN = 1.35;
 
 /**
  * Runtime handle for a loaded vegetation group: a per-frame LOD swap plus live
@@ -195,16 +188,8 @@ export interface VegetationControl {
   group: Group;
   /** whether the look allows the rich crown (the multi-tuft toggle) */
   multiTuft: () => boolean;
-  /** frees what the control holds beyond its group (a load in flight);
-   *  the group itself goes with the dressing's parts */
-  dispose?: () => void;
-  /** geometry bytes it built after its dressing was weighed (a late
-   *  load), for the tile cache (tile-stream.ts calculateBytesUsed) */
-  lateBytes?: () => number;
   /** advance the wind-sway animation (call per frame with elapsed seconds) */
   setTime: (seconds: number) => void;
-  /** the share of the trees drawn (Modell's selection; 1 = all) */
-  setTreeShare: (share: number) => void;
   /**
    * Moves the crowns to `day` (days since 1 January; lib/city/tree-season.ts):
    * autumn colour and bare crowns. Called on a date change, never per frame;
@@ -587,8 +572,6 @@ export interface CrownUniforms {
   /** the wind-sway clock (s) */
   time: Live;
   translucency: Live;
-  /** the share of the trees drawn (Modell's selection, `crownKept`) */
-  treeShare: Live;
 }
 
 /** Fresh crown uniforms at the look table's defaults. */
@@ -600,7 +583,6 @@ function createCrownUniforms(): CrownUniforms {
     sunDirection: uniform(new Vector3(0, 1, 0)),
     time: uniform(0),
     translucency: uniform(LOOK_DEFAULTS.translucency),
-    treeShare: uniform(1),
   };
 }
 
@@ -713,46 +695,6 @@ function crownLight(
   };
 }
 
-/** A float's bits as a uint. A cast, not a conversion: the bitcast node's
- *  typings lack the node operators it has. */
-const bitsOf = (v: F): Node<"uint"> =>
-  floatBitsToUint(v) as unknown as Node<"uint">;
-
-/**
- * The drawn tree's rank among Modell's selection (lib/city/coarse-crowns.ts
- * `treeRank`, its CPU twin): three's PCG hash of the float bits of where
- * the instance stands (its matrix's translation, x and z) — not of its slot,
- * so a tree is ranked alike on the fine level, the coarse level and in the
- * build step that chooses the coarse level's crowns.
- */
-function treeRankNode(): F {
-  const at = instanceColumn(3);
-  return hashNode(bitsOf(at.x).bitXor(bitsOf(at.z).mul(uint(0x9e_37_79_b1))));
-}
-
-/**
- * Whether the drawn tree is among Modell's selection (lib/city/model-view.ts
- * `treeShare`): 1 while its rank is below the share, else 0 — and the
- * material folds a 0 crown (or trunk) onto its own origin, a point that
- * draws no triangle and casts no shadow. The same ones come back as the
- * scale grows again. A share of 1 keeps every tree (the rank is below 1):
- * off Modell nothing changes.
- */
-function treeKept(share: Live): F {
-  return select(treeRankNode().lessThan(share), float(1), float(0));
-}
-
-/**
- * A kept crown in its own space: folded away when it is not kept, and
- * widened sideways by the share lost (lib/city/model-view.ts `treeSpread`,
- * the same 1/√share), so the crowns Modell keeps cover the ground all of
- * them did — a thinned wood stays a closed wood.
- */
-function crownKept(local: V3, share: Live): V3 {
-  const spread = float(1).div(sqrt(clamp(share, MODEL_TREES_FLOOR, 1)));
-  return local.mul(vec3(spread, 1, spread)).mul(treeKept(share));
-}
-
 /**
  * Sage crown material with a backlit shimmer: when the sun is behind the
  * canopy the camera-facing leaves glow warm (crownLight). Shared by every
@@ -777,10 +719,8 @@ export function buildCrownMaterial(
   m.name = bare ? "crown-bare" : "crown-leafy";
   m.userData.crownUniforms = u;
   const sway = crownSway(u.time);
-  m.positionNode = instancePosition(crownKept(sway.local, u.treeShare));
-  m.castShadowPositionNode = instancePosition(
-    crownKept(positionLocal, u.treeShare)
-  );
+  m.positionNode = instancePosition(sway.local);
+  m.castShadowPositionNode = instancePosition();
   const crownScale = varying(length(instanceColumn(0).xyz));
   const gust = varying(sway.gust);
   const tinted = materialColor.mul(instanceTint());
@@ -851,17 +791,13 @@ export function buildTrunkGeo(): BufferGeometry {
 /**
  * Trunk material with a gentle vertical value gradient (darker rooted
  * base), from the geometry's own height (before the instance scale).
- * Scene-wide: it carries nothing of a tile. A trunk goes with its crown
- * when Modell thins the trees (`treeKept`: the same rank, from the same
- * place).
+ * Scene-wide: it carries nothing of a tile.
  */
-export function buildTrunkMaterial(
-  u: Pick<CrownUniforms, "treeShare">
-): MeshStandardNodeMaterial {
+export function buildTrunkMaterial(): MeshStandardNodeMaterial {
   return sceneMaterial("vegetation-trunk", () => {
     const m = new MeshStandardNodeMaterial({ color: 0x8a_7c_68, roughness: 1 });
     m.name = "trunk";
-    m.positionNode = instancePosition(positionLocal.mul(treeKept(u.treeShare)));
+    m.positionNode = instancePosition();
     const tg = clamp(varying(positionGeometry.y).div(TRUNK_H), 0, 1);
     m.colorNode = materialColor.mul(mix(0.74, 1.05, smoothstep(0, 0.6, tg)));
     return m;
@@ -1085,7 +1021,7 @@ export function buildCrownWarmup(): CrownWarmup {
 function buildTrees(
   trees: Placement[],
   extras: TreeInstance[],
-  crownMats: SceneCrowns
+  crownMats: CrownMaterials
 ): {
   chunks: VegetationChunk[];
   meshes: Instances[];
@@ -1100,7 +1036,7 @@ function buildTrees(
     rich: buildCrownGeoRich(),
     trunk: buildTrunkGeo(),
   };
-  const trunkMat = buildTrunkMaterial(crownMats.uniforms);
+  const trunkMat = buildTrunkMaterial();
 
   const meshes: Instances[] = [];
   const chunks: VegetationChunk[] = [];
@@ -1232,9 +1168,6 @@ export function buildVegetation(
     multiTuft: () => multiTuft,
     setTime: (seconds) => {
       u.time.value = seconds;
-    },
-    setTreeShare: (share) => {
-      u.treeShare.value = share;
     },
     setSeason: (day) => applySeasons(seasons, day),
     // The chunks' tiers are updateVegetationLod's; the canopy keeps no other

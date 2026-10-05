@@ -315,7 +315,6 @@ export function showDataLayers(
 }
 
 function disposeDressing(d: TileDressing): void {
-  d.vegetation?.dispose?.();
   d.lamps?.dispose();
   d.monuments?.dispose();
   d.sport?.dispose();
@@ -393,10 +392,6 @@ function buildTileVegetation(
       canopy.setTime(seconds);
       own.setTime(seconds);
     },
-    setTreeShare: (share) => {
-      canopy.setTreeShare(share);
-      own.setTreeShare(share);
-    },
     setSeason: (day) => {
       const a = canopy.setSeason(day);
       const b = own.setSeason(day);
@@ -443,8 +438,10 @@ const nextTask = () =>
  * LoD2 leaves them out of the buildings (city-mesh.ts), so without them
  * every river crossing vanished past the fine level's reach — in the air
  * beyond ≈1.2 km, and from 2.5 m/px on in a whole Modell picture; and the
- * crowns a small-scale Modell picture keeps (coarse-crowns-layer.ts),
- * fetched only once Modell thins the trees.
+ * trees, a third of them drawn wider (coarse-crowns-layer.ts): the fine
+ * level carries every tree, so without these every place showing the
+ * coarse level showed none — in the distance, and at any Modell scale
+ * where the fine level was not loaded.
  */
 async function buildCoarseDressing(
   terrain: TerrainLayer,
@@ -459,9 +456,12 @@ async function buildCoarseDressing(
   const tile = extras.tileId;
   const fetchKind = <T>(file: string | undefined): Features<T> =>
     file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
-  const [traffic, bridges] = await Promise.all([
+  const [traffic, bridges, crownBytes] = await Promise.all([
     fetchKind<TrafficFeature>(files.traffic),
     fetchKind<BridgeFeature>(files.bridge),
+    files.crowns
+      ? fetchOptionalBinary(url(files.crowns), signal)
+      : Promise.resolve(null),
   ]);
   const bands =
     traffic.length > 0
@@ -501,26 +501,15 @@ async function buildCoarseDressing(
   const asks = [flows, decks].filter(
     (a): a is AskSet<FeatureInquiry> => a !== undefined && a !== null
   );
-  const crownsFile = files.crowns;
-  const vegetation = crownsFile
-    ? buildCoarseCrowns(
-        async (crownSignal) => {
-          const buffer = await fetchOptionalBinary(
-            url(crownsFile),
-            crownSignal
-          );
-          return (buffer && unpackCrowns(buffer)) ?? [];
-        },
-        {
-          compile: ctx.compile,
+  const crowns = (crownBytes && unpackCrowns(crownBytes)) ?? [];
+  const vegetation =
+    crowns.length > 0
+      ? buildCoarseCrowns(crowns, {
           heightAt: terrain.heightAt,
           offset,
-          onChange: ctx.onChange,
-          season: ctx.season,
           sunDirection: ctx.sunDirection,
-        }
-      )
-    : undefined;
+        })
+      : undefined;
   return {
     asks: asks.length > 0 ? asks : undefined,
     rail: rail && rail.children.length > 0 ? rail : undefined,
@@ -855,10 +844,7 @@ export class DressingPlugin {
   calculateBytesUsed(_tile: object, scene: Object3D | null): number {
     const dressed = scene ? this.dressed.get(scene) : undefined;
     const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
-    // what a dressing loads late (Modell's coarse crowns) counts from the
-    // next recalculation (every dressing that lands asks for one)
-    const late = dressed?.dressing?.vegetation?.lateBytes?.() ?? 0;
-    return rasters + (dressed?.dressingBytes ?? 0) + late;
+    return rasters + (dressed?.dressingBytes ?? 0);
   }
 
   /** `scene`'s terrain takes up (or lets go of) its rasters; the other

@@ -1,38 +1,41 @@
 /**
- * The trees of a small-scale Modell picture: the crowns the coarse terrain
- * level draws once the fine level, which carries the trees, has given way
- * (2.5 m/px, about 1 : 9 450). A plan generalizes its trees by selection
- * (lib/city/model-view.ts `treeShare`): at the smallest scales it keeps
- * MODEL_TREES_FLOOR of them, chosen by `treeRank`, a hash of where each one
- * stands. The build step (prepare-data.ts) runs the fine level's own
- * placement over a tile's tree files (lib/city/tree-placement.ts,
- * tree-inventory.ts) and keeps exactly the crowns the fine level shows at
- * that floor — its far tier, thinned and widened as the far tier is
- * (lib/city/vegetation-lod.ts) — so the trees stay where they are when the
- * level changes. No THREE, no DOM.
+ * The coarse terrain level's trees. Each terrain level carries its own:
+ * the fine level every tree (vegetation-layer.ts), the coarse level a
+ * third of them, drawn wider (coarse-crowns-layer.ts) — and the tile
+ * renderer shows one level per place, so wherever there is ground there
+ * are trees, at any scale and whichever level a device can hold. This is
+ * a plan's generalization by selection: COARSE_TREE_SHARE of the trees,
+ * chosen by a hash of where each stands, their crowns COARSE_TREE_WIDEN
+ * wider so a wood still covers the ground it covers. The build step
+ * (scripts/coarse-crowns.ts) runs the fine level's own placement over a
+ * tile's tree files (lib/city/tree-placement.ts, tree-inventory.ts), so a
+ * coarse crown stands where its fine tree does. No THREE, no DOM.
  *
  * The published file (`crowns_<tile>.crw.gz`), little-endian:
  *
  *   bytes 0–3   "CRW1"
  *   bytes 4–7   uint32 count
  *   bytes 8…    count × 20 bytes:
- *     float32 x, float32 z   the world (Y-up) position, exactly the float
- *                            the fine level's instance matrix holds
+ *     float32 x, float32 z   the world (Y-up) position, the float the fine
+ *                            level's instance matrix holds
  *     uint8  code            0 = a canopy or row tree; 1 + REGISTER_COLOURS
  *                            index = a register tree
  *     uint8  ndvi            0..254 (NDVI × 254), 255 = none
  *     uint8  genus           TREE_GENERA index (register trees; 0 = other)
  *     int8   jitter          the register tree's season offset × 10 (days)
  *     uint16 rot             the turn about the vertical, 0..2π over 0..65535
- *     uint16 a, b, c         a canopy tree: scale × 4096, sideways widening
- *                            × 4096, 0; a register tree: its crown's base,
- *                            top and width in centimetres
+ *     uint16 a, b, c         a canopy tree: its scale × 4096, 0, 0; a
+ *                            register tree: its crown's base, top and width
+ *                            in centimetres
  */
-import type { Placement } from "./tree-placement";
-import { bucketByCell } from "./tree-placement";
 import type { InventoryTree, TreeExtents } from "./tree-inventory";
-import { MODEL_TREES_FLOOR } from "./model-view";
-import { FAR_THIN_WIDEN, keepInFarTier } from "./vegetation-lod";
+import type { Placement } from "./tree-placement";
+
+/** The share of the trees the coarse level draws. */
+export const COARSE_TREE_SHARE = 1 / 3;
+/** How much wider it draws their crowns: as many square metres of crown
+ *  as all the trees have (share × widen² = 1). */
+export const COARSE_TREE_WIDEN = Math.sqrt(1 / COARSE_TREE_SHARE);
 
 const MAGIC = "CRW1";
 const HEADER_BYTES = 8;
@@ -40,37 +43,26 @@ const RECORD_BYTES = 20;
 const SCALE_UNIT = 4096;
 const NO_NDVI = 255;
 
-// --- the rank --------------------------------------------------------------
-
-const F32 = new Float32Array(1);
-const U32 = new Uint32Array(F32.buffer);
-
-/** A float32's bits as an unsigned integer. */
-function bitsOf(v: number): number {
-  F32[0] = v;
-  return U32[0];
-}
-
-/** three's TSL `hash` (a PCG step) on an unsigned seed: [0, 1). */
+/** A PCG step on an unsigned 32-bit seed: [0, 1). */
 function pcg(seed: number): number {
   const state = (Math.imul(seed, 747_796_405) + 2_891_336_453) >>> 0;
   const word =
     Math.imul(((state >>> ((state >>> 28) + 4)) ^ state) >>> 0, 277_803_737) >>>
     0;
-  const result = ((word >>> 22) ^ word) >>> 0;
-  return Math.fround(Math.fround(result) * 2 ** -32);
+  return (((word >>> 22) ^ word) >>> 0) / 2 ** 32;
 }
 
 /**
- * The rank (0..1) of the tree whose instance stands at world (x, z): the
- * crown shader keeps it while the rank is below Modell's share of trees
- * (app/_components/vegetation-layer.ts `crownKept`, the GPU twin — the
- * same hash of the same float bits). Where it stands, not its slot in a
- * buffer: the build step, the fine level and the coarse level rank a tree
- * alike, and a tile rebuilt in another order keeps the same trees.
+ * Whether the coarse level draws the tree standing at world (x, z): a hash
+ * of where it stands (to the decimetre), so a tile rebuilt keeps the same
+ * trees and neighbours are chosen independently — no row or stripe of
+ * trees goes as one.
  */
-export function treeRank(x: number, z: number): number {
-  return pcg((bitsOf(x) ^ Math.imul(bitsOf(z), 0x9e_37_79_b1)) >>> 0);
+export function drawnCoarse(x: number, z: number): boolean {
+  const seed =
+    Math.imul(Math.round(x * 10), 73_856_093) ^
+    Math.imul(Math.round(z * 10), 19_349_663);
+  return pcg(seed >>> 0) < COARSE_TREE_SHARE;
 }
 
 // --- the crowns ---------------------------------------------------------------
@@ -85,7 +77,8 @@ export const REGISTER_COLOURS = [
 ] as const;
 export type RegisterColour = (typeof REGISTER_COLOURS)[number];
 
-/** One crown of the coarse level. */
+/** One crown of the coarse level, at its natural size (the layer widens
+ *  it by COARSE_TREE_WIDEN). */
 export type CoarseCrown = {
   ndvi?: number;
   rot: number;
@@ -95,9 +88,8 @@ export type CoarseCrown = {
 } & (
   | {
       kind: "canopy";
-      /** the tree's scale, and how much wider its crown is drawn */
+      /** the tree's scale (tree-placement.ts) */
       s: number;
-      widen: number;
     }
   | {
       kind: "register";
@@ -120,40 +112,27 @@ function registerColour(t: InventoryTree): RegisterColour {
 }
 
 /**
- * The crowns a tile's coarse level draws: of what its fine level draws in
- * the far tier — the row and canopy trees (`placements`, rows first, as
- * the vegetation layer collects them) thinned in their dense chunks and
- * widened there, and every register tree — those whose rank is below
- * `floor`.
+ * The crowns a tile's coarse level draws: of the trees its fine level
+ * draws — the row and canopy trees (`placements`) and the register's —
+ * those `drawnCoarse` keeps.
  */
 export function coarseCrowns(
   placements: readonly Placement[],
-  register: readonly InventoryTree[],
-  floor = MODEL_TREES_FLOOR
+  register: readonly InventoryTree[]
 ): CoarseCrown[] {
-  const out: CoarseCrown[] = [];
-  for (const cell of bucketByCell([...placements])) {
-    const thinned = cell.length > 0 && !keepInFarTier(1, cell.length);
-    cell.forEach((p, i) => {
-      if (!keepInFarTier(i, cell.length) || treeRank(p.x, p.z) >= floor) {
-        return;
-      }
-      out.push({
-        kind: "canopy",
-        x: p.x,
-        z: p.z,
-        rot: p.rot,
-        s: p.s,
-        widen: thinned ? FAR_THIN_WIDEN : 1,
-        ndvi: p.ndvi,
-      });
-    });
-  }
-  for (const t of register) {
-    if (treeRank(t.x, t.z) >= floor) {
-      continue;
-    }
-    out.push({
+  const canopy = placements
+    .filter((p) => drawnCoarse(p.x, p.z))
+    .map((p): CoarseCrown => ({
+      kind: "canopy",
+      x: p.x,
+      z: p.z,
+      rot: p.rot,
+      s: p.s,
+      ndvi: p.ndvi,
+    }));
+  const registered = register
+    .filter((t) => drawnCoarse(t.x, t.z))
+    .map((t): CoarseCrown => ({
       kind: "register",
       x: t.x,
       z: t.z,
@@ -167,9 +146,8 @@ export function coarseCrowns(
       genus: t.genus,
       jitter: t.jitter,
       ndvi: t.ndvi,
-    });
-  }
-  return out;
+    }));
+  return [...canopy, ...registered];
 }
 
 // --- the file -------------------------------------------------------------------
@@ -199,7 +177,6 @@ export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
     if (c.kind === "canopy") {
       view.setUint8(at + 8, 0);
       view.setUint16(at + 14, clampInt(c.s * SCALE_UNIT, 0, 65_535), true);
-      view.setUint16(at + 16, clampInt(c.widen * SCALE_UNIT, 0, 65_535), true);
       return;
     }
     view.setUint8(at + 8, 1 + REGISTER_COLOURS.indexOf(c.colour));
@@ -240,15 +217,9 @@ export function unpackCrowns(buffer: ArrayBuffer): CoarseCrown[] | null {
       ...(ndviByte === NO_NDVI ? {} : { ndvi: ndviByte / 254 }),
     };
     const a = view.getUint16(at + 14, true);
-    const b = view.getUint16(at + 16, true);
     const colour = REGISTER_COLOURS[code - 1];
     if (code === 0 || colour === undefined) {
-      out.push({
-        ...base,
-        kind: "canopy",
-        s: a / SCALE_UNIT,
-        widen: b / SCALE_UNIT,
-      });
+      out.push({ ...base, kind: "canopy", s: a / SCALE_UNIT });
       continue;
     }
     out.push({
@@ -257,7 +228,7 @@ export function unpackCrowns(buffer: ArrayBuffer): CoarseCrown[] | null {
       colour,
       ext: {
         crownBase: a / 100,
-        crownTop: b / 100,
+        crownTop: view.getUint16(at + 16, true) / 100,
         crownWidth: view.getUint16(at + 18, true) / 100,
       },
       genus: view.getUint8(at + 10),

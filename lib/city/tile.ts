@@ -225,10 +225,9 @@ const ARTIFACTS = {
   },
   lowveg: { file: named("lowveg", "geojson"), dressing: true, osm: true },
   canopyx: { file: named("canopyx", "geojson"), dressing: true },
-  // The crowns a small-scale Modell picture keeps on the coarse level
-  // (lib/city/coarse-crowns.ts): baked by prepare-data.ts from the tree
-  // files above, no committed source; fetched only once Modell thins the
-  // trees.
+  // The coarse level's trees, a third of them (lib/city/coarse-crowns.ts):
+  // baked by prepare-data.ts from the tree files above, no committed
+  // source.
   crowns: {
     file: (tile) => `crowns_${tile}.crw.gz`,
     built: true,
@@ -258,8 +257,8 @@ export const DRESSING_KINDS: readonly DressingKind[] = kindsWith("dressing");
  * show beyond the fine level's reach — the counted traffic (a data layer
  * read from the air, which stopped at every tile the fine level had not
  * reached yet), the bridges, which it rides and which the coarse level
- * draws (the buildings leave LoD2's bridge slabs out), and the crowns a
- * small-scale Modell picture keeps (the fine level carries the trees).
+ * draws (the buildings leave LoD2's bridge slabs out), and its own trees,
+ * a third of the fine level's (lib/city/coarse-crowns.ts).
  */
 export type CoarseDressingKind = KindsWith<"coarse">;
 export const COARSE_DRESSING_KINDS: readonly CoarseDressingKind[] =

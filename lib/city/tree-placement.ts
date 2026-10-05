@@ -1,9 +1,9 @@
 /**
  * Where the canopy and row trees stand, and how big: the placements the
  * vegetation layer (app/_components/vegetation-layer.ts) draws, and the
- * build step reproduces to choose the trees a small-scale Modell picture
- * keeps (lib/city/coarse-crowns.ts, prepare-data.ts). One owner, so both
- * sides place every tree at the very same float. No THREE, no DOM.
+ * build step reproduces to choose the coarse level's trees
+ * (lib/city/coarse-crowns.ts, scripts/coarse-crowns.ts). One owner, so a
+ * coarse crown stands where its fine tree does. No THREE, no DOM.
  */
 import type { CanopyFeature, MonumentFeature, VegRowFeature } from "./features";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
@@ -42,9 +42,9 @@ export const BASE_TREE_H = 5.8;
 
 /**
  * One tree or hedge segment in the Y-up scene frame. `x` and `z` are the
- * float32 the instance matrix will hold (Math.fround): the selection by
- * scale (`treeRank`) and the colour jitter hash exactly what the GPU and
- * the build step see.
+ * float32 the instance matrix will hold (Math.fround), so the coarse
+ * level's file carries them exactly and its crowns hash the same colour
+ * jitter.
  */
 export interface Placement {
   /** DOP NDVI 0..1 at this point (lush↔dry crown colour); undefined = no raster */

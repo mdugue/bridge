@@ -180,11 +180,6 @@ test("every tile wears the scene's crown and trunk materials; the warm-up carrie
   expect(uniforms.shimmer.value).toBe(0.42);
   b.setTime(12.5);
   expect(uniforms.time.value).toBe(12.5);
-  // Modell's selection is one uniform for the whole scene too
-  expect(uniforms.treeShare.value).toBe(1);
-  a.setTreeShare(0.25);
-  expect(uniforms.treeShare.value).toBe(0.25);
-  b.setTreeShare(1);
   a.applyLook(LOOK_DEFAULTS);
   const warm = buildCrownWarmup();
   expect(warm.main.map((m) => m.material)).toEqual([bare, leafy]);

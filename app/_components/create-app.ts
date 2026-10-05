@@ -47,8 +47,6 @@ import {
   MODEL_SHADOW_MAX,
   type ModelPresetId,
   modelFootprint,
-  scaleOf,
-  treeShare,
 } from "@/lib/city/model-view";
 import { SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
 import { cutOutFromView } from "@/lib/city/section";
@@ -1766,22 +1764,14 @@ async function bootApp(
   // sway (same clock as the water ripple). A tier change changes what casts
   // shadows, so it invalidates the map.
   const vegetationControls: VegetationControl[] = [];
-  /** the share of the trees drawn last frame (Modell's selection) */
-  let lastTreeShare = 1;
-  /**
-   * `eye`: where the tiers are measured from (Modell: above the pivot);
-   * `share`: how many of the trees stand (Modell generalizes them by its
-   * scale, lib/city/model-view.ts `treeShare`; 1 on foot and in the air).
-   */
-  const stepVegetation = (elapsed: number, eye: Vector3, share: number) => {
+  /** `eye`: where the tiers are measured from (Modell: above the pivot). */
+  const stepVegetation = (elapsed: number, eye: Vector3) => {
     vegetationControls.length = 0;
-    let lodChanged = share !== lastTreeShare;
-    lastTreeShare = share;
+    let lodChanged = false;
     for (const d of stream.dressings) {
       if (d.vegetation) {
         vegetationControls.push(d.vegetation);
         d.vegetation.setTime(elapsed);
-        d.vegetation.setTreeShare(share);
         if (d.vegetation.updateLod(eye)) {
           lodChanged = true;
         }
@@ -1815,7 +1805,7 @@ async function bootApp(
       setMapAltitude(camera.position.y - ground);
       // Repoint the shared real lamp lights at the nearest heads.
       lampLights.updateNearest(camera.position);
-      stepVegetation(elapsed, camera.position, 1);
+      stepVegetation(elapsed, camera.position);
       return null;
     }
     const foot = footprintCircle(modelFootprint(target, viewportCss()));
@@ -1831,9 +1821,7 @@ async function bootApp(
     eye.set(pivot.x, pivot.y + equivalent, pivot.z);
     setMapAltitude(equivalent);
     lampLights.updateNearest(eye);
-    // the trees thin out with the scale; in the dolly zoom as far as it went
-    const share = treeShare(scaleOf(target.metresPerPixel));
-    stepVegetation(elapsed, eye, 1 + (share - 1) * modelRig.blend());
+    stepVegetation(elapsed, eye);
     return equivalent;
   };
   /**

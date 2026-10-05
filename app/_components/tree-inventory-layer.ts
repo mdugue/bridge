@@ -517,9 +517,6 @@ export function buildTreeInventory(
       setTime: (seconds) => {
         u.time.value = seconds;
       },
-      setTreeShare: (share) => {
-        u.treeShare.value = share;
-      },
       setSeason: (day) => applySeasons(seasons, day),
       // Same rule as the canopy (vegetation-layer.ts swapCrownLod).
       updateLod: (cameraPos) => swapCrownLod(cells, cameraPos, multiTuft),

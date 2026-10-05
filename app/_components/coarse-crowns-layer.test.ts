@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Color, Matrix4, type Object3D, Vector3 } from "three/webgpu";
 import {
+  COARSE_TREE_WIDEN,
   coarseCrowns,
   packCrowns,
   unpackCrowns,
@@ -55,20 +56,20 @@ function drawn(list: Instances[]): Map<string, { m: Matrix4; c: Color }> {
   return out;
 }
 
-const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+const column = (m: Matrix4, i: number) =>
+  new Vector3().setFromMatrixColumn(m, i).length();
 
-test("the coarse level draws the fine far tier's crowns where it stands them", async () => {
-  const points = Array.from({ length: 60 }, (_, i) =>
+test("a coarse crown stands where its fine tree does, as tall and wider", () => {
+  const points = Array.from({ length: 200 }, (_, i) =>
     canopy(
-      411_100 + (i % 10) * 9.3,
-      5_656_900 + Math.floor(i / 10) * 8.7,
+      411_100 + (i % 20) * 9.3,
+      5_656_900 + Math.floor(i / 20) * 8.7,
       6 + (i % 7) * 2
     )
   );
-  const register = [
-    lime(411_050.5, 5_656_880.25),
-    lime(411_060.5, 5_656_870.75),
-  ];
+  const register = Array.from({ length: 30 }, (_, i) =>
+    lime(411_050.5 + i * 7.1, 5_656_880.25)
+  );
   const inventory = buildTreeInventory(register, ctx);
   const fine = buildVegetation(
     {
@@ -79,82 +80,31 @@ test("the coarse level draws the fine far tier's crowns where it stands them", a
     },
     ctx
   );
-  const far = drawn(fine.chunks.map((c) => c.far));
+  // the fine level's crowns before any far-tier thinning
+  const all = drawn(fine.chunks.map((c) => c.mid));
 
-  // every tree kept (floor 1): the coarse crowns are the far tier itself
   const crowns = coarseCrowns(
     canopyPlacements(points, ctx, undefined, inventory.keepTree),
-    inventoryTrees(register, ctx),
-    1
+    inventoryTrees(register, ctx)
   );
-  const packed = packCrowns(crowns);
-  let loads = 0;
-  const coarse = buildCoarseCrowns(
-    () => {
-      loads++;
-      return Promise.resolve(unpackCrowns(packed.buffer as ArrayBuffer) ?? []);
-    },
-    {
-      compile: () => Promise.resolve(),
-      heightAt: () => 100,
-      offset: ctx.offset,
-      onChange: () => undefined,
-      season: () => 190,
-    }
-  );
-  // on foot and in the air nothing loads
-  coarse.setTreeShare(1);
-  await tick();
-  expect(loads).toBe(0);
-  expect(coarse.group.visible).toBe(false);
-  // Modell thins the trees: the crowns load once and show
-  coarse.setTreeShare(0.6);
-  coarse.setTreeShare(0.5);
-  for (let i = 0; i < 5; i++) {
-    await tick();
-  }
-  expect(loads).toBe(1);
-  expect(coarse.group.visible).toBe(true);
-  const got = drawn(sets(coarse.group));
-  expect(got.size).toBe(far.size);
-  for (const [key, { m, c }] of got) {
-    const twin = far.get(key);
+  const file = unpackCrowns(packCrowns(crowns).buffer as ArrayBuffer) ?? [];
+  const coarse = drawn(sets(buildCoarseCrowns(file, ctx).group));
+  // a third of them, register and canopy both
+  expect(coarse.size).toBeGreaterThan(all.size * 0.2);
+  expect(coarse.size).toBeLessThan(all.size * 0.5);
+  for (const [key, { m, c }] of coarse) {
+    const twin = all.get(key);
     expect(twin).toBeDefined();
-    // the same matrix to the file's units (scale 1/4096, turn 1/65535)
-    const a = m.elements;
-    const b = twin?.m.elements ?? [];
-    for (let k = 0; k < 16; k++) {
-      expect(a[k]).toBeCloseTo(b[k], 2);
+    if (!twin) {
+      continue;
     }
-    expect(c.r).toBeCloseTo(twin?.c.r ?? 0, 2);
-    expect(c.g).toBeCloseTo(twin?.c.g ?? 0, 2);
-    expect(c.b).toBeCloseTo(twin?.c.b ?? 0, 2);
+    // the same height (to the file's units), COARSE_TREE_WIDEN wider
+    expect(column(m, 1)).toBeCloseTo(column(twin.m, 1), 2);
+    expect(column(m, 0) / column(twin.m, 0)).toBeCloseTo(COARSE_TREE_WIDEN, 2);
+    expect(m.elements[13]).toBeCloseTo(twin.m.elements[13], 2);
+    // the same colour
+    expect(c.r).toBeCloseTo(twin.c.r, 2);
+    expect(c.g).toBeCloseTo(twin.c.g, 2);
+    expect(c.b).toBeCloseTo(twin.c.b, 2);
   }
-  // back on foot they hide
-  coarse.setTreeShare(1);
-  expect(coarse.group.visible).toBe(false);
-});
-
-test("a tile that goes while its crowns load builds nothing", async () => {
-  let release: (v: ReturnType<typeof coarseCrowns>) => void = () => undefined;
-  const coarse = buildCoarseCrowns(
-    () =>
-      new Promise((resolve) => {
-        release = resolve;
-      }),
-    {
-      compile: () => Promise.resolve(),
-      heightAt: () => 0,
-      offset: { cx: 0, cy: 0 },
-      onChange: () => undefined,
-      season: () => 0,
-    }
-  );
-  coarse.setTreeShare(0.4);
-  coarse.dispose?.();
-  release([{ kind: "canopy", x: 1, z: 1, rot: 0, s: 1, widen: 1 }]);
-  await tick();
-  expect(coarse.group.children).toHaveLength(0);
-  // the share is the scene's: leave it as the other tests find it
-  coarse.setTreeShare(1);
 });

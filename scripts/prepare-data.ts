@@ -746,10 +746,10 @@ function paintAndLight(
 }
 
 /**
- * The crowns a small-scale Modell picture keeps on the tile's coarse level
- * (lib/city/coarse-crowns.ts, scripts/coarse-crowns.ts): the fine level's
- * own placement of the tile's trees on its own ground, and the floor's
- * selection of it. Pre-gzipped like the packed canopy.
+ * The trees the tile's coarse level draws (lib/city/coarse-crowns.ts,
+ * scripts/coarse-crowns.ts): the fine level's own placement of the tile's
+ * trees on its own ground, a third of them. Pre-gzipped like the packed
+ * canopy.
  */
 async function publishCrowns(tile: string): Promise<string | undefined> {
   const a = tileArtifacts(tile);

@@ -1,12 +1,11 @@
 import { expect, test } from "bun:test";
-import { treeRank, unpackCrowns } from "../lib/city/coarse-crowns";
-import { MODEL_TREES_FLOOR } from "../lib/city/model-view";
+import { drawnCoarse, unpackCrowns } from "../lib/city/coarse-crowns";
 import { tileExtentOf, tileIdOf } from "../lib/city/site";
 import { sideFileSource } from "../lib/city/tile";
 import { DRESDEN } from "../sites/dresden";
 import { bakeCoarseCrowns } from "./coarse-crowns";
 
-test("the spawn tile's coarse crowns: a floor's share of its trees, ranked below it", async () => {
+test("the spawn tile's coarse crowns: its trees the selection draws", async () => {
   const cell = DRESDEN.tiles[0];
   const tile = tileIdOf(DRESDEN, cell);
   const extent = tileExtentOf(cell);
@@ -40,6 +39,6 @@ test("the spawn tile's coarse crowns: a floor's share of its trees, ranked below
   );
   expect(crowns.some((c) => c.ndvi !== undefined)).toBe(true);
   for (const c of crowns) {
-    expect(treeRank(c.x, c.z)).toBeLessThan(MODEL_TREES_FLOOR);
+    expect(drawnCoarse(c.x, c.z)).toBe(true);
   }
 });
