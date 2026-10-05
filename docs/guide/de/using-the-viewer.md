@@ -193,10 +193,12 @@ Gebäude knapp außerhalb werfen ihren Schatten noch über seinen Rand); und
 
 **Die Bäume folgen dem Maßstab**, wie auf einem gezeichneten Plan: Bis
 1 : 5 000 steht jeder Baum im Bild; zoomst du weiter hinaus, werden es
-weniger — die kleinen zuerst —, bis bei 1 : 9 000 keiner mehr steht und
-das Grün das ist, was der Boden zeigt: Wald, Wiesen und das Grün der Parks
-und Höfe, wie es ein Übersichtsplan zeichnet. Zoomst du wieder hinein,
-kommen dieselben Bäume zurück. Die Brücken stehen in jedem Maßstab.
+weniger, bis ab 1 : 9 000 etwa ein Drittel von ihnen steht, die Kronen
+breiter gezeichnet, damit ein Wald ein Wald bleibt — in jedem Maßstab,
+auch über der ganzen Stadt. Zoomst du wieder hinein, kommen dieselben
+Bäume zurück. Die Brücken stehen in jedem Maßstab, eine Straßenbrücke mit
+ihren Gehwegen, Bordsteinen und der Fahrbahn, die steinernen in Lagen aus
+behauenem Stein.
 
 Jeder Bildstil geht im Modell; *Strich* und *Schwarzplan* sind dafür
 gemacht. Tiefenschärfe, die warm/kalt-Tiefenfärbung und die Vignette ruhen

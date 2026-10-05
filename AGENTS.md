@@ -138,15 +138,18 @@ config change.
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
     the street-tree cadastre's silhouettes, `crown-season.ts`, the
-    crowns' autumn colour and bare winter stipple, and
-    `low-vegetation-layer.ts`, the OSM hedges), `city-layer.ts` (dresses a
+    crowns' autumn colour and bare winter stipple,
+    `coarse-crowns-layer.ts`, the crowns the coarse level draws once
+    Modell thins the trees, and `low-vegetation-layer.ts`, the OSM
+    hedges), `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
     green in the terrain's fragment pass), `sport-ground.ts` (sports
     grounds: surface and lines in the same pass), `sport-fixtures.ts`
     (their goals, posts and nets), `rail-layer.ts` (rails, ballast,
     platforms and the bridges: decks, the measured steel above them,
-    arches, pylons, piers — ADR 0033), `wall-layer.ts`,
+    arches, pylons, piers — ADR 0033; `bridge-surface.ts`, their deck
+    laid out by its axis and their ashlar), `wall-layer.ts`,
     `kerb-layer.ts`, `stair-layer.ts` and `fence-layer.ts` (only their
     materials: walls, kerbs, stairs and fences are baked into the fine
     terrain glTF; a fence is one low band in a muted tone — no pattern),
@@ -245,7 +248,11 @@ config change.
   first frame as a pure state machine), `terrain-tin.ts`
   (the fine level's TIN + its height index), `wall-snap.ts` (walls onto
   the measured step), `fences.ts` (fence panels and gate gaps),
-  `tree-inventory.ts` (the cadastre's archetypes and veto), `tree-season.ts`
+  `tree-inventory.ts` (the cadastre's archetypes and veto),
+  `tree-placement.ts` (where the canopy and row trees stand — the layer's
+  and the build's one placement), `coarse-crowns.ts` (Modell's selection
+  of the trees: their rank, the floor's crowns per tile, their file),
+  `tree-season.ts`
   (per-genus leaf-out, autumn and leaf fall), `building-tint.ts` (the
   per-building clay tint, storey height, roof palette), `small-buildings.ts`
   (the scan's sheds as boxes; the canopy points they veto),
@@ -338,7 +345,9 @@ config change.
   burned in), written by `tile-glb.ts` (meshopt, quantised,
   `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
   `pipeline.ts` (fetch/bake runner), `site-report.ts` (`bun run site`),
-  `downsample-raster.ts` (the 2048² and 512² class rasters), `bake-wissen-hero.ts`
+  `downsample-raster.ts` (the 2048² and 512² class rasters),
+  `coarse-crowns.ts` (a tile's coarse crowns from its tree files),
+  `bake-wissen-hero.ts`
   (the site's land-cover map, `site-map.webp`),
   `sentry-release.ts` (after `next build`: the build's Sentry release,
   its commit and deploy — a no-op without `SENTRY_AUTH_TOKEN`),

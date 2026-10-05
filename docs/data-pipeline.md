@@ -661,6 +661,7 @@ Measured 2026-09-25 on the current build (Dresden, gzipped wire sizes):
 | street furniture GeoJSON | up to 0.02 MB (0.19 MB raw; the forest tile 33416_5658 has seven pieces); with plan 030's signs and fixtures 0.01–0.03 MB (0.07–0.25 MB raw) on the four first tiles |
 | street-tree cadastre + OSM trees GeoJSON | 0.01–0.07 MB (0.1–0.9 MB raw; none on 33416_5658, all forest; the four first tiles with OSM trees 0.04–0.07 MB) |
 | scan trees, packed (`canopyx_<t>.pts.gz`, 16 bytes a point with the crown radius) | 0.02–0.07 MB (0.05–0.14 MB raw; GeoJSON until 2026-10-03, 0.4–1.1 MB raw) |
+| coarse crowns (`crowns_<t>.crw.gz`, `lib/city/coarse-crowns.ts`: 20 bytes a crown — the world x/z as the fine level's matrix holds them, scale or the register crown's extents, turn, NDVI, genus, season offset; built by prepare-data from the tile's tree files on its fine ground, `scripts/coarse-crowns.ts`; fetched by the coarse level only once Modell thins the trees) | 0.04–0.14 MB (0.07–0.25 MB raw; 3 300–12 700 crowns, 88 000 over Dresden's fifteen tiles) |
 | OSM hedges GeoJSON | ≤ 0.005 MB |
 | trams GeoJSON (the four first tiles) | 0.003–0.017 MB (0.01–0.09 MB raw) |
 | riverside GeoJSON (the four first tiles) | ≤ 0.004 MB (≤ 0.02 MB raw) |

@@ -184,11 +184,12 @@ moving meanwhile — buildings just outside the cut still cast their
 shadows over its edge); and *Bild speichern*.
 
 **Trees follow the scale**, as on a drawn plan: up to 1 : 5 000 every
-tree stands in the picture; zooming further out thins them — the small
-ones first — until by 1 : 9 000 none is left and the vegetation is what
-the ground shows: woods, meadows and the green of parks and courtyards,
-as an overview plan draws it. Zooming back in brings the same trees back.
-The bridges stand at every scale.
+tree stands in the picture; zooming further out thins them until, from
+1 : 9 000 on, about a third of them stand, their crowns drawn wider so a
+wood still reads as a wood — at any scale, the whole city included.
+Zooming back in brings the same trees back. The bridges stand at every
+scale, a road bridge with its footways, kerbs and carriageway, the stone
+ones in courses of dressed stone.
 
 Every picture style works in Modell; *Strich* and *Schwarzplan* are made
 for it. Depth of field, the warm/cool grade and the vignette rest while

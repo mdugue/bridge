@@ -65,21 +65,28 @@ eye above the pivot at the equivalent distance, the distance fog is
 open, the sky dome hidden and the background the style's paper. Depth
 of field, grading and the vignette are off.
 
-**Trees follow the scale, by selection** (2026-10-04). A parallel
-picture loads one terrain level across the whole sheet, and the trees
-ride on the fine one: past 2.5 m/px (about 1 : 9 450) they all went at
-once — by day not inside the shadow camera's frustum, which kept its
-fine tiles. A plan generalizes its trees instead: Modell draws every one
-up to 1 : 5 000 and thins them (the small crowns first, the same ones
-back on the way in) until none stands at 1 : 9 000, where the ground's
-green — forest, meadow, urban green — is the vegetation an overview plan
-shows (`treeShare`, the crown shader's `crownKept`). Keeping the fine
-level, and so the trees, for the whole series was weighed and lost: at
-1 : 10 000 a desktop picture covers 9–12 tiles, which a fine level's
-rasters do not fit in the tile cache. What else rides on the fine level
-and has to be gone, or carried by the coarse one, before 1 : 9 450 is
-the constraint this sets — the bridges were the first: they are drawn
-on the coarse level too.
+**Trees follow the scale, by selection** (2026-10-04, revised 2026-10-05).
+A parallel picture loads one terrain level across the whole sheet, and
+the trees ride on the fine one: past 2.5 m/px (about 1 : 9 450) they all
+went at once — by day not inside the shadow camera's frustum, which kept
+its fine tiles. A plan generalizes its trees instead: Modell draws every
+one up to 1 : 5 000 and thins them until 1 : 9 000, keeping 30 % at
+any smaller scale, their crowns widened by 1/√share so a wood stays a
+wood (`treeShare`, `treeSpread`, the crown shader's `crownKept`). Which
+trees stay is a hash of where each stands (`treeRank`), not of its slot,
+so the build step can choose them too: it bakes per tile the floor's
+crowns of the fine level's far tier (`crowns_<t>.crw.gz`,
+lib/city/coarse-crowns.ts), and the coarse level draws exactly those,
+fetched only once Modell thins the trees. The first version thinned to
+none at 1 : 9 000 and let the ground's green be the vegetation — an
+overview of the city then showed no tree at all, which is not how a
+planner's axonometry reads. Keeping the fine level, and so the trees,
+for the whole series was weighed and lost: at 1 : 10 000 a desktop
+picture covers 9–12 tiles, which a fine level's rasters do not fit in
+the tile cache. What else rides on the fine level and has to be carried
+by the coarse one before 1 : 9 450 is the constraint this sets — the
+bridges and the trees are; the rest (lamps, furniture, walls) is below
+a pixel there.
 
 **The Ausschnitt shows once its programs are held** (2026-10-04).
 Switching a `ClippingGroup` switches the build of every drawable under

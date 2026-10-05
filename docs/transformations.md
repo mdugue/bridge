@@ -2296,19 +2296,35 @@ removed, not tuned.
   21.3., 21.6., 21.12. of the shown year, one capture each, as a 3 × 4
   sheet with the legend (`image-export.ts`, `lib/city/image-export.ts`).
 - **Trees by scale** — Modell generalizes the trees by selection, as a
-  plan does: every tree up to 1 : 5 000 (`MODEL_TREES_ALL`), none from
-  1 : 9 000 (`MODEL_TREES_NONE`), the share between eased along the
+  plan does: every tree up to 1 : 5 000 (`MODEL_TREES_ALL`), fewer until
+  1 : 9 000 (`MODEL_TREES_FEW`), and from there a floor of them, 30 %
+  (`MODEL_TREES_FLOOR`), at any smaller scale — the share eased along the
   scale's logarithm (`lib/city/model-view.ts` `treeShare`; in the dolly
   zoom by its progress). The crown shader (`vegetation-layer.ts`
-  `crownKept`) keeps a crown while a stable hash of its instance, raised
-  to its size, is below the share — small crowns go first, the same ones
-  come back — and folds the others onto their origin (no triangle, no
-  shadow; one uniform for every crown set, the cadastre's and the
-  styles' siblings included). Past 1 : 9 000 the vegetation is the
-  ground's green (forest, meadow, urban green). Before, every tree went
-  at once where the fine terrain that carries them gave way to the
-  coarse one (2.5 m/px ≈ 1 : 9 450) — by day only outside the shadow
-  camera's frustum, which kept its fine tiles.
+  `crownKept`) keeps a tree while its rank — three's PCG hash of the
+  float bits of where it stands (`treeRank`, `lib/city/coarse-crowns.ts`,
+  the CPU twin) — is below the share, folds the others onto their origin
+  (no triangle, no shadow; trunks go with their crowns), and widens the
+  kept crowns sideways by 1/√share (`treeSpread`), so a thinned wood
+  covers what the whole one did. The rank is where the tree stands, not
+  its slot, so every level and the build rank a tree alike.
+  An earlier version thinned to none at 1 : 9 000 — discontinued: past
+  it a picture of the city showed no tree at all, the Großer Garten a
+  flat green.
+- **The trees on the coarse level** — the fine terrain, which carries the
+  trees, gives way at 2.5 m/px (≈ 1 : 9 450). The build step runs the fine
+  level's own placement over each tile's tree files (the packed canopy as
+  the browser unpacks it, the scan crowns, the rows, the register and the
+  orchards, its veto, on the fine level's ground; `lib/city/tree-placement.ts`,
+  `lib/city/tree-inventory.ts`) and keeps the crowns its far tier draws
+  — dense chunks thinned and widened as there — whose rank is below the
+  floor (`coarseCrowns`), packed 20 bytes a crown (`crowns_<t>.crw.gz`,
+  ≈ 88 000 crowns and 1 MB gzipped for Dresden's fifteen tiles). The
+  coarse level fetches and builds them only once Modell thins the trees
+  (`coarse-crowns-layer.ts`), with the far crown's geometry one step
+  coarser, the same colours (NDVI, the register's foliage), seasons and
+  scene-wide material: the trees stay where they stand when the level
+  changes, and an overview of the whole city still shows its trees.
 - **Bridges on both terrain levels** — the coarse level draws its tile's
   bridges as the fine one does (`buildRail` with the decks alone: deck,
   parapets, piers or arches, the measured steel; no rails), and they are
@@ -2316,6 +2332,23 @@ removed, not tuned.
   every river crossing used to vanish where the fine level's reach ended:
   in the air beyond ≈ 1.2 km, and in Modell across the whole picture from
   2.5 m/px on.
+- **The bridges' surfaces** — a bridge was one flat colour per part (a
+  pale slab over the river). The deck's top now carries its frame — the
+  station and offset on the axis and the outline's edges there, a vertex
+  attribute (`aDeck`, `rail-layer.ts` `addDeckFrame`; the top split to
+  triangles of ≤ 6 m, `splitDeckTop`, since a curved deck's triangulation
+  joins vertices up to 190 m apart and the frame is exact only at them)
+  — and its material
+  (`bridge-surface.ts`, scene-wide, world space) lays a road bridge out as
+  the street it carries: footways along both sides in the pavement's
+  colour with their slabs, a kerb stone and a gutter, the carriageway in
+  the road's colour with a grain and, on two lanes, the centre line's
+  dashes; a path bridge is sand with kerbs, a rail bridge the track bed
+  with its walkways, the rest stone paving. The fascia, parapets, piers
+  and masonry arches are ashlar: courses and running-bond joints on every
+  upright face, a shade per block, a weathering mottle. The fine detail
+  fades by the pixel's footprint; the footways, the kerbs' line and the
+  mottle stay to the smallest scales.
 - **The export's legend** — the scale from the view's metres per pixel
   (printed at 300 dpi), the north arrow from its turn, the credits from
   the site's attribution lines (`siteAttribution`) — drawn into the PNG,
