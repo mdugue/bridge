@@ -11,6 +11,11 @@ import {
   LARGEST_TILE_BYTES,
   tileCacheBytesFor,
 } from "./scene-profile";
+import { SAFETY_LEVELS } from "@/lib/city/gpu-safety";
+import { memoryLimitsFor } from "@/lib/city/memory-governor";
+
+const MiB = 1024 ** 2;
+const GiB = 1024 * MiB;
 
 test("sceneProfileFromSearch defaults to the full product scene", () => {
   expect(sceneProfileFromSearch("")).toBe("full");
@@ -63,13 +68,15 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
   expect(sceneBudgetFor("", false)).toEqual({
     forceWebGL: false,
     profile: "full",
+    safety: 0,
     tier: "desktop",
     neighbourTiles: true,
     lowRasters: false,
   });
-  expect(sceneBudgetFor("?scene=lite", true)).toEqual({
+  expect(sceneBudgetFor("?scene=lite", true, 2)).toEqual({
     forceWebGL: false,
     profile: "lite",
+    safety: 2,
     tier: "mobile",
     neighbourTiles: false,
     lowRasters: true,
@@ -95,9 +102,8 @@ test("tileCacheBytesFor keeps less out-of-view content on a phone", () => {
   expect(phone.min).toBeLessThan(phone.max);
   expect(desktop.min).toBeLessThan(desktop.max);
   expect(phone.max).toBeLessThan(desktop.min);
-  // A phone's tiles stay well under the ~850 MB its Safari lets the GPU
-  // hold, with room for the post targets and the shadow map.
-  expect(phone.max).toBeLessThanOrEqual(600 * 1024 ** 2);
+  // the desktop's page as it always was
+  expect(desktop).toEqual({ min: 1.2 * GiB, max: 1.6 * GiB });
 });
 
 test("tileCacheBytesFor can always unload the largest tile", () => {
@@ -105,9 +111,59 @@ test("tileCacheBytesFor can always unload the largest tile", () => {
   // loads nothing while at `max`: with a narrower gap one big unused tile
   // can hold it just over `max` forever (the Alaunpark never loaded).
   for (const tier of ["mobile", "desktop"] as const) {
-    const { min, max } = tileCacheBytesFor(tier);
-    expect(max - min).toBeGreaterThan(LARGEST_TILE_BYTES);
+    for (const safety of SAFETY_LEVELS) {
+      const { min, max } = tileCacheBytesFor(tier, safety);
+      expect(max - min).toBeGreaterThan(LARGEST_TILE_BYTES[tier]);
+    }
   }
+});
+
+/**
+ * What three counts as fixed on the 402×874 iPhone the phone's numbers are
+ * derived for: the screen targets (~75.75 bytes per drawn pixel: the
+ * scene, depth, SMAA, DoF, GTAO and outline targets) and the shadow map
+ * (depth plus three's RGBA8 colour attachment, 8 bytes a texel).
+ */
+function phoneFixedBytes(safety: (typeof SAFETY_LEVELS)[number]): number {
+  const ratio = pixelRatioFor("full", "mobile", 3, safety);
+  const pixels = Math.floor(402 * ratio) * Math.floor(874 * ratio);
+  const shadow = shadowMapSizeFor("full", "mobile", safety);
+  return pixels * 75.75 + shadow * shadow * 8;
+}
+
+test("a phone's tile cache fits under the governor's soft line with the rest it holds", () => {
+  // Before, the cache's max (600 MB) alone sat above the hard line (560):
+  // it never bound anything before Safari took the GPU away at 614 MB.
+  for (const safety of SAFETY_LEVELS) {
+    const { max } = tileCacheBytesFor("mobile", safety);
+    const { soft } = memoryLimitsFor("mobile", safety);
+    // 100 MiB for the scene-wide sets and the cache's own overshoot
+    expect(max + phoneFixedBytes(safety) + 100 * MiB).toBeLessThanOrEqual(soft);
+  }
+});
+
+test("every safety level is a lighter page than the one before", () => {
+  for (const tier of ["mobile", "desktop"] as const) {
+    for (const safety of SAFETY_LEVELS.slice(1)) {
+      const lighter = tileCacheBytesFor(tier, safety);
+      const before = tileCacheBytesFor(tier, (safety - 1) as 0);
+      expect(lighter.max).toBeLessThan(before.max);
+      expect(lighter.min).toBeLessThan(before.min);
+      expect(pixelRatioFor("full", tier, 3, safety)).toBeLessThan(
+        pixelRatioFor("full", tier, 3, (safety - 1) as 0)
+      );
+      expect(shadowMapSizeFor("full", tier, safety)).toBeLessThanOrEqual(
+        shadowMapSizeFor("full", tier, (safety - 1) as 0)
+      );
+    }
+    // the lightest page has a smaller shadow map than the first
+    expect(shadowMapSizeFor("full", tier, 3)).toBeLessThan(
+      shadowMapSizeFor("full", tier, 0)
+    );
+  }
+  // the lite profile's own numbers hold at every level
+  expect(pixelRatioFor("lite", "mobile", 3, 3)).toBe(0.5);
+  expect(shadowMapSizeFor("lite", "mobile", 3)).toBe(512);
 });
 
 test("warmPaperFor leaves the Papier warm-up to the desktop", () => {
