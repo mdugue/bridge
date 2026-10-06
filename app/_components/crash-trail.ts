@@ -153,6 +153,11 @@ export function dismissPreviousTrail(): void {
 }
 
 export interface CrashTrail {
+  /**
+   * The record's start, which names this page: the safety level keeps it
+   * with a raise of the page's own (gpu-safety.ts `raisedBy`).
+   */
+  startedAt: string;
   /** One event: a boot stage, a style switch, an error, a lost device. */
   note: (kind: string, detail?: string) => void;
   /** One heartbeat (the record adds the time). */
@@ -191,7 +196,11 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
     hidden: document.visibilityState === "hidden",
   });
   const stopAnswering = answerFor(trail.startedAt);
+  // The record's clock stops while the device sleeps; the wall clock goes
+  // with every write (when the page was last alive) and with the
+  // visibility's events (how long it was away).
   const write = () => {
+    trail.lastWall = Date.now();
     try {
       localStorage.setItem(CURRENT_KEY, JSON.stringify(trail));
     } catch {
@@ -200,7 +209,7 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
   };
   const note = (kind: string, detail?: string) => {
     const event = { t: seconds(), kind, detail: detail?.slice(0, 300) };
-    pushEvent(trail, event);
+    pushEvent(trail, event, Date.now());
     try {
       listener?.(event, trail);
     } catch {
@@ -265,6 +274,7 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
   note("start");
 
   return {
+    startedAt: trail.startedAt,
     note,
     beat: (beat) => {
       const entry = { t: seconds(), ...beat };

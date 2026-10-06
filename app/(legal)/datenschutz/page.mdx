@@ -59,7 +59,8 @@ stürzt er manchmal ab oder ruckelt. Damit das auffällt und behoben werden
 kann, schickt er Berichte:
 
 - wenn der vorige Besuch abgestürzt ist (beim nächsten Besuch),
-- wenn ein Fehler auftritt (höchstens fünf je Besuch),
+- wenn ein Fehler auftritt (höchstens fünf je Besuch, dazu der eine, an dem
+  der Viewer ausfällt),
 - je Besuch eine Zusammenfassung, wie er lief: Zeit bis zum ersten Bild und
   bis alles geladen war, Bildrate, belegter Speicher,
 - Beginn und Ende des Besuchs, normal oder mit Absturz.
@@ -125,9 +126,11 @@ und liest es nur auf deinem Gerät:
   schließt: die Stelle, an der du in der Stadt standest, und wann das war –
   damit sie dich dorthin zurückbringt und nicht endlos neu lädt,
 - wenn die Grafik auf deinem Gerät zuletzt ausgefallen ist, unter dem Namen
-  `gpu-safety`: eine Sparstufe von 0 bis 3, wann sie zuletzt stieg und, wenn
-  ein abgestürzter Besuch sie erhöht hat, wann dieser begann – damit der
-  Viewer beim nächsten Besuch sparsamer zeichnet und nicht wieder ausfällt.
+  `gpu-safety`: eine Sparstufe von 0 bis 3, wann sie zuletzt stieg und wann
+  der Besuch begann, der sie erhöht hat (ein abgestürzter, oder einer, dem
+  der Grafikspeicher ausging) – damit der Viewer beim nächsten Besuch
+  sparsamer zeichnet, nicht wieder ausfällt und einen Ausfall nur einmal
+  zählt.
   Die Stufe sinkt von selbst, alle drei Tage um eins.
 
 Rechtsgrundlage ist § 25 Abs. 2 Nr. 2 TDDDG: Diese Einträge sind für die
