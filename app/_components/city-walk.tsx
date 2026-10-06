@@ -20,7 +20,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
@@ -47,6 +46,7 @@ import {
 } from "@/lib/city/snapshot";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { AltitudeStick } from "./altitude-stick";
+import { BootError, layerErrorText } from "./boot-error";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
 import { startCrashReports } from "./crash-reports";
@@ -561,7 +561,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         // finish on their own (a failed tile counts as done), so they are
         // not settled here. A failure before the first frame rejects the
         // boot instead.
-        setStreamError(`Eine Schicht konnte nicht geladen werden: ${message}`);
+        setStreamError(layerErrorText(message));
+      },
+      onErrorCleared: () => {
+        // the tile it named came back (a fatal message stays)
+        if (!(cancelled || fatal)) {
+          setStreamError(null);
+        }
       },
       onFatal: (message) => {
         if (!cancelled) {
@@ -843,12 +849,10 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         )}
 
         {status.phase === "error" && (
-          <Alert className="absolute inset-x-8 top-8" variant="destructive">
-            <AlertTitle>Der Stadt-Viewer konnte nicht starten</AlertTitle>
-            <AlertDescription className="wrap-break-word">
-              {status.message}
-            </AlertDescription>
-          </Alert>
+          <BootError
+            message={status.message}
+            onRetry={supported ? () => location.reload() : undefined}
+          />
         )}
 
         {booted && (
