@@ -90,6 +90,7 @@ import { LegalLinks } from "./legal-links";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { ProjectionPanel } from "./projection-panel";
 import type { SoundscapeControl } from "./soundscape-toggle";
+import { deviceTierFromMedia, postProfileFor } from "./scene-profile";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
 import {
@@ -311,6 +312,42 @@ function FocusControls({
           value={distance}
         />
       )}
+    </>
+  );
+}
+
+/**
+ * The lens blur's switch and its focus. Not shown where the device builds
+ * no lens blur (a phone, scene-profile.ts `PostProfile.dof`): the look
+ * keeps its value, and a snapshot taken there still carries it.
+ */
+function DepthOfFieldControls({
+  look,
+  onLook,
+}: {
+  look: LookValues;
+  onLook: (patch: Partial<LookValues>) => void;
+}) {
+  return (
+    <>
+      <Field orientation="horizontal">
+        <FieldLabel className="font-medium text-xs" htmlFor="depth-of-field">
+          Tiefenschärfe
+        </FieldLabel>
+        <Switch
+          checked={look.dof}
+          id="depth-of-field"
+          onCheckedChange={(checked) => onLook({ dof: checked })}
+          size="sm"
+        />
+      </Field>
+      <FocusControls
+        distance={look.focusDistanceM}
+        enabled={look.dof}
+        mode={look.focusMode}
+        onDistance={(m) => onLook({ focusDistanceM: m })}
+        onMode={(m) => onLook({ focusMode: m })}
+      />
     </>
   );
 }
@@ -819,6 +856,8 @@ export function SceneSidebar(props: SceneSidebarProps) {
     () => sitePlaces(site.viewpoints, props.landmarks, site.name),
     [site, props.landmarks]
   );
+  // the same media query the scene's tier was read from (scene-profile.ts)
+  const lensBlur = postProfileFor(deviceTierFromMedia(props.coarse)).dof;
   return (
     <Sidebar
       className="p-3 [&>[data-slot=sidebar-inner]]:rounded-xl [&>[data-slot=sidebar-inner]]:shadow-xl"
@@ -853,7 +892,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
               <MinimapCard
                 bounds={props.bounds}
                 focusRingM={
-                  look.dof && look.focusMode === "manual"
+                  lensBlur && look.dof && look.focusMode === "manual"
                     ? look.focusDistanceM
                     : null
                 }
@@ -965,32 +1004,8 @@ export function SceneSidebar(props: SceneSidebarProps) {
                       />
                     </Field>
                   )}
-                  {group === "rendering" && (
-                    <>
-                      <Field orientation="horizontal">
-                        <FieldLabel
-                          className="font-medium text-xs"
-                          htmlFor="depth-of-field"
-                        >
-                          Tiefenschärfe
-                        </FieldLabel>
-                        <Switch
-                          checked={look.dof}
-                          id="depth-of-field"
-                          onCheckedChange={(checked) =>
-                            onLook({ dof: checked })
-                          }
-                          size="sm"
-                        />
-                      </Field>
-                      <FocusControls
-                        distance={look.focusDistanceM}
-                        enabled={look.dof}
-                        mode={look.focusMode}
-                        onDistance={(m) => onLook({ focusDistanceM: m })}
-                        onMode={(m) => onLook({ focusMode: m })}
-                      />
-                    </>
+                  {group === "rendering" && lensBlur && (
+                    <DepthOfFieldControls look={look} onLook={onLook} />
                   )}
                 </LookGroupRow>
               ))}

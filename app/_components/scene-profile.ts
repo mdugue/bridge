@@ -195,13 +195,53 @@ export function aoSamplesFor(profile: SceneProfile): number {
 }
 
 /**
- * Whether the picture styles' idle warm-up also compiles Papier's programs
- * for the whole scene (post-stack.ts). Not on a phone: those pipelines
- * double what the GPU process holds, and an iPhone tab dies of memory well
- * before a desktop one — there the first Papier frame builds what it draws.
+ * What the post stack (post-stack.ts) builds and warms on a device tier.
+ * Its screen-sized targets live in the GPU process for the whole session
+ * and no step of the memory governor can shrink them, so on a phone they
+ * are cut to what the picture cannot do without.
  */
-export function warmPaperFor(tier: DeviceTier): boolean {
-  return tier !== "mobile";
+export interface PostProfile {
+  /**
+   * Whether depth of field exists at all. Its pass holds six targets and
+   * a full-resolution copy of its input (23 MB at an iPhone's 603×1311
+   * drawing buffer) from the first frame, standing still or not — for a
+   * lens hint a six-inch screen barely shows. Off: the HUD hides its switch,
+   * the look keeps its value.
+   */
+  dof: boolean;
+  /**
+   * SMAA (three full-resolution half-float targets and a copy of the frame
+   * before it, 24 MB on that iPhone) or FXAA, which needs no target: it
+   * runs inside the last pass, on the scene's own colour.
+   */
+  antialias: "smaa" | "fxaa";
+  /**
+   * What the idle warm-up after the load prepares: every picture style
+   * (their pipelines, their scene dressing), or only the outline of an
+   * asked element — on a phone a style builds on its first frame instead
+   * of holding its pipelines and dressing for a style most never pick.
+   */
+  warmStyles: "all" | "outline-only";
+  /**
+   * Whether the warm-up also compiles Papier's programs for the whole scene
+   * (and each landing tile then compiles its own). Not on a phone: those
+   * pipelines double what the GPU process holds, and an iPhone tab dies of
+   * memory well before a desktop one — there the first Papier frame builds
+   * what it draws.
+   */
+  warmPaper: boolean;
+}
+
+/** The post profile of a device tier (see `PostProfile`). */
+export function postProfileFor(tier: DeviceTier): PostProfile {
+  return tier === "mobile"
+    ? {
+        dof: false,
+        antialias: "fxaa",
+        warmStyles: "outline-only",
+        warmPaper: false,
+      }
+    : { dof: true, antialias: "smaa", warmStyles: "all", warmPaper: true };
 }
 
 /**

@@ -8,10 +8,12 @@ import {
   NoToneMapping,
   type Object3D,
   type PerspectiveCamera,
+  RedFormat,
   RenderPipeline,
   RenderTarget,
   SRGBColorSpace,
   type Scene,
+  UnsignedByteType,
   Vector2,
   Vector3,
   type WebGPURenderer,
@@ -57,6 +59,7 @@ import {
   RENDER_STYLE_BY_ID,
   type RenderStyleDef,
 } from "@/lib/city/render-style";
+import { fxaa } from "./fxaa";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
 import {
@@ -67,6 +70,7 @@ import {
   createPipelineAnchors,
   type PipelineAnchors,
 } from "./pipeline-anchors";
+import type { PostProfile } from "./scene-profile";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
@@ -86,7 +90,9 @@ const HYPERFOCAL_M = 600;
  * shadow at a wall's foot does not bleed onto the street in front. Its own
  * half-resolution pass: 50 reads a texel, a quarter of the pixels. (three's
  * DenoiseNode rebuilds a normal from depth for each of its 16 taps, at
- * full resolution — too much for a phone.)
+ * full resolution — too much for a phone.) Its target holds the one value
+ * in one byte, as GTAO's own does, and no depth buffer (a quad draws it):
+ * a half-float RGBA with depth was twelve bytes a texel for it.
  */
 function aoSmoothed(
   raw: ReturnType<ReturnType<typeof ao>["getTextureNode"]>,
@@ -116,8 +122,13 @@ function aoSmoothed(
       weights = weights.add(w);
     }
   }
-  const smoothed = vec4(vec3(sum.div(max(weights, 1e-4))), 1);
-  return rtt(smoothed, null, null, { resolutionScale: 0.5 });
+  const smoothed = vec4(sum.div(max(weights, 1e-4)), 0, 0, 1);
+  return rtt(smoothed, null, null, {
+    resolutionScale: 0.5,
+    format: RedFormat,
+    type: UnsignedByteType,
+    depthBuffer: false,
+  });
 }
 
 /**
@@ -235,7 +246,9 @@ export interface PostStack {
    * dressing and the Papier programs of the scene's objects compiled
    * ahead, the style pipelines built one per frame — so the first switch
    * to a style does not stall. Idempotent; create-app calls it once the
-   * scene has loaded and the browser is idle.
+   * scene has loaded and the browser is idle. On a phone (scene-profile.ts
+   * `PostProfile.warmStyles`) only the outline's programs: a style builds
+   * on the first frame that shows it there.
    */
   warmStyles: () => Promise<void>;
 }
@@ -310,6 +323,78 @@ function finish(input: V4, viewZ: F, f: Finish): V4 {
   return vec4(graded.mul(vignette).mul(paper), input.a);
 }
 
+/**
+ * Depth of field over `lit` (`DepthOfFieldNode`). Its input is drawn into
+ * a target of its own first; `dof()` would make that target itself, with
+ * the depth buffer every render target gets by default and nothing here
+ * reads (a third more memory for the copy) — the picture is the same.
+ */
+function lensBlurOf(lit: V4, viewZ: F, focusDistance: Live, focusRange: Live) {
+  const input = rtt(lit, null, null, { depthBuffer: false });
+  const node = dof(
+    input,
+    viewZ,
+    focusDistance,
+    focusRange,
+    uniform(BOKEH_SCALE)
+  );
+  return {
+    // reason: the effect nodes' types don't carry their vec4 output.
+    focused: nodeObject(node) as unknown as V4,
+    dispose: () => {
+      node.dispose();
+      input.dispose();
+    },
+  };
+}
+
+/** The frame's antialiasing (scene-profile.ts `PostProfile.antialias`). */
+interface Antialiasing {
+  /** the frame a pipeline drew into `beforeAa` (a style, depth of field) */
+  afterPre: V4;
+  /** the scene's own colour with its contact shadows, where nothing drew
+   *  into `beforeAa` — null: every frame goes through it (SMAA) */
+  direct: V4 | null;
+  setSize: (size: Vector2) => void;
+  dispose: () => void;
+}
+
+/**
+ * SMAA reads a texture and renders three passes of its own into three
+ * full-resolution half-float targets, so every frame is drawn into
+ * `beforeAa` first. FXAA needs no target: it runs inside the last pass,
+ * on `beforeAa` when a pipeline drew there, else on the scene target
+ * itself — the contact shadows multiplied in after it, which at half
+ * resolution and smoothed carry no edge of their own to antialias.
+ */
+function antialiasingOf(
+  kind: PostProfile["antialias"],
+  beforeAa: RenderTarget,
+  scene: RenderTarget,
+  occlusion: F
+): Antialiasing {
+  if (kind === "smaa") {
+    const node = smaa(texture(beforeAa.texture));
+    return {
+      // reason: as above, SMAANode's vec4 output
+      afterPre: nodeObject(node) as unknown as V4,
+      direct: null,
+      setSize: () => undefined,
+      dispose: () => node.dispose(),
+    };
+  }
+  const texel = uniform(new Vector2());
+  const setSize = (size: Vector2) => texel.value.set(1 / size.x, 1 / size.y);
+  setSize(new Vector2(scene.width, scene.height));
+  const sceneAa = fxaa(scene.texture, texel);
+  return {
+    afterPre: fxaa(beforeAa.texture, texel),
+    direct: vec4(sceneAa.rgb.mul(occlusion), sceneAa.a),
+    setSize,
+    dispose: () => undefined,
+  };
+}
+
 type Drawable = Object3D & {
   geometry?: BufferGeometry;
   isLine?: boolean;
@@ -342,12 +427,20 @@ const COMPILE_LANES = 4;
  * pipeline would sit one level deeper than any compile) — then three's node
  * `RenderPipeline` from its colour and depth: GTAO (half resolution, normals
  * reconstructed from depth) × the contact slider → DoF (`DepthOfFieldNode`,
- * crosshair autofocus, dropped while moving) → the picture style (ink +
- * tone; not in the default pastel style's pipelines at all) → SMAA → depth
- * grading, vignette and paper grain → sRGB. The scene target has no MSAA;
- * SMAA carries the antialiasing — of the style's ink lines too, which is
- * why the style sits before it. There is no tone mapping: the look was
- * tuned without it.
+ * crosshair autofocus, dropped while moving; not built on a phone) → the
+ * picture style (ink + tone; not in the default pastel style's pipelines
+ * at all) → SMAA (FXAA on a phone) → depth grading, vignette and paper
+ * grain → sRGB. The scene target has no MSAA; SMAA carries the
+ * antialiasing — of the style's ink lines too, which is why the style sits
+ * before it. There is no tone mapping: the look was tuned without it.
+ *
+ * What it builds follows the device tier (scene-profile.ts `PostProfile`):
+ * its screen-sized targets stay in the GPU process for the whole session,
+ * and on a phone that was ~68 MB of them before a single tile — the lens
+ * blur's, SMAA's and the frame copy they read. There the pastel frame is
+ * the scene pass, the contact shadows and one last pass that antialiases
+ * (FXAA), grades and outlines; a picture style draws into `beforeAa` only
+ * while it is on, and the target goes when it is left.
  */
 export function createPostStack(
   renderer: WebGPURenderer,
@@ -362,15 +455,8 @@ export function createPostStack(
   aoSamples: number,
   /** the scene's fog (height-fog.ts): the styles read and paper it */
   fog: SceneFog,
-  /**
-   * Whether the idle warm-up compiles Papier's programs for the whole
-   * scene (and each landing tile then compiles its own). Off on phones:
-   * it doubles the pipelines the GPU process holds and took half a minute
-   * of main thread on an iPhone, for a style most never pick — there the
-   * first Papier frame builds what it draws instead (scene-profile.ts
-   * `warmPaperFor`).
-   */
-  warmPaper: boolean
+  /** what the tier builds and warms (scene-profile.ts `postProfileFor`) */
+  profile: PostProfile
 ): PostStack {
   const size = renderer.getDrawingBufferSize(new Vector2());
   const depthTexture = new DepthTexture(size.x, size.y);
@@ -406,10 +492,9 @@ export function createPostStack(
 
   const focusDistance = uniform(HYPERFOCAL_M);
   const focusRange = uniform(focusRangeFor(HYPERFOCAL_M));
-  // reason: the effect nodes' types don't carry their vec4 output.
-  const focused = nodeObject(
-    dof(lit, viewZ, focusDistance, focusRange, uniform(BOKEH_SCALE))
-  ) as unknown as V4;
+  const lensBlur = profile.dof
+    ? lensBlurOf(lit, viewZ, focusDistance, focusRange)
+    : null;
 
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
   const stylize = createStylize({ lens, depth: depthTexture, fog, litAt });
@@ -427,13 +512,20 @@ export function createPostStack(
   // target and one SMAA for all four. SMAA reads a texture, and each
   // pipeline carrying its own made a copy of its input and three targets
   // of its own — sixteen at full resolution, all resident once the styles
-  // were warmed, ~95 MB on an iPhone.
+  // were warmed, ~95 MB on an iPhone. With FXAA only a style (or the lens
+  // blur) draws here: the target is allocated by the first frame that
+  // does, and freed by the first that does not.
   const beforeAa = new RenderTarget(size.x, size.y, {
     type: HalfFloatType,
     depthBuffer: false,
   });
   beforeAa.texture.name = "BeforeAA";
-  const antialiased = smaa(texture(beforeAa.texture));
+  const antialiasing = antialiasingOf(
+    profile.antialias,
+    beforeAa,
+    target,
+    occlusion
+  );
   // The asked element's outline: its own antialiasing (a smooth band of a
   // blurred mask), so after SMAA, and under the paper grain like the ink.
   const outline = createSelectionOutline({
@@ -442,20 +534,23 @@ export function createPostStack(
     width: size.x,
     height: size.y,
   });
-  const finished = new RenderPipeline(
-    renderer,
-    renderOutput(
-      finish(
-        // reason: as above, SMAANode's vec4 output
-        outline.over(nodeObject(antialiased) as unknown as V4),
-        viewZ,
-        finishing
-      ),
-      NoToneMapping,
-      SRGBColorSpace
-    )
-  );
-  finished.outputColorTransform = false;
+  // The last pass, to the canvas: one per antialiased input.
+  const finishedOf = (antialiased: V4) => {
+    const p = new RenderPipeline(
+      renderer,
+      renderOutput(
+        finish(outline.over(antialiased), viewZ, finishing),
+        NoToneMapping,
+        SRGBColorSpace
+      )
+    );
+    p.outputColorTransform = false;
+    return p;
+  };
+  const finished = {
+    afterPre: finishedOf(antialiasing.afterPre),
+    direct: antialiasing.direct && finishedOf(antialiasing.direct),
+  };
   // A pipeline renders into the current target: these into `beforeAa`.
   const pipelineOf = (node: V4) => {
     const p = new RenderPipeline(renderer, node);
@@ -467,9 +562,14 @@ export function createPostStack(
   // re-translate the whole post graph on the main thread every time a
   // flight starts or stops. The pastel pair has no style node in it at all;
   // every other style is the one styled pair (its mode is a uniform).
-  const pastel = { dof: pipelineOf(focused), plain: pipelineOf(lit) };
+  // Without a lens blur there is no DoF half; with FXAA the plain pastel
+  // frame needs no pipeline before the last pass.
+  const pastel = {
+    dof: lensBlur && pipelineOf(lensBlur.focused),
+    plain: antialiasing.direct ? null : pipelineOf(lit),
+  };
   const styled = {
-    dof: pipelineOf(stylize.node(focused)),
+    dof: lensBlur && pipelineOf(stylize.node(lensBlur.focused)),
     plain: pipelineOf(stylize.node(lit)),
   };
 
@@ -481,17 +581,49 @@ export function createPostStack(
   let dofWanted = LOOK_DEFAULTS.dof;
   let regressed = false;
   let model = false;
-  const pipeline = () => {
+  /** What draws into `beforeAa` this frame (null: nothing), and the last pass. */
+  const frame = () => {
     const pair = style.shaderMode > 0 ? styled : pastel;
-    return dofWanted && style.allowDof && !regressed && !model
-      ? pair.dof
-      : pair.plain;
+    const lensOn = dofWanted && style.allowDof && !regressed && !model;
+    const pre = (lensOn ? pair.dof : null) ?? pair.plain;
+    return {
+      pre,
+      finished: pre
+        ? finished.afterPre
+        : (finished.direct ?? finished.afterPre),
+    };
   };
   // Pipelines that still have to build: a pipeline builds its graph on its
   // first render, so each is rendered once, one per frame, before the one
   // the frame shows (which draws over it). The pastel pair goes first —
   // those frames are under the load screen.
-  const toWarm: RenderPipeline[] = [pastel.dof, pastel.plain];
+  const toWarm: RenderPipeline[] = [pastel.dof, pastel.plain].filter(
+    (p) => p !== null
+  );
+  // whether `beforeAa` holds its memory (FXAA lets it go between styles)
+  let preHeld = false;
+  /** Draws what goes before the antialiasing into `beforeAa`, if anything. */
+  const drawPre = (pre: RenderPipeline | null) => {
+    const warming = toWarm.shift();
+    if (!(pre || warming)) {
+      if (preHeld) {
+        beforeAa.dispose();
+        preHeld = false;
+      }
+      return;
+    }
+    const previous = renderer.getRenderTarget();
+    renderer.setRenderTarget(beforeAa);
+    preHeld = true;
+    try {
+      if (warming && warming !== pre) {
+        warming.render();
+      }
+      pre?.render();
+    } finally {
+      renderer.setRenderTarget(previous);
+    }
+  };
 
   // The sliders' raw values; the style weights them on the way in, so a
   // style switch re-applies them without the store changing.
@@ -673,9 +805,9 @@ export function createPostStack(
   const compiledFigure = new WeakMap<Object3D, unknown>();
   const gone = new WeakSet<BufferGeometry>();
   const onGone = (event: { target: BufferGeometry }) => gone.add(event.target);
-  // Papier's programs are made once the styles are warmed (where
-  // `warmPaper` allows) or while Papier is on; otherwise a tile compiles
-  // for the scene's own look only.
+  // Papier's programs are made once the styles are warmed (where the
+  // profile's `warmPaper` allows) or while Papier is on; otherwise a tile
+  // compiles for the scene's own look only.
   let paperWanted = false;
 
   const compileAll = async (
@@ -715,7 +847,13 @@ export function createPostStack(
 
   let stylesWarm: Promise<void> | null = null;
   const warmStyles = async () => {
-    toWarm.push(styled.plain, styled.dof);
+    // A phone keeps the styles to their first frame: their pipelines, and
+    // the sibling crown sets and lamp cones each would make and compile
+    // for every loaded tile, for a style most never pick.
+    if (profile.warmStyles !== "all") {
+      return;
+    }
+    toWarm.push(...[styled.plain, styled.dof].filter((p) => p !== null));
     // Whatever the styles dress the scene with (their crowns share the
     // scene crowns' builds; the lamp cones are new), then — where it is
     // worth it — the Papier programs of every material and layout.
@@ -724,7 +862,7 @@ export function createPostStack(
       ...styleDressing.prepare({ crowns: "paper", lampCones: false }),
     ] as Drawable[];
     await compileAll(dressed, compileOne, compiled);
-    if (!warmPaper) {
+    if (!profile.warmPaper) {
       return;
     }
     paperWanted = true;
@@ -763,7 +901,8 @@ export function createPostStack(
     },
     releaseCut: letGo,
     warmStyles: () => {
-      // the outline's mask program too: the first question builds nothing
+      // the outline's mask and blur programs too, on every tier: the first
+      // question builds nothing
       stylesWarm ??= outline
         .compile(renderer, camera)
         .then(warmStyles)
@@ -809,18 +948,9 @@ export function createPostStack(
       }
       outline.update(renderer.getPixelRatio());
       outline.renderMask(renderer, view);
-      const shown = pipeline();
-      const warming = toWarm.shift();
-      renderer.setRenderTarget(beforeAa);
-      try {
-        if (warming && warming !== shown) {
-          warming.render();
-        }
-        shown.render();
-      } finally {
-        renderer.setRenderTarget(previous);
-      }
-      finished.render();
+      const shown = frame();
+      drawPre(shown.pre);
+      shown.finished.render();
     },
     getFocusInfo: () => ({
       focusDistance: focusDistance.value,
@@ -831,6 +961,7 @@ export function createPostStack(
       renderer.getDrawingBufferSize(size);
       target.setSize(size.x, size.y);
       beforeAa.setSize(size.x, size.y);
+      antialiasing.setSize(size);
       outline.setSize(size.x, size.y);
     },
     setSelection: (selection) => outline.set(selection),
@@ -864,11 +995,17 @@ export function createPostStack(
         pastel.plain,
         styled.dof,
         styled.plain,
-        finished,
+        finished.afterPre,
+        finished.direct,
       ]) {
-        p.dispose();
+        p?.dispose();
       }
-      antialiased.dispose();
+      // the passes' own targets and materials: a pipeline frees its quad's
+      // material only, and these hold the screen-sized memory
+      antialiasing.dispose();
+      lensBlur?.dispose();
+      aoTexture.dispose();
+      aoPass.dispose();
       beforeAa.dispose();
       outline.dispose();
       paperScene.dispose();
