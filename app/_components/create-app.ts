@@ -25,8 +25,12 @@ import {
   memoryLimitsFor,
   type MemoryStep,
 } from "@/lib/city/memory-governor";
+import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import {
+  frameLoss,
   type GpuLoss,
+  RESUME_AWAY_MS,
+  RESUME_WINDOW_MS,
   type SafetyLevel,
   shadowTilesStream,
   startTileOf,
@@ -183,14 +187,6 @@ const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
 /** How often the crash trail takes a heartbeat (crash-trail.ts). */
 const TRAIL_BEAT_MS = 2000;
-/**
- * A page shown again after at least this long hidden may find its GPU
- * taken: iOS reclaims a background tab's GPU process, and the first frame
- * after it throws (create-app's resume guard, below).
- */
-const RESUME_AWAY_MS = 10_000;
-/** A frame that fails this soon after such a return is a reclaim. */
-const RESUME_WINDOW_MS = 5000;
 /** How long a memory emergency keeps the shadow camera from streaming. */
 const EMERGENCY_SHADOW_HOLD_MS = 120_000;
 /** Allocation failures closer together than this are one emergency. */
@@ -339,7 +335,8 @@ export interface CityWalkOptions {
   /**
    * The GPU is gone for good, or a frame threw and left three's renderer
    * in a state no later frame draws right (the render stopped) — `how`:
-   * lost in use, or reclaimed by iOS while the page was in the background
+   * lost in use, reclaimed by iOS while the page was in the background,
+   * or failed — a frame that threw on a GPU still working, a bug
    * (lib/city/gpu-safety.ts). The reload to run when the page recovers by
    * itself (gpu-recovery.ts, a reload where the player stood): the scene
    * runs it once the old device is freed, and once the page is in view.
@@ -758,22 +755,25 @@ function whenVisible(then: () => void): void {
 
 /**
  * Unloads every tile the cache holds that is not in use, at once (on a
- * hide, in an emergency) and lets the cache keep none of them: it frees
- * 5 % of its excess per call otherwise, the rest a frame later — and no
- * frame runs in a hidden page. Public API of 3DTilesRendererJS's cache.
+ * hide, in an emergency): for that call the cache keeps none of them and
+ * frees all its excess — it frees 5 % per call otherwise, the rest a frame
+ * later, and no frame runs in a hidden page. Both bounds are back as they
+ * were after it: what the cache keeps from then on is the caller's (the
+ * memory governor's step). Public API of 3DTilesRendererJS's cache.
  */
 function shedUnusedTiles(cache: {
   minBytesSize: number;
   unloadPercent: number;
   unloadUnusedContent: () => void;
 }): void {
-  const percent = cache.unloadPercent;
+  const { minBytesSize, unloadPercent } = cache;
   cache.minBytesSize = 0;
   cache.unloadPercent = 1;
   try {
     cache.unloadUnusedContent();
   } finally {
-    cache.unloadPercent = percent;
+    cache.minBytesSize = minBytesSize;
+    cache.unloadPercent = unloadPercent;
   }
 }
 
@@ -1123,12 +1123,15 @@ async function bootApp(
       // memory before a frame's own allocation fails; the half-made
       // attribute such a failure left, met again at a tile's release, is
       // only noted (memoryEmergency is defined further down: the stream
-      // calls this from its loads, which start with the first frame)
+      // calls this from its loads, which start with the first frame). The
+      // trail gets the part, never the tile: a tile's id names where the
+      // player was, and the trail goes into reports.
       onAllocationFailure: (error, where) => {
         const message = error instanceof Error ? error.message : String(error);
-        opts.trail?.note("alloc-failed", `${where} ${message}`);
-        if (!where.startsWith("dispose")) {
-          memoryEmergency(`allocation ${where}`);
+        const part = where.split(" ")[0] ?? where;
+        opts.trail?.note("alloc-failed", `${part} ${message}`);
+        if (part !== "dispose") {
+          memoryEmergency(`allocation ${part}`);
         }
       },
       dressingGate,
@@ -1527,14 +1530,25 @@ async function bootApp(
   // (below) — the height is above the ground, which is not there yet. A
   // recovered page starts where its player stood instead, on the tile the
   // boot waits for (`spawn`), on foot or in the air (Modell is the HUD's
-  // to put back): its first update streams that place, not the spawn.
+  // to put back): its first update streams that place, not the spawn. It
+  // boots looking straight down (clamped to the pitch limit) onto that
+  // tile: a pose that looks at the sky, or out past the site's edge, from
+  // the air sees no tile — nothing would load, and by night or from safety
+  // level 2 no shadow camera streams one either, so the boot would wait
+  // for ever. Its own aim goes back once the tile has landed (below, and
+  // the HUD's after the first frame).
   const spawnView = spawnViewpoint(opts.site);
   const restored = startTileOf(extras.tiles, opts.initialCamera?.epsg)
     ? opts.initialCamera
     : undefined;
-  const placeStart = () =>
-    restored ? pose.applyCameraState(restored) : pose.placeAt(spawnView);
-  placeStart();
+  const placeStart = (booting = false) => {
+    if (!restored) {
+      pose.placeAt(spawnView);
+      return;
+    }
+    pose.applyCameraState(booting ? { ...restored, pitchDeg: -90 } : restored);
+  };
+  placeStart(true);
 
   // Street-view-style canvas gestures (touch and mouse, incl. pointer lock).
   /** A step of the wall clearance from `point` towards the camera, level. */
@@ -2205,7 +2219,10 @@ async function bootApp(
       ? "reclaimed"
       : "lost";
   // "render stopped" goes on the trail first: what the page notes after it
-  // is the aftermath (cancelled fetches, the device's last word).
+  // is the aftermath (cancelled fetches, the device's last word). A page
+  // that does not reload notes "gpu failed" last: the failure card (or the
+  // failed boot) is reported once — after a reclaim, which reports nothing
+  // of its own, it is the only word there is (crash-reports.ts).
   const stopRendering = (
     message: string,
     how: GpuLoss = "lost",
@@ -2231,6 +2248,7 @@ async function bootApp(
       void releaseGpu(renderer).then(() => whenVisible(reload));
       return;
     }
+    opts.trail?.note("gpu failed", `${how}: ${message}`);
     const failed = `Die Grafik ist ausgefallen (${message}). Bitte neu laden.`;
     if (!firstFrameShown) {
       bootFailure ??= new Error(failed);
@@ -2264,15 +2282,23 @@ async function bootApp(
   // override and object function installed (every later frame draws only
   // the casters, and returns normally). Carrying on is never a recovery.
   // Soon after a long absence it is the GPU iOS reclaimed meanwhile: noted
-  // as that (stopRendering), not as a failed frame.
+  // as that (stopRendering), not as a failed frame. In use it is a loss
+  // only with a sign of the GPU running out — an allocation error, a
+  // memory emergency before it, a GPU that no longer takes work (the
+  // probe; WebGL2 has none to fail) — and otherwise a bug ("failed"): a
+  // reload at the same level, never a lighter device for days.
   const onFrameFailed = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     const where =
       error instanceof Error
         ? (error.stack ?? "").split("\n").slice(0, 4).join(" | ")
         : "";
-    const how = lossNow();
-    if (how === "lost") {
+    const how = frameLoss(lossNow(), {
+      allocation: isAllocationFailure(error),
+      emergency: lastEmergency !== Number.NEGATIVE_INFINITY,
+      answers: () => probeGpu(renderer) === null,
+    });
+    if (how !== "reclaimed") {
       opts.trail?.note("frame failed", `${message} ${where}`);
     }
     stopRendering(message, how, `${message} ${where}`);
@@ -2507,9 +2533,15 @@ async function bootApp(
   );
   const baseError = stream.tiles.errorTarget;
   const baseMin = stream.tiles.lruCache.minBytesSize;
+  // A phone's page in the background keeps no tile it does not use (the
+  // resume guard, below): its lower bound is 0 until it is shown again,
+  // whatever step the governor takes meanwhile.
+  const shedding = () => budget.tier === "mobile" && document.hidden;
   const applyStep = (step: MemoryStep) => {
     stream.tiles.errorTarget = baseError * step.errorScale;
-    stream.tiles.lruCache.minBytesSize = baseMin * step.minScale;
+    stream.tiles.lruCache.minBytesSize = shedding()
+      ? 0
+      : baseMin * step.minScale;
   };
   applyStep(governor.step());
   const govern = setInterval(() => {
@@ -2535,11 +2567,16 @@ async function bootApp(
   /**
    * The GPU ran out of memory (the uncaptured GPUOutOfMemoryError above):
    * shed at once what can go, before a frame's own allocation fails and
-   * the render stops — the governor to its last step, every tile not in
-   * use, the shadow camera's tiles for two minutes — and make the next
-   * page a safety level lighter (gpu-safety.ts), once per page. The one
-   * entry for every allocation-failure signal: a failed upload or compile
-   * the stream reports connects here, `memoryEmergency("allocation …")`.
+   * the render stops — every tile not in use, the governor to its last
+   * step, the shadow camera's tiles for two minutes — and make the next
+   * page a safety level lighter (gpu-safety.ts), once per page and per
+   * incident: the raise names this page (`by`), so the loss it foretold
+   * renews it rather than adding one, and its death raises nothing more
+   * on the next load. Not for a GPU iOS reclaimed (hidden, or just back
+   * after a long absence): an allocation refused there is the reclaim's
+   * symptom, no sign of the page's. The one entry for every
+   * allocation-failure signal: a failed upload or compile the stream
+   * reports connects here, `memoryEmergency("allocation …")`.
    */
   const memoryEmergency = (reason: string): void => {
     const now = performance.now();
@@ -2549,10 +2586,8 @@ async function bootApp(
     lastEmergency = now;
     opts.trail?.note("memory emergency", reason);
     const step = governor.force(3, renderer.info.memory.total, now);
-    if (step) {
-      applyStep(step);
-    }
     shedUnusedTiles(stream.tiles.lruCache);
+    applyStep(step ?? governor.step());
     shadowHeldUntil = Math.max(shadowHeldUntil, now + EMERGENCY_SHADOW_HOLD_MS);
     streamShadowTiles(sunUp);
     clearTimeout(shadowResume);
@@ -2560,9 +2595,9 @@ async function bootApp(
       () => streamShadowTiles(sunUp),
       EMERGENCY_SHADOW_HOLD_MS + GOVERN_MS
     );
-    if (!emergencyRaised) {
+    if (!emergencyRaised && lossNow() === "lost") {
       emergencyRaised = true;
-      raiseSafety(budget.safety);
+      raiseSafety(budget.safety, { by: opts.trail?.startedAt });
     }
   };
 
@@ -2572,22 +2607,25 @@ async function bootApp(
   // not in use (a desktop keeps its cache: a tab switch is no threat
   // there); shown again, it gets its cache back and probes the GPU before
   // the next frame draws — a GPU gone meanwhile is a reclaim
-  // (stopRendering), not a failure of the page's.
-  let hiddenAt = document.hidden ? performance.now() : null;
+  // (stopRendering), not a failure of the page's. The time away is the
+  // wall clock's: iOS stops `performance.now()` while the device sleeps,
+  // and an hour with the phone locked would read as a glance away.
+  let hiddenAt = document.hidden ? Date.now() : null;
   const onVisibility = () => {
     if (disposed || stopped) {
       return;
     }
     if (document.hidden) {
-      hiddenAt = performance.now();
-      if (budget.tier === "mobile") {
+      hiddenAt = Date.now();
+      if (shedding()) {
         shedUnusedTiles(stream.tiles.lruCache);
+        applyStep(governor.step());
       }
       return;
     }
-    const away = hiddenAt === null ? 0 : performance.now() - hiddenAt;
+    const away = hiddenAt === null ? 0 : Date.now() - hiddenAt;
     hiddenAt = null;
-    stream.tiles.lruCache.minBytesSize = baseMin * governor.step().minScale;
+    applyStep(governor.step());
     if (away >= RESUME_AWAY_MS) {
       resumedAt = performance.now();
     }

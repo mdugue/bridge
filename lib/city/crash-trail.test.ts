@@ -55,6 +55,32 @@ test("a page loaded in the background is no crash when it is killed there", () =
   expect(trail.stats?.beats).toBe(0);
 });
 
+test("the time away is the wall clock's too: a phone locked for an hour resumes", () => {
+  const start = Date.parse(setup.startedAt);
+  const trail = createTrail(setup);
+  // locked for an hour, while the page's own clock moved two seconds
+  pushEvent(trail, { t: 10, kind: "hidden" }, start + 10_000);
+  pushEvent(trail, { t: 12, kind: "visible" }, start + 3_610_000);
+  expect(trail.resumedAt).toBe(12);
+  expect(trail.hiddenWall).toBeUndefined();
+  // a glance away is none by either clock
+  pushEvent(trail, { t: 20, kind: "hidden" }, start + 3_618_000);
+  pushEvent(trail, { t: 23, kind: "visible" }, start + 3_621_000);
+  expect(trail.resumedAt).toBe(12);
+  // a wall clock set back meanwhile: the page's own still counts
+  pushEvent(trail, { t: 30, kind: "hidden" }, start + 3_628_000);
+  pushEvent(trail, { t: 45, kind: "visible" }, start);
+  expect(trail.resumedAt).toBe(45);
+  // without the wall clock (an older record), the page's own
+  pushEvent(trail, { t: 50, kind: "hidden" });
+  pushEvent(trail, { t: 61, kind: "visible" });
+  expect(trail.resumedAt).toBe(61);
+  // a page loaded in the background was away from its start
+  const behind = createTrail({ ...setup, hidden: true });
+  pushEvent(behind, { t: 2, kind: "visible" }, start + 60_000);
+  expect(behind.resumedAt).toBe(2);
+});
+
 test("events and beats keep only the newest entries", () => {
   const trail = createTrail(setup);
   for (let i = 0; i < TRAIL_EVENTS + 5; i++) {

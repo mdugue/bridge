@@ -29,7 +29,7 @@ function ladder() {
   return {
     raise: (from: SafetyLevel) => {
       raises++;
-      return raiseSafety(from, local, 0);
+      return raiseSafety(from, { store: local, now: 0 });
     },
     next: () => settleSafety("", local, null, 0),
     raises: () => raises,
@@ -95,6 +95,38 @@ test("a GPU reclaimed in the background reloads at the same level, three times i
   ).toBe(true);
   // and a reclaim counts as a recovery for the page after it
   expect(recentlyRecovered(store, 1_800_002)).toBe(true);
+});
+
+test("a frame that failed on a working GPU reloads at the same level, twice in ten minutes", () => {
+  const store = memoryStore();
+  const pages = ladder();
+  for (const t of [0, 60_000]) {
+    expect(recoverFromGpuLoss("failed", "{}", 0, pages.raise, store, t)).toBe(
+      true
+    );
+  }
+  expect(
+    recoverFromGpuLoss("failed", "{}", 0, pages.raise, store, 120_000)
+  ).toBe(false);
+  // a bug never makes the device lighter
+  expect(pages.raises()).toBe(0);
+  expect(pages.next()).toBe(0);
+  expect(recentlyRecovered(store, 120_000)).toBe(true);
+  // ten minutes on, the next one may reload again
+  expect(
+    recoverFromGpuLoss("failed", "{}", 0, pages.raise, store, 600_001)
+  ).toBe(true);
+});
+
+test("a page lost before its first frame keeps the place it booted at for the next", () => {
+  const store = memoryStore();
+  const { raise } = ladder();
+  recoverFromGpuLoss("lost", '{"camera":1}', 0, raise, store, 0);
+  // the recovered page boots there, and loses its GPU before it drew:
+  // it has no camera of its own to give
+  expect(peekRecoverySnapshot(store)).toBe('{"camera":1}');
+  expect(recoverFromGpuLoss("lost", null, 1, raise, store, 1000)).toBe(true);
+  expect(takeRecoverySnapshot(store)).toBe('{"camera":1}');
 });
 
 test("Leichter weiter raises the level and keeps the place past every cap", () => {

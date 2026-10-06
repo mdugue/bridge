@@ -149,16 +149,30 @@ test("no report names a place: not the tile, not a coordinate", () => {
     kind: "error",
     detail: "no ground at 412345.67, 5656789.12 (51.05041, 13.73726)",
   };
+  // A tile's id outside a URL, as a note may name one.
+  const refused = {
+    t: 7.7,
+    kind: "alloc-failed",
+    detail: "content 32565_5932_2_hh RangeError: out of bounds",
+  };
   pushEvent(trail, lost);
   pushEvent(trail, thrown);
+  pushEvent(trail, refused);
+  pushEvent(trail, {
+    t: 7.8,
+    kind: "memory emergency",
+    detail: "allocation dressing 33412_5656_2_sn",
+  });
   const sent = JSON.stringify([
     crashReport(trail, ID, ctx),
     problemReport(trail, lost, ID, ctx),
     problemReport(trail, thrown, ID, ctx),
+    problemReport(trail, refused, ID, ctx),
   ]);
   for (const place of [
     "33412",
     "5656",
+    "5932",
     "412345",
     "5656789",
     "51.05041",
@@ -169,6 +183,8 @@ test("no report names a place: not the tile, not a coordinate", () => {
   // What failed stays readable.
   expect(sent).toContain("canopy_#####_####_#_sn");
   expect(sent).toContain("no ground at ######.##");
+  expect(sent).toContain("alloc-failed: content #####_####_#_hh RangeError");
+  expect(sent).toContain("allocation dressing #####_####_#_sn");
 });
 
 test("no report leaves Sentry an address to infer for the visitor", () => {
@@ -259,6 +275,30 @@ describe("which problems are the aftermath of the page's end", () => {
     // an error is the page's own, in view or not
     expect(isAftermath(noted(), error, true)).toBe(false);
   });
+
+  test("not a GPU the system took, whichever of its signs comes first", () => {
+    const deviceLost = { t: 20, kind: "device-lost", detail: "unknown" };
+    const refused = { t: 20, kind: "alloc-failed", detail: "content x" };
+    // lost or refused while hidden: a reclaim, before it is noted as one
+    expect(isAftermath(noted(), deviceLost, true)).toBe(true);
+    expect(isAftermath(noted(), refused, true)).toBe(true);
+    // or within create-app's window after a long absence
+    const back = noted("hidden", "visible");
+    back.resumedAt = 18;
+    expect(isAftermath(back, deviceLost, false)).toBe(true);
+    expect(isAftermath(back, { ...deviceLost, t: 23.5 }, false)).toBe(false);
+    // in view and in use, a lost device is the page's own
+    expect(isAftermath(noted(), deviceLost, false)).toBe(false);
+    expect(isAftermath(noted(), refused, false)).toBe(false);
+  });
+
+  test("a GPU the page could not recover from is reported even past saving", () => {
+    const card = { t: 20, kind: "gpu failed", detail: "reclaimed: x" };
+    const stopped = noted("render stopped", "gpu reclaimed");
+    expect(isAftermath(stopped, card, true)).toBe(false);
+    stopped.state = "clean";
+    expect(isAftermath(stopped, card, false)).toBe(true);
+  });
 });
 
 test("a recovery page that died is a crash of its own, with its restart gap", () => {
@@ -279,6 +319,16 @@ test("a recovery page that died is a crash of its own, with its restart gap", ()
   });
   // Without the next page's start, no gap.
   expect(tagsOf(crashReport(trail, ID, ctx)).restart_gap_s).toBeUndefined();
+});
+
+test("a page that died after the device slept is timed by the wall clock", () => {
+  const trail = page();
+  // locked for an hour at 8 s on the page's own clock, killed on waking
+  const woke = Date.parse(trail.startedAt) / 1000 + 3608;
+  trail.lastWall = woke * 1000;
+  const report = crashReport(trail, ID, ctx, { nextStart: woke + 1.2 });
+  expect(report.timestamp).toBe(woke);
+  expect(tagsOf(report).restart_gap_s).toBe("1.2");
 });
 
 test("a report says how soon after a long stretch in the background it came", () => {
@@ -312,7 +362,44 @@ test("a page reports each problem once, and only so many", () => {
       admit({ t: 3, kind: "error", detail: `boom ${"x".repeat(i)}` })
     ).toBe(true);
   }
-  expect(admit({ t: 4, kind: "device-lost" })).toBe(false);
+  expect(admit({ t: 4, kind: "error", detail: "one too many" })).toBe(false);
+  // what ends the page goes out past the cap — once: what follows is its echo
+  expect(admit({ t: 5, kind: "device-lost" })).toBe(true);
+  expect(admit({ t: 6, kind: "gpu failed", detail: "lost: x" })).toBe(false);
+});
+
+test("a GPU running out costs one warning, and its end still goes out", () => {
+  const admit = createProblemGate();
+  // one out-of-memory episode, every part it failed to make
+  for (const where of ["content", "dressing", "crowns", "dispose"]) {
+    expect(
+      admit({ t: 1, kind: "alloc-failed", detail: `${where} RangeError` })
+    ).toBe(where === "content");
+  }
+  for (let i = 0; i < PROBLEMS_PER_PAGE; i++) {
+    admit({
+      t: 2,
+      kind: "gpu-error",
+      detail: `GPUOutOfMemoryError ${"x".repeat(i)}`,
+    });
+  }
+  expect(
+    admit({
+      t: 3,
+      kind: "frame failed",
+      detail: "Unable to make command encoder",
+    })
+  ).toBe(true);
+});
+
+test("a failure card is one report: its cause's, or its own after a reclaim", () => {
+  const card = { t: 9, kind: "gpu failed", detail: "reclaimed: Unable to" };
+  // a reclaim reports nothing of its own: the card is the only word
+  expect(createProblemGate()(card)).toBe(true);
+  // after a failed frame the card is that failure's echo
+  const admit = createProblemGate();
+  expect(admit({ t: 8, kind: "frame failed", detail: "TypeError" })).toBe(true);
+  expect(admit(card)).toBe(false);
 });
 
 test("what the viewer notes as it copes is never a report of its own", () => {

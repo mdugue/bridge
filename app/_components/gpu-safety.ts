@@ -13,11 +13,12 @@ import { recentlyRecovered } from "./gpu-recovery";
 /**
  * The safety ladder's browser side (the ladder and why it exists:
  * lib/city/gpu-safety.ts): one local-storage key, `gpu-safety`, holding
- * `{ level, raisedAt }` and the start of the crashed page's record that
- * last raised it. Every access may throw (private mode, site data
- * blocked, a full quota): a page that cannot read it runs at level 0, one
- * that cannot write it simply does not get lighter — and does not reload
- * itself after a lost GPU (gpu-recovery.ts).
+ * `{ level, raisedAt }`, the start of the crashed page's record that last
+ * raised it and of the page that last raised it in use. Every access may
+ * throw (private mode, site data blocked, a full quota): a page that
+ * cannot read it runs at level 0, one that cannot write it simply does not
+ * get lighter — and does not reload itself after a lost GPU
+ * (gpu-recovery.ts).
  */
 
 const KEY = "gpu-safety";
@@ -76,6 +77,19 @@ export function settleSafety(
   return level;
 }
 
+export interface RaiseOptions {
+  /**
+   * The raising page's record start (crash-trail.ts): a raise in use, once
+   * per incident — the loss after this page's own memory emergency renews
+   * that raise instead of adding one, and the page's death raises nothing
+   * more on the next load (lib/city/gpu-safety.ts `raisedSafety`). Without
+   * it, a raise on top (*Leichter weiter*).
+   */
+  by?: string;
+  store?: Store | null;
+  now?: number;
+}
+
 /**
  * A level lighter from the next page on (a lost GPU, a memory emergency,
  * "Leichter weiter"), above `from`, the level this page runs at. False
@@ -83,10 +97,9 @@ export function settleSafety(
  */
 export function raiseSafety(
   from: SafetyLevel,
-  store: Store | null = local(),
-  now = Date.now()
+  { by, store = local(), now = Date.now() }: RaiseOptions = {}
 ): boolean {
-  return writeStored(store, raisedSafety(readStored(store), from, now));
+  return writeStored(store, raisedSafety(readStored(store), from, now, by));
 }
 
 /**
@@ -103,52 +116,47 @@ function crashedBefore(): Trail | null {
 }
 
 /**
- * A record that only looked ended was a page still open in another tab
- * (crash-trail.ts `pageStillOpen`): its raise is taken back, and the
- * record stays counted. Not if anything raised the level since.
+ * The level a page boots at once a previous record that looks crashed
+ * (`crashed`) has had its chance to answer (`stillOpen`): a record that
+ * only looked ended is a page still open in another tab (crash-trail.ts
+ * `pageStillOpen`) — no crash, no raise, and nothing marked counted: the
+ * next load asks again.
  */
-function undoIfStillOpen(
+export async function settleAfterAsking(
+  search: string,
   store: Store | null,
-  before: StoredSafety | null,
-  trail: Trail
-): void {
-  const raised = readStored(store);
-  void pageStillOpen(trail).then((open) => {
-    const now = readStored(store);
-    if (!(open && raised && now?.raisedAt === raised.raisedAt)) {
-      return;
-    }
-    writeStored(store, {
-      ...(before ?? { level: 0, raisedAt: 0 }),
-      crash: trail.startedAt,
-    });
-  });
+  crashed: Trail | null,
+  stillOpen: (trail: Trail) => Promise<boolean>,
+  now: () => number = Date.now
+): Promise<SafetyLevel> {
+  const open = crashed ? await stillOpen(crashed) : false;
+  return settleSafety(
+    search,
+    store,
+    open ? null : (crashed?.startedAt ?? null),
+    now()
+  );
 }
 
-let pageLevel: SafetyLevel | null = null;
+let pageLevel: Promise<SafetyLevel> | null = null;
 
 /**
  * This page's safety level, worked out once per load (the budget is made
- * from it, city-walk-client.tsx): before the crash trail of this page
- * starts, so the previous page's record is still the one offered.
+ * from it, city-walk-client.tsx): the previous page's record is read
+ * before the crash trail of this page starts, so it is still the one
+ * offered; the level settles once that page had its chance to say it is
+ * still open (up to 250 ms, beside the manifest's fetch — and only for a
+ * record that looks crashed).
  */
-export function pageSafety(): SafetyLevel {
+export function pageSafety(): Promise<SafetyLevel> {
   if (typeof window === "undefined") {
-    return 0;
+    return Promise.resolve(0);
   }
-  if (pageLevel === null) {
-    const store = local();
-    const before = readStored(store);
-    const crashed = crashedBefore();
-    pageLevel = settleSafety(
-      location.search,
-      store,
-      crashed?.startedAt ?? null,
-      Date.now()
-    );
-    if (crashed && readStored(store)?.crash !== before?.crash) {
-      undoIfStillOpen(store, before, crashed);
-    }
-  }
+  pageLevel ??= settleAfterAsking(
+    location.search,
+    local(),
+    crashedBefore(),
+    pageStillOpen
+  );
   return pageLevel;
 }

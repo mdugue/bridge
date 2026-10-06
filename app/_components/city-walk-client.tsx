@@ -6,6 +6,7 @@ import {
   isNetworkFailure,
   MANIFEST_FETCH_BUDGET_MS,
 } from "@/lib/city/fetch-retry";
+import type { SafetyLevel } from "@/lib/city/gpu-safety";
 import { loadStageStates } from "@/lib/city/load-stages";
 import { siteDataBase } from "@/lib/city/site-index";
 import { type DataManifest, MANIFEST_FILE, manifestUrl } from "@/lib/city/tile";
@@ -139,6 +140,29 @@ function useDataManifest(base: string): {
 }
 
 /**
+ * The device's safety level (gpu-safety.ts), null until it has settled:
+ * it reads the previous page's crash trail before this page's own trail
+ * starts (city-walk.tsx mounts only once the budget is made), and a
+ * previous record that looks crashed is first asked whether its page is
+ * still open — beside the manifest's fetch, so the boot waits on both.
+ */
+function usePageSafety(): SafetyLevel | null {
+  const [safety, setSafety] = useState<SafetyLevel | null>(null);
+  useEffect(() => {
+    let live = true;
+    void pageSafety().then((level) => {
+      if (live) {
+        setSafety(level);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  return safety;
+}
+
+/**
  * The viewer for one site (the route /<site>): its data folder, and the
  * site itself for every part of the HUD (site-context.tsx). Takes the id, not
  * the Site, since a Server Component renders it; the registry resolves it.
@@ -173,19 +197,19 @@ function SiteViewer({ base }: { base: string }) {
     loadViewer().catch(() => undefined);
   }, []);
   const { manifest, failed, retry } = useDataManifest(base);
+  const safety = usePageSafety();
   // The render budget (profile, device tier, whether the rest of the site
   // streams, the device's safety level) is read from the page ONCE, here,
   // and handed down; the scene never re-reads the window. The lite profile
-  // streams the spawn tile alone. The safety level reads the previous
-  // page's crash trail, before this page's own trail starts (city-walk.tsx).
+  // streams the spawn tile alone.
   const setup = useMemo(() => {
-    if (manifest === undefined) {
+    if (manifest === undefined || safety === null) {
       return null;
     }
-    const budget: SceneBudget = currentSceneBudget(pageSafety());
+    const budget: SceneBudget = currentSceneBudget(safety);
     const tileset = budget.neighbourTiles ? TILESET_FILE : TILESET_SPAWN_FILE;
     return { budget, tilesetUrl: manifestUrl(manifest, tileset, base) };
-  }, [base, manifest]);
+  }, [base, manifest, safety]);
   if (failed !== undefined) {
     return (
       <div className="relative h-full w-full bg-[image:var(--hud-scrim)]">

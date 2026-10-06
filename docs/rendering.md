@@ -669,8 +669,10 @@ stays their measure; the tile cache counts true bytes.
   stream reports out of memory) **forces** the last step at once, without
   a line or a hold, sheds every tile not in use, keeps the shadow camera
   from streaming for two minutes and raises the device's level once per
-  page; WebKit reports every failed allocation, so one emergency covers
-  five seconds.
+  page — in use only (hidden, or within 5 s of a return, an allocation
+  refused is a reclaimed GPU's symptom), and as the page's own raise, so
+  the loss it foretells renews it rather than adding a level; WebKit
+  reports every failed allocation, so one emergency covers five seconds.
 - **The page's own process.** After a content's compile has uploaded it,
   and while its tile is still there, an allowlist of its attributes give
   up their CPU arrays (`dropCpuCopies`; the lists are `cpuDroppable` and
@@ -698,11 +700,13 @@ stays their measure; the tile cache counts true bytes.
   GPU had no room for (`lib/city/gpu-allocation.ts`: the
   `createAttribute` RangeError, WebKit's "Unable to …", an
   `OperationError`, `GPUOutOfMemoryError`) leaves its dressing off, notes
-  `alloc-failed <where> <message>` and calls the memory emergency (a
-  half-made attribute met again at a release is only noted). Disposal
-  steps past such an attribute (`disposeGeometry`), and a leaving tile
-  whose dressing still compiles has its content freed by the plugin, so
-  the tile renderer's own dispose never meets one. A compile that throws
+  `alloc-failed <part> <message>` (`content`, `dressing`, `crowns` or
+  `dispose` — never the tile: its id names where the player was) and
+  calls the memory emergency (a half-made attribute met again at a
+  release is only noted). Disposal steps past such an attribute
+  (`disposeGeometry`), and a leaving tile whose dressing still compiles
+  has its content freed by the plugin, so the tile renderer's own
+  dispose never meets one. A compile that throws
   inside three's `compileAsync` leaves three's private pre-compiling flag
   raised until the next compile that succeeds (only
   `ShadowNode.updateBefore` reads it): the shadow map can pause until the
@@ -747,34 +751,48 @@ snapshot waits in session storage, the raised level in local storage
 (`gpu-safety`). One automatic reload per level (0 → 1 → 2 → 3); none from
 level 3, and none where the raise cannot be stored — the next page would
 be no lighter; a tab-wide net of three in ten minutes covers a
-`?safety=N` page, whose level cannot rise. Before every reload
-`renderer.dispose()` runs (raced against 300 ms): it unhooks the
-geometries' dispose listeners and destroys the device, which WebKit
-otherwise frees only once the old document is collected — after the new
-page has started allocating in the same process. A page hidden at that
-moment reloads once it is visible. The recovered page sets its pose
-before the stream's first update (its start tile is the one under the
-camera, `startTileOf`) and its first frame waits for that tile, or for
-any shown tile once the renderer is idle without it; from level 2 it puts
-back neither the picture style nor Modell. Past the caps the HUD shows a
-card (`gpu-failure-card.tsx`): *Die Grafik ist ausgefallen*, one sentence,
-*Leichter weiter* (a level lighter, back where the player stood, past
-every cap) and *Neu laden*, the browser's own words under *Details*. A
-frame that throws is a loss too: three's render does not unwind (its call
-depth stays a level deep, or the shadow pass's override stays on), and no
-later frame draws right. Before the first frame the message fails the
-boot instead.
+`?safety=N` page, whose level cannot rise. One incident raises the level
+once: the loss after the page's own memory emergency renews that raise
+(`raisedBy`), and a page killed after one raises nothing more on the next
+load. Before every reload `renderer.dispose()` runs (raced against
+300 ms): it unhooks the geometries' dispose listeners and destroys the
+device, which WebKit otherwise frees only once the old document is
+collected — after the new page has started allocating in the same
+process. A page hidden at that moment reloads once it is visible. The
+recovered page sets its pose before the stream's first update (its start
+tile is the one under the camera, `startTileOf`), **looking straight
+down** onto that tile — a pose that looks at the sky or out past the
+site's edge from the air sees no tile, and by night or from level 2 no
+shadow camera streams one, so nothing would load — and puts the player's
+own aim back once the tile has landed; its first frame waits for that
+tile, or for any shown tile once the renderer is idle without it. From
+level 2 it puts back neither the picture style nor Modell. A page lost
+before its first frame leaves the snapshot it booted with for the next;
+a boot that fails takes it, so the next load starts at the spawn. Past
+the caps the HUD shows a card (`gpu-failure-card.tsx`): *Die Grafik ist
+ausgefallen*, one sentence, *Leichter weiter* (a level lighter, back where
+the player stood, past every cap) and *Neu laden*, the browser's own
+words under *Details*. A frame that throws stops the render too: three's
+render does not unwind (its call depth stays a level deep, or the shadow
+pass's override stays on), and no later frame draws right. It is a loss
+only with a sign of the GPU running out — an allocation error, a memory
+emergency before it, a GPU the probe finds gone (`frameLoss`); otherwise
+it is a bug (`failed`, and every throw on WebGL2, which has nothing to
+probe): the page reloads at the same level, at most twice in ten
+minutes. Before the first frame the message fails the boot instead.
 
 **A GPU taken in the background is not the page's failure** (the resume
 guard in `create-app.ts`). Hidden, a phone's page lets go of every tile
-not in use at once (`shedUnusedTiles`: the cache's lower bound 0 and its
-`unloadPercent` 1 for that call — it frees 5 % of its excess a call and
-the rest in later frames, and a hidden page runs none). Shown again, it
-gets its lower bound back and probes the device — an empty command buffer
+not in use at once (`shedUnusedTiles`: `unloadPercent` 1 for that call —
+it frees 5 % of its excess a call and the rest in later frames, and a
+hidden page runs none) and keeps none while hidden (the cache's lower
+bound 0, whatever step the governor takes). Shown again, it gets its
+lower bound back and probes the device — an empty command buffer
 encoded, finished and submitted, where WebKit throws "Unable to make
 command encoder" before any device-lost arrives. A failed probe, a device
 lost while hidden, or a frame that fails within 5 s of a return after at
-least 10 s away is noted `gpu reclaimed`: the page reloads at the same
+least 10 s away (by the wall clock: iOS stops `performance.now()` while
+the device sleeps) is noted `gpu reclaimed`: the page reloads at the same
 level, at most three times in 30 minutes.
 
 **Crashes and slow pages are reported** where the build has a DSN
@@ -784,34 +802,47 @@ every 2 s, and the whole page's frame-rate buckets and memory peaks) is
 read by the next load, which sends it as a fatal event grouped by
 renderer and phase (`boot after <stage>`, `streaming`, `running`); the
 problems the viewer catches itself (a lost device, a GPU error, a failed
-frame, allocation or load) go out as they happen, and each page's numbers
-(first frame, loaded, mean fps, the share of time below 10/20/30 fps, the
-most memory held) as a transaction each time it leaves view, for the
-stretch since the last one, and each page is a session (`ok` → `exited`,
-or `crashed` by the next load) for Sentry's crash-free rate per release. A
-record whose page is still open in another tab is not a crash
+frame, allocation or load, a GPU the page could not recover from) go out
+as they happen, and each page's numbers (first frame, loaded, mean fps,
+the share of time below 10/20/30 fps, the most memory held) as a
+transaction each time it leaves view, for the stretch since the last
+one, and each page is a session (`ok` → `exited`, or `crashed` by the
+next load) for Sentry's crash-free rate per release. A page reports at
+most five of the problems it goes on after (one `alloc-failed` for a
+whole out-of-memory episode, whatever the parts it failed on), and past
+that cap the first problem that ends it (`device-lost`, `frame failed`,
+`boot failed`, `gpu failed`) — the first only, so a failure card is one
+report. A record whose page is still open in another tab is not a crash
 (`pageStillOpen`); nor is one that started in a hidden document (it starts
 `hidden`, and a kill in the background is no crash). After a GPU recovery
 only a record with nothing but its start is passed over; a recovery page
 that dies, in its boot or later, comes in as *Recovery page died (phase,
 backend)* with a fingerprint of its own. What a page notes after `render
 stopped`, `reloading` or `gpu reclaimed`, or once it ended clean
-(pagehide, the viewer's end), and a failed load or boot while it is
-hidden, is its **aftermath** (`isAftermath`): a breadcrumb, no event, no
-session error — the rejection from freeing what the dead device held, the
-fetches a reload cancels. Levels: a lost device and a failed boot are
-fatal, a boot that gave up on the network (`network: …`) an error, a
-failed allocation the page survived (`alloc-failed`) a warning, the rest
-errors; `gpu reclaimed`, `memory emergency`, `net-retry`, `net-wait` and
-`safety` are breadcrumbs only. Every report is tagged `safety` (the
-device's level), `resumed_s` (seconds since the page came back after at
-least 10 s hidden, when under a minute) and, on a crash, `restart_gap_s`
-(how soon the next page started after the record's last entry: under
-~2 s is Safari reloading a page whose process it killed — the last beat
-may lie 2 s before the death). All of it is Sentry envelopes in
-beacons (`lib/city/crash-reports.ts`), no SDK, to the site's own `/r/e`,
-which `next.config.ts` forwards to the tracker (blockers drop requests to
-Sentry's host). The release is `bridge@<commit>`, derived once
+(pagehide, the viewer's end), a failed load or boot while it is hidden,
+and a reclaim's own word — a `device-lost` or `alloc-failed` while hidden
+or within 5 s of a return, noted before the page knows to say `gpu
+reclaimed` — is its **aftermath** (`isAftermath`): a breadcrumb, no
+event, no session error — the rejection from freeing what the dead
+device held, the fetches a reload cancels. A page that does not reload
+notes `gpu failed`, reported even past saving: after a reclaim, the
+failure card's only word. Levels: a lost device, `gpu failed` and a
+failed boot are fatal, a boot that gave up on the network (`network: …`)
+an error, a failed allocation the page survived (`alloc-failed`) a
+warning, the rest errors; `gpu reclaimed`, `memory emergency`,
+`net-retry`, `net-wait` and `safety` are breadcrumbs only. Every report
+is tagged `safety` (the device's level), `resumed_s` (seconds since the
+page came back after at least 10 s hidden, when under a minute) and, on
+a crash, `restart_gap_s` (how soon the next page started after the
+record's last write: under ~2 s is Safari reloading a page whose process
+it killed — the last beat may lie 2 s before the death); both by the
+wall clock the trail keeps beside its own, which stops while the device
+sleeps. Event text is scrubbed of places (`scrub`: the numbers in a URL,
+in a bare tile id and in anything shaped like a coordinate). All of it
+is Sentry envelopes in beacons (`lib/city/crash-reports.ts`), no SDK, to
+the site's own `/r/e`, which `next.config.ts` forwards to the tracker
+(blockers drop requests to Sentry's host). The release is
+`bridge@<commit>`, derived once
 (`reportBuild`) for the page and for `scripts/sentry-release.ts`, which
 creates it after the build with its commit and deploy. To set it up: a
 Sentry project (EU region, *Prevent Storing of IP Addresses* on), its DSN
@@ -855,7 +886,8 @@ The **first frame** waits on the spawn tile's buildings and *any* of its
 terrain levels (`bootApp` in `create-app.ts`); the player is then placed
 again on the spawn tile's ground, which did not exist when the pose was
 first set. A page that recovers a lost GPU starts on the tile under the
-player's camera instead, its pose set before the stream's first update
+player's camera instead, its pose set before the stream's first update,
+looking straight down onto that tile until it has landed
 ([ADR 0046](./adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)).
 Everything else is the tiles renderer's call: it loads and
 unloads by screen-space error from both cameras, and a `DressingPlugin`

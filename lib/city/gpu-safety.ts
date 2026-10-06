@@ -10,14 +10,17 @@
  * So every sign that a device ran out raises its level by one, kept in the
  * browser: a lost GPU that reloads the page, a previous page that died in
  * use (the crash trail offers it as a crash), a memory emergency in the
- * page (create-app.ts). Each level is a lighter page: a lower pixel-ratio
- * cap, a smaller shadow map and tile cache (scene-profile.ts), lower
- * memory lines and a governor that starts — and stays — further down
- * (memory-governor.ts), no shadow-camera streaming from level 2, and a
- * recovered page that puts back the place and the time but neither the
+ * page (create-app.ts) — one level per incident: the loss or the death
+ * that follows a page's own emergency is that emergency's end, not a
+ * second sign (`raisedBy`). Each level is a lighter page: a lower
+ * pixel-ratio cap, a smaller shadow map and tile cache (scene-profile.ts),
+ * lower memory lines and a governor that starts — and stays — further
+ * down (memory-governor.ts), no shadow-camera streaming from level 2, and
+ * a recovered page that puts back the place and the time but neither the
  * picture style nor Modell from level 2. A level comes back down by
  * itself, one per three days since it was last raised; `?safety=N` sets
- * it for one page (QA) and stores nothing.
+ * it for one page (QA) and stores nothing. A frame that throws on a GPU
+ * that still answers is a bug, not a sign (`frameLoss`).
  *
  * Also here: the caps on the automatic recovery (one reload per level,
  * gpu-recovery.ts) and where a recovered page starts. Pure: the caller
@@ -44,6 +47,12 @@ export interface StoredSafety {
    * record, seen again by a later page, raises nothing.
    */
   crash?: string;
+  /**
+   * The start of the record of the page that raised it in use (its memory
+   * emergency, its lost GPU): that page raises nothing more for the same
+   * incident, and its death, seen by the next page, raises nothing either.
+   */
+  raisedBy?: string;
 }
 
 /** The nearest level to `n`. */
@@ -76,6 +85,9 @@ export function parseStoredSafety(raw: string | null): StoredSafety | null {
     if (typeof value.crash === "string") {
       stored.crash = value.crash;
     }
+    if (typeof value.raisedBy === "string") {
+      stored.raisedBy = value.raisedBy;
+    }
     return stored;
   } catch {
     return null;
@@ -98,18 +110,30 @@ export function decayedSafety(
 /**
  * The record after a raise: one above the higher of what is stored (as it
  * stands now) and `from`, the level the page runs at — a page on a QA
- * override, or one whose stored level a memory emergency already raised,
- * still ends up above itself.
+ * override, or one whose stored level another tab raised meanwhile, still
+ * ends up above itself. `by`, the raising page's record start, makes it a
+ * raise in use, once per incident: when that page raised the stored level
+ * itself (its memory emergency), its lost GPU only renews that raise — at
+ * least a level above the page. Without `by` (a crashed previous page,
+ * *Leichter weiter*) every raise adds a level.
  */
 export function raisedSafety(
   stored: StoredSafety | null,
   from: SafetyLevel,
-  now: number
+  now: number,
+  by?: string
 ): StoredSafety {
-  const level = clampSafety(Math.max(decayedSafety(stored, now), from) + 1);
+  const decayed = decayedSafety(stored, now);
+  const own = by !== undefined && stored?.raisedBy === by;
+  const level = clampSafety(
+    own ? Math.max(decayed, from + 1) : Math.max(decayed, from) + 1
+  );
   const raised: StoredSafety = { level, raisedAt: now };
   if (stored?.crash !== undefined) {
     raised.crash = stored.crash;
+  }
+  if (by !== undefined) {
+    raised.raisedBy = by;
   }
   return raised;
 }
@@ -136,7 +160,9 @@ export interface SafetyInputs {
 /**
  * The level a page boots at, and what to store for it (null: nothing). A
  * previous page that died in use raises the level once — the record's
- * start marks it counted. An override is the level, and stores nothing.
+ * start marks it counted — unless that page raised it itself before it
+ * died (`raisedBy`: its memory emergency, the same incident). An override
+ * is the level, and stores nothing.
  */
 export function resolveSafety(inputs: SafetyInputs): {
   level: SafetyLevel;
@@ -147,6 +173,12 @@ export function resolveSafety(inputs: SafetyInputs): {
     return { level: override, store: null };
   }
   if (previousCrash !== null && stored?.crash !== previousCrash) {
+    if (stored?.raisedBy === previousCrash) {
+      return {
+        level: decayedSafety(stored, now),
+        store: { ...stored, crash: previousCrash },
+      };
+    }
     const raised = { ...raisedSafety(stored, 0, now), crash: previousCrash };
     return { level: raised.level, store: raised };
   }
@@ -176,17 +208,54 @@ export function restoresLook(level: SafetyLevel): boolean {
 // --- the automatic recovery's caps (gpu-recovery.ts) -----------------------
 
 /**
- * How the GPU went: `lost` — it failed in use (a frame that threw, a device
- * the browser reports lost), which says the page asked too much; or
- * `reclaimed` — iOS took it while the page was in the background, which
- * says nothing about the page.
+ * How the GPU went: `lost` — it failed in use (a device the browser
+ * reports lost, a frame that threw for want of memory), which says the
+ * page asked too much; `reclaimed` — iOS took it while the page was in the
+ * background, which says nothing about the page; or `failed` — a frame
+ * threw on a GPU that still answers, with no sign of memory running out:
+ * a bug (a node build, three), which a lighter page would not cure.
  */
-export type GpuLoss = "lost" | "reclaimed";
+export type GpuLoss = "lost" | "reclaimed" | "failed";
+
+/**
+ * A page shown again after at least this long hidden may find its GPU
+ * taken: iOS reclaims a background tab's GPU process, and the first frame
+ * after it throws (create-app.ts's resume guard; the crash trail's
+ * `resumedAt` and the reports' reclaims count the same).
+ */
+export const RESUME_AWAY_MS = 10_000;
+/** A GPU that fails this soon after such a return was reclaimed. */
+export const RESUME_WINDOW_MS = 5000;
+
+/** What else is known when a frame throws in use (`frameLoss`). */
+export interface FrameSigns {
+  /** the error is the GPU failing to give memory (gpu-allocation.ts) */
+  allocation: boolean;
+  /** the page had a memory emergency */
+  emergency: boolean;
+  /** whether the GPU still takes work (create-app's probe; WebGL2: yes) */
+  answers: () => boolean;
+}
+
+/**
+ * How a frame that threw went, `how` being what the page's visibility
+ * says (lost in use, or reclaimed): a loss in use is `failed` unless
+ * something says the GPU ran out — an allocation error, an emergency
+ * before it, or a GPU that no longer takes work. A bug would otherwise
+ * lighten the device for days, a level per reload.
+ */
+export function frameLoss(how: GpuLoss, signs: FrameSigns): GpuLoss {
+  if (how !== "lost" || signs.allocation || signs.emergency) {
+    return how;
+  }
+  return signs.answers() ? "failed" : "lost";
+}
 
 /** When the page reloaded itself, per kind (ms since the epoch). */
 export interface RecoveryHistory {
   losses: readonly number[];
   reclaims: readonly number[];
+  failures: readonly number[];
 }
 
 /**
@@ -198,6 +267,11 @@ export const LOSS_WINDOW_MS = 600_000;
 /** At most this many reloads after a reclaim in RECLAIM_WINDOW_MS. */
 export const RECLAIM_TRIES = 3;
 export const RECLAIM_WINDOW_MS = 1_800_000;
+/**
+ * At most this many reloads after a failed frame in LOSS_WINDOW_MS: the
+ * recovery's old cap — a bug that comes back with the place shows the card.
+ */
+export const FAILURE_TRIES = 2;
 
 const within = (times: readonly number[], windowMs: number, now: number) =>
   times.filter((t) => now - t < windowMs);
@@ -210,13 +284,14 @@ export function recentHistory(
   return {
     losses: within(history.losses, LOSS_WINDOW_MS, now),
     reclaims: within(history.reclaims, RECLAIM_WINDOW_MS, now),
+    failures: within(history.failures, LOSS_WINDOW_MS, now),
   };
 }
 
 /**
  * Whether the page may reload itself. A loss reloads once per level — the
- * reload is a level lighter — and not from the lightest; a reclaim does
- * not raise the level and has its own cap.
+ * reload is a level lighter — and not from the lightest; a reclaim and a
+ * failed frame do not raise the level and have caps of their own.
  */
 export function mayRecover(
   how: GpuLoss,
@@ -225,10 +300,14 @@ export function mayRecover(
   now: number
 ): boolean {
   const recent = recentHistory(history, now);
-  if (how === "reclaimed") {
-    return recent.reclaims.length < RECLAIM_TRIES;
+  switch (how) {
+    case "reclaimed":
+      return recent.reclaims.length < RECLAIM_TRIES;
+    case "failed":
+      return recent.failures.length < FAILURE_TRIES;
+    case "lost":
+      return level < MAX_SAFETY && recent.losses.length < MAX_SAFETY;
   }
-  return level < MAX_SAFETY && recent.losses.length < MAX_SAFETY;
 }
 
 // --- where a recovered page starts -------------------------------------------

@@ -123,7 +123,8 @@ config change.
     storage, `gpu-safety`: `pageSafety`, `raiseSafety` — ADR 0046),
     `gpu-recovery.ts` (a lost GPU: one reload per safety level, the
     renderer released first, back at the player's pose; a GPU reclaimed in
-    the background reloads at the same level), `gpu-failure-card.tsx` (the
+    the background, or a frame that threw on a GPU still working — a bug —,
+    reloads at the same level), `gpu-failure-card.tsx` (the
     card past the caps: *Leichter weiter*, *Neu laden*), `instancing.ts`
     (`Instances`: instanced sets that share one node build),
     `fetch-optional.ts` (the one fetch/abort policy: `fetchBytes` retries a
