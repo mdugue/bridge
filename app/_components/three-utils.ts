@@ -66,8 +66,9 @@ const sceneSharedAttributes = new WeakSet<object>();
  * geometry dispose destroys the GPU buffer of every attribute the geometry
  * holds, shared or not — every other tile would then draw from a
  * destroyed buffer, and the frame fail. A marked attribute is taken off a
- * geometry before it is disposed (`detachSceneShared`, which
- * `disposeObject3D` runs first) and lives as long as its app's device.
+ * geometry before it is disposed (`detachShared`, which `disposeGeometry`
+ * and `disposeObject3D` run first; `detachSceneShared` ahead of a dispose
+ * that is not ours) and lives as long as its app's device.
  */
 export function markSceneShared(attribute: AnyAttribute): void {
   sceneSharedAttributes.add(attribute);
@@ -139,6 +140,41 @@ export function disposeMaterial(
 }
 
 /**
+ * Runs `dispose` until it goes through, at most `attempts` times, and
+ * returns what it threw on the way (empty when the first try went
+ * through). three r186 leaves an attribute whose GPU buffer failed to
+ * allocate half made — its entry, no buffer — and a later dispose of its
+ * geometry throws on it midway, the rest of the geometry's attributes
+ * still held and its listener still on. The throw has removed that entry,
+ * so the next try goes on past it: one try per attribute at most.
+ */
+function untilThrough(dispose: () => void, attempts: number): unknown[] {
+  const errors: unknown[] = [];
+  for (let i = 0; i < attempts; i++) {
+    try {
+      dispose();
+      return errors;
+    } catch (err) {
+      errors.push(err);
+    }
+  }
+  return errors;
+}
+
+/**
+ * Disposes a geometry, past an attribute that failed to allocate
+ * (`untilThrough`), and never with a buffer the scene shares on it
+ * (`markSceneShared`). Returns what three threw, if anything.
+ */
+export function disposeGeometry(geometry: BufferGeometry): unknown[] {
+  detachShared(geometry);
+  return untilThrough(
+    () => geometry.dispose(),
+    attributesOf(geometry).length + 1
+  );
+}
+
+/**
  * Tells the renderer the drawables of a subtree are gone for good.
  * WebGPURenderer keeps a render object per drawable and pass — its
  * bindings, i.e. uniform buffers and bind groups in the GPU process — until
@@ -147,18 +183,22 @@ export function disposeMaterial(
  * (`sceneMaterial`) is never disposed, and disposing a geometry only clears
  * the attribute cache: without this event every drawable of every unloaded
  * tile kept its bindings, and the GPU process grew with each flight until
- * iOS ended it.
+ * iOS ended it. A drawable whose release throws does not keep the others':
+ * what was thrown is returned.
  */
-export function releaseRenderState(root: Object3D): void {
+export function releaseRenderState(root: Object3D): unknown[] {
+  const errors: unknown[] = [];
   root.traverse((obj) => {
     if ((obj as { geometry?: unknown }).geometry) {
       // reason: `dispose` is not in Object3D's typed event map; it is the
       // event three's renderer listens for on every drawable.
-      (obj as unknown as EventDispatcher<{ dispose: object }>).dispatchEvent({
-        type: "dispose",
-      });
+      const drawable = obj as unknown as EventDispatcher<{ dispose: object }>;
+      errors.push(
+        ...untilThrough(() => drawable.dispatchEvent({ type: "dispose" }), 1)
+      );
     }
   });
+  return errors;
 }
 
 /**
@@ -170,10 +210,12 @@ export function releaseRenderState(root: Object3D): void {
  * reached (a material may share them): the layer that created a texture
  * frees it — TerrainLayer.dispose, LampControl.dispose, SunRig.dispose. Nor
  * are the buffers the scene shares (`markSceneShared`): they are taken off
- * first.
+ * first. One resource that throws does not stop the walk (a geometry is
+ * disposed past an attribute that failed to allocate, `disposeGeometry`):
+ * what was thrown is returned, the rest freed.
  */
-export function disposeObject3D(root: Object3D): void {
-  detachSceneShared(root);
+export function disposeObject3D(root: Object3D): unknown[] {
+  const errors: unknown[] = [];
   root.traverse((obj) => {
     const resource = obj as Object3D & {
       geometry?: BufferGeometry;
@@ -181,10 +223,13 @@ export function disposeObject3D(root: Object3D): void {
     };
     // An `Instances` set's matrix and colour buffers are attributes of its
     // geometry view (instancing.ts), so they go with the geometry.
-    resource.geometry?.dispose();
-    disposeMaterial(resource.material);
+    if (resource.geometry) {
+      errors.push(...disposeGeometry(resource.geometry));
+    }
+    errors.push(...untilThrough(() => disposeMaterial(resource.material), 1));
   });
-  releaseRenderState(root);
+  errors.push(...releaseRenderState(root));
+  return errors;
 }
 
 /**

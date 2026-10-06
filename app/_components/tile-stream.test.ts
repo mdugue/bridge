@@ -226,6 +226,46 @@ test("a city drops its normals' and roof flags' CPU copies once its compile uplo
   }
 });
 
+test("a compile the GPU had no room for is reported once, and drops nothing", async () => {
+  for (const [error, reported] of [
+    [
+      new RangeError("Range consisting of offset and length are out of bounds"),
+      true,
+    ],
+    [new TypeError("a bug, not memory"), false],
+  ] as const) {
+    const failures: string[] = [];
+    const plugin = new DressingPlugin(
+      {
+        dressingGate: new Promise<void>(() => undefined),
+        compile: () => Promise.reject(error),
+        onAllocationFailure: (_: unknown, where: string) =>
+          failures.push(where),
+        onChange: () => undefined,
+      } as unknown as TileStreamContext,
+      {
+        cities: new Set(),
+        terrains: new Set(),
+        dressings: new Set(),
+        demolished: new Map(),
+      }
+    );
+    const mesh = new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial());
+    const scene = new Object3D();
+    scene.userData = { tileId: "33412_5656_2_sn" };
+    scene.add(mesh);
+    plugin.dressed.set(scene, {
+      city: { mesh, dispose: () => undefined } as unknown as CityLayer,
+    });
+    // the tile still loads: the frames retry what the compile could not
+    await plugin.processTileModel(scene, { engineData: { scene } });
+    expect(failures).toEqual(reported ? ["content 33412_5656_2_sn"] : []);
+    expect(mesh.geometry.getAttribute("normal").array.length).toBeGreaterThan(
+      0
+    );
+  }
+});
+
 /** A plugin whose compiles resolve at once, and a content root with a mesh
  *  whose geometry reports its own dispose. */
 function abortableLoad() {

@@ -919,14 +919,18 @@ async function bootApp(
   cleanups.push(() => seasonClock.dispose());
   const stream = createTileStream(
     {
-      // whether it compiled: a tile drops the CPU copies of what it uploaded
+      // whether it compiled (a tile drops the CPU copies of what it
+      // uploaded); what a compile throws the stream sorts out
       compile: (object) =>
         compileWith
-          ? compileWith(object).then(
-              () => true,
-              () => false
-            )
+          ? compileWith(object).then(() => true)
           : Promise.resolve(false),
+      // a compile the GPU had no room for (the dressing stays off), or the
+      // half-made attribute it left met at a tile's release
+      onAllocationFailure: (error, where) => {
+        const message = error instanceof Error ? error.message : String(error);
+        opts.trail?.note("alloc-failed", `${where} ${message}`);
+      },
       dressingGate,
       fogColor: sceneFog.color,
       heightAt,

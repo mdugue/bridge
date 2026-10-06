@@ -114,6 +114,7 @@ import { sportGround } from "./sport-ground";
 import {
   type AnyAttribute,
   detachShared,
+  disposeGeometry,
   markSceneShared,
   textureBytes,
   trackTexture,
@@ -1667,9 +1668,8 @@ export async function dressTerrain(
     dispose: () => {
       // Shares the tile's positions; only its own index (and normals) go —
       // not the site's (GridShare), which other tiles draw with.
-      detachShared(waterGeometry);
       detachShared(mesh.geometry);
-      waterGeometry.dispose();
+      disposeGeometry(waterGeometry);
       free();
     },
   };

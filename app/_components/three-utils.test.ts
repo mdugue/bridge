@@ -87,6 +87,35 @@ test("an instanced set's buffers go with its geometry view", () => {
   expect(calls).toBe(1);
 });
 
+test("a geometry left half made by a failed allocation is disposed past it, and the walk frees the rest", () => {
+  // three r186: an attribute whose buffer failed to allocate makes its
+  // geometry's dispose throw once, midway; the next dispose goes through
+  const poisoned = new BoxGeometry();
+  let throws = 1;
+  let through = 0;
+  poisoned.addEventListener("dispose", () => {
+    if (throws > 0) {
+      throws--;
+      throw new TypeError("undefined is not an object (data.buffer.destroy)");
+    }
+    through++;
+  });
+  const healthy = new BoxGeometry();
+  const healthyCalls = countDisposals(healthy);
+  const material = new MeshBasicNodeMaterial();
+  const materialCalls = countDisposals(material);
+  const root = new Object3D();
+  root.add(new Mesh(poisoned, material), new Mesh(healthy, material));
+
+  const errors = disposeObject3D(root);
+
+  expect(errors).toHaveLength(1);
+  expect(errors[0]).toBeInstanceOf(TypeError);
+  expect(through).toBe(1);
+  expect(healthyCalls()).toBe(1);
+  expect(materialCalls()).toBeGreaterThanOrEqual(1);
+});
+
 test("a bare Object3D is traversed without throwing", () => {
   expect(() => disposeObject3D(new Object3D())).not.toThrow();
 });

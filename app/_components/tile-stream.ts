@@ -2,6 +2,7 @@ import { DownloadPriorityQueue, PriorityQueue } from "3d-tiles-renderer/core";
 import { TilesRenderer } from "3d-tiles-renderer/three";
 import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
+  type BufferGeometry,
   type Camera,
   type Color,
   Group,
@@ -48,6 +49,7 @@ import {
 import { COARSE_DRESSING_KINDS, type DressingKind } from "@/lib/city/tile";
 import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
 import { askSets, type AskSet } from "@/lib/city/ask-solids";
+import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { type CityLayer, dressCity } from "./city-layer";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
@@ -94,6 +96,7 @@ import {
   type AnyAttribute,
   compileRepresentatives,
   detachSceneShared,
+  disposeGeometry,
   disposeObject3D,
   dropCpuCopies,
   estimateGeometryBytes,
@@ -178,6 +181,15 @@ export interface TileStreamContext {
   offset: { cx: number; cy: number };
   /** content landed, left, or changed visibility */
   onChange: () => void;
+  /**
+   * A compile threw because the GPU (or the page's process) could not
+   * make room (lib/city/gpu-allocation.ts) — `where` says what: `content
+   * <tile>`, `dressing <tile>` (left off, the tile bare) or `crowns` (the
+   * seasonal warm-up) — or a tile's release met what such a failure left
+   * behind (`dispose <tile>`: three's half-made attribute, the tile freed
+   * past it). Once per failure.
+   */
+  onAllocationFailure?: (error: unknown, where: string) => void;
   renderer: WebGPURenderer;
   styleResources: StyleResources;
   sunDirection: Vector3;
@@ -375,15 +387,34 @@ export function showDataLayers(
   }
 }
 
-function disposeDressing(d: TileDressing): void {
-  d.lamps?.dispose();
-  d.monuments?.dispose();
-  d.sport?.dispose();
+/** Frees a dressing; a part that throws does not keep the others (what
+ *  was thrown is returned). */
+function disposeDressing(d: TileDressing): unknown[] {
+  const errors: unknown[] = [];
+  for (const own of [d.lamps, d.monuments, d.sport]) {
+    try {
+      own?.dispose();
+    } catch (err) {
+      errors.push(err);
+    }
+  }
   for (const part of dressingParts(d)) {
     part.removeFromParent();
-    disposeObject3D(part);
+    errors.push(...disposeObject3D(part));
   }
+  return errors;
 }
+
+/** The site tile a content root is of (its extras), for the trail. */
+const tileIdOf = (scene: Object3D): string =>
+  (scene.userData as Partial<ContentExtras>).tileId ?? "?";
+
+/**
+ * How a compile ended (`DressingPlugin.compileUnder`): done, its buffers on
+ * the GPU with it; not run, nothing could compile it yet; failed; or out
+ * of memory — the GPU or the page could not make room.
+ */
+type Compiled = "done" | "failed" | "not run" | "out of memory";
 
 /** The goals, posts and nets of the grounds this tile owns (a ground on a
  *  seam is in both tiles' tables; its centre decides). */
@@ -825,6 +856,10 @@ export class DressingPlugin {
    * free those again.
    */
   private readonly compiles = new Map<Object3D, number>();
+  /** each content root's own geometries (its glTF's and the water's), and
+   *  the roots whose own compile still runs (disposeContentNow) */
+  private readonly contentOf = new WeakMap<Object3D, Set<BufferGeometry>>();
+  private readonly contentCompiling = new WeakSet<Object3D>();
   /**
    * Settles once the renderer is done with a content root's load: it
    * records every material in the content right after `processTileModel`
@@ -1171,9 +1206,30 @@ export class DressingPlugin {
     this.warmup = warmup;
     await withinCompileWait(
       Promise.all(warmup.main.map((mesh) => this.ctx.compile(mesh))).then(
-        () => undefined
+        () => undefined,
+        (err: unknown) => {
+          this.compileFailed(err, "crowns");
+        }
       )
     );
+  }
+
+  /** What a compile that threw comes to: out of memory (reported) or a
+   *  failure the frames will meet again. */
+  private compileFailed(err: unknown, where: string): Compiled {
+    if (!isAllocationFailure(err)) {
+      return "failed";
+    }
+    this.ctx.onAllocationFailure?.(err, where);
+    return "out of memory";
+  }
+
+  /** Reports the first thing a tile's release threw (three's half-made
+   *  attribute of a failed allocation: the release went on past it). */
+  private disposeFailed(errors: unknown[], scene: Object3D): void {
+    if (errors.length > 0 && !this.disposed) {
+      this.ctx.onAllocationFailure?.(errors[0], `dispose ${tileIdOf(scene)}`);
+    }
   }
 
   /**
@@ -1242,32 +1298,46 @@ export class DressingPlugin {
         catchUp(dressing, this.ctx);
         const compiled =
           this.dressed.get(scene) === entry
-            ? this.compileUnder(scene, compileRepresentatives(parts))
-            : Promise.resolve(false);
+            ? this.compileUnder(
+                scene,
+                compileRepresentatives(parts),
+                `dressing ${extras.tileId}`
+              )
+            : Promise.resolve<Compiled>("not run");
+        let outcome: Compiled | undefined;
+        compiled
+          .then((ended) => {
+            outcome = ended;
+          })
+          .catch(() => undefined);
         await withinCompileWait(compiled);
         built();
         // Not before the renderer has recorded the tile's own content (see
         // `loaded`): the dressing's materials are the scene's.
         await this.loaded.get(scene);
-        if (this.disposed || this.dressed.get(scene) !== entry) {
+        // A dressing whose compile ran out of GPU memory stays off: the
+        // tile goes bare rather than the GPU further under.
+        if (
+          this.disposed ||
+          this.dressed.get(scene) !== entry ||
+          outcome === "out of memory"
+        ) {
           // freed once its compile has ended (see `compiles`)
-          const free = () => disposeDressing(dressing);
-          compiled.then(free, free);
+          compiled
+            .then(() => this.disposeFailed(disposeDressing(dressing), scene))
+            .catch(() => undefined);
           return;
         }
-        // The content root is the viewer's Y-up scene frame (the renderer's
-        // up-axis turn cancels the world group's), so the Y-up dressing
-        // hangs under it and leaves with its tile.
-        scene.add(...parts);
-        entry.dressing = dressing;
-        entry.dressingBytes = parts.reduce(
-          (sum, part) => sum + estimateGeometryBytes(part),
-          0
-        );
-        this.tiles?.recalculateBytesUsed();
-        this.stream.dressings.add(dressing);
-        // Whatever changed while it compiled (the hour moves on).
-        catchUp(dressing, this.ctx);
+        this.hangDressing(scene, entry, dressing);
+        // ...and one whose compile outlasted the wait and then ran out of
+        // memory comes down again
+        compiled
+          .then((ended) => {
+            if (ended === "out of memory") {
+              this.dropDressing(scene, entry, dressing);
+            }
+          })
+          .catch(() => undefined);
       })
       .catch(() => {
         // A dressing that fails leaves its tile bare, never the stream stuck.
@@ -1288,6 +1358,46 @@ export class DressingPlugin {
     return ready;
   }
 
+  /** Hangs a built dressing on its tile's content root. */
+  private hangDressing(
+    scene: Object3D,
+    entry: Dressed,
+    dressing: TileDressing
+  ): void {
+    const parts = dressingParts(dressing);
+    // The content root is the viewer's Y-up scene frame (the renderer's
+    // up-axis turn cancels the world group's), so the Y-up dressing
+    // hangs under it and leaves with its tile.
+    scene.add(...parts);
+    entry.dressing = dressing;
+    entry.dressingBytes = parts.reduce(
+      (sum, part) => sum + estimateGeometryBytes(part),
+      0
+    );
+    this.tiles?.recalculateBytesUsed();
+    this.stream.dressings.add(dressing);
+    // Whatever changed while it compiled (the hour moves on).
+    catchUp(dressing, this.ctx);
+  }
+
+  /** Takes a hung dressing down again and frees it (its compile ran out of
+   *  memory after it hung); the tile stays, bare. */
+  private dropDressing(
+    scene: Object3D,
+    entry: Dressed,
+    dressing: TileDressing
+  ): void {
+    if (this.disposed || entry.dressing !== dressing) {
+      return; // gone with its tile already
+    }
+    entry.dressing = undefined;
+    entry.dressingBytes = undefined;
+    this.stream.dressings.delete(dressing);
+    this.disposeFailed(disposeDressing(dressing), scene);
+    this.tiles?.recalculateBytesUsed();
+    this.ctx.onChange();
+  }
+
   disposeTile(tile: { engineData?: { scene?: Object3D | null } }): void {
     const scene = tile.engineData?.scene ?? this.sceneOf.get(tile);
     this.sceneOf.delete(tile);
@@ -1295,19 +1405,24 @@ export class DressingPlugin {
       this.builtOf.get(scene)?.();
       this.released.add(scene);
       this.release(scene);
+      this.disposeContentNow(scene);
     }
   }
 
   /**
    * Compiles `objects` (the root or what hangs under it), counted on
-   * `scene` until they end (see `compiles`). Resolves whether every one
-   * was compiled, its buffers uploaded with it; never rejects.
+   * `scene` until they end (see `compiles`). Resolves how it ended (a
+   * failure for want of memory reported as `where`); never rejects.
    */
-  private compileUnder(scene: Object3D, objects: Object3D[]): Promise<boolean> {
+  private compileUnder(
+    scene: Object3D,
+    objects: Object3D[],
+    where: string
+  ): Promise<Compiled> {
     this.compiles.set(scene, (this.compiles.get(scene) ?? 0) + 1);
     const done = Promise.all(objects.map((o) => this.ctx.compile(o))).then(
-      (compiled) => compiled.every(Boolean),
-      () => false
+      (compiled): Compiled => (compiled.every(Boolean) ? "done" : "not run"),
+      (err: unknown) => this.compileFailed(err, where)
     );
     const settle = () => {
       const left = (this.compiles.get(scene) ?? 1) - 1;
@@ -1329,11 +1444,27 @@ export class DressingPlugin {
    * The content's own compile — and once it has uploaded the content, the
    * CPU copies of what nothing reads any more go (`dropContentCopies`).
    */
-  private compileContent(scene: Object3D): Promise<boolean> {
-    const compiled = this.compileUnder(scene, [scene]);
+  private compileContent(scene: Object3D): Promise<Compiled> {
+    // the content's own geometries, before any dressing hangs beside them
+    // (disposeContentNow)
+    const content = new Set<BufferGeometry>();
+    scene.traverse((obj) => {
+      const { geometry } = obj as Object3D & { geometry?: BufferGeometry };
+      if (geometry) {
+        content.add(geometry);
+      }
+    });
+    this.contentOf.set(scene, content);
+    this.contentCompiling.add(scene);
+    const compiled = this.compileUnder(
+      scene,
+      [scene],
+      `content ${tileIdOf(scene)}`
+    );
     compiled
-      .then((done) => {
-        if (done) {
+      .then((ended) => {
+        this.contentCompiling.delete(scene);
+        if (ended === "done") {
           this.dropContentCopies(scene);
         }
       })
@@ -1373,9 +1504,7 @@ export class DressingPlugin {
       return;
     }
     const dressed = this.dressed.get(scene);
-    if (dressed) {
-      this.releaseDressed(scene, dressed);
-    }
+    const errors = dressed ? this.releaseDressed(scene, dressed) : [];
     // The content itself, once — buildings, ground, and the walls, stairs,
     // kerbs and fences baked into it: its geometries, the per-tile
     // materials the dressing put on it (the renderer frees only the glTF's
@@ -1385,19 +1514,50 @@ export class DressingPlugin {
     // it never does, and a compile has uploaded them by then.
     if (!this.freed.has(scene)) {
       this.freed.add(scene);
-      disposeObject3D(scene);
+      errors.push(...disposeObject3D(scene));
     }
+    this.disposeFailed(errors, scene);
     if (dressed && !this.disposed) {
       this.ctx.onChange();
     }
   }
 
-  private releaseDressed(scene: Object3D, dressed: Dressed): void {
+  /**
+   * The content's geometries freed now, though the rest of the tile waits
+   * for its dressing's compile (`release`): the tile renderer disposes them
+   * right after this plugin let go of the tile, and on a geometry with an
+   * attribute that failed to allocate three's dispose throws out of the
+   * renderer's update. Freed here past that attribute (three-utils.ts
+   * `disposeGeometry`), its later dispose is a no-op. Not while the
+   * content's own compile runs: it would upload them again.
+   */
+  private disposeContentNow(scene: Object3D): void {
+    const content = this.contentOf.get(scene);
+    if (!content || this.freed.has(scene) || this.contentCompiling.has(scene)) {
+      return;
+    }
+    this.disposeFailed(
+      [...content].flatMap((geometry) => disposeGeometry(geometry)),
+      scene
+    );
+  }
+
+  /** Frees what was dressed onto `scene`; returns what threw on the way
+   *  (the rest is freed regardless). */
+  private releaseDressed(scene: Object3D, dressed: Dressed): unknown[] {
     this.dressed.delete(scene);
     dressed.aborter?.abort();
+    const errors: unknown[] = [];
+    const free = (dispose: () => void) => {
+      try {
+        dispose();
+      } catch (err) {
+        errors.push(err);
+      }
+    };
     if (dressed.city) {
       this.stream.cities.delete(dressed.city);
-      dressed.city.dispose();
+      free(() => dressed.city?.dispose());
     }
     if (dressed.svf) {
       this.skyView.release(dressed.svf);
@@ -1405,12 +1565,13 @@ export class DressingPlugin {
     if (dressed.terrain) {
       this.stream.terrains.delete(dressed.terrain);
       this.holdRasters(scene, dressed.terrain.rasters, false);
-      dressed.terrain.dispose();
+      free(() => dressed.terrain?.dispose());
     }
     if (dressed.dressing) {
       this.stream.dressings.delete(dressed.dressing);
-      disposeDressing(dressed.dressing);
+      errors.push(...disposeDressing(dressed.dressing));
     }
+    return errors;
   }
 }
 
