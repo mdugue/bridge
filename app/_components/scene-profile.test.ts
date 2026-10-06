@@ -7,6 +7,7 @@ import {
   pixelRatioFor,
   sceneBudgetFor,
   sceneProfileFromSearch,
+  shadowMapBytesFor,
   shadowMapSizeFor,
   LARGEST_TILE_BYTES,
   tileCacheBytesFor,
@@ -113,4 +114,11 @@ test("tileCacheBytesFor can always unload the largest tile", () => {
 test("warmPaperFor leaves the Papier warm-up to the desktop", () => {
   expect(warmPaperFor("desktop")).toBe(true);
   expect(warmPaperFor("mobile")).toBe(false);
+});
+
+test("shadowMapBytesFor counts the depth map and its one-byte colour target", () => {
+  expect(shadowMapBytesFor(shadowMapSizeFor("full", "mobile"))).toBe(
+    20 * 1024 ** 2
+  );
+  expect(shadowMapBytesFor(512)).toBe(512 * 512 * 5);
 });

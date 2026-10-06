@@ -118,9 +118,9 @@ export function shadowMapSizeFor(
   if (profile === "lite") {
     return 512;
   }
-  // A phone's shadow map is a quarter of the desktop's texels (16 MB instead
-  // of 36 MB) and a quarter of the per-frame depth fill; the soft PCF radius
-  // hides the coarser texel over the 110 m frustum.
+  // A phone's shadow map is under half the desktop's texels (20 MB instead
+  // of 45 MB, `shadowMapBytesFor`) and of the per-frame depth fill; the
+  // soft PCF radius hides the coarser texel over the 110 m frustum.
   return tier === "mobile" ? 2048 : 3072;
 }
 
@@ -202,4 +202,13 @@ export function aoSamplesFor(profile: SceneProfile): number {
  */
 export function warmPaperFor(tier: DeviceTier): boolean {
   return tier !== "mobile";
+}
+
+/**
+ * GPU bytes of the sun's shadow map for its edge in texels: the depth
+ * texture (4 bytes a texel; depth24plus is 32-bit on Apple GPUs) and the
+ * one-byte colour target three renders beside it (sun-rig.ts) — no mips.
+ */
+export function shadowMapBytesFor(size: number): number {
+  return size * size * (4 + 1);
 }

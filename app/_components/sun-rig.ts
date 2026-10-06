@@ -2,9 +2,18 @@ import {
   type Box3,
   type Camera,
   Color,
+  type DepthTexture,
   DirectionalLight,
   HemisphereLight,
+  type Light,
+  type LightShadow,
+  type Node,
+  type NodeBuilder,
+  RedFormat,
+  type RenderTarget,
   type Scene,
+  ShadowNode,
+  UnsignedByteType,
   Vector3,
 } from "three/webgpu";
 import { SkyMesh } from "three/addons/objects/SkyMesh.js";
@@ -33,6 +42,7 @@ import {
   shadowFocusAhead,
 } from "@/lib/city/shadow-fit";
 import { sunDirectionWorld } from "@/lib/city/sun";
+import { shadowMapBytesFor } from "./scene-profile";
 import type { V3, V4 } from "./shader-chunks";
 
 export interface SunState {
@@ -84,7 +94,8 @@ export interface SunRig {
   /** The sun's shadow camera: the tile stream loads what it sees too, so a
    *  building behind the player still casts into the view. */
   shadowCamera: Camera;
-  /** GPU bytes of the shadow map (a 32-bit depth texture, no mipmaps). */
+  /** GPU bytes of the shadow map: a 32-bit depth texture and its one-byte
+   *  colour target, no mipmaps (scene-profile.ts `shadowMapBytesFor`). */
   shadowMapBytes: number;
   /** The shadow frustum on the ground, kept current: its centre in the data
    *  frame (x east, y north: world x, −z) and its half-size (z, m). The
@@ -97,6 +108,42 @@ export interface SunRig {
 }
 
 const SUN_INTENSITY = 2.4;
+
+/** What three's ShadowNode makes the map in: its documented override. */
+interface ShadowTargets {
+  depthTexture: DepthTexture;
+  shadowMap: RenderTarget;
+}
+// reason: setupRenderTarget is part of ShadowNode (ShadowNode.js documents
+// overriding it, TileShadowNode does) but missing from the @types.
+const ShadowNodeWithTarget = ShadowNode as unknown as new (
+  light: Light,
+  shadow: LightShadow | null
+) => ShadowNode & {
+  setupRenderTarget(shadow: LightShadow, builder: NodeBuilder): ShadowTargets;
+};
+
+/**
+ * three's shadow node, its map's colour target one byte a texel. The map is
+ * a render target, and three gives it a colour texture of the shadow's
+ * `mapType` (RGBA, four bytes) beside the depth the PCF filter reads — as
+ * large again as the depth (16 MB at a phone's 2048²) for a colour only
+ * coloured shadows sample (`renderer.shadowMap.transmitted`, never on
+ * here). A render pass needs no colour target in WebGPU, but three's
+ * shadow pass always draws into one: the smallest it can draw into is one
+ * red byte, renderable on both backends. Installed as the light's
+ * `shadow.shadowNode` — what three's own CSM and tiled shadows plug in
+ * through — so nothing of three is patched (ADR 0027).
+ */
+class OneByteShadowNode extends ShadowNodeWithTarget {
+  setupRenderTarget(shadow: LightShadow, builder: NodeBuilder): ShadowTargets {
+    const targets = super.setupRenderTarget(shadow, builder);
+    // before anything is allocated: the target is made, not yet drawn into
+    targets.shadowMap.texture.format = RedFormat;
+    targets.shadowMap.texture.type = UnsignedByteType;
+    return targets;
+  }
+}
 
 /** What the rig drives on the sky dome. */
 interface SkyDome {
@@ -273,6 +320,10 @@ export function createSunRig(
   // edges are a soft penumbra that hides the texel staircase — without VSM's
   // grid.
   sun.shadow.radius = 5;
+  const shadowNode = new OneByteShadowNode(sun, sun.shadow);
+  // reason: `shadowNode` is read by three's AnalyticLightNode but missing
+  // from LightShadow's @types.
+  (sun.shadow as LightShadow & { shadowNode?: Node }).shadowNode = shadowNode;
   scene.add(sun, sun.target);
 
   // Current sun direction and frustum focus; reposition() places the light and
@@ -436,9 +487,12 @@ export function createSunRig(
     // three only draws the map for a VISIBLE light: below the horizon the
     // flag stays raised (and is consumed at sunrise), so it is not "pending".
     shadowPending: () => sun.visible && sun.shadow.needsUpdate,
-    shadowMapBytes: shadowMapSize * shadowMapSize * 4,
+    shadowMapBytes: shadowMapBytesFor(shadowMapSize),
     shadowReach,
     shadowCamera: sun.shadow.camera,
-    dispose: () => sun.dispose(),
+    dispose: () => {
+      sun.dispose();
+      shadowNode.dispose();
+    },
   };
 }
