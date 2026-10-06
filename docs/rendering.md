@@ -694,14 +694,17 @@ stays their measure; the tile cache counts true bytes.
   tile's own compile waits for that step at its end
   (`compile-lanes.ts`). The glTF loader's result (its parser, the binary
   chunk, the decoded buffers) goes at `load-model` (`dropLoaderResult`).
-  Rasters decode and upload **in a site-wide turn** (`raster-upload.ts`,
-  `lib/city/task-gate.ts`): each is on the GPU (`renderer.initTexture`)
-  with its bytes dropped at the upload, and a phone decodes **one at a
-  time** (`RASTER_TURNS`) — at most one decoded raster (16 MiB) waits,
-  where a fine level held ~48 MiB of them until its compile, times five
-  parses; a desktop keeps the five it always overlapped (through one
-  turn the spawn tile's ground waited behind every neighbour's, and the
-  whole-site boot took 40 % longer). A level whose tile leaves while it
+  Rasters decode **in a site-wide turn** (`raster-upload.ts`,
+  `lib/city/task-gate.ts`, `setRasterTier`). A phone decodes **one at a
+  time** and puts each on the GPU at once (`renderer.initTexture`), its
+  bytes dropped at the upload — at most one decoded raster (16 MiB)
+  waits, where a fine level held ~48 MiB of them until its compile, times
+  five parses. A desktop keeps what it always did: five decodes at once,
+  each raster uploaded by its level's compile. Through one turn the spawn
+  tile's ground waited behind every neighbour's, and uploaded as they
+  decoded, every neighbour's rasters took the main thread before the
+  spawn tile's compile: the whole-site boot took 40 %, then 15 % longer,
+  and is as fast as before since. A level whose tile leaves while it
   dresses — the camera wanted it and moved on, a memory emergency shed
   it — stops its raster loads where they are (`DressingPlugin`'s
   per-content abort): it decodes and uploads nothing more, and lets go
@@ -987,8 +990,9 @@ four per origin at once (`PHONE_STREAM` in `tile-stream.ts`; the tile
 renderer's own 5 and 25 asked for the boot's eleven contents in one
 millisecond), and its terrain, sky-view and horizon rasters decode and
 upload one at a time for the whole site (`raster-upload.ts`,
-`RASTER_TURNS`; five at once on a desktop): a raster is on the GPU, its
-bytes gone, before the next one decodes. The ground fills in a little
+`setRasterTier`; a desktop decodes five at once and uploads at the
+compile, as before): a raster is on the GPU, its bytes gone, before the
+next one decodes. The ground fills in a little
 later for it. A level whose tile leaves meanwhile takes no more turns.
 
 The HUD's five load stages and their weights are declared once in

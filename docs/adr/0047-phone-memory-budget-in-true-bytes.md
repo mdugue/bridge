@@ -110,14 +110,18 @@ measured on the phone.
   the shared index) — about 190 MiB less in a view of five cities, four
   fine and six coarse levels. The glTF loader's result goes at
   `load-model` (`dropLoaderResult`), and with it the parser's chunk.
-- **Rasters decode and upload in a site-wide turn**
-  (`raster-upload.ts` over `lib/city/task-gate.ts`): each is on the GPU
-  (`renderer.initTexture`) with its bytes dropped at the upload. A phone
-  takes **one at a time** (`RASTER_TURNS`, set by the stream for its
-  tier): at most one decoded raster (16 MiB) waits, instead of ~48 MiB
-  per level times five parses. A desktop keeps the five it always
-  overlapped: through one turn the spawn tile's ground waited behind
-  every neighbour's, and the whole-site boot took 40 % longer. The
+- **Rasters decode in a site-wide turn** (`raster-upload.ts` over
+  `lib/city/task-gate.ts`, `setRasterTier` set by the stream for its
+  tier). A phone takes **one at a time** and puts each on the GPU at once
+  (`renderer.initTexture`), its bytes dropped at the upload: at most one
+  decoded raster (16 MiB) waits, instead of ~48 MiB per level times five
+  parses. A desktop keeps what it always did — five decodes at once, each
+  raster uploaded by its level's compile: through one turn the spawn
+  tile's ground waited behind every neighbour's, and uploaded at decode,
+  every neighbour's rasters took the main thread before the spawn tile's
+  compile (7 s of the first 18 under SwiftShader); the whole-site boot
+  took 40 %, then 15 % longer, and with both kept to the phone it is as
+  fast as before (134 s against main's 138 s on the same machine). The
   download — through the retrying fetch, ADR 0048 — stays outside the
   gate.
 - **A level whose tile leaves stops its raster loads.** The tile cache

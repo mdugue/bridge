@@ -89,7 +89,7 @@ import {
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
 import { RasterShares } from "./raster-shares";
-import { setRasterTurns } from "./raster-upload";
+import { setRasterTier } from "./raster-upload";
 import type { DeviceTier } from "./scene-profile";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
@@ -1693,7 +1693,7 @@ export function createTileStream(
 ): TileStream {
   const tiles = new TilesRenderer(ctx.tilesetUrl);
   paceStreaming(tiles, ctx.tier);
-  setRasterTurns(ctx.tier);
+  setRasterTier(ctx.tier);
   tiles.registerPlugin(new ContentFetchPlugin());
   tiles.registerPlugin(
     new GLTFExtensionsPlugin({ metadata: true, meshoptDecoder: MeshoptDecoder })

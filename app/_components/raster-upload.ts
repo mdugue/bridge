@@ -15,23 +15,33 @@ import type { DeviceTier } from "./scene-profile";
  * The download stays outside, its retries with it: a stalled request must
  * not hold the ground of every other tile.
  *
- * One at a time is a phone's (`RASTER_TURNS`). A desktop has the memory
- * and keeps the overlap it always had — a level decodes its rasters one
- * after another, and the tile renderer parses five tiles at once — so its
- * boot is not held up: through one turn, the spawn tile's ground waited
- * behind every neighbour's, and the whole-site boot took 40 % longer.
+ * That is a phone's (`setRasterTier`). A desktop has the memory and keeps
+ * what it always did, so its boot is not held up: five decodes at once (a
+ * level decodes its rasters one after another, and the tile renderer
+ * parses five tiles at once), each raster uploaded by the compile of the
+ * first material that binds it. Through one turn, the spawn tile's ground
+ * waited behind every neighbour's; uploaded as they decoded, every
+ * neighbour's rasters took the main thread before the spawn tile's
+ * compile (7 s of the first 18 under SwiftShader) — the whole-site boot
+ * took 40 %, then 15 % longer than before.
  */
 const rasterGate = createTaskGate(1);
+let uploadAtDecode = true;
 
-/** How many rasters decode and upload at once, per device tier. */
+/** How many rasters decode at once, per device tier. */
 export const RASTER_TURNS: Readonly<Record<DeviceTier, number>> = {
   desktop: 5,
   mobile: 1,
 };
 
-/** Sets the site-wide raster turns for this page's tier (tile-stream.ts). */
-export function setRasterTurns(tier: DeviceTier): void {
+/**
+ * This page's tier (tile-stream.ts): a phone decodes one raster at a time
+ * and uploads it at once; a desktop decodes five at once and uploads at
+ * the compile.
+ */
+export function setRasterTier(tier: DeviceTier): void {
   rasterGate.setLimit(RASTER_TURNS[tier]);
+  uploadAtDecode = tier === "mobile";
 }
 
 /**
@@ -75,18 +85,19 @@ export function dropDataOnUpload(texture: Texture): void {
 }
 
 /**
- * Uploads a texture now (three's public `initTexture`) rather than at the
- * compile of the first material that binds it: a data texture's bytes are
- * dropped right away (`dropDataOnUpload`). Configure it first — its format,
- * filters and mip chain are fixed at the upload. One that fails to upload
- * is disposed and the error rethrown (the caller treats the raster as
- * absent).
+ * On a phone (`setRasterTier`), uploads a texture now (three's public
+ * `initTexture`) rather than at the compile of the first material that
+ * binds it: a data texture's bytes are dropped right away
+ * (`dropDataOnUpload`). Configure it first — its format, filters and mip
+ * chain are fixed at the upload. One that fails to upload is disposed and
+ * the error rethrown (the caller treats the raster as absent). On a
+ * desktop it leaves the upload to the compile, as before.
  */
 export function uploadNow(
   texture: Texture,
   renderer: WebGPURenderer | undefined
 ): void {
-  if (!renderer) {
+  if (!(renderer && uploadAtDecode)) {
     return;
   }
   try {

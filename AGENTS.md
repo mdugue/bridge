@@ -153,9 +153,9 @@ config change.
     `sentry-create-alert` and the Sentry MCP server in `.mcp.json` work
     the issues — never add the SDK they otherwise set up)
   - layers: `terrain-layer.ts` (dresses a terrain tile), `raster-upload.ts`
-    (the streamed rasters decode and upload in a site-wide turn — one at
-    a time on a phone, five on a desktop, `RASTER_TURNS` — their bytes
-    dropped at the upload), `landcover-splat.ts`
+    (the streamed rasters decode in a site-wide turn, `setRasterTier`: a
+    phone one at a time, each uploaded at once and its bytes dropped; a
+    desktop five, uploaded at the compile), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
     the street-tree cadastre's silhouettes, `crown-season.ts`, the

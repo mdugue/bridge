@@ -454,8 +454,8 @@ At runtime `landcover-splat.ts` paints it with the one palette
 (`lib/city/landcover.ts`, a `uniformArray`) into an RGBA target, one
 full-screen `QuadMesh` pass per tile (a scene-wide node material per raster
 size, `textureLoad` of the class ids; the class texture is on the GPU
-before the paint — decoded and uploaded in its turn, one raster at a time
-for the site, its bytes dropped at the upload (`raster-upload.ts`); a
+before the paint — decoded in its turn (on a phone one raster at a time
+for the site, uploaded at once, its bytes dropped; `raster-upload.ts`); a
 bitmap the decoder fell back to is never closed — a closed `ImageBitmap`
 uploads empty on node pages): RGB = the pastel class colour,
 **A = water coverage** (a 3×3 tent over the water class — the soft
