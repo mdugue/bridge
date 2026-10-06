@@ -102,3 +102,30 @@ test("a task that fails frees its place", async () => {
   ]);
   expect(gate.running()).toBe(0);
 });
+
+test("a raised limit starts the waiters at once; a lowered one lets the running finish", async () => {
+  const gate = createTaskGate(1);
+  const log: string[] = [];
+  const a = held(log, "a");
+  const b = held(log, "b");
+  const c = held(log, "c");
+  const results = [gate.run(a.task), gate.run(b.task), gate.run(c.task)];
+  await settle();
+  expect(log).toEqual(["start a"]);
+  gate.setLimit(3);
+  await settle();
+  expect(log).toEqual(["start a", "start b", "start c"]);
+  gate.setLimit(1);
+  const d = held(log, "d");
+  const later = gate.run(d.task);
+  a.finish();
+  b.finish();
+  await settle();
+  // still one running (c): d waits for it
+  expect(log).not.toContain("start d");
+  c.finish();
+  await settle();
+  expect(log).toContain("start d");
+  d.finish();
+  expect(await Promise.all([...results, later])).toEqual(["a", "b", "c", "d"]);
+});

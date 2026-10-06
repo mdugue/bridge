@@ -130,16 +130,30 @@ export const STREAM_ERROR_TARGET = 16;
  * map's 2048 px the coarse terrain's 40 m came to 372 px over the 220 m
  * frustum, so every tile the frustum touched was refined to its fine level
  * (and from the air, up to four of them: 642 → 677 MB on an iPhone, flying
- * at 228 m). At 64 px the coarse level stays below the target at every
- * radius, while a tile's buildings (and the coarse level with its crowns,
- * which is the minimum terrain under them) still load for the shadow: what
- * the main camera refines is refined for the view, not for the sun.
+ * at 228 m). On a phone, at 64 px, the coarse level stays below the target
+ * at every radius, while a tile's buildings (and the coarse level with its
+ * crowns, which is the minimum terrain under them) still load for the
+ * shadow: what the main camera refines is refined for the view, not for the
+ * sun. A desktop has the memory for the fine level under the eye-level
+ * frustum (110 m): at 128 px the coarse level's 23 px still refine it there
+ * — a tile behind the player at a seam casts its own trees' shadows, and
+ * the whole-site boot fetches the spawn tile's fine level as early as it
+ * did — but no longer from the air, where the frustum grows (12 px and
+ * less from 220 m on).
  */
-export const SHADOW_STREAM_PX = 64;
+export const SHADOW_STREAM_PX: Readonly<Record<"desktop" | "mobile", number>> =
+  {
+    desktop: 128,
+    mobile: 64,
+  };
 
 /** The width and height the shadow camera streams at (`SHADOW_STREAM_PX`). */
-export function shadowStreamResolution(): { height: number; width: number } {
-  return { width: SHADOW_STREAM_PX, height: SHADOW_STREAM_PX };
+export function shadowStreamResolution(tier: "desktop" | "mobile"): {
+  height: number;
+  width: number;
+} {
+  const px = SHADOW_STREAM_PX[tier];
+  return { width: px, height: px };
 }
 
 /**
@@ -150,7 +164,7 @@ export function shadowStreamResolution(): { height: number; width: number } {
 export function shadowStreamError(
   geometricError: number,
   radius: number,
-  px = SHADOW_STREAM_PX
+  px: number
 ): number {
   return geometricError / ((2 * radius) / px);
 }

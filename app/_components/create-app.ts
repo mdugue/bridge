@@ -1158,7 +1158,10 @@ async function bootApp(
       },
       // at a resolution for streaming, not the map's: it loads what casts
       // into the view, never a finer terrain level (shadow-fit.ts)
-      { camera: sunRig.shadowCamera, ...shadowStreamResolution() },
+      {
+        camera: sunRig.shadowCamera,
+        ...shadowStreamResolution(budget.tier),
+      },
     ]
   );
   cleanups.push(() => stream.dispose());
@@ -1260,7 +1263,7 @@ async function bootApp(
     shadowStreams = on;
     const shadow = sunRig.shadowCamera;
     if (on) {
-      const { width, height } = shadowStreamResolution();
+      const { width, height } = shadowStreamResolution(budget.tier);
       stream.tiles.setCamera(shadow);
       stream.tiles.setResolution(shadow, width, height);
     } else {

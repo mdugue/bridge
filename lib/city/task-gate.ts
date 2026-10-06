@@ -14,6 +14,9 @@ export interface TaskGate {
   running: () => number;
   /** tasks waiting for a place */
   waiting: () => number;
+  /** how many may run at once from now on (a raised limit starts waiters
+   *  at once; a lowered one lets the running finish) */
+  setLimit: (limit: number) => void;
 }
 
 interface Waiter {
@@ -27,7 +30,8 @@ function abortError(signal: AbortSignal | undefined): Error {
     : new DOMException("The operation was aborted.", "AbortError");
 }
 
-export function createTaskGate(limit: number): TaskGate {
+export function createTaskGate(initialLimit: number): TaskGate {
+  let limit = initialLimit;
   let running = 0;
   const line: Waiter[] = [];
   const next = () => {
@@ -71,5 +75,9 @@ export function createTaskGate(limit: number): TaskGate {
     run,
     running: () => running,
     waiting: () => line.length,
+    setLimit: (next_: number) => {
+      limit = Math.max(1, next_);
+      next();
+    },
   };
 }

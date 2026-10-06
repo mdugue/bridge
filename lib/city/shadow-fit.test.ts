@@ -82,8 +82,8 @@ test("the dead zone scales with the radius and matches the old 20 m", () => {
   }
 });
 
-test("the shadow camera never refines terrain, at any radius it takes", () => {
-  const { width, height } = shadowStreamResolution();
+test("a phone's shadow camera never refines terrain, at any radius it takes", () => {
+  const { width, height } = shadowStreamResolution("mobile");
   expect(width).toBe(height);
   // every radius the fit can hand out, and everything in between
   for (let r = SHADOW_BASE_RADIUS; r <= SHADOW_MAX_RADIUS; r += 5) {
@@ -99,11 +99,27 @@ test("the shadow camera never refines terrain, at any radius it takes", () => {
   ).toBeGreaterThan(STREAM_ERROR_TARGET);
 });
 
-test("the shadow camera still loads the buildings that cast into the view", () => {
-  const { width } = shadowStreamResolution();
-  // a tile's node refines to its buildings (and the coarse ground under
-  // them) even at the widest frustum and a target many times the base
+test("a desktop's shadow camera refines terrain at eye level, never from the air", () => {
+  const { width } = shadowStreamResolution("desktop");
+  // the eye-level frustum: the fine level under it, as before
   expect(
-    shadowStreamError(TILE_ERROR, SHADOW_MAX_RADIUS, width)
-  ).toBeGreaterThan(STREAM_ERROR_TARGET * 64);
+    shadowStreamError(COARSE_TERRAIN_ERROR, SHADOW_BASE_RADIUS, width)
+  ).toBeGreaterThan(STREAM_ERROR_TARGET);
+  // every wider frustum (from the air): coarse, whatever it covers
+  for (let r = SHADOW_BASE_RADIUS * 2; r <= SHADOW_MAX_RADIUS; r += 5) {
+    expect(shadowStreamError(COARSE_TERRAIN_ERROR, r, width)).toBeLessThan(
+      STREAM_ERROR_TARGET
+    );
+  }
+});
+
+test("the shadow camera still loads the buildings that cast into the view", () => {
+  for (const tier of ["desktop", "mobile"] as const) {
+    const { width } = shadowStreamResolution(tier);
+    // a tile's node refines to its buildings (and the coarse ground under
+    // them) even at the widest frustum and a target many times the base
+    expect(
+      shadowStreamError(TILE_ERROR, SHADOW_MAX_RADIUS, width)
+    ).toBeGreaterThan(STREAM_ERROR_TARGET * 64);
+  }
 });

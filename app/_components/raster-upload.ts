@@ -1,5 +1,6 @@
 import type { Texture, WebGPURenderer } from "three/webgpu";
 import { createTaskGate } from "@/lib/city/task-gate";
+import type { DeviceTier } from "./scene-profile";
 
 /**
  * The streamed rasters' decode and upload, one at a time for the whole
@@ -11,8 +12,25 @@ import { createTaskGate } from "@/lib/city/task-gate";
  * on the GPU (`uploadNow`, its bytes dropped) before the next one decodes.
  * The download stays outside: a stalled request must not hold the ground
  * of every other tile.
+ *
+ * One at a time is a phone's (`RASTER_TURNS`). A desktop has the memory
+ * and keeps the overlap it always had — a level decodes its rasters one
+ * after another, and the tile renderer parses five tiles at once — so its
+ * boot is not held up: through one turn, the spawn tile's ground waited
+ * behind every neighbour's, and the whole-site boot took 40 % longer.
  */
 const rasterGate = createTaskGate(1);
+
+/** How many rasters decode and upload at once, per device tier. */
+export const RASTER_TURNS: Readonly<Record<DeviceTier, number>> = {
+  desktop: 5,
+  mobile: 1,
+};
+
+/** Sets the site-wide raster turns for this page's tier (tile-stream.ts). */
+export function setRasterTurns(tier: DeviceTier): void {
+  rasterGate.setLimit(RASTER_TURNS[tier]);
+}
 
 /** A raster's PNG bytes. Rejects on a network failure, an HTTP error and
  *  an abort. */
