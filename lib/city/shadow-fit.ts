@@ -115,3 +115,42 @@ export function shadowFocusAhead(radius: number): number {
 export function shadowDeadZone(radius: number): number {
   return radius * FOLLOW_DEAD_ZONE_FRACTION;
 }
+
+/**
+ * 3DTilesRendererJS's error target (px), which the viewer keeps as its base
+ * (the memory governor scales it up, never down).
+ */
+export const STREAM_ERROR_TARGET = 16;
+
+/**
+ * The resolution (px, square) the shadow camera streams tiles at: one
+ * chosen for streaming, not the shadow map's. The tile renderer measures an
+ * orthographic camera's error as a tile's geometric error over its pixel —
+ * the frustum's width over the resolution — whatever the distance. At the
+ * map's 2048 px the coarse terrain's 40 m came to 372 px over the 220 m
+ * frustum, so every tile the frustum touched was refined to its fine level
+ * (and from the air, up to four of them: 642 → 677 MB on an iPhone, flying
+ * at 228 m). At 64 px the coarse level stays below the target at every
+ * radius, while a tile's buildings (and the coarse level with its crowns,
+ * which is the minimum terrain under them) still load for the shadow: what
+ * the main camera refines is refined for the view, not for the sun.
+ */
+export const SHADOW_STREAM_PX = 64;
+
+/** The width and height the shadow camera streams at (`SHADOW_STREAM_PX`). */
+export function shadowStreamResolution(): { height: number; width: number } {
+  return { width: SHADOW_STREAM_PX, height: SHADOW_STREAM_PX };
+}
+
+/**
+ * The screen-space error (px) the tile renderer gives a node of
+ * `geometricError` (m) under the shadow camera at half-size `radius` (m),
+ * streamed at `px`: its pixel is the frustum's width over the resolution.
+ */
+export function shadowStreamError(
+  geometricError: number,
+  radius: number,
+  px = SHADOW_STREAM_PX
+): number {
+  return geometricError / ((2 * radius) / px);
+}

@@ -5,7 +5,11 @@ import {
   SHADOW_MAX_RADIUS,
   shadowDeadZone,
   shadowFocusAhead,
+  shadowStreamError,
+  shadowStreamResolution,
+  STREAM_ERROR_TARGET,
 } from "./shadow-fit";
+import { COARSE_TERRAIN_ERROR, TILE_ERROR } from "./tileset";
 
 test("eye level keeps the base radius (walking is unchanged)", () => {
   expect(fitShadowRadius(1.7, SHADOW_BASE_RADIUS)).toBe(SHADOW_BASE_RADIUS);
@@ -76,4 +80,30 @@ test("the dead zone scales with the radius and matches the old 20 m", () => {
   for (const r of [110, 220, 440, 880]) {
     expect(shadowDeadZone(r) + shadowFocusAhead(r)).toBeLessThan(r * 0.8);
   }
+});
+
+test("the shadow camera never refines terrain, at any radius it takes", () => {
+  const { width, height } = shadowStreamResolution();
+  expect(width).toBe(height);
+  // every radius the fit can hand out, and everything in between
+  for (let r = SHADOW_BASE_RADIUS; r <= SHADOW_MAX_RADIUS; r += 5) {
+    // under the base error target, so it holds at every target the memory
+    // governor raises it to
+    expect(shadowStreamError(COARSE_TERRAIN_ERROR, r, width)).toBeLessThan(
+      STREAM_ERROR_TARGET
+    );
+  }
+  // the map's own resolution did refine it, across the whole eye-level frustum
+  expect(
+    shadowStreamError(COARSE_TERRAIN_ERROR, SHADOW_BASE_RADIUS, 2048)
+  ).toBeGreaterThan(STREAM_ERROR_TARGET);
+});
+
+test("the shadow camera still loads the buildings that cast into the view", () => {
+  const { width } = shadowStreamResolution();
+  // a tile's node refines to its buildings (and the coarse ground under
+  // them) even at the widest frustum and a target many times the base
+  expect(
+    shadowStreamError(TILE_ERROR, SHADOW_MAX_RADIUS, width)
+  ).toBeGreaterThan(STREAM_ERROR_TARGET * 64);
 });

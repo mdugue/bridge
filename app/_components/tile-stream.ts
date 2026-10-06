@@ -1331,7 +1331,10 @@ export class DressingPlugin {
 /**
  * Starts streaming the tileset under `world` (the viewer's rotated Z-up
  * group). `cameras` decide what loads: the view camera, and the sun's shadow
- * camera, so a building behind the player still casts into the view.
+ * camera, so a building behind the player still casts into the view — the
+ * latter at a resolution of its own (lib/city/shadow-fit.ts
+ * `shadowStreamResolution`), so it loads a tile's buildings and coarse
+ * ground but never refines its terrain.
  */
 export function createTileStream(
   ctx: TileStreamContext,
