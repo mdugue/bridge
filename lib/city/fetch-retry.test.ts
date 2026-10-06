@@ -75,7 +75,6 @@ test("errors: an abort is the caller's, the browsers' network errors are transie
     "Load failed",
     "Failed to fetch",
     "NetworkError when attempting to fetch resource.",
-    "The compressed data was not valid",
   ]) {
     expect(errorVerdict(new TypeError(message))).toBe("transient");
   }

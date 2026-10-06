@@ -71,12 +71,13 @@ function errorName(err: unknown): string | undefined {
 }
 
 /**
- * What an error thrown by the fetch, its body read or its inflation means.
- * Every browser rejects a failed request with a TypeError (Safari "Load
- * failed", Chrome "Failed to fetch", Firefox "NetworkError when attempting
- * to fetch resource."), a body cut off mid-transfer too, and so does a
- * DecompressionStream fed a truncated stream — all worth another try.
- * Anything else (a SyntaxError, a RangeError) is not the network's.
+ * What an error thrown by the fetch or its body read means. Every browser
+ * rejects a failed request with a TypeError (Safari "Load failed", Chrome
+ * "Failed to fetch", Firefox "NetworkError when attempting to fetch
+ * resource."), and a body cut off mid-transfer too — worth another try.
+ * Anything else (a SyntaxError, a RangeError) is not the network's, and
+ * neither is a gzip that does not inflate once read whole: the browser
+ * side rethrows that as a plain Error (fetch-optional.ts `inflate`).
  */
 export function errorVerdict(err: unknown): FetchVerdict {
   const name = errorName(err);

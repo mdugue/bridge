@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { isNetworkFailure } from "@/lib/city/fetch-retry";
 import {
   eitherSignal,
   fetchBytes,
@@ -125,6 +126,25 @@ test("fetchBytes answers a status no retry fixes as it is, without a body", asyn
   expect(got).toMatchObject({ status: 403, ok: false });
   expect(got.bytes.length).toBe(0);
   expect(stub.calls()).toBe(1);
+});
+
+test("a gzip read whole that does not inflate is a corrupt file, not the network's: no retry", async () => {
+  // the gzip magic, then nothing a decoder takes
+  const corrupt = () =>
+    new Response(new Uint8Array([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 7, 7]));
+  const stub = stubFetch(corrupt);
+  const error = await fetchBytes("/t.glb.gz", {
+    budgetMs: 20_000,
+    gunzip: true,
+  }).catch((err: unknown) => err);
+  expect(stub.calls()).toBe(1);
+  expect(error).toBeInstanceOf(Error);
+  // the tile healer and the boot do not wait for it
+  expect(isNetworkFailure(error)).toBe(false);
+  expect((error as Error).message).toStartWith("/t.glb.gz: corrupt gzip");
+  // an optional one is off, at once
+  expect(await fetchOptionalBinary("/x.pts.gz")).toBeNull();
+  expect(stub.calls()).toBe(2);
 });
 
 test("a required file that is missing throws with its status", async () => {

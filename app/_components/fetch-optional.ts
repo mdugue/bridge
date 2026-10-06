@@ -64,14 +64,33 @@ export interface FetchBytesOptions {
   signal?: AbortSignal;
   /** how long transient failures are retried, in ms of a usable page */
   budgetMs: number;
-  /** inflate a gzipped body inside the retries (a truncated stream is one
-   *  more transient failure) */
+  /** inflate a gzipped body (`inflate`) */
   gunzip?: boolean;
   /** the rest of the request (`cache`, headers) */
   init?: RequestInit;
 }
 
 const NO_BYTES = new Uint8Array(0);
+
+/**
+ * A gzipped body, inflated. It has been read whole by then — a body cut
+ * off in transit fails its read, which is retried — so one that does not
+ * inflate is a corrupt file (a broken upload, a proxy that mangled it):
+ * rethrown as a plain Error, not the TypeError the stream rejects with,
+ * which the retries and the tile healer would take for the network's and
+ * fetch again for ever.
+ */
+async function inflate(
+  url: string,
+  raw: Uint8Array<ArrayBuffer>
+): Promise<Uint8Array<ArrayBuffer>> {
+  try {
+    return new Uint8Array(await new Response(gunzip(raw)).arrayBuffer());
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    throw new Error(`${url}: corrupt gzip (${why})`, { cause: err });
+  }
+}
 
 /**
  * Fetches `url` and reads its body, retrying network failures and
@@ -99,9 +118,7 @@ export async function fetchBytes(
       }
       const raw = new Uint8Array(await res.arrayBuffer());
       const bytes =
-        opts.gunzip && isGzipped(raw)
-          ? new Uint8Array(await new Response(gunzip(raw)).arrayBuffer())
-          : raw;
+        opts.gunzip && isGzipped(raw) ? await inflate(url, raw) : raw;
       return { status: res.status, value: bytes };
     },
     { budgetMs, env: PAGE_RETRY_ENV, signal, onRetry: reportRetry }
