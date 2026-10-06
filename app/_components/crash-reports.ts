@@ -3,6 +3,7 @@ import {
   createProblemGate,
   envelope,
   firstSet,
+  isAftermath,
   type Payload,
   PROBLEM_KINDS,
   problemReport,
@@ -136,9 +137,16 @@ async function reportPrevious(ctx: ReportContext): Promise<void> {
     // No storage, no previous record either.
     return;
   }
-  const crashed = offerAsCrash(previous, recentlyRecovered());
+  const recovered = recentlyRecovered();
+  const crashed = offerAsCrash(previous, recovered);
   if (crashed) {
-    sendEvent(crashReport(previous, newId(), ctx));
+    sendEvent(
+      crashReport(previous, newId(), ctx, {
+        recovered,
+        // This page's navigation start: how soon it followed the death.
+        nextStart: performance.timeOrigin / 1000,
+      })
+    );
   }
   if (summaryDue(previous)) {
     sendEvent(summaryReport(previous, newId(), ctx));
@@ -169,7 +177,12 @@ function begin(trail: Trail, ctx: ReportContext): void {
   sendSession(sessionUpdate(trail, "ok", ctx));
 }
 
-/** Hears this page's trail: its problems, its leaving, its end. */
+/**
+ * Hears this page's trail: its problems, its leaving, its end. A problem
+ * that is the aftermath of the page's end (`isAftermath`: after its render
+ * stopped or as it leaves) stays a breadcrumb — no event, no error on the
+ * session.
+ */
 function listen(ctx: ReportContext): TrailListener {
   const admit = createProblemGate();
   return (event, trail) => {
@@ -183,7 +196,10 @@ function listen(ctx: ReportContext): TrailListener {
     if (!report) {
       return;
     }
-    if (PROBLEM_KINDS.has(event.kind)) {
+    if (
+      PROBLEM_KINDS.has(event.kind) &&
+      !isAftermath(trail, event, document.visibilityState === "hidden")
+    ) {
       report.problems += 1;
       if (admit(event)) {
         sendEvent(problemReport(trail, event, newId(), ctx));

@@ -3,6 +3,7 @@ import {
   createTrail,
   endedInCrash,
   firstAt,
+  formatBeat,
   formatTrail,
   offerAsCrash,
   parseTrail,
@@ -45,6 +46,15 @@ test("a record starts running, so a page that is killed stays a crash", () => {
   expect(endedInCrash(null)).toBe(false);
 });
 
+test("a page loaded in the background is no crash when it is killed there", () => {
+  const trail = createTrail({ ...setup, hidden: true });
+  pushEvent(trail, { t: 0, kind: "start" });
+  pushBeat(trail, beat(2)); // the loop's frames while out of view
+  expect(endedInCrash(trail)).toBe(false);
+  expect(offerAsCrash(trail, false)).toBe(false);
+  expect(trail.stats?.beats).toBe(0);
+});
+
 test("events and beats keep only the newest entries", () => {
   const trail = createTrail(setup);
   for (let i = 0; i < TRAIL_EVENTS + 5; i++) {
@@ -79,6 +89,36 @@ test("the text names the device, the events and the last beats", () => {
   expect(text).toContain("12.3s  device-lost  unknown");
   expect(text).toContain("gpu 180MB");
   expect(text).toContain("tiles 3/2");
+});
+
+test("a beat is one line, its parts two spaces apart, older records' too", () => {
+  const full = {
+    ...beat(12),
+    t: 12.34,
+    heldMB: 512.4,
+    held: "5482a 274MB 120t 339MB 31rt 120p 300u",
+    rasterMB: 98.2,
+    fine: 2,
+    coarse: 5,
+    cacheMB: 411.6,
+    cacheMinMB: 320,
+    cacheMaxMB: 600,
+    downloading: 4,
+    parsing: 2,
+    failed: 0,
+    online: false,
+  };
+  expect(formatBeat(full)).toBe(
+    "12.3s  f360 30fps  gpu 180MB rast 98MB held 512MB 5482a 274MB 120t 339MB 31rt 120p 300u" +
+      "  90dc 1200k▲  tiles 3/2 terr 2f/5c  cache 412MB 320-600" +
+      "  net 4d 2p 0f offline  pastel walk 2m"
+  );
+  // Online, the line says nothing about it.
+  expect(formatBeat({ ...full, online: true })).toContain("net 4d 2p 0f  ");
+  // A record from before these fields reads as it always did.
+  expect(formatBeat(beat(14))).toBe(
+    "14s  f420 30fps  gpu 180MB  90dc 1200k▲  tiles 3/2  pastel walk 2m"
+  );
 });
 
 test("the page's stats count only the beats rendered in view", () => {
@@ -161,6 +201,19 @@ describe("which previous record is offered as a crash", () => {
 
   test("after a recovery, not iOS's own navigation that never drew", () => {
     expect(offerAsCrash(died("renderer"), true)).toBe(false);
+  });
+
+  test("a recovery page that died in its boot is offered: the loop", () => {
+    // its buildings landed, then it died before the first frame
+    expect(offerAsCrash(died("start", "stage buildings"), true)).toBe(true);
+    // its loop rendered, then it died before any stage was done
+    const rendered = died("start");
+    pushBeat(rendered, { ...beat(2), frames: 40 });
+    expect(offerAsCrash(rendered, true)).toBe(true);
+    // a beat before the loop drew anything is still nothing but its start
+    const idle = died("start");
+    pushBeat(idle, { ...beat(2), frames: 0 });
+    expect(offerAsCrash(idle, true)).toBe(false);
   });
 
   test("a recovered page that drew and then died is offered", () => {

@@ -157,8 +157,13 @@ export interface CrashTrail {
   note: (kind: string, detail?: string) => void;
   /** One heartbeat (the record adds the time). */
   beat: (beat: Omit<TrailBeat, "t">) => void;
-  /** Facts learned after the start (the backend once the renderer is up). */
-  set: (patch: Partial<Pick<Trail, "backend" | "pixelRatio">>) => void;
+  /**
+   * Facts learned after the start: the backend once the renderer is up,
+   * the safety level the budget was cut to.
+   */
+  set: (
+    patch: Partial<Pick<Trail, "backend" | "pixelRatio" | "safety">>
+  ) => void;
   /** The page leaves normally: the record ends clean. */
   end: () => void;
 }
@@ -181,6 +186,9 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
     screen: `${screen.width}×${screen.height}@${devicePixelRatio}`,
     deviceMemoryGB: (navigator as Navigator & { deviceMemory?: number })
       .deviceMemory,
+    // A tab opened behind another, or restored, starts out of view: it
+    // hears no "hidden", and a kill there is no crash in use either.
+    hidden: document.visibilityState === "hidden",
   });
   const stopAnswering = answerFor(trail.startedAt);
   const write = () => {

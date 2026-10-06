@@ -1,9 +1,11 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   crashReport,
   createProblemGate,
   envelope,
   envelopeUrl,
+  isAftermath,
+  type Payload,
   PROBLEMS_PER_PAGE,
   problemReport,
   reportBuild,
@@ -39,15 +41,21 @@ const beat = (t: number, fps: number) => ({
   heightM: 1.7,
 });
 
+const SETUP = {
+  startedAt: "2026-10-03T10:00:00.000Z",
+  url: "/dresden?view=abc&trail=1",
+  userAgent: "Mozilla/5.0 (iPhone)",
+  screen: "393×852@3",
+  deviceMemoryGB: 4,
+};
+
+/** The tags a report carries (a payload's members are unknown). */
+const tagsOf = (payload: Payload) =>
+  payload.tags as Record<string, string | undefined>;
+
 /** A page that booted, streamed, was loaded and ran at 8, 25 and 50 fps. */
 function page(): Trail {
-  const trail = createTrail({
-    startedAt: "2026-10-03T10:00:00.000Z",
-    url: "/dresden?view=abc&trail=1",
-    userAgent: "Mozilla/5.0 (iPhone)",
-    screen: "393×852@3",
-    deviceMemoryGB: 4,
-  });
+  const trail = createTrail(SETUP);
   trail.backend = "WebGPU";
   pushEvent(trail, { t: 0, kind: "start" });
   pushEvent(trail, { t: 3, kind: "first frame" });
@@ -197,10 +205,99 @@ test("a problem is grouped by its kind and its detail without URLs or numbers", 
   );
   expect(a.fingerprint).toEqual(["load-error", "<url> #"]);
   expect(b.fingerprint).toEqual(a.fingerprint);
-  expect(a.level).toBe("error");
-  expect(
-    problemReport(trail, { t: 7, kind: "device-lost" }, ID, ctx).level
-  ).toBe("fatal");
+});
+
+test("a problem's level says whether the page survived it", () => {
+  const trail = page();
+  const level = (kind: string, detail?: string) =>
+    problemReport(trail, { t: 7, kind, detail }, ID, ctx).level;
+  expect(level("load-error", "https://x/a.glb 404")).toBe("error");
+  expect(level("device-lost")).toBe("fatal");
+  expect(level("boot failed", "Die Grafik ist ausgefallen")).toBe("fatal");
+  // A boot that gave up on the network is the connection's failure.
+  expect(level("boot failed", "network: Load failed")).toBe("error");
+  // An allocation the page shed memory for and survived.
+  expect(level("alloc-failed", "RangeError: out of bounds")).toBe("warning");
+});
+
+describe("which problems are the aftermath of the page's end", () => {
+  const noted = (...kinds: string[]) => {
+    const trail = page();
+    kinds.forEach((kind, i) => pushEvent(trail, { t: 10 + i, kind }));
+    return trail;
+  };
+  const error = { t: 20, kind: "rejection", detail: "buffer.destroy" };
+  const lost = { t: 20, kind: "load-error", detail: "https://x/a.glb" };
+
+  test("a problem on a page in use is reported", () => {
+    expect(isAftermath(noted(), error, false)).toBe(false);
+    expect(isAftermath(noted(), lost, false)).toBe(false);
+    // the frame that failed, noted before the render stopped
+    expect(isAftermath(noted("memory"), error, false)).toBe(false);
+  });
+
+  test("not once the page is past saving", () => {
+    for (const end of ["render stopped", "reloading", "gpu reclaimed"]) {
+      expect(isAftermath(noted("frame failed", end), error, false)).toBe(true);
+    }
+  });
+
+  test("not once the page has left", () => {
+    const left = noted("hidden", "pagehide");
+    left.state = "clean";
+    expect(isAftermath(left, error, false)).toBe(true);
+    // back from the back-forward cache, it is in use again
+    left.state = "running";
+    expect(isAftermath(left, error, false)).toBe(false);
+  });
+
+  test("not a load that failed while the page was out of view", () => {
+    expect(isAftermath(noted(), lost, true)).toBe(true);
+    expect(isAftermath(noted(), { t: 20, kind: "boot failed" }, true)).toBe(
+      true
+    );
+    // an error is the page's own, in view or not
+    expect(isAftermath(noted(), error, true)).toBe(false);
+  });
+});
+
+test("a recovery page that died is a crash of its own, with its restart gap", () => {
+  const trail = page();
+  trail.safety = 2;
+  const died = Date.parse(trail.startedAt) / 1000 + 8;
+  const plain = crashReport(trail, ID, ctx, { nextStart: died + 0.84 });
+  expect(plain.tags).toMatchObject({ restart_gap_s: "0.8", safety: "2" });
+  const recovery = crashReport(trail, ID, ctx, {
+    recovered: true,
+    nextStart: died + 33,
+  });
+  expect(recovery).toMatchObject({
+    level: "fatal",
+    message: { formatted: "Recovery page died (running, WebGPU)" },
+    fingerprint: ["recovery page died", "WebGPU", "running"],
+    tags: { restart_gap_s: "33" },
+  });
+  // Without the next page's start, no gap.
+  expect(tagsOf(crashReport(trail, ID, ctx)).restart_gap_s).toBeUndefined();
+});
+
+test("a report says how soon after a long stretch in the background it came", () => {
+  const trail = page();
+  pushEvent(trail, { t: 10, kind: "hidden" });
+  pushEvent(trail, { t: 130, kind: "visible" }); // two minutes away
+  pushEvent(trail, { t: 140, kind: "hidden" });
+  pushEvent(trail, { t: 143, kind: "visible" }); // a glance away: no resume
+  const at = (t: number) =>
+    tagsOf(problemReport(trail, { t, kind: "frame failed" }, ID, ctx))
+      .resumed_s;
+  expect(at(130.8)).toBe("0.8");
+  expect(at(185)).toBe("55");
+  expect(at(190)).toBeUndefined();
+  // A page loaded in the background resumes when it first comes into view.
+  const behind = createTrail({ ...SETUP, hidden: true });
+  pushEvent(behind, { t: 12, kind: "visible" });
+  const error = { t: 13, kind: "error" };
+  expect(tagsOf(problemReport(behind, error, ID, ctx)).resumed_s).toBe("1");
 });
 
 test("a page reports each problem once, and only so many", () => {
@@ -216,6 +313,21 @@ test("a page reports each problem once, and only so many", () => {
     ).toBe(true);
   }
   expect(admit({ t: 4, kind: "device-lost" })).toBe(false);
+});
+
+test("what the viewer notes as it copes is never a report of its own", () => {
+  const admit = createProblemGate();
+  for (const kind of [
+    "gpu reclaimed",
+    "memory emergency",
+    "net-retry",
+    "net-wait",
+    "safety",
+    "render stopped",
+  ]) {
+    expect(admit({ t: 1, kind, detail: "x" })).toBe(false);
+  }
+  expect(admit({ t: 2, kind: "alloc-failed", detail: "x" })).toBe(true);
 });
 
 test("the summary is a transaction over the page with its numbers", () => {
