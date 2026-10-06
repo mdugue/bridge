@@ -69,7 +69,8 @@ Bildschirmgröße und Pixeldichte, den ungefähren Arbeitsspeicher des Geräts,
 die Grafikschnittstelle (WebGPU oder WebGL2), die aufgerufene Seite ohne
 Parameter (etwa `/dresden`), den Verlauf des Besuchs (Ladeschritte,
 Fehlermeldungen, Bildrate, Speicher, geladene Kacheln, Bildstil, Gehen oder
-Fliegen, Höhe der Kamera über dem Boden), Zeitpunkte, eine zufällige Kennung
+Fliegen, Höhe der Kamera über dem Boden, die Sparstufe nach Grafikausfällen –
+siehe unten), Zeitpunkte, eine zufällige Kennung
 des einzelnen Seitenaufrufs und die Version der Seite.
 
 Er enthält **nicht** deinen Standort oder wo in der Stadt du warst, keine
@@ -118,7 +119,12 @@ und liest es nur auf deinem Gerät:
 - deine Wahl zu den Fehlerberichten,
 - wenn sich die Seite nach einem Grafikfehler selbst neu lädt, bis du den Tab
   schließt: die Stelle, an der du in der Stadt standest, und wann das war –
-  damit sie dich dorthin zurückbringt und nicht endlos neu lädt.
+  damit sie dich dorthin zurückbringt und nicht endlos neu lädt,
+- wenn die Grafik auf deinem Gerät zuletzt ausgefallen ist, unter dem Namen
+  `gpu-safety`: eine Sparstufe von 0 bis 3, wann sie zuletzt stieg und, wenn
+  ein abgestürzter Besuch sie erhöht hat, wann dieser begann – damit der
+  Viewer beim nächsten Besuch sparsamer zeichnet und nicht wieder ausfällt.
+  Die Stufe sinkt von selbst, alle drei Tage um eins.
 
 Rechtsgrundlage ist § 25 Abs. 2 Nr. 2 TDDDG: Diese Einträge sind für die
 Funktionen, die du nutzt, unbedingt erforderlich. Du kannst sie jederzeit in
