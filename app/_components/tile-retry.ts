@@ -12,7 +12,7 @@ import {
   onUsableAgain,
   pageLeaving,
   pageVisible,
-  usableMs,
+  visibleMs,
   watchRetries,
 } from "./net-gate";
 
@@ -262,15 +262,16 @@ function createHealer(tiles: HealableTiles, onClear?: () => void) {
 /**
  * The boot's wait for the spawn tiles (or the tileset) that gave up on the
  * network: the healer asks for them again, and the boot fails only once
- * the page has been usable for BOOT_NET_WAIT_MS since the stream started
- * without them — a dead server is said so within a minute or so. The wait
+ * the page has been visible for BOOT_NET_WAIT_MS since the stream started
+ * without them — a dead server, or no network at all, is said so within a
+ * minute or so; a phone in a pocket waits until it is looked at. The wait
  * ends when the last of them lands (a boot that got its tiles back and is
  * only slow is not failed for the blip); a give-up after that waits
  * afresh, from its own moment. A page on its way out decides nothing.
  */
 function createBootWait(opts: NetworkWatchOptions) {
   /** when the wait started counting (null: between rounds) */
-  let since: number | null = usableMs();
+  let since: number | null = visibleMs();
   let last = "";
   /** the boot's give-ups not landed yet (null: the tileset) */
   const waiting = new Set<object | null>();
@@ -287,7 +288,7 @@ function createBootWait(opts: NetworkWatchOptions) {
     if (pageLeaving()) {
       return;
     }
-    const waited = usableMs() - (since ?? usableMs());
+    const waited = visibleMs() - (since ?? visibleMs());
     if (waited >= BOOT_NET_WAIT_MS) {
       stop();
       opts.onBootGiveUp(
@@ -301,7 +302,7 @@ function createBootWait(opts: NetworkWatchOptions) {
   return {
     start: (tile: object | null, message: string) => {
       last = message;
-      since ??= usableMs();
+      since ??= visibleMs();
       waiting.add(tile);
       tick ??= setInterval(check, BOOT_WAIT_TICK_MS);
     },

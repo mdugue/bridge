@@ -263,7 +263,7 @@ interface Dressed {
 /**
  * Every request the renderer makes — the tileset and each tile's content —
  * through the viewer's one fetch (fetch-optional.ts `fetchBytes`): a
- * network failure is retried while the page is usable, so a tile that hit
+ * network failure is retried while the page is visible, so a tile that hit
  * a blip stays loading (its coarse level shown, the boot waiting) instead
  * of failing; one that gives up is brought back later (tile-retry.ts). The
  * `.glb.gz` content is pre-gzipped (static hosts do not compress binary

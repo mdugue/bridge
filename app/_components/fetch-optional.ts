@@ -3,9 +3,10 @@
  * manifest, the tileset and every tile, their side files and rasters
  * (raster-upload.ts `fetchRasterBytes`), the trees' NDVI sampler — go
  * through `fetchBytes`: a network failure (or a 408/429/5xx) is retried
- * with backoff while the page is usable (lib/city/fetch-retry.ts,
- * net-gate.ts), the body read inside the retries, so a blip — a Wi-Fi
- * handover, a resume from the background — is never taken for the answer.
+ * with backoff for a budget of the page's visible time
+ * (lib/city/fetch-retry.ts, net-gate.ts), the body read inside the
+ * retries, so a blip — a Wi-Fi handover, a resume from the background — is
+ * never taken for the answer.
  * Not yet: the minimap's and the soundscape's rasters and the inquiry
  * card's facts fetch directly (a failure there is that widget's), and the
  * reports' beacons are fire-and-forget.
@@ -62,7 +63,7 @@ export interface FetchedBytes {
 
 export interface FetchBytesOptions {
   signal?: AbortSignal;
-  /** how long transient failures are retried, in ms of a usable page */
+  /** how long transient failures are retried, in ms of a visible page */
   budgetMs: number;
   /** inflate a gzipped body (`inflate`) */
   gunzip?: boolean;
@@ -267,7 +268,7 @@ export async function fetchFeaturesFrom<T>(
 
 /**
  * Fetches a REQUIRED JSON artifact: retried while the network is down for
- * up to the boot's wait (ms of a usable page), then — or on any other
+ * up to the boot's wait (ms of a visible page), then — or on any other
  * failure — it throws (a give-up's message starts "network: ").
  */
 export async function fetchRequiredJson<T>(
