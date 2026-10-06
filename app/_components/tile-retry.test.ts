@@ -191,3 +191,29 @@ test("the boot gives up on the network after a minute of a usable page without i
   expect(given.length).toBe(1);
   second.dispose();
 });
+
+test("the boot's wait ends when what it waited for lands, and a later give-up waits afresh", () => {
+  const { tiles } = fakeTiles();
+  const given: Error[] = [];
+  const watch = createNetworkWatch({
+    tiles,
+    bootOver: () => false,
+    onBootGiveUp: (error) => given.push(error),
+  });
+  const spawn = failedTile("spawn");
+  watch.failed(null, lost(), "/tileset.json", true);
+  watch.failed(spawn, lost(), "/spawn", true);
+  // healed at 5 s, back at 30 s (its content: the tileset is back too)
+  jest.advanceTimersByTime(30_000);
+  watch.landed(spawn);
+  // a slow link, the rest of the spawn tile still on its way: no give-up
+  jest.advanceTimersByTime(60_000);
+  expect(given).toEqual([]);
+  // another blip at 90 s: a minute from then
+  watch.failed(failedTile("terrain"), lost(), "/spawn-terrain", true);
+  jest.advanceTimersByTime(59_000);
+  expect(given).toEqual([]);
+  jest.advanceTimersByTime(2000);
+  expect(given.length).toBe(1);
+  watch.dispose();
+});
