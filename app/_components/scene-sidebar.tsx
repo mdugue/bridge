@@ -90,7 +90,6 @@ import { LegalLinks } from "./legal-links";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { ProjectionPanel } from "./projection-panel";
 import type { SoundscapeControl } from "./soundscape-toggle";
-import { deviceTierFromMedia, postProfileFor } from "./scene-profile";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
 import {
@@ -820,6 +819,12 @@ export interface SceneSidebarProps {
   /** the site's landmarks (Wikidata), most notable first */
   landmarks: Landmark[];
   latLng: { lat: number; lng: number } | null;
+  /**
+   * Whether the scene has a lens blur — the budget it was built with
+   * (scene-profile.ts `postProfileFor`), not the pointer as it is now: a
+   * keyboard detached after the boot leaves the blur on, and its switch.
+   */
+  lensBlur: boolean;
   look: LookValues;
   minutes: number;
   mode: ViewMode;
@@ -850,14 +855,12 @@ export interface SceneSidebarProps {
 
 export function SceneSidebar(props: SceneSidebarProps) {
   const { toggleSidebar } = useSidebar();
-  const { handleRef, look, onLook } = props;
+  const { handleRef, lensBlur, look, onLook } = props;
   const site = useSite();
   const places = useMemo(
     () => sitePlaces(site.viewpoints, props.landmarks, site.name),
     [site, props.landmarks]
   );
-  // the same media query the scene's tier was read from (scene-profile.ts)
-  const lensBlur = postProfileFor(deviceTierFromMedia(props.coarse)).dof;
   return (
     <Sidebar
       className="p-3 [&>[data-slot=sidebar-inner]]:rounded-xl [&>[data-slot=sidebar-inner]]:shadow-xl"

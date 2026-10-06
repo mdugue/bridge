@@ -82,7 +82,7 @@ import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { ModelInstruments } from "./model-instruments";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { updatePocDebug } from "./poc-debug";
-import type { SceneBudget } from "./scene-profile";
+import { postProfileFor, type SceneBudget } from "./scene-profile";
 import { overlook, type ViewpointGeometry } from "@/lib/city/site";
 import {
   BikeCountList,
@@ -1011,6 +1011,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           landcoverTiles={landcoverTiles}
           landmarks={landmarks}
           latLng={latLng}
+          lensBlur={postProfileFor(budget.tier).dof}
           look={lookValues}
           minutes={time.minutes}
           mode={mode}
