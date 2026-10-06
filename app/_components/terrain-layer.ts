@@ -74,7 +74,11 @@ import {
 } from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import { colonyGarden } from "./cultivated-layer";
-import { fetchOptionalJson, isAbortError } from "./fetch-optional";
+import {
+  fetchOptionalJson,
+  isAbortError,
+  untilAborted,
+} from "./fetch-optional";
 import {
   type GroundColour,
   type GroundInputs,
@@ -179,7 +183,9 @@ export interface TerrainOptions {
   offset: { cx: number; cy: number };
   /** paints the colour splat from the class raster (one GPU pass) */
   renderer: WebGPURenderer;
-  /** aborts the raster downloads */
+  /** aborts the level's raster loads — its own and its waits on the
+   *  shared ones — and rejects the dressing with the abort, everything it
+   *  took let go (its tile left, or the stream went) */
   signal?: AbortSignal;
   /** the sky-view rasters, shared with the tile's buildings (tile-stream.ts) */
   skyView?: SharedRasters<Texture>;
@@ -431,6 +437,12 @@ export async function loadSplatRasters(
     return null;
   }
   const { texture, width, height } = raster;
+  // every level that wanted it gone while it decoded: no splat painted (a
+  // mipmapped RGBA target of the raster's size) for nobody
+  if (signal?.aborted) {
+    texture.dispose();
+    signal.throwIfAborted();
+  }
   return {
     ...raster,
     painted: paintLandcoverSplat(renderer, texture, width, height),
@@ -1387,7 +1399,10 @@ async function loadTerrainRasters(
       return Promise.resolve(null);
     }
     holds.push(() => share.release(key));
-    return share.acquire(key);
+    // an abort lets go at once (`free` below), not once the raster this
+    // waits for has decoded and uploaded: the last holder gone, its load
+    // stops too
+    return untilAborted(share.acquire(key), opts.signal);
   };
   const free = () => {
     for (const texture of owned.splice(0)) {

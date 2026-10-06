@@ -59,6 +59,7 @@ import {
   RENDER_STYLE_BY_ID,
   type RenderStyleDef,
 } from "@/lib/city/render-style";
+import { compileInLanes, type Compiling } from "./compile-lanes";
 import { fxaa } from "./fxaa";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
@@ -181,7 +182,9 @@ export interface PostStack {
    * Builds `object`'s node materials and compiles their pipelines off the
    * frame, for the target the scene renders into (a pipeline is specific
    * to its attachments). Tiles await it before they show, so a landing tile
-   * never stalls a frame on a synchronous build.
+   * never stalls a frame on a synchronous build. Resolves once every
+   * drawable under `object` is uploaded — those another compile had
+   * started too (compile-lanes.ts): a tile drops its CPU copies on it.
    */
   compile: (object: Object3D) => Promise<void>;
   /**
@@ -733,7 +736,7 @@ export function createPostStack(
     kind: PaperKind | undefined;
     /** both sides of each build: clipped and plain, and the swap's */
     anchors: { a: PipelineAnchors; paper: boolean }[];
-    done: WeakMap<Object3D, unknown>;
+    done: WeakMap<Drawable, Compiling>;
   }
   let cut: CutHold | null = null;
   let releaseAfterFrame: PipelineAnchors[] = [];
@@ -799,10 +802,11 @@ export function createPostStack(
   };
 
   // Once is enough for a drawable and its material (a tile, then the whole
-  // scene at boot, walks the same objects).
-  const compiled = new WeakMap<Object3D, unknown>();
-  const compiledPaper = new WeakMap<Object3D, unknown>();
-  const compiledFigure = new WeakMap<Object3D, unknown>();
+  // scene at boot, walks the same objects) — and a walk resolves only once
+  // the steps another walk started on its drawables have (compile-lanes.ts).
+  const compiled = new WeakMap<Drawable, Compiling>();
+  const compiledPaper = new WeakMap<Drawable, Compiling>();
+  const compiledFigure = new WeakMap<Drawable, Compiling>();
   const gone = new WeakSet<BufferGeometry>();
   const onGone = (event: { target: BufferGeometry }) => gone.add(event.target);
   // Papier's programs are made once the styles are warmed (where the
@@ -813,31 +817,20 @@ export function createPostStack(
   const compileAll = async (
     list: Drawable[],
     step: (drawable: Drawable) => Promise<void>,
-    done: WeakMap<Object3D, unknown>
+    done: WeakMap<Drawable, Compiling>
   ) => {
     const geometries = new Set(list.map((o) => o.geometry as BufferGeometry));
     for (const g of geometries) {
       g.addEventListener("dispose", onGone);
     }
-    let next = 0;
     // One at a time per lane: a drawable whose tile left meanwhile is
     // skipped — compiling it would re-create the GPU buffers of a disposed
     // geometry, and nothing would free them again.
-    const lane = async () => {
-      while (next < list.length) {
-        const drawable = list[next++];
-        if (
-          done.get(drawable) === drawable.material ||
-          gone.has(drawable.geometry as BufferGeometry)
-        ) {
-          continue;
-        }
-        done.set(drawable, drawable.material);
-        await step(drawable);
-      }
-    };
     try {
-      await Promise.all(Array.from({ length: COMPILE_LANES }, lane));
+      await compileInLanes(list, step, done, {
+        lanes: COMPILE_LANES,
+        skip: (drawable) => gone.has(drawable.geometry as BufferGeometry),
+      });
     } finally {
       for (const g of geometries) {
         g.removeEventListener("dispose", onGone);

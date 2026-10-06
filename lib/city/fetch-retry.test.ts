@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import {
   backoffMs,
   createRetryTally,
-  createUsableClock,
+  createVisibleClock,
   errorVerdict,
   type FetchAnswer,
   healDelayMs,
@@ -17,17 +17,17 @@ import {
 } from "./fetch-retry";
 
 /**
- * A page on a fake clock: sleeping moves the clock, the page is usable
+ * A page on a fake clock: sleeping moves the clock, the page is visible
  * except over the `hidden` spans (ms, half-open), and waiting for it to be
  * usable skips to the end of the span it is in.
  */
 function fakePage(hidden: [number, number][] = []) {
   let now = 0;
-  const usableAt = (t: number) => !hidden.some(([a, b]) => t >= a && t < b);
-  const usableBetween = (to: number) => {
+  const visibleAt = (t: number) => !hidden.some(([a, b]) => t >= a && t < b);
+  const visibleBetween = (to: number) => {
     let total = 0;
     for (let t = 0; t < to; t += 10) {
-      total += usableAt(t) ? Math.min(10, to - t) : 0;
+      total += visibleAt(t) ? Math.min(10, to - t) : 0;
     }
     return total;
   };
@@ -48,7 +48,7 @@ function fakePage(hidden: [number, number][] = []) {
       }
       return Promise.resolve();
     },
-    usableMs: () => usableBetween(now),
+    visibleMs: () => visibleBetween(now),
     describe: () => "online visible",
   };
   return { env, at: () => now };
@@ -75,7 +75,6 @@ test("errors: an abort is the caller's, the browsers' network errors are transie
     "Load failed",
     "Failed to fetch",
     "NetworkError when attempting to fetch resource.",
-    "The compressed data was not valid",
   ]) {
     expect(errorVerdict(new TypeError(message))).toBe("transient");
   }
@@ -125,15 +124,15 @@ test("a Retry-After is read as seconds or as a date, capped, and ignored when un
   expect(retryAfterMs(null, 0)).toBeUndefined();
 });
 
-test("the usable clock stands still while the page is hidden or offline", () => {
-  const clock = createUsableClock(true, 0);
+test("the budget clock stands still while the page is hidden", () => {
+  const clock = createVisibleClock(true, 0);
   clock.set(false, 1000);
-  expect(clock.usableMs(5000)).toBe(1000);
+  expect(clock.visibleMs(5000)).toBe(1000);
   clock.set(true, 9000);
   clock.set(true, 9500);
-  expect(clock.usableMs(10_000)).toBe(2000);
-  const hidden = createUsableClock(false, 0);
-  expect(hidden.usableMs(3000)).toBe(0);
+  expect(clock.visibleMs(10_000)).toBe(2000);
+  const hidden = createVisibleClock(false, 0);
+  expect(hidden.visibleMs(3000)).toBe(0);
 });
 
 test("a network error is retried until an answer comes", async () => {
@@ -261,7 +260,7 @@ test("the budget spent, the retries give up with a NetworkError that says how of
   );
 });
 
-test("time the page is hidden or offline does not count against the budget", async () => {
+test("time the page is hidden does not count against the budget", async () => {
   // hidden from 1 s to 61 s: the retries wait it out and still have budget
   const page = fakePage([[1000, 61_000]]);
   let calls = 0;

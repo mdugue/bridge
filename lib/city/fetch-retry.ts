@@ -6,10 +6,13 @@
  * boot. The policy here: an abort is the caller's (never retried), a 404 or
  * 410 is absent, a network error or a 408/425/429/5xx is transient and
  * retried with jittered exponential backoff (a Retry-After honoured), any
- * other status is fatal. The budget counts only time the page could have
- * succeeded in — visible and online — so a phone in a pocket does not use
- * it up. The browser side (the fetch, the page's state) is
- * app/_components/fetch-optional.ts `fetchBytes` and
+ * other status is fatal. The budget counts only the time the page is
+ * visible: a phone in a pocket does not use it up (a hidden page's
+ * requests are what iOS cancels and starves first), while a visible page
+ * the browser calls offline does — an outage ends in a give-up, and the
+ * tile healer and the boot's own wait take it from there, instead of
+ * every retry waiting for good. The browser side (the fetch, the page's
+ * state) is app/_components/fetch-optional.ts `fetchBytes` and
  * app/_components/net-gate.ts. No DOM.
  */
 
@@ -21,7 +24,7 @@ export const RETRY_BASE_MS = 500;
 export const RETRY_CAP_MS = 15_000;
 /** The longest a Retry-After is honoured for. */
 export const RETRY_AFTER_CAP_MS = 60_000;
-/** How long a tile's content is retried (ms of a usable page). */
+/** How long a tile's content is retried (ms of a visible page). */
 export const TILE_FETCH_BUDGET_MS = 20_000;
 /** …an optional side file (lamps, rails, …): it must not hold up the
  *  tile's serial dressing chain for long. */
@@ -71,12 +74,13 @@ function errorName(err: unknown): string | undefined {
 }
 
 /**
- * What an error thrown by the fetch, its body read or its inflation means.
- * Every browser rejects a failed request with a TypeError (Safari "Load
- * failed", Chrome "Failed to fetch", Firefox "NetworkError when attempting
- * to fetch resource."), a body cut off mid-transfer too, and so does a
- * DecompressionStream fed a truncated stream — all worth another try.
- * Anything else (a SyntaxError, a RangeError) is not the network's.
+ * What an error thrown by the fetch or its body read means. Every browser
+ * rejects a failed request with a TypeError (Safari "Load failed", Chrome
+ * "Failed to fetch", Firefox "NetworkError when attempting to fetch
+ * resource."), and a body cut off mid-transfer too — worth another try.
+ * Anything else (a SyntaxError, a RangeError) is not the network's, and
+ * neither is a gzip that does not inflate once read whole: the browser
+ * side rethrows that as a plain Error (fetch-optional.ts `inflate`).
  */
 export function errorVerdict(err: unknown): FetchVerdict {
   const name = errorName(err);
@@ -151,18 +155,21 @@ export function retryAfterMs(
 }
 
 /**
- * A clock that runs only while the page is usable (visible and online):
- * `set` says when that changes, `usableMs` how long it has been usable
- * since the clock started.
+ * The budgets' clock: it runs only while the page is visible — offline or
+ * not (see the header). `set` says when that changes, `visibleMs` how long
+ * the page has been visible since the clock started.
  */
-export interface UsableClock {
-  set: (usable: boolean, nowMs: number) => void;
-  usableMs: (nowMs: number) => number;
+export interface VisibleClock {
+  set: (visible: boolean, nowMs: number) => void;
+  visibleMs: (nowMs: number) => number;
 }
 
-export function createUsableClock(usable: boolean, nowMs: number): UsableClock {
+export function createVisibleClock(
+  visible: boolean,
+  nowMs: number
+): VisibleClock {
   let total = 0;
-  let since: number | null = usable ? nowMs : null;
+  let since: number | null = visible ? nowMs : null;
   return {
     set: (now, at) => {
       if (now && since === null) {
@@ -172,7 +179,7 @@ export function createUsableClock(usable: boolean, nowMs: number): UsableClock {
         since = null;
       }
     },
-    usableMs: (at) => total + (since === null ? 0 : Math.max(at - since, 0)),
+    visibleMs: (at) => total + (since === null ? 0 : Math.max(at - since, 0)),
   };
 }
 
@@ -186,12 +193,14 @@ export interface FetchAnswer<T> {
 
 /** The page the retries run in (net-gate.ts; a fake clock in the tests). */
 export interface RetryEnv {
-  /** resolves once a try can succeed (the page visible and online) */
+  /** resolves once a try can succeed (the page visible and online — or,
+   *  visible and called offline, at the next probe) */
   whenUsable: (signal?: AbortSignal) => Promise<void>;
   /** waits `ms`; rejects when `signal` aborts */
   sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
-  /** the page's usable time so far (a UsableClock) */
-  usableMs: () => number;
+  /** the page's visible time so far (a VisibleClock): what a budget
+   *  counts */
+  visibleMs: () => number;
   /** wall-clock ms (Retry-After dates) */
   now: () => number;
   random: () => number;
@@ -208,7 +217,7 @@ export interface RetryNote {
 }
 
 export interface RetryOptions {
-  /** how long transient failures are retried, in usable ms */
+  /** how long transient failures are retried, in ms of a visible page */
   budgetMs: number;
   env: RetryEnv;
   signal?: AbortSignal;
@@ -257,8 +266,9 @@ async function nextWait<T>(
 /**
  * Runs `attempt` until it answers with a status that is not transient (ok,
  * absent, fatal: the caller decides), retrying network errors and
- * transient statuses for `budgetMs` of usable time. The first try goes at
- * once; each later one after its backoff and once the page is usable. An
+ * transient statuses for `budgetMs` of a visible page. The first try goes
+ * at once; each later one after its backoff and once the page is usable
+ * (`whenUsable`: the wait for a visible page to come online counts). An
  * abort rejects at once with an AbortError; a fatal error rejects as it
  * is; a budget spent rejects with a NetworkError.
  */
@@ -267,7 +277,7 @@ export async function withRetry<T>(
   opts: RetryOptions
 ): Promise<FetchAnswer<T>> {
   const { budgetMs, env, signal, onRetry } = opts;
-  const start = env.usableMs();
+  const start = env.visibleMs();
   for (let tries = 1; ; tries++) {
     if (signal?.aborted) {
       throw abortError();
@@ -276,7 +286,7 @@ export async function withRetry<T>(
     if ("answer" in next) {
       return next.answer;
     }
-    const spent = env.usableMs() - start;
+    const spent = env.visibleMs() - start;
     if (spent + next.delayMs > budgetMs) {
       const state = env.describe?.();
       throw new NetworkError(

@@ -1,9 +1,15 @@
 /**
- * The one fetch policy for the viewer's files. Every request goes through
- * `fetchBytes`: a network failure (or a 408/429/5xx) is retried with backoff
- * while the page is usable (lib/city/fetch-retry.ts, net-gate.ts), the body
- * read inside the retries, so a blip — a Wi-Fi handover, a resume from the
- * background — is never taken for the answer.
+ * The one fetch policy for the viewer's files. The scene's requests — the
+ * manifest, the tileset and every tile, their side files and rasters
+ * (raster-upload.ts `fetchRasterBytes`), the trees' NDVI sampler — go
+ * through `fetchBytes`: a network failure (or a 408/429/5xx) is retried
+ * with backoff for a budget of the page's visible time
+ * (lib/city/fetch-retry.ts, net-gate.ts), the body read inside the
+ * retries, so a blip — a Wi-Fi handover, a resume from the background — is
+ * never taken for the answer.
+ * Not yet: the minimap's and the soundscape's rasters and the inquiry
+ * card's facts fetch directly (a failure there is that widget's), and the
+ * reports' beacons are fire-and-forget.
  *
  * OPTIONAL artifacts (lamps, walls, rails, roof colours, a live feed, …):
  * a 404, unparseable JSON or a failure that outlasts their short budget
@@ -57,16 +63,34 @@ export interface FetchedBytes {
 
 export interface FetchBytesOptions {
   signal?: AbortSignal;
-  /** how long transient failures are retried, in ms of a usable page */
+  /** how long transient failures are retried, in ms of a visible page */
   budgetMs: number;
-  /** inflate a gzipped body inside the retries (a truncated stream is one
-   *  more transient failure) */
+  /** inflate a gzipped body (`inflate`) */
   gunzip?: boolean;
   /** the rest of the request (`cache`, headers) */
   init?: RequestInit;
 }
 
 const NO_BYTES = new Uint8Array(0);
+
+/**
+ * A gzipped body, inflated. It has been read whole by then — a body cut
+ * off in transit fails its read, which is retried — so one that does not
+ * inflate is a corrupt file (a broken upload, a proxy that mangled it):
+ * rethrown as a plain Error, not the TypeError the stream rejects with,
+ * which the retries and the tile healer would take for the network's and
+ * fetch again for ever. (A tile's load-error names the URL itself.)
+ */
+async function inflate(
+  raw: Uint8Array<ArrayBuffer>
+): Promise<Uint8Array<ArrayBuffer>> {
+  try {
+    return new Uint8Array(await new Response(gunzip(raw)).arrayBuffer());
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    throw new Error(`Corrupt gzip: ${why}`, { cause: err });
+  }
+}
 
 /**
  * Fetches `url` and reads its body, retrying network failures and
@@ -93,10 +117,7 @@ export async function fetchBytes(
         };
       }
       const raw = new Uint8Array(await res.arrayBuffer());
-      const bytes =
-        opts.gunzip && isGzipped(raw)
-          ? new Uint8Array(await new Response(gunzip(raw)).arrayBuffer())
-          : raw;
+      const bytes = opts.gunzip && isGzipped(raw) ? await inflate(raw) : raw;
       return { status: res.status, value: bytes };
     },
     { budgetMs, env: PAGE_RETRY_ENV, signal, onRetry: reportRetry }
@@ -132,6 +153,38 @@ export function eitherSignal(
     b.addEventListener("abort", abort, { once: true });
   }
   return { signal: both.signal, release };
+}
+
+/**
+ * `promise`, or a rejection with the abort as soon as `signal` fires: the
+ * caller stops waiting (and lets go of what it holds) at once, while the
+ * work behind `promise` goes on for whoever else waits for it — a shared
+ * raster (shared-rasters.ts) is aborted only once its last holder lets go.
+ */
+export function untilAborted<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  if (!signal) {
+    return promise;
+  }
+  let abort = (): void => undefined;
+  const aborted = new Promise<never>((_, reject) => {
+    abort = () =>
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException("The operation was aborted.", "AbortError")
+      );
+  });
+  if (signal.aborted) {
+    abort();
+  } else {
+    signal.addEventListener("abort", abort, { once: true });
+  }
+  return Promise.race([promise, aborted]).finally(() => {
+    signal.removeEventListener("abort", abort);
+  });
 }
 
 /** An optional file's bytes, or null (off); rethrows aborts. */
@@ -213,7 +266,7 @@ export async function fetchFeaturesFrom<T>(
 
 /**
  * Fetches a REQUIRED JSON artifact: retried while the network is down for
- * up to the boot's wait (ms of a usable page), then — or on any other
+ * up to the boot's wait (ms of a visible page), then — or on any other
  * failure — it throws (a give-up's message starts "network: ").
  */
 export async function fetchRequiredJson<T>(

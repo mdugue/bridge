@@ -29,19 +29,30 @@ a decision on the spot:
 **One retry policy** (`lib/city/fetch-retry.ts`, pure). An abort is the
 caller's and never retried; 404 and 410 mean absent; a network error (any
 `TypeError` — Safari's "Load failed", Chrome's "Failed to fetch",
-Firefox's "NetworkError …", a body cut off, a `DecompressionStream` fed a
-truncated stream —, a `NetworkError`) and 408, 425, 429 and 5xx are
-transient; any other status is fatal. A transient failure is retried with
-jittered exponential backoff: 0.5 s doubling to 15 s, × 0.5–1.5, a
-`Retry-After` honoured up to 60 s. The first try goes at once — a working
-network is exactly as fast as before; each retry waits until the page is
-usable.
+Firefox's "NetworkError …", a body cut off —, a `NetworkError`) and 408,
+425, 429 and 5xx are transient; any other status is fatal, and so is a
+gzip that does not inflate once its body was read whole: a corrupt file
+(a broken upload, a mangling proxy), which `fetchBytes` rethrows as a
+plain Error — retried and healed as a blip, it was downloaded six times
+a round under *Keine Verbindung zum Server*, for good. A transient
+failure is retried with jittered exponential backoff: 0.5 s doubling to
+15 s, × 0.5–1.5, a `Retry-After` honoured up to 60 s. The first try goes
+at once — a working network is exactly as fast as before; each retry
+waits until the page is usable.
 
-**The budget counts usable time only** — visible and online
-(`createUsableClock`), so a phone in a pocket does not use it up: 20 s for
-a tile's content, 8 s for an optional side file (it must not hold up the
-tile's serial dressing chain for long), 20 s for the manifest, 60 s for
-the tileset and the boot. A fetch that outlasts its budget throws a
+**The budget counts the page's visible time only**
+(`createVisibleClock`), offline or not. A phone in a pocket does not use
+it up — a hidden page's requests are what iOS cancels and starves
+first —; a visible page that cannot reach the network does, so an outage
+ends in a give-up the healer, the manifest's cached copy and the boot's
+message take up. (The clock first ran only while the page was visible
+*and online*: offline, no budget ever ran out — every retry woke on the
+15 s probe, failed and waited again, the manifest's fallback was never
+reached, the first optional file held the serial dressing chain, and a
+tile held its download slot.) 20 s for a tile's content, 8 s for an
+optional side file or a raster (it must not hold up the tile's serial
+dressing chain for long), 20 s for the manifest, 60 s for the tileset
+and the boot. A fetch that outlasts its budget throws a
 `NetworkError` whose message starts `network: ` and says the cause, the
 attempts and the page's state (`online=… vis=…`); the HUD and the reports
 tell a network cause by that prefix.
@@ -49,15 +60,21 @@ tell a network cause by that prefix.
 **The page's view of the network is one module** (`app/_components/net-gate.ts`):
 `whenUsable` (resolves on `online`, on visible again, on `pageshow`, and
 every 15 s on a visible page the browser calls offline — `navigator.onLine`
-is a hint, and a missed `online` event would strand it), the usable clock,
-and `pageLeaving()`: true from `pagehide` — a navigation, a reload, the
+is a hint, and a missed `online` event would strand it), the budgets'
+clock, and `pageLeaving()`: true from `pagehide` — a navigation, a reload, the
 GPU recovery's too — until the page comes back from the bfcache. **While
 the page leaves, nothing is decided or reported**: the loads a leaving
 page loses are its own doing.
 
 **Every tile and tileset request goes through the retrying fetch**
 (`fetchBytes` in `fetch-optional.ts`, by `ContentFetchPlugin` in
-`tile-stream.ts`, which also inflates `.gz` inside the retries). A tile
+`tile-stream.ts`, which also inflates `.gz` inside the retries), and so
+do the terrain, sky-view and horizon rasters (`fetchRasterBytes` in
+`raster-upload.ts`, the download outside the raster gate) and the trees'
+NDVI sampler (`fetchOptionalBinary`), each for an optional file's 8 s: a
+blip on a class raster had dressed its level with the flat fallback
+ground — and both levels, while the shared copy of that null was held —
+with no load-error for the healer to see. A tile
 that retries stays LOADING, so its REPLACE parent — the coarse level —
 stays drawn and the boot keeps waiting.
 
@@ -75,13 +92,25 @@ whose `add` refuses an item it already holds, so the request returns
 early. Removing it first runs the renderer's own unload (UNLOADED, every
 plugin's `disposeTile`), and the next update asks for it. **An upstream
 bug, to be reported to NASA-AMMOS/3DTilesRendererJS**; the `remove` goes
-once a release fixes it. A healed tile clears the HUD's pill when it
-lands (`onErrorCleared`).
+once a release fixes it. Only a tile still FAILED is removed: one the
+cache evicted meanwhile (an unused FAILED tile goes first) is UNLOADED
+again, and the renderer asks for it itself once it wants it — removing
+it then unloaded a tile that had come back, or aborted its load. The
+HUD's pill goes (`onErrorCleared`) once nothing the network failed is
+outstanding: every tile that gave up has landed, or the renderer's
+update after the heal did not ask for it again (its `update-after`: left
+UNLOADED out of view, or failed for another reason) — `landed()` says
+so at a landing, the watch's `onClear` at once. A pill that went with
+the first healed tile to land stayed up for good over a working network
+when the player had moved on, and went while others were still missing.
 
 **The boot waits for the network.** Before the first frame a network
 give-up on the spawn tile or the tileset notes `net-wait` instead of
-failing the boot; the boot fails only after 60 s of a usable page since
-the stream started without a first frame, with a `network: ` message.
+failing the boot; the boot fails only after 60 s of a visible page since
+the stream started without those tiles back, with a `network: `
+message. The wait ends when the last of them lands — a boot that got its
+tiles back and is only slow is not failed for the blip — and a give-up
+after that waits afresh, from its own moment.
 Then, and when the manifest never came, the boot error
 (`boot-error.tsx`) says *Keine Verbindung zum Server. Prüfe die
 Internetverbindung und versuche es noch einmal.*, the browser's own text
@@ -110,25 +139,28 @@ so.
 
 ## Consequences
 
-- On a dead network (online, nothing answers) the boot waits about a
-  minute instead of failing at once; offline it waits as long as it is
-  offline, and the load screen gives no reason meanwhile — a *Warte auf
-  Verbindung* hint there is a follow-up.
+- On a dead network (online, nothing answers) or none (offline) the boot
+  waits about a minute of a visible page instead of failing at once, and
+  the load screen gives no reason meanwhile — a *Warte auf Verbindung*
+  hint there is a follow-up. A retry waits for a usable page, so offline
+  a give-up comes up to one probe (15 s) past its budget.
 - A tile that retries holds one of the renderer's download slots for up
-  to 20 s of usable time (a phone has four per origin, ADR 0047).
+  to 20 s of visible time (a phone has four per origin, ADR 0047).
 - `resetFailedTiles()` also turns a tile that FAILED for another reason (a
   404, a parse error) back to UNLOADED: it is not asked for again until
   evicted, and its parent is drawn instead of a hole.
-- Not yet through the policy: the terrain rasters, the sky-view and
-  horizon rasters, the NDVI sampler and the soundscape's PNGs fetch
-  directly, and a dressing that failed transiently is not queued again —
-  follow-ups. The optional fetchers still return null after their budget
-  (throwing would turn two callers' failures into unhandled rejections and
-  settle a dressing for good).
+- Not yet through the policy: the soundscape's and the minimap's PNGs and
+  the inquiry card's facts fetch directly, and a dressing that failed
+  transiently is not queued again — follow-ups. The optional fetchers
+  still return null after their budget (throwing would turn two callers'
+  failures into unhandled rejections and settle a dressing for good); a
+  raster that gave up is absent for as long as its shared copy is held.
 - The live bicycle feed (ADR 0040) is retried for up to 8 s too: a few
   more requests to the city's host while it is down.
-- Whether Safari's `DecompressionStream` error on a truncated gzip is a
-  `TypeError` is unverified; if not, such a tile is fatal as before.
+- A gzip is inflated only once its body was read whole (a body cut off
+  in transit fails its read, which is retried), so whatever the
+  `DecompressionStream` throws there is the file's: a corrupt tile is a
+  hole and one `onError`, a corrupt optional file is off.
 - New network reads use `fetchBytes` with a budget from
   `fetch-retry.ts`; a new decision on a load-error asks `failed()` of the
   network watch first.
@@ -141,6 +173,8 @@ so.
   held for good. The budgets end in a decision the HUD can word.
 - **Counting wall-clock time**: a phone in a pocket or a tab in the
   background would use the budget up while it could not have succeeded.
+- **Counting only usable time** (visible and online; the first version):
+  offline, nothing ever gave up (above).
 - **Trusting `navigator.onLine`**: a hint; a missed `online` event would
   strand a page that has its network back. A visible page tries every 15 s
   whatever it says, and the healer runs on any visible page.
@@ -155,8 +189,11 @@ so.
 
 ## References
 
-- `lib/city/fetch-retry.ts` (+ test), `app/_components/net-gate.ts`,
+- `lib/city/fetch-retry.ts` (+ test), `app/_components/net-gate.ts`
+  (`createNetGate`, + test),
   `app/_components/fetch-optional.ts` (`fetchBytes`, + test),
+  `app/_components/raster-upload.ts` (`fetchRasterBytes`, + test),
+  `app/_components/vegetation-layer.ts` (`loadNdviSampler`),
   `app/_components/tile-retry.ts` (+ test), `app/_components/tile-stream.ts`
   (`ContentFetchPlugin`), `app/_components/boot-error.tsx`,
   `app/_components/city-walk-client.tsx` (the manifest),

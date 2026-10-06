@@ -1,21 +1,32 @@
 import { expect, test } from "bun:test";
 import {
+  BoxGeometry,
   BufferAttribute,
+  Color,
   DataTexture,
   InterleavedBuffer,
   InterleavedBufferAttribute,
+  Matrix4,
+  Mesh,
   MeshStandardNodeMaterial,
   RedFormat,
   RGBAFormat,
+  type Texture,
   Vector3,
+  type WebGPURenderer,
 } from "three/webgpu";
 import { uniform } from "three/tsl";
+import type { TerrainExtras } from "@/lib/city/tileset";
+import type { SharedRasters } from "./shared-rasters";
 import {
   createGridShare,
   createTerrainMaterial,
+  dressTerrain,
   type GroundUniforms,
   readsSportGrounds,
   type SplatLayer,
+  type SplatRasters,
+  type SportRasters,
   splatUv,
 } from "./terrain-layer";
 import { isSceneShared } from "./three-utils";
@@ -135,4 +146,68 @@ test("the coarse tiles draw with one index and one water index for the site", ()
   expect(grids.water(2, own, other.position)).not.toBe(water);
   // another grid size is another site-wide index
   expect(grids.index(3, gridTile(0).index)).not.toBe(site);
+});
+
+/** Shared rasters whose loads answer `acquire`, their releases noted. */
+function share<T>(
+  acquire: () => Promise<T | null>,
+  released: string[] = []
+): SharedRasters<T> {
+  return {
+    acquire,
+    release: (key) => released.push(key),
+    held: () => 0,
+    clear: () => undefined,
+  };
+}
+
+test("a level whose tile leaves while it waits for a shared raster lets go at once, without waiting for that raster", async () => {
+  const released: string[] = [];
+  // the class raster another level is still decoding: it lands only when
+  // the test says
+  let land: (rasters: SplatRasters | null) => void = () => undefined;
+  const splats = share<SplatRasters>(
+    () =>
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    released
+  );
+  const none = () => Promise.resolve(null);
+  const aborter = new AbortController();
+  const outcome = dressTerrain(
+    new Mesh(new BoxGeometry(), new MeshStandardNodeMaterial()),
+    {
+      kind: "terrain",
+      bounds: [0, 0, 100, 100],
+      n: 2,
+      level: 1,
+      landcover: "landcover.png",
+      landcoverLow: "landcover-low.png",
+      minElevation: 0,
+      tileId: "t",
+    } as unknown as TerrainExtras,
+    new Matrix4(),
+    {
+      fileUrl: (file) => file,
+      fogColor: uniform(new Color()),
+      lowRasters: false,
+      ground: ground(),
+      offset: { cx: 0, cy: 0 },
+      renderer: {} as WebGPURenderer,
+      splats,
+      ndvis: share<Texture>(none),
+      sports: share<SportRasters>(none),
+      signal: aborter.signal,
+    }
+  ).then(
+    () => "dressed",
+    (err: unknown) => (err as Error).name
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  aborter.abort();
+  expect(await outcome).toBe("AbortError");
+  // its hold is gone already: the last holder gone, the shared load stops
+  expect(released).toEqual(["landcover.png"]);
+  land(null);
 });

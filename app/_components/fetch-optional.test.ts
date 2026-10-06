@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { isNetworkFailure } from "@/lib/city/fetch-retry";
 import {
   eitherSignal,
   fetchBytes,
@@ -7,6 +8,7 @@ import {
   fetchOptionalBinary,
   fetchOptionalJson,
   fetchRequiredJson,
+  untilAborted,
 } from "./fetch-optional";
 
 const realFetch = globalThis.fetch;
@@ -126,6 +128,25 @@ test("fetchBytes answers a status no retry fixes as it is, without a body", asyn
   expect(stub.calls()).toBe(1);
 });
 
+test("a gzip read whole that does not inflate is a corrupt file, not the network's: no retry", async () => {
+  // the gzip magic, then nothing a decoder takes
+  const corrupt = () =>
+    new Response(new Uint8Array([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 7, 7]));
+  const stub = stubFetch(corrupt);
+  const error = await fetchBytes("/t.glb.gz", {
+    budgetMs: 20_000,
+    gunzip: true,
+  }).catch((err: unknown) => err);
+  expect(stub.calls()).toBe(1);
+  expect(error).toBeInstanceOf(Error);
+  // the tile healer and the boot do not wait for it
+  expect(isNetworkFailure(error)).toBe(false);
+  expect((error as Error).message).toStartWith("Corrupt gzip: ");
+  // an optional one is off, at once
+  expect(await fetchOptionalBinary("/x.pts.gz")).toBeNull();
+  expect(stub.calls()).toBe(2);
+});
+
 test("a required file that is missing throws with its status", async () => {
   stubFetch(() => new Response(null, { status: 404 }));
   // (bun-types declare `rejects` as void; see "an abort is rethrown")
@@ -148,4 +169,27 @@ test("either signal aborts the merged one; released, neither does", () => {
   c.abort();
   expect(released.signal.aborted).toBe(false);
   expect(eitherSignal(undefined, d.signal).signal).toBe(d.signal);
+});
+
+test("an abort ends the wait at once, the work behind it going on for whoever else waits", async () => {
+  let land: (value: string) => void = () => undefined;
+  const shared = new Promise<string>((resolve) => {
+    land = resolve;
+  });
+  const aborter = new AbortController();
+  const waiting = untilAborted(shared, aborter.signal);
+  aborter.abort();
+  // (bun-types declare `rejects` as void; see "an abort is rethrown")
+  // oxlint-disable-next-line typescript/await-thenable
+  await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+  land("raster");
+  expect(await shared).toBe("raster");
+  // without an abort: the answer, or the failure, as it comes
+  const fresh = new AbortController();
+  expect(await untilAborted(Promise.resolve(1), fresh.signal)).toBe(1);
+  const failure = new Error("decode");
+  // oxlint-disable-next-line typescript/await-thenable
+  await expect(
+    untilAborted(Promise.reject(failure), fresh.signal)
+  ).rejects.toBe(failure);
 });
