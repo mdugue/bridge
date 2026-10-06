@@ -1,9 +1,14 @@
 /**
- * The one fetch policy for the viewer's files. Every request goes through
- * `fetchBytes`: a network failure (or a 408/429/5xx) is retried with backoff
- * while the page is usable (lib/city/fetch-retry.ts, net-gate.ts), the body
- * read inside the retries, so a blip — a Wi-Fi handover, a resume from the
- * background — is never taken for the answer.
+ * The one fetch policy for the viewer's files. The scene's requests — the
+ * manifest, the tileset and every tile, their side files and rasters
+ * (raster-upload.ts `fetchRasterBytes`), the trees' NDVI sampler — go
+ * through `fetchBytes`: a network failure (or a 408/429/5xx) is retried
+ * with backoff while the page is usable (lib/city/fetch-retry.ts,
+ * net-gate.ts), the body read inside the retries, so a blip — a Wi-Fi
+ * handover, a resume from the background — is never taken for the answer.
+ * Not yet: the minimap's and the soundscape's rasters and the inquiry
+ * card's facts fetch directly (a failure there is that widget's), and the
+ * reports' beacons are fire-and-forget.
  *
  * OPTIONAL artifacts (lamps, walls, rails, roof colours, a live feed, …):
  * a 404, unparseable JSON or a failure that outlasts their short budget

@@ -49,8 +49,10 @@ function greyPng(
 }
 
 const realFetch = globalThis.fetch;
+const realRandom = Math.random;
 afterEach(() => {
   globalThis.fetch = realFetch;
+  Math.random = realRandom;
 });
 
 function serve(png: Uint8Array<ArrayBuffer>): void {
@@ -82,6 +84,21 @@ test("a raster is on the GPU, set up as it samples, when its load resolves — i
   expect((texture.image as { data: unknown }).data).toBeNull();
   // the size it holds on the GPU is still known (the HUD, the tile cache)
   expect(trackedBytesOf(texture)).toBe(Math.round(16 * (4 / 3)));
+});
+
+test("a raster whose download hit a blip is asked for again, not taken for absent", async () => {
+  // the shortest backoff (0.25 s), so the test waits for one real retry
+  Math.random = () => 0;
+  const png = greyPng(2, 2, new Uint8Array(4).fill(90));
+  let calls = 0;
+  // reason: the loader reads only `ok` and the body of a Response
+  globalThis.fetch = (() =>
+    ++calls === 1
+      ? Promise.reject(new TypeError("Load failed"))
+      : Promise.resolve(new Response(png))) as unknown as typeof fetch;
+  const seen: { mips: boolean; min: number }[] = [];
+  expect(await loadNdviTexture("ndvi.png", fakeRenderer(seen))).not.toBeNull();
+  expect(calls).toBe(2);
 });
 
 test("a raster the GPU refuses is absent, and freed", async () => {

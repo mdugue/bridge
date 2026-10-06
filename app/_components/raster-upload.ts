@@ -1,5 +1,7 @@
 import type { Texture, WebGPURenderer } from "three/webgpu";
+import { OPTIONAL_FETCH_BUDGET_MS } from "@/lib/city/fetch-retry";
 import { createTaskGate } from "@/lib/city/task-gate";
+import { fetchBytes } from "./fetch-optional";
 import type { DeviceTier } from "./scene-profile";
 
 /**
@@ -10,8 +12,8 @@ import type { DeviceTier } from "./scene-profile";
  * held several levels' worth at the same moment — on a phone, memory the
  * page's process was ended for. Through the gate, a raster is decoded and
  * on the GPU (`uploadNow`, its bytes dropped) before the next one decodes.
- * The download stays outside: a stalled request must not hold the ground
- * of every other tile.
+ * The download stays outside, its retries with it: a stalled request must
+ * not hold the ground of every other tile.
  *
  * One at a time is a phone's (`RASTER_TURNS`). A desktop has the memory
  * and keeps the overlap it always had — a level decodes its rasters one
@@ -32,17 +34,26 @@ export function setRasterTurns(tier: DeviceTier): void {
   rasterGate.setLimit(RASTER_TURNS[tier]);
 }
 
-/** A raster's PNG bytes. Rejects on a network failure, an HTTP error and
- *  an abort. */
+/**
+ * A raster's PNG bytes, through the viewer's one fetch policy
+ * (fetch-optional.ts `fetchBytes`): a blip is retried for the budget of an
+ * optional file — every raster is optional to its level, and a level
+ * loads its rasters one after another inside its dressing, so a longer
+ * budget each would hold it for minutes on a dead network. Rejects on an
+ * HTTP error, a network give-up and an abort.
+ */
 export async function fetchRasterBytes(
   url: string,
   signal?: AbortSignal
 ): Promise<Uint8Array<ArrayBuffer>> {
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
+  const got = await fetchBytes(url, {
+    signal,
+    budgetMs: OPTIONAL_FETCH_BUDGET_MS,
+  });
+  if (!got.ok) {
+    throw new Error(`Failed to fetch ${url}: HTTP ${got.status}`);
   }
-  return new Uint8Array(await res.arrayBuffer());
+  return got.bytes;
 }
 
 /** Runs a raster's decode and upload in its turn (see `rasterGate`);
