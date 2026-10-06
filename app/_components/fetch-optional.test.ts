@@ -141,7 +141,7 @@ test("a gzip read whole that does not inflate is a corrupt file, not the network
   expect(error).toBeInstanceOf(Error);
   // the tile healer and the boot do not wait for it
   expect(isNetworkFailure(error)).toBe(false);
-  expect((error as Error).message).toStartWith("/t.glb.gz: corrupt gzip");
+  expect((error as Error).message).toStartWith("Corrupt gzip: ");
   // an optional one is off, at once
   expect(await fetchOptionalBinary("/x.pts.gz")).toBeNull();
   expect(stub.calls()).toBe(2);

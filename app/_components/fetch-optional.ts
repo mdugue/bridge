@@ -79,17 +79,16 @@ const NO_BYTES = new Uint8Array(0);
  * inflate is a corrupt file (a broken upload, a proxy that mangled it):
  * rethrown as a plain Error, not the TypeError the stream rejects with,
  * which the retries and the tile healer would take for the network's and
- * fetch again for ever.
+ * fetch again for ever. (A tile's load-error names the URL itself.)
  */
 async function inflate(
-  url: string,
   raw: Uint8Array<ArrayBuffer>
 ): Promise<Uint8Array<ArrayBuffer>> {
   try {
     return new Uint8Array(await new Response(gunzip(raw)).arrayBuffer());
   } catch (err) {
     const why = err instanceof Error ? err.message : String(err);
-    throw new Error(`${url}: corrupt gzip (${why})`, { cause: err });
+    throw new Error(`Corrupt gzip: ${why}`, { cause: err });
   }
 }
 
@@ -118,8 +117,7 @@ export async function fetchBytes(
         };
       }
       const raw = new Uint8Array(await res.arrayBuffer());
-      const bytes =
-        opts.gunzip && isGzipped(raw) ? await inflate(url, raw) : raw;
+      const bytes = opts.gunzip && isGzipped(raw) ? await inflate(raw) : raw;
       return { status: res.status, value: bytes };
     },
     { budgetMs, env: PAGE_RETRY_ENV, signal, onRetry: reportRetry }
