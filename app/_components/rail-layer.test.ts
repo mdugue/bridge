@@ -5,13 +5,16 @@ import type {
   BridgeFeature,
   RailFeature,
 } from "@/lib/city/features";
+import { deckMaterial, stoneMaterial } from "./bridge-surface";
 import {
   approaches,
   buildBallast,
   buildDeckTable,
   buildRail,
+  COLORS,
   type RailContext,
 } from "./rail-layer";
+import { axisFrame } from "@/lib/city/bridge";
 import { deckLift, ringToWorld } from "@/lib/city/decks";
 
 const ctx: RailContext = {
@@ -519,4 +522,81 @@ test("the lift table carries the approaches for what rides up to a deck", () => 
   expect(deckLift(decks, 20, 0, undefined, "decks")).toBeCloseTo(101, 5);
   // without the ground, only the decks
   expect(buildDeckTable([bridge], { offset: ctx.offset }).length).toBe(1);
+});
+
+test("a deck's top is laid out by its frame; its stone is dressed", () => {
+  const built = buildRail({ ...empty, bridges: [deck({})] }, ctx);
+  const [top, stone] = built.children as Mesh[];
+  expect(top.material).toBe(deckMaterial("road", COLORS.deckRoad));
+  expect(stone.material).toBe(stoneMaterial(COLORS.deckStone));
+  const pos = top.geometry.getAttribute("position");
+  const frame = top.geometry.getAttribute("aDeck");
+  expect(frame.itemSize).toBe(4);
+  expect(frame.count).toBe(pos.count);
+  for (let i = 0; i < frame.count; i++) {
+    // the station runs along the axis (x here), the offset across it
+    // (left of the axis is north: −z), the edges are the outline's
+    expect(frame.getX(i)).toBeCloseTo(pos.getX(i), 6);
+    expect(frame.getY(i)).toBeCloseTo(-pos.getZ(i), 6);
+    expect(frame.getZ(i)).toBeCloseTo(6, 6);
+    expect(frame.getW(i)).toBeCloseTo(-6, 6);
+  }
+  // an older file without an axis keeps its colour: no frame to lay out
+  const plain = buildRail(
+    { ...empty, bridges: [deck({ axis: undefined, line: undefined })] },
+    ctx
+  ).children[0] as Mesh;
+  const zeros = plain.geometry.getAttribute("aDeck");
+  for (let i = 0; i < zeros.count; i++) {
+    expect(zeros.getZ(i) - zeros.getW(i)).toBe(0);
+  }
+});
+
+test("a curved deck's frame holds inside every triangle, not only at its corners", () => {
+  // a 12 m deck along an arc of 400 m radius, 300 m long, its axis and
+  // outline sampled every 30 m as the bake's are (a few vertices, long
+  // chords — the triangulation joins them across the arc)
+  const R = 400;
+  const at = (s: number, offset: number): [number, number] => {
+    const a = s / R;
+    return [(R - offset) * Math.sin(a), R - (R - offset) * Math.cos(a)];
+  };
+  const stations = Array.from({ length: 11 }, (_, i) => i * 30);
+  const axis = stations.map((s) => at(s, 0));
+  const left = stations.map((s) => at(s, 6));
+  const right = stations.map((s) => at(s, -6)).reverse();
+  const ring = [...left, ...right, left[0]];
+  const bridge = deck({
+    axis,
+    deck: ring.map(() => 120),
+    line: Array.from({ length: 160 }, () => 120),
+  });
+  bridge.geometry.coordinates = [ring];
+  const top = buildRail({ ...empty, bridges: [bridge] }, ctx)
+    .children[0] as Mesh;
+  const pos = top.geometry.getAttribute("position");
+  const nrm = top.geometry.getAttribute("normal");
+  const frame = top.geometry.getAttribute("aDeck");
+  const frameAxis = axisFrame(axis);
+  let worst = 0;
+  for (let t = 0; t < pos.count; t += 3) {
+    if (nrm.getY(t) < 0.9) {
+      continue;
+    }
+    const at = (k: number) => [pos.getX(t + k), pos.getZ(t + k)];
+    for (let k = 0; k < 3; k++) {
+      const [ax, az] = at(k);
+      const [bx, bz] = at((k + 1) % 3);
+      // no edge of the top longer than the frame's step
+      expect(Math.hypot(bx - ax, bz - az)).toBeLessThanOrEqual(6.001);
+    }
+    const x = (pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2)) / 3;
+    const z = (pos.getZ(t) + pos.getZ(t + 1) + pos.getZ(t + 2)) / 3;
+    const o = (frame.getY(t) + frame.getY(t + 1) + frame.getY(t + 2)) / 3;
+    worst = Math.max(
+      worst,
+      Math.abs(o - (frameAxis?.project(x, -z).offset ?? 0))
+    );
+  }
+  expect(worst).toBeLessThan(0.3);
 });

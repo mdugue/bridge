@@ -1303,10 +1303,11 @@ async function bootApp(
     const { target, solids } = subject.thing;
     const first = solids[0];
     if (target.kind === "bridge" && first && "slab" in first) {
-      // the fine level's dressing: the coarse one carries only flows
-      const rail = [...stream.dressings].find(
-        (d) => d.tile === target.tile && d.rail
-      )?.rail;
+      // on the level that answered: a tile's fine and coarse terrain each
+      // carry its bridges, and the hidden one hangs outside the scene
+      const rail = stream
+        .visibleDressings()
+        .find((d) => d.tile === target.tile && d.rail)?.rail;
       return { positions: bridgeShape(rail, first.slab), reach: 0 };
     }
     if (target.kind === "traffic") {
@@ -1843,27 +1844,61 @@ async function bootApp(
       cuts.hideSection();
     }
   };
-  /** Sets the Ausschnitt to the middle of the view, or lifts it. */
+  /** counts the Ausschnitt's requests: a hold that ends late is stale */
+  let cutRequest = 0;
+  /**
+   * Sets the Ausschnitt to the middle of the view, or lifts it. A new one
+   * shows once its programs are built and held off the frames
+   * (post-stack.ts `holdCut`): switching the city's clipping builds every
+   * material anew, both ways. Lifted, they go after the frame that no
+   * longer needs them.
+   */
   const setCutOut = (on: boolean) => {
     // where a glide (a preset switch, a turn) is heading: mid-way a view
     // near level shows no ground to fit a square into
     const v = modelRig.settledView();
-    cuts.setCutOut(
-      on && v ? cutOutFromView(v, viewportCss()) : null,
-      siteGround.atWorld,
-      groundVersion
-    );
+    const cut = on && v ? cutOutFromView(v, viewportCss()) : null;
+    const request = ++cutRequest;
+    cuts.setCutOut(cut, siteGround.atWorld, groundVersion);
     invalidateShadows();
+    if (!cut) {
+      postStack.releaseCut();
+      return;
+    }
+    if (cuts.revealed()) {
+      return;
+    }
+    postStack
+      .holdCut(cuts.group, [cuts.group])
+      .then(() => {
+        if (request === cutRequest && !disposed) {
+          cuts.reveal();
+          invalidateShadows();
+          opts.trail?.note("cut-out", "shown");
+        }
+      })
+      .catch(() => undefined);
+  };
+  /** Modell's view for the HUD, with the scene's half: the Ausschnitt. */
+  const modelHud = (): ModelHud | null => {
+    const hud = modelRig.hud();
+    return (
+      hud && {
+        ...hud,
+        cutOut: cuts.cutOut() !== null,
+        cutOutPending: cuts.cutOut() !== null && !cuts.revealed(),
+      }
+    );
   };
   /** Modell's pose for the minimap (the pivot, the turn) and its HUD. */
   let modelHudShown = false;
   const tickModel = () => {
-    const hud = modelRig.hud();
+    const hud = modelHud();
     if (!hud) {
       return;
     }
     modelHudShown = true;
-    opts.onModelView?.({ ...hud, cutOut: cuts.cutOut() !== null });
+    opts.onModelView?.(hud);
     const epsg = worldToEpsg(hud.pivot.x, hud.pivot.z, offset);
     opts.onPose?.({
       epsgX: epsg.x,
@@ -2431,7 +2466,7 @@ async function bootApp(
     turnModelTo: modelRig.turnTo,
     setModelTilt: modelRig.setTilt,
     setModelShear: modelRig.setShear,
-    getModelHud: modelRig.hud,
+    getModelHud: modelHud,
     setFollowAim: pose.setFollowAim,
     setFollowPosition: pose.setFollowPosition,
     setClimbInput: pose.setClimbInput,

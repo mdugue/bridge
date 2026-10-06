@@ -40,14 +40,13 @@ import {
 } from "three/tsl";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import {
   LOOK_DEFAULTS,
   type LookValues,
   type VegetationLookKey,
 } from "@/lib/city/look-controls";
 import { decodeGreyPng } from "@/lib/city/png-raster";
-import { samplePolyline } from "@/lib/city/polyline";
 import {
   maxWindowSampler,
   type RasterSampler,
@@ -59,6 +58,15 @@ import {
   TRUNK_TOP_R,
   trunkFlare,
 } from "@/lib/city/tree-inventory";
+import {
+  bucketByCell,
+  canopyPlacements,
+  cellKey,
+  hash,
+  type Placement,
+  rowPlacements,
+  type TreeVeto,
+} from "@/lib/city/tree-placement";
 import { seasonJitter } from "@/lib/city/tree-season";
 import {
   CROWN_BASE_COLOR,
@@ -88,12 +96,7 @@ import {
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
-/**
- * Veto on a row or canopy tree at EPSG (x, y) with its measured height `h`
- * (canopy points only): false drops it because a surveyed inventory tree
- * already stands there (tree-inventory-layer.ts).
- */
-export type TreeVeto = (x: number, y: number, h?: number) => boolean;
+export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
 
 /**
  * A tree placed by precomputed transforms rather than a uniform scale — the
@@ -307,104 +310,10 @@ export function swapCrownLod(
   return changed;
 }
 
-const TREE_SPACING = 9; // metres between trees along a row
-const HEDGE_SPACING = 1.1; // metres between hedge segments
-/**
- * Edge length (m) of a vegetation chunk. Each chunk is its own Instances set
- * with a tight bounding sphere, so three frustum-culls whole chunks that are
- * behind or beside the camera out of BOTH the main and the shadow pass —
- * instead of the old all-or-nothing "one mesh per tile". Trades a few hundred
- * (mostly-culled) draw calls for a large drop in processed triangles.
- */
-export const CHUNK_SIZE = 250;
 export const TRUNK_H = 2.4;
 const CROWN_R = 2.1;
 const HEDGE_H = 1.3;
 const HEDGE_W = 0.9;
-/** Approx visual height of an unscaled tree; canopy scale = h / this. */
-const BASE_TREE_H = 5.8;
-
-/** Deterministic [0,1) jitter so the layer rebuilds identically. */
-export function hash(i: number): number {
-  const s = Math.sin(i * 12.9898) * 43_758.5453;
-  return s - Math.floor(s);
-}
-
-export interface Placement {
-  /** DOP NDVI 0..1 at this point (lush↔dry crown colour); undefined = no raster */
-  ndvi?: number;
-  rot: number;
-  s: number;
-  x: number;
-  y: number;
-  z: number;
-}
-
-/** Resamples every line and drops each point onto the terrain (EPSG -> world). */
-function collectPlacements(
-  features: VegRowFeature[],
-  ctx: VegetationContext,
-  ndviAt?: RasterSampler,
-  keepTree?: TreeVeto
-): { hedges: Placement[]; trees: Placement[] } {
-  const { offset } = ctx;
-  const trees: Placement[] = [];
-  const hedges: Placement[] = [];
-  for (const f of features) {
-    if (f.geometry?.type !== "LineString") {
-      continue;
-    }
-    const isHedge = f.properties?.kind === "hedge";
-    const pts = samplePolyline(
-      f.geometry.coordinates,
-      isHedge ? HEDGE_SPACING : TREE_SPACING
-    );
-    for (let i = 0; i < pts.length; i++) {
-      const [ex, ey] = pts[i];
-      if (!isHedge && keepTree && !keepTree(ex, ey)) {
-        continue; // an inventory tree stands here
-      }
-      const ground = ctx.heightAt(ex, ey);
-      if (ground === null) {
-        continue; // off-tile or NoData
-      }
-      const seed = ex * 0.13 + ey * 0.07 + i;
-      const w = epsgToWorld(ex, ey, offset);
-      const place: Placement = {
-        x: w.x,
-        y: ground,
-        z: w.z,
-        rot: isHedge ? hash(seed) * 0.3 : hash(seed * 1.7) * Math.PI,
-        s: isHedge ? 1 : 0.8 + hash(seed) * 0.6,
-        ndvi: ndviAt?.(ex, ey),
-      };
-      (isHedge ? hedges : trees).push(place);
-    }
-  }
-  return { trees, hedges };
-}
-
-/** The CHUNK_SIZE cell a Y-up world position falls in. */
-function cellKey(x: number, z: number): string {
-  return `${Math.floor(x / CHUNK_SIZE)},${Math.floor(z / CHUNK_SIZE)}`;
-}
-
-/** Groups Y-up items into CHUNK_SIZE cells so each becomes its own mesh. */
-export function bucketByCell<T extends { x: number; z: number }>(
-  items: T[]
-): T[][] {
-  const cells = new Map<string, T[]>();
-  for (const p of items) {
-    const key = cellKey(p.x, p.z);
-    const cell = cells.get(key);
-    if (cell) {
-      cell.push(p);
-    } else {
-      cells.set(key, [p]);
-    }
-  }
-  return [...cells.values()];
-}
 
 /** One chunk's trees: the uniform-scale placements plus the precomputed ones. */
 interface TreeCell {
@@ -1199,47 +1108,6 @@ export async function loadNdviSampler(
   }
 }
 
-/** Canopy points (DOM1-derived) → height-scaled tree placements. */
-function collectCanopy(
-  features: CanopyFeature[],
-  ctx: VegetationContext,
-  ndviAt?: RasterSampler,
-  keepTree?: TreeVeto
-): Placement[] {
-  const { offset } = ctx;
-  const out: Placement[] = [];
-  for (const f of features) {
-    if (f.geometry?.type !== "Point") {
-      continue;
-    }
-    const [ex, ey] = f.geometry.coordinates;
-    if (keepTree && !keepTree(ex, ey, f.properties?.h)) {
-      continue; // an inventory tree stands here
-    }
-    const ground = ctx.heightAt(ex, ey);
-    if (ground === null) {
-      continue;
-    }
-    // A point missing a numeric `h` (only the TS type, not the JSON, promises
-    // one) would make scale NaN; Math.max/min don't clamp NaN, so the NaN
-    // matrix poisons the chunk's bounding sphere and the whole cell culls.
-    const rawH = f.properties?.h ?? Number.NaN;
-    const h = Number.isFinite(rawH) ? rawH : BASE_TREE_H;
-    const seed = ex * 0.13 + ey * 0.07;
-    const w = epsgToWorld(ex, ey, offset);
-    out.push({
-      x: w.x,
-      y: ground,
-      z: w.z,
-      rot: hash(seed * 1.7) * Math.PI,
-      // Scale the whole tree to the measured canopy height (± a touch).
-      s: Math.min(Math.max(h / BASE_TREE_H, 0.5), 7) * (0.9 + hash(seed) * 0.2),
-      ndvi: ndviAt?.(ex, ey),
-    });
-  }
-  return out;
-}
-
 /**
  * Builds stylized vegetation from the ATKIS veg04 rows GeoJSON (hedges + tree
  * rows) and, when given, the DOM1-derived canopy GeoJSON (area trees scaled to
@@ -1275,13 +1143,8 @@ export function buildVegetation(
   let seasons: SeasonalCrowns[] = [];
 
   const { ndviAt, keepTree } = features;
-  const { trees, hedges } = collectPlacements(
-    features.rows,
-    ctx,
-    ndviAt,
-    keepTree
-  );
-  trees.push(...collectCanopy(features.canopy, ctx, ndviAt, keepTree));
+  const { trees, hedges } = rowPlacements(features.rows, ctx, ndviAt, keepTree);
+  trees.push(...canopyPlacements(features.canopy, ctx, ndviAt, keepTree));
   const extras = features.extraTrees ?? [];
   if (trees.length + extras.length > 0) {
     const built = buildTrees(trees, extras, crownMats);

@@ -5,7 +5,7 @@ const entry = (id: string, links: number, h?: number, height?: number) => ({
   id,
   links,
   name: id,
-  objects: ["o"],
+  objects: [`lod2-${id}`],
   x: 1000,
   y: 2000,
   ...(h === undefined ? {} : { h }),
@@ -24,6 +24,47 @@ test("the site's landmarks: one per item, most notable first, the taller height"
   expect(
     siteLandmarks([{ landmarks: [entry("A", 1), entry("B", 2)] }], 1)
   ).toHaveLength(1);
+});
+
+test("a landmark housed in a more notable one's building is that one", () => {
+  const housed = (id: string, links: number, objects: string[]) => ({
+    ...entry(id, links),
+    objects,
+  });
+  const list = siteLandmarks([
+    {
+      landmarks: [
+        housed("Rüstkammer", 10, ["schloss", "flügel"]),
+        housed("Residenzschloss", 32, ["schloss"]),
+        housed("Hofkirche", 35, ["kirche"]),
+      ],
+    },
+  ]);
+  expect(list.map((l) => l.id)).toEqual(["Hofkirche", "Residenzschloss"]);
+  // …and still found by its own name
+  expect(list[1].also).toEqual(["Rüstkammer"]);
+  expect(list[0].also).toBeUndefined();
+  // the limit counts the buildings kept, not the items read
+  expect(
+    siteLandmarks(
+      [
+        {
+          landmarks: [
+            housed("A", 9, ["a"]),
+            housed("A2", 8, ["a"]),
+            housed("B", 7, ["b"]),
+            housed("C", 6, ["c"]),
+            housed("B2", 5, ["b"]),
+          ],
+        },
+      ],
+      2
+    ).map((l) => [l.id, l.also])
+  ).toEqual([
+    ["A", ["A2"]],
+    // housed in a kept one, though less notable than the first one cut
+    ["B", ["B2"]],
+  ]);
 });
 
 test("a vantage looks at the landmark from the south-south-west, higher for a taller one", () => {

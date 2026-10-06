@@ -76,8 +76,9 @@ export function tileReport(
     dgmSourceFiles(site, tile).tif,
     cityMeshSourceFiles(site, tile).city,
   ];
+  // what the build makes from other files is no source to miss
   const artifacts = Object.values(tileArtifacts(tile)).filter(
-    (a) => !a.bakedFrom
+    (a) => !a.bakedFrom && !a.built
   );
   const required = artifacts
     .filter((a) => a.required)

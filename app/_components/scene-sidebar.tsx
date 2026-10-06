@@ -15,11 +15,9 @@ import {
   FullscreenIcon,
   HammerIcon,
   ImageDownIcon,
-  LandmarkIcon,
   type LucideIcon,
   PlaneIcon,
   SparklesIcon,
-  StarIcon,
   TreesIcon,
   XIcon,
 } from "lucide-react";
@@ -31,7 +29,7 @@ import type {
   SetStateAction,
 } from "react";
 import Link from "next/link";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { getTimes } from "suncalc";
 import { Button } from "@/components/ui/button";
 import { SUPPORT_URL } from "@/lib/brand";
@@ -72,7 +70,8 @@ import {
 } from "@/lib/city/look-controls";
 import { type DataLayerKey, siteDataLayers } from "@/lib/city/data-layers";
 import { STUDY_DATES, STUDY_HOURS } from "@/lib/city/image-export";
-import { type Landmark, landmarkVantage } from "@/lib/city/landmarks";
+import type { Landmark } from "@/lib/city/landmarks";
+import { sitePlaces } from "@/lib/city/places";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import {
   RENDER_STYLE_BY_ID,
@@ -85,6 +84,7 @@ import { cn } from "cn";
 import type { CityWalkHandle, CityWalkStats } from "./create-app";
 import { DataLayersPanel } from "./data-layers-panel";
 import { Minimap } from "./minimap";
+import { PlacesList } from "./places-list";
 import { hintsFor } from "./control-hints";
 import { LegalLinks } from "./legal-links";
 import type { ModelHud, ViewMode } from "./model-rig";
@@ -103,9 +103,11 @@ import { useSite } from "./site-context";
  * The scene sidebar, structured by what you came to do rather than by which
  * uniform a slider writes to:
  *
- *  - **Erkunden** — where you are and where you can go: minimap, walk/fly,
- *    the scenic vantages, the data layers (traffic, bikes, trams), the
- *    keys. Everything a first visit needs.
+ *  - **Erkunden** — where you are and where you can go: the minimap, the
+ *    view mode (walk, fly, Modell — with Modell's *Projektion* right under
+ *    it), the places (vantages and landmarks as one list, the first few
+ *    shown), the data layers (traffic, bikes, trams), the keys (folded).
+ *    Everything a first visit needs.
  *  - **Szene** — what the scene looks like right now: sun and time, then the
  *    look groups, each collapsed until asked for.
  *  - **Erweitert** — the tools, the snapshot codec and the counters.
@@ -458,163 +460,87 @@ function MinimapCard({
 }
 
 /**
- * The scenic vantages, plus the one you saved yourself.
- *
- * The saved view is a removable item, the way a chip or a saved place is: the
- * card travels there, and the ✕ in its corner clears it, which is also how you
- * re-assign it — clear, then set it again from wherever you are standing. The
- * two buttons are siblings rather than nested, because a button inside a
- * button is neither valid HTML nor reachable by keyboard.
- */
-function Viewpoints({
-  onForget,
-  onRemember,
-  onRestore,
-  onTravel,
-  remembered,
-  showKeys,
-}: {
-  onForget: () => void;
-  onRemember: () => void;
-  onRestore: () => void;
-  onTravel: (id: string) => void;
-  remembered: boolean;
-  /** show each card's 1–9 shortcut (keyboard devices) */
-  showKeys: boolean;
-}) {
-  const site = useSite();
-  return (
-    <div className="flex flex-col gap-2 px-3 pt-1 pb-3.5">
-      <span className={`${SECTION_LABEL} px-1`}>Aussichtspunkte</span>
-      <div className="grid grid-cols-2 gap-2">
-        {site.viewpoints.map((view, index) => (
-          <button
-            className="flex min-h-16.5 flex-col gap-2 rounded-lg border bg-background p-2.5 text-left hover:border-ring"
-            key={view.id}
-            onClick={() => onTravel(view.id)}
-            title={view.description}
-            type="button"
-          >
-            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground leading-none">
-              {view.mode === "fly" ? (
-                <PlaneIcon className="size-3" />
-              ) : (
-                <FootprintsIcon className="size-3" />
-              )}
-              {view.mode === "fly" ? "Aus der Luft" : "Auf Augenhöhe"}
-              {showKeys && index < 9 && (
-                <kbd className="ml-auto rounded-sm bg-muted px-1 font-sans text-[10px] leading-4">
-                  {index + 1}
-                </kbd>
-              )}
-            </span>
-            <span className="font-medium text-xs leading-tight">
-              {view.label}
-            </span>
-          </button>
-        ))}
-        <div className="relative">
-          <button
-            className={cn(
-              "flex min-h-16.5 w-full flex-col items-center justify-center gap-1.5 rounded-lg border p-2.5 text-[11px] leading-tight hover:border-ring",
-              remembered
-                ? "bg-background text-foreground"
-                : "border-dashed text-muted-foreground hover:text-foreground"
-            )}
-            onClick={remembered ? onRestore : onRemember}
-            title={
-              remembered
-                ? "Zur gemerkten Sicht zurückspringen"
-                : "Die aktuelle Sicht merken"
-            }
-            type="button"
-          >
-            <StarIcon
-              className={cn("size-3.5", remembered && "fill-current")}
-            />
-            {remembered ? "Gemerkte Sicht" : "Aktuelle Sicht merken"}
-          </button>
-          {remembered && (
-            <button
-              aria-label="Gemerkte Sicht entfernen"
-              // 20px reads right in the corner; the ::after pad makes it a
-              // real touch target without the bulk (as the sidebar primitives do).
-              className="absolute top-1 right-1 inline-flex size-5 items-center justify-center rounded-full text-muted-foreground after:absolute after:-inset-2 hover:bg-accent hover:text-foreground"
-              onClick={onForget}
-              title="Gemerkte Sicht entfernen"
-              type="button"
-            >
-              <XIcon className="size-3" />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * The city's landmarks: what Wikidata knows as its most notable buildings
- * and structures, matched to what the scene draws (plan 050). A quiet list
- * under the authored vantages — one click glides up to an overlook on it.
- * Built from the data for every city, so a new one gets its list for free.
- */
-function Landmarks({
-  landmarks,
-  onTravel,
-}: {
-  landmarks: Landmark[];
-  onTravel: (lm: Landmark) => void;
-}) {
-  if (landmarks.length === 0) {
-    return null;
-  }
-  return (
-    <div className="flex flex-col gap-2 px-3 pb-3.5">
-      <span className={`${SECTION_LABEL} px-1`}>Wahrzeichen</span>
-      <div className="flex flex-wrap gap-1.5">
-        {landmarks.map((lm) => (
-          <button
-            className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-left text-[11px] leading-tight hover:border-ring"
-            key={lm.id}
-            onClick={() => onTravel(lm)}
-            title={`Zu ${lm.name} fliegen`}
-            type="button"
-          >
-            <LandmarkIcon className="size-3 shrink-0 text-muted-foreground" />
-            <span className="truncate">{lm.name}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
  * The key/action table — the full list the floating bar only shows the first
- * four of. Touch devices get the gestures instead: a phone has no W A S D.
+ * four of, folded away until asked for: the bar already teaches the first
+ * steps. Touch devices get the gestures instead: a phone has no W A S D.
  */
 function ControlTable({ coarse, model }: { coarse: boolean; model: boolean }) {
   return (
-    <div className="flex flex-col gap-2 border-t px-4 pt-3 pb-3.5">
-      <span className={SECTION_LABEL}>Steuerung</span>
-      {/* One key/action pair per row: two side by side ran out of the
-          sidebar on desktop and the phone sheet alike. */}
-      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-2 text-xs">
-        {hintsFor(coarse, model).map((hint) => (
-          <Fragment key={hint.key}>
-            <span className="inline-flex h-5 min-w-5 items-center justify-center whitespace-nowrap rounded-sm border bg-muted px-1.5 font-medium text-[10px] text-muted-foreground leading-none">
-              {hint.key}
-            </span>
-            <span className="text-pretty text-muted-foreground leading-tight">
-              {hint.action}
-            </span>
-          </Fragment>
-        ))}
-      </div>
-    </div>
+    <Collapsible className="border-t px-4 pt-1.5 pb-2">
+      <CollapsibleTrigger
+        aria-label="Steuerung — ein- und ausklappen"
+        className="group/keys -mx-2 flex h-9 w-[calc(100%+1rem)] items-center gap-2 rounded-lg px-2 text-left hover:bg-accent"
+      >
+        <span className={cn(SECTION_LABEL, "flex-1")}>Steuerung</span>
+        <ChevronDownIcon className="size-3 opacity-35 transition-transform group-aria-expanded/keys:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        {/* One key/action pair per row: two side by side ran out of the
+            sidebar on desktop and the phone sheet alike. */}
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-2 pt-1 pb-1.5 text-xs">
+          {hintsFor(coarse, model).map((hint) => (
+            <Fragment key={hint.key}>
+              <span className="inline-flex h-5 min-w-5 items-center justify-center whitespace-nowrap rounded-sm border bg-muted px-1.5 font-medium text-[10px] text-muted-foreground leading-none">
+                {hint.key}
+              </span>
+              <span className="text-pretty text-muted-foreground leading-tight">
+                {hint.action}
+              </span>
+            </Fragment>
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
+
+/**
+ * Walk, fly or Modell: one segmented control under the map, and Modell's
+ * *Projektion* right beneath it while it is on — the mode and what it
+ * offers stay together instead of ending up under the list of places.
+ */
+function ViewModeSwitch({
+  mode,
+  onMode,
+}: {
+  mode: ViewMode;
+  onMode: (mode: ViewMode) => void;
+}) {
+  return (
+    <ToggleGroup
+      aria-label="Ansicht"
+      className="grid w-full grid-cols-3 gap-0.75 rounded-lg bg-muted p-0.75"
+      onValueChange={(value: string[]) => {
+        const next = value[0] as ViewMode | undefined;
+        if (next) {
+          onMode(next);
+        }
+      }}
+      size="sm"
+      value={[mode]}
+    >
+      <ToggleGroupItem className={MODE_ITEM} value="walk">
+        <FootprintsIcon data-icon="inline-start" />
+        Gehen
+      </ToggleGroupItem>
+      <ToggleGroupItem className={MODE_ITEM} value="fly">
+        <PlaneIcon data-icon="inline-start" />
+        Fliegen
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        className={MODE_ITEM}
+        title="Die Stadt in Parallelprojektion, wie Städtebauer sie zeichnen (M)"
+        value="model"
+      >
+        <BoxIcon data-icon="inline-start" />
+        Modell
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
+
+const MODE_ITEM =
+  "h-7 text-muted-foreground data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-sm";
 
 const STUDY_CHIP =
   "h-6 rounded-full px-2 font-mono text-[10px] tabular-nums text-muted-foreground data-pressed:border-ring data-pressed:bg-background data-pressed:text-foreground data-pressed:ring-1 data-pressed:ring-ring";
@@ -889,6 +815,10 @@ export function SceneSidebar(props: SceneSidebarProps) {
   const { toggleSidebar } = useSidebar();
   const { handleRef, look, onLook } = props;
   const site = useSite();
+  const places = useMemo(
+    () => sitePlaces(site.viewpoints, props.landmarks, site.name),
+    [site, props.landmarks]
+  );
   return (
     <Sidebar
       className="p-3 [&>[data-slot=sidebar-inner]]:rounded-xl [&>[data-slot=sidebar-inner]]:shadow-xl"
@@ -933,72 +863,11 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 subscribePose={props.subscribePose}
               />
             )}
-            <Viewpoints
-              onForget={() => props.setRememberedView(null)}
-              onRemember={() => {
-                const here = handleRef.current?.captureViewpoint();
-                if (here) {
-                  props.setRememberedView(here);
-                }
-              }}
-              onRestore={() => {
-                if (props.rememberedView) {
-                  handleRef.current?.flyToViewpoint(props.rememberedView);
-                }
-              }}
-              onTravel={(id) => {
-                const view = site.viewpoints.find((v) => v.id === id);
-                if (view) {
-                  handleRef.current?.flyToViewpoint(view);
-                }
-              }}
-              remembered={props.rememberedView !== null}
-              showKeys={!props.coarse}
-            />
-            <Landmarks
-              landmarks={props.landmarks}
-              onTravel={(lm) =>
-                handleRef.current?.flyToViewpoint(landmarkVantage(lm))
-              }
-            />
-            {/* Below the vantages, and quiet: one-click travel is the reason
-                to open this tab, while walk/fly is a mode you set once. Same
-                segmented control as the tabs above, not an inverted slab. */}
             <div className="px-3 pb-3.5">
-              <ToggleGroup
-                className="grid w-full grid-cols-3 gap-0.75 rounded-lg bg-muted p-0.75"
-                onValueChange={(value: string[]) => {
-                  const next = value[0] as ViewMode | undefined;
-                  if (next) {
-                    handleRef.current?.setViewMode(next);
-                  }
-                }}
-                size="sm"
-                value={[props.mode]}
-              >
-                <ToggleGroupItem
-                  className="h-7 text-muted-foreground data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-sm"
-                  value="walk"
-                >
-                  <FootprintsIcon data-icon="inline-start" />
-                  Gehen
-                </ToggleGroupItem>
-                <ToggleGroupItem
-                  className="h-7 text-muted-foreground data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-sm"
-                  value="fly"
-                >
-                  <PlaneIcon data-icon="inline-start" />
-                  Fliegen
-                </ToggleGroupItem>
-                <ToggleGroupItem
-                  className="h-7 text-muted-foreground data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-sm"
-                  title="Die Stadt in Parallelprojektion, wie Städtebauer sie zeichnen (M)"
-                  value="model"
-                >
-                  <BoxIcon data-icon="inline-start" />
-                  Modell
-                </ToggleGroupItem>
-              </ToggleGroup>
+              <ViewModeSwitch
+                mode={props.mode}
+                onMode={(next) => handleRef.current?.setViewMode(next)}
+              />
             </div>
             {props.mode === "model" && props.modelView && (
               <ProjectionPanel
@@ -1012,6 +881,26 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 view={props.modelView}
               />
             )}
+            <PlacesList
+              onForget={() => props.setRememberedView(null)}
+              onRemember={() => {
+                const here = handleRef.current?.captureViewpoint();
+                if (here) {
+                  props.setRememberedView(here);
+                }
+              }}
+              onRestore={() => {
+                if (props.rememberedView) {
+                  handleRef.current?.flyToViewpoint(props.rememberedView);
+                }
+              }}
+              onTravel={(place) =>
+                handleRef.current?.flyToViewpoint(place.view)
+              }
+              places={places}
+              remembered={props.rememberedView !== null}
+              showKeys={!props.coarse}
+            />
             {siteDataLayers(site.dataLayers).length > 0 && (
               <div className="flex flex-col gap-2 border-t px-4 pt-3 pb-3.5">
                 <span className={SECTION_LABEL}>Verkehrsdaten</span>

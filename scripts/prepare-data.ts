@@ -112,6 +112,7 @@ import {
 } from "../lib/city/tram-timetable";
 import { siteFromArgs } from "../sites";
 import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
+import { bakeCoarseCrowns } from "./coarse-crowns";
 import { contentKey, createContentHasher, moduleGraph } from "./bake-sources";
 import {
   cityMesh,
@@ -182,10 +183,11 @@ const manifest: DataManifest = { version: 1, files: {} };
 const keep = new Set<string>([MANIFEST_FILE]);
 let published = 0;
 
-/** `name.ext` → `name.<8 hex of sha1>.ext` (`.glb.gz`, `.pts.gz` keep both). */
+/** `name.ext` → `name.<8 hex of sha1>.ext` (`.glb.gz`, `.pts.gz`, `.crw.gz`
+ *  keep both). */
 function hashedName(file: string, content: Uint8Array): string {
   const hash = createHash("sha1").update(content).digest("hex").slice(0, 8);
-  const ext = file.match(/(\.(?:glb|pts)\.gz|\.[^.]+)$/u)?.[0] ?? "";
+  const ext = file.match(/(\.(?:glb|pts|crw)\.gz|\.[^.]+)$/u)?.[0] ?? "";
   return `${basename(file, ext)}.${hash}${ext}`;
 }
 
@@ -393,6 +395,10 @@ for (const tile of TILES) {
     TileArtifact,
   ][];
   for (const [kind, artifact] of artifacts) {
+    if (kind === "crowns") {
+      // baked from the tree files on the fine ground (publishCrowns)
+      continue;
+    }
     if (
       kind === "cultivatedRaster" &&
       existsSync(at(sideFileSource(SITE, artifact.file)))
@@ -739,6 +745,59 @@ function paintAndLight(
   };
 }
 
+/**
+ * The trees the tile's coarse level draws (lib/city/coarse-crowns.ts,
+ * scripts/coarse-crowns.ts): the fine level's own placement of the tile's
+ * trees on its own ground, a third of them. Pre-gzipped like the packed
+ * canopy.
+ */
+async function publishCrowns(tile: string): Promise<string | undefined> {
+  const a = tileArtifacts(tile);
+  const side = (kind: TileArtifactKind) => {
+    const path = at(sideFileSource(SITE, a[kind].file));
+    return existsSync(path) ? path : undefined;
+  };
+  const sources = {
+    canopy: side("canopy"),
+    canopyx: side("canopyx"),
+    cultivated: side("cultivated"),
+    monuments: side("monuments"),
+    ndvi: side("ndvi"),
+    sheds: existsSync(at(cityMeshSourceFiles(SITE, tile).smallBuild))
+      ? at(cityMeshSourceFiles(SITE, tile).smallBuild)
+      : undefined,
+    trees: side("trees"),
+    vegrows: side("vegrows"),
+  };
+  if (
+    !(sources.canopy || sources.canopyx || sources.trees || sources.vegrows)
+  ) {
+    return undefined;
+  }
+  const inputs = [
+    ...Object.values(sources).filter((p): p is string => p !== undefined),
+    ...terrainInputs(tile),
+  ];
+  const [minX, minY] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+  const file = a.crowns.file;
+  const bytes = await cached(
+    file,
+    cacheKey(inputs, offset, passagesIn(tile)),
+    async () => {
+      const fine = await shapedTerrain(tile, 0);
+      return gz(
+        await bakeCoarseCrowns(sources, {
+          bounds: fine.bounds,
+          heightAt: fine.heightAt,
+          offset,
+          origin: [minX, minY],
+        })
+      );
+    }
+  );
+  return publish(file, bytes);
+}
+
 /** A tile's terrain at one level: glTF + its extent and elevation range. */
 async function bakeTerrain(
   tile: string,
@@ -754,6 +813,12 @@ async function bakeTerrain(
     fail(`missing source file ${source.tif}${HINT}`);
   }
   const names = sideFiles.get(tile) ?? {};
+  if (level === 1) {
+    const crowns = await publishCrowns(tile);
+    if (crowns) {
+      names.crowns = crowns;
+    }
+  }
   const { n } = TERRAIN_LEVELS[level];
   // The fine level's walls stand on the neighbours' ground too.
   const inputs =

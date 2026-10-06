@@ -79,6 +79,16 @@ Where the build differs from the plan below, the build wins:
   through seven). The Schwarzplan hides everything but the clay and the
   ground — trees, walls, furniture, bridges, rails.
 
+Follow-ups (2026-10-04): the two-finger twist turned the ground against
+the fingers (the turn's sign; `twistedTurn` and its test now hold it);
+the trees stand at every scale (the fine terrain level draws all of
+them, the coarse one a baked third, √3 wider, wherever it shows) instead
+of all leaving past 2.5 m/px — ADR 0044, *Each terrain level carries its
+trees*; the bridges have their surfaces (a road deck's
+footways, kerbs and carriageway, ashlar stone); and *Erkunden* puts Modell's
+*Projektion* right under the mode switch, with the viewpoints and
+landmarks merged into one list of *Orte* below it.
+
 ## Why this matters
 
 Planners do not look at a city from a pedestrian's eye or a drone. They

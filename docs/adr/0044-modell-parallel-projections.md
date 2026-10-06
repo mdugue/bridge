@@ -65,6 +65,51 @@ eye above the pivot at the equivalent distance, the distance fog is
 open, the sky dome hidden and the background the style's paper. Depth
 of field, grading and the vignette are off.
 
+**Each terrain level carries its trees** (2026-10-04, revised twice on
+2026-10-05). A parallel picture loads one terrain level across the
+whole sheet, and the trees rode on the fine one: past 2.5 m/px (about
+1 : 9 450) they all went at once. The fine level now draws every tree
+and the coarse level a fixed third of them, chosen by a hash of where
+each stands, as tall and √3 wider so a wood covers what the whole one
+did — baked per tile by the build from the fine level's own placement
+(`crowns_<t>.crw.gz`, lib/city/coarse-crowns.ts) and drawn whenever the
+coarse level is, in every mode. Modell has no tree rule of its own: the
+picture shows the trees of whichever level the renderer shows.
+
+Two versions lost on the way. The first thinned the trees to none at
+1 : 9 000 and let the ground's green be the vegetation — an overview of
+the city showed no tree at all, which is not how a planner's axonometry
+reads. The second generalized them by scale, as a plan does — every tree
+to 1 : 5 000, a floor of 30 % from 1 : 9 000, folded in the crown
+shader — and fetched the coarse level's crowns only once Modell thinned.
+That was two rules for one picture, and they disagreed: the coarse level
+shows wherever the fine one is not loaded, not only past 2.5 m/px — the
+memory governor raises the error target ×2 to ×8 (×4 puts the switch at
+≈ 1 : 2 400), and fine tiles take a moment to load — so at 1 : 3 000 a
+picture could show no tree at all. Keeping the fine level, and so the
+trees, for the whole series was weighed and lost: at 1 : 10 000 a
+desktop picture covers 9–12 tiles, which a fine level's rasters do not
+fit in the tile cache. What else rides on the fine level and has to be
+carried by the coarse one is the constraint this sets — the bridges and
+the trees are; the rest (lamps, furniture, walls) is below a pixel past
+2.5 m/px, and goes with the fine level where a device saves memory.
+
+**The Ausschnitt shows once its programs are held** (2026-10-04).
+Switching a `ClippingGroup` switches the build of every drawable under
+it; three keeps one render object per drawable for both sides and frees
+the build a switch leaves. The first cut froze the picture while the
+whole city's programs built in one frame, and so did every switch after
+it, both ways — long enough on a phone for the tab to die. A cut now
+shows when both sides are compiled off the frames on stand-ins and held
+(`holdCut`), the HUD saying *Wird vorbereitet …* until then, and is let
+go a frame after it is lifted. The shadow pass stays unclipped — no
+compile ahead reaches it, and clipped it rebuilt every caster in the
+frame that showed the cut: a building outside casts over the cut's edge.
+Rejected: drawing the cut-out frames into a second render target (their
+own render context, both sides alive at once) — every post pass reads
+the scene target; and clipping always (a cut that moves only its
+planes) — every material in every mode would carry the clip.
+
 **The legend is HUD and file, never scene.** The scale bar (with its
 numbers — the maintainer's call) and the north arrow are HUD glass, the
 minimap draws the picture's footprint; the export (`image-export.ts`)

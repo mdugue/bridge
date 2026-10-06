@@ -19,6 +19,7 @@ import {
   scaleOf,
   snapTilt,
   snapTurn,
+  twistedTurn,
   viewBetween,
   withPreset,
   wrapDeg,
@@ -57,6 +58,8 @@ export interface ModelHud {
   transitioning: boolean;
   /** an Ausschnitt is set (model-cuts.ts; the scene fills it in) */
   cutOut: boolean;
+  /** …and its programs are still being built: it shows once they are */
+  cutOutPending: boolean;
 }
 
 /** s the dolly zoom in and out takes. */
@@ -523,6 +526,7 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
       footprint: modelFootprint(v, viewport()),
       transitioning: phase.kind === "entering" || phase.kind === "leaving",
       cutOut: false,
+      cutOutPending: false,
     };
   };
 
@@ -659,7 +663,7 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
         return;
       }
       dragging = true;
-      setView({ ...view, turnDeg: wrapDeg(view.turnDeg - radians * RAD2DEG) });
+      setView({ ...view, turnDeg: twistedTurn(view.turnDeg, radians) });
     },
     endDrag: () => {
       if (!dragging || !view || phase.kind !== "model") {

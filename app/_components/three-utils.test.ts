@@ -2,12 +2,15 @@ import { expect, test } from "bun:test";
 import {
   BoxGeometry,
   type BufferGeometry,
+  ClippingGroup,
+  Group,
   type Material,
   Mesh,
   MeshBasicNodeMaterial,
   Object3D,
 } from "three/webgpu";
 import {
+  aloneUnder,
   disposeObject3D,
   estimateGeometryBytes,
   releaseRenderState,
@@ -174,4 +177,32 @@ test("a released drawable dispatches dispose, even on a scene-wide material", ()
   disposeObject3D(root);
   expect(seen).toEqual(["drawable"]);
   release();
+});
+
+test("a compile under a group sees the object alone there, and then all is back", () => {
+  const group = new ClippingGroup();
+  group.enabled = false;
+  const city = new Group();
+  const hidden = new Group();
+  hidden.visible = false;
+  group.add(city, hidden);
+  const stub = new Mesh();
+  const seen = aloneUnder(group, stub, () => ({
+    enabled: group.enabled,
+    visible: group.children.filter((c) => c.visible),
+  }));
+  expect(seen.enabled).toBe(true);
+  expect(seen.visible).toEqual([stub]);
+  expect(group.enabled).toBe(false);
+  expect(group.children).toEqual([city, hidden]);
+  expect([city.visible, hidden.visible]).toEqual([true, false]);
+  expect(stub.parent).toBeNull();
+  // put back even when the compile throws
+  expect(() =>
+    aloneUnder(group, stub, () => {
+      throw new Error("lost device");
+    })
+  ).toThrow("lost device");
+  expect(group.children).toEqual([city, hidden]);
+  expect(city.visible).toBe(true);
 });

@@ -293,8 +293,10 @@ export function ProjectionPanel({
           />
         </Field>
         <span className="text-[10px] text-muted-foreground leading-snug">
-          Nur die Bildmitte, wie aus der Stadt geschnitten
-          {view.cutOut && (
+          {view.cutOutPending
+            ? "Wird vorbereitet …"
+            : "Nur die Bildmitte, wie aus der Stadt geschnitten"}
+          {view.cutOut && !view.cutOutPending && (
             <>
               {" · "}
               <button

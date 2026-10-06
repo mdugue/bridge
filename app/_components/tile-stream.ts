@@ -18,7 +18,6 @@ import type {
   AreaFeature,
   BridgeFeature,
   CanopyExtraFeature,
-  CanopyFeature,
   CultivatedFeature,
   FurnitureFeature,
   LampFeature,
@@ -34,9 +33,10 @@ import type {
 import { orchardTrees, vineRows } from "@/lib/city/cultivated";
 import type { LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
-import { onRelief } from "@/lib/city/monuments";
 import { pointFeatures, unpackPoints } from "@/lib/city/point-pack";
 import { type SportTable, sportFixtures } from "@/lib/city/sport";
+import { offMonuments } from "@/lib/city/tree-placement";
+import { unpackCrowns } from "@/lib/city/coarse-crowns";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   type CityExtras,
@@ -44,11 +44,12 @@ import {
   ownsPoint,
   type TerrainExtras,
 } from "@/lib/city/tileset";
-import type { DressingKind } from "@/lib/city/tile";
+import { COARSE_DRESSING_KINDS, type DressingKind } from "@/lib/city/tile";
 import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
 import { askSets, type AskSet } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { type CityLayer, dressCity } from "./city-layer";
+import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
 import {
@@ -190,6 +191,28 @@ export interface TileStream {
   visibleDressings: () => TileDressing[];
 }
 
+/**
+ * Whether a terrain level takes over from its tile's other level: one of
+ * `shown` (the content extras of what is on screen) is that level.
+ */
+export function takesOver(
+  level: Pick<TerrainExtras, "level" | "tileId">,
+  shown: readonly (Partial<ContentExtras> | undefined)[]
+): boolean {
+  return shown.some(
+    (other) =>
+      other?.kind === "terrain" &&
+      other.tileId === level.tileId &&
+      other.level !== level.level
+  );
+}
+
+/** What the dressing plugin reads of the renderer it is registered on. */
+interface PluginTiles {
+  recalculateBytesUsed: (tile?: object | null) => void;
+  readonly visibleTiles: ReadonlySet<object>;
+}
+
 /** Every dressed object of a tile, keyed by its content root. */
 interface Dressed {
   /** aborts the dressing's fetches when the tile leaves before it lands */
@@ -275,12 +298,19 @@ export function dressingParts(d: TileDressing): Object3D[] {
 
 /** How long a tile may wait on its compile before it shows regardless. */
 const COMPILE_WAIT_MS = 3000;
+/** How long a level may wait on its dressing while the tile's other level
+ *  stands in for it (DressingPlugin.handsOver) before it shows regardless. */
+const HAND_OVER_WAIT_MS = 10_000;
 
-function withinCompileWait(done: Promise<void>): Promise<void> {
+function withinWait(done: Promise<void>, ms: number): Promise<void> {
   return Promise.race([
     done,
-    new Promise<void>((resolve) => setTimeout(resolve, COMPILE_WAIT_MS)),
+    new Promise<void>((resolve) => setTimeout(resolve, ms)),
   ]);
+}
+
+function withinCompileWait(done: Promise<void>): Promise<void> {
+  return withinWait(done, COMPILE_WAIT_MS);
 }
 
 /**
@@ -321,24 +351,6 @@ function disposeDressing(d: TileDressing): void {
     part.removeFromParent();
     disposeObject3D(part);
   }
-}
-
-/** The canopy without the "trees" the DOM1 bake planted on a measured
- *  monument (lib/city/monuments.ts `onRelief`). */
-function offMonuments(
-  canopy: CanopyFeature[],
-  monuments: MonumentFeature[]
-): CanopyFeature[] {
-  const reliefs = monuments.flatMap((m) =>
-    m.properties?.relief ? [m.properties.relief] : []
-  );
-  if (reliefs.length === 0) {
-    return canopy;
-  }
-  return canopy.filter((f) => {
-    const [x, y] = f.geometry.coordinates;
-    return !onRelief(reliefs, x, y);
-  });
 }
 
 /** The goals, posts and nets of the grounds this tile owns (a ground on a
@@ -447,25 +459,38 @@ const nextTask = () =>
   });
 
 /**
- * The coarse terrain level's dressing: only the counted traffic, built
- * coarser (traffic-layer.ts `TrafficDetail`) on the coarse ground it is
- * drawn over, so the flows reach every tile in view and not just the ones
- * the fine level has loaded.
+ * The coarse terrain level's dressing: what must not end where the fine
+ * level's reach does — the counted traffic, built coarser (traffic-layer.ts
+ * `TrafficDetail`) on the coarse ground it is drawn over, so the flows
+ * reach every tile in view and not just the ones the fine level has
+ * loaded; the bridges (decks, piers, the measured steel, no rails): the
+ * LoD2 leaves them out of the buildings (city-mesh.ts), so without them
+ * every river crossing vanished past the fine level's reach — in the air
+ * beyond ≈1.2 km, and from 2.5 m/px on in a whole Modell picture; and the
+ * trees, a third of them drawn wider (coarse-crowns-layer.ts): the fine
+ * level carries every tree, so without these every place showing the
+ * coarse level showed none — in the distance, and at any Modell scale
+ * where the fine level was not loaded.
  */
 async function buildCoarseDressing(
   terrain: TerrainLayer,
   extras: TerrainExtras,
-  offset: { cx: number; cy: number },
+  ctx: TileStreamContext,
   extent: TerrainBounds,
   url: (file: string) => string,
   signal?: AbortSignal
 ): Promise<TileDressing> {
+  const { offset } = ctx;
   const files = extras.coarse ?? {};
+  const tile = extras.tileId;
   const fetchKind = <T>(file: string | undefined): Features<T> =>
     file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
-  const [traffic, bridges] = await Promise.all([
+  const [traffic, bridges, crownBytes] = await Promise.all([
     fetchKind<TrafficFeature>(files.traffic),
     fetchKind<BridgeFeature>(files.bridge),
+    files.crowns
+      ? fetchOptionalBinary(url(files.crowns), signal)
+      : Promise.resolve(null),
   ]);
   const bands =
     traffic.length > 0
@@ -477,13 +502,49 @@ async function buildCoarseDressing(
           extent
         )
       : undefined;
+  // the same bridges as the fine level draws (its decks are measured, the
+  // piers stand on the ground in reach), the same owner per seam
+  const owns = (x: number, y: number) => ownsPoint(extent, x, y);
+  const ground = { offset, heightAt: ctx.heightAt };
+  const rail =
+    bridges.length > 0
+      ? buildRail(
+          { bridges, rails: [], ballast: [], platforms: [] },
+          { ...ground, owns }
+        )
+      : undefined;
   // asked on the coarse bodies too: the tiles the fine level has not
   // reached show only these
-  const set = trafficAskSet(bands, traffic, extras.tileId);
+  const flows = trafficAskSet(bands, traffic, tile);
+  const decks = rail
+    ? bridgeAskSet(
+        rail,
+        bridgeItems(bridges, {
+          ...ground,
+          tile,
+          treeHeightAt: terrain.heightAt,
+          owns,
+        })
+      )
+    : undefined;
+  const asks = [flows, decks].filter(
+    (a): a is AskSet<FeatureInquiry> => a !== undefined && a !== null
+  );
+  const crowns = (crownBytes && unpackCrowns(crownBytes)) ?? [];
+  const vegetation =
+    crowns.length > 0
+      ? buildCoarseCrowns(crowns, {
+          heightAt: terrain.heightAt,
+          offset,
+          sunDirection: ctx.sunDirection,
+        })
+      : undefined;
   return {
-    asks: set ? [set] : undefined,
-    tile: extras.tileId,
+    asks: asks.length > 0 ? asks : undefined,
+    rail: rail && rail.children.length > 0 ? rail : undefined,
+    tile,
     traffic: bands,
+    vegetation,
   };
 }
 
@@ -497,11 +558,11 @@ async function buildDressing(
   const d = extras.dressing;
   const tile = extras.tileId;
   if (!d) {
-    return extras.coarse?.traffic
+    return COARSE_DRESSING_KINDS.some((kind) => extras.coarse?.[kind])
       ? buildCoarseDressing(
           terrain,
           extras,
-          ctx.offset,
+          ctx,
           ctx.tileBounds(tile) ?? terrain.bounds,
           url,
           signal
@@ -742,12 +803,17 @@ export class DressingPlugin {
    * tile rebuilt their shaders inside the frames of a flight.
    */
   private readonly loaded = new WeakMap<Object3D, Promise<void>>();
+  /** what settles `loaded`: the renderer's load-model (`landed`), the
+   *  moment it records the content and before any frame shows it */
+  private readonly settles = new WeakMap<Object3D, () => void>();
+  /** what ends a content root's wait for its queued dressing (handsOver) */
+  private readonly builtOf = new WeakMap<Object3D, () => void>();
+  /** the boot's spawn tile is shown bare, its dressing after the gate */
+  private gateOpen = false;
   /** tiles whose dressing was tried (see TileStream.dressingSettled) */
   readonly settled = new Set<string>();
   private readonly toData = new Matrix4();
-  private tiles: {
-    recalculateBytesUsed: (tile?: object | null) => void;
-  } | null = null;
+  private tiles: PluginTiles | null = null;
   /** the content roots whose terrain reads each raster (raster-shares.ts) */
   private readonly rasterShares = new RasterShares<Object3D>();
   /** the tile a content root was loaded for (to reweigh it) */
@@ -790,15 +856,47 @@ export class DressingPlugin {
     // of its programs (they compile their own).
     this.chain = ctx.dressingGate;
     ctx.dressingGate
-      .then(() => this.warmCrowns())
+      .then(() => {
+        this.gateOpen = true;
+        return this.warmCrowns();
+      })
       .catch(() => {
         // Without the warm-up a date change compiles in a frame; the
         // stream goes on.
       });
   }
 
-  init(tiles: { recalculateBytesUsed: (tile?: object | null) => void }): void {
+  init(tiles: PluginTiles): void {
     this.tiles = tiles;
+  }
+
+  /** The renderer has marked `scene`'s tile loaded (its load-model): the
+   *  content is recorded, and no frame has shown it yet. */
+  landed(scene: Object3D): void {
+    this.settles.get(scene)?.();
+    this.settles.delete(scene);
+  }
+
+  /**
+   * Whether `extras`' level takes over from the tile's other level, which
+   * is on screen now. The renderer keeps that one drawn until this one is
+   * loaded (3D Tiles' REPLACE refinement, both ways), so this one is
+   * loaded only once its dressing is built and compiled too: the trees,
+   * lamps and bridges of one level leave in the frame the next level's
+   * arrive, instead of a gap between the two. A tile with no level on
+   * screen shows at once and is dressed after (nothing to hand over); so
+   * does the boot's spawn tile, whose dressing waits for the gate.
+   */
+  private handsOver(extras: TerrainExtras): boolean {
+    if (!(this.gateOpen && this.tiles)) {
+      return false;
+    }
+    const shown = [...this.tiles.visibleTiles].map(
+      (tile) =>
+        (tile as { engineData?: { scene?: Object3D | null } }).engineData?.scene
+          ?.userData as Partial<ContentExtras> | undefined
+    );
+    return takesOver(extras, shown);
   }
 
   /**
@@ -841,12 +939,14 @@ export class DressingPlugin {
         settle = resolve;
       })
     );
+    this.settles.set(scene, settle);
     try {
       await this.dressContent(scene, tile);
     } finally {
-      // The renderer records the content in the continuation of this call;
-      // by the next task it has.
-      setTimeout(settle, 0);
+      // The renderer records the content in the continuation of this call
+      // and then says so (`landed`); a load it drops says nothing, and by
+      // the next task it has dropped it.
+      setTimeout(() => this.landed(scene), 0);
     }
   }
 
@@ -859,16 +959,27 @@ export class DressingPlugin {
       return;
     }
     this.sceneOf.set(tile, scene);
+    let dressed: Promise<void> | undefined;
     if (extras.kind === "city") {
       this.dressCity(scene, mesh, extras);
     } else if (extras.kind === "terrain") {
-      await this.dressTerrain(scene, mesh, extras);
+      ({ dressed } = await this.dressTerrain(scene, mesh, extras));
     }
     // The renderer shows the tile once this resolves: its programs are
     // ready by then instead of compiling inside a frame. (A tile that left
     // meanwhile is not compiled: that would upload what nothing shows.)
     if (!this.released.has(scene)) {
       await withinCompileWait(this.compileUnder(scene, [scene]));
+    }
+    // ...and, where it takes over from the tile's other level, its
+    // dressing with it (handsOver).
+    if (
+      dressed &&
+      extras.kind === "terrain" &&
+      !this.released.has(scene) &&
+      this.handsOver(extras)
+    ) {
+      await withinWait(dressed, HAND_OVER_WAIT_MS);
     }
     // Disposed while it was being dressed: the renderer drops an aborted
     // load without ever recording the scene, so nothing else frees it. The
@@ -938,11 +1049,14 @@ export class DressingPlugin {
     });
   }
 
+  /** Dresses a terrain level's ground and queues the rest of its dressing
+   *  (`dressed`: built and compiled — wrapped, since an async function
+   *  would wait for a promise it returns). */
   private async dressTerrain(
     scene: Object3D,
     mesh: Mesh,
     extras: TerrainExtras
-  ) {
+  ): Promise<{ dressed?: Promise<void> }> {
     // Local → data frame: the node's dequantisation, then the content root's
     // glTF→3D Tiles up-axis turn (the tileset frame IS the data frame).
     scene.updateMatrix();
@@ -987,9 +1101,10 @@ export class DressingPlugin {
     this.stream.terrains.add(terrain);
     this.dressed.set(scene, { terrain });
     this.holdRasters(scene, terrain.rasters, true);
-    if (extras.dressing || extras.coarse?.traffic) {
-      this.queueDressing(scene, terrain, extras);
-    }
+    const coarse = COARSE_DRESSING_KINDS.some((kind) => extras.coarse?.[kind]);
+    return extras.dressing || coarse
+      ? { dressed: this.queueDressing(scene, terrain, extras) }
+      : {};
   }
 
   /** Dressings build one at a time, after the gate: each is a long task.
@@ -1043,12 +1158,25 @@ export class DressingPlugin {
     this.sports.clear();
   }
 
+  /**
+   * Builds the tile's dressing in its turn and hangs it on the tile. The
+   * promise settles once the dressing is built and compiled (or given up),
+   * before it hangs: it hangs as soon as the renderer has recorded the
+   * tile's own content (`loaded`), before any frame — so a tile that waits
+   * for it (handsOver) is shown with it.
+   */
   private queueDressing(
     scene: Object3D,
     terrain: TerrainLayer,
     extras: TerrainExtras
-  ): void {
+  ): Promise<void> {
     this.pending++;
+    let built = (): void => undefined;
+    const ready = new Promise<void>((resolve) => {
+      built = resolve;
+    });
+    // a tile that leaves stops waiting for it at once (disposeTile)
+    this.builtOf.set(scene, built);
     this.chain = this.chain
       .then(() => this.ctx.dressingGate)
       .then(async () => {
@@ -1065,37 +1193,32 @@ export class DressingPlugin {
           entry.aborter.signal
         );
         entry.aborter = undefined;
+        const parts = dressingParts(dressing);
+        // Compiled as the frames will draw it — in its season and at the
+        // hour (which swap crown materials) — before it hangs anywhere: a
+        // build three keys differently from what a frame asks for compiles
+        // inside that frame. (A compile starts at the drawable: where it
+        // will hang does not change its build.)
+        catchUp(dressing, this.ctx);
+        const compiled =
+          this.dressed.get(scene) === entry
+            ? this.compileUnder(scene, compileRepresentatives(parts))
+            : Promise.resolve();
+        await withinCompileWait(compiled);
+        built();
         // Not before the renderer has recorded the tile's own content (see
         // `loaded`): the dressing's materials are the scene's.
         await this.loaded.get(scene);
-        if (this.dressed.get(scene) !== entry) {
-          disposeDressing(dressing);
+        if (this.disposed || this.dressed.get(scene) !== entry) {
+          // freed once its compile has ended (see `compiles`)
+          const free = () => disposeDressing(dressing);
+          compiled.then(free, free);
           return;
-        }
-        const parts = dressingParts(dressing);
-        // Compiled as the frames will draw it: in its season and at the
-        // hour (which swap crown materials), hanging where it will hang —
-        // but hidden until then. A build three keys differently from what
-        // a frame asks for compiles inside that frame.
-        catchUp(dressing, this.ctx);
-        const shown = parts.map((part) => part.visible);
-        for (const part of parts) {
-          part.visible = false;
         }
         // The content root is the viewer's Y-up scene frame (the renderer's
         // up-axis turn cancels the world group's), so the Y-up dressing
         // hangs under it and leaves with its tile.
         scene.add(...parts);
-        await withinCompileWait(
-          this.compileUnder(scene, compileRepresentatives(parts))
-        );
-        if (this.dressed.get(scene) !== entry) {
-          disposeDressing(dressing);
-          return;
-        }
-        parts.forEach((part, i) => {
-          part.visible = shown[i] ?? true;
-        });
         entry.dressing = dressing;
         entry.dressingBytes = parts.reduce(
           (sum, part) => sum + estimateGeometryBytes(part),
@@ -1110,9 +1233,11 @@ export class DressingPlugin {
         // A dressing that fails leaves its tile bare, never the stream stuck.
       })
       .finally(() => {
+        built();
+        this.builtOf.delete(scene);
         this.pending--;
-        // A tile is dressed when its fine level is (the coarse one carries
-        // only the traffic flows).
+        // A tile is dressed when its fine level is (the coarse one only
+        // stands in for it).
         if (extras.level === 0) {
           this.settled.add(extras.tileId);
         }
@@ -1120,12 +1245,14 @@ export class DressingPlugin {
           this.ctx.onChange();
         }
       });
+    return ready;
   }
 
   disposeTile(tile: { engineData?: { scene?: Object3D | null } }): void {
     const scene = tile.engineData?.scene ?? this.sceneOf.get(tile);
     this.sceneOf.delete(tile);
     if (scene) {
+      this.builtOf.get(scene)?.();
       this.released.add(scene);
       this.release(scene);
     }
@@ -1287,7 +1414,10 @@ export function createTileStream(
     tiles.setCamera(camera);
     tiles.setResolution(camera, width, height);
   }
-  tiles.addEventListener("load-model", changed);
+  tiles.addEventListener("load-model", (event) => {
+    dressing.landed(event.scene);
+    changed();
+  });
   tiles.addEventListener("tile-visibility-change", changed);
   world.add(tiles.group);
   return stream;

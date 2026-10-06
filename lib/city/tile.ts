@@ -74,6 +74,8 @@ export interface TileArtifact {
   /** for a downsampled raster: the committed full-size file it is baked
    *  from (under data/<site>/dlm/) and its edge (px) */
   bakedFrom?: { file: string; raster: number };
+  /** made by prepare-data.ts from other side files: nothing committed */
+  built?: true;
   /** file name under public/data (before content hashing) */
   file: string;
   /** false = the loader treats a missing file as "feature off" */
@@ -87,7 +89,8 @@ export const SMALL_RASTER_PX = 512;
 /**
  * One row per side file. Besides its name, a row says where the viewer
  * finds it — `dressing`: named in the fine terrain's dressing extras
- * (tile-stream.ts fetches it per tile); `sound`: named in the tileset's
+ * (tile-stream.ts fetches it per tile); `coarse`: named in the coarse
+ * terrain's, for what must show beyond the fine level's reach; `sound`: named in the tileset's
  * tile list for the soundscape (plan 035); `ask`: named there for the
  * inquiry card (ADR 0042), fetched only when something is asked — and
  * `osm`: the file is derived
@@ -98,6 +101,9 @@ export const SMALL_RASTER_PX = 512;
 interface ArtifactSpec {
   ask?: true;
   bakedFrom?: { file: (tile: string) => string; raster: number };
+  built?: true;
+  /** named in the coarse terrain's extras: what that level is dressed with */
+  coarse?: true;
   dressing?: true;
   file: (tile: string) => string;
   osm?: true;
@@ -179,7 +185,12 @@ const ARTIFACTS = {
   },
   furniture: { file: named("furniture", "geojson"), dressing: true, osm: true },
   rail: { file: named("rail", "geojson"), dressing: true },
-  bridge: { file: named("bridge", "geojson"), dressing: true, osm: true },
+  bridge: {
+    file: named("bridge", "geojson"),
+    dressing: true,
+    coarse: true,
+    osm: true,
+  },
   railarea: { file: named("railarea", "geojson"), dressing: true },
   platform: { file: named("platform", "geojson"), dressing: true, osm: true },
   // Optional: the OSM trams — tracks, catenary supports, stop signs
@@ -207,14 +218,27 @@ const ARTIFACTS = {
   treeFacts: { file: named("treefacts", "json"), ask: true },
   // Optional: the city's counted motor traffic per road section
   // (pipeline/bake/traffic.py); drawn only while its data layer is on.
-  traffic: { file: named("traffic", "geojson"), dressing: true },
+  traffic: {
+    file: named("traffic", "geojson"),
+    dressing: true,
+    coarse: true,
+  },
   lowveg: { file: named("lowveg", "geojson"), dressing: true, osm: true },
   canopyx: { file: named("canopyx", "geojson"), dressing: true },
+  // The coarse level's trees, a third of them (lib/city/coarse-crowns.ts):
+  // baked by prepare-data.ts from the tree files above, no committed
+  // source.
+  crowns: {
+    file: (tile) => `crowns_${tile}.crw.gz`,
+    built: true,
+    coarse: true,
+  },
 } as const satisfies Record<string, ArtifactSpec>;
 
 type Specs = typeof ARTIFACTS;
 export type TileArtifactKind = keyof Specs;
-type KindsWith<F extends "ask" | "dressing" | "osm" | "sound"> = {
+type Flag = "ask" | "coarse" | "dressing" | "osm" | "sound";
+type KindsWith<F extends Flag> = {
   [K in TileArtifactKind]: Specs[K] extends Record<F, true> ? K : never;
 }[TileArtifactKind];
 /** The side files named in a fine terrain's dressing extras. */
@@ -222,7 +246,7 @@ export type DressingKind = KindsWith<"dressing">;
 /** The side files the soundscape fetches. */
 export type SoundKind = KindsWith<"sound">;
 
-const kindsWith = <F extends "ask" | "dressing" | "osm" | "sound">(flag: F) =>
+const kindsWith = <F extends Flag>(flag: F) =>
   (Object.keys(ARTIFACTS) as TileArtifactKind[]).filter(
     (kind) => (ARTIFACTS[kind] as ArtifactSpec)[flag]
   ) as KindsWith<F>[];
@@ -232,13 +256,13 @@ export const DRESSING_KINDS: readonly DressingKind[] = kindsWith("dressing");
  * The side files the coarse terrain level is dressed with: only what must
  * show beyond the fine level's reach — the counted traffic (a data layer
  * read from the air, which stopped at every tile the fine level had not
- * reached yet) and the bridge decks it rides.
+ * reached yet), the bridges, which it rides and which the coarse level
+ * draws (the buildings leave LoD2's bridge slabs out), and its own trees,
+ * a third of the fine level's (lib/city/coarse-crowns.ts).
  */
-export const COARSE_DRESSING_KINDS = [
-  "traffic",
-  "bridge",
-] as const satisfies readonly DressingKind[];
-export type CoarseDressingKind = (typeof COARSE_DRESSING_KINDS)[number];
+export type CoarseDressingKind = KindsWith<"coarse">;
+export const COARSE_DRESSING_KINDS: readonly CoarseDressingKind[] =
+  kindsWith("coarse");
 export const SOUND_KINDS: readonly SoundKind[] = kindsWith("sound");
 /** The side files only the inquiry card fetches. */
 export type AskKind = KindsWith<"ask">;
@@ -277,6 +301,7 @@ export function tileArtifacts(
     out[kind] = {
       file: spec.file(tile),
       required: spec.required === true,
+      ...(spec.built ? { built: true as const } : {}),
       ...(spec.bakedFrom
         ? {
             bakedFrom: {

@@ -54,7 +54,13 @@ heavy part (vegetation incl. the street-tree cadastre and the OSM hedges,
 lamps, rails on the fine terrain level; its walls
 and stairs are baked into the glTF) waits
 behind the HUD's gate and is built one tile at a time behind the streaming
-chip. Every tile change re-renders the shadow map. The layers:
+chip. A terrain level that takes over from its tile's other level on
+screen is loaded only once its dressing is built and compiled
+(`handsOver`): the renderer keeps the old level, trees and all, drawn
+until then, so a change of level never blinks the trees away. The
+dressing is compiled off the scene and hung at the renderer's
+`load-model` — never before it records the content's materials, which it
+disposes with the tile. Every tile change re-renders the shadow map. The layers:
 
 - `city-layer.ts` — `dressCity` on a building tile: one glTF mesh per tile
   with a per-vertex feature id (`EXT_mesh_features`); the per-object table
@@ -171,7 +177,9 @@ chip. Every tile change re-renders the shadow map. The layers:
   Fresnel sky sheen (`visual-style.ts`: `osmColour`, `clayGlow`) — no
   panes, no textures (the window grid is vetoed). Landmarks (flag 16) come from Wikidata
   (`landmarks.py`, cached at fetch time), the site's twelve in the
-  tileset's `extras.landmarks` → the HUD's *Wahrzeichen* chips →
+  tileset's `extras.landmarks` (one per building drawn) → the HUD's
+  *Orte*, merged with the authored vantages (`lib/city/places.ts`: a
+  landmark a vantage names or looks at is folded into it) →
   `landmarkVantage`.
 - Modell (plan 055, ADR 0044; `M`): the city in parallel projection.
   `model-rig.ts` owns the view while it is on (pan / zoom about the
@@ -186,12 +194,24 @@ chip. Every tile change re-renders the shadow map. The layers:
   camera: `view-ray.ts`. The Schnitt (`model-cuts.ts`,
   `visual-style.ts` `setClaySection`: the clay two-sided, back faces the
   poché, a ground-profile strip) and the Ausschnitt (a `ClippingGroup`
-  around `world`, a plinth). The export (`image-export.ts`) tiles the
+  around `world`, a plinth — shown only once `PostStack.holdCut` has
+  compiled and holds both sides of every build, since a switch of the
+  group rebuilds the city's programs in the frame; its shadows are not
+  clipped). The export (`image-export.ts`) tiles the
   frustum with `setViewOffset`, **one tile per animation frame** — SMAA
   and GTAO are `NodeUpdateType.FRAME` nodes and render once per frame.
   The planner styles *Strich* and *Schwarzplan* are rows of the style
   table and kinds of the paper swap (`paper-scene.ts`: `paper`, `line`,
   `figure`; the ground's `paperGroundOn` = 1, 2, 3).
+  Each terrain level carries its trees, in every mode: the fine one
+  all of them, the coarse one a fixed third (`drawnCoarse`, a hash of
+  where each stands), √3 wider, baked by the build from the fine level's
+  placement (`crowns_<t>.crw.gz`, `coarse-crowns-layer.ts`) — the coarse
+  level shows past 2.5 m/px and wherever the memory governor or a load
+  leaves the fine one out, at any scale, so never tie a layer's trees to
+  Modell's scale; anything else on the fine level vanishes there at
+  once. A two-finger twist turns the ground with the fingers
+  (`twistedTurn`).
 - Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
   AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
   `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),
@@ -615,6 +635,19 @@ with pylons where they peak ≥ 10 m (the Blaues Wunder); cable-stayed gets
 a pylon and a fan. The deck's `depth` comes from the OSM fairway clearance
 over the DGM water; beam piers keep the fairway clear. The LoD2's own
 bridge slabs (`53001_*`) are dropped from the building mesh.
+
+**Surfaces** (`bridge-surface.ts`): the deck's top mesh carries its frame
+per vertex (`aDeck` = station, offset, the outline's left/right there —
+`addDeckFrame`, the outline's width read 3 m in from the ends; the top's
+triangles split to ≤ 6 m, `splitDeckTop`, since the triangulation of a
+curved deck joins vertices 190 m apart and the frame, exact at each
+vertex, interpolates truly only over a short reach — the Marienbrücke's
+carriageway sat 8 m off); the scene-wide deck material lays a road
+deck out from it (footways, kerb and gutter, carriageway grain, centre
+dashes on two lanes), a path deck as sand with kerbs, a rail deck as bed
+and walkways; the stone (fascia, parapets, piers, masonry) is ashlar in
+world space along each face's own horizontal. Fine detail fades by
+`fwidth`; the footway/carriageway split and the mottle hold to 1 : 10 000.
 
 **Lines take their level along the whole line** (ADR 0041). Rails and
 trams are not lifted onto whatever deck lies under a point (a lower line

@@ -34,7 +34,9 @@ import {
  *   r186) whose four planes are the rectangle's sides — off, it costs
  *   nothing (a disabled group is no clipping context). Along its edges a
  *   plinth: four strips from the ground down to a common base, the look of
- *   a model cut from the city.
+ *   a model cut from the city. Switching the group switches the build of
+ *   every drawable under it, so a new cut shows only once `reveal` says
+ *   its programs are built (post-stack.ts `holdCut`).
  *
  * Both strips are drawn in the poché's colour by every style (their
  * material papers itself, `userData.paperOwn`, so the paper swaps leave it
@@ -127,13 +129,22 @@ export interface ModelCuts {
     ground: number
   ) => void;
   hideSection: () => void;
-  /** Sets (or, with null, lifts) the Ausschnitt. */
+  /**
+   * Sets (or, with null, lifts) the Ausschnitt. A new one shows once
+   * `reveal` is called — when its programs are built (post-stack.ts
+   * `holdCut`); one that shows stays shown as it moves or the ground
+   * changes.
+   */
   setCutOut: (
     cut: CutOut | null,
     heightAt: (x: number, z: number) => number | null,
     ground: number
   ) => void;
+  /** Shows the Ausschnitt that is set: the clipping and the plinth. */
+  reveal: () => void;
   cutOut: () => CutOut | null;
+  /** an Ausschnitt is set and shows */
+  revealed: () => boolean;
   dispose: () => void;
 }
 
@@ -141,10 +152,16 @@ export function createModelCuts(): ModelCuts {
   const group = new ClippingGroup();
   group.name = "model-cut-out";
   group.enabled = false;
-  group.clipShadows = true;
+  // The shadow pass draws the whole city: clipped, every caster's shadow
+  // program would be built anew inside the frame that shows the cut, and
+  // again in the one that lifts it (no compile ahead reaches the shadow
+  // pass) — the stall the Ausschnitt was known for. So a building outside
+  // still casts its shadow over the cut's edge.
+  group.clipShadows = false;
   const profile = stripMesh("model-section-profile");
   const plinth = stripMesh("model-plinth");
   let cut: CutOut | null = null;
+  let shown = false;
   return {
     group,
     objects: [profile.mesh, plinth.mesh],
@@ -170,16 +187,25 @@ export function createModelCuts(): ModelCuts {
     setCutOut: (next, heightAt, ground) => {
       cut = next;
       if (!next) {
+        shown = false;
         group.enabled = false;
         group.clippingPlanes = [];
         plinth.hide();
         return;
       }
-      group.clippingPlanes = cutOutPlanes(next).map(
-        (p) =>
-          new Plane(new Vector3(p.normal.x, p.normal.y, p.normal.z), p.constant)
+      // the same four planes, moved: a count that changed would change the
+      // clipping's key, and every build under it
+      const planes = cutOutPlanes(next);
+      if (group.clippingPlanes.length !== planes.length) {
+        group.clippingPlanes = planes.map(() => new Plane());
+      }
+      planes.forEach((p, i) =>
+        group.clippingPlanes[i].set(
+          new Vector3(p.normal.x, p.normal.y, p.normal.z),
+          p.constant
+        )
       );
-      group.enabled = true;
+      group.enabled = shown;
       const corners = cutOutCorners(next);
       const step = Math.max(
         Math.max(next.halfRight, next.halfAhead) / 400,
@@ -197,8 +223,18 @@ export function createModelCuts(): ModelCuts {
           )
         )
       );
+      plinth.mesh.visible = shown;
+    },
+    reveal: () => {
+      if (!cut) {
+        return;
+      }
+      shown = true;
+      group.enabled = true;
+      plinth.mesh.visible = true;
     },
     cutOut: () => cut,
+    revealed: () => shown,
     dispose: () => {
       profile.dispose();
       plinth.dispose();

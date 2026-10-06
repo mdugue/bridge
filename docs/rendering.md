@@ -137,6 +137,7 @@ is the codebook.
 | Crown colour | NDVI 5×5 footprint max, recentred on the median; where the DOP has no near-IR (Munich) the GLI from its RGB, mapped onto the NDVI's scale | DOP | `crownColor` (+ hash sage fallback) |
 | Crown motion | wind sway (vertex), leaf flutter, sway-coupled brightness | — | (*Blattflimmern*, *Windhelligkeit*) |
 | Crown detail | three tiers per 250 m chunk, decided over the whole site each frame: rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `updateVegetationLod` (*Multi-Tuft-Kronen (nah)*) |
+| Coarse-level trees | a fixed third of the fine level's trees (a hash of where each stands), as tall, crowns √3 wider, in their colours and season, no trunks — wherever the tile renderer shows the coarse terrain: far off, from the air, in Modell past 2.5 m/px or wherever a coarsened stream or a load leaves the fine level out, at any scale; the fine level draws every tree | where each tree stands (`drawnCoarse`) | `coarse-crowns-layer.ts`, `lib/city/coarse-crowns.ts`, `scripts/coarse-crowns.ts`, `crowns_<t>.crw.gz` |
 | Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; trunk diameter `t` → trunk girth (fitted to the drawn trunk's radius at 1.3 m, flared foot included, × 1.3; else from the height); drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes; OSM `natural=tree` (`s: "osm"`) fills in where the register has no tree within 3 m | Stadtbaumkataster Dresden, OSM | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Crown season | scene date (calendar day) + genus `gn` (± 6 days per tree) → `{ leaf, autumn }` (`lib/city/tree-season.ts`); `autumn` mixes the per-instance colour toward the genus hue, `aBare` = 1 − leaf discards the crown down to a 25 % grey-brown twig stipple (a hashed alpha test in crown space, ~1.25 px cells at every distance) and thins the shadow through the same discard in a custom depth material; evergreens constant, canopy/row trees a generic curve; written on a day change, never per frame | Stadtbaumkataster (genus), OSM | `crown-season.ts`, `vegetation-layer.ts` `buildCrownMaterial(…, bare)` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
@@ -158,7 +159,7 @@ is the codebook.
 | Canopy on a monument | a canopy point on a relief cell is dropped (the DOM1 "tree" was the monument) | DOM1, Basis-DLM | `onRelief` |
 | Ballast surface | dissolved `ver03_f` polygons (and their holes) draped on the ground — split where it strays > 1 m from a triangle, down to 6 m — 0.18 m up, a 0.45 m fascia; none on a rail deck | Basis-DLM | `rail-layer.ts` |
 | Rails | `ver03_l` lines × `tracks` (1–3 pairs at `TRACK_PITCH`) on the level the whole line runs on (`lv`, ADR 0041): the ground, a rail deck, or a span over a gap the DGM leaves beside a bridge; none in a tunnel (a stretch > 15 m within 2 m of a DLM tunnel) and none of the DLM's trams. Without a DLM: OSM's rail ways (each track its own way, `tracks` from the tag), the same drawing | Basis-DLM (OSM without one) | `buildRails` |
-| Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height (the roadway DOM1 measures, held near the DGM abutment ramp and within 8 % grade, 4 % on rail), width by `kind`, the top in its land-cover class colour (road, path, railway; stone otherwise), parapet walls along the sides only (none where a frame stands on the edge), closed from below; the deck line a straight ramp plus one upward camber fitted to the measurement, never sagging; slab `depth` = deck − (water + fairway clearance), 0.6–5 m, else 1.1 m; from each end ≥ 0.5 m above the ground an approach at the kind's grade (road 8 %, path 10 %, rail 3 %) down to where it meets it, ≤ 40 m, in the deck's colour, 1.1 m deep (none onto another deck); drawn by the tile that owns its centre. Without a DLM the ring is OSM's `man_made=bridge` outline, else one bridge's ways buffered by `width` (or `lanes`) and merged per `layer`, the same drawing | Basis-DLM (OSM without one) + DGM1/DOM1 + OSM seamarks | `drawBridge` |
+| Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height (the roadway DOM1 measures, held near the DGM abutment ramp and within 8 % grade, 4 % on rail), width by `kind`, the top in its land-cover class colour (road, path, railway; stone otherwise) laid out by its frame on the axis (`aDeck`, per vertex of a top split to triangles of ≤ 6 m so it holds on a curve: a road deck's footways along both sides in the pavement's colour with slabs, kerb stone and gutter, the carriageway's grain and, on two lanes, the centre dashes; a path deck sand with kerbs; a rail deck the bed with walkways; stone paving otherwise — `bridge-surface.ts`), its fascia, the parapets, piers and masonry ashlar (courses, running-bond joints, a shade per block, a weathering mottle; the fine detail fading by the pixel's footprint), parapet walls along the sides only (none where a frame stands on the edge), closed from below; the deck line a straight ramp plus one upward camber fitted to the measurement, never sagging; slab `depth` = deck − (water + fairway clearance), 0.6–5 m, else 1.1 m; from each end ≥ 0.5 m above the ground an approach at the kind's grade (road 8 %, path 10 %, rail 3 %) down to where it meets it, ≤ 40 m, in the deck's colour, 1.1 m deep (none onto another deck); drawn by the tile that owns its centre, on both terrain levels. Without a DLM the ring is OSM's `man_made=bridge` outline, else one bridge's ways buffered by `width` (or `lanes`) and merged per `layer`, the same drawing | Basis-DLM (OSM without one) + DGM1/DOM1 + OSM seamarks | `drawBridge` |
 | Bridge superstructure | `ribs` (lateral `offset` + `rise` per 2 m): on an arch bridge the ribs that follow the tightest rib's parabola → steel arches carried below the deck to their springing, hangers/posts every 16 m (a rib that follows no arch: not drawn); cable-stayed → pylon + stays every 12 m fanned to the deck; else an open frame on each deck edge, its outer face flush with the deck's side, in a simple form (`ribProfile`: straight chords from the deck to the towers, a sag between them no lower than 2.6 m, a level girder without towers) — one 1.6 m chord, a post every 10 m, no diagonals — and a tower on a river pier + portal where it peaks ≥ 10 m (4 m prominent); two ribs snap to the two deck edges (`placeRibs`); pale matte steel `0xd9dde0` | DOM1 (+ Wikidata/OSM class) | `addSuperstructure`, `lib/city/bridge.ts` |
 | Bridge underside | `structure` contains `arch` and no steel arch → arches of ~26 m between piers 3.2 m thick, springing a quarter of the clearance above the ground, the deck's own side edges carried down to them as spandrel walls (both faces), a vault across the deck under each arch; else box piers every ~26 m on the axis, the fairway kept clear (main span wide, else 40 m); a frame's tower stands on its river pier | OSM / Wikidata | `addMasonry`, `masonryArches`, `pierStations` |
 | Span deck | under a rail or tram span (a gap with no deck outline): a slab as wide as the tracks + 0.9 m (tram: 1.6 m either side), top in the deck colour, stone fascia and soffit 1.1 m deep, a pier every 26 m where it clears the ground by 2.5 m; drawn by the tile owning its middle | the line levels on DGM1 | `addSpanDeck` |
@@ -199,7 +200,7 @@ is the codebook.
 | Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier, Strich, Schwarzplan — one post pass over the finished frame (below); Papier and Strich also swap every surface for one white paper material for the frame (Papier's ground keeps its paint and water as greys, Strich's turns plan-coloured), the Schwarzplan draws the buildings unlit black and hides everything but them and the white ground; remembered per browser | sun altitude (noir's dusk exposure) | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts`, `style-memory.ts` |
 | Modell's picture | a parallel camera (`model-camera.ts`, sheared for the Militärperspektive) at a scale (metres per CSS px ↔ 1 : n at 96 dpi); the post passes read it through the view lens; DoF, grading and vignette off, the distance fog open, the sky dome hidden, the background the style's paper; the shadow frustum fits the picture's footprint | the view (pivot, turn, tilt, scale) | `lib/city/model-view.ts`, `model-rig.ts`, `view-lens.ts`, ADR 0044 |
 | Schnitt | the near plane through the pivot; the clay drawn two-sided with its back faces near-black (the poché, `clayPoche`), the ground's profile along the cut as a poché strip from the terrain heights | the terrain heights | `visual-style.ts` `setClaySection`, `model-cuts.ts`, `lib/city/section.ts` |
-| Ausschnitt | the city's group in a `ClippingGroup` with the rectangle's four planes; a plinth of four poché strips from the ground down to a common base | the terrain heights | `model-cuts.ts`, `lib/city/section.ts` |
+| Ausschnitt | the city's group in a `ClippingGroup` with the rectangle's four planes, shown once its programs are compiled and held off the frames (`holdCut`); shadows not clipped; a plinth of four poché strips from the ground down to a common base | the terrain heights | `model-cuts.ts`, `lib/city/section.ts`, `post-stack.ts` |
 | Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: comic and Papier sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; faded by the scene's fog factor | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
 | Minimap | site tile bounds + 512² class raster in the palette + the bridge decks in the colour of the class they carry (hairline edge) + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
 
@@ -412,6 +413,28 @@ Nothing is built for Modell.
   half-octave steps (110–1600 m; 880 m on phones); vegetation tiers, lamp
   lights, the map overlay and the soundscape read an eye over the pivot at
   the equivalent distance.
+- **Trees at every scale.** The picture loads one terrain level across
+  the sheet (the tile renderer's error for a parallel camera is the
+  geometric error over the pixel size): fine below 2.5 m/px, coarse
+  above — and below it too wherever the memory governor has raised the
+  error target (×4: from ≈ 1 : 2 400) or the fine tiles are still on
+  their way. Each level carries its own trees: the fine one every tree,
+  the coarse one a fixed third of them, √3 wider, baked by the build
+  from the same placement (`crowns_<t>.crw.gz`). So whichever level the
+  renderer shows has its trees, and Modell has no tree rule of its own.
+  The bridges ride on both levels as well (the coarse one draws its
+  decks too), so no river crossing goes with the level.
+- **The Ausschnitt compiles ahead.** A `ClippingGroup` changes the build
+  of every drawable under it, and three keeps one render object per
+  drawable for both sides: switching it rebuilds the whole city's
+  programs in the frame, both ways, and frees the side it leaves. So a
+  cut shows once `PostStack.holdCut` has compiled both sides on
+  stand-ins (pipeline-anchors.ts, every material) — the clipped ones
+  under the group itself (`aloneUnder`: the stand-in its only visible
+  child for the call's synchronous half), where three makes the very
+  render context the frames use — and holds them while it shows; a tile
+  landing meanwhile is held as it compiles. The shadow pass is left
+  unclipped: nothing compiles ahead for it.
 - **The dolly zoom.** Entering, the perspective camera backs away while
   its field of view closes to 2°, keeping the pivot's framing, and tilts to
   the view; the fog opens as it goes; at the end the parallel camera takes
@@ -463,6 +486,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | ≈ 130–200 k |
 | canopy points (fine level) | 0.6–9.5 MB raw (forest tiles top) | up to 81 k trees: ≈ 9 MB of instance data once built (trunks, mid and rich crowns share one matrix buffer) |
 | cadastre trees, scan trees, hedges (fine level) | 0.4–0.8 / 0.65 (spawn only) / ≤ 0.03 MB raw | — |
+| coarse crowns (coarse level) | 0.04–0.29 MB (0.07–0.56 MB raw) | 3 700–27 900 crowns, 20 tris each: ≈ 90 B of instance data a crown once built (matrix, tint, season) |
 
 Before the tileset a tile was ≈1.0 MB of buildings plus a 1.1 MB
 heightfield; quantised meshes cost more on the wire than a height blob,
@@ -580,7 +604,17 @@ new casters are the exception: they compile in the frame that first draws
 them. The heavy dressing — vegetation,
 lamps, monuments, rails — waits behind a gate the HUD opens after the handover
 (`startStreaming`, [ADR 0008](./adr/0008-progressive-two-phase-boot.md)'s
-second phase) and is built one tile at a time. **Ready** (`onLoaded`,
+second phase) and is built one tile at a time. A tile with nothing on
+screen shows at once, bare, and is dressed after; a terrain level that
+takes over from its tile's other level on screen — the fine one replacing
+the coarse one as the view comes closer, or back — is loaded only once
+its dressing is built and compiled too (`handsOver`, at most 10 s), and
+the dressing hangs on it in the task the renderer records it, before any
+frame. The renderer keeps the old level drawn until the new one is loaded
+(3D Tiles' REPLACE refinement, both ways), so one level's trees, lamps
+and bridges leave in the frame the next level's arrive; the old way, the
+new level showed bare first and its trees came after — a blink of no
+trees at every change of level. **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile
 is dressed, the renderer is idle and no dressing is pending; it also lifts
 the fog clamp. A tile that fails to load leaves a hole and one `onError`

@@ -1,6 +1,7 @@
 import {
   type BufferGeometry,
   type Camera,
+  type ClippingGroup,
   DepthTexture,
   HalfFloatType,
   type Node,
@@ -62,9 +63,12 @@ import {
   createSelectionOutline,
   type OutlineSelection,
 } from "./selection-outline";
-import { createPipelineAnchors } from "./pipeline-anchors";
+import {
+  createPipelineAnchors,
+  type PipelineAnchors,
+} from "./pipeline-anchors";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
-import { compileRepresentatives } from "./three-utils";
+import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
 import { createStylize } from "./stylize-effect";
 import type { ViewLens } from "./view-lens";
@@ -208,6 +212,16 @@ export interface PostStack {
   setSelection: (selection: OutlineSelection | null) => void;
   /** How many pipeline anchors hold scene-wide pipelines (diagnostics). */
   anchorCount: () => number;
+  /**
+   * Builds and holds, off the frames, every program the Ausschnitt
+   * (model-cuts.ts, `group`) switches `roots`' drawables between: the
+   * clipped ones and the plain ones they come back to. Resolves when all
+   * are held; the scene can show the cut then without building a thing.
+   * Tiles that land while it holds are held as they compile.
+   */
+  holdCut: (group: ClippingGroup, roots: Object3D[]) => Promise<void>;
+  /** Lets them go, after the next frame (which switches back to plain). */
+  releaseCut: () => void;
   /** The sun's altitude in degrees (Film noir opens up at dusk). */
   setSunAltitude: (altitudeDeg: number) => void;
   /**
@@ -572,6 +586,86 @@ export function createPostStack(
         : Promise.resolve();
   const compilePaper = compileSwap("paper");
   const compileFigure = compileSwap("figure");
+  // The Ausschnitt (model-cuts.ts) is a ClippingGroup around the city.
+  // three keeps ONE render object per drawable on both sides of it and
+  // keys the drawable's build by the clipping: switching the group swaps
+  // every drawable's build, and releases the one it leaves as soon as no
+  // render object uses it. Built inside the frame, that was every material
+  // of the city at once, both ways — seconds on a laptop, long enough on a
+  // phone for the browser to give up on the page. So the cut's programs
+  // are compiled ahead on stand-ins (pipeline-anchors.ts, every material):
+  // the clipped ones under the group, the plain ones as the frames draw
+  // them now (and the swap's, in a paper style), held while the cut shows.
+  interface CutHold {
+    group: ClippingGroup;
+    kind: PaperKind | undefined;
+    /** both sides of each build: clipped and plain, and the swap's */
+    anchors: { a: PipelineAnchors; paper: boolean }[];
+    done: WeakMap<Object3D, unknown>;
+  }
+  let cut: CutHold | null = null;
+  let releaseAfterFrame: PipelineAnchors[] = [];
+  /**
+   * `object` compiled under `group`'s clipping (three-utils.ts
+   * `aloneUnder`): the render object the call makes has the very context
+   * the frames use while the cut shows.
+   */
+  const compileUnder = (group: ClippingGroup, object: Object3D) => {
+    const previous = renderer.getRenderTarget();
+    renderer.setRenderTarget(target);
+    try {
+      return aloneUnder(group, object, () =>
+        renderer.compileAsync(group, camera, scene)
+      );
+    } finally {
+      renderer.setRenderTarget(previous);
+    }
+  };
+  const newHold = (group: ClippingGroup, kind?: PaperKind): CutHold => {
+    const under = (o: Object3D) => compileUnder(group, o);
+    const plain = (o: Object3D) => compileOne(o);
+    const anchors = [
+      { a: createPipelineAnchors(under, true), paper: false },
+      { a: createPipelineAnchors(plain, true), paper: false },
+    ];
+    if (kind) {
+      const swapped =
+        (compile: (o: Object3D) => Promise<void>) => (o: Object3D) =>
+          paperScene.swapped(o, () => compile(o), kind);
+      anchors.push(
+        { a: createPipelineAnchors(swapped(under), true), paper: true },
+        { a: createPipelineAnchors(swapped(plain), true), paper: true }
+      );
+    }
+    return { group, kind, anchors, done: new WeakMap() };
+  };
+  /** Holds both sides of the cut for `roots`' drawables, one per build. */
+  const holdAll = async (held: CutHold, roots: Object3D[]) => {
+    const step = async (drawable: Drawable) => {
+      const paper =
+        held.kind !== undefined && paperScene.drawsAsPaper(drawable, held.kind);
+      for (const { a, paper: swap } of held.anchors) {
+        if (cut !== held) {
+          return;
+        }
+        if (!swap || paper) {
+          await a.anchor(drawable);
+        }
+      }
+    };
+    // every drawable, not one per material and attribute names: the
+    // anchors key a build as three does (strides, item sizes, the index),
+    // and a build the frames come back to that no anchor holds is one
+    // built inside the frame
+    await compileAll(roots.flatMap(drawablesOf), step, held.done);
+  };
+  const letGo = () => {
+    if (cut) {
+      releaseAfterFrame.push(...cut.anchors.map(({ a }) => a));
+      cut = null;
+    }
+  };
+
   // Once is enough for a drawable and its material (a tile, then the whole
   // scene at boot, walks the same objects).
   const compiled = new WeakMap<Object3D, unknown>();
@@ -642,6 +736,10 @@ export function createPostStack(
   return {
     compile: async (root) => {
       await compileAll(drawablesOf(root), compileAnchored, compiled);
+      // a tile landing under a cut that shows: its builds held before it does
+      if (cut) {
+        await holdAll(cut, [root]);
+      }
       // The override's build is keyed by the source's material and layout,
       // so one drawable of each is all Papier needs.
       const kind = style.paperScene;
@@ -656,6 +754,14 @@ export function createPostStack(
       }
     },
     anchorCount: () => anchors.count(),
+    holdCut: async (group, roots) => {
+      if (cut?.group !== group) {
+        letGo();
+        cut = newHold(group, style.paperScene ?? undefined);
+      }
+      await holdAll(cut, roots);
+    },
+    releaseCut: letGo,
     warmStyles: () => {
       // the outline's mask program too: the first question builds nothing
       stylesWarm ??= outline
@@ -693,6 +799,13 @@ export function createPostStack(
         restore?.();
         dressed?.();
         renderer.setRenderTarget(previous);
+      }
+      // a released cut's builds go once a frame has drawn without them
+      if (releaseAfterFrame.length > 0) {
+        for (const a of releaseAfterFrame) {
+          a.dispose();
+        }
+        releaseAfterFrame = [];
       }
       outline.update(renderer.getPixelRatio());
       outline.renderMask(renderer, view);
@@ -761,6 +874,11 @@ export function createPostStack(
       paperScene.dispose();
       styleDressing.dispose();
       anchors.dispose();
+      letGo();
+      for (const a of releaseAfterFrame) {
+        a.dispose();
+      }
+      releaseAfterFrame = [];
       target.dispose();
     },
   };

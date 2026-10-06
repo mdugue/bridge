@@ -737,7 +737,7 @@ visual-variable codebook is in
   night). No panes, no mullions, no texture — the window-grid veto holds
   (🗃️ below). `osmColour` / `clayGlow` in `visual-style.ts`. Conservative strengths,
   not yet judged on a real GPU.
-- **Landmarks from Wikidata** (HUD *Erkunden* → *Wahrzeichen*; plan 050)
+- **Landmarks from Wikidata** (HUD *Erkunden* → *Orte*; plan 050)
   — `bun run fetch` asks Wikidata per tile (`wikibase:box`, instance of a
   subclass of *architectural structure* Q811979, ≥ 2 sitelinks, top 80;
   height P2048, material P186, building = subclass of Q41176; a box that
@@ -756,8 +756,18 @@ visual-variable codebook is in
   objects (`OBJECT_FLAG_LANDMARK` = 16; no look of its own), gives them
   the Wikidata material where OSM names none (`withLandmarks` in
   `prepare-data.ts`), and writes the site's twelve most notable into the
-  tileset's `extras.landmarks` (`siteLandmarks`); the HUD lists them as
-  chips under the viewpoints, and a click glides to an aerial vantage from
+  tileset's `extras.landmarks` (`siteLandmarks`) — one per building drawn:
+  an item whose LoD2 objects a more notable one already holds is that
+  one (the Rüstkammer and the Staatliche Kunstsammlungen in the
+  Residenzschloss, the Galerie Neue Meister in the Albertinum), its name
+  kept in the host's `also` for the search. The HUD merges them with the
+  authored vantages into one list, *Orte* (`lib/city/places.ts`
+  `sitePlaces`): a landmark a vantage names — every word of one in the
+  other, German endings, fillers, the city's name and Wikidata's
+  brackets aside ("Zwinger" in "Zwinger & Semperoper", "Dresden
+  Hauptbahnhof" in "Hauptbahnhof") — or one within 60 m of where a
+  vantage looking down ≥ 20° looks is folded into that vantage, the rest
+  follow the vantages; a click on a landmark glides to an aerial vantage from
   the south-south-west (`landmarkVantage`: altitude clamp(h + 50, 60,
   300) m, pitch −22°, fov 55°). Examples: the Elbphilharmonie (41
   sitelinks, material glass), the Chilehaus (35) and St. Michaelis (27,
@@ -1006,6 +1016,34 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   daylight ramp — until plan 020 on one shadow-map sample 2 m toward the sun,
   which a node material cannot reach: node lights keep their shadow map to
   themselves, so a crown behind a building now glows too).
+- **The coarse level's trees** (2026-10-05) — each terrain level carries
+  its own trees. The fine level draws every tree (the tiers above). The
+  coarse level, which the tile renderer shows wherever the fine one is
+  not loaded — in the distance and from the air, in a Modell picture past
+  2.5 m/px, at any scale on a phone whose memory governor coarsens the
+  stream, and while fine tiles load — draws a fixed third of them, chosen
+  by a hash of where each stands (`drawnCoarse`,
+  `lib/city/coarse-crowns.ts`): as tall, their crowns √3 wider
+  (`COARSE_TREE_WIDEN`) so a wood covers what the whole one did, in the
+  same colours (NDVI, the register's foliage) and seasons, on the scene's
+  crown material, the far crown's geometry one subdivision coarser and
+  without trunks (`coarse-crowns-layer.ts`). The build step runs the fine
+  level's own placement over each tile's tree files (the packed canopy as
+  the browser unpacks it, the scan crowns, the rows, the register and the
+  orchards, its veto, on the fine level's ground;
+  `lib/city/tree-placement.ts`, `lib/city/tree-inventory.ts`,
+  `scripts/coarse-crowns.ts`) and packs that third, 20 bytes a crown
+  (`crowns_<t>.crw.gz`, ≈ 136 000 crowns and 1.5 MB gzipped for
+  Dresden's fifteen tiles). The coarse level fetches it with its other
+  side files and builds it with its dressing, whatever the mode or scale,
+  so a tree stays where it stood when the level changes and no scale and
+  no device is left without trees. A level that takes over from the
+  other on screen shows only once its trees are built (`handsOver`,
+  `tile-stream.ts`): the old level's trees stay until the new level's
+  arrive, in the same frame — first built, the new level showed bare and
+  its trees followed a moment later, a blink at every change of level.
+  The cost of the switch: where the levels meet, a wood goes from all its
+  trees to a third of them, wider.
 - **Canopy motion** — per-frame in `buildCrownMaterial`, **main pass only** (the
   shadow pass draws the rigid `castShadowPositionNode` → no shadow-pass cost, no
   extra buffers):
@@ -2272,9 +2310,48 @@ removed, not tuned.
   → poché walls down to 12 m below the lowest corner; the city clipped by
   the square's planes (`ClippingGroup`). Buildings on the edge are cut,
   not kept or dropped whole (that would need a per-object centroid).
+  Switching the group switches every drawable's build (three keys it by
+  the clipping and keeps one render object for both sides), and frees
+  the one it leaves: built in the frame, that was the whole city's
+  programs at once, both ways — the picture froze, a phone's tab died. A
+  new cut now shows once its programs are compiled off the frames on
+  stand-ins, the clipped ones under the group and the plain ones they
+  come back to, and held while it shows (`post-stack.ts` `holdCut`); the
+  HUD says *Wird vorbereitet …* meanwhile. The shadow pass is not
+  clipped (no compile ahead reaches it): a building outside still casts
+  over the cut's edge.
 - **Shadow study sheet** — the sun (`suncalc`) at 9, 12, 15, 18 Uhr on
   21.3., 21.6., 21.12. of the shown year, one capture each, as a 3 × 4
   sheet with the legend (`image-export.ts`, `lib/city/image-export.ts`).
+- **Trees at every scale** — Modell draws the trees of the terrain
+  level under the picture, as every mode does (✅ *The coarse level's
+  trees*, Vegetation): every tree where the fine level is loaded, a
+  third of them, wider, where the coarse one shows. No scale thins them
+  of its own (🗃️ *Modell's trees thinned by scale*).
+- **Bridges on both terrain levels** — the coarse level draws its tile's
+  bridges as the fine one does (`buildRail` with the decks alone: deck,
+  parapets, piers or arches, the measured steel; no rails), and they are
+  asked on it too. LoD2's bridge slabs are left out of the buildings, so
+  every river crossing used to vanish where the fine level's reach ended:
+  in the air beyond ≈ 1.2 km, and in Modell across the whole picture from
+  2.5 m/px on.
+- **The bridges' surfaces** — a bridge was one flat colour per part (a
+  pale slab over the river). The deck's top now carries its frame — the
+  station and offset on the axis and the outline's edges there, a vertex
+  attribute (`aDeck`, `rail-layer.ts` `addDeckFrame`; the top split to
+  triangles of ≤ 6 m, `splitDeckTop`, since a curved deck's triangulation
+  joins vertices up to 190 m apart and the frame is exact only at them)
+  — and its material
+  (`bridge-surface.ts`, scene-wide, world space) lays a road bridge out as
+  the street it carries: footways along both sides in the pavement's
+  colour with their slabs, a kerb stone and a gutter, the carriageway in
+  the road's colour with a grain and, on two lanes, the centre line's
+  dashes; a path bridge is sand with kerbs, a rail bridge the track bed
+  with its walkways, the rest stone paving. The fascia, parapets, piers
+  and masonry arches are ashlar: courses and running-bond joints on every
+  upright face, a shade per block, a weathering mottle. The fine detail
+  fades by the pixel's footprint; the footways, the kerbs' line and the
+  mottle stay to the smallest scales.
 - **The export's legend** — the scale from the view's metres per pixel
   (printed at 300 dpi), the north arrow from its turn, the credits from
   the site's attribution lines (`siteAttribution`) — drawn into the PNG,
@@ -2397,6 +2474,7 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
+| **Modell's trees thinned by scale** (2026-10-04 → 2026-10-05: every tree to 1 : 5 000, fewer to 1 : 9 000, a floor of 30 % beyond, the kept crowns widened by 1/√share — `treeShare`, `treeSpread`, the crown shader's `crownKept` folding the others onto their origin; the coarse level's crowns, the floor's selection, fetched only once Modell thinned. The version before it thinned to none at 1 : 9 000) | Two rules for one picture: the scale set the share, the tile renderer the level, and the two disagree. The coarse level shows wherever the fine one is not loaded, not only past 2.5 m/px — at 1 : 3 000 on a phone whose memory governor coarsens the stream, or while fine tiles load — and there the picture showed no tree at all, since its crowns came only once Modell thinned (maintainer, 2026-10-05: trees at large and at small scales, none at 1 : 3 000). The version before showed no tree in an overview of the city. | Each terrain level carries its own trees, whatever the mode or scale (✅ *The coarse level's trees*): the fine level all, the coarse one a fixed third. A generalization by scale, if it comes back, has to follow the level the renderer shows, not run as a second rule beside it. |
 | **Pedestrian counts** (for the traffic data layers, 2026-10-01) | No open measured source for the site: the only pedestrian counter, hystreet.com's laser count on the Prager Straße, is commercial (access on request); the city's "Fußgängerquerung St. Petersburger Straße" is a *bicycle* counter. A density modelled from stops, shops and census cells would be a model drawn as if measured. | Revisit with an open counter network (Telraam sensors in the site, if any, through its API with a key). |
 | **Live tram positions** (GTFS-RT, the TLMS radio telegrams) | gtfs.de's realtime feed is one protobuf for all of Germany, too heavy for a browser to poll; TLMS (`wss://socket.tlm.solutions`) is a volunteer service whose coverage and uptime the viewer cannot vouch for. | The timetable runs instead (✅ *Trams by timetable*); delays could come from the VVO's departure monitor (`webapi.vvo-online.de/dm`, answers any origin) per stop — 📋. |
 | **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). Text now appears only on demand, in the inquiry card ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md)). |

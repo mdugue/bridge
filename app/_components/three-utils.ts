@@ -1,6 +1,7 @@
 import type {
   BufferGeometry,
   EventDispatcher,
+  Group,
   Material,
   Object3D,
   Texture,
@@ -266,4 +267,34 @@ export function compileRepresentatives(roots: Object3D[]): Object3D[] {
 /** A geometry's attribute names, the layout part of a build's key. */
 export function layoutOf(geometry: BufferGeometry | undefined): string {
   return geometry ? Object.keys(geometry.attributes).sort().join(",") : "";
+}
+
+/**
+ * Runs `during` with `object` the only visible child of `group`, and the
+ * group enabled: what a compile walking `group` sees for its synchronous
+ * half — `object` under the group's clipping and nothing else of it
+ * (post-stack.ts `holdCut`). Everything is put back after, `object` taken
+ * out again.
+ */
+export function aloneUnder<T>(
+  group: Group & { enabled: boolean },
+  object: Object3D,
+  during: () => T
+): T {
+  const enabled = group.enabled;
+  const shown = group.children.filter((c) => c.visible);
+  for (const c of shown) {
+    c.visible = false;
+  }
+  group.add(object);
+  group.enabled = true;
+  try {
+    return during();
+  } finally {
+    group.enabled = enabled;
+    group.remove(object);
+    for (const c of shown) {
+      c.visible = true;
+    }
+  }
 }

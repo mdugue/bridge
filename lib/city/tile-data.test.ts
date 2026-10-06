@@ -104,8 +104,9 @@ test("every Dresden tile has every artifact the viewer reads and every bake inpu
   for (const tile of tileIds(DRESDEN)) {
     const files = [
       ...Object.entries(tileArtifacts(tile))
-        // A downsampled raster is made at build time, not committed.
-        .filter(([kind, a]) => !a.bakedFrom && !(kind in MAY_LACK))
+        // A downsampled raster, or a file built from others, is made at
+        // build time, not committed.
+        .filter(([kind, a]) => !a.bakedFrom && !a.built && !(kind in MAY_LACK))
         .map(([, a]) => sideFileSource(DRESDEN, a.file)),
       wallSourceFile(DRESDEN, tile),
       kerbSourceFile(DRESDEN, tile),
