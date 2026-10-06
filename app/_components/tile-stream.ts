@@ -914,6 +914,9 @@ export class DressingPlugin {
   /** the coarse level's grid index and water index, one copy for the
    *  site (terrain-layer.ts `GridShare`) */
   private readonly grids: GridShare = createGridShare();
+  /** aborts the levels' own raster loads when the stream goes: they would
+   *  hold their turn to decode (raster-upload.ts) from the next app's */
+  private readonly lifetime = new AbortController();
 
   constructor(
     private readonly ctx: TileStreamContext,
@@ -1149,6 +1152,7 @@ export class DressingPlugin {
       ndvis: this.ndvis,
       sports: this.sports,
       grids: this.grids,
+      signal: this.lifetime.signal,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls, kerbs and fences: only their
@@ -1241,6 +1245,7 @@ export class DressingPlugin {
    */
   dispose(): void {
     this.disposed = true;
+    this.lifetime.abort();
     this.warmup?.dispose();
     this.warmup = null;
     // (release deletes the entry it is on: a Map iterates on safely)
