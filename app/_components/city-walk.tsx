@@ -43,15 +43,24 @@ import {
   decodeLook,
   encodeSnapshot,
   parseSnapshot,
+  type Snapshot,
   snapshotInstant,
 } from "@/lib/city/snapshot";
+import { restoresLook } from "@/lib/city/gpu-safety";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { AltitudeStick } from "./altitude-stick";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
 import { startCrashReports } from "./crash-reports";
 import { startCrashTrail } from "./crash-trail";
-import { recoverFromGpuLoss, takeRecoverySnapshot } from "./gpu-recovery";
+import { GpuFailureCard } from "./gpu-failure-card";
+import {
+  peekRecoverySnapshot,
+  recoverFromGpuLoss,
+  recoverOnRequest,
+  takeRecoverySnapshot,
+} from "./gpu-recovery";
+import { raiseSafety } from "./gpu-safety";
 import { VEIL_HOLD_MS } from "./handover";
 import {
   type CityWalkHandle,
@@ -408,11 +417,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const { current: timeNow, sync: syncTime } = time;
   // The look store outlives the scene: a remount (StrictMode, a tile switch)
   // boots the new instance from it, so sliders and scene never disagree.
-  // The picture style starts as the viewer last left it (style-memory.ts).
+  // The picture style starts as the viewer last left it (style-memory.ts) —
+  // from safety level 2 in the default one (lib/city/gpu-safety.ts).
   const [look] = useState(() =>
     createLookState({
       ...LOOK_DEFAULTS,
-      style: readStoredStyle() ?? LOOK_DEFAULTS.style,
+      style:
+        (restoresLook(budget.safety) ? readStoredStyle() : null) ??
+        LOOK_DEFAULTS.style,
     })
   );
   const lookValues = useSyncExternalStore(look.subscribe, look.get, look.get);
@@ -449,10 +461,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   }, [live.ended]);
   // What a lost GPU keeps for the next page and puts back there
   // (gpu-recovery.ts): the boot effect reads this render's time and look
-  // through a ref, as it does live mode.
+  // through a ref, as it does live mode. The time and the look go back
+  // before the boot, so the scene starts with them; the camera goes to the
+  // boot itself (`initialCamera`), Modell after its first frame. From
+  // safety level 2 neither the picture style nor Modell come back.
   const recovery = useRef<{
     capture: () => string | null;
-    restore: (h: CityWalkHandle, text: string) => void;
+    prepare: (snapshot: Snapshot) => void;
   } | null>(null);
   useEffect(() => {
     recovery.current = {
@@ -464,17 +479,31 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             )
           : null;
       },
-      restore: (h, text) => {
-        const parsed = parseSnapshot(text);
-        if (!parsed.ok) {
-          return;
+      prepare: (snapshot) => {
+        time.setInstant(snapshotInstant(snapshot));
+        const patch = decodeLook(snapshot.look);
+        if (!restoresLook(budget.safety)) {
+          delete patch.style;
         }
-        h.applyCameraState(parsed.snapshot.camera);
-        time.setInstant(snapshotInstant(parsed.snapshot));
-        look.set(decodeLook(parsed.snapshot.look));
+        look.set(patch);
       },
     };
   });
+  // The render stopped and the page did not recover by itself: the
+  // browser's words, for the failure card (gpu-failure-card.tsx).
+  const [gpuFailure, setGpuFailure] = useState<string | null>(null);
+  /** The card's buttons: a level lighter where the player stood, or not. */
+  const reloadAfterFailure = (lighter: boolean) => {
+    if (lighter) {
+      recoverOnRequest(
+        recovery.current?.capture() ?? null,
+        budget.safety,
+        raiseSafety
+      );
+    }
+    const released = handleRef.current?.releaseGpu() ?? Promise.resolve();
+    void released.then(() => location.reload());
+  };
   const [landcoverTiles, setLandcoverTiles] = useState<MapTile[]>([]);
   const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   const [fps, setFps] = useState<number | null>(null);
@@ -513,6 +542,15 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     // browser kills leaves its last steps for the next load (crash-trail.ts),
     // which reports them where the build has a DSN (crash-reports.ts).
     const trail = startCrashTrail(startCrashReports() ?? undefined);
+    // Back where the player stood before the GPU was lost (gpu-recovery.ts):
+    // read now, taken once the scene is up — a boot that StrictMode aborts
+    // leaves it for the next.
+    const text = peekRecoverySnapshot();
+    const parsed = text ? parseSnapshot(text) : null;
+    const restored = parsed?.ok ? parsed.snapshot : null;
+    if (restored) {
+      recovery.current?.prepare(restored);
+    }
 
     createCityWalkApp({
       container,
@@ -520,6 +558,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       look,
       site,
       tilesetUrl,
+      initialCamera: restored?.camera,
       initialDate: timeNow(),
       signal: aborter.signal,
       trail,
@@ -548,11 +587,19 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           startTransition(() => setStreamingMore(isBusy));
         }
       },
-      onGpuLost: () =>
-        !cancelled && recoverFromGpuLoss(recovery.current?.capture() ?? null),
+      onGpuLost: (how) =>
+        !cancelled &&
+        recoverFromGpuLoss(
+          how,
+          recovery.current?.capture() ?? null,
+          budget.safety,
+          raiseSafety
+        )
+          ? () => location.reload()
+          : null,
       onError: (message) => {
         // After a fatal one the render has stopped: a tile still in flight
-        // failing must not replace "Bitte neu laden" with a layer's hole.
+        // failing must not add a layer's hole under the failure card.
         if (cancelled || fatal) {
           return;
         }
@@ -566,7 +613,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       onFatal: (message) => {
         if (!cancelled) {
           fatal = true;
-          setStreamError(message);
+          setGpuFailure(message);
         }
       },
       onStats: (s) => {
@@ -641,10 +688,15 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         handle = h;
         handleRef.current = h;
         trail.note("first frame");
-        // Back where the player stood before the GPU was lost (gpu-recovery.ts).
-        const recovered = takeRecoverySnapshot();
-        if (recovered) {
-          recovery.current?.restore(h, recovered);
+        if (restored) {
+          // The scene booted there; Modell (where the safety level keeps
+          // it) and a place off every tile only now.
+          takeRecoverySnapshot();
+          h.applyCameraState(
+            restoresLook(budget.safety)
+              ? restored.camera
+              : { ...restored.camera, model: undefined }
+          );
           trail.note("recovered", "after a lost GPU");
         } else {
           arriveAt(h, site, sayHud);
@@ -833,6 +885,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         )}
 
         <CrashReport />
+
+        {gpuFailure !== null && (
+          <GpuFailureCard
+            detail={gpuFailure}
+            onLighter={() => reloadAfterFailure(true)}
+            onReload={() => reloadAfterFailure(false)}
+          />
+        )}
 
         {exportVeil && (
           <div

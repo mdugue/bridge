@@ -32,7 +32,16 @@
  * times what the GPU holds. The phone's lines were set against that count
  * on the phone itself; counted true, they would have to be measured again,
  * so the count stays as a cautious measure rather than a corrected one.
+ *
+ * A page at a raised safety level (lib/city/gpu-safety.ts) has lower
+ * lines and a floor: the governor starts at a step further down and never
+ * comes back above it — a recovered iPhone page that streamed its first
+ * view at level 0 held 534 MB three seconds in and lost its GPU again.
+ * And an emergency (the GPU out of memory, create-app.ts) forces the last
+ * step at once, without waiting on a line or a hold.
  */
+
+import type { SafetyLevel } from "./gpu-safety";
 
 export interface MemoryLimits {
   /** held bytes at which the first step down is taken */
@@ -50,7 +59,8 @@ export interface MemoryLimits {
   retryMs: number;
 }
 
-type Level = 0 | 1 | 2 | 3;
+export type MemoryLevel = 0 | 1 | 2 | 3;
+type Level = MemoryLevel;
 
 export interface MemoryStep {
   level: Level;
@@ -77,25 +87,48 @@ export const MEMORY_STEPS: readonly [
 const MB = 1024 * 1024;
 
 /**
+ * How much lower each safety level puts both lines: a device that lost
+ * its GPU at 614 MB held lost it again, after the reload, at 495–531 MB.
+ */
+export const LINE_SCALE_PER_LEVEL = 0.9;
+
+/**
  * A phone's lines sit well under the ~720 MB its Safari failed at (the
  * frames in between still allocate); the desktop's only catch the extreme.
+ * Each safety level lowers both by LINE_SCALE_PER_LEVEL.
  */
-export function memoryLimitsFor(tier: "desktop" | "mobile"): MemoryLimits {
+export function memoryLimitsFor(
+  tier: "desktop" | "mobile",
+  safety: SafetyLevel = 0
+): MemoryLimits {
+  const scale = LINE_SCALE_PER_LEVEL ** safety;
   return tier === "mobile"
     ? {
-        soft: 480 * MB,
-        hard: 560 * MB,
+        soft: 480 * MB * scale,
+        hard: 560 * MB * scale,
         margin: 60 * MB,
         holdMs: 10_000,
         retryMs: 120_000,
       }
     : {
-        soft: 2048 * MB,
-        hard: 2560 * MB,
+        soft: 2048 * MB * scale,
+        hard: 2560 * MB * scale,
         margin: 256 * MB,
         holdMs: 10_000,
         retryMs: 120_000,
       };
+}
+
+/**
+ * The step a page at a safety level starts at and never leaves for a
+ * finer one: on a phone the level itself; a desktop, with memory to
+ * spare, one lower from level 2 on.
+ */
+export function memoryFloorFor(
+  tier: "desktop" | "mobile",
+  safety: SafetyLevel
+): MemoryLevel {
+  return tier === "mobile" ? safety : (Math.max(0, safety - 1) as MemoryLevel);
 }
 
 export interface MemoryGovernor {
@@ -103,10 +136,23 @@ export interface MemoryGovernor {
   step: () => MemoryStep;
   /** the step to take at `held` bytes and time `now` (ms); null: stay */
   update: (held: number, now: number) => MemoryStep | null;
+  /**
+   * Takes `level` at once — no line, no hold (an emergency) — with `held`
+   * bytes at time `now`; null when the governor already stands there or
+   * further down. It comes back up as from any step it took.
+   */
+  force: (level: MemoryLevel, held: number, now: number) => MemoryStep | null;
 }
 
-export function createMemoryGovernor(limits: MemoryLimits): MemoryGovernor {
-  let level: Level = 0;
+/**
+ * Starts at `floor` (a page at a raised safety level, memoryFloorFor) and
+ * never steps up past it.
+ */
+export function createMemoryGovernor(
+  limits: MemoryLimits,
+  floor: MemoryLevel = 0
+): MemoryGovernor {
+  let level: Level = floor;
   let since = Number.NEGATIVE_INFINITY;
   // Per level stepped down to: the memory held when the step was taken,
   // the least held while it settled (its hold), and when. Their difference
@@ -132,13 +178,24 @@ export function createMemoryGovernor(limits: MemoryLimits): MemoryGovernor {
     if (held >= limits.soft && level < 1) {
       return 1;
     }
-    if (level === 0 || holding) {
+    if (level === 0 || level <= floor || holding) {
       return level;
     }
     if (held + freedBy(level, now) < lineOf(level) - limits.margin) {
       return (level - 1) as Level;
     }
     return level;
+  };
+  /** Moves to `next` with `held` at `now`, minding what a step down took. */
+  const moveTo = (next: Level, held: number, now: number): MemoryStep => {
+    for (let l = level + 1; l <= next; l++) {
+      taken[l] = held;
+      settled[l] = held;
+      takenAt[l] = now;
+    }
+    level = next;
+    since = now;
+    return MEMORY_STEPS[level];
   };
   return {
     step: () => MEMORY_STEPS[level],
@@ -149,17 +206,8 @@ export function createMemoryGovernor(limits: MemoryLimits): MemoryGovernor {
         }
       }
       const next = target(held, now);
-      if (next === level) {
-        return null;
-      }
-      for (let l = level + 1; l <= next; l++) {
-        taken[l] = held;
-        settled[l] = held;
-        takenAt[l] = now;
-      }
-      level = next;
-      since = now;
-      return MEMORY_STEPS[level];
+      return next === level ? null : moveTo(next, held, now);
     },
+    force: (next, held, now) => (next > level ? moveTo(next, held, now) : null),
   };
 }

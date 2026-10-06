@@ -23,11 +23,18 @@
  * shadow texels and texture memory shrink; AO quality follows the profile,
  * not the tier.
  *
- * Both are read from the page ONCE (`currentSceneBudget`, in
+ * Orthogonal to both is the device's **safety level** (0–3,
+ * lib/city/gpu-safety.ts): how often it has lately run out of GPU memory.
+ * Each level lowers the pixel-ratio cap, the shadow map and the tile cache
+ * a step; level 0 is the page as it always was.
+ *
+ * All three are read from the page ONCE (`currentSceneBudget`, in
  * city-walk-client.tsx) and handed down as a `SceneBudget`: the renderer, the
  * sun rig, the post stack and the tile loader take the number they need from
  * it instead of reading the window themselves.
  */
+
+import type { SafetyLevel } from "@/lib/city/gpu-safety";
 
 export type SceneProfile = "full" | "lite";
 
@@ -45,6 +52,12 @@ export interface SceneBudget {
   /** whether the rest of the site streams: always in `full`, in `lite` only with `?block=1` */
   neighbourTiles: boolean;
   profile: SceneProfile;
+  /**
+   * The device's safety level (lib/city/gpu-safety.ts, kept in the
+   * browser by app/_components/gpu-safety.ts): 0 unless it ran out of GPU
+   * memory lately, then a lighter page per level.
+   */
+  safety: SafetyLevel;
   tier: DeviceTier;
 }
 
@@ -75,16 +88,21 @@ export function deviceTierFromMedia(coarseNoHover: boolean): DeviceTier {
   return coarseNoHover ? "mobile" : "desktop";
 }
 
-/** Pure: the budget for a page's `location.search` and its media-query result. */
+/**
+ * Pure: the budget for a page's `location.search`, its media-query result
+ * and the device's safety level (app/_components/gpu-safety.ts).
+ */
 export function sceneBudgetFor(
   search: string,
-  coarseNoHover: boolean
+  coarseNoHover: boolean,
+  safety: SafetyLevel = 0
 ): SceneBudget {
   const profile = sceneProfileFromSearch(search);
   const tier = deviceTierFromMedia(coarseNoHover);
   return {
     forceWebGL: forceWebGLFromSearch(search),
     profile,
+    safety,
     tier,
     neighbourTiles: profile === "full" || liteKeepsBlockFromSearch(search),
     lowRasters: tier === "mobile",
@@ -92,24 +110,36 @@ export function sceneBudgetFor(
 }
 
 /**
- * The budget of the page this runs in. Safe during SSR (the full desktop
- * budget); read it once inside the browser-only startup path, never during
- * render, so the server and client markup can't disagree.
+ * The budget of the page this runs in, at the device's safety level.
+ * Safe during SSR (the full desktop budget); read it once inside the
+ * browser-only startup path, never during render, so the server and client
+ * markup can't disagree.
  */
-export function currentSceneBudget(): SceneBudget {
+export function currentSceneBudget(safety: SafetyLevel = 0): SceneBudget {
   if (typeof window === "undefined") {
     return sceneBudgetFor("", false);
   }
   return sceneBudgetFor(
     window.location.search,
-    window.matchMedia(MOBILE_MEDIA_QUERY).matches
+    window.matchMedia(MOBILE_MEDIA_QUERY).matches,
+    safety
   );
 }
 
-/** Shadow-map resolution for a profile + tier (see sun-rig.ts for the recipe). */
+/** The shadow map's edge per safety level (0–3), per tier. */
+const SHADOW_MAP_SIZE: Record<DeviceTier, readonly number[]> = {
+  desktop: [3072, 2048, 2048, 1024],
+  mobile: [2048, 2048, 1024, 1024],
+};
+
+/**
+ * Shadow-map resolution for a profile + tier at a safety level (see
+ * sun-rig.ts for the recipe).
+ */
 export function shadowMapSizeFor(
   profile: SceneProfile,
-  tier: DeviceTier = "desktop"
+  tier: DeviceTier = "desktop",
+  safety: SafetyLevel = 0
 ): number {
   // 512² is a ~36x cheaper depth pass than 3072². The shadows look coarse,
   // which is fine: the headless suite asserts that shadows are ENABLED and
@@ -118,28 +148,38 @@ export function shadowMapSizeFor(
   if (profile === "lite") {
     return 512;
   }
-  // A phone's shadow map is under half the desktop's texels (20 MB instead
-  // of 45 MB, `shadowMapBytesFor`) and of the per-frame depth fill; the
-  // soft PCF radius hides the coarser texel over the 110 m frustum.
-  return tier === "mobile" ? 2048 : 3072;
+  // A phone's shadow map is a quarter of the desktop's texels and a quarter
+  // of the per-frame depth fill; the soft PCF radius hides the coarser
+  // texel over the 110 m frustum. The map is a depth texture and a one-byte
+  // colour target (`shadowMapBytesFor`): 20 MiB at 2048², 5 MiB at 1024².
+  return SHADOW_MAP_SIZE[tier][safety];
 }
 
+/** The pixel-ratio cap per safety level (0–3), per tier. */
+const PIXEL_RATIO_CAP: Record<DeviceTier, readonly number[]> = {
+  desktop: [2, 1.5, 1.25, 1],
+  mobile: [1.5, 1.25, 1, 0.85],
+};
+
 /**
- * Render pixel ratio for a profile + tier. `lite` renders at half linear
- * resolution (a quarter of the pixels) and lets the browser upscale — the
- * only honest way to cut fill-rate in the headless suite, where every pixel
- * is shaded on the CPU. A phone is capped at 1.5 (its 3x panel would
- * otherwise push the post stack's screen buffers past what fits).
+ * Render pixel ratio for a profile + tier at a safety level. `lite`
+ * renders at half linear resolution (a quarter of the pixels) and lets the
+ * browser upscale — the only honest way to cut fill-rate in the headless
+ * suite, where every pixel is shaded on the CPU. A phone is capped at 1.5
+ * (its 3x panel would otherwise push the post stack's screen buffers past
+ * what fits), and lower per safety level: the screen targets cost ~76
+ * bytes per drawn pixel, 57 MiB at 1.5 on a 402×874 iPhone, 25 at 1.0.
  */
 export function pixelRatioFor(
   profile: SceneProfile,
   tier: DeviceTier,
-  devicePixelRatio: number
+  devicePixelRatio: number,
+  safety: SafetyLevel = 0
 ): number {
   if (profile === "lite") {
     return 0.5;
   }
-  return Math.min(devicePixelRatio, tier === "mobile" ? 1.5 : 2);
+  return Math.min(devicePixelRatio, PIXEL_RATIO_CAP[tier][safety]);
 }
 
 const MB = 1024 * 1024;
@@ -147,13 +187,44 @@ const GB = 1024 * MB;
 
 /**
  * The largest tile as the tile renderer's cache weighs it: a fine terrain
- * tile on the desktop — its glTF (62 MB at the start tile) plus the rasters
- * its terrain holds (the 4096² class raster and the splat painted from it,
- * the 8192-wide surface, sports and markings rasters: ~160 MB) and its
- * dressing, with some headroom. On a phone the same tile weighs ~150 MB.
- * See `tileCacheBytesFor`.
+ * level — its glTF as the renderer estimates it (12.3 MB at the start tile,
+ * 15 MB of decoded arrays; ~25 MB for the densest), the rasters its
+ * terrain holds (tile-stream.ts `calculateBytesUsed`, the shared ones in
+ * shares: whole once the coarse level has gone) and its dressing's
+ * geometry (≲ 20 MB, the trees' instances most of it), with headroom. On
+ * the desktop the rasters are the 4096² class raster and the splat painted
+ * from it and the 8192-wide surface, sports and markings rasters (~160 MB).
+ * On a phone they are 75.7 MiB: the 2048² class raster, its splat with its
+ * mips, NDVI, sky view, horizon and sports grounds (45.7, shared with the
+ * coarse level), and the level's own surface, edges, markings and
+ * allotments (30). See `tileCacheBytesFor`.
  */
-export const LARGEST_TILE_BYTES = 260 * MB;
+export const LARGEST_TILE_BYTES: Readonly<Record<DeviceTier, number>> = {
+  desktop: 260 * MB,
+  mobile: 128 * MB,
+};
+
+/**
+ * The tile cache's bounds per safety level (0–3), per tier; on a phone
+ * derived for the soft line of the memory governor (see below).
+ */
+const TILE_CACHE_BYTES: Record<
+  DeviceTier,
+  readonly { max: number; min: number }[]
+> = {
+  desktop: [
+    { min: 1.2 * GB, max: 1.6 * GB },
+    { min: 1 * GB, max: 1.4 * GB },
+    { min: 0.8 * GB, max: 1.2 * GB },
+    { min: 0.6 * GB, max: 1 * GB },
+  ],
+  mobile: [
+    { min: 168 * MB, max: 336 * MB },
+    { min: 148 * MB, max: 296 * MB },
+    { min: 136 * MB, max: 272 * MB },
+    { min: 96 * MB, max: 232 * MB },
+  ],
+};
 
 /**
  * How much tile content the tile renderer keeps, in bytes, weighed as the
@@ -161,26 +232,55 @@ export const LARGEST_TILE_BYTES = 260 * MB;
  * adds (tile-stream.ts `calculateBytesUsed`). Past `max` it unloads tiles
  * no longer in use, down to `min`, and it asks for no new tile while at or
  * above `max` — so `max` bounds the GPU memory of the tiles, give or take
- * those in flight. Before the rasters counted, a phone's cache sat at
- * 173 MB of its 180 while the GPU held 865 MB, and Safari's next buffer
- * failed to allocate (the render stopped); flying to the Dresdner Heide
- * by the minimap had killed the page the same way. The phone's `max`
- * leaves ~250 MB for everything else (post targets, shadow map, scene-wide
- * sets); the desktop keeps about what it kept when only the glTF counted.
+ * those in flight (which weigh nothing until they land). Before the
+ * rasters counted, a phone's cache sat at 173 MB of its 180 while the GPU
+ * held 865 MB, and Safari's next buffer failed to allocate (the render
+ * stopped); flying to the Dresdner Heide by the minimap had killed the
+ * page the same way.
  *
- * `max − min` must exceed the largest tile. The cache never unloads a tile
- * that would take it below `min`, and asks for no new tile while it is at
- * or above `max`: at 120–180 MB a phone that flew to the Alaunpark sat at
- * 181 MB with a 62 MB tile first in line to go — unloading it would have
- * left 119 MB — and never loaded the ground there.
+ * A phone's `max` is what fits under the memory governor's soft line
+ * (lib/city/memory-governor.ts, lower per safety level) once the rest of
+ * what three counts is there: soft − fixed − 100 MiB. Fixed are the screen
+ * targets of the phone's post profile (`postProfileFor`: no lens blur, no
+ * SMAA targets — 24 bytes per drawn pixel covers the scene's colour and
+ * depth, the one-byte AO and outline targets and a picture style's own
+ * target while one is on: on the 402×874 iPhone 18, 12.5, 8 and 6 MiB at
+ * the pixel ratios 1.5, 1.25, 1.0, 0.85 of the four levels) and the
+ * shadow map (`shadowMapBytesFor`: 20 MiB at 2048², 5 at 1024²): 38,
+ * 32.5, 13 and 11 MiB. The 100 MiB are ~40 for the scene-wide sets (sky,
+ * lamp pool, data layers, uniform buffers and shader text) and ~60 of
+ * headroom: tiles in flight weigh nothing in the cache, it unloads only
+ * past `max` and one tile over, and three counts a tree set's instance
+ * matrices once per view. Against 480/432/389/350 MiB of soft line that
+ * leaves 342, 299, 276 and 239 MiB: `max` is 336, 296, 272, 232. Until it
+ * was derived the
+ * phone's `max` was 600 MB, above the governor's own hard line (560): the
+ * cache never bound anything before Safari took the GPU away, at 614 MB
+ * held.
+ *
+ * A view that wants more than `max` (every city in the 6 km frustum and
+ * its coarse level stay wanted at every governor step) then loads its
+ * farthest tiles late, or not until the governor's coarser error target
+ * has let fine levels go — what the soft line would force a moment later.
+ * The desktop keeps at level 0 what it always kept.
+ *
+ * `max − min` must exceed the largest tile (LARGEST_TILE_BYTES). The cache
+ * never unloads a tile that would take it below `min`, and asks for no new
+ * tile while it is at or above `max`: at 120–180 MB a phone that flew to
+ * the Alaunpark sat at 181 MB with a 62 MB tile first in line to go —
+ * unloading it would have left 119 MB — and never loaded the ground there.
+ * The phone's `min` is about half its `max` where that leaves the gap,
+ * less further down the ladder, where the governor's floor
+ * (memoryFloorFor) lowers it again anyway.
  */
-export function tileCacheBytesFor(tier: DeviceTier): {
+export function tileCacheBytesFor(
+  tier: DeviceTier,
+  safety: SafetyLevel = 0
+): {
   max: number;
   min: number;
 } {
-  return tier === "mobile"
-    ? { min: 320 * MB, max: 600 * MB }
-    : { min: 1.2 * GB, max: 1.6 * GB };
+  return TILE_CACHE_BYTES[tier][safety];
 }
 
 /**

@@ -2,9 +2,11 @@ import { expect, test } from "bun:test";
 import {
   createMemoryGovernor,
   MEMORY_STEPS,
+  memoryFloorFor,
   type MemoryLimits,
   memoryLimitsFor,
 } from "./memory-governor";
+import { SAFETY_LEVELS } from "./gpu-safety";
 
 const MB = 1024 * 1024;
 const LIMITS: MemoryLimits = {
@@ -109,4 +111,46 @@ test("what a step freed is forgotten after a while: the step up is tried again",
   governor.update(390 * MB, 4000);
   expect(governor.update(390 * MB, 60_000)).toBeNull();
   expect(governor.update(390 * MB, 120_000)?.level).toBe(0);
+});
+
+test("a page at a raised safety level starts at its floor and never steps above it", () => {
+  const governor = createMemoryGovernor(LIMITS, 2);
+  // coarser from the first update on, before any memory was held
+  expect(governor.step().level).toBe(2);
+  expect(governor.update(100 * MB, 0)).toBeNull();
+  expect(governor.update(100 * MB, 600_000)).toBeNull();
+  expect(governor.step().level).toBe(2);
+  // it still takes the last step past the hard line, and comes back to 2
+  expect(governor.update(600 * MB, 700_000)?.level).toBe(3);
+  expect(governor.update(200 * MB, 900_000)?.level).toBe(2);
+  expect(governor.update(100 * MB, 1_000_000)).toBeNull();
+});
+
+test("an emergency takes the last step at once, and it comes back like any step", () => {
+  const governor = createMemoryGovernor(LIMITS);
+  expect(governor.force(3, 400 * MB, 0)?.level).toBe(3);
+  // nothing to force when already there
+  expect(governor.force(2, 400 * MB, 1000)).toBeNull();
+  // it holds, then steps back one at a time once the memory is well under
+  expect(governor.update(200 * MB, 5000)).toBeNull();
+  expect(governor.update(200 * MB, 10_000)?.level).toBe(2);
+});
+
+test("each safety level lowers the lines, and a phone's floor is its level", () => {
+  for (const tier of ["mobile", "desktop"] as const) {
+    const lines = SAFETY_LEVELS.map((s) => memoryLimitsFor(tier, s));
+    for (let s = 1; s < lines.length; s++) {
+      expect(lines[s].soft).toBeLessThan(lines[s - 1].soft);
+      expect(lines[s].hard).toBeLessThan(lines[s - 1].hard);
+      expect(lines[s].soft).toBeLessThan(lines[s].hard);
+    }
+    // level 0 is the page as before
+    expect(memoryLimitsFor(tier, 0)).toEqual(memoryLimitsFor(tier));
+  }
+  expect(SAFETY_LEVELS.map((s) => memoryFloorFor("mobile", s))).toEqual([
+    0, 1, 2, 3,
+  ]);
+  expect(SAFETY_LEVELS.map((s) => memoryFloorFor("desktop", s))).toEqual([
+    0, 0, 1, 2,
+  ]);
 });

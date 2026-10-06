@@ -67,7 +67,8 @@ kann, schickt er Berichte:
 Ein Bericht enthält Browser, Betriebssystem und Gerätetyp (User-Agent),
 Bildschirmgröße und Pixeldichte, den ungefähren Arbeitsspeicher des Geräts,
 die Grafikschnittstelle (WebGPU oder WebGL2), wie weit der Viewer seine
-Grafik auf diesem Gerät nach früheren Abstürzen zurückgenommen hat, die
+Grafik auf diesem Gerät nach früheren Abstürzen zurückgenommen hat (die
+Sparstufe, siehe unten), die
 aufgerufene Seite ohne Parameter (etwa `/dresden`), den Verlauf des Besuchs
 (Ladeschritte, Fehlermeldungen, Bildrate, Speicher, geladene und gerade
 ladende Kacheln, ob der Browser sich für online hält, wann die Seite im
@@ -122,7 +123,12 @@ und liest es nur auf deinem Gerät:
 - deine Wahl zu den Fehlerberichten,
 - wenn sich die Seite nach einem Grafikfehler selbst neu lädt, bis du den Tab
   schließt: die Stelle, an der du in der Stadt standest, und wann das war –
-  damit sie dich dorthin zurückbringt und nicht endlos neu lädt.
+  damit sie dich dorthin zurückbringt und nicht endlos neu lädt,
+- wenn die Grafik auf deinem Gerät zuletzt ausgefallen ist, unter dem Namen
+  `gpu-safety`: eine Sparstufe von 0 bis 3, wann sie zuletzt stieg und, wenn
+  ein abgestürzter Besuch sie erhöht hat, wann dieser begann – damit der
+  Viewer beim nächsten Besuch sparsamer zeichnet und nicht wieder ausfällt.
+  Die Stufe sinkt von selbst, alle drei Tage um eins.
 
 Rechtsgrundlage ist § 25 Abs. 2 Nr. 2 TDDDG: Diese Einträge sind für die
 Funktionen, die du nutzt, unbedingt erforderlich. Du kannst sie jederzeit in
