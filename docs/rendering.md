@@ -261,9 +261,9 @@ is spelled: changing one is a look change, not a re-bake
   the coarse level stays at or below 11.6 px at every radius, so the
   shadow camera never refines terrain, while a tile's buildings
   (≥ 3 636 px) and the coarse ground under them still load for the
-  shadow: what the main camera refines is refined for the view. Near a
-  seam with the sun behind, a neighbour the view does not refine casts
-  its coarse crowns' shadows there. A desktop has the memory for the fine
+  shadow: what the main camera refines is refined for the view, and near
+  a seam with the sun behind, a neighbour the view does not refine casts
+  its coarse crowns' shadows. A desktop has the memory for the fine
   level under the eye-level frustum: at 128 px the coarse level's 23 px
   at 110 m still refine it (a neighbour behind the player casts its own
   trees' shadows, and the whole-site boot asks for the spawn tile's fine
