@@ -77,10 +77,10 @@ export interface TrailStats {
 }
 
 /**
- * How a record ended: "running" is how every record starts and what a
- * killed page leaves behind; "hidden" is a page that went to the
- * background (a kill there is the system reclaiming it, not a crash in
- * use); "clean" is a page that left normally.
+ * How a record ended: "running" is how a record in view starts and what a
+ * killed page leaves behind; "hidden" is a page in the background — gone
+ * there, or loaded there and never shown (a kill there is the system
+ * reclaiming it, not a crash in use); "clean" is a page that left normally.
  */
 export type TrailEnd = "running" | "hidden" | "clean";
 
@@ -152,16 +152,19 @@ export interface SummaryMark {
 /** The event the HUD notes when the scene goes live (city-walk.tsx). */
 const FIRST_FRAME = "first frame";
 
-export type TrailSetup = Pick<
+export interface TrailSetup extends Pick<
   Trail,
   "startedAt" | "url" | "userAgent" | "screen" | "deviceMemoryGB"
->;
+> {
+  /** the page starts in the background (a tab opened behind, restored) */
+  hidden?: boolean;
+}
 
-export function createTrail(setup: TrailSetup): Trail {
+export function createTrail({ hidden, ...setup }: TrailSetup): Trail {
   return {
     v: TRAIL_VERSION,
     backend: "?",
-    state: "running",
+    state: hidden ? "hidden" : "running",
     events: [],
     beats: [],
     stats: emptyStats(),
@@ -270,14 +273,31 @@ export function endedInCrash(trail: Trail | null): trail is Trail {
 }
 
 /**
+ * Whether a record holds nothing but its start: it never drew, noted no
+ * boot stage and beat no rendered frame — a page gone before the viewer
+ * got anywhere.
+ */
+function startOnly(trail: Trail): boolean {
+  const noted = (test: (kind: string) => boolean) =>
+    Object.keys(trail.firsts ?? {}).some(test) ||
+    trail.events.some((e) => test(e.kind));
+  return !(
+    trail.drew === true ||
+    noted((kind) => kind === FIRST_FRAME || kind.startsWith("stage ")) ||
+    trail.beats.some((b) => b.frames > 0)
+  );
+}
+
+/**
  * Whether the previous page's record should be offered as a crash. Not when
  * that page reloaded itself to recover a lost GPU (it noted so — not
  * necessarily last: WebKit's device-lost can arrive after the failed frame
  * that started the reload — and the recovery already handled it), nor when
- * this page follows a recovery (`recovered`) and the record never reached
- * its first frame — iOS may interleave a navigation of its own that leaves
- * a trail with nothing but its start. A recovered page that then died is
- * offered: that is the report the recovery is there to make possible.
+ * this page follows a recovery (`recovered`) and the record holds nothing
+ * but its start (`startOnly`) — iOS may interleave a navigation of its own
+ * that leaves such a trail. A recovered page that then died is offered, in
+ * its boot too: a recovery page that dies again is the loop the reports
+ * are there to show.
  */
 export function offerAsCrash(
   trail: Trail | null,
@@ -289,9 +309,7 @@ export function offerAsCrash(
   if (trail.events.some((e) => e.kind === "reloading")) {
     return false;
   }
-  const drew =
-    trail.drew === true || trail.events.some((e) => e.kind === FIRST_FRAME);
-  return !(recovered && !drew);
+  return !(recovered && startOnly(trail));
 }
 
 export const round = (n: number, digits = 0) => {

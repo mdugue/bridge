@@ -21,7 +21,10 @@ import {
  *   is reported by the next load, its last events and beats as breadcrumbs.
  * - a **problem** on this page: an uncaught error, or one of the failures
  *   the viewer catches itself and notes (a lost device, a GPU error, a
- *   frame that threw, a file that did not load, a failed boot).
+ *   frame that threw, a GPU allocation that failed, a file that did not
+ *   load, a failed boot) — until the page is past saving or leaving, after
+ *   which a problem is its end's aftermath and only a breadcrumb
+ *   (`isAftermath`).
  * - the page's **summary**, a transaction each time the page leaves view,
  *   for the stretch since the last one: the time to the first frame and to
  *   loaded (in the stretch they fell in), the frame rates while in view,
@@ -53,12 +56,78 @@ export const PROBLEM_KINDS: ReadonlySet<string> = new Set([
   "frame failed",
   "load-error",
   "boot failed",
+  // a GPU allocation that failed in a compile: the page sheds and goes on
+  "alloc-failed",
 ]);
 // Not "render stopped": it always follows a lost device or a failed frame,
-// which say why.
+// which say why. Nor what the viewer notes as it copes — "gpu reclaimed"
+// (a GPU the system took while the page was in the background, restored
+// by a reload), "memory emergency", "net-retry", "net-wait", "safety":
+// those are the trail's breadcrumbs, never an event of their own.
 
 /** The most problems one page reports (a GPU error can repeat per frame). */
 export const PROBLEMS_PER_PAGE = 5;
+
+/** A report's severity, as Sentry names it. */
+type ReportLevel = "fatal" | "error" | "warning";
+
+/**
+ * How bad a problem is: a lost device and a failed boot end the page
+ * (fatal) — except a boot that gave up on the network ("network: …", the
+ * detail the viewer gives a load it retried in vain), which is the
+ * connection's failure, not the viewer's; a failed allocation the page
+ * survived is a warning; everything else an error.
+ */
+function problemLevel(event: TrailEvent): ReportLevel {
+  switch (event.kind) {
+    case "device-lost":
+      return "fatal";
+    case "boot failed":
+      return event.detail?.startsWith("network:") ? "error" : "fatal";
+    case "alloc-failed":
+      return "warning";
+    default:
+      return "error";
+  }
+}
+
+/**
+ * The notes after which the page is past saving — its render stopped, it
+ * reloads itself, or its GPU was taken in the background — so whatever
+ * fails next is what its end leaves behind (a rejection from freeing what
+ * the dead device held, a fetch the reload cancels).
+ */
+const PAST_SAVING: readonly string[] = [
+  "render stopped",
+  "reloading",
+  "gpu reclaimed",
+];
+/** The problems a page causes itself as it leaves: a fetch cancelled. */
+const LEAVING_PROBLEMS: ReadonlySet<string> = new Set([
+  "load-error",
+  "boot failed",
+]);
+
+/**
+ * Whether a problem the page notes is the aftermath of its end, kept as a
+ * breadcrumb instead of a report of its own: once the page is past saving
+ * (PAST_SAVING) or leaving (its record ended clean: pagehide, or the
+ * viewer unmounted), and a load that failed while the page was `hidden` —
+ * the browser cancels a background page's fetches, and a reload's.
+ */
+export function isAftermath(
+  trail: Trail,
+  event: TrailEvent,
+  hidden: boolean
+): boolean {
+  if (trail.state === "clean") {
+    return true;
+  }
+  if (PAST_SAVING.some((kind) => firstAt(trail, kind) !== undefined)) {
+    return true;
+  }
+  return hidden && LEAVING_PROBLEMS.has(event.kind);
+}
 
 /**
  * The release names' prefix: a name is global to a Sentry organisation,
@@ -357,7 +426,7 @@ function breadcrumbs(trail: Trail) {
       timestamp: at(trail, e.t),
       category: "trail",
       message: eventLine(e),
-      level: PROBLEM_KINDS.has(e.kind) ? "error" : "info",
+      level: PROBLEM_KINDS.has(e.kind) ? problemLevel(e) : "info",
     },
   }));
   const beats = trail.beats.map((b) => ({
@@ -377,21 +446,35 @@ function breadcrumbs(trail: Trail) {
   };
 }
 
-/** The previous page, which died in use: a fatal event, by phase. */
+/** What the page that reports a crash knows about it. */
+export interface CrashContext {
+  /** it follows a GPU recovery (gpu-recovery.ts `recentlyRecovered`) */
+  recovered?: boolean;
+}
+
+/**
+ * The previous page, which died in use: a fatal event, by phase — a page
+ * that followed a GPU recovery as one of its own ("Recovery page died":
+ * the recovery runs in a loop).
+ */
 export function crashReport(
   trail: Trail,
   id: string,
-  ctx: ReportContext
+  ctx: ReportContext,
+  crash: CrashContext = {}
 ): Payload {
   const phase = trailPhase(trail);
+  const [title, group] = crash.recovered
+    ? ["Recovery page died", "recovery page died"]
+    : ["Page died in use", "page died"];
   return {
     ...common(trail, ctx),
     event_id: id,
     timestamp: at(trail, lastT(trail)),
     level: "fatal",
     logger: "crash-trail",
-    message: { formatted: `Page died in use (${phase}, ${trail.backend})` },
-    fingerprint: ["page died", trail.backend, phase],
+    message: { formatted: `${title} (${phase}, ${trail.backend})` },
+    fingerprint: [group, trail.backend, phase],
     breadcrumbs: breadcrumbs(trail),
   };
 }
@@ -403,12 +486,11 @@ export function problemReport(
   id: string,
   ctx: ReportContext
 ): Payload {
-  const fatal = event.kind === "device-lost" || event.kind === "boot failed";
   return {
     ...common(trail, ctx),
     event_id: id,
     timestamp: at(trail, event.t),
-    level: fatal ? "fatal" : "error",
+    level: problemLevel(event),
     logger: "crash-trail",
     message: {
       formatted: scrub(`${event.kind}: ${event.detail ?? ""}`.trim()),

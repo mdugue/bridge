@@ -45,6 +45,15 @@ test("a record starts running, so a page that is killed stays a crash", () => {
   expect(endedInCrash(null)).toBe(false);
 });
 
+test("a page loaded in the background is no crash when it is killed there", () => {
+  const trail = createTrail({ ...setup, hidden: true });
+  pushEvent(trail, { t: 0, kind: "start" });
+  pushBeat(trail, beat(2)); // the loop's frames while out of view
+  expect(endedInCrash(trail)).toBe(false);
+  expect(offerAsCrash(trail, false)).toBe(false);
+  expect(trail.stats?.beats).toBe(0);
+});
+
 test("events and beats keep only the newest entries", () => {
   const trail = createTrail(setup);
   for (let i = 0; i < TRAIL_EVENTS + 5; i++) {
@@ -161,6 +170,19 @@ describe("which previous record is offered as a crash", () => {
 
   test("after a recovery, not iOS's own navigation that never drew", () => {
     expect(offerAsCrash(died("renderer"), true)).toBe(false);
+  });
+
+  test("a recovery page that died in its boot is offered: the loop", () => {
+    // its buildings landed, then it died before the first frame
+    expect(offerAsCrash(died("start", "stage buildings"), true)).toBe(true);
+    // its loop rendered, then it died before any stage was done
+    const rendered = died("start");
+    pushBeat(rendered, { ...beat(2), frames: 40 });
+    expect(offerAsCrash(rendered, true)).toBe(true);
+    // a beat before the loop drew anything is still nothing but its start
+    const idle = died("start");
+    pushBeat(idle, { ...beat(2), frames: 0 });
+    expect(offerAsCrash(idle, true)).toBe(false);
   });
 
   test("a recovered page that drew and then died is offered", () => {

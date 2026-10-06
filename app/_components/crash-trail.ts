@@ -181,6 +181,9 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
     screen: `${screen.width}×${screen.height}@${devicePixelRatio}`,
     deviceMemoryGB: (navigator as Navigator & { deviceMemory?: number })
       .deviceMemory,
+    // A tab opened behind another, or restored, starts out of view: it
+    // hears no "hidden", and a kill there is no crash in use either.
+    hidden: document.visibilityState === "hidden",
   });
   const stopAnswering = answerFor(trail.startedAt);
   const write = () => {
