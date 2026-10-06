@@ -919,10 +919,14 @@ async function bootApp(
   cleanups.push(() => seasonClock.dispose());
   const stream = createTileStream(
     {
+      // whether it compiled: a tile drops the CPU copies of what it uploaded
       compile: (object) =>
         compileWith
-          ? compileWith(object).catch(() => undefined)
-          : Promise.resolve(),
+          ? compileWith(object).then(
+              () => true,
+              () => false
+            )
+          : Promise.resolve(false),
       dressingGate,
       fogColor: sceneFog.color,
       heightAt,

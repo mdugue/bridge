@@ -185,6 +185,47 @@ test("a tile that leaves lets go of the site's shared index at once, while its c
   await loading;
 });
 
+test("a city drops its normals' and roof flags' CPU copies once its compile uploaded them, and only then", async () => {
+  for (const compiled of [true, false]) {
+    const plugin = new DressingPlugin(
+      {
+        dressingGate: new Promise<void>(() => undefined),
+        compile: () => Promise.resolve(compiled),
+        onChange: () => undefined,
+      } as unknown as TileStreamContext,
+      {
+        cities: new Set(),
+        terrains: new Set(),
+        dressings: new Set(),
+        demolished: new Map(),
+      }
+    );
+    const geometry = new BoxGeometry();
+    geometry.setAttribute(
+      "roof",
+      new BufferAttribute(
+        new Float32Array(geometry.attributes.position.count),
+        1
+      )
+    );
+    const mesh = new Mesh(geometry, new MeshBasicNodeMaterial());
+    const scene = new Object3D();
+    scene.add(mesh);
+    plugin.dressed.set(scene, {
+      city: { mesh, dispose: () => undefined } as unknown as CityLayer,
+    });
+    // the renderer keeps the load (its scene recorded on the tile)
+    await plugin.processTileModel(scene, { engineData: { scene } });
+    // dropped only where the compile ran: a buffer three meets for the first
+    // time without its numbers uploads empty
+    expect(geometry.getAttribute("normal").array.length === 0).toBe(compiled);
+    expect(geometry.getAttribute("roof").array.length === 0).toBe(compiled);
+    // what collision, picks and demolish read stays
+    expect(geometry.getAttribute("position").array.length).toBeGreaterThan(0);
+    expect(geometry.getIndex()?.array.length).toBeGreaterThan(0);
+  }
+});
+
 /** A plugin whose compiles resolve at once, and a content root with a mesh
  *  whose geometry reports its own dispose. */
 function abortableLoad() {

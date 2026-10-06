@@ -112,6 +112,7 @@ import {
 import { applyGroundLight, type GroundLight } from "./sky-light";
 import { sportGround } from "./sport-ground";
 import {
+  type AnyAttribute,
   detachShared,
   markSceneShared,
   textureBytes,
@@ -141,6 +142,9 @@ export interface TerrainLayer {
   heightAt: (x: number, y: number) => number | null;
   level: 0 | 1;
   mesh: Mesh;
+  /** whether the ground is a TIN (its height index reads the mesh's index:
+   *  lib/city/terrain-tin.ts `TinIndex`), not the grid */
+  tin: boolean;
   /** the tile's baked stairs (fine level only; stair-layer.ts) */
   stairs?: Mesh;
   /** the tile's baked kerb stones (fine level only; kerb-layer.ts) */
@@ -1544,6 +1548,43 @@ function groundLightOf(splat: SplatLayer): GroundLight | undefined {
 }
 
 /**
+ * A dressed level's buffers that nothing reads on the CPU once its compile
+ * has uploaded them (tile-stream.ts drops their CPU copies then: three.js
+ * keeps every one, a second copy of the tile's geometry). Each is read by
+ * the material its compile builds, so it is on the GPU by then:
+ * - the ground's positions and normals (the terrain material reads both;
+ *   the height samplers copied what they need at dressing) and a grid's
+ *   own index — not a TIN's, which its height index reads
+ *   (lib/city/terrain-tin.ts `TinIndex`), nor the site's shared one;
+ * - the water's own index (its positions are the ground's); not its
+ *   normals, which its material never reads, so a later material might;
+ * - the stairs', walls' and kerbs' positions, normals and index, the
+ *   stairs' vertex colours (they draw with them);
+ * - the fences' positions, band uv and index; not their normals (the band
+ *   is lit as the ground, by a normal of its own).
+ */
+export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
+  const ground = layer.mesh.geometry;
+  const of = (mesh: Mesh | undefined, names: string[]) =>
+    mesh
+      ? [
+          ...names.map((name) => mesh.geometry.getAttribute(name)),
+          mesh.geometry.getIndex(),
+        ]
+      : [];
+  return [
+    ground.getAttribute("position"),
+    ground.getAttribute("normal"),
+    layer.tin ? null : ground.getIndex(),
+    layer.water?.mesh.geometry.getIndex(),
+    ...of(layer.stairs, ["position", "normal", "color"]),
+    ...of(layer.walls, ["position", "normal"]),
+    ...of(layer.kerbs, ["position", "normal"]),
+    ...of(layer.fences, ["position", "uv"]),
+  ].filter((a): a is AnyAttribute => a !== null && a !== undefined);
+}
+
+/**
  * Dresses a streamed terrain mesh: loads its class raster (and NDVI), paints
  * the colour splat, swaps in the land-cover material and hangs the water and
  * mist sheets under it. `toData` maps the mesh's local frame to the data
@@ -1617,6 +1658,7 @@ export async function dressTerrain(
     light: splat ? groundLightOf(splat) : undefined,
     tile: extras.tileId,
     level: extras.level,
+    tin: extras.tin !== undefined,
     vertexCount: mesh.geometry.getAttribute("position").count,
     bounds,
     minElevation: extras.minElevation,

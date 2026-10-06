@@ -191,30 +191,92 @@ export function disposeObject3D(root: Object3D): void {
  * GPU bytes of every geometry reachable from `root` (each buffer counted
  * once: attributes, index and instanced attributes — several geometries may
  * view the same buffers, as the seasonal crowns do, crown-season.ts). An
- * estimate for the memory HUD — three keeps no byte counters, and a phone's
- * single memory pool is where this scene runs out of room first.
+ * estimate for the memory HUD and the tile cache's weighing of a dressing
+ * (three's own counters see only what it uploaded, and count a buffer once
+ * per view of it). From the buffers' counts: a buffer whose CPU copy was
+ * dropped (`dropCpuCopies`) weighs what it did.
  */
 export function estimateGeometryBytes(root: Object3D): number {
   const seen = new Set<object>();
   let bytes = 0;
-  const count = (array: ArrayLike<number> & { byteLength: number }) => {
-    if (!seen.has(array)) {
-      seen.add(array);
-      bytes += array.byteLength;
+  for (const geometry of geometriesUnder(root)) {
+    for (const attribute of attributesOf(geometry)) {
+      const buffer = bufferOf(attribute);
+      // the array tells two attributes over one array apart; a dropped
+      // one is its own
+      const key = buffer.array.length > 0 ? buffer.array : buffer;
+      if (!seen.has(key)) {
+        seen.add(key);
+        bytes += bufferBytes(buffer);
+      }
     }
-  };
-  root.traverse((obj) => {
-    const geometry = (obj as Object3D & { geometry?: BufferGeometry }).geometry;
-    if (!geometry) {
-      return;
+  }
+  return bytes;
+}
+
+// --- CPU copies -------------------------------------------------------------------
+
+/** A typed array's constructor, for an empty one of its kind. */
+type ArrayKind = new (length: number) => BufferAttribute["array"];
+
+/** Sets a geometry's bounds while its positions are still there: three
+ *  would otherwise compute them from an empty array (and cull the mesh). */
+function boundsNow(geometry: BufferGeometry): void {
+  if (!geometry.boundingBox) {
+    geometry.computeBoundingBox();
+  }
+  if (!geometry.boundingSphere) {
+    geometry.computeBoundingSphere();
+  }
+}
+
+/**
+ * Drops the CPU copies of `drop`'s buffers — once the GPU has them and
+ * nothing reads them on the CPU any more. three keeps every attribute's
+ * array after the upload (its WebGPU path never calls `onUploadCallback`):
+ * a second copy of every byte of geometry on the page's process. The array
+ * is swapped for an empty one of its kind: after the upload three reads
+ * only that (the vertex and index formats) and the count, which it keeps.
+ * A buffer that another attribute under `root` also holds, and a
+ * scene-shared one (`markSceneShared`), keep theirs; the geometries whose
+ * positions go get their bounds first. Returns the bytes dropped.
+ *
+ * Only after a compile that drew with them has resolved: an attribute three
+ * meets for the first time after this uploads an empty buffer, and the
+ * draw that reads it fails.
+ */
+export function dropCpuCopies(
+  root: Object3D,
+  drop: readonly (AnyAttribute | null | undefined)[]
+): number {
+  const dropped = new Set<AnyAttribute>();
+  for (const attribute of drop) {
+    if (attribute && !isSceneShared(attribute)) {
+      dropped.add(attribute);
     }
-    for (const attribute of Object.values(geometry.attributes)) {
-      count(attribute.array);
+  }
+  const buffers = new Set([...dropped].map(bufferOf));
+  const geometries = geometriesUnder(root);
+  for (const geometry of geometries) {
+    for (const attribute of attributesOf(geometry)) {
+      if (!dropped.has(attribute)) {
+        buffers.delete(bufferOf(attribute));
+      }
     }
-    if (geometry.index) {
-      count(geometry.index.array);
+  }
+  for (const geometry of geometries) {
+    const position = geometry.getAttribute("position") as
+      | AnyAttribute
+      | undefined;
+    if (position && buffers.has(bufferOf(position))) {
+      boundsNow(geometry);
     }
-  });
+  }
+  let bytes = 0;
+  for (const buffer of buffers) {
+    bytes += buffer.array.byteLength;
+    buffer.array = new (buffer.array.constructor as ArrayKind)(0);
+  }
   return bytes;
 }
 
