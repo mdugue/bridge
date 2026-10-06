@@ -50,7 +50,7 @@ history. Decisions that came out of plans are written up as
 | 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample | REJECTED — premise gone with ADR 0023 (no baked RGB splat) | [completed.md](./completed.md#016--bunimage-instead-of-sharp-for-the-raster-downsample--rejected-premise-gone) |
 | 017 | Any German city: site config, per-Land ingest adapters, NAS input, OSM land cover as a DLM substitute | **PARTIAL** — site config, Python bake package and the Saxony adapter built; plans 049 and 051 built most of phases A, C and D in their own shape (providers for SN, NW, BY, HH, BE; per-site data and provenance; OSM land cover, rails and decks; `bun run site <site>`; every site in the tests); open: B (NAS), D.1 (row-only trees without DOM1), a first run of Berlin's adapter | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
 | 018 | Stream tiles around the camera: tile manager, loader worker, 1 km near cells, KTX2 splat | REJECTED — superseded by 3D Tiles + 3DTilesRendererJS (ADR 0024) | [completed.md](./completed.md#018--stream-tiles-around-the-camera--rejected-superseded-by-adr-0024) |
-| 019 | **The one GPU checklist**: backends, palette, quantisation, LOD and seams, shadows, GTAO and sky light, picture styles, frame time and memory, phones, deploy host, and the feature plates of plans 023–039 | **TODO** — needs a GPU and two phones; rewritten 2026-10-01 | [019-gpu-verification.md](./019-gpu-verification.md) |
+| 019 | **The one GPU checklist**: backends, palette, quantisation, LOD and seams, shadows, GTAO and sky light, picture styles, frame time and memory, phones, deploy host, and the feature plates of plans 023–039 | **TODO** — needs a GPU and two phones; rewritten 2026-10-01; section M, the phone crash fixes of 2026-10-06 (ADRs 0046–0048), added | [019-gpu-verification.md](./019-gpu-verification.md) |
 | 020 | WebGPURenderer + TSL instead of WebGL and `onBeforeCompile`; node post instead of `postprocessing`/`n8ao` | DONE (2026-09-26) — the whole port, one path (WebGPU, its WebGL2 backend as the fallback), public API only; the spike's internal patches rejected for a top-level scene pass, `Instances` and `sceneMaterial`; look unjudged on a real GPU | [completed.md](./completed.md#020--webgpurenderer-and-tsl-node-materials--done-2026-09-26) |
 | 021 | `/wissen` on Astro Starlight instead of a hand-built Next route | **TODO** — plan only; Phase 0 awaits the maintainer | [021-wissen-astro-starlight.md](./021-wissen-astro-starlight.md) |
 | 022 | Re-bake the four original tiles from the current editions, the whole chain downstream of the land cover | **TODO** — after plan 040 step 1; re-scoped 2026-10-01 | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
@@ -420,6 +420,8 @@ the port (2026-09-26) made of it:
 5. **A user-facing quality tier (S–M).** The device tier already halves
    shadow texels and rasters on phones; a selectable `medium` tuple (DPR 1,
    2048² shadows, AO/DoF off) for weak desktops needs real-device looks.
+   Since 2026-10-06 the safety ladder's levels (ADR 0046) are such tuples:
+   a menu would set the level `?safety=N` sets for QA.
 6. ~~**A provenance manifest per tile (S).**~~ Now plan 017 phase A step 3
    (the ingest adapter writes `data/<site>/<tile>.provenance.json` from the
    values its checked downloads already know). `bun run fetch <site>
@@ -458,13 +460,17 @@ the port (2026-09-26) made of it:
     (spike).** The crash panel says "copy and send it on" but names no
     destination; a prefilled report (the trail; the view only on opt-in)
     closes the loop the crash trail was built for. (2026-10-01.)
-11. **A recovered page starts one memory step down (S).** The memory
-    governor always starts at level 0, so a phone reloads after a lost
-    GPU into the same load that killed it; starting the recovered session
-    at level 1 (`lib/city/memory-governor.ts` `MEMORY_STEPS`) would make
-    recovery stick, and makes option 5 (a quality tier) a starting level
-    plus the scene-profile tuple. Offered 2026-10-01, not picked; plan
-    038 step 3 stops the reload loop either way.
+11. ~~**A recovered page starts one memory step down (S).**~~ Done
+    2026-10-06, wider than offered: a per-device safety level (0–3, kept
+    in local storage, one level lower every three days) that a lost GPU,
+    a crashed previous page or a memory emergency raises; each level
+    lowers the pixel ratio, the shadow map, the tile cache and the
+    governor's lines and starts the governor at a floor — one automatic
+    reload per level, then a card
+    ([ADR 0046](../adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)).
+    The iPhone's recovery loop in Sentry (CITY-WALK-1…8) showed why the
+    old cap (plan 038 step 3) was not enough: each reload replayed the
+    budget that had failed.
 12. **Committed QA views (S) — [plan 048](./048-spike-view-links-and-qa-views.md)
     part B.** Plan 019's reference views have no coordinates and eleven
     rows say "look unjudged on a GPU"; `qa/views/*.json` read by the shot
@@ -667,3 +673,15 @@ not render it (no GPU, no WebGPU in Bun).
   and condensed into [completed.md](./completed.md); 043 stopped at its
   bundling STOP condition (Turbopack copies a module worker as a raw
   asset), its findings kept in the plan. Plan 047 is another agent's.
+- **2026-10-06, the phone crash fixes** (no plan file; branch
+  `claude/phone-crash-fixes`): thirteen Sentry events from one iPhone
+  (CITY-WALK-1…8) were mapped by seven parallel analyses (textures,
+  geometry, post, loss, network, three's internals, the budget) and fixed
+  by five work packages on one branch: the safety ladder and the
+  recovery (ADR 0046, backlog item 11), the reports' classification and
+  the heartbeat, the phone's post profile and the one-byte shadow colour
+  target, the stream's memory (the shadow camera at 64 px, the phone's
+  pacing, the raster gate, shared coarse indices, CPU copies dropped;
+  ADR 0047), and the network retries (ADR 0048). Verified headless and by
+  the unit tests only; what a real iPhone and a WebGPU desktop must show
+  is plan 019's section M.
