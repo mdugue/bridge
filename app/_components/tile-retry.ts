@@ -36,23 +36,45 @@ import {
  * When: as soon as the page may have its network back ("online", visible
  * again, back from the bfcache), and otherwise after 5, 15, 45, then every
  * 120 s while any are waiting (lib/city/fetch-retry.ts HEAL_DELAYS_MS).
+ *
+ * The HUD's word about the network goes once nothing it failed is
+ * outstanding: every tile that gave up has landed, or was asked for again
+ * and is not wanted any more — the renderer's next update after a heal
+ * asks for those in view, and one it left UNLOADED (out of view) or that
+ * failed for another reason is no longer the network's to answer for.
  */
 
 /** What the healer reads of the renderer. */
 export interface HealableTiles {
   lruCache: { remove: (item: object) => boolean };
   resetFailedTiles: () => void;
+  /** "update-after": the renderer has asked for what it wants now */
+  addEventListener: (type: "update-after", listener: () => void) => void;
+  removeEventListener: (type: "update-after", listener: () => void) => void;
 }
 
-/** 3d-tiles-renderer's FAILED loading state (core/renderer/constants.js:
- *  exported at runtime, missing from its types). */
+/** 3d-tiles-renderer's FAILED and UNLOADED loading states
+ *  (core/renderer/constants.js: exported at runtime, missing from its
+ *  types); a tile in flight or loaded is above them. */
 const TILE_FAILED = -1;
+const TILE_UNLOADED = 0;
+
+function loadingState(tile: object): number | undefined {
+  return (tile as { internal?: { loadingState?: number } }).internal
+    ?.loadingState;
+}
 
 /** Whether `tile` is still the FAILED tile it was: one the cache let go of
  *  since (UNLOADED), or that is loading or loaded again, is not. */
 function stillFailed(tile: object): boolean {
-  const { internal } = tile as { internal?: { loadingState?: number } };
-  return internal?.loadingState === TILE_FAILED;
+  return loadingState(tile) === TILE_FAILED;
+}
+
+/** Whether the renderer left a tile it was asked for again: not wanted
+ *  (UNLOADED), or FAILED for a reason not the network's. */
+function leftAlone(tile: object): boolean {
+  const state = loadingState(tile);
+  return state === TILE_UNLOADED || state === TILE_FAILED;
 }
 
 /** One "net-retry" note at most this often (with the count since). */
@@ -73,7 +95,13 @@ export interface NetworkWatch {
     url: string,
     atBoot: boolean
   ) => boolean;
-  /** A tile landed: true when it is one that had failed on the network. */
+  /**
+   * A tile landed (the renderer's load-model): true when nothing the
+   * network failed is outstanding any more, the first time since the last
+   * failure — the HUD's word about it can go. (An all-clear found after a
+   * heal's update, `onClear`, is told there instead where it is given,
+   * and here at the next landing where it is not.)
+   */
   landed: (tile: object) => boolean;
   dispose: () => void;
 }
@@ -86,10 +114,14 @@ export interface NetworkWatchOptions {
   /** the boot gives up on the network (its error's message starts
    *  "network: ") */
   onBootGiveUp: (error: Error) => void;
+  /** nothing the network failed is outstanding any more, found by the
+   *  renderer's update after a heal (every tile it asked for again is out
+   *  of view): what `landed` would say at the next landing, at once */
+  onClear?: () => void;
 }
 
 export function createNetworkWatch(opts: NetworkWatchOptions): NetworkWatch {
-  const healer = createHealer(opts.tiles);
+  const healer = createHealer(opts.tiles, opts.onClear);
   const bootWait = createBootWait(opts);
   const tally = createRetryTally(RETRY_NOTE_MS);
   const unwatch = watchRetries((note) => {
@@ -137,14 +169,40 @@ export function createNetworkWatch(opts: NetworkWatchOptions): NetworkWatch {
 
 /** The tiles that gave up on the network, asked for again when it may be
  *  back. */
-function createHealer(tiles: HealableTiles) {
+function createHealer(tiles: HealableTiles, onClear?: () => void) {
   const failed = new Set<object>();
   let rootFailed = false;
   /** asked for again, not landed yet */
   const retried = new Set<object>();
+  /** a failure since the last all-clear was told */
+  let owed = false;
   let step = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
+  /** true once, when nothing the network failed is outstanding any more */
+  const allClear = (): boolean => {
+    if (!owed || failed.size > 0 || rootFailed || retried.size > 0) {
+      return false;
+    }
+    owed = false;
+    return true;
+  };
+  // After a heal the renderer's next update asks for the tiles it wants;
+  // the others are not waited for.
+  const afterUpdate = () => {
+    if (!owed) {
+      return;
+    }
+    for (const tile of retried) {
+      if (leftAlone(tile)) {
+        retried.delete(tile);
+      }
+    }
+    if (onClear && allClear()) {
+      onClear();
+    }
+  };
+  tiles.addEventListener("update-after", afterUpdate);
   const heal = () => {
     clearTimeout(timer);
     timer = undefined;
@@ -173,7 +231,9 @@ function createHealer(tiles: HealableTiles) {
   const stopListening = onUsableAgain(heal);
   return {
     failed: (tile: object | null) => {
+      owed = true;
       if (tile) {
+        retried.delete(tile);
         failed.add(tile);
       } else {
         rootFailed = true;
@@ -184,19 +244,17 @@ function createHealer(tiles: HealableTiles) {
       const healed = retried.delete(tile);
       // evicted and asked for again before the heal: it came back by itself
       const cameBack = failed.delete(tile);
-      if (!(healed || cameBack)) {
-        return false;
-      }
       // the network is back: the next failure starts the waits afresh
-      if (failed.size === 0) {
+      if ((healed || cameBack) && failed.size === 0) {
         step = 0;
       }
-      return true;
+      return allClear();
     },
     dispose: () => {
       disposed = true;
       clearTimeout(timer);
       stopListening();
+      tiles.removeEventListener("update-after", afterUpdate);
     },
   };
 }

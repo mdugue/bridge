@@ -20,9 +20,12 @@ const failedTile = (id: string): FakeTile => ({
 });
 
 /** The renderer as the healer sees it: what it was asked to do, in order.
- *  Its cache's `remove` unloads a tile, as the renderer's does. */
+ *  Its cache's `remove` unloads a tile, as the renderer's does; `update`
+ *  asks for the tiles `wanted` names (QUEUED is above UNLOADED) and ends
+ *  with its "update-after". */
 function fakeTiles() {
   const calls: string[] = [];
+  const listeners = new Set<() => void>();
   const tiles: HealableTiles = {
     lruCache: {
       remove: (item) => {
@@ -33,8 +36,18 @@ function fakeTiles() {
       },
     },
     resetFailedTiles: () => calls.push("reset"),
+    addEventListener: (_, listener) => listeners.add(listener),
+    removeEventListener: (_, listener) => listeners.delete(listener),
   };
-  return { tiles, calls };
+  const update = (...wanted: FakeTile[]) => {
+    for (const tile of wanted) {
+      tile.internal.loadingState = LOADING;
+    }
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+  return { tiles, calls, update, listeners };
 }
 
 function fakeTrail() {
@@ -70,9 +83,55 @@ test("a tile that gave up on the network leaves the cache before the failed tile
   jest.advanceTimersByTime(1);
   // (resetFailedTiles alone never asks for a tile the cache still holds)
   expect(calls).toEqual(["remove a", "remove b", "reset"]);
-  expect(watch.landed(a)).toBe(true);
-  expect(watch.landed(a)).toBe(false);
   watch.dispose();
+});
+
+test("the network's word goes once the last tile it failed lands, not before", () => {
+  const { tiles, update } = fakeTiles();
+  const watch = createNetworkWatch({
+    tiles,
+    bootOver: () => true,
+    onBootGiveUp: () => undefined,
+  });
+  const a = failedTile("a");
+  const b = failedTile("b");
+  watch.failed(a, lost(), "/a", false);
+  watch.failed(b, lost(), "/b", false);
+  jest.advanceTimersByTime(5000);
+  update(a, b);
+  expect(watch.landed(a)).toBe(false);
+  // a tile that never failed says nothing either
+  expect(watch.landed(failedTile("other"))).toBe(false);
+  expect(watch.landed(b)).toBe(true);
+  expect(watch.landed(b)).toBe(false);
+  watch.dispose();
+});
+
+test("a tile asked for again that the renderer no longer wants does not hold the network's word up", () => {
+  for (const told of [true, false]) {
+    const { tiles, update, listeners } = fakeTiles();
+    let cleared = 0;
+    const watch = createNetworkWatch({
+      tiles,
+      bootOver: () => true,
+      onBootGiveUp: () => undefined,
+      onClear: told
+        ? () => {
+            cleared++;
+          }
+        : undefined,
+    });
+    const away = failedTile("away");
+    watch.failed(away, lost(), "/away", false);
+    jest.advanceTimersByTime(5000);
+    // the player moved on: the update after the heal leaves it UNLOADED
+    update();
+    // said at once where the caller listens, else at the next landing
+    expect(cleared).toBe(told ? 1 : 0);
+    expect(watch.landed(failedTile("next"))).toBe(!told);
+    watch.dispose();
+    expect(listeners.size).toBe(0);
+  }
 });
 
 test("the tileset itself is reset without a cache entry; a failure that is not the network's is left to the caller", () => {
@@ -87,7 +146,8 @@ test("the tileset itself is reset without a cache entry; a failure that is not t
   expect(watch.failed(null, lost(), "/tileset.json", false)).toBe(true);
   jest.advanceTimersByTime(5000);
   expect(calls).toEqual(["reset"]);
-  expect(watch.landed({ id: "x" })).toBe(false);
+  // any content landing means the tileset is back
+  expect(watch.landed({ id: "y" })).toBe(true);
   watch.dispose();
 });
 
@@ -107,12 +167,15 @@ test("a tile the cache let go of before the heal is left alone: in view again, i
   // all three evicted while FAILED (UNLOADED again), two of them asked for
   // again through the renderer's own path, one back already
   landed.internal.loadingState = LOADING;
-  expect(watch.landed(landed)).toBe(true);
+  expect(watch.landed(landed)).toBe(false);
   loading.internal.loadingState = LOADING;
   away.internal.loadingState = UNLOADED;
   jest.advanceTimersByTime(5000);
   // nothing unloaded, nothing aborted
   expect(calls).toEqual(["reset"]);
+  // and once the one on its way lands, nothing is out (the third is not
+  // wanted now)
+  expect(watch.landed(loading)).toBe(true);
   watch.dispose();
 });
 
