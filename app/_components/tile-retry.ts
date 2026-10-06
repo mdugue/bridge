@@ -29,7 +29,9 @@ import {
  * nothing dressed on a tile that never landed, or frees a content root
  * whose dressing threw), and the next `update()` asks for it again. The
  * root tileset (a load-error without a tile) comes back through
- * `resetFailedTiles()`.
+ * `resetFailedTiles()`. A tile the cache evicted before the heal is
+ * UNLOADED again, and the renderer asks for it itself once it wants it:
+ * the heal leaves alone whatever is no longer FAILED.
  *
  * When: as soon as the page may have its network back ("online", visible
  * again, back from the bfcache), and otherwise after 5, 15, 45, then every
@@ -40,6 +42,17 @@ import {
 export interface HealableTiles {
   lruCache: { remove: (item: object) => boolean };
   resetFailedTiles: () => void;
+}
+
+/** 3d-tiles-renderer's FAILED loading state (core/renderer/constants.js:
+ *  exported at runtime, missing from its types). */
+const TILE_FAILED = -1;
+
+/** Whether `tile` is still the FAILED tile it was: one the cache let go of
+ *  since (UNLOADED), or that is loading or loaded again, is not. */
+function stillFailed(tile: object): boolean {
+  const { internal } = tile as { internal?: { loadingState?: number } };
+  return internal?.loadingState === TILE_FAILED;
 }
 
 /** One "net-retry" note at most this often (with the count since). */
@@ -141,8 +154,14 @@ function createHealer(tiles: HealableTiles) {
       return;
     }
     for (const tile of failed) {
-      tiles.lruCache.remove(tile);
-      retried.add(tile);
+      // One the cache evicted meanwhile (a FAILED tile out of view goes
+      // first) is no longer the healer's: in view again, the renderer asks
+      // for it itself — removing it now would unload what came back, or
+      // abort its load.
+      if (stillFailed(tile)) {
+        tiles.lruCache.remove(tile);
+        retried.add(tile);
+      }
     }
     failed.clear();
     rootFailed = false;
@@ -159,7 +178,10 @@ function createHealer(tiles: HealableTiles) {
       timer ??= setTimeout(heal, healDelayMs(step++));
     },
     landed: (tile: object): boolean => {
-      if (!retried.delete(tile)) {
+      const healed = retried.delete(tile);
+      // evicted and asked for again before the heal: it came back by itself
+      const cameBack = failed.delete(tile);
+      if (!(healed || cameBack)) {
         return false;
       }
       // the network is back: the next failure starts the waits afresh
