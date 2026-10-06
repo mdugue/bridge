@@ -2,6 +2,7 @@ import {
   type GpuLoss,
   mayRecover,
   recentHistory,
+  type RecoveryHistory,
   type SafetyLevel,
 } from "@/lib/city/gpu-safety";
 
@@ -19,7 +20,8 @@ import {
  * lighter, and lose the GPU the same way. So one automatic reload per
  * level, none from the lightest; past that the HUD says the graphics
  * failed and offers "Leichter weiter". A GPU that iOS reclaimed while the
- * page was in the background says nothing about the page: it reloads at
+ * page was in the background says nothing about the page, nor does a
+ * frame that threw on a GPU that still answers (a bug): each reloads at
  * the same level, under a cap of its own.
  */
 
@@ -49,7 +51,16 @@ interface Stored {
   tries: number[];
   /** when it reloaded for a GPU reclaimed in the background (ms) */
   reclaims?: number[];
+  /** when it reloaded for a frame that failed on a working GPU (ms) */
+  failures?: number[];
 }
+
+/** The reload times kept, as the caps read them. */
+const historyOf = (stored: Stored): RecoveryHistory => ({
+  losses: stored.tries,
+  reclaims: stored.reclaims ?? [],
+  failures: stored.failures ?? [],
+});
 
 function read(store: Store): Stored {
   try {
@@ -63,8 +74,9 @@ function read(store: Store): Stored {
 /**
  * Whether the page reloads itself after its GPU went (`how`), at `level`
  * (the page's safety level): if so, `snapshot` is kept for the next load
- * and, for a loss in use, the stored level raised (`raise`, gpu-safety.ts;
- * false: it could not be stored). The caller reloads. False with storage
+ * (none: the page never drew, and the one it booted with stays) and, for a
+ * loss in use, the stored level raised (`raise`, gpu-safety.ts; false: it
+ * could not be stored). The caller reloads. False with storage
  * unavailable, or past the caps (lib/city/gpu-safety.ts `mayRecover`):
  * then the caller says the graphics failed.
  */
@@ -81,23 +93,27 @@ export function recoverFromGpuLoss(
   }
   try {
     const stored = read(store);
-    const history = { losses: stored.tries, reclaims: stored.reclaims ?? [] };
+    const history = historyOf(stored);
     if (!mayRecover(how, level, history, now)) {
       return false;
     }
     const recent = recentHistory(history, now);
-    const next: Stored =
-      how === "lost"
-        ? { tries: [...recent.losses, now], reclaims: [...recent.reclaims] }
-        : { tries: [...recent.losses], reclaims: [...recent.reclaims, now] };
-    if (snapshot) {
-      next.snapshot = snapshot;
+    const next: Stored = {
+      tries: [...recent.losses, ...(how === "lost" ? [now] : [])],
+      reclaims: [...recent.reclaims, ...(how === "reclaimed" ? [now] : [])],
+      failures: [...recent.failures, ...(how === "failed" ? [now] : [])],
+    };
+    // A page lost before its first frame has no camera of its own yet:
+    // the place it booted at waits for the next load still.
+    const kept = snapshot ?? stored.snapshot;
+    if (kept) {
+      next.snapshot = kept;
     }
     store.setItem(KEY, JSON.stringify(next));
   } catch {
     return false;
   }
-  return how === "reclaimed" || raise(level);
+  return how !== "lost" || raise(level);
 }
 
 /**
@@ -136,8 +152,8 @@ export function recentlyRecovered(
     return false;
   }
   try {
-    const stored = read(store);
-    return [...stored.tries, ...(stored.reclaims ?? [])].some(
+    const { losses, reclaims, failures } = historyOf(read(store));
+    return [...losses, ...reclaims, ...failures].some(
       (t) => now - t < RECENT_MS
     );
   } catch {

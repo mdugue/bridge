@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import {
   decayedSafety,
+  FAILURE_TRIES,
+  frameLoss,
   mayRecover,
   parseStoredSafety,
   RECLAIM_WINDOW_MS,
@@ -73,6 +75,33 @@ test("a raise ends above the page's own level and keeps the counted crash", () =
   });
 });
 
+test("a page raises once per incident: its lost GPU renews its emergency's raise", () => {
+  // the emergency of the page started at "A", running at level 1
+  const emergency = raisedSafety({ level: 1, raisedAt: 0 }, 1, 10, "A");
+  expect(emergency).toEqual({ level: 2, raisedAt: 10, raisedBy: "A" });
+  // the loss that follows on the same page: still a level above the page
+  expect(raisedSafety(emergency, 1, 20, "A")).toEqual({
+    level: 2,
+    raisedAt: 20,
+    raisedBy: "A",
+  });
+  // a loss with no emergency before it raises by one, as ever
+  expect(raisedSafety({ level: 1, raisedAt: 0 }, 1, 20, "A").level).toBe(2);
+  // another page's raise, or a request on top (Leichter weiter), adds one
+  expect(raisedSafety(emergency, 1, 20, "B").level).toBe(3);
+  expect(raisedSafety(emergency, 1, 20).level).toBe(3);
+});
+
+test("a page that died after raising the level itself raises nothing more", () => {
+  const stored: StoredSafety = { level: 2, raisedAt: 0, raisedBy: "A" };
+  expect(boot(stored, 10, "A")).toEqual({
+    level: 2,
+    stored: { level: 2, raisedAt: 0, raisedBy: "A", crash: "A" },
+  });
+  // another page that died is a crash of its own
+  expect(boot(stored, 10, "B").level).toBe(3);
+});
+
 test("?safety=N sets one page's level and stores nothing", () => {
   expect(safetyOverride("?safety=2")).toBe(2);
   expect(safetyOverride("?scene=lite&safety=0")).toBe(0);
@@ -109,36 +138,64 @@ test("a stored record that is not one counts as nothing stored", () => {
     raisedAt: 5,
     crash: "z",
   });
+  expect(
+    parseStoredSafety('{"level":2,"raisedAt":5,"raisedBy":"y","crash":7}')
+  ).toEqual({ level: 2, raisedAt: 5, raisedBy: "y" });
 });
 
 test("a lost GPU reloads once per level, never from the lightest page", () => {
-  const none = { losses: [], reclaims: [] };
+  const none = { losses: [], reclaims: [], failures: [] };
   expect(mayRecover("lost", 0, none, 0)).toBe(true);
   expect(mayRecover("lost", 2, none, 0)).toBe(true);
   expect(mayRecover("lost", 3, none, 0)).toBe(false);
   // the tab's own net: a page whose level cannot rise (an override) stops
   // after as many reloads as there are levels
-  const three = { losses: [0, 60_000, 120_000], reclaims: [] };
+  const three = { losses: [0, 60_000, 120_000], reclaims: [], failures: [] };
   expect(mayRecover("lost", 0, three, 180_000)).toBe(false);
   expect(mayRecover("lost", 0, three, 700_000)).toBe(true);
 });
 
 test("a background reclaim reloads under its own cap, whatever the level", () => {
   const reclaims = [0, 1000, 2000];
-  expect(mayRecover("reclaimed", 3, { losses: [], reclaims: [] }, 0)).toBe(
-    true
-  );
-  expect(mayRecover("reclaimed", 0, { losses: [], reclaims }, 3000)).toBe(
-    false
-  );
+  const none = { losses: [], reclaims: [], failures: [] };
+  expect(mayRecover("reclaimed", 3, none, 0)).toBe(true);
+  expect(mayRecover("reclaimed", 0, { ...none, reclaims }, 3000)).toBe(false);
   expect(
-    mayRecover("reclaimed", 0, { losses: [], reclaims }, RECLAIM_WINDOW_MS)
+    mayRecover("reclaimed", 0, { ...none, reclaims }, RECLAIM_WINDOW_MS)
   ).toBe(true);
   // losses do not use up the reclaims' cap, nor the other way round
-  expect(
-    mayRecover("reclaimed", 0, { losses: [0, 1, 2], reclaims: [] }, 3)
-  ).toBe(true);
-  expect(mayRecover("lost", 0, { losses: [], reclaims }, 3000)).toBe(true);
+  expect(mayRecover("reclaimed", 0, { ...none, losses: [0, 1, 2] }, 3)).toBe(
+    true
+  );
+  expect(mayRecover("lost", 0, { ...none, reclaims }, 3000)).toBe(true);
+});
+
+test("a failed frame reloads twice in ten minutes, at any level", () => {
+  const none = { losses: [], reclaims: [], failures: [] };
+  expect(mayRecover("failed", 3, none, 0)).toBe(true);
+  const failures = Array.from({ length: FAILURE_TRIES }, (_, i) => i);
+  expect(mayRecover("failed", 0, { ...none, failures }, 60_000)).toBe(false);
+  expect(mayRecover("failed", 0, { ...none, failures }, 600_000)).toBe(true);
+  // a bug uses up no loss reload, nor a loss a bug's
+  expect(mayRecover("lost", 0, { ...none, failures }, 60_000)).toBe(true);
+  expect(mayRecover("failed", 0, { ...none, losses: [0, 1, 2] }, 3)).toBe(true);
+});
+
+test("a frame that throws on a GPU that still answers is a bug, not a loss", () => {
+  const signs = { allocation: false, emergency: false, answers: () => true };
+  expect(frameLoss("lost", signs)).toBe("failed");
+  // what says the GPU ran out
+  expect(frameLoss("lost", { ...signs, allocation: true })).toBe("lost");
+  expect(frameLoss("lost", { ...signs, emergency: true })).toBe("lost");
+  expect(frameLoss("lost", { ...signs, answers: () => false })).toBe("lost");
+  // a reclaim stays one, and is not probed
+  let probed = false;
+  const answers = () => {
+    probed = true;
+    return true;
+  };
+  expect(frameLoss("reclaimed", { ...signs, answers })).toBe("reclaimed");
+  expect(probed).toBe(false);
 });
 
 test("from level 2 the shadow camera streams nothing and the look starts plain", () => {
