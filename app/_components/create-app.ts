@@ -110,7 +110,7 @@ import { type SceneCensus, sceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
 import {
   aoSamplesFor,
-  warmPaperFor,
+  postProfileFor,
   pixelRatioFor,
   type SceneBudget,
   shadowMapSizeFor,
@@ -1103,7 +1103,7 @@ async function bootApp(
     lens,
     aoSamplesFor(budget.profile),
     sceneFog,
-    warmPaperFor(budget.tier)
+    postProfileFor(budget.tier)
   );
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;

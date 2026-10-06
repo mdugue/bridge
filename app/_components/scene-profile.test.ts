@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 import {
   aoSamplesFor,
-  warmPaperFor,
   deviceTierFromMedia,
   liteKeepsBlockFromSearch,
   pixelRatioFor,
+  postProfileFor,
   sceneBudgetFor,
   sceneProfileFromSearch,
+  shadowMapBytesFor,
   shadowMapSizeFor,
   LARGEST_TILE_BYTES,
   tileCacheBytesFor,
@@ -110,7 +111,29 @@ test("tileCacheBytesFor can always unload the largest tile", () => {
   }
 });
 
-test("warmPaperFor leaves the Papier warm-up to the desktop", () => {
-  expect(warmPaperFor("desktop")).toBe(true);
-  expect(warmPaperFor("mobile")).toBe(false);
+test("postProfileFor leaves the costly post work to the desktop", () => {
+  const desktop = postProfileFor("desktop");
+  const phone = postProfileFor("mobile");
+  // the desktop keeps the full picture: lens blur, SMAA, every style warm
+  expect(desktop).toEqual({
+    dof: true,
+    antialias: "smaa",
+    warmStyles: "all",
+    warmPaper: true,
+  });
+  // a phone builds no lens blur, antialiases without targets of its own
+  // and warms nothing but the outline
+  expect(phone).toEqual({
+    dof: false,
+    antialias: "fxaa",
+    warmStyles: "outline-only",
+    warmPaper: false,
+  });
+});
+
+test("shadowMapBytesFor counts the depth map and its one-byte colour target", () => {
+  expect(shadowMapBytesFor(shadowMapSizeFor("full", "mobile"))).toBe(
+    20 * 1024 ** 2
+  );
+  expect(shadowMapBytesFor(512)).toBe(512 * 512 * 5);
 });
