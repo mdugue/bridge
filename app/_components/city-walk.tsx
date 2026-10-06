@@ -492,13 +492,17 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   // The render stopped and the page did not recover by itself: the
   // browser's words, for the failure card (gpu-failure-card.tsx).
   const [gpuFailure, setGpuFailure] = useState<string | null>(null);
-  /** The card's buttons: a level lighter where the player stood, or not. */
+  /**
+   * The card's buttons: a level lighter where the player stood, or not —
+   * a raise on top of what the page itself raised (no `by`), so that
+   * *Leichter weiter* is lighter than *Neu laden*.
+   */
   const reloadAfterFailure = (lighter: boolean) => {
     if (lighter) {
       recoverOnRequest(
         recovery.current?.capture() ?? null,
         budget.safety,
-        raiseSafety
+        (from) => raiseSafety(from)
       );
     }
     const released = handleRef.current?.releaseGpu() ?? Promise.resolve();
@@ -587,13 +591,16 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           startTransition(() => setStreamingMore(isBusy));
         }
       },
+      // A loss raises the level as this page's (`by`): after its own
+      // memory emergency the same incident, renewed rather than raised
+      // again (gpu-safety.ts).
       onGpuLost: (how) =>
         !cancelled &&
         recoverFromGpuLoss(
           how,
           recovery.current?.capture() ?? null,
           budget.safety,
-          raiseSafety
+          (from) => raiseSafety(from, { by: trail.startedAt })
         )
           ? () => location.reload()
           : null,
@@ -735,6 +742,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         const aborted =
           err instanceof DOMException && err.name === "AbortError";
         if (!(cancelled || aborted)) {
+          // A place that failed the boot is not tried again on the next
+          // load: the recovery's snapshot goes with this boot.
+          takeRecoverySnapshot();
           trail.note(
             "boot failed",
             err instanceof Error ? err.message : String(err)
