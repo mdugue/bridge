@@ -2,6 +2,7 @@ import {
   FPS_BUCKETS,
   firstAt,
   formatBeat,
+  resumedFor,
   round,
   type SummaryMark,
   type Trail,
@@ -362,8 +363,11 @@ function buildOf(trail: Trail, ctx: ReportContext) {
     : { release: ctx.release, environment: ctx.environment };
 }
 
-/** What every report carries: where, on what, how far the page got. */
-function common(trail: Trail, ctx: ReportContext) {
+/**
+ * What every report carries: where, on what, how far the page got — and,
+ * at `t` (s on the trail), how long ago it came back from the background.
+ */
+function common(trail: Trail, ctx: ReportContext, t: number) {
   const last = trail.beats.at(-1);
   return {
     platform: "javascript",
@@ -389,6 +393,11 @@ function common(trail: Trail, ctx: ReportContext) {
       screen: trail.screen,
       pixel_ratio: asTag(trail.pixelRatio),
       device_memory_gb: asTag(trail.deviceMemoryGB),
+      // the budget the page ran on after earlier losses on the device
+      safety: asTag(trail.safety),
+      // a failure within a minute of coming back from the background is
+      // where iOS took the GPU while the page was away
+      resumed_s: asTag(resumedFor(trail, t)),
     },
     contexts: { page: pageContext(trail) },
   };
@@ -450,12 +459,17 @@ function breadcrumbs(trail: Trail) {
 export interface CrashContext {
   /** it follows a GPU recovery (gpu-recovery.ts `recentlyRecovered`) */
   recovered?: boolean;
+  /** when it started (Unix s): how soon after the death */
+  nextStart?: number;
 }
 
 /**
  * The previous page, which died in use: a fatal event, by phase — a page
  * that followed a GPU recovery as one of its own ("Recovery page died":
- * the recovery runs in a loop).
+ * the recovery runs in a loop). `restart_gap_s` is how long after the
+ * record's last entry (its last beat can be two seconds before the death)
+ * the reporting page started: under ~2 s, that was Safari reloading a
+ * page whose process it killed.
  */
 export function crashReport(
   trail: Trail,
@@ -464,16 +478,23 @@ export function crashReport(
   crash: CrashContext = {}
 ): Payload {
   const phase = trailPhase(trail);
+  const end = lastT(trail);
+  const base = common(trail, ctx, end);
+  const gap =
+    crash.nextStart === undefined || !Number.isFinite(crash.nextStart)
+      ? undefined
+      : round(crash.nextStart - at(trail, end), 1);
   const [title, group] = crash.recovered
     ? ["Recovery page died", "recovery page died"]
     : ["Page died in use", "page died"];
   return {
-    ...common(trail, ctx),
+    ...base,
     event_id: id,
-    timestamp: at(trail, lastT(trail)),
+    timestamp: at(trail, end),
     level: "fatal",
     logger: "crash-trail",
     message: { formatted: `${title} (${phase}, ${trail.backend})` },
+    tags: { ...base.tags, restart_gap_s: asTag(gap) },
     fingerprint: [group, trail.backend, phase],
     breadcrumbs: breadcrumbs(trail),
   };
@@ -487,7 +508,7 @@ export function problemReport(
   ctx: ReportContext
 ): Payload {
   return {
-    ...common(trail, ctx),
+    ...common(trail, ctx, event.t),
     event_id: id,
     timestamp: at(trail, event.t),
     level: problemLevel(event),
@@ -545,7 +566,7 @@ export function summaryReport(
   id: string,
   ctx: ReportContext
 ): Payload {
-  const base = common(trail, ctx);
+  const base = common(trail, ctx, lastT(trail));
   const part = stretch(trail);
   const measurements: Record<string, { value: number; unit: string }> = {};
   const measure = (name: string, value: number | undefined, unit: string) => {

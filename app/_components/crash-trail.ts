@@ -157,8 +157,13 @@ export interface CrashTrail {
   note: (kind: string, detail?: string) => void;
   /** One heartbeat (the record adds the time). */
   beat: (beat: Omit<TrailBeat, "t">) => void;
-  /** Facts learned after the start (the backend once the renderer is up). */
-  set: (patch: Partial<Pick<Trail, "backend" | "pixelRatio">>) => void;
+  /**
+   * Facts learned after the start: the backend once the renderer is up,
+   * the safety level the budget was cut to.
+   */
+  set: (
+    patch: Partial<Pick<Trail, "backend" | "pixelRatio" | "safety">>
+  ) => void;
   /** The page leaves normally: the record ends clean. */
   end: () => void;
 }

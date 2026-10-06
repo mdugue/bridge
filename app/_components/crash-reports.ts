@@ -140,7 +140,13 @@ async function reportPrevious(ctx: ReportContext): Promise<void> {
   const recovered = recentlyRecovered();
   const crashed = offerAsCrash(previous, recovered);
   if (crashed) {
-    sendEvent(crashReport(previous, newId(), ctx, { recovered }));
+    sendEvent(
+      crashReport(previous, newId(), ctx, {
+        recovered,
+        // This page's navigation start: how soon it followed the death.
+        nextStart: performance.timeOrigin / 1000,
+      })
+    );
   }
   if (summaryDue(previous)) {
     sendEvent(summaryReport(previous, newId(), ctx));

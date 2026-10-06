@@ -5,6 +5,7 @@ import {
   envelope,
   envelopeUrl,
   isAftermath,
+  type Payload,
   PROBLEMS_PER_PAGE,
   problemReport,
   reportBuild,
@@ -47,6 +48,10 @@ const SETUP = {
   screen: "393×852@3",
   deviceMemoryGB: 4,
 };
+
+/** The tags a report carries (a payload's members are unknown). */
+const tagsOf = (payload: Payload) =>
+  payload.tags as Record<string, string | undefined>;
 
 /** A page that booted, streamed, was loaded and ran at 8, 25 and 50 fps. */
 function page(): Trail {
@@ -256,13 +261,43 @@ describe("which problems are the aftermath of the page's end", () => {
   });
 });
 
-test("a recovery page that died is a crash of its own", () => {
+test("a recovery page that died is a crash of its own, with its restart gap", () => {
   const trail = page();
-  expect(crashReport(trail, ID, ctx, { recovered: true })).toMatchObject({
+  trail.safety = 2;
+  const died = Date.parse(trail.startedAt) / 1000 + 8;
+  const plain = crashReport(trail, ID, ctx, { nextStart: died + 0.84 });
+  expect(plain.tags).toMatchObject({ restart_gap_s: "0.8", safety: "2" });
+  const recovery = crashReport(trail, ID, ctx, {
+    recovered: true,
+    nextStart: died + 33,
+  });
+  expect(recovery).toMatchObject({
     level: "fatal",
     message: { formatted: "Recovery page died (running, WebGPU)" },
     fingerprint: ["recovery page died", "WebGPU", "running"],
+    tags: { restart_gap_s: "33" },
   });
+  // Without the next page's start, no gap.
+  expect(tagsOf(crashReport(trail, ID, ctx)).restart_gap_s).toBeUndefined();
+});
+
+test("a report says how soon after a long stretch in the background it came", () => {
+  const trail = page();
+  pushEvent(trail, { t: 10, kind: "hidden" });
+  pushEvent(trail, { t: 130, kind: "visible" }); // two minutes away
+  pushEvent(trail, { t: 140, kind: "hidden" });
+  pushEvent(trail, { t: 143, kind: "visible" }); // a glance away: no resume
+  const at = (t: number) =>
+    tagsOf(problemReport(trail, { t, kind: "frame failed" }, ID, ctx))
+      .resumed_s;
+  expect(at(130.8)).toBe("0.8");
+  expect(at(185)).toBe("55");
+  expect(at(190)).toBeUndefined();
+  // A page loaded in the background resumes when it first comes into view.
+  const behind = createTrail({ ...SETUP, hidden: true });
+  pushEvent(behind, { t: 12, kind: "visible" });
+  const error = { t: 13, kind: "error" };
+  expect(tagsOf(problemReport(behind, error, ID, ctx)).resumed_s).toBe("1");
 });
 
 test("a page reports each problem once, and only so many", () => {

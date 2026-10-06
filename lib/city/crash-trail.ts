@@ -96,7 +96,22 @@ export interface Trail {
   pixelRatio?: number;
   /** the device memory the browser reports (GB, Chromium only) */
   deviceMemoryGB?: number;
+  /**
+   * How far the viewer lowered its budget on this device after earlier
+   * losses (0: not at all), once the page knows it; optional.
+   */
+  safety?: number;
   state: TrailEnd;
+  /**
+   * Since when the page is in the background (s), while it is: a record
+   * that starts hidden is hidden from its start. Optional, as `stats`.
+   */
+  hiddenAt?: number;
+  /**
+   * When the page last came back into view after at least RESUME_AFTER_S
+   * in the background (s) — where iOS reclaims a GPU. Optional.
+   */
+  resumedAt?: number;
   /**
    * The page reached its first frame — kept apart from the events, whose
    * ring drops its oldest (a minute of streaming notes forty dressings);
@@ -152,6 +167,11 @@ export interface SummaryMark {
 /** The event the HUD notes when the scene goes live (city-walk.tsx). */
 const FIRST_FRAME = "first frame";
 
+/** A stretch in the background at least this long makes a resume (s). */
+const RESUME_AFTER_S = 10;
+/** How long after a resume a report says how long ago it was (s). */
+const RESUME_WINDOW_S = 60;
+
 export interface TrailSetup extends Pick<
   Trail,
   "startedAt" | "url" | "userAgent" | "screen" | "deviceMemoryGB"
@@ -165,6 +185,7 @@ export function createTrail({ hidden, ...setup }: TrailSetup): Trail {
     v: TRAIL_VERSION,
     backend: "?",
     state: hidden ? "hidden" : "running",
+    ...(hidden ? { hiddenAt: 0 } : {}),
     events: [],
     beats: [],
     stats: emptyStats(),
@@ -201,9 +222,39 @@ export function pushEvent(trail: Trail, event: TrailEvent): void {
   if (event.kind === FIRST_FRAME) {
     trail.drew = true;
   }
+  followVisibility(trail, event);
   pushRing(trail.events, event, TRAIL_EVENTS);
   trail.firsts ??= {};
   trail.firsts[event.kind] ??= event.t;
+}
+
+/**
+ * Keeps when the page went to the background and when it last came back
+ * from a long stretch there (the browser side notes "hidden" and
+ * "visible" as the document's visibility changes).
+ */
+function followVisibility(trail: Trail, event: TrailEvent): void {
+  if (event.kind === "hidden") {
+    trail.hiddenAt ??= event.t;
+  } else if (event.kind === "visible") {
+    if (
+      trail.hiddenAt !== undefined &&
+      event.t - trail.hiddenAt >= RESUME_AFTER_S
+    ) {
+      trail.resumedAt = event.t;
+    }
+    delete trail.hiddenAt;
+  }
+}
+
+/**
+ * How long ago (s) the page came back from a long stretch in the
+ * background, at `t` — or undefined when that is not recent
+ * (RESUME_WINDOW_S) or never happened.
+ */
+export function resumedFor(trail: Trail, t: number): number | undefined {
+  const since = trail.resumedAt === undefined ? -1 : t - trail.resumedAt;
+  return since >= 0 && since < RESUME_WINDOW_S ? round(since, 1) : undefined;
 }
 
 /**
@@ -365,7 +416,8 @@ export function formatTrail(trail: Trail): string {
       (trail.pixelRatio === undefined ? "" : ` · pr ${trail.pixelRatio}`) +
       (trail.deviceMemoryGB === undefined
         ? ""
-        : ` · mem ${trail.deviceMemoryGB}GB`),
+        : ` · mem ${trail.deviceMemoryGB}GB`) +
+      (trail.safety === undefined ? "" : ` · safety ${trail.safety}`),
     ...(trail.stats ? [`page ${formatStats(trail.stats)}`] : []),
     "",
     "events:",
