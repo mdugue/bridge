@@ -1,36 +1,31 @@
 /**
- * The one fetch policy for OPTIONAL artifacts (lamps, walls, rails, roof
- * colours, …): a 404, a network failure or unparseable JSON means "feature
- * off"; an abort is never swallowed — the doomed instance (StrictMode
- * remount, navigation away) must stop building geometry from partial data,
- * and the caller's ensureAlive() relies on the rejection. Required artifacts
- * (the tileset) throw on any failure instead.
+ * The one fetch policy for the viewer's files. Every request goes through
+ * `fetchBytes`: a network failure (or a 408/429/5xx) is retried with backoff
+ * while the page is usable (lib/city/fetch-retry.ts, net-gate.ts), the body
+ * read inside the retries, so a blip — a Wi-Fi handover, a resume from the
+ * background — is never taken for the answer.
+ *
+ * OPTIONAL artifacts (lamps, walls, rails, roof colours, a live feed, …):
+ * a 404, unparseable JSON or a failure that outlasts their short budget
+ * means "feature off". (lib/city/tile.ts names only files a tile has, so a
+ * 404 there is a deploy fault rather than an absence.) An abort is never
+ * swallowed — the doomed instance (StrictMode remount, navigation away)
+ * must stop building geometry from partial data, and the caller's
+ * ensureAlive() relies on the rejection. REQUIRED artifacts (the tileset)
+ * throw instead, after the boot's longer wait for the network.
  */
 
 import type { FeatureCollection } from "@/lib/city/features";
+import {
+  BOOT_NET_WAIT_MS,
+  OPTIONAL_FETCH_BUDGET_MS,
+  withRetry,
+} from "@/lib/city/fetch-retry";
+import { PAGE_RETRY_ENV, reportRetry } from "./net-gate";
 
 /** True for the DOMException a fetch throws when its AbortSignal fires. */
 export function isAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError";
-}
-
-/** Fetches an optional JSON artifact; null = feature off. Rethrows aborts. */
-export async function fetchOptionalJson<T>(
-  url: string,
-  signal?: AbortSignal
-): Promise<T | null> {
-  try {
-    const res = await fetch(url, { signal });
-    if (!res.ok) {
-      return null;
-    }
-    return (await res.json()) as T;
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
 }
 
 /**
@@ -51,6 +46,135 @@ export function gunzip(
     .pipeThrough(new DecompressionStream("gzip"));
 }
 
+/** What `fetchBytes` got: the final status and, when it is ok, the body. */
+export interface FetchedBytes {
+  /** a 2xx, or a status no retry fixes (404, 403, …) */
+  status: number;
+  ok: boolean;
+  /** the body (inflated when asked to and gzipped); empty unless ok */
+  bytes: Uint8Array<ArrayBuffer>;
+}
+
+export interface FetchBytesOptions {
+  signal?: AbortSignal;
+  /** how long transient failures are retried, in ms of a usable page */
+  budgetMs: number;
+  /** inflate a gzipped body inside the retries (a truncated stream is one
+   *  more transient failure) */
+  gunzip?: boolean;
+  /** the rest of the request (`cache`, headers) */
+  init?: RequestInit;
+}
+
+const NO_BYTES = new Uint8Array(0);
+
+/**
+ * Fetches `url` and reads its body, retrying network failures and
+ * transient statuses (lib/city/fetch-retry.ts `withRetry`): resolves with
+ * the final status — the body only when it is ok —, rejects with an
+ * AbortError on abort, the error itself when it is not the network's, or a
+ * NetworkError (`transient`, `attempts`) once the budget is spent.
+ */
+export async function fetchBytes(
+  url: string,
+  opts: FetchBytesOptions
+): Promise<FetchedBytes> {
+  const { signal, budgetMs, init } = opts;
+  const answer = await withRetry(
+    async () => {
+      const res = await fetch(url, { ...init, signal });
+      if (!res.ok) {
+        // an error page's body is never read
+        void res.body?.cancel().catch(() => undefined);
+        return {
+          status: res.status,
+          retryAfter: res.headers.get("retry-after"),
+          value: NO_BYTES,
+        };
+      }
+      const raw = new Uint8Array(await res.arrayBuffer());
+      const bytes =
+        opts.gunzip && isGzipped(raw)
+          ? new Uint8Array(await new Response(gunzip(raw)).arrayBuffer())
+          : raw;
+      return { status: res.status, value: bytes };
+    },
+    { budgetMs, env: PAGE_RETRY_ENV, signal, onRetry: reportRetry }
+  );
+  return {
+    status: answer.status,
+    ok: answer.status >= 200 && answer.status < 300,
+    bytes: answer.value,
+  };
+}
+
+/**
+ * One signal that aborts with either of two; `release` drops its listeners
+ * once the work is done (the plugin's own signal outlives every fetch).
+ */
+export function eitherSignal(
+  a: AbortSignal | null | undefined,
+  b: AbortSignal
+): { signal: AbortSignal; release: () => void } {
+  if (!a) {
+    return { signal: b, release: () => undefined };
+  }
+  const both = new AbortController();
+  const abort = () => both.abort();
+  const release = () => {
+    a.removeEventListener("abort", abort);
+    b.removeEventListener("abort", abort);
+  };
+  if (a.aborted || b.aborted) {
+    both.abort();
+  } else {
+    a.addEventListener("abort", abort, { once: true });
+    b.addEventListener("abort", abort, { once: true });
+  }
+  return { signal: both.signal, release };
+}
+
+/** An optional file's bytes, or null (off); rethrows aborts. */
+async function optionalBytes(
+  url: string,
+  signal: AbortSignal | undefined,
+  inflate: boolean
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  try {
+    const got = await fetchBytes(url, {
+      signal,
+      budgetMs: OPTIONAL_FETCH_BUDGET_MS,
+      gunzip: inflate,
+    });
+    return got.ok ? got.bytes : null;
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
+  }
+}
+
+function parseJson<T>(bytes: Uint8Array): T {
+  return JSON.parse(new TextDecoder().decode(bytes)) as T;
+}
+
+/** Fetches an optional JSON artifact; null = feature off. Rethrows aborts. */
+export async function fetchOptionalJson<T>(
+  url: string,
+  signal?: AbortSignal
+): Promise<T | null> {
+  const bytes = await optionalBytes(url, signal, false);
+  if (!bytes) {
+    return null;
+  }
+  try {
+    return parseJson<T>(bytes);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Fetches an optional binary artifact; null = feature off. Rethrows aborts.
  * A pre-gzipped one (`.gz`) is inflated here (isGzipped), as the tiles'
@@ -60,22 +184,8 @@ export async function fetchOptionalBinary(
   url: string,
   signal?: AbortSignal
 ): Promise<ArrayBuffer | null> {
-  try {
-    const res = await fetch(url, { signal });
-    if (!res.ok) {
-      return null;
-    }
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (!isGzipped(bytes)) {
-      return bytes.buffer;
-    }
-    return await new Response(gunzip(bytes)).arrayBuffer();
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
+  const bytes = await optionalBytes(url, signal, true);
+  return bytes ? bytes.buffer : null;
 }
 
 /** The `features` of an optional GeoJSON FeatureCollection, or []. */
@@ -101,14 +211,18 @@ export async function fetchFeaturesFrom<T>(
   return lists.flat();
 }
 
-/** Fetches a REQUIRED JSON artifact; any failure throws. */
+/**
+ * Fetches a REQUIRED JSON artifact: retried while the network is down for
+ * up to the boot's wait (ms of a usable page), then — or on any other
+ * failure — it throws (a give-up's message starts "network: ").
+ */
 export async function fetchRequiredJson<T>(
   url: string,
   signal?: AbortSignal
 ): Promise<T> {
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
+  const got = await fetchBytes(url, { signal, budgetMs: BOOT_NET_WAIT_MS });
+  if (!got.ok) {
+    throw new Error(`Failed to fetch ${url}: HTTP ${got.status}`);
   }
-  return (await res.json()) as T;
+  return parseJson<T>(got.bytes);
 }
