@@ -55,12 +55,13 @@ import { type CityLayer, dressCity } from "./city-layer";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
+import { TILE_FETCH_BUDGET_MS } from "@/lib/city/fetch-retry";
 import {
+  eitherSignal,
+  fetchBytes,
   fetchFeatures,
   fetchOptionalBinary,
   fetchOptionalJson,
-  gunzip,
-  isGzipped,
 } from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
 import { buildLamps, type LampControl } from "./lamp-layer";
@@ -259,20 +260,48 @@ interface Dressed {
 }
 
 /**
- * The tiles' `.glb.gz` content is pre-gzipped (static hosts do not compress
- * binary types); inflate it natively before the loader sees it — unless the
- * host already did (isGzipped, fetch-optional.ts).
+ * Every request the renderer makes — the tileset and each tile's content —
+ * through the viewer's one fetch (fetch-optional.ts `fetchBytes`): a
+ * network failure is retried while the page is usable, so a tile that hit
+ * a blip stays loading (its coarse level shown, the boot waiting) instead
+ * of failing; one that gives up is brought back later (tile-retry.ts). The
+ * `.glb.gz` content is pre-gzipped (static hosts do not compress binary
+ * types) and inflated natively inside the retries — unless the host already
+ * did (isGzipped). Content comes back as its bytes, which the renderer
+ * parses as they are (no Response to copy them through again); JSON as a
+ * Response, which the renderer reads itself; a status no retry fixes as an
+ * empty Response with that status, which the renderer reports.
  */
-class GzipContentPlugin {
-  name = "BRIDGE_GZIP_CONTENT";
-  async fetchData(url: string, options: RequestInit): Promise<Response> {
-    const res = await fetch(url, options);
-    if (!(url.endsWith(".gz") && res.ok)) {
-      return res;
+class ContentFetchPlugin {
+  name = "BRIDGE_CONTENT_FETCH";
+  /** aborts every request in flight when the stream goes (dispose) */
+  private readonly aborter = new AbortController();
+  async fetchData(
+    url: string,
+    options: RequestInit
+  ): Promise<Response | ArrayBuffer> {
+    const { signal, ...init } = options;
+    const either = eitherSignal(signal, this.aborter.signal);
+    try {
+      const got = await fetchBytes(url, {
+        signal: either.signal,
+        budgetMs: TILE_FETCH_BUDGET_MS,
+        gunzip: url.endsWith(".gz"),
+        init,
+      });
+      if (!got.ok) {
+        return new Response(null, { status: got.status });
+      }
+      return new URL(url, window.location.href).pathname.endsWith(".json")
+        ? new Response(got.bytes, { status: got.status })
+        : got.bytes.buffer;
+    } finally {
+      either.release();
     }
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    const body = isGzipped(bytes) ? gunzip(bytes) : bytes;
-    return new Response(body, { status: res.status });
+  }
+
+  dispose(): void {
+    this.aborter.abort();
   }
 }
 
@@ -1642,7 +1671,7 @@ export function createTileStream(
 ): TileStream {
   const tiles = new TilesRenderer(ctx.tilesetUrl);
   paceStreaming(tiles, ctx.tier);
-  tiles.registerPlugin(new GzipContentPlugin());
+  tiles.registerPlugin(new ContentFetchPlugin());
   tiles.registerPlugin(
     new GLTFExtensionsPlugin({ metadata: true, meshoptDecoder: MeshoptDecoder })
   );

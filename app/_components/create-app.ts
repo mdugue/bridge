@@ -102,10 +102,15 @@ import { trafficMesh } from "./traffic-ask";
 import { createCityCollider } from "./collision";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
-import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
+import {
+  fetchOptionalJson,
+  fetchRequiredJson,
+  isAbortError,
+} from "./fetch-optional";
 import type { MovementMode } from "./fps-movement";
 import { NO_GPU_MESSAGE } from "./gpu-support";
 import { raiseSafety } from "./gpu-safety";
+import { pageLeaving } from "./net-gate";
 import { createSceneFog, installSceneFog } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
@@ -144,6 +149,7 @@ import {
   showDataLayers,
   type TileDressing,
 } from "./tile-stream";
+import { createNetworkWatch } from "./tile-retry";
 import { attachTouchControls } from "./touch-controls";
 import {
   treesWithin,
@@ -328,6 +334,9 @@ export interface CityWalkOptions {
    * scene keeps running; the HUD shows the message.
    */
   onError?: (message: string) => void;
+  /** The tile behind `onError` came back after all (it had failed on the
+   *  network, tile-retry.ts): the HUD's message goes. */
+  onErrorCleared?: () => void;
   /**
    * The GPU is gone for good, or a frame threw and left three's renderer
    * in a state no later frame draws right (the render stopped) — `how`:
@@ -1162,24 +1171,61 @@ async function bootApp(
   // the HUD says so once, the rest keeps streaming. Before the first frame
   // the spawn tile (or the tileset itself) failing is fatal instead: the
   // boot below rejects rather than waiting for content that never comes.
+  // Unless the network let it down (its fetch retried and gave up): such a
+  // tile is asked for again (tile-retry.ts), its hole closes, and the boot
+  // waits for it — failing only after a minute of a usable page without
+  // it. A page on its way out (pagehide) decides and reports nothing.
   let reportedError = false;
+  let reportedNetwork = false;
   let firstFrameShown = false;
   let bootFailure: Error | null = null;
+  const network = createNetworkWatch({
+    tiles: stream.tiles,
+    trail: opts.trail,
+    bootOver: () => firstFrameShown || disposed,
+    onBootGiveUp: (error) => {
+      bootFailure ??= error;
+    },
+  });
+  cleanups.push(() => network.dispose());
   stream.tiles.addEventListener("load-error", (event) => {
     const { error, tile, url } = event as {
       error?: unknown;
-      tile?: unknown;
+      tile?: object | null;
       url?: unknown;
     };
+    if (isAbortError(error)) {
+      return;
+    }
     const failure = error instanceof Error ? error : new Error(String(error));
-    opts.trail?.note("load-error", `${String(url)} ${failure.message}`);
-    if (!firstFrameShown && (tile === null || String(url).includes(spawn.id))) {
-      bootFailure ??= failure;
+    const atBoot =
+      !firstFrameShown && (tile === null || String(url).includes(spawn.id));
+    const lost = network.failed(tile ?? null, error, String(url), atBoot);
+    if (pageLeaving()) {
+      return;
+    }
+    if (!lost) {
+      opts.trail?.note("load-error", `${String(url)} ${failure.message}`);
+    }
+    if (atBoot) {
+      if (!lost) {
+        bootFailure ??= failure;
+      }
       return;
     }
     if (!(disposed || reportedError)) {
       reportedError = true;
+      reportedNetwork = lost;
       opts.onError?.(failure.message);
+    }
+  });
+  // A tile that had failed on the network is back: the HUD's word about it
+  // goes (a later failure says so again).
+  stream.tiles.addEventListener("load-model", (event) => {
+    if (network.landed(event.tile) && reportedNetwork && !disposed) {
+      reportedError = false;
+      reportedNetwork = false;
+      opts.onErrorCleared?.();
     }
   });
 
