@@ -7,6 +7,7 @@ import {
   fetchOptionalBinary,
   fetchOptionalJson,
   fetchRequiredJson,
+  untilAborted,
 } from "./fetch-optional";
 
 const realFetch = globalThis.fetch;
@@ -148,4 +149,27 @@ test("either signal aborts the merged one; released, neither does", () => {
   c.abort();
   expect(released.signal.aborted).toBe(false);
   expect(eitherSignal(undefined, d.signal).signal).toBe(d.signal);
+});
+
+test("an abort ends the wait at once, the work behind it going on for whoever else waits", async () => {
+  let land: (value: string) => void = () => undefined;
+  const shared = new Promise<string>((resolve) => {
+    land = resolve;
+  });
+  const aborter = new AbortController();
+  const waiting = untilAborted(shared, aborter.signal);
+  aborter.abort();
+  // (bun-types declare `rejects` as void; see "an abort is rethrown")
+  // oxlint-disable-next-line typescript/await-thenable
+  await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+  land("raster");
+  expect(await shared).toBe("raster");
+  // without an abort: the answer, or the failure, as it comes
+  const fresh = new AbortController();
+  expect(await untilAborted(Promise.resolve(1), fresh.signal)).toBe(1);
+  const failure = new Error("decode");
+  // oxlint-disable-next-line typescript/await-thenable
+  await expect(
+    untilAborted(Promise.reject(failure), fresh.signal)
+  ).rejects.toBe(failure);
 });

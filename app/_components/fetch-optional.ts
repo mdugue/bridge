@@ -134,6 +134,38 @@ export function eitherSignal(
   return { signal: both.signal, release };
 }
 
+/**
+ * `promise`, or a rejection with the abort as soon as `signal` fires: the
+ * caller stops waiting (and lets go of what it holds) at once, while the
+ * work behind `promise` goes on for whoever else waits for it — a shared
+ * raster (shared-rasters.ts) is aborted only once its last holder lets go.
+ */
+export function untilAborted<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  if (!signal) {
+    return promise;
+  }
+  let abort = (): void => undefined;
+  const aborted = new Promise<never>((_, reject) => {
+    abort = () =>
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException("The operation was aborted.", "AbortError")
+      );
+  });
+  if (signal.aborted) {
+    abort();
+  } else {
+    signal.addEventListener("abort", abort, { once: true });
+  }
+  return Promise.race([promise, aborted]).finally(() => {
+    signal.removeEventListener("abort", abort);
+  });
+}
+
 /** An optional file's bytes, or null (off); rethrows aborts. */
 async function optionalBytes(
   url: string,

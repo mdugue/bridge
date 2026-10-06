@@ -947,6 +947,15 @@ export class DressingPlugin {
   /** aborts the levels' own raster loads when the stream goes: they would
    *  hold their turn to decode (raster-upload.ts) from the next app's */
   private readonly lifetime = new AbortController();
+  /**
+   * Each terrain level's raster loads while it dresses, aborted when its
+   * tile leaves (`disposeTile`): a level the camera wanted and dropped
+   * again — a flight, a boot that looked around, the memory emergency's
+   * shed — would otherwise decode and upload every raster it names, in
+   * the site-wide turn of the tiles still wanted and holding one of the
+   * renderer's parse slots, only to free them at once.
+   */
+  private readonly loadAborts = new WeakMap<Object3D, AbortController>();
 
   constructor(
     private readonly ctx: TileStreamContext,
@@ -1169,21 +1178,30 @@ export class DressingPlugin {
     scene.updateMatrix();
     mesh.updateMatrix();
     this.toData.multiplyMatrices(scene.matrix, mesh.matrix);
-    const terrain = await dressTerrain(mesh, extras, this.toData, {
-      fileUrl: this.url,
-      fogColor: this.ctx.fogColor,
-      lowRasters: this.ctx.lowRasters,
-      ground: this.ctx.ground,
-      offset: this.ctx.offset,
-      renderer: this.ctx.renderer,
-      skyView: this.skyView,
-      horizon: this.horizon,
-      splats: this.splats,
-      ndvis: this.ndvis,
-      sports: this.sports,
-      grids: this.grids,
-      signal: this.lifetime.signal,
-    });
+    const own = new AbortController();
+    this.loadAborts.set(scene, own);
+    const either = eitherSignal(own.signal, this.lifetime.signal);
+    let terrain: TerrainLayer;
+    try {
+      terrain = await dressTerrain(mesh, extras, this.toData, {
+        fileUrl: this.url,
+        fogColor: this.ctx.fogColor,
+        lowRasters: this.ctx.lowRasters,
+        ground: this.ctx.ground,
+        offset: this.ctx.offset,
+        renderer: this.ctx.renderer,
+        skyView: this.skyView,
+        horizon: this.horizon,
+        splats: this.splats,
+        ndvis: this.ndvis,
+        sports: this.sports,
+        grids: this.grids,
+        signal: either.signal,
+      });
+    } finally {
+      either.release();
+      this.loadAborts.delete(scene);
+    }
     terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls, kerbs and fences: only their
     // materials here, lit by the tile's baked light as the ground is.
@@ -1437,6 +1455,9 @@ export class DressingPlugin {
     const scene = tile.engineData?.scene ?? this.sceneOf.get(tile);
     this.sceneOf.delete(tile);
     if (scene) {
+      // its rasters stop where they are (the load this rejects is the
+      // renderer's to drop: its own signal is aborted by now)
+      this.loadAborts.get(scene)?.abort();
       this.builtOf.get(scene)?.();
       this.released.add(scene);
       this.release(scene);
