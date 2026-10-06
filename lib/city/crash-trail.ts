@@ -47,6 +47,25 @@ export interface TrailBeat {
   /** loaded building tiles and built dressings */
   cities: number;
   dressings: number;
+  /**
+   * What tells the ways a phone runs out apart (optional: older records
+   * lack them): the tracked raster textures inside the `gpu` figure (tile
+   * rasters, land-cover splats, sky light), MB …
+   */
+  rasterMB?: number;
+  /** … the terrain levels loaded with their rasters, fine and coarse … */
+  fine?: number;
+  coarse?: number;
+  /** … the tile cache's bytes and its lower and upper bound, MB … */
+  cacheMB?: number;
+  cacheMinMB?: number;
+  cacheMaxMB?: number;
+  /** … tile contents downloading and parsing now, and failed for good … */
+  downloading?: number;
+  parsing?: number;
+  failed?: number;
+  /** … and whether the browser thinks it is online. */
+  online?: boolean;
   style: string;
   /** walk or fly, and the camera's height above the ground (m) */
   mode: string;
@@ -368,16 +387,66 @@ export const round = (n: number, digits = 0) => {
   return Math.round(n * f) / f;
 };
 
-/** One heartbeat as a line of the report (and of the console). */
+/**
+ * One heartbeat as a line of the report (and of the console), its parts
+ * two spaces apart; a part an older record lacks is left out:
+ *
+ *     12.3s  f300 30fps  gpu 180MB rast 98MB held 512MB 5482a 274MB …
+ *       90dc 1200k▲  tiles 3/2 terr 2f/5c  cache 412MB 320-600
+ *       net 4d 2p 0f offline  pastel walk 2m
+ */
 export function formatBeat(b: TrailBeat): string {
-  const heap = b.heapMB === undefined ? "" : ` heap ${round(b.heapMB)}MB`;
+  return [
+    `${round(b.t, 1)}s`,
+    `f${b.frames} ${round(b.fps)}fps`,
+    memoryPart(b),
+    `${b.calls}dc ${round(b.triangles / 1000)}k▲`,
+    tilesPart(b),
+    cachePart(b),
+    netPart(b),
+    `${b.style} ${b.mode} ${round(b.heightM)}m`,
+  ]
+    .filter((part) => part !== "")
+    .join("  ");
+}
+
+/** The scene's estimate (and its rasters), three's count, the JS heap. */
+function memoryPart(b: TrailBeat): string {
+  const raster = b.rasterMB === undefined ? "" : ` rast ${round(b.rasterMB)}MB`;
   const held =
     b.heldMB === undefined ? "" : ` held ${round(b.heldMB)}MB ${b.held ?? ""}`;
-  return (
-    `${round(b.t, 1)}s  f${b.frames} ${round(b.fps)}fps  gpu ${round(b.gpuMB)}MB${held}${heap}` +
-    `  ${b.calls}dc ${round(b.triangles / 1000)}k▲  tiles ${b.cities}/${b.dressings}` +
-    `  ${b.style} ${b.mode} ${round(b.heightM)}m`
-  );
+  const heap = b.heapMB === undefined ? "" : ` heap ${round(b.heapMB)}MB`;
+  return `gpu ${round(b.gpuMB)}MB${raster}${held.trimEnd()}${heap}`;
+}
+
+/** Building tiles / dressings, and the terrain levels: fine / coarse. */
+function tilesPart(b: TrailBeat): string {
+  const levels =
+    b.fine === undefined || b.coarse === undefined
+      ? ""
+      : ` terr ${b.fine}f/${b.coarse}c`;
+  return `tiles ${b.cities}/${b.dressings}${levels}`;
+}
+
+/** The tile cache: its bytes, then its bounds (min-max), MB. */
+function cachePart(b: TrailBeat): string {
+  if (b.cacheMB === undefined) {
+    return "";
+  }
+  const bounds =
+    b.cacheMinMB === undefined || b.cacheMaxMB === undefined
+      ? ""
+      : ` ${round(b.cacheMinMB)}-${round(b.cacheMaxMB)}`;
+  return `cache ${round(b.cacheMB)}MB${bounds}`;
+}
+
+/** Tile contents in flight (downloading, parsing), failed, and offline. */
+function netPart(b: TrailBeat): string {
+  const flight =
+    b.downloading === undefined
+      ? ""
+      : `net ${b.downloading}d ${b.parsing ?? 0}p ${b.failed ?? 0}f`;
+  return b.online === false ? `${flight} offline`.trim() : flight;
 }
 
 /** One event as a line of the report (and of the console). */

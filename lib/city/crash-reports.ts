@@ -423,6 +423,10 @@ function pageContext(trail: Trail) {
       last?.heldMB === undefined ? undefined : round(last.heldMB, 0),
     last_fps: last ? round(last.fps, 1) : undefined,
     last_tiles: last ? `${last.cities}/${last.dressings}` : undefined,
+    last_raster_mb:
+      last?.rasterMB === undefined ? undefined : round(last.rasterMB, 0),
+    last_cache_mb:
+      last?.cacheMB === undefined ? undefined : round(last.cacheMB, 0),
     last_height_m: last ? round(last.heightM, 0) : undefined,
   };
 }

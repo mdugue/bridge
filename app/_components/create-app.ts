@@ -626,8 +626,42 @@ function heldByKind(m: WebGPURenderer["info"]["memory"]): string {
   const mb = (bytes: number) => Math.round(bytes / 1_048_576);
   return (
     `${m.attributes}a ${mb(m.attributesSize + m.indexAttributesSize)}MB ` +
-    `${m.textures}t ${mb(m.texturesSize)}MB ${m.programs}p ${m.uniformBuffers}u`
+    `${m.textures}t ${mb(m.texturesSize)}MB ${m.renderTargets}rt ` +
+    `${m.programs}p ${m.uniformBuffers}u`
   );
+}
+
+/**
+ * What the tile stream holds and does, for the crash trail's heartbeat:
+ * the terrain levels loaded with their rasters (fine, coarse), the tile
+ * cache against its bounds, the tile contents in flight and those that
+ * failed — what tells a GPU that ran out from a page killed in the middle
+ * of a download burst.
+ */
+function streamByKind(
+  stream: ReturnType<typeof createTileStream>
+): Partial<Parameters<CrashTrail["beat"]>[0]> {
+  let fine = 0;
+  for (const terrain of stream.terrains) {
+    fine += terrain.level === 0 ? 1 : 0;
+  }
+  // (Both are public in 3DTilesRendererJS's code, missing from its types.)
+  const cache = stream.tiles.lruCache as typeof stream.tiles.lruCache & {
+    cachedBytes: number;
+  };
+  const { stats } = stream.tiles as unknown as {
+    stats: { downloading: number; parsing: number; failed: number };
+  };
+  return {
+    fine,
+    coarse: stream.terrains.size - fine,
+    cacheMB: cache.cachedBytes / 1_048_576,
+    cacheMinMB: cache.minBytesSize / 1_048_576,
+    cacheMaxMB: cache.maxBytesSize / 1_048_576,
+    downloading: stats.downloading,
+    parsing: stats.parsing,
+    failed: stats.failed,
+  };
 }
 
 /** Reprojects the recenter point (the spawn tile's centre) for SunCalc. */
@@ -2171,6 +2205,7 @@ async function bootApp(
         frames,
         fps: rate,
         gpuMB: gpuBytes() / 1_048_576,
+        rasterMB: trackedTextureBytes() / 1_048_576,
         heldMB: renderer.info.memory.total / 1_048_576,
         held: heldByKind(renderer.info.memory),
         calls: renderer.info.render.drawCalls,
@@ -2178,6 +2213,8 @@ async function bootApp(
         heapMB: heap ? heap.usedJSHeapSize / 1_048_576 : undefined,
         cities: stream.visibleCities().length,
         dressings: stream.dressings.size,
+        ...streamByKind(stream),
+        online: navigator.onLine,
         style: lastStyle,
         mode: pose.getMode(),
         heightM: camera.position.y - groundUnderCamera(),

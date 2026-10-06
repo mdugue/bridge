@@ -66,11 +66,15 @@ kann, schickt er Berichte:
 
 Ein Bericht enthält Browser, Betriebssystem und Gerätetyp (User-Agent),
 Bildschirmgröße und Pixeldichte, den ungefähren Arbeitsspeicher des Geräts,
-die Grafikschnittstelle (WebGPU oder WebGL2), die aufgerufene Seite ohne
-Parameter (etwa `/dresden`), den Verlauf des Besuchs (Ladeschritte,
-Fehlermeldungen, Bildrate, Speicher, geladene Kacheln, Bildstil, Gehen oder
-Fliegen, Höhe der Kamera über dem Boden), Zeitpunkte, eine zufällige Kennung
-des einzelnen Seitenaufrufs und die Version der Seite.
+die Grafikschnittstelle (WebGPU oder WebGL2), wie weit der Viewer seine
+Grafik auf diesem Gerät nach früheren Abstürzen zurückgenommen hat, die
+aufgerufene Seite ohne Parameter (etwa `/dresden`), den Verlauf des Besuchs
+(Ladeschritte, Fehlermeldungen, Bildrate, Speicher, geladene und gerade
+ladende Kacheln, ob der Browser sich für online hält, wann die Seite im
+Hintergrund lag, Bildstil, Gehen oder Fliegen, Höhe der Kamera über dem
+Boden), Zeitpunkte – nach einem Absturz auch, wie bald darauf die Seite
+wieder geöffnet wurde –, eine zufällige Kennung des einzelnen Seitenaufrufs
+und die Version der Seite.
 
 Er enthält **nicht** deinen Standort oder wo in der Stadt du warst, keine
 IP-Adresse, keinen Namen, kein Cookie und keine Kennung, die dich bei einem
