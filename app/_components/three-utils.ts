@@ -1,11 +1,124 @@
 import type {
+  BufferAttribute,
   BufferGeometry,
   EventDispatcher,
   Group,
+  InterleavedBuffer,
+  InterleavedBufferAttribute,
   Material,
   Object3D,
   Texture,
 } from "three/webgpu";
+
+/** A geometry's attribute, plain or a view of an interleaved buffer. */
+export type AnyAttribute = BufferAttribute | InterleavedBufferAttribute;
+
+/** What holds an attribute's numbers: itself, or its interleaved buffer —
+ *  what three uploads as one GPU buffer. */
+export function bufferOf(
+  attribute: AnyAttribute
+): BufferAttribute | InterleavedBuffer {
+  return (attribute as InterleavedBufferAttribute).isInterleavedBufferAttribute
+    ? (attribute as InterleavedBufferAttribute).data
+    : (attribute as BufferAttribute);
+}
+
+/**
+ * A buffer's bytes on the GPU, from its count (a field three keeps): a
+ * buffer whose CPU copy is gone (`dropCpuCopies`) weighs what it did. As
+ * three.js's `estimateBytesUsed` (which the tile renderer weighs a tile's
+ * glTF by) counts.
+ */
+export function bufferBytes(
+  buffer: BufferAttribute | InterleavedBuffer
+): number {
+  const per = buffer.array.BYTES_PER_ELEMENT;
+  return (buffer as InterleavedBuffer).isInterleavedBuffer
+    ? buffer.count * (buffer as InterleavedBuffer).stride * per
+    : buffer.count * (buffer as BufferAttribute).itemSize * per;
+}
+
+/** The geometries under `root`, each once. */
+function geometriesUnder(root: Object3D): Set<BufferGeometry> {
+  const geometries = new Set<BufferGeometry>();
+  root.traverse((obj) => {
+    const geometry = (obj as Object3D & { geometry?: BufferGeometry }).geometry;
+    if (geometry) {
+      geometries.add(geometry);
+    }
+  });
+  return geometries;
+}
+
+/** A geometry's attributes and its index. */
+function attributesOf(geometry: BufferGeometry): AnyAttribute[] {
+  const all = Object.values(geometry.attributes) as AnyAttribute[];
+  return geometry.index ? [...all, geometry.index] : all;
+}
+
+// --- buffers the whole scene shares ----------------------------------------------
+
+const sceneSharedAttributes = new WeakSet<object>();
+
+/**
+ * Marks an attribute every tile may draw with (the coarse terrain's grid
+ * index and its water index: terrain-layer.ts `createGridShare`). three's
+ * geometry dispose destroys the GPU buffer of every attribute the geometry
+ * holds, shared or not — every other tile would then draw from a
+ * destroyed buffer, and the frame fail. A marked attribute is taken off a
+ * geometry before it is disposed (`detachShared`, which `disposeGeometry`
+ * and `disposeObject3D` run first; `detachSceneShared` ahead of a dispose
+ * that is not ours) and lives as long as its app's device.
+ */
+export function markSceneShared(attribute: AnyAttribute): void {
+  sceneSharedAttributes.add(attribute);
+}
+
+/** Whether `attribute` is one the scene shares (`markSceneShared`). */
+export function isSceneShared(attribute: AnyAttribute): boolean {
+  return sceneSharedAttributes.has(attribute);
+}
+
+/** Takes the scene-shared attributes off a geometry (before its dispose:
+ *  see `markSceneShared`). */
+export function detachShared(geometry: BufferGeometry): void {
+  if (geometry.index && isSceneShared(geometry.index)) {
+    geometry.setIndex(null);
+  }
+  for (const [name, attribute] of Object.entries(geometry.attributes)) {
+    if (isSceneShared(attribute)) {
+      geometry.deleteAttribute(name);
+    }
+  }
+}
+
+/**
+ * Takes the scene-shared attributes off every geometry under `root`: what
+ * must happen before anything disposes them — the tile renderer disposes a
+ * tile's geometries itself, right after the plugins let go of it.
+ */
+export function detachSceneShared(root: Object3D): void {
+  for (const geometry of geometriesUnder(root)) {
+    detachShared(geometry);
+  }
+}
+
+/** The GPU bytes of the scene-shared attributes under `root`, each once:
+ *  what no one tile holds, though the tile renderer counts them in it. */
+export function sceneSharedBytes(root: Object3D): number {
+  const seen = new Set<object>();
+  let bytes = 0;
+  for (const geometry of geometriesUnder(root)) {
+    for (const attribute of attributesOf(geometry)) {
+      const buffer = bufferOf(attribute);
+      if (isSceneShared(attribute) && !seen.has(buffer)) {
+        seen.add(buffer);
+        bytes += bufferBytes(buffer);
+      }
+    }
+  }
+  return bytes;
+}
 
 /**
  * Disposes a material unless it is scene-wide (`userData.shared`,
@@ -27,6 +140,41 @@ export function disposeMaterial(
 }
 
 /**
+ * Runs `dispose` until it goes through, at most `attempts` times, and
+ * returns what it threw on the way (empty when the first try went
+ * through). three r186 leaves an attribute whose GPU buffer failed to
+ * allocate half made — its entry, no buffer — and a later dispose of its
+ * geometry throws on it midway, the rest of the geometry's attributes
+ * still held and its listener still on. The throw has removed that entry,
+ * so the next try goes on past it: one try per attribute at most.
+ */
+function untilThrough(dispose: () => void, attempts: number): unknown[] {
+  const errors: unknown[] = [];
+  for (let i = 0; i < attempts; i++) {
+    try {
+      dispose();
+      return errors;
+    } catch (err) {
+      errors.push(err);
+    }
+  }
+  return errors;
+}
+
+/**
+ * Disposes a geometry, past an attribute that failed to allocate
+ * (`untilThrough`), and never with a buffer the scene shares on it
+ * (`markSceneShared`). Returns what three threw, if anything.
+ */
+export function disposeGeometry(geometry: BufferGeometry): unknown[] {
+  detachShared(geometry);
+  return untilThrough(
+    () => geometry.dispose(),
+    attributesOf(geometry).length + 1
+  );
+}
+
+/**
  * Tells the renderer the drawables of a subtree are gone for good.
  * WebGPURenderer keeps a render object per drawable and pass — its
  * bindings, i.e. uniform buffers and bind groups in the GPU process — until
@@ -35,18 +183,22 @@ export function disposeMaterial(
  * (`sceneMaterial`) is never disposed, and disposing a geometry only clears
  * the attribute cache: without this event every drawable of every unloaded
  * tile kept its bindings, and the GPU process grew with each flight until
- * iOS ended it.
+ * iOS ended it. A drawable whose release throws does not keep the others':
+ * what was thrown is returned.
  */
-export function releaseRenderState(root: Object3D): void {
+export function releaseRenderState(root: Object3D): unknown[] {
+  const errors: unknown[] = [];
   root.traverse((obj) => {
     if ((obj as { geometry?: unknown }).geometry) {
       // reason: `dispose` is not in Object3D's typed event map; it is the
       // event three's renderer listens for on every drawable.
-      (obj as unknown as EventDispatcher<{ dispose: object }>).dispatchEvent({
-        type: "dispose",
-      });
+      const drawable = obj as unknown as EventDispatcher<{ dispose: object }>;
+      errors.push(
+        ...untilThrough(() => drawable.dispatchEvent({ type: "dispose" }), 1)
+      );
     }
   });
+  return errors;
 }
 
 /**
@@ -56,9 +208,14 @@ export function releaseRenderState(root: Object3D): void {
  * (city-layer.ts); without this every demolish would leak its buffers, and
  * dispose() runs it over the whole scene at teardown. Textures are NOT
  * reached (a material may share them): the layer that created a texture
- * frees it — TerrainLayer.dispose, LampControl.dispose, SunRig.dispose.
+ * frees it — TerrainLayer.dispose, LampControl.dispose, SunRig.dispose. Nor
+ * are the buffers the scene shares (`markSceneShared`): they are taken off
+ * first. One resource that throws does not stop the walk (a geometry is
+ * disposed past an attribute that failed to allocate, `disposeGeometry`):
+ * what was thrown is returned, the rest freed.
  */
-export function disposeObject3D(root: Object3D): void {
+export function disposeObject3D(root: Object3D): unknown[] {
+  const errors: unknown[] = [];
   root.traverse((obj) => {
     const resource = obj as Object3D & {
       geometry?: BufferGeometry;
@@ -66,40 +223,105 @@ export function disposeObject3D(root: Object3D): void {
     };
     // An `Instances` set's matrix and colour buffers are attributes of its
     // geometry view (instancing.ts), so they go with the geometry.
-    resource.geometry?.dispose();
-    disposeMaterial(resource.material);
+    if (resource.geometry) {
+      errors.push(...disposeGeometry(resource.geometry));
+    }
+    errors.push(...untilThrough(() => disposeMaterial(resource.material), 1));
   });
-  releaseRenderState(root);
+  errors.push(...releaseRenderState(root));
+  return errors;
 }
 
 /**
  * GPU bytes of every geometry reachable from `root` (each buffer counted
  * once: attributes, index and instanced attributes — several geometries may
  * view the same buffers, as the seasonal crowns do, crown-season.ts). An
- * estimate for the memory HUD — three keeps no byte counters, and a phone's
- * single memory pool is where this scene runs out of room first.
+ * estimate for the memory HUD and the tile cache's weighing of a dressing
+ * (three's own counters see only what it uploaded, and count a buffer once
+ * per view of it). From the buffers' counts: a buffer whose CPU copy was
+ * dropped (`dropCpuCopies`) weighs what it did.
  */
 export function estimateGeometryBytes(root: Object3D): number {
   const seen = new Set<object>();
   let bytes = 0;
-  const count = (array: ArrayLike<number> & { byteLength: number }) => {
-    if (!seen.has(array)) {
-      seen.add(array);
-      bytes += array.byteLength;
+  for (const geometry of geometriesUnder(root)) {
+    for (const attribute of attributesOf(geometry)) {
+      const buffer = bufferOf(attribute);
+      // the array tells two attributes over one array apart; a dropped
+      // one is its own
+      const key = buffer.array.length > 0 ? buffer.array : buffer;
+      if (!seen.has(key)) {
+        seen.add(key);
+        bytes += bufferBytes(buffer);
+      }
     }
-  };
-  root.traverse((obj) => {
-    const geometry = (obj as Object3D & { geometry?: BufferGeometry }).geometry;
-    if (!geometry) {
-      return;
+  }
+  return bytes;
+}
+
+// --- CPU copies -------------------------------------------------------------------
+
+/** A typed array's constructor, for an empty one of its kind. */
+type ArrayKind = new (length: number) => BufferAttribute["array"];
+
+/** Sets a geometry's bounds while its positions are still there: three
+ *  would otherwise compute them from an empty array (and cull the mesh). */
+function boundsNow(geometry: BufferGeometry): void {
+  if (!geometry.boundingBox) {
+    geometry.computeBoundingBox();
+  }
+  if (!geometry.boundingSphere) {
+    geometry.computeBoundingSphere();
+  }
+}
+
+/**
+ * Drops the CPU copies of `drop`'s buffers — once the GPU has them and
+ * nothing reads them on the CPU any more. three keeps every attribute's
+ * array after the upload (its WebGPU path never calls `onUploadCallback`):
+ * a second copy of every byte of geometry on the page's process. The array
+ * is swapped for an empty one of its kind: after the upload three reads
+ * only that (the vertex and index formats) and the count, which it keeps.
+ * A buffer that another attribute under `root` also holds, and a
+ * scene-shared one (`markSceneShared`), keep theirs; the geometries whose
+ * positions go get their bounds first. Returns the bytes dropped.
+ *
+ * Only after a compile that drew with them has resolved: an attribute three
+ * meets for the first time after this uploads an empty buffer, and the
+ * draw that reads it fails.
+ */
+export function dropCpuCopies(
+  root: Object3D,
+  drop: readonly (AnyAttribute | null | undefined)[]
+): number {
+  const dropped = new Set<AnyAttribute>();
+  for (const attribute of drop) {
+    if (attribute && !isSceneShared(attribute)) {
+      dropped.add(attribute);
     }
-    for (const attribute of Object.values(geometry.attributes)) {
-      count(attribute.array);
+  }
+  const buffers = new Set([...dropped].map(bufferOf));
+  const geometries = geometriesUnder(root);
+  for (const geometry of geometries) {
+    for (const attribute of attributesOf(geometry)) {
+      if (!dropped.has(attribute)) {
+        buffers.delete(bufferOf(attribute));
+      }
     }
-    if (geometry.index) {
-      count(geometry.index.array);
+  }
+  for (const geometry of geometries) {
+    const position = geometry.getAttribute("position") as
+      | AnyAttribute
+      | undefined;
+    if (position && buffers.has(bufferOf(position))) {
+      boundsNow(geometry);
     }
-  });
+  }
+  let bytes = 0;
+  for (const buffer of buffers) {
+    bytes += buffer.array.byteLength;
+    buffer.array = new (buffer.array.constructor as ArrayKind)(0);
+  }
   return bytes;
 }
 

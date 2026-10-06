@@ -56,7 +56,10 @@ import {
   type ModelPresetId,
   modelFootprint,
 } from "@/lib/city/model-view";
-import { SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
+import {
+  SHADOW_MAX_RADIUS,
+  shadowStreamResolution,
+} from "@/lib/city/shadow-fit";
 import { cutOutFromView } from "@/lib/city/section";
 import {
   type ExportTile,
@@ -1101,10 +1104,18 @@ async function bootApp(
   cleanups.push(() => seasonClock.dispose());
   const stream = createTileStream(
     {
+      // whether it compiled (a tile drops the CPU copies of what it
+      // uploaded); what a compile throws the stream sorts out
       compile: (object) =>
         compileWith
-          ? compileWith(object).catch(() => undefined)
-          : Promise.resolve(),
+          ? compileWith(object).then(() => true)
+          : Promise.resolve(false),
+      // a compile the GPU had no room for (the dressing stays off), or the
+      // half-made attribute it left met at a tile's release
+      onAllocationFailure: (error, where) => {
+        const message = error instanceof Error ? error.message : String(error);
+        opts.trail?.note("alloc-failed", `${where} ${message}`);
+      },
       dressingGate,
       fogColor: sceneFog.color,
       heightAt,
@@ -1119,6 +1130,7 @@ async function bootApp(
       renderer,
       styleResources,
       sunDirection,
+      tier: budget.tier,
       tileBounds: (id) => extras.tiles.find((t) => t.id === id)?.bounds,
       tilesetUrl,
     },
@@ -1129,11 +1141,9 @@ async function bootApp(
         width: container.clientWidth,
         height: container.clientHeight,
       },
-      {
-        camera: sunRig.shadowCamera,
-        width: shadowMapSizeFor(budget.profile, budget.tier),
-        height: shadowMapSizeFor(budget.profile, budget.tier),
-      },
+      // at a resolution for streaming, not the map's: it loads what casts
+      // into the view, never a finer terrain level (shadow-fit.ts)
+      { camera: sunRig.shadowCamera, ...shadowStreamResolution() },
     ]
   );
   cleanups.push(() => stream.dispose());
@@ -1176,7 +1186,11 @@ async function bootApp(
   // The sun's shadow camera streams tiles (tile-stream.ts) only while the
   // sun is up: by night it draws no shadow, and the tiles it kept loaded
   // around the player were memory nothing showed — on a phone, memory the
-  // governor cannot free (a tile in use is never evicted).
+  // governor cannot free (a tile in use is never evicted). By day it
+  // streams at a resolution of its own (lib/city/shadow-fit.ts
+  // `shadowStreamResolution`): an orthographic camera's error ignores the
+  // distance, and at the map's resolution it pinned the fine terrain level
+  // under its whole frustum, beyond any error target the governor set.
   let shadowStreams = true;
   // From safety level 2 (lib/city/gpu-safety.ts) it streams nothing, nor
   // for a while after a memory emergency (memoryEmergency, below).
@@ -1194,9 +1208,9 @@ async function bootApp(
     shadowStreams = on;
     const shadow = sunRig.shadowCamera;
     if (on) {
-      const size = shadowMapSizeFor(budget.profile, budget.tier);
+      const { width, height } = shadowStreamResolution();
       stream.tiles.setCamera(shadow);
-      stream.tiles.setResolution(shadow, size, size);
+      stream.tiles.setResolution(shadow, width, height);
     } else {
       stream.tiles.deleteCamera(shadow);
     }

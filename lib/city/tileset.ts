@@ -73,7 +73,7 @@ export const TERRAIN_LEVELS: Record<0 | 1, TerrainLevel> = {
  */
 export const COARSE_TERRAIN_ERROR = 40;
 /** Large enough that a visible tile always refines to its terrain. */
-const TILE_ERROR = 100_000;
+export const TILE_ERROR = 100_000;
 
 /** The features a fine terrain tile is dressed with (published names; only
  *  the files the tile has). Which kinds these are is the artifact table's

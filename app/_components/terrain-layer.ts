@@ -66,7 +66,12 @@ import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import { colonyCropUv } from "@/lib/city/cultivated";
 import { type MarkingTable, packMarkingTable } from "@/lib/city/markings";
 import { packSportTable, type SportTable } from "@/lib/city/sport";
-import { planTriangles, TinIndex } from "@/lib/city/terrain-tin";
+import {
+  planOf,
+  planTriangles,
+  sameNumbers,
+  TinIndex,
+} from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import { colonyGarden } from "./cultivated-layer";
 import { fetchOptionalJson, isAbortError } from "./fetch-optional";
@@ -80,6 +85,12 @@ import {
 } from "./ground-detail";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
 import { PAPER_HEX, paperGroundOn } from "./paper-scene";
+import {
+  dropDataOnUpload,
+  fetchRasterBytes,
+  inRasterTurn,
+  uploadNow,
+} from "./raster-upload";
 import { roadMarkings } from "./road-markings";
 import {
   dataXY,
@@ -100,7 +111,14 @@ import {
 } from "./material-slots";
 import { applyGroundLight, type GroundLight } from "./sky-light";
 import { sportGround } from "./sport-ground";
-import { textureBytes, trackTexture } from "./three-utils";
+import {
+  type AnyAttribute,
+  detachShared,
+  disposeGeometry,
+  markSceneShared,
+  textureBytes,
+  trackTexture,
+} from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
 /**
@@ -125,6 +143,9 @@ export interface TerrainLayer {
   heightAt: (x: number, y: number) => number | null;
   level: 0 | 1;
   mesh: Mesh;
+  /** whether the ground is a TIN (its height index reads the mesh's index:
+   *  lib/city/terrain-tin.ts `TinIndex`), not the grid */
+  tin: boolean;
   /** the tile's baked stairs (fine level only; stair-layer.ts) */
   stairs?: Mesh;
   /** the tile's baked kerb stones (fine level only; kerb-layer.ts) */
@@ -170,6 +191,8 @@ export interface TerrainOptions {
   splats: SharedRasters<SplatRasters>;
   ndvis: SharedRasters<Texture>;
   sports: SharedRasters<SportRasters>;
+  /** the grid level's index and water index, one copy for the site */
+  grids?: GridShare;
 }
 
 /**
@@ -195,28 +218,100 @@ export interface GroundUniforms {
   sunDirection: UniformNode<"vec3", Vector3>;
 }
 
+/** A loaded raster and its size in texels. */
+interface LoadedRaster {
+  height: number;
+  texture: Texture;
+  width: number;
+}
+
 /**
- * Loads a single-channel DATA raster (class ids, NDVI) as a RED texture
- * holding exactly the baked bytes. The PNG is inflated and unfiltered here
+ * How a data raster is sampled: its channels (the bake interleaves them in
+ * a greyscale PNG), NEAREST for ids and LINEAR for fields, a mip chain
+ * where it is read from afar. Set before the upload: the format and the
+ * mip chain are fixed by it.
+ */
+interface RasterLook {
+  anisotropy?: number;
+  channels: 1 | 2 | 4;
+  filter: "linear" | "nearest";
+  mipmaps?: boolean;
+}
+
+/** Ids (class, paving, sports grounds, markings): exact texels. */
+const idLook = (channels: 1 | 4): RasterLook => ({
+  channels,
+  filter: "nearest",
+});
+
+/** Fields (edge distances, colonies): smooth, read near the camera. */
+const FIELD_LOOK: RasterLook = { channels: 2, filter: "linear" };
+
+/** The NDVI: smooth and mipmapped, read across the whole tile. */
+const NDVI_LOOK: RasterLook = {
+  channels: 1,
+  filter: "linear",
+  mipmaps: true,
+  anisotropy: 16,
+};
+
+/** Applies `look` and records the texture's GPU bytes (trackTexture). */
+function lookAs(raster: LoadedRaster, look: RasterLook): void {
+  const { texture } = raster;
+  const filter = look.filter === "nearest" ? NearestFilter : LinearFilter;
+  texture.magFilter = filter;
+  texture.minFilter = look.mipmaps ? LinearMipmapLinearFilter : filter;
+  texture.generateMipmaps = look.mipmaps === true;
+  if (look.anisotropy) {
+    texture.anisotropy = look.anisotropy;
+  }
+  texture.colorSpace = NoColorSpace;
+  trackTexture(
+    texture,
+    textureBytes(
+      raster.width,
+      raster.height,
+      look.channels,
+      look.mipmaps === true
+    )
+  );
+}
+
+/**
+ * Loads a DATA raster as a texture holding exactly the baked bytes, set up
+ * as `look` says and on the GPU when it resolves (raster-upload.ts: decoded
+ * and uploaded in its turn, one raster at a time site-wide, its CPU bytes
+ * dropped at the upload). The PNG is inflated and unfiltered here
  * (lib/city/png-raster.ts), not by the browser's image decoder: WebKit
  * colour-manages (and dithers) untagged greyscale even with
  * `colorSpaceConversion: "none"`, which on iPhones rewrote class ids into
  * speckles of the neighbouring classes' colours. The inflate is async and
  * the unfiltering yields every few hundred rows, so a 4096² raster does not
- * stall the frame it streams in with. A PNG the decoder does not handle
- * falls back to the browser (`loadBitmapTexture`). Rejects on a network
- * failure and on abort.
+ * stall the frame it streams in with. A single-channel PNG the decoder does
+ * not handle falls back to the browser (`loadBitmapTexture`). Rejects on a
+ * network failure, a failed upload and an abort.
  */
 async function loadRasterTexture(
   url: string,
-  signal?: AbortSignal,
-  channels: 1 | 2 | 4 = 1
-): Promise<{ height: number; texture: Texture; width: number }> {
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
-  }
-  const bytes = new Uint8Array(await res.arrayBuffer());
+  look: RasterLook,
+  renderer?: WebGPURenderer,
+  signal?: AbortSignal
+): Promise<LoadedRaster> {
+  const bytes = await fetchRasterBytes(url, signal);
+  return inRasterTurn(async () => {
+    const raster = await decodeRaster(bytes, look.channels, signal);
+    lookAs(raster, look);
+    uploadNow(raster.texture, renderer);
+    return raster;
+  }, signal);
+}
+
+/** The raster's texture from its PNG bytes (see `loadRasterTexture`). */
+async function decodeRaster(
+  bytes: Uint8Array<ArrayBuffer>,
+  channels: 1 | 2 | 4,
+  signal?: AbortSignal
+): Promise<LoadedRaster> {
   let raster: GreyRaster;
   try {
     raster = await decodeGreyPng(bytes);
@@ -246,13 +341,30 @@ async function loadRasterTexture(
   texture.unpackAlignment = 1;
   texture.needsUpdate = true;
   // 16 MB of CPU bytes for a 4096² raster: dead weight once the GPU has
-  // them (mipmaps are generated on the GPU). Twelve resident copies took
-  // mobile Safari past its per-tab memory limit when these were bitmaps.
-  texture.onUpdate = () => {
-    (texture.image as { data: Uint8Array | null }).data = null;
-    texture.onUpdate = null;
-  };
+  // them. Twelve resident copies took mobile Safari past its per-tab
+  // memory limit when these were bitmaps.
+  dropDataOnUpload(texture);
   return { texture, width, height };
+}
+
+/**
+ * A raster that is a feature, not a requirement: absent, undecodable or
+ * failed to upload → null (the ground goes without it). Rethrows an abort.
+ */
+async function loadOptionalRaster(
+  url: string,
+  look: RasterLook,
+  renderer?: WebGPURenderer,
+  signal?: AbortSignal
+): Promise<LoadedRaster | null> {
+  try {
+    return await loadRasterTexture(url, look, renderer, signal);
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
+  }
 }
 
 /**
@@ -284,30 +396,16 @@ async function loadBitmapTexture(
 }
 
 /**
- * Loads the land-cover splatmap as a NEAREST-filtered data texture (class ids
- * must not be interpolated) in linear space (the red channel is a class id,
- * not a colour). Non-fatal: a failure just falls back to the flat sage ground.
+ * The land-cover splatmap as a NEAREST-filtered data texture (class ids must
+ * not be interpolated) in linear space (the red channel is a class id, not
+ * a colour). Non-fatal: a failure just falls back to the flat sage ground.
  */
-async function loadSplatTexture(
+function loadSplatTexture(
   url: string,
+  renderer: WebGPURenderer,
   signal?: AbortSignal
-): Promise<{ height: number; texture: Texture; width: number } | null> {
-  try {
-    const loaded = await loadRasterTexture(url, signal);
-    const { texture, width, height } = loaded;
-    texture.magFilter = NearestFilter;
-    texture.minFilter = NearestFilter;
-    texture.generateMipmaps = false;
-    texture.colorSpace = NoColorSpace;
-    // One byte per texel: the class id is the RED channel.
-    trackTexture(texture, textureBytes(width, height, 1, false));
-    return loaded;
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
+): Promise<LoadedRaster | null> {
+  return loadOptionalRaster(url, idLook(1), renderer, signal);
 }
 
 /** A class raster and the colour splat painted from it. */
@@ -328,7 +426,7 @@ export async function loadSplatRasters(
   renderer: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<SplatRasters | null> {
-  const raster = await loadSplatTexture(url, signal);
+  const raster = await loadSplatTexture(url, renderer, signal);
   if (!raster) {
     return null;
   }
@@ -357,10 +455,11 @@ export const sportKey = (raster: string, table: string): string =>
 /** Loads the sports grounds a `sportKey` names. */
 export function loadSportKey(
   key: string,
+  renderer?: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<SportRasters | null> {
   const [raster = "", table = ""] = key.split("\n");
-  return loadSportGrounds(raster, table, signal);
+  return loadSportGrounds(raster, table, renderer, signal);
 }
 
 export function freeSport(sport: SportRasters): void {
@@ -376,24 +475,11 @@ export function freeSport(sport: SportRasters): void {
  */
 export async function loadNdviTexture(
   url: string,
+  renderer?: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<Texture | null> {
-  try {
-    const { texture, width, height } = await loadRasterTexture(url, signal);
-    texture.magFilter = LinearFilter;
-    texture.minFilter = LinearMipmapLinearFilter;
-    texture.generateMipmaps = true;
-    texture.anisotropy = 16;
-    texture.colorSpace = NoColorSpace;
-    // Greenness is a single channel too (RED, from loadRasterTexture).
-    trackTexture(texture, textureBytes(width, height, 1, true));
-    return texture;
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
+  const raster = await loadOptionalRaster(url, NDVI_LOOK, renderer, signal);
+  return raster?.texture ?? null;
 }
 
 /**
@@ -405,22 +491,11 @@ export async function loadNdviTexture(
  */
 async function loadSurfaceTexture(
   url: string,
+  renderer?: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<Texture | null> {
-  try {
-    const { texture, width, height } = await loadRasterTexture(url, signal, 4);
-    texture.magFilter = NearestFilter;
-    texture.minFilter = NearestFilter;
-    texture.generateMipmaps = false;
-    texture.colorSpace = NoColorSpace;
-    trackTexture(texture, textureBytes(width, height, 4, false));
-    return texture;
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
+  const raster = await loadOptionalRaster(url, idLook(4), renderer, signal);
+  return raster?.texture ?? null;
 }
 
 /**
@@ -431,22 +506,65 @@ async function loadSurfaceTexture(
  */
 async function loadEdgesTexture(
   url: string,
+  renderer?: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<Texture | null> {
+  const raster = await loadOptionalRaster(url, FIELD_LOOK, renderer, signal);
+  return raster?.texture ?? null;
+}
+
+/** A 2-texel-high float table (sport.ts, markings.ts) as a NEAREST data
+ *  texture; at least one texel wide (a table with no rows still binds). */
+function tableTexture(packed: {
+  data: Float32Array;
+  width: number;
+}): DataTexture {
+  const table = new DataTexture(
+    packed.width > 0 ? packed.data : new Float32Array(8),
+    Math.max(packed.width, 1),
+    2,
+    RGBAFormat,
+    FloatType
+  );
+  table.magFilter = NearestFilter;
+  table.minFilter = NearestFilter;
+  table.generateMipmaps = false;
+  table.needsUpdate = true;
+  return table;
+}
+
+/**
+ * A raster read through its table (the sports grounds, the road markings):
+ * the table is packed first, so nothing can fail once the raster is on the
+ * GPU; without the raster the table goes again. Absent, empty or
+ * undecodable → null. Rethrows an abort.
+ */
+async function loadIndexedRaster(
+  rasterUrl: string,
+  packTable: () => { data: Float32Array; width: number },
+  renderer?: WebGPURenderer,
+  signal?: AbortSignal
+): Promise<{ raster: Texture; table: DataTexture } | null> {
+  let table: DataTexture;
   try {
-    const { texture, width, height } = await loadRasterTexture(url, signal, 2);
-    texture.magFilter = LinearFilter;
-    texture.minFilter = LinearFilter;
-    texture.generateMipmaps = false;
-    texture.colorSpace = NoColorSpace;
-    trackTexture(texture, textureBytes(width, height, 2, false));
-    return texture;
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
+    table = tableTexture(packTable());
+  } catch {
     return null;
   }
+  const raster = await loadOptionalRaster(
+    rasterUrl,
+    idLook(4),
+    renderer,
+    signal
+  ).catch((err: unknown) => {
+    table.dispose();
+    throw err;
+  });
+  if (!raster) {
+    table.dispose();
+    return null;
+  }
+  return { raster: raster.texture, table };
 }
 
 /**
@@ -458,42 +576,19 @@ async function loadEdgesTexture(
 async function loadSportGrounds(
   rasterUrl: string,
   tableUrl: string,
+  renderer?: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<{ raster: Texture; table: DataTexture } | null> {
   const doc = await fetchOptionalJson<SportTable>(tableUrl, signal);
   if (!doc?.grounds?.length) {
     return null;
   }
-  try {
-    const { texture, width, height } = await loadRasterTexture(
-      rasterUrl,
-      signal,
-      4
-    );
-    texture.magFilter = NearestFilter;
-    texture.minFilter = NearestFilter;
-    texture.generateMipmaps = false;
-    texture.colorSpace = NoColorSpace;
-    trackTexture(texture, textureBytes(width, height, 4, false));
-    const packed = packSportTable(doc);
-    const table = new DataTexture(
-      packed.data,
-      packed.width,
-      2,
-      RGBAFormat,
-      FloatType
-    );
-    table.magFilter = NearestFilter;
-    table.minFilter = NearestFilter;
-    table.generateMipmaps = false;
-    table.needsUpdate = true;
-    return { raster: texture, table };
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
+  return loadIndexedRaster(
+    rasterUrl,
+    () => packSportTable(doc),
+    renderer,
+    signal
+  );
 }
 
 /**
@@ -505,71 +600,37 @@ async function loadSportGrounds(
  */
 async function loadColonyTexture(
   url: string,
+  renderer?: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<Texture | null> {
-  try {
-    const { texture, width, height } = await loadRasterTexture(url, signal, 2);
-    texture.magFilter = LinearFilter;
-    texture.minFilter = LinearFilter;
-    texture.generateMipmaps = false;
-    texture.colorSpace = NoColorSpace;
-    trackTexture(texture, textureBytes(width, height, 2, false));
-    return texture;
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
+  const raster = await loadOptionalRaster(url, FIELD_LOOK, renderer, signal);
+  return raster?.texture ?? null;
 }
 
 /**
  * Loads the road markings (pipeline/bake/markings.py): the index raster
  * (RA = the row, G = lane bits, B = the centre offset; NEAREST) and its
  * table as a 2-texel-high float texture (lib/city/markings.ts). Either
- * absent or undecodable → null and the roads stay unpainted.
+ * absent or undecodable → null and the roads stay unpainted. A table with
+ * no rows still binds a (1-texel) texture: the lane bits need the program,
+ * the row lookups never run.
  */
 async function loadMarkings(
   rasterUrl: string,
   tableUrl: string,
+  renderer?: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<{ raster: Texture; table: DataTexture } | null> {
   const doc = await fetchOptionalJson<MarkingTable>(tableUrl, signal);
   if (!doc?.markings) {
     return null;
   }
-  try {
-    const { texture, width, height } = await loadRasterTexture(
-      rasterUrl,
-      signal,
-      4
-    );
-    texture.magFilter = NearestFilter;
-    texture.minFilter = NearestFilter;
-    texture.generateMipmaps = false;
-    texture.colorSpace = NoColorSpace;
-    trackTexture(texture, textureBytes(width, height, 4, false));
-    const packed = packMarkingTable(doc);
-    // A table with no rows still binds a (1-texel) texture: the lane bits
-    // need the program, the row lookups never run.
-    const table = new DataTexture(
-      packed.width > 0 ? packed.data : new Float32Array(8),
-      Math.max(packed.width, 1),
-      2,
-      RGBAFormat,
-      FloatType
-    );
-    table.magFilter = NearestFilter;
-    table.minFilter = NearestFilter;
-    table.generateMipmaps = false;
-    table.needsUpdate = true;
-    return { raster: texture, table };
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
+  return loadIndexedRaster(
+    rasterUrl,
+    () => packMarkingTable(doc),
+    renderer,
+    signal
+  );
 }
 
 /** Land-cover splatmap aligned to the terrain, for per-surface tinting. */
@@ -1113,6 +1174,108 @@ function tinHeightAt(
   return (x, y) => tin.heightAt(x, y);
 }
 
+/** A mesh's positions as the numbers they are stored as (quantised, maybe
+ *  interleaved): the array, numbers per vertex, and where x sits. */
+function rawPositions(position: BufferAttribute | InterleavedBufferAttribute): {
+  array: Float32Array | Int16Array | Int8Array | Uint16Array | Uint8Array;
+  offset: number;
+  stride: number;
+} {
+  const interleaved =
+    (position as InterleavedBufferAttribute).isInterleavedBufferAttribute ===
+    true;
+  return interleaved
+    ? {
+        array: (position as InterleavedBufferAttribute).data
+          .array as Int16Array,
+        stride: (position as InterleavedBufferAttribute).data.stride,
+        offset: (position as InterleavedBufferAttribute).offset,
+      }
+    : {
+        array: (position as BufferAttribute).array as Float32Array,
+        stride: position.itemSize,
+        offset: 0,
+      };
+}
+
+/** The triangles of `index` with area in plan, as an index attribute of
+ *  their own (`waterGeometryOf`). */
+function ownWaterIndex(
+  index: BufferAttribute,
+  position: BufferAttribute | InterleavedBufferAttribute
+): BufferAttribute {
+  // The quantised numbers as they are (lib/city/terrain-tin.ts).
+  const raw = rawPositions(position);
+  return new BufferAttribute(
+    planTriangles(
+      index.array as Uint16Array | Uint32Array,
+      raw.array,
+      raw.stride,
+      raw.offset
+    ),
+    1
+  );
+}
+
+/**
+ * The coarse terrain's grid index and the water index made from it, one
+ * copy for the whole site. Every coarse tile carries the same index byte
+ * for byte (the bake triangulates every tile's grid and skirt alike) —
+ * 6 MB on the GPU and as much on the CPU, its water index another 6 MB,
+ * i.e. 80 % of a coarse tile's geometry. The first tile's become the
+ * site's (three-utils.ts `markSceneShared`: no tile's release frees them,
+ * the app's device does); a later tile's are swapped for them where they
+ * hold the same numbers — the water's where its plan (the quantised x and
+ * z it is chosen by) is the first tile's too. A tile whose own differ keeps
+ * its own. One per app: the stream makes it (tile-stream.ts).
+ */
+export interface GridShare {
+  /** the site's index for an `n`·`n` grid, or `own` when it differs */
+  index: (n: number, own: BufferAttribute) => BufferAttribute;
+  /** the water triangles of `index` over `position`'s plan */
+  water: (
+    n: number,
+    index: BufferAttribute,
+    position: BufferAttribute | InterleavedBufferAttribute
+  ) => BufferAttribute;
+}
+
+export function createGridShare(): GridShare {
+  const indices = new Map<number, BufferAttribute>();
+  const waters = new Map<
+    number,
+    { index: BufferAttribute; plan: ArrayLike<number> }
+  >();
+  return {
+    index: (n, own) => {
+      const kept = indices.get(n);
+      if (!kept) {
+        markSceneShared(own);
+        indices.set(n, own);
+        return own;
+      }
+      return sameNumbers(kept.array, own.array) ? kept : own;
+    },
+    water: (n, index, position) => {
+      if (indices.get(n) !== index) {
+        return ownWaterIndex(index, position);
+      }
+      const raw = rawPositions(position);
+      const plan = planOf(raw.array, raw.stride, raw.offset, position.count);
+      const kept = waters.get(n);
+      if (kept && sameNumbers(kept.plan, plan)) {
+        return kept.index;
+      }
+      const own = ownWaterIndex(index, position);
+      if (!kept) {
+        markSceneShared(own);
+        waters.set(n, { index: own, plan });
+      }
+      return own;
+    },
+  };
+}
+
 /**
  * The water's geometry: the terrain's positions without its skirt. The water
  * and mist sheets drape the terrain mesh, and its skirt — the 30 m vertical
@@ -1123,11 +1286,16 @@ function tinHeightAt(
  * in plan. A TIN's water also faces straight up (`upFacing`): it spans the
  * river with a few huge triangles whose vertex normals are averaged with the
  * steep bank faces they share a vertex with, so the water's shading would
- * fan out in streaks across them.
+ * fan out in streaks across them. `waterIndex` picks its triangles (on the
+ * grid, the site's shared ones: `GridShare`).
  */
 function waterGeometryOf(
   geometry: BufferGeometry,
-  upFacing: boolean
+  upFacing: boolean,
+  waterIndex: (
+    index: BufferAttribute,
+    position: BufferAttribute | InterleavedBufferAttribute
+  ) => BufferAttribute = ownWaterIndex
 ): BufferGeometry {
   const position = geometry.getAttribute("position");
   const index = geometry.getIndex();
@@ -1143,21 +1311,7 @@ function waterGeometryOf(
     water.setAttribute("normal", geometry.getAttribute("normal"));
   }
   if (index) {
-    // The quantised numbers as they are (lib/city/terrain-tin.ts).
-    const raw = position;
-    const interleaved =
-      (raw as InterleavedBufferAttribute).isInterleavedBufferAttribute === true;
-    const kept = planTriangles(
-      index.array as Uint16Array | Uint32Array,
-      interleaved
-        ? (raw as InterleavedBufferAttribute).data.array
-        : (raw as BufferAttribute).array,
-      interleaved
-        ? (raw as InterleavedBufferAttribute).data.stride
-        : raw.itemSize,
-      interleaved ? (raw as InterleavedBufferAttribute).offset : 0
-    );
-    water.setIndex(new BufferAttribute(kept, 1));
+    water.setIndex(waterIndex(index, position));
   }
   water.boundingBox = geometry.boundingBox?.clone() ?? null;
   water.boundingSphere = geometry.boundingSphere?.clone() ?? null;
@@ -1216,9 +1370,11 @@ interface TerrainRasters {
 
 /**
  * The level's rasters, one after another on purpose: several 4096² rasters
- * decoding at once is a peak mobile Safari kills the tab for. Those a
- * tile's two levels share (tile-stream.ts) are held, not owned; on an
- * abort everything taken so far is let go again.
+ * decoding at once is a peak mobile Safari kills the tab for (and across
+ * the levels the tile renderer parses at once, each raster decodes and
+ * uploads in its turn: raster-upload.ts). Those a tile's two levels share
+ * (tile-stream.ts) are held, not owned; on an abort everything taken so far
+ * is let go again — on the GPU already, so let go means freed there too.
  */
 async function loadTerrainRasters(
   extras: TerrainExtras,
@@ -1258,6 +1414,19 @@ async function loadTerrainRasters(
   }
 }
 
+/**
+ * Whether a terrain level reads its tile's sports grounds: both levels on a
+ * desktop, the fine one only on a phone. Their index raster is a 2048²
+ * RGBA, 16 MB on the GPU for each coarse tile in view (14 of Dresden's 15
+ * tiles have grounds); beyond the fine level's reach a pitch shows its
+ * land-cover class, its lines a pixel or less there anyway. The coarse
+ * level then builds the variant without the slot, which every tile
+ * without grounds shares.
+ */
+export function readsSportGrounds(level: 0 | 1, lowRasters: boolean): boolean {
+  return !(lowRasters && level === 1);
+}
+
 /** The optional rasters over the class raster, one after another (see
  *  loadTerrainRasters); each absent one is null. The level's own go into
  *  `owned`. */
@@ -1280,13 +1449,17 @@ async function loadDetailRasters(
   // fine level only.
   const surface = url(extras.surface);
   const surfaceTexture = own(
-    surface ? await loadSurfaceTexture(surface, opts.signal) : null
+    surface
+      ? await loadSurfaceTexture(surface, opts.renderer, opts.signal)
+      : null
   );
   const edges = url(extras.edges);
   const edgesTexture = own(
-    edges ? await loadEdgesTexture(edges, opts.signal) : null
+    edges ? await loadEdgesTexture(edges, opts.renderer, opts.signal) : null
   );
-  const sportRaster = url(extras.sport);
+  const sportRaster = readsSportGrounds(extras.level, opts.lowRasters)
+    ? url(extras.sport)
+    : undefined;
   const sportTable = url(extras.sportTable);
   const sport = await hold(
     opts.sports,
@@ -1301,7 +1474,12 @@ async function loadDetailRasters(
   const markingsTable = url(extras.markingsTable);
   const markings =
     markingsRaster && markingsTable
-      ? await loadMarkings(markingsRaster, markingsTable, opts.signal)
+      ? await loadMarkings(
+          markingsRaster,
+          markingsTable,
+          opts.renderer,
+          opts.signal
+        )
       : null;
   own(markings?.raster ?? null);
   own(markings?.table ?? null);
@@ -1311,7 +1489,9 @@ async function loadDetailRasters(
     (opts.lowRasters ? extras.cultivatedLow : undefined) ?? extras.cultivated
   );
   const colonyTexture = own(
-    colonies ? await loadColonyTexture(colonies, opts.signal) : null
+    colonies
+      ? await loadColonyTexture(colonies, opts.renderer, opts.signal)
+      : null
   );
   const horizon = await hold(opts.horizon, url(extras.horizon));
   const svf = await hold(opts.skyView, url(extras.svf));
@@ -1369,6 +1549,43 @@ function groundLightOf(splat: SplatLayer): GroundLight | undefined {
 }
 
 /**
+ * A dressed level's buffers that nothing reads on the CPU once its compile
+ * has uploaded them (tile-stream.ts drops their CPU copies then: three.js
+ * keeps every one, a second copy of the tile's geometry). Each is read by
+ * the material its compile builds, so it is on the GPU by then:
+ * - the ground's positions and normals (the terrain material reads both;
+ *   the height samplers copied what they need at dressing) and a grid's
+ *   own index — not a TIN's, which its height index reads
+ *   (lib/city/terrain-tin.ts `TinIndex`), nor the site's shared one;
+ * - the water's own index (its positions are the ground's); not its
+ *   normals, which its material never reads, so a later material might;
+ * - the stairs', walls' and kerbs' positions, normals and index, the
+ *   stairs' vertex colours (they draw with them);
+ * - the fences' positions, band uv and index; not their normals (the band
+ *   is lit as the ground, by a normal of its own).
+ */
+export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
+  const ground = layer.mesh.geometry;
+  const of = (mesh: Mesh | undefined, names: string[]) =>
+    mesh
+      ? [
+          ...names.map((name) => mesh.geometry.getAttribute(name)),
+          mesh.geometry.getIndex(),
+        ]
+      : [];
+  return [
+    ground.getAttribute("position"),
+    ground.getAttribute("normal"),
+    layer.tin ? null : ground.getIndex(),
+    layer.water?.mesh.geometry.getIndex(),
+    ...of(layer.stairs, ["position", "normal", "color"]),
+    ...of(layer.walls, ["position", "normal"]),
+    ...of(layer.kerbs, ["position", "normal"]),
+    ...of(layer.fences, ["position", "uv"]),
+  ].filter((a): a is AnyAttribute => a !== null && a !== undefined);
+}
+
+/**
  * Dresses a streamed terrain mesh: loads its class raster (and NDVI), paints
  * the colour splat, swaps in the land-cover material and hangs the water and
  * mist sheets under it. `toData` maps the mesh's local frame to the data
@@ -1382,7 +1599,12 @@ export async function dressTerrain(
 ): Promise<TerrainLayer> {
   const { bounds, n } = extras;
   // The fine level is a TIN; the coarse one (and a fine level whose DGM had
-  // holes) the grid.
+  // holes) the grid, whose index (and water index) the site shares.
+  const grids = extras.tin ? undefined : opts.grids;
+  const index = mesh.geometry.getIndex();
+  if (grids && index) {
+    mesh.geometry.setIndex(grids.index(n, index));
+  }
   const elevations = extras.tin ? null : gridElevations(mesh, n, toData);
   const heightAt = elevations
     ? (x: number, y: number) =>
@@ -1416,7 +1638,8 @@ export async function dressTerrain(
   // the tile.
   const waterGeometry = waterGeometryOf(
     mesh.geometry,
-    extras.tin !== undefined
+    extras.tin !== undefined,
+    grids && ((own, position) => grids.water(n, own, position))
   );
   const water = splat
     ? createWaterLayer(waterGeometry, splat, opts.fogColor)
@@ -1436,14 +1659,17 @@ export async function dressTerrain(
     light: splat ? groundLightOf(splat) : undefined,
     tile: extras.tileId,
     level: extras.level,
+    tin: extras.tin !== undefined,
     vertexCount: mesh.geometry.getAttribute("position").count,
     bounds,
     minElevation: extras.minElevation,
     water,
     heightAt,
     dispose: () => {
-      // Shares the tile's positions; only its own index (and normals) go.
-      waterGeometry.dispose();
+      // Shares the tile's positions; only its own index (and normals) go —
+      // not the site's (GridShare), which other tiles draw with.
+      detachShared(mesh.geometry);
+      disposeGeometry(waterGeometry);
       free();
     },
   };

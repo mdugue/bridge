@@ -2,7 +2,9 @@ import { expect, test } from "bun:test";
 import { SKIRT_DEPTH } from "./terrain-geometry";
 import {
   buildTinGeometryData,
+  planOf,
   planTriangles,
+  sameNumbers,
   type TerrainTin,
   TinIndex,
   tinFromMesher,
@@ -153,6 +155,37 @@ test("heightAt skips the vertical skirt triangles it is handed", () => {
   // surface one; the surface wins, never the skirt's lowered floor.
   expect(index.heightAt(15, 30)).toBeCloseTo(101, 2);
   expect(index.heightAt(30, 15)).toBeCloseTo(105, 2);
+});
+
+test("meshes with one index and one plan have the same water triangles, whatever their heights", () => {
+  const tin = roundTrip();
+  const { positions, indices } = buildTinGeometryData(tin, { cx: 0, cy: 0 });
+  const count = positions.length / 3;
+  // two tiles' quantised Y-up positions: the same plan, other heights
+  const tile = (lift: number) => {
+    const out = new Int16Array(count * 4);
+    for (let i = 0; i < count; i++) {
+      const [x, y, z] = [0, 1, 2].map((k) => positions[3 * i + k]);
+      out.set(
+        [Math.round(x * 100), Math.round(z * 10) + lift, -y * 100],
+        4 * i
+      );
+    }
+    return out;
+  };
+  const a = tile(0);
+  const b = tile(37);
+  const index = Uint32Array.from(indices);
+  expect(sameNumbers(planOf(a, 4, 0, count), planOf(b, 4, 0, count))).toBe(
+    true
+  );
+  expect(planTriangles(index, b, 4)).toEqual(planTriangles(index, a, 4));
+  // a plan that differs is told apart
+  const moved = tile(0);
+  moved[4] += 1;
+  expect(sameNumbers(planOf(a, 4, 0, count), planOf(moved, 4, 0, count))).toBe(
+    false
+  );
 });
 
 test("planTriangles keeps the surface and drops the skirt, quantised or not", () => {
