@@ -10,6 +10,7 @@ import { uniform } from "three/tsl";
 import {
   createTerrainMaterial,
   type GroundUniforms,
+  readsSportGrounds,
   type SplatLayer,
   splatUv,
 } from "./terrain-layer";
@@ -54,6 +55,21 @@ test("the baked light folds in only where the tile has its rasters", () => {
   expect(createTerrainMaterial(splat()).aoNode).toBeNull();
   const lit = createTerrainMaterial(splat({ svfTexture: raster(RedFormat) }));
   expect(lit.aoNode).not.toBeNull();
+});
+
+test("a phone's coarse level reads no sports grounds, and builds as every tile without them", () => {
+  expect(readsSportGrounds(1, true)).toBe(false);
+  // the fine level keeps them, and a desktop's coarse level too
+  expect(readsSportGrounds(0, true)).toBe(true);
+  expect(readsSportGrounds(1, false)).toBe(true);
+  const look = ground();
+  const sport = { raster: raster(RGBAFormat), table: raster(RGBAFormat) };
+  const bare = createTerrainMaterial(splat({ ground: look }));
+  const lean = createTerrainMaterial(splat({ ground: look }));
+  const pitched = createTerrainMaterial(splat({ ground: look, sport }));
+  // one shared graph for the variant: a tile that lands builds no shader
+  expect(lean.colorNode).toBe(bare.colorNode);
+  expect(pitched.colorNode).not.toBe(bare.colorNode);
 });
 
 test("the splat uv is a node over the tile's corner uniform", () => {

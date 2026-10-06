@@ -824,27 +824,28 @@ export class DressingPlugin {
   private readonly tileOf = new WeakMap<Object3D, object>();
   /** the sky-view rasters a tile's terrain and buildings share */
   readonly skyView: SharedRasters<Texture> = createSharedRasters(
-    (url) => loadSkyViewTexture(url),
+    (url, signal) => loadSkyViewTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
   /** the horizon rasters a tile's two terrain levels share */
   readonly horizon: SharedRasters<Texture> = createSharedRasters(
-    (url) => loadHorizonTexture(url),
+    (url, signal) => loadHorizonTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
   /** the class rasters (and their painted splats), NDVI and sports grounds
    *  a tile's two terrain levels share — on a phone both levels name the
-   *  same files, ~43 MB of GPU memory per tile loaded twice */
+   *  same class and NDVI files, ~30 MB of GPU memory per tile loaded twice
+   *  (the sports grounds only the fine level reads there) */
   readonly splats: SharedRasters<SplatRasters> = createSharedRasters(
     (url, signal) => loadSplatRasters(url, this.ctx.renderer, signal),
     freeSplatRasters
   );
   readonly ndvis: SharedRasters<Texture> = createSharedRasters(
-    (url, signal) => loadNdviTexture(url, signal),
+    (url, signal) => loadNdviTexture(url, this.ctx.renderer, signal),
     (texture) => texture.dispose()
   );
   readonly sports: SharedRasters<SportRasters> = createSharedRasters(
-    (key, signal) => loadSportKey(key, signal),
+    (key, signal) => loadSportKey(key, this.ctx.renderer, signal),
     freeSport
   );
 

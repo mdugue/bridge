@@ -12,6 +12,7 @@ import {
   UnsignedByteType,
   Vector2,
   type Vector3,
+  type WebGPURenderer,
 } from "three/webgpu";
 import {
   asin,
@@ -37,7 +38,7 @@ import {
   vec2,
 } from "three/tsl";
 import type { Node, UniformNode } from "three/webgpu";
-import { decodeGreyPng } from "@/lib/city/png-raster";
+import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import {
   FACADE_SVF_GAIN,
   FACADE_SVF_OFFSET_M,
@@ -66,6 +67,12 @@ import {
   type V2,
   type V3,
 } from "./shader-chunks";
+import {
+  dropDataOnUpload,
+  fetchRasterBytes,
+  inRasterTurn,
+  uploadNow,
+} from "./raster-upload";
 import { sceneShared, textureBytes, trackTexture } from "./three-utils";
 
 /**
@@ -430,56 +437,71 @@ export const retainOpenSkyTexture = white.retain;
 
 // --- loading -------------------------------------------------------------------------
 
-/** Drops the CPU copy once the GPU has it (as terrain-layer's rasters do). */
-function releaseAfterUpload(tex: Texture): void {
-  tex.onUpdate = () => {
-    (tex.image as { data: Uint8Array | null }).data = null;
-    tex.onUpdate = null;
-  };
-}
-
-async function fetchGrey(url: string, signal?: AbortSignal) {
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
-  }
-  return decodeGreyPng(new Uint8Array(await res.arrayBuffer()));
-}
-
 /**
- * The sky-view raster as a RED texture, LINEAR + mipmapped (a soft field).
- * Decoded by the viewer's own PNG decoder, never the browser's. Absent or
- * undecodable → null (the light stays as it was); rethrows an abort.
+ * A baked light raster: fetched, then decoded by the viewer's own PNG
+ * decoder (never the browser's), made a texture by `make` and on the GPU in
+ * its turn (raster-upload.ts: one raster at a time site-wide, its CPU bytes
+ * dropped at the upload). Absent, undecodable, refused by `make` or failed
+ * to upload → null (the light stays as it was); rethrows an abort.
  */
-export async function loadSkyViewTexture(
+async function loadLightRaster<T extends Texture>(
   url: string,
+  make: (raster: GreyRaster) => T | null,
+  renderer?: WebGPURenderer,
   signal?: AbortSignal
-): Promise<Texture | null> {
+): Promise<T | null> {
   try {
-    const raster = await fetchGrey(url, signal);
-    const tex = new DataTexture(
-      raster.data,
-      raster.width,
-      raster.height,
-      RedFormat,
-      UnsignedByteType
-    );
-    tex.flipY = false;
-    tex.unpackAlignment = 1;
-    tex.magFilter = LinearFilter;
-    tex.minFilter = LinearMipmapLinearFilter;
-    tex.generateMipmaps = true;
-    tex.colorSpace = NoColorSpace;
-    tex.needsUpdate = true;
-    releaseAfterUpload(tex);
-    trackTexture(tex, textureBytes(raster.width, raster.height, 1, true));
-    return tex;
+    const bytes = await fetchRasterBytes(url, signal);
+    return await inRasterTurn(async () => {
+      const raster = await decodeGreyPng(bytes);
+      signal?.throwIfAborted();
+      const tex = make(raster);
+      if (tex) {
+        tex.flipY = false;
+        tex.unpackAlignment = 1;
+        tex.colorSpace = NoColorSpace;
+        tex.needsUpdate = true;
+        dropDataOnUpload(tex);
+        uploadNow(tex, renderer);
+      }
+      return tex;
+    }, signal);
   } catch (err) {
     if (isAbortError(err)) {
       throw err;
     }
     return null;
   }
+}
+
+/**
+ * The sky-view raster as a RED texture, LINEAR + mipmapped (a soft field).
+ * See `loadLightRaster`.
+ */
+export function loadSkyViewTexture(
+  url: string,
+  signal?: AbortSignal,
+  renderer?: WebGPURenderer
+): Promise<Texture | null> {
+  return loadLightRaster(
+    url,
+    (raster) => {
+      const tex = new DataTexture(
+        raster.data,
+        raster.width,
+        raster.height,
+        RedFormat,
+        UnsignedByteType
+      );
+      tex.magFilter = LinearFilter;
+      tex.minFilter = LinearMipmapLinearFilter;
+      tex.generateMipmaps = true;
+      trackTexture(tex, textureBytes(raster.width, raster.height, 1, true));
+      return tex;
+    },
+    renderer,
+    signal
+  );
 }
 
 /**
@@ -489,33 +511,33 @@ export async function loadSkyViewTexture(
  * exactly a DataArrayTexture's layer-major layout. LINEAR (the angles
  * interpolate), no mipmaps. Absent, or an older one-band raster → null.
  */
-export async function loadHorizonTexture(
+export function loadHorizonTexture(
   url: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  renderer?: WebGPURenderer
 ): Promise<DataArrayTexture | null> {
-  try {
-    const raster = await fetchGrey(url, signal);
-    const n = raster.width / 4;
-    if (raster.height !== n * HORIZON_TEXTURE_LAYERS) {
-      return null;
-    }
-    const tex = new DataArrayTexture(raster.data, n, n, HORIZON_TEXTURE_LAYERS);
-    tex.format = RGBAFormat;
-    tex.type = UnsignedByteType;
-    tex.flipY = false;
-    tex.unpackAlignment = 1;
-    tex.magFilter = LinearFilter;
-    tex.minFilter = LinearFilter;
-    tex.generateMipmaps = false;
-    tex.colorSpace = NoColorSpace;
-    tex.needsUpdate = true;
-    releaseAfterUpload(tex);
-    trackTexture(tex, textureBytes(n, n * HORIZON_TEXTURE_LAYERS, 4, false));
-    return tex;
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
+  return loadLightRaster(
+    url,
+    (raster) => {
+      const n = raster.width / 4;
+      if (raster.height !== n * HORIZON_TEXTURE_LAYERS) {
+        return null;
+      }
+      const tex = new DataArrayTexture(
+        raster.data,
+        n,
+        n,
+        HORIZON_TEXTURE_LAYERS
+      );
+      tex.format = RGBAFormat;
+      tex.type = UnsignedByteType;
+      tex.magFilter = LinearFilter;
+      tex.minFilter = LinearFilter;
+      tex.generateMipmaps = false;
+      trackTexture(tex, textureBytes(n, n * HORIZON_TEXTURE_LAYERS, 4, false));
+      return tex;
+    },
+    renderer,
+    signal
+  );
 }
