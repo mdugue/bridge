@@ -1,5 +1,6 @@
 import {
   Box3,
+  type BufferAttribute,
   type Camera,
   Color,
   Group,
@@ -136,6 +137,9 @@ import {
 import { createSunRig, type SunState } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
+  type AnyAttribute,
+  bufferBytes,
+  bufferOf,
   disposeObject3D,
   estimateGeometryBytes,
   retainSceneMaterials,
@@ -272,14 +276,8 @@ function sceneBuffers(
     const geometry = (
       object as Object3D & {
         geometry?: {
-          attributes: Record<
-            string,
-            {
-              array: ArrayLike<number> & { byteLength: number };
-              data?: { array: { byteLength: number } };
-            }
-          >;
-          index: { array: { byteLength: number } } | null;
+          attributes: Record<string, AnyAttribute>;
+          index: BufferAttribute | null;
         };
       }
     ).geometry;
@@ -287,12 +285,13 @@ function sceneBuffers(
       return;
     }
     drawables++;
+    // by count, not by the array: a tile drops the CPU copies it uploaded
     if (geometry.index) {
-      indices.set(geometry.index, geometry.index.array.byteLength);
+      indices.set(geometry.index, bufferBytes(geometry.index));
     }
     for (const attribute of Object.values(geometry.attributes)) {
-      const owner = attribute.data ?? attribute;
-      buffers.set(owner, owner.array.byteLength);
+      const owner = bufferOf(attribute);
+      buffers.set(owner, bufferBytes(owner));
     }
   });
   const sum = (m: Map<object, number>) =>
@@ -660,6 +659,7 @@ function traceRenderer(
   trail.set({
     backend: backend.isWebGPUBackend ? "WebGPU" : "WebGL2",
     pixelRatio: renderer.getPixelRatio(),
+    safety,
   });
   if (safety > 0) {
     // A lighter page (lib/city/gpu-safety.ts): what the device went through.
@@ -1119,11 +1119,17 @@ async function bootApp(
         compileWith
           ? compileWith(object).then(() => true)
           : Promise.resolve(false),
-      // a compile the GPU had no room for (the dressing stays off), or the
-      // half-made attribute it left met at a tile's release
+      // a compile the GPU had no room for (the dressing stays off): shed
+      // memory before a frame's own allocation fails; the half-made
+      // attribute such a failure left, met again at a tile's release, is
+      // only noted (memoryEmergency is defined further down: the stream
+      // calls this from its loads, which start with the first frame)
       onAllocationFailure: (error, where) => {
         const message = error instanceof Error ? error.message : String(error);
         opts.trail?.note("alloc-failed", `${where} ${message}`);
+        if (!where.startsWith("dispose")) {
+          memoryEmergency(`allocation ${where}`);
+        }
       },
       dressingGate,
       fogColor: sceneFog.color,
