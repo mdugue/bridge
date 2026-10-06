@@ -2,12 +2,14 @@ import {
   FPS_BUCKETS,
   firstAt,
   formatBeat,
+  resumedFor,
   round,
   type SummaryMark,
   type Trail,
   type TrailEvent,
   trailPhase,
 } from "./crash-trail";
+import { RESUME_WINDOW_MS } from "./gpu-safety";
 
 /**
  * The viewer's reports to an error tracker, built from the crash trail
@@ -21,7 +23,10 @@ import {
  *   is reported by the next load, its last events and beats as breadcrumbs.
  * - a **problem** on this page: an uncaught error, or one of the failures
  *   the viewer catches itself and notes (a lost device, a GPU error, a
- *   frame that threw, a file that did not load, a failed boot).
+ *   frame that threw, a GPU allocation that failed, a file that did not
+ *   load, a failed boot, a GPU the page could not recover from) — until
+ *   the page is past saving or leaving, after which a problem is its end's
+ *   aftermath and only a breadcrumb (`isAftermath`).
  * - the page's **summary**, a transaction each time the page leaves view,
  *   for the stretch since the last one: the time to the first frame and to
  *   loaded (in the stretch they fell in), the frame rates while in view,
@@ -53,12 +58,129 @@ export const PROBLEM_KINDS: ReadonlySet<string> = new Set([
   "frame failed",
   "load-error",
   "boot failed",
+  // a GPU allocation that failed in a compile: the page sheds and goes on
+  "alloc-failed",
+  // the render stopped and the page did not reload: the failure card
+  "gpu failed",
 ]);
 // Not "render stopped": it always follows a lost device or a failed frame,
-// which say why.
+// which say why. Nor what the viewer notes as it copes — "gpu reclaimed"
+// (a GPU the system took while the page was in the background, restored
+// by a reload), "memory emergency", "net-retry", "net-wait", "safety":
+// those are the trail's breadcrumbs, never an event of their own.
+
+/**
+ * The problems that end the page: the render stops after them, or the boot
+ * gives up. One goes out whatever the page reported before it (the cap is
+ * for the problems a page goes on after: one out-of-memory episode alone
+ * notes an allocation per part) — and only the first: the next is its echo
+ * (a failure card after a failed frame).
+ */
+const PAGE_ENDING: ReadonlySet<string> = new Set([
+  "device-lost",
+  "frame failed",
+  "boot failed",
+  "gpu failed",
+]);
+
+/**
+ * The problems a page reports once whatever their detail: every part a
+ * GPU short of memory fails to make is one episode, one warning.
+ */
+const ONCE_A_PAGE: ReadonlySet<string> = new Set(["alloc-failed"]);
 
 /** The most problems one page reports (a GPU error can repeat per frame). */
 export const PROBLEMS_PER_PAGE = 5;
+
+/** A report's severity, as Sentry names it. */
+type ReportLevel = "fatal" | "error" | "warning";
+
+/**
+ * How bad a problem is: a lost device, a GPU the page could not recover
+ * from and a failed boot end the page (fatal) — except a boot that gave
+ * up on the network ("network: …", the detail the viewer gives a load it
+ * retried in vain), which is the connection's failure, not the viewer's; a
+ * failed allocation the page survived is a warning; everything else an
+ * error.
+ */
+function problemLevel(event: TrailEvent): ReportLevel {
+  switch (event.kind) {
+    case "device-lost":
+    case "gpu failed":
+      return "fatal";
+    case "boot failed":
+      return event.detail?.startsWith("network:") ? "error" : "fatal";
+    case "alloc-failed":
+      return "warning";
+    default:
+      return "error";
+  }
+}
+
+/**
+ * The notes after which the page is past saving — its render stopped, it
+ * reloads itself, or its GPU was taken in the background — so whatever
+ * fails next is what its end leaves behind (a rejection from freeing what
+ * the dead device held, a fetch the reload cancels).
+ */
+const PAST_SAVING: readonly string[] = [
+  "render stopped",
+  "reloading",
+  "gpu reclaimed",
+];
+/** The problems a page causes itself as it leaves: a fetch cancelled. */
+const LEAVING_PROBLEMS: ReadonlySet<string> = new Set([
+  "load-error",
+  "boot failed",
+]);
+/**
+ * The signs of a GPU the system took (ADR 0046): a device lost, or an
+ * allocation refused, while the page is hidden or just after a long
+ * absence — what create-app's resume guard calls a reclaim. It notes
+ * `gpu reclaimed` only as it stops the render, after the device's own
+ * word: the order the signs arrive in must not decide the report.
+ */
+const RECLAIM_PROBLEMS: ReadonlySet<string> = new Set([
+  "device-lost",
+  "alloc-failed",
+]);
+/** create-app's window after a return, in the trail's seconds. */
+const RECLAIM_WINDOW_S = RESUME_WINDOW_MS / 1000;
+
+/**
+ * Whether a problem the page notes is the aftermath of its end, kept as a
+ * breadcrumb instead of a report of its own: once the page is past saving
+ * (PAST_SAVING) or leaving (its record ended clean: pagehide, or the
+ * viewer unmounted); a load that failed while the page was `hidden` — the
+ * browser cancels a background page's fetches, and a reload's; and the
+ * signs of a GPU the system reclaimed (RECLAIM_PROBLEMS). A page that
+ * could not recover its GPU ("gpu failed": the failure card) is reported
+ * past saving too — after a reclaim it is the only word there is.
+ */
+export function isAftermath(
+  trail: Trail,
+  event: TrailEvent,
+  hidden: boolean
+): boolean {
+  if (trail.state === "clean") {
+    return true;
+  }
+  if (event.kind === "gpu failed") {
+    return false;
+  }
+  if (PAST_SAVING.some((kind) => firstAt(trail, kind) !== undefined)) {
+    return true;
+  }
+  if (RECLAIM_PROBLEMS.has(event.kind) && reclaimedAt(trail, event, hidden)) {
+    return true;
+  }
+  return hidden && LEAVING_PROBLEMS.has(event.kind);
+}
+
+/** Whether the GPU fails where the system takes it: hidden, or just back. */
+function reclaimedAt(trail: Trail, event: TrailEvent, hidden: boolean) {
+  return hidden || (resumedFor(trail, event.t) ?? Infinity) < RECLAIM_WINDOW_S;
+}
 
 /**
  * The release names' prefix: a name is global to a Sentry organisation,
@@ -217,14 +339,16 @@ const URL_PATTERN = /\b[a-z]+:\/\/\S+/gi;
 /**
  * An event's text as it may leave the device, with no place in it: the
  * numbers in a URL go (a tile's file names the 2 km cell the camera was
- * in — after *Standort*, where the visitor stands), and so does anything
- * shaped like a coordinate (five digits and more, three decimals and
- * more).
+ * in — after *Standort*, where the visitor stands), and those of a bare
+ * tile id (`33412_5656_2_sn`: digit runs joined by underscores), and so
+ * does anything shaped like a coordinate (five digits and more, three
+ * decimals and more).
  */
 export function scrub(text: string): string {
   const blank = (s: string) => s.replace(/\d/g, "#");
   return text
     .replace(URL_PATTERN, blank)
+    .replace(/\d+(?:_\d+)+/g, blank)
     .replace(/\d+\.\d{3,}|\d{5,}(?:\.\d+)?/g, blank);
 }
 
@@ -247,18 +371,34 @@ export function problemKey(event: TrailEvent): string {
 }
 
 /**
- * Which problems a page reports: each kind and key once, and no more than
- * PROBLEMS_PER_PAGE in all — the free tier's events are counted.
+ * Which problems a page reports: each kind and key once (an allocation
+ * failure once at all), no more than PROBLEMS_PER_PAGE of those the page
+ * goes on after — the free tier's events are counted — and, past that
+ * cap, the first problem that ends the page (PAGE_ENDING).
  */
 export function createProblemGate(): (event: TrailEvent) => boolean {
   const seen = new Set<string>();
+  let counted = 0;
+  let ended = false;
   return (event) => {
-    if (!PROBLEM_KINDS.has(event.kind) || seen.size >= PROBLEMS_PER_PAGE) {
+    if (!PROBLEM_KINDS.has(event.kind)) {
       return false;
     }
-    const key = `${event.kind} ${problemKey(event)}`;
+    const key = ONCE_A_PAGE.has(event.kind)
+      ? event.kind
+      : `${event.kind} ${problemKey(event)}`;
     if (seen.has(key)) {
       return false;
+    }
+    if (PAGE_ENDING.has(event.kind)) {
+      if (ended) {
+        return false;
+      }
+      ended = true;
+    } else if (counted >= PROBLEMS_PER_PAGE) {
+      return false;
+    } else {
+      counted += 1;
     }
     seen.add(key);
     return true;
@@ -293,8 +433,11 @@ function buildOf(trail: Trail, ctx: ReportContext) {
     : { release: ctx.release, environment: ctx.environment };
 }
 
-/** What every report carries: where, on what, how far the page got. */
-function common(trail: Trail, ctx: ReportContext) {
+/**
+ * What every report carries: where, on what, how far the page got — and,
+ * at `t` (s on the trail), how long ago it came back from the background.
+ */
+function common(trail: Trail, ctx: ReportContext, t: number) {
   const last = trail.beats.at(-1);
   return {
     platform: "javascript",
@@ -320,6 +463,11 @@ function common(trail: Trail, ctx: ReportContext) {
       screen: trail.screen,
       pixel_ratio: asTag(trail.pixelRatio),
       device_memory_gb: asTag(trail.deviceMemoryGB),
+      // the budget the page ran on after earlier losses on the device
+      safety: asTag(trail.safety),
+      // a failure within a minute of coming back from the background is
+      // where iOS took the GPU while the page was away
+      resumed_s: asTag(resumedFor(trail, t)),
     },
     contexts: { page: pageContext(trail) },
   };
@@ -345,6 +493,10 @@ function pageContext(trail: Trail) {
       last?.heldMB === undefined ? undefined : round(last.heldMB, 0),
     last_fps: last ? round(last.fps, 1) : undefined,
     last_tiles: last ? `${last.cities}/${last.dressings}` : undefined,
+    last_raster_mb:
+      last?.rasterMB === undefined ? undefined : round(last.rasterMB, 0),
+    last_cache_mb:
+      last?.cacheMB === undefined ? undefined : round(last.cacheMB, 0),
     last_height_m: last ? round(last.heightM, 0) : undefined,
   };
 }
@@ -357,7 +509,7 @@ function breadcrumbs(trail: Trail) {
       timestamp: at(trail, e.t),
       category: "trail",
       message: eventLine(e),
-      level: PROBLEM_KINDS.has(e.kind) ? "error" : "info",
+      level: PROBLEM_KINDS.has(e.kind) ? problemLevel(e) : "info",
     },
   }));
   const beats = trail.beats.map((b) => ({
@@ -377,21 +529,50 @@ function breadcrumbs(trail: Trail) {
   };
 }
 
-/** The previous page, which died in use: a fatal event, by phase. */
+/** What the page that reports a crash knows about it. */
+export interface CrashContext {
+  /** it follows a GPU recovery (gpu-recovery.ts `recentlyRecovered`) */
+  recovered?: boolean;
+  /** when it started (Unix s): how soon after the death */
+  nextStart?: number;
+}
+
+/**
+ * The previous page, which died in use: a fatal event, by phase — a page
+ * that followed a GPU recovery as one of its own ("Recovery page died":
+ * the recovery runs in a loop). `restart_gap_s` is how long after the
+ * record's last entry (its last beat can be two seconds before the death)
+ * the reporting page started: under ~2 s, that was Safari reloading a
+ * page whose process it killed. Both by the wall clock where the record
+ * has it (`lastWall`): the trail's own stops while the device sleeps.
+ */
 export function crashReport(
   trail: Trail,
   id: string,
-  ctx: ReportContext
+  ctx: ReportContext,
+  crash: CrashContext = {}
 ): Payload {
   const phase = trailPhase(trail);
+  const end = lastT(trail);
+  const base = common(trail, ctx, end);
+  const died =
+    trail.lastWall === undefined ? at(trail, end) : trail.lastWall / 1000;
+  const gap =
+    crash.nextStart === undefined || !Number.isFinite(crash.nextStart)
+      ? undefined
+      : round(crash.nextStart - died, 1);
+  const [title, group] = crash.recovered
+    ? ["Recovery page died", "recovery page died"]
+    : ["Page died in use", "page died"];
   return {
-    ...common(trail, ctx),
+    ...base,
     event_id: id,
-    timestamp: at(trail, lastT(trail)),
+    timestamp: died,
     level: "fatal",
     logger: "crash-trail",
-    message: { formatted: `Page died in use (${phase}, ${trail.backend})` },
-    fingerprint: ["page died", trail.backend, phase],
+    message: { formatted: `${title} (${phase}, ${trail.backend})` },
+    tags: { ...base.tags, restart_gap_s: asTag(gap) },
+    fingerprint: [group, trail.backend, phase],
     breadcrumbs: breadcrumbs(trail),
   };
 }
@@ -403,12 +584,11 @@ export function problemReport(
   id: string,
   ctx: ReportContext
 ): Payload {
-  const fatal = event.kind === "device-lost" || event.kind === "boot failed";
   return {
-    ...common(trail, ctx),
+    ...common(trail, ctx, event.t),
     event_id: id,
     timestamp: at(trail, event.t),
-    level: fatal ? "fatal" : "error",
+    level: problemLevel(event),
     logger: "crash-trail",
     message: {
       formatted: scrub(`${event.kind}: ${event.detail ?? ""}`.trim()),
@@ -463,7 +643,7 @@ export function summaryReport(
   id: string,
   ctx: ReportContext
 ): Payload {
-  const base = common(trail, ctx);
+  const base = common(trail, ctx, lastT(trail));
   const part = stretch(trail);
   const measurements: Record<string, { value: number; unit: string }> = {};
   const measure = (name: string, value: number | undefined, unit: string) => {

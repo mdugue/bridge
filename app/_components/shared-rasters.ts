@@ -13,8 +13,9 @@ export interface SharedRasters<T> {
   held: () => number;
   /** one reference less; the last one frees it (once it has loaded) */
   release: (key: string) => void;
-  /** frees every raster whatever its references (the stream's teardown);
-   *  a later release of a cleared key is a no-op */
+  /** frees every raster whatever its references (the stream's teardown),
+   *  aborting the loads still on their way; a later release of a cleared
+   *  key is a no-op */
   clear: () => void;
 }
 
@@ -77,6 +78,11 @@ export function createSharedRasters<T>(
     },
     clear: () => {
       for (const entry of entries.values()) {
+        // a load still on its way stops (its download, its turn to decode:
+        // raster-upload.ts) — it would only be freed when it landed
+        if (!entry.landed) {
+          entry.controller.abort();
+        }
         freeWhenLoaded(entry.promise);
       }
       entries.clear();

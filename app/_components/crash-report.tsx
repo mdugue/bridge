@@ -15,8 +15,8 @@ import { recentlyRecovered } from "./gpu-recovery";
 /**
  * The previous page's crash trail (crash-trail.ts), offered as text to
  * copy: shown when that page died while in use — unless it reloaded itself
- * to recover a lost GPU, or this page follows a recovery and the record never
- * reached a first frame (offerAsCrash, gpu-recovery.ts) — or always with
+ * to recover a lost GPU, or this page follows a recovery and the record
+ * holds nothing but its start (offerAsCrash, gpu-recovery.ts) — or always with
  * `?trail=1`; and not a page still open in another tab, whose record only
  * looks ended (crash-trail.ts `pageStillOpen`). Where the build reports
  * crashes (crash-reports.ts), the card says the report already went out.

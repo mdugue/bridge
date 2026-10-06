@@ -1,18 +1,31 @@
+import {
+  type GpuLoss,
+  mayRecover,
+  recentHistory,
+  type RecoveryHistory,
+  type SafetyLevel,
+} from "@/lib/city/gpu-safety";
+
 /**
  * A lost GPU, recovered by a new page where the player stood. iOS takes
  * Safari's GPU process away under memory pressure, and the page's device
  * is gone for good: three has no way back to a new one, so the only
  * recovery is a new page. The camera, the time and the look (the Snapshot
  * codec, lib/city/snapshot.ts) wait in session storage, and the next load
- * puts them back. At most twice in ten minutes: a scene that loses its GPU
- * again — at once, or a minute later once it has streamed back to the view
- * that ran it out of memory — shows the message instead of reloading in a
- * loop.
+ * puts them back.
+ *
+ * A page that lost its GPU in use comes back a safety level lighter
+ * (lib/city/gpu-safety.ts) — the level is raised before the reload, and a
+ * level that cannot be stored means no reload: the next page would be no
+ * lighter, and lose the GPU the same way. So one automatic reload per
+ * level, none from the lightest; past that the HUD says the graphics
+ * failed and offers "Leichter weiter". A GPU that iOS reclaimed while the
+ * page was in the background says nothing about the page, nor does a
+ * frame that threw on a GPU that still answers (a bug): each reloads at
+ * the same level, under a cap of its own.
  */
 
 const KEY = "gpu-recovery";
-const WINDOW_MS = 600_000;
-const TRIES = 2;
 /** how long a page counts as following a recovery (recentlyRecovered) */
 const RECENT_MS = 120_000;
 
@@ -36,7 +49,18 @@ interface Stored {
   snapshot?: string;
   /** when the page last reloaded for a lost GPU (ms) */
   tries: number[];
+  /** when it reloaded for a GPU reclaimed in the background (ms) */
+  reclaims?: number[];
+  /** when it reloaded for a frame that failed on a working GPU (ms) */
+  failures?: number[];
 }
+
+/** The reload times kept, as the caps read them. */
+const historyOf = (stored: Stored): RecoveryHistory => ({
+  losses: stored.tries,
+  reclaims: stored.reclaims ?? [],
+  failures: stored.failures ?? [],
+});
 
 function read(store: Store): Stored {
   try {
@@ -48,34 +72,70 @@ function read(store: Store): Stored {
 }
 
 /**
- * Reloads the page with `snapshot` kept for the next load, unless it
- * already did twice in the last ten minutes (or storage is unavailable):
- * then it returns false and the caller says the graphics failed.
+ * Whether the page reloads itself after its GPU went (`how`), at `level`
+ * (the page's safety level): if so, `snapshot` is kept for the next load
+ * (none: the page never drew, and the one it booted with stays) and, for a
+ * loss in use, the stored level raised (`raise`, gpu-safety.ts; false: it
+ * could not be stored). The caller reloads. False with storage
+ * unavailable, or past the caps (lib/city/gpu-safety.ts `mayRecover`):
+ * then the caller says the graphics failed.
  */
 export function recoverFromGpuLoss(
+  how: GpuLoss,
   snapshot: string | null,
+  level: SafetyLevel,
+  raise: (from: SafetyLevel) => boolean,
   store: Store | null = session(),
-  reload: () => void = () => location.reload(),
   now = Date.now()
 ): boolean {
   if (!store) {
     return false;
   }
   try {
-    const tries = read(store).tries.filter((t) => now - t < WINDOW_MS);
-    if (tries.length >= TRIES) {
+    const stored = read(store);
+    const history = historyOf(stored);
+    if (!mayRecover(how, level, history, now)) {
       return false;
     }
-    const next: Stored = { tries: [...tries, now] };
-    if (snapshot) {
-      next.snapshot = snapshot;
+    const recent = recentHistory(history, now);
+    const next: Stored = {
+      tries: [...recent.losses, ...(how === "lost" ? [now] : [])],
+      reclaims: [...recent.reclaims, ...(how === "reclaimed" ? [now] : [])],
+      failures: [...recent.failures, ...(how === "failed" ? [now] : [])],
+    };
+    // A page lost before its first frame has no camera of its own yet:
+    // the place it booted at waits for the next load still.
+    const kept = snapshot ?? stored.snapshot;
+    if (kept) {
+      next.snapshot = kept;
     }
     store.setItem(KEY, JSON.stringify(next));
   } catch {
     return false;
   }
-  reload();
-  return true;
+  return how !== "lost" || raise(level);
+}
+
+/**
+ * "Leichter weiter" on the failure card: a level lighter and back where
+ * the player stood, past every cap — the player asked for it. The caller
+ * reloads; without storage that reload is all there is.
+ */
+export function recoverOnRequest(
+  snapshot: string | null,
+  level: SafetyLevel,
+  raise: (from: SafetyLevel) => boolean,
+  store: Store | null = session()
+): void {
+  raise(level);
+  if (!(store && snapshot)) {
+    return;
+  }
+  try {
+    store.setItem(KEY, JSON.stringify({ ...read(store), snapshot }));
+  } catch {
+    // The reload starts at the spawn.
+  }
 }
 
 /**
@@ -92,9 +152,30 @@ export function recentlyRecovered(
     return false;
   }
   try {
-    return read(store).tries.some((t) => now - t < RECENT_MS);
+    const { losses, reclaims, failures } = historyOf(read(store));
+    return [...losses, ...reclaims, ...failures].some(
+      (t) => now - t < RECENT_MS
+    );
   } catch {
     return false;
+  }
+}
+
+/**
+ * The snapshot a recovery left for this load, without taking it: a boot
+ * that StrictMode aborts (or that fails before its first frame) leaves it
+ * for the next one. `takeRecoverySnapshot` once the scene is up.
+ */
+export function peekRecoverySnapshot(
+  store: Store | null = session()
+): string | null {
+  if (!store) {
+    return null;
+  }
+  try {
+    return read(store).snapshot ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -106,12 +187,12 @@ export function takeRecoverySnapshot(
     return null;
   }
   try {
-    const stored = read(store);
-    if (!stored.snapshot) {
+    const { snapshot, ...rest } = read(store);
+    if (!snapshot) {
       return null;
     }
-    store.setItem(KEY, JSON.stringify({ tries: stored.tries }));
-    return stored.snapshot;
+    store.setItem(KEY, JSON.stringify(rest));
+    return snapshot;
   } catch {
     return null;
   }

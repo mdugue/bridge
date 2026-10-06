@@ -244,8 +244,9 @@ visual-variable codebook is in
   level the dressing stands **goals**, **basketball posts** and **nets**
   (`sport-fixtures.ts`, `sportFixtures`): pale-clay bars, the nets a
   lavender-grey veil in the street furniture's palette and matte material, one merged mesh each per tile, in the tile that owns
-  the ground's centre. Both terrain levels; absent files → the land-cover
-  class. Dresden (2026-09-19 extract): 431 grounds over the fifteen tiles
+  the ground's centre. Both terrain levels on a desktop, the fine level
+  only on a phone (🗃️ *Sports grounds on a phone's coarse terrain
+  level*); absent files → the land-cover class. Dresden (2026-09-19 extract): 431 grounds over the fifteen tiles
   (175 on the four first; a table row per tile a ground reaches).
   Textures scale with HUD *Bodendetail*; colours and lines stay.
 - **Road markings** (plan 026) — OSM `highway=crossing` nodes,
@@ -1999,7 +2000,12 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 - **Soft shadows** — `PCFShadowMap` + raised `shadow.radius`; terrain
   `castShadow=false`; `normalBias=0`; tight camera-following frustum, whose
   camera also drives the tile streaming (casters behind the player stay
-  loaded). Full recipe and dead-ends in the
+  loaded) — at a resolution of its own, not the map's: 64 px on a phone,
+  where it loads a tile's buildings and coarse ground but never refines
+  terrain, 128 px on a desktop, where it still refines the eye-level
+  frustum's fine level but never from the air
+  (`SHADOW_STREAM_PX`, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md));
+  the map's colour target is one byte (`OneByteShadowNode`). Full recipe and dead-ends in the
   [city-walker skill](../.claude/skills/city-walker/SKILL.md).
 - **Sky-view factor** (*Himmelslicht*, plan 033) — the committed DGM1 with
   every non-vertical LoD2 surface burned on top (max over its triangles,
@@ -2333,7 +2339,8 @@ removed, not tuned.
   parapets, piers or arches, the measured steel; no rails), and they are
   asked on it too. LoD2's bridge slabs are left out of the buildings, so
   every river crossing used to vanish where the fine level's reach ended:
-  in the air beyond ≈ 1.2 km, and in Modell across the whole picture from
+  in the air beyond the fine level's reach (≈ 2.6 km on a viewport 1080
+  CSS px high), and in Modell across the whole picture from
   2.5 m/px on.
 - **The bridges' surfaces** — a bridge was one flat colour per part (a
   pale slab over the river). The deck's top now carries its frame — the
@@ -2405,7 +2412,8 @@ research that produced them):
    `CSMShadowNode` is available without shader patching — still a depth
    pass per cascade on every sun or camera move, and its own decision.
 8. **Adaptive resolution while moving** — *partly shipped*: DoF is skipped
-   while the camera moves (`lib/city/regression.ts`, plan 007). AO is **not**
+   while the camera moves (`lib/city/regression.ts`, plan 007; a phone
+   builds no DoF at all, ADR 0047). AO is **not**
    — gating it made the contact shadows blink on every step, so the AO pass
    (GTAO since plan 020) runs permanently at half resolution instead
    ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). A pixel-ratio
@@ -2474,6 +2482,7 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
+| **Sports grounds on a phone's coarse terrain level** (until 2026-10-06: `sport_<t>.png` read on both levels on every device, `sport-ground.ts` in the coarse terrain's colour node) | The index raster is a 2048² RGBA texture, 16 MiB on the GPU for each coarse tile in view (14 of Dresden's 15 tiles have grounds) — on a phone whose post targets and shadow map together now hold ~30 MiB, and whose tile cache is 336 MiB ([ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)). Beyond the fine level a pitch is a few pixels and its lines a pixel or less: it shows its land-cover class (`readsSportGrounds`; the coarse level builds the shared variant without the slot). | A desktop still draws them on both levels, and a phone's fine level draws them as before. A 1024² phone twin of the raster (`sport_low`, as `markings_low`) would bring them back at a quarter of the cost; it needs a bake and a look on a GPU. |
 | **Modell's trees thinned by scale** (2026-10-04 → 2026-10-05: every tree to 1 : 5 000, fewer to 1 : 9 000, a floor of 30 % beyond, the kept crowns widened by 1/√share — `treeShare`, `treeSpread`, the crown shader's `crownKept` folding the others onto their origin; the coarse level's crowns, the floor's selection, fetched only once Modell thinned. The version before it thinned to none at 1 : 9 000) | Two rules for one picture: the scale set the share, the tile renderer the level, and the two disagree. The coarse level shows wherever the fine one is not loaded, not only past 2.5 m/px — at 1 : 3 000 on a phone whose memory governor coarsens the stream, or while fine tiles load — and there the picture showed no tree at all, since its crowns came only once Modell thinned (maintainer, 2026-10-05: trees at large and at small scales, none at 1 : 3 000). The version before showed no tree in an overview of the city. | Each terrain level carries its own trees, whatever the mode or scale (✅ *The coarse level's trees*): the fine level all, the coarse one a fixed third. A generalization by scale, if it comes back, has to follow the level the renderer shows, not run as a second rule beside it. |
 | **Pedestrian counts** (for the traffic data layers, 2026-10-01) | No open measured source for the site: the only pedestrian counter, hystreet.com's laser count on the Prager Straße, is commercial (access on request); the city's "Fußgängerquerung St. Petersburger Straße" is a *bicycle* counter. A density modelled from stops, shops and census cells would be a model drawn as if measured. | Revisit with an open counter network (Telraam sensors in the site, if any, through its API with a key). |
 | **Live tram positions** (GTFS-RT, the TLMS radio telegrams) | gtfs.de's realtime feed is one protobuf for all of Germany, too heavy for a browser to poll; TLMS (`wss://socket.tlm.solutions`) is a volunteer service whose coverage and uptime the viewer cannot vouch for. | The timetable runs instead (✅ *Trams by timetable*); delays could come from the VVO's departure monitor (`webapi.vvo-online.de/dm`, answers any origin) per stop — 📋. |

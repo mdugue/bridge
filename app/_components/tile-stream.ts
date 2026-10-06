@@ -1,6 +1,8 @@
+import { DownloadPriorityQueue, PriorityQueue } from "3d-tiles-renderer/core";
 import { TilesRenderer } from "3d-tiles-renderer/three";
 import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
+  type BufferGeometry,
   type Camera,
   type Color,
   Group,
@@ -47,17 +49,19 @@ import {
 import { COARSE_DRESSING_KINDS, type DressingKind } from "@/lib/city/tile";
 import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
 import { askSets, type AskSet } from "@/lib/city/ask-solids";
+import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { type CityLayer, dressCity } from "./city-layer";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
+import { TILE_FETCH_BUDGET_MS } from "@/lib/city/fetch-retry";
 import {
+  eitherSignal,
+  fetchBytes,
   fetchFeatures,
   fetchOptionalBinary,
   fetchOptionalJson,
-  gunzip,
-  isGzipped,
 } from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
 import { buildLamps, type LampControl } from "./lamp-layer";
@@ -68,9 +72,12 @@ import { bridgeAskSet } from "./bridge-ask";
 import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
+  cpuDroppable,
+  createGridShare,
   dressTerrain,
   freeSplatRasters,
   freeSport,
+  type GridShare,
   type GroundUniforms,
   loadNdviTexture,
   loadSplatRasters,
@@ -82,13 +89,20 @@ import {
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
 import { RasterShares } from "./raster-shares";
+import { setRasterTier } from "./raster-upload";
+import type { DeviceTier } from "./scene-profile";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import {
+  type AnyAttribute,
   compileRepresentatives,
+  detachSceneShared,
+  disposeGeometry,
   disposeObject3D,
+  dropCpuCopies,
   estimateGeometryBytes,
+  sceneSharedBytes,
 } from "./three-utils";
 import { buildTraffic } from "./traffic-layer";
 import { trafficAskSet } from "./traffic-ask";
@@ -139,8 +153,13 @@ export interface TileDressing {
 }
 
 export interface TileStreamContext {
-  /** compiles an object's shaders before it shows (PostStack.compile) */
-  compile: (object: Object3D) => Promise<void>;
+  /**
+   * Compiles an object's shaders before it shows (PostStack.compile), which
+   * uploads its buffers: resolves true once that is done, false when
+   * nothing could compile it yet (the frames will). Rejects with what the
+   * compile threw.
+   */
+  compile: (object: Object3D) => Promise<boolean>;
   /** resolves when the HUD lets the heavy dressing start (create-app's
    *  startStreaming): the first frames only wait on terrain + buildings */
   dressingGate: Promise<void>;
@@ -164,9 +183,20 @@ export interface TileStreamContext {
   offset: { cx: number; cy: number };
   /** content landed, left, or changed visibility */
   onChange: () => void;
+  /**
+   * A compile threw because the GPU (or the page's process) could not
+   * make room (lib/city/gpu-allocation.ts) — `where` says what: `content
+   * <tile>`, `dressing <tile>` (left off, the tile bare) or `crowns` (the
+   * seasonal warm-up) — or a tile's release met what such a failure left
+   * behind (`dispose <tile>`: three's half-made attribute, the tile freed
+   * past it). Once per failure.
+   */
+  onAllocationFailure?: (error: unknown, where: string) => void;
   renderer: WebGPURenderer;
   styleResources: StyleResources;
   sunDirection: Vector3;
+  /** a phone streams fewer tiles at once (`paceStreaming`) */
+  tier: DeviceTier;
   /** a site tile's exact extent (the tileset's root extras) */
   tileBounds: (tileId: string) => TerrainBounds | undefined;
   tilesetUrl: string;
@@ -221,30 +251,74 @@ interface Dressed {
   dressing?: TileDressing;
   /** the dressing's geometry bytes, once it hangs on the tile */
   dressingBytes?: number;
+  /** the bytes of the site's shared buffers its content holds (the coarse
+   *  grid's index and water index): the tile renderer counts them in the
+   *  tile's glTF, but they stay when the tile goes */
+  sharedBytes?: number;
   /** the shared sky-view raster the city holds (its URL) */
   svf?: string;
   terrain?: TerrainLayer;
 }
 
 /**
- * The tiles' `.glb.gz` content is pre-gzipped (static hosts do not compress
- * binary types); inflate it natively before the loader sees it — unless the
- * host already did (isGzipped, fetch-optional.ts).
+ * Every request the renderer makes — the tileset and each tile's content —
+ * through the viewer's one fetch (fetch-optional.ts `fetchBytes`): a
+ * network failure is retried while the page is visible, so a tile that hit
+ * a blip stays loading (its coarse level shown, the boot waiting) instead
+ * of failing; one that gives up is brought back later (tile-retry.ts). The
+ * `.glb.gz` content is pre-gzipped (static hosts do not compress binary
+ * types) and inflated natively inside the retries — unless the host already
+ * did (isGzipped). Content comes back as its bytes, which the renderer
+ * parses as they are (no Response to copy them through again); JSON as a
+ * Response, which the renderer reads itself; a status no retry fixes as an
+ * empty Response with that status, which the renderer reports.
  */
-class GzipContentPlugin {
-  name = "BRIDGE_GZIP_CONTENT";
-  async fetchData(url: string, options: RequestInit): Promise<Response> {
-    const res = await fetch(url, options);
-    if (!(url.endsWith(".gz") && res.ok)) {
-      return res;
+class ContentFetchPlugin {
+  name = "BRIDGE_CONTENT_FETCH";
+  /** aborts every request in flight when the stream goes (dispose) */
+  private readonly aborter = new AbortController();
+  async fetchData(
+    url: string,
+    options: RequestInit
+  ): Promise<Response | ArrayBuffer> {
+    const { signal, ...init } = options;
+    const either = eitherSignal(signal, this.aborter.signal);
+    try {
+      const got = await fetchBytes(url, {
+        signal: either.signal,
+        budgetMs: TILE_FETCH_BUDGET_MS,
+        gunzip: url.endsWith(".gz"),
+        init,
+      });
+      if (!got.ok) {
+        return new Response(null, { status: got.status });
+      }
+      return new URL(url, window.location.href).pathname.endsWith(".json")
+        ? new Response(got.bytes, { status: got.status })
+        : got.bytes.buffer;
+    } finally {
+      either.release();
     }
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    const body = isGzipped(bytes) ? gunzip(bytes) : bytes;
-    return new Response(body, { status: res.status });
+  }
+
+  dispose(): void {
+    this.aborter.abort();
   }
 }
 
 type Features<T> = Promise<T[]>;
+
+/**
+ * The city's buffers nothing reads on the CPU once it is compiled: its
+ * normals and roof flags (the clay reads both, so its compile uploads
+ * them). The positions, index and feature ids stay — collision and picks
+ * raycast the BVH over them, demolish rebuilds the index from the feature
+ * ids, the selection outline cuts a building's triangles out of them.
+ */
+function cityCpuDroppable(city: CityLayer): AnyAttribute[] {
+  const geometry = city.mesh.geometry;
+  return [geometry.getAttribute("normal"), geometry.getAttribute("roof")];
+}
 
 function firstMesh(root: Object3D): Mesh | undefined {
   return root.getObjectByProperty("isMesh", true) as Mesh | undefined;
@@ -302,14 +376,14 @@ const COMPILE_WAIT_MS = 3000;
  *  stands in for it (DressingPlugin.handsOver) before it shows regardless. */
 const HAND_OVER_WAIT_MS = 10_000;
 
-function withinWait(done: Promise<void>, ms: number): Promise<void> {
+function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
   return Promise.race([
-    done,
+    done.then(() => undefined),
     new Promise<void>((resolve) => setTimeout(resolve, ms)),
   ]);
 }
 
-function withinCompileWait(done: Promise<void>): Promise<void> {
+function withinCompileWait(done: Promise<unknown>): Promise<void> {
   return withinWait(done, COMPILE_WAIT_MS);
 }
 
@@ -343,15 +417,34 @@ export function showDataLayers(
   }
 }
 
-function disposeDressing(d: TileDressing): void {
-  d.lamps?.dispose();
-  d.monuments?.dispose();
-  d.sport?.dispose();
+/** Frees a dressing; a part that throws does not keep the others (what
+ *  was thrown is returned). */
+function disposeDressing(d: TileDressing): unknown[] {
+  const errors: unknown[] = [];
+  for (const own of [d.lamps, d.monuments, d.sport]) {
+    try {
+      own?.dispose();
+    } catch (err) {
+      errors.push(err);
+    }
+  }
   for (const part of dressingParts(d)) {
     part.removeFromParent();
-    disposeObject3D(part);
+    errors.push(...disposeObject3D(part));
   }
+  return errors;
 }
+
+/** The site tile a content root is of (its extras), for the trail. */
+const tileIdOf = (scene: Object3D): string =>
+  (scene.userData as Partial<ContentExtras>).tileId ?? "?";
+
+/**
+ * How a compile ended (`DressingPlugin.compileUnder`): done, its buffers on
+ * the GPU with it; not run, nothing could compile it yet; failed; or out
+ * of memory — the GPU or the page could not make room.
+ */
+type Compiled = "done" | "failed" | "not run" | "out of memory";
 
 /** The goals, posts and nets of the grounds this tile owns (a ground on a
  *  seam is in both tiles' tables; its centre decides). */
@@ -793,6 +886,10 @@ export class DressingPlugin {
    * free those again.
    */
   private readonly compiles = new Map<Object3D, number>();
+  /** each content root's own geometries (its glTF's and the water's), and
+   *  the roots whose own compile still runs (disposeContentNow) */
+  private readonly contentOf = new WeakMap<Object3D, Set<BufferGeometry>>();
+  private readonly contentCompiling = new WeakSet<Object3D>();
   /**
    * Settles once the renderer is done with a content root's load: it
    * records every material in the content right after `processTileModel`
@@ -820,29 +917,45 @@ export class DressingPlugin {
   private readonly tileOf = new WeakMap<Object3D, object>();
   /** the sky-view rasters a tile's terrain and buildings share */
   readonly skyView: SharedRasters<Texture> = createSharedRasters(
-    (url) => loadSkyViewTexture(url),
+    (url, signal) => loadSkyViewTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
   /** the horizon rasters a tile's two terrain levels share */
   readonly horizon: SharedRasters<Texture> = createSharedRasters(
-    (url) => loadHorizonTexture(url),
+    (url, signal) => loadHorizonTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
   /** the class rasters (and their painted splats), NDVI and sports grounds
    *  a tile's two terrain levels share — on a phone both levels name the
-   *  same files, ~43 MB of GPU memory per tile loaded twice */
+   *  same class and NDVI files, ~30 MB of GPU memory per tile loaded twice
+   *  (the sports grounds only the fine level reads there) */
   readonly splats: SharedRasters<SplatRasters> = createSharedRasters(
     (url, signal) => loadSplatRasters(url, this.ctx.renderer, signal),
     freeSplatRasters
   );
   readonly ndvis: SharedRasters<Texture> = createSharedRasters(
-    (url, signal) => loadNdviTexture(url, signal),
+    (url, signal) => loadNdviTexture(url, this.ctx.renderer, signal),
     (texture) => texture.dispose()
   );
   readonly sports: SharedRasters<SportRasters> = createSharedRasters(
-    (key, signal) => loadSportKey(key, signal),
+    (key, signal) => loadSportKey(key, this.ctx.renderer, signal),
     freeSport
   );
+  /** the coarse level's grid index and water index, one copy for the
+   *  site (terrain-layer.ts `GridShare`) */
+  private readonly grids: GridShare = createGridShare();
+  /** aborts the levels' own raster loads when the stream goes: they would
+   *  hold their turn to decode (raster-upload.ts) from the next app's */
+  private readonly lifetime = new AbortController();
+  /**
+   * Each terrain level's raster loads while it dresses, aborted when its
+   * tile leaves (`disposeTile`): a level the camera wanted and dropped
+   * again — a flight, a boot that looked around, the memory emergency's
+   * shed — would otherwise decode and upload every raster it names, in
+   * the site-wide turn of the tiles still wanted and holding one of the
+   * renderer's parse slots, only to free them at once.
+   */
+  private readonly loadAborts = new WeakMap<Object3D, AbortController>();
 
   constructor(
     private readonly ctx: TileStreamContext,
@@ -905,12 +1018,15 @@ export class DressingPlugin {
    * holds and its dressing's geometry, which the renderer cannot see — it
    * reads textures off the glTF's materials. Without them an iPhone's
    * cache sat at 173 MB of its 180 while the GPU held 865 MB, and the next
-   * buffer failed to allocate.
+   * buffer failed to allocate. Less the site's shared buffers it counted in
+   * the glTF (`sharedBytes`): evicting the tile frees none of them.
    */
   calculateBytesUsed(_tile: object, scene: Object3D | null): number {
     const dressed = scene ? this.dressed.get(scene) : undefined;
     const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
-    return rasters + (dressed?.dressingBytes ?? 0);
+    return (
+      rasters + (dressed?.dressingBytes ?? 0) - (dressed?.sharedBytes ?? 0)
+    );
   }
 
   /** `scene`'s terrain takes up (or lets go of) its rasters; the other
@@ -969,7 +1085,7 @@ export class DressingPlugin {
     // ready by then instead of compiling inside a frame. (A tile that left
     // meanwhile is not compiled: that would upload what nothing shows.)
     if (!this.released.has(scene)) {
-      await withinCompileWait(this.compileUnder(scene, [scene]));
+      await withinCompileWait(this.compileContent(scene));
     }
     // ...and, where it takes over from the tile's other level, its
     // dressing with it (handsOver).
@@ -1062,19 +1178,30 @@ export class DressingPlugin {
     scene.updateMatrix();
     mesh.updateMatrix();
     this.toData.multiplyMatrices(scene.matrix, mesh.matrix);
-    const terrain = await dressTerrain(mesh, extras, this.toData, {
-      fileUrl: this.url,
-      fogColor: this.ctx.fogColor,
-      lowRasters: this.ctx.lowRasters,
-      ground: this.ctx.ground,
-      offset: this.ctx.offset,
-      renderer: this.ctx.renderer,
-      skyView: this.skyView,
-      horizon: this.horizon,
-      splats: this.splats,
-      ndvis: this.ndvis,
-      sports: this.sports,
-    });
+    const own = new AbortController();
+    this.loadAborts.set(scene, own);
+    const either = eitherSignal(own.signal, this.lifetime.signal);
+    let terrain: TerrainLayer;
+    try {
+      terrain = await dressTerrain(mesh, extras, this.toData, {
+        fileUrl: this.url,
+        fogColor: this.ctx.fogColor,
+        lowRasters: this.ctx.lowRasters,
+        ground: this.ctx.ground,
+        offset: this.ctx.offset,
+        renderer: this.ctx.renderer,
+        skyView: this.skyView,
+        horizon: this.horizon,
+        splats: this.splats,
+        ndvis: this.ndvis,
+        sports: this.sports,
+        grids: this.grids,
+        signal: either.signal,
+      });
+    } finally {
+      either.release();
+      this.loadAborts.delete(scene);
+    }
     terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls, kerbs and fences: only their
     // materials here, lit by the tile's baked light as the ground is.
@@ -1099,7 +1226,7 @@ export class DressingPlugin {
       terrain.fences = fences;
     }
     this.stream.terrains.add(terrain);
-    this.dressed.set(scene, { terrain });
+    this.dressed.set(scene, { terrain, sharedBytes: sceneSharedBytes(scene) });
     this.holdRasters(scene, terrain.rasters, true);
     const coarse = COARSE_DRESSING_KINDS.some((kind) => extras.coarse?.[kind]);
     return extras.dressing || coarse
@@ -1131,9 +1258,30 @@ export class DressingPlugin {
     this.warmup = warmup;
     await withinCompileWait(
       Promise.all(warmup.main.map((mesh) => this.ctx.compile(mesh))).then(
-        () => undefined
+        () => undefined,
+        (err: unknown) => {
+          this.compileFailed(err, "crowns");
+        }
       )
     );
+  }
+
+  /** What a compile that threw comes to: out of memory (reported) or a
+   *  failure the frames will meet again. */
+  private compileFailed(err: unknown, where: string): Compiled {
+    if (!isAllocationFailure(err)) {
+      return "failed";
+    }
+    this.ctx.onAllocationFailure?.(err, where);
+    return "out of memory";
+  }
+
+  /** Reports the first thing a tile's release threw (three's half-made
+   *  attribute of a failed allocation: the release went on past it). */
+  private disposeFailed(errors: unknown[], scene: Object3D): void {
+    if (errors.length > 0 && !this.disposed) {
+      this.ctx.onAllocationFailure?.(errors[0], `dispose ${tileIdOf(scene)}`);
+    }
   }
 
   /**
@@ -1145,6 +1293,7 @@ export class DressingPlugin {
    */
   dispose(): void {
     this.disposed = true;
+    this.lifetime.abort();
     this.warmup?.dispose();
     this.warmup = null;
     // (release deletes the entry it is on: a Map iterates on safely)
@@ -1202,32 +1351,46 @@ export class DressingPlugin {
         catchUp(dressing, this.ctx);
         const compiled =
           this.dressed.get(scene) === entry
-            ? this.compileUnder(scene, compileRepresentatives(parts))
-            : Promise.resolve();
+            ? this.compileUnder(
+                scene,
+                compileRepresentatives(parts),
+                `dressing ${extras.tileId}`
+              )
+            : Promise.resolve<Compiled>("not run");
+        let outcome: Compiled | undefined;
+        compiled
+          .then((ended) => {
+            outcome = ended;
+          })
+          .catch(() => undefined);
         await withinCompileWait(compiled);
         built();
         // Not before the renderer has recorded the tile's own content (see
         // `loaded`): the dressing's materials are the scene's.
         await this.loaded.get(scene);
-        if (this.disposed || this.dressed.get(scene) !== entry) {
+        // A dressing whose compile ran out of GPU memory stays off: the
+        // tile goes bare rather than the GPU further under.
+        if (
+          this.disposed ||
+          this.dressed.get(scene) !== entry ||
+          outcome === "out of memory"
+        ) {
           // freed once its compile has ended (see `compiles`)
-          const free = () => disposeDressing(dressing);
-          compiled.then(free, free);
+          compiled
+            .then(() => this.disposeFailed(disposeDressing(dressing), scene))
+            .catch(() => undefined);
           return;
         }
-        // The content root is the viewer's Y-up scene frame (the renderer's
-        // up-axis turn cancels the world group's), so the Y-up dressing
-        // hangs under it and leaves with its tile.
-        scene.add(...parts);
-        entry.dressing = dressing;
-        entry.dressingBytes = parts.reduce(
-          (sum, part) => sum + estimateGeometryBytes(part),
-          0
-        );
-        this.tiles?.recalculateBytesUsed();
-        this.stream.dressings.add(dressing);
-        // Whatever changed while it compiled (the hour moves on).
-        catchUp(dressing, this.ctx);
+        this.hangDressing(scene, entry, dressing);
+        // ...and one whose compile outlasted the wait and then ran out of
+        // memory comes down again
+        compiled
+          .then((ended) => {
+            if (ended === "out of memory") {
+              this.dropDressing(scene, entry, dressing);
+            }
+          })
+          .catch(() => undefined);
       })
       .catch(() => {
         // A dressing that fails leaves its tile bare, never the stream stuck.
@@ -1248,22 +1411,74 @@ export class DressingPlugin {
     return ready;
   }
 
+  /** Hangs a built dressing on its tile's content root. */
+  private hangDressing(
+    scene: Object3D,
+    entry: Dressed,
+    dressing: TileDressing
+  ): void {
+    const parts = dressingParts(dressing);
+    // The content root is the viewer's Y-up scene frame (the renderer's
+    // up-axis turn cancels the world group's), so the Y-up dressing
+    // hangs under it and leaves with its tile.
+    scene.add(...parts);
+    entry.dressing = dressing;
+    entry.dressingBytes = parts.reduce(
+      (sum, part) => sum + estimateGeometryBytes(part),
+      0
+    );
+    this.tiles?.recalculateBytesUsed();
+    this.stream.dressings.add(dressing);
+    // Whatever changed while it compiled (the hour moves on).
+    catchUp(dressing, this.ctx);
+  }
+
+  /** Takes a hung dressing down again and frees it (its compile ran out of
+   *  memory after it hung); the tile stays, bare. */
+  private dropDressing(
+    scene: Object3D,
+    entry: Dressed,
+    dressing: TileDressing
+  ): void {
+    if (this.disposed || entry.dressing !== dressing) {
+      return; // gone with its tile already
+    }
+    entry.dressing = undefined;
+    entry.dressingBytes = undefined;
+    this.stream.dressings.delete(dressing);
+    this.disposeFailed(disposeDressing(dressing), scene);
+    this.tiles?.recalculateBytesUsed();
+    this.ctx.onChange();
+  }
+
   disposeTile(tile: { engineData?: { scene?: Object3D | null } }): void {
     const scene = tile.engineData?.scene ?? this.sceneOf.get(tile);
     this.sceneOf.delete(tile);
     if (scene) {
+      // its rasters stop where they are (the load this rejects is the
+      // renderer's to drop: its own signal is aborted by now)
+      this.loadAborts.get(scene)?.abort();
       this.builtOf.get(scene)?.();
       this.released.add(scene);
       this.release(scene);
+      this.disposeContentNow(scene);
     }
   }
 
-  /** Compiles `objects` (the root or what hangs under it), counted on
-   *  `scene` until they end (see `compiles`). */
-  private compileUnder(scene: Object3D, objects: Object3D[]): Promise<void> {
+  /**
+   * Compiles `objects` (the root or what hangs under it), counted on
+   * `scene` until they end (see `compiles`). Resolves how it ended (a
+   * failure for want of memory reported as `where`); never rejects.
+   */
+  private compileUnder(
+    scene: Object3D,
+    objects: Object3D[],
+    where: string
+  ): Promise<Compiled> {
     this.compiles.set(scene, (this.compiles.get(scene) ?? 0) + 1);
     const done = Promise.all(objects.map((o) => this.ctx.compile(o))).then(
-      () => undefined
+      (compiled): Compiled => (compiled.every(Boolean) ? "done" : "not run"),
+      (err: unknown) => this.compileFailed(err, where)
     );
     const settle = () => {
       const left = (this.compiles.get(scene) ?? 1) - 1;
@@ -1276,20 +1491,76 @@ export class DressingPlugin {
         this.release(scene);
       }
     };
-    done.then(settle, settle);
+    // a release that throws must not surface as an unhandled rejection
+    done.then(settle).catch(() => undefined);
     return done;
+  }
+
+  /**
+   * The content's own compile — and once it has uploaded the content, the
+   * CPU copies of what nothing reads any more go (`dropContentCopies`).
+   */
+  private compileContent(scene: Object3D): Promise<Compiled> {
+    // the content's own geometries, before any dressing hangs beside them
+    // (disposeContentNow)
+    const content = new Set<BufferGeometry>();
+    scene.traverse((obj) => {
+      const { geometry } = obj as Object3D & { geometry?: BufferGeometry };
+      if (geometry) {
+        content.add(geometry);
+      }
+    });
+    this.contentOf.set(scene, content);
+    this.contentCompiling.add(scene);
+    const compiled = this.compileUnder(
+      scene,
+      [scene],
+      `content ${tileIdOf(scene)}`
+    );
+    compiled
+      .then((ended) => {
+        this.contentCompiling.delete(scene);
+        if (ended === "done") {
+          this.dropContentCopies(scene);
+        }
+      })
+      .catch(() => undefined);
+    return compiled;
+  }
+
+  /**
+   * Drops the CPU copies of the content's buffers that the GPU has and
+   * nothing reads on the CPU (three-utils.ts `dropCpuCopies`): a terrain
+   * level's (terrain-layer.ts `cpuDroppable`), a city's normals and roof
+   * flags (`cityCpuDroppable`). Not for a tile that left or a stream that
+   * went: its buffers go with it.
+   */
+  private dropContentCopies(scene: Object3D): void {
+    const entry = this.dressed.get(scene);
+    if (this.disposed || this.released.has(scene) || !entry) {
+      return;
+    }
+    const drop = entry.terrain
+      ? cpuDroppable(entry.terrain)
+      : entry.city
+        ? cityCpuDroppable(entry.city)
+        : [];
+    dropCpuCopies(scene, drop);
   }
 
   /** Frees everything dressed onto one content root — once its compiles
    *  have ended (see `compiles`; the last one to end calls this again). */
   private release(scene: Object3D): void {
+    // The site's shared buffers leave its geometries at once, whatever
+    // still compiles: the tile renderer disposes them right after this
+    // plugin let go of the tile, and three's dispose would destroy those
+    // buffers for every other tile (three-utils.ts `markSceneShared`).
+    detachSceneShared(scene);
     if (this.compiles.has(scene)) {
       return;
     }
     const dressed = this.dressed.get(scene);
-    if (dressed) {
-      this.releaseDressed(scene, dressed);
-    }
+    const errors = dressed ? this.releaseDressed(scene, dressed) : [];
     // The content itself, once — buildings, ground, and the walls, stairs,
     // kerbs and fences baked into it: its geometries, the per-tile
     // materials the dressing put on it (the renderer frees only the glTF's
@@ -1299,19 +1570,50 @@ export class DressingPlugin {
     // it never does, and a compile has uploaded them by then.
     if (!this.freed.has(scene)) {
       this.freed.add(scene);
-      disposeObject3D(scene);
+      errors.push(...disposeObject3D(scene));
     }
+    this.disposeFailed(errors, scene);
     if (dressed && !this.disposed) {
       this.ctx.onChange();
     }
   }
 
-  private releaseDressed(scene: Object3D, dressed: Dressed): void {
+  /**
+   * The content's geometries freed now, though the rest of the tile waits
+   * for its dressing's compile (`release`): the tile renderer disposes them
+   * right after this plugin let go of the tile, and on a geometry with an
+   * attribute that failed to allocate three's dispose throws out of the
+   * renderer's update. Freed here past that attribute (three-utils.ts
+   * `disposeGeometry`), its later dispose is a no-op. Not while the
+   * content's own compile runs: it would upload them again.
+   */
+  private disposeContentNow(scene: Object3D): void {
+    const content = this.contentOf.get(scene);
+    if (!content || this.freed.has(scene) || this.contentCompiling.has(scene)) {
+      return;
+    }
+    this.disposeFailed(
+      [...content].flatMap((geometry) => disposeGeometry(geometry)),
+      scene
+    );
+  }
+
+  /** Frees what was dressed onto `scene`; returns what threw on the way
+   *  (the rest is freed regardless). */
+  private releaseDressed(scene: Object3D, dressed: Dressed): unknown[] {
     this.dressed.delete(scene);
     dressed.aborter?.abort();
+    const errors: unknown[] = [];
+    const free = (dispose: () => void) => {
+      try {
+        dispose();
+      } catch (err) {
+        errors.push(err);
+      }
+    };
     if (dressed.city) {
       this.stream.cities.delete(dressed.city);
-      dressed.city.dispose();
+      free(() => dressed.city?.dispose());
     }
     if (dressed.svf) {
       this.skyView.release(dressed.svf);
@@ -1319,19 +1621,70 @@ export class DressingPlugin {
     if (dressed.terrain) {
       this.stream.terrains.delete(dressed.terrain);
       this.holdRasters(scene, dressed.terrain.rasters, false);
-      dressed.terrain.dispose();
+      free(() => dressed.terrain?.dispose());
     }
     if (dressed.dressing) {
       this.stream.dressings.delete(dressed.dressing);
-      disposeDressing(dressed.dressing);
+      errors.push(...disposeDressing(dressed.dressing));
     }
+    return errors;
   }
+}
+
+/**
+ * Lets go of the glTF loader's result the tile renderer keeps with a loaded
+ * tile (`engineData.metadata`), and with it the loader's parser: the glb's
+ * binary chunk and every buffer it decoded — what keeps a tile's whole
+ * geometry on the CPU however many of its attributes give up their copy
+ * (three-utils.ts `dropCpuCopies`): 1.3 / 2.4 / 4.4 MB of chunk for a
+ * coarse / city / fine content besides. Only Google's copyright plugin
+ * reads it, which this viewer does not use; the scene stays.
+ */
+export function dropLoaderResult(tile: unknown): void {
+  const data = (tile as { engineData?: { metadata?: unknown } }).engineData;
+  if (data) {
+    data.metadata = null;
+  }
+}
+
+/**
+ * How many tile contents a phone downloads (per origin) and parses at once.
+ * The tile renderer's own queues (25 downloads, 5 parses) asked for the
+ * boot's eleven contents in one millisecond, and a parse holds its decoded
+ * glTF, its rasters and its compile until it is through: several hundred
+ * MB on the page's process before anything reached the GPU, and Safari
+ * ended the page at the first frame. Two parses keep a neighbour coming
+ * while the spawn tile compiles.
+ */
+export const PHONE_STREAM = { parses: 2, downloadsPerOrigin: 4 } as const;
+
+/**
+ * Gives a phone's renderer queues of its own at `PHONE_STREAM`'s limits.
+ * Before its first update (the renderer takes them up then). The defaults
+ * are module-wide queues every renderer shares, so they are replaced, not
+ * changed: a desktop app booted after (a StrictMode remount) keeps its own.
+ */
+export function paceStreaming(tiles: TilesRenderer, tier: DeviceTier): void {
+  if (tier !== "mobile") {
+    return;
+  }
+  const parse = new PriorityQueue();
+  parse.maxJobs = PHONE_STREAM.parses;
+  parse.priorityCallback = tiles.parseQueue.priorityCallback;
+  tiles.parseQueue = parse;
+  const download = new DownloadPriorityQueue();
+  download.maxJobsPerOrigin = PHONE_STREAM.downloadsPerOrigin;
+  download.priorityCallback = tiles.downloadQueue.priorityCallback;
+  tiles.downloadQueue = download;
 }
 
 /**
  * Starts streaming the tileset under `world` (the viewer's rotated Z-up
  * group). `cameras` decide what loads: the view camera, and the sun's shadow
- * camera, so a building behind the player still casts into the view.
+ * camera, so a building behind the player still casts into the view — the
+ * latter at a resolution of its own (lib/city/shadow-fit.ts
+ * `shadowStreamResolution`), so it loads a tile's buildings and coarse
+ * ground but never refines its terrain.
  */
 export function createTileStream(
   ctx: TileStreamContext,
@@ -1339,7 +1692,9 @@ export function createTileStream(
   cameras: { camera: Camera; height: number; width: number }[]
 ): TileStream {
   const tiles = new TilesRenderer(ctx.tilesetUrl);
-  tiles.registerPlugin(new GzipContentPlugin());
+  paceStreaming(tiles, ctx.tier);
+  setRasterTier(ctx.tier);
+  tiles.registerPlugin(new ContentFetchPlugin());
   tiles.registerPlugin(
     new GLTFExtensionsPlugin({ metadata: true, meshoptDecoder: MeshoptDecoder })
   );
@@ -1415,6 +1770,7 @@ export function createTileStream(
     tiles.setResolution(camera, width, height);
   }
   tiles.addEventListener("load-model", (event) => {
+    dropLoaderResult(event.tile);
     dressing.landed(event.scene);
     changed();
   });

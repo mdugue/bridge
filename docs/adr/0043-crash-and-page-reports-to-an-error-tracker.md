@@ -1,7 +1,12 @@
 # ADR 0043: Crashes, page summaries and sessions go to an error tracker, from the crash trail, only where a DSN is set
 
 - **Status:** accepted; a per-browser opt-out and the privacy page since
-  2026-10-04 ([ADR 0045](./0045-legal-pages-from-the-deployment.md))
+  2026-10-04 ([ADR 0045](./0045-legal-pages-from-the-deployment.md));
+  amended by [ADR 0046](./0046-a-per-device-safety-ladder-for-gpu-loss.md)
+  (a page's aftermath, background and recovery-page deaths, the `safety`,
+  `resumed_s` and `restart_gap_s` tags) and
+  [ADR 0048](./0048-network-failures-are-retried.md) (a network boot
+  failure is an error, not fatal; nothing reported while the page leaves)
 - **Date:** 2026-10-03
 
 ## Context

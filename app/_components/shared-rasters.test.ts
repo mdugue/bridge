@@ -109,3 +109,25 @@ test("a load every reader left before it landed is aborted", async () => {
   expect(await pending).toBeNull();
   expect(await second).toBeNull();
 });
+
+test("the stream's teardown stops the loads still on their way", async () => {
+  const signals: AbortSignal[] = [];
+  const share = createSharedRasters(
+    (key, signal) => {
+      signals.push(signal);
+      return key === "landed"
+        ? Promise.resolve("tex")
+        : new Promise<string>((_resolve, reject) => {
+            signal.addEventListener("abort", () =>
+              reject(new Error("aborted"))
+            );
+          });
+    },
+    () => undefined
+  );
+  await share.acquire("landed");
+  const pending = share.acquire("on its way");
+  share.clear();
+  expect(signals.map((s) => s.aborted)).toEqual([false, true]);
+  expect(await pending).toBeNull();
+});

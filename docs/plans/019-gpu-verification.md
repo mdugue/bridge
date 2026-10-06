@@ -192,8 +192,8 @@ On the dev server over the LAN (`bun dev` serves HTTPS for exactly this):
   its level) without leaving the ground unloaded (the Alaunpark case in
   `scene-profile.ts`).
 - [ ] A forced GPU loss (background the tab under memory pressure, or a
-  heavy flight) reloads in place once and restores the view; it does not
-  loop (plan 038 step 3).
+  heavy flight) reloads in place, a safety level lighter, and restores the
+  view; it does not loop (ADR 0046 — the details are section M).
 - [ ] Locate me and live mode with the compass; a minimap jump ends live
   mode (plan 038 step 5).
 - [ ] **Listening pass** (plan 035, rides along — not a GPU check): the
@@ -684,12 +684,91 @@ atmospheric motes (7), the geometry kit's winding unification (21, plan
 046's maintenance note: needs a headed before/after comparison), and a
 user-facing quality tier (Direction 5).
 
+### M. The phone crash fixes (2026-10-06, ADRs 0046–0048)
+
+Built and unit-tested headless only (SwiftShader, WebGL2): nothing below
+has run on WebGPU or on a phone. On the iPhone keep a cabled Web Inspector
+open (`crashTrail.current()` prints the trail with its beats); on the
+desktop use Chrome with WebGPU and repeat with `?gpu=webgl2`.
+
+- [ ] **The ladder by hand.** `?safety=0`, `1`, `2`, `3` on the iPhone and
+  on a desktop: each boots with its level's pixel ratio, shadow map and
+  cache bounds (the beat's `cache … min-max`; `__poc.handle.getGpuDebug()`),
+  the trail notes `safety level N` from 1 on, and local storage's
+  `gpu-safety` is left as it was. Good: level 3 is soft but usable.
+- [ ] **A loss reloads a level lighter, where you stood.** Force a loss (a
+  heavy flight in Comic): the page reloads within about 0.3 s after
+  `render stopped` (`renderer.dispose()` first), `gpu-safety` reads one
+  level higher, the camera, time and look come back (from level 2 without
+  the picture style and Modell), and the new page does not lose its GPU
+  again at a lower `held` than the first did (the CITY-WALK-4/6 pattern).
+  After the third, the card *Die Grafik ist ausgefallen*: *Leichter
+  weiter* reloads a level lighter at the pose, *Neu laden* plainly. In a
+  private window (storage blocked) the first loss shows the card.
+- [ ] **The probe on resume.** Background Safari for two minutes or more
+  with other apps open, come back: either the page simply goes on, or the
+  trail shows `gpu reclaimed` and the page reloads at the **same** level —
+  never a `frame failed` report. A tab opened in the background shows
+  `crash trail v1 · hidden`, and a kill there is not offered as a crash.
+- [ ] **The memory emergency.** If Safari reports a `GPUOutOfMemoryError`
+  (the trail's `gpu-error`), a `memory emergency` note follows it, the
+  governor's level jumps to 3 and `gpu-safety` rises once. An
+  `alloc-failed` note leaves its tile bare and the page running; shadows
+  that pause after it come back with the next tile that compiles.
+- [ ] **The one-byte shadow colour target.** Shadows render on WebGPU
+  (Chrome desktop, the iPhone) and on `?gpu=webgl2`, with no validation
+  error for the `r8unorm` colour attachment beside the depth; `getGpuDebug`
+  counts 20 MiB for a 2048² map.
+- [ ] **FXAA on the phone.** Pastel and Comic on the iPhone, against the
+  desktop's SMAA at the same snapshot: paving, road markings, the ink
+  lines and roof edges — softer is expected, crawling or haloed edges
+  around the sun's glow are not. Knob: `fxaa.ts` (its contrast
+  thresholds).
+- [ ] **AO in one byte.** A wall's foot on a lawn at low sun on a desktop,
+  against a build of `main` at the same snapshot: no banding in the
+  contact shadow's gradient beyond one step.
+- [ ] **The outline.** Ask a building, a tree, a bridge and a traffic flow
+  on the phone and the desktop: the line as before, its halo's edge steady
+  while the camera moves; ask again after 10 s idle — no hitch (the beat's
+  render targets: 8 → 6 after the keep time, back to 8 when asked).
+- [ ] **Dropped CPU copies under every other material.** Once a few tiles
+  have loaded (their copies dropped): Papier, Strich and Schwarzplan; Modell
+  with an Ausschnitt switched on and off; *Bild speichern* and the
+  *Verschattungsstudie*; a demolish; the outline on a building. Good: no
+  missing geometry and no WebGPU validation error (an empty vertex buffer)
+  in the console, on both backends.
+- [ ] **The phone's coarse level without sports grounds.** From 200 m up
+  over the Großer Garten's pitches on the iPhone: pitches beyond the fine
+  level show their land-cover class and gain their lines as the fine level
+  arrives — no flash of a wrong colour.
+- [ ] **The shadow camera at 64 px (phone) / 128 px (desktop).** On a
+  phone at eye level on a tile seam with the sun behind, and flying at
+  124–249 m on either: the neighbour casts its coarse
+  crowns' shadows (a third of the trees, wider) — acceptable or not; the
+  beat's `terr Nf/Nc` shows no fine level held behind the player.
+- [ ] **The phone's cache at 336 MiB.** The spawn view in portrait, then a
+  flight across the site on the iPhone: no hole in the ground inside the
+  fog. If there are, raise level 0's `max` in `scene-profile.ts`
+  (`TILE_CACHE_BYTES`) and accept less headroom; note the beat's `cache`
+  and `held` when it happens.
+- [ ] **The boot burst.** Ten cold boots on the iPhone (cache cleared): no
+  page killed right after its first frame (CITY-WALK-2); the beats show
+  `net 4d 2p` at most.
+- [ ] **The network.** Airplane mode during the boot and while walking:
+  `net-retry` notes, missing tiles drawn at their coarse level, the pill
+  *Keine Verbindung zum Server — ein Teil der Stadt fehlt, neuer Versuch
+  folgt.*, and the holes closing soon after the network is back. A boot
+  that stays without network for a minute of a visible page shows *Keine
+  Verbindung zum Server* with *Erneut versuchen*. A reload while tiles
+  load sends no `load-error` or `boot failed` report.
+
 ## STOP conditions
 
 - A visible defect that no knob above fixes: report the snapshot JSON and
   the plates of both backends.
 - GPU memory keeps climbing across repeated flights.
-- A phone reloads more than once in ten minutes for the same view.
+- A phone reloads more than once per safety level, or loses its GPU again
+  at the next level for the same view (ADR 0046).
 
 ## Findings
 

@@ -316,6 +316,42 @@ function FocusControls({
 }
 
 /**
+ * The lens blur's switch and its focus. Not shown where the device builds
+ * no lens blur (a phone, scene-profile.ts `PostProfile.dof`): the look
+ * keeps its value, and a snapshot taken there still carries it.
+ */
+function DepthOfFieldControls({
+  look,
+  onLook,
+}: {
+  look: LookValues;
+  onLook: (patch: Partial<LookValues>) => void;
+}) {
+  return (
+    <>
+      <Field orientation="horizontal">
+        <FieldLabel className="font-medium text-xs" htmlFor="depth-of-field">
+          Tiefenschärfe
+        </FieldLabel>
+        <Switch
+          checked={look.dof}
+          id="depth-of-field"
+          onCheckedChange={(checked) => onLook({ dof: checked })}
+          size="sm"
+        />
+      </Field>
+      <FocusControls
+        distance={look.focusDistanceM}
+        enabled={look.dof}
+        mode={look.focusMode}
+        onDistance={(m) => onLook({ focusDistanceM: m })}
+        onMode={(m) => onLook({ focusMode: m })}
+      />
+    </>
+  );
+}
+
+/**
  * The picture style: five swatch cards, exactly one pressed — the same
  * single-value ToggleGroup as walk/fly and the focus mode, so the keyboard
  * moves through it the same way.
@@ -783,6 +819,12 @@ export interface SceneSidebarProps {
   /** the site's landmarks (Wikidata), most notable first */
   landmarks: Landmark[];
   latLng: { lat: number; lng: number } | null;
+  /**
+   * Whether the scene has a lens blur — the budget it was built with
+   * (scene-profile.ts `postProfileFor`), not the pointer as it is now: a
+   * keyboard detached after the boot leaves the blur on, and its switch.
+   */
+  lensBlur: boolean;
   look: LookValues;
   minutes: number;
   mode: ViewMode;
@@ -813,7 +855,7 @@ export interface SceneSidebarProps {
 
 export function SceneSidebar(props: SceneSidebarProps) {
   const { toggleSidebar } = useSidebar();
-  const { handleRef, look, onLook } = props;
+  const { handleRef, lensBlur, look, onLook } = props;
   const site = useSite();
   const places = useMemo(
     () => sitePlaces(site.viewpoints, props.landmarks, site.name),
@@ -853,7 +895,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
               <MinimapCard
                 bounds={props.bounds}
                 focusRingM={
-                  look.dof && look.focusMode === "manual"
+                  lensBlur && look.dof && look.focusMode === "manual"
                     ? look.focusDistanceM
                     : null
                 }
@@ -965,32 +1007,8 @@ export function SceneSidebar(props: SceneSidebarProps) {
                       />
                     </Field>
                   )}
-                  {group === "rendering" && (
-                    <>
-                      <Field orientation="horizontal">
-                        <FieldLabel
-                          className="font-medium text-xs"
-                          htmlFor="depth-of-field"
-                        >
-                          Tiefenschärfe
-                        </FieldLabel>
-                        <Switch
-                          checked={look.dof}
-                          id="depth-of-field"
-                          onCheckedChange={(checked) =>
-                            onLook({ dof: checked })
-                          }
-                          size="sm"
-                        />
-                      </Field>
-                      <FocusControls
-                        distance={look.focusDistanceM}
-                        enabled={look.dof}
-                        mode={look.focusMode}
-                        onDistance={(m) => onLook({ focusDistanceM: m })}
-                        onMode={(m) => onLook({ focusMode: m })}
-                      />
-                    </>
+                  {group === "rendering" && lensBlur && (
+                    <DepthOfFieldControls look={look} onLook={onLook} />
                   )}
                 </LookGroupRow>
               ))}

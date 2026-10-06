@@ -86,7 +86,7 @@ import {
   RICH_IN_M,
   RICH_OUT_M,
 } from "@/lib/city/vegetation-lod";
-import { isAbortError } from "./fetch-optional";
+import { fetchOptionalBinary } from "./fetch-optional";
 import {
   Instances,
   instanceMatrix,
@@ -1085,25 +1085,23 @@ function buildHedges(hedges: Placement[]): Instances[] {
  * Loads the DOP NDVI PNG into a CPU sampler (EPSG → 0..1). The bytes are
  * inflated as written (lib/city/png-raster.ts), never through the browser's
  * image decoder, which colour-manages untagged greyscale on WebKit. Returns
- * null on any failure (no raster, decode error) so crowns fall back to the
- * hash-only sage — graceful degradation, see docs/portability.md.
+ * null on any failure (no raster, a decode error, a network failure past
+ * an optional file's retries) so crowns fall back to the hash-only sage —
+ * graceful degradation, see docs/portability.md. Rethrows an abort.
  */
 export async function loadNdviSampler(
   url: string,
   bounds: TerrainBounds,
   signal?: AbortSignal
 ): Promise<RasterSampler | null> {
+  // retried like any optional file, an abort rethrown (fetch-optional.ts)
+  const png = await fetchOptionalBinary(url, signal);
+  if (!png) {
+    return null;
+  }
   try {
-    const res = await fetch(url, { signal });
-    if (!res.ok) {
-      return null;
-    }
-    const png = new Uint8Array(await res.arrayBuffer());
-    return maxWindowSampler(await decodeGreyPng(png), bounds);
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
+    return maxWindowSampler(await decodeGreyPng(new Uint8Array(png)), bounds);
+  } catch {
     return null;
   }
 }

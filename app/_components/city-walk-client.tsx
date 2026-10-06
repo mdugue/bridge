@@ -1,11 +1,19 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  isNetworkFailure,
+  MANIFEST_FETCH_BUDGET_MS,
+} from "@/lib/city/fetch-retry";
+import type { SafetyLevel } from "@/lib/city/gpu-safety";
 import { loadStageStates } from "@/lib/city/load-stages";
 import { siteDataBase } from "@/lib/city/site-index";
 import { type DataManifest, MANIFEST_FILE, manifestUrl } from "@/lib/city/tile";
 import { TILESET_FILE, TILESET_SPAWN_FILE } from "@/lib/city/tileset";
+import { BootError } from "./boot-error";
+import { type FetchedBytes, fetchBytes, isAbortError } from "./fetch-optional";
+import { pageSafety } from "./gpu-safety";
 import { LoadScreen } from "./load-screen";
 import { currentSceneBudget, type SceneBudget } from "./scene-profile";
 import { SiteProvider } from "./site-context";
@@ -53,25 +61,105 @@ const loadViewer = () => import("./city-walk");
  * The artifact manifest (logical → content-hashed file names, see
  * lib/city/tile.ts). Fetched with `no-cache` so a re-bake reaches every client
  * while the hashed files themselves stay cached forever — the tileset it
- * names references everything else by hashed name.
+ * names references everything else by hashed name. A network failure is
+ * retried (fetch-optional.ts `fetchBytes`); once that gives up, the copy
+ * this browser cached last will do (its hashed files are likely cached
+ * too). Without either there is nothing to start from — the unhashed names
+ * are never published (scripts/prepare-data.ts prunes them) — so the boot
+ * error says so, with a way to try again.
  */
-function useDataManifest(base: string): DataManifest | null | undefined {
-  const [manifest, setManifest] = useState<DataManifest | null | undefined>();
+async function loadManifest(
+  url: string,
+  signal: AbortSignal
+): Promise<DataManifest> {
+  let got: FetchedBytes;
+  try {
+    got = await fetchBytes(url, {
+      signal,
+      budgetMs: MANIFEST_FETCH_BUDGET_MS,
+      init: { cache: "no-cache" },
+    });
+  } catch (err) {
+    if (!isNetworkFailure(err)) {
+      throw err;
+    }
+    got = await fetchBytes(url, {
+      signal,
+      budgetMs: 0,
+      init: { cache: "force-cache" },
+    }).catch(() => {
+      throw err;
+    });
+  }
+  if (!got.ok) {
+    throw new Error(`Failed to fetch ${url}: HTTP ${got.status}`);
+  }
+  const manifest = JSON.parse(new TextDecoder().decode(got.bytes)) as
+    | Partial<DataManifest>
+    | undefined;
+  if (manifest?.version !== 1) {
+    throw new Error(`${url}: not a version 1 manifest`);
+  }
+  return manifest as DataManifest;
+}
+
+function useDataManifest(base: string): {
+  manifest?: DataManifest;
+  /** why there is none (the boot error's message) */
+  failed?: string;
+  retry: () => void;
+} {
+  const [state, setState] = useState<{
+    manifest?: DataManifest;
+    failed?: string;
+  }>({});
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    let cancelled = false;
-    void fetch(`${base}/${MANIFEST_FILE}`, { cache: "no-cache" })
-      .then((res) => (res.ok ? (res.json() as Promise<DataManifest>) : null))
-      .catch(() => null)
-      .then((m) => {
-        if (!cancelled) {
-          setManifest(m?.version === 1 ? m : null);
+    const aborter = new AbortController();
+    loadManifest(`${base}/${MANIFEST_FILE}`, aborter.signal).then(
+      (manifest) => {
+        if (!aborter.signal.aborted) {
+          setState({ manifest });
         }
-      });
+      },
+      (err: unknown) => {
+        if (!(aborter.signal.aborted || isAbortError(err))) {
+          setState({
+            failed: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    );
+    return () => aborter.abort();
+  }, [base, attempt]);
+  const retry = useCallback(() => {
+    setState({});
+    setAttempt((n) => n + 1);
+  }, []);
+  return { ...state, retry };
+}
+
+/**
+ * The device's safety level (gpu-safety.ts), null until it has settled:
+ * it reads the previous page's crash trail before this page's own trail
+ * starts (city-walk.tsx mounts only once the budget is made), and a
+ * previous record that looks crashed is first asked whether its page is
+ * still open — beside the manifest's fetch, so the boot waits on both.
+ */
+function usePageSafety(): SafetyLevel | null {
+  const [safety, setSafety] = useState<SafetyLevel | null>(null);
+  useEffect(() => {
+    let live = true;
+    void pageSafety().then((level) => {
+      if (live) {
+        setSafety(level);
+      }
+    });
     return () => {
-      cancelled = true;
+      live = false;
     };
-  }, [base]);
-  return manifest;
+  }, []);
+  return safety;
 }
 
 /**
@@ -108,18 +196,27 @@ function SiteViewer({ base }: { base: string }) {
     // early start must not add an unhandled rejection of its own.
     loadViewer().catch(() => undefined);
   }, []);
-  const manifest = useDataManifest(base);
+  const { manifest, failed, retry } = useDataManifest(base);
+  const safety = usePageSafety();
   // The render budget (profile, device tier, whether the rest of the site
-  // streams) is read from the page ONCE, here, and handed down; the scene
-  // never re-reads the window. The lite profile streams the spawn tile alone.
+  // streams, the device's safety level) is read from the page ONCE, here,
+  // and handed down; the scene never re-reads the window. The lite profile
+  // streams the spawn tile alone.
   const setup = useMemo(() => {
-    if (manifest === undefined) {
+    if (manifest === undefined || safety === null) {
       return null;
     }
-    const budget: SceneBudget = currentSceneBudget();
+    const budget: SceneBudget = currentSceneBudget(safety);
     const tileset = budget.neighbourTiles ? TILESET_FILE : TILESET_SPAWN_FILE;
     return { budget, tilesetUrl: manifestUrl(manifest, tileset, base) };
-  }, [base, manifest]);
+  }, [base, manifest, safety]);
+  if (failed !== undefined) {
+    return (
+      <div className="relative h-full w-full bg-[image:var(--hud-scrim)]">
+        <BootError message={failed} onRetry={retry} />
+      </div>
+    );
+  }
   if (!setup) {
     return <BootScreen />;
   }

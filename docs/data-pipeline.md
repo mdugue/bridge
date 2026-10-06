@@ -491,7 +491,9 @@ root                                   refine ADD
 
 The buildings load whenever the tile is in view. The terrain refines from
 the 512² grid to the fine TIN (±0.15 m) by screen-space error — at the renderer's 16 px target, 40 m
-switches at ≈ 1.2 km from the tile on a 1080p screen. Only L0 is
+switches at ≈ 2.6 km from the tile for a viewport 1080 CSS px high
+(≈ 2.1 km on an iPhone in portrait; `docs/rendering.md`, "The frame
+budget"). Only L0 is
 *dressed*: vegetation, lamps, monuments, rails and the water and mist sheets
 are built when a fine terrain tile arrives and leave with it. The root's
 `extras` carry what the viewer needs before any content: the site id, the
@@ -590,7 +592,13 @@ name, but the viewer looks up only the tileset in it: the tileset names
 the hashed content, and the content's `extras` name the hashed side files
 (the map picture is looked up the same way). The viewer fetches
 `/data/<site>/manifest.json`; every other URL resolves relative to the
-tileset's. Files the manifest no longer references are pruned.
+tileset's. Files the manifest no longer references are pruned, and no
+unhashed name but the manifest's own is published, so **the client never
+requests another**: a manifest that does not arrive is retried for 20 s, then the copy the
+browser cached last will do, and without either the boot says so and
+offers to try again — it no longer falls back to
+`/data/<site>/tileset.json`
+([ADR 0048](./adr/0048-network-failures-are-retried.md)).
 `next.config.ts` serves `/data/*` as `public, max-age=31536000, immutable`
 and each `/data/<site>/manifest.json` and `/data/sites.json` as `no-cache`
 ([ADR 0007](./adr/0007-content-hashed-publishing-with-a-manifest.md)).

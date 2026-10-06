@@ -59,18 +59,24 @@ stürzt er manchmal ab oder ruckelt. Damit das auffällt und behoben werden
 kann, schickt er Berichte:
 
 - wenn der vorige Besuch abgestürzt ist (beim nächsten Besuch),
-- wenn ein Fehler auftritt (höchstens fünf je Besuch),
+- wenn ein Fehler auftritt (höchstens fünf je Besuch, dazu der eine, an dem
+  der Viewer ausfällt),
 - je Besuch eine Zusammenfassung, wie er lief: Zeit bis zum ersten Bild und
   bis alles geladen war, Bildrate, belegter Speicher,
 - Beginn und Ende des Besuchs, normal oder mit Absturz.
 
 Ein Bericht enthält Browser, Betriebssystem und Gerätetyp (User-Agent),
 Bildschirmgröße und Pixeldichte, den ungefähren Arbeitsspeicher des Geräts,
-die Grafikschnittstelle (WebGPU oder WebGL2), die aufgerufene Seite ohne
-Parameter (etwa `/dresden`), den Verlauf des Besuchs (Ladeschritte,
-Fehlermeldungen, Bildrate, Speicher, geladene Kacheln, Bildstil, Gehen oder
-Fliegen, Höhe der Kamera über dem Boden), Zeitpunkte, eine zufällige Kennung
-des einzelnen Seitenaufrufs und die Version der Seite.
+die Grafikschnittstelle (WebGPU oder WebGL2), wie weit der Viewer seine
+Grafik auf diesem Gerät nach früheren Abstürzen zurückgenommen hat (die
+Sparstufe, siehe unten), die
+aufgerufene Seite ohne Parameter (etwa `/dresden`), den Verlauf des Besuchs
+(Ladeschritte, Fehlermeldungen, Bildrate, Speicher, geladene und gerade
+ladende Kacheln, ob der Browser sich für online hält, wann die Seite im
+Hintergrund lag, Bildstil, Gehen oder Fliegen, Höhe der Kamera über dem
+Boden), Zeitpunkte – nach einem Absturz auch, wie bald darauf die Seite
+wieder geöffnet wurde –, eine zufällige Kennung des einzelnen Seitenaufrufs
+und die Version der Seite.
 
 Er enthält **nicht** deinen Standort oder wo in der Stadt du warst, keine
 IP-Adresse, keinen Namen, kein Cookie und keine Kennung, die dich bei einem
@@ -118,7 +124,14 @@ und liest es nur auf deinem Gerät:
 - deine Wahl zu den Fehlerberichten,
 - wenn sich die Seite nach einem Grafikfehler selbst neu lädt, bis du den Tab
   schließt: die Stelle, an der du in der Stadt standest, und wann das war –
-  damit sie dich dorthin zurückbringt und nicht endlos neu lädt.
+  damit sie dich dorthin zurückbringt und nicht endlos neu lädt,
+- wenn die Grafik auf deinem Gerät zuletzt ausgefallen ist, unter dem Namen
+  `gpu-safety`: eine Sparstufe von 0 bis 3, wann sie zuletzt stieg und wann
+  der Besuch begann, der sie erhöht hat (ein abgestürzter, oder einer, dem
+  der Grafikspeicher ausging) – damit der Viewer beim nächsten Besuch
+  sparsamer zeichnet, nicht wieder ausfällt und einen Ausfall nur einmal
+  zählt.
+  Die Stufe sinkt von selbst, alle drei Tage um eins.
 
 Rechtsgrundlage ist § 25 Abs. 2 Nr. 2 TDDDG: Diese Einträge sind für die
 Funktionen, die du nutzt, unbedingt erforderlich. Du kannst sie jederzeit in
@@ -178,4 +191,4 @@ vorgeschrieben; ohne die Verbindungsdaten lässt sich die Seite aber nicht
 ausliefern. Eine automatisierte Entscheidungsfindung oder ein Profiling
 findet nicht statt.
 
-<small>Stand: 4. Oktober 2026</small>
+<small>Stand: 6. Oktober 2026</small>

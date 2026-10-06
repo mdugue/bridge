@@ -115,3 +115,56 @@ export function shadowFocusAhead(radius: number): number {
 export function shadowDeadZone(radius: number): number {
   return radius * FOLLOW_DEAD_ZONE_FRACTION;
 }
+
+/**
+ * 3DTilesRendererJS's error target (px), which the viewer keeps as its base
+ * (the memory governor scales it up, never down).
+ */
+export const STREAM_ERROR_TARGET = 16;
+
+/**
+ * The resolution (px, square) the shadow camera streams tiles at: one
+ * chosen for streaming, not the shadow map's. The tile renderer measures an
+ * orthographic camera's error as a tile's geometric error over its pixel —
+ * the frustum's width over the resolution — whatever the distance. At the
+ * map's 2048 px the coarse terrain's 40 m came to 372 px over the 220 m
+ * frustum, so every tile the frustum touched was refined to its fine level
+ * (and from the air, up to four of them: 642 → 677 MB on an iPhone, flying
+ * at 228 m). On a phone, at 64 px, the coarse level stays below the target
+ * at every radius, while a tile's buildings (and the coarse level with its
+ * crowns, which is the minimum terrain under them) still load for the
+ * shadow: what the main camera refines is refined for the view, not for the
+ * sun. A desktop has the memory for the fine level under the eye-level
+ * frustum (110 m): at 128 px the coarse level's 23 px still refine it there
+ * — a tile behind the player at a seam casts its own trees' shadows, and
+ * the whole-site boot fetches the spawn tile's fine level as early as it
+ * did — but no longer from the air, where the frustum grows (12 px and
+ * less from 220 m on).
+ */
+export const SHADOW_STREAM_PX: Readonly<Record<"desktop" | "mobile", number>> =
+  {
+    desktop: 128,
+    mobile: 64,
+  };
+
+/** The width and height the shadow camera streams at (`SHADOW_STREAM_PX`). */
+export function shadowStreamResolution(tier: "desktop" | "mobile"): {
+  height: number;
+  width: number;
+} {
+  const px = SHADOW_STREAM_PX[tier];
+  return { width: px, height: px };
+}
+
+/**
+ * The screen-space error (px) the tile renderer gives a node of
+ * `geometricError` (m) under the shadow camera at half-size `radius` (m),
+ * streamed at `px`: its pixel is the frustum's width over the resolution.
+ */
+export function shadowStreamError(
+  geometricError: number,
+  radius: number,
+  px: number
+): number {
+  return geometricError / ((2 * radius) / px);
+}

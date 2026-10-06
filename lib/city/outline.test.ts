@@ -3,9 +3,26 @@ import {
   normalQuantile,
   OUTLINE_BAND,
   OUTLINE_WIDTH_CSS_PX,
+  outlineKernel,
   outlineSigmaCssPx,
   outlineSpread,
 } from "./outline";
+
+test("the blur's kernel keeps the mask's level and has the sigma the width assumes", () => {
+  const w = outlineKernel();
+  expect(w).toHaveLength(3 + 2 * OUTLINE_BAND.sigma);
+  // both sides: a flat mask stays at its value
+  expect(w.reduce((sum, x, i) => sum + (i === 0 ? x : 2 * x), 0)).toBeCloseTo(
+    1,
+    12
+  );
+  // its spread in taps is what outlineSpread divides by — a little under,
+  // where the kernel cuts the Gaussian's tails off
+  const sd = Math.sqrt(w.reduce((sum, x, i) => sum + 2 * x * i * i, 0));
+  const assumed = (3 + 2 * OUTLINE_BAND.sigma) / 3;
+  expect(sd).toBeLessThan(assumed);
+  expect(sd).toBeGreaterThan(assumed * 0.95);
+});
 
 test("the quantile inverts the normal distribution", () => {
   expect(normalQuantile(0.5)).toBeCloseTo(0, 9);

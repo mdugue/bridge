@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
 import {
   BoxGeometry,
-  type BufferGeometry,
+  BufferAttribute,
+  BufferGeometry,
   ClippingGroup,
   Group,
+  InterleavedBuffer,
+  InterleavedBufferAttribute,
   type Material,
   Mesh,
   MeshBasicNodeMaterial,
@@ -12,11 +15,14 @@ import {
 import {
   aloneUnder,
   disposeObject3D,
+  dropCpuCopies,
   estimateGeometryBytes,
+  markSceneShared,
   releaseRenderState,
   retainSceneMaterials,
   sceneMaterial,
   sceneShared,
+  sceneSharedBytes,
   textureBytes,
 } from "./three-utils";
 import { Instances } from "./instancing";
@@ -81,8 +87,59 @@ test("an instanced set's buffers go with its geometry view", () => {
   expect(calls).toBe(1);
 });
 
+test("a geometry left half made by a failed allocation is disposed past it, and the walk frees the rest", () => {
+  // three r186: an attribute whose buffer failed to allocate makes its
+  // geometry's dispose throw once, midway; the next dispose goes through
+  const poisoned = new BoxGeometry();
+  let throws = 1;
+  let through = 0;
+  poisoned.addEventListener("dispose", () => {
+    if (throws > 0) {
+      throws--;
+      throw new TypeError("undefined is not an object (data.buffer.destroy)");
+    }
+    through++;
+  });
+  const healthy = new BoxGeometry();
+  const healthyCalls = countDisposals(healthy);
+  const material = new MeshBasicNodeMaterial();
+  const materialCalls = countDisposals(material);
+  const root = new Object3D();
+  root.add(new Mesh(poisoned, material), new Mesh(healthy, material));
+
+  const errors = disposeObject3D(root);
+
+  expect(errors).toHaveLength(1);
+  expect(errors[0]).toBeInstanceOf(TypeError);
+  expect(through).toBe(1);
+  expect(healthyCalls()).toBe(1);
+  expect(materialCalls()).toBeGreaterThanOrEqual(1);
+});
+
 test("a bare Object3D is traversed without throwing", () => {
   expect(() => disposeObject3D(new Object3D())).not.toThrow();
+});
+
+test("a buffer the scene shares is off a geometry when that geometry is disposed", () => {
+  // three's dispose destroys the GPU buffer of whatever the geometry holds
+  // as it dispatches: the shared index must not be held by then
+  const shared = new BufferAttribute(Uint32Array.from([0, 1, 2]), 1);
+  markSceneShared(shared);
+  const geometry = new BoxGeometry();
+  geometry.setIndex(shared);
+  const own = geometry.getAttribute("position");
+  let heldAtDispose: unknown = "never disposed";
+  geometry.addEventListener("dispose", () => {
+    heldAtDispose = geometry.index;
+  });
+  const root = new Object3D();
+  root.add(new Mesh(geometry, new MeshBasicNodeMaterial()));
+  expect(sceneSharedBytes(root)).toBe(12);
+  disposeObject3D(root);
+  expect(heldAtDispose).toBeNull();
+  // the tile's own attributes went with it as ever
+  expect(geometry.getAttribute("position")).toBe(own);
+  expect(shared.array).toEqual(Uint32Array.from([0, 1, 2]));
 });
 
 test("estimateGeometryBytes counts each geometry once, index included", () => {
@@ -96,6 +153,80 @@ test("estimateGeometryBytes counts each geometry once, index included", () => {
   root.add(new Mesh(geometry, new MeshBasicNodeMaterial()));
   root.add(new Mesh(geometry, new MeshBasicNodeMaterial()));
   expect(estimateGeometryBytes(root)).toBe(expected);
+});
+
+/** A quantised glTF-like mesh: interleaved positions and normals, an index. */
+function gltfMesh() {
+  const geometry = new BufferGeometry();
+  const positions = new InterleavedBuffer(
+    Int16Array.from([0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 100, 0]),
+    4
+  );
+  const normals = new InterleavedBuffer(
+    Int8Array.from([0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0]),
+    4
+  );
+  geometry.setAttribute(
+    "position",
+    new InterleavedBufferAttribute(positions, 3, 0, true)
+  );
+  geometry.setAttribute(
+    "normal",
+    new InterleavedBufferAttribute(normals, 3, 0, true)
+  );
+  geometry.setIndex(new BufferAttribute(Uint32Array.from([0, 1, 2]), 1));
+  return new Mesh(geometry, new MeshBasicNodeMaterial());
+}
+
+test("dropped CPU copies keep their kind, count and weight, and the mesh its bounds", () => {
+  const mesh = gltfMesh();
+  const { geometry } = mesh;
+  const root = new Object3D();
+  root.add(mesh);
+  const before = estimateGeometryBytes(root);
+  const dropped = dropCpuCopies(root, [
+    geometry.getAttribute("position"),
+    geometry.getAttribute("normal"),
+    geometry.getIndex(),
+  ]);
+  expect(dropped).toBe(24 + 12 + 12);
+  const position = geometry.getAttribute(
+    "position"
+  ) as InterleavedBufferAttribute;
+  // what three reads after the upload: the kind of array, and the count
+  expect(position.data.array).toBeInstanceOf(Int16Array);
+  expect(position.data.array.length).toBe(0);
+  expect(position.count).toBe(3);
+  expect(geometry.getIndex()?.array).toBeInstanceOf(Uint32Array);
+  expect(geometry.getIndex()?.count).toBe(3);
+  // the HUD and the tile cache weigh what the GPU holds, not the CPU
+  expect(estimateGeometryBytes(root)).toBe(before);
+  // bounds taken from the positions while they were there (culling)
+  expect(geometry.boundingSphere?.radius).toBeGreaterThan(0);
+});
+
+test("a buffer still read through another attribute, or shared by the scene, keeps its copy", () => {
+  const mesh = gltfMesh();
+  const twin = new Mesh(new BufferGeometry(), mesh.material);
+  // a second view of the same normals the drop does not list
+  twin.geometry.setAttribute(
+    "normal",
+    new InterleavedBufferAttribute(
+      (mesh.geometry.getAttribute("normal") as InterleavedBufferAttribute).data,
+      3,
+      0,
+      true
+    )
+  );
+  const shared = mesh.geometry.getIndex();
+  if (shared) {
+    markSceneShared(shared);
+  }
+  const root = new Object3D();
+  root.add(mesh, twin);
+  dropCpuCopies(root, [mesh.geometry.getAttribute("normal"), shared]);
+  expect(mesh.geometry.getAttribute("normal").array.length).toBe(12);
+  expect(shared?.array.length).toBe(3);
 });
 
 test("textureBytes adds a third for a mip chain", () => {

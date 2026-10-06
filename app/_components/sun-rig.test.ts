@@ -2,9 +2,13 @@ import { expect, test } from "bun:test";
 import {
   Box3,
   Color,
+  type DepthTexture,
   DirectionalLight,
-  type RenderTarget,
+  RedFormat,
+  RenderTarget,
   Scene,
+  type ShadowNode,
+  UnsignedByteType,
   Vector3,
 } from "three/webgpu";
 import { uniform } from "three/tsl";
@@ -123,10 +127,36 @@ test("airborne, the frustum is pushed toward what the camera looks at", () => {
   expect(Math.abs(sun.target.position.z)).toBeLessThan(1);
 });
 
+test("the shadow map's colour target is one byte a texel beside its depth", () => {
+  const { sun } = rig(512);
+  // reason: three reads the light's shadow node from an undeclared member
+  const node = (sun.shadow as unknown as { shadowNode?: ShadowNode })
+    .shadowNode as unknown as {
+    setupRenderTarget: (
+      shadow: unknown,
+      builder: unknown
+    ) => { depthTexture: DepthTexture; shadowMap: RenderTarget };
+  };
+  expect(node).toBeDefined();
+  // the two members of a node builder the base reads
+  const { shadowMap, depthTexture } = node.setupRenderTarget(sun.shadow, {
+    renderer: { reversedDepthBuffer: false },
+    createRenderTarget: (width: number, height: number) =>
+      new RenderTarget(width, height),
+  });
+  expect(shadowMap.texture.format).toBe(RedFormat);
+  expect(shadowMap.texture.type).toBe(UnsignedByteType);
+  // the depth the PCF filter compares against is still the map's
+  expect(shadowMap.depthTexture).toBe(depthTexture);
+  expect(shadowMap.width).toBe(512);
+  shadowMap.dispose();
+});
+
 test("the shadow map takes the size it is given (lite = 512²)", () => {
   const { sunRig, sun } = rig(512);
   expect(sun.shadow.mapSize.x).toBe(512);
-  expect(sunRig.shadowMapBytes).toBe(512 * 512 * 4);
+  // the depth's four bytes and the colour target's one
+  expect(sunRig.shadowMapBytes).toBe(512 * 512 * 5);
   // Coarser texel (0.43 m over the 220 m frustum): the re-centre still snaps
   // to it, so the frustum lands within one texel of the point.
   walkTo(sunRig, 0, 0);
