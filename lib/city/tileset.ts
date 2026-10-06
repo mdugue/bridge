@@ -68,8 +68,9 @@ export const TERRAIN_LEVELS: Record<0 | 1, TerrainLevel> = {
 /**
  * Geometric error (m) of the coarse terrain: the fine level replaces it once
  * `error · screenHeight / (distance · 2 tan(fov/2))` exceeds the renderer's
- * error target (16 px). 40 m switches at ≈1.2 km from the tile on a 1080p
- * screen at the 55° default field of view. Start value — tune on a GPU.
+ * error target (16 px). 40 m switches at ≈2.6 km from the tile on a 1080p
+ * screen at the 55° default field of view (≈2.1 km on a portrait iPhone,
+ * whose camera streams at CSS pixels). Start value — tune on a GPU.
  */
 export const COARSE_TERRAIN_ERROR = 40;
 /** Large enough that a visible tile always refines to its terrain. */
@@ -111,7 +112,8 @@ export interface TerrainExtras {
   surface?: string;
   /** edge-distance raster (fine level only) */
   edges?: string;
-  /** sports-ground index raster and its table of grounds (both levels) */
+  /** sports-ground index raster and its table of grounds (both levels;
+   *  a phone's coarse level skips it, terrain-layer.ts readsSportGrounds) */
   sport?: string;
   sportTable?: string;
   /** allotment-colony raster cropped to the colonies, its half-resolution

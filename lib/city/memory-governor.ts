@@ -1,8 +1,8 @@
 /**
  * Keeps the GPU memory a page holds under the line where the browser takes
  * its GPU away. On an iPhone, Safari's GPU process failed to allocate a
- * buffer at ~720 MB (three's own count) and the page lost its device for
- * good: the render stopped. The tile cache bounds the tiles nobody looks at,
+ * buffer at 495–761 MB (three's own count; lower on a page that followed
+ * a loss) and the page lost its device for good: the render stopped. The tile cache bounds the tiles nobody looks at,
  * never the ones in view — looking around from high above put more fine
  * tiles in view than fit.
  *
@@ -93,8 +93,10 @@ const MB = 1024 * 1024;
 export const LINE_SCALE_PER_LEVEL = 0.9;
 
 /**
- * A phone's lines sit well under the ~720 MB its Safari failed at (the
- * frames in between still allocate); the desktop's only catch the extreme.
+ * A phone's lines sit under the 614–761 MB its Safari first failed at
+ * (the frames in between still allocate; a page that followed a loss
+ * failed lower, which is what the safety levels' lower lines are for);
+ * the desktop's only catch the extreme.
  * Each safety level lowers both by LINE_SCALE_PER_LEVEL.
  */
 export function memoryLimitsFor(

@@ -167,8 +167,9 @@ const PIXEL_RATIO_CAP: Record<DeviceTier, readonly number[]> = {
  * browser upscale — the only honest way to cut fill-rate in the headless
  * suite, where every pixel is shaded on the CPU. A phone is capped at 1.5
  * (its 3x panel would otherwise push the post stack's screen buffers past
- * what fits), and lower per safety level: the screen targets cost ~76
- * bytes per drawn pixel, 57 MiB at 1.5 on a 402×874 iPhone, 25 at 1.0.
+ * what fits), and lower per safety level: the phone's screen targets
+ * (`postProfileFor`) cost up to ~24 bytes per drawn pixel, 18 MiB at 1.5
+ * on a 402×874 iPhone, 8 at 1.0 — and every pass's fill falls with them.
  */
 export function pixelRatioFor(
   profile: SceneProfile,
