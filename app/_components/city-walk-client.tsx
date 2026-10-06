@@ -6,6 +6,7 @@ import { loadStageStates } from "@/lib/city/load-stages";
 import { siteDataBase } from "@/lib/city/site-index";
 import { type DataManifest, MANIFEST_FILE, manifestUrl } from "@/lib/city/tile";
 import { TILESET_FILE, TILESET_SPAWN_FILE } from "@/lib/city/tileset";
+import { pageSafety } from "./gpu-safety";
 import { LoadScreen } from "./load-screen";
 import { currentSceneBudget, type SceneBudget } from "./scene-profile";
 import { SiteProvider } from "./site-context";
@@ -110,13 +111,15 @@ function SiteViewer({ base }: { base: string }) {
   }, []);
   const manifest = useDataManifest(base);
   // The render budget (profile, device tier, whether the rest of the site
-  // streams) is read from the page ONCE, here, and handed down; the scene
-  // never re-reads the window. The lite profile streams the spawn tile alone.
+  // streams, the device's safety level) is read from the page ONCE, here,
+  // and handed down; the scene never re-reads the window. The lite profile
+  // streams the spawn tile alone. The safety level reads the previous
+  // page's crash trail, before this page's own trail starts (city-walk.tsx).
   const setup = useMemo(() => {
     if (manifest === undefined) {
       return null;
     }
-    const budget: SceneBudget = currentSceneBudget();
+    const budget: SceneBudget = currentSceneBudget(pageSafety());
     const tileset = budget.neighbourTiles ? TILESET_FILE : TILESET_SPAWN_FILE;
     return { budget, tilesetUrl: manifestUrl(manifest, tileset, base) };
   }, [base, manifest]);

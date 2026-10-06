@@ -20,8 +20,16 @@ import { WALL_CLEARANCE } from "@/lib/city/clearance";
 import { createBootPhases } from "@/lib/city/boot-phases";
 import {
   createMemoryGovernor,
+  memoryFloorFor,
   memoryLimitsFor,
+  type MemoryStep,
 } from "@/lib/city/memory-governor";
+import {
+  type GpuLoss,
+  type SafetyLevel,
+  shadowTilesStream,
+  startTileOf,
+} from "@/lib/city/gpu-safety";
 import { createGround } from "@/lib/city/ground";
 import type { Landmark } from "@/lib/city/landmarks";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
@@ -94,6 +102,7 @@ import { createSeasonClock } from "./crown-season";
 import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
 import type { MovementMode } from "./fps-movement";
 import { NO_GPU_MESSAGE } from "./gpu-support";
+import { raiseSafety } from "./gpu-safety";
 import { createSceneFog, installSceneFog } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
@@ -161,6 +170,20 @@ const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
 /** How often the crash trail takes a heartbeat (crash-trail.ts). */
 const TRAIL_BEAT_MS = 2000;
+/**
+ * A page shown again after at least this long hidden may find its GPU
+ * taken: iOS reclaims a background tab's GPU process, and the first frame
+ * after it throws (create-app's resume guard, below).
+ */
+const RESUME_AWAY_MS = 10_000;
+/** A frame that fails this soon after such a return is a reclaim. */
+const RESUME_WINDOW_MS = 5000;
+/** How long a memory emergency keeps the shadow camera from streaming. */
+const EMERGENCY_SHADOW_HOLD_MS = 120_000;
+/** Allocation failures closer together than this are one emergency. */
+const EMERGENCY_GAP_MS = 5000;
+/** How long a reload waits for the old device to be destroyed. */
+const RELEASE_WAIT_MS = 300;
 /** How often the memory governor looks at the GPU memory held. */
 const GOVERN_MS = 1000;
 
@@ -282,6 +305,14 @@ export interface CityWalkOptions {
    */
   budget: SceneBudget;
   container: HTMLElement;
+  /**
+   * Where a recovered page's player stood (gpu-recovery.ts, the snapshot's
+   * camera): the boot places the camera there before the stream's first
+   * update and waits for the tile under it, so the page loads that place
+   * and not the spawn first. Off every tile the boot starts at the spawn.
+   * Modell's part is the caller's to put back after the first frame.
+   */
+  initialCamera?: CameraState;
   initialDate: Date;
   /**
    * The look store (HUD-owned; lib/city/look-state.ts): the scene applies its
@@ -296,14 +327,18 @@ export interface CityWalkOptions {
   onError?: (message: string) => void;
   /**
    * The GPU is gone for good, or a frame threw and left three's renderer
-   * in a state no later frame draws right (the render stopped): true when
-   * the page recovers by itself (gpu-recovery.ts, a reload where the player
-   * stood); otherwise the HUD says the graphics failed (`onFatal`).
+   * in a state no later frame draws right (the render stopped) — `how`:
+   * lost in use, or reclaimed by iOS while the page was in the background
+   * (lib/city/gpu-safety.ts). The reload to run when the page recovers by
+   * itself (gpu-recovery.ts, a reload where the player stood): the scene
+   * runs it once the old device is freed, and once the page is in view.
+   * Null: the HUD says the graphics failed (`onFatal`).
    */
-  onGpuLost?: () => boolean;
+  onGpuLost?: (how: GpuLoss) => (() => void) | null;
   /**
    * The render stopped after the first frame and the page did not recover
-   * by itself: the message is the whole story, not one layer's failure.
+   * by itself: the graphics failed as a whole, not one layer. `message` is
+   * the browser's own (WebKit's, three's), for the failure card's details.
    */
   onFatal?: (message: string) => void;
   /** throttled (~2 Hz) smoothed FPS, decoupled from the heavier stats emit */
@@ -403,6 +438,12 @@ export interface CityWalkHandle {
   provenanceUrl: string | null;
   /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
   enterImmersive: () => void;
+  /**
+   * The page is about to reload after the render stopped (the failure
+   * card's buttons): frees the GPU — three's renderer and its device —
+   * and settles within RELEASE_WAIT_MS. Nothing draws after it.
+   */
+  releaseGpu: () => Promise<void>;
   /**
    * Teleports the camera (world/Y-up coords) — used by tests and QA.
    * Switches to fly mode so the ground clamp doesn't drag the camera down.
@@ -562,7 +603,12 @@ async function createRenderer(
   // headless suite, where every pixel is shaded on the CPU. Fill-rate is what
   // the post stack costs, and the post stack is most of a frame.
   renderer.setPixelRatio(
-    pixelRatioFor(budget.profile, budget.tier, window.devicePixelRatio)
+    pixelRatioFor(
+      budget.profile,
+      budget.tier,
+      window.devicePixelRatio,
+      budget.safety
+    )
   );
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
@@ -593,12 +639,20 @@ async function createRenderer(
  * device-lost and GPU-error callbacks through it (three's own handlers
  * still run: they log and stop the renderer).
  */
-function traceRenderer(renderer: WebGPURenderer, trail: CrashTrail): void {
+function traceRenderer(
+  renderer: WebGPURenderer,
+  trail: CrashTrail,
+  safety: SafetyLevel
+): void {
   const backend = renderer.backend as { isWebGPUBackend?: boolean };
   trail.set({
     backend: backend.isWebGPUBackend ? "WebGPU" : "WebGL2",
     pixelRatio: renderer.getPixelRatio(),
   });
+  if (safety > 0) {
+    // A lighter page (lib/city/gpu-safety.ts): what the device went through.
+    trail.note("safety", `level ${safety}`);
+  }
   const onLost = renderer.onDeviceLost.bind(renderer);
   renderer.onDeviceLost = (info) => {
     trail.note("device-lost", `${info.reason ?? ""} ${info.message}`);
@@ -615,6 +669,100 @@ function traceRenderer(renderer: WebGPURenderer, trail: CrashTrail): void {
     );
     onError(info as string);
   };
+}
+
+/** The part of a WebGPU device the resume guard probes with. */
+interface ProbedDevice {
+  createCommandEncoder: () => { finish: () => unknown };
+  queue: { submit: (commandBuffers: unknown[]) => void };
+}
+
+/**
+ * Whether the GPU still answers: an empty command buffer, encoded and
+ * submitted. When iOS has taken Safari's GPU process, WebKit throws right
+ * here ("Unable to make command encoder", "Unable to finish") — before
+ * any device-lost arrives, and before a frame throws the same way. The
+ * error's message, or null; the WebGL2 backend has nothing to probe.
+ */
+function probeGpu(renderer: WebGPURenderer): string | null {
+  const backend = renderer.backend as {
+    isWebGPUBackend?: boolean;
+    device?: ProbedDevice | null;
+  };
+  const device = backend.isWebGPUBackend ? backend.device : null;
+  if (!device) {
+    return null;
+  }
+  try {
+    const encoder = device.createCommandEncoder();
+    device.queue.submit([encoder.finish()]);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+/**
+ * Frees the GPU before the page reloads. three's dispose first unhooks
+ * every geometry's dispose listener — a geometry freed later (a compile
+ * settling, the tile cache) can no longer reach three's destroyAttribute
+ * with an attribute whose upload failed, which threw — then destroys the
+ * device: WebKit otherwise frees its allocations only once the old
+ * document is collected, after the new page started allocating in the
+ * same process. Settles within RELEASE_WAIT_MS either way.
+ */
+function releaseGpu(renderer: WebGPURenderer): Promise<void> {
+  let released: Promise<void>;
+  try {
+    released = renderer.dispose().catch(() => undefined);
+  } catch {
+    released = Promise.resolve();
+  }
+  return Promise.race([
+    released,
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, RELEASE_WAIT_MS);
+    }),
+  ]);
+}
+
+/**
+ * Runs `then` now, or once the page is in view again: a page reloaded in
+ * the background boots hidden, which is where iOS takes GPUs away.
+ */
+function whenVisible(then: () => void): void {
+  if (!document.hidden) {
+    then();
+    return;
+  }
+  const onShow = () => {
+    if (!document.hidden) {
+      document.removeEventListener("visibilitychange", onShow);
+      then();
+    }
+  };
+  document.addEventListener("visibilitychange", onShow);
+}
+
+/**
+ * Unloads every tile the cache holds that is not in use, at once (on a
+ * hide, in an emergency) and lets the cache keep none of them: it frees
+ * 5 % of its excess per call otherwise, the rest a frame later — and no
+ * frame runs in a hidden page. Public API of 3DTilesRendererJS's cache.
+ */
+function shedUnusedTiles(cache: {
+  minBytesSize: number;
+  unloadPercent: number;
+  unloadUnusedContent: () => void;
+}): void {
+  const percent = cache.unloadPercent;
+  cache.minBytesSize = 0;
+  cache.unloadPercent = 1;
+  try {
+    cache.unloadUnusedContent();
+  } finally {
+    cache.unloadPercent = percent;
+  }
 }
 
 /**
@@ -644,7 +792,7 @@ export async function createCityWalkApp(
 ): Promise<CityWalkHandle> {
   const renderer = await createRenderer(opts.container, opts.budget);
   if (opts.trail) {
-    traceRenderer(renderer, opts.trail);
+    traceRenderer(renderer, opts.trail, opts.budget.safety);
   }
   const scene = new Scene();
   scene.background = new Color(SKY_COLOR);
@@ -777,7 +925,10 @@ async function bootApp(
   );
   ensureAlive();
   const { offset } = extras;
-  const [spawn] = extras.tiles;
+  // The tile the boot starts on and waits for: the spawn tile, or the one
+  // a recovered page's camera stands on (lib/city/gpu-safety.ts).
+  const spawn =
+    startTileOf(extras.tiles, opts.initialCamera?.epsg) ?? extras.tiles[0];
   const siteBounds = unionBounds(extras);
 
   // Shared world sun direction (surface→sun), kept in sync by the sun rig and
@@ -839,7 +990,7 @@ async function bootApp(
     scene,
     worldBounds,
     latLng,
-    shadowMapSizeFor(budget.profile, budget.tier),
+    shadowMapSizeFor(budget.profile, budget.tier, budget.safety),
     sunDirection,
     sceneFog.color
   );
@@ -925,7 +1076,7 @@ async function bootApp(
       heightAt,
       look: opts.look,
       lowRasters: budget.lowRasters,
-      cacheBytes: tileCacheBytesFor(budget.tier),
+      cacheBytes: tileCacheBytesFor(budget.tier, budget.safety),
       ground,
       night: () => currentNight,
       season: () => seasonClock.day(),
@@ -993,7 +1144,16 @@ async function bootApp(
   // around the player were memory nothing showed — on a phone, memory the
   // governor cannot free (a tile in use is never evicted).
   let shadowStreams = true;
-  const streamShadowTiles = (on: boolean) => {
+  // From safety level 2 (lib/city/gpu-safety.ts) it streams nothing, nor
+  // for a while after a memory emergency (memoryEmergency, below).
+  let shadowHeldUntil = shadowTilesStream(budget.safety)
+    ? 0
+    : Number.POSITIVE_INFINITY;
+  // what the sun last asked for
+  let sunUp = true;
+  const streamShadowTiles = (sunAbove: boolean) => {
+    sunUp = sunAbove;
+    const on = sunAbove && performance.now() >= shadowHeldUntil;
     if (on === shadowStreams) {
       return;
     }
@@ -1261,9 +1421,17 @@ async function bootApp(
   };
   // Spawn at the site's start vantage (on the spawn tile, so the boot's
   // wait for that tile holds); placed again once its terrain has landed
-  // (below) — the height is above the ground, which is not there yet.
+  // (below) — the height is above the ground, which is not there yet. A
+  // recovered page starts where its player stood instead, on the tile the
+  // boot waits for (`spawn`), on foot or in the air (Modell is the HUD's
+  // to put back): its first update streams that place, not the spawn.
   const spawnView = spawnViewpoint(opts.site);
-  pose.placeAt(spawnView);
+  const restored = startTileOf(extras.tiles, opts.initialCamera?.epsg)
+    ? opts.initialCamera
+    : undefined;
+  const placeStart = () =>
+    restored ? pose.applyCameraState(restored) : pose.placeAt(spawnView);
+  placeStart();
 
   // Street-view-style canvas gestures (touch and mouse, incl. pointer lock).
   /** A step of the wall clearance from `point` towards the camera, level. */
@@ -1925,18 +2093,39 @@ async function bootApp(
   // failing the boot, since the HUD shows `onFatal` only once booted and
   // the stopped loop no longer streams the tiles the boot waits for.
   let stopped = false;
-  const stopRendering = (message: string) => {
+  // When the page came back into view after RESUME_AWAY_MS or more hidden
+  // (the resume guard, below): a GPU that fails soon after was reclaimed.
+  let resumedAt = Number.NEGATIVE_INFINITY;
+  /** How a GPU that fails now went: in the background, or in use. */
+  const lossNow = (): GpuLoss =>
+    document.hidden || performance.now() - resumedAt < RESUME_WINDOW_MS
+      ? "reclaimed"
+      : "lost";
+  // "render stopped" goes on the trail first: what the page notes after it
+  // is the aftermath (cancelled fetches, the device's last word).
+  const stopRendering = (
+    message: string,
+    how: GpuLoss = "lost",
+    detail = message
+  ) => {
     if (stopped) {
       return;
     }
     stopped = true;
     void renderer.setAnimationLoop(null);
     opts.trail?.note("render stopped", message);
+    if (how === "reclaimed") {
+      // iOS took the GPU of a page in the background: no failure of the
+      // page's own, and no reason for a lighter one (gpu-safety.ts).
+      opts.trail?.note("gpu reclaimed", detail);
+    }
     if (disposed) {
       return;
     }
-    if (opts.onGpuLost?.()) {
-      opts.trail?.note("reloading", "to recover the GPU");
+    const reload = opts.onGpuLost?.(how);
+    if (reload) {
+      opts.trail?.note("reloading", `to recover the GPU (${how})`);
+      void releaseGpu(renderer).then(() => whenVisible(reload));
       return;
     }
     const failed = `Die Grafik ist ausgefallen (${message}). Bitte neu laden.`;
@@ -1944,14 +2133,25 @@ async function bootApp(
       bootFailure ??= new Error(failed);
       return;
     }
-    opts.onFatal?.(failed);
+    opts.onFatal?.(message);
   };
   // A device the browser reports lost: three only stops drawing (silently,
   // every frame after it returns early), so the loop stops here too.
   const onDeviceLost = renderer.onDeviceLost.bind(renderer);
   renderer.onDeviceLost = (info) => {
     onDeviceLost(info);
-    stopRendering(info.message);
+    stopRendering(info.message, lossNow());
+  };
+  // WebKit's failed allocation also arrives, after the fact, as an
+  // uncaptured GPUOutOfMemoryError (three passes its class name as the
+  // type): the earliest word there is of a GPU running out.
+  const onGpuError = renderer.onError.bind(renderer);
+  // reason: typed as a string; the WebGPU backend passes { type, message }.
+  renderer.onError = (info: string | { type?: string; message?: string }) => {
+    onGpuError(info as string);
+    if (typeof info === "object" && info.type === "GPUOutOfMemoryError") {
+      memoryEmergency(info.message ?? "GPUOutOfMemoryError");
+    }
   };
   // A frame that throws stops the render. A lost GPU (iOS reclaims the GPU
   // process under memory pressure; WebKit throws InvalidStateError before
@@ -1960,14 +2160,19 @@ async function bootApp(
   // one level deep (no compile matches a frame again), or the shadow pass's
   // override and object function installed (every later frame draws only
   // the casters, and returns normally). Carrying on is never a recovery.
+  // Soon after a long absence it is the GPU iOS reclaimed meanwhile: noted
+  // as that (stopRendering), not as a failed frame.
   const onFrameFailed = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     const where =
       error instanceof Error
         ? (error.stack ?? "").split("\n").slice(0, 4).join(" | ")
         : "";
-    opts.trail?.note("frame failed", `${message} ${where}`);
-    stopRendering(message);
+    const how = lossNow();
+    if (how === "lost") {
+      opts.trail?.note("frame failed", `${message} ${where}`);
+    }
+    stopRendering(message, how, `${message} ${where}`);
   };
   // Bild speichern: one tile per frame, read in the frame's own task right
   // after its render (the canvas's picture is only readable until the task
@@ -2187,24 +2392,108 @@ async function bootApp(
   }
   // Coarser tiles in view before the browser takes the GPU away
   // (lib/city/memory-governor.ts): the error target and the cache's lower
-  // bound follow what the renderer holds.
-  const governor = createMemoryGovernor(memoryLimitsFor(budget.tier));
+  // bound follow what the renderer holds. A page at a raised safety level
+  // (lib/city/gpu-safety.ts) has lower lines and starts further down, at
+  // its floor — already for the stream's first update, in the next frame.
+  const governor = createMemoryGovernor(
+    memoryLimitsFor(budget.tier, budget.safety),
+    memoryFloorFor(budget.tier, budget.safety)
+  );
   const baseError = stream.tiles.errorTarget;
   const baseMin = stream.tiles.lruCache.minBytesSize;
+  const applyStep = (step: MemoryStep) => {
+    stream.tiles.errorTarget = baseError * step.errorScale;
+    stream.tiles.lruCache.minBytesSize = baseMin * step.minScale;
+  };
+  applyStep(governor.step());
   const govern = setInterval(() => {
     const held = renderer.info.memory.total;
     const step = governor.update(held, performance.now());
     if (!step) {
       return;
     }
-    stream.tiles.errorTarget = baseError * step.errorScale;
-    stream.tiles.lruCache.minBytesSize = baseMin * step.minScale;
+    applyStep(step);
     opts.trail?.note(
       "memory",
       `level ${step.level} at ${Math.round(held / 1_048_576)} MB`
     );
   }, GOVERN_MS);
   cleanups.push(() => clearInterval(govern));
+
+  // --- the memory emergency ---------------------------------------------
+  let emergencyRaised = false;
+  // WebKit reports every allocation that failed: one emergency covers a burst.
+  let lastEmergency = Number.NEGATIVE_INFINITY;
+  let shadowResume: ReturnType<typeof setTimeout> | undefined;
+  cleanups.push(() => clearTimeout(shadowResume));
+  /**
+   * The GPU ran out of memory (the uncaptured GPUOutOfMemoryError above):
+   * shed at once what can go, before a frame's own allocation fails and
+   * the render stops — the governor to its last step, every tile not in
+   * use, the shadow camera's tiles for two minutes — and make the next
+   * page a safety level lighter (gpu-safety.ts), once per page. The one
+   * entry for every allocation-failure signal: a failed upload or compile
+   * the stream reports connects here, `memoryEmergency("allocation …")`.
+   */
+  const memoryEmergency = (reason: string): void => {
+    const now = performance.now();
+    if (disposed || stopped || now - lastEmergency < EMERGENCY_GAP_MS) {
+      return;
+    }
+    lastEmergency = now;
+    opts.trail?.note("memory emergency", reason);
+    const step = governor.force(3, renderer.info.memory.total, now);
+    if (step) {
+      applyStep(step);
+    }
+    shedUnusedTiles(stream.tiles.lruCache);
+    shadowHeldUntil = Math.max(shadowHeldUntil, now + EMERGENCY_SHADOW_HOLD_MS);
+    streamShadowTiles(sunUp);
+    clearTimeout(shadowResume);
+    shadowResume = setTimeout(
+      () => streamShadowTiles(sunUp),
+      EMERGENCY_SHADOW_HOLD_MS + GOVERN_MS
+    );
+    if (!emergencyRaised) {
+      emergencyRaised = true;
+      raiseSafety(budget.safety);
+    }
+  };
+
+  // --- the resume guard -------------------------------------------------
+  // iOS takes the GPU of a page in the background, and what the page holds
+  // counts against it there: hidden, a phone's page lets go of every tile
+  // not in use (a desktop keeps its cache: a tab switch is no threat
+  // there); shown again, it gets its cache back and probes the GPU before
+  // the next frame draws — a GPU gone meanwhile is a reclaim
+  // (stopRendering), not a failure of the page's.
+  let hiddenAt = document.hidden ? performance.now() : null;
+  const onVisibility = () => {
+    if (disposed || stopped) {
+      return;
+    }
+    if (document.hidden) {
+      hiddenAt = performance.now();
+      if (budget.tier === "mobile") {
+        shedUnusedTiles(stream.tiles.lruCache);
+      }
+      return;
+    }
+    const away = hiddenAt === null ? 0 : performance.now() - hiddenAt;
+    hiddenAt = null;
+    stream.tiles.lruCache.minBytesSize = baseMin * governor.step().minScale;
+    if (away >= RESUME_AWAY_MS) {
+      resumedAt = performance.now();
+    }
+    const failure = probeGpu(renderer);
+    if (failure !== null) {
+      stopRendering(failure, "reclaimed");
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibility);
+  cleanups.push(() =>
+    document.removeEventListener("visibilitychange", onVisibility)
+  );
 
   // The load after the first frame (lib/city/boot-phases.ts): declared
   // before the first await, since tile events call checkLoaded from then on.
@@ -2213,9 +2502,13 @@ async function bootApp(
   // Landed = shown by the renderer, not merely dressed: a dressed tile can
   // still be waiting on its compile, and the spawn teleport below needs
   // ground that is really there.
+  // A recovered page's camera may look away from the tile it stands on:
+  // once the renderer is idle without that tile, any tile it shows will do.
+  const startsOn = (tile: string) =>
+    tile === spawn.id || (restored !== undefined && tilesIdle);
   const spawnLanded = () => ({
-    city: stream.visibleCities().some((c) => c.tile === spawn.id),
-    terrain: stream.visibleTerrains().some((t) => t.tile === spawn.id),
+    city: stream.visibleCities().some((c) => startsOn(c.tile)),
+    terrain: stream.visibleTerrains().some((t) => startsOn(t.tile)),
   });
   await new Promise<void>((resolve, reject) => {
     const poll = () => {
@@ -2245,9 +2538,10 @@ async function bootApp(
   // scene (sky, sun rig, lamp light pool), under the overlay instead of in
   // the first visible frame.
   await postStack.compile(scene).catch(() => undefined);
-  // On the spawn vantage now that its ground exists (the pose was placed
-  // before any terrain had landed, over the fallback floor).
-  pose.placeAt(spawnView);
+  // On the spawn vantage (or where a recovered page stood) now that its
+  // ground exists (the pose was placed before any terrain had landed,
+  // over the fallback floor).
+  placeStart();
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
   stage("light", 1);
@@ -2348,6 +2642,7 @@ async function bootApp(
       ? new URL(extras.provenance, tilesetUrl).href
       : null,
     enterImmersive: canvasControls.lockPointer,
+    releaseGpu: () => releaseGpu(renderer),
     flyTo: (position, lookAt) => {
       modelRig.exitNow();
       pose.flyTo(position, lookAt);
