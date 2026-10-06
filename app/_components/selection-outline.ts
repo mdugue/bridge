@@ -1,16 +1,21 @@
-import { gaussianBlur } from "three/addons/tsl/display/GaussianBlurNode.js";
 import {
   type BufferAttribute,
   BufferGeometry,
   type Camera,
   Float32BufferAttribute,
-  HalfFloatType,
   LinearFilter,
   Mesh,
   MeshBasicNodeMaterial,
+  NodeMaterial,
+  QuadMesh,
+  RedFormat,
   RenderTarget,
   Scene,
   type DepthTexture,
+  type Texture,
+  type UniformNode,
+  UnsignedByteType,
+  Vector2,
   type WebGPURenderer,
   Color,
   DoubleSide,
@@ -21,17 +26,24 @@ import {
   fwidth,
   max,
   mix,
-  nodeObject,
   positionView,
   screenUV,
   smoothstep,
   texture,
   uniform,
+  uv,
+  vec2,
   vec3,
   vec4,
 } from "three/tsl";
-import { OUTLINE_BAND, OUTLINE_HALO, outlineSpread } from "@/lib/city/outline";
-import type { V4 } from "./shader-chunks";
+import {
+  OUTLINE_BAND,
+  OUTLINE_HALO,
+  OUTLINE_KEEP_MS,
+  outlineKernel,
+  outlineSpread,
+} from "@/lib/city/outline";
+import type { F, V4 } from "./shader-chunks";
 import { TRAFFIC_ATTRIBUTES, trafficPositionNode } from "./traffic-layer";
 import type { ViewLens } from "./view-lens";
 
@@ -67,18 +79,29 @@ const FLOW_ATTRIBUTES = ["position", ...TRAFFIC_ATTRIBUTES] as const;
  * blur's reach follows the device pixel ratio: the width is in CSS
  * pixels. The halo is the paper the hatch lifts the building towards, so
  * mark and outline read as one drawing.
+ *
+ * Memory: the mask and the blur hold one byte a texel (the mask is 0 or 1,
+ * the blur a ramp the band reads to a few hundredths), and the mask and
+ * the blur's two passes are drawn only while something is asked. With
+ * nothing asked the last pass reads the blur's cleared target, and the
+ * mask and the first blur target go some seconds after the last question
+ * (`OUTLINE_KEEP_MS`): on an iPhone 9 MB of half-float targets, drawn
+ * every frame, became one 0.2 MB target. The mask stays at the drawing
+ * buffer's resolution: the blur's taps step less than a texel of the half
+ * resolution it writes, so it reads the mask's edge between those texels.
  */
 export interface SelectionOutline {
   /** what to outline, or null for nothing */
   set: (selection: OutlineSelection | null) => void;
-  /** draws the mask after the scene pass (nothing when nothing is asked) */
+  /** draws the mask and its blur after the scene pass (nothing when
+   *  nothing is asked) */
   renderMask: (renderer: WebGPURenderer, camera: Camera) => void;
   /** the frame with the outline over it */
   over: (colour: V4) => V4;
   /** follows the device pixel ratio (the width is in CSS px) */
   update: (pixelRatio: number) => void;
   setSize: (width: number, height: number) => void;
-  /** builds the mask's program off the frame */
+  /** builds the mask's and the blur's programs off the frame */
   compile: (renderer: WebGPURenderer, camera: Camera) => Promise<void>;
   dispose: () => void;
 }
@@ -92,6 +115,53 @@ const PAPER = new Color(0.97, 0.93, 0.85);
 const SEEN_SLACK_M = 0.6;
 const SEEN_SLACK_SHARE = 0.01;
 
+/** A one-byte target without depth, read with linear filtering. */
+function byteTarget(width: number, height: number, name: string) {
+  const target = new RenderTarget(width, height, {
+    format: RedFormat,
+    type: UnsignedByteType,
+    depthBuffer: false,
+    minFilter: LinearFilter,
+    magFilter: LinearFilter,
+  });
+  target.texture.name = name;
+  return target;
+}
+
+/** The blur's resolution for the drawing buffer's (GaussianBlurNode's). */
+const halved = (n: number) => Math.max(Math.round(n * 0.5), 1);
+
+/**
+ * One pass of the blur over `source`'s red channel: the kernel's taps
+ * along `across` (1, 0 or 0, 1), `spread` half-resolution texels (`texel`)
+ * apart — three's GaussianBlurNode, which the outline used before, made
+ * the same sums into half-float RGBA targets it kept for good.
+ */
+function blurPass(
+  source: Texture,
+  across: [number, number],
+  spread: UniformNode<"float", number>,
+  texel: UniformNode<"vec2", Vector2>,
+  name: string
+): { material: NodeMaterial; quad: QuadMesh } {
+  const weights = outlineKernel();
+  const at = uv();
+  const step = vec2(across[0], across[1]).mul(spread).mul(texel);
+  let sum: F = texture(source, at).r.mul(weights[0]);
+  for (let i = 1; i < weights.length; i++) {
+    const offset = step.mul(i);
+    sum = sum.add(
+      texture(source, at.add(offset))
+        .r.add(texture(source, at.sub(offset)).r)
+        .mul(weights[i])
+    );
+  }
+  const material = new NodeMaterial();
+  material.fragmentNode = vec4(sum, 0, 0, 1);
+  material.name = name;
+  return { material, quad: new QuadMesh(material) };
+}
+
 export function createSelectionOutline(deps: {
   /** what the passes know of the camera (view-lens.ts) */
   lens: ViewLens;
@@ -100,13 +170,17 @@ export function createSelectionOutline(deps: {
   height: number;
   width: number;
 }): SelectionOutline {
-  const mask = new RenderTarget(deps.width, deps.height, {
-    type: HalfFloatType,
-    depthBuffer: false,
-    minFilter: LinearFilter,
-    magFilter: LinearFilter,
-  });
-  mask.texture.name = "SelectionMask";
+  const mask = byteTarget(deps.width, deps.height, "SelectionMask");
+  const across = byteTarget(
+    halved(deps.width),
+    halved(deps.height),
+    "SelectionBlurAcross"
+  );
+  const blurred = byteTarget(
+    halved(deps.width),
+    halved(deps.height),
+    "SelectionBlur"
+  );
 
   // Seen where the scene's surface is not in front of it: the scene's
   // view depth at this pixel against the element's own.
@@ -197,18 +271,35 @@ export function createSelectionOutline(deps: {
   scene.add(flow);
   // whether something is asked (the compile shows the shape for a moment)
   let selected = false;
-  let drawn = false;
+  // whether the last pass reads a cleared blur (nothing asked since)
+  let clean = false;
+  // whether the mask and the first blur target hold memory, and since when
+  // nothing has used them (performance.now())
+  let held = false;
+  let lastUsed = 0;
 
   const spread = uniform(outlineSpread(1));
-  // reason: GaussianBlurNode's types don't carry its vec4 output.
-  const blurred = nodeObject(
-    gaussianBlur(texture(mask.texture), spread, OUTLINE_BAND.sigma, {
-      resolutionScale: 0.5,
-    })
-  ) as unknown as V4;
+  const texel = uniform(
+    new Vector2(1 / halved(deps.width), 1 / halved(deps.height))
+  );
+  const blurAcross = blurPass(
+    mask.texture,
+    [1, 0],
+    spread,
+    texel,
+    "selection-blur-across"
+  );
+  const blurDown = blurPass(
+    across.texture,
+    [0, 1],
+    spread,
+    texel,
+    "selection-blur-down"
+  );
+  const blurredMask = texture(blurred.texture);
 
   const over = (colour: V4): V4 => {
-    const f = blurred.r;
+    const f = blurredMask.r;
     const aa = max(fwidth(f), 1e-4);
     const band = (from: number, to: number) =>
       smoothstep(float(from).sub(aa), float(from).add(aa), f).mul(
@@ -231,17 +322,46 @@ export function createSelectionOutline(deps: {
     );
   };
 
-  const clearMask = (renderer: WebGPURenderer) => {
+  const clearTarget = (renderer: WebGPURenderer, target: RenderTarget) => {
     const previous = renderer.getRenderTarget();
     const clearColor = renderer.getClearColor(new Color());
     const clearAlpha = renderer.getClearAlpha();
-    renderer.setRenderTarget(mask);
+    renderer.setRenderTarget(target);
     renderer.setClearColor(0x00_00_00, 0);
     try {
       renderer.clear(true, false, false);
     } finally {
       renderer.setClearColor(clearColor, clearAlpha);
       renderer.setRenderTarget(previous);
+    }
+  };
+
+  /** One full-screen pass into `target`. */
+  const pass = (
+    renderer: WebGPURenderer,
+    quad: QuadMesh,
+    target: RenderTarget
+  ) => {
+    const previous = renderer.getRenderTarget();
+    renderer.setRenderTarget(target);
+    try {
+      quad.render(renderer);
+    } finally {
+      renderer.setRenderTarget(previous);
+    }
+  };
+  /** Nothing asked: the last pass reads nothing, the memory goes in time. */
+  const idle = (renderer: WebGPURenderer) => {
+    if (!clean) {
+      clearTarget(renderer, blurred);
+      clean = true;
+    }
+    if (held && performance.now() - lastUsed > OUTLINE_KEEP_MS) {
+      // drawn into again, a target is allocated again (three re-creates
+      // what a dispose freed, as on every resize)
+      mask.dispose();
+      across.dispose();
+      held = false;
     }
   };
 
@@ -274,13 +394,10 @@ export function createSelectionOutline(deps: {
     },
     renderMask: (renderer, camera) => {
       if (!selected) {
-        if (drawn) {
-          clearMask(renderer);
-          drawn = false;
-        }
+        idle(renderer);
         return;
       }
-      clearMask(renderer);
+      clearTarget(renderer, mask);
       const previous = renderer.getRenderTarget();
       const autoClear = renderer.autoClear;
       renderer.setRenderTarget(mask);
@@ -291,34 +408,61 @@ export function createSelectionOutline(deps: {
         renderer.autoClear = autoClear;
         renderer.setRenderTarget(previous);
       }
-      drawn = true;
+      pass(renderer, blurAcross.quad, across);
+      pass(renderer, blurDown.quad, blurred);
+      clean = false;
+      held = true;
+      lastUsed = performance.now();
     },
     over,
     update: (pixelRatio) => {
       spread.value = outlineSpread(pixelRatio);
     },
-    setSize: (width, height) => mask.setSize(width, height),
-    // like PostStack's compileOne: the call builds the program before it
-    // returns, so the target and the shape are restored before a frame
-    compile: (renderer, camera) => {
+    setSize: (width, height) => {
+      // a new size frees the old textures: the blur is cleared again
+      mask.setSize(width, height);
+      across.setSize(halved(width), halved(height));
+      blurred.setSize(halved(width), halved(height));
+      texel.value.set(1 / halved(width), 1 / halved(height));
+      clean = false;
+    },
+    // like PostStack's compileOne: each call builds its program before it
+    // returns, so the target and the shape are restored before a frame.
+    // Compiling against the targets allocates them: they go in time, as
+    // after a question.
+    compile: async (renderer, camera) => {
       const previous = renderer.getRenderTarget();
       const shown = [shape.visible, flow.visible] as const;
       shape.visible = true;
       flow.visible = true;
-      renderer.setRenderTarget(mask);
+      const builds: Promise<void>[] = [];
       try {
-        return renderer.compileAsync(scene, camera);
+        renderer.setRenderTarget(mask);
+        builds.push(renderer.compileAsync(scene, camera));
+        renderer.setRenderTarget(across);
+        builds.push(
+          renderer.compileAsync(blurAcross.quad, blurAcross.quad.camera)
+        );
+        renderer.setRenderTarget(blurred);
+        builds.push(renderer.compileAsync(blurDown.quad, blurDown.quad.camera));
       } finally {
         [shape.visible, flow.visible] = shown;
         renderer.setRenderTarget(previous);
       }
+      held = true;
+      lastUsed = performance.now();
+      await Promise.all(builds);
     },
     dispose: () => {
       shape.geometry.dispose();
       dropFlowGeometry(flow.geometry, flowShared);
       material.dispose();
       flowMaterial.dispose();
+      blurAcross.material.dispose();
+      blurDown.material.dispose();
       mask.dispose();
+      across.dispose();
+      blurred.dispose();
     },
   };
 }

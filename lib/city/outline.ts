@@ -68,11 +68,34 @@ export function outlineSigmaCssPx(): number {
 }
 
 /**
- * GaussianBlurNode's direction factor for a device pixel ratio: its taps
- * step `factor` half-resolution texels (two drawing pixels each), and its
- * kernel's sigma is (3 + 2·sigma) / 3 taps.
+ * The blur's direction factor for a device pixel ratio: its taps step
+ * `factor` half-resolution texels (two drawing pixels each), and its
+ * kernel's sigma is (3 + 2·sigma) / 3 taps (`outlineKernel`).
  */
 export function outlineSpread(pixelRatio: number): number {
   const kernelSigmaTaps = (3 + 2 * OUTLINE_BAND.sigma) / 3;
   return (outlineSigmaCssPx() * pixelRatio) / (2 * kernelSigmaTaps);
 }
+
+/**
+ * The blur's weights, centre first, one side (the other mirrors it):
+ * three's GaussianBlurNode kernel, which the outline drew with before it
+ * blurred on one-byte targets of its own — 3 + 2·sigma taps a side of a
+ * Gaussian whose sigma is a third of that, normalised over both sides.
+ */
+export function outlineKernel(sigma = OUTLINE_BAND.sigma): number[] {
+  const taps = 3 + 2 * sigma;
+  const s = taps / 3;
+  const raw = Array.from({ length: taps }, (_, i) =>
+    Math.exp((-0.5 * i * i) / (s * s))
+  );
+  const total = raw.reduce((sum, w, i) => sum + (i === 0 ? w : 2 * w), 0);
+  return raw.map((w) => w / total);
+}
+
+/**
+ * How long the outline's mask and first blur target outlive the last
+ * question (ms): asking the next thing soon after reuses them, and a
+ * viewer who stopped asking does not hold them (selection-outline.ts).
+ */
+export const OUTLINE_KEEP_MS = 10_000;
