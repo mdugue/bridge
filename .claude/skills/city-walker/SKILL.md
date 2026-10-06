@@ -48,7 +48,11 @@ ADR 0030). Content is glTF (meshopt, quantised,
 pre-gzipped `.glb.gz`). 3DTilesRendererJS loads and unloads it by
 screen-space error with an LRU cache; the sun's shadow camera is a second
 camera while the sun is up, so casters outside the view stay loaded (by
-night it is taken off the stream: it draws no shadow). A dressing plugin builds
+night it is taken off the stream: it draws no shadow) — at 64 px
+(`SHADOW_STREAM_PX`, `lib/city/shadow-fit.ts`), not the map's resolution:
+the renderer's error for an orthographic camera ignores distance, so at
+2048 px it refined the terrain under the whole frustum; at 64 px it loads
+a tile's buildings and coarse level, never its fine terrain (ADR 0047). A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
 heavy part (vegetation incl. the street-tree cadastre and the OSM hedges,
 lamps, rails on the fine terrain level; its walls
@@ -115,7 +119,12 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   of day.
 - `post-stack.ts` — the scene pass into its own target and three's node
   `RenderPipeline`: GTAO, DoF, the picture style, SMAA, depth grading,
-  vignette, paper grain. The picture styles (Comic, Film noir, Sin City,
+  vignette, paper grain — built per tier (`postProfileFor`, ADR 0047): a
+  phone builds no DoF, antialiases with FXAA inside the last pass
+  (`fxaa.ts`: a perceptual luma over the linear frame), draws `BeforeAA`
+  only while a style is on and warms only the outline's programs; the AO
+  smoothing and the outline's mask and blur are one-byte targets, the
+  outline drawn only while something is asked. The picture styles (Comic, Film noir, Sin City,
   Papier; `lib/city/render-style.ts`) are one node, `stylize-effect.ts`
   (ADR 0034), in a styled pipeline pair the default pastel never draws:
   ink from the second difference of `1/z` (zero on planes; relative to `w`
@@ -368,7 +377,8 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | casters' depth | the material itself | no custom depth materials: the shadow pass draws `castShadowPositionNode ?? positionNode` and honours `maskNode` |
 | `shadow.bias` | ~−0.0003 | small constant bias, residual cleanup |
 | terrain `castShadow` | **false** | a casting terrain self-shadows into triangle/staircase acne at grazing sun; ground only receives |
-| shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 | soft radius lets 3072 look like 4096 at ~44% less fill |
+| shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 (phones 2048; smaller at a raised safety level, ADR 0046) | soft radius lets 3072 look like 4096 at ~44% less fill |
+| the map's colour target | one red byte (`OneByteShadowNode`, set as `sun.shadow.shadowNode`) | three's shadow pass draws into a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
 | frustum half-size (`lib/city/shadow-fit.ts`) | 110 m at eye level, growing to 880 m with altitude | camera-following, texel-snapped; small = fine texels, but a fixed 110 m leaves a fly-over entirely unshadowed |
 | `shadow.autoUpdate` | false | re-render only when the frustum centre leaves a dead zone (18% of the half-size — 20 m at the base, as before), when the half-size re-fits, when the sun moves, or when a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
 
@@ -442,9 +452,11 @@ The bake writes only a **4096² class raster** (ids 0–8, `pipeline/bake/landco
 At runtime `landcover-splat.ts` paints it with the one palette
 (`lib/city/landcover.ts`, a `uniformArray`) into an RGBA target, one
 full-screen `QuadMesh` pass per tile (a scene-wide node material per raster
-size, `textureLoad` of the class ids; the class texture keeps its bytes or
-bitmap until the paint — a closed `ImageBitmap` uploads empty on node
-pages): RGB = the pastel class colour,
+size, `textureLoad` of the class ids; the class texture is on the GPU
+before the paint — decoded and uploaded in its turn, one raster at a time
+for the site, its bytes dropped at the upload (`raster-upload.ts`); a
+bitmap the decoder fell back to is never closed — a closed `ImageBitmap`
+uploads empty on node pages): RGB = the pastel class colour,
 **A = water coverage** (a 3×3 tent over the water class — the soft
 shoreline). The terrain shader samples it `LinearFilter` + mipmaps +
 **anisotropy 16** (GPU AA at grazing angles — kills the NEAREST staircase);
@@ -566,13 +578,21 @@ not sky.
   sun's daylight ramp (the GLSL gated them on a shadow-map sample 2 m
   toward the sun — not reachable from a node material, so a crown behind a
   building now glows too; judge on a GPU).
-- Phones cache **320–600 MB** of tile content (`tileCacheBytesFor` in
-  `app/_components/scene-profile.ts`, `lruCache.min/maxBytesSize`), weighed
-  as the GPU holds it (the dressing plugin's `calculateBytesUsed`), and
-  `max − min` must exceed the largest tile. The old 120–180 MB was broken:
-  a phone flying to the Alaunpark never loaded the ground there (the
-  library's 0.3–0.4 GB default before that kept the start area while the
-  Heide arrived). See `docs/rendering.md`, "GPU memory on a phone".
+- Phones cache **168–336 MiB** of tile content at safety level 0 (148–296,
+  136–272, 96–232 at levels 1–3; `tileCacheBytesFor` in
+  `app/_components/scene-profile.ts`, `lruCache.min/maxBytesSize`),
+  weighed as the GPU holds it (the dressing plugin's `calculateBytesUsed`,
+  less the site-shared buffers). `max` is derived: the governor's soft
+  line − the fixed costs (24 B per drawn pixel + the shadow map) −
+  100 MiB; `max − min` must exceed the largest tile (128 MiB on a phone).
+  The 320–600 MB before had `max` above the governor's own hard line, so
+  the cache never bound anything before Safari took the GPU; the 120–180 MB
+  before that was broken the other way: a phone flying to the Alaunpark
+  never loaded the ground there. See `docs/rendering.md`, "GPU memory on a
+  phone", and ADR 0047 — with its two rules: an attribute read on the CPU
+  after the dressing (or first by a later material) stays off the
+  CPU-copy drop lists, and a site-shared buffer is never on a geometry
+  that is disposed.
 - **Chunking:** placements are bucketed into 250 m cells, one instanced set per
   cell (shared geo/material), so off-screen cells frustum-cull from both the
   main and shadow pass. After `setMatrixAt` you **must**
@@ -677,7 +697,9 @@ pavement: road, path (squares, pedestrian zones) or built-up.
 Buildings are already merged (low draw calls) — **BatchedMesh is moot** and
 would break objectid picking. The bottleneck is **fill-rate**: the post
 pipeline (GTAO is the priciest) and the shadow-map render — which is why
-**DoF** is skipped while the camera moves (`lib/city/regression.ts`). **AO is
+**DoF** is skipped while the camera moves (`lib/city/regression.ts`; a
+phone does not build it at all — its targets were the cost there, not its
+passes). **AO is
 not**: the contact shadows blinked on every footstep, so GTAO instead runs
 permanently at half resolution (`resolutionScale = 0.5`, normals
 reconstructed from depth, radius 6 m, occlusion raised to the contact
@@ -688,7 +710,8 @@ prebuilt `RenderPipeline`s** (with and without `DepthOfFieldNode`, both
 built under the load screen), never by swapping one pipeline's output node,
 which re-translates the whole post graph on the main thread. SMAA carries
 the anti-aliasing (the canvas and the scene target have no MSAA) — once, in
-a last pipeline over the target every pipeline draws into. Buildings
+a last pipeline over the target every pipeline draws into; a phone uses
+FXAA inside that last pass instead (no targets of its own). Buildings
 are opaque clay only; `MeshPhysicalMaterial.transmission` ≈ doubles scene
 cost, so the frosted "ghost" style was dropped rather than kept as an
 option. `handle.getRenderInfo()` exposes `renderer.info` of the last frame
@@ -717,7 +740,9 @@ bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 Headless e2e uses SwiftShader through the renderer's WebGL2 backend (headless
 Chromium has no WebGPU adapter) — shadows/AA look nothing like a real GPU, so
 use `--headed` for any lighting work. To check the fallback on a GPU, add
-`?gpu=webgl2` (`SHOTS_QUERY=gpu=webgl2`). Verify from **oblique** angles (a tree through
+`?gpu=webgl2` (`SHOTS_QUERY=gpu=webgl2`); to see a lighter page of the
+safety ladder, `?safety=1`–`3` (ADR 0046: pixel ratio, shadow map, tile
+cache and governor a step down; nothing stored). Verify from **oblique** angles (a tree through
 a bridge is invisible looking straight down). Snapshot JSON shape:
 
 ```json

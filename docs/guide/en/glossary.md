@@ -223,11 +223,11 @@ objects meet the ground, computed from the depth buffer. The viewer uses
 one of them, *GTAO* (ground-truth ambient occlusion), at half resolution.
 
 **Depth of field (DoF)** — the photographic blur outside the focus
-distance; here focused on the crosshair by default.
+distance; here focused on the crosshair by default. Not on phones.
 
 **Post-processing** — effects applied to the finished image: contact
-shadows, depth of field, anti-aliasing (SMAA), depth grading, vignette,
-paper grain.
+shadows, depth of field, anti-aliasing (SMAA; on phones the lighter
+FXAA), depth grading, vignette, paper grain.
 
 **Fill-rate** — how many pixels per second the graphics card can shade;
 the scene's main cost driver, which is why phones render fewer pixels.

@@ -404,10 +404,12 @@ mistake); the switch stays as you set it.
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
-| | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance |
+| | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance; not offered on phones |
 
 While the camera moves, the depth-of-field blur is switched off (the eye
-cannot resolve it in motion) and comes back when you stop.
+cannot resolve it in motion) and comes back when you stop. Phones do not
+offer the switch at all: the blur needs more graphics memory than a phone
+can spare for a hint a small screen barely shows.
 
 ### Erweitert ("Advanced")
 
@@ -451,13 +453,39 @@ the page then simply disappears or reloads. On the next visit a card says
 the last session ended unexpectedly and shows its record: what had loaded,
 the frame rate and the memory in its last seconds.
 
+If the graphics fail — a phone takes the graphics memory away from the
+browser —, the viewer rebuilds itself where you stood, **a step
+lighter**: a slightly softer image, coarser ground in the distance, fewer
+parts of the city kept in memory, and from the second step without the
+picture style or *Modell* you were in. It remembers this for your device
+(a crash that ended the last visit counts too) and returns to full detail
+by itself after a few days, one step every three days. If the graphics
+fail again at the lightest step, a card says *Die Grafik ist
+ausgefallen* ("the graphics failed") and offers *Leichter weiter* ("go on
+lighter": a step lighter, back where you stood) and *Neu laden*
+("reload"). A phone may also take the graphics away from a page that sat
+in the background for a while; then the viewer simply reloads at the same
+step.
+
+**When the connection drops**, the viewer keeps trying by itself: parts
+of the city that could not load are missing or only coarse for the
+moment, a short note at the top says *Keine Verbindung zum Server — ein
+Teil der Stadt fehlt, neuer Versuch folgt.* ("no connection to the
+server — part of the city is missing, trying again"), and the gaps close
+once the connection is back. A start without a connection keeps
+waiting while your device is offline; if the server still does not
+answer once it is online again, the viewer says after a while (20
+seconds to a minute) *Keine Verbindung zum Server* and offers *Erneut
+versuchen* ("try again").
+
 Where this site is set up for it, that record also goes out on its own, to
 an error tracker (Sentry), together with errors the viewer runs into and,
 for every visit, a few numbers about how it ran: how long until the first
 picture and until everything had loaded, the frame rate, the most memory
 used, and whether it ended normally or in a crash. That is how the slow and the crashing phones become visible. A
 report holds the browser and device type, the screen size, which city
-(without the rest of the address) and these numbers — never your location
+(without the rest of the address), the step the viewer runs at on your
+device and these numbers — never your location
 or where in the city you were, no name, no IP address and no cookie. If
 your browser sends *Global Privacy Control*, nothing is sent, and the
 switch on the privacy page (*Datenschutz*, linked at the

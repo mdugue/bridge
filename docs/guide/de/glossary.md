@@ -239,11 +239,12 @@ abdunkeln. Der Viewer nutzt eines davon, *GTAO* (Ground-Truth Ambient
 Occlusion), in halber Auflösung.
 
 **Tiefenschärfe (DoF)** — die fotografische Unschärfe außerhalb der
-Fokusentfernung; hier standardmäßig auf das Fadenkreuz fokussiert.
+Fokusentfernung; hier standardmäßig auf das Fadenkreuz fokussiert. Nicht
+auf Telefonen.
 
 **Nachbearbeitung (Post-Processing)** — Effekte auf dem fertigen Bild:
-Kontaktschatten, Tiefenschärfe, Kantenglättung (SMAA), Tiefenfärbung,
-Vignette, Papierkorn.
+Kontaktschatten, Tiefenschärfe, Kantenglättung (SMAA; auf Telefonen das
+leichtere FXAA), Tiefenfärbung, Vignette, Papierkorn.
 
 **Füllrate** — wie viele Pixel je Sekunde die Grafikkarte einfärben kann;
 der Hauptkostentreiber der Szene, weshalb Handys weniger Pixel rendern.
