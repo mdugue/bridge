@@ -741,8 +741,9 @@ desktop use Chrome with WebGPU and repeat with `?gpu=webgl2`.
   over the Großer Garten's pitches on the iPhone: pitches beyond the fine
   level show their land-cover class and gain their lines as the fine level
   arrives — no flash of a wrong colour.
-- [ ] **The shadow camera at 64 px.** At eye level on a tile seam with the
-  sun behind, and flying at 124–249 m: the neighbour casts its coarse
+- [ ] **The shadow camera at 64 px (phone) / 128 px (desktop).** On a
+  phone at eye level on a tile seam with the sun behind, and flying at
+  124–249 m on either: the neighbour casts its coarse
   crowns' shadows (a third of the trees, wider) — acceptable or not; the
   beat's `terr Nf/Nc` shows no fine level held behind the player.
 - [ ] **The phone's cache at 336 MiB.** The spawn view in portrait, then a

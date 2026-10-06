@@ -1191,6 +1191,15 @@ async function bootApp(
   let reportedNetwork = false;
   let firstFrameShown = false;
   let bootFailure: Error | null = null;
+  // The HUD's word about the network goes once nothing it failed is
+  // outstanding (tile-retry.ts): at a landing, or found after a heal.
+  const clearNetworkWord = () => {
+    if (reportedNetwork && !disposed) {
+      reportedError = false;
+      reportedNetwork = false;
+      opts.onErrorCleared?.();
+    }
+  };
   const network = createNetworkWatch({
     tiles: stream.tiles,
     trail: opts.trail,
@@ -1198,6 +1207,7 @@ async function bootApp(
     onBootGiveUp: (error) => {
       bootFailure ??= error;
     },
+    onClear: clearNetworkWord,
   });
   cleanups.push(() => network.dispose());
   stream.tiles.addEventListener("load-error", (event) => {
@@ -1231,13 +1241,12 @@ async function bootApp(
       opts.onError?.(failure.message);
     }
   });
-  // A tile that had failed on the network is back: the HUD's word about it
-  // goes (a later failure says so again).
+  // The last tile the network failed is back, or no longer wanted: the
+  // HUD's word about it goes (a later failure says so again). Every landing
+  // is told: the boot's network wait learns from it that its tiles came.
   stream.tiles.addEventListener("load-model", (event) => {
-    if (network.landed(event.tile) && reportedNetwork && !disposed) {
-      reportedError = false;
-      reportedNetwork = false;
-      opts.onErrorCleared?.();
+    if (network.landed(event.tile)) {
+      clearNetworkWord();
     }
   });
 

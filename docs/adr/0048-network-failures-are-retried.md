@@ -1,4 +1,4 @@
-# ADR 0048: A network failure is retried for a budget of usable time, never decided at once; a tile that gives up is healed, and nothing is decided while the page leaves
+# ADR 0048: A network failure is retried for a budget of the page's visible time, never decided at once; a tile that gives up is healed, and nothing is decided while the page leaves
 
 - **Status:** accepted
 - **Date:** 2026-10-06

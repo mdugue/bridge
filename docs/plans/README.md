@@ -680,7 +680,8 @@ not render it (no GPU, no WebGPU in Bun).
   by five work packages on one branch: the safety ladder and the
   recovery (ADR 0046, backlog item 11), the reports' classification and
   the heartbeat, the phone's post profile and the one-byte shadow colour
-  target, the stream's memory (the shadow camera at 64 px, the phone's
+  target, the stream's memory (the shadow camera at 64 px on a phone, 128 on a
+  desktop, the phone's
   pacing, the raster gate, shared coarse indices, CPU copies dropped;
   ADR 0047), and the network retries (ADR 0048). Verified headless and by
   the unit tests only; what a real iPhone and a WebGPU desktop must show
