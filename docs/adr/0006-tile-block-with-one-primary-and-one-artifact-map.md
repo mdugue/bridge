@@ -1,6 +1,9 @@
 # ADR 0006: A 2×2 tile block with one primary tile, and one artifact map shared by bake and client
 
-- **Status:** superseded by [ADR 0024](./0024-site-streams-as-3d-tiles.md)
+- **Status:** superseded by [ADR 0024](./0024-site-streams-as-3d-tiles.md);
+  its fetch policy for optional artifacts amended by
+  [ADR 0048](./0048-network-failures-are-retried.md) (a network failure is
+  retried before a feature goes off)
 - **Date:** 2026-06 (block), 2026-09 (artifact map, plan 010)
 
 ## Context

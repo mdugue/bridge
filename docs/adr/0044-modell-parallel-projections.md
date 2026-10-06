@@ -155,7 +155,8 @@ cuts the light away). Both go through the Papier swap
   rework anyway. Lost.
 - **A second post pipeline built for the ortho camera**: correct builds
   for every camera branch, but a second set of node builds (a phone tab's
-  memory, the reason `warmPaperFor` exists) and a hitch on first entry.
+  memory, the reason a phone's post profile warms no Papier programs —
+  `postProfileFor`, ADR 0047) and a hitch on first entry.
   The lens made it unnecessary.
 - **Lettering on the sheet** (scale numbers, labels in the scene):
   ADR 0042 and plan 032's removal stand; the numbers live on the HUD's
