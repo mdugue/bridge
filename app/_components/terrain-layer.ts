@@ -66,7 +66,12 @@ import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import { colonyCropUv } from "@/lib/city/cultivated";
 import { type MarkingTable, packMarkingTable } from "@/lib/city/markings";
 import { packSportTable, type SportTable } from "@/lib/city/sport";
-import { planTriangles, TinIndex } from "@/lib/city/terrain-tin";
+import {
+  planOf,
+  planTriangles,
+  sameNumbers,
+  TinIndex,
+} from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import { colonyGarden } from "./cultivated-layer";
 import { fetchOptionalJson, isAbortError } from "./fetch-optional";
@@ -106,7 +111,12 @@ import {
 } from "./material-slots";
 import { applyGroundLight, type GroundLight } from "./sky-light";
 import { sportGround } from "./sport-ground";
-import { textureBytes, trackTexture } from "./three-utils";
+import {
+  detachShared,
+  markSceneShared,
+  textureBytes,
+  trackTexture,
+} from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
 /**
@@ -176,6 +186,8 @@ export interface TerrainOptions {
   splats: SharedRasters<SplatRasters>;
   ndvis: SharedRasters<Texture>;
   sports: SharedRasters<SportRasters>;
+  /** the grid level's index and water index, one copy for the site */
+  grids?: GridShare;
 }
 
 /**
@@ -1157,6 +1169,108 @@ function tinHeightAt(
   return (x, y) => tin.heightAt(x, y);
 }
 
+/** A mesh's positions as the numbers they are stored as (quantised, maybe
+ *  interleaved): the array, numbers per vertex, and where x sits. */
+function rawPositions(position: BufferAttribute | InterleavedBufferAttribute): {
+  array: Float32Array | Int16Array | Int8Array | Uint16Array | Uint8Array;
+  offset: number;
+  stride: number;
+} {
+  const interleaved =
+    (position as InterleavedBufferAttribute).isInterleavedBufferAttribute ===
+    true;
+  return interleaved
+    ? {
+        array: (position as InterleavedBufferAttribute).data
+          .array as Int16Array,
+        stride: (position as InterleavedBufferAttribute).data.stride,
+        offset: (position as InterleavedBufferAttribute).offset,
+      }
+    : {
+        array: (position as BufferAttribute).array as Float32Array,
+        stride: position.itemSize,
+        offset: 0,
+      };
+}
+
+/** The triangles of `index` with area in plan, as an index attribute of
+ *  their own (`waterGeometryOf`). */
+function ownWaterIndex(
+  index: BufferAttribute,
+  position: BufferAttribute | InterleavedBufferAttribute
+): BufferAttribute {
+  // The quantised numbers as they are (lib/city/terrain-tin.ts).
+  const raw = rawPositions(position);
+  return new BufferAttribute(
+    planTriangles(
+      index.array as Uint16Array | Uint32Array,
+      raw.array,
+      raw.stride,
+      raw.offset
+    ),
+    1
+  );
+}
+
+/**
+ * The coarse terrain's grid index and the water index made from it, one
+ * copy for the whole site. Every coarse tile carries the same index byte
+ * for byte (the bake triangulates every tile's grid and skirt alike) —
+ * 6 MB on the GPU and as much on the CPU, its water index another 6 MB,
+ * i.e. 80 % of a coarse tile's geometry. The first tile's become the
+ * site's (three-utils.ts `markSceneShared`: no tile's release frees them,
+ * the app's device does); a later tile's are swapped for them where they
+ * hold the same numbers — the water's where its plan (the quantised x and
+ * z it is chosen by) is the first tile's too. A tile whose own differ keeps
+ * its own. One per app: the stream makes it (tile-stream.ts).
+ */
+export interface GridShare {
+  /** the site's index for an `n`·`n` grid, or `own` when it differs */
+  index: (n: number, own: BufferAttribute) => BufferAttribute;
+  /** the water triangles of `index` over `position`'s plan */
+  water: (
+    n: number,
+    index: BufferAttribute,
+    position: BufferAttribute | InterleavedBufferAttribute
+  ) => BufferAttribute;
+}
+
+export function createGridShare(): GridShare {
+  const indices = new Map<number, BufferAttribute>();
+  const waters = new Map<
+    number,
+    { index: BufferAttribute; plan: ArrayLike<number> }
+  >();
+  return {
+    index: (n, own) => {
+      const kept = indices.get(n);
+      if (!kept) {
+        markSceneShared(own);
+        indices.set(n, own);
+        return own;
+      }
+      return sameNumbers(kept.array, own.array) ? kept : own;
+    },
+    water: (n, index, position) => {
+      if (indices.get(n) !== index) {
+        return ownWaterIndex(index, position);
+      }
+      const raw = rawPositions(position);
+      const plan = planOf(raw.array, raw.stride, raw.offset, position.count);
+      const kept = waters.get(n);
+      if (kept && sameNumbers(kept.plan, plan)) {
+        return kept.index;
+      }
+      const own = ownWaterIndex(index, position);
+      if (!kept) {
+        markSceneShared(own);
+        waters.set(n, { index: own, plan });
+      }
+      return own;
+    },
+  };
+}
+
 /**
  * The water's geometry: the terrain's positions without its skirt. The water
  * and mist sheets drape the terrain mesh, and its skirt — the 30 m vertical
@@ -1167,11 +1281,16 @@ function tinHeightAt(
  * in plan. A TIN's water also faces straight up (`upFacing`): it spans the
  * river with a few huge triangles whose vertex normals are averaged with the
  * steep bank faces they share a vertex with, so the water's shading would
- * fan out in streaks across them.
+ * fan out in streaks across them. `waterIndex` picks its triangles (on the
+ * grid, the site's shared ones: `GridShare`).
  */
 function waterGeometryOf(
   geometry: BufferGeometry,
-  upFacing: boolean
+  upFacing: boolean,
+  waterIndex: (
+    index: BufferAttribute,
+    position: BufferAttribute | InterleavedBufferAttribute
+  ) => BufferAttribute = ownWaterIndex
 ): BufferGeometry {
   const position = geometry.getAttribute("position");
   const index = geometry.getIndex();
@@ -1187,21 +1306,7 @@ function waterGeometryOf(
     water.setAttribute("normal", geometry.getAttribute("normal"));
   }
   if (index) {
-    // The quantised numbers as they are (lib/city/terrain-tin.ts).
-    const raw = position;
-    const interleaved =
-      (raw as InterleavedBufferAttribute).isInterleavedBufferAttribute === true;
-    const kept = planTriangles(
-      index.array as Uint16Array | Uint32Array,
-      interleaved
-        ? (raw as InterleavedBufferAttribute).data.array
-        : (raw as BufferAttribute).array,
-      interleaved
-        ? (raw as InterleavedBufferAttribute).data.stride
-        : raw.itemSize,
-      interleaved ? (raw as InterleavedBufferAttribute).offset : 0
-    );
-    water.setIndex(new BufferAttribute(kept, 1));
+    water.setIndex(waterIndex(index, position));
   }
   water.boundingBox = geometry.boundingBox?.clone() ?? null;
   water.boundingSphere = geometry.boundingSphere?.clone() ?? null;
@@ -1452,7 +1557,12 @@ export async function dressTerrain(
 ): Promise<TerrainLayer> {
   const { bounds, n } = extras;
   // The fine level is a TIN; the coarse one (and a fine level whose DGM had
-  // holes) the grid.
+  // holes) the grid, whose index (and water index) the site shares.
+  const grids = extras.tin ? undefined : opts.grids;
+  const index = mesh.geometry.getIndex();
+  if (grids && index) {
+    mesh.geometry.setIndex(grids.index(n, index));
+  }
   const elevations = extras.tin ? null : gridElevations(mesh, n, toData);
   const heightAt = elevations
     ? (x: number, y: number) =>
@@ -1486,7 +1596,8 @@ export async function dressTerrain(
   // the tile.
   const waterGeometry = waterGeometryOf(
     mesh.geometry,
-    extras.tin !== undefined
+    extras.tin !== undefined,
+    grids && ((own, position) => grids.water(n, own, position))
   );
   const water = splat
     ? createWaterLayer(waterGeometry, splat, opts.fogColor)
@@ -1512,7 +1623,10 @@ export async function dressTerrain(
     water,
     heightAt,
     dispose: () => {
-      // Shares the tile's positions; only its own index (and normals) go.
+      // Shares the tile's positions; only its own index (and normals) go —
+      // not the site's (GridShare), which other tiles draw with.
+      detachShared(waterGeometry);
+      detachShared(mesh.geometry);
       waterGeometry.dispose();
       free();
     },

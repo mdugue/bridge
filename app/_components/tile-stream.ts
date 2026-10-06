@@ -69,9 +69,11 @@ import { bridgeAskSet } from "./bridge-ask";
 import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
+  createGridShare,
   dressTerrain,
   freeSplatRasters,
   freeSport,
+  type GridShare,
   type GroundUniforms,
   loadNdviTexture,
   loadSplatRasters,
@@ -89,8 +91,10 @@ import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import {
   compileRepresentatives,
+  detachSceneShared,
   disposeObject3D,
   estimateGeometryBytes,
+  sceneSharedBytes,
 } from "./three-utils";
 import { buildTraffic } from "./traffic-layer";
 import { trafficAskSet } from "./traffic-ask";
@@ -225,6 +229,10 @@ interface Dressed {
   dressing?: TileDressing;
   /** the dressing's geometry bytes, once it hangs on the tile */
   dressingBytes?: number;
+  /** the bytes of the site's shared buffers its content holds (the coarse
+   *  grid's index and water index): the tile renderer counts them in the
+   *  tile's glTF, but they stay when the tile goes */
+  sharedBytes?: number;
   /** the shared sky-view raster the city holds (its URL) */
   svf?: string;
   terrain?: TerrainLayer;
@@ -848,6 +856,9 @@ export class DressingPlugin {
     (key, signal) => loadSportKey(key, this.ctx.renderer, signal),
     freeSport
   );
+  /** the coarse level's grid index and water index, one copy for the
+   *  site (terrain-layer.ts `GridShare`) */
+  private readonly grids: GridShare = createGridShare();
 
   constructor(
     private readonly ctx: TileStreamContext,
@@ -910,12 +921,15 @@ export class DressingPlugin {
    * holds and its dressing's geometry, which the renderer cannot see — it
    * reads textures off the glTF's materials. Without them an iPhone's
    * cache sat at 173 MB of its 180 while the GPU held 865 MB, and the next
-   * buffer failed to allocate.
+   * buffer failed to allocate. Less the site's shared buffers it counted in
+   * the glTF (`sharedBytes`): evicting the tile frees none of them.
    */
   calculateBytesUsed(_tile: object, scene: Object3D | null): number {
     const dressed = scene ? this.dressed.get(scene) : undefined;
     const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
-    return rasters + (dressed?.dressingBytes ?? 0);
+    return (
+      rasters + (dressed?.dressingBytes ?? 0) - (dressed?.sharedBytes ?? 0)
+    );
   }
 
   /** `scene`'s terrain takes up (or lets go of) its rasters; the other
@@ -1079,6 +1093,7 @@ export class DressingPlugin {
       splats: this.splats,
       ndvis: this.ndvis,
       sports: this.sports,
+      grids: this.grids,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls, kerbs and fences: only their
@@ -1104,7 +1119,7 @@ export class DressingPlugin {
       terrain.fences = fences;
     }
     this.stream.terrains.add(terrain);
-    this.dressed.set(scene, { terrain });
+    this.dressed.set(scene, { terrain, sharedBytes: sceneSharedBytes(scene) });
     this.holdRasters(scene, terrain.rasters, true);
     const coarse = COARSE_DRESSING_KINDS.some((kind) => extras.coarse?.[kind]);
     return extras.dressing || coarse
@@ -1288,6 +1303,11 @@ export class DressingPlugin {
   /** Frees everything dressed onto one content root — once its compiles
    *  have ended (see `compiles`; the last one to end calls this again). */
   private release(scene: Object3D): void {
+    // The site's shared buffers leave its geometries at once, whatever
+    // still compiles: the tile renderer disposes them right after this
+    // plugin let go of the tile, and three's dispose would destroy those
+    // buffers for every other tile (three-utils.ts `markSceneShared`).
+    detachSceneShared(scene);
     if (this.compiles.has(scene)) {
       return;
     }

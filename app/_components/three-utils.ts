@@ -1,11 +1,123 @@
 import type {
+  BufferAttribute,
   BufferGeometry,
   EventDispatcher,
   Group,
+  InterleavedBuffer,
+  InterleavedBufferAttribute,
   Material,
   Object3D,
   Texture,
 } from "three/webgpu";
+
+/** A geometry's attribute, plain or a view of an interleaved buffer. */
+export type AnyAttribute = BufferAttribute | InterleavedBufferAttribute;
+
+/** What holds an attribute's numbers: itself, or its interleaved buffer —
+ *  what three uploads as one GPU buffer. */
+export function bufferOf(
+  attribute: AnyAttribute
+): BufferAttribute | InterleavedBuffer {
+  return (attribute as InterleavedBufferAttribute).isInterleavedBufferAttribute
+    ? (attribute as InterleavedBufferAttribute).data
+    : (attribute as BufferAttribute);
+}
+
+/**
+ * A buffer's bytes on the GPU, from its count (a field three keeps): a
+ * buffer whose CPU copy is gone (`dropCpuCopies`) weighs what it did. As
+ * three.js's `estimateBytesUsed` (which the tile renderer weighs a tile's
+ * glTF by) counts.
+ */
+export function bufferBytes(
+  buffer: BufferAttribute | InterleavedBuffer
+): number {
+  const per = buffer.array.BYTES_PER_ELEMENT;
+  return (buffer as InterleavedBuffer).isInterleavedBuffer
+    ? buffer.count * (buffer as InterleavedBuffer).stride * per
+    : buffer.count * (buffer as BufferAttribute).itemSize * per;
+}
+
+/** The geometries under `root`, each once. */
+function geometriesUnder(root: Object3D): Set<BufferGeometry> {
+  const geometries = new Set<BufferGeometry>();
+  root.traverse((obj) => {
+    const geometry = (obj as Object3D & { geometry?: BufferGeometry }).geometry;
+    if (geometry) {
+      geometries.add(geometry);
+    }
+  });
+  return geometries;
+}
+
+/** A geometry's attributes and its index. */
+function attributesOf(geometry: BufferGeometry): AnyAttribute[] {
+  const all = Object.values(geometry.attributes) as AnyAttribute[];
+  return geometry.index ? [...all, geometry.index] : all;
+}
+
+// --- buffers the whole scene shares ----------------------------------------------
+
+const sceneSharedAttributes = new WeakSet<object>();
+
+/**
+ * Marks an attribute every tile may draw with (the coarse terrain's grid
+ * index and its water index: terrain-layer.ts `createGridShare`). three's
+ * geometry dispose destroys the GPU buffer of every attribute the geometry
+ * holds, shared or not — every other tile would then draw from a
+ * destroyed buffer, and the frame fail. A marked attribute is taken off a
+ * geometry before it is disposed (`detachSceneShared`, which
+ * `disposeObject3D` runs first) and lives as long as its app's device.
+ */
+export function markSceneShared(attribute: AnyAttribute): void {
+  sceneSharedAttributes.add(attribute);
+}
+
+/** Whether `attribute` is one the scene shares (`markSceneShared`). */
+export function isSceneShared(attribute: AnyAttribute): boolean {
+  return sceneSharedAttributes.has(attribute);
+}
+
+/** Takes the scene-shared attributes off a geometry (before its dispose:
+ *  see `markSceneShared`). */
+export function detachShared(geometry: BufferGeometry): void {
+  if (geometry.index && isSceneShared(geometry.index)) {
+    geometry.setIndex(null);
+  }
+  for (const [name, attribute] of Object.entries(geometry.attributes)) {
+    if (isSceneShared(attribute)) {
+      geometry.deleteAttribute(name);
+    }
+  }
+}
+
+/**
+ * Takes the scene-shared attributes off every geometry under `root`: what
+ * must happen before anything disposes them — the tile renderer disposes a
+ * tile's geometries itself, right after the plugins let go of it.
+ */
+export function detachSceneShared(root: Object3D): void {
+  for (const geometry of geometriesUnder(root)) {
+    detachShared(geometry);
+  }
+}
+
+/** The GPU bytes of the scene-shared attributes under `root`, each once:
+ *  what no one tile holds, though the tile renderer counts them in it. */
+export function sceneSharedBytes(root: Object3D): number {
+  const seen = new Set<object>();
+  let bytes = 0;
+  for (const geometry of geometriesUnder(root)) {
+    for (const attribute of attributesOf(geometry)) {
+      const buffer = bufferOf(attribute);
+      if (isSceneShared(attribute) && !seen.has(buffer)) {
+        seen.add(buffer);
+        bytes += bufferBytes(buffer);
+      }
+    }
+  }
+  return bytes;
+}
 
 /**
  * Disposes a material unless it is scene-wide (`userData.shared`,
@@ -56,9 +168,12 @@ export function releaseRenderState(root: Object3D): void {
  * (city-layer.ts); without this every demolish would leak its buffers, and
  * dispose() runs it over the whole scene at teardown. Textures are NOT
  * reached (a material may share them): the layer that created a texture
- * frees it — TerrainLayer.dispose, LampControl.dispose, SunRig.dispose.
+ * frees it — TerrainLayer.dispose, LampControl.dispose, SunRig.dispose. Nor
+ * are the buffers the scene shares (`markSceneShared`): they are taken off
+ * first.
  */
 export function disposeObject3D(root: Object3D): void {
+  detachSceneShared(root);
   root.traverse((obj) => {
     const resource = obj as Object3D & {
       geometry?: BufferGeometry;

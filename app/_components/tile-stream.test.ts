@@ -7,6 +7,7 @@ import { TilesRenderer } from "3d-tiles-renderer/three";
 import { createLookState } from "@/lib/city/look-state";
 import {
   BoxGeometry,
+  BufferAttribute,
   Mesh,
   MeshBasicNodeMaterial,
   Object3D,
@@ -14,6 +15,7 @@ import {
 import type { CityLayer } from "./city-layer";
 import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
+import { markSceneShared } from "./three-utils";
 import {
   catchUp,
   DRESSING_PART_NAMES,
@@ -147,6 +149,40 @@ test("a tile that leaves while its compile runs is freed once the compile ends",
   finish();
   await loading;
   expect(freed).toBe(true);
+});
+
+test("a tile that leaves lets go of the site's shared index at once, while its compile still runs", async () => {
+  let finish = (): void => undefined;
+  const plugin = new DressingPlugin(
+    {
+      dressingGate: new Promise<void>(() => undefined),
+      compile: () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+      onChange: () => undefined,
+    } as unknown as TileStreamContext,
+    {
+      cities: new Set(),
+      terrains: new Set(),
+      dressings: new Set(),
+      demolished: new Map(),
+    }
+  );
+  const shared = new BufferAttribute(Uint32Array.from([0, 1, 2]), 1);
+  markSceneShared(shared);
+  const scene = new Object3D();
+  const mesh = new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial());
+  mesh.geometry.setIndex(shared);
+  scene.add(mesh);
+  const tile = {};
+  const loading = plugin.processTileModel(scene, tile);
+  plugin.disposeTile(tile);
+  // the tile renderer disposes the tile's geometries right after this; the
+  // index other tiles draw with must be gone from them by then
+  expect(mesh.geometry.index).toBeNull();
+  finish();
+  await loading;
 });
 
 /** A plugin whose compiles resolve at once, and a content root with a mesh

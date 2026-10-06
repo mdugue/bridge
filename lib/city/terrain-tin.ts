@@ -318,6 +318,53 @@ export function planTriangles<T extends IndexArray>(
   return kept.slice(0, n) as T;
 }
 
+/** The typed arrays a streamed glTF's positions come in. */
+type PositionArray =
+  | Float32Array
+  | Int16Array
+  | Int8Array
+  | Uint16Array
+  | Uint8Array;
+
+/**
+ * The plan (x, z: the numbers `planTriangles` reads) of each of `count`
+ * vertices, as they are, two per vertex. Two meshes with the same index and
+ * the same plan have the same water triangles: what lets the coarse tiles
+ * share theirs (terrain-layer.ts `createGridShare`).
+ */
+export function planOf<T extends PositionArray>(
+  positions: T,
+  stride: number,
+  offset: number,
+  count: number
+): T {
+  const plan = new (positions.constructor as new (length: number) => T)(
+    count * 2
+  );
+  for (let i = 0; i < count; i++) {
+    const at = i * stride + offset;
+    plan[2 * i] = positions[at];
+    plan[2 * i + 1] = positions[at + 2];
+  }
+  return plan;
+}
+
+/** Whether two arrays hold the same numbers, in the same order. */
+export function sameNumbers(
+  a: ArrayLike<number>,
+  b: ArrayLike<number>
+): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** What `TinIndex` needs: projected vertex positions, their elevations and
  *  the surface triangles (no skirt). */
 export interface TinSurface {

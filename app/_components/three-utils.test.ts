@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   BoxGeometry,
+  BufferAttribute,
   type BufferGeometry,
   ClippingGroup,
   Group,
@@ -13,10 +14,12 @@ import {
   aloneUnder,
   disposeObject3D,
   estimateGeometryBytes,
+  markSceneShared,
   releaseRenderState,
   retainSceneMaterials,
   sceneMaterial,
   sceneShared,
+  sceneSharedBytes,
   textureBytes,
 } from "./three-utils";
 import { Instances } from "./instancing";
@@ -83,6 +86,28 @@ test("an instanced set's buffers go with its geometry view", () => {
 
 test("a bare Object3D is traversed without throwing", () => {
   expect(() => disposeObject3D(new Object3D())).not.toThrow();
+});
+
+test("a buffer the scene shares is off a geometry when that geometry is disposed", () => {
+  // three's dispose destroys the GPU buffer of whatever the geometry holds
+  // as it dispatches: the shared index must not be held by then
+  const shared = new BufferAttribute(Uint32Array.from([0, 1, 2]), 1);
+  markSceneShared(shared);
+  const geometry = new BoxGeometry();
+  geometry.setIndex(shared);
+  const own = geometry.getAttribute("position");
+  let heldAtDispose: unknown = "never disposed";
+  geometry.addEventListener("dispose", () => {
+    heldAtDispose = geometry.index;
+  });
+  const root = new Object3D();
+  root.add(new Mesh(geometry, new MeshBasicNodeMaterial()));
+  expect(sceneSharedBytes(root)).toBe(12);
+  disposeObject3D(root);
+  expect(heldAtDispose).toBeNull();
+  // the tile's own attributes went with it as ever
+  expect(geometry.getAttribute("position")).toBe(own);
+  expect(shared.array).toEqual(Uint32Array.from([0, 1, 2]));
 });
 
 test("estimateGeometryBytes counts each geometry once, index included", () => {
