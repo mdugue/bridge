@@ -94,7 +94,12 @@ measured on the phone.
   and the CPU. The cache weighs a tile without them
   (`calculateBytesUsed` subtracts `sceneSharedBytes`).
 - **CPU copies go once the GPU has them.** After a content's compile
-  resolved — uploaded — and while its tile is still there, an allowlist of
+  resolved — uploaded: `PostStack.compile` resolves only once every
+  drawable under the root has been through `compileAsync`, those another
+  compile had started too (`compile-lanes.ts`; the boot's compile of the
+  whole scene can be inside a slow tile's water when the tile's own
+  compile reaches it, and the tile waits for that step instead of
+  skipping it) — and while its tile is still there, an allowlist of
   attributes give up their arrays (`dropCpuCopies`, empty arrays of the
   same kind, bounds computed first): the terrain's positions and normals,
   a grid's own index, the water's own index, the stairs', walls' and
@@ -105,20 +110,43 @@ measured on the phone.
   the shared index) — about 190 MiB less in a view of five cities, four
   fine and six coarse levels. The glTF loader's result goes at
   `load-model` (`dropLoaderResult`), and with it the parser's chunk.
-- **Rasters decode and upload one at a time for the whole site**
+- **Rasters decode and upload in a site-wide turn**
   (`raster-upload.ts` over `lib/city/task-gate.ts`): each is on the GPU
-  (`renderer.initTexture`) and its bytes dropped before the next one
-  decodes — at most one decoded raster (16 MiB) waits, instead of ~48 MiB
-  per level times five parses. The download stays outside the gate.
+  (`renderer.initTexture`) with its bytes dropped at the upload. A phone
+  takes **one at a time** (`RASTER_TURNS`, set by the stream for its
+  tier): at most one decoded raster (16 MiB) waits, instead of ~48 MiB
+  per level times five parses. A desktop keeps the five it always
+  overlapped: through one turn the spawn tile's ground waited behind
+  every neighbour's, and the whole-site boot took 40 % longer. The
+  download — through the retrying fetch, ADR 0048 — stays outside the
+  gate.
+- **A level whose tile leaves stops its raster loads.** The tile cache
+  evicts a level still dressing as soon as the camera no longer wants it
+  (a flight, the boot camera's first looks, the emergency's shed of
+  every unused tile). Its loads had only the stream's lifetime signal:
+  each raster it named still took its turn, decoded and uploaded, and
+  was freed at once — on the whole-site lite boot under SwiftShader
+  13 s more of texture uploads than before this ADR's changes, and on a
+  phone one of its two parse slots held meanwhile. `DressingPlugin` now gives each content root an
+  abort of its own, fired in `disposeTile`; the level's wait on a shared
+  raster ends with it (`untilAborted`), so everything it took is let go
+  at once, and a shared load every holder left is aborted in its turn —
+  a class raster that landed for nobody paints no splat.
 - **A phone streams fewer tiles at once** (`PHONE_STREAM`: 2 parses,
   4 downloads per origin, the renderer's own queues replaced before its
   first update; the defaults are module-wide singletons).
 
-**The shadow camera streams at a resolution of its own**,
-`SHADOW_STREAM_PX` = 64 (`lib/city/shadow-fit.ts`): the coarse terrain's
-error stays at or below 11.6 px at every radius (under the target of 16),
-so it never refines terrain, while a tile's buildings (≥ 3 636 px) and the
-coarse level under them still load for the shadow. On every tier.
+**The shadow camera streams at a resolution of its own**
+(`SHADOW_STREAM_PX` in `lib/city/shadow-fit.ts`, per tier). A phone's is
+64 px: the coarse terrain's error stays at or below 11.6 px at every
+radius (under the target of 16), so it never refines terrain, while a
+tile's buildings (≥ 3 636 px) and the coarse level under them still load
+for the shadow. A desktop's is 128 px: it has the memory for the fine
+level under the eye-level frustum, where the coarse level's 23 px still
+refine it (a neighbour behind the player casts its own trees' shadows,
+and the whole-site boot asks for the spawn tile's fine level as early as
+it did), but no longer under the wide frustums from the air (11.6 px and
+less from 220 m on).
 
 **A failed allocation costs a dressing, not the page.** A compile the GPU
 had no room for (`lib/city/gpu-allocation.ts`: the `createAttribute`
@@ -145,7 +173,9 @@ Two rules for every later change:
   later one (the Papier override) might. A new style, cut or export that
   reads a tile's geometry checks the lists first, and so does a new CPU
   reader. `TileStreamContext.compile` resolving `true` must keep meaning
-  "uploaded".
+  "uploaded": a compile that skips a drawable must still wait for
+  whoever compiles it (`compile-lanes.ts`), and a step that failed fails
+  every compile waiting for it.
 - **A scene-shared attribute is never on a geometry when that geometry is
   disposed** (`markSceneShared`): three's dispose destroys the GPU buffer
   of every attribute the geometry holds, and every other tile would draw
@@ -159,8 +189,10 @@ And:
   cache is derived again (`tileCacheBytesFor`'s comment carries the sum).
   Keep `renderer.shadowMap.transmitted` off: coloured shadows would read a
   red-only target.
-- A new raster loader goes through `raster-upload.ts` (`inRasterTurn`,
-  `uploadNow`, `dropDataOnUpload`).
+- A new raster loader goes through `raster-upload.ts`
+  (`fetchRasterBytes`, `inRasterTurn`, `uploadNow`, `dropDataOnUpload`)
+  and takes its level's signal: a level whose tile left must not decode
+  or upload another raster.
 - A compile that throws inside three's `compileAsync` leaves three's
   private pre-compiling flag raised until the next compile that succeeds
   (only `ShadowNode.updateBefore` reads it), so the shadow map can pause
@@ -170,9 +202,13 @@ And:
   sizes against the 336 MiB `max`: the farthest tiles arrive later, or
   only once the governor lets fine levels go. FXAA is softer than SMAA on
   fine contrast; the AO and the outline's halo are quantised to 8 bits; a
-  phone's first switch to a style hitches. On the desktop too, rasters
-  arrive one at a time and a seam's neighbour casts its coarse crowns'
-  shadows. All of it waits for a look on a real GPU (plan 019, section M).
+  phone's first switch to a style hitches, and near a seam with the sun
+  behind, a neighbour the phone's view does not refine casts its coarse
+  crowns' shadows (the desktop keeps both its raster overlap and its
+  eye-level shadow tiles). A compile now also waits for the steps another
+  compile has in flight on its drawables — the boot's compile of the
+  scene for one compileAsync per lane of the tiles still compiling. All
+  of it waits for a look on a real GPU (plan 019, section M).
 - The heartbeat says where the memory went (`rast`, `cache`, `terr`,
   `net`; docs/rendering.md, "GPU memory on a phone").
 
@@ -206,15 +242,18 @@ And:
 
 - `app/_components/scene-profile.ts` (`postProfileFor`,
   `shadowMapBytesFor`, `tileCacheBytesFor`, + test),
-  `app/_components/post-stack.ts`, `app/_components/fxaa.ts`,
+  `app/_components/post-stack.ts`, `app/_components/compile-lanes.ts`
+  (+ test), `app/_components/fxaa.ts`,
   `app/_components/selection-outline.ts`, `lib/city/outline.ts`,
   `app/_components/sun-rig.ts` (`OneByteShadowNode`)
 - `app/_components/tile-stream.ts` (`PHONE_STREAM`, `paceStreaming`,
-  `dropLoaderResult`, `dropContentCopies`, `calculateBytesUsed`),
-  `app/_components/terrain-layer.ts` (`readsSportGrounds`,
-  `createGridShare`, `cpuDroppable`), `app/_components/three-utils.ts`
-  (`dropCpuCopies`, `markSceneShared`, `disposeGeometry`),
-  `app/_components/raster-upload.ts`, `lib/city/task-gate.ts`,
+  `dropLoaderResult`, `dropContentCopies`, `calculateBytesUsed`,
+  `loadAborts`), `app/_components/terrain-layer.ts`
+  (`readsSportGrounds`, `createGridShare`, `cpuDroppable`, + test),
+  `app/_components/three-utils.ts` (`dropCpuCopies`, `markSceneShared`,
+  `disposeGeometry`), `app/_components/fetch-optional.ts`
+  (`untilAborted`), `app/_components/raster-upload.ts` (`RASTER_TURNS`),
+  `lib/city/task-gate.ts`,
   `lib/city/gpu-allocation.ts`, `lib/city/shadow-fit.ts`
   (`SHADOW_STREAM_PX`)
 - [ADR 0011](./0011-motion-keyed-quality-regression.md) (DoF while

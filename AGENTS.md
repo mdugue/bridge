@@ -127,10 +127,11 @@ config change.
     card past the caps: *Leichter weiter*, *Neu laden*), `instancing.ts`
     (`Instances`: instanced sets that share one node build),
     `fetch-optional.ts` (the one fetch/abort policy: `fetchBytes` retries a
-    network failure for a budget of usable time, ADR 0048), `net-gate.ts`
-    (the page's view of the network: visible, online, `pageLeaving` from
-    pagehide), `tile-retry.ts` (tiles that gave up on the network asked
-    for again; the boot waits for them), `boot-error.tsx` (the boot's
+    network failure for a budget of the page's visible time, offline or
+    not, ADR 0048), `net-gate.ts` (the page's view of the network:
+    visible, online, the budgets' clock, `pageLeaving` from pagehide),
+    `tile-retry.ts` (tiles that gave up on the network asked for again;
+    the boot waits for them), `boot-error.tsx` (the boot's
     error in German, *Keine Verbindung zum Server*, *Erneut versuchen*),
     `crash-trail.ts` + `crash-report.tsx` (a page the browser kills leaves
     its boot stages, errors, lost device and heartbeats in local storage;
@@ -151,8 +152,9 @@ config change.
     `sentry-create-alert` and the Sentry MCP server in `.mcp.json` work
     the issues — never add the SDK they otherwise set up)
   - layers: `terrain-layer.ts` (dresses a terrain tile), `raster-upload.ts`
-    (the streamed rasters decode and upload one at a time for the whole
-    site, their bytes dropped at the upload), `landcover-splat.ts`
+    (the streamed rasters decode and upload in a site-wide turn — one at
+    a time on a phone, five on a desktop, `RASTER_TURNS` — their bytes
+    dropped at the upload), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
     the street-tree cadastre's silhouettes, `crown-season.ts`, the
@@ -265,7 +267,7 @@ config change.
   recovered page's start tile — ADR 0046), `gpu-allocation.ts` (which
   errors are a GPU allocation that failed), `fetch-retry.ts` (when a
   failed fetch is tried again and for how long — ADR 0048),
-  `task-gate.ts` (a concurrency gate: the rasters' one at a time),
+  `task-gate.ts` (a concurrency gate: the rasters' turns),
   `ground.ts` (the
   site's ground: terrain heights, the floor, rays — one owner for the pose,
   focus, shadow fit and soundscape), `ground-join.ts` (how a part meets
@@ -670,7 +672,9 @@ tile adds beyond its glTF must reach the cache's weighing
 (`DressingPlugin.calculateBytesUsed`), and a phone's memory is watched
 by `lib/city/memory-governor.ts` — see docs/rendering.md, "GPU memory on
 a phone". A content's CPU copies go once its compile has uploaded them
-(`dropCpuCopies` over `cpuDroppable` / `cityCpuDroppable`, ADR 0047): **an
+(`dropCpuCopies` over `cpuDroppable` / `cityCpuDroppable`, ADR 0047; a
+compile resolves only once every drawable under it is uploaded, those
+another compile had started too — `compile-lanes.ts`): **an
 attribute read on the CPU after the dressing, or first read by a material
 the tile's own does not use, stays off those lists** — met after the drop,
 three uploads an empty buffer. **A buffer the site shares**
@@ -684,9 +688,9 @@ triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glT
 renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
 streaming camera while the sun is up, so tiles that cast into the view stay
 loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`)
-— at 64 px (`SHADOW_STREAM_PX`), not the map's resolution: an orthographic
-camera's error ignores distance, and at 2048 px it refined the terrain
-under its whole frustum;
+— at 128 px on a desktop and 64 on a phone (`SHADOW_STREAM_PX`), not the
+map's resolution: an orthographic camera's error ignores distance, and at
+2048 px it refined the terrain under its whole frustum;
 `displayActiveTiles` keeps loaded tiles drawn while turning.
 
 **Vegetation** is chunked into 250 m cells (one `Instances` set per cell) so

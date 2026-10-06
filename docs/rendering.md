@@ -249,19 +249,26 @@ is spelled: changing one is a look change, not a re-bake
 - **The shadow camera streams, at a resolution of its own.** The sun's
   shadow camera is registered with the tiles renderer as a second camera,
   so a tile that casts into the view stays loaded even when it is behind
-  the player — at `SHADOW_STREAM_PX` = 64 (`lib/city/shadow-fit.ts`), not
-  at the map's resolution. The tile renderer measures an orthographic
+  the player — at a resolution of its own (`SHADOW_STREAM_PX` in
+  `lib/city/shadow-fit.ts`: 128 px on a desktop, 64 on a phone), not at
+  the map's. The tile renderer measures an orthographic
   camera's error as a tile's geometric error over its pixel (the
   frustum's width over the resolution), whatever the distance: at the
   map's 2048 px the coarse terrain's 40 m came to 372, 186, 93 and 46.5 px
   at half-sizes of 110, 220, 440 and 880 m, against a target of 16, so every tile the
   frustum touched was refined to its fine level — up to four from the air
-  (an iPhone flying at 228 m: 642 → 677 MB held). At 64 px the coarse
-  level stays at or below 11.6 px at every radius, so the shadow camera
-  never refines terrain, while a tile's buildings (≥ 3 636 px) and the
-  coarse ground under them still load for the shadow: what the main camera
-  refines is refined for the view. Near a seam with the sun behind, a
-  neighbour the view does not refine casts its coarse crowns' shadows. By
+  (an iPhone flying at 228 m: 642 → 677 MB held). On a phone, at 64 px,
+  the coarse level stays at or below 11.6 px at every radius, so the
+  shadow camera never refines terrain, while a tile's buildings
+  (≥ 3 636 px) and the coarse ground under them still load for the
+  shadow: what the main camera refines is refined for the view. Near a
+  seam with the sun behind, a neighbour the view does not refine casts
+  its coarse crowns' shadows there. A desktop has the memory for the fine
+  level under the eye-level frustum: at 128 px the coarse level's 23 px
+  at 110 m still refine it (a neighbour behind the player casts its own
+  trees' shadows, and the whole-site boot asks for the spawn tile's fine
+  level as early as it did), but no longer from the air (11.6 px and less
+  from 220 m on). By
   night the shadow camera streams nothing (`streamShadowTiles`); nor from
   safety level 2, nor for two minutes after a memory emergency
   ([ADR 0046](./adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)).
@@ -550,7 +557,8 @@ the safety levels 1, 2 and 3:
 | Tiles | the whole site streams (`tileset.json`) | same | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
 | Terrain | L0 TIN (±0.15 m) near, L1 512² grid beyond (the switch at ≈ 2.6 km from a tile for a viewport 1080 CSS px high; ≈ 2.1 km on an iPhone in portrait) | same | same |
 | Shadow map | 3072² (2048², 2048², 1024²) | 2048² (2048², 1024², 1024²) | 512² |
-| Shadow camera streams at | 64 px, by day; from level 2 never | same | same |
+| Shadow camera streams at | 128 px, by day; from level 2 never | 64 px, by day; from level 2 never | as the tier |
+| Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
 | Pixel ratio | ≤ 2 (1.5, 1.25, 1.0) | ≤ 1.5 (1.25, 1.0, 0.85) | 0.5 |
 | Post (`postProfileFor`) | DoF, SMAA, every style warmed | no DoF, FXAA, only the outline warmed | as the tier |
 | Land-cover rasters | L0 4096², L1 2048² | 2048² everywhere; the coarse level without the sports raster | L0 4096², L1 2048² |
@@ -677,16 +685,28 @@ stays their measure; the tile cache counts true bytes.
   `cityCpuDroppable`): a city content 10.0 → 5.3 MiB on the CPU, a fine
   level 27.4 → 7.7, a coarse one 16.4 → 0.8 (with the shared index) —
   about 190 MiB in a view of five cities, four fine and six coarse
-  levels. The glTF loader's result (its parser, the binary chunk, the
-  decoded buffers) goes at `load-model` (`dropLoaderResult`). Rasters
-  decode and upload **one at a time for the whole site**
-  (`raster-upload.ts`, `lib/city/task-gate.ts`): each is on the GPU
-  (`renderer.initTexture`) with its bytes dropped before the next one
-  decodes — at most one decoded raster (16 MiB) waits, where a fine level
-  held ~48 MiB of them until its compile, times five parses. And a phone
-  parses two tile contents and downloads four per origin at once
-  (`PHONE_STREAM`, the renderer's own queues replaced before its first
-  update), where the boot asked for eleven contents in one millisecond.
+  levels. "Uploaded" is what the compile's resolving means: it resolves
+  only once every drawable under the content has been through
+  `compileAsync`, those another compile had started too — the boot's
+  compile of the whole scene meets a slow tile's water mid-build, and the
+  tile's own compile waits for that step at its end
+  (`compile-lanes.ts`). The glTF loader's result (its parser, the binary
+  chunk, the decoded buffers) goes at `load-model` (`dropLoaderResult`).
+  Rasters decode and upload **in a site-wide turn** (`raster-upload.ts`,
+  `lib/city/task-gate.ts`): each is on the GPU (`renderer.initTexture`)
+  with its bytes dropped at the upload, and a phone decodes **one at a
+  time** (`RASTER_TURNS`) — at most one decoded raster (16 MiB) waits,
+  where a fine level held ~48 MiB of them until its compile, times five
+  parses; a desktop keeps the five it always overlapped (through one
+  turn the spawn tile's ground waited behind every neighbour's, and the
+  whole-site boot took 40 % longer). A level whose tile leaves while it
+  dresses — the camera wanted it and moved on, a memory emergency shed
+  it — stops its raster loads where they are (`DressingPlugin`'s
+  per-content abort): it decodes and uploads nothing more, and lets go
+  of the shared rasters it waited for at once. And a phone parses two
+  tile contents and downloads four per origin at once (`PHONE_STREAM`,
+  the renderer's own queues replaced before its first update), where the
+  boot asked for eleven contents in one millisecond.
   Two rules follow: an attribute read on the CPU after the dressing (the
   city's positions, index and feature ids; the TIN's index), or first
   read by a material the tile's own does not use, stays off the drop
@@ -838,7 +858,7 @@ sequenceDiagram
   B->>S: /<site> (the prerendered route: which site)
   B->>S: /data/<site>/manifest.json (no-cache, retried · else the cached copy)
   B->>S: tileset.json (hashed, extras: CRS, offset, tile list)
-  Note over B,S: every fetch retried for a budget of usable time (visible, online)
+  Note over B,S: every fetch retried for a budget of the page's visible time
   Note over B: renderer, sun rig, lamp light pool, post stack, tile stream
   B->>S: every tile's footprints (minimap)
   B->>S: spawn tile: buildings glb, a terrain level + class raster, NDVI
@@ -897,23 +917,34 @@ what lies between ([ADR 0032](./adr/0032-camera-never-inside-a-building.md)).
 ([ADR 0048](./adr/0048-network-failures-are-retried.md)). Every tile and
 tileset request goes through one retrying fetch (`fetchBytes` in
 `fetch-optional.ts`; for tile content `ContentFetchPlugin`, which inflates
-the `.gz` inside the retries): an abort is never retried, a 404 means
-absent, a network error or a 408/425/429/5xx is retried with jittered
-backoff (0.5 s doubling to 15 s, × 0.5–1.5, a `Retry-After` honoured) —
-the first try at once, each retry once the page is usable, visible and
-online (`net-gate.ts`). The budget counts usable time only: 20 s for a
-tile's content, 8 s for an optional side file, 20 s for the manifest, 60 s
-for the tileset. A tile that retries stays LOADING, so its coarse level
-stays drawn and the boot keeps waiting. One that gives up is FAILED and
-healed (`tile-retry.ts`): asked for again on `online`, on the page's
-return and after 5, 15, 45, then every 120 s — by `lruCache.remove(tile)`
-and then `resetFailedTiles()`, because 3d-tiles-renderer 0.5.3's
+the `.gz` once its body is read whole — one that does not inflate is a
+corrupt file, not a blip, and is not retried), and so do the terrain,
+sky-view and horizon rasters (`fetchRasterBytes`) and the trees' NDVI
+sampler: an abort is never retried, a 404 means absent, a network error
+or a 408/425/429/5xx is retried with jittered backoff (0.5 s doubling to
+15 s, × 0.5–1.5, a `Retry-After` honoured) — the first try at once, each
+retry once the page is usable, visible and online, or visible and called
+offline every 15 s (`net-gate.ts`). The budget counts the page's visible
+time, offline or not — a phone in a pocket spends nothing, one in a
+tunnel ends in a give-up: 20 s for a tile's content, 8 s for an optional
+side file or a raster, 20 s for the manifest, 60 s for the tileset. A
+tile that retries stays LOADING, so its coarse level stays drawn and the
+boot keeps waiting. One that gives up is FAILED and healed
+(`tile-retry.ts`): asked for again on `online`, on the page's return and
+after 5, 15, 45, then every 120 s — by `lruCache.remove(tile)` and then
+`resetFailedTiles()`, because 3d-tiles-renderer 0.5.3's
 `resetFailedTiles()` alone never re-requests a tile still in its cache (an
-upstream bug, to be reported). Before the first frame a network give-up on
-the spawn tile or the tileset notes `net-wait` instead of failing the
-boot: the boot fails only after 60 s of a usable page without a first
-frame, with a `network: …` message, and the boot error says *Keine
-Verbindung zum Server* and offers *Erneut versuchen* (`boot-error.tsx`).
+upstream bug, to be reported). A tile the cache evicted meanwhile is left
+alone: the renderer asks for it itself when it wants it. The HUD's pill
+about the network goes once nothing it failed is outstanding — every
+tile that gave up has landed, or the renderer's update after the heal
+did not ask for it again (out of view). Before the first frame a network
+give-up on the spawn tile or the tileset notes `net-wait` instead of
+failing the boot: the boot fails only after 60 s of a visible page
+without those tiles back, with a `network: …` message — the wait ends
+when the last of them lands, and a later give-up waits afresh — and the
+boot error says *Keine Verbindung zum Server* and offers *Erneut
+versuchen* (`boot-error.tsx`).
 The manifest is fetched `no-cache`, and once that gives up the copy the
 browser cached last will do — never the unhashed `tileset.json`, which the
 build does not publish. From `pagehide` on — a reload, the GPU recovery's
@@ -922,10 +953,11 @@ too — nothing is decided or reported (`pageLeaving`).
 **The burst is paced.** A phone parses two tile contents and downloads
 four per origin at once (`PHONE_STREAM` in `tile-stream.ts`; the tile
 renderer's own 5 and 25 asked for the boot's eleven contents in one
-millisecond), and on every device the terrain, sky-view and horizon
-rasters decode and upload one at a time for the whole site
-(`raster-upload.ts`): a raster is on the GPU, its bytes gone, before the
-next one decodes. The ground fills in a little later for it.
+millisecond), and its terrain, sky-view and horizon rasters decode and
+upload one at a time for the whole site (`raster-upload.ts`,
+`RASTER_TURNS`; five at once on a desktop): a raster is on the GPU, its
+bytes gone, before the next one decodes. The ground fills in a little
+later for it. A level whose tile leaves meanwhile takes no more turns.
 
 The HUD's five load stages and their weights are declared once in
 `lib/city/load-stages.ts`. The first three are the first frame; the other
