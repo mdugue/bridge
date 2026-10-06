@@ -1,4 +1,9 @@
 import { expect, test } from "bun:test";
+import {
+  DEFAULT_DOWNLOAD_QUEUE,
+  DEFAULT_PARSE_QUEUE,
+} from "3d-tiles-renderer/core";
+import { TilesRenderer } from "3d-tiles-renderer/three";
 import { createLookState } from "@/lib/city/look-state";
 import {
   BoxGeometry,
@@ -14,6 +19,8 @@ import {
   DRESSING_PART_NAMES,
   DressingPlugin,
   dressingParts,
+  PHONE_STREAM,
+  paceStreaming,
   type TileDressing,
   type TileStreamContext,
   takesOver,
@@ -187,6 +194,30 @@ test("a load the renderer keeps is not freed", async () => {
   tile.engineData = { scene };
   await nextTask();
   expect(freed.value).toBe(false);
+});
+
+test("a phone streams fewer contents at once, on queues of its own", () => {
+  const phone = new TilesRenderer("https://example.com/tileset.json");
+  const desktop = new TilesRenderer("https://example.com/tileset.json");
+  paceStreaming(phone, "mobile");
+  paceStreaming(desktop, "desktop");
+  expect(phone.parseQueue.maxJobs).toBe(PHONE_STREAM.parses);
+  expect(phone.downloadQueue.maxJobsPerOrigin).toBe(
+    PHONE_STREAM.downloadsPerOrigin
+  );
+  // the renderer's own order of what loads first
+  expect(phone.parseQueue.priorityCallback).toBe(
+    DEFAULT_PARSE_QUEUE.priorityCallback
+  );
+  expect(phone.downloadQueue.priorityCallback).toBe(
+    DEFAULT_DOWNLOAD_QUEUE.priorityCallback
+  );
+  // the module-wide defaults another renderer shares are left as they were
+  expect(desktop.parseQueue).toBe(DEFAULT_PARSE_QUEUE);
+  expect(DEFAULT_PARSE_QUEUE.maxJobs).toBeGreaterThan(PHONE_STREAM.parses);
+  expect(desktop.downloadQueue).toBe(DEFAULT_DOWNLOAD_QUEUE);
+  phone.dispose();
+  desktop.dispose();
 });
 
 test("a level waits for its dressing only where it takes over from its tile's other level", () => {

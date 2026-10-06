@@ -1,3 +1,4 @@
+import { DownloadPriorityQueue, PriorityQueue } from "3d-tiles-renderer/core";
 import { TilesRenderer } from "3d-tiles-renderer/three";
 import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
@@ -82,6 +83,7 @@ import {
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
 import { RasterShares } from "./raster-shares";
+import type { DeviceTier } from "./scene-profile";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
@@ -167,6 +169,8 @@ export interface TileStreamContext {
   renderer: WebGPURenderer;
   styleResources: StyleResources;
   sunDirection: Vector3;
+  /** a phone streams fewer tiles at once (`paceStreaming`) */
+  tier: DeviceTier;
   /** a site tile's exact extent (the tileset's root extras) */
   tileBounds: (tileId: string) => TerrainBounds | undefined;
   tilesetUrl: string;
@@ -1329,6 +1333,37 @@ export class DressingPlugin {
 }
 
 /**
+ * How many tile contents a phone downloads (per origin) and parses at once.
+ * The tile renderer's own queues (25 downloads, 5 parses) asked for the
+ * boot's eleven contents in one millisecond, and a parse holds its decoded
+ * glTF, its rasters and its compile until it is through: several hundred
+ * MB on the page's process before anything reached the GPU, and Safari
+ * ended the page at the first frame. Two parses keep a neighbour coming
+ * while the spawn tile compiles.
+ */
+export const PHONE_STREAM = { parses: 2, downloadsPerOrigin: 4 } as const;
+
+/**
+ * Gives a phone's renderer queues of its own at `PHONE_STREAM`'s limits.
+ * Before its first update (the renderer takes them up then). The defaults
+ * are module-wide queues every renderer shares, so they are replaced, not
+ * changed: a desktop app booted after (a StrictMode remount) keeps its own.
+ */
+export function paceStreaming(tiles: TilesRenderer, tier: DeviceTier): void {
+  if (tier !== "mobile") {
+    return;
+  }
+  const parse = new PriorityQueue();
+  parse.maxJobs = PHONE_STREAM.parses;
+  parse.priorityCallback = tiles.parseQueue.priorityCallback;
+  tiles.parseQueue = parse;
+  const download = new DownloadPriorityQueue();
+  download.maxJobsPerOrigin = PHONE_STREAM.downloadsPerOrigin;
+  download.priorityCallback = tiles.downloadQueue.priorityCallback;
+  tiles.downloadQueue = download;
+}
+
+/**
  * Starts streaming the tileset under `world` (the viewer's rotated Z-up
  * group). `cameras` decide what loads: the view camera, and the sun's shadow
  * camera, so a building behind the player still casts into the view — the
@@ -1342,6 +1377,7 @@ export function createTileStream(
   cameras: { camera: Camera; height: number; width: number }[]
 ): TileStream {
   const tiles = new TilesRenderer(ctx.tilesetUrl);
+  paceStreaming(tiles, ctx.tier);
   tiles.registerPlugin(new GzipContentPlugin());
   tiles.registerPlugin(
     new GLTFExtensionsPlugin({ metadata: true, meshoptDecoder: MeshoptDecoder })

@@ -937,6 +937,7 @@ async function bootApp(
       renderer,
       styleResources,
       sunDirection,
+      tier: budget.tier,
       tileBounds: (id) => extras.tiles.find((t) => t.id === id)?.bounds,
       tilesetUrl,
     },
