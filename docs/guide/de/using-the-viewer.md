@@ -426,11 +426,13 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
-| | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung |
+| | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung; auf Telefonen nicht angeboten |
 
 Solange sich die Kamera bewegt, ist die Tiefenschärfe-Unschärfe
 abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
-zurück, sobald du stehst.
+zurück, sobald du stehst. Telefone bieten den Schalter gar nicht an: Die
+Unschärfe braucht mehr Grafikspeicher, als ein Telefon für einen Hauch
+erübrigen kann, den ein kleiner Bildschirm kaum zeigt.
 
 ### Erweitert
 
@@ -477,13 +479,37 @@ Beim nächsten Besuch sagt eine Karte, dass die letzte Sitzung unerwartet
 beendet wurde, und zeigt ihr Protokoll: was geladen war, die Bildrate und
 den Speicher ihrer letzten Sekunden.
 
+Fällt die Grafik aus – ein Telefon entzieht dem Browser den
+Grafikspeicher –, baut sich der Viewer dort, wo du standest, **eine Stufe
+leichter** wieder auf: ein etwas weicheres Bild, gröberes Gelände in der
+Ferne, weniger Teile der Stadt im Speicher und ab der zweiten Stufe ohne
+den Bildstil oder das *Modell*, in dem du warst. Das merkt er sich für
+dein Gerät (auch ein Absturz, der den letzten Besuch beendet hat, zählt)
+und kehrt nach ein paar Tagen von selbst zu vollen Details zurück, alle
+drei Tage um eine Stufe. Fällt die Grafik auf der leichtesten Stufe
+wieder aus, sagt eine Karte *Die Grafik ist ausgefallen* und bietet
+*Leichter weiter* (eine Stufe leichter, zurück, wo du standest) und *Neu
+laden* an. Auch einer Seite, die eine Weile im Hintergrund lag, kann ein
+Telefon die Grafik nehmen; dann lädt der Viewer einfach auf derselben
+Stufe neu.
+
+**Wenn die Verbindung abreißt**, versucht es der Viewer von selbst
+weiter: Teile der Stadt, die nicht laden konnten, fehlen vorerst oder
+sind nur grob da, oben steht kurz *Keine Verbindung zum Server — ein Teil
+der Stadt fehlt, neuer Versuch folgt.*, und die Lücken schließen sich,
+sobald die Verbindung wieder da ist. Ein Start ohne Verbindung wartet,
+solange dein Gerät offline ist; antwortet der Server auch online nicht,
+sagt der Viewer nach einer Weile (20 Sekunden bis eine Minute) *Keine
+Verbindung zum Server* und bietet *Erneut versuchen* an.
+
 Wo diese Seite dafür eingerichtet ist, geht dieses Protokoll auch von
 selbst an einen Fehlerdienst (Sentry), dazu Fehler, auf die der Viewer
 stößt, und zu jedem Besuch ein paar Zahlen darüber, wie er lief: wie lange
 bis zum ersten Bild und bis alles geladen war, die Bildrate, der meiste
 belegte Speicher und ob er normal oder mit einem Absturz endete. So werden die langsamen und die abstürzenden Telefone
 sichtbar. Ein Bericht enthält Browser- und Gerätetyp, die
-Bildschirmgröße, welche Stadt (ohne den Rest der Adresse) und diese Zahlen
+Bildschirmgröße, welche Stadt (ohne den Rest der Adresse), die Stufe, auf
+der der Viewer auf deinem Gerät läuft, und diese Zahlen
 — nie deinen Standort oder wo in der Stadt du warst, keinen Namen, keine
 IP-Adresse und kein Cookie. Sendet dein Browser *Global Privacy Control*,
 wird nichts geschickt, und der Schalter auf der Datenschutzseite

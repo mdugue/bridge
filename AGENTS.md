@@ -109,16 +109,29 @@ config change.
 
 - `app/_components/` — the viewer, grouped:
   - spine: `create-app.ts` (scene/loop/handle), `tile-stream.ts` (the
-    3DTilesRendererJS setup: gzip + glTF-metadata plugins and the dressing
-    plugin that builds and disposes everything a tile carries),
+    3DTilesRendererJS setup: the retrying, inflating content fetch, the
+    glTF-metadata plugin and the dressing plugin that builds and disposes
+    everything a tile carries; a phone's paced queues),
     `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount,
     given the site id; which tileset to stream), `site-context.tsx`
     (`SiteProvider`/`useSite`: the site the HUD describes),
     `poc-debug.ts` (the `window.__poc` test/QA hook), `scene-profile.ts`
-    (`?scene=lite`, `?gpu=webgl2`), `gpu-support.ts` (the WebGPU-or-WebGL2
-    preflight), `instancing.ts` (`Instances`: instanced sets that share one
-    node build),
-    `fetch-optional.ts` (the one optional-artifact fetch/abort policy),
+    (`?scene=lite`, `?gpu=webgl2`; the budget per tier and safety level —
+    pixel ratio, shadow map, tile cache, `postProfileFor` and
+    `shadowMapBytesFor`), `gpu-support.ts` (the WebGPU-or-WebGL2
+    preflight), `gpu-safety.ts` (the device's safety level in local
+    storage, `gpu-safety`: `pageSafety`, `raiseSafety` — ADR 0046),
+    `gpu-recovery.ts` (a lost GPU: one reload per safety level, the
+    renderer released first, back at the player's pose; a GPU reclaimed in
+    the background reloads at the same level), `gpu-failure-card.tsx` (the
+    card past the caps: *Leichter weiter*, *Neu laden*), `instancing.ts`
+    (`Instances`: instanced sets that share one node build),
+    `fetch-optional.ts` (the one fetch/abort policy: `fetchBytes` retries a
+    network failure for a budget of usable time, ADR 0048), `net-gate.ts`
+    (the page's view of the network: visible, online, `pageLeaving` from
+    pagehide), `tile-retry.ts` (tiles that gave up on the network asked
+    for again; the boot waits for them), `boot-error.tsx` (the boot's
+    error in German, *Keine Verbindung zum Server*, *Erneut versuchen*),
     `crash-trail.ts` + `crash-report.tsx` (a page the browser kills leaves
     its boot stages, errors, lost device and heartbeats in local storage;
     the next load offers them as text to copy, `?trail=1` always — the
@@ -130,11 +143,16 @@ config change.
     by `lib/city/crash-reports.ts`, whose `reportBuild` names the release
     `bridge@<commit>` once for the page and for
     `scripts/sentry-release.ts`, the build's last step; ADR 0043; off in
-    a browser that said no on `/datenschutz`, ADR 0045. The
+    a browser that said no on `/datenschutz`, ADR 0045; a page's
+    aftermath — after its render stopped, while it leaves — stays a
+    breadcrumb, and every report carries the device's safety level and
+    how soon after a return from the background it came, ADR 0046. The
     Sentry agent skills `sentry-debug-issue`, `sentry-setup-releases` and
     `sentry-create-alert` and the Sentry MCP server in `.mcp.json` work
     the issues — never add the SDK they otherwise set up)
-  - layers: `terrain-layer.ts` (dresses a terrain tile), `landcover-splat.ts`
+  - layers: `terrain-layer.ts` (dresses a terrain tile), `raster-upload.ts`
+    (the streamed rasters decode and upload one at a time for the whole
+    site, their bytes dropped at the upload), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
     the street-tree cadastre's silhouettes, `crown-season.ts`, the
@@ -178,7 +196,9 @@ config change.
     factor on the ambient light, the far horizon on the sun; its raster
     shared by a tile's terrain and buildings through `shared-rasters.ts`),
     `height-fog.ts` (the one `scene.fogNode`), `post-stack.ts` (the scene
-    pass and the node `RenderPipeline`),
+    pass and the node `RenderPipeline`, built per tier: no DoF and FXAA on a
+    phone — ADR 0047), `fxaa.ts` (the phone's FXAA inside the last pass, a
+    perceptual luma over the linear frame),
     `stylize-effect.ts` (the picture styles' one node: ink lines + tone;
     the table is `lib/city/render-style.ts`), `paper-scene.ts` (Papier's
     render-time white material), `style-dressing.ts` (a style's own crowns
@@ -240,7 +260,13 @@ config change.
   loads from there until it is clicked
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
-  policy, the look table + store, the Snapshot codec, `ground.ts` (the
+  policy, the look table + store, the Snapshot codec, `gpu-safety.ts`
+  (the safety ladder: levels, raise and decay, the recovery's caps, a
+  recovered page's start tile — ADR 0046), `gpu-allocation.ts` (which
+  errors are a GPU allocation that failed), `fetch-retry.ts` (when a
+  failed fetch is tried again and for how long — ADR 0048),
+  `task-gate.ts` (a concurrency gate: the rasters' one at a time),
+  `ground.ts` (the
   site's ground: terrain heights, the floor, rays — one owner for the pose,
   focus, shadow fit and soundscape), `ground-join.ts` (how a part meets
   the ground: foot depths, edges, the join contract — ADR 0035),
@@ -570,7 +596,9 @@ into triangle/staircase acne at grazing sun); `normalBias = 0` (it offsets the
 flat ground's sample toward the light → the bright peter-panning contact strip;
 safe at 0 because terrain doesn't cast and buildings/trees cast via back faces,
 so lit faces never self-acne); a small negative `bias`; and a tight,
-camera-following frustum on a right-sized map (finer texels = cleaner edges).
+camera-following frustum on a right-sized map (finer texels = cleaner edges),
+its colour target one byte (`OneByteShadowNode` as `light.shadow.shadowNode`:
+keep `renderer.shadowMap.transmitted` off).
 **VSM rings** ("corduroy"/grid) on large ground planes at grazing angles — avoid
 it here. Past the frustum the ground's shadows come from a baked horizon map (two
 bands, ADR 0031); their *shapes* there (and on facades) remain a job for
@@ -599,8 +627,9 @@ pass runs at half resolution (normals reconstructed from depth) — roughly
 what the skip used to save, paid every frame instead. Its sample count
 rebuilds the pass's material, so it is a **construction-time setting**
 (`aoSamplesFor`): a motion-keyed quality switch there trades a flicker for a
-rebuild hitch. DoF is still dropped while moving — motion has already
-destroyed the bokeh — by switching between two prebuilt pipelines, never by
+rebuild hitch. DoF (desktop only: a phone does not build it, ADR 0047) is
+still dropped while moving — motion has already destroyed the bokeh — by
+switching between two prebuilt pipelines, never by
 swapping one pipeline's output node (that re-translates the whole graph).
 
 **Buildings are already batched.** Each tile's buildings are ONE glTF mesh
@@ -640,13 +669,24 @@ to the same place is a leak; a steady one is the tile cache). What a
 tile adds beyond its glTF must reach the cache's weighing
 (`DressingPlugin.calculateBytesUsed`), and a phone's memory is watched
 by `lib/city/memory-governor.ts` — see docs/rendering.md, "GPU memory on
-a phone". A lost GPU reloads where the player stood (`gpu-recovery.ts`).
+a phone". A content's CPU copies go once its compile has uploaded them
+(`dropCpuCopies` over `cpuDroppable` / `cityCpuDroppable`, ADR 0047): **an
+attribute read on the CPU after the dressing, or first read by a material
+the tile's own does not use, stays off those lists** — met after the drop,
+three uploads an empty buffer. **A buffer the site shares**
+(`markSceneShared`: the coarse grid's and water's index) **is never on a geometry when
+that geometry is disposed** — three would destroy it for every tile;
+detach it first. A lost GPU reloads a safety level lighter, where the
+player stood (`gpu-recovery.ts`, ADR 0046).
 The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
 triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
 streaming camera while the sun is up, so tiles that cast into the view stay
-loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`);
+loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`)
+— at 64 px (`SHADOW_STREAM_PX`), not the map's resolution: an orthographic
+camera's error ignores distance, and at 2048 px it refined the terrain
+under its whole frustum;
 `displayActiveTiles` keeps loaded tiles drawn while turning.
 
 **Vegetation** is chunked into 250 m cells (one `Instances` set per cell) so
@@ -680,8 +720,8 @@ scene material. `PostStack.warmStyles` prepares them all once the scene
 is idle: the styled pipelines build one per frame (a pipeline builds its
 graph and its SMAA passes on its first render), and the dressing and the
 scene's own objects are compiled under the Papier swap with
-`compileAsync` (not on phones: `warmPaperFor` — the extra pipelines cost
-an iPhone tab its memory) — no stand-ins: the override takes each source material's
+`compileAsync` (not on phones: `postProfileFor` warms only the outline
+there — the extra pipelines cost an iPhone tab its memory) — no stand-ins: the override takes each source material's
 position node, so only the real objects match what a frame builds. The
 node's only branch is on the mode (a uniform); per pixel it selects, so
 derivatives and texture reads stay in uniform control flow (WGSL), and
@@ -754,6 +794,11 @@ once per animation frame: anything that renders the frame twice in one
 bridge or a misplaced layer is invisible looking straight down.
 
 ## QA: self-verify, don't ask for screenshots
+
+URL knobs: `?scene=lite` (the CI profile, below), `?gpu=webgl2` (the
+WebGL2 backend where WebGPU exists), `?safety=N` (0–3: the page at that
+safety level, nothing stored — ADR 0046), `?trail=1` (the crash trail's
+card always).
 
 There is a **snapshot system**: the in-app Snapshot panel copies the full
 camera pose + sun time + look sliders as JSON; `__poc.handle.getCameraState()`
