@@ -12,8 +12,8 @@ import {
  * the tile healer (tile-retry.ts). Its listeners are the page's, installed
  * once on first use and never removed: they outlive every app on the page.
  *
- * `leaving` is set on pagehide — a navigation, a reload (the GPU recovery's
- * too) or the bfcache — and cleared when the page comes back from the
+ * `pageLeaving()` holds from pagehide — a navigation, a reload (the GPU
+ * recovery's too) or the bfcache — until the page comes back from the
  * bfcache: the loads a leaving page loses are its own doing, and nothing
  * about them is decided or reported.
  */
@@ -185,13 +185,14 @@ export function reportRetry(note: RetryNote): void {
 }
 
 /**
- * `listener` on every moment the page may have become usable again
- * ("online", visible, "pageshow"); returns its removal.
+ * `listener` on every moment the page may have its network back
+ * ("online", visible again, "pageshow") while it is visible — whatever
+ * navigator.onLine says, which is a hint; returns its removal.
  */
 export function onUsableAgain(listener: () => void): () => void {
   install();
   const wake = () => {
-    if (pageUsable()) {
+    if (pageVisible()) {
       listener();
     }
   };
