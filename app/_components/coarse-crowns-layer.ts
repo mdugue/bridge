@@ -47,7 +47,7 @@ function crownMatrix(c: CoarseCrown, ground: number, out: Matrix4): Matrix4 {
   return out.compose(
     new Vector3(c.x, ground, c.z),
     new Quaternion().setFromAxisAngle(Y_AXIS, c.rot),
-    new Vector3(c.s * W, c.s, c.s * W)
+    new Vector3((c.w ?? c.s) * W, c.s, (c.w ?? c.s) * W)
   );
 }
 
@@ -57,7 +57,7 @@ function paintCrown(c: CoarseCrown, ground: number, col: Color): void {
   if (c.kind === "canopy") {
     crownColor(
       col,
-      { x: c.x, y: ground, z: c.z, rot: c.rot, s: c.s, ndvi: c.ndvi },
+      { x: c.x, y: ground, z: c.z, rot: c.rot, s: c.s, w: c.w, ndvi: c.ndvi },
       v
     );
     return;
