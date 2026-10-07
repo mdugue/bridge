@@ -163,7 +163,11 @@ export function parseHamburgBikes(
     return [];
   }
   const points = new Map<string, StaPoint>();
-  for (const stream of streams as StaStream[]) {
+  // a null or a number in the list is left out, never thrown
+  const objects = (streams as unknown[]).filter(
+    (s): s is StaStream => typeof s === "object" && s !== null
+  );
+  for (const stream of objects) {
     const at = pointOf(stream, epsg);
     const obs = stream.Observations?.[0];
     if (!(at && obs) || typeof obs.result !== "number") {

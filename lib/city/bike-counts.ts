@@ -213,7 +213,8 @@ export function parseBikeCounts(
     return [];
   }
   const [minX, minY, maxX, maxY] = bounds;
-  return (features as RawCounter[])
+  return (features as unknown[])
+    .filter((f): f is RawCounter => typeof f === "object" && f !== null)
     .map((f) => counterOf(f, zone))
     .filter(
       (c): c is BikeCounter =>

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { BikeCounter } from "@/lib/city/bike-counts";
 import type { GroundContext } from "@/lib/city/ground-clamp";
-import { createBikeLayer } from "./bike-layer";
+import { createBikeFeed, createBikeLayer } from "./bike-layer";
 import type { Instances } from "./instancing";
 
 const counter = (
@@ -66,4 +66,56 @@ test("an old count stands grey", () => {
   // grey: the three channels close together
   expect(Math.max(...stale) - Math.min(...stale)).toBeLessThan(0.1);
   layer.dispose();
+});
+
+/** Answers every request with `body` as JSON; counts the calls. */
+function stubFetch(body: unknown): {
+  calls: () => number;
+  restore: () => void;
+} {
+  const real = globalThis.fetch;
+  let calls = 0;
+  // reason: the stub takes the URL only; the helpers pass a string
+  globalThis.fetch = (() => {
+    calls++;
+    return Promise.resolve(new Response(JSON.stringify(body)));
+  }) as unknown as typeof fetch;
+  return {
+    calls: () => calls,
+    restore: () => {
+      globalThis.fetch = real;
+    },
+  };
+}
+
+const settle = () => new Promise((r) => setTimeout(r, 5));
+
+test("an answer the feed cannot parse is no crash: the last counts stay", async () => {
+  const stub = stubFetch({ features: [] });
+  const rejections: unknown[] = [];
+  const onRejection = (reason: unknown) => rejections.push(reason);
+  process.on("unhandledRejection", onRejection);
+  const heard: BikeCounter[][] = [];
+  const feed = createBikeFeed({
+    bounds: [0, 0, 1, 1],
+    epsg: 25_833,
+    feed: {
+      url: () => "/bikes",
+      parse: () => {
+        throw new TypeError("Cannot read properties of null");
+      },
+    },
+    onCounts: (c) => heard.push(c),
+  });
+  try {
+    feed.start();
+    await settle();
+    expect(stub.calls()).toBe(1);
+    expect(heard).toEqual([]);
+    expect(rejections).toEqual([]);
+  } finally {
+    feed.stop();
+    process.off("unhandledRejection", onRejection);
+    stub.restore();
+  }
 });

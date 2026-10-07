@@ -30,7 +30,7 @@ import {
   isStale,
 } from "@/lib/city/bike-counts";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
-import { fetchOptionalJson, isAbortError } from "./fetch-optional";
+import { fetchOptionalJson } from "./fetch-optional";
 import { dataTime, glassColour, glassGrazing } from "./glass";
 import {
   Instances,
@@ -316,19 +316,28 @@ export function createBikeFeed(opts: {
     aborter?.abort();
     const mine = new AbortController();
     aborter = mine;
+    let doc: unknown;
     try {
-      const doc = await fetchOptionalJson<unknown>(
+      doc = await fetchOptionalJson<unknown>(
         opts.feed.url(opts.bounds, opts.epsg),
         mine.signal
       );
-      if (doc !== null && aborter === mine) {
-        opts.onCounts(opts.feed.parse(doc, opts.bounds, opts.epsg));
-      }
-    } catch (err) {
-      if (!isAbortError(err)) {
-        throw err;
-      }
+    } catch {
+      // aborted, or the network failed past the fetch's own retries: a
+      // failed poll is no crash, the columns keep the last counts
+      return;
     }
+    if (doc === null || aborter !== mine) {
+      return;
+    }
+    let counters: BikeCounter[];
+    try {
+      counters = opts.feed.parse(doc, opts.bounds, opts.epsg);
+    } catch {
+      // an answer the parser cannot read: the last counts stay
+      return;
+    }
+    opts.onCounts(counters);
   };
   return {
     start: () => {

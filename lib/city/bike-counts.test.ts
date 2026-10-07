@@ -83,6 +83,14 @@ test("off the site, inactive or malformed counters are dropped, never thrown", (
   expect(parseBikeCounts({ features: "no" }, SITE)).toEqual([]);
 });
 
+test("a null or a number among the features is left out, the others read", () => {
+  const counters = parseBikeCounts(
+    { features: [null, counter({}), 3, "x"] },
+    SITE
+  );
+  expect(counters.map((c) => c.name)).toEqual(["Albertbrücke"]);
+});
+
 test("the time is Dresden's wall clock, whatever the visitor's zone; anything else is no time", () => {
   // winter (CET, +1) and summer (CEST, +2)
   expect(parseCountTime("24.12.2026 18:00:00")?.toISOString()).toBe(
