@@ -165,7 +165,7 @@ export function InquiryStrip({
     return (
       <div className="pointer-events-none absolute inset-x-0 bottom-[calc(8.25rem+0.75rem)] z-20 flex justify-center px-3">
         <nav
-          aria-label="Was am Strahl liegt, von vorn nach hinten"
+          aria-label="Was hier noch gemeint sein kann, vorn zuerst"
           className={cn(
             glass,
             "relative flex max-w-full gap-0.5 overflow-x-auto rounded-full p-1 text-[12px] [scrollbar-width:none]"
@@ -180,7 +180,7 @@ export function InquiryStrip({
   }
   return (
     <nav
-      aria-label="Was am Strahl liegt, von vorn nach hinten"
+      aria-label="Was hier noch gemeint sein kann, vorn zuerst"
       className={cn(
         glass,
         "flex max-h-[40%] min-h-0 shrink-0 flex-col rounded-lg p-1 text-[12px]"
@@ -189,7 +189,7 @@ export function InquiryStrip({
       onPointerLeave={() => onPreview(null)}
     >
       <p className="px-2 pt-1 pb-1 text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
-        Am Strahl · von vorn nach hinten
+        Hier auch · vorn zuerst
       </p>
       <div className="min-h-0 overflow-y-auto overscroll-contain">
         {items.map(row)}

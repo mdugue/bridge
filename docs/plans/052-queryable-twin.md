@@ -213,7 +213,7 @@ each thing once, at most eight, nearest first, the chosen one never cut),
 listed apart from the card, so the card stays about one thing — the way
 an editor's "select the layer under the pointer" list works
 (`inquiry-strip.tsx`): on a desktop a quiet glass list in the card's
-column, under it ("Am Strahl · von vorn nach hinten", an icon, the
+column, under it ("Hier auch · vorn zuerst", an icon, the
 card's title and the distance each, the chosen one marked); on a touch
 screen a row of chips above the folded sheet, scrolled to the chosen
 one. The pointer on a candidate moves the outline to it for as long as
