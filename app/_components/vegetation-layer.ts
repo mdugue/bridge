@@ -318,6 +318,8 @@ export function swapCrownLod(
 
 export const TRUNK_H = 2.4;
 const CROWN_R = 2.1;
+/** The crown geometry's centre above the foot. */
+export const CROWN_CENTRE_Y = TRUNK_H + CROWN_R * 0.5;
 
 /** How far a crown's own lobes move in and out (in the geometry's units,
  *  a crown ~2 across), and how far its top leans (per unit above the
@@ -899,25 +901,46 @@ const TWIG_R: [number, number] = [0.028, 0.01];
  * crown's own reshape and sway bend it with its crown (buildBranchMaterial).
  * About 120 triangles.
  */
+/** How far from the crown's centre a branch may reach (× CROWN_R). */
+const BRANCH_INSIDE = 0.68;
+
 export function buildBranchGeo(): BufferGeometry {
-  const cy = TRUNK_H + CROWN_R * 0.5;
+  const cy = CROWN_CENTRE_Y;
   const foot = new Vector3(0, TRUNK_H - 0.15, 0);
+  const centre = new Vector3(0, cy, 0);
+  // every tip well inside the crown, whose lumps and waves dent it: a twig
+  // end poking through read as a dark speck on the summer crown
+  const inside = (v: Vector3): Vector3 => {
+    const off = v.clone().sub(centre);
+    return off.length() > CROWN_R * BRANCH_INSIDE
+      ? centre.clone().add(off.setLength(CROWN_R * BRANCH_INSIDE))
+      : v;
+  };
   const parts = [
-    limb(foot, new Vector3(0.1, cy + CROWN_R * 0.75, -0.05), 0.075, 0.02),
+    limb(
+      foot,
+      inside(new Vector3(0.1, cy + CROWN_R * 0.75, -0.05)),
+      0.075,
+      0.02
+    ),
   ];
   for (let k = 0; k < LIMBS; k++) {
     const a = (k / LIMBS) * Math.PI * 2 + 0.4;
     const up = cy + CROWN_R * (k % 2 === 0 ? 0.15 : 0.4);
     const reach = CROWN_R * LIMB_REACH;
-    const tip = new Vector3(Math.cos(a) * reach, up, Math.sin(a) * reach);
+    const tip = inside(
+      new Vector3(Math.cos(a) * reach, up, Math.sin(a) * reach)
+    );
     parts.push(limb(foot, tip, ...LIMB_R));
     const fork = foot.clone().lerp(tip, 0.55);
     for (const turn of [0.6, -0.5]) {
       const r = reach * (turn > 0 ? 0.95 : 0.7);
-      const twig = new Vector3(
-        Math.cos(a + turn) * r,
-        up + CROWN_R * (turn > 0 ? 0.3 : 0.55),
-        Math.sin(a + turn) * r
+      const twig = inside(
+        new Vector3(
+          Math.cos(a + turn) * r,
+          up + CROWN_R * (turn > 0 ? 0.3 : 0.55),
+          Math.sin(a + turn) * r
+        )
       );
       parts.push(limb(fork, twig, ...TWIG_R));
     }

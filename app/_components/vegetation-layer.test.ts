@@ -21,6 +21,7 @@ import {
   TRUNK_H,
   updateVegetationLod,
   type VegetationContext,
+  CROWN_CENTRE_Y,
 } from "./vegetation-layer";
 
 /** Instances drawn under a root (each set's `drawCount`). */
@@ -257,6 +258,17 @@ test("the branch fork stays inside the crown", () => {
   crown.computeBoundingBox();
   const b = branch.boundingBox?.clone().expandByScalar(-0.1);
   expect(b && crown.boundingBox?.containsBox(b)).toBe(true);
+  // no twig end pokes through the crown's surface: every vertex nearer the
+  // crown's centre than the crown's nearest vertex
+  const centre = new Vector3(0, CROWN_CENTRE_Y, 0);
+  const v = new Vector3();
+  const radii = (g: typeof branch): number[] => {
+    const pos = g.attributes.position;
+    return Array.from({ length: pos.count }, (_, i) =>
+      v.fromBufferAttribute(pos, i).distanceTo(centre)
+    );
+  };
+  expect(Math.max(...radii(branch))).toBeLessThan(Math.min(...radii(crown)));
   // a few hundred triangles at most: drawn for every near tree
   expect((branch.index?.count ?? 0) / 3).toBeLessThan(200);
 });
