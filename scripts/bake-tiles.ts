@@ -44,7 +44,6 @@ import {
 } from "../lib/city/terrain-geometry";
 import {
   buildTinGeometryData,
-  type TerrainTin,
   TinIndex,
   tinSurface,
 } from "../lib/city/terrain-tin";
@@ -312,12 +311,12 @@ export function tinTerrainMesh(
     burnWalls: false,
     stairMargin: maxError,
   });
-  let tin: TerrainTin;
-  try {
-    tin = tinFromGrid(elevations, dgm.n, dgm.bounds, maxError);
-  } catch {
+  // Only NoData falls back to the grid; any other failure of the TIN is a
+  // bug and fails the build (tinFromGrid keeps its own check as a guard).
+  if (elevations.some((z) => !Number.isFinite(z))) {
     return null;
   }
+  const tin = tinFromGrid(elevations, dgm.n, dgm.bounds, maxError);
   const { positions, indices, minElevation, surfaceIndexCount } =
     buildTinGeometryData(tin, offset);
   const index = new TinIndex(tinSurface(tin));
