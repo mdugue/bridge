@@ -180,12 +180,15 @@ jobs:
             prepare-data-${{ runner.os }}-
       # Turbopack's build cache (.next/cache). It saves ~10 s of compiling, and
       # restoring it costs about as much, so a new entry — ~100 MB and ~16 s
-      # to upload — is saved from main only; PRs start from main's.
+      # to upload — is saved from main only; PRs start from main's. The key
+      # hashes the repo's sources only: a bare `**/*.ts` walks node_modules —
+      # 11 500 files against 480 — after `bun install`. A new source folder
+      # at the root goes into both lists (restore and save stay identical).
       - uses: actions/cache/restore@v6
         if: steps.scope.outputs.run == 'true' || matrix.shard.buildCheck
         with:
           path: .next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.css') }}
+          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('app/**/*.ts', 'app/**/*.tsx', 'app/**/*.css', 'app/**/*.mdx', 'components/**/*.tsx', 'hooks/**/*.ts', 'lib/**/*.ts', 'sites/**/*.ts', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'mdx-components.tsx') }}
           restore-keys: |
             nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
             nextjs-${{ runner.os }}-
@@ -207,7 +210,7 @@ jobs:
         if: matrix.shard.buildCheck && github.event_name == 'push'
         with:
           path: .next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.css') }}
+          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('app/**/*.ts', 'app/**/*.tsx', 'app/**/*.css', 'app/**/*.mdx', 'components/**/*.tsx', 'hooks/**/*.ts', 'lib/**/*.ts', 'sites/**/*.ts', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'mdx-components.tsx') }}
       # Headless runs use Chromium's headless shell, never the full browser:
       # installing the shell alone keeps the cached download to a third. No
       # `--with-deps`: the runner image already carries every library the
