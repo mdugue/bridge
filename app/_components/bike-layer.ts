@@ -318,7 +318,8 @@ export function createBikeFeed(opts: {
   /** performance.now() of the last counts heard */
   let lastRead = Number.NEGATIVE_INFINITY;
   // no document (a test, a worker): never hidden
-  const hidden = () => globalThis.document?.hidden === true;
+  const hidden = () =>
+    typeof document === "undefined" ? false : document.hidden;
   const read = async () => {
     if (hidden()) {
       return;
