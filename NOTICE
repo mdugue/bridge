@@ -30,6 +30,10 @@ data and stays under the licence of its source:
 
   - GTFS timetable: DELFI e.V. via gtfs.de, CC BY 4.0.
 
+  - Mapillary's detected objects (Dresden's street lamps and litter bins
+    OpenStreetMap lacks, data/<site>/dlm/mly_*.geojson): Mapillary,
+    CC BY-SA 4.0. Kept in their own files, apart from the ODbL layers.
+
 Every source with its licence and required credit is listed in
 docs/guide/en/data-sources.md, section "Licences and credits" (in German:
 docs/guide/de/data-sources.md, "Lizenzen und Quellenvermerke").

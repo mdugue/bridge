@@ -20,6 +20,7 @@ Lizenzen) beschreibt [Woher die Daten kommen](./data-sources.md).
 | Schuppen, weitere Bäume, Heckenhöhen | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁴ | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁵ |
 | Vegetationsfarbe (Vitalität) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟡 DOP RGB (GLI) ⁶ | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) |
 | Denkmäler, Brunnen | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
+| Stadtmobiliar, Lampen, Treppen, Mauern, Zäune, Markierungen, Beläge, Sportplätze, Straßenbahn, Anleger | 🔵 OSM + Mapillary | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM |
 | Datenebene: Kfz-Verkehr | 🟢 Zählungen der Stadt | 🟡 Straßenverkehrszählung ⁷ | 🟢 Zählungen der Stadt (Hauptstraßen) | ⚪ — ⁸ | 🟡 Straßenverkehrszählung ⁷ | ⚪ — ⁸ | 🟡 Straßenverkehrszählung ⁷ | 🟢 Zählungen der Stadt |
 | Datenebene: Radverkehr live | 🟢 Zählstellen der Stadt | ⚪ — ⁹ | 🟢 Zählstellen der Stadt | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ |
 | Datenebene: Straßenbahnen (Fahrplan) | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM |
@@ -59,7 +60,6 @@ dafür:
 - **Fassadenmaterial**: 🔵 OSM + Nachbarschaft
 - **Türme, Schornsteine, fehlende Gebäude**: 🟢 DOM1 + OSM
 - **Wahrzeichen**: 🟢 Wikidata + OSM
-- **Stadtmobiliar, Lampen, Treppen, Mauern, Zäune, Markierungen, Beläge, Sportplätze, Straßenbahn, Anleger**: 🔵 OSM
 - **Himmelslicht, Fernschatten**: 🟢 DGM1 + LoD2
 
 *Diese Seite wird aus den Standort- und Anbieter-Konfigurationen erzeugt

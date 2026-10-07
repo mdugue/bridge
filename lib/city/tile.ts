@@ -186,6 +186,10 @@ const ARTIFACTS = {
     sound: true,
   },
   furniture: { file: named("furniture", "geojson"), dressing: true, osm: true },
+  // Optional: the lamps and bins OSM lacks, from Mapillary's detected
+  // objects (pipeline/bake/mapillary.py, CC BY-SA — its own file, never
+  // merged into OSM's); stood with the lamps and the furniture.
+  mly: { file: named("mly", "geojson"), dressing: true },
   rail: { file: named("rail", "geojson"), dressing: true },
   bridge: {
     file: named("bridge", "geojson"),

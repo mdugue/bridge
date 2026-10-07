@@ -13,6 +13,7 @@ import {
   firstText,
   type InquiryCard,
   metres,
+  mapillarySource,
   osmSource,
   positionKey,
   sourceLine,
@@ -51,10 +52,11 @@ export interface HedgeInquiry {
   width?: number;
 }
 
-/** A street lamp (OSM). */
+/** A street lamp (OSM, or Mapillary's: `src`). */
 export interface LampInquiry {
   kind: "lamp";
   position: [number, number];
+  src?: "mly";
   tile: string;
 }
 
@@ -193,7 +195,11 @@ export function lampCard(
     facts: factLines([["Mast", "5 m, angenommen"]]),
     id: positionKey(l.position),
     idLabel: "Lage",
-    sources: [osmSource(provenance, ["Laterne"], "trees")],
+    sources: [
+      l.src === "mly"
+        ? mapillarySource(["Laterne"])
+        : osmSource(provenance, ["Laterne"], "trees"),
+    ],
   };
 }
 
@@ -271,7 +277,11 @@ export function furnitureCard(
     facts,
     id: positionKey(f.position),
     idLabel: "Lage",
-    sources: [osmSource(provenance, [title], "trees")],
+    sources: [
+      p.src === "mly"
+        ? mapillarySource([title])
+        : osmSource(provenance, [title], "trees"),
+    ],
   };
 }
 

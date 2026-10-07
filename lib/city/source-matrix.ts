@@ -266,7 +266,8 @@ const ROWS: Row[] = [
       en: "Street furniture, lamps, stairs, walls, fences, markings, paving, sports grounds, trams, landing stages",
       de: "Stadtmobiliar, Lampen, Treppen, Mauern, Zäune, Markierungen, Beläge, Sportplätze, Straßenbahn, Anleger",
     },
-    cell: () => osm(),
+    // Mapillary fills in the lamps and bins OSM lacks (Site.mapillary)
+    cell: (s) => (s.mapillary ? osm(both("OSM + Mapillary")) : osm()),
   },
   {
     label: {

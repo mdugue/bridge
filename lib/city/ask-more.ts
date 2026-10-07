@@ -273,6 +273,7 @@ export function pointItems(
       kind: "lamp",
       tile: ctx.tile,
       position: [at[0], at[1]],
+      ...(f.properties?.src ? { src: f.properties.src } : {}),
     });
   }
   for (const f of furniture) {

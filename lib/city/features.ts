@@ -130,10 +130,18 @@ export interface LowVegFeature {
 export type LowVegSource = "osm" | "osm+lsc";
 
 /** OSM street lamps (pipeline/bake/lamps.py, ODbL); the post height is a
- *  lamp-layer constant, so no property is read. */
+ *  lamp-layer constant, so no property is read but the source (`src`:
+ *  "mly" for Mapillary's, lib/city/mapillary.ts). */
 export interface LampFeature {
   geometry: PointGeometry;
-  properties: Record<string, unknown> | null;
+  properties: { src?: "mly" } | null;
+}
+
+/** Street lamps and litter bins OSM lacks, detected by Mapillary
+ *  (pipeline/bake/mapillary.py, CC BY-SA 4.0). */
+export interface MapillaryFeature {
+  geometry: PointGeometry;
+  properties: { k: "bin" | "lamp" } | null;
 }
 
 /** The street furniture the bake keeps (pipeline/bake/furniture.py). */
@@ -195,6 +203,8 @@ export interface FurnitureFeature {
     lit?: boolean;
     metal?: boolean;
     n?: number;
+    /** "mly": Mapillary's, not OSM's (lib/city/mapillary.ts) */
+    src?: "mly";
   } | null;
 }
 

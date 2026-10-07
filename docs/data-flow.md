@@ -227,8 +227,8 @@ flowchart LR
 | **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy **+** LSC crown peaks outside the mask (every tile, thinned against the cadastre and the OSM trees) | DLM class raster *(gates)* · the LSC small structures (a canopy or scan point in or within 0.5 m of one is its roof, dropped at build time by `scripts/prepare-data.ts`) · DOP NDVI (crown colour; the GLI from RGB where the DOP has no near-IR, Munich) · without a DLM the OSM bridge decks keep the canopy off (`rail` runs first) · the scene date (a generic deciduous year: autumn colour, bare crowns; hedges stay green) · the terrain level shown (the fine one draws every tree, the coarse one a fixed third, √3 wider, baked by `scripts/coarse-crowns.ts` into `crowns_<t>.crw.gz`) | `vegetation-layer.ts`, `crown-season.ts`, `coarse-crowns-layer.ts`; baked by `pipeline/bake/landcover.py` + `canopy.py` + `ndvi.py` + `lowveg.py` |
 | **Cultivated land** | OSM `landuse=allotments` (+ `leisure=garden` plots), `orchard`, `vineyard` | the colony raster (beds in the terrain pass) · OSM `natural=tree` in an orchard, else an 8 m grid, less the spots a canopy, scan or inventory tree already fills · DGM1 (a vineyard's rows along the contour, over the whole vineyard from every tile's DGM; ground-clamp) | `cultivated-layer.ts`, `lib/city/cultivated.ts`, `tile-stream.ts`; baked by `pipeline/bake/cultivated.py` |
 | **OSM hedges** | OSM `barrier=hedge` lines (Geofabrik extract) | LSC (measured height) · DGM1 (ground-clamp); tag / 1.5 m where no LAZ. The bake's laser-scan-only hedges and shrubs are not shipped (🗃️ in the ledger) | `low-vegetation-layer.ts`; baked by `pipeline/bake/lowveg.py` |
-| **Street lamps** | OSM `highway=street_lamp` (Geofabrik extract) | DGM1 (ground-clamp); gated off water + railway | baked by `pipeline/bake/lamps.py`; `lamp-layer.ts` |
-| **Street furniture & playgrounds** | OSM `amenity=bench/waste_basket/bicycle_parking/post_box/clock/drinking_water`, `leisure=picnic_table`, `barrier=bollard` (+ `height`, `material`), `advertising=column` (+ `lit`), `highway=traffic_signals` (+ `traffic_signals:direction`), `emergency=fire_hydrant` (+ `fire_hydrant:type`), `leisure=playground` outlines + `playground=*` equipment, stops with `shelter=yes` and bus stops without (their sign) (Geofabrik extract; the committed files from BBBike's Dresden cut) | OSM highways (the bearing an untagged object faces; a signal's travel direction) · the DLM road class (the kerb a signal or hydrant sign in the carriageway moves to) · OSM building outlines (wall clocks) · DGM1 (ground-clamp); gated off water, railway and bridge decks | baked by `pipeline/bake/furniture.py`; `furniture-layer.ts`, `lib/city/furniture.ts` |
+| **Street lamps** | OSM `highway=street_lamp` (Geofabrik extract) **+** Mapillary's detected street lights where OSM has none within 8 m (Dresden, `Site.mapillary`; CC BY-SA 4.0, its own file `mly_<t>.geojson`) | DGM1 (ground-clamp); gated off water + railway (Mapillary's also off LoD2 footprints and bridge decks, out of the carriageway to the kerb) | baked by `pipeline/bake/lamps.py` + `mapillary.py`; `lamp-layer.ts`, `lib/city/mapillary.ts` |
+| **Street furniture & playgrounds** | OSM `amenity=bench/waste_basket/bicycle_parking/post_box/clock/drinking_water`, `leisure=picnic_table`, `barrier=bollard` (+ `height`, `material`), `advertising=column` (+ `lit`), `highway=traffic_signals` (+ `traffic_signals:direction`), `emergency=fire_hydrant` (+ `fire_hydrant:type`), `leisure=playground` outlines + `playground=*` equipment, stops with `shelter=yes` and bus stops without (their sign) (Geofabrik extract; the committed files from BBBike's Dresden cut) | OSM highways (the bearing an untagged object faces; a signal's travel direction) · the DLM road class (the kerb a signal or hydrant sign in the carriageway moves to) · OSM building outlines (wall clocks) · DGM1 (ground-clamp); gated off water, railway and bridge decks · **+** Mapillary's detected trash cans where OSM has no bin within 8 m (as the lamps above) | baked by `pipeline/bake/furniture.py` + `mapillary.py`; `furniture-layer.ts`, `lib/city/furniture.ts`, `lib/city/mapillary.ts` |
 | **Fountains & monuments** | Basis-DLM `sie03_p` monument points (`BWF` 1750/1770/1780, official names) | OSM `amenity=fountain` (basin outlines, fountains the DLM lacks, which DLM monument is a fountain) · DOM1 − DGM1 (the sculpture's measured form) · DGM1 (seated over the highest ground under a basin) | baked by `pipeline/bake/monuments.py`; `monument-layer.ts`, `lib/city/monuments.ts` |
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel; trams left to OSM); without a DLM (Hamburg, Berlin) OSM `railway=rail/light_rail/subway/narrow_gauge` with `tracks` and `electrified`, its ballast the ways' beds buffered | DGM1 (the level along the whole line: ground, deck, span — ADR 0041) · Basis-DLM tunnels `ver06` `BWF=1870` (a stretch > 15 m within 2 m of one is underground: cut; OSM: `tunnel`, `location=underground`) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` (`rail_osm.py` without a DLM) |
 | **Trams** | OSM `railway=tram` (each track, with its `gauge`; standard gauge where untagged), `power=catenary_mast` (the masts within 15 m of a tram track), the OSM building outlines (facades for the rosette spans), `railway=tram_stop` + the platforms (the stop signs) | DLM class raster (street — road, path or built-up — vs lawn vs ballast bed; no way in a tunnel) · DOP NDVI (lawn bed) · DGM1 (drape) · the bridge decks (a track tagged `bridge` rides the deck) | `tram-layer.ts`, `lib/city/tram.ts` (wire stations and sag); baked by `pipeline/bake/tram.py` |
@@ -278,6 +278,7 @@ flowchart LR
     iDGM["DGM1 GeoTIFF<br/>data/&lt;site&gt;/dgm"]
     iCJ["LoD2 CityJSON<br/>data/&lt;site&gt;/cityjson"]
     iWD["Wikidata bridges · landmarks<br/>wikidata/*.json"]
+    iMLY["Mapillary objects<br/>mapillary/*.json"]
     iVM["Verkehrsmengen<br/>traffic/*.geojson"]
     iGTFS["GTFS feed<br/>gtfs/nv_free.zip"]
   end
@@ -292,6 +293,7 @@ flowchart LR
     bLAMP["lamps.py"]
     bMON["monuments.py"]
     bFURN["furniture.py"]
+    bMLY["mapillary.py"]
     bWALL["walls.py"]
     bSTR["stairs.py"]
     bRAIL["rail.py + bridge.py<br/>(rail_osm.py without a DLM)"]
@@ -321,6 +323,7 @@ flowchart LR
     dLAMP["lamps"]
     dMON["monuments"]
     dFURN["furniture"]
+    dMLY["mly"]
     dWALL["walls · fences · gates"]
     dSTR["stairs"]
     dRAIL["rail · railarea<br/>bridge · platform"]
@@ -372,6 +375,12 @@ flowchart LR
   iOSM ==> bFURN
   dCLS ==>|gates| bFURN
   bFURN ==> dFURN
+  iMLY ==>|"street lights · trash cans"| bMLY
+  dLAMP -. "what OSM has" .-> bMLY
+  dFURN -. "what OSM has" .-> bMLY
+  dCLS ==>|gates| bMLY
+  iCJ -. "footprints" .-> bMLY
+  bMLY ==> dMLY
   iOSM ==> bWALL ==> dWALL
   iOSM ==> bSTR ==> dSTR
   iDGM -. "landings" .-> bSTR

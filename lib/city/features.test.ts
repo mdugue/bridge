@@ -12,6 +12,7 @@ import type {
   FurnitureFeature,
   LampFeature,
   LowVegFeature,
+  MapillaryFeature,
   MonumentFeature,
   RailFeature,
   RiversideFeature,
@@ -235,6 +236,14 @@ test.each(cases)("%s: lamps are points", (_, a) => {
   for (const f of load<LampFeature>(a.lamps)) {
     expect(f.geometry.type).toBe("Point");
     expect(isPoint2(f.geometry.coordinates)).toBe(true);
+  }
+});
+
+test.each(cases)("%s: Mapillary's objects are lamp and bin points", (_, a) => {
+  for (const f of load<MapillaryFeature>(a.mly)) {
+    expect(f.geometry.type).toBe("Point");
+    expect(isPoint2(f.geometry.coordinates)).toBe(true);
+    expect(["lamp", "bin"]).toContain(f.properties?.k ?? "");
   }
 });
 

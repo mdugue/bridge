@@ -104,6 +104,12 @@ export function osmSource(
     .join(" · ");
 }
 
+/** The source line of an object Mapillary detected in street photos
+ *  (pipeline/bake/mapillary.py). */
+export function mapillarySource(what: readonly string[]): string {
+  return `${what.join(", ")}: Mapillary, in Straßenfotos erkannt · Mapillary, CC BY-SA 4.0`;
+}
+
 /** The credits a card names where the provenance manifest has none (not
  *  yet arrived, or failed): the site's own, never another Land's. */
 export interface CardCredits {

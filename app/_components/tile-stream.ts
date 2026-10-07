@@ -22,6 +22,7 @@ import type {
   CanopyExtraFeature,
   CultivatedFeature,
   FurnitureFeature,
+  MapillaryFeature,
   LampFeature,
   LowVegFeature,
   MonumentFeature,
@@ -52,6 +53,7 @@ import { moreSets } from "@/lib/city/ask-more";
 import { askSets, type AskSet } from "@/lib/city/ask-solids";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
+import { mapillaryParts } from "@/lib/city/mapillary";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { type CityLayer, dressCity } from "./city-layer";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
@@ -888,9 +890,10 @@ async function buildDressing(
     rows,
     canopy,
     ndviAt,
-    lamps,
+    lamps: osmLamps,
     monuments,
-    furniture,
+    furniture: osmFurniture,
+    mly,
     rails,
     bridges,
     ballast,
@@ -912,6 +915,8 @@ async function buildDressing(
     lamps: get<LampFeature>("lamps"),
     monuments: get<MonumentFeature>("monuments"),
     furniture: get<FurnitureFeature>("furniture"),
+    // the lamps and bins OSM lacks, Mapillary's (lib/city/mapillary.ts)
+    mly: get<MapillaryFeature>("mly"),
     rails: get<RailFeature>("rail"),
     bridges: get<BridgeFeature>("bridge"),
     ballast: get<AreaFeature>("railarea"),
@@ -932,6 +937,9 @@ async function buildDressing(
     river: get<RiversideFeature>("riverside"),
     traffic: get<TrafficFeature>("traffic"),
   });
+  const fromMapillary = mapillaryParts(mly);
+  const lamps = [...osmLamps, ...fromMapillary.lamps];
+  const furniture = [...osmFurniture, ...fromMapillary.furniture];
   const sport = buildSport(terrain, sportTable, ctx);
   await nextTask();
   // Rails may run past the tile edge: they sample the ground over

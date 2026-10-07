@@ -18,6 +18,7 @@ from . import (
     landcover,
     landmarks,
     lowveg,
+    mapillary,
     markings,
     monuments,
     ndvi,
@@ -58,6 +59,9 @@ STEPS = {
     "lamps": lamps.run,
     "monuments": monuments.run,
     "furniture": furniture.run,
+    # After the lamps and the furniture: Mapillary's lamps and bins where
+    # OSM has none.
+    "mapillary": mapillary.run,
     "walls": walls.run,
     "stairs": stairs.run,
     "surface": surface.run,

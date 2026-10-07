@@ -211,6 +211,12 @@ export interface Site {
   /** the city's street-tree register, where it publishes one openly */
   treeCadastre?: TreeCadastre;
   /**
+   * Whether the site adds the street lamps and litter bins OSM lacks from
+   * Mapillary's detected objects (pipeline/bake/mapillary.py; CC BY-SA, so
+   * its credit joins the footer).
+   */
+  mapillary?: boolean;
+  /**
    * The id of the viewpoint the player starts at. It must lie on the first
    * tile: that one is always streamed (the lite profile streams it alone)
    * and the boot waits for it.
@@ -337,12 +343,16 @@ export const TRAFFIC_HOURS_CREDIT =
 export const TIMETABLE_CREDIT =
   "Straßenbahn-Fahrplan: DELFI e.V. via gtfs.de, CC BY 4.0";
 
+/** The credit of Mapillary's lamps and bins (`Site.mapillary`). */
+export const MAPILLARY_CREDIT = "Lampen, Mülleimer: Mapillary, CC BY-SA 4.0";
+
 /** The credits of the site's registers and data layers, each a
  *  "what: holder, licence" line. */
 function dataCredits(site: Site): string[] {
   const layers = site.dataLayers;
   return [
     ...(site.treeCadastre ? [site.treeCadastre.credit] : []),
+    ...(site.mapillary ? [MAPILLARY_CREDIT] : []),
     ...(layers?.traffic ? [layers.traffic.credit, TRAFFIC_HOURS_CREDIT] : []),
     ...(layers?.bikes ? [layers.bikes.credit] : []),
     ...(layers?.trams ? [TIMETABLE_CREDIT] : []),
@@ -361,6 +371,7 @@ export function siteAttribution(site: Site): string[] {
     site.provider.credit,
     osmCredit(site),
     ...(site.treeCadastre ? [treeCredit(site.treeCadastre)] : []),
+    ...(site.mapillary ? [MAPILLARY_CREDIT] : []),
     ...(data.length > 0 ? [data.join(" · ")] : []),
   ];
 }

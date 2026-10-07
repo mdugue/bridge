@@ -41,7 +41,7 @@ from typing import Protocol
 
 from rasterio.enums import Resampling
 
-from . import bridge, cadastre, landmarks, traffic_sources, transit
+from . import bridge, cadastre, landmarks, mapillary, traffic_sources, transit
 from .citygml import write_cityjson
 from .common import Tile, dlm_complete
 from .net import download
@@ -216,6 +216,7 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> li
             _step("laser scan", tile, laz, lambda: _place_laz(source.lsc(ctx, tile), laz))
     _try("tree cadastre", tile, lambda: cadastre.fetch(tile))
     _try("traffic counts", tile, lambda: traffic_sources.fetch(tile))
+    _try("Mapillary objects", tile, lambda: mapillary.fetch(tile))
     _try(
         "Wikidata bridges",
         tile,
