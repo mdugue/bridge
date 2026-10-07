@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDownIcon, ExternalLinkIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -79,6 +79,23 @@ export function InquiryData({
   const [open, setOpen] = useState(false);
   const [near, setNear] = useState(false);
   const mod = useLineage(open || near);
+  const root = useRef<HTMLDivElement | null>(null);
+  // Opened, the section scrolls up into the card's own scroll (never an
+  // ancestor's: scrollIntoView would also shift the sheet's popup).
+  useEffect(() => {
+    const el = root.current;
+    const scroller = el?.closest<HTMLElement>("[data-inquiry-scroll]");
+    if (!(open && el && scroller)) {
+      return;
+    }
+    // once the panel has grown: before, there is nothing to scroll to
+    const id = window.setTimeout(() => {
+      const top =
+        el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      scroller.scrollBy({ top: Math.max(top - 8, 0), behavior: "smooth" });
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [open]);
   const entries = useMemo(
     () => mod?.lineage(inquiry, provenance, site) ?? null,
     [mod, inquiry, provenance, site]
@@ -88,6 +105,7 @@ export function InquiryData({
       className="mt-3 border-t border-border pt-2"
       onOpenChange={setOpen}
       open={open}
+      ref={root}
     >
       <CollapsibleTrigger
         className="group/data flex w-full items-center gap-1.5 text-left text-[11px] text-muted-foreground hover:text-foreground"

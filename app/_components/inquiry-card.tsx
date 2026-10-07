@@ -164,12 +164,21 @@ export function InquiryCard({
   return (
     <aside
       aria-labelledby="inquiry-title"
-      className="absolute top-4 left-4 z-20 w-[min(22rem,calc(100%-2rem))] rounded-lg bg-card p-4 text-card-foreground shadow-lg ring-1 ring-foreground/10 select-text"
+      className="absolute top-4 left-4 z-20 flex max-h-[calc(100%-2rem)] w-[min(22rem,calc(100%-2rem))] flex-col rounded-lg bg-card text-card-foreground shadow-lg ring-1 ring-foreground/10 select-text"
       data-testid="inquiry-card"
       data-variant="card"
     >
-      <CardHeader card={card} onClose={onClose} />
-      <CardDetails card={card} inquiry={inquiry} provenance={provenance} />
+      <div className="shrink-0 px-4 pt-4">
+        <CardHeader card={card} onClose={onClose} />
+      </div>
+      {/* the head stays; facts and Daten scroll below it, the wheel there
+          scrolls the card, not the scene */}
+      <div
+        className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-4"
+        data-inquiry-scroll
+      >
+        <CardDetails card={card} inquiry={inquiry} provenance={provenance} />
+      </div>
     </aside>
   );
 }
@@ -274,7 +283,13 @@ function InquirySheet({
         data-variant="sheet"
         ref={popup}
       >
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]">
+        {/* The popup is the whole screen tall and unfolds to three
+            quarters of it: the scroll ends where the screen does, or the
+            last quarter of the Daten scrolled out of reach below it. */}
+        <div
+          data-inquiry-scroll
+          className="flex max-h-[calc(75dvh-1.75rem)] min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]"
+        >
           <CardHeader
             card={card}
             closeSlot={<SheetClose />}
