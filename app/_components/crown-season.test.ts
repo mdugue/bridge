@@ -4,7 +4,6 @@ import {
   IcosahedronGeometry,
   type Material,
   MeshBasicNodeMaterial,
-  DoubleSide,
   MeshStandardNodeMaterial,
 } from "three/webgpu";
 import { TREE_GENERA } from "@/lib/city/tree-season";
@@ -12,7 +11,6 @@ import {
   createSeasonClock,
   type CrownSeasonKey,
   crownWarmup,
-  DEFAULT_OPEN,
   seasonCrowns,
 } from "./crown-season";
 import { Instances, isInstances } from "./instancing";
@@ -49,14 +47,6 @@ test("both LOD sets share one tint buffer and one leaf cover over the crown's ow
   expect(cheap.geometry.getAttribute("position")).toBe(
     geo.getAttribute("position")
   );
-});
-
-test("each crown's gaps in full leaf ride with it, shared by both LOD sets", () => {
-  const { cheap, rich } = crowns([{ ...lime, open: 0.45 }, pine]);
-  const gaps = cheap.geometry.getAttribute("aGap");
-  expect(rich.geometry.getAttribute("aGap")).toBe(gaps);
-  expect(gaps.array[0]).toBeCloseTo(0.45);
-  expect(gaps.array[1]).toBeCloseTo(DEFAULT_OPEN);
 });
 
 test("summer changes nothing; winter bares the deciduous crowns and thins their shadow", () => {
@@ -163,15 +153,15 @@ test("the warm-up stands in for both crown variants, laid out as a crown", () =>
   expect(freed).toBe(0); // the materials are the scene's, not the warm-up's
 });
 
-test("both crowns mask their gaps (the shadow pass honours it), double-sided, and twigs lose the glow", () => {
+test("only the seasonal crown masks (the shadow pass honours it), and twigs lose the glow", () => {
   const { leafy, bare } = sceneCrowns();
   expect(leafy).toBeInstanceOf(MeshStandardNodeMaterial);
   expect(bare).toBeInstanceOf(MeshStandardNodeMaterial);
   const plain = leafy as MeshStandardNodeMaterial;
   const seasonal = bare as MeshStandardNodeMaterial;
+  expect(plain.maskNode).toBeNull();
+  expect(seasonal.maskNode).not.toBeNull();
   for (const m of [plain, seasonal]) {
-    expect(m.maskNode).not.toBeNull();
-    expect(m.side).toBe(DoubleSide);
     expect(m.positionNode).not.toBeNull();
     // the cast shadow stays rigid: no sway in the shadow pass
     expect(m.castShadowPositionNode).not.toBeNull();

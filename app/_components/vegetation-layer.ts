@@ -1,6 +1,7 @@
 import {
+  Box3,
   BoxGeometry,
-  DoubleSide,
+  BufferAttribute,
   type BufferGeometry,
   Color,
   CylinderGeometry,
@@ -10,11 +11,11 @@ import {
   Matrix4,
   MeshStandardNodeMaterial,
   Object3D,
-  Quaternion,
   type UniformNode,
   Vector3,
 } from "three/webgpu";
 import {
+  attribute,
   cameraPosition,
   clamp,
   distance,
@@ -22,7 +23,6 @@ import {
   float,
   floor,
   fract,
-  frontFacing,
   length,
   materialColor,
   max,
@@ -32,7 +32,6 @@ import {
   positionGeometry,
   positionWorld,
   pow,
-  select,
   sin,
   smoothstep,
   uniform,
@@ -93,6 +92,7 @@ import {
 import { fetchOptionalBinary } from "./fetch-optional";
 import {
   Instances,
+  instanceFloat,
   instanceMatrix,
   instancePosition,
   instanceTint,
@@ -318,14 +318,50 @@ export function swapCrownLod(
 
 export const TRUNK_H = 2.4;
 const CROWN_R = 2.1;
+/** The generic crown's centre above the ground, in geometry units: what
+ *  the clumps' offsets (`aClump`) are measured from. */
+export const CROWN_CENTRE_Y = TRUNK_H + CROWN_R * 0.5;
 
 /** How far a crown's own lobes move in and out (in the geometry's units,
  *  a crown ~2 across), and how far its top leans (per unit above the
  *  trunk). */
 const SHAPE_BULGE = 0.62;
-/** The crown's inside, seen through a gap: this much of its light. */
-const INSIDE_SHADE = 0.55;
 const SHAPE_LEAN = 0.09;
+
+/**
+ * A crown's air (`aGap`, crown-season.ts `CrownSeasonKey.open`) moves its
+ * leaf clumps apart: each clump's centre out from the crown's by
+ * open × CLUMP_SPREAD of its offset, the clump itself shrunk about its
+ * centre by open × CLUMP_SHRINK — so the crown keeps its outline while sky
+ * opens between the clumps. At the default 0.3 a ring clump's neighbour is
+ * about a tenth of a crown radius away; at 0 the clumps overlap into one
+ * lumpy crown.
+ */
+const CLUMP_SPREAD = 0.7;
+const CLUMP_SHRINK = 0.45;
+/** How much of a clump vertex's normal is its own clump's (the rest the
+ *  crown's): each clump reads round, the crown still as one form. */
+const CLUMP_OWN_NORMAL = 0.55;
+/**
+ * The near crowns' clumps, around the crown's centre in crown radii:
+ * [x, y, z, radius]. A top, a ring of three above the middle and a ring of
+ * three below, turned against each other so no gap runs straight through.
+ */
+const CLUMPS: [number, number, number, number][] = [
+  [0, 0.55, 0, 0.62],
+  ...[30, 150, 270].map((deg): [number, number, number, number] => [
+    Math.cos((deg * Math.PI) / 180) * 0.55,
+    0.18,
+    Math.sin((deg * Math.PI) / 180) * 0.55,
+    0.58,
+  ]),
+  ...[90, 210, 330].map((deg): [number, number, number, number] => [
+    Math.cos((deg * Math.PI) / 180) * 0.6,
+    -0.26,
+    Math.sin((deg * Math.PI) / 180) * 0.6,
+    0.55,
+  ]),
+];
 
 /**
  * Recomputes a crown geometry's bounding sphere and grows it by the most
@@ -447,76 +483,105 @@ export function buildCrownGeo(detail = 2): BufferGeometry {
     nrm.setXYZ(i, v.x, v.y, v.z);
   }
   nrm.needsUpdate = true;
-  return padCrownSphere(g);
+  return padCrownSphere(oneMass(g));
 }
 
 /**
- * Rich multi-tuft crown for NEAR trees (LOD): a squashed core plus heavily
- * overlapping, elongated lobes merged into one mass, then RADIAL normals. ~18×
- * the cheap crown's triangles, so it is only ever shown within LOD_NEAR_M. ONE
- * shared geometry (fixed seed) — instance rotation hides the repetition.
+ * The near crowns: seven leaf clumps (CLUMPS), each an icosphere of
+ * `detail`, fitted to the lumpy crown's box so every instance matrix and
+ * the register's fits stay right. Each vertex carries its clump's centre
+ * (`aClump`), so the material moves the clumps apart by the tree's air
+ * (`crownClumps`): sky between clumps of leaves, the gaps a crown really
+ * has, at the scale of its limbs rather than of pixels. The normals lean
+ * out of each clump and out of the crown (CLUMP_OWN_NORMAL). Detail 1
+ * (7 × 80 tris) is the mid tier and the register's cheap crown, detail 2
+ * (7 × 320) the rich tier.
  */
-export function buildCrownGeoRich(): BufferGeometry {
-  const cy = TRUNK_H + CROWN_R * 0.5;
+export function buildClumpCrownGeo(detail: 1 | 2): BufferGeometry {
   const R = CROWN_R;
-  const up = new Vector3(0, 1, 0);
-  const dir = new Vector3();
-  const at = new Vector3();
-  const scl = new Vector3();
-  const q = new Quaternion();
-  const mtx = new Matrix4();
-  const parts: BufferGeometry[] = [];
-  let k = 0;
-  const rnd = () => hash((k++ + 1) * 1.37 + 0.19);
-
-  const core = new IcosahedronGeometry(R * 0.72, 1);
-  core.scale(1.1, 0.82, 1.1);
-  parts.push(core);
-
-  const addLobes = (
-    count: number,
-    distLo: number,
-    distHi: number,
-    radLo: number,
-    radHi: number,
-    elong: number,
-    yLo: number,
-    yHi: number
-  ): void => {
-    for (let i = 0; i < count; i++) {
-      const ny = yLo + rnd() * (yHi - yLo);
-      dir.set(rnd() * 2 - 1, ny, rnd() * 2 - 1).normalize();
-      at.copy(dir).multiplyScalar(R * (distLo + rnd() * (distHi - distLo)));
-      at.y += R * 0.06;
-      const rad = R * (radLo + rnd() * (radHi - radLo));
-      const long = 1 + rnd() * elong; // stretch along the lobe's reach
-      scl.set(1 / Math.sqrt(long), long, 1 / Math.sqrt(long));
-      q.setFromUnitVectors(up, dir);
-      mtx.compose(at, q, scl);
-      const b = new IcosahedronGeometry(rad, 1);
-      b.applyMatrix4(mtx);
-      parts.push(b);
+  const v = new Vector3();
+  const own = new Vector3();
+  const parts = CLUMPS.map(([x, y, z, r], k) => {
+    const ball = new IcosahedronGeometry(R * r, detail);
+    ball.deleteAttribute("uv");
+    // each clump a little its own: turned, and a touch squashed or tall
+    ball.rotateY(hash(k * 2.31 + 0.7) * Math.PI * 2);
+    ball.scale(1, 0.9 + hash(k * 1.73 + 0.3) * 0.2, 1);
+    ball.translate(x * R, y * R, z * R);
+    const centre = new Float32Array(ball.attributes.position.count * 4);
+    for (let i = 0; i < ball.attributes.position.count; i++) {
+      centre.set([x * R, y * R, z * R, 1], i * 4);
     }
-  };
-  addLobes(5, 0.24, 0.44, 0.5, 0.66, 0.4, -0.3, 1.15); // big fused lobes
-  addLobes(4, 0.34, 0.52, 0.4, 0.54, 0.35, -0.7, 0.05); // low skirt
-  addLobes(8, 0.46, 0.66, 0.24, 0.34, 0.3, -0.15, 1.05); // silhouette bumps
-
+    ball.setAttribute("aClump", new BufferAttribute(centre, 4));
+    return ball;
+  });
   const merged = mergeGeometries(parts);
   if (!merged) {
     return buildCrownGeo(); // attributes always match here; fall back defensively
   }
-  merged.scale(1, 1.04, 1);
-  merged.translate(0, cy, 0);
+  // fit the lumpy crown's box: same base, top and width
+  const like = buildCrownGeo();
+  like.computeBoundingBox();
+  merged.computeBoundingBox();
+  const want = like.boundingBox;
+  const got = merged.boundingBox;
+  like.dispose();
+  if (!want || !got) {
+    return padCrownSphere(merged);
+  }
+  const across = (b: Box3): number =>
+    Math.max(b.max.x - b.min.x, b.max.z - b.min.z);
+  const k = across(want) / across(got);
+  const ky = (want.max.y - want.min.y) / (got.max.y - got.min.y);
+  const cy = CROWN_CENTRE_Y;
   const pos = merged.attributes.position;
   const nrm = merged.attributes.normal;
-  const v = new Vector3();
+  const clump = merged.attributes.aClump;
   for (let i = 0; i < pos.count; i++) {
+    // positions about the crown's centre, so want's centre lands on it
+    const yNew = (pos.getY(i) - (got.min.y + got.max.y) / 2) * ky;
+    pos.setXYZ(
+      i,
+      pos.getX(i) * k,
+      yNew + (want.min.y + want.max.y) / 2,
+      pos.getZ(i) * k
+    );
+    clump.setXYZW(
+      i,
+      clump.getX(i) * k,
+      (clump.getY(i) + cy - (got.min.y + got.max.y) / 2) * ky +
+        (want.min.y + want.max.y) / 2 -
+        cy,
+      clump.getZ(i) * k,
+      1
+    );
+  }
+  for (let i = 0; i < pos.count; i++) {
+    own
+      .set(
+        pos.getX(i) - clump.getX(i),
+        pos.getY(i) - cy - clump.getY(i),
+        pos.getZ(i) - clump.getZ(i)
+      )
+      .normalize();
     v.set(pos.getX(i), pos.getY(i) - cy, pos.getZ(i)).normalize();
+    v.lerp(own, CLUMP_OWN_NORMAL).normalize();
     nrm.setXYZ(i, v.x, v.y, v.z);
   }
+  pos.needsUpdate = true;
   nrm.needsUpdate = true;
+  clump.needsUpdate = true;
   return padCrownSphere(merged);
+}
+
+/** The mid tier's and the register's cheap crown (buildClumpCrownGeo). */
+export function buildCrownGeoMid(): BufferGeometry {
+  return buildClumpCrownGeo(1);
+}
+
+/** The rich tier's crown, near trees only (buildClumpCrownGeo). */
+export function buildCrownGeoRich(): BufferGeometry {
+  return buildClumpCrownGeo(2);
 }
 
 /**
@@ -539,7 +604,7 @@ export function buildStyleCrownGeo(
     const g = new IcosahedronGeometry(CROWN_R * 0.98, tier === "far" ? 0 : 1);
     g.scale(1, 1.12, 1);
     g.translate(0, cy, 0);
-    return padCrownSphere(g);
+    return padCrownSphere(oneMass(g));
   }
   const detail = tier === "rich" ? 2 : 1;
   // [x, y, z, radius] in crown radii, around the crown centre.
@@ -565,7 +630,7 @@ export function buildStyleCrownGeo(
   });
   const merged = mergeGeometries(parts) ?? parts[0] ?? buildCrownGeo(detail);
   merged.translate(0, cy, 0);
-  return padCrownSphere(merged);
+  return padCrownSphere(oneMass(merged));
 }
 
 /** The value-noise hash (a smoothed lattice of sin hashes). */
@@ -654,10 +719,9 @@ function crownSway(time: Live, base: V3): { gust: F; local: V3 } {
  * their size on a crown of any scale and close smoothly round it; below
  * the trunk's top they fade out, so the crown still sits on its stem.
  */
-export function crownShape(): V3 {
+export function crownShape(p: V3 = positionGeometry): V3 {
   const origin = instanceColumn(3);
   const s = fract(origin.xz.mul(vec2(0.0173, 0.0219))).mul(6.2832);
-  const p = positionGeometry;
   // a direction from the position alone (never the normal: a faceted
   // crown, Papier's card, carries several normals per corner and would
   // tear open), about the generic crown's centre
@@ -675,6 +739,37 @@ export function crownShape(): V3 {
   return p
     .add(n.mul(wave.mul(SHAPE_BULGE).mul(inCrown)))
     .add(leanDir.mul(lean));
+}
+
+/**
+ * The crown's leaf clumps moved apart by its air (`aGap`): per vertex, its
+ * clump's centre offset from the crown's centre (`aClump`.xyz, geometry
+ * units) and whether it belongs to a clump at all (`.w`; 0 on the
+ * single-mass crowns — far, coarse, conifers, the styles' — which then
+ * stay as they are). Before `crownShape`, so the per-tree waves bend the
+ * opened crown; used by the cast shadow too, so light falls between the
+ * clumps.
+ */
+export function crownClumps(): V3 {
+  const clump = attribute<"vec4">("aClump", "vec4");
+  const open = instanceFloat("aGap").mul(clump.w);
+  const centre = vec3(0, CROWN_CENTRE_Y, 0).add(clump.xyz);
+  const p = positionGeometry;
+  return p
+    .add(clump.xyz.mul(open.mul(CLUMP_SPREAD)))
+    .sub(p.sub(centre).mul(open.mul(CLUMP_SHRINK)));
+}
+
+/** Marks a crown geometry as one mass (`aClump` all zero, see
+ *  `crownClumps`) and drops its uv, which no crown reads: one vertex
+ *  buffer fewer of WebGPU's eight. Returns `g`. */
+export function oneMass(g: BufferGeometry): BufferGeometry {
+  g.deleteAttribute("uv");
+  g.setAttribute(
+    "aClump",
+    new BufferAttribute(new Float32Array(g.attributes.position.count * 4), 4)
+  );
+  return g;
 }
 
 /**
@@ -765,12 +860,11 @@ function crownLight(
  * seasonal variant: the per-instance leaf cover thins the crown to twigs
  * (crown-season.ts) through `maskNode`, which the shadow pass honours, so
  * the thinned crown thins its shadow too; a chunk wears it only while any
- * of its crowns is out of full leaf. Both variants open the crown's gaps in
- * full leaf through the same mask (`aGap`, crown-season.ts), double-sided
- * so the far side shows through a gap; the price is early depth testing on
- * the crowns, all year now (it was the winter's already). The cast shadow stays rigid (`castShadowPositionNode`): the sun
- * rig only redraws the shadow map on a move — accepted, invisible at this
- * scale.
+ * of its crowns is out of full leaf, so the summer crown keeps early depth
+ * testing. A crown's air in full leaf is no mask: its leaf clumps move
+ * apart (`crownClumps`), in the cast shadow too. The cast shadow does not
+ * sway (`castShadowPositionNode`): the sun rig only redraws the shadow map
+ * on a move — accepted, invisible at this scale.
  */
 export function buildCrownMaterial(
   u: CrownUniforms,
@@ -782,34 +876,30 @@ export function buildCrownMaterial(
   });
   m.name = bare ? "crown-bare" : "crown-leafy";
   m.userData.crownUniforms = u;
-  const shape = crownShape();
+  const shape = crownShape(crownClumps());
   const sway = crownSway(u.time, shape);
   m.positionNode = instancePosition(sway.local);
   m.castShadowPositionNode = instancePosition(shape);
   const crownScale = varying(length(instanceColumn(1).xyz));
   const gust = varying(sway.gust);
   const tinted = materialColor.mul(instanceTint());
-  // Both variants open their gaps through the mask (and the shadow with
-  // them); through a gap the crown's far side shows from within, darker.
-  m.side = DoubleSide;
-  const inside = select(frontFacing, float(1), float(INSIDE_SHADE));
-  const season = crownSeasonNodes();
-  m.maskNode = season.keep;
   if (!bare) {
     const lit = crownLight(u, tinted, gust, crownScale);
-    m.colorNode = lit.colour.mul(inside);
-    m.emissiveNode = lit.emissive.mul(inside);
+    m.colorNode = lit.colour;
+    m.emissiveNode = lit.emissive;
     return m;
   }
+  const season = crownSeasonNodes();
+  m.maskNode = season.keep;
   const lit = crownLight(
     u,
     mix(tinted, season.twigColour, season.twig),
     gust,
     crownScale
   );
-  m.colorNode = lit.colour.mul(inside);
+  m.colorNode = lit.colour;
   // Twigs of a bare crown neither shimmer nor glow.
-  m.emissiveNode = lit.emissive.mul(float(1).sub(season.twig)).mul(inside);
+  m.emissiveNode = lit.emissive.mul(float(1).sub(season.twig));
   return m;
 }
 
@@ -1101,7 +1191,7 @@ function buildTrees(
   // stays cheap to allocate.
   const geos: TreeGeos = {
     far: buildCrownGeo(1),
-    mid: buildCrownGeo(),
+    mid: buildCrownGeoMid(),
     rich: buildCrownGeoRich(),
     trunk: buildTrunkGeo(),
   };

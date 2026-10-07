@@ -13,6 +13,8 @@ import { BASE_TREE_H, GENERIC_CROWN_W } from "@/lib/city/tree-placement";
 import { isInstances } from "./instancing";
 import {
   buildCrownGeo,
+  buildCrownGeoMid,
+  buildCrownGeoRich,
   buildCrownWarmup,
   buildTrunkGeo,
   buildVegetation,
@@ -224,5 +226,57 @@ describe("the generic crown's measures", () => {
     expect(box?.max.y).toBeCloseTo(BASE_TREE_H, 0);
     const width = (box?.max.x ?? 0) - (box?.min.x ?? 0);
     expect(Math.abs(width - GENERIC_CROWN_W)).toBeLessThan(0.3);
+  });
+});
+
+describe("the near crowns' leaf clumps", () => {
+  test("every vertex of a near crown names its clump; a far crown is one mass", () => {
+    for (const g of [buildCrownGeoMid(), buildCrownGeoRich()]) {
+      const clump = g.getAttribute("aClump");
+      const centres = new Set<string>();
+      for (let i = 0; i < clump.count; i++) {
+        expect(clump.getW(i)).toBe(1);
+        centres.add(`${clump.getX(i).toFixed(3)},${clump.getZ(i).toFixed(3)}`);
+      }
+      expect(centres.size).toBe(7);
+      expect(g.hasAttribute("uv")).toBe(false);
+    }
+    const far = buildCrownGeo(1).getAttribute("aClump");
+    for (let i = 0; i < far.count; i++) {
+      expect(far.getW(i)).toBe(0);
+    }
+  });
+
+  test("a near crown keeps the lumpy crown's box, so every fit holds", () => {
+    const box = (g: ReturnType<typeof buildCrownGeo>) => {
+      g.computeBoundingBox();
+      const b = g.boundingBox;
+      return {
+        h: (b?.max.y ?? 0) - (b?.min.y ?? 0),
+        w: Math.max(
+          (b?.max.x ?? 0) - (b?.min.x ?? 0),
+          (b?.max.z ?? 0) - (b?.min.z ?? 0)
+        ),
+      };
+    };
+    const want = box(buildCrownGeo());
+    for (const g of [buildCrownGeoMid(), buildCrownGeoRich()]) {
+      const got = box(g);
+      expect(got.h).toBeCloseTo(want.h, 3);
+      expect(got.w).toBeCloseTo(want.w, 3);
+    }
+  });
+
+  test("a crown set draws from at most WebGPU's eight vertex buffers", () => {
+    const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
+    const [chunk] = built.chunks;
+    for (const set of [chunk.mid, chunk.rich]) {
+      const buffers = new Set(
+        Object.values(set.geometry.attributes).map((a) =>
+          "data" in a ? a.data : a
+        )
+      );
+      expect(buffers.size).toBeLessThanOrEqual(8);
+    }
   });
 });

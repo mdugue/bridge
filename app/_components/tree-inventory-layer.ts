@@ -34,7 +34,10 @@ import { Instances } from "./instancing";
 import {
   applySeasons,
   buildCrownGeo,
+  buildCrownGeoMid,
   buildCrownGeoRich,
+  CROWN_CENTRE_Y,
+  oneMass,
   padCrownSphere,
   bucketByCell,
   type CellLod,
@@ -172,19 +175,35 @@ function reshapeCrown(
   const nrm = g.attributes.normal;
   const v = new Vector3();
   const centre = new Vector3(0, minY + normalCentre * height, 0);
-  for (let i = 0; i < pos.count; i++) {
-    v.set(pos.getX(i) / halfW, (pos.getY(i) - cy) / halfH, pos.getZ(i) / halfW);
+  const reshape = (x: number, py: number, z: number): Vector3 => {
+    v.set(x / halfW, (py - cy) / halfH, z / halfW);
     const len = Math.max(v.length(), 1e-6);
     const dy = v.y / len;
     const phi = Math.atan2(v.z, v.x);
     const { r, y } = map(dy, phi);
     const k = 1 + (len - 1) * RELIEF;
-    pos.setXYZ(
-      i,
+    return v.set(
       Math.cos(phi) * r * k * halfW,
       minY + y * height,
       Math.sin(phi) * r * k * halfW
     );
+  };
+  // a clump crown's clump centres go where their clumps go (crownClumps
+  // reads them about the crown's centre)
+  const clump = g.getAttribute("aClump");
+  const crownY = CROWN_CENTRE_Y;
+  for (let i = 0; clump && i < clump.count; i++) {
+    if (clump.getW(i) > 0) {
+      const c = reshape(clump.getX(i), clump.getY(i) + crownY, clump.getZ(i));
+      clump.setXYZ(i, c.x, c.y - crownY, c.z);
+    }
+  }
+  if (clump) {
+    clump.needsUpdate = true;
+  }
+  for (let i = 0; i < pos.count; i++) {
+    const p = reshape(pos.getX(i), pos.getY(i), pos.getZ(i));
+    pos.setXYZ(i, p.x, p.y, p.z);
   }
   for (let i = 0; i < pos.count; i++) {
     v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).sub(centre).normalize();
@@ -256,11 +275,11 @@ function buildConeGeo(like: FittedGeo, segments: number): BufferGeometry {
   }
   pos.needsUpdate = true;
   nrm.needsUpdate = true;
-  return g;
+  return oneMass(g);
 }
 
 function buildShapeGeos(): ShapeGeos {
-  const cheap = buildCrownGeo();
+  const cheap = buildCrownGeoMid();
   const rich = buildCrownGeoRich();
   const broad = { cheap: fitted(cheap), rich: fitted(rich) };
   const out = {

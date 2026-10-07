@@ -6,11 +6,9 @@ import {
 } from "three/webgpu";
 import {
   abs,
-  cameraPosition,
   clamp,
   dFdx,
   dFdy,
-  distance,
   exp2,
   float,
   floor,
@@ -21,10 +19,8 @@ import {
   max,
   min,
   positionGeometry,
-  positionWorld,
   select,
   sin,
-  smoothstep,
   step,
   varying,
   vec2,
@@ -70,22 +66,14 @@ export interface CrownSeasonKey {
   genus: number;
   /** the tree's own offset (days, ±SEASON_JITTER_DAYS) */
   jitter: number;
-  /** how open its crown is in full leaf: the share of the crown left as
-   *  gaps (0 closed … ~0.5 airy); absent = DEFAULT_OPEN */
+  /** how open its crown is in full leaf: how far its leaf clumps stand
+   *  apart (0 one closed mass … ~0.5 airy; vegetation-layer.ts
+   *  `crownClumps`); absent = DEFAULT_OPEN */
   open?: number;
 }
 
-/** A crown's gaps in full leaf where nothing says how open it is. */
+/** A crown's air in full leaf where nothing says how open it is. */
 export const DEFAULT_OPEN = 0.3;
-/**
- * How many clumps of leaves (and gaps between them) run across a crown:
- * the gap noise's frequency in the crown geometry's own units (the generic
- * crown is ~4.2 across), so a crown has about as many clumps at any scale.
- */
-const GAP_FREQ = 1.5;
-/** Past this distance (m) the gaps close: a few pixels wide, they would
- *  only shimmer. */
-const GAP_FADE: [number, number] = [160, 420];
 
 /** The crown material's base colour: the material multiplies the
  *  per-instance tint by it, so an autumn hue is divided by it to land as
@@ -168,32 +156,12 @@ export interface CrownSeasonNodes {
   twigColour: V3;
 }
 
-/** Smooth value noise over the integer lattice, 0..1 (eight hashes). */
-function gapNoise(p: V3, seed: V3): F {
-  const i = floor(p);
-  const f0 = fract(p);
-  const f = f0.mul(f0).mul(f0.mul(-2).add(3));
-  const h = (x: number, y: number, z: number): F =>
-    crownHash3(i.add(vec3(x, y, z)).add(seed));
-  const x00 = h(0, 0, 0).mix(h(1, 0, 0), f.x);
-  const x10 = h(0, 1, 0).mix(h(1, 1, 0), f.x);
-  const x01 = h(0, 0, 1).mix(h(1, 0, 1), f.x);
-  const x11 = h(0, 1, 1).mix(h(1, 1, 1), f.x);
-  return x00.mix(x10, f.y).mix(x01.mix(x11, f.y), f.z);
-}
-
 /**
- * The crown's leaf cover as nodes: the gaps every crown has in full leaf,
- * and the thinning of a bare one.
+ * The crown's leaf cover as nodes: the thinning of a bare crown. (Its air
+ * in full leaf is no mask: vegetation-layer.ts `crownClumps` moves its
+ * clumps apart by `aGap`.)
  *
- * Gaps: a smooth value noise in the crown's own space (GAP_FREQ clumps
- * across, the seed from where the tree stands) opens the crown where it
- * falls below the tree's `aGap`; the hashed threshold frays the clumps'
- * edges by a pixel, so a gap is a hole between leaf clumps, not a cut-out.
- * They close with distance (GAP_FADE). Through the maskNode the shadow
- * thins with them: dappled light under a crown.
- *
- * Bare: a fixed rotation (rows (2,2,1)/3, (2,−1,−2)/3, (1,−2,2)/3;
+ * A fixed rotation (rows (2,2,1)/3, (2,−1,−2)/3, (1,−2,2)/3;
  * symmetric, so the column order does not matter) turns the cell grid off
  * the crown's axes, so the cells do not line up in visible rows; the cell
  * is the geometry's own position (before the sway and the instance
@@ -203,7 +171,6 @@ function gapNoise(p: V3, seed: V3): F {
  */
 export function crownSeasonNodes(): CrownSeasonNodes {
   const bare = varying(instanceFloat("aBare"));
-  const open = varying(instanceFloat("aGap"));
   const turn = mat3(
     0.6667,
     0.6667,
@@ -220,19 +187,11 @@ export function crownSeasonNodes(): CrownSeasonNodes {
   const origin = instanceMatrix().mul(vec4(0, 0, 0, 1));
   const seed = varying(fract(origin.xz.mul(0.0137)).mul(97));
   const cellH = crownThreshold(cell, vec3(seed, 0)).toVar("crownCellH");
-  const far = smoothstep(
-    GAP_FADE[0],
-    GAP_FADE[1],
-    distance(cameraPosition, positionWorld)
-  );
-  const gap = open.mul(float(1).sub(far));
-  const clumps = gapNoise(cell.mul(GAP_FREQ), vec3(seed, 3.7));
-  const inLeaf = clumps.add(cellH.sub(0.5).mul(0.06)).greaterThanEqual(gap);
   const leafy = float(1).sub(bare);
   const isBare = bare.greaterThan(BARE_EPS);
   const twig = new Color(TWIG_COLOR);
   return {
-    keep: inLeaf.and(isBare.not().or(cellH.lessThan(max(leafy, TWIG_DENSITY)))),
+    keep: isBare.not().or(cellH.lessThan(max(leafy, TWIG_DENSITY))),
     twig: select(isBare, step(leafy, cellH), float(0)),
     twigColour: vec3(twig.r, twig.g, twig.b),
   };

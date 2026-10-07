@@ -1006,9 +1006,20 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   well — a stand-in, marked 🟡 in the *Sources by city* page. München's
   four tiles have it. A DOP with fewer than three bands still skips.
 - **Crown shaping** — radial crown normals (free), organic trunk, base darkening;
-  the mid crown is a detail-2 icosphere (180 tris) with lobes;
+  **crown clumps** (2026-10-07): the mid and rich crowns are seven leaf
+  clumps (icospheres of detail 1, 560 tris, and 2, 2 240 tris) fitted to
+  the lumpy crown's box, each vertex carrying its clump's centre
+  (`aClump`); the material moves the clumps apart by the tree's air
+  (`aGap`: canopy 0.3 ± 0.1, the register's by family and age) — each
+  centre out by 0.7 × air of its offset, each clump shrunk by 0.45 × air —
+  so sky opens between them while the outline holds; normals lean 55 %
+  out of the clump, 45 % out of the crown (`vegetation-layer.ts`
+  `buildClumpCrownGeo`, `crownClumps`). The far and coarse crowns, the
+  conifers and the styles' crowns stay one mass. It replaced the lobed
+  detail-2 icosphere (180 tris) of the mid tier and the ~1 440-tri
+  multi-tuft crown of the rich one;
   **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),
-  planned over every loaded tile at once: the rich ~1 440-tri multi-tuft
+  planned over every loaded tile at once: the rich clump
   crown near (220 m in / 300 m out) but only while the site's rich trees fit
   a budget of 2 500, nearest chunks first; the mid crown + trunk; and past
   650 m (back at 550 m) a detail-1 crown (80 tris) without trunk, dense
@@ -2396,12 +2407,16 @@ research that produced them):
 4. **Cartographic minimap** — DTK / basemap.de P10 raster tile + Ortsteile labels
    replacing the math-drawn minimap.
 5. ~~**Dappled canopy shadow**~~ *Built 2026-10-07* without a proxy
-   caster: every crown opens gaps in full leaf through its own `maskNode`
-   (`aGap`, `crown-season.ts` `crownSeasonNodes`: a smooth value noise in
-   crown space, ~1.5 clumps per crown unit, frayed by the hashed
-   threshold, closed past 160–420 m), double-sided; the shadow pass
-   honours the mask, so light falls through. Cost: no early depth test on
-   crowns all year (it was the winter's already) and the inside drawn.
+   caster and without a mask: the near crowns are seven leaf clumps
+   that stand apart by the tree's air (see *Crown clumps* above), and
+   the cast shadow takes the same shape, so light falls between the
+   clumps. 🗃️ The first cut (same day, never merged) cut the gaps per
+   pixel through the crown's `maskNode` (a smooth value noise in crown
+   space, frayed by the hashed threshold, double-sided): without a
+   temporal AA to average it, the noise stayed raw and the crowns read
+   as dirty or as a camouflage net, also on a real GPU; and a pixel is
+   the wrong scale for a crown's gaps, which lie between limbs
+   (the study: <https://claude.ai/artifact/MVXcYxUdEyyW8vX4AXBr4q>).
 6. **Real trees from the laser-scan point cloud** — segment high-veg returns →
    per-tree position/height/crown; bake to per-tile GeoJSON. *(First step ✅
    above: `canopyx` crown peaks with `h` + `r`, outside the canopy mask only,
