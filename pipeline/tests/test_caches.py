@@ -40,20 +40,52 @@ def test_a_truncated_wikidata_cache_is_deleted_and_named(tmp_path, module, name)
     assert not path.exists()
 
 
-def test_the_wikidata_landmarks_cache_is_written_through_part(tmp_path, monkeypatch):
-    row = {
+ROWS = {
+    "landmarks": {
         "i": {"value": "http://www.wikidata.org/entity/Q42"},
         "label": {"value": "Zwinger"},
         "coord": {"value": "Point(13.73 51.05)"},
         "links": {"value": "30"},
-    }
-    monkeypatch.setattr(landmarks.urllib.request, "urlopen", lambda req, timeout: Answer([row]))
+    },
+    "bridges": {
+        "b": {"value": "http://www.wikidata.org/entity/Q42"},
+        "label": {"value": "Augustusbrücke"},
+        "coord": {"value": "Point(13.74 51.05)"},
+        "types": {"value": "arch bridge"},
+    },
+}
+
+
+@pytest.mark.parametrize("module,name", [(landmarks, "landmarks"), (bridge, "bridges")])
+def test_a_wikidata_cache_killed_mid_write_leaves_no_file_by_its_name(
+    tmp_path, monkeypatch, module, name
+):
+    # The write dies half-way (a killed run, a full disk): what it left
+    # must not carry the cache's name, or every later fetch would skip the
+    # tile and every bake would read the truncated file.
+    monkeypatch.setattr(module.urllib.request, "urlopen", lambda req, timeout: Answer([ROWS[name]]))
+    write_text = Path.write_text
+    killed = []
+
+    def dies_half_way(self, data, *args, **kwargs):
+        if not killed:
+            killed.append(self)
+            write_text(self, data[: len(data) // 2], *args, **kwargs)
+            raise OSError("killed mid-write")
+        return write_text(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", dies_half_way)
     raw = tmp_path / "raw"
-    landmarks.fetch_wikidata(raw, "t", BOUNDS, 25833)
-    folder = raw / "wikidata"
-    assert [p.name for p in folder.iterdir()] == ["landmarks_t.json"]
-    doc = json.loads((folder / "landmarks_t.json").read_text())
-    assert [i["id"] for i in doc["landmarks"]] == ["Q42"]
+    dest = raw / "wikidata" / f"{name}_t.json"
+    with pytest.raises(OSError, match="killed"):
+        module.fetch_wikidata(raw, "t", BOUNDS, 25833)
+    assert killed and killed[0] != dest
+    assert not dest.exists()
+    # the next run fetches the tile again and writes the whole cache
+    module.fetch_wikidata(raw, "t", BOUNDS, 25833)
+    assert sorted(p.name for p in dest.parent.iterdir() if p.suffix == ".json") == [dest.name]
+    doc = json.loads(dest.read_text())
+    assert [i["id"] for i in doc[name]] == ["Q42"]
 
 
 def test_a_non_json_wikidata_answer_writes_nothing(tmp_path, monkeypatch):
