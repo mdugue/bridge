@@ -1270,6 +1270,17 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   thickens to 1.3 × by 150. The age is
   counted to the current year, so the picture ages with the calendar.
   Height and crown stay as measured.
+- **Branches** (2026-10-07, every canopy, row and broadleaf register tree
+  near the camera) — *inputs:* none beyond the crown. A branch fork in the
+  crown geometry's own space (`vegetation-layer.ts` `buildBranchGeo`: a
+  leader and five main limbs from the trunk's top out to two thirds of
+  the crown, two twigs each, ~110 triangles) drawn on the mid crowns'
+  matrices (no buffer of its own) with the rich tier only, and only while
+  a crown of the chunk is out of full leaf (`showBranches`: a closed
+  summer crown hides it), bent by the crown's own reshape and sway
+  (`buildBranchMaterial`), so a limb stays in its crown and moves with it.
+  It carries the bare crown's stipple in winter; its shadow falls with the
+  crown's. One set per chunk, a scene-wide material.
 
 - **Hedges (OSM, laser-scan height)** and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the

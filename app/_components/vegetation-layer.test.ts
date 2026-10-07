@@ -12,6 +12,7 @@ import { TRUNK_ROWS, trunkRadiusAt } from "@/lib/city/tree-inventory";
 import { BASE_TREE_H, GENERIC_CROWN_W } from "@/lib/city/tree-placement";
 import { isInstances } from "./instancing";
 import {
+  buildBranchGeo,
   buildCrownGeo,
   buildCrownWarmup,
   buildTrunkGeo,
@@ -63,9 +64,9 @@ test("a hedge is one instance per 1.1 m, a tree row one tree per 9 m", () => {
     { rows: [row("treerow", 20)], canopy: [] },
     ctx
   );
-  // 0, 9, 18 → 3 trees; each is a trunk + a mid, a rich and a far crown
+  // 0, 9, 18 → 3 trees; each is a trunk, its limbs + a mid, a rich and a far crown
   // instance (a sparse chunk keeps every tree in the far tier).
-  expect(instancesIn(trees.group)).toBe(3 * 4);
+  expect(instancesIn(trees.group)).toBe(3 * 5);
 });
 
 test("canopy points become trees; off-terrain points are skipped", () => {
@@ -73,7 +74,7 @@ test("canopy points become trees; off-terrain points are skipped", () => {
     { rows: [], canopy: [canopy(5, 12), canopy(50, 8)], ndviAt: () => 0.7 },
     ctx
   );
-  expect(instancesIn(built.group)).toBe(2 * 4);
+  expect(instancesIn(built.group)).toBe(2 * 5);
   const off = buildVegetation(
     { rows: [], canopy: [canopy(5, 12)] },
     { ...ctx, heightAt: () => null }
@@ -225,4 +226,37 @@ describe("the generic crown's measures", () => {
     const width = (box?.max.x ?? 0) - (box?.min.x ?? 0);
     expect(Math.abs(width - GENERIC_CROWN_W)).toBeLessThan(0.3);
   });
+});
+
+test("the limbs ride on the mid crowns' matrices and show near in bare crowns", () => {
+  const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
+  const [chunk] = built.chunks;
+  expect(chunk.branches?.instanceMatrix).toBe(chunk.mid.instanceMatrix);
+  expect(chunk.branches?.drawCount).toBe(chunk.mid.drawCount);
+  expect(chunk.branches?.visible).toBe(false);
+  // near, in full leaf: the closed crown hides them
+  updateVegetationLod([built], new Vector3(5, 100, 0));
+  expect(chunk.branches?.visible).toBe(false);
+  // out of leaf (the chunk wears the seasonal crown)
+  const leafy = chunk.rich.material;
+  const bare = new MeshStandardNodeMaterial();
+  bare.name = "crown-bare";
+  chunk.rich.material = bare;
+  updateVegetationLod([built], new Vector3(5, 100, 0));
+  expect(chunk.branches?.visible).toBe(true);
+  updateVegetationLod([built], new Vector3(5_000, 100, 0));
+  expect(chunk.branches?.visible).toBe(false);
+  chunk.rich.material = leafy;
+  bare.dispose();
+});
+
+test("the branch fork stays inside the crown", () => {
+  const branch = buildBranchGeo();
+  const crown = buildCrownGeo();
+  branch.computeBoundingBox();
+  crown.computeBoundingBox();
+  const b = branch.boundingBox?.clone().expandByScalar(-0.1);
+  expect(b && crown.boundingBox?.containsBox(b)).toBe(true);
+  // a few hundred triangles at most: drawn for every near tree
+  expect((branch.index?.count ?? 0) / 3).toBeLessThan(200);
 });

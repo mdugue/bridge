@@ -211,6 +211,9 @@ export interface VegetationControl {
  * mesh, the precomputed trees (TreeInstance) the rest.
  */
 export interface VegetationChunk {
+  /** the limbs inside the crowns, drawn with the rich tier (on the mid
+   *  crowns' matrices) */
+  branches?: Instances;
   far: Instances;
   mid: Instances;
   rich: Instances;
@@ -865,6 +868,91 @@ export function buildTrunkMaterial(): MeshStandardNodeMaterial {
   });
 }
 
+/** One limb of the branch fork: a tapered, open four-sided tube from
+ *  `a` to `b` (radii `ra`, `rb`), in the crown geometry's units. */
+function limb(a: Vector3, b: Vector3, ra: number, rb: number): BufferGeometry {
+  const g = new CylinderGeometry(rb, ra, a.distanceTo(b), 4, 1, true);
+  g.deleteAttribute("uv");
+  const dir = b.clone().sub(a).normalize();
+  g.applyMatrix4(
+    new Matrix4().compose(
+      a.clone().add(b).multiplyScalar(0.5),
+      new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), dir),
+      new Vector3(1, 1, 1)
+    )
+  );
+  return g;
+}
+
+/** Main limbs of the fork, their reach (crown radii) and side twigs. */
+const LIMBS = 5;
+const LIMB_REACH = 0.68;
+const LIMB_R: [number, number] = [0.07, 0.025];
+const TWIG_R: [number, number] = [0.028, 0.01];
+
+/**
+ * The branch fork inside a crown, in the crown geometry's own space (the
+ * canopy's and the register's broadleaf crowns share it): a leader up the
+ * middle and five main limbs from the trunk's top out to two thirds of the
+ * crown, each with two twigs — what carries a bare crown in winter,
+ * instead of a stick under a stipple (drawn only then, showBranches). The
+ * crown's own reshape and sway bend it with its crown (buildBranchMaterial).
+ * About 120 triangles.
+ */
+export function buildBranchGeo(): BufferGeometry {
+  const cy = TRUNK_H + CROWN_R * 0.5;
+  const foot = new Vector3(0, TRUNK_H - 0.15, 0);
+  const parts = [
+    limb(foot, new Vector3(0.1, cy + CROWN_R * 0.75, -0.05), 0.075, 0.02),
+  ];
+  for (let k = 0; k < LIMBS; k++) {
+    const a = (k / LIMBS) * Math.PI * 2 + 0.4;
+    const up = cy + CROWN_R * (k % 2 === 0 ? 0.15 : 0.4);
+    const reach = CROWN_R * LIMB_REACH;
+    const tip = new Vector3(Math.cos(a) * reach, up, Math.sin(a) * reach);
+    parts.push(limb(foot, tip, ...LIMB_R));
+    const fork = foot.clone().lerp(tip, 0.55);
+    for (const turn of [0.6, -0.5]) {
+      const r = reach * (turn > 0 ? 0.95 : 0.7);
+      const twig = new Vector3(
+        Math.cos(a + turn) * r,
+        up + CROWN_R * (turn > 0 ? 0.3 : 0.55),
+        Math.sin(a + turn) * r
+      );
+      parts.push(limb(fork, twig, ...TWIG_R));
+    }
+  }
+  const merged = mergeGeometries(parts) ?? parts[0];
+  for (const p of parts) {
+    if (p !== merged) {
+      p.dispose();
+    }
+  }
+  // bent by its crown's reshape like the crown itself
+  return padCrownSphere(merged);
+}
+
+/**
+ * The limbs' material: the trunk's bark, bent by the crown's own reshape
+ * and sway (crownShape, crownSway) so a limb stays inside its crown and
+ * moves with it. Scene-wide.
+ */
+export function buildBranchMaterial(): MeshStandardNodeMaterial {
+  return sceneMaterial("vegetation-branch", () => {
+    const u = sceneCrowns().uniforms;
+    const m = new MeshStandardNodeMaterial({
+      color: TRUNK_BASE,
+      roughness: 1,
+    });
+    m.name = "branch";
+    const shape = crownShape();
+    m.positionNode = instancePosition(crownSway(u.time, shape).local);
+    m.castShadowPositionNode = instancePosition(shape);
+    m.colorNode = materialColor.mul(0.92);
+    return m;
+  });
+}
+
 /**
  * Per-tree crown colour. `v` is the deterministic hash jitter (keeps neighbours
  * distinct). Without NDVI it's the original pastel sage; with it, the DOP
@@ -917,6 +1005,7 @@ interface TreeGeos {
   mid: BufferGeometry;
   rich: BufferGeometry;
   trunk: BufferGeometry;
+  branch: BufferGeometry;
 }
 
 /** A crown set over the placements and the crowned precomputed trees. */
@@ -1119,6 +1208,7 @@ function buildTrees(
     mid: buildCrownGeo(),
     rich: buildCrownGeoRich(),
     trunk: buildTrunkGeo(),
+    branch: buildBranchGeo(),
   };
   const trunkMat = buildTrunkMaterial();
 
@@ -1127,6 +1217,10 @@ function buildTrees(
   const seasons: SeasonalCrowns[] = [];
   for (const cell of bucketTrees(trees, extras)) {
     const built = buildTreeCell(cell, geos, trunkMat, crownMats);
+    if (built.chunk) {
+      built.chunk.branches = branchesFor(built.chunk.mid, geos.branch);
+      built.meshes.push(built.chunk.branches);
+    }
     meshes.push(...built.meshes);
     if (built.chunk) {
       chunks.push(built.chunk);
@@ -1138,6 +1232,27 @@ function buildTrees(
   // The crown and trunk materials are scene-wide: a tile's disposal
   // (disposeObject3D) frees its sets' geometry views and leaves them.
   return { chunks, meshes, seasons };
+}
+
+/**
+ * A chunk's limbs: the branch fork in every crown, on the mid crowns'
+ * matrices (no buffer of its own; the register's broadleaf crowns are
+ * fitted to the same geometry, so their limbs fit too). Hidden until the
+ * chunk takes the rich tier.
+ */
+function branchesFor(mid: Instances, geo: BufferGeometry): Instances {
+  const set = new Instances(
+    geo,
+    buildBranchMaterial(),
+    mid.drawCount,
+    mid.instanceMatrix
+  );
+  set.computeBoundingSphere();
+  set.castShadow = true;
+  set.receiveShadow = true;
+  set.visible = false;
+  set.userData.treePart = "branches";
+  return set;
 }
 
 /** The ATKIS row hedges' material (scene-wide: nothing of a tile). */
@@ -1271,6 +1386,7 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
   chunk.rich.visible = tier === "rich";
   chunk.mid.visible = tier === "mid";
   chunk.far.visible = tier === "far";
+  showBranches(chunk);
   // A trunk 550 m out is below a pixel; the far tier drops it.
   chunk.trunks.visible = tier !== "far";
 }
@@ -1305,7 +1421,28 @@ export function updateVegetationLod(
     if (tiers[i] !== all[i].tier) {
       showTier(all[i], tiers[i]);
       changed = true;
+    } else if (showBranches(all[i])) {
+      changed = true;
     }
   }
   return changed;
+}
+
+/**
+ * Limbs only near, and only while a crown of the chunk is out of full
+ * leaf (it wears the seasonal crown, crown-season.ts): a closed summer
+ * crown hides them, so they would be drawn for nothing. True when their
+ * visibility changed (a date change switches the crown's material).
+ */
+function showBranches(chunk: VegetationChunk): boolean {
+  if (!chunk.branches) {
+    return false;
+  }
+  const show =
+    chunk.tier === "rich" && chunk.rich.material.name === "crown-bare";
+  if (chunk.branches.visible === show) {
+    return false;
+  }
+  chunk.branches.visible = show;
+  return true;
 }
