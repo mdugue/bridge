@@ -30,7 +30,11 @@ results of both steps are deterministic functions of committed inputs.
   phones (ADR 0016).
 
 Outputs are cached in `.cache/prepare-data/` with mtime staleness against
-the inputs *and* the bake's own source files.
+the inputs *and* the bake's own source files. (2026-10: the cache is keyed
+by content, not mtime — the inputs' contents, `COMMON_SOURCES` and the
+modules reachable from each artifact's own bake entries,
+`scripts/bake-sources.ts`; see [data-pipeline.md](../data-pipeline.md),
+"Cache and publish".)
 
 ## Consequences
 
