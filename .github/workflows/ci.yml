@@ -107,8 +107,9 @@ jobs:
   # whole site with the shell and /wissen 161 s, the desktop HUD group
   # 132 s, the rendering group with the phone 315 s, of which the phone's
   # one test (its own boot) took 61 s. So the phone runs beside the HUD:
-  # ~161 / ~193 / ~254 s. The rendering group cannot be cut finer by tag
-  # without a second boot of its shared page. Each shard builds for itself:
+  # an estimate (not yet measured) of 161 / 193 / 254 s. The rendering
+  # group cannot be cut finer by tag without a second boot of its shared
+  # page. Each shard builds for itself:
   # 21–24 s with the bake cache warm (that run), 2m23s–3m24s cold (run
   # 37476256017 on main, 2026-10-06). The checkout varies more than any of
   # it (26 s to 12 min in that run), which is why it clones one commit.
@@ -209,7 +210,7 @@ jobs:
         if: steps.scope.outputs.run == 'true' || matrix.shard.buildCheck
         with:
           path: .next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('app/**/*.ts', 'app/**/*.tsx', 'app/**/*.css', 'app/**/*.mdx', 'components/**/*.tsx', 'hooks/**/*.ts', 'lib/**/*.ts', 'sites/**/*.ts', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'mdx-components.tsx') }}
+          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('app/**/*.ts', 'app/**/*.tsx', 'app/**/*.css', 'app/**/*.mdx', 'components/**/*.tsx', 'hooks/**/*.ts', 'lib/**/*.ts', 'sites/**/*.ts', 'types/**/*.ts', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'mdx-components.tsx') }}
           restore-keys: |
             nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
             nextjs-${{ runner.os }}-
@@ -231,7 +232,7 @@ jobs:
         if: matrix.shard.buildCheck && github.event_name == 'push'
         with:
           path: .next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('app/**/*.ts', 'app/**/*.tsx', 'app/**/*.css', 'app/**/*.mdx', 'components/**/*.tsx', 'hooks/**/*.ts', 'lib/**/*.ts', 'sites/**/*.ts', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'mdx-components.tsx') }}
+          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('app/**/*.ts', 'app/**/*.tsx', 'app/**/*.css', 'app/**/*.mdx', 'components/**/*.tsx', 'hooks/**/*.ts', 'lib/**/*.ts', 'sites/**/*.ts', 'types/**/*.ts', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'mdx-components.tsx') }}
       # Headless runs use Chromium's headless shell, never the full browser:
       # installing the shell alone keeps the cached download to a third. No
       # `--with-deps`: the runner image already carries every library the
