@@ -2468,9 +2468,11 @@ research that produced them):
     run the columns with the scene's hour); the accidents with injury
     (Unfallatlas, the statistics offices, dl-de/by-2-0; pedestrian and
     cyclist involvement per point) as a fourth layer.
-15. **The twin, next** — ask trees, bridges and monuments too, a link
-    to an asked building, a *Datenstand* panel, the ingest writing the
-    provenance ([plan 052](./plans/052-queryable-twin.md) phases 4–7); the
+15. **The twin, next** — asking trees, bridges and monuments too is ✅
+    built 2026-10-01 (plan 052 phase 4; see the twin section above). Still
+    planned: a link to an asked building, a *Datenstand* panel, the ingest
+    writing the provenance ([plan 052](./plans/052-queryable-twin.md)
+    phases 4b–7); the
     day playing, weather as mood, the Elbe at its gauge
     ([plan 053](./plans/053-time-and-live-sources.md)); flood, sun hours,
     sight lines and a planned building as scenarios

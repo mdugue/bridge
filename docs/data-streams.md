@@ -159,23 +159,23 @@ Value to the walker against effort, art-direction fit and data quality.
 "Identity" items need a picking UI that shows text **on demand** (a card),
 never on the ground — check that line with the maintainer first.
 
-| # | Item | Sources | Effort | Why |
-|---|---|---|---|---|
-| 1 | **Official heritage flag** per LoD2 object | WFS `L1544`, cross-check Wikidata P1435/P1708 | S | replaces the OSM `heritage` join (1 302 objects) with the official list; the column and the shader exist (plan 027 phase 2) |
-| 2 | **Real storey count** for the storey bands | WFS `L1512` (or ALKIS) | S–M | 100 % vs ≈ 2 % in LoD2; the bands are derived from height today |
-| 3 | **Cheap bake wins in LoD2** | CityJSON | S | drop ClosureSurfaces; `QualitaetDacherkennung` gates the roof colour; chimneys/masts at `BauwerkHoehe` |
-| 4 | **Night from `lit`** | OSM | S–M | a whole network lit or dark at night, beyond the 3 064 lamp points; fits the dusk look |
-| 5 | **Facade colour and material** | OSM `building:colour`/`material`/`roof:material` | M | the one facade colour source; centre-dense, so blend with the hash; judge on a GPU (risk: "painted-by-numbers") |
-| 6 | **Soundscape from measured data** | WFS noise maps, OSM acoustic signals, streams/weirs, `attraction=animal`, schools | M | plan 035 already listens to the scene; these make it measured |
-| 7 | **"What am I looking at" card** | LoD2 `name`, Wikidata (via OSM way id), WFS addresses, OSM artwork/`artist_name` | M | a knowledge layer on pick; needs a maintainer decision on text in the HUD |
-| 8 | **Tree age and landmark trees** | cadastre `jalter`, WFS `L34`/`L807`, OSM `denotation`, Wikidata | S | young trees staked; natural monuments at their size |
-| 9 | **Elbe high water** | WFS flood extents + marks | M | a slider flooding the Elbwiesen to 2002/2013/1845; the water layer exists |
-| 10 | **Memory layer** (Stolpersteine, plaques, ghost tracks, destroyed 1945) | OSM, WFS `L1223`, Wikidata | M | quiet ground glints, names on demand; needs careful, respectful design |
-| 11 | **ALKIS** | GeoSN layer 0 | L | parcels, surveyed stairs/walls, building use — the bigger official upgrade (ledger 📋 #3) |
-| 12 | **Lamp shapes and gas lanterns** | OSM lamp tags | S–M | varied silhouettes; 35 % coverage, so a default shape stays |
-| 13 | **Opening hours and outdoor seating** | OSM | M | the shop wash only while open; café tables in summer |
-| 14 | **Tram lines on the stop signs / passing trams** | OSM route relations, WFS `L1233` | M–L | the colour of each line; a moving tram is a new kind of object |
-| 15 | **Viewpoints** for the glides | OSM `tourism=viewpoint`, Bellotto paintings (placed by hand) | S | authored viewpoints exist; these give more |
+| # | Item | Sources | Effort | Why | Status |
+|---|---|---|---|---|---|
+| 1 | **Official heritage flag** per LoD2 object | WFS `L1544`, cross-check Wikidata P1435/P1708 | S | replaces the OSM `heritage` join (1 302 objects) with the official list; the column and the shader exist (plan 027 phase 2) | open |
+| 2 | **Real storey count** for the storey bands | WFS `L1512` (or ALKIS) | S–M | 100 % vs ≈ 2 % in LoD2; the bands are derived from height today | open |
+| 3 | **Cheap bake wins in LoD2** | CityJSON | S | drop ClosureSurfaces; `QualitaetDacherkennung` gates the roof colour; chimneys/masts at `BauwerkHoehe` | open |
+| 4 | **Night from `lit`** | OSM | S–M | a whole network lit or dark at night, beyond the 3 064 lamp points; fits the dusk look | open |
+| 5 | **Facade colour and material** | OSM `building:colour`/`material`/`roof:material` | M | the one facade colour source; centre-dense, so blend with the hash; judge on a GPU (risk: "painted-by-numbers") | built (plan 050: `osmColourTint`) |
+| 6 | **Soundscape from measured data** | WFS noise maps, OSM acoustic signals, streams/weirs, `attraction=animal`, schools | M | plan 035 already listens to the scene; these make it measured | open |
+| 7 | **"What am I looking at" card** | LoD2 `name`, Wikidata (via OSM way id), WFS addresses, OSM artwork/`artist_name` | M | a knowledge layer on pick; needs a maintainer decision on text in the HUD | built (ADR 0042) |
+| 8 | **Tree age and landmark trees** | cadastre `jalter`, WFS `L34`/`L807`, OSM `denotation`, Wikidata | S | young trees staked; natural monuments at their size | open |
+| 9 | **Elbe high water** | WFS flood extents + marks | M | a slider flooding the Elbwiesen to 2002/2013/1845; the water layer exists | open |
+| 10 | **Memory layer** (Stolpersteine, plaques, ghost tracks, destroyed 1945) | OSM, WFS `L1223`, Wikidata | M | quiet ground glints, names on demand; needs careful, respectful design | open |
+| 11 | **ALKIS** | GeoSN layer 0 | L | parcels, surveyed stairs/walls, building use — the bigger official upgrade (ledger 📋 #3) | open |
+| 12 | **Lamp shapes and gas lanterns** | OSM lamp tags | S–M | varied silhouettes; 35 % coverage, so a default shape stays | open |
+| 13 | **Opening hours and outdoor seating** | OSM | M | the shop wash only while open; café tables in summer | open |
+| 14 | **Tram lines on the stop signs / passing trams** | OSM route relations, WFS `L1233` | M–L | the colour of each line; a moving tram is a new kind of object | built (passing trams: `tram-cars.ts`, ADR 0040) |
+| 15 | **Viewpoints** for the glides | OSM `tourism=viewpoint`, Bellotto paintings (placed by hand) | S | authored viewpoints exist; these give more | open |
 
 **Not worth it** (measured): Wikidata heights, floors, style, architect,
 material, 3D models (≤ 10 %); OSM `start_date` (0.5 %) and `roof:colour`
