@@ -63,6 +63,8 @@ export const PROBLEM_KINDS: ReadonlySet<string> = new Set([
   "alloc-failed",
   // a dressing's build threw: the tile stays bare
   "dressing failed",
+  // Modell's Ausschnitt could not build its programs: it is lifted
+  "cut-out failed",
   // the render stopped and the page did not reload: the failure card
   "gpu failed",
 ]);

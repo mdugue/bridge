@@ -1139,11 +1139,7 @@ async function bootApp(
       onDressingFailed: (error, tile) => {
         const message = error instanceof Error ? error.message : String(error);
         opts.trail?.note("dressing failed", `${tile} ${message}`);
-        if (!(disposed || reportedError)) {
-          reportedError = true;
-          reportedNetwork = false;
-          opts.onError?.(`${message} (Kachel ${tile})`);
-        }
+        sayLayerFailed(`${message} (Kachel ${tile})`);
       },
       dressingGate,
       fogColor: sceneFog.color,
@@ -1204,6 +1200,15 @@ async function bootApp(
   let bootFailure: Error | null = null;
   // The HUD's word about the network goes once nothing it failed is
   // outstanding (tile-retry.ts): at a landing, or found after a heal.
+  // A part of the city that failed for good (no retry heals it): the
+  // HUD's layer word, once.
+  const sayLayerFailed = (message: string) => {
+    if (!(disposed || reportedError)) {
+      reportedError = true;
+      reportedNetwork = false;
+      opts.onError?.(message);
+    }
+  };
   const clearNetworkWord = () => {
     if (reportedNetwork && !disposed) {
       reportedError = false;
@@ -2182,7 +2187,20 @@ async function bootApp(
           opts.trail?.note("cut-out", "shown");
         }
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        // A program that failed to build: the Ausschnitt is lifted (its
+        // switch no longer "building…" for ever) and said.
+        if (request !== cutRequest || disposed) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        opts.trail?.note("cut-out failed", message);
+        setCutOut(false);
+        if (isAllocationFailure(error)) {
+          memoryEmergency("allocation cut-out");
+        }
+        sayLayerFailed(`Ausschnitt (${message})`);
+      });
   };
   /** Modell's view for the HUD, with the scene's half: the Ausschnitt. */
   const modelHud = (): ModelHud | null => {
