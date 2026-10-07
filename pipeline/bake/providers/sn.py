@@ -50,7 +50,9 @@ def _zip(ctx: Ctx, product: str, e: int, n: int, keep: bool = False) -> Path:
 def _files(
     ctx: Ctx, tile: Tile, product: str, pattern: str, margin: int = 0, keep: bool = False
 ) -> list[Path]:
-    """The members matching `pattern` of every cell's ZIP. A margin cell
+    """The members matching `pattern` of every cell's ZIP, each cell's into
+    a folder of its own (a member named like a neighbour's must not be
+    taken for it: the extraction keeps a file already there). A margin cell
     the server answers 404 for (past Saxony's border) is skipped; any other
     failure, and any failure on the tile's own cells, raises."""
     own = own_cells(tile, TILE_KM)
@@ -61,9 +63,9 @@ def _files(
         except OSError as err:
             if (e, n) in own or not not_published(err):
                 raise
-            print(f"{tile.id}: LoD2 {e}_{n} (neighbour) not available")
+            print(f"{tile.id}: {product} {e}_{n} (neighbour) not available")
             continue
-        out += unzip_members(archive, pattern, ctx.scratch / product)
+        out += unzip_members(archive, pattern, ctx.scratch / product / f"{e}_{n}")
     return out
 
 

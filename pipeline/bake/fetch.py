@@ -18,9 +18,14 @@ already there, so a rerun only fetches what is missing:
     data/_raw/<provider>/wikidata/landmarks_<tile>.json  its notable buildings and structures
     data/_raw/<provider>/lsc/<tile>.laz                  laser scan (`--lsc` only)
 
-Statewide packages are cached under data/_raw/<provider>/downloads/; a
-tile's own downloads live in a scratch folder only until its products are
+Statewide packages, and the LoD2 files a tile shares with its neighbours
+(the one-cell ring), are cached under data/_raw/<provider>/downloads/; a
+tile's other downloads live in a scratch folder only until its products are
 written (the products are the cache: a rerun skips them).
+
+The fetch exits 1 when a product the build or the bakes cannot do without
+failed — a tile's DGM1 or LoD2, the Basis-DLM (where the provider has one)
+or the OSM extract — after it has tried everything else.
 """
 
 from __future__ import annotations
@@ -47,8 +52,9 @@ from .spec import Spec
 @dataclass(frozen=True)
 class Ctx:
     """What an adapter works with: the provider's raw folder (statewide
-    packages are cached in `downloads/`) and a scratch folder for the tile's
-    own downloads, removed once its products are written."""
+    packages and shared LoD2 files are cached in `downloads/`) and a
+    scratch folder for the tile's own downloads, removed once its products
+    are written."""
 
     raw: Path
     scratch: Path
@@ -223,34 +229,57 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> li
     return failed
 
 
-def fetch_osm(spec: Spec) -> None:
+def fetch_osm(spec: Spec) -> bool:
+    """The site's OSM extract; False when it could not be downloaded. The
+    tiles are still fetched, but the bakes need it (every OSM layer, and
+    the land cover where the provider has no Basis-DLM), so `run` fails at
+    the end."""
     if spec.osm.exists():
-        return
+        return True
     try:
         # Geofabrik publishes an md5 beside every extract.
         download(spec.osm_url, spec.osm, md5_url=f"{spec.osm_url}.md5")
-    except Exception as err:  # noqa: BLE001 — the tiles do not need it
+        return True
+    except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
         print(f"OSM extract not downloaded ({err}); put {spec.osm_url} at {spec.osm}")
+        return False
+
+
+def fetch_dlm(spec: Spec, source: Adapter) -> bool:
+    """The provider's Basis-DLM, where it has one; False when it could not
+    be fetched. The land-cover bake refuses to run without it, so `run`
+    fails at the end — after the tiles."""
+    if not spec.products.dlm or dlm_complete(spec.raw / "dlm"):
+        return True
+    try:
+        with _scratch(spec.raw, "dlm") as scratch:
+            source.dlm(Ctx(spec.raw, scratch, spec.epsg))
+        return True
+    except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
+        print(f"Basis-DLM not fetched ({type(err).__name__}: {err})")
+        return False
 
 
 def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
     spec.raw.mkdir(parents=True, exist_ok=True)
     source = adapter(spec.provider)
-    if spec.products.dlm and not dlm_complete(spec.raw / "dlm"):
-        try:
-            with _scratch(spec.raw, "dlm") as scratch:
-                source.dlm(Ctx(spec.raw, scratch, spec.epsg))
-        except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
-            print(f"Basis-DLM not fetched ({type(err).__name__}: {err})")
-    fetch_osm(spec)
+    # required, site-wide: the bakes refuse to run without either
+    site_failed = [
+        what
+        for what, ok in (("Basis-DLM", fetch_dlm(spec, source)), ("OSM extract", fetch_osm(spec)))
+        if not ok
+    ]
     if spec.trams:
         transit.fetch_gtfs(transit.gtfs_dir(spec.raw))
     if lsc and not spec.products.lsc:
         print(f"--lsc: the {spec.provider} adapter reads no laser scan — skipped")
     failures = {tile.id: fetch_tile(spec, tile, source, lsc) for tile in tiles}
     failures = {tid: what for tid, what in failures.items() if what}
+    if site_failed:
+        print(f"fetch: {', '.join(site_failed)} not fetched — the bakes cannot run without it")
     if failures:
         print("fetch: required products not fetched — the build cannot use these tiles:")
         for tid, what in failures.items():
             print(f"  {tid}: {', '.join(what)}")
+    if site_failed or failures:
         raise SystemExit(1)

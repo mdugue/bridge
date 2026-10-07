@@ -50,9 +50,11 @@ def listing(product: str) -> list[str]:
     return [f["name"] for d in index["datasets"] for f in d["files"]]
 
 
-def _files(ctx: Ctx, tile: Tile, product: str, margin: int = 0) -> list[Path]:
+def _files(ctx: Ctx, tile: Tile, product: str, margin: int = 0, keep: bool = False) -> list[Path]:
     """The 1 km files covering the tile, plus `margin` rings around it; a
-    margin cell the listing has no file for (past NRW's border) is skipped."""
+    margin cell the listing has no file for (past NRW's border) is skipped.
+    With `keep` they go to `downloads/<product>/`, shared by the site's
+    tiles, else to the tile's scratch folder."""
     own = own_cells(tile, 1)
     out = []
     for e, n in cells(tile, 1, margin):
@@ -65,7 +67,8 @@ def _files(ctx: Ctx, tile: Tile, product: str, margin: int = 0) -> list[Path]:
             raise FileNotFoundError(f"{product}: no file for the 1 km cell {e}_{n}")
         # the newest year sorts last
         url = f"{BASE}/{FOLDERS[product]}/{names[-1]}"
-        out.append(download(url, ctx.scratch / product / names[-1]))
+        folder = ctx.downloads if keep else ctx.scratch
+        out.append(download(url, folder / product / names[-1]))
     return out
 
 
@@ -83,8 +86,9 @@ def dop(ctx: Ctx, tile: Tile) -> list[Path]:
 
 def lod2(ctx: Ctx, tile: Tile) -> list[Path]:
     # One ring of neighbouring cells: a seam building filed next door is
-    # kept by the tile holding its envelope centre.
-    return _files(ctx, tile, "lod2", margin=1)
+    # kept by the tile holding its envelope centre. Each file is read by up
+    # to four tiles, so it is kept under downloads/lod2/.
+    return _files(ctx, tile, "lod2", margin=1, keep=True)
 
 
 def lsc(ctx: Ctx, tile: Tile) -> list[Path]:
