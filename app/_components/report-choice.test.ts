@@ -2,10 +2,22 @@ import { afterEach, expect, test } from "bun:test";
 
 // A module of its own (the query): the DSN is read once, at load, and
 // crash-reports.test.ts loads the shared one with a DSN set — under Bun
-// the test files share one module registry.
-const { reportsDeclined, reportsState, setReportsDeclined } = (await import(
-  `${import.meta.dir}/report-choice.ts?no-dsn`
-)) as typeof import("./report-choice");
+// the test files share one module registry. Loaded with no DSN whatever
+// the environment holds (Bun reads .env files), which is then put back.
+const savedDsn = process.env.CRASH_REPORTS_DSN;
+delete process.env.CRASH_REPORTS_DSN;
+const { reportsDeclined, reportsState, setReportsDeclined } =
+  await (async () => {
+    try {
+      return (await import(
+        `${import.meta.dir}/report-choice.ts?no-dsn`
+      )) as typeof import("./report-choice");
+    } finally {
+      if (savedDsn !== undefined) {
+        process.env.CRASH_REPORTS_DSN = savedDsn;
+      }
+    }
+  })();
 
 const globals = globalThis as { localStorage?: unknown };
 const original = globals.localStorage;

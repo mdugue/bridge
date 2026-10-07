@@ -21,6 +21,8 @@ const NAMES = [
 ] as const;
 const saved = Object.fromEntries(NAMES.map((name) => [name, g[name]]));
 const savedInfo = console.info;
+/** the environment's own DSN (Bun reads .env files), put back after each */
+const savedDsn = process.env.CRASH_REPORTS_DSN;
 
 interface Beacon {
   url: string;
@@ -60,7 +62,11 @@ beforeEach(() => {
 afterEach(() => {
   Object.assign(g, saved);
   console.info = savedInfo;
-  delete process.env.CRASH_REPORTS_DSN;
+  if (savedDsn === undefined) {
+    delete process.env.CRASH_REPORTS_DSN;
+  } else {
+    process.env.CRASH_REPORTS_DSN = savedDsn;
+  }
 });
 
 function trail(): Trail {
