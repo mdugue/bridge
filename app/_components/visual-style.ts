@@ -296,8 +296,8 @@ function ledge(h: F, top: F, size: number, drop: number, strength: F): F {
     float(1).sub(smoothstep(0, drop, below))
   );
   return float(1)
-    .add(face.mul(0.18).mul(strength))
-    .sub(shade.mul(0.32).mul(strength));
+    .add(face.mul(0.22).mul(strength))
+    .sub(shade.mul(0.4).mul(strength));
 }
 
 /**
@@ -305,7 +305,8 @@ function ledge(h: F, top: F, size: number, drop: number, strength: F): F {
  * windows, from the heights the table already carries — walls only, never
  * on a part with its own colour (a door, flag 64) or on a facade that is
  * its own (a landmark, a church, a theatre, a hall: flag 16,
- * `ownFacade` in lib/city/building-tint.ts), and only on a facade
+ * `ownFacade` in lib/city/building-tint.ts) or under a flat LoD2 roof
+ * (flag 256: post-war and modern buildings), and only on a facade
  * tall enough to have it; the ground floor's three only on a part standing
  * on the ground (flag 128), not on a tower's part on a roof:
  *  - Sockel: the lowest 0.6 m a little darker and cooler, a stone plinth,
@@ -332,7 +333,12 @@ function articulation(
   const grounded = mod(floor(f.div(128)), 2);
   // a landmark's or a church's facade is its own (flag 16): no town
   // house's plinth and cornices on it
-  const plain = max(own, mod(floor(f.div(16)), 2));
+  // … nor a flat-roofed one's (flag 256): a post-war slab or a modern
+  // block has no town house's plinth and cornices
+  const plain = max(
+    max(own, mod(floor(f.div(16)), 2)),
+    mod(floor(f.div(256)), 2)
+  );
   const on = d.uArticulation.mul(wall).mul(float(1).sub(plain));
   // the ground floor's parts on a part standing on the ground only
   const low = on.mul(grounded);
@@ -354,7 +360,7 @@ function articulation(
   const twoStoreys = step(storey.mul(2).sub(0.3), eave);
   out = out.mul(ledge(h, storey.add(0.1), 0.2, 0.35, low.mul(twoStoreys)));
   return out.mul(
-    ledge(h, eave.sub(0.05), 0.3, 0.55, on.mul(step(5, eave)).mul(1.2))
+    ledge(h, eave.sub(0.05), 0.35, 0.65, on.mul(step(5, eave)).mul(1.3))
   );
 }
 

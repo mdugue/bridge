@@ -76,6 +76,10 @@ export const OBJECT_FLAG_OWN_COLOUR = 64;
 /** An object that stands on the ground, not on another part's roof: the
  *  plinth, shop zone and ground-floor cornice are drawn on it only. */
 export const OBJECT_FLAG_GROUNDED = 128;
+/** A flat LoD2 roof (`roofType` 1000): a post-war or modern building, whose
+ *  facade the clay's Gliederung (a town house's plinth and cornices) does
+ *  not dress. The column is 16 bits wide from this flag on. */
+export const OBJECT_FLAG_FLAT_ROOF = 256;
 /** A part counts as grounded when its base lies within this of its building
  *  tree's lowest base (a slope's fall; a part on a roof sits a storey up). */
 export const GROUNDED_SLACK_M = 3;
@@ -199,7 +203,7 @@ export interface CityObjectTable {
   building: Uint8Array;
   count: number;
   eaveH: Float32Array;
-  flags: Uint8Array;
+  flags: Uint16Array;
   glow: Uint8Array;
   roof: Float32Array;
   root: Uint32Array;
@@ -217,7 +221,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     baseZ: new Float32Array(count),
     building: new Uint8Array(count),
     eaveH: new Float32Array(count),
-    flags: new Uint8Array(count),
+    flags: new Uint16Array(count),
     glow: new Uint8Array(count),
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
