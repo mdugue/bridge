@@ -424,11 +424,11 @@ function wallPlane(wn: V3, h: F): V2 {
  * glass from stucco), and nothing on a facade nobody photographed:
  *  - Unruhe: a mid or busy facade (much of it not plain render) gets a
  *    fine relief of soft blotches, about a metre wide and taller than wide,
- *    above the plinth and under the eave, faded out once a blotch is a few
- *    pixels across. Blotches, not a lattice: the window-grid veto holds.
- *  - Ton: much dark in it (frames, openings, soot) a few per cent darker
- *    and cooler; little dark a shade lighter — capped, so a misreading is
- *    never a colour error.
+ *    above the plinth and under the eave (±18 % at busy), faded out once a
+ *    blotch is a few pixels across. Blotches, not a lattice: the window-grid veto holds.
+ *  - Ton: much dark in it (frames, openings, soot) up to 12 % darker and
+ *    cooler; little dark 4 % lighter — capped, so a misreading is never a
+ *    colour error.
  *  - Geschossgesimse: a busy facade under a pitched roof (the Gründerzeit
  *    front) carries a ledge at every storey line up to the eave, not only
  *    the first (on Gliederung's slider too).
@@ -460,17 +460,17 @@ function facadeReading(
   const fine = valueNoise(p.div(vec2(0.45, 0.6)).add(17.3));
   const n = coarse.mul(0.65).add(fine.mul(0.35)).sub(0.5).mul(2);
   const px = max(fwidth(p.x), fwidth(h));
-  const near = float(1).sub(smoothstep(0.06, 0.22, px));
+  const near = float(1).sub(smoothstep(0.12, 0.45, px));
   const band = smoothstep(0.6, 1.2, h).mul(
     float(1).sub(smoothstep(eave.sub(0.6), eave.sub(0.2), h))
   );
   let out: V3 = col.mul(
-    float(1).sub(n.mul(0.09).mul(amp).mul(band).mul(near).mul(on))
+    float(1).sub(n.mul(0.18).mul(amp).mul(band).mul(near).mul(on))
   );
-  // Ton: dark 1 lifts 2 %, 2 keeps, 3 darkens and cools 6 %
+  // Ton: dark 1 lifts 4 %, 2 darkens 3 %, 3 darkens and cools 12 %
   const tone = mix(
-    mix(vec3(1.02), vec3(1), step(1.5, dark)),
-    vec3(0.94, 0.945, 0.965),
+    mix(vec3(1.04), vec3(0.97, 0.97, 0.98), step(1.5, dark)),
+    vec3(0.88, 0.89, 0.93),
     step(2.5, dark)
   );
   out = mix(out, out.mul(tone), on.mul(step(0.5, dark)));
@@ -484,7 +484,7 @@ function facadeReading(
     .mul(step(1.5, k))
     .mul(step(top, eave.sub(0.8)))
     .mul(d.uArticulation);
-  return out.mul(ledge(h, top, 0.16, 0.3, on.mul(busyFront).mul(0.8)));
+  return out.mul(ledge(h, top, 0.2, 0.35, on.mul(busyFront)));
 }
 
 /** A facade's mapped material from the object's flags (lib/city/
