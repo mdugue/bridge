@@ -300,8 +300,11 @@ export interface BikeFeed {
 
 /**
  * The live counts, read while the layer is on: once when it is switched
- * on, then every five minutes, never while it is off. A failed read keeps
- * the last counts (the service is down for a moment, the columns stay).
+ * on, then every five minutes, never while it is off — nor while the page
+ * is hidden (a background tab does not ask the city's service); back in
+ * view, it reads at once if the last counts are older than a poll. A
+ * failed read keeps the last counts (the service is down for a moment,
+ * the columns stay).
  */
 export function createBikeFeed(opts: {
   bounds: readonly [number, number, number, number];
@@ -312,7 +315,14 @@ export function createBikeFeed(opts: {
 }): BikeFeed {
   let timer: ReturnType<typeof setInterval> | null = null;
   let aborter: AbortController | null = null;
+  /** performance.now() of the last counts heard */
+  let lastRead = Number.NEGATIVE_INFINITY;
+  // no document (a test, a worker): never hidden
+  const hidden = () => globalThis.document?.hidden === true;
   const read = async () => {
+    if (hidden()) {
+      return;
+    }
     aborter?.abort();
     const mine = new AbortController();
     aborter = mine;
@@ -337,7 +347,13 @@ export function createBikeFeed(opts: {
       // an answer the parser cannot read: the last counts stay
       return;
     }
+    lastRead = performance.now();
     opts.onCounts(counters);
+  };
+  const onVisibility = () => {
+    if (!hidden() && performance.now() - lastRead >= BIKE_POLL_MS) {
+      void read();
+    }
   };
   return {
     start: () => {
@@ -346,11 +362,17 @@ export function createBikeFeed(opts: {
       }
       void read();
       timer = setInterval(() => void read(), BIKE_POLL_MS);
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", onVisibility);
+      }
     },
     stop: () => {
       if (timer !== null) {
         clearInterval(timer);
         timer = null;
+      }
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
       }
       aborter?.abort();
       aborter = null;
