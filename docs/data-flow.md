@@ -305,6 +305,7 @@ flowchart LR
     bRIV["riverside.py"]
     bLMK["landmarks.py"]
     bGAP["structures.py"]
+    bDOOR["doors.py"]
     bTRF["traffic.py"]
     bTRS["transit.py (site-wide)"]
   end
@@ -316,6 +317,7 @@ flowchart LR
     dNDVI["ndvi PNG"]
     dROOF["roofcolor JSON"]
     dOSMB["osmbuild JSON"]
+    dDOOR["doors"]
     dLAMP["lamps"]
     dMON["monuments"]
     dFURN["furniture"]
@@ -356,6 +358,10 @@ flowchart LR
   iCJ ==> bROOF ==> dROOF
   iOSM ==>|"tags · neighbourhood walls"| bOSMB
   iCJ ==> bOSMB ==> dOSMB
+  iOSM ==>|"entrance=*"| bDOOR
+  iCJ ==>|"footprints"| bDOOR
+  iDGM -. "sill height" .-> bDOOR
+  bDOOR ==> dDOOR
   iOSM ==> bLAMP
   dCLS ==>|gates| bLAMP
   bLAMP ==> dLAMP
@@ -420,6 +426,7 @@ flowchart LR
   dROOF -. "roof colour" .-> tCITY
   dOSMB -. "shop · heritage flags · material · colours" .-> tCITY
   dGAP -. "columns · buildings · relief height fields" .-> tCITY
+  dDOOR -. "surround · leaf on the host wall" .-> tCITY
   dLMK -. "landmark flag · material · extras.landmarks" .-> tCITY
   dCLS ==> tSIDE
   dCAN ==> tSIDE

@@ -248,6 +248,26 @@ export interface SmallBuildingFeature {
   properties: { h: number; hc?: number[]; z: number } | null;
 }
 
+/**
+ * A door on a LoD2 wall (pipeline/bake/doors.py, ODbL; a city-mesh bake
+ * input, not served): an OSM entrance snapped onto the nearest footprint
+ * edge of the object `of`, with the wall's outward normal (`nx`, `ny`),
+ * the door's width and height (m), the ground under its sill `z` and the
+ * `entrance=*` value as `kind`.
+ */
+export interface DoorFeature {
+  geometry: PointGeometry;
+  properties: {
+    h: number;
+    kind: string;
+    nx: number;
+    ny: number;
+    of: string;
+    w: number;
+    z: number;
+  } | null;
+}
+
 /** What the surface model shows and LoD2 lacks, confirmed by OSM
  *  (pipeline/bake/structures.py, ODbL): a column (chimney, tower, mast,
  *  water tower, communications tower, lighthouse) as its axis point with
