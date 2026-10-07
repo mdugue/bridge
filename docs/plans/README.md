@@ -87,6 +87,7 @@ history. Decisions that came out of plans are written up as
 | 053 | Time and live sources: the day plays, weather sets the mood, the Elbe follows its gauge | **TODO** — static where possible (ADR 0001 amended); CORS of each source to verify first | [053-time-and-live-sources.md](./053-time-and-live-sources.md) |
 | 054 | Scenarios in the scene's own hand: flood, sun hours, sight lines, a planned building | **TODO** — TSL terms on the terrain and clay graphs | [054-scenarios.md](./054-scenarios.md) |
 | 055 | *Modell*: the city in parallel projection for planners — Isometrie, Vogelschau, Lageplan, Militärperspektive, Ansicht and Schnitt; scale bar, north arrow, planner styles, image export, shadow study | **DONE** — all five phases (ADR 0044); still to judge on a real GPU: the perspective-built specular and halo branches, the water glitter, Strich's washes | [055-model-view-parallel-projections.md](./055-model-view-parallel-projections.md) |
+| 056 | Window axes measured in open street photos (Panoramax, Mapillary) as fine vertical lines — the one case the window-grid veto allows | **BLOCKED** — spike 2026-10-07: Panoramax reaches 58 of 3 731 spawn-tile buildings at a usable angle, poses ±30 m; needs Mapillary's computed poses | [056-window-axes-from-photos.md](./056-window-axes-from-photos.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
