@@ -25,6 +25,7 @@ import type { TreeFactsFile } from "@/lib/city/features";
 import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
 import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
 import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
+import { InquiryData } from "./inquiry-data";
 import { isTextEntry } from "./keyboard-controls";
 
 type DrawerSnapPoint = DrawerPrimitive.Root.SnapPoint;
@@ -151,7 +152,13 @@ export function InquiryCard({
     // opens a fresh sheet, never the closing one (whose close would drop
     // the new question).
     return (
-      <InquirySheet card={card} key={inquiryKey(inquiry)} onClose={onClose} />
+      <InquirySheet
+        card={card}
+        inquiry={inquiry}
+        key={inquiryKey(inquiry)}
+        onClose={onClose}
+        provenance={provenance}
+      />
     );
   }
   return (
@@ -162,7 +169,7 @@ export function InquiryCard({
       data-variant="card"
     >
       <CardHeader card={card} onClose={onClose} />
-      <CardDetails card={card} />
+      <CardDetails card={card} inquiry={inquiry} provenance={provenance} />
     </aside>
   );
 }
@@ -228,10 +235,14 @@ function useSheetEntrance(): [RefObject<HTMLDivElement | null>, boolean] {
  */
 function InquirySheet({
   card,
+  inquiry,
   onClose,
+  provenance,
 }: {
   card: InquiryCardModel;
+  inquiry: Inquiry;
   onClose: () => void;
+  provenance: SiteProvenance | null;
 }) {
   const [open, setOpen] = useState(true);
   const [snap, setSnap] = useState<DrawerSnapPoint | null>(
@@ -277,7 +288,7 @@ function InquirySheet({
           >
             {unfolded ? "Angaben einklappen" : "Angaben und Quellen"}
           </button>
-          <CardDetails card={card} />
+          <CardDetails card={card} inquiry={inquiry} provenance={provenance} />
         </div>
       </DrawerContent>
     </Drawer>
@@ -345,8 +356,16 @@ function CardHeader({
   );
 }
 
-/** The facts, the id to copy and the source lines. */
-function CardDetails({ card }: { card: InquiryCardModel }) {
+/** The facts, the id to copy and, folded, the data behind them. */
+function CardDetails({
+  card,
+  inquiry,
+  provenance,
+}: {
+  card: InquiryCardModel;
+  inquiry: Inquiry;
+  provenance: SiteProvenance | null;
+}) {
   // Which id was copied: a new building's card starts uncopied.
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copied = copiedId === card.id;
@@ -389,11 +408,11 @@ function CardDetails({ card }: { card: InquiryCardModel }) {
         </button>
       </div>
 
-      <ul className="mt-2 space-y-1 text-[10.5px] leading-snug text-muted-foreground">
-        {card.sources.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
+      <InquiryData
+        inquiry={inquiry}
+        provenance={provenance}
+        sources={card.sources}
+      />
     </>
   );
 }

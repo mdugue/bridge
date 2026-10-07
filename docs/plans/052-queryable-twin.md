@@ -178,6 +178,26 @@ tree's card; the timetable's trams as a kind (a car moves, so the
 pick runs on its sections' current frames); furniture, lamps and stops as further kinds (their files
 are in the dressing already).
 
+### 4c. The data behind each thing — **BUILT** (2026-10-07)
+
+The card's source lines were the bottom third of every card and read as
+small print between the facts and the next question. They now sit
+folded under **Daten** (`inquiry-data.tsx`), which unfolds into two
+parts: *Angaben* — the card's own source lines, where each stated fact
+comes from — and *Darstellung* — what the thing as drawn is made of:
+each dataset with what it gave the form, colour, place and light (the
+LoD2's walls and roof, the surface model's rebuilt roof, OSM's facade
+colour and shop fronts, the orthophoto's roof colour, the sky light
+baked from DGM1 and LoD2, a tree's register and its NDVI leaf colour, a
+bridge's Wikidata item), its edition, its credit and a link to it, and
+last what the viewer works out itself (the tint's scatter, the crown
+forms, the hour's light). `lib/city/lineage.ts` decides, only from what
+the object carries (its flags, source and facts; the feature's
+properties; the site's products), and is its own chunk, imported when
+the section is first opened or the pointer nears its toggle — the boot
+carries none of it, and nothing new is fetched (the manifest is the
+card's).
+
 ### 4b. Aim and ask in live mode (S–M)
 
 With live mode on (the phone's compass and GPS steer the view), a tap
