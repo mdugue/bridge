@@ -734,6 +734,9 @@ async function buildDressing(
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
+  // Orchard trees join the cadastre as its "small" archetype, appended: an
+  // index stays the trees file's (and its facts row), the orchard's past it.
+  const trees = [...inventory, ...orchardTrees(cultivated)];
   const vegetation = buildTileVegetation(
     {
       rows,
@@ -743,8 +746,7 @@ async function buildDressing(
       canopy: offMonuments([...canopy, ...scanTrees], monuments),
       ndviAt: ndviAt ?? undefined,
     },
-    // Orchard trees join the cadastre as its "small" archetype.
-    [...inventory, ...orchardTrees(cultivated)],
+    trees,
     {
       offset: ctx.offset,
       heightAt: terrain.heightAt,
@@ -825,7 +827,7 @@ async function buildDressing(
   };
   const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
   const asks = [
-    ...treeSets(inventory, askCtx),
+    ...treeSets(trees, askCtx),
     ...askSets(monumentItems(monuments, askCtx)),
     ...(bridgeSet ? [bridgeSet] : []),
   ];

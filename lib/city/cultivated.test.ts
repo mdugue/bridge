@@ -59,7 +59,7 @@ const features: CultivatedFeature[] = [
   { geometry: null, properties: null },
 ];
 
-test("orchard trees become small deciduous cadastre trees", () => {
+test("orchard trees become small deciduous cadastre trees, marked as orchard trees", () => {
   const trees = orchardTrees(features);
   expect(trees).toHaveLength(1);
   expect(trees[0].geometry.coordinates).toEqual([4, 5]);
@@ -68,6 +68,7 @@ test("orchard trees become small deciduous cadastre trees", () => {
     h: 5,
     d: 3.5,
     l: "d",
+    s: "orchard",
   });
 });
 

@@ -113,6 +113,22 @@ test("before its facts arrive a tree says its genus, nothing it cannot", () => {
   ]);
 });
 
+test("an orchard tree says it is one, from OSM's orchard, with no register line", () => {
+  // past the facts file's end: no row of its own
+  const card = treeCard(
+    { ...linde, index: 2, osm: false, orchard: true, genus: "" },
+    treeFactsAt(file, 2),
+    provenance
+  );
+  expect(card.kicker).toBe("Obstbaum");
+  expect(card.title).toBe("Obstbaum");
+  expect(card.facts).toEqual([]);
+  expect(card.sources).toEqual([
+    "Obstwiese: OpenStreetMap · Stand 26.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
+  ]);
+  expect(card.sources.join()).not.toContain("Stadtbaumkataster");
+});
+
 test("a named fountain with a figure, its basin from OSM, its name official", () => {
   const card = monumentCard(
     {

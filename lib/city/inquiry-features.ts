@@ -37,6 +37,9 @@ export interface TreeInquiry {
   kind: "tree";
   /** from OSM, not the city's register */
   osm: boolean;
+  /** an orchard tree (OSM's orchards, lib/city/cultivated.ts): no row of
+   *  the facts file, no register */
+  orchard?: boolean;
   /** where it stands (the site's CRS) */
   position: [number, number];
   tile: string;
@@ -145,12 +148,32 @@ function treeLines(t: TreeInquiry, f: TreeFacts, title: string): CardFact[] {
   ]);
 }
 
+/** An orchard tree's card: where it stands, from OSM's orchard (its size
+ *  is the orchard's default, no fact). */
+function orchardCard(
+  t: TreeInquiry,
+  provenance: SiteProvenance | null
+): InquiryCard {
+  return {
+    kicker: "Obstbaum",
+    title: firstText(t.genus, "Obstbaum"),
+    address: "",
+    facts: [],
+    id: positionKey(t.position),
+    idLabel: "Lage",
+    sources: [osmSource(provenance, ["Obstwiese"], "trees")],
+  };
+}
+
 /** The tree's card; `facts` null until its tile's file has arrived. */
 export function treeCard(
   t: TreeInquiry,
   facts: TreeFacts | null,
   provenance: SiteProvenance | null
 ): InquiryCard {
+  if (t.orchard) {
+    return orchardCard(t, provenance);
+  }
   const f = facts ?? NO_TREE_FACTS;
   const title = firstText(
     f.german,
