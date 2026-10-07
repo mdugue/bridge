@@ -11,6 +11,8 @@ import {
 } from "three/webgpu";
 import type { TreeFeature } from "@/lib/city/features";
 import { familyLook, TRUNK_BASE } from "@/lib/city/tree-family";
+import { ageLook } from "@/lib/city/tree-age";
+import { buildTreeStakes } from "./tree-stakes";
 import {
   LOOK_DEFAULTS,
   type VegetationLookKey,
@@ -288,6 +290,7 @@ function buildShapeGeos(): ShapeGeos {
 }
 
 /** How a register tree's crown follows the year (its genus and leaf). */
+
 function seasonKeyOf(t: InventoryTree): CrownSeasonKey {
   const evergreen = t.leaf === "e";
   return {
@@ -323,7 +326,9 @@ function writeCrowns(
 /** Trunk girth: the measured diameter where there is one, else the height
  *  (tree-inventory.ts trunkGirth). */
 function trunkMatrix(t: InventoryTree): Matrix4 {
-  const girth = trunkGirth(t.ext, t.dbh);
+  // a measured trunk is as measured; else the age thins or thickens it
+  const girth =
+    trunkGirth(t.ext, t.dbh) * (t.dbh === undefined ? ageLook(t.age).girth : 1);
   return new Matrix4().compose(
     new Vector3(t.x, t.ground, t.z),
     new Quaternion().setFromAxisAngle(Y_AXIS, t.rot),
@@ -527,6 +532,10 @@ export function buildTreeInventory(
   if (trees.length > 0) {
     const geos = buildShapeGeos();
     instances = canopyInstances(trees, geos.broad);
+    const stakes = buildTreeStakes(trees.filter((t) => ageLook(t.age).staked));
+    if (stakes) {
+      group.add(stakes);
+    }
     counts.broad = trees.filter((t) => t.shape === "broad").length;
     const reshaped = trees.filter((t) => t.shape !== "broad");
     for (const cell of bucketByCell(reshaped)) {

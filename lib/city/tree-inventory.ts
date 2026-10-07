@@ -1,3 +1,4 @@
+import { treeAge } from "./tree-age";
 import type { TreeFeature } from "./features";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { clamp } from "./math";
@@ -283,6 +284,9 @@ export interface InventoryTree {
   /** measured trunk diameter at breast height (cm) */
   dbh?: number;
   ext: TreeExtents;
+  /** its age in years (lib/city/tree-age.ts), where the register has a
+   *  planting year */
+  age?: number;
   /** TREE_GENERA index (lib/city/tree-season.ts); 0 = other deciduous */
   genus: number;
   ground: number;
@@ -309,7 +313,8 @@ export function inventoryTrees(
     heightAt: (x: number, y: number) => number | null;
     offset: RecenterOffset;
   },
-  ndviAt?: RasterSampler
+  ndviAt?: RasterSampler,
+  year = new Date().getFullYear()
 ): InventoryTree[] {
   const out: InventoryTree[] = [];
   for (const f of features) {
@@ -337,6 +342,7 @@ export function inventoryTrees(
       colour: p.c ?? 0,
       dbh: p.t,
       ndvi: ndviAt?.(ex, ey),
+      age: treeAge(p.y, year),
     });
   }
   return out;
