@@ -210,13 +210,16 @@ nothing solid stands behind it (`firstSolid`); the tolerant rings still
 vote when the exact ray meets nothing. The rest are candidates
 (`mergeCandidates`: the exact ray's hits and each ring ray's first two,
 each thing once, at most eight, nearest first, the chosen one never cut),
-shown in a strip of their own beside the tap (`inquiry-strip.tsx`) —
-"vorn … hinten", an icon, the card's title and the distance each — so the
-card stays about one thing. The pointer on a candidate moves the outline
-to it for as long as it stays (`previewCandidate`), a click shows it in
-the card and moves the hatch (`selectCandidate`). A ring a finger wide
-pulses once at the tap: how far round it the question looked. On a touch
-screen the strip sits above the folded sheet.
+listed apart from the card, so the card stays about one thing — the way
+an editor's "select the layer under the pointer" list works
+(`inquiry-strip.tsx`): on a desktop a quiet glass list in the card's
+column, under it ("Am Strahl · von vorn nach hinten", an icon, the
+card's title and the distance each, the chosen one marked); on a touch
+screen a row of chips above the folded sheet, scrolled to the chosen
+one. The pointer on a candidate moves the outline to it for as long as
+it stays (`previewCandidate`), a click shows it in the card and moves
+the hatch (`selectCandidate`). A ring a finger wide pulses once at the
+tap: how far round it the question looked.
 
 ### 4b. Aim and ask in live mode (S–M)
 

@@ -164,7 +164,7 @@ export function InquiryCard({
   return (
     <aside
       aria-labelledby="inquiry-title"
-      className="absolute top-4 left-4 z-20 flex max-h-[calc(100%-2rem)] w-[min(22rem,calc(100%-2rem))] flex-col rounded-lg bg-card text-card-foreground shadow-lg ring-1 ring-foreground/10 select-text"
+      className="pointer-events-auto flex min-h-0 shrink flex-col rounded-lg bg-card text-card-foreground shadow-lg ring-1 ring-foreground/10 select-text"
       data-testid="inquiry-card"
       data-variant="card"
     >

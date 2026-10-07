@@ -71,7 +71,7 @@ import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
 import { type ExportContext, saveImage, saveShadowStudy } from "./image-export";
 import { InquiryCard } from "./inquiry-card";
-import { InquiryStrip } from "./inquiry-strip";
+import { InquiryStrip, InquiryTapRing } from "./inquiry-strip";
 import { useLiveMode } from "./live-mode";
 import {
   LocateMessage,
@@ -962,20 +962,15 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             />
 
             {sound.on && <SoundGlyph onClick={sound.toggle} />}
-            {inquiry && along && (
-              <InquiryStrip
-                along={along}
-                onPreview={(i) => handleRef.current?.previewCandidate(i)}
-                onSelect={(i) => handleRef.current?.selectCandidate(i)}
-                sheet={coarse}
-              />
-            )}
             {inquiry && (
-              <InquiryCard
+              <InquiryPanel
+                along={along}
+                coarse={coarse}
                 inquiry={inquiry}
                 onClose={closeInquiry}
+                onPreview={(i) => handleRef.current?.previewCandidate(i)}
+                onSelect={(i) => handleRef.current?.selectCandidate(i)}
                 provenanceUrl={provenanceUrl}
-                sheet={coarse}
               />
             )}
             <SettingsToggle />
@@ -1069,5 +1064,61 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         />
       )}
     </SidebarProvider>
+  );
+}
+
+/**
+ * The asked thing's card and what else the ray met: on a desktop one
+ * column at the left, the card over the list; on a touch screen the sheet
+ * with the chips above it. The tap's ring either way.
+ */
+function InquiryPanel({
+  along,
+  coarse,
+  inquiry,
+  onClose,
+  onPreview,
+  onSelect,
+  provenanceUrl,
+}: {
+  along: InquiryAlong | null;
+  coarse: boolean;
+  inquiry: Inquiry;
+  onClose: () => void;
+  onPreview: (index: number | null) => void;
+  onSelect: (index: number) => void;
+  provenanceUrl: string | null;
+}) {
+  const strip = along && (
+    <InquiryStrip
+      along={along}
+      onPreview={onPreview}
+      onSelect={onSelect}
+      sheet={coarse}
+    />
+  );
+  const card = (
+    <InquiryCard
+      inquiry={inquiry}
+      onClose={onClose}
+      provenanceUrl={provenanceUrl}
+      sheet={coarse}
+    />
+  );
+  return (
+    <>
+      {along && <InquiryTapRing along={along} />}
+      {coarse ? (
+        <>
+          {strip}
+          {card}
+        </>
+      ) : (
+        <div className="pointer-events-none absolute inset-y-4 left-4 z-20 flex w-[min(22rem,calc(100%-2rem))] flex-col items-stretch gap-2">
+          {card}
+          {strip}
+        </div>
+      )}
+    </>
   );
 }

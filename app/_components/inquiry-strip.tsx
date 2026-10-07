@@ -5,19 +5,12 @@ import {
   BridgeIcon,
   Building2Icon,
   CarIcon,
-  ChevronRightIcon,
   LandmarkIcon,
   type LucideIcon,
   TreeDeciduousIcon,
   TreePineIcon,
 } from "lucide-react";
-import {
-  type CSSProperties,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { cn } from "cn";
 import {
   type Inquiry,
@@ -52,32 +45,37 @@ export function distanceLabel(m: number): string {
   return m < 1000 ? `${whole.format(m)} m` : `${tenths.format(m / 1000)} km`;
 }
 
-/** The strip's left edge (px) that centres it on `share` of its parent's
- *  width, kept `margin` px inside it. */
-function useClampedLeft(share: number, content: unknown, margin = 12) {
-  const ref = useRef<HTMLElement | null>(null);
-  const [left, setLeft] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    const parent = el?.offsetParent as HTMLElement | null;
-    if (!(el && parent)) {
-      return;
-    }
-    const width = el.offsetWidth;
-    const room = parent.clientWidth;
-    const centred = share * room - width / 2;
-    setLeft(Math.max(margin, Math.min(centred, room - margin - width)));
-  }, [share, content, margin]);
-  return [ref, left] as const;
+/** A finger-wide ring at the tap, pulsed once: how far round the point
+ *  the question looked (the crosshair's when asked by key: none). */
+export function InquiryTapRing({ along }: { along: InquiryAlong }) {
+  if (!along.at || along.candidates.length < 2) {
+    return null;
+  }
+  const x = (along.at.x + 1) / 2;
+  const y = (1 - along.at.y) / 2;
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full border border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.25)] [animation-fill-mode:forwards] [animation-iteration-count:1]"
+      style={{
+        left: `${x * 100}%`,
+        top: `${y * 100}%`,
+        width: TOLERANCE_PX * 2,
+        height: TOLERANCE_PX * 2,
+      }}
+    />
+  );
 }
 
 /**
- * Everything the question's ray met, front to back (plan 052): a strip of
- * its own beside the tap, apart from the card, so the card stays about one
- * thing. The chosen one is filled; the pointer on another outlines it in
- * the scene for as long as it stays, a click shows it in the card. A ring
- * at the tap, a finger wide, says how far round the point the question
- * looked. On a touch screen the strip sits above the folded sheet.
+ * Everything the question's ray met, front to back (plan 052), apart from
+ * the card so the card stays about one thing — the way an editor's
+ * "select the layer under the pointer" list works. On a desktop a quiet
+ * list in the card's column, under it: one row per candidate, the chosen
+ * one marked; on a touch screen a row of chips above the folded sheet,
+ * scrolled sideways. Glass, not paper: the scene shows through. The
+ * pointer on a row outlines its thing in the scene for as long as it
+ * stays, a click shows it in the card.
  */
 export function InquiryStrip({
   along,
@@ -88,7 +86,7 @@ export function InquiryStrip({
   along: InquiryAlong;
   onPreview: (index: number | null) => void;
   onSelect: (index: number) => void;
-  /** a touch screen: above the bottom sheet, not at the tap */
+  /** a touch screen: chips above the bottom sheet, not a list */
   sheet?: boolean;
 }) {
   const items = useMemo(
@@ -105,107 +103,97 @@ export function InquiryStrip({
       }),
     [along]
   );
-  // where the question was asked, in % of the scene (the crosshair when
-  // asked by key)
-  const at = along.at ?? { x: 0, y: 0 };
-  const tap = { x: (at.x + 1) / 2, y: (1 - at.y) / 2 };
-  const [ref, left] = useClampedLeft(tap.x, along);
-  // below the tap's ring, or above it in the lower part of the screen
-  const below = tap.y < 0.72;
-  const place: CSSProperties = {
-    left: left ?? `${tap.x * 100}%`,
-    top: below
-      ? `calc(${tap.y * 100}% + ${TOLERANCE_PX + 10}px)`
-      : `calc(${tap.y * 100}% - ${TOLERANCE_PX + 10}px - 2.25rem)`,
-    // unmeasured, it waits out of sight for its width
-    visibility: left === null ? "hidden" : undefined,
-  };
+  // the chips scroll sideways: the chosen one into view
+  const chips = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const nav = chips.current;
+    const chosen = nav?.querySelector<HTMLElement>("[aria-current]");
+    if (nav && chosen) {
+      nav.scrollLeft =
+        chosen.offsetLeft - (nav.clientWidth - chosen.offsetWidth) / 2;
+    }
+  }, [along]);
   if (items.length < 2) {
     return null;
   }
-  return (
-    <>
-      {along.at && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.25)] [animation-fill-mode:forwards] [animation-iteration-count:1] animate-ping"
-          style={{
-            left: `${tap.x * 100}%`,
-            top: `${tap.y * 100}%`,
-            width: TOLERANCE_PX * 2,
-            height: TOLERANCE_PX * 2,
-          }}
-        />
-      )}
-      <div
+  const row = (item: (typeof items)[number], i: number) => {
+    const Icon = item.icon;
+    const chosen = i === along.selected;
+    return (
+      <button
+        aria-current={chosen ? "true" : undefined}
         className={cn(
-          "pointer-events-none absolute z-20",
-          sheet
-            ? "inset-x-0 bottom-[calc(8.25rem+0.75rem)] flex justify-center px-3"
-            : "inset-0"
+          "flex min-w-0 items-center gap-2 rounded-md text-left leading-none transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          sheet ? "shrink-0 rounded-full px-2.5 py-1.5" : "w-full px-2 py-1.5",
+          chosen
+            ? "bg-foreground/[0.08] text-foreground"
+            : "text-foreground/75 hover:bg-foreground/[0.05] hover:text-foreground"
         )}
+        key={item.key}
+        onBlur={() => onPreview(null)}
+        onClick={() => onSelect(i)}
+        onFocus={() => onPreview(i)}
+        onPointerEnter={() => onPreview(i)}
+        title={`${item.kicker} · ${item.distance}`}
+        type="button"
       >
-        <nav
-          aria-label="Was auf dem Strahl liegt"
+        <Icon
+          aria-hidden
           className={cn(
-            "pointer-events-auto flex max-w-[calc(100%-1.5rem)] items-center gap-0.5 overflow-x-auto rounded-full bg-card/95 p-1 text-card-foreground shadow-lg ring-1 ring-foreground/10 backdrop-blur-sm [scrollbar-width:none]",
-            !sheet && "absolute"
+            "size-3.5 shrink-0",
+            chosen ? "text-foreground" : "text-muted-foreground"
+          )}
+        />
+        <span
+          className={cn(
+            "truncate",
+            sheet ? "max-w-[8rem]" : "flex-1",
+            chosen && "font-medium"
+          )}
+        >
+          {item.label}
+        </span>
+        <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+          {item.distance}
+        </span>
+      </button>
+    );
+  };
+  const glass =
+    "pointer-events-auto bg-card/65 text-card-foreground shadow-sm ring-1 ring-foreground/[0.06] backdrop-blur-md";
+  if (sheet) {
+    return (
+      <div className="pointer-events-none absolute inset-x-0 bottom-[calc(8.25rem+0.75rem)] z-20 flex justify-center px-3">
+        <nav
+          aria-label="Was am Strahl liegt, von vorn nach hinten"
+          className={cn(
+            glass,
+            "relative flex max-w-full gap-0.5 overflow-x-auto rounded-full p-1 text-[12px] [scrollbar-width:none]"
           )}
           data-testid="inquiry-strip"
-          onPointerLeave={() => onPreview(null)}
-          ref={(el) => {
-            ref.current = el;
-          }}
-          style={sheet ? undefined : place}
+          ref={chips}
         >
-          <span className="shrink-0 pr-1 pl-2 text-[9px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-            vorn
-          </span>
-          {items.map((item, i) => {
-            const Icon = item.icon;
-            const chosen = i === along.selected;
-            return (
-              <span className="flex shrink-0 items-center" key={item.key}>
-                {i > 0 && (
-                  <ChevronRightIcon
-                    aria-hidden
-                    className="size-3 text-muted-foreground/50"
-                  />
-                )}
-                <button
-                  aria-current={chosen ? "true" : undefined}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full py-1 pr-2.5 pl-2 text-[12px] leading-none transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    chosen
-                      ? "bg-foreground text-background"
-                      : "text-foreground/85 hover:bg-muted hover:text-foreground"
-                  )}
-                  onBlur={() => onPreview(null)}
-                  onClick={() => onSelect(i)}
-                  onFocus={() => onPreview(i)}
-                  onPointerEnter={() => onPreview(i)}
-                  title={`${item.kicker} · ${item.distance}`}
-                  type="button"
-                >
-                  <Icon aria-hidden className="size-3.5 shrink-0" />
-                  <span className="max-w-[9.5rem] truncate">{item.label}</span>
-                  <span
-                    className={cn(
-                      "text-[10px] tabular-nums",
-                      chosen ? "text-background/60" : "text-muted-foreground"
-                    )}
-                  >
-                    {item.distance}
-                  </span>
-                </button>
-              </span>
-            );
-          })}
-          <span className="shrink-0 pr-2 pl-1 text-[9px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-            hinten
-          </span>
+          {items.map(row)}
         </nav>
       </div>
-    </>
+    );
+  }
+  return (
+    <nav
+      aria-label="Was am Strahl liegt, von vorn nach hinten"
+      className={cn(
+        glass,
+        "flex max-h-[40%] min-h-0 shrink-0 flex-col rounded-lg p-1 text-[12px]"
+      )}
+      data-testid="inquiry-strip"
+      onPointerLeave={() => onPreview(null)}
+    >
+      <p className="px-2 pt-1 pb-1 text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
+        Am Strahl · von vorn nach hinten
+      </p>
+      <div className="min-h-0 overflow-y-auto overscroll-contain">
+        {items.map(row)}
+      </div>
+    </nav>
   );
 }
