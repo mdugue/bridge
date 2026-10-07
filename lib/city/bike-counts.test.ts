@@ -3,6 +3,7 @@ import {
   acrossStreet,
   bikeColumnHeight,
   bikeCountsUrl,
+  countClock,
   isStale,
   parseBikeCounts,
   parseCountTime,
@@ -110,6 +111,14 @@ test("the time is Dresden's wall clock, whatever the visitor's zone; anything el
     "2026-10-25T03:00:00.000Z"
   );
   expect(parseCountTime("gestern")).toBeNull();
+});
+
+test("a count's time is shown on the city's clock, whatever the visitor's zone", () => {
+  // run under any TZ but Berlin's (TZ=Asia/Tokyo) a local clock fails this
+  expect(countClock(parseCountTime("01.10.2026 07:00:00") as Date)).toBe(
+    "07:00"
+  );
+  expect(countClock(new Date("2026-12-24T17:00:00Z"))).toBe("18:00");
 });
 
 test("an old count is stale", () => {

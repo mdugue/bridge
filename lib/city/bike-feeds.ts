@@ -32,9 +32,6 @@ type Bounds = readonly [number, number, number, number];
 export interface BikeFeedReader {
   parse: (doc: unknown, bounds: Bounds, epsg: number) => BikeCounter[];
   url: (bounds: Bounds, epsg: number) => string;
-  /** the time zone whose wall clock the feed's times are written in; none
-   *  where they carry their own offset (ISO with `Z`) */
-  zone?: string;
 }
 
 /** Hamburg's SensorThings service. */
@@ -235,7 +232,6 @@ export const BIKE_FEED_READERS: Record<BikeFeedId, BikeFeedReader> = {
   dresden: {
     url: (_bounds, epsg) => bikeCountsUrl(epsg),
     parse: (doc, bounds) => parseBikeCounts(doc, bounds, DRESDEN_ZONE),
-    zone: DRESDEN_ZONE,
   },
   hamburg: { url: hamburgBikeUrl, parse: parseHamburgBikes },
 };

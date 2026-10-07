@@ -82,9 +82,25 @@ function text(value: unknown): string {
   return typeof value === "number" ? String(value) : "";
 }
 
+/** Every site's wall clock (all of them are German): a count's time is
+ *  read and shown in it, never in the visitor's zone. */
+export const SITE_ZONE = "Europe/Berlin";
+
 /** Where the city's feed tells its time: Dresden's `messzeit` is the
  *  city's wall clock, never the visitor's. */
-export const DRESDEN_ZONE = "Europe/Berlin";
+export const DRESDEN_ZONE = SITE_ZONE;
+
+const countClockFormat = new Intl.DateTimeFormat("de-DE", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: SITE_ZONE,
+});
+
+/** "07:00" — a count's time on the city's wall clock, wherever the
+ *  visitor is. */
+export function countClock(at: Date): string {
+  return countClockFormat.format(at);
+}
 
 /** The wall clock of `zone` at an instant, as if it were UTC (ms). */
 function wallClockAt(ms: number, zone: string): number {
