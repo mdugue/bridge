@@ -21,6 +21,14 @@ export const OUTLINE_BAND = { from: 0.07, to: 0.66, strength: 1, sigma: 4 };
 /** The paper halo just outside it, so it reads on dark asphalt too. */
 export const OUTLINE_HALO = { from: 0.012, to: 0.07, strength: 0.55 };
 
+/**
+ * Where something in front hides the element, the line is drawn on top
+ * all the same, at this share of its ink: the hidden edge of a drawing,
+ * lighter than the seen one, so the whole shape reads and so does what
+ * stands before it.
+ */
+export const OUTLINE_HIDDEN = { strength: 0.42 };
+
 /** The standard normal distribution's quantile (Acklam's approximation,
  *  ample for line widths). */
 export function normalQuantile(p: number): number {

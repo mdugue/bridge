@@ -2,13 +2,16 @@ import {
   type BufferAttribute,
   BufferGeometry,
   type Camera,
+  CustomBlending,
   Float32BufferAttribute,
   LinearFilter,
+  MaxEquation,
   Mesh,
   MeshBasicNodeMaterial,
   NodeMaterial,
+  OneFactor,
   QuadMesh,
-  RedFormat,
+  RGFormat,
   RenderTarget,
   Scene,
   type DepthTexture,
@@ -25,6 +28,7 @@ import {
   float,
   fwidth,
   max,
+  select,
   mix,
   positionView,
   screenUV,
@@ -39,20 +43,22 @@ import {
 import {
   OUTLINE_BAND,
   OUTLINE_HALO,
+  OUTLINE_HIDDEN,
   OUTLINE_KEEP_MS,
   outlineKernel,
   outlineSpread,
 } from "@/lib/city/outline";
-import type { F, V4 } from "./shader-chunks";
+import type { V4 } from "./shader-chunks";
 import { TRAFFIC_ATTRIBUTES, trafficPositionNode } from "./traffic-layer";
 import type { ViewLens } from "./view-lens";
 
 /**
  * What the outline goes around: an element's triangles in world space
  * (non-indexed) with how far behind them the scene's surface may lie and
- * still be the element (`reach`, m — 0 for its own triangles; a stand-in's
- * depth, so the mask is what the scene drew inside it; unbounded for
- * glass, which writes no depth) — or one counted section of a traffic
+ * still be the element where it shows (`reach`, m — 0 for its own
+ * triangles; a stand-in's depth, so what shows is what the scene drew
+ * inside it; unbounded for glass, which writes no depth) — or one counted
+ * section of a traffic
  * flow (`triangles` of the tile's `flow` mesh), drawn as the layer draws
  * it, grown with the hour and widened from the air.
  */
@@ -69,24 +75,34 @@ const FLOW_ATTRIBUTES = ["position", ...TRAFFIC_ATTRIBUTES] as const;
  * thick, soft and a little rounded, in the hatch's graphite on a hair of
  * its paper, a constant width on screen whatever the distance.
  *
+ * The line goes round the whole element, never along what stands in
+ * front of it, and is drawn over everything: a house behind a tree is
+ * outlined as a house, not as the tree's edge against it. Where something
+ * in front hides the element, the line is lighter (`OUTLINE_HIDDEN`) — the
+ * draughtsman's hidden edge — so it still says which is in front; the
+ * hatch, on the clay itself, stays where the element shows.
+ *
  * How: the element's own triangles (world positions, `set`) are drawn
- * into a mask, only where the scene shows them (the scene pass's depth
- * decides: a house behind another is outlined where it shows). The mask
+ * into a two-channel mask: red wherever they fall, green only where the
+ * scene shows them (the scene pass's depth decides), merged by MAX
+ * blending so a hidden back face never clears a shown front. The mask
  * is blurred at half resolution, which rounds its corners, drops what is
  * finer than the line and leaves a smooth ramp across the silhouette;
  * the line is the band of that ramp around its middle, anti-aliased by
  * its own gradient (`fwidth`), so it never steps like a pixel edge. The
  * blur's reach follows the device pixel ratio: the width is in CSS
- * pixels. The halo is the paper the hatch lifts the building towards, so
- * mark and outline read as one drawing.
+ * pixels. The line's band is red's; green over red near it is the share
+ * of the element there that shows. The halo is the paper the hatch lifts
+ * the building towards, so mark and outline read as one drawing.
  *
- * Memory: the mask and the blur hold one byte a texel (the mask is 0 or 1,
- * the blur a ramp the band reads to a few hundredths), and the mask and
+ * Memory: the mask and the blur hold two bytes a texel (each channel 0 or
+ * 1 in the mask, in the blur a ramp the band reads to a few hundredths),
+ * and the mask and
  * the blur's two passes are drawn only while something is asked. With
  * nothing asked the last pass reads the blur's cleared target, and the
  * mask and the first blur target go some seconds after the last question
  * (`OUTLINE_KEEP_MS`): on an iPhone 9 MB of half-float targets, drawn
- * every frame, became one 0.2 MB target. The mask stays at the drawing
+ * every frame, became one 0.4 MB target. The mask stays at the drawing
  * buffer's resolution: the blur's taps step less than a texel of the half
  * resolution it writes, so it reads the mask's edge between those texels.
  */
@@ -115,10 +131,11 @@ const PAPER = new Color(0.97, 0.93, 0.85);
 const SEEN_SLACK_M = 0.6;
 const SEEN_SLACK_SHARE = 0.01;
 
-/** A one-byte target without depth, read with linear filtering. */
+/** A two-byte target (red, green) without depth, read with linear
+ *  filtering. */
 function byteTarget(width: number, height: number, name: string) {
   const target = new RenderTarget(width, height, {
-    format: RedFormat,
+    format: RGFormat,
     type: UnsignedByteType,
     depthBuffer: false,
     minFilter: LinearFilter,
@@ -132,7 +149,7 @@ function byteTarget(width: number, height: number, name: string) {
 const halved = (n: number) => Math.max(Math.round(n * 0.5), 1);
 
 /**
- * One pass of the blur over `source`'s red channel: the kernel's taps
+ * One pass of the blur over `source`'s red and green: the kernel's taps
  * along `across` (1, 0 or 0, 1), `spread` half-resolution texels (`texel`)
  * apart — three's GaussianBlurNode, which the outline used before, made
  * the same sums into half-float RGBA targets it kept for good.
@@ -147,17 +164,17 @@ function blurPass(
   const weights = outlineKernel();
   const at = uv();
   const step = vec2(across[0], across[1]).mul(spread).mul(texel);
-  let sum: F = texture(source, at).r.mul(weights[0]);
+  let sum = texture(source, at).rg.mul(weights[0]);
   for (let i = 1; i < weights.length; i++) {
     const offset = step.mul(i);
     sum = sum.add(
       texture(source, at.add(offset))
-        .r.add(texture(source, at.sub(offset)).r)
+        .rg.add(texture(source, at.sub(offset)).rg)
         .mul(weights[i])
     );
   }
   const material = new NodeMaterial();
-  material.fragmentNode = vec4(sum, 0, 0, 1);
+  material.fragmentNode = vec4(sum, 0, 1);
   material.name = name;
   return { material, quad: new QuadMesh(material) };
 }
@@ -195,27 +212,37 @@ export function createSelectionOutline(deps: {
   // with depth): about 0 on its own triangles, up to `reach` in a stand-in
   const behind = positionView.z.sub(sceneZ);
   const reach = uniform(0);
-  const maskMaterial = (name: string) => {
+  // red: the element; green: where the scene shows it. MAX keeps a shown
+  // face's green under a hidden one drawn after it.
+  const maskMaterial = (name: string, seen: Parameters<typeof select>[0]) => {
     const m = new MeshBasicNodeMaterial();
-    m.colorNode = vec4(1, 1, 1, 1);
+    m.colorNode = vec4(1, select(seen, float(1), float(0)), 0, 1);
     // both faces: the LoD2's polygons do not all face out (the clay draws
     // both sides too)
     m.side = DoubleSide;
     m.depthTest = false;
     m.depthWrite = false;
     m.fog = false;
+    m.blending = CustomBlending;
+    m.blendEquation = MaxEquation;
+    m.blendSrc = OneFactor;
+    m.blendDst = OneFactor;
     m.name = name;
     return m;
   };
-  const material = maskMaterial("selection-mask");
-  material.maskNode = behind
-    .greaterThanEqual(slack.negate())
-    .and(behind.lessThanEqual(reach.add(slack)));
+  const material = maskMaterial(
+    "selection-mask",
+    behind
+      .greaterThanEqual(slack.negate())
+      .and(behind.lessThanEqual(reach.add(slack)))
+  );
   // A flow is glass: no depth of its own, so only what stands in front of
   // it hides it.
-  const flowMaterial = maskMaterial("selection-mask-flow");
+  const flowMaterial = maskMaterial(
+    "selection-mask-flow",
+    behind.greaterThanEqual(slack.negate())
+  );
   flowMaterial.positionNode = trafficPositionNode();
-  flowMaterial.maskNode = behind.greaterThanEqual(slack.negate());
 
   // Always a position attribute, even with nothing asked (one degenerate
   // triangle): the program is built from the geometry's attributes, and
@@ -300,12 +327,16 @@ export function createSelectionOutline(deps: {
 
   const over = (colour: V4): V4 => {
     const f = blurredMask.r;
+    // the share of the element near here that the scene shows: 1 on a
+    // line round what shows, 0 round what is hidden
+    const shown = smoothstep(0.25, 0.75, blurredMask.g.div(max(f, 1e-3)));
+    const ink = mix(float(OUTLINE_HIDDEN.strength), float(1), shown);
     const aa = max(fwidth(f), 1e-4);
     const band = (from: number, to: number) =>
       smoothstep(float(from).sub(aa), float(from).add(aa), f).mul(
         float(1).sub(smoothstep(float(to).sub(aa), float(to).add(aa), f))
       );
-    const ink = band(OUTLINE_BAND.from, OUTLINE_BAND.to);
+    const line = band(OUTLINE_BAND.from, OUTLINE_BAND.to);
     const halo = band(OUTLINE_HALO.from, OUTLINE_HALO.to);
     const onPaper = mix(
       colour.rgb,
@@ -316,7 +347,7 @@ export function createSelectionOutline(deps: {
       mix(
         onPaper,
         vec3(GRAPHITE.r, GRAPHITE.g, GRAPHITE.b),
-        ink.mul(OUTLINE_BAND.strength)
+        line.mul(ink).mul(OUTLINE_BAND.strength)
       ),
       colour.a
     );
