@@ -173,3 +173,17 @@ test("a bridge matched to Wikidata links its item", () => {
   // the class came from Wikidata: OSM gave nothing here
   expect(sources(entries)).not.toContain("OpenStreetMap");
 });
+
+test("a tree the surface model measured names the model, not a register", () => {
+  const entries = lineage(
+    { kind: "canopy", tile: "t", position: [0, 0], source: "dom", height: 12 },
+    provenance,
+    saxony
+  );
+  expect(sources(entries)).toEqual([
+    "Digitales Oberflächenmodell DOM1",
+    "Digitales Geländemodell DGM1",
+    "Digitales Orthophoto",
+    "Im Viewer berechnet",
+  ]);
+});

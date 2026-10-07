@@ -27,6 +27,7 @@ import type {
   MonumentInquiry,
   TreeInquiry,
 } from "./inquiry-features";
+import type { CanopyInquiry, MoreInquiry } from "./inquiry-more";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
 import { isMeasuredRoof, type ObjectFacts } from "./object-facts";
 import {
@@ -198,6 +199,13 @@ export function lineage(
     case "bikes":
       bikeLineage(l, inquiry);
       break;
+    case "canopy":
+    case "furniture":
+    case "hedge":
+    case "lamp":
+    case "landing":
+    case "stop":
+      moreLineage(l, inquiry, site);
   }
   return l.entries;
 }
@@ -408,4 +416,72 @@ function bikeLineage(l: Lineage, b: BikeInquiry): void {
     how: "gelesen",
   });
   l.source("dgm", ["der Boden"], "gelesen");
+}
+
+/** Where each OSM thing was read, and what the viewer gave it. */
+const OSM_THINGS: Record<
+  Exclude<MoreInquiry["kind"], "canopy" | "hedge">,
+  [string, string]
+> = {
+  lamp: ["Standort", "der Mast, die Leuchte und ihr Licht bei Nacht"],
+  furniture: ["Standort, Art und was OSM zur Form sagt", "die Form je Art"],
+  stop: ["Standort und Name", "das Haltestellenschild"],
+  landing: ["der Umriss und die Art", "Steg, Ponton und Höhe am Wasser"],
+};
+
+function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
+  switch (m.kind) {
+    case "canopy":
+      canopyLineage(l, m, site);
+      return;
+    case "hedge":
+      l.source("dlm", [m.source === "dlm" && "Verlauf"], "gelesen");
+      l.source("osm", [m.source !== "dlm" && "Verlauf"], "gelesen", {
+        osm: "trees",
+      });
+      l.source("lsc", [m.source === "osm+lsc" && "Höhe"], "gemessen");
+      l.source("dgm", ["der Boden"], "gelesen");
+      l.viewer([m.source !== "osm+lsc" && "Höhe und Breite, angenommen"]);
+      return;
+    case "furniture":
+    case "lamp":
+    case "landing":
+    case "stop": {
+      const [read, drawn] = OSM_THINGS[m.kind];
+      l.source("osm", [read], "gelesen", { osm: "trees" });
+      l.source("dgm", ["der Boden"], "gelesen");
+      l.viewer([drawn]);
+    }
+  }
+}
+
+function canopyLineage(l: Lineage, c: CanopyInquiry, site: LineageSite): void {
+  l.source(
+    "dom",
+    [c.source === "dom" && "Standort und Höhe der Krone"],
+    "gemessen"
+  );
+  l.source(
+    "lsc",
+    [c.source === "lsc" && "Standort, Höhe und Krone"],
+    "gemessen"
+  );
+  l.source(
+    "dlm",
+    [c.source === "row" && "die Baumreihe, auf der er steht"],
+    "gelesen"
+  );
+  l.source("dgm", ["der Boden, auf dem er steht"], "gelesen");
+  l.source(
+    "dop",
+    [
+      site.provider.products.dop !== null &&
+        "Laubfarbe aus dem Vegetationsindex",
+    ],
+    "gemessen"
+  );
+  l.viewer([
+    "die Krone als Grundform, ohne Gattung",
+    c.source === "row" && "ein Baum alle 9 m entlang der Reihe",
+  ]);
 }

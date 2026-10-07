@@ -173,8 +173,26 @@ function thingKey(t: FeatureInquiry): string {
       return `bikes:${t.id}:${t.position.join(",")}`;
     case "bridge":
     case "monument":
+    case "canopy":
+    case "furniture":
+    case "hedge":
+    case "lamp":
+    case "landing":
+    case "stop":
       return `${t.kind}:${t.tile}:${t.position.join(",")}`;
   }
+}
+
+/** The kinds whose stand-in is wider than what it stands for (a crown, a
+ *  hedge) or lies flat on the ground (a playground): chosen only when
+ *  nothing solid stands behind them. */
+function porous(t: FeatureInquiry): boolean {
+  return (
+    t.kind === "tree" ||
+    t.kind === "canopy" ||
+    t.kind === "hedge" ||
+    (t.kind === "furniture" && t.properties.k === "playground")
+  );
 }
 
 /** How far a ray looks for a thing when no building stops it (m). */
@@ -242,7 +260,7 @@ export function createInquiryProbe(deps: {
         distance: thing.distance,
         hit: { thing },
         key: thingKey(thing.target),
-        porous: thing.target.kind === "tree",
+        porous: porous(thing.target),
       })),
     ].sort((a, b) => a.distance - b.distance);
     const farthest = hits.at(-1)?.distance;
