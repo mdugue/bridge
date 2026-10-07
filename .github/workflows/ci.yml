@@ -22,6 +22,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        with:
+          # This job never reads data/ (811 MB of geodata, 2026-10-06): a
+          # sparse checkout of everything else.
+          sparse-checkout: |
+            /*
+            !/data/
+          sparse-checkout-cone-mode: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
@@ -34,6 +41,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        with:
+          # This job never reads data/ (811 MB of geodata, 2026-10-06): a
+          # sparse checkout of everything else.
+          sparse-checkout: |
+            /*
+            !/data/
+          sparse-checkout-cone-mode: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
@@ -118,8 +132,9 @@ jobs:
             buildCheck: false
     steps:
       - uses: actions/checkout@v7
-      # One extra commit, not the whole history: the repo carries ~130 MB of
-      # committed geodata, so a deep clone is not free.
+      # One extra commit, not the whole history: the repo carries ~810 MB of
+      # committed geodata (2026-10-06; seven sites), so a deep clone is not
+      # free.
       - name: Fetch the PR base commit
         if: github.event_name == 'pull_request'
         run: git fetch --no-tags --depth=1 origin "$BASE_SHA"
