@@ -65,7 +65,10 @@ makes those checks repeatable.
   sidebar's Snapshot section (`scene-sidebar.tsx:≈923-947`) has *Kopieren*
   and *Anwenden*.
 - URL parameters read today: `scene`, `gpu`, `block` (`scene-profile.ts`),
-  `trail` (`crash-report.tsx`). None reaches a sink beyond literal
+  `safety` (`lib/city/gpu-safety.ts`, ADR 0046), `trail` (`crash-report.tsx`), and
+  the fragment `#at=lat,lng` (the arrival hand-off, `lib/city/geolocation.ts`
+  `ARRIVAL_PARAM` — the spike should extend that read rather than add a
+  parallel one). None reaches a sink beyond literal
   comparison — keep it that way: `?snap=` goes only through `parseSnapshot`.
 - `e2e/snapshot-shot.spec.ts`: reads `shots/*.json`
   (`readdirSync(SHOTS_DIR).filter((f) => f.endsWith(".json"))`), renders

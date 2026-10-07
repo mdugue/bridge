@@ -328,7 +328,8 @@ config change.
   (`mdx-components.tsx` at the root), linked from every footer and the
   viewer's sidebar (`app/_components/legal-links.tsx`). `<ReportsChoice />`
   in the privacy page is the reports' opt-out switch
-  (`reports-choice.tsx`, kept by `report-choice.ts`)
+  (`app/_components/reports-choice.tsx`, kept by
+  `app/_components/report-choice.ts`)
 - `pipeline/` — the offline pipeline, one Python package in a uv environment:
   the fetch (`bake/fetch.py`; `providers/{sn,nw,by,hh,be}.py` are the
   per-Land adapters; `rasters.py` mosaics/clips to our tiles, `citygml.py`
