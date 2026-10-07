@@ -190,8 +190,9 @@ sie auf einen dunklen Sockel stellt, wie ein aus der Stadt geschnittenes
 Modell (*neu setzen* nimmt die aktuelle Mitte; er endet mit dem Modell;
 beim ersten Mal steht dort kurz *Wird vorbereitet …*, während die Stadt
 für den Schnitt vorbereitet wird, und sie bewegt sich dabei weiter —
-Gebäude knapp außerhalb werfen ihren Schatten noch über seinen Rand); und
-*Bild speichern*.
+Gebäude knapp außerhalb werfen ihren Schatten noch über seinen Rand;
+lässt er sich nicht vorbereiten, sagt das die Zeile darunter, mit *noch
+einmal versuchen*); und *Bild speichern*.
 
 **Die Bäume stehen in jedem Maßstab.** Nah heran steht jeder Baum im
 Bild; wo die Stadt gröber gezeichnet wird — weit hinausgezoomt, die

@@ -95,6 +95,17 @@ function presetNote(view: ModelHud): string {
   }
 }
 
+/** The line under the Ausschnitt's switch. */
+function cutOutHint(view: ModelHud): string {
+  if (view.cutOutPending) {
+    return "Wird vorbereitet …";
+  }
+  if (view.cutOutFailed) {
+    return "Der Ausschnitt ließ sich nicht vorbereiten";
+  }
+  return "Nur die Bildmitte, wie aus der Stadt geschnitten";
+}
+
 /**
  * Modell's *Projektion* section (plan 055): the views as cards, each with
  * the cube it draws; the scale as a readout and the series to step to; the
@@ -293,10 +304,8 @@ export function ProjectionPanel({
           />
         </Field>
         <span className="text-[10px] text-muted-foreground leading-snug">
-          {view.cutOutPending
-            ? "Wird vorbereitet …"
-            : "Nur die Bildmitte, wie aus der Stadt geschnitten"}
-          {view.cutOut && !view.cutOutPending && (
+          {cutOutHint(view)}
+          {(view.cutOutFailed || (view.cutOut && !view.cutOutPending)) && (
             <>
               {" · "}
               <button
@@ -304,7 +313,7 @@ export function ProjectionPanel({
                 onClick={() => onCutOut(true)}
                 type="button"
               >
-                neu setzen
+                {view.cutOutFailed ? "noch einmal versuchen" : "neu setzen"}
               </button>
             </>
           )}

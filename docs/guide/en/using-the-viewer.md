@@ -183,7 +183,8 @@ a model cut from the city (*neu setzen* takes the current middle; it ends
 with Modell; the first time it says *Wird vorbereitet …* for a moment
 while the city's drawing is prepared for the cut, and the city keeps
 moving meanwhile — buildings just outside the cut still cast their
-shadows over its edge); and *Bild speichern*.
+shadows over its edge; should it fail to prepare, the line beneath says
+so, with *noch einmal versuchen*, "try again"); and *Bild speichern*.
 
 **Trees stand at every scale.** Close up every tree is in the picture;
 where the city is drawn coarser — zoomed far out, the whole city at

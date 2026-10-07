@@ -60,6 +60,9 @@ export interface ModelHud {
   cutOut: boolean;
   /** …and its programs are still being built: it shows once they are */
   cutOutPending: boolean;
+  /** the last one asked for could not be built (lifted again): said in
+   *  the panel until the next try, or until Modell is left */
+  cutOutFailed: boolean;
 }
 
 /** s the dolly zoom in and out takes. */
@@ -531,6 +534,7 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
       transitioning: phase.kind === "entering" || phase.kind === "leaving",
       cutOut: false,
       cutOutPending: false,
+      cutOutFailed: false,
     };
   };
 

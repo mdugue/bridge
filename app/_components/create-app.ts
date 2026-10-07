@@ -1530,6 +1530,9 @@ async function bootApp(
       // the Ausschnitt is a Modell thing: a walk sees the whole city
       setCutOut(false);
     }
+    if (!parallel) {
+      cutOutFailed = false; // ...and so is its word
+    }
     applyFog();
     invalidateShadows();
     opts.trail?.note("camera", parallel ? "parallel" : "perspective");
@@ -2181,6 +2184,9 @@ async function bootApp(
   };
   /** counts the Ausschnitt's requests: a hold that ends late is stale */
   let cutRequest = 0;
+  /** the last Ausschnitt could not be built: Modell's panel says so (not
+   *  the HUD's layer word — no part of the city is missing) */
+  let cutOutFailed = false;
   /**
    * Sets the Ausschnitt to the middle of the view, or lifts it. A new one
    * shows once its programs are built and held off the frames
@@ -2194,6 +2200,7 @@ async function bootApp(
     const v = modelRig.settledView();
     const cut = on && v ? cutOutFromView(v, viewportCss()) : null;
     const request = ++cutRequest;
+    cutOutFailed = false;
     cuts.setCutOut(cut, siteGround.atWorld, groundVersion);
     invalidateShadows();
     if (!cut) {
@@ -2214,17 +2221,18 @@ async function bootApp(
       })
       .catch((error: unknown) => {
         // A program that failed to build: the Ausschnitt is lifted (its
-        // switch no longer "building…" for ever) and said.
+        // switch no longer "building…" for ever) and said in Modell's
+        // panel, beside its switch.
         if (request !== cutRequest || disposed) {
           return;
         }
         const message = error instanceof Error ? error.message : String(error);
         opts.trail?.note("cut-out failed", message);
         setCutOut(false);
+        cutOutFailed = true;
         if (isAllocationFailure(error)) {
           memoryEmergency("allocation cut-out");
         }
-        sayLayerFailed(`Ausschnitt (${message})`);
       });
   };
   /** Modell's view for the HUD, with the scene's half: the Ausschnitt. */
@@ -2235,6 +2243,7 @@ async function bootApp(
         ...hud,
         cutOut: cuts.cutOut() !== null,
         cutOutPending: cuts.cutOut() !== null && !cuts.revealed(),
+        cutOutFailed,
       }
     );
   };
