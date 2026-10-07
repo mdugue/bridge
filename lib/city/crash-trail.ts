@@ -88,8 +88,9 @@ export const FPS_BUCKETS = [10, 20, 30, 45] as const;
 
 /**
  * The whole page in numbers, where the rings keep only its end: every beat
- * rendered in view (none before the first frame, none while hidden),
- * counted by frame rate, and the most the page held.
+ * in view while it rendered (none before the first frame, none while
+ * hidden, none after the render stopped), counted by frame rate, and the
+ * most the page held at any beat.
  */
 export interface TrailStats {
   /** beats counted */
@@ -331,33 +332,30 @@ export function resumedFor(trail: Trail, t: number): number | undefined {
 }
 
 /**
- * Appends a beat to the ring and, when the page rendered in view, counts
- * it in the stats: a beat before the first frame measures the boot, one
- * while hidden a paused loop — neither is the frame rate anybody saw.
+ * Appends a beat to the ring and counts it in the stats: its memory always
+ * (the most the page held, whatever it drew), its frame rate when the page
+ * was in view and rendering — a beat before the first frame measures the
+ * boot, one while hidden a paused loop, one after the render stopped no
+ * loop at all: none of them is a frame rate anybody saw. A beat in view
+ * that met no new frame is one: the main thread froze, 0 fps.
  */
 export function pushBeat(trail: Trail, beat: TrailBeat): void {
   const previous = trail.beats.at(-1);
   pushRing(trail.beats, beat, TRAIL_BEATS);
-  // The stats are the frames rendered in view: not before the first, not
-  // out of view, not after the render stopped, nor a beat that met no new
-  // frame (a held or stopped loop) — those stay in the ring as the record.
-  if (
-    beat.frames === 0 ||
-    beat.stopped ||
-    (previous !== undefined && beat.frames <= previous.frames) ||
-    trail.state === "hidden"
-  ) {
-    return;
-  }
   const stats = (trail.stats ??= emptyStats());
-  stats.beats += 1;
-  stats.fpsSum += beat.fps;
-  stats.fps[fpsBucket(beat.fps)] += 1;
   stats.maxGpuMB = Math.max(stats.maxGpuMB, beat.gpuMB);
   stats.maxHeldMB = Math.max(stats.maxHeldMB, beat.heldMB ?? 0);
   if (beat.heapMB !== undefined) {
     stats.maxHeapMB = Math.max(stats.maxHeapMB ?? 0, beat.heapMB);
   }
+  if (beat.frames === 0 || beat.stopped || trail.state === "hidden") {
+    return;
+  }
+  const stalled = previous !== undefined && beat.frames <= previous.frames;
+  const fps = stalled ? 0 : beat.fps;
+  stats.beats += 1;
+  stats.fpsSum += fps;
+  stats.fps[fpsBucket(fps)] += 1;
 }
 
 /** When an event of `kind` first happened (s), or undefined. */
