@@ -1281,6 +1281,16 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   (`buildBranchMaterial`), so a limb stays in its crown and moves with it.
   It carries the bare crown's stipple in winter; its shadow falls with the
   crown's. One set per chunk, a scene-wide material.
+- **Hedges, one look** (2026-10-07) — the Basis-DLM row hedges (until
+  then plain green boxes, `BoxGeometry`) wear the OSM hedges' soft
+  clipped block and material (`hedge-look.ts`), tinted per instance, so
+  the two sources read as one plant. Every hedge's top frays in its last
+  fifth (the foliage noise as `maskNode`, honoured by the shadow pass) and
+  its ridge waves along its length with a phase from where each piece
+  stands. *Not done:* OSM `natural=shrub` (dropped in the bake for the
+  "grey boulder" look) needs a re-bake of `lowveg.py` against the site's
+  OSM extract, which this change could not reach; the laser-scan shrubs
+  stay out (their false hits on crown rims are not a matter of shape).
 
 - **Hedges (OSM, laser-scan height)** and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the

@@ -1,5 +1,14 @@
 import type { Texture, TextureNode, Vector2 } from "three/webgpu";
-import { positionWorld, vec2, vec3 } from "three/tsl";
+import {
+  dot,
+  floor,
+  fract,
+  mix,
+  positionWorld,
+  sin,
+  vec2,
+  vec3,
+} from "three/tsl";
 import type { Node, UniformNode } from "three/webgpu";
 
 /**
@@ -53,3 +62,24 @@ export const texSize = (t: Texture): [number, number] => {
  * `texture()` and `textureLoad()` take either.
  */
 export type Tex = Texture | TextureNode;
+
+/** The value-noise hash (a smoothed lattice of sin hashes). */
+function leafHash(p: V2): F {
+  return fract(sin(dot(p, vec2(127.1, 311.7))).mul(43_758.5453));
+}
+
+/**
+ * Cheap value noise (smoothed hash lattice), 0..1: the crowns' leaf
+ * twinkle and the hedges' foliage mottle and fringe (hedge-look.ts) — small,
+ * irregular specks instead of a clean rolling sine band.
+ */
+export function leafNoise(p: V2): F {
+  const i = floor(p);
+  const f0 = fract(p);
+  const f = f0.mul(f0).mul(f0.mul(-2).add(3));
+  return mix(
+    mix(leafHash(i), leafHash(i.add(vec2(1, 0))), f.x),
+    mix(leafHash(i.add(vec2(0, 1))), leafHash(i.add(vec2(1, 1))), f.x),
+    f.y
+  );
+}

@@ -1,5 +1,4 @@
 import {
-  BoxGeometry,
   type BufferGeometry,
   Color,
   CylinderGeometry,
@@ -19,7 +18,6 @@ import {
   distance,
   dot,
   float,
-  floor,
   fract,
   length,
   materialColor,
@@ -93,8 +91,12 @@ import {
   instancePosition,
   instanceTint,
 } from "./instancing";
-import type { F, Live, V2, V3, V4 } from "./shader-chunks";
+import type { F, Live, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
+import { buildHedgeGeo, hedgeMaterial, hedgeTint } from "./hedge-look";
+import { leafNoise } from "./shader-chunks";
+
+export { leafNoise } from "./shader-chunks";
 import { TRUNK_BASE } from "@/lib/city/tree-family";
 
 export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
@@ -566,27 +568,6 @@ export function buildStyleCrownGeo(
   const merged = mergeGeometries(parts) ?? parts[0] ?? buildCrownGeo(detail);
   merged.translate(0, cy, 0);
   return padCrownSphere(merged);
-}
-
-/** The value-noise hash (a smoothed lattice of sin hashes). */
-function leafHash(p: V2): F {
-  return fract(sin(dot(p, vec2(127.1, 311.7))).mul(43_758.5453));
-}
-
-/**
- * Cheap value noise (smoothed hash lattice), 0..1: the crowns' leaf
- * twinkle and the hedges' foliage mottle (low-vegetation-layer.ts) — small,
- * irregular specks instead of a clean rolling sine band.
- */
-export function leafNoise(p: V2): F {
-  const i = floor(p);
-  const f0 = fract(p);
-  const f = f0.mul(f0).mul(f0.mul(-2).add(3));
-  return mix(
-    mix(leafHash(i), leafHash(i.add(vec2(1, 0))), f.x),
-    mix(leafHash(i.add(vec2(0, 1))), leafHash(i.add(vec2(1, 1))), f.x),
-    f.y
-  );
 }
 
 /** The crown's live uniform nodes, shared by every crown material of the
@@ -1278,26 +1259,29 @@ function branchesFor(mid: Instances, geo: BufferGeometry): Instances {
   return set;
 }
 
-/** The ATKIS row hedges' material (scene-wide: nothing of a tile). */
-function rowHedgeMaterial(): MeshStandardNodeMaterial {
-  return sceneMaterial("vegetation-row-hedge", () => {
-    const m = new MeshStandardNodeMaterial({ color: 0x55_6b_3e, roughness: 1 });
-    m.name = "row-hedge";
-    m.positionNode = instancePosition();
-    return m;
-  });
-}
-
+/**
+ * The ATKIS row hedges: the OSM hedges' soft clipped block and material
+ * (hedge-look.ts) at the row's sample spacing, so a DLM hedge and an OSM
+ * hedge read as the same plant — not the green boxes they once were.
+ */
 function buildHedges(hedges: Placement[]): Instances[] {
-  const geo = new BoxGeometry(HEDGE_W, HEDGE_H, HEDGE_W * 1.4);
-  geo.translate(0, HEDGE_H / 2, 0);
-  const mat = rowHedgeMaterial();
+  const geo = buildHedgeGeo();
+  geo.scale(HEDGE_W, HEDGE_H, HEDGE_W * 1.4);
+  const mat = hedgeMaterial();
+  const col = new Color();
   const meshes: Instances[] = [];
   for (const cell of bucketByCell(hedges)) {
     const mesh = new Instances(geo, mat, cell.length);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     writeInstances(mesh, cell);
+    cell.forEach((p, i) => {
+      hedgeTint(col, hash(p.x * 0.37 + p.z * 0.11) - 0.5);
+      mesh.setColorAt(i, col);
+    });
+    if (mesh.instanceTints) {
+      mesh.instanceTints.needsUpdate = true;
+    }
     meshes.push(mesh);
   }
   return meshes;

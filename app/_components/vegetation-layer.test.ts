@@ -23,6 +23,7 @@ import {
   type VegetationContext,
   CROWN_CENTRE_Y,
 } from "./vegetation-layer";
+import { hedgeMaterial } from "./hedge-look";
 
 /** Instances drawn under a root (each set's `drawCount`). */
 function instancesIn(root: Object3D): number {
@@ -271,4 +272,12 @@ test("the branch fork stays inside the crown", () => {
   expect(Math.max(...radii(branch))).toBeLessThan(Math.min(...radii(crown)));
   // a few hundred triangles at most: drawn for every near tree
   expect((branch.index?.count ?? 0) / 3).toBeLessThan(200);
+});
+
+test("a DLM row hedge wears the OSM hedges' block and material, tinted", () => {
+  const hedges = buildVegetation({ rows: [row("hedge", 10)], canopy: [] }, ctx);
+  const [set] = hedges.group.children.filter(isInstances);
+  expect(set.material).toBe(hedgeMaterial());
+  expect(set.instanceTints).not.toBeNull();
+  expect(hedgeMaterial().maskNode).toBeTruthy(); // the leafy fringe
 });
