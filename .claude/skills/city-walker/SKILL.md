@@ -685,7 +685,7 @@ span deck, `addSpanDeck`) and a fill it cannot climb into a *cut*. The
 build solves every piece with 450 m of context from the pieces that run
 on through its ends (`lib/city/line-levels.ts`) and publishes the runs as
 `lv`; a cut ≥ 30 % under a drawn deck opens a passage in the terrain bake
-(`lib/city/passages.ts`). Check with `bun scripts/line-levels.ts <site>`.
+(`lib/city/passages.ts`). Check with `bun scripts/line-levels-cli.ts <site>`.
 
 **Underground is not drawn.** The DLM's rail lines say nothing of a
 tunnel, so `rail.py` cuts a stretch that runs within 2 m of a DLM tunnel

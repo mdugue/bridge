@@ -7,10 +7,10 @@
  * it passes under, not dropped into the gap the DGM leaves around a
  * bridge. Reads files, no side effects.
  *
- * Run directly for where the drawn lines still jump, before (the old rule:
- * any deck under a point lifts it) and after:
- *
- *   bun scripts/line-levels.ts <site>
+ * Where the drawn lines still jump, before (the old rule: any deck under a
+ * point lifts it) and after: `bun scripts/line-levels-cli.ts <site>`. The
+ * runner is a file of its own so this module imports no `sites/` config
+ * (the build cache keys the terrain on this module's imports).
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -41,7 +41,6 @@ import type { Site } from "../lib/city/site";
 import { sampleHeightfield } from "../lib/city/terrain-geometry";
 import { dgmSourceFiles, sideFileSource, tileIds } from "../lib/city/tile";
 import { ownsPoint } from "../lib/city/tileset";
-import { siteFromArgs } from "../sites";
 import { readDgm } from "./bake-tiles";
 
 const at = (path: string) => join(process.cwd(), path);
@@ -348,17 +347,4 @@ export async function measureJumps(
   });
   report.worst.sort((p, q) => q.by - p.by);
   return report;
-}
-
-if (import.meta.main) {
-  const { site } = siteFromArgs(process.argv.slice(2));
-  const r = await measureJumps(site);
-  process.stdout.write(
-    `${site.id}: ${r.samples} samples; jumps ${r.before} before, ${r.after} after\n`
-  );
-  for (const w of r.worst.slice(0, 20)) {
-    process.stdout.write(
-      `  ${w.line} at ${w.x.toFixed(1)} ${w.y.toFixed(1)} by ${w.by.toFixed(2)} m\n`
-    );
-  }
 }

@@ -72,7 +72,7 @@ road the bridge data lacks.
 
 - Dresden: steps beyond a line's grade by more than a metre 230 → 18,
   Hamburg 330 → 62, Leipzig 41 → 17, Unna 20 → 0. `scripts/line-levels.test.ts`
-  holds the reference site to a budget; `bun scripts/line-levels.ts <site>`
+  holds the reference site to a budget; `bun scripts/line-levels-cli.ts <site>`
   prints the count and the worst places.
 - What remains: deck ends standing above lower ground for good (the
   approaches reach 1.2 m at a rail's 3 %), and deck tops the DOM1

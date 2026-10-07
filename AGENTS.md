@@ -784,7 +784,7 @@ draws its deck), a *cut* through the fill under one (the terrain bake
 opens it under a drawn deck, `lib/city/passages.ts`) — and publishes it
 as `lv` in the rail and tram files. A new line layer takes its levels the
 same way (`lineLevelsAt` in `rail-layer.ts`); `scripts/line-levels.test.ts`
-holds the reference site's jumps to a budget, `bun scripts/line-levels.ts
+holds the reference site's jumps to a budget, `bun scripts/line-levels-cli.ts
 <site>` prints them.
 
 **Modell reads the camera through a lens** (ADR 0044). A post pass never
