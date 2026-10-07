@@ -301,17 +301,23 @@ def test_the_last_row_used_to_clip_the_first():
 DLMS = sorted(p for p in (Path(__file__).resolve().parents[2] / "data").glob("*/dlm"))
 TABLES = sorted(p for dlm in DLMS for p in dlm.glob("markings_*.json"))
 # The share of a row's samples another row may take at the full raster
-# (≈1 m texels). Two crossings that cross each other at an angle (an X at a
-# junction, not merged: they are not on one axis) share a few texels at
-# their corners, and a texel can only name one of them.
+# (2048², ≈1 m texels). Two crossings that cross each other at an angle (an
+# X at a junction, not merged: they are not on one axis) share a few texels
+# at their corners, and a texel can only name one of them. The bound is the
+# measured worst case with headroom: 0.27 % (München 32690_5332) under 0.5 %.
 DROPPED_OK = 0.005
 
 
 def _dropped_ok(px: int, full: int) -> float:
-    """The bound at a px² raster: a coarser raster's corner texels are wider
-    by the same factor, so the shared corner takes that much more of a row
-    (the phones' 1024² raster: 1 %; measured worst, a signalled crossing
-    over a zebra in Leipzig, 0.8 %)."""
+    """The bound at a px² raster, scaled with the texel: 0.5 % at 2048², 1 %
+    at the phones' 1024², each the measured worst case with headroom (at
+    1024², 0.8 %: a signalled crossing over a zebra in Leipzig,
+    33318_5688). A coarser raster can lose paint the full one does not:
+    its texels are 2 m wide and its core 1.45 m, not 0.75 m
+    (`markings.reach`), so where a smaller row lies within a texel of a
+    larger one, all four texels the shader reads around a point of the
+    larger row's paint can belong to the smaller — the Leipzig row loses
+    nothing at 2048²."""
     return DROPPED_OK * full / px
 
 
