@@ -703,6 +703,17 @@ visual-variable codebook is in
   without a mapped entrance has none. Ground joins: `doors` in
   `JOIN_PARTS`, budget 1 % (the misses are sills at the top of mapped
   steps).
+- **Dormers** — what DOM1 shows over a pitched LoD2 roof (25–62°) that
+  LoD2 leaves out (`pipeline/bake/dormers.py`): the excess `DOM − roof`
+  against its own 9 m median, blobs 0.7 m and more over it, 3–30 m² and
+  compact, their top 0.9–3.5 m over the roof and under the object's
+  ridge, clear of every tree point — a chimney is too small, a crown
+  overhanging the roof irregular or too high. Each becomes a front facing
+  down the slope, two cheeks and a flat roof at the measured top running
+  back into the main roof (`lib/city/dormers.ts`), appended as one object
+  per host in its tint and roof colour (`source` 4), no storey band, eave
+  line, plinth or shop zone on it. No window in the front: the veto
+  stands. Dresden: 10 514 on fifteen tiles, 862 on the spawn tile.
 - **Eave line** (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
   (geometry-derived; the attribute is ~4 %).
 - **Dusk glow** (*Abendlicht*) — warm emissive on commerce/public/special
