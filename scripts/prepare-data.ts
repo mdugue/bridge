@@ -212,14 +212,23 @@ function publish(logical: string, content: Uint8Array): string {
  *  config, the lockfile and the dependency patches (the glTF tools'
  *  versions shape the output too). Not the other sites' configs, nor what
  *  only the viewer reads: an artifact's own bake brings its sources
- *  (`cacheKey`'s `entries`). */
+ *  (`cacheKey`'s `entries`). Each must exist: the hasher reads a missing
+ *  file as "absent" (an optional input's right answer), which would drop
+ *  it from every key without a word. */
 const COMMON_SOURCES = [
   "scripts/prepare-data.ts",
   `sites/${SITE.id}.ts`,
   "sites/providers.ts",
   "bun.lock",
   ...readdirSync(at("patches")).map((name) => `patches/${name}`),
-].map(at);
+].map((source) => {
+  if (!existsSync(at(source))) {
+    fail(
+      `missing source file ${source} — every cache key carries it (a site's config is sites/<site id>.ts)`
+    );
+  }
+  return at(source);
+});
 
 const hashOf = createContentHasher();
 const graphs = new Map<string, string[]>();
