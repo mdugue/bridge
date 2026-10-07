@@ -489,7 +489,12 @@ test("a level waits for its dressing only where it takes over from its tile's ot
 
 /** A tile's counted traffic as a slot: one two-way street, its dressing's
  *  ask list, and a host whose compiles the test holds and counts. */
-function trafficTile(opts: { gone?: () => boolean } = {}) {
+function trafficTile(
+  opts: {
+    gone?: () => boolean;
+    turn?: TrafficHost["turn"];
+  } = {}
+) {
   const street: TrafficFeature = {
     geometry: {
       type: "LineString",
@@ -513,6 +518,7 @@ function trafficTile(opts: { gone?: () => boolean } = {}) {
   const compiled: Group[] = [];
   let finish = (): void => undefined;
   let built = 0;
+  const freeErrors: unknown[][] = [];
   const host: TrafficHost = {
     root,
     compile: (group) => {
@@ -520,6 +526,10 @@ function trafficTile(opts: { gone?: () => boolean } = {}) {
       return new Promise((resolve) => {
         finish = () => resolve("done");
       });
+    },
+    turn: opts.turn ?? ((work) => work()),
+    freeFailed: (errors) => {
+      freeErrors.push(errors);
     },
     gone: opts.gone ?? (() => false),
     built: () => {
@@ -534,6 +544,7 @@ function trafficTile(opts: { gone?: () => boolean } = {}) {
     built: () => built,
     compiled,
     finish: () => finish(),
+    freeErrors,
     host,
     root,
     slot,
@@ -622,6 +633,63 @@ test("a tile released while its traffic compiles gets nothing shown, asked or we
   // ...and its release (once the compile ended) frees them
   slot.dispose();
   expect(bodies?.parent).toBeNull();
+});
+
+test("bodies freed while their compile runs are freed once it ends", async () => {
+  const { finish, freeErrors, host, slot } = trafficTile();
+  slot.attach(host);
+  const showing = slot.show();
+  await nextTask();
+  const bodies = slot.group;
+  const mesh = bodies?.children[0] as Mesh | undefined;
+  let freed = false;
+  mesh?.geometry.addEventListener("dispose", () => {
+    freed = true;
+  });
+  // the dressing comes down (its own compile ran out of memory) while the
+  // traffic's compile still runs: taken down now, freed only after
+  expect(slot.dispose()).toEqual([]);
+  expect(bodies?.parent).toBeNull();
+  expect(slot.group).toBeNull();
+  await nextTask();
+  expect(freed).toBe(false);
+  finish();
+  await showing;
+  await nextTask();
+  expect(freed).toBe(true);
+  expect(freeErrors).toEqual([[]]);
+});
+
+test("a switch-on builds the tiles' bodies one after another", async () => {
+  // the dressings' chain, as the plugin hands it to every slot
+  let chain = Promise.resolve();
+  const turn: TrafficHost["turn"] = (work) => {
+    const run = chain.then(work);
+    chain = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  };
+  const a = trafficTile({ turn });
+  const b = trafficTile({ turn });
+  a.slot.attach(a.host);
+  b.slot.attach(b.host);
+  const showing = [a.slot.show(), b.slot.show()];
+  await nextTask();
+  await nextTask();
+  // the first tile's turn holds the chain while its compile runs
+  expect(a.compiled).toHaveLength(1);
+  expect(b.compiled).toHaveLength(0);
+  expect(b.slot.group).toBeNull();
+  a.finish();
+  await nextTask();
+  await nextTask();
+  expect(b.compiled).toHaveLength(1);
+  b.finish();
+  await Promise.all(showing);
+  expect(a.built()).toBe(1);
+  expect(b.built()).toBe(1);
 });
 
 test("a dressing freed before its traffic's turn builds nothing", async () => {

@@ -164,6 +164,12 @@ export interface TrafficHost {
   /** compiles the bodies before they show, counted on the tile so its
    *  release waits for it; never rejects */
   compile: (group: Group) => Promise<Compiled>;
+  /** runs the build in its turn among the dressings' (one at a time: each
+   *  is a long task), and the next turn waits for it */
+  turn: <T>(work: () => Promise<T>) => Promise<T>;
+  /** what freeing the bodies threw, once a free that waited for their
+   *  compile has run */
+  freeFailed: (errors: unknown[]) => void;
   /** whether the tile, its dressing or the stream has gone */
   gone: () => boolean;
   /** the bodies are built and compiled: the tile weighs them now */
@@ -192,8 +198,10 @@ export interface TrafficSlot {
   asks: () => AskSet<FeatureInquiry> | null;
   /** the tile the bodies will hang on (the plugin, as the dressing hangs) */
   attach: (host: TrafficHost) => void;
-  /** frees the bodies; a show still running ends without hanging them.
-   *  Returns what the freeing threw. */
+  /** frees the bodies — once their compile has ended, if one still runs
+   *  (three cannot stop it, and one that resumes on freed buffers uploads
+   *  them again); a show still running ends without hanging them. Returns
+   *  what the freeing threw now (a later free reports to the host). */
   dispose: () => unknown[];
 }
 
@@ -623,37 +631,63 @@ export interface TrafficSource {
 
 /**
  * A tile's counted traffic, its bodies built on demand (`TrafficSlot`):
- * the first `show` once the dressing hangs builds them in a task of its
- * own, hangs them hidden on the tile, compiles them, and only then shows
- * them, weighs them into the tile and adds their ask set. A tile that
- * leaves meanwhile gets nothing hung (its release frees what was).
+ * the first `show` once the dressing hangs builds them in the host's turn
+ * (a switch-on builds every loaded tile's bodies one after another, like
+ * the dressings), hangs them hidden on the tile, compiles them, and only
+ * then shows them, weighs them into the tile and adds their ask set. A
+ * tile that leaves meanwhile gets nothing hung (its release frees what
+ * was).
  */
 export function trafficSlot(src: TrafficSource): TrafficSlot {
   let host: TrafficHost | null = null;
   let building: Promise<void> | null = null;
   let set: AskSet<FeatureInquiry> | null = null;
+  /** the bodies' compile while it runs */
+  let compiling: Promise<Compiled> | null = null;
   let wanted = false;
   let ready = false;
   let disposed = false;
   const gone = (h: TrafficHost) => disposed || h.gone();
+  /** The bodies built, hung hidden and their compile started — in the
+   *  host's turn, which waits on the compile as a dressing's does. */
+  const start = (h: TrafficHost) =>
+    h.turn(async () => {
+      await nextTask();
+      if (gone(h)) {
+        return null;
+      }
+      const group = buildTraffic(
+        src.features,
+        src.bridges,
+        src.ground,
+        src.detail,
+        src.bounds
+      );
+      // asked as built, before it hangs (traffic-ask.ts)
+      const asks = trafficAskSet(group, src.features, src.tile);
+      group.visible = false;
+      h.root.add(group);
+      slot.group = group;
+      const compiled = h.compile(group);
+      compiling = compiled;
+      compiled
+        .finally(() => {
+          if (compiling === compiled) {
+            compiling = null;
+          }
+        })
+        .catch(() => undefined);
+      await withinCompileWait(compiled);
+      // (an object: a promise returned bare would be awaited whole)
+      return { asks, compiled, group };
+    });
   const build = async (h: TrafficHost): Promise<void> => {
-    await nextTask();
-    if (gone(h)) {
+    const started = await start(h);
+    if (!started || gone(h)) {
       return;
     }
-    const group = buildTraffic(
-      src.features,
-      src.bridges,
-      src.ground,
-      src.detail,
-      src.bounds
-    );
-    // asked as built, before it hangs (traffic-ask.ts)
-    const asks = trafficAskSet(group, src.features, src.tile);
-    group.visible = false;
-    h.root.add(group);
-    slot.group = group;
-    const ended = await h.compile(group);
+    const { asks, compiled, group } = started;
+    const ended = await compiled;
     if (gone(h)) {
       return; // the tile's release frees it, once the compile has ended
     }
@@ -709,6 +743,14 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
         return [];
       }
       group.removeFromParent();
+      const running = compiling;
+      if (running && host) {
+        const h = host;
+        running
+          .finally(() => h.freeFailed(disposeObject3D(group)))
+          .catch(() => undefined);
+        return [];
+      }
       return disposeObject3D(group);
     },
   };
@@ -1563,8 +1605,8 @@ export class DressingPlugin {
         // A dressing that fails leaves its tile bare, never the stream
         // stuck — but never silently: a builder's throw is a bug or a
         // heap that ran out.
-        if (isAbortError(err) || this.disposed) {
-          return;
+        if (isAbortError(err) || this.disposed || this.released.has(scene)) {
+          return; // a tile that left mid-build: no failure of its own
         }
         if (isAllocationFailure(err)) {
           this.ctx.onAllocationFailure?.(err, `dressing ${extras.tileId}`);
@@ -1612,6 +1654,17 @@ export class DressingPlugin {
           compileRepresentatives([group]),
           `traffic ${tileIdOf(scene)}`
         ),
+      // the dressings' own chain: a switch-on builds the loaded tiles'
+      // bodies one after another, never all in one task
+      turn: (work) => {
+        const run = this.chain.then(work);
+        this.chain = run.then(
+          () => undefined,
+          () => undefined
+        );
+        return run;
+      },
+      freeFailed: (errors) => this.disposeFailed(errors, scene),
       gone: () =>
         this.disposed ||
         this.released.has(scene) ||
