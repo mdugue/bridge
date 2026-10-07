@@ -660,11 +660,14 @@ async function bakeCity(
     )
   );
   const svf = sideFiles.get(tile)?.svf;
+  const facades = sideFiles.get(tile)?.facades;
   const extras: CityExtras = {
     kind: "city",
     tileId: tile,
     // The facades' ambient light reads the terrain's sky-view raster.
     ...(svf ? { svf } : {}),
+    // ...and their relief and tone what street photos saw of them.
+    ...(facades ? { facades } : {}),
   };
   const name = `city_${tile}.glb.gz`;
   const glb = await cached(

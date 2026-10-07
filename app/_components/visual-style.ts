@@ -52,6 +52,7 @@ import {
   type F,
   type Live,
   type V3,
+  type V2,
   type V4,
 } from "./shader-chunks";
 import {
@@ -94,6 +95,7 @@ export interface ClayDetailUniforms {
   uAO: Live;
   /** Gliederung: plinth, ground-floor and eave cornices, shop zones */
   uArticulation: Live;
+  uFacadeReading: Live;
   uBands: Live;
   /** dusk interior glow strength (commercial/public) */
   uDuskGlow: Live;
@@ -216,7 +218,15 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
       clayPoche.greaterThan(0.5).and(frontFacing.not()),
       POCHE,
       askedColour(
-        clayColour(d, tint, build, h, wall, flags),
+        facadeReading(
+          d,
+          clayColour(d, tint, build, h, wall, flags),
+          build,
+          h,
+          wall,
+          flags,
+          wn
+        ),
         h,
         wall,
         flags,
@@ -363,6 +373,104 @@ function articulation(
   return out.mul(
     ledge(h, eave.sub(0.05), 0.35, 0.65, on.mul(step(5, eave)).mul(1.3))
   );
+}
+
+/** Smooth value noise in [0, 1] (two hashed corners per axis, eased):
+ *  blotches, never a grid's lines. */
+function valueNoise(p: V2): F {
+  const i = floor(p);
+  const f = fract(p);
+  const u = f.mul(f).mul(f.mul(-2).add(3));
+  const hash = (o: [number, number]) =>
+    fract(sin(dot(i.add(vec2(...o)), vec2(127.1, 311.7))).mul(43_758.5453));
+  return mix(
+    mix(hash([0, 0]), hash([1, 0]), u.x),
+    mix(hash([0, 1]), hash([1, 1]), u.x),
+    u.y
+  );
+}
+
+/** A building's facade readings from its flags (lib/city/facade-reading.ts:
+ *  FACADE_UNIT × (busy + 4 × dark), each graded 0 unseen, 1–3). */
+function readingOf(flags: F): { busy: F; dark: F } {
+  const code = floor(floor(flags.add(0.5)).div(512));
+  return { busy: mod(code, 4), dark: floor(code.div(4)) };
+}
+
+/** Where on its wall a fragment lies: metres along the wall and up. */
+function wallPlane(wn: V3, h: F): V2 {
+  const along = normalize(vec2(wn.z.negate(), wn.x).add(1e-5));
+  return vec2(dot(positionWorld.xz, along), h);
+}
+
+/**
+ * Fassadenbild (uFacadeReading): what street photos say about a facade
+ * (lib/city/facade-reading.ts), painted onto the clay as Gliederung's
+ * ledges are — walls only, never on a part with its own colour (64), a
+ * landmark's facade (16) or glass and metal (4, 8: the photos cannot tell
+ * glass from stucco), and nothing on a facade nobody photographed:
+ *  - Unruhe: a mid or busy facade (much of it not plain render) gets a
+ *    fine relief of soft blotches, about a metre wide and taller than wide,
+ *    above the plinth and under the eave, faded out once a blotch is a few
+ *    pixels across. Blotches, not a lattice: the window-grid veto holds.
+ *  - Ton: much dark in it (frames, openings, soot) a few per cent darker
+ *    and cooler; little dark a shade lighter — capped, so a misreading is
+ *    never a colour error.
+ *  - Geschossgesimse: a busy facade under a pitched roof (the Gründerzeit
+ *    front) carries a ledge at every storey line up to the eave, not only
+ *    the first (on Gliederung's slider too).
+ * A shop sign or an open ground floor joins OSM's shops in the flags, so
+ * Gliederung's Ladenzone and the dusk's shop light take it as they are.
+ */
+function facadeReading(
+  d: ClayDetailUniforms,
+  col: V3,
+  build: V4,
+  h: F,
+  wall: F,
+  flags: F,
+  wn: V3
+): V3 {
+  const f = floor(flags.add(0.5));
+  const { busy, dark } = readingOf(flags);
+  const plain = max(
+    max(mod(floor(f.div(64)), 2), mod(floor(f.div(16)), 2)),
+    max(mod(floor(f.div(4)), 2), mod(floor(f.div(8)), 2))
+  );
+  const on = d.uFacadeReading.mul(wall).mul(float(1).sub(plain));
+  const eave = build.z;
+  // Unruhe: mid 0.5, busy 1
+  const amp = clamp(busy.sub(1).mul(0.5), 0, 1);
+  const p = wallPlane(wn, h);
+  const coarse = valueNoise(p.div(vec2(1.1, 1.6)));
+  const fine = valueNoise(p.div(vec2(0.45, 0.6)).add(17.3));
+  const n = coarse.mul(0.65).add(fine.mul(0.35)).sub(0.5).mul(2);
+  const px = max(fwidth(p.x), fwidth(h));
+  const near = float(1).sub(smoothstep(0.06, 0.22, px));
+  const band = smoothstep(0.6, 1.2, h).mul(
+    float(1).sub(smoothstep(eave.sub(0.6), eave.sub(0.2), h))
+  );
+  let out: V3 = col.mul(
+    float(1).sub(n.mul(0.09).mul(amp).mul(band).mul(near).mul(on))
+  );
+  // Ton: dark 1 lifts 2 %, 2 keeps, 3 darkens and cools 6 %
+  const tone = mix(
+    mix(vec3(1.02), vec3(1), step(1.5, dark)),
+    vec3(0.94, 0.945, 0.965),
+    step(2.5, dark)
+  );
+  out = mix(out, out.mul(tone), on.mul(step(0.5, dark)));
+  // Geschossgesimse on a busy facade under a pitched roof
+  const storey = max(build.y, 2.4);
+  const k = floor(h.sub(0.1).div(storey)).add(1);
+  const top = k.mul(storey).add(0.1);
+  const pitched = float(1).sub(mod(floor(f.div(256)), 2));
+  const busyFront = step(2.5, busy)
+    .mul(pitched)
+    .mul(step(1.5, k))
+    .mul(step(top, eave.sub(0.8)))
+    .mul(d.uArticulation);
+  return out.mul(ledge(h, top, 0.16, 0.3, on.mul(busyFront).mul(0.8)));
 }
 
 /** A facade's mapped material from the object's flags (lib/city/
@@ -542,6 +650,7 @@ export function createStyleResources(
     clayDetail: {
       uAO: uniform(LOOK_DEFAULTS.groundShade),
       uArticulation: uniform(LOOK_DEFAULTS.articulation),
+      uFacadeReading: uniform(LOOK_DEFAULTS.facadeReading),
       uBands: uniform(LOOK_DEFAULTS.bands),
       uDuskGlow: uniform(LOOK_DEFAULTS.duskGlow),
       uEave: uniform(LOOK_DEFAULTS.eave),
@@ -686,6 +795,7 @@ const CLAY_UNIFORM_FOR: Record<
   keyof Omit<ClayDetailUniforms, "uNight">
 > = {
   articulation: "uArticulation",
+  facadeReading: "uFacadeReading",
   bands: "uBands",
   duskGlow: "uDuskGlow",
   eave: "uEave",

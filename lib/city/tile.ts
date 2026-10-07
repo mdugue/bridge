@@ -163,6 +163,10 @@ const ARTIFACTS = {
   // shadow map. Without them the light is as before.
   svf: { file: named("svf", "png"), sound: true },
   horizon: { file: named("horizon", "png") },
+  // Optional: what street photos say about each building's facade
+  // (lib/city/facade-reading.ts; Mapillary, CC BY-SA 4.0): the clay's
+  // relief, tone and shop plinth. Without it the facades are as before.
+  facades: { file: named("facades", "json") },
   // Optional: the road markings (pipeline/bake/markings.py) — the index
   // raster (rows, lane bits, centre offset) and the table of crossings
   // and stop lines; without them the roads stay unpainted.

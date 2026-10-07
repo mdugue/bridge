@@ -1458,6 +1458,28 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   tile), traffic signs (no layer draws them), signals (OSM's are placed by
   the direction they face, which a detection lacks).
 
+- **Facade readings from street photos (experimental, spawn tile only)** —
+  Mapillary's 2025 panoramas of a street front, rectified onto the LoD2
+  wall with their computed poses and masked to the "building" class, give
+  per wall the share of the upper wall that is not plain render (openings,
+  frames, stucco, glass), the share clearly darker than the render, and
+  how open the ground floor is; two sequences of one wall agree at
+  Spearman ρ 0.66–0.71 (window size, window count, storey height and
+  "ornament" did not, and stucco cannot be told from glass). A building
+  takes the length-weighted median of its walls, graded: busy 1–3 (busy
+  only where two sequences saw it), dark 1–3, and a shop where a shop sign
+  hangs within 4 m of the wall or the ground floor is more than 80 % open.
+  857 walls of 597 buildings on Dresden's spawn tile (a third of its street
+  fronts; courtyards hardly at all). Its own file
+  (`dlm/facades_<t>.json`, CC BY-SA 4.0), read at runtime into the flags
+  column above the OSM bits (`lib/city/facade-reading.ts`); the clay draws
+  a fine relief of soft blotches on mid and busy facades, a tone a few per
+  cent darker or lighter, a ledge at every storey of a busy front under a
+  pitched roof, and the shop zone of a signed shop (*Fassadenbild*,
+  `visual-style.ts` `facadeReading`). No windows: the grid veto holds. The
+  file is converted from the spike's table; the photo analysis is not a
+  pipeline step yet.
+
 - **Street furniture** — OSM benches (`amenity=bench`, points and the
   ways a bench is sometimes drawn as), picnic tables, litter bins
   (`waste_basket`), bicycle stands (`bicycle_parking`, not wall loops),
