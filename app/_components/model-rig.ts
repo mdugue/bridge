@@ -350,8 +350,12 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
     c.updateMatrixWorld(true);
   };
 
-  const restorePerspective = () => {
+  /** The walk/fly camera's projection back (the dolly zoom moves its
+   *  field of view, near and far); `fov`, where the caller knows the one to
+   *  return to — camera-pose.ts keeps the FOV on the camera itself. */
+  const restorePerspective = (fov?: number) => {
     const c = opts.camera;
+    c.fov = fov ?? c.fov;
     c.near = PERSPECTIVE_NEAR;
     c.far = PERSPECTIVE_FAR;
     c.updateProjectionMatrix();
@@ -829,7 +833,9 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
         return;
       }
       const wasParallel = phase.kind === "model";
-      restorePerspective();
+      // mid-dolly the camera is zoomed: back to the FOV it was entered
+      // with (a settled Modell set from a snapshot never touched it)
+      restorePerspective(entry?.state.fov);
       phase = { kind: "off" };
       view = null;
       glide = null;
