@@ -340,7 +340,8 @@ function CardHeader({
   return (
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+        {/* the accent the outline is drawn in: card and object are one */}
+        <p className="text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
           {card.kicker}
         </p>
         <Title

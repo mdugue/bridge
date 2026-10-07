@@ -156,7 +156,7 @@ export function InquiryStrip({
           "flex min-w-0 items-center gap-2 rounded-md text-left leading-none transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
           sheet ? "shrink-0 rounded-full px-2.5 py-1.5" : "w-full px-2 py-1.5",
           chosen
-            ? "bg-foreground/[0.08] text-foreground"
+            ? "bg-primary/10 text-foreground"
             : "text-foreground/75 hover:bg-foreground/[0.05] hover:text-foreground"
         )}
         key={item.key}
@@ -171,7 +171,7 @@ export function InquiryStrip({
           aria-hidden
           className={cn(
             "size-3.5 shrink-0",
-            chosen ? "text-foreground" : "text-muted-foreground"
+            chosen ? "text-primary" : "text-muted-foreground"
           )}
         />
         <span

@@ -221,8 +221,8 @@ Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
 Mit der Maus genügt ein **Klick** auf ein Gebäude, auf einem Touchscreen
 **langes Drücken** (den Finger eine halbe Sekunde ruhig halten); `I`
 fragt, was unter dem Fadenkreuz steht. Das Gebäude bekommt eine feine
-Bleistiftschraffur und eine Graphitlinie um seinen Umriss, und eine
-Karte öffnet sich. Ein Klick ins Leere
+Schraffur und eine Linie um seinen Umriss, beide in der pinken
+Akzentfarbe der Bedienelemente, und eine Karte öffnet sich. Ein Klick ins Leere
 schließt sie wieder. Ein kleines Haus musst du
 nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
 Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
@@ -257,9 +257,10 @@ Geschätzt wird nichts: Ein Gebäude ohne erfasste Geschosse hat einfach
 keine Geschosszeile.
 
 Bäume, Denkmale und Brunnen und Brücken antworten genauso. Was du
-gefragt hast, umrahmt eine weiche Graphitlinie auf einem Hauch Papier —
+gefragt hast, umrahmt eine weiche pinke Linie auf einem hellen Saum —
 entlang seines Umrisses, so wie du ihn gerade siehst, gleich breit auf
-dem Bildschirm, ob nah oder fern. Ein
+dem Bildschirm, ob nah oder fern. Beim Antippen leuchtet der Saum kurz
+auf. Ein
 **Straßenbaum** nennt seine Art (deutsch und botanisch), Straße und
 Nummer im Stadtbaumkataster, Höhe, Krone und Stamm, soweit das Kataster
 sie gemessen hat (was fehlt, bleibt weg, statt geschätzt zu werden), und

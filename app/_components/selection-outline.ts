@@ -45,10 +45,13 @@ import {
   OUTLINE_HALO,
   OUTLINE_HIDDEN,
   OUTLINE_KEEP_MS,
+  OUTLINE_PULSE,
+  outlinePulse,
+  SELECTION_ACCENT,
   outlineKernel,
   outlineSpread,
 } from "@/lib/city/outline";
-import type { V4 } from "./shader-chunks";
+import type { F, V4 } from "./shader-chunks";
 import { TRAFFIC_ATTRIBUTES, trafficPositionNode } from "./traffic-layer";
 import type { ViewLens } from "./view-lens";
 
@@ -72,8 +75,11 @@ const FLOW_ATTRIBUTES = ["position", ...TRAFFIC_ATTRIBUTES] as const;
 /**
  * The outline around the asked element (plan 052): one line along its
  * silhouette as the camera sees it now — not along every edge of it —
- * thick, soft and a little rounded, in the hatch's graphite on a hair of
- * its paper, a constant width on screen whatever the distance.
+ * thick, soft and a little rounded, in the HUD's accent on a hair of its
+ * pale (`SELECTION_ACCENT`), a constant width on screen whatever the
+ * distance. A new question flashes: the halo widens and glows in the
+ * accent, then settles (`OUTLINE_PULSE`); a hover over a candidate
+ * does not.
  *
  * The line goes round the whole element, never along what stands in
  * front of it, and is drawn over everything: a house behind a tree is
@@ -92,7 +98,7 @@ const FLOW_ATTRIBUTES = ["position", ...TRAFFIC_ATTRIBUTES] as const;
  * its own gradient (`fwidth`), so it never steps like a pixel edge. The
  * blur's reach follows the device pixel ratio: the width is in CSS
  * pixels. The line's band is red's; green over red near it is the share
- * of the element there that shows. The halo is the paper the hatch lifts
+ * of the element there that shows. The halo is the pale the hatch lifts
  * the building towards, so mark and outline read as one drawing.
  *
  * Memory: the mask and the blur hold two bytes a texel (each channel 0 or
@@ -107,8 +113,9 @@ const FLOW_ATTRIBUTES = ["position", ...TRAFFIC_ATTRIBUTES] as const;
  * resolution it writes, so it reads the mask's edge between those texels.
  */
 export interface SelectionOutline {
-  /** what to outline, or null for nothing */
-  set: (selection: OutlineSelection | null) => void;
+  /** what to outline, or null for nothing; a new question flashes
+   *  (`flash`, by default), a hover over a candidate does not */
+  set: (selection: OutlineSelection | null, flash?: boolean) => void;
   /** draws the mask and its blur after the scene pass (nothing when
    *  nothing is asked) */
   renderMask: (renderer: WebGPURenderer, camera: Camera) => void;
@@ -122,9 +129,8 @@ export interface SelectionOutline {
   dispose: () => void;
 }
 
-/** The hatch's ink and paper (visual-style.ts `askedColour`). */
-const GRAPHITE = new Color(0.24, 0.22, 0.21);
-const PAPER = new Color(0.97, 0.93, 0.85);
+const LINE = vec3(...SELECTION_ACCENT.line);
+const HALO = vec3(...SELECTION_ACCENT.halo);
 /** A tree sways and a proxy is not the drawn shape: how far behind the
  *  scene's surface the element may lie and still count as seen (m, and a
  *  share of the distance). */
@@ -306,6 +312,9 @@ export function createSelectionOutline(deps: {
   let lastUsed = 0;
 
   const spread = uniform(outlineSpread(1));
+  // the flash of a new question (OUTLINE_PULSE), and when it was asked
+  const pulse = uniform(0);
+  let askedAt = Number.NEGATIVE_INFINITY;
   const texel = uniform(
     new Vector2(1 / halved(deps.width), 1 / halved(deps.height))
   );
@@ -332,23 +341,23 @@ export function createSelectionOutline(deps: {
     const shown = smoothstep(0.25, 0.75, blurredMask.g.div(max(f, 1e-3)));
     const ink = mix(float(OUTLINE_HIDDEN.strength), float(1), shown);
     const aa = max(fwidth(f), 1e-4);
-    const band = (from: number, to: number) =>
-      smoothstep(float(from).sub(aa), float(from).add(aa), f).mul(
-        float(1).sub(smoothstep(float(to).sub(aa), float(to).add(aa), f))
+    const band = (from: F, to: F) =>
+      smoothstep(from.sub(aa), from.add(aa), f).mul(
+        float(1).sub(smoothstep(to.sub(aa), to.add(aa), f))
       );
-    const line = band(OUTLINE_BAND.from, OUTLINE_BAND.to);
-    const halo = band(OUTLINE_HALO.from, OUTLINE_HALO.to);
-    const onPaper = mix(
+    const line = band(float(OUTLINE_BAND.from), float(OUTLINE_BAND.to));
+    // the flash widens the halo outward and lights it in the accent
+    const halo = band(
+      mix(float(OUTLINE_HALO.from), float(OUTLINE_PULSE.from), pulse),
+      float(OUTLINE_HALO.to)
+    );
+    const onHalo = mix(
       colour.rgb,
-      vec3(PAPER.r, PAPER.g, PAPER.b),
-      halo.mul(OUTLINE_HALO.strength)
+      mix(HALO, LINE, pulse.mul(OUTLINE_PULSE.glow)),
+      halo.mul(mix(float(OUTLINE_HALO.strength), float(1), pulse))
     );
     return vec4(
-      mix(
-        onPaper,
-        vec3(GRAPHITE.r, GRAPHITE.g, GRAPHITE.b),
-        line.mul(ink).mul(OUTLINE_BAND.strength)
-      ),
+      mix(onHalo, LINE, line.mul(ink).mul(OUTLINE_BAND.strength)),
       colour.a
     );
   };
@@ -381,6 +390,12 @@ export function createSelectionOutline(deps: {
       renderer.setRenderTarget(previous);
     }
   };
+  /** A new question restarts the flash; nothing asked ends it. */
+  const flashFrom = (flash: boolean) => {
+    if (flash || !selected) {
+      askedAt = selected ? performance.now() : Number.NEGATIVE_INFINITY;
+    }
+  };
   /** Nothing asked: the last pass reads nothing, the memory goes in time. */
   const idle = (renderer: WebGPURenderer) => {
     if (!clean) {
@@ -397,7 +412,7 @@ export function createSelectionOutline(deps: {
   };
 
   return {
-    set: (selection) => {
+    set: (selection, flash = true) => {
       shape.geometry.dispose();
       dropFlowGeometry(flow.geometry, flowShared);
       const positions =
@@ -422,6 +437,7 @@ export function createSelectionOutline(deps: {
       }
       flow.visible = flowShared;
       selected = shape.visible || flow.visible;
+      flashFrom(flash);
     },
     renderMask: (renderer, camera) => {
       if (!selected) {
@@ -444,6 +460,7 @@ export function createSelectionOutline(deps: {
       clean = false;
       held = true;
       lastUsed = performance.now();
+      pulse.value = outlinePulse(lastUsed - askedAt);
     },
     over,
     update: (pixelRatio) => {

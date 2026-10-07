@@ -18,8 +18,39 @@ export const OUTLINE_WIDTH_CSS_PX = 4.5;
  */
 export const OUTLINE_BAND = { from: 0.07, to: 0.66, strength: 1, sigma: 4 };
 
-/** The paper halo just outside it, so it reads on dark asphalt too. */
+/** The light halo just outside it, so it reads on dark asphalt too. */
 export const OUTLINE_HALO = { from: 0.012, to: 0.07, strength: 0.55 };
+
+/**
+ * The selection's colours: the HUD's accent, so the outline, the mark on
+ * the asked building and the card are one thing — the one place the
+ * scene leaves its palette, since a choice is the interface's, not the
+ * city's. Linear sRGB of app/globals.css: `line` is `--sidebar-primary`,
+ * `ink` (the hatch) `--primary`, `halo` `--primary-foreground`.
+ */
+export const SELECTION_ACCENT = {
+  line: [0.576, 0, 0.732],
+  ink: [0.391, 0, 0.474],
+  halo: [0.98, 0.905, 0.998],
+} as const;
+
+/**
+ * The flash when something is newly asked: the halo widens outward and
+ * glows in the accent, then settles into the steady halo over `ms`.
+ * `from` is the halo's outer edge at the flash (a lower mask value lies
+ * farther out), `glow` the accent's share of the halo then.
+ */
+export const OUTLINE_PULSE = { ms: 650, from: 0.002, glow: 0.75 };
+
+/** The flash's strength `elapsed` ms after the question: 1 at once,
+ *  easing out to 0 at OUTLINE_PULSE.ms (cubic). */
+export function outlinePulse(elapsed: number): number {
+  if (!(elapsed >= 0) || elapsed >= OUTLINE_PULSE.ms) {
+    return 0;
+  }
+  const t = 1 - elapsed / OUTLINE_PULSE.ms;
+  return t * t * t;
+}
 
 /**
  * Where something in front hides the element, the line is drawn on top

@@ -161,9 +161,10 @@ cylinder, a basin's prism as stand-ins, which count only where the
 scene's surface lies inside them), the mask is blurred at half
 resolution, and a band of the blur is the line: rounded, simplified
 below its own width, smooth at its edge (fwidth), 4.5 CSS px whatever
-the screen's pixel ratio or the distance. Graphite with a hair of paper
-outside, the hatch's two colours, so it reads on dark asphalt as on a
-lawn. A first mark, a pencil loop on the ground around a tree and along
+the screen's pixel ratio or the distance. In the HUD's accent pink with
+a hair of its pale outside, the hatch's two colours, so it reads on dark
+asphalt as on a lawn, and flashing on a new question (graphite and paper
+until maintainer review on 2026-10-07 asked for a bolder mark). A first mark, a pencil loop on the ground around a tree and along
 a deck's parapets, said "here" rather than "this" and left a building
 without a line (maintainer review, 2026-10-01; 🗃️ in the ledger). E2E:
 a register tree asked from above in the `@desktop-render` group.

@@ -901,9 +901,16 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   prism) are drawn into a mask where the scene pass's depth shows them
   (a stand-in only where the scene's own surface lies inside it), the
   mask is blurred at half resolution, and the band of the blur between
-  0.07 and 0.66 is the line: 4.5 CSS px of the hatch's graphite, on a
-  hair of its paper outside (0.012–0.07, 55 %), anti-aliased by its own
-  gradient. The blur rounds the corners and drops what is finer than
+  0.07 and 0.66 is the line: 4.5 CSS px in the HUD's accent pink
+  (`SELECTION_ACCENT`, the theme's `--sidebar-primary`; the hatch on a
+  building is `--primary`), on a hair of its pale outside (0.012–0.07,
+  55 %), anti-aliased by its own gradient. The selection leaves the
+  city's palette on purpose: it is the interface's, and the card's
+  kicker and the chosen candidate carry the same colour. A new question
+  flashes: the pale fringe widens to 0.002 and glows in the accent, easing
+  out over 650 ms (`OUTLINE_PULSE`); a hover over a candidate does not.
+  (Graphite and paper until 2026-10-07: maintainer review asked for a
+  bolder mark.) The blur rounds the corners and drops what is finer than
   the line; its reach follows the device pixel ratio, so the width is
   in screen pixels at any distance (`lib/city/outline.ts`,
   `selection-outline.ts`, `selection-shape.ts`; over the finished frame,

@@ -211,8 +211,8 @@ the frame as you see it, with the credits.
 The city itself carries no text. Ask it instead: with a mouse, a
 **click** on a building; on a touch screen, a **long press** (hold a
 finger still for half a second); `I` asks what stands under the
-crosshair. The building gets a fine pencil hatch and a graphite line round its
-outline, and a card opens; a
+crosshair. The building gets a fine hatch and a line round its outline,
+both in the controls' pink accent, and a card opens; a
 click on nothing closes it again. You need not hit a small house exactly:
 when nothing stands right under your finger, the building most of the
 ground around it belongs to answers. On a phone the card is a sheet at
@@ -243,9 +243,9 @@ next question asks the next building. Nothing is estimated: a building without m
 storeys simply has no storey line.
 
 Trees, monuments and fountains, and bridges answer the same way.
-Whatever you asked is framed by a soft graphite line on a hair of paper —
+Whatever you asked is framed by a soft pink line on a pale fringe —
 along its outline as you see it now, the same width on screen near or
-far. A **street tree**
+far. The fringe flashes briefly when you ask. A **street tree**
 says its species (German and botanical), its street and number in the
 city's tree register, the height, crown and trunk the register measured
 (a size the register lacks is left out, not guessed) and the age it
