@@ -58,6 +58,42 @@ export function trailUrl(pathname: string, search: string): string {
   return query ? `${pathname}?${query}` : pathname;
 }
 
+/** How long one error's repeats are counted, not noted (seconds). */
+export const ERROR_REPEAT_S = 10;
+
+/**
+ * Notes errors, a repeat of the last one within `ERROR_REPEAT_S` of its
+ * note counted instead: a throw that comes back every frame would
+ * otherwise write the whole record to storage 60 times a second. The
+ * count goes out as one `text ×N` when the text changes, the window has
+ * passed, or the record ends (`flush`).
+ */
+export function errorCoalescer(
+  note: (text: string) => void,
+  now: () => number
+): { error: (text: string) => void; flush: () => void } {
+  let last = { text: "", count: 0, at: Number.NEGATIVE_INFINITY };
+  const flush = () => {
+    if (last.count > 1) {
+      note(`${last.text} ×${last.count}`);
+    }
+    last = { text: "", count: 0, at: Number.NEGATIVE_INFINITY };
+  };
+  return {
+    error: (text) => {
+      const t = now();
+      if (text === last.text && t - last.at < ERROR_REPEAT_S) {
+        last.count++;
+        return;
+      }
+      flush();
+      note(text);
+      last = { text, count: 1, at: t };
+    },
+    flush,
+  };
+}
+
 let rotated = false;
 let announced = false;
 /** Moves the last page's record aside, once per page load. */
@@ -254,13 +290,14 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
     },
   };
 
+  const errors = errorCoalescer((text) => note("error", text), seconds);
   const onError = (event: ErrorEvent) => {
     const error = event.error as unknown;
     const stack =
       error instanceof Error
         ? (error.stack ?? "").split("\n").slice(1, 4).join(" | ")
         : `@${event.filename}:${event.lineno}`;
-    note("error", `${event.message} ${stack}`);
+    errors.error(`${event.message} ${stack}`);
   };
   const onRejection = (event: PromiseRejectionEvent) =>
     note(
@@ -308,6 +345,7 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
       console.info(TAG, JSON.stringify(patch));
     },
     end: () => {
+      errors.flush();
       trail.state = "clean";
       note("end");
       stopAnswering();

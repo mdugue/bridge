@@ -2424,13 +2424,8 @@ async function bootApp(
       c.request.resolve({ canvas: c.out, imagePxPerCssPx: c.imagePxPerCssPx });
     }
   };
-  // (It resolves once the loop is installed: nothing to wait for.)
-  void renderer.setAnimationLoop((time) => {
-    // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
-    // the clamp below keeps the skipped time from jumping the scene.
-    if (pocFramesHeld()) {
-      return;
-    }
+  // One frame: the scene steps, streams and renders.
+  const frame = (time: number) => {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     const elapsed = timer.getElapsed();
@@ -2492,15 +2487,28 @@ async function bootApp(
     // The counters cover this frame's passes only (autoReset is off: the
     // loop's own reset also ran on held frames, which read back as zero).
     renderer.info.reset();
-    try {
-      postStack.render();
-    } catch (error) {
-      onFrameFailed(error);
-      return;
-    }
+    postStack.render();
     takeCaptureTile();
     frames++;
     tickPocFrame(shadowRendered);
+  };
+  // (It resolves once the loop is installed: nothing to wait for.) The
+  // whole frame is guarded, not the render alone: three asks for the next
+  // frame before it runs this one, so a throw out of the pose, the stream
+  // or an overlay would come again every frame — into the trail's storage
+  // and the reports' count, behind a frozen picture — and never reach
+  // onFrameFailed, which stops the loop and decides the reload.
+  void renderer.setAnimationLoop((time) => {
+    // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
+    // the clamp in the frame keeps the skipped time from jumping the scene.
+    if (pocFramesHeld()) {
+      return;
+    }
+    try {
+      frame(time);
+    } catch (error) {
+      onFrameFailed(error);
+    }
   });
   cleanups.push(() => void renderer.setAnimationLoop(null));
   // The crash trail's heartbeat: what a killed page was doing last.
