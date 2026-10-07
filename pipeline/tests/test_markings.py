@@ -297,23 +297,43 @@ def test_the_last_row_used_to_clip_the_first():
     assert paint_lost(rows, index_raster(rows, KM2, 2048), KM2)[0] == (0.0, 0.0)
 
 
-DLM = Path(__file__).resolve().parents[2] / "data" / "dlm"
+# Every site whose data is on disk, as test_committed.py walks it.
+DLMS = sorted(p for p in (Path(__file__).resolve().parents[2] / "data").glob("*/dlm"))
+TABLES = sorted(p for dlm in DLMS for p in dlm.glob("markings_*.json"))
+# The share of a row's samples another row may take at the full raster
+# (≈1 m texels). Two crossings that cross each other at an angle (an X at a
+# junction, not merged: they are not on one axis) share a few texels at
+# their corners, and a texel can only name one of them.
 DROPPED_OK = 0.005
 
 
-@pytest.mark.parametrize("table", sorted(DLM.glob("markings_*.json")), ids=lambda p: p.stem)
+def _dropped_ok(px: int, full: int) -> float:
+    """The bound at a px² raster: a coarser raster's corner texels are wider
+    by the same factor, so the shared corner takes that much more of a row
+    (the phones' 1024² raster: 1 %; measured worst, a signalled crossing
+    over a zebra in Leipzig, 0.8 %)."""
+    return DROPPED_OK * full / px
+
+
+def _epsg(doc: dict) -> int:
+    """The table's CRS, `"EPSG:25832"` → 25832 (three of the seven sites are
+    not in zone 33)."""
+    return int(str(doc["crs"]).rsplit(":", 1)[-1])
+
+
+@pytest.mark.parametrize(
+    "table", TABLES, ids=lambda p: f"{p.parent.parent.name}/{p.stem.removeprefix('markings_')}"
+)
 def test_the_committed_rasters_lose_no_paint(table):
     doc = json.loads(table.read_text())
     xmin, ymin, xmax, ymax = doc["bounds"]
-    tile = Tile(doc["tile"], (xmin, ymin, xmax, ymax), 25833, Path("."), Path("."))
+    tile = Tile(doc["tile"], (xmin, ymin, xmax, ymax), _epsg(doc), Path("."), Path("."))
     rows = [[xmin + r[0], ymax + r[1], *r[2:]] for r in doc["markings"]]
+    full = doc["size"]
     for name in (f"markings_{doc['tile']}.png", f"markings_low_{doc['tile']}.png"):
-        grey = np.asarray(Image.open(DLM / name))
+        grey = np.asarray(Image.open(table.parent / name))
         px = grey.shape[0]
         q = grey.reshape(px, px, 4).astype(np.uint16)
         lost = paint_lost(rows, q[..., 0] + 256 * q[..., 3], tile)
-        # Two crossings that cross each other at an angle (an X at a
-        # junction, not merged: they are not on one axis) share a few
-        # texels at their corners, and a texel can only name one of them:
-        # up to ~0.1 % of such a row's samples fall there. Nothing larger.
-        assert [i for i, (_, d) in enumerate(lost) if d > DROPPED_OK] == [], name
+        ok = _dropped_ok(px, full)
+        assert [i for i, (_, d) in enumerate(lost) if d > ok] == [], name
