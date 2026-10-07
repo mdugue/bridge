@@ -4,7 +4,7 @@
  * lost, a frame that threw, an allocation that failed, the page hidden or
  * shown, the first frame, the end — and the machine answers with the
  * effects to carry out, in order. create-app.ts binds the signals to the
- * renderer, the stream and the document and executes the effects; the
+ * renderer, the stream and the page and executes the effects; the
  * clocks and the page's visibility arrive as signal fields. No THREE, no
  * DOM.
  *
@@ -27,7 +27,7 @@ import {
  * What the page hears. `now` is the monotonic clock (ms); `wall` the wall
  * clock (ms) — iOS stops the monotonic one while the device sleeps, and an
  * hour with the phone locked would read as a glance away, so the time away
- * is measured on the wall. `hidden` is the document's visibility at the
+ * is measured on the wall. `hidden` is the page's visibility at the
  * signal.
  */
 export type LifecycleSignal =

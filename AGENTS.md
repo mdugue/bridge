@@ -266,7 +266,9 @@ config change.
   policy, the look table + store, the Snapshot codec, `gpu-safety.ts`
   (the safety ladder: levels, raise and decay, the recovery's caps, a
   recovered page's start tile — ADR 0046), `gpu-allocation.ts` (which
-  errors are a GPU allocation that failed), `fetch-retry.ts` (when a
+  errors are a GPU allocation that failed), `page-lifecycle.ts` (the
+  page's GPU-loss, memory-emergency and resume decisions as effects —
+  ADR 0046), `fetch-retry.ts` (when a
   failed fetch is tried again and for how long — ADR 0048),
   `task-gate.ts` (a concurrency gate: the rasters' turns),
   `ground.ts` (the

@@ -769,7 +769,11 @@ An older record prints as it was.
 **If the GPU is lost anyway**, or a frame throws, the render stops and the
 page reloads where the player stood, **a safety level lighter**
 (`gpu-recovery.ts`, `lib/city/gpu-safety.ts`,
-[ADR 0046](./adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)): the
+[ADR 0046](./adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)). The
+decisions — what a lost device, a failed frame, an allocation failure, a
+hidden or shown page lead to — are one pure machine,
+`lib/city/page-lifecycle.ts`, tested by the incident sequences in its
+test; `create-app.ts` binds its signals and effects. The
 snapshot waits in session storage, the raised level in local storage
 (`gpu-safety`). One automatic reload per level (0 → 1 → 2 → 3); none from
 level 3, and none where the raise cannot be stored — the next page would
