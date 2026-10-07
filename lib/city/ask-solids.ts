@@ -227,6 +227,23 @@ export function nearestItem<T>(
   return best;
 }
 
+/** Every item the ray meets within `far`, nearest first. */
+export function itemsAlong<T>(
+  o: Xyz,
+  d: Xyz,
+  items: Iterable<AskItem<T>>,
+  far: number
+): AskHit<T>[] {
+  const out: AskHit<T>[] = [];
+  for (const item of items) {
+    const t = raySolids(o, d, item.solids);
+    if (t !== null && t <= far) {
+      out.push({ ...item, distance: t });
+    }
+  }
+  return out.sort((a, b) => a.distance - b.distance);
+}
+
 /** An axis-aligned box (world). */
 export interface Aabb {
   max: Xyz;
@@ -238,6 +255,9 @@ export interface Aabb {
  * passes through it, then asks the set for its nearest hit.
  */
 export interface AskSet<T> {
+  /** every hit within `far`, nearest first — for the things behind the
+   *  first (the probe's candidates); a set without it offers its nearest */
+  along?: (o: Xyz, d: Xyz, far: number) => AskHit<T>[];
   box: Aabb;
   nearest: (o: Xyz, d: Xyz, far: number) => AskHit<T> | null;
 }
@@ -295,6 +315,7 @@ export function askSets<T>(
   return [...cells.values()].map((g) => ({
     box: g.box,
     nearest: (o, d, far) => nearestItem(o, d, g.items, far),
+    along: (o, d, far) => itemsAlong(o, d, g.items, far),
   }));
 }
 
@@ -359,6 +380,34 @@ export function nearestInSets<T>(
     }
   }
   return found.hit;
+}
+
+/**
+ * Every hit in the sets the ray meets within `far`, nearest first: each
+ * set's own `along`, or its nearest where it has none.
+ */
+export function hitsInSets<T>(
+  o: Xyz,
+  d: Xyz,
+  sets: Iterable<AskSet<T>>,
+  far: number
+): AskHit<T>[] {
+  const out: AskHit<T>[] = [];
+  for (const set of sets) {
+    const enter = rayAabb(o, d, set.box);
+    if (enter === null || enter > far) {
+      continue;
+    }
+    if (set.along) {
+      out.push(...set.along(o, d, far));
+    } else {
+      const hit = set.nearest(o, d, far);
+      if (hit) {
+        out.push(hit);
+      }
+    }
+  }
+  return out.sort((a, b) => a.distance - b.distance);
 }
 
 /** How far (x, z) lies from the ring's edge in plan; 0 inside it. */

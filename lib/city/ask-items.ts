@@ -9,12 +9,14 @@
  */
 import {
   type Aabb,
+  type AskHit,
   type AskItem,
   type AskSet,
   type AskSolid,
   type Cylinder,
   cylindersBox,
   rayCylinder,
+  type Xyz,
 } from "./ask-solids";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
 import type { BridgeFeature, MonumentFeature, TreeFeature } from "./features";
@@ -101,8 +103,33 @@ function packedTreeSet(
       { x, z, y0: yb, y1: yt, r },
     ];
   };
+  const distance = (o: Xyz, d: Xyz, k: number): number => {
+    const [trunk, crown] = cylinders(k);
+    return Math.min(
+      rayCylinder(o, d, trunk) ?? Number.POSITIVE_INFINITY,
+      rayCylinder(o, d, crown) ?? Number.POSITIVE_INFINITY
+    );
+  };
+  const hit = (k: number, t: number): AskHit<FeatureInquiry> => {
+    const [trunk, crown] = cylinders(k);
+    return {
+      distance: t,
+      target: treeInquiry(table, index[k], tile),
+      solids: [{ cylinder: trunk }, { cylinder: crown }],
+    };
+  };
   return {
     box,
+    along: (o, d, far) => {
+      const out: AskHit<FeatureInquiry>[] = [];
+      for (let k = 0; k < index.length; k++) {
+        const t = distance(o, d, k);
+        if (t <= far) {
+          out.push(hit(k, t));
+        }
+      }
+      return out.sort((a, b) => a.distance - b.distance);
+    },
     nearest: (o, d, far) => {
       let best = -1;
       let reach = far;

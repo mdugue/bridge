@@ -198,6 +198,26 @@ the section is first opened or the pointer nears its toggle — the boot
 carries none of it, and nothing new is fetched (the manifest is the
 card's).
 
+### 4d. What the ray met — **BUILT** (2026-10-07)
+
+A click used to answer with the nearest thing on its ray, and a tree's
+crown is a stand-in wider than its leaves: a house half behind a street
+tree was answered as the tree. The probe now keeps everything a ray
+meets before the ground (`cityObjectsAlong` for the buildings, one hit a
+tree; `hitsInSets` for the things — a set's `along`, else its nearest)
+and chooses the first *solid* thing on the exact ray, a crown only where
+nothing solid stands behind it (`firstSolid`); the tolerant rings still
+vote when the exact ray meets nothing. The rest are candidates
+(`mergeCandidates`: the exact ray's hits and each ring ray's first two,
+each thing once, at most eight, nearest first, the chosen one never cut),
+shown in a strip of their own beside the tap (`inquiry-strip.tsx`) —
+"vorn … hinten", an icon, the card's title and the distance each — so the
+card stays about one thing. The pointer on a candidate moves the outline
+to it for as long as it stays (`previewCandidate`), a click shows it in
+the card and moves the hatch (`selectCandidate`). A ring a finger wide
+pulses once at the tap: how far round it the question looked. On a touch
+screen the strip sits above the folded sheet.
+
 ### 4b. Aim and ask in live mode (S–M)
 
 With live mode on (the phone's compass and GPS steer the view), a tap

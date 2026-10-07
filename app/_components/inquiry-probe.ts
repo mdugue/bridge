@@ -1,48 +1,82 @@
 import { type Camera, Raycaster, Vector2 } from "three/webgpu";
-import { type AskHit, type AskSet, nearestInSets } from "@/lib/city/ask-solids";
+import { type AskHit, type AskSet, hitsInSets } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import type { Inquiry, InquiryObject } from "@/lib/city/inquiry";
-import { type CityLayer, pickCityObject } from "./city-layer";
+import { type CityLayer, cityObjectsAlong } from "./city-layer";
 import { setPickRay } from "./view-ray";
 
 /**
  * The scene side of the "Befragen" mode (ADR 0042): asks the city what
- * stands under a screen point and marks it. Only buildings answer — a ray
- * that meets the ground first finds nothing, so a building behind a hill
- * cannot be picked through it. A finger is not a pixel: when nothing
- * stands exactly under the point, rays on two rings around it (TOLERANCE_PX)
- * vote, and the building most of them hit wins (the nearest on a tie). The
- * mark (the clay's pencil hatch, and the outline round what the screen
- * shows of it) is the whole building tree, the same set demolish would
- * take; a tree, monument or bridge gets the outline alone. It stays until
- * the next question or `clear`; the hatch goes with its tile if the tile
- * unloads, the outline with what the scene draws (its mask is only where
- * the element shows). The HUD owns the card; this module owns only the
- * scene state.
+ * stands under a screen point and marks it. A ray meets everything on its
+ * way until the ground (a building behind a hill cannot be picked through
+ * it); what it chooses is the first solid thing — a building, a bridge, a
+ * monument, a counted flow — and a tree only where nothing solid stands on
+ * the ray: a crown is a stand-in wider than its leaves, and a house half
+ * behind one is what a click on it most often means. Everything else the
+ * ray met is a candidate, nearest first (`Asked.candidates`): the trees in
+ * front, the houses behind. A finger is not a pixel: rays on two rings
+ * around the point (TOLERANCE_PX) add what they meet first to the
+ * candidates, and when nothing stands exactly under the point, the thing
+ * most of them chose wins (the nearest on a tie). The mark (the clay's
+ * pencil hatch, and the outline round the whole of it) is the whole
+ * building tree, the same set demolish would take; a tree, monument or
+ * bridge gets the outline alone. It stays until the next question or
+ * `clear`; the hatch goes with its tile if the tile unloads. `preview`
+ * moves the outline alone to another candidate for a moment. The HUD owns
+ * the card and the candidates' strip; this module owns only the scene
+ * state.
  */
 export interface InquiryProbe {
-  /** asks at a screen point (NDC; the crosshair when omitted) */
-  ask: (ndc?: { x: number; y: number }) => Inquiry | null;
+  /** asks at a screen point (NDC; the crosshair when omitted) and marks
+   *  what it chose */
+  ask: (ndc?: { x: number; y: number }) => Asked | null;
+  /** marks another candidate of the last question; its inquiry */
+  select: (index: number) => Inquiry | null;
+  /** outlines a candidate of the last question for a moment (null: the
+   *  chosen one again) */
+  preview: (index: number | null) => void;
   /** removes the mark */
   clear: () => void;
+}
+
+/** What a question met: its candidates, nearest first, and the chosen. */
+export interface Asked {
+  candidates: { distance: number; inquiry: Inquiry; key: string }[];
+  selected: number;
 }
 
 /** The radius (CSS px) of the outer ring of rays around a tap. */
 export const TOLERANCE_PX = 22;
 /** Rays per ring (two rings: half and full radius). */
 const RING_RAYS = 8;
+/** The most candidates a question offers. */
+export const MAX_CANDIDATES = 8;
+/** What one ring ray adds to the candidates: its first few hits. */
+const RING_HITS = 2;
 
-/** One ring ray's answer: which building tree it hit, and how far away. */
+/** One ray's answer: which thing it hit, and how far away. */
 export interface PickSample<T> {
   distance: number;
   hit: T;
-  /** the building tree it hit (tile + root), for the vote */
+  /** the thing it hit (a building tree: tile + root), for the vote */
   key: string;
+  /** a stand-in wider than what it stands for (a tree's crown) */
+  porous?: boolean;
 }
 
 /**
- * The building a tap means when nothing stands exactly under it: the tree
- * most ring rays hit, the nearest hit on a tie.
+ * The thing a ray means among what it met, nearest first: the first solid
+ * one; a porous one (a crown) only when nothing solid stands behind it.
+ */
+export function firstSolid<T>(
+  hits: readonly PickSample<T>[]
+): PickSample<T> | null {
+  return hits.find((h) => !h.porous) ?? hits[0] ?? null;
+}
+
+/**
+ * The thing a tap means when nothing stands exactly under it: the one
+ * most ring rays chose, the nearest hit on a tie.
  */
 export function chooseSample<T>(
   samples: readonly PickSample<T>[]
@@ -70,6 +104,34 @@ export function chooseSample<T>(
     }
   }
   return winner?.best ?? null;
+}
+
+/**
+ * The candidates of a question, nearest first, each thing once (its
+ * nearest hit): everything the exact ray met and the first few each ring
+ * ray met, at most `max` — the chosen one always among them.
+ */
+export function mergeCandidates<T>(
+  chosen: PickSample<T>,
+  exact: readonly PickSample<T>[],
+  rings: readonly (readonly PickSample<T>[])[],
+  max = MAX_CANDIDATES
+): PickSample<T>[] {
+  const byKey = new Map<string, PickSample<T>>([[chosen.key, chosen]]);
+  for (const s of [...exact, ...rings.flatMap((r) => r.slice(0, RING_HITS))]) {
+    const known = byKey.get(s.key);
+    if (!known || (s.distance < known.distance && s.key !== chosen.key)) {
+      byKey.set(s.key, s);
+    }
+  }
+  const all = [...byKey.values()].sort((a, b) => a.distance - b.distance);
+  // nearest first, but the chosen one is never cut
+  const kept = all.slice(0, max);
+  if (!kept.includes(chosen)) {
+    kept[kept.length - 1] = chosen;
+    kept.sort((a, b) => a.distance - b.distance);
+  }
+  return kept;
 }
 
 /** NDC offsets of the rays around a point: two rings of RING_RAYS. */
@@ -136,73 +198,63 @@ export function createInquiryProbe(deps: {
   viewport: () => { height: number; width: number };
 }): InquiryProbe {
   let marked: CityLayer | null = null;
+  // the last question's candidates, as the scene knows them
+  let last: { hits: ProbeHit[]; selected: number } | null = null;
   const ray = new Raycaster();
 
-  const clear = () => {
+  const unmark = () => {
     // A tile that unloaded took its texture with it: never touch it again.
     // One merely out of view keeps its texture, and its mark must go.
     if (marked && deps.isLoaded(marked)) {
       marked.mark(new Set());
     }
     marked = null;
+  };
+  const clear = () => {
+    unmark();
+    last = null;
     deps.outline(null);
   };
 
-  /** One ray: what it meets first, before the ground, if anything. */
-  const sample = (
+  /** One ray: everything it meets before the ground, nearest first. */
+  const along = (
     ndc: { x: number; y: number } | undefined
-  ): PickSample<ProbeHit> | null => {
+  ): PickSample<ProbeHit>[] => {
     const camera = deps.camera();
-    const picked = pickCityObject(camera, deps.cities(), ndc);
+    const buildings = cityObjectsAlong(camera, deps.cities(), ndc);
     const reach = Math.max(
       setPickRay(ray, ndc ? new Vector2(ndc.x, ndc.y) : CENTRE, camera),
       FAR
     );
-    const thing = nearestInSets(
+    const things = hitsInSets(
       ray.ray.origin,
       ray.ray.direction,
       deps.things(),
-      picked?.distance ?? reach
+      reach
     );
-    const distance = thing?.distance ?? picked?.distance;
-    if (distance === undefined) {
-      return null;
+    const hits: PickSample<ProbeHit>[] = [
+      ...buildings.map(({ distance, layer, objectIndex }) => ({
+        distance,
+        hit: { building: { layer, objectIndex } },
+        key: `${layer.tile}:${layer.table.root[objectIndex]}`,
+      })),
+      ...things.map((thing) => ({
+        distance: thing.distance,
+        hit: { thing },
+        key: thingKey(thing.target),
+        porous: thing.target.kind === "tree",
+      })),
+    ].sort((a, b) => a.distance - b.distance);
+    const farthest = hits.at(-1)?.distance;
+    if (farthest === undefined) {
+      return [];
     }
-    const ground = deps.groundAlong(ray, distance);
-    if (ground !== null && ground < distance) {
-      return null;
-    }
-    if (thing) {
-      return { distance, hit: { thing }, key: thingKey(thing.target) };
-    }
-    if (!picked) {
-      return null;
-    }
-    const { layer, objectIndex } = picked;
-    return {
-      distance,
-      hit: { building: { layer, objectIndex } },
-      key: `${layer.tile}:${layer.table.root[objectIndex]}`,
-    };
+    const ground = deps.groundAlong(ray, farthest);
+    return ground === null ? hits : hits.filter((h) => h.distance <= ground);
   };
 
-  const pick = (ndc?: { x: number; y: number }): ProbeHit | null => {
-    const exact = sample(ndc);
-    if (exact || !ndc) {
-      return exact?.hit ?? null;
-    }
-    const samples: PickSample<ProbeHit>[] = [];
-    for (const d of ringOffsets(TOLERANCE_PX, deps.viewport())) {
-      const s = sample({ x: ndc.x + d.x, y: ndc.y + d.y });
-      if (s) {
-        samples.push(s);
-      }
-    }
-    return chooseSample(samples)?.hit ?? null;
-  };
-
-  /** A building's whole tree, marked in the clay. */
-  const askBuilding = (layer: CityLayer, objectIndex: number): Inquiry => {
+  /** A building's live tree: its objects and its inquiry (unmarked). */
+  const building = (layer: CityLayer, objectIndex: number) => {
     const { table } = layer;
     const tree: number[] = [];
     for (let i = 0; i < table.count; i++) {
@@ -210,10 +262,6 @@ export function createInquiryProbe(deps: {
         tree.push(i);
       }
     }
-    const objects = new Set(tree);
-    layer.mark(objects);
-    marked = layer;
-    deps.outline({ building: { layer, objects } });
     const object = (i: number): InquiryObject => ({
       objectIndex: i,
       building: table.building[i] === 1,
@@ -222,26 +270,94 @@ export function createInquiryProbe(deps: {
       source: table.source[i],
       facts: layer.facts(i),
     });
-    return {
+    const inquiry: Inquiry = {
       kind: "building",
       tile: layer.tile,
       picked: object(objectIndex),
       tree: tree.map(object),
     };
+    return { inquiry, objects: new Set(tree) };
   };
 
-  const ask = (ndc?: { x: number; y: number }): Inquiry | null => {
+  const describe = (hit: ProbeHit): Inquiry =>
+    "thing" in hit
+      ? hit.thing.target
+      : building(hit.building.layer, hit.building.objectIndex).inquiry;
+
+  /** The outline's subject for a hit (a building's whole live tree). */
+  const subject = (hit: ProbeHit): OutlineSubject =>
+    "thing" in hit
+      ? { thing: hit.thing }
+      : {
+          building: {
+            layer: hit.building.layer,
+            objects: building(hit.building.layer, hit.building.objectIndex)
+              .objects,
+          },
+        };
+
+  /** Marks a hit: the hatch on a building's tree, the outline round it. */
+  const mark = (hit: ProbeHit) => {
+    unmark();
+    if ("building" in hit) {
+      const { layer, objectIndex } = hit.building;
+      const { objects } = building(layer, objectIndex);
+      layer.mark(objects);
+      marked = layer;
+      deps.outline({ building: { layer, objects } });
+    } else {
+      deps.outline({ thing: hit.thing });
+    }
+  };
+
+  const ask = (ndc?: { x: number; y: number }): Asked | null => {
     clear();
-    const hit = pick(ndc);
-    if (!hit) {
+    const exact = along(ndc);
+    const rings = ndc
+      ? ringOffsets(TOLERANCE_PX, deps.viewport()).map((d) =>
+          along({ x: ndc.x + d.x, y: ndc.y + d.y })
+        )
+      : [];
+    const chosen =
+      firstSolid(exact) ??
+      chooseSample(
+        rings
+          .map((r) => firstSolid(r))
+          .filter((h): h is PickSample<ProbeHit> => h !== null)
+      );
+    if (!chosen) {
       return null;
     }
-    if ("thing" in hit) {
-      deps.outline({ thing: hit.thing });
-      return hit.thing.target;
-    }
-    return askBuilding(hit.building.layer, hit.building.objectIndex);
+    const kept = mergeCandidates(chosen, exact, rings);
+    const selected = kept.indexOf(chosen);
+    last = { hits: kept.map((k) => k.hit), selected };
+    mark(chosen.hit);
+    return {
+      candidates: kept.map((k) => ({
+        distance: k.distance,
+        inquiry: describe(k.hit),
+        key: k.key,
+      })),
+      selected,
+    };
   };
 
-  return { ask, clear };
+  const select = (index: number): Inquiry | null => {
+    const hit = last?.hits[index];
+    if (!(last && hit)) {
+      return null;
+    }
+    last.selected = index;
+    mark(hit);
+    return describe(hit);
+  };
+
+  const preview = (index: number | null) => {
+    const hit = last?.hits[index ?? last.selected];
+    if (hit) {
+      deps.outline(subject(hit));
+    }
+  };
+
+  return { ask, clear, preview, select };
 }

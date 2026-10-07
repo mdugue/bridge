@@ -72,6 +72,18 @@ export interface BuildingInquiry {
 /** Whatever someone asked about (ADR 0042, plan 052 phase 4). */
 export type Inquiry = BuildingInquiry | FeatureInquiry;
 
+/**
+ * What else a question's ray met (the HUD's strip of candidates): every
+ * thing on it and within a finger's width, nearest first, each with its
+ * inquiry, and which one the card shows.
+ */
+export interface InquiryAlong {
+  /** where it was asked (NDC), null at the crosshair */
+  at: { x: number; y: number } | null;
+  candidates: { distance: number; inquiry: Inquiry; key: string }[];
+  selected: number;
+}
+
 /** The AdV code for "nach Quellenlage nicht zu spezifizieren". */
 const UNSPECIFIED = "31001_9998";
 

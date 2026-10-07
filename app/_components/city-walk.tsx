@@ -30,7 +30,7 @@ import {
   type SkippedStages,
   type StageFractions,
 } from "@/lib/city/load-stages";
-import type { Inquiry } from "@/lib/city/inquiry";
+import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import type { BikeCounter } from "@/lib/city/bike-counts";
 import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
@@ -71,6 +71,7 @@ import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
 import { type ExportContext, saveImage, saveShadowStudy } from "./image-export";
 import { InquiryCard } from "./inquiry-card";
+import { InquiryStrip } from "./inquiry-strip";
 import { useLiveMode } from "./live-mode";
 import {
   LocateMessage,
@@ -442,10 +443,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const [modelView, setModelView] = useState<ModelHud | null>(null);
   // Befragen (ADR 0042): what was asked last, while its card is open.
   const [inquiry, setInquiry] = useState<Inquiry | null>(null);
+  // everything the question's ray met (the strip beside the tap)
+  const [along, setAlong] = useState<InquiryAlong | null>(null);
   const [provenanceUrl, setProvenanceUrl] = useState<string | null>(null);
   const closeInquiry = useCallback(() => {
     handleRef.current?.clearInquiry();
     setInquiry(null);
+    setAlong(null);
   }, []);
   const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
@@ -679,9 +683,10 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           startTransition(() => setModelView(view));
         }
       },
-      onInquiry: (asked) => {
+      onInquiry: (asked, met) => {
         if (!cancelled) {
           setInquiry(asked);
+          setAlong(met);
         }
       },
       onPose: (pose) => {
@@ -763,6 +768,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       // The card belongs to the scene that marked its building: a route
       // kept hidden (and shown again) boots a new scene without that mark.
       setInquiry(null);
+      setAlong(null);
       clearTimeout(veilTimer);
       clearTimeout(streamFallback);
       handleRef.current = null;
@@ -956,6 +962,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             />
 
             {sound.on && <SoundGlyph onClick={sound.toggle} />}
+            {inquiry && along && (
+              <InquiryStrip
+                along={along}
+                onPreview={(i) => handleRef.current?.previewCandidate(i)}
+                onSelect={(i) => handleRef.current?.selectCandidate(i)}
+                sheet={coarse}
+              />
+            )}
             {inquiry && (
               <InquiryCard
                 inquiry={inquiry}
