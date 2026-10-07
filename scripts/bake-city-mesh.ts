@@ -695,16 +695,16 @@ export function appendDoors(
         footprints: [],
       });
     };
-    part(mesh.surround, mixRgb(host.tint, SURROUND_STONE, 0.45));
+    // as calm as the painted plinth and cornices: the surround barely off
+    // its wall, the leaf a shade of the wall rather than a dark hole
+    part(mesh.surround, mixRgb(host.tint, SURROUND_STONE, 0.2));
     part(
       mesh.leaf,
-      p.kind === "garage"
-        ? LEAF_GARAGE
-        : mixRgb(
-            host.tint.map((c) => c * 0.35),
-            LEAF_WOOD,
-            p.kind === "main" ? 0.8 : 0.6
-          )
+      mixRgb(
+        host.tint.map((c) => c * 0.62),
+        p.kind === "garage" ? LEAF_GARAGE : LEAF_WOOD,
+        p.kind === "main" ? 0.45 : 0.3
+      )
     );
   }
   const v = baked.vertices;

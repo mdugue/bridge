@@ -13,10 +13,10 @@ import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
 /** How the surround stands: its jambs' and lintel's width, how far it
  *  stands out of the wall, and how far it reaches back into it (the LoD2
  *  wall is not where OSM's facade line is, to the centimetre). */
-export const DOOR_SURROUND = { width: 0.2, proud: 0.12, back: 0.12 } as const;
+export const DOOR_SURROUND = { width: 0.14, proud: 0.06, back: 0.12 } as const;
 /** How far the leaf stands out of the wall: behind the surround's face, so
  *  the doorway reads as a recess. */
-export const DOOR_LEAF_PROUD = 0.05;
+export const DOOR_LEAF_PROUD = 0.02;
 /** A door stands on one ground sample (the lowest in front of it). */
 export const DOOR_SINK = SINK.box;
 

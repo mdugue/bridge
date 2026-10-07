@@ -34,7 +34,7 @@ SNAP_M = 3.0
 # two entrances closer than this along one wall are one doorway
 MIN_GAP_M = 1.2
 # the surround's jambs (lib/city/doors.ts DOOR_SURROUND.width)
-SURROUND_M = 0.2
+SURROUND_M = 0.14
 # what the door stands clear of: the wall's corners, the eave
 CORNER_M = 0.25
 HEAD_M = 0.6
