@@ -1373,9 +1373,12 @@ export class DressingPlugin {
         // `loaded`): the dressing's materials are the scene's.
         await this.loaded.get(scene);
         // A dressing whose compile ran out of GPU memory stays off: the
-        // tile goes bare rather than the GPU further under.
+        // tile goes bare rather than the GPU further under. Nor does one
+        // whose tile left while a compile ran: its release waits for the
+        // compile (`compiles`), so its entry is still there.
         if (
           this.disposed ||
+          this.released.has(scene) ||
           this.dressed.get(scene) !== entry ||
           outcome === "out of memory"
         ) {

@@ -326,6 +326,66 @@ test("a dressing whose build throws is reported, an allocation failure as one, a
   }
 });
 
+test("a tile released while a compile still runs is never dressed after the wait", async () => {
+  // the content's own compile outlasts everything here
+  const blocker = new Object3D();
+  const failures: unknown[] = [];
+  const stream = {
+    cities: new Set<CityLayer>(),
+    terrains: new Set<TerrainLayer>(),
+    dressings: new Set<TileDressing>(),
+    demolished: new Map<string, Set<number>>(),
+  };
+  const plugin = new DressingPlugin(
+    {
+      dressingGate: Promise.resolve(),
+      compile: (o: Object3D) =>
+        o === blocker
+          ? new Promise<boolean>(() => undefined)
+          : Promise.resolve(true),
+      look: createLookState(),
+      night: () => 0,
+      season: () => 180,
+      onDressingFailed: (error: unknown) => failures.push(error),
+      onChange: () => undefined,
+    } as unknown as TileStreamContext,
+    stream
+  );
+  const scene = new Object3D();
+  const terrain = {
+    rasters: [],
+    dispose: () => undefined,
+  } as unknown as TerrainLayer;
+  plugin.dressed.set(scene, { terrain });
+  // reason: the queue and the compile count are private; the test drives
+  // them directly, without the terrain build a renderer would need
+  const inner = plugin as unknown as {
+    compileUnder: (
+      scene: Object3D,
+      objects: Object3D[],
+      where: string
+    ) => Promise<unknown>;
+    queueDressing: (
+      scene: Object3D,
+      terrain: TerrainLayer,
+      extras: unknown
+    ) => Promise<void>;
+  };
+  void inner.compileUnder(scene, [blocker], "content t");
+  const queued = inner.queueDressing(scene, terrain, { tileId: "t", level: 0 });
+  // the renderer unloads the tile before the dressing's turn: the release
+  // waits for the running compile, the entry stays
+  plugin.disposeTile({ engineData: { scene } });
+  await queued;
+  // (the release ended the tile's wait at once; the queue goes on)
+  while (plugin.pending > 0) {
+    await nextTask();
+  }
+  expect(failures).toEqual([]);
+  expect(plugin.settled.has("t")).toBe(true);
+  expect(stream.dressings.size).toBe(0);
+});
+
 /** A plugin whose compiles resolve at once, and a content root with a mesh
  *  whose geometry reports its own dispose. */
 function abortableLoad() {
