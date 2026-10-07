@@ -1651,7 +1651,8 @@ async function bootApp(
       const flow = trafficMesh(
         stream
           .visibleDressings()
-          .find((d) => d.tile === target.tile && d.traffic)?.traffic
+          .find((d) => d.tile === target.tile && d.traffic?.group)?.traffic
+          ?.group ?? undefined
       );
       return flow
         ? { flow, triangles: trafficTriangles(flow, target.index) }
