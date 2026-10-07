@@ -76,8 +76,10 @@ export function siteLandmarks(
   /** which kept landmark draws a LoD2 object */
   const drawn = new Map<string, Landmark>();
   const out: Landmark[] = [];
+  // Ties by id, by code point (as the bake does): the order goes into the
+  // content-hashed tileset, so it must not depend on the machine's locale.
   const ranked = [...byId.values()].sort(
-    (a, b) => b.links - a.links || a.name.localeCompare(b.name)
+    (a, b) => b.links - a.links || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
   );
   for (const e of ranked) {
     // past the limit only to name what the kept ones house
