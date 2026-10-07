@@ -5,6 +5,7 @@ import {
   type Material,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
+  DoubleSide,
 } from "three/webgpu";
 import { TREE_GENERA } from "@/lib/city/tree-season";
 import {
@@ -153,14 +154,16 @@ test("the warm-up stands in for both crown variants, laid out as a crown", () =>
   expect(freed).toBe(0); // the materials are the scene's, not the warm-up's
 });
 
-test("only the seasonal crown masks (the shadow pass honours it), and twigs lose the glow", () => {
+test("both crowns mask their rim, the seasonal one its twigs too (the shadow pass honours it), and twigs lose the glow", () => {
   const { leafy, bare } = sceneCrowns();
   expect(leafy).toBeInstanceOf(MeshStandardNodeMaterial);
   expect(bare).toBeInstanceOf(MeshStandardNodeMaterial);
   const plain = leafy as MeshStandardNodeMaterial;
   const seasonal = bare as MeshStandardNodeMaterial;
-  expect(plain.maskNode).toBeNull();
+  expect(plain.maskNode).not.toBeNull();
   expect(seasonal.maskNode).not.toBeNull();
+  expect(seasonal.maskNode).not.toBe(plain.maskNode);
+  expect(plain.side).toBe(DoubleSide);
   for (const m of [plain, seasonal]) {
     expect(m.positionNode).not.toBeNull();
     // the cast shadow stays rigid: no sway in the shadow pass

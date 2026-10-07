@@ -1007,20 +1007,27 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   four tiles have it. A DOP with fewer than three bands still skips.
 - **Crown shaping** — radial crown normals (free), organic trunk, base darkening;
   **crown air** (2026-10-07): the tree's air (`aGap`: canopy 0.3 ± 0.1,
-  the register's 0.3) opens its crown. The rich crown's lobes carry their
-  centres (`aClump`; the core −1) and move apart — each 1.4 × air of its
-  offset out, shrunk 0.5 × air, the core shrunk 1.3 × air — so sky shows
-  between them at the edge and the lobes behind come into view; the
-  normals stay the crown's, so it still shades as one soft mass
-  (`crownLobes`). Every crown is also frayed: a per-tree Perlin field over
-  the direction from its centre (3.1 and 6.3 cycles, seeded by the ground
-  position) bites irregular bays into it, up to 3 × air geometry units
-  deep, and pushes a few tufts out (`crownFray`); the bays and the core
-  shade up to 40 % darker, the crown's inside. The cast shadow takes the
-  same shape. Mid, far and coarse crowns, conifers and the styles' crowns
-  have no lobes, only the fray. 🗃️ Its first cut (same day, never merged)
-  built the near crowns of seven separate leaf clumps with their own
-  normals: they read as a bunch of eggs, too regular for a tree;
+  the register's 0.3) opens its crown, mostly at its rim, where a real
+  crown shows the sky. Where the crown's radial normal grazes the view, a
+  smooth Perlin field in the crown's space (2.6 and 6 cycles per geometry
+  unit, seeded by the ground position) is cut away by the crown's mask —
+  crisp, no hash — up to 2.3 × air of the field at the silhouette, faded
+  out within 6–14 m of the eye (`crownRimKeep`); the crown is drawn from
+  both sides, its inside 0.6 × as light, so a cut shows the dark of the
+  crown's interior and, at the silhouette, the sky. The rich crown's lobes
+  carry their centres (`aClump`; the core −1) and move apart — 1.4 × air of
+  their offset out, shrunk 0.5 × air, the core 1.3 × air — with the
+  crown's own normals (`crownLobes`), and every crown's outline is frayed
+  by a per-tree Perlin field over the direction from its centre, up to 3 ×
+  air geometry units deep (`crownFray`); the bays and the core shade up to
+  40 % darker. The shadow pass reads all of it from the sun, so the
+  shadow's edge breaks up too. The mask and the two sides cost the summer
+  crowns their early depth test. 🗃️ Measured offline (a silhouette
+  raster of the rich crown from four sides), lobes alone let through
+  about 1 % sky even at three times the spread, and shrinking them until
+  sky showed left loose balls; tunnels through the crown read as rings.
+  🗃️ Its first cut (same day, never merged) built the near crowns of seven
+  separate leaf clumps with their own normals: they read as eggs;
   **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),
   planned over every loaded tile at once: the rich
   crown near (220 m in / 300 m out) but only while the site's rich trees fit
@@ -2410,17 +2417,18 @@ research that produced them):
 4. **Cartographic minimap** — DTK / basemap.de P10 raster tile + Ortsteile labels
    replacing the math-drawn minimap.
 5. ~~**Dappled canopy shadow**~~ *Built 2026-10-07* without a proxy
-   caster and without a mask: the tree's air opens its crown's lobes and
-   frays its outline (see *Crown shaping* above), and the cast shadow
-   takes the same shape, so light falls through the bays. A second cut
-   built the near crowns of separate leaf clumps (also 🗃️, see there). 🗃️
-   The first cut (same day, never merged) cut the gaps per pixel through
-   the crown's `maskNode` (a smooth value noise in crown space, frayed by
-   the hashed threshold, double-sided): without a temporal AA to average
-   it, the noise stayed raw and the crowns read as dirty or as a
-   camouflage net, also on a real GPU; and a pixel is the wrong scale for
-   a crown's gaps, which lie between limbs (the study:
-   <https://claude.ai/artifact/MVXcYxUdEyyW8vX4AXBr4q>).
+   caster: the crown's rim is cut leafy by its air through its mask,
+   which the shadow pass honours, so light falls through the shadow's
+   edge (see *Crown shaping* above). A second cut built the near crowns
+   of separate leaf clumps (🗃️, see there). 🗃️ The first cut (same day,
+   never merged) cut the gaps per pixel all over the crown through its
+   `maskNode` (a smooth value noise in crown space, frayed by the hashed
+   threshold, double-sided): without a temporal AA to average it, the
+   noise stayed raw and the crowns read as dirty or as a camouflage net,
+   also on a real GPU; and a pixel is the wrong scale for a crown's gaps,
+   which lie between limbs (the study:
+   <https://claude.ai/artifact/MVXcYxUdEyyW8vX4AXBr4q>). The rim cut
+   keeps the field smooth and crisp and only at the edge.
 6. **Real trees from the laser-scan point cloud** — segment high-veg returns →
    per-tree position/height/crown; bake to per-tile GeoJSON. *(First step ✅
    above: `canopyx` crown peaks with `h` + `r`, outside the canopy mask only,

@@ -4,6 +4,7 @@ import {
   type BufferGeometry,
   Color,
   CylinderGeometry,
+  DoubleSide,
   Group,
   IcosahedronGeometry,
   type Material,
@@ -23,16 +24,20 @@ import {
   float,
   floor,
   fract,
+  frontFacing,
   length,
   materialColor,
   max,
   mix,
   mx_noise_float,
   normalize,
+  normalView,
+  positionViewDirection,
   normalWorldGeometry,
   positionGeometry,
   positionWorld,
   pow,
+  select,
   sin,
   smoothstep,
   uniform,
@@ -795,6 +800,43 @@ export function crownLobes(): { inner: F; position: V3 } {
 }
 
 /**
+ * A crown's air at its rim: where the crown turns away from the eye (its
+ * radial normal grazing the view), a smooth Perlin field in the crown's
+ * own space cuts leaf-sized holes — crisp, no hash, so no grain — and the
+ * cut grows towards the silhouette and with the tree's air (`aGap`). The
+ * crown stays closed where it faces the eye and turns leafy and see-through
+ * at its edge, where a real crown shows the sky; the shadow pass reads it
+ * from the sun, so the shadow's edge breaks up too. RIM_CUT is the share
+ * of the field cut at the very silhouette for a tree of air 1; RIM_LEAF
+ * the field's frequency per geometry unit. Within a few metres of the eye
+ * the cut fades out.
+ */
+const RIM_CUT = 2.3;
+const RIM_LEAF = 2.6;
+/** How light a crown's inside is, against its outside. */
+const RIM_INSIDE = 0.6;
+
+export function crownRimKeep(p: V3): ReturnType<F["greaterThan"]> {
+  const origin = instanceColumn(3).xz;
+  const seed = vec3(
+    fract(origin.x.mul(0.0213)).mul(53),
+    0,
+    fract(origin.y.mul(0.0191)).mul(61)
+  );
+  const leaf = mx_noise_float(p.mul(RIM_LEAF).add(seed))
+    .add(mx_noise_float(p.mul(RIM_LEAF * 2.3).add(seed.zyx)).mul(0.45))
+    .mul(0.5)
+    .add(0.5);
+  const facing = clamp(dot(normalView, positionViewDirection), 0, 1);
+  const rim = smoothstep(0.72, 0.05, facing);
+  // a crown right overhead stays closed: cut open at arm's length its
+  // rim reads as torn paper, a shell with no inside
+  const near = smoothstep(6, 14, distance(cameraPosition, positionWorld));
+  const cut = rim.mul(instanceFloat("aGap")).mul(RIM_CUT).mul(near);
+  return leaf.greaterThan(cut);
+}
+
+/**
  * The crown's light terms (all in world space, off the swayed fragment's
  * `positionWorld`): the backlit shimmer, the translucency, the leaf
  * twinkle and the sway-coupled brightness. `base` is the crown's own
@@ -882,11 +924,12 @@ function crownLight(
  * seasonal variant: the per-instance leaf cover thins the crown to twigs
  * (crown-season.ts) through `maskNode`, which the shadow pass honours, so
  * the thinned crown thins its shadow too; a chunk wears it only while any
- * of its crowns is out of full leaf, so the summer crown keeps early depth
- * testing. A crown's air in full leaf is no mask: it frays the outline
- * (`crownFray`), in the cast shadow too. The cast shadow stays rigid (`castShadowPositionNode`): the sun
- * rig only redraws the shadow map on a move — accepted, invisible at this
- * scale.
+ * of its crowns is out of full leaf. Both variants mask the crown's rim by
+ * its air (`crownRimKeep`), are drawn from both sides and move its lobes
+ * apart and fray its outline (`crownLobes`, `crownFray`), in the cast
+ * shadow too. The cast shadow stays rigid (`castShadowPositionNode`): the
+ * sun rig only redraws the shadow map on a move — accepted, invisible at
+ * this scale.
  */
 export function buildCrownMaterial(
   u: CrownUniforms,
@@ -906,17 +949,24 @@ export function buildCrownMaterial(
   m.castShadowPositionNode = instancePosition(shape);
   const crownScale = varying(length(instanceColumn(1).xyz));
   const gust = varying(sway.gust);
+  // the crown is drawn from both sides: where its rim is cut open
+  // (crownRimKeep) the eye meets its inside, shaded as the dark of a crown's
+  // interior, not a paper shell
+  m.side = DoubleSide;
   const tinted = materialColor
     .mul(instanceTint())
+    .mul(select(frontFacing, float(1), float(RIM_INSIDE)))
     .mul(float(1).sub(varying(max(fray.hollow, lobes.inner)).mul(FRAY_SHADE)));
+  const rimKeep = crownRimKeep(lobes.position);
   if (!bare) {
+    m.maskNode = rimKeep;
     const lit = crownLight(u, tinted, gust, crownScale);
     m.colorNode = lit.colour;
     m.emissiveNode = lit.emissive;
     return m;
   }
   const season = crownSeasonNodes();
-  m.maskNode = season.keep;
+  m.maskNode = season.keep.and(rimKeep);
   const lit = crownLight(
     u,
     mix(tinted, season.twigColour, season.twig),

@@ -54,8 +54,8 @@ import type { F, V2, V3 } from "./shader-chunks";
  * the camera) and about a pixel fine at every distance.
  *
  * A chunk whose crowns are all in full leaf keeps the plain crown material
- * (no mask, so early depth testing stays on); a chunk with any bare
- * instance switches to the seasonal variant.
+ * (masked only at its rim, vegetation-layer.ts `crownRimKeep`); a chunk
+ * with any bare instance switches to the seasonal variant.
  */
 
 /** What one crown instance needs to follow the year. */
@@ -66,8 +66,9 @@ export interface CrownSeasonKey {
   genus: number;
   /** the tree's own offset (days, ±SEASON_JITTER_DAYS) */
   jitter: number;
-  /** how open its crown is in full leaf: how deep its outline frays
-   *  (0 one closed mass … ~0.5 airy; vegetation-layer.ts `crownFray`);
+  /** how open its crown is in full leaf: how open its rim, lobes and
+   *  outline are (0 one closed mass … ~0.5 airy; vegetation-layer.ts
+   *  `crownRimKeep`, `crownLobes`, `crownFray`);
    *  absent = DEFAULT_OPEN */
   open?: number;
 }
@@ -158,8 +159,8 @@ export interface CrownSeasonNodes {
 
 /**
  * The crown's leaf cover as nodes: the thinning of a bare crown. (Its air
- * in full leaf is no mask: vegetation-layer.ts `crownFray` frays its
- * outline by `aGap`.)
+ * in full leaf opens its rim instead: vegetation-layer.ts
+ * `crownRimKeep`.)
  *
  * A fixed rotation (rows (2,2,1)/3, (2,−1,−2)/3, (1,−2,2)/3;
  * symmetric, so the column order does not matter) turns the cell grid off
