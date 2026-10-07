@@ -85,10 +85,55 @@ describe("page lifecycle: the incident sequences", () => {
     });
     expect(lifecycle.stopped).toBe(true);
     expect(lifecycle.dispatch(lost(60_100))).toEqual([]);
-    expect(lifecycle.dispatch(frame(60_200))).toEqual([
-      { kind: "note", event: "frame failed", detail: "boom at render" },
-    ]);
     expect(asked).toEqual(["lost"]);
+  });
+
+  test("a frame that fails after the stop notes nothing", () => {
+    const { lifecycle } = machine();
+    lifecycle.dispatch({ kind: "firstFrame" });
+    lifecycle.dispatch(lost(60_000));
+    let probed = false;
+    const late: LifecycleSignal = {
+      kind: "frameFailed",
+      message: "boom",
+      where: "at render",
+      allocation: false,
+      gpuAnswers: () => {
+        probed = true;
+        return true;
+      },
+      now: 60_200,
+      hidden: false,
+    };
+    expect(lifecycle.dispatch(late)).toEqual([]);
+    expect(lifecycle.dispatch(frame(60_300))).toEqual([]);
+    expect(probed).toBe(false);
+  });
+
+  test("a recovery that throws stops the render and says the GPU failed", () => {
+    const lifecycle = createPageLifecycle({
+      emergencyGapMs: GAP,
+      shadowHoldMs: HOLD,
+      mayReload: () => {
+        throw new Error("capture failed");
+      },
+    });
+    lifecycle.dispatch({ kind: "firstFrame" });
+    const effects = lifecycle.dispatch(lost(60_000));
+    expect(shape(effects)).toEqual([
+      "stopRender",
+      "note(render stopped)",
+      "note(recovery failed)",
+      "note(gpu failed)",
+      "fatal(card)",
+    ]);
+    expect(effects[2]).toEqual({
+      kind: "note",
+      event: "recovery failed",
+      detail: "capture failed",
+    });
+    expect(lifecycle.stopped).toBe(true);
+    expect(lifecycle.dispatch(frame(60_100))).toEqual([]);
   });
 
   test("a device lost while hidden is reclaimed", () => {

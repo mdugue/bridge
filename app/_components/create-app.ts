@@ -2273,6 +2273,8 @@ async function bootApp(
   // the stream and the document feed it signals, and `runLifecycle`
   // carries out the effects it answers with, in the trail's order.
   // `onGpuLost` is asked once per stop; its reload waits for the effect.
+  // One that throws is no reload: the machine catches it, so the render
+  // still stops and the page says the GPU failed ("recovery failed").
   let reloadNow: (() => void) | null = null;
   // the governor's forced step, for the emergency's applyStep that follows
   let forcedStep: MemoryStep | null = null;

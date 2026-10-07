@@ -77,7 +77,9 @@ export interface LifecycleOptions {
   /**
    * Whether the page reloads to recover this loss (gpu-recovery's answer,
    * create-app's `onGpuLost`): asked once per stop, and only on a page not
-   * disposed.
+   * disposed. One that throws (the recovery's capture failed) is no reload:
+   * noted as "recovery failed", and the page says the GPU failed — the
+   * throw never escapes `dispatch`, so the render stops all the same.
    */
   mayReload: (how: GpuLoss) => boolean;
   /** the wall clock's time the page was hidden at, if it starts hidden */
@@ -111,6 +113,21 @@ function lossAt(state: State, now: number, hidden: boolean): GpuLoss {
     : "lost";
 }
 
+/** `mayReload`'s answer; a throw is a no, noted after the stop. */
+function askReload(
+  opts: LifecycleOptions,
+  how: GpuLoss,
+  effects: LifecycleEffect[]
+): boolean {
+  try {
+    return opts.mayReload(how);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    effects.push({ kind: "note", event: "recovery failed", detail });
+    return false;
+  }
+}
+
 /**
  * The render cannot go on: stop once, then recover (a reload where the
  * player stood, gpu-recovery.ts) or say so — before the first frame by
@@ -140,7 +157,7 @@ function stopSequence(
   if (state.disposed) {
     return effects;
   }
-  if (opts.mayReload(how)) {
+  if (askReload(opts, how, effects)) {
     effects.push(
       {
         kind: "note",
@@ -171,6 +188,11 @@ function frameFailed(
   opts: LifecycleOptions,
   signal: Extract<LifecycleSignal, { kind: "frameFailed" }>
 ): LifecycleEffect[] {
+  // A frame after the stop (one already queued, a loop another error
+  // could not stop) is the stop's aftermath, not a failure of its own.
+  if (state.stopped) {
+    return [];
+  }
   const how = frameLoss(lossAt(state, signal.now, signal.hidden), {
     allocation: signal.allocation,
     emergency: state.lastEmergency !== Number.NEGATIVE_INFINITY,
