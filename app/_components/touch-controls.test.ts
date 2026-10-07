@@ -84,6 +84,7 @@ function harness() {
   const { detach } = attachTouchControls(element, callbacks, timer);
   const fire = (type: string, e: FiredPointer) =>
     handlers.get(type)?.({
+      type,
       pointerType: "touch",
       button: 0,
       timeStamp: 0,
@@ -368,4 +369,26 @@ test("moving or a second finger cancels a long press", () => {
   fire("pointerdown", { pointerId: 3, clientX: 200, clientY: 200 });
   elapse();
   expect(calls.longPress).toEqual([]);
+});
+
+test("a pointer the browser cancels is no tap, nor the first of a double", () => {
+  const { fire, calls } = harness();
+  fire("pointerdown", { pointerId: 1, clientX: 200, clientY: 400 });
+  fire("pointercancel", {
+    pointerId: 1,
+    clientX: 200,
+    clientY: 400,
+    timeStamp: 80,
+  });
+  expect(calls.tap).toHaveLength(0);
+  // a quick tap right after is a single tap
+  fire("pointerdown", { pointerId: 2, clientX: 200, clientY: 400 });
+  fire("pointerup", {
+    pointerId: 2,
+    clientX: 200,
+    clientY: 400,
+    timeStamp: 200,
+  });
+  expect(calls.tap).toHaveLength(1);
+  expect(calls.doubleTap).toHaveLength(0);
 });
