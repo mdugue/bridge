@@ -36,8 +36,8 @@ import {
   hasObjectFlag,
   inheritedFlags,
   inheritedLook,
+  markFlatRoofs,
   markGrounded,
-  OBJECT_FLAG_FLAT_ROOF,
   OBJECT_FLAG_LANDMARK,
   OBJECT_FLAG_OWN_COLOUR,
   OBJECT_SOURCE_DOOR,
@@ -529,11 +529,10 @@ export function bakeCityMesh(
       root,
       baseZ: cm(baseZ),
       eaveH: cm(eaveH),
-      flags:
-        facadeFlags(
-          inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
-          ownFacade(attrs, eaveH, osm?.levels)
-        ) + (own.roofType === FLAT_ROOF_TYPE ? OBJECT_FLAG_FLAT_ROOF : 0),
+      flags: facadeFlags(
+        inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
+        ownFacade(attrs, eaveH, osm?.levels)
+      ),
       storeyH: cm(mappedStoreyHeight(eaveH, measured, osm?.levels)),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
@@ -580,13 +579,11 @@ export function bakeCityMesh(
   }
 
   const baked = { epsg, matrix, objects, offset, vertices: v };
+  markFlatRoofs(objects, v);
   appendBeyondLod2(tile, baked, keys, { doors, facades, gaps, scan });
   markGrounded(baked.objects);
   return baked;
 }
-
-/** LoD2's `roofType` of a flat roof (AdV Dachform 1000, Flachdach). */
-const FLAT_ROOF_TYPE = "1000";
 
 /** The flags with OBJECT_FLAG_LANDMARK where the facade is its own. */
 function facadeFlags(flags: number, own: boolean): number {

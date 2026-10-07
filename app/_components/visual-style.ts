@@ -305,8 +305,8 @@ function ledge(h: F, top: F, size: number, drop: number, strength: F): F {
  * windows, from the heights the table already carries — walls only, never
  * on a part with its own colour (a door, flag 64) or on a facade that is
  * its own (a landmark, a church, a theatre, a hall: flag 16,
- * `ownFacade` in lib/city/building-tint.ts) or under a flat LoD2 roof
- * (flag 256: post-war and modern buildings), and only on a facade
+ * `ownFacade` in lib/city/building-tint.ts) or under a flat roof (flag
+ * 256, `markFlatRoofs`: post-war and modern buildings), and only on a facade
  * tall enough to have it; the ground floor's three only on a part standing
  * on the ground (flag 128), not on a tower's part on a roof:
  *  - Sockel: the lowest 0.6 m a little darker and cooler, a stone plinth,

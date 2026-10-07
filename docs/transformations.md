@@ -681,8 +681,8 @@ visual-variable codebook is in
   (flag 16: a Wikidata landmark, a monumental ALKIS use — church,
   theatre, palace, museum … — or OSM storeys taller than 5.5 m, a hall;
   `ownFacade`), which gets no drawn door either, and not under a flat
-  LoD2 roof (flag 256: post-war slabs and modern blocks have no town
-  house's cornices); the ground floor's three only on a part
+  roof (flag 256: three quarters of the LoD2 roof area level — post-war
+  slabs and modern blocks have no town house's cornices); the ground floor's three only on a part
   standing on the ground (flag 128: within 3 m of its tree's lowest base,
   so a tower's part on a roof gets no plinth). Slider *Gliederung*,
   default 80 %. No windows: the veto stands.

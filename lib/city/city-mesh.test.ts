@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  markFlatRoofs,
   markGrounded,
+  OBJECT_FLAG_FLAT_ROOF,
   OBJECT_FLAG_GROUNDED,
   type CityObjectRow,
   countBuildings,
@@ -174,4 +176,20 @@ describe("markGrounded", () => {
     markGrounded(objects);
     expect(objects[1].flags).toBe(OBJECT_FLAG_GROUNDED);
   });
+});
+
+test("markFlatRoofs: a roof mostly level is flat, a pitched one not", () => {
+  const objects = [{ flags: 0 }, { flags: 0 }, { flags: 128 }];
+  // object 0: one level roof triangle; object 1: one at 45°; object 2: a
+  // level triangle that is a wall (not roof), so it has no roof at all
+  const positions = [
+    0, 0, 10, 4, 0, 10, 0, 4, 10, 0, 0, 10, 4, 0, 10, 0, 4, 14, 0, 0, 0, 4, 0,
+    0, 0, 4, 0,
+  ];
+  markFlatRoofs(objects, {
+    positions,
+    objectIds: [0, 0, 0, 1, 1, 1, 2, 2, 2],
+    isRoof: [1, 1, 1, 1, 1, 1, 0, 0, 0],
+  });
+  expect(objects.map((o) => o.flags)).toEqual([OBJECT_FLAG_FLAT_ROOF, 0, 128]);
 });

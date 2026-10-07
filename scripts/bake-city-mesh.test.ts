@@ -101,11 +101,11 @@ test("a BuildingPart inherits its Building's function: glow and tint", () => {
   expect(part.eaveH).toBeCloseTo(9, 2);
   expect(house.eaveH).toBeCloseTo(12, 2);
   // Without an OSM LUT only what stands on the ground is flagged (the shop
-  // Building is drawn by its part; the part's roof is flat).
+  // Building is drawn by its part; the fixture's boxes have flat roofs).
   expect(baked.objects.map((o) => o.flags)).toEqual([
     0,
     OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
-    OBJECT_FLAG_GROUNDED,
+    OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
   ]);
 });
 
@@ -117,7 +117,7 @@ test("the OSM LUT flags objects by id: shop 1, heritage 2", () => {
   expect(baked.objects.map((o) => o.flags)).toEqual([
     0,
     1 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
-    3 + OBJECT_FLAG_GROUNDED,
+    3 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
   ]);
   // ...and the glTF property table carries them as a UINT16 column.
   const flags = cityMesh(baked).input.table?.properties.flags;
@@ -125,7 +125,7 @@ test("the OSM LUT flags objects by id: shop 1, heritage 2", () => {
   expect([...(flags?.values ?? [])]).toEqual([
     0,
     1 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
-    3 + OBJECT_FLAG_GROUNDED,
+    3 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
   ]);
 });
 
@@ -196,7 +196,7 @@ test("a part carries its root Building's flags as well as its own", () => {
   expect(baked.objects.map((o) => o.flags)).toEqual([
     2,
     3 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
-    OBJECT_FLAG_GROUNDED,
+    OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
   ]);
   // A flag on the root alone still reaches the part.
   const rootOnly = bakeCityMesh("t", fixture(), undefined, null, {
@@ -205,7 +205,7 @@ test("a part carries its root Building's flags as well as its own", () => {
   expect(rootOnly.objects.map((o) => o.flags)).toEqual([
     1,
     1 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
-    OBJECT_FLAG_GROUNDED,
+    OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
   ]);
 });
 
