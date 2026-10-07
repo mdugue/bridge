@@ -2108,8 +2108,11 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 Overlays on the city, each switched on and off on its own in the HUD
 (*Erkunden* → *Verkehrsdaten*; `lib/city/data-layers.ts`, one flag per
 layer in the look store and the snapshot, all **off** at boot): nothing is
-drawn, fetched or polled for a layer that is off (the traffic bands are
-fetched with their tile's dressing — 37 KB a tile — and only hidden). They
+drawn, fetched or polled for a layer that is off (the counted sections'
+features, 37 KB a tile, are fetched with their tile's dressing; the glass
+bodies are built on the layer's first switch-on per tile, kept hidden when
+it is switched off and freed with the tile — plan 062, ADR 0040's
+2026-10-07 update). They
 are measurements laid over the poetic city, not part of it: unlit or flat
 colours, no shadows, no text in the scene (what they say in words is in
 the sidebar). Judged on SwiftShader plates only so far — **unjudged on a
@@ -2172,8 +2175,9 @@ GPU**.
   `cls:L1781` "aktuelle Zählwerte", dl-de/by-2-0; 35 counters, the
   bicycles of the last full hour per direction) read **by the browser**
   from the city's server (it answers any origin) when the layer is
-  switched on and every 5 minutes while it is on
-  (`app/_components/bike-layer.ts`, `lib/city/bike-counts.ts`): a pair of
+  switched on and every 5 minutes while it is on — not while the page is
+  hidden; back in view it reads at once when the counts are older than one
+  poll (`app/_components/bike-layer.ts`, `lib/city/bike-counts.ts`): a pair of
   **glass columns** per counter across the street (`winkel`, its run,
   degrees counter-clockwise from north), one per direction (teal, lilac),
   height 1.5 m + 1.6 × √count (482 an hour on the Albertbrücke ≈ 37 m),
