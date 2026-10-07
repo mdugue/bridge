@@ -281,3 +281,79 @@ def test_nrw_lod2_reads_the_ring_and_skips_neighbours_the_listing_lacks(tmp_path
     names.remove(pattern.format(e=408, n=5708).replace("\\", ""))
     with pytest.raises(FileNotFoundError):
         nw.lod2(Ctx(tmp_path, tmp_path, 25832), tile)
+
+
+def _fetch_run(tmp_path, monkeypatch, fail: str):
+    """`fetch.run` over one tile with a fake adapter whose `fail` product
+    raises; nothing touches the network."""
+    from types import SimpleNamespace
+
+    from bake import fetch
+
+    spec = parse(
+        json.dumps(
+            {
+                "site": "x",
+                "provider": "sn",
+                "epsg": 25833,
+                "products": {"dom": True, "dop": "rgbi", "dlm": False, "lsc": False},
+                "credit": "Quelle: GeoSN, dl-de/by-2-0",
+                "raw": str(tmp_path / "raw"),
+                "data": str(tmp_path / "data"),
+                "osm": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
+                "tiles": [{"id": "t_sn", "bounds": [412000, 5656000, 414000, 5658000]}],
+            }
+        )
+    )
+    tried = []
+
+    def product(name):
+        def get(ctx, tile):
+            tried.append(name)
+            if name == fail:
+                raise OSError(f"{name} unavailable")
+            return [Path(name)]
+
+        return get
+
+    fake = SimpleNamespace(**{p: product(p) for p in ("dgm", "dom", "dop", "lod2", "lsc")})
+
+    def touch(dest):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text("x")
+
+    monkeypatch.setattr(fetch, "adapter", lambda provider: fake)
+    monkeypatch.setattr(fetch, "fetch_osm", lambda spec: None)
+    monkeypatch.setattr(fetch, "write_tile_raster", lambda files, tile, dest, *a, **k: touch(dest))
+    monkeypatch.setattr(fetch, "write_cityjson", lambda files, bounds, epsg, dest: touch(dest))
+    extras = []
+    monkeypatch.setattr(fetch.cadastre, "fetch", lambda tile: extras.append("trees"))
+    monkeypatch.setattr(fetch.traffic_sources, "fetch", lambda tile: extras.append("traffic"))
+
+    def broken_wikidata(*args):
+        extras.append("bridges")
+        raise ValueError("not JSON")
+
+    monkeypatch.setattr(fetch.bridge, "fetch_wikidata", broken_wikidata)
+    monkeypatch.setattr(fetch.landmarks, "fetch_wikidata", lambda *a: extras.append("landmarks"))
+    fetch.run(spec, spec.tiles)
+    return tried, extras
+
+
+def test_a_failed_required_product_fails_the_fetch_after_the_rest(tmp_path, monkeypatch):
+    import pytest
+
+    with pytest.raises(SystemExit) as exit_info:
+        _fetch_run(tmp_path, monkeypatch, "dgm")
+    assert exit_info.value.code == 1
+    # the other products and the extras were still tried
+    assert (tmp_path / "data" / "cityjson" / "lod2_t_sn.city.json").exists()
+    assert (tmp_path / "raw" / "dop" / "t_sn.tif").exists()
+
+
+def test_a_failed_optional_product_or_extra_is_a_note(tmp_path, monkeypatch):
+    # the orthophoto fails, and the bridges' Wikidata answer is not JSON:
+    # both are a printed line, and the landmarks after it are still fetched
+    tried, extras = _fetch_run(tmp_path, monkeypatch, "dop")
+    assert set(tried) == {"dgm", "lod2", "dom", "dop"}
+    assert extras == ["trees", "traffic", "bridges", "landmarks"]

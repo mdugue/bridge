@@ -451,7 +451,7 @@ def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int, margin: float = 5
     try:
         with urllib.request.urlopen(req, timeout=120) as res:
             rows = json.load(res)["results"]["bindings"]
-    except OSError as err:
+    except (OSError, ValueError, KeyError) as err:
         print(f"{tile_id}: Wikidata not fetched ({err}); bridges keep the OSM structure")
         return
     bridges = []

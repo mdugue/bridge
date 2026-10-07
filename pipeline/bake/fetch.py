@@ -107,17 +107,31 @@ def adapter(provider: str) -> Adapter:
     return importlib.import_module(f"bake.providers.{provider}")  # type: ignore[return-value]
 
 
-def _step(what: str, tile: Tile, dest: Path, make) -> None:
+def _step(what: str, tile: Tile, dest: Path, make) -> bool:
     """One product of a tile. Every writer goes through a `.part` file and
     raises rather than writing something incomplete, so an existing `dest`
-    is a finished one; a failure is reported and the next product goes on."""
+    is a finished one; a failure is reported and the next product goes on.
+    True when `dest` is there (it was, or it was made), False on a failure."""
     if dest.exists():
-        return
+        return True
     try:
         make()
         print(f"{tile.id}: {what} → {dest}")
+        return True
     except Exception as err:  # noqa: BLE001 — report, then fetch the rest
         print(f"{tile.id}: {what} not fetched ({type(err).__name__}: {err})")
+        return False
+
+
+def _try(what: str, tile: Tile, call) -> bool:
+    """A per-tile fetch with no `dest` of its own to skip on (it keeps its
+    own cache): any failure is reported and the next fetch goes on."""
+    try:
+        call()
+        return True
+    except Exception as err:  # noqa: BLE001 — report, then fetch the rest
+        print(f"{tile.id}: {what} not fetched ({type(err).__name__}: {err})")
+        return False
 
 
 @contextmanager
@@ -144,21 +158,31 @@ def _place_laz(files: list[Path], dest: Path) -> None:
     part.replace(dest)
 
 
-def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> None:
+def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> list[str]:
+    """Fetches the tile's products; returns the REQUIRED ones that failed
+    (the DGM1 and the LoD2: the build fails without them). The optional
+    ones — surface model, orthophoto, laser scan and the per-tile extras —
+    only print a line when they fail: their features are then off."""
+    failed: list[str] = []
     with _scratch(spec.raw, tile.id) as scratch:
         ctx = Ctx(spec.raw, scratch, spec.epsg)
-        _step(
+        # required
+        if not _step(
             "DGM1",
             tile,
             tile.dgm,
             lambda: write_tile_raster(source.dgm(ctx, tile), tile, tile.dgm, 1.0, heights=True),
-        )
-        _step(
+        ):
+            failed.append("DGM1")
+        # required
+        if not _step(
             "LoD2",
             tile,
             tile.cityjson,
             lambda: write_cityjson(source.lod2(ctx, tile), tile.bounds, spec.epsg, tile.cityjson),
-        )
+        ):
+            failed.append("LoD2")
+        # optional from here on
         if spec.products.dom:
             dom = tile.raw_raster("dom1")
             _step(
@@ -184,10 +208,19 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> No
         if lsc and spec.products.lsc:
             laz = tile.raw / "lsc" / f"{tile.id}.laz"
             _step("laser scan", tile, laz, lambda: _place_laz(source.lsc(ctx, tile), laz))
-    cadastre.fetch(tile)
-    traffic_sources.fetch(tile)
-    bridge.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg)
-    landmarks.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg)
+    _try("tree cadastre", tile, lambda: cadastre.fetch(tile))
+    _try("traffic counts", tile, lambda: traffic_sources.fetch(tile))
+    _try(
+        "Wikidata bridges",
+        tile,
+        lambda: bridge.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg),
+    )
+    _try(
+        "Wikidata landmarks",
+        tile,
+        lambda: landmarks.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg),
+    )
+    return failed
 
 
 def fetch_osm(spec: Spec) -> None:
@@ -214,5 +247,10 @@ def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
         transit.fetch_gtfs(transit.gtfs_dir(spec.raw))
     if lsc and not spec.products.lsc:
         print(f"--lsc: the {spec.provider} adapter reads no laser scan — skipped")
-    for tile in tiles:
-        fetch_tile(spec, tile, source, lsc)
+    failures = {tile.id: fetch_tile(spec, tile, source, lsc) for tile in tiles}
+    failures = {tid: what for tid, what in failures.items() if what}
+    if failures:
+        print("fetch: required products not fetched — the build cannot use these tiles:")
+        for tid, what in failures.items():
+            print(f"  {tid}: {', '.join(what)}")
+        raise SystemExit(1)

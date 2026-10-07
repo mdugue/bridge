@@ -115,7 +115,7 @@ def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int) -> None:
     lons, lats = back.transform([xmin, xmax, xmin, xmax], [ymin, ymin, ymax, ymax])
     try:
         rows = query_box((min(lons), max(lons)), (min(lats), max(lats)))
-    except OSError as err:
+    except (OSError, ValueError, KeyError) as err:
         print(f"{tile_id}: Wikidata landmarks not fetched ({err})")
         return
     items: dict[str, dict] = {}
