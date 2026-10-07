@@ -149,3 +149,21 @@ test("a broadleaf crown rides into the canopy with its genus and trunk", () => {
     new Vector3().setFromMatrixColumn(t.instances[0].trunk, 0).length();
   expect(girth(inv)).toBeLessThan(girth(unmeasured));
 });
+
+test("a sapling stands between stakes, and thin; an old tree is broad-footed", () => {
+  const year = new Date().getFullYear();
+  const at = (x: number, y: number): TreeFeature => ({
+    geometry: { type: "Point", coordinates: [x, 0] },
+    properties: { a: 0, d: 6, h: 10, l: "d", gn: 3, y },
+  });
+  const inv = buildTreeInventory([at(0, year - 2), at(20, year - 120)], ctx);
+  const stakes = inv.control.group.children.filter(
+    (c) => c.userData.treePart === "stakes"
+  );
+  expect(stakes).toHaveLength(1);
+  expect(isInstances(stakes[0]) && stakes[0].drawCount).toBe(1);
+  const [young, old] = inv.instances;
+  const girth = (t: (typeof inv.instances)[number]) =>
+    new Vector3().setFromMatrixColumn(t.trunk, 0).length();
+  expect(girth(young)).toBeLessThan(girth(old));
+});

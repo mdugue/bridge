@@ -101,6 +101,8 @@ export interface TreeFeature {
      *  tree (lib/city/cultivated.ts, at runtime only — no file has it) */
     s?: "orchard" | "osm";
     t?: number;
+    /** the planting year (pipeline/bake/trees.py planting_year) */
+    y?: number;
   } | null;
 }
 

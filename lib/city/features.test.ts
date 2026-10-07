@@ -571,6 +571,11 @@ test.each(cases)(
         expect(p.t > 0 && p.t <= 400).toBe(true);
       }
       expect([undefined, "osm"]).toContain(p?.s);
+      // planting year: a whole year, not in the future
+      if (p?.y !== undefined) {
+        expect(Number.isInteger(p.y)).toBe(true);
+        expect(p.y >= 1500 && p.y <= new Date().getFullYear()).toBe(true);
+      }
     }
   }
 );
