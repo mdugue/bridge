@@ -1194,27 +1194,49 @@ async function bootApp(
   // tile is asked for again (tile-retry.ts), its hole closes, and the boot
   // waits for it — failing only after a minute of a usable page without
   // it. A page on its way out (pagehide) decides and reports nothing.
-  let reportedError = false;
-  let reportedNetwork = false;
+  // The HUD's word about a missing part, latched per cause: a network
+  // word (the healer clears it once its tiles are back) or a layer word (a
+  // part gone for good, which no landing clears). A network failure
+  // replaces a layer word, which waits behind it (`layerWord`) and comes
+  // back when the network's clears; a second failure of a shown cause
+  // stays silent.
+  let shownWord: "none" | "network" | "layer" = "none";
+  let layerWord: string | null = null;
   let firstFrameShown = false;
   let bootFailure: Error | null = null;
-  // The HUD's word about the network goes once nothing it failed is
-  // outstanding (tile-retry.ts): at a landing, or found after a heal.
   // A part of the city that failed for good (no retry heals it): the
   // HUD's layer word, once.
   const sayLayerFailed = (message: string) => {
-    if (!(disposed || reportedError)) {
-      reportedError = true;
-      reportedNetwork = false;
+    if (disposed || layerWord !== null) {
+      return;
+    }
+    layerWord = message;
+    if (shownWord === "none") {
+      shownWord = "layer";
       opts.onError?.(message);
     }
   };
-  const clearNetworkWord = () => {
-    if (reportedNetwork && !disposed) {
-      reportedError = false;
-      reportedNetwork = false;
-      opts.onErrorCleared?.();
+  // A tile the network let down: asked for again (tile-retry.ts).
+  const sayNetworkFailed = (message: string) => {
+    if (!disposed && shownWord !== "network") {
+      shownWord = "network";
+      opts.onError?.(message);
     }
+  };
+  // The HUD's word about the network goes once nothing it failed is
+  // outstanding (tile-retry.ts): at a landing, or found after a heal. A
+  // layer word it covered shows again.
+  const clearNetworkWord = () => {
+    if (shownWord !== "network" || disposed) {
+      return;
+    }
+    if (layerWord !== null) {
+      shownWord = "layer";
+      opts.onError?.(layerWord);
+      return;
+    }
+    shownWord = "none";
+    opts.onErrorCleared?.();
   };
   const network = createNetworkWatch({
     tiles: stream.tiles,
@@ -1251,10 +1273,10 @@ async function bootApp(
       }
       return;
     }
-    if (!(disposed || reportedError)) {
-      reportedError = true;
-      reportedNetwork = lost;
-      opts.onError?.(failure.message);
+    if (lost) {
+      sayNetworkFailed(failure.message);
+    } else {
+      sayLayerFailed(failure.message);
     }
   });
   // The last tile the network failed is back, or no longer wanted: the
