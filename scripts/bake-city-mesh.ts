@@ -40,7 +40,9 @@ import {
   markGrounded,
   OBJECT_FLAG_LANDMARK,
   OBJECT_FLAG_OWN_COLOUR,
+  OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_DOOR,
+  OBJECT_SOURCE_DORMER,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
   type OsmBuildingLut,
@@ -53,8 +55,10 @@ import {
   doorMesh,
   wallShift,
 } from "../lib/city/doors";
+import { dormerMesh } from "../lib/city/dormers";
 import type {
   DoorFeature,
+  DormerFeature,
   MeasuredRoofFeature,
   SmallBuildingFeature,
   StructureFeature,
@@ -440,7 +444,8 @@ export function withMeasuredRoofs(
  * a part carries its own flags and its root Building's. `facades` is the
  * tile's wall material (the tint palette; osm_buildings.py `context`), an
  * object's own neighbourhood overriding it.
- * `measured` are the roofs rebuilt from DOM1, when baked.
+ * `measured` are the roofs rebuilt from DOM1, when baked; `onWalls` OSM's
+ * doors and the surface model's dormers, each on its LoD2 host.
  */
 export function bakeCityMesh(
   tile: string,
@@ -452,7 +457,10 @@ export function bakeCityMesh(
   facades: FacadeMaterial = "render",
   gaps?: readonly StructureFeature[],
   measured?: readonly MeasuredRoofFeature[],
-  doors?: readonly DoorFeature[]
+  onWalls: {
+    doors?: readonly DoorFeature[];
+    dormers?: readonly DormerFeature[];
+  } = {}
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
   const doc = withoutTrafficStructures(source);
@@ -580,7 +588,7 @@ export function bakeCityMesh(
 
   const baked = { epsg, matrix, objects, offset, vertices: v };
   markFlatRoofs(objects, v);
-  appendBeyondLod2(tile, baked, keys, { doors, facades, gaps, scan });
+  appendBeyondLod2(tile, baked, keys, { ...onWalls, facades, gaps, scan });
   markGrounded(baked.objects);
   return baked;
 }
@@ -593,13 +601,15 @@ function facadeFlags(flags: number, own: boolean): number {
 }
 
 /** What the tile's mesh carries beyond LoD2: the scan's sheds, the
- *  surface model's structures, OSM's doors (each on its LoD2 host). */
+ *  surface model's structures and dormers, OSM's doors (each on its LoD2
+ *  host). */
 function appendBeyondLod2(
   tile: string,
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
   keys: readonly string[],
   extra: {
     doors?: readonly DoorFeature[];
+    dormers?: readonly DormerFeature[];
     facades: FacadeMaterial;
     gaps?: readonly StructureFeature[];
     scan?: readonly SmallBuildingFeature[];
@@ -614,6 +624,9 @@ function appendBeyondLod2(
   }
   if (extra.doors) {
     appendDoors(baked, extra.doors, objectIndex);
+  }
+  if (extra.dormers) {
+    appendDormers(baked, extra.dormers, objectIndex);
   }
 }
 
@@ -731,6 +744,74 @@ export function appendDoors(
       v.isRoof,
       objectIds.map(() => 0)
     ),
+    ...flatNormalsAfter(v, positions.length),
+  };
+}
+
+/**
+ * The dormers the surface model shows on the pitched LoD2 roofs (pipeline/
+ * bake/dormers.py), appended as part of the object they sit on: one object
+ * per host, in the host's tint and roof colour, the host's building tree
+ * (asking or demolishing a dormer takes the building), no footprint, `source`
+ * 4. Its walls carry no storey band, eave line, plinth or shop zone (its
+ * base is its own, high on the roof). A dormer whose host the tile does not
+ * hold is dropped.
+ */
+export function appendDormers(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  dormers: readonly DormerFeature[],
+  objectIndex: ReadonlyMap<string, number>
+): void {
+  const byHost = new Map<number, DormerFeature[]>();
+  for (const f of dormers) {
+    const hostIndex = f.properties
+      ? objectIndex.get(f.properties.of)
+      : undefined;
+    if (hostIndex !== undefined && baked.objects[hostIndex]) {
+      byHost.set(hostIndex, [...(byHost.get(hostIndex) ?? []), f]);
+    }
+  }
+  if (byHost.size === 0) {
+    return;
+  }
+  const positions: number[] = [];
+  const objectIds: number[] = [];
+  const isRoof: number[] = [];
+  for (const [hostIndex, list] of byHost) {
+    const host = baked.objects[hostIndex];
+    const index = baked.objects.length;
+    let base = Number.POSITIVE_INFINITY;
+    let top = Number.NEGATIVE_INFINITY;
+    for (const f of list) {
+      const mesh = dormerMesh(f, baked.offset);
+      positions.push(...mesh.positions);
+      isRoof.push(...mesh.isRoof);
+      for (let i = 0; i < mesh.isRoof.length; i++) {
+        objectIds.push(index);
+      }
+      base = Math.min(base, mesh.base);
+      top = Math.max(top, f.properties?.top ?? mesh.base);
+    }
+    const above = cm(top - base + 1);
+    baked.objects.push({
+      ...host,
+      building: false,
+      baseZ: cm(base),
+      // above its top: no eave stroke, no storey band on it
+      eaveH: above,
+      storeyH: above,
+      glow: 0,
+      // the host's facts but its ground floor's: no shop wash up here
+      flags: host.flags & ~OBJECT_FLAG_SHOP,
+      source: OBJECT_SOURCE_DORMER,
+      footprints: [],
+    });
+  }
+  const v = baked.vertices;
+  baked.vertices = {
+    positions: concat(v.positions, positions),
+    objectIds: concat(v.objectIds, objectIds),
+    isRoof: concat(v.isRoof, isRoof),
     ...flatNormalsAfter(v, positions.length),
   };
 }

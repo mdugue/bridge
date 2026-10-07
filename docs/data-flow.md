@@ -306,6 +306,7 @@ flowchart LR
     bLMK["landmarks.py"]
     bGAP["structures.py"]
     bDOOR["doors.py"]
+    bDORM["dormers.py"]
     bTRF["traffic.py"]
     bTRS["transit.py (site-wide)"]
   end
@@ -318,6 +319,7 @@ flowchart LR
     dROOF["roofcolor JSON"]
     dOSMB["osmbuild JSON"]
     dDOOR["doors"]
+    dDORM["dormers"]
     dLAMP["lamps"]
     dMON["monuments"]
     dFURN["furniture"]
@@ -414,6 +416,10 @@ flowchart LR
   iOSM ==>|"names what the gap is"| bGAP
   dLMK -. "roof relief" .-> bGAP
   bGAP ==> dGAP
+  iDOM ==>|"excess over the roof"| bDORM
+  iCJ ==>|"pitched roofs · footprints"| bDORM
+  dCAN -. "no crown" .-> bDORM
+  bDORM ==> dDORM
   iVM ==> bTRF ==> dTRF
   iGTFS ==> bTRS
   dTRAM ==>|tracks| bTRS
@@ -427,6 +433,7 @@ flowchart LR
   dOSMB -. "shop · heritage flags · material · colours" .-> tCITY
   dGAP -. "columns · buildings · relief height fields" .-> tCITY
   dDOOR -. "surround · leaf on the host wall" .-> tCITY
+  dDORM -. "front · cheeks · roof on the host roof" .-> tCITY
   dLMK -. "landmark flag · material · extras.landmarks" .-> tCITY
   dCLS ==> tSIDE
   dCAN ==> tSIDE

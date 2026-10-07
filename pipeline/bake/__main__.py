@@ -11,6 +11,7 @@ from . import (
     canopy,
     cultivated,
     doors,
+    dormers,
     edges,
     fetch,
     furniture,
@@ -97,6 +98,10 @@ STEPS = {
     # OSM — the chimneys, towers and masts LoD2 leaves out, the buildings it
     # does not carry yet, and a landmark's roof form it flattens (plan 050).
     "structures": structures.run,
+    # After roofs (the rebuilt ones are measured already) and the tree bakes
+    # (a crown over a roof is no dormer): the dormers DOM1 shows on the
+    # pitched LoD2 roofs.
+    "dormers": dormers.run,
 }
 
 
