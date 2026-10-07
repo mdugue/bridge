@@ -13,8 +13,9 @@ the browser streams with
 [3DTilesRendererJS](https://github.com/NASA-AMMOS/3DTilesRendererJS) and renders
 with [three.js](https://threejs.org) (`WebGPURenderer` and TSL node
 materials) — a start page and one route per city (`/dresden`, `/leipzig`,
-…), no backend, no database, no accounts, nothing
-persisted.
+…), no backend, no database, no accounts; nothing persisted but what
+the browser keeps for itself (the crash trail, a few preferences — all on
+`/datenschutz`).
 
 ## Prerequisites
 
@@ -119,7 +120,8 @@ a tile's DGM and LoD2 go straight into `data/<site>/`.
 
 Tile id scheme: `<UTM zone><easting km>_<northing km>_2_<provider>` — Dresden
 spawns on `33412_5656_2_sn`, spanning 412000–414000 E / 5656000–5658000 N in
-**EPSG:25833**. The viewer streams every tile of the site around the camera —
+**EPSG:25833** (the provider sets the CRS: EPSG:25833 for Saxony and Berlin,
+25832 for Hamburg, Bavaria and NRW). The viewer streams every tile of the site around the camera —
 detailed near, coarse far, unloaded when out of view — and walking, collision
 and demolish work on every loaded tile.
 
@@ -176,7 +178,8 @@ slider calls one. Pure, three-free, unit-tested math lives in
 [`lib/city/`](lib/city); the renderer, the TSL node materials and the
 post pipeline live in `app/_components/`.
 
-Coordinate frames matter here. Source data is EPSG:25833, Z-up; a parent
+Coordinate frames matter here. Source data is ETRS89/UTM, Z-up
+(EPSG:25833 for Saxony and Berlin, 25832 for Hamburg, Bavaria and NRW); a parent
 `world` group is rotated −90° about X so data-Z (elevation) becomes scene-Y
 (up), giving `x = easting − cx`, `z = −(northing − cy)`, `y = elevation`, with
 `(cx, cy)` the shared recenter offset ([`lib/city/recenter.ts`](lib/city/recenter.ts),
