@@ -104,4 +104,24 @@ export function osmSource(
     .join(" · ");
 }
 
-export const GEOSN_CREDIT = "Quelle: GeoSN, dl-de/by-2-0";
+/** The credits a card names where the provenance manifest has none (not
+ *  yet arrived, or failed): the site's own, never another Land's. */
+export interface CardCredits {
+  /** the provider's credit line (`Provider.credit`): LoD2, DOM, DLM, scan */
+  provider: string;
+  /** the street-tree register's holder and licence, where the site has one */
+  register?: string;
+}
+
+/** A site's credits as a card names them: the provider's line as it is,
+ *  the register's without its label ("Stadtbäume: …" → "…"). */
+export function cardCredits(site: {
+  provider: { credit: string };
+  treeCadastre?: { credit: string };
+}): CardCredits {
+  const register = site.treeCadastre?.credit.replace(/^[^:]*:\s*/u, "");
+  return {
+    provider: site.provider.credit,
+    ...(register ? { register } : {}),
+  };
+}

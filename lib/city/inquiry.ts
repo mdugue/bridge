@@ -15,9 +15,9 @@ import {
   hasObjectFlag,
 } from "./city-mesh";
 import {
+  type CardCredits,
   type CardFact,
   factLines,
-  GEOSN_CREDIT,
   germanDates,
   type InquiryCard,
   metres,
@@ -105,6 +105,7 @@ const known = (values: readonly number[]): number[] =>
 /** The LoD2 source line: the model year, its inputs, the object's export. */
 function lod2Source(
   provenance: SiteProvenance | null,
+  credits: CardCredits,
   tile: string,
   created: string,
   rebuilt: boolean
@@ -126,13 +127,14 @@ function lod2Source(
   if (created) {
     parts.push(`Objekt exportiert ${germanDates(created)}`);
   }
-  parts.push(source?.credit ?? GEOSN_CREDIT);
+  parts.push(source?.credit ?? credits.provider);
   return parts.join(" · ");
 }
 
 /** The surface model's line for a roof rebuilt from it (ADR 0036). */
 function rebuiltSource(
   provenance: SiteProvenance | null,
+  credits: CardCredits,
   tile: string
 ): string {
   const source = provenance?.sources.dom;
@@ -141,21 +143,25 @@ function rebuiltSource(
     `Dach und Höhe: ${source?.label ?? "Digitales Oberflächenmodell DOM1"}`,
     stand ? `Befliegung ${germanDates(stand)}` : "",
     "das Stadtmodell verfehlt dieses Dach",
-    source?.credit ?? GEOSN_CREDIT,
+    source?.credit ?? credits.provider,
   ]
     .filter(Boolean)
     .join(" · ");
 }
 
 /** The laser scan's source line (a structure LoD2 lacks, plan 034). */
-function scanSource(provenance: SiteProvenance | null, tile: string): string {
+function scanSource(
+  provenance: SiteProvenance | null,
+  credits: CardCredits,
+  tile: string
+): string {
   const source = provenance?.sources.lsc;
   const stand = provenance?.tiles[tile]?.lsc;
   return [
     source?.label ?? "Laserscan",
     stand ? `Befliegung ${germanDates(stand)}` : "",
     "nicht im amtlichen Stadtmodell",
-    source?.credit ?? GEOSN_CREDIT,
+    source?.credit ?? credits.provider,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -222,24 +228,25 @@ function cardFacts(
 }
 
 /**
- * The card for one inquiry; `provenance` null until the manifest arrived,
- * `treeFacts` until a tree's tile's facts file has (lib/city/inquiry-
- * features.ts).
+ * The card for one inquiry; `provenance` null until the manifest arrived
+ * (the site's own `credits` stand in for its credit lines), `treeFacts`
+ * until a tree's tile's facts file has (lib/city/inquiry-features.ts).
  */
 export function inquiryCard(
   inquiry: Inquiry,
   provenance: SiteProvenance | null,
+  credits: CardCredits,
   treeFacts: TreeFacts | null = null
 ): InquiryCard {
   switch (inquiry.kind) {
     case "building":
-      return buildingCard(inquiry, provenance);
+      return buildingCard(inquiry, provenance, credits);
     case "tree":
-      return treeCard(inquiry, treeFacts, provenance);
+      return treeCard(inquiry, treeFacts, provenance, credits);
     case "monument":
-      return monumentCard(inquiry, provenance);
+      return monumentCard(inquiry, provenance, credits);
     case "bridge":
-      return bridgeCard(inquiry, provenance);
+      return bridgeCard(inquiry, provenance, credits);
     case "traffic":
       return trafficCard(inquiry);
     case "bikes":
@@ -250,7 +257,8 @@ export function inquiryCard(
 /** A building's card (LoD2, or a scan structure LoD2 lacks). */
 function buildingCard(
   inquiry: BuildingInquiry,
-  provenance: SiteProvenance | null
+  provenance: SiteProvenance | null,
+  credits: CardCredits
 ): InquiryCard {
   const pick = inquiry.picked;
   const scan = pick.source === OBJECT_SOURCE_SCAN;
@@ -270,11 +278,11 @@ function buildingCard(
   ].filter(Boolean);
   const sources = [
     scan
-      ? scanSource(provenance, inquiry.tile)
-      : lod2Source(provenance, inquiry.tile, t.created, t.rebuilt),
+      ? scanSource(provenance, credits, inquiry.tile)
+      : lod2Source(provenance, credits, inquiry.tile, t.created, t.rebuilt),
   ];
   if (t.rebuilt) {
-    sources.push(rebuiltSource(provenance, inquiry.tile));
+    sources.push(rebuiltSource(provenance, credits, inquiry.tile));
   }
   if (fromOsm.length > 0) {
     sources.push(osmSource(provenance, fromOsm, "buildings"));

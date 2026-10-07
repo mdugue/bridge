@@ -9,6 +9,15 @@ import {
   treeFactsAt,
 } from "./inquiry-features";
 import type { SiteProvenance } from "./provenance";
+import { type CardCredits, cardCredits } from "./card-lines";
+
+/** Dresden's credits as the HUD hands them over (sites/). */
+const DRESDEN: CardCredits = cardCredits({
+  provider: { credit: "Quelle: GeoSN, dl-de/by-2-0" },
+  treeCadastre: {
+    credit: "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0",
+  },
+});
 
 const geosn = {
   credit: "Quelle: GeoSN, dl-de/by-2-0",
@@ -78,7 +87,7 @@ const linde: TreeInquiry = {
 };
 
 test("a register tree: species, place, the measured sizes only, its age", () => {
-  const card = treeCard(linde, treeFactsAt(file, 0), provenance);
+  const card = treeCard(linde, treeFactsAt(file, 0), provenance, DRESDEN);
   expect(card.kicker).toBe("Stadtbaum");
   expect(card.title).toBe("Winter-Linde");
   expect(card.address).toBe("Grunaer Straße · Baum Nr. 40");
@@ -97,14 +106,15 @@ test("a register tree: species, place, the measured sizes only, its age", () => 
 });
 
 test("before its facts arrive a tree says its genus, nothing it cannot", () => {
-  const card = treeCard(linde, null, provenance);
+  const card = treeCard(linde, null, provenance, DRESDEN);
   expect(card.title).toBe("Tilia");
   expect(card.facts).toEqual([]);
   // an OSM tree with no genus is the kind of tree it is, credited to OSM
   const osm = treeCard(
     { ...linde, osm: true, genus: "", conifer: true },
     treeFactsAt(file, 1),
-    provenance
+    provenance,
+    DRESDEN
   );
   expect(osm.kicker).toBe("Baum");
   expect(osm.title).toBe("Nadelbaum");
@@ -118,7 +128,8 @@ test("an orchard tree says it is one, from OSM's orchard, with no register line"
   const card = treeCard(
     { ...linde, index: 2, osm: false, orchard: true, genus: "" },
     treeFactsAt(file, 2),
-    provenance
+    provenance,
+    DRESDEN
   );
   expect(card.kicker).toBe("Obstbaum");
   expect(card.title).toBe("Obstbaum");
@@ -127,6 +138,40 @@ test("an orchard tree says it is one, from OSM's orchard, with no register line"
     "Obstwiese: OpenStreetMap · Stand 26.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
   ]);
   expect(card.sources.join()).not.toContain("Stadtbaumkataster");
+});
+
+test("without the manifest the register and the surveys are the site's own", () => {
+  expect(DRESDEN.register).toBe("Landeshauptstadt Dresden, dl-de/by-2-0");
+  const hamburg: CardCredits = {
+    provider: "Quelle: LGV Hamburg, dl-de/by-2-0",
+    register: "Freie und Hansestadt Hamburg, dl-de/by-2-0",
+  };
+  const tree = treeCard(linde, treeFactsAt(file, 0), null, hamburg);
+  expect(tree.sources).toEqual([
+    "Art, Maße: Stadtbaumkataster · Freie und Hansestadt Hamburg, dl-de/by-2-0",
+  ]);
+  // a site without a register credits its provider
+  const munich = treeCard(linde, treeFactsAt(file, 0), null, {
+    provider: "Bayerische Vermessungsverwaltung, CC BY 4.0",
+  });
+  expect(munich.sources[0]).toContain("Bayerische Vermessungsverwaltung");
+  const bridge = bridgeCard(
+    {
+      kind: "bridge",
+      tile: "t",
+      length: 0,
+      position: [0, 0],
+      properties: { kind: "road" },
+    },
+    null,
+    hamburg
+  );
+  expect(bridge.sources).toEqual([
+    "Fläche, Deck im DOM1 gemessen: Basis-DLM · Quelle: LGV Hamburg, dl-de/by-2-0",
+  ]);
+  expect([...tree.sources, ...bridge.sources].join()).not.toMatch(
+    /GeoSN|Dresden/u
+  );
 });
 
 test("a named fountain with a figure, its basin from OSM, its name official", () => {
@@ -144,7 +189,8 @@ test("a named fountain with a figure, its basin from OSM, its name official", ()
         relief: { west: 0, north: 0, cols: 2, rows: 1, dm: [12, 31] },
       },
     },
-    provenance
+    provenance,
+    DRESDEN
   );
   expect(card.kicker).toBe("Brunnen");
   expect(card.title).toBe("Gänsedieb-Brunnen");
@@ -176,7 +222,8 @@ test("a bridge: name and deck from the DLM, structure and span from Wikidata", (
         clearance: 5.6,
       },
     },
-    provenance
+    provenance,
+    DRESDEN
   );
   expect(card.kicker).toBe("Straßenbrücke");
   expect(card.title).toBe("Albertbrücke");
