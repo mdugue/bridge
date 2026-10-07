@@ -132,9 +132,9 @@ never from the tile name. The modules in `pipeline/bake/`:
 | `spec.py` | the site spec from `scripts/pipeline.ts` |
 | `common.py` | `Tile` (id, extent, CRS, raw and data folders, the OSM extract, the provider's products), the DLM layers the bakes read, reading vector layers without geopandas, the GeoJSON writer |
 | `fetch.py` | the fetch: calls the provider's adapter per product and tile, skips what exists, writes the results into place |
-| `providers/{sn,nw,by,hh,be}.py` | one adapter per provider: `dgm`, `dom`, `dop`, `lod2` return the provider's own files covering a tile; `lod2` reads one ring of neighbouring cells around the tile, so a seam building the provider filed next door is seen by the tile that owns its envelope centre — a neighbouring cell is skipped only when the provider has no file for it (a 404, or no entry in the listing or archive: past the border); any other failure on it raises, so the LoD2 is not written and the next run tries again (Saxony's LoD2 ZIPs are kept under `downloads/LoD2_CityGML/`, shared by the site's tiles; Bavaria's 2 km LoD2 reads the tile's own cells only so far); `dlm` fills `dlm/` |
+| `providers/{sn,nw,by,hh,be}.py` | one adapter per provider: `dgm`, `dom`, `dop`, `lod2` return the provider's own files covering a tile; `lod2` reads one ring of neighbouring cells around the tile, so a seam building the provider filed next door is seen by the tile that owns its envelope centre — a neighbouring cell is skipped only when the provider has no file for it (a 404 or 410, `fetch.not_published`, or no entry in the listing or archive: past the border); any other failure on it raises, so the LoD2 is not written and the next run tries again (Saxony's LoD2 ZIPs are kept under `downloads/LoD2_CityGML/`, shared by the site's tiles; Bavaria's 2 km LoD2 reads the tile's own cells only so far); `dlm` fills `dlm/` |
 | `rasters.py` | mosaics a provider's rasters over a tile at 1 m / 20 cm; the DGM compact (DEFLATE, float predictor, centimetres). A height mosaic whose 1–99 % spread is under 0.5 m (`MIN_HEIGHT_RANGE_M`) is refused as broken: Hamburg's DGM was once committed as 0 m everywhere (a mosaic that kept the float-min NoData), and every house floated 5–10 m above it; `test_committed.py` holds every committed DGM tile to a spread of ≥ 2 m |
-| `citygml.py` | streaming CityGML (AdV LoD2) → CityJSON, buildings owned by the tile holding their envelope centre (the fetch reads the neighbouring cells, so the rule never drops a building — Bavaria aside, see the adapters' row: Saxony files each building in exactly one 2 km file) |
+| `citygml.py` | streaming CityGML (AdV LoD2) → CityJSON, buildings owned by the tile holding their envelope centre (the fetch reads the neighbouring cells, so the rule never drops a building — Bavaria aside, see the adapters' row: Saxony files each building in exactly one 2 km file; the committed Leipzig, Grimma and Meißen CityJSON was fetched before the fetch read the neighbouring cells, so it can still lack buildings at the tile seams until the maintainer re-fetches those sites) |
 | `net.py` | downloads (`.part` until complete), single members of remote ZIPs by HTTP range |
 | `osm.py` | reads the site's `.osm.pbf` through GDAL's OSM driver, with a margin in degrees around the tile, reprojected to the tile's CRS; `in_tunnel` (a way in a tunnel or `location=underground`) and `below_ground` (that, or a negative `layer` / `level`) for what is drawn on the terrain |
 | `landcover.py`, `landcover_osm.py`, `rail.py`, `canopy.py`, `trees.py`, `ndvi.py`, `roof_colour.py`, `osm_buildings.py`, `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`, `surface.py`, `edges.py`, `markings.py`, `sport.py`, `tram.py`, `riverside.py`, `skyview.py`, `soundmarks.py`, `lowveg.py`, `cultivated.py`, `small_buildings.py`, `landmarks.py`, `structures.py` | one step each, in the order of the step table (`STEPS`; the table below) |
@@ -569,11 +569,16 @@ card showing the figure it is ranked by.
 **Cache.** Baked outputs are cached in `.cache/prepare-data/` (gitignored),
 one entry per output, under a key over the **contents** of its input
 files, the bake's own sources and the values it depends on (the recenter
-offset, the `extras` it names). The sources are not a hand-kept list:
-each artifact names the bake modules that make it, and
-`scripts/bake-sources.ts` walks the relative imports from those entries, so
-every module that shapes the artifact is in its key — and only those. Every
-key also carries `prepare-data.ts` itself, the site's own config,
+offset, the `extras` it names). The sources are found in two steps. The
+**entries** are a hand-kept list in `prepare-data.ts`: each artifact names
+the bake modules that make it (`GROUND_BAKE` for the shaped ground, a
+`bake` array per artifact kind, or the `entries` it passes to `cacheKey`
+directly). From those entries `scripts/bake-sources.ts` walks the relative
+and `@/` imports, so every module an entry imports, at any depth, is in the
+key — and only those. The walk cannot see a call `prepare-data.ts` makes
+itself: a module it calls for an artifact must be one of that artifact's
+entries or reachable from one, or a change to it leaves the cached artifact
+stale. Every key also carries `prepare-data.ts` itself, the site's own config,
 `sites/providers.ts`, `bun.lock` and `patches/` (the glTF tools' versions
 shape the output). Another site's config re-bakes nothing; a palette colour
 re-bakes only the map picture.

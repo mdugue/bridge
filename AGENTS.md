@@ -542,11 +542,14 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
   ≈ 2 min for fifteen tiles, warm ≈ 1 s; CI restores it between runs): the key covers the inputs'
-  contents and every module the artifact's own bake imports,
-  walked from that bake's entry (`scripts/bake-sources.ts`; the site's own config and
-  `prepare-data.ts` are in every key — there is no list to keep in step),
-  so another site's config re-bakes nothing and a palette colour only the
-  map picture; the glTF quantisation and meshopt settings live in
+  contents, `COMMON_SOURCES` (`prepare-data.ts` itself, the site's own
+  config, `sites/providers.ts`, `bun.lock`, `patches/`) and every module
+  reachable from the artifact's bake entries (`scripts/bake-sources.ts`
+  walks the imports). Those entries **are listed by hand** in
+  `prepare-data.ts` (`GROUND_BAKE`, each `bake` array, the `entries` passed
+  to `cacheKey`): a module it calls for an artifact must be one of them or
+  imported from one, or that artifact's cache goes stale. Another site's
+  config re-bakes nothing, a palette colour only the map picture; the glTF quantisation and meshopt settings live in
   `scripts/tile-glb.ts`, the gzip (Bun's libdeflate) in `prepare-data.ts`.
 
 ## Rendering gotchas (hard-won — don't relearn these)
@@ -841,8 +844,10 @@ whole site with the shell and `/wissen`; the desktop HUD group
 (`@desktop-render`). Each desktop group boots its own page. The required
 status check "E2E (Playwright)" is the small job that reports them all. A new
 spec lands in the whole-site shard unless it carries one of those tags —
-keep the shards within a minute of each other (measured on CI, see the
-workflow's comment with its date).
+keep the shards within about 1.5 minutes of each other (the rendering group
+shares one booted page, cannot be split by tag without a second boot, and
+so sets the floor for the longest shard; measured on CI, see the
+workflow's comment with its run and date).
 
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
 [`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It streams

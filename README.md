@@ -14,8 +14,8 @@ the browser streams with
 with [three.js](https://threejs.org) (`WebGPURenderer` and TSL node
 materials) — a start page and one route per city (`/dresden`, `/leipzig`,
 …), no backend, no database, no accounts; nothing persisted but what
-the browser keeps for itself (the crash trail, a few preferences — all on
-`/datenschutz`).
+the browser keeps for itself (the crash trail, the device's GPU safety
+level — ADR 0046 —, a few preferences; the full list is on `/datenschutz`).
 
 ## Prerequisites
 
