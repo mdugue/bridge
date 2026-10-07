@@ -63,6 +63,10 @@ def test_citygml_becomes_the_cityjson_the_build_reads(tmp_path):
     # B2's envelope centre (2005, 105) lies on the next tile: dropped here.
     doc = convert([gml, gml], (0.0, 0.0, 2000.0, 2000.0), 25833)
     assert list(doc["CityObjects"]) == ["B1", "P1"]
+    # The next tile reads the same files (the fetch's one-cell margin) and
+    # keeps B2, whose centre it owns — once, although it appears twice.
+    nxt = convert([gml, gml], (2000.0, 0.0, 4000.0, 2000.0), 25833)
+    assert list(nxt["CityObjects"]) == ["B2"]
     b1, p1 = doc["CityObjects"]["B1"], doc["CityObjects"]["P1"]
     assert b1["children"] == ["P1"] and p1["parents"] == ["B1"]
     assert b1["attributes"]["measuredHeight"] == 10.0
@@ -94,6 +98,13 @@ def test_provider_cells_cover_the_tile():
     # an odd-km tile on a 2 km grid touches four 2 km cells
     odd = _tile((409000.0, 5709000.0, 411000.0, 5711000.0))
     assert sorted(cells(odd, 2)) == [(408, 5708), (408, 5710), (410, 5708), (410, 5710)]
+
+    # the LoD2 fetch's one ring of neighbouring cells
+    assert len(list(cells(tile, 2, margin=1))) == 9
+    assert (406, 5706) in set(cells(tile, 2, margin=1))
+    assert (410, 5710) in set(cells(tile, 2, margin=1))
+    assert len(list(cells(tile, 1, margin=1))) == 16
+    assert sorted(cells(tile, 1, margin=1))[0] == (407, 5707)
 
 
 def test_xyz_cell_centres_grid_to_a_georeferenced_raster(tmp_path):

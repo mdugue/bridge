@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..common import Tile
-from ..fetch import Ctx, cells
+from ..fetch import Ctx, cells, own_cells
 from ..net import remote_zip_members
 
 OPEN = "https://www.daten-hamburg.de/opendata"
@@ -33,17 +33,25 @@ DISTRICTS = (
 )
 
 
-def _members(ctx: Ctx, tile: Tile, urls: list[str], pattern: str, folder: str) -> list[Path]:
+def _members(
+    ctx: Ctx, tile: Tile, urls: list[str], pattern: str, folder: str, margin: int = 0
+) -> list[Path]:
     """The 1 km members for the tile from every archive that has them — the
     district archives are cut at district borders, so a cell on one is in
-    two, each with its half (the fetch mosaics them)."""
+    two, each with its half (the fetch mosaics them). `margin` rings of
+    cells around the tile are read too; one no archive holds (past the
+    city's border) is skipped."""
+    own = own_cells(tile, 1)
     out = []
-    for e, n in cells(tile, 1):
+    for e, n in cells(tile, 1, margin):
         found = []
         for i, url in enumerate(urls):
             dest = ctx.scratch / folder / str(i)
             found += remote_zip_members(url, pattern.format(e=e, n=n), dest)
         if not found:
+            if (e, n) not in own:
+                print(f"{tile.id}: {folder} {e}_{n} (neighbour) not available")
+                continue
             raise FileNotFoundError(f"{folder}: no file for the 1 km cell {e}_{n}")
         out += found
     return out
@@ -63,7 +71,9 @@ def dop(ctx: Ctx, tile: Tile) -> list[Path]:
 
 
 def lod2(ctx: Ctx, tile: Tile) -> list[Path]:
-    return _members(ctx, tile, [LOD2], r"LoD2_32_{e}_{n}_1_HH\.gml$", "lod2")
+    # One ring of neighbouring cells: a seam building filed next door is
+    # kept by the tile holding its envelope centre.
+    return _members(ctx, tile, [LOD2], r"LoD2_32_{e}_{n}_1_HH\.gml$", "lod2", margin=1)
 
 
 def dlm(ctx: Ctx) -> None:

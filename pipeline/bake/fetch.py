@@ -74,12 +74,24 @@ class Adapter(Protocol):
         """Fill `ctx.raw / "dlm"` with the AdV Shape layers."""
 
 
-def cells(tile: Tile, km: int) -> Iterator[tuple[int, int]]:
-    """South-west corners (km) of a provider's `km` grid covering the tile."""
+def cells(tile: Tile, km: int, margin: int = 0) -> Iterator[tuple[int, int]]:
+    """South-west corners (km) of a provider's `km` grid covering the tile,
+    plus `margin` rings of cells around it (the LoD2 fetch reads one: a
+    provider files a seam building in one cell by its own rule, and the
+    converter keeps it for the tile holding its envelope centre — which
+    may be the cell next door)."""
     xmin, ymin, xmax, ymax = (int(b) // 1000 for b in tile.bounds)
-    for e in range(xmin - xmin % km, xmax, km):
-        for n in range(ymin - ymin % km, ymax, km):
+    pad = margin * km
+    for e in range(xmin - xmin % km - pad, xmax + pad, km):
+        for n in range(ymin - ymin % km - pad, ymax + pad, km):
             yield e, n
+
+
+def own_cells(tile: Tile, km: int) -> set[tuple[int, int]]:
+    """The cells inside the tile (`cells(tile, km)` without a margin): a
+    file missing for one of them is an error, one missing for a margin cell
+    (past the provider's coverage) is skipped."""
+    return set(cells(tile, km))
 
 
 def adapter(provider: str) -> Adapter:
