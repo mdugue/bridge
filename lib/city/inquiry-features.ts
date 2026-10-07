@@ -7,10 +7,10 @@
  */
 import type { BridgeFeature, MonumentFeature, TreeFactsFile } from "./features";
 import {
+  type CardCredits,
   type CardFact,
   factLines,
   firstText,
-  GEOSN_CREDIT,
   germanDates,
   type InquiryCard,
   metres,
@@ -38,6 +38,9 @@ export interface TreeInquiry {
   kind: "tree";
   /** from OSM, not the city's register */
   osm: boolean;
+  /** an orchard tree (OSM's orchards, lib/city/cultivated.ts): no row of
+   *  the facts file, no register */
+  orchard?: boolean;
   /** where it stands (the site's CRS) */
   position: [number, number];
   tile: string;
@@ -105,10 +108,8 @@ const KNOWN_HEIGHT = 1;
 const KNOWN_CROWN = 2;
 const KNOWN_TRUNK = 4;
 
-const REGISTER = {
-  label: "Stadtbaumkataster",
-  credit: "Landeshauptstadt Dresden, dl-de/by-2-0",
-};
+/** The street-tree register's name where the manifest has none. */
+const REGISTER_LABEL = "Stadtbaumkataster";
 
 /** No facts yet: nothing measured, no species, no place. */
 const NO_TREE_FACTS: TreeFacts = {
@@ -147,12 +148,33 @@ function treeLines(t: TreeInquiry, f: TreeFacts, title: string): CardFact[] {
   ]);
 }
 
+/** An orchard tree's card: where it stands, from OSM's orchard (its size
+ *  is the orchard's default, no fact). */
+function orchardCard(
+  t: TreeInquiry,
+  provenance: SiteProvenance | null
+): InquiryCard {
+  return {
+    kicker: "Obstbaum",
+    title: firstText(t.genus, "Obstbaum"),
+    address: "",
+    facts: [],
+    id: positionKey(t.position),
+    idLabel: "Lage",
+    sources: [osmSource(provenance, ["Obstwiese"], "trees")],
+  };
+}
+
 /** The tree's card; `facts` null until its tile's file has arrived. */
 export function treeCard(
   t: TreeInquiry,
   facts: TreeFacts | null,
-  provenance: SiteProvenance | null
+  provenance: SiteProvenance | null,
+  credits: CardCredits
 ): InquiryCard {
+  if (t.orchard) {
+    return orchardCard(t, provenance);
+  }
   const f = facts ?? NO_TREE_FACTS;
   const title = firstText(
     f.german,
@@ -164,12 +186,19 @@ export function treeCard(
     firstText(f.german, f.botanical) ? "Art" : "",
     f.known & (KNOWN_HEIGHT | KNOWN_CROWN | KNOWN_TRUNK) ? "Maße" : "",
   ].filter(Boolean);
-  const source = t.osm
-    ? osmSource(provenance, what.length > 0 ? what : ["Baum"], "trees")
-    : sourceLine(provenance, "trees", what, REGISTER);
+  // a site without a register has OSM's trees alone (provenance.ts
+  // treesSource): no register is named, nor the provider credited for one
+  const register = t.osm ? undefined : credits.register;
+  const source =
+    register === undefined
+      ? osmSource(provenance, what.length > 0 ? what : ["Baum"], "trees")
+      : sourceLine(provenance, "trees", what, {
+          label: REGISTER_LABEL,
+          credit: register,
+        });
   const nr = f.nr > 0 ? ` · Baum Nr. ${whole.format(f.nr)}` : "";
   return {
-    kicker: t.osm ? "Baum" : "Stadtbaum",
+    kicker: register === undefined ? "Baum" : "Stadtbaum",
     title,
     address: f.place ? `${f.place}${nr}` : "",
     facts: treeLines(t, f, title),
@@ -201,7 +230,8 @@ export function reliefHeight(p: Props<MonumentFeature>): number | null {
 /** The monument's or fountain's card. */
 export function monumentCard(
   m: MonumentInquiry,
-  provenance: SiteProvenance | null
+  provenance: SiteProvenance | null,
+  credits: CardCredits
 ): InquiryCard {
   const p = m.properties;
   const kicker = MONUMENT_KIND[p.kind] ?? "Denkmal";
@@ -220,7 +250,7 @@ export function monumentCard(
     fromDlm
       ? sourceLine(provenance, "dlm", [p.name ? "Name" : "Lage"], {
           label: "Basis-DLM",
-          credit: GEOSN_CREDIT,
+          credit: credits.provider,
         })
       : "",
     fromOsm
@@ -237,7 +267,7 @@ export function monumentCard(
           ["Höhe gemessen"],
           {
             label: "Digitales Oberflächenmodell DOM1",
-            credit: GEOSN_CREDIT,
+            credit: credits.provider,
           },
           ""
         )
@@ -283,10 +313,43 @@ export function structureLabel(structure: string | null | undefined): string {
     .join(" · ");
 }
 
+/**
+ * Where a bridge's area and deck come from: the provider's Basis-DLM, the
+ * deck measured in its DOM1 — or, where the provider has no Basis-DLM
+ * (Hamburg, Berlin: rail_osm.py), OSM's bridge ways, the deck still
+ * measured in the provider's DOM1.
+ */
+function bridgeAreaLines(
+  area: string,
+  provenance: SiteProvenance | null,
+  credits: CardCredits
+): string[] {
+  const deck = "Deck im DOM1 gemessen";
+  if (credits.dlm) {
+    return [
+      sourceLine(provenance, "dlm", [area, deck], {
+        label: "Basis-DLM",
+        credit: credits.provider,
+      }),
+    ];
+  }
+  return [
+    osmSource(provenance, [area], "bridges"),
+    sourceLine(
+      provenance,
+      "dom",
+      [deck],
+      { label: "Digitales Oberflächenmodell DOM1", credit: credits.provider },
+      ""
+    ),
+  ];
+}
+
 /** The bridge's card. */
 export function bridgeCard(
   b: BridgeInquiry,
-  provenance: SiteProvenance | null
+  provenance: SiteProvenance | null,
+  credits: CardCredits
 ): InquiryCard {
   const p = b.properties;
   const kicker = BRIDGE_KIND[p.kind ?? "other"] ?? "Brücke";
@@ -298,12 +361,7 @@ export function bridgeCard(
     ["Durchfahrtshöhe", p.clearance ? metres(p.clearance) : ""],
   ]);
   const sources = [
-    sourceLine(
-      provenance,
-      "dlm",
-      [p.name ? "Name, Fläche" : "Fläche", "Deck im DOM1 gemessen"],
-      { label: "Basis-DLM", credit: GEOSN_CREDIT }
-    ),
+    ...bridgeAreaLines(p.name ? "Name, Fläche" : "Fläche", provenance, credits),
     p.wikidata && (structure || p.span)
       ? sourceLine(
           provenance,

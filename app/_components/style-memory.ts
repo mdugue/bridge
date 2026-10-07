@@ -1,4 +1,5 @@
 import { isRenderStyle, type RenderStyle } from "@/lib/city/render-style";
+import { STORAGE_KEYS } from "./storage-keys";
 
 /**
  * The picture style (Bildstil) is remembered per viewer, like the folded
@@ -7,7 +8,7 @@ import { isRenderStyle, type RenderStyle } from "@/lib/city/render-style";
  * style. Storage can be missing or throw (private mode, blocked site data);
  * then the style simply is not remembered.
  */
-const STYLE_KEY = "bildstil";
+const STYLE_KEY = STORAGE_KEYS.style;
 
 export function readStoredStyle(): RenderStyle | null {
   try {

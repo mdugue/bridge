@@ -102,13 +102,25 @@ class Lineage {
   ) {}
 
   /** A source of the site's provider or the manifest's, with its edition
-   *  for the tile (or `stand` when given). */
+   *  for the tile (or `stand` when given). A "dlm" source on a site whose
+   *  provider has no Basis-DLM (Hamburg, Berlin) is OSM's, which stands in
+   *  for it there (landcover_osm.py, rail_osm.py): `standIn` names the OSM
+   *  product it came from. */
   source(
     key: SourceKey,
     used: Said,
     how: LineageEntry["how"],
-    opts: { stand?: string; url?: string; osm?: OsmProduct } = {}
+    opts: {
+      stand?: string;
+      url?: string;
+      osm?: OsmProduct;
+      standIn?: OsmProduct;
+    } = {}
   ): void {
+    if (key === "dlm" && !this.site.provider.products.dlm) {
+      this.source("osm", used, how, { ...opts, osm: opts.standIn });
+      return;
+    }
     const said = spoken(used);
     if (said.length > 0) {
       this.entries.push({
@@ -311,6 +323,17 @@ function treeLineage(l: Lineage, t: TreeInquiry, site: LineageSite): void {
     "Höhe und Krone (wo nicht gemessen: aus der Statistik der Kachel)",
     "Gattung: Wuchsform, Austrieb, Herbstfarbe und Laubfall",
   ];
+  if (t.orchard) {
+    // an orchard's tree: OSM's orchard, at the orchard's default size
+    l.source("osm", ["Standort (Obstwiese)"], "gelesen", { osm: "trees" });
+    l.source("dgm", ["der Boden, auf dem er steht"], "gelesen");
+    l.viewer([
+      "Höhe und Krone: die Vorgabe der Obstwiese",
+      "die Krone aus Grundformen",
+      "Wind und Licht zur Uhrzeit der Szene",
+    ]);
+    return;
+  }
   if (t.osm) {
     l.source("osm", drawn, "gelesen", { osm: "trees" });
   } else {
@@ -363,7 +386,8 @@ function bridgeLineage(l: Lineage, b: BridgeInquiry, site: LineageSite): void {
   l.source(
     "dlm",
     ["der Umriss des Decks", "die Art: Straße, Weg oder Bahn"],
-    "gelesen"
+    "gelesen",
+    { standIn: "bridges" }
   );
   l.source(
     "dom",
@@ -435,7 +459,9 @@ function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
       canopyLineage(l, m, site);
       return;
     case "hedge":
-      l.source("dlm", [m.source === "dlm" && "Verlauf"], "gelesen");
+      l.source("dlm", [m.source === "dlm" && "Verlauf"], "gelesen", {
+        standIn: "trees",
+      });
       l.source("osm", [m.source !== "dlm" && "Verlauf"], "gelesen", {
         osm: "trees",
       });
@@ -469,7 +495,8 @@ function canopyLineage(l: Lineage, c: CanopyInquiry, site: LineageSite): void {
   l.source(
     "dlm",
     [c.source === "row" && "die Baumreihe, auf der er steht"],
-    "gelesen"
+    "gelesen",
+    { standIn: "trees" }
   );
   l.source("dgm", ["der Boden, auf dem er steht"], "gelesen");
   l.source(

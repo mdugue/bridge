@@ -115,7 +115,9 @@ bietet an, wohin es stattdessen gehen kann: zu einem der Aussichtspunkte, zu
 einer Stelle, die du auf der Karte wählst, oder du bleibst, wo du bist.
 Stehst du in einer anderen Stadt, die diese Seite auch zeigt, sagt das
 Fenster das zuerst und bietet an, dorthin zu springen: Ihr Viewer öffnet
-sich mit dir dort, wo du stehst. Browser fragen dafür um Erlaubnis (iPhones auch für den
+sich mit dir dort, wo du stehst (die Position reist im Fragment des Links
+mit, das nie beim Server ankommt). Browser fragen dafür um Erlaubnis
+(iPhones auch für den
 Kompass); der Standort verlässt das Gerät nicht — auch nicht in einem
 Absturzbericht (siehe *Wenn es abstürzt*).
 
@@ -188,8 +190,9 @@ sie auf einen dunklen Sockel stellt, wie ein aus der Stadt geschnittenes
 Modell (*neu setzen* nimmt die aktuelle Mitte; er endet mit dem Modell;
 beim ersten Mal steht dort kurz *Wird vorbereitet …*, während die Stadt
 für den Schnitt vorbereitet wird, und sie bewegt sich dabei weiter —
-Gebäude knapp außerhalb werfen ihren Schatten noch über seinen Rand); und
-*Bild speichern*.
+Gebäude knapp außerhalb werfen ihren Schatten noch über seinen Rand;
+lässt er sich nicht vorbereiten, sagt das die Zeile darunter, mit *noch
+einmal versuchen*); und *Bild speichern*.
 
 **Die Bäume stehen in jedem Maßstab.** Nah heran steht jeder Baum im
 Bild; wo die Stadt gröber gezeichnet wird — weit hinausgezoomt, die

@@ -9,7 +9,7 @@ import rasterio
 
 from bake.citygml import convert, write_cityjson
 from bake.common import Tile
-from bake.fetch import cells
+from bake.fetch import Ctx, cells
 from bake.landcover_osm import _area_class
 from bake.providers.be import xyz_to_tif
 from bake.spec import parse
@@ -63,6 +63,10 @@ def test_citygml_becomes_the_cityjson_the_build_reads(tmp_path):
     # B2's envelope centre (2005, 105) lies on the next tile: dropped here.
     doc = convert([gml, gml], (0.0, 0.0, 2000.0, 2000.0), 25833)
     assert list(doc["CityObjects"]) == ["B1", "P1"]
+    # The next tile reads the same files (the fetch's one-cell margin) and
+    # keeps B2, whose centre it owns — once, although it appears twice.
+    nxt = convert([gml, gml], (2000.0, 0.0, 4000.0, 2000.0), 25833)
+    assert list(nxt["CityObjects"]) == ["B2"]
     b1, p1 = doc["CityObjects"]["B1"], doc["CityObjects"]["P1"]
     assert b1["children"] == ["P1"] and p1["parents"] == ["B1"]
     assert b1["attributes"]["measuredHeight"] == 10.0
@@ -94,6 +98,13 @@ def test_provider_cells_cover_the_tile():
     # an odd-km tile on a 2 km grid touches four 2 km cells
     odd = _tile((409000.0, 5709000.0, 411000.0, 5711000.0))
     assert sorted(cells(odd, 2)) == [(408, 5708), (408, 5710), (410, 5708), (410, 5710)]
+
+    # the LoD2 fetch's one ring of neighbouring cells
+    assert len(list(cells(tile, 2, margin=1))) == 9
+    assert (406, 5706) in set(cells(tile, 2, margin=1))
+    assert (410, 5710) in set(cells(tile, 2, margin=1))
+    assert len(list(cells(tile, 1, margin=1))) == 16
+    assert sorted(cells(tile, 1, margin=1))[0] == (407, 5707)
 
 
 def test_xyz_cell_centres_grid_to_a_georeferenced_raster(tmp_path):
@@ -204,3 +215,223 @@ def test_saxony_links_come_from_the_batch_pages_current_shares(tmp_path, monkeyp
     finally:
         sn.products.cache_clear()
     assert fetched == [f"{sn.CLOUD}/NewLsc123/lsc_33414_5656_2_sn_laz.zip"]
+
+
+def _http(code):
+    import urllib.error
+
+    return urllib.error.HTTPError("https://example.invalid/x.zip", code, "x", None, None)
+
+
+def test_saxony_lod2_reads_the_ring_and_skips_only_missing_neighbours(tmp_path, monkeypatch):
+    # A seam building may be filed in a neighbour's 2 km ZIP: the LoD2 fetch
+    # asks for the 3x3 cells. A neighbour the server has no file for is
+    # skipped; any other failure (a 503, a cut connection) raises, so the
+    # tile is not written without its seam buildings.
+    import pytest
+
+    from bake.fetch import Ctx
+    from bake.providers import sn
+
+    tile = _tile((408000.0, 5708000.0, 410000.0, 5710000.0))
+    asked = []
+    failures = {}
+
+    def fake_zip(ctx, product, e, n, keep=False):
+        asked.append((e, n))
+        if (e, n) in failures:
+            raise failures[(e, n)]
+        return tmp_path / f"{e}_{n}.zip"
+
+    monkeypatch.setattr(sn, "_zip", fake_zip)
+    monkeypatch.setattr(sn, "unzip_members", lambda path, pattern, dest: [path])
+    ctx = Ctx(tmp_path, tmp_path, 25833)
+
+    failures[(406, 5706)] = _http(404)
+    files = sn.lod2(ctx, tile)
+    assert sorted(asked) == sorted(cells(tile, 2, margin=1))
+    assert len(files) == 8
+
+    for err in (_http(503), OSError("cut connection")):
+        failures[(406, 5706)] = err
+        with pytest.raises(OSError):
+            sn.lod2(ctx, tile)
+    failures.clear()
+    failures[(408, 5708)] = _http(404)
+    with pytest.raises(OSError):
+        sn.lod2(ctx, tile)
+
+
+def test_saxony_extracts_each_cells_members_into_a_folder_of_its_own(tmp_path, monkeypatch):
+    # GeoSN names a member alike in every cell's ZIP; extracted into one
+    # folder, the first cell's file would stand in for all the others (the
+    # extraction keeps a file already there).
+    import zipfile
+
+    from bake.providers import sn
+
+    odd = _tile((409000.0, 5709000.0, 411000.0, 5711000.0))
+
+    def fake_zip(ctx, product, e, n, keep=False):
+        path = tmp_path / "zips" / f"{e}_{n}.zip"
+        path.parent.mkdir(exist_ok=True)
+        with zipfile.ZipFile(path, "w") as z:
+            z.writestr("tile.gml", f"{e}_{n}")
+        return path
+
+    monkeypatch.setattr(sn, "_zip", fake_zip)
+    files = sn._files(Ctx(tmp_path, tmp_path / "scratch", 25833), odd, "LoD2_CityGML", r"\.gml$")
+    assert len(set(files)) == 4
+    assert sorted(f.read_text() for f in files) == sorted(f"{e}_{n}" for e, n in cells(odd, 2))
+
+
+def test_berlin_and_nrw_keep_the_lod2_ring_for_the_neighbouring_tiles(tmp_path, monkeypatch):
+    # a 1 km cell of the ring is read by up to four tiles: it is downloaded
+    # once into downloads/lod2/, not into each tile's scratch folder
+    from bake.providers import be, nw
+
+    tile = _tile((408000.0, 5708000.0, 410000.0, 5710000.0))
+    names = [
+        nw.PATTERNS["lod2"].format(e=e, n=n).replace("\\", "") for e, n in cells(tile, 1, margin=1)
+    ]
+    monkeypatch.setattr(nw, "listing", lambda product: names)
+    monkeypatch.setattr(be, "unzip_members", lambda path, pattern, dest: [path])
+    ctx = Ctx(tmp_path / "raw", tmp_path / "scratch", 25832)
+    dests = {be: [], nw: []}
+    for module, into in dests.items():
+        monkeypatch.setattr(
+            module, "download", lambda url, dest, into=into: into.append(dest) or dest
+        )
+        module.lod2(ctx, tile)
+        assert len(into) == 16
+        assert all(d.parent == ctx.downloads / "lod2" for d in into)
+
+
+def test_nrw_lod2_reads_the_ring_and_skips_neighbours_the_listing_lacks(tmp_path, monkeypatch):
+    import pytest
+
+    from bake.fetch import Ctx
+    from bake.providers import nw
+
+    tile = _tile((408000.0, 5708000.0, 410000.0, 5710000.0))
+    present = {c for c in cells(tile, 1, margin=1) if c != (407, 5707)}
+    pattern = nw.PATTERNS["lod2"]
+    names = [pattern.format(e=e, n=n).replace("\\", "") for e, n in present]
+    monkeypatch.setattr(nw, "listing", lambda product: names)
+    asked = []
+    monkeypatch.setattr(nw, "download", lambda url, dest: asked.append(url) or dest)
+    files = nw.lod2(Ctx(tmp_path, tmp_path, 25832), tile)
+    assert len(files) == len(asked) == 15
+
+    names.remove(pattern.format(e=408, n=5708).replace("\\", ""))
+    with pytest.raises(FileNotFoundError):
+        nw.lod2(Ctx(tmp_path, tmp_path, 25832), tile)
+
+
+def _fetch_run(tmp_path, monkeypatch, fail: str, dlm: bool = False):
+    """`fetch.run` over one tile with a fake adapter whose `fail` product
+    raises ("osm": the OSM extract's download; "dlm": the Basis-DLM, which
+    the spec asks for with `dlm`); nothing touches the network."""
+    from types import SimpleNamespace
+
+    from bake import fetch
+
+    spec = parse(
+        json.dumps(
+            {
+                "site": "x",
+                "provider": "sn",
+                "epsg": 25833,
+                "products": {"dom": True, "dop": "rgbi", "dlm": dlm, "lsc": False},
+                "credit": "Quelle: GeoSN, dl-de/by-2-0",
+                "raw": str(tmp_path / "raw"),
+                "data": str(tmp_path / "data"),
+                "osm": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
+                "tiles": [{"id": "t_sn", "bounds": [412000, 5656000, 414000, 5658000]}],
+            }
+        )
+    )
+    tried = []
+
+    def product(name):
+        def get(ctx, tile):
+            tried.append(name)
+            if name == fail:
+                raise OSError(f"{name} unavailable")
+            return [Path(name)]
+
+        return get
+
+    fake = SimpleNamespace(**{p: product(p) for p in ("dgm", "dom", "dop", "lod2", "lsc")})
+
+    def fake_dlm(ctx):
+        tried.append("dlm")
+        if fail == "dlm":
+            raise OSError("dlm unavailable")
+
+    fake.dlm = fake_dlm
+
+    def fake_download(url, dest, md5_url=None):
+        tried.append("osm")
+        if fail == "osm":
+            raise OSError("osm unavailable")
+
+    def touch(dest):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text("x")
+
+    monkeypatch.setattr(fetch, "adapter", lambda provider: fake)
+    monkeypatch.setattr(fetch, "download", fake_download)
+    monkeypatch.setattr(fetch, "dlm_complete", lambda folder: False)
+    monkeypatch.setattr(fetch, "write_tile_raster", lambda files, tile, dest, *a, **k: touch(dest))
+    monkeypatch.setattr(fetch, "write_cityjson", lambda files, bounds, epsg, dest: touch(dest))
+    extras = []
+    monkeypatch.setattr(fetch.cadastre, "fetch", lambda tile: extras.append("trees"))
+    monkeypatch.setattr(fetch.traffic_sources, "fetch", lambda tile: extras.append("traffic"))
+
+    def broken_wikidata(*args):
+        extras.append("bridges")
+        raise ValueError("not JSON")
+
+    monkeypatch.setattr(fetch.bridge, "fetch_wikidata", broken_wikidata)
+    monkeypatch.setattr(fetch.landmarks, "fetch_wikidata", lambda *a: extras.append("landmarks"))
+    fetch.run(spec, spec.tiles)
+    return tried, extras
+
+
+def test_a_failed_required_product_fails_the_fetch_after_the_rest(tmp_path, monkeypatch):
+    import pytest
+
+    with pytest.raises(SystemExit) as exit_info:
+        _fetch_run(tmp_path, monkeypatch, "dgm")
+    assert exit_info.value.code == 1
+    # the other products and the extras were still tried
+    assert (tmp_path / "data" / "cityjson" / "lod2_t_sn.city.json").exists()
+    assert (tmp_path / "raw" / "dop" / "t_sn.tif").exists()
+
+
+def test_a_failed_optional_product_or_extra_is_a_note(tmp_path, monkeypatch):
+    # the orthophoto fails, and the bridges' Wikidata answer is not JSON:
+    # both are a printed line, and the landmarks after it are still fetched
+    tried, extras = _fetch_run(tmp_path, monkeypatch, "dop")
+    assert set(tried) == {"osm", "dgm", "lod2", "dom", "dop"}
+    assert extras == ["trees", "traffic", "bridges", "landmarks"]
+
+
+def test_a_failed_basis_dlm_or_osm_extract_fails_the_fetch_after_the_tiles(tmp_path, monkeypatch):
+    # the land cover is not baked without the Basis-DLM (where the provider
+    # has one), nor any OSM layer without the extract: the fetch still
+    # fetches every tile, then exits 1
+    import pytest
+
+    for fail in ("dlm", "osm"):
+        with pytest.raises(SystemExit) as exit_info:
+            _fetch_run(tmp_path / fail, monkeypatch, fail, dlm=True)
+        assert exit_info.value.code == 1
+        assert (tmp_path / fail / "data" / "cityjson" / "lod2_t_sn.city.json").exists()
+        assert (tmp_path / fail / "raw" / "dop" / "t_sn.tif").exists()
+
+
+def test_a_fetched_basis_dlm_and_osm_extract_pass(tmp_path, monkeypatch):
+    tried, _ = _fetch_run(tmp_path, monkeypatch, "none", dlm=True)
+    assert {"dlm", "osm"} <= set(tried)

@@ -97,7 +97,9 @@ export interface TreeFeature {
     gn?: number;
     h: number;
     l: "d" | "e";
-    s?: "osm";
+    /** "osm": an OSM tree, not the register's; "orchard": an orchard
+     *  tree (lib/city/cultivated.ts, at runtime only — no file has it) */
+    s?: "orchard" | "osm";
     t?: number;
   } | null;
 }

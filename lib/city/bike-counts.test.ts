@@ -3,6 +3,7 @@ import {
   acrossStreet,
   bikeColumnHeight,
   bikeCountsUrl,
+  countClock,
   isStale,
   parseBikeCounts,
   parseCountTime,
@@ -47,8 +48,8 @@ test("a counter with both directions, its hour and its street", () => {
     { toward: "Nord - Neustadt", count: 309 },
     { toward: "Süd - Altstadt", count: 482 },
   ]);
-  expect(c.measuredAt?.getHours()).toBe(7);
-  expect(c.measuredAt?.getDate()).toBe(1);
+  // 07:00 in Dresden (CEST)
+  expect(c.measuredAt?.toISOString()).toBe("2026-10-01T05:00:00.000Z");
   expect(c.angleDeg).toBe(25);
 });
 
@@ -83,18 +84,48 @@ test("off the site, inactive or malformed counters are dropped, never thrown", (
   expect(parseBikeCounts({ features: "no" }, SITE)).toEqual([]);
 });
 
-test("the time is read as local time; anything else is no time", () => {
-  const t = parseCountTime("24.12.2026 18:00:00");
-  expect(t?.getFullYear()).toBe(2026);
-  expect(t?.getMonth()).toBe(11);
-  expect(t?.getHours()).toBe(18);
+test("a null or a number among the features is left out, the others read", () => {
+  const counters = parseBikeCounts(
+    { features: [null, counter({}), 3, "x"] },
+    SITE
+  );
+  expect(counters.map((c) => c.name)).toEqual(["Albertbrücke"]);
+});
+
+test("the time is Dresden's wall clock, whatever the visitor's zone; anything else is no time", () => {
+  // winter (CET, +1) and summer (CEST, +2)
+  expect(parseCountTime("24.12.2026 18:00:00")?.toISOString()).toBe(
+    "2026-12-24T17:00:00.000Z"
+  );
+  expect(parseCountTime("24.06.2026 18:00:00")?.toISOString()).toBe(
+    "2026-06-24T16:00:00.000Z"
+  );
+  // either side of the spring and autumn switches (29.03. and 25.10.2026)
+  expect(parseCountTime("29.03.2026 01:30:00")?.toISOString()).toBe(
+    "2026-03-29T00:30:00.000Z"
+  );
+  expect(parseCountTime("29.03.2026 03:30:00")?.toISOString()).toBe(
+    "2026-03-29T01:30:00.000Z"
+  );
+  expect(parseCountTime("25.10.2026 04:00:00")?.toISOString()).toBe(
+    "2026-10-25T03:00:00.000Z"
+  );
   expect(parseCountTime("gestern")).toBeNull();
+});
+
+test("a count's time is shown on the city's clock, whatever the visitor's zone", () => {
+  // run under any TZ but Berlin's (TZ=Asia/Tokyo) a local clock fails this
+  expect(countClock(parseCountTime("01.10.2026 07:00:00") as Date)).toBe(
+    "07:00"
+  );
+  expect(countClock(new Date("2026-12-24T17:00:00Z"))).toBe("18:00");
 });
 
 test("an old count is stale", () => {
   const [c] = parseBikeCounts({ features: [counter({})] }, SITE);
-  expect(isStale(c, new Date(2026, 9, 1, 8, 10))).toBe(false);
-  expect(isStale(c, new Date(2026, 9, 1, 11, 30))).toBe(true);
+  // 07:00 in Dresden is 05:00 UTC
+  expect(isStale(c, new Date(Date.UTC(2026, 9, 1, 6, 10)))).toBe(false);
+  expect(isStale(c, new Date(Date.UTC(2026, 9, 1, 9, 30)))).toBe(true);
 });
 
 test("a column grows with the root of its count, a stub at none", () => {

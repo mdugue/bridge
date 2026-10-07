@@ -15,6 +15,19 @@
 >
 > **Ordering**: plan 046 splits `rail-layer.ts`. Run this plan **before**
 > 046, or re-locate the functions named here in the split files.
+>
+> **Amendment (2026-10-06 audit, against `4b0310a`)**: **step 3 is moot.**
+> `buildRails` no longer lifts every sample inside a rail-deck polygon
+> through `deckLift`; since commit 677fe7c (ADR 0041, 2026-10-01) it calls
+> `lineLevelsAt(dense, "rail", f.properties?.lv, ctx, decks)`
+> (`app/_components/rail-layer.ts:2350`), and the line's level is solved
+> along its whole run by the build step — exactly the "rails passing
+> under a rail deck stay down" rule this step planned. Skip step 3 and
+> its two tests; if a rail still climbs onto a deck it passes under, that
+> is a line-levels bug (`scripts/line-levels.ts`, `lib/city/levels.ts`),
+> not this plan's. The excerpts of steps 1 and 4 moved by ≈ 250 lines in
+> `rail-layer.ts` (the span-deck code was added above them): find them by
+> text (`addApproach`, `approachLanding`, `paper-scene.ts`'s override).
 
 ## Status
 

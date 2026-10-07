@@ -30,7 +30,11 @@ results of both steps are deterministic functions of committed inputs.
   phones (ADR 0016).
 
 Outputs are cached in `.cache/prepare-data/` with mtime staleness against
-the inputs *and* the bake's own source files.
+the inputs *and* the bake's own source files. (2026-10: the cache is keyed
+by content, not mtime — the inputs' contents, `COMMON_SOURCES` and the
+modules reachable from each artifact's own bake entries,
+`scripts/bake-sources.ts`; see [data-pipeline.md](../data-pipeline.md),
+"Cache and publish".)
 
 ## Consequences
 
@@ -63,3 +67,7 @@ the inputs *and* the bake's own source files.
   entries "Terrain heightfield", "Buildings", "Rasters at 2048²".
 - `scripts/bake-heightfield.ts`, `scripts/bake-city-mesh.ts`,
   `lib/city/heightfield.ts`, `lib/city/city-mesh.ts`.
+- (2026-10: the heightfield and `bake-heightfield.ts` are gone — the
+  terrain is a TIN per [ADR 0030](./0030-terrain-tin-and-wall-snap.md),
+  baked by `scripts/bake-terrain-tin.ts`; the decision — bake heavy inputs
+  at build time — stands)

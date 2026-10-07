@@ -1608,7 +1608,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   pier every 26 m where it clears the ground by 2.5 m, drawn by the tile
   owning its middle (`addSpanDeck`). Dresden: steps beyond the grade by
   > 1 m in the drawn lines 230 → 18, Hamburg 330 → 62, Leipzig 41 → 17, Unna
-  20 → 0 (`bun scripts/line-levels.ts <site>`; the test holds Dresden to
+  20 → 0 (`bun scripts/line-levels-cli.ts <site>`; the test holds Dresden to
   20). What remains: deck ends above lower ground for good, and deck tops
   DOM1 put 1.5–2 m off their embankment. *(Until then: lifted onto every
   deck under a point — 🗃️ below.)*
@@ -2115,8 +2115,11 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 Overlays on the city, each switched on and off on its own in the HUD
 (*Erkunden* → *Verkehrsdaten*; `lib/city/data-layers.ts`, one flag per
 layer in the look store and the snapshot, all **off** at boot): nothing is
-drawn, fetched or polled for a layer that is off (the traffic bands are
-fetched with their tile's dressing — 37 KB a tile — and only hidden). They
+drawn, fetched or polled for a layer that is off (the counted sections'
+features, 37 KB a tile, are fetched with their tile's dressing; the glass
+bodies are built on the layer's first switch-on per tile, kept hidden when
+it is switched off and freed with the tile — plan 062, ADR 0040's
+2026-10-07 update). They
 are measurements laid over the poetic city, not part of it: unlit or flat
 colours, no shadows, no text in the scene (what they say in words is in
 the sidebar). Judged on SwiftShader plates only so far — **unjudged on a
@@ -2179,8 +2182,9 @@ GPU**.
   `cls:L1781` "aktuelle Zählwerte", dl-de/by-2-0; 35 counters, the
   bicycles of the last full hour per direction) read **by the browser**
   from the city's server (it answers any origin) when the layer is
-  switched on and every 5 minutes while it is on
-  (`app/_components/bike-layer.ts`, `lib/city/bike-counts.ts`): a pair of
+  switched on and every 5 minutes while it is on — not while the page is
+  hidden; back in view it reads at once when the counts are older than one
+  poll (`app/_components/bike-layer.ts`, `lib/city/bike-counts.ts`): a pair of
   **glass columns** per counter across the street (`winkel`, its run,
   degrees counter-clockwise from north), one per direction (teal, lilac),
   height 1.5 m + 1.6 × √count (482 an hour on the Albertbrücke ≈ 37 m),
@@ -2480,9 +2484,11 @@ research that produced them):
     run the columns with the scene's hour); the accidents with injury
     (Unfallatlas, the statistics offices, dl-de/by-2-0; pedestrian and
     cyclist involvement per point) as a fourth layer.
-15. **The twin, next** — ask trees, bridges and monuments too, a link
-    to an asked building, a *Datenstand* panel, the ingest writing the
-    provenance ([plan 052](./plans/052-queryable-twin.md) phases 4–7); the
+15. **The twin, next** — asking trees, bridges and monuments too is ✅
+    built 2026-10-01 (plan 052 phase 4; see the twin section above). Still
+    planned: a link to an asked building, a *Datenstand* panel, the ingest
+    writing the provenance ([plan 052](./plans/052-queryable-twin.md)
+    phases 4b–7); the
     day playing, weather as mood, the Elbe at its gauge
     ([plan 053](./plans/053-time-and-live-sources.md)); flood, sun hours,
     sight lines and a planned building as scenarios

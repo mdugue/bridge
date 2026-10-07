@@ -187,3 +187,85 @@ test("a tree the surface model measured names the model, not a register", () => 
     "Im Viewer berechnet",
   ]);
 });
+
+test("an orchard's tree names OSM's orchard, not the city's register", () => {
+  const entries = lineage(
+    {
+      kind: "tree",
+      tile: "t",
+      index: 4,
+      position: [0, 0],
+      osm: false,
+      orchard: true,
+      conifer: false,
+      genus: "",
+      height: 4.5,
+      crown: 4,
+    },
+    provenance,
+    saxony
+  );
+  expect(sources(entries)).toEqual([
+    "OpenStreetMap",
+    "Digitales Geländemodell DGM1",
+    "Im Viewer berechnet",
+  ]);
+  expect(entries[0].credit).toContain("ODbL");
+});
+
+test("without a Basis-DLM a bridge's deck and a tree row are OSM's, with its licence and link", () => {
+  const hamburg: LineageSite = {
+    provider: {
+      credit: "Freie und Hansestadt Hamburg, LGV, dl-de/by-2-0",
+      portal: "https://geoportal-hamburg.de/",
+      products: { dom: true, dop: "rgbi", dlm: false, lsc: false },
+    },
+  };
+  const osmStands: SiteProvenance = {
+    ...provenance,
+    sources: {
+      ...provenance.sources,
+      osm: {
+        ...provenance.sources.osm,
+        stands: { bridges: "2026-08-01", trees: "2026-07-01" },
+      },
+    },
+  };
+  for (const manifest of [osmStands, null]) {
+    const bridge = lineage(
+      {
+        kind: "bridge",
+        tile: "t",
+        length: 120,
+        position: [0, 0],
+        properties: {},
+      },
+      manifest,
+      hamburg
+    );
+    expect(sources(bridge)).not.toContain("Basis-DLM");
+    const deck = bridge.find((e) => e.used.includes("der Umriss des Decks"));
+    expect(deck?.source).toBe("OpenStreetMap");
+    expect(deck?.credit).toContain("ODbL");
+    expect(deck?.url).toBe("https://www.openstreetmap.org/copyright");
+    const row = lineage(
+      { kind: "canopy", tile: "t", position: [0, 0], source: "row" },
+      manifest,
+      hamburg
+    );
+    expect(sources(row)).not.toContain("Basis-DLM");
+    expect(row[0].source).toBe("OpenStreetMap");
+  }
+  const deck = lineage(
+    {
+      kind: "bridge",
+      tile: "t",
+      length: 120,
+      position: [0, 0],
+      properties: {},
+    },
+    osmStands,
+    hamburg
+  )[0];
+  expect(deck.stand).toBe("01.08.2026");
+});

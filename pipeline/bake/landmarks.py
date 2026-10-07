@@ -115,7 +115,7 @@ def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int) -> None:
     lons, lats = back.transform([xmin, xmax, xmin, xmax], [ymin, ymin, ymax, ymax])
     try:
         rows = query_box((min(lons), max(lons)), (min(lats), max(lats)))
-    except OSError as err:
+    except (OSError, ValueError, KeyError) as err:
         print(f"{tile_id}: Wikidata landmarks not fetched ({err})")
         return
     items: dict[str, dict] = {}
@@ -141,7 +141,11 @@ def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int) -> None:
     ranked = sorted(items.values(), key=lambda i: (-i["links"], i["id"]))
     dest.parent.mkdir(parents=True, exist_ok=True)
     doc = {"source": "Wikidata (CC0)", "query": SPARQL, "landmarks": ranked}
-    dest.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    # through a `.part` file: a run killed mid-write leaves no truncated
+    # cache that every later fetch would keep
+    part = dest.with_name(dest.name + ".part")
+    part.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    part.replace(dest)
     print(f"{tile_id}: {len(ranked)} Wikidata landmarks → {dest}")
 
 
@@ -152,7 +156,12 @@ def load_wikidata(tile: Tile) -> list[dict]:
         return []
     to_tile = Transformer.from_crs(4326, tile.epsg, always_xy=True)
     out = []
-    for item in json.loads(path.read_text())["landmarks"]:
+    try:
+        doc = json.loads(path.read_text())
+    except ValueError as err:
+        path.unlink()
+        raise OSError(f"{path}: not JSON — deleted; run bun run fetch again") from err
+    for item in doc["landmarks"]:
         x, y = to_tile.transform(item["lon"], item["lat"])
         out.append({**item, "x": x, "y": y})
     return out

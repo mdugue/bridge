@@ -25,8 +25,10 @@ import type { TreeFactsFile } from "@/lib/city/features";
 import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
 import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
 import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
+import { cardCredits } from "@/lib/city/card-lines";
 import { InquiryData } from "./inquiry-data";
 import { isTextEntry } from "./keyboard-controls";
+import { useSite } from "./site-context";
 
 type DrawerSnapPoint = DrawerPrimitive.Root.SnapPoint;
 
@@ -133,9 +135,11 @@ export function InquiryCard({
 }) {
   const provenance = useProvenance(provenanceUrl);
   const treeFacts = useTreeFacts(inquiry);
+  const site = useSite();
+  const credits = useMemo(() => cardCredits(site), [site]);
   const card = useMemo(
-    () => inquiryCard(inquiry, provenance, treeFacts),
-    [inquiry, provenance, treeFacts]
+    () => inquiryCard(inquiry, provenance, credits, treeFacts),
+    [inquiry, provenance, credits, treeFacts]
   );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -70,14 +70,14 @@ history. Decisions that came out of plans are written up as
 | 036 | What the data streams carry that we do not use (OSM, LoD2, the city's WFS, Wikidata, GeoSN, DLM): a measured survey and a ranking | **REFERENCE** — moved to [docs/data-streams.md](../data-streams.md) on 2026-10-01 (a survey, not a plan); pick an item into its own plan | [data-streams.md](../data-streams.md) |
 | 037 | The commands agents run work (`bun run build`/`test`, E2E_DEV over HTTPS), the skill's phone cache numbers, "1024²" → TIN, guide viewpoints and sizes, codebook pointers, Dependabot/CI paths, lockfile header; a test pins the guide to the HUD | DONE (2026-10-03) — `bunfig.toml` keeps a bare `bun test` out of e2e; coverage gaps listed in CI; a docs link test besides the guide test | [completed.md](./completed.md#037--the-commands-agents-run-and-docs-that-say-what-the-code-does--done-2026-10-03) |
 | 038 | Runtime spine: the shadow camera follows by night (no pinned tile), "loaded" without a spawn dressing nobody builds, no GPU-recovery loop and the crash it hid, no stuck key after a ⌘ chord, a jump ends live mode | DONE (2026-10-03) — step 2's decision moved into the pure boot machine; the GPU failure has its own HUD path | [completed.md](./completed.md#038--five-runtime-fixes-in-the-viewers-spine--done-2026-10-03) |
-| 039 | Bridge approach ramps without zero normals, rails passing under a rail deck stay down, Papier keeps double-sided ribbons and bare crowns, Sin City rain that lasts | **TODO** — P1/P2; step 4 needs a GPU look | [039-geometry-and-style-fixes.md](./039-geometry-and-style-fixes.md) |
-| 040 | Bakes: step-major `bun run bake`, seam stair flights kept, atomic ingest + timeouts + https check, atomic `prepare-data` writes, the `/wissen` hero as tall as the site | **TODO** — P1/P2; the stairs then need a re-bake (maintainer) | [040-bake-pipeline-fixes.md](./040-bake-pipeline-fixes.md) |
+| 039 | Bridge approach ramps without zero normals, rails passing under a rail deck stay down, Papier keeps double-sided ribbons and bare crowns, Sin City rain that lasts | **TODO** — P1/P2; step 4 needs a GPU look; **step 3 moot since ADR 0041** (2026-10-06 audit: `buildRails` goes through `lineLevelsAt`, commit 677fe7c) and the line refs of steps 1/4 moved — see the plan's amendment | [039-geometry-and-style-fixes.md](./039-geometry-and-style-fixes.md) |
+| 040 | Bakes: step-major `bun run bake`, seam stair flights kept, atomic ingest + timeouts + https check, atomic `prepare-data` writes, the `/wissen` hero as tall as the site | **TODO** — P1/P2; the stairs then need a re-bake (maintainer); **drifted** (2026-10-06 audit): its step bodies cite `scripts/bake.ts`, `ingest_sn.py`, `test_ingest.py` (gone — `scripts/pipeline.ts`, `fetch.py` + `providers/`, `test_fetch.py`), the runner takes one JSON spec, step 3 is partly done (`net.py` timeouts, `.part` writes), step 5 appears done (`bake-wissen-hero.ts` `cell * rows`); refresh before executing and fold in the bake runner's order test — see the plan's amendment | [040-bake-pipeline-fixes.md](./040-bake-pipeline-fixes.md) |
 | 041 | Test net: raster shares and the aborted-load free, the collider through a real BVH, census for stairs/sport/kerbs, eye height vs the DGM, pens per style, three's real geometry key | DONE (2026-10-03) — raster shares in their own module; tree rows left allowed empty (Grimma, Munich) | [completed.md](./completed.md#041--tests-where-the-regressions-are--done-2026-10-03) |
 | 042 | Main thread while streaming: stats coalesced, footprints only when they change (no minimap repaint per tile event), footprints after the handover, the viewer chunk fetched with the manifest | DONE (2026-10-03) — the first frame and "loaded" flush the coalesced stats | [completed.md](./completed.md#042--less-main-thread-churn-while-tiles-stream--done-2026-10-03) |
 | 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **BLOCKED** (2026-10-03) — gate passed (BVH median 75 ms a tile), the worker built and tested, but Next 16.3.7's Turbopack emits `new Worker(new URL(…))` as a raw asset; three options in the plan's findings | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
 | 044 | The canopy points as a packed binary instead of a 9.5 MB GeoJSON parsed in one task | DONE (2026-10-03) — 96 ms of JSON.parse → ≈ 13 ms to unpack on the biggest tile; published pre-gzipped (`.pts.gz`) | [completed.md](./completed.md#044--the-canopy-points-packed-not-geojson--done-2026-10-03) |
 | 045 | One source for the raster decoders (the stale `surfaceHeading`) and the Python class ids; one OSM number parser; the byte scales pinned across languages | **TODO** — P3; before plan 017 phase 4 | [045-one-source-for-decoders-and-class-ids.md](./045-one-source-for-decoders-and-class-ids.md) |
-| 046 | Moves only: `rail-layer.ts` into mesh kit / deck table / bridge, telemetry and picking out of `bootApp`, a home for the TSL helpers, the terrain↔water cycle, the dead-code sweep | **TODO** — P3; after 039, 041–043 | [046-split-the-god-modules-and-sweep.md](./046-split-the-god-modules-and-sweep.md) |
+| 046 | Moves only: `rail-layer.ts` into mesh kit / deck table / bridge, telemetry and picking out of `bootApp`, a home for the TSL helpers, the terrain↔water cycle, the dead-code sweep | **TODO** — P3; after 039, 041–043; **drifted** (2026-10-06 audit): the deck table moved to `lib/city/decks.ts` on the day 046 was planned, `rail-layer.ts` is 2 485 lines with the span-deck code (ADR 0041) and two more importers (`traffic-layer.ts`, `data-overlays.ts`), `bootApp` doubled to ≈ 2 050 lines (plans 060/066 take its GPU-loss slice); refresh its drift block before executing — see the plan's amendment | [046-split-the-god-modules-and-sweep.md](./046-split-the-god-modules-and-sweep.md) |
 | 047 | Spike: "Problem melden" — the crash report with a destination, the view only on opt-in | **TODO** — spike; maintainer answers needed at its step 3. Crashes now also go out on their own where a DSN is set (ADR 0043); what is left is the view on opt-in and a destination for deploys without a DSN | [047-spike-report-a-problem.md](./047-spike-report-a-problem.md) |
 | 048 | Spike: a view as a `?snap=` link; committed QA views for plan 019 | **TODO** — spike + small build | [048-spike-view-links-and-qa-views.md](./048-spike-view-links-and-qa-views.md) |
 | 049 | Many sites: providers, per-site data, `bun run fetch <site>` → `bake` → build, eight sites with viewpoints; one deployment with a route per site (`/dresden`) and a start page to pick the city | **DONE** (2026-10-01) — Berlin's adapter untested; committing sites other than Dresden is the maintainer's call | [049-many-sites-one-env-var.md](./049-many-sites-one-env-var.md) |
@@ -87,6 +87,18 @@ history. Decisions that came out of plans are written up as
 | 053 | Time and live sources: the day plays, weather sets the mood, the Elbe follows its gauge | **TODO** — static where possible (ADR 0001 amended); CORS of each source to verify first | [053-time-and-live-sources.md](./053-time-and-live-sources.md) |
 | 054 | Scenarios in the scene's own hand: flood, sun hours, sight lines, a planned building | **TODO** — TSL terms on the terrain and clay graphs | [054-scenarios.md](./054-scenarios.md) |
 | 055 | *Modell*: the city in parallel projection for planners — Isometrie, Vogelschau, Lageplan, Militärperspektive, Ansicht and Schnitt; scale bar, north arrow, planner styles, image export, shadow study | **DONE** — all five phases (ADR 0044); still to judge on a real GPU: the perspective-built specular and halo branches, the water glitter, Strich's washes | [055-model-view-parallel-projections.md](./055-model-view-parallel-projections.md) |
+| 056 | The committed markings rasters are checked again: the test globs `data/*/dlm` (it globbed the moved `data/dlm` and skipped, green, since 2026-09-30), reads each tile's CRS, and an empty parametrize fails at collection | **DONE** (2026-10-07) — 32 tables over seven sites, 0 skipped; `empty_parameter_set_mark = "fail_at_collect"`. Deviation: the bound scales with the raster (`DROPPED_OK × size / px`: 0.5 % at 2048², 1 % on the phones' 1024²) — the one table over 0.5 %, Leipzig `33318_5688_2_sn` row 22 (a signalled crossing over a zebra at an angle, 0.8 % on the 1024² raster, 0 % at 2048²), is what the current code bakes from the committed table, not stale data: the shared corner texels are twice as wide at 1024² | [056-markings-rasters-test-finds-its-data-again.md](./056-markings-rasters-test-finds-its-data-again.md) |
+| 057 | Every seam building is converted: the LoD2 fetch reads one ring of neighbouring cells, so the centre-ownership rule finds what Saxony filed next door (9–34 buildings per Dresden tile centred outside it, none in the neighbour's file; Leipzig's pipeline-converted tiles have 0 — dropped) | DONE (2026-10-07) — `cells(…, margin)` + `own_cells`; sn (ZIPs kept in `downloads/`), nw, hh, be read one ring for LoD2, margin cells past the border skipped; deviation: `by.py` untouched — its LoD2 is a 2 km grid (a STOP condition), its margin left for a follow-up (backlog, 2026-10-06 audit); review fixes: a margin cell is skipped only on a 404/410 (sn, be — any other failure raises), adapter tests for sn and nw; re-fetch of Leipzig, Grimma, Meißen is the maintainer's | [057-seam-buildings-are-fetched-and-kept.md](./057-seam-buildings-are-fetched-and-kept.md) |
+| 058 | The jump to another city hands the GPS fix over in the URL fragment, not `?at=` (which reached the host's request log, the crash trail in local storage and the crash card's text, against the privacy page's "never leaves your device"); the trail keeps only the QA knobs of a query; the page, the guide and AGENTS.md say so | DONE (2026-10-07) — as planned; deviations: `arrivalOf` requires a leading `#` (URLSearchParams also strips `?`, so the plan's `replace(/^#/u, "")` still read a query), and `crash-trail.test.ts` was new (no fake storage needed, `trailUrl` is pure) | [058-standort-hand-off-stays-off-the-server.md](./058-standort-hand-off-stays-off-the-server.md) |
+| 059 | One table of the ten storage keys, a test that `/datenschutz` names each (it misses `crash-trail.reported`) and each live-feed host, and tests for the reports' "no" and the sender's gate (none existed) | **DONE (2026-10-07)** — as planned; the report-choice test loads its own module instance (query specifier) since Bun's test files share a registry and the sender's test loads it with a DSN; the BroadcastChannel name `crash-trail` and the Sentry logger label stay literals (not storage keys) | [059-storage-keys-pinned-to-the-privacy-page.md](./059-storage-keys-pinned-to-the-privacy-page.md) |
+| 060 | The spine's failure paths: a dressing build that fails is noted and reported (an allocation failure sheds memory), the whole frame is guarded (a throw before the render re-threw 60×/s into the trail's storage write), a failed cut-out hold settles, the missing-part word keeps one latch per cause, a released root is never dressed, heartbeats after a stop do not count, `exitNow` restores the FOV, a cancelled pointer is no tap | DONE (2026-10-07) — all eight steps; deviations: the HUD's layer word takes the bare message (the HUD prefixes it), a cut-out failure goes through the same latch and is a problem kind too, a layer word covered by a network one shows again when that clears, the trail's coalescing is a tested `errorCoalescer`, steps 1/5 drive the private queue through casts (no fake timers), `model-rig.test.ts` is new; e2e not run here | [060-the-spine-fails-loudly-and-settles.md](./060-the-spine-fails-loudly-and-settles.md) |
+| 061 | Each baked artifact's cache key walks its own bake's imports: the one graph from `prepare-data.ts` holds 68 modules incl. all ten `sites/*.ts` and the palette, so 40 of 267 commits since the cache was born re-baked every site (≈ 2 min locally, ≈ 110 s × 3 shards on CI) | **DONE** (2026-10-07) — each `cacheKey` names its bake's entries (the graph from each, plus `prepare-data.ts`, the site's own config, `bun.lock`, `patches/`); the levels CLI split into `scripts/line-levels-cli.ts` so no bake reaches `sites/`; the fine terrain keys on every tile's passages, the stats on the footprints' content; measured on Dresden: warm 1–2 s, still warm (2.0 s) after a Leipzig config edit, a palette edit re-baked only the map picture (3.3 s), a Dresden config edit re-baked the site (≈ 3 min) | [061-bake-cache-keyed-per-artifact.md](./061-bake-cache-keyed-per-artifact.md) |
+| 062 | The counted traffic's bodies are built on the first switch-on, like the bikes and trams — not for every tile at every load (≈ 21 MB of GPU buffers plus CPU copies for the spawn tile's fine level, 260 k vertices, for a layer that is off at start; ≈ 50–100 MB of a phone's cache, reasoned); no vertex normals on an unlit material | **DONE** (2026-10-07) — the bodies are built on the first switch-on per tile (`TrafficSlot` in `tile-stream.ts`: a task of their own, compiled hidden, then shown, weighed and asked; kept while off, freed with the tile, nothing hung on a tile released mid-build); step 1 dropped: the glass reads the normals | [062-traffic-bodies-built-on-first-switch-on.md](./062-traffic-bodies-built-on-first-switch-on.md) |
+| 063 | The build and the fetch fail loudly and write atomically: a site without `provenance.json` builds (today `prepare-data` dies and no site is served), only a NoData grid falls back to the grid level, `bun run fetch` exits non-zero on a required product and guards the Wikidata/cadastre/traffic fetches, the Wikidata and GTFS caches go through `.part`, landmarks tie by id (not the build machine's locale) | DONE (2026-10-07) — all five steps; deviations: the provenance note is printed by `scripts/site-report.ts` (`absentSiteFiles` in `lib/city/site-report.ts`), the cache tests are a new `pipeline/tests/test_caches.py`, and an unreadable trams cache is derived again rather than kept | [063-build-and-fetch-fail-loudly.md](./063-build-and-fetch-fail-loudly.md) |
+| 064 | CI: the Next-cache key hashes the repo's sources (not `node_modules`, 11 541 files against 476), lint and typecheck check out without the 811 MB of geodata (the comment says ~130 MB), the shards re-cut with measured numbers and their date (main's run 37476256017 measured 149 / 220 / 340 s against the comment's "~100 / ~135 / ~125") | **IMPLEMENTED, awaiting PR run (2026-10-07)** — unverified: CI green (incl. the sparse checkout on a real runner) and the shard spread (est. ~93 s > the 60 s criterion); flip to DONE with the PR run's measured shard times. Next-cache key over the repo's sources (+ `types/**/*.ts`); lint/typecheck sparse checkout without `data/` (both pass locally with `data/` moved aside); shards re-cut from run 37496735478 (161 / 132 / 315 s): `@phone` moved to the HUD shard, not shard 1 as suggested (the rendering group can't be split by tag without a second boot); `grep -c sparse-checkout` is 4 (two lines per job, cone mode off is required) | [064-ci-hashes-what-it-means-and-clones-what-it-reads.md](./064-ci-hashes-what-it-means-and-clones-what-it-reads.md) |
+| 065 | The reference docs say what the code does: the skill's per-provider frame and complete bake list (`traffic`, `transit`), README's CRS and "nothing persisted", ADR 0001's storage list (`gpu-safety`), ADR 0003/0015 references, the ledger's and survey's built rows, `report-choice` under `app/_components/`, `?at`/`safety` among the URL reads; optionally a backtick-path check in `links.test.ts` | **DONE (2026-10-07)** — steps 1–6 as planned (058 had already added `#at=lat,lng` to AGENTS.md's knobs; ledger #15 marks only its built part ✅, the rest of the row stays 📋; the survey got a Status column); optional step 7 not built: its check also fails on paths that open plans (043, 045, 046, 048, 066) propose to create — its STOP condition | [065-docs-say-what-the-code-does.md](./065-docs-say-what-the-code-does.md) |
+| 066 | The page's GPU-loss, memory-emergency and resume decisions as one pure machine (`lib/city/page-lifecycle.ts`, signals → effects, like `boot-phases.ts`) with the incident sequences of the 2026-10-06 fixes as its tests; `create-app.ts` keeps a binder | DONE (2026-10-07) — steps 1–5; deviations: `gpuAnswers`/`gpuFailure` are lazy thunks (the probe asked only where the closures asked it), an initial `hiddenAt` option for a page that starts hidden, `onGpuLost` is now asked inside `dispatch` (before the stop's effects run; trail-note order unchanged), 15 tests not 10; `create-app.ts` shrank by 45 lines (3 024 → 2 979), not ≥ 80 (the binder keeps the effect map and the hooks' comments); e2e `@desktop-render\|@phone` 9 passed locally | [066-page-lifecycle-as-a-pure-machine.md](./066-page-lifecycle-as-a-pure-machine.md) |
+| 067 | The data layers and the twin: a tram timetable that failed to load can be tried again (`loading` never reset), Dresden's counts judged in Europe/Berlin (today the viewer's zone: all grey in Tokyo, a dead counter lit in New York), orchard trees askable, the card credits the site's own provider and register (not GeoSN/Dresden on Hamburg), a malformed feed element left out instead of thrown, polling only in view | DONE (2026-10-07) — all six steps; deviations: the tram failure is `TramCarsStatus.failed` shown by `TramStatusLine` in `data-layers-panel.tsx` (a two-line edit, not `city-walk.tsx`); orchard trees are marked `s: "orchard"` (`cultivated.ts`, `features.ts` type, a flag bit in `ask-items.ts`, tests in `cultivated`/`ask-items`); the zone is a feed fact (`BikeFeedReader.zone`); credits via `cardCredits(site)` in `card-lines.ts`, `GEOSN_CREDIT` deleted; the bike card still formats the count time in the visitor's zone (`inquiry-traffic.ts`, out of scope); e2e `@desktop-hud` not run here (Playwright's chromium 1243 missing in the container) | [067-data-layers-and-the-twin-small-fixes.md](./067-data-layers-and-the-twin-small-fixes.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -111,6 +123,15 @@ S/M/L.
    (the four tiles' re-bake) waits for 040 step 1. Plan 017 phase C was
    built by plan 049 without 045's named class ids; 045 then covers
    `landcover_osm.py` too.
+   **Plans 056–067 (2026-10-06 audit) — order:** 056 (a skipped test,
+   minutes) → 057 (seam buildings) → 058 → 059 (privacy) → 060 (the
+   spine's failure paths) → 061 (the bake cache) → 062 (traffic on
+   demand, phones) → 067 (data layers, the twin) → 063 (build and fetch)
+   → 064 (CI, needs a PR run) → 065 (docs) → 066 (the lifecycle machine,
+   after 060). 040 and 046 are **drifted** and must be refreshed before
+   they run (their rows and amendments say what moved); 039's step 3 is
+   moot. The non-interactive run picked these twelve by leverage from the
+   vetted findings below; the rest is the 2026-10-06 backlog.
 
 1. **Plan 019 (M, GPU) — the one GPU checklist.** Everything since the 3D
    Tiles switch was verified headless only. Since 2026-10-01 every "look
@@ -267,6 +288,253 @@ S/M/L.
     [data-streams survey](../data-streams.md)) instead of the OSM heritage
     join; tram tracks have no ground-join test (ADR 0035: a runtime part is
     tested with `checkJoins`).
+
+### 2026-10-06 audit (`improve deep`, against `4b0310a`)
+
+Eight parallel auditors (the viewer's spine; the layers, the data layers,
+the twin and `lib/city`; the build step and the bakes; security and
+dependencies; performance; tests and DX; architecture; docs and
+direction), every finding re-opened in the code before it was ranked —
+the two data claims (the seam buildings, the markings test's skip) were
+re-measured with Python over the committed data, the cache-key claim
+with the repo's own `moduleGraph`. In scope: the 196 commits since
+`a28de75` (the data layers, the twin, the crash reports, Modell, the
+legal pages, the safety ladder, the phone memory budget, the network
+retries). Baseline green at `4b0310a`: `bun run verify` (2 082 unit
+tests, 1 skipped — plan 056's), pipeline pytest (359) + ruff. The run
+was non-interactive: the twelve plans 056–067 are the top findings by
+leverage; what follows is vetted but **not planned** (backlog, S unless
+noted), then what was refuted or judged not worth doing.
+
+- **Bavaria's LoD2 reads its own 2 km cells only (S; from plan 057).**
+  `by.py` `lod2` iterates `cells(tile, 2)`, so a seam building LDBV filed
+  in a neighbouring 2 km file is dropped by the converter's centre rule
+  (München). Same design as Saxony's: `margin=1` on the 2 km grid, a
+  margin cell skipped only on a 404/410 (`fetch.not_published`), the own
+  cells raise; optionally keep the ZIPs/GMLs under `downloads/` for the
+  neighbouring tiles, and a monkeypatched adapter test like sn's.
+- **The scene clock's zone (M, design).** The HUD composes the scene
+  date in the viewer's zone and the sun is computed for that absolute
+  instant at the site — right for the sun, wrong for everything that is
+  Europe/Berlin time: the tram timetable (`tram-timetable.ts` `getDay`/`getHours`),
+  the traffic curve (`traffic-hours.ts`), the clock hands
+  (`furniture-layer.ts`), the *Verschattungsstudie*'s panels
+  (`image-export.ts` `new Date(year, m, d, hour)`, labelled "Ortszeit").
+  A visitor in New York at 09:00 sees the 15:00 sun with the 09:00
+  timetable; the exported study's "9 Uhr" panel is 01:00 Dresden time for
+  Tokyo. Fix: one `timeZone` per provider (`"Europe/Berlin"`), the scene
+  instant composed and split through `Intl.DateTimeFormat` parts, a
+  `siteLocal(date)` helper for `secondsOfDay`/`dayKindOf`/`setClockTime`/`studyPanels`/`trafficHourStatus`;
+  the season's wall-clock fields stay in the site's zone; tests under a
+  foreign `TZ`. Plan 067 step 2 fixes the bike counts' half of it.
+- **A seam deck drawn by one tile, askable in the other (S, MED).**
+  `rail-layer.ts` `drawsDeck` averages the ring *with* its closing vertex;
+  `ask-items.ts` `bridgeItems` owns by `ringCentre` (open ring): the two
+  centroids differ by `(p0 − mean)/(n+1)`, metres on a long deck with
+  few vertices, so a deck across a seam can be drawn by A and asked in B
+  — a click answers nothing. Fix: one `deckOwnerPoint(feature)` in
+  `lib/city/decks.ts` used by `drawsDeck`, `bridgeItems` and the coarse
+  path; a synthetic seam-deck test. How many committed decks straddle it
+  is unmeasured.
+- **The outline keeps a released tile's flow mesh (S, MED).** The
+  selection mask shares the asked tile's flow attributes; nothing clears
+  the selection when the tile is released, so the next mask render
+  re-uploads the whole geometry from the retained CPU arrays. Fix: in the
+  plugin's release, re-resolve or clear the outline's subject when it
+  belongs to the leaving tile.
+- **`runLevelAt` yields NaN when a baked run outruns the samples (S,
+  latent).** `levels.ts:454-467` has no bound on `b`; a tile re-baked
+  with another `LEVEL_STEP` would lose its rails to a NaN bounding sphere.
+  Clamp, and assert no NaN level in the line-levels test.
+- **Tram cars re-sample the ground ≈ 4 000 times per frame while on
+  (M, measure first).** `tram-cars.ts` per frame: `runningTrams` over
+  2 598 trips, then 8 `railTop` (a deck-table scan + a TIN bucket scan)
+  per tram and 24 per trail for ≈ 128 trams, and the trail and instance
+  buffers re-uploaded whole. Reasoned ≈ 2–5 ms a frame on a desktop,
+  2–3× on a phone — only with *Straßenbahnen* on. Fix: sample `railTop`
+  once per pattern vertex into a `Float32Array` (re-sampled on
+  `streamChanged`), interpolate per frame, `updateRanges` on the buffers,
+  `runningTrams` at the 1 s status cadence. Profile with the layer on at
+  17:30 before doing it.
+- **The minimap's boot payload (S–M, measure first).** Every tile's
+  footprints (≈ 4 MB of JSON), 15 bridge files and 15 PNGs for a 192 px
+  map, and the static layer repainted ≈ 30 times during the boot (once
+  per arriving file). Fix: offscreen canvases per layer, or one
+  site-wide footprint raster baked at prepare time.
+- **Pack the street-tree cadastre like the canopy (S–M).** `trees_<tile>.geojson`
+  is 0.4–0.9 MB / up to 7 453 features per tile, `JSON.parse`d on the
+  main thread in `buildDressing`; `lib/city/point-pack.ts` exists and plan
+  044's record named this file as the next pack (`x, y, h, d, a, g`; the
+  facts stay in `treefacts`).
+- **An e2e over the network failure path (M).** `tile-retry.ts`,
+  `fetch-optional.ts`, `fetch-retry.ts` and `net-gate.ts` are unit-tested;
+  the pill (`stream-pill.tsx`), `boot-error.tsx` (*Keine Verbindung zum
+  Server*), `gpu-failure-card.tsx` and `createTileStream`'s wiring have
+  no test, and the suite never aborts a `/data/**` request (one
+  `page.route` exists: the bike WFS stub). Five of the last week's fixes
+  sit in that seam. A spec: `page.route("**/data/dresden/**", abort)` for
+  the first N requests, assert the pill (German), lift the route, assert
+  `ready` and the pill gone; a second case aborts everything and asserts
+  the boot error. Budget it in frames, in the whole-site shard.
+- **The bake runner's order and a failing step's name (S).**
+  `pipeline/bake/__main__.py`'s `STEPS` carries hard constraints in
+  comments ("rail before the canopy", "lowveg last", "structures after
+  landmarks") and no test; the loop prints no site/tile/step on a raise.
+  Folded into plan 040's refresh (its step 1 already adds `test_main.py`):
+  assert the index relations, wrap the loop in a `try` that prints
+  `f"{site} {tile} {step}: {exc}"` and re-raises, parametrise two bakes'
+  fixtures on EPSG 25832 too (three of seven sites; the fixtures are all
+  25833).
+- **`coverage-gaps.ts` hides loaded-but-barely-executed sources (S).** A
+  source counts as covered when any test's import graph loads it:
+  `ground-detail.ts` (784 lines), `sport-ground.ts`, `water-layer.ts`,
+  `monument-layer.ts` vanish behind their tested importers. The lcov
+  carries `LF`/`LH`: add a second table "loaded, under 20 % executed".
+- **A `test:data` lane (S, MED).** `ground-joins.test.ts` (a DGM bake,
+  60 s cap), `line-levels.test.ts` (15 tiles, 120 s cap) and
+  `features.test.ts` (743 GeoJSON, 118 MB) run in every `bun run test` /
+  `test:watch`; the unit job is 85 s. Name the data-walking files and
+  give them their own script; `verify` runs both.
+- **An environment-variables table in the README (S).** `SITE_URL`
+  (`app/layout.tsx`, the metadata base — relative OG/canonical URLs when
+  unset), `SHOTS_QUERY`/`SHOTS_TAG`, `CHROME`/`BUN_CHROME_PATH`/`DEBUG_CHROME`/`DUMP_RAW`,
+  `PORT`/`E2E_DEV`, `BASE`/`RUNS` (`scripts/eval/`) are named nowhere a
+  newcomer looks; `scripts/eval/*.py` sit outside ruff/pytest and rot.
+- **Agent DX (S each; the maintainer's settings, not an executor's):**
+  `.claude/settings.json` pre-approves `git commit *` and `git add *` but
+  not `bun run verify`, `bun lint`, `bun typecheck`, `bun run fix`,
+  `bun run test:pipeline` (inverted friction: the gate prompts, the
+  mutation does not), and carries three one-off grep/awk entries; there
+  is no format-on-save hook for Claude Code (removed after it reformatted
+  conflict markers) while `.cursor/hooks.json` still runs a whole-tree
+  `bun fix` after every edit; a `PostToolUse` hook on `Edit|Write` running
+  `oxfmt <file>` and skipping files with `^<<<<<<< ` would restore it
+  safely. `bun run fix` formats before the lint autofix (`oxfmt && oxlint --fix`);
+  `.vscode/settings.json` does the reverse — investigate whether an
+  autofix can leave the tree unformatted.
+- **Two real-timer unit tests (S):** `crown-season.test.ts:125` sleeps
+  80 ms against a 40 ms throttle; `tile-stream.test.ts:295` a 1 ms sleep
+  as "next task" — fake timers (`net-gate.test.ts:30-35` shows the pattern).
+- **Architecture, moves only (fold into plan 046's refresh unless
+  noted):** `tile-stream.ts` (1 780 lines) holds four concerns 046 does
+  not list — the retrying content fetch and the phone's pacing
+  (`ContentFetchPlugin`, `paceStreaming`), the dressing builders and the
+  part table, the `DressingPlugin` (25 instance fields) and
+  `createTileStream` — split into `tile-fetch.ts`, `dressing-builders.ts`
+  (the home item 23 wants), `dressing-plugin.ts`; `three-utils.ts` is a
+  junk drawer (25 exports, fan-in 23: disposal, shared buffers, byte
+  accounting, CPU-copy drops, scene materials, compile representatives)
+  — `gpu-bytes.ts`, `scene-shared.ts`, the compile helpers into
+  `compile-lanes.ts`; the TSL `hash21` is byte-identical in
+  `post-stack.ts` and `stylize-effect.ts`, the sin-dot hash and the value
+  noise identical in `water-layer.ts` and `vegetation-layer.ts` (beyond
+  046 step 3's list: a `valueNoise(hash)` factory in the helper home);
+  `smoothstep` re-implemented at 13 sites in 10 files (three named
+  copies with different parameter orders) — `lib/city/math.ts` gains
+  `lerp`, `smooth01`, `smoothstep`; the Python bakes keep two `_count`/`_share`
+  pairs that **drifted** (`traffic.py` rejects numeric strings,
+  `traffic_sources.py` accepts them — unify on the tolerant one and pin
+  the string case; a baked traffic file may change) and three identical
+  pairs (`load_wikidata`, `surface_id`, `table_json`) — `common.py`;
+  dead exports beyond 046's three (`pageUsable`, `activeDataLayers`,
+  `pannedBy`, `HORIZON_BANDS`, `LANGS`) and ten exports referenced by
+  their test only (`skyview.ts`'s `sunAngles`/`horizonBracket`/`horizonTexel`,
+  `shadowStreamError`, `screenOfPoint`, `insideCutOut`, `stripeCoverage`,
+  `buildingFootprints`, `colonyEdgeMetres`/`colonyAxis`, `projectOntoAxis`)
+  — wire in or drop; three clocks (`performance.now`, `Date.now`, the
+  net-gate's visible clock) in the same files with no rule which a
+  timeout uses — one `clocks` object in `net-gate.ts`; twelve `userData`
+  tags as bare literals across 19 files — a typed `scene-tags.ts` when a
+  file is next touched; two soft import cycles in `lib/city`
+  (`snapshot` → `model-view` → `pose` → `snapshot` type-only;
+  `city-mesh` ↔ `object-facts`) — a leaf `model-presets.ts`.
+- **Adding a data layer touches five spine files (M).** `DATA_LAYERS`
+  is a registry, but `data-overlays.ts` applies each key by hand,
+  `create-app.ts` hand-lists `LayerName` and one callback per layer
+  (`onBikeCounts`, `onTramStatus`, `onTrafficHour`), `city-walk.tsx` a
+  `useState` and a detail component per layer, the e2e census a list:
+  the bikes commit touched 9 files, the trams 17. Give each
+  `DataLayerDef` its overlay factory, HUD detail and census part; one
+  `onDataLayer(key, payload)`. Plan 062's `TrafficSlot` is the first
+  per-tile shape.
+- **The HUD's 35-prop sidebar and 47-member handle (M–L, design).**
+  Every new HUD fact adds a `useState` in `city-walk.tsx`, a callback in
+  `CityWalkOptions` (26 fields, 17 callbacks), a prop in
+  `SceneSidebarProps` and a handle member; backlog item 24's time context
+  is the small version. Generalise `look-state.ts` into a scene-facts
+  store and a HUD store; the React Compiler is on, so memo is not the fix.
+- **Direction (choices):** a bake-freshness record per tile (every
+  Python artifact carries only `attribution`; `bun run site` reports
+  presence, the re-bake ledger is hand-kept in rows 050/051/022 — write a
+  `bake: {step, code, inputs, at}` member and let the report say `stale`;
+  M); the storage keys and the guide's tables pinned to the code (plan
+  059 does the keys and hosts; `guide-labels.test.ts` could also pin
+  `KEY_ACTIONS`, the styles, the data-layer labels, the Modell presets
+  and the other six sites' viewpoints; S); *ride a tram* (the only moving
+  thing in the twin is not askable — no `tram-ask.ts`; `glideTo` and the
+  live-mode follow exist; ask a tram → the card names the line →
+  *Mitfahren* until any input; S–M, the maintainer's call); the official
+  storeys and heritage flag from the city's WFS (data-streams #1/#2; the
+  WFS reader pattern exists in `cadastre.py`/`traffic_sources.py`;
+  Dresden-only, a stand-in row for the others; S–M); view links (plan 048)
+  — half the mechanism exists since the `at` hand-off: extend that read.
+
+**Refuted or not worth doing (2026-10-06):**
+
+- *The dressing part-table test asserts its fixture against itself* —
+  the production table carries `satisfies Record<Exclude<keyof TileDressing, "asks" | "tile">, …>`
+  (`tile-stream.ts:356-360`): a new field fails `bun typecheck`; the
+  test's cast is redundant, not a gap.
+- *`frameLoss`'s "emergency before it" sign has no time window* — the
+  raise is deduplicated per incident (`raisedBy`); the only effect is
+  which cap counts the reload. Note it when the frame guard (plan 060
+  step 2) widens what reaches `onFrameFailed`; no fix on its own.
+- *A zero-sized container drives NaN into the camera* — only if the
+  mount can be `display:none` while mounted; no `<Activity>`/hidden
+  route exists. An early return in the resize observer when a dimension
+  is 0 is a one-liner when that path appears.
+- *The Sentry tunnel as an open relay* — the DSN's host, path, project
+  and key are pinned at build time; Next merges a request's query below
+  the destination's; anyone may POST envelopes, as the public DSN already
+  allows. *The beacons' fields vs the privacy page* — every field of
+  `common()`/`pageContext()`/`breadcrumbs()` is named on the page; IPs
+  are `infer_ip: "never"`. *Local-storage reads* — all validated or
+  shape-checked, rings capped. *HTML sinks* — none in `app/`, `components/`,
+  `lib/`. *URL parameters* — exact matches and anchored regexes, no sink.
+  *Routes* — in-memory lookups, no filesystem path from a param.
+  *Credentials in history* — none (pattern search over the tree and
+  `git log -S`; the hits are placeholders and docs).
+- *The vendored Sentry skills put the org token on `curl` command lines*
+  (`.agents/skills/sentry-create-alert/SKILL.md:47,170`) — a one-line
+  note in AGENTS.md's Sentry paragraph ("the token is `$SENTRY_AUTH_TOKEN`
+  from the environment, never typed into a command") is enough; no token
+  was ever pasted.
+- *Version lag* — none with cost (`next` 16.3.7 → 16.3.8, Dependabot's
+  group); no three r186 deprecation in use (`GTAONode`'s deprecated
+  options unused); lockfiles and the loader patch in order; the two
+  Markdown pipelines (MDX for the legal pages, unified for `/wissen`) and
+  the two Inter sources (site vs the diagram renderer) are different jobs.
+- *`@types/three` in `dependencies`* — harmless for a static app.
+- *`prepare-sites.ts <ids>` prunes every other site's output* — a
+  documented design ("only the ones named"); the next full run restores
+  them. *Two cache keys in `prepare-data` miss inputs* (the stats' key
+  misses the sheds/structures appended to the footprints; the fine
+  terrain's key misses the neighbours' passages) — real but rare; fold
+  into plan 061's key rework if it touches those sites. *The DGM's
+  georeferencing vs the tile extent*, *hollow buildings counted by
+  `write_cityjson`*, *NDVI by band count not by `products.dop`*, *a WFS
+  answer without `numberMatched` written as complete* — latent, LOW
+  occurrence; one assertion each when a provider trips them.
+- *The joystick's `setThumb` state at pointer-move rate*, *`nextTask`'s
+  nested timers*, *the beat's 2 s traverse*, *per-pass `updateMatrixWorld`*,
+  *the date popover's calendar in the viewer chunk* — small or
+  unmeasured; profile first.
+- *The serial `@desktop-hud` group's failure cascade* — the trade-off
+  AGENTS.md prescribes; split only if flakes appear. *"Exported for
+  tests" seams* (`buildBallast`, `vineInstances`, `model-view.ts:760`) —
+  the cheapest guard at the right boundary; leave.
+- *A `bun run ci`* chaining verify, pytest and e2e — one line if wanted;
+  not a finding.
 
 ### 2026-10-01 audit (`improve deep`, against `a28de75`)
 
@@ -478,6 +746,22 @@ the port (2026-09-26) made of it:
 
 ### Maintainer actions
 
+- After plan 057 lands: re-fetch Leipzig, Grimma and Meißen
+  (`bun run fetch <site>` with `data/<site>/cityjson/` cleared, so the
+  converter rewrites the tiles with their seam buildings), then
+  `bun run bake <site>` and commit; Dresden's committed CityJSON already
+  holds them (the older converter kept GeoSN's files whole) — plan 022's
+  re-fetch gets them through the same path. (2026-10-06.) The fetch now
+  keeps Saxony's LoD2 ZIPs in `data/_raw/sn/downloads/LoD2_CityGML/`
+  (new; nine per tile, shared with the neighbours), and `_step` skips an
+  existing `lod2_<tile>.city.json`, so the per-tile CityJSON must be
+  deleted for the re-fetch to rewrite it. (2026-10-07.)
+- Condense plans 049 and 055 (DONE, kept in full) into
+  [completed.md](./completed.md) per the lifecycle above, and settle
+  050/051's "BUILT" rows (a status the vocabulary lacks: DONE or PARTIAL
+  with what is open). (2026-10-06.)
+- Refresh plans 040 and 046 (drifted — their rows say what moved) before
+  handing either to an executor. (2026-10-06.)
 - Run plan 019 on a GPU machine (the 3D Tiles branch is long merged;
   the look of everything since is unjudged on a GPU).
 - Re-bake the remaining DLM/DOP products with the current editions:
@@ -603,7 +887,13 @@ pass, the post stack, the renderer construction and preflight, the sky
 and lamp-halo materials, the vertex formats), and each of its audit
 categories had one reader. The 2026-10-01 run ran the tests (unit, pipeline, coverage)
 but no e2e and no `next build`, and read the WebGPU port's code but could
-not render it (no GPU, no WebGPU in Bun).
+not render it (no GPU, no WebGPU in Bun). The 2026-10-06 run ran lint,
+typecheck, the unit and pipeline suites, read the committed CityJSON,
+markings and traffic data with Python and measured the bake's import
+graph with the repo's helper; no e2e, no `next build`, no GPU, no real
+fetch; the CI timings come from the two latest `main` runs' logs;
+`components/ui/**` and the vendored skills were scanned for
+prompt-injection content only (none found).
 
 ## History
 
@@ -686,3 +976,10 @@ not render it (no GPU, no WebGPU in Bun).
   ADR 0047), and the network retries (ADR 0048). Verified headless and by
   the unit tests only; what a real iPhone and a WebGPU desktop must show
   is plan 019's section M.
+- **2026-10-06 run** (against `4b0310a`, `improve deep`, non-interactive):
+  eight parallel auditors over the 196 commits since `a28de75`; every
+  finding re-opened in the code, the data claims re-measured; plans
+  056–067 written by leverage, the rest of the vetted findings and the
+  refuted ones recorded above; 039 step 3 marked moot (ADR 0041), 040 and
+  046 marked drifted with amendments. Baseline green (2 082 unit tests,
+  359 pipeline tests).

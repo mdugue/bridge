@@ -109,7 +109,9 @@ phone compass a few degrees. If you stand outside the area, a small window
 says how far and offers where to go instead: one of the vantage points, a
 spot you pick on the map, or staying where you are. If you stand in
 another city this site also shows, the window says so first and offers to
-jump there: its viewer opens with you standing where you are. Browsers ask for permission first
+jump there: its viewer opens with you standing where you are (the
+position travels in the link's fragment, which never reaches the server).
+Browsers ask for permission first
 (iPhones for the compass too); the location never leaves the device — not
 even in a crash report (see *When it crashes*).
 
@@ -181,7 +183,8 @@ a model cut from the city (*neu setzen* takes the current middle; it ends
 with Modell; the first time it says *Wird vorbereitet …* for a moment
 while the city's drawing is prepared for the cut, and the city keeps
 moving meanwhile — buildings just outside the cut still cast their
-shadows over its edge); and *Bild speichern*.
+shadows over its edge; should it fail to prepare, the line beneath says
+so, with *noch einmal versuchen*, "try again"); and *Bild speichern*.
 
 **Trees stand at every scale.** Close up every tree is in the picture;
 where the city is drawn coarser — zoomed far out, the whole city at

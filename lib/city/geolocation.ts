@@ -182,20 +182,25 @@ export function siteHolding(
   });
 }
 
-/** The query that hands a fix to another site's page (`?at=lat,lng`). */
+/** The fragment that hands a fix to another site's page (`#at=lat,lng`):
+ *  a fragment never reaches a server — not in the request, not in a
+ *  Referer — and the crash trail keeps the query alone. */
 export const ARRIVAL_PARAM = "at";
 
-/** `/<site>?at=lat,lng`: the other site's page, told where the player is. */
+/** `/<site>#at=lat,lng`: the other site's page, told where the player is. */
 export function arrivalHref(
   siteId: string,
   fix: Pick<GeoFix, "lat" | "lng">
 ): string {
-  return `/${siteId}?${ARRIVAL_PARAM}=${fix.lat.toFixed(6)},${fix.lng.toFixed(6)}`;
+  return `/${siteId}#${ARRIVAL_PARAM}=${fix.lat.toFixed(6)},${fix.lng.toFixed(6)}`;
 }
 
-/** The fix a page was opened with (`?at=lat,lng`), or null. */
-export function arrivalOf(search: string): Pick<GeoFix, "lat" | "lng"> | null {
-  const value = new URLSearchParams(search).get(ARRIVAL_PARAM);
+/** The fix a page was opened with (its `#at=lat,lng`), or null. */
+export function arrivalOf(hash: string): Pick<GeoFix, "lat" | "lng"> | null {
+  // Only a fragment: URLSearchParams would read a `?query` just the same.
+  const value = hash.startsWith("#")
+    ? new URLSearchParams(hash.slice(1)).get(ARRIVAL_PARAM)
+    : null;
   const m = value?.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
   if (!m) {
     return null;

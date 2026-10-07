@@ -28,6 +28,7 @@ import {
   reportsDeclined,
   reportsState,
 } from "./report-choice";
+import { STORAGE_KEYS } from "./storage-keys";
 
 /**
  * The crash reports' browser side (what goes out, and why:
@@ -50,7 +51,7 @@ const DSN = firstSet(process.env.CRASH_REPORTS_DSN) ?? "";
 const RELEASE = firstSet(process.env.CRASH_REPORTS_RELEASE);
 const ENVIRONMENT = firstSet(process.env.CRASH_REPORTS_ENV) ?? "production";
 /** The start of the last previous record reported, so it goes out once. */
-const REPORTED_KEY = "crash-trail.reported";
+const REPORTED_KEY = STORAGE_KEYS.trailReported;
 const TAG = "[crash-reports]";
 
 /** The events that leave the page's view (the summary goes out) … */

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { HAMBURG } from "../../sites/hamburg";
 import { LEIPZIG } from "../../sites/leipzig";
 import {
+  absentSiteFiles,
   DLM_LAYERS,
   siteReport,
   siteSummary,
@@ -40,6 +41,17 @@ test("everything there: ready, nothing absent", () => {
   expect(siteReport(LEIPZIG, () => true).every((r) => r.next === "ready")).toBe(
     true
   );
+});
+
+test("a site without a provenance record is ready and reports it absent", () => {
+  const exists = (p: string) => !p.endsWith("/provenance.json");
+  expect(siteReport(LEIPZIG, exists).every((r) => r.next === "ready")).toBe(
+    true
+  );
+  expect(absentSiteFiles(LEIPZIG, exists).map((f) => f.path)).toEqual([
+    "data/leipzig/provenance.json",
+  ]);
+  expect(absentSiteFiles(LEIPZIG, () => true)).toEqual([]);
 });
 
 test("a provider without an open DLM says so", () => {

@@ -21,9 +21,11 @@
  *     immutable. Files the manifest no longer references are pruned.
  *
  * Baked outputs are cached in `.cache/prepare-data/` (gitignored) under a
- * key of their inputs' contents, every module this file imports
- * (bake-sources.ts) and the names they reference, so a rerun is cheap and a
- * changed bake never serves a stale cache.
+ * key of their inputs' contents, every module the artifact's own bake
+ * imports (bake-sources.ts, walked from that bake's entry), this file, the
+ * site's own config and the names they reference, so a rerun is cheap, a
+ * changed bake never serves a stale cache, and an edit to another site or
+ * to what only the viewer reads re-bakes nothing.
  * Writes public/data/<site>/ (gitignored), the folder the route /<site>
  * streams from.
  */
@@ -206,25 +208,71 @@ function publish(logical: string, content: Uint8Array): string {
 
 // --- cache --------------------------------------------------------------------
 
-/**
- * The bake's own sources — every module reachable from this file through
- * relative imports — plus the lockfile and the dependency patches, since the
- * glTF tools' versions shape the output too: a change to any of them
- * re-bakes everything.
- */
-const BAKE_SOURCES = [
-  ...moduleGraph("scripts/prepare-data.ts"),
+/** What every key carries: this file (the orchestration), the site's own
+ *  config, the lockfile and the dependency patches (the glTF tools'
+ *  versions shape the output too). Not the other sites' configs, nor what
+ *  only the viewer reads: an artifact's own bake brings its sources
+ *  (`cacheKey`'s `entries`). Each must exist: the hasher reads a missing
+ *  file as "absent" (an optional input's right answer), which would drop
+ *  it from every key without a word. */
+const COMMON_SOURCES = [
+  "scripts/prepare-data.ts",
+  `sites/${SITE.id}.ts`,
+  "sites/providers.ts",
   "bun.lock",
   ...readdirSync(at("patches")).map((name) => `patches/${name}`),
-].map(at);
+].map((source) => {
+  if (!existsSync(at(source))) {
+    fail(
+      `missing source file ${source} — every cache key carries it (a site's config is sites/<site id>.ts)`
+    );
+  }
+  return at(source);
+});
 
 const hashOf = createContentHasher();
+const graphs = new Map<string, string[]>();
 
-/** A cache key over the contents of the input files, the bake's sources and
- *  any extra values. */
-function cacheKey(inputs: string[], ...extra: unknown[]): string {
-  return contentKey(hashOf, [...inputs, ...BAKE_SOURCES], extra);
+/** Every module reachable from `entry`, memoised per bake run. */
+function sourcesOf(entry: string): string[] {
+  let graph = graphs.get(entry);
+  if (!graph) {
+    graph = moduleGraph(entry).map(at);
+    graphs.set(entry, graph);
+  }
+  return graph;
 }
+
+/** A cache key over the contents of the input files, the sources of the
+ *  bake that makes the artifact (each entry module and every module it
+ *  imports: the bake modules and the lib/city helpers this file calls for
+ *  it), the common sources, and any extra values. */
+function cacheKey(
+  inputs: string[],
+  entries: string[],
+  ...extra: unknown[]
+): string {
+  const sources = new Set<string>(COMMON_SOURCES);
+  for (const entry of entries) {
+    for (const file of sourcesOf(entry)) {
+      sources.add(file);
+    }
+  }
+  return contentKey(hashOf, [...inputs, ...[...sources].toSorted()], extra);
+}
+
+/** The modules a tile's shaped ground is baked by (`shapedTerrain`): the
+ *  DGM reader and meshers, the TIN's tolerance, the stair, terrace and wall
+ *  sources, the passages the site's lines open, the levels' grid sizes and
+ *  the tile's extent. */
+const GROUND_BAKE = [
+  "scripts/bake-tiles.ts",
+  "scripts/bake-terrain-tin.ts",
+  "scripts/tile-sources.ts",
+  "scripts/line-levels.ts",
+  "lib/city/tileset.ts",
+  "lib/city/site.ts",
+];
 
 /**
  * A site-wide artifact's cache name. Every site shares the cache, and
@@ -278,7 +326,7 @@ async function publishColonies(
   names: Published
 ): Promise<void> {
   const src = at(sideFileSource(SITE, file));
-  const key = cacheKey([src]);
+  const key = cacheKey([src], ["scripts/crop-raster.ts"]);
   const lowFile = file.replace(/\.png$/u, ".r1024.png");
   const cropFile = file.replace(/\.png$/u, ".crop.json");
   let cropping: ReturnType<typeof cropColonyRaster> | null = null;
@@ -323,7 +371,12 @@ async function publishCanopy(tile: string, file: string): Promise<string> {
   const packed = file.replace(/\.geojson$/u, ".pts.gz");
   const [minX, minY] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
   const stride = file.startsWith("canopyx_") ? 4 : 3;
-  const bytes = await cached(packed, cacheKey([src, sheds]), () => {
+  const bake = [
+    "lib/city/point-pack.ts",
+    "lib/city/small-buildings.ts",
+    "lib/city/site.ts",
+  ];
+  const bytes = await cached(packed, cacheKey([src, sheds], bake), () => {
     const trees =
       readJson<FeatureCollection<CanopyFeature>>(src).features ?? [];
     let features = trees;
@@ -346,7 +399,7 @@ async function publishCanopy(tile: string, file: string): Promise<string> {
 const lineLevels = parse<SiteLevels>(
   await cached(
     `line-levels-${SITE.id}.json`,
-    cacheKey(levelInputs(SITE)),
+    cacheKey(levelInputs(SITE), ["scripts/line-levels.ts"]),
     async () => utf8(await siteLineLevels(SITE))
   )
 );
@@ -427,7 +480,9 @@ for (const tile of TILES) {
         fail(`missing source file ${source}${HINT}`);
       }
       const { raster } = artifact.bakedFrom;
-      const bytes = await cached(artifact.file, cacheKey([src]), () =>
+      // lib/city/tile.ts: the artifact table names the raster's size
+      const bake = ["scripts/downsample-raster.ts", "lib/city/tile.ts"];
+      const bytes = await cached(artifact.file, cacheKey([src], bake), () =>
         downsampleClassRaster(src, raster)
       );
       names[kind] = publish(artifact.file, bytes);
@@ -535,7 +590,10 @@ function parseCity(tile: string): BakedCityMesh {
 const frame = parse<{ cx: number; cy: number; epsg: number }>(
   await cached(
     siteWide("frame.json"),
-    cacheKey([at(cityMeshSourceFiles(SITE, TILES[0]).city)]),
+    cacheKey(
+      [at(cityMeshSourceFiles(SITE, TILES[0]).city)],
+      ["scripts/bake-city-mesh.ts"]
+    ),
     () => {
       const baked = parseCity(TILES[0]);
       return utf8({ ...baked.offset, epsg: baked.epsg });
@@ -568,7 +626,13 @@ async function bakeCity(
     at(src.landmarks),
     at(src.measuredRoofs),
   ];
-  const key = cacheKey(inputs, offset);
+  const bake = [
+    "scripts/bake-city-mesh.ts",
+    "scripts/bake-tiles.ts",
+    "scripts/tile-glb.ts",
+    "scripts/measured-roofs.ts",
+  ];
+  const key = cacheKey(inputs, bake, offset);
   let mesh: ReturnType<typeof cityMesh> | null = null;
   const built = () => {
     mesh ??= cityMesh(parseCity(tile));
@@ -592,14 +656,17 @@ async function bakeCity(
     ...(svf ? { svf } : {}),
   };
   const name = `city_${tile}.glb.gz`;
-  const glb = await cached(name, cacheKey(inputs, offset, extras), async () =>
-    gz(
-      await writeMeshGlb({
-        ...built().input,
-        name: "city",
-        extras: { ...extras },
-      })
-    )
+  const glb = await cached(
+    name,
+    cacheKey(inputs, bake, offset, extras),
+    async () =>
+      gz(
+        await writeMeshGlb({
+          ...built().input,
+          name: "city",
+          extras: { ...extras },
+        })
+      )
   );
   return { file: publish(name, glb), footprints, maxZ };
 }
@@ -782,7 +849,12 @@ async function publishCrowns(tile: string): Promise<string | undefined> {
   const file = a.crowns.file;
   const bytes = await cached(
     file,
-    cacheKey(inputs, offset, passagesIn(tile)),
+    cacheKey(
+      inputs,
+      ["scripts/coarse-crowns.ts", ...GROUND_BAKE],
+      offset,
+      passagesIn(tile)
+    ),
     async () => {
       const fine = await shapedTerrain(tile, 0);
       return gz(
@@ -842,8 +914,18 @@ async function bakeTerrain(
       ? { dressing: pickFiles(names, DRESSING_KINDS) }
       : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
   };
-  // the passages come from every tile's lines and decks (line-levels.ts)
-  const key = cacheKey(inputs, offset, described, passagesIn(tile));
+  // The passages come from every tile's lines and decks (line-levels.ts);
+  // the fine level's walls, kerbs, stairs and fences stand on every tile's
+  // fine ground, and so on every tile's passages.
+  const opened = level === 0 ? passages : passagesIn(tile);
+  const bake = [
+    ...GROUND_BAKE,
+    "scripts/tile-glb.ts",
+    // fineChildren: the gates cut the walls
+    "lib/city/fences.ts",
+    "lib/city/tile.ts",
+  ];
+  const key = cacheKey(inputs, bake, offset, described, opened);
   const meta = parse<{
     bounds: TerrainExtras["bounds"];
     ground?: number[];
@@ -853,7 +935,7 @@ async function bakeTerrain(
   }>(
     await cached(
       `${stem}.json`,
-      cacheKey(inputs, offset, described, passagesIn(tile), "ground"),
+      cacheKey(inputs, bake, offset, described, opened, "ground"),
       async () => {
         const m = await shapedTerrain(tile, level);
         return utf8({
@@ -944,11 +1026,24 @@ log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
 // Who publishes each source, and each tile's edition of it: the inquiry
 // card's "Quelle" lines (ADR 0042), from the hand-kept record.
+/** The site's provenance record; a site without one (freshly fetched)
+ *  builds with an empty record — the cards then name sources without
+ *  editions. A record that is there but unreadable still fails. */
+function readProvenance(): ProvenanceRecord {
+  const path = at(`${siteDataDir(SITE)}/provenance.json`);
+  if (!existsSync(path)) {
+    log(
+      `${SITE.id}: no provenance.json — the cards name sources without editions`
+    );
+    return {};
+  }
+  return readJson<ProvenanceRecord>(path);
+}
 const provenanceFile = publish(
   PROVENANCE_FILE,
   utf8(
     siteProvenance(
-      readJson<ProvenanceRecord>(at(`${siteDataDir(SITE)}/provenance.json`)),
+      readProvenance(),
       baked.map((t) => t.id),
       SITE
     )
@@ -1002,13 +1097,11 @@ const rasters = TILES.map((tile) =>
   at(sideFileSource(SITE, tileArtifacts(tile).landcover.file))
 );
 if (rasters.every((path) => existsSync(path))) {
-  const heroSources = [
-    ...rasters,
-    at("scripts/bake-wissen-hero.ts"),
-    at("lib/city/landcover.ts"),
-  ];
-  const hero = await cached(siteWide(HERO_FILE), cacheKey(heroSources), () =>
-    bakeWissenHero(SITE.tiles, rasters, 1600)
+  // bake-wissen-hero.ts imports the palette (lib/city/landcover.ts)
+  const hero = await cached(
+    siteWide(HERO_FILE),
+    cacheKey(rasters, ["scripts/bake-wissen-hero.ts"]),
+    () => bakeWissenHero(SITE.tiles, rasters, 1600)
   );
   publish(HERO_FILE, hero);
 } else {
@@ -1028,11 +1121,20 @@ const statSources = TILES.flatMap((tile) => {
     at(sideFileSource(SITE, kinds.canopyx.file)),
     at(cityMeshSourceFiles(SITE, tile).city),
     at(cityMeshSourceFiles(SITE, tile).landmarks),
+    // the scan's sheds and the structures join the footprints
+    at(cityMeshSourceFiles(SITE, tile).smallBuild),
+    at(cityMeshSourceFiles(SITE, tile).structures),
   ];
 });
 const stats = await cached(
   siteWide(SITE_STATS_FILE),
-  cacheKey(statSources, extras.ground ?? null, footprintFiles.size),
+  cacheKey(
+    statSources,
+    ["lib/city/site-stats.ts", "lib/city/tile.ts"],
+    extras.ground ?? null,
+    // the footprints' published names hash their content
+    [...footprintFiles.values()]
+  ),
   async () => utf8(await siteStats())
 );
 writeFileSync(join(OUT_DIR, SITE_STATS_FILE), stats);

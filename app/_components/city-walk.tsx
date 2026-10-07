@@ -1,6 +1,6 @@
 "use client";
 
-import { ARRIVAL_PARAM, arrivalOf, placementOf } from "@/lib/city/geolocation";
+import { arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site } from "@/lib/city/site";
 import {
@@ -337,17 +337,18 @@ function OffsiteDialog({
 
 /**
  * The page was opened from another city's off-site dialog with where the
- * player stands (`?at=lat,lng`, lib/city/geolocation.ts `arrivalHref`):
- * put them there, on foot, and drop the parameter so a reload starts at the
- * site's spawn again.
+ * player stands (`#at=lat,lng`, lib/city/geolocation.ts `arrivalHref` — the
+ * fragment: never sent to the server, not kept by the trail): put them
+ * there, on foot, and drop the fragment so a reload starts at the site's
+ * spawn again.
  */
 function arriveAt(h: CityWalkHandle, site: Site, say: Say): void {
-  const at = arrivalOf(location.search);
+  const at = arrivalOf(location.hash);
   if (!at) {
     return;
   }
   const url = new URL(location.href);
-  url.searchParams.delete(ARRIVAL_PARAM);
+  url.hash = "";
   history.replaceState(history.state, "", url);
   const placement = placementOf(
     { ...at, accuracy: 0, headingDeg: null },

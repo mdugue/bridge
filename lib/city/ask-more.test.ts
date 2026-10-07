@@ -15,8 +15,15 @@ import type {
 } from "./features";
 import { epsgToWorld } from "./ground-clamp";
 import { samplePolyline } from "./polyline";
+import { type CardCredits } from "./card-lines";
 import { inquiryCard } from "./inquiry";
 import type { FeatureInquiry } from "./inquiry-features";
+
+/** Dresden's credits (sites/providers.ts) as the HUD hands them over. */
+const DRESDEN: CardCredits = {
+  dlm: true,
+  provider: "Quelle: GeoSN, dl-de/by-2-0",
+};
 
 const TILE = "33412_5656_2_sn";
 const read = <F>(kind: string) =>
@@ -95,7 +102,7 @@ test("lamps, furniture and tram stops are each askable at their point", () => {
   const at = bench?.geometry.coordinates as [number, number];
   const asked = askDown(at[0], at[1]);
   expect(asked?.kind).toBe("furniture");
-  expect(asked && inquiryCard(asked, null).title).toBe("Bank");
+  expect(asked && inquiryCard(asked, null, DRESDEN).title).toBe("Bank");
   const stop = features.trams.find(
     (f) => f.properties?.k === "stop" && f.properties.name
   );
@@ -103,7 +110,9 @@ test("lamps, furniture and tram stops are each askable at their point", () => {
     const [sx, sy] = stop.geometry.coordinates;
     const s = askDown(sx, sy);
     expect(s?.kind).toBe("stop");
-    expect(s && inquiryCard(s, null).title).toBe(stop.properties?.name ?? "");
+    expect(s && inquiryCard(s, null, DRESDEN).title).toBe(
+      stop.properties?.name ?? ""
+    );
   }
 });
 

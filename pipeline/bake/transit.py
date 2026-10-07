@@ -203,9 +203,14 @@ def cached_site_trams(folder: Path, bounds, epsg: int) -> dict | None:
     key = "_".join(f"{v:.0f}" for v in bounds)
     cache = folder / f"trams_{key}.json"
     if cache.exists() and cache.stat().st_mtime >= zip_path.stat().st_mtime:
-        return json.loads(cache.read_text())
+        try:
+            return json.loads(cache.read_text())
+        except ValueError:
+            pass  # unreadable (an older, interrupted write): derived again
     feed = site_trams(zip_path, bounds, epsg)
-    cache.write_text(json.dumps(feed))
+    part = cache.with_name(cache.name + ".part")
+    part.write_text(json.dumps(feed))
+    part.replace(cache)
     return feed
 
 

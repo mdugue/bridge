@@ -15,6 +15,36 @@
 > Saxony's adapter is `pipeline/bake/providers/sn.py`). Read the paths and
 > commands below in that layout; this is drift, not a STOP condition.
 >
+> **Amendment (2026-10-06 audit, against `4b0310a`) — refresh before
+> executing.** The step bodies and the done criteria still cite
+> `scripts/bake.ts`, `pipeline/bake/ingest_sn.py` and
+> `pipeline/tests/test_ingest.py` (`--bounds` per tile, "`grep -n
+> timeout ingest_sn.py`"): the runner is now `scripts/pipeline.ts` handing
+> Python one JSON spec (`pipeline/bake/spec.py`; `__main__.py` `main()`
+> takes `--spec` and repeatable `--tile`), the fetch is `pipeline/bake/fetch.py`
+> + `providers/{sn,nw,by,hh,be}.py`, the tests `pipeline/tests/test_fetch.py`
+> and `test_net.py`. What that changes per step: **step 1** (step-major)
+> still applies — the loop at `__main__.py:152-157` is tile-major
+> (`for tile in tiles: for step in steps`) — but the test's `sys.argv`
+> must build a spec file, not `--bounds`; add to its `test_main.py`: (a)
+> the step **order** pinned by index relations (`landcover < canopy`,
+> `rail < canopy`, `surface < markings`, `edges < markings`, `lowveg <
+> cultivated`, `lowveg < small-buildings`, `landmarks < structures` — the
+> constraints the comments in `STEPS` state) and that every `*.run` in the
+> package is listed once; (b) a `try/except` around the loop that prints
+> `f"{spec.site} {tile.id} {step}: {exc}"` and re-raises, so a step that
+> fails on tile 11 of 15 names itself; (c) two or three bakes' synthetic
+> fixtures parametrised on EPSG 25832 as well (three of the seven
+> committed sites; `synthetic.py` is 25833 only). **Step 3** (ingest
+> hardening) is partly done: `net.py:27` `urlopen(req, timeout=120)`,
+> `net.py:101-115` and `fetch.py:90,117-121` write through `.part` — re-read
+> `fetch.py`/`net.py` and keep only what is still missing (plan 063 adds
+> the fetch's exit code and the Wikidata/GTFS caches' `.part`; do not
+> duplicate it). **Step 5** (the hero's height) appears done:
+> `scripts/bake-wissen-hero.ts:78` sizes the map `cell * rows` — verify
+> and strike. Re-point every path above, re-derive the drift-check line,
+> and re-stamp "Planned at" before handing the plan to an executor.
+>
 > **Drift check (run first)**:
 > `git diff --stat dd470e9..HEAD -- scripts/bake.ts pipeline/bake/__main__.py pipeline/bake/stairs.py pipeline/bake/rail.py pipeline/bake/ingest_sn.py pipeline/bake/common.py scripts/prepare-data.ts scripts/bake-wissen-hero.ts app/wissen/_components/landing.tsx`
 > On a change in the lines a step edits, compare with the excerpts below;

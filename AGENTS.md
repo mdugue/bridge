@@ -266,7 +266,9 @@ config change.
   policy, the look table + store, the Snapshot codec, `gpu-safety.ts`
   (the safety ladder: levels, raise and decay, the recovery's caps, a
   recovered page's start tile — ADR 0046), `gpu-allocation.ts` (which
-  errors are a GPU allocation that failed), `fetch-retry.ts` (when a
+  errors are a GPU allocation that failed), `page-lifecycle.ts` (the
+  page's GPU-loss, memory-emergency and resume decisions as effects —
+  ADR 0046), `fetch-retry.ts` (when a
   failed fetch is tried again and for how long — ADR 0048),
   `task-gate.ts` (a concurrency gate: the rasters' turns),
   `ground.ts` (the
@@ -328,7 +330,8 @@ config change.
   (`mdx-components.tsx` at the root), linked from every footer and the
   viewer's sidebar (`app/_components/legal-links.tsx`). `<ReportsChoice />`
   in the privacy page is the reports' opt-out switch
-  (`reports-choice.tsx`, kept by `report-choice.ts`)
+  (`app/_components/reports-choice.tsx`, kept by
+  `app/_components/report-choice.ts`)
 - `pipeline/` — the offline pipeline, one Python package in a uv environment:
   the fetch (`bake/fetch.py`; `providers/{sn,nw,by,hh,be}.py` are the
   per-Land adapters; `rasters.py` mosaics/clips to our tiles, `citygml.py`
@@ -539,8 +542,14 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
   ≈ 2 min for fifteen tiles, warm ≈ 1 s; CI restores it between runs): the key covers the inputs'
-  contents and every module the bake imports (`scripts/bake-sources.ts`
-  walks the import graph — there is no list to keep in step); the glTF quantisation and meshopt settings live in
+  contents, `COMMON_SOURCES` (`prepare-data.ts` itself, the site's own
+  config, `sites/providers.ts`, `bun.lock`, `patches/`) and every module
+  reachable from the artifact's bake entries (`scripts/bake-sources.ts`
+  walks the imports). Those entries **are listed by hand** in
+  `prepare-data.ts` (`GROUND_BAKE`, each `bake` array, the `entries` passed
+  to `cacheKey`): a module it calls for an artifact must be one of them or
+  imported from one, or that artifact's cache goes stale. Another site's
+  config re-bakes nothing, a palette colour only the map picture; the glTF quantisation and meshopt settings live in
   `scripts/tile-glb.ts`, the gzip (Bun's libdeflate) in `prepare-data.ts`.
 
 ## Rendering gotchas (hard-won — don't relearn these)
@@ -781,7 +790,7 @@ draws its deck), a *cut* through the fill under one (the terrain bake
 opens it under a drawn deck, `lib/city/passages.ts`) — and publishes it
 as `lv` in the rail and tram files. A new line layer takes its levels the
 same way (`lineLevelsAt` in `rail-layer.ts`); `scripts/line-levels.test.ts`
-holds the reference site's jumps to a budget, `bun scripts/line-levels.ts
+holds the reference site's jumps to a budget, `bun scripts/line-levels-cli.ts
 <site>` prints them.
 
 **Modell reads the camera through a lens** (ADR 0044). A post pass never
@@ -803,7 +812,9 @@ bridge or a misplaced layer is invisible looking straight down.
 URL knobs: `?scene=lite` (the CI profile, below), `?gpu=webgl2` (the
 WebGL2 backend where WebGPU exists), `?safety=N` (0–3: the page at that
 safety level, nothing stored — ADR 0046), `?trail=1` (the crash trail's
-card always).
+card always), `#at=lat,lng` (the off-site dialog's hand-off to another
+city's page: placed there after the first frame, then dropped — a
+fragment, so it never reaches the server or the crash trail).
 
 There is a **snapshot system**: the in-app Snapshot panel copies the full
 camera pose + sun time + look sliders as JSON; `__poc.handle.getCameraState()`
@@ -829,11 +840,14 @@ the per-test timeout if it spends frames carelessly. Playwright runs a single wo
 viewer pages halve each other's frame rate. CI splits the suite over **three
 runners** instead (the `e2e` matrix in `.github/workflows/ci.yml`), by tag: the
 whole site with the shell and `/wissen`; the desktop HUD group
-(`@desktop-hud`); the desktop rendering group (`@desktop-render`) with the
-phone (`@phone`). Each desktop group boots its own page. The required
+(`@desktop-hud`) with the phone (`@phone`); the desktop rendering group
+(`@desktop-render`). Each desktop group boots its own page. The required
 status check "E2E (Playwright)" is the small job that reports them all. A new
 spec lands in the whole-site shard unless it carries one of those tags —
-keep the shards within a minute of each other.
+keep the shards within about 1.5 minutes of each other (the rendering group
+shares one booted page, cannot be split by tag without a second boot, and
+so sets the floor for the longest shard; measured on CI, see the
+workflow's comment with its run and date).
 
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
 [`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It streams
@@ -932,6 +946,10 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   still *formats* it. Accepted knowingly — revisit if oxc ships CSS rules.
 - `components/ui/**` is vendored by `shadcn add` — regenerate, never hand-edit.
   Adding a component adds its dependency; removing one should remove it again.
+  One deliberate exception: `components/ui/sidebar.tsx` no longer writes its
+  open state to a cookie (the site sets none, ADR 0045). A `shadcn add
+  sidebar` brings that write back — take it out again; the no-cookie test in
+  `app/_components/storage-keys.test.ts` fails until you do.
 - Class names are joined with `cn` from the **`cn` package** (shadcn's
   replacement for `clsx` + `tailwind-merge`, set up by `shadcn migrate cn`):
   import it as `import { cn } from "cn"`, as the generated components do.

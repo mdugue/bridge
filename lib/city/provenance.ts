@@ -75,7 +75,7 @@ const OSM_PRODUCTS: [OsmProduct, string][] = [
 
 /** What the manifest needs to know of the site: whose data it is. */
 export interface ProvenanceSite {
-  provider: Pick<Provider, "credit" | "licence">;
+  provider: Pick<Provider, "credit" | "licence" | "products">;
   treeCadastre?: TreeCadastre;
 }
 
@@ -166,6 +166,13 @@ export function siteProvenance(
   const osmStand = leadingDate(products?.osmBuildings?.dataAsOf);
   const stands = osmStands(products);
   const wikidataStand = leadingDate(record.wikidata?.dataAsOf);
+  const osm: SourceInfo = {
+    label: "OpenStreetMap",
+    credit: "© OpenStreetMap-Mitwirkende",
+    licence: "ODbL",
+    ...(osmStand ? { stand: osmStand } : {}),
+    stands,
+  };
   const sources: Record<SourceKey, SourceInfo> = {
     lod2: { label: "3D-Stadtmodell LoD2", credit: official, licence },
     lsc: { label: "Laserscan", credit: official, licence },
@@ -180,14 +187,12 @@ export function siteProvenance(
       licence,
     },
     dop: { label: "Digitales Orthophoto", credit: official, licence },
-    dlm: { label: "Basis-DLM", credit: official, licence },
-    osm: {
-      label: "OpenStreetMap",
-      credit: "© OpenStreetMap-Mitwirkende",
-      licence: "ODbL",
-      ...(osmStand ? { stand: osmStand } : {}),
-      stands,
-    },
+    // a provider without a Basis-DLM (Hamburg, Berlin) has OSM in its
+    // place: the land cover, rails and bridge areas (ADR 0039)
+    dlm: site.provider.products.dlm
+      ? { label: "Basis-DLM", credit: official, licence }
+      : osm,
+    osm,
     wikidata: {
       // CC0 asks for no credit; the licence is the line's last word
       label: "Wikidata",

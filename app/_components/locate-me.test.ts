@@ -62,7 +62,7 @@ test("describeOffsite names the other city the player stands in", () => {
     {
       kind: "outside",
       distanceM: 100_000,
-      elsewhere: { href: "/leipzig?at=51.3,12.4", site: SITES.leipzig },
+      elsewhere: { href: "/leipzig#at=51.3,12.4", site: SITES.leipzig },
     },
     "Dresden · Altstadt"
   );

@@ -12,6 +12,47 @@
 > Plans 039 (rail-layer fixes), 041, 042 and 043 (create-app) edit the
 > same files — **run this plan after them**, and re-derive the line
 > numbers below from the live code (the section *names* are what matter).
+>
+> **Amendment (2026-10-06 audit, against `4b0310a`) — refresh the drift
+> block before executing.** (1) The pure deck table this plan's step 1
+> extracts into `bridge-deck.ts` already left `rail-layer.ts` on the day
+> the plan was written: `lib/city/decks.ts` (commit 677fe7c) holds
+> `Ring2`, `ringToWorld`, `DeckPoly`, `pointInRing`, `decksAt`, `deckLift`,
+> `deckPoly`, `longAxis`, `deckRing`, `bridgeDecks`; `rail-layer.ts`
+> imports them and keeps only `deckOf` and `buildDeckTable`. Step 1's
+> "Mesh kit" list (`Ring2`/`ringToWorld` at 293–329) describes code that
+> is no longer there; `bridge-deck.ts` is now the *approaches* plus the
+> span-deck code. (2) `rail-layer.ts` is 2 485 lines (the plan says
+> 2 191): ADR 0041 added `addSpanDeck`, `spanRuns`, `lineLevelsAt`
+> (`:2214`), `addDrapedArea` (`:2036`), `addDeckFrame`, `splitDeckTop`,
+> `densified`, `polygonsOf` and eight constants — a section the split must
+> place; its importers are five now (`traffic-layer.ts:40` and
+> `data-overlays.ts:27` take `buildDeckTable`, beside tram, riverside and
+> tile-stream). In the mesh kit, give `quadXYZ` (16 positional numbers,
+> 5 callers) and `pushTri` (13, 6 callers) point-struct parameters
+> (`pushTri(acc, a: P3, b: P3, c: P3, …)`) — a move with a signature, no
+> geometry change. (3) `bootApp` doubled since this plan (≈ 1 040 → ≈
+> 2 050 lines): beyond the telemetry and picking of step 2 it now holds
+> Modell's view swap, cuts and HUD ticks, the image capture loop (220
+> lines beside `image-export.ts`), the twin's outline/inquiry, the
+> GPU-loss/emergency/resume trio and the data overlays. Plan 066 lifts
+> the GPU-loss trio into `lib/city/page-lifecycle.ts` (do it first or
+> alongside); `model-session.ts` (swap/cuts/ticks/capture) and
+> `twin-session.ts` (probe, outline, answered) are the two further moves
+> to add to step 2. (4) The dead-code sweep (step 5) has five more
+> never-referenced exports — `net-gate.ts` `pageUsable`, `data-layers.ts`
+> `activeDataLayers`, `model-view.ts` `pannedBy`, `skyview.ts`
+> `HORIZON_BANDS`, `lib/docs/routes.ts` `LANGS` — and ten referenced by
+> their test only (`skyview.ts` `sunAngles`/`horizonBracket`/`horizonTexel`,
+> `shadow-fit.ts` `shadowStreamError`, `model-view.ts` `screenOfPoint`,
+> `section.ts` `insideCutOut`, `markings.ts` `stripeCoverage`, `minimap.ts`
+> `buildingFootprints`, `cultivated.ts` `colonyEdgeMetres`/`colonyAxis`,
+> `stairs.ts` `projectOntoAxis`): wire each in or drop export and test.
+> (5) Step 3's TSL helper home should also take the byte-identical
+> `hash21` of `post-stack.ts`/`stylize-effect.ts` and the identical
+> sin-dot hash + value noise of `water-layer.ts`/`vegetation-layer.ts`
+> (a `valueNoise(hash)` factory; each caller keeps its hash — no pixel
+> change). Re-stamp "Planned at" after the refresh.
 
 ## Status
 

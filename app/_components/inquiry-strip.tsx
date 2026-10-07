@@ -23,7 +23,9 @@ import {
   type InquiryAlong,
   inquiryCard,
 } from "@/lib/city/inquiry";
+import { cardCredits } from "@/lib/city/card-lines";
 import { TOLERANCE_PX } from "./inquiry-probe";
+import { useSite } from "./site-context";
 
 /** The icon a candidate is drawn with. */
 function kindIcon(inquiry: Inquiry): LucideIcon {
@@ -119,10 +121,11 @@ export function InquiryStrip({
   /** a touch screen: chips above the bottom sheet, not a list */
   sheet?: boolean;
 }) {
+  const site = useSite();
   const items = useMemo(
     () =>
       along.candidates.map((c) => {
-        const card = inquiryCard(c.inquiry, null);
+        const card = inquiryCard(c.inquiry, null, cardCredits(site));
         return {
           icon: kindIcon(c.inquiry),
           key: c.key,
@@ -131,7 +134,7 @@ export function InquiryStrip({
           distance: distanceLabel(c.distance),
         };
       }),
-    [along]
+    [along, site]
   );
   // the chips scroll sideways: the chosen one into view
   const chips = useRef<HTMLElement | null>(null);

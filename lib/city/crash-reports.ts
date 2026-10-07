@@ -44,7 +44,8 @@ import { RESUME_WINDOW_MS } from "./gpu-safety";
  * What goes out is what the trail holds and nothing else: the path (no
  * query), the user agent, the screen and the device's memory, the
  * renderer, the events (`scrub`bed) and the beats — no position (the trail
- * has none), no user id (a session's id names the page, not the visitor),
+ * has none: the URL it keeps is the path and the QA knobs, and the hand-off
+ * between cities travels in the fragment), no user id (a session's id names the page, not the visitor),
  * no IP address (`sdk.settings.infer_ip: "never"`: Sentry infers none),
  * no cookie. No DOM.
  */
@@ -60,14 +61,19 @@ export const PROBLEM_KINDS: ReadonlySet<string> = new Set([
   "boot failed",
   // a GPU allocation that failed in a compile: the page sheds and goes on
   "alloc-failed",
+  // a dressing's build threw: the tile stays bare
+  "dressing failed",
+  // Modell's Ausschnitt could not build its programs: it is lifted
+  "cut-out failed",
   // the render stopped and the page did not reload: the failure card
   "gpu failed",
 ]);
 // Not "render stopped": it always follows a lost device or a failed frame,
 // which say why. Nor what the viewer notes as it copes — "gpu reclaimed"
 // (a GPU the system took while the page was in the background, restored
-// by a reload), "memory emergency", "net-retry", "net-wait", "safety":
-// those are the trail's breadcrumbs, never an event of their own.
+// by a reload), "memory emergency", "net-retry", "net-wait", "safety",
+// "error repeated" (the count of an error noted already): those are the
+// trail's breadcrumbs, never an event of their own.
 
 /**
  * The problems that end the page: the render stops after them, or the boot

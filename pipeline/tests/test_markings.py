@@ -297,23 +297,49 @@ def test_the_last_row_used_to_clip_the_first():
     assert paint_lost(rows, index_raster(rows, KM2, 2048), KM2)[0] == (0.0, 0.0)
 
 
-DLM = Path(__file__).resolve().parents[2] / "data" / "dlm"
+# Every site whose data is on disk, as test_committed.py walks it.
+DLMS = sorted(p for p in (Path(__file__).resolve().parents[2] / "data").glob("*/dlm"))
+TABLES = sorted(p for dlm in DLMS for p in dlm.glob("markings_*.json"))
+# The share of a row's samples another row may take at the full raster
+# (2048², ≈1 m texels). Two crossings that cross each other at an angle (an
+# X at a junction, not merged: they are not on one axis) share a few texels
+# at their corners, and a texel can only name one of them. The bound is the
+# measured worst case with headroom: 0.27 % (München 32690_5332) under 0.5 %.
 DROPPED_OK = 0.005
 
 
-@pytest.mark.parametrize("table", sorted(DLM.glob("markings_*.json")), ids=lambda p: p.stem)
+def _dropped_ok(px: int, full: int) -> float:
+    """The bound at a px² raster, scaled with the texel: 0.5 % at 2048², 1 %
+    at the phones' 1024², each the measured worst case with headroom (at
+    1024², 0.8 %: a signalled crossing over a zebra in Leipzig,
+    33318_5688). A coarser raster can lose paint the full one does not:
+    its texels are 2 m wide and its core 1.45 m, not 0.75 m
+    (`markings.reach`), so where a smaller row lies within a texel of a
+    larger one, all four texels the shader reads around a point of the
+    larger row's paint can belong to the smaller — the Leipzig row loses
+    nothing at 2048²."""
+    return DROPPED_OK * full / px
+
+
+def _epsg(doc: dict) -> int:
+    """The table's CRS, `"EPSG:25832"` → 25832 (three of the seven sites are
+    not in zone 33)."""
+    return int(str(doc["crs"]).rsplit(":", 1)[-1])
+
+
+@pytest.mark.parametrize(
+    "table", TABLES, ids=lambda p: f"{p.parent.parent.name}/{p.stem.removeprefix('markings_')}"
+)
 def test_the_committed_rasters_lose_no_paint(table):
     doc = json.loads(table.read_text())
     xmin, ymin, xmax, ymax = doc["bounds"]
-    tile = Tile(doc["tile"], (xmin, ymin, xmax, ymax), 25833, Path("."), Path("."))
+    tile = Tile(doc["tile"], (xmin, ymin, xmax, ymax), _epsg(doc), Path("."), Path("."))
     rows = [[xmin + r[0], ymax + r[1], *r[2:]] for r in doc["markings"]]
+    full = doc["size"]
     for name in (f"markings_{doc['tile']}.png", f"markings_low_{doc['tile']}.png"):
-        grey = np.asarray(Image.open(DLM / name))
+        grey = np.asarray(Image.open(table.parent / name))
         px = grey.shape[0]
         q = grey.reshape(px, px, 4).astype(np.uint16)
         lost = paint_lost(rows, q[..., 0] + 256 * q[..., 3], tile)
-        # Two crossings that cross each other at an angle (an X at a
-        # junction, not merged: they are not on one axis) share a few
-        # texels at their corners, and a texel can only name one of them:
-        # up to ~0.1 % of such a row's samples fall there. Nothing larger.
-        assert [i for i, (_, d) in enumerate(lost) if d > DROPPED_OK] == [], name
+        ok = _dropped_ok(px, full)
+        assert [i for i, (_, d) in enumerate(lost) if d > ok] == [], name

@@ -451,7 +451,7 @@ def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int, margin: float = 5
     try:
         with urllib.request.urlopen(req, timeout=120) as res:
             rows = json.load(res)["results"]["bindings"]
-    except OSError as err:
+    except (OSError, ValueError, KeyError) as err:
         print(f"{tile_id}: Wikidata not fetched ({err}); bridges keep the OSM structure")
         return
     bridges = []
@@ -470,7 +470,11 @@ def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int, margin: float = 5
         )
     dest.parent.mkdir(parents=True, exist_ok=True)
     doc = {"source": "Wikidata (CC0)", "query": SPARQL, "bridges": bridges}
-    dest.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    # through a `.part` file: a run killed mid-write leaves no truncated
+    # cache that every later fetch would keep
+    part = dest.with_name(dest.name + ".part")
+    part.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    part.replace(dest)
     print(f"{tile_id}: {len(bridges)} Wikidata bridges → {dest}")
 
 
@@ -481,7 +485,12 @@ def load_wikidata(tile: Tile) -> list[dict]:
         return []
     to_tile = Transformer.from_crs(4326, tile.epsg, always_xy=True)
     out = []
-    for b in json.loads(path.read_text())["bridges"]:
+    try:
+        doc = json.loads(path.read_text())
+    except ValueError as err:
+        path.unlink()
+        raise OSError(f"{path}: not JSON — deleted; run bun run fetch again") from err
+    for b in doc["bridges"]:
         x, y = to_tile.transform(b["lon"], b["lat"])
         out.append({**b, "x": x, "y": y})
     return out

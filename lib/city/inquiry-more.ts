@@ -8,9 +8,9 @@
  * position and kind — and quotes its source. No THREE, no DOM.
  */
 import {
+  type CardCredits,
   factLines,
   firstText,
-  GEOSN_CREDIT,
   type InquiryCard,
   metres,
   osmSource,
@@ -90,15 +90,28 @@ export type MoreInquiry =
   | LandingInquiry
   | StopInquiry;
 
-const DOM = {
-  label: "Digitales Oberflächenmodell DOM1",
-  credit: GEOSN_CREDIT,
-};
+const DOM_LABEL = "Digitales Oberflächenmodell DOM1";
+
+/** A vegetation row's source: the Basis-DLM's, or where the provider has
+ *  none (Hamburg, Berlin: landcover_osm.py) OSM's hedges and tree rows. */
+function rowSource(
+  what: string,
+  provenance: SiteProvenance | null,
+  credits: CardCredits
+): string {
+  return credits.dlm
+    ? sourceLine(provenance, "dlm", [what], {
+        label: "Basis-DLM",
+        credit: credits.provider,
+      })
+    : osmSource(provenance, [what], "trees");
+}
 
 /** A tree the scene draws without a register's name. */
 export function canopyCard(
   t: CanopyInquiry,
-  provenance: SiteProvenance | null
+  provenance: SiteProvenance | null,
+  credits: CardCredits
 ): InquiryCard {
   const facts = factLines([
     ["Höhe", t.height ? `${metres(t.height)}, gemessen` : ""],
@@ -106,15 +119,15 @@ export function canopyCard(
     ["Art", "nicht bekannt"],
   ]);
   const sources = {
-    dom: sourceLine(provenance, "dom", ["Lage und Höhe der Krone"], DOM),
+    dom: sourceLine(provenance, "dom", ["Lage und Höhe der Krone"], {
+      label: DOM_LABEL,
+      credit: credits.provider,
+    }),
     lsc: sourceLine(provenance, "lsc", ["Lage, Höhe und Krone"], {
       label: "Laserscan",
-      credit: GEOSN_CREDIT,
+      credit: credits.provider,
     }),
-    row: sourceLine(provenance, "dlm", ["Baumreihe"], {
-      label: "Basis-DLM",
-      credit: GEOSN_CREDIT,
-    }),
+    row: rowSource("Baumreihe", provenance, credits),
   };
   return {
     kicker: t.source === "row" ? "Baum einer Baumreihe" : "Baum",
@@ -133,7 +146,8 @@ export function canopyCard(
 /** A hedge. */
 export function hedgeCard(
   h: HedgeInquiry,
-  provenance: SiteProvenance | null
+  provenance: SiteProvenance | null,
+  credits: CardCredits
 ): InquiryCard {
   const measured = h.source === "osm+lsc";
   const facts = factLines([
@@ -146,18 +160,13 @@ export function hedgeCard(
   ]);
   const sources =
     h.source === "dlm"
-      ? [
-          sourceLine(provenance, "dlm", ["Hecke"], {
-            label: "Basis-DLM",
-            credit: GEOSN_CREDIT,
-          }),
-        ]
+      ? [rowSource("Hecke", provenance, credits)]
       : [
           osmSource(provenance, ["Hecke"], "trees"),
           measured
             ? sourceLine(provenance, "lsc", ["Höhe gemessen"], {
                 label: "Laserscan",
-                credit: GEOSN_CREDIT,
+                credit: credits.provider,
               })
             : "",
         ].filter(Boolean);
@@ -310,13 +319,14 @@ export function landingCard(
 /** The card of any of these. */
 export function moreCard(
   inquiry: MoreInquiry,
-  provenance: SiteProvenance | null
+  provenance: SiteProvenance | null,
+  credits: CardCredits
 ): InquiryCard {
   switch (inquiry.kind) {
     case "canopy":
-      return canopyCard(inquiry, provenance);
+      return canopyCard(inquiry, provenance, credits);
     case "hedge":
-      return hedgeCard(inquiry, provenance);
+      return hedgeCard(inquiry, provenance, credits);
     case "lamp":
       return lampCard(inquiry, provenance);
     case "furniture":

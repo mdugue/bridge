@@ -147,9 +147,10 @@ test("a beat is one line, its parts two spaces apart, older records' too", () =>
   );
 });
 
-test("the page's stats count only the beats rendered in view", () => {
+test("the page's frame rate counts only the beats rendered in view; its memory every beat", () => {
   const trail = createTrail(setup);
-  pushBeat(trail, { ...beat(1, 0), frames: 0 }); // before the first frame
+  // before the first frame: the boot's memory, no frame rate
+  pushBeat(trail, { ...beat(1, 0), frames: 0, heapMB: 120 });
   pushBeat(trail, beat(2, 8));
   pushBeat(trail, { ...beat(3, 50), heldMB: 640, heapMB: 210 });
   trail.state = "hidden";
@@ -161,11 +162,26 @@ test("the page's stats count only the beats rendered in view", () => {
     fpsSum: 83,
     fps: [1, 0, 1, 0, 1],
     maxGpuMB: 180.4,
-    maxHeldMB: 640,
+    maxHeldMB: 900,
     maxHeapMB: 210,
   });
   // The ring still holds every beat, for the report's last seconds.
   expect(trail.beats).toHaveLength(5);
+});
+
+test("a beat in view without a new frame is 0 fps; one after the render stopped is none", () => {
+  const trail = createTrail(setup);
+  pushBeat(trail, beat(2, 30));
+  // the main thread froze: no frame since the last beat, yet in view
+  pushBeat(trail, { ...beat(2, 12), t: 3 });
+  // the render stopped behind the failure card, the memory still held
+  pushBeat(trail, { ...beat(4, 0), stopped: true, gpuMB: 300, heldMB: 700 });
+  expect(trail.stats?.beats).toBe(2);
+  expect(trail.stats?.fpsSum).toBe(30);
+  expect(trail.stats?.fps).toEqual([1, 0, 0, 1, 0]);
+  expect(trail.stats?.maxGpuMB).toBe(300);
+  expect(trail.stats?.maxHeldMB).toBe(700);
+  expect(trail.beats).toHaveLength(3);
 });
 
 test("the boot's milestones outlive the event ring", () => {

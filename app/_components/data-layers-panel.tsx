@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   BIKE_DIRECTION_TINTS,
   type BikeCounter,
+  countClock,
   tintCss,
 } from "@/lib/city/bike-counts";
 import type { DataLayerDef, DataLayerKey } from "@/lib/city/data-layers";
@@ -80,10 +81,7 @@ function countHour(counters: BikeCounter[]): string | null {
   if (times.length === 0) {
     return null;
   }
-  const t = new Date(Math.max(...times));
-  const hh = String(t.getHours()).padStart(2, "0");
-  const mm = String(t.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm} Uhr`;
+  return `${countClock(new Date(Math.max(...times)))} Uhr`;
 }
 
 /**
@@ -206,10 +204,10 @@ function germanDate(iso: string): string {
 /** The timetable trams in words: how many run now, from which day's
  *  timetable. */
 export function TramStatusLine({ status }: { status: TramCarsStatus | null }) {
-  if (!status) {
+  if (!status || status.failed) {
     return (
       <span className="text-[11px] text-muted-foreground">
-        Fahrplan wird geladen …
+        {status?.failed ?? "Fahrplan wird geladen …"}
       </span>
     );
   }

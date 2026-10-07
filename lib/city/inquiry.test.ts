@@ -17,6 +17,15 @@ import {
   type ObjectFacts,
 } from "./object-facts";
 import type { SiteProvenance } from "./provenance";
+import type { CardCredits } from "./card-lines";
+
+/** Dresden's credits (sites/providers.ts, sites/dresden.ts) as the HUD
+ *  hands them over. */
+const DRESDEN: CardCredits = {
+  dlm: true,
+  provider: "Quelle: GeoSN, dl-de/by-2-0",
+  register: "Landeshauptstadt Dresden, dl-de/by-2-0",
+};
 
 const facts = (over: Partial<ObjectFacts> = {}): ObjectFacts => ({
   buildingId: "DESNATPU1000HJx5",
@@ -124,7 +133,8 @@ test("the Building's own tree facts win over its parts' (the bake's union)", () 
         object({ objectIndex: 1, facts: facts({ height: 24, area: 300 }) }),
       ],
     },
-    null
+    null,
+    DRESDEN
   );
   const fact = (label: string) =>
     card.facts.find((f) => f.label === label)?.value;
@@ -143,7 +153,8 @@ test("a roof rebuilt from the surface model is said to be measured there", () =>
       }),
       tree: [],
     },
-    provenance
+    provenance,
+    DRESDEN
   );
   expect(card.facts).toContainEqual({
     label: "Dach",
@@ -162,7 +173,8 @@ test("a rebuilt roof with measured faces is said to be shaped as measured", () =
       picked: object({ facts: facts({ roofType: MEASURED_SHAPE }) }),
       tree: [],
     },
-    provenance
+    provenance,
+    DRESDEN
   );
   expect(card.facts).toContainEqual({
     label: "Dach",
@@ -196,7 +208,7 @@ test("a named church: name as title, use above, every source quoted", () => {
     picked: part,
     tree: [object({ building: true, objectIndex: 2 }), part, tower],
   };
-  const card = inquiryCard(inquiry, provenance);
+  const card = inquiryCard(inquiry, provenance, DRESDEN);
   expect(card.title).toBe("Kreuzkirche");
   expect(card.kicker).toBe("Kirche");
   expect(card.address).toBe("An der Kreuzkirche 6");
@@ -224,7 +236,8 @@ test("an unspecified house says so and quotes no OSM it did not use", () => {
       picked: object({ facts: facts({ height: 12 }) }),
       tree: [],
     },
-    null
+    null,
+    DRESDEN
   );
   expect(card.title).toBe("Gebäude");
   expect(card.facts[0]).toEqual({ label: "Nutzung", value: "nicht angegeben" });
@@ -233,6 +246,29 @@ test("an unspecified house says so and quotes no OSM it did not use", () => {
   expect(card.sources[0]).toBe(
     "3D-Stadtmodell LoD2 · Quelle: GeoSN, dl-de/by-2-0"
   );
+});
+
+test("without the manifest a card on another Land's site credits that Land, not GeoSN", () => {
+  const credits: CardCredits = {
+    dlm: false,
+    provider: "Quelle: LGV Hamburg, dl-de/by-2-0",
+  };
+  const shed = object({ source: OBJECT_SOURCE_SCAN });
+  const lod2 = inquiryCard(
+    { kind: "building", tile: "t", picked: object(), tree: [] },
+    null,
+    credits
+  );
+  const scan = inquiryCard(
+    { kind: "building", tile: "t", picked: shed, tree: [shed] },
+    null,
+    credits
+  );
+  expect(lod2.sources[0]).toBe(
+    "3D-Stadtmodell LoD2 · Quelle: LGV Hamburg, dl-de/by-2-0"
+  );
+  expect(scan.sources[0]).toContain("Quelle: LGV Hamburg, dl-de/by-2-0");
+  expect([...lod2.sources, ...scan.sources].join()).not.toContain("GeoSN");
 });
 
 test("a shed from the laser scan is marked as not in the official model", () => {
@@ -247,7 +283,8 @@ test("a shed from the laser scan is marked as not in the official model", () => 
   });
   const card = inquiryCard(
     { kind: "building", tile: "t", picked: shed, tree: [shed] },
-    provenance
+    provenance,
+    DRESDEN
   );
   expect(card.title).toBe("Kleinbau");
   expect(card.facts.map((f) => f.label)).toEqual(["Höhe", "Grundfläche"]);

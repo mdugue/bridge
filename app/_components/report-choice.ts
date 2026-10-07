@@ -1,3 +1,5 @@
+import { STORAGE_KEYS } from "./storage-keys";
+
 /**
  * Whether this browser sends crash reports (crash-reports.ts, ADR 0043),
  * and the visitor's "no" to them (ADR 0045): set on /datenschutz, kept in
@@ -9,7 +11,7 @@
  * for this tab, in memory: the trail and its reports run without storage
  * too, and an objection must not depend on it.
  */
-const DECLINED_KEY = "crash-reports.declined";
+const DECLINED_KEY = STORAGE_KEYS.reportsDeclined;
 
 /** The "no" of this tab, for a browser that keeps nothing. */
 let declinedHere = false;

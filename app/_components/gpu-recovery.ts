@@ -5,6 +5,7 @@ import {
   type RecoveryHistory,
   type SafetyLevel,
 } from "@/lib/city/gpu-safety";
+import { SESSION_KEYS } from "./storage-keys";
 
 /**
  * A lost GPU, recovered by a new page where the player stood. iOS takes
@@ -25,7 +26,7 @@ import {
  * the same level, under a cap of its own.
  */
 
-const KEY = "gpu-recovery";
+const KEY = SESSION_KEYS.gpuRecovery;
 /** how long a page counts as following a recovery (recentlyRecovered) */
 const RECENT_MS = 120_000;
 

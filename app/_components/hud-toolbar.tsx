@@ -8,9 +8,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "cn";
+import { STORAGE_KEYS } from "./storage-keys";
 
 /** localStorage key of the minimised state — a per-viewer convenience. */
-const COLLAPSED_KEY = "hud-toolbar-collapsed";
+const COLLAPSED_KEY = STORAGE_KEYS.toolbarCollapsed;
 
 export interface HudTool {
   /** a spinner instead of the icon while it works */

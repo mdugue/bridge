@@ -64,7 +64,8 @@ export function colonyCropUv(
 }
 
 /** The orchard trees as the tree layer's cadastre features (the "small"
- *  archetype: a round crown on a ≈1.3 m stem), deciduous. */
+ *  archetype: a round crown on a ≈1.3 m stem), deciduous, marked
+ *  `s: "orchard"` (the card names them). */
 export function orchardTrees(features: CultivatedFeature[]): TreeFeature[] {
   const small = TREE_ARCHETYPES.indexOf("small");
   const out: TreeFeature[] = [];
@@ -75,7 +76,7 @@ export function orchardTrees(features: CultivatedFeature[]): TreeFeature[] {
     const { h, d } = f.properties;
     out.push({
       geometry: f.geometry,
-      properties: { a: small, h: h ?? 4.5, d: d ?? 4, l: "d" },
+      properties: { a: small, h: h ?? 4.5, d: d ?? 4, l: "d", s: "orchard" },
     });
   }
   return out;

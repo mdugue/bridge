@@ -58,7 +58,7 @@ const TREE_CELL = 64;
 /** What a tile knows of its trees beyond their solids, by feature index. */
 interface TreeTable {
   crown: Float32Array;
-  /** bit 1 OSM, bit 2 conifer */
+  /** bit 1 OSM, bit 2 conifer, bit 4 orchard */
   flags: Uint8Array;
   genus: Uint8Array;
   height: Float32Array;
@@ -77,6 +77,7 @@ function treeInquiry(t: TreeTable, i: number, tile: string): FeatureInquiry {
     position: [t.position[i * 2], t.position[i * 2 + 1]],
     osm: (t.flags[i] & 1) === 1,
     conifer: (t.flags[i] & 2) === 2,
+    ...((t.flags[i] & 4) === 4 ? { orchard: true } : {}),
     genus: TREE_GENERA[t.genus[i]] ?? "",
     height: t.height[i],
     crown: t.crown[i],
@@ -200,7 +201,9 @@ export function treeSets(
       table.trunk[i] = p.t ?? 0;
       table.genus[i] = p.gn ?? 0;
       table.flags[i] =
-        (p.s === "osm" ? 1 : 0) | (archetype === "conifer" ? 2 : 0);
+        (p.s === "osm" ? 1 : 0) |
+        (archetype === "conifer" ? 2 : 0) |
+        (p.s === "orchard" ? 4 : 0);
       return [
         x,
         z,
