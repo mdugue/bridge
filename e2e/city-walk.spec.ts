@@ -970,9 +970,15 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await expect(card).toBeVisible();
       // The LoD2 Building's gml:id — the key every other dataset joins on.
       await expect(card).toContainText(/DESNAT\w+/);
+      // the sources are folded under "Daten"; unfolded, the card's own
+      // lines and what the building as drawn is made of (a lazy chunk)
+      await card.getByTestId("inquiry-data-toggle").click();
       await expect(card).toContainText("Quelle: GeoSN, dl-de/by-2-0");
       // the provenance manifest arrives with the first card: the edition
       await expect(card).toContainText(/Modell \d{4}/);
+      await expect(card.getByTestId("inquiry-data")).toContainText(
+        "Im Viewer berechnet"
+      );
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
       await page.keyboard.press("i");
@@ -1027,6 +1033,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await expect(card).toContainText("Stadtbaum");
       await expect(card).toContainText("Lage");
       // the facts file arrived: the source line names what it gave
+      await card.getByTestId("inquiry-data-toggle").click();
       await expect(card).toContainText(/Art.*: Stadtbaumkataster/);
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
@@ -1411,6 +1418,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
         page.getByRole("button", { name: "Angaben einklappen" })
       ).toHaveAttribute("aria-expanded", "true");
       await expect(sheet).toContainText("Kennung");
+      await sheet.getByTestId("inquiry-data-toggle").tap();
       await expect(sheet).toContainText("Quelle: GeoSN");
       // The drawer's own close: it slides away, then the card is gone.
       await page.getByRole("button", { name: "Karte schließen" }).tap();

@@ -965,7 +965,11 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   (`Instances`), chunked into 250 m cells for frustum culling. `pipeline/bake/landcover.py`
   (`vegrows_<tile>.geojson`) → `vegetation-layer.ts`, per fine terrain tile.
 - **Canopy fill** — `nDOM = DOM1 − DGM1`, one tree per ~7 m cell at the tallest
-  pixel, scaled to measured height, **gated off road/bridge/water** via the DLM
+  pixel, as tall as measured and **0.58 × its height wide**
+  (`CROWN_TO_HEIGHT`, `lib/city/tree-placement.ts`: the median of Dresden's
+  50 123 surveyed trees with height and crown, the same in every 5 m class;
+  until 2026-10-07 the generic crown was scaled uniformly by `h / 5.8`,
+  0.88 × h wide and 1.1 × h tall, so a park point stood under ~5 crowns), **gated off road/bridge/water** via the DLM
   class raster, and off everything within 10 m of a DLM bridge (a bridge's
   steel on a park bank is as tall as a crown: the Blaues Wunder's pylons came
   out as two trees; without a DLM the decks the rail step baked from OSM,
@@ -2397,8 +2401,9 @@ research that produced them):
 6. **Real trees from the laser-scan point cloud** — segment high-veg returns →
    per-tree position/height/crown; bake to per-tile GeoJSON. *(First step ✅
    above: `canopyx` crown peaks with `h` + `r`, outside the canopy mask only,
-   thinned against the cadastre; the renderer still sizes a crown from `h`
-   alone.)*
+   thinned against the cadastre; since 2026-10-07 the renderer sizes such a
+   crown from its `r`, 2r within 0.4–0.75 × h — the radius is the distance
+   to the crown mass's edge at the peak, so a group's would be too wide.)*
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
    low-sun shadows clip the 110 m frustum). *Amended 2026-09-25:* the baked
    horizon (✅ above, [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md))

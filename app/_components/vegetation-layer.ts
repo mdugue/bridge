@@ -312,6 +312,26 @@ export function swapCrownLod(
 
 export const TRUNK_H = 2.4;
 const CROWN_R = 2.1;
+
+/** How far a crown's own lobes move in and out (in the geometry's units,
+ *  a crown ~2 across), and how far its top leans (per unit above the
+ *  trunk). */
+const SHAPE_BULGE = 0.62;
+const SHAPE_LEAN = 0.09;
+
+/**
+ * Recomputes a crown geometry's bounding sphere and grows it by the most
+ * `crownShape` moves a vertex, so a chunk's cull sphere (Instances fits it
+ * from the geometry's) still holds every reshaped crown. Returns `g`.
+ */
+export function padCrownSphere(g: BufferGeometry): BufferGeometry {
+  g.computeBoundingSphere();
+  if (g.boundingSphere) {
+    g.boundingSphere.radius += SHAPE_BULGE + SHAPE_LEAN * 5;
+  }
+  return g;
+}
+
 const HEDGE_H = 1.3;
 const HEDGE_W = 0.9;
 
@@ -349,7 +369,8 @@ function writePlacements(mesh: Instances, items: Placement[], widen = 1): void {
     const p = items[i];
     dummy.position.set(p.x, p.y, p.z);
     dummy.rotation.set(0, p.rot, 0);
-    dummy.scale.set(p.s * widen, p.s, p.s * widen);
+    const w = (p.w ?? p.s) * widen;
+    dummy.scale.set(w, p.s, w);
     dummy.updateMatrix();
     mesh.setMatrixAt(i, dummy.matrix);
   }
@@ -418,7 +439,7 @@ export function buildCrownGeo(detail = 2): BufferGeometry {
     nrm.setXYZ(i, v.x, v.y, v.z);
   }
   nrm.needsUpdate = true;
-  return g;
+  return padCrownSphere(g);
 }
 
 /**
@@ -487,7 +508,7 @@ export function buildCrownGeoRich(): BufferGeometry {
     nrm.setXYZ(i, v.x, v.y, v.z);
   }
   nrm.needsUpdate = true;
-  return merged;
+  return padCrownSphere(merged);
 }
 
 /**
@@ -510,7 +531,7 @@ export function buildStyleCrownGeo(
     const g = new IcosahedronGeometry(CROWN_R * 0.98, tier === "far" ? 0 : 1);
     g.scale(1, 1.12, 1);
     g.translate(0, cy, 0);
-    return g;
+    return padCrownSphere(g);
   }
   const detail = tier === "rich" ? 2 : 1;
   // [x, y, z, radius] in crown radii, around the crown centre.
@@ -536,7 +557,7 @@ export function buildStyleCrownGeo(
   });
   const merged = mergeGeometries(parts) ?? parts[0] ?? buildCrownGeo(detail);
   merged.translate(0, cy, 0);
-  return merged;
+  return padCrownSphere(merged);
 }
 
 /** The value-noise hash (a smoothed lattice of sin hashes). */
@@ -601,9 +622,9 @@ const instanceColumn = (i: number): V4 =>
  * Y-up scene, so local Y is already up. Returns the bent vertex and the
  * centred gust signal (the brightness pulse rides on it).
  */
-function crownSway(time: Live): { gust: F; local: V3 } {
+function crownSway(time: Live, base: V3): { gust: F; local: V3 } {
   const phase = dot(instanceColumn(3).xz, vec2(0.07, 0.11));
-  const k0 = clamp(positionGeometry.y.div(7), 0, 1);
+  const k0 = clamp(base.y.div(7), 0, 1);
   const k = k0.mul(k0).mul(0.16);
   const gust = sin(time.mul(0.38).add(phase)).add(
     sin(time.mul(0.8).add(phase.mul(1.7))).mul(0.5)
@@ -611,8 +632,41 @@ function crownSway(time: Live): { gust: F; local: V3 } {
   const side = sin(time.mul(0.31).add(phase).add(1.7)).mul(0.6);
   return {
     gust,
-    local: positionGeometry.add(vec3(gust.mul(k), 0, side.mul(k))),
+    local: base.add(vec3(gust.mul(k), 0, side.mul(k))),
   };
+}
+
+/**
+ * Every tree its own crown: the shared geometry pushed in and out along
+ * the direction from its centre by a few broad waves whose phases come from where
+ * the tree stands, and its top leaned a little to one side. One geometry
+ * and one material for every tree, so no draw call and no build is added;
+ * the cast shadow takes the same shape (`castShadowPositionNode`). The
+ * waves run over the direction from the crown's centre, so they keep
+ * their size on a crown of any scale and close smoothly round it; below
+ * the trunk's top they fade out, so the crown still sits on its stem.
+ */
+export function crownShape(): V3 {
+  const origin = instanceColumn(3);
+  const s = fract(origin.xz.mul(vec2(0.0173, 0.0219))).mul(6.2832);
+  const p = positionGeometry;
+  // a direction from the position alone (never the normal: a faceted
+  // crown, Papier's card, carries several normals per corner and would
+  // tear open), about the generic crown's centre
+  const n = normalize(
+    p.sub(vec3(0, TRUNK_H + CROWN_R * 0.5, 0)).add(vec3(0, 1e-3, 0))
+  );
+  const wave = sin(n.x.mul(2.3).add(s.x))
+    .mul(sin(n.z.mul(2.1).add(s.y)))
+    .mul(0.55)
+    .add(sin(n.y.mul(3.1).add(n.x.mul(1.3)).add(s.x.add(s.y))).mul(0.3))
+    .add(sin(n.z.mul(4.3).sub(n.y.mul(1.7)).add(s.y.mul(2))).mul(0.15));
+  const inCrown = smoothstep(TRUNK_H * 0.7, TRUNK_H + 0.6, p.y);
+  const lean = max(p.y.sub(TRUNK_H), 0).mul(SHAPE_LEAN);
+  const leanDir = vec3(sin(s.x.add(s.y)), 0, sin(s.x.sub(s.y).add(1.57)));
+  return p
+    .add(n.mul(wave.mul(SHAPE_BULGE).mul(inCrown)))
+    .add(leanDir.mul(lean));
 }
 
 /**
@@ -718,10 +772,11 @@ export function buildCrownMaterial(
   });
   m.name = bare ? "crown-bare" : "crown-leafy";
   m.userData.crownUniforms = u;
-  const sway = crownSway(u.time);
+  const shape = crownShape();
+  const sway = crownSway(u.time, shape);
   m.positionNode = instancePosition(sway.local);
-  m.castShadowPositionNode = instancePosition();
-  const crownScale = varying(length(instanceColumn(0).xyz));
+  m.castShadowPositionNode = instancePosition(shape);
+  const crownScale = varying(length(instanceColumn(1).xyz));
   const gust = varying(sway.gust);
   const tinted = materialColor.mul(instanceTint());
   if (!bare) {

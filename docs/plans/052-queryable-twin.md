@@ -178,6 +178,65 @@ tree's card; the timetable's trams as a kind (a car moves, so the
 pick runs on its sections' current frames); furniture, lamps and stops as further kinds (their files
 are in the dressing already).
 
+### 4c. The data behind each thing — **BUILT** (2026-10-07)
+
+The card's source lines were the bottom third of every card and read as
+small print between the facts and the next question. They now sit
+folded under **Daten** (`inquiry-data.tsx`), which unfolds into two
+parts: *Angaben* — the card's own source lines, where each stated fact
+comes from — and *Darstellung* — what the thing as drawn is made of:
+each dataset with what it gave the form, colour, place and light (the
+LoD2's walls and roof, the surface model's rebuilt roof, OSM's facade
+colour and shop fronts, the orthophoto's roof colour, the sky light
+baked from DGM1 and LoD2, a tree's register and its NDVI leaf colour, a
+bridge's Wikidata item), its edition, its credit and a link to it, and
+last what the viewer works out itself (the tint's scatter, the crown
+forms, the hour's light). `lib/city/lineage.ts` decides, only from what
+the object carries (its flags, source and facts; the feature's
+properties; the site's products), and is its own chunk, imported when
+the section is first opened or the pointer nears its toggle — the boot
+carries none of it, and nothing new is fetched (the manifest is the
+card's).
+
+### 4d. What the ray met — **BUILT** (2026-10-07)
+
+A click used to answer with the nearest thing on its ray, and a tree's
+crown is a stand-in wider than its leaves: a house half behind a street
+tree was answered as the tree. The probe now keeps everything a ray
+meets before the ground (`cityObjectsAlong` for the buildings, one hit a
+tree; `hitsInSets` for the things — a set's `along`, else its nearest)
+and chooses the first *solid* thing on the exact ray, a crown only where
+nothing solid stands behind it (`firstSolid`); the tolerant rings still
+vote when the exact ray meets nothing. The rest are candidates
+(`mergeCandidates`: the exact ray's hits and each ring ray's first two,
+each thing once, at most eight, nearest first, the chosen one never cut),
+listed apart from the card, so the card stays about one thing — the way
+an editor's "select the layer under the pointer" list works
+(`inquiry-strip.tsx`): on a desktop a quiet glass list in the card's
+column, under it ("Hier auch · vorn zuerst", an icon, the
+card's title and the distance each, the chosen one marked); on a touch
+screen a row of chips above the folded sheet, scrolled to the chosen
+one. The pointer on a candidate moves the outline to it for as long as
+it stays (`previewCandidate`), a click shows it in the card and moves
+the hatch (`selectCandidate`). A ring a finger wide pulses once at the
+tap: how far round it the question looked.
+
+### 4e. Everything the scene draws — **BUILT** (2026-10-07)
+
+Beyond the register's trees, the monuments and the bridges, every tree
+the canopy draws is asked now — the surface model's crowns, the laser
+scan's, the Basis-DLM rows' trees, placed as the layer places them and
+with the register's veto (`canopySets`, packed like the register's) —
+and the hedges (OSM's and the Basis-DLM's, one thing along the whole
+line), the street lamps, the street furniture and playgrounds, the tram
+stops and the landing stages (`lib/city/ask-more.ts`). Each card says
+what its data knows and no more (`lib/city/inquiry-more.ts`): a canopy
+tree its measured height and "Art: nicht bekannt", a lamp its post as
+assumed, a bench its length, backrest and facing. Crowns, hedges and a
+playground's outline are porous like the register's crowns: chosen only
+where nothing solid stands behind them. Squares (*Plätze*) are not asked
+yet: no bake keeps them as areas; that is a new OSM product of its own.
+
 ### 4b. Aim and ask in live mode (S–M)
 
 With live mode on (the phone's compass and GPS steer the view), a tap

@@ -83,7 +83,7 @@ import {
 } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
-import type { Inquiry } from "@/lib/city/inquiry";
+import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import {
@@ -370,9 +370,10 @@ export interface CityWalkOptions {
   onFollowEnd?: () => void;
   /**
    * What was asked last ("Befragen", ADR 0042): a click, a long press or
-   * `I` at the crosshair; null when nothing stands there.
+   * `I` at the crosshair, or a candidate chosen from the strip; null when
+   * nothing stands there. `along`: everything the question's ray met.
    */
-  onInquiry?: (inquiry: Inquiry | null) => void;
+  onInquiry?: (inquiry: Inquiry | null, along: InquiryAlong | null) => void;
   /** walk, fly or Modell (plan 055): at the start of a switch */
   onModeChange?: (mode: ViewMode) => void;
   /**
@@ -443,6 +444,12 @@ export interface CityWalkHandle {
    * marks it and reports it through `onInquiry`; tests and QA call it.
    */
   inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
+  /** Shows another candidate of the last question (the strip's click):
+   *  marks it and reports it through `onInquiry`. */
+  selectCandidate: (index: number) => Inquiry | null;
+  /** Outlines a candidate of the last question while the pointer is on
+   *  it in the strip; null outlines the chosen one again. */
+  previewCandidate: (index: number | null) => void;
   /** The provenance manifest (lib/city/provenance.ts), when the tileset
    *  names one: the inquiry card's source lines. */
   provenanceUrl: string | null;
@@ -1708,18 +1715,46 @@ async function bootApp(
         };
       case "bikes":
         return { ...asked, credit: layerSources?.bikes?.credit };
+      case undefined:
+        return null;
       case "building":
       case "bridge":
       case "monument":
+      case "canopy":
+      case "furniture":
+      case "hedge":
+      case "lamp":
+      case "landing":
+      case "stop":
         return asked;
-      case undefined:
-        return null;
     }
   };
+  // the last question's candidates, with what the card needs of each
+  let along: InquiryAlong | null = null;
   const inquireAt = (ndc?: { x: number; y: number }): Inquiry | null => {
-    const inquiry = answered(probe.ask(ndc));
-    opts.onInquiry?.(inquiry);
+    const asked = probe.ask(ndc);
+    along = asked
+      ? {
+          at: ndc ?? null,
+          candidates: asked.candidates.map((c) => ({
+            ...c,
+            inquiry: answered(c.inquiry) ?? c.inquiry,
+          })),
+          selected: asked.selected,
+        }
+      : null;
+    const inquiry = along?.candidates[along.selected]?.inquiry ?? null;
+    opts.onInquiry?.(inquiry, along);
     return inquiry;
+  };
+  const selectCandidate = (index: number): Inquiry | null => {
+    const chosen = along?.candidates[index];
+    if (!(along && chosen && probe.select(index))) {
+      return null;
+    }
+    along = { ...along, selected: index };
+    opts.onInquiry?.(chosen.inquiry, along);
+    return chosen.inquiry;
   };
   /** Modell: centres the picture on the ground under a screen point. */
   const centreAt = (ndcX: number, ndcY: number) => {
@@ -2814,7 +2849,12 @@ async function bootApp(
 
   return {
     setSun,
-    clearInquiry: probe.clear,
+    clearInquiry: () => {
+      along = null;
+      probe.clear();
+    },
+    selectCandidate,
+    previewCandidate: probe.preview,
     demolishAtCrosshair,
     inquireAt,
     provenanceUrl: extras.provenance

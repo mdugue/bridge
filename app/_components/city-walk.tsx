@@ -30,7 +30,7 @@ import {
   type SkippedStages,
   type StageFractions,
 } from "@/lib/city/load-stages";
-import type { Inquiry } from "@/lib/city/inquiry";
+import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import type { BikeCounter } from "@/lib/city/bike-counts";
 import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
@@ -71,6 +71,7 @@ import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
 import { type ExportContext, saveImage, saveShadowStudy } from "./image-export";
 import { InquiryCard } from "./inquiry-card";
+import { InquiryStrip, InquiryTapRing } from "./inquiry-strip";
 import { useLiveMode } from "./live-mode";
 import {
   LocateMessage,
@@ -443,10 +444,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const [modelView, setModelView] = useState<ModelHud | null>(null);
   // Befragen (ADR 0042): what was asked last, while its card is open.
   const [inquiry, setInquiry] = useState<Inquiry | null>(null);
+  // everything the question's ray met (the strip beside the tap)
+  const [along, setAlong] = useState<InquiryAlong | null>(null);
   const [provenanceUrl, setProvenanceUrl] = useState<string | null>(null);
   const closeInquiry = useCallback(() => {
     handleRef.current?.clearInquiry();
     setInquiry(null);
+    setAlong(null);
   }, []);
   const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
@@ -680,9 +684,10 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           startTransition(() => setModelView(view));
         }
       },
-      onInquiry: (asked) => {
+      onInquiry: (asked, met) => {
         if (!cancelled) {
           setInquiry(asked);
+          setAlong(met);
         }
       },
       onPose: (pose) => {
@@ -764,6 +769,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       // The card belongs to the scene that marked its building: a route
       // kept hidden (and shown again) boots a new scene without that mark.
       setInquiry(null);
+      setAlong(null);
       clearTimeout(veilTimer);
       clearTimeout(streamFallback);
       handleRef.current = null;
@@ -958,11 +964,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
 
             {sound.on && <SoundGlyph onClick={sound.toggle} />}
             {inquiry && (
-              <InquiryCard
+              <InquiryPanel
+                along={along}
+                coarse={coarse}
                 inquiry={inquiry}
                 onClose={closeInquiry}
+                onPreview={(i) => handleRef.current?.previewCandidate(i)}
+                onSelect={(i) => handleRef.current?.selectCandidate(i)}
                 provenanceUrl={provenanceUrl}
-                sheet={coarse}
               />
             )}
             <SettingsToggle />
@@ -1056,5 +1065,61 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         />
       )}
     </SidebarProvider>
+  );
+}
+
+/**
+ * The asked thing's card and what else the ray met: on a desktop one
+ * column at the left, the card over the list; on a touch screen the sheet
+ * with the chips above it. The tap's ring either way.
+ */
+function InquiryPanel({
+  along,
+  coarse,
+  inquiry,
+  onClose,
+  onPreview,
+  onSelect,
+  provenanceUrl,
+}: {
+  along: InquiryAlong | null;
+  coarse: boolean;
+  inquiry: Inquiry;
+  onClose: () => void;
+  onPreview: (index: number | null) => void;
+  onSelect: (index: number) => void;
+  provenanceUrl: string | null;
+}) {
+  const strip = along && (
+    <InquiryStrip
+      along={along}
+      onPreview={onPreview}
+      onSelect={onSelect}
+      sheet={coarse}
+    />
+  );
+  const card = (
+    <InquiryCard
+      inquiry={inquiry}
+      onClose={onClose}
+      provenanceUrl={provenanceUrl}
+      sheet={coarse}
+    />
+  );
+  return (
+    <>
+      {along && <InquiryTapRing along={along} />}
+      {coarse ? (
+        <>
+          {strip}
+          {card}
+        </>
+      ) : (
+        <div className="pointer-events-none absolute inset-y-4 left-4 z-20 flex w-[min(22rem,calc(100%-2rem))] flex-col items-stretch gap-2">
+          {card}
+          {strip}
+        </div>
+      )}
+    </>
   );
 }

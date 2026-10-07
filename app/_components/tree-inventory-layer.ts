@@ -35,6 +35,7 @@ import {
   applySeasons,
   buildCrownGeo,
   buildCrownGeoRich,
+  padCrownSphere,
   bucketByCell,
   type CellLod,
   crownColor,
@@ -276,6 +277,11 @@ function buildShapeGeos(): ShapeGeos {
       cheap: fitted(reshapeCrown(cheap, map, c)),
       rich: fitted(reshapeCrown(rich, map, c)),
     };
+  }
+  // the crowns are reshaped per tree in the material (crownShape)
+  for (const pair of Object.values(out)) {
+    padCrownSphere(pair.cheap.geo);
+    padCrownSphere(pair.rich.geo);
   }
   return out;
 }

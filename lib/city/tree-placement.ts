@@ -37,8 +37,29 @@ export const CHUNK_SIZE = 250;
 export const TREE_SPACING = 9;
 /** Metres between hedge segments. */
 export const HEDGE_SPACING = 1.1;
-/** Approx visual height of an unscaled tree; canopy scale = h / this. */
-export const BASE_TREE_H = 5.8;
+/** The generic tree's top at scale 1 (the lobed crown's highest point,
+ *  vegetation-layer.ts `buildCrownGeo`); canopy scale = h / this, so a
+ *  tree stands as tall as the surface model measured it. */
+export const BASE_TREE_H = 6.4;
+/** The generic crown's width at scale 1 (m). */
+export const GENERIC_CROWN_W = 5.1;
+/**
+ * Crown width over tree height where nothing measured the crown: the median
+ * of Dresden's surveyed street trees (50 123 with height and crown measured,
+ * 0.58 in every 5 m height class from 10 to 30 m). The generic crown alone
+ * is 0.8 × its height, and a canopy tree on its 7 m grid drawn that wide
+ * stood under five crowns at once.
+ */
+export const CROWN_TO_HEIGHT = 0.58;
+/** A laser-scan crown's width from its measured radius, within these
+ *  shares of its height (the radius is the distance to the crown mass's
+ *  edge at the peak: of a lone tree its crown, of a group the group's). */
+const SCAN_CROWN_TO_HEIGHT: [number, number] = [0.4, 0.75];
+
+/** The horizontal scale that draws the generic crown `width` m across. */
+export function crownSpread(width: number): number {
+  return width / GENERIC_CROWN_W;
+}
 
 /**
  * One tree or hedge segment in the Y-up scene frame. `x` and `z` are the
@@ -50,7 +71,10 @@ export interface Placement {
   /** DOP NDVI 0..1 at this point (lush↔dry crown colour); undefined = no raster */
   ndvi?: number;
   rot: number;
+  /** the vertical scale (height / BASE_TREE_H) */
   s: number;
+  /** the horizontal scale (crown width / GENERIC_CROWN_W); absent = `s` */
+  w?: number;
   x: number;
   y: number;
   z: number;
@@ -107,12 +131,16 @@ export function rowPlacements(
       }
       const seed = ex * 0.13 + ey * 0.07 + i;
       const w = worldOf(ex, ey, ctx.offset);
+      const s = isHedge ? 1 : 0.8 + hash(seed) * 0.6;
       const place: Placement = {
         x: w.x,
         y: ground,
         z: w.z,
         rot: isHedge ? hash(seed) * 0.3 : hash(seed * 1.7) * Math.PI,
-        s: isHedge ? 1 : 0.8 + hash(seed) * 0.6,
+        s,
+        ...(isHedge
+          ? {}
+          : { w: crownSpread(s * BASE_TREE_H * CROWN_TO_HEIGHT) }),
         ndvi: ndviAt?.(ex, ey),
       };
       (isHedge ? hedges : trees).push(place);
@@ -121,9 +149,31 @@ export function rowPlacements(
   return { trees, hedges };
 }
 
-/** Canopy points (DOM1-derived) → height-scaled tree placements. */
+/**
+ * A canopy tree's crown width (m): from the laser scan's measured radius
+ * where the point has one (`r`), else CROWN_TO_HEIGHT of its height; `v`
+ * (0..1) varies it by ±10 %.
+ */
+export function canopyCrownWidth(
+  height: number,
+  r: number | undefined,
+  v: number
+): number {
+  const jitter = 0.9 + v * 0.2;
+  if (r !== undefined && Number.isFinite(r) && r > 0) {
+    const [lo, hi] = SCAN_CROWN_TO_HEIGHT;
+    return Math.min(Math.max(2 * r, lo * height), hi * height) * jitter;
+  }
+  return height * CROWN_TO_HEIGHT * jitter;
+}
+
+/** Canopy points (DOM1-derived, and the laser scan's with a crown radius)
+ *  → tree placements as tall as measured, CROWN_TO_HEIGHT wide or as wide
+ *  as the scan measured. */
 export function canopyPlacements(
-  features: CanopyFeature[],
+  features: (CanopyFeature & {
+    properties: { h: number; r?: number } | null;
+  })[],
   ctx: PlacementContext,
   ndviAt?: RasterSampler,
   keepTree?: TreeVeto
@@ -148,13 +198,22 @@ export function canopyPlacements(
     const h = Number.isFinite(rawH) ? rawH : BASE_TREE_H;
     const seed = ex * 0.13 + ey * 0.07;
     const w = worldOf(ex, ey, ctx.offset);
+    // Scale the tree to the measured canopy height (± a touch) …
+    const s =
+      Math.min(Math.max(h / BASE_TREE_H, 0.5), 7) * (0.9 + hash(seed) * 0.2);
+    // … and its crown to a measured or a typical width, separately.
+    const width = canopyCrownWidth(
+      s * BASE_TREE_H,
+      f.properties?.r,
+      hash(seed * 2.3 + 0.7)
+    );
     out.push({
       x: w.x,
       y: ground,
       z: w.z,
       rot: hash(seed * 1.7) * Math.PI,
-      // Scale the whole tree to the measured canopy height (± a touch).
-      s: Math.min(Math.max(h / BASE_TREE_H, 0.5), 7) * (0.9 + hash(seed) * 0.2),
+      s,
+      w: crownSpread(width),
       ndvi: ndviAt?.(ex, ey),
     });
   }

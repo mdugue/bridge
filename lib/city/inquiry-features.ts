@@ -19,6 +19,7 @@ import {
   sourceLine,
   whole,
 } from "./card-lines";
+import type { MoreInquiry } from "./inquiry-more";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
 import type { SiteProvenance } from "./provenance";
 
@@ -99,6 +100,7 @@ export type FeatureInquiry =
   | BikeInquiry
   | BridgeInquiry
   | MonumentInquiry
+  | MoreInquiry
   | TrafficInquiry
   | TreeInquiry;
 
