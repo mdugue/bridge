@@ -122,10 +122,16 @@ function bikeOverlay(
         compiling = true;
         const built = layer;
         // Shown once its shaders are built, never inside a frame.
-        void opts.compile(built.group).then(() => {
-          compiled = true;
-          built.group.visible = on && alive();
-        });
+        void opts.compile(built.group).then(
+          () => {
+            compiled = true;
+            built.group.visible = on && alive();
+          },
+          () => {
+            // the next counts try again
+            compiling = false;
+          }
+        );
       }
     },
   });
@@ -165,6 +171,31 @@ function bikeOverlay(
   };
 }
 
+/** What the HUD hears when the timetable could not be loaded. */
+const TRAM_LOAD_FAILED: TramCarsStatus = {
+  date: null,
+  failed: "Fahrplan nicht geladen",
+  kind: "weekday",
+  running: 0,
+};
+
+/** Whether a fetched timetable has the shape the trams read
+ *  (lib/city/tram-timetable.ts); a malformed file is a failed load. */
+export function isTramTimetable(doc: unknown): doc is TramTimetable {
+  if (typeof doc !== "object" || doc === null) {
+    return false;
+  }
+  const t = doc as Partial<Record<keyof TramTimetable, unknown>>;
+  return (
+    Array.isArray(t.patterns) &&
+    Array.isArray(t.profiles) &&
+    Array.isArray(t.routes) &&
+    typeof t.days === "object" &&
+    t.days !== null &&
+    !Array.isArray(t.days)
+  );
+}
+
 /** The timetable trams: loaded (timetable and bridge decks) on the first
  *  switch-on, run from the scene's clock. */
 function tramOverlay(
@@ -177,6 +208,13 @@ function tramOverlay(
   let cars: TramCars | null = null;
   let loading = false;
   let statusDue = 0;
+  // A load that fails (no timetable, a malformed one, the network) says
+  // so and leaves the layer unloaded: the next switch-on tries again.
+  const failed = () => {
+    if (alive() && on) {
+      opts.onTramStatus?.(TRAM_LOAD_FAILED);
+    }
+  };
   const load = async () => {
     const url = opts.tramTimetableUrl;
     if (!url || loading) {
@@ -185,10 +223,14 @@ function tramOverlay(
     loading = true;
     try {
       const [timetable, bridges] = await Promise.all([
-        fetchOptionalJson<TramTimetable>(url, signal),
+        fetchOptionalJson<unknown>(url, signal),
         fetchFeaturesFrom<BridgeFeature>(opts.bridgeUrls, signal),
       ]);
-      if (!(timetable && alive())) {
+      if (!alive()) {
+        return;
+      }
+      if (!isTramTimetable(timetable)) {
+        failed();
         return;
       }
       // Decks only: the approach ramps need the ground of tiles that may
@@ -207,9 +249,12 @@ function tramOverlay(
       built.group.visible = on;
       opts.onChange?.();
     } catch (err) {
+      // a missing or broken file is no crash: the HUD says so
       if (!isAbortError(err)) {
-        throw err;
+        failed();
       }
+    } finally {
+      loading = false;
     }
   };
   return {

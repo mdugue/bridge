@@ -206,10 +206,10 @@ function germanDate(iso: string): string {
 /** The timetable trams in words: how many run now, from which day's
  *  timetable. */
 export function TramStatusLine({ status }: { status: TramCarsStatus | null }) {
-  if (!status) {
+  if (!status || status.failed) {
     return (
       <span className="text-[11px] text-muted-foreground">
-        Fahrplan wird geladen …
+        {status?.failed ?? "Fahrplan wird geladen …"}
       </span>
     );
   }

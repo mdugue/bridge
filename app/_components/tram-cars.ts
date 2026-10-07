@@ -227,6 +227,8 @@ function createTrails() {
 export interface TramCarsStatus {
   /** the date whose timetable runs (the day kind's chosen date) */
   date: string | null;
+  /** set when the timetable could not be loaded: what the HUD says */
+  failed?: string;
   kind: TramDayKind;
   /** trams on their way now */
   running: number;
