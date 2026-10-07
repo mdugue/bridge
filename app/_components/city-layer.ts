@@ -323,6 +323,42 @@ export function pickCityObject(
     : null;
 }
 
+const alongRaycaster = new Raycaster();
+
+/**
+ * Every building tree a pick ray passes through, nearest first, one hit
+ * per tree (its nearest face): what stands behind the first, for the
+ * probe's candidates.
+ */
+export function cityObjectsAlong(
+  camera: Camera,
+  layers: readonly CityLayer[],
+  ndc?: { x: number; y: number }
+): { distance: number; layer: CityLayer; objectIndex: number }[] {
+  alongRaycaster.far = setPickRay(
+    alongRaycaster,
+    ndc ? pickAt.set(ndc.x, ndc.y) : SCREEN_CENTER,
+    camera
+  );
+  const meshes: Object3D[] = layers.map((l) => l.mesh);
+  const out: { distance: number; layer: CityLayer; objectIndex: number }[] = [];
+  const seen = new Set<string>();
+  for (const hit of alongRaycaster.intersectObjects(meshes, false)) {
+    const layer = layers.find((l) => l.mesh === hit.object);
+    const ids = layer?.mesh.geometry.getAttribute("featureId");
+    if (!(layer && ids && hit.face)) {
+      continue;
+    }
+    const objectIndex = ids.getX(hit.face.a);
+    const key = `${layer.tile}:${layer.table.root[objectIndex]}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push({ distance: hit.distance, layer, objectIndex });
+    }
+  }
+  return out;
+}
+
 export function countBuildings(layer: CityLayer): number {
   return countLiveBuildings(layer.table.building, (i) => layer.alive[i] === 1);
 }
