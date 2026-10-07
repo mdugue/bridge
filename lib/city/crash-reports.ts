@@ -71,8 +71,9 @@ export const PROBLEM_KINDS: ReadonlySet<string> = new Set([
 // Not "render stopped": it always follows a lost device or a failed frame,
 // which say why. Nor what the viewer notes as it copes — "gpu reclaimed"
 // (a GPU the system took while the page was in the background, restored
-// by a reload), "memory emergency", "net-retry", "net-wait", "safety":
-// those are the trail's breadcrumbs, never an event of their own.
+// by a reload), "memory emergency", "net-retry", "net-wait", "safety",
+// "error repeated" (the count of an error noted already): those are the
+// trail's breadcrumbs, never an event of their own.
 
 /**
  * The problems that end the page: the render stops after them, or the boot

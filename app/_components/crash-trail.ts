@@ -44,7 +44,7 @@ const PREVIOUS_KEY = STORAGE_KEYS.trailPrevious;
  *  reports and the crash card's text. */
 const TRAIL_QUERY = ["scene", "gpu", "block", "safety", "trail"] as const;
 
-/** The path plus the known knobs of `search`, in their given order. */
+/** The path plus the known knobs of `search`, in TRAIL_QUERY's order. */
 export function trailUrl(pathname: string, search: string): string {
   const given = new URLSearchParams(search);
   const kept = new URLSearchParams();
@@ -61,23 +61,33 @@ export function trailUrl(pathname: string, search: string): string {
 /** How long one error's repeats are counted, not noted (seconds). */
 export const ERROR_REPEAT_S = 10;
 
+/** What a repeated error's count is noted as: a breadcrumb, not a problem
+ *  of its own (crash-reports.ts `PROBLEM_KINDS`) — its first note was. */
+export const ERROR_REPEATED = "error repeated";
+
+/** The events that may be a page's last word: a pending count goes first
+ *  (a page killed in the background, or leaving, keeps it). */
+const FLUSHED_BY: ReadonlySet<string> = new Set(["hidden", "pagehide", "end"]);
+
 /**
  * Notes errors, a repeat of the last one within `ERROR_REPEAT_S` of its
  * note counted instead: a throw that comes back every frame would
  * otherwise write the whole record to storage 60 times a second. The
- * count goes out as one `text ×N` when the text changes, the window has
- * passed, or the record ends (`flush`).
+ * count goes out as one `text ×N` (as ERROR_REPEATED) when the text
+ * changes, the window has passed, or before an event that may end the
+ * record (`noting`: hidden, pagehide, end).
  */
 export function errorCoalescer(
-  note: (text: string) => void,
+  note: (kind: string, text: string) => void,
   now: () => number
-): { error: (text: string) => void; flush: () => void } {
+): { error: (text: string) => void; noting: (kind: string) => void } {
   let last = { text: "", count: 0, at: Number.NEGATIVE_INFINITY };
   const flush = () => {
-    if (last.count > 1) {
-      note(`${last.text} ×${last.count}`);
-    }
+    const { text, count } = last;
     last = { text: "", count: 0, at: Number.NEGATIVE_INFINITY };
+    if (count > 1) {
+      note(ERROR_REPEATED, `${text} ×${count}`);
+    }
   };
   return {
     error: (text) => {
@@ -87,10 +97,14 @@ export function errorCoalescer(
         return;
       }
       flush();
-      note(text);
+      note("error", text);
       last = { text, count: 1, at: t };
     },
-    flush,
+    noting: (kind) => {
+      if (FLUSHED_BY.has(kind)) {
+        flush();
+      }
+    },
   };
 }
 
@@ -263,7 +277,10 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
       // Full or blocked: the trail stops, the viewer does not.
     }
   };
+  // (the coalescer notes through `note`, which tells it every event)
+  const errors = errorCoalescer((kind, text) => note(kind, text), seconds);
   const note = (kind: string, detail?: string) => {
+    errors.noting(kind);
     const event = { t: seconds(), kind, detail: detail?.slice(0, 300) };
     pushEvent(trail, event, Date.now());
     try {
@@ -290,7 +307,6 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
     },
   };
 
-  const errors = errorCoalescer((text) => note("error", text), seconds);
   const onError = (event: ErrorEvent) => {
     const error = event.error as unknown;
     const stack =
@@ -345,7 +361,6 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
       console.info(TAG, JSON.stringify(patch));
     },
     end: () => {
-      errors.flush();
       trail.state = "clean";
       note("end");
       stopAnswering();
