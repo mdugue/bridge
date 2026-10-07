@@ -2395,9 +2395,13 @@ research that produced them):
    where OSM is thin (ADR 0028).
 4. **Cartographic minimap** — DTK / basemap.de P10 raster tile + Ortsteile labels
    replacing the math-drawn minimap.
-5. **Dappled canopy shadow** — a colour-less proxy caster per chunk whose
-   `maskNode` cuts the gaps (the shadow pass honours it; the old
-   `WebGLShadowMap` alphaMap-override gotcha left with plan 020).
+5. ~~**Dappled canopy shadow**~~ *Built 2026-10-07* without a proxy
+   caster: every crown opens gaps in full leaf through its own `maskNode`
+   (`aGap`, `crown-season.ts` `crownSeasonNodes`: a smooth value noise in
+   crown space, ~1.5 clumps per crown unit, frayed by the hashed
+   threshold, closed past 160–420 m), double-sided; the shadow pass
+   honours the mask, so light falls through. Cost: no early depth test on
+   crowns all year (it was the winter's already) and the inside drawn.
 6. **Real trees from the laser-scan point cloud** — segment high-veg returns →
    per-tree position/height/crown; bake to per-tile GeoJSON. *(First step ✅
    above: `canopyx` crown peaks with `h` + `r`, outside the canopy mask only,

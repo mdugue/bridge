@@ -1,5 +1,6 @@
 import {
   BoxGeometry,
+  DoubleSide,
   type BufferGeometry,
   Color,
   CylinderGeometry,
@@ -21,6 +22,7 @@ import {
   float,
   floor,
   fract,
+  frontFacing,
   length,
   materialColor,
   max,
@@ -30,6 +32,7 @@ import {
   positionGeometry,
   positionWorld,
   pow,
+  select,
   sin,
   smoothstep,
   uniform,
@@ -70,6 +73,7 @@ import {
 import { seasonJitter } from "@/lib/city/tree-season";
 import {
   CROWN_BASE_COLOR,
+  DEFAULT_OPEN,
   type CrownMaterials,
   type CrownSeasonKey,
   crownSeasonNodes,
@@ -258,12 +262,14 @@ export function treesWithin(
 }
 
 /** A canopy or row tree's season: the generic deciduous curve, offset by
- *  a stable hash of its position. */
+ *  a stable hash of its position, and its crown's gaps. */
 export function genericSeasonKey(x: number, z: number): CrownSeasonKey {
   return {
     genus: 0,
     evergreen: false,
     jitter: seasonJitter(hash(x * 0.53 + z * 0.29 + 7.1)),
+    // a canopy tree's species is unknown: some crowns denser, some airier
+    open: DEFAULT_OPEN + (hash(x * 0.71 + z * 0.37 + 2.3) - 0.5) * 0.2,
   };
 }
 
@@ -317,6 +323,8 @@ const CROWN_R = 2.1;
  *  a crown ~2 across), and how far its top leans (per unit above the
  *  trunk). */
 const SHAPE_BULGE = 0.62;
+/** The crown's inside, seen through a gap: this much of its light. */
+const INSIDE_SHADE = 0.55;
 const SHAPE_LEAN = 0.09;
 
 /**
@@ -757,8 +765,10 @@ function crownLight(
  * seasonal variant: the per-instance leaf cover thins the crown to twigs
  * (crown-season.ts) through `maskNode`, which the shadow pass honours, so
  * the thinned crown thins its shadow too; a chunk wears it only while any
- * of its crowns is out of full leaf, so the summer crown keeps early depth
- * testing. The cast shadow stays rigid (`castShadowPositionNode`): the sun
+ * of its crowns is out of full leaf. Both variants open the crown's gaps in
+ * full leaf through the same mask (`aGap`, crown-season.ts), double-sided
+ * so the far side shows through a gap; the price is early depth testing on
+ * the crowns, all year now (it was the winter's already). The cast shadow stays rigid (`castShadowPositionNode`): the sun
  * rig only redraws the shadow map on a move — accepted, invisible at this
  * scale.
  */
@@ -779,23 +789,27 @@ export function buildCrownMaterial(
   const crownScale = varying(length(instanceColumn(1).xyz));
   const gust = varying(sway.gust);
   const tinted = materialColor.mul(instanceTint());
-  if (!bare) {
-    const lit = crownLight(u, tinted, gust, crownScale);
-    m.colorNode = lit.colour;
-    m.emissiveNode = lit.emissive;
-    return m;
-  }
+  // Both variants open their gaps through the mask (and the shadow with
+  // them); through a gap the crown's far side shows from within, darker.
+  m.side = DoubleSide;
+  const inside = select(frontFacing, float(1), float(INSIDE_SHADE));
   const season = crownSeasonNodes();
   m.maskNode = season.keep;
+  if (!bare) {
+    const lit = crownLight(u, tinted, gust, crownScale);
+    m.colorNode = lit.colour.mul(inside);
+    m.emissiveNode = lit.emissive.mul(inside);
+    return m;
+  }
   const lit = crownLight(
     u,
     mix(tinted, season.twigColour, season.twig),
     gust,
     crownScale
   );
-  m.colorNode = lit.colour;
+  m.colorNode = lit.colour.mul(inside);
   // Twigs of a bare crown neither shimmer nor glow.
-  m.emissiveNode = lit.emissive.mul(float(1).sub(season.twig));
+  m.emissiveNode = lit.emissive.mul(float(1).sub(season.twig)).mul(inside);
   return m;
 }
 
