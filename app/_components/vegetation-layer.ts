@@ -815,6 +815,8 @@ const RIM_CUT = 2.3;
 const RIM_LEAF = 2.6;
 /** How light a crown's inside is, against its outside. */
 const RIM_INSIDE = 0.6;
+/** The second octave's offset in the field. */
+const RIM_OCTAVE = vec3(17.3, 5.1, 29.7);
 
 export function crownRimKeep(p: V3): ReturnType<F["greaterThan"]> {
   const origin = instanceColumn(3).xz;
@@ -823,17 +825,25 @@ export function crownRimKeep(p: V3): ReturnType<F["greaterThan"]> {
     0,
     fract(origin.y.mul(0.0191)).mul(61)
   );
-  const leaf = mx_noise_float(p.mul(RIM_LEAF).add(seed))
-    .add(mx_noise_float(p.mul(RIM_LEAF * 2.3).add(seed.zyx)).mul(0.45))
+  // a crown right overhead stays closed: cut open at arm's length its
+  // rim reads as torn paper, a shell with no inside
+  const near = smoothstep(6, 14, distance(cameraPosition, positionWorld));
+  // one varying for the field's point and the cut's depth, both per
+  // vertex: WebGPU passes at most 16 between the stages, three packs none,
+  // and past the limit the crown's pipeline is invalid and draws nothing
+  const rimVary = varying(
+    vec4(
+      p.mul(RIM_LEAF).add(seed),
+      instanceFloat("aGap").mul(RIM_CUT).mul(near)
+    )
+  );
+  const leaf = mx_noise_float(rimVary.xyz)
+    .add(mx_noise_float(rimVary.xyz.mul(2.3).add(RIM_OCTAVE)).mul(0.45))
     .mul(0.5)
     .add(0.5);
   const facing = clamp(dot(normalView, positionViewDirection), 0, 1);
   const rim = smoothstep(0.72, 0.05, facing);
-  // a crown right overhead stays closed: cut open at arm's length its
-  // rim reads as torn paper, a shell with no inside
-  const near = smoothstep(6, 14, distance(cameraPosition, positionWorld));
-  const cut = rim.mul(instanceFloat("aGap")).mul(RIM_CUT).mul(near);
-  return leaf.greaterThan(cut);
+  return leaf.greaterThan(rim.mul(rimVary.w));
 }
 
 /**
@@ -947,16 +957,23 @@ export function buildCrownMaterial(
   const sway = crownSway(u.time, shape);
   m.positionNode = instancePosition(sway.local);
   m.castShadowPositionNode = instancePosition(shape);
-  const crownScale = varying(length(instanceColumn(1).xyz));
-  const gust = varying(sway.gust);
+  // packed: every varying takes one of WebGPU's 16 slots (crownRimKeep)
+  const lightVary = varying(vec2(length(instanceColumn(1).xyz), sway.gust));
+  const crownScale = lightVary.x;
+  const gust = lightVary.y;
   // the crown is drawn from both sides: where its rim is cut open
   // (crownRimKeep) the eye meets its inside, shaded as the dark of a crown's
   // interior, not a paper shell
   m.side = DoubleSide;
+  // the bays' shade rides on the tint's varying, not one of its own
+  const shaded = varying(
+    instanceTint().mul(
+      float(1).sub(max(fray.hollow, lobes.inner).mul(FRAY_SHADE))
+    )
+  );
   const tinted = materialColor
-    .mul(instanceTint())
-    .mul(select(frontFacing, float(1), float(RIM_INSIDE)))
-    .mul(float(1).sub(varying(max(fray.hollow, lobes.inner)).mul(FRAY_SHADE)));
+    .mul(shaded)
+    .mul(select(frontFacing, float(1), float(RIM_INSIDE)));
   const rimKeep = crownRimKeep(lobes.position);
   if (!bare) {
     m.maskNode = rimKeep;

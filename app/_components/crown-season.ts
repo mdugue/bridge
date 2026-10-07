@@ -171,7 +171,14 @@ export interface CrownSeasonNodes {
  * so neighbours differ.
  */
 export function crownSeasonNodes(): CrownSeasonNodes {
-  const bare = varying(instanceFloat("aBare"));
+  // the instance's ground position: its matrix's translation (m · e₃)
+  const origin = instanceMatrix().mul(vec4(0, 0, 0, 1));
+  // the seed and the leaf cover in one varying: WebGPU passes at most 16
+  // between the stages, and the crown material spends most of them
+  const perTree = varying(
+    vec3(fract(origin.xz.mul(0.0137)).mul(97), instanceFloat("aBare"))
+  );
+  const bare = perTree.z;
   const turn = mat3(
     0.6667,
     0.6667,
@@ -184,9 +191,7 @@ export function crownSeasonNodes(): CrownSeasonNodes {
     0.6667
   );
   const cell = varying(turn.mul(positionGeometry));
-  // the instance's ground position: its matrix's translation (m · e₃)
-  const origin = instanceMatrix().mul(vec4(0, 0, 0, 1));
-  const seed = varying(fract(origin.xz.mul(0.0137)).mul(97));
+  const seed = perTree.xy;
   const cellH = crownThreshold(cell, vec3(seed, 0)).toVar("crownCellH");
   const leafy = float(1).sub(bare);
   const isBare = bare.greaterThan(BARE_EPS);

@@ -589,6 +589,14 @@ main thread) out of the frames:
   the mesh simply does not draw, while WebGL2 (sixteen, the headless e2e's
   backend) draws it: pack scalars into vec4s (`traffic-layer.ts`
   `TRAFFIC_ATTRIBUTES`, its test holds the count).
+- **WebGPU passes at most sixteen varyings between the stages**, and three
+  packs none: every `varying()`, and every attribute or vertex-stage value a
+  fragment node reads, takes a slot of its own, and `frontFacing` takes one
+  in the fragment stage. Past the limit the pipeline is invalid and the mesh
+  draws nothing (its shadow pass too), while WebGL2 draws it. Pack per-vertex
+  scalars into one `varying(vec4(…))` (the crowns: `crownRimKeep`). Headless
+  Chromium has a WebGPU adapter (`--enable-unsafe-webgpu
+  --use-webgpu-adapter=swiftshader`) that reports these errors in the console.
 
 **Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
 5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈
