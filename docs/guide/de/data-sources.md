@@ -105,6 +105,7 @@ Berlin ist eingerichtet, aber noch nicht gebaut.
 | **LSC** | Laserscan-Punktwolke | GeoSN (Dresden, Meißen, Grimma, Leipzig), Geobasis NRW (Unna), Bayerische Vermessungsverwaltung (München) | Heckenhöhen; Bäume in Höfen und Gärten; die Gartenlauben, Schuppen und Containerbauten, die dem 3D-Gebäudemodell fehlen |
 | **OSM** | OpenStreetMap | Freiwillige | Straßenlampen, Hecken, Stadtmöbel (Bänke, Papierkörbe, Fahrradbügel, Poller, Briefkästen, Wartehäuschen und Haltestellenschilder, Litfaßsäulen, Ampeln, Hydranten, Uhren, Trinkbrunnen), Spielplätze und ihre Geräte, Bahnsteige, Mauern, Felskanten, Treppen, Brücken-Tragwerkstypen und Durchfahrtshöhen, Brunnenbecken, womit Straßen, Gehwege und Parkplätze belegt sind, Sportplätze, Läden und Cafés im Erdgeschoss, Baudenkmale, Zäune, Geländer und Tore, Fahrbahnmarkierungen (Überwege, Haltlinien, Rad- und Mittellinien), Kleingärten, Obstwiesen und Weinberge, Bäume, die das Stadtbaumkataster nicht führt, Straßenbahngleise mit ihren Oberleitungsmasten, Anlegestellen, Buhnen und Fährrouten auf der Elbe, Kirchen und Glockentürme (für die verborgene Klangkulisse), woraus Gebäude gebaut sind und ihre Wand- und Dachfarben, Schornsteine, Türme und Masten und die Gebäude, die für das 3D-Modell zu neu sind |
 | **Wikidata** | freie Wissensdatenbank | Freiwillige | Bauart und Hauptspannweite benannter Brücken; die Wahrzeichen der Stadt (die Liste im Feld) und ihr Fassadenmaterial |
+| **Mapillary** | Straßenfotos und die darin erkannten Objekte | Fotos der Mitwirkenden, Erkennung durch Mapillary | Nur Dresden: Straßenlampen und Papierkörbe, die OpenStreetMap nicht kennt — etwa 6 700 Lampen und 1 700 Papierkörbe auf den fünfzehn Kacheln. Mapillary verortet jedes Objekt, das es auf mehreren Fotos erkennt; der Viewer behält die, bei denen in 8 m keine Lampe bzw. kein Papierkorb aus OpenStreetMap steht, die seit 2020 gesehen wurden und nicht in einem Gebäude liegen, und rückt sie von der Fahrbahn an den Bordstein. Ihre Lage ist ein paar Meter ungenau, und eine Lampe, die es aus zwei Fahrten doppelt verortet, steht nur einmal (mindestens 7 m Abstand). Auf Nachfrage sagt eine Lampe oder ein Papierkorb, ob sie von Mapillary stammt |
 | **Stadtbaumkataster** | Das Baumverzeichnis der Stadt | Landeshauptstadt Dresden | Straßen- und Parkbäume an ihrem vermessenen Standort, mit Höhe, Kronenbreite, Stamm, einer Kronenform nach der Art und deren Herbstfarbe und Laubfall; auf Nachfrage Art, Standort, Baumnummer und Alter |
 | **Straßenbaumkataster / Baumkataster / Baumbestand** | Die Baumverzeichnisse von Hamburg, Leipzig und Berlin | Freie und Hansestadt Hamburg (BUKEA); Stadt Leipzig (Amt für Stadtgrün und Gewässer); Geoportal Berlin | Wie das Dresdner; Hamburgs Bäume bekommen ihre Höhe aus dem Oberflächenmodell |
 | **Verkehrsmengen** | Kfz je Tag und Straßenabschnitt | Landeshauptstadt Dresden | Datenebene *Kfz-Verkehr*: gläserne Ströme je Fahrtrichtung, breiter, höher und kräftiger gefärbt, wo mehr fährt |
@@ -362,6 +363,7 @@ Download fand an diesem Tag oder kurz davor statt.
 | Verkehrsmengen | alle fünfzehn | Zählungen von 2010 bis 2026, meist 2023–2026, abgefragt am **2026-10-01** | WFS der Stadt; `data/dresden/provenance.json` | 2026-10-01 |
 | Rad-Dauerzählstellen | — | live, beim Einschalten der Ebene und alle fünf Minuten | WFS der Stadt | nicht eingecheckt |
 | GTFS-Fahrplan | das ganze Gebiet | der Feed vom **2026-09-26**; die Tage 2026-10-01 (Werktag), 2026-10-10 (Samstag), 2026-10-04 (Sonntag) | `Last-Modified` der Datei; `data/dresden/transit/trams.json` | 2026-10-01 |
+| Mapillary-Objekte | Dresden (fünfzehn Kacheln) | Erkennungen, zuletzt gesehen 2020 – 2026 | `last_seen_at` jedes Objekts; der Zwischenspeicher unter `data/_raw/sn/mapillary/` | 2026-10-07 |
 
 Beachte die **unterschiedlichen Stände in einem Bild**: Boden und Baumhöhen
 stammen von Ende 2024, die Gebäudeformen aus einem Laserscan von 2016 mit
@@ -426,6 +428,7 @@ Overpass-API.
 | Straßenverkehrszählung Sachsen | `dl-de/by-2-0` | „Freistaat Sachsen, LASuV“ |
 | Verkehrswerte NRW | `dl-de/by-2-0` | „Straßen.NRW“ |
 | GTFS-Fahrplan | *CC BY 4.0* | „DELFI e.V. via gtfs.de“ |
+| Mapillary (erkannte Straßenlampen und Papierkörbe) | *CC BY-SA 4.0* | „Mapillary“ — in einer eigenen Datei, getrennt von den OpenStreetMap-Daten |
 
 Der Viewer zeigt den Vermerk des Anbieters des Orts, den OSM-Vermerk und,
 wo es eines gibt, den des städtischen Baumkatasters in der Fußzeile seines

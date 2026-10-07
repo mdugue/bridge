@@ -20,6 +20,7 @@ described in [Where the data comes from](./data-sources.md).
 | Sheds, extra trees, hedge heights | 🟢 laser scan | 🟢 laser scan | ⚪ — ⁴ | 🟢 laser scan | 🟢 laser scan | 🟢 laser scan | 🟢 laser scan | ⚪ — ⁵ |
 | Vegetation colour (vigour) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟡 DOP RGB (GLI) ⁶ | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) |
 | Monuments, fountains | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
+| Street furniture, lamps, stairs, walls, fences, markings, paving, sports grounds, trams, landing stages | 🔵 OSM + Mapillary | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM |
 | Data layer: motor traffic | 🟢 city counts | 🟡 road census ⁷ | 🟢 city counts (main roads) | ⚪ — ⁸ | 🟡 road census ⁷ | ⚪ — ⁸ | 🟡 road census ⁷ | 🟢 city counts |
 | Data layer: cycling, live | 🟢 city counters | ⚪ — ⁹ | 🟢 city counters | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ |
 | Data layer: trams by timetable | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM |
@@ -58,7 +59,6 @@ publishes them openly, or OpenStreetMap is the one source for them:
 - **Facade materials**: 🔵 OSM + neighbourhood
 - **Towers, chimneys, missing buildings**: 🟢 DOM1 + OSM
 - **Landmarks**: 🟢 Wikidata + OSM
-- **Street furniture, lamps, stairs, walls, fences, markings, paving, sports grounds, trams, landing stages**: 🔵 OSM
 - **Sky light, far shadows**: 🟢 DGM1 + LoD2
 
 *This page is generated from the site and provider configurations

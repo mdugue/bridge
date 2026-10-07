@@ -69,6 +69,27 @@ test("a lamp's post is assumed, and the card says so", () => {
   expect(card.facts).toEqual([{ label: "Mast", value: "5 m, angenommen" }]);
 });
 
+test("a lamp or bin Mapillary detected names Mapillary, not OSM", () => {
+  const lamp = lampCard(
+    { kind: "lamp", tile: "t", position: at, src: "mly" },
+    null
+  );
+  expect(lamp.sources[0]).toStartWith("Laterne: Mapillary");
+  expect(lamp.sources[0]).toContain("CC BY-SA 4.0");
+  const bin = furnitureCard(
+    {
+      kind: "furniture",
+      tile: "t",
+      position: at,
+      properties: { k: "bin", src: "mly" },
+    },
+    null
+  );
+  expect(bin.sources[0]).toStartWith("Papierkorb: Mapillary");
+  const osmLamp = lampCard({ kind: "lamp", tile: "t", position: at }, null);
+  expect(osmLamp.sources[0]).toContain("OpenStreetMap");
+});
+
 test("a bench faces where OSM or the nearest way says", () => {
   const card = furnitureCard(
     {

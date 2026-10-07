@@ -1434,6 +1434,30 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   fine terrain tile; the three real lights go to the nearest heads of the
   visible tiles.
 
+- **Street lamps and litter bins OSM lacks, from Mapillary** — Mapillary's
+  detected objects ("map features": `object--street-light`,
+  `object--trash-can`, each one triangulated across the street photos that
+  saw it; CC BY-SA 4.0) fill in where OSM is thin. On Dresden's spawn tile
+  OSM maps 339 lamps and 203 bins; Mapillary places ~1 500 street lights
+  and ~600 bins, of which 125 and 14 lie within 5 m of an OSM one (its
+  positions are 2–6 m off; median 4 m against the OSM lamps it matches).
+  Kept: seen since 2020; the two detectors' copies of one object merged
+  within 4 m; nothing within 8 m of an OSM object of its kind; nothing
+  inside a LoD2 footprint (a facade lamp, or a placement through the wall);
+  one in the carriageway moved to the kerb, none on water, railway or a
+  bridge deck (furniture.py's gate); kept objects of a kind 7 m apart (one
+  lamp placed twice from two sequences). Dresden: 6 726 lamps and 1 732
+  bins on fifteen tiles (899 and 337 on the spawn tile). Stood by the lamp
+  and furniture layers like OSM's; the card names Mapillary. Its own file
+  (`dlm/mly_<t>.geojson`), never merged into the OSM files: ODbL and CC
+  BY-SA do not mix in one database. `pipeline/bake/mapillary.py` (the fetch
+  caches the tile's map features under `<raw>/mapillary/`, it needs
+  `MAPILLARY_TOKEN`), `lib/city/mapillary.ts`; per site `Site.mapillary`,
+  whose credit joins the footer. Not (yet): Mapillary's benches and bicycle
+  stands (fewer than OSM's: 111 and 48 against 587 and 292 on the spawn
+  tile), traffic signs (no layer draws them), signals (OSM's are placed by
+  the direction they face, which a detection lacks).
+
 - **Street furniture** — OSM benches (`amenity=bench`, points and the
   ways a bench is sometimes drawn as), picnic tables, litter bins
   (`waste_basket`), bicycle stands (`bicycle_parking`, not wall loops),

@@ -100,6 +100,7 @@ way; Berlin is configured but not built yet.
 | **LSC** | Laser-scan point cloud | GeoSN (Dresden, Meißen, Grimma, Leipzig), Geobasis NRW (Unna), Bavarian survey administration (Munich) | Hedge heights; trees in courtyards and gardens; the garden houses, sheds and container buildings the 3D building model lacks |
 | **OSM** | OpenStreetMap | Volunteers | Street lamps, hedges, street furniture (benches, bins, bicycle stands, bollards, post boxes, stop shelters and stop signs, advertising columns, traffic signals, hydrants, clocks, drinking fountains), playgrounds and their equipment, station platforms, walls, cliff edges, stairs, bridge structure types and navigation clearances, fountain basins, what streets, pavements and car parks are paved with, sports grounds, shops and cafés on the ground floor, listed buildings, fences, railings and gates, road markings (crossings, stop lines, cycle and centre lines), allotment gardens, orchards and vineyards, trees the city's register does not list, tram tracks with their overhead-line masts, the landing stages, groynes and ferry routes on the Elbe, churches and bell towers (for the hidden soundscape), what buildings are made of and their wall and roof colours, chimneys, towers and masts, and the buildings too new for the 3D model |
 | **Wikidata** | free knowledge base | Volunteers | The kind and main span of named bridges; the city's landmarks (the list in the panel) and their facade material |
+| **Mapillary** | Street photos and the objects found in them | Contributors' photos, Mapillary's detection | Dresden only: street lamps and litter bins OpenStreetMap does not map — about 6 700 lamps and 1 700 bins on the fifteen tiles. Mapillary places each object it recognises in several photos; the viewer keeps those with no OpenStreetMap lamp or bin within 8 m, seen since 2020, not inside a building, moved off the carriageway to the kerb. Their positions are a few metres off, and a lamp it placed twice from two drives stands only once (7 m apart at least). Asked, a lamp or bin says whether it came from Mapillary |
 | **Stadtbaumkataster** | The city's street-tree register | Landeshauptstadt Dresden | Street and park trees at their surveyed positions, with height, crown width, trunk, a crown shape from the species and the species' autumn colour and leaf fall; asked, their species, location, tree number and age |
 | **Straßenbaumkataster / Baumkataster / Baumbestand** | The street-tree registers of Hamburg, Leipzig and Berlin | Freie und Hansestadt Hamburg (BUKEA); Stadt Leipzig (Amt für Stadtgrün und Gewässer); Geoportal Berlin | The same as Dresden's; Hamburg's trees take their height from the surface model |
 | **Verkehrsmengen** | Motor vehicles per day and road section | Landeshauptstadt Dresden | Data layer *Kfz-Verkehr*: glass flows per direction, wider, taller and deeper in colour where more traffic runs |
@@ -356,6 +357,7 @@ before it.
 | Verkehrsmengen | all fifteen | counts from 2010 to 2026, mostly 2023–2026, read on **2026-10-01** | the city's WFS; `data/dresden/provenance.json` | 2026-10-01 |
 | Rad-Dauerzählstellen | — | live, when the layer is switched on and every five minutes | the city's WFS | not committed |
 | GTFS timetable | the whole site | the feed of **2026-09-26**; the days 2026-10-01 (working day), 2026-10-10 (Saturday), 2026-10-04 (Sunday) | the file's `Last-Modified`; `data/dresden/transit/trams.json` | 2026-10-01 |
+| Mapillary objects | Dresden (fifteen tiles) | detections last seen 2020 – 2026 | each object's `last_seen_at`; the cache under `data/_raw/sn/mapillary/` | 2026-10-07 |
 
 Note the **mismatch of dates inside one picture**: the ground and the tree
 heights are from late 2024, the building shapes from a 2016 laser scan with
@@ -417,6 +419,7 @@ bridge-structure files still date from earlier Overpass API queries.
 | Saxony's road census | `dl-de/by-2-0` | "Freistaat Sachsen, LASuV" |
 | NRW's Verkehrswerte | `dl-de/by-2-0` | "Straßen.NRW" |
 | GTFS timetable | *CC BY 4.0* | "DELFI e.V. via gtfs.de" |
+| Mapillary (detected street lamps and bins) | *CC BY-SA 4.0* | "Mapillary" — kept in its own file, apart from the OpenStreetMap data |
 
 The viewer shows the credit of the site's provider, the OSM credit and,
 where there is one, the city's tree cadastre in the footer of its

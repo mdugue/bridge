@@ -96,6 +96,7 @@ test("Dresden keeps its tile ids, credits and extract", () => {
     "Quelle: GeoSN, dl-de/by-2-0",
     "Lampen, Bänke, Ampeln, Hydranten, Uhren, Litfaßsäulen, Brunnen, Mauern, Zäune, Hecken, Treppen, Plätze, Beläge, Fahrbahnmarkierungen, Sportplätze, Kleingärten, Obstwiesen, Weinberge, Bahnsteige, Straßenbahn, Anlegestellen, Brücken, Läden, Baudenkmale und Kirchtürme © OpenStreetMap-Mitwirkende (ODbL)",
     "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0; weitere Bäume © OpenStreetMap-Mitwirkende (ODbL)",
+    "Lampen, Mülleimer: Mapillary, CC BY-SA 4.0",
     "Verkehrsmengen: Landeshauptstadt Dresden, dl-de/by-2-0 · Tagesgang: Freie und Hansestadt Hamburg, dl-de/by-2-0 · Radzählstellen: Landeshauptstadt Dresden, dl-de/by-2-0 · Straßenbahn-Fahrplan: DELFI e.V. via gtfs.de, CC BY 4.0",
   ]);
   // A site without a tree register credits two sources, and its data
@@ -166,7 +167,7 @@ test("overlook refuses a vantage that does not look down", () => {
 
 test("the short credit names every licensor and licence once", () => {
   expect(siteCredit(SITES.dresden)).toBe(
-    "GeoSN, Landeshauptstadt Dresden, Freie und Hansestadt Hamburg (dl-de/by-2-0) · DELFI e.V. via gtfs.de (CC BY 4.0) · © OpenStreetMap (ODbL)"
+    "GeoSN, Landeshauptstadt Dresden, Freie und Hansestadt Hamburg (dl-de/by-2-0) · Mapillary (CC BY-SA 4.0) · DELFI e.V. via gtfs.de (CC BY 4.0) · © OpenStreetMap (ODbL)"
   );
   expect(siteCredit(SITES.unna)).toBe(
     "Geobasis NRW (dl-de/zero-2-0) · Straßen.NRW, Freie und Hansestadt Hamburg (dl-de/by-2-0) · © OpenStreetMap (ODbL)"
