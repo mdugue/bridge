@@ -49,5 +49,6 @@ greys only.
 ## References
 
 - Ledger "Roof colour", "Roof vividness", 🗃️ orthophoto rows;
-  `scripts/extract-roof-colour.sh`, `lib/city/building-tint.ts`
+  `scripts/extract-roof-colour.sh` (now `pipeline/bake/roof_colour.py`,
+  ADR 0025), `lib/city/building-tint.ts`
   (`roofColor`), `visual-style.ts`.
