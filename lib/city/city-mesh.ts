@@ -39,7 +39,7 @@ export interface OsmBuildingFacts {
   heritage?: number;
   /** one of the city's landmarks (landmarks.py, Wikidata) */
   landmark?: number;
-  /** `building:levels`, for the inquiry card */
+  /** `building:levels`, for the inquiry card and the storey bands */
   levels?: number;
   material?: WallMaterial;
   /** the outline's `name`, for the inquiry card */

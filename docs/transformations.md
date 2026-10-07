@@ -664,8 +664,14 @@ visual-variable codebook is in
   copper-green stays green, terracotta red, slate cool — curing drabness without
   homogenising toward terracotta. *(Rejected: blending toward a terracotta target
   — it destroyed the ~187 genuine copper-patina-green roofs the DOP captured.)*
-- **Storey bands** (*Höhenlinien*) — band spacing from `storeyHeight(measuredHeight)`
-  (`storeysAboveGround` is only ~4 % populated, so derived).
+- **Storey bands** (*Höhenlinien*) — where OSM counts the storeys
+  (`building:levels`, a part's own or its Building's), the walls up to the
+  eave divided by that count (`mappedStoreyHeight`), kept when the storey
+  comes out 2.4–5.5 m (outside it the count is another part's or a typo);
+  else `storeyHeight(measuredHeight)`, whole ~3.2 m storeys
+  (`storeysAboveGround` is only ~4 % populated). Spawn tile: 2 172 objects
+  on mapped storeys (median 3.67 m, p10 3.06, p90 4.79), 298 back on the
+  estimate.
 - **Eave line** (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
   (geometry-derived; the attribute is ~4 %).
 - **Dusk glow** (*Abendlicht*) — warm emissive on commerce/public/special

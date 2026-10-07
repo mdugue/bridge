@@ -454,6 +454,33 @@ export function storeyHeight(heightMeters: number | undefined): number {
   return Math.min(Math.max(heightMeters / storeys, 2.5), 4.5);
 }
 
+/** A storey OSM's `building:levels` may give, in metres: outside this the
+ *  count belongs to another part (a tower inheriting its nave's levels) or
+ *  is a typo, and the estimate from the height stands. */
+const MAPPED_STOREY = { min: 2.4, max: 5.5 } as const;
+
+/**
+ * Storey height (m) for the contour bands of a building whose storeys OSM
+ * counts (`building:levels`, the storeys below the roof): the walls up to
+ * the eave divided by that count, so each band lies on a real floor — a
+ * Gründerzeit block's 4 m storeys and a Plattenbau's 2.8 m ones differ.
+ * Without a count, or where it gives an implausible storey, `storeyHeight`
+ * of the measured height.
+ */
+export function mappedStoreyHeight(
+  eaveMeters: number,
+  measuredMeters: number | undefined,
+  levels: number | undefined
+): number {
+  if (levels !== undefined && levels >= 1) {
+    const storey = eaveMeters / levels;
+    if (storey >= MAPPED_STOREY.min && storey <= MAPPED_STOREY.max) {
+      return storey;
+    }
+  }
+  return storeyHeight(measuredMeters);
+}
+
 /** Signed per-building roughness jitter in [-1,1] (decorrelated hash). */
 export function roughJitter(objectId: string): number {
   return hash01(`${objectId}#R`) * 2 - 1;

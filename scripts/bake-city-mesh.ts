@@ -27,6 +27,7 @@ import {
   roofColor,
   roofTint,
   roughJitter,
+  mappedStoreyHeight,
   storeyHeight,
 } from "../lib/city/building-tint";
 import {
@@ -505,14 +506,16 @@ export function bakeCityMesh(
       typeof own.measuredHeight === "number" ? own.measuredHeight : total;
     const roofMin = roofMinZ.get(index);
     const look = inheritedLook(osmLut?.[id], osmLut?.[keys[root]]);
+    const osm = inheritedOsm(osmLut?.[id], osmLut?.[keys[root]]);
+    const eaveH = roofMin === undefined ? total : Math.max(roofMin - baseZ, 0);
     const footprints = footprintsOf[index];
     return {
       building: o.type === "Building",
       root,
       baseZ: cm(baseZ),
-      eaveH: cm(roofMin === undefined ? total : Math.max(roofMin - baseZ, 0)),
+      eaveH: cm(eaveH),
       flags: inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
-      storeyH: cm(storeyHeight(measured)),
+      storeyH: cm(mappedStoreyHeight(eaveH, measured, osm?.levels)),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
       tint: rgb(buildingTint(id, attrs, look.context ?? facades, look)),
@@ -522,7 +525,7 @@ export function bakeCityMesh(
         buildingId: keys[root],
         own,
         resolved: attrs,
-        osm: inheritedOsm(osmLut?.[id], osmLut?.[keys[root]]),
+        osm,
         fallbackHeight: total,
         footprints,
         rebuilt: rebuilt.has(id),
