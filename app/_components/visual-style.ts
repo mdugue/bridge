@@ -340,7 +340,7 @@ function articulation(
 ): V3 {
   const f = floor(flags.add(0.5));
   const own = mod(floor(f.div(64)), 2);
-  const shop = mod(f, 2);
+  const shop = shopOf(d, flags);
   const grounded = mod(floor(f.div(128)), 2);
   // a landmark's or a church's facade is its own (flag 16): no town
   // house's plinth and cornices on it
@@ -392,9 +392,22 @@ function valueNoise(p: V2): F {
 
 /** A building's facade readings from its flags (lib/city/facade-reading.ts:
  *  FACADE_UNIT × (busy + 4 × dark), each graded 0 unseen, 1–3). */
-function readingOf(flags: F): { busy: F; dark: F } {
+function readingOf(flags: F): { busy: F; dark: F; shop: F } {
   const code = floor(floor(flags.add(0.5)).div(512));
-  return { busy: mod(code, 4), dark: floor(code.div(4)) };
+  return {
+    busy: mod(code, 4),
+    dark: mod(floor(code.div(4)), 4),
+    shop: floor(code.div(16)),
+  };
+}
+
+/** A shop on the ground floor: OSM's (flag 1), or a shop sign the street
+ *  photos saw (on the Fassadenbild slider). */
+function shopOf(d: ClayDetailUniforms, flags: F): F {
+  return max(
+    mod(floor(flags.add(0.5)), 2),
+    readingOf(flags).shop.mul(d.uFacadeReading)
+  );
 }
 
 /** Where on its wall a fragment lies: metres along the wall and up. */
@@ -419,8 +432,9 @@ function wallPlane(wn: V3, h: F): V2 {
  *  - Geschossgesimse: a busy facade under a pitched roof (the Gründerzeit
  *    front) carries a ledge at every storey line up to the eave, not only
  *    the first (on Gliederung's slider too).
- * A shop sign or an open ground floor joins OSM's shops in the flags, so
- * Gliederung's Ladenzone and the dusk's shop light take it as they are.
+ *  - Ladensockel: a shop sign at the wall or an open ground floor joins
+ *    OSM's shops (`shopOf`), so Gliederung's Ladenzone and the dusk's
+ *    shop light take it as they are.
  */
 function facadeReading(
   d: ClayDetailUniforms,
@@ -564,7 +578,7 @@ function clayGlow(
   const rim = vec3(1, 0.95, 0.8).mul(fres.mul(fres).mul(d.uRim));
   const dusk = build.w.mul(d.uDuskGlow).mul(d.uNight);
   const glow = vec3(1, 0.82, 0.5).mul(dusk.mul(wall).mul(0.5));
-  const shop = mod(floor(flags.add(0.5)), 2);
+  const shop = shopOf(d, flags);
   const floorBand = float(1).sub(smoothstep(0.7, 1, h.div(max(build.y, 0.5))));
   const along = normalize(vec2(wn.z.negate(), wn.x).add(1e-5));
   const seg = dot(positionWorld.xz, along).div(3.5);

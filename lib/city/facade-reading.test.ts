@@ -17,12 +17,12 @@ test("a reading rides above the OSM flags and keeps them", () => {
   expect(Math.floor(flags / FACADE_UNIT)).toBe(3 + 4 * 2);
   // the column is 16 bits wide
   expect(withFacadeReading(511, [3, 3, 1])).toBeLessThan(65_536);
+  expect(withFacadeReading(0, [3, 3, 1]) % FACADE_UNIT).toBe(0);
 });
 
-test("a shop sign joins OSM's shops once, and a new reading replaces the old", () => {
-  const signed = withFacadeReading(0, [1, 1, 1]);
-  expect(signed % 2).toBe(OBJECT_FLAG_SHOP);
-  expect(withFacadeReading(OBJECT_FLAG_SHOP, [1, 1, 1])).toBe(signed);
+test("a shop sign is a bit of its own, and a new reading replaces the old", () => {
+  const signed = withFacadeReading(OBJECT_FLAG_SHOP, [1, 1, 1]);
+  expect(signed).toBe(OBJECT_FLAG_SHOP + FACADE_UNIT * (1 + 4 + 16));
   expect(withFacadeReading(withFacadeReading(0, [3, 3, 0]), [1, 0, 0])).toBe(
     FACADE_UNIT
   );

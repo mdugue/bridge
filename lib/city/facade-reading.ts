@@ -9,14 +9,12 @@
  *    frames, stucco, glass), graded 1 calm, 2 mid, 3 busy — busy only
  *    where two image sequences saw it;
  *  - dark: how much of it is clearly darker than the render, 1–3;
- *  - shop: a shop sign at the wall or an open ground floor (joins OSM's
- *    shops, OBJECT_FLAG_SHOP).
+ *  - shop: a shop sign at the wall or an open ground floor (the clay
+ *    joins it to OSM's shops, OBJECT_FLAG_SHOP, on its own slider).
  * 0 is "not seen" (two thirds of the street fronts, nearly every
  * courtyard). The readings ride in the object table's flags column, above
- * the OSM flags: `FACADE_UNIT` × (busy + 4 × dark).
+ * the OSM flags: `FACADE_UNIT` × (busy + 4 × dark + 16 × shop).
  */
-import { OBJECT_FLAG_SHOP } from "./city-mesh";
-
 /** [busy 0–3, dark 0–3, shop 0|1], by the Building's gml:id. */
 export type FacadeReading = [number, number, number];
 
@@ -40,11 +38,9 @@ export function withFacadeReading(
     return own;
   }
   const [busy, dark, shop] = reading;
-  const shopBit =
-    shop > 0 && Math.floor(own / OBJECT_FLAG_SHOP) % 2 === 0
-      ? OBJECT_FLAG_SHOP
-      : 0;
-  return own + shopBit + FACADE_UNIT * (grade(busy) + 4 * grade(dark));
+  return (
+    own + FACADE_UNIT * (grade(busy) + 4 * grade(dark) + (shop > 0 ? 16 : 0))
+  );
 }
 
 /** The table's flags with each row's building's reading; `buildingOf`
