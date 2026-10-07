@@ -66,9 +66,9 @@ export interface CrownSeasonKey {
   genus: number;
   /** the tree's own offset (days, ±SEASON_JITTER_DAYS) */
   jitter: number;
-  /** how open its crown is in full leaf: how far its leaf clumps stand
-   *  apart (0 one closed mass … ~0.5 airy; vegetation-layer.ts
-   *  `crownClumps`); absent = DEFAULT_OPEN */
+  /** how open its crown is in full leaf: how deep its outline frays
+   *  (0 one closed mass … ~0.5 airy; vegetation-layer.ts `crownFray`);
+   *  absent = DEFAULT_OPEN */
   open?: number;
 }
 
@@ -158,8 +158,8 @@ export interface CrownSeasonNodes {
 
 /**
  * The crown's leaf cover as nodes: the thinning of a bare crown. (Its air
- * in full leaf is no mask: vegetation-layer.ts `crownClumps` moves its
- * clumps apart by `aGap`.)
+ * in full leaf is no mask: vegetation-layer.ts `crownFray` frays its
+ * outline by `aGap`.)
  *
  * A fixed rotation (rows (2,2,1)/3, (2,−1,−2)/3, (1,−2,2)/3;
  * symmetric, so the column order does not matter) turns the cell grid off

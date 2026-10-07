@@ -34,7 +34,6 @@ import { Instances } from "./instancing";
 import {
   applySeasons,
   buildCrownGeo,
-  buildCrownGeoMid,
   buildCrownGeoRich,
   CROWN_CENTRE_Y,
   oneMass,
@@ -188,12 +187,12 @@ function reshapeCrown(
       Math.sin(phi) * r * k * halfW
     );
   };
-  // a clump crown's clump centres go where their clumps go (crownClumps
+  // a rich crown's lobe centres go where their lobes go (crownLobes
   // reads them about the crown's centre)
   const clump = g.getAttribute("aClump");
   const crownY = CROWN_CENTRE_Y;
   for (let i = 0; clump && i < clump.count; i++) {
-    if (clump.getW(i) > 0) {
+    if (clump.getW(i) !== 0) {
       const c = reshape(clump.getX(i), clump.getY(i) + crownY, clump.getZ(i));
       clump.setXYZ(i, c.x, c.y - crownY, c.z);
     }
@@ -279,7 +278,7 @@ function buildConeGeo(like: FittedGeo, segments: number): BufferGeometry {
 }
 
 function buildShapeGeos(): ShapeGeos {
-  const cheap = buildCrownGeoMid();
+  const cheap = buildCrownGeo();
   const rich = buildCrownGeoRich();
   const broad = { cheap: fitted(cheap), rich: fitted(rich) };
   const out = {
