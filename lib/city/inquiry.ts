@@ -32,6 +32,7 @@ import {
   type TreeFacts,
   treeCard,
 } from "./inquiry-features";
+import { moreCard } from "./inquiry-more";
 import { bikeCard, trafficCard } from "./inquiry-traffic";
 import {
   isMeasuredRoof,
@@ -256,6 +257,13 @@ export function inquiryCard(
       return trafficCard(inquiry);
     case "bikes":
       return bikeCard(inquiry);
+    case "canopy":
+    case "furniture":
+    case "hedge":
+    case "lamp":
+    case "landing":
+    case "stop":
+      return moreCard(inquiry, provenance);
   }
 }
 

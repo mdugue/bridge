@@ -1671,12 +1671,18 @@ async function bootApp(
         };
       case "bikes":
         return { ...asked, credit: layerSources?.bikes?.credit };
+      case undefined:
+        return null;
       case "building":
       case "bridge":
       case "monument":
+      case "canopy":
+      case "furniture":
+      case "hedge":
+      case "lamp":
+      case "landing":
+      case "stop":
         return asked;
-      case undefined:
-        return null;
     }
   };
   // the last question's candidates, with what the card needs of each

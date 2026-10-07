@@ -37,7 +37,7 @@ import type { LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import { pointFeatures, unpackPoints } from "@/lib/city/point-pack";
 import { type SportTable, sportFixtures } from "@/lib/city/sport";
-import { offMonuments } from "@/lib/city/tree-placement";
+import { offMonuments, type TreeVeto } from "@/lib/city/tree-placement";
 import { unpackCrowns } from "@/lib/city/coarse-crowns";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
@@ -48,6 +48,7 @@ import {
 } from "@/lib/city/tileset";
 import { COARSE_DRESSING_KINDS, type DressingKind } from "@/lib/city/tile";
 import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
+import { moreSets } from "@/lib/city/ask-more";
 import { askSets, type AskSet } from "@/lib/city/ask-solids";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
@@ -482,7 +483,7 @@ function buildTileVegetation(
   features: Omit<VegetationFeatures, "extraTrees" | "keepTree">,
   inventoryTrees: TreeFeature[],
   vegCtx: VegetationContext
-): VegetationControl {
+): { keepTree?: TreeVeto; vegetation: VegetationControl } {
   const inventory =
     inventoryTrees.length > 0
       ? buildTreeInventory(inventoryTrees, vegCtx, features.ndviAt)
@@ -496,13 +497,13 @@ function buildTileVegetation(
     vegCtx
   );
   if (!inventory) {
-    return canopy;
+    return { vegetation: canopy };
   }
   const own = inventory.control;
   const group = new Group();
   group.name = "vegetation";
   group.add(canopy.group, own.group);
-  return {
+  const vegetation: VegetationControl = {
     group,
     chunks: canopy.chunks,
     multiTuft: canopy.multiTuft,
@@ -527,6 +528,7 @@ function buildTileVegetation(
       return a || b;
     },
   };
+  return { keepTree: inventory.keepTree, vegetation };
 }
 
 /** `Promise.all` over named promises: no position to get out of step. */
@@ -730,13 +732,15 @@ async function buildDressing(
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
-  const vegetation = buildTileVegetation(
+  const ownCanopy = offMonuments(canopy, monuments);
+  const ownScan = offMonuments(scanTrees, monuments);
+  const { vegetation, keepTree } = buildTileVegetation(
     {
       rows,
       // The laser-scan crowns outside the canopy mask join the canopy as
       // ordinary trees (they carry the same measured `h`); the bake already
       // dropped the ones a cadastre tree claims.
-      canopy: offMonuments([...canopy, ...scanTrees], monuments),
+      canopy: [...ownCanopy, ...ownScan],
       ndviAt: ndviAt ?? undefined,
     },
     // Orchard trees join the cadastre as its "small" archetype.
@@ -820,10 +824,26 @@ async function buildDressing(
       : undefined,
   };
   const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
+  await nextTask();
   const asks = [
     ...treeSets(inventory, askCtx),
     ...askSets(monumentItems(monuments, askCtx)),
     ...(bridgeSet ? [bridgeSet] : []),
+    // every other tree, the hedges, lamps, furniture, stops and landings
+    ...moreSets(
+      {
+        canopy: ownCanopy,
+        scan: ownScan,
+        rows,
+        hedges,
+        lamps: ownLamps,
+        furniture,
+        trams,
+        river,
+      },
+      { offset: ctx.offset, heightAt: terrain.heightAt, tile },
+      keepTree
+    ),
   ];
   // Sections are cut at the tile edge by the bake; a bridge street rides
   // the decks of this tile's bridge file (which names a seam deck in both).

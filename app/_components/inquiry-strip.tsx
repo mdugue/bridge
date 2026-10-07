@@ -1,12 +1,18 @@
 "use client";
 
 import {
+  AnchorIcon,
+  ArmchairIcon,
   BikeIcon,
   BridgeIcon,
   Building2Icon,
   CarIcon,
+  FerrisWheelIcon,
+  LampFloorIcon,
   LandmarkIcon,
   type LucideIcon,
+  ShrubIcon,
+  TramFrontIcon,
   TreeDeciduousIcon,
   TreePineIcon,
 } from "lucide-react";
@@ -34,8 +40,32 @@ function kindIcon(inquiry: Inquiry): LucideIcon {
       return CarIcon;
     case "bikes":
       return BikeIcon;
+    case "canopy":
+      return TreeDeciduousIcon;
+    case "hedge":
+      return ShrubIcon;
+    case "lamp":
+      return LampFloorIcon;
+    case "furniture":
+      return PLAY.has(inquiry.properties.k) ? FerrisWheelIcon : ArmchairIcon;
+    case "stop":
+      return TramFrontIcon;
+    case "landing":
+      return AnchorIcon;
   }
 }
+
+const PLAY = new Set([
+  "climb",
+  "playground",
+  "playhouse",
+  "roundabout",
+  "sandpit",
+  "seesaw",
+  "slide",
+  "springy",
+  "swing",
+]);
 
 const whole = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
 const tenths = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
