@@ -280,6 +280,26 @@ export interface DoorFeature {
   } | null;
 }
 
+/** A dormer the surface model shows on a pitched LoD2 roof
+ *  (pipeline/bake/dormers.py, DOM1 — the provider's licence): its centre,
+ *  the roof's downslope direction (`ax`, `ay`), its width across and depth
+ *  along the slope (`w`, `d`), the roof's height at the centre (`z`), its
+ *  measured top (`top`), the roof's slope (degrees) and the LoD2 object it
+ *  sits on (`of`). */
+export interface DormerFeature {
+  geometry: PointGeometry;
+  properties: {
+    ax: number;
+    ay: number;
+    d: number;
+    of: string;
+    slope: number;
+    top: number;
+    w: number;
+    z: number;
+  } | null;
+}
+
 /** What the surface model shows and LoD2 lacks, confirmed by OSM
  *  (pipeline/bake/structures.py, ODbL): a column (chimney, tower, mast,
  *  water tower, communications tower, lighthouse) as its axis point with

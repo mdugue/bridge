@@ -47,6 +47,7 @@ import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import type {
   CanopyFeature,
   DoorFeature,
+  DormerFeature,
   FeatureCollection,
   RailFeature,
   TramFeature,
@@ -575,6 +576,9 @@ function parseCity(tile: string): BakedCityMesh {
   const doors = existsSync(at(src.doors))
     ? readJson<FeatureCollection<DoorFeature>>(at(src.doors)).features
     : undefined;
+  const dormers = existsSync(at(src.dormers))
+    ? readJson<FeatureCollection<DormerFeature>>(at(src.dormers)).features
+    : undefined;
   const baked = bakeCityMesh(
     tile,
     doc,
@@ -585,7 +589,7 @@ function parseCity(tile: string): BakedCityMesh {
     osmDoc?.context ?? "render",
     gaps,
     measured,
-    doors
+    { doors, dormers }
   );
   sharedMatrix ??= baked.matrix;
   return baked;
@@ -631,6 +635,7 @@ async function bakeCity(
     at(src.landmarks),
     at(src.measuredRoofs),
     at(src.doors),
+    at(src.dormers),
   ];
   const bake = [
     "scripts/bake-city-mesh.ts",
