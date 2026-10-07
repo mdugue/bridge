@@ -85,7 +85,7 @@ export function readObjectTable(
     baseZ: new Float32Array(count),
     building: new Uint8Array(count),
     eaveH: new Float32Array(count),
-    flags: new Uint8Array(count),
+    flags: new Uint16Array(count),
     glow: new Uint8Array(count),
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
@@ -97,7 +97,7 @@ export function readObjectTable(
   const accessor = metadata.tableAccessors[0];
   const scalar = (
     name: string,
-    out: Float32Array | Uint8Array | Uint32Array
+    out: Float32Array | Uint8Array | Uint16Array | Uint32Array
   ) => {
     // absent columns stay 0 (`source` before plan 034: LoD2)
     if (!(accessor && name in accessor.properties)) {

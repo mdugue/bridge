@@ -38,6 +38,7 @@ export type Column =
       noData?: number;
     }
   | { type: "SCALAR"; componentType: "UINT8"; values: Uint8Array }
+  | { type: "SCALAR"; componentType: "UINT16"; values: Uint16Array }
   | { type: "SCALAR"; componentType: "UINT32"; values: Uint32Array }
   | { type: "VEC3"; componentType: "FLOAT32"; values: Float32Array }
   | { type: "STRING"; values: readonly string[] }
