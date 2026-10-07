@@ -22,6 +22,7 @@ import type { CardCredits } from "./card-lines";
 /** Dresden's credits (sites/providers.ts, sites/dresden.ts) as the HUD
  *  hands them over. */
 const DRESDEN: CardCredits = {
+  dlm: true,
   provider: "Quelle: GeoSN, dl-de/by-2-0",
   register: "Landeshauptstadt Dresden, dl-de/by-2-0",
 };
@@ -249,6 +250,7 @@ test("an unspecified house says so and quotes no OSM it did not use", () => {
 
 test("without the manifest a card on another Land's site credits that Land, not GeoSN", () => {
   const credits: CardCredits = {
+    dlm: false,
     provider: "Quelle: LGV Hamburg, dl-de/by-2-0",
   };
   const shed = object({ source: OBJECT_SOURCE_SCAN });

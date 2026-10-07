@@ -13,7 +13,7 @@ import { type CardCredits, cardCredits } from "./card-lines";
 
 /** Dresden's credits as the HUD hands them over (sites/). */
 const DRESDEN: CardCredits = cardCredits({
-  provider: { credit: "Quelle: GeoSN, dl-de/by-2-0" },
+  provider: { credit: "Quelle: GeoSN, dl-de/by-2-0", products: { dlm: true } },
   treeCadastre: {
     credit: "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0",
   },
@@ -143,6 +143,7 @@ test("an orchard tree says it is one, from OSM's orchard, with no register line"
 test("without the manifest the register and the surveys are the site's own", () => {
   expect(DRESDEN.register).toBe("Landeshauptstadt Dresden, dl-de/by-2-0");
   const hamburg: CardCredits = {
+    dlm: false,
     provider: "Quelle: LGV Hamburg, dl-de/by-2-0",
     register: "Freie und Hansestadt Hamburg, dl-de/by-2-0",
   };
@@ -150,11 +151,16 @@ test("without the manifest the register and the surveys are the site's own", () 
   expect(tree.sources).toEqual([
     "Art, Maße: Stadtbaumkataster · Freie und Hansestadt Hamburg, dl-de/by-2-0",
   ]);
-  // a site without a register credits its provider
+  // a site without a register has OSM's trees: no register is named, and
+  // its provider is not credited for one
   const munich = treeCard(linde, treeFactsAt(file, 0), null, {
+    dlm: true,
     provider: "Bayerische Vermessungsverwaltung, CC BY 4.0",
   });
-  expect(munich.sources[0]).toContain("Bayerische Vermessungsverwaltung");
+  expect(munich.kicker).toBe("Baum");
+  expect(munich.sources).toEqual([
+    "Art, Maße: OpenStreetMap · © OpenStreetMap-Mitwirkende, ODbL",
+  ]);
   const bridge = bridgeCard(
     {
       kind: "bridge",
@@ -166,9 +172,12 @@ test("without the manifest the register and the surveys are the site's own", () 
     null,
     hamburg
   );
+  // no Basis-DLM in Hamburg: the bridge's area is OSM's, its deck the DOM1's
   expect(bridge.sources).toEqual([
-    "Fläche, Deck im DOM1 gemessen: Basis-DLM · Quelle: LGV Hamburg, dl-de/by-2-0",
+    "Fläche: OpenStreetMap · © OpenStreetMap-Mitwirkende, ODbL",
+    "Deck im DOM1 gemessen: Digitales Oberflächenmodell DOM1 · Quelle: LGV Hamburg, dl-de/by-2-0",
   ]);
+  expect(bridge.sources.join()).not.toContain("Basis-DLM");
   expect([...tree.sources, ...bridge.sources].join()).not.toMatch(
     /GeoSN|Dresden/u
   );

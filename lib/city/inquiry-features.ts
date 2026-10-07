@@ -184,15 +184,19 @@ export function treeCard(
     firstText(f.german, f.botanical) ? "Art" : "",
     f.known & (KNOWN_HEIGHT | KNOWN_CROWN | KNOWN_TRUNK) ? "Maße" : "",
   ].filter(Boolean);
-  const source = t.osm
-    ? osmSource(provenance, what.length > 0 ? what : ["Baum"], "trees")
-    : sourceLine(provenance, "trees", what, {
-        label: REGISTER_LABEL,
-        credit: credits.register ?? credits.provider,
-      });
+  // a site without a register has OSM's trees alone (provenance.ts
+  // treesSource): no register is named, nor the provider credited for one
+  const register = t.osm ? undefined : credits.register;
+  const source =
+    register === undefined
+      ? osmSource(provenance, what.length > 0 ? what : ["Baum"], "trees")
+      : sourceLine(provenance, "trees", what, {
+          label: REGISTER_LABEL,
+          credit: register,
+        });
   const nr = f.nr > 0 ? ` · Baum Nr. ${whole.format(f.nr)}` : "";
   return {
-    kicker: t.osm ? "Baum" : "Stadtbaum",
+    kicker: register === undefined ? "Baum" : "Stadtbaum",
     title,
     address: f.place ? `${f.place}${nr}` : "",
     facts: treeLines(t, f, title),
@@ -307,6 +311,38 @@ export function structureLabel(structure: string | null | undefined): string {
     .join(" · ");
 }
 
+/**
+ * Where a bridge's area and deck come from: the provider's Basis-DLM, the
+ * deck measured in its DOM1 — or, where the provider has no Basis-DLM
+ * (Hamburg, Berlin: rail_osm.py), OSM's bridge ways, the deck still
+ * measured in the provider's DOM1.
+ */
+function bridgeAreaLines(
+  area: string,
+  provenance: SiteProvenance | null,
+  credits: CardCredits
+): string[] {
+  const deck = "Deck im DOM1 gemessen";
+  if (credits.dlm) {
+    return [
+      sourceLine(provenance, "dlm", [area, deck], {
+        label: "Basis-DLM",
+        credit: credits.provider,
+      }),
+    ];
+  }
+  return [
+    osmSource(provenance, [area], "bridges"),
+    sourceLine(
+      provenance,
+      "dom",
+      [deck],
+      { label: "Digitales Oberflächenmodell DOM1", credit: credits.provider },
+      ""
+    ),
+  ];
+}
+
 /** The bridge's card. */
 export function bridgeCard(
   b: BridgeInquiry,
@@ -323,12 +359,7 @@ export function bridgeCard(
     ["Durchfahrtshöhe", p.clearance ? metres(p.clearance) : ""],
   ]);
   const sources = [
-    sourceLine(
-      provenance,
-      "dlm",
-      [p.name ? "Name, Fläche" : "Fläche", "Deck im DOM1 gemessen"],
-      { label: "Basis-DLM", credit: credits.provider }
-    ),
+    ...bridgeAreaLines(p.name ? "Name, Fläche" : "Fläche", provenance, credits),
     p.wikidata && (structure || p.span)
       ? sourceLine(
           provenance,

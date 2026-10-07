@@ -107,6 +107,9 @@ export function osmSource(
 /** The credits a card names where the provenance manifest has none (not
  *  yet arrived, or failed): the site's own, never another Land's. */
 export interface CardCredits {
+  /** whether the provider publishes a Basis-DLM (`products.dlm`); without
+   *  one the bridge areas come from OSM (Hamburg, Berlin) */
+  dlm: boolean;
   /** the provider's credit line (`Provider.credit`): LoD2, DOM, DLM, scan */
   provider: string;
   /** the street-tree register's holder and licence, where the site has one */
@@ -116,11 +119,12 @@ export interface CardCredits {
 /** A site's credits as a card names them: the provider's line as it is,
  *  the register's without its label ("Stadtbäume: …" → "…"). */
 export function cardCredits(site: {
-  provider: { credit: string };
+  provider: { credit: string; products: { dlm: boolean } };
   treeCadastre?: { credit: string };
 }): CardCredits {
   const register = site.treeCadastre?.credit.replace(/^[^:]*:\s*/u, "");
   return {
+    dlm: site.provider.products.dlm,
     provider: site.provider.credit,
     ...(register ? { register } : {}),
   };
