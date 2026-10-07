@@ -296,8 +296,8 @@ function ledge(h: F, top: F, size: number, drop: number, strength: F): F {
     float(1).sub(smoothstep(0, drop, below))
   );
   return float(1)
-    .add(face.mul(0.14).mul(strength))
-    .sub(shade.mul(0.26).mul(strength));
+    .add(face.mul(0.18).mul(strength))
+    .sub(shade.mul(0.32).mul(strength));
 }
 
 /**
@@ -336,7 +336,7 @@ function articulation(
   const px = max(fwidth(h), 1e-4);
   // Sockel
   const plinth = clamp(float(0.6).sub(h).div(px), 0, 1).mul(step(3, eave));
-  let out: V3 = mix(col, col.mul(vec3(0.82, 0.83, 0.86)), plinth.mul(low));
+  let out: V3 = mix(col, col.mul(vec3(0.78, 0.79, 0.83)), plinth.mul(low));
   out = out.mul(
     ledge(h, float(0.64), 0.04, 0.12, low.mul(step(3, eave)).mul(0.8))
   );

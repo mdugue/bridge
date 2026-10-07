@@ -680,7 +680,7 @@ visual-variable codebook is in
   front. Walls only, not on a door; the ground floor's three only on a part
   standing on the ground (flag 128: within 3 m of its tree's lowest base,
   so a tower's part on a roof gets no plinth). Slider *Gliederung*,
-  default 60 %. No windows: the veto stands.
+  default 80 %. No windows: the veto stands.
 - **Doors** — OSM `entrance=*` nodes on the ground floor (no `level`, or
   one with a 0; not `no`, `entry_only`, `emergency_ward_entrance`) snapped
   onto the nearest LoD2 footprint edge within 3 m (`pipeline/bake/
