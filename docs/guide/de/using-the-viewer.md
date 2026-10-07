@@ -411,6 +411,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Dachfarbe* | wie stark die echte (oder synthetische) Dachfarbe durchkommt |
 | | *Dachsättigung* | hebt die Sättigung der Luftbild-Dachfarben, ohne den Farbton zu verschieben; 0 = rohes Luftbild |
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
+| | *Gliederung* | was ein Haus auf Augenhöhe vor seinen Fenstern zeigt: ein steinerner Sockel, ein Gesims über dem Erdgeschoss, ein tieferes unter der Traufe und eine dunklere Ladenzone, wo ein Laden erfasst ist — keine Fenster |
 | | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |

@@ -389,6 +389,7 @@ mistake); the switch stays as you set it.
 | | *Dachfarbe* | how strongly the real (or synthesised) roof colour shows |
 | | *Dachsättigung* | lifts the saturation of the aerial-photo roof colours without shifting their hue; 0 = raw photo |
 | | *Traufkante* | a soft line where wall meets roof |
+| | *Gliederung* | what a house shows at eye level before its windows: a stone plinth, a ledge over the ground floor, a deeper one under the eaves, and a darker shop zone where a shop is mapped — no windows |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |

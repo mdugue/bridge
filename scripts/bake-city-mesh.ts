@@ -34,6 +34,7 @@ import {
   type CityObjectRow,
   inheritedFlags,
   inheritedLook,
+  markGrounded,
   OBJECT_FLAG_OWN_COLOUR,
   OBJECT_SOURCE_DOOR,
   OBJECT_SOURCE_GAP,
@@ -572,6 +573,7 @@ export function bakeCityMesh(
 
   const baked = { epsg, matrix, objects, offset, vertices: v };
   appendBeyondLod2(tile, baked, keys, { doors, facades, gaps, scan });
+  markGrounded(baked.objects);
   return baked;
 }
 

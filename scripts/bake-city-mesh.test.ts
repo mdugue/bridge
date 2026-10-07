@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { CityJsonDocument } from "../lib/city/types";
-import { OBJECT_SOURCE_GAP } from "../lib/city/city-mesh";
+import { OBJECT_FLAG_GROUNDED, OBJECT_SOURCE_GAP } from "../lib/city/city-mesh";
 import type { StructureFeature } from "../lib/city/features";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
 import { bakeCityMesh, scanStructureId } from "./bake-city-mesh";
@@ -96,8 +96,13 @@ test("a BuildingPart inherits its Building's function: glow and tint", () => {
   // Heights stay the part's own: 9 m of box, not the building's.
   expect(part.eaveH).toBeCloseTo(9, 2);
   expect(house.eaveH).toBeCloseTo(12, 2);
-  // Without an OSM LUT nothing is flagged.
-  expect(baked.objects.map((o) => o.flags)).toEqual([0, 0, 0]);
+  // Without an OSM LUT only what stands on the ground is flagged (the shop
+  // Building is drawn by its part).
+  expect(baked.objects.map((o) => o.flags)).toEqual([
+    0,
+    OBJECT_FLAG_GROUNDED,
+    OBJECT_FLAG_GROUNDED,
+  ]);
 });
 
 test("the OSM LUT flags objects by id: shop 1, heritage 2", () => {
@@ -105,11 +110,19 @@ test("the OSM LUT flags objects by id: shop 1, heritage 2", () => {
     "shop-part": { shop: 1 },
     house: { heritage: 1, shop: 1 },
   });
-  expect(baked.objects.map((o) => o.flags)).toEqual([0, 1, 3]);
+  expect(baked.objects.map((o) => o.flags)).toEqual([
+    0,
+    1 + OBJECT_FLAG_GROUNDED,
+    3 + OBJECT_FLAG_GROUNDED,
+  ]);
   // ...and the glTF property table carries them as a UINT8 column.
   const flags = cityMesh(baked).input.table?.properties.flags;
   expect(flags).toMatchObject({ type: "SCALAR", componentType: "UINT8" });
-  expect([...(flags?.values ?? [])]).toEqual([0, 1, 3]);
+  expect([...(flags?.values ?? [])]).toEqual([
+    0,
+    1 + OBJECT_FLAG_GROUNDED,
+    3 + OBJECT_FLAG_GROUNDED,
+  ]);
 });
 
 test("every object carries its identity and semantics as fact columns", () => {
@@ -176,12 +189,20 @@ test("a part carries its root Building's flags as well as its own", () => {
     shop: { heritage: 1 },
     "shop-part": { shop: 1 },
   });
-  expect(baked.objects.map((o) => o.flags)).toEqual([2, 3, 0]);
+  expect(baked.objects.map((o) => o.flags)).toEqual([
+    2,
+    3 + OBJECT_FLAG_GROUNDED,
+    OBJECT_FLAG_GROUNDED,
+  ]);
   // A flag on the root alone still reaches the part.
   const rootOnly = bakeCityMesh("t", fixture(), undefined, null, {
     shop: { shop: 1 },
   });
-  expect(rootOnly.objects.map((o) => o.flags)).toEqual([1, 1, 0]);
+  expect(rootOnly.objects.map((o) => o.flags)).toEqual([
+    1,
+    1 + OBJECT_FLAG_GROUNDED,
+    OBJECT_FLAG_GROUNDED,
+  ]);
 });
 
 test("the scan's small structures join as their own buildings, source 1", () => {
@@ -210,7 +231,7 @@ test("the scan's small structures join as their own buildings, source 1", () => 
   expect(shed.eaveH).toBeCloseTo(2.7, 2);
   // no storey band on a shed: the first would stand above its eave
   expect(shed.storeyH).toBeGreaterThan(shed.eaveH);
-  expect(shed.flags).toBe(0);
+  expect(shed.flags).toBe(OBJECT_FLAG_GROUNDED);
   expect(shed.glow).toBe(0);
   expect(shed.footprints[0].length).toBe(4);
   expect(shed.facts).toMatchObject({ height: 2.5, area: 12, function: "" });

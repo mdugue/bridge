@@ -71,6 +71,36 @@ export const OBJECT_FLAG_ASKED = 32;
 /** A part that wears its own colour (a door's surround and leaf): its tint
  *  drawn at full strength, not mixed into the clay by *Farbvariation*. */
 export const OBJECT_FLAG_OWN_COLOUR = 64;
+/** An object that stands on the ground, not on another part's roof: the
+ *  plinth, shop zone and ground-floor cornice are drawn on it only. */
+export const OBJECT_FLAG_GROUNDED = 128;
+/** A part counts as grounded when its base lies within this of its building
+ *  tree's lowest base (a slope's fall; a part on a roof sits a storey up). */
+export const GROUNDED_SLACK_M = 3;
+
+/**
+ * Sets OBJECT_FLAG_GROUNDED on every object whose base lies within
+ * `GROUNDED_SLACK_M` of the lowest base in its building tree (a lone
+ * building is its own tree, so it always does). A Building drawn only by
+ * its parts has no geometry (no height, base 0) and takes no part. In
+ * place.
+ */
+export function markGrounded(
+  objects: readonly Pick<CityObjectRow, "baseZ" | "eaveH" | "flags" | "root">[]
+): void {
+  const drawn = objects.filter((o) => o.eaveH > 0);
+  const lowest = new Map<number, number>();
+  for (const o of drawn) {
+    lowest.set(o.root, Math.min(lowest.get(o.root) ?? Infinity, o.baseZ));
+  }
+  for (const o of drawn) {
+    const grounded =
+      o.baseZ <= (lowest.get(o.root) ?? o.baseZ) + GROUNDED_SLACK_M;
+    if (grounded && !hasObjectFlag(o.flags, OBJECT_FLAG_GROUNDED)) {
+      o.flags += OBJECT_FLAG_GROUNDED;
+    }
+  }
+}
 
 /** The `flags` value of one object: its OSM facts summed as bits. */
 export function objectFlags(entry?: OsmBuildingFacts): number {

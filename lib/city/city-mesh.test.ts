@@ -1,5 +1,7 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
+  markGrounded,
+  OBJECT_FLAG_GROUNDED,
   type CityObjectRow,
   countBuildings,
   doomedObjects,
@@ -149,4 +151,27 @@ test("LoD2 traffic structures (ALKIS 53001, bridges) leave the building mesh", (
   expect(kept.vertices).toBe(doc.vertices);
   const plain = { ...doc, CityObjects: { house: doc.CityObjects.house } };
   expect(withoutTrafficStructures(plain)).toBe(plain);
+});
+
+describe("markGrounded", () => {
+  test("flags the parts near their tree's lowest base, not one on a roof", () => {
+    const objects = [
+      { baseZ: 0, eaveH: 0, flags: 0, root: 0 },
+      { baseZ: 110, eaveH: 9, flags: 0, root: 0 },
+      { baseZ: 112.5, eaveH: 9, flags: 1, root: 0 },
+      { baseZ: 124, eaveH: 9, flags: 0, root: 0 },
+      { baseZ: 140, eaveH: 9, flags: 0, root: 4 },
+    ];
+    markGrounded(objects);
+    // the Building drawn by its parts takes no flag, nor sets the lowest base
+    expect(objects.map((o) => o.flags)).toEqual([
+      0,
+      OBJECT_FLAG_GROUNDED,
+      1 + OBJECT_FLAG_GROUNDED,
+      0,
+      OBJECT_FLAG_GROUNDED,
+    ]);
+    markGrounded(objects);
+    expect(objects[1].flags).toBe(OBJECT_FLAG_GROUNDED);
+  });
 });
