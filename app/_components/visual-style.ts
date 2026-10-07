@@ -41,6 +41,7 @@ import {
   vec4,
 } from "three/tsl";
 import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
+import { SELECTION_ACCENT } from "@/lib/city/outline";
 import {
   type ClayLookKey,
   LOOK_DEFAULTS,
@@ -387,8 +388,9 @@ function clayGlow(
     .glass.mul(fres.mul(fres).mul(fres))
     .mul(d.uRim)
     .mul(float(1).sub(d.uNight.mul(0.7)));
-  // The asked building's paper light: faint by day, a glow after dark.
-  const askedLight = vec3(0.97, 0.9, 0.78).mul(
+  // The asked building's light, in the accent's pale: faint by day, a
+  // glow after dark.
+  const askedLight = vec3(...SELECTION_ACCENT.halo).mul(
     askedFlag(flags).mul(d.uNight.mul(0.08).add(0.06))
   );
   return rim
@@ -406,8 +408,10 @@ function askedFlag(flags: F): F {
 /**
  * The building someone asks about (flag 32, OBJECT_FLAG_ASKED — set in the
  * packed table at runtime by the inquiry probe, ADR 0042): lifted towards
- * paper white (a faint paper light of its own in clayGlow, so it
- * reads in shade too), and drawn over with a pencil hatch. Near, the
+ * the accent's pale (a faint light of its own in clayGlow, so it reads in
+ * shade too), and drawn over with a hatch in the HUD's accent
+ * (`SELECTION_ACCENT`, lib/city/outline.ts) — the selection is the
+ * interface's, so it leaves the city's palette. Near, the
  * strokes lie on the building — every 0.9 m, along the wall and up it (so
  * they climb the facade at 45°), straight across the roof, fwidth-constant
  * like the storey lines. Where they would crowd closer than a few pixels
@@ -433,8 +437,8 @@ function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
     min(abs(fract(s.sub(0.5)).sub(0.5)).mul(7 / 1.2), 1)
   );
   const ink = mix(paper.mul(0.55), line.mul(0.6), near).mul(asked);
-  const lifted = mix(col, vec3(0.97, 0.93, 0.85), asked.mul(0.4));
-  return mix(lifted, vec3(0.24, 0.22, 0.21), ink);
+  const lifted = mix(col, vec3(...SELECTION_ACCENT.halo), asked.mul(0.4));
+  return mix(lifted, vec3(...SELECTION_ACCENT.ink), ink);
 }
 
 /**

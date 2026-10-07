@@ -1585,8 +1585,8 @@ async function bootApp(
   // What the outline goes around (selection-shape.ts): a building's own
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
   // monument's shape after its data.
-  const outline = (subject: OutlineSubject | null) => {
-    postStack.setSelection(outlineShape(subject));
+  const outline = (subject: OutlineSubject | null, flash = true) => {
+    postStack.setSelection(outlineShape(subject), flash);
   };
   const outlineShape = (
     subject: OutlineSubject | null

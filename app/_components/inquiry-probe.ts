@@ -209,7 +209,8 @@ export function createInquiryProbe(deps: {
   /** distance along the pick ray to the ground, or null within `far` */
   groundAlong: (raycaster: Raycaster, far: number) => number | null;
   /** the outline's subject: what was asked, or null when nothing is */
-  outline: (subject: OutlineSubject | null) => void;
+  /** a hover over a candidate passes `flash` false (selection-outline.ts) */
+  outline: (subject: OutlineSubject | null, flash?: boolean) => void;
   /** the trees, monuments and decks on screen now (lib/city/ask-items.ts) */
   things: () => Iterable<AskSet<FeatureInquiry>>;
   /** the canvas size in CSS px, for the tolerance rings */
@@ -373,7 +374,8 @@ export function createInquiryProbe(deps: {
   const preview = (index: number | null) => {
     const hit = last?.hits[index ?? last.selected];
     if (hit) {
-      deps.outline(subject(hit));
+      // a hover only points: no flash (selection-outline.ts)
+      deps.outline(subject(hit), false);
     }
   };
 
