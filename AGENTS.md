@@ -946,6 +946,10 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   still *formats* it. Accepted knowingly — revisit if oxc ships CSS rules.
 - `components/ui/**` is vendored by `shadcn add` — regenerate, never hand-edit.
   Adding a component adds its dependency; removing one should remove it again.
+  One deliberate exception: `components/ui/sidebar.tsx` no longer writes its
+  open state to a cookie (the site sets none, ADR 0045). A `shadcn add
+  sidebar` brings that write back — take it out again; the no-cookie test in
+  `app/_components/storage-keys.test.ts` fails until you do.
 - Class names are joined with `cn` from the **`cn` package** (shadcn's
   replacement for `clsx` + `tailwind-merge`, set up by `shadcn migrate cn`):
   import it as `import { cn } from "cn"`, as the generated components do.
