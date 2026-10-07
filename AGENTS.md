@@ -542,8 +542,11 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
   ≈ 2 min for fifteen tiles, warm ≈ 1 s; CI restores it between runs): the key covers the inputs'
-  contents and every module the bake imports (`scripts/bake-sources.ts`
-  walks the import graph — there is no list to keep in step); the glTF quantisation and meshopt settings live in
+  contents and every module the artifact's own bake imports,
+  walked from that bake's entry (`scripts/bake-sources.ts`; the site's own config and
+  `prepare-data.ts` are in every key — there is no list to keep in step),
+  so another site's config re-bakes nothing and a palette colour only the
+  map picture; the glTF quantisation and meshopt settings live in
   `scripts/tile-glb.ts`, the gzip (Bun's libdeflate) in `prepare-data.ts`.
 
 ## Rendering gotchas (hard-won — don't relearn these)

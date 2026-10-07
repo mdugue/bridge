@@ -5,24 +5,46 @@ import { join } from "node:path";
 import { contentKey, createContentHasher, moduleGraph } from "./bake-sources";
 
 describe("moduleGraph", () => {
-  test("reaches every module the bake imports, transitively", () => {
-    const graph = moduleGraph("scripts/prepare-data.ts");
-    // The ones a hand-kept list once missed: each shapes every tile.
+  test("a tile bake's graph holds its own modules, not the site configs or the palette", () => {
+    const terrain = moduleGraph("scripts/bake-tiles.ts");
     for (const path of [
-      "scripts/prepare-data.ts",
       "scripts/bake-tiles.ts",
-      "scripts/bake-city-mesh.ts",
       "lib/city/tfw.ts",
-      "lib/city/crs.ts",
-      "lib/city/recenter.ts",
-      "lib/city/landcover.ts",
+      "lib/city/terrain-geometry.ts",
+    ]) {
+      expect(terrain).toContain(path);
+    }
+    for (const path of [
+      "sites/berlin.ts",
       "sites/dresden.ts",
-      // through the tsconfig alias (sites/dresden.ts: "@/lib/city/pose")
+      "lib/city/landcover.ts",
       "lib/city/pose.ts",
     ]) {
-      expect(graph).toContain(path);
+      expect(terrain).not.toContain(path);
     }
-    expect(graph.every((path) => !path.includes("node_modules"))).toBe(true);
+    const city = moduleGraph("scripts/bake-city-mesh.ts");
+    expect(city).toContain("lib/city/city-mesh.ts");
+    expect(city).not.toContain("sites/berlin.ts");
+    expect(moduleGraph("scripts/bake-wissen-hero.ts")).toContain(
+      "lib/city/landcover.ts"
+    );
+    expect(terrain.every((path) => !path.includes("node_modules"))).toBe(true);
+  });
+
+  test("no bake prepare-data keys on reaches a site config", () => {
+    // The CLI that does lives beside it (scripts/line-levels-cli.ts).
+    for (const entry of [
+      "scripts/line-levels.ts",
+      "scripts/coarse-crowns.ts",
+      "scripts/tile-sources.ts",
+      "scripts/tile-glb.ts",
+      "scripts/downsample-raster.ts",
+      "scripts/crop-raster.ts",
+    ]) {
+      expect(
+        moduleGraph(entry).filter((path) => path.startsWith("sites/"))
+      ).toEqual([]);
+    }
   });
 
   test("follows relative and @/ imports, not packages", () => {
