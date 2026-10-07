@@ -1134,6 +1134,17 @@ async function bootApp(
           memoryEmergency(`allocation ${part}`);
         }
       },
+      // A dressing that threw leaves its tile bare: noted, reported, and
+      // said in the HUD as a layer's hole (no retry heals it).
+      onDressingFailed: (error, tile) => {
+        const message = error instanceof Error ? error.message : String(error);
+        opts.trail?.note("dressing failed", `${tile} ${message}`);
+        if (!(disposed || reportedError)) {
+          reportedError = true;
+          reportedNetwork = false;
+          opts.onError?.(`${message} (Kachel ${tile})`);
+        }
+      },
       dressingGate,
       fogColor: sceneFog.color,
       heightAt,

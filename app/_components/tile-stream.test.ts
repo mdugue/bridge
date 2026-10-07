@@ -266,6 +266,66 @@ test("a compile the GPU had no room for is reported once, and drops nothing", as
   }
 });
 
+test("a dressing whose build throws is reported, an allocation failure as one, and the tile settles", async () => {
+  for (const error of [
+    new TypeError("boom"),
+    new RangeError("Array buffer allocation failed"),
+  ]) {
+    const failed: [unknown, string][] = [];
+    const allocations: [unknown, string][] = [];
+    const ctx = {
+      dressingGate: Promise.resolve(),
+      compile: () => Promise.resolve(true),
+      onAllocationFailure: (err: unknown, where: string) =>
+        allocations.push([err, where]),
+      onDressingFailed: (err: unknown, tile: string) =>
+        failed.push([err, tile]),
+      onChange: () => undefined,
+      // the build's first file URL reads it: the earliest throw a test
+      // can inject without a renderer
+      get tilesetUrl(): string {
+        throw error;
+      },
+    } as unknown as TileStreamContext;
+    const plugin = new DressingPlugin(ctx, {
+      cities: new Set(),
+      terrains: new Set(),
+      dressings: new Set(),
+      demolished: new Map(),
+    });
+    const scene = new Object3D();
+    const terrain = {} as TerrainLayer;
+    plugin.dressed.set(scene, { terrain });
+    const tile = "33412_5656_2_sn";
+    // reason: queueDressing is private; the test drives the queue directly,
+    // without the terrain build a renderer would need
+    const queue = (
+      plugin as unknown as {
+        queueDressing: (
+          scene: Object3D,
+          terrain: TerrainLayer,
+          extras: unknown
+        ) => Promise<void>;
+      }
+    ).queueDressing.bind(plugin);
+    await queue(scene, terrain, {
+      tileId: tile,
+      level: 0,
+      dressing: { vegrows: "vegrows.json" },
+    });
+    // the queue moves on: the tile counts as tried
+    await nextTask();
+    expect(plugin.settled.has(tile)).toBe(true);
+    if (error instanceof RangeError) {
+      expect(allocations).toEqual([[error, `dressing ${tile}`]]);
+      expect(failed).toEqual([]);
+    } else {
+      expect(failed).toEqual([[error, tile]]);
+      expect(allocations).toEqual([]);
+    }
+  }
+});
+
 /** A plugin whose compiles resolve at once, and a content root with a mesh
  *  whose geometry reports its own dispose. */
 function abortableLoad() {

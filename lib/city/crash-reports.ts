@@ -61,6 +61,8 @@ export const PROBLEM_KINDS: ReadonlySet<string> = new Set([
   "boot failed",
   // a GPU allocation that failed in a compile: the page sheds and goes on
   "alloc-failed",
+  // a dressing's build threw: the tile stays bare
+  "dressing failed",
   // the render stopped and the page did not reload: the failure card
   "gpu failed",
 ]);

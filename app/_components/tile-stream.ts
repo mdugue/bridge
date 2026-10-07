@@ -62,6 +62,7 @@ import {
   fetchFeatures,
   fetchOptionalBinary,
   fetchOptionalJson,
+  isAbortError,
 } from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
 import { buildLamps, type LampControl } from "./lamp-layer";
@@ -192,6 +193,9 @@ export interface TileStreamContext {
    * past it). Once per failure.
    */
   onAllocationFailure?: (error: unknown, where: string) => void;
+  /** a dressing whose build threw (not an abort, not an allocation
+   *  failure — those go to `onAllocationFailure`): the tile stays bare */
+  onDressingFailed?: (error: unknown, tile: string) => void;
   renderer: WebGPURenderer;
   styleResources: StyleResources;
   sunDirection: Vector3;
@@ -1392,8 +1396,18 @@ export class DressingPlugin {
           })
           .catch(() => undefined);
       })
-      .catch(() => {
-        // A dressing that fails leaves its tile bare, never the stream stuck.
+      .catch((err: unknown) => {
+        // A dressing that fails leaves its tile bare, never the stream
+        // stuck — but never silently: a builder's throw is a bug or a
+        // heap that ran out.
+        if (isAbortError(err) || this.disposed) {
+          return;
+        }
+        if (isAllocationFailure(err)) {
+          this.ctx.onAllocationFailure?.(err, `dressing ${extras.tileId}`);
+        } else {
+          this.ctx.onDressingFailed?.(err, extras.tileId);
+        }
       })
       .finally(() => {
         built();
