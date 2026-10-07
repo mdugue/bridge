@@ -843,9 +843,13 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       undefined,
       { timeout: slow(30_000) }
     );
-    // The spawn tile's counted sections are built (hidden until now).
-    const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
-    expect(stats?.traffic.triangles ?? 0).toBeGreaterThan(0);
+    // The spawn tile's counted sections are built on the switch-on (built
+    // in a task of their own and compiled before they show).
+    await page.waitForFunction(
+      () => (window.__poc?.stats?.layerStats.traffic.triangles ?? 0) > 0,
+      undefined,
+      { timeout: slow(30_000) }
+    );
     // The timetable runs at the scene's 14:00: trams are out on the spawn
     // tile's tracks, and the HUD says how many.
     await expect(page.locator("#tram-status")).toContainText(
