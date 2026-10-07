@@ -95,6 +95,7 @@ import {
 } from "./instancing";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
+import { TRUNK_BASE } from "@/lib/city/tree-family";
 
 export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
 
@@ -114,6 +115,8 @@ export interface TreeInstance {
     rich: Matrix4;
     season?: CrownSeasonKey;
   };
+  /** the bark as a tint of the trunk material (absent = its own colour) */
+  bark?: Color;
   trunk: Matrix4;
   /** Y-up world position, for the chunk bucketing */
   x: number;
@@ -850,11 +853,14 @@ export function buildTrunkGeo(): BufferGeometry {
  */
 export function buildTrunkMaterial(): MeshStandardNodeMaterial {
   return sceneMaterial("vegetation-trunk", () => {
-    const m = new MeshStandardNodeMaterial({ color: 0x8a_7c_68, roughness: 1 });
+    const m = new MeshStandardNodeMaterial({ color: TRUNK_BASE, roughness: 1 });
     m.name = "trunk";
     m.positionNode = instancePosition();
     const tg = clamp(varying(positionGeometry.y).div(TRUNK_H), 0, 1);
-    m.colorNode = materialColor.mul(mix(0.74, 1.05, smoothstep(0, 0.6, tg)));
+    // the register's bark per tree (TreeInstance.bark; white elsewhere)
+    m.colorNode = materialColor
+      .mul(instanceTint())
+      .mul(mix(0.74, 1.05, smoothstep(0, 0.6, tg)));
     return m;
   });
 }
@@ -936,6 +942,27 @@ function crownMesh(
   return mesh;
 }
 
+/** The precomputed trees' bark on their trunks (slots from `first`); the
+ *  canopy's trunks keep the material's own colour. Nothing to paint, no
+ *  tint buffer. */
+function paintBark(
+  trunks: Instances,
+  first: number,
+  extras: TreeInstance[]
+): void {
+  if (!extras.some((e) => e.bark)) {
+    return;
+  }
+  const white = new Color(1, 1, 1);
+  for (let i = 0; i < first; i++) {
+    trunks.setColorAt(i, white);
+  }
+  extras.forEach((e, i) => trunks.setColorAt(first + i, e.bark ?? white));
+  if (trunks.instanceTints) {
+    trunks.instanceTints.needsUpdate = true;
+  }
+}
+
 /**
  * One chunk's sets: a trunk per tree, and — when the chunk has any crown
  * — the mid, rich and far crowns (one is visible; updateVegetationLod
@@ -963,6 +990,7 @@ function buildTreeCell(
     const trunks = new Instances(geos.trunk, trunkMat, extras.length);
     trunks.castShadow = true;
     extras.forEach((e, i) => trunks.setMatrixAt(i, e.trunk));
+    paintBark(trunks, 0, extras);
     finishInstances(trunks);
     return { chunk: null, meshes: [trunks], season: null };
   }
@@ -989,6 +1017,7 @@ function buildTreeCell(
     rich = crownMesh(geos.rich, crownMat, trees, crowned, "rich");
     writePlacements(trunks, trees);
     extras.forEach((e, i) => trunks.setMatrixAt(trees.length + i, e.trunk));
+    paintBark(trunks, trees.length, extras);
     finishInstances(trunks);
   }
   trunks.castShadow = true;

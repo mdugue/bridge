@@ -34,6 +34,7 @@ import {
   phenologyOf,
   SEASON_JITTER_DAYS,
   seasonAt,
+  bloomAt,
 } from "@/lib/city/tree-season";
 import { Instances, instanceFloat, instanceMatrix } from "./instancing";
 import type { F, V2, V3 } from "./shader-chunks";
@@ -275,6 +276,26 @@ function autumnTargets(keys: CrownSeasonKey[]): Float32Array {
   return out;
 }
 
+/**
+ * Each instance's blossom colour (its genus's, divided by the material's
+ * base colour like the autumn targets), or null when no instance flowers.
+ */
+function bloomTargets(keys: CrownSeasonKey[]): Float32Array | null {
+  if (!keys.some((k) => !k.evergreen && phenologyOf(k.genus).bloom)) {
+    return null;
+  }
+  base.set(CROWN_BASE_COLOR);
+  const out = new Float32Array(keys.length * 3);
+  keys.forEach((k, i) => {
+    const [h, s, l] = phenologyOf(k.genus).bloom?.colour ?? [0, 0, 1];
+    scratch.setHSL(h, s, l);
+    out[i * 3] = scratch.r / base.r;
+    out[i * 3 + 1] = scratch.g / base.g;
+    out[i * 3 + 2] = scratch.b / base.b;
+  });
+  return out;
+}
+
 /** Writes one instance's season; true when its values moved. */
 function writeInstance(
   i: number,
@@ -282,19 +303,25 @@ function writeInstance(
   day: number,
   arrays: {
     bare: Float32Array;
+    bloom: Float32Array | null;
     colour: Float32Array;
     summer: Float32Array;
     target: Float32Array;
   }
 ): boolean {
   const s = key.evergreen ? EVERGREEN : seasonAt(day, key.genus, key.jitter);
-  const bare = 1 - s.leaf;
+  // A crown in flower is full of blossom, leaves or not (a cherry flowers
+  // before its leaves are out).
+  const flower =
+    arrays.bloom && !key.evergreen ? bloomAt(day, key.genus, key.jitter) : 0;
+  const bare = 1 - Math.max(s.leaf, flower);
   let moved = Math.abs(arrays.bare[i] - bare) > 1e-4;
   arrays.bare[i] = bare;
   for (let c = 0; c < 3; c++) {
     const j = i * 3 + c;
-    const v =
+    const leafy =
       arrays.summer[j] + (arrays.target[j] - arrays.summer[j]) * s.autumn;
+    const v = arrays.bloom ? leafy + (arrays.bloom[j] - leafy) * flower : leafy;
     moved ||= Math.abs(arrays.colour[j] - v) > 1e-4;
     arrays.colour[j] = v;
   }
@@ -337,6 +364,7 @@ export function seasonCrowns(
     colour: colourAttr.array as Float32Array,
     summer: Float32Array.from(colourAttr.array as Float32Array),
     target: autumnTargets(keys),
+    bloom: bloomTargets(keys),
   };
   const farSeason =
     far?.instanceTints && farSlots && farSlots.length === far.drawCount
