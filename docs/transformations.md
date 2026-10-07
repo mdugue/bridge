@@ -664,8 +664,31 @@ visual-variable codebook is in
   copper-green stays green, terracotta red, slate cool — curing drabness without
   homogenising toward terracotta. *(Rejected: blending toward a terracotta target
   — it destroyed the ~187 genuine copper-patina-green roofs the DOP captured.)*
-- **Storey bands** (*Höhenlinien*) — band spacing from `storeyHeight(measuredHeight)`
-  (`storeysAboveGround` is only ~4 % populated, so derived).
+- **Storey bands** (*Höhenlinien*) — where OSM counts the storeys
+  (`building:levels`, a part's own or its Building's), the walls up to the
+  eave divided by that count (`mappedStoreyHeight`), kept when the storey
+  comes out 2.4–5.5 m (outside it the count is another part's or a typo);
+  else `storeyHeight(measuredHeight)`, whole ~3.2 m storeys
+  (`storeysAboveGround` is only ~4 % populated). Spawn tile: 2 172 objects
+  on mapped storeys (median 3.67 m, p10 3.06, p90 4.79), 298 back on the
+  estimate.
+- **Doors** — OSM `entrance=*` nodes on the ground floor (no `level`, or
+  one with a 0; not `no`, `entry_only`, `emergency_ward_entrance`) snapped
+  onto the nearest LoD2 footprint edge within 3 m (`pipeline/bake/
+  doors.py`), with the outward normal; dropped on a party wall (its
+  outside lies in another footprint), an edge too short for 0.7 m, or a
+  wall too low for the door plus 0.6 m; one door per 1.2 m of wall. The
+  sill stands on the lowest DGM1 sample in front of it. The building bake
+  lays each door onto its host's wall triangles (`wallShift` in
+  `lib/city/doors.ts` — LoD2 walls stand up to ±0.15 m off the footprint
+  line, and a wall proud of it swallowed the leaf) and appends a pale
+  surround and a darker leaf set back between it, as two objects in the
+  host's building tree (`source` 3, flag 64: their tint at full strength).
+  Dresden: 6 628 doors on fifteen tiles (3 208 `main`, 2 794 `yes`, 299
+  `staircase`), 489 on the spawn tile. Never an invented door: a building
+  without a mapped entrance has none. Ground joins: `doors` in
+  `JOIN_PARTS`, budget 1 % (the misses are sills at the top of mapped
+  steps).
 - **Eave line** (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
   (geometry-derived; the attribute is ~4 %).
 - **Dusk glow** (*Abendlicht*) — warm emissive on commerce/public/special

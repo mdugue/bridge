@@ -10,6 +10,7 @@ import argparse
 from . import (
     canopy,
     cultivated,
+    doors,
     edges,
     fetch,
     furniture,
@@ -52,6 +53,8 @@ STEPS = {
     "ndvi": ndvi.run,
     "roof-colour": roof_colour.run,
     "osm-buildings": osm_buildings.run,
+    # OSM entrances on the LoD2 walls (scripts/bake-city-mesh.ts draws them).
+    "doors": doors.run,
     "lamps": lamps.run,
     "monuments": monuments.run,
     "furniture": furniture.run,

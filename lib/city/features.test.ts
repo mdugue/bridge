@@ -7,6 +7,7 @@ import type {
   CanopyExtraFeature,
   CanopyFeature,
   CultivatedFeature,
+  DoorFeature,
   FeatureCollection,
   FurnitureFeature,
   LampFeature,
@@ -236,6 +237,25 @@ test.each(cases)("%s: lamps are points", (_, a) => {
     expect(isPoint2(f.geometry.coordinates)).toBe(true);
   }
 });
+
+test.each(tiles)(
+  "%s: doors are points on a wall with a size and a ground",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).doors;
+    for (const f of loadSource<DoorFeature>(src)) {
+      expect(f.geometry.type).toBe("Point");
+      expect(isPoint2(f.geometry.coordinates)).toBe(true);
+      const p = f.properties;
+      expect(p?.of.length ?? 0).toBeGreaterThan(0);
+      expect(Math.hypot(p?.nx ?? 0, p?.ny ?? 0)).toBeCloseTo(1, 3);
+      expect(p?.w ?? 0).toBeGreaterThanOrEqual(0.7);
+      expect(p?.w ?? 99).toBeLessThanOrEqual(6);
+      expect(p?.h ?? 0).toBeGreaterThanOrEqual(1.8);
+      expect(p?.h ?? 99).toBeLessThanOrEqual(5);
+      expect(Number.isFinite(p?.z)).toBe(true);
+    }
+  }
+);
 
 test.each(tiles)(
   "%s: small structures are rectangles with a ground and a top in range",
@@ -713,6 +733,7 @@ test.each(tiles)(
       stairSourceFile(site, tile),
       terraceSourceFile(site, tile),
       cityMeshSourceFiles(site, tile).osmBuild,
+      cityMeshSourceFiles(site, tile).doors,
       sideFileSource(site, `surface_${tile}.json`),
     ];
     for (const file of files) {

@@ -16,7 +16,8 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { SmallBuildingFeature } from "../lib/city/features";
+import { doorJoins } from "../lib/city/doors";
+import type { DoorFeature, SmallBuildingFeature } from "../lib/city/features";
 import { cutWallGates, fenceGeometry } from "../lib/city/fences";
 import {
   checkJoins,
@@ -55,6 +56,7 @@ export const JOIN_PARTS = [
   "stairs",
   "fences",
   "sheds",
+  "doors",
 ] as const;
 export type JoinPart = (typeof JOIN_PARTS)[number];
 
@@ -86,6 +88,18 @@ async function tileGround(site: Site, tile: string): Promise<Ground> {
     bounds: dgm.bounds,
     heightAt: (x, y) => sampleHeightfield(field, x, y),
   };
+}
+
+/** OSM's entrances the bake draws as doors on a tile's walls. */
+function doors(site: Site, tile: string): DoorFeature[] {
+  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).doors);
+  return existsSync(path)
+    ? ((
+        JSON.parse(readFileSync(path, "utf8")) as {
+          features?: DoorFeature[];
+        }
+      ).features ?? [])
+    : [];
 }
 
 /** The scan's small structures the bake appends to a tile's buildings. */
@@ -126,6 +140,7 @@ function tileJoins(
       fenceGeometry(fenceLines(site, tile), gates, heightAt, OFFSET, cut.leaves)
         ?.joins ?? [],
     sheds: smallBuildings(site, tile).flatMap(structureJoins),
+    doors: doors(site, tile).flatMap(doorJoins),
   };
 }
 

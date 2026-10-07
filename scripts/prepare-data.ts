@@ -46,6 +46,7 @@ import type { OsmBuildingLut, WallMaterial } from "../lib/city/city-mesh";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import type {
   CanopyFeature,
+  DoorFeature,
   FeatureCollection,
   RailFeature,
   TramFeature,
@@ -571,6 +572,9 @@ function parseCity(tile: string): BakedCityMesh {
     ? readJson<FeatureCollection<MeasuredRoofFeature>>(at(src.measuredRoofs))
         .features
     : undefined;
+  const doors = existsSync(at(src.doors))
+    ? readJson<FeatureCollection<DoorFeature>>(at(src.doors)).features
+    : undefined;
   const baked = bakeCityMesh(
     tile,
     doc,
@@ -580,7 +584,8 @@ function parseCity(tile: string): BakedCityMesh {
     scan,
     osmDoc?.context ?? "render",
     gaps,
-    measured
+    measured,
+    doors
   );
   sharedMatrix ??= baked.matrix;
   return baked;
@@ -625,6 +630,7 @@ async function bakeCity(
     at(src.structures),
     at(src.landmarks),
     at(src.measuredRoofs),
+    at(src.doors),
   ];
   const bake = [
     "scripts/bake-city-mesh.ts",

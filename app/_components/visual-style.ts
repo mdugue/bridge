@@ -248,7 +248,9 @@ function clayColour(
   flags: F
 ): V3 {
   const isRoof = step(0.5, build.x);
-  const tintMix = mix(d.uTint, d.uRoofTint, isRoof);
+  // a door wears its own colour (OBJECT_FLAG_OWN_COLOUR, 64) at full strength
+  const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
+  const tintMix = max(mix(d.uTint, d.uRoofTint, isRoof), own);
   const roofL = dot(tint, vec3(0.299, 0.587, 0.114));
   const roofC = tint.sub(roofL);
   const dull = float(1).sub(smoothstep(0.04, 0.3, length(roofC)));

@@ -39,7 +39,7 @@ export interface OsmBuildingFacts {
   heritage?: number;
   /** one of the city's landmarks (landmarks.py, Wikidata) */
   landmark?: number;
-  /** `building:levels`, for the inquiry card */
+  /** `building:levels`, for the inquiry card and the storey bands */
   levels?: number;
   material?: WallMaterial;
   /** the outline's `name`, for the inquiry card */
@@ -68,6 +68,9 @@ export const OBJECT_FLAG_LANDMARK = 16;
 /** The building someone is asking about (the inquiry card, ADR 0042): set
  *  in the packed texture at runtime only, never baked. */
 export const OBJECT_FLAG_ASKED = 32;
+/** A part that wears its own colour (a door's surround and leaf): its tint
+ *  drawn at full strength, not mixed into the clay by *Farbvariation*. */
+export const OBJECT_FLAG_OWN_COLOUR = 64;
 
 /** The `flags` value of one object: its OSM facts summed as bits. */
 export function objectFlags(entry?: OsmBuildingFacts): number {
@@ -154,6 +157,9 @@ export const OBJECT_SOURCE_SCAN = 1;
 /** A structure the surface model shows beyond LoD2 (pipeline/bake/
  *  structures.py): a chimney, tower or mast, or a missing building. */
 export const OBJECT_SOURCE_GAP = 2;
+/** A doorway on a wall, part of the building it opens (pipeline/bake/
+ *  doors.py, OSM entrances): its surround or its leaf. */
+export const OBJECT_SOURCE_DOOR = 3;
 
 /** The property table as typed columns — how the glTF carries it. */
 export interface CityObjectTable {
