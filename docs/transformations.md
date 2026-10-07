@@ -1009,7 +1009,7 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   **crown air** (2026-10-07): the tree's air (`aGap`: canopy 0.3 ± 0.1,
   the register's 0.3) opens its crown, mostly at its rim, where a real
   crown shows the sky. Where the crown's radial normal grazes the view, a
-  smooth Perlin field in the crown's space (2.6 and 6 cycles per geometry
+  smooth noise field in the crown's space (2.6 and 6 cycles per geometry
   unit, seeded by the ground position) is cut away by the crown's mask —
   crisp, no hash — up to 2.3 × air of the field at the silhouette, faded
   out within 6–14 m of the eye (`crownRimKeep`); the crown is drawn from
@@ -1018,11 +1018,16 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   carry their centres (`aClump`; the core −1) and move apart — 1.4 × air of
   their offset out, shrunk 0.5 × air, the core 1.3 × air — with the
   crown's own normals (`crownLobes`), and every crown's outline is frayed
-  by a per-tree Perlin field over the direction from its centre, up to 3 ×
+  by a per-tree noise field over the direction from its centre, up to 3 ×
   air geometry units deep (`crownFray`); the bays and the core shade up to
   40 % darker. The shadow pass reads all of it from the sun, so the
   shadow's edge breaks up too. The mask and the two sides cost the summer
-  crowns their early depth test. 🗃️ Measured offline (a silhouette
+  crowns their early depth test. Both fields are one bilinear tap of a
+  256² value-noise texture (`crown-noise.ts`, the trick that answers a 3D
+  noise from a 2D lattice whose second channel is the next slice): with
+  MaterialX's Perlin (`mx_noise_float`), twice a fragment and twice a
+  vertex in the scene and the shadow pass, a park view took ~1.6× main's
+  frame time (SwiftShader, WebGPU), with the texture ~1.07×. 🗃️ Measured offline (a silhouette
   raster of the rich crown from four sides), lobes alone let through
   about 1 % sky even at three times the spread, and shrinking them until
   sky showed left loose balls; tunnels through the crown read as rings.

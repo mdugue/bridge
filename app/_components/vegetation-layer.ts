@@ -29,7 +29,6 @@ import {
   materialColor,
   max,
   mix,
-  mx_noise_float,
   normalize,
   normalView,
   positionViewDirection,
@@ -47,6 +46,7 @@ import {
   vec4,
 } from "three/tsl";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { crownNoise } from "./crown-noise";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import {
@@ -728,7 +728,7 @@ export function crownShape(p: V3 = positionGeometry): V3 {
 
 /**
  * A crown's air (`aGap`, crown-season.ts `CrownSeasonKey.open`) frays its
- * outline: a per-tree Perlin field over the direction from the crown's
+ * outline: a per-tree noise field (crown-noise.ts) over the direction from the crown's
  * centre bites irregular bays into the surface, FRAY_DEPTH × open deep,
  * with a finer octave so their rims are ragged, and pushes a few tufts
  * out. A dense crown (open ≈ 0.15, a chestnut) stays nearly round, an airy
@@ -756,8 +756,8 @@ export function crownFray(p: V3 = positionGeometry): {
   const n = normalize(
     p.sub(vec3(0, TRUNK_H + CROWN_R * 0.5, 0)).add(vec3(0, 1e-3, 0))
   );
-  const broad = mx_noise_float(n.mul(3.1).add(seed));
-  const fine = mx_noise_float(n.mul(6.3).add(seed.yxz));
+  const broad = crownNoise(n.mul(3.1).add(seed));
+  const fine = crownNoise(n.mul(6.3).add(seed.yxz));
   const hollow = smoothstep(0.02, 0.5, broad.add(fine.mul(0.35)));
   const tuft = smoothstep(0.25, 0.6, fine.negate()).mul(0.3);
   const open = instanceFloat("aGap");
@@ -801,7 +801,7 @@ export function crownLobes(): { inner: F; position: V3 } {
 
 /**
  * A crown's air at its rim: where the crown turns away from the eye (its
- * radial normal grazing the view), a smooth Perlin field in the crown's
+ * radial normal grazing the view), a smooth noise field (crown-noise.ts) in the crown's
  * own space cuts leaf-sized holes — crisp, no hash, so no grain — and the
  * cut grows towards the silhouette and with the tree's air (`aGap`). The
  * crown stays closed where it faces the eye and turns leafy and see-through
@@ -837,8 +837,8 @@ export function crownRimKeep(p: V3): ReturnType<F["greaterThan"]> {
       instanceFloat("aGap").mul(RIM_CUT).mul(near)
     )
   );
-  const leaf = mx_noise_float(rimVary.xyz)
-    .add(mx_noise_float(rimVary.xyz.mul(2.3).add(RIM_OCTAVE)).mul(0.45))
+  const leaf = crownNoise(rimVary.xyz)
+    .add(crownNoise(rimVary.xyz.mul(2.3).add(RIM_OCTAVE)).mul(0.45))
     .mul(0.5)
     .add(0.5);
   const facing = clamp(dot(normalView, positionViewDirection), 0, 1);
