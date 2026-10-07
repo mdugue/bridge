@@ -424,6 +424,47 @@ export function inheritedAttributes(
   return out;
 }
 
+/** ALKIS functions whose facade is its own: palaces, theatres, concert
+ *  halls, museums, castles, churches, synagogues, chapels, houses of
+ *  worship, mosques, temples, monasteries, parliaments. */
+const MONUMENTAL = new Set([
+  "31001_3011",
+  "31001_3031",
+  "31001_3032",
+  "31001_3033",
+  "31001_3034",
+  "31001_3038",
+  "31001_3040",
+  "31001_3041",
+  "31001_3042",
+  "31001_3043",
+  "31001_3045",
+  "31001_3046",
+  "31001_3047",
+  "31001_3048",
+]);
+/** A storey taller than this (m) is a hall's, not a storey house's. */
+const HALL_STOREY_M = 5.5;
+
+/**
+ * Whether a building's facade is its own rather than a storey house's:
+ * a monumental use (`MONUMENTAL`, the Building's ALKIS function), or
+ * storeys OSM counts that are taller than `HALL_STOREY_M` (a hall, a
+ * nave). Such a facade gets no painted plinth or cornices and no drawn
+ * doors — they are a town house's, and a church in them looks dressed up.
+ */
+export function ownFacade(
+  attrs: Record<string, unknown> = {},
+  eaveH = 0,
+  levels = 0
+): boolean {
+  const fn = readString(attrs.function);
+  if (fn && MONUMENTAL.has(fn)) {
+    return true;
+  }
+  return levels > 0 && eaveH / levels > HALL_STOREY_M;
+}
+
 /**
  * Whether a building earns a warm interior glow at dusk: commerce
  * (`31001_2xxx`), public (`31001_3xxx`) and special structures (non-`31001`).

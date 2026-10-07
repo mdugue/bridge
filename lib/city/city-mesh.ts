@@ -63,7 +63,9 @@ export const OBJECT_FLAG_HERITAGE = 2;
 export const OBJECT_FLAG_GLASS = 4;
 /** Metal walls or cladding: a cool, smoother clay (column `flags`). */
 export const OBJECT_FLAG_METAL = 8;
-/** Part of one of the city's landmarks (Wikidata; column `flags`). */
+/** Part of one of the city's landmarks (Wikidata) or of a building whose
+ *  facade is its own (`ownFacade`, lib/city/building-tint.ts): no generic
+ *  Gliederung, no drawn doors (column `flags`). */
 export const OBJECT_FLAG_LANDMARK = 16;
 /** The building someone is asking about (the inquiry card, ADR 0042): set
  *  in the packed texture at runtime only, never baked. */

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   buildingGlows,
+  ownFacade,
   buildingTint,
   inheritedAttributes,
   roofColor,
@@ -179,4 +180,12 @@ test("a brick city paints housing and commerce in brick, civic keeps its stone",
   const civic = { function: "31001_3021" };
   expect(buildingTint("c", civic, "brick")).toEqual(buildingTint("c", civic));
   expect(buildingTint("h", {}, "render")).toEqual(buildingTint("h", {}));
+});
+
+test("ownFacade: monumental uses and hall storeys, not town houses", () => {
+  expect(ownFacade({ function: "31001_3041" })).toBe(true); // Kirche
+  expect(ownFacade({ function: "31001_3032" })).toBe(true); // Theater, Oper
+  expect(ownFacade({ function: "31001_1000" }, 18, 6)).toBe(false);
+  expect(ownFacade({ function: "31001_2000" }, 18, 2)).toBe(true); // a hall
+  expect(ownFacade({ function: "31001_2000" }, 18)).toBe(false); // no levels
 });
