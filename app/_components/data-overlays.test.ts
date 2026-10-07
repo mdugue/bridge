@@ -65,6 +65,40 @@ test("a timetable that failed to load says so and is tried again on the next swi
   overlays.dispose();
 });
 
+test("trams whose compile failed leave the scene, and the next switch-on adds one set", async () => {
+  stubFetch(
+    () =>
+      new Response(
+        JSON.stringify({ days: {}, patterns: [], profiles: [], routes: [] })
+      )
+  );
+  const parent = new Object3D();
+  const trams = () => parent.children.filter((c) => c.name === "tram-cars");
+  const statuses: (TramCarsStatus | null)[] = [];
+  let compiles = 0;
+  const overlays = createDataOverlays({
+    ...base,
+    parent,
+    compile: () => {
+      compiles++;
+      return compiles === 1
+        ? Promise.reject(new Error("pipeline"))
+        : Promise.resolve();
+    },
+    onTramStatus: (s) => statuses.push(s),
+    tramTimetableUrl: "/data/trams.json",
+  });
+  overlays.apply(layers({ tramLayer: true }));
+  await until(() => statuses.some((s) => s?.failed));
+  expect(trams()).toHaveLength(0);
+  overlays.apply(layers({ tramLayer: false }));
+  overlays.apply(layers({ tramLayer: true }));
+  await until(() => overlays.parts().trams?.visible === true);
+  expect(trams()).toHaveLength(1);
+  overlays.dispose();
+  expect(trams()).toHaveLength(0);
+});
+
 test("a malformed timetable is a failed load", () => {
   expect(isTramTimetable(null)).toBe(false);
   expect(isTramTimetable({ patterns: [] })).toBe(false);

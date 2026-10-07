@@ -174,7 +174,8 @@ function bikeOverlay(
 /** What the HUD hears when the timetable could not be loaded. */
 const TRAM_LOAD_FAILED: TramCarsStatus = {
   date: null,
-  failed: "Fahrplan nicht geladen",
+  failed:
+    "Fahrplan nicht geladen – Ebene aus- und wieder einschalten, um es erneut zu versuchen",
   kind: "weekday",
   running: 0,
 };
@@ -221,6 +222,9 @@ function tramOverlay(
       return;
     }
     loading = true;
+    // this load's cars until they are the layer's (freed below otherwise,
+    // or the next switch-on would add a second set)
+    let built: TramCars | null = null;
     try {
       const [timetable, bridges] = await Promise.all([
         fetchOptionalJson<unknown>(url, signal),
@@ -236,17 +240,17 @@ function tramOverlay(
       // Decks only: the approach ramps need the ground of tiles that may
       // not have streamed in; a car off the deck rides the ground.
       const decks = buildDeckTable(bridges, { offset: opts.ground.offset });
-      const built = createTramCars(timetable, decks, opts.ground);
+      built = createTramCars(timetable, decks, opts.ground);
       built.group.visible = false;
       opts.parent.add(built.group);
       built.update(clock(performance.now()));
       await opts.compile(built.group);
       if (!alive()) {
-        built.dispose();
         return;
       }
       cars = built;
-      built.group.visible = on;
+      built = null;
+      cars.group.visible = on;
       opts.onChange?.();
     } catch (err) {
       // a missing or broken file is no crash: the HUD says so
@@ -254,6 +258,9 @@ function tramOverlay(
         failed();
       }
     } finally {
+      // not the layer's (a throw, a rejected compile, a page gone): freed,
+      // its group out of the scene
+      built?.dispose();
       loading = false;
     }
   };
