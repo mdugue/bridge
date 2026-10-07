@@ -349,7 +349,8 @@ function writePlacements(mesh: Instances, items: Placement[], widen = 1): void {
     const p = items[i];
     dummy.position.set(p.x, p.y, p.z);
     dummy.rotation.set(0, p.rot, 0);
-    dummy.scale.set(p.s * widen, p.s, p.s * widen);
+    const w = (p.w ?? p.s) * widen;
+    dummy.scale.set(w, p.s, w);
     dummy.updateMatrix();
     mesh.setMatrixAt(i, dummy.matrix);
   }
@@ -721,7 +722,7 @@ export function buildCrownMaterial(
   const sway = crownSway(u.time);
   m.positionNode = instancePosition(sway.local);
   m.castShadowPositionNode = instancePosition();
-  const crownScale = varying(length(instanceColumn(0).xyz));
+  const crownScale = varying(length(instanceColumn(1).xyz));
   const gust = varying(sway.gust);
   const tinted = materialColor.mul(instanceTint());
   if (!bare) {

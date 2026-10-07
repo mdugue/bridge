@@ -24,7 +24,8 @@
  *     uint8  genus           TREE_GENERA index (register trees; 0 = other)
  *     int8   jitter          the register tree's season offset × 10 (days)
  *     uint16 rot             the turn about the vertical, 0..2π over 0..65535
- *     uint16 a, b, c         a canopy tree: its scale × 4096, 0, 0; a
+ *     uint16 a, b, c         a canopy tree: its vertical and horizontal
+ *                            scale × 4096, 0; a
  *                            register tree: its crown's base, top and width
  *                            in centimetres
  */
@@ -88,8 +89,10 @@ export type CoarseCrown = {
 } & (
   | {
       kind: "canopy";
-      /** the tree's scale (tree-placement.ts) */
+      /** the tree's vertical scale (tree-placement.ts) */
       s: number;
+      /** its horizontal scale (absent = `s`) */
+      w?: number;
     }
   | {
       kind: "register";
@@ -128,6 +131,7 @@ export function coarseCrowns(
       z: p.z,
       rot: p.rot,
       s: p.s,
+      w: p.w ?? p.s,
       ndvi: p.ndvi,
     }));
   const registered = register
@@ -177,6 +181,8 @@ export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
     if (c.kind === "canopy") {
       view.setUint8(at + 8, 0);
       view.setUint16(at + 14, clampInt(c.s * SCALE_UNIT, 0, 65_535), true);
+      const w = (c.w ?? c.s) * SCALE_UNIT;
+      view.setUint16(at + 16, clampInt(w, 0, 65_535), true);
       return;
     }
     view.setUint8(at + 8, 1 + REGISTER_COLOURS.indexOf(c.colour));
@@ -219,7 +225,13 @@ export function unpackCrowns(buffer: ArrayBuffer): CoarseCrown[] | null {
     const a = view.getUint16(at + 14, true);
     const colour = REGISTER_COLOURS[code - 1];
     if (code === 0 || colour === undefined) {
-      out.push({ ...base, kind: "canopy", s: a / SCALE_UNIT });
+      const w = view.getUint16(at + 16, true);
+      out.push({
+        ...base,
+        kind: "canopy",
+        s: a / SCALE_UNIT,
+        w: (w || a) / SCALE_UNIT,
+      });
       continue;
     }
     out.push({

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   Color,
   Matrix4,
@@ -9,8 +9,10 @@ import {
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { TRUNK_ROWS, trunkRadiusAt } from "@/lib/city/tree-inventory";
+import { BASE_TREE_H, GENERIC_CROWN_W } from "@/lib/city/tree-placement";
 import { isInstances } from "./instancing";
 import {
+  buildCrownGeo,
   buildCrownWarmup,
   buildTrunkGeo,
   buildVegetation,
@@ -212,4 +214,15 @@ test("the trunk geometry's rings are the profile its girth is fitted to", () => 
       0.08
     );
   }
+});
+
+describe("the generic crown's measures", () => {
+  test("BASE_TREE_H and GENERIC_CROWN_W are the crown geometry's own", () => {
+    const g = buildCrownGeo();
+    g.computeBoundingBox();
+    const box = g.boundingBox;
+    expect(box?.max.y).toBeCloseTo(BASE_TREE_H, 0);
+    const width = (box?.max.x ?? 0) - (box?.min.x ?? 0);
+    expect(Math.abs(width - GENERIC_CROWN_W)).toBeLessThan(0.3);
+  });
 });
