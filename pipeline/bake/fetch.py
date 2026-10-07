@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import importlib
 import shutil
+import urllib.error
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -92,6 +93,14 @@ def own_cells(tile: Tile, km: int) -> set[tuple[int, int]]:
     file missing for one of them is an error, one missing for a margin cell
     (past the provider's coverage) is skipped."""
     return set(cells(tile, km))
+
+
+def not_published(err: OSError) -> bool:
+    """Whether a download failed because the server has no such file (404,
+    410) — the one failure that skips a margin cell. Anything else (a
+    timeout, a cut connection, a failed check, a 5xx) raises, so `_step`
+    reports the product as not fetched and the next run tries again."""
+    return isinstance(err, urllib.error.HTTPError) and err.code in (404, 410)
 
 
 def adapter(provider: str) -> Adapter:

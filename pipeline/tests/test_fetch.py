@@ -215,3 +215,69 @@ def test_saxony_links_come_from_the_batch_pages_current_shares(tmp_path, monkeyp
     finally:
         sn.products.cache_clear()
     assert fetched == [f"{sn.CLOUD}/NewLsc123/lsc_33414_5656_2_sn_laz.zip"]
+
+
+def _http(code):
+    import urllib.error
+
+    return urllib.error.HTTPError("https://example.invalid/x.zip", code, "x", None, None)
+
+
+def test_saxony_lod2_reads_the_ring_and_skips_only_missing_neighbours(tmp_path, monkeypatch):
+    # A seam building may be filed in a neighbour's 2 km ZIP: the LoD2 fetch
+    # asks for the 3x3 cells. A neighbour the server has no file for is
+    # skipped; any other failure (a 503, a cut connection) raises, so the
+    # tile is not written without its seam buildings.
+    import pytest
+
+    from bake.fetch import Ctx
+    from bake.providers import sn
+
+    tile = _tile((408000.0, 5708000.0, 410000.0, 5710000.0))
+    asked = []
+    failures = {}
+
+    def fake_zip(ctx, product, e, n, keep=False):
+        asked.append((e, n))
+        if (e, n) in failures:
+            raise failures[(e, n)]
+        return tmp_path / f"{e}_{n}.zip"
+
+    monkeypatch.setattr(sn, "_zip", fake_zip)
+    monkeypatch.setattr(sn, "unzip_members", lambda path, pattern, dest: [path])
+    ctx = Ctx(tmp_path, tmp_path, 25833)
+
+    failures[(406, 5706)] = _http(404)
+    files = sn.lod2(ctx, tile)
+    assert sorted(asked) == sorted(cells(tile, 2, margin=1))
+    assert len(files) == 8
+
+    for err in (_http(503), OSError("cut connection")):
+        failures[(406, 5706)] = err
+        with pytest.raises(OSError):
+            sn.lod2(ctx, tile)
+    failures.clear()
+    failures[(408, 5708)] = _http(404)
+    with pytest.raises(OSError):
+        sn.lod2(ctx, tile)
+
+
+def test_nrw_lod2_reads_the_ring_and_skips_neighbours_the_listing_lacks(tmp_path, monkeypatch):
+    import pytest
+
+    from bake.fetch import Ctx
+    from bake.providers import nw
+
+    tile = _tile((408000.0, 5708000.0, 410000.0, 5710000.0))
+    present = {c for c in cells(tile, 1, margin=1) if c != (407, 5707)}
+    pattern = nw.PATTERNS["lod2"]
+    names = [pattern.format(e=e, n=n).replace("\\", "") for e, n in present]
+    monkeypatch.setattr(nw, "listing", lambda product: names)
+    asked = []
+    monkeypatch.setattr(nw, "download", lambda url, dest: asked.append(url) or dest)
+    files = nw.lod2(Ctx(tmp_path, tmp_path, 25832), tile)
+    assert len(files) == len(asked) == 15
+
+    names.remove(pattern.format(e=408, n=5708).replace("\\", ""))
+    with pytest.raises(FileNotFoundError):
+        nw.lod2(Ctx(tmp_path, tmp_path, 25832), tile)

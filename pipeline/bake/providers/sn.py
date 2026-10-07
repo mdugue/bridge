@@ -17,7 +17,7 @@ from functools import cache
 from pathlib import Path
 
 from ..common import DLM_LAYERS, Tile
-from ..fetch import Ctx, cells, own_cells
+from ..fetch import Ctx, cells, not_published, own_cells
 from ..net import download, fetch_text, unzip_members
 
 BATCH_PAGE = "https://www.geodaten.sachsen.de/batch-download-4719.html"
@@ -51,15 +51,15 @@ def _files(
     ctx: Ctx, tile: Tile, product: str, pattern: str, margin: int = 0, keep: bool = False
 ) -> list[Path]:
     """The members matching `pattern` of every cell's ZIP. A margin cell
-    the provider has no file for (past Saxony's border) is skipped; the
-    tile's own cells raise."""
+    the server answers 404 for (past Saxony's border) is skipped; any other
+    failure, and any failure on the tile's own cells, raises."""
     own = own_cells(tile, TILE_KM)
     out = []
     for e, n in cells(tile, TILE_KM, margin):
         try:
             archive = _zip(ctx, product, e, n, keep)
-        except OSError:
-            if (e, n) in own:
+        except OSError as err:
+            if (e, n) in own or not not_published(err):
                 raise
             print(f"{tile.id}: LoD2 {e}_{n} (neighbour) not available")
             continue
