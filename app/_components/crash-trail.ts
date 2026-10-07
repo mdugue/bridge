@@ -38,6 +38,25 @@ declare global {
 }
 const PREVIOUS_KEY = "crash-trail.previous";
 
+/** The query parameters worth a record (the QA knobs, AGENTS.md): anything
+ *  else a page was opened with stays out of the trail — it goes into
+ *  reports and the crash card's text. */
+const TRAIL_QUERY = ["scene", "gpu", "block", "safety", "trail"] as const;
+
+/** The path plus the known knobs of `search`, in their given order. */
+export function trailUrl(pathname: string, search: string): string {
+  const given = new URLSearchParams(search);
+  const kept = new URLSearchParams();
+  for (const key of TRAIL_QUERY) {
+    const value = given.get(key);
+    if (value !== null) {
+      kept.set(key, value);
+    }
+  }
+  const query = kept.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 let rotated = false;
 let announced = false;
 /** Moves the last page's record aside, once per page load. */
@@ -186,7 +205,7 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
   const seconds = () => (performance.now() - t0) / 1000;
   const trail = createTrail({
     startedAt: new Date().toISOString(),
-    url: location.pathname + location.search,
+    url: trailUrl(location.pathname, location.search),
     userAgent: navigator.userAgent,
     screen: `${screen.width}×${screen.height}@${devicePixelRatio}`,
     deviceMemoryGB: (navigator as Navigator & { deviceMemory?: number })

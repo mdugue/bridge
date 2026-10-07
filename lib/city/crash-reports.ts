@@ -44,7 +44,8 @@ import { RESUME_WINDOW_MS } from "./gpu-safety";
  * What goes out is what the trail holds and nothing else: the path (no
  * query), the user agent, the screen and the device's memory, the
  * renderer, the events (`scrub`bed) and the beats — no position (the trail
- * has none), no user id (a session's id names the page, not the visitor),
+ * has none: the URL it keeps is the path and the QA knobs, and the hand-off
+ * between cities travels in the fragment), no user id (a session's id names the page, not the visitor),
  * no IP address (`sdk.settings.infer_ip: "never"`: Sentry infers none),
  * no cookie. No DOM.
  */
