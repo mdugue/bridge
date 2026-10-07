@@ -570,9 +570,13 @@ card showing the figure it is ranked by.
 one entry per output, under a key over the **contents** of its input
 files, the bake's own sources and the values it depends on (the recenter
 offset, the `extras` it names). The sources are not a hand-kept list:
-`scripts/bake-sources.ts` walks the relative imports from `prepare-data.ts`,
-so every `lib/city/` module and site config the bake reaches is in the key,
-plus `bun.lock` and `patches/` (the glTF tools' versions shape the output).
+each artifact names the bake modules that make it, and
+`scripts/bake-sources.ts` walks the relative imports from those entries, so
+every module that shapes the artifact is in its key — and only those. Every
+key also carries `prepare-data.ts` itself, the site's own config,
+`sites/providers.ts`, `bun.lock` and `patches/` (the glTF tools' versions
+shape the output). Another site's config re-bakes nothing; a palette colour
+re-bakes only the map picture.
 A changed input, a changed bake or a renamed side file re-bakes; a checkout
 or a touch alone does not; anything else is a cache
 read. Every site shares the directory, and it keeps one entry per name: a
