@@ -186,7 +186,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     id: "figure",
     label: "Schwarzplan",
     description:
-      "Die Gebäude schwarz, alles andere weiß — keine Bäume, keine Schatten; gemacht für den Lageplan",
+      "Die Gebäude schwarz, alles andere weiß, die Katasterbäume als Kronenkreise — keine Schatten; gemacht für den Lageplan",
     shaderMode: 6,
     // the figure is the drawing: no lines
     inkWeight: 0,

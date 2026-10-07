@@ -1321,6 +1321,20 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   the coarse level's crowns carry no age. The age is
   counted to the current year, so the picture ages with the calendar.
   Height and crown size stay as measured.
+- **Trees by picture style** (2026-10-07) — what the tree changes above
+  mean per style, with one new mark. *Pastell*, *Film noir*, *Sin City*:
+  everything (families, blossom, age, stakes). *Comic*: its cloud
+  crowns copy every per-instance attribute (`style-dressing.ts`), so they
+  turn and flower with the season. *Papier* and *Strich*: the paper
+  override has no mask, so their card crowns stay closed outlines (a
+  plan's cloud, not a noise). *Schwarzplan*: until now no trees; now the register's trees as
+  a site plan draws them (`tree-plan.ts`: the measured crown as a circle,
+  its line 8 % of the radius, the stem a dot, 0.4 m above the foot), one
+  hidden set per tile shown only in its frames (`paper-scene.ts` shows
+  what is tagged `planOnly`) and drawn in the figure's black by the swap.
+  Only the register's trees: measured, so they may stand on a plan; the
+  canopy's are inferred. On the fine terrain level only, so a Schwarzplan
+  zoomed out past it shows none.
 
 - **Hedges (OSM, laser-scan height)** and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the

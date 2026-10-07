@@ -13,6 +13,7 @@ import type { TreeFeature } from "@/lib/city/features";
 import { familyLook, TRUNK_BASE } from "@/lib/city/tree-family";
 import { ageLook } from "@/lib/city/tree-age";
 import { buildTreeStakes } from "./tree-stakes";
+import { buildTreePlan } from "./tree-plan";
 import {
   LOOK_DEFAULTS,
   type VegetationLookKey,
@@ -544,6 +545,10 @@ export function buildTreeInventory(
     const stakes = buildTreeStakes(trees.filter((t) => ageLook(t.age).staked));
     if (stakes) {
       group.add(stakes);
+    }
+    const plan = buildTreePlan(trees);
+    if (plan) {
+      group.add(plan);
     }
     counts.broad = trees.filter((t) => t.shape === "broad").length;
     const reshaped = trees.filter((t) => t.shape !== "broad");
