@@ -129,7 +129,7 @@ is the codebook.
 | The asked building | the probe's pick on a click, a long press or `I` (the whole building tree) → flag 32 in the packed texture at runtime: lifted 40 % towards paper white with a faint paper light of its own; a pencil hatch every 0.9 m on the building near (up the facade at 45°, across the roof), 45° strokes every 7 px in screen space where those would crowd; and the outline (below); no slider, the hatch not in *Papier* | the viewer's question | `inquiry-probe.ts`, `city-layer.ts` `mark`, `visual-style.ts` `askedColour` |
 | The asked tree, monument or bridge | the probe's pick among the tile's askable things (ray vs. data solids; bridges vs. their drawn meshes) → the outline (next row) alone | the viewer's question | `inquiry-probe.ts`, `lib/city/ask-items.ts`, `bridge-ask.ts` |
 | The asked traffic flow or bicycle counter | while its layer shows: a ray on the flow's drawn bodies (the vertex names its section) or on the counter's columns as tall as they stand → the outline alone, a flow's with the layer's own grown and widened positions, tested only against what stands in front of the glass | the viewer's question | `traffic-ask.ts`, `bike-ask.ts`, `lib/city/inquiry-traffic.ts` |
-| The outline of the asked element | its triangles (a building's or bridge's own; a tree's crown and trunk, a monument's cylinder, a basin's prism as stand-ins) → a one-byte mask where the scene's depth shows them, blurred at half resolution by its own one-byte blur (GaussianBlurNode's kernel, `outlineKernel`) → the band 0.07–0.66 of the blur: one rounded line along the silhouette as seen now, 4.5 CSS px of the hatch's graphite on a hair of its paper, fwidth-smoothed; over the finished frame, in every picture style; mask and blur drawn only while something is asked | the viewer's question | `selection-outline.ts`, `selection-shape.ts`, `lib/city/outline.ts`, `post-stack.ts` |
+| The outline of the asked element | its triangles (a building's or bridge's own; a tree's crown and trunk, a monument's cylinder, a basin's prism as stand-ins) → a two-byte mask, red the whole element, green where the scene's depth shows it (MAX blending), blurred at half resolution by its own two-byte blur (GaussianBlurNode's kernel, `outlineKernel`) → the band 0.07–0.66 of red's blur: one rounded line round the element's whole silhouette, never along what stands in front, 4.5 CSS px of the hatch's graphite on a hair of its paper, fwidth-smoothed, at 42 % of its ink where green says the element is hidden (`OUTLINE_HIDDEN`, the hidden edge); over the finished frame and everything in it, in every picture style; mask and blur drawn only while something is asked | the viewer's question | `selection-outline.ts`, `selection-shape.ts`, `lib/city/outline.ts`, `post-stack.ts` |
 | The inquiry card (HUD, not the scene; a bottom sheet on touch) | the fact columns (`buildingId`, ALKIS use, roof form and pitch, height, area, OSM name, address, storeys), a tree's register facts (`treefacts_<tile>.json`), a monument's or bridge's feature, and the provenance manifest (each source's edition and licence), on demand only | LoD2, OSM, `data/<site>/provenance.json` | `lib/city/object-facts.ts`, `lib/city/inquiry.ts`, `lib/city/provenance.ts`, `inquiry-card.tsx` (ADR 0042) |
 | Transparency | slider, hash-dithered (no transmission) | — | (*Transparenz*) |
 | Tree position and height | canopy point + `h` (3–45 m): as tall as measured, crown 0.58 × h wide (the cadastre's measured median; a scan crown 2r within 0.4–0.75 × h); rows every 9 m along `veg04_l` | DOM1−DGM1, LSC, Basis-DLM | `vegetation-layer.ts`, `lib/city/tree-placement.ts` |
@@ -354,18 +354,23 @@ step of the memory governor can shrink them.
   depth buffer (a half-float RGBA with depth was twelve bytes a texel for
   one value); the outline draws only while something is asked (below).
 
-On the iPhone the post targets went from 68 to 9.6 MiB (+0.9 while
+On the iPhone the post targets went from 68 to 9.6 MiB (+1.8 while
 something is asked, +6 while a picture style is on); at 2560×1440 on a
 desktop, from 316 to 251 MiB.
 
 **The outline of the asked element** (`selection-outline.ts`) is a
-one-byte mask at the drawing buffer's resolution — the element's
-triangles where the scene's depth shows them — blurred by its own
-two-pass blur into one-byte, half-resolution targets with GaussianBlurNode's
+two-byte mask at the drawing buffer's resolution — red the element's
+triangles wherever they fall, green only where the scene's depth shows
+them — blurred by its own two-pass blur into two-byte, half-resolution
+targets with GaussianBlurNode's
 kernel (`outlineKernel`; three's node copies its source's half-float type
 onto its targets, which made them RGBA16F), and banded in the last pass,
-over the antialiased frame. The mask and the blur are drawn only while
-something is asked; idle, the last pass reads the cleared 0.19 MiB blur
+over the antialiased frame: the line follows red, so it goes round the
+whole element and over whatever stands in front of it, and is lighter
+where green says that part is hidden. (It used to follow green alone and
+so traced the edge of the tree or house in front.) The mask and the blur
+are drawn only while something is asked; idle, the last pass reads the
+cleared 0.38 MiB blur
 target, and the mask and the first blur target are freed
 `OUTLINE_KEEP_MS` (10 s) after the last question and made again by the
 next. Their programs compile with the idle warm-up on every tier, so the
