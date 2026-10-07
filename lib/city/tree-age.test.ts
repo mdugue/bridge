@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  type AgeLook,
   ageLook,
   OLD_YEARS,
   STAKED_YEARS,
@@ -14,7 +15,7 @@ test("a tree's age runs from its planting year; unknown stays unknown", () => {
 });
 
 test("an unknown or mature tree looks as before", () => {
-  const mature = { girth: 1, staked: false };
+  const mature: AgeLook = { girth: 1, staked: false, leaf: [0, 0, 0] };
   expect(ageLook(undefined)).toEqual(mature);
   expect(ageLook(Number.NaN)).toEqual(mature);
   expect(ageLook(40)).toEqual(mature);
@@ -30,4 +31,12 @@ test("saplings are staked and thin; old trees broad-footed", () => {
   // continuous at the edges of the mature span
   expect(ageLook(YOUNG_YEARS - 0.01).girth).toBeCloseTo(1, 2);
   expect(ageLook(OLD_YEARS + 0.01).girth).toBeCloseTo(1, 2);
+});
+
+test("a young crown is lighter, an old one deeper", () => {
+  expect(ageLook(1).leaf[2]).toBeGreaterThan(ageLook(10).leaf[2]);
+  expect(ageLook(10).leaf[2]).toBeGreaterThan(0);
+  expect(ageLook(200).leaf[2]).toBeLessThan(ageLook(100).leaf[2]);
+  expect(ageLook(100).leaf[2]).toBeLessThan(0);
+  expect(ageLook(YOUNG_YEARS - 0.01).leaf[2]).toBeCloseTo(0, 2);
 });

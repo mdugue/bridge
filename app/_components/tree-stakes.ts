@@ -22,10 +22,10 @@ import { sceneMaterial } from "./three-utils";
 /** How far the posts stand from the stem (m), how tall and how thick. */
 const STAKE_R = 0.42;
 const STAKE_H = 2.1;
-const STAKE_THICK = 0.035;
+const STAKE_THICK = 0.05;
 /** The rails between the posts, at these heights (m). */
 const RAILS = [0.55, 1.75];
-const STAKE_COLOR = 0xc2_a8_80;
+const STAKE_COLOR = 0xdc_c4_9c;
 
 /** Three posts on a circle and a ring of rails between them, at the foot
  *  of a stem at the origin. A tile's own (its set's disposal frees it). */

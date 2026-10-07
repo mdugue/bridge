@@ -406,25 +406,34 @@ function canopyInstances(
  * an inventory lime and a canopy lime read as the same tree — then leaned
  * by the genus's family (lib/city/tree-family.ts: a chestnut deeper, a
  * robinia yellower, a plane lighter), so a street of mixed genera reads
- * mixed.
+ * mixed — and by its age (lib/city/tree-age.ts: a sapling fresh and light,
+ * an ancient tree deep).
  */
 export function inventoryColor(
   col: Color,
   t: Pick<InventoryTree, "colour" | "ground" | "leaf" | "ndvi" | "x" | "z"> & {
     genus?: number;
+    age?: number;
   },
   v: number
 ): void {
   plainInventoryColor(col, t, v);
-  if (t.genus !== undefined && t.colour === 0 && t.leaf !== "e") {
-    const [dh, ds, dl] = familyLook(t.genus).summer;
-    col.getHSL(hsl);
-    col.setHSL(
-      (hsl.h + dh + 1) % 1,
-      Math.min(Math.max(hsl.s + ds, 0), 1),
-      Math.min(Math.max(hsl.l + dl, 0), 1)
-    );
+  if (t.colour !== 0 || t.leaf === "e") {
+    return;
   }
+  if (t.genus !== undefined) {
+    lean(col, familyLook(t.genus).summer);
+  }
+  lean(col, ageLook(t.age).leaf);
+}
+
+function lean(col: Color, [dh, ds, dl]: readonly [number, number, number]) {
+  col.getHSL(hsl);
+  col.setHSL(
+    (hsl.h + dh + 1) % 1,
+    Math.min(Math.max(hsl.s + ds, 0), 1),
+    Math.min(Math.max(hsl.l + dl, 0), 1)
+  );
 }
 const hsl = { h: 0, s: 0, l: 0 };
 

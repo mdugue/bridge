@@ -1315,9 +1315,12 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   height rule's; under 5 years (1 960 trees) it
   stands between stakes (`tree-stakes.ts`: three posts and two rails, one
   set per tile, a scene-wide material); past 80 years an unmeasured trunk
-  thickens to 1.3 × by 150. The age is
+  thickens to 1.3 × by 150. The crown's colour leans with the age too: a
+  sapling's lighter and fresher (fading out by 15 years), an ancient
+  tree's deeper and duller (from 80 to 150 years); on the fine level only,
+  the coarse level's crowns carry no age. The age is
   counted to the current year, so the picture ages with the calendar.
-  Height and crown stay as measured.
+  Height and crown size stay as measured.
 
 - **Hedges (OSM, laser-scan height)** and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the
