@@ -5,7 +5,8 @@ description: Project-specific guide to this 3D city-walker viewer — scene arch
 
 # City Walker — rendering, data & QA
 
-Stylized client-side 3D walk through Dresden from Saxon open geodata. Read
+Stylized client-side 3D walk through a German city from its Land's open
+geodata (Dresden is the reference). Read
 `AGENTS.md` first for the high-level map; this skill is the deep reference for
 *how it's built*. For *what maps to what* — the source→feature provenance
 diagram, the transformation ledger (active / experimental / planned /
@@ -345,8 +346,10 @@ and their node graphs construct without a GPU under `bun test`.
 
 ## Coordinate frame (critical)
 
-Data is EPSG:25833 (UTM33), Z-up. `world` is rotated −90° about X so data-Z
-(elevation) → scene-Y. Conversions (`lib/city/ground-clamp.ts`):
+Data is ETRS89/UTM, Z-up — EPSG:25833 (zone 33) for Saxony and Berlin,
+EPSG:25832 (zone 32) for Hamburg, Bavaria and NRW; the provider sets it
+(`sites/providers.ts`, `Provider.epsg`) and every path takes it from the
+site. `world` is rotated −90° about X so data-Z (elevation) → scene-Y. Conversions (`lib/city/ground-clamp.ts`):
 
 ```
 world.x = epsgX − cx       world.z = −(epsgY − cy)       world.y = elevation
@@ -358,8 +361,9 @@ baked against it so they align. The glTF content is Y-up and the renderer's
 up-axis turn cancels `world`'s rotation, so a tile's content root is the Y-up
 frame. **Trap:** vegetation uses Y-up coords, so it never goes into the
 rotated `world` group itself (else the −90° applies twice and trees launch
-into the sky). Tiles `33EEE_NNNN_2_sn` (the site's `tileSuffix`, `sites/`);
-`33412_5656_2_sn` is the spawn tile.
+into the sky). Tiles are `<zone><EEE>_<NNNN>_2<suffix>` — the zone from the
+CRS, the suffix the provider's (`_sn`, `_nw`, `_by`, `_hh`, `_be`); Dresden's
+spawn tile is `33412_5656_2_sn`, Hamburg's tiles look like `32564_5932_2_hh`.
 
 ## Shadows — the recipe and why (this took many rounds)
 
@@ -809,9 +813,10 @@ bun run bake dresden 33412_5656_2_sn   # one tile, all steps
 bun run bake dresden --step canopy     # one step (STEPS in pipeline/bake/__main__.py, in this order):
                                        #   landcover islands rail canopy trees ndvi roof-colour
                                        #   osm-buildings lamps monuments furniture walls stairs surface edges
-                                       #   markings sport tram riverside roofs skyview soundmarks
+                                       #   markings sport tram riverside traffic roofs skyview soundmarks
                                        #   lowveg cultivated small-buildings
                                        #   landmarks structures
+                                       # `transit` runs once for the site after every tile (SITE_STEPS)
 bun run test:pipeline                  # pytest + ruff
 ```
 
