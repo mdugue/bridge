@@ -677,7 +677,10 @@ visual-variable codebook is in
   0.6 m stone plinth, a ledge at the first storey line (where the wall
   holds two storeys), a deeper ledge under the eave, and on a building with
   a mapped shop the ground floor a shade darker as its recessed shop
-  front. Walls only, not on a door; the ground floor's three only on a part
+  front. Walls only, not on a door, and not on a facade that is its own
+  (flag 16: a Wikidata landmark, a monumental ALKIS use — church,
+  theatre, palace, museum … — or OSM storeys taller than 5.5 m, a hall;
+  `ownFacade`), which gets no drawn door either; the ground floor's three only on a part
   standing on the ground (flag 128: within 3 m of its tree's lowest base,
   so a tower's part on a roof gets no plinth). Slider *Gliederung*,
   default 80 %. No windows: the veto stands.

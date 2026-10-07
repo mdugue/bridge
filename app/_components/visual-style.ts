@@ -303,7 +303,9 @@ function ledge(h: F, top: F, size: number, drop: number, strength: F): F {
 /**
  * Gliederung (uArticulation): what a house shows at eye level before its
  * windows, from the heights the table already carries — walls only, never
- * on a part with its own colour (a door, flag 64), and only on a facade
+ * on a part with its own colour (a door, flag 64) or on a facade that is
+ * its own (a landmark, a church, a theatre, a hall: flag 16,
+ * `ownFacade` in lib/city/building-tint.ts), and only on a facade
  * tall enough to have it; the ground floor's three only on a part standing
  * on the ground (flag 128), not on a tower's part on a roof:
  *  - Sockel: the lowest 0.6 m a little darker and cooler, a stone plinth,
@@ -328,7 +330,10 @@ function articulation(
   const own = mod(floor(f.div(64)), 2);
   const shop = mod(f, 2);
   const grounded = mod(floor(f.div(128)), 2);
-  const on = d.uArticulation.mul(wall).mul(float(1).sub(own));
+  // a landmark's or a church's facade is its own (flag 16): no town
+  // house's plinth and cornices on it
+  const plain = max(own, mod(floor(f.div(16)), 2));
+  const on = d.uArticulation.mul(wall).mul(float(1).sub(plain));
   // the ground floor's parts on a part standing on the ground only
   const low = on.mul(grounded);
   const storey = max(build.y, 2.4);

@@ -20,6 +20,7 @@ import {
 } from "three";
 import {
   buildingGlows,
+  ownFacade,
   buildingTint,
   type FacadeMaterial,
   inheritedAttributes,
@@ -32,9 +33,11 @@ import {
 } from "../lib/city/building-tint";
 import {
   type CityObjectRow,
+  hasObjectFlag,
   inheritedFlags,
   inheritedLook,
   markGrounded,
+  OBJECT_FLAG_LANDMARK,
   OBJECT_FLAG_OWN_COLOUR,
   OBJECT_SOURCE_DOOR,
   OBJECT_SOURCE_GAP,
@@ -525,7 +528,10 @@ export function bakeCityMesh(
       root,
       baseZ: cm(baseZ),
       eaveH: cm(eaveH),
-      flags: inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
+      flags: facadeFlags(
+        inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
+        ownFacade(attrs, eaveH, osm?.levels)
+      ),
       storeyH: cm(mappedStoreyHeight(eaveH, measured, osm?.levels)),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
@@ -575,6 +581,13 @@ export function bakeCityMesh(
   appendBeyondLod2(tile, baked, keys, { doors, facades, gaps, scan });
   markGrounded(baked.objects);
   return baked;
+}
+
+/** The flags with OBJECT_FLAG_LANDMARK where the facade is its own. */
+function facadeFlags(flags: number, own: boolean): number {
+  return own && !hasObjectFlag(flags, OBJECT_FLAG_LANDMARK)
+    ? flags + OBJECT_FLAG_LANDMARK
+    : flags;
 }
 
 /** What the tile's mesh carries beyond LoD2: the scan's sheds, the
@@ -662,7 +675,8 @@ export function appendDoors(
     const p = f.properties;
     const hostIndex = p ? objectIndex.get(p.of) : undefined;
     const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
-    if (!(p && host)) {
+    // a landmark's or a church's portal is its own: no generic door on it
+    if (!(p && host) || hasObjectFlag(host.flags, OBJECT_FLAG_LANDMARK)) {
       continue;
     }
     const shift = wallShift(
