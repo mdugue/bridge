@@ -944,11 +944,24 @@ log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
 // Who publishes each source, and each tile's edition of it: the inquiry
 // card's "Quelle" lines (ADR 0042), from the hand-kept record.
+/** The site's provenance record; a site without one (freshly fetched)
+ *  builds with an empty record — the cards then name sources without
+ *  editions. A record that is there but unreadable still fails. */
+function readProvenance(): ProvenanceRecord {
+  const path = at(`${siteDataDir(SITE)}/provenance.json`);
+  if (!existsSync(path)) {
+    log(
+      `${SITE.id}: no provenance.json — the cards name sources without editions`
+    );
+    return {};
+  }
+  return readJson<ProvenanceRecord>(path);
+}
 const provenanceFile = publish(
   PROVENANCE_FILE,
   utf8(
     siteProvenance(
-      readJson<ProvenanceRecord>(at(`${siteDataDir(SITE)}/provenance.json`)),
+      readProvenance(),
       baked.map((t) => t.id),
       SITE
     )
