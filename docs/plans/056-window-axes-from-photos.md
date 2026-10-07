@@ -14,7 +14,7 @@
 - **Effort**: L (pose refinement and facade rectification are the bulk)
 - **Risk**: HIGH — a wrongly placed axis is an invented one
 - **Planned at**: 2026-10-07
-- **Status**: **BLOCKED** on coverage — nothing drawn
+- **Status**: **BLOCKED** on pose accuracy — nothing drawn (Mapillary tried 2026-10-07)
 
 ## What the spike found (Panoramax, spawn tile `33412_5656_2_sn`)
 
@@ -41,9 +41,49 @@
 So: too few houses, too unreliably placed. Drawing axes from this would
 mostly draw them where nothing was measured, which the veto forbids.
 
+## What Mapillary showed (spawn tile, 2026-10-07)
+
+Coverage is no longer the problem: 32 379 images on the tile, 8 097 of
+them 360° panoramas with computed poses (`computed_geometry`,
+`computed_rotation`, one batched `?ids=` request per 50 images; the
+bbox listing does not return the rotation). 5 366 outer LoD2 walls of
+6 m or more stand under eaves of 6 m or more; 536 of them are seen
+face-on (≤ 57° obliquity, 5–25 m, line of sight clear of other
+footprints) from two or more sequences.
+
+- **Rectification works.** The panorama sampled onto the LoD2 wall at
+  20 px/m (2048 px thumbnails, equirectangular, the full SfM rotation)
+  gives straight, upright facade strips; window rows and storeys read
+  clearly.
+- **Positions do not hold to the metre.** Strips of one wall from two
+  sequences show the same rhythm shifted along the wall: of 111
+  cross-sequence pairs over 30 walls, 8 correlate (r > 0.45) at all and
+  their median shift is 0.6 m; 3 agree within 0.25 m. The SfM poses are
+  metre-level, not decimetre-level.
+- **Skyline refinement did not fix it.** Fitting each pose (±2.5 m,
+  ±2°, ±1 m camera height) so the LoD2 roof edges, densified per
+  angle, meet the photo's sky line converges to a mean misfit of 1–3°:
+  trees, the camera car's own roof boxes and LoD2's simplified eaves
+  dominate it, and the along-street offset is barely constrained by a
+  near-flat roofline. With it, 3 of 9 pairs correlated, 1 within
+  0.25 m.
+- **Detection is the smaller problem.** Texture energy over each storey's
+  window band, z-scored and agreed across storeys, finds the window
+  columns on plain plaster facades; darkness alone does not (curtains,
+  reflections).
+
+So the rhythm is measurable, its position on the wall is not: an axis
+drawn from this would sit up to a metre beside the real window — an
+invented axis by the veto's rule.
+
 ## What it would take
 
-1. **Coverage first.** Mapillary has far denser Dresden coverage
+1. ~~**Coverage first.**~~ Done (see above); the blocker is now the pose.
+   A position good to ~0.2 m along the wall needs either feature
+   matching between the sequences and a joint bundle adjustment anchored
+   to LoD2 corners, or one anchor per wall (a measured corner or door
+   edge) that each photo's strip is registered to before agreeing.
+1. **Coverage.** Mapillary has far denser Dresden coverage
    (sequences from cars, several directions); its API needs a client
    token (`MLY|…`), which the maintainer would have to create and put in
    the environment (never committed). Its images carry computed poses
