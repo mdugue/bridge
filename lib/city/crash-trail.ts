@@ -76,6 +76,8 @@ export interface TrailBeat {
   /** walk or fly, and the camera's height above the ground (m) */
   mode: string;
   heightM: number;
+  /** the render had stopped (the failure card): a record, no frame rate */
+  stopped?: boolean;
 }
 
 /**
@@ -334,8 +336,17 @@ export function resumedFor(trail: Trail, t: number): number | undefined {
  * while hidden a paused loop — neither is the frame rate anybody saw.
  */
 export function pushBeat(trail: Trail, beat: TrailBeat): void {
+  const previous = trail.beats.at(-1);
   pushRing(trail.beats, beat, TRAIL_BEATS);
-  if (beat.frames === 0 || trail.state === "hidden") {
+  // The stats are the frames rendered in view: not before the first, not
+  // out of view, not after the render stopped, nor a beat that met no new
+  // frame (a held or stopped loop) — those stay in the ring as the record.
+  if (
+    beat.frames === 0 ||
+    beat.stopped ||
+    (previous !== undefined && beat.frames <= previous.frames) ||
+    trail.state === "hidden"
+  ) {
     return;
   }
   const stats = (trail.stats ??= emptyStats());

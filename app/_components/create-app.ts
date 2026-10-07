@@ -2586,6 +2586,7 @@ async function bootApp(
         style: lastStyle,
         mode: pose.getMode(),
         heightM: camera.position.y - groundUnderCamera(),
+        stopped,
       });
     }, TRAIL_BEAT_MS);
     cleanups.push(() => clearInterval(beat));

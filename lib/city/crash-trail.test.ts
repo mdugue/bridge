@@ -168,6 +168,18 @@ test("the page's stats count only the beats rendered in view", () => {
   expect(trail.beats).toHaveLength(5);
 });
 
+test("a beat after the render stopped, or without a new frame, is no frame rate", () => {
+  const trail = createTrail(setup);
+  pushBeat(trail, beat(2, 30));
+  // the loop met no frame since the last beat
+  pushBeat(trail, { ...beat(2, 0), t: 3 });
+  // the render stopped behind the failure card
+  pushBeat(trail, { ...beat(4, 0), stopped: true });
+  expect(trail.stats?.beats).toBe(1);
+  expect(trail.stats?.fpsSum).toBe(30);
+  expect(trail.beats).toHaveLength(3);
+});
+
 test("the boot's milestones outlive the event ring", () => {
   const trail = createTrail(setup);
   pushEvent(trail, { t: 3.5, kind: "first frame" });
