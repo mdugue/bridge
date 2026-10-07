@@ -9,6 +9,7 @@ import {
 import { offerAsCrash, type Trail } from "@/lib/city/crash-trail";
 import { pageStillOpen, previousTrail } from "./crash-trail";
 import { recentlyRecovered } from "./gpu-recovery";
+import { STORAGE_KEYS } from "./storage-keys";
 
 /**
  * The safety ladder's browser side (the ladder and why it exists:
@@ -21,7 +22,7 @@ import { recentlyRecovered } from "./gpu-recovery";
  * (gpu-recovery.ts).
  */
 
-const KEY = "gpu-safety";
+const KEY = STORAGE_KEYS.gpuSafety;
 
 type Store = Pick<Storage, "getItem" | "setItem">;
 

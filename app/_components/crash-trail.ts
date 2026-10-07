@@ -11,6 +11,7 @@ import {
   type TrailBeat,
   type TrailEvent,
 } from "@/lib/city/crash-trail";
+import { STORAGE_KEYS } from "./storage-keys";
 
 /**
  * The crash trail's browser side (the core and why it exists:
@@ -27,7 +28,7 @@ import {
  * `crashTrail.current()` / `crashTrail.previous()` return the report text.
  */
 
-const CURRENT_KEY = "crash-trail";
+const CURRENT_KEY = STORAGE_KEYS.trail;
 const TAG = "[crash-trail]";
 
 declare global {
@@ -36,7 +37,7 @@ declare global {
     crashTrail?: { current: () => string; previous: () => string };
   }
 }
-const PREVIOUS_KEY = "crash-trail.previous";
+const PREVIOUS_KEY = STORAGE_KEYS.trailPrevious;
 
 /** The query parameters worth a record (the QA knobs, AGENTS.md): anything
  *  else a page was opened with stays out of the trail — it goes into

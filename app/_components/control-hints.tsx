@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "cn";
+import { STORAGE_KEYS } from "./storage-keys";
 
 /**
  * How you move, declared once. The floating bar over the scene shows the few
@@ -80,9 +81,9 @@ export const TOUCH_HINTS: readonly ControlHint[] = [
   { key: "Höhenregler", action: "steigen / sinken (Flug)" },
 ];
 
-const DISMISSED_KEY = "city-walk:hints-dismissed";
+const DISMISSED_KEY = STORAGE_KEYS.hintsDismissed;
 /** Modell's own bar: it is new when Modell is first entered. */
-const MODEL_DISMISSED_KEY = "city-walk:model-hints-dismissed";
+const MODEL_DISMISSED_KEY = STORAGE_KEYS.modelHintsDismissed;
 /** Long enough to read as a fade, short enough not to linger. */
 const FADE_MS = 300;
 

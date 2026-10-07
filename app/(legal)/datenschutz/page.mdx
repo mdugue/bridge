@@ -116,15 +116,18 @@ Diese Seite setzt keine Cookies. Im lokalen Speicher deines Browsers (Local
 Storage und Session Storage) legt sie nur ab, was ihre Funktionen brauchen,
 und liest es nur auf deinem Gerät:
 
-- den zuletzt gewählten Bildstil,
-- ob du die Bedienhinweise geschlossen und die Werkzeugleiste eingeklappt
-  hast,
-- den Verlauf des laufenden und des vorigen Besuchs (siehe
-  [Fehlerberichte](#fehlerberichte)),
-- deine Wahl zu den Fehlerberichten,
+- den zuletzt gewählten Bildstil (`bildstil`),
+- ob du die Bedienhinweise geschlossen (`city-walk:hints-dismissed`,
+  `city-walk:model-hints-dismissed`) und die Werkzeugleiste eingeklappt
+  hast (`hud-toolbar-collapsed`),
+- den Verlauf des laufenden und des vorigen Besuchs (`crash-trail`,
+  `crash-trail.previous`) und ob der vorige schon gemeldet wurde
+  (`crash-trail.reported`; siehe [Fehlerberichte](#fehlerberichte)),
+- deine Wahl zu den Fehlerberichten (`crash-reports.declined`),
 - wenn sich die Seite nach einem Grafikfehler selbst neu lädt, bis du den Tab
   schließt: die Stelle, an der du in der Stadt standest, und wann das war –
-  damit sie dich dorthin zurückbringt und nicht endlos neu lädt,
+  damit sie dich dorthin zurückbringt und nicht endlos neu lädt
+  (`gpu-recovery`, im Session Storage),
 - wenn die Grafik auf deinem Gerät zuletzt ausgefallen ist, unter dem Namen
   `gpu-safety`: eine Sparstufe von 0 bis 3, wann sie zuletzt stieg und wann
   der Besuch begann, der sie erhöht hat (ein abgestürzter, oder einer, dem
