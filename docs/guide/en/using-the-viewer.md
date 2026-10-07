@@ -109,7 +109,9 @@ phone compass a few degrees. If you stand outside the area, a small window
 says how far and offers where to go instead: one of the vantage points, a
 spot you pick on the map, or staying where you are. If you stand in
 another city this site also shows, the window says so first and offers to
-jump there: its viewer opens with you standing where you are. Browsers ask for permission first
+jump there: its viewer opens with you standing where you are (the
+position travels in the link's fragment, which never reaches the server).
+Browsers ask for permission first
 (iPhones for the compass too); the location never leaves the device — not
 even in a crash report (see *When it crashes*).
 

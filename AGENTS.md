@@ -803,7 +803,9 @@ bridge or a misplaced layer is invisible looking straight down.
 URL knobs: `?scene=lite` (the CI profile, below), `?gpu=webgl2` (the
 WebGL2 backend where WebGPU exists), `?safety=N` (0–3: the page at that
 safety level, nothing stored — ADR 0046), `?trail=1` (the crash trail's
-card always).
+card always), `#at=lat,lng` (the off-site dialog's hand-off to another
+city's page: placed there after the first frame, then dropped — a
+fragment, so it never reaches the server or the crash trail).
 
 There is a **snapshot system**: the in-app Snapshot panel copies the full
 camera pose + sun time + look sliders as JSON; `__poc.handle.getCameraState()`
