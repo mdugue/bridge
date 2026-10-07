@@ -40,25 +40,25 @@ export const TRUNK_BASE = 0x8a_7c_68;
 export const FAMILY_LOOK: Readonly<Record<TreeFamily, FamilyLook>> = {
   generic: { summer: [0, 0, 0], bark: TRUNK_BASE },
   // dense, a fresh mid green
-  lime: { summer: [0.01, 0.04, 0.02], bark: 0x7c_70_62 },
-  maple: { summer: [0, 0.02, -0.02], bark: 0x80_76_6a },
+  lime: { summer: [0.015, 0.08, 0.05], bark: 0x7c_70_62 },
+  maple: { summer: [-0.02, 0.1, 0], bark: 0x80_76_6a },
   // broad and irregular, dark, a rough dark bark
-  oak: { summer: [0.02, -0.02, -0.06], bark: 0x6e_62_56 },
+  oak: { summer: [0.02, -0.06, -0.12], bark: 0x6e_62_56 },
   // open, light green, the pale mottled bark
-  plane: { summer: [-0.01, 0.02, 0.05], bark: 0xb8_b0_96 },
+  plane: { summer: [-0.03, 0.02, 0.12], bark: 0xcc_c4_a4 },
   // the densest dome, deep green
-  chestnut: { summer: [0.02, 0.04, -0.07], bark: 0x74_68_5c },
+  chestnut: { summer: [0.03, 0.06, -0.15], bark: 0x74_68_5c },
   // pinnate leaves: airy, a yellow-green
-  feather: { summer: [-0.03, 0.06, 0.06], bark: 0x7a_70_64 },
+  feather: { summer: [-0.05, 0.14, 0.1], bark: 0x7a_70_64 },
   // light, flickering crowns; birch's white stem
-  birch: { summer: [-0.015, 0.03, 0.06], bark: 0xe4_e0_d6 },
+  birch: { summer: [-0.035, 0.08, 0.13], bark: 0xf0_ed_e6 },
   // small ornamental crowns: cherries, apples, pears, hawthorn, rowan
-  blossom: { summer: [0, 0, 0.02], bark: 0x6c_5c_54 },
+  blossom: { summer: [0, -0.04, 0.04], bark: 0x6c_5c_54 },
   // hornbeam, hop-hornbeam, elm, hazel: close, fine-leaved
-  hornbeam: { summer: [0.01, 0, -0.02], bark: 0x9a_96_8c },
+  hornbeam: { summer: [0.01, 0.02, -0.06], bark: 0x9a_96_8c },
   // the conifers (evergreen and the larch kin): close, blue-green, a
   // reddish bark
-  conifer: { summer: [0.06, -0.04, -0.06], bark: 0x8c_62_4c },
+  conifer: { summer: [0.08, -0.08, -0.12], bark: 0x8c_62_4c },
 };
 
 const FAMILY_OF: Readonly<Partial<Record<TreeGenus, TreeFamily>>> = {

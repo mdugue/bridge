@@ -33,9 +33,11 @@ test("families tell the common street trees apart", () => {
 test("the looks stay in the crown's range", () => {
   for (const f of TREE_FAMILIES) {
     const { summer, bark } = FAMILY_LOOK[f];
-    for (const d of summer) {
-      expect(Math.abs(d)).toBeLessThanOrEqual(0.08);
-    }
+    // a hue lean stays within green; lightness and saturation may push
+    // further, as far as a pastel crown still reads as foliage
+    expect(Math.abs(summer[0])).toBeLessThanOrEqual(0.1);
+    expect(Math.abs(summer[1])).toBeLessThanOrEqual(0.16);
+    expect(Math.abs(summer[2])).toBeLessThanOrEqual(0.16);
     expect(bark).toBeGreaterThanOrEqual(0);
     expect(bark).toBeLessThanOrEqual(0xff_ff_ff);
   }
