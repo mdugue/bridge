@@ -1,5 +1,9 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
+  markFlatRoofs,
+  markGrounded,
+  OBJECT_FLAG_FLAT_ROOF,
+  OBJECT_FLAG_GROUNDED,
   type CityObjectRow,
   countBuildings,
   doomedObjects,
@@ -149,4 +153,43 @@ test("LoD2 traffic structures (ALKIS 53001, bridges) leave the building mesh", (
   expect(kept.vertices).toBe(doc.vertices);
   const plain = { ...doc, CityObjects: { house: doc.CityObjects.house } };
   expect(withoutTrafficStructures(plain)).toBe(plain);
+});
+
+describe("markGrounded", () => {
+  test("flags the parts near their tree's lowest base, not one on a roof", () => {
+    const objects = [
+      { baseZ: 0, eaveH: 0, flags: 0, root: 0 },
+      { baseZ: 110, eaveH: 9, flags: 0, root: 0 },
+      { baseZ: 112.5, eaveH: 9, flags: 1, root: 0 },
+      { baseZ: 124, eaveH: 9, flags: 0, root: 0 },
+      { baseZ: 140, eaveH: 9, flags: 0, root: 4 },
+    ];
+    markGrounded(objects);
+    // the Building drawn by its parts takes no flag, nor sets the lowest base
+    expect(objects.map((o) => o.flags)).toEqual([
+      0,
+      OBJECT_FLAG_GROUNDED,
+      1 + OBJECT_FLAG_GROUNDED,
+      0,
+      OBJECT_FLAG_GROUNDED,
+    ]);
+    markGrounded(objects);
+    expect(objects[1].flags).toBe(OBJECT_FLAG_GROUNDED);
+  });
+});
+
+test("markFlatRoofs: a roof mostly level is flat, a pitched one not", () => {
+  const objects = [{ flags: 0 }, { flags: 0 }, { flags: 128 }];
+  // object 0: one level roof triangle; object 1: one at 45°; object 2: a
+  // level triangle that is a wall (not roof), so it has no roof at all
+  const positions = [
+    0, 0, 10, 4, 0, 10, 0, 4, 10, 0, 0, 10, 4, 0, 10, 0, 4, 14, 0, 0, 0, 4, 0,
+    0, 0, 4, 0,
+  ];
+  markFlatRoofs(objects, {
+    positions,
+    objectIds: [0, 0, 0, 1, 1, 1, 2, 2, 2],
+    isRoof: [1, 1, 1, 1, 1, 1, 0, 0, 0],
+  });
+  expect(objects.map((o) => o.flags)).toEqual([OBJECT_FLAG_FLAT_ROOF, 0, 128]);
 });

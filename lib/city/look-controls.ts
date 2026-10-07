@@ -23,6 +23,7 @@ export type SceneLookKey =
   | "waterMist";
 /** Rows the shared clay material applies (visual-style.ts). */
 export type ClayLookKey =
+  | "articulation"
   | "bands"
   | "duskGlow"
   | "eave"
@@ -210,6 +211,16 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     group: "buildings",
     initial: 0.35,
     snapshotKey: "eavePct",
+  },
+  {
+    key: "articulation",
+    id: "building-articulation",
+    label: "Gliederung",
+    description:
+      "Sockel, Gesims über dem Erdgeschoss, Traufgesims und Ladenzonen — keine Fenster",
+    group: "buildings",
+    initial: 0.8,
+    snapshotKey: "articulationPct",
   },
   {
     key: "duskGlow",

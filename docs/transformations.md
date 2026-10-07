@@ -672,6 +672,20 @@ visual-variable codebook is in
   (`storeysAboveGround` is only ~4 % populated). Spawn tile: 2 172 objects
   on mapped storeys (median 3.67 m, p10 3.06, p90 4.79), 298 back on the
   estimate.
+- **Gliederung** (plinth, cornices, shop zone) — painted in the clay
+  shader from heights the object table already carries, no new data: a
+  0.6 m stone plinth, a ledge at the first storey line (where the wall
+  holds two storeys), a deeper ledge under the eave, and on a building with
+  a mapped shop the ground floor a shade darker as its recessed shop
+  front. Walls only, not on a door, and not on a facade that is its own
+  (flag 16: a Wikidata landmark, a monumental ALKIS use — church,
+  theatre, palace, museum … — or OSM storeys taller than 5.5 m, a hall;
+  `ownFacade`), which gets no drawn door either, and not under a flat
+  roof (flag 256: three quarters of the LoD2 roof area level — post-war
+  slabs and modern blocks have no town house's cornices); the ground floor's three only on a part
+  standing on the ground (flag 128: within 3 m of its tree's lowest base,
+  so a tower's part on a roof gets no plinth). Slider *Gliederung*,
+  default 80 %. No windows: the veto stands.
 - **Doors** — OSM `entrance=*` nodes on the ground floor (no `level`, or
   one with a 0; not `no`, `entry_only`, `emergency_ward_entrance`) snapped
   onto the nearest LoD2 footprint edge within 3 m (`pipeline/bake/

@@ -73,6 +73,98 @@ export const OBJECT_FLAG_ASKED = 32;
 /** A part that wears its own colour (a door's surround and leaf): its tint
  *  drawn at full strength, not mixed into the clay by *Farbvariation*. */
 export const OBJECT_FLAG_OWN_COLOUR = 64;
+/** An object that stands on the ground, not on another part's roof: the
+ *  plinth, shop zone and ground-floor cornice are drawn on it only. */
+export const OBJECT_FLAG_GROUNDED = 128;
+/** A flat roof (`markFlatRoofs`: most of its roof area lies flat): a
+ *  post-war or modern building, whose facade the clay's Gliederung (a town
+ *  house's plinth and cornices) does not dress. The column is 16 bits wide
+ *  from this flag on. */
+export const OBJECT_FLAG_FLAT_ROOF = 256;
+/** A roof triangle within this of level counts as flat (cos 10°). */
+const FLAT_NORMAL_Z = 0.985;
+/** An object whose roof is flat over this share of its area is flat-roofed:
+ *  LoD2 calls many post-war slabs a mixed form (`roofType` 5000) for a
+ *  stair tower or a pavilion's lean-to, so the type alone misses them. */
+export const FLAT_ROOF_SHARE = 0.75;
+
+/**
+ * Sets OBJECT_FLAG_FLAT_ROOF on every object whose roof triangles
+ * (`isRoof`, non-indexed, three vertices each) lie flat over
+ * `FLAT_ROOF_SHARE` of their area. In place.
+ */
+export function markFlatRoofs(
+  objects: readonly Pick<CityObjectRow, "flags">[],
+  mesh: {
+    positions: ArrayLike<number>;
+    objectIds: ArrayLike<number>;
+    isRoof: ArrayLike<number>;
+  }
+): void {
+  const flat = new Float64Array(objects.length);
+  const all = new Float64Array(objects.length);
+  const p = mesh.positions;
+  for (let v = 0; v + 2 < mesh.objectIds.length; v += 3) {
+    if (mesh.isRoof[v] < 0.5) {
+      continue;
+    }
+    const [a, b, c] = [v * 3, v * 3 + 3, v * 3 + 6];
+    const ux = p[b] - p[a];
+    const uy = p[b + 1] - p[a + 1];
+    const uz = p[b + 2] - p[a + 2];
+    const wx = p[c] - p[a];
+    const wy = p[c + 1] - p[a + 1];
+    const wz = p[c + 2] - p[a + 2];
+    const nx = uy * wz - uz * wy;
+    const ny = uz * wx - ux * wz;
+    const nz = ux * wy - uy * wx;
+    const area = Math.hypot(nx, ny, nz);
+    const o = mesh.objectIds[v];
+    if (area > 0 && o < objects.length) {
+      all[o] += area;
+      if (Math.abs(nz) / area >= FLAT_NORMAL_Z) {
+        flat[o] += area;
+      }
+    }
+  }
+  objects.forEach((o, i) => {
+    if (
+      all[i] > 0 &&
+      flat[i] >= FLAT_ROOF_SHARE * all[i] &&
+      !hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF)
+    ) {
+      o.flags += OBJECT_FLAG_FLAT_ROOF;
+    }
+  });
+}
+
+/** A part counts as grounded when its base lies within this of its building
+ *  tree's lowest base (a slope's fall; a part on a roof sits a storey up). */
+export const GROUNDED_SLACK_M = 3;
+
+/**
+ * Sets OBJECT_FLAG_GROUNDED on every object whose base lies within
+ * `GROUNDED_SLACK_M` of the lowest base in its building tree (a lone
+ * building is its own tree, so it always does). A Building drawn only by
+ * its parts has no geometry (no height, base 0) and takes no part. In
+ * place.
+ */
+export function markGrounded(
+  objects: readonly Pick<CityObjectRow, "baseZ" | "eaveH" | "flags" | "root">[]
+): void {
+  const drawn = objects.filter((o) => o.eaveH > 0);
+  const lowest = new Map<number, number>();
+  for (const o of drawn) {
+    lowest.set(o.root, Math.min(lowest.get(o.root) ?? Infinity, o.baseZ));
+  }
+  for (const o of drawn) {
+    const grounded =
+      o.baseZ <= (lowest.get(o.root) ?? o.baseZ) + GROUNDED_SLACK_M;
+    if (grounded && !hasObjectFlag(o.flags, OBJECT_FLAG_GROUNDED)) {
+      o.flags += OBJECT_FLAG_GROUNDED;
+    }
+  }
+}
 
 /** The `flags` value of one object: its OSM facts summed as bits. */
 export function objectFlags(entry?: OsmBuildingFacts): number {
@@ -169,7 +261,7 @@ export interface CityObjectTable {
   building: Uint8Array;
   count: number;
   eaveH: Float32Array;
-  flags: Uint8Array;
+  flags: Uint16Array;
   glow: Uint8Array;
   roof: Float32Array;
   root: Uint32Array;
@@ -187,7 +279,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     baseZ: new Float32Array(count),
     building: new Uint8Array(count),
     eaveH: new Float32Array(count),
-    flags: new Uint8Array(count),
+    flags: new Uint16Array(count),
     glow: new Uint8Array(count),
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
