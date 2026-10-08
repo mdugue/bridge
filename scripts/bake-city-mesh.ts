@@ -58,6 +58,7 @@ import {
   DOOR_SURROUND,
   doorMesh,
   wallShift,
+  wallShiftAlong,
 } from "../lib/city/doors";
 import { dormerMesh } from "../lib/city/dormers";
 import {
@@ -65,6 +66,7 @@ import {
   corniceMesh,
   plinthMesh,
   type Shaded,
+  type WallShift,
 } from "../lib/city/plinths";
 import type {
   DoorFeature,
@@ -701,6 +703,8 @@ export function appendPlinths(
   const positions: number[] = [];
   const normals: number[] = [];
   const objectIds: number[] = [];
+  const walls = treeTriangles(baked);
+  const vertices = baked.vertices.positions;
   const part = (
     tris: Shaded,
     host: CityObjectRow,
@@ -748,11 +752,15 @@ export function appendPlinths(
       PLINTH_STONE,
       0.25
     );
-    part(plinthMesh(f, baked.offset), host, foot, top, stone);
+    // laid on the host's wall, not the footprint line it stands off
+    const wall = walls.get(host.root) ?? [];
+    const shift: WallShift = (a, b, z0, z1) =>
+      wallShiftAlong([a, b], [z0, z1], baked.offset, vertices, wall);
+    part(plinthMesh(f, baked.offset, shift), host, foot, top, stone);
     const z = corniceHeight(host, top);
     if (z !== undefined) {
       const plaster = mixRgb(host.tint, SURROUND_STONE, 0.08);
-      const tris = corniceMesh(f, baked.offset, z);
+      const tris = corniceMesh(f, baked.offset, z, shift);
       part(tris, host, z, z + CORNICE.height + CORNICE.wash, plaster);
     }
   }

@@ -707,7 +707,10 @@ visual-variable codebook is in
   the same way: a BuildingPart standing in its Building, two parts on
   one facade line) is that run's, the tallest object's first, so no two
   bands stack. Runs end on the footprint's vertices. The building bake
-  appends a stone band 7 cm proud of the wall whose front rolls over a
+  lays each piece on its host's LoD2 wall, which stands up to a couple
+  of decimetres off the footprint line (rays against the host's
+  triangles, `wallShiftAlong`; a corner's pieces take the outermost),
+  and appends a stone band 7 cm proud of it whose front rolls over a
   12 cm quarter-round shoulder into its top, shaded smooth (no hard
   edge), with square ends (`lib/city/plinths.ts`, `appendPlinths`); the
   pieces that meet round a corner of the footprint (turning up to 135°)

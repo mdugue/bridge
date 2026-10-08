@@ -56,7 +56,23 @@ interface Run {
   b: readonly number[];
   ma?: readonly [number, number];
   mb?: readonly [number, number];
+  /** how far the host's wall stands out of the footprint line here */
+  s: number;
 }
+
+/** How far the host's wall stands out of the footprint line along a→b
+ *  between two heights (metres along the run's outward normal; negative
+ *  where it stands back) — LoD2's walls stand up to a couple of decimetres
+ *  off it, and a band laid on the line would sink into a wall standing
+ *  proud of it. */
+export type WallShift = (
+  a: readonly number[],
+  b: readonly number[],
+  z0: number,
+  z1: number
+) => number;
+
+const noShift: WallShift = () => 0;
 
 /**
  * A straight run of `profile` along the wall from a to b (the street to its
@@ -84,7 +100,8 @@ function extrude(
   const at = (end: 0 | 1, [o, z]: readonly [number, number]): number[] => {
     const p = end === 0 ? a : b;
     const m = (end === 0 ? run.ma : run.mb) ?? n;
-    return [p[0] - offset.cx + m[0] * o, p[1] - offset.cy + m[1] * o, z];
+    const out = o + run.s;
+    return [p[0] - offset.cx + m[0] * out, p[1] - offset.cy + m[1] * out, z];
   };
   // each profile edge's normal in the wall's frame (out, up)
   const edge = profile.map((p, k) => {
@@ -141,16 +158,22 @@ export interface PlinthPiece {
   b: readonly number[];
   foot: number;
   top: number;
+  /** the host's wall out of the footprint line (`WallShift`) */
+  s: number;
 }
 
 /**
  * The plinth's pieces as the mesh draws them: each feature line with its
  * foot (`PLINTH_SINK` under its ground) and top, and the pieces that meet
  * round a corner of the footprint (the bake ends them on its vertex) given
- * one foot and one top, the lowest and highest of them — so the mitre
- * closes and no band stands proud of its neighbour at the corner.
+ * one foot, one top and one wall shift, the lowest, highest and outermost
+ * of them — so the mitre closes and no band stands proud of its neighbour
+ * at the corner.
  */
-export function plinthPieces(f: PlinthFeature): PlinthPiece[] {
+export function plinthPieces(
+  f: PlinthFeature,
+  shift: WallShift = noShift
+): PlinthPiece[] {
   const p = f.properties;
   if (!p) {
     return [];
@@ -162,8 +185,27 @@ export function plinthPieces(f: PlinthFeature): PlinthPiece[] {
       foot: p.g[i] - PLINTH_SINK,
       top: p.top[i],
     }))
-    .filter((q) => Math.hypot(q.b[0] - q.a[0], q.b[1] - q.a[1]) > 1e-3);
-  const group = pieces.map((_, i) => i);
+    .filter((q) => Math.hypot(q.b[0] - q.a[0], q.b[1] - q.a[1]) > 1e-3)
+    .map((q) => ({ ...q, s: shift(q.a, q.b, q.top - 0.6, q.top - 0.2) }));
+  const root = cornerGroups(pieces);
+  const level = new Map<number, { foot: number; top: number; s: number }>();
+  pieces.forEach((q, i) => {
+    const r = root[i];
+    const l = level.get(r);
+    level.set(r, {
+      foot: Math.min(l?.foot ?? q.foot, q.foot),
+      top: Math.max(l?.top ?? q.top, q.top),
+      s: Math.max(l?.s ?? q.s, q.s),
+    });
+  });
+  return pieces.map((q, i) => ({ ...q, ...level.get(root[i]) }));
+}
+
+/** Per run, the root of the runs it is joined to round corners. */
+function cornerGroups(
+  runs: readonly { a: readonly number[]; b: readonly number[] }[]
+): number[] {
+  const group = runs.map((_, i) => i);
   const root = (i: number): number => {
     let r = i;
     while (group[r] !== r) {
@@ -171,19 +213,10 @@ export function plinthPieces(f: PlinthFeature): PlinthPiece[] {
     }
     return r;
   };
-  for (const [i, j] of corners(pieces)) {
+  for (const [i, j] of corners(runs)) {
     group[root(i)] = root(j);
   }
-  const level = new Map<number, { foot: number; top: number }>();
-  pieces.forEach((q, i) => {
-    const r = root(i);
-    const l = level.get(r);
-    level.set(r, {
-      foot: Math.min(l?.foot ?? q.foot, q.foot),
-      top: Math.max(l?.top ?? q.top, q.top),
-    });
-  });
-  return pieces.map((q, i) => ({ ...q, ...level.get(root(i)) }));
+  return runs.map((_, i) => root(i));
 }
 
 /** The pairs [i, j] where run i's end meets run j's start round a corner
@@ -214,11 +247,12 @@ function corners(
 
 /** The runs with their mitres: where run i meets run j round a corner,
  *  both end on the bisector, `m = (n₁ + n₂) / (1 + n₁·n₂)`, so a point
- *  `o` out of either wall lands on the same spot. */
+ *  `o` out of either wall lands on the same spot (the runs of a corner
+ *  share their wall shift). */
 function mitred(
-  runs: readonly { a: readonly number[]; b: readonly number[] }[]
+  runs: readonly { a: readonly number[]; b: readonly number[]; s: number }[]
 ): Run[] {
-  const out: Run[] = runs.map((r) => ({ a: r.a, b: r.b }));
+  const out: Run[] = runs.map((r) => ({ a: r.a, b: r.b, s: r.s }));
   const normal = (r: { a: readonly number[]; b: readonly number[] }) => {
     const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
     return [(r.b[1] - r.a[1]) / l, -(r.b[0] - r.a[0]) / l];
@@ -242,10 +276,11 @@ function mitred(
  */
 export function plinthMesh(
   f: PlinthFeature,
-  offset: { cx: number; cy: number }
+  offset: { cx: number; cy: number },
+  shift: WallShift = noShift
 ): Shaded {
   const out: Shaded = { positions: [], normals: [] };
-  const pieces = plinthPieces(f);
+  const pieces = plinthPieces(f, shift);
   const runs = mitred(pieces);
   pieces.forEach((q, i) => {
     if (!(q.top - PLINTH.round > q.foot)) {
@@ -298,12 +333,23 @@ function corniceProfile(z: number): Profile {
 export function corniceMesh(
   f: PlinthFeature,
   offset: { cx: number; cy: number },
-  z: number
+  z: number,
+  shift: WallShift = noShift
 ): Shaded {
   const out: Shaded = { positions: [], normals: [] };
   const profile = corniceProfile(z);
+  const runs = straightRuns(f.geometry.coordinates).map(([a, b]) => ({
+    a,
+    b,
+    s: shift(a, b, z - 0.3, z + CORNICE.height + 0.3),
+  }));
+  const root = cornerGroups(runs);
+  const outmost = new Map<number, number>();
+  runs.forEach((r, i) =>
+    outmost.set(root[i], Math.max(outmost.get(root[i]) ?? r.s, r.s))
+  );
   for (const run of mitred(
-    straightRuns(f.geometry.coordinates).map(([a, b]) => ({ a, b }))
+    runs.map((r, i) => ({ ...r, s: outmost.get(root[i]) ?? r.s }))
   )) {
     // the back (in the wall); smooth from the underside's front edge over
     // the nose into the wash

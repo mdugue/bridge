@@ -154,6 +154,21 @@ test("the Gurtgesims round a corner is mitred too", () => {
   expect(tris).toHaveLength(2 * (2 * 6) + 2 * 5);
 });
 
+test("a wall standing off the footprint line carries the band out with it", () => {
+  const xs = (m: { positions: number[] }) =>
+    Math.max(...m.positions.filter((_, i) => i % 3 === 0));
+  const shifted = plinthMesh(plinth, { cx: 0, cy: 0 }, () => 0.12);
+  expect(xs(shifted)).toBeCloseTo(100 + PLINTH.proud + 0.12, 6);
+  const cornice = corniceMesh(plinth, { cx: 0, cy: 0 }, 14, () => -0.05);
+  expect(xs(cornice)).toBeCloseTo(100 + CORNICE.proud - 0.05, 6);
+});
+
+test("the pieces round a corner take the outermost wall", () => {
+  const shift = (a: readonly number[]) =>
+    a[0] === 100 && a[1] === 0 ? 0.1 : 0;
+  expect(plinthPieces(corner, shift).map((q) => q.s)).toEqual([0.1, 0.1]);
+});
+
 test("pieces in line join into one run; a turn starts the next", () => {
   const runs = straightRuns([
     [

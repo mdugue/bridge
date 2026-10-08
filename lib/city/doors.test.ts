@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DOOR_SURROUND, doorMesh, wallShift } from "./doors";
+import { DOOR_SURROUND, doorMesh, wallShift, wallShiftAlong } from "./doors";
 import type { DoorFeature } from "./features";
 
 const door = (nx: number, ny: number): DoorFeature => ({
@@ -74,5 +74,25 @@ describe("wallShift", () => {
   test("ignores a wall facing away and one out of reach", () => {
     expect(wallShift(door(1, 0), offset, wall(0.1, -1), [0, 3])).toBe(0);
     expect(wallShift(door(1, 0), offset, wall(2), [0, 3])).toBe(0);
+  });
+});
+
+describe("wallShiftAlong", () => {
+  const run = [
+    [100, 195],
+    [100, 205],
+  ] as const;
+  test("finds the wall a stretch runs along, either side of its line", () => {
+    for (const b of [0.15, 0, -0.1]) {
+      expect(wallShiftAlong(run, [1, 3], offset, wall(b), [0, 3])).toBeCloseTo(
+        b,
+        6
+      );
+    }
+  });
+
+  test("is 0 where no wall faces the stretch", () => {
+    expect(wallShiftAlong(run, [1, 3], offset, wall(0.1, -1), [0, 3])).toBe(0);
+    expect(wallShiftAlong(run, [40, 41], offset, wall(0.1), [0, 3])).toBe(0);
   });
 });

@@ -68,6 +68,45 @@ export function wallShift(
   return Number.isFinite(shift) ? shift : 0;
 }
 
+/**
+ * `wallShift` for a straight stretch of wall a→b (EPSG, the street to its
+ * right) between heights z0 and z1: rays at a fifth, the middle and four
+ * fifths of it at both heights, the outermost hit; 0 where none meets the
+ * wall within `DOOR_WALL_REACH`. The plinth and Gurtgesims are laid on it
+ * (`lib/city/plinths.ts`).
+ */
+export function wallShiftAlong(
+  [a, b]: readonly [readonly number[], readonly number[]],
+  [z0, z1]: readonly [number, number],
+  offset: { cx: number; cy: number },
+  positions: ArrayLike<number>,
+  triangles: readonly number[]
+): number {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (len < 1e-3) {
+    return 0;
+  }
+  const t = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+  const n: V3 = [t[1], -t[0], 0];
+  let shift = Number.NEGATIVE_INFINITY;
+  for (const f of [0.2, 0.5, 0.8]) {
+    for (const z of [z0, z1]) {
+      const o: V3 = [
+        a[0] - offset.cx + t[0] * len * f + n[0] * DOOR_WALL_REACH,
+        a[1] - offset.cy + t[1] * len * f + n[1] * DOOR_WALL_REACH,
+        z,
+      ];
+      for (const tri of triangles) {
+        const hit = rayHit(o, n, positions, tri);
+        if (hit !== undefined && hit <= 2 * DOOR_WALL_REACH) {
+          shift = Math.max(shift, DOOR_WALL_REACH - hit);
+        }
+      }
+    }
+  }
+  return Number.isFinite(shift) ? shift : 0;
+}
+
 /** Where a ray from `o` along −n meets the triangle facing it (its first
  *  vertex at `t`), as the distance along the ray; undefined if it misses. */
 function rayHit(
