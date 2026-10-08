@@ -423,12 +423,14 @@ function wallPlane(wn: V3, h: F): V2 {
  * landmark's facade (16) or glass and metal (4, 8: the photos cannot tell
  * glass from stucco), and nothing on a facade nobody photographed:
  *  - Unruhe: a mid or busy facade (much of it not plain render) gets a
- *    fine relief of soft blotches, about a metre wide and taller than wide,
- *    above the plinth and under the eave (±18 % at busy), faded out once a
- *    blotch is a few pixels across. Blotches, not a lattice: the window-grid veto holds.
- *  - Ton: much dark in it (frames, openings, soot) up to 12 % darker and
- *    cooler; little dark 4 % lighter — capped, so a misreading is never a
- *    colour error.
+ *    fine plaster relief lit from above (the slope of a flat-lying noise
+ *    up the wall, ±10 % at busy, two octaves of 0.3 and 0.13 m), above the
+ *    plinth and under the eave, each octave faded out once it is a few
+ *    pixels. No blotch darker than the wall, no lattice: the window-grid
+ *    veto holds.
+ *  - Ton: much dark in it (frames, openings, soot) up to 8 % darker, a
+ *    touch cooler; little dark 3 % lighter — capped, so a misreading is
+ *    never a colour error.
  *  - Geschossgesimse: a busy facade under a pitched roof (the Gründerzeit
  *    front) carries a ledge at every storey line up to the eave, not only
  *    the first (on Gliederung's slider too).
@@ -453,24 +455,36 @@ function facadeReading(
   );
   const on = d.uFacadeReading.mul(wall).mul(float(1).sub(plain));
   const eave = build.z;
-  // Unruhe: mid 0.5, busy 1
+  // Unruhe: mid 0.5, busy 1 — a relief lit from above: the slope of a
+  // fine, flat-lying noise up the wall, so its edges catch light on top and
+  // shade below (a plaster texture), never a blotch darker than the wall
   const amp = clamp(busy.sub(1).mul(0.5), 0, 1);
   const p = wallPlane(wn, h);
-  const coarse = valueNoise(p.div(vec2(1.1, 1.6)));
-  const fine = valueNoise(p.div(vec2(0.45, 0.6)).add(17.3));
-  const n = coarse.mul(0.65).add(fine.mul(0.35)).sub(0.5).mul(2);
   const px = max(fwidth(p.x), fwidth(h));
-  const near = float(1).sub(smoothstep(0.12, 0.45, px));
+  const nearC = float(1).sub(smoothstep(0.1, 0.3, px));
+  const nearF = float(1).sub(smoothstep(0.04, 0.12, px));
+  const relief = (q: V2): F =>
+    valueNoise(q.div(vec2(0.55, 0.32)))
+      .mul(0.6)
+      .mul(nearC)
+      .add(
+        valueNoise(q.div(vec2(0.22, 0.13)).add(17.3))
+          .mul(0.4)
+          .mul(nearF)
+      );
+  const slope = relief(p).sub(relief(p.sub(vec2(0, 0.05))));
+  // falling as it rises: the face tilts up, towards the sky
+  const lit = clamp(slope.mul(-4), -1, 1);
   const band = smoothstep(0.6, 1.2, h).mul(
     float(1).sub(smoothstep(eave.sub(0.6), eave.sub(0.2), h))
   );
   let out: V3 = col.mul(
-    float(1).sub(n.mul(0.18).mul(amp).mul(band).mul(near).mul(on))
+    float(1).add(lit.mul(0.1).add(0.015).mul(amp).mul(band).mul(on))
   );
-  // Ton: dark 1 lifts 4 %, 2 darkens 3 %, 3 darkens and cools 12 %
+  // Ton: dark 1 lifts 3 %, 2 darkens 2 %, 3 darkens 8 % (a touch cool)
   const tone = mix(
-    mix(vec3(1.04), vec3(0.97, 0.97, 0.98), step(1.5, dark)),
-    vec3(0.88, 0.89, 0.93),
+    mix(vec3(1.03), vec3(0.98), step(1.5, dark)),
+    vec3(0.92, 0.92, 0.94),
     step(2.5, dark)
   );
   out = mix(out, out.mul(tone), on.mul(step(0.5, dark)));
