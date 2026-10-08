@@ -3,11 +3,15 @@
  * shares (ADR 0042): numbers, dates, a position as the thing's key, and
  * the source lines with their editions and licences. No THREE, no DOM.
  */
+import type { Method, Stated } from "./methods";
 import type { OsmProduct, SiteProvenance, SourceKey } from "./provenance";
 
 export interface CardFact {
   label: string;
   value: string;
+  /** how the value was come by, where it was inferred (detected or
+   *  assumed); a deterministic value carries none, so the card stays quiet */
+  method?: Method;
 }
 
 export interface InquiryCard {
@@ -20,8 +24,9 @@ export interface InquiryCard {
   idLabel: string;
   /** a small line above the title: what kind of thing this is */
   kicker: string;
-  /** one line per source the card quotes, with its edition and licence */
-  sources: string[];
+  /** one line per source the card quotes, with its edition and licence,
+   *  and how the viewer came by what it took from it */
+  sources: Stated[];
   title: string;
 }
 
@@ -56,11 +61,24 @@ export function firstText(...texts: (string | null | undefined)[]): string {
   return texts.find((t) => typeof t === "string" && t !== "") ?? "";
 }
 
-/** The facts with a value, in order ("" leaves a line out). */
-export function factLines(lines: readonly [string, string][]): CardFact[] {
+/** The facts with a value, in order ("" leaves a line out); a third item
+ *  marks a value as inferred. */
+export function factLines(
+  lines: readonly (
+    | readonly [string, string]
+    | readonly [string, string, Method | undefined]
+  )[]
+): CardFact[] {
   return lines
     .filter(([, value]) => value !== "")
-    .map(([label, value]) => ({ label, value }));
+    .map(([label, value, method]) =>
+      method ? { label, value, method } : { label, value }
+    );
+}
+
+/** Source lines come by one method ("" leaves a line out). */
+export function stated(method: Method, ...lines: string[]): Stated[] {
+  return lines.filter(Boolean).map((text) => ({ text, method }));
 }
 
 /**
