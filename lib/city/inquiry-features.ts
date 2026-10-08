@@ -215,6 +215,16 @@ const MONUMENT_KIND: Record<Props<MonumentFeature>["kind"], string> = {
   column: "Säule",
 };
 
+/** The kicker of a monument whose form OSM names. */
+const MONUMENT_FORM: Record<string, string> = {
+  statue: "Standbild",
+  bust: "Büste",
+  sculpture: "Skulptur",
+  stele: "Stele",
+  stone: "Gedenkstein",
+  obelisk: "Obelisk",
+};
+
 const FOUNTAIN_STYLE: Record<string, string> = {
   basin: "Becken mit Wasserspiel",
   pool: "stilles Becken",
@@ -227,6 +237,41 @@ export function reliefHeight(p: Props<MonumentFeature>): number | null {
   return dm && dm.length > 0 ? Math.max(...dm) / 10 : null;
 }
 
+function monumentFacts(
+  p: Props<MonumentFeature>,
+  height: number | null
+): CardFact[] {
+  return factLines([
+    [
+      "Form",
+      p.kind === "fountain" ? (FOUNTAIN_STYLE[p.style ?? ""] ?? "") : "",
+    ],
+    ["Skulptur", p.figure ? "im Becken" : ""],
+    ["Werk von", p.artist ?? ""],
+    ["Material", p.material ?? ""],
+    ["Höhe", height ? metres(height) : ""],
+  ]);
+}
+
+/** What OSM told of a monument, for its source line. */
+function monumentOsmWhat(
+  p: Props<MonumentFeature>,
+  fromDlm: boolean,
+  tagged: boolean
+): string[] {
+  if (p.kind === "fountain") {
+    return [p.name && !fromDlm ? "Name, Becken" : "Becken"];
+  }
+  const what = [
+    p.name && !fromDlm ? "Name" : "",
+    p.form ? "Art" : "",
+    p.artist ? "Werk" : "",
+    p.material ? "Material" : "",
+    tagged ? "Höhe" : "",
+  ].filter(Boolean);
+  return what.length > 0 ? what : ["Lage"];
+}
+
 /** The monument's or fountain's card. */
 export function monumentCard(
   m: MonumentInquiry,
@@ -234,18 +279,14 @@ export function monumentCard(
   credits: CardCredits
 ): InquiryCard {
   const p = m.properties;
-  const kicker = MONUMENT_KIND[p.kind] ?? "Denkmal";
+  const kicker =
+    MONUMENT_FORM[p.form ?? ""] ?? MONUMENT_KIND[p.kind] ?? "Denkmal";
   const height = reliefHeight(p);
-  const facts: CardFact[] = factLines([
-    [
-      "Form",
-      p.kind === "fountain" ? (FOUNTAIN_STYLE[p.style ?? ""] ?? "") : "",
-    ],
-    ["Skulptur", p.figure ? "im Becken" : ""],
-    ["Höhe", height ? metres(height) : ""],
-  ]);
+  const tagged = height ? undefined : p.height;
+  const facts = monumentFacts(p, height ?? tagged ?? null);
   const fromDlm = p.source === "dlm" || p.source === "dlm+osm";
   const fromOsm = p.source === "osm" || p.source === "dlm+osm";
+  const osmWhat = monumentOsmWhat(p, fromDlm, tagged !== undefined);
   const sources = [
     fromDlm
       ? sourceLine(provenance, "dlm", [p.name ? "Name" : "Lage"], {
@@ -256,7 +297,7 @@ export function monumentCard(
     fromOsm
       ? osmSource(
           provenance,
-          [p.name && !fromDlm ? "Name, Becken" : "Becken"],
+          osmWhat.length > 0 ? osmWhat : ["Lage"],
           "fountains"
         )
       : "",

@@ -4,6 +4,8 @@ import {
   insideRing,
   jetHeight,
   jetPlaces,
+  MARKER_SHAPE,
+  markerPieces,
   onRelief,
   openRing,
   reliefSurface,
@@ -102,4 +104,27 @@ test("a point on a measured relief cell is on it; its padding is not", () => {
   expect(onRelief([relief], 101.5, 198.5)).toBe(true);
   expect(onRelief([relief], 100.5, 199.5)).toBe(false);
   expect(onRelief([relief], 90, 190)).toBe(false);
+});
+
+test("a typed monument is its form's parts, scaled whole to a tagged height", () => {
+  const statue = markerPieces("statue", "statue");
+  expect(statue.map((p) => p.solid)).toEqual(["block", "pillar"]);
+  // the figure stands on its pedestal
+  expect(statue[1].lift).toBe(statue[0].height);
+  const obelisk = markerPieces("column", "obelisk", 12);
+  const top = Math.max(...obelisk.map((p) => p.lift + p.height));
+  expect(top).toBeCloseTo(12);
+  expect(obelisk[1].width).toBeGreaterThan(
+    markerPieces("column", "obelisk")[1].width
+  );
+  // a height far off the form's is clamped, not obeyed
+  const tiny = markerPieces("statue", "statue", 0.1);
+  expect(Math.max(...tiny.map((p) => p.lift + p.height))).toBeGreaterThan(1);
+});
+
+test("an untyped monument keeps its kind's one marker", () => {
+  expect(markerPieces("stone")).toEqual([
+    { ...MARKER_SHAPE.stone, lift: 0, solid: "block" },
+  ]);
+  expect(markerPieces("statue")[0].solid).toBe("pillar");
 });

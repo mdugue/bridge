@@ -2,6 +2,8 @@ import {
   BufferAttribute,
   type BufferGeometry,
   CapsuleGeometry,
+  ConeGeometry,
+  CylinderGeometry,
   DoubleSide,
   ExtrudeGeometry,
   Group,
@@ -55,7 +57,8 @@ import {
   basinLevels,
   jetHeight,
   jetPlaces,
-  MARKER_SHAPE,
+  type MarkerSolid,
+  markerPieces,
   openRing,
   POINT_BASIN_R,
   reliefSurface,
@@ -78,7 +81,9 @@ import { sceneMaterial } from "./three-utils";
  *   one soft form in the same pale clay as the buildings (lib/city/
  *   monuments.ts `reliefSurface`) — the right size and silhouette, no
  *   detail the 1 m grid does not have;
- * - a monument nothing measured is an abstract marker in that clay;
+ * - a monument nothing measured is an abstract marker in that clay, built
+ *   of the parts its form has where OSM names it (a pedestal under a
+ *   statue, a needle on an obelisk's base — `markerPieces`), never a figure;
  * - a basin is its OSM outline as a low clay rim around water, and a jet
  *   a translucent water bell rising from it.
  *
@@ -89,7 +94,7 @@ import { sceneMaterial } from "./three-utils";
  *
  * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
  * the Y-up frame; rims, water and reliefs are merged, markers and jets
- * instanced: seven draw calls per tile at most. Its four materials carry
+ * instanced: eight draw calls per tile at most. Its four materials carry
  * nothing of a tile (the clock and the night are module uniforms), so every
  * tile wears the same ones (`sceneMaterial`). Non-fatal: missing/empty
  * inputs yield an empty group.
@@ -112,12 +117,12 @@ interface Placed {
 /** Everything one tile's monuments add up to, before it becomes meshes. */
 interface Parts {
   jets: Placed[];
-  pillars: Placed[];
+  /** the markers' clay solids, by solid */
+  markers: Record<MarkerSolid, Placed[]>;
   reliefs: BufferGeometry[];
   /** a fountain's sculptures: lit from the basin by night */
   sculptures: BufferGeometry[];
   rims: BufferGeometry[];
-  slabs: Placed[];
   waters: BufferGeometry[];
 }
 
@@ -129,9 +134,31 @@ function unitPillar(): BufferGeometry {
     .translate(0, 0.5, 0);
 }
 
-function unitSlab(): BufferGeometry {
+function unitBlock(): BufferGeometry {
   return new RoundedBoxGeometry(1, 1, 1, 3, 0.2).translate(0, 0.5, 0);
 }
+
+/** An obelisk's needle 1 m wide at its foot and 1 m tall: a four-sided
+ *  shaft tapering to 0.6, its last tenth the pyramidion. */
+function unitNeedle(): BufferGeometry {
+  const r = Math.SQRT1_2; // the circumradius of a 1 m square
+  const shaft = new CylinderGeometry(0.62 * r, r, 0.9, 4, 1, true)
+    .rotateY(Math.PI / 4)
+    .translate(0, 0.45, 0);
+  const tip = new ConeGeometry(0.62 * r, 0.1, 4, 1, true)
+    .rotateY(Math.PI / 4)
+    .translate(0, 0.95, 0);
+  const geo = mergeGeometries([shaft, tip]);
+  shaft.dispose();
+  tip.dispose();
+  return geo;
+}
+
+const UNIT_SOLID: Record<MarkerSolid, () => BufferGeometry> = {
+  block: unitBlock,
+  needle: unitNeedle,
+  pillar: unitPillar,
+};
 
 /**
  * A water bell 1 m tall: a thin jet that opens at the top and falls back
@@ -413,13 +440,22 @@ function addMonument(
   if (ground === null) {
     return;
   }
-  const s = MARKER_SHAPE[kind];
-  // Sunk a little, so a marker on a slope never shows its underside.
-  (kind === "stone" ? parts.slabs : parts.pillars).push({
-    at: worldAt([x, y], ground - 0.15, ctx),
-    scale: new Vector3(s.width, s.height + 0.15, s.depth),
-    yaw: yawOf(x, y),
-  });
+  const at = worldAt([x, y], ground, ctx);
+  const yaw = yawOf(x, y);
+  for (const p of markerPieces(
+    kind,
+    f.properties?.form,
+    f.properties?.height
+  )) {
+    // A foot on the ground is sunk a little, so a marker on a slope never
+    // shows its underside; a piece on a pedestal sits into it.
+    const sink = p.lift > 0 ? 0.1 : 0.15;
+    parts.markers[p.solid].push({
+      at: at.clone().setY(at.y + p.lift - sink),
+      scale: new Vector3(p.width, p.height + sink, p.depth),
+      yaw,
+    });
+  }
 }
 
 function instanced(
@@ -619,11 +655,10 @@ export function buildMonuments(
   group.name = "monuments";
   const parts: Parts = {
     jets: [],
-    pillars: [],
+    markers: { block: [], needle: [], pillar: [] },
     reliefs: [],
     sculptures: [],
     rims: [],
-    slabs: [],
     waters: [],
   };
   for (const f of features) {
@@ -638,12 +673,16 @@ export function buildMonuments(
     merged(parts.reliefs, materials.clay(), true),
     merged(parts.sculptures, materials.litClay(), true),
     merged(parts.waters, materials.water(), false),
-    parts.pillars.length > 0
-      ? instanced(unitPillar(), materials.clay(), parts.pillars, true)
-      : null,
-    parts.slabs.length > 0
-      ? instanced(unitSlab(), materials.clay(), parts.slabs, true)
-      : null,
+    ...(Object.keys(UNIT_SOLID) as MarkerSolid[]).map((solid) =>
+      parts.markers[solid].length > 0
+        ? instanced(
+            UNIT_SOLID[solid](),
+            materials.clay(),
+            parts.markers[solid],
+            true
+          )
+        : null
+    ),
     parts.jets.length > 0
       ? instanced(unitBell(), materials.spray(), parts.jets, false)
       : null,

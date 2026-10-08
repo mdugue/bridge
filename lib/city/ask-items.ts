@@ -22,7 +22,7 @@ import { axisFrame, BRIDGE_STEP } from "./bridge";
 import type { BridgeFeature, MonumentFeature, TreeFeature } from "./features";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import type { FeatureInquiry } from "./inquiry-features";
-import { MARKER_SHAPE, POINT_BASIN_R, ringCentre } from "./monuments";
+import { markerPieces, POINT_BASIN_R, ringCentre } from "./monuments";
 import { archetypeOf, treeExtents } from "./tree-inventory";
 import { TREE_GENERA } from "./tree-season";
 
@@ -300,11 +300,15 @@ function monumentSolid(
       },
     };
   }
-  const shape = p.kind === "fountain" ? null : MARKER_SHAPE[p.kind];
-  const r = shape
-    ? Math.max(shape.width, shape.depth) / 2 + 0.3
+  const pieces =
+    p.kind === "fountain" ? null : markerPieces(p.kind, p.form, p.height);
+  const r = pieces
+    ? Math.max(...pieces.map((s) => Math.max(s.width, s.depth))) / 2 + 0.3
     : POINT_BASIN_R;
-  const height = Math.max(top, shape?.height ?? BASIN_RIM);
+  const height = Math.max(
+    top,
+    pieces ? Math.max(...pieces.map((s) => s.lift + s.height)) : BASIN_RIM
+  );
   const { x, z } = epsgToWorld(ex, ey, ctx.offset);
   return {
     position: [ex, ey],

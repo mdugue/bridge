@@ -6,7 +6,12 @@
  * plain numbers out. No THREE, no DOM.
  */
 import { SINK } from "./ground-join";
-import type { FountainStyle, MonumentKind, ReliefGrid } from "./features";
+import type {
+  FountainStyle,
+  MonumentForm,
+  MonumentKind,
+  ReliefGrid,
+} from "./features";
 import type { Point2 } from "./polyline";
 
 /** A fountain without an outline (a DLM point, an OSM node): its basin radius (m). */
@@ -138,9 +143,9 @@ export function jetPlaces(
 
 /**
  * A monument nothing measured (too small for the 1 m surface model, or under
- * a tree): an abstract marker in the scene's clay — a rounded pillar for a
- * statue, a low slab for a stone, a slender shaft for a column. No figure
- * pretends to know what stands there (m).
+ * a tree) and nothing names the form of: an abstract marker in the scene's
+ * clay — a rounded pillar for a statue, a low slab for a stone, a slender
+ * shaft for a column. No figure pretends to know what stands there (m).
  */
 export const MARKER_SHAPE: Record<
   Exclude<MonumentKind, "fountain">,
@@ -150,6 +155,80 @@ export const MARKER_SHAPE: Record<
   stone: { width: 0.9, depth: 0.32, height: 1 },
   column: { width: 0.5, depth: 0.5, height: 4.5 },
 };
+
+/** The three clay solids a marker is built of: a rounded pillar (a capsule
+ *  stretched), a rounded block and a tapering four-sided needle. */
+export type MarkerSolid = "block" | "needle" | "pillar";
+
+/** One solid of a marker: its size (m) and how far above the ground its
+ *  foot stands (`lift`, m). */
+export interface MarkerPiece {
+  depth: number;
+  height: number;
+  lift: number;
+  solid: MarkerSolid;
+  width: number;
+}
+
+/**
+ * The markers of the forms OSM names (lib/city/features.ts `MonumentForm`),
+ * still abstract and in clay — the parts every such monument has, at the
+ * size such monuments have, never a figure: a statue is a body-sized
+ * pillar on its pedestal, a bust a head-sized one on a slender plinth, a
+ * free sculpture a broad mass without one, a stele an upright slab, a
+ * memorial stone a low rounded block, an obelisk a needle on its base.
+ */
+const FORM_PIECES: Record<MonumentForm, readonly MarkerPiece[]> = {
+  statue: [
+    { solid: "block", width: 1.1, depth: 1.1, height: 1.6, lift: 0 },
+    { solid: "pillar", width: 0.62, depth: 0.5, height: 1.9, lift: 1.6 },
+  ],
+  bust: [
+    { solid: "block", width: 0.5, depth: 0.5, height: 1.35, lift: 0 },
+    { solid: "pillar", width: 0.5, depth: 0.42, height: 0.7, lift: 1.35 },
+  ],
+  sculpture: [{ solid: "pillar", width: 1.1, depth: 0.85, height: 2, lift: 0 }],
+  stele: [{ solid: "block", width: 0.75, depth: 0.25, height: 1.9, lift: 0 }],
+  stone: [{ solid: "pillar", width: 1.3, depth: 0.9, height: 0.95, lift: 0 }],
+  obelisk: [
+    { solid: "block", width: 1.5, depth: 1.5, height: 0.7, lift: 0 },
+    { solid: "needle", width: 0.85, depth: 0.85, height: 5.3, lift: 0.7 },
+  ],
+};
+
+/** A tagged height scales a form by at most this much either way. */
+const HEIGHT_SCALE: readonly [number, number] = [0.4, 3];
+
+/**
+ * The solids of a monument's marker: its form's, scaled to a tagged
+ * height (whole, so a 13 m obelisk is a broad one too), else the plain
+ * marker of its kind.
+ */
+export function markerPieces(
+  kind: Exclude<MonumentKind, "fountain">,
+  form?: MonumentForm,
+  height?: number
+): MarkerPiece[] {
+  const pieces: readonly MarkerPiece[] = (form ? FORM_PIECES[form] : null) ?? [
+    {
+      ...MARKER_SHAPE[kind],
+      lift: 0,
+      solid: kind === "stone" ? "block" : "pillar",
+    },
+  ];
+  const top = Math.max(...pieces.map((p) => p.lift + p.height));
+  const k =
+    height && height > 0
+      ? Math.min(Math.max(height / top, HEIGHT_SCALE[0]), HEIGHT_SCALE[1])
+      : 1;
+  return pieces.map((p) => ({
+    solid: p.solid,
+    width: p.width * k,
+    depth: p.depth * k,
+    height: p.height * k,
+    lift: p.lift * k,
+  }));
+}
 
 /** Samples per metre of a smoothed relief (0.25 m). */
 export const RELIEF_SUB = 4;

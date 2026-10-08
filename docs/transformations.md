@@ -1614,8 +1614,31 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   curtain, light shimmers across the water — and by night the water glows
   and a fountain's sculpture is lit warm from its basin (`setFountainTime`,
   `setFountainNight`, one shared clock and night factor). Merged/instanced,
-  seven draw calls per tile at most. Not walk-blocking (collision is
+  eight draw calls per tile at most. Not walk-blocking (collision is
   buildings only).
+  **What a monument is, from OSM** (2026-10-08): the DLM's Denkmal,
+  Standbild and Gedenkstein share one code, so 179 of Dresden's monuments
+  were one rounded pillar. OSM's `memorial=*` / `artwork_type=*` tell a
+  statue from a bust, a free sculpture, a stele, a stone or an obelisk: a
+  DLM monument takes the form of the OSM memorial or artwork of its name
+  within 15 m, else the nearest — never a plaque, which is the sign that
+  explains it — and a name that says *Obelisk*, *Stele* or *Büste* wins.
+  The marker is then that form's parts in clay (`markerPieces`: a
+  body-sized pillar on a 1.6 m pedestal, a head-sized one on a slender
+  plinth, a broad mass without a pedestal, an upright slab, a low rounded
+  block, a four-sided needle on its base), scaled whole to a tagged
+  `height`; still no figure. A measured `relief` wins over any form.
+  Free-standing OSM sculptures and memorials the DLM lacks are added
+  (160 on Dresden's fifteen tiles, mostly park and estate sculptures; not
+  inside a LoD2 footprint, not within 3 m of one kept). The card names the
+  form, the artist (`artist_name`) and the material (`material`, in
+  German). On Dresden: 274 of 396 non-fountain monuments carry a form.
+  Not used: **Mapillary** detects no monuments (its map-feature classes
+  are street furniture and signs; checked over the Altstadt, 2026-10-08),
+  **Wikidata** types more finely (32 *Reiterstandbilder* round Dresden)
+  but rarely carries a height (7 of 941) and its points match ours worse
+  than OSM's; **Panoramax** and Mapillary photos would need photogrammetry
+  per monument; Wikimedia Commons holds no 3D scan of a Dresden monument.
   **Caveats, checked against the sources:** DOM1 (November 2024) and DOP
   (March 2024) were both taken while Dresden's fountains are drained and
   their sculptures boxed for winter — the Albertplatz "bodies" are those

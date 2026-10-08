@@ -219,6 +219,19 @@ export interface FurnitureFeature {
  */
 export type MonumentKind = "column" | "fountain" | "statue" | "stone";
 
+/**
+ * What a monument is, by OSM's `memorial=*` / `artwork_type=*` (ODbL): a
+ * figure on its pedestal, a bust, a free sculpture, a stele, a stone, an
+ * obelisk. The DLM's code alone does not tell a statue from a stone.
+ */
+export type MonumentForm =
+  | "bust"
+  | "obelisk"
+  | "sculpture"
+  | "statue"
+  | "stele"
+  | "stone";
+
 /** How a fountain's basin is dressed: a raised rim with jets, jets on flush
  *  paving (a splash pad), or a still pool without any. */
 export type FountainStyle = "basin" | "pool" | "splash";
@@ -239,9 +252,17 @@ export interface ReliefGrid {
 export interface MonumentFeature {
   geometry: PointGeometry | PolygonGeometry;
   properties: {
+    /** who made it (OSM `artist_name`) */
+    artist?: string;
     /** a fountain with a DLM monument in it (its sculpture is measured) */
     figure?: boolean;
+    /** what it is, from OSM (absent: nothing says) */
+    form?: MonumentForm;
+    /** its tagged height (m, OSM `height`) */
+    height?: number;
     kind: MonumentKind;
+    /** what it is made of, in German ("Bronze, Granit"; OSM `material`) */
+    material?: string;
     name?: string;
     /** the measured sculpture or monument (pipeline/bake/monuments.py) */
     relief?: ReliefGrid;

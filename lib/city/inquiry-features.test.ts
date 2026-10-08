@@ -252,3 +252,34 @@ test("a bridge: name and deck from the DLM, structure and span from Wikidata", (
   expect(structureLabel("beam;arch")).toBe("Balken · Bogen");
   expect(structureLabel(null)).toBe("");
 });
+
+test("a statue typed by OSM: its form, maker and material, its name official", () => {
+  const card = monumentCard(
+    {
+      kind: "monument",
+      tile: "t",
+      position: [411600, 5656500],
+      properties: {
+        kind: "statue",
+        name: "Martin-Luther-Denkmal",
+        source: "dlm+osm",
+        form: "statue",
+        artist: "Adolf von Donndorf",
+        material: "Bronze",
+        height: 6,
+      },
+    },
+    provenance,
+    DRESDEN
+  );
+  expect(card.kicker).toBe("Standbild");
+  expect(card.facts).toEqual([
+    { label: "Werk von", value: "Adolf von Donndorf" },
+    { label: "Material", value: "Bronze" },
+    { label: "Höhe", value: "6 m" },
+  ]);
+  expect(card.sources).toEqual([
+    "Name: Basis-DLM · Quelle: GeoSN, dl-de/by-2-0",
+    "Art, Werk, Material, Höhe: OpenStreetMap · Stand 19.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
+  ]);
+});
