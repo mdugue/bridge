@@ -1,6 +1,6 @@
 """Shopfronts: the ground floor of a LoD2 wall as street panoramas show it,
-in bays along the wall (Mapillary, CC BY-SA 4.0), with OSM's shops as a
-fallback.
+in bays along the wall (Mapillary, CC BY-SA 4.0), and the canopy over it
+where the surface model shows one (DOM1, the provider's licence).
 
 The fetch (facades.py) measures every panorama on every wall it sees and
 caches, per image and wall, the ground floor's profile in `BIN_M` bins from
@@ -32,29 +32,45 @@ Per wall (`merge`):
     measured bays have nearly the same width they take their median width
     about their own centres (`snap_rhythm`): no bay is added where nothing
     was measured;
+  - a glazed row (`row`): where the bins any image saw are at least
+    `ROW_SHARE` open over at least `ROW_SEEN_M` of the wall — a modernist
+    shop row, glass from pier to pier, seen from the boulevard by one or
+    two panoramas each stretch — one image's verdict decides a bin no other
+    saw, and unknown gaps up to `ROW_GAP_M` (a tree trunk, a canopy's
+    column in front) are bridged: the bays are that row's glass;
   - the wall is a shopfront when its open bins are at least `SHOP_SHARE` of
-    its decided bins and it has a bay, or when a store sign is seen on it
-    (in `MIN_VOTES` images, or in one and as a Mapillary map feature within
-    `SIGN_M`).
+    its decided bins and it has a bay, or it is a glazed row, or a store
+    sign is seen on it (in `MIN_VOTES` images, or in one and as a Mapillary
+    map feature within `SIGN_M`).
 
-A wall no panorama shows as a shopfront but with an OSM `shop=*` (or a
-place to eat and drink) node within `OSM_M` gets the node's position along
-it (`osm_at`), `src: "osm"`.
+A wall no panorama shows as a shopfront gets nothing: an OSM shop node
+says there is a shop, not where its windows are, and a guessed bay read as
+a door (the first bake drew one there; dropped).
+
+Over a shopfront the surface model may show a canopy (`canopy`): the
+GDR shop pavilions of the Hauptstraße carry their flat roof 3–4 m out over
+the pavement on columns. Per metre along the wall, nDOM = DOM1 − DGM1 is
+sampled every half metre out of it; where it is `CANOPY_H` high a metre
+out, no higher than the building behind, and stays level (`CANOPY_TOL_M`)
+before it drops off within `CANOPY_OUT_M`, that station has a canopy of
+that depth. Runs of stations at least `CANOPY_MIN_M` long (one miss
+bridged) are the canopies, each with its median depth and height.
 
 The bake writes `dlm/shopfronts_<tile>.json`:
 
     {"attribution": …, "bin_m": 0.5, "buildings": {"<gml:id>": [
       {"oid", "wi", "a": [x, y], "b": [x, y], "L", "n": [nx, ny],
-       "z": [za, zb], "src": "photo"|"osm",
+       "z": [za, zb], "src": "photo", "row": true?,
        "bays": [[s, e], …], "sign": {"at": [[s, e], …], "z": [z0, z1]},
-       "gf_top", "imgs", "seqs"} | {"oid", "wi", "a", "b", "L", "src": "osm",
-       "osm_at": [s, …]}, …]}}
+       "canopy": [{"at": [s, e], "d", "h"}, …],
+       "gf_top", "imgs", "seqs"}, …]}}
 
 `a`/`b` are the wall's base points in the tile's CRS (the LoD2 footprint's
 edge, a → b the direction s runs), s in metres from a; `n` its outward
-normal; `z` the lowest DGM ground in front of a and of b. Its own file,
-credited to Mapillary and OSM: their licences do not mix with the LoD2
-tables."""
+normal; `z` the lowest DGM ground in front of a and of b; a canopy's `d`
+its depth out of the wall and `h` its top above the ground in front. Its
+own file, credited to Mapillary and the provider: their licences do not
+mix with the OSM tables."""
 
 from __future__ import annotations
 
@@ -67,11 +83,10 @@ import numpy as np
 import rasterio
 import shapely
 
-from .common import OSM_ATTRIBUTION, Tile
+from .common import Tile
 from .facade_measure import BIN_M, GF_BAND, ROW_M
 from .facades import ATTRIBUTION, SIGN_M, _signs, measured_path, walls
-from .osm import has_extract
-from .osm_buildings import root_of, shop_points
+from .osm_buildings import root_of
 
 MAX_SHIFT_M = 1.5
 MIN_OVERLAP = 6  # bins two sequences must share to be aligned
@@ -87,7 +102,17 @@ SHOP_SHARE = 0.5
 MIN_PIER_M = 0.2
 RHYTHM_TOL_M = 0.4  # bays this close to their median width are one rhythm
 GT_SPREAD_M = 0.6  # the images' ground-floor tops must agree this well
-OSM_M = 3.0
+ROW_SHARE = 0.75  # the seen bins this open: a glazed shop row
+ROW_SEEN_M = 6.0  # ... seen over at least this much of the wall
+ROW_GAP_M = 1.0  # an unknown gap this narrow in a glazed row is bridged
+CANOPY_STEP_M = 1.0  # the stations along the wall
+CANOPY_OUT_M = tuple(0.5 * k for k in range(1, 17))  # 0.5 … 8 m out
+CANOPY_H = (2.6, 6.5)  # a canopy's top above the ground: over a ground floor
+CANOPY_TOL_M = (0.6, 1.0)  # it stays this level (below, above: a fascia's lip)
+CANOPY_MIN_D = 1.5
+CANOPY_MIN_M = 4.0
+CLOSED_M = 1.5  # a run of wall this long that two images agree on stays wall
+FACING_COS = 0.98  # walls of one object this parallel face the same way
 FRONT_M = (0.5, 1.5)  # the ground in front of a wall is sampled this far out
 
 # --- one wall (pure) --------------------------------------------------------
@@ -180,14 +205,14 @@ def align(by_seq: dict[str, list[dict]], n: int) -> tuple[dict[str, int], list[d
     return shifts, stats
 
 
-def vote(profiles: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
-    """Per bin: 1 open, 0 pier, -1 unknown (fewer than MIN_VOTES images, or
-    a tie); and the mean share where seen."""
+def vote(profiles: list[np.ndarray], min_votes: int = MIN_VOTES) -> tuple[np.ndarray, np.ndarray]:
+    """Per bin: 1 open, 0 pier, -1 unknown (fewer than `min_votes` images,
+    or a tie); and the mean share where seen."""
     stack = np.stack(profiles)
     seen = (~np.isnan(stack)).sum(0)
     opened = (stack >= OPEN_BIN).sum(0)  # NaN compares False
     state = np.full(stack.shape[1], -1)
-    decided = seen >= MIN_VOTES
+    decided = seen >= min_votes
     state[decided & (2 * opened > seen)] = 1
     state[decided & (2 * opened < seen)] = 0
     return state, _nanmean(stack)
@@ -215,16 +240,23 @@ def runs(mask: np.ndarray) -> list[tuple[int, int]]:
     return out
 
 
-def bays(state: np.ndarray, share: np.ndarray, length: float) -> list[list[float]]:
-    """The runs of open bins (one unknown bin between two open ones bridged)
-    at least MIN_BAY_M wide, as [start, end] metres. An edge next to a pier
-    moves into it by the pier bin's open share (at most half), split
-    between the two bays where the pier is one bin between two: a pier
-    keeps at least a quarter metre."""
+def bridged(state: np.ndarray, most: int) -> np.ndarray:
+    """`state` with runs of at most `most` unknown bins between two open
+    ones opened."""
     s = state.copy()
-    for i in range(1, len(s) - 1):
-        if s[i] == -1 and s[i - 1] == 1 and s[i + 1] == 1:
-            s[i] = 1
+    for i, j in runs(s == -1):
+        if j - i <= most and i > 0 and j < len(s) and s[i - 1] == 1 and s[j] == 1:
+            s[i:j] = 1
+    return s
+
+
+def bays(state: np.ndarray, share: np.ndarray, length: float, bridge: int = 1) -> list[list[float]]:
+    """The runs of open bins (up to `bridge` unknown bins between two open
+    ones bridged) at least MIN_BAY_M wide, as [start, end] metres. An edge
+    next to a pier moves into it by the pier bin's open share (at most
+    half), split between the two bays where the pier is one bin between
+    two: a pier keeps at least a quarter metre."""
+    s = bridged(state, bridge)
 
     def into(p: int) -> float:
         if p < 0 or p >= len(s) or s[p] != 0 or np.isnan(share[p]):
@@ -297,12 +329,20 @@ def merge(records: list[dict], length: float, near_feature: bool = False) -> dic
         return out
     shifts, out["align"] = align(by_seq, n)
     placed = [(r, shifts[r["seq"]]) for r in seen]
-    state, share = vote([shifted(openness(r, n), k) for r, k in placed])
+    profiles = [shifted(openness(r, n), k) for r, k in placed]
+    state, share = vote(profiles)
     bs = snap_rhythm(bays(state, share, length), length)
     decided = state >= 0
     open_share = float((state == 1).sum() / decided.sum()) if decided.any() else 0.0
+    if (row := glazed_row(profiles, length)) is not None:
+        bs, out["row"] = row, True
     sign = sign_runs(placed, n, near_feature)
     out |= {"bays": bs, "open_share": round(open_share, 2), "decided": int(decided.sum())}
+    out["closed"] = [
+        [i * BIN_M, min(j * BIN_M, length)]
+        for i, j in runs(state == 0)
+        if (j - i) * BIN_M >= CLOSED_M - 1e-9
+    ]
     if sign:
         zs = np.array([r["sz"] for r in seen if r.get("sz")])
         out["sign"] = {"at": [[s, min(e, round(length, 2))] for s, e in sign]}
@@ -313,7 +353,103 @@ def merge(records: list[dict], length: float, near_feature: bool = False) -> dic
             ]
     if (gt := ground_top(seen)) is not None:
         out["gf_top"] = gt
-    out["shop"] = bool(sign) or (bool(bs) and open_share >= SHOP_SHARE)
+    out["shop"] = bool(sign) or (bool(bs) and (open_share >= SHOP_SHARE or "row" in out))
+    return out
+
+
+def glazed_row(profiles: list[np.ndarray], length: float) -> list[list[float]] | None:
+    """The glass of a glazed shop row, or None where the wall is not one:
+    the bins any image saw at least ROW_SHARE open over ROW_SEEN_M of the
+    wall. One image decides a bin no other saw (a tie stays unknown), and
+    unknown gaps up to ROW_GAP_M are bridged; at least one bay."""
+    state, share = vote(profiles, min_votes=1)
+    decided = state >= 0
+    if decided.sum() * BIN_M < ROW_SEEN_M - 1e-9:
+        return None
+    if (state == 1).sum() < ROW_SHARE * decided.sum():
+        return None
+    out = bays(state, share, length, bridge=int(round(ROW_GAP_M / BIN_M)))
+    return out or None
+
+
+# --- the canopy over it (pure, given the surface model) ---------------------
+
+
+def under_canopy(cs: list[dict], closed: list[list[float]]) -> list[list[float]]:
+    """The glass of a shop row under its canopies: each canopy's run along
+    the wall, without the runs two images agree are wall (`closed`), at
+    least MIN_BAY_M wide."""
+    out = []
+    for c in cs:
+        pieces = [list(c["at"])]
+        for c0, c1 in closed:
+            pieces = [
+                q
+                for s0, s1 in pieces
+                for q in ([s0, min(s1, c0)], [max(s0, c1), s1])
+                if q[1] - q[0] > 0
+            ]
+        out.extend(q for q in pieces if q[1] - q[0] >= MIN_BAY_M - 1e-9)
+    return [[round(a, 2), round(b, 2)] for a, b in sorted(out)]
+
+
+def canopy_depth(heights: list[float | None], inside: float | None) -> tuple[float, float] | None:
+    """One station's canopy (depth, height) from nDOM `heights` at
+    CANOPY_OUT_M out of the wall and `inside` a metre and a half behind it;
+    None where the surface model shows none: its height a metre out within
+    CANOPY_H, no higher than the building, level until it drops off before
+    the last sample, at least CANOPY_MIN_D deep."""
+    if len(heights) < 3 or heights[1] is None or heights[2] is None:
+        return None
+    h = (heights[1] + heights[2]) / 2
+    lo, hi = CANOPY_TOL_M
+    if not (CANOPY_H[0] <= h <= CANOPY_H[1]) or inside is None or inside < h - lo:
+        return None
+    depth = None
+    for d, v in zip(CANOPY_OUT_M, heights, strict=False):
+        if v is None or not (h - lo <= v <= h + hi):
+            break
+        depth = d
+    else:
+        return None  # level as far as it was sampled: not a canopy's edge
+    if depth is None or depth + 0.25 < CANOPY_MIN_D:
+        return None
+    return depth + 0.25, h
+
+
+def canopies(w: dict, ndom) -> list[dict]:
+    """The canopies along wall `w` ({a, b, L, n}): `ndom(x, y)` the surface
+    model's height over the ground there (None outside it)."""
+    (ax, ay), (bx, by), (nx, ny) = w["a"], w["b"], w["n"]
+    tx, ty = (bx - ax) / w["L"], (by - ay) / w["L"]
+    stations = np.arange(CANOPY_STEP_M / 2, w["L"], CANOPY_STEP_M)
+    found: list[tuple[float, float] | None] = []
+    for s in stations:
+        x, y = ax + tx * s, ay + ty * s
+        found.append(
+            canopy_depth(
+                [ndom(x + nx * d, y + ny * d) for d in CANOPY_OUT_M],
+                ndom(x - nx * 1.5, y - ny * 1.5),
+            )
+        )
+    has = np.array([f is not None for f in found] + [False])
+    for i in range(1, len(found) - 1):  # one miss bridged
+        if not has[i] and has[i - 1] and has[i + 1]:
+            has[i] = True
+    out = []
+    for i, j in runs(has[:-1]):
+        got = [f for f in found[i:j] if f is not None]
+        s0 = max(0.0, stations[i] - CANOPY_STEP_M / 2)
+        s1 = min(w["L"], stations[j - 1] + CANOPY_STEP_M / 2)
+        if s1 - s0 < CANOPY_MIN_M - 1e-9:
+            continue
+        out.append(
+            {
+                "at": [round(s0, 2), round(s1, 2)],
+                "d": round(float(np.median([d for d, _ in got])), 2),
+                "h": round(float(np.median([h for _, h in got])), 2),
+            }
+        )
     return out
 
 
@@ -386,40 +522,85 @@ def _wall_entry(w: dict, ground=None) -> dict:
 
 
 def shopfronts(
-    city: dict, by_wall: dict, signs: np.ndarray, shops: np.ndarray, ground=None
+    city: dict, by_wall: dict, signs: np.ndarray, ground=None, ndom=None
 ) -> tuple[dict, dict]:
-    """Per Building gml:id its shopfront walls, and the merge's statistics."""
+    """Per Building gml:id its shopfront walls (with their canopies where
+    `ndom` shows one), and the merge's statistics.
+
+    Under a canopy the shop row runs the canopy's length (`under_canopy`):
+    the pavilions' glass from end to end, where the photos are few and the
+    canopy's shade and columns break their profile up. A wall the photos do
+    not show as a shopfront gets one only under a canopy that continues a
+    measured one: the same LoD2 object, facing the same way (`src:
+    "canopy"`)."""
     ws = walls(city)
     near_sign = nearest_walls(ws, signs, SIGN_M)
-    near_shop = nearest_walls(ws, shops, OSM_M)
     out: dict[str, list[dict]] = collections.defaultdict(list)
-    stats = {"walls_seen": 0, "align": [], "photo": 0, "osm": 0}
+    stats = {"walls_seen": 0, "align": [], "photo": 0, "row": 0, "canopy": 0, "continued": 0}
+    merged: dict[int, dict] = {}
     for i, w in enumerate(ws):
         recs = by_wall.get((w["oid"], w["wi"]), [])
-        m = merge(recs, w["L"], near_feature=i in near_sign) if recs else None
-        if m and m["imgs"]:
+        if not recs:
+            continue
+        merged[i] = m = merge(recs, w["L"], near_feature=i in near_sign)
+        if m["imgs"]:
             stats["walls_seen"] += 1
             stats["align"].extend(m["align"])
-        if m and m["shop"]:
-            entry = _wall_entry(w, ground) | {"src": "photo", "bays": m["bays"]}
-            entry |= {k: m[k] for k in ("sign", "gf_top") if k in m}
-            entry |= {"imgs": m["imgs"], "seqs": m["seqs"]}
-            out[root_of(city, w["oid"])].append(entry)
-            stats["photo"] += 1
-        elif i in near_shop:
-            entry = _wall_entry(w, ground) | {"src": "osm", "osm_at": sorted(near_shop[i])}
-            out[root_of(city, w["oid"])].append(entry)
-            stats["osm"] += 1
+    sheltered: dict[str, list[tuple[float, float]]] = collections.defaultdict(list)
+    shops = [i for i, m in merged.items() if m["shop"]]
+    for i in shops:
+        w, m = ws[i], merged[i]
+        entry = _wall_entry(w, ground) | {"src": "photo", "bays": m["bays"]}
+        entry |= {k: m[k] for k in ("row", "sign", "gf_top") if k in m}
+        entry |= {"imgs": m["imgs"], "seqs": m["seqs"]}
+        if ndom is not None and (cs := canopies(w, ndom)):
+            entry |= {"canopy": cs, "bays": under_canopy(cs, m["closed"]), "row": True}
+            sheltered[w["oid"]].append(w["n"])
+            stats["canopy"] += 1
+        out[root_of(city, w["oid"])].append(entry)
+        stats["photo"] += 1
+        stats["row"] += int("row" in entry)
+    for i, w in enumerate(ws):
+        if i in shops or ndom is None:
+            continue
+        if not any(w["n"][0] * n[0] + w["n"][1] * n[1] >= FACING_COS for n in sheltered[w["oid"]]):
+            continue
+        if not (cs := canopies(w, ndom)):
+            continue
+        closed = merged[i].get("closed", []) if i in merged else []
+        if not (glass := under_canopy(cs, closed)):
+            continue
+        entry = _wall_entry(w, ground) | {"src": "canopy", "bays": glass, "row": True, "canopy": cs}
+        out[root_of(city, w["oid"])].append(entry)
+        stats["continued"] += 1
     return dict(sorted(out.items())), stats
 
 
-def write(path: Path, buildings: dict) -> None:
+def write(path: Path, buildings: dict, credit: str = "") -> None:
     doc = {
-        "attribution": f"{ATTRIBUTION}; {OSM_ATTRIBUTION}",
+        "attribution": "; ".join(c for c in (ATTRIBUTION, credit) if c),
         "bin_m": BIN_M,
         "buildings": buildings,
     }
     path.write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True))
+
+
+class _Raster:
+    """A single-band raster in memory, sampled by point (None outside it or
+    where it holds no value)."""
+
+    def __init__(self, path: Path):
+        with rasterio.open(path) as r:
+            self.a = r.read(1, masked=True).filled(np.nan).astype(np.float32)
+            self.inv = ~r.transform
+
+    def __call__(self, x: float, y: float) -> float | None:
+        c, r = self.inv * (x, y)
+        r, c = int(math.floor(r)), int(math.floor(c))
+        if not (0 <= r < self.a.shape[0] and 0 <= c < self.a.shape[1]):
+            return None
+        z = float(self.a[r, c])
+        return z if np.isfinite(z) and z > -1000 else None
 
 
 def run(tile: Tile) -> None:
@@ -427,24 +608,23 @@ def run(tile: Tile) -> None:
     path = measured_path(tile)
     city = json.loads(tile.cityjson.read_text())
     by_wall = _records(path) if tile.mapillary and path.exists() else {}
-    shops = (
-        np.array([[p.x, p.y] for p in shop_points(tile)], float).reshape(-1, 2)
-        if has_extract(tile, "shops")
-        else np.zeros((0, 2))
-    )
     signs = _signs(tile) if tile.mapillary else np.zeros((0, 2))
-    with rasterio.open(tile.dgm) as dgm:
+    ground = _Raster(tile.dgm)
+    ndom = None
+    dom_path = tile.raw_raster("dom1")
+    if by_wall and tile.products.dom and dom_path.exists():
+        dom = _Raster(dom_path)
 
-        def ground(x: float, y: float) -> float | None:
-            left, bottom, right, top = dgm.bounds
-            if not (left <= x < right and bottom <= y < top):
-                return None
-            z = float(next(dgm.sample([(x, y)]))[0])
-            return z if np.isfinite(z) and z > -1000 else None
+        def ndom(x: float, y: float) -> float | None:
+            top, z = dom(x, y), ground(x, y)
+            return None if top is None or z is None else top - z
 
-        buildings, stats = shopfronts(city, by_wall, signs, shops, ground)
-    write(out, buildings)
+    elif by_wall:
+        print(f"{tile.id}: no DOM1 — the shopfronts without canopies")
+    buildings, stats = shopfronts(city, by_wall, signs, ground, ndom)
+    write(out, buildings, tile.credit if stats["canopy"] else "")
     print(
-        f"{tile.id}: {stats['photo']} shopfront walls from photos, {stats['osm']} from OSM"
-        f" ({len(buildings)} buildings; {stats['walls_seen']} walls seen)"
+        f"{tile.id}: {stats['photo']} shopfront walls from photos ({stats['row']} glazed rows,"
+        f" {stats['canopy']} under a canopy), {stats['continued']} more under a canopy that"
+        f" continues one ({len(buildings)} buildings; {stats['walls_seen']} walls seen)"
     )

@@ -281,28 +281,33 @@ export interface DoorFeature {
 }
 
 /**
- * One wall's shopfront (pipeline/bake/shopfronts.py; Mapillary CC BY-SA 4.0
- * and OSM ODbL; a city-mesh bake input, not served): the LoD2 object `oid`
- * and its wall `wi` as facades.py numbers them, the wall's base points `a`
- * → `b` (EPSG; `s` runs from `a`), its length, outward normal and the
- * lowest ground in front of each end (`z`). `src: "photo"`: the bays and
- * the sign band measured in street panoramas, the ground floor's top where
- * measured (metres above the ground); `src: "osm"`: no photo shows a
- * shopfront, an OSM shop node stands at `osm_at`.
+ * One wall's shopfront (pipeline/bake/shopfronts.py; Mapillary CC BY-SA 4.0,
+ * the canopies from DOM1 under the provider's licence; a city-mesh bake
+ * input, not served): the LoD2 object `oid` and its wall `wi` as facades.py
+ * numbers them, the wall's base points `a` → `b` (EPSG; `s` runs from
+ * `a`), its length, outward normal and the lowest ground in front of each
+ * end (`z`). `src: "photo"`: the bays and the sign band measured in street
+ * panoramas, the ground floor's top where measured (metres above the
+ * ground); `src: "canopy"`: no photo measured this wall, but a canopy runs
+ * on from a measured one of the same object. `row`: a glazed shop row,
+ * glass from pier to pier. `canopy`: where the surface model shows a
+ * canopy over the shopfront, its depth out of the wall `d` and its top
+ * above the ground `h`.
  */
 export interface ShopfrontWall {
   a: [number, number];
   b: [number, number];
   bays?: [number, number][];
+  canopy?: { at: [number, number]; d: number; h: number }[];
   gf_top?: number;
   imgs?: number;
   L: number;
   n: [number, number];
   oid: string;
-  osm_at?: number[];
+  row?: boolean;
   seqs?: number;
   sign?: { at: [number, number][]; z?: [number, number] };
-  src: "osm" | "photo";
+  src: "canopy" | "photo";
   wi: number;
   z?: [number, number];
 }

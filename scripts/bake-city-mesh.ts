@@ -72,6 +72,7 @@ import {
   doorSpans,
   footAt,
   paneTop,
+  CANOPY,
   SHOPFRONT,
   shopfrontMesh,
   wallBays,
@@ -459,7 +460,7 @@ export function withMeasuredRoofs(
  * object's own neighbourhood overriding it.
  * `measured` are the roofs rebuilt from DOM1, when baked; `onWalls` OSM's
  * doors, the surface model's dormers and the shopfronts (street photos,
- * OSM's shops), each on its LoD2 host.
+ * the surface model's canopies), each on its LoD2 host.
  */
 export function bakeCityMesh(
   tile: string,
@@ -784,9 +785,10 @@ const SHOP_HOST_ABOVE_M = 2;
 
 /**
  * The shopfronts on the LoD2 walls (pipeline/bake/shopfronts.py: bays and
- * signs from street photos, OSM's shops), appended as part of the object
- * they front, like the doors: two objects per wall (the glass, the frame
- * with its fascia), the host's building tree (asking or demolishing one
+ * signs from street photos, canopies from the surface model), appended as
+ * part of the object they front, like the doors: up to three objects per
+ * wall (the glass; the frame with its mullions and fascia; the canopy in
+ * the host's own clay), the host's building tree (asking or demolishing one
  * takes the building), no footprint, no storey band or eave line on them,
  * `source` 6 (a wall with a sign and no bay gets its fascia alone).
  * Skipped: a host the tile does not hold, a glass or metal
@@ -821,7 +823,11 @@ export function appendShopfronts(
     const mesh = shopfrontMesh(w, bays, host.storeyH, baked.offset, (span) =>
       wallShiftAt(w, span, baked.offset, baked.vertices.positions, triangles)
     );
-    if (mesh.pane.length === 0 && mesh.frame.length === 0) {
+    if (
+      mesh.pane.length === 0 &&
+      mesh.frame.length === 0 &&
+      mesh.canopy.length === 0
+    ) {
       continue;
     }
     drawn++;
@@ -831,7 +837,8 @@ export function appendShopfronts(
         base +
         Math.max(
           paneTop(w, host.storeyH) + SHOPFRONT.head,
-          w.sign?.z?.[1] ?? 0
+          w.sign?.z?.[1] ?? 0,
+          ...(w.canopy ?? []).map((c) => c.h + CANOPY.lip)
         ) +
         1
     );
@@ -870,16 +877,24 @@ export function appendShopfronts(
         PANE_ROUGH
       );
     }
-    part(
-      mesh.frame,
-      mixRgb(
-        host.tint.map((c) => c * 0.6),
-        FRAME_STONE,
-        0.35
-      ),
-      OBJECT_FLAG_OWN_COLOUR,
-      host.rough
-    );
+    if (mesh.frame.length > 0) {
+      part(
+        mesh.frame,
+        mixRgb(
+          host.tint.map((c) => c * 0.6),
+          FRAME_STONE,
+          0.35
+        ),
+        OBJECT_FLAG_OWN_COLOUR,
+        host.rough
+      );
+    }
+    // the canopy is the building's own: its clay and tint, lit like its
+    // walls (not a frame's darker own colour), the shop wash left to the
+    // ground floor behind it
+    if (mesh.canopy.length > 0) {
+      part(mesh.canopy, host.tint, host.flags & ~OBJECT_FLAG_SHOP, host.rough);
+    }
   }
   const v = baked.vertices;
   baked.vertices = {

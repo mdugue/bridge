@@ -290,18 +290,23 @@ test.each(tiles)(
         for (const z of w.z ?? []) {
           expect(Number.isFinite(z)).toBe(true);
         }
-        expect(["photo", "osm"]).toContain(w.src);
+        expect(["photo", "canopy"]).toContain(w.src);
         for (const [s0, s1] of w.bays ?? []) {
           expect(s0).toBeGreaterThanOrEqual(0);
           expect(s1).toBeLessThanOrEqual(w.L + 0.01);
           expect(s1 - s0).toBeGreaterThanOrEqual(1.2 - 1e-6);
         }
-        for (const s of w.osm_at ?? []) {
-          expect(s).toBeGreaterThanOrEqual(0);
-          expect(s).toBeLessThanOrEqual(w.L + 0.01);
+        for (const c of w.canopy ?? []) {
+          expect(c.at[0]).toBeGreaterThanOrEqual(0);
+          expect(c.at[1]).toBeLessThanOrEqual(w.L + 0.01);
+          expect(c.d).toBeGreaterThanOrEqual(1.5);
+          expect(c.d).toBeLessThanOrEqual(8);
+          expect(c.h).toBeGreaterThanOrEqual(2.6);
+          expect(c.h).toBeLessThanOrEqual(6.5);
         }
-        if (w.src === "osm") {
-          expect(w.osm_at?.length ?? 0).toBeGreaterThan(0);
+        // a wall only a canopy speaks for is under one
+        if (w.src === "canopy") {
+          expect(w.canopy?.length ?? 0).toBeGreaterThan(0);
         }
       }
     }
@@ -785,7 +790,6 @@ test.each(tiles)(
       terraceSourceFile(site, tile),
       cityMeshSourceFiles(site, tile).osmBuild,
       cityMeshSourceFiles(site, tile).doors,
-      cityMeshSourceFiles(site, tile).shopfronts,
       sideFileSource(site, `surface_${tile}.json`),
     ];
     for (const file of files) {

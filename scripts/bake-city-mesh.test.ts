@@ -469,7 +469,7 @@ test("dormers join their host as one object, roof-flagged on top, source 4", () 
   expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 2 * 3);
 });
 
-test("a shopfront joins its host as glass and frame, source 6", () => {
+test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
   // the house's south wall (x 40–50 m, y 0), facing −y
   const front = (oid = "house"): ShopfrontWall => ({
     oid,
@@ -519,4 +519,14 @@ test("a shopfront joins its host as glass and frame, source 6", () => {
   expect(frame.tint[1]).toBeLessThan(house.tint[1]);
   // a glass facade wears its own front
   expect(bake([front()], true).objects.length).toBe(lod2.objects.length);
+  // a canopy is a third object, in the host's own clay
+  const sheltered = bake([
+    { ...front(), canopy: [{ at: [0, 10], d: 3.5, h: 4.2 }] },
+  ]);
+  expect(sheltered.objects.length).toBe(lod2.objects.length + 3);
+  const canopy = sheltered.objects.at(-1);
+  expect(canopy?.source).toBe(OBJECT_SOURCE_SHOPFRONT);
+  expect(canopy?.tint).toEqual(sheltered.objects[2].tint);
+  expect((canopy?.flags ?? 0) & OBJECT_FLAG_GLASS).toBe(0);
+  expect((canopy?.flags ?? 0) & OBJECT_FLAG_OWN_COLOUR).toBe(0);
 });

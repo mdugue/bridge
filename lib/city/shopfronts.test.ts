@@ -1,15 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import type { DoorFeature, ShopfrontWall } from "./features";
 import {
+  CANOPY,
   doorSpans,
   FASCIA_MAX_M,
+  fasciaSpans,
   MIN_BAY_M,
-  OSM_BAY_M,
+  MULLION,
+  mullions,
   PANE_TUCK_M,
+  PANEL_M,
   paneTop,
   piers,
   SHOPFRONT,
   SHOPFRONT_SINK,
+  ROW_SILL_M,
   SHOPFRONT_TOP_M,
   shopfrontJoins,
   shopfrontMesh,
@@ -66,13 +71,20 @@ function triangles(p: number[]): { c: number[]; n: number[] }[] {
 }
 
 describe("the bays", () => {
-  test("an OSM shop gets one bay at its node, overlapping ones join", () => {
-    const w = wall({ src: "osm", bays: undefined, osm_at: [5, 6, 11.5] });
-    // 5 and 6 overlap; 11.5 is clipped at the wall's end pier
-    expect(wallBays(w, [])).toEqual([
-      [5 - OSM_BAY_M / 2, 6 + OSM_BAY_M / 2],
-      [11.5 - OSM_BAY_M / 2, 12 - SHOPFRONT.pier],
+  test("only measured bays, clipped inside the wall's end piers", () => {
+    expect(wallBays(wall({ bays: [[0, 12]] }), [])).toEqual([
+      [SHOPFRONT.pier, 12 - SHOPFRONT.pier],
     ]);
+    expect(wallBays(wall({ bays: undefined }), [])).toEqual([]);
+  });
+
+  test("mullions divide a bay into equal panels no wider than PANEL_M", () => {
+    expect(mullions([1, 1 + PANEL_M])).toEqual([]);
+    const ms = mullions([0, 5]);
+    // three panels of 5/3 m
+    expect(ms).toHaveLength(2);
+    expect((ms[0][0] + ms[0][1]) / 2).toBeCloseTo(5 / 3);
+    expect(ms[0][1] - ms[0][0]).toBeCloseTo(MULLION.w);
   });
 
   test("a door is cut out of a bay; a sliver left over is dropped", () => {
@@ -137,6 +149,11 @@ describe("the pane's top", () => {
     );
     expect(paneTop(wall({ sign: sign(1.7) }), 4)).toBe(SHOPFRONT_TOP_M);
   });
+
+  test("under a canopy's slab, its head included", () => {
+    const w = wall({ canopy: [{ at: [0, 12], d: 4, h: 3.3 }] });
+    expect(paneTop(w, 5)).toBeCloseTo(3.3 - CANOPY.slab - SHOPFRONT.head);
+  });
 });
 
 describe("the mesh", () => {
@@ -175,6 +192,7 @@ describe("the mesh", () => {
   test("no window under a ground floor too low; a sign alone is a fascia", () => {
     const low = wall({ gf_top: 1.6 });
     expect(shopfrontMesh(low, wallBays(low, []), 4, OFFSET)).toEqual({
+      canopy: [],
       frame: [],
       pane: [],
     });
@@ -189,6 +207,60 @@ describe("the mesh", () => {
       ({ c }) => c[2]
     );
     expect(Math.max(...tops)).toBeLessThanOrEqual(103 + FASCIA_MAX_M);
+  });
+
+  test("a glazed row sits on a lower riser, its panes split by mullions", () => {
+    const w = wall({ bays: [[0, 12]], row: true });
+    const mesh = shopfrontMesh(w, wallBays(w, []), 4, OFFSET);
+    const zs = mesh.pane.filter((_, i) => i % 3 === 2);
+    expect(Math.min(...zs)).toBeCloseTo(100 + ROW_SILL_M - PANE_TUCK_M);
+    // 11.5 m of glass: six panels, five mullions standing out as far as
+    // MULLION.proud, between the riser and the head
+    const ys = triangles(mesh.frame).map(({ c }) => c[1]);
+    expect(ys.some((y) => Math.abs(y + MULLION.proud) < 1e-6)).toBe(true);
+    expect(mullions(wallBays(w, [])[0])).toHaveLength(5);
+  });
+
+  for (const reversed of [false, true]) {
+    test(`a canopy: a slab out to its fascia, at the measured top (${reversed ? "b → a" : "a → b"})`, () => {
+      const w = wall(
+        {
+          canopy: [{ at: [0, 12], d: 4, h: 4.3 }],
+          sign: { at: [[1, 5]], z: [3.4, 4.2] },
+        },
+        reversed
+      );
+      // the canopy's fascia is the sign band: no board on the wall
+      expect(fasciaSpans(w)).toEqual([]);
+      const mesh = shopfrontMesh(w, wallBays(w, []), 5, OFFSET);
+      const tris = triangles(mesh.canopy);
+      expect(tris.length).toBeGreaterThan(0);
+      const ys = tris.map(({ c }) => c[1]);
+      const zs = tris.map(({ c }) => c[2]);
+      // out to its depth (−y), from the wall
+      expect(Math.min(...ys)).toBeCloseTo(-4, 1);
+      expect(Math.max(...ys)).toBeLessThanOrEqual(CANOPY.tuck + 1e-9);
+      // the slab's top at the measured height, the fascia's lip over it,
+      // the fascia no deeper than CANOPY.fasciaH
+      expect(Math.max(...zs)).toBeCloseTo(104.3 + CANOPY.lip);
+      expect(Math.min(...zs)).toBeGreaterThanOrEqual(
+        104.3 - CANOPY.fasciaH - 1e-9
+      );
+      for (const { n } of tris) {
+        // nothing faces into the wall
+        expect(n[1]).toBeLessThanOrEqual(1e-9);
+      }
+    });
+  }
+
+  test("a low canopy's fascia keeps the headroom", () => {
+    const w = wall({ canopy: [{ at: [0, 12], d: 3, h: 3 }], gf_top: 2.2 });
+    const zs = triangles(shopfrontMesh(w, [], 4, OFFSET).canopy).map(
+      ({ c }) => c[2]
+    );
+    expect(Math.min(...zs)).toBeGreaterThanOrEqual(
+      100 + CANOPY.headroom - 1e-9
+    );
   });
 
   test("laid onto the wall where it stands off the footprint line", () => {

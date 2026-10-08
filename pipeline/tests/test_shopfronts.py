@@ -190,17 +190,69 @@ def test_the_ground_floor_top_is_read_from_wide_low_openings():
     assert ground_top(holes[:, :50], eave) is None  # one narrow opening
 
 
-def test_the_tile_lists_photo_shopfronts_and_osm_shops(tmp_path):
+def test_a_glazed_row_takes_one_image_where_no_other_looked():
+    # two images, each seeing a different half of a wall that is glass
+    # nearly throughout: no bin has two votes, yet the row is its glass
+    glass = [90] * 12 + [-1] * 2 + [90] * 10
+    a = glass[:14] + [-1] * 10
+    b = [-1] * 12 + glass[12:]
+    m = merge([_rec("a", a), _rec("b", b)], 12.0)
+    assert m["row"] and m["shop"]
+    assert m["bays"] == [[0.0, 12.0]]
+    # windows and piers in equal parts are no row
+    m = merge([_rec("a", FRONT), _rec("b", FRONT)], 10.0)
+    assert "row" not in m
+
+
+def test_two_images_agreeing_on_wall_make_a_closed_run():
+    shut = [90] * 6 + [0] * 4 + [90] * 10
+    m = merge([_rec("a", shut), _rec("b", shut)], 10.0)
+    assert m["closed"] == [[3.0, 5.0]]
+
+
+def test_a_canopy_is_level_from_the_wall_to_its_edge():
+    out = [4.3] * 7 + [4.9, 0.1] + [0.0] * 7  # a lip at 3.5 m, the edge at 4 m
+    d, h = sf.canopy_depth(out, 4.4)
+    assert d == pytest.approx(4.25) and h == pytest.approx(4.3)
+    # a tall building's wall: no canopy (nothing low in front)
+    assert sf.canopy_depth([18.0] * 4 + [0.0] * 12, 18.0) is None
+    # higher than the building behind it: a tree, not its canopy
+    assert sf.canopy_depth([4.3] * 4 + [0.0] * 12, 2.0) is None
+    # uneven from the wall out: a crown, not a slab
+    assert sf.canopy_depth([4.3, 4.3, 6.0] + [0.0] * 13, 6.5) is None
+    # level as far as it was sampled: the footprint misses the building
+    assert sf.canopy_depth([4.3] * 16, 4.3) is None
+
+
+def test_canopies_run_along_the_wall_and_bridge_one_miss():
+    w = {"a": (0.0, 0.0), "b": (12.0, 0.0), "L": 12.0, "n": (0.0, -1.0)}
+
+    def ndom(x, y):
+        if y > 0:
+            return 4.4  # the pavilion behind
+        if x < 2.0 or 5.0 <= x < 6.0:
+            return 0.0  # no canopy there (and one miss at 5–6 m)
+        return 4.3 if y > -3.6 else 0.0
+
+    cs = sf.canopies(w, ndom)
+    assert cs == [{"at": [2.0, 12.0], "d": 3.75, "h": 4.3}]
+
+
+def test_the_glass_under_a_canopy_keeps_measured_walls():
+    cs = [{"at": [0.0, 20.0], "d": 4.0, "h": 4.3}]
+    assert sf.under_canopy(cs, []) == [[0.0, 20.0]]
+    assert sf.under_canopy(cs, [[5.0, 7.0], [19.0, 20.0]]) == [[0.0, 5.0], [7.0, 19.0]]
+
+
+def test_the_tile_lists_photo_shopfronts_and_no_osm_guess(tmp_path):
     city = _city({"A": (0, 0, 12, 10, 12), "B": (30, 0, 42, 10, 12)})
     ws = sf.walls(city)
     wa = next(w for w in ws if w["oid"] == "A" and w["L"] == pytest.approx(12.0))
     recs = [_rec("a", FRONT[:24]), _rec("b", FRONT[:24])]
     by_wall = {(wa["oid"], wa["wi"]): [r | {"oid": "A", "wi": wa["wi"]} for r in recs]}
-    wb = next(w for w in ws if w["oid"] == "B")
-    mid = np.array([[(wb["a"][0] + wb["b"][0]) / 2 + 0.5, (wb["a"][1] + wb["b"][1]) / 2 + 0.5]])
     ground = lambda x, y: 100.0 + 0.1 * (x - sf_X0)  # noqa: E731 — a slope eastwards
-    out, stats = sf.shopfronts(city, by_wall, np.zeros((0, 2)), mid, ground)
-    assert stats["photo"] == 1 and stats["osm"] == 1
+    out, stats = sf.shopfronts(city, by_wall, np.zeros((0, 2)), ground)
+    assert stats["photo"] == 1 and set(out) == {"A-root"}
     a = out["A-root"][0]
     # the outward normal points away from the footprint (A spans y 0–10)
     mid_y = (wa["a"][1] + wa["b"][1]) / 2 - Y0
@@ -212,10 +264,36 @@ def test_the_tile_lists_photo_shopfronts_and_osm_shops(tmp_path):
         a["src"] == "photo"
         and a["bays"][0] == [1.0, 3.0]
         and a["a"] == [round(c, 2) for c in wa["a"]]
+        and "canopy" not in a
     )
-    b = out["B-root"][0]
-    assert b["src"] == "osm" and b["osm_at"][0] == pytest.approx(wb["L"] / 2, abs=0.6)
     path = tmp_path / "s.json"
     sf.write(path, out)
     doc = json.loads(path.read_text())
-    assert "Mapillary" in doc["attribution"] and "OpenStreetMap" in doc["attribution"]
+    assert doc["attribution"] == "Mapillary, CC BY-SA 4.0"
+
+
+def test_a_canopy_glazes_its_wall_and_runs_on_along_the_object(tmp_path):
+    city = _city({"A": (0, 0, 12, 10, 12)})
+    ws = sf.walls(city)
+    wa = next(w for w in ws if w["oid"] == "A" and w["L"] == pytest.approx(12.0))
+    nx, ny = wa["n"]
+    recs = [_rec("a", FRONT[:24]), _rec("b", FRONT[:24])]
+    by_wall = {(wa["oid"], wa["wi"]): [r | {"oid": "A", "wi": wa["wi"]} for r in recs]}
+    (ax, ay) = wa["a"]
+
+    def ndom(x, y):
+        out = (x - ax) * nx + (y - ay) * ny  # metres out of wall A's line
+        if out < 0:
+            return 4.4 if sf_X0 <= x <= sf_X0 + 12 and Y0 <= y <= Y0 + 10 else 0.0
+        return 4.3 if out < 3.6 and sf_X0 <= x <= sf_X0 + 12 else 0.0
+
+    out, stats = sf.shopfronts(city, by_wall, np.zeros((0, 2)), lambda x, y: 100.0, ndom)
+    a = next(e for e in out["A-root"] if e["wi"] == wa["wi"])
+    assert a["row"] and a["canopy"][0]["d"] == pytest.approx(3.75)
+    # the glass runs under the whole canopy but for the 2 m both images
+    # see as wall (9–11 m; 11–12 m is too narrow a bay)
+    assert a["canopy"][0]["at"] == [0.0, 12.0]
+    assert a["bays"] == [[0.0, 9.0]]
+    assert stats["canopy"] == 1
+    sf.write(tmp_path / "s.json", out, "Quelle: GeoSN, dl-de/by-2-0")
+    assert "GeoSN" in json.loads((tmp_path / "s.json").read_text())["attribution"]

@@ -1,13 +1,19 @@
 /**
  * The shopfronts on the LoD2 walls (pipeline/bake/shopfronts.py: the
  * ground floor's bays and store signs measured in Mapillary's street
- * panoramas, OSM's shops where no photo shows one) as geometry the building
- * bake appends to the tile's mesh (scripts/bake-city-mesh.ts): per bay a
- * dark glass pane barely proud of the wall, set back in a frame — piers at
- * its edges and between bays, a stall riser under it, a head over it, all
- * standing out of the wall — and a fascia board where a sign was seen. No
- * mullions, no lettering, no bay where nothing was measured: an OSM shop
- * gets one bay at its node, never a grid.
+ * panoramas, the canopy over them in the surface model) as geometry the
+ * building bake appends to the tile's mesh (scripts/bake-city-mesh.ts): per
+ * bay a dark glass pane barely proud of the wall, set back in a frame —
+ * piers at its edges and between bays, a stall riser under it, a head over
+ * it, all standing out of the wall — divided into panels no wider than
+ * PANEL_M by slim mullions (a shop window is wide glass in a light frame,
+ * not a door), a fascia board where a sign was seen, and the canopy where
+ * the surface model shows one: a flat slab out over the pavement with a
+ * deep fascia at its edge (the Hauptstraße's GDR pavilions). A glazed row
+ * (`row`: glass from pier to pier) sits on a lower riser. No lettering, no
+ * column under a canopy (none is measured), no bay where nothing was
+ * measured: a wall no photo shows as a shopfront has none (an OSM shop node
+ * says a shop is there, not where its windows are).
  *
  * Shop windows on a shop's ground floor are the one exception to the glass
  * veto (docs/transformations.md): the pane is its own object, flagged glass
@@ -42,8 +48,25 @@ export const STOREY_CLEAR_M = 0.2;
 export const MIN_PANE_M = 1.5;
 /** A bay narrower than this (after a door is cut out of it) is dropped. */
 export const MIN_BAY_M = 1.2;
-/** The one bay an OSM shop node gets, centred on it. */
-export const OSM_BAY_M = 2.4;
+/** A pane is divided into panels at most this wide (m) by mullions. */
+export const PANEL_M = 2;
+/** A mullion's width and how far it stands out of the wall (m): slimmer
+ *  and flatter than a pier. */
+export const MULLION = { proud: 0.05, w: 0.06 } as const;
+/** A glazed row's stall riser (m above the ground): the modernist rows
+ *  glaze nearly to the pavement. */
+export const ROW_SILL_M = 0.3;
+/** A canopy (m): its slab's thickness under its measured top, its fascia's
+ *  depth and lip over the slab, the tallest fascia, and the headroom the
+ *  fascia keeps over the ground. */
+export const CANOPY = {
+  fasciaD: 0.2,
+  fasciaH: 1,
+  headroom: 2.6,
+  lip: 0.05,
+  slab: 0.3,
+  tuck: 0.02,
+} as const;
 /** A shopfront's feet go this far into the ground (each part on its two
  *  ends' lower ground). */
 export const SHOPFRONT_SINK = SINK.box;
@@ -64,7 +87,9 @@ export const PANE_TUCK_M = 0.02;
 export const FASCIA_MAX_M = 1;
 
 export interface ShopfrontMesh {
-  /** the piers, stall risers, heads and fascias */
+  /** the canopies: slab and fascia */
+  canopy: number[];
+  /** the piers, stall risers, heads, mullions and fascias */
   frame: number[];
   /** the glass */
   pane: number[];
@@ -151,28 +176,13 @@ export function doorSpans(
 }
 
 /**
- * The wall's bays as drawn: the measured ones (or one OSM_BAY_M bay
- * centred on each OSM shop node, overlapping ones joined), clipped to the
- * wall, with the doors cut out; a piece narrower than MIN_BAY_M dropped.
+ * The wall's bays as drawn: the measured ones clipped to the wall inside
+ * its end piers, with the doors cut out; a piece narrower than MIN_BAY_M
+ * dropped.
  */
 export function wallBays(w: ShopfrontWall, doors: readonly Span[]): Span[] {
   const inset = SHOPFRONT.pier;
-  let bays: Span[] =
-    w.src === "osm"
-      ? (w.osm_at ?? [])
-          .map((s): Span => [s - OSM_BAY_M / 2, s + OSM_BAY_M / 2])
-          .toSorted((p, q) => p[0] - q[0])
-          .reduce<Span[]>((acc, b) => {
-            const last = acc.at(-1);
-            if (last && b[0] <= last[1] + inset) {
-              last[1] = Math.max(last[1], b[1]);
-            } else {
-              acc.push([b[0], b[1]]);
-            }
-            return acc;
-          }, [])
-      : (w.bays ?? []).map(([s0, s1]): Span => [s0, s1]);
-  bays = bays.map(([s0, s1]): Span => [
+  let bays = (w.bays ?? []).map(([s0, s1]): Span => [
     Math.max(s0, inset),
     Math.min(s1, w.L - inset),
   ]);
@@ -180,6 +190,22 @@ export function wallBays(w: ShopfrontWall, doors: readonly Span[]): Span[] {
     bays = without(bays, d);
   }
   return bays.filter(([s0, s1]) => s1 - s0 >= MIN_BAY_M - 1e-9);
+}
+
+/** The mullions dividing a bay into equal panels no wider than PANEL_M. */
+export function mullions([s0, s1]: Span): Span[] {
+  const n = Math.ceil((s1 - s0) / PANEL_M - 1e-9);
+  const out: Span[] = [];
+  for (let k = 1; k < n; k++) {
+    const c = s0 + ((s1 - s0) * k) / n;
+    out.push([c - MULLION.w / 2, c + MULLION.w / 2]);
+  }
+  return out;
+}
+
+/** The stall riser's top above the ground: lower on a glazed row. */
+export function sillOf(w: ShopfrontWall): number {
+  return w.row ? ROW_SILL_M : SHOPFRONT.sill;
 }
 
 /**
@@ -211,8 +237,12 @@ export function paneTop(w: ShopfrontWall, storeyH: number): number {
   // a sign hangs over the window: the pane ends under it, unless the sign
   // was measured too low for a window under it (then the fascia goes up)
   const under = (w.sign?.z?.[0] ?? Number.POSITIVE_INFINITY) - SHOPFRONT.head;
-  if (under - SHOPFRONT.sill >= MIN_PANE_M) {
+  if (under - sillOf(w) >= MIN_PANE_M) {
     top = Math.min(top, under);
+  }
+  // under a canopy, the pane and its head end under the slab
+  for (const c of w.canopy ?? []) {
+    top = Math.min(top, c.h - CANOPY.slab - SHOPFRONT.head);
   }
   return top;
 }
@@ -233,11 +263,12 @@ export function shopfrontMesh(
   offset: { cx: number; cy: number },
   shift: (span: Span) => number = () => 0
 ): ShopfrontMesh {
-  const out: ShopfrontMesh = { frame: [], pane: [] };
+  const out: ShopfrontMesh = { canopy: [], frame: [], pane: [] };
   const top = paneTop(w, storeyH);
+  const sill = sillOf(w);
   // no window where the ground floor is too low for one: the fascia alone
-  const windows = top - SHOPFRONT.sill >= MIN_PANE_M ? bays : [];
-  const { back, frameProud, head, paneProud, sill } = SHOPFRONT;
+  const windows = top - sill >= MIN_PANE_M ? bays : [];
+  const { back, frameProud, head, paneProud } = SHOPFRONT;
   const all: Face[] = ["+a", "-a", "+b", "+c"];
   const { t, n } = wallFrame(w, offset);
   const mirrored = t[0] * n[1] - t[1] * n[0] < 0;
@@ -271,9 +302,29 @@ export function shopfrontMesh(
       ...all,
       "-c",
     ]);
+    // the mullions, on the pane between riser and head (their ends in them)
+    for (const m of mullions(bay)) {
+      const { at: atBay } = wallFrame(w, offset, shift(bay));
+      const g = Math.max(groundAt(w, bay[0]), groundAt(w, bay[1]));
+      box(
+        out.frame,
+        atBay,
+        mirrored ? [m[1], m[0]] : m,
+        [-back, MULLION.proud],
+        [g + sill, g + top],
+        ["+a", "-a", "+b"]
+      );
+    }
   }
   for (const p of piers(windows, w.L)) {
     part(out.frame, p, frameProud, (f, g) => [f, g + top + head], all);
+  }
+  for (const c of w.canopy ?? []) {
+    canopyMesh(w, c, top, (span, proud, z, faces) => {
+      const { at } = wallFrame(w, offset, shift(span));
+      const along: Span = mirrored ? [span[1], span[0]] : span;
+      box(out.canopy, at, along, proud, z, faces);
+    });
   }
   for (const [s0, s1] of fasciaSpans(w)) {
     const [z0, z1] = w.sign?.z ?? [top, top + SHOPFRONT.fasciaH];
@@ -296,11 +347,60 @@ export function shopfrontMesh(
 }
 
 /** Where the fascia boards run: the measured sign spans, clipped to the
- *  wall; none without a sign. */
+ *  wall; none without a sign, none under a canopy (its fascia is the sign
+ *  band). */
 export function fasciaSpans(w: ShopfrontWall): Span[] {
+  if ((w.canopy ?? []).length > 0) {
+    return [];
+  }
   return (w.sign?.at ?? [])
     .map(([s0, s1]): Span => [Math.max(0, s0), Math.min(w.L, s1)])
     .filter(([s0, s1]) => s1 - s0 >= 0.5);
+}
+
+/**
+ * A canopy's slab and fascia, through `put(span, [out0, out1], [z0, z1],
+ * faces)`: the slab from the wall out to the fascia, CANOPY.slab thick
+ * under the measured top; the fascia at its edge, CANOPY.fasciaD deep,
+ * from at most CANOPY.fasciaH under the top (keeping CANOPY.headroom over
+ * the ground, and no lower than the pane's head behind it) to a lip over
+ * the slab. Heights over the higher ground of the canopy's ends.
+ */
+export function canopyMesh(
+  w: ShopfrontWall,
+  c: { at: [number, number]; d: number; h: number },
+  top: number,
+  put: (
+    span: Span,
+    out: [number, number],
+    z: [number, number],
+    faces: readonly Face[]
+  ) => void
+): void {
+  const span: Span = [Math.max(0, c.at[0]), Math.min(w.L, c.at[1])];
+  if (span[1] - span[0] < 0.5 || c.d <= CANOPY.fasciaD) {
+    return;
+  }
+  const g = Math.max(groundAt(w, span[0]), groundAt(w, span[1]));
+  const slab0 = c.h - CANOPY.slab;
+  const fascia0 = Math.max(
+    c.h - CANOPY.fasciaH,
+    CANOPY.headroom,
+    Math.min(top + SHOPFRONT.head, slab0)
+  );
+  const edge = c.d - CANOPY.fasciaD;
+  put(
+    span,
+    [-CANOPY.tuck, edge + CANOPY.tuck],
+    [g + slab0, g + c.h],
+    ["+a", "-a", "+c", "-c"]
+  );
+  put(
+    span,
+    [edge, c.d],
+    [g + Math.min(fascia0, slab0), g + c.h + CANOPY.lip],
+    ["+a", "-a", "+b", "+c", "-c"]
+  );
 }
 
 /**

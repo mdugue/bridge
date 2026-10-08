@@ -47,7 +47,7 @@ export function cityJsonFile(tile: string): string {
  *  the surface model shows beyond LoD2 + the landmarks Wikidata knows +
  *  the roofs rebuilt from DOM1 + OSM's entrances on the walls + the
  *  dormers DOM1 shows on the pitched roofs + the shopfronts street photos
- *  and OSM's shops show on the ground floors). */
+ *  show on the ground floors, with the canopies DOM1 shows over them). */
 export function cityMeshSourceFiles(
   site: Site,
   tile: string
