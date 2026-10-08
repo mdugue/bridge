@@ -18,6 +18,7 @@ export type SceneLookKey =
   | "heightFog"
   | "horizonShade"
   | "meadowNdvi"
+  | "reflections"
   | "skyView"
   | "urbanGreen"
   | "waterMist";
@@ -340,6 +341,16 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     // Below full strength until judged on GPU plates (plan 033).
     initial: 0.8,
     snapshotKey: "horizonShadePct",
+  },
+  {
+    key: "reflections",
+    id: "reflections",
+    label: "Spiegelung",
+    description:
+      "Der Himmel spiegelt sich in Glasfassaden, Vergoldungen und im Wasser (nur der Himmel, nicht die Stadt)",
+    group: "rendering",
+    initial: 1,
+    snapshotKey: "reflectionPct",
   },
   {
     key: "grain",

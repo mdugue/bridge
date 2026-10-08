@@ -62,6 +62,11 @@ import {
   slotUniform,
 } from "./material-slots";
 import { claySkySlots, createClaySky, openSkySlots } from "./sky-light";
+import {
+  mirrorWeight,
+  reflectionStrength,
+  skyReflection,
+} from "./sky-reflection";
 
 /** A building tile's object table (lib/city/city-mesh.ts). */
 interface ObjectTable {
@@ -216,7 +221,9 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
       clayPoche.greaterThan(0.5).and(frontFacing.not()),
       POCHE,
       askedColour(
-        clayColour(d, tint, build, h, wall, flags),
+        clayColour(d, tint, build, h, wall, flags).mul(
+          float(1).sub(facadeMirror(flags, wall, wn).mul(0.6))
+        ),
         h,
         wall,
         flags,
@@ -374,6 +381,20 @@ function facadeMaterial(flags: F, wall: F): { glass: F; metal: F } {
   };
 }
 
+/**
+ * Spiegelung on a facade (sky-reflection.ts): how much of the sky a glass
+ * wall (flag 4) mirrors, from a tenth face on to all of it at a grazing
+ * view, and a metal one (flag 8) a third as much — weighted by the row,
+ * so at 0 the facade is the clay it was. The clay's own colour gives way
+ * by part of it (clayGraph), as a pane's would.
+ */
+function facadeMirror(flags: F, wall: F, wn: V3): F {
+  const m = facadeMaterial(flags, wall);
+  return mirrorWeight(wn, 0.1)
+    .mul(m.glass.add(m.metal.mul(0.35)))
+    .mul(reflectionStrength);
+}
+
 /** Glass and metal cladding read a little smoother than the clay. */
 function facadeRoughness(r: F, m: { glass: F; metal: F }): F {
   return mix(mix(r, 0.42, m.glass), 0.5, m.metal);
@@ -469,11 +490,13 @@ function clayGlow(
     .mul(lit)
     .mul(d.uDuskGlow)
     .mul(d.uNight);
-  // Glas: the grazing angle catches a pale sky sheen, dimmed at night
+  // Glas: the grazing angle catches a pale sky sheen, dimmed at night —
+  // the stand-in for the reflection, drawn only as Spiegelung is turned down
   const sheen = facadeMaterial(flags, wall)
     .glass.mul(fres.mul(fres).mul(fres))
     .mul(d.uRim)
-    .mul(float(1).sub(d.uNight.mul(0.7)));
+    .mul(float(1).sub(d.uNight.mul(0.7)))
+    .mul(float(1).sub(reflectionStrength));
   // The asked building's light, in the accent's pale: faint by day, a
   // glow after dark.
   const askedLight = vec3(...SELECTION_ACCENT.halo).mul(
@@ -483,6 +506,7 @@ function clayGlow(
     .add(glow)
     .add(vec3(1, 0.78, 0.45).mul(shopGlow.mul(0.4)))
     .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)))
+    .add(skyReflection(wn, 0.22).mul(facadeMirror(flags, wall, wn)))
     .add(askedLight);
 }
 
