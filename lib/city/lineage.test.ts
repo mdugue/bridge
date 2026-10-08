@@ -6,7 +6,7 @@ import {
 } from "./city-mesh";
 import type { InquiryObject } from "./inquiry";
 import type { TreeInquiry } from "./inquiry-features";
-import { type LineageSite, lineage } from "./lineage";
+import { type LineageEntry, type LineageSite, lineage } from "./lineage";
 import { MEASURED_ROOF, NO_FACT, type ObjectFacts } from "./object-facts";
 import type { SiteProvenance } from "./provenance";
 
@@ -79,6 +79,8 @@ const object = (over: Partial<InquiryObject> = {}): InquiryObject => ({
 const sources = (entries: ReturnType<typeof lineage>) =>
   entries.map((e) => e.source);
 
+const said = (entry: LineageEntry) => entry.used.map((u) => u.text);
+
 test("a LoD2 building whose roof was rebuilt: the model, the surface model for the roof, the photo's roof colour", () => {
   const picked = object({
     flags: OBJECT_FLAG_SHOP,
@@ -95,16 +97,29 @@ test("a LoD2 building whose roof was rebuilt: the model, the surface model for t
     "OpenStreetMap",
     "Digitales Orthophoto",
     "Digitales Geländemodell DGM1",
-    "Im Viewer berechnet",
+    "Im Viewer",
   ]);
   const [model, surface, osm] = entries;
   // the model edition, as the card says it; the portal to find it
   expect(model.stand).toBe("Modell 2024");
   expect(model.url).toBe("https://www.geodaten.sachsen.de/");
   // the rebuilt roof is the surface model's, not the model's
-  expect(model.used.join()).not.toContain("Dachform");
+  expect(said(model).join()).not.toContain("Dachform");
   expect(surface.stand).toBe("01.03.2024");
-  expect(osm.used).toContain("Schaufenster im Erdgeschoss");
+  // a roof put in where the model misses the surface is detected, the
+  // model's own lines are taken as published
+  expect(surface.used.map((u) => u.method)).toEqual(["detected"]);
+  expect(model.used.every((u) => u.method === "taken")).toBe(true);
+  // a shop is a point matched to the footprint: detected; the material
+  // where nothing is mapped is assumed
+  expect(osm.used).toContainEqual({
+    text: "Schaufenster im Erdgeschoss",
+    method: "detected",
+  });
+  expect(osm.used).toContainEqual({
+    text: "sonst Ziegel oder Putz wie in der Nachbarschaft",
+    method: "assumed",
+  });
   expect(osm.credit).toBe("© OpenStreetMap-Mitwirkende, ODbL");
   // the viewer's own work credits nobody
   expect(entries.at(-1)?.credit).toBe("");
@@ -120,7 +135,7 @@ test("a shed from the laser scan claims neither the model nor a roof colour", ()
   expect(sources(entries)).toEqual([
     "Laserscan",
     "Digitales Geländemodell DGM1",
-    "Im Viewer berechnet",
+    "Im Viewer",
   ]);
   // without the manifest the provider's credit still stands
   expect(entries[0].credit).toBe("Quelle: GeoSN, dl-de/by-2-0");
@@ -148,10 +163,10 @@ test("a tree: its register, or OSM; the leaf colour only where the photo has ban
     "Stadtbaumkataster",
     "Digitales Geländemodell DGM1",
     "Digitales Orthophoto",
-    "Im Viewer berechnet",
+    "Im Viewer",
   ]);
   expect(sources(lineage({ ...tree, osm: true }, provenance, noPhoto))).toEqual(
-    ["OpenStreetMap", "Digitales Geländemodell DGM1", "Im Viewer berechnet"]
+    ["OpenStreetMap", "Digitales Geländemodell DGM1", "Im Viewer"]
   );
 });
 
@@ -184,7 +199,7 @@ test("a tree the surface model measured names the model, not a register", () => 
     "Digitales Oberflächenmodell DOM1",
     "Digitales Geländemodell DGM1",
     "Digitales Orthophoto",
-    "Im Viewer berechnet",
+    "Im Viewer",
   ]);
 });
 
@@ -208,7 +223,7 @@ test("an orchard's tree names OSM's orchard, not the city's register", () => {
   expect(sources(entries)).toEqual([
     "OpenStreetMap",
     "Digitales Geländemodell DGM1",
-    "Im Viewer berechnet",
+    "Im Viewer",
   ]);
   expect(entries[0].credit).toContain("ODbL");
 });
@@ -244,7 +259,7 @@ test("without a Basis-DLM a bridge's deck and a tree row are OSM's, with its lic
       hamburg
     );
     expect(sources(bridge)).not.toContain("Basis-DLM");
-    const deck = bridge.find((e) => e.used.includes("der Umriss des Decks"));
+    const deck = bridge.find((e) => said(e).includes("der Umriss des Decks"));
     expect(deck?.source).toBe("OpenStreetMap");
     expect(deck?.credit).toContain("ODbL");
     expect(deck?.url).toBe("https://www.openstreetmap.org/copyright");

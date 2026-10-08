@@ -976,9 +976,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await expect(card).toContainText("Quelle: GeoSN, dl-de/by-2-0");
       // the provenance manifest arrives with the first card: the edition
       await expect(card).toContainText(/Modell \d{4}/);
-      await expect(card.getByTestId("inquiry-data")).toContainText(
-        "Im Viewer berechnet"
-      );
+      await expect(card.getByTestId("inquiry-data")).toContainText("Im Viewer");
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
       await page.keyboard.press("i");

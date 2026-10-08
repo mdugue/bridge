@@ -57,7 +57,11 @@ Docs are only useful if they do not rot. Treat them as part of "done":
 > data → feature transformation** is not complete until:
 > 1. [transformations.md](./transformations.md) has the entry with the right
 >    status (✅ active · 🧪 experimental · 📋 planned · 🗃️ discontinued —
->    and *why*, especially for discontinued);
+>    and *why*, especially for discontinued) and, if active or experimental,
+>    its method badge (`❝ taken` · `= computed` · `◎ detected` ·
+>    `≈ assumed`, `lib/city/methods.ts`); the guide's
+>    [methods page](./guide/en/methods.md) (EN and DE) and the inquiry card's
+>    lineage (`lib/city/lineage.ts`) say the same;
 > 2. [data-flow.md](./data-flow.md)'s diagram and table reflect any new
 >    source, feature or edge;
 > 3. [portability.md](./portability.md) records the fallback if a new

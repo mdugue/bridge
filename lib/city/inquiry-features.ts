@@ -17,9 +17,11 @@ import {
   osmSource,
   positionKey,
   sourceLine,
+  stated,
   whole,
 } from "./card-lines";
 import type { MoreInquiry } from "./inquiry-more";
+import type { Stated } from "./methods";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
 import type { SiteProvenance } from "./provenance";
 
@@ -161,7 +163,7 @@ function orchardCard(
     facts: [],
     id: positionKey(t.position),
     idLabel: "Lage",
-    sources: [osmSource(provenance, ["Obstwiese"], "trees")],
+    sources: stated("taken", osmSource(provenance, ["Obstwiese"], "trees")),
   };
 }
 
@@ -204,7 +206,7 @@ export function treeCard(
     facts: treeLines(t, f, title),
     id: positionKey(t.position),
     idLabel: "Lage",
-    sources: [source],
+    sources: stated("taken", source),
   };
 }
 
@@ -288,32 +290,32 @@ export function monumentCard(
   const fromOsm = p.source === "osm" || p.source === "dlm+osm";
   const osmWhat = monumentOsmWhat(p, fromDlm, tagged !== undefined);
   const sources = [
-    fromDlm
-      ? sourceLine(provenance, "dlm", [p.name ? "Name" : "Lage"], {
-          label: "Basis-DLM",
-          credit: credits.provider,
-        })
-      : "",
-    fromOsm
-      ? osmSource(
-          provenance,
-          osmWhat.length > 0 ? osmWhat : ["Lage"],
-          "fountains"
-        )
-      : "",
-    height
-      ? sourceLine(
-          provenance,
-          "dom",
-          ["Höhe gemessen"],
-          {
-            label: "Digitales Oberflächenmodell DOM1",
+    ...stated(
+      "taken",
+      fromDlm
+        ? sourceLine(provenance, "dlm", [p.name ? "Name" : "Lage"], {
+            label: "Basis-DLM",
             credit: credits.provider,
-          },
-          ""
-        )
-      : "",
-  ].filter(Boolean);
+          })
+        : "",
+      fromOsm ? osmSource(provenance, osmWhat, "fountains") : ""
+    ),
+    ...stated(
+      "computed",
+      height
+        ? sourceLine(
+            provenance,
+            "dom",
+            ["Höhe gemessen"],
+            {
+              label: "Digitales Oberflächenmodell DOM1",
+              credit: credits.provider,
+            },
+            ""
+          )
+        : ""
+    ),
+  ];
   return {
     kicker,
     title: firstText(p.name, kicker),
@@ -364,24 +366,43 @@ function bridgeAreaLines(
   area: string,
   provenance: SiteProvenance | null,
   credits: CardCredits
-): string[] {
+): Stated[] {
   const deck = "Deck im DOM1 gemessen";
   if (credits.dlm) {
-    return [
-      sourceLine(provenance, "dlm", [area, deck], {
+    return stated(
+      "taken",
+      sourceLine(provenance, "dlm", [area], {
         label: "Basis-DLM",
         credit: credits.provider,
-      }),
-    ];
+      })
+    ).concat(
+      // bridge.py: the deck line, the surface's lower third across it
+      stated(
+        "computed",
+        sourceLine(
+          provenance,
+          "dom",
+          [deck],
+          {
+            label: "Digitales Oberflächenmodell DOM1",
+            credit: credits.provider,
+          },
+          ""
+        )
+      )
+    );
   }
   return [
-    osmSource(provenance, [area], "bridges"),
-    sourceLine(
-      provenance,
-      "dom",
-      [deck],
-      { label: "Digitales Oberflächenmodell DOM1", credit: credits.provider },
-      ""
+    ...stated("taken", osmSource(provenance, [area], "bridges")),
+    ...stated(
+      "computed",
+      sourceLine(
+        provenance,
+        "dom",
+        [deck],
+        { label: "Digitales Oberflächenmodell DOM1", credit: credits.provider },
+        ""
+      )
     ),
   ];
 }
@@ -403,21 +424,24 @@ export function bridgeCard(
   ]);
   const sources = [
     ...bridgeAreaLines(p.name ? "Name, Fläche" : "Fläche", provenance, credits),
-    p.wikidata && (structure || p.span)
-      ? sourceLine(
-          provenance,
-          "wikidata",
-          [structure ? "Tragwerk" : "", p.span ? "Spannweite" : ""].filter(
-            Boolean
-          ),
-          { label: "Wikidata", credit: "CC0" }
-        )
-      : "",
-    !p.wikidata && structure
-      ? osmSource(provenance, ["Tragwerk"], "bridges")
-      : "",
-    p.clearance ? osmSource(provenance, ["Durchfahrtshöhe"], "bridges") : "",
-  ].filter(Boolean);
+    ...stated(
+      "taken",
+      p.wikidata && (structure || p.span)
+        ? sourceLine(
+            provenance,
+            "wikidata",
+            [structure ? "Tragwerk" : "", p.span ? "Spannweite" : ""].filter(
+              Boolean
+            ),
+            { label: "Wikidata", credit: "CC0" }
+          )
+        : "",
+      !p.wikidata && structure
+        ? osmSource(provenance, ["Tragwerk"], "bridges")
+        : "",
+      p.clearance ? osmSource(provenance, ["Durchfahrtshöhe"], "bridges") : ""
+    ),
+  ];
   return {
     kicker,
     title: firstText(p.name, kicker),

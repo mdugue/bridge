@@ -15,6 +15,7 @@ import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import { visit } from "unist-util-visit";
+import { METHODS, methodOfToken } from "@/lib/city/methods";
 import { diagramKey } from "@/lib/docs/diagrams";
 import { type Lang, resolveHref } from "@/lib/docs/routes";
 import { Diagram } from "../_components/diagram";
@@ -102,6 +103,51 @@ function rehypeLinks(file: string, pages: ReadonlySet<string>) {
 }
 
 /**
+ * A method badge written as inline code (`◎ erkannt`, `≈ assumed`: the
+ * glyph and the word, lib/city/methods.ts) becomes the badge the inquiry
+ * card shows; on GitHub it stays a readable token. Code in a block is left
+ * alone, and so is any other inline code.
+ */
+function rehypeMethodBadges(lang: Lang) {
+  return () => (tree: HastRoot) => {
+    visit(tree, "element", (node: Element, index, parent) => {
+      if (
+        node.tagName !== "code" ||
+        !parent ||
+        index === undefined ||
+        (parent.type === "element" && parent.tagName === "pre")
+      ) {
+        return;
+      }
+      const method = methodOfToken(hastText(node));
+      if (!method) {
+        return;
+      }
+      const info = METHODS[method];
+      const label = lang === "de" ? info.label : info.labelEn;
+      parent.children[index] = {
+        type: "element",
+        tagName: "span",
+        properties: {
+          className: ["method-badge"],
+          dataMethod: method,
+          title: `${label}: ${lang === "de" ? info.meaning : info.meaningEn}`,
+        },
+        children: [
+          {
+            type: "element",
+            tagName: "span",
+            properties: { ariaHidden: "true" },
+            children: [{ type: "text", value: info.glyph }],
+          },
+          { type: "text", value: label },
+        ],
+      };
+    });
+  };
+}
+
+/**
  * Wide tables scroll inside their own box instead of widening the page. Not
  * typeset's `typeset-scroll`: that one sets tables to max-content, which
  * turns this repo's prose tables into single endless lines.
@@ -167,6 +213,7 @@ export async function renderDoc(
     .use(rehypeSlug)
     .use(rehypeLinks(file, pages))
     .use(rehypeTableScroll)
+    .use(rehypeMethodBadges(lang))
     .use(rehypeShiki, {
       theme: "github-light",
       defaultLanguage: "text",
