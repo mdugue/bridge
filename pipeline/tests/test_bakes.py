@@ -1006,6 +1006,20 @@ def test_a_cadastre_tree_carries_its_genus_and_trunk():
     assert "s" not in props
 
 
+def test_a_cadastre_tree_carries_its_planting_year():
+    from bake.trees import planting_year
+
+    # the register's own year wins; else the record's year less its age
+    assert planting_year({"planted": 1998, "facts": {"age": 5, "date": "2025-03-01"}}) == 1998
+    assert planting_year({"planted": None, "facts": {"age": 46, "date": "2025-09-10"}}) == 1979
+    # no age, no date, or an implausible year: none
+    assert planting_year({"planted": None, "facts": {"age": None, "date": "2025-09-10"}}) is None
+    assert planting_year({"planted": None, "facts": {"age": 46, "date": ""}}) is None
+    assert planting_year({"planted": 1066}) is None
+    assert planting_year({"planted": 3000}) is None
+    assert planting_year({}) is None
+
+
 def test_tree_facts_follow_the_features_and_say_what_is_measured():
     from bake.trees import osm_tree, parse_trees, tree_facts, tree_props
 

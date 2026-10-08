@@ -1306,6 +1306,21 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   `crown-season.ts` mixes the crown's colour toward the blossom and keeps
   a flowering crown full (`aBare` = 1 − max(leaf, bloom)) — on the same
   day change, no new attribute. An illustrator's table, not botany.
+- **Tree age** (2026-10-07, Dresden; the other registers on their next
+  bake) — *inputs:* the planting year `y` (`trees.py` `planting_year`: a
+  register's `pflanzjahr`, else the year of its record less Dresden's
+  `jalter`; 43 471 of Dresden's 60 266 trees). `lib/city/tree-age.ts`
+  turns the age into what the measured sizes do not say: a tree under
+  15 years has, without a measured trunk, a trunk down to 0.6 × the
+  height rule's; under 5 years (1 960 trees) it
+  stands between stakes (`tree-stakes.ts`: three posts and two rails, one
+  set per tile, a scene-wide material); past 80 years an unmeasured trunk
+  thickens to 1.3 × by 150. The crown's colour leans with the age too: a
+  sapling's lighter and fresher (fading out by 15 years), an ancient
+  tree's deeper and duller (from 80 to 150 years); on the fine level only,
+  the coarse level's crowns carry no age. The age is
+  counted to the current year, so the picture ages with the calendar.
+  Height and crown size stay as measured.
 
 - **Hedges (OSM, laser-scan height)** and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the

@@ -50,7 +50,8 @@ Output `data/<site>/dlm/trees_<tile>.geojson`, points with
   cultivar, f 1 = in forest/copse, gn the genus (an index into the file's
   `genera` member, tree_archetypes.GENERA; absent = 0, other deciduous),
   t trunk diameter at breast height (cm, when measured or tagged and
-  plausible), s "osm"
+  plausible), y the planting year (the register's own, or its record's
+  year less the age it records; when plausible), s "osm"
   for an OSM tree (absent = the cadastre) (lib/city/features.ts `TreeFeature`).
 
 And `data/dlm/treefacts_<tile>.json`, what the inquiry card says about each
@@ -66,6 +67,7 @@ tree has its tagged taxon and German name, its tagged sizes, no location
 
 from __future__ import annotations
 
+import datetime
 import json
 import re
 import statistics
@@ -547,6 +549,23 @@ def woodland_at(cls: np.ndarray, bounds, x: float, y: float) -> bool:
     return int(cls[r, c]) in WOODLAND
 
 
+EARLIEST_PLANTING = 1500
+
+
+def planting_year(t: dict) -> int | None:
+    """The year a register tree was planted: the register's own planting
+    year, else the year of its record less the age it records (Dresden's
+    `jalter`); None where neither is known or the year is implausible."""
+    year = t.get("planted")
+    if not year:
+        f = t.get("facts") or {}
+        age, date = f.get("age"), f.get("date") or ""
+        year = int(date[:4]) - age if age and len(date) >= 4 else None
+    if year is None or not EARLIEST_PLANTING <= year <= datetime.date.today().year:
+        return None
+    return year
+
+
 def tree_props(t: dict, h: float, d: float) -> dict:
     """The feature properties of one tree (the optional members only when
     they say something)."""
@@ -559,6 +578,8 @@ def tree_props(t: dict, h: float, d: float) -> dict:
         props["gn"] = t["gn"]
     if t.get("t") and plausible_trunk(t["t"], h) and round(t["t"]) > 0:
         props["t"] = round(t["t"])  # a sapling's 1 cm girth rounds to none
+    if (year := planting_year(t)) is not None:
+        props["y"] = year
     if t.get("src") == "osm":
         props["s"] = "osm"
     return props
