@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { DOOR_SURROUND, doorMesh, wallShift, wallShiftAlong } from "./doors";
+import {
+  DOOR_SURROUND,
+  doorMesh,
+  eaveAlong,
+  wallShift,
+  wallShiftAlong,
+} from "./doors";
 import type { DoorFeature } from "./features";
 
 const door = (nx: number, ny: number): DoorFeature => ({
@@ -112,5 +118,41 @@ describe("wallShiftAlong", () => {
     expect(wallShiftAlong(run, [40, 41], offset, wall(0.1), [0, 3])).toEqual([
       0, 0,
     ]);
+  });
+});
+
+describe("eaveAlong", () => {
+  const run = [
+    [100, 195],
+    [100, 205],
+  ] as const;
+  /** A roof face over x 94..100 (y 190..210), its height at (x, y). */
+  const roof = (z: (x: number, y: number) => number): number[] => {
+    const q = [
+      [100, 190],
+      [100, 210],
+      [94, 210],
+      [94, 190],
+    ].map(([x, y]) => [x, y, z(x, y)]);
+    return [...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]];
+  };
+
+  test("reads where a roof falling to the wall meets it", () => {
+    const pitched = roof((x) => 12 + (100 - x));
+    expect(eaveAlong(run, [0, 0], offset, pitched, [0, 3])).toBeCloseTo(12, 6);
+    // the wall standing back from the line: the eave on the wall
+    expect(eaveAlong(run, [-0.1, -0.1], offset, pitched, [0, 3])).toBeCloseTo(
+      12.1,
+      6
+    );
+  });
+
+  test("a gable, the roof climbing along the wall, has none", () => {
+    const gable = roof((_, y) => 12 + (y - 190) * 0.5);
+    expect(eaveAlong(run, [0, 0], offset, gable, [0, 3])).toBeUndefined();
+  });
+
+  test("no roof over the wall, no eave", () => {
+    expect(eaveAlong(run, [0, 0], offset, [], [])).toBeUndefined();
   });
 });

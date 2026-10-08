@@ -684,8 +684,8 @@ visual-variable codebook is in
   estimate.
 - **Gliederung** `≈ assumed` (plinth, cornices, shop zone) — painted in the clay
   shader from heights the object table already carries, no new data: a
-  0.6 m stone plinth (the ledge at the first storey line is modelled
-  now, with the plinth: see *Plinths*), a deeper ledge under the eave, and on a building with
+  0.6 m stone plinth (the ledges at the first storey line and under the
+  eave are modelled now, with the plinth: see *Plinths*), and on a building with
   a mapped shop the ground floor a shade darker as its recessed shop
   front. Walls only, not on a door, and not on a facade that is its own
   (flag 16: a Wikidata landmark, a monumental ALKIS use — church,
@@ -734,6 +734,23 @@ visual-variable codebook is in
   painted Gurtgesims is gone: its painted shadow read as a smear. A first
   cut with hard bevels and ends run past each corner read too hard and
   overlapped at corners.
+  The **Traufgesims** follows the same stretches under the eave, where
+  the host's roof runs level along the wall (`eaveAlong`: the topmost
+  roof face just inside the wall at five points, its plane carried out
+  to the wall; four of them within 0.3 m — not along a gable), from 5 m
+  of wall and 1.5 m over the band below: a quarter-round 16 cm proud
+  rolling out of the wall into a short lip, 32 cm tall, its top flush
+  with the eave. The painted ledge under the eave is gone: it read as a
+  stain under the roof.
+  All three **run on from house to house** (`joinStretches`): LoD2's
+  footprints stop a few decimetres short of each other and the bake
+  leaves a party wall's end out, so a row's bands broke at every house.
+  A gap of up to 1.2 m between one stretch's end and the next's start,
+  in line (turning by up to 20°, 0.4 m aside), is closed at its middle;
+  neighbours whose levels lie within 0.6 m (Gurtgesims), 0.25 m
+  (Traufgesims) or 0.2 m (plinth top) take one level, the nearest first,
+  so a row on a slope steps where its houses do rather than drifting.
+  On the spawn tile 2 439 ends run on, most over gaps of 0.4–0.6 m.
   Dresden: 175 570 pieces on 35 850 objects on fifteen tiles (13 777 on
   3 026 on the spawn tile; the files up to 2 MB each). Ground
   joins: `plinths` in `JOIN_PARTS`, budget 1 %.

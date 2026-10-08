@@ -120,6 +120,93 @@ export function wallShiftAlong(
   return lineThrough(read);
 }
 
+/** How far inside the wall `eaveAlong` reads the roof. */
+const EAVE_IN_M = 0.2;
+/** An eave is level within this along its stretch. */
+const EAVE_LEVEL_M = 0.3;
+
+/**
+ * Where the host's roof meets its wall along a straight stretch a→b (EPSG,
+ * the street to its right; the wall `shift` out of the line at a and b,
+ * `wallShiftAlong`): at five points along it the roof just inside the wall,
+ * its plane carried out to the wall — the eave, where the roof runs level
+ * along the stretch (four of the five within `EAVE_LEVEL_M` of the lowest:
+ * a dormer or a turret may stand on it). Undefined along a gable, where the
+ * roof climbs along the wall, or where no roof is read.
+ */
+export function eaveAlong(
+  [a, b]: readonly [readonly number[], readonly number[]],
+  [sa, sb]: readonly [number, number],
+  offset: { cx: number; cy: number },
+  positions: ArrayLike<number>,
+  /** the host's roof triangles: each one's first vertex index */
+  roofs: readonly number[]
+): number | undefined {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (len < 1e-3) {
+    return undefined;
+  }
+  const t = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+  const n = [t[1], -t[0]];
+  const read: number[] = [];
+  for (const f of ALONG) {
+    const s = sa + (sb - sa) * f;
+    const wall = [
+      a[0] - offset.cx + t[0] * len * f + n[0] * s,
+      a[1] - offset.cy + t[1] * len * f + n[1] * s,
+    ];
+    const z = roofAt(
+      [wall[0] - n[0] * EAVE_IN_M, wall[1] - n[1] * EAVE_IN_M],
+      wall,
+      positions,
+      roofs
+    );
+    if (z !== undefined) {
+      read.push(z);
+    }
+  }
+  const low = Math.min(...read);
+  const level = read.filter((z) => z - low <= EAVE_LEVEL_M);
+  return level.length >= 4
+    ? level.reduce((sum, z) => sum + z, 0) / level.length
+    : undefined;
+}
+
+/** The topmost roof face over `p` (mesh frame), its plane read at `at`. */
+function roofAt(
+  p: readonly number[],
+  at: readonly number[],
+  positions: ArrayLike<number>,
+  roofs: readonly number[]
+): number | undefined {
+  let best: { z: number; at: number } | undefined;
+  for (const t of roofs) {
+    const v = (i: number): V3 => [
+      positions[3 * (t + i)],
+      positions[3 * (t + i) + 1],
+      positions[3 * (t + i) + 2],
+    ];
+    const [p0, p1, p2] = [v(0), v(1), v(2)];
+    const face = cross(sub(p1, p0), sub(p2, p0));
+    // facing up, not a wall
+    if (face[2] <= 0.05 * Math.hypot(...face)) {
+      continue;
+    }
+    const plane = (x: number, y: number) =>
+      p0[2] - (face[0] * (x - p0[0]) + face[1] * (y - p0[1])) / face[2];
+    const d = (q: V3, r: V3) =>
+      (r[0] - q[0]) * (p[1] - q[1]) - (r[1] - q[1]) * (p[0] - q[0]);
+    const [d0, d1, d2] = [d(p0, p1), d(p1, p2), d(p2, p0)];
+    const inside =
+      (d0 >= 0 && d1 >= 0 && d2 >= 0) || (d0 <= 0 && d1 <= 0 && d2 <= 0);
+    const z = plane(p[0], p[1]);
+    if (inside && (best === undefined || z > best.z)) {
+      best = { z, at: plane(at[0], at[1]) };
+    }
+  }
+  return best?.at;
+}
+
 /** The least-squares line through (f, s) read at f = 0 and 1; one point:
  *  level; none: [0, 0]. */
 function lineThrough(read: readonly [number, number][]): [number, number] {

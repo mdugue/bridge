@@ -1,8 +1,12 @@
 import { expect, test } from "bun:test";
 import type { PlinthFeature } from "./features";
 import {
+  bandMeshes,
+  BRIDGE_M,
   CORNICE,
   corniceMesh,
+  EAVE_CORNICE,
+  joinStretches,
   PLINTH,
   PLINTH_SINK,
   plinthMesh,
@@ -235,4 +239,58 @@ test("a piece with no height or no length draws nothing", () => {
     properties: { of: "a", g: [0], top: [1] },
   };
   expect(plinthMesh(dot, { cx: 0, cy: 0 }).positions).toHaveLength(0);
+});
+
+// two houses in a row along +y at x = 100, the street to the right (+x),
+// their walls' stretches a gap apart
+const row = (gap: number, z1: number, z2: number) => [
+  { a: [100, 0], b: [100, 10], lo: z1, hi: z1, host: 1 },
+  { a: [100, 10 + gap], b: [100, 16 + gap], lo: z2, hi: z2, host: 2 },
+];
+
+test("a cornice runs on over the gap to the next house, at one level", () => {
+  const { stretches } = joinStretches(row(0.5, 14, 14.3), "line");
+  expect(stretches[0].b[1]).toBeCloseTo(10.25, 6);
+  expect(stretches[1].a[1]).toBeCloseTo(10.25, 6);
+  // the mean underside, by length
+  const z = (14 * 10 + 14.3 * 6) / 16;
+  expect(stretches[0].hi).toBeCloseTo(z, 6);
+  expect(stretches[1].hi).toBeCloseTo(z, 6);
+});
+
+test("houses whose cornices lie far apart in height step, still closed", () => {
+  const { stretches } = joinStretches(row(0.5, 14, 15), "line");
+  expect(stretches.map((s) => s.hi)).toEqual([14, 15]);
+  expect(stretches[0].b[1]).toBeCloseTo(10.25, 6);
+});
+
+test("a gap wider than a seam between houses stays open", () => {
+  const { stretches } = joinStretches(row(BRIDGE_M + 0.3, 14, 14), "line");
+  expect(stretches[0].b).toEqual([100, 10]);
+  expect(stretches[1].a).toEqual([100, 10 + BRIDGE_M + 0.3]);
+});
+
+test("a house set back from its neighbour's line is no continuation", () => {
+  const set = row(0.5, 14, 14);
+  set[1] = { ...set[1], a: [99, 10.5], b: [99, 16.5] };
+  const { stretches } = joinStretches(set, "line");
+  expect(stretches[0].b).toEqual([100, 10]);
+});
+
+test("the Traufgesims rolls out of the wall under the eave, per host", () => {
+  const meshes = bandMeshes(
+    joinStretches(row(0.5, 19.68, 19.68), "line", 0.25),
+    { cx: 0, cy: 0 },
+    "eave",
+    () => [0, 0]
+  );
+  expect([...meshes.keys()]).toEqual([1, 2]);
+  const mesh = meshes.get(1);
+  const xs = mesh?.positions.filter((_, i) => i % 3 === 0) ?? [];
+  const zs = mesh?.positions.filter((_, i) => i % 3 === 2) ?? [];
+  expect(Math.max(...xs)).toBeCloseTo(100 + EAVE_CORNICE.proud, 6);
+  expect(Math.min(...zs)).toBeCloseTo(19.68, 6);
+  expect(Math.max(...zs)).toBeCloseTo(19.68 + EAVE_CORNICE.height, 6);
+  // smooth over the round, flat on the ends
+  expect(mesh?.normals.slice(0, 9).every(Number.isFinite)).toBe(true);
 });

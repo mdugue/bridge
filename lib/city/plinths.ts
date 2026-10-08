@@ -6,8 +6,10 @@
  * over a rounded shoulder into its top, and its ends — so the plinth throws
  * a soft shadow line, without cutting the LoD2 wall; and the Gurtgesims
  * over the ground floor along the same stretches, a slim rounded band in
- * the same register (`corniceMesh`). Both are rounded where they meet the
- * light and mitred where two walls meet.
+ * the same register (`corniceMesh`), and the Traufgesims under a level
+ * eave (`EAVE_CORNICE`). All are rounded where they meet the light,
+ * mitred where two walls meet and run on from house to house along a row
+ * (`joinStretches`).
  * Pure, no THREE.
  */
 import type { PlinthFeature } from "./features";
@@ -273,14 +275,15 @@ function mitred(
     b: readonly number[];
     sa: number;
     sb: number;
-  }[]
+  }[],
+  pairs: readonly (readonly [number, number])[] = corners(runs)
 ): Run[] {
   const out: Run[] = runs.map((r) => ({ ...r }));
   const normal = (r: { a: readonly number[]; b: readonly number[] }) => {
     const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
     return [(r.b[1] - r.a[1]) / l, -(r.b[0] - r.a[0]) / l];
   };
-  for (const [i, j] of corners(runs)) {
+  for (const [i, j] of pairs) {
     const [n1, n2] = [normal(runs[i]), normal(runs[j])];
     const det = n1[0] * n2[1] - n1[1] * n2[0];
     let [s1, s2] = [out[i].sb, out[j].sa];
@@ -317,24 +320,11 @@ export function plinthMesh(
   offset: { cx: number; cy: number },
   shift: WallShift = noShift
 ): Shaded {
-  const out: Shaded = { positions: [], normals: [] };
-  const pieces = plinthPieces(f, shift);
-  const runs = mitred(pieces);
-  pieces.forEach((q, i) => {
-    if (!(q.top - PLINTH.round > q.foot)) {
-      return;
-    }
-    // the edges: bottom, front, the shoulder's three facets, top, back
-    extrude(
-      out,
-      runs[i],
-      offset,
-      plinthProfile(q.foot, q.top),
-      [0, 6],
-      [2, 3, 4, 5]
-    );
-  });
-  return out;
+  const joined = joinStretches(plinthStretches(f, 0), "plinth");
+  return (
+    bandMeshes(joined, offset, "plinth", (_, ...at) => shift(...at)).get(0) ??
+    empty()
+  );
 }
 
 /** The plinth's section: up the front, over a quarter-round shoulder
@@ -374,19 +364,341 @@ export function corniceMesh(
   z: number,
   shift: WallShift = noShift
 ): Shaded {
-  const out: Shaded = { positions: [], normals: [] };
-  const profile = corniceProfile(z);
-  const runs = straightRuns(f.geometry.coordinates).map(([a, b]) => {
-    const [sa, sb] = shift(a, b, z - 0.3, z + CORNICE.height + 0.3);
-    return { a, b, sa, sb };
+  const joined = joinStretches(lineStretches(f, 0, z), "line");
+  return (
+    bandMeshes(joined, offset, "cornice", (_, ...at) => shift(...at)).get(0) ??
+    empty()
+  );
+}
+
+/** The Traufgesims under the eave, in the same register as the
+ *  Gurtgesims but heavier: a quarter-round rolling out of the wall from
+ *  its underside to `proud`, `rise` tall, and a short lip up to the eave
+ *  `height` over its underside — soft, a band of light under the roof's
+ *  edge and a soft shadow under it. */
+export const EAVE_CORNICE = {
+  proud: 0.16,
+  back: 0.15,
+  height: 0.32,
+  rise: 0.24,
+} as const;
+
+/** A band's stretch along a wall (EPSG ends, the street to its right):
+ *  the object it belongs to and its level — a plinth's foot and top, a
+ *  cornice's underside (`lo` = `hi`). */
+export interface Stretch {
+  a: readonly number[];
+  b: readonly number[];
+  lo: number;
+  hi: number;
+  host: number;
+}
+
+/** A plinth feature's pieces as stretches of `host`. */
+export function plinthStretches(f: PlinthFeature, host: number): Stretch[] {
+  return plinthPieces(f).map((q) => ({
+    a: q.a,
+    b: q.b,
+    lo: q.foot,
+    hi: q.top,
+    host,
+  }));
+}
+
+/** A cornice along a plinth feature's stretches, its underside at `z`:
+ *  the pieces joined end to end into straight runs, so a run has two
+ *  ends, not one per piece. */
+export function lineStretches(
+  f: PlinthFeature,
+  host: number,
+  z: number
+): Stretch[] {
+  return straightRuns(f.geometry.coordinates).map(([a, b]) => ({
+    a,
+    b,
+    lo: z,
+    hi: z,
+    host,
+  }));
+}
+
+/** Two stretches' ends this far apart, in line, are one band across the
+ *  gap: the next house's wall a few decimetres on (LoD2's footprints stop
+ *  short of one another, and the bake leaves the party wall's end out). */
+export const BRIDGE_M = 1.2;
+/** …turning by no more than this, and standing no further aside. */
+const BRIDGE_COS = Math.cos((20 * Math.PI) / 180);
+const BRIDGE_ASIDE_M = 0.4;
+
+/** How the levels of stretches that meet are made one: a plinth's take the
+ *  lowest foot and highest top (a corner always, so its mitre closes), a
+ *  cornice's the mean underside, weighted by length. */
+export type Levelling = "plinth" | "line";
+
+interface Link {
+  i: number;
+  j: number;
+  d: number;
+  corner: boolean;
+}
+
+/** Where stretch i's end meets stretch j's start: at a corner (within
+ *  `MEET_M`, turning by no more than `MITRE_MAX_DEG`), in line, or across
+ *  a gap of up to `BRIDGE_M`. An end and a start take one link each, the
+ *  nearest. */
+function links(st: readonly Stretch[]): Link[] {
+  const cell = (x: number, y: number) =>
+    `${Math.floor(x / BRIDGE_M)},${Math.floor(y / BRIDGE_M)}`;
+  const starts = new Map<string, number[]>();
+  st.forEach((s, j) => {
+    const k = cell(s.a[0], s.a[1]);
+    starts.set(k, [...(starts.get(k) ?? []), j]);
   });
-  for (const run of mitred(runs)) {
-    // the back (in the wall); smooth from the underside's front edge over
-    // the nose into the wash
-    extrude(out, run, offset, profile, [profile.length - 1], [1, 2, 3, 4, 5]);
+  const dir = (s: Stretch) => {
+    const l = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]) || 1;
+    return [(s.b[0] - s.a[0]) / l, (s.b[1] - s.a[1]) / l];
+  };
+  const minCos = Math.cos((MITRE_MAX_DEG * Math.PI) / 180);
+  const found: Link[] = [];
+  st.forEach((s, i) => {
+    const [cx, cy] = [
+      Math.floor(s.b[0] / BRIDGE_M),
+      Math.floor(s.b[1] / BRIDGE_M),
+    ];
+    for (let gx = cx - 1; gx <= cx + 1; gx++) {
+      for (let gy = cy - 1; gy <= cy + 1; gy++) {
+        for (const j of starts.get(`${gx},${gy}`) ?? []) {
+          const link = linkOf(s, st[j], dir, minCos);
+          if (j !== i && link) {
+            found.push({ i, j, ...link });
+          }
+        }
+      }
+    }
+  });
+  found.sort((p, q) => p.d - q.d);
+  const [ends, heads] = [new Set<number>(), new Set<number>()];
+  return found.filter((l) => {
+    if (ends.has(l.i) || heads.has(l.j)) {
+      return false;
+    }
+    ends.add(l.i);
+    heads.add(l.j);
+    return true;
+  });
+}
+
+function linkOf(
+  s: Stretch,
+  t: Stretch,
+  dir: (s: Stretch) => number[],
+  minCos: number
+): { d: number; corner: boolean } | undefined {
+  const g = [t.a[0] - s.b[0], t.a[1] - s.b[1]];
+  const d = Math.hypot(g[0], g[1]);
+  const [u, v] = [dir(s), dir(t)];
+  const cos = u[0] * v[0] + u[1] * v[1];
+  if (d <= MEET_M) {
+    return cos > minCos ? { d, corner: cos < 0.9998 } : undefined;
   }
+  const along = u[0] * g[0] + u[1] * g[1];
+  const aside = Math.abs(u[0] * g[1] - u[1] * g[0]);
+  return d <= BRIDGE_M &&
+    cos >= BRIDGE_COS &&
+    aside <= BRIDGE_ASIDE_M &&
+    along > -BRIDGE_ASIDE_M
+    ? { d, corner: false }
+    : undefined;
+}
+
+/**
+ * The stretches drawn as one band where they meet: each gap of up to
+ * `BRIDGE_M` between one stretch's end and the next's start, in line,
+ * closed (both run on to the gap's middle), and the levels of stretches
+ * that meet made one (`Levelling`) as long as they lie within `tolerance`
+ * of each other — the nearest first, so a long row on a falling street
+ * steps where its houses do rather than drifting. Returns the stretches
+ * and the corners to mitre (only between stretches of one level).
+ */
+export function joinStretches(
+  stretches: readonly Stretch[],
+  levelling: Levelling,
+  tolerance = levelling === "plinth" ? 0.2 : 0.6
+): { stretches: Stretch[]; corners: [number, number][] } {
+  const st = stretches.map((s) => ({ ...s }));
+  const ls = links(st);
+  const parent = st.map((_, i) => i);
+  const root = (i: number): number => {
+    let r = i;
+    while (parent[r] !== r) {
+      r = parent[r];
+    }
+    return r;
+  };
+  const span = st.map((s) => ({ min: s.hi, max: s.hi }));
+  const byStep = [...ls].sort(
+    (p, q) =>
+      Math.abs(st[p.i].hi - st[p.j].hi) - Math.abs(st[q.i].hi - st[q.j].hi)
+  );
+  for (const l of byStep) {
+    const [r1, r2] = [root(l.i), root(l.j)];
+    const lo = Math.min(span[r1].min, span[r2].min);
+    const hi = Math.max(span[r1].max, span[r2].max);
+    const forced = l.corner && levelling === "plinth";
+    if (r1 !== r2 && (forced || hi - lo <= tolerance)) {
+      parent[r1] = r2;
+      span[r2] = { min: lo, max: hi };
+    }
+  }
+  const level = new Map<number, { lo: number; hi: number; w: number }>();
+  st.forEach((s, i) => {
+    const r = root(i);
+    const w = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
+    const l = level.get(r) ?? {
+      lo: Number.POSITIVE_INFINITY,
+      hi: levelling === "plinth" ? Number.NEGATIVE_INFINITY : 0,
+      w: 0,
+    };
+    level.set(
+      r,
+      levelling === "plinth"
+        ? { lo: Math.min(l.lo, s.lo), hi: Math.max(l.hi, s.hi), w: 0 }
+        : { lo: 0, hi: l.hi + s.hi * w, w: l.w + w }
+    );
+  });
+  st.forEach((s, i) => {
+    const l = level.get(root(i));
+    if (l) {
+      const z = l.w > 0 ? l.hi / l.w : l.hi;
+      s.lo = levelling === "plinth" ? l.lo : z;
+      s.hi = z;
+    }
+  });
+  for (const { i, j, d } of ls) {
+    if (d > MEET_M) {
+      const [s, t] = [st[i], st[j]];
+      const mid = [(s.b[0] + t.a[0]) / 2, (s.b[1] + t.a[1]) / 2];
+      s.b = onLine(s.a, s.b, mid);
+      t.a = onLine(t.b, t.a, mid);
+    }
+  }
+  const corners = ls
+    .filter(
+      (l) => l.corner && st[l.i].lo === st[l.j].lo && st[l.i].hi === st[l.j].hi
+    )
+    .map((l): [number, number] => [l.i, l.j]);
+  return { stretches: st, corners };
+}
+
+/** The point on the line from `from` through `to` nearest `p`. */
+function onLine(
+  from: readonly number[],
+  to: readonly number[],
+  p: readonly number[]
+): number[] {
+  const l = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1;
+  const u = [(to[0] - from[0]) / l, (to[1] - from[1]) / l];
+  const k = (p[0] - from[0]) * u[0] + (p[1] - from[1]) * u[1];
+  return [from[0] + u[0] * k, from[1] + u[1] * k];
+}
+
+/** Which band a stretch draws. */
+export type BandKind = "plinth" | "cornice" | "eave";
+
+/** `WallShift` on a stretch's host. */
+export type HostShift = (
+  host: number,
+  a: readonly number[],
+  b: readonly number[],
+  z0: number,
+  z1: number
+) => readonly [number, number];
+
+/** Between which heights a band reads its wall. */
+function wallBand(kind: BandKind, s: Stretch): [number, number] {
+  if (kind === "plinth") {
+    return [s.hi - 0.6, s.hi - 0.2];
+  }
+  if (kind === "cornice") {
+    return [s.hi - 0.3, s.hi + CORNICE.height + 0.3];
+  }
+  return [s.hi - 0.6, s.hi];
+}
+
+/**
+ * The bands' triangles per host (mesh frame, counter-clockwise from
+ * outside, with their normals): each stretch laid on its host's wall
+ * (`HostShift`) and mitred into the stretches it meets round a corner.
+ */
+export function bandMeshes(
+  joined: { stretches: readonly Stretch[]; corners: [number, number][] },
+  offset: { cx: number; cy: number },
+  kind: BandKind,
+  shift: HostShift
+): Map<number, Shaded> {
+  const st = joined.stretches;
+  const runs = mitred(
+    st.map((s) => {
+      const [sa, sb] = shift(s.host, s.a, s.b, ...wallBand(kind, s));
+      return { a: s.a, b: s.b, sa, sb };
+    }),
+    joined.corners
+  );
+  const out = new Map<number, Shaded>();
+  st.forEach((s, i) => {
+    if (kind === "plinth" && !(s.hi - PLINTH.round > s.lo)) {
+      return;
+    }
+    const mesh = out.get(s.host) ?? empty();
+    out.set(s.host, mesh);
+    if (kind === "plinth") {
+      // the edges: bottom, front, the shoulder's three facets, top, back
+      extrude(
+        mesh,
+        runs[i],
+        offset,
+        plinthProfile(s.lo, s.hi),
+        [0, 6],
+        [2, 3, 4, 5]
+      );
+    } else if (kind === "cornice") {
+      // the back (in the wall); smooth from the underside's front edge
+      // over the nose into the wash
+      const profile = corniceProfile(s.hi);
+      extrude(
+        mesh,
+        runs[i],
+        offset,
+        profile,
+        [profile.length - 1],
+        [1, 2, 3, 4, 5]
+      );
+    } else {
+      // the underside and the back in the wall; smooth over the quarter
+      // round into the lip
+      extrude(mesh, runs[i], offset, eaveProfile(s.hi), [0, 6], [1, 2, 3, 4]);
+    }
+  });
   return out;
 }
+
+/** The Traufgesims's section: out of the wall along its underside, round
+ *  a quarter-round up to the lip, back over the top into the wall. */
+function eaveProfile(z: number): Profile {
+  const { proud, back, height, rise } = EAVE_CORNICE;
+  const round = [0, 30, 60, 90].map((deg): [number, number] => {
+    const r = (deg * Math.PI) / 180;
+    return [proud * Math.sin(r), z + rise * (1 - Math.cos(r))];
+  });
+  return [
+    [-back, z],
+    ...round,
+    [proud - 0.02, z + height],
+    [-back, z + height],
+  ];
+}
+
+const empty = (): Shaded => ({ positions: [], normals: [] });
 
 /** The lines joined where one ends where the next starts, in line. */
 export function straightRuns(
