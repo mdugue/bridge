@@ -471,6 +471,9 @@ export interface MeasuredMarker {
 
 /** The 1 m cells overstate a body by about half a cell all round. */
 const CELL_SHRINK = 0.85;
+/** …and a pedestal more: its cells' fringe is the figure's overhang and
+ *  the base's mouldings (the Goldener Reiter's measures 5.6 × 3.6 m). */
+const PEDESTAL_SHRINK = 0.72;
 /** A relief this tall (m) with this many cells is a figure on a pedestal. */
 const COMPOSED_MIN_H = 3;
 const COMPOSED_MIN_CELLS = 6;
@@ -574,8 +577,8 @@ function composed(
     (fig.centre[1] - whole.centre[1]) * uy;
   const base: MarkerPiece & { along: number } = {
     solid: "block",
-    width: whole.length * CELL_SHRINK,
-    depth: Math.max(whole.width * CELL_SHRINK, 1),
+    width: whole.length * PEDESTAL_SHRINK,
+    depth: Math.max(whole.width * PEDESTAL_SHRINK, 1),
     height: pedestal,
     lift: 0,
     along: 0,
@@ -588,7 +591,9 @@ function composed(
     ? [
         {
           solid: "block",
-          width: figLength * 0.85,
+          // the figure's lower parts (a horse's head and tail) fall under
+          // the cut: the body spans most of the pedestal
+          width: Math.max(figLength * 0.85, base.width * 0.65),
           depth: Math.min(figWidth, 1.1),
           height: figureH * 0.55,
           lift: pedestal - 0.05,
@@ -613,6 +618,11 @@ function composed(
           along,
         },
       ];
+  // the figure stands on its pedestal, never over its edge
+  for (const f of figure) {
+    const room = Math.max((base.width - f.width) / 2, 0);
+    f.along = Math.min(Math.max(f.along, -room), room);
+  }
   return { centre: whole.centre, yaw: axis, pieces: [base, ...figure] };
 }
 

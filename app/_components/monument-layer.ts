@@ -143,8 +143,10 @@ function unitPillar(): BufferGeometry {
     .translate(0, 0.5, 0);
 }
 
+/** A block 1 m on each side with crisp, barely softened edges: scaled to a
+ *  pedestal's size, a larger radius swelled it into a cushion. */
 function unitBlock(): BufferGeometry {
-  return new RoundedBoxGeometry(1, 1, 1, 3, 0.2).translate(0, 0.5, 0);
+  return new RoundedBoxGeometry(1, 1, 1, 2, 0.04).translate(0, 0.5, 0);
 }
 
 /** An obelisk's needle 1 m wide at its foot and 1 m tall: a four-sided
