@@ -977,7 +977,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       // the provenance manifest arrives with the first card: the edition
       await expect(card).toContainText(/Modell \d{4}/);
       await expect(card.getByTestId("inquiry-data")).toContainText(
-        "Im Viewer berechnet"
+        "Im Viewer"
       );
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();

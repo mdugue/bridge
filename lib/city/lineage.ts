@@ -36,12 +36,14 @@ import {
   type SiteProvenance,
   type SourceKey,
 } from "./provenance";
+import type { Method, Stated } from "./methods";
 import type { Provider } from "./site";
 
 /** One dataset behind the asked thing. */
 export interface LineageEntry {
-  /** what the viewer took from it for this thing, in reading order */
-  used: string[];
+  /** what the viewer took from it for this thing, in reading order, each
+   *  with how it came by it (lib/city/methods.ts) */
+  used: Stated[];
   /** the dataset, as the card names it */
   source: string;
   /** its edition for this thing's tile ("" when none is known) */
@@ -50,9 +52,6 @@ export interface LineageEntry {
   credit: string;
   /** where a person finds the dataset (or this thing in it) */
   url?: string;
-  /** how the viewer came by it: read as published, measured from it in
-   *  the bake, or worked out in the viewer */
-  how: "gelesen" | "gemessen" | "berechnet";
 }
 
 /** What the lineage needs of the site beyond the manifest. */
@@ -61,6 +60,7 @@ export interface LineageSite {
 }
 
 const OSM_URL = "https://www.openstreetmap.org/copyright";
+const MAPILLARY_URL = "https://www.mapillary.com/";
 const WIKIDATA_URL = "https://www.wikidata.org/wiki/";
 
 const FALLBACK: Record<SourceKey, string> = {
@@ -85,11 +85,25 @@ const OFFICIAL: ReadonlySet<SourceKey> = new Set([
   "dlm",
 ]);
 
-/** What a source gave, a line per item; a falsy item is left out. */
-type Said = readonly (string | false | null | undefined | 0)[];
+/** What a source gave, a line per item: its text, with the call's method,
+ *  or [text, method] where that item was come by otherwise; a falsy item
+ *  is left out. */
+type Said = readonly (
+  | string
+  | readonly [string, Method]
+  | false
+  | null
+  | undefined
+  | 0
+)[];
 
-const spoken = (used: Said): string[] =>
-  used.filter((u): u is string => typeof u === "string" && u !== "");
+const spoken = (used: Said, method: Method): Stated[] =>
+  used.flatMap((u): Stated[] => {
+    if (typeof u === "string") {
+      return u === "" ? [] : [{ text: u, method }];
+    }
+    return u ? [{ text: u[0], method: u[1] }] : [];
+  });
 
 /** Builds the entries for one thing on one tile. */
 class Lineage {
@@ -109,7 +123,7 @@ class Lineage {
   source(
     key: SourceKey,
     used: Said,
-    how: LineageEntry["how"],
+    method: Method,
     opts: {
       stand?: string;
       url?: string;
@@ -118,10 +132,10 @@ class Lineage {
     } = {}
   ): void {
     if (key === "dlm" && !this.site.provider.products.dlm) {
-      this.source("osm", used, how, { ...opts, osm: opts.standIn });
+      this.source("osm", used, method, { ...opts, osm: opts.standIn });
       return;
     }
-    const said = spoken(used);
+    const said = spoken(used, method);
     if (said.length > 0) {
       this.entries.push({
         source: this.provenance?.sources[key]?.label ?? FALLBACK[key],
@@ -129,7 +143,6 @@ class Lineage {
         stand: germanDates(opts.stand ?? this.standOf(key, opts.osm)),
         credit: this.creditOf(key),
         url: opts.url ?? this.urlOf(key),
-        how,
       });
     }
   }
@@ -166,16 +179,16 @@ class Lineage {
     }
   }
 
-  /** What the viewer works out itself, from no dataset of its own. */
+  /** What the viewer works out itself, from no dataset of its own: by
+   *  default a design or default of its own (`assumed`). */
   viewer(used: Said): void {
-    const said = spoken(used);
+    const said = spoken(used, "assumed");
     if (said.length > 0) {
       this.entries.push({
-        source: "Im Viewer berechnet",
+        source: "Im Viewer",
         used: said,
         stand: "",
         credit: "",
-        how: "berechnet",
       });
     }
   }
@@ -240,16 +253,21 @@ function buildingLineage(
   const source = b.picked.source;
   const lod2 = source !== OBJECT_SOURCE_SCAN && source !== OBJECT_SOURCE_GAP;
   if (source === OBJECT_SOURCE_SCAN) {
+    // small_buildings.py: a box where the scan's surface stands 2–6.5 m up,
+    // outside LoD2 and without the split pulses of vegetation
     l.source(
       "lsc",
-      ["Grundriss und Höhe: ein Kleinbau, den das Stadtmodell nicht kennt"],
-      "gemessen"
+      [
+        "dass hier ein Kleinbau steht, den das Stadtmodell nicht kennt",
+        ["Grundriss und Höhe", "computed"],
+      ],
+      "detected"
     );
   } else if (source === OBJECT_SOURCE_GAP) {
-    l.source("osm", ["was hier steht und sein Umriss"], "gelesen", {
+    l.source("osm", ["was hier steht und sein Umriss"], "taken", {
       osm: "buildings",
     });
-    l.source("dom", ["seine Höhe über Gelände und Stadtmodell"], "gemessen");
+    l.source("dom", ["seine Höhe über Gelände und Stadtmodell"], "computed");
   } else {
     lod2Lineage(l, b, facts);
   }
@@ -258,18 +276,22 @@ function buildingLineage(
     [
       (has(OBJECT_FLAG_GLASS) || has(OBJECT_FLAG_METAL)) &&
         "Glas oder Metall der Fassade",
-      has(OBJECT_FLAG_SHOP) && "Schaufenster im Erdgeschoss",
-      lod2 &&
-        "Fassadenfarbe, wo kartiert; sonst Ziegel oder Putz wie in der Nachbarschaft",
+      // osm_buildings.py: a shop point inside the footprint, or snapped to
+      // the nearest one within a few metres
+      has(OBJECT_FLAG_SHOP) && ["Schaufenster im Erdgeschoss", "detected"],
+      lod2 && "Fassadenfarbe, wo kartiert",
+      lod2 && ["sonst Ziegel oder Putz wie in der Nachbarschaft", "assumed"],
     ],
-    "gelesen",
+    "taken",
     { osm: "buildings" }
   );
+  // landmarks.py: Wikidata's item matched to the LoD2 objects it covers
   l.source(
     "wikidata",
     [has(OBJECT_FLAG_LANDMARK) && "eines der Wahrzeichen der Stadt"],
-    "gelesen"
+    "detected"
   );
+  // roof_colour.py: the median of the roof's texels
   l.source(
     "dop",
     [
@@ -277,17 +299,17 @@ function buildingLineage(
         lod2 &&
         "Dachfarbe, wo das Luftbild sie zeigt",
     ],
-    "gemessen"
+    "computed"
   );
   l.source(
     "dgm",
     ["Himmelslicht und Horizont, mit dem Stadtmodell berechnet"],
-    "berechnet"
+    "computed"
   );
   l.viewer([
     "Tönung je Gebäude, fest gestreut, wo nichts kartiert ist",
     lod2 && "Geschossbänder und Fassadenstruktur",
-    "Licht und Schatten zur Uhrzeit der Szene",
+    ["Licht und Schatten zur Uhrzeit der Szene", "computed"],
   ]);
 }
 
@@ -307,50 +329,59 @@ function lod2Lineage(
       !rebuilt && facts.some((f) => f.roofType) && "Dachform und -neigung",
       facts.some((f) => f.function) && "Nutzung: das Licht am Abend",
     ],
-    "gelesen",
+    "taken",
     { stand: lod2Stand(l.provenance, b.tile) }
   );
+  // roofs.py: where the model's roof misses the surface by a threshold,
+  // flat levels and measured faces in its place
   l.source(
     "dom",
     [rebuilt && "das Dach, neu gemessen, wo das Stadtmodell es verfehlt"],
-    "gemessen"
+    "detected"
   );
 }
 
 function treeLineage(l: Lineage, t: TreeInquiry, site: LineageSite): void {
-  const drawn = [
-    "Standort",
-    "Höhe und Krone (wo nicht gemessen: aus der Statistik der Kachel)",
-    "Gattung: Wuchsform, Austrieb, Herbstfarbe und Laubfall",
-  ];
   if (t.orchard) {
     // an orchard's tree: OSM's orchard, at the orchard's default size
-    l.source("osm", ["Standort (Obstwiese)"], "gelesen", { osm: "trees" });
-    l.source("dgm", ["der Boden, auf dem er steht"], "gelesen");
+    l.source(
+      "osm",
+      ["die Obstwiese, in der er steht", "sein Standort, wo kartiert"],
+      "taken",
+      { osm: "trees" }
+    );
+    l.source("dgm", ["der Boden, auf dem er steht"], "taken");
     l.viewer([
+      "sonst sein Standort, im Raster der Obstwiese gesetzt",
       "Höhe und Krone: die Vorgabe der Obstwiese",
       "die Krone aus Grundformen",
-      "Wind und Licht zur Uhrzeit der Szene",
+      ["Wind und Licht zur Uhrzeit der Szene", "computed"],
     ]);
     return;
   }
+  const drawn: Said = [
+    "Standort",
+    "Höhe und Krone, wo erfasst",
+    ["sonst Höhe und Krone aus der Statistik der Kachel", "assumed"],
+    "Gattung: Wuchsform, Austrieb, Herbstfarbe und Laubfall",
+  ];
   if (t.osm) {
-    l.source("osm", drawn, "gelesen", { osm: "trees" });
+    l.source("osm", drawn, "taken", { osm: "trees" });
   } else {
-    l.source("trees", drawn, "gelesen");
+    l.source("trees", drawn, "taken");
   }
-  l.source("dgm", ["der Boden, auf dem er steht"], "gelesen");
+  l.source("dgm", ["der Boden, auf dem er steht"], "taken");
   l.source(
     "dop",
     [
       site.provider.products.dop !== null &&
         "Laubfarbe aus dem Vegetationsindex",
     ],
-    "gemessen"
+    "computed"
   );
   l.viewer([
     "die Krone aus Grundformen je Gattung",
-    "Wind und Licht zur Uhrzeit der Szene",
+    ["Wind und Licht zur Uhrzeit der Szene", "computed"],
   ]);
 }
 
@@ -359,26 +390,20 @@ function monumentLineage(l: Lineage, m: MonumentInquiry): void {
   const fromDlm = p.source === "dlm" || p.source === "dlm+osm";
   const fromOsm = p.source === "osm" || p.source === "dlm+osm";
   const measured = (p.relief?.dm.length ?? 0) > 0;
-  l.source(
-    "dlm",
-    [
-      fromDlm && "Standort und Art",
-      fromDlm && !measured && "die Form der Markierung",
-    ],
-    "gelesen"
-  );
+  l.source("dlm", [fromDlm && "Standort und Art"], "taken");
   l.source(
     "osm",
     [fromOsm && "das Becken", fromOsm && p.style && "das Wasserspiel"],
-    "gelesen",
+    "taken",
     { osm: "fountains" }
   );
   l.source(
     "dom",
     [measured && "die Form, gemessen als Oberfläche über dem Gelände"],
-    "gemessen"
+    "computed"
   );
-  l.source("dgm", ["der Boden"], "gelesen");
+  l.source("dgm", ["der Boden"], "taken");
+  l.viewer([fromDlm && !measured && "die Form der Markierung"]);
 }
 
 function bridgeLineage(l: Lineage, b: BridgeInquiry, site: LineageSite): void {
@@ -386,26 +411,28 @@ function bridgeLineage(l: Lineage, b: BridgeInquiry, site: LineageSite): void {
   l.source(
     "dlm",
     ["der Umriss des Decks", "die Art: Straße, Weg oder Bahn"],
-    "gelesen",
+    "taken",
     { standIn: "bridges" }
   );
+  // bridge.py: the deck line is the lower third of the surface across the
+  // deck; the steel above it a rib wherever it rises ≥ 3 m for ≥ 25 m
   l.source(
     "dom",
     [
       site.provider.products.dom && "die Höhe der Fahrbahn",
-      (p.ribs?.length ?? 0) > 0 && "das Tragwerk über dem Deck",
+      (p.ribs?.length ?? 0) > 0 && ["das Tragwerk über dem Deck", "detected"],
     ],
-    "gemessen"
+    "computed"
   );
   l.source(
     "dgm",
-    ["Widerlager, Rampen und Pfeiler", "das Wasser unter der Fahrrinne"],
-    "gelesen"
+    ["Widerlager und Rampen", "das Wasser unter der Fahrrinne"],
+    "taken"
   );
   l.source(
     "wikidata",
     [p.wikidata && p.structure && "die Bauart des Tragwerks"],
-    "gelesen",
+    "taken",
     { url: p.wikidata ? `${WIKIDATA_URL}${p.wikidata}` : undefined }
   );
   l.source(
@@ -414,32 +441,33 @@ function bridgeLineage(l: Lineage, b: BridgeInquiry, site: LineageSite): void {
       !p.wikidata && p.structure && "die Bauart des Tragwerks",
       p.clearance && "die Durchfahrtshöhe: wie tief das Deck ist",
     ],
-    "gelesen",
+    "taken",
     { osm: "bridges" }
   );
+  l.viewer(["die Pfeiler, außerhalb der Fahrrinne gesetzt"]);
 }
 
 function trafficLineage(l: Lineage, t: TrafficInquiry): void {
   l.other({
     source: "Verkehrszählung",
-    used: ["wie breit die Bänder je Richtung fließen"],
+    used: [
+      { text: "wie breit die Bänder je Richtung fließen", method: "taken" },
+    ],
     stand: "",
     credit: t.credit ?? "",
-    how: "gelesen",
   });
-  l.source("dgm", ["ihr Verlauf über dem Gelände"], "gelesen");
+  l.source("dgm", ["ihr Verlauf über dem Gelände"], "taken");
   l.viewer(["der Verkehr zur Stunde der Szene (typischer Tagesgang)"]);
 }
 
 function bikeLineage(l: Lineage, b: BikeInquiry): void {
   l.other({
     source: "Fahrradzählstelle, live",
-    used: ["wie hoch die Säulen je Richtung stehen"],
+    used: [{ text: "wie hoch die Säulen je Richtung stehen", method: "taken" }],
     stand: "",
     credit: b.credit ?? "",
-    how: "gelesen",
   });
-  l.source("dgm", ["der Boden"], "gelesen");
+  l.source("dgm", ["der Boden"], "taken");
 }
 
 /** Where each OSM thing was read, and what the viewer gave it. */
@@ -453,59 +481,90 @@ const OSM_THINGS: Record<
   landing: ["der Umriss und die Art", "Steg, Ponton und Höhe am Wasser"],
 };
 
+/** Whether a thing was found by Mapillary in street photos, not read
+ *  from OSM (pipeline/bake/mapillary.py). */
+function fromMapillary(m: MoreInquiry): boolean {
+  return (
+    (m.kind === "lamp" && m.src === "mly") ||
+    (m.kind === "furniture" && m.properties.src === "mly")
+  );
+}
+
 function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
   switch (m.kind) {
     case "canopy":
       canopyLineage(l, m, site);
       return;
     case "hedge":
-      l.source("dlm", [m.source === "dlm" && "Verlauf"], "gelesen", {
+      l.source("dlm", [m.source === "dlm" && "Verlauf"], "taken", {
         standIn: "trees",
       });
-      l.source("osm", [m.source !== "dlm" && "Verlauf"], "gelesen", {
+      l.source("osm", [m.source !== "dlm" && "Verlauf"], "taken", {
         osm: "trees",
       });
-      l.source("lsc", [m.source === "osm+lsc" && "Höhe"], "gemessen");
-      l.source("dgm", ["der Boden"], "gelesen");
-      l.viewer([m.source !== "osm+lsc" && "Höhe und Breite, angenommen"]);
+      l.source("lsc", [m.source === "osm+lsc" && "Höhe"], "computed");
+      l.source("dgm", ["der Boden"], "taken");
+      l.viewer([m.source !== "osm+lsc" && "Höhe und Breite"]);
       return;
     case "furniture":
     case "lamp":
     case "landing":
     case "stop": {
       const [read, drawn] = OSM_THINGS[m.kind];
-      l.source("osm", [read], "gelesen", { osm: "trees" });
-      l.source("dgm", ["der Boden"], "gelesen");
+      if (fromMapillary(m)) {
+        l.other({
+          source: "Mapillary",
+          used: [
+            { text: "Standort und Art, in Straßenfotos", method: "detected" },
+          ],
+          stand: "",
+          credit: "Mapillary, CC BY-SA 4.0",
+          url: MAPILLARY_URL,
+        });
+      } else {
+        l.source("osm", [read], "taken", { osm: "trees" });
+      }
+      l.source("dgm", ["der Boden"], "taken");
       l.viewer([drawn]);
     }
   }
 }
 
 function canopyLineage(l: Lineage, c: CanopyInquiry, site: LineageSite): void {
+  // canopy.py / lowveg.py: a tree where the surface peaks inside a cell,
+  // between 3 and 45 m over the ground, in wood, copse or park
   l.source(
     "dom",
-    [c.source === "dom" && "Standort und Höhe der Krone"],
-    "gemessen"
+    [
+      c.source === "dom" &&
+        "dass hier ein Baum steht: die höchste Stelle der Krone",
+      c.source === "dom" && ["Höhe der Krone", "computed"],
+    ],
+    "detected"
   );
   l.source(
     "lsc",
-    [c.source === "lsc" && "Standort, Höhe und Krone"],
-    "gemessen"
+    [
+      c.source === "lsc" &&
+        "dass hier ein Baum steht: die höchste Stelle der Krone",
+      c.source === "lsc" && ["Höhe und Krone", "computed"],
+    ],
+    "detected"
   );
   l.source(
     "dlm",
     [c.source === "row" && "die Baumreihe, auf der er steht"],
-    "gelesen",
+    "taken",
     { standIn: "trees" }
   );
-  l.source("dgm", ["der Boden, auf dem er steht"], "gelesen");
+  l.source("dgm", ["der Boden, auf dem er steht"], "taken");
   l.source(
     "dop",
     [
       site.provider.products.dop !== null &&
         "Laubfarbe aus dem Vegetationsindex",
     ],
-    "gemessen"
+    "computed"
   );
   l.viewer([
     "die Krone als Grundform, ohne Gattung",
