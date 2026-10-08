@@ -1628,9 +1628,9 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   connected patch within 6 m (or inside the basin's water), ≤ 60 cells,
   below 8.5 m and touching nothing taller (a leafless crown reads the same
   on a 1 m grid) — the bake writes it as `relief` (27 of 174 monuments). 
-  `pipeline/bake/monuments.py` → `monument-layer.ts`: a relief is smoothed
+  `pipeline/bake/monuments.py` → `monument-layer.ts`: a fountain's relief is smoothed
   (`reliefSurface`: ×4 bilinear, one binomial pass) into one soft form in
-  the buildings' clay, seated per sample on the terrain; a monument nothing
+  the buildings' clay, seated per sample on the terrain (a monument's is composed, below); a monument nothing
   measured is an abstract clay marker (rounded pillar · slab · shaft,
   `MARKER_SHAPE`) — no invented figure. Basins are the OSM outline as a low
   clay rim (the water its 0.35 m inset) over the highest ground under it,
@@ -1642,8 +1642,75 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   curtain, light shimmers across the water — and by night the water glows
   and a fountain's sculpture is lit warm from its basin (`setFountainTime`,
   `setFountainNight`, one shared clock and night factor). Merged/instanced,
-  seven draw calls per tile at most. Not walk-blocking (collision is
+  eight draw calls per tile at most. Not walk-blocking (collision is
   buildings only).
+  **What a monument is, from OSM** (2026-10-08): the DLM's Denkmal,
+  Standbild and Gedenkstein share one code, so 179 of Dresden's monuments
+  were one rounded pillar. OSM's `memorial=*` / `artwork_type=*` tell a
+  statue from a bust, a free sculpture, a stele, a stone or an obelisk: a
+  DLM monument takes the form of the OSM memorial or artwork of its name
+  within 15 m, else the nearest — never a plaque, which is the sign that
+  explains it — and a name that says *Obelisk*, *Stele* or *Büste* wins.
+  The marker is then that form's parts in clay (`markerPieces`: a
+  body-sized pillar on a 1.6 m pedestal, a head-sized one on a slender
+  plinth, a broad mass without a pedestal, an upright slab, a low rounded
+  block, a four-sided needle on its base), scaled whole to a tagged
+  `height`; still no figure. A measured `relief` wins over any form.
+  Free-standing OSM sculptures and memorials the DLM lacks are added
+  (160 on Dresden's fifteen tiles, mostly park and estate sculptures; not
+  inside a LoD2 footprint, not within 3 m of one kept). The card names the
+  form, the artist (`artist_name`) and the material (`material`, in
+  German). On Dresden: 274 of 396 non-fountain monuments carry a form.
+  Not used: **Mapillary** detects no monuments (its map-feature classes
+  are street furniture and signs; checked over the Altstadt, 2026-10-08),
+  **Wikidata** types more finely (32 *Reiterstandbilder* round Dresden)
+  but rarely carries a height (7 of 941) and its points match ours worse
+  than OSM's (its materials are used, below); **Panoramax** and Mapillary photos would need photogrammetry
+  per monument; Wikimedia Commons holds no 3D scan of a Dresden monument.
+  **What a monument is made of, as a tone** (2026-10-08): where OSM
+  names no `material`, Wikidata's `P186` does for the monuments,
+  sculptures and memorials it knows (fetched per tile,
+  `data/_raw/<provider>/wikidata/monuments_<t>.json`, Stolpersteine left
+  out; the item of the monument's name within 40 m, else the nearest
+  within 10 m): 15 on Dresden, the Goldener Reiter's copper and gold leaf
+  among them, `wikidata` naming the item on the card. The viewer turns
+  the material into a muted tone in the clay's palette (`MATERIAL_TONE`,
+  `markerTones`: warm sandstone, grey granite, bronze's dark green-brown
+  patina, copper's verdigris, a soft gold): the figure takes the most
+  striking metal, the pedestal the stone named (else clay). A marker's
+  pedestal piece and figure piece are tinted apart; a measured relief 3 m
+  or taller is a figure on a pedestal, its upper 45 % the figure's tone
+  (`figureShare` — the laser scan puts the Goldener Reiter's pedestal top
+  at 4.6 of 8.5 m). Glass, plastic and ceramic stay clay. No texture, no
+  gilding glint: one colour per part. **The laser scan** (LSC, the same
+  November 2024 flight, ~16 points/m² there) shows the Goldener Reiter as
+  a pedestal and an elongated body with the rider's peak — orientation and
+  mass at 0.5 m, still no horse; not baked (a 380 MB download per tile).
+  **Measured monuments as composed solids** (2026-10-08): the smoothed
+  1 m relief read as a heap (the Goldener Reiter a soft gold mound), so a
+  monument's relief is no longer drawn as a surface; it is measured
+  (`measuredMarker`): its cells' principal axis, footprint and top. A
+  relief of 3 m or more with 6 cells or more becomes a pedestal at its
+  footprint (x0.85) and the cells' median height, with the figure (the
+  cells well above it) on top: lying along the axis where it is long
+  (2.5 m and 1.6 times its width: a body block with an upright pillar on
+  it, the horse and rider, the reclining river gods), else one upright
+  pillar. Else the OSM form at the measured height and axis (an obelisk
+  or stele always), else one mass at the footprint and height. The same
+  clay solids as the markers, tinted per part. A fountain's sculpture
+  keeps its smoothed relief (the winter housings below).
+  **What a part is made of, in its surface** (2026-10-08): one smooth
+  clay read as a plastic cast. A pedestal is now built as masonry
+  (`pedestalCourses`: a plinth course a little wider at its foot, the
+  shaft, a projecting cap; sharp-edged blocks, no rounding) and dressed
+  as the bridges' ashlar (courses, running-bond joints, a shade per
+  block). A figure's finish follows its material (`partFinish`, the
+  instance attribute `iFinish`): stone tooled (a fine mottle, a touch
+  less matte), bronze and copper a patina (rain streaks, verdigris in
+  soft spots, roughness 0.55, a faint sky sheen at grazing angles),
+  gilding smoother (roughness 0.33) with a warm sheen; no metalness, as
+  no environment map lights the scene. A figure nothing names stays
+  plain clay; a pedestal is masonry, named or not.
   **Caveats, checked against the sources:** DOM1 (November 2024) and DOP
   (March 2024) were both taken while Dresden's fountains are drained and
   their sculptures boxed for winter — the Albertplatz "bodies" are those

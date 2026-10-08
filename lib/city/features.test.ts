@@ -509,6 +509,23 @@ test.each(cases)(
           f.properties?.style ?? ""
         );
       }
+      const form = f.properties?.form;
+      if (form !== undefined) {
+        expect(kind).not.toBe("fountain");
+        expect([
+          "bust",
+          "obelisk",
+          "sculpture",
+          "statue",
+          "stele",
+          "stone",
+        ]).toContain(form);
+      }
+      const wikidata = f.properties?.wikidata;
+      if (wikidata !== undefined) {
+        expect(wikidata).toMatch(/^Q\d+$/);
+        expect(f.properties?.material).toBeTruthy();
+      }
     }
   }
 );
