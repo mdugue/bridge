@@ -1610,9 +1610,9 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   connected patch within 6 m (or inside the basin's water), ≤ 60 cells,
   below 8.5 m and touching nothing taller (a leafless crown reads the same
   on a 1 m grid) — the bake writes it as `relief` (27 of 174 monuments). 
-  `pipeline/bake/monuments.py` → `monument-layer.ts`: a relief is smoothed
+  `pipeline/bake/monuments.py` → `monument-layer.ts`: a fountain's relief is smoothed
   (`reliefSurface`: ×4 bilinear, one binomial pass) into one soft form in
-  the buildings' clay, seated per sample on the terrain; a monument nothing
+  the buildings' clay, seated per sample on the terrain (a monument's is composed, below); a monument nothing
   measured is an abstract clay marker (rounded pillar · slab · shaft,
   `MARKER_SHAPE`) — no invented figure. Basins are the OSM outline as a low
   clay rim (the water its 0.35 m inset) over the highest ground under it,
@@ -1668,6 +1668,19 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   November 2024 flight, ~16 points/m² there) shows the Goldener Reiter as
   a pedestal and an elongated body with the rider's peak — orientation and
   mass at 0.5 m, still no horse; not baked (a 380 MB download per tile).
+  **Measured monuments as composed solids** (2026-10-08): the smoothed
+  1 m relief read as a heap (the Goldener Reiter a soft gold mound), so a
+  monument's relief is no longer drawn as a surface; it is measured
+  (`measuredMarker`): its cells' principal axis, footprint and top. A
+  relief of 3 m or more with 6 cells or more becomes a pedestal at its
+  footprint (x0.85) and the cells' median height, with the figure (the
+  cells well above it) on top: lying along the axis where it is long
+  (2.5 m and 1.6 times its width: a body block with an upright pillar on
+  it, the horse and rider, the reclining river gods), else one upright
+  pillar. Else the OSM form at the measured height and axis (an obelisk
+  or stele always), else one mass at the footprint and height. The same
+  clay solids as the markers, tinted per part. A fountain's sculpture
+  keeps its smoothed relief (the winter housings below).
   **Caveats, checked against the sources:** DOM1 (November 2024) and DOP
   (March 2024) were both taken while Dresden's fountains are drained and
   their sculptures boxed for winter — the Albertplatz "bodies" are those

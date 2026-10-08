@@ -458,3 +458,215 @@ export function figureShare(h: number, top: number): number {
   const t = (h - top * FIGURE_FROM) / FIGURE_BLEND + 0.5;
   return Math.min(Math.max(t, 0), 1);
 }
+
+/** A measured monument as composed solids: where it stands (projected,
+ *  the measured footprint's centre), which way its long axis runs (the
+ *  yaw a marker's width lies along) and its pieces, each `along` metres
+ *  off the centre on that axis. */
+export interface MeasuredMarker {
+  centre: Point2;
+  pieces: (MarkerPiece & { along: number })[];
+  yaw: number;
+}
+
+/** The 1 m cells overstate a body by about half a cell all round. */
+const CELL_SHRINK = 0.85;
+/** A relief this tall (m) with this many cells is a figure on a pedestal. */
+const COMPOSED_MIN_H = 3;
+const COMPOSED_MIN_CELLS = 6;
+/** A figure at least this much longer than wide, and this long (m), lies
+ *  along its pedestal (a horse and rider, a reclining figure): a body
+ *  along the axis with an upright mass on it. */
+const LONG_FIGURE = 1.6;
+const LONG_FIGURE_M = 2.5;
+
+interface Cell {
+  h: number;
+  x: number;
+  y: number;
+}
+
+function reliefCells(r: ReliefGrid): Cell[] {
+  const cells: Cell[] = [];
+  for (let row = 0; row < r.rows; row++) {
+    for (let col = 0; col < r.cols; col++) {
+      const h = (r.dm[row * r.cols + col] ?? 0) / 10;
+      if (h > 0) {
+        cells.push({ h, x: r.west + col + 0.5, y: r.north - row - 0.5 });
+      }
+    }
+  }
+  return cells;
+}
+
+/** The cells' principal axis (radians, east = 0, counter-clockwise). */
+function principalAxis(cells: readonly Cell[]): number {
+  const n = cells.length;
+  const mx = cells.reduce((s, c) => s + c.x, 0) / n;
+  const my = cells.reduce((s, c) => s + c.y, 0) / n;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (const c of cells) {
+    sxx += (c.x - mx) ** 2;
+    syy += (c.y - my) ** 2;
+    sxy += (c.x - mx) * (c.y - my);
+  }
+  return 0.5 * Math.atan2(2 * sxy, sxx - syy);
+}
+
+/** The cells' extent along and across `axis`: its centre (projected),
+ *  length and width (m, the cells' full squares). */
+function extent(
+  cells: readonly Cell[],
+  axis: number
+): { centre: Point2; length: number; width: number } {
+  const ux = Math.cos(axis);
+  const uy = Math.sin(axis);
+  let a0 = Infinity;
+  let a1 = -Infinity;
+  let b0 = Infinity;
+  let b1 = -Infinity;
+  for (const c of cells) {
+    const a = c.x * ux + c.y * uy;
+    const b = -c.x * uy + c.y * ux;
+    a0 = Math.min(a0, a);
+    a1 = Math.max(a1, a);
+    b0 = Math.min(b0, b);
+    b1 = Math.max(b1, b);
+  }
+  const a = (a0 + a1) / 2;
+  const b = (b0 + b1) / 2;
+  return {
+    centre: [a * ux - b * uy, a * uy + b * ux],
+    length: a1 - a0 + 1,
+    width: b1 - b0 + 1,
+  };
+}
+
+function median(values: number[]): number {
+  const s = [...values].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/** The figure on a pedestal: the pedestal at the cells' median height
+ *  (its top dominates a 1 m grid), the figure the cells well above it. */
+function composed(
+  cells: readonly Cell[],
+  axis: number,
+  top: number
+): MeasuredMarker | null {
+  const whole = extent(cells, axis);
+  const pedestal = median(cells.map((c) => c.h));
+  const figureCells = cells.filter(
+    (c) => c.h >= pedestal + 0.3 * (top - pedestal)
+  );
+  const figureH = top - pedestal;
+  if (figureCells.length < 2 || figureH < 1 || pedestal < 1) {
+    return null;
+  }
+  const fig = extent(figureCells, axis);
+  const ux = Math.cos(axis);
+  const uy = Math.sin(axis);
+  const along =
+    (fig.centre[0] - whole.centre[0]) * ux +
+    (fig.centre[1] - whole.centre[1]) * uy;
+  const base: MarkerPiece & { along: number } = {
+    solid: "block",
+    width: whole.length * CELL_SHRINK,
+    depth: Math.max(whole.width * CELL_SHRINK, 1),
+    height: pedestal,
+    lift: 0,
+    along: 0,
+  };
+  const figLength = fig.length * CELL_SHRINK;
+  const figWidth = Math.max(fig.width * CELL_SHRINK * 0.7, 0.6);
+  const lying =
+    figLength >= LONG_FIGURE_M && figLength >= LONG_FIGURE * figWidth;
+  const figure: (MarkerPiece & { along: number })[] = lying
+    ? [
+        {
+          solid: "block",
+          width: figLength * 0.85,
+          depth: Math.min(figWidth, 1.1),
+          height: figureH * 0.55,
+          lift: pedestal - 0.05,
+          along,
+        },
+        {
+          solid: "pillar",
+          width: 0.62,
+          depth: 0.5,
+          height: figureH * 0.5,
+          lift: pedestal + figureH * 0.5,
+          along,
+        },
+      ]
+    : [
+        {
+          solid: "pillar",
+          width: Math.min(figLength * 0.7, 1.4),
+          depth: Math.min(figWidth, 1.1),
+          height: figureH + 0.1,
+          lift: pedestal - 0.1,
+          along,
+        },
+      ];
+  return { centre: whole.centre, yaw: axis, pieces: [base, ...figure] };
+}
+
+/**
+ * A measured monument (not a fountain's sculpture) as a few clean solids
+ * instead of its smoothed 1 m surface, which read as a heap. A relief
+ * tall and broad enough is a pedestal at its measured footprint and
+ * height with the figure on it (`composed`: lying along the axis where it
+ * is long — a horse and rider — else upright); else the form OSM names,
+ * at the measured height and along the measured axis (an obelisk or a
+ * stele always); else one mass at the footprint and height (a slender
+ * pillar where it is taller than long, a block where not). Still never a
+ * figure.
+ */
+export function measuredMarker(
+  r: ReliefGrid,
+  kind: Exclude<MonumentKind, "fountain">,
+  form?: MonumentForm
+): MeasuredMarker | null {
+  const cells = reliefCells(r);
+  if (cells.length === 0) {
+    return null;
+  }
+  const top = Math.max(...cells.map((c) => c.h));
+  const axis = principalAxis(cells);
+  const whole = extent(cells, axis);
+  const slender = form === "obelisk" || form === "stele";
+  if (!slender && top >= COMPOSED_MIN_H && cells.length >= COMPOSED_MIN_CELLS) {
+    const c = composed(cells, axis, top);
+    if (c) {
+      return c;
+    }
+  }
+  if (form) {
+    return {
+      centre: whole.centre,
+      yaw: axis,
+      pieces: markerPieces(kind, form, top).map((p) => ({ ...p, along: 0 })),
+    };
+  }
+  const length = whole.length * CELL_SHRINK * 0.8;
+  const width = Math.max(whole.width * CELL_SHRINK * 0.8, 0.4);
+  return {
+    centre: whole.centre,
+    yaw: axis,
+    pieces: [
+      {
+        solid: top > length && length < 2 ? "pillar" : "block",
+        width: length,
+        depth: width,
+        height: top,
+        lift: 0,
+        along: 0,
+      },
+    ],
+  };
+}

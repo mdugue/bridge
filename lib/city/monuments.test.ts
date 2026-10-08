@@ -9,6 +9,7 @@ import {
   MATERIAL_TONE,
   markerPieces,
   markerTones,
+  measuredMarker,
   onRelief,
   openRing,
   reliefSurface,
@@ -161,5 +162,39 @@ describe("material tones", () => {
     expect(figureShare(1, 8.5)).toBe(0);
     expect(figureShare(8, 8.5)).toBe(1);
     expect(figureShare(8.5 * 0.55, 8.5)).toBeCloseTo(0.5);
+  });
+});
+
+describe("a measured monument as composed solids", () => {
+  // the Goldener Reiter's cells on DOM1's 1 m grid (dm above ground)
+  const reiter = {
+    west: 0,
+    north: 8,
+    cols: 8,
+    rows: 8,
+    dm: [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 28, 0, 0, 0, 0, 0, 12, 59, 52, 41,
+      0, 0, 0, 0, 53, 72, 65, 17, 0, 0, 0, 43, 51, 61, 22, 0, 0, 0, 14, 42, 48,
+      44, 0, 0, 0, 0, 0, 0, 41, 27, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+  };
+
+  test("a horse and rider: a pedestal, a body along its axis, an upright mass", () => {
+    const m = measuredMarker(reiter, "statue");
+    expect(m?.pieces.map((p) => p.solid)).toEqual(["block", "block", "pillar"]);
+    const [pedestal, body, rider] = m?.pieces ?? [];
+    expect(pedestal.lift).toBe(0);
+    expect(pedestal.height).toBeGreaterThan(3.5);
+    // the axis runs north-east, as the statue does
+    expect((m?.yaw ?? 0) * (180 / Math.PI)).toBeCloseTo(54, -1);
+    expect(body.width).toBeGreaterThan(body.depth * 1.5);
+    expect(rider.lift + rider.height).toBeCloseTo(7.2, 1);
+  });
+
+  test("a low relief is one mass; an obelisk keeps its needle", () => {
+    const low = { west: 0, north: 2, cols: 2, rows: 2, dm: [12, 10, 0, 0] };
+    expect(measuredMarker(low, "stone")?.pieces).toHaveLength(1);
+    const tall = measuredMarker(reiter, "column", "obelisk");
+    expect(tall?.pieces.map((p) => p.solid)).toEqual(["block", "needle"]);
   });
 });

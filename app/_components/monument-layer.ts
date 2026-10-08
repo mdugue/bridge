@@ -59,8 +59,10 @@ import {
   figureShare,
   jetHeight,
   jetPlaces,
+  type MarkerPiece,
   type MarkerTones,
   markerTones,
+  measuredMarker,
   type MarkerSolid,
   markerPieces,
   openRing,
@@ -81,10 +83,12 @@ import { sceneMaterial } from "./three-utils";
  * official names, OSM's fountain basins, and the sculptures' bulk measured
  * in DOM1 − DGM1). Nothing here invents a shape the data does not carry:
  *
- * - a measured monument or fountain sculpture is its relief, smoothed into
- *   one soft form in the same pale clay as the buildings (lib/city/
- *   monuments.ts `reliefSurface`) — the right size and silhouette, no
- *   detail the 1 m grid does not have;
+ * - a measured monument is a few clean solids in the same pale clay as
+ *   the buildings, at its measured footprint, axis and height: a pedestal
+ *   with the figure on it (lib/city/monuments.ts `measuredMarker`) —
+ *   smoothed, its 1 m relief read as a heap;
+ * - a fountain's measured sculpture is its relief, smoothed into one soft
+ *   form (`reliefSurface`; in DOM1 it is the winter housing);
  * - a monument nothing measured is an abstract marker in that clay, built
  *   of the parts its form has where OSM names it (a pedestal under a
  *   statue, a needle on an obelisk's base — `markerPieces`), never a figure;
@@ -472,36 +476,67 @@ function addMonument(
   if (f.geometry?.type !== "Point" || !kind || kind === "fountain") {
     return;
   }
-  const tones = markerTones(f.properties?.material);
-  const relief = f.properties?.relief;
-  if (relief) {
-    const geo = reliefMesh(relief, ctx, tones);
-    if (geo) {
-      parts.reliefs.push(geo);
-      return;
-    }
-  }
   const [x, y] = f.geometry.coordinates;
-  const ground = ctx.heightAt(x, y);
+  const measured = f.properties?.relief
+    ? measuredMarker(f.properties.relief, kind, f.properties.form)
+    : null;
+  const marker = measured ?? {
+    centre: [x, y] as Point2,
+    yaw: yawOf(x, y),
+    pieces: markerPieces(kind, f.properties?.form, f.properties?.height).map(
+      (p) => ({ ...p, along: 0 })
+    ),
+  };
+  const ground = ctx.heightAt(marker.centre[0], marker.centre[1]);
   if (ground === null) {
     return;
   }
-  const at = worldAt([x, y], ground, ctx);
-  const yaw = yawOf(x, y);
-  const pieces = markerPieces(kind, f.properties?.form, f.properties?.height);
-  for (const p of pieces) {
-    // A foot on the ground is sunk a little, so a marker on a slope never
-    // shows its underside; a piece on a pedestal sits into it.
-    const sink = p.lift > 0 ? 0.1 : 0.15;
-    // the foot of a marker of two pieces is its pedestal
-    const pedestal = pieces.length > 1 && p.lift === 0;
+  const tones = markerTones(f.properties?.material);
+  const ux = Math.cos(marker.yaw);
+  const uy = Math.sin(marker.yaw);
+  for (const p of marker.pieces) {
+    const px = marker.centre[0] + p.along * ux;
+    const py = marker.centre[1] + p.along * uy;
+    // A foot on the ground reaches below the lowest ground under its
+    // corners, so a pedestal on a slope never shows its underside; a
+    // piece on a pedestal sits into it.
+    const sink =
+      p.lift > 0 ? 0.1 : 0.15 + ground - footGround(p, px, py, ux, uy, ctx);
+    // the foot of a marker of two pieces or more is its pedestal
+    const pedestal = marker.pieces.length > 1 && p.lift === 0;
     parts.markers[p.solid].push({
-      at: at.clone().setY(at.y + p.lift - sink),
+      at: worldAt([px, py], ground + p.lift - sink, ctx),
       scale: new Vector3(p.width, p.height + sink, p.depth),
       tone: pedestal ? tones.base : tones.figure,
-      yaw,
+      yaw: marker.yaw,
     });
   }
+}
+
+/** The lowest ground under a piece's four corners (m, world Y). */
+function footGround(
+  p: MarkerPiece,
+  x: number,
+  y: number,
+  ux: number,
+  uy: number,
+  ctx: GroundContext
+): number {
+  let low = Number.POSITIVE_INFINITY;
+  for (const [a, b] of [
+    [-1, -1],
+    [-1, 1],
+    [1, -1],
+    [1, 1],
+  ]) {
+    const da = (a * p.width) / 2;
+    const db = (b * p.depth) / 2;
+    const h = ctx.heightAt(x + da * ux - db * uy, y + da * uy + db * ux);
+    if (h !== null) {
+      low = Math.min(low, h);
+    }
+  }
+  return Number.isFinite(low) ? low : (ctx.heightAt(x, y) ?? 0);
 }
 
 function instanced(
