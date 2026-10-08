@@ -55,6 +55,13 @@ const DOOR_CLEAR_M = 0.3;
 /** How far a fascia reaches down into the head under it (m): the head's
  *  top would otherwise lie in the fascia's bottom face and flicker. */
 const FASCIA_TUCK_M = 0.02;
+/** How far a pane reaches behind the riser under it and the head over it
+ *  (m): edge to edge, the quantised glTF positions open hairline cracks
+ *  the lit wall shows through. */
+export const PANE_TUCK_M = 0.02;
+/** The tallest fascia (m): a sign band measured taller (big lettering, a
+ *  banner) is a board this tall at its foot, not a slab over the storey. */
+export const FASCIA_MAX_M = 1;
 
 export interface ShopfrontMesh {
   /** the piers, stall risers, heads and fascias */
@@ -251,7 +258,13 @@ export function shopfrontMesh(
   };
   for (const bay of windows) {
     // the pane from the sill to its top, over the bay's higher ground
-    part(out.pane, bay, paneProud, (_, g) => [g + sill, g + top], ["+b"]);
+    part(
+      out.pane,
+      bay,
+      paneProud,
+      (_, g) => [g + sill - PANE_TUCK_M, g + top + PANE_TUCK_M],
+      ["+b"]
+    );
     // the stall riser under it, the head over it
     part(out.frame, bay, frameProud, (f, g) => [f, g + sill], all);
     part(out.frame, bay, frameProud, (_, g) => [g + top, g + top + head], [
@@ -269,10 +282,13 @@ export function shopfrontMesh(
       [s0, s1],
       SHOPFRONT.fasciaProud,
       // a little into the head it sits on, so no two faces lie coplanar
-      (_, g) => [
-        g + Math.max(z0 - FASCIA_TUCK_M, top),
-        g + Math.max(z1, top + head),
-      ],
+      (_, g) => {
+        const bottom = Math.max(z0 - FASCIA_TUCK_M, top);
+        return [
+          g + bottom,
+          g + Math.max(Math.min(z1, bottom + FASCIA_MAX_M), top + head),
+        ];
+      },
       [...all, "-c"]
     );
   }

@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import type { DoorFeature, ShopfrontWall } from "./features";
 import {
   doorSpans,
+  FASCIA_MAX_M,
   MIN_BAY_M,
   OSM_BAY_M,
+  PANE_TUCK_M,
   paneTop,
   piers,
   SHOPFRONT,
@@ -153,6 +155,7 @@ describe("the mesh", () => {
   }
 
   test("the pane stands barely proud, from the sill to its top", () => {
+    // tucked a little behind the riser and the head, so no crack opens
     const w = wall({ gf_top: 3.2 });
     const mesh = shopfrontMesh(w, wallBays(w, []), 4, OFFSET);
     const ys = new Set<number>();
@@ -162,8 +165,8 @@ describe("the mesh", () => {
       zs.push(mesh.pane[i + 2]);
     }
     expect([...ys]).toEqual([-SHOPFRONT.paneProud]);
-    expect(Math.min(...zs)).toBeCloseTo(100 + SHOPFRONT.sill);
-    expect(Math.max(...zs)).toBeCloseTo(103.2);
+    expect(Math.min(...zs)).toBeCloseTo(100 + SHOPFRONT.sill - PANE_TUCK_M);
+    expect(Math.max(...zs)).toBeCloseTo(103.2 + PANE_TUCK_M);
     // the frame stands further out, so the glass reads recessed
     const frameYs = triangles(mesh.frame).map(({ c }) => c[1]);
     expect(Math.min(...frameYs)).toBeCloseTo(-SHOPFRONT.frameProud);
@@ -180,6 +183,12 @@ describe("the mesh", () => {
     expect(mesh.pane).toEqual([]);
     const zs = triangles(mesh.frame).map(({ c }) => c[2]);
     expect(Math.min(...zs)).toBeGreaterThan(102.9);
+    // a sign band measured 2 m tall is a board no taller than FASCIA_MAX_M
+    const tall = wall({ bays: [], sign: { at: [[2, 8]], z: [3, 5] } });
+    const tops = triangles(shopfrontMesh(tall, [], 4, OFFSET).frame).map(
+      ({ c }) => c[2]
+    );
+    expect(Math.max(...tops)).toBeLessThanOrEqual(103 + FASCIA_MAX_M);
   });
 
   test("laid onto the wall where it stands off the footprint line", () => {

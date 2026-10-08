@@ -296,7 +296,7 @@ function clayColour(
 }
 
 /** A door's or a shopfront's faces that look up (sills, heads, ledge and
- *  fascia tops, 8–10 cm deep — flag 64, not the glass): a shade darker,
+ *  fascia tops, 8–10 cm deep — flag 64, not the glass): half as bright,
  *  so a ledge in the open sky reads as a soft edge, not a white line. */
 function ownTopShade(flags: F, wall: F): F {
   const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
@@ -304,7 +304,7 @@ function ownTopShade(flags: F, wall: F): F {
     own
       .mul(float(1).sub(wall))
       .mul(float(1).sub(shopPane(flags)))
-      .mul(0.3)
+      .mul(0.5)
   );
 }
 
