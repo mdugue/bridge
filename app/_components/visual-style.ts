@@ -623,7 +623,12 @@ function clayGlow(
   // a shop window has its own grazing light (paneSky), not the clay's rim
   const pane = shopPane(flags);
   const clayOnly = float(1).sub(pane);
-  const rim = vec3(1, 0.95, 0.8).mul(fres.mul(fres).mul(d.uRim).mul(clayOnly));
+  // … nor on a door's or a shopfront's sills, heads and undersides: seen
+  // edge-on, 8 cm faces are slivers a pixel high, and the rim (Fresnel → 1
+  // there) lit them into a dotted white line along every frame
+  const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
+  const rimOn = clayOnly.mul(float(1).sub(own.mul(float(1).sub(wall))));
+  const rim = vec3(1, 0.95, 0.8).mul(fres.mul(fres).mul(d.uRim).mul(rimOn));
   const dusk = build.w.mul(d.uDuskGlow).mul(d.uNight);
   const glow = vec3(1, 0.82, 0.5).mul(dusk.mul(wall).mul(0.5));
   const shop = shopOf(d, flags);
