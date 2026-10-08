@@ -133,7 +133,8 @@ flowchart LR
   DGM -. ground-clamp .-> LOW
 
   %% lamps
-  OSM ==>|"point positions"| LAMP
+  OSM ==>|"point positions · support / lamp_mount"| LAMP
+  DLM -. "road class → hung across the street, or moved to the kerb" .-> LAMP
 
   %% street furniture
   OSM ==>|"bench · waste_basket · bicycle_parking · bollard · post_box · shelter<br/>playground outlines + mapped equipment<br/>advertising · traffic_signals · fire_hydrant · clock · drinking_water · bus_stop"| FURN
@@ -142,6 +143,7 @@ flowchart LR
 
   %% fountains + monuments (official list, OSM basins)
   DLM ==>|"sie03_p monuments: position · name · kind"| MON
+  OSM -.->|"memorial / artwork_type: form · artist · material"| MON
   OSM -. "amenity=fountain: basin outlines + fountains the DLM lacks" .-> MON
   DOM ==>|"nDOM = DOM1 − DGM1 → the sculpture's measured bulk"| MON
 
@@ -231,7 +233,7 @@ flowchart LR
 | **Shopfronts** (experimental) | the same panoramas measured per LoD2 wall: the ground floor's openings in 0.5 m bins and 0.3 m rows, Mapillary's store signs, aligned between sequences and voted per bin into bays or a glazed row (all fifteen Dresden tiles) **+** DOM1 − DGM1 in front of the wall: the canopy over a shopfront | LoD2 walls (where, the host's wall triangles), DGM1 (the ground in front), OSM doors (a bay is cut there) | baked by `pipeline/bake/shopfronts.py` into `dlm/shopfronts_<t>.json`; drawn by the building bake, `lib/city/shopfronts.ts`, `bake-city-mesh.ts` `appendShopfronts` |
 | **Street lamps** | OSM `highway=street_lamp` (Geofabrik extract) **+** Mapillary's detected street lights where OSM has none within 8 m (Dresden, `Site.mapillary`; CC BY-SA 4.0, its own file `mly_<t>.geojson`) | DGM1 (ground-clamp); gated off water + railway (Mapillary's also off LoD2 footprints and bridge decks, out of the carriageway to the kerb) | baked by `pipeline/bake/lamps.py` + `mapillary.py`; `lamp-layer.ts`, `lib/city/mapillary.ts` |
 | **Street furniture & playgrounds** | OSM `amenity=bench/waste_basket/bicycle_parking/post_box/clock/drinking_water`, `leisure=picnic_table`, `barrier=bollard` (+ `height`, `material`), `advertising=column` (+ `lit`), `highway=traffic_signals` (+ `traffic_signals:direction`), `emergency=fire_hydrant` (+ `fire_hydrant:type`), `leisure=playground` outlines + `playground=*` equipment, stops with `shelter=yes` and bus stops without (their sign) (Geofabrik extract; the committed files from BBBike's Dresden cut) | OSM highways (the bearing an untagged object faces; a signal's travel direction) · the DLM road class (the kerb a signal or hydrant sign in the carriageway moves to) · OSM building outlines (wall clocks) · DGM1 (ground-clamp); gated off water, railway and bridge decks · **+** Mapillary's detected trash cans where OSM has no bin within 8 m (as the lamps above) | baked by `pipeline/bake/furniture.py` + `mapillary.py`; `furniture-layer.ts`, `lib/city/furniture.ts`, `lib/city/mapillary.ts` |
-| **Fountains & monuments** | Basis-DLM `sie03_p` monument points (`BWF` 1750/1770/1780, official names) | OSM `amenity=fountain` (basin outlines, fountains the DLM lacks, which DLM monument is a fountain) · DOM1 − DGM1 (the sculpture's measured form) · DGM1 (seated over the highest ground under a basin) | baked by `pipeline/bake/monuments.py`; `monument-layer.ts`, `lib/city/monuments.ts` |
+| **Fountains & monuments** | Basis-DLM `sie03_p` monument points (`BWF` 1750/1770/1780, official names) | OSM `amenity=fountain` (basin outlines, fountains the DLM lacks, which DLM monument is a fountain) · OSM `memorial=*` / `artwork_type=*`, `artist_name`, `material`, `height` (what a monument is: its marker's form and its card; sculptures the DLM lacks) · Wikidata `P186` (the material where OSM names none) · DOM1 − DGM1 (the sculpture's measured form) · DGM1 (seated over the highest ground under a basin) | baked by `pipeline/bake/monuments.py`; `monument-layer.ts`, `lib/city/monuments.ts` |
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel; trams left to OSM); without a DLM (Hamburg, Berlin) OSM `railway=rail/light_rail/subway/narrow_gauge` with `tracks` and `electrified`, its ballast the ways' beds buffered | DGM1 (the level along the whole line: ground, deck, span — ADR 0041) · Basis-DLM tunnels `ver06` `BWF=1870` (a stretch > 15 m within 2 m of one is underground: cut; OSM: `tunnel`, `location=underground`) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` (`rail_osm.py` without a DLM) |
 | **Trams** | OSM `railway=tram` (each track, with its `gauge`; standard gauge where untagged), `power=catenary_mast` (the masts within 15 m of a tram track), the OSM building outlines (facades for the rosette spans), `railway=tram_stop` + the platforms (the stop signs) | DLM class raster (street — road, path or built-up — vs lawn vs ballast bed; no way in a tunnel) · DOP NDVI (lawn bed) · DGM1 (drape) · the bridge decks (a track tagged `bridge` rides the deck) | `tram-layer.ts`, `lib/city/tram.ts` (wire stations and sag); baked by `pipeline/bake/tram.py` |
 | **Data layer: motor traffic** (off by default) | the site's counts (`traffic_sources.py`): Dresden's Verkehrsmengen (WFS `cls:L363`, per direction), Berlin's and Hamburg's Verkehrsmengen, Saxony's road census SVZ 2021, NRW's Verkehrswerte (both directions together, split evenly): vehicles per day per road section, heavy goods share | DGM1 (drape) · the bridge decks (a section on a street named a bridge rides the deck) · the scene's clock on a measured daily curve (Hamburg's inner-city counters, `lib/city/traffic-hours.ts`) · the HUD's switch | `traffic-layer.ts`, `lib/city/traffic.ts`, `lib/city/traffic-hours.ts`, `tile-stream.ts`; asked through `traffic-ask.ts` → `lib/city/inquiry-traffic.ts`; baked by `pipeline/bake/traffic.py` |
@@ -312,6 +314,7 @@ flowchart LR
     bGAP["structures.py"]
     bDOOR["doors.py"]
     bSHOP["facade_measure.py + shopfronts.py"]
+    bPLIN["plinths.py"]
     bDORM["dormers.py"]
     bTRF["traffic.py"]
     bTRS["transit.py (site-wide)"]
@@ -326,6 +329,7 @@ flowchart LR
     dOSMB["osmbuild JSON"]
     dDOOR["doors"]
     dSHOP["shopfronts"]
+    dPLIN["plinths"]
     dDORM["dormers"]
     dLAMP["lamps"]
     dMON["monuments"]
@@ -377,6 +381,9 @@ flowchart LR
   iDOM -. "canopy over the shopfront" .-> bSHOP
   iDGM -. "ground in front" .-> bSHOP
   bSHOP ==> dSHOP
+  iCJ ==>|"footprints"| bPLIN
+  iDGM ==>|"ground in front"| bPLIN
+  bPLIN ==> dPLIN
   iOSM ==> bLAMP
   dCLS ==>|gates| bLAMP
   bLAMP ==> dLAMP
@@ -453,6 +460,7 @@ flowchart LR
   dGAP -. "columns · buildings · relief height fields" .-> tCITY
   dDOOR -. "surround · leaf on the host wall" .-> tCITY
   dSHOP -. "soft niche · glass · fascia · canopy on the host wall" .-> tCITY
+  dPLIN -. "stone band on the host wall" .-> tCITY
   dDORM -. "front · cheeks · roof on the host roof" .-> tCITY
   dLMK -. "landmark flag · material · extras.landmarks" .-> tCITY
   dCLS ==> tSIDE

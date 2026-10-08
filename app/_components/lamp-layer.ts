@@ -19,11 +19,23 @@ import { color, float, mix, select, uniform, uv, vec3, vec4 } from "three/tsl";
 import type { LampFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
+import type { Pt } from "./rail-layer";
 import type { F, Live } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
+import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
 
 /** Lamp post height (m). OSM rarely tags it; the bake defaults each lamp to 5 m. */
 const LAMP_H = 5;
+/** A lamp hung across the street (pipeline/bake/lamps.py `HUNG_H`): its
+ *  head over the ground, the wire's ends that much higher on the facades
+ *  or masts, so it sags down to the lamp. */
+const HUNG_H = 7;
+const WIRE_END_LIFT = 0.6;
+const WIRE_HALF = 0.008;
+/** The lamp wires in the posts' dark metal, so the head reads as hung. */
+const LAMP_WIRE_INK = { color: 0x3a_3a_40, opacity: 0.9 };
+/** A mast at the kerb holding a wire end where no facade stands. */
+const MAST_R = 0.07;
 /** Emissive lantern intensity at full night. */
 const HEAD_EMISSIVE = 3;
 /** Additive glow-sprite world size + peak opacity. */
@@ -120,14 +132,8 @@ function placeInstances(
   return mesh;
 }
 
-/** Tapered pole topped by a small dark housing — a normal lit mesh (~12 tris). */
-function buildPosts(places: Place[]): Instances {
-  const pole = new CylinderGeometry(0.06, 0.1, LAMP_H, 6);
-  pole.translate(0, LAMP_H / 2, 0);
-  const housing = new BoxGeometry(0.32, 0.22, 0.32);
-  housing.translate(0, LAMP_H, 0);
-  const geo = mergeGeometries([pole, housing]) ?? pole;
-  const mat = sceneMaterial("lamp-post", () => {
+const postMaterial = (): Material =>
+  sceneMaterial("lamp-post", () => {
     const m = new MeshStandardNodeMaterial({
       color: 0x3a_3a_40,
       roughness: 0.7,
@@ -136,17 +142,38 @@ function buildPosts(places: Place[]): Instances {
     m.positionNode = instancePosition();
     return m;
   });
-  const mesh = placeInstances(geo, mat, places);
+
+/** Tapered pole topped by a small dark housing — a normal lit mesh (~12 tris). */
+function buildPosts(places: Place[]): Instances {
+  const pole = new CylinderGeometry(0.06, 0.1, LAMP_H, 6);
+  pole.translate(0, LAMP_H / 2, 0);
+  const housing = new BoxGeometry(0.32, 0.22, 0.32);
+  housing.translate(0, LAMP_H, 0);
+  const geo = mergeGeometries([pole, housing]) ?? pole;
+  const mesh = placeInstances(geo, postMaterial(), places);
   mesh.name = "lamp-posts";
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
 }
 
-/** Emissive lantern head; the emissive rides the night factor (0 by day). */
-function buildHeads(places: Place[]): Instances {
+/** Slim masts at the kerb holding a hung lamp's wire, the posts' material. */
+function buildMasts(places: Place[]): Instances {
+  const h = HUNG_H + WIRE_END_LIFT + 0.2;
+  const geo = new CylinderGeometry(MAST_R * 0.7, MAST_R, h, 6);
+  geo.translate(0, h / 2, 0);
+  const mesh = placeInstances(geo, postMaterial(), places);
+  mesh.name = "lamp-masts";
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+/** Emissive lantern head at `height`; the emissive rides the night factor
+ *  (0 by day). */
+function buildHeads(places: Place[], height = LAMP_H): Instances {
   const geo = new BoxGeometry(0.3, 0.3, 0.3);
-  geo.translate(0, LAMP_H, 0);
+  geo.translate(0, height, 0);
   const mat = sceneMaterial("lamp-head", () => {
     const m = new MeshStandardNodeMaterial({
       color: 0x33_33_2e,
@@ -229,12 +256,101 @@ function buildDecals(places: Place[]): Instances {
   return mesh;
 }
 
+/** A tile's lamps sorted by how they are held. */
+interface LampPlaces {
+  /** every head, posts' and hung lamps', for the halos and the real lights */
+  heads: Vector3[];
+  hung: Place[];
+  masts: Place[];
+  /** every lamp's ground, for the light pools */
+  pools: Place[];
+  posts: Place[];
+  wires: Wires;
+}
+
+/** A point at `lift` m over the ground at EPSG (x, y), or null off it. */
+function liftedPt(
+  [ex, ey]: readonly [number, number],
+  lift: number,
+  ctx: GroundContext
+): Pt | null {
+  const ground = ctx.heightAt(ex, ey);
+  if (ground === null) {
+    return null;
+  }
+  const { x, z } = epsgToWorld(ex, ey, ctx.offset);
+  return { x, y: ground + lift, z };
+}
+
+/** A hung lamp's wire, from each end (a facade or a mast, higher) down to
+ *  the top of its head, and the masts it needs. */
+function hangWire(
+  f: LampFeature,
+  head: Pt,
+  ctx: GroundContext,
+  out: LampPlaces
+): void {
+  const wire = f.properties?.wire;
+  if (!wire) {
+    return;
+  }
+  const top = { x: head.x, y: head.y + 0.15, z: head.z };
+  wire.forEach((end, i) => {
+    const at = liftedPt(end, HUNG_H + WIRE_END_LIFT, ctx);
+    if (!at) {
+      return;
+    }
+    addWire(out.wires, [at, top], WIRE_HALF);
+    if (f.properties?.masts?.[i]) {
+      out.masts.push({ x: at.x, y: at.y - HUNG_H - WIRE_END_LIFT, z: at.z });
+    }
+  });
+}
+
+function lampPlaces(features: LampFeature[], ctx: GroundContext): LampPlaces {
+  const out: LampPlaces = {
+    heads: [],
+    hung: [],
+    masts: [],
+    pools: [],
+    posts: [],
+    wires: wires(),
+  };
+  for (const f of features) {
+    if (f.geometry?.type !== "Point") {
+      continue;
+    }
+    const ground = liftedPt(f.geometry.coordinates, 0, ctx);
+    if (!ground) {
+      continue; // off-tile / NoData
+    }
+    const hung = Boolean(f.properties?.wire);
+    const h = hung ? HUNG_H : LAMP_H;
+    (hung ? out.hung : out.posts).push(ground);
+    out.pools.push(ground);
+    out.heads.push(new Vector3(ground.x, ground.y + h, ground.z));
+    if (hung) {
+      hangWire(f, { x: ground.x, y: ground.y + h, z: ground.z }, ctx, out);
+    }
+  }
+  return out;
+}
+
+/** Heads at one height, tagged for the picture styles' light cones
+ *  (style-dressing.ts) with that height; the layer itself knows no style. */
+function taggedHeads(places: Place[], height: number): Instances {
+  const heads = buildHeads(places, height);
+  heads.userData.styleLampHeads = { height };
+  return heads;
+}
+
 /**
- * Builds one tile's OSM street lamps into stylized geometry on the Y-up scene.
- * Mostly fake — emissive heads, additive glow sprites and ground light-pool
- * decals — driven by a single `nightFactor`; the real lighting comes from a
- * small shared {@link createLampLights} pool. An empty feature list yields
- * an empty group.
+ * Builds one tile's OSM street lamps into stylized geometry on the Y-up scene:
+ * a post with its head, or — a lamp hung across the street — a head on a
+ * wire between the facades (or masts at the kerb). Mostly fake — emissive
+ * heads, additive glow sprites and ground light-pool decals — driven by a
+ * single `nightFactor`; the real lighting comes from a small shared
+ * {@link createLampLights} pool. An empty feature list yields an empty group.
  */
 export function buildLamps(
   features: LampFeature[],
@@ -242,25 +358,10 @@ export function buildLamps(
 ): LampControl {
   const group = new Group();
   group.name = "lamps";
-  const { offset } = ctx;
+  const places = lampPlaces(features, ctx);
+  const headPositions = places.heads;
 
-  const places: Place[] = [];
-  const headPositions: Vector3[] = [];
-  for (const f of features) {
-    if (f.geometry?.type !== "Point") {
-      continue;
-    }
-    const [ex, ey] = f.geometry.coordinates;
-    const ground = ctx.heightAt(ex, ey);
-    if (ground === null) {
-      continue; // off-tile / NoData
-    }
-    const { x, z } = epsgToWorld(ex, ey, offset);
-    places.push({ x, y: ground, z });
-    headPositions.push(new Vector3(x, ground + LAMP_H, z));
-  }
-
-  if (places.length === 0) {
+  if (places.pools.length === 0) {
     return {
       group,
       headPositions,
@@ -273,14 +374,22 @@ export function buildLamps(
     };
   }
 
-  const posts = buildPosts(places);
-  const heads = buildHeads(places);
+  if (places.posts.length > 0) {
+    group.add(buildPosts(places.posts), taggedHeads(places.posts, LAMP_H));
+  }
+  if (places.hung.length > 0) {
+    group.add(taggedHeads(places.hung, HUNG_H));
+  }
+  if (places.masts.length > 0) {
+    group.add(buildMasts(places.masts));
+  }
+  const wireSet = wireMesh(places.wires, "lamp-wires", LAMP_WIRE_INK);
+  if (wireSet) {
+    group.add(wireSet);
+  }
   const glow = buildGlow(headPositions);
-  const decals = buildDecals(places);
-  group.add(posts, heads, glow, decals);
-  // For the picture styles' light cones (style-dressing.ts): a tag with the
-  // post height; the layer itself knows no style.
-  heads.userData.styleLampHeads = { height: LAMP_H };
+  const decals = buildDecals(places.pools);
+  group.add(glow, decals);
 
   return {
     group,

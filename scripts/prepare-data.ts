@@ -48,6 +48,7 @@ import type {
   CanopyFeature,
   DoorFeature,
   ShopfrontFile,
+  PlinthFeature,
   DormerFeature,
   FeatureCollection,
   RailFeature,
@@ -574,6 +575,9 @@ function parseCity(tile: string): BakedCityMesh {
     ? readJson<FeatureCollection<MeasuredRoofFeature>>(at(src.measuredRoofs))
         .features
     : undefined;
+  const plinths = existsSync(at(src.plinths))
+    ? readJson<FeatureCollection<PlinthFeature>>(at(src.plinths)).features
+    : undefined;
   const doors = existsSync(at(src.doors))
     ? readJson<FeatureCollection<DoorFeature>>(at(src.doors)).features
     : undefined;
@@ -595,7 +599,7 @@ function parseCity(tile: string): BakedCityMesh {
     osmDoc?.context ?? "render",
     gaps,
     measured,
-    { doors, dormers, shopfronts }
+    { doors, dormers, plinths, shopfronts }
   );
   sharedMatrix ??= baked.matrix;
   return baked;
@@ -641,6 +645,7 @@ async function bakeCity(
     at(src.landmarks),
     at(src.measuredRoofs),
     at(src.doors),
+    at(src.plinths),
     at(src.dormers),
     at(src.shopfronts),
   ];

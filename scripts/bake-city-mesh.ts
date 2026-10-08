@@ -38,6 +38,7 @@ import {
   inheritedLook,
   markFlatRoofs,
   markGrounded,
+  OBJECT_FLAG_FLAT_ROOF,
   OBJECT_FLAG_GLASS,
   OBJECT_FLAG_LANDMARK,
   OBJECT_FLAG_METAL,
@@ -45,6 +46,7 @@ import {
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_DOOR,
   OBJECT_SOURCE_DORMER,
+  OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
@@ -56,14 +58,31 @@ import {
   DOOR_SINK,
   DOOR_SURROUND,
   doorMesh,
+  eaveAlong,
   wallShift,
+  wallShiftAlong,
+  wallShiftKnots,
 } from "../lib/city/doors";
 import { dormerMesh } from "../lib/city/dormers";
+import {
+  type BandKind,
+  bandMeshes,
+  CORNICE,
+  EAVE_CORNICE,
+  type HostShift,
+  joinStretches,
+  lineStretches,
+  plinthStretches,
+  type Shaded,
+  type Stretch,
+  straightRuns,
+} from "../lib/city/plinths";
 import type {
   DoorFeature,
   DormerFeature,
   MeasuredRoofFeature,
   ShopfrontWall,
+  PlinthFeature,
   SmallBuildingFeature,
   StructureFeature,
 } from "../lib/city/features";
@@ -73,7 +92,6 @@ import {
   footAt,
   paneTop,
   CANOPY,
-  type Shaded,
   SHOPFRONT,
   shopfrontMesh,
   wallBays,
@@ -487,6 +505,7 @@ export function bakeCityMesh(
   onWalls: {
     doors?: readonly DoorFeature[];
     dormers?: readonly DormerFeature[];
+    plinths?: readonly PlinthFeature[];
     shopfronts?: readonly ShopfrontWall[];
   } = {}
 ): BakedCityMesh {
@@ -639,6 +658,7 @@ function appendBeyondLod2(
     doors?: readonly DoorFeature[];
     dormers?: readonly DormerFeature[];
     facades: FacadeMaterial;
+    plinths?: readonly PlinthFeature[];
     shopfronts?: readonly ShopfrontWall[];
     gaps?: readonly StructureFeature[];
     scan?: readonly SmallBuildingFeature[];
@@ -650,6 +670,9 @@ function appendBeyondLod2(
   const objectIndex = new Map(keys.map((id, i) => [id, i]));
   if (extra.gaps) {
     appendGapStructures(tile, baked, extra.gaps, extra.facades, objectIndex);
+  }
+  if (extra.plinths) {
+    appendPlinths(baked, extra.plinths, objectIndex);
   }
   if (extra.shopfronts) {
     // before the doors: a bay is cut at a door, which the doors then draw
@@ -682,6 +705,226 @@ function treeTriangles(
     }
   }
   return out;
+}
+
+/** A plinth's stone: its wall's tint, a touch darker and cooler. */
+const PLINTH_STONE: [number, number, number] = [0.62, 0.62, 0.64];
+/** What a plinth's host must not be: a facade of its own (a landmark, a
+ *  church), a part with its own colour, glass or metal cladding, or a
+ *  flat-roofed block — the painted Gliederung's own gate. */
+const NO_PLINTH =
+  OBJECT_FLAG_LANDMARK |
+  OBJECT_FLAG_OWN_COLOUR |
+  OBJECT_FLAG_GLASS |
+  OBJECT_FLAG_METAL |
+  OBJECT_FLAG_FLAT_ROOF;
+/** A part whose base stands this far over the ground at its plinth stands
+ *  on a roof (a tower's part), not on the street. */
+const PLINTH_ON_GROUND_M = 1.5;
+
+/**
+ * The plinths on the LoD2 walls' street side (pipeline/bake/plinths.py),
+ * appended as part of the building they carry, like its doors: one object
+ * per host in a stone shade of the host's tint, the host's building tree
+ * (asking or demolishing it takes the building), no footprint, no storey
+ * band or eave line on it, `source` 5. Only a town house carries one: a
+ * host from 3 m of wall, standing on the street, not `NO_PLINTH`. Along
+ * the same stretches the Gurtgesims over its ground floor
+ * (`corniceHeight`) and the Traufgesims under its eave where the roof runs
+ * level along the wall (`eaveAlong`), each an object in a plaster shade a
+ * touch paler than the wall. Each band runs on from house to house along
+ * a row (`joinStretches`): over the gaps LoD2's footprints leave between
+ * them, at one level where theirs lie close.
+ */
+export function appendPlinths(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  plinths: readonly PlinthFeature[],
+  objectIndex: ReadonlyMap<string, number>
+): void {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const objectIds: number[] = [];
+  const walls = treeTriangles(baked);
+  const vertices = baked.vertices.positions;
+  const isRoof = baked.vertices.isRoof;
+  const roofs = new Map<number, number[]>();
+  for (const [root, tris] of walls) {
+    roofs.set(
+      root,
+      tris.filter((t) => isRoof[t] === 1)
+    );
+  }
+  const part = (
+    tris: Shaded,
+    host: CityObjectRow,
+    tint: [number, number, number]
+  ) => {
+    const zs = tris.positions.filter((_, i) => i % 3 === 2);
+    if (zs.length === 0) {
+      return;
+    }
+    const [base, top] = [Math.min(...zs), Math.max(...zs)];
+    const index = baked.objects.length;
+    positions.push(...tris.positions);
+    normals.push(...tris.normals);
+    for (let i = 0; i < tris.positions.length / 3; i++) {
+      objectIds.push(index);
+    }
+    const above = cm(top - base + 1);
+    baked.objects.push({
+      ...host,
+      building: false,
+      baseZ: cm(base),
+      // above its top: no eave stroke, no storey band on it
+      eaveH: above,
+      storeyH: above,
+      glow: 0,
+      // its own colour, none of the host's OSM looks (no shop wash)
+      flags: OBJECT_FLAG_OWN_COLOUR,
+      tint,
+      source: OBJECT_SOURCE_PLINTH,
+      footprints: [],
+    });
+  };
+  const wallOf = (h: number) => walls.get(baked.objects[h].root) ?? [];
+  const shift: HostShift = (h, a, b, z0, z1) =>
+    wallShiftKnots([a, b], [z0, z1], baked.offset, vertices, wallOf(h));
+  const bands: Record<BandKind, Stretch[]> = {
+    plinth: [],
+    cornice: [],
+    eave: [],
+  };
+  for (const f of plinths) {
+    const p = f.properties;
+    const hostIndex = p ? objectIndex.get(p.of) : undefined;
+    const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
+    if (
+      !(p && host && hostIndex !== undefined) ||
+      (host.flags & NO_PLINTH) !== 0 ||
+      host.eaveH < 3
+    ) {
+      continue;
+    }
+    if (host.baseZ > Math.min(...p.g) + PLINTH_ON_GROUND_M) {
+      continue;
+    }
+    bands.plinth.push(...plinthStretches(f, hostIndex));
+    const top = Math.max(...p.top);
+    const z = corniceHeight(host, top);
+    if (z !== undefined) {
+      bands.cornice.push(...lineStretches(f, hostIndex, z));
+    }
+    bands.eave.push(
+      ...eaveStretches(f, hostIndex, host, z ?? top, (a, b, z0, z1) =>
+        eaveAlong(
+          [a, b],
+          wallShiftAlong(
+            [a, b],
+            [z0, z1],
+            baked.offset,
+            vertices,
+            wallOf(hostIndex)
+          ),
+          baked.offset,
+          vertices,
+          roofs.get(host.root) ?? []
+        )
+      )
+    );
+  }
+  const tolerance: Record<BandKind, number> = {
+    plinth: 0.2,
+    cornice: 0.6,
+    eave: EAVE_STEP_M,
+  };
+  for (const kind of ["plinth", "cornice", "eave"] as const) {
+    const joined = joinStretches(
+      bands[kind],
+      kind === "plinth" ? "plinth" : "line",
+      tolerance[kind]
+    );
+    for (const [h, tris] of bandMeshes(joined, baked.offset, kind, shift)) {
+      const host = baked.objects[h];
+      // close to the wall: the form, not the colour, carries it
+      const tint =
+        kind === "plinth"
+          ? mixRgb(
+              host.tint.map((c) => c * 0.9),
+              PLINTH_STONE,
+              0.25
+            )
+          : mixRgb(host.tint, SURROUND_STONE, 0.08);
+      part(tris, host, tint);
+    }
+  }
+  if (positions.length === 0) {
+    return;
+  }
+  const v = baked.vertices;
+  baked.vertices = {
+    positions: concat(v.positions, positions),
+    objectIds: concat(v.objectIds, objectIds),
+    isRoof: concat(
+      v.isRoof,
+      objectIds.map(() => 0)
+    ),
+    normals: concat(
+      v.normals ?? new Float32Array(v.positions.length).fill(Number.NaN),
+      normals
+    ),
+  };
+}
+
+/** Neighbouring houses' Traufgesimse this close in height run as one. */
+const EAVE_STEP_M = 0.25;
+/** A Traufgesims from this much wall, and this far over the band below. */
+const EAVE_MIN_M = 5;
+const EAVE_CLEAR_M = 1.5;
+
+/** A host's Traufgesims along its plinth's straight runs: where the roof
+ *  runs level along the wall (`eave`), its underside `EAVE_CORNICE.height`
+ *  under the eave — on a wall from `EAVE_MIN_M`, `EAVE_CLEAR_M` over the
+ *  band below it (`under`: the Gurtgesims, or the plinth's top). */
+function eaveStretches(
+  f: PlinthFeature,
+  hostIndex: number,
+  host: CityObjectRow,
+  under: number,
+  /** the eave along a→b, the wall read between two heights */
+  eave: (
+    a: readonly number[],
+    b: readonly number[],
+    z0: number,
+    z1: number
+  ) => number | undefined
+): Stretch[] {
+  const guess = host.baseZ + host.eaveH;
+  return straightRuns(f.geometry.coordinates).flatMap(([a, b]) => {
+    const e = eave(a, b, guess - 1.5, guess - 0.5);
+    const z = e === undefined ? undefined : e - EAVE_CORNICE.height;
+    return z !== undefined &&
+      e !== undefined &&
+      e - host.baseZ >= EAVE_MIN_M &&
+      z > under + EAVE_CLEAR_M
+      ? [{ a, b, lo: z, hi: z, host: hostIndex }]
+      : [];
+  });
+}
+
+/** Where a host's Gurtgesims sits (its underside, absolute): straddling
+ *  the first storey line over the host's base, as the painted ledge did —
+ *  only where the wall holds two storeys and the line stands a metre
+ *  clear of the plinth's top. */
+export function corniceHeight(
+  host: Pick<CityObjectRow, "baseZ" | "eaveH" | "storeyH">,
+  plinthTop: number
+): number | undefined {
+  const storey = Math.max(host.storeyH, 2.4);
+  if (host.eaveH < 2 * storey - 0.3) {
+    return undefined;
+  }
+  const z = host.baseZ + storey - CORNICE.height / 2;
+  return z > plinthTop + 1 ? z : undefined;
 }
 
 /** A doorway's surround: its wall's tint, lifted towards a pale stone. */

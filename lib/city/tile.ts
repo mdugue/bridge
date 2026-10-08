@@ -57,6 +57,7 @@ export function cityMeshSourceFiles(
   dormers: string;
   measuredRoofs: string;
   osmBuild: string;
+  plinths: string;
   roofColor: string;
   landmarks: string;
   shopfronts: string;
@@ -69,6 +70,7 @@ export function cityMeshSourceFiles(
     doors: `${dir}/dlm/doors_${tile}.geojson`,
     dormers: `${dir}/dlm/dormers_${tile}.geojson`,
     osmBuild: `${dir}/dlm/osmbuild_${tile}.json`,
+    plinths: `${dir}/dlm/plinths_${tile}.geojson`,
     measuredRoofs: `${dir}/dlm/roofs_${tile}.geojson`,
     roofColor: `${dir}/dop/roofcolor_${tile}.json`,
     shopfronts: `${dir}/dlm/shopfronts_${tile}.json`,

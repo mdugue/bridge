@@ -17,8 +17,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { doorJoins } from "../lib/city/doors";
+import { plinthJoins } from "../lib/city/plinths";
 import type {
   DoorFeature,
+  PlinthFeature,
   ShopfrontFile,
   ShopfrontWall,
   SmallBuildingFeature,
@@ -64,6 +66,7 @@ export const JOIN_PARTS = [
   "sheds",
   "doors",
   "shopfronts",
+  "plinths",
 ] as const;
 export type JoinPart = (typeof JOIN_PARTS)[number];
 
@@ -95,6 +98,18 @@ async function tileGround(site: Site, tile: string): Promise<Ground> {
     bounds: dgm.bounds,
     heightAt: (x, y) => sampleHeightfield(field, x, y),
   };
+}
+
+/** The LoD2 walls' street side the bake draws as plinths. */
+function plinths(site: Site, tile: string): PlinthFeature[] {
+  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).plinths);
+  return existsSync(path)
+    ? ((
+        JSON.parse(readFileSync(path, "utf8")) as {
+          features?: PlinthFeature[];
+        }
+      ).features ?? [])
+    : [];
 }
 
 /** OSM's entrances the bake draws as doors on a tile's walls. */
@@ -177,6 +192,7 @@ function tileJoins(
     shopfronts: shopfronts(site, tile).flatMap((w) =>
       shopfrontWallJoins(w, doors(site, tile))
     ),
+    plinths: plinths(site, tile).flatMap(plinthJoins),
   };
 }
 

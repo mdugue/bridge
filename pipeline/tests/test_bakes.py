@@ -1006,6 +1006,20 @@ def test_a_cadastre_tree_carries_its_genus_and_trunk():
     assert "s" not in props
 
 
+def test_a_cadastre_tree_carries_its_planting_year():
+    from bake.trees import planting_year
+
+    # the register's own year wins; else the record's year less its age
+    assert planting_year({"planted": 1998, "facts": {"age": 5, "date": "2025-03-01"}}) == 1998
+    assert planting_year({"planted": None, "facts": {"age": 46, "date": "2025-09-10"}}) == 1979
+    # no age, no date, or an implausible year: none
+    assert planting_year({"planted": None, "facts": {"age": None, "date": "2025-09-10"}}) is None
+    assert planting_year({"planted": None, "facts": {"age": 46, "date": ""}}) is None
+    assert planting_year({"planted": 1066}) is None
+    assert planting_year({"planted": 3000}) is None
+    assert planting_year({}) is None
+
+
 def test_tree_facts_follow_the_features_and_say_what_is_measured():
     from bake.trees import osm_tree, parse_trees, tree_facts, tree_props
 
@@ -1360,3 +1374,108 @@ def test_a_laser_scan_rasterises_by_pdals_binning_rules(tmp_path):
     assert band("lowint_050.tif", "mean")[6, 0] == 1000.0
     assert band("lowint_050.tif", "count")[6, 0] == 1
     assert band("lowint_050.tif", "mean")[0, 7] == -9999.0
+
+
+def test_osm_names_a_monuments_form_height_and_material():
+    from bake.monuments import osm_form, osm_height, osm_material
+
+    assert osm_form('"historic"=>"memorial","memorial"=>"bust"') == "bust"
+    assert osm_form('"tourism"=>"artwork","artwork_type"=>"statue"') == "statue"
+    assert osm_form('"memorial"=>"war_memorial"') is None
+    assert osm_form('"artwork_type"=>"mural"') == "plaque"
+    assert osm_height('"height"=>"4,5 m"') == 4.5
+    assert osm_height('"height"=>"120"') is None
+    assert osm_material('"material"=>"bronze;granite;foo"') == "Bronze, Granit"
+
+
+def test_a_dlm_monument_takes_its_osm_partners_form_never_a_plaque():
+    from bake.monuments import type_monuments
+
+    def osm(x, form, name=None):
+        return {
+            "geom": shapely.Point(x, 0),
+            "name": name,
+            "form": form,
+            "height": None,
+            "material": None,
+            "artist": None,
+        }
+
+    dlm = [
+        {
+            "geom": shapely.Point(0, 0),
+            "kind": "statue",
+            "name": "Schiller-Denkmal",
+            "style": None,
+            "figure": False,
+            "source": "dlm",
+        },
+        {
+            "geom": shapely.Point(500, 0),
+            "kind": "statue",
+            "name": "Moritzmonument",
+            "style": None,
+            "figure": False,
+            "source": "dlm",
+        },
+        {
+            "geom": shapely.Point(900, 0),
+            "kind": "statue",
+            "name": "König-Albert-Obelisk",
+            "style": None,
+            "figure": False,
+            "source": "dlm",
+        },
+    ]
+    near = [
+        osm(4, "sculpture"),  # nearer, but not of its name
+        osm(9, "statue", "Friedrich-Schiller-Denkmal"),
+        osm(501, "plaque"),  # the plaque that explains the monument
+        osm(300, "sculpture", "Park sculpture"),
+        osm(300.5, "statue"),  # the same object mapped twice
+        osm(700, "plaque"),  # a plaque the DLM lacks: on a wall, not added
+    ]
+    out = type_monuments(dlm, near, None)
+    by = {o["name"]: o for o in out}
+    assert by["Schiller-Denkmal"]["form"] == "statue"
+    assert by["Schiller-Denkmal"]["source"] == "dlm+osm"
+    assert by["Moritzmonument"].get("form") is None
+    assert by["König-Albert-Obelisk"]["form"] == "obelisk"  # its name says so
+    added = [o for o in out if o["source"] == "osm"]
+    # the unclaimed sculpture at 4 m stands within 3 m of nothing kept: added
+    assert sorted(o["form"] for o in added) == ["sculpture", "sculpture"]
+
+
+def test_a_monument_without_an_osm_material_takes_wikidatas():
+    from bake.monuments import wikidata_material, wikidata_materials
+
+    assert wikidata_material(["copper", "gold leaf"]) == "Kupfer, Blattgold"
+    assert wikidata_material(["Carrara marble", "high-quality steel"]) == "Marmor, Stahl"
+    assert wikidata_material(["papier-mâché"]) is None
+
+    def monument(x, name, material=None, kind="statue"):
+        return {"geom": shapely.Point(x, 0), "kind": kind, "name": name, "material": material}
+
+    def item(x, qid, name, material):
+        return {"geom": shapely.Point(x, 0), "id": qid, "name": name, "material": material}
+
+    items = [
+        monument(0, "Goldener Reiter"),
+        monument(100, "Bismarck-Denkmal", material="Bronze"),  # OSM's stays
+        monument(200, "Luther-Denkmal"),
+        monument(300, "Stilles Wasser", kind="fountain"),
+    ]
+    wikidata = [
+        item(6, "Q1", "Brunnen am Markt", "Sandstein"),  # nearer, not of its name
+        item(30, "Q558537", "Goldener Reiter", "Kupfer, Blattgold"),
+        item(100, "Q2", "Bismarck-Denkmal", "Bronze, Granit"),
+        item(215, "Q3", "Lesender Arbeiter", "Bronze"),  # too far for another name
+        item(300, "Q4", "Stilles Wasser", "Sandstein"),
+    ]
+    wikidata_materials(items, wikidata)
+    assert [(m.get("material"), m.get("wikidata")) for m in items] == [
+        ("Kupfer, Blattgold", "Q558537"),
+        ("Bronze", None),
+        (None, None),
+        (None, None),
+    ]

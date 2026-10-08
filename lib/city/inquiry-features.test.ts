@@ -10,6 +10,9 @@ import {
 } from "./inquiry-features";
 import type { SiteProvenance } from "./provenance";
 import { type CardCredits, cardCredits } from "./card-lines";
+import type { Stated } from "./methods";
+
+const lines = (sources: readonly Stated[]) => sources.map((l) => l.text);
 
 /** Dresden's credits as the HUD hands them over (sites/). */
 const DRESDEN: CardCredits = cardCredits({
@@ -100,7 +103,7 @@ test("a register tree: species, place, the measured sizes only, its age", () => 
   ]);
   expect(card.id).toBe("412089.7 5656000.4");
   expect(card.idLabel).toBe("Lage");
-  expect(card.sources).toEqual([
+  expect(lines(card.sources)).toEqual([
     "Art, Maße: Stadtbaumkataster · Stand 01.10.2026 · Landeshauptstadt Dresden, dl-de/by-2-0",
   ]);
 });
@@ -118,7 +121,7 @@ test("before its facts arrive a tree says its genus, nothing it cannot", () => {
   );
   expect(osm.kicker).toBe("Baum");
   expect(osm.title).toBe("Nadelbaum");
-  expect(osm.sources).toEqual([
+  expect(lines(osm.sources)).toEqual([
     "Baum: OpenStreetMap · Stand 26.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
   ]);
 });
@@ -134,10 +137,10 @@ test("an orchard tree says it is one, from OSM's orchard, with no register line"
   expect(card.kicker).toBe("Obstbaum");
   expect(card.title).toBe("Obstbaum");
   expect(card.facts).toEqual([]);
-  expect(card.sources).toEqual([
+  expect(lines(card.sources)).toEqual([
     "Obstwiese: OpenStreetMap · Stand 26.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
   ]);
-  expect(card.sources.join()).not.toContain("Stadtbaumkataster");
+  expect(lines(card.sources).join()).not.toContain("Stadtbaumkataster");
 });
 
 test("without the manifest the register and the surveys are the site's own", () => {
@@ -148,7 +151,7 @@ test("without the manifest the register and the surveys are the site's own", () 
     register: "Freie und Hansestadt Hamburg, dl-de/by-2-0",
   };
   const tree = treeCard(linde, treeFactsAt(file, 0), null, hamburg);
-  expect(tree.sources).toEqual([
+  expect(lines(tree.sources)).toEqual([
     "Art, Maße: Stadtbaumkataster · Freie und Hansestadt Hamburg, dl-de/by-2-0",
   ]);
   // a site without a register has OSM's trees: no register is named, and
@@ -158,7 +161,7 @@ test("without the manifest the register and the surveys are the site's own", () 
     provider: "Bayerische Vermessungsverwaltung, CC BY 4.0",
   });
   expect(munich.kicker).toBe("Baum");
-  expect(munich.sources).toEqual([
+  expect(lines(munich.sources)).toEqual([
     "Art, Maße: OpenStreetMap · © OpenStreetMap-Mitwirkende, ODbL",
   ]);
   const bridge = bridgeCard(
@@ -173,12 +176,12 @@ test("without the manifest the register and the surveys are the site's own", () 
     hamburg
   );
   // no Basis-DLM in Hamburg: the bridge's area is OSM's, its deck the DOM1's
-  expect(bridge.sources).toEqual([
+  expect(lines(bridge.sources)).toEqual([
     "Fläche: OpenStreetMap · © OpenStreetMap-Mitwirkende, ODbL",
     "Deck im DOM1 gemessen: Digitales Oberflächenmodell DOM1 · Quelle: LGV Hamburg, dl-de/by-2-0",
   ]);
-  expect(bridge.sources.join()).not.toContain("Basis-DLM");
-  expect([...tree.sources, ...bridge.sources].join()).not.toMatch(
+  expect(lines(bridge.sources).join()).not.toContain("Basis-DLM");
+  expect([...lines(tree.sources), ...lines(bridge.sources)].join()).not.toMatch(
     /GeoSN|Dresden/u
   );
 });
@@ -208,7 +211,7 @@ test("a named fountain with a figure, its basin from OSM, its name official", ()
     { label: "Skulptur", value: "im Becken" },
     { label: "Höhe", value: "3,1 m" },
   ]);
-  expect(card.sources).toEqual([
+  expect(lines(card.sources)).toEqual([
     "Name: Basis-DLM · Quelle: GeoSN, dl-de/by-2-0",
     "Becken: OpenStreetMap · Stand 19.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
     "Höhe gemessen: Digitales Oberflächenmodell DOM1 · Quelle: GeoSN, dl-de/by-2-0",
@@ -244,11 +247,80 @@ test("a bridge: name and deck from the DLM, structure and span from Wikidata", (
   ]);
   expect(card.id).toBe("Q315427");
   expect(card.idLabel).toBe("Wikidata");
-  expect(card.sources).toEqual([
-    "Name, Fläche, Deck im DOM1 gemessen: Basis-DLM · Quelle: GeoSN, dl-de/by-2-0",
+  expect(lines(card.sources)).toEqual([
+    "Name, Fläche: Basis-DLM · Quelle: GeoSN, dl-de/by-2-0",
+    "Deck im DOM1 gemessen: Digitales Oberflächenmodell DOM1 · Quelle: GeoSN, dl-de/by-2-0",
     "Tragwerk, Spannweite: Wikidata · Stand 26.09.2026 · CC0",
     "Durchfahrtshöhe: OpenStreetMap · Stand 19.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
   ]);
+  // the area as the DLM publishes it, the deck computed from the surface
+  expect(card.sources.map((l) => l.method)).toEqual([
+    "taken",
+    "computed",
+    "taken",
+    "taken",
+  ]);
   expect(structureLabel("beam;arch")).toBe("Balken · Bogen");
   expect(structureLabel(null)).toBe("");
+});
+
+test("a statue typed by OSM: its form, maker and material, its name official", () => {
+  const card = monumentCard(
+    {
+      kind: "monument",
+      tile: "t",
+      position: [411600, 5656500],
+      properties: {
+        kind: "statue",
+        name: "Martin-Luther-Denkmal",
+        source: "dlm+osm",
+        form: "statue",
+        artist: "Adolf von Donndorf",
+        material: "Bronze",
+        height: 6,
+      },
+    },
+    provenance,
+    DRESDEN
+  );
+  expect(card.kicker).toBe("Standbild");
+  expect(card.facts).toEqual([
+    { label: "Werk von", value: "Adolf von Donndorf" },
+    { label: "Material", value: "Bronze" },
+    { label: "Höhe", value: "6 m" },
+  ]);
+  expect(lines(card.sources)).toEqual([
+    "Name: Basis-DLM · Quelle: GeoSN, dl-de/by-2-0",
+    "Art, Werk, Material, Höhe: OpenStreetMap · Stand 19.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
+  ]);
+});
+
+test("a monument whose material only Wikidata names quotes it for that", () => {
+  const card = monumentCard(
+    {
+      kind: "monument",
+      tile: "t",
+      position: [411791, 5657042],
+      properties: {
+        kind: "statue",
+        name: "Goldener Reiter",
+        source: "dlm",
+        material: "Kupfer, Blattgold",
+        wikidata: "Q558537",
+        relief: { west: 0, north: 0, cols: 2, rows: 1, dm: [46, 70] },
+      },
+    },
+    provenance,
+    DRESDEN
+  );
+  expect(card.kicker).toBe("Denkmal");
+  expect(card.facts).toEqual([
+    { label: "Material", value: "Kupfer, Blattgold" },
+    { label: "Höhe", value: "7 m" },
+  ]);
+  expect(lines(card.sources)).toEqual([
+    "Name: Basis-DLM · Quelle: GeoSN, dl-de/by-2-0",
+    "Material: Wikidata · Stand 26.09.2026 · CC0",
+    "Höhe gemessen: Digitales Oberflächenmodell DOM1 · Quelle: GeoSN, dl-de/by-2-0",
+  ]);
 });

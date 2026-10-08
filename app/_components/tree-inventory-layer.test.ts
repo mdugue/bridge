@@ -52,6 +52,14 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
     ctx
   );
   expect(inv.counts).toEqual({ broad: 3, spindle: 1, cone: 1, weep: 1 });
+  const plan = inv.control.group.children.filter(
+    (c) => c.userData.treePart === "plan"
+  );
+  // the Schwarzplan's circles: one hidden set of every register tree
+  expect(plan).toHaveLength(1);
+  expect(plan[0].visible).toBe(false);
+  expect(isInstances(plan[0]) && plan[0].drawCount).toBe(6);
+  inv.control.group.remove(...plan);
   const own = census(inv.control.group);
   // 3 reshaped shapes × 2 LODs, all in one 250 m chunk; no trunk set
   expect(own.meshes).toBe(3 * 2);
@@ -148,4 +156,22 @@ test("a broadleaf crown rides into the canopy with its genus and trunk", () => {
   const girth = (t: typeof inv) =>
     new Vector3().setFromMatrixColumn(t.instances[0].trunk, 0).length();
   expect(girth(inv)).toBeLessThan(girth(unmeasured));
+});
+
+test("a sapling stands between stakes, and thin; an old tree is broad-footed", () => {
+  const year = new Date().getFullYear();
+  const at = (x: number, y: number): TreeFeature => ({
+    geometry: { type: "Point", coordinates: [x, 0] },
+    properties: { a: 0, d: 6, h: 10, l: "d", gn: 3, y },
+  });
+  const inv = buildTreeInventory([at(0, year - 2), at(20, year - 120)], ctx);
+  const stakes = inv.control.group.children.filter(
+    (c) => c.userData.treePart === "stakes"
+  );
+  expect(stakes).toHaveLength(1);
+  expect(isInstances(stakes[0]) && stakes[0].drawCount).toBe(1);
+  const [young, old] = inv.instances;
+  const girth = (t: (typeof inv.instances)[number]) =>
+    new Vector3().setFromMatrixColumn(t.trunk, 0).length();
+  expect(girth(young)).toBeLessThan(girth(old));
 });

@@ -22,6 +22,11 @@ export interface PointGeometry {
   type: "Point";
 }
 
+export interface MultiLineGeometry {
+  coordinates: Point2[][];
+  type: "MultiLineString";
+}
+
 export interface PolygonGeometry {
   coordinates: Point2[][];
   type: "Polygon";
@@ -101,6 +106,8 @@ export interface TreeFeature {
      *  tree (lib/city/cultivated.ts, at runtime only — no file has it) */
     s?: "orchard" | "osm";
     t?: number;
+    /** the planting year (pipeline/bake/trees.py planting_year) */
+    y?: number;
   } | null;
 }
 
@@ -130,18 +137,31 @@ export interface LowVegFeature {
 export type LowVegSource = "osm" | "osm+lsc";
 
 /** OSM street lamps (pipeline/bake/lamps.py, ODbL); the post height is a
- *  lamp-layer constant, so no property is read but the source (`src`:
- *  "mly" for Mapillary's, lib/city/mapillary.ts). */
+ *  lamp-layer constant. A lamp hung across the street carries its `wire`
+ *  (the two ends, EPSG; the head at the point, `h` m over the ground) and
+ *  `masts` where an end is a mast at the kerb, not a facade. The source
+ *  (`src`): "mly" for Mapillary's, lib/city/mapillary.ts. */
 export interface LampFeature {
   geometry: PointGeometry;
-  properties: { src?: "mly" } | null;
+  properties: {
+    h?: number;
+    masts?: [boolean, boolean];
+    src?: "mly";
+    wire?: [Point2, Point2];
+  } | null;
 }
 
 /** Street lamps and litter bins OSM lacks, detected by Mapillary
- *  (pipeline/bake/mapillary.py, CC BY-SA 4.0). */
+ *  (pipeline/bake/mapillary.py, CC BY-SA 4.0); a lamp hung across the
+ *  street carries the OSM lamps' `wire`, `masts` and `h`. */
 export interface MapillaryFeature {
   geometry: PointGeometry;
-  properties: { k: "bin" | "lamp" } | null;
+  properties: {
+    h?: number;
+    k: "bin" | "lamp";
+    masts?: [boolean, boolean];
+    wire?: [Point2, Point2];
+  } | null;
 }
 
 /** The street furniture the bake keeps (pipeline/bake/furniture.py). */
@@ -217,6 +237,19 @@ export interface FurnitureFeature {
  */
 export type MonumentKind = "column" | "fountain" | "statue" | "stone";
 
+/**
+ * What a monument is, by OSM's `memorial=*` / `artwork_type=*` (ODbL): a
+ * figure on its pedestal, a bust, a free sculpture, a stele, a stone, an
+ * obelisk. The DLM's code alone does not tell a statue from a stone.
+ */
+export type MonumentForm =
+  | "bust"
+  | "obelisk"
+  | "sculpture"
+  | "statue"
+  | "stele"
+  | "stone";
+
 /** How a fountain's basin is dressed: a raised rim with jets, jets on flush
  *  paving (a splash pad), or a still pool without any. */
 export type FountainStyle = "basin" | "pool" | "splash";
@@ -237,14 +270,25 @@ export interface ReliefGrid {
 export interface MonumentFeature {
   geometry: PointGeometry | PolygonGeometry;
   properties: {
+    /** who made it (OSM `artist_name`) */
+    artist?: string;
     /** a fountain with a DLM monument in it (its sculpture is measured) */
     figure?: boolean;
+    /** what it is, from OSM (absent: nothing says) */
+    form?: MonumentForm;
+    /** its tagged height (m, OSM `height`) */
+    height?: number;
     kind: MonumentKind;
+    /** what it is made of, in German ("Bronze, Granit"; OSM `material`,
+     *  else Wikidata's — then `wikidata` is set) */
+    material?: string;
     name?: string;
     /** the measured sculpture or monument (pipeline/bake/monuments.py) */
     relief?: ReliefGrid;
     source?: "dlm" | "dlm+osm" | "osm";
     style?: FountainStyle;
+    /** the Wikidata item its `material` comes from */
+    wikidata?: string;
   } | null;
 }
 
@@ -317,6 +361,16 @@ export interface ShopfrontFile {
   attribution: string;
   bin_m: number;
   buildings: Record<string, ShopfrontWall[]>;
+}
+
+/** A building's plinth on the street side of its LoD2 walls
+ *  (pipeline/bake/plinths.py, LoD2 + DGM1): level pieces of the wall's
+ *  open stretches, each walked with the street to its right (a→b), its
+ *  top (`top`) and the lowest ground under it (`g`), one per line, and the
+ *  LoD2 object it belongs to (`of`). */
+export interface PlinthFeature {
+  geometry: MultiLineGeometry;
+  properties: { g: number[]; of: string; top: number[] } | null;
 }
 
 /** A dormer the surface model shows on a pitched LoD2 roof

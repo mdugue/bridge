@@ -342,10 +342,11 @@ function ledge(h: F, top: F, size: number, drop: number, strength: F): F {
  * tall enough to have it; the ground floor's three only on a part standing
  * on the ground (flag 128), not on a tower's part on a roof:
  *  - Sockel: the lowest 0.6 m a little darker and cooler, a stone plinth,
- *    with a crisp top edge (from 3 m of wall);
- *  - Gurtgesims: a ledge at the first storey line (build.y), lit face and
- *    shadow under it, where the wall holds two storeys;
- *  - Traufgesims: a deeper ledge under the eave (build.z), from 5 m;
+ *    with a crisp top edge (from 3 m of wall) — under the modelled plinth
+ *    where the street side has one (lib/city/plinths.ts), which also
+ *    models the Gurtgesims at the first storey line and the Traufgesims
+ *    under a level eave (no painted ones: their painted shadows read as
+ *    a smear, a stain under the roof);
  *  - Ladenzone: a shop's ground floor (flag 1) a shade darker and cooler
  *    under the Gurtgesims, read as the recessed shop front — no panes.
  * Not sun-dependent: the ledges' light and shadow are painted, like the
@@ -388,12 +389,8 @@ function articulation(
     .mul(clamp(h.sub(0.6).div(px), 0, 1))
     .mul(shop);
   out = mix(out, out.mul(vec3(0.74, 0.76, 0.8)), zone.mul(low));
-  // Gurtgesims, Traufgesims
-  const twoStoreys = step(storey.mul(2).sub(0.3), eave);
-  out = out.mul(ledge(h, storey.add(0.1), 0.2, 0.35, low.mul(twoStoreys)));
-  return out.mul(
-    ledge(h, eave.sub(0.05), 0.35, 0.65, on.mul(step(5, eave)).mul(1.3))
-  );
+  // the Gurtgesims and the Traufgesims are modelled: lib/city/plinths.ts
+  return out;
 }
 
 /** Smooth value noise in [0, 1] (two hashed corners per axis, eased):

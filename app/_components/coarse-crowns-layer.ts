@@ -66,6 +66,7 @@ function paintCrown(c: CoarseCrown, ground: number, col: Color): void {
     col,
     {
       colour: c.colour === "copper" ? 1 : c.colour === "golden" ? 2 : 0,
+      genus: c.genus,
       ground,
       leaf: c.colour === "evergreen" ? "e" : "d",
       ndvi: c.ndvi,

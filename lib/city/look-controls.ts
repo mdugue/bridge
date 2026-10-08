@@ -218,7 +218,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "building-articulation",
     label: "Gliederung",
     description:
-      "Sockel, Gesims über dem Erdgeschoss, Traufgesims und Ladenzonen — keine Fenster",
+      "Gemalter Sockel, Traufgesims und Ladenzonen — keine Fenster; Sockel und Gesims über dem Erdgeschoss sind modelliert",
     group: "buildings",
     initial: 0.8,
     snapshotKey: "articulationPct",

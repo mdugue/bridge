@@ -9,6 +9,7 @@ import type {
   CultivatedFeature,
   DoorFeature,
   ShopfrontFile,
+  PlinthFeature,
   FeatureCollection,
   FurnitureFeature,
   LampFeature,
@@ -237,6 +238,15 @@ test.each(cases)("%s: lamps are points", (_, a) => {
   for (const f of load<LampFeature>(a.lamps)) {
     expect(f.geometry.type).toBe("Point");
     expect(isPoint2(f.geometry.coordinates)).toBe(true);
+    const wire = f.properties?.wire;
+    if (wire) {
+      expect(wire).toHaveLength(2);
+      expect(wire.every(isPoint2)).toBe(true);
+      expect(f.properties?.h).toBeGreaterThan(0);
+      expect(f.properties?.masts ?? [false, false]).toHaveLength(2);
+    } else {
+      expect(f.properties?.masts).toBeUndefined();
+    }
   }
 });
 
@@ -245,6 +255,10 @@ test.each(cases)("%s: Mapillary's objects are lamp and bin points", (_, a) => {
     expect(f.geometry.type).toBe("Point");
     expect(isPoint2(f.geometry.coordinates)).toBe(true);
     expect(["lamp", "bin"]).toContain(f.properties?.k ?? "");
+    if (f.properties?.wire) {
+      expect(f.properties.k).toBe("lamp");
+      expect(f.properties.wire.every(isPoint2)).toBe(true);
+    }
   }
 });
 
@@ -309,6 +323,29 @@ test.each(tiles)(
           expect(w.canopy?.length ?? 0).toBeGreaterThan(0);
         }
       }
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: plinths are wall pieces with a ground under their top",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).plinths;
+    for (const f of loadSource<PlinthFeature>(src)) {
+      expect(f.geometry.type).toBe("MultiLineString");
+      const p = f.properties;
+      expect(p?.of.length ?? 0).toBeGreaterThan(0);
+      const lines = f.geometry.coordinates;
+      expect(p?.g).toHaveLength(lines.length);
+      expect(p?.top).toHaveLength(lines.length);
+      lines.forEach((line, i) => {
+        expect(line).toHaveLength(2);
+        expect(line.every(isPoint2)).toBe(true);
+        // the band stands over its lowest ground, never under it; its foot
+        // reaches down a light well or a ramp beside the wall, not a storey
+        expect((p?.top[i] ?? 0) - (p?.g[i] ?? 0)).toBeGreaterThan(0);
+        expect((p?.top[i] ?? 0) - (p?.g[i] ?? 0)).toBeLessThan(8.5);
+      });
     }
   }
 );
@@ -547,6 +584,23 @@ test.each(cases)(
           f.properties?.style ?? ""
         );
       }
+      const form = f.properties?.form;
+      if (form !== undefined) {
+        expect(kind).not.toBe("fountain");
+        expect([
+          "bust",
+          "obelisk",
+          "sculpture",
+          "statue",
+          "stele",
+          "stone",
+        ]).toContain(form);
+      }
+      const wikidata = f.properties?.wikidata;
+      if (wikidata !== undefined) {
+        expect(wikidata).toMatch(/^Q\d+$/);
+        expect(f.properties?.material).toBeTruthy();
+      }
     }
   }
 );
@@ -647,6 +701,11 @@ test.each(cases)(
         expect(p.t > 0 && p.t <= 400).toBe(true);
       }
       expect([undefined, "osm"]).toContain(p?.s);
+      // planting year: a whole year, not in the future
+      if (p?.y !== undefined) {
+        expect(Number.isInteger(p.y)).toBe(true);
+        expect(p.y >= 1500 && p.y <= new Date().getFullYear()).toBe(true);
+      }
     }
   }
 );

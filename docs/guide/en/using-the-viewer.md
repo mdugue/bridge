@@ -372,7 +372,7 @@ next visit:
 | *Sin City* | hard areas in four tones (black, near-black, near-white, white) that follow the brightness around them, so even a dark view stays readable; crowns and the Elbe go black, meadows stay light, the skyline and big silhouettes stand as a white edge against the black; rain falls in front of the scene; only the red tiled roofs keep their colour |
 | *Papier* | the city as a white paper model: every surface a slightly broken white, real sunlight and real (blue-grey) shadows, fine drawn graphite outlines; the trees become folded card polyhedra; road markings and sports lines stay as a faint grey, water as a cooler, deeper paper; lights and mist sheets drop out |
 | *Strich* ("line") | a line drawing as on a plan: the white model with every edge in one even line, the shade as one light grey wash, the ground in plan colours (pale green, pale blue water, near-white streets), the trees as folded card |
-| *Schwarzplan* ("figure-ground plan") | the buildings black, everything else white — no trees, no shadows, no lines; made for the *Lageplan*, usable everywhere |
+| *Schwarzplan* ("figure-ground plan") | the buildings black, everything else white, the street-tree register's trees as crown circles with a stem dot (measured, so only those) — no shadows, no lines; made for the *Lageplan*, usable everywhere |
 
 In the graphic styles *Comic*, *Sin City*, *Strich* and *Schwarzplan* the
 depth of field rests (a blurred background under crisp lines reads as a
@@ -392,7 +392,7 @@ mistake); the switch stays as you set it.
 | | *Dachfarbe* | how strongly the real (or synthesised) roof colour shows |
 | | *Dachsättigung* | lifts the saturation of the aerial-photo roof colours without shifting their hue; 0 = raw photo |
 | | *Traufkante* | a soft line where wall meets roof |
-| | *Gliederung* | what a house shows at eye level before its windows: a stone plinth, a ledge over the ground floor, a deeper one under the eaves, and a darker shop zone where a shop is mapped — no windows |
+| | *Gliederung* | what a house shows at eye level before its windows, painted: a darker shop zone where a shop is mapped — no windows. The plinth, the ledge over the ground floor and the eave cornice are modelled, run on from house to house and are always there |
 | | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs — no windows; Dresden only, where panoramas show the front |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
