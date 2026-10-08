@@ -30,8 +30,10 @@ The fetch (needs `MAPILLARY_TOKEN`) searches the tile's panoramas, plans
 the walls, and for each image asks for its pose and its segmentation,
 downloads the 2048 px thumbnail, measures it on every wall it serves and
 deletes it: only the measurements are cached, one JSON line an image, under
-`<raw>/mapillary/facades/<tile>.jsonl` (a tile's thumbnails are ~1 GB;
-none is kept). A rerun skips what is measured. `MAPILLARY_FACADE_SOURCE`
+`<raw>/mapillary/facades/<tile>.v2.jsonl` (a tile's thumbnails are ~1 GB;
+none is kept). v2 adds each wall's ground-floor profile (shopfronts.py);
+the bake reads the first fetch's `<tile>.jsonl` where a tile has no v2
+yet. A rerun skips what is measured. `MAPILLARY_FACADE_SOURCE`
 may name a folder holding earlier downloads (`img/<id>.jpg`,
 `det/<id>.json`), read instead of the network and never deleted.
 
@@ -91,7 +93,19 @@ def cache_dir(tile: Tile) -> Path:
 
 
 def cache_path(tile: Tile) -> Path:
+    """The measurements with the ground floor's profile (facade_measure.profile)."""
+    return cache_dir(tile) / f"{tile.id}.v2.jsonl"
+
+
+def legacy_cache_path(tile: Tile) -> Path:
+    """The first fetch's measurements, without the profile: read while a
+    tile has no v2 cache yet."""
     return cache_dir(tile) / f"{tile.id}.jsonl"
+
+
+def measured_path(tile: Tile) -> Path:
+    v2 = cache_path(tile)
+    return v2 if v2.exists() else legacy_cache_path(tile)
 
 
 def _images_path(tile: Tile) -> Path:
@@ -612,7 +626,7 @@ def _signs(tile: Tile) -> np.ndarray:
 
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"facades_{tile.id}.json")
-    path = cache_path(tile)
+    path = measured_path(tile)
     if not tile.mapillary or not path.exists():
         if tile.mapillary:
             print(f"{tile.id}: no facade measurements — no building has a facade reading")

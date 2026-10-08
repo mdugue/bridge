@@ -1492,6 +1492,34 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   signs per building (the spike's table had matched them to walls by an
   index from a different wall list).
 
+- **Shopfronts from street photos (experimental, bake only)** — the same
+  panoramas measured once more per wall (`<raw>/mapillary/facades/<t>.v2.jsonl`;
+  the first fetch's cache stays): the ground floor's profile along the
+  LoD2 wall in 0.5 m bins from its start vertex — how open each 0.3 m row
+  of the band 0.3–3.4 m is against the ground floor's own plaster (the
+  brighter half of its smooth pixels: a mean over piers and glass, as the
+  upper-wall reading takes, makes a whole shopfront read open), where
+  Mapillary's segmentation finds a store sign (`object--sign--store`, its
+  band in metres), and the top of wide, low openings. Per wall
+  (`pipeline/bake/shopfronts.py`) each sequence's median profile is shifted
+  onto the best-seen one by the best correlation within ±1.5 m (taken only
+  where it beats no shift by 0.15 and reaches 0.5), every image votes per
+  bin — open where both knee height (0.6–1.2 m) and eye height (1.2–2.4 m)
+  are at least 60 % open, so a house window above its sill and a dark
+  plinth are no opening —, two images must agree, and the runs of open
+  bins at least 1.2 m wide are the bays (three or more of nearly one width
+  take their median width; none is added). A wall is a shopfront with a
+  bay over at least half its decided bins, or a store sign seen twice (or
+  once beside a Mapillary sign feature); a wall without one but with an
+  OSM shop or café node within 3 m keeps the node's position (`osm_at`,
+  `src: "osm"`). `dlm/shopfronts_<t>.json` (per Building, per wall: base
+  points in the tile's CRS, bays, sign, ground-floor top). On the spawn
+  tile 313 walls of 1 043 seen (212 with bays, 184 buildings; 101 by a
+  sign alone) and 100 OSM walls; the other tiles carry the OSM walls only
+  until their panoramas are measured again. Noisy: two sequences' profiles
+  correlate at a median 0.31 unshifted, 0.56 after the shift; a single
+  image misreads graffiti and painted panels as openings. Not drawn yet.
+
 - **Street furniture** — OSM benches (`amenity=bench`, points and the
   ways a bench is sometimes drawn as), picnic tables, litter bins
   (`waste_basket`), bicycle stands (`bicycle_parking`, not wall loops),
