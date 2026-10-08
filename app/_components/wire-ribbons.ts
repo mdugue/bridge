@@ -41,9 +41,14 @@ import { sceneMaterial } from "./three-utils";
 /** the pixel floor of a wire's drawn width, and its fade with distance (m) */
 const WIRE_MIN_PX = 0.8;
 const WIRE_FADE = { near: 150, far: 350 };
-/** the wires' ink and its opacity at full coverage: light and faint */
-const WIRE_COLOR = 0x80_85_90;
-const WIRE_OPACITY = 0.6;
+/** A wire's ink and its opacity at full coverage. */
+export interface WireInk {
+  color: number;
+  opacity: number;
+}
+
+/** The trams' overhead line: light and faint. */
+export const TRAM_INK: WireInk = { color: 0x80_85_90, opacity: 0.6 };
 
 /** Wire segments as camera-facing ribbons: each vertex is a centre point,
  *  the segment's direction, the side (±1) and the half-width. */
@@ -130,10 +135,10 @@ function wireFrame() {
  * distance fade, at the ink's own faint opacity; it is worked out per
  * vertex and interpolated, as a varying.
  */
-function wireMaterial(): MeshBasicNodeMaterial {
-  return sceneMaterial("wire", () => {
+function wireMaterial(ink: WireInk): MeshBasicNodeMaterial {
+  return sceneMaterial(`wire-${ink.color}-${ink.opacity}`, () => {
     const m = new MeshBasicNodeMaterial({
-      color: new Color(WIRE_COLOR),
+      color: new Color(ink.color),
       transparent: true,
       depthWrite: false,
     });
@@ -143,7 +148,7 @@ function wireMaterial(): MeshBasicNodeMaterial {
     m.positionNode = modelWorldMatrixInverse
       .mul(cameraWorldMatrix)
       .mul(vec4(drawn, 1)).xyz;
-    const alpha = float(WIRE_OPACITY)
+    const alpha = float(ink.opacity)
       .mul(clamp(truePx.div(WIRE_MIN_PX), 0.2, 1))
       .mul(float(1).sub(fade));
     m.opacityNode = materialOpacity.mul(varying(alpha));
@@ -151,7 +156,11 @@ function wireMaterial(): MeshBasicNodeMaterial {
   });
 }
 
-export function wireMesh(w: Wires, name: string): Mesh | null {
+export function wireMesh(
+  w: Wires,
+  name: string,
+  ink: WireInk = TRAM_INK
+): Mesh | null {
   if (w.index.length === 0) {
     return null;
   }
@@ -162,7 +171,7 @@ export function wireMesh(w: Wires, name: string): Mesh | null {
   g.setAttribute("wireHalf", new Float32BufferAttribute(w.half, 1));
   g.setIndex(w.index);
   g.computeBoundingSphere();
-  const mesh = new Mesh(g, wireMaterial());
+  const mesh = new Mesh(g, wireMaterial(ink));
   mesh.name = name;
   mesh.castShadow = false;
   mesh.receiveShadow = false;

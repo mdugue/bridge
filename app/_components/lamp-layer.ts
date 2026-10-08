@@ -31,7 +31,9 @@ const LAMP_H = 5;
  *  or masts, so it sags down to the lamp. */
 const HUNG_H = 7;
 const WIRE_END_LIFT = 0.6;
-const WIRE_HALF = 0.006;
+const WIRE_HALF = 0.008;
+/** The lamp wires in the posts' dark metal, so the head reads as hung. */
+const LAMP_WIRE_INK = { color: 0x3a_3a_40, opacity: 0.9 };
 /** A mast at the kerb holding a wire end where no facade stands. */
 const MAST_R = 0.07;
 /** Emissive lantern intensity at full night. */
@@ -381,7 +383,7 @@ export function buildLamps(
   if (places.masts.length > 0) {
     group.add(buildMasts(places.masts));
   }
-  const wireSet = wireMesh(places.wires, "lamp-wires");
+  const wireSet = wireMesh(places.wires, "lamp-wires", LAMP_WIRE_INK);
   if (wireSet) {
     group.add(wireSet);
   }

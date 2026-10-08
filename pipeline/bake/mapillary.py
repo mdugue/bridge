@@ -15,7 +15,10 @@ of a kind stand `APART_M` apart; a detection within
 positions are 2–6 m off); one inside a LoD2 footprint hangs on the facade or
 was placed through it, and is dropped; one in the carriageway moves to the
 kerb, one on the railway, water or a bridge deck is dropped, as the OSM
-furniture is (furniture.py `Gate`). The tile writes only what it owns.
+furniture is (furniture.py `Gate`). A lamp in the carriageway that hangs by the
+untagged rule of the OSM lamps (within `lamps.AXIS_M` of a street's centre
+line, facades closing both sides) hangs across the street as they do
+(`wire`, `masts`, `h`). The tile writes only what it owns.
 
 The fetch caches the tile's map features under `<raw>/mapillary/` (it needs
 `MAPILLARY_TOKEN` in the environment). The bake writes `dlm/mly_<tile>.geojson`
@@ -36,6 +39,7 @@ import numpy as np
 import shapely
 from pyproj import Transformer
 
+from . import lamps
 from .common import Tile, feature, write_geojson
 from .furniture import Gate
 from .net import _request
@@ -181,6 +185,21 @@ def placed(p: shapely.Point, gate: Gate, buildings: shapely.STRtree) -> shapely.
     return p
 
 
+class Hangers:
+    """The streets and facades a detected lamp may hang across, read once
+    the first lamp in the carriageway needs them."""
+
+    def __init__(self, tile: Tile, gate: Gate) -> None:
+        self.tile, self.gate, self.read = tile, gate, None
+
+    def hang(self, p: shapely.Point) -> dict | None:
+        if self.read is None:
+            ways, lines = lamps.streets(self.tile)
+            self.read = (ways, lines, lamps.Facades(self.tile))
+        ways, lines, facades = self.read
+        return lamps.hang(p, False, ways, lines, facades, self.gate)
+
+
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"mly_{tile.id}.geojson")
     path = cache_path(tile)
@@ -193,16 +212,22 @@ def run(tile: Tile) -> None:
     _, polys = footprints(json.loads(tile.cityjson.read_text()))
     buildings = shapely.STRtree(polys)
     osm = {"lamp": _osm_points(tile, "lamps", None), "bin": _osm_points(tile, "furniture", "bin")}
+    hangers = Hangers(tile, gate)
     features, counts = [], {}
     for kind, pts in detections(tile, json.loads(path.read_text())).items():
         kept: list[shapely.Point] = []
         for x, y in missing(merged(pts, MERGE_M), osm[kind], OSM_NEAR_M):
-            p = placed(shapely.Point(x, y), gate, buildings)
+            p, props = shapely.Point(x, y), {"k": kind}
+            hung = hangers.hang(p) if kind == "lamp" and gate.on_road(p) else None
+            if hung is not None and gate.open(p):
+                props.update(hung)
+            else:
+                p = placed(p, gate, buildings)
             if p is None or any(p.distance(q) < APART_M for q in kept):
                 continue
             kept.append(p)
             point = {"type": "Point", "coordinates": [round(p.x, 2), round(p.y, 2)]}
-            features.append(feature(point, {"k": kind}))
+            features.append(feature(point, props))
         counts[kind] = len(kept)
     write_geojson(out, features, tile.epsg, ATTRIBUTION)
     print(f"{tile.id}: Mapillary objects OSM lacks {counts}")
