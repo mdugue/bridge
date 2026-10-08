@@ -1537,17 +1537,22 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   the shift; a single image misreads graffiti and painted panels as
   openings; a long wall is often seen by two images only. The building
   bake draws them (`lib/city/shopfronts.ts`, `appendShopfronts`, column
-  `source` = 6): per bay a dark blue-grey glass pane 2 cm proud from
-  0.5 m (a glazed row: 0.3 m) to the measured ground-floor top (3 m
-  where none; under a canopy's slab), framed by piers, a stall riser and
-  a head 8 cm proud, divided into equal panels no wider than 2 m by 6 cm
-  mullions 5 cm proud, a fascia 10 cm proud at the measured sign band
-  (none under a canopy: its fascia is the sign band); a canopy is a slab
-  0.3 m thick under its measured top from the wall out to a 0.2 m deep
-  fascia at its edge, at most 1 m tall, with 2.6 m headroom, in the
-  host's own clay (its columns are not measured and not drawn). The
-  glass is smooth (roughness 0.12) and catches the sun; the upper pane
-  and a grazing view hold a calm sky (`paneSky`), so it reads as glass
+  `source` = 6), soft and abstract (*Weiche Nische*, 2026-10-08): per
+  run of bays a surround 15 cm proud with rounded outer edges, a niche
+  per bay whose reveal rolls into the front over a 7 cm quarter round
+  (smooth normals), the glass at the niche's back 6 cm out of the wall
+  from 0.5 m (a glazed row: 0.3 m) to the measured ground-floor top (3 m
+  where none; under a canopy's slab, into which the head then reaches) —
+  no mullions, no frame boards —, a rounded fascia band 10 cm proud at
+  the measured sign band (none under a canopy: its fascia is the sign
+  band); a canopy is a slab 0.3 m thick under its measured top from the
+  wall out to a 0.2 m deep fascia at its edge, at most 1 m tall, with
+  2.6 m headroom, its outer edges rounded, in the host's own clay (its
+  columns are not measured and not drawn). The glass is a muted tone a
+  little darker and cooler than its wall (not black), with the head's
+  soft shadow over its top (`paneShade`); it is smooth (roughness 0.2)
+  and catches the sun calmly; the upper pane and a grazing view hold a
+  calm sky (`paneSky`), so it reads as glass
   out of the sun too. Shop windows on a shop's ground floor are the one
   exception to the glass veto (🗃️ *Procedural window grid*, user
   decision 2026-10-08); a wall no photo shows as a shopfront gets none

@@ -452,7 +452,7 @@ flowchart LR
   dOSMB -. "shop · heritage flags · material · colours" .-> tCITY
   dGAP -. "columns · buildings · relief height fields" .-> tCITY
   dDOOR -. "surround · leaf on the host wall" .-> tCITY
-  dSHOP -. "glass · mullions · fascia · canopy on the host wall" .-> tCITY
+  dSHOP -. "soft niche · glass · fascia · canopy on the host wall" .-> tCITY
   dDORM -. "front · cheeks · roof on the host roof" .-> tCITY
   dLMK -. "landmark flag · material · extras.landmarks" .-> tCITY
   dCLS ==> tSIDE
