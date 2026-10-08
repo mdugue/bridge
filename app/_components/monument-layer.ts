@@ -1,4 +1,5 @@
 import {
+  BoxGeometry,
   BufferAttribute,
   type BufferGeometry,
   CapsuleGeometry,
@@ -8,6 +9,7 @@ import {
   DoubleSide,
   ExtrudeGeometry,
   Group,
+  InstancedBufferAttribute,
   LatheGeometry,
   type Material,
   Matrix4,
@@ -22,7 +24,6 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
-import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   attribute,
@@ -36,11 +37,14 @@ import {
   mix,
   normalize,
   normalView,
+  normalWorldGeometry,
   positionLocal,
+  positionViewDirection,
   positionWorld,
   select,
   sin,
   smoothstep,
+  step,
   uniform,
   uv,
   varying,
@@ -51,18 +55,24 @@ import {
 import type {
   FountainStyle,
   MonumentFeature,
+  MonumentKind,
   ReliefGrid,
 } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import {
   basinLevels,
+  FINISH,
+  type Finish,
   figureShare,
   jetHeight,
   jetPlaces,
   type MarkerPiece,
   type MarkerTones,
+  type MeasuredMarker,
   markerTones,
   measuredMarker,
+  partFinish,
+  pedestalCourses,
   type MarkerSolid,
   markerPieces,
   openRing,
@@ -73,7 +83,9 @@ import {
   yawOf,
 } from "@/lib/city/monuments";
 import type { Point2 } from "@/lib/city/polyline";
-import { Instances, instancePosition } from "./instancing";
+import { ashlar, footprint } from "./bridge-surface";
+import { gdNoise } from "./ground-detail";
+import { Instances, instanceFloat, instancePosition } from "./instancing";
 import type { F, Live } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
@@ -118,6 +130,8 @@ const RIM_M = 0.35; // a point fountain's rim width (the bake insets outlines by
 /** One instance: where, how big, which way, in which tone (sRGB; null: clay). */
 interface Placed {
   at: Vector3;
+  /** how its surface is finished (lib/city/monuments.ts `FINISH`) */
+  finish: Finish;
   scale: Vector3;
   tone: number | null;
   yaw: number;
@@ -143,10 +157,10 @@ function unitPillar(): BufferGeometry {
     .translate(0, 0.5, 0);
 }
 
-/** A block 1 m on each side with crisp, barely softened edges: scaled to a
- *  pedestal's size, a larger radius swelled it into a cushion. */
+/** A block 1 m on each side with crisp edges, as a stone is cut: rounded,
+ *  scaled to a pedestal's size, it read as a moulded cushion. */
 function unitBlock(): BufferGeometry {
-  return new RoundedBoxGeometry(1, 1, 1, 2, 0.04).translate(0, 0.5, 0);
+  return new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 }
 
 /** An obelisk's needle 1 m wide at its foot and 1 m tall: a four-sided
@@ -463,6 +477,7 @@ function addFountain(
     parts.jets.push({
       at: worldAt(place, levels.water, ctx),
       scale: new Vector3(h * spread, h * spread, h * spread),
+      finish: FINISH.clay,
       tone: null,
       yaw: 0,
     });
@@ -478,17 +493,7 @@ function addMonument(
   if (f.geometry?.type !== "Point" || !kind || kind === "fountain") {
     return;
   }
-  const [x, y] = f.geometry.coordinates;
-  const measured = f.properties?.relief
-    ? measuredMarker(f.properties.relief, kind, f.properties.form)
-    : null;
-  const marker = measured ?? {
-    centre: [x, y] as Point2,
-    yaw: yawOf(x, y),
-    pieces: markerPieces(kind, f.properties?.form, f.properties?.height).map(
-      (p) => ({ ...p, along: 0 })
-    ),
-  };
+  const marker = markerOf(f.properties, kind, f.geometry.coordinates);
   const ground = ctx.heightAt(marker.centre[0], marker.centre[1]);
   if (ground === null) {
     return;
@@ -496,23 +501,51 @@ function addMonument(
   const tones = markerTones(f.properties?.material);
   const ux = Math.cos(marker.yaw);
   const uy = Math.sin(marker.yaw);
-  for (const p of marker.pieces) {
-    const px = marker.centre[0] + p.along * ux;
-    const py = marker.centre[1] + p.along * uy;
-    // A foot on the ground reaches below the lowest ground under its
-    // corners, so a pedestal on a slope never shows its underside; a
-    // piece on a pedestal sits into it.
-    const sink =
-      p.lift > 0 ? 0.1 : 0.15 + ground - footGround(p, px, py, ux, uy, ctx);
-    // the foot of a marker of two pieces or more is its pedestal
-    const pedestal = marker.pieces.length > 1 && p.lift === 0;
-    parts.markers[p.solid].push({
-      at: worldAt([px, py], ground + p.lift - sink, ctx),
-      scale: new Vector3(p.width, p.height + sink, p.depth),
-      tone: pedestal ? tones.base : tones.figure,
-      yaw: marker.yaw,
-    });
+  const material = f.properties?.material;
+  for (const piece of marker.pieces) {
+    const px = marker.centre[0] + piece.along * ux;
+    const py = marker.centre[1] + piece.along * uy;
+    // the foot of a marker of two pieces or more is its pedestal, built
+    // in courses as masonry is
+    const pedestal =
+      marker.pieces.length > 1 && piece.lift === 0 && piece.solid === "block";
+    for (const p of pedestal ? pedestalCourses(piece) : [piece]) {
+      // A foot on the ground reaches below the lowest ground under its
+      // corners, so a pedestal on a slope never shows its underside; a
+      // piece on a pedestal sits into it.
+      const sink =
+        p.lift > 0 ? 0.1 : 0.15 + ground - footGround(p, px, py, ux, uy, ctx);
+      parts.markers[p.solid].push({
+        at: worldAt([px, py], ground + p.lift - sink, ctx),
+        finish: partFinish(material, pedestal),
+        scale: new Vector3(p.width, p.height + sink, p.depth),
+        tone: pedestal ? tones.base : tones.figure,
+        yaw: marker.yaw,
+      });
+    }
   }
+}
+
+/** A monument's solids: its measured relief composed, else the marker of
+ *  its form or kind at its point, turned by a stable hash. */
+function markerOf(
+  props: MonumentFeature["properties"],
+  kind: Exclude<MonumentKind, "fountain">,
+  [x, y]: Point2
+): MeasuredMarker {
+  const measured = props?.relief
+    ? measuredMarker(props.relief, kind, props.form)
+    : null;
+  return (
+    measured ?? {
+      centre: [x, y],
+      yaw: yawOf(x, y),
+      pieces: markerPieces(kind, props?.form, props?.height).map((p) => ({
+        ...p,
+        along: 0,
+      })),
+    }
+  );
 }
 
 /** The lowest ground under a piece's four corners (m, world Y). */
@@ -558,6 +591,15 @@ function instanced(
     if (tinted) {
       mesh.setColorAt(i, linear(places[i].tone));
     }
+  }
+  if (places.some((p) => p.finish !== FINISH.clay)) {
+    mesh.geometry.setAttribute(
+      "iFinish",
+      new InstancedBufferAttribute(
+        Float32Array.from(places, (p) => p.finish),
+        1
+      )
+    );
   }
   mesh.instanceMatrix.needsUpdate = true;
   // Spread-out cloud: recompute the sphere or it culls when the origin is off-screen.
@@ -709,8 +751,99 @@ function clayMaterial(): MeshStandardNodeMaterial {
     metalness: 0,
   });
   m.positionNode = instancePosition();
-  m.colorNode = clayTint();
+  const f = finishOf();
+  m.colorNode = mix(
+    clayTint().mul(finishGrain(f)),
+    VERDIGRIS,
+    f.patina.mul(verdigrisSpots())
+  );
+  m.roughnessNode = float(0.95)
+    .sub(f.worked.mul(0.07))
+    .sub(f.patina.mul(0.4))
+    .sub(f.gilded.mul(0.62));
+  // No environment map lights the scene: a metal's sheen is the sky it
+  // catches at a grazing angle, warm on gilding, faint on a patina.
+  const grazing = float(1)
+    .sub(dot(normalView, positionViewDirection).abs().clamp(0, 1))
+    .pow(3);
+  m.emissiveNode = materialEmissive.add(
+    vec3(0.95, 0.75, 0.38)
+      .mul(f.gilded)
+      .mul(grazing.mul(0.4).add(0.04))
+      .add(vec3(0.5, 0.58, 0.55).mul(f.patina).mul(grazing.mul(0.12)))
+  );
   return m;
+}
+
+/** Bronze and copper's verdigris, where the patina gathers (linear RGB). */
+const VERDIGRIS = vec3(0.36, 0.5, 0.42);
+
+interface FinishMasks {
+  dressed: F;
+  gilded: F;
+  patina: F;
+  worked: F;
+}
+
+/** The part's finish as one 0/1 mask each (0 everywhere off an instance
+ *  set with finishes: rims, fountain sculptures, plain markers). */
+function finishOf(): FinishMasks {
+  const f = instanceFloat("iFinish");
+  const is = (k: number): F => step(k - 0.5, f).mul(step(f, k + 0.5));
+  return {
+    dressed: is(FINISH.dressed),
+    worked: is(FINISH.worked),
+    patina: is(FINISH.patina),
+    gilded: is(FINISH.gilded),
+  };
+}
+
+/**
+ * The surface's grain, a factor on the tint: a pedestal is ashlar (the
+ * bridges' courses, joints and block shades — bridge-surface.ts
+ * `ashlar`), a stone figure a fine tooled mottle, a metal figure the
+ * streaks rain draws down a patina, gilding a faint unevenness. Branch-
+ * free: every finish is computed and masked.
+ */
+function finishGrain(f: FinishMasks): F {
+  const p = positionWorld;
+  const stone = ashlar(p, normalWorldGeometry, footprint());
+  const tooled = float(1)
+    .add(
+      gdNoise(p.xz.mul(1.7).add(p.y.mul(0.9)))
+        .sub(0.5)
+        .mul(0.12)
+    )
+    .add(
+      gdNoise(p.xz.mul(9).add(p.y.mul(7)))
+        .sub(0.5)
+        .mul(0.06)
+    );
+  const streaks = float(1).add(
+    gdNoise(vec2(p.x.add(p.z.mul(0.7)).mul(3.1), p.y.mul(0.35)))
+      .sub(0.5)
+      .mul(0.3)
+  );
+  const leaf = float(1).add(
+    gdNoise(p.xz.mul(4).add(p.y.mul(3)))
+      .sub(0.5)
+      .mul(0.08)
+  );
+  return float(1)
+    .add(f.dressed.mul(stone.sub(1)))
+    .add(f.worked.mul(tooled.sub(1)))
+    .add(f.patina.mul(streaks.sub(1)))
+    .add(f.gilded.mul(leaf.sub(1)));
+}
+
+/** Where verdigris gathers on a patina: soft spots and runs, 0–0.45. */
+function verdigrisSpots(): F {
+  const p = positionWorld;
+  return smoothstep(
+    0.5,
+    0.85,
+    gdNoise(vec2(p.x.add(p.z).mul(1.3), p.y.mul(0.8)))
+  ).mul(0.45);
 }
 
 /**

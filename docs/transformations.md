@@ -1699,6 +1699,18 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   or stele always), else one mass at the footprint and height. The same
   clay solids as the markers, tinted per part. A fountain's sculpture
   keeps its smoothed relief (the winter housings below).
+  **What a part is made of, in its surface** (2026-10-08): one smooth
+  clay read as a plastic cast. A pedestal is now built as masonry
+  (`pedestalCourses`: a plinth course a little wider at its foot, the
+  shaft, a projecting cap; sharp-edged blocks, no rounding) and dressed
+  as the bridges' ashlar (courses, running-bond joints, a shade per
+  block). A figure's finish follows its material (`partFinish`, the
+  instance attribute `iFinish`): stone tooled (a fine mottle, a touch
+  less matte), bronze and copper a patina (rain streaks, verdigris in
+  soft spots, roughness 0.55, a faint sky sheen at grazing angles),
+  gilding smoother (roughness 0.33) with a warm sheen; no metalness, as
+  no environment map lights the scene. A figure nothing names stays
+  plain clay; a pedestal is masonry, named or not.
   **Caveats, checked against the sources:** DOM1 (November 2024) and DOP
   (March 2024) were both taken while Dresden's fountains are drained and
   their sculptures boxed for winter — the Albertplatz "bodies" are those

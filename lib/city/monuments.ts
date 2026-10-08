@@ -680,3 +680,70 @@ export function measuredMarker(
     ],
   };
 }
+
+/**
+ * How a monument's part is finished, for its surface (the shader's
+ * `iFinish`): plain clay, dressed stone (ashlar courses and joints, a
+ * pedestal), worked stone (a stone figure: mottled, no joints), patinated
+ * metal (bronze, copper: a mottled patina with a soft sheen) or gilding (a
+ * warm sheen). Numbers, as the instance attribute carries them.
+ */
+export const FINISH = {
+  clay: 0,
+  dressed: 1,
+  worked: 2,
+  patina: 3,
+  gilded: 4,
+} as const;
+export type Finish = (typeof FINISH)[keyof typeof FINISH];
+
+const GILDED = new Set(["Blattgold", "Gold"]);
+const STONE = new Set([...BASE_MATERIALS, "Porzellan"]);
+
+/**
+ * A part's finish: a pedestal is masonry, named or not (nearly every one
+ * is); a figure is what its most striking material is — gilding, a metal,
+ * a stone — else clay.
+ */
+export function partFinish(
+  material: string | undefined,
+  pedestal: boolean
+): Finish {
+  if (pedestal) {
+    return FINISH.dressed;
+  }
+  const names = (material ?? "").split(",").map((n) => n.trim());
+  if (names.some((n) => GILDED.has(n))) {
+    return FINISH.gilded;
+  }
+  if (names.some((n) => FIGURE_ORDER.includes(n))) {
+    return FINISH.patina;
+  }
+  return names.some((n) => STONE.has(n)) ? FINISH.worked : FINISH.clay;
+}
+
+/**
+ * A pedestal as masonry is built: a plinth course a little wider at its
+ * foot, the shaft, and a cap slab projecting under the figure — crisp
+ * blocks, not one moulded box. A pedestal under 0.8 m (an obelisk's base)
+ * stays one block.
+ */
+export function pedestalCourses(p: MarkerPiece): MarkerPiece[] {
+  if (p.height < 0.8) {
+    return [p];
+  }
+  const o = Math.min(Math.max(0.05 * Math.min(p.width, p.depth), 0.05), 0.18);
+  const foot = Math.min(Math.max(0.12 * p.height, 0.15), 0.45);
+  const cap = Math.min(Math.max(0.08 * p.height, 0.12), 0.35);
+  return [
+    { ...p, width: p.width + 2 * o, depth: p.depth + 2 * o, height: foot },
+    p,
+    {
+      ...p,
+      width: p.width + 1.4 * o,
+      depth: p.depth + 1.4 * o,
+      height: cap,
+      lift: p.lift + p.height - cap,
+    },
+  ];
+}

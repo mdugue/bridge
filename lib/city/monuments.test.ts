@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   basinLevels,
+  FINISH,
   figureShare,
   insideRing,
   jetHeight,
@@ -12,6 +13,8 @@ import {
   measuredMarker,
   onRelief,
   openRing,
+  partFinish,
+  pedestalCourses,
   reliefSurface,
   ringArea,
   ringCentre,
@@ -196,5 +199,30 @@ describe("a measured monument as composed solids", () => {
     expect(measuredMarker(low, "stone")?.pieces).toHaveLength(1);
     const tall = measuredMarker(reiter, "column", "obelisk");
     expect(tall?.pieces.map((p) => p.solid)).toEqual(["block", "needle"]);
+  });
+});
+
+describe("pedestals and finishes", () => {
+  test("a pedestal is a plinth, a shaft and a cap; a low base one block", () => {
+    const p = {
+      solid: "block" as const,
+      width: 2,
+      depth: 1.5,
+      height: 4,
+      lift: 0,
+    };
+    const [foot, shaft, cap] = pedestalCourses(p);
+    expect(foot.width).toBeGreaterThan(cap.width);
+    expect(cap.width).toBeGreaterThan(shaft.width);
+    expect(cap.lift + cap.height).toBeCloseTo(4);
+    expect(pedestalCourses({ ...p, height: 0.5 })).toHaveLength(1);
+  });
+
+  test("a pedestal is masonry; a figure is gilded, patinated or worked", () => {
+    expect(partFinish(undefined, true)).toBe(FINISH.dressed);
+    expect(partFinish("Kupfer, Blattgold", false)).toBe(FINISH.gilded);
+    expect(partFinish("Bronze, Granit", false)).toBe(FINISH.patina);
+    expect(partFinish("Sandstein", false)).toBe(FINISH.worked);
+    expect(partFinish(undefined, false)).toBe(FINISH.clay);
   });
 });
