@@ -257,6 +257,10 @@ export const OBJECT_SOURCE_DOOR = 3;
 /** A dormer on a pitched roof, part of the building it sits on (pipeline/
  *  bake/dormers.py, the surface model over the LoD2 roof). */
 export const OBJECT_SOURCE_DORMER = 4;
+/** A shopfront on a ground floor, part of the building it fronts
+ *  (pipeline/bake/shopfronts.py: street photos, OSM's shops): its glass,
+ *  or its frame and fascia. (5 is the plinths'.) */
+export const OBJECT_SOURCE_SHOPFRONT = 6;
 
 /** The property table as typed columns — how the glTF carries it. */
 export interface CityObjectTable {

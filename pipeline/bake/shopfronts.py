@@ -44,13 +44,15 @@ it (`osm_at`), `src: "osm"`.
 The bake writes `dlm/shopfronts_<tile>.json`:
 
     {"attribution": …, "bin_m": 0.5, "buildings": {"<gml:id>": [
-      {"oid", "wi", "a": [x, y], "b": [x, y], "L", "src": "photo"|"osm",
+      {"oid", "wi", "a": [x, y], "b": [x, y], "L", "n": [nx, ny],
+       "z": [za, zb], "src": "photo"|"osm",
        "bays": [[s, e], …], "sign": {"at": [[s, e], …], "z": [z0, z1]},
        "gf_top", "imgs", "seqs"} | {"oid", "wi", "a", "b", "L", "src": "osm",
        "osm_at": [s, …]}, …]}}
 
 `a`/`b` are the wall's base points in the tile's CRS (the LoD2 footprint's
-edge, a → b the direction s runs), s in metres from a. Its own file,
+edge, a → b the direction s runs), s in metres from a; `n` its outward
+normal; `z` the lowest DGM ground in front of a and of b. Its own file,
 credited to Mapillary and OSM: their licences do not mix with the LoD2
 tables."""
 
@@ -62,6 +64,7 @@ import math
 from pathlib import Path
 
 import numpy as np
+import rasterio
 import shapely
 
 from .common import OSM_ATTRIBUTION, Tile
@@ -85,6 +88,7 @@ MIN_PIER_M = 0.2
 RHYTHM_TOL_M = 0.4  # bays this close to their median width are one rhythm
 GT_SPREAD_M = 0.6  # the images' ground-floor tops must agree this well
 OSM_M = 3.0
+FRONT_M = (0.5, 1.5)  # the ground in front of a wall is sampled this far out
 
 # --- one wall (pure) --------------------------------------------------------
 
@@ -354,18 +358,35 @@ def _records(path: Path) -> dict[tuple[str, int], list[dict]]:
     return by
 
 
-def _wall_entry(w: dict) -> dict:
-    return {
+def _wall_entry(w: dict, ground=None) -> dict:
+    """The wall's identity and frame: base points, length, outward normal
+    `n`, and with `ground` the lowest ground in front of each end `z`
+    (FRONT_M out, a little in from the corner)."""
+    out = {
         "oid": w["oid"],
         "wi": w["wi"],
         "a": [round(c, 2) for c in w["a"]],
         "b": [round(c, 2) for c in w["b"]],
         "L": round(w["L"], 2),
+        "n": [round(c, 4) for c in w["n"]],
     }
+    if ground is not None:
+        (ax, ay), (bx, by), (nx, ny) = w["a"], w["b"], w["n"]
+        tx, ty = (bx - ax) / w["L"], (by - ay) / w["L"]
+        inset = min(0.5, w["L"] / 4)
+        zs = []
+        for (x, y), sign in (((ax, ay), 1), ((bx, by), -1)):
+            px, py = x + tx * inset * sign, y + ty * inset * sign
+            z = [ground(px + nx * d, py + ny * d) for d in FRONT_M]
+            z = [v for v in z if v is not None]
+            zs.append(round(min(z), 2) if z else None)
+        if None not in zs:
+            out["z"] = zs
+    return out
 
 
 def shopfronts(
-    city: dict, by_wall: dict, signs: np.ndarray, shops: np.ndarray
+    city: dict, by_wall: dict, signs: np.ndarray, shops: np.ndarray, ground=None
 ) -> tuple[dict, dict]:
     """Per Building gml:id its shopfront walls, and the merge's statistics."""
     ws = walls(city)
@@ -380,13 +401,13 @@ def shopfronts(
             stats["walls_seen"] += 1
             stats["align"].extend(m["align"])
         if m and m["shop"]:
-            entry = _wall_entry(w) | {"src": "photo", "bays": m["bays"]}
+            entry = _wall_entry(w, ground) | {"src": "photo", "bays": m["bays"]}
             entry |= {k: m[k] for k in ("sign", "gf_top") if k in m}
             entry |= {"imgs": m["imgs"], "seqs": m["seqs"]}
             out[root_of(city, w["oid"])].append(entry)
             stats["photo"] += 1
         elif i in near_shop:
-            entry = _wall_entry(w) | {"src": "osm", "osm_at": sorted(near_shop[i])}
+            entry = _wall_entry(w, ground) | {"src": "osm", "osm_at": sorted(near_shop[i])}
             out[root_of(city, w["oid"])].append(entry)
             stats["osm"] += 1
     return dict(sorted(out.items())), stats
@@ -412,7 +433,16 @@ def run(tile: Tile) -> None:
         else np.zeros((0, 2))
     )
     signs = _signs(tile) if tile.mapillary else np.zeros((0, 2))
-    buildings, stats = shopfronts(city, by_wall, signs, shops)
+    with rasterio.open(tile.dgm) as dgm:
+
+        def ground(x: float, y: float) -> float | None:
+            left, bottom, right, top = dgm.bounds
+            if not (left <= x < right and bottom <= y < top):
+                return None
+            z = float(next(dgm.sample([(x, y)]))[0])
+            return z if np.isfinite(z) and z > -1000 else None
+
+        buildings, stats = shopfronts(city, by_wall, signs, shops, ground)
     write(out, buildings)
     print(
         f"{tile.id}: {stats['photo']} shopfront walls from photos, {stats['osm']} from OSM"

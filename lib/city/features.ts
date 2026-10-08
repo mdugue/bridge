@@ -280,6 +280,40 @@ export interface DoorFeature {
   } | null;
 }
 
+/**
+ * One wall's shopfront (pipeline/bake/shopfronts.py; Mapillary CC BY-SA 4.0
+ * and OSM ODbL; a city-mesh bake input, not served): the LoD2 object `oid`
+ * and its wall `wi` as facades.py numbers them, the wall's base points `a`
+ * → `b` (EPSG; `s` runs from `a`), its length, outward normal and the
+ * lowest ground in front of each end (`z`). `src: "photo"`: the bays and
+ * the sign band measured in street panoramas, the ground floor's top where
+ * measured (metres above the ground); `src: "osm"`: no photo shows a
+ * shopfront, an OSM shop node stands at `osm_at`.
+ */
+export interface ShopfrontWall {
+  a: [number, number];
+  b: [number, number];
+  bays?: [number, number][];
+  gf_top?: number;
+  imgs?: number;
+  L: number;
+  n: [number, number];
+  oid: string;
+  osm_at?: number[];
+  seqs?: number;
+  sign?: { at: [number, number][]; z?: [number, number] };
+  src: "osm" | "photo";
+  wi: number;
+  z?: [number, number];
+}
+
+/** A tile's shopfronts, per Building gml:id (`shopfronts_<tile>.json`). */
+export interface ShopfrontFile {
+  attribution: string;
+  bin_m: number;
+  buildings: Record<string, ShopfrontWall[]>;
+}
+
 /** A dormer the surface model shows on a pitched LoD2 roof
  *  (pipeline/bake/dormers.py, DOM1 — the provider's licence): its centre,
  *  the roof's downslope direction (`ax`, `ay`), its width across and depth

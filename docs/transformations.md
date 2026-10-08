@@ -1492,7 +1492,7 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   signs per building (the spike's table had matched them to walls by an
   index from a different wall list).
 
-- **Shopfronts from street photos (experimental, bake only)** — the same
+- **Shopfronts from street photos (experimental)** — the same
   panoramas measured once more per wall (`<raw>/mapillary/facades/<t>.v2.jsonl`;
   the first fetch's cache stays): the ground floor's profile along the
   LoD2 wall in 0.5 m bins from its start vertex — how open each 0.3 m row
@@ -1518,7 +1518,17 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   sign alone) and 100 OSM walls; the other tiles carry the OSM walls only
   until their panoramas are measured again. Noisy: two sequences' profiles
   correlate at a median 0.31 unshifted, 0.56 after the shift; a single
-  image misreads graffiti and painted panels as openings. Not drawn yet.
+  image misreads graffiti and painted panels as openings. The building
+  bake draws them (`lib/city/shopfronts.ts`, `appendShopfronts`, column
+  `source` = 6): per bay a dark blue-grey glass pane 2 cm proud from 0.5 m
+  to the measured ground-floor top (3 m where none), framed by piers, a
+  stall riser and a head 8 cm proud, a fascia 10 cm proud at the measured
+  sign band, an OSM shop one 2.4 m bay at its node; the glass is smooth
+  (roughness 0.12) and catches the sun and the sky. On the spawn tile 294
+  of 413 walls draw (the rest have no bay and no sign, or their ground
+  isn't sampled). Shop windows on a shop's ground floor are the one
+  exception to the glass veto (🗃️ *Procedural window grid*, user
+  decision 2026-10-08).
 
 - **Street furniture** — OSM benches (`amenity=bench`, points and the
   ways a bench is sometimes drawn as), picnic tables, litter bins
@@ -2643,7 +2653,7 @@ research that produced them):
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
 | **A raised pavement behind the kerb** (plan 023's leftover: lift the pavement a kerb's height above the road) | The DGM1 has no such step to lift, and ADR 0035 makes every part meet the ground at the ground's own level: the kerb's back now runs down to the pavement (`meetGround`), which took its ground-join misses from 32 % to 2 % (2026-10-01 audit). | Only with a measured kerb height per street (none of the sources carries it) and a terrain cut that ADR 0035's join check accepts. |
 | **DGM1 micro-relief as a normal texture** (plan 023 phase 7: a 1 m normal map over the "2 m mesh") | The fine level is a ±0.15 m TIN of the native DGM (ADR 0030), not a 2 m grid, and `terrainNormal` (`terrain-layer.ts`) deliberately pulls near-flat normals up: the DGM's ruts, survey wobble and 8-bit normals read as dirty flecks under a low sun. Kerbs are real geometry now. | Revisit only if a real-GPU plate shows the ground too flat — and then as a softer calm threshold, not more relief. |
-| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. Re-affirmed by plan 050: a glass facade (OSM `building:material=glass`) gets a cool tint and a sky sheen, never panes, mullions or a texture. |
+| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. Re-affirmed by plan 050: a glass facade (OSM `building:material=glass`) gets a cool tint and a sky sheen, never panes, mullions or a texture. One exception (user decision, 2026-10-08): **shop windows on a shop's ground floor may show glass** — dark, slightly reflecting panes where street photos measured the bays (or one bay at an OSM shop node), never a grid and never above the ground floor (*Shopfronts from street photos*). |
 | **Structures from the surface model alone** (plan 050: every tall gap between DOM1 and `max(DGM1, LoD2 roof)` as a column or block) | The gap is mostly not buildings: tree crowns, power pylons, and on the flight day the construction cranes — Leipzig's centre showed dozens of 50–95 m spikes with no mapped structure, Hamburg 90–98 m ones beside a 2023 building. | Only where OSM names the structure (`man_made=*`, a building outline) does the surface model measure it; a landmark's roof relief is the one gap drawn without a mapped outline, and only over its own LoD2 roof. |
 | **Invented or imported landmark geometry** (hand-modelled landmarks per city, glTF models from 3D warehouses, a stock spire or dome by type) | Not repeatable for the next city, a licence per model, and a detailed model breaks the clay style next to LoD2 boxes. | Geometry beyond LoD2 comes only from a measurement confirmed by a name ([ADR 0038](./adr/0038-measured-and-named-additions.md)). |
 | **Landmark roof relief as stacked slabs** (plan 050 as first built: the excess over the highest LoD2 roof cut into ≥ 2 m bands, at most 8, each band's smoothed outline extruded as a flat slab — a contour model) | A spire LoD2 cuts short became a stepped pyramid (Unna's Stadtkirche: LoD2 stops at 137 m, the surface model at ≈ 178 m) and the Elbphilharmonie's crests a flight of terraces — the plan's own STOP ("reads as a stack of plates"); 508 slabs on 74 objects in the first bake. | Replaced by the measured height field on the 1 m grid, lightly smoothed, built as one surface with corner heights averaged (✅ *Landmark roof relief*). Still no invented smooth roof: every height is a surface-model cell. |

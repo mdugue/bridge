@@ -212,7 +212,9 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     // varies house-to-house (clamped to stay matte, no shiny clay).
     roughness: facadeRoughness(
       clamp(float(1).add(d.uRough.mul(rough)), 0.55, 1),
-      facadeMaterial(flags, wall)
+      facadeMaterial(flags, wall),
+      shopPane(flags),
+      rough
     ),
     colour: select(
       clayPoche.greaterThan(0.5).and(frontFacing.not()),
@@ -511,9 +513,24 @@ function facadeMaterial(flags: F, wall: F): { glass: F; metal: F } {
   };
 }
 
-/** Glass and metal cladding read a little smoother than the clay. */
-function facadeRoughness(r: F, m: { glass: F; metal: F }): F {
-  return mix(mix(r, 0.42, m.glass), 0.5, m.metal);
+/** Glass and metal cladding read a little smoother than the clay; a shop
+ *  window's pane (`shopPane`) takes its own roughness from the `rough`
+ *  column, smooth enough to mirror the sun and the sky. */
+function facadeRoughness(
+  r: F,
+  m: { glass: F; metal: F },
+  pane: F,
+  paneRough: F
+): F {
+  return mix(mix(mix(r, 0.42, m.glass), 0.5, m.metal), paneRough, pane);
+}
+
+/** 1 on a shop window's pane: glass (4) that wears its own colour (64) —
+ *  the shopfronts' panes (lib/city/shopfronts.ts), the one exception to
+ *  the glass veto. Its `rough` column is then a roughness, not a jitter. */
+function shopPane(flags: F): F {
+  const f = floor(flags.add(0.5));
+  return mod(floor(f.div(64)), 2).mul(mod(floor(f.div(4)), 2));
 }
 
 /**

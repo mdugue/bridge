@@ -343,8 +343,10 @@ export const TRAFFIC_HOURS_CREDIT =
 export const TIMETABLE_CREDIT =
   "Straßenbahn-Fahrplan: DELFI e.V. via gtfs.de, CC BY 4.0";
 
-/** The credit of Mapillary's lamps and bins (`Site.mapillary`). */
-export const MAPILLARY_CREDIT = "Lampen, Mülleimer: Mapillary, CC BY-SA 4.0";
+/** The credit of Mapillary's lamps and bins and the shopfronts measured in
+ *  its street photos (`Site.mapillary`). */
+export const MAPILLARY_CREDIT =
+  "Lampen, Mülleimer, Schaufenster: Mapillary, CC BY-SA 4.0";
 
 /** The credits of the site's registers and data layers, each a
  *  "what: holder, licence" line. */

@@ -2,7 +2,8 @@ import json
 
 import numpy as np
 import pytest
-from test_facades import _city
+from test_facades import X0 as sf_X0
+from test_facades import Y0, _city
 
 from bake import shopfronts as sf
 from bake.facade_measure import bin_shares, ground_top
@@ -197,9 +198,16 @@ def test_the_tile_lists_photo_shopfronts_and_osm_shops(tmp_path):
     by_wall = {(wa["oid"], wa["wi"]): [r | {"oid": "A", "wi": wa["wi"]} for r in recs]}
     wb = next(w for w in ws if w["oid"] == "B")
     mid = np.array([[(wb["a"][0] + wb["b"][0]) / 2 + 0.5, (wb["a"][1] + wb["b"][1]) / 2 + 0.5]])
-    out, stats = sf.shopfronts(city, by_wall, np.zeros((0, 2)), mid)
+    ground = lambda x, y: 100.0 + 0.1 * (x - sf_X0)  # noqa: E731 — a slope eastwards
+    out, stats = sf.shopfronts(city, by_wall, np.zeros((0, 2)), mid, ground)
     assert stats["photo"] == 1 and stats["osm"] == 1
     a = out["A-root"][0]
+    # the outward normal points away from the footprint (A spans y 0–10)
+    mid_y = (wa["a"][1] + wa["b"][1]) / 2 - Y0
+    assert a["n"][1] == pytest.approx(-1.0 if mid_y < 5 else 1.0)
+    # the ground in front of each end, half a metre in from the corner
+    xa = wa["a"][0] + (0.5 if wa["b"][0] > wa["a"][0] else -0.5)
+    assert a["z"][0] == pytest.approx(ground(xa, 0), abs=0.01)
     assert (
         a["src"] == "photo"
         and a["bays"][0] == [1.0, 3.0]
