@@ -9,7 +9,9 @@ import {
 } from "@/components/ui/collapsible";
 import type { Inquiry } from "@/lib/city/inquiry";
 import type { LineageEntry } from "@/lib/city/lineage";
+import type { Stated } from "@/lib/city/methods";
 import type { SiteProvenance } from "@/lib/city/provenance";
+import { MethodBadge, MethodLegend } from "./method-badge";
 import { useSite } from "./site-context";
 
 type LineageModule = typeof import("@/lib/city/lineage");
@@ -49,12 +51,6 @@ function useLineage(wanted: boolean): LineageModule | null {
   return mod;
 }
 
-const HOW: Record<LineageEntry["how"], string> = {
-  gelesen: "gelesen",
-  gemessen: "gemessen",
-  berechnet: "berechnet",
-};
-
 /**
  * The card's "Daten" section (plan 052): folded by default, so the card
  * leads with what the thing is. Unfolded, every dataset the viewer used
@@ -63,7 +59,8 @@ const HOW: Record<LineageEntry["how"], string> = {
  * gave its form, colour, place and light, with its edition, its credit and
  * where to find it, and what the viewer worked out itself
  * (lib/city/lineage.ts, loaded on the first unfolding or as the pointer
- * nears the toggle).
+ * nears the toggle). Every line carries the badge of how the viewer came
+ * by it (lib/city/methods.ts), the legend folded at the end.
  */
 export function InquiryData({
   inquiry,
@@ -73,7 +70,7 @@ export function InquiryData({
   inquiry: Inquiry;
   provenance: SiteProvenance | null;
   /** the card's source lines: where each fact it states comes from */
-  sources: readonly string[];
+  sources: readonly Stated[];
 }) {
   const site = useSite();
   const [open, setOpen] = useState(false);
@@ -123,7 +120,10 @@ export function InquiryData({
             <SectionHead>Angaben</SectionHead>
             <ul className="space-y-1 text-[10.5px] leading-snug text-muted-foreground">
               {sources.map((line) => (
-                <li key={line}>{line}</li>
+                <li className="flex items-start gap-2" key={line.text}>
+                  <span className="min-w-0 flex-1">{line.text}</span>
+                  <MethodBadge method={line.method} />
+                </li>
               ))}
             </ul>
           </>
@@ -138,6 +138,15 @@ export function InquiryData({
         ) : (
           <p className="text-[11px] text-muted-foreground">lädt …</p>
         )}
+        <details className="group/legend mt-3 border-t border-border pt-2">
+          <summary className="cursor-pointer list-none text-[10.5px] text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+            Was die Abzeichen bedeuten
+            <ChevronDownIcon className="ml-1 inline size-3 transition-transform group-open/legend:rotate-180" />
+          </summary>
+          <div className="mt-2">
+            <MethodLegend />
+          </div>
+        </details>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -173,17 +182,15 @@ function LineageRow({ entry }: { entry: LineageEntry }) {
             entry.source
           )}
         </span>
-        <span className="shrink-0 text-[9.5px] tracking-[0.1em] text-muted-foreground uppercase">
-          {HOW[entry.how]}
-        </span>
       </div>
-      <ul className="mt-0.5 text-foreground/80">
+      <ul className="mt-0.5 space-y-0.5 text-foreground/80">
         {entry.used.map((u) => (
-          <li className="flex gap-1.5" key={u}>
+          <li className="flex items-start gap-1.5" key={u.text}>
             <span aria-hidden className="text-muted-foreground">
               –
             </span>
-            <span>{u}</span>
+            <span className="min-w-0 flex-1">{u.text}</span>
+            <MethodBadge className="mt-px" method={u.method} />
           </li>
         ))}
       </ul>

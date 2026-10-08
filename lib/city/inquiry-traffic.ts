@@ -13,6 +13,7 @@ import {
   firstText,
   type InquiryCard,
   positionKey,
+  stated,
   whole,
 } from "./card-lines";
 import type { TrafficFeature, TrafficMethod } from "./features";
@@ -150,14 +151,18 @@ export function trafficCard(t: TrafficInquiry): InquiryCard {
       p.sp === 1 ? "je zur Hälfte, nicht je Richtung gezählt" : "",
     ],
     ["Gezählt", counted],
-    [hour?.[0] ?? "", hour?.[1] ?? ""],
+    // the typical day's curve, not a count
+    [hour?.[0] ?? "", hour?.[1] ?? "", "assumed"],
   ]);
   const sources = [
-    t.credit ?? "",
-    hour
-      ? "Stundenwert geschätzt nach dem typischen Tagesgang: Freie und Hansestadt Hamburg, dl-de/by-2-0"
-      : "",
-  ].filter(Boolean);
+    ...stated("taken", t.credit ?? ""),
+    ...stated(
+      "assumed",
+      hour
+        ? "Stundenwert geschätzt nach dem typischen Tagesgang: Freie und Hansestadt Hamburg, dl-de/by-2-0"
+        : ""
+    ),
+  ];
   return {
     kicker: p.br === 1 ? "Kfz-Verkehr · Brücke" : "Kfz-Verkehr",
     title: firstText(p.n, "Straßenabschnitt"),
@@ -202,6 +207,6 @@ export function bikeCard(b: BikeInquiry): InquiryCard {
     facts,
     id: b.id || positionKey(b.position),
     idLabel: b.id ? "Zählstelle" : "Lage",
-    sources: b.credit ? [b.credit] : [],
+    sources: stated("taken", b.credit ?? ""),
   };
 }

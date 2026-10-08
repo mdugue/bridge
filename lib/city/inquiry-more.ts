@@ -17,6 +17,7 @@ import {
   osmSource,
   positionKey,
   sourceLine,
+  stated,
   whole,
 } from "./card-lines";
 import type {
@@ -25,6 +26,7 @@ import type {
   LowVegSource,
   RiversideFeature,
 } from "./features";
+import type { Stated } from "./methods";
 import type { SiteProvenance } from "./provenance";
 
 /** A tree the scene draws that no register names: a crown the surface
@@ -100,13 +102,28 @@ function rowSource(
   what: string,
   provenance: SiteProvenance | null,
   credits: CardCredits
-): string {
-  return credits.dlm
-    ? sourceLine(provenance, "dlm", [what], {
-        label: "Basis-DLM",
-        credit: credits.provider,
-      })
-    : osmSource(provenance, [what], "trees");
+): Stated[] {
+  return stated(
+    "taken",
+    credits.dlm
+      ? sourceLine(provenance, "dlm", [what], {
+          label: "Basis-DLM",
+          credit: credits.provider,
+        })
+      : osmSource(provenance, [what], "trees")
+  );
+}
+
+/** A thing's one source: Mapillary's detection in street photos, or OSM's
+ *  mapped point. */
+function pointSource(
+  what: string,
+  mapillary: boolean,
+  provenance: SiteProvenance | null
+): Stated[] {
+  return mapillary
+    ? stated("detected", mapillarySource([what]))
+    : stated("taken", osmSource(provenance, [what], "trees"));
 }
 
 /** A tree the scene draws without a register's name. */
@@ -120,28 +137,38 @@ export function canopyCard(
     ["Krone", t.crown ? `Ø ${metres(t.crown)}, gemessen` : ""],
     ["Art", "nicht bekannt"],
   ]);
+  // a line carries the least certain of what it gives: the place of a
+  // crown is detected (canopy.py, lowveg.py), its height then computed
   const sources = {
-    dom: sourceLine(provenance, "dom", ["Lage und Höhe der Krone"], {
-      label: DOM_LABEL,
-      credit: credits.provider,
-    }),
-    lsc: sourceLine(provenance, "lsc", ["Lage, Höhe und Krone"], {
-      label: "Laserscan",
-      credit: credits.provider,
-    }),
+    dom: stated(
+      "detected",
+      sourceLine(provenance, "dom", ["Lage und Höhe der Krone"], {
+        label: DOM_LABEL,
+        credit: credits.provider,
+      })
+    ),
+    lsc: stated(
+      "detected",
+      sourceLine(provenance, "lsc", ["Lage, Höhe und Krone"], {
+        label: "Laserscan",
+        credit: credits.provider,
+      })
+    ),
     row: rowSource("Baumreihe", provenance, credits),
+  };
+  const found = {
+    dom: "Eine Krone, im Oberflächenmodell erkannt",
+    lsc: "Eine Krone, im Laserscan erkannt",
+    row: "Die Bäume einer Reihe stehen in festem Abstand, wie gezeichnet",
   };
   return {
     kicker: t.source === "row" ? "Baum einer Baumreihe" : "Baum",
     title: "Baum",
-    address:
-      t.source === "row"
-        ? "Die Bäume einer Reihe stehen in festem Abstand, wie gezeichnet"
-        : "Eine Krone, die die Befliegung gemessen hat",
+    address: found[t.source],
     facts,
     id: positionKey(t.position),
     idLabel: "Lage",
-    sources: [sources[t.source]],
+    sources: sources[t.source],
   };
 }
 
@@ -156,22 +183,26 @@ export function hedgeCard(
     [
       "Höhe",
       h.height ? `${metres(h.height)}${measured ? ", gemessen" : ""}` : "",
+      measured ? undefined : "assumed",
     ],
     ["Breite", h.width ? metres(h.width) : ""],
     ["Länge", h.length > 0 ? metres(h.length) : ""],
   ]);
   const sources =
     h.source === "dlm"
-      ? [rowSource("Hecke", provenance, credits)]
+      ? rowSource("Hecke", provenance, credits)
       : [
-          osmSource(provenance, ["Hecke"], "trees"),
-          measured
-            ? sourceLine(provenance, "lsc", ["Höhe gemessen"], {
-                label: "Laserscan",
-                credit: credits.provider,
-              })
-            : "",
-        ].filter(Boolean);
+          ...stated("taken", osmSource(provenance, ["Hecke"], "trees")),
+          ...stated(
+            "computed",
+            measured
+              ? sourceLine(provenance, "lsc", ["Höhe gemessen"], {
+                  label: "Laserscan",
+                  credit: credits.provider,
+                })
+              : ""
+          ),
+        ];
   return {
     kicker: "Hecke",
     title: "Hecke",
@@ -192,14 +223,10 @@ export function lampCard(
     kicker: "Straßenbeleuchtung",
     title: "Straßenlaterne",
     address: "",
-    facts: factLines([["Mast", "5 m, angenommen"]]),
+    facts: factLines([["Mast", "5 m, angenommen", "assumed"]]),
     id: positionKey(l.position),
     idLabel: "Lage",
-    sources: [
-      l.src === "mly"
-        ? mapillarySource(["Laterne"])
-        : osmSource(provenance, ["Laterne"], "trees"),
-    ],
+    sources: pointSource("Laterne", l.src === "mly", provenance),
   };
 }
 
@@ -277,11 +304,7 @@ export function furnitureCard(
     facts,
     id: positionKey(f.position),
     idLabel: "Lage",
-    sources: [
-      p.src === "mly"
-        ? mapillarySource([title])
-        : osmSource(provenance, [title], "trees"),
-    ],
+    sources: pointSource(title, p.src === "mly", provenance),
   };
 }
 
@@ -297,7 +320,7 @@ export function stopCard(
     facts: [],
     id: positionKey(s.position),
     idLabel: "Lage",
-    sources: [osmSource(provenance, ["Name", "Lage"], "trees")],
+    sources: stated("taken", osmSource(provenance, ["Name", "Lage"], "trees")),
   };
 }
 
@@ -322,7 +345,7 @@ export function landingCard(
     facts: factLines([["Länge", p.len ? metres(p.len) : ""]]),
     id: positionKey(l.position),
     idLabel: "Lage",
-    sources: [osmSource(provenance, [title], "trees")],
+    sources: stated("taken", osmSource(provenance, [title], "trees")),
   };
 }
 

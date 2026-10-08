@@ -7,6 +7,9 @@ import {
   trafficCard,
   type TrafficInquiry,
 } from "./inquiry-traffic";
+import type { Stated } from "./methods";
+
+const lines = (sources: readonly Stated[]) => sources.map((l) => l.text);
 
 const antonstrasse: TrafficInquiry = {
   kind: "traffic",
@@ -54,7 +57,7 @@ test("a section counted per direction says each, with its heavy goods", () => {
     "6.000 Kfz/Tag · 6,7 % Schwerverkehr"
   );
   expect(value(card, "Gezählt")).toBe("2025 · Detektor, Jahresmittel");
-  expect(card.sources).toEqual([
+  expect(lines(card.sources)).toEqual([
     "Verkehrsmengen: Landeshauptstadt Dresden, dl-de/by-2-0",
   ]);
 });
@@ -86,7 +89,7 @@ test("the hour is an estimate from the day's curve, and says whose curve", () =>
     hour: { kind: "weekday", factor: 1.8, time: "17:30" },
   });
   expect(value(card, "Um 17:30 (Werktag)")).toBe("≈ 1.130 Kfz/Stunde");
-  expect(card.sources.at(-1)).toContain("typischen Tagesgang");
+  expect(card.sources.at(-1)?.text).toContain("typischen Tagesgang");
 });
 
 test("a counter says its bicycles per direction and when they were counted", () => {
@@ -124,7 +127,7 @@ test("a counter says its bicycles per direction and when they were counted", () 
     staleAfterMs: 3 * 3600_000,
   });
   expect(old.facts.at(-1)?.value).toContain("älter als drei Stunden");
-  expect(old.sources).toEqual([]);
+  expect(lines(old.sources)).toEqual([]);
 });
 
 test("a counter's time is the city's clock, whatever the visitor's zone", () => {
