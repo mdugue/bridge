@@ -1458,9 +1458,10 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   tile), traffic signs (no layer draws them), signals (OSM's are placed by
   the direction they face, which a detection lacks).
 
-- **Facade readings from street photos (experimental, spawn tile only)** —
-  Mapillary's 2025 panoramas of a street front, rectified onto the LoD2
-  wall with their computed poses and masked to the "building" class, give
+- **Facade readings from street photos (experimental)** —
+  Mapillary's panoramas of a street front (since 2016; on Dresden nearly
+  all from 2025), rectified onto the LoD2 wall with their computed poses
+  and masked to the "building" class, give
   per wall the share of the upper wall that is not plain render (openings,
   frames, stucco, glass), the share clearly darker than the render, and
   how open the ground floor is; two sequences of one wall agree at
@@ -1469,16 +1470,27 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   takes the length-weighted median of its walls, graded: busy 1–3 (busy
   only where two sequences saw it), dark 1–3, and a shop where a shop sign
   hangs within 4 m of the wall or the ground floor is more than 80 % open.
-  857 walls of 597 buildings on Dresden's spawn tile (a third of its street
-  fronts; courtyards hardly at all). Its own file
+  On Dresden 2 798 walls of 1 957 buildings over thirteen tiles (864 walls
+  and 614 buildings on the spawn tile, a third of its street fronts;
+  courtyards hardly at all; two tiles have no usable panorama). Its own file
   (`dlm/facades_<t>.json`, CC BY-SA 4.0), read at runtime into the flags
   column above the OSM bits (`lib/city/facade-reading.ts`); the clay draws
   a fine relief of soft blotches on mid and busy facades, a tone a few per
   cent darker or lighter, a ledge at every storey of a busy front under a
   pitched roof, and the shop zone of a signed shop (*Fassadenbild*,
-  `visual-style.ts` `facadeReading`). No windows: the grid veto holds. The
-  file is converted from the spike's table; the photo analysis is not a
-  pipeline step yet.
+  `visual-style.ts` `facadeReading`). No windows: the grid veto holds.
+  The photo analysis is the `facades` step (`pipeline/bake/facades.py`,
+  `facade_measure.py`): `bun run fetch` plans the walls, asks Mapillary
+  for each panorama's pose and segmentation, measures its 2048 px
+  thumbnail on every wall it serves and deletes it, caching only the
+  measurements (`<raw>/mapillary/facades/<t>.jsonl`); `bun run bake
+  --step facades` grades them per building. 13 717 panoramas measured
+  for Dresden's fifteen tiles in about an hour (the spawn tile's 3 341 in
+  six minutes); re-baked from the step, the spawn tile agrees with the
+  spike's hand-converted file on busy for 584 of 590 shared buildings and
+  on dark for 581; shop is set on 59 more, since the step joins the store
+  signs per building (the spike's table had matched them to walls by an
+  index from a different wall list).
 
 - **Street furniture** — OSM benches (`amenity=bench`, points and the
   ways a bench is sometimes drawn as), picnic tables, litter bins
