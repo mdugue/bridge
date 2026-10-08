@@ -1288,6 +1288,25 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   hues and whether the bare-crown dither reads as noise in motion (the
   plan's STOP condition) need the `--headed` plates on a real GPU.
 
+- **Tree families** (2026-10-07, every register tree) — *inputs:* the
+  genus `gn` (and the archetype's leaf for a conifer without one).
+  `lib/city/tree-family.ts` groups the 37 genera into ten families an
+  illustrator tells apart (lime, maple, oak/beech, plane, chestnut,
+  pinnate — robinia, ash, honey locust —, birch/poplar/willow, blossom —
+  cherry, apple, pear, hawthorn, rowan —, hornbeam/elm, conifer) and gives
+  each a lean of its summer green (HSL offsets ≤ 0.07 on the NDVI
+  colour: a chestnut deeper, a robinia yellower, a plane lighter; not on
+  the copper, golden or evergreen cultivars) and a bark colour, written
+  as the trunk's per-instance tint (a birch's white stem, a plane's pale
+  bark, a pine's reddish one; canopy trunks keep the material's own).
+  **Blossom:** `Phenology.bloom` gives eight genera a flowering span,
+  colour and strength (cherries pink 2–26 April, before their leaves;
+  pears, apples, hawthorn white; rowan, horse-chestnut candles, robinia
+  and catalpa a partial cream), `bloomAt` a rise and fall over it;
+  `crown-season.ts` mixes the crown's colour toward the blossom and keeps
+  a flowering crown full (`aBare` = 1 − max(leaf, bloom)) — on the same
+  day change, no new attribute. An illustrator's table, not botany.
+
 - **Hedges (OSM, laser-scan height)** and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the
   site (`bun run fetch <site> --lsc`, then `bun run bake <site>`); a tile without one would bake
