@@ -68,12 +68,20 @@ export function wallShift(
   return Number.isFinite(shift) ? shift : 0;
 }
 
+/** Where along a stretch `wallShiftAlong` reads the wall. */
+const ALONG = [0.1, 0.3, 0.5, 0.7, 0.9];
+/** A wall read further than this off the footprint line is another one. */
+const ALONG_MAX_M = 0.35;
+
 /**
  * `wallShift` for a straight stretch of wall a→b (EPSG, the street to its
- * right) between heights z0 and z1: rays at a fifth, the middle and four
- * fifths of it at both heights, the outermost hit; 0 where none meets the
- * wall within `DOOR_WALL_REACH`. The plinth and Gurtgesims are laid on it
- * (`lib/city/plinths.ts`).
+ * right) between heights z0 and z1, at each of its two ends: LoD2's wall
+ * is often turned a little against the footprint edge, so it stands out
+ * of the line at one end and back from it at the other. Rays at five
+ * points along it at both heights (each point the outermost hit within
+ * `ALONG_MAX_M`), a straight line fitted through them and read at a and
+ * b; [0, 0] where no ray meets the wall. The plinth and Gurtgesims are
+ * laid on it (`lib/city/plinths.ts`).
  */
 export function wallShiftAlong(
   [a, b]: readonly [readonly number[], readonly number[]],
@@ -81,15 +89,16 @@ export function wallShiftAlong(
   offset: { cx: number; cy: number },
   positions: ArrayLike<number>,
   triangles: readonly number[]
-): number {
+): [number, number] {
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (len < 1e-3) {
-    return 0;
+    return [0, 0];
   }
   const t = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
   const n: V3 = [t[1], -t[0], 0];
-  let shift = Number.NEGATIVE_INFINITY;
-  for (const f of [0.2, 0.5, 0.8]) {
+  const read: [number, number][] = [];
+  for (const f of ALONG) {
+    let shift = Number.NEGATIVE_INFINITY;
     for (const z of [z0, z1]) {
       const o: V3 = [
         a[0] - offset.cx + t[0] * len * f + n[0] * DOOR_WALL_REACH,
@@ -98,13 +107,33 @@ export function wallShiftAlong(
       ];
       for (const tri of triangles) {
         const hit = rayHit(o, n, positions, tri);
-        if (hit !== undefined && hit <= 2 * DOOR_WALL_REACH) {
-          shift = Math.max(shift, DOOR_WALL_REACH - hit);
+        const s = hit === undefined ? Number.NaN : DOOR_WALL_REACH - hit;
+        if (Math.abs(s) <= ALONG_MAX_M) {
+          shift = Math.max(shift, s);
         }
       }
     }
+    if (Number.isFinite(shift)) {
+      read.push([f, shift]);
+    }
   }
-  return Number.isFinite(shift) ? shift : 0;
+  return lineThrough(read);
+}
+
+/** The least-squares line through (f, s) read at f = 0 and 1; one point:
+ *  level; none: [0, 0]. */
+function lineThrough(read: readonly [number, number][]): [number, number] {
+  if (read.length === 0) {
+    return [0, 0];
+  }
+  const mf = read.reduce((sum, [f]) => sum + f, 0) / read.length;
+  const ms = read.reduce((sum, [, s]) => sum + s, 0) / read.length;
+  const sff = read.reduce((sum, [f]) => sum + (f - mf) ** 2, 0);
+  const slope =
+    sff < 1e-9
+      ? 0
+      : read.reduce((sum, [f, s]) => sum + (f - mf) * (s - ms), 0) / sff;
+  return [ms - slope * mf, ms + slope * (1 - mf)];
 }
 
 /** Where a ray from `o` along −n meets the triangle facing it (its first

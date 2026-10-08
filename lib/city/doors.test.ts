@@ -84,15 +84,33 @@ describe("wallShiftAlong", () => {
   ] as const;
   test("finds the wall a stretch runs along, either side of its line", () => {
     for (const b of [0.15, 0, -0.1]) {
-      expect(wallShiftAlong(run, [1, 3], offset, wall(b), [0, 3])).toBeCloseTo(
-        b,
-        6
-      );
+      const [sa, sb] = wallShiftAlong(run, [1, 3], offset, wall(b), [0, 3]);
+      expect(sa).toBeCloseTo(b, 6);
+      expect(sb).toBeCloseTo(b, 6);
     }
   });
 
+  test("follows a wall turned against the footprint line, end to end", () => {
+    // out of the line by 0.1 at y 190, back from it by 0.1 at y 210
+    const turned = [
+      [100.1, 190, 0],
+      [99.9, 210, 0],
+      [99.9, 210, 30],
+      [100.1, 190, 0],
+      [99.9, 210, 30],
+      [100.1, 190, 30],
+    ].flat();
+    const [sa, sb] = wallShiftAlong(run, [1, 3], offset, turned, [0, 3]);
+    expect(sa).toBeCloseTo(0.05, 3);
+    expect(sb).toBeCloseTo(-0.05, 3);
+  });
+
   test("is 0 where no wall faces the stretch", () => {
-    expect(wallShiftAlong(run, [1, 3], offset, wall(0.1, -1), [0, 3])).toBe(0);
-    expect(wallShiftAlong(run, [40, 41], offset, wall(0.1), [0, 3])).toBe(0);
+    expect(wallShiftAlong(run, [1, 3], offset, wall(0.1, -1), [0, 3])).toEqual([
+      0, 0,
+    ]);
+    expect(wallShiftAlong(run, [40, 41], offset, wall(0.1), [0, 3])).toEqual([
+      0, 0,
+    ]);
   });
 });

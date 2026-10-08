@@ -157,16 +157,39 @@ test("the Gurtgesims round a corner is mitred too", () => {
 test("a wall standing off the footprint line carries the band out with it", () => {
   const xs = (m: { positions: number[] }) =>
     Math.max(...m.positions.filter((_, i) => i % 3 === 0));
-  const shifted = plinthMesh(plinth, { cx: 0, cy: 0 }, () => 0.12);
+  const shifted = plinthMesh(plinth, { cx: 0, cy: 0 }, () => [0.12, 0.12]);
   expect(xs(shifted)).toBeCloseTo(100 + PLINTH.proud + 0.12, 6);
-  const cornice = corniceMesh(plinth, { cx: 0, cy: 0 }, 14, () => -0.05);
+  const cornice = corniceMesh(plinth, { cx: 0, cy: 0 }, 14, () => [
+    -0.05, -0.05,
+  ]);
   expect(xs(cornice)).toBeCloseTo(100 + CORNICE.proud - 0.05, 6);
 });
 
-test("the pieces round a corner take the outermost wall", () => {
-  const shift = (a: readonly number[]) =>
-    a[0] === 100 && a[1] === 0 ? 0.1 : 0;
-  expect(plinthPieces(corner, shift).map((q) => q.s)).toEqual([0.1, 0.1]);
+test("a wall turned against the line: the band follows it end to end", () => {
+  const mesh = plinthMesh(plinth, { cx: 0, cy: 0 }, () => [0.1, -0.1]);
+  const front = (y: number) =>
+    Math.max(
+      ...mesh.positions.filter(
+        (_, i) => i % 3 === 0 && Math.abs(mesh.positions[i + 1] - y) < 1e-6
+      )
+    );
+  expect(front(0)).toBeCloseTo(100 + PLINTH.proud + 0.1, 6);
+  expect(front(10)).toBeCloseTo(100 + PLINTH.proud - 0.1, 6);
+});
+
+test("round a corner the mitre meets where the two shifted walls meet", () => {
+  // the wall along +y stands 0.1 out at the corner, the one along −x not
+  const shift = (a: readonly number[]): [number, number] =>
+    a[0] === 100 && a[1] === 0 ? [0.1, 0.1] : [0, 0];
+  const mesh = plinthMesh(corner, { cx: 0, cy: 0 }, shift);
+  const has = (x: number, y: number) =>
+    mesh.positions.some(
+      (_, i) =>
+        i % 3 === 0 &&
+        Math.abs(mesh.positions[i] - x) < 1e-6 &&
+        Math.abs(mesh.positions[i + 1] - y) < 1e-6
+    );
+  expect(has(100.1 + PLINTH.proud, 10 + PLINTH.proud)).toBe(true);
 });
 
 test("pieces in line join into one run; a turn starts the next", () => {
