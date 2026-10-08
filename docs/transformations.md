@@ -1524,8 +1524,9 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   to the measured ground-floor top (3 m where none), framed by piers, a
   stall riser and a head 8 cm proud, a fascia 10 cm proud at the measured
   sign band, an OSM shop one 2.4 m bay at its node; the glass is smooth
-  (roughness 0.12) and catches the sun and the sky. On the spawn tile 294
-  of 413 walls draw (the rest have no bay and no sign, or their ground
+  (roughness 0.12) and catches the sun; the upper pane and a grazing
+  view hold a calm sky (`paneSky`), so it reads as glass out of the sun
+  too. On the spawn tile 294 of 413 walls draw (the rest have no bay and no sign, or their ground
   isn't sampled). Shop windows on a shop's ground floor are the one
   exception to the glass veto (🗃️ *Procedural window grid*, user
   decision 2026-10-08).

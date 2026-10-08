@@ -768,10 +768,12 @@ export function appendDoors(
   };
 }
 
-/** A shop window: dark blue-grey glass, smooth enough to mirror the sun
- *  and the sky (its `rough` column is the pane's roughness, read as such
- *  for own-colour glass, app/_components/visual-style.ts). */
-export const PANE_GLASS: [number, number, number] = [0.045, 0.06, 0.08];
+/** A shop window: deep blue-grey glass — about 0.10 / 0.12 / 0.15 as
+ *  shown (sRGB), stored linear like every tint the clay reads — smooth
+ *  enough to mirror the sun (its `rough` column is the pane's roughness,
+ *  read as such for own-colour glass); its sky is the clay's `paneSky`
+ *  (app/_components/visual-style.ts). */
+export const PANE_GLASS: [number, number, number] = [0.01, 0.0137, 0.0194];
 export const PANE_ROUGH = 0.12;
 /** A shopfront's frame and fascia: a calm stone or painted-wood shade of
  *  its wall, darker than it. */

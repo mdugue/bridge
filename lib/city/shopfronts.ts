@@ -52,6 +52,9 @@ export const SHOPFRONT_WALL_REACH = 0.6;
 /** A door (OSM entrance) keeps this much of the bay clear beside its
  *  surround. */
 const DOOR_CLEAR_M = 0.3;
+/** How far a fascia reaches down into the head under it (m): the head's
+ *  top would otherwise lie in the fascia's bottom face and flicker. */
+const FASCIA_TUCK_M = 0.02;
 
 export interface ShopfrontMesh {
   /** the piers, stall risers, heads and fascias */
@@ -265,7 +268,11 @@ export function shopfrontMesh(
       out.frame,
       [s0, s1],
       SHOPFRONT.fasciaProud,
-      (_, g) => [g + Math.max(z0, top), g + Math.max(z1, top + head)],
+      // a little into the head it sits on, so no two faces lie coplanar
+      (_, g) => [
+        g + Math.max(z0 - FASCIA_TUCK_M, top),
+        g + Math.max(z1, top + head),
+      ],
       [...all, "-c"]
     );
   }

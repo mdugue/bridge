@@ -292,7 +292,20 @@ function clayColour(
   );
   col = col.mul(float(1).sub(eave.mul(d.uEave).mul(wall).mul(0.6)));
   col = articulation(d, col, build, h, wall, flags);
-  return osmColour(d, col, build, h, wall, flags);
+  return osmColour(d, col, build, h, wall, flags).mul(ownTopShade(flags, wall));
+}
+
+/** A door's or a shopfront's faces that look up (sills, heads, ledge and
+ *  fascia tops, 8–10 cm deep — flag 64, not the glass): a shade darker,
+ *  so a ledge in the open sky reads as a soft edge, not a white line. */
+function ownTopShade(flags: F, wall: F): F {
+  const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
+  return float(1).sub(
+    own
+      .mul(float(1).sub(wall))
+      .mul(float(1).sub(shopPane(flags)))
+      .mul(0.3)
+  );
 }
 
 /** A ledge drawn in shade (Gliederung): a lit face `size` metres tall whose
@@ -594,7 +607,8 @@ function osmColour(
  * pale sky sheen as well), Abendlicht (build.w = 1: commercial/public,
  * walls only, × night) and Ladenlicht (a shop's ground floor under the
  * first storey line with a soft top edge, broken along the facade by a
- * low-frequency hash in ≈ 3.5 m cells).
+ * low-frequency hash in ≈ 3.5 m cells). A shop window's pane takes its
+ * own sky (`paneSky`) in place of the rim and the glass sheen.
  */
 function clayGlow(
   d: ClayDetailUniforms,
@@ -606,7 +620,10 @@ function clayGlow(
 ): V3 {
   const view = normalize(cameraPosition.sub(positionWorld));
   const fres = float(1).sub(clamp(dot(view, wn), 0, 1));
-  const rim = vec3(1, 0.95, 0.8).mul(fres.mul(fres).mul(d.uRim));
+  // a shop window has its own grazing light (paneSky), not the clay's rim
+  const pane = shopPane(flags);
+  const clayOnly = float(1).sub(pane);
+  const rim = vec3(1, 0.95, 0.8).mul(fres.mul(fres).mul(d.uRim).mul(clayOnly));
   const dusk = build.w.mul(d.uDuskGlow).mul(d.uNight);
   const glow = vec3(1, 0.82, 0.5).mul(dusk.mul(wall).mul(0.5));
   const shop = shopOf(d, flags);
@@ -627,6 +644,7 @@ function clayGlow(
   const sheen = facadeMaterial(flags, wall)
     .glass.mul(fres.mul(fres).mul(fres))
     .mul(d.uRim)
+    .mul(clayOnly)
     .mul(float(1).sub(d.uNight.mul(0.7)));
   // The asked building's light, in the accent's pale: faint by day, a
   // glow after dark.
@@ -637,7 +655,27 @@ function clayGlow(
     .add(glow)
     .add(vec3(1, 0.78, 0.45).mul(shopGlow.mul(0.4)))
     .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)))
+    .add(paneSky(d, h, fres).mul(pane))
     .add(askedLight);
+}
+
+/** The pale sky a shop window's dark pane holds (its lit term is the
+ *  sun's: roughness 0.12). Lit or not, it reads as glass: the upper pane
+ *  brightens a little, as if the sky were mirrored (`h`, metres above the
+ *  pane's foot: the pane runs from 0.5 m to about 3 m), and Schlick's
+ *  Fresnel lifts it more where it is seen at a grazing angle (`fres`,
+ *  1 − n·v). Calm, never a mirror: at most about a fifth of the sky's
+ *  colour, dimmed at night. */
+function paneSky(d: ClayDetailUniforms, h: F, fres: F): V3 {
+  const upper = smoothstep(0.8, 3.2, h);
+  const f2 = fres.mul(fres);
+  const schlick = float(0.04).add(float(0.96).mul(f2.mul(f2).mul(fres)));
+  return vec3(0.55, 0.66, 0.8).mul(
+    upper
+      .mul(0.06)
+      .add(schlick.mul(0.25))
+      .mul(float(1).sub(d.uNight.mul(0.85)))
+  );
 }
 
 /** 1 on the building someone asked about (OBJECT_FLAG_ASKED, 32). */
