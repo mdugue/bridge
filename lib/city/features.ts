@@ -132,11 +132,18 @@ export interface LowVegFeature {
 export type LowVegSource = "osm" | "osm+lsc";
 
 /** OSM street lamps (pipeline/bake/lamps.py, ODbL); the post height is a
- *  lamp-layer constant, so no property is read but the source (`src`:
- *  "mly" for Mapillary's, lib/city/mapillary.ts). */
+ *  lamp-layer constant. A lamp hung across the street carries its `wire`
+ *  (the two ends, EPSG; the head at the point, `h` m over the ground) and
+ *  `masts` where an end is a mast at the kerb, not a facade. The source
+ *  (`src`): "mly" for Mapillary's, lib/city/mapillary.ts. */
 export interface LampFeature {
   geometry: PointGeometry;
-  properties: { src?: "mly" } | null;
+  properties: {
+    h?: number;
+    masts?: [boolean, boolean];
+    src?: "mly";
+    wire?: [Point2, Point2];
+  } | null;
 }
 
 /** Street lamps and litter bins OSM lacks, detected by Mapillary

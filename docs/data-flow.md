@@ -133,7 +133,8 @@ flowchart LR
   DGM -. ground-clamp .-> LOW
 
   %% lamps
-  OSM ==>|"point positions"| LAMP
+  OSM ==>|"point positions · support / lamp_mount"| LAMP
+  DLM -. "road class → hung across the street, or moved to the kerb" .-> LAMP
 
   %% street furniture
   OSM ==>|"bench · waste_basket · bicycle_parking · bollard · post_box · shelter<br/>playground outlines + mapped equipment<br/>advertising · traffic_signals · fire_hydrant · clock · drinking_water · bus_stop"| FURN

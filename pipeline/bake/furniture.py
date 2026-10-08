@@ -23,7 +23,11 @@ What stands in the carriageway on the map moves to the kerb: a traffic
 signal mapped on the road (its stop line) stands at the kerb on the right
 of the traffic it faces (`traffic_signals:direction` along the way through
 the node), a hydrant sign whose hydrant lies in the lane at the nearest
-kerb — the kerb read from the class raster. A bus stop without a shelter
+kerb — the kerb read from the class raster. So does a bench, bicycle
+stand, bin, post box, column, stop or shelter mapped in a street's lanes
+(the nearest way has a carriageway, `STREETS`); in a square, a pedestrian
+zone or on a platform, which the class raster's road covers too, it stays
+where it is mapped. A bus stop without a shelter
 gets the "H" sign, unless a shelter stands within 8 m. A clock on a pole
 stands where it is mapped; a wall clock hangs on the nearest facade (the
 OSM building outline, ≤ 3 m), else it is dropped, as are tower clocks (the
@@ -87,6 +91,16 @@ POINT_WHERE = (
     'OR other_tags LIKE \'%"advertising"=>"column"%\' '
     'OR other_tags LIKE \'%"emergency"=>"fire_hydrant"%\''
 )
+# The ways with a carriageway (not footways, paths, platforms or tracks).
+STREETS = (
+    "motorway", "trunk", "primary", "secondary", "tertiary", "unclassified",
+    "residential", "living_street", "service", "road",
+    "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link",
+)  # fmt: skip
+# What stands beside a street, never in its lanes: mapped in the carriageway
+# of the nearest way, it moves to the kerb (the class raster's road also
+# covers squares, platforms and pedestrian zones, where things stand on it).
+KERBSIDE = {"bench", "bike", "bin", "column", "picnic", "postbox", "shelter", "stop", "water"}
 # Kinds without a front: they get no bearing.
 ROUND = {"bollard", "bin", "column", "hydrant"}
 HYDRANT = {"pillar": "hydrant", "underground": "hydrantsign"}
@@ -282,9 +296,9 @@ def _point_feature(p: shapely.Point, props: dict) -> dict:
     return feature({"type": "Point", "coordinates": [round(p.x, 2), round(p.y, 2)]}, props)
 
 
-def way_bearing(p: shapely.Point, ways, lines) -> float | None:
-    """The digitised direction of the way the point lies on (≤ 0.5 m)."""
-    hit = ways.query_nearest(p, max_distance=ON_WAY_M)
+def way_bearing(p: shapely.Point, ways, lines, within: float = ON_WAY_M) -> float | None:
+    """The digitised direction of the way the point lies on (≤ `within`)."""
+    hit = ways.query_nearest(p, max_distance=within)
     if len(hit) == 0:
         return None
     line = lines[hit[0]]
@@ -345,8 +359,14 @@ class Facades:
         return q, out
 
 
+def on_street(p: shapely.Point, ways, streets: np.ndarray) -> bool:
+    """Whether the way nearest p (within `FACE_M`) has a carriageway."""
+    hit = ways.query_nearest(p, max_distance=FACE_M)
+    return len(hit) > 0 and bool(streets[hit[0]])
+
+
 def _placed(
-    k: str, g: shapely.Point, other: str | None, gate: Gate, ways, lines, facades
+    k: str, g: shapely.Point, other: str | None, gate: Gate, ways, lines, streets, facades
 ) -> tuple[shapely.Point, float | None] | None:
     """Where a point object stands and the bearing it faces (None: round)."""
     if k == "signal":
@@ -356,6 +376,11 @@ def _placed(
     if k == "hydrantsign" and gate.on_road(g):
         kerb = gate.nearest_kerb(g)
         return (kerb, facing(kerb, ways, lines)) if kerb is not None else None
+    if k in KERBSIDE and gate.on_road(g) and on_street(g, ways, streets):
+        kerb = gate.nearest_kerb(g)
+        if kerb is None:
+            return None
+        return kerb, None if k in ROUND else facing(kerb, ways, lines)
     if k in ROUND:
         return g, None
     a = direction(tag(other, "direction")) if k == "bench" else None
@@ -375,7 +400,7 @@ def _props(k: str, other: str | None) -> dict:
     return props
 
 
-def _points(tile: Tile, gate: Gate, ways, lines) -> list[dict]:
+def _points(tile: Tile, gate: Gate, ways, lines, streets) -> list[dict]:
     geoms, fields = read_osm(
         tile, "points", POINT_WHERE, ["barrier", "highway", "other_tags"], margin=0.0005
     )
@@ -390,7 +415,7 @@ def _points(tile: Tile, gate: Gate, ways, lines) -> list[dict]:
     for g, k, other in zip(geoms, kinds, fields["other_tags"], strict=True):
         if k is None or hidden(other) or not gate.open(g):
             continue
-        placed = _placed(k, g, other, gate, ways, lines, facades)
+        placed = _placed(k, g, other, gate, ways, lines, streets, facades)
         if placed is None or not gate.open(placed[0]):
             continue
         at, a = placed
@@ -503,12 +528,16 @@ def _equipment(tile: Tile, gate: Gate) -> list[dict]:
 def run(tile: Tile) -> None:
     if not has_extract(tile, "the street furniture"):
         return
-    lines, _ = read_osm(tile, "lines", "highway IS NOT NULL", ["highway"], margin=0.001)
-    lines = np.array([g for g in lines if g.geom_type == "LineString"], dtype=object)
+    geoms, fields = read_osm(tile, "lines", "highway IS NOT NULL", ["highway"], margin=0.001)
+    keep = [g.geom_type == "LineString" for g in geoms]
+    lines = np.array([g for g, k in zip(geoms, keep, strict=True) if k], dtype=object)
+    streets = np.array(
+        [h in STREETS for h, k in zip(fields["highway"], keep, strict=True) if k], dtype=bool
+    )
     ways = shapely.STRtree(lines)
     gate = Gate(tile)
     features = (
-        _points(tile, gate, ways, lines)
+        _points(tile, gate, ways, lines, streets)
         + _bench_ways(tile, gate, ways, lines)
         + _playgrounds(tile, gate)
         + _equipment(tile, gate)
