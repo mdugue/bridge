@@ -13,6 +13,7 @@ from . import (
     doors,
     dormers,
     edges,
+    facades,
     fetch,
     furniture,
     lamps,
@@ -63,6 +64,9 @@ STEPS = {
     # After the lamps and the furniture: Mapillary's lamps and bins where
     # OSM has none.
     "mapillary": mapillary.run,
+    # What Mapillary's panoramas say about the facades (measured by the
+    # fetch): three readings per building for the clay.
+    "facades": facades.run,
     "walls": walls.run,
     "stairs": stairs.run,
     "surface": surface.run,
