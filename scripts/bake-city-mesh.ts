@@ -38,11 +38,15 @@ import {
   inheritedLook,
   markFlatRoofs,
   markGrounded,
+  OBJECT_FLAG_FLAT_ROOF,
+  OBJECT_FLAG_GLASS,
   OBJECT_FLAG_LANDMARK,
+  OBJECT_FLAG_METAL,
   OBJECT_FLAG_OWN_COLOUR,
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_DOOR,
   OBJECT_SOURCE_DORMER,
+  OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
   type OsmBuildingLut,
@@ -56,10 +60,12 @@ import {
   wallShift,
 } from "../lib/city/doors";
 import { dormerMesh } from "../lib/city/dormers";
+import { plinthMesh } from "../lib/city/plinths";
 import type {
   DoorFeature,
   DormerFeature,
   MeasuredRoofFeature,
+  PlinthFeature,
   SmallBuildingFeature,
   StructureFeature,
 } from "../lib/city/features";
@@ -460,6 +466,7 @@ export function bakeCityMesh(
   onWalls: {
     doors?: readonly DoorFeature[];
     dormers?: readonly DormerFeature[];
+    plinths?: readonly PlinthFeature[];
   } = {}
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
@@ -611,6 +618,7 @@ function appendBeyondLod2(
     doors?: readonly DoorFeature[];
     dormers?: readonly DormerFeature[];
     facades: FacadeMaterial;
+    plinths?: readonly PlinthFeature[];
     gaps?: readonly StructureFeature[];
     scan?: readonly SmallBuildingFeature[];
   }
@@ -621,6 +629,9 @@ function appendBeyondLod2(
   const objectIndex = new Map(keys.map((id, i) => [id, i]));
   if (extra.gaps) {
     appendGapStructures(tile, baked, extra.gaps, extra.facades, objectIndex);
+  }
+  if (extra.plinths) {
+    appendPlinths(baked, extra.plinths, objectIndex);
   }
   if (extra.doors) {
     appendDoors(baked, extra.doors, objectIndex);
@@ -649,6 +660,91 @@ function treeTriangles(
     }
   }
   return out;
+}
+
+/** A plinth's stone: its wall's tint, a shade darker and cooler. */
+const PLINTH_STONE: [number, number, number] = [0.62, 0.62, 0.64];
+/** What a plinth's host must not be: a facade of its own (a landmark, a
+ *  church), a part with its own colour, glass or metal cladding, or a
+ *  flat-roofed block — the painted Gliederung's own gate. */
+const NO_PLINTH =
+  OBJECT_FLAG_LANDMARK |
+  OBJECT_FLAG_OWN_COLOUR |
+  OBJECT_FLAG_GLASS |
+  OBJECT_FLAG_METAL |
+  OBJECT_FLAG_FLAT_ROOF;
+/** A part whose base stands this far over the ground at its plinth stands
+ *  on a roof (a tower's part), not on the street. */
+const PLINTH_ON_GROUND_M = 1.5;
+
+/**
+ * The plinths on the LoD2 walls' street side (pipeline/bake/plinths.py),
+ * appended as part of the building they carry, like its doors: one object
+ * per host in a stone shade of the host's tint, the host's building tree
+ * (asking or demolishing it takes the building), no footprint, no storey
+ * band or eave line on it, `source` 5. Only a town house carries one: a
+ * host from 3 m of wall, standing on the street, not `NO_PLINTH`.
+ */
+export function appendPlinths(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  plinths: readonly PlinthFeature[],
+  objectIndex: ReadonlyMap<string, number>
+): void {
+  const positions: number[] = [];
+  const objectIds: number[] = [];
+  for (const f of plinths) {
+    const p = f.properties;
+    const hostIndex = p ? objectIndex.get(p.of) : undefined;
+    const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
+    if (!(p && host) || (host.flags & NO_PLINTH) !== 0 || host.eaveH < 3) {
+      continue;
+    }
+    const foot = Math.min(...p.g);
+    if (host.baseZ > foot + PLINTH_ON_GROUND_M) {
+      continue;
+    }
+    const tris = plinthMesh(f, baked.offset);
+    if (tris.length === 0) {
+      continue;
+    }
+    const index = baked.objects.length;
+    positions.push(...tris);
+    for (let i = 0; i < tris.length / 3; i++) {
+      objectIds.push(index);
+    }
+    const above = cm(Math.max(...p.top) - foot + 1);
+    baked.objects.push({
+      ...host,
+      building: false,
+      baseZ: cm(foot),
+      // above its top: no eave stroke, no storey band on it
+      eaveH: above,
+      storeyH: above,
+      glow: 0,
+      // its own colour, none of the host's OSM looks (no shop wash)
+      flags: OBJECT_FLAG_OWN_COLOUR,
+      tint: mixRgb(
+        host.tint.map((c) => c * 0.82),
+        PLINTH_STONE,
+        0.4
+      ),
+      source: OBJECT_SOURCE_PLINTH,
+      footprints: [],
+    });
+  }
+  if (positions.length === 0) {
+    return;
+  }
+  const v = baked.vertices;
+  baked.vertices = {
+    positions: concat(v.positions, positions),
+    objectIds: concat(v.objectIds, objectIds),
+    isRoof: concat(
+      v.isRoof,
+      objectIds.map(() => 0)
+    ),
+    ...flatNormalsAfter(v, positions.length),
+  };
 }
 
 /** A doorway's surround: its wall's tint, lifted towards a pale stone. */

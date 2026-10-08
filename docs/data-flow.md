@@ -308,6 +308,7 @@ flowchart LR
     bLMK["landmarks.py"]
     bGAP["structures.py"]
     bDOOR["doors.py"]
+    bPLIN["plinths.py"]
     bDORM["dormers.py"]
     bTRF["traffic.py"]
     bTRS["transit.py (site-wide)"]
@@ -321,6 +322,7 @@ flowchart LR
     dROOF["roofcolor JSON"]
     dOSMB["osmbuild JSON"]
     dDOOR["doors"]
+    dPLIN["plinths"]
     dDORM["dormers"]
     dLAMP["lamps"]
     dMON["monuments"]
@@ -367,6 +369,9 @@ flowchart LR
   iCJ ==>|"footprints"| bDOOR
   iDGM -. "sill height" .-> bDOOR
   bDOOR ==> dDOOR
+  iCJ ==>|"footprints"| bPLIN
+  iDGM ==>|"ground in front"| bPLIN
+  bPLIN ==> dPLIN
   iOSM ==> bLAMP
   dCLS ==>|gates| bLAMP
   bLAMP ==> dLAMP
@@ -442,6 +447,7 @@ flowchart LR
   dOSMB -. "shop · heritage flags · material · colours" .-> tCITY
   dGAP -. "columns · buildings · relief height fields" .-> tCITY
   dDOOR -. "surround · leaf on the host wall" .-> tCITY
+  dPLIN -. "stone band on the host wall" .-> tCITY
   dDORM -. "front · cheeks · roof on the host roof" .-> tCITY
   dLMK -. "landmark flag · material · extras.landmarks" .-> tCITY
   dCLS ==> tSIDE

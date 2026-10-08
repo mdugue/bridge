@@ -686,6 +686,25 @@ visual-variable codebook is in
   standing on the ground (flag 128: within 3 m of its tree's lowest base,
   so a tower's part on a roof gets no plinth). Slider *Gliederung*,
   default 80 %. No windows: the veto stands.
+- **Plinths** — modelled, not painted: every open stretch of a LoD2
+  footprint edge (its outside not in another footprint, so no party wall;
+  1.5 m and longer; objects 5 m tall and more) on the DGM1 read 0.6 m in
+  front of the wall and smoothed over 3 m (`pipeline/bake/plinths.py`),
+  cut into level pieces wherever the ground under one spans more than
+  0.45 m (the steps of a plinth on a sloping street). Each piece's top
+  stands 0.9 m over its highest ground, its foot under the lowest; a piece
+  runs on 0.1 m past an outer corner (a vertex turning more than 25°), so
+  two bands meet round it. The building bake appends a stone band 0.1 m
+  proud of the wall with a top bevelled 6 cm towards the street and its
+  two ends (`lib/city/plinths.ts`, `appendPlinths`), one object per host
+  in a darker, cooler shade of its tint (`source` 5, flag 64); not on a
+  host that is a landmark, glass, metal, flat-roofed or its own colour,
+  lower than 3 m of wall, or standing more than 1.5 m over the ground at
+  its plinth (a part on a roof) — the painted *Gliederung*'s gate. The
+  painted 0.6 m plinth stays under it, hidden where the band stands.
+  Dresden: 176 769 pieces on 35 969 objects on fifteen tiles (13 865 on
+  3 030 on the spawn tile; the files up to 2 MB each). Ground
+  joins: `plinths` in `JOIN_PARTS`, budget 1 %.
 - **Doors** — OSM `entrance=*` nodes on the ground floor (no `level`, or
   one with a 0; not `no`, `entry_only`, `emergency_ward_entrance`) snapped
   onto the nearest LoD2 footprint edge within 3 m (`pipeline/bake/

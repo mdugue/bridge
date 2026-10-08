@@ -8,6 +8,7 @@ import type {
   CanopyFeature,
   CultivatedFeature,
   DoorFeature,
+  PlinthFeature,
   FeatureCollection,
   FurnitureFeature,
   LampFeature,
@@ -262,6 +263,29 @@ test.each(tiles)(
       expect(p?.h ?? 0).toBeGreaterThanOrEqual(1.8);
       expect(p?.h ?? 99).toBeLessThanOrEqual(5);
       expect(Number.isFinite(p?.z)).toBe(true);
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: plinths are wall pieces with a ground under their top",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).plinths;
+    for (const f of loadSource<PlinthFeature>(src)) {
+      expect(f.geometry.type).toBe("MultiLineString");
+      const p = f.properties;
+      expect(p?.of.length ?? 0).toBeGreaterThan(0);
+      const lines = f.geometry.coordinates;
+      expect(p?.g).toHaveLength(lines.length);
+      expect(p?.top).toHaveLength(lines.length);
+      lines.forEach((line, i) => {
+        expect(line).toHaveLength(2);
+        expect(line.every(isPoint2)).toBe(true);
+        // the band stands over its lowest ground, never under it; its foot
+        // reaches down a light well or a ramp beside the wall, not a storey
+        expect((p?.top[i] ?? 0) - (p?.g[i] ?? 0)).toBeGreaterThan(0);
+        expect((p?.top[i] ?? 0) - (p?.g[i] ?? 0)).toBeLessThan(8.5);
+      });
     }
   }
 );

@@ -22,6 +22,11 @@ export interface PointGeometry {
   type: "Point";
 }
 
+export interface MultiLineGeometry {
+  coordinates: Point2[][];
+  type: "MultiLineString";
+}
+
 export interface PolygonGeometry {
   coordinates: Point2[][];
   type: "Polygon";
@@ -280,6 +285,16 @@ export interface DoorFeature {
     w: number;
     z: number;
   } | null;
+}
+
+/** A building's plinth on the street side of its LoD2 walls
+ *  (pipeline/bake/plinths.py, LoD2 + DGM1): level pieces of the wall's
+ *  open stretches, each walked with the street to its right (a→b), its
+ *  top (`top`) and the lowest ground under it (`g`), one per line, and the
+ *  LoD2 object it belongs to (`of`). */
+export interface PlinthFeature {
+  geometry: MultiLineGeometry;
+  properties: { g: number[]; of: string; top: number[] } | null;
 }
 
 /** A dormer the surface model shows on a pitched LoD2 roof
