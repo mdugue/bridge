@@ -809,6 +809,12 @@ bridge or a misplaced layer is invisible looking straight down.
 
 ## QA: self-verify, don't ask for screenshots
 
+**A PR that changes what the viewer shows carries JSON snapshots** in its
+description — views the reviewer pastes into the preview's Snapshot panel,
+before and after as a look-key pair where the change has a slider. The
+**`pr-snapshots` skill** (`.claude/skills/pr-snapshots/`) says how;
+screenshots are optional there.
+
 URL knobs: `?scene=lite` (the CI profile, below), `?gpu=webgl2` (the
 WebGL2 backend where WebGPU exists), `?safety=N` (0–3: the page at that
 safety level, nothing stored — ADR 0046), `?trail=1` (the crash trail's
