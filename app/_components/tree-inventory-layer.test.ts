@@ -52,6 +52,14 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
     ctx
   );
   expect(inv.counts).toEqual({ broad: 3, spindle: 1, cone: 1, weep: 1 });
+  const plan = inv.control.group.children.filter(
+    (c) => c.userData.treePart === "plan"
+  );
+  // the Schwarzplan's circles: one hidden set of every register tree
+  expect(plan).toHaveLength(1);
+  expect(plan[0].visible).toBe(false);
+  expect(isInstances(plan[0]) && plan[0].drawCount).toBe(6);
+  inv.control.group.remove(...plan);
   const own = census(inv.control.group);
   // 3 reshaped shapes × 2 LODs, all in one 250 m chunk; no trunk set
   expect(own.meshes).toBe(3 * 2);

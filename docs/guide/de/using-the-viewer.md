@@ -395,7 +395,7 @@ zuletzt gewählten Stil für den nächsten Besuch:
 | *Sin City* | harte Flächen in vier Tönen (Schwarz, fast Schwarz, fast Weiß, Weiß), die sich nach der Helligkeit der Umgebung richten, so bleibt auch eine dunkle Ansicht lesbar; Baumkronen und die Elbe werden schwarz, Wiesen bleiben hell, die Skyline und große Silhouetten stehen als weiße Kante gegen das Schwarz; Regen fällt vor der Szene; nur die roten Ziegeldächer behalten Farbe |
 | *Papier* | die Stadt als weißes Papiermodell: jede Fläche aus leicht gebrochenem Weiß, echtes Sonnenlicht und echte Schatten (bläulich-grau), feine gezeichnete Graphitkonturen; die Bäume werden gefaltete Karton-Polyeder; Fahrbahnmarkierungen und Sportplatzlinien bleiben als zartes Grau, Wasser als etwas kühleres, tieferes Papier; Lichter und Nebelschleier fallen weg |
 | *Strich* | Strichzeichnung wie im Plan: das weiße Modell mit jeder Kante in einer gleich starken Linie, der Schatten als eine hellgraue Lasur, das Gelände in Planfarben (zartes Grün, hellblaues Wasser, fast weiße Straßen), die Bäume aus gefaltetem Karton |
-| *Schwarzplan* | die Gebäude schwarz, alles andere weiß — keine Bäume, keine Schatten, keine Linien; gemacht für den *Lageplan*, überall wählbar |
+| *Schwarzplan* | die Gebäude schwarz, alles andere weiß, die Bäume des Baumkatasters als Kronenkreise mit Stammpunkt (gemessen, darum nur sie) — keine Schatten, keine Linien; gemacht für den *Lageplan*, überall wählbar |
 
 In den grafischen Stilen *Comic*, *Sin City*, *Strich* und *Schwarzplan*
 ruht die Tiefenschärfe (ein unscharfer Hintergrund unter scharfen Linien
