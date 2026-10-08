@@ -1,5 +1,6 @@
 """The plinth bake's pure parts: which stretches of a wall are open to the
-street, how a run steps down a slope, and which corners a band runs past."""
+street, how a run steps down a slope, and which stretches another
+object's run already covers."""
 
 import shapely
 
@@ -44,15 +45,26 @@ def test_edges_walk_counter_clockwise_with_the_outside_to_the_right():
     square = shapely.Polygon([(0, 0), (0, 10), (10, 10), (10, 0)])
     out = list(plinths.edges(square))
     assert len(out) == 4
-    for a, b, _, (nx, ny), corners in out:
+    for a, b, _, (nx, ny) in out:
         mid = ((a[0] + b[0]) / 2 + nx, (a[1] + b[1]) / 2 + ny)
         assert not square.contains(shapely.Point(mid))
-        assert corners == (True, True)
+    # consecutive edges share their vertex: the corner the runs meet at
+    for (_, b, _, _), (a, _, _, _) in zip(out, out[1:] + out[:1], strict=True):
+        assert a == b
 
 
-def test_near_straight_vertex_is_no_corner():
-    poly = shapely.Polygon([(0, 0), (5, 0.05), (10, 0), (10, 10), (0, 10)])
-    by_start = {a: c for a, _, _, _, c in plinths.edges(poly)}
-    # the edges either side of the near-straight vertex at (5, 0.05)
-    assert by_start[(0.0, 0.0)] == (True, False)
-    assert by_start[(5.0, 0.05)] == (False, True)
+def test_a_run_along_another_is_taken_a_crossing_one_is_not():
+    taken = plinths.Taken()
+    taken.add((0.0, 0.0), (10.0, 0.0), (1.0, 0.0))
+    # the same facade line, either sense, a hand's width off
+    assert taken.near(5.0, 0.1, (1.0, 0.0))
+    assert taken.near(5.0, -0.1, (-1.0, 0.0))
+    # a wall meeting it at the corner runs across it
+    assert not taken.near(0.0, 0.0, (0.0, 1.0))
+    # past its end, or further out
+    assert not taken.near(11.0, 0.0, (1.0, 0.0))
+    assert not taken.near(5.0, 1.0, (1.0, 0.0))
+    runs = plinths.open_runs(
+        (0, 0.1), (20, 0.1), (0, -1), lambda x, y: False, lambda x, y: taken.near(x, y, (1.0, 0.0))
+    )
+    assert runs == [(10.5, 20)]

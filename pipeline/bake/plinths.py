@@ -49,18 +49,22 @@ FRONT_M = 0.6
 # how far out a party wall's other footprint is looked for
 PARTY_M = 0.4
 SMOOTH_M = 3.0
-# the band's run past an outer corner (lib/city/plinths.ts PLINTH.proud)
-CORNER_M = 0.1
-# a vertex turning less than this is no corner
-CORNER_DEG = 25
+# a stretch this close to (and along) another object's run is that run's:
+# a BuildingPart over its Building, two parts sharing a facade line
+TAKEN_M = 0.25
 
 
 def open_runs(
-    a: tuple[float, float], b: tuple[float, float], outward: tuple[float, float], inside
+    a: tuple[float, float],
+    b: tuple[float, float],
+    outward: tuple[float, float],
+    inside,
+    taken=lambda x, y: False,
 ) -> list[tuple[float, float]]:
     """The stretches [t0, t1] (metres from `a`) of the edge a→b whose
     outside is open: `inside(x, y)` says whether a point lies in another
-    footprint. Sampled every half metre."""
+    footprint, `taken(x, y)` whether another object's run already lies
+    along it there. Sampled every half metre."""
     length = math.hypot(b[0] - a[0], b[1] - a[1])
     if length < MIN_RUN_M:
         return []
@@ -69,6 +73,7 @@ def open_runs(
     ts = np.linspace(0.0, length, n)
     free = [
         not inside(a[0] + ux * t + outward[0] * PARTY_M, a[1] + uy * t + outward[1] * PARTY_M)
+        and not taken(a[0] + ux * t, a[1] + uy * t)
         for t in ts
     ]
     runs: list[tuple[float, float]] = []
@@ -148,9 +153,9 @@ def run_features(oid, a, ux, uy, nx, ny, t0, t1, dgm) -> list[dict]:
 def edges(poly):
     """Each exterior edge of the footprint, walked so that its outside lies
     to the right (counter-clockwise round the footprint): its ends, its
-    direction, its outward normal and whether each end is an outer corner
-    (the band runs on past it by `CORNER_M`, to meet its neighbour round
-    the corner)."""
+    direction and its outward normal. Consecutive edges share their vertex,
+    so the runs of an outer or inner corner meet there and the building
+    bake mitres them (`lib/city/plinths.ts`)."""
     # make_valid can leave lines and points beside the polygons
     parts = [g for g in shapely.get_parts(shapely.get_parts(poly)) if g.geom_type == "Polygon"]
     for part in parts:
@@ -162,30 +167,43 @@ def edges(poly):
         n = len(xy)
         if n < 3:
             continue
-        dirs = [(xy[(i + 1) % n] - xy[i]) / math.dist(xy[(i + 1) % n], xy[i]) for i in range(n)]
-        # an outer corner turns left (counter-clockwise), and by enough to
-        # be one (LoD2's rings carry near-straight vertices)
-        corner = [
-            float(dirs[i - 1][0] * dirs[i][1] - dirs[i - 1][1] * dirs[i][0])
-            > math.sin(math.radians(CORNER_DEG))
-            for i in range(n)
-        ]
         for i in range(n):
             a, b = xy[i], xy[(i + 1) % n]
-            ux, uy = float(dirs[i][0]), float(dirs[i][1])
-            yield (
-                (float(a[0]), float(a[1])),
-                (float(b[0]), float(b[1])),
-                (ux, uy),
-                (uy, -ux),
-                (corner[i], corner[(i + 1) % n]),
-            )
+            length = math.dist(a, b)
+            ux, uy = float((b[0] - a[0]) / length), float((b[1] - a[1]) / length)
+            yield (float(a[0]), float(a[1])), (float(b[0]), float(b[1])), (ux, uy), (uy, -ux)
 
 
-def extend(f: dict, by: float, ux: float, uy: float, end: int) -> None:
-    """Moves a piece's end `by` metres along the wall."""
-    x, y = f["geometry"]["coordinates"][end]
-    f["geometry"]["coordinates"][end] = [round(x + ux * by, 2), round(y + uy * by, 2)]
+class Taken:
+    """The runs already laid, on a 2 m grid: whether a point lies within
+    `TAKEN_M` of one running the same way (either sense)."""
+
+    def __init__(self) -> None:
+        self.cells: dict[tuple[int, int], list[tuple]] = {}
+
+    def add(self, a, b, u) -> None:
+        length = math.dist(a, b)
+        for k in range(int(length / 1.0) + 2):
+            t = min(k * 1.0, length)
+            key = (int((a[0] + u[0] * t) // 2), int((a[1] + u[1] * t) // 2))
+            cell = self.cells.setdefault(key, [])
+            if not cell or cell[-1] != (a, b, u):
+                cell.append((a, b, u))
+
+    def near(self, x: float, y: float, u) -> bool:
+        cx, cy = int(x // 2), int(y // 2)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for a, b, v in self.cells.get((cx + dx, cy + dy), ()):
+                    if abs(u[0] * v[0] + u[1] * v[1]) < 0.95:
+                        continue
+                    t = (x - a[0]) * v[0] + (y - a[1]) * v[1]
+                    if (
+                        -0.01 <= t <= math.dist(a, b) + 0.01
+                        and abs((x - a[0]) * v[1] - (y - a[1]) * v[0]) < TAKEN_M
+                    ):
+                        return True
+        return False
 
 
 def run(tile: Tile) -> None:
@@ -197,8 +215,13 @@ def run(tile: Tile) -> None:
     heights = object_heights(city)
     tree = shapely.STRtree(polys)
     out: list[dict] = []
+    taken = Taken()
+    # the tallest first: where two objects share a facade line the main
+    # body carries the plinth, not a part standing in it
+    order = sorted(range(len(ids)), key=lambda i: -heights.get(ids[i], 0.0))
     with rasterio.open(tile.dgm) as dgm:
-        for i, (oid, poly) in enumerate(zip(ids, polys, strict=True)):
+        for i in order:
+            oid, poly = ids[i], polys[i]
             # a garage, a shed, a kiosk: no town house's plinth
             if heights.get(oid, 0.0) < MIN_HEIGHT_M:
                 continue
@@ -207,17 +230,19 @@ def run(tile: Tile) -> None:
                 p = shapely.Point(x, y)
                 return any(int(j) != own for j in tree.query(p, predicate="within"))
 
-            for a, b, (ux, uy), (nx, ny), (ca, cb) in edges(poly):
-                length = math.dist(a, b)
-                for t0, t1 in open_runs(a, b, (nx, ny), inside):
-                    # past an outer corner the band runs on to meet the next
-                    e0 = CORNER_M if ca and t0 < 0.01 else 0.0
-                    e1 = CORNER_M if cb and t1 > length - 0.01 else 0.0
-                    run = run_features(oid, a, ux, uy, nx, ny, t0, t1, dgm)
-                    if run:
-                        extend(run[0], -e0, ux, uy, 0)
-                        extend(run[-1], e1, ux, uy, 1)
-                    out.extend(run)
+            laid = []
+            for a, b, (ux, uy), (nx, ny) in edges(poly):
+
+                def along(x: float, y: float, u=(ux, uy)) -> bool:
+                    return taken.near(x, y, u)
+
+                for t0, t1 in open_runs(a, b, (nx, ny), inside, along):
+                    out.extend(run_features(oid, a, ux, uy, nx, ny, t0, t1, dgm))
+                    p0 = (a[0] + ux * t0, a[1] + uy * t0)
+                    laid.append((p0, (a[0] + ux * t1, a[1] + uy * t1), (ux, uy)))
+            # laid once the object is done: its own runs never block each other
+            for a, b, u in laid:
+                taken.add(a, b, u)
     write_geojson(tile.out("dlm", f"plinths_{tile.id}.geojson"), by_object(out), tile.epsg)
     hosts = len({f["properties"]["of"] for f in out})
     print(f"{tile.id}: {len(out)} plinth pieces on {hosts} objects")

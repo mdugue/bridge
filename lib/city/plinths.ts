@@ -2,11 +2,12 @@
  * The plinths on the LoD2 walls' street side (pipeline/bake/plinths.py:
  * level pieces of each wall's open stretches, on the DGM1) as geometry the
  * building bake appends to the tile's mesh (scripts/bake-city-mesh.ts): per
- * piece a stone band standing proud of the wall — its front face, a top
- * bevelled down towards the street and its two ends — so the plinth throws
- * a real shadow line and turns its corners, without cutting the LoD2 wall;
- * and the Gurtgesims over the ground floor along the same stretches, a
- * slim band in the same register (`corniceMesh`).
+ * piece a stone band standing proud of the wall — its front face rolling
+ * over a rounded shoulder into its top, and its ends — so the plinth throws
+ * a soft shadow line, without cutting the LoD2 wall; and the Gurtgesims
+ * over the ground floor along the same stretches, a slim rounded band in
+ * the same register (`corniceMesh`). Both are rounded where they meet the
+ * light and mitred where two walls meet.
  * Pure, no THREE.
  */
 import type { PlinthFeature } from "./features";
@@ -14,124 +15,299 @@ import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
 
 /** How the band stands: how far it stands out of the wall, how far it
  *  reaches back into it (LoD2's walls stand a decimetre or so off the
- *  footprint line) and how far its top falls from the wall to its front
- *  edge (the bevel that catches the light). pipeline/bake/plinths.py runs
- *  a piece on past an outer corner by `proud`, so two bands meet there. */
-export const PLINTH = { proud: 0.1, back: 0.15, bevel: 0.06 } as const;
+ *  footprint line) and how tall the rounded shoulder is that turns its
+ *  front into its top — soft, so the light rolls over it rather than
+ *  breaking on an edge. */
+export const PLINTH = { proud: 0.07, back: 0.15, round: 0.12 } as const;
 /** The band's foot under the lowest ground read along it. */
 export const PLINTH_SINK = SINK.box;
 
 /** The Gurtgesims over the ground floor, modelled to match the plinth: a
- *  slim band `proud` out of the wall, `height` tall, its underside flat (a
- *  crisp shadow under it) and its top weathered back to the wall by
- *  `bevel`; its underside at the first storey line. */
+ *  slim rounded nose `proud` out of the wall and `height` tall, its
+ *  underside flat (a soft shadow under it) and its top washed back to the
+ *  wall by `wash`; its underside at the first storey line. */
 export const CORNICE = {
-  proud: 0.08,
+  proud: 0.06,
   back: 0.15,
-  height: 0.12,
-  bevel: 0.06,
+  height: 0.14,
+  wash: 0.03,
 } as const;
 
-type V3 = [number, number, number];
+/** Past this turn two runs meeting at a vertex end square, not mitred. */
+const MITRE_MAX_DEG = 135;
+/** Ends this close meet. */
+const MEET_M = 0.02;
+
 /** A cross-section in the wall's frame: out of the wall, up. */
 type Profile = readonly (readonly [number, number])[];
+
+/** Triangles with a normal per vertex: one smooth across a rounded
+ *  profile's facets, NaN (flat) on the ends. */
+export interface Shaded {
+  normals: number[];
+  positions: number[];
+}
+
+/** One straight run of a profile: its ends (EPSG), and at each end the
+ *  mitre — how a point `o` out of the wall moves: `o·m` from the end — or
+ *  none (a square end, capped). */
+interface Run {
+  a: readonly number[];
+  b: readonly number[];
+  ma?: readonly [number, number];
+  mb?: readonly [number, number];
+}
 
 /**
  * A straight run of `profile` along the wall from a to b (the street to its
  * right), pushed onto `out` as triangles counter-clockwise from outside: a
  * face per profile edge except those in `hidden` (in the wall, in the
- * ground) and the two ends. The profile runs up the front, over the top
- * and down the back, convex.
+ * ground), shaded smooth over the vertices in `smooth`, and a cap on each
+ * end not mitred. The profile runs up the front, over the top and down
+ * the back, convex.
  */
 function extrude(
-  out: number[],
-  [a, b]: readonly [readonly number[], readonly number[]],
+  out: Shaded,
+  run: Run,
   offset: { cx: number; cy: number },
   profile: Profile,
-  hidden: readonly number[]
+  hidden: readonly number[],
+  smooth: readonly number[]
 ): void {
+  const { a, b } = run;
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (len < 1e-3) {
     return;
   }
   const t = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
-  const n = [t[1], -t[0]];
-  const at = (s: number, [o, z]: readonly [number, number]): V3 => [
-    a[0] - offset.cx + t[0] * s + n[0] * o,
-    a[1] - offset.cy + t[1] * s + n[1] * o,
-    z,
-  ];
-  const tri = (p: V3, q: V3, r: V3) => out.push(...p, ...q, ...r);
+  const n: [number, number] = [t[1], -t[0]];
+  const at = (end: 0 | 1, [o, z]: readonly [number, number]): number[] => {
+    const p = end === 0 ? a : b;
+    const m = (end === 0 ? run.ma : run.mb) ?? n;
+    return [p[0] - offset.cx + m[0] * o, p[1] - offset.cy + m[1] * o, z];
+  };
+  // each profile edge's normal in the wall's frame (out, up)
+  const edge = profile.map((p, k) => {
+    const q = profile[(k + 1) % profile.length];
+    const l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+    return [(q[1] - p[1]) / l, -(q[0] - p[0]) / l];
+  });
+  const normalAt = (k: number, v: number): number[] => {
+    const e = edge[k];
+    const other = edge[(v === k ? k - 1 + profile.length : v) % profile.length];
+    const both = smooth.includes(v) ? [e[0] + other[0], e[1] + other[1]] : e;
+    const l = Math.hypot(both[0], both[1]) || 1;
+    return [(n[0] * both[0]) / l, (n[1] * both[0]) / l, both[1] / l];
+  };
+  const flat = [Number.NaN, Number.NaN, Number.NaN];
+  const tri = (ps: number[][], ns: number[][]) => {
+    for (const p of ps) {
+      out.positions.push(...p);
+    }
+    for (const nn of ns) {
+      out.normals.push(...nn);
+    }
+  };
   profile.forEach((p, k) => {
     if (hidden.includes(k)) {
       return;
     }
-    const q = profile[(k + 1) % profile.length];
-    tri(at(0, p), at(len, p), at(len, q));
-    tri(at(0, p), at(len, q), at(0, q));
+    const kq = (k + 1) % profile.length;
+    const q = profile[kq];
+    const np = normalAt(k, k);
+    const nq = normalAt(k, kq);
+    tri([at(0, p), at(1, p), at(1, q)], [np, np, nq]);
+    tri([at(0, p), at(1, q), at(0, q)], [np, nq, nq]);
   });
   for (let k = 1; k + 1 < profile.length; k++) {
-    tri(at(0, profile[0]), at(0, profile[k]), at(0, profile[k + 1]));
-    tri(at(len, profile[0]), at(len, profile[k + 1]), at(len, profile[k]));
+    if (!run.ma) {
+      tri(
+        [at(0, profile[0]), at(0, profile[k]), at(0, profile[k + 1])],
+        [flat, flat, flat]
+      );
+    }
+    if (!run.mb) {
+      tri(
+        [at(1, profile[0]), at(1, profile[k + 1]), at(1, profile[k])],
+        [flat, flat, flat]
+      );
+    }
   }
+}
+
+/** A plinth piece: its ends (EPSG), foot and top. */
+export interface PlinthPiece {
+  a: readonly number[];
+  b: readonly number[];
+  foot: number;
+  top: number;
+}
+
+/**
+ * The plinth's pieces as the mesh draws them: each feature line with its
+ * foot (`PLINTH_SINK` under its ground) and top, and the pieces that meet
+ * round a corner of the footprint (the bake ends them on its vertex) given
+ * one foot and one top, the lowest and highest of them — so the mitre
+ * closes and no band stands proud of its neighbour at the corner.
+ */
+export function plinthPieces(f: PlinthFeature): PlinthPiece[] {
+  const p = f.properties;
+  if (!p) {
+    return [];
+  }
+  const pieces = f.geometry.coordinates
+    .map((line, i) => ({
+      a: line[0],
+      b: line.at(-1) ?? line[0],
+      foot: p.g[i] - PLINTH_SINK,
+      top: p.top[i],
+    }))
+    .filter((q) => Math.hypot(q.b[0] - q.a[0], q.b[1] - q.a[1]) > 1e-3);
+  const group = pieces.map((_, i) => i);
+  const root = (i: number): number => {
+    let r = i;
+    while (group[r] !== r) {
+      r = group[r];
+    }
+    return r;
+  };
+  for (const [i, j] of corners(pieces)) {
+    group[root(i)] = root(j);
+  }
+  const level = new Map<number, { foot: number; top: number }>();
+  pieces.forEach((q, i) => {
+    const r = root(i);
+    const l = level.get(r);
+    level.set(r, {
+      foot: Math.min(l?.foot ?? q.foot, q.foot),
+      top: Math.max(l?.top ?? q.top, q.top),
+    });
+  });
+  return pieces.map((q, i) => ({ ...q, ...level.get(root(i)) }));
+}
+
+/** The pairs [i, j] where run i's end meets run j's start round a corner
+ *  (turning, but by no more than `MITRE_MAX_DEG`). */
+function corners(
+  runs: readonly { a: readonly number[]; b: readonly number[] }[]
+): [number, number][] {
+  const out: [number, number][] = [];
+  const dir = (r: { a: readonly number[]; b: readonly number[] }) => {
+    const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
+    return [(r.b[0] - r.a[0]) / l, (r.b[1] - r.a[1]) / l];
+  };
+  const minCos = Math.cos((MITRE_MAX_DEG * Math.PI) / 180);
+  runs.forEach((r, i) => {
+    runs.forEach((s, j) => {
+      if (i === j || Math.hypot(r.b[0] - s.a[0], r.b[1] - s.a[1]) > MEET_M) {
+        return;
+      }
+      const [u, v] = [dir(r), dir(s)];
+      const cos = u[0] * v[0] + u[1] * v[1];
+      if (cos < 0.9998 && cos > minCos) {
+        out.push([i, j]);
+      }
+    });
+  });
+  return out;
+}
+
+/** The runs with their mitres: where run i meets run j round a corner,
+ *  both end on the bisector, `m = (n₁ + n₂) / (1 + n₁·n₂)`, so a point
+ *  `o` out of either wall lands on the same spot. */
+function mitred(
+  runs: readonly { a: readonly number[]; b: readonly number[] }[]
+): Run[] {
+  const out: Run[] = runs.map((r) => ({ a: r.a, b: r.b }));
+  const normal = (r: { a: readonly number[]; b: readonly number[] }) => {
+    const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
+    return [(r.b[1] - r.a[1]) / l, -(r.b[0] - r.a[0]) / l];
+  };
+  for (const [i, j] of corners(runs)) {
+    const [n1, n2] = [normal(runs[i]), normal(runs[j])];
+    const d = 1 + n1[0] * n2[0] + n1[1] * n2[1];
+    const m: [number, number] = [(n1[0] + n2[0]) / d, (n1[1] + n2[1]) / d];
+    out[i].mb = m;
+    out[j].ma = m;
+  }
+  return out;
 }
 
 /**
  * A plinth's triangles (mesh frame: x = epsgX − cx, y = epsgY − cy, z up),
- * counter-clockwise from outside. Only the faces one can see: the front,
- * the bevelled top and the ends — no back (in the wall), no bottom (in
- * the ground).
+ * counter-clockwise from outside, with their normals. Only the faces one
+ * can see: the front rolling over its rounded shoulder into the top, and
+ * the square ends — no back (in the wall), no bottom (in the ground); the
+ * pieces meeting round a corner mitred into one another.
  */
 export function plinthMesh(
   f: PlinthFeature,
   offset: { cx: number; cy: number }
-): number[] {
-  const out: number[] = [];
-  const p = f.properties;
-  if (!p) {
-    return out;
-  }
-  const { proud, back, bevel } = PLINTH;
-  f.geometry.coordinates.forEach((line, i) => {
-    const top = p.top[i];
-    const foot = p.g[i] - PLINTH_SINK;
-    if (line.length < 2 || !(top - bevel > foot)) {
+): Shaded {
+  const out: Shaded = { positions: [], normals: [] };
+  const pieces = plinthPieces(f);
+  const runs = mitred(pieces);
+  pieces.forEach((q, i) => {
+    if (!(q.top - PLINTH.round > q.foot)) {
       return;
     }
-    const profile: Profile = [
-      [-back, foot],
-      [proud, foot],
-      [proud, top - bevel],
-      [-back, top],
-    ];
-    // the bottom (in the ground) and the back (in the wall)
-    extrude(out, [line[0], line.at(-1) ?? line[0]], offset, profile, [0, 3]);
+    // the edges: bottom, front, the shoulder's three facets, top, back
+    extrude(
+      out,
+      runs[i],
+      offset,
+      plinthProfile(q.foot, q.top),
+      [0, 6],
+      [2, 3, 4, 5]
+    );
   });
   return out;
+}
+
+/** The plinth's section: up the front, over a quarter-round shoulder
+ *  into the top, back into the wall. */
+function plinthProfile(foot: number, top: number): Profile {
+  const { proud, back, round } = PLINTH;
+  const shoulder = [0, 30, 60, 90].map((deg): [number, number] => {
+    const r = (deg * Math.PI) / 180;
+    return [proud * Math.cos(r), top - round + round * Math.sin(r)];
+  });
+  return [[-back, foot], [proud, foot], ...shoulder, [-back, top]];
+}
+
+/** The Gurtgesims's section: a flat underside, a half-round nose, a wash
+ *  back to the wall. */
+function corniceProfile(z: number): Profile {
+  const { proud, back, height, wash } = CORNICE;
+  const rx = proud * 0.7;
+  const cx = proud - rx;
+  const nose = [-90, -45, 0, 45, 90].map((deg): [number, number] => {
+    const r = (deg * Math.PI) / 180;
+    return [cx + rx * Math.cos(r), z + height / 2 + (height / 2) * Math.sin(r)];
+  });
+  return [[-back, z], ...nose, [-back, z + height + wash]];
 }
 
 /**
  * The Gurtgesims along the same open stretches as the plinth, at one
  * height `z` (its underside: the first storey line over the host's base),
  * level however the ground falls: the plinth's pieces joined end to end
- * into straight runs first, so a run has two ends, not one per piece.
+ * into straight runs first, so a run has two ends, not one per piece, and
+ * the runs meeting round a corner mitred into one another.
  */
 export function corniceMesh(
   f: PlinthFeature,
   offset: { cx: number; cy: number },
   z: number
-): number[] {
-  const out: number[] = [];
-  const { proud, back, height, bevel } = CORNICE;
-  const profile: Profile = [
-    [-back, z],
-    [proud, z],
-    [proud, z + height],
-    [-back, z + height + bevel],
-  ];
-  for (const run of straightRuns(f.geometry.coordinates)) {
-    // the back (in the wall)
-    extrude(out, run, offset, profile, [3]);
+): Shaded {
+  const out: Shaded = { positions: [], normals: [] };
+  const profile = corniceProfile(z);
+  for (const run of mitred(
+    straightRuns(f.geometry.coordinates).map(([a, b]) => ({ a, b }))
+  )) {
+    // the back (in the wall); smooth from the underside's front edge over
+    // the nose into the wash
+    extrude(out, run, offset, profile, [profile.length - 1], [1, 2, 3, 4, 5]);
   }
   return out;
 }
@@ -166,19 +342,13 @@ export function straightRuns(
  *  deeper; where it falls away from the wall (a step down, a light well)
  *  the foot is checked here. */
 export function plinthJoins(f: PlinthFeature): JoinPoint[] {
-  const p = f.properties;
-  if (!p) {
-    return [];
-  }
-  return f.geometry.coordinates.flatMap((line, i) => {
-    const [a, b] = [line[0], line.at(-1) ?? line[0]];
+  return plinthPieces(f).flatMap(({ a, b, foot: z }) => {
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
     if (len < 1e-3) {
       return [];
     }
     const nx = (b[1] - a[1]) / len;
     const ny = -(b[0] - a[0]) / len;
-    const z = p.g[i] - PLINTH_SINK;
     const end = (q: readonly number[]) => ({
       x: q[0] + nx * PLINTH.proud,
       y: q[1] + ny * PLINTH.proud,

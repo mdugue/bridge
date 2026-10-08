@@ -60,7 +60,12 @@ import {
   wallShift,
 } from "../lib/city/doors";
 import { dormerMesh } from "../lib/city/dormers";
-import { CORNICE, corniceMesh, plinthMesh } from "../lib/city/plinths";
+import {
+  CORNICE,
+  corniceMesh,
+  plinthMesh,
+  type Shaded,
+} from "../lib/city/plinths";
 import type {
   DoorFeature,
   DormerFeature,
@@ -662,7 +667,7 @@ function treeTriangles(
   return out;
 }
 
-/** A plinth's stone: its wall's tint, a shade darker and cooler. */
+/** A plinth's stone: its wall's tint, a touch darker and cooler. */
 const PLINTH_STONE: [number, number, number] = [0.62, 0.62, 0.64];
 /** What a plinth's host must not be: a facade of its own (a landmark, a
  *  church), a part with its own colour, glass or metal cladding, or a
@@ -694,17 +699,19 @@ export function appendPlinths(
   objectIndex: ReadonlyMap<string, number>
 ): void {
   const positions: number[] = [];
+  const normals: number[] = [];
   const objectIds: number[] = [];
   const part = (
-    tris: number[],
+    tris: Shaded,
     host: CityObjectRow,
     base: number,
     top: number,
     tint: [number, number, number]
   ) => {
     const index = baked.objects.length;
-    positions.push(...tris);
-    for (let i = 0; i < tris.length / 3; i++) {
+    positions.push(...tris.positions);
+    normals.push(...tris.normals);
+    for (let i = 0; i < tris.positions.length / 3; i++) {
       objectIds.push(index);
     }
     const above = cm(top - base + 1);
@@ -735,17 +742,18 @@ export function appendPlinths(
       continue;
     }
     const top = Math.max(...p.top);
+    // close to the wall: the form, not the colour, carries it
     const stone = mixRgb(
-      host.tint.map((c) => c * 0.82),
+      host.tint.map((c) => c * 0.9),
       PLINTH_STONE,
-      0.4
+      0.25
     );
     part(plinthMesh(f, baked.offset), host, foot, top, stone);
     const z = corniceHeight(host, top);
     if (z !== undefined) {
-      const plaster = mixRgb(host.tint, SURROUND_STONE, 0.15);
+      const plaster = mixRgb(host.tint, SURROUND_STONE, 0.08);
       const tris = corniceMesh(f, baked.offset, z);
-      part(tris, host, z, z + CORNICE.height + CORNICE.bevel, plaster);
+      part(tris, host, z, z + CORNICE.height + CORNICE.wash, plaster);
     }
   }
   if (positions.length === 0) {
@@ -759,7 +767,10 @@ export function appendPlinths(
       v.isRoof,
       objectIds.map(() => 0)
     ),
-    ...flatNormalsAfter(v, positions.length),
+    normals: concat(
+      v.normals ?? new Float32Array(v.positions.length).fill(Number.NaN),
+      normals
+    ),
   };
 }
 
