@@ -5,6 +5,7 @@ import {
   eaveAlong,
   wallShift,
   wallShiftAlong,
+  wallShiftKnots,
 } from "./doors";
 import type { DoorFeature } from "./features";
 
@@ -155,4 +156,36 @@ describe("eaveAlong", () => {
   test("no roof over the wall, no eave", () => {
     expect(eaveAlong(run, [0, 0], offset, [], [])).toBeUndefined();
   });
+});
+
+test("wallShiftKnots follows a wall that bends, where one line would cut it", () => {
+  // out of the line by 0.05 at y 190 and 210, by 0.2 at y 200
+  const bent = [
+    [100.05, 190, 0],
+    [100.2, 200, 0],
+    [100.2, 200, 30],
+    [100.05, 190, 0],
+    [100.2, 200, 30],
+    [100.05, 190, 30],
+    [100.2, 200, 0],
+    [100.05, 210, 0],
+    [100.05, 210, 30],
+    [100.2, 200, 0],
+    [100.05, 210, 30],
+    [100.2, 200, 30],
+  ].flat();
+  const { f, s } = wallShiftKnots(
+    [
+      [100, 190],
+      [100, 210],
+    ],
+    [1, 3],
+    offset,
+    bent,
+    [0, 3, 6, 9]
+  );
+  expect(f).toHaveLength(21);
+  expect(s[10]).toBeCloseTo(0.2, 6);
+  expect(s[0]).toBeCloseTo(0.05 + 0.015 * 0.1, 6);
+  expect(s[5]).toBeCloseTo(0.125, 6);
 });

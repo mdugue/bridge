@@ -321,10 +321,7 @@ export function plinthMesh(
   shift: WallShift = noShift
 ): Shaded {
   const joined = joinStretches(plinthStretches(f, 0), "plinth");
-  return (
-    bandMeshes(joined, offset, "plinth", (_, ...at) => shift(...at)).get(0) ??
-    empty()
-  );
+  return bandMeshes(joined, offset, "plinth", knotsOf(shift)).get(0) ?? empty();
 }
 
 /** The plinth's section: up the front, over a quarter-round shoulder
@@ -366,8 +363,7 @@ export function corniceMesh(
 ): Shaded {
   const joined = joinStretches(lineStretches(f, 0, z), "line");
   return (
-    bandMeshes(joined, offset, "cornice", (_, ...at) => shift(...at)).get(0) ??
-    empty()
+    bandMeshes(joined, offset, "cornice", knotsOf(shift)).get(0) ?? empty()
   );
 }
 
@@ -605,14 +601,29 @@ function onLine(
 /** Which band a stretch draws. */
 export type BandKind = "plinth" | "cornice" | "eave";
 
-/** `WallShift` on a stretch's host. */
+/** How a stretch's host's wall stands off the footprint line along it:
+ *  the shift `s` at fractions `f` (0 at a, 1 at b), straight between. */
+export interface WallKnots {
+  f: readonly number[];
+  s: readonly number[];
+}
+
+/** `WallKnots` on a stretch's host, read between two heights. */
 export type HostShift = (
   host: number,
   a: readonly number[],
   b: readonly number[],
   z0: number,
   z1: number
-) => readonly [number, number];
+) => WallKnots;
+
+/** A `WallShift` (one line, a to b) as knots. */
+export const knotsOf =
+  (shift: WallShift): HostShift =>
+  (_, a, b, z0, z1) => {
+    const [sa, sb] = shift(a, b, z0, z1);
+    return { f: [0, 1], s: [sa, sb] };
+  };
 
 /** Between which heights a band reads its wall. */
 function wallBand(kind: BandKind, s: Stretch): [number, number] {
@@ -637,11 +648,15 @@ export function bandMeshes(
   shift: HostShift
 ): Map<number, Shaded> {
   const st = joined.stretches;
-  const runs = mitred(
-    st.map((s) => {
-      const [sa, sb] = shift(s.host, s.a, s.b, ...wallBand(kind, s));
-      return { a: s.a, b: s.b, sa, sb };
-    }),
+  const knots = st.map((s) => shift(s.host, s.a, s.b, ...wallBand(kind, s)));
+  // the stretches' ends round corners, mitred on the shifts at those ends
+  const ends = mitred(
+    st.map((s, i) => ({
+      a: s.a,
+      b: s.b,
+      sa: knots[i].s[0],
+      sb: knots[i].s.at(-1) ?? 0,
+    })),
     joined.corners
   );
   const out = new Map<number, Shaded>();
@@ -651,35 +666,68 @@ export function bandMeshes(
     }
     const mesh = out.get(s.host) ?? empty();
     out.set(s.host, mesh);
-    if (kind === "plinth") {
-      // the edges: bottom, front, the shoulder's three facets, top, back
-      extrude(
-        mesh,
-        runs[i],
-        offset,
-        plinthProfile(s.lo, s.hi),
-        [0, 6],
-        [2, 3, 4, 5]
-      );
-    } else if (kind === "cornice") {
-      // the back (in the wall); smooth from the underside's front edge
-      // over the nose into the wash
-      const profile = corniceProfile(s.hi);
-      extrude(
-        mesh,
-        runs[i],
-        offset,
-        profile,
-        [profile.length - 1],
-        [1, 2, 3, 4, 5]
-      );
-    } else {
-      // the underside and the back in the wall; smooth over the quarter
-      // round into the lip
-      extrude(mesh, runs[i], offset, eaveProfile(s.hi), [0, 6], [1, 2, 3, 4]);
+    for (const run of along(ends[i], knots[i])) {
+      extrudeBand(mesh, run, offset, kind, s);
     }
   });
   return out;
+}
+
+/** A stretch's run cut at its knots into pieces that each lie on the wall
+ *  between two of them, joined end to end without caps; its own ends keep
+ *  their mitres (on the first and last knot's shift). */
+function along(run: Run, k: WallKnots): Run[] {
+  if (k.f.length <= 2) {
+    return [{ ...run, sa: k.s[0], sb: k.s.at(-1) ?? 0 }];
+  }
+  const len = Math.hypot(run.b[0] - run.a[0], run.b[1] - run.a[1]);
+  const n: [number, number] = [
+    (run.b[1] - run.a[1]) / len,
+    -(run.b[0] - run.a[0]) / len,
+  ];
+  const p = (f: number) => [
+    run.a[0] + (run.b[0] - run.a[0]) * f,
+    run.a[1] + (run.b[1] - run.a[1]) * f,
+  ];
+  const out: Run[] = [];
+  for (let j = 0; j + 1 < k.f.length; j++) {
+    const first = j === 0;
+    const last = j + 2 === k.f.length;
+    out.push({
+      a: p(k.f[j]),
+      b: p(k.f[j + 1]),
+      sa: k.s[j],
+      sb: k.s[j + 1],
+      ma: first ? run.ma : n,
+      ca: first ? run.ca : undefined,
+      mb: last ? run.mb : n,
+      cb: last ? run.cb : undefined,
+    });
+  }
+  return out;
+}
+
+/** One run of a band's profile. */
+function extrudeBand(
+  mesh: Shaded,
+  run: Run,
+  offset: { cx: number; cy: number },
+  kind: BandKind,
+  s: Stretch
+): void {
+  if (kind === "plinth") {
+    // the edges: bottom, front, the shoulder's three facets, top, back
+    extrude(mesh, run, offset, plinthProfile(s.lo, s.hi), [0, 6], [2, 3, 4, 5]);
+  } else if (kind === "cornice") {
+    // the back (in the wall); smooth from the underside's front edge
+    // over the nose into the wash
+    const profile = corniceProfile(s.hi);
+    extrude(mesh, run, offset, profile, [profile.length - 1], [1, 2, 3, 4, 5]);
+  } else {
+    // the underside and the back in the wall; smooth over the quarter
+    // round into the lip
+    extrude(mesh, run, offset, eaveProfile(s.hi), [0, 6], [1, 2, 3, 4]);
+  }
 }
 
 /** The Traufgesims's section: out of the wall along its underside, round

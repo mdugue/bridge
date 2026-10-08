@@ -282,7 +282,7 @@ test("the Traufgesims rolls out of the wall under the eave, per host", () => {
     joinStretches(row(0.5, 19.68, 19.68), "line", 0.25),
     { cx: 0, cy: 0 },
     "eave",
-    () => [0, 0]
+    () => ({ f: [0, 1], s: [0, 0] })
   );
   expect([...meshes.keys()]).toEqual([1, 2]);
   const mesh = meshes.get(1);
@@ -293,4 +293,29 @@ test("the Traufgesims rolls out of the wall under the eave, per host", () => {
   expect(Math.max(...zs)).toBeCloseTo(19.68 + EAVE_CORNICE.height, 6);
   // smooth over the round, flat on the ends
   expect(mesh?.normals.slice(0, 9).every(Number.isFinite)).toBe(true);
+});
+
+test("a band follows a wall that bends along its stretch, without caps", () => {
+  // knots: the wall 0.1 out at both ends, 0.2 out in the middle
+  const meshes = bandMeshes(
+    joinStretches(row(5, 14, 14).slice(0, 1), "line"),
+    { cx: 0, cy: 0 },
+    "cornice",
+    () => ({ f: [0, 0.5, 1], s: [0.1, 0.2, 0.1] })
+  );
+  const tris = triangles(meshes.get(1)?.positions ?? []);
+  const front = (y: number) =>
+    Math.max(
+      ...tris.flatMap((t, k) =>
+        t.y.map((ty, v) =>
+          Math.abs(ty - y) < 1e-6
+            ? (meshes.get(1)?.positions[k * 9 + v * 3] ?? 0)
+            : Number.NEGATIVE_INFINITY
+        )
+      )
+    );
+  expect(front(5)).toBeCloseTo(100 + 0.2 + CORNICE.proud, 6);
+  expect(front(0)).toBeCloseTo(100 + 0.1 + CORNICE.proud, 6);
+  // two ends capped, none at the knot
+  expect(tris.filter((t) => Math.abs(t.n[1]) > 0.99)).toHaveLength(2 * 5);
 });

@@ -120,6 +120,117 @@ export function wallShiftAlong(
   return lineThrough(read);
 }
 
+/** How far apart `wallShiftKnots` reads the wall along a stretch. */
+const KNOT_M = 1;
+/** …and how far in from the stretch's ends its end knots read it. */
+const KNOT_END_M = 0.1;
+
+/** A wall's stand off the footprint line along a stretch: at fractions
+ *  `f` (0 at a, 1 at b, rising) the shift `s` (`wallShift`). */
+export interface WallKnots {
+  f: number[];
+  s: number[];
+}
+
+/**
+ * `wallShiftAlong` read every `KNOT_M` along the stretch rather than
+ * fitted by one line: LoD2's walls are not flat over a long stretch (they
+ * bend a few centimetres at their faces' seams), and a band laid on one
+ * line through them sank into the wall where it bulged. Each knot the
+ * outermost hit at either height; a knot no ray meets takes its
+ * neighbours' line; none at all, [0, 0].
+ */
+export function wallShiftKnots(
+  [a, b]: readonly [readonly number[], readonly number[]],
+  [z0, z1]: readonly [number, number],
+  offset: { cx: number; cy: number },
+  positions: ArrayLike<number>,
+  triangles: readonly number[]
+): WallKnots {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (len < 1e-3) {
+    return { f: [0, 1], s: [0, 0] };
+  }
+  const t = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+  const n: V3 = [t[1], -t[0], 0];
+  const near = trianglesNear(
+    [
+      [a[0] - offset.cx, a[1] - offset.cy],
+      [b[0] - offset.cx, b[1] - offset.cy],
+    ],
+    [z0, z1],
+    positions,
+    triangles
+  );
+  const count = Math.max(1, Math.round(len / KNOT_M));
+  const f = Array.from({ length: count + 1 }, (_, k) => k / count);
+  const end = Math.min(KNOT_END_M / len, 0.25);
+  const read = f.map((fk) => {
+    const at = Math.min(Math.max(fk, end), 1 - end) * len;
+    let shift = Number.NEGATIVE_INFINITY;
+    for (const z of [z0, z1]) {
+      const o: V3 = [
+        a[0] - offset.cx + t[0] * at + n[0] * DOOR_WALL_REACH,
+        a[1] - offset.cy + t[1] * at + n[1] * DOOR_WALL_REACH,
+        z,
+      ];
+      for (const tri of near) {
+        const hit = rayHit(o, n, positions, tri);
+        const s = hit === undefined ? Number.NaN : DOOR_WALL_REACH - hit;
+        if (Math.abs(s) <= ALONG_MAX_M) {
+          shift = Math.max(shift, s);
+        }
+      }
+    }
+    return shift;
+  });
+  return { f, s: fillGaps(f, read) };
+}
+
+/** The triangles whose box reaches the box round a stretch (mesh frame)
+ *  grown by `DOOR_WALL_REACH`, between two heights: the only ones its rays
+ *  can meet. */
+function trianglesNear(
+  [a, b]: readonly [readonly number[], readonly number[]],
+  [z0, z1]: readonly [number, number],
+  positions: ArrayLike<number>,
+  triangles: readonly number[]
+): number[] {
+  const r = DOOR_WALL_REACH;
+  const [x0, x1] = [Math.min(a[0], b[0]) - r, Math.max(a[0], b[0]) + r];
+  const [y0, y1] = [Math.min(a[1], b[1]) - r, Math.max(a[1], b[1]) + r];
+  return triangles.filter((t) => {
+    const at = (i: number, c: number) => positions[3 * (t + i) + c];
+    const out = (c: number, lo: number, hi: number) =>
+      Math.max(at(0, c), at(1, c), at(2, c)) < lo ||
+      Math.min(at(0, c), at(1, c), at(2, c)) > hi;
+    return !(out(0, x0, x1) || out(1, y0, y1) || out(2, z0, z1));
+  });
+}
+
+/** Knots no ray met, read off the line through their nearest neighbours
+ *  that were (held level past the last one); none met: 0. */
+function fillGaps(f: readonly number[], read: readonly number[]): number[] {
+  const known = read
+    .map((s, k) => [k, s] as const)
+    .filter(([, s]) => Number.isFinite(s));
+  if (known.length === 0) {
+    return read.map(() => 0);
+  }
+  return read.map((s, k) => {
+    if (Number.isFinite(s)) {
+      return s;
+    }
+    const before = known.filter(([i]) => i < k).at(-1);
+    const after = known.find(([i]) => i > k);
+    if (!(before && after)) {
+      return (before ?? after ?? [k, 0])[1];
+    }
+    const w = (f[k] - f[before[0]]) / (f[after[0]] - f[before[0]]);
+    return before[1] + (after[1] - before[1]) * w;
+  });
+}
+
 /** How far inside the wall `eaveAlong` reads the roof. */
 const EAVE_IN_M = 0.2;
 /** An eave is level within this along its stretch. */

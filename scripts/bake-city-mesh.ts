@@ -60,6 +60,7 @@ import {
   eaveAlong,
   wallShift,
   wallShiftAlong,
+  wallShiftKnots,
 } from "../lib/city/doors";
 import { dormerMesh } from "../lib/city/dormers";
 import {
@@ -755,14 +756,9 @@ export function appendPlinths(
       footprints: [],
     });
   };
+  const wallOf = (h: number) => walls.get(baked.objects[h].root) ?? [];
   const shift: HostShift = (h, a, b, z0, z1) =>
-    wallShiftAlong(
-      [a, b],
-      [z0, z1],
-      baked.offset,
-      vertices,
-      walls.get(baked.objects[h].root) ?? []
-    );
+    wallShiftKnots([a, b], [z0, z1], baked.offset, vertices, wallOf(h));
   const bands: Record<BandKind, Stretch[]> = {
     plinth: [],
     cornice: [],
@@ -789,8 +785,20 @@ export function appendPlinths(
       bands.cornice.push(...lineStretches(f, hostIndex, z));
     }
     bands.eave.push(
-      ...eaveStretches(f, hostIndex, host, z ?? top, shift, (a, b, s) =>
-        eaveAlong([a, b], s, baked.offset, vertices, roofs.get(host.root) ?? [])
+      ...eaveStretches(f, hostIndex, host, z ?? top, (a, b, z0, z1) =>
+        eaveAlong(
+          [a, b],
+          wallShiftAlong(
+            [a, b],
+            [z0, z1],
+            baked.offset,
+            vertices,
+            wallOf(hostIndex)
+          ),
+          baked.offset,
+          vertices,
+          roofs.get(host.root) ?? []
+        )
       )
     );
   }
@@ -852,17 +860,17 @@ function eaveStretches(
   hostIndex: number,
   host: CityObjectRow,
   under: number,
-  shift: HostShift,
+  /** the eave along a→b, the wall read between two heights */
   eave: (
     a: readonly number[],
     b: readonly number[],
-    s: readonly [number, number]
+    z0: number,
+    z1: number
   ) => number | undefined
 ): Stretch[] {
   const guess = host.baseZ + host.eaveH;
   return straightRuns(f.geometry.coordinates).flatMap(([a, b]) => {
-    const s = shift(hostIndex, a, b, guess - 1.5, guess - 0.5);
-    const e = eave(a, b, s);
+    const e = eave(a, b, guess - 1.5, guess - 0.5);
     const z = e === undefined ? undefined : e - EAVE_CORNICE.height;
     return z !== undefined &&
       e !== undefined &&

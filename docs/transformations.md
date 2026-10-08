@@ -709,9 +709,11 @@ visual-variable codebook is in
   bands stack. Runs end on the footprint's vertices. The building bake
   lays each piece on its host's LoD2 wall, which stands up to a couple
   of decimetres off the footprint line and is often turned a little
-  against it (rays at five points against the host's triangles, a line
-  fitted through them and read at both ends, `wallShiftAlong`; a mitre
-  meets where the two shifted walls meet),
+  against it, and bends a few centimetres along a long stretch (rays
+  every metre against the host's triangles, the band laid piece by piece
+  through them, `wallShiftKnots` — one line fitted through five rays
+  sank the 6 cm Gurtgesims into the wall where it bulged; a mitre meets
+  where the two shifted walls meet),
   and appends a stone band 7 cm proud of it whose front rolls over a
   12 cm quarter-round shoulder into its top, shaded smooth (no hard
   edge), with square ends (`lib/city/plinths.ts`, `appendPlinths`); the
