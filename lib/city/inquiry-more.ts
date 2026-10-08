@@ -56,6 +56,8 @@ export interface HedgeInquiry {
 
 /** A street lamp (OSM, or Mapillary's: `src`). */
 export interface LampInquiry {
+  /** hung on a wire across the street (pipeline/bake/lamps.py) */
+  hung?: boolean;
   kind: "lamp";
   position: [number, number];
   src?: "mly";
@@ -221,9 +223,16 @@ export function lampCard(
 ): InquiryCard {
   return {
     kicker: "Straßenbeleuchtung",
-    title: "Straßenlaterne",
+    title: l.hung ? "Hängeleuchte" : "Straßenlaterne",
     address: "",
-    facts: factLines([["Mast", "5 m, angenommen", "assumed"]]),
+    facts: factLines(
+      l.hung
+        ? [
+            ["Aufhängung", "Querseil über der Straße", "computed"],
+            ["Höhe", "7 m, angenommen", "assumed"],
+          ]
+        : [["Mast", "5 m, angenommen", "assumed"]]
+    ),
     id: positionKey(l.position),
     idLabel: "Lage",
     sources: pointSource("Laterne", l.src === "mly", provenance),

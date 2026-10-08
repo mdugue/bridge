@@ -77,6 +77,15 @@ test("a lamp's post is assumed, and the card says so", () => {
   ]);
 });
 
+test("a lamp hung across the street has no post, and says how it hangs", () => {
+  const card = lampCard(
+    { kind: "lamp", tile: "t", position: at, hung: true },
+    null
+  );
+  expect(card.title).toBe("Hängeleuchte");
+  expect(card.facts.map((f) => f.label)).toEqual(["Aufhängung", "Höhe"]);
+});
+
 test("a lamp or bin Mapillary detected names Mapillary, not OSM", () => {
   const lamp = lampCard(
     { kind: "lamp", tile: "t", position: at, src: "mly" },

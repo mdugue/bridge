@@ -236,6 +236,15 @@ test.each(cases)("%s: lamps are points", (_, a) => {
   for (const f of load<LampFeature>(a.lamps)) {
     expect(f.geometry.type).toBe("Point");
     expect(isPoint2(f.geometry.coordinates)).toBe(true);
+    const wire = f.properties?.wire;
+    if (wire) {
+      expect(wire).toHaveLength(2);
+      expect(wire.every(isPoint2)).toBe(true);
+      expect(f.properties?.h).toBeGreaterThan(0);
+      expect(f.properties?.masts ?? [false, false]).toHaveLength(2);
+    } else {
+      expect(f.properties?.masts).toBeUndefined();
+    }
   }
 });
 

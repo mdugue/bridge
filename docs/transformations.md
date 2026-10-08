@@ -1491,6 +1491,19 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   Elbe or the track bed (the rail corridor is now its own layer). Built per
   fine terrain tile; the three real lights go to the nearest heads of the
   visible tiles.
+  **Lamps hung across the street** `= computed` (2026-10-08) — OSM maps the
+  old town's catenary lamps (Äußere Neustadt: Alaunstraße, …) in the
+  carriageway, where they stood as posts in the traffic. A lamp hangs when
+  `support`/`lamp_mount` = `suspended`/`wire` says so, or, untagged, when it
+  stands in the road class within 2 m of a street's centre line with
+  facades (OSM outlines) closing both sides within 12 m; its wire runs
+  across the street to the facade on each side (within 20 m, a 2.5 m
+  corridor either side so a gateway does not miss the wall) or to a mast at
+  the kerb, its head 7 m up, the wire's ends 0.6 m higher (the sag). Any
+  other lamp in the road class moves to the nearest kerb. Dresden: 19 hung,
+  nearly all tagged (OSM tags `support=suspended` on 17 lamps, 16 of them in
+  the road class; ~480 untagged lamps stand in it, most a pole the road's
+  width covers). The wires are the trams' ribbons (`wire-ribbons.ts`).
 
 - **Street lamps and litter bins OSM lacks, from Mapillary** `◎ detected` — Mapillary's
   detected objects ("map features": `object--street-light`,
@@ -1529,7 +1542,12 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   object to the nearest highway within 25 m** (across it when it stands on
   it); a bench way stands at its midpoint at its mapped length, facing the
   path side. Only what the tags carry varies: `backrest=no` benches are
-  stools, a stand's `capacity` gives its hoops (two bikes each). Dropped:
+  stools, a stand's `capacity` gives its hoops (two bikes each). A bench,
+  stand, bin, post box, column, stop or shelter mapped in a street's lanes
+  (the road class, the nearest way a carriageway, `STREETS`) moves to the
+  nearest kerb (2026-10-08: Alaunstraße's stands stood in the lane); in a
+  square, a pedestrian zone or on a platform — the road class covers those
+  too — it stays where it is mapped. Dropped:
   indoors, underground, classes 5 and 8, bridge decks (the terrain under
   them is the river). A bollard keeps its tagged `height` and a metal
   `material` (the Stallhof's 1.46 m bronze columns of 1591 are mapped as
