@@ -145,6 +145,15 @@ export function InquiryData({
           </summary>
           <div className="mt-2">
             <MethodLegend />
+            <a
+              className="mt-2 inline-flex items-center gap-1 text-[10.5px] text-muted-foreground decoration-dotted underline-offset-2 hover:text-foreground hover:underline"
+              href="/wissen/de/methods"
+              rel="noreferrer"
+              target="_blank"
+            >
+              Mehr dazu im Wissensbereich
+              <ExternalLinkIcon className="size-2.5 opacity-60" />
+            </a>
           </div>
         </details>
       </CollapsibleContent>

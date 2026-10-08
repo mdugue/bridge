@@ -71,6 +71,12 @@ series (DTK10, DTK25, DTK50, DTK100 for the scales 1:10 000 to 1:100 000),
 available as raster tiles from the same portal; not used yet (a candidate
 for a cartographic minimap).
 
+**Deterministic / inferred** — how the viewer comes by a statement.
+Deterministic (`❝ taken`, `= computed`): from the source or by a fixed
+formula, the same data give the same result. Inferred (`◎ detected`,
+`≈ assumed`): added by a rule, a match or a design choice.
+[The four badges](./methods.md).
+
 **Echo (first / last / only)** — a laser pulse can return several echoes:
 the *first* from the top of a tree or a roof, the *last* from the ground
 beneath. The surface model uses the first echoes, the terrain model the
@@ -117,6 +123,12 @@ files), the raw material of the height models. Read offline, where a
 survey office offers it (Saxony, North Rhine-Westphalia), for hedge
 heights, garden trees and the sheds the 3D building model lacks.
 [Fact sheet](./data-sources.md#lsc--the-laser-scan-point-cloud).
+
+**Pattern recognition** — here: a rule with thresholds decides *what*
+something is (a tree at a crown's peak, a shed in the laser scan), or two
+sources are matched (a shop is assigned to a building). Open and
+reproducible, but not infallible; the viewer marks it `◎ detected`.
+[The four badges](./methods.md).
 
 **nDOM** — *normalisiertes DOM*: surface model minus terrain model, i.e. the
 height of things standing on the ground. Computed by the project from DOM1
