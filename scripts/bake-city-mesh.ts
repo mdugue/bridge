@@ -38,11 +38,15 @@ import {
   inheritedLook,
   markFlatRoofs,
   markGrounded,
+  OBJECT_FLAG_FLAT_ROOF,
+  OBJECT_FLAG_GLASS,
   OBJECT_FLAG_LANDMARK,
+  OBJECT_FLAG_METAL,
   OBJECT_FLAG_OWN_COLOUR,
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_DOOR,
   OBJECT_SOURCE_DORMER,
+  OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
   type OsmBuildingLut,
@@ -54,12 +58,21 @@ import {
   DOOR_SURROUND,
   doorMesh,
   wallShift,
+  wallShiftAlong,
 } from "../lib/city/doors";
 import { dormerMesh } from "../lib/city/dormers";
+import {
+  CORNICE,
+  corniceMesh,
+  plinthMesh,
+  type Shaded,
+  type WallShift,
+} from "../lib/city/plinths";
 import type {
   DoorFeature,
   DormerFeature,
   MeasuredRoofFeature,
+  PlinthFeature,
   SmallBuildingFeature,
   StructureFeature,
 } from "../lib/city/features";
@@ -460,6 +473,7 @@ export function bakeCityMesh(
   onWalls: {
     doors?: readonly DoorFeature[];
     dormers?: readonly DormerFeature[];
+    plinths?: readonly PlinthFeature[];
   } = {}
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
@@ -611,6 +625,7 @@ function appendBeyondLod2(
     doors?: readonly DoorFeature[];
     dormers?: readonly DormerFeature[];
     facades: FacadeMaterial;
+    plinths?: readonly PlinthFeature[];
     gaps?: readonly StructureFeature[];
     scan?: readonly SmallBuildingFeature[];
   }
@@ -621,6 +636,9 @@ function appendBeyondLod2(
   const objectIndex = new Map(keys.map((id, i) => [id, i]));
   if (extra.gaps) {
     appendGapStructures(tile, baked, extra.gaps, extra.facades, objectIndex);
+  }
+  if (extra.plinths) {
+    appendPlinths(baked, extra.plinths, objectIndex);
   }
   if (extra.doors) {
     appendDoors(baked, extra.doors, objectIndex);
@@ -649,6 +667,135 @@ function treeTriangles(
     }
   }
   return out;
+}
+
+/** A plinth's stone: its wall's tint, a touch darker and cooler. */
+const PLINTH_STONE: [number, number, number] = [0.62, 0.62, 0.64];
+/** What a plinth's host must not be: a facade of its own (a landmark, a
+ *  church), a part with its own colour, glass or metal cladding, or a
+ *  flat-roofed block — the painted Gliederung's own gate. */
+const NO_PLINTH =
+  OBJECT_FLAG_LANDMARK |
+  OBJECT_FLAG_OWN_COLOUR |
+  OBJECT_FLAG_GLASS |
+  OBJECT_FLAG_METAL |
+  OBJECT_FLAG_FLAT_ROOF;
+/** A part whose base stands this far over the ground at its plinth stands
+ *  on a roof (a tower's part), not on the street. */
+const PLINTH_ON_GROUND_M = 1.5;
+
+/**
+ * The plinths on the LoD2 walls' street side (pipeline/bake/plinths.py),
+ * appended as part of the building they carry, like its doors: one object
+ * per host in a stone shade of the host's tint, the host's building tree
+ * (asking or demolishing it takes the building), no footprint, no storey
+ * band or eave line on it, `source` 5. Only a town house carries one: a
+ * host from 3 m of wall, standing on the street, not `NO_PLINTH`. Along
+ * the same stretches the Gurtgesims over its ground floor (`corniceMesh`,
+ * `corniceHeight`): a second object in a plaster shade a touch paler than
+ * the wall, level at the first storey line.
+ */
+export function appendPlinths(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  plinths: readonly PlinthFeature[],
+  objectIndex: ReadonlyMap<string, number>
+): void {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const objectIds: number[] = [];
+  const walls = treeTriangles(baked);
+  const vertices = baked.vertices.positions;
+  const part = (
+    tris: Shaded,
+    host: CityObjectRow,
+    base: number,
+    top: number,
+    tint: [number, number, number]
+  ) => {
+    const index = baked.objects.length;
+    positions.push(...tris.positions);
+    normals.push(...tris.normals);
+    for (let i = 0; i < tris.positions.length / 3; i++) {
+      objectIds.push(index);
+    }
+    const above = cm(top - base + 1);
+    baked.objects.push({
+      ...host,
+      building: false,
+      baseZ: cm(base),
+      // above its top: no eave stroke, no storey band on it
+      eaveH: above,
+      storeyH: above,
+      glow: 0,
+      // its own colour, none of the host's OSM looks (no shop wash)
+      flags: OBJECT_FLAG_OWN_COLOUR,
+      tint,
+      source: OBJECT_SOURCE_PLINTH,
+      footprints: [],
+    });
+  };
+  for (const f of plinths) {
+    const p = f.properties;
+    const hostIndex = p ? objectIndex.get(p.of) : undefined;
+    const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
+    if (!(p && host) || (host.flags & NO_PLINTH) !== 0 || host.eaveH < 3) {
+      continue;
+    }
+    const foot = Math.min(...p.g);
+    if (host.baseZ > foot + PLINTH_ON_GROUND_M) {
+      continue;
+    }
+    const top = Math.max(...p.top);
+    // close to the wall: the form, not the colour, carries it
+    const stone = mixRgb(
+      host.tint.map((c) => c * 0.9),
+      PLINTH_STONE,
+      0.25
+    );
+    // laid on the host's wall, not the footprint line it stands off
+    const wall = walls.get(host.root) ?? [];
+    const shift: WallShift = (a, b, z0, z1) =>
+      wallShiftAlong([a, b], [z0, z1], baked.offset, vertices, wall);
+    part(plinthMesh(f, baked.offset, shift), host, foot, top, stone);
+    const z = corniceHeight(host, top);
+    if (z !== undefined) {
+      const plaster = mixRgb(host.tint, SURROUND_STONE, 0.08);
+      const tris = corniceMesh(f, baked.offset, z, shift);
+      part(tris, host, z, z + CORNICE.height + CORNICE.wash, plaster);
+    }
+  }
+  if (positions.length === 0) {
+    return;
+  }
+  const v = baked.vertices;
+  baked.vertices = {
+    positions: concat(v.positions, positions),
+    objectIds: concat(v.objectIds, objectIds),
+    isRoof: concat(
+      v.isRoof,
+      objectIds.map(() => 0)
+    ),
+    normals: concat(
+      v.normals ?? new Float32Array(v.positions.length).fill(Number.NaN),
+      normals
+    ),
+  };
+}
+
+/** Where a host's Gurtgesims sits (its underside, absolute): straddling
+ *  the first storey line over the host's base, as the painted ledge did —
+ *  only where the wall holds two storeys and the line stands a metre
+ *  clear of the plinth's top. */
+export function corniceHeight(
+  host: Pick<CityObjectRow, "baseZ" | "eaveH" | "storeyH">,
+  plinthTop: number
+): number | undefined {
+  const storey = Math.max(host.storeyH, 2.4);
+  if (host.eaveH < 2 * storey - 0.3) {
+    return undefined;
+  }
+  const z = host.baseZ + storey - CORNICE.height / 2;
+  return z > plinthTop + 1 ? z : undefined;
 }
 
 /** A doorway's surround: its wall's tint, lifted towards a pale stone. */

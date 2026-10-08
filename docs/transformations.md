@@ -684,8 +684,8 @@ visual-variable codebook is in
   estimate.
 - **Gliederung** `≈ assumed` (plinth, cornices, shop zone) — painted in the clay
   shader from heights the object table already carries, no new data: a
-  0.6 m stone plinth, a ledge at the first storey line (where the wall
-  holds two storeys), a deeper ledge under the eave, and on a building with
+  0.6 m stone plinth (the ledge at the first storey line is modelled
+  now, with the plinth: see *Plinths*), a deeper ledge under the eave, and on a building with
   a mapped shop the ground floor a shade darker as its recessed shop
   front. Walls only, not on a door, and not on a facade that is its own
   (flag 16: a Wikidata landmark, a monumental ALKIS use — church,
@@ -696,6 +696,47 @@ visual-variable codebook is in
   standing on the ground (flag 128: within 3 m of its tree's lowest base,
   so a tower's part on a roof gets no plinth). Slider *Gliederung*,
   default 80 %. No windows: the veto stands.
+- **Plinths** `= computed` `≈ assumed` — modelled, not painted: every open stretch of a LoD2
+  footprint edge (its outside not in another footprint, so no party wall;
+  1.5 m and longer; objects 5 m tall and more) on the DGM1 read 0.6 m in
+  front of the wall and smoothed over 3 m (`pipeline/bake/plinths.py`),
+  cut into level pieces wherever the ground under one spans more than
+  0.45 m (the steps of a plinth on a sloping street). Each piece's top
+  stands 0.9 m over its highest ground, its foot under the lowest. A
+  stretch already covered by another object's run (within 0.25 m, running
+  the same way: a BuildingPart standing in its Building, two parts on
+  one facade line) is that run's, the tallest object's first, so no two
+  bands stack. Runs end on the footprint's vertices. The building bake
+  lays each piece on its host's LoD2 wall, which stands up to a couple
+  of decimetres off the footprint line and is often turned a little
+  against it (rays at five points against the host's triangles, a line
+  fitted through them and read at both ends, `wallShiftAlong`; a mitre
+  meets where the two shifted walls meet),
+  and appends a stone band 7 cm proud of it whose front rolls over a
+  12 cm quarter-round shoulder into its top, shaded smooth (no hard
+  edge), with square ends (`lib/city/plinths.ts`, `appendPlinths`); the
+  pieces that meet round a corner of the footprint (turning up to 135°)
+  are mitred into one another on the bisector and share one foot and
+  one top, so a corner closes without overlap. One object per host in a
+  shade a touch darker and cooler than its tint — the form carries it,
+  not the colour (`source` 5, flag 64); not on a
+  host that is a landmark, glass, metal, flat-roofed or its own colour,
+  lower than 3 m of wall, or standing more than 1.5 m over the ground at
+  its plinth (a part on a roof) — the painted *Gliederung*'s gate. The
+  painted 0.6 m plinth stays under it, hidden where the band stands.
+  Along the same stretches the **Gurtgesims** is modelled too, in the
+  same register (`corniceMesh`): level at the first storey line over the
+  host's base (where the wall holds two storeys and the line stands a
+  metre over the plinth's top), a rounded nose 6 cm proud and 14 cm tall
+  over a flat underside, its top washed 3 cm back to the wall, shaded
+  smooth; the pieces in line joined into one run, the runs mitred round
+  corners; a plaster shade barely off the wall's. The
+  painted Gurtgesims is gone: its painted shadow read as a smear. A first
+  cut with hard bevels and ends run past each corner read too hard and
+  overlapped at corners.
+  Dresden: 175 570 pieces on 35 850 objects on fifteen tiles (13 777 on
+  3 026 on the spawn tile; the files up to 2 MB each). Ground
+  joins: `plinths` in `JOIN_PARTS`, budget 1 %.
 - **Doors** `❝ taken` `◎ detected` — OSM `entrance=*` nodes on the ground floor (no `level`, or
   one with a 0; not `no`, `entry_only`, `emergency_ward_entrance`) snapped
   onto the nearest LoD2 footprint edge within 3 m (`pipeline/bake/
