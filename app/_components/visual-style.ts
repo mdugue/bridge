@@ -290,7 +290,13 @@ function clayColour(
   const eave = float(1).sub(
     min(abs(h.sub(build.z)).div(max(fwidth(h).mul(2), 1e-4)), 1)
   );
-  col = col.mul(float(1).sub(eave.mul(d.uEave).mul(wall).mul(0.6)));
+  // a shop window's eave is the glass's top (no stroke): the head's soft
+  // shadow falls there instead
+  const pane = shopPane(flags);
+  col = col.mul(
+    float(1).sub(eave.mul(d.uEave).mul(wall).mul(0.6).mul(float(1).sub(pane)))
+  );
+  col = col.mul(mix(1, paneShade(h, build.z), pane));
   col = articulation(d, col, build, h, wall, flags);
   return osmColour(d, col, build, h, wall, flags).mul(ownTopShade(flags, wall));
 }
@@ -660,25 +666,34 @@ function clayGlow(
     .add(glow)
     .add(vec3(1, 0.78, 0.45).mul(shopGlow.mul(0.4)))
     .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)))
-    .add(paneSky(d, h, fres).mul(pane))
+    .add(paneSky(d, h, fres).mul(paneShade(h, build.z)).mul(pane))
     .add(askedLight);
 }
 
-/** The pale sky a shop window's dark pane holds (its lit term is the
- *  sun's: roughness 0.12). Lit or not, it reads as glass: the upper pane
- *  brightens a little, as if the sky were mirrored (`h`, metres above the
- *  pane's foot: the pane runs from 0.5 m to about 3 m), and Schlick's
- *  Fresnel lifts it more where it is seen at a grazing angle (`fres`,
- *  1 − n·v). Calm, never a mirror: at most about a fifth of the sky's
- *  colour, dimmed at night. */
+/** The soft shadow the surround's head throws onto a shop window's glass:
+ *  its upper half metre darkening towards the top (`top`, the glass's top
+ *  over the object's foot — its `eaveH`), a gradient, never an edge. The
+ *  multiplier for the pane's colour and sky. */
+function paneShade(h: F, top: F): F {
+  return float(1).sub(smoothstep(top.sub(0.6), top, h).mul(0.45));
+}
+
+/** The pale sky a shop window's muted glass holds (its lit term is the
+ *  sun's: roughness 0.2). Lit or not, it reads as glass: the pane
+ *  brightens a little upwards, as if the sky were mirrored (`h`, metres
+ *  above the object's foot: the pane runs from 0.3–0.5 m to about 3 m),
+ *  and Schlick's Fresnel lifts it more where it is seen at a grazing angle
+ *  (`fres`, 1 − n·v). Calm, never a mirror: at most about a seventh of the
+ *  sky's colour, dimmed at night — the glass is only a little darker than
+ *  its wall, and a stronger sky would wash it out to the wall's tone. */
 function paneSky(d: ClayDetailUniforms, h: F, fres: F): V3 {
-  const upper = smoothstep(0.8, 3.2, h);
+  const upper = smoothstep(0.8, 2.6, h);
   const f2 = fres.mul(fres);
   const schlick = float(0.04).add(float(0.96).mul(f2.mul(f2).mul(fres)));
   return vec3(0.55, 0.66, 0.8).mul(
     upper
-      .mul(0.06)
-      .add(schlick.mul(0.25))
+      .mul(0.04)
+      .add(schlick.mul(0.15))
       .mul(float(1).sub(d.uNight.mul(0.85)))
   );
 }

@@ -73,6 +73,7 @@ import {
   footAt,
   paneTop,
   CANOPY,
+  type Shaded,
   SHOPFRONT,
   shopfrontMesh,
   wallBays,
@@ -371,6 +372,17 @@ function flatNormalsAfter(
   const normals = new Float32Array(v.normals.length + count).fill(Number.NaN);
   normals.set(v.normals);
   return { normals };
+}
+
+/** The stream's normals run on with `appended` (NaN: flat), the stream's
+ *  own flat where it carries none. */
+function shadedNormalsAfter(
+  v: CityVertices,
+  appended: readonly number[]
+): Float32Array<ArrayBuffer> {
+  const own =
+    v.normals ?? new Float32Array(v.positions.length).fill(Number.NaN);
+  return concat(own, appended);
 }
 
 function concat(
@@ -769,28 +781,56 @@ export function appendDoors(
   };
 }
 
-/** A shop window: deep blue-grey glass — about 0.10 / 0.12 / 0.15 as
- *  shown (sRGB), stored linear like every tint the clay reads — smooth
- *  enough to mirror the sun (its `rough` column is the pane's roughness,
- *  read as such for own-colour glass); its sky is the clay's `paneSky`
- *  (app/_components/visual-style.ts). */
-export const PANE_GLASS: [number, number, number] = [0.01, 0.0137, 0.0194];
-export const PANE_ROUGH = 0.12;
-/** A shopfront's frame and fascia: a calm stone or painted-wood shade of
- *  its wall, darker than it. */
-const FRAME_STONE: [number, number, number] = [0.3, 0.27, 0.24];
+/** The clay's base colour (the material's 0xece7df, linear) and how much
+ *  of a building's tint the walls show at the Farbvariation slider's
+ *  default (lib/city/look-controls.ts): a wall as one sees it. */
+const CLAY_BASE: [number, number, number] = [0.838, 0.799, 0.737];
+const WALL_TINT_SHOWN = 0.6;
+/** A shop window: a muted glass a little darker and cooler than its wall
+ *  — the wall as shown, darkened, drawn towards a cool slate — not a
+ *  black hole; smooth enough to hold a calm reflection of the sun (its
+ *  `rough` column is the pane's roughness, read as such for own-colour
+ *  glass) and of the sky (the clay's `paneSky`,
+ *  app/_components/visual-style.ts). */
+const PANE_SLATE: [number, number, number] = [0.07, 0.09, 0.12];
+export const PANE_ROUGH = 0.2;
+/** A shopfront's surround and fascia: its wall as shown, a shade darker
+ *  and a touch cooler — part of the wall, not a frame. */
+const SURROUND_COOL: [number, number, number] = [0.52, 0.55, 0.6];
 /** A host this far above the ground in front of its wall stands on another
  *  part (a storey on a podium, a roof terrace): no shopfront on it. */
 const SHOP_HOST_ABOVE_M = 2;
 
+/** The shop glass and the surround for a host of tint `tint` (linear). */
+export function shopfrontColours(tint: readonly number[]): {
+  glass: [number, number, number];
+  surround: [number, number, number];
+} {
+  const wall = mixRgb(CLAY_BASE, tint, WALL_TINT_SHOWN);
+  return {
+    glass: mixRgb(
+      wall.map((c) => c * 0.4),
+      PANE_SLATE,
+      0.45
+    ),
+    surround: mixRgb(
+      wall.map((c) => c * 0.9),
+      SURROUND_COOL,
+      0.12
+    ),
+  };
+}
+
 /**
  * The shopfronts on the LoD2 walls (pipeline/bake/shopfronts.py: bays and
  * signs from street photos, canopies from the surface model), appended as
- * part of the object they front, like the doors: up to three objects per
- * wall (the glass; the frame with its mullions and fascia; the canopy in
- * the host's own clay), the host's building tree (asking or demolishing one
- * takes the building), no footprint, no storey band or eave line on them,
- * `source` 6 (a wall with a sign and no bay gets its fascia alone).
+ * part of the object they front, like the doors: per wall one object per
+ * run of glass (its `eaveH` the pane's top, where the head's soft shadow
+ * falls — `paneShade` in visual-style.ts), the surrounds and fascias as one
+ * (rounded: their own smooth normals), the canopy in the host's own clay;
+ * the host's building tree (asking or demolishing one takes the
+ * building), no footprint, no storey band or eave line on them, `source` 6
+ * (a wall with a sign and no bay gets its fascia alone).
  * Skipped: a host the tile does not hold, a glass or metal
  * facade (its own front), a host not on the ground; a bay is cut where an
  * OSM door stands. Returns the walls drawn.
@@ -802,6 +842,7 @@ export function appendShopfronts(
   objectIndex: ReadonlyMap<string, number>
 ): number {
   const positions: number[] = [];
+  const normals: number[] = [];
   const objectIds: number[] = [];
   const trees = treeTriangles(baked);
   const rootOf = (id: string) => {
@@ -824,9 +865,9 @@ export function appendShopfronts(
       wallShiftAt(w, span, baked.offset, baked.vertices.positions, triangles)
     );
     if (
-      mesh.pane.length === 0 &&
-      mesh.frame.length === 0 &&
-      mesh.canopy.length === 0
+      mesh.panes.length === 0 &&
+      mesh.frame.positions.length === 0 &&
+      mesh.canopy.positions.length === 0
     ) {
       continue;
     }
@@ -836,29 +877,31 @@ export function appendShopfronts(
       Math.max(...(w.z ?? [0])) -
         base +
         Math.max(
-          paneTop(w, host.storeyH) + SHOPFRONT.head,
+          paneTop(w, host.storeyH) + SHOPFRONT.head + CANOPY.tuck,
           w.sign?.z?.[1] ?? 0,
-          ...(w.canopy ?? []).map((c) => c.h + CANOPY.lip)
+          ...(w.canopy ?? []).map((c) => c.h)
         ) +
         1
     );
     const part = (
-      tris: number[],
+      tris: Shaded,
       tint: [number, number, number],
       flags: number,
-      rough: number
+      rough: number,
+      eaveH = above
     ) => {
       const index = baked.objects.length;
-      positions.push(...tris);
-      for (let i = 0; i < tris.length / 3; i++) {
-        objectIds.push(index);
+      positions.push(...tris.positions);
+      normals.push(...tris.normals);
+      for (let i = 0; i < tris.positions.length / 9; i++) {
+        objectIds.push(index, index, index);
       }
       baked.objects.push({
         ...host,
         building: false,
         baseZ: cm(base),
         // above the shopfront: no eave stroke, no storey band on it
-        eaveH: above,
+        eaveH,
         storeyH: above,
         glow: 0,
         // its own colour, none of the host's OSM looks (no shop wash)
@@ -869,30 +912,27 @@ export function appendShopfronts(
         footprints: [],
       });
     };
-    if (mesh.pane.length > 0) {
+    const colours = shopfrontColours(host.tint);
+    for (const pane of mesh.panes) {
       part(
-        mesh.pane,
-        PANE_GLASS,
+        {
+          positions: pane.positions,
+          normals: pane.positions.map(() => Number.NaN),
+        },
+        colours.glass,
         OBJECT_FLAG_OWN_COLOUR + OBJECT_FLAG_GLASS,
-        PANE_ROUGH
+        PANE_ROUGH,
+        // the glass's eave is its top: the head's shadow under it
+        cm(pane.top - base)
       );
     }
-    if (mesh.frame.length > 0) {
-      part(
-        mesh.frame,
-        mixRgb(
-          host.tint.map((c) => c * 0.6),
-          FRAME_STONE,
-          0.35
-        ),
-        OBJECT_FLAG_OWN_COLOUR,
-        host.rough
-      );
+    if (mesh.frame.positions.length > 0) {
+      part(mesh.frame, colours.surround, OBJECT_FLAG_OWN_COLOUR, host.rough);
     }
     // the canopy is the building's own: its clay and tint, lit like its
     // walls (not a frame's darker own colour), the shop wash left to the
     // ground floor behind it
-    if (mesh.canopy.length > 0) {
+    if (mesh.canopy.positions.length > 0) {
       part(mesh.canopy, host.tint, host.flags & ~OBJECT_FLAG_SHOP, host.rough);
     }
   }
@@ -904,7 +944,7 @@ export function appendShopfronts(
       v.isRoof,
       objectIds.map(() => 0)
     ),
-    ...flatNormalsAfter(v, positions.length),
+    normals: shadedNormalsAfter(v, normals),
   };
   return drawn;
 }

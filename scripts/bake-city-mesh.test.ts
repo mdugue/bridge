@@ -14,6 +14,7 @@ import type {
   ShopfrontWall,
   StructureFeature,
 } from "../lib/city/features";
+import { paneTop, SHOPFRONT_SINK } from "../lib/city/shopfronts";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
 import { bakeCityMesh, PANE_ROUGH, scanStructureId } from "./bake-city-mesh";
 import { cityMesh } from "./bake-tiles";
@@ -482,7 +483,7 @@ test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
     src: "photo",
     bays: [
       [1, 3],
-      [4, 6.5],
+      [3.5, 6.5],
     ],
     sign: { at: [[1, 7]], z: [3.3, 3.9] },
   });
@@ -514,9 +515,26 @@ test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
   expect(pane.flags & OBJECT_FLAG_GLASS).toBe(OBJECT_FLAG_GLASS);
   expect(frame.flags & OBJECT_FLAG_GLASS).toBe(0);
   expect(pane.rough).toBe(PANE_ROUGH);
-  // dark glass, a frame darker than its wall
-  expect(Math.max(...pane.tint)).toBeLessThan(0.1);
-  expect(frame.tint[1]).toBeLessThan(house.tint[1]);
+  // muted glass, darker and cooler than its surround — not a black hole
+  const lum = (c: readonly number[]) => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+  expect(lum(pane.tint)).toBeLessThan(0.6 * lum(frame.tint));
+  expect(lum(pane.tint)).toBeGreaterThan(0.1);
+  expect(pane.tint[2] / pane.tint[0]).toBeGreaterThan(
+    frame.tint[2] / frame.tint[0]
+  );
+  // the glass's eave is its top, over the shopfront's sunk foot
+  expect(pane.eaveH).toBeCloseTo(
+    paneTop(front(), house.storeyH) + SHOPFRONT_SINK,
+    2
+  );
+  expect(frame.eaveH).toBeGreaterThan(4);
+  // the surround and the canopy shaded smooth: their own normals
+  const normals = baked.vertices.normals ?? new Float32Array();
+  expect(
+    normals.some(
+      (n) => !Number.isNaN(n) && Math.abs(n) > 0.2 && Math.abs(n) < 0.95
+    )
+  ).toBe(true);
   // a glass facade wears its own front
   expect(bake([front()], true).objects.length).toBe(lod2.objects.length);
   // a canopy is a third object, in the host's own clay
