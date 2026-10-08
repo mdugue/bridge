@@ -49,6 +49,7 @@ export const DRESDEN: Site = {
     },
     trams: { operator: "DVB" },
   },
+  mapillary: true,
   treeCadastre: {
     id: "dresden",
     credit: "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0",

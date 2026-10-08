@@ -100,6 +100,23 @@ colour, so the layers read as a map there.
   so the glass layers do not show under that picture style (the tram
   cars do, as paper).
 
+## Update (2026-10-07): the traffic bodies are built on the first switch-on
+
+The motor-traffic bullet above built the bodies with every tile's
+dressing and kept them hidden, so that no node build would fall inside a
+frame. That cost every loaded tile its bodies' buffers for a layer that
+is off at start (about 21 MB of GPU buffers for the spawn tile's fine
+level, reasoned from its vertex count). Since
+[plan 062](../plans/062-traffic-bodies-built-on-first-switch-on.md) a
+tile keeps only its features in the dressing; the bodies are built on the
+layer's first switch-on per tile, in a task of their own, hung hidden and
+compiled before they show (`TrafficSlot` in `tile-stream.ts`) — still no
+node build inside a frame. Switched off again they stay built and hidden;
+they are freed with the tile. Both terrain levels still carry them, the
+coarse one coarser. The decision — a switchable layer that costs nothing
+while off — stands, and the motor traffic now meets it as the bicycle
+columns and the trams do.
+
 ## Alternatives
 
 - **Bake the bicycle counts.** An hour old at best, a week at worst; the

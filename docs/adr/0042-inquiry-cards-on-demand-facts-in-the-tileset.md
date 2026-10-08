@@ -100,7 +100,7 @@ only where a source offers no CORS.
   Monuments and bridges answer from the features the dressing already has.
   Every asked element, building or not, is outlined: one line along its
   silhouette as seen now, a constant width in screen pixels, in the
-  hatch's graphite on a hair of its paper (`selection-outline.ts`; it
+  HUD's accent on a hair of its pale (`selection-outline.ts`; it
   replaced a first pencil loop on the ground) — still no text in the
   scene.
   Instanced sets cannot be raycast one by one since ADR 0027, so trees and

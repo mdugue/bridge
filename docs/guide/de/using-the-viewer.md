@@ -115,7 +115,9 @@ bietet an, wohin es stattdessen gehen kann: zu einem der Aussichtspunkte, zu
 einer Stelle, die du auf der Karte wählst, oder du bleibst, wo du bist.
 Stehst du in einer anderen Stadt, die diese Seite auch zeigt, sagt das
 Fenster das zuerst und bietet an, dorthin zu springen: Ihr Viewer öffnet
-sich mit dir dort, wo du stehst. Browser fragen dafür um Erlaubnis (iPhones auch für den
+sich mit dir dort, wo du stehst (die Position reist im Fragment des Links
+mit, das nie beim Server ankommt). Browser fragen dafür um Erlaubnis
+(iPhones auch für den
 Kompass); der Standort verlässt das Gerät nicht — auch nicht in einem
 Absturzbericht (siehe *Wenn es abstürzt*).
 
@@ -188,8 +190,9 @@ sie auf einen dunklen Sockel stellt, wie ein aus der Stadt geschnittenes
 Modell (*neu setzen* nimmt die aktuelle Mitte; er endet mit dem Modell;
 beim ersten Mal steht dort kurz *Wird vorbereitet …*, während die Stadt
 für den Schnitt vorbereitet wird, und sie bewegt sich dabei weiter —
-Gebäude knapp außerhalb werfen ihren Schatten noch über seinen Rand); und
-*Bild speichern*.
+Gebäude knapp außerhalb werfen ihren Schatten noch über seinen Rand;
+lässt er sich nicht vorbereiten, sagt das die Zeile darunter, mit *noch
+einmal versuchen*); und *Bild speichern*.
 
 **Die Bäume stehen in jedem Maßstab.** Nah heran steht jeder Baum im
 Bild; wo die Stadt gröber gezeichnet wird — weit hinausgezoomt, die
@@ -221,8 +224,8 @@ Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
 Mit der Maus genügt ein **Klick** auf ein Gebäude, auf einem Touchscreen
 **langes Drücken** (den Finger eine halbe Sekunde ruhig halten); `I`
 fragt, was unter dem Fadenkreuz steht. Das Gebäude bekommt eine feine
-Bleistiftschraffur und eine Graphitlinie um seinen Umriss, und eine
-Karte öffnet sich. Ein Klick ins Leere
+Schraffur und eine Linie um seinen Umriss, beide in der pinken
+Akzentfarbe der Bedienelemente, und eine Karte öffnet sich. Ein Klick ins Leere
 schließt sie wieder. Ein kleines Haus musst du
 nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
 Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
@@ -257,9 +260,10 @@ Geschätzt wird nichts: Ein Gebäude ohne erfasste Geschosse hat einfach
 keine Geschosszeile.
 
 Bäume, Denkmale und Brunnen und Brücken antworten genauso. Was du
-gefragt hast, umrahmt eine weiche Graphitlinie auf einem Hauch Papier —
+gefragt hast, umrahmt eine weiche pinke Linie auf einem hellen Saum —
 entlang seines Umrisses, so wie du ihn gerade siehst, gleich breit auf
-dem Bildschirm, ob nah oder fern. Ein
+dem Bildschirm, ob nah oder fern. Beim Antippen leuchtet der Saum kurz
+auf. Ein
 **Straßenbaum** nennt seine Art (deutsch und botanisch), Straße und
 Nummer im Stadtbaumkataster, Höhe, Krone und Stamm, soweit das Kataster
 sie gemessen hat (was fehlt, bleibt weg, statt geschätzt zu werden), und
@@ -411,6 +415,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Dachfarbe* | wie stark die echte (oder synthetische) Dachfarbe durchkommt |
 | | *Dachsättigung* | hebt die Sättigung der Luftbild-Dachfarben, ohne den Farbton zu verschieben; 0 = rohes Luftbild |
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
+| | *Gliederung* | was ein Haus auf Augenhöhe vor seinen Fenstern zeigt: ein steinerner Sockel, ein Gesims über dem Erdgeschoss, ein tieferes unter der Traufe und eine dunklere Ladenzone, wo ein Laden erfasst ist — keine Fenster |
 | | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |

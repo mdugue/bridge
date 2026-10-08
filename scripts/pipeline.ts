@@ -55,6 +55,7 @@ export function siteSpec(site: Site) {
     treeCadastre: site.treeCadastre ?? null,
     traffic: site.dataLayers?.traffic?.source ?? null,
     trams: site.dataLayers?.trams !== undefined,
+    mapillary: site.mapillary === true,
     raw: providerRawDir(site),
     data: siteDataDir(site),
     osm: osmExtractUrl(site),

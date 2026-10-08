@@ -223,7 +223,7 @@ export interface PostStack {
    * (selection-outline.ts): drawn over every picture style, after the
    * antialiasing, under the paper grain.
    */
-  setSelection: (selection: OutlineSelection | null) => void;
+  setSelection: (selection: OutlineSelection | null, flash?: boolean) => void;
   /** How many pipeline anchors hold scene-wide pipelines (diagnostics). */
   anchorCount: () => number;
   /**
@@ -957,7 +957,7 @@ export function createPostStack(
       antialiasing.setSize(size);
       outline.setSize(size.x, size.y);
     },
-    setSelection: (selection) => outline.set(selection),
+    setSelection: (selection, flash) => outline.set(selection, flash),
     setModel: (on) => {
       model = on;
       applyStyleWeights();

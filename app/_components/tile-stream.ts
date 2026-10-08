@@ -22,6 +22,7 @@ import type {
   CanopyExtraFeature,
   CultivatedFeature,
   FurnitureFeature,
+  MapillaryFeature,
   LampFeature,
   LowVegFeature,
   MonumentFeature,
@@ -37,7 +38,7 @@ import type { LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import { pointFeatures, unpackPoints } from "@/lib/city/point-pack";
 import { type SportTable, sportFixtures } from "@/lib/city/sport";
-import { offMonuments } from "@/lib/city/tree-placement";
+import { offMonuments, type TreeVeto } from "@/lib/city/tree-placement";
 import { unpackCrowns } from "@/lib/city/coarse-crowns";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
@@ -48,9 +49,12 @@ import {
 } from "@/lib/city/tileset";
 import { COARSE_DRESSING_KINDS, type DressingKind } from "@/lib/city/tile";
 import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
+import { moreSets } from "@/lib/city/ask-more";
 import { askSets, type AskSet } from "@/lib/city/ask-solids";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
+import { mapillaryParts } from "@/lib/city/mapillary";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { type CityLayer, dressCity } from "./city-layer";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import type { CrownWarmup } from "./crown-season";
@@ -62,6 +66,7 @@ import {
   fetchFeatures,
   fetchOptionalBinary,
   fetchOptionalJson,
+  isAbortError,
 } from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
 import { buildLamps, type LampControl } from "./lamp-layer";
@@ -104,7 +109,7 @@ import {
   estimateGeometryBytes,
   sceneSharedBytes,
 } from "./three-utils";
-import { buildTraffic } from "./traffic-layer";
+import { buildTraffic, type TrafficDetail } from "./traffic-layer";
 import { trafficAskSet } from "./traffic-ask";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
@@ -144,12 +149,63 @@ export interface TileDressing {
   tram?: Group;
   /** the Elbe's landing stages, groynes, ferry lines (riverside-layer.ts) */
   riverside?: Group;
-  /** the counted motor traffic (traffic-layer.ts): a data layer, shown
-   *  only while the HUD has it on */
-  traffic?: Group;
+  /** the counted motor traffic (traffic-layer.ts): a data layer, its
+   *  bodies built on the first switch-on (`TrafficSlot`) */
+  traffic?: TrafficSlot;
   vegetation?: VegetationControl;
   /** vine rows (cultivated-layer.ts): static */
   vineyards?: Group;
+}
+
+/**
+ * Where a tile's traffic bodies go once its dressing hangs on the tile
+ * (`DressingPlugin.hangDressing`).
+ */
+export interface TrafficHost {
+  /** the content root the bodies hang under (the Y-up scene frame) */
+  root: Object3D;
+  /** compiles the bodies before they show, counted on the tile so its
+   *  release waits for it; never rejects */
+  compile: (group: Group) => Promise<Compiled>;
+  /** runs the build in its turn among the dressings' (one at a time: each
+   *  is a long task), and the next turn waits for it */
+  turn: <T>(work: () => Promise<T>) => Promise<T>;
+  /** what freeing the bodies threw, once a free that waited for their
+   *  compile has run */
+  freeFailed: (errors: unknown[]) => void;
+  /** whether the tile, its dressing or the stream has gone */
+  gone: () => boolean;
+  /** the bodies are built and compiled: the tile weighs them now */
+  built: () => void;
+  /** the build threw (a bug, or a heap that ran out) */
+  failed: (error: unknown) => void;
+}
+
+/**
+ * The counted traffic of a tile (traffic-layer.ts): its features at once,
+ * its bodies built on the first switch-on and freed with the dressing — a
+ * data layer costs nothing while it is off, like the bicycle columns and
+ * the trams (data-overlays.ts).
+ */
+export interface TrafficSlot {
+  /** the bodies, once built and compiled (null before; kept while the
+   *  layer is off again) */
+  group: Group | null;
+  /** builds the bodies on the first call (in a task of its own, once the
+   *  dressing hangs on its tile) and shows them; resolves once they show,
+   *  or once there is nothing to show */
+  show: () => Promise<void>;
+  /** hides the bodies (keeps them: a second switch-on is instant) */
+  hide: () => void;
+  /** the ask set for the probe, once the bodies are built */
+  asks: () => AskSet<FeatureInquiry> | null;
+  /** the tile the bodies will hang on (the plugin, as the dressing hangs) */
+  attach: (host: TrafficHost) => void;
+  /** frees the bodies — once their compile has ended, if one still runs
+   *  (three cannot stop it, and one that resumes on freed buffers uploads
+   *  them again); a show still running ends without hanging them. Returns
+   *  what the freeing threw now (a later free reports to the host). */
+  dispose: () => unknown[];
 }
 
 export interface TileStreamContext {
@@ -192,6 +248,9 @@ export interface TileStreamContext {
    * past it). Once per failure.
    */
   onAllocationFailure?: (error: unknown, where: string) => void;
+  /** a dressing whose build threw (not an abort, not an allocation
+   *  failure — those go to `onAllocationFailure`): the tile stays bare */
+  onDressingFailed?: (error: unknown, tile: string) => void;
   renderer: WebGPURenderer;
   styleResources: StyleResources;
   sunDirection: Vector3;
@@ -350,7 +409,7 @@ export const DRESSING_PARTS = {
   rail: (d) => d.rail,
   tram: (d) => d.tram,
   riverside: (d) => d.riverside,
-  traffic: (d) => d.traffic,
+  traffic: (d) => d.traffic?.group ?? undefined,
   sport: (d) => d.sport?.group,
   vineyards: (d) => d.vineyards,
 } as const satisfies Record<
@@ -407,13 +466,16 @@ export function catchUp(
 }
 
 /** A dressing's data layers shown or hidden as the look has them
- *  (lib/city/data-layers.ts): a layer that is off draws nothing. */
+ *  (lib/city/data-layers.ts): a layer that is off draws nothing, and one
+ *  never switched on has built nothing. */
 export function showDataLayers(
   d: Pick<TileDressing, "traffic">,
   look: Pick<LookValues, "trafficLayer">
 ): void {
-  if (d.traffic) {
-    d.traffic.visible = look.trafficLayer;
+  if (look.trafficLayer) {
+    void d.traffic?.show();
+  } else {
+    d.traffic?.hide();
   }
 }
 
@@ -427,6 +489,10 @@ function disposeDressing(d: TileDressing): unknown[] {
     } catch (err) {
       errors.push(err);
     }
+  }
+  // the traffic's bodies, built or still building (it nulls its group)
+  if (d.traffic) {
+    errors.push(...d.traffic.dispose());
   }
   for (const part of dressingParts(d)) {
     part.removeFromParent();
@@ -444,7 +510,7 @@ const tileIdOf = (scene: Object3D): string =>
  * the GPU with it; not run, nothing could compile it yet; failed; or out
  * of memory — the GPU or the page could not make room.
  */
-type Compiled = "done" | "failed" | "not run" | "out of memory";
+export type Compiled = "done" | "failed" | "not run" | "out of memory";
 
 /** The goals, posts and nets of the grounds this tile owns (a ground on a
  *  seam is in both tiles' tables; its centre decides). */
@@ -482,7 +548,7 @@ function buildTileVegetation(
   features: Omit<VegetationFeatures, "extraTrees" | "keepTree">,
   inventoryTrees: TreeFeature[],
   vegCtx: VegetationContext
-): VegetationControl {
+): { keepTree?: TreeVeto; vegetation: VegetationControl } {
   const inventory =
     inventoryTrees.length > 0
       ? buildTreeInventory(inventoryTrees, vegCtx, features.ndviAt)
@@ -496,13 +562,13 @@ function buildTileVegetation(
     vegCtx
   );
   if (!inventory) {
-    return canopy;
+    return { vegetation: canopy };
   }
   const own = inventory.control;
   const group = new Group();
   group.name = "vegetation";
   group.add(canopy.group, own.group);
-  return {
+  const vegetation: VegetationControl = {
     group,
     chunks: canopy.chunks,
     multiTuft: canopy.multiTuft,
@@ -527,6 +593,7 @@ function buildTileVegetation(
       return a || b;
     },
   };
+  return { keepTree: inventory.keepTree, vegetation };
 }
 
 /** `Promise.all` over named promises: no position to get out of step. */
@@ -550,6 +617,149 @@ const nextTask = () =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
   });
+
+/** What a tile's traffic bodies are built from (traffic-layer.ts
+ *  `buildTraffic`), and where the probe's ask set goes once they are. */
+export interface TrafficSource {
+  features: TrafficFeature[];
+  bridges: BridgeFeature[];
+  ground: GroundContext;
+  detail: TrafficDetail;
+  /** the tile's extent: a section cut at its edge does not taper there */
+  bounds?: readonly [number, number, number, number];
+  tile: string;
+  /** the dressing's ask list: the counted sections join it once their
+   *  bodies are built (they are asked on them, while the layer shows) */
+  asks: AskSet<FeatureInquiry>[];
+}
+
+/**
+ * A tile's counted traffic, its bodies built on demand (`TrafficSlot`):
+ * the first `show` once the dressing hangs builds them in the host's turn
+ * (a switch-on builds every loaded tile's bodies one after another, like
+ * the dressings), hangs them hidden on the tile, compiles them, and only
+ * then shows them, weighs them into the tile and adds their ask set. A
+ * tile that leaves meanwhile gets nothing hung (its release frees what
+ * was).
+ */
+export function trafficSlot(src: TrafficSource): TrafficSlot {
+  let host: TrafficHost | null = null;
+  let building: Promise<void> | null = null;
+  let set: AskSet<FeatureInquiry> | null = null;
+  /** the bodies' compile while it runs */
+  let compiling: Promise<Compiled> | null = null;
+  let wanted = false;
+  let ready = false;
+  let disposed = false;
+  const gone = (h: TrafficHost) => disposed || h.gone();
+  /** The bodies built, hung hidden and their compile started — in the
+   *  host's turn, which waits on the compile as a dressing's does. */
+  const start = (h: TrafficHost) =>
+    h.turn(async () => {
+      await nextTask();
+      if (gone(h)) {
+        return null;
+      }
+      const group = buildTraffic(
+        src.features,
+        src.bridges,
+        src.ground,
+        src.detail,
+        src.bounds
+      );
+      // asked as built, before it hangs (traffic-ask.ts)
+      const asks = trafficAskSet(group, src.features, src.tile);
+      group.visible = false;
+      h.root.add(group);
+      slot.group = group;
+      const compiled = h.compile(group);
+      compiling = compiled;
+      compiled
+        .finally(() => {
+          if (compiling === compiled) {
+            compiling = null;
+          }
+        })
+        .catch(() => undefined);
+      await withinCompileWait(compiled);
+      // (an object: a promise returned bare would be awaited whole)
+      return { asks, compiled, group };
+    });
+  const build = async (h: TrafficHost): Promise<void> => {
+    const started = await start(h);
+    if (!started || gone(h)) {
+      return;
+    }
+    const { asks, compiled, group } = started;
+    const ended = await compiled;
+    if (gone(h)) {
+      return; // the tile's release frees it, once the compile has ended
+    }
+    if (ended === "out of memory") {
+      // the GPU had no room (reported by the compile): the layer stays
+      // off on this tile rather than the GPU further under
+      slot.dispose();
+      return;
+    }
+    ready = true;
+    set = asks;
+    if (set) {
+      src.asks.push(set);
+    }
+    group.visible = wanted;
+    h.built();
+  };
+  const slot: TrafficSlot = {
+    group: null,
+    show: () => {
+      wanted = true;
+      if (ready && slot.group) {
+        slot.group.visible = true;
+        return Promise.resolve();
+      }
+      if (!host || disposed) {
+        return Promise.resolve(); // built once the dressing hangs
+      }
+      const h = host;
+      building ??= build(h).catch((err: unknown) => {
+        if (!gone(h)) {
+          h.failed(err);
+        }
+      });
+      return building;
+    },
+    hide: () => {
+      wanted = false;
+      if (slot.group) {
+        slot.group.visible = false;
+      }
+    },
+    asks: () => set,
+    attach: (h) => {
+      host = h;
+    },
+    dispose: () => {
+      disposed = true;
+      ready = false;
+      const group = slot.group;
+      slot.group = null;
+      if (!group) {
+        return [];
+      }
+      group.removeFromParent();
+      const running = compiling;
+      if (running && host) {
+        const h = host;
+        running
+          .finally(() => h.freeFailed(disposeObject3D(group)))
+          .catch(() => undefined);
+        return [];
+      }
+      return disposeObject3D(group);
+    },
+  };
+  return slot;
+}
 
 /**
  * The coarse terrain level's dressing: what must not end where the fine
@@ -585,16 +795,6 @@ async function buildCoarseDressing(
       ? fetchOptionalBinary(url(files.crowns), signal)
       : Promise.resolve(null),
   ]);
-  const bands =
-    traffic.length > 0
-      ? buildTraffic(
-          traffic,
-          bridges,
-          { offset, heightAt: terrain.heightAt },
-          "coarse",
-          extent
-        )
-      : undefined;
   // the same bridges as the fine level draws (its decks are measured, the
   // piers stand on the ground in reach), the same owner per seam
   const owns = (x: number, y: number) => ownsPoint(extent, x, y);
@@ -606,9 +806,6 @@ async function buildCoarseDressing(
           { ...ground, owns }
         )
       : undefined;
-  // asked on the coarse bodies too: the tiles the fine level has not
-  // reached show only these
-  const flows = trafficAskSet(bands, traffic, tile);
   const decks = rail
     ? bridgeAskSet(
         rail,
@@ -620,9 +817,21 @@ async function buildCoarseDressing(
         })
       )
     : undefined;
-  const asks = [flows, decks].filter(
-    (a): a is AskSet<FeatureInquiry> => a !== undefined && a !== null
-  );
+  const asks = decks ? [decks] : [];
+  // asked on the coarse bodies too, once built: the tiles the fine level
+  // has not reached show only these
+  const flows =
+    traffic.length > 0
+      ? trafficSlot({
+          features: traffic,
+          bridges,
+          ground: { offset, heightAt: terrain.heightAt },
+          detail: "coarse",
+          bounds: extent,
+          tile,
+          asks,
+        })
+      : undefined;
   const crowns = (crownBytes && unpackCrowns(crownBytes)) ?? [];
   const vegetation =
     crowns.length > 0
@@ -633,10 +842,10 @@ async function buildCoarseDressing(
         })
       : undefined;
   return {
-    asks: asks.length > 0 ? asks : undefined,
+    asks: asks.length > 0 || flows ? asks : undefined,
     rail: rail && rail.children.length > 0 ? rail : undefined,
     tile,
-    traffic: bands,
+    traffic: flows,
     vegetation,
   };
 }
@@ -681,9 +890,10 @@ async function buildDressing(
     rows,
     canopy,
     ndviAt,
-    lamps,
+    lamps: osmLamps,
     monuments,
-    furniture,
+    furniture: osmFurniture,
+    mly,
     rails,
     bridges,
     ballast,
@@ -705,6 +915,8 @@ async function buildDressing(
     lamps: get<LampFeature>("lamps"),
     monuments: get<MonumentFeature>("monuments"),
     furniture: get<FurnitureFeature>("furniture"),
+    // the lamps and bins OSM lacks, Mapillary's (lib/city/mapillary.ts)
+    mly: get<MapillaryFeature>("mly"),
     rails: get<RailFeature>("rail"),
     bridges: get<BridgeFeature>("bridge"),
     ballast: get<AreaFeature>("railarea"),
@@ -725,22 +937,29 @@ async function buildDressing(
     river: get<RiversideFeature>("riverside"),
     traffic: get<TrafficFeature>("traffic"),
   });
+  const fromMapillary = mapillaryParts(mly);
+  const lamps = [...osmLamps, ...fromMapillary.lamps];
+  const furniture = [...osmFurniture, ...fromMapillary.furniture];
   const sport = buildSport(terrain, sportTable, ctx);
   await nextTask();
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
-  const vegetation = buildTileVegetation(
+  // Orchard trees join the cadastre as its "small" archetype, appended: an
+  // index stays the trees file's (and its facts row), the orchard's past it.
+  const trees = [...inventory, ...orchardTrees(cultivated)];
+  const ownCanopy = offMonuments(canopy, monuments);
+  const ownScan = offMonuments(scanTrees, monuments);
+  const { vegetation, keepTree } = buildTileVegetation(
     {
       rows,
       // The laser-scan crowns outside the canopy mask join the canopy as
       // ordinary trees (they carry the same measured `h`); the bake already
       // dropped the ones a cadastre tree claims.
-      canopy: offMonuments([...canopy, ...scanTrees], monuments),
+      canopy: [...ownCanopy, ...ownScan],
       ndviAt: ndviAt ?? undefined,
     },
-    // Orchard trees join the cadastre as its "small" archetype.
-    [...inventory, ...orchardTrees(cultivated)],
+    trees,
     {
       offset: ctx.offset,
       heightAt: terrain.heightAt,
@@ -820,34 +1039,49 @@ async function buildDressing(
       : undefined,
   };
   const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
+  await nextTask();
   const asks = [
-    ...treeSets(inventory, askCtx),
+    ...treeSets(trees, askCtx),
     ...askSets(monumentItems(monuments, askCtx)),
     ...(bridgeSet ? [bridgeSet] : []),
+    // every other tree, the hedges, lamps, furniture, stops and landings
+    ...moreSets(
+      {
+        canopy: ownCanopy,
+        scan: ownScan,
+        rows,
+        hedges,
+        lamps: ownLamps,
+        furniture,
+        trams,
+        river,
+      },
+      { offset: ctx.offset, heightAt: terrain.heightAt, tile },
+      keepTree
+    ),
   ];
   // Sections are cut at the tile edge by the bake; a bridge street rides
   // the decks of this tile's bridge file (which names a seam deck in both).
-  const trafficBands =
+  // The counted sections are asked on their bodies, while the layer shows;
+  // the bodies come with the first switch-on.
+  const trafficFlows =
     traffic.length > 0
-      ? buildTraffic(
-          traffic,
+      ? trafficSlot({
+          features: traffic,
           bridges,
           ground,
-          "fine",
-          ctx.tileBounds(tile) ?? terrain.bounds
-        )
+          detail: "fine",
+          bounds: ctx.tileBounds(tile) ?? terrain.bounds,
+          tile,
+          asks,
+        })
       : undefined;
-  // The counted sections are asked on their bodies, while the layer shows.
-  const trafficSet = trafficAskSet(trafficBands, traffic, tile);
-  if (trafficSet) {
-    asks.push(trafficSet);
-  }
   return {
     asks,
     tile,
     tram,
     riverside,
-    traffic: trafficBands,
+    traffic: trafficFlows,
     vegetation,
     lowVegetation,
     vineyards,
@@ -1369,9 +1603,12 @@ export class DressingPlugin {
         // `loaded`): the dressing's materials are the scene's.
         await this.loaded.get(scene);
         // A dressing whose compile ran out of GPU memory stays off: the
-        // tile goes bare rather than the GPU further under.
+        // tile goes bare rather than the GPU further under. Nor does one
+        // whose tile left while a compile ran: its release waits for the
+        // compile (`compiles`), so its entry is still there.
         if (
           this.disposed ||
+          this.released.has(scene) ||
           this.dressed.get(scene) !== entry ||
           outcome === "out of memory"
         ) {
@@ -1392,8 +1629,18 @@ export class DressingPlugin {
           })
           .catch(() => undefined);
       })
-      .catch(() => {
-        // A dressing that fails leaves its tile bare, never the stream stuck.
+      .catch((err: unknown) => {
+        // A dressing that fails leaves its tile bare, never the stream
+        // stuck — but never silently: a builder's throw is a bug or a
+        // heap that ran out.
+        if (isAbortError(err) || this.disposed || this.released.has(scene)) {
+          return; // a tile that left mid-build: no failure of its own
+        }
+        if (isAllocationFailure(err)) {
+          this.ctx.onAllocationFailure?.(err, `dressing ${extras.tileId}`);
+        } else {
+          this.ctx.onDressingFailed?.(err, extras.tileId);
+        }
       })
       .finally(() => {
         built();
@@ -1423,14 +1670,60 @@ export class DressingPlugin {
     // hangs under it and leaves with its tile.
     scene.add(...parts);
     entry.dressing = dressing;
-    entry.dressingBytes = parts.reduce(
+    this.weighDressing(entry, dressing);
+    this.tiles?.recalculateBytesUsed();
+    this.stream.dressings.add(dressing);
+    // The traffic's bodies hang here once its layer is switched on.
+    dressing.traffic?.attach({
+      root: scene,
+      compile: (group) =>
+        this.compileUnder(
+          scene,
+          compileRepresentatives([group]),
+          `traffic ${tileIdOf(scene)}`
+        ),
+      // the dressings' own chain: a switch-on builds the loaded tiles'
+      // bodies one after another, never all in one task
+      turn: (work) => {
+        const run = this.chain.then(work);
+        this.chain = run.then(
+          () => undefined,
+          () => undefined
+        );
+        return run;
+      },
+      freeFailed: (errors) => this.disposeFailed(errors, scene),
+      gone: () =>
+        this.disposed ||
+        this.released.has(scene) ||
+        entry.dressing !== dressing,
+      built: () => {
+        this.weighDressing(entry, dressing);
+        const tile = this.tileOf.get(scene);
+        if (tile) {
+          this.tiles?.recalculateBytesUsed(tile);
+        }
+        this.ctx.onChange();
+      },
+      failed: (err) => {
+        if (isAllocationFailure(err)) {
+          this.ctx.onAllocationFailure?.(err, `traffic ${tileIdOf(scene)}`);
+        } else {
+          this.ctx.onDressingFailed?.(err, tileIdOf(scene));
+        }
+      },
+    });
+    // Whatever changed while it compiled (the hour moves on).
+    catchUp(dressing, this.ctx);
+  }
+
+  /** A hung dressing's geometry bytes, as its parts stand now (the
+   *  traffic's bodies count once built). */
+  private weighDressing(entry: Dressed, dressing: TileDressing): void {
+    entry.dressingBytes = dressingParts(dressing).reduce(
       (sum, part) => sum + estimateGeometryBytes(part),
       0
     );
-    this.tiles?.recalculateBytesUsed();
-    this.stream.dressings.add(dressing);
-    // Whatever changed while it compiled (the hour moves on).
-    catchUp(dressing, this.ctx);
   }
 
   /** Takes a hung dressing down again and frees it (its compile ran out of

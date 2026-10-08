@@ -27,15 +27,17 @@ import {
 } from "@/lib/city/memory-governor";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import {
-  frameLoss,
   type GpuLoss,
-  RESUME_AWAY_MS,
-  RESUME_WINDOW_MS,
   type SafetyLevel,
   shadowTilesStream,
   startTileOf,
 } from "@/lib/city/gpu-safety";
 import { createGround } from "@/lib/city/ground";
+import {
+  createPageLifecycle,
+  type LifecycleEffect,
+  type LifecycleSignal,
+} from "@/lib/city/page-lifecycle";
 import type { Landmark } from "@/lib/city/landmarks";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import {
@@ -81,7 +83,7 @@ import {
 } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
-import type { Inquiry } from "@/lib/city/inquiry";
+import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import {
@@ -368,9 +370,10 @@ export interface CityWalkOptions {
   onFollowEnd?: () => void;
   /**
    * What was asked last ("Befragen", ADR 0042): a click, a long press or
-   * `I` at the crosshair; null when nothing stands there.
+   * `I` at the crosshair, or a candidate chosen from the strip; null when
+   * nothing stands there. `along`: everything the question's ray met.
    */
-  onInquiry?: (inquiry: Inquiry | null) => void;
+  onInquiry?: (inquiry: Inquiry | null, along: InquiryAlong | null) => void;
   /** walk, fly or Modell (plan 055): at the start of a switch */
   onModeChange?: (mode: ViewMode) => void;
   /**
@@ -441,6 +444,12 @@ export interface CityWalkHandle {
    * marks it and reports it through `onInquiry`; tests and QA call it.
    */
   inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
+  /** Shows another candidate of the last question (the strip's click):
+   *  marks it and reports it through `onInquiry`. */
+  selectCandidate: (index: number) => Inquiry | null;
+  /** Outlines a candidate of the last question while the pointer is on
+   *  it in the strip; null outlines the chosen one again. */
+  previewCandidate: (index: number | null) => void;
   /** The provenance manifest (lib/city/provenance.ts), when the tileset
    *  names one: the inquiry card's source lines. */
   provenanceUrl: string | null;
@@ -1134,6 +1143,13 @@ async function bootApp(
           memoryEmergency(`allocation ${part}`);
         }
       },
+      // A dressing that threw leaves its tile bare: noted, reported, and
+      // said in the HUD as a layer's hole (no retry heals it).
+      onDressingFailed: (error, tile) => {
+        const message = error instanceof Error ? error.message : String(error);
+        opts.trail?.note("dressing failed", `${tile} ${message}`);
+        sayLayerFailed(`${message} (Kachel ${tile})`);
+      },
       dressingGate,
       fogColor: sceneFog.color,
       heightAt,
@@ -1187,18 +1203,49 @@ async function bootApp(
   // tile is asked for again (tile-retry.ts), its hole closes, and the boot
   // waits for it — failing only after a minute of a usable page without
   // it. A page on its way out (pagehide) decides and reports nothing.
-  let reportedError = false;
-  let reportedNetwork = false;
+  // The HUD's word about a missing part, latched per cause: a network
+  // word (the healer clears it once its tiles are back) or a layer word (a
+  // part gone for good, which no landing clears). A network failure
+  // replaces a layer word, which waits behind it (`layerWord`) and comes
+  // back when the network's clears; a second failure of a shown cause
+  // stays silent.
+  let shownWord: "none" | "network" | "layer" = "none";
+  let layerWord: string | null = null;
   let firstFrameShown = false;
   let bootFailure: Error | null = null;
-  // The HUD's word about the network goes once nothing it failed is
-  // outstanding (tile-retry.ts): at a landing, or found after a heal.
-  const clearNetworkWord = () => {
-    if (reportedNetwork && !disposed) {
-      reportedError = false;
-      reportedNetwork = false;
-      opts.onErrorCleared?.();
+  // A part of the city that failed for good (no retry heals it): the
+  // HUD's layer word, once.
+  const sayLayerFailed = (message: string) => {
+    if (disposed || layerWord !== null) {
+      return;
     }
+    layerWord = message;
+    if (shownWord === "none") {
+      shownWord = "layer";
+      opts.onError?.(message);
+    }
+  };
+  // A tile the network let down: asked for again (tile-retry.ts).
+  const sayNetworkFailed = (message: string) => {
+    if (!disposed && shownWord !== "network") {
+      shownWord = "network";
+      opts.onError?.(message);
+    }
+  };
+  // The HUD's word about the network goes once nothing it failed is
+  // outstanding (tile-retry.ts): at a landing, or found after a heal. A
+  // layer word it covered shows again.
+  const clearNetworkWord = () => {
+    if (shownWord !== "network" || disposed) {
+      return;
+    }
+    if (layerWord !== null) {
+      shownWord = "layer";
+      opts.onError?.(layerWord);
+      return;
+    }
+    shownWord = "none";
+    opts.onErrorCleared?.();
   };
   const network = createNetworkWatch({
     tiles: stream.tiles,
@@ -1235,10 +1282,10 @@ async function bootApp(
       }
       return;
     }
-    if (!(disposed || reportedError)) {
-      reportedError = true;
-      reportedNetwork = lost;
-      opts.onError?.(failure.message);
+    if (lost) {
+      sayNetworkFailed(failure.message);
+    } else {
+      sayLayerFailed(failure.message);
     }
   });
   // The last tile the network failed is back, or no longer wanted: the
@@ -1490,6 +1537,9 @@ async function bootApp(
       // the Ausschnitt is a Modell thing: a walk sees the whole city
       setCutOut(false);
     }
+    if (!parallel) {
+      cutOutFailed = false; // ...and so is its word
+    }
     applyFog();
     invalidateShadows();
     opts.trail?.note("camera", parallel ? "parallel" : "perspective");
@@ -1578,8 +1628,8 @@ async function bootApp(
   // What the outline goes around (selection-shape.ts): a building's own
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
   // monument's shape after its data.
-  const outline = (subject: OutlineSubject | null) => {
-    postStack.setSelection(outlineShape(subject));
+  const outline = (subject: OutlineSubject | null, flash = true) => {
+    postStack.setSelection(outlineShape(subject), flash);
   };
   const outlineShape = (
     subject: OutlineSubject | null
@@ -1611,7 +1661,8 @@ async function bootApp(
       const flow = trafficMesh(
         stream
           .visibleDressings()
-          .find((d) => d.tile === target.tile && d.traffic)?.traffic
+          .find((d) => d.tile === target.tile && d.traffic?.group)?.traffic
+          ?.group ?? undefined
       );
       return flow
         ? { flow, triangles: trafficTriangles(flow, target.index) }
@@ -1664,18 +1715,46 @@ async function bootApp(
         };
       case "bikes":
         return { ...asked, credit: layerSources?.bikes?.credit };
+      case undefined:
+        return null;
       case "building":
       case "bridge":
       case "monument":
+      case "canopy":
+      case "furniture":
+      case "hedge":
+      case "lamp":
+      case "landing":
+      case "stop":
         return asked;
-      case undefined:
-        return null;
     }
   };
+  // the last question's candidates, with what the card needs of each
+  let along: InquiryAlong | null = null;
   const inquireAt = (ndc?: { x: number; y: number }): Inquiry | null => {
-    const inquiry = answered(probe.ask(ndc));
-    opts.onInquiry?.(inquiry);
+    const asked = probe.ask(ndc);
+    along = asked
+      ? {
+          at: ndc ?? null,
+          candidates: asked.candidates.map((c) => ({
+            ...c,
+            inquiry: answered(c.inquiry) ?? c.inquiry,
+          })),
+          selected: asked.selected,
+        }
+      : null;
+    const inquiry = along?.candidates[along.selected]?.inquiry ?? null;
+    opts.onInquiry?.(inquiry, along);
     return inquiry;
+  };
+  const selectCandidate = (index: number): Inquiry | null => {
+    const chosen = along?.candidates[index];
+    if (!(along && chosen && probe.select(index))) {
+      return null;
+    }
+    along = { ...along, selected: index };
+    opts.onInquiry?.(chosen.inquiry, along);
+    return chosen.inquiry;
   };
   /** Modell: centres the picture on the ground under a screen point. */
   const centreAt = (ndcX: number, ndcY: number) => {
@@ -2140,6 +2219,9 @@ async function bootApp(
   };
   /** counts the Ausschnitt's requests: a hold that ends late is stale */
   let cutRequest = 0;
+  /** the last Ausschnitt could not be built: Modell's panel says so (not
+   *  the HUD's layer word — no part of the city is missing) */
+  let cutOutFailed = false;
   /**
    * Sets the Ausschnitt to the middle of the view, or lifts it. A new one
    * shows once its programs are built and held off the frames
@@ -2153,6 +2235,7 @@ async function bootApp(
     const v = modelRig.settledView();
     const cut = on && v ? cutOutFromView(v, viewportCss()) : null;
     const request = ++cutRequest;
+    cutOutFailed = false;
     cuts.setCutOut(cut, siteGround.atWorld, groundVersion);
     invalidateShadows();
     if (!cut) {
@@ -2171,7 +2254,21 @@ async function bootApp(
           opts.trail?.note("cut-out", "shown");
         }
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        // A program that failed to build: the Ausschnitt is lifted (its
+        // switch no longer "building…" for ever) and said in Modell's
+        // panel, beside its switch.
+        if (request !== cutRequest || disposed) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        opts.trail?.note("cut-out failed", message);
+        setCutOut(false);
+        cutOutFailed = true;
+        if (isAllocationFailure(error)) {
+          memoryEmergency("allocation cut-out");
+        }
+      });
   };
   /** Modell's view for the HUD, with the scene's half: the Ausschnitt. */
   const modelHud = (): ModelHud | null => {
@@ -2181,6 +2278,7 @@ async function bootApp(
         ...hud,
         cutOut: cuts.cutOut() !== null,
         cutOutPending: cuts.cutOut() !== null && !cuts.revealed(),
+        cutOutFailed,
       }
     );
   };
@@ -2214,63 +2312,87 @@ async function bootApp(
   let tickDue = 0;
   let fpsDue = 0;
   let frames = 0;
-  // The render cannot go on: stop once, then recover (a reload where the
-  // player stood, gpu-recovery.ts) or say so — before the first frame by
-  // failing the boot, since the HUD shows `onFatal` only once booted and
-  // the stopped loop no longer streams the tiles the boot waits for.
-  let stopped = false;
-  // When the page came back into view after RESUME_AWAY_MS or more hidden
-  // (the resume guard, below): a GPU that fails soon after was reclaimed.
-  let resumedAt = Number.NEGATIVE_INFINITY;
-  /** How a GPU that fails now went: in the background, or in use. */
-  const lossNow = (): GpuLoss =>
-    document.hidden || performance.now() - resumedAt < RESUME_WINDOW_MS
-      ? "reclaimed"
-      : "lost";
-  // "render stopped" goes on the trail first: what the page notes after it
-  // is the aftermath (cancelled fetches, the device's last word). A page
-  // that does not reload notes "gpu failed" last: the failure card (or the
-  // failed boot) is reported once — after a reclaim, which reports nothing
-  // of its own, it is the only word there is (crash-reports.ts).
-  const stopRendering = (
-    message: string,
-    how: GpuLoss = "lost",
-    detail = message
-  ) => {
-    if (stopped) {
-      return;
-    }
-    stopped = true;
-    void renderer.setAnimationLoop(null);
-    opts.trail?.note("render stopped", message);
-    if (how === "reclaimed") {
-      // iOS took the GPU of a page in the background: no failure of the
-      // page's own, and no reason for a lighter one (gpu-safety.ts).
-      opts.trail?.note("gpu reclaimed", detail);
-    }
-    if (disposed) {
-      return;
-    }
-    const reload = opts.onGpuLost?.(how);
-    if (reload) {
-      opts.trail?.note("reloading", `to recover the GPU (${how})`);
-      void releaseGpu(renderer).then(() => whenVisible(reload));
-      return;
-    }
-    opts.trail?.note("gpu failed", `${how}: ${message}`);
-    const failed = `Die Grafik ist ausgefallen (${message}). Bitte neu laden.`;
-    if (!firstFrameShown) {
-      bootFailure ??= new Error(failed);
-      return;
-    }
-    opts.onFatal?.(message);
+  // The page's GPU-loss, memory-emergency and resume decisions are one
+  // pure machine (lib/city/page-lifecycle.ts, ADR 0046): the renderer,
+  // the stream and the document feed it signals, and `runLifecycle`
+  // carries out the effects it answers with, in the trail's order.
+  // `onGpuLost` is asked once per stop; its reload waits for the effect.
+  // One that throws is no reload: the machine catches it, so the render
+  // still stops and the page says the GPU failed ("recovery failed").
+  let reloadNow: (() => void) | null = null;
+  // the governor's forced step, for the emergency's applyStep that follows
+  let forcedStep: MemoryStep | null = null;
+  let shadowResume: ReturnType<typeof setTimeout> | undefined;
+  cleanups.push(() => clearTimeout(shadowResume));
+  const lifecycle = createPageLifecycle({
+    emergencyGapMs: EMERGENCY_GAP_MS,
+    shadowHoldMs: EMERGENCY_SHADOW_HOLD_MS,
+    mayReload: (how) => {
+      reloadNow = opts.onGpuLost?.(how) ?? null;
+      return reloadNow !== null;
+    },
+    hiddenAt: document.hidden ? Date.now() : null,
+  });
+  type Effects = {
+    [K in LifecycleEffect["kind"]]: (
+      effect: Extract<LifecycleEffect, { kind: K }>
+    ) => void;
   };
+  const effects: Effects = {
+    note: (e) => opts.trail?.note(e.event, e.detail),
+    stopRender: () => void renderer.setAnimationLoop(null),
+    reload: () => {
+      const reload = reloadNow;
+      if (reload) {
+        void releaseGpu(renderer).then(() => whenVisible(reload));
+      }
+    },
+    fatal: (e) => {
+      if (!e.beforeFirstFrame) {
+        opts.onFatal?.(e.message);
+        return;
+      }
+      const failed = `Die Grafik ist ausgefallen (${e.message}). Bitte neu laden.`;
+      bootFailure ??= new Error(failed);
+    },
+    shed: () => shedUnusedTiles(stream.tiles.lruCache),
+    governorForce: (e) => {
+      forcedStep = governor.force(3, renderer.info.memory.total, e.now);
+    },
+    applyStep: () => {
+      applyStep(forcedStep ?? governor.step());
+      forcedStep = null;
+    },
+    holdShadows: (e) => {
+      shadowHeldUntil = Math.max(shadowHeldUntil, e.untilNow);
+      streamShadowTiles(sunUp);
+      clearTimeout(shadowResume);
+      shadowResume = setTimeout(
+        () => streamShadowTiles(sunUp),
+        EMERGENCY_SHADOW_HOLD_MS + GOVERN_MS
+      );
+    },
+    raiseSafety: () =>
+      raiseSafety(budget.safety, { by: opts.trail?.startedAt }),
+  };
+  const runLifecycle = (signal: LifecycleSignal): void => {
+    for (const effect of lifecycle.dispatch(signal)) {
+      // reason: the map's key and the effect's kind are the same union member
+      (effects[effect.kind] as (e: LifecycleEffect) => void)(effect);
+    }
+  };
+  /** Now, as the machine's signals carry it. */
+  const at = () => ({ now: performance.now(), hidden: document.hidden });
+  // The GPU ran out of memory (an uncaptured GPUOutOfMemoryError, a failed
+  // upload or compile the stream reports): the one entry for them all.
+  const memoryEmergency = (reason: string): void =>
+    runLifecycle({ kind: "allocationFailed", reason, ...at() });
   // A device the browser reports lost: three only stops drawing (silently,
   // every frame after it returns early), so the loop stops here too.
   const onDeviceLost = renderer.onDeviceLost.bind(renderer);
   renderer.onDeviceLost = (info) => {
     onDeviceLost(info);
-    stopRendering(info.message, lossNow());
+    runLifecycle({ kind: "deviceLost", message: info.message, ...at() });
   };
   // WebKit's failed allocation also arrives, after the fact, as an
   // uncaptured GPUOutOfMemoryError (three passes its class name as the
@@ -2283,34 +2405,23 @@ async function bootApp(
       memoryEmergency(info.message ?? "GPUOutOfMemoryError");
     }
   };
-  // A frame that throws stops the render. A lost GPU (iOS reclaims the GPU
-  // process under memory pressure; WebKit throws InvalidStateError before
-  // any device-lost arrives) fails every frame after it. Anything else
-  // thrown inside three's render leaves it unwound: its render call depth
-  // one level deep (no compile matches a frame again), or the shadow pass's
-  // override and object function installed (every later frame draws only
-  // the casters, and returns normally). Carrying on is never a recovery.
-  // Soon after a long absence it is the GPU iOS reclaimed meanwhile: noted
-  // as that (stopRendering), not as a failed frame. In use it is a loss
-  // only with a sign of the GPU running out — an allocation error, a
-  // memory emergency before it, a GPU that no longer takes work (the
-  // probe; WebGL2 has none to fail) — and otherwise a bug ("failed"): a
-  // reload at the same level, never a lighter device for days.
+  // A frame that throws stops the render: a lost GPU (WebKit throws
+  // InvalidStateError before any device-lost arrives) fails every frame
+  // after it, and anything else thrown inside three's render leaves it
+  // unwound. Carrying on is never a recovery; how it went (reclaimed, lost
+  // or a bug) is the machine's frameLoss, the probe asked only if needed.
   const onFrameFailed = (error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    const where =
-      error instanceof Error
-        ? (error.stack ?? "").split("\n").slice(0, 4).join(" | ")
-        : "";
-    const how = frameLoss(lossNow(), {
+    runLifecycle({
+      kind: "frameFailed",
+      message: error instanceof Error ? error.message : String(error),
+      where:
+        error instanceof Error
+          ? (error.stack ?? "").split("\n").slice(0, 4).join(" | ")
+          : "",
       allocation: isAllocationFailure(error),
-      emergency: lastEmergency !== Number.NEGATIVE_INFINITY,
-      answers: () => probeGpu(renderer) === null,
+      gpuAnswers: () => probeGpu(renderer) === null,
+      ...at(),
     });
-    if (how !== "reclaimed") {
-      opts.trail?.note("frame failed", `${message} ${where}`);
-    }
-    stopRendering(message, how, `${message} ${where}`);
   };
   // Bild speichern: one tile per frame, read in the frame's own task right
   // after its render (the canvas's picture is only readable until the task
@@ -2413,13 +2524,8 @@ async function bootApp(
       c.request.resolve({ canvas: c.out, imagePxPerCssPx: c.imagePxPerCssPx });
     }
   };
-  // (It resolves once the loop is installed: nothing to wait for.)
-  void renderer.setAnimationLoop((time) => {
-    // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
-    // the clamp below keeps the skipped time from jumping the scene.
-    if (pocFramesHeld()) {
-      return;
-    }
+  // One frame: the scene steps, streams and renders.
+  const frame = (time: number) => {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     const elapsed = timer.getElapsed();
@@ -2481,15 +2587,28 @@ async function bootApp(
     // The counters cover this frame's passes only (autoReset is off: the
     // loop's own reset also ran on held frames, which read back as zero).
     renderer.info.reset();
-    try {
-      postStack.render();
-    } catch (error) {
-      onFrameFailed(error);
-      return;
-    }
+    postStack.render();
     takeCaptureTile();
     frames++;
     tickPocFrame(shadowRendered);
+  };
+  // (It resolves once the loop is installed: nothing to wait for.) The
+  // whole frame is guarded, not the render alone: three asks for the next
+  // frame before it runs this one, so a throw out of the pose, the stream
+  // or an overlay would come again every frame — into the trail's storage
+  // and the reports' count, behind a frozen picture — and never reach
+  // onFrameFailed, which stops the loop and decides the reload.
+  void renderer.setAnimationLoop((time) => {
+    // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
+    // the clamp in the frame keeps the skipped time from jumping the scene.
+    if (pocFramesHeld()) {
+      return;
+    }
+    try {
+      frame(time);
+    } catch (error) {
+      onFrameFailed(error);
+    }
   });
   cleanups.push(() => void renderer.setAnimationLoop(null));
   // The crash trail's heartbeat: what a killed page was doing last.
@@ -2527,6 +2646,7 @@ async function bootApp(
         style: lastStyle,
         mode: pose.getMode(),
         heightM: camera.position.y - groundUnderCamera(),
+        stopped: lifecycle.stopped,
       });
     }, TRAIL_BEAT_MS);
     cleanups.push(() => clearInterval(beat));
@@ -2567,82 +2687,22 @@ async function bootApp(
   }, GOVERN_MS);
   cleanups.push(() => clearInterval(govern));
 
-  // --- the memory emergency ---------------------------------------------
-  let emergencyRaised = false;
-  // WebKit reports every allocation that failed: one emergency covers a burst.
-  let lastEmergency = Number.NEGATIVE_INFINITY;
-  let shadowResume: ReturnType<typeof setTimeout> | undefined;
-  cleanups.push(() => clearTimeout(shadowResume));
-  /**
-   * The GPU ran out of memory (the uncaptured GPUOutOfMemoryError above):
-   * shed at once what can go, before a frame's own allocation fails and
-   * the render stops — every tile not in use, the governor to its last
-   * step, the shadow camera's tiles for two minutes — and make the next
-   * page a safety level lighter (gpu-safety.ts), once per page and per
-   * incident: the raise names this page (`by`), so the loss it foretold
-   * renews it rather than adding one, and its death raises nothing more
-   * on the next load. Not for a GPU iOS reclaimed (hidden, or just back
-   * after a long absence): an allocation refused there is the reclaim's
-   * symptom, no sign of the page's. The one entry for every
-   * allocation-failure signal: a failed upload or compile the stream
-   * reports connects here, `memoryEmergency("allocation …")`.
-   */
-  const memoryEmergency = (reason: string): void => {
-    const now = performance.now();
-    if (disposed || stopped || now - lastEmergency < EMERGENCY_GAP_MS) {
-      return;
-    }
-    lastEmergency = now;
-    opts.trail?.note("memory emergency", reason);
-    const step = governor.force(3, renderer.info.memory.total, now);
-    shedUnusedTiles(stream.tiles.lruCache);
-    applyStep(step ?? governor.step());
-    shadowHeldUntil = Math.max(shadowHeldUntil, now + EMERGENCY_SHADOW_HOLD_MS);
-    streamShadowTiles(sunUp);
-    clearTimeout(shadowResume);
-    shadowResume = setTimeout(
-      () => streamShadowTiles(sunUp),
-      EMERGENCY_SHADOW_HOLD_MS + GOVERN_MS
-    );
-    if (!emergencyRaised && lossNow() === "lost") {
-      emergencyRaised = true;
-      raiseSafety(budget.safety, { by: opts.trail?.startedAt });
-    }
-  };
-
   // --- the resume guard -------------------------------------------------
-  // iOS takes the GPU of a page in the background, and what the page holds
-  // counts against it there: hidden, a phone's page lets go of every tile
-  // not in use (a desktop keeps its cache: a tab switch is no threat
-  // there); shown again, it gets its cache back and probes the GPU before
-  // the next frame draws — a GPU gone meanwhile is a reclaim
-  // (stopRendering), not a failure of the page's. The time away is the
-  // wall clock's: iOS stops `performance.now()` while the device sleeps,
-  // and an hour with the phone locked would read as a glance away.
-  let hiddenAt = document.hidden ? Date.now() : null;
-  const onVisibility = () => {
-    if (disposed || stopped) {
-      return;
-    }
-    if (document.hidden) {
-      hiddenAt = Date.now();
-      if (shedding()) {
-        shedUnusedTiles(stream.tiles.lruCache);
-        applyStep(governor.step());
-      }
-      return;
-    }
-    const away = hiddenAt === null ? 0 : Date.now() - hiddenAt;
-    hiddenAt = null;
-    applyStep(governor.step());
-    if (away >= RESUME_AWAY_MS) {
-      resumedAt = performance.now();
-    }
-    const failure = probeGpu(renderer);
-    if (failure !== null) {
-      stopRendering(failure, "reclaimed");
-    }
-  };
+  // Hidden, a phone's page lets go of every tile not in use; shown again,
+  // it gets its cache back and probes the GPU before the next frame draws
+  // (page-lifecycle.ts). The time away is the wall clock's: iOS stops
+  // `performance.now()` while the device sleeps.
+  const onVisibility = () =>
+    runLifecycle(
+      document.hidden
+        ? { kind: "hidden", wall: Date.now(), phone: budget.tier === "mobile" }
+        : {
+            kind: "shown",
+            wall: Date.now(),
+            now: performance.now(),
+            gpuFailure: () => probeGpu(renderer),
+          }
+    );
   document.addEventListener("visibilitychange", onVisibility);
   cleanups.push(() =>
     document.removeEventListener("visibilitychange", onVisibility)
@@ -2685,6 +2745,7 @@ async function bootApp(
     poll();
   });
   firstFrameShown = true;
+  lifecycle.dispatch({ kind: "firstFrame" });
   onChange();
   flushStats();
   // Tiles compile themselves before they show; this covers the rest of the
@@ -2788,7 +2849,12 @@ async function bootApp(
 
   return {
     setSun,
-    clearInquiry: probe.clear,
+    clearInquiry: () => {
+      along = null;
+      probe.clear();
+    },
+    selectCandidate,
+    previewCandidate: probe.preview,
     demolishAtCrosshair,
     inquireAt,
     provenanceUrl: extras.provenance
@@ -2955,6 +3021,7 @@ async function bootApp(
         return;
       }
       disposed = true;
+      lifecycle.dispatch({ kind: "dispose" });
       // Same list, same order as a failed boot unwinds: animation loop ->
       // resize observer -> listeners -> touch -> post stack -> stream ->
       // lights -> sun rig.

@@ -25,7 +25,10 @@ import type { TreeFactsFile } from "@/lib/city/features";
 import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
 import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
 import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
+import { cardCredits } from "@/lib/city/card-lines";
+import { InquiryData } from "./inquiry-data";
 import { isTextEntry } from "./keyboard-controls";
+import { useSite } from "./site-context";
 
 type DrawerSnapPoint = DrawerPrimitive.Root.SnapPoint;
 
@@ -132,9 +135,11 @@ export function InquiryCard({
 }) {
   const provenance = useProvenance(provenanceUrl);
   const treeFacts = useTreeFacts(inquiry);
+  const site = useSite();
+  const credits = useMemo(() => cardCredits(site), [site]);
   const card = useMemo(
-    () => inquiryCard(inquiry, provenance, treeFacts),
-    [inquiry, provenance, treeFacts]
+    () => inquiryCard(inquiry, provenance, credits, treeFacts),
+    [inquiry, provenance, credits, treeFacts]
   );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -151,18 +156,33 @@ export function InquiryCard({
     // opens a fresh sheet, never the closing one (whose close would drop
     // the new question).
     return (
-      <InquirySheet card={card} key={inquiryKey(inquiry)} onClose={onClose} />
+      <InquirySheet
+        card={card}
+        inquiry={inquiry}
+        key={inquiryKey(inquiry)}
+        onClose={onClose}
+        provenance={provenance}
+      />
     );
   }
   return (
     <aside
       aria-labelledby="inquiry-title"
-      className="absolute top-4 left-4 z-20 w-[min(22rem,calc(100%-2rem))] rounded-lg bg-card p-4 text-card-foreground shadow-lg ring-1 ring-foreground/10 select-text"
+      className="pointer-events-auto flex min-h-0 shrink flex-col rounded-lg bg-card text-card-foreground shadow-lg ring-1 ring-foreground/10 select-text"
       data-testid="inquiry-card"
       data-variant="card"
     >
-      <CardHeader card={card} onClose={onClose} />
-      <CardDetails card={card} />
+      <div className="shrink-0 px-4 pt-4">
+        <CardHeader card={card} onClose={onClose} />
+      </div>
+      {/* the head stays; facts and Daten scroll below it, the wheel there
+          scrolls the card, not the scene */}
+      <div
+        className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-4"
+        data-inquiry-scroll
+      >
+        <CardDetails card={card} inquiry={inquiry} provenance={provenance} />
+      </div>
     </aside>
   );
 }
@@ -228,10 +248,14 @@ function useSheetEntrance(): [RefObject<HTMLDivElement | null>, boolean] {
  */
 function InquirySheet({
   card,
+  inquiry,
   onClose,
+  provenance,
 }: {
   card: InquiryCardModel;
+  inquiry: Inquiry;
   onClose: () => void;
+  provenance: SiteProvenance | null;
 }) {
   const [open, setOpen] = useState(true);
   const [snap, setSnap] = useState<DrawerSnapPoint | null>(
@@ -263,7 +287,13 @@ function InquirySheet({
         data-variant="sheet"
         ref={popup}
       >
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]">
+        {/* The popup is the whole screen tall and unfolds to three
+            quarters of it: the scroll ends where the screen does, or the
+            last quarter of the Daten scrolled out of reach below it. */}
+        <div
+          data-inquiry-scroll
+          className="flex max-h-[calc(75dvh-1.75rem)] min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]"
+        >
           <CardHeader
             card={card}
             closeSlot={<SheetClose />}
@@ -277,7 +307,7 @@ function InquirySheet({
           >
             {unfolded ? "Angaben einklappen" : "Angaben und Quellen"}
           </button>
-          <CardDetails card={card} />
+          <CardDetails card={card} inquiry={inquiry} provenance={provenance} />
         </div>
       </DrawerContent>
     </Drawer>
@@ -314,7 +344,8 @@ function CardHeader({
   return (
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+        {/* the accent the outline is drawn in: card and object are one */}
+        <p className="text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
           {card.kicker}
         </p>
         <Title
@@ -345,8 +376,16 @@ function CardHeader({
   );
 }
 
-/** The facts, the id to copy and the source lines. */
-function CardDetails({ card }: { card: InquiryCardModel }) {
+/** The facts, the id to copy and, folded, the data behind them. */
+function CardDetails({
+  card,
+  inquiry,
+  provenance,
+}: {
+  card: InquiryCardModel;
+  inquiry: Inquiry;
+  provenance: SiteProvenance | null;
+}) {
   // Which id was copied: a new building's card starts uncopied.
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copied = copiedId === card.id;
@@ -389,11 +428,11 @@ function CardDetails({ card }: { card: InquiryCardModel }) {
         </button>
       </div>
 
-      <ul className="mt-2 space-y-1 text-[10.5px] leading-snug text-muted-foreground">
-        {card.sources.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
+      <InquiryData
+        inquiry={inquiry}
+        provenance={provenance}
+        sources={card.sources}
+      />
     </>
   );
 }

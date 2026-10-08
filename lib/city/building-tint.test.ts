@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
 import {
   buildingGlows,
+  ownFacade,
   buildingTint,
   inheritedAttributes,
   roofColor,
   roofTint,
   roughJitter,
+  mappedStoreyHeight,
   storeyHeight,
 } from "./building-tint";
 
@@ -143,6 +145,18 @@ test("storeyHeight: snaps near ~3.2 m, clamps, falls back to 3", () => {
   expect(Math.round(12 / h)).toBe(4); // 12 m → 4 storeys of 3 m
 });
 
+test("mappedStoreyHeight: OSM's storeys up to the eave, else the estimate", () => {
+  // a Gründerzeit block: 17 m to the eave over 4 storeys
+  expect(mappedStoreyHeight(17, 22, 4)).toBe(4.25);
+  // a Plattenbau: 16.8 m over 6
+  expect(mappedStoreyHeight(16.8, 18, 6)).toBeCloseTo(2.8);
+  // no count, or one implausible for these walls → the height's estimate
+  expect(mappedStoreyHeight(17, 22, undefined)).toBe(storeyHeight(22));
+  expect(mappedStoreyHeight(40, 45, 4)).toBe(storeyHeight(45)); // a tower
+  expect(mappedStoreyHeight(6, 9, 5)).toBe(storeyHeight(9)); // a typo
+  expect(mappedStoreyHeight(6, 9, 0)).toBe(storeyHeight(9));
+});
+
 test("roughJitter: deterministic, in [-1,1]", () => {
   expect(roughJitter("x")).toBe(roughJitter("x"));
   for (const id of ["a", "b", "kurz", "DESNATPU1000HJx5"]) {
@@ -166,4 +180,12 @@ test("a brick city paints housing and commerce in brick, civic keeps its stone",
   const civic = { function: "31001_3021" };
   expect(buildingTint("c", civic, "brick")).toEqual(buildingTint("c", civic));
   expect(buildingTint("h", {}, "render")).toEqual(buildingTint("h", {}));
+});
+
+test("ownFacade: monumental uses and hall storeys, not town houses", () => {
+  expect(ownFacade({ function: "31001_3041" })).toBe(true); // Kirche
+  expect(ownFacade({ function: "31001_3032" })).toBe(true); // Theater, Oper
+  expect(ownFacade({ function: "31001_1000" }, 18, 6)).toBe(false);
+  expect(ownFacade({ function: "31001_2000" }, 18, 2)).toBe(true); // a hall
+  expect(ownFacade({ function: "31001_2000" }, 18)).toBe(false); // no levels
 });

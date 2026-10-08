@@ -10,7 +10,7 @@ import { measureJumps } from "./line-levels";
  * upper ones dropping into the gap beside a bridge. What remains are deck
  * ends above lower ground the approaches meet and tracks that end in a
  * gap. Lower the budget when a fix lowers the count; raising it needs a
- * reason in the commit. `bun scripts/line-levels.ts <site>` prints the
+ * reason in the commit. `bun scripts/line-levels-cli.ts <site>` prints the
  * count and the worst places.
  */
 const BUDGET = 20;

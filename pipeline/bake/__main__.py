@@ -10,6 +10,8 @@ import argparse
 from . import (
     canopy,
     cultivated,
+    doors,
+    dormers,
     edges,
     fetch,
     furniture,
@@ -17,6 +19,7 @@ from . import (
     landcover,
     landmarks,
     lowveg,
+    mapillary,
     markings,
     monuments,
     ndvi,
@@ -52,9 +55,14 @@ STEPS = {
     "ndvi": ndvi.run,
     "roof-colour": roof_colour.run,
     "osm-buildings": osm_buildings.run,
+    # OSM entrances on the LoD2 walls (scripts/bake-city-mesh.ts draws them).
+    "doors": doors.run,
     "lamps": lamps.run,
     "monuments": monuments.run,
     "furniture": furniture.run,
+    # After the lamps and the furniture: Mapillary's lamps and bins where
+    # OSM has none.
+    "mapillary": mapillary.run,
     "walls": walls.run,
     "stairs": stairs.run,
     "surface": surface.run,
@@ -94,6 +102,10 @@ STEPS = {
     # OSM — the chimneys, towers and masts LoD2 leaves out, the buildings it
     # does not carry yet, and a landmark's roof form it flattens (plan 050).
     "structures": structures.run,
+    # After roofs (the rebuilt ones are measured already) and the tree bakes
+    # (a crown over a roof is no dormer): the dormers DOM1 shows on the
+    # pitched LoD2 roofs.
+    "dormers": dormers.run,
 }
 
 

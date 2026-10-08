@@ -11,6 +11,7 @@ import { WATER_CLASS } from "../lib/city/landcover";
 import { buildingFootprintPolys } from "../lib/city/minimap";
 import { type Site, tileExtentOf, tileIdOf } from "../lib/city/site";
 import {
+  absentSiteFiles,
   siteReport,
   siteSummary,
   walkViewpointIssue,
@@ -101,6 +102,10 @@ if (process.argv.includes("--all")) {
     for (const line of checks) {
       out(line);
     }
+    out();
+  }
+  for (const f of absentSiteFiles(site, existsSync)) {
+    out(`${f.path}: absent — ${f.hint}`);
     out();
   }
   for (const t of siteReport(site, existsSync)) {

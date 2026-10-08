@@ -51,6 +51,23 @@ test("every tree of the file is askable, by its index there", () => {
   );
 });
 
+test("an orchard tree appended to the file's is askable past its end, as an orchard tree", () => {
+  const trees = read<TreeFeature>("trees");
+  const at: [number, number] = [412_500.5, 5_656_500.5];
+  const orchard: TreeFeature = {
+    geometry: { type: "Point", coordinates: at },
+    properties: { a: 0, h: 4.5, d: 4, l: "d", s: "orchard" },
+  };
+  const sets = treeSets([...trees, orchard], ctx);
+  const w = epsgToWorld(at[0], at[1], offset);
+  const hit = nearestInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500);
+  expect(hit?.target).toMatchObject({
+    kind: "tree",
+    index: trees.length,
+    orchard: true,
+  });
+});
+
 test("a fountain basin and the monuments are askable where they stand", () => {
   const monuments = read<MonumentFeature>("monuments");
   const items = monumentItems(monuments, ctx);

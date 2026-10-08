@@ -18,15 +18,21 @@ already there, so a rerun only fetches what is missing:
     data/_raw/<provider>/wikidata/landmarks_<tile>.json  its notable buildings and structures
     data/_raw/<provider>/lsc/<tile>.laz                  laser scan (`--lsc` only)
 
-Statewide packages are cached under data/_raw/<provider>/downloads/; a
-tile's own downloads live in a scratch folder only until its products are
+Statewide packages, and the LoD2 files a tile shares with its neighbours
+(the one-cell ring), are cached under data/_raw/<provider>/downloads/; a
+tile's other downloads live in a scratch folder only until its products are
 written (the products are the cache: a rerun skips them).
+
+The fetch exits 1 when a product the build or the bakes cannot do without
+failed — a tile's DGM1 or LoD2, the Basis-DLM (where the provider has one)
+or the OSM extract — after it has tried everything else.
 """
 
 from __future__ import annotations
 
 import importlib
 import shutil
+import urllib.error
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -35,7 +41,7 @@ from typing import Protocol
 
 from rasterio.enums import Resampling
 
-from . import bridge, cadastre, landmarks, traffic_sources, transit
+from . import bridge, cadastre, landmarks, mapillary, traffic_sources, transit
 from .citygml import write_cityjson
 from .common import Tile, dlm_complete
 from .net import download
@@ -46,8 +52,9 @@ from .spec import Spec
 @dataclass(frozen=True)
 class Ctx:
     """What an adapter works with: the provider's raw folder (statewide
-    packages are cached in `downloads/`) and a scratch folder for the tile's
-    own downloads, removed once its products are written."""
+    packages and shared LoD2 files are cached in `downloads/`) and a
+    scratch folder for the tile's own downloads, removed once its products
+    are written."""
 
     raw: Path
     scratch: Path
@@ -74,29 +81,63 @@ class Adapter(Protocol):
         """Fill `ctx.raw / "dlm"` with the AdV Shape layers."""
 
 
-def cells(tile: Tile, km: int) -> Iterator[tuple[int, int]]:
-    """South-west corners (km) of a provider's `km` grid covering the tile."""
+def cells(tile: Tile, km: int, margin: int = 0) -> Iterator[tuple[int, int]]:
+    """South-west corners (km) of a provider's `km` grid covering the tile,
+    plus `margin` rings of cells around it (the LoD2 fetch reads one: a
+    provider files a seam building in one cell by its own rule, and the
+    converter keeps it for the tile holding its envelope centre — which
+    may be the cell next door)."""
     xmin, ymin, xmax, ymax = (int(b) // 1000 for b in tile.bounds)
-    for e in range(xmin - xmin % km, xmax, km):
-        for n in range(ymin - ymin % km, ymax, km):
+    pad = margin * km
+    for e in range(xmin - xmin % km - pad, xmax + pad, km):
+        for n in range(ymin - ymin % km - pad, ymax + pad, km):
             yield e, n
+
+
+def own_cells(tile: Tile, km: int) -> set[tuple[int, int]]:
+    """The cells inside the tile (`cells(tile, km)` without a margin): a
+    file missing for one of them is an error, one missing for a margin cell
+    (past the provider's coverage) is skipped."""
+    return set(cells(tile, km))
+
+
+def not_published(err: OSError) -> bool:
+    """Whether a download failed because the server has no such file (404,
+    410) — the one failure that skips a margin cell. Anything else (a
+    timeout, a cut connection, a failed check, a 5xx) raises, so `_step`
+    reports the product as not fetched and the next run tries again."""
+    return isinstance(err, urllib.error.HTTPError) and err.code in (404, 410)
 
 
 def adapter(provider: str) -> Adapter:
     return importlib.import_module(f"bake.providers.{provider}")  # type: ignore[return-value]
 
 
-def _step(what: str, tile: Tile, dest: Path, make) -> None:
+def _step(what: str, tile: Tile, dest: Path, make) -> bool:
     """One product of a tile. Every writer goes through a `.part` file and
     raises rather than writing something incomplete, so an existing `dest`
-    is a finished one; a failure is reported and the next product goes on."""
+    is a finished one; a failure is reported and the next product goes on.
+    True when `dest` is there (it was, or it was made), False on a failure."""
     if dest.exists():
-        return
+        return True
     try:
         make()
         print(f"{tile.id}: {what} → {dest}")
+        return True
     except Exception as err:  # noqa: BLE001 — report, then fetch the rest
         print(f"{tile.id}: {what} not fetched ({type(err).__name__}: {err})")
+        return False
+
+
+def _try(what: str, tile: Tile, call) -> bool:
+    """A per-tile fetch with no `dest` of its own to skip on (it keeps its
+    own cache): any failure is reported and the next fetch goes on."""
+    try:
+        call()
+        return True
+    except Exception as err:  # noqa: BLE001 — report, then fetch the rest
+        print(f"{tile.id}: {what} not fetched ({type(err).__name__}: {err})")
+        return False
 
 
 @contextmanager
@@ -123,21 +164,31 @@ def _place_laz(files: list[Path], dest: Path) -> None:
     part.replace(dest)
 
 
-def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> None:
+def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> list[str]:
+    """Fetches the tile's products; returns the REQUIRED ones that failed
+    (the DGM1 and the LoD2: the build fails without them). The optional
+    ones — surface model, orthophoto, laser scan and the per-tile extras —
+    only print a line when they fail: their features are then off."""
+    failed: list[str] = []
     with _scratch(spec.raw, tile.id) as scratch:
         ctx = Ctx(spec.raw, scratch, spec.epsg)
-        _step(
+        # required
+        if not _step(
             "DGM1",
             tile,
             tile.dgm,
             lambda: write_tile_raster(source.dgm(ctx, tile), tile, tile.dgm, 1.0, heights=True),
-        )
-        _step(
+        ):
+            failed.append("DGM1")
+        # required
+        if not _step(
             "LoD2",
             tile,
             tile.cityjson,
             lambda: write_cityjson(source.lod2(ctx, tile), tile.bounds, spec.epsg, tile.cityjson),
-        )
+        ):
+            failed.append("LoD2")
+        # optional from here on
         if spec.products.dom:
             dom = tile.raw_raster("dom1")
             _step(
@@ -163,35 +214,73 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> No
         if lsc and spec.products.lsc:
             laz = tile.raw / "lsc" / f"{tile.id}.laz"
             _step("laser scan", tile, laz, lambda: _place_laz(source.lsc(ctx, tile), laz))
-    cadastre.fetch(tile)
-    traffic_sources.fetch(tile)
-    bridge.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg)
-    landmarks.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg)
+    _try("tree cadastre", tile, lambda: cadastre.fetch(tile))
+    _try("traffic counts", tile, lambda: traffic_sources.fetch(tile))
+    _try("Mapillary objects", tile, lambda: mapillary.fetch(tile))
+    _try(
+        "Wikidata bridges",
+        tile,
+        lambda: bridge.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg),
+    )
+    _try(
+        "Wikidata landmarks",
+        tile,
+        lambda: landmarks.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg),
+    )
+    return failed
 
 
-def fetch_osm(spec: Spec) -> None:
+def fetch_osm(spec: Spec) -> bool:
+    """The site's OSM extract; False when it could not be downloaded. The
+    tiles are still fetched, but the bakes need it (every OSM layer, and
+    the land cover where the provider has no Basis-DLM), so `run` fails at
+    the end."""
     if spec.osm.exists():
-        return
+        return True
     try:
         # Geofabrik publishes an md5 beside every extract.
         download(spec.osm_url, spec.osm, md5_url=f"{spec.osm_url}.md5")
-    except Exception as err:  # noqa: BLE001 — the tiles do not need it
+        return True
+    except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
         print(f"OSM extract not downloaded ({err}); put {spec.osm_url} at {spec.osm}")
+        return False
+
+
+def fetch_dlm(spec: Spec, source: Adapter) -> bool:
+    """The provider's Basis-DLM, where it has one; False when it could not
+    be fetched. The land-cover bake refuses to run without it, so `run`
+    fails at the end — after the tiles."""
+    if not spec.products.dlm or dlm_complete(spec.raw / "dlm"):
+        return True
+    try:
+        with _scratch(spec.raw, "dlm") as scratch:
+            source.dlm(Ctx(spec.raw, scratch, spec.epsg))
+        return True
+    except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
+        print(f"Basis-DLM not fetched ({type(err).__name__}: {err})")
+        return False
 
 
 def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
     spec.raw.mkdir(parents=True, exist_ok=True)
     source = adapter(spec.provider)
-    if spec.products.dlm and not dlm_complete(spec.raw / "dlm"):
-        try:
-            with _scratch(spec.raw, "dlm") as scratch:
-                source.dlm(Ctx(spec.raw, scratch, spec.epsg))
-        except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
-            print(f"Basis-DLM not fetched ({type(err).__name__}: {err})")
-    fetch_osm(spec)
+    # required, site-wide: the bakes refuse to run without either
+    site_failed = [
+        what
+        for what, ok in (("Basis-DLM", fetch_dlm(spec, source)), ("OSM extract", fetch_osm(spec)))
+        if not ok
+    ]
     if spec.trams:
         transit.fetch_gtfs(transit.gtfs_dir(spec.raw))
     if lsc and not spec.products.lsc:
         print(f"--lsc: the {spec.provider} adapter reads no laser scan — skipped")
-    for tile in tiles:
-        fetch_tile(spec, tile, source, lsc)
+    failures = {tile.id: fetch_tile(spec, tile, source, lsc) for tile in tiles}
+    failures = {tid: what for tid, what in failures.items() if what}
+    if site_failed:
+        print(f"fetch: {', '.join(site_failed)} not fetched — the bakes cannot run without it")
+    if failures:
+        print("fetch: required products not fetched — the build cannot use these tiles:")
+        for tid, what in failures.items():
+            print(f"  {tid}: {', '.join(what)}")
+    if site_failed or failures:
+        raise SystemExit(1)

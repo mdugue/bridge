@@ -1,4 +1,4 @@
-# Plan 056: Window axes from street photos — spike result
+# Plan 068: Window axes from street photos — spike result
 
 > **Executor instructions**: Read fully first. The window-grid veto
 > (`docs/transformations.md`, discontinued table) was loosened on

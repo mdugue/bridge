@@ -109,7 +109,9 @@ phone compass a few degrees. If you stand outside the area, a small window
 says how far and offers where to go instead: one of the vantage points, a
 spot you pick on the map, or staying where you are. If you stand in
 another city this site also shows, the window says so first and offers to
-jump there: its viewer opens with you standing where you are. Browsers ask for permission first
+jump there: its viewer opens with you standing where you are (the
+position travels in the link's fragment, which never reaches the server).
+Browsers ask for permission first
 (iPhones for the compass too); the location never leaves the device — not
 even in a crash report (see *When it crashes*).
 
@@ -181,7 +183,8 @@ a model cut from the city (*neu setzen* takes the current middle; it ends
 with Modell; the first time it says *Wird vorbereitet …* for a moment
 while the city's drawing is prepared for the cut, and the city keeps
 moving meanwhile — buildings just outside the cut still cast their
-shadows over its edge); and *Bild speichern*.
+shadows over its edge; should it fail to prepare, the line beneath says
+so, with *noch einmal versuchen*, "try again"); and *Bild speichern*.
 
 **Trees stand at every scale.** Close up every tree is in the picture;
 where the city is drawn coarser — zoomed far out, the whole city at
@@ -211,8 +214,8 @@ the frame as you see it, with the credits.
 The city itself carries no text. Ask it instead: with a mouse, a
 **click** on a building; on a touch screen, a **long press** (hold a
 finger still for half a second); `I` asks what stands under the
-crosshair. The building gets a fine pencil hatch and a graphite line round its
-outline, and a card opens; a
+crosshair. The building gets a fine hatch and a line round its outline,
+both in the controls' pink accent, and a card opens; a
 click on nothing closes it again. You need not hit a small house exactly:
 when nothing stands right under your finger, the building most of the
 ground around it belongs to answers. On a phone the card is a sheet at
@@ -243,9 +246,9 @@ next question asks the next building. Nothing is estimated: a building without m
 storeys simply has no storey line.
 
 Trees, monuments and fountains, and bridges answer the same way.
-Whatever you asked is framed by a soft graphite line on a hair of paper —
+Whatever you asked is framed by a soft pink line on a pale fringe —
 along its outline as you see it now, the same width on screen near or
-far. A **street tree**
+far. The fringe flashes briefly when you ask. A **street tree**
 says its species (German and botanical), its street and number in the
 city's tree register, the height, crown and trunk the register measured
 (a size the register lacks is left out, not guessed) and the age it
@@ -389,6 +392,7 @@ mistake); the switch stays as you set it.
 | | *Dachfarbe* | how strongly the real (or synthesised) roof colour shows |
 | | *Dachsättigung* | lifts the saturation of the aerial-photo roof colours without shifting their hue; 0 = raw photo |
 | | *Traufkante* | a soft line where wall meets roof |
+| | *Gliederung* | what a house shows at eye level before its windows: a stone plinth, a ledge over the ground floor, a deeper one under the eaves, and a darker shop zone where a shop is mapped — no windows |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |

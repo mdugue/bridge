@@ -17,7 +17,7 @@ from functools import cache
 from pathlib import Path
 
 from ..common import DLM_LAYERS, Tile
-from ..fetch import Ctx, cells
+from ..fetch import Ctx, cells, not_published, own_cells
 from ..net import download, fetch_text, unzip_members
 
 BATCH_PAGE = "https://www.geodaten.sachsen.de/batch-download-4719.html"
@@ -37,16 +37,35 @@ def products() -> dict[str, dict]:
     return table
 
 
-def _zip(ctx: Ctx, product: str, e: int, n: int) -> Path:
+def _zip(ctx: Ctx, product: str, e: int, n: int, keep: bool = False) -> Path:
+    """One cell's ZIP: in the tile's scratch folder, or with `keep` under
+    `downloads/<product>/`, shared by the site's tiles (each LoD2 ZIP is read
+    by up to nine of them)."""
     entry = products()[product]
     name = entry["filename"].replace("$Rechtswert$", str(e)).replace("$Hochwert$", str(n))
-    return download(f"{CLOUD}/{entry['share_id']}/{name}", ctx.scratch / name)
+    folder = ctx.downloads / product if keep else ctx.scratch
+    return download(f"{CLOUD}/{entry['share_id']}/{name}", folder / name)
 
 
-def _files(ctx: Ctx, tile: Tile, product: str, pattern: str) -> list[Path]:
+def _files(
+    ctx: Ctx, tile: Tile, product: str, pattern: str, margin: int = 0, keep: bool = False
+) -> list[Path]:
+    """The members matching `pattern` of every cell's ZIP, each cell's into
+    a folder of its own (a member named like a neighbour's must not be
+    taken for it: the extraction keeps a file already there). A margin cell
+    the server answers 404 for (past Saxony's border) is skipped; any other
+    failure, and any failure on the tile's own cells, raises."""
+    own = own_cells(tile, TILE_KM)
     out = []
-    for e, n in cells(tile, TILE_KM):
-        out += unzip_members(_zip(ctx, product, e, n), pattern, ctx.scratch / product)
+    for e, n in cells(tile, TILE_KM, margin):
+        try:
+            archive = _zip(ctx, product, e, n, keep)
+        except OSError as err:
+            if (e, n) in own or not not_published(err):
+                raise
+            print(f"{tile.id}: {product} {e}_{n} (neighbour) not available")
+            continue
+        out += unzip_members(archive, pattern, ctx.scratch / product / f"{e}_{n}")
     return out
 
 
@@ -63,7 +82,10 @@ def dop(ctx: Ctx, tile: Tile) -> list[Path]:
 
 
 def lod2(ctx: Ctx, tile: Tile) -> list[Path]:
-    return _files(ctx, tile, "LoD2_CityGML", r"\.gml$")
+    """The tile's cell and the eight around it: GeoSN files a seam building
+    in one 2 km file only, which may be a neighbour's (the converter keeps
+    what the tile owns)."""
+    return _files(ctx, tile, "LoD2_CityGML", r"\.gml$", margin=1, keep=True)
 
 
 def lsc(ctx: Ctx, tile: Tile) -> list[Path]:

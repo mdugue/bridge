@@ -10,6 +10,7 @@ import {
   kerbSourceFile,
   providerRawDir,
   sideFileSource,
+  siteDataDir,
   stairSourceFile,
   terraceSourceFile,
   tileArtifacts,
@@ -108,6 +109,31 @@ export function tileReport(
     next = unfetched ? "fetch" : "bake";
   }
   return { tile, missing, absent, next };
+}
+
+/** A site-level file the build reads but does without: absent, it never
+ *  holds the site back. */
+export interface SiteFileNote {
+  /** what is off without it, and how to add it */
+  hint: string;
+  path: string;
+}
+
+/** The site-level files that are absent (`provenance.json`: hand-kept, the
+ *  inquiry cards' editions). */
+export function absentSiteFiles(
+  site: Site,
+  exists: (path: string) => boolean
+): SiteFileNote[] {
+  const provenance = `${siteDataDir(site)}/provenance.json`;
+  return exists(provenance)
+    ? []
+    : [
+        {
+          path: provenance,
+          hint: "the inquiry cards show sources without editions; copy data/dresden/provenance.json and edit",
+        },
+      ];
 }
 
 export function siteReport(

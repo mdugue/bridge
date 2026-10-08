@@ -17,7 +17,7 @@ import rasterio
 from rasterio.transform import from_origin
 
 from ..common import Tile
-from ..fetch import Ctx, cells
+from ..fetch import Ctx, cells, not_published, own_cells
 from ..net import download, remote_zip_members, unzip_members
 
 ATOM = "https://gdi.berlin.de/data"
@@ -86,10 +86,22 @@ def dop(ctx: Ctx, tile: Tile) -> list[Path]:
 
 
 def lod2(ctx: Ctx, tile: Tile) -> list[Path]:
+    """The tile's 1 km cells and one ring around them: a seam building filed
+    next door is kept by the tile holding its envelope centre. The ZIPs are
+    kept under `downloads/lod2/`, shared by the site's tiles (each is read
+    by up to four of them). A margin cell the server answers 404 for (past
+    Berlin's border) is skipped; any other failure raises."""
+    own = own_cells(tile, 1)
     out = []
-    for e, n in cells(tile, 1):
+    for e, n in cells(tile, 1, margin=1):
         name = f"LoD2_{e}_{n}.zip"
-        zip_path = download(f"{ATOM}/a_lod2/atom/{name}", ctx.scratch / "lod2" / name)
+        try:
+            zip_path = download(f"{ATOM}/a_lod2/atom/{name}", ctx.downloads / "lod2" / name)
+        except OSError as err:
+            if (e, n) in own or not not_published(err):
+                raise
+            print(f"{tile.id}: LoD2 {e}_{n} (neighbour) not available")
+            continue
         out += unzip_members(zip_path, r"\.(xml|gml)$", ctx.scratch / "lod2" / f"{e}_{n}")
     return out
 

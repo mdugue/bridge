@@ -77,6 +77,20 @@ test("a counter outside the site, or a malformed answer, is left out", () => {
   expect(parseHamburgBikes({ value: "no" }, BOUNDS, EPSG)).toEqual([]);
 });
 
+test("a null or a number among the streams is left out, the others read", () => {
+  const doc = {
+    value: [
+      null,
+      stream("1", "Nord nach Süd", 139, 9.989791, 53.559602),
+      7,
+      { Thing: null, Observations: [null], properties: null },
+    ],
+  };
+  const counters = parseHamburgBikes(doc, BOUNDS, EPSG);
+  expect(counters).toHaveLength(1);
+  expect(counters[0].directions).toEqual([{ toward: "Süd", count: 139 }]);
+});
+
 test("compass names and intervals read as the counters write them", () => {
   expect(compassToward("Südwest nach Nordost")).toBe("Nordost");
   expect(compassToward("Keine Richtung")).toBe("");

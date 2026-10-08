@@ -97,7 +97,9 @@ export interface TreeFeature {
     gn?: number;
     h: number;
     l: "d" | "e";
-    s?: "osm";
+    /** "osm": an OSM tree, not the register's; "orchard": an orchard
+     *  tree (lib/city/cultivated.ts, at runtime only — no file has it) */
+    s?: "orchard" | "osm";
     t?: number;
   } | null;
 }
@@ -128,10 +130,18 @@ export interface LowVegFeature {
 export type LowVegSource = "osm" | "osm+lsc";
 
 /** OSM street lamps (pipeline/bake/lamps.py, ODbL); the post height is a
- *  lamp-layer constant, so no property is read. */
+ *  lamp-layer constant, so no property is read but the source (`src`:
+ *  "mly" for Mapillary's, lib/city/mapillary.ts). */
 export interface LampFeature {
   geometry: PointGeometry;
-  properties: Record<string, unknown> | null;
+  properties: { src?: "mly" } | null;
+}
+
+/** Street lamps and litter bins OSM lacks, detected by Mapillary
+ *  (pipeline/bake/mapillary.py, CC BY-SA 4.0). */
+export interface MapillaryFeature {
+  geometry: PointGeometry;
+  properties: { k: "bin" | "lamp" } | null;
 }
 
 /** The street furniture the bake keeps (pipeline/bake/furniture.py). */
@@ -193,6 +203,8 @@ export interface FurnitureFeature {
     lit?: boolean;
     metal?: boolean;
     n?: number;
+    /** "mly": Mapillary's, not OSM's (lib/city/mapillary.ts) */
+    src?: "mly";
   } | null;
 }
 
@@ -246,6 +258,46 @@ export interface MonumentFeature {
 export interface SmallBuildingFeature {
   geometry: PolygonGeometry;
   properties: { h: number; hc?: number[]; z: number } | null;
+}
+
+/**
+ * A door on a LoD2 wall (pipeline/bake/doors.py, ODbL; a city-mesh bake
+ * input, not served): an OSM entrance snapped onto the nearest footprint
+ * edge of the object `of`, with the wall's outward normal (`nx`, `ny`),
+ * the door's width and height (m), the ground under its sill `z` and the
+ * `entrance=*` value as `kind`.
+ */
+export interface DoorFeature {
+  geometry: PointGeometry;
+  properties: {
+    h: number;
+    kind: string;
+    nx: number;
+    ny: number;
+    of: string;
+    w: number;
+    z: number;
+  } | null;
+}
+
+/** A dormer the surface model shows on a pitched LoD2 roof
+ *  (pipeline/bake/dormers.py, DOM1 — the provider's licence): its centre,
+ *  the roof's downslope direction (`ax`, `ay`), its width across and depth
+ *  along the slope (`w`, `d`), the roof's height at the centre (`z`), its
+ *  measured top (`top`), the roof's slope (degrees) and the LoD2 object it
+ *  sits on (`of`). */
+export interface DormerFeature {
+  geometry: PointGeometry;
+  properties: {
+    ax: number;
+    ay: number;
+    d: number;
+    of: string;
+    slope: number;
+    top: number;
+    w: number;
+    z: number;
+  } | null;
 }
 
 /** What the surface model shows and LoD2 lacks, confirmed by OSM

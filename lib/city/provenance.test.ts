@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { BERLIN } from "../../sites/berlin";
 import { DRESDEN } from "../../sites/dresden";
+import { HAMBURG } from "../../sites/hamburg";
 import { UNNA } from "../../sites/unna";
 import {
   isSiteProvenance,
@@ -56,6 +58,19 @@ test("another site's card credits its own provider, and OSM for its trees", () =
     "Landeshauptstadt Dresden, dl-de/by-2-0"
   );
   expect(dresden.sources.trees.licence).toBe("dl-de/by-2-0");
+});
+
+test("a provider without a Basis-DLM credits OSM, which stands in for it", () => {
+  for (const site of [HAMBURG, BERLIN]) {
+    expect(site.provider.products.dlm).toBe(false);
+    const manifest = siteProvenance({}, tileIds(site), site);
+    expect(manifest.sources.dlm.label).toBe("OpenStreetMap");
+    expect(manifest.sources.dlm.licence).toBe("ODbL");
+    expect(manifest.sources.dom.credit).toBe(site.provider.credit);
+  }
+  const dresden = siteProvenance(record, tileIds(DRESDEN), DRESDEN);
+  expect(dresden.sources.dlm.label).toBe("Basis-DLM");
+  expect(dresden.sources.dlm.credit).toBe(DRESDEN.provider.credit);
 });
 
 test("a LoD2 edition splits into the model year and its inputs' years", () => {

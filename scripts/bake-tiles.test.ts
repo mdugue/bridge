@@ -79,3 +79,20 @@ test("the skirt does not tilt the border normals (no bright band at a seam)", ()
     }
   }
 });
+
+test("only a NoData grid falls back to the grid level; any other TIN failure throws", () => {
+  const n = 4;
+  const flat = (size: number) => ({
+    bounds: [0, 0, 4, 4] as [number, number, number, number],
+    elevations: new Float32Array(n * n).fill(100),
+    n: size,
+  });
+  const holed = flat(n);
+  holed.elevations[5] = Number.NaN;
+  expect(tinTerrainMesh(holed, [], { cx: 0, cy: 0 }, {}, 0.1)).toBeNull();
+  // A grid whose size does not match its samples: no NoData in the
+  // samples, so the TIN's own failure must surface, not become a grid.
+  expect(() =>
+    tinTerrainMesh(flat(0), [], { cx: 0, cy: 0 }, {}, 0.1)
+  ).toThrow();
+});

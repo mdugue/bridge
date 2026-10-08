@@ -7,7 +7,7 @@
  *
  * The answer carries, per counter, the bicycles of the last full hour in
  * each of its two directions (`w1`/`w2`, named by `r1`/`r2`), the hour
- * they were counted in (`messzeit`, local time), and `winkel`, the angle of
+ * they were counted in (`messzeit`, the city's wall clock: Europe/Berlin), and `winkel`, the angle of
  * the street at the counter (degrees counter-clockwise from north: the
  * Albertbrücke's 25° is its run NNW to the Neustadt, the Antonstraße's 120°
  * its run WSW to the Marienbrücke).
@@ -58,7 +58,7 @@ export interface BikeCounter {
   /** one or two directions (a counter on a one-way path has one) */
   directions: BikeDirection[];
   id: string;
-  /** the hour counted (local time), or null when the answer has none */
+  /** the hour counted (an instant), or null when the answer has none */
   measuredAt: Date | null;
   /** the counter's name ("Albertbrücke") */
   name: string;
@@ -82,8 +82,72 @@ function text(value: unknown): string {
   return typeof value === "number" ? String(value) : "";
 }
 
-/** "01.10.2026 07:00:00" (local time) → Date, or null. */
-export function parseCountTime(raw: unknown): Date | null {
+/** Every site's wall clock (all of them are German): a count's time is
+ *  read and shown in it, never in the visitor's zone. */
+export const SITE_ZONE = "Europe/Berlin";
+
+/** Where the city's feed tells its time: Dresden's `messzeit` is the
+ *  city's wall clock, never the visitor's. */
+export const DRESDEN_ZONE = SITE_ZONE;
+
+const countClockFormat = new Intl.DateTimeFormat("de-DE", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: SITE_ZONE,
+});
+
+/** "07:00" — a count's time on the city's wall clock, wherever the
+ *  visitor is. */
+export function countClock(at: Date): string {
+  return countClockFormat.format(at);
+}
+
+/** The wall clock of `zone` at an instant, as if it were UTC (ms). */
+function wallClockAt(ms: number, zone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(ms));
+  const n = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((p) => p.type === type)?.value ?? 0);
+  // "24" is midnight in some engines' hour12: false
+  return Date.UTC(
+    n("year"),
+    n("month") - 1,
+    n("day"),
+    n("hour") % 24,
+    n("minute"),
+    n("second")
+  );
+}
+
+/**
+ * The instant a wall-clock time in `zone` names. The wall clock read as
+ * UTC is a first guess; the zone's offset at that guess corrects it once,
+ * and the offset at the corrected instant a second time — that covers a
+ * guess on the other side of a daylight-saving switch from the answer.
+ */
+export function zonedTime(
+  parts: readonly [number, number, number, number, number, number],
+  zone: string
+): Date {
+  const [y, mo, d, h, mi, s] = parts;
+  const guess = Date.UTC(y, mo - 1, d, h, mi, s);
+  const first = guess - (wallClockAt(guess, zone) - guess);
+  return new Date(guess - (wallClockAt(first, zone) - first));
+}
+
+/** "01.10.2026 07:00:00" (the wall clock of `zone`) → Date, or null. */
+export function parseCountTime(
+  raw: unknown,
+  zone: string = DRESDEN_ZONE
+): Date | null {
   const m = /^(\d{2})\.(\d{2})\.(\d{4}) (\d{2}):(\d{2})(?::(\d{2}))?$/u.exec(
     text(raw).trim()
   );
@@ -91,13 +155,9 @@ export function parseCountTime(raw: unknown): Date | null {
     return null;
   }
   const [, d, mo, y, h, mi, s] = m;
-  return new Date(
-    Number(y),
-    Number(mo) - 1,
-    Number(d),
-    Number(h),
-    Number(mi),
-    Number(s ?? 0)
+  return zonedTime(
+    [Number(y), Number(mo), Number(d), Number(h), Number(mi), Number(s ?? 0)],
+    zone
   );
 }
 
@@ -118,7 +178,7 @@ function nameOf(raw: unknown): string {
     .replace(/_(\d+)$/u, (_, n: string) => ` ${Number(n) + 1}`);
 }
 
-function counterOf(f: RawCounter): BikeCounter | null {
+function counterOf(f: RawCounter, zone: string): BikeCounter | null {
   const p = f.properties ?? {};
   const c = f.geometry?.coordinates;
   if (
@@ -148,7 +208,7 @@ function counterOf(f: RawCounter): BikeCounter | null {
     angleDeg: typeof p.winkel === "number" ? p.winkel : 0,
     directions,
     id: text(p.fremd_id) || `${c[0]},${c[1]}`,
-    measuredAt: parseCountTime(p.messzeit),
+    measuredAt: parseCountTime(p.messzeit, zone),
     name: nameOf(p.bezeichnung),
     where: text(p.lage).trim(),
     x: c[0],
@@ -157,18 +217,21 @@ function counterOf(f: RawCounter): BikeCounter | null {
 }
 
 /** The counters of a WFS answer that stand inside `bounds` (the site),
- *  west to east. Anything malformed is left out, never thrown. */
+ *  west to east, their times read in `zone`. Anything malformed is left
+ *  out, never thrown. */
 export function parseBikeCounts(
   doc: unknown,
-  bounds: readonly [number, number, number, number]
+  bounds: readonly [number, number, number, number],
+  zone: string = DRESDEN_ZONE
 ): BikeCounter[] {
   const features = (doc as { features?: unknown } | null)?.features;
   if (!Array.isArray(features)) {
     return [];
   }
   const [minX, minY, maxX, maxY] = bounds;
-  return (features as RawCounter[])
-    .map(counterOf)
+  return (features as unknown[])
+    .filter((f): f is RawCounter => typeof f === "object" && f !== null)
+    .map((f) => counterOf(f, zone))
     .filter(
       (c): c is BikeCounter =>
         c !== null && c.x >= minX && c.x < maxX && c.y >= minY && c.y < maxY

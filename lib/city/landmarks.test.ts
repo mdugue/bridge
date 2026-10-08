@@ -94,3 +94,17 @@ test("a vantage looks at the landmark from the south-south-west, higher for a ta
     Math.hypot(low.epsg.x, low.epsg.y)
   );
 });
+
+test("landmarks tied on links keep the id order, whatever the locale", () => {
+  const named = (id: string, name: string) => ({ ...entry(id, 2), name });
+  const list = siteLandmarks([
+    {
+      landmarks: [
+        named("Q2", "Äußere Neustadt"),
+        named("Q1", "Zwinger"),
+        named("Q3", "Frauenkirche"),
+      ],
+    },
+  ]);
+  expect(list.map((l) => l.id)).toEqual(["Q1", "Q2", "Q3"]);
+});

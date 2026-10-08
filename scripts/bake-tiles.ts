@@ -44,7 +44,6 @@ import {
 } from "../lib/city/terrain-geometry";
 import {
   buildTinGeometryData,
-  type TerrainTin,
   TinIndex,
   tinSurface,
 } from "../lib/city/terrain-tin";
@@ -312,12 +311,12 @@ export function tinTerrainMesh(
     burnWalls: false,
     stairMargin: maxError,
   });
-  let tin: TerrainTin;
-  try {
-    tin = tinFromGrid(elevations, dgm.n, dgm.bounds, maxError);
-  } catch {
+  // Only NoData falls back to the grid; any other failure of the TIN is a
+  // bug and fails the build (tinFromGrid keeps its own check as a guard).
+  if (elevations.some((z) => !Number.isFinite(z))) {
     return null;
   }
+  const tin = tinFromGrid(elevations, dgm.n, dgm.bounds, maxError);
   const { positions, indices, minElevation, surfaceIndexCount } =
     buildTinGeometryData(tin, offset);
   const index = new TinIndex(tinSurface(tin));
@@ -480,7 +479,7 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       baseZ: { type: "SCALAR", componentType: "FLOAT32", values: t.baseZ },
       building: { type: "SCALAR", componentType: "UINT8", values: t.building },
       eaveH: { type: "SCALAR", componentType: "FLOAT32", values: t.eaveH },
-      flags: { type: "SCALAR", componentType: "UINT8", values: t.flags },
+      flags: { type: "SCALAR", componentType: "UINT16", values: t.flags },
       glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
       roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
       root: { type: "SCALAR", componentType: "UINT32", values: t.root },

@@ -7,7 +7,7 @@
  * hour's estimate is labelled as one (the typical day's curve, not a
  * count). No THREE, no DOM.
  */
-import type { BikeDirection } from "./bike-counts";
+import { type BikeDirection, SITE_ZONE } from "./bike-counts";
 import {
   factLines,
   firstText,
@@ -169,11 +169,13 @@ export function trafficCard(t: TrafficInquiry): InquiryCard {
   };
 }
 
+/** The count's day and hour on the city's wall clock, not the visitor's. */
 const clock = new Intl.DateTimeFormat("de-DE", {
   day: "2-digit",
   hour: "2-digit",
   minute: "2-digit",
   month: "2-digit",
+  timeZone: SITE_ZONE,
 });
 
 /** The live counter's card. */

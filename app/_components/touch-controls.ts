@@ -301,6 +301,15 @@ export function attachTouchControls(
     if (wasPair) {
       callbacks.onDragEnd?.();
     }
+    if (e.type === "pointercancel") {
+      // The browser took the pointer (a system gesture, palm rejection):
+      // the press is over, but it was no tap — nor the first of a double.
+      lastTap = null;
+      if (pointers.size === 0) {
+        dragged = false;
+      }
+      return;
+    }
     const isTap =
       !(dragged || longPressed) &&
       pointers.size === 0 &&

@@ -59,7 +59,9 @@ Without a DSN nothing is sent. What the page keeps in local storage: the
 crash trail (this page's record and the previous one's, and which
 previous record was reported), the visitor's "no" to the reports
 ([ADR 0045](./0045-legal-pages-from-the-deployment.md)), the last
-picture style, the toolbar's fold, the dismissed control hints; in
+picture style, the toolbar's fold, the dismissed control hints, the
+device's GPU safety level
+([ADR 0046](./0046-a-per-device-safety-ladder-for-gpu-loss.md)); in
 session storage the view a GPU recovery returns to. The privacy page,
 `/datenschutz`, lists the same.
 

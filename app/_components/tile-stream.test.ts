@@ -8,10 +8,14 @@ import { createLookState } from "@/lib/city/look-state";
 import {
   BoxGeometry,
   BufferAttribute,
+  type Group,
   Mesh,
   MeshBasicNodeMaterial,
   Object3D,
 } from "three/webgpu";
+import type { AskSet } from "@/lib/city/ask-solids";
+import type { TrafficFeature } from "@/lib/city/features";
+import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import type { CityLayer } from "./city-layer";
 import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
@@ -23,9 +27,12 @@ import {
   dressingParts,
   PHONE_STREAM,
   paceStreaming,
+  showDataLayers,
   type TileDressing,
   type TileStreamContext,
+  type TrafficHost,
   takesOver,
+  trafficSlot,
 } from "./tile-stream";
 import type { VegetationControl } from "./vegetation-layer";
 
@@ -105,7 +112,7 @@ test("every part of a dressing is in the part table, so disposal and the census 
     rail: group(),
     tram: group(),
     riverside: group(),
-    traffic: group(),
+    traffic: control(),
     sport: control(),
     vineyards: group(),
   } as unknown as TileDressing;
@@ -266,6 +273,126 @@ test("a compile the GPU had no room for is reported once, and drops nothing", as
   }
 });
 
+test("a dressing whose build throws is reported, an allocation failure as one, and the tile settles", async () => {
+  for (const error of [
+    new TypeError("boom"),
+    new RangeError("Array buffer allocation failed"),
+  ]) {
+    const failed: [unknown, string][] = [];
+    const allocations: [unknown, string][] = [];
+    const ctx = {
+      dressingGate: Promise.resolve(),
+      compile: () => Promise.resolve(true),
+      onAllocationFailure: (err: unknown, where: string) =>
+        allocations.push([err, where]),
+      onDressingFailed: (err: unknown, tile: string) =>
+        failed.push([err, tile]),
+      onChange: () => undefined,
+      // the build's first file URL reads it: the earliest throw a test
+      // can inject without a renderer
+      get tilesetUrl(): string {
+        throw error;
+      },
+    } as unknown as TileStreamContext;
+    const plugin = new DressingPlugin(ctx, {
+      cities: new Set(),
+      terrains: new Set(),
+      dressings: new Set(),
+      demolished: new Map(),
+    });
+    const scene = new Object3D();
+    const terrain = {} as TerrainLayer;
+    plugin.dressed.set(scene, { terrain });
+    const tile = "33412_5656_2_sn";
+    // reason: queueDressing is private; the test drives the queue directly,
+    // without the terrain build a renderer would need
+    const queue = (
+      plugin as unknown as {
+        queueDressing: (
+          scene: Object3D,
+          terrain: TerrainLayer,
+          extras: unknown
+        ) => Promise<void>;
+      }
+    ).queueDressing.bind(plugin);
+    await queue(scene, terrain, {
+      tileId: tile,
+      level: 0,
+      dressing: { vegrows: "vegrows.json" },
+    });
+    // the queue moves on: the tile counts as tried
+    await nextTask();
+    expect(plugin.settled.has(tile)).toBe(true);
+    if (error instanceof RangeError) {
+      expect(allocations).toEqual([[error, `dressing ${tile}`]]);
+      expect(failed).toEqual([]);
+    } else {
+      expect(failed).toEqual([[error, tile]]);
+      expect(allocations).toEqual([]);
+    }
+  }
+});
+
+test("a tile released while a compile still runs is never dressed after the wait", async () => {
+  // the content's own compile outlasts everything here
+  const blocker = new Object3D();
+  const failures: unknown[] = [];
+  const stream = {
+    cities: new Set<CityLayer>(),
+    terrains: new Set<TerrainLayer>(),
+    dressings: new Set<TileDressing>(),
+    demolished: new Map<string, Set<number>>(),
+  };
+  const plugin = new DressingPlugin(
+    {
+      dressingGate: Promise.resolve(),
+      compile: (o: Object3D) =>
+        o === blocker
+          ? new Promise<boolean>(() => undefined)
+          : Promise.resolve(true),
+      look: createLookState(),
+      night: () => 0,
+      season: () => 180,
+      onDressingFailed: (error: unknown) => failures.push(error),
+      onChange: () => undefined,
+    } as unknown as TileStreamContext,
+    stream
+  );
+  const scene = new Object3D();
+  const terrain = {
+    rasters: [],
+    dispose: () => undefined,
+  } as unknown as TerrainLayer;
+  plugin.dressed.set(scene, { terrain });
+  // reason: the queue and the compile count are private; the test drives
+  // them directly, without the terrain build a renderer would need
+  const inner = plugin as unknown as {
+    compileUnder: (
+      scene: Object3D,
+      objects: Object3D[],
+      where: string
+    ) => Promise<unknown>;
+    queueDressing: (
+      scene: Object3D,
+      terrain: TerrainLayer,
+      extras: unknown
+    ) => Promise<void>;
+  };
+  void inner.compileUnder(scene, [blocker], "content t");
+  const queued = inner.queueDressing(scene, terrain, { tileId: "t", level: 0 });
+  // the renderer unloads the tile before the dressing's turn: the release
+  // waits for the running compile, the entry stays
+  plugin.disposeTile({ engineData: { scene } });
+  await queued;
+  // (the release ended the tile's wait at once; the queue goes on)
+  while (plugin.pending > 0) {
+    await nextTask();
+  }
+  expect(failures).toEqual([]);
+  expect(plugin.settled.has("t")).toBe(true);
+  expect(stream.dressings.size).toBe(0);
+});
+
 /** A plugin whose compiles resolve at once, and a content root with a mesh
  *  whose geometry reports its own dispose. */
 function abortableLoad() {
@@ -358,4 +485,219 @@ test("a level waits for its dressing only where it takes over from its tile's ot
     false
   );
   expect(takesOver(fine, [{ ...coarse, level: 0 }])).toBe(false);
+});
+
+/** A tile's counted traffic as a slot: one two-way street, its dressing's
+ *  ask list, and a host whose compiles the test holds and counts. */
+function trafficTile(
+  opts: {
+    gone?: () => boolean;
+    turn?: TrafficHost["turn"];
+  } = {}
+) {
+  const street: TrafficFeature = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [100, 0],
+      ],
+    },
+    properties: { t: 9000, f: 6000, b: 3000 },
+  };
+  const asks: AskSet<FeatureInquiry>[] = [];
+  const slot = trafficSlot({
+    features: [street],
+    bridges: [],
+    ground: { offset: { cx: 0, cy: 0 }, heightAt: () => 110 },
+    detail: "fine",
+    tile: "t",
+    asks,
+  });
+  const root = new Object3D();
+  const compiled: Group[] = [];
+  let finish = (): void => undefined;
+  let built = 0;
+  const freeErrors: unknown[][] = [];
+  const host: TrafficHost = {
+    root,
+    compile: (group) => {
+      compiled.push(group);
+      return new Promise((resolve) => {
+        finish = () => resolve("done");
+      });
+    },
+    turn: opts.turn ?? ((work) => work()),
+    freeFailed: (errors) => {
+      freeErrors.push(errors);
+    },
+    gone: opts.gone ?? (() => false),
+    built: () => {
+      built++;
+    },
+    failed: (err) => {
+      throw err;
+    },
+  };
+  return {
+    asks,
+    built: () => built,
+    compiled,
+    finish: () => finish(),
+    freeErrors,
+    host,
+    root,
+    slot,
+  };
+}
+
+test("the counted traffic costs nothing while the layer is off", async () => {
+  const { asks, compiled, host, slot } = trafficTile();
+  const d: TileDressing = { tile: "t", traffic: slot };
+  slot.attach(host);
+  catchUp(d, {
+    look: createLookState(),
+    night: () => 0,
+    season: () => 180,
+  });
+  showDataLayers(d, { trafficLayer: false });
+  await nextTask();
+  expect(slot.group).toBeNull();
+  expect(dressingParts(d)).toEqual([]);
+  expect(compiled).toHaveLength(0);
+  expect(asks).toHaveLength(0);
+});
+
+test("the first switch-on builds and compiles the bodies once; off keeps them, the release frees them", async () => {
+  const { asks, built, compiled, finish, host, root, slot } = trafficTile();
+  const d: TileDressing = { tile: "t", traffic: slot };
+  // switched on before the dressing hangs: nothing to hang it on yet
+  showDataLayers(d, { trafficLayer: true });
+  await nextTask();
+  expect(slot.group).toBeNull();
+  slot.attach(host);
+  const first = slot.show();
+  const second = slot.show();
+  await nextTask();
+  // hung hidden while it compiles, once
+  expect(compiled).toHaveLength(1);
+  expect(slot.group?.parent).toBe(root);
+  expect(slot.group?.visible).toBe(false);
+  expect(asks).toHaveLength(0);
+  finish();
+  await Promise.all([first, second]);
+  expect(compiled).toHaveLength(1);
+  expect(built()).toBe(1);
+  expect(slot.group?.visible).toBe(true);
+  expect(dressingParts(d)).toEqual([slot.group as Group]);
+  // the probe asks its sections now
+  expect(asks).toHaveLength(1);
+  expect(slot.asks()).toBe(asks[0]);
+  // off: hidden, kept; on again: no second build
+  showDataLayers(d, { trafficLayer: false });
+  const bodies = slot.group;
+  expect(bodies?.visible).toBe(false);
+  await slot.show();
+  expect(slot.group).toBe(bodies);
+  expect(bodies?.visible).toBe(true);
+  expect(compiled).toHaveLength(1);
+  // the tile's release frees them
+  let freed = false;
+  const mesh = bodies?.children[0] as Mesh | undefined;
+  mesh?.geometry.addEventListener("dispose", () => {
+    freed = true;
+  });
+  expect(slot.dispose()).toEqual([]);
+  expect(freed).toBe(true);
+  expect(slot.group).toBeNull();
+  expect(bodies?.parent).toBeNull();
+});
+
+test("a tile released while its traffic compiles gets nothing shown, asked or weighed", async () => {
+  let gone = false;
+  const { asks, built, finish, host, slot } = trafficTile({
+    gone: () => gone,
+  });
+  slot.attach(host);
+  const showing = slot.show();
+  await nextTask();
+  const bodies = slot.group;
+  expect(bodies).not.toBeNull();
+  // the renderer unloads the tile while the compile runs
+  gone = true;
+  finish();
+  await showing;
+  expect(bodies?.visible).toBe(false);
+  expect(asks).toHaveLength(0);
+  expect(built()).toBe(0);
+  // ...and its release (once the compile ended) frees them
+  slot.dispose();
+  expect(bodies?.parent).toBeNull();
+});
+
+test("bodies freed while their compile runs are freed once it ends", async () => {
+  const { finish, freeErrors, host, slot } = trafficTile();
+  slot.attach(host);
+  const showing = slot.show();
+  await nextTask();
+  const bodies = slot.group;
+  const mesh = bodies?.children[0] as Mesh | undefined;
+  let freed = false;
+  mesh?.geometry.addEventListener("dispose", () => {
+    freed = true;
+  });
+  // the dressing comes down (its own compile ran out of memory) while the
+  // traffic's compile still runs: taken down now, freed only after
+  expect(slot.dispose()).toEqual([]);
+  expect(bodies?.parent).toBeNull();
+  expect(slot.group).toBeNull();
+  await nextTask();
+  expect(freed).toBe(false);
+  finish();
+  await showing;
+  await nextTask();
+  expect(freed).toBe(true);
+  expect(freeErrors).toEqual([[]]);
+});
+
+test("a switch-on builds the tiles' bodies one after another", async () => {
+  // the dressings' chain, as the plugin hands it to every slot
+  let chain = Promise.resolve();
+  const turn: TrafficHost["turn"] = (work) => {
+    const run = chain.then(work);
+    chain = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  };
+  const a = trafficTile({ turn });
+  const b = trafficTile({ turn });
+  a.slot.attach(a.host);
+  b.slot.attach(b.host);
+  const showing = [a.slot.show(), b.slot.show()];
+  await nextTask();
+  await nextTask();
+  // the first tile's turn holds the chain while its compile runs
+  expect(a.compiled).toHaveLength(1);
+  expect(b.compiled).toHaveLength(0);
+  expect(b.slot.group).toBeNull();
+  a.finish();
+  await nextTask();
+  await nextTask();
+  expect(b.compiled).toHaveLength(1);
+  b.finish();
+  await Promise.all(showing);
+  expect(a.built()).toBe(1);
+  expect(b.built()).toBe(1);
+});
+
+test("a dressing freed before its traffic's turn builds nothing", async () => {
+  const { compiled, host, slot } = trafficTile();
+  slot.attach(host);
+  const showing = slot.show();
+  slot.dispose();
+  await showing;
+  expect(slot.group).toBeNull();
+  expect(compiled).toHaveLength(0);
 });

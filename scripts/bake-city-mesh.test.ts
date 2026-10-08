@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
 import type { CityJsonDocument } from "../lib/city/types";
-import { OBJECT_SOURCE_GAP } from "../lib/city/city-mesh";
-import type { StructureFeature } from "../lib/city/features";
+import {
+  OBJECT_FLAG_FLAT_ROOF,
+  OBJECT_FLAG_GROUNDED,
+  OBJECT_SOURCE_DORMER,
+  OBJECT_SOURCE_GAP,
+} from "../lib/city/city-mesh";
+import type { DormerFeature, StructureFeature } from "../lib/city/features";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
 import { bakeCityMesh, scanStructureId } from "./bake-city-mesh";
 import { cityMesh } from "./bake-tiles";
@@ -96,8 +101,13 @@ test("a BuildingPart inherits its Building's function: glow and tint", () => {
   // Heights stay the part's own: 9 m of box, not the building's.
   expect(part.eaveH).toBeCloseTo(9, 2);
   expect(house.eaveH).toBeCloseTo(12, 2);
-  // Without an OSM LUT nothing is flagged.
-  expect(baked.objects.map((o) => o.flags)).toEqual([0, 0, 0]);
+  // Without an OSM LUT only what stands on the ground is flagged (the shop
+  // Building is drawn by its part; the fixture's boxes have flat roofs).
+  expect(baked.objects.map((o) => o.flags)).toEqual([
+    0,
+    OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
+    OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
+  ]);
 });
 
 test("the OSM LUT flags objects by id: shop 1, heritage 2", () => {
@@ -105,11 +115,19 @@ test("the OSM LUT flags objects by id: shop 1, heritage 2", () => {
     "shop-part": { shop: 1 },
     house: { heritage: 1, shop: 1 },
   });
-  expect(baked.objects.map((o) => o.flags)).toEqual([0, 1, 3]);
-  // ...and the glTF property table carries them as a UINT8 column.
+  expect(baked.objects.map((o) => o.flags)).toEqual([
+    0,
+    1 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
+    3 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
+  ]);
+  // ...and the glTF property table carries them as a UINT16 column.
   const flags = cityMesh(baked).input.table?.properties.flags;
-  expect(flags).toMatchObject({ type: "SCALAR", componentType: "UINT8" });
-  expect([...(flags?.values ?? [])]).toEqual([0, 1, 3]);
+  expect(flags).toMatchObject({ type: "SCALAR", componentType: "UINT16" });
+  expect([...(flags?.values ?? [])]).toEqual([
+    0,
+    1 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
+    3 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
+  ]);
 });
 
 test("every object carries its identity and semantics as fact columns", () => {
@@ -176,12 +194,20 @@ test("a part carries its root Building's flags as well as its own", () => {
     shop: { heritage: 1 },
     "shop-part": { shop: 1 },
   });
-  expect(baked.objects.map((o) => o.flags)).toEqual([2, 3, 0]);
+  expect(baked.objects.map((o) => o.flags)).toEqual([
+    2,
+    3 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
+    OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
+  ]);
   // A flag on the root alone still reaches the part.
   const rootOnly = bakeCityMesh("t", fixture(), undefined, null, {
     shop: { shop: 1 },
   });
-  expect(rootOnly.objects.map((o) => o.flags)).toEqual([1, 1, 0]);
+  expect(rootOnly.objects.map((o) => o.flags)).toEqual([
+    1,
+    1 + OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
+    OBJECT_FLAG_GROUNDED + OBJECT_FLAG_FLAT_ROOF,
+  ]);
 });
 
 test("the scan's small structures join as their own buildings, source 1", () => {
@@ -210,7 +236,7 @@ test("the scan's small structures join as their own buildings, source 1", () => 
   expect(shed.eaveH).toBeCloseTo(2.7, 2);
   // no storey band on a shed: the first would stand above its eave
   expect(shed.storeyH).toBeGreaterThan(shed.eaveH);
-  expect(shed.flags).toBe(0);
+  expect(shed.flags).toBe(OBJECT_FLAG_GROUNDED);
   expect(shed.glow).toBe(0);
   expect(shed.footprints[0].length).toBe(4);
   expect(shed.facts).toMatchObject({ height: 2.5, area: 12, function: "" });
@@ -397,4 +423,41 @@ test("a measured roof replaces its object's LoD2 triangles, same row", () => {
   // alongside its positions, all of them NaN
   expect(v.normals).toHaveLength(v.positions.length);
   expect([...(v.normals ?? [])].every(Number.isNaN)).toBe(true);
+});
+
+test("dormers join their host as one object, roof-flagged on top, source 4", () => {
+  const on = (x: number, of = "house"): DormerFeature => ({
+    geometry: { type: "Point", coordinates: [412_000 + x, 5_656_005] },
+    properties: { of, ax: 1, ay: 0, w: 2, d: 2, z: 110, top: 111.5, slope: 45 },
+  });
+  const lod2 = bakeCityMesh("t", fixture(), undefined, null);
+  const baked = bakeCityMesh(
+    "t",
+    fixture(),
+    undefined,
+    null,
+    undefined,
+    undefined,
+    "render",
+    undefined,
+    undefined,
+    // two on the house, one whose host is elsewhere (dropped)
+    { dormers: [on(43), on(47), on(5, "elsewhere")] }
+  );
+  expect(baked.objects.length).toBe(lod2.objects.length + 1);
+  const house = baked.objects[2];
+  const dormer = baked.objects.at(-1);
+  expect(dormer?.root).toBe(house.root);
+  expect(dormer?.tint).toEqual(house.tint);
+  expect(dormer?.roof).toEqual(house.roof);
+  expect(dormer?.building).toBe(false);
+  expect(dormer?.footprints).toEqual([]);
+  expect(dormer?.source).toBe(OBJECT_SOURCE_DORMER);
+  // high on the roof: no plinth
+  expect((dormer?.flags ?? 0) & OBJECT_FLAG_GROUNDED).toBe(0);
+  const added = baked.vertices.isRoof.length - lod2.vertices.isRoof.length;
+  // per dormer: front 2, cheeks 2, roof 2 triangles
+  expect(added).toBe(2 * 6 * 3);
+  const roofs = Array.from(baked.vertices.isRoof.slice(-added));
+  expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 2 * 3);
 });

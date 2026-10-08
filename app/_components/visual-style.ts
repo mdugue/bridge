@@ -41,6 +41,7 @@ import {
   vec4,
 } from "three/tsl";
 import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
+import { SELECTION_ACCENT } from "@/lib/city/outline";
 import {
   type ClayLookKey,
   LOOK_DEFAULTS,
@@ -91,6 +92,8 @@ interface ClayGraph {
 /** The clay's facade uniforms, shared by every tile (write `.value`). */
 export interface ClayDetailUniforms {
   uAO: Live;
+  /** Gliederung: plinth, ground-floor and eave cornices, shop zones */
+  uArticulation: Live;
   uBands: Live;
   /** dusk interior glow strength (commercial/public) */
   uDuskGlow: Live;
@@ -247,7 +250,9 @@ function clayColour(
   flags: F
 ): V3 {
   const isRoof = step(0.5, build.x);
-  const tintMix = mix(d.uTint, d.uRoofTint, isRoof);
+  // a door wears its own colour (OBJECT_FLAG_OWN_COLOUR, 64) at full strength
+  const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
+  const tintMix = max(mix(d.uTint, d.uRoofTint, isRoof), own);
   const roofL = dot(tint, vec3(0.299, 0.587, 0.114));
   const roofC = tint.sub(roofL);
   const dull = float(1).sub(smoothstep(0.04, 0.3, length(roofC)));
@@ -274,7 +279,90 @@ function clayColour(
     min(abs(h.sub(build.z)).div(max(fwidth(h).mul(2), 1e-4)), 1)
   );
   col = col.mul(float(1).sub(eave.mul(d.uEave).mul(wall).mul(0.6)));
+  col = articulation(d, col, build, h, wall, flags);
   return osmColour(d, col, build, h, wall, flags);
+}
+
+/** A ledge drawn in shade (Gliederung): a lit face `size` metres tall whose
+ *  top is at `top`, and a soft shadow `drop` metres deep under it. Its edges
+ *  are fwidth-crisp, so it reads at any distance without shimmering. The
+ *  multiplier for the colour (1 off the ledge). */
+function ledge(h: F, top: F, size: number, drop: number, strength: F): F {
+  const px = max(fwidth(h), 1e-4);
+  const face = clamp(top.sub(h).div(px), 0, 1).mul(
+    clamp(h.sub(top.sub(size)).div(px), 0, 1)
+  );
+  const below = top.sub(size).sub(h);
+  const shade = clamp(below.div(px), 0, 1).mul(
+    float(1).sub(smoothstep(0, drop, below))
+  );
+  return float(1)
+    .add(face.mul(0.22).mul(strength))
+    .sub(shade.mul(0.4).mul(strength));
+}
+
+/**
+ * Gliederung (uArticulation): what a house shows at eye level before its
+ * windows, from the heights the table already carries — walls only, never
+ * on a part with its own colour (a door, flag 64) or on a facade that is
+ * its own (a landmark, a church, a theatre, a hall: flag 16,
+ * `ownFacade` in lib/city/building-tint.ts) or under a flat roof (flag
+ * 256, `markFlatRoofs`: post-war and modern buildings), and only on a facade
+ * tall enough to have it; the ground floor's three only on a part standing
+ * on the ground (flag 128), not on a tower's part on a roof:
+ *  - Sockel: the lowest 0.6 m a little darker and cooler, a stone plinth,
+ *    with a crisp top edge (from 3 m of wall);
+ *  - Gurtgesims: a ledge at the first storey line (build.y), lit face and
+ *    shadow under it, where the wall holds two storeys;
+ *  - Traufgesims: a deeper ledge under the eave (build.z), from 5 m;
+ *  - Ladenzone: a shop's ground floor (flag 1) a shade darker and cooler
+ *    under the Gurtgesims, read as the recessed shop front — no panes.
+ * Not sun-dependent: the ledges' light and shadow are painted, like the
+ * storey lines.
+ */
+function articulation(
+  d: ClayDetailUniforms,
+  col: V3,
+  build: V4,
+  h: F,
+  wall: F,
+  flags: F
+): V3 {
+  const f = floor(flags.add(0.5));
+  const own = mod(floor(f.div(64)), 2);
+  const shop = mod(f, 2);
+  const grounded = mod(floor(f.div(128)), 2);
+  // a landmark's or a church's facade is its own (flag 16): no town
+  // house's plinth and cornices on it
+  // … nor a flat-roofed one's (flag 256): a post-war slab or a modern
+  // block has no town house's plinth and cornices
+  const plain = max(
+    max(own, mod(floor(f.div(16)), 2)),
+    mod(floor(f.div(256)), 2)
+  );
+  const on = d.uArticulation.mul(wall).mul(float(1).sub(plain));
+  // the ground floor's parts on a part standing on the ground only
+  const low = on.mul(grounded);
+  const storey = max(build.y, 2.4);
+  const eave = build.z;
+  const px = max(fwidth(h), 1e-4);
+  // Sockel
+  const plinth = clamp(float(0.6).sub(h).div(px), 0, 1).mul(step(3, eave));
+  let out: V3 = mix(col, col.mul(vec3(0.78, 0.79, 0.83)), plinth.mul(low));
+  out = out.mul(
+    ledge(h, float(0.64), 0.04, 0.12, low.mul(step(3, eave)).mul(0.8))
+  );
+  // Ladenzone under the first storey's ledge
+  const zone = clamp(storey.sub(0.35).sub(h).div(px), 0, 1)
+    .mul(clamp(h.sub(0.6).div(px), 0, 1))
+    .mul(shop);
+  out = mix(out, out.mul(vec3(0.74, 0.76, 0.8)), zone.mul(low));
+  // Gurtgesims, Traufgesims
+  const twoStoreys = step(storey.mul(2).sub(0.3), eave);
+  out = out.mul(ledge(h, storey.add(0.1), 0.2, 0.35, low.mul(twoStoreys)));
+  return out.mul(
+    ledge(h, eave.sub(0.05), 0.35, 0.65, on.mul(step(5, eave)).mul(1.3))
+  );
 }
 
 /** A facade's mapped material from the object's flags (lib/city/
@@ -387,8 +475,9 @@ function clayGlow(
     .glass.mul(fres.mul(fres).mul(fres))
     .mul(d.uRim)
     .mul(float(1).sub(d.uNight.mul(0.7)));
-  // The asked building's paper light: faint by day, a glow after dark.
-  const askedLight = vec3(0.97, 0.9, 0.78).mul(
+  // The asked building's light, in the accent's pale: faint by day, a
+  // glow after dark.
+  const askedLight = vec3(...SELECTION_ACCENT.halo).mul(
     askedFlag(flags).mul(d.uNight.mul(0.08).add(0.06))
   );
   return rim
@@ -406,8 +495,10 @@ function askedFlag(flags: F): F {
 /**
  * The building someone asks about (flag 32, OBJECT_FLAG_ASKED — set in the
  * packed table at runtime by the inquiry probe, ADR 0042): lifted towards
- * paper white (a faint paper light of its own in clayGlow, so it
- * reads in shade too), and drawn over with a pencil hatch. Near, the
+ * the accent's pale (a faint light of its own in clayGlow, so it reads in
+ * shade too), and drawn over with a hatch in the HUD's accent
+ * (`SELECTION_ACCENT`, lib/city/outline.ts) — the selection is the
+ * interface's, so it leaves the city's palette. Near, the
  * strokes lie on the building — every 0.9 m, along the wall and up it (so
  * they climb the facade at 45°), straight across the roof, fwidth-constant
  * like the storey lines. Where they would crowd closer than a few pixels
@@ -433,8 +524,8 @@ function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
     min(abs(fract(s.sub(0.5)).sub(0.5)).mul(7 / 1.2), 1)
   );
   const ink = mix(paper.mul(0.55), line.mul(0.6), near).mul(asked);
-  const lifted = mix(col, vec3(0.97, 0.93, 0.85), asked.mul(0.4));
-  return mix(lifted, vec3(0.24, 0.22, 0.21), ink);
+  const lifted = mix(col, vec3(...SELECTION_ACCENT.halo), asked.mul(0.4));
+  return mix(lifted, vec3(...SELECTION_ACCENT.ink), ink);
 }
 
 /**
@@ -450,6 +541,7 @@ export function createStyleResources(
   return {
     clayDetail: {
       uAO: uniform(LOOK_DEFAULTS.groundShade),
+      uArticulation: uniform(LOOK_DEFAULTS.articulation),
       uBands: uniform(LOOK_DEFAULTS.bands),
       uDuskGlow: uniform(LOOK_DEFAULTS.duskGlow),
       uEave: uniform(LOOK_DEFAULTS.eave),
@@ -593,6 +685,7 @@ const CLAY_UNIFORM_FOR: Record<
   Exclude<ClayLookKey, "transparency">,
   keyof Omit<ClayDetailUniforms, "uNight">
 > = {
+  articulation: "uArticulation",
   bands: "uBands",
   duskGlow: "uDuskGlow",
   eave: "uEave",

@@ -126,3 +126,20 @@ test("a counter says its bicycles per direction and when they were counted", () 
   expect(old.facts.at(-1)?.value).toContain("älter als drei Stunden");
   expect(old.sources).toEqual([]);
 });
+
+test("a counter's time is the city's clock, whatever the visitor's zone", () => {
+  // 07:00 in Dresden (CEST); under TZ=Asia/Tokyo a local clock says 14:00
+  const measuredAt = new Date("2026-10-01T05:00:00Z");
+  const card = bikeCard({
+    kind: "bikes",
+    id: "100",
+    name: "Albertbrücke",
+    where: "",
+    directions: [{ count: 3, toward: "" }],
+    measuredAt,
+    now: measuredAt,
+    position: [412700, 5657300],
+    staleAfterMs: 3 * 3600_000,
+  });
+  expect(card.facts.at(-1)?.value).toBe("01.10., 07:00 Uhr");
+});

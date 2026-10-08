@@ -11,6 +11,7 @@ import {
   type TrailBeat,
   type TrailEvent,
 } from "@/lib/city/crash-trail";
+import { STORAGE_KEYS } from "./storage-keys";
 
 /**
  * The crash trail's browser side (the core and why it exists:
@@ -27,7 +28,7 @@ import {
  * `crashTrail.current()` / `crashTrail.previous()` return the report text.
  */
 
-const CURRENT_KEY = "crash-trail";
+const CURRENT_KEY = STORAGE_KEYS.trail;
 const TAG = "[crash-trail]";
 
 declare global {
@@ -36,7 +37,76 @@ declare global {
     crashTrail?: { current: () => string; previous: () => string };
   }
 }
-const PREVIOUS_KEY = "crash-trail.previous";
+const PREVIOUS_KEY = STORAGE_KEYS.trailPrevious;
+
+/** The query parameters worth a record (the QA knobs, AGENTS.md): anything
+ *  else a page was opened with stays out of the trail — it goes into
+ *  reports and the crash card's text. */
+const TRAIL_QUERY = ["scene", "gpu", "block", "safety", "trail"] as const;
+
+/** The path plus the known knobs of `search`, in TRAIL_QUERY's order. */
+export function trailUrl(pathname: string, search: string): string {
+  const given = new URLSearchParams(search);
+  const kept = new URLSearchParams();
+  for (const key of TRAIL_QUERY) {
+    const value = given.get(key);
+    if (value !== null) {
+      kept.set(key, value);
+    }
+  }
+  const query = kept.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
+/** How long one error's repeats are counted, not noted (seconds). */
+export const ERROR_REPEAT_S = 10;
+
+/** What a repeated error's count is noted as: a breadcrumb, not a problem
+ *  of its own (crash-reports.ts `PROBLEM_KINDS`) — its first note was. */
+export const ERROR_REPEATED = "error repeated";
+
+/** The events that may be a page's last word: a pending count goes first
+ *  (a page killed in the background, or leaving, keeps it). */
+const FLUSHED_BY: ReadonlySet<string> = new Set(["hidden", "pagehide", "end"]);
+
+/**
+ * Notes errors, a repeat of the last one within `ERROR_REPEAT_S` of its
+ * note counted instead: a throw that comes back every frame would
+ * otherwise write the whole record to storage 60 times a second. The
+ * count goes out as one `text ×N` (as ERROR_REPEATED) when the text
+ * changes, the window has passed, or before an event that may end the
+ * record (`noting`: hidden, pagehide, end).
+ */
+export function errorCoalescer(
+  note: (kind: string, text: string) => void,
+  now: () => number
+): { error: (text: string) => void; noting: (kind: string) => void } {
+  let last = { text: "", count: 0, at: Number.NEGATIVE_INFINITY };
+  const flush = () => {
+    const { text, count } = last;
+    last = { text: "", count: 0, at: Number.NEGATIVE_INFINITY };
+    if (count > 1) {
+      note(ERROR_REPEATED, `${text} ×${count}`);
+    }
+  };
+  return {
+    error: (text) => {
+      const t = now();
+      if (text === last.text && t - last.at < ERROR_REPEAT_S) {
+        last.count++;
+        return;
+      }
+      flush();
+      note("error", text);
+      last = { text, count: 1, at: t };
+    },
+    noting: (kind) => {
+      if (FLUSHED_BY.has(kind)) {
+        flush();
+      }
+    },
+  };
+}
 
 let rotated = false;
 let announced = false;
@@ -186,7 +256,7 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
   const seconds = () => (performance.now() - t0) / 1000;
   const trail = createTrail({
     startedAt: new Date().toISOString(),
-    url: location.pathname + location.search,
+    url: trailUrl(location.pathname, location.search),
     userAgent: navigator.userAgent,
     screen: `${screen.width}×${screen.height}@${devicePixelRatio}`,
     deviceMemoryGB: (navigator as Navigator & { deviceMemory?: number })
@@ -207,7 +277,10 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
       // Full or blocked: the trail stops, the viewer does not.
     }
   };
+  // (the coalescer notes through `note`, which tells it every event)
+  const errors = errorCoalescer((kind, text) => note(kind, text), seconds);
   const note = (kind: string, detail?: string) => {
+    errors.noting(kind);
     const event = { t: seconds(), kind, detail: detail?.slice(0, 300) };
     pushEvent(trail, event, Date.now());
     try {
@@ -240,7 +313,7 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
       error instanceof Error
         ? (error.stack ?? "").split("\n").slice(1, 4).join(" | ")
         : `@${event.filename}:${event.lineno}`;
-    note("error", `${event.message} ${stack}`);
+    errors.error(`${event.message} ${stack}`);
   };
   const onRejection = (event: PromiseRejectionEvent) =>
     note(

@@ -9,12 +9,14 @@
  */
 import {
   type Aabb,
+  type AskHit,
   type AskItem,
   type AskSet,
   type AskSolid,
   type Cylinder,
   cylindersBox,
   rayCylinder,
+  type Xyz,
 } from "./ask-solids";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
 import type { BridgeFeature, MonumentFeature, TreeFeature } from "./features";
@@ -56,7 +58,7 @@ const TREE_CELL = 64;
 /** What a tile knows of its trees beyond their solids, by feature index. */
 interface TreeTable {
   crown: Float32Array;
-  /** bit 1 OSM, bit 2 conifer */
+  /** bit 1 OSM, bit 2 conifer, bit 4 orchard */
   flags: Uint8Array;
   genus: Uint8Array;
   height: Float32Array;
@@ -75,6 +77,7 @@ function treeInquiry(t: TreeTable, i: number, tile: string): FeatureInquiry {
     position: [t.position[i * 2], t.position[i * 2 + 1]],
     osm: (t.flags[i] & 1) === 1,
     conifer: (t.flags[i] & 2) === 2,
+    ...((t.flags[i] & 4) === 4 ? { orchard: true } : {}),
     genus: TREE_GENERA[t.genus[i]] ?? "",
     height: t.height[i],
     crown: t.crown[i],
@@ -90,8 +93,7 @@ function packedTreeSet(
   box: Aabb,
   solids: Float32Array,
   index: Int32Array,
-  table: TreeTable,
-  tile: string
+  target: (i: number) => FeatureInquiry
 ): AskSet<FeatureInquiry> {
   const cylinders = (k: number): [Cylinder, Cylinder] => {
     const at = k * TREE_STRIDE;
@@ -101,8 +103,33 @@ function packedTreeSet(
       { x, z, y0: yb, y1: yt, r },
     ];
   };
+  const distance = (o: Xyz, d: Xyz, k: number): number => {
+    const [trunk, crown] = cylinders(k);
+    return Math.min(
+      rayCylinder(o, d, trunk) ?? Number.POSITIVE_INFINITY,
+      rayCylinder(o, d, crown) ?? Number.POSITIVE_INFINITY
+    );
+  };
+  const hit = (k: number, t: number): AskHit<FeatureInquiry> => {
+    const [trunk, crown] = cylinders(k);
+    return {
+      distance: t,
+      target: target(index[k]),
+      solids: [{ cylinder: trunk }, { cylinder: crown }],
+    };
+  };
   return {
     box,
+    along: (o, d, far) => {
+      const out: AskHit<FeatureInquiry>[] = [];
+      for (let k = 0; k < index.length; k++) {
+        const t = distance(o, d, k);
+        if (t <= far) {
+          out.push(hit(k, t));
+        }
+      }
+      return out.sort((a, b) => a.distance - b.distance);
+    },
     nearest: (o, d, far) => {
       let best = -1;
       let reach = far;
@@ -123,7 +150,7 @@ function packedTreeSet(
       const [trunk, crown] = cylinders(best);
       return {
         distance: reach,
-        target: treeInquiry(table, index[best], tile),
+        target: target(index[best]),
         solids: [{ cylinder: trunk }, { cylinder: crown }],
       };
     },
@@ -151,45 +178,79 @@ export function treeSets(
     genus: new Uint8Array(n),
     flags: new Uint8Array(n),
   };
+  const target = (i: number) => treeInquiry(table, i, ctx.tile);
+  return packedCylinderSets(
+    n,
+    (i) => {
+      const f = features[i];
+      const p = f.properties;
+      if (f.geometry?.type !== "Point" || !p) {
+        return null;
+      }
+      const [ex, ey] = f.geometry.coordinates;
+      const y = ground(ex, ey);
+      if (y === null) {
+        return null;
+      }
+      const archetype = archetypeOf(p.a);
+      const ext = treeExtents(p.h, p.d, archetype, p.g === 1);
+      const { x, z } = epsgToWorld(ex, ey, ctx.offset);
+      table.position.set([ex, ey], i * 2);
+      table.height[i] = p.h;
+      table.crown[i] = p.d;
+      table.trunk[i] = p.t ?? 0;
+      table.genus[i] = p.gn ?? 0;
+      table.flags[i] =
+        (p.s === "osm" ? 1 : 0) |
+        (archetype === "conifer" ? 2 : 0) |
+        (p.s === "orchard" ? 4 : 0);
+      return [
+        x,
+        z,
+        y,
+        y + ext.crownBase,
+        y + ext.crownTop,
+        Math.max(ext.crownWidth / 2, MIN_CROWN_R),
+      ];
+    },
+    target
+  );
+}
+
+/** One packed tree: x, z, ground, crown base, crown top, crown radius. */
+export type PackedTree = [number, number, number, number, number, number];
+
+/**
+ * Trees as packed trunk-and-crown cylinders, per TREE_CELL cell a typed
+ * array: `put(i)` places tree i (or leaves it out with null), `target(i)`
+ * makes its inquiry only when a ray meets it.
+ */
+export function packedCylinderSets(
+  n: number,
+  put: (i: number) => PackedTree | null,
+  target: (i: number) => FeatureInquiry
+): AskSet<FeatureInquiry>[] {
   const cells = new Map<string, { box: Aabb; trees: number[] }>();
   const packed: number[] = [];
-  features.forEach((f, i) => {
-    const p = f.properties;
-    if (f.geometry?.type !== "Point" || !p) {
-      return;
+  for (let i = 0; i < n; i++) {
+    const tree = put(i);
+    if (!tree) {
+      continue;
     }
-    const [ex, ey] = f.geometry.coordinates;
-    const y = ground(ex, ey);
-    if (y === null) {
-      return;
-    }
-    const archetype = archetypeOf(p.a);
-    const ext = treeExtents(p.h, p.d, archetype, p.g === 1);
-    const { x, z } = epsgToWorld(ex, ey, ctx.offset);
-    const r = Math.max(ext.crownWidth / 2, MIN_CROWN_R);
-    table.position.set([ex, ey], i * 2);
-    table.height[i] = p.h;
-    table.crown[i] = p.d;
-    table.trunk[i] = p.t ?? 0;
-    table.genus[i] = p.gn ?? 0;
-    table.flags[i] =
-      (p.s === "osm" ? 1 : 0) | (archetype === "conifer" ? 2 : 0);
+    const [x, z, y, , top, r] = tree;
     const key = `${Math.floor(x / TREE_CELL)},${Math.floor(z / TREE_CELL)}`;
     const cell = cells.get(key);
-    const box = cylindersBox(x, z, y, y + ext.crownTop, r, cell?.box);
+    const box = cylindersBox(x, z, y, top, r, cell?.box);
     if (cell) {
       cell.box = box;
       cell.trees.push(i);
     } else {
       cells.set(key, { box, trees: [i] });
     }
-    packed[i * TREE_STRIDE] = x;
-    packed[i * TREE_STRIDE + 1] = z;
-    packed[i * TREE_STRIDE + 2] = y;
-    packed[i * TREE_STRIDE + 3] = y + ext.crownBase;
-    packed[i * TREE_STRIDE + 4] = y + ext.crownTop;
-    packed[i * TREE_STRIDE + 5] = r;
-  });
+    for (let c = 0; c < TREE_STRIDE; c++) {
+      packed[i * TREE_STRIDE + c] = tree[c];
+    }
+  }
   return [...cells.values()].map(({ box, trees }) => {
     const solids = new Float32Array(trees.length * TREE_STRIDE);
     trees.forEach((i, k) => {
@@ -197,7 +258,7 @@ export function treeSets(
         solids[k * TREE_STRIDE + c] = packed[i * TREE_STRIDE + c];
       }
     });
-    return packedTreeSet(box, solids, Int32Array.from(trees), table, ctx.tile);
+    return packedTreeSet(box, solids, Int32Array.from(trees), target);
   });
 }
 

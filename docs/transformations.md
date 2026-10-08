@@ -664,8 +664,56 @@ visual-variable codebook is in
   copper-green stays green, terracotta red, slate cool — curing drabness without
   homogenising toward terracotta. *(Rejected: blending toward a terracotta target
   — it destroyed the ~187 genuine copper-patina-green roofs the DOP captured.)*
-- **Storey bands** (*Höhenlinien*) — band spacing from `storeyHeight(measuredHeight)`
-  (`storeysAboveGround` is only ~4 % populated, so derived).
+- **Storey bands** (*Höhenlinien*) — where OSM counts the storeys
+  (`building:levels`, a part's own or its Building's), the walls up to the
+  eave divided by that count (`mappedStoreyHeight`), kept when the storey
+  comes out 2.4–5.5 m (outside it the count is another part's or a typo);
+  else `storeyHeight(measuredHeight)`, whole ~3.2 m storeys
+  (`storeysAboveGround` is only ~4 % populated). Spawn tile: 2 172 objects
+  on mapped storeys (median 3.67 m, p10 3.06, p90 4.79), 298 back on the
+  estimate.
+- **Gliederung** (plinth, cornices, shop zone) — painted in the clay
+  shader from heights the object table already carries, no new data: a
+  0.6 m stone plinth, a ledge at the first storey line (where the wall
+  holds two storeys), a deeper ledge under the eave, and on a building with
+  a mapped shop the ground floor a shade darker as its recessed shop
+  front. Walls only, not on a door, and not on a facade that is its own
+  (flag 16: a Wikidata landmark, a monumental ALKIS use — church,
+  theatre, palace, museum … — or OSM storeys taller than 5.5 m, a hall;
+  `ownFacade`), which gets no drawn door either, and not under a flat
+  roof (flag 256: three quarters of the LoD2 roof area level — post-war
+  slabs and modern blocks have no town house's cornices); the ground floor's three only on a part
+  standing on the ground (flag 128: within 3 m of its tree's lowest base,
+  so a tower's part on a roof gets no plinth). Slider *Gliederung*,
+  default 80 %. No windows: the veto stands.
+- **Doors** — OSM `entrance=*` nodes on the ground floor (no `level`, or
+  one with a 0; not `no`, `entry_only`, `emergency_ward_entrance`) snapped
+  onto the nearest LoD2 footprint edge within 3 m (`pipeline/bake/
+  doors.py`), with the outward normal; dropped on a party wall (its
+  outside lies in another footprint), an edge too short for 0.7 m, or a
+  wall too low for the door plus 0.6 m; one door per 1.2 m of wall. The
+  sill stands on the lowest DGM1 sample in front of it. The building bake
+  lays each door onto its host's wall triangles (`wallShift` in
+  `lib/city/doors.ts` — LoD2 walls stand up to ±0.15 m off the footprint
+  line, and a wall proud of it swallowed the leaf) and appends a pale
+  surround and a darker leaf set back between it, as two objects in the
+  host's building tree (`source` 3, flag 64: their tint at full strength).
+  Dresden: 6 628 doors on fifteen tiles (3 208 `main`, 2 794 `yes`, 299
+  `staircase`), 489 on the spawn tile. Never an invented door: a building
+  without a mapped entrance has none. Ground joins: `doors` in
+  `JOIN_PARTS`, budget 1 % (the misses are sills at the top of mapped
+  steps).
+- **Dormers** — what DOM1 shows over a pitched LoD2 roof (25–62°) that
+  LoD2 leaves out (`pipeline/bake/dormers.py`): the excess `DOM − roof`
+  against its own 9 m median, blobs 0.7 m and more over it, 3–30 m² and
+  compact, their top 0.9–3.5 m over the roof and under the object's
+  ridge, clear of every tree point — a chimney is too small, a crown
+  overhanging the roof irregular or too high. Each becomes a front facing
+  down the slope, two cheeks and a flat roof at the measured top running
+  back into the main roof (`lib/city/dormers.ts`), appended as one object
+  per host in its tint and roof colour (`source` 4), no storey band, eave
+  line, plinth or shop zone on it. No window in the front: the veto
+  stands. Dresden: 10 514 on fifteen tiles, 862 on the spawn tile.
 - **Eave line** (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
   (geometry-derived; the attribute is ~4 %).
 - **Dusk glow** (*Abendlicht*) — warm emissive on commerce/public/special
@@ -901,9 +949,16 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   prism) are drawn into a mask where the scene pass's depth shows them
   (a stand-in only where the scene's own surface lies inside it), the
   mask is blurred at half resolution, and the band of the blur between
-  0.07 and 0.66 is the line: 4.5 CSS px of the hatch's graphite, on a
-  hair of its paper outside (0.012–0.07, 55 %), anti-aliased by its own
-  gradient. The blur rounds the corners and drops what is finer than
+  0.07 and 0.66 is the line: 4.5 CSS px in the HUD's accent pink
+  (`SELECTION_ACCENT`, the theme's `--sidebar-primary`; the hatch on a
+  building is `--primary`), on a hair of its pale outside (0.012–0.07,
+  55 %), anti-aliased by its own gradient. The selection leaves the
+  city's palette on purpose: it is the interface's, and the card's
+  kicker and the chosen candidate carry the same colour. A new question
+  flashes: the pale fringe widens to 0.002 and glows in the accent, easing
+  out over 650 ms (`OUTLINE_PULSE`); a hover over a candidate does not.
+  (Graphite and paper until 2026-10-07: maintainer review asked for a
+  bolder mark.) The blur rounds the corners and drops what is finer than
   the line; its reach follows the device pixel ratio, so the width is
   in screen pixels at any distance (`lib/city/outline.ts`,
   `selection-outline.ts`, `selection-shape.ts`; over the finished frame,
@@ -1379,6 +1434,30 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   fine terrain tile; the three real lights go to the nearest heads of the
   visible tiles.
 
+- **Street lamps and litter bins OSM lacks, from Mapillary** — Mapillary's
+  detected objects ("map features": `object--street-light`,
+  `object--trash-can`, each one triangulated across the street photos that
+  saw it; CC BY-SA 4.0) fill in where OSM is thin. On Dresden's spawn tile
+  OSM maps 339 lamps and 203 bins; Mapillary places ~1 500 street lights
+  and ~600 bins, of which 125 and 14 lie within 5 m of an OSM one (its
+  positions are 2–6 m off; median 4 m against the OSM lamps it matches).
+  Kept: seen since 2020; the two detectors' copies of one object merged
+  within 4 m; nothing within 8 m of an OSM object of its kind; nothing
+  inside a LoD2 footprint (a facade lamp, or a placement through the wall);
+  one in the carriageway moved to the kerb, none on water, railway or a
+  bridge deck (furniture.py's gate); kept objects of a kind 7 m apart (one
+  lamp placed twice from two sequences). Dresden: 6 726 lamps and 1 732
+  bins on fifteen tiles (899 and 337 on the spawn tile). Stood by the lamp
+  and furniture layers like OSM's; the card names Mapillary. Its own file
+  (`dlm/mly_<t>.geojson`), never merged into the OSM files: ODbL and CC
+  BY-SA do not mix in one database. `pipeline/bake/mapillary.py` (the fetch
+  caches the tile's map features under `<raw>/mapillary/`, it needs
+  `MAPILLARY_TOKEN`), `lib/city/mapillary.ts`; per site `Site.mapillary`,
+  whose credit joins the footer. Not (yet): Mapillary's benches and bicycle
+  stands (fewer than OSM's: 111 and 48 against 587 and 292 on the spawn
+  tile), traffic signs (no layer draws them), signals (OSM's are placed by
+  the direction they face, which a detection lacks).
+
 - **Street furniture** — OSM benches (`amenity=bench`, points and the
   ways a bench is sometimes drawn as), picnic tables, litter bins
   (`waste_basket`), bicycle stands (`bicycle_parking`, not wall loops),
@@ -1601,7 +1680,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   pier every 26 m where it clears the ground by 2.5 m, drawn by the tile
   owning its middle (`addSpanDeck`). Dresden: steps beyond the grade by
   > 1 m in the drawn lines 230 → 18, Hamburg 330 → 62, Leipzig 41 → 17, Unna
-  20 → 0 (`bun scripts/line-levels.ts <site>`; the test holds Dresden to
+  20 → 0 (`bun scripts/line-levels-cli.ts <site>`; the test holds Dresden to
   20). What remains: deck ends above lower ground for good, and deck tops
   DOM1 put 1.5–2 m off their embankment. *(Until then: lifted onto every
   deck under a point — 🗃️ below.)*
@@ -2108,8 +2187,11 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 Overlays on the city, each switched on and off on its own in the HUD
 (*Erkunden* → *Verkehrsdaten*; `lib/city/data-layers.ts`, one flag per
 layer in the look store and the snapshot, all **off** at boot): nothing is
-drawn, fetched or polled for a layer that is off (the traffic bands are
-fetched with their tile's dressing — 37 KB a tile — and only hidden). They
+drawn, fetched or polled for a layer that is off (the counted sections'
+features, 37 KB a tile, are fetched with their tile's dressing; the glass
+bodies are built on the layer's first switch-on per tile, kept hidden when
+it is switched off and freed with the tile — plan 062, ADR 0040's
+2026-10-07 update). They
 are measurements laid over the poetic city, not part of it: unlit or flat
 colours, no shadows, no text in the scene (what they say in words is in
 the sidebar). Judged on SwiftShader plates only so far — **unjudged on a
@@ -2172,8 +2254,9 @@ GPU**.
   `cls:L1781` "aktuelle Zählwerte", dl-de/by-2-0; 35 counters, the
   bicycles of the last full hour per direction) read **by the browser**
   from the city's server (it answers any origin) when the layer is
-  switched on and every 5 minutes while it is on
-  (`app/_components/bike-layer.ts`, `lib/city/bike-counts.ts`): a pair of
+  switched on and every 5 minutes while it is on — not while the page is
+  hidden; back in view it reads at once when the counts are older than one
+  poll (`app/_components/bike-layer.ts`, `lib/city/bike-counts.ts`): a pair of
   **glass columns** per counter across the street (`winkel`, its run,
   degrees counter-clockwise from north), one per direction (teal, lilac),
   height 1.5 m + 1.6 × √count (482 an hour on the Albertbrücke ≈ 37 m),
@@ -2473,9 +2556,11 @@ research that produced them):
     run the columns with the scene's hour); the accidents with injury
     (Unfallatlas, the statistics offices, dl-de/by-2-0; pedestrian and
     cyclist involvement per point) as a fourth layer.
-15. **The twin, next** — ask trees, bridges and monuments too, a link
-    to an asked building, a *Datenstand* panel, the ingest writing the
-    provenance ([plan 052](./plans/052-queryable-twin.md) phases 4–7); the
+15. **The twin, next** — asking trees, bridges and monuments too is ✅
+    built 2026-10-01 (plan 052 phase 4; see the twin section above). Still
+    planned: a link to an asked building, a *Datenstand* panel, the ingest
+    writing the provenance ([plan 052](./plans/052-queryable-twin.md)
+    phases 4b–7); the
     day playing, weather as mood, the Elbe at its gauge
     ([plan 053](./plans/053-time-and-live-sources.md)); flood, sun hours,
     sight lines and a planned building as scenarios

@@ -32,8 +32,9 @@ import { describeOffsite, type Offsite } from "./locate-me";
  *
  * When the fix lies in another city this deployment serves, that comes
  * first: one prominent link to its page, which puts the player where they
- * stand (`?at=lat,lng`, read after its first frame); the vantages here stay
- * below as the other choice.
+ * stand (`#at=lat,lng`, `arrivalHref` in lib/city/geolocation.ts: a
+ * fragment, so the position never reaches the server; read after its first
+ * frame, then dropped); the vantages here stay below as the other choice.
  */
 export function LocateOffsiteDialog({
   offsite,
