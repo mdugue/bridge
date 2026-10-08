@@ -57,16 +57,24 @@ import {
   DOOR_SINK,
   DOOR_SURROUND,
   doorMesh,
+  eaveAlong,
   wallShift,
   wallShiftAlong,
+  wallShiftKnots,
 } from "../lib/city/doors";
 import { dormerMesh } from "../lib/city/dormers";
 import {
+  type BandKind,
+  bandMeshes,
   CORNICE,
-  corniceMesh,
-  plinthMesh,
+  EAVE_CORNICE,
+  type HostShift,
+  joinStretches,
+  lineStretches,
+  plinthStretches,
   type Shaded,
-  type WallShift,
+  type Stretch,
+  straightRuns,
 } from "../lib/city/plinths";
 import type {
   DoorFeature,
@@ -691,9 +699,12 @@ const PLINTH_ON_GROUND_M = 1.5;
  * (asking or demolishing it takes the building), no footprint, no storey
  * band or eave line on it, `source` 5. Only a town house carries one: a
  * host from 3 m of wall, standing on the street, not `NO_PLINTH`. Along
- * the same stretches the Gurtgesims over its ground floor (`corniceMesh`,
- * `corniceHeight`): a second object in a plaster shade a touch paler than
- * the wall, level at the first storey line.
+ * the same stretches the Gurtgesims over its ground floor
+ * (`corniceHeight`) and the Traufgesims under its eave where the roof runs
+ * level along the wall (`eaveAlong`), each an object in a plaster shade a
+ * touch paler than the wall. Each band runs on from house to house along
+ * a row (`joinStretches`): over the gaps LoD2's footprints leave between
+ * them, at one level where theirs lie close.
  */
 export function appendPlinths(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
@@ -705,13 +716,24 @@ export function appendPlinths(
   const objectIds: number[] = [];
   const walls = treeTriangles(baked);
   const vertices = baked.vertices.positions;
+  const isRoof = baked.vertices.isRoof;
+  const roofs = new Map<number, number[]>();
+  for (const [root, tris] of walls) {
+    roofs.set(
+      root,
+      tris.filter((t) => isRoof[t] === 1)
+    );
+  }
   const part = (
     tris: Shaded,
     host: CityObjectRow,
-    base: number,
-    top: number,
     tint: [number, number, number]
   ) => {
+    const zs = tris.positions.filter((_, i) => i % 3 === 2);
+    if (zs.length === 0) {
+      return;
+    }
+    const [base, top] = [Math.min(...zs), Math.max(...zs)];
     const index = baked.objects.length;
     positions.push(...tris.positions);
     normals.push(...tris.normals);
@@ -734,34 +756,75 @@ export function appendPlinths(
       footprints: [],
     });
   };
+  const wallOf = (h: number) => walls.get(baked.objects[h].root) ?? [];
+  const shift: HostShift = (h, a, b, z0, z1) =>
+    wallShiftKnots([a, b], [z0, z1], baked.offset, vertices, wallOf(h));
+  const bands: Record<BandKind, Stretch[]> = {
+    plinth: [],
+    cornice: [],
+    eave: [],
+  };
   for (const f of plinths) {
     const p = f.properties;
     const hostIndex = p ? objectIndex.get(p.of) : undefined;
     const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
-    if (!(p && host) || (host.flags & NO_PLINTH) !== 0 || host.eaveH < 3) {
+    if (
+      !(p && host && hostIndex !== undefined) ||
+      (host.flags & NO_PLINTH) !== 0 ||
+      host.eaveH < 3
+    ) {
       continue;
     }
-    const foot = Math.min(...p.g);
-    if (host.baseZ > foot + PLINTH_ON_GROUND_M) {
+    if (host.baseZ > Math.min(...p.g) + PLINTH_ON_GROUND_M) {
       continue;
     }
+    bands.plinth.push(...plinthStretches(f, hostIndex));
     const top = Math.max(...p.top);
-    // close to the wall: the form, not the colour, carries it
-    const stone = mixRgb(
-      host.tint.map((c) => c * 0.9),
-      PLINTH_STONE,
-      0.25
-    );
-    // laid on the host's wall, not the footprint line it stands off
-    const wall = walls.get(host.root) ?? [];
-    const shift: WallShift = (a, b, z0, z1) =>
-      wallShiftAlong([a, b], [z0, z1], baked.offset, vertices, wall);
-    part(plinthMesh(f, baked.offset, shift), host, foot, top, stone);
     const z = corniceHeight(host, top);
     if (z !== undefined) {
-      const plaster = mixRgb(host.tint, SURROUND_STONE, 0.08);
-      const tris = corniceMesh(f, baked.offset, z, shift);
-      part(tris, host, z, z + CORNICE.height + CORNICE.wash, plaster);
+      bands.cornice.push(...lineStretches(f, hostIndex, z));
+    }
+    bands.eave.push(
+      ...eaveStretches(f, hostIndex, host, z ?? top, (a, b, z0, z1) =>
+        eaveAlong(
+          [a, b],
+          wallShiftAlong(
+            [a, b],
+            [z0, z1],
+            baked.offset,
+            vertices,
+            wallOf(hostIndex)
+          ),
+          baked.offset,
+          vertices,
+          roofs.get(host.root) ?? []
+        )
+      )
+    );
+  }
+  const tolerance: Record<BandKind, number> = {
+    plinth: 0.2,
+    cornice: 0.6,
+    eave: EAVE_STEP_M,
+  };
+  for (const kind of ["plinth", "cornice", "eave"] as const) {
+    const joined = joinStretches(
+      bands[kind],
+      kind === "plinth" ? "plinth" : "line",
+      tolerance[kind]
+    );
+    for (const [h, tris] of bandMeshes(joined, baked.offset, kind, shift)) {
+      const host = baked.objects[h];
+      // close to the wall: the form, not the colour, carries it
+      const tint =
+        kind === "plinth"
+          ? mixRgb(
+              host.tint.map((c) => c * 0.9),
+              PLINTH_STONE,
+              0.25
+            )
+          : mixRgb(host.tint, SURROUND_STONE, 0.08);
+      part(tris, host, tint);
     }
   }
   if (positions.length === 0) {
@@ -780,6 +843,42 @@ export function appendPlinths(
       normals
     ),
   };
+}
+
+/** Neighbouring houses' Traufgesimse this close in height run as one. */
+const EAVE_STEP_M = 0.25;
+/** A Traufgesims from this much wall, and this far over the band below. */
+const EAVE_MIN_M = 5;
+const EAVE_CLEAR_M = 1.5;
+
+/** A host's Traufgesims along its plinth's straight runs: where the roof
+ *  runs level along the wall (`eave`), its underside `EAVE_CORNICE.height`
+ *  under the eave — on a wall from `EAVE_MIN_M`, `EAVE_CLEAR_M` over the
+ *  band below it (`under`: the Gurtgesims, or the plinth's top). */
+function eaveStretches(
+  f: PlinthFeature,
+  hostIndex: number,
+  host: CityObjectRow,
+  under: number,
+  /** the eave along a→b, the wall read between two heights */
+  eave: (
+    a: readonly number[],
+    b: readonly number[],
+    z0: number,
+    z1: number
+  ) => number | undefined
+): Stretch[] {
+  const guess = host.baseZ + host.eaveH;
+  return straightRuns(f.geometry.coordinates).flatMap(([a, b]) => {
+    const e = eave(a, b, guess - 1.5, guess - 0.5);
+    const z = e === undefined ? undefined : e - EAVE_CORNICE.height;
+    return z !== undefined &&
+      e !== undefined &&
+      e - host.baseZ >= EAVE_MIN_M &&
+      z > under + EAVE_CLEAR_M
+      ? [{ a, b, lo: z, hi: z, host: hostIndex }]
+      : [];
+  });
 }
 
 /** Where a host's Gurtgesims sits (its underside, absolute): straddling

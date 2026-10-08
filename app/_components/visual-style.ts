@@ -320,9 +320,9 @@ function ledge(h: F, top: F, size: number, drop: number, strength: F): F {
  *  - Sockel: the lowest 0.6 m a little darker and cooler, a stone plinth,
  *    with a crisp top edge (from 3 m of wall) — under the modelled plinth
  *    where the street side has one (lib/city/plinths.ts), which also
- *    models the Gurtgesims at the first storey line (no painted one: its
- *    painted shadow read as a smear);
- *  - Traufgesims: a deeper ledge under the eave (build.z), from 5 m;
+ *    models the Gurtgesims at the first storey line and the Traufgesims
+ *    under a level eave (no painted ones: their painted shadows read as
+ *    a smear, a stain under the roof);
  *  - Ladenzone: a shop's ground floor (flag 1) a shade darker and cooler
  *    under the Gurtgesims, read as the recessed shop front — no panes.
  * Not sun-dependent: the ledges' light and shadow are painted, like the
@@ -365,10 +365,8 @@ function articulation(
     .mul(clamp(h.sub(0.6).div(px), 0, 1))
     .mul(shop);
   out = mix(out, out.mul(vec3(0.74, 0.76, 0.8)), zone.mul(low));
-  // Traufgesims (the Gurtgesims is modelled: lib/city/plinths.ts)
-  return out.mul(
-    ledge(h, eave.sub(0.05), 0.35, 0.65, on.mul(step(5, eave)).mul(1.3))
-  );
+  // the Gurtgesims and the Traufgesims are modelled: lib/city/plinths.ts
+  return out;
 }
 
 /** A facade's mapped material from the object's flags (lib/city/
