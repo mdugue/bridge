@@ -1,11 +1,14 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   basinLevels,
+  figureShare,
   insideRing,
   jetHeight,
   jetPlaces,
   MARKER_SHAPE,
+  MATERIAL_TONE,
   markerPieces,
+  markerTones,
   onRelief,
   openRing,
   reliefSurface,
@@ -127,4 +130,36 @@ test("an untyped monument keeps its kind's one marker", () => {
     { ...MARKER_SHAPE.stone, lift: 0, solid: "block" },
   ]);
   expect(markerPieces("statue")[0].solid).toBe("pillar");
+});
+
+describe("material tones", () => {
+  test("a gilded figure shows its gold, a bronze one on granite both", () => {
+    expect(markerTones("Kupfer, Blattgold")).toEqual({
+      figure: MATERIAL_TONE.Blattgold,
+      base: null,
+    });
+    expect(markerTones("Granit, Bronze")).toEqual({
+      figure: MATERIAL_TONE.Bronze,
+      base: MATERIAL_TONE.Granit,
+    });
+    expect(markerTones("Sandstein")).toEqual({
+      figure: MATERIAL_TONE.Sandstein,
+      base: MATERIAL_TONE.Sandstein,
+    });
+  });
+
+  test("nothing named, or nothing with a tone, stays clay", () => {
+    expect(markerTones()).toEqual({ figure: null, base: null });
+    expect(markerTones("Glas, Kunststoff")).toEqual({
+      figure: null,
+      base: null,
+    });
+  });
+
+  test("a tall relief is a figure on a pedestal, a low one all figure", () => {
+    expect(figureShare(0.5, 2)).toBe(1);
+    expect(figureShare(1, 8.5)).toBe(0);
+    expect(figureShare(8, 8.5)).toBe(1);
+    expect(figureShare(8.5 * 0.55, 8.5)).toBeCloseTo(0.5);
+  });
 });

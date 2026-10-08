@@ -347,3 +347,114 @@ export function yawOf(x: number, y: number): number {
   const s = Math.sin(x * 12.9898 + y * 78.233) * 43_758.5453;
   return (s - Math.floor(s)) * Math.PI * 2;
 }
+
+/**
+ * A material's tone (sRGB), muted into the clay's palette: an abstraction
+ * of what the eye takes from a monument at a distance — warm sandstone,
+ * grey granite, bronze's dark green-brown patina, copper's verdigris, a
+ * soft gold — never a texture. A material without one (glass, plastic,
+ * ceramic: too varied to name a colour) stays in clay.
+ */
+export const MATERIAL_TONE: Readonly<Record<string, number>> = {
+  Sandstein: 0xe2_cf_ac,
+  Stein: 0xe3_de_d4,
+  Kalkstein: 0xe8_e2_d3,
+  Marmor: 0xf1_ee_e8,
+  Granit: 0xb8_b5_b0,
+  Diabas: 0x8f_91_8f,
+  Porphyr: 0xc0_94_87,
+  Beton: 0xcd_ca_c3,
+  Ziegel: 0xc8_90_7a,
+  Holz: 0xb9_9c_7c,
+  Porzellan: 0xf4_f3_f0,
+  Bronze: 0x7f_8c_6e,
+  Kupfer: 0x86_b2_9d,
+  Gold: 0xd8_b4_5a,
+  Blattgold: 0xd8_b4_5a,
+  Messing: 0xc9_ae_72,
+  Metall: 0xa9_ae_b3,
+  Stahl: 0xa9_ae_b3,
+  Edelstahl: 0xb9_bd_c1,
+  Eisen: 0x7d_80_84,
+  Gusseisen: 0x7d_80_84,
+};
+
+/** What shows of a figure's materials, the most striking first: gilding
+ *  over the copper under it, a metal over its stone. */
+const FIGURE_ORDER = [
+  "Blattgold",
+  "Gold",
+  "Kupfer",
+  "Bronze",
+  "Messing",
+  "Edelstahl",
+  "Stahl",
+  "Metall",
+  "Gusseisen",
+  "Eisen",
+];
+/** What a pedestal is built of. */
+const BASE_MATERIALS = new Set([
+  "Sandstein",
+  "Stein",
+  "Kalkstein",
+  "Marmor",
+  "Granit",
+  "Diabas",
+  "Porphyr",
+  "Beton",
+  "Ziegel",
+]);
+
+/** The tones of a monument (sRGB): its figure's and its pedestal's;
+ *  `null` where nothing names one (clay). */
+export interface MarkerTones {
+  base: number | null;
+  figure: number | null;
+}
+
+/**
+ * A monument's tones from its materials ("Bronze, Granit"): the figure
+ * takes the most striking metal, else the first material named; the
+ * pedestal the first stone named — else, where only metals are named,
+ * clay (nothing says what it stands on), and where only one stone is,
+ * that stone (a sandstone statue on its sandstone base).
+ */
+export function markerTones(material?: string): MarkerTones {
+  const names = (material ?? "")
+    .split(",")
+    .map((n) => n.trim())
+    .filter((n) => n in MATERIAL_TONE);
+  if (names.length === 0) {
+    return { base: null, figure: null };
+  }
+  const figure = FIGURE_ORDER.find((n) => names.includes(n)) ?? names[0];
+  const base = names.find((n) => BASE_MATERIALS.has(n));
+  return {
+    figure: MATERIAL_TONE[figure],
+    base: base ? MATERIAL_TONE[base] : null,
+  };
+}
+
+/** A measured relief this tall (m) is a figure on a pedestal: its upper
+ *  part takes the figure's tone, its lower the pedestal's. */
+export const PEDESTAL_RELIEF_M = 3;
+/** Where on such a relief the figure begins (a share of its height): the
+ *  Goldener Reiter's pedestal ends at 4.6 of 8.5 m in the laser scan. */
+export const FIGURE_FROM = 0.55;
+/** The blend between pedestal and figure (m). */
+const FIGURE_BLEND = 0.4;
+
+/**
+ * How much of the figure's tone a relief vertex takes (0 the pedestal's,
+ * 1 the figure's) at `h` above the ground, on a relief `top` tall: a low
+ * relief is all figure, a tall one a figure above `FIGURE_FROM` of its
+ * height.
+ */
+export function figureShare(h: number, top: number): number {
+  if (top < PEDESTAL_RELIEF_M) {
+    return 1;
+  }
+  const t = (h - top * FIGURE_FROM) / FIGURE_BLEND + 0.5;
+  return Math.min(Math.max(t, 0), 1);
+}

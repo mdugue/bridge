@@ -294,3 +294,33 @@ test("a statue typed by OSM: its form, maker and material, its name official", (
     "Art, Werk, Material, Höhe: OpenStreetMap · Stand 19.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
   ]);
 });
+
+test("a monument whose material only Wikidata names quotes it for that", () => {
+  const card = monumentCard(
+    {
+      kind: "monument",
+      tile: "t",
+      position: [411791, 5657042],
+      properties: {
+        kind: "statue",
+        name: "Goldener Reiter",
+        source: "dlm",
+        material: "Kupfer, Blattgold",
+        wikidata: "Q558537",
+        relief: { west: 0, north: 0, cols: 2, rows: 1, dm: [46, 70] },
+      },
+    },
+    provenance,
+    DRESDEN
+  );
+  expect(card.kicker).toBe("Denkmal");
+  expect(card.facts).toEqual([
+    { label: "Material", value: "Kupfer, Blattgold" },
+    { label: "Höhe", value: "7 m" },
+  ]);
+  expect(lines(card.sources)).toEqual([
+    "Name: Basis-DLM · Quelle: GeoSN, dl-de/by-2-0",
+    "Material: Wikidata · Stand 26.09.2026 · CC0",
+    "Höhe gemessen: Digitales Oberflächenmodell DOM1 · Quelle: GeoSN, dl-de/by-2-0",
+  ]);
+});

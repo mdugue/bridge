@@ -26,6 +26,14 @@ OSM sculpture or memorial the DLM lacks (most of a city's park
 sculptures) is added; one inside a LoD2 footprint is indoors or on a
 facade, and is left out.
 
+Where OSM names no material, Wikidata may (`P186`, "made from material"):
+the Goldener Reiter is copper under gold leaf, the Bismarck-Denkmal bronze
+on granite. The fetch caches the monuments, sculptures and memorials it
+knows on the tile (`fetch_wikidata`, never a Stolperstein); a monument
+without a material takes the item of its name within `WIKIDATA_NAME_M`,
+else the nearest within `WIKIDATA_NEAR_M`, and keeps its id (`wikidata`)
+as the material's source.
+
 A basin outline is written as a Polygon ring — the rim, its hole the water
 (the outline inset by the rim width); a basin too small to inset is a solid
 bowl. Everything else is a Point.
@@ -47,10 +55,12 @@ from __future__ import annotations
 import json
 import re
 from collections import deque
+from pathlib import Path
 
 import numpy as np
 import rasterio
 import shapely
+from pyproj import Transformer
 
 from .common import (
     OSM_ATTRIBUTION,
@@ -62,6 +72,7 @@ from .common import (
     read_layer,
     write_geojson,
 )
+from .landmarks import query_box
 from .osm import below_ground, has_extract, read_osm, tag
 from .osm_buildings import footprints
 
@@ -134,6 +145,10 @@ MATERIALS = {
     "plastic": "Kunststoff",
     "ceramic": "Keramik",
     "brick": "Ziegel",
+    "gold": "Gold",
+    "gold_leaf": "Blattgold",
+    "porcelain": "Porzellan",
+    "diabase": "Diabas",
 }
 
 
@@ -359,6 +374,126 @@ def type_monuments(
     return items
 
 
+# How far a Wikidata item may stand from the monument it describes (m): of
+# its name, or the nearest of any name. Wikidata's coordinates are often a
+# map pin, not the plinth.
+WIKIDATA_NAME_M = 40.0
+WIKIDATA_NEAR_M = 10.0
+WIKIDATA_QUERY = """
+SELECT ?i ?label ?coord (GROUP_CONCAT(DISTINCT ?mat; separator="|") AS ?materials) WHERE {
+  SERVICE wikibase:box {
+    ?i wdt:P625 ?coord .
+    bd:serviceParam wikibase:cornerSouthWest "Point(%(w)f %(s)f)"^^geo:wktLiteral .
+    bd:serviceParam wikibase:cornerNorthEast "Point(%(e)f %(n)f)"^^geo:wktLiteral .
+  }
+  VALUES ?cls { wd:Q4989906 wd:Q860861 wd:Q179700 wd:Q5003624 wd:Q575759 }
+  ?i wdt:P31/wdt:P279* ?cls .
+  MINUS { ?i wdt:P31 wd:Q26703203 }
+  ?i wdt:P186 ?m . ?m rdfs:label ?mat . FILTER(LANG(?mat) = "en")
+  ?i rdfs:label ?label . FILTER(LANG(?label) = "de")
+} GROUP BY ?i ?label ?coord LIMIT 500
+"""
+
+
+def wikidata_material(labels: list[str]) -> str | None:
+    """Wikidata's material labels (en) in German, known ones only: a label
+    the table lacks is read by its last word ("Carrara marble": Marmor,
+    "high-quality steel": Stahl, "Meissen porcelain": Porzellan)."""
+    names = []
+    for label in labels:
+        key = label.strip().lower().replace(" ", "_").replace("-", "_")
+        name = MATERIALS.get(key) or MATERIALS.get(key.rsplit("_", 1)[-1])
+        if name:
+            names.append(name)
+    return ", ".join(dict.fromkeys(names)) or None
+
+
+def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int) -> None:
+    """The monuments Wikidata knows a material of on a tile →
+    `<raw>/wikidata/monuments_<tile>.json` (fetch time only; the bake reads
+    the file, never the network). A Stolperstein (Q26703203) is left out:
+    thousands of them, none a monument that stands."""
+    dest = raw / "wikidata" / f"monuments_{tile_id}.json"
+    if dest.exists():
+        return
+    back = Transformer.from_crs(epsg, 4326, always_xy=True)
+    xmin, ymin, xmax, ymax = bounds
+    lons, lats = back.transform([xmin, xmax, xmin, xmax], [ymin, ymin, ymax, ymax])
+    rows = query_box((min(lons), max(lons)), (min(lats), max(lats)), template=WIKIDATA_QUERY)
+    items: dict[str, dict] = {}
+    for r in rows:
+        lon, lat = (float(v) for v in r["coord"]["value"][6:-1].split())
+        qid = r["i"]["value"].rsplit("/", 1)[-1]
+        materials = sorted(m for m in r["materials"]["value"].split("|") if m)
+        items.setdefault(
+            qid,
+            {
+                "id": qid,
+                "label": r["label"]["value"],
+                "lon": lon,
+                "lat": lat,
+                "materials": materials,
+            },
+        )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    doc = {"source": "Wikidata (CC0)", "monuments": sorted(items.values(), key=lambda i: i["id"])}
+    part = dest.with_name(dest.name + ".part")
+    part.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    part.replace(dest)
+    print(f"{tile_id}: {len(items)} Wikidata monuments with a material → {dest}")
+
+
+def load_wikidata(tile: Tile) -> list[dict]:
+    """The fetched items as `{geom, id, name, material}` in the tile's CRS."""
+    path = tile.raw / "wikidata" / f"monuments_{tile.id}.json"
+    if not path.exists():
+        return []
+    try:
+        doc = json.loads(path.read_text())
+    except ValueError as err:
+        path.unlink()
+        raise OSError(f"{path}: not JSON — deleted; run bun run fetch again") from err
+    to_tile = Transformer.from_crs(4326, tile.epsg, always_xy=True)
+    out = []
+    for item in doc["monuments"]:
+        material = wikidata_material(item["materials"])
+        # a Stolperschwelle is a Stolperstein's longer sibling, set in the pavement
+        if material and not item["label"].startswith("Stolper"):
+            x, y = to_tile.transform(item["lon"], item["lat"])
+            out.append(
+                {
+                    "geom": shapely.Point(x, y),
+                    "id": item["id"],
+                    "name": item["label"],
+                    "material": material,
+                }
+            )
+    return out
+
+
+def wikidata_materials(items: list[dict], wikidata: list[dict]) -> None:
+    """A monument OSM names no material of takes Wikidata's: the item of
+    its name within `WIKIDATA_NAME_M`, else the nearest within
+    `WIKIDATA_NEAR_M` — each item for one monument only."""
+    claimed: set[int] = set()
+    for m in items:
+        if m["kind"] == "fountain" or m.get("material"):
+            continue
+        near = []
+        for i, w in enumerate(wikidata):
+            if i in claimed:
+                continue
+            d = shapely.distance(m["geom"], w["geom"])
+            named = same_name(m["name"], w["name"])
+            if d <= (WIKIDATA_NAME_M if named else WIKIDATA_NEAR_M):
+                near.append((not named, d, i))
+        if near:
+            i = min(near)[2]
+            claimed.add(i)
+            m["material"] = wikidata[i]["material"]
+            m["wikidata"] = wikidata[i]["id"]
+
+
 def _buildings(tile: Tile) -> shapely.STRtree | None:
     if not tile.cityjson.exists():
         return None
@@ -410,7 +545,7 @@ def properties(item: dict) -> dict:
     if item["kind"] == "fountain":
         props["style"] = item["style"]
         props["figure"] = bool(item["figure"])
-    for key in ("form", "height", "material", "artist"):
+    for key in ("form", "height", "material", "artist", "wikidata"):
         if item.get(key):
             props[key] = item[key]
     return props
@@ -562,7 +697,9 @@ def run(tile: Tile) -> None:
         print(f"{tile.id}: no DOM1 — monuments without their measured relief")
     origin = (tile.bounds[0], tile.bounds[3])
     features = []
-    for item in type_monuments(conflate(dlm, osm), memorials, _buildings(tile)):
+    items = type_monuments(conflate(dlm, osm), memorials, _buildings(tile))
+    wikidata_materials(items, load_wikidata(tile))
+    for item in items:
         anchor = item["geom"].representative_point()
         if not owns(tile.bounds, shapely.get_x(anchor), shapely.get_y(anchor)):
             continue
@@ -581,10 +718,12 @@ def run(tile: Tile) -> None:
     kinds = {k: sum(f["properties"]["kind"] == k for f in features) for k in KINDS}
     reliefs = sum("relief" in f["properties"] for f in features)
     typed = sum("form" in f["properties"] for f in features)
+    wd = sum("wikidata" in f["properties"] for f in features)
     print(
         f"{tile.id}: monuments "
         + ", ".join(f"{n} {k}" for k, n in kinds.items())
-        + f"; {reliefs} with a measured relief, {typed} with an OSM form"
+        + f"; {reliefs} with a measured relief, {typed} with an OSM form,"
+        + f" {wd} with Wikidata's material"
     )
 
 

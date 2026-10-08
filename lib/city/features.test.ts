@@ -512,6 +512,11 @@ test.each(cases)(
           "stone",
         ]).toContain(form);
       }
+      const wikidata = f.properties?.wikidata;
+      if (wikidata !== undefined) {
+        expect(wikidata).toMatch(/^Q\d+$/);
+        expect(f.properties?.material).toBeTruthy();
+      }
     }
   }
 );

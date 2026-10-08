@@ -261,13 +261,16 @@ export interface MonumentFeature {
     /** its tagged height (m, OSM `height`) */
     height?: number;
     kind: MonumentKind;
-    /** what it is made of, in German ("Bronze, Granit"; OSM `material`) */
+    /** what it is made of, in German ("Bronze, Granit"; OSM `material`,
+     *  else Wikidata's — then `wikidata` is set) */
     material?: string;
     name?: string;
     /** the measured sculpture or monument (pipeline/bake/monuments.py) */
     relief?: ReliefGrid;
     source?: "dlm" | "dlm+osm" | "osm";
     style?: FountainStyle;
+    /** the Wikidata item its `material` comes from */
+    wikidata?: string;
   } | null;
 }
 

@@ -1444,3 +1444,38 @@ def test_a_dlm_monument_takes_its_osm_partners_form_never_a_plaque():
     added = [o for o in out if o["source"] == "osm"]
     # the unclaimed sculpture at 4 m stands within 3 m of nothing kept: added
     assert sorted(o["form"] for o in added) == ["sculpture", "sculpture"]
+
+
+def test_a_monument_without_an_osm_material_takes_wikidatas():
+    from bake.monuments import wikidata_material, wikidata_materials
+
+    assert wikidata_material(["copper", "gold leaf"]) == "Kupfer, Blattgold"
+    assert wikidata_material(["Carrara marble", "high-quality steel"]) == "Marmor, Stahl"
+    assert wikidata_material(["papier-mâché"]) is None
+
+    def monument(x, name, material=None, kind="statue"):
+        return {"geom": shapely.Point(x, 0), "kind": kind, "name": name, "material": material}
+
+    def item(x, qid, name, material):
+        return {"geom": shapely.Point(x, 0), "id": qid, "name": name, "material": material}
+
+    items = [
+        monument(0, "Goldener Reiter"),
+        monument(100, "Bismarck-Denkmal", material="Bronze"),  # OSM's stays
+        monument(200, "Luther-Denkmal"),
+        monument(300, "Stilles Wasser", kind="fountain"),
+    ]
+    wikidata = [
+        item(6, "Q1", "Brunnen am Markt", "Sandstein"),  # nearer, not of its name
+        item(30, "Q558537", "Goldener Reiter", "Kupfer, Blattgold"),
+        item(100, "Q2", "Bismarck-Denkmal", "Bronze, Granit"),
+        item(215, "Q3", "Lesender Arbeiter", "Bronze"),  # too far for another name
+        item(300, "Q4", "Stilles Wasser", "Sandstein"),
+    ]
+    wikidata_materials(items, wikidata)
+    assert [(m.get("material"), m.get("wikidata")) for m in items] == [
+        ("Kupfer, Blattgold", "Q558537"),
+        ("Bronze", None),
+        (None, None),
+        (None, None),
+    ]

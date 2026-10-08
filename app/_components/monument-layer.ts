@@ -2,6 +2,7 @@ import {
   BufferAttribute,
   type BufferGeometry,
   CapsuleGeometry,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   DoubleSide,
@@ -55,8 +56,11 @@ import type {
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import {
   basinLevels,
+  figureShare,
   jetHeight,
   jetPlaces,
+  type MarkerTones,
+  markerTones,
   type MarkerSolid,
   markerPieces,
   openRing,
@@ -107,10 +111,11 @@ const WATER_GLOW = 0x12_1c_22; // lifts the water out of the rim's shade
 const SPRAY_COLOR = 0xf4_f8_fb;
 const RIM_M = 0.35; // a point fountain's rim width (the bake insets outlines by the same)
 
-/** One instance: where, how big, which way. */
+/** One instance: where, how big, which way, in which tone (sRGB; null: clay). */
 interface Placed {
   at: Vector3;
   scale: Vector3;
+  tone: number | null;
   yaw: number;
 }
 
@@ -154,10 +159,16 @@ function unitNeedle(): BufferGeometry {
   return geo;
 }
 
+/** WebGPU draws from eight vertex buffers: an instance's matrix takes
+ *  four, its tint one — the clay reads no uv, so a solid carries none. */
+function withoutUv(make: () => BufferGeometry): () => BufferGeometry {
+  return () => make().deleteAttribute("uv");
+}
+
 const UNIT_SOLID: Record<MarkerSolid, () => BufferGeometry> = {
-  block: unitBlock,
-  needle: unitNeedle,
-  pillar: unitPillar,
+  block: withoutUv(unitBlock),
+  needle: withoutUv(unitNeedle),
+  pillar: withoutUv(unitPillar),
 };
 
 /**
@@ -318,6 +329,7 @@ function worldAt(p: Point2, y: number, ctx: GroundContext): Vector3 {
 function reliefMesh(
   grid: ReliefGrid,
   ctx: GroundContext,
+  tones: MarkerTones,
   floor = Number.NEGATIVE_INFINITY
 ): BufferGeometry | null {
   const s = reliefSurface(grid);
@@ -348,9 +360,36 @@ function reliefMesh(
       pos.setXYZ(i, w.x, ground + s.heights[i], w.z);
     }
   }
+  geo.setAttribute("aTint", reliefTint(s.heights, tones));
   // The plane's +y (north) became −z: its winding now faces up.
   geo.computeVertexNormals();
   return geo.toNonIndexed();
+}
+
+/** A tone (sRGB hex, null: the clay) as linear RGB. */
+function linear(tone: number | null): Color {
+  return new Color(tone ?? CLAY_COLOR);
+}
+
+/**
+ * Each relief vertex's colour (linear RGB): the figure's tone above the
+ * pedestal, the pedestal's below it (`figureShare`; a relief too low for
+ * a pedestal is all figure), the clay where nothing names a material.
+ */
+function reliefTint(
+  heights: Float32Array,
+  tones: MarkerTones
+): BufferAttribute {
+  const figure = linear(tones.figure);
+  const base = linear(tones.base);
+  const top = heights.reduce((a, b) => Math.max(a, b), 0);
+  const tint = new Float32Array(heights.length * 3);
+  const c = new Color();
+  for (let i = 0; i < heights.length; i++) {
+    c.copy(base).lerp(figure, figureShare(heights[i], top));
+    tint.set([c.r, c.g, c.b], i * 3);
+  }
+  return new BufferAttribute(tint, 3);
 }
 
 /** Each vertex's height above the basin's water (the uplight's falloff). */
@@ -392,7 +431,12 @@ function addFountain(
   }
   const relief = f.properties?.relief;
   if (relief) {
-    const geo = reliefMesh(relief, ctx, levels.water - 0.3);
+    const geo = reliefMesh(
+      relief,
+      ctx,
+      markerTones(f.properties?.material),
+      levels.water - 0.3
+    );
     if (geo) {
       parts.sculptures.push(withLift(geo, levels.water));
     }
@@ -413,6 +457,7 @@ function addFountain(
     parts.jets.push({
       at: worldAt(place, levels.water, ctx),
       scale: new Vector3(h * spread, h * spread, h * spread),
+      tone: null,
       yaw: 0,
     });
   }
@@ -427,9 +472,10 @@ function addMonument(
   if (f.geometry?.type !== "Point" || !kind || kind === "fountain") {
     return;
   }
+  const tones = markerTones(f.properties?.material);
   const relief = f.properties?.relief;
   if (relief) {
-    const geo = reliefMesh(relief, ctx);
+    const geo = reliefMesh(relief, ctx, tones);
     if (geo) {
       parts.reliefs.push(geo);
       return;
@@ -442,17 +488,17 @@ function addMonument(
   }
   const at = worldAt([x, y], ground, ctx);
   const yaw = yawOf(x, y);
-  for (const p of markerPieces(
-    kind,
-    f.properties?.form,
-    f.properties?.height
-  )) {
+  const pieces = markerPieces(kind, f.properties?.form, f.properties?.height);
+  for (const p of pieces) {
     // A foot on the ground is sunk a little, so a marker on a slope never
     // shows its underside; a piece on a pedestal sits into it.
     const sink = p.lift > 0 ? 0.1 : 0.15;
+    // the foot of a marker of two pieces is its pedestal
+    const pedestal = pieces.length > 1 && p.lift === 0;
     parts.markers[p.solid].push({
       at: at.clone().setY(at.y + p.lift - sink),
       scale: new Vector3(p.width, p.height + sink, p.depth),
+      tone: pedestal ? tones.base : tones.figure,
       yaw,
     });
   }
@@ -468,9 +514,13 @@ function instanced(
   const m = new Matrix4();
   const q = new Quaternion();
   const up = new Vector3(0, 1, 0);
+  const tinted = places.some((p) => p.tone !== null);
   for (let i = 0; i < places.length; i++) {
     q.setFromAxisAngle(up, places[i].yaw);
     mesh.setMatrixAt(i, m.compose(places[i].at, q, places[i].scale));
+    if (tinted) {
+      mesh.setColorAt(i, linear(places[i].tone));
+    }
   }
   mesh.instanceMatrix.needsUpdate = true;
   // Spread-out cloud: recompute the sphere or it culls when the origin is off-screen.
@@ -597,8 +647,24 @@ function waterMaterial(): MeshStandardNodeMaterial {
   return m;
 }
 
+/**
+ * A clay part's colour: an instance's (`iColor`) or a vertex's (`aTint`,
+ * the reliefs) where its material is named, else the clay. One material
+ * for all three: the build is keyed by the attribute layout anyway.
+ */
+const clayTint = Fn((builder) => {
+  if (builder.geometry.hasAttribute("iColor")) {
+    return attribute("iColor", "vec3");
+  }
+  if (builder.geometry.hasAttribute("aTint")) {
+    return attribute("aTint", "vec3");
+  }
+  return vec3(materialColor);
+});
+
 /** The buildings' matte clay, for rims, reliefs and markers (instanced or
- *  merged: `instancePosition` is the plain vertex off a set). */
+ *  merged: `instancePosition` is the plain vertex off a set), tinted by
+ *  what a monument is made of (`clayTint`). */
 function clayMaterial(): MeshStandardNodeMaterial {
   const m = new MeshStandardNodeMaterial({
     color: CLAY_COLOR,
@@ -606,6 +672,7 @@ function clayMaterial(): MeshStandardNodeMaterial {
     metalness: 0,
   });
   m.positionNode = instancePosition();
+  m.colorNode = clayTint();
   return m;
 }
 

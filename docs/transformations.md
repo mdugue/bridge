@@ -1647,8 +1647,27 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   are street furniture and signs; checked over the Altstadt, 2026-10-08),
   **Wikidata** types more finely (32 *Reiterstandbilder* round Dresden)
   but rarely carries a height (7 of 941) and its points match ours worse
-  than OSM's; **Panoramax** and Mapillary photos would need photogrammetry
+  than OSM's (its materials are used, below); **Panoramax** and Mapillary photos would need photogrammetry
   per monument; Wikimedia Commons holds no 3D scan of a Dresden monument.
+  **What a monument is made of, as a tone** (2026-10-08): where OSM
+  names no `material`, Wikidata's `P186` does for the monuments,
+  sculptures and memorials it knows (fetched per tile,
+  `data/_raw/<provider>/wikidata/monuments_<t>.json`, Stolpersteine left
+  out; the item of the monument's name within 40 m, else the nearest
+  within 10 m): 15 on Dresden, the Goldener Reiter's copper and gold leaf
+  among them, `wikidata` naming the item on the card. The viewer turns
+  the material into a muted tone in the clay's palette (`MATERIAL_TONE`,
+  `markerTones`: warm sandstone, grey granite, bronze's dark green-brown
+  patina, copper's verdigris, a soft gold): the figure takes the most
+  striking metal, the pedestal the stone named (else clay). A marker's
+  pedestal piece and figure piece are tinted apart; a measured relief 3 m
+  or taller is a figure on a pedestal, its upper 45 % the figure's tone
+  (`figureShare` — the laser scan puts the Goldener Reiter's pedestal top
+  at 4.6 of 8.5 m). Glass, plastic and ceramic stay clay. No texture, no
+  gilding glint: one colour per part. **The laser scan** (LSC, the same
+  November 2024 flight, ~16 points/m² there) shows the Goldener Reiter as
+  a pedestal and an elongated body with the rider's peak — orientation and
+  mass at 0.5 m, still no horse; not baked (a 380 MB download per tile).
   **Caveats, checked against the sources:** DOM1 (November 2024) and DOP
   (March 2024) were both taken while Dresden's fountains are drained and
   their sculptures boxed for winter — the Albertplatz "bodies" are those
