@@ -674,8 +674,8 @@ visual-variable codebook is in
   estimate.
 - **Gliederung** (plinth, cornices, shop zone) — painted in the clay
   shader from heights the object table already carries, no new data: a
-  0.6 m stone plinth, a ledge at the first storey line (where the wall
-  holds two storeys), a deeper ledge under the eave, and on a building with
+  0.6 m stone plinth (the ledge at the first storey line is modelled
+  now, with the plinth: see *Plinths*), a deeper ledge under the eave, and on a building with
   a mapped shop the ground floor a shade darker as its recessed shop
   front. Walls only, not on a door, and not on a facade that is its own
   (flag 16: a Wikidata landmark, a monumental ALKIS use — church,
@@ -702,6 +702,13 @@ visual-variable codebook is in
   lower than 3 m of wall, or standing more than 1.5 m over the ground at
   its plinth (a part on a roof) — the painted *Gliederung*'s gate. The
   painted 0.6 m plinth stays under it, hidden where the band stands.
+  Along the same stretches the **Gurtgesims** is modelled too, in the
+  same register (`corniceMesh`): level at the first storey line over the
+  host's base (where the wall holds two storeys and the line stands a
+  metre over the plinth's top), 8 cm proud, 12 cm tall, flat underneath
+  (a crisp shadow) and weathered 6 cm back on top, the pieces in line
+  joined into one run; a plaster shade a touch paler than the wall. The
+  painted Gurtgesims is gone: its painted shadow read as a smear.
   Dresden: 176 769 pieces on 35 969 objects on fifteen tiles (13 865 on
   3 030 on the spawn tile; the files up to 2 MB each). Ground
   joins: `plinths` in `JOIN_PARTS`, budget 1 %.

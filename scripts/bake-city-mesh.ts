@@ -60,7 +60,7 @@ import {
   wallShift,
 } from "../lib/city/doors";
 import { dormerMesh } from "../lib/city/dormers";
-import { plinthMesh } from "../lib/city/plinths";
+import { CORNICE, corniceMesh, plinthMesh } from "../lib/city/plinths";
 import type {
   DoorFeature,
   DormerFeature,
@@ -683,7 +683,10 @@ const PLINTH_ON_GROUND_M = 1.5;
  * per host in a stone shade of the host's tint, the host's building tree
  * (asking or demolishing it takes the building), no footprint, no storey
  * band or eave line on it, `source` 5. Only a town house carries one: a
- * host from 3 m of wall, standing on the street, not `NO_PLINTH`.
+ * host from 3 m of wall, standing on the street, not `NO_PLINTH`. Along
+ * the same stretches the Gurtgesims over its ground floor (`corniceMesh`,
+ * `corniceHeight`): a second object in a plaster shade a touch paler than
+ * the wall, level at the first storey line.
  */
 export function appendPlinths(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
@@ -692,6 +695,34 @@ export function appendPlinths(
 ): void {
   const positions: number[] = [];
   const objectIds: number[] = [];
+  const part = (
+    tris: number[],
+    host: CityObjectRow,
+    base: number,
+    top: number,
+    tint: [number, number, number]
+  ) => {
+    const index = baked.objects.length;
+    positions.push(...tris);
+    for (let i = 0; i < tris.length / 3; i++) {
+      objectIds.push(index);
+    }
+    const above = cm(top - base + 1);
+    baked.objects.push({
+      ...host,
+      building: false,
+      baseZ: cm(base),
+      // above its top: no eave stroke, no storey band on it
+      eaveH: above,
+      storeyH: above,
+      glow: 0,
+      // its own colour, none of the host's OSM looks (no shop wash)
+      flags: OBJECT_FLAG_OWN_COLOUR,
+      tint,
+      source: OBJECT_SOURCE_PLINTH,
+      footprints: [],
+    });
+  };
   for (const f of plinths) {
     const p = f.properties;
     const hostIndex = p ? objectIndex.get(p.of) : undefined;
@@ -703,34 +734,19 @@ export function appendPlinths(
     if (host.baseZ > foot + PLINTH_ON_GROUND_M) {
       continue;
     }
-    const tris = plinthMesh(f, baked.offset);
-    if (tris.length === 0) {
-      continue;
+    const top = Math.max(...p.top);
+    const stone = mixRgb(
+      host.tint.map((c) => c * 0.82),
+      PLINTH_STONE,
+      0.4
+    );
+    part(plinthMesh(f, baked.offset), host, foot, top, stone);
+    const z = corniceHeight(host, top);
+    if (z !== undefined) {
+      const plaster = mixRgb(host.tint, SURROUND_STONE, 0.15);
+      const tris = corniceMesh(f, baked.offset, z);
+      part(tris, host, z, z + CORNICE.height + CORNICE.bevel, plaster);
     }
-    const index = baked.objects.length;
-    positions.push(...tris);
-    for (let i = 0; i < tris.length / 3; i++) {
-      objectIds.push(index);
-    }
-    const above = cm(Math.max(...p.top) - foot + 1);
-    baked.objects.push({
-      ...host,
-      building: false,
-      baseZ: cm(foot),
-      // above its top: no eave stroke, no storey band on it
-      eaveH: above,
-      storeyH: above,
-      glow: 0,
-      // its own colour, none of the host's OSM looks (no shop wash)
-      flags: OBJECT_FLAG_OWN_COLOUR,
-      tint: mixRgb(
-        host.tint.map((c) => c * 0.82),
-        PLINTH_STONE,
-        0.4
-      ),
-      source: OBJECT_SOURCE_PLINTH,
-      footprints: [],
-    });
   }
   if (positions.length === 0) {
     return;
@@ -745,6 +761,22 @@ export function appendPlinths(
     ),
     ...flatNormalsAfter(v, positions.length),
   };
+}
+
+/** Where a host's Gurtgesims sits (its underside, absolute): straddling
+ *  the first storey line over the host's base, as the painted ledge did —
+ *  only where the wall holds two storeys and the line stands a metre
+ *  clear of the plinth's top. */
+export function corniceHeight(
+  host: Pick<CityObjectRow, "baseZ" | "eaveH" | "storeyH">,
+  plinthTop: number
+): number | undefined {
+  const storey = Math.max(host.storeyH, 2.4);
+  if (host.eaveH < 2 * storey - 0.3) {
+    return undefined;
+  }
+  const z = host.baseZ + storey - CORNICE.height / 2;
+  return z > plinthTop + 1 ? z : undefined;
 }
 
 /** A doorway's surround: its wall's tint, lifted towards a pale stone. */
