@@ -1542,7 +1542,8 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   per bay whose reveal rolls into the front over a 7 cm quarter round
   (smooth normals), the glass at the niche's back 6 cm out of the wall
   from 0.5 m (a glazed row: 0.3 m) to the measured ground-floor top (3 m
-  where none; under a canopy's slab, into which the head then reaches) —
+  where none; under a canopy's slab, into which the head reaches over
+  a strip of wall under 0.25 m) —
   no mullions, no frame boards —, a rounded fascia band 10 cm proud at
   the measured sign band (none under a canopy: its fascia is the sign
   band); a canopy is a slab 0.3 m thick under its measured top from the

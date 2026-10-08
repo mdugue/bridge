@@ -511,13 +511,27 @@ describe("the mesh", () => {
         }
       }
       expect(soft).toBeGreaterThan(0);
-      // and the surround's head reaches up into the slab, not onto it
-      const frameZs = triangles(mesh.frame.positions).map(({ c }) => c[2]);
-      const slab = 104.3 - CANOPY.slab;
-      expect(Math.max(...frameZs)).toBeGreaterThan(slab + 0.02);
-      expect(Math.max(...frameZs)).toBeLessThan(104.3);
     });
   }
+
+  test("a head close under a canopy reaches up into its slab, never onto it", () => {
+    const slab = 104.3 - CANOPY.slab;
+    const top = (gfTop: number) => {
+      const w = wall({
+        canopy: [{ at: [0, 12], d: 4, h: 4.3 }],
+        gf_top: gfTop,
+      });
+      const zs = triangles(
+        shopfrontMesh(w, wallBays(w, []), 5, OFFSET).frame.positions
+      ).map(({ c }) => c[2]);
+      return Math.max(...zs);
+    };
+    // a strip of wall under the slab: the head reaches up into it
+    expect(top(3.8)).toBeGreaterThan(slab + 0.02);
+    expect(top(3.8)).toBeLessThan(104.3);
+    // a tall gap stays wall: the head ends well under the slab
+    expect(top(3)).toBeLessThan(slab - CANOPY.reach + 0.01);
+  });
 
   test("a low canopy's fascia keeps the headroom", () => {
     const w = wall({ canopy: [{ at: [0, 12], d: 3, h: 3 }], gf_top: 2.2 });

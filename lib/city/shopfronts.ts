@@ -62,8 +62,11 @@ export const SHOPFRONT = {
   sill: 0.5,
   tuck: 0.03,
 } as const;
-/** Facets per quarter round: about a quantum each. */
-const ROUND_STEPS = 3;
+/** Facets per quarter round: two, each about one and a half of the
+ *  glTF's position quanta long — finer facets came out of the quantising
+ *  ragged and sparkled along an edge seen at a distance; the per-vertex
+ *  normals shade them round. */
+const ROUND_STEPS = 2;
 /** The pane's top where the ground floor's was not measured. */
 export const SHOPFRONT_TOP_M = 3;
 /** The pane's top keeps this far under the first storey line. */
@@ -80,13 +83,15 @@ export const MIN_WALL_M = 0.4;
 export const ROW_SILL_M = 0.3;
 /** A canopy (m): its slab's thickness under its measured top, its fascia's
  *  depth, the tallest fascia, the headroom the fascia keeps over the
- *  ground, the round of its outer edges, and how far a surround's head
- *  reaches up into the slab over it. */
+ *  ground, the round of its outer edges, how far a surround's head
+ *  reaches up into the slab over it, and the most wall left between the
+ *  head and the slab for the head to reach up (a taller gap stays wall). */
 export const CANOPY = {
   fasciaD: 0.2,
   fasciaH: 1,
   headroom: 2.6,
   round: 0.09,
+  reach: 0.25,
   slab: 0.3,
   tuck: 0.08,
 } as const;
@@ -560,9 +565,14 @@ export function shopfrontMesh(
   for (const run of runs) {
     const f = wallFrame(w, offset, shift(run.span));
     const g = Math.max(groundAt(w, run.span[0]), groundAt(w, run.span[1]));
-    // under a canopy the head reaches up into its slab
+    // under a canopy the head ends under its slab — or, where only a
+    // strip of wall would be left between them, reaches up into it
     const slab = canopySlabOver(w, run.span);
     const paneZ = Math.min(g + top, (slab ?? Number.POSITIVE_INFINITY) - head);
+    const reach =
+      slab !== undefined && slab - (paneZ + head) < CANOPY.reach
+        ? slab + CANOPY.tuck
+        : paneZ + head;
     if (paneZ - (g + sill) < MIN_PANE_M / 2) {
       continue;
     }
@@ -579,7 +589,7 @@ export function shopfrontMesh(
         s0: run.span[0],
         s1: run.span[1],
         z0: footAt(w, run.span),
-        z1: slab === undefined ? paneZ + head : slab + CANOPY.tuck,
+        z1: reach,
       },
       holes,
       { inner: glass - tuck, open: true, proud, round }
