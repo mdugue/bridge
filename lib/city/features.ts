@@ -324,6 +324,45 @@ export interface DoorFeature {
   } | null;
 }
 
+/**
+ * One wall's shopfront (pipeline/bake/shopfronts.py; Mapillary CC BY-SA 4.0,
+ * the canopies from DOM1 under the provider's licence; a city-mesh bake
+ * input, not served): the LoD2 object `oid` and its wall `wi` as facades.py
+ * numbers them, the wall's base points `a` → `b` (EPSG; `s` runs from
+ * `a`), its length, outward normal and the lowest ground in front of each
+ * end (`z`). `src: "photo"`: the bays and the sign band measured in street
+ * panoramas, the ground floor's top where measured (metres above the
+ * ground); `src: "canopy"`: no photo measured this wall, but a canopy runs
+ * on from a measured one of the same object. `row`: a glazed shop row,
+ * glass from pier to pier. `canopy`: where the surface model shows a
+ * canopy over the shopfront, its depth out of the wall `d` and its top
+ * above the ground `h`.
+ */
+export interface ShopfrontWall {
+  a: [number, number];
+  b: [number, number];
+  bays?: [number, number][];
+  canopy?: { at: [number, number]; d: number; h: number }[];
+  gf_top?: number;
+  imgs?: number;
+  L: number;
+  n: [number, number];
+  oid: string;
+  row?: boolean;
+  seqs?: number;
+  sign?: { at: [number, number][]; z?: [number, number] };
+  src: "canopy" | "photo";
+  wi: number;
+  z?: [number, number];
+}
+
+/** A tile's shopfronts, per Building gml:id (`shopfronts_<tile>.json`). */
+export interface ShopfrontFile {
+  attribution: string;
+  bin_m: number;
+  buildings: Record<string, ShopfrontWall[]>;
+}
+
 /** A building's plinth on the street side of its LoD2 walls
  *  (pipeline/bake/plinths.py, LoD2 + DGM1): level pieces of the wall's
  *  open stretches, each walked with the street to its right (a→b), its

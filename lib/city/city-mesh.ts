@@ -257,6 +257,12 @@ export const OBJECT_SOURCE_DOOR = 3;
 /** A dormer on a pitched roof, part of the building it sits on (pipeline/
  *  bake/dormers.py, the surface model over the LoD2 roof). */
 export const OBJECT_SOURCE_DORMER = 4;
+/** A shopfront on a ground floor, part of the building it fronts
+ *  (pipeline/bake/shopfronts.py: street photos, the surface model's
+ *  canopies): its glass, its frame and fascia, or its canopy. (5 is the
+ *  plinths'.) */
+export const OBJECT_SOURCE_SHOPFRONT = 6;
+
 /** A plinth on a wall's street side, part of the building it carries
  *  (pipeline/bake/plinths.py, LoD2 + DGM1). */
 export const OBJECT_SOURCE_PLINTH = 5;

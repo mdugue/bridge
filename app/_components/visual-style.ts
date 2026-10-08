@@ -52,6 +52,7 @@ import {
   type F,
   type Live,
   type V3,
+  type V2,
   type V4,
 } from "./shader-chunks";
 import {
@@ -94,6 +95,7 @@ export interface ClayDetailUniforms {
   uAO: Live;
   /** Gliederung: plinth, ground-floor and eave cornices, shop zones */
   uArticulation: Live;
+  uFacadeReading: Live;
   uBands: Live;
   /** dusk interior glow strength (commercial/public) */
   uDuskGlow: Live;
@@ -210,13 +212,23 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     // varies house-to-house (clamped to stay matte, no shiny clay).
     roughness: facadeRoughness(
       clamp(float(1).add(d.uRough.mul(rough)), 0.55, 1),
-      facadeMaterial(flags, wall)
+      facadeMaterial(flags, wall),
+      shopPane(flags),
+      rough
     ),
     colour: select(
       clayPoche.greaterThan(0.5).and(frontFacing.not()),
       POCHE,
       askedColour(
-        clayColour(d, tint, build, h, wall, flags),
+        facadeReading(
+          d,
+          clayColour(d, tint, build, h, wall, flags),
+          build,
+          h,
+          wall,
+          flags,
+          wn
+        ),
         h,
         wall,
         flags,
@@ -278,9 +290,28 @@ function clayColour(
   const eave = float(1).sub(
     min(abs(h.sub(build.z)).div(max(fwidth(h).mul(2), 1e-4)), 1)
   );
-  col = col.mul(float(1).sub(eave.mul(d.uEave).mul(wall).mul(0.6)));
+  // a shop window's eave is the glass's top (no stroke): the head's soft
+  // shadow falls there instead
+  const pane = shopPane(flags);
+  col = col.mul(
+    float(1).sub(eave.mul(d.uEave).mul(wall).mul(0.6).mul(float(1).sub(pane)))
+  );
+  col = col.mul(mix(1, paneShade(h, build.z), pane));
   col = articulation(d, col, build, h, wall, flags);
-  return osmColour(d, col, build, h, wall, flags);
+  return osmColour(d, col, build, h, wall, flags).mul(ownTopShade(flags, wall));
+}
+
+/** A door's or a shopfront's faces that look up (sills, heads, ledge and
+ *  fascia tops, 8–10 cm deep — flag 64, not the glass): half as bright,
+ *  so a ledge in the open sky reads as a soft edge, not a white line. */
+function ownTopShade(flags: F, wall: F): F {
+  const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
+  return float(1).sub(
+    own
+      .mul(float(1).sub(wall))
+      .mul(float(1).sub(shopPane(flags)))
+      .mul(0.5)
+  );
 }
 
 /** A ledge drawn in shade (Gliederung): a lit face `size` metres tall whose
@@ -331,7 +362,7 @@ function articulation(
 ): V3 {
   const f = floor(flags.add(0.5));
   const own = mod(floor(f.div(64)), 2);
-  const shop = mod(f, 2);
+  const shop = shopOf(d, flags);
   const grounded = mod(floor(f.div(128)), 2);
   // a landmark's or a church's facade is its own (flag 16): no town
   // house's plinth and cornices on it
@@ -362,6 +393,132 @@ function articulation(
   return out;
 }
 
+/** Smooth value noise in [0, 1] (two hashed corners per axis, eased):
+ *  blotches, never a grid's lines. */
+function valueNoise(p: V2): F {
+  const i = floor(p);
+  const f = fract(p);
+  const u = f.mul(f).mul(f.mul(-2).add(3));
+  const hash = (o: [number, number]) =>
+    fract(sin(dot(i.add(vec2(...o)), vec2(127.1, 311.7))).mul(43_758.5453));
+  return mix(
+    mix(hash([0, 0]), hash([1, 0]), u.x),
+    mix(hash([0, 1]), hash([1, 1]), u.x),
+    u.y
+  );
+}
+
+/** A building's facade readings from its flags (lib/city/facade-reading.ts:
+ *  FACADE_UNIT × (busy + 4 × dark), each graded 0 unseen, 1–3). */
+function readingOf(flags: F): { busy: F; dark: F; shop: F } {
+  const code = floor(floor(flags.add(0.5)).div(512));
+  return {
+    busy: mod(code, 4),
+    dark: mod(floor(code.div(4)), 4),
+    shop: floor(code.div(16)),
+  };
+}
+
+/** A shop on the ground floor: OSM's (flag 1), or a shop sign the street
+ *  photos saw (on the Fassadenbild slider). */
+function shopOf(d: ClayDetailUniforms, flags: F): F {
+  return max(
+    mod(floor(flags.add(0.5)), 2),
+    readingOf(flags).shop.mul(d.uFacadeReading)
+  );
+}
+
+/** Where on its wall a fragment lies: metres along the wall and up. */
+function wallPlane(wn: V3, h: F): V2 {
+  const along = normalize(vec2(wn.z.negate(), wn.x).add(1e-5));
+  return vec2(dot(positionWorld.xz, along), h);
+}
+
+/**
+ * Fassadenbild (uFacadeReading): what street photos say about a facade
+ * (lib/city/facade-reading.ts), painted onto the clay as Gliederung's
+ * ledges are — walls only, never on a part with its own colour (64), a
+ * landmark's facade (16) or glass and metal (4, 8: the photos cannot tell
+ * glass from stucco), and nothing on a facade nobody photographed:
+ *  - Unruhe: a mid or busy facade (much of it not plain render) gets a
+ *    fine plaster relief lit from above (the slope of a flat-lying noise
+ *    up the wall, ±10 % at busy, two octaves of 0.3 and 0.13 m), above the
+ *    plinth and under the eave, each octave faded out once it is a few
+ *    pixels. No blotch darker than the wall, no lattice: the window-grid
+ *    veto holds.
+ *  - Ton: much dark in it (frames, openings, soot) up to 8 % darker, a
+ *    touch cooler; little dark 3 % lighter — capped, so a misreading is
+ *    never a colour error.
+ *  - Geschossgesimse: a busy facade under a pitched roof (the Gründerzeit
+ *    front) carries a ledge at every storey line up to the eave, not only
+ *    the first (on Gliederung's slider too).
+ *  - Ladensockel: a shop sign at the wall or an open ground floor joins
+ *    OSM's shops (`shopOf`), so Gliederung's Ladenzone and the dusk's
+ *    shop light take it as they are.
+ */
+function facadeReading(
+  d: ClayDetailUniforms,
+  col: V3,
+  build: V4,
+  h: F,
+  wall: F,
+  flags: F,
+  wn: V3
+): V3 {
+  const f = floor(flags.add(0.5));
+  const { busy, dark } = readingOf(flags);
+  const plain = max(
+    max(mod(floor(f.div(64)), 2), mod(floor(f.div(16)), 2)),
+    max(mod(floor(f.div(4)), 2), mod(floor(f.div(8)), 2))
+  );
+  const on = d.uFacadeReading.mul(wall).mul(float(1).sub(plain));
+  const eave = build.z;
+  // Unruhe: mid 0.5, busy 1 — a relief lit from above: the slope of a
+  // fine, flat-lying noise up the wall, so its edges catch light on top and
+  // shade below (a plaster texture), never a blotch darker than the wall
+  const amp = clamp(busy.sub(1).mul(0.5), 0, 1);
+  const p = wallPlane(wn, h);
+  const px = max(fwidth(p.x), fwidth(h));
+  const nearC = float(1).sub(smoothstep(0.1, 0.3, px));
+  const nearF = float(1).sub(smoothstep(0.04, 0.12, px));
+  const relief = (q: V2): F =>
+    valueNoise(q.div(vec2(0.55, 0.32)))
+      .mul(0.6)
+      .mul(nearC)
+      .add(
+        valueNoise(q.div(vec2(0.22, 0.13)).add(17.3))
+          .mul(0.4)
+          .mul(nearF)
+      );
+  const slope = relief(p).sub(relief(p.sub(vec2(0, 0.05))));
+  // falling as it rises: the face tilts up, towards the sky
+  const lit = clamp(slope.mul(-4), -1, 1);
+  const band = smoothstep(0.6, 1.2, h).mul(
+    float(1).sub(smoothstep(eave.sub(0.6), eave.sub(0.2), h))
+  );
+  let out: V3 = col.mul(
+    float(1).add(lit.mul(0.1).add(0.015).mul(amp).mul(band).mul(on))
+  );
+  // Ton: dark 1 lifts 3 %, 2 darkens 2 %, 3 darkens 8 % (a touch cool)
+  const tone = mix(
+    mix(vec3(1.03), vec3(0.98), step(1.5, dark)),
+    vec3(0.92, 0.92, 0.94),
+    step(2.5, dark)
+  );
+  out = mix(out, out.mul(tone), on.mul(step(0.5, dark)));
+  // Geschossgesimse on a busy facade under a pitched roof
+  const storey = max(build.y, 2.4);
+  const k = floor(h.sub(0.1).div(storey)).add(1);
+  const top = k.mul(storey).add(0.1);
+  const pitched = float(1).sub(mod(floor(f.div(256)), 2));
+  const busyFront = step(2.5, busy)
+    .mul(pitched)
+    .mul(step(1.5, k))
+    .mul(step(top, eave.sub(0.8)))
+    .mul(d.uArticulation);
+  return out.mul(ledge(h, top, 0.2, 0.35, on.mul(busyFront)));
+}
+
 /** A facade's mapped material from the object's flags (lib/city/
  *  city-mesh.ts: glass 4, metal 8), walls only. */
 function facadeMaterial(flags: F, wall: F): { glass: F; metal: F } {
@@ -372,9 +529,24 @@ function facadeMaterial(flags: F, wall: F): { glass: F; metal: F } {
   };
 }
 
-/** Glass and metal cladding read a little smoother than the clay. */
-function facadeRoughness(r: F, m: { glass: F; metal: F }): F {
-  return mix(mix(r, 0.42, m.glass), 0.5, m.metal);
+/** Glass and metal cladding read a little smoother than the clay; a shop
+ *  window's pane (`shopPane`) takes its own roughness from the `rough`
+ *  column, smooth enough to mirror the sun and the sky. */
+function facadeRoughness(
+  r: F,
+  m: { glass: F; metal: F },
+  pane: F,
+  paneRough: F
+): F {
+  return mix(mix(mix(r, 0.42, m.glass), 0.5, m.metal), paneRough, pane);
+}
+
+/** 1 on a shop window's pane: glass (4) that wears its own colour (64) —
+ *  the shopfronts' panes (lib/city/shopfronts.ts), the one exception to
+ *  the glass veto. Its `rough` column is then a roughness, not a jitter. */
+function shopPane(flags: F): F {
+  const f = floor(flags.add(0.5));
+  return mod(floor(f.div(64)), 2).mul(mod(floor(f.div(4)), 2));
 }
 
 /**
@@ -438,7 +610,8 @@ function osmColour(
  * pale sky sheen as well), Abendlicht (build.w = 1: commercial/public,
  * walls only, × night) and Ladenlicht (a shop's ground floor under the
  * first storey line with a soft top edge, broken along the facade by a
- * low-frequency hash in ≈ 3.5 m cells).
+ * low-frequency hash in ≈ 3.5 m cells). A shop window's pane takes its
+ * own sky (`paneSky`) in place of the rim and the glass sheen.
  */
 function clayGlow(
   d: ClayDetailUniforms,
@@ -450,10 +623,18 @@ function clayGlow(
 ): V3 {
   const view = normalize(cameraPosition.sub(positionWorld));
   const fres = float(1).sub(clamp(dot(view, wn), 0, 1));
-  const rim = vec3(1, 0.95, 0.8).mul(fres.mul(fres).mul(d.uRim));
+  // a shop window has its own grazing light (paneSky), not the clay's rim
+  const pane = shopPane(flags);
+  const clayOnly = float(1).sub(pane);
+  // … nor on a door's or a shopfront's sills, heads and undersides: seen
+  // edge-on, 8 cm faces are slivers a pixel high, and the rim (Fresnel → 1
+  // there) lit them into a dotted white line along every frame
+  const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
+  const rimOn = clayOnly.mul(float(1).sub(own.mul(float(1).sub(wall))));
+  const rim = vec3(1, 0.95, 0.8).mul(fres.mul(fres).mul(d.uRim).mul(rimOn));
   const dusk = build.w.mul(d.uDuskGlow).mul(d.uNight);
   const glow = vec3(1, 0.82, 0.5).mul(dusk.mul(wall).mul(0.5));
-  const shop = mod(floor(flags.add(0.5)), 2);
+  const shop = shopOf(d, flags);
   const floorBand = float(1).sub(smoothstep(0.7, 1, h.div(max(build.y, 0.5))));
   const along = normalize(vec2(wn.z.negate(), wn.x).add(1e-5));
   const seg = dot(positionWorld.xz, along).div(3.5);
@@ -471,6 +652,7 @@ function clayGlow(
   const sheen = facadeMaterial(flags, wall)
     .glass.mul(fres.mul(fres).mul(fres))
     .mul(d.uRim)
+    .mul(clayOnly)
     .mul(float(1).sub(d.uNight.mul(0.7)));
   // The asked building's light, in the accent's pale: faint by day, a
   // glow after dark.
@@ -481,7 +663,36 @@ function clayGlow(
     .add(glow)
     .add(vec3(1, 0.78, 0.45).mul(shopGlow.mul(0.4)))
     .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)))
+    .add(paneSky(d, h, fres).mul(paneShade(h, build.z)).mul(pane))
     .add(askedLight);
+}
+
+/** The soft shadow the surround's head throws onto a shop window's glass:
+ *  its upper half metre darkening towards the top (`top`, the glass's top
+ *  over the object's foot — its `eaveH`), a gradient, never an edge. The
+ *  multiplier for the pane's colour and sky. */
+function paneShade(h: F, top: F): F {
+  return float(1).sub(smoothstep(top.sub(0.6), top, h).mul(0.45));
+}
+
+/** The pale sky a shop window's muted glass holds (its lit term is the
+ *  sun's: roughness 0.2). Lit or not, it reads as glass: the pane
+ *  brightens a little upwards, as if the sky were mirrored (`h`, metres
+ *  above the object's foot: the pane runs from 0.3–0.5 m to about 3 m),
+ *  and Schlick's Fresnel lifts it more where it is seen at a grazing angle
+ *  (`fres`, 1 − n·v). Calm, never a mirror: at most about a seventh of the
+ *  sky's colour, dimmed at night — the glass is only a little darker than
+ *  its wall, and a stronger sky would wash it out to the wall's tone. */
+function paneSky(d: ClayDetailUniforms, h: F, fres: F): V3 {
+  const upper = smoothstep(0.8, 2.6, h);
+  const f2 = fres.mul(fres);
+  const schlick = float(0.04).add(float(0.96).mul(f2.mul(f2).mul(fres)));
+  return vec3(0.55, 0.66, 0.8).mul(
+    upper
+      .mul(0.04)
+      .add(schlick.mul(0.15))
+      .mul(float(1).sub(d.uNight.mul(0.85)))
+  );
 }
 
 /** 1 on the building someone asked about (OBJECT_FLAG_ASKED, 32). */
@@ -539,6 +750,7 @@ export function createStyleResources(
     clayDetail: {
       uAO: uniform(LOOK_DEFAULTS.groundShade),
       uArticulation: uniform(LOOK_DEFAULTS.articulation),
+      uFacadeReading: uniform(LOOK_DEFAULTS.facadeReading),
       uBands: uniform(LOOK_DEFAULTS.bands),
       uDuskGlow: uniform(LOOK_DEFAULTS.duskGlow),
       uEave: uniform(LOOK_DEFAULTS.eave),
@@ -683,6 +895,7 @@ const CLAY_UNIFORM_FOR: Record<
   keyof Omit<ClayDetailUniforms, "uNight">
 > = {
   articulation: "uArticulation",
+  facadeReading: "uFacadeReading",
   bands: "uBands",
   duskGlow: "uDuskGlow",
   eave: "uEave",
