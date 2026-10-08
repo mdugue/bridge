@@ -151,7 +151,7 @@ def standable(p: shapely.Point, gate: Gate) -> bool:
     return owns(gate.bounds, p.x, p.y) and gate.cls_at(p.x, p.y) not in (None, *BLOCKED)
 
 
-def _streets(tile: Tile) -> tuple[shapely.STRtree, np.ndarray]:
+def streets(tile: Tile) -> tuple[shapely.STRtree, np.ndarray]:
     where = "highway IN (" + ", ".join(f"'{s}'" for s in STREETS) + ")"
     geoms, _ = read_osm(tile, "lines", where, ["highway"], margin=0.001)
     lines = np.array([g for g in geoms if g.geom_type == "LineString"], dtype=object)
@@ -169,7 +169,7 @@ def run(tile: Tile, lamp_height: float = LAMP_H) -> None:
         tile, "points", "highway = 'street_lamp'", ["highway", "other_tags"], margin=0.0005
     )
     gate = Gate(tile)
-    ways, lines = _streets(tile)
+    ways, lines = streets(tile)
     facades = Facades(tile)
     features, hung = [], 0
     for g, other in zip(geoms, fields["other_tags"], strict=True):

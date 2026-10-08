@@ -147,10 +147,16 @@ export interface LampFeature {
 }
 
 /** Street lamps and litter bins OSM lacks, detected by Mapillary
- *  (pipeline/bake/mapillary.py, CC BY-SA 4.0). */
+ *  (pipeline/bake/mapillary.py, CC BY-SA 4.0); a lamp hung across the
+ *  street carries the OSM lamps' `wire`, `masts` and `h`. */
 export interface MapillaryFeature {
   geometry: PointGeometry;
-  properties: { k: "bin" | "lamp" } | null;
+  properties: {
+    h?: number;
+    k: "bin" | "lamp";
+    masts?: [boolean, boolean];
+    wire?: [Point2, Point2];
+  } | null;
 }
 
 /** The street furniture the bake keeps (pipeline/bake/furniture.py). */

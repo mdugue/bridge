@@ -1503,7 +1503,10 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   other lamp in the road class moves to the nearest kerb. Dresden: 19 hung,
   nearly all tagged (OSM tags `support=suspended` on 17 lamps, 16 of them in
   the road class; ~480 untagged lamps stand in it, most a pole the road's
-  width covers). The wires are the trams' ribbons (`wire-ribbons.ts`).
+  width covers). The wires are the trams' ribbons (`wire-ribbons.ts`), in
+  the posts' dark metal so the head reads as hung. Mapillary's lamps in the
+  carriageway hang by the untagged rule too (Dresden: 142, most of them in
+  the Äußere Neustadt, re-baked 2026-10-08).
 
 - **Street lamps and litter bins OSM lacks, from Mapillary** `◎ detected` — Mapillary's
   detected objects ("map features": `object--street-light`,

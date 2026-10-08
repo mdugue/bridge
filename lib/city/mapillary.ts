@@ -21,7 +21,11 @@ export function mapillaryParts(features: readonly MapillaryFeature[]): {
   for (const f of features) {
     const kind = f.properties?.k;
     if (kind === "lamp") {
-      lamps.push({ geometry: f.geometry, properties: { src: "mly" } });
+      const { h, masts, wire } = f.properties ?? {};
+      lamps.push({
+        geometry: f.geometry,
+        properties: wire ? { h, masts, src: "mly", wire } : { src: "mly" },
+      });
     } else if (kind === "bin") {
       furniture.push({
         geometry: f.geometry,

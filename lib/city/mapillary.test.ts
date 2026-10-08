@@ -22,3 +22,21 @@ test("Mapillary's lamps join the lamps, its bins the furniture, marked", () => {
     },
   ]);
 });
+
+test("a lamp Mapillary saw hung across the street keeps its wire", () => {
+  const wire: [[number, number], [number, number]] = [
+    [1, 5],
+    [1, -5],
+  ];
+  const hung: MapillaryFeature = {
+    geometry: { type: "Point", coordinates: [1, 0] },
+    properties: { k: "lamp", h: 7, wire, masts: [false, true] },
+  };
+  const [lamp] = mapillaryParts([hung]).lamps;
+  expect(lamp?.properties).toEqual({
+    h: 7,
+    masts: [false, true],
+    src: "mly",
+    wire,
+  });
+});

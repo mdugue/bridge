@@ -253,6 +253,10 @@ test.each(cases)("%s: Mapillary's objects are lamp and bin points", (_, a) => {
     expect(f.geometry.type).toBe("Point");
     expect(isPoint2(f.geometry.coordinates)).toBe(true);
     expect(["lamp", "bin"]).toContain(f.properties?.k ?? "");
+    if (f.properties?.wire) {
+      expect(f.properties.k).toBe("lamp");
+      expect(f.properties.wire.every(isPoint2)).toBe(true);
+    }
   }
 });
 
