@@ -1475,7 +1475,7 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   courtyards hardly at all; two tiles have no usable panorama). Its own file
   (`dlm/facades_<t>.json`, CC BY-SA 4.0), read at runtime into the flags
   column above the OSM bits (`lib/city/facade-reading.ts`); the clay draws
-  a fine relief of soft blotches on mid and busy facades, a tone a few per
+  a fine plaster relief lit from above on mid and busy facades, a tone a few per
   cent darker or lighter, a ledge at every storey of a busy front under a
   pitched roof, and the shop zone of a signed shop (*Fassadenbild*,
   `visual-style.ts` `facadeReading`). No windows: the grid veto holds.
