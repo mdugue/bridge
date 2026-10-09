@@ -1590,8 +1590,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   (`dlm/mly_<t>.geojson`), never merged into the OSM files: ODbL and CC
   BY-SA do not mix in one database. `pipeline/bake/mapillary.py` (the fetch
   caches the tile's map features under `<raw>/mapillary/`, it needs
-  `MAPILLARY_TOKEN`), `lib/city/mapillary.ts`; per site `Site.mapillary`,
-  whose credit joins the footer. Not (yet): Mapillary's benches and bicycle
+  `MAPILLARY_TOKEN`), `lib/city/mapillary.ts`; per site `Site.mapillary`
+  with `objects` (Dresden only), whose credit joins the footer. Not (yet): Mapillary's benches and bicycle
   stands (fewer than OSM's: 111 and 48 against 587 and 292 on the spawn
   tile), traffic signs (no layer draws them), signals (OSM's are placed by
   the direction they face, which a detection lacks).
@@ -1610,7 +1610,12 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   hangs within 4 m of the wall or the ground floor is more than 80 % open.
   On Dresden 2 798 walls of 1 957 buildings over thirteen tiles (864 walls
   and 614 buildings on the spawn tile, a third of its street fronts;
-  courtyards hardly at all; two tiles have no usable panorama). Its own file
+  courtyards hardly at all; two tiles have no usable panorama). Since
+  2026-10-09 every committed site with panoramas is measured the same way
+  (`Site.mapillary`; the lamps and bins stay Dresden's, `objects`):
+  Leipzig 1 635 buildings on four tiles, Hamburg 109, Meißen 49, Grimma
+  229 (its eastern tile has no panorama), München 3 609; Unna has no
+  panorama at all, only flat photos. Its own file
   (`dlm/facades_<t>.json`, CC BY-SA 4.0), read at runtime into the flags
   column above the OSM bits (`lib/city/facade-reading.ts`); the clay draws
   a fine plaster relief lit from above on mid and busy facades, a tone a few per
@@ -1673,7 +1678,20 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   tiles measured (2026-10-08: 13 717 panoramas — the spawn tile's 3 341
   first, the other fourteen tiles' 10 376 in 30 min of fetch at ≈ 6
   images/s on four cores): 1 003 shopfront walls on 780 buildings, 223 of them
-  glazed rows, 19 under a canopy (3 of them continuing one). Noisy: two
+  glazed rows, 19 under a canopy (3 of them continuing one). The other
+  cities (2026-10-09, `Site.mapillary`, the same step and constants):
+  **Leipzig** 7 945 panoramas on four tiles, 1 130 shopfront walls on 843
+  buildings (226 glazed rows, 11 under a canopy — its DOM1 fetched for
+  this); **München** 22 212 panoramas, the most of any city (11 679 on the Marienplatz tile, 10 362 of all of them from 2026), 3 079 walls on 2 229 buildings (889 glazed rows; no DOM1 on disk, so no canopies) — on the Marienplatz tile 1 741 of the 3 231 walls seen, a larger share than anywhere else, worth a look for false openings (arcades, dark plinths); **Hamburg** 842 panoramas (61 on the
+  Jungfernstieg tile), 152 walls on 112 buildings (33 glazed rows; no
+  DOM1 on disk, so no canopies); **Grimma** 855 panoramas, all on the
+  old-town tile, 79 walls on 75 buildings (12 glazed rows); **Meißen** 196
+  panoramas, 23 walls on 21 buildings; **Unna** none — Mapillary has only
+  flat photos there (1 676 in the square kilometre at the old-town
+  tile's centre, not one panorama), which the rectification cannot place on a wall, so Unna is
+  left without `mapillary`. The panorama search now asks for a cell the
+  API keeps answering 500 on in quarters, as it does a full one
+  (Leipzig's centre). Noisy: two
   sequences' profiles correlate at a median 0.31 unshifted, 0.56 after
   the shift; a single image misreads graffiti and painted panels as
   openings; a long wall is often seen by two images only. The building
@@ -2647,9 +2665,11 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   pooling in low ground, a term of the one `scene.fogNode` every material
   takes (`fog = false` opts out: the river mist); HUD *Talnebel*.
   `height-fog.ts`. **Sets in with distance** (2026-10-09): none within
-  15 m of the camera, all of it from 90 m (`VALLEY_NEAR_M`); at the full
+  40 m of the camera, all of it from 900 m (`VALLEY_NEAR_M`); at the full
   share 10 m off, the default 0.2 greyed every nearby surface by ≈ 18 %
-  (a shop pane at sRGB 102/105/108 against 56/61/65 without it). **Depth from the site's relief** (2026-10-01, ADR
+  (a shop pane at sRGB 102/105/108 against 56/61/65 without it), and
+  full from 90 m it laid one flat veil over the river and the meadows in
+  the lower half of the start view, the same at 200 m as at 2 km. **Depth from the site's relief** (2026-10-01, ADR
   0039): the pool's fade height (`heightFalloff`) was Dresden's
   Elbe-to-rim 28 m everywhere, which hazed flat Hamburg and Munich from
   the river to the rooftops. `prepare-data.ts` samples each tile's coarse
@@ -2660,7 +2680,11 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   `ground`). Dresden, Grimma, Meißen and Unna keep 28 m; Hamburg ≈ 9.6 m,
   Leipzig ≈ 12 m, Munich ≈ 15 m. Not yet judged on a real GPU.
 - **River mist** `❝ taken` `≈ assumed` — DLM water mask (the painted splat's alpha) → a drifting,
-  sun-lit mist sheet over the Elbe; HUD *Flussnebel*. `water-layer.ts`
+  sun-lit mist sheet over the Elbe; HUD *Flussnebel*. None within 120 m of
+  the eye, full from 1.2 km, at most 40 % opaque and only 30 % of the way
+  from the sky's tint to white (it was full from 90 m at up to 62 % and
+  60 % of the way to white, and the near river in the start view lay
+  under a pale, drifting band that read as a smear on the screen). `water-layer.ts`
   `createWaterMist`.
 - **Drifting clouds** `≈ assumed` — `SkyMesh`'s procedural clouds drift on TSL `time`
   (slow `cloudSpeed`), lit by the sun instant. `sun-rig.ts`.

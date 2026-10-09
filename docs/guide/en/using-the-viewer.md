@@ -392,7 +392,7 @@ mistake); the switch stays as you set it.
 |---|---|---|
 | Atmosphäre | *Nebel* | distance haze |
 | | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height and sets in some way off, so what stands right in front of you stays clear |
-| | *Flussnebel* | drifting mist sheet over the water |
+| | *Flussnebel* | drifting mist sheet over the water, from about 120 m ahead, denser only far off |
 | | *Tiefenfärbung* | warm near, cool far: a depth-based colour grade |
 | Gebäude | *Transparenz* | see through buildings (dithered), up to 90 % |
 | | *Boden-Verlauf* | darkening of walls towards the ground |
@@ -404,7 +404,7 @@ mistake); the switch stays as you set it.
 | | *Traufkante* | a soft line where wall meets roof |
 | | *Gliederung* | what a house shows at eye level, painted: a darker shop zone where a shop is mapped. The plinth, the ledge over the ground floor and the eave cornice are modelled, run on from house to house and are always there |
 | | *Fenster* | rows of windows on every house, drawn into the wall: an opening you look into, its reveals in the wall's plaster, its back darker and cooler, a slim sill with its shadow — no glass, no panes, no mullions. Spacing and size where street photos measured the house (Dresden), else the nearest measured house's of the same kind, else its type's; one row per storey, the windows as tall as the storey allows, the ground floor's above the plinth, the top floor's under the eave cornice; a town house's ground floor a little raised, its windows with a surround. None on party walls, beside doors, over shop fronts, on churches, palaces and halls. From a distance they fade into the facade's tone |
-| | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs; Dresden only, where panoramas show the front |
+| | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs; where panoramas show the front (every city but Unna, which has none) |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
@@ -421,7 +421,7 @@ mistake); the switch stays as you set it.
 | | *Spiegelung* | the sky mirrored in glass facades, gilding and water; the sky only, not the buildings across the street |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
-| | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the centre of the view, *Manuell* on a fixed distance; not offered on phones |
+| | *Tiefenschärfe* (switch) | photographic depth of field, only behind the focus (the foreground stays sharp); *Auto* focuses on the centre of the view, *Manuell* on a fixed distance; not offered on phones |
 
 While the camera moves, the depth-of-field blur is switched off (the eye
 cannot resolve it in motion) and comes back when you stop. Phones do not

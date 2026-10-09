@@ -334,9 +334,17 @@ function finish(input: V4, viewZ: F, f: Finish): V4 {
  */
 function lensBlurOf(lit: V4, viewZ: F, focusDistance: Live, focusRange: Live) {
   const input = rtt(lit, null, null, { depthBuffer: false });
+  // Only what lies beyond the focus goes soft. Nearer than it is read as
+  // at the focus (view Z is negative ahead): a lens blurs the foreground
+  // too, but in a first-person view the foreground is the street at your
+  // feet, the lower half of the screen — blurred, it read as a streaky
+  // veil lying flat on the screen rather than as depth. The node still
+  // runs its near-field passes, now over an empty field: the clamp saves
+  // no work, a far-only pass of our own would.
+  const behindFocus = viewZ.min(focusDistance.negate());
   const node = dof(
     input,
-    viewZ,
+    behindFocus,
     focusDistance,
     focusRange,
     uniform(BOKEH_SCALE)

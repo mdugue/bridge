@@ -26,7 +26,9 @@ export type Reason =
   | "censusOnly"
   | "noTrafficCounts"
   | "noLiveBikes"
-  | "noTrams";
+  | "noTrams"
+  | "panoramasNotRead"
+  | "noPanoramas";
 
 export interface Cell {
   quality: Quality;
@@ -86,6 +88,10 @@ const REASONS: Record<Lang, Record<Reason, string>> = {
     noLiveBikes:
       "No open bicycle counter the browser can read live (counts published yearly, monthly or daily only, or none).",
     noTrams: "The city has no trams.",
+    panoramasNotRead:
+      "The pipeline has not measured this city's street photos (Mapillary) yet.",
+    noPanoramas:
+      "Mapillary has no street panoramas here, only flat photos, which the measurement cannot place on a wall.",
   },
   de: {
     noDlm:
@@ -109,6 +115,10 @@ const REASONS: Record<Lang, Record<Reason, string>> = {
     noLiveBikes:
       "Keine offene Radzählstelle, die der Browser live lesen kann (Zählwerte nur jährlich, monatlich oder täglich, oder gar keine).",
     noTrams: "Die Stadt hat keine Straßenbahn.",
+    panoramasNotRead:
+      "Die Pipeline hat die Straßenfotos (Mapillary) dieser Stadt noch nicht vermessen.",
+    noPanoramas:
+      "Mapillary hat hier keine Straßenpanoramen, nur flache Fotos, die die Vermessung nicht auf eine Wand legen kann.",
   },
 };
 
@@ -137,6 +147,9 @@ const none = (reason: Reason): Cell => ({
 
 /** Lands without a laser scan: not published openly, or not read yet. */
 const SCAN_GAPS: Partial<Record<string, Reason>> = { hh: "noLsc" };
+
+/** Sites whose street photos give no shop windows (checked 2026-10-09). */
+const PANORAMA_GAPS: Partial<Record<string, Reason>> = { unna: "noPanoramas" };
 
 /** Registers whose records lack something the viewer then derives. */
 const CADASTRE_GAPS: Partial<Record<string, Reason>> = { hamburg: "noHeight" };
@@ -242,6 +255,17 @@ const ROWS: Row[] = [
   },
   {
     label: {
+      en: "Shop windows, facade readings",
+      de: "Schaufenster, Fassadenbild",
+    },
+    // measured in the site's panoramas (Site.mapillary)
+    cell: (s) =>
+      s.mapillary
+        ? best("Mapillary")
+        : none(PANORAMA_GAPS[s.id] ?? "panoramasNotRead"),
+  },
+  {
+    label: {
       en: "Towers, chimneys, missing buildings",
       de: "Türme, Schornsteine, fehlende Gebäude",
     },
@@ -266,8 +290,8 @@ const ROWS: Row[] = [
       en: "Street furniture, lamps, stairs, walls, fences, markings, paving, sports grounds, trams, landing stages",
       de: "Stadtmobiliar, Lampen, Treppen, Mauern, Zäune, Markierungen, Beläge, Sportplätze, Straßenbahn, Anleger",
     },
-    // Mapillary fills in the lamps and bins OSM lacks (Site.mapillary)
-    cell: (s) => (s.mapillary ? osm(both("OSM + Mapillary")) : osm()),
+    // Mapillary fills in the lamps and bins OSM lacks (Site.mapillary.objects)
+    cell: (s) => (s.mapillary?.objects ? osm(both("OSM + Mapillary")) : osm()),
   },
   {
     label: {

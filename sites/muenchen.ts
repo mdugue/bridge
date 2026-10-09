@@ -14,6 +14,7 @@ export const MUENCHEN: Site = {
   provider: BAVARIA,
   dataLayers: { trams: { operator: "MVG" } },
   osm: "europe/germany/bayern/oberbayern",
+  mapillary: { objects: false },
   spawn: "marienplatz",
   tiles: [
     { e: 690, n: 5334 },
