@@ -1,7 +1,11 @@
 import { type Camera, Raycaster, Vector2 } from "three/webgpu";
 import { type AskHit, type AskSet, hitsInSets } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
-import type { Inquiry, InquiryObject } from "@/lib/city/inquiry";
+import {
+  type Inquiry,
+  type InquiryObject,
+  TOLERANCE_PX,
+} from "@/lib/city/inquiry";
 import { type CityLayer, cityObjectsAlong } from "./city-layer";
 import { setPickRay } from "./view-ray";
 
@@ -45,8 +49,6 @@ export interface Asked {
   selected: number;
 }
 
-/** The radius (CSS px) of the outer ring of rays around a tap. */
-export const TOLERANCE_PX = 22;
 /** Rays per ring (two rings: half and full radius). */
 const RING_RAYS = 8;
 /** The most candidates a question offers. */

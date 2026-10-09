@@ -26,6 +26,8 @@ const FLY_SPEED_BASE = 10;
 const DOLLY_TAU = 0.15;
 /** m of dolly left over that is no longer worth a frame. */
 const DOLLY_EPSILON = 0.01;
+/** A dolly's line shorter than this (squared) leads nowhere. */
+const MIN_DOLLY_LINE_SQ = 1e-12;
 /** seconds — eye-height smoothing over the ~4 m DGM grid */
 const GROUND_TAU = 0.12;
 
@@ -39,6 +41,10 @@ export const MOVEMENT_KEYS: ReadonlySet<string> = new Set([
   "KeyA",
   "KeyS",
   "KeyD",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
   "Space",
   "KeyE",
   "KeyQ",
@@ -60,6 +66,8 @@ export interface FpsMovementOptions {
 
 export interface FpsMovement {
   getMode: () => MovementMode;
+  /** Turn input from the arrow keys: +1 turns right, −1 left. */
+  turnInput: () => number;
   press: (code: string) => void;
   release: (code: string) => void;
   /** Drops every held key and the stick — call when the window loses focus. */
@@ -77,10 +85,16 @@ export interface FpsMovement {
   setMode: (mode: MovementMode) => void;
   /**
    * Pushes the camera `metres` forward (< 0: back), eased over a few frames:
-   * on foot along the ground in the heading, walls stopping it; in the air
-   * along the view, down too, never through the ground. Adds up.
+   * on foot along the ground, walls stopping it; in the air along the line,
+   * down too, never through the ground. Adds up. `towards` (a world
+   * direction, unit length) is the line — the ray under the pointer or
+   * between the fingers; without it the view as it is now. On foot only
+   * its level part counts, as long as it is: a ray steeply down walks
+   * little, one past the feet a little back, never a sudden full step.
    */
-  dolly: (metres: number) => void;
+  dolly: (metres: number, towards?: Vector3) => void;
+  /** The dolly still to travel (world m), written into `out`. */
+  pendingDolly: (out: Vector3) => Vector3;
   /** Drops whatever dolly is still pending (a glide takes the camera). */
   stopDolly: () => void;
   /** Snaps the eye onto the ground at the current spot (used by teleports). */
@@ -109,8 +123,9 @@ export function createFpsMovement(
   let analogX = 0;
   let analogY = 0;
   let analogV = 0;
-  /** dolly metres still to travel */
-  let pendingDolly = 0;
+  /** the dolly still to travel (world m) */
+  const pendingDolly = new Vector3();
+  const dollyTake = new Vector3();
   const look = new Vector3();
 
   const shiftHeld = () => keys.has("ShiftLeft") || keys.has("ShiftRight");
@@ -124,10 +139,12 @@ export function createFpsMovement(
 
     let ix = analogX;
     let iy = analogY;
-    if (keys.has("KeyW")) {
+    // The arrows as in Street View: up and down walk, left and right turn
+    // (turnInput).
+    if (keys.has("KeyW") || keys.has("ArrowUp")) {
       iy += 1;
     }
-    if (keys.has("KeyS")) {
+    if (keys.has("KeyS") || keys.has("ArrowDown")) {
       iy -= 1;
     }
     if (keys.has("KeyD")) {
@@ -193,17 +210,14 @@ export function createFpsMovement(
       ? options.resolveStep(camera.position, proposed)
       : proposed;
 
-  /** This frame's share of the pending dolly (m). */
-  const dollyStep = (dt: number): number => {
-    if (pendingDolly === 0) {
-      return 0;
+  /** This frame's share of the pending dolly (world m). */
+  const dollyStep = (dt: number): Vector3 => {
+    dollyTake.copy(pendingDolly).multiplyScalar(1 - Math.exp(-dt / DOLLY_TAU));
+    if (pendingDolly.distanceTo(dollyTake) < DOLLY_EPSILON) {
+      dollyTake.copy(pendingDolly);
     }
-    let take = pendingDolly * (1 - Math.exp(-dt / DOLLY_TAU));
-    if (Math.abs(pendingDolly - take) < DOLLY_EPSILON) {
-      take = pendingDolly;
-    }
-    pendingDolly -= take;
-    return take;
+    pendingDolly.sub(dollyTake);
+    return dollyTake;
   };
 
   /** Fly speed (m/s) at the camera's height above the ground. */
@@ -224,22 +238,23 @@ export function createFpsMovement(
     if (mode === "walk") {
       const step = WALK_SPEED * (shiftHeld() ? SPRINT_FACTOR : 1) * dt;
       // horizontalStep leaves the level heading in `forward`.
-      const proposed = horizontalStep(step).addScaledVector(forward, dolly);
+      const proposed = horizontalStep(step);
+      proposed.x += dolly.x;
+      proposed.z += dolly.z;
       camera.position.add(collide(proposed));
       clampToGround(dt);
       return;
     }
     // Flying meets the facades too: a flight never passes into a building
     // (over its roof it has nothing to meet). The roofs themselves are
-    // camera-pose.ts's clearance guard. A dolly runs along the view itself,
-    // so pinching while looking down sinks towards what is under the cross.
+    // camera-pose.ts's clearance guard. A dolly runs along its line, so
+    // pinching over the street below sinks towards it.
     const step = flySpeed() * dt;
-    camera.getWorldDirection(look);
     const proposed = horizontalStep(step);
-    proposed.x += look.x * dolly;
-    proposed.z += look.z * dolly;
+    proposed.x += dolly.x;
+    proposed.z += dolly.z;
     camera.position.add(collide(proposed));
-    const climb = verticalInput() * step + look.y * dolly;
+    const climb = verticalInput() * step + dolly.y;
     if (climb > 0) {
       camera.position.y += climb;
     } else if (climb < 0) {
@@ -249,6 +264,8 @@ export function createFpsMovement(
 
   return {
     update,
+    turnInput: () =>
+      (keys.has("ArrowRight") ? 1 : 0) - (keys.has("ArrowLeft") ? 1 : 0),
     press: (code) => {
       if (MOVEMENT_KEYS.has(code)) {
         keys.add(code);
@@ -260,15 +277,32 @@ export function createFpsMovement(
       analogX = 0;
       analogY = 0;
       analogV = 0;
-      pendingDolly = 0;
+      pendingDolly.set(0, 0, 0);
     },
-    dolly: (metres) => {
-      if (Number.isFinite(metres)) {
-        pendingDolly += metres;
+    dolly: (metres, towards) => {
+      if (!Number.isFinite(metres) || metres === 0) {
+        return;
       }
+      if (towards) {
+        look.copy(towards);
+      } else {
+        camera.getWorldDirection(look);
+      }
+      if (mode === "walk") {
+        // The level part at its own length: shorter the steeper the ray,
+        // so the walk fades out towards the feet rather than flipping.
+        look.y = 0;
+      } else {
+        look.normalize();
+      }
+      if (look.lengthSq() < MIN_DOLLY_LINE_SQ) {
+        return;
+      }
+      pendingDolly.addScaledVector(look, metres);
     },
+    pendingDolly: (out) => out.copy(pendingDolly),
     stopDolly: () => {
-      pendingDolly = 0;
+      pendingDolly.set(0, 0, 0);
     },
     setAnalog: (x, y) => {
       analogX = Math.min(Math.max(x, -1), 1);
@@ -281,7 +315,7 @@ export function createFpsMovement(
     setMode: (next) => {
       mode = next;
       // A push meant for one mode is not carried into the other.
-      pendingDolly = 0;
+      pendingDolly.set(0, 0, 0);
     },
     snapToGround: () => {
       const ground = options.groundHeight(camera.position.x, camera.position.z);

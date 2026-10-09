@@ -46,17 +46,27 @@ Moment, etwa bei einem langen Flug, zeigt ein kleiner Hinweis *Umgebung
 lädt* oben im Bild (siehe
 [Wie ein Besuch abläuft](./how-it-works.md#wie-ein-besuch-abläuft)).
 
+Die Seitenleiste ist von Anfang an da, über dem Ladebildschirm. Schon
+während die Stadt lädt, kannst du einen Ort wählen, einen Punkt auf der
+Karte anklicken oder einen Snapshot anwenden: Das Laden beginnt dann
+dort neu (der Ladebildschirm nennt ihn als *Start*), und du kommst gleich
+dort an statt am üblichen Startpunkt mit anschließender Reise. Sonne,
+Uhrzeit und Look lassen sich ebenfalls schon einstellen; Modell, die
+Werkzeuge, *Sicht merken*, der Klang und das Speichern eines Bildes
+warten, bis die Szene steht.
+
 ## Bewegen
 
 | Eingabe (Desktop) | Wirkung |
 |---|---|
-| Mit der Maus ziehen | umsehen |
+| Mit der Maus ziehen | umsehen (der Zeiger ist eine Hand, die den Blick greift) |
 | `W` `A` `S` `D` | gehen (oder fliegen) |
+| `↑` `↓` / `←` `→` | vor und zurück gehen / nach links und rechts drehen |
 | `Shift` | sprinten |
 | `F` | zwischen Gehen und Fliegen wechseln (abheben / landen) |
 | `Leertaste` / `Shift` (oder `E` / `Q`) | hoch / runter im Flug |
 | `1` – `9` | zum ersten bis neunten Aussichtspunkt gleiten |
-| Mausrad (oder Zwei-Finger-Geste auf dem Trackpad) | vor oder zurück |
+| Mausrad (oder Zwei-Finger-Geste auf dem Trackpad, auch Aufziehen) | zu der Stelle unter dem Mauszeiger (im immersiven Modus: dem Fadenkreuz) hin oder von ihr weg: zu Fuß den Boden entlang, im Flug auf der Linie zu ihr, die Stelle bleibt unter dem Zeiger; jeder Schritt legt den Großteil des restlichen Wegs zurück, nie über sie hinaus, und über dem Himmel bleibt der Flug waagerecht |
 | `Alt` + Mausrad | zoomen (Blickwinkel enger oder weiter) |
 | Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
 | Klick auf die Minikarte | dorthin gleiten (zu Fuß landest du stehend, im Flug in gleicher Höhe) |
@@ -80,7 +90,7 @@ lädt* oben im Bild (siehe
 | ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
 | Höhenregler (über der Werkzeugleiste, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
-| Zwei Finger auseinander / zusammen | vor / zurück: zu Fuß den Weg entlang, im Flug in Blickrichtung (je höher, desto weiter) |
+| Zwei Finger auseinander / zusammen | zur Stelle zwischen den Fingern hin / von ihr weg: zu Fuß den Weg entlang, im Flug auf der Linie zu ihr (je höher, desto weiter) |
 
 Beim Gehen bleibst du in Augenhöhe auf dem Gelände und stößt an Gebäuden
 und Mauern an. Auch im Flug stößt du an Fassaden, sinken kannst du nicht

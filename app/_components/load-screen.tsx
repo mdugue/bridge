@@ -95,10 +95,16 @@ function StageRow({ stage }: { stage: LoadStageState }) {
 }
 
 export function LoadScreen({
+  besidePanel = false,
+  destination,
   handedOver,
   percent,
   stages,
 }: {
+  /** the side panel is open over the screen's right edge (a desktop) */
+  besidePanel?: boolean;
+  /** a place picked while loading: the scene starts there */
+  destination?: string;
   /**
    * The first frame is up and the scene is live behind the glass: stop taking
    * pointer events, so the player can look around while the veil is still
@@ -128,7 +134,15 @@ export function LoadScreen({
           costs the main thread nothing while the scene boots. */}
       <div className="absolute inset-0 bg-[image:var(--hud-veil)] backdrop-blur-md" />
 
-      <div className="absolute inset-0 flex flex-col px-8 py-10 text-hud-foreground sm:px-12 lg:px-18 lg:py-16">
+      <div
+        className="absolute inset-0 flex flex-col px-8 py-10 text-hud-foreground sm:px-12 lg:px-18 lg:py-16"
+        // (inline: it must win over every breakpoint's padding)
+        style={
+          besidePanel
+            ? { paddingRight: "calc(var(--sidebar-width) + 2.5rem)" }
+            : undefined
+        }
+      >
         <div className="flex flex-col gap-1.5">
           <span className="font-medium text-[11px] uppercase leading-none tracking-widest opacity-60">
             City Walk
@@ -136,6 +150,11 @@ export function LoadScreen({
           <span className="font-semibold text-lg leading-tight sm:text-xl">
             {site.label}
           </span>
+          {destination && (
+            <span className="text-sm leading-tight opacity-75">
+              Start: {destination}
+            </span>
+          )}
         </div>
 
         <div className="flex flex-1 items-center gap-10 xl:gap-20">

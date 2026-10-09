@@ -335,3 +335,6 @@ function buildingCard(
     sources,
   };
 }
+
+/** The radius (CSS px) of the outer ring of rays around a tap. */
+export const TOLERANCE_PX = 22;

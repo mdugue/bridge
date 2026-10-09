@@ -44,17 +44,26 @@ by tile, detailed near you and coarse further away. When that takes a
 moment, on a long flight for instance, a small *Umgebung lädt* ("loading
 surroundings") hint shows at the top of the screen (see [how a visit unfolds](./how-it-works.md#how-a-visit-unfolds)).
 
+The side panel is there from the start, over the loading screen. While
+the city loads you can already pick a place, click a spot on the map or
+apply a snapshot: the load starts over at that place (the loading screen
+names it as *Start*), so you arrive there instead of at the usual start
+and then travel. The sun, the time and the look can be set too; Modell,
+the tools, *Sicht merken* (remember this view), the sound and saving a
+picture wait until the scene is up.
+
 ## Moving around
 
 | Input (desktop) | Does |
 |---|---|
-| Drag with the mouse | look around |
+| Drag with the mouse | look around (the pointer is a hand that grabs the view) |
 | `W` `A` `S` `D` | walk (or fly) |
+| `↑` `↓` / `←` `→` | walk forward and back / turn left and right |
 | `Shift` | sprint |
 | `F` | switch between walking and flying (take off / land) |
 | `Space` / `Shift` (or `E` / `Q`) | up / down while flying |
 | `1` – `9` | glide to the first to ninth viewpoint |
-| Mouse wheel (or a two-finger trackpad gesture) | move forward or back |
+| Mouse wheel (or a two-finger trackpad gesture, or pinching on it) | move towards the spot under the pointer (the crosshair in immersive mode), or back from it: on foot along the ground, flying along the line to that spot, which stays under the pointer; each step covers most of the way left, never past it, and over the sky the flight stays level |
 | `Alt` + mouse wheel | zoom (narrows or widens the field of view) |
 | Double-click on the ground | travel there in a short glide; flying, glide part of the way towards it |
 | Click on the minimap | glide there (on foot you land standing; flying, at the same height) |
@@ -78,7 +87,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (above the toolbar, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there in a short glide; flying, glide part of the way towards it |
-| Two fingers apart / together | forward / back: on foot along the ground, flying along the view (the higher, the further) |
+| Two fingers apart / together | towards / away from the spot between the fingers: on foot along the ground, flying along the line to it (the higher, the further) |
 
 While walking you are held at eye height on the terrain and collide with
 buildings and walls. Flying, you meet facades too, sinking stops at eye
