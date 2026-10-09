@@ -392,8 +392,8 @@ mistake); the switch stays as you set it.
 | | *Dachfarbe* | how strongly the real (or synthesised) roof colour shows |
 | | *Dachsättigung* | lifts the saturation of the aerial-photo roof colours without shifting their hue; 0 = raw photo |
 | | *Traufkante* | a soft line where wall meets roof |
-| | *Gliederung* | what a house shows at eye level before its windows, painted: a darker shop zone where a shop is mapped — no windows. The plinth, the ledge over the ground floor and the eave cornice are modelled, run on from house to house and are always there |
-| | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs — no windows; Dresden only, where panoramas show the front |
+| | *Gliederung* | what a house shows at eye level before its windows, painted: a darker shop zone where a shop is mapped — no painted windows. The plinth, the ledge over the ground floor and the eave cornice are modelled, run on from house to house and are always there |
+| | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs; Dresden only, where panoramas show the front. The slider paints no windows: where the photos measured a wall's window rhythm, its windows are modelled into the building as soft, shallow niches in the wall's own colour (no glass, no frames), with a sill band or a band of ornament where those were measured too, and they are always there |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
