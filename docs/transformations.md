@@ -2467,9 +2467,11 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   pooling in low ground, a term of the one `scene.fogNode` every material
   takes (`fog = false` opts out: the river mist); HUD *Talnebel*.
   `height-fog.ts`. **Sets in with distance** (2026-10-09): none within
-  15 m of the camera, all of it from 90 m (`VALLEY_NEAR_M`); at the full
+  40 m of the camera, all of it from 900 m (`VALLEY_NEAR_M`); at the full
   share 10 m off, the default 0.2 greyed every nearby surface by ≈ 18 %
-  (a shop pane at sRGB 102/105/108 against 56/61/65 without it). **Depth from the site's relief** (2026-10-01, ADR
+  (a shop pane at sRGB 102/105/108 against 56/61/65 without it), and
+  full from 90 m it laid one flat veil over the river and the meadows in
+  the lower half of the start view, the same at 200 m as at 2 km. **Depth from the site's relief** (2026-10-01, ADR
   0039): the pool's fade height (`heightFalloff`) was Dresden's
   Elbe-to-rim 28 m everywhere, which hazed flat Hamburg and Munich from
   the river to the rooftops. `prepare-data.ts` samples each tile's coarse
@@ -2480,9 +2482,12 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   `ground`). Dresden, Grimma, Meißen and Unna keep 28 m; Hamburg ≈ 9.6 m,
   Leipzig ≈ 12 m, Munich ≈ 15 m. Not yet judged on a real GPU.
 - **River mist** `❝ taken` `≈ assumed` — DLM water mask (the painted splat's alpha) → a drifting,
-  sun-lit mist sheet over the Elbe; HUD *Flussnebel*. None within 30 m of
-  the eye, full from 300 m (it was full from 90 m, and the near river lay
-  under streaks that read as a smear on the screen). `water-layer.ts`
+  sun-lit mist sheet over the Elbe; HUD *Flussnebel*. None within 120 m of
+  the eye, full from 1.2 km, at most 40 % opaque and only 30 % of the way
+  from the sky's tint to white (it was full from 90 m, opaque and white,
+  and the near river lay under streaks that read as a smear on the
+  screen; full from 300 m it still drew a pale band over the Elbe in the
+  start view). `water-layer.ts`
   `createWaterMist`.
 - **Drifting clouds** `≈ assumed` — `SkyMesh`'s procedural clouds drift on TSL `time`
   (slow `cloudSpeed`), lit by the sun instant. `sun-rig.ts`.
