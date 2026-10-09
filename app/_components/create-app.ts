@@ -389,7 +389,7 @@ export interface CityWalkOptions {
   onFollowEnd?: () => void;
   /**
    * What was asked last ("Befragen", ADR 0042): a click, a long press or
-   * `I` at the crosshair, or a candidate chosen from the strip; null when
+   * `I` under the pointer, or a candidate chosen from the strip; null when
    * nothing stands there. `along`: everything the question's ray met.
    */
   onInquiry?: (inquiry: Inquiry | null, along: InquiryAlong | null) => void;
@@ -459,7 +459,7 @@ export interface CityWalkHandle {
   demolishAtCrosshair: () => void;
   dispose: () => void;
   /**
-   * Asks what stands at a screen point (NDC; the crosshair when omitted),
+   * Asks what stands at a screen point (NDC; the centre when omitted),
    * marks it and reports it through `onInquiry`; tests and QA call it.
    */
   inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
@@ -1683,7 +1683,7 @@ async function bootApp(
   const tapRaycaster = new Raycaster();
   tapRaycaster.firstHitOnly = true;
   // Befragen (ADR 0042): a click asks, a long press on a touch screen,
-  // and I at the crosshair — there is no mode to switch on first.
+  // and I under the pointer — there is no mode to switch on first.
   // What the outline goes around (selection-shape.ts): a building's own
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
   // monument's shape after its data.
@@ -2062,26 +2062,30 @@ async function bootApp(
   };
   const demolishAtCrosshair = () => demolishAt();
 
-  // Where the mouse rests over the scene (NDC): `I` and `R` act on what is
+  // Where the mouse rests over the scene: `I` and `R` act on what is
   // under the pointer, as a hover shortcut does — there is no dot in the
   // middle to aim with. Without a pointer there (a touch screen, the
   // pointer off the canvas or locked in immersive mode) they act at the
-  // centre.
-  let hoverNdc: { x: number; y: number } | undefined;
+  // centre. Kept in client pixels and turned into NDC when a key asks, so
+  // a canvas resized or locked since the last move is read as it is now.
+  let hover: { x: number; y: number } | undefined;
   const canvas = renderer.domElement;
   const onHover = (e: PointerEvent) => {
-    if (e.pointerType !== "mouse" || document.pointerLockElement === canvas) {
-      hoverNdc = undefined;
-      return;
-    }
-    const r = canvas.getBoundingClientRect();
-    hoverNdc = {
-      x: ((e.clientX - r.left) / r.width) * 2 - 1,
-      y: -(((e.clientY - r.top) / r.height) * 2 - 1),
-    };
+    hover =
+      e.pointerType === "mouse" ? { x: e.clientX, y: e.clientY } : undefined;
   };
   const onLeave = () => {
-    hoverNdc = undefined;
+    hover = undefined;
+  };
+  const aim = (): { x: number; y: number } | undefined => {
+    if (!hover || document.pointerLockElement === canvas) {
+      return undefined;
+    }
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: ((hover.x - r.left) / r.width) * 2 - 1,
+      y: -(((hover.y - r.top) / r.height) * 2 - 1),
+    };
   };
   canvas.addEventListener("pointermove", onHover);
   canvas.addEventListener("pointerleave", onLeave);
@@ -2109,11 +2113,11 @@ async function bootApp(
           modelRig.owns() ? modelRig.leave("fly") : pose.toggleMode(),
         toggleModel: () =>
           modelRig.owns() ? modelRig.leave() : modelRig.enter(),
-        demolish: () => demolishAt(hoverNdc),
+        demolish: () => demolishAt(aim()),
         // I asks under the pointer, or at the centre in pointer lock,
         // where there is no pointer to click with.
         inquire: () => {
-          inquireAt(hoverNdc);
+          inquireAt(aim());
         },
         cycleStyle: () =>
           opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),

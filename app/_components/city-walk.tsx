@@ -439,6 +439,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
   const immersive = usePointerLocked();
+  const [aimingCentre, setAimingCentre] = useState(false);
   const hud = useHudMessage();
   const sayHud = hud.say;
   const locate = useLocateMe(handleRef, hud);
@@ -1081,8 +1082,10 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           <>
             {/* No dot in the middle: the pointer aims (I and R act under
                 it). Only immersive mode, which hides the pointer, marks
-                the centre it aims at instead — never on Modell's sheet. */}
-            {immersive && mode !== "model" && (
+                the centre it aims at instead, and so does the panel's
+                demolish button while it is pointed at or focused — it acts
+                at the centre. Never on Modell's sheet. */}
+            {(immersive || aimingCentre) && mode !== "model" && (
               <div
                 aria-hidden
                 className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
@@ -1169,6 +1172,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         applySnapshot={applySnapshot}
         bounds={bounds}
         coarse={coarse}
+        onAimCentre={setAimingCentre}
         copySnapshot={copySnapshot}
         day={time.day}
         footprints={footprints}

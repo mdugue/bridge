@@ -961,8 +961,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     await aimAtBuilding(page);
     const box = await page.locator("canvas[data-engine]").boundingBox();
     await withFramesHeld(page, async () => {
-      // the centre, where the aimed building stands (the pointer stays
-      // there for I)
+      // the centre, where the aimed building stands
       await page.mouse.click(
         (box?.x ?? 0) + (box?.width ?? 0) / 2,
         (box?.y ?? 0) + (box?.height ?? 0) / 2
@@ -971,6 +970,8 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await expect(card).toBeVisible();
       // The LoD2 Building's gml:id — the key every other dataset joins on.
       await expect(card).toContainText(/DESNAT\w+/);
+      const centreId =
+        (await card.textContent())?.match(/DESNAT\w+/)?.[0] ?? "";
       // the sources are folded under "Daten"; unfolded, the card's own
       // lines and what the building as drawn is made of (a lazy chunk)
       await card.getByTestId("inquiry-data-toggle").click();
@@ -980,8 +981,49 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await expect(card.getByTestId("inquiry-data")).toContainText("Im Viewer");
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
+      // I asks under the pointer, not at the centre: find a spot off the
+      // middle (clear of the panel on the right) where another building
+      // stands, rest the pointer there and press I.
+      const off = await page.evaluate(() => {
+        const h = window.__poc?.handle;
+        if (!h) {
+          throw new Error("scene handle not published");
+        }
+        const centre = h.inquireAt();
+        const same =
+          centre?.kind === "building"
+            ? new Set(centre.tree.map((o) => `${centre.tile}:${o.objectIndex}`))
+            : new Set<string>();
+        const spots = [
+          [-0.4, 0],
+          [0, -0.35],
+          [-0.35, -0.35],
+          [0, 0.35],
+          [-0.35, 0.35],
+          [0.25, -0.35],
+          [0.25, 0.35],
+        ];
+        for (const [x, y] of spots) {
+          const asked = h.inquireAt({ x, y });
+          if (
+            asked?.kind === "building" &&
+            !same.has(`${asked.tile}:${asked.picked.objectIndex}`)
+          ) {
+            return { x, y };
+          }
+        }
+        return null;
+      });
+      expect(off).not.toBeNull();
+      await page.keyboard.press("Escape");
+      await expect(card).toBeHidden();
+      await page.mouse.move(
+        (box?.x ?? 0) + (((off?.x ?? 0) + 1) / 2) * (box?.width ?? 0),
+        (box?.y ?? 0) + ((1 - (off?.y ?? 0)) / 2) * (box?.height ?? 0)
+      );
       await page.keyboard.press("i");
-      await expect(card).toContainText(/DESNAT\w+/);
+      await expect(card).toBeVisible();
+      await expect(card).not.toContainText(centreId);
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
     });
