@@ -381,7 +381,7 @@ mistake); the switch stays as you set it.
 | Group | Slider | What it does |
 |---|---|---|
 | Atmosphäre | *Nebel* | distance haze |
-| | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height |
+| | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height and sets in some way off, so what stands right in front of you stays clear |
 | | *Flussnebel* | drifting mist sheet over the water |
 | | *Tiefenfärbung* | warm near, cool far: a depth-based colour grade |
 | Gebäude | *Transparenz* | see through buildings (dithered), up to 90 % |

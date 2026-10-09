@@ -404,7 +404,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | Gruppe | Regler | Was er tut |
 |---|---|---|
 | Atmosphäre | *Nebel* | Entfernungsdunst |
-| | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe |
+| | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
 | | *Flussnebel* | treibende Nebelschicht über dem Wasser |
 | | *Tiefenfärbung* | warm nah, kühl fern: eine tiefenabhängige Farbgebung |
 | Gebäude | *Transparenz* | durch Gebäude hindurchsehen (gerastert), bis 90 % |
