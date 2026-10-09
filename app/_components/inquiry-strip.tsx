@@ -24,7 +24,7 @@ import {
   inquiryCard,
 } from "@/lib/city/inquiry";
 import { cardCredits } from "@/lib/city/card-lines";
-import { TOLERANCE_PX } from "./inquiry-probe";
+import { TOLERANCE_PX } from "@/lib/city/inquiry";
 import { useSite } from "./site-context";
 
 /** The icon a candidate is drawn with. */
@@ -78,7 +78,7 @@ export function distanceLabel(m: number): string {
 }
 
 /** A finger-wide ring at the tap, pulsed once: how far round the point
- *  the question looked (the crosshair's when asked by key: none). */
+ *  the question looked (none when asked at the centre). */
 export function InquiryTapRing({ along }: { along: InquiryAlong }) {
   if (!along.at || along.candidates.length < 2) {
     return null;

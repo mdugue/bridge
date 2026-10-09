@@ -937,6 +937,18 @@ first set. A page that recovers a lost GPU starts on the tile under the
 player's camera instead, its pose set before the stream's first update,
 looking straight down onto that tile until it has landed
 ([ADR 0046](./adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)).
+The HUD does not wait for any of it: the panel mounts as soon as the
+device's budget is made, before the manifest and before the scene's
+chunk (`create-app.ts` and three.js load beside it, by dynamic import), and
+the loading screen sits under it. The tileset's extras reach the HUD as
+soon as they are read (`onSiteInfo`: places, minimap, sun readout). A
+place, a map spot or a snapshot picked before the first frame boots the
+scene again from there (`initialView`, or `initialCamera` for a
+snapshot), the same way a recovered page starts on its own tile — a
+picked place from above the top of its tile's box, since its height is
+over a ground not yet known (`lib/city/boot-start.ts`). Each boot waits
+for the one before it to settle, so quick picks never hold two
+renderers at once, and the page keeps one crash trail across them.
 Everything else is the tiles renderer's call: it loads and
 unloads by screen-space error from both cameras, and a `DressingPlugin`
 (`tile-stream.ts`) dresses each landing tile inside the renderer's own

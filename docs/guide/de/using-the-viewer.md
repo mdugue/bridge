@@ -46,24 +46,34 @@ Moment, etwa bei einem langen Flug, zeigt ein kleiner Hinweis *Umgebung
 lädt* oben im Bild (siehe
 [Wie ein Besuch abläuft](./how-it-works.md#wie-ein-besuch-abläuft)).
 
+Die Seitenleiste ist von Anfang an da, über dem Ladebildschirm. Schon
+während die Stadt lädt, kannst du einen Ort wählen, einen Punkt auf der
+Karte anklicken oder einen Snapshot anwenden: Das Laden beginnt dann
+dort neu (der Ladebildschirm nennt ihn als *Start*), und du kommst gleich
+dort an statt am üblichen Startpunkt mit anschließender Reise. Sonne,
+Uhrzeit und Look lassen sich ebenfalls schon einstellen; Modell, die
+Werkzeuge, *Sicht merken*, der Klang und das Speichern eines Bildes
+warten, bis die Szene steht.
+
 ## Bewegen
 
 | Eingabe (Desktop) | Wirkung |
 |---|---|
-| Mit der Maus ziehen | umsehen |
+| Mit der Maus ziehen | umsehen (der Zeiger ist eine Hand, die den Blick greift) |
 | `W` `A` `S` `D` | gehen (oder fliegen) |
+| `↑` `↓` / `←` `→` | vor und zurück gehen / nach links und rechts drehen |
 | `Shift` | sprinten |
 | `F` | zwischen Gehen und Fliegen wechseln (abheben / landen) |
 | `Leertaste` / `Shift` (oder `E` / `Q`) | hoch / runter im Flug |
 | `1` – `9` | zum ersten bis neunten Aussichtspunkt gleiten |
-| Mausrad (oder Zwei-Finger-Geste auf dem Trackpad) | vor oder zurück |
+| Mausrad (oder Zwei-Finger-Geste auf dem Trackpad, auch Aufziehen) | zu der Stelle unter dem Mauszeiger (im immersiven Modus: dem Fadenkreuz) hin oder von ihr weg: zu Fuß den Boden entlang, im Flug auf der Linie zu ihr, die Stelle bleibt unter dem Zeiger; jeder Schritt legt den Großteil des restlichen Wegs zurück, nie über sie hinaus, und über dem Himmel bleibt der Flug waagerecht |
 | `Alt` + Mausrad | zoomen (Blickwinkel enger oder weiter) |
 | Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
 | Klick auf die Minikarte | dorthin gleiten (zu Fuß landest du stehend, im Flug in gleicher Höhe) |
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren |
 | Klick auf ein Gebäude | es befragen: eine Karte sagt, was die Daten darüber wissen |
-| `I` | befragen, was unter dem Fadenkreuz steht (auch immersiv) |
-| `R` | Gebäude unter dem Fadenkreuz abreißen |
+| `I` | befragen, was unter dem Mauszeiger steht (immersiv: in der Bildmitte) |
+| `R` | Gebäude unter dem Mauszeiger abreißen (immersiv: in der Bildmitte) |
 | `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City → Papier → Strich → Schwarzplan) |
 | `M` | ins *Modell* wechseln, die Stadt in Parallelprojektion, und zurück (siehe [Modell](#modell-die-stadt-als-planzeichnung)) |
 | `Esc` | immersiven Modus verlassen |
@@ -80,7 +90,7 @@ lädt* oben im Bild (siehe
 | ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
 | Höhenregler (über der Werkzeugleiste, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
-| Zwei Finger auseinander / zusammen | vor / zurück: zu Fuß den Weg entlang, im Flug in Blickrichtung (je höher, desto weiter) |
+| Zwei Finger auseinander / zusammen | zur Stelle zwischen den Fingern hin / von ihr weg: zu Fuß den Weg entlang, im Flug auf der Linie zu ihr (je höher, desto weiter) |
 
 Beim Gehen bleibst du in Augenhöhe auf dem Gelände und stößt an Gebäuden
 und Mauern an. Auch im Flug stößt du an Fassaden, sinken kannst du nicht
@@ -223,7 +233,9 @@ Quellenvermerken.
 Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
 Mit der Maus genügt ein **Klick** auf ein Gebäude, auf einem Touchscreen
 **langes Drücken** (den Finger eine halbe Sekunde ruhig halten); `I`
-fragt, was unter dem Fadenkreuz steht. Das Gebäude bekommt eine feine
+fragt, was unter dem Mauszeiger steht (im immersiven Modus, der den
+Zeiger ausblendet, was in der Bildmitte steht; nur dort markiert ein
+Punkt die Mitte). Das Gebäude bekommt eine feine
 Schraffur und eine Linie um seinen Umriss, beide in der pinken
 Akzentfarbe der Bedienelemente, und eine Karte öffnet sich. Ein Klick ins Leere
 schließt sie wieder. Ein kleines Haus musst du
@@ -434,7 +446,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Spiegelung* | der Himmel spiegelt sich in Glasfassaden, Vergoldungen und im Wasser; nur der Himmel, nicht die Häuser gegenüber |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
-| | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung; auf Telefonen nicht angeboten |
+| | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf die Bildmitte, *Manuell* auf eine feste Entfernung; auf Telefonen nicht angeboten |
 
 Solange sich die Kamera bewegt, ist die Tiefenschärfe-Unschärfe
 abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
@@ -444,8 +456,8 @@ erübrigen kann, den ein kleiner Bildschirm kaum zeigt.
 
 ### Erweitert
 
-- **Werkzeuge** — *Gebäude unter dem Fadenkreuz abreißen* entfernt das
-  Gebäude, das du anschaust (wie `R`), auf jeder Kachel im Blick; das
+- **Werkzeuge** — *Gebäude in der Bildmitte abreißen* entfernt das
+  Gebäude, das du anschaust (`R` das unter dem Mauszeiger), auf jeder Kachel im Blick; das
   lässt sich nicht rückgängig machen. *Bild speichern* speichert die
   Ansicht als PNG mit ihren Quellen (siehe [Modell](#modell-die-stadt-als-planzeichnung)). *Immersiver Modus* fängt den
   Mauszeiger für ein Ego-Perspektive-Gefühl ein; `Esc` verlässt ihn.

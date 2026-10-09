@@ -575,7 +575,9 @@ card showing the figure it is ranked by.
 
 ### Cache and publish
 
-**Cache.** Baked outputs are cached in `.cache/prepare-data/` (gitignored),
+**Cache.** Baked outputs are cached in `.cache/prepare-data/` (gitignored;
+on Vercel in `.next/cache/prepare-data/`, since its build cache keeps only
+`node_modules` and `.next/cache` from one deployment to the next),
 one entry per output, under a key over the **contents** of its input
 files, the bake's own sources and the values it depends on (the recenter
 offset, the `extras` it names). The sources are found in two steps. The
