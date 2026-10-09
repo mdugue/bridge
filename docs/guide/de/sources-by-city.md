@@ -19,13 +19,13 @@ Lizenzen) beschreibt [Woher die Daten kommen](./data-sources.md).
 | Baumreihen, Hecken | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
 | Schuppen, weitere Bäume, Heckenhöhen | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁴ | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁵ |
 | Vegetationsfarbe (Vitalität) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟡 DOP RGB (GLI) ⁶ | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) |
-| Schaufenster, Fassadenbild | 🟢 Mapillary | ⚪ — ⁷ | ⚪ — ⁷ | 🟢 Mapillary | ⚪ — ⁷ | ⚪ — ⁷ | ⚪ — ⁷ | ⚪ — ⁷ |
+| Schaufenster, Fassadenbild | 🟢 Mapillary | ⚪ — ⁷ | 🟢 Mapillary | 🟢 Mapillary | ⚪ — ⁷ | ⚪ — ⁷ | ⚪ — ⁷ | ⚪ — ⁷ |
 | Denkmäler, Brunnen | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
 | Stadtmobiliar, Lampen, Treppen, Mauern, Zäune, Markierungen, Beläge, Sportplätze, Straßenbahn, Anleger | 🔵 OSM + Mapillary | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM |
 | Datenebene: Kfz-Verkehr | 🟢 Zählungen der Stadt | 🟡 Straßenverkehrszählung ⁸ | 🟢 Zählungen der Stadt (Hauptstraßen) | ⚪ — ⁹ | 🟡 Straßenverkehrszählung ⁸ | ⚪ — ⁹ | 🟡 Straßenverkehrszählung ⁸ | 🟢 Zählungen der Stadt |
 | Datenebene: Radverkehr live | 🟢 Zählstellen der Stadt | ⚪ — ¹⁰ | 🟢 Zählstellen der Stadt | ⚪ — ¹⁰ | ⚪ — ¹⁰ | ⚪ — ¹⁰ | ⚪ — ¹⁰ | ⚪ — ¹⁰ |
 | Datenebene: Straßenbahnen (Fahrplan) | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹¹ | ⚪ — ¹¹ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹¹ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹¹ | 🟢 GTFS (DELFI) + OSM |
-| 🟢 aus der besten Quelle | **20** / 22 | **15** / 22 | **11** / 22 | **18** / 22 | **15** / 22 | **15** / 22 | **15** / 22 | **12** / 22 |
+| 🟢 aus der besten Quelle | **20** / 22 | **15** / 22 | **12** / 22 | **18** / 22 | **15** / 22 | **15** / 22 | **15** / 22 | **12** / 22 |
 
 ## Legende
 
