@@ -1419,6 +1419,55 @@ function cutWindows(
   return { cut, drawn, drawnWalls, meshes, removed };
 }
 
+/** Triangles appended to the stream under one object id (NaN normals or
+ *  none: flat). */
+interface AppendedPart {
+  id: number;
+  normals?: readonly number[];
+  positions: readonly number[];
+}
+
+/** The vertex stream without the `removed` triangles (each one's first
+ *  vertex) and with `parts` appended, written straight into typed arrays:
+ *  a tile's stream is millions of vertices, and a copy through plain
+ *  arrays raised a cold bake's peak memory by ~0.8 GB a tile. */
+function withoutTriangles(
+  v: CityVertices,
+  removed: ReadonlySet<number>,
+  parts: readonly AppendedPart[]
+): CityVertices {
+  const kept = v.objectIds.length - 3 * removed.size;
+  const added = parts.reduce((n, p) => n + p.positions.length / 3, 0);
+  const total = kept + added;
+  const positions = new Float32Array(3 * total);
+  const normals = new Float32Array(3 * total).fill(Number.NaN);
+  const objectIds = new Float32Array(total);
+  const isRoof = new Float32Array(total);
+  let at = 0;
+  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
+    if (removed.has(t)) {
+      continue;
+    }
+    positions.set(v.positions.subarray(3 * t, 3 * t + 9), 3 * at);
+    if (v.normals) {
+      normals.set(v.normals.subarray(3 * t, 3 * t + 9), 3 * at);
+    }
+    objectIds.set(v.objectIds.subarray(t, t + 3), at);
+    isRoof.set(v.isRoof.subarray(t, t + 3), at);
+    at += 3;
+  }
+  for (const p of parts) {
+    positions.set(p.positions, 3 * at);
+    if (p.normals) {
+      normals.set(p.normals, 3 * at);
+    }
+    const n = p.positions.length / 3;
+    objectIds.fill(p.id, at, at + n);
+    at += n;
+  }
+  return { positions, objectIds, isRoof, normals };
+}
+
 /**
  * The facades street photos' traits model (pipeline/bake/windows.py,
  * lib/city/windows.ts): on each measured wall with a model, per upper
@@ -1447,54 +1496,27 @@ export function appendWindows(
   if (removed.size === 0) {
     return { walls: 0, windows: 0 };
   }
-  const v = baked.vertices;
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const objectIds: number[] = [];
-  const isRoof: number[] = [];
-  const own =
-    v.normals ?? new Float32Array(v.positions.length).fill(Number.NaN);
-  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
-    if (removed.has(t)) {
-      continue;
-    }
-    for (let k = 0; k < 9; k++) {
-      positions.push(v.positions[3 * t + k]);
-      normals.push(own[3 * t + k]);
-    }
-    for (let k = 0; k < 3; k++) {
-      objectIds.push(v.objectIds[t + k]);
-      isRoof.push(v.isRoof[t + k]);
-    }
-  }
-  const add = (tris: Shaded, id: number) => {
-    for (let i = 0; i < tris.positions.length; i++) {
-      positions.push(tris.positions[i]);
-      normals.push(tris.normals[i]);
-    }
-    for (let i = 0; i < tris.positions.length / 3; i++) {
-      objectIds.push(id);
-      isRoof.push(0);
-    }
-  };
-  for (const c of cut) {
-    add(
-      { positions: c.positions, normals: c.positions.map(() => Number.NaN) },
-      c.id
-    );
-  }
+  // what goes on: the cut faces (flat), the reveals in the host's row,
+  // the backs and bands as rows of their own
+  const parts: AppendedPart[] = cut.map((c) => ({
+    id: c.id,
+    positions: c.positions,
+  }));
   for (const [hostIndex, mesh] of meshes) {
     const host = baked.objects[hostIndex];
-    add(mesh.reveals, hostIndex);
+    parts.push({ id: hostIndex, ...mesh.reveals });
     const part = (tris: Shaded, tint: [number, number, number]) => {
       if (tris.positions.length === 0) {
         return;
       }
-      const zs = tris.positions.filter((_, i) => i % 3 === 2);
-      const base = Math.min(...zs);
-      const above = cm(Math.max(...zs) - base + 1);
-      const index = baked.objects.length;
-      add(tris, index);
+      let base = Number.POSITIVE_INFINITY;
+      let top = Number.NEGATIVE_INFINITY;
+      for (let i = 2; i < tris.positions.length; i += 3) {
+        base = Math.min(base, tris.positions[i]);
+        top = Math.max(top, tris.positions[i]);
+      }
+      const above = cm(top - base + 1);
+      parts.push({ id: baked.objects.length, ...tris });
       baked.objects.push({
         ...host,
         building: false,
@@ -1520,11 +1542,6 @@ export function appendWindows(
     );
     part(mesh.bands, mixRgb(host.tint, SURROUND_STONE, 0.08));
   }
-  baked.vertices = {
-    positions: new Float32Array(positions),
-    objectIds: new Float32Array(objectIds),
-    isRoof: new Float32Array(isRoof),
-    normals: new Float32Array(normals),
-  };
+  baked.vertices = withoutTriangles(baked.vertices, removed, parts);
   return { walls: drawnWalls, windows: drawn };
 }

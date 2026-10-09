@@ -1050,6 +1050,11 @@ for (const [i, tile] of TILES.entries()) {
       Number.isFinite(maxZ) ? maxZ : 1,
     ],
   });
+  // A tile's meshes are hundreds of MB of typed arrays that Bun's lazy
+  // collector let pile up over the loop: a cold Dresden reached ~7 GB,
+  // more than a 4-core, 8 GB build machine running two sites side by side
+  // holds. Collected after each tile, the loop stays near one tile's peak.
+  Bun.gc(true);
 }
 log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
