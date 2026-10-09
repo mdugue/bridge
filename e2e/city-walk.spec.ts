@@ -576,17 +576,22 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // polling between frames can miss it. Every line the HUD says is
     // recorded instead, and the assertion reads the record.
     await page.evaluate(() => {
-      const w = window as unknown as { __compass?: number; __said?: string[] };
+      const w = window as unknown as {
+        __compass?: number;
+        __said?: string[];
+        __saying?: MutationObserver;
+      };
       const said: string[] = [];
       w.__said = said;
-      new MutationObserver(() => {
+      w.__saying = new MutationObserver(() => {
         for (const line of document.querySelectorAll("output[aria-live]")) {
           const text = line.textContent ?? "";
           if (text && said.at(-1) !== text) {
             said.push(text);
           }
         }
-      }).observe(document.body, {
+      });
+      w.__saying.observe(document.body, {
         characterData: true,
         childList: true,
         subtree: true,
@@ -622,8 +627,12 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // East by the compass, ≈ 1° more on the UTM grid (meridian convergence).
     expect(Math.abs((state?.headingDeg ?? 0) - 91)).toBeLessThan(2);
     await page.evaluate(() => {
-      const w = window as unknown as { __compass?: number };
+      const w = window as unknown as {
+        __compass?: number;
+        __saying?: MutationObserver;
+      };
       window.clearInterval(w.__compass);
+      w.__saying?.disconnect();
     });
     expectNoErrors(errors);
   });

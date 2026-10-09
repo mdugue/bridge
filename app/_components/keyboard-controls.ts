@@ -64,7 +64,9 @@ export function isTextEntry(target: EventTarget | null): boolean {
 /**
  * True for a key the focused control uses itself: the arrows on a slider,
  * a tab, a radio or a toggle group's item in the panel — they step that
- * control, they do not also walk or turn.
+ * control, they do not also walk or turn. A plain button keeps them, even
+ * in a group or the HUD's toolbar (which steps nothing): clicking Modell
+ * there must not stop the arrows panning it.
  */
 export function isControlKey(
   code: string,
@@ -74,7 +76,7 @@ export function isControlKey(
   return (
     code.startsWith("Arrow") &&
     el?.closest?.(
-      "[role=slider], [role=tab], [role=radio], [role=option], [role=menuitem], [role=group] button, [role=toolbar] button"
+      "[role=slider], [role=tab], [role=radio], [role=option], [role=menuitem], [data-slot=toggle-group-item]"
     ) != null
   );
 }

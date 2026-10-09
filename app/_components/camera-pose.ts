@@ -17,6 +17,7 @@ import {
   type Xyz,
 } from "@/lib/city/pose";
 import { easeAngleDeg } from "@/lib/city/geolocation";
+import { groundRayDistance } from "@/lib/city/ground-ray";
 import {
   clearHeight,
   GROUND_CLEARANCE,
@@ -63,6 +64,8 @@ export interface CameraSolids {
   roofAbove: (x: number, y: number, z: number) => number | null;
   /** the highest building surface over world (x, z), or null */
   topAt: (x: number, z: number) => number | null;
+  /** distance along a world ray to the first building, or null within `far` */
+  along?: (origin: Vector3, direction: Vector3, far: number) => number | null;
 }
 
 /** rad per CSS px of grab-look drag — a full phone-width swipe ≈ 90° */
@@ -150,10 +153,17 @@ export interface Ndc {
 }
 
 /**
- * A forward dolly in the air stops this share of the way to the ground
- * the ray points at: the spot comes nearer, the camera never lands on it.
+ * A forward dolly stops this share of the way to what its ray meets (the
+ * ground, a facade): the spot comes nearer, the camera never lands on it
+ * nor passes it.
  */
-const DOLLY_GROUND_SHARE = 0.8;
+const DOLLY_HIT_SHARE = 0.8;
+/** m — how far a dolly's ray looks for something to head for. */
+const DOLLY_RAY_FAR = 6000;
+/** A ray this near straight up or down (squared level part) has no way. */
+const LEVEL_MIN_SQ = 1e-4;
+/** The view's centre in NDC: where a dolly heads without a pointer. */
+const CENTRE: Ndc = { x: 0, y: 0 };
 
 export interface CameraPose {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
@@ -168,7 +178,8 @@ export interface CameraPose {
    * `at` (NDC: the pointer, the fingers' midpoint; the centre without
    * it), as maps zoom about the cursor: what is under it stays under it.
    * On foot it walks along the ground that way; in the air it flies along
-   * the ray, further the higher it is, never past the ground it points at.
+   * the ray, further the higher it is. Forward it never passes what the
+   * ray meets (the ground, a facade); over the sky it flies level.
    */
   dolly: (amount: number, at?: Ndc) => void;
   /**
@@ -276,12 +287,14 @@ export function createCameraPose(
   opts: CameraPoseOptions
 ): CameraPose {
   const { offset } = opts;
+  /** ground elevation at world (x, z); null off every tile */
+  const terrainWorld = (x: number, z: number): number | null => {
+    const epsg = worldToEpsg(x, z, offset);
+    return opts.heightAt(epsg.x, epsg.y);
+  };
   const movement = createFpsMovement(camera, {
     eyeHeight: EYE_HEIGHT,
-    groundHeight: (x, z) => {
-      const epsg = worldToEpsg(x, z, offset);
-      return opts.heightAt(epsg.x, epsg.y);
-    },
+    groundHeight: terrainWorld,
     resolveStep: opts.resolveStep,
   });
   const flight = createCameraFlight(camera);
@@ -596,6 +609,41 @@ export function createCameraPose(
       .normalize();
 
   /**
+   * Distance along a world ray from the camera to the ground or the first
+   * building in front of it, or null when it meets neither (the sky, off
+   * every tile).
+   */
+  const hitAlong = (towards: Vector3): number | null => {
+    const from = camera.position;
+    const ground = groundRayDistance(from, towards, terrainWorld, {
+      far: DOLLY_RAY_FAR,
+    });
+    return solids?.along?.(from, towards, ground ?? DOLLY_RAY_FAR) ?? ground;
+  };
+
+  /** `v` laid level: its horizontal part, else the view's heading. */
+  const levelOf = (v: Vector3) => {
+    v.y = 0;
+    if (v.lengthSq() < LEVEL_MIN_SQ) {
+      camera.getWorldDirection(v).setY(0);
+    }
+  };
+
+  const pending = new Vector3();
+  const dollyLine = new Vector3();
+  /**
+   * The most metres a forward dolly may add, moving by `line` per metre:
+   * a share of the way to `hit` (m along the ray), less what earlier
+   * notches or pinch steps still have to travel — those count as gone.
+   */
+  const dollyRoom = (hit: number, line: Vector3): number => {
+    movement.pendingDolly(pending);
+    const per = line.lengthSq();
+    const gone = per < LEVEL_MIN_SQ ? 0 : pending.dot(line) / per;
+    return Math.max(hit - gone, 0) * DOLLY_HIT_SHARE;
+  };
+
+  /**
    * Pushes the camera along by `amount` units of ln(zoom ratio), towards
    * the screen point `at` (the view's centre without it).
    */
@@ -605,18 +653,26 @@ export function createCameraPose(
     }
     cancelGlide();
     endFollow();
-    const towards = at ? rayThrough(at) : camera.getWorldDirection(dir);
-    if (movement.getMode() === "walk") {
-      movement.dolly(amount * WALK_DOLLY_M, towards);
-      return;
-    }
+    const towards = rayThrough(at ?? CENTRE);
+    const walking = movement.getMode() === "walk";
     const p = camera.position;
-    const above = p.y - groundWorld(p.x, p.z);
-    let metres = amount * Math.max(FLY_DOLLY_MIN_M, above * FLY_DOLLY_PER_M);
-    // Down a ray, no further than most of the way to the ground below.
-    if (metres > 0 && towards.y < 0) {
-      const reach = Math.max(above - EYE_HEIGHT, 0) / -towards.y;
-      metres = Math.min(metres, reach * DOLLY_GROUND_SHARE);
+    let metres =
+      amount *
+      (walking
+        ? WALK_DOLLY_M
+        : Math.max(
+            FLY_DOLLY_MIN_M,
+            (p.y - groundWorld(p.x, p.z)) * FLY_DOLLY_PER_M
+          ));
+    const hit = metres > 0 ? hitAlong(towards) : null;
+    if (hit !== null) {
+      // On foot the move is the ray's level part (fps-movement.ts).
+      const line = walking ? dollyLine.set(towards.x, 0, towards.z) : towards;
+      metres = Math.min(metres, dollyRoom(hit, line));
+    } else if (metres > 0 && !walking) {
+      // Nothing ahead to come nearer to (the sky): fly level, never up
+      // and up into it.
+      levelOf(towards);
     }
     movement.dolly(metres, towards);
   };

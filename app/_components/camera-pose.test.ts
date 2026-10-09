@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import { PerspectiveCamera, Vector3 } from "three/webgpu";
 import { EYE_HEIGHT, PITCH_LIMIT, RAD2DEG } from "@/lib/city/pose";
-import { type CameraPoseOptions, createCameraPose } from "./camera-pose";
+import {
+  type CameraPoseOptions,
+  type CameraSolids,
+  createCameraPose,
+} from "./camera-pose";
 import type { MovementMode } from "./fps-movement";
 import type { Viewpoint } from "@/lib/city/site";
 
@@ -333,11 +337,94 @@ test("a forward dolly in the air stops short of the ground it points at", () => 
     fov: 55,
   });
   // 2 × max(15, 18) m would be past the ground at this pitch; the step
-  // ends 80 % of the way down to eye height.
+  // ends 80 % of the way to where the ray meets it.
   pose.dolly(2);
   settle(pose);
   const drop = GROUND + 20 - camera.position.y;
-  expect(drop).toBeCloseTo((20 - EYE_HEIGHT) * 0.8, 4);
+  expect(drop).toBeCloseTo(20 * 0.8, 1);
+});
+
+/** A flyer `above` m over the ground, looking north at `pitchDeg`. */
+function flyer(above: number, pitchDeg: number, solids?: CameraSolids) {
+  const r = rig(solids ? { solids } : {});
+  r.pose.applyCameraState({
+    mode: "fly",
+    pos: { x: 0, y: GROUND + above, z: 0 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 0,
+    pitchDeg,
+    fov: 55,
+  });
+  r.camera.updateMatrixWorld();
+  return r;
+}
+
+test("notches still easing in count: two before the camera moves stop as short as two after", () => {
+  const quick = flyer(100, -80);
+  quick.pose.dolly(2);
+  quick.pose.dolly(2);
+  settle(quick.pose);
+  const slow = flyer(100, -80);
+  slow.pose.dolly(2);
+  settle(slow.pose);
+  slow.camera.updateMatrixWorld();
+  slow.pose.dolly(2);
+  settle(slow.pose);
+  // 80 % of the way, then 80 % of the rest: 4 m above the ground is left.
+  expect(quick.camera.position.y - GROUND).toBeCloseTo(4, 1);
+  expect(slow.camera.position.y - GROUND).toBeCloseTo(4, 1);
+});
+
+test("at the lowest flying height a dolly over the ground still heads for the spot", () => {
+  const { camera, pose } = flyer(EYE_HEIGHT, 0);
+  const at = { x: 0, y: -0.5 };
+  const ray = new Vector3(at.x, at.y, 0.5)
+    .unproject(camera)
+    .sub(camera.position)
+    .normalize();
+  const spotAhead = EYE_HEIGHT / Math.tan(Math.asin(-ray.y));
+  pose.dolly(0.5, at);
+  settle(pose);
+  // the descent stops at the floor, the way ahead goes on: 80 % of it
+  expect(-camera.position.z).toBeCloseTo(spotAhead * 0.8, 1);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 6);
+});
+
+test("a dolly towards the sky flies level instead of climbing", () => {
+  const { camera, pose } = flyer(50, 0);
+  for (let i = 0; i < 5; i += 1) {
+    pose.dolly(1, { x: 0, y: 0.8 });
+    settle(pose);
+  }
+  expect(camera.position.y).toBeCloseTo(GROUND + 50, 6);
+  // max(15, 0.9 × 50) m a notch, ahead
+  expect(-camera.position.z).toBeCloseTo(5 * 45, 1);
+});
+
+test("a dolly stops short of the facade its ray meets", () => {
+  const { camera, pose } = flyer(50, 0, {
+    roofAbove: () => null,
+    topAt: () => null,
+    along: () => 40,
+  });
+  pose.dolly(5);
+  settle(pose);
+  expect(-camera.position.z).toBeCloseTo(40 * 0.8, 1);
+});
+
+test("on foot a dolly towards the ground nearby walks most of the way, not past it", () => {
+  const { camera, pose } = rig();
+  camera.updateMatrixWorld();
+  const at = { x: 0, y: -0.9 };
+  const ray = new Vector3(at.x, at.y, 0.5)
+    .unproject(camera)
+    .sub(camera.position)
+    .normalize();
+  const spotAhead = EYE_HEIGHT / Math.tan(Math.asin(-ray.y));
+  pose.dolly(1, at);
+  settle(pose);
+  expect(-camera.position.z).toBeCloseTo(spotAhead * 0.8, 1);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 3);
 });
 
 test("fly → walk glides down onto the ground and levels the view", () => {

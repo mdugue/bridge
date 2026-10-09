@@ -55,7 +55,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | `F` | switch between walking and flying (take off / land) |
 | `Space` / `Shift` (or `E` / `Q`) | up / down while flying |
 | `1` – `9` | glide to the first to ninth viewpoint |
-| Mouse wheel (or a two-finger trackpad gesture, or pinching on it) | move towards the spot under the pointer, or back from it: on foot along the ground, flying along the line to that spot, which stays under the pointer |
+| Mouse wheel (or a two-finger trackpad gesture, or pinching on it) | move towards the spot under the pointer (the crosshair in immersive mode), or back from it: on foot along the ground, flying along the line to that spot, which stays under the pointer; each step covers most of the way left, never past it, and over the sky the flight stays level |
 | `Alt` + mouse wheel | zoom (narrows or widens the field of view) |
 | Double-click on the ground | travel there in a short glide; flying, glide part of the way towards it |
 | Click on the minimap | glide there (on foot you land standing; flying, at the same height) |

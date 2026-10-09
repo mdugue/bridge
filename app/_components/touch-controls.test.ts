@@ -291,6 +291,26 @@ test("the wheel heads for the pointer: its spot comes along in NDC", () => {
   expect(calls.wheelAt).toEqual([[0.5, 0.5]]);
 });
 
+test("in pointer lock the wheel heads for the crosshair, not where the lock began", () => {
+  const { wheel, lock, gesture, calls } = harness();
+  lock(true);
+  wheel(-100, { clientX: 300, clientY: 200 });
+  gesture("gesturestart", 1);
+  gesture("gesturechange", 1.2, 300, 200);
+  expect(calls.wheelAt).toEqual([
+    [0, 0],
+    [0, 0],
+  ]);
+});
+
+test("Safari's gesture events leave a pinch to the touch pointers down", () => {
+  const { fire, gesture, calls } = harness();
+  fire("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 });
+  gesture("gesturestart", 1);
+  gesture("gesturechange", 1.5);
+  expect(calls.wheel).toEqual([]);
+});
+
 test("Safari's trackpad pinch dollies like a pinch, about the pointer", () => {
   const { gesture, calls } = harness();
   gesture("gesturestart", 1);

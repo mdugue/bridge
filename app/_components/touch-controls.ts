@@ -359,6 +359,14 @@ export function attachTouchControls(
     }
   };
 
+  /**
+   * Where a wheel or a trackpad pinch points: the pointer, or the centre
+   * while it is locked (its client position then stays where the lock
+   * began, and the crosshair is what aims).
+   */
+  const aimOf = (clientX: number, clientY: number): [number, number] =>
+    locked() ? [0, 0] : ndcOf(clientX, clientY);
+
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     if (e.deltaY === 0) {
@@ -377,13 +385,13 @@ export function attachTouchControls(
       -px / (e.ctrlKey ? TRACKPAD_PINCH_PX_PER_UNIT : WHEEL_PX_PER_UNIT);
     callbacks.onWheelDolly(
       Math.min(Math.max(units, -MAX_WHEEL_UNITS), MAX_WHEEL_UNITS),
-      ...ndcOf(e.clientX, e.clientY)
+      ...aimOf(e.clientX, e.clientY)
     );
   };
 
   // Safari's trackpad pinch: its own events, in place of a ctrl+wheel. On
-  // an iPhone they come alongside the two touch pointers, which already
-  // pinch — those win.
+  // an iPhone they come alongside the touch pointers, which already pinch —
+  // those win (a trackpad's pinch has no pointer down).
   let gestureScale = 1;
   const onGestureStart = (e: Event) => {
     e.preventDefault();
@@ -392,14 +400,14 @@ export function attachTouchControls(
   const onGestureChange = (e: Event) => {
     e.preventDefault();
     const g = e as GestureEventLike;
-    if (pointers.size >= 2 || !(g.scale > 0)) {
+    if (pointers.size > 0 || !(g.scale > 0)) {
       return;
     }
     const units = Math.log(g.scale / gestureScale);
     gestureScale = g.scale;
     callbacks.onWheelDolly(
       Math.min(Math.max(units, -MAX_WHEEL_UNITS), MAX_WHEEL_UNITS),
-      ...ndcOf(g.clientX, g.clientY)
+      ...aimOf(g.clientX, g.clientY)
     );
   };
 

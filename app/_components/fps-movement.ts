@@ -26,6 +26,8 @@ const FLY_SPEED_BASE = 10;
 const DOLLY_TAU = 0.15;
 /** m of dolly left over that is no longer worth a frame. */
 const DOLLY_EPSILON = 0.01;
+/** A dolly's line shorter than this (squared) leads nowhere. */
+const MIN_DOLLY_LINE_SQ = 1e-12;
 /** seconds — eye-height smoothing over the ~4 m DGM grid */
 const GROUND_TAU = 0.12;
 
@@ -87,9 +89,12 @@ export interface FpsMovement {
    * down too, never through the ground. Adds up. `towards` (a world
    * direction, unit length) is the line — the ray under the pointer or
    * between the fingers; without it the view as it is now. On foot only
-   * its level part counts.
+   * its level part counts, as long as it is: a ray steeply down walks
+   * little, one past the feet a little back, never a sudden full step.
    */
   dolly: (metres: number, towards?: Vector3) => void;
+  /** The dolly still to travel (world m), written into `out`. */
+  pendingDolly: (out: Vector3) => Vector3;
   /** Drops whatever dolly is still pending (a glide takes the camera). */
   stopDolly: () => void;
   /** Snaps the eye onto the ground at the current spot (used by teleports). */
@@ -284,13 +289,18 @@ export function createFpsMovement(
         camera.getWorldDirection(look);
       }
       if (mode === "walk") {
+        // The level part at its own length: shorter the steeper the ray,
+        // so the walk fades out towards the feet rather than flipping.
         look.y = 0;
+      } else {
+        look.normalize();
       }
-      if (look.lengthSq() === 0) {
+      if (look.lengthSq() < MIN_DOLLY_LINE_SQ) {
         return;
       }
-      pendingDolly.addScaledVector(look.normalize(), metres);
+      pendingDolly.addScaledVector(look, metres);
     },
+    pendingDolly: (out) => out.copy(pendingDolly),
     stopDolly: () => {
       pendingDolly.set(0, 0, 0);
     },
