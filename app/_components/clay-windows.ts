@@ -188,16 +188,21 @@ function columns(i: WindowInputs, s: F, length: F) {
 /** 1 where a ground-floor window on `centre` (m along the wall), `half`
  *  wide either side, keeps `DOOR_GAP_M` of wall from the door a `_FACADE`
  *  door slot holds (`DOOR_SLOT`; 1 where it holds none) — the code's place
- *  and width class as lib/city/windows.ts `slotDoor` reads them. */
+ *  and width class as lib/city/windows.ts `slotDoor` reads them, the test
+ *  its `clearOfDoor`. */
 function doorClear(slot: F, centre: F, half: F): F {
   const code = floor(slot.mul(DOOR_NONE_CODE).add(0.5));
   const place = floor(code.add(0.5).div(DOOR_SLOT.widths));
-  const width = code
-    .sub(place.mul(DOOR_SLOT.widths))
+  const c = code.sub(place.mul(DOOR_SLOT.widths));
+  const width = min(c, DOOR_SLOT.fine)
     .mul(DOOR_SLOT.wStep)
+    .add(max(c.sub(DOOR_SLOT.fine), 0).mul(DOOR_SLOT.wideStep))
     .add(DOOR_SLOT.w0);
   const clear = step(
-    width.mul(0.5).add(DOOR_GAP_M).add(half),
+    width
+      .mul(0.5)
+      .add(DOOR_GAP_M + DOOR_SLOT.step / 2)
+      .add(half),
     abs(centre.sub(place.mul(DOOR_SLOT.step)))
   );
   return max(clear, step(DOOR_NONE_CODE - 0.5, abs(code)));

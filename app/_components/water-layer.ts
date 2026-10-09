@@ -35,6 +35,7 @@ import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
 import { reflectionStrength, skyReflection } from "./sky-reflection";
 import { type SplatLayer, splatUv } from "./terrain-layer";
+import { viewDirection } from "./view-direction";
 
 /** Animated water surface, masked to the land-cover "water" class (id 8). */
 export interface WaterLayer {
@@ -266,7 +267,7 @@ export function createWaterLayer(
   const wcov = smoothstep(0.28, 0.72, texture(splat.colorTexture, uv).a);
   material.maskNode = wcov.greaterThan(0.001);
   material.opacityNode = materialOpacity.mul(wcov);
-  const view = normalize(cameraPosition.sub(positionWorld));
+  const view = viewDirection().negate();
   material.colorNode = waterColour(splat, uv, view, skyTint);
 
   // Stylized ripples on the shading normal (view space, as the slot takes

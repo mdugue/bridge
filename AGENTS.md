@@ -228,7 +228,8 @@ config change.
     `model-rig.ts` (owns the view while on: pan/zoom/turn/tilt, the
     dolly zoom in and out, the presets), `model-camera.ts` (the ortho
     camera, sheared for the Militärperspektive), `view-lens.ts` (what
-    every post pass reads of the camera drawing the frame), `view-ray.ts`
+    every post pass reads of the camera drawing the frame),
+    `view-direction.ts` (what a material reads of the view), `view-ray.ts`
     (pick rays for any camera), `model-cuts.ts` (the Schnitt's ground
     profile, the Ausschnitt's clipping and plinth), `model-instruments.tsx`
     (scale bar, north arrow), `projection-panel.tsx` (the sidebar's
@@ -822,10 +823,13 @@ matrices, `ortho`, `equivalent`), so the same pipeline draws the
 perspective and the parallel (and sheared) camera. A new pass that turns
 depth into distance goes through `lens.viewZ`/`lens.distance`, a new ray
 through `setPickRay`, a new distance-keyed look through the equivalent
-distance — reading `camera.fov` or `camera.position` directly is a bug in
-Modell. Screen passes built on `NodeUpdateType.FRAME` (SMAA, GTAO) render
-once per animation frame: anything that renders the frame twice in one
-(the export's tiles) must spread over frames.
+distance, a material's view direction through `viewDirection()`
+(`view-direction.ts`) — reading `camera.fov`, `camera.position` or TSL's
+`cameraPosition` for a direction is a bug in Modell (a Militärperspektive
+looks in 45° off its camera's forward). Screen passes built on
+`NodeUpdateType.FRAME` (SMAA, GTAO) render once per animation frame:
+anything that renders the frame twice in one (the export's tiles) must
+spread over frames.
 
 **Verify renders from oblique angles**, not head-on — a tree growing through a
 bridge or a misplaced layer is invisible looking straight down.

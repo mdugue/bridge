@@ -9,18 +9,10 @@ import {
   type Scene,
   type WebGPURenderer,
 } from "three/webgpu";
-import {
-  cameraPosition,
-  dot,
-  float,
-  normalize,
-  pmremTexture,
-  positionWorld,
-  reflect,
-  uniform,
-} from "three/tsl";
+import { dot, float, pmremTexture, reflect, uniform } from "three/tsl";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import type { F, Live, V3 } from "./shader-chunks";
+import { viewDirection } from "./view-direction";
 
 /**
  * Spiegelung: the sky in glass, gilding and water.
@@ -90,7 +82,7 @@ export const SKY_REFLECTION_BYTES = 2 * target.width * target.height * 8;
  * weighted by the row or a Fresnel term.
  */
 export function skyReflection(n: V3, roughness: F | number): V3 {
-  const incident = normalize(positionWorld.sub(cameraPosition));
+  const incident = viewDirection();
   const level = typeof roughness === "number" ? float(roughness) : roughness;
   return pmremTexture(target.texture, reflect(incident, n), level);
 }
@@ -101,7 +93,7 @@ export function skyReflection(n: V3, roughness: F | number): V3 {
  * a facade seen along the street already catches the sky).
  */
 export function mirrorWeight(n: V3, base: number): F {
-  const view = normalize(cameraPosition.sub(positionWorld));
+  const view = viewDirection().negate();
   const grazing = float(1).sub(dot(view, n).abs().clamp(0, 1));
   return float(base).add(float(1 - base).mul(grazing.pow(4)));
 }

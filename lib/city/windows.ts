@@ -24,10 +24,10 @@
  *
  * **Where** is four numbers per wall vertex (`facadeAttribute`, the glTF's
  * `_FACADE`): metres along the wall from its middle, the wall's length
- * (negative over a shopfront: no window on its ground floor), and where up
- * to two of OSM's doors stand along it and how wide they are (no
- * ground-floor window within `DOOR_GAP_M` of one; a wall with more doors
- * has none on its ground floor). A wall is one plane of one object's
+ * (negative where its ground floor has no window: over a shopfront, or
+ * with more doors than the two below), and where up to two of OSM's doors
+ * stand along it and how wide they are (no ground-floor window within
+ * `DOOR_GAP_M` of one). A wall is one plane of one object's
  * triangles, edge-connected; a party wall — one another wall stands
  * against, back to back — gets none.
  *
@@ -183,12 +183,16 @@ export const FACADE_ROOF = -1;
  * code `place · widths + class`: the door's place along the wall from the
  * wall's middle in `step` m, held to ±`reach` m (so no code comes near
  * ±32 767, the roof's flag and no door), and its width class, the door's
- * width rounded up to `w0 + class · wStep` m (0.6–2.8 m).
+ * width rounded up to a class (`doorClassWidth`): from `w0` in `wStep` m
+ * for `fine` classes, then in `wideStep` m — 0.6–2 m in 0.2 m, then 3, 4,
+ * 5 and 6 m, the widest the doors bake takes (pipeline/bake/doors.py).
  */
 export const DOOR_SLOT = {
+  fine: 7,
   reach: 270,
   step: 0.1,
   w0: 0.6,
+  wideStep: 1,
   widths: 12,
   wStep: 0.2,
 } as const;
@@ -708,15 +712,22 @@ export function windowAxes(length: number, spec: WindowSpec): number[] {
   return Array.from({ length: n }, (_, k) => (k - (n - 1) / 2) * spec.axis);
 }
 
+/** The width (m) of a door slot's width class (`DOOR_SLOT`). */
+export function doorClassWidth(c: number): number {
+  const { fine, w0, wideStep, wStep } = DOOR_SLOT;
+  return w0 + wStep * Math.min(c, fine) + wideStep * Math.max(c - fine, 0);
+}
+
 /** A door's code in a `_FACADE` door slot (`DOOR_SLOT`): `at` m along the
  *  wall from its middle, `w` m wide. */
 export function doorSlot(at: number, w: number): number {
-  const { reach, step, w0, widths, wStep } = DOOR_SLOT;
+  const { fine, reach, step, w0, wideStep, widths, wStep } = DOOR_SLOT;
   const place = Math.round(Math.min(Math.max(at, -reach), reach) / step);
-  const width = Math.min(
-    Math.max(Math.ceil((w - w0) / wStep - 1e-6), 0),
-    widths - 1
-  );
+  const top = w0 + fine * wStep;
+  const width =
+    w <= top + 1e-6
+      ? Math.max(Math.ceil((w - w0) / wStep - 1e-6), 0)
+      : Math.min(fine + Math.ceil((w - top) / wideStep - 1e-6), widths - 1);
   return place * widths + width;
 }
 
@@ -727,20 +738,25 @@ export function slotDoor(code: number): { at: number; w: number } | undefined {
   if (Math.abs(code) >= DOOR_NONE_CODE) {
     return undefined;
   }
-  const { step, w0, widths, wStep } = DOOR_SLOT;
+  const { step, widths } = DOOR_SLOT;
   const place = Math.floor((code + 0.5) / widths);
-  return { at: place * step, w: w0 + (code - place * widths) * wStep };
+  return { at: place * step, w: doorClassWidth(code - place * widths) };
 }
 
 /** Whether a ground-floor window `w` wide on the axis `axis` (m along the
- *  wall from its middle) keeps `DOOR_GAP_M` of wall from a door's opening.
- *  The shader's test (clay-windows.ts). */
+ *  wall from its middle) keeps `DOOR_GAP_M` of wall from the opening of a
+ *  door as a slot holds it — and half a place step more, as far as the
+ *  door's rounded place may lie off its own. The shader's test
+ *  (clay-windows.ts). */
 export function clearOfDoor(
   axis: number,
   w: number,
   door: { at: number; w: number }
 ): boolean {
-  return Math.abs(axis - door.at) >= door.w / 2 + DOOR_GAP_M + w / 2;
+  return (
+    Math.abs(axis - door.at) >=
+    door.w / 2 + DOOR_GAP_M + DOOR_SLOT.step / 2 + w / 2
+  );
 }
 
 /**

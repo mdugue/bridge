@@ -40,9 +40,10 @@ finds its window cell from two inputs the building bake writes
   sill's height as classes);
 - **per wall vertex, where it stands on its wall** — the `_FACADE`
   attribute (snorm16 vec4): metres along the wall from its middle, the
-  wall's length (negative over a shopfront, 0 on a party wall), and up to
-  two of OSM's doors along it, each its place and width in one code (a
-  wall with more doors has no ground-floor windows). A wall is one plane
+  wall's length (negative where the ground floor has no windows: over a
+  shopfront, or with more doors than the two it holds; 0 on a party
+  wall), and up to two of OSM's doors along it, each its place and width
+  in one code. A wall is one plane
   of one object's triangles; a party wall is one another wall stands
   against back to back.
 
@@ -127,7 +128,8 @@ neighbours carry windows.
 - The reveals look along the view: from the camera in perspective, and
   in Modell's parallel projection along one direction for the whole
   frame, sheared off the camera's forward in a Militärperspektive
-  (`setClayView`, each frame with the post's lens).
+  (`viewDirection()`, `view-direction.ts`, set each frame with the post's
+  lens; the clay's rim and mirrors read the same).
 - A window's place along the wall is not measured (two drives' poses
   differ by ~0.6 m): the axes are centred on each wall. A house the
   photos measured gets its spacing and width, drawn towards its type's;
