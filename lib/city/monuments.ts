@@ -6,7 +6,12 @@
  * plain numbers out. No THREE, no DOM.
  */
 import { SINK } from "./ground-join";
-import type { FountainStyle, MonumentKind, ReliefGrid } from "./features";
+import type {
+  FountainStyle,
+  MonumentForm,
+  MonumentKind,
+  ReliefGrid,
+} from "./features";
 import type { Point2 } from "./polyline";
 
 /** A fountain without an outline (a DLM point, an OSM node): its basin radius (m). */
@@ -138,9 +143,9 @@ export function jetPlaces(
 
 /**
  * A monument nothing measured (too small for the 1 m surface model, or under
- * a tree): an abstract marker in the scene's clay — a rounded pillar for a
- * statue, a low slab for a stone, a slender shaft for a column. No figure
- * pretends to know what stands there (m).
+ * a tree) and nothing names the form of: an abstract marker in the scene's
+ * clay — a rounded pillar for a statue, a low slab for a stone, a slender
+ * shaft for a column. No figure pretends to know what stands there (m).
  */
 export const MARKER_SHAPE: Record<
   Exclude<MonumentKind, "fountain">,
@@ -150,6 +155,80 @@ export const MARKER_SHAPE: Record<
   stone: { width: 0.9, depth: 0.32, height: 1 },
   column: { width: 0.5, depth: 0.5, height: 4.5 },
 };
+
+/** The three clay solids a marker is built of: a rounded pillar (a capsule
+ *  stretched), a rounded block and a tapering four-sided needle. */
+export type MarkerSolid = "block" | "needle" | "pillar";
+
+/** One solid of a marker: its size (m) and how far above the ground its
+ *  foot stands (`lift`, m). */
+export interface MarkerPiece {
+  depth: number;
+  height: number;
+  lift: number;
+  solid: MarkerSolid;
+  width: number;
+}
+
+/**
+ * The markers of the forms OSM names (lib/city/features.ts `MonumentForm`),
+ * still abstract and in clay — the parts every such monument has, at the
+ * size such monuments have, never a figure: a statue is a body-sized
+ * pillar on its pedestal, a bust a head-sized one on a slender plinth, a
+ * free sculpture a broad mass without one, a stele an upright slab, a
+ * memorial stone a low rounded block, an obelisk a needle on its base.
+ */
+const FORM_PIECES: Record<MonumentForm, readonly MarkerPiece[]> = {
+  statue: [
+    { solid: "block", width: 1.1, depth: 1.1, height: 1.6, lift: 0 },
+    { solid: "pillar", width: 0.62, depth: 0.5, height: 1.9, lift: 1.6 },
+  ],
+  bust: [
+    { solid: "block", width: 0.5, depth: 0.5, height: 1.35, lift: 0 },
+    { solid: "pillar", width: 0.5, depth: 0.42, height: 0.7, lift: 1.35 },
+  ],
+  sculpture: [{ solid: "pillar", width: 1.1, depth: 0.85, height: 2, lift: 0 }],
+  stele: [{ solid: "block", width: 0.75, depth: 0.25, height: 1.9, lift: 0 }],
+  stone: [{ solid: "pillar", width: 1.3, depth: 0.9, height: 0.95, lift: 0 }],
+  obelisk: [
+    { solid: "block", width: 1.5, depth: 1.5, height: 0.7, lift: 0 },
+    { solid: "needle", width: 0.85, depth: 0.85, height: 5.3, lift: 0.7 },
+  ],
+};
+
+/** A tagged height scales a form by at most this much either way. */
+const HEIGHT_SCALE: readonly [number, number] = [0.4, 3];
+
+/**
+ * The solids of a monument's marker: its form's, scaled to a tagged
+ * height (whole, so a 13 m obelisk is a broad one too), else the plain
+ * marker of its kind.
+ */
+export function markerPieces(
+  kind: Exclude<MonumentKind, "fountain">,
+  form?: MonumentForm,
+  height?: number
+): MarkerPiece[] {
+  const pieces: readonly MarkerPiece[] = (form ? FORM_PIECES[form] : null) ?? [
+    {
+      ...MARKER_SHAPE[kind],
+      lift: 0,
+      solid: kind === "stone" ? "block" : "pillar",
+    },
+  ];
+  const top = Math.max(...pieces.map((p) => p.lift + p.height));
+  const k =
+    height && height > 0
+      ? Math.min(Math.max(height / top, HEIGHT_SCALE[0]), HEIGHT_SCALE[1])
+      : 1;
+  return pieces.map((p) => ({
+    solid: p.solid,
+    width: p.width * k,
+    depth: p.depth * k,
+    height: p.height * k,
+    lift: p.lift * k,
+  }));
+}
 
 /** Samples per metre of a smoothed relief (0.25 m). */
 export const RELIEF_SUB = 4;
@@ -267,4 +346,404 @@ export function onRelief(
 export function yawOf(x: number, y: number): number {
   const s = Math.sin(x * 12.9898 + y * 78.233) * 43_758.5453;
   return (s - Math.floor(s)) * Math.PI * 2;
+}
+
+/**
+ * A material's tone (sRGB), muted into the clay's palette: an abstraction
+ * of what the eye takes from a monument at a distance — warm sandstone,
+ * grey granite, bronze's dark green-brown patina, copper's verdigris, a
+ * soft gold — never a texture. A material without one (glass, plastic,
+ * ceramic: too varied to name a colour) stays in clay.
+ */
+export const MATERIAL_TONE: Readonly<Record<string, number>> = {
+  Sandstein: 0xe2_cf_ac,
+  Stein: 0xe3_de_d4,
+  Kalkstein: 0xe8_e2_d3,
+  Marmor: 0xf1_ee_e8,
+  Granit: 0xb8_b5_b0,
+  Diabas: 0x8f_91_8f,
+  Porphyr: 0xc0_94_87,
+  Beton: 0xcd_ca_c3,
+  Ziegel: 0xc8_90_7a,
+  Holz: 0xb9_9c_7c,
+  Porzellan: 0xf4_f3_f0,
+  Bronze: 0x7f_8c_6e,
+  Kupfer: 0x86_b2_9d,
+  Gold: 0xd8_b4_5a,
+  Blattgold: 0xd8_b4_5a,
+  Messing: 0xc9_ae_72,
+  Metall: 0xa9_ae_b3,
+  Stahl: 0xa9_ae_b3,
+  Edelstahl: 0xb9_bd_c1,
+  Eisen: 0x7d_80_84,
+  Gusseisen: 0x7d_80_84,
+};
+
+/** What shows of a figure's materials, the most striking first: gilding
+ *  over the copper under it, a metal over its stone. */
+const FIGURE_ORDER = [
+  "Blattgold",
+  "Gold",
+  "Kupfer",
+  "Bronze",
+  "Messing",
+  "Edelstahl",
+  "Stahl",
+  "Metall",
+  "Gusseisen",
+  "Eisen",
+];
+/** What a pedestal is built of. */
+const BASE_MATERIALS = new Set([
+  "Sandstein",
+  "Stein",
+  "Kalkstein",
+  "Marmor",
+  "Granit",
+  "Diabas",
+  "Porphyr",
+  "Beton",
+  "Ziegel",
+]);
+
+/** The tones of a monument (sRGB): its figure's and its pedestal's;
+ *  `null` where nothing names one (clay). */
+export interface MarkerTones {
+  base: number | null;
+  figure: number | null;
+}
+
+/**
+ * A monument's tones from its materials ("Bronze, Granit"): the figure
+ * takes the most striking metal, else the first material named; the
+ * pedestal the first stone named — else, where only metals are named,
+ * clay (nothing says what it stands on), and where only one stone is,
+ * that stone (a sandstone statue on its sandstone base).
+ */
+export function markerTones(material?: string): MarkerTones {
+  const names = (material ?? "")
+    .split(",")
+    .map((n) => n.trim())
+    .filter((n) => n in MATERIAL_TONE);
+  if (names.length === 0) {
+    return { base: null, figure: null };
+  }
+  const figure = FIGURE_ORDER.find((n) => names.includes(n)) ?? names[0];
+  const base = names.find((n) => BASE_MATERIALS.has(n));
+  return {
+    figure: MATERIAL_TONE[figure],
+    base: base ? MATERIAL_TONE[base] : null,
+  };
+}
+
+/** A measured relief this tall (m) is a figure on a pedestal: its upper
+ *  part takes the figure's tone, its lower the pedestal's. */
+export const PEDESTAL_RELIEF_M = 3;
+/** Where on such a relief the figure begins (a share of its height): the
+ *  Goldener Reiter's pedestal ends at 4.6 of 8.5 m in the laser scan. */
+export const FIGURE_FROM = 0.55;
+/** The blend between pedestal and figure (m). */
+const FIGURE_BLEND = 0.4;
+
+/**
+ * How much of the figure's tone a relief vertex takes (0 the pedestal's,
+ * 1 the figure's) at `h` above the ground, on a relief `top` tall: a low
+ * relief is all figure, a tall one a figure above `FIGURE_FROM` of its
+ * height.
+ */
+export function figureShare(h: number, top: number): number {
+  if (top < PEDESTAL_RELIEF_M) {
+    return 1;
+  }
+  const t = (h - top * FIGURE_FROM) / FIGURE_BLEND + 0.5;
+  return Math.min(Math.max(t, 0), 1);
+}
+
+/** A measured monument as composed solids: where it stands (projected,
+ *  the measured footprint's centre), which way its long axis runs (the
+ *  yaw a marker's width lies along) and its pieces, each `along` metres
+ *  off the centre on that axis. */
+export interface MeasuredMarker {
+  centre: Point2;
+  pieces: (MarkerPiece & { along: number })[];
+  yaw: number;
+}
+
+/** The 1 m cells overstate a body by about half a cell all round. */
+const CELL_SHRINK = 0.85;
+/** …and a pedestal more: its cells' fringe is the figure's overhang and
+ *  the base's mouldings (the Goldener Reiter's measures 5.6 × 3.6 m). */
+const PEDESTAL_SHRINK = 0.72;
+/** A relief this tall (m) with this many cells is a figure on a pedestal. */
+const COMPOSED_MIN_H = 3;
+const COMPOSED_MIN_CELLS = 6;
+/** A figure at least this much longer than wide, and this long (m), lies
+ *  along its pedestal (a horse and rider, a reclining figure): a body
+ *  along the axis with an upright mass on it. */
+const LONG_FIGURE = 1.6;
+const LONG_FIGURE_M = 2.5;
+
+interface Cell {
+  h: number;
+  x: number;
+  y: number;
+}
+
+function reliefCells(r: ReliefGrid): Cell[] {
+  const cells: Cell[] = [];
+  for (let row = 0; row < r.rows; row++) {
+    for (let col = 0; col < r.cols; col++) {
+      const h = (r.dm[row * r.cols + col] ?? 0) / 10;
+      if (h > 0) {
+        cells.push({ h, x: r.west + col + 0.5, y: r.north - row - 0.5 });
+      }
+    }
+  }
+  return cells;
+}
+
+/** The cells' principal axis (radians, east = 0, counter-clockwise). */
+function principalAxis(cells: readonly Cell[]): number {
+  const n = cells.length;
+  const mx = cells.reduce((s, c) => s + c.x, 0) / n;
+  const my = cells.reduce((s, c) => s + c.y, 0) / n;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (const c of cells) {
+    sxx += (c.x - mx) ** 2;
+    syy += (c.y - my) ** 2;
+    sxy += (c.x - mx) * (c.y - my);
+  }
+  return 0.5 * Math.atan2(2 * sxy, sxx - syy);
+}
+
+/** The cells' extent along and across `axis`: its centre (projected),
+ *  length and width (m, the cells' full squares). */
+function extent(
+  cells: readonly Cell[],
+  axis: number
+): { centre: Point2; length: number; width: number } {
+  const ux = Math.cos(axis);
+  const uy = Math.sin(axis);
+  let a0 = Infinity;
+  let a1 = -Infinity;
+  let b0 = Infinity;
+  let b1 = -Infinity;
+  for (const c of cells) {
+    const a = c.x * ux + c.y * uy;
+    const b = -c.x * uy + c.y * ux;
+    a0 = Math.min(a0, a);
+    a1 = Math.max(a1, a);
+    b0 = Math.min(b0, b);
+    b1 = Math.max(b1, b);
+  }
+  const a = (a0 + a1) / 2;
+  const b = (b0 + b1) / 2;
+  return {
+    centre: [a * ux - b * uy, a * uy + b * ux],
+    length: a1 - a0 + 1,
+    width: b1 - b0 + 1,
+  };
+}
+
+function median(values: number[]): number {
+  const s = [...values].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/** The figure on a pedestal: the pedestal at the cells' median height
+ *  (its top dominates a 1 m grid), the figure the cells well above it. */
+function composed(
+  cells: readonly Cell[],
+  axis: number,
+  top: number
+): MeasuredMarker | null {
+  const whole = extent(cells, axis);
+  const pedestal = median(cells.map((c) => c.h));
+  const figureCells = cells.filter(
+    (c) => c.h >= pedestal + 0.3 * (top - pedestal)
+  );
+  const figureH = top - pedestal;
+  if (figureCells.length < 2 || figureH < 1 || pedestal < 1) {
+    return null;
+  }
+  const fig = extent(figureCells, axis);
+  const ux = Math.cos(axis);
+  const uy = Math.sin(axis);
+  const along =
+    (fig.centre[0] - whole.centre[0]) * ux +
+    (fig.centre[1] - whole.centre[1]) * uy;
+  const base: MarkerPiece & { along: number } = {
+    solid: "block",
+    width: whole.length * PEDESTAL_SHRINK,
+    depth: Math.max(whole.width * PEDESTAL_SHRINK, 1),
+    height: pedestal,
+    lift: 0,
+    along: 0,
+  };
+  const figLength = fig.length * CELL_SHRINK;
+  const figWidth = Math.max(fig.width * CELL_SHRINK * 0.7, 0.6);
+  const lying =
+    figLength >= LONG_FIGURE_M && figLength >= LONG_FIGURE * figWidth;
+  const figure: (MarkerPiece & { along: number })[] = lying
+    ? [
+        {
+          solid: "block",
+          // the figure's lower parts (a horse's head and tail) fall under
+          // the cut: the body spans most of the pedestal
+          width: Math.max(figLength * 0.85, base.width * 0.65),
+          depth: Math.min(figWidth, 1.1),
+          height: figureH * 0.55,
+          lift: pedestal - 0.05,
+          along,
+        },
+        {
+          solid: "pillar",
+          width: 0.62,
+          depth: 0.5,
+          height: figureH * 0.5,
+          lift: pedestal + figureH * 0.5,
+          along,
+        },
+      ]
+    : [
+        {
+          solid: "pillar",
+          width: Math.min(figLength * 0.7, 1.4),
+          depth: Math.min(figWidth, 1.1),
+          height: figureH + 0.1,
+          lift: pedestal - 0.1,
+          along,
+        },
+      ];
+  // the figure stands on its pedestal, never over its edge
+  for (const f of figure) {
+    const room = Math.max((base.width - f.width) / 2, 0);
+    f.along = Math.min(Math.max(f.along, -room), room);
+  }
+  return { centre: whole.centre, yaw: axis, pieces: [base, ...figure] };
+}
+
+/**
+ * A measured monument (not a fountain's sculpture) as a few clean solids
+ * instead of its smoothed 1 m surface, which read as a heap. A relief
+ * tall and broad enough is a pedestal at its measured footprint and
+ * height with the figure on it (`composed`: lying along the axis where it
+ * is long — a horse and rider — else upright); else the form OSM names,
+ * at the measured height and along the measured axis (an obelisk or a
+ * stele always); else one mass at the footprint and height (a slender
+ * pillar where it is taller than long, a block where not). Still never a
+ * figure.
+ */
+export function measuredMarker(
+  r: ReliefGrid,
+  kind: Exclude<MonumentKind, "fountain">,
+  form?: MonumentForm
+): MeasuredMarker | null {
+  const cells = reliefCells(r);
+  if (cells.length === 0) {
+    return null;
+  }
+  const top = Math.max(...cells.map((c) => c.h));
+  const axis = principalAxis(cells);
+  const whole = extent(cells, axis);
+  const slender = form === "obelisk" || form === "stele";
+  if (!slender && top >= COMPOSED_MIN_H && cells.length >= COMPOSED_MIN_CELLS) {
+    const c = composed(cells, axis, top);
+    if (c) {
+      return c;
+    }
+  }
+  if (form) {
+    return {
+      centre: whole.centre,
+      yaw: axis,
+      pieces: markerPieces(kind, form, top).map((p) => ({ ...p, along: 0 })),
+    };
+  }
+  const length = whole.length * CELL_SHRINK * 0.8;
+  const width = Math.max(whole.width * CELL_SHRINK * 0.8, 0.4);
+  return {
+    centre: whole.centre,
+    yaw: axis,
+    pieces: [
+      {
+        solid: top > length && length < 2 ? "pillar" : "block",
+        width: length,
+        depth: width,
+        height: top,
+        lift: 0,
+        along: 0,
+      },
+    ],
+  };
+}
+
+/**
+ * How a monument's part is finished, for its surface (the shader's
+ * `iFinish`): plain clay, dressed stone (ashlar courses and joints, a
+ * pedestal), worked stone (a stone figure: mottled, no joints), patinated
+ * metal (bronze, copper: a mottled patina with a soft sheen) or gilding (a
+ * warm sheen). Numbers, as the instance attribute carries them.
+ */
+export const FINISH = {
+  clay: 0,
+  dressed: 1,
+  worked: 2,
+  patina: 3,
+  gilded: 4,
+} as const;
+export type Finish = (typeof FINISH)[keyof typeof FINISH];
+
+const GILDED = new Set(["Blattgold", "Gold"]);
+const STONE = new Set([...BASE_MATERIALS, "Porzellan"]);
+
+/**
+ * A part's finish: a pedestal is masonry, named or not (nearly every one
+ * is); a figure is what its most striking material is — gilding, a metal,
+ * a stone — else clay.
+ */
+export function partFinish(
+  material: string | undefined,
+  pedestal: boolean
+): Finish {
+  if (pedestal) {
+    return FINISH.dressed;
+  }
+  const names = (material ?? "").split(",").map((n) => n.trim());
+  if (names.some((n) => GILDED.has(n))) {
+    return FINISH.gilded;
+  }
+  if (names.some((n) => FIGURE_ORDER.includes(n))) {
+    return FINISH.patina;
+  }
+  return names.some((n) => STONE.has(n)) ? FINISH.worked : FINISH.clay;
+}
+
+/**
+ * A pedestal as masonry is built: a plinth course a little wider at its
+ * foot, the shaft, and a cap slab projecting under the figure — crisp
+ * blocks, not one moulded box. A pedestal under 0.8 m (an obelisk's base)
+ * stays one block.
+ */
+export function pedestalCourses(p: MarkerPiece): MarkerPiece[] {
+  if (p.height < 0.8) {
+    return [p];
+  }
+  const o = Math.min(Math.max(0.05 * Math.min(p.width, p.depth), 0.05), 0.18);
+  const foot = Math.min(Math.max(0.12 * p.height, 0.15), 0.45);
+  const cap = Math.min(Math.max(0.08 * p.height, 0.12), 0.35);
+  return [
+    { ...p, width: p.width + 2 * o, depth: p.depth + 2 * o, height: foot },
+    p,
+    {
+      ...p,
+      width: p.width + 1.4 * o,
+      depth: p.depth + 1.4 * o,
+      height: cap,
+      lift: p.lift + p.height - cap,
+    },
+  ];
 }

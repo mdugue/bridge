@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { DOOR_SURROUND, doorMesh, wallShift } from "./doors";
+import {
+  DOOR_SURROUND,
+  doorMesh,
+  eaveAlong,
+  wallShift,
+  wallShiftAlong,
+  wallShiftKnots,
+} from "./doors";
 import type { DoorFeature } from "./features";
 
 const door = (nx: number, ny: number): DoorFeature => ({
@@ -75,4 +82,110 @@ describe("wallShift", () => {
     expect(wallShift(door(1, 0), offset, wall(0.1, -1), [0, 3])).toBe(0);
     expect(wallShift(door(1, 0), offset, wall(2), [0, 3])).toBe(0);
   });
+});
+
+describe("wallShiftAlong", () => {
+  const run = [
+    [100, 195],
+    [100, 205],
+  ] as const;
+  test("finds the wall a stretch runs along, either side of its line", () => {
+    for (const b of [0.15, 0, -0.1]) {
+      const [sa, sb] = wallShiftAlong(run, [1, 3], offset, wall(b), [0, 3]);
+      expect(sa).toBeCloseTo(b, 6);
+      expect(sb).toBeCloseTo(b, 6);
+    }
+  });
+
+  test("follows a wall turned against the footprint line, end to end", () => {
+    // out of the line by 0.1 at y 190, back from it by 0.1 at y 210
+    const turned = [
+      [100.1, 190, 0],
+      [99.9, 210, 0],
+      [99.9, 210, 30],
+      [100.1, 190, 0],
+      [99.9, 210, 30],
+      [100.1, 190, 30],
+    ].flat();
+    const [sa, sb] = wallShiftAlong(run, [1, 3], offset, turned, [0, 3]);
+    expect(sa).toBeCloseTo(0.05, 3);
+    expect(sb).toBeCloseTo(-0.05, 3);
+  });
+
+  test("is 0 where no wall faces the stretch", () => {
+    expect(wallShiftAlong(run, [1, 3], offset, wall(0.1, -1), [0, 3])).toEqual([
+      0, 0,
+    ]);
+    expect(wallShiftAlong(run, [40, 41], offset, wall(0.1), [0, 3])).toEqual([
+      0, 0,
+    ]);
+  });
+});
+
+describe("eaveAlong", () => {
+  const run = [
+    [100, 195],
+    [100, 205],
+  ] as const;
+  /** A roof face over x 94..100 (y 190..210), its height at (x, y). */
+  const roof = (z: (x: number, y: number) => number): number[] => {
+    const q = [
+      [100, 190],
+      [100, 210],
+      [94, 210],
+      [94, 190],
+    ].map(([x, y]) => [x, y, z(x, y)]);
+    return [...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]];
+  };
+
+  test("reads where a roof falling to the wall meets it", () => {
+    const pitched = roof((x) => 12 + (100 - x));
+    expect(eaveAlong(run, [0, 0], offset, pitched, [0, 3])).toBeCloseTo(12, 6);
+    // the wall standing back from the line: the eave on the wall
+    expect(eaveAlong(run, [-0.1, -0.1], offset, pitched, [0, 3])).toBeCloseTo(
+      12.1,
+      6
+    );
+  });
+
+  test("a gable, the roof climbing along the wall, has none", () => {
+    const gable = roof((_, y) => 12 + (y - 190) * 0.5);
+    expect(eaveAlong(run, [0, 0], offset, gable, [0, 3])).toBeUndefined();
+  });
+
+  test("no roof over the wall, no eave", () => {
+    expect(eaveAlong(run, [0, 0], offset, [], [])).toBeUndefined();
+  });
+});
+
+test("wallShiftKnots follows a wall that bends, where one line would cut it", () => {
+  // out of the line by 0.05 at y 190 and 210, by 0.2 at y 200
+  const bent = [
+    [100.05, 190, 0],
+    [100.2, 200, 0],
+    [100.2, 200, 30],
+    [100.05, 190, 0],
+    [100.2, 200, 30],
+    [100.05, 190, 30],
+    [100.2, 200, 0],
+    [100.05, 210, 0],
+    [100.05, 210, 30],
+    [100.2, 200, 0],
+    [100.05, 210, 30],
+    [100.2, 200, 30],
+  ].flat();
+  const { f, s } = wallShiftKnots(
+    [
+      [100, 190],
+      [100, 210],
+    ],
+    [1, 3],
+    offset,
+    bent,
+    [0, 3, 6, 9]
+  );
+  expect(f).toHaveLength(21);
+  expect(s[10]).toBeCloseTo(0.2, 6);
+  expect(s[0]).toBeCloseTo(0.05 + 0.015 * 0.1, 6);
+  expect(s[5]).toBeCloseTo(0.125, 6);
 });

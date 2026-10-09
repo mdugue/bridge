@@ -249,13 +249,18 @@ export function createPaperScene(
   };
   const savedFog = new Color();
   const hidden: Object3D[] = [];
+  const shown: Object3D[] = [];
   // What the swap does not draw, gathered once per scene change rather than
   // walked for every frame. Their own visibility is read per frame: a
   // hidden object is left alone, and so restored as it was.
-  let candidates: Record<"figure" | "paper", Object3D[]> | null = null;
+  let candidates: Record<"figure" | "paper" | "plan", Object3D[]> | null = null;
   let ownPaper: Material[] = [];
   const gather = () => {
-    const found = { paper: [] as Object3D[], figure: [] as Object3D[] };
+    const found = {
+      paper: [] as Object3D[],
+      figure: [] as Object3D[],
+      plan: [] as Object3D[],
+    };
     const own = new Set<Material>();
     scene.traverse((object) => {
       if (hiddenInPaper(object)) {
@@ -263,6 +268,9 @@ export function createPaperScene(
       }
       if (hiddenInFigure(object)) {
         found.figure.push(object);
+      }
+      if (object.userData.planOnly === true) {
+        found.plan.push(object);
       }
       for (const m of paperOwnMaterials(object)) {
         own.add(m);
@@ -286,10 +294,20 @@ export function createPaperScene(
     }
     paperGroundOn.value = PAPER_GROUND[kind];
     hidden.length = 0;
+    shown.length = 0;
     for (const object of list) {
       if (object.visible) {
         object.visible = false;
         hidden.push(object);
+      }
+    }
+    // what only the plan draws (tree-plan.ts): shown for its frames
+    if (kind === "figure") {
+      for (const object of lists.plan) {
+        if (!object.visible) {
+          object.visible = true;
+          shown.push(object);
+        }
       }
     }
     return () => {
@@ -297,6 +315,10 @@ export function createPaperScene(
         object.visible = true;
       }
       hidden.length = 0;
+      for (const object of shown) {
+        object.visible = false;
+      }
+      shown.length = 0;
       for (const m of ownPaper) {
         m.allowOverride = true;
       }

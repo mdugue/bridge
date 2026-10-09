@@ -23,6 +23,10 @@ import {
   packObjectTexels,
 } from "@/lib/city/city-mesh";
 import { type ObjectFacts, readFacts } from "@/lib/city/object-facts";
+import {
+  applyFacadeReadings,
+  type FacadeReadings,
+} from "@/lib/city/facade-reading";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createClayMaterial, type StyleResources } from "./visual-style";
 
@@ -38,6 +42,9 @@ export interface CityLayer {
   /** drops the object's building tree; true when anything changed */
   demolish: (objectIndex: number) => boolean;
   dispose: () => void;
+  /** what street photos say about the tile's facades, once they land
+   *  (lib/city/facade-reading.ts) */
+  facadeReadings: (readings: FacadeReadings) => void;
   /** what the twin knows about one object (read from the table on demand) */
   facts: (objectIndex: number) => ObjectFacts;
   /** marks the objects someone asks about (the clay's pencil hatch); an
@@ -93,6 +100,10 @@ export function readObjectTable(
     source: new Uint8Array(count),
     storeyH: new Float32Array(count),
     tint: new Float32Array(count * 3),
+    winAxis: new Float32Array(count),
+    winH: new Float32Array(count),
+    winStyle: new Uint32Array(count),
+    winW: new Float32Array(count),
   };
   const accessor = metadata.tableAccessors[0];
   const scalar = (
@@ -121,6 +132,11 @@ export function readObjectTable(
   scalar("rough", table.rough);
   scalar("source", table.source);
   scalar("storeyH", table.storeyH);
+  // a tile baked before the windows has none (absent columns stay 0)
+  scalar("winAxis", table.winAxis);
+  scalar("winH", table.winH);
+  scalar("winStyle", table.winStyle);
+  scalar("winW", table.winW);
   vec3("roof", table.roof);
   vec3("tint", table.tint);
   return table;
@@ -186,9 +202,9 @@ function objectTexture(table: CityObjectTable): {
 }
 
 /**
- * Dresses a streamed city mesh: the glTF feature id and roof flag under the
- * names the clay shader reads, the tile's clay material, a BVH for collision
- * and picks. `demolished` replays this session's demolitions of the tile.
+ * Dresses a streamed city mesh: the glTF feature id and place on the wall
+ * (the windows', a roof vertex flagged in it) under the names the clay
+ * shader reads, the tile's clay material, a BVH for collision and picks. `demolished` replays this session's demolitions of the tile.
  */
 export function dressCity(
   mesh: Mesh,
@@ -201,7 +217,7 @@ export function dressCity(
   const count = metadata.tableAccessors[0]?.count ?? 0;
   for (const [from, to] of [
     ["_feature_id_0", "featureId"],
-    ["_roof", "roof"],
+    ["_facade", "facade"],
   ] as const) {
     const attribute = geometry.getAttribute(from);
     if (attribute) {
@@ -245,6 +261,8 @@ export function dressCity(
     geometry.computeBoundsTree();
   }
 
+  // the asked objects, kept for the facade readings' repack
+  let marked: ReadonlySet<number> = new Set();
   const layer: CityLayer = {
     tile,
     mesh,
@@ -265,8 +283,24 @@ export function dressCity(
       geometry.disposeBoundsTree();
       objects.texture.dispose();
     },
+    facadeReadings: (readings) => {
+      const ids = metadata.tableAccessors[0];
+      if (
+        ids &&
+        "buildingId" in ids.properties &&
+        applyFacadeReadings(
+          table.flags,
+          (i) => String(ids.getPropertyValue("buildingId", i)),
+          readings
+        ) &&
+        markObjects(objects.texture, table, marked)
+      ) {
+        objects.texture.needsUpdate = true;
+      }
+    },
     facts: (objectIndex) => readObjectFacts(metadata, objectIndex),
-    mark: (marked) => {
+    mark: (next) => {
+      marked = next;
       if (markObjects(objects.texture, table, marked)) {
         objects.texture.needsUpdate = true;
       }

@@ -13,6 +13,7 @@ from . import (
     doors,
     dormers,
     edges,
+    facades,
     fetch,
     furniture,
     lamps,
@@ -24,10 +25,12 @@ from . import (
     monuments,
     ndvi,
     osm_buildings,
+    plinths,
     rail,
     riverside,
     roof_colour,
     roofs,
+    shopfronts,
     skyview,
     small_buildings,
     soundmarks,
@@ -40,6 +43,7 @@ from . import (
     transit,
     trees,
     walls,
+    windows,
 )
 from .spec import parse
 
@@ -57,12 +61,23 @@ STEPS = {
     "osm-buildings": osm_buildings.run,
     # OSM entrances on the LoD2 walls (scripts/bake-city-mesh.ts draws them).
     "doors": doors.run,
+    # The LoD2 walls' street side as plinth runs on the DGM (the same bake).
+    "plinths": plinths.run,
     "lamps": lamps.run,
     "monuments": monuments.run,
     "furniture": furniture.run,
     # After the lamps and the furniture: Mapillary's lamps and bins where
     # OSM has none.
     "mapillary": mapillary.run,
+    # What Mapillary's panoramas say about the facades (measured by the
+    # fetch): three readings per building for the clay.
+    "facades": facades.run,
+    # The same measurements per wall: the ground floor's bays and store
+    # signs (OSM's shops where no photo shows one).
+    "shopfronts": shopfronts.run,
+    # The facade traits per wall (the fetch's trait profiles): the windows
+    # and their surrounds the building bake models.
+    "windows": windows.run,
     "walls": walls.run,
     "stairs": stairs.run,
     "surface": surface.run,

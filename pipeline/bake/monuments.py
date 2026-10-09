@@ -15,6 +15,25 @@ ones. So OSM's `amenity=fountain` (points and basin outlines, ODbL) fills in:
   without an OSM partner (a round basin of the default size);
 - every other OSM fountain is added as it is: the DLM does not know it.
 
+The DLM says *that* a monument stands somewhere, not what it is: its
+Denkmal, Standbild and Gedenkstein share one code. OSM's memorial and
+artwork tags (`memorial=bust`, `artwork_type=statue`, …) say which, and
+often who made it and of what: a DLM monument within `TYPE_M` of an OSM
+memorial or artwork takes its `form` (a statue on its pedestal, a bust,
+a free sculpture, a stele, a stone, an obelisk; a plaque hangs on a wall),
+its `height` when tagged, its `artist` and `material`. A free-standing
+OSM sculpture or memorial the DLM lacks (most of a city's park
+sculptures) is added; one inside a LoD2 footprint is indoors or on a
+facade, and is left out.
+
+Where OSM names no material, Wikidata may (`P186`, "made from material"):
+the Goldener Reiter is copper under gold leaf, the Bismarck-Denkmal bronze
+on granite. The fetch caches the monuments, sculptures and memorials it
+knows on the tile (`fetch_wikidata`, never a Stolperstein); a monument
+without a material takes the item of its name within `WIKIDATA_NAME_M`,
+else the nearest within `WIKIDATA_NEAR_M`, and keeps its id (`wikidata`)
+as the material's source.
+
 A basin outline is written as a Polygon ring — the rim, its hole the water
 (the outline inset by the rim width); a basin too small to inset is a solid
 bowl. Everything else is a Point.
@@ -33,12 +52,15 @@ none (the viewer draws a marker). Each tile writes only what it owns
 
 from __future__ import annotations
 
+import json
 import re
 from collections import deque
+from pathlib import Path
 
 import numpy as np
 import rasterio
 import shapely
+from pyproj import Transformer
 
 from .common import (
     OSM_ATTRIBUTION,
@@ -50,7 +72,9 @@ from .common import (
     read_layer,
     write_geojson,
 )
-from .osm import has_extract, read_osm, tag
+from .landmarks import query_box
+from .osm import below_ground, has_extract, read_osm, tag
+from .osm_buildings import footprints
 
 # Bauwerksfunktion of AX_SonstigesBauwerkOderSonstigeEinrichtung (51009).
 MONUMENT, COLUMN_OR_STONE, FOUNTAIN = "1750", "1770", "1780"
@@ -68,6 +92,64 @@ RELIEF_MAX_H = 8.5  # taller: a leafless crown reads the same; drop it
 RELIEF_MAX_M2 = 60  # cells; larger patches are canopy or buildings
 SEED_M = 2.5  # the tallest cell this close to a monument point seeds it
 REACH_M = 6  # a monument's patch must end within this radius
+# A DLM monument this close to an OSM memorial or artwork (m) is it: the two
+# place one object a few metres apart (the DLM at its centre, OSM often at
+# its plinth's front).
+TYPE_M = 15.0
+DUPLICATE_M = 3.0  # two OSM nodes this close are one object, mapped twice
+# OSM's `memorial=*` and `artwork_type=*` → the marker's form. A plaque, a
+# painting or a mural hangs on a wall: it is a form, but nothing free-standing.
+OSM_FORM = {
+    "statue": "statue",
+    "bust": "bust",
+    "sculpture": "sculpture",
+    "installation": "sculpture",
+    "stele": "stele",
+    "relief": "stele",
+    "stone": "stone",
+    "obelisk": "obelisk",
+    "plaque": "plaque",
+    "blue_plaque": "plaque",
+    "painting": "plaque",
+    "mural": "plaque",
+    "graffiti": "plaque",
+    "street_art": "plaque",
+}
+# The DLM kind (the viewer's fallback and the card's kicker) of a form.
+FORM_KIND = {
+    "statue": "statue",
+    "bust": "statue",
+    "sculpture": "statue",
+    "stele": "stone",
+    "stone": "stone",
+    "obelisk": "column",
+}
+MATERIALS = {
+    "bronze": "Bronze",
+    "copper": "Kupfer",
+    "brass": "Messing",
+    "metal": "Metall",
+    "steel": "Stahl",
+    "stainless_steel": "Edelstahl",
+    "iron": "Eisen",
+    "cast_iron": "Gusseisen",
+    "stone": "Stein",
+    "sandstone": "Sandstein",
+    "granite": "Granit",
+    "marble": "Marmor",
+    "limestone": "Kalkstein",
+    "porphyry": "Porphyr",
+    "concrete": "Beton",
+    "wood": "Holz",
+    "glass": "Glas",
+    "plastic": "Kunststoff",
+    "ceramic": "Keramik",
+    "brick": "Ziegel",
+    "gold": "Gold",
+    "gold_leaf": "Blattgold",
+    "porcelain": "Porzellan",
+    "diabase": "Diabas",
+}
 
 
 def dlm_kind(bwf: str | None, name: str | None) -> str:
@@ -80,6 +162,35 @@ def dlm_kind(bwf: str | None, name: str | None) -> str:
     if bwf == COLUMN_OR_STONE or STONE_NAME.search(label):
         return "stone"
     return "statue"
+
+
+def osm_form(other_tags: str | None) -> str | None:
+    """What an OSM memorial or artwork is, as a marker form, or None when the
+    tags do not say (a `war_memorial`, a bare `historic=monument`)."""
+    for key in ("memorial", "artwork_type"):
+        form = OSM_FORM.get((tag(other_tags, key) or "").strip().lower())
+        if form:
+            return form
+    return None
+
+
+def osm_height(other_tags: str | None) -> float | None:
+    """A tagged `height` (m) within what a monument can be, or None."""
+    m = re.match(r"\s*(\d+(?:[.,]\d+)?)\s*m?\s*$", tag(other_tags, "height") or "")
+    if not m:
+        return None
+    h = float(m.group(1).replace(",", "."))
+    return h if 0.3 <= h <= 40 else None
+
+
+def osm_material(other_tags: str | None) -> str | None:
+    """The tagged material(s) in German, known ones only ("Bronze, Granit")."""
+    names = [
+        MATERIALS[v.strip().lower()]
+        for v in (tag(other_tags, "material") or "").split(";")
+        if v.strip().lower() in MATERIALS
+    ]
+    return ", ".join(dict.fromkeys(names)) or None
 
 
 def largest_part(geom: shapely.Geometry) -> shapely.Geometry:
@@ -157,6 +268,239 @@ def _osm_fountains(tile: Tile) -> list[dict]:
     return found
 
 
+def _osm_monuments(tile: Tile) -> list[dict]:
+    """OSM's memorials and artworks near the tile, as `{geom, name, form,
+    height, material, artist}` (a Stolperstein, a plaque without a form
+    and anything underground left out)."""
+    wanted = (
+        'other_tags LIKE \'%"historic"=>"memorial"%\''
+        ' OR other_tags LIKE \'%"historic"=>"monument"%\''
+        ' OR other_tags LIKE \'%"tourism"=>"artwork"%\''
+    )
+    geoms, fields = read_osm(tile, "points", wanted, ["name", "other_tags"], margin=0.0005)
+    found: list[dict] = []
+    for g, name, other in zip(
+        geoms, column(fields, "name", geoms), column(fields, "other_tags", geoms), strict=True
+    ):
+        if tag(other, "memorial") == "stolperstein" or below_ground(other):
+            continue
+        found.append(
+            {
+                "geom": g,
+                "name": name or None,
+                "form": osm_form(other),
+                "height": osm_height(other),
+                "material": osm_material(other),
+                "artist": tag(other, "artist_name") or None,
+            }
+        )
+    return found
+
+
+GENERIC_WORDS = {"denkmal", "gedenkstein", "mahnmal", "monument", "ehrenmal", "statue", "skulptur"}
+
+
+def _words(name: str) -> set[str]:
+    return {w for w in re.split(r"[\s\-–.,]+", name.lower()) if len(w) >= 4} - GENERIC_WORDS
+
+
+def same_name(a: str | None, b: str | None) -> bool:
+    """Whether two names plausibly name one monument: they share a word that
+    is not just "Denkmal" ("Schiller-Denkmal", "Friedrich-Schiller-Denkmal")."""
+    return bool(a and b and _words(a) & _words(b))
+
+
+def name_form(name: str | None) -> str | None:
+    """A form the DLM's official name states ("…-Obelisk", "…stele")."""
+    label = (name or "").lower()
+    for word, form in (("obelisk", "obelisk"), ("stele", "stele"), ("büste", "bust")):
+        if word in label:
+            return form
+    return None
+
+
+def _partner(m: dict, osm: list[dict], claimed: set[int]) -> int | None:
+    """The OSM memorial or artwork that is this DLM monument: the one of its
+    name within `TYPE_M`, else the nearest. A plaque is never it — a DLM
+    monument stands free, the plaque beside it explains it."""
+    near = []
+    for i, o in enumerate(osm):
+        if i in claimed or o["form"] == "plaque":
+            continue
+        d = shapely.distance(m["geom"], o["geom"])
+        if d <= TYPE_M:
+            near.append((not same_name(m["name"], o["name"]), d, i))
+    return min(near)[2] if near else None
+
+
+def type_monuments(
+    items: list[dict], osm: list[dict], buildings: shapely.STRtree | None
+) -> list[dict]:
+    """The conflated monuments, each DLM one typed by its OSM memorial or
+    artwork (`_partner`), and the free-standing OSM ones the DLM lacks
+    added (`source` "osm"). A plaque the DLM does not know is not added."""
+    claimed: set[int] = set()
+    for m in items:
+        if m["kind"] == "fountain":
+            continue
+        i = _partner(m, osm, claimed)
+        if i is not None:
+            claimed.add(i)
+            o = osm[i]
+            m.update({k: o[k] for k in ("form", "height", "material", "artist")})
+            m["name"] = m["name"] or o["name"]
+            m["source"] = "dlm+osm"
+        m["form"] = name_form(m["name"]) or m.get("form")
+    kept = [m["geom"] for m in items]
+    for i, o in enumerate(osm):
+        if i in claimed or FORM_KIND.get(o["form"] or "") is None:
+            continue
+        if any(shapely.distance(o["geom"], g) <= DUPLICATE_M for g in kept):
+            continue
+        if buildings is not None and len(buildings.query(o["geom"], "within")) > 0:
+            continue  # indoors, or on a facade
+        kept.append(o["geom"])
+        items.append(
+            {
+                "geom": o["geom"],
+                "kind": FORM_KIND[o["form"]],
+                "name": o["name"],
+                "style": None,
+                "figure": False,
+                "source": "osm",
+                **{k: o[k] for k in ("form", "height", "material", "artist")},
+            }
+        )
+    return items
+
+
+# How far a Wikidata item may stand from the monument it describes (m): of
+# its name, or the nearest of any name. Wikidata's coordinates are often a
+# map pin, not the plinth.
+WIKIDATA_NAME_M = 40.0
+WIKIDATA_NEAR_M = 10.0
+WIKIDATA_QUERY = """
+SELECT ?i ?label ?coord (GROUP_CONCAT(DISTINCT ?mat; separator="|") AS ?materials) WHERE {
+  SERVICE wikibase:box {
+    ?i wdt:P625 ?coord .
+    bd:serviceParam wikibase:cornerSouthWest "Point(%(w)f %(s)f)"^^geo:wktLiteral .
+    bd:serviceParam wikibase:cornerNorthEast "Point(%(e)f %(n)f)"^^geo:wktLiteral .
+  }
+  VALUES ?cls { wd:Q4989906 wd:Q860861 wd:Q179700 wd:Q5003624 wd:Q575759 }
+  ?i wdt:P31/wdt:P279* ?cls .
+  MINUS { ?i wdt:P31 wd:Q26703203 }
+  ?i wdt:P186 ?m . ?m rdfs:label ?mat . FILTER(LANG(?mat) = "en")
+  ?i rdfs:label ?label . FILTER(LANG(?label) = "de")
+} GROUP BY ?i ?label ?coord LIMIT 500
+"""
+
+
+def wikidata_material(labels: list[str]) -> str | None:
+    """Wikidata's material labels (en) in German, known ones only: a label
+    the table lacks is read by its last word ("Carrara marble": Marmor,
+    "high-quality steel": Stahl, "Meissen porcelain": Porzellan)."""
+    names = []
+    for label in labels:
+        key = label.strip().lower().replace(" ", "_").replace("-", "_")
+        name = MATERIALS.get(key) or MATERIALS.get(key.rsplit("_", 1)[-1])
+        if name:
+            names.append(name)
+    return ", ".join(dict.fromkeys(names)) or None
+
+
+def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int) -> None:
+    """The monuments Wikidata knows a material of on a tile →
+    `<raw>/wikidata/monuments_<tile>.json` (fetch time only; the bake reads
+    the file, never the network). A Stolperstein (Q26703203) is left out:
+    thousands of them, none a monument that stands."""
+    dest = raw / "wikidata" / f"monuments_{tile_id}.json"
+    if dest.exists():
+        return
+    back = Transformer.from_crs(epsg, 4326, always_xy=True)
+    xmin, ymin, xmax, ymax = bounds
+    lons, lats = back.transform([xmin, xmax, xmin, xmax], [ymin, ymin, ymax, ymax])
+    rows = query_box((min(lons), max(lons)), (min(lats), max(lats)), template=WIKIDATA_QUERY)
+    items: dict[str, dict] = {}
+    for r in rows:
+        lon, lat = (float(v) for v in r["coord"]["value"][6:-1].split())
+        qid = r["i"]["value"].rsplit("/", 1)[-1]
+        materials = sorted(m for m in r["materials"]["value"].split("|") if m)
+        items.setdefault(
+            qid,
+            {
+                "id": qid,
+                "label": r["label"]["value"],
+                "lon": lon,
+                "lat": lat,
+                "materials": materials,
+            },
+        )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    doc = {"source": "Wikidata (CC0)", "monuments": sorted(items.values(), key=lambda i: i["id"])}
+    part = dest.with_name(dest.name + ".part")
+    part.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    part.replace(dest)
+    print(f"{tile_id}: {len(items)} Wikidata monuments with a material → {dest}")
+
+
+def load_wikidata(tile: Tile) -> list[dict]:
+    """The fetched items as `{geom, id, name, material}` in the tile's CRS."""
+    path = tile.raw / "wikidata" / f"monuments_{tile.id}.json"
+    if not path.exists():
+        return []
+    try:
+        doc = json.loads(path.read_text())
+    except ValueError as err:
+        path.unlink()
+        raise OSError(f"{path}: not JSON — deleted; run bun run fetch again") from err
+    to_tile = Transformer.from_crs(4326, tile.epsg, always_xy=True)
+    out = []
+    for item in doc["monuments"]:
+        material = wikidata_material(item["materials"])
+        # a Stolperschwelle is a Stolperstein's longer sibling, set in the pavement
+        if material and not item["label"].startswith("Stolper"):
+            x, y = to_tile.transform(item["lon"], item["lat"])
+            out.append(
+                {
+                    "geom": shapely.Point(x, y),
+                    "id": item["id"],
+                    "name": item["label"],
+                    "material": material,
+                }
+            )
+    return out
+
+
+def wikidata_materials(items: list[dict], wikidata: list[dict]) -> None:
+    """A monument OSM names no material of takes Wikidata's: the item of
+    its name within `WIKIDATA_NAME_M`, else the nearest within
+    `WIKIDATA_NEAR_M` — each item for one monument only."""
+    claimed: set[int] = set()
+    for m in items:
+        if m["kind"] == "fountain" or m.get("material"):
+            continue
+        near = []
+        for i, w in enumerate(wikidata):
+            if i in claimed:
+                continue
+            d = shapely.distance(m["geom"], w["geom"])
+            named = same_name(m["name"], w["name"])
+            if d <= (WIKIDATA_NAME_M if named else WIKIDATA_NEAR_M):
+                near.append((not named, d, i))
+        if near:
+            i = min(near)[2]
+            claimed.add(i)
+            m["material"] = wikidata[i]["material"]
+            m["wikidata"] = wikidata[i]["id"]
+
+
+def _buildings(tile: Tile) -> shapely.STRtree | None:
+    if not tile.cityjson.exists():
+        return None
+    _, polys = footprints(json.loads(tile.cityjson.read_text()))
+    return shapely.STRtree(polys)
+
+
 def conflate(dlm: list[dict], osm: list[dict]) -> list[dict]:
     """The DLM monuments and the OSM fountains as one list of
     `{geom, kind, name, style, figure, source}`: each DLM point on an OSM
@@ -201,6 +545,9 @@ def properties(item: dict) -> dict:
     if item["kind"] == "fountain":
         props["style"] = item["style"]
         props["figure"] = bool(item["figure"])
+    for key in ("form", "height", "material", "artist", "wikidata"):
+        if item.get(key):
+            props[key] = item[key]
     return props
 
 
@@ -340,7 +687,9 @@ def run(tile: Tile) -> None:
     if tile.products.dlm and not tile.has_dlm("the monuments"):
         return
     dlm = _dlm_points(tile) if tile.products.dlm else []
-    osm = _osm_fountains(tile) if has_extract(tile, "the OSM fountains") else []
+    extract = has_extract(tile, "the OSM fountains and memorials")
+    osm = _osm_fountains(tile) if extract else []
+    memorials = _osm_monuments(tile) if extract else []
     if not dlm and not osm and not tile.products.dlm:
         return
     ndom = _ndom(tile)
@@ -348,7 +697,9 @@ def run(tile: Tile) -> None:
         print(f"{tile.id}: no DOM1 — monuments without their measured relief")
     origin = (tile.bounds[0], tile.bounds[3])
     features = []
-    for item in conflate(dlm, osm):
+    items = type_monuments(conflate(dlm, osm), memorials, _buildings(tile))
+    wikidata_materials(items, load_wikidata(tile))
+    for item in items:
         anchor = item["geom"].representative_point()
         if not owns(tile.bounds, shapely.get_x(anchor), shapely.get_y(anchor)):
             continue
@@ -361,14 +712,18 @@ def run(tile: Tile) -> None:
         features.append(feature(geometry_json(item["geom"]), props))
     # Stable order: the committed file diffs by feature, not by read order.
     features.sort(key=lambda f: (f["properties"]["kind"], _anchor_key(f["geometry"])))
-    credit = "; ".join(c for c in (tile.credit if dlm else "", OSM_ATTRIBUTION if osm else "") if c)
+    osm_credit = OSM_ATTRIBUTION if osm or memorials else ""
+    credit = "; ".join(c for c in (tile.credit if dlm else "", osm_credit) if c)
     write_geojson(tile.out("dlm", f"monuments_{tile.id}.geojson"), features, tile.epsg, credit)
     kinds = {k: sum(f["properties"]["kind"] == k for f in features) for k in KINDS}
     reliefs = sum("relief" in f["properties"] for f in features)
+    typed = sum("form" in f["properties"] for f in features)
+    wd = sum("wikidata" in f["properties"] for f in features)
     print(
         f"{tile.id}: monuments "
         + ", ".join(f"{n} {k}" for k, n in kinds.items())
-        + f"; {reliefs} with a measured relief"
+        + f"; {reliefs} with a measured relief, {typed} with an OSM form,"
+        + f" {wd} with Wikidata's material"
     )
 
 

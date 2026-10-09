@@ -114,6 +114,37 @@ test("keys typed into a text field are the HUD's, but their release still reache
   expect(calls).toEqual(["release:KeyW"]);
 });
 
+test("the arrows step a focused slider or tab, not the camera; elsewhere they walk", () => {
+  const { fire, calls } = harness();
+  const slider = { closest: (s: string) => (s.includes("slider") ? {} : null) };
+  fire("keydown", { code: "ArrowLeft", target: slider });
+  // other keys on that slider still walk
+  fire("keydown", { code: "KeyW", target: slider });
+  fire("keydown", { code: "ArrowUp", target: { closest: () => null } });
+  expect(calls).toEqual(["press:KeyW", "press:ArrowUp"]);
+});
+
+/** A focused element matching these selectors (a stand-in for the DOM). */
+const focused = (...matches: string[]) => ({
+  closest: (selectors: string) =>
+    selectors.split(",").some((s) => matches.includes(s.trim())) ? {} : null,
+});
+
+test("a toggle group's item keeps its arrows; a toolbar's plain button does not", () => {
+  const { fire, calls } = harness();
+  // walk/fly/Modell in the panel: its arrows move between the items
+  fire("keydown", {
+    code: "ArrowRight",
+    target: focused("[data-slot=toggle-group-item]", "[role=group] button"),
+  });
+  // the HUD's toolbar after a click on Modell: the arrows still pan
+  fire("keydown", {
+    code: "ArrowLeft",
+    target: focused("[role=toolbar] button", "button"),
+  });
+  expect(calls).toEqual(["press:ArrowLeft"]);
+});
+
 test("losing focus or being hidden releases every key", () => {
   const { fire, calls, state } = harness();
   fire("blur");

@@ -8,6 +8,8 @@ import type {
   CanopyFeature,
   CultivatedFeature,
   DoorFeature,
+  ShopfrontFile,
+  PlinthFeature,
   FeatureCollection,
   FurnitureFeature,
   LampFeature,
@@ -32,6 +34,7 @@ import type {
 } from "./features";
 import { SITES } from "../../sites";
 import { STRUCTURE_KINDS } from "./features";
+import type { WindowFile } from "./windows";
 import { type Site, tileExtentOf, tileIdOf } from "./site";
 import { TREE_GENERA } from "./tree-season";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
@@ -236,6 +239,15 @@ test.each(cases)("%s: lamps are points", (_, a) => {
   for (const f of load<LampFeature>(a.lamps)) {
     expect(f.geometry.type).toBe("Point");
     expect(isPoint2(f.geometry.coordinates)).toBe(true);
+    const wire = f.properties?.wire;
+    if (wire) {
+      expect(wire).toHaveLength(2);
+      expect(wire.every(isPoint2)).toBe(true);
+      expect(f.properties?.h).toBeGreaterThan(0);
+      expect(f.properties?.masts ?? [false, false]).toHaveLength(2);
+    } else {
+      expect(f.properties?.masts).toBeUndefined();
+    }
   }
 });
 
@@ -244,6 +256,10 @@ test.each(cases)("%s: Mapillary's objects are lamp and bin points", (_, a) => {
     expect(f.geometry.type).toBe("Point");
     expect(isPoint2(f.geometry.coordinates)).toBe(true);
     expect(["lamp", "bin"]).toContain(f.properties?.k ?? "");
+    if (f.properties?.wire) {
+      expect(f.properties.k).toBe("lamp");
+      expect(f.properties.wire.every(isPoint2)).toBe(true);
+    }
   }
 });
 
@@ -262,6 +278,118 @@ test.each(tiles)(
       expect(p?.h ?? 0).toBeGreaterThanOrEqual(1.8);
       expect(p?.h ?? 99).toBeLessThanOrEqual(5);
       expect(Number.isFinite(p?.z)).toBe(true);
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: shopfronts are walls with a frame, bays on them and a ground",
+  (tile, site) => {
+    const path = join(ROOT, cityMeshSourceFiles(site, tile).shopfronts);
+    if (!existsSync(path)) {
+      return;
+    }
+    const doc = JSON.parse(readFileSync(path, "utf8")) as ShopfrontFile;
+    expect(doc.attribution).toContain("Mapillary");
+    for (const walls of Object.values(doc.buildings)) {
+      for (const w of walls) {
+        expect(w.oid.length).toBeGreaterThan(0);
+        expect(Number.isInteger(w.wi)).toBe(true);
+        const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+        expect(len).toBeCloseTo(w.L, 1);
+        expect(Math.hypot(...w.n)).toBeCloseTo(1, 3);
+        // the normal stands square on the wall
+        expect(
+          Math.abs((w.b[0] - w.a[0]) * w.n[0] + (w.b[1] - w.a[1]) * w.n[1])
+        ).toBeLessThan(0.01 * w.L);
+        for (const z of w.z ?? []) {
+          expect(Number.isFinite(z)).toBe(true);
+        }
+        expect(["photo", "canopy"]).toContain(w.src);
+        for (const [s0, s1] of w.bays ?? []) {
+          expect(s0).toBeGreaterThanOrEqual(0);
+          expect(s1).toBeLessThanOrEqual(w.L + 0.01);
+          expect(s1 - s0).toBeGreaterThanOrEqual(1.2 - 1e-6);
+        }
+        for (const c of w.canopy ?? []) {
+          expect(c.at[0]).toBeGreaterThanOrEqual(0);
+          expect(c.at[1]).toBeLessThanOrEqual(w.L + 0.01);
+          expect(c.d).toBeGreaterThanOrEqual(1.5);
+          expect(c.d).toBeLessThanOrEqual(8);
+          expect(c.h).toBeGreaterThanOrEqual(2.6);
+          expect(c.h).toBeLessThanOrEqual(6.5);
+        }
+        // a wall only a canopy speaks for is under one
+        if (w.src === "canopy") {
+          expect(w.canopy?.length ?? 0).toBeGreaterThan(0);
+        }
+      }
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: window models keep to the ranges the bake draws",
+  (tile, site) => {
+    const path = join(ROOT, cityMeshSourceFiles(site, tile).windows);
+    if (!existsSync(path)) {
+      return;
+    }
+    const doc = JSON.parse(readFileSync(path, "utf8")) as WindowFile;
+    expect(doc.attribution).toContain("Mapillary");
+    for (const [rho, n] of Object.values(doc.reliability)) {
+      expect(rho === null || Math.abs(rho) <= 1).toBe(true);
+      expect(Number.isInteger(n)).toBe(true);
+    }
+    for (const walls of Object.values(doc.buildings)) {
+      for (const w of walls) {
+        expect(w.oid.length).toBeGreaterThan(0);
+        expect(Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1])).toBeCloseTo(
+          w.L,
+          1
+        );
+        expect(Math.hypot(...w.n)).toBeCloseTo(1, 3);
+        expect(w.seqs).toBeGreaterThanOrEqual(1);
+        const m = w.model;
+        if (!m) {
+          continue;
+        }
+        expect(["regular", "loose"]).toContain(m.grid);
+        expect(m.axis).toBeGreaterThanOrEqual(1.8);
+        expect(m.axis).toBeLessThanOrEqual(4.8);
+        // a pier between two windows
+        expect(m.w).toBeLessThanOrEqual(m.axis - 0.6 + 1e-6);
+        expect(m.w).toBeGreaterThanOrEqual(0.7);
+        expect(m.h).toBeGreaterThanOrEqual(0.8);
+        expect(m.h).toBeLessThanOrEqual(2.4);
+        if (m.storey !== undefined) {
+          expect(m.storey).toBeGreaterThanOrEqual(2.8);
+          expect(m.storey).toBeLessThanOrEqual(4.6);
+        }
+      }
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: plinths are wall pieces with a ground under their top",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).plinths;
+    for (const f of loadSource<PlinthFeature>(src)) {
+      expect(f.geometry.type).toBe("MultiLineString");
+      const p = f.properties;
+      expect(p?.of.length ?? 0).toBeGreaterThan(0);
+      const lines = f.geometry.coordinates;
+      expect(p?.g).toHaveLength(lines.length);
+      expect(p?.top).toHaveLength(lines.length);
+      lines.forEach((line, i) => {
+        expect(line).toHaveLength(2);
+        expect(line.every(isPoint2)).toBe(true);
+        // the band stands over its lowest ground, never under it; its foot
+        // reaches down a light well or a ramp beside the wall, not a storey
+        expect((p?.top[i] ?? 0) - (p?.g[i] ?? 0)).toBeGreaterThan(0);
+        expect((p?.top[i] ?? 0) - (p?.g[i] ?? 0)).toBeLessThan(8.5);
+      });
     }
   }
 );
@@ -500,6 +628,23 @@ test.each(cases)(
           f.properties?.style ?? ""
         );
       }
+      const form = f.properties?.form;
+      if (form !== undefined) {
+        expect(kind).not.toBe("fountain");
+        expect([
+          "bust",
+          "obelisk",
+          "sculpture",
+          "statue",
+          "stele",
+          "stone",
+        ]).toContain(form);
+      }
+      const wikidata = f.properties?.wikidata;
+      if (wikidata !== undefined) {
+        expect(wikidata).toMatch(/^Q\d+$/);
+        expect(f.properties?.material).toBeTruthy();
+      }
     }
   }
 );
@@ -600,6 +745,11 @@ test.each(cases)(
         expect(p.t > 0 && p.t <= 400).toBe(true);
       }
       expect([undefined, "osm"]).toContain(p?.s);
+      // planting year: a whole year, not in the future
+      if (p?.y !== undefined) {
+        expect(Number.isInteger(p.y)).toBe(true);
+        expect(p.y >= 1500 && p.y <= new Date().getFullYear()).toBe(true);
+      }
     }
   }
 );

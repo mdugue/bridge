@@ -111,30 +111,47 @@ the detailed ground.
 
 ## What is real, what is not
 
-**Measured, from official surveys:** terrain heights, building footprints,
-heights and roof shapes, land use, water outlines, railway alignments,
-bridge positions and deck heights, tree positions and heights, roof colours,
-meadow greenness.
+Every statement in the viewer carries one of four badges; what they mean
+and where each applies is set out in
+[How the viewer comes by what it shows](./methods.md). In short:
 
-**Contributed by volunteers (OpenStreetMap):** street lamps, benches and
-other street furniture, playgrounds, station platforms, tram tracks and
-overhead-line masts, retaining walls
-with their heights, the structural type of bridges, what streets and
-pavements are paved with. Completeness varies from street to street.
+`❝ taken` **from official surveys and registers:** terrain heights,
+building footprints, heights and roof shapes, land use, water outlines,
+railway alignments, bridge outlines, the place, species and size of the
+street trees from the street-tree register.
 
-**Computed:** the sun position, all shadows, fog and haze, the depth of
-field, the slow motion of leaves and water.
+`❝ taken` **contributed by volunteers (OpenStreetMap):** street lamps,
+benches and other street furniture, playgrounds, station platforms, tram
+tracks and overhead-line masts, retaining walls with their heights, front
+entrances, facade colours and materials where mapped, the structural type of
+bridges, what streets and pavements are paved with. Completeness varies from
+street to street.
 
-**Invented for the look:** the pastel palette, the paper grain and vignette,
-the shape of tree crowns, the wall tint per building, the ripples on the
-water, the stones and slabs of the paving patterns, the warm windows at dusk (the *presence* of a shop or public building
-is real; its lit windows are not).
+`= computed` **by a fixed formula over measured values:** the height of
+the trees without a register and of the bridge decks, roof colours, meadow
+and foliage green, sky light and horizon, the sun position and all shadows.
 
-**Not in the data at all:** windows and doors, facade materials, the
-smaller street furniture (planters; traffic and street-name signs are
-mapped too sparsely to show), vehicles (the trams' tracks and
-wires are there, the trams are not), people, vegetation
-smaller than about 3 m, and anything indoors.
+`◎ detected` **by pattern recognition — it can be wrong:** the trees
+without a register (at crown peaks in the surface), sheds and garden houses
+(in the laser scan), re-measured roofs, chimneys, towers and dormers, arches
+and trusses above bridges, which shop belongs to which building, which
+building is a landmark, and the window rhythm of the houses street photos
+saw.
+
+`≈ assumed` **designed for the look or set without data:** the pastel
+palette, the paper grain and vignette, the shape of tree crowns, the wall
+tint per building, brick or plaster where nothing is mapped, the ripples on
+the water, the stones and slabs of the paving patterns, the piers under
+bridges, the windows of the houses no photo measured (a measured
+neighbour's rhythm or the house type's), the warm windows at dusk (the
+*presence* of a shop or public building is real; its lit windows are not).
+
+**Not in the data at all:** where exactly each window sits on its wall
+(the rows are centred on it), the smaller street furniture
+(planters; traffic and street-name signs are mapped too sparsely to show),
+vehicles (the trams' tracks and wires are there; the trams themselves only
+as a data layer by timetable), people, vegetation smaller than about 3 m,
+and anything indoors.
 
 **Left out on purpose:** text. OpenStreetMap has the names of the streets
 and squares, but the viewer writes none of them — not on the ground, not as a
@@ -153,8 +170,11 @@ caption on the screen: the map look reads better without it.
 - Aerial photos look slightly **sideways** at tall buildings, so a sampled
   roof colour can include a bit of facade. The sampling avoids the edge of
   each roof to reduce this.
-- Tree **species** are unknown; every tree is the same generic shape, scaled
-  to its measured height and tinted by how green it looked from the air.
+- A tree's **species** is known only where the street-tree register (Dresden,
+  Hamburg, Leipzig, Berlin) or OpenStreetMap names it; it sets the crown's
+  form and season, but the crown itself is still drawn from basic shapes
+  (`≈ assumed`). Every other tree is the same generic shape, scaled to its
+  measured height and tinted by how green it looked from the air.
 - The building model contains **no bridges, walls or towers** for these
   tiles even though newer editions of the product may; that is why bridges
   and walls are rebuilt from other sources.

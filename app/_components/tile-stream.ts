@@ -56,6 +56,7 @@ import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { mapillaryParts } from "@/lib/city/mapillary";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { type CityLayer, dressCity } from "./city-layer";
+import type { FacadeReadings } from "@/lib/city/facade-reading";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
@@ -369,14 +370,15 @@ type Features<T> = Promise<T[]>;
 
 /**
  * The city's buffers nothing reads on the CPU once it is compiled: its
- * normals and roof flags (the clay reads both, so its compile uploads
- * them). The positions, index and feature ids stay — collision and picks
- * raycast the BVH over them, demolish rebuilds the index from the feature
- * ids, the selection outline cuts a building's triangles out of them.
+ * normals and places on the wall, the roof flag among them (the clay reads
+ * both, so its compile uploads them). The positions, index and feature ids stay —
+ * collision and picks raycast the BVH over them, demolish rebuilds the
+ * index from the feature ids, the selection outline cuts a building's
+ * triangles out of them.
  */
 function cityCpuDroppable(city: CityLayer): AnyAttribute[] {
   const geometry = city.mesh.geometry;
-  return [geometry.getAttribute("normal"), geometry.getAttribute("roof")];
+  return [geometry.getAttribute("normal"), geometry.getAttribute("facade")];
 }
 
 function firstMesh(root: Object3D): Mesh | undefined {
@@ -1371,6 +1373,17 @@ export class DressingPlugin {
     if (extras.svf) {
       entry.svf = this.url(extras.svf);
       this.shareSkyView(scene, entry, extras.tileId, entry.svf);
+    }
+    // What street photos say about the facades lands after the buildings
+    // show; until then (and without it) they are drawn as before.
+    if (extras.facades) {
+      void fetchOptionalJson<FacadeReadings>(this.url(extras.facades)).then(
+        (readings) => {
+          if (readings && this.dressed.get(scene) === entry) {
+            city.facadeReadings(readings);
+          }
+        }
+      );
     }
   }
 

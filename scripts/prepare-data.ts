@@ -20,7 +20,8 @@
  *     one file served `no-cache` (next.config.ts), everything else is
  *     immutable. Files the manifest no longer references are pruned.
  *
- * Baked outputs are cached in `.cache/prepare-data/` (gitignored) under a
+ * Baked outputs are cached in `.cache/prepare-data/` (gitignored; on Vercel
+ * `.next/cache/prepare-data/`, which its build cache keeps) under a
  * key of their inputs' contents, every module the artifact's own bake
  * imports (bake-sources.ts, walked from that bake's entry), this file, the
  * site's own config and the names they reference, so a rerun is cheap, a
@@ -47,6 +48,8 @@ import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import type {
   CanopyFeature,
   DoorFeature,
+  ShopfrontFile,
+  PlinthFeature,
   DormerFeature,
   FeatureCollection,
   RailFeature,
@@ -110,6 +113,7 @@ import {
   type TilesetExtras,
 } from "../lib/city/tileset";
 import type { CityJsonDocument } from "../lib/city/types";
+import type { WindowFile } from "../lib/city/windows";
 import {
   TRAM_TIMETABLE_FILE,
   tramTimetableSource,
@@ -149,7 +153,13 @@ import {
   wallLines,
 } from "./tile-sources";
 
-const CACHE_DIR = join(process.cwd(), ".cache/prepare-data");
+/** On Vercel the cache lives under `.next/cache`, the one folder (with
+ *  node_modules) its Next.js builds carry from one deployment to the next;
+ *  elsewhere under `.cache`, so clearing `.next` keeps a local bake. */
+const CACHE_DIR = join(
+  process.cwd(),
+  process.env.VERCEL ? ".next/cache/prepare-data" : ".cache/prepare-data"
+);
 const SITE = (() => {
   try {
     return siteFromArgs(process.argv.slice(2)).site;
@@ -573,11 +583,22 @@ function parseCity(tile: string): BakedCityMesh {
     ? readJson<FeatureCollection<MeasuredRoofFeature>>(at(src.measuredRoofs))
         .features
     : undefined;
+  const plinths = existsSync(at(src.plinths))
+    ? readJson<FeatureCollection<PlinthFeature>>(at(src.plinths)).features
+    : undefined;
   const doors = existsSync(at(src.doors))
     ? readJson<FeatureCollection<DoorFeature>>(at(src.doors)).features
     : undefined;
   const dormers = existsSync(at(src.dormers))
     ? readJson<FeatureCollection<DormerFeature>>(at(src.dormers)).features
+    : undefined;
+  const shopfronts = existsSync(at(src.shopfronts))
+    ? Object.values(
+        readJson<ShopfrontFile>(at(src.shopfronts)).buildings
+      ).flat()
+    : undefined;
+  const windows = existsSync(at(src.windows))
+    ? Object.values(readJson<WindowFile>(at(src.windows)).buildings).flat()
     : undefined;
   const baked = bakeCityMesh(
     tile,
@@ -589,7 +610,7 @@ function parseCity(tile: string): BakedCityMesh {
     osmDoc?.context ?? "render",
     gaps,
     measured,
-    { doors, dormers }
+    { doors, dormers, plinths, shopfronts, windows }
   );
   sharedMatrix ??= baked.matrix;
   return baked;
@@ -635,7 +656,10 @@ async function bakeCity(
     at(src.landmarks),
     at(src.measuredRoofs),
     at(src.doors),
+    at(src.plinths),
     at(src.dormers),
+    at(src.shopfronts),
+    at(src.windows),
   ];
   const bake = [
     "scripts/bake-city-mesh.ts",
@@ -660,11 +684,14 @@ async function bakeCity(
     )
   );
   const svf = sideFiles.get(tile)?.svf;
+  const facades = sideFiles.get(tile)?.facades;
   const extras: CityExtras = {
     kind: "city",
     tileId: tile,
     // The facades' ambient light reads the terrain's sky-view raster.
     ...(svf ? { svf } : {}),
+    // ...and their relief and tone what street photos saw of them.
+    ...(facades ? { facades } : {}),
   };
   const name = `city_${tile}.glb.gz`;
   const glb = await cached(
@@ -1030,6 +1057,11 @@ for (const [i, tile] of TILES.entries()) {
       Number.isFinite(maxZ) ? maxZ : 1,
     ],
   });
+  // A tile's meshes are hundreds of MB of typed arrays that Bun's lazy
+  // collector let pile up over the loop: a cold Dresden reached ~7 GB,
+  // more than a 4-core, 8 GB build machine running two sites side by side
+  // holds. Collected after each tile, the loop stays near one tile's peak.
+  Bun.gc(true);
 }
 log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 

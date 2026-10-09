@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  bloomAt,
   dayOfYear,
   PHENOLOGY,
   phenologyOf,
@@ -116,4 +117,24 @@ test("day of year follows the local calendar through the whole day", () => {
   // A daylight-saving night (Europe: 29 March, 25 October) is no shorter.
   expect(dayOfYear(new Date(2026, 2, 29, 12))).toBeCloseTo(87.5);
   expect(dayOfYear(new Date(2026, 9, 25, 12))).toBeCloseTo(297.5);
+});
+
+test("flowering trees bloom in their span and nowhere else", () => {
+  const cherry = TREE_GENERA.indexOf("Prunus");
+  const lime = TREE_GENERA.indexOf("Tilia");
+  const span = PHENOLOGY.Prunus.bloom?.span ?? [0, 0];
+  const peak = (span[0] + span[1]) / 2;
+  expect(bloomAt(peak, cherry)).toBeCloseTo(
+    PHENOLOGY.Prunus.bloom?.strength ?? 0
+  );
+  expect(bloomAt(span[0] - 1, cherry)).toBe(0);
+  expect(bloomAt(span[1] + 1, cherry)).toBe(0);
+  expect(bloomAt(200, cherry)).toBe(0);
+  for (let d = 0; d < 365; d += 5) {
+    expect(bloomAt(d, lime)).toBe(0);
+  }
+  // a late tree flowers late
+  expect(bloomAt(span[0] + 2, cherry, 4)).toBeLessThan(
+    bloomAt(span[0] + 2, cherry)
+  );
 });

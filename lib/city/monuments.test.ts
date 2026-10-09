@@ -1,11 +1,20 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   basinLevels,
+  FINISH,
+  figureShare,
   insideRing,
   jetHeight,
   jetPlaces,
+  MARKER_SHAPE,
+  MATERIAL_TONE,
+  markerPieces,
+  markerTones,
+  measuredMarker,
   onRelief,
   openRing,
+  partFinish,
+  pedestalCourses,
   reliefSurface,
   ringArea,
   ringCentre,
@@ -102,4 +111,118 @@ test("a point on a measured relief cell is on it; its padding is not", () => {
   expect(onRelief([relief], 101.5, 198.5)).toBe(true);
   expect(onRelief([relief], 100.5, 199.5)).toBe(false);
   expect(onRelief([relief], 90, 190)).toBe(false);
+});
+
+test("a typed monument is its form's parts, scaled whole to a tagged height", () => {
+  const statue = markerPieces("statue", "statue");
+  expect(statue.map((p) => p.solid)).toEqual(["block", "pillar"]);
+  // the figure stands on its pedestal
+  expect(statue[1].lift).toBe(statue[0].height);
+  const obelisk = markerPieces("column", "obelisk", 12);
+  const top = Math.max(...obelisk.map((p) => p.lift + p.height));
+  expect(top).toBeCloseTo(12);
+  expect(obelisk[1].width).toBeGreaterThan(
+    markerPieces("column", "obelisk")[1].width
+  );
+  // a height far off the form's is clamped, not obeyed
+  const tiny = markerPieces("statue", "statue", 0.1);
+  expect(Math.max(...tiny.map((p) => p.lift + p.height))).toBeGreaterThan(1);
+});
+
+test("an untyped monument keeps its kind's one marker", () => {
+  expect(markerPieces("stone")).toEqual([
+    { ...MARKER_SHAPE.stone, lift: 0, solid: "block" },
+  ]);
+  expect(markerPieces("statue")[0].solid).toBe("pillar");
+});
+
+describe("material tones", () => {
+  test("a gilded figure shows its gold, a bronze one on granite both", () => {
+    expect(markerTones("Kupfer, Blattgold")).toEqual({
+      figure: MATERIAL_TONE.Blattgold,
+      base: null,
+    });
+    expect(markerTones("Granit, Bronze")).toEqual({
+      figure: MATERIAL_TONE.Bronze,
+      base: MATERIAL_TONE.Granit,
+    });
+    expect(markerTones("Sandstein")).toEqual({
+      figure: MATERIAL_TONE.Sandstein,
+      base: MATERIAL_TONE.Sandstein,
+    });
+  });
+
+  test("nothing named, or nothing with a tone, stays clay", () => {
+    expect(markerTones()).toEqual({ figure: null, base: null });
+    expect(markerTones("Glas, Kunststoff")).toEqual({
+      figure: null,
+      base: null,
+    });
+  });
+
+  test("a tall relief is a figure on a pedestal, a low one all figure", () => {
+    expect(figureShare(0.5, 2)).toBe(1);
+    expect(figureShare(1, 8.5)).toBe(0);
+    expect(figureShare(8, 8.5)).toBe(1);
+    expect(figureShare(8.5 * 0.55, 8.5)).toBeCloseTo(0.5);
+  });
+});
+
+describe("a measured monument as composed solids", () => {
+  // the Goldener Reiter's cells on DOM1's 1 m grid (dm above ground)
+  const reiter = {
+    west: 0,
+    north: 8,
+    cols: 8,
+    rows: 8,
+    dm: [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 28, 0, 0, 0, 0, 0, 12, 59, 52, 41,
+      0, 0, 0, 0, 53, 72, 65, 17, 0, 0, 0, 43, 51, 61, 22, 0, 0, 0, 14, 42, 48,
+      44, 0, 0, 0, 0, 0, 0, 41, 27, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+  };
+
+  test("a horse and rider: a pedestal, a body along its axis, an upright mass", () => {
+    const m = measuredMarker(reiter, "statue");
+    expect(m?.pieces.map((p) => p.solid)).toEqual(["block", "block", "pillar"]);
+    const [pedestal, body, rider] = m?.pieces ?? [];
+    expect(pedestal.lift).toBe(0);
+    expect(pedestal.height).toBeGreaterThan(3.5);
+    // the axis runs north-east, as the statue does
+    expect((m?.yaw ?? 0) * (180 / Math.PI)).toBeCloseTo(54, -1);
+    expect(body.width).toBeGreaterThan(body.depth * 1.5);
+    expect(rider.lift + rider.height).toBeCloseTo(7.2, 1);
+  });
+
+  test("a low relief is one mass; an obelisk keeps its needle", () => {
+    const low = { west: 0, north: 2, cols: 2, rows: 2, dm: [12, 10, 0, 0] };
+    expect(measuredMarker(low, "stone")?.pieces).toHaveLength(1);
+    const tall = measuredMarker(reiter, "column", "obelisk");
+    expect(tall?.pieces.map((p) => p.solid)).toEqual(["block", "needle"]);
+  });
+});
+
+describe("pedestals and finishes", () => {
+  test("a pedestal is a plinth, a shaft and a cap; a low base one block", () => {
+    const p = {
+      solid: "block" as const,
+      width: 2,
+      depth: 1.5,
+      height: 4,
+      lift: 0,
+    };
+    const [foot, shaft, cap] = pedestalCourses(p);
+    expect(foot.width).toBeGreaterThan(cap.width);
+    expect(cap.width).toBeGreaterThan(shaft.width);
+    expect(cap.lift + cap.height).toBeCloseTo(4);
+    expect(pedestalCourses({ ...p, height: 0.5 })).toHaveLength(1);
+  });
+
+  test("a pedestal is masonry; a figure is gilded, patinated or worked", () => {
+    expect(partFinish(undefined, true)).toBe(FINISH.dressed);
+    expect(partFinish("Kupfer, Blattgold", false)).toBe(FINISH.gilded);
+    expect(partFinish("Bronze, Granit", false)).toBe(FINISH.patina);
+    expect(partFinish("Sandstein", false)).toBe(FINISH.worked);
+    expect(partFinish(undefined, false)).toBe(FINISH.clay);
+  });
 });

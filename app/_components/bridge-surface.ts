@@ -80,7 +80,7 @@ const PAVEMENT = classColour("builtup");
 const PAINT: V3 = linear([226, 223, 214]);
 
 /** The pixel's footprint in metres. */
-const footprint = (): F => {
+export const footprint = (): F => {
   const w = fwidth(positionWorld);
   return max(max(w.x, w.y), max(w.z, 0.002));
 };

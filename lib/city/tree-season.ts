@@ -81,6 +81,17 @@ export interface Phenology {
   /** fraction of the crown that hangs on, dead and coloured, through the
    *  winter (marcescence: oaks, beech and hornbeam) */
   hold?: number;
+  /** the flowering, for the trees that a street notices in flower: its
+   *  span, the blossom's colour (HSL, the scene's pastel register) and how
+   *  much of the crown it covers at its peak (0..1) */
+  bloom?: Bloom;
+}
+
+/** A genus's flowering (Phenology.bloom). */
+export interface Bloom {
+  colour: readonly [number, number, number];
+  span: DaySpan;
+  strength: number;
 }
 
 // The hues, named once: several genera share a colour.
@@ -155,12 +166,14 @@ export const PHENOLOGY: Readonly<Record<TreeGenus, Phenology>> = {
     colour: [215, 275],
     fall: [268, 298],
     hue: [0.08, 0.35, 0.5],
+    bloom: { span: [118, 138], colour: [0.1, 0.2, 0.93], strength: 0.35 },
   },
   Prunus: {
     leafOut: [94, 112],
     colour: [268, 290],
     fall: [284, 306],
     hue: ORANGE_RED,
+    bloom: { span: [92, 116], colour: [0.95, 0.5, 0.86], strength: 0.85 },
   },
   // late, tan, the last leaves hang on into December
   Platanus: {
@@ -174,6 +187,7 @@ export const PHENOLOGY: Readonly<Record<TreeGenus, Phenology>> = {
     colour: [280, 298],
     fall: [288, 310],
     hue: YELLOW,
+    bloom: { span: [144, 162], colour: [0.14, 0.3, 0.9], strength: 0.45 },
   },
   Carpinus: {
     leafOut: [104, 122],
@@ -187,6 +201,7 @@ export const PHENOLOGY: Readonly<Record<TreeGenus, Phenology>> = {
     colour: [278, 298],
     fall: [292, 314],
     hue: ORANGE_RED,
+    bloom: { span: [128, 148], colour: [0.1, 0.25, 0.92], strength: 0.7 },
   },
   Gleditsia: {
     leafOut: [124, 144],
@@ -218,6 +233,7 @@ export const PHENOLOGY: Readonly<Record<TreeGenus, Phenology>> = {
     colour: [280, 300],
     fall: [294, 316],
     hue: ORANGE,
+    bloom: { span: [112, 132], colour: [0.96, 0.42, 0.88], strength: 0.75 },
   },
   Liquidambar: {
     leafOut: [110, 130],
@@ -261,6 +277,7 @@ export const PHENOLOGY: Readonly<Record<TreeGenus, Phenology>> = {
     colour: [262, 284],
     fall: [280, 302],
     hue: ORANGE_RED,
+    bloom: { span: [130, 146], colour: [0.13, 0.35, 0.88], strength: 0.45 },
   },
   Liriodendron: {
     leafOut: [108, 128],
@@ -273,6 +290,7 @@ export const PHENOLOGY: Readonly<Record<TreeGenus, Phenology>> = {
     colour: [284, 300],
     fall: [288, 306],
     hue: YELLOW_BROWN,
+    bloom: { span: [176, 196], colour: [0.12, 0.2, 0.93], strength: 0.4 },
   },
   Corylus: {
     leafOut: [96, 114],
@@ -286,6 +304,7 @@ export const PHENOLOGY: Readonly<Record<TreeGenus, Phenology>> = {
     colour: [288, 312],
     fall: [302, 326],
     hue: [0.99, 0.45, 0.5],
+    bloom: { span: [100, 120], colour: [0.12, 0.25, 0.93], strength: 0.8 },
   },
   // pure yellow, and bare within days
   Ginkgo: {
@@ -419,4 +438,21 @@ export function seasonAt(day: number, genus: number, jitter = 0): Season {
     d < p.fall[0] ? hold + (1 - hold) * up : 1 - (1 - hold) * ramp(p.fall, d);
   const autumn = d < p.leafOut[1] ? 1 - up : ramp(p.colour, d);
   return { leaf, autumn };
+}
+
+/**
+ * How far a tree of `genus` is in flower on `day` (0 none … the genus's
+ * `strength` at the peak), shifted by its `jitter` like seasonAt: it rises
+ * through the first half of the span and fades through the second.
+ */
+export function bloomAt(day: number, genus: number, jitter = 0): number {
+  const b = phenologyOf(genus).bloom;
+  if (!b) {
+    return 0;
+  }
+  const d = (((day - jitter) % YEAR) + YEAR) % YEAR;
+  const [a, z] = b.span;
+  const mid = (a + z) / 2;
+  const t = d < mid ? ramp([a, mid], d) : 1 - ramp([mid, z], d);
+  return b.strength * t;
 }

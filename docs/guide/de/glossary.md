@@ -77,6 +77,12 @@ DTK25, DTK50, DTK100 für die Maßstäbe 1:10 000 bis 1:100 000), als
 Rasterkacheln vom selben Portal verfügbar; noch nicht genutzt (Kandidat für
 eine kartographische Minikarte).
 
+**Deterministisch / erschlossen** — wie der Viewer zu einer Angabe kommt.
+Deterministisch (`❝ übernommen`, `= berechnet`): aus der Quelle oder mit
+einer festen Formel, gleiche Daten ergeben dasselbe. Erschlossen
+(`◎ erkannt`, `≈ angenommen`): durch eine Regel, einen Abgleich oder eine
+Gestaltung hinzugefügt. [Die vier Abzeichen](./methods.md).
+
 **Echo (first / last / only)** — ein Laserimpuls kann mehrere Echos
 zurückwerfen: das *erste* von der Baumkrone oder dem Dach, das *letzte* vom
 Boden darunter. Das Oberflächenmodell nutzt die ersten Echos, das
@@ -126,6 +132,12 @@ ist der ihrer Eingaben (hier: Laserscan 2016, Grundrisse 2021/2022).
 Vermessungsamt sie anbietet (Sachsen, Nordrhein-Westfalen), für
 Heckenhöhen, Gartenbäume und die Schuppen, die dem 3D-Gebäudemodell
 fehlen. [Steckbrief](./data-sources.md#lsc--die-laserscan-punktwolke).
+
+**Mustererkennung** — hier: eine Regel mit Schwellenwerten entscheidet,
+*was* etwas ist (ein Baum an einer Kronenspitze, ein Schuppen im
+Laserscan), oder zwei Quellen werden abgeglichen (ein Laden wird einem
+Gebäude zugeordnet). Offen und reproduzierbar, aber nicht unfehlbar; der
+Viewer kennzeichnet es mit `◎ erkannt`. [Die vier Abzeichen](./methods.md).
 
 **nDOM** — *normalisiertes DOM*: Oberflächenmodell minus Geländemodell,
 also die Höhe dessen, was auf dem Boden steht. Vom Projekt aus DOM1 und
@@ -239,7 +251,7 @@ abdunkeln. Der Viewer nutzt eines davon, *GTAO* (Ground-Truth Ambient
 Occlusion), in halber Auflösung.
 
 **Tiefenschärfe (DoF)** — die fotografische Unschärfe außerhalb der
-Fokusentfernung; hier standardmäßig auf das Fadenkreuz fokussiert. Nicht
+Fokusentfernung; hier standardmäßig auf die Bildmitte fokussiert. Nicht
 auf Telefonen.
 
 **Nachbearbeitung (Post-Processing)** — Effekte auf dem fertigen Bild:
@@ -253,7 +265,7 @@ der Hauptkostentreiber der Szene, weshalb Handys weniger Pixel rendern.
 Schattenkamera) sieht; alles außerhalb wird übersprungen.
 
 **BVH** — *Bounding Volume Hierarchy*, ein Suchbaum über Dreiecke, der
-„was liegt unter dem Fadenkreuz“ und Kollisionsprüfungen schnell macht.
+„was liegt unter dem Mauszeiger“ und Kollisionsprüfungen schnell macht.
 
 **Pixelverhältnis (DPR)** — wie viele gerenderte Pixel je Bildschirmpixel;
 auf Handys gesenkt, um Füllrate zu sparen.

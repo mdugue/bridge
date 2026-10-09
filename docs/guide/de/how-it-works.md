@@ -117,32 +117,48 @@ Gelände bist.
 
 ## Was echt ist und was nicht
 
-**Gemessen, aus amtlichen Vermessungen:** Geländehöhen, Gebäudegrundrisse,
--höhen und Dachformen, Landnutzung, Gewässerumrisse, Gleisverläufe,
-Brückenlagen und Deckhöhen, Baumpositionen und -höhen, Dachfarben,
-Wiesengrün.
+Jede Angabe im Viewer trägt eines von vier Abzeichen; was sie bedeuten und
+wo welches gilt, steht ausführlich in
+[Wie der Viewer zu einer Angabe kommt](./methods.md). Kurz:
 
-**Von Freiwilligen beigetragen (OpenStreetMap):** Straßenlampen, Bänke
-und andere Stadtmöbel, Spielplätze, Bahnsteige, Straßenbahngleise und
-Oberleitungsmasten, Stützmauern mit Höhen,
-der Tragwerkstyp von Brücken, womit Straßen und Gehwege belegt sind. Die
-Vollständigkeit schwankt von Straße zu Straße.
+`❝ übernommen` **aus amtlichen Vermessungen und Registern:**
+Geländehöhen, Gebäudegrundrisse, -höhen und Dachformen, Landnutzung,
+Gewässerumrisse, Gleisverläufe, Brückenumrisse, Standort, Art und Maße der
+Straßenbäume aus dem Baumkataster.
 
-**Berechnet:** der Sonnenstand, alle Schatten, Nebel und Dunst, die
-Tiefenschärfe, die langsame Bewegung von Blättern und Wasser.
+`❝ übernommen` **von Freiwilligen beigetragen (OpenStreetMap):**
+Straßenlampen, Bänke und andere Stadtmöbel, Spielplätze, Bahnsteige,
+Straßenbahngleise und Oberleitungsmasten, Stützmauern mit Höhen, Hauseingänge,
+Fassadenfarben und -materialien, wo eingetragen, der Tragwerkstyp von
+Brücken, womit Straßen und Gehwege belegt sind. Die Vollständigkeit schwankt
+von Straße zu Straße.
 
-**Für den Look erfunden:** die Pastellpalette, Papierkorn und Vignette, die
-Form der Baumkronen, der Wandton je Gebäude, die Wellen auf dem Wasser, die
-Steine und Platten der Belagsmuster, die
-warmen Fenster in der Dämmerung (dass es ein Laden oder öffentliches
-Gebäude *ist*, stimmt; seine leuchtenden Fenster sind erfunden).
+`= berechnet` **mit einer festen Formel aus Messwerten:** die Höhe der Bäume
+ohne Kataster und der Brückendecks, Dachfarben, Wiesen- und Laubgrün,
+Himmelslicht und Horizont, der Sonnenstand und alle Schatten.
 
-**Gar nicht in den Daten:** Fenster und Türen, Fassadenmaterialien,
-die kleineren Stadtmöbel (Pflanzkübel; Verkehrs- und Straßennamensschilder
-sind zu lückenhaft erfasst, um sie zu zeigen),
-Fahrzeuge (Gleise und Oberleitung der Straßenbahn sind da, die Bahnen
-nicht), Menschen, Bewuchs unter etwa 3 m und
-alles im Inneren von Gebäuden.
+`◎ erkannt` **durch Mustererkennung — kann sich irren:** die Bäume ohne
+Kataster (an Kronenspitzen in der Oberfläche), Schuppen und Lauben (im
+Laserscan), neu gemessene Dächer, Schornsteine, Türme und Gauben, Bögen und
+Fachwerke über Brücken, welcher Laden zu welchem Gebäude gehört, welches
+Gebäude ein Wahrzeichen ist und der Fensterrhythmus der Häuser, die
+Straßenfotos gesehen haben.
+
+`≈ angenommen` **für den Look gestaltet oder ohne Daten gesetzt:** die
+Pastellpalette, Papierkorn und Vignette, die Form der Baumkronen, der
+Wandton je Gebäude, Backstein oder Putz, wo nichts eingetragen ist, die
+Wellen auf dem Wasser, die Steine und Platten der Belagsmuster, die Pfeiler
+unter Brücken, die Fenster der Häuser, die kein Foto vermessen hat (der
+Rhythmus eines gemessenen Nachbarn oder der des Haustyps), die warmen
+Fenster in der Dämmerung (dass es ein Laden oder öffentliches Gebäude
+*ist*, stimmt; seine leuchtenden Fenster sind erfunden).
+
+**Gar nicht in den Daten:** wo genau jedes Fenster auf seiner Wand sitzt
+(die Reihen stehen mittig darauf), die kleineren Stadtmöbel (Pflanzkübel;
+Verkehrs- und Straßennamensschilder sind zu lückenhaft erfasst, um sie zu
+zeigen), Fahrzeuge (Gleise und Oberleitung der Straßenbahn sind da; die
+Bahnen gibt es nur als Datenebene nach Fahrplan), Menschen, Bewuchs unter
+etwa 3 m und alles im Inneren von Gebäuden.
 
 **Bewusst weggelassen:** Schrift. OpenStreetMap kennt die Namen der
 Straßen und Plätze, doch der Viewer schreibt keinen davon hin — weder auf
@@ -163,9 +179,12 @@ ohne Text ruhiger.
 - Luftbilder schauen bei hohen Gebäuden leicht **schräg**, sodass eine
   gemessene Dachfarbe etwas Fassade enthalten kann. Die Abtastung meidet den
   Dachrand, um das zu mindern.
-- Baum**arten** sind unbekannt; jeder Baum hat dieselbe generische Form,
-  skaliert auf seine gemessene Höhe und getönt danach, wie grün er aus der
-  Luft aussah.
+- Die **Art** eines Baums kennt der Viewer nur, wo das Baumkataster
+  (Dresden, Hamburg, Leipzig, Berlin) oder OpenStreetMap sie nennt; sie
+  bestimmt Wuchsform und Jahreszeit der Krone, die Krone selbst ist aber
+  weiter aus Grundformen gebaut (`≈ angenommen`). Jeder andere Baum hat
+  dieselbe generische Form, skaliert auf seine gemessene Höhe und getönt
+  danach, wie grün er aus der Luft aussah.
 - Das Gebäudemodell enthält für diese Kacheln **keine Brücken, Mauern oder
   Türme**, obwohl neuere Ausgaben des Produkts das könnten; deshalb werden
   Brücken und Mauern aus anderen Quellen nachgebaut.

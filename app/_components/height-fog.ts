@@ -1,10 +1,11 @@
 import { AdditiveBlending, Color, type Scene, Vector4 } from "three/webgpu";
-import { VALLEY_FALLOFF_MAX } from "@/lib/city/valley-fog";
+import { VALLEY_FALLOFF_MAX, VALLEY_NEAR_M } from "@/lib/city/valley-fog";
 import {
   clamp,
   float,
   Fn,
   fog,
+  length,
   max,
   min,
   positionView,
@@ -29,7 +30,9 @@ import type { F } from "./shader-chunks";
  *   pools deeper haze than bridge decks and high ground at the same
  *   distance. It builds on the distance fog, never replaces it — only adds
  *   haze toward the fog colour in low ground, so distant high ground still
- *   hazes normally. The start follows the lowest terrain landed so far;
+ *   hazes normally. The start follows the lowest terrain landed so far.
+ *   It sets in with distance (`VALLEY_NEAR_M`): what is right in front of
+ *   the camera keeps its colour;
  * - the site-edge haze: the data ends at the outer tile edge, so the world
  *   dissolves into the fog colour over the last `SITE_EDGE_FADE_M` before
  *   it — never on what is right in front of the camera, so walking along
@@ -88,13 +91,15 @@ export function createSceneFog(
 /** How much of the fog colour a fragment takes (0..1). */
 export function fogFactor(f: SceneFog): F {
   const distance = rangeFogFactor(f.near, f.far);
-  const pool = float(1).sub(
-    smoothstep(
-      f.heightStart,
-      f.heightStart.add(f.heightFalloff),
-      positionWorld.y
+  const pool = float(1)
+    .sub(
+      smoothstep(
+        f.heightStart,
+        f.heightStart.add(f.heightFalloff),
+        positionWorld.y
+      )
     )
-  );
+    .mul(smoothstep(VALLEY_NEAR_M[0], VALLEY_NEAR_M[1], length(positionView)));
   const pooled = clamp(
     distance.add(f.heightStrength.mul(pool).mul(float(1).sub(distance))),
     0,

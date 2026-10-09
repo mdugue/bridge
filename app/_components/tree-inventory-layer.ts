@@ -10,6 +10,10 @@ import {
   Vector3,
 } from "three/webgpu";
 import type { TreeFeature } from "@/lib/city/features";
+import { familyLook, TRUNK_BASE } from "@/lib/city/tree-family";
+import { ageLook } from "@/lib/city/tree-age";
+import { buildTreeStakes } from "./tree-stakes";
+import { buildTreePlan } from "./tree-plan";
 import {
   LOOK_DEFAULTS,
   type VegetationLookKey,
@@ -287,8 +291,22 @@ function buildShapeGeos(): ShapeGeos {
 }
 
 /** How a register tree's crown follows the year (its genus and leaf). */
+
 function seasonKeyOf(t: InventoryTree): CrownSeasonKey {
-  return { genus: t.genus, evergreen: t.leaf === "e", jitter: t.jitter };
+  const evergreen = t.leaf === "e";
+  return {
+    genus: t.genus,
+    evergreen,
+    jitter: t.jitter,
+  };
+}
+
+/** A trunk's bark as the trunk material's tint (white = its own colour):
+ *  the family's bark divided by the material's base. */
+export function barkTint(genus: number, evergreen: boolean): Color {
+  const bark = new Color(familyLook(genus, evergreen).bark);
+  const own = new Color(TRUNK_BASE);
+  return bark.setRGB(bark.r / own.r, bark.g / own.g, bark.b / own.b);
 }
 
 const Y_AXIS = new Vector3(0, 1, 0);
@@ -309,7 +327,9 @@ function writeCrowns(
 /** Trunk girth: the measured diameter where there is one, else the height
  *  (tree-inventory.ts trunkGirth). */
 function trunkMatrix(t: InventoryTree): Matrix4 {
-  const girth = trunkGirth(t.ext, t.dbh);
+  // a measured trunk is as measured; else the age thins or thickens it
+  const girth =
+    trunkGirth(t.ext, t.dbh) * (t.dbh === undefined ? ageLook(t.age).girth : 1);
   return new Matrix4().compose(
     new Vector3(t.x, t.ground, t.z),
     new Quaternion().setFromAxisAngle(Y_AXIS, t.rot),
@@ -360,7 +380,12 @@ function canopyInstances(
   broad: ShapeGeos["broad"]
 ): TreeInstance[] {
   return trees.map((t) => {
-    const out: TreeInstance = { x: t.x, z: t.z, trunk: trunkMatrix(t) };
+    const out: TreeInstance = {
+      x: t.x,
+      z: t.z,
+      trunk: trunkMatrix(t),
+      bark: barkTint(t.genus, t.leaf === "e"),
+    };
     if (t.shape === "broad") {
       const colour = new Color();
       inventoryColor(colour, t, hash(t.x * 0.3 + t.z * 0.7) - 0.5);
@@ -379,9 +404,41 @@ function canopyInstances(
  * Crown colour: the cadastre's leaf type and foliage colour where they say
  * something the NDVI cannot (evergreens, purple and golden cultivars), the
  * canopy trees' own NDVI remap (vegetation-layer crownColor) otherwise, so
- * an inventory lime and a canopy lime read as the same tree.
+ * an inventory lime and a canopy lime read as the same tree — then leaned
+ * by the genus's family (lib/city/tree-family.ts: a chestnut deeper, a
+ * robinia yellower, a plane lighter), so a street of mixed genera reads
+ * mixed — and by its age (lib/city/tree-age.ts: a sapling fresh and light,
+ * an ancient tree deep).
  */
 export function inventoryColor(
+  col: Color,
+  t: Pick<InventoryTree, "colour" | "ground" | "leaf" | "ndvi" | "x" | "z"> & {
+    genus?: number;
+    age?: number;
+  },
+  v: number
+): void {
+  plainInventoryColor(col, t, v);
+  if (t.colour !== 0 || t.leaf === "e") {
+    return;
+  }
+  if (t.genus !== undefined) {
+    lean(col, familyLook(t.genus).summer);
+  }
+  lean(col, ageLook(t.age).leaf);
+}
+
+function lean(col: Color, [dh, ds, dl]: readonly [number, number, number]) {
+  col.getHSL(hsl);
+  col.setHSL(
+    (hsl.h + dh + 1) % 1,
+    Math.min(Math.max(hsl.s + ds, 0), 1),
+    Math.min(Math.max(hsl.l + dl, 0), 1)
+  );
+}
+const hsl = { h: 0, s: 0, l: 0 };
+
+function plainInventoryColor(
   col: Color,
   t: Pick<InventoryTree, "colour" | "ground" | "leaf" | "ndvi" | "x" | "z">,
   v: number
@@ -485,6 +542,14 @@ export function buildTreeInventory(
   if (trees.length > 0) {
     const geos = buildShapeGeos();
     instances = canopyInstances(trees, geos.broad);
+    const stakes = buildTreeStakes(trees.filter((t) => ageLook(t.age).staked));
+    if (stakes) {
+      group.add(stakes);
+    }
+    const plan = buildTreePlan(trees);
+    if (plan) {
+      group.add(plan);
+    }
     counts.broad = trees.filter((t) => t.shape === "broad").length;
     const reshaped = trees.filter((t) => t.shape !== "broad");
     for (const cell of bucketByCell(reshaped)) {

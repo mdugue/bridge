@@ -139,3 +139,24 @@ test("the Schwarzplan draws only the buildings, black, and the white ground", ()
   expect(w.solid.visible).toBe(true);
   expect(w.scene.overrideMaterial).toBeNull();
 });
+
+test("what only the plan draws shows in the Schwarzplan's frames alone", () => {
+  const w = world();
+  const planMaterial = new MeshBasicNodeMaterial();
+  planMaterial.userData.figure = true;
+  const plan = new Mesh(new BoxGeometry(), planMaterial);
+  plan.visible = false;
+  plan.userData.planOnly = true;
+  w.scene.add(plan);
+  const paper = createPaperScene(w.scene, w.fog);
+  const papier = paper.begin("paper");
+  expect(plan.visible).toBe(false);
+  papier();
+  const figure = paper.begin("figure");
+  expect(plan.visible).toBe(true);
+  // the plan's circles wear the figure's black, the solid is not drawn
+  expect(paper.drawsAsPaper(plan, "figure")).toBe(true);
+  expect(w.solid.visible).toBe(false);
+  figure();
+  expect(plan.visible).toBe(false);
+});

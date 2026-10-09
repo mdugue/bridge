@@ -46,7 +46,9 @@ export function cityJsonFile(tile: string): string {
  *  facts per object + the laser scan's small structures + the structures
  *  the surface model shows beyond LoD2 + the landmarks Wikidata knows +
  *  the roofs rebuilt from DOM1 + OSM's entrances on the walls + the
- *  dormers DOM1 shows on the pitched roofs). */
+ *  dormers DOM1 shows on the pitched roofs + the shopfronts street photos
+ *  show on the ground floors, with the canopies DOM1 shows over them +
+ *  the facade traits they measure on the upper walls, the windows). */
 export function cityMeshSourceFiles(
   site: Site,
   tile: string
@@ -56,10 +58,13 @@ export function cityMeshSourceFiles(
   dormers: string;
   measuredRoofs: string;
   osmBuild: string;
+  plinths: string;
   roofColor: string;
   landmarks: string;
+  shopfronts: string;
   smallBuild: string;
   structures: string;
+  windows: string;
 } {
   const dir = siteDataDir(site);
   return {
@@ -67,11 +72,14 @@ export function cityMeshSourceFiles(
     doors: `${dir}/dlm/doors_${tile}.geojson`,
     dormers: `${dir}/dlm/dormers_${tile}.geojson`,
     osmBuild: `${dir}/dlm/osmbuild_${tile}.json`,
+    plinths: `${dir}/dlm/plinths_${tile}.geojson`,
     measuredRoofs: `${dir}/dlm/roofs_${tile}.geojson`,
     roofColor: `${dir}/dop/roofcolor_${tile}.json`,
+    shopfronts: `${dir}/dlm/shopfronts_${tile}.json`,
     smallBuild: `${dir}/dlm/smallbuild_${tile}.geojson`,
     structures: `${dir}/dlm/structures_${tile}.geojson`,
     landmarks: `${dir}/dlm/landmarks_${tile}.json`,
+    windows: `${dir}/dlm/windows_${tile}.json`,
   };
 }
 
@@ -163,6 +171,10 @@ const ARTIFACTS = {
   // shadow map. Without them the light is as before.
   svf: { file: named("svf", "png"), sound: true },
   horizon: { file: named("horizon", "png") },
+  // Optional: what street photos say about each building's facade
+  // (lib/city/facade-reading.ts; Mapillary, CC BY-SA 4.0): the clay's
+  // relief, tone and shop plinth. Without it the facades are as before.
+  facades: { file: named("facades", "json") },
   // Optional: the road markings (pipeline/bake/markings.py) — the index
   // raster (rows, lane bits, centre offset) and the table of crossings
   // and stop lines; without them the roads stay unpainted.

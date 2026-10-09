@@ -22,7 +22,12 @@ import { axisFrame, BRIDGE_STEP } from "./bridge";
 import type { BridgeFeature, MonumentFeature, TreeFeature } from "./features";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import type { FeatureInquiry } from "./inquiry-features";
-import { MARKER_SHAPE, POINT_BASIN_R, ringCentre } from "./monuments";
+import {
+  markerPieces,
+  measuredMarker,
+  POINT_BASIN_R,
+  ringCentre,
+} from "./monuments";
 import { archetypeOf, treeExtents } from "./tree-inventory";
 import { TREE_GENERA } from "./tree-season";
 
@@ -300,12 +305,31 @@ function monumentSolid(
       },
     };
   }
-  const shape = p.kind === "fountain" ? null : MARKER_SHAPE[p.kind];
-  const r = shape
-    ? Math.max(shape.width, shape.depth) / 2 + 0.3
+  const measured =
+    p.kind !== "fountain" && p.relief
+      ? measuredMarker(p.relief, p.kind, p.form)
+      : null;
+  const pieces =
+    p.kind === "fountain"
+      ? null
+      : (measured?.pieces ??
+        markerPieces(p.kind, p.form, p.height).map((s) => ({
+          ...s,
+          along: 0,
+        })));
+  const r = pieces
+    ? Math.max(
+        ...pieces.map(
+          (s) => Math.hypot(s.width, s.depth) / 2 + Math.abs(s.along)
+        )
+      ) + 0.3
     : POINT_BASIN_R;
-  const height = Math.max(top, shape?.height ?? BASIN_RIM);
-  const { x, z } = epsgToWorld(ex, ey, ctx.offset);
+  const height = Math.max(
+    top,
+    pieces ? Math.max(...pieces.map((s) => s.lift + s.height)) : BASIN_RIM
+  );
+  const [cx, cy] = measured?.centre ?? [ex, ey];
+  const { x, z } = epsgToWorld(cx, cy, ctx.offset);
   return {
     position: [ex, ey],
     solid: { cylinder: { x, z, y0: y - 0.2, y1: y + height, r } },

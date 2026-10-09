@@ -164,6 +164,8 @@ config change.
     third of them, wider —, and `low-vegetation-layer.ts`, the OSM
     hedges), `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
+    `clay-windows.ts` (every house's windows, drawn by the clay's
+    fragment pass as recesses — no geometry, no glass; ADR 0049),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
     green in the terrain's fragment pass), `sport-ground.ts` (sports
     grounds: surface and lines in the same pass), `sport-fixtures.ts`
@@ -237,7 +239,7 @@ config change.
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers,
     `sceneMaterial` for the scene-wide shared node materials)
   - the twin (ADR 0042): `inquiry-probe.ts` (what a click, a long press
-    or `I` at the crosshair asks, and the pencil-hatch mark) and
+    or `I` under the pointer asks, and the pencil-hatch mark) and
     `inquiry-card.tsx` (the card — the only place the scene's facts become
     text); the
     facts are `lib/city/object-facts.ts` (bake and read), the card's lines
@@ -285,7 +287,9 @@ config change.
   level's third of the trees, per tile, and their file),
   `tree-season.ts`
   (per-genus leaf-out, autumn and leaf fall), `building-tint.ts` (the
-  per-building clay tint, storey height, roof palette), `small-buildings.ts`
+  per-building clay tint, storey height, roof palette), `windows.ts`
+  (each building's window rhythm — measured, a neighbour's or its
+  type's — and each wall vertex's place on its wall), `small-buildings.ts`
   (the scan's sheds as boxes; the canopy points they veto),
   `structures.ts` (the columns, missing buildings and roof-relief height
   fields DOM1 shows beyond LoD2, as meshes), `landmarks.ts` (the site's
@@ -540,8 +544,9 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   (WebKit colour-manages untagged greyscale even with
   `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
   with neighbouring classes).
-- `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
-  ≈ 2 min for fifteen tiles, warm ≈ 1 s; CI restores it between runs): the key covers the inputs'
+- `prepare-data.ts` caches by content in `.cache/prepare-data` (on Vercel
+  `.next/cache/prepare-data`, the folder its build cache keeps; cold run
+  ≈ 6 min for fifteen tiles, warm ≈ 1 s; CI restores it between runs): the key covers the inputs'
   contents, `COMMON_SOURCES` (`prepare-data.ts` itself, the site's own
   config, `sites/providers.ts`, `bun.lock`, `patches/`) and every module
   reachable from the artifact's bake entries (`scripts/bake-sources.ts`
@@ -589,9 +594,9 @@ main thread) out of the frames:
   through the group builds the wrong side. Modell's Ausschnitt shows only
   once `PostStack.holdCut` holds both sides (`aloneUnder`), and leaves its
   shadows unclipped.
-- WebGPU has no 1-component 8/16-bit vertex formats (the feature id and roof
-  flag are baked as FLOAT), and draws points 1 px wide (the lamp halos are
-  sprites).
+- WebGPU has no 1-component 8/16-bit vertex formats (the feature id is
+  baked as FLOAT; the roof flag rides in the windows' snorm16 `_FACADE`),
+  and draws points 1 px wide (the lamp halos are sprites).
 - **WebGPU draws from at most eight vertex buffers** (the default limit;
   three asks for no more), and every non-interleaved attribute is one —
   `position` and `normal` included. A ninth makes the pipeline invalid and
@@ -652,7 +657,13 @@ not help** (and would break feature-id picking/demolish). Per-building data
 (tint, heights, roof colour, glow, roughness, the demolish tree) is **one row
 per object** in an `EXT_structural_metadata` property table, packed into a
 float texture the clay shader reads (`lib/city/city-mesh.ts`) — add a
-building attribute there, not as a vertex attribute. The perf bottleneck is
+building attribute there, not as a vertex attribute. A word packed into
+bits there (the windows' style) or a value that seeds a hash (the
+roughness jitter) reaches the fragment as a **flat** varying
+(`setInterpolation(InterpolationSamplingType.FLAT)`): interpolated, even a
+value all three vertices share drifts by a few ulps, which past 2²⁰ reaches
+a word's low bits and which a hash magnifies into a new value every pixel
+(a loose grid's windows frayed at their sides). The perf bottleneck is
 **fill-rate** (post FX + shadow map), not draw calls.
 
 **Tiles come and go.** 3DTilesRendererJS loads and unloads tiles by
@@ -808,6 +819,12 @@ once per animation frame: anything that renders the frame twice in one
 bridge or a misplaced layer is invisible looking straight down.
 
 ## QA: self-verify, don't ask for screenshots
+
+**A PR that changes what the viewer shows carries JSON snapshots** in its
+description — views the reviewer pastes into the preview's Snapshot panel,
+before and after as a look-key pair where the change has a slider. The
+**`pr-snapshots` skill** (`.claude/skills/pr-snapshots/`) says how;
+screenshots are optional there.
 
 URL knobs: `?scene=lite` (the CI profile, below), `?gpu=webgl2` (the
 WebGL2 backend where WebGPU exists), `?safety=N` (0–3: the page at that
