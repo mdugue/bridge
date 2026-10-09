@@ -100,6 +100,10 @@ export function readObjectTable(
     source: new Uint8Array(count),
     storeyH: new Float32Array(count),
     tint: new Float32Array(count * 3),
+    winAxis: new Float32Array(count),
+    winH: new Float32Array(count),
+    winStyle: new Uint32Array(count),
+    winW: new Float32Array(count),
   };
   const accessor = metadata.tableAccessors[0];
   const scalar = (
@@ -128,6 +132,11 @@ export function readObjectTable(
   scalar("rough", table.rough);
   scalar("source", table.source);
   scalar("storeyH", table.storeyH);
+  // a tile baked before the windows has none (absent columns stay 0)
+  scalar("winAxis", table.winAxis);
+  scalar("winH", table.winH);
+  scalar("winStyle", table.winStyle);
+  scalar("winW", table.winW);
   vec3("roof", table.roof);
   vec3("tint", table.tint);
   return table;
@@ -193,9 +202,9 @@ function objectTexture(table: CityObjectTable): {
 }
 
 /**
- * Dresses a streamed city mesh: the glTF feature id and roof flag under the
- * names the clay shader reads, the tile's clay material, a BVH for collision
- * and picks. `demolished` replays this session's demolitions of the tile.
+ * Dresses a streamed city mesh: the glTF feature id and place on the wall
+ * (the windows', a roof vertex flagged in it) under the names the clay
+ * shader reads, the tile's clay material, a BVH for collision and picks. `demolished` replays this session's demolitions of the tile.
  */
 export function dressCity(
   mesh: Mesh,
@@ -208,7 +217,7 @@ export function dressCity(
   const count = metadata.tableAccessors[0]?.count ?? 0;
   for (const [from, to] of [
     ["_feature_id_0", "featureId"],
-    ["_roof", "roof"],
+    ["_facade", "facade"],
   ] as const) {
     const attribute = geometry.getAttribute(from);
     if (attribute) {

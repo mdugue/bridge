@@ -48,6 +48,7 @@ import {
   tinSurface,
 } from "../lib/city/terrain-tin";
 import { tfwToBounds } from "../lib/city/tfw";
+import { facadeAttribute } from "../lib/city/windows";
 import type { BakedCityMesh } from "./bake-city-mesh";
 import { tinFromGrid } from "./bake-terrain-tin";
 import type { Column, MeshInput, PropertyTable } from "./tile-glb";
@@ -466,7 +467,8 @@ export interface CityMesh {
 /**
  * The building mesh with its property table: flat normals from the
  * non-indexed stream, then welded (vertices of equal position, normal,
- * object and roof flag merge — never across objects).
+ * object and place on their wall, the roof flag in it, merge — never across
+ * objects).
  */
 export function cityMesh(baked: BakedCityMesh): CityMesh {
   const v = baked.vertices;
@@ -487,6 +489,11 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       source: { type: "SCALAR", componentType: "UINT8", values: t.source },
       storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },
       tint: { type: "VEC3", componentType: "FLOAT32", values: t.tint },
+      // the windows the clay draws (lib/city/windows.ts)
+      winAxis: { type: "SCALAR", componentType: "FLOAT32", values: t.winAxis },
+      winH: { type: "SCALAR", componentType: "FLOAT32", values: t.winH },
+      winStyle: { type: "SCALAR", componentType: "UINT32", values: t.winStyle },
+      winW: { type: "SCALAR", componentType: "FLOAT32", values: t.winW },
       // What the object is, for the inquiry card (ADR 0042): read one row
       // at a time, only when asked — never packed for the shader.
       ...Object.fromEntries(
@@ -523,7 +530,14 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
     input: {
       positions: v.positions,
       normals: withShading(normalsOf(v.positions), v.normals),
-      attributes: { _FEATURE_ID_0: v.objectIds, _ROOF: v.isRoof },
+      attributes: { _FEATURE_ID_0: v.objectIds },
+      // the place on the wall, a roof vertex flagged in it (FACADE_ROOF)
+      vectors: {
+        _FACADE: {
+          array: v.facade ?? facadeAttribute(v, () => false),
+          type: "VEC4",
+        },
+      },
       table,
       weld: true,
     },

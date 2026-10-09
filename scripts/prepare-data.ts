@@ -113,6 +113,7 @@ import {
   type TilesetExtras,
 } from "../lib/city/tileset";
 import type { CityJsonDocument } from "../lib/city/types";
+import type { WindowFile } from "../lib/city/windows";
 import {
   TRAM_TIMETABLE_FILE,
   tramTimetableSource,
@@ -596,6 +597,9 @@ function parseCity(tile: string): BakedCityMesh {
         readJson<ShopfrontFile>(at(src.shopfronts)).buildings
       ).flat()
     : undefined;
+  const windows = existsSync(at(src.windows))
+    ? Object.values(readJson<WindowFile>(at(src.windows)).buildings).flat()
+    : undefined;
   const baked = bakeCityMesh(
     tile,
     doc,
@@ -606,7 +610,7 @@ function parseCity(tile: string): BakedCityMesh {
     osmDoc?.context ?? "render",
     gaps,
     measured,
-    { doors, dormers, plinths, shopfronts }
+    { doors, dormers, plinths, shopfronts, windows }
   );
   sharedMatrix ??= baked.matrix;
   return baked;
@@ -655,6 +659,7 @@ async function bakeCity(
     at(src.plinths),
     at(src.dormers),
     at(src.shopfronts),
+    at(src.windows),
   ];
   const bake = [
     "scripts/bake-city-mesh.ts",
@@ -1052,6 +1057,11 @@ for (const [i, tile] of TILES.entries()) {
       Number.isFinite(maxZ) ? maxZ : 1,
     ],
   });
+  // A tile's meshes are hundreds of MB of typed arrays that Bun's lazy
+  // collector let pile up over the loop: a cold Dresden reached ~7 GB,
+  // more than a 4-core, 8 GB build machine running two sites side by side
+  // holds. Collected after each tile, the loop stays near one tile's peak.
+  Bun.gc(true);
 }
 log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 

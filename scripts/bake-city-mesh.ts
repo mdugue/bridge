@@ -48,6 +48,7 @@ import {
   OBJECT_SOURCE_DORMER,
   OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_GAP,
+  OBJECT_SOURCE_LOD2,
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
   type OsmBuildingLut,
@@ -115,6 +116,12 @@ import {
   structureShape,
 } from "../lib/city/structures";
 import type { CityJsonDocument } from "../lib/city/types";
+import {
+  facadeAttribute,
+  type WindowHost,
+  type WindowWall,
+  windowSpecs,
+} from "../lib/city/windows";
 import { measuredRoofMesh, measuredRoofsById } from "./measured-roofs";
 
 /** RoofSurface index in the loader's fixed `defaultSemanticsColors` order. */
@@ -129,8 +136,20 @@ const rgb = (c: [number, number, number]): [number, number, number] => [
   r3(c[2]),
 ];
 
+/** What the bake lays on the LoD2 walls, each feature on its host. */
+export interface OnWalls {
+  doors?: readonly DoorFeature[];
+  dormers?: readonly DormerFeature[];
+  plinths?: readonly PlinthFeature[];
+  shopfronts?: readonly ShopfrontWall[];
+  windows?: readonly WindowWall[];
+}
+
 /** The mesh as non-indexed triangles, flat per-face vertices. */
 export interface CityVertices {
+  /** per vertex where it lies on its wall, for the windows (4 × snorm16,
+   *  lib/city/windows.ts `facadeAttribute`); absent: no windows */
+  facade?: Int16Array<ArrayBuffer>;
   /** 1 on RoofSurface vertices, 0 elsewhere */
   isRoof: Float32Array<ArrayBuffer>;
   /** per vertex, a normal to shade with in place of the triangle's flat
@@ -502,12 +521,7 @@ export function bakeCityMesh(
   facades: FacadeMaterial = "render",
   gaps?: readonly StructureFeature[],
   measured?: readonly MeasuredRoofFeature[],
-  onWalls: {
-    doors?: readonly DoorFeature[];
-    dormers?: readonly DormerFeature[];
-    plinths?: readonly PlinthFeature[];
-    shopfronts?: readonly ShopfrontWall[];
-  } = {}
+  onWalls: OnWalls = {}
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
   const doc = withoutTrafficStructures(source);
@@ -560,6 +574,9 @@ export function bakeCityMesh(
   // the objects drawn as their measured parts (ADR 0036): their facts
   // say so, not what the LoD2 roof said
   const rebuilt = measuredRoofsById(measured ?? []);
+  // what the windows read beyond the row: the function, OSM's storeys,
+  // a facade of its own (a landmark's flag alone keeps its windows)
+  const hosts: WindowExtra[] = [];
   const objects: CityObjectRow[] = keys.map((id, index) => {
     const o = doc.CityObjects[id];
     const root = rootOf(doc, keys, index);
@@ -579,6 +596,8 @@ export function bakeCityMesh(
     const osm = inheritedOsm(osmLut?.[id], osmLut?.[keys[root]]);
     const eaveH = roofMin === undefined ? total : Math.max(roofMin - baseZ, 0);
     const footprints = footprintsOf[index];
+    const monumental = ownFacade(attrs, eaveH, osm?.levels);
+    hosts[index] = windowExtra(attrs, osm?.levels, monumental);
     return {
       building: o.type === "Building",
       root,
@@ -586,7 +605,7 @@ export function bakeCityMesh(
       eaveH: cm(eaveH),
       flags: facadeFlags(
         inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
-        ownFacade(attrs, eaveH, osm?.levels)
+        monumental
       ),
       storeyH: cm(mappedStoreyHeight(eaveH, measured, osm?.levels)),
       glow: buildingGlows(attrs) ? 1 : 0,
@@ -633,11 +652,59 @@ export function bakeCityMesh(
     }
   }
 
-  const baked = { epsg, matrix, objects, offset, vertices: v };
+  const baked: BakedCityMesh = { epsg, matrix, objects, offset, vertices: v };
   markFlatRoofs(objects, v);
-  appendBeyondLod2(tile, baked, keys, { ...onWalls, facades, gaps, scan });
-  markGrounded(baked.objects);
+  dressWalls(tile, baked, keys, hosts, onWalls, { facades, gaps, scan });
   return baked;
+}
+
+/**
+ * The walls' storeys, windows and parts, in the order they read each
+ * other: the storeys counted from the street, then the windows (the
+ * plinths' and shopfronts' heights read the storey they snap to the
+ * eave), then the parts beyond LoD2, and last each wall vertex's place on
+ * its wall.
+ */
+function dressWalls(
+  tile: string,
+  baked: BakedCityMesh,
+  keys: readonly string[],
+  hosts: readonly WindowExtra[],
+  onWalls: OnWalls,
+  extra: {
+    facades: FacadeMaterial;
+    gaps?: readonly StructureFeature[];
+    scan?: readonly SmallBuildingFeature[];
+  }
+): void {
+  const plinths = onWalls.plinths ?? [];
+  // the storeys count from the street, where the plinths say where it is
+  liftToStreet(baked.objects, keys, plinths);
+  assignWindows(baked.objects, keys, hosts, onWalls.windows ?? [], plinths);
+  appendBeyondLod2(tile, baked, keys, { ...onWalls, ...extra });
+  markGrounded(baked.objects);
+  // the parts laid on the walls copied their host's row: windows are the
+  // LoD2 walls' alone
+  for (const o of baked.objects) {
+    if ((o.source ?? OBJECT_SOURCE_LOD2) !== OBJECT_SOURCE_LOD2) {
+      delete o.windows;
+    }
+  }
+  baked.vertices.facade = facadeOf(baked, keys, onWalls);
+}
+
+/** What the windows read of an object beyond its row: its function,
+ *  whether OSM counts its storeys, a facade of its own. */
+function windowExtra(
+  attrs: Record<string, unknown>,
+  levels: number | undefined,
+  monumental: boolean
+): WindowExtra {
+  return {
+    fn: typeof attrs.function === "string" ? attrs.function : undefined,
+    levels: (levels ?? 0) >= 1,
+    monumental,
+  };
 }
 
 /** The flags with OBJECT_FLAG_LANDMARK where the facade is its own. */
@@ -722,6 +789,20 @@ const NO_PLINTH =
  *  on a roof (a tower's part), not on the street. */
 const PLINTH_ON_GROUND_M = 1.5;
 
+/** Whether a plinth piece is drawn on its host: not on a facade of its
+ *  own, glass, metal or a flat-roofed block (`NO_PLINTH`), not under 3 m
+ *  of wall, not on a part standing on a roof. */
+function carriesPlinth(
+  host: Pick<CityObjectRow, "baseZ" | "eaveH" | "flags">,
+  ground: readonly number[]
+): boolean {
+  return (
+    (host.flags & NO_PLINTH) === 0 &&
+    host.eaveH >= 3 &&
+    host.baseZ <= Math.min(...ground) + PLINTH_ON_GROUND_M
+  );
+}
+
 /**
  * The plinths on the LoD2 walls' street side (pipeline/bake/plinths.py),
  * appended as part of the building they carry, like its doors: one object
@@ -798,14 +879,7 @@ export function appendPlinths(
     const p = f.properties;
     const hostIndex = p ? objectIndex.get(p.of) : undefined;
     const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
-    if (
-      !(p && host && hostIndex !== undefined) ||
-      (host.flags & NO_PLINTH) !== 0 ||
-      host.eaveH < 3
-    ) {
-      continue;
-    }
-    if (host.baseZ > Math.min(...p.g) + PLINTH_ON_GROUND_M) {
+    if (!(p && host && hostIndex !== undefined && carriesPlinth(host, p.g))) {
       continue;
     }
     bands.plinth.push(...plinthStretches(f, hostIndex));
@@ -1273,4 +1347,193 @@ export function appendDormers(
     isRoof: concat(v.isRoof, isRoof),
     ...flatNormalsAfter(v, positions.length),
   };
+}
+
+/** An object's footprint centre (EPSG): its first ring's mean. */
+function footprintCentre(
+  footprints: readonly [number, number][][]
+): [number, number] | undefined {
+  const ring = footprints[0];
+  if (!ring?.length) {
+    return undefined;
+  }
+  const x = ring.reduce((a, p) => a + p[0], 0) / ring.length;
+  const y = ring.reduce((a, p) => a + p[1], 0) / ring.length;
+  return [x, y];
+}
+
+/** What keeps a building's walls free of windows beside a facade of its
+ *  own (`WindowExtra.monumental`): glass or metal cladding, its own colour.
+ *  A Wikidata landmark's flag alone does not — most are town houses whose
+ *  neighbours have windows (the Neumarkt's, a listed Mietshaus). */
+const NO_WINDOW_FLAGS =
+  OBJECT_FLAG_GLASS | OBJECT_FLAG_METAL | OBJECT_FLAG_OWN_COLOUR;
+
+/** What the windows read of an object beyond its row. */
+export type WindowExtra = Pick<WindowHost, "fn" | "levels"> & {
+  /** its facade its own (lib/city/building-tint.ts `ownFacade`: a
+   *  church, a palace, a theatre, a hall) */
+  monumental?: boolean;
+};
+
+/** A building's street level stands at most this far over the lowest
+ *  ground under its plinths (m): up a steep street its ground floor's
+ *  level lies between. */
+const STREET_RISE_M = 1;
+/** An object's base moves up to its building's street level from at most
+ *  this far under it (m): deeper, it stands in a courtyard or a cut. */
+const STREET_UNDER_M = 1.5;
+
+/**
+ * Each LoD2 object's base moved up to its building's street level where
+ * the building's plinths say where that is (`carriesPlinth`): the highest
+ * of their pieces' lowest ground, at most `STREET_RISE_M` over the lowest;
+ * its eave stays where it is. A LoD2 base is the lowest ground round the
+ * whole footprint — a courtyard's, a light well's, a ramp's — and lay a
+ * median 0.3 m under the street on Dresden's spawn tile, so storeys, bands
+ * and windows counted from it put the ground floor's windows behind the
+ * plinth. Every part of the building moves to the same level, so their
+ * storeys meet.
+ */
+export function liftToStreet(
+  objects: CityObjectRow[],
+  keys: readonly string[],
+  plinths: readonly PlinthFeature[]
+): void {
+  const index = new Map(keys.map((id, i) => [id, i]));
+  const ground = new Map<number, { lo: number; hi: number }>();
+  for (const f of plinths) {
+    const p = f.properties;
+    const i = p ? index.get(p.of) : undefined;
+    const host = i === undefined ? undefined : objects[i];
+    if (p && host && carriesPlinth(host, p.g)) {
+      const had = ground.get(host.root);
+      ground.set(host.root, {
+        lo: Math.min(had?.lo ?? Number.POSITIVE_INFINITY, ...p.g),
+        hi: Math.max(had?.hi ?? Number.NEGATIVE_INFINITY, ...p.g),
+      });
+    }
+  }
+  for (const o of objects) {
+    const g = ground.get(o.root);
+    if (!g || (o.source ?? OBJECT_SOURCE_LOD2) !== OBJECT_SOURCE_LOD2) {
+      continue;
+    }
+    const street = Math.min(g.hi, g.lo + STREET_RISE_M);
+    const rise = street - o.baseZ;
+    if (rise > 0 && rise <= STREET_UNDER_M) {
+      o.eaveH = cm(Math.max(o.eaveH - rise, 0));
+      o.baseZ = cm(street);
+    }
+  }
+}
+
+/** How high each object's plinth stands over its base (m), where one is
+ *  drawn (`carriesPlinth`): the highest top of its pieces — the
+ *  ground-floor windows keep above it. */
+function plinthTops(
+  objects: readonly CityObjectRow[],
+  plinths: readonly PlinthFeature[],
+  index: ReadonlyMap<string, number>
+): Map<number, number> {
+  const tops = new Map<number, number>();
+  for (const f of plinths) {
+    const p = f.properties;
+    const i = p ? index.get(p.of) : undefined;
+    const host = i === undefined ? undefined : objects[i];
+    if (p && host && i !== undefined && carriesPlinth(host, p.g)) {
+      const top = Math.max(...p.top) - host.baseZ;
+      tops.set(i, Math.max(tops.get(i) ?? top, top));
+    }
+  }
+  return tops;
+}
+
+/**
+ * Each LoD2 object's windows (lib/city/windows.ts `windowSpecs`: measured
+ * on its walls, on another part of its building, on the nearest building
+ * of its kind, or its type's) and the storey they keep, snapped to its
+ * eave — written into its row (`windows`, `storeyH`); its ground floor's
+ * over its plinth.
+ */
+export function assignWindows(
+  objects: CityObjectRow[],
+  keys: readonly string[],
+  extra: readonly WindowExtra[],
+  walls: readonly WindowWall[],
+  plinths: readonly PlinthFeature[] = []
+): void {
+  const index = new Map(keys.map((id, i) => [id, i]));
+  const tops = plinthTops(objects, plinths, index);
+  const hosts: WindowHost[] = objects.map((o, i) => ({
+    centre: footprintCentre(o.footprints),
+    eaveH: o.eaveH,
+    flat: hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF),
+    fn: extra[i]?.fn,
+    levels: extra[i]?.levels ?? false,
+    lod2: (o.source ?? OBJECT_SOURCE_LOD2) === OBJECT_SOURCE_LOD2,
+    ownFacade:
+      (extra[i]?.monumental ?? false) || (o.flags & NO_WINDOW_FLAGS) !== 0,
+    plinth: tops.get(i),
+    root: o.root,
+    shop: hasObjectFlag(o.flags, OBJECT_FLAG_SHOP),
+    storeyH: o.storeyH,
+  }));
+  windowSpecs(hosts, walls, index).forEach((choice, i) => {
+    if (choice.spec.axis > 0) {
+      objects[i].windows = choice.spec;
+      objects[i].storeyH = cm(choice.storey);
+    }
+  });
+}
+
+/**
+ * Where on its wall each vertex of a window-carrying object lies (lib/city/
+ * windows.ts `facadeAttribute`), with OSM's doors and the shopfronts on
+ * those walls.
+ */
+function facadeOf(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  keys: readonly string[],
+  onWalls: {
+    doors?: readonly DoorFeature[];
+    shopfronts?: readonly ShopfrontWall[];
+  }
+): Int16Array<ArrayBuffer> {
+  const { cx, cy } = baked.offset;
+  const index = new Map(keys.map((id, i) => [id, i]));
+  const doors = (onWalls.doors ?? []).flatMap((f) => {
+    const p = f.properties;
+    const object = p ? index.get(p.of) : undefined;
+    if (!p || object === undefined) {
+      return [];
+    }
+    const [x, y] = f.geometry.coordinates;
+    return [
+      {
+        object,
+        at: [x - cx, y - cy] as [number, number],
+        n: [p.nx, p.ny] as [number, number],
+      },
+    ];
+  });
+  const shops = (onWalls.shopfronts ?? []).flatMap((w) => {
+    const object = index.get(w.oid);
+    return object === undefined
+      ? []
+      : [
+          {
+            object,
+            a: [w.a[0] - cx, w.a[1] - cy] as [number, number],
+            b: [w.b[0] - cx, w.b[1] - cy] as [number, number],
+            n: w.n,
+          },
+        ];
+  });
+  return facadeAttribute(
+    baked.vertices,
+    (i) => (baked.objects[i]?.windows?.axis ?? 0) > 0,
+    doors,
+    shops
+  );
 }

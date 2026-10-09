@@ -58,6 +58,7 @@ each data → look transformation does and its status.
 | [0046](./0046-a-per-device-safety-ladder-for-gpu-loss.md) | A device that lost its GPU gets a lighter page: a safety level 0–3 per device in local storage, raised by a loss, a crashed previous page or a memory emergency, one level lower every three days; recovery bounded by levels (one reload each), the old device released first, a GPU reclaimed in the background told apart | accepted |
 | [0047](./0047-phone-memory-budget-in-true-bytes.md) | A phone's memory in true bytes: a post profile per tier (no DoF, FXAA, one-byte targets, a one-byte shadow colour target), fixed costs counted, the tile cache derived from the governor's soft line, buffers shared across tiles, CPU copies dropped after upload, the shadow camera streaming at a resolution of its own (64 px on a phone, 128 on a desktop) | accepted |
 | [0048](./0048-network-failures-are-retried.md) | A network failure is retried for a budget of the page's visible time, never decided at once; a tile that gave up is healed; the boot waits a minute of a usable page; the manifest never falls back to an unhashed name; nothing decided while the page leaves | accepted |
+| [0049](./0049-windows-drawn-by-the-clay.md) | Windows are drawn by the clay's fragment shader on every house (a recess, no geometry, no glass): their rhythm per building measured where street photos saw it, else a neighbour's, else its type's; per wall vertex its place along the wall; none on party walls, doors, shopfronts or a monumental facade | accepted |
 
 ## Format
 

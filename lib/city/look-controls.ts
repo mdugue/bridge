@@ -35,7 +35,8 @@ export type ClayLookKey =
   | "roofVibrance"
   | "roughness"
   | "tint"
-  | "transparency";
+  | "transparency"
+  | "windows";
 /** Rows the post stack applies (post-stack.ts). */
 export type PostLookKey = "contact" | "grading" | "grain" | "ink";
 /** Rows every vegetation tile applies (vegetation-layer.ts). */
@@ -219,17 +220,27 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "building-articulation",
     label: "Gliederung",
     description:
-      "Gemalter Sockel, Traufgesims und Ladenzonen — keine Fenster; Sockel und Gesims über dem Erdgeschoss sind modelliert",
+      "Gemalter Sockel, Traufgesims und Ladenzonen; Sockel und Gesims über dem Erdgeschoss sind modelliert",
     group: "buildings",
     initial: 0.8,
     snapshotKey: "articulationPct",
+  },
+  {
+    key: "windows",
+    id: "building-windows",
+    label: "Fenster",
+    description:
+      "Fensterreihen auf jeder Fassade: Takt und Größe aus Straßenfotos, sonst vom nächsten gemessenen Haus oder vom Haustyp — vertiefte Öffnungen mit schmaler Sohlbank, ohne Glas und Sprossen",
+    group: "buildings",
+    initial: 1,
+    snapshotKey: "windowsPct",
   },
   {
     key: "facadeReading",
     id: "building-facade-reading",
     label: "Fassadenbild",
     description:
-      "Was Straßenfotos über eine Fassade sagen: feines Relief, wo sie unruhig ist, ein dunklerer Ton, Ladensockel — keine Fenster",
+      "Was Straßenfotos über eine Fassade sagen: feines Relief, wo sie unruhig ist, ein dunklerer Ton, Ladensockel",
     group: "buildings",
     initial: 1,
     snapshotKey: "facadeReadingPct",
