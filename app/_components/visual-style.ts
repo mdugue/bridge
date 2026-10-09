@@ -1,4 +1,5 @@
 import {
+  type Camera,
   type DataTexture,
   DoubleSide,
   FrontSide,
@@ -69,6 +70,7 @@ import {
 } from "./material-slots";
 import { clayWindows } from "./clay-windows";
 import { claySkySlots, createClaySky, openSkySlots } from "./sky-light";
+import { parallelDirection } from "./view-ray";
 import {
   mirrorWeight,
   reflectionStrength,
@@ -116,6 +118,9 @@ export interface ClayDetailUniforms {
   uEave: Live;
   /** night factor 0..1, driven by the sun rig (gates the dusk glow) */
   uNight: Live;
+  /** 1 while the camera drawing the frame is Modell's parallel one
+   *  (`setClayView`) */
+  uParallel: Live;
   uRim: Live;
   /** roof colour mix strength */
   uRoofTint: Live;
@@ -130,9 +135,19 @@ export interface ClayDetailUniforms {
    *  the windows' own shadows */
   uSun: UniformNode<"vec3", Vector3>;
   uTint: Live;
+  /** world, the direction a parallel projection looks along (unit;
+   *  `setClayView`) */
+  uViewRay: UniformNode<"vec3", Vector3>;
   /** the windows (Fenster, clay-windows.ts) */
   uWindows: Live;
 }
+
+/** The clay uniforms the look's rows drive: all but the sun's, the
+ *  night's and the camera's. */
+type ClayLookUniform = keyof Omit<
+  ClayDetailUniforms,
+  "uNight" | "uParallel" | "uSun" | "uViewRay"
+>;
 
 /**
  * What every tile's clay material shares: the facade uniforms and the
@@ -235,6 +250,12 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   const wn = normalize(varying(modelWorldMatrix.mul(vec4(safe, 0)).xyz));
   const h = max(localH, 0);
   const wall = float(1).sub(smoothstep(0.5, 0.7, abs(wn.y)));
+  // in a parallel projection every pixel looks along one direction (a
+  // Militärperspektive's sheared off the camera's forward), not from the
+  // camera's place
+  const view = normalize(
+    mix(positionWorld.sub(cameraPosition), d.uViewRay, d.uParallel)
+  );
   const windows = clayWindows({
     eave: build.z,
     facade: varying(facade),
@@ -245,6 +266,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     storey: build.y,
     strength: d.uWindows,
     sun: d.uSun,
+    view,
     wall,
     wn,
   });
@@ -268,9 +290,11 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
       shopPane(flags),
       rough
     ),
-    colour: select(
-      clayPoche.greaterThan(0.5).and(frontFacing.not()),
-      POCHE,
+    // A mix, not a select: three emits a select as if/else, and the facade
+    // drawn inside its arm — the windows first among it — would be built
+    // twice (the normal, light and glow read it outside), its derivatives in
+    // a branch.
+    colour: mix(
       askedColour(
         windows
           .colour(
@@ -289,7 +313,9 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
         wall,
         flags,
         wn
-      )
+      ),
+      POCHE,
+      step(0.5, clayPoche).mul(float(1).sub(float(frontFacing)))
     ),
     // Himmelslicht: the courtyard's ground floor gets less of the sky;
     // a window's recess and the wall under its sill less still.
@@ -834,6 +860,7 @@ export function createStyleResources(
       uDuskGlow: uniform(LOOK_DEFAULTS.duskGlow),
       uEave: uniform(LOOK_DEFAULTS.eave),
       uNight: night,
+      uParallel: uniform(0),
       uRim: uniform(LOOK_DEFAULTS.rim),
       uRoofTint: uniform(LOOK_DEFAULTS.roofTint),
       uRoofVibrance: uniform(LOOK_DEFAULTS.roofVibrance),
@@ -841,6 +868,7 @@ export function createStyleResources(
       uSkyView: skyView,
       uSun: sun,
       uTint: uniform(LOOK_DEFAULTS.tint),
+      uViewRay: uniform(new Vector3(0, 0, -1)),
       uWindows: uniform(LOOK_DEFAULTS.windows),
     },
     materials: new Set(),
@@ -958,6 +986,24 @@ export function setClaySection(resources: StyleResources, on: boolean): void {
   }
 }
 
+/**
+ * Hands the clay the camera drawing the frame (each frame, with the post's
+ * lens): the windows' reveals look into the wall along the view — from the
+ * camera's place in perspective, along one direction for every pixel in
+ * Modell's parallel projection, sheared off the camera's forward in a
+ * Militärperspektive.
+ */
+export function setClayView(resources: StyleResources, camera: Camera): void {
+  const d = resources.clayDetail;
+  const parallel =
+    (camera as Camera & { isOrthographicCamera?: boolean })
+      .isOrthographicCamera === true;
+  d.uParallel.value = parallel ? 1 : 0;
+  if (parallel) {
+    parallelDirection(camera, d.uViewRay.value);
+  }
+}
+
 export function setCityTransparency(
   resources: StyleResources,
   transparency: number
@@ -975,7 +1021,7 @@ export function setCityTransparency(
  */
 const CLAY_UNIFORM_FOR: Record<
   Exclude<ClayLookKey, "transparency">,
-  keyof Omit<ClayDetailUniforms, "uNight" | "uSun">
+  ClayLookUniform
 > = {
   articulation: "uArticulation",
   facadeReading: "uFacadeReading",
@@ -1001,7 +1047,7 @@ export function applyCityLook(
 ): void {
   for (const [key, uniform] of Object.entries(CLAY_UNIFORM_FOR) as [
     keyof typeof CLAY_UNIFORM_FOR,
-    keyof Omit<ClayDetailUniforms, "uNight" | "uSun">,
+    ClayLookUniform,
   ][]) {
     resources.clayDetail[uniform].value = look[key];
   }

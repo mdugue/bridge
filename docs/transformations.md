@@ -1824,9 +1824,12 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   **Where on its wall** (`facadeAttribute`; the glTF's `_FACADE`, a
   snorm16 vec4 per vertex, 512 m a unit): metres along the wall from its
   middle, the wall's length — negative over a shopfront (no ground-floor
-  window), 0 on a party wall —, and up to two of OSM's doors along it (no
-  ground-floor window within 1.1 m); a roof vertex carries −1 in the
-  first door's slot, the clay's roof flag. A wall is one object's coplanar,
+  window), 0 on a party wall —, and up to two of OSM's doors along it,
+  each its place (in 0.1 m) and its width rounded up to a 0.2 m class in
+  one code: a ground-floor window keeps 0.6 m of wall between its opening
+  and a door's (the door's surround, a pier), and a wall with more doors
+  than the two slots has no ground-floor windows; a roof vertex carries
+  −1 in the first door's slot, the clay's roof flag. A wall is one object's coplanar,
   vertex-connected triangles; a party wall is one with another wall back
   to back against it (opposite normals within 10°, planes within 0.5 m,
   over a quarter of it covered). Positions along the wall are not

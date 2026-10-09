@@ -180,6 +180,7 @@ import {
   applyCityLook,
   createStyleResources,
   setClaySection,
+  setClayView,
 } from "./visual-style";
 import { createModelCuts } from "./model-cuts";
 
@@ -2655,8 +2656,10 @@ async function bootApp(
     lastEquivalent = equivalent ?? 600;
     updateCuts();
     aimCaptureTile();
-    // What the post passes know of the camera drawing this frame.
+    // What the post passes and the clay's windows know of the camera
+    // drawing this frame.
     lens.update(view, lastEquivalent);
+    setClayView(styleResources, view);
     // The fountains' jets and water shimmer (one shared uniform).
     setFountainTime(elapsed);
     // The data layers' light (one shared uniform; drawn only when on).

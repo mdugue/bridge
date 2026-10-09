@@ -603,6 +603,18 @@ main thread) out of the frames:
   the mesh simply does not draw, while WebGL2 (sixteen, the headless e2e's
   backend) draws it: pack scalars into vec4s (`traffic-layer.ts`
   `TRAFFIC_ATTRIBUTES`, its test holds the count).
+- **The clay passes as many varyings as WebGPU allows**: sixteen
+  inter-stage variables, one of them `front_facing`'s, and with
+  transparency on and the Ausschnitt's clip distances the clay uses the
+  other fifteen. A new value per building or per vertex rides in a
+  varying it already passes, or the buildings vanish on WebGPU while
+  WebGL2 still draws them (ADR 0049).
+- **A TSL `select` is an if/else in the shader.** three builds each arm in
+  its own scope: what an arm builds first is built again where it is used
+  outside, and a derivative or texture read first built in an arm runs in
+  non-uniform control flow (three turns WGSL's uniformity check off, so
+  nothing says so). In a per-pixel graph use `mix`/`step` with safe
+  denominators; a select whose arms are constants is harmless.
 
 **Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
 5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈

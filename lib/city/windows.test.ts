@@ -1,11 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
+  clearOfDoor,
+  DOOR_GAP_M,
+  DOOR_NONE_CODE,
+  DOOR_SLOT,
+  doorSlot,
   FACADE_ROOF,
   FACADE_SCALE_M,
   type FacadeModel,
   facadeAttribute,
   groundLift,
   NO_DOOR,
+  slotDoor,
   packStyle,
   TOWARD_TYPE,
   TYPES,
@@ -475,18 +481,89 @@ describe("facadeAttribute", () => {
     }
   });
 
-  test("a door's place on its wall, a shopfront's wall negative", () => {
+  test("a door's place and width on its wall, a shopfront's wall negative", () => {
     const mesh = quads(boxWalls(0, 0, 0, 14, 10, 12));
     const f = facadeAttribute(
       mesh,
       () => true,
-      [{ object: 0, at: [10, 0.1], n: [0, -1] }],
+      [{ object: 0, at: [10, 0.1], n: [0, -1], w: 1.8 }],
       [{ object: 0, a: [14, 0], b: [14, 10], n: [1, 0] }]
     );
     // the door 3 m from the south wall's middle, the way s runs there
-    expect(Math.abs(metres(f[2]))).toBeCloseTo(3, 1);
+    const door = slotDoor(f[2]);
+    expect(Math.abs(door?.at ?? 0)).toBeCloseTo(3, 9);
+    expect(door?.w).toBeCloseTo(1.8, 9);
     expect(f[3]).toBe(Math.round(32_767 * NO_DOOR));
-    // the east wall stands over a shopfront
+    expect(slotDoor(f[3])).toBeUndefined();
+    // the south wall keeps its ground floor, the east one stands over a
+    // shopfront
+    expect(metres(f[1])).toBeCloseTo(14, 1);
     expect(metres(f[4 * 6 + 1])).toBeCloseTo(-10, 1);
+  });
+
+  test("a wall with more doors than the slots hold has no ground-floor windows", () => {
+    const mesh = quads(boxWalls(0, 0, 0, 14, 10, 12));
+    const door = (x: number) => ({
+      object: 0,
+      at: [x, 0] as [number, number],
+      n: [0, -1] as [number, number],
+      w: 1.2,
+    });
+    const two = facadeAttribute(mesh, () => true, [door(3), door(11)]);
+    expect(metres(two[1])).toBeCloseTo(14, 1);
+    const three = facadeAttribute(mesh, () => true, [
+      door(3),
+      door(7),
+      door(11),
+    ]);
+    expect(metres(three[1])).toBeCloseTo(-14, 1);
+    // the two nearest the middle are kept
+    expect(slotDoor(three[2])?.at).toBeCloseTo(0, 9);
+    expect(Math.abs(slotDoor(three[3])?.at ?? 0)).toBeCloseTo(4, 9);
+  });
+});
+
+describe("the door slots", () => {
+  test("hold a door's place to a decimetre and its width rounded up", () => {
+    for (const at of [-12.34, -0.05, 0, 3.0, 7.96, 120.5]) {
+      for (const w of [0.6, 1.2, 1.25, 1.8, 2.6]) {
+        const door = slotDoor(doorSlot(at, w));
+        expect(Math.abs((door?.at ?? Number.NaN) - at)).toBeLessThanOrEqual(
+          DOOR_SLOT.step / 2 + 1e-9
+        );
+        expect(door?.w ?? 0).toBeGreaterThanOrEqual(w - 1e-9);
+        expect(door?.w ?? 0).toBeLessThan(w + DOOR_SLOT.wStep);
+      }
+    }
+    // a door wider than the widest class, or far along, is held
+    expect(slotDoor(doorSlot(0, 4))?.w).toBeCloseTo(2.8, 9);
+    expect(slotDoor(doorSlot(400, 1.2))?.at).toBeCloseTo(DOOR_SLOT.reach, 9);
+  });
+
+  test("never read as the roof's flag or as no door", () => {
+    const codes = [
+      doorSlot(-1e4, 9),
+      doorSlot(-1e4, 0),
+      doorSlot(1e4, 9),
+      doorSlot(1e4, 0),
+    ];
+    for (const code of codes) {
+      expect(Math.abs(code)).toBeLessThan(DOOR_NONE_CODE);
+      // the clay's roof flag: a first door slot at FACADE_ROOF + 1e-3 or less
+      expect(code / 32_767).toBeGreaterThan(FACADE_ROOF + 1e-3);
+      expect(slotDoor(code)).toBeDefined();
+    }
+    expect(slotDoor(Math.round(32_767 * FACADE_ROOF))).toBeUndefined();
+  });
+
+  test("a ground-floor window keeps the gap from a door's opening", () => {
+    const door = { at: 0, w: 1.2 };
+    const w = 1.1;
+    const edge = door.w / 2 + DOOR_GAP_M + w / 2;
+    expect(clearOfDoor(edge, w, door)).toBe(true);
+    expect(clearOfDoor(-edge, w, door)).toBe(true);
+    expect(clearOfDoor(edge - 0.01, w, door)).toBe(false);
+    // a wide gate keeps its windows further off
+    expect(clearOfDoor(edge, w, { at: 0, w: 2.6 })).toBe(false);
   });
 });

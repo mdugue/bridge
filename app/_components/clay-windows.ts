@@ -1,7 +1,6 @@
 import type { UniformNode, Vector3 } from "three/webgpu";
 import {
   abs,
-  cameraPosition,
   cameraViewMatrix,
   clamp,
   dot,
@@ -14,8 +13,6 @@ import {
   mix,
   mod,
   normalize,
-  positionWorld,
-  select,
   sign,
   sin,
   smoothstep,
@@ -25,7 +22,9 @@ import {
   vec4,
 } from "three/tsl";
 import {
-  DOOR_CLEAR_M,
+  DOOR_GAP_M,
+  DOOR_NONE_CODE,
+  DOOR_SLOT,
   FACADE_SCALE_M,
   LOOSE_JITTER,
   WINDOW_DEPTH,
@@ -90,6 +89,10 @@ export interface WindowInputs {
   strength: Live;
   /** world, surface → sun */
   sun: UniformNode<"vec3", Vector3>;
+  /** world, the view's direction through the fragment (unit, into the
+   *  scene): from the camera in perspective, one for every pixel in
+   *  Modell's parallel projection */
+  view: V3;
   /** 1 on walls */
   wall: F;
   /** the flat world normal */
@@ -162,11 +165,9 @@ function columns(i: WindowInputs, s: F, length: F) {
   const axis = max(i.spec.x, 0.1);
   const style = floor(i.spec.w.add(0.5));
   const room = length.sub(2 * WINDOW_ROWS.edge).sub(i.spec.y);
-  const n = select(
-    room.lessThan(0),
-    float(0),
-    floor(room.div(axis).add(1e-4)).add(1)
-  );
+  // steps and mixes, never a select: three emits a select as if/else, and
+  // what an arm builds first it builds again outside it
+  const n = step(0, room).mul(floor(max(room, 0).div(axis).add(1e-4)).add(1));
   const off = n.sub(1).mul(0.5);
   const j = clamp(floor(s.div(axis).add(off).add(0.5)), 0, max(n.sub(1), 0));
   const free = clamp(
@@ -182,6 +183,24 @@ function columns(i: WindowInputs, s: F, length: F) {
   const centre = j.sub(off).mul(axis).add(jitter);
   const extent = off.mul(axis).add(i.spec.y.mul(0.5));
   return { axis, centre, extent, j, n, style };
+}
+
+/** 1 where a ground-floor window on `centre` (m along the wall), `half`
+ *  wide either side, keeps `DOOR_GAP_M` of wall from the door a `_FACADE`
+ *  door slot holds (`DOOR_SLOT`; 1 where it holds none) — the code's place
+ *  and width class as lib/city/windows.ts `slotDoor` reads them. */
+function doorClear(slot: F, centre: F, half: F): F {
+  const code = floor(slot.mul(DOOR_NONE_CODE).add(0.5));
+  const place = floor(code.add(0.5).div(DOOR_SLOT.widths));
+  const width = code
+    .sub(place.mul(DOOR_SLOT.widths))
+    .mul(DOOR_SLOT.wStep)
+    .add(DOOR_SLOT.w0);
+  const clear = step(
+    width.mul(0.5).add(DOOR_GAP_M).add(half),
+    abs(centre.sub(place.mul(DOOR_SLOT.step)))
+  );
+  return max(clear, step(DOOR_NONE_CODE - 0.5, abs(code)));
 }
 
 /** The window grid at the fragment: its column (`columns`) and its storey
@@ -206,16 +225,10 @@ function grid(i: WindowInputs): Grid {
   const storey = max(i.storey, 0.5);
   const first = max(storey, WINDOW_ROWS.firstLine);
   const tall = min(i.spec.z, storey.sub(sill).sub(WINDOW_ROWS.lintel));
-  const k = select(
-    i.h.lessThan(first),
-    float(0),
-    floor(i.h.sub(first).div(storey)).add(1)
+  const k = step(first, i.h).mul(
+    floor(max(i.h.sub(first), 0).div(storey)).add(1)
   );
-  const line = select(
-    k.lessThan(0.5),
-    float(0),
-    first.add(k.sub(1).mul(storey))
-  );
+  const line = step(0.5, k).mul(first.add(k.sub(1).mul(storey)));
   // the ground floor's windows start higher (a Hochparterre, over the
   // plinth), their heads where the upper floors' are
   const lift = mod(floor(c.style.div(WINDOW_STYLE.lift)), WINDOW_LIFT.classes)
@@ -227,14 +240,13 @@ function grid(i: WindowInputs): Grid {
     .sub(line)
     .sub(sill)
     .sub(lift);
-  const door = (d: F) =>
-    step(DOOR_CLEAR_M, abs(c.centre.sub(d.mul(FACADE_SCALE_M))));
+  const half = i.spec.y.mul(0.5);
   const groundOk = float(1)
     .sub(bit(c.style, WINDOW_STYLE.noGround))
     .mul(float(1).sub(i.shop))
     .mul(step(-0.01, signed))
-    .mul(door(i.facade.z))
-    .mul(door(i.facade.w))
+    .mul(doorClear(i.facade.z, c.centre, half))
+    .mul(doorClear(i.facade.w, c.centre, half))
     .mul(step(sill.add(tall), first.sub(WINDOW_ROWS.lintel)));
   const rows = step(0.5, c.n)
     .mul(step(WINDOW_ROWS.min, height))
@@ -247,7 +259,7 @@ function grid(i: WindowInputs): Grid {
     band: here.mul(step(abs(s), c.extent)),
     coverage: i.spec.y.mul(tall).div(max(c.axis.mul(storey), 0.1)),
     depth,
-    half: i.spec.y.mul(0.5),
+    half,
     here,
     j: c.j,
     k,
@@ -281,23 +293,17 @@ function wallFrame(wn: V3) {
  * sliver of a reveal at most, and the shadow map, read on the wall's
  * plane, is noise there.
  */
-function recess(g: Grid, wn: V3, sun: V3, px: Px) {
+function recess(g: Grid, view: V3, wn: V3, sun: V3, px: Px) {
   const f = wallFrame(wn);
-  const view = normalize(positionWorld.sub(cameraPosition));
   const vd = max(dot(view, f.out).negate(), 0.05);
   const ku = dot(view, f.t).div(vd);
   const kv = view.y.div(vd);
-  const far = float(1e4);
-  const zu = select(
-    abs(ku).lessThan(1e-4),
-    far,
-    g.half.sub(sign(ku).mul(g.u)).div(abs(ku))
-  );
-  const zv = select(
-    abs(kv).lessThan(1e-4),
-    far,
-    select(kv.greaterThan(0), g.tall.sub(g.v), g.v).div(abs(kv))
-  );
+  // how deep the ray leaves the opening's side, and its head or sill (far
+  // where it runs along them)
+  const far = 1e4;
+  const up = step(0, kv);
+  const zu = min(g.half.sub(sign(ku).mul(g.u)).div(max(abs(ku), 1e-4)), far);
+  const zv = min(mix(g.v, g.tall.sub(g.v), up).div(max(abs(kv), 1e-4)), far);
   // a side reveal is seen where the ray leaves the opening's side before
   // the back; the head's or the sill's likewise
   const sideSeen = cover(
@@ -306,10 +312,10 @@ function recess(g: Grid, wn: V3, sun: V3, px: Px) {
       .sub(g.half.sub(g.depth.mul(abs(ku)))),
     px.u
   );
-  const rowSeen = select(
-    kv.greaterThan(0),
+  const rowSeen = mix(
+    cover(g.depth.mul(kv.negate()).sub(g.v), px.v),
     cover(g.v.sub(g.tall.sub(g.depth.mul(kv))), px.v),
-    cover(g.depth.mul(kv.negate()).sub(g.v), px.v)
+    up
   );
   const sideFirst = step(zu, zv);
   const side = sideSeen.mul(mix(float(1).sub(rowSeen), 1, sideFirst));
@@ -499,7 +505,7 @@ export function clayWindows(i: WindowInputs): ClayWindows {
     .mul(cover(g.v, px.v))
     .mul(cover(g.tall.sub(g.v), px.v))
     .mul(near);
-  const r = recess(g, i.wn, i.sun, px);
+  const r = recess(g, i.view, i.wn, i.sun, px);
   const p = parts(g, i, px);
   const round = arris(g, i.wn, px);
   const rounded = round.weight.mul(near).mul(float(1).sub(opening));

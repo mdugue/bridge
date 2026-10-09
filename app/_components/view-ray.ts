@@ -18,6 +18,25 @@ const SCENE_TOP = 2500;
 const near = new Vector3();
 const far = new Vector3();
 
+/** A screen point (NDC) of a parallel camera unprojected onto its near
+ *  plane (`near`) and its far plane (`far`). */
+function unprojectDepths(ndc: { x: number; y: number }, camera: Camera): void {
+  const nearZ = camera.coordinateSystem === WebGPUCoordinateSystem ? 0 : -1;
+  near.set(ndc.x, ndc.y, nearZ).unproject(camera);
+  far.set(ndc.x, ndc.y, 1).unproject(camera);
+}
+
+/**
+ * The direction a parallel camera looks along (world, unit, into the
+ * scene), into `out`: the same for every screen point, and in a
+ * Militärperspektive sheared off the camera's forward — which three's
+ * camera does not know, so it is unprojected.
+ */
+export function parallelDirection(camera: Camera, out: Vector3): Vector3 {
+  unprojectDepths({ x: 0, y: 0 }, camera);
+  return out.subVectors(far, near).normalize();
+}
+
 /**
  * Sets `raycaster` to the ray through a screen point (NDC) of any camera:
  * three's own `setFromCamera` for a perspective one (the ray starts at the
@@ -40,9 +59,7 @@ export function setPickRay(
     raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), camera);
     return PERSPECTIVE_FAR;
   }
-  const nearZ = camera.coordinateSystem === WebGPUCoordinateSystem ? 0 : -1;
-  near.set(ndc.x, ndc.y, nearZ).unproject(camera);
-  far.set(ndc.x, ndc.y, 1).unproject(camera);
+  unprojectDepths(ndc, camera);
   const reach = near.distanceTo(far);
   const direction = far.sub(near).normalize();
   // down to the top of the scene (a level ray starts on its cut)
