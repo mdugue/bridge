@@ -912,8 +912,8 @@ visual-variable codebook is in
 
 ### The twin: identity, facts and provenance (asked on demand)
 
-The scene says nothing on its own; asked (a click, a long press, `I` at
-the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md),
+The scene says nothing on its own; asked (a click, a long press, `I` under
+the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md),
 [plan 052](./plans/052-queryable-twin.md)).
 
 - **Object identity and semantics in the tileset** `❝ taken` — CityJSON attributes →
@@ -958,7 +958,7 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   from 100 m the building looked unchanged. Not in *Papier* (its override
   material). **Not yet judged on a real GPU.**
 - **The inquiry card** `❝ taken` (asked by a click, a long press on touch, or `I`
-  at the crosshair — no mode since 2026-10-01; the HUD's card surface, no
+  under the pointer — at the centre without one — no mode since 2026-10-01; the HUD's card surface, no
   longer a warm paper sheet; a tap slightly off a small house still finds it — two rings of
   rays vote; a bottom sheet on touch screens) — `lib/city/inquiry.ts` →
   `inquiry-card.tsx`: the

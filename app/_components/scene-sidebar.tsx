@@ -295,7 +295,7 @@ function FocusControls({
         </ToggleGroup>
         <FieldDescription className="text-[11px] leading-snug">
           {mode === "auto"
-            ? "Scharf auf das, was unter dem Fadenkreuz liegt"
+            ? "Scharf auf das, was in der Bildmitte liegt"
             : "Feste Fokusdistanz — als Ring auf der Minikarte"}
         </FieldDescription>
       </Field>
@@ -795,18 +795,28 @@ function ToolButton({
   icon: Icon,
   label,
   onClick,
+  onAim,
 }: {
   disabled?: boolean;
   hint: string;
   icon: LucideIcon;
   label: string;
   onClick: () => void;
+  /** told while the button is pointed at or focused, and when it no longer is */
+  onAim?: (aiming: boolean) => void;
 }) {
+  // A panel that closes (the phone's sheet) unmounts the button without a
+  // blur or a pointer leave.
+  useEffect(() => () => onAim?.(false), [onAim]);
   return (
     <button
       className="flex min-h-8.5 items-center gap-2.5 rounded-lg border bg-background px-2.5 py-1.5 text-left font-medium text-xs hover:border-ring disabled:pointer-events-none disabled:opacity-50"
       disabled={disabled}
+      onBlur={() => onAim?.(false)}
       onClick={onClick}
+      onFocus={() => onAim?.(true)}
+      onPointerEnter={() => onAim?.(true)}
+      onPointerLeave={() => onAim?.(false)}
       type="button"
     >
       <Icon className="size-3.5 shrink-0 opacity-70" />
@@ -823,6 +833,11 @@ export interface SceneSidebarProps {
   bounds: TerrainBounds | null;
   coarse: boolean;
   copySnapshot: () => void;
+  /**
+   * The centre-aimed tool is pointed at or focused: the HUD marks the
+   * middle it will act on, which no dot marks otherwise.
+   */
+  onAimCentre: (aiming: boolean) => void;
   /** what a data layer that is on says in words (the bike counts) */
   dataLayerDetail?: Partial<Record<DataLayerKey, ReactNode>>;
   day: Date;
@@ -1053,7 +1068,8 @@ export function SceneSidebar(props: SceneSidebarProps) {
                   disabled={!props.ready}
                   hint="R"
                   icon={HammerIcon}
-                  label="Gebäude unter dem Fadenkreuz abreißen"
+                  label="Gebäude in der Bildmitte abreißen — mit R unter dem Mauszeiger"
+                  onAim={props.onAimCentre}
                   onClick={() => handleRef.current?.demolishAtCrosshair()}
                 />
                 <ToolButton

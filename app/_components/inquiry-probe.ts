@@ -31,7 +31,7 @@ import { setPickRay } from "./view-ray";
  * state.
  */
 export interface InquiryProbe {
-  /** asks at a screen point (NDC; the crosshair when omitted) and marks
+  /** asks at a screen point (NDC; the centre when omitted) and marks
    *  what it chose */
   ask: (ndc?: { x: number; y: number }) => Asked | null;
   /** marks another candidate of the last question; its inquiry */

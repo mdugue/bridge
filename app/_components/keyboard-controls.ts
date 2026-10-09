@@ -8,9 +8,9 @@
 export interface KeyboardActions {
   /** V — the next picture style (pastel → comic → noir → Sin City → Papier) */
   cycleStyle: () => void;
-  /** R — demolish the building under the crosshair */
+  /** R — demolish the building under the pointer (the centre without one) */
   demolish: () => void;
-  /** I — asks what stands at the crosshair ("Befragen", ADR 0042) */
+  /** I — asks what stands under the pointer, or at the centre ("Befragen", ADR 0042) */
   inquire: () => void;
   press: (code: string) => void;
   release: (code: string) => void;
