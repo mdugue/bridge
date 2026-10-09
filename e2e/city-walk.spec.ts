@@ -1534,9 +1534,14 @@ test.describe("whole site streamed", () => {
     // the spawn view reaches (five of the fifteen) with its terrain,
     // buildings and dressings — ~180 000 tree instances — all shaded on the
     // CPU. Measured at ~55 s to `ready` on a four-core machine at
-    // SITE_VIEWPORT (about 45 frames at 1.2 s each; ~155 s at 800×600); a
-    // shared runner is about half as fast.
-    test.setTimeout(slow(180_000));
+    // SITE_VIEWPORT (2026-09-26: about 45 frames at 1.2 s each; ~155 s at
+    // 800×600). On CI the runner decides more than the scene does: on
+    // 2026-10-09 this test passed in 169–415 s over six runs, and the tree
+    // that passed in 169 s on its pull request (#142) ran out of the 450 s
+    // it had then on main, seven dressings built and one pending. So the
+    // budget is set by the slowest runner seen, with room to spare: a red
+    // job for a slow machine teaches nothing, while a real hang still fails.
+    test.setTimeout(slow(270_000));
     const context = await browser.newContext({ viewport: SITE_VIEWPORT });
     const page = await context.newPage();
     const errors = watchErrors(page);
@@ -1552,7 +1557,7 @@ test.describe("whole site streamed", () => {
         () => window.__poc?.ready === true,
         undefined,
         {
-          timeout: slow(150_000),
+          timeout: slow(240_000),
         }
       );
       const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
