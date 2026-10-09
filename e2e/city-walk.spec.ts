@@ -571,8 +571,26 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // Click, then report a phone held upright with its camera to the east,
     // ten times a second like a real sensor — on the absolute stream
     // Chromium's compass arrives on.
+    // The answer is a HUD line that clears after five seconds, while a
+    // SwiftShader frame can hold the main thread for longer: a locator
+    // polling between frames can miss it. Every line the HUD says is
+    // recorded instead, and the assertion reads the record.
     await page.evaluate(() => {
-      const w = window as unknown as { __compass?: number };
+      const w = window as unknown as { __compass?: number; __said?: string[] };
+      const said: string[] = [];
+      w.__said = said;
+      new MutationObserver(() => {
+        for (const line of document.querySelectorAll("output[aria-live]")) {
+          const text = line.textContent ?? "";
+          if (text && said.at(-1) !== text) {
+            said.push(text);
+          }
+        }
+      }).observe(document.body, {
+        characterData: true,
+        childList: true,
+        subtree: true,
+      });
       [...document.querySelectorAll<HTMLButtonElement>("button")]
         .find((b) => b.textContent?.trim() === "Standort")
         ?.click();
@@ -587,9 +605,14 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
         );
       }, 100);
     });
-    await expect(page.getByText("Du bist hier")).toBeVisible({
-      timeout: slow(20_000),
-    });
+    await page.waitForFunction(
+      () =>
+        (window as unknown as { __said?: string[] }).__said?.some((text) =>
+          text.startsWith("Du bist hier")
+        ),
+      undefined,
+      { timeout: slow(45_000) }
+    );
     const state = await page.evaluate(() =>
       window.__poc?.handle?.getCameraState()
     );
