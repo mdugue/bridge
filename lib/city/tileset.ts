@@ -308,6 +308,31 @@ export function buildTileset(
   };
 }
 
+/**
+ * The top of each tile's box (m: the highest roof or ground on it), in the
+ * order of the extras' tiles — buildTileset writes the root's children in
+ * that order; undefined for a child without a box. A boot that starts off
+ * the spawn lifts its camera above it (boot-start.ts).
+ */
+export function tileTopsOf(json: unknown): (number | undefined)[] {
+  const children = (
+    json as {
+      root?: { children?: { boundingVolume?: { box?: unknown } }[] };
+    } | null
+  )?.root?.children;
+  if (!Array.isArray(children)) {
+    return [];
+  }
+  return children.map(({ boundingVolume }) => {
+    const box = boundingVolume?.box;
+    return Array.isArray(box) &&
+      typeof box[2] === "number" &&
+      typeof box[11] === "number"
+      ? box[2] + Math.abs(box[11])
+      : undefined;
+  });
+}
+
 /** Validates the parts of the tileset extras the viewer depends on. */
 export function parseTilesetExtras(json: unknown): TilesetExtras {
   const extras = (json as { extras?: Partial<TilesetExtras> } | null)?.extras;

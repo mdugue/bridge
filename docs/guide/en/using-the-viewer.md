@@ -44,6 +44,14 @@ by tile, detailed near you and coarse further away. When that takes a
 moment, on a long flight for instance, a small *Umgebung lädt* ("loading
 surroundings") hint shows at the top of the screen (see [how a visit unfolds](./how-it-works.md#how-a-visit-unfolds)).
 
+The side panel is there from the start, over the loading screen. While
+the city loads you can already pick a place, click a spot on the map or
+apply a snapshot: the load starts over at that place (the loading screen
+names it as *Start*), so you arrive there instead of at the usual start
+and then travel. The sun, the time and the look can be set too; Modell,
+the tools, *Sicht merken* (remember this view), the sound and saving a
+picture wait until the scene is up.
+
 ## Moving around
 
 | Input (desktop) | Does |

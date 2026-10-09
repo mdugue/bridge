@@ -30,8 +30,8 @@ import {
   type GpuLoss,
   type SafetyLevel,
   shadowTilesStream,
-  startTileOf,
 } from "@/lib/city/gpu-safety";
+import { bootingPose, startOf } from "@/lib/city/boot-start";
 import { createGround } from "@/lib/city/ground";
 import {
   createPageLifecycle,
@@ -82,7 +82,11 @@ import {
   type ViewpointGeometry,
 } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
+import {
+  parseTilesetExtras,
+  type TilesetExtras,
+  tileTopsOf,
+} from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import { createCameraPose, type FollowAim } from "./camera-pose";
@@ -304,6 +308,12 @@ function sceneBuffers(
   };
 }
 
+/** What the HUD knows of the site from the tileset alone (`onSiteInfo`). */
+export type SiteInfo = Pick<
+  CityWalkHandle,
+  "landcoverTiles" | "landmarks" | "latLng" | "provenanceUrl" | "terrainBounds"
+>;
+
 export interface CityWalkOptions {
   /**
    * The render budget (profile, device tier, whether the neighbour tiles
@@ -320,6 +330,13 @@ export interface CityWalkOptions {
    * Modell's part is the caller's to put back after the first frame.
    */
   initialCamera?: CameraState;
+  /**
+   * A place picked in the HUD before the first frame (a vantage, a
+   * landmark, a spot on the minimap): the boot starts there, as it does a
+   * recovered page's camera, instead of at the spawn. `initialCamera`
+   * wins when both are given.
+   */
+  initialView?: ViewpointGeometry;
   initialDate: Date;
   /**
    * The look store (HUD-owned; lib/city/look-state.ts): the scene applies its
@@ -362,6 +379,12 @@ export interface CityWalkOptions {
   trail?: CrashTrail;
   /** Every layer has streamed in (the scene is complete). */
   onLoaded?: () => void;
+  /**
+   * The site as the tileset describes it, as soon as the tileset is read —
+   * long before the first frame: the HUD's places, minimap and sun readout
+   * work while the scene is still loading.
+   */
+  onSiteInfo?: (info: SiteInfo) => void;
   /**
    * After `onLoaded`: whether tiles or their details are loading right now
    * (a flight streams new tiles in). Fires on changes only.
@@ -976,15 +999,14 @@ async function bootApp(
   stage("buildings", 0);
   // What the viewer needs before any content: the frame and the tile list.
   const tilesetUrl = new URL(opts.tilesetUrl, window.location.href).href;
-  const extras = parseTilesetExtras(
-    await fetchRequiredJson(tilesetUrl, opts.signal)
-  );
+  const tileset = await fetchRequiredJson<unknown>(tilesetUrl, opts.signal);
+  const extras = parseTilesetExtras(tileset);
   ensureAlive();
   const { offset } = extras;
   // The tile the boot starts on and waits for: the spawn tile, or the one
-  // a recovered page's camera stands on (lib/city/gpu-safety.ts).
-  const spawn =
-    startTileOf(extras.tiles, opts.initialCamera?.epsg) ?? extras.tiles[0];
+  // a recovered page's camera, or a place picked in the HUD while the page
+  // was loading, stands on (lib/city/boot-start.ts).
+  const { picked, restored, spawn } = startOf(opts, extras.tiles);
   const siteBounds = unionBounds(extras);
 
   // Shared world sun direction (surface→sun), kept in sync by the sun rig and
@@ -1042,6 +1064,20 @@ async function bootApp(
   // Where the site sits on the globe: the sun rig needs it, and so does the
   // HUD's sunrise/sunset readout.
   const latLng = siteLatLng(opts.site, extras.epsg, offset);
+  const siteInfo: SiteInfo = {
+    landmarks: extras.landmarks ?? [],
+    landcoverTiles: extras.tiles.map((t) => ({
+      src: new URL(t.minimap, tilesetUrl).href,
+      bounds: t.bounds,
+      bridges: t.bridges ? new URL(t.bridges, tilesetUrl).href : undefined,
+    })),
+    latLng,
+    provenanceUrl: extras.provenance
+      ? new URL(extras.provenance, tilesetUrl).href
+      : null,
+    terrainBounds: siteBounds,
+  };
+  opts.onSiteInfo?.(siteInfo);
   const sunRig = createSunRig(
     scene,
     worldBounds,
@@ -1594,23 +1630,30 @@ async function bootApp(
   // (below) — the height is above the ground, which is not there yet. A
   // recovered page starts where its player stood instead, on the tile the
   // boot waits for (`spawn`), on foot or in the air (Modell is the HUD's
-  // to put back): its first update streams that place, not the spawn. It
-  // boots looking straight down (clamped to the pitch limit) onto that
-  // tile: a pose that looks at the sky, or out past the site's edge, from
-  // the air sees no tile — nothing would load, and by night or from safety
-  // level 2 no shadow camera streams one either, so the boot would wait
-  // for ever. Its own aim goes back once the tile has landed (below, and
-  // the HUD's after the first frame).
-  const spawnView = spawnViewpoint(opts.site);
-  const restored = startTileOf(extras.tiles, opts.initialCamera?.epsg)
-    ? opts.initialCamera
-    : undefined;
-  const placeStart = (booting = false) => {
-    if (!restored) {
-      pose.placeAt(spawnView);
+  // to put back): its first update streams that place, not the spawn; a
+  // place picked in the HUD while the page was loading (`initialView`)
+  // likewise. Both boot looking straight down onto that tile, the picked
+  // place from above the tile's top (lib/city/boot-start.ts): a pose that
+  // sees no tile loads none, and by night or from safety level 2 no
+  // shadow camera streams one either, so the boot would wait for ever.
+  // Their own pose goes back once the tile has landed (below, and the
+  // HUD's after the first frame).
+  const spawnView = picked ?? spawnViewpoint(opts.site);
+  /** the boot does not start on the spawn vantage, which looks at its tile */
+  const startsElsewhere = restored !== undefined || picked !== undefined;
+  const booting = bootingPose(
+    { picked, restored },
+    spawnView,
+    tileTopsOf(tileset)[extras.tiles.indexOf(spawn)],
+    offset
+  );
+  const placeStart = (boot = false) => {
+    const camera = boot ? "camera" in booting && booting.camera : restored;
+    if (camera) {
+      pose.applyCameraState(camera);
       return;
     }
-    pose.applyCameraState(booting ? { ...restored, pitchDeg: -90 } : restored);
+    pose.placeAt(spawnView);
   };
   placeStart(true);
 
@@ -2723,7 +2766,7 @@ async function bootApp(
   // A recovered page's camera may look away from the tile it stands on:
   // once the renderer is idle without that tile, any tile it shows will do.
   const startsOn = (tile: string) =>
-    tile === spawn.id || (restored !== undefined && tilesIdle);
+    tile === spawn.id || (startsElsewhere && tilesIdle);
   const spawnLanded = () => ({
     city: stream.visibleCities().some((c) => startsOn(c.tile)),
     terrain: stream.visibleTerrains().some((t) => startsOn(t.tile)),
@@ -2862,9 +2905,6 @@ async function bootApp(
     previewCandidate: probe.preview,
     demolishAtCrosshair,
     inquireAt,
-    provenanceUrl: extras.provenance
-      ? new URL(extras.provenance, tilesetUrl).href
-      : null,
     enterImmersive: canvasControls.lockPointer,
     releaseGpu: () => releaseGpu(renderer),
     flyTo: (position, lookAt) => {
@@ -2992,14 +3032,7 @@ async function bootApp(
     setMoveInput: pose.setMoveInput,
     startStreaming,
     getFootprints: currentFootprints,
-    landmarks: extras.landmarks ?? [],
-    landcoverTiles: extras.tiles.map((t) => ({
-      src: new URL(t.minimap, tilesetUrl).href,
-      bounds: t.bounds,
-      bridges: t.bridges ? new URL(t.bridges, tilesetUrl).href : undefined,
-    })),
-    latLng,
-    terrainBounds: siteBounds,
+    ...siteInfo,
     offset,
     // In Modell the ear hangs over the pivot, as high as the picture is
     // equivalent to: a model on a table hears the city from above.

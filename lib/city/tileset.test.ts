@@ -7,6 +7,7 @@ import {
   parseTilesetExtras,
   type TilesetExtras,
   tileBox,
+  tileTopsOf,
 } from "./tileset";
 
 const offset = { cx: 413_000, cy: 5_657_000 };
@@ -84,6 +85,15 @@ test("parseTilesetExtras accepts what the bake writes and rejects the rest", () 
   expect(() =>
     parseTilesetExtras({ extras: { ...extras, tiles: [] } })
   ).toThrow();
+});
+
+test("a tile's top is its box's, in the extras' order", () => {
+  const high: BakedTile = { ...tile("b", 410_000), zRange: [90, 340] };
+  const set = buildTileset([tile("a", 412_000), high], extras);
+  expect(tileTopsOf(set)).toEqual([200, 340]);
+  expect(tileTopsOf({ root: { children: [{}] } })).toEqual([undefined]);
+  expect(tileTopsOf({})).toEqual([]);
+  expect(tileTopsOf(null)).toEqual([]);
 });
 
 test("a point on a seam belongs to exactly one tile", () => {
