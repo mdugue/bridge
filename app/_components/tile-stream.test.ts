@@ -192,7 +192,7 @@ test("a tile that leaves lets go of the site's shared index at once, while its c
   await loading;
 });
 
-test("a city drops its normals' and roof flags' CPU copies once its compile uploaded them, and only then", async () => {
+test("a city drops its normals' and places on the wall's CPU copies once its compile uploaded them, and only then", async () => {
   for (const compiled of [true, false]) {
     const plugin = new DressingPlugin(
       {
@@ -209,10 +209,11 @@ test("a city drops its normals' and roof flags' CPU copies once its compile uplo
     );
     const geometry = new BoxGeometry();
     geometry.setAttribute(
-      "roof",
+      "facade",
       new BufferAttribute(
-        new Float32Array(geometry.attributes.position.count),
-        1
+        new Int16Array(4 * geometry.attributes.position.count),
+        4,
+        true
       )
     );
     const mesh = new Mesh(geometry, new MeshBasicNodeMaterial());
@@ -226,7 +227,7 @@ test("a city drops its normals' and roof flags' CPU copies once its compile uplo
     // dropped only where the compile ran: a buffer three meets for the first
     // time without its numbers uploads empty
     expect(geometry.getAttribute("normal").array.length === 0).toBe(compiled);
-    expect(geometry.getAttribute("roof").array.length === 0).toBe(compiled);
+    expect(geometry.getAttribute("facade").array.length === 0).toBe(compiled);
     // what collision, picks and demolish read stays
     expect(geometry.getAttribute("position").array.length).toBeGreaterThan(0);
     expect(geometry.getIndex()?.array.length).toBeGreaterThan(0);

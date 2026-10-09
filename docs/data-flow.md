@@ -231,6 +231,7 @@ flowchart LR
 | **OSM hedges** | OSM `barrier=hedge` lines (Geofabrik extract) | LSC (measured height) · DGM1 (ground-clamp); tag / 1.5 m where no LAZ. The bake's laser-scan-only hedges and shrubs are not shipped (🗃️ in the ledger) | `low-vegetation-layer.ts`; baked by `pipeline/bake/lowveg.py` |
 | **Facade readings** (experimental) | Mapillary's street panoramas, rectified onto the LoD2 walls with their computed poses, masked by Mapillary's segmentation (about a third of the street fronts) + its store signs | LoD2 walls (where), DGM1 (the camera's and the wall's ground), OSM shops (joined at runtime) | baked by `pipeline/bake/facades.py` + `facade_measure.py` into `dlm/facades_<t>.json`; `lib/city/facade-reading.ts`, `visual-style.ts` `facadeReading` |
 | **Shopfronts** (experimental) | the same panoramas measured per LoD2 wall: the ground floor's openings in 0.5 m bins and 0.3 m rows, Mapillary's store signs, aligned between sequences and voted per bin into bays or a glazed row (every tile of every committed site with panoramas: all but Unna) **+** DOM1 − DGM1 in front of the wall: the canopy over a shopfront | LoD2 walls (where, the host's wall triangles), DGM1 (the ground in front), OSM doors (a bay is cut there) | baked by `pipeline/bake/shopfronts.py` into `dlm/shopfronts_<t>.json`; drawn by the building bake, `lib/city/shopfronts.ts`, `bake-city-mesh.ts` `appendShopfronts` |
+| **Windows** (*Fenster*) | the same panoramas measured once more per LoD2 wall over the upper storeys: column and row profiles of how dark and how open the wall is, the plaster's edges and fine texture (`<t>.v3.jsonl`); per wall the features that do not move with the camera — the axis spacing and its regularity (autocorrelation), the storey height, the openings' share, width and proportion, ornament —, each used only where two sequences agree on it at Spearman ρ ≥ 0.6; per building the rhythm of its own walls, else another part's, else the nearest measured building's of its roof form and eave, else its type's | LoD2 (roof form, eave, walls: each wall vertex's place along its wall, party walls back to back), OSM levels (the storey), OSM doors and the shopfronts (no window beside or over them), the plinths (the street the storeys count from; the ground floor's windows over them), the ALKIS function (none on a monumental use, a garage or a shed), OSM material (none on glass or metal) | baked by `pipeline/bake/facade_traits.py` (fetch) + `windows.py` into `dlm/windows_<t>.json`; the rhythm and `_FACADE` by the building bake (`lib/city/windows.ts`, `bake-city-mesh.ts` `assignWindows`); drawn by the clay, `app/_components/clay-windows.ts` (ADR 0049) |
 | **Street lamps** | OSM `highway=street_lamp` (Geofabrik extract) **+** Mapillary's detected street lights where OSM has none within 8 m (Dresden, `Site.mapillary.objects`; CC BY-SA 4.0, its own file `mly_<t>.geojson`) | DGM1 (ground-clamp); gated off water + railway (Mapillary's also off LoD2 footprints and bridge decks, out of the carriageway to the kerb) | baked by `pipeline/bake/lamps.py` + `mapillary.py`; `lamp-layer.ts`, `lib/city/mapillary.ts` |
 | **Street furniture & playgrounds** | OSM `amenity=bench/waste_basket/bicycle_parking/post_box/clock/drinking_water`, `leisure=picnic_table`, `barrier=bollard` (+ `height`, `material`), `advertising=column` (+ `lit`), `highway=traffic_signals` (+ `traffic_signals:direction`), `emergency=fire_hydrant` (+ `fire_hydrant:type`), `leisure=playground` outlines + `playground=*` equipment, stops with `shelter=yes` and bus stops without (their sign) (Geofabrik extract; the committed files from BBBike's Dresden cut) | OSM highways (the bearing an untagged object faces; a signal's travel direction) · the DLM road class (the kerb a signal or hydrant sign in the carriageway moves to) · OSM building outlines (wall clocks) · DGM1 (ground-clamp); gated off water, railway and bridge decks · **+** Mapillary's detected trash cans where OSM has no bin within 8 m (as the lamps above) | baked by `pipeline/bake/furniture.py` + `mapillary.py`; `furniture-layer.ts`, `lib/city/furniture.ts`, `lib/city/mapillary.ts` |
 | **Fountains & monuments** | Basis-DLM `sie03_p` monument points (`BWF` 1750/1770/1780, official names) | OSM `amenity=fountain` (basin outlines, fountains the DLM lacks, which DLM monument is a fountain) · OSM `memorial=*` / `artwork_type=*`, `artist_name`, `material`, `height` (what a monument is: its marker's form and its card; sculptures the DLM lacks) · Wikidata `P186` (the material where OSM names none) · DOM1 − DGM1 (the sculpture's measured form) · DGM1 (seated over the highest ground under a basin) | baked by `pipeline/bake/monuments.py`; `monument-layer.ts`, `lib/city/monuments.ts` |
@@ -283,7 +284,7 @@ flowchart LR
     iCJ["LoD2 CityJSON<br/>data/&lt;site&gt;/cityjson"]
     iWD["Wikidata bridges · landmarks<br/>wikidata/*.json"]
     iMLY["Mapillary objects<br/>mapillary/*.json"]
-    iPANO["Mapillary panoramas + segmentation<br/>measured, not kept<br/>mapillary/facades/*.v2.jsonl"]
+    iPANO["Mapillary panoramas + segmentation<br/>measured, not kept<br/>mapillary/facades/*.v2 · v3.jsonl"]
     iVM["Verkehrsmengen<br/>traffic/*.geojson"]
     iGTFS["GTFS feed<br/>gtfs/nv_free.zip"]
   end
@@ -314,6 +315,7 @@ flowchart LR
     bGAP["structures.py"]
     bDOOR["doors.py"]
     bSHOP["facade_measure.py + shopfronts.py"]
+    bWIN["facade_traits.py + windows.py"]
     bPLIN["plinths.py"]
     bDORM["dormers.py"]
     bTRF["traffic.py"]
@@ -329,6 +331,7 @@ flowchart LR
     dOSMB["osmbuild JSON"]
     dDOOR["doors"]
     dSHOP["shopfronts"]
+    dWIN["windows"]
     dPLIN["plinths"]
     dDORM["dormers"]
     dLAMP["lamps"]
@@ -381,6 +384,9 @@ flowchart LR
   iDOM -. "canopy over the shopfront" .-> bSHOP
   iDGM -. "ground in front" .-> bSHOP
   bSHOP ==> dSHOP
+  iPANO ==>|"upper-wall profiles: period · share · edges"| bWIN
+  iCJ ==>|"walls"| bWIN
+  bWIN ==> dWIN
   iCJ ==>|"footprints"| bPLIN
   iDGM ==>|"ground in front"| bPLIN
   bPLIN ==> dPLIN
@@ -460,6 +466,7 @@ flowchart LR
   dGAP -. "columns · buildings · relief height fields" .-> tCITY
   dDOOR -. "surround · leaf on the host wall" .-> tCITY
   dSHOP -. "soft niche · glass · fascia · canopy on the host wall" .-> tCITY
+  dWIN -. "window rhythm per building · its place on each wall (drawn by the clay)" .-> tCITY
   dPLIN -. "stone band on the host wall" .-> tCITY
   dDORM -. "front · cheeks · roof on the host roof" .-> tCITY
   dLMK -. "landmark flag · material · extras.landmarks" .-> tCITY

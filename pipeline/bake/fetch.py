@@ -219,6 +219,7 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> li
     _try("traffic counts", tile, lambda: traffic_sources.fetch(tile))
     _try("Mapillary objects", tile, lambda: mapillary.fetch(tile))
     _try("Mapillary facades", tile, lambda: facades.fetch(tile))
+    _try("Mapillary facade traits", tile, lambda: facades.fetch(tile, "traits"))
     _try(
         "Wikidata bridges",
         tile,

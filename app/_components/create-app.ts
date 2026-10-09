@@ -30,8 +30,8 @@ import {
   type GpuLoss,
   type SafetyLevel,
   shadowTilesStream,
-  startTileOf,
 } from "@/lib/city/gpu-safety";
+import { bootingPose, startOf } from "@/lib/city/boot-start";
 import { createGround } from "@/lib/city/ground";
 import {
   createPageLifecycle,
@@ -82,7 +82,11 @@ import {
   type ViewpointGeometry,
 } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
+import {
+  parseTilesetExtras,
+  type TilesetExtras,
+  tileTopsOf,
+} from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import { createCameraPose, type FollowAim } from "./camera-pose";
@@ -304,6 +308,12 @@ function sceneBuffers(
   };
 }
 
+/** What the HUD knows of the site from the tileset alone (`onSiteInfo`). */
+export type SiteInfo = Pick<
+  CityWalkHandle,
+  "landcoverTiles" | "landmarks" | "latLng" | "provenanceUrl" | "terrainBounds"
+>;
+
 export interface CityWalkOptions {
   /**
    * The render budget (profile, device tier, whether the neighbour tiles
@@ -320,6 +330,13 @@ export interface CityWalkOptions {
    * Modell's part is the caller's to put back after the first frame.
    */
   initialCamera?: CameraState;
+  /**
+   * A place picked in the HUD before the first frame (a vantage, a
+   * landmark, a spot on the minimap): the boot starts there, as it does a
+   * recovered page's camera, instead of at the spawn. `initialCamera`
+   * wins when both are given.
+   */
+  initialView?: ViewpointGeometry;
   initialDate: Date;
   /**
    * The look store (HUD-owned; lib/city/look-state.ts): the scene applies its
@@ -363,6 +380,12 @@ export interface CityWalkOptions {
   /** Every layer has streamed in (the scene is complete). */
   onLoaded?: () => void;
   /**
+   * The site as the tileset describes it, as soon as the tileset is read —
+   * long before the first frame: the HUD's places, minimap and sun readout
+   * work while the scene is still loading.
+   */
+  onSiteInfo?: (info: SiteInfo) => void;
+  /**
    * After `onLoaded`: whether tiles or their details are loading right now
    * (a flight streams new tiles in). Fires on changes only.
    */
@@ -371,7 +394,7 @@ export interface CityWalkOptions {
   onFollowEnd?: () => void;
   /**
    * What was asked last ("Befragen", ADR 0042): a click, a long press or
-   * `I` at the crosshair, or a candidate chosen from the strip; null when
+   * `I` under the pointer, or a candidate chosen from the strip; null when
    * nothing stands there. `along`: everything the question's ray met.
    */
   onInquiry?: (inquiry: Inquiry | null, along: InquiryAlong | null) => void;
@@ -441,7 +464,7 @@ export interface CityWalkHandle {
   demolishAtCrosshair: () => void;
   dispose: () => void;
   /**
-   * Asks what stands at a screen point (NDC; the crosshair when omitted),
+   * Asks what stands at a screen point (NDC; the centre when omitted),
    * marks it and reports it through `onInquiry`; tests and QA call it.
    */
   inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
@@ -557,7 +580,13 @@ export interface CityWalkHandle {
   setFollowAim: (aim: FollowAim | null) => void;
   /** live mode's GPS ground point (EPSG), null stops (camera-pose.ts) */
   setFollowPosition: (epsg: { x: number; y: number } | null) => void;
-  setSun: (date: Date) => SunState;
+  /**
+   * Moves the sun to an instant. `preview` marks a step of a drag through
+   * the day: what is dear and not needed at every step (the sky's
+   * reflection) follows a few times a second; the call without it, which
+   * ends the drag, brings everything up to date at once.
+   */
+  setSun: (date: Date, preview?: boolean) => SunState;
   /**
    * Lets the heavy dressing start — vegetation, lamps, rails — and
    * the terrain BVHs. Held back so its synchronous chunks cannot stutter the
@@ -976,15 +1005,14 @@ async function bootApp(
   stage("buildings", 0);
   // What the viewer needs before any content: the frame and the tile list.
   const tilesetUrl = new URL(opts.tilesetUrl, window.location.href).href;
-  const extras = parseTilesetExtras(
-    await fetchRequiredJson(tilesetUrl, opts.signal)
-  );
+  const tileset = await fetchRequiredJson<unknown>(tilesetUrl, opts.signal);
+  const extras = parseTilesetExtras(tileset);
   ensureAlive();
   const { offset } = extras;
   // The tile the boot starts on and waits for: the spawn tile, or the one
-  // a recovered page's camera stands on (lib/city/gpu-safety.ts).
-  const spawn =
-    startTileOf(extras.tiles, opts.initialCamera?.epsg) ?? extras.tiles[0];
+  // a recovered page's camera, or a place picked in the HUD while the page
+  // was loading, stands on (lib/city/boot-start.ts).
+  const { picked, restored, spawn } = startOf(opts, extras.tiles);
   const siteBounds = unionBounds(extras);
 
   // Shared world sun direction (surface→sun), kept in sync by the sun rig and
@@ -1042,6 +1070,20 @@ async function bootApp(
   // Where the site sits on the globe: the sun rig needs it, and so does the
   // HUD's sunrise/sunset readout.
   const latLng = siteLatLng(opts.site, extras.epsg, offset);
+  const siteInfo: SiteInfo = {
+    landmarks: extras.landmarks ?? [],
+    landcoverTiles: extras.tiles.map((t) => ({
+      src: new URL(t.minimap, tilesetUrl).href,
+      bounds: t.bounds,
+      bridges: t.bridges ? new URL(t.bridges, tilesetUrl).href : undefined,
+    })),
+    latLng,
+    provenanceUrl: extras.provenance
+      ? new URL(extras.provenance, tilesetUrl).href
+      : null,
+    terrainBounds: siteBounds,
+  };
+  opts.onSiteInfo?.(siteInfo);
   const sunRig = createSunRig(
     scene,
     worldBounds,
@@ -1087,8 +1129,13 @@ async function bootApp(
   }
   cleanups.push(() => lampLights.dispose());
 
-  // The facades share the ground's Himmelslicht strength (the same node).
-  const styleResources = createStyleResources(clayNight, ground.skyView);
+  // The facades share the ground's Himmelslicht strength and the sun (the
+  // same nodes).
+  const styleResources = createStyleResources(
+    clayNight,
+    ground.skyView,
+    ground.sunDirection
+  );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: () => void = () => undefined;
@@ -1331,8 +1378,8 @@ async function bootApp(
       stream.tiles.deleteCamera(shadow);
     }
   };
-  const setSun = (date: Date): SunState => {
-    const state = sunRig.update(date);
+  const setSun = (date: Date, preview = false): SunState => {
+    const state = sunRig.update(date, preview);
     streamShadowTiles(state.aboveHorizon);
     currentNight = state.nightFactor;
     sunAltitude = state.altitudeDeg;
@@ -1347,7 +1394,11 @@ async function bootApp(
     clayNight.value = state.nightFactor;
     seasonClock.set(date);
     clockToOverlays?.(date);
-    invalidateShadows();
+    // The sun's move has asked for the map already; a drag's step leaves
+    // it to the rig's pace.
+    if (!preview) {
+      invalidateShadows();
+    }
     return state;
   };
   setSun(opts.initialDate);
@@ -1594,23 +1645,30 @@ async function bootApp(
   // (below) — the height is above the ground, which is not there yet. A
   // recovered page starts where its player stood instead, on the tile the
   // boot waits for (`spawn`), on foot or in the air (Modell is the HUD's
-  // to put back): its first update streams that place, not the spawn. It
-  // boots looking straight down (clamped to the pitch limit) onto that
-  // tile: a pose that looks at the sky, or out past the site's edge, from
-  // the air sees no tile — nothing would load, and by night or from safety
-  // level 2 no shadow camera streams one either, so the boot would wait
-  // for ever. Its own aim goes back once the tile has landed (below, and
-  // the HUD's after the first frame).
-  const spawnView = spawnViewpoint(opts.site);
-  const restored = startTileOf(extras.tiles, opts.initialCamera?.epsg)
-    ? opts.initialCamera
-    : undefined;
-  const placeStart = (booting = false) => {
-    if (!restored) {
-      pose.placeAt(spawnView);
+  // to put back): its first update streams that place, not the spawn; a
+  // place picked in the HUD while the page was loading (`initialView`)
+  // likewise. Both boot looking straight down onto that tile, the picked
+  // place from above the tile's top (lib/city/boot-start.ts): a pose that
+  // sees no tile loads none, and by night or from safety level 2 no
+  // shadow camera streams one either, so the boot would wait for ever.
+  // Their own pose goes back once the tile has landed (below, and the
+  // HUD's after the first frame).
+  const spawnView = picked ?? spawnViewpoint(opts.site);
+  /** the boot does not start on the spawn vantage, which looks at its tile */
+  const startsElsewhere = restored !== undefined || picked !== undefined;
+  const booting = bootingPose(
+    { picked, restored },
+    spawnView,
+    tileTopsOf(tileset)[extras.tiles.indexOf(spawn)],
+    offset
+  );
+  const placeStart = (boot = false) => {
+    const camera = boot ? "camera" in booting && booting.camera : restored;
+    if (camera) {
+      pose.applyCameraState(camera);
       return;
     }
-    pose.applyCameraState(booting ? { ...restored, pitchDeg: -90 } : restored);
+    pose.placeAt(spawnView);
   };
   placeStart(true);
 
@@ -1629,7 +1687,7 @@ async function bootApp(
   const tapRaycaster = new Raycaster();
   tapRaycaster.firstHitOnly = true;
   // Befragen (ADR 0042): a click asks, a long press on a touch screen,
-  // and I at the crosshair — there is no mode to switch on first.
+  // and I under the pointer — there is no mode to switch on first.
   // What the outline goes around (selection-shape.ts): a building's own
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
   // monument's shape after its data.
@@ -1818,13 +1876,13 @@ async function bootApp(
         modelRig.zoomAt({ x: midX, y: midY }, ratio / lastPinch);
         lastPinch = ratio;
       } else {
-        pose.pinchTo(ratio);
+        pose.pinchTo(ratio, { x: midX, y: midY });
       }
     },
     onWheelDolly: (amount, ndcX, ndcY) =>
       modelRig.owns()
         ? modelRig.zoomAt({ x: ndcX, y: ndcY }, Math.exp(amount))
-        : pose.dolly(amount),
+        : pose.dolly(amount, { x: ndcX, y: ndcY }),
     onWheelZoom: (ratio) => {
       if (!modelRig.owns()) {
         pose.zoomBy(ratio);
@@ -1989,8 +2047,9 @@ async function bootApp(
     checkLoaded();
   };
 
-  const demolishAtCrosshair = () => {
-    const picked = pickCityObject(activeCamera(), stream.visibleCities());
+  /** Demolishes the building at a screen point (NDC; the centre without). */
+  const demolishAt = (ndc?: { x: number; y: number }) => {
+    const picked = pickCityObject(activeCamera(), stream.visibleCities(), ndc);
     if (!picked?.layer.demolish(picked.objectIndex)) {
       return;
     }
@@ -2005,6 +2064,39 @@ async function bootApp(
     invalidateShadows();
     scheduleStats();
   };
+  const demolishAtCrosshair = () => demolishAt();
+
+  // Where the mouse rests over the scene: `I` and `R` act on what is
+  // under the pointer, as a hover shortcut does — there is no dot in the
+  // middle to aim with. Without a pointer there (a touch screen, the
+  // pointer off the canvas or locked in immersive mode) they act at the
+  // centre. Kept in client pixels and turned into NDC when a key asks, so
+  // a canvas resized or locked since the last move is read as it is now.
+  let hover: { x: number; y: number } | undefined;
+  const canvas = renderer.domElement;
+  const onHover = (e: PointerEvent) => {
+    hover =
+      e.pointerType === "mouse" ? { x: e.clientX, y: e.clientY } : undefined;
+  };
+  const onLeave = () => {
+    hover = undefined;
+  };
+  const aim = (): { x: number; y: number } | undefined => {
+    if (!hover || document.pointerLockElement === canvas) {
+      return undefined;
+    }
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: ((hover.x - r.left) / r.width) * 2 - 1,
+      y: -(((hover.y - r.top) / r.height) * 2 - 1),
+    };
+  };
+  canvas.addEventListener("pointermove", onHover);
+  canvas.addEventListener("pointerleave", onLeave);
+  cleanups.push(() => {
+    canvas.removeEventListener("pointermove", onHover);
+    canvas.removeEventListener("pointerleave", onLeave);
+  });
 
   cleanups.push(
     attachKeyboardControls(
@@ -2025,11 +2117,11 @@ async function bootApp(
           modelRig.owns() ? modelRig.leave("fly") : pose.toggleMode(),
         toggleModel: () =>
           modelRig.owns() ? modelRig.leave() : modelRig.enter(),
-        demolish: demolishAtCrosshair,
-        // I asks at the crosshair: in pointer lock there is no pointer
-        // to click with.
+        demolish: () => demolishAt(aim()),
+        // I asks under the pointer, or at the centre in pointer lock,
+        // where there is no pointer to click with.
         inquire: () => {
-          inquireAt();
+          inquireAt(aim());
         },
         cycleStyle: () =>
           opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
@@ -2723,7 +2815,7 @@ async function bootApp(
   // A recovered page's camera may look away from the tile it stands on:
   // once the renderer is idle without that tile, any tile it shows will do.
   const startsOn = (tile: string) =>
-    tile === spawn.id || (restored !== undefined && tilesIdle);
+    tile === spawn.id || (startsElsewhere && tilesIdle);
   const spawnLanded = () => ({
     city: stream.visibleCities().some((c) => startsOn(c.tile)),
     terrain: stream.visibleTerrains().some((t) => startsOn(t.tile)),
@@ -2862,9 +2954,6 @@ async function bootApp(
     previewCandidate: probe.preview,
     demolishAtCrosshair,
     inquireAt,
-    provenanceUrl: extras.provenance
-      ? new URL(extras.provenance, tilesetUrl).href
-      : null,
     enterImmersive: canvasControls.lockPointer,
     releaseGpu: () => releaseGpu(renderer),
     flyTo: (position, lookAt) => {
@@ -2992,14 +3081,7 @@ async function bootApp(
     setMoveInput: pose.setMoveInput,
     startStreaming,
     getFootprints: currentFootprints,
-    landmarks: extras.landmarks ?? [],
-    landcoverTiles: extras.tiles.map((t) => ({
-      src: new URL(t.minimap, tilesetUrl).href,
-      bounds: t.bounds,
-      bridges: t.bridges ? new URL(t.bridges, tilesetUrl).href : undefined,
-    })),
-    latLng,
-    terrainBounds: siteBounds,
+    ...siteInfo,
     offset,
     // In Modell the ear hangs over the pivot, as high as the picture is
     // equivalent to: a model on a table hears the city from above.

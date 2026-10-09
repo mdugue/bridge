@@ -109,13 +109,29 @@ export function mirrorWeight(n: V3, base: number): F {
 /** Smallest sun move (radians) that re-renders the map. */
 const MIN_TURN = (0.5 * Math.PI) / 180;
 
+/**
+ * Least time (ms) between two renders while the time of day is dragged:
+ * a drag turns the sun by degrees a step, and each render is the dome on
+ * six faces and the generator's blur, some twenty passes — four a second
+ * keep the mirrors moving with the sky.
+ */
+const PREVIEW_INTERVAL_MS = 250;
+
+interface Direction {
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface SkyReflection {
   /**
    * Re-renders the map from `skyScene` once the sun turned by a visible
    * angle (the palette follows the sun's altitude, so it moves with it) —
-   * call outside a frame.
+   * call outside a frame. `preview` (a step of a drag) renders at most
+   * every `PREVIEW_INTERVAL_MS`, the last step after the wait; a plain
+   * call renders at once.
    */
-  refresh: (sunDirection: { x: number; y: number; z: number }) => void;
+  refresh: (sunDirection: Direction, preview?: boolean) => void;
   dispose: () => void;
 }
 
@@ -125,26 +141,57 @@ export function createSkyReflection(
   skyScene: Scene
 ): SkyReflection {
   const generator = new PMREMGenerator(renderer);
-  let last: { x: number; y: number; z: number } | null = null;
+  let last: Direction | null = null;
+  let next: Direction = { x: 0, y: 1, z: 0 };
+  let renderedAt = Number.NEGATIVE_INFINITY;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const render = () => {
+    const sun = next;
+    if (
+      last &&
+      Math.acos(Math.min(1, last.x * sun.x + last.y * sun.y + last.z * sun.z)) <
+        MIN_TURN
+    ) {
+      return;
+    }
+    last = sun;
+    renderedAt = performance.now();
+    // The dome sits at the cube camera (its own onBeforeRender), 4.5 km
+    // across: near and far keep it whole.
+    generator.fromScene(skyScene, 0, 1, 10_000, {
+      size: CUBE_SIZE,
+      renderTarget: target,
+    });
+  };
+  const cancel = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
   return {
-    refresh: (sun) => {
-      if (
-        last &&
-        Math.acos(
-          Math.min(1, last.x * sun.x + last.y * sun.y + last.z * sun.z)
-        ) < MIN_TURN
-      ) {
+    refresh: (sun, preview = false) => {
+      next = { x: sun.x, y: sun.y, z: sun.z };
+      if (!preview) {
+        cancel();
+        render();
         return;
       }
-      last = { x: sun.x, y: sun.y, z: sun.z };
-      // The dome sits at the cube camera (its own onBeforeRender), 4.5 km
-      // across: near and far keep it whole.
-      generator.fromScene(skyScene, 0, 1, 10_000, {
-        size: CUBE_SIZE,
-        renderTarget: target,
-      });
+      if (timer !== null) {
+        return;
+      }
+      const wait = renderedAt + PREVIEW_INTERVAL_MS - performance.now();
+      if (wait <= 0) {
+        render();
+        return;
+      }
+      timer = setTimeout(() => {
+        timer = null;
+        render();
+      }, wait);
     },
     dispose: () => {
+      cancel();
       generator.dispose();
       target.dispose();
     },

@@ -4,7 +4,14 @@
  * way to change them — which also tells the scene. A remount boots the new
  * scene at the current instant, not at the page's first one.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { SunState } from "./sun-rig";
 
 /** 14:00, the time the page opens at. */
@@ -23,6 +30,54 @@ export function splitDate(date: Date): { day: Date; minutes: number } {
   };
 }
 
+export interface FrameGate {
+  /** runs now, or once the frame that already ran it is over */
+  request: () => void;
+  /** drops a run still waiting for its frame */
+  cancel: () => void;
+}
+
+/**
+ * Runs `run` at most once per animation frame: the first request of a
+ * frame runs at once, the ones after it in the same frame collapse into
+ * one run as the next frame starts (after that frame's render, which three
+ * asked for first — so the scene trails a drag by a frame). A slider dragged by a
+ * mouse that reports more often than the screen draws (or a touch) asks
+ * many times a frame; the scene only needs the last.
+ */
+export function frameGate(
+  run: () => void,
+  schedule: (callback: () => void) => number = requestAnimationFrame,
+  unschedule: (handle: number) => void = cancelAnimationFrame
+): FrameGate {
+  let frame: number | null = null;
+  let waiting = false;
+  const request = () => {
+    if (frame !== null) {
+      waiting = true;
+      return;
+    }
+    run();
+    frame = schedule(() => {
+      frame = null;
+      if (waiting) {
+        waiting = false;
+        request();
+      }
+    });
+  };
+  return {
+    request,
+    cancel: () => {
+      if (frame !== null) {
+        unschedule(frame);
+      }
+      frame = null;
+      waiting = false;
+    },
+  };
+}
+
 export interface SceneTime {
   day: Date;
   minutes: number;
@@ -32,6 +87,12 @@ export interface SceneTime {
   sun: SunState | null;
   /** moves the scene to a day and minute */
   set: (day: Date, minutes: number) => void;
+  /**
+   * The same for every step of a drag: the scene follows at most once a
+   * frame, and the rest of the HUD with it, as a transition behind the
+   * frames — the slider shows its own value meanwhile. `set` ends a drag.
+   */
+  preview: (day: Date, minutes: number) => void;
   /** moves the scene to an instant (to the minute the sliders can show) */
   setInstant: (date: Date) => void;
   /** tells a (new) scene the current instant */
@@ -41,9 +102,9 @@ export interface SceneTime {
 }
 
 /** `apply` hands an instant to the scene, which answers with its sun (or
- *  nothing while there is no scene). */
+ *  nothing while there is no scene); `preview` marks a drag's step. */
 export function useSceneTime(
-  apply: (date: Date) => SunState | undefined,
+  apply: (date: Date, preview?: boolean) => SunState | undefined,
   initialDay: Date
 ): SceneTime {
   const [day, setDay] = useState(initialDay);
@@ -58,7 +119,32 @@ export function useSceneTime(
     applyRef.current = apply;
   }, [apply]);
 
+  // A drag's steps reach the scene through the gate, and the scene's answer
+  // reaches the HUD as a transition: one sun a frame, no HUD render in one.
+  const previewed = useRef({ day: initialDay, minutes: INITIAL_MINUTES });
+  const toScene = useCallback(() => {
+    const state = applyRef.current(now.current, true);
+    const step = previewed.current;
+    startTransition(() => {
+      setDay(step.day);
+      setMinutes(step.minutes);
+      if (state) {
+        setSun(state);
+      }
+    });
+  }, []);
+  const gate = useRef<FrameGate | null>(null);
+  useEffect(() => {
+    const own = frameGate(toScene);
+    gate.current = own;
+    return () => {
+      own.cancel();
+      gate.current = null;
+    };
+  }, [toScene]);
+
   const set = useCallback((nextDay: Date, nextMinutes: number) => {
+    gate.current?.cancel();
     setDay(nextDay);
     setMinutes(nextMinutes);
     const next = composeDate(nextDay, nextMinutes);
@@ -68,6 +154,18 @@ export function useSceneTime(
       setSun(state);
     }
   }, []);
+  const preview = useCallback(
+    (nextDay: Date, nextMinutes: number) => {
+      now.current = composeDate(nextDay, nextMinutes);
+      previewed.current = { day: nextDay, minutes: nextMinutes };
+      if (gate.current) {
+        gate.current.request();
+      } else {
+        toScene();
+      }
+    },
+    [toScene]
+  );
   const setInstant = useCallback(
     (instant: Date) => {
       const parts = splitDate(instant);
@@ -82,5 +180,15 @@ export function useSceneTime(
     }
   }, []);
   const current = useCallback(() => now.current, []);
-  return { day, minutes, date, sun, set, setInstant, sync, current };
+  return {
+    day,
+    minutes,
+    date,
+    sun,
+    set,
+    preview,
+    setInstant,
+    sync,
+    current,
+  };
 }

@@ -20,7 +20,8 @@ export function BootError({
 }) {
   const network = isNetworkMessage(message);
   return (
-    <Alert className="absolute inset-x-8 top-8" variant="destructive">
+    // (over the viewer's side panel, fixed at z-10, which stays open)
+    <Alert className="absolute inset-x-8 top-8 z-40" variant="destructive">
       <AlertTitle>Der Stadt-Viewer konnte nicht starten</AlertTitle>
       <AlertDescription className="wrap-break-word">
         {network ? (

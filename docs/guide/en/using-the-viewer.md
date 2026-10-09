@@ -44,24 +44,33 @@ by tile, detailed near you and coarse further away. When that takes a
 moment, on a long flight for instance, a small *Umgebung lädt* ("loading
 surroundings") hint shows at the top of the screen (see [how a visit unfolds](./how-it-works.md#how-a-visit-unfolds)).
 
+The side panel is there from the start, over the loading screen. While
+the city loads you can already pick a place, click a spot on the map or
+apply a snapshot: the load starts over at that place (the loading screen
+names it as *Start*), so you arrive there instead of at the usual start
+and then travel. The sun, the time and the look can be set too; Modell,
+the tools, *Sicht merken* (remember this view), the sound and saving a
+picture wait until the scene is up.
+
 ## Moving around
 
 | Input (desktop) | Does |
 |---|---|
-| Drag with the mouse | look around |
+| Drag with the mouse | look around (the pointer is a hand that grabs the view) |
 | `W` `A` `S` `D` | walk (or fly) |
+| `↑` `↓` / `←` `→` | walk forward and back / turn left and right |
 | `Shift` | sprint |
 | `F` | switch between walking and flying (take off / land) |
 | `Space` / `Shift` (or `E` / `Q`) | up / down while flying |
 | `1` – `9` | glide to the first to ninth viewpoint |
-| Mouse wheel (or a two-finger trackpad gesture) | move forward or back |
+| Mouse wheel (or a two-finger trackpad gesture, or pinching on it) | move towards the spot under the pointer (the crosshair in immersive mode), or back from it: on foot along the ground, flying along the line to that spot, which stays under the pointer; each step covers most of the way left, never past it, and over the sky the flight stays level |
 | `Alt` + mouse wheel | zoom (narrows or widens the field of view) |
 | Double-click on the ground | travel there in a short glide; flying, glide part of the way towards it |
 | Click on the minimap | glide there (on foot you land standing; flying, at the same height) |
 | *Standort* (toolbar, bottom right) | teleport to where you really are |
 | Click on a building | ask it: a card says what the data knows about it |
-| `I` | ask what stands under the crosshair (immersive too) |
-| `R` | demolish the building under the crosshair |
+| `I` | ask what stands under the mouse pointer (immersive: at the centre) |
+| `R` | demolish the building under the mouse pointer (immersive: at the centre) |
 | `V` | switch to the next picture style (Pastell → Comic → Film noir → Sin City → Papier → Strich → Schwarzplan) |
 | `M` | switch to *Modell*, the city in parallel projection, and back (see [Modell](#modell-the-city-as-a-planner-draws-it)) |
 | `Esc` | leave immersive mode |
@@ -78,7 +87,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (above the toolbar, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there in a short glide; flying, glide part of the way towards it |
-| Two fingers apart / together | forward / back: on foot along the ground, flying along the view (the higher, the further) |
+| Two fingers apart / together | towards / away from the spot between the fingers: on foot along the ground, flying along the line to it (the higher, the further) |
 
 While walking you are held at eye height on the terrain and collide with
 buildings and walls. Flying, you meet facades too, sinking stops at eye
@@ -214,7 +223,8 @@ the frame as you see it, with the credits.
 The city itself carries no text. Ask it instead: with a mouse, a
 **click** on a building; on a touch screen, a **long press** (hold a
 finger still for half a second); `I` asks what stands under the
-crosshair. The building gets a fine hatch and a line round its outline,
+mouse pointer (in immersive mode, which hides the pointer, what stands at
+the centre; only there a dot marks it). The building gets a fine hatch and a line round its outline,
 both in the controls' pink accent, and a card opens; a
 click on nothing closes it again. You need not hit a small house exactly:
 when nothing stands right under your finger, the building most of the
@@ -392,8 +402,9 @@ mistake); the switch stays as you set it.
 | | *Dachfarbe* | how strongly the real (or synthesised) roof colour shows |
 | | *Dachsättigung* | lifts the saturation of the aerial-photo roof colours without shifting their hue; 0 = raw photo |
 | | *Traufkante* | a soft line where wall meets roof |
-| | *Gliederung* | what a house shows at eye level before its windows, painted: a darker shop zone where a shop is mapped — no windows. The plinth, the ledge over the ground floor and the eave cornice are modelled, run on from house to house and are always there |
-| | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs — no windows; where panoramas show the front (every city but Unna, which has none) |
+| | *Gliederung* | what a house shows at eye level, painted: a darker shop zone where a shop is mapped. The plinth, the ledge over the ground floor and the eave cornice are modelled, run on from house to house and are always there |
+| | *Fenster* | rows of windows on every house, drawn into the wall: an opening you look into, its reveals in the wall's plaster, its back darker and cooler, a slim sill with its shadow — no glass, no panes, no mullions. Spacing and size where street photos measured the house (Dresden), else the nearest measured house's of the same kind, else its type's; one row per storey, the windows as tall as the storey allows, the ground floor's above the plinth, the top floor's under the eave cornice; a town house's ground floor a little raised, its windows with a surround. None on party walls, beside doors, over shop fronts, on churches, palaces and halls. From a distance they fade into the facade's tone |
+| | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs; where panoramas show the front (every city but Unna, which has none) |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
@@ -410,7 +421,7 @@ mistake); the switch stays as you set it.
 | | *Spiegelung* | the sky mirrored in glass facades, gilding and water; the sky only, not the buildings across the street |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
-| | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance; not offered on phones |
+| | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the centre of the view, *Manuell* on a fixed distance; not offered on phones |
 
 While the camera moves, the depth-of-field blur is switched off (the eye
 cannot resolve it in motion) and comes back when you stop. Phones do not
@@ -419,8 +430,8 @@ can spare for a hint a small screen barely shows.
 
 ### Erweitert ("Advanced")
 
-- **Werkzeuge** — *Gebäude unter dem Fadenkreuz abreißen* demolishes the
-  building you are looking at (same as `R`), on any tile in view; it is
+- **Werkzeuge** — *Gebäude in der Bildmitte abreißen* demolishes the
+  building you are looking at (`R` the one under the pointer), on any tile in view; it is
   not undoable. *Bild speichern* saves the view as a PNG with its sources
   (see [Modell](#modell-the-city-as-a-planner-draws-it)). *Immersiver Modus* locks the mouse pointer
   for a first-person feel; `Esc` leaves it.

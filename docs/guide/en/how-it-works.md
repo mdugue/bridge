@@ -134,17 +134,20 @@ and foliage green, sky light and horizon, the sun position and all shadows.
 `◎ detected` **by pattern recognition — it can be wrong:** the trees
 without a register (at crown peaks in the surface), sheds and garden houses
 (in the laser scan), re-measured roofs, chimneys, towers and dormers, arches
-and trusses above bridges, which shop belongs to which building and which
-building is a landmark.
+and trusses above bridges, which shop belongs to which building, which
+building is a landmark, and the window rhythm of the houses street photos
+saw.
 
 `≈ assumed` **designed for the look or set without data:** the pastel
 palette, the paper grain and vignette, the shape of tree crowns, the wall
 tint per building, brick or plaster where nothing is mapped, the ripples on
 the water, the stones and slabs of the paving patterns, the piers under
-bridges, the warm windows at dusk (the *presence* of a shop or public
-building is real; its lit windows are not).
+bridges, the windows of the houses no photo measured (a measured
+neighbour's rhythm or the house type's), the warm windows at dusk (the
+*presence* of a shop or public building is real; its lit windows are not).
 
-**Not in the data at all:** windows, the smaller street furniture
+**Not in the data at all:** where exactly each window sits on its wall
+(the rows are centred on it), the smaller street furniture
 (planters; traffic and street-name signs are mapped too sparsely to show),
 vehicles (the trams' tracks and wires are there; the trams themselves only
 as a data layer by timetable), people, vegetation smaller than about 3 m,

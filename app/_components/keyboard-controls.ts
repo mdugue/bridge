@@ -8,9 +8,9 @@
 export interface KeyboardActions {
   /** V — the next picture style (pastel → comic → noir → Sin City → Papier) */
   cycleStyle: () => void;
-  /** R — demolish the building under the crosshair */
+  /** R — demolish the building under the pointer (the centre without one) */
   demolish: () => void;
-  /** I — asks what stands at the crosshair ("Befragen", ADR 0042) */
+  /** I — asks what stands under the pointer, or at the centre ("Befragen", ADR 0042) */
   inquire: () => void;
   press: (code: string) => void;
   release: (code: string) => void;
@@ -61,6 +61,26 @@ export function isTextEntry(target: EventTarget | null): boolean {
   );
 }
 
+/**
+ * True for a key the focused control uses itself: the arrows on a slider,
+ * a tab, a radio or a toggle group's item in the panel — they step that
+ * control, they do not also walk or turn. A plain button keeps them, even
+ * in a group or the HUD's toolbar (which steps nothing): clicking Modell
+ * there must not stop the arrows panning it.
+ */
+export function isControlKey(
+  code: string,
+  target: EventTarget | null
+): boolean {
+  const el = target as { closest?: (selector: string) => unknown } | null;
+  return (
+    code.startsWith("Arrow") &&
+    el?.closest?.(
+      "[role=slider], [role=tab], [role=radio], [role=option], [role=menuitem], [data-slot=toggle-group-item]"
+    ) != null
+  );
+}
+
 export function attachKeyboardControls(
   { document, window }: KeyboardTargets,
   actions: KeyboardActions
@@ -69,7 +89,7 @@ export function attachKeyboardControls(
     // Held keys auto-repeat. Movement doesn't care (the key set is
     // idempotent), but the one-shot actions must fire once per press —
     // holding R used to re-parse the whole tile on every repeat.
-    if (e.repeat || isTextEntry(e.target)) {
+    if (e.repeat || isTextEntry(e.target) || isControlKey(e.code, e.target)) {
       return;
     }
     // macOS browsers send no keyup for a key released while ⌘ is down, so a

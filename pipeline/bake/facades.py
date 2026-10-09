@@ -85,6 +85,7 @@ SIGN_M = 4.0  # a store sign this close to a wall is on it
 SIGN_WALL_M = 2.0  # the walls signs are matched to (any eave)
 
 WORKERS = max(2, (os.cpu_count() or 2) + 2)  # downloads overlap the measuring
+WORKERS_ENV = "MAPILLARY_WORKERS"  # fewer, where another fetch shares the line
 SOURCE_ENV = "MAPILLARY_FACADE_SOURCE"
 
 
@@ -101,6 +102,12 @@ def legacy_cache_path(tile: Tile) -> Path:
     """The first fetch's measurements, without the profile: read while a
     tile has no v2 cache yet."""
     return cache_dir(tile) / f"{tile.id}.jsonl"
+
+
+def traits_path(tile: Tile) -> Path:
+    """The trait profiles (facade_traits.py), measured on the same
+    panoramas in a fetch of their own: the v1/v2 caches stay as they are."""
+    return cache_dir(tile) / f"{tile.id}.v3.jsonl"
 
 
 def measured_path(tile: Tile) -> Path:
@@ -472,8 +479,10 @@ def measure_image(job: dict) -> dict:
     """One image measured on its walls: {"img", "seq", "walls": [...]}, or
     {"img", "skip"} when it cannot be (no pose), or {"img", "fail"} on a
     network failure (not cached: the next run tries again)."""
-    from .facade_measure import EYE_M, class_map, load_image, measure, rotation_matrix
+    from . import facade_measure, facade_traits
+    from .facade_measure import EYE_M, class_map, load_image, rotation_matrix
 
+    measure = facade_traits.measure if job.get("kind") == "traits" else facade_measure.measure
     iid = job["img"]
     if not job.get("rot") or not job.get("url"):
         return {"img": iid, "skip": "no pose or thumbnail"}
@@ -547,8 +556,11 @@ def _fetch_signs(tile: Tile) -> None:
     )
 
 
-def fetch(tile: Tile) -> None:
-    """Measure the tile's facades on its panoramas, caching per image."""
+def fetch(tile: Tile, kind: str = "facades") -> None:
+    """Measure the tile's facades on its panoramas, caching per image:
+    `kind` "facades" the readings and the ground floor's profile
+    (facade_measure.py, the v2 cache), "traits" the trait profiles
+    (facade_traits.py, the v3 cache)."""
     if not tile.mapillary:
         return
     if not os.environ.get("MAPILLARY_TOKEN"):
@@ -560,10 +572,10 @@ def fetch(tile: Tile) -> None:
         lambda: _search_tile(tile, "images", {"fields": IMAGE_FIELDS, "is_pano": "true"}, NEAR_M),
     )
     jobs = plan(json.loads(tile.cityjson.read_text()), images, tile.epsg)
-    out = cache_path(tile)
+    out = traits_path(tile) if kind == "traits" else cache_path(tile)
     done = _done(out)
     todo = sorted(set(jobs) - done)
-    print(f"{tile.id}: {len(jobs)} panoramas see its walls, {len(todo)} to measure")
+    print(f"{tile.id}: {len(jobs)} panoramas see its walls, {len(todo)} to measure ({kind})")
     if not todo:
         return
     scratch = cache_dir(tile) / ".img"
@@ -573,7 +585,11 @@ def fetch(tile: Tile) -> None:
     t0 = last = time.time()
     with (
         open(out, "a") as f,
-        cf.ProcessPoolExecutor(WORKERS, initializer=_init_worker, initargs=(str(tile.dgm),)) as ex,
+        cf.ProcessPoolExecutor(
+            int(os.environ.get(WORKERS_ENV) or WORKERS),
+            initializer=_init_worker,
+            initargs=(str(tile.dgm),),
+        ) as ex,
     ):
         for start in range(0, len(todo), 400):
             batch = todo[start : start + 400]
@@ -585,13 +601,14 @@ def fetch(tile: Tile) -> None:
                     "url": poses.get(i, {}).get("thumb_2048_url"),
                     "scratch": str(scratch),
                     "source": source,
+                    "kind": kind,
                 }
                 for i in batch
             ]
             for r in ex.map(measure_image, work, chunksize=1):
-                kind = "fail" if "fail" in r else "skip" if "skip" in r else "measured"
-                counts[kind] += 1
-                if kind != "fail":
+                outcome = "fail" if "fail" in r else "skip" if "skip" in r else "measured"
+                counts[outcome] += 1
+                if outcome != "fail":
                     f.write(json.dumps(r, separators=(",", ":")) + "\n")
                     f.flush()
             if time.time() - last > 60 or start + 400 >= len(todo):

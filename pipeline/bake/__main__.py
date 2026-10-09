@@ -43,6 +43,7 @@ from . import (
     transit,
     trees,
     walls,
+    windows,
 )
 from .spec import parse
 
@@ -74,6 +75,9 @@ STEPS = {
     # The same measurements per wall: the ground floor's bays and store
     # signs (OSM's shops where no photo shows one).
     "shopfronts": shopfronts.run,
+    # The facade traits per wall (the fetch's trait profiles): the windows
+    # and their surrounds the building bake models.
+    "windows": windows.run,
     "walls": walls.run,
     "stairs": stairs.run,
     "surface": surface.run,

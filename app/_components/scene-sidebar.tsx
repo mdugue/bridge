@@ -295,7 +295,7 @@ function FocusControls({
         </ToggleGroup>
         <FieldDescription className="text-[11px] leading-snug">
           {mode === "auto"
-            ? "Scharf auf das, was unter dem Fadenkreuz liegt"
+            ? "Scharf auf das, was in der Bildmitte liegt"
             : "Feste Fokusdistanz — als Ring auf der Minikarte"}
         </FieldDescription>
       </Field>
@@ -536,9 +536,12 @@ function ControlTable({ coarse, model }: { coarse: boolean; model: boolean }) {
  * offers stay together instead of ending up under the list of places.
  */
 function ViewModeSwitch({
+  disabled,
   mode,
   onMode,
 }: {
+  /** the scene is still loading: there is no camera to switch yet */
+  disabled: boolean;
   mode: ViewMode;
   onMode: (mode: ViewMode) => void;
 }) {
@@ -546,6 +549,7 @@ function ViewModeSwitch({
     <ToggleGroup
       aria-label="Ansicht"
       className="grid w-full grid-cols-3 gap-0.75 rounded-lg bg-muted p-0.75"
+      disabled={disabled}
       onValueChange={(value: string[]) => {
         const next = value[0] as ViewMode | undefined;
         if (next) {
@@ -590,11 +594,14 @@ function ShadowStudy({
   day,
   minutes,
   onStudy,
+  ready,
   updateSun,
 }: {
   day: Date;
   minutes: number;
   onStudy: () => void;
+  /** the scene is up: there is a picture to save */
+  ready: boolean;
   updateSun: (day: Date, minutes: number) => void;
 }) {
   const dateKey = (d: { month: number; day: number }) => `${d.month}-${d.day}`;
@@ -654,8 +661,9 @@ function ShadowStudy({
         ))}
       </ToggleGroup>
       <button
-        className="flex min-h-8 items-center gap-2.5 rounded-lg border bg-background px-2.5 py-1.5 text-left font-medium text-xs hover:border-ring"
+        className="flex min-h-8 items-center gap-2.5 rounded-lg border bg-background px-2.5 py-1.5 text-left font-medium text-xs hover:border-ring disabled:pointer-events-none disabled:opacity-50"
         data-testid="export-study"
+        disabled={!ready}
         onClick={onStudy}
         title="Dieselbe Ansicht um 9, 12, 15 und 18 Uhr am 21. März, 21. Juni und 21. Dezember — als ein Blatt"
         type="button"
@@ -676,6 +684,8 @@ function SunControls({
   minutes,
   onDefaultTime,
   onStudy,
+  previewSun,
+  ready,
   sun,
   updateSun,
 }: {
@@ -684,9 +694,38 @@ function SunControls({
   minutes: number;
   onDefaultTime: () => void;
   onStudy: () => void;
+  previewSun: (day: Date, minutes: number) => void;
+  ready: boolean;
   sun: SunState | null;
   updateSun: (day: Date, minutes: number) => void;
 }) {
+  // The minute under the thumb while it moves: the thumb and the clock show
+  // it at once, while the scene (once a frame) and the rest of the HUD (as
+  // a transition) follow behind; letting go hands it over as the minute.
+  const [moving, setMoving] = useState<number | null>(null);
+  const shown = moving ?? minutes;
+  // A touch the system cancels ends the drag without a commit (the slider
+  // listens for the release only): hand over the minute it had reached.
+  const dragging = moving !== null;
+  const reached = useRef<number | null>(null);
+  useEffect(() => {
+    if (!dragging) {
+      return;
+    }
+    const cancel = () => {
+      const last = reached.current;
+      setMoving(null);
+      if (last !== null) {
+        updateSun(day, last);
+      }
+    };
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("touchcancel", cancel);
+    return () => {
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("touchcancel", cancel);
+    };
+  }, [dragging, day, updateSun]);
   const times = latLng ? getTimes(day, latLng.lat, latLng.lng) : null;
   const sunrise = times?.sunrise;
   const sunset = times?.sunset;
@@ -739,7 +778,7 @@ function SunControls({
           </PopoverContent>
         </Popover>
         <span className="flex h-7.5 items-center rounded-lg border px-2.5 font-medium font-mono text-xs tabular-nums">
-          {formatMinutes(minutes)}
+          {formatMinutes(shown)}
         </span>
       </div>
       <Slider
@@ -748,12 +787,24 @@ function SunControls({
         id="sun-time"
         max={24 * 60 - 1}
         min={0}
-        onValueChange={(value) =>
-          updateSun(day, Number(Array.isArray(value) ? value[0] : value))
-        }
+        onValueChange={(value, details) => {
+          const next = Number(Array.isArray(value) ? value[0] : value);
+          reached.current = next;
+          setMoving(next);
+          // a key or the input commits in the same call: the scene takes
+          // the step from there, once
+          if (details.reason === "drag" || details.reason === "track-press") {
+            previewSun(day, next);
+          }
+        }}
+        onValueCommitted={(value) => {
+          reached.current = null;
+          setMoving(null);
+          updateSun(day, Number(Array.isArray(value) ? value[0] : value));
+        }}
         step={1}
         style={{ "--sun-gradient": gradient } as CSSProperties}
-        value={[minutes]}
+        value={[shown]}
       />
       <div className="flex justify-between font-mono text-[10px] text-muted-foreground leading-none">
         <span>0:00</span>
@@ -771,6 +822,7 @@ function SunControls({
         day={day}
         minutes={minutes}
         onStudy={onStudy}
+        ready={ready}
         updateSun={updateSun}
       />
     </div>
@@ -779,20 +831,33 @@ function SunControls({
 
 /** A tool row: icon, what it does, and the key that also does it. */
 function ToolButton({
+  disabled = false,
   hint,
   icon: Icon,
   label,
   onClick,
+  onAim,
 }: {
+  disabled?: boolean;
   hint: string;
   icon: LucideIcon;
   label: string;
   onClick: () => void;
+  /** told while the button is pointed at or focused, and when it no longer is */
+  onAim?: (aiming: boolean) => void;
 }) {
+  // A panel that closes (the phone's sheet) unmounts the button without a
+  // blur or a pointer leave.
+  useEffect(() => () => onAim?.(false), [onAim]);
   return (
     <button
-      className="flex min-h-8.5 items-center gap-2.5 rounded-lg border bg-background px-2.5 py-1.5 text-left font-medium text-xs hover:border-ring"
+      className="flex min-h-8.5 items-center gap-2.5 rounded-lg border bg-background px-2.5 py-1.5 text-left font-medium text-xs hover:border-ring disabled:pointer-events-none disabled:opacity-50"
+      disabled={disabled}
+      onBlur={() => onAim?.(false)}
       onClick={onClick}
+      onFocus={() => onAim?.(true)}
+      onPointerEnter={() => onAim?.(true)}
+      onPointerLeave={() => onAim?.(false)}
       type="button"
     >
       <Icon className="size-3.5 shrink-0 opacity-70" />
@@ -809,6 +874,11 @@ export interface SceneSidebarProps {
   bounds: TerrainBounds | null;
   coarse: boolean;
   copySnapshot: () => void;
+  /**
+   * The centre-aimed tool is pointed at or focused: the HUD marks the
+   * middle it will act on, which no dot marks otherwise.
+   */
+  onAimCentre: (aiming: boolean) => void;
   /** what a data layer that is on says in words (the bike counts) */
   dataLayerDetail?: Partial<Record<DataLayerKey, ReactNode>>;
   day: Date;
@@ -838,6 +908,20 @@ export interface SceneSidebarProps {
   onLook: (patch: Partial<LookValues>) => void;
   onTab: (tab: SceneTabId) => void;
   onTeleport: (epsgX: number, epsgY: number) => void;
+  /** to a vantage (and its name): a glide, or while the scene loads,
+   *  where it starts */
+  onTravel: (view: ViewpointGeometry, label?: string) => void;
+  /**
+   * The scene can start (the browser has a GPU it draws with): without
+   * one a place, or a snapshot, has nowhere to go.
+   */
+  canTravel: boolean;
+  /**
+   * The scene is up. Before that the panel is already open — places, the
+   * map, the sun and the look can be chosen while the city loads — but
+   * what needs a camera (Modell, the tools, the pictures) waits.
+   */
+  ready: boolean;
   rememberedView: ViewpointGeometry | null;
   resetLook: () => void;
   setRememberedView: (view: ViewpointGeometry | null) => void;
@@ -851,6 +935,9 @@ export interface SceneSidebarProps {
   sun: SunState | null;
   tab: SceneTabId;
   updateSun: (day: Date, minutes: number) => void;
+  /** a step of a time drag (scene-time.ts `preview`): the scene follows
+   *  once a frame, the HUD behind the frames */
+  previewSun: (day: Date, minutes: number) => void;
 }
 
 export function SceneSidebar(props: SceneSidebarProps) {
@@ -907,6 +994,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
             )}
             <div className="px-3 pb-3.5">
               <ViewModeSwitch
+                disabled={!props.ready}
                 mode={props.mode}
                 onMode={(next) => handleRef.current?.setViewMode(next)}
               />
@@ -924,6 +1012,8 @@ export function SceneSidebar(props: SceneSidebarProps) {
               />
             )}
             <PlacesList
+              canRemember={props.ready}
+              canTravel={props.canTravel}
               onForget={() => props.setRememberedView(null)}
               onRemember={() => {
                 const here = handleRef.current?.captureViewpoint();
@@ -933,12 +1023,10 @@ export function SceneSidebar(props: SceneSidebarProps) {
               }}
               onRestore={() => {
                 if (props.rememberedView) {
-                  handleRef.current?.flyToViewpoint(props.rememberedView);
+                  props.onTravel(props.rememberedView);
                 }
               }}
-              onTravel={(place) =>
-                handleRef.current?.flyToViewpoint(place.view)
-              }
+              onTravel={(place) => props.onTravel(place.view, place.label)}
               places={places}
               remembered={props.rememberedView !== null}
               showKeys={!props.coarse}
@@ -967,6 +1055,8 @@ export function SceneSidebar(props: SceneSidebarProps) {
               onStudy={props.onStudy}
               latLng={props.latLng}
               minutes={props.minutes}
+              previewSun={props.previewSun}
+              ready={props.ready}
               sun={props.sun}
               updateSun={props.updateSun}
             />
@@ -1020,12 +1110,15 @@ export function SceneSidebar(props: SceneSidebarProps) {
               <span className={SECTION_LABEL}>Werkzeuge</span>
               <div className="flex flex-col gap-1.5">
                 <ToolButton
+                  disabled={!props.ready}
                   hint="R"
                   icon={HammerIcon}
-                  label="Gebäude unter dem Fadenkreuz abreißen"
+                  label="Gebäude in der Bildmitte abreißen — mit R unter dem Mauszeiger"
+                  onAim={props.onAimCentre}
                   onClick={() => handleRef.current?.demolishAtCrosshair()}
                 />
                 <ToolButton
+                  disabled={!props.ready}
                   hint="PNG"
                   icon={ImageDownIcon}
                   label="Bild speichern — mit Quellen, im Modell mit Maßstab und Nordpfeil"
@@ -1033,6 +1126,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 />
                 {!props.coarse && (
                   <ToolButton
+                    disabled={!props.ready}
                     hint="Esc beendet"
                     icon={FullscreenIcon}
                     label="Immersiver Modus"
@@ -1050,11 +1144,17 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-1.5">
-                <Button onClick={props.copySnapshot} size="sm" type="button">
+                <Button
+                  disabled={!props.ready}
+                  onClick={props.copySnapshot}
+                  size="sm"
+                  type="button"
+                >
                   <CopyIcon data-icon="inline-start" />
                   Kopieren
                 </Button>
                 <Button
+                  disabled={!props.canTravel}
                   onClick={props.applySnapshot}
                   size="sm"
                   type="button"
@@ -1115,6 +1215,9 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 </FieldLabel>
                 <Switch
                   checked={props.sound.on}
+                  // (it starts once the city is up: before, a switch that
+                  // stayed off would say nothing)
+                  disabled={!(props.sound.on || props.sound.ready)}
                   id="soundscape"
                   onCheckedChange={props.sound.toggle}
                   size="sm"
