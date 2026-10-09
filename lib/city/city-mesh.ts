@@ -2,6 +2,7 @@ import type { FacadeMaterial } from "./building-tint";
 import type { FootprintPoly } from "./minimap";
 import type { ObjectFacts } from "./object-facts";
 import type { CityJsonDocument } from "./types";
+import type { WindowSpec } from "./windows";
 
 /**
  * The buildings' per-object table. The bake (scripts/bake-city-mesh.ts)
@@ -242,6 +243,9 @@ export interface CityObjectRow {
   storeyH: number;
   /** wall colour (linear RGB) */
   tint: Rgb;
+  /** the windows the clay draws on its walls (lib/city/windows.ts; none
+   *  when absent) */
+  windows?: WindowSpec;
 }
 
 /** An object of the LoD2 CityJSON (column `source`, the default). */
@@ -267,12 +271,6 @@ export const OBJECT_SOURCE_SHOPFRONT = 6;
  *  (pipeline/bake/plinths.py, LoD2 + DGM1). */
 export const OBJECT_SOURCE_PLINTH = 5;
 
-/** A window niche's back, or the Faschen and bands round the windows, part
- *  of the building whose wall they are on (pipeline/bake/windows.py: the
- *  facade traits street photos measure). The niches' reveals are the
- *  host's own row. */
-export const OBJECT_SOURCE_WINDOW = 7;
-
 /** The property table as typed columns — how the glTF carries it. */
 export interface CityObjectTable {
   baseZ: Float32Array;
@@ -287,6 +285,12 @@ export interface CityObjectTable {
   source: Uint8Array;
   storeyH: Float32Array;
   tint: Float32Array;
+  /** the windows' axis spacing (0: none), width, height (m) and style
+   *  (lib/city/windows.ts `WindowSpec`) */
+  winAxis: Float32Array;
+  winH: Float32Array;
+  winStyle: Uint32Array;
+  winW: Float32Array;
 }
 
 /** Rows → columns (the bake side). */
@@ -305,6 +309,10 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     source: new Uint8Array(count),
     storeyH: new Float32Array(count),
     tint: new Float32Array(count * 3),
+    winAxis: new Float32Array(count),
+    winH: new Float32Array(count),
+    winStyle: new Uint32Array(count),
+    winW: new Float32Array(count),
   };
   rows.forEach((r, i) => {
     table.baseZ[i] = r.baseZ;
@@ -318,23 +326,28 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     table.source[i] = r.source ?? OBJECT_SOURCE_LOD2;
     table.storeyH[i] = r.storeyH;
     table.tint.set(r.tint, i * 3);
+    table.winAxis[i] = r.windows?.axis ?? 0;
+    table.winH[i] = r.windows?.h ?? 0;
+    table.winStyle[i] = r.windows?.style ?? 0;
+    table.winW[i] = r.windows?.w ?? 0;
   });
   return table;
 }
 
 /** Objects per texel row of the packed table (a WebGL2-safe edge). */
 export const OBJECT_TEXTURE_WIDTH = 1024;
-/** RGBA texels per object: (tint, baseZ) (roof, eaveH) (storeyH, glow, rough, flags). */
-export const OBJECT_TEXEL_BANDS = 3;
+/** RGBA texels per object: (tint, baseZ) (roof, eaveH) (storeyH, glow,
+ *  rough, flags) (window axis, width, height, style). */
+export const OBJECT_TEXEL_BANDS = 4;
 
-/** Rows of one band: the texture is `OBJECT_TEXTURE_WIDTH × bandRows·3`. */
+/** Rows of one band: the texture is `OBJECT_TEXTURE_WIDTH × bandRows·4`. */
 export function objectBandRows(count: number): number {
   return Math.max(1, Math.ceil(count / OBJECT_TEXTURE_WIDTH));
 }
 
 /**
  * The table as RGBA float texels for the clay shader. Object `i` lives at
- * column `i % W`, row `floor(i / W)` of each of three bands stacked
+ * column `i % W`, row `floor(i / W)` of each of four bands stacked
  * vertically; the shader reads band `b` at row `+ b · bandRows`.
  */
 export function packObjectTexels(table: CityObjectTable): Float32Array {
@@ -351,6 +364,10 @@ export function packObjectTexels(table: CityObjectTable): Float32Array {
     out.set(
       [table.storeyH[i], table.glow[i], table.rough[i], table.flags[i]],
       2 * band + at
+    );
+    out.set(
+      [table.winAxis[i], table.winW[i], table.winH[i], table.winStyle[i]],
+      3 * band + at
     );
   }
   return out;

@@ -8,19 +8,27 @@ import {
   OBJECT_SOURCE_DORMER,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SHOPFRONT,
-  OBJECT_SOURCE_WINDOW,
+  type OsmBuildingLut,
 } from "../lib/city/city-mesh";
 import type {
   DormerFeature,
+  PlinthFeature,
   ShopfrontWall,
   StructureFeature,
 } from "../lib/city/features";
 import { paneTop, SHOPFRONT_SINK } from "../lib/city/shopfronts";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
-import type { WindowWall } from "../lib/city/windows";
 import {
-  appendWindows,
+  FACADE_SCALE_M,
+  TYPES,
+  unpackStyle,
+  WINDOW_ROWS,
+  type WindowWall,
+} from "../lib/city/windows";
+import {
+  assignWindows,
   bakeCityMesh,
+  liftToStreet,
   PANE_ROUGH,
   scanStructureId,
 } from "./bake-city-mesh";
@@ -556,8 +564,8 @@ test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
   expect((canopy?.flags ?? 0) & OBJECT_FLAG_OWN_COLOUR).toBe(0);
 });
 
-test("measured windows are cut into their host's wall as soft niches, source 7", () => {
-  // the house's south wall again, 12 m to the eave, a window every 3 m
+test("windows: a rhythm per house in its row, every wall vertex placed on its wall", () => {
+  // the house's south wall, measured: a window every 3 m
   const wall: WindowWall = {
     oid: "house",
     wi: 0,
@@ -572,39 +580,133 @@ test("measured windows are cut into their host's wall as soft niches, source 7",
     traits: {},
     model: { axis: 3, grid: "regular", w: 1.2, h: 1.6, storey: 3.2 },
   };
-  const bake = () => bakeCityMesh("t", fixture(), undefined, null);
-  const index = new Map([
-    ["shop", 0],
-    ["shop-part", 1],
-    ["house", 2],
-  ]);
-  // the fixture's boxes are flat-roofed blocks: none there
-  const flat = bake();
-  const count = flat.objects.length;
-  expect(appendWindows(flat, [wall], [], index)).toEqual({
-    walls: 0,
-    windows: 0,
-  });
-  expect(flat.objects.length).toBe(count);
-  // under a pitched roof, two storeys of three
+  const bake = (osm?: OsmBuildingLut, doc = fixture()) =>
+    bakeCityMesh(
+      "t",
+      doc,
+      undefined,
+      null,
+      osm,
+      undefined,
+      "render",
+      undefined,
+      undefined,
+      { windows: [wall] }
+    );
   const baked = bake();
-  baked.objects[2].flags &= ~OBJECT_FLAG_FLAT_ROOF;
-  const tris = baked.vertices.positions.length / 9;
-  const drawn = appendWindows(baked, [wall], [], index);
-  expect(drawn.walls).toBe(1);
-  expect(drawn.windows).toBeGreaterThanOrEqual(3);
-  expect(baked.vertices.positions.length / 9).toBeGreaterThan(tris);
-  const [backs, bands] = baked.objects.slice(count);
-  expect(bands).toBeUndefined();
-  expect(backs.source).toBe(OBJECT_SOURCE_WINDOW);
-  expect(backs.root).toBe(baked.objects[2].root);
-  expect(backs.flags & OBJECT_FLAG_OWN_COLOUR).toBe(OBJECT_FLAG_OWN_COLOUR);
-  // the niche's back is the wall's tint, darker
-  expect(backs.tint[0]).toBeLessThan(baked.objects[2].tint[0]);
-  // a Fasche or sill band is one object more
-  const framed = bake();
-  framed.objects[2].flags &= ~OBJECT_FLAG_FLAT_ROOF;
-  const sill = { ...wall, model: { ...wall.model!, sill: true } };
-  appendWindows(framed, [sill], [], index);
-  expect(framed.objects.length).toBe(count + 2);
+  const [shop, part, house] = baked.objects;
+  // the shop Building is drawn by its part: no wall of its own
+  expect(shop.windows).toBeUndefined();
+  // the part borrows the measured house's rhythm (a flat roof like it,
+  // 40 m off), the house has its own
+  expect(unpackStyle(house.windows?.style ?? 0).measured).toBe(true);
+  // its own 3 m, drawn a little towards a block's
+  expect(house.windows?.axis).toBeGreaterThan(TYPES.block.axis);
+  expect(house.windows?.axis).toBeLessThan(3);
+  expect(unpackStyle(part.windows?.style ?? 0).near).toBe(true);
+  // the storey snapped under the eave: 12 m, four storeys
+  expect(house.storeyH).toBeCloseTo(3, 2);
+  // ...and the glTF property table carries the rhythm
+  const table = cityMesh(baked).input.table?.properties;
+  expect(table?.winStyle).toMatchObject({ componentType: "UINT32" });
+  // a vertex's wall: the house's walls are 10 m long, the roof has none
+  const f = baked.vertices.facade ?? new Int16Array();
+  expect(f.length).toBe((4 * baked.vertices.positions.length) / 3);
+  const { objectIds, positions: p } = baked.vertices;
+  const lengths = new Set<number>();
+  for (let t = 0; t < objectIds.length; t += 3) {
+    // a wall triangle: its three corners not all at one height
+    const zs = [2, 5, 8].map((c) => p[3 * t + c]);
+    if (objectIds[t] === 2 && Math.max(...zs) - Math.min(...zs) > 1) {
+      lengths.add(Math.round((f[4 * t + 1] / 32_767) * FACADE_SCALE_M));
+    }
+  }
+  expect([...lengths]).toEqual([10]);
+  // a landmark that is a town house keeps them, a church's walls are
+  // its own
+  expect(bake({ house: { landmark: 1 } }).objects[2].windows).toBeDefined();
+  const church = fixture();
+  church.CityObjects.house.attributes = {
+    ...church.CityObjects.house.attributes,
+    function: "31001_3041",
+  };
+  expect(bake(undefined, church).objects[2].windows).toBeUndefined();
+});
+
+test("windows: the ground floor's keep over the house's plinth", () => {
+  const doc = fixture();
+  const { objects } = bakeCityMesh("t", doc, undefined, null);
+  const house = objects[2];
+  // a pitched roof's house carries a plinth; 1.2 m over its base
+  house.flags &= ~OBJECT_FLAG_FLAT_ROOF;
+  const plinth: PlinthFeature = {
+    geometry: {
+      type: "MultiLineString",
+      coordinates: [
+        [
+          [412_040, 5_656_000],
+          [412_050, 5_656_000],
+        ],
+      ],
+    },
+    properties: { of: "house", g: [house.baseZ], top: [house.baseZ + 1.2] },
+  };
+  assignWindows(objects, Object.keys(doc.CityObjects), [], [], [plinth]);
+  const s = unpackStyle(house.windows?.style ?? 0);
+  expect(s.noGround).toBe(false);
+  expect(s.sill + s.lift).toBeGreaterThanOrEqual(
+    1.2 + WINDOW_ROWS.plinthGap - 1e-9
+  );
+  // without one, where its type has them
+  const bare = bakeCityMesh("t", fixture(), undefined, null).objects;
+  bare[2].flags &= ~OBJECT_FLAG_FLAT_ROOF;
+  assignWindows(bare, Object.keys(doc.CityObjects), [], [], []);
+  expect(unpackStyle(bare[2].windows?.style ?? 0).lift).toBe(0);
+});
+
+test("a building's base moves up to the street its plinths stand on", () => {
+  const doc = fixture();
+  const keys = Object.keys(doc.CityObjects);
+  const piece = (of: string, g: number): PlinthFeature => ({
+    geometry: {
+      type: "MultiLineString",
+      coordinates: [
+        [
+          [412_040, 5_656_000],
+          [412_050, 5_656_000],
+        ],
+      ],
+    },
+    properties: { of, g: [g], top: [g + 0.9] },
+  });
+  const pitched = () => {
+    const { objects } = bakeCityMesh("t", doc, undefined, null);
+    for (const o of objects) {
+      o.flags &= ~OBJECT_FLAG_FLAT_ROOF;
+    }
+    return objects;
+  };
+  const objects = pitched();
+  const [, part, house] = objects;
+  const [base, eave, partBase] = [house.baseZ, house.eaveH, part.baseZ];
+  liftToStreet(objects, keys, [
+    piece("house", base + 0.3),
+    piece("house", base + 0.5),
+  ]);
+  // the higher piece's ground, the eave where it was
+  expect(house.baseZ).toBeCloseTo(base + 0.5, 2);
+  expect(house.baseZ + house.eaveH).toBeCloseTo(base + eave, 2);
+  // another building keeps its base
+  expect(part.baseZ).toBe(partBase);
+  // up a steep street: a metre over its lowest piece at most
+  const steep = pitched();
+  liftToStreet(steep, keys, [
+    piece("house", base + 0.2),
+    piece("house", base + 2),
+  ]);
+  expect(steep[2].baseZ).toBeCloseTo(base + 1.2, 2);
+  // a base far under its street stands in a courtyard: it stays
+  const deep = pitched();
+  liftToStreet(deep, keys, [piece("house", base + 1.8)]);
+  expect(deep[2].baseZ).toBe(base);
 });

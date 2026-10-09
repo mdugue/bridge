@@ -78,6 +78,14 @@ export interface MeshInput {
   /** reorder vertices and triangles for the vertex cache and meshopt (the
    *  fine terrain's TIN: nothing reads its order; the grid keeps its own) */
   reorder?: boolean;
+  /** custom vertex attributes of two or four components as normalised
+   *  16-bit integers (glTF names, `_UPPER_CASE`; a reader sees −1…1):
+   *  written as they are, never quantised again (a wall vertex's place
+   *  along its wall, lib/city/windows.ts) */
+  vectors?: Record<
+    string,
+    { array: Int16Array<ArrayBuffer>; type: "VEC2" | "VEC4" }
+  >;
   /** merge vertices whose every attribute is equal (flat-shaded buildings);
    *  implies `reorder` */
   weld?: boolean;
@@ -131,6 +139,17 @@ function addPrimitive(
   for (const [name, array] of Object.entries(input.attributes ?? {})) {
     prim.setAttribute(name, accessor(array, "SCALAR"));
   }
+  for (const [name, v] of Object.entries(input.vectors ?? {})) {
+    prim.setAttribute(
+      name,
+      doc
+        .createAccessor()
+        .setArray(v.array)
+        .setType(v.type)
+        .setNormalized(true)
+        .setBuffer(buffer)
+    );
+  }
   if (input.indices) {
     prim.setIndices(accessor(input.indices, "SCALAR"));
   }
@@ -162,7 +181,7 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
   scene.setExtras(input.extras);
   // Only positions, normals, colours and texture coordinates are quantised:
   // the custom attributes are ids and flags that must stay exact (quantize
-  // would squeeze them to 12 bits).
+  // would squeeze them to 12 bits), the vectors are quantised already.
   const transforms = [
     quantize({
       pattern: /^(POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/,

@@ -370,14 +370,15 @@ type Features<T> = Promise<T[]>;
 
 /**
  * The city's buffers nothing reads on the CPU once it is compiled: its
- * normals and roof flags (the clay reads both, so its compile uploads
- * them). The positions, index and feature ids stay — collision and picks
- * raycast the BVH over them, demolish rebuilds the index from the feature
- * ids, the selection outline cuts a building's triangles out of them.
+ * normals and places on the wall, the roof flag among them (the clay reads
+ * both, so its compile uploads them). The positions, index and feature ids stay —
+ * collision and picks raycast the BVH over them, demolish rebuilds the
+ * index from the feature ids, the selection outline cuts a building's
+ * triangles out of them.
  */
 function cityCpuDroppable(city: CityLayer): AnyAttribute[] {
   const geometry = city.mesh.geometry;
-  return [geometry.getAttribute("normal"), geometry.getAttribute("roof")];
+  return [geometry.getAttribute("normal"), geometry.getAttribute("facade")];
 }
 
 function firstMesh(root: Object3D): Mesh | undefined {

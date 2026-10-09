@@ -1,35 +1,26 @@
 import { describe, expect, test } from "bun:test";
-import { ShapeUtils, Vector2 } from "three";
-import { QUANTUM_M } from "./shopfronts";
 import {
-  axes,
-  cutFace,
-  cutOf,
+  FACADE_ROOF,
+  FACADE_SCALE_M,
   type FacadeModel,
-  FASCHE,
-  fitsFace,
-  footprintOf,
-  NICHE,
-  nicheMesh,
-  bandMeshes,
-  ROWS,
-  rows,
-  wallFaces,
-  type WindowMesh,
-  windowLayout,
+  facadeAttribute,
+  groundLift,
+  NO_DOOR,
+  packStyle,
+  TOWARD_TYPE,
+  TYPES,
+  unpackStyle,
+  WINDOW_LIFT,
+  WINDOW_ROWS,
+  type WindowHost,
   type WindowWall,
+  windowAxes,
+  windowless,
+  windowRows,
+  windowSpecs,
+  windowStorey,
+  windowType,
 } from "./windows";
-
-/** THREE's earcut as the bake passes it (scripts/bake-city-mesh.ts). */
-const triangulate = (data: number[], holes: number[]): number[] => {
-  const pts: Vector2[] = [];
-  for (let i = 0; i + 1 < data.length; i += 2) {
-    pts.push(new Vector2(data[i], data[i + 1]));
-  }
-  const cuts = [...holes, pts.length];
-  const rings = holes.map((start, i) => pts.slice(start, cuts[i + 1]));
-  return ShapeUtils.triangulateShape(pts.slice(0, cuts[0]), rings).flat();
-};
 
 const model = (extra: Partial<FacadeModel> = {}): FacadeModel => ({
   axis: 3,
@@ -39,239 +30,463 @@ const model = (extra: Partial<FacadeModel> = {}): FacadeModel => ({
   ...extra,
 });
 
-describe("axes", () => {
-  test("centred on the wall at the measured spacing", () => {
-    const xs = axes(14, model(), "k");
-    expect(xs.length).toBe(4);
-    expect((xs[0] + xs.at(-1)!) / 2).toBeCloseTo(7, 9);
-    expect(xs[1] - xs[0]).toBeCloseTo(3, 9);
-    // the outer windows keep the wall's edge
-    expect(xs[0] - 0.6).toBeGreaterThanOrEqual(ROWS.edge - 1e-9);
+const host = (extra: Partial<WindowHost> = {}): WindowHost => ({
+  centre: [0, 0],
+  eaveH: 15,
+  flat: false,
+  levels: false,
+  lod2: true,
+  ownFacade: false,
+  root: 0,
+  shop: false,
+  storeyH: 3.75,
+  ...extra,
+});
+
+const measured = (oid: string, m = model()): WindowWall => ({
+  a: [0, 0],
+  b: [14, 0],
+  eave: 15,
+  imgs: 4,
+  L: 14,
+  model: m,
+  n: [0, -1],
+  oid,
+  seqs: 2,
+  traits: {},
+  wi: 0,
+});
+
+describe("the style", () => {
+  test("packs and unpacks its bits, depth and sill to their class", () => {
+    const style = packStyle({
+      loose: true,
+      lintel: true,
+      noGround: true,
+      depth: 0.18,
+      sill: 0.85,
+      lift: 0.6,
+    });
+    // exact in a float texel
+    expect(packStyle({ lift: 9, depth: 9, sill: 9, frame: true })).toBeLessThan(
+      2 ** 24
+    );
+    const s = unpackStyle(style);
+    expect(s).toMatchObject({
+      loose: true,
+      frame: false,
+      lintel: true,
+      noGround: true,
+      measured: false,
+      near: false,
+    });
+    expect(s.depth).toBeCloseTo(0.18, 9);
+    expect(s.sill).toBeCloseTo(0.85, 9);
+    expect(s.lift).toBeCloseTo(0.6, 9);
   });
 
-  test("a loose grid is off a little, the same every bake, never crowded", () => {
-    const a = axes(14, model({ grid: "loose" }), "x/1");
-    expect(a).toEqual(axes(14, model({ grid: "loose" }), "x/1"));
-    expect(a).not.toEqual(axes(14, model(), "x/1"));
-    for (let k = 1; k < a.length; k++) {
-      expect(a[k] - a[k - 1] - 1.2).toBeGreaterThanOrEqual(ROWS.gap - 1e-9);
+  test("clamps depth and sill into their classes", () => {
+    const s = unpackStyle(packStyle({ depth: 2, sill: 0 }));
+    expect(s.depth).toBeCloseTo(0.27, 9);
+    expect(s.sill).toBeCloseTo(0.5, 9);
+  });
+});
+
+test("a building's type: roof, eave, storey", () => {
+  expect(windowType(true, 20, 3)).toBe("block");
+  expect(windowType(true, 5, 3)).toBe("low");
+  expect(windowType(false, 5, 2.5)).toBe("house");
+  expect(windowType(false, 16, 4)).toBe("tall");
+  expect(windowType(false, 12, 3)).toBe("storey");
+});
+
+test("the storey snaps to a whole number under the eave", () => {
+  expect(windowStorey(16, 3.14)).toBeCloseTo(3.2, 9);
+  // the photos' storey wins over the estimate
+  expect(windowStorey(16, 3.14, 4.1)).toBeCloseTo(4, 9);
+  // nothing to snap on a low wall
+  expect(windowStorey(2.5, 3)).toBe(3);
+});
+
+test("garages, sheds and plants have no windows", () => {
+  expect(windowless("31001_2463")).toBe(true);
+  expect(windowless("31001_2522")).toBe(true);
+  expect(windowless("31001_2723")).toBe(true);
+  expect(windowless("31001_1000")).toBe(false);
+  expect(windowless(undefined)).toBe(false);
+});
+
+describe("windowSpecs", () => {
+  const index = new Map([
+    ["a", 0],
+    ["b", 1],
+    ["c", 2],
+    ["d", 3],
+  ]);
+
+  test("its own walls first, then its building's, a neighbour's, its type", () => {
+    const hosts = [
+      host({ root: 0 }),
+      host({ root: 0, centre: [5, 0] }),
+      host({ root: 2, centre: [60, 0] }),
+      host({ root: 3, centre: [400, 0] }),
+    ];
+    const [a, b, c, d] = windowSpecs(
+      hosts,
+      [measured("a", model({ axis: 3.4, grid: "loose", orn: true }))],
+      index
+    );
+    expect(a.from).toBe("measured");
+    // drawn towards its type's, not past the photos'
+    const t = TYPES[windowType(false, 15, a.storey)];
+    expect(a.spec.axis).toBeGreaterThan(t.axis);
+    expect(a.spec.axis).toBeLessThan(3.4);
+    expect(unpackStyle(a.spec.style)).toMatchObject({
+      loose: true,
+      lintel: true,
+      measured: true,
+    });
+    expect(b.from).toBe("tree");
+    expect(b.spec.axis).toBe(a.spec.axis);
+    expect(c.from).toBe("near");
+    expect(c.spec.axis).toBe(a.spec.axis);
+    expect(unpackStyle(c.spec.style).near).toBe(true);
+    // beyond NEAR_M: the type's rhythm
+    expect(d.from).toBe("type");
+    expect(d.spec.axis).toBe(TYPES[windowType(false, 15, d.storey)].axis);
+  });
+
+  test("a neighbour lends only to its own roof form and about its eave", () => {
+    const hosts = [
+      host(),
+      host({ root: 1, centre: [20, 0], flat: true }),
+      host({ root: 2, centre: [20, 0], eaveH: 30 }),
+    ];
+    const [, flat, tall] = windowSpecs(hosts, [measured("a")], index);
+    expect(flat.from).toBe("type");
+    expect(tall.from).toBe("type");
+  });
+
+  test("none on a facade of its own, a garage, a low wall or a shed", () => {
+    const hosts = [
+      host({ ownFacade: true }),
+      host({ root: 1, fn: "31001_2463" }),
+      host({ root: 2, eaveH: 2.8 }),
+      host({ root: 3, lod2: false }),
+    ];
+    for (const choice of windowSpecs(hosts, [measured("a")], index)) {
+      expect(choice.from).toBe("none");
+      expect(choice.spec.axis).toBe(0);
     }
   });
 
-  test("no window on a wall too short for one, or an axis narrower than it", () => {
-    expect(axes(2, model(), "k")).toEqual([]);
-    expect(axes(14, model({ axis: 1.3 }), "k")).toEqual([]);
+  test("the window keeps its lintel under the next storey line", () => {
+    const [low] = windowSpecs(
+      [host({ eaveH: 9, storeyH: 3 })],
+      [measured("a", model({ h: 2.4 }))],
+      index
+    );
+    const { sill } = unpackStyle(low.spec.style);
+    expect(low.spec.h).toBeCloseTo(low.storey - sill - WINDOW_ROWS.lintel, 2);
+  });
+
+  test("the photos' storey only where OSM counts none", () => {
+    const wall = measured("a", model({ storey: 4.1 }));
+    const [own] = windowSpecs([host({ eaveH: 16 })], [wall], index);
+    expect(own.storey).toBeCloseTo(4, 9);
+    const [osm] = windowSpecs(
+      [host({ eaveH: 16, levels: true, storeyH: 3.2 })],
+      [wall],
+      index
+    );
+    expect(osm.storey).toBeCloseTo(3.2, 9);
+  });
+
+  test("a shop's ground floor gets none", () => {
+    const [shop] = windowSpecs([host({ shop: true })], [], index);
+    expect(unpackStyle(shop.spec.style).noGround).toBe(true);
+  });
+
+  test("a measured rhythm keeps near its type's", () => {
+    const [wide, narrow] = windowSpecs(
+      [host(), host({ root: 1, centre: [400, 0] })],
+      [
+        measured("a", model({ axis: 4.6, w: 2.2, h: 2.4 })),
+        measured("b", model({ axis: 1.9, w: 0.75, h: 1 })),
+      ],
+      index
+    );
+    for (const [c, side] of [
+      [wide, "hi"],
+      [narrow, "lo"],
+    ] as const) {
+      const t = TYPES[windowType(false, 15, c.storey)];
+      expect(c.from).toBe("measured");
+      expect(c.spec.w / t.w).toBeCloseTo(TOWARD_TYPE.w[side], 1);
+      // to the centimetre
+      expect(c.spec.axis).toBeGreaterThanOrEqual(
+        t.axis * TOWARD_TYPE.axis.lo - 0.005
+      );
+      expect(c.spec.axis).toBeLessThanOrEqual(
+        t.axis * TOWARD_TYPE.axis.hi + 0.005
+      );
+    }
+  });
+
+  test("the ground floor's windows keep over the plinth", () => {
+    const [low, high, raised, squat] = windowSpecs(
+      [
+        host({ eaveH: 9, storeyH: 3, plinth: 1.2 }),
+        host({ root: 1, eaveH: 9, storeyH: 3, plinth: 2.6 }),
+        host({ root: 2, eaveH: 16, storeyH: 4 }),
+        host({ root: 3, eaveH: 9, storeyH: 3, plinth: 1.6 }),
+      ],
+      [],
+      index
+    );
+    const s = unpackStyle(low.spec.style);
+    expect(s.sill + s.lift).toBeGreaterThanOrEqual(
+      1.2 + WINDOW_ROWS.plinthGap - 1e-9
+    );
+    expect(s.noGround).toBe(false);
+    // a plinth too high for the classes: no ground-floor windows
+    expect(unpackStyle(high.spec.style).noGround).toBe(true);
+    // ...nor where the lift would leave them wider than tall
+    const q = unpackStyle(squat.spec.style);
+    expect(squat.spec.h - q.lift).toBeLessThan(
+      WINDOW_ROWS.squat * squat.spec.w
+    );
+    expect(q.noGround).toBe(true);
+    // a town house's Hochparterre
+    expect(unpackStyle(raised.spec.style).lift).toBeCloseTo(
+      WINDOW_ROWS.raise,
+      9
+    );
   });
 });
 
-test("rows: one per storey over the first line, under the eave, under its lintel", () => {
-  const r = rows(4, 3.2, 2.5, 14);
-  // the window is cut to the storey: 3.2 − sill − lintel
-  for (const [z0, z1] of r) {
-    expect(z1 - z0).toBeCloseTo(3.2 - ROWS.sill - ROWS.lintel, 9);
-  }
-  expect(r.length).toBe(3);
-  r.forEach(([z0], k) => expect(z0).toBeCloseTo(4.9 + 3.2 * k, 9));
-  expect(r.at(-1)?.[1]).toBeLessThanOrEqual(14);
-  // a storey too low for a window under its lintel has none
-  expect(rows(4, 1.8, 1.6, 30)).toEqual([]);
-});
-
-test("the layout starts over the ground floor, or over a shopfront", () => {
-  const w = {
-    L: 14,
-    eave: 15,
-    oid: "o",
-    wi: 0,
-    z: [100, 100] as [number, number],
-  };
-  const host = { baseZ: 100, eaveH: 15, storeyH: 3.5 };
-  const wins = windowLayout(w, model(), host);
-  expect(Math.min(...wins.map((r) => r.z0))).toBeCloseTo(103.5 + ROWS.sill, 9);
-  expect(Math.max(...wins.map((r) => r.z1))).toBeLessThanOrEqual(
-    115 - ROWS.eaveClear
+test("the ground floor's lift: a Hochparterre, over the plinth, in classes", () => {
+  expect(groundLift(false, 0.9)).toBe(0);
+  expect(groundLift(true, 0.9)).toBeCloseTo(WINDOW_ROWS.raise, 9);
+  // 0.9 m of plinth and its gap over a 0.9 m sill
+  expect(groundLift(false, 0.9, 0.9)).toBeCloseTo(WINDOW_ROWS.plinthGap, 9);
+  // rounded up to a class
+  expect(groundLift(false, 0.9, 0.92)).toBeCloseTo(
+    WINDOW_ROWS.plinthGap + WINDOW_LIFT.step,
+    9
   );
-  // a shop reaching 5 m up: the first row a storey higher
-  const over = windowLayout(w, model(), host, 105);
-  expect(Math.min(...over.map((r) => r.z0))).toBeCloseTo(
-    103.5 + 3.5 + ROWS.sill,
+  expect(groundLift(true, 0.85, 0.9)).toBeCloseTo(WINDOW_ROWS.raise, 9);
+  expect(groundLift(false, 0.85, 3)).toBeUndefined();
+  expect(WINDOW_ROWS.raise / WINDOW_LIFT.step).toBeCloseTo(
+    Math.round(WINDOW_ROWS.raise / WINDOW_LIFT.step),
     9
   );
 });
 
-/** A wall 14 m long and 15 m high along x (y = 0), facing −y, as two
- *  triangles, and a second face (another wall) beside it. */
-function wallMesh(): { positions: number[]; wall: WindowWall } {
-  const q = (a: number[], b: number[], c: number[], d: number[]) => [
-    ...a,
-    ...b,
-    ...c,
-    ...a,
-    ...c,
-    ...d,
-  ];
-  // counter-clockwise seen from −y: x right, z up
-  const front = q([0, 0, 100], [14, 0, 100], [14, 0, 115], [0, 0, 115]);
-  // the side wall at x = 14, facing +x
-  const side = q([14, 0, 100], [14, 10, 100], [14, 10, 115], [14, 0, 115]);
-  return {
-    positions: [...front, ...side],
-    wall: {
-      a: [0, 0],
-      b: [14, 0],
-      eave: 15,
-      imgs: 4,
-      L: 14,
-      n: [0, -1],
-      oid: "o",
-      seqs: 2,
-      traits: {},
-      wi: 0,
-      z: [100, 100],
-    },
-  };
-}
+describe("the layout", () => {
+  const spec = { axis: 3, w: 1.2, h: 1.6, style: packStyle({ sill: 0.9 }) };
 
-describe("cutting the wall", () => {
-  const offset = { cx: 0, cy: 0 };
-
-  test("the wall's face is found, in its plane, with its outline", () => {
-    const { positions, wall } = wallMesh();
-    const faces = wallFaces(wall, offset, positions, [0, 3, 6, 9]);
-    expect(faces.length).toBe(1);
-    expect(faces[0].triangles).toEqual([0, 3]);
-    expect(faces[0].area).toBeCloseTo(14 * 15, 6);
-    expect(faces[0].loops.length).toBe(1);
-    expect(faces[0].loops[0].pts.length).toBe(4);
+  test("the axes are centred, the outer ones off the wall's ends", () => {
+    const xs = windowAxes(14, spec);
+    expect(xs.length).toBe(4);
+    expect(xs[0] + xs.at(-1)!).toBeCloseTo(0, 9);
+    expect(xs[1] - xs[0]).toBeCloseTo(3, 9);
+    expect(7 + xs[0] - spec.w / 2).toBeGreaterThanOrEqual(
+      WINDOW_ROWS.edge - 1e-9
+    );
+    expect(windowAxes(2, spec)).toEqual([]);
   });
 
-  test("holes are cut from the outline's own vertices, facing out, area kept", () => {
-    const { positions, wall } = wallMesh();
-    const [face] = wallFaces(wall, offset, positions, [0, 3]);
-    const m = model();
-    const wins = windowLayout(wall, m, { baseZ: 100, eaveH: 15, storeyH: 3.5 });
-    const fit = wins.filter((r) => fitsFace(face, footprintOf(r, m), 0.12));
-    expect(fit.length).toBe(wins.length);
-    const cut = cutFace(
-      face,
-      fit.map((r) => cutOf(r, m)),
-      positions,
-      triangulate
-    );
-    expect(cut).toBeDefined();
-    const tris = cut ?? [];
-    let area = 0;
-    for (let i = 0; i < tris.length; i += 9) {
-      const e1 = [
-        tris[i + 3] - tris[i],
-        tris[i + 4] - tris[i + 1],
-        tris[i + 5] - tris[i + 2],
-      ];
-      const e2 = [
-        tris[i + 6] - tris[i],
-        tris[i + 7] - tris[i + 1],
-        tris[i + 8] - tris[i + 2],
-      ];
-      const ny = e1[2] * e2[0] - e1[0] * e2[2];
-      // every piece faces −y, out of the wall
-      expect(ny).toBeLessThan(0);
-      area += Math.abs(ny) / 2;
-      // and lies in the wall's plane
-      for (let k = 1; k < 9; k += 3) {
-        expect(Math.abs(tris[i + k])).toBeLessThan(1e-9);
-      }
+  test("a row per storey from the ground floor, under the eave", () => {
+    const rows = windowRows(spec, 3.5, 15);
+    expect(rows[0][0]).toBeCloseTo(0.9, 9);
+    expect(rows[1][0]).toBeCloseTo(3.5 + 0.9, 9);
+    for (const [z0, z1] of rows) {
+      expect(z1 - z0).toBeCloseTo(1.6, 9);
+      expect(z1).toBeLessThanOrEqual(15 - WINDOW_ROWS.eaveClear + 1e-9);
     }
-    const holes = fit
-      .map((r) => cutOf(r, m))
-      .reduce((s, r) => s + (r.s1 - r.s0) * (r.z1 - r.z0), 0);
-    expect(area).toBeCloseTo(14 * 15 - holes, 6);
-    // the outline keeps its four corners, nothing on its edges
-    const onEdge = [];
-    for (let i = 0; i < tris.length; i += 3) {
-      const [x, , z] = [tris[i], tris[i + 1], tris[i + 2]];
-      const corner = (x === 0 || x === 14) && (z === 100 || z === 115);
-      const edge = x === 0 || x === 14 || z === 100 || z === 115;
-      if (edge && !corner) {
-        onEdge.push([x, z]);
-      }
-    }
-    expect(onEdge).toEqual([]);
+    expect(rows.length).toBe(4);
+    // no ground floor over a shop
+    expect(windowRows(spec, 3.5, 15, false)[0][0]).toBeCloseTo(4.4, 9);
   });
 
-  test("a window that does not fit inside the face is not cut", () => {
-    const { positions, wall } = wallMesh();
-    const [face] = wallFaces(wall, offset, positions, [0, 3]);
-    expect(fitsFace(face, { s0: 13.5, s1: 14.5, z0: 105, z1: 106 }, 0.12)).toBe(
-      false
-    );
-    expect(fitsFace(face, { s0: 2, s1: 3, z0: 114.95, z1: 116 }, 0.12)).toBe(
-      false
-    );
-    expect(fitsFace(face, { s0: 2, s1: 3, z0: 105, z1: 106 }, 0.12)).toBe(true);
+  test("a top floor's windows end under the eave, shorter if they must", () => {
+    const clipped = windowRows(spec, 3.5, 13.3).at(-1)!;
+    expect(clipped[0]).toBeCloseTo(11.4, 9);
+    expect(clipped[1]).toBeCloseTo(13.3 - WINDOW_ROWS.eaveClear, 9);
+    // too little left: none
+    expect(windowRows(spec, 3.5, 12.3).at(-1)![0]).toBeCloseTo(7.9, 9);
+  });
+
+  test("a lifted ground floor keeps its head", () => {
+    const lifted = { ...spec, style: packStyle({ sill: 0.9, lift: 0.45 }) };
+    const [ground, first] = windowRows(lifted, 3.5, 15);
+    expect(ground[0]).toBeCloseTo(0.9 + 0.45, 9);
+    expect(ground[1]).toBeCloseTo(0.9 + 1.6, 9);
+    expect(first[0]).toBeCloseTo(3.5 + 0.9, 9);
   });
 });
 
-describe("the niche", () => {
-  const { wall, positions } = wallMesh();
-  const [face] = wallFaces(wall, { cx: 0, cy: 0 }, positions, [0, 3]);
-  const r = { s0: 2, s1: 3.2, z0: 105, z1: 106.6 };
-  const mesh = (m: FacadeModel): WindowMesh => {
-    const out: WindowMesh = {
-      backs: { normals: [], positions: [] },
-      bands: { normals: [], positions: [] },
-      reveals: { normals: [], positions: [] },
-    };
-    nicheMesh(out, face.frame, r, m);
-    bandMeshes(out, face.frame, [r], m, [0.2, 13.8]);
-    return out;
+/** Quads as triangles (a b c, a c d), per object. */
+function quads(list: { object: number; pts: number[][]; roof?: boolean }[]): {
+  isRoof: number[];
+  objectIds: number[];
+  positions: number[];
+} {
+  const out = {
+    isRoof: [] as number[],
+    objectIds: [] as number[],
+    positions: [] as number[],
   };
-  /** y of every vertex: the wall lies at 0, out of it is −y. */
-  const outs = (p: number[]) => p.filter((_, i) => i % 3 === 1).map((y) => -y);
-
-  test("its back lies behind the wall, the lip rolls from the wall's plane", () => {
-    const m = mesh(model());
-    expect(m.bands.positions).toEqual([]);
-    for (const o of outs(m.backs.positions)) {
-      expect(o).toBeCloseTo(-NICHE.depth, 9);
+  for (const { object, pts, roof } of list) {
+    const [a, b, c, d] = pts;
+    for (const p of [a, b, c, a, c, d]) {
+      out.positions.push(...p);
+      out.objectIds.push(object);
+      out.isRoof.push(roof ? 1 : 0);
     }
-    const reveal = outs(m.reveals.positions);
-    expect(Math.max(...reveal)).toBeCloseTo(0, 9);
-    expect(Math.min(...reveal)).toBeCloseTo(-NICHE.depth, 9);
-    // smooth: the lip's normals turn between the wall's and the reveal's
-    const n = m.reveals.normals;
-    expect(n.some((v, i) => i % 3 === 1 && v < -0.2 && v > -0.95)).toBe(true);
+  }
+  return out;
+}
+
+/** A box's four walls, outward, from (x0, y0) to (x1, y1), 0 → h. */
+function boxWalls(
+  object: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  h: number
+) {
+  return [
+    // south, facing −y: counter-clockwise seen from outside
+    {
+      object,
+      pts: [
+        [x0, y0, 0],
+        [x1, y0, 0],
+        [x1, y0, h],
+        [x0, y0, h],
+      ],
+    },
+    {
+      object,
+      pts: [
+        [x1, y0, 0],
+        [x1, y1, 0],
+        [x1, y1, h],
+        [x1, y0, h],
+      ],
+    },
+    {
+      object,
+      pts: [
+        [x1, y1, 0],
+        [x0, y1, 0],
+        [x0, y1, h],
+        [x1, y1, h],
+      ],
+    },
+    {
+      object,
+      pts: [
+        [x0, y1, 0],
+        [x0, y0, 0],
+        [x0, y0, h],
+        [x0, y1, h],
+      ],
+    },
+  ];
+}
+
+const metres = (v: number) => (v / 32_767) * FACADE_SCALE_M;
+
+describe("facadeAttribute", () => {
+  test("every wall vertex: its place from the wall's middle and the wall's length", () => {
+    const mesh = quads([
+      ...boxWalls(0, 0, 0, 14, 10, 12),
+      {
+        object: 0,
+        roof: true,
+        pts: [
+          [0, 0, 12],
+          [14, 0, 12],
+          [14, 10, 12],
+          [0, 10, 12],
+        ],
+      },
+    ]);
+    const f = facadeAttribute(mesh, () => true);
+    // the south wall's first vertex (0, 0): 7 m from its middle
+    expect(Math.abs(metres(f[0]))).toBeCloseTo(7, 1);
+    expect(metres(f[1])).toBeCloseTo(14, 1);
+    expect(f[2]).toBe(Math.round(32_767 * NO_DOOR));
+    // the east wall is 10 m long
+    expect(metres(f[4 * 6 + 1])).toBeCloseTo(10, 1);
+    // the roof carries none
+    expect(f[4 * 24 + 1]).toBe(0);
+    // along the wall s runs one way: its two ends are opposite
+    expect(metres(f[0])).toBeCloseTo(-metres(f[4 * 1]), 1);
   });
 
-  test("whatever lies along the wall keeps two quanta off it", () => {
-    for (const m of [
-      model(),
-      model({ frame: true, sill: true, lisene: true, orn: true }),
-    ]) {
-      const all = mesh(m);
-      for (const part of [all.backs, all.bands, all.reveals]) {
-        for (let i = 0; i < part.positions.length; i += 9) {
-          const ys = [
-            part.positions[i + 1],
-            part.positions[i + 4],
-            part.positions[i + 7],
-          ];
-          // a face parallel to the wall: all three at one depth
-          if (
-            Math.max(...ys) - Math.min(...ys) < 1e-9 &&
-            Math.abs(ys[0]) > 1e-9
-          ) {
-            expect(Math.abs(ys[0])).toBeGreaterThanOrEqual(2 * QUANTUM_M);
-          }
-        }
+  test("a party wall gets none; the other walls keep theirs", () => {
+    const mesh = quads([
+      ...boxWalls(0, 0, 0, 10, 10, 12),
+      ...boxWalls(1, 10, 0, 20, 10, 12),
+    ]);
+    const f = facadeAttribute(mesh, () => true);
+    // object 0's east wall (x = 10) stands against object 1's west wall
+    expect(f[4 * 6 + 1]).toBe(0);
+    expect(f[4 * 24 + 3 * 6 * 4 + 1]).toBe(0);
+    // their south walls keep their length
+    expect(metres(f[1])).toBeCloseTo(10, 1);
+    expect(metres(f[4 * 24 + 1])).toBeCloseTo(10, 1);
+  });
+
+  test("objects without windows are left out", () => {
+    const mesh = quads(boxWalls(0, 0, 0, 10, 10, 12));
+    const f = facadeAttribute(mesh, () => false);
+    expect(f[1]).toBe(0);
+    expect(f[2]).toBe(Math.round(32_767 * NO_DOOR));
+  });
+
+  test("a roof vertex carries the roof flag in its first door slot, windows or not", () => {
+    const mesh = quads([
+      ...boxWalls(0, 0, 0, 14, 10, 12),
+      {
+        object: 0,
+        roof: true,
+        pts: [
+          [0, 0, 12],
+          [14, 0, 12],
+          [14, 10, 12],
+          [0, 10, 12],
+        ],
+      },
+    ]);
+    for (const drawn of [true, false]) {
+      const f = facadeAttribute(mesh, () => drawn);
+      expect(f[4 * 24 + 2]).toBe(Math.round(32_767 * FACADE_ROOF));
+      expect(f[4 * 24 + 3]).toBe(Math.round(32_767 * NO_DOOR));
+      // no wall vertex reads as one
+      for (let v = 0; v < 24; v++) {
+        expect(f[4 * v + 2]).toBe(Math.round(32_767 * NO_DOOR));
       }
     }
   });
 
-  test("a Fasche stands out round the window and rolls into the reveal", () => {
-    const m = mesh(model({ frame: true }));
-    const front = outs(m.bands.positions);
-    expect(Math.max(...front)).toBeCloseTo(FASCHE.proud, 9);
-    // the opening it frames is the window, without a lip
-    expect(cutOf(r, model({ frame: true }))).toEqual(r);
+  test("a door's place on its wall, a shopfront's wall negative", () => {
+    const mesh = quads(boxWalls(0, 0, 0, 14, 10, 12));
+    const f = facadeAttribute(
+      mesh,
+      () => true,
+      [{ object: 0, at: [10, 0.1], n: [0, -1] }],
+      [{ object: 0, a: [14, 0], b: [14, 10], n: [1, 0] }]
+    );
+    // the door 3 m from the south wall's middle, the way s runs there
+    expect(Math.abs(metres(f[2]))).toBeCloseTo(3, 1);
+    expect(f[3]).toBe(Math.round(32_767 * NO_DOOR));
+    // the east wall stands over a shopfront
+    expect(metres(f[4 * 6 + 1])).toBeCloseTo(-10, 1);
   });
 });

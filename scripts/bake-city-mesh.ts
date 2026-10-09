@@ -48,9 +48,9 @@ import {
   OBJECT_SOURCE_DORMER,
   OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_GAP,
+  OBJECT_SOURCE_LOD2,
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
-  OBJECT_SOURCE_WINDOW,
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
@@ -117,18 +117,10 @@ import {
 } from "../lib/city/structures";
 import type { CityJsonDocument } from "../lib/city/types";
 import {
-  cutFace,
-  cutOf,
-  bandMeshes as windowBands,
-  FACE_MARGIN_M,
-  faceSpan,
-  fitsFace,
-  footprintOf,
-  nicheMesh,
-  type WindowMesh,
+  facadeAttribute,
+  type WindowHost,
   type WindowWall,
-  wallFaces,
-  windowLayout,
+  windowSpecs,
 } from "../lib/city/windows";
 import { measuredRoofMesh, measuredRoofsById } from "./measured-roofs";
 
@@ -144,8 +136,20 @@ const rgb = (c: [number, number, number]): [number, number, number] => [
   r3(c[2]),
 ];
 
+/** What the bake lays on the LoD2 walls, each feature on its host. */
+export interface OnWalls {
+  doors?: readonly DoorFeature[];
+  dormers?: readonly DormerFeature[];
+  plinths?: readonly PlinthFeature[];
+  shopfronts?: readonly ShopfrontWall[];
+  windows?: readonly WindowWall[];
+}
+
 /** The mesh as non-indexed triangles, flat per-face vertices. */
 export interface CityVertices {
+  /** per vertex where it lies on its wall, for the windows (4 × snorm16,
+   *  lib/city/windows.ts `facadeAttribute`); absent: no windows */
+  facade?: Int16Array<ArrayBuffer>;
   /** 1 on RoofSurface vertices, 0 elsewhere */
   isRoof: Float32Array<ArrayBuffer>;
   /** per vertex, a normal to shade with in place of the triangle's flat
@@ -517,13 +521,7 @@ export function bakeCityMesh(
   facades: FacadeMaterial = "render",
   gaps?: readonly StructureFeature[],
   measured?: readonly MeasuredRoofFeature[],
-  onWalls: {
-    doors?: readonly DoorFeature[];
-    dormers?: readonly DormerFeature[];
-    plinths?: readonly PlinthFeature[];
-    shopfronts?: readonly ShopfrontWall[];
-    windows?: readonly WindowWall[];
-  } = {}
+  onWalls: OnWalls = {}
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
   const doc = withoutTrafficStructures(source);
@@ -576,6 +574,9 @@ export function bakeCityMesh(
   // the objects drawn as their measured parts (ADR 0036): their facts
   // say so, not what the LoD2 roof said
   const rebuilt = measuredRoofsById(measured ?? []);
+  // what the windows read beyond the row: the function, OSM's storeys,
+  // a facade of its own (a landmark's flag alone keeps its windows)
+  const hosts: WindowExtra[] = [];
   const objects: CityObjectRow[] = keys.map((id, index) => {
     const o = doc.CityObjects[id];
     const root = rootOf(doc, keys, index);
@@ -595,6 +596,8 @@ export function bakeCityMesh(
     const osm = inheritedOsm(osmLut?.[id], osmLut?.[keys[root]]);
     const eaveH = roofMin === undefined ? total : Math.max(roofMin - baseZ, 0);
     const footprints = footprintsOf[index];
+    const monumental = ownFacade(attrs, eaveH, osm?.levels);
+    hosts[index] = windowExtra(attrs, osm?.levels, monumental);
     return {
       building: o.type === "Building",
       root,
@@ -602,7 +605,7 @@ export function bakeCityMesh(
       eaveH: cm(eaveH),
       flags: facadeFlags(
         inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
-        ownFacade(attrs, eaveH, osm?.levels)
+        monumental
       ),
       storeyH: cm(mappedStoreyHeight(eaveH, measured, osm?.levels)),
       glow: buildingGlows(attrs) ? 1 : 0,
@@ -649,11 +652,59 @@ export function bakeCityMesh(
     }
   }
 
-  const baked = { epsg, matrix, objects, offset, vertices: v };
+  const baked: BakedCityMesh = { epsg, matrix, objects, offset, vertices: v };
   markFlatRoofs(objects, v);
-  appendBeyondLod2(tile, baked, keys, { ...onWalls, facades, gaps, scan });
-  markGrounded(baked.objects);
+  dressWalls(tile, baked, keys, hosts, onWalls, { facades, gaps, scan });
   return baked;
+}
+
+/**
+ * The walls' storeys, windows and parts, in the order they read each
+ * other: the storeys counted from the street, then the windows (the
+ * plinths' and shopfronts' heights read the storey they snap to the
+ * eave), then the parts beyond LoD2, and last each wall vertex's place on
+ * its wall.
+ */
+function dressWalls(
+  tile: string,
+  baked: BakedCityMesh,
+  keys: readonly string[],
+  hosts: readonly WindowExtra[],
+  onWalls: OnWalls,
+  extra: {
+    facades: FacadeMaterial;
+    gaps?: readonly StructureFeature[];
+    scan?: readonly SmallBuildingFeature[];
+  }
+): void {
+  const plinths = onWalls.plinths ?? [];
+  // the storeys count from the street, where the plinths say where it is
+  liftToStreet(baked.objects, keys, plinths);
+  assignWindows(baked.objects, keys, hosts, onWalls.windows ?? [], plinths);
+  appendBeyondLod2(tile, baked, keys, { ...onWalls, ...extra });
+  markGrounded(baked.objects);
+  // the parts laid on the walls copied their host's row: windows are the
+  // LoD2 walls' alone
+  for (const o of baked.objects) {
+    if ((o.source ?? OBJECT_SOURCE_LOD2) !== OBJECT_SOURCE_LOD2) {
+      delete o.windows;
+    }
+  }
+  baked.vertices.facade = facadeOf(baked, keys, onWalls);
+}
+
+/** What the windows read of an object beyond its row: its function,
+ *  whether OSM counts its storeys, a facade of its own. */
+function windowExtra(
+  attrs: Record<string, unknown>,
+  levels: number | undefined,
+  monumental: boolean
+): WindowExtra {
+  return {
+    fn: typeof attrs.function === "string" ? attrs.function : undefined,
+    levels: (levels ?? 0) >= 1,
+    monumental,
+  };
 }
 
 /** The flags with OBJECT_FLAG_LANDMARK where the facade is its own. */
@@ -678,7 +729,6 @@ function appendBeyondLod2(
     shopfronts?: readonly ShopfrontWall[];
     gaps?: readonly StructureFeature[];
     scan?: readonly SmallBuildingFeature[];
-    windows?: readonly WindowWall[];
   }
 ): void {
   if (extra.scan) {
@@ -690,11 +740,6 @@ function appendBeyondLod2(
   }
   if (extra.plinths) {
     appendPlinths(baked, extra.plinths, objectIndex);
-  }
-  if (extra.windows) {
-    // before the shopfronts and doors: they lay themselves on the wall the
-    // windows cut, but only on its ground floor, which the windows keep
-    appendWindows(baked, extra.windows, extra.shopfronts ?? [], objectIndex);
   }
   if (extra.shopfronts) {
     // before the doors: a bay is cut at a door, which the doors then draw
@@ -743,6 +788,20 @@ const NO_PLINTH =
 /** A part whose base stands this far over the ground at its plinth stands
  *  on a roof (a tower's part), not on the street. */
 const PLINTH_ON_GROUND_M = 1.5;
+
+/** Whether a plinth piece is drawn on its host: not on a facade of its
+ *  own, glass, metal or a flat-roofed block (`NO_PLINTH`), not under 3 m
+ *  of wall, not on a part standing on a roof. */
+function carriesPlinth(
+  host: Pick<CityObjectRow, "baseZ" | "eaveH" | "flags">,
+  ground: readonly number[]
+): boolean {
+  return (
+    (host.flags & NO_PLINTH) === 0 &&
+    host.eaveH >= 3 &&
+    host.baseZ <= Math.min(...ground) + PLINTH_ON_GROUND_M
+  );
+}
 
 /**
  * The plinths on the LoD2 walls' street side (pipeline/bake/plinths.py),
@@ -820,14 +879,7 @@ export function appendPlinths(
     const p = f.properties;
     const hostIndex = p ? objectIndex.get(p.of) : undefined;
     const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
-    if (
-      !(p && host && hostIndex !== undefined) ||
-      (host.flags & NO_PLINTH) !== 0 ||
-      host.eaveH < 3
-    ) {
-      continue;
-    }
-    if (host.baseZ > Math.min(...p.g) + PLINTH_ON_GROUND_M) {
+    if (!(p && host && hostIndex !== undefined && carriesPlinth(host, p.g))) {
       continue;
     }
     bands.plinth.push(...plinthStretches(f, hostIndex));
@@ -1297,251 +1349,191 @@ export function appendDormers(
   };
 }
 
-/** A niche's back: its wall's tint, darker, as if in its own shadow. */
-const NICHE_SHADE = 0.78;
-/** What a window's host must not be: the plinths' gate (a landmark, a
- *  part with its own colour, glass or metal, a flat-roofed block). */
-const NO_WINDOWS = NO_PLINTH;
-/** A host this far above the ground in front of its wall stands on another
- *  part: no windows on it. */
-const WINDOW_HOST_ABOVE_M = 1.5;
-/** How far over a shopfront's top a wall's first window sill keeps. */
-const OVER_SHOP_M = 0.3;
-
-/** A shopfront's top over its ground (m): its windows' head, sign or
- *  canopy — the most a shop reaches up (the windows start above it). */
-function shopTop(w: ShopfrontWall, storeyH: number): number {
-  return Math.max(
-    paneTop(w, storeyH) + SHOPFRONT.head + CANOPY.tuck,
-    w.sign?.z?.[1] ?? 0,
-    ...(w.canopy ?? []).map((c) => c.h)
-  );
+/** An object's footprint centre (EPSG): its first ring's mean. */
+function footprintCentre(
+  footprints: readonly [number, number][][]
+): [number, number] | undefined {
+  const ring = footprints[0];
+  if (!ring?.length) {
+    return undefined;
+  }
+  const x = ring.reduce((a, p) => a + p[0], 0) / ring.length;
+  const y = ring.reduce((a, p) => a + p[1], 0) / ring.length;
+  return [x, y];
 }
 
-/** Each object's wall triangles (each one's first vertex). */
-function objectTriangles(v: CityVertices): Map<number, number[]> {
-  const out = new Map<number, number[]>();
-  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
-    if (v.isRoof[t] === 1) {
-      continue;
-    }
-    const id = v.objectIds[t];
-    const list = out.get(id);
-    if (list) {
-      list.push(t);
-    } else {
-      out.set(id, [t]);
+/** What keeps a building's walls free of windows beside a facade of its
+ *  own (`WindowExtra.monumental`): glass or metal cladding, its own colour.
+ *  A Wikidata landmark's flag alone does not — most are town houses whose
+ *  neighbours have windows (the Neumarkt's, a listed Mietshaus). */
+const NO_WINDOW_FLAGS =
+  OBJECT_FLAG_GLASS | OBJECT_FLAG_METAL | OBJECT_FLAG_OWN_COLOUR;
+
+/** What the windows read of an object beyond its row. */
+export type WindowExtra = Pick<WindowHost, "fn" | "levels"> & {
+  /** its facade its own (lib/city/building-tint.ts `ownFacade`: a
+   *  church, a palace, a theatre, a hall) */
+  monumental?: boolean;
+};
+
+/** A building's street level stands at most this far over the lowest
+ *  ground under its plinths (m): up a steep street its ground floor's
+ *  level lies between. */
+const STREET_RISE_M = 1;
+/** An object's base moves up to its building's street level from at most
+ *  this far under it (m): deeper, it stands in a courtyard or a cut. */
+const STREET_UNDER_M = 1.5;
+
+/**
+ * Each LoD2 object's base moved up to its building's street level where
+ * the building's plinths say where that is (`carriesPlinth`): the highest
+ * of their pieces' lowest ground, at most `STREET_RISE_M` over the lowest;
+ * its eave stays where it is. A LoD2 base is the lowest ground round the
+ * whole footprint — a courtyard's, a light well's, a ramp's — and lay a
+ * median 0.3 m under the street on Dresden's spawn tile, so storeys, bands
+ * and windows counted from it put the ground floor's windows behind the
+ * plinth. Every part of the building moves to the same level, so their
+ * storeys meet.
+ */
+export function liftToStreet(
+  objects: CityObjectRow[],
+  keys: readonly string[],
+  plinths: readonly PlinthFeature[]
+): void {
+  const index = new Map(keys.map((id, i) => [id, i]));
+  const ground = new Map<number, { lo: number; hi: number }>();
+  for (const f of plinths) {
+    const p = f.properties;
+    const i = p ? index.get(p.of) : undefined;
+    const host = i === undefined ? undefined : objects[i];
+    if (p && host && carriesPlinth(host, p.g)) {
+      const had = ground.get(host.root);
+      ground.set(host.root, {
+        lo: Math.min(had?.lo ?? Number.POSITIVE_INFINITY, ...p.g),
+        hi: Math.max(had?.hi ?? Number.NEGATIVE_INFINITY, ...p.g),
+      });
     }
   }
-  return out;
+  for (const o of objects) {
+    const g = ground.get(o.root);
+    if (!g || (o.source ?? OBJECT_SOURCE_LOD2) !== OBJECT_SOURCE_LOD2) {
+      continue;
+    }
+    const street = Math.min(g.hi, g.lo + STREET_RISE_M);
+    const rise = street - o.baseZ;
+    if (rise > 0 && rise <= STREET_UNDER_M) {
+      o.eaveH = cm(Math.max(o.eaveH - rise, 0));
+      o.baseZ = cm(street);
+    }
+  }
 }
 
-const emptyWindowMesh = (): WindowMesh => ({
-  backs: { normals: [], positions: [] },
-  bands: { normals: [], positions: [] },
-  reveals: { normals: [], positions: [] },
-});
-
-/** The walls' windows, cut into their faces: per face its new triangles,
- *  the old ones it replaces, and per host the niches and bands. */
-function cutWindows(
-  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
-  walls: readonly WindowWall[],
-  shopfronts: readonly ShopfrontWall[],
-  objectIndex: ReadonlyMap<string, number>
-) {
-  const v = baked.vertices;
-  const byObject = objectTriangles(v);
-  const shops = new Map(shopfronts.map((w) => [`${w.oid}/${w.wi}`, w]));
-  const removed = new Set<number>();
-  const cut: { id: number; positions: number[] }[] = [];
-  const meshes = new Map<number, WindowMesh>();
-  let drawnWalls = 0;
-  let drawn = 0;
-  for (const w of walls) {
-    const m = w.model;
-    const hostIndex = objectIndex.get(w.oid);
-    const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
-    if (!(m && host && hostIndex !== undefined)) {
-      continue;
+/** How high each object's plinth stands over its base (m), where one is
+ *  drawn (`carriesPlinth`): the highest top of its pieces — the
+ *  ground-floor windows keep above it. */
+function plinthTops(
+  objects: readonly CityObjectRow[],
+  plinths: readonly PlinthFeature[],
+  index: ReadonlyMap<string, number>
+): Map<number, number> {
+  const tops = new Map<number, number>();
+  for (const f of plinths) {
+    const p = f.properties;
+    const i = p ? index.get(p.of) : undefined;
+    const host = i === undefined ? undefined : objects[i];
+    if (p && host && i !== undefined && carriesPlinth(host, p.g)) {
+      const top = Math.max(...p.top) - host.baseZ;
+      tops.set(i, Math.max(tops.get(i) ?? top, top));
     }
-    const ground = Math.min(...(w.z ?? [host.baseZ]));
-    if (
-      (host.flags & NO_WINDOWS) !== 0 ||
-      host.baseZ > ground + WINDOW_HOST_ABOVE_M
-    ) {
-      continue;
-    }
-    const shop = shops.get(`${w.oid}/${w.wi}`);
-    const above = shop
-      ? ground + shopTop(shop, host.storeyH) + OVER_SHOP_M
-      : undefined;
-    const wins = windowLayout(w, m, host, above);
-    const tris = (byObject.get(hostIndex) ?? []).filter((t) => !removed.has(t));
-    let onWall = 0;
-    for (const face of wins.length > 0
-      ? wallFaces(w, baked.offset, v.positions, tris)
-      : []) {
-      const fit = wins.filter((r) =>
-        fitsFace(face, footprintOf(r, m), FACE_MARGIN_M)
-      );
-      const positions =
-        fit.length > 0
-          ? cutFace(
-              face,
-              fit.map((r) => cutOf(r, m)),
-              v.positions,
-              triangulateXY
-            )
-          : undefined;
-      if (!positions) {
-        continue;
-      }
-      for (const t of face.triangles) {
-        removed.add(t);
-      }
-      cut.push({ id: hostIndex, positions });
-      const mesh = meshes.get(hostIndex) ?? emptyWindowMesh();
-      meshes.set(hostIndex, mesh);
-      for (const r of fit) {
-        nicheMesh(mesh, face.frame, r, m);
-      }
-      const [s0, s1] = faceSpan(face);
-      windowBands(mesh, face.frame, fit, m, [
-        s0 + FACE_MARGIN_M,
-        s1 - FACE_MARGIN_M,
-      ]);
-      onWall += fit.length;
-    }
-    drawnWalls += onWall > 0 ? 1 : 0;
-    drawn += onWall;
   }
-  return { cut, drawn, drawnWalls, meshes, removed };
-}
-
-/** Triangles appended to the stream under one object id (NaN normals or
- *  none: flat). */
-interface AppendedPart {
-  id: number;
-  normals?: readonly number[];
-  positions: readonly number[];
-}
-
-/** The vertex stream without the `removed` triangles (each one's first
- *  vertex) and with `parts` appended, written straight into typed arrays:
- *  a tile's stream is millions of vertices, and a copy through plain
- *  arrays raised a cold bake's peak memory by ~0.8 GB a tile. */
-function withoutTriangles(
-  v: CityVertices,
-  removed: ReadonlySet<number>,
-  parts: readonly AppendedPart[]
-): CityVertices {
-  const kept = v.objectIds.length - 3 * removed.size;
-  const added = parts.reduce((n, p) => n + p.positions.length / 3, 0);
-  const total = kept + added;
-  const positions = new Float32Array(3 * total);
-  const normals = new Float32Array(3 * total).fill(Number.NaN);
-  const objectIds = new Float32Array(total);
-  const isRoof = new Float32Array(total);
-  let at = 0;
-  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
-    if (removed.has(t)) {
-      continue;
-    }
-    positions.set(v.positions.subarray(3 * t, 3 * t + 9), 3 * at);
-    if (v.normals) {
-      normals.set(v.normals.subarray(3 * t, 3 * t + 9), 3 * at);
-    }
-    objectIds.set(v.objectIds.subarray(t, t + 3), at);
-    isRoof.set(v.isRoof.subarray(t, t + 3), at);
-    at += 3;
-  }
-  for (const p of parts) {
-    positions.set(p.positions, 3 * at);
-    if (p.normals) {
-      normals.set(p.normals, 3 * at);
-    }
-    const n = p.positions.length / 3;
-    objectIds.fill(p.id, at, at + n);
-    at += n;
-  }
-  return { positions, objectIds, isRoof, normals };
+  return tops;
 }
 
 /**
- * The facades street photos' traits model (pipeline/bake/windows.py,
- * lib/city/windows.ts): on each measured wall with a model, per upper
- * storey a row of soft niches cut into the host's LoD2 wall — its face
- * re-triangulated round them, under its own row — the niches' reveals in
- * the host's row, their backs a darker own-colour object and the Faschen,
- * sill bands, lisenes and ornament fields one more, in a plaster shade a
- * touch paler than the wall (as the plinths' cornices), `source` 7, the
- * host's building tree. Not on a landmark, a part with its own colour,
- * glass or metal, a flat-roofed block (`NO_WINDOWS`), nor a host standing
- * on another part; above a shopfront on the wall. Returns the walls and
- * windows drawn.
+ * Each LoD2 object's windows (lib/city/windows.ts `windowSpecs`: measured
+ * on its walls, on another part of its building, on the nearest building
+ * of its kind, or its type's) and the storey they keep, snapped to its
+ * eave — written into its row (`windows`, `storeyH`); its ground floor's
+ * over its plinth.
  */
-export function appendWindows(
-  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+export function assignWindows(
+  objects: CityObjectRow[],
+  keys: readonly string[],
+  extra: readonly WindowExtra[],
   walls: readonly WindowWall[],
-  shopfronts: readonly ShopfrontWall[],
-  objectIndex: ReadonlyMap<string, number>
-): { walls: number; windows: number } {
-  const { cut, drawn, drawnWalls, meshes, removed } = cutWindows(
-    baked,
-    walls,
-    shopfronts,
-    objectIndex
-  );
-  if (removed.size === 0) {
-    return { walls: 0, windows: 0 };
-  }
-  // what goes on: the cut faces (flat), the reveals in the host's row,
-  // the backs and bands as rows of their own
-  const parts: AppendedPart[] = cut.map((c) => ({
-    id: c.id,
-    positions: c.positions,
+  plinths: readonly PlinthFeature[] = []
+): void {
+  const index = new Map(keys.map((id, i) => [id, i]));
+  const tops = plinthTops(objects, plinths, index);
+  const hosts: WindowHost[] = objects.map((o, i) => ({
+    centre: footprintCentre(o.footprints),
+    eaveH: o.eaveH,
+    flat: hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF),
+    fn: extra[i]?.fn,
+    levels: extra[i]?.levels ?? false,
+    lod2: (o.source ?? OBJECT_SOURCE_LOD2) === OBJECT_SOURCE_LOD2,
+    ownFacade:
+      (extra[i]?.monumental ?? false) || (o.flags & NO_WINDOW_FLAGS) !== 0,
+    plinth: tops.get(i),
+    root: o.root,
+    shop: hasObjectFlag(o.flags, OBJECT_FLAG_SHOP),
+    storeyH: o.storeyH,
   }));
-  for (const [hostIndex, mesh] of meshes) {
-    const host = baked.objects[hostIndex];
-    parts.push({ id: hostIndex, ...mesh.reveals });
-    const part = (tris: Shaded, tint: [number, number, number]) => {
-      if (tris.positions.length === 0) {
-        return;
-      }
-      let base = Number.POSITIVE_INFINITY;
-      let top = Number.NEGATIVE_INFINITY;
-      for (let i = 2; i < tris.positions.length; i += 3) {
-        base = Math.min(base, tris.positions[i]);
-        top = Math.max(top, tris.positions[i]);
-      }
-      const above = cm(top - base + 1);
-      parts.push({ id: baked.objects.length, ...tris });
-      baked.objects.push({
-        ...host,
-        building: false,
-        baseZ: cm(base),
-        // above its top: no eave stroke, no storey band on it
-        eaveH: above,
-        storeyH: above,
-        glow: 0,
-        // its own colour, none of the host's OSM looks (no shop wash)
-        flags: OBJECT_FLAG_OWN_COLOUR,
-        tint,
-        source: OBJECT_SOURCE_WINDOW,
-        footprints: [],
-      });
-    };
-    part(
-      mesh.backs,
-      rgb([
-        host.tint[0] * NICHE_SHADE,
-        host.tint[1] * NICHE_SHADE,
-        host.tint[2] * NICHE_SHADE,
-      ])
-    );
-    part(mesh.bands, mixRgb(host.tint, SURROUND_STONE, 0.08));
+  windowSpecs(hosts, walls, index).forEach((choice, i) => {
+    if (choice.spec.axis > 0) {
+      objects[i].windows = choice.spec;
+      objects[i].storeyH = cm(choice.storey);
+    }
+  });
+}
+
+/**
+ * Where on its wall each vertex of a window-carrying object lies (lib/city/
+ * windows.ts `facadeAttribute`), with OSM's doors and the shopfronts on
+ * those walls.
+ */
+function facadeOf(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  keys: readonly string[],
+  onWalls: {
+    doors?: readonly DoorFeature[];
+    shopfronts?: readonly ShopfrontWall[];
   }
-  baked.vertices = withoutTriangles(baked.vertices, removed, parts);
-  return { walls: drawnWalls, windows: drawn };
+): Int16Array<ArrayBuffer> {
+  const { cx, cy } = baked.offset;
+  const index = new Map(keys.map((id, i) => [id, i]));
+  const doors = (onWalls.doors ?? []).flatMap((f) => {
+    const p = f.properties;
+    const object = p ? index.get(p.of) : undefined;
+    if (!p || object === undefined) {
+      return [];
+    }
+    const [x, y] = f.geometry.coordinates;
+    return [
+      {
+        object,
+        at: [x - cx, y - cy] as [number, number],
+        n: [p.nx, p.ny] as [number, number],
+      },
+    ];
+  });
+  const shops = (onWalls.shopfronts ?? []).flatMap((w) => {
+    const object = index.get(w.oid);
+    return object === undefined
+      ? []
+      : [
+          {
+            object,
+            a: [w.a[0] - cx, w.a[1] - cy] as [number, number],
+            b: [w.b[0] - cx, w.b[1] - cy] as [number, number],
+            n: w.n,
+          },
+        ];
+  });
+  return facadeAttribute(
+    baked.vertices,
+    (i) => (baked.objects[i]?.windows?.axis ?? 0) > 0,
+    doors,
+    shops
+  );
 }

@@ -66,7 +66,7 @@ export const SHOPFRONT = {
  *  glTF's position quanta long — finer facets came out of the quantising
  *  ragged and sparkled along an edge seen at a distance; the per-vertex
  *  normals shade them round. */
-export const ROUND_STEPS = 2;
+const ROUND_STEPS = 2;
 /** The pane's top where the ground floor's was not measured. */
 export const SHOPFRONT_TOP_M = 3;
 /** The pane's top keeps this far under the first storey line. */
@@ -290,20 +290,20 @@ export function paneTop(w: ShopfrontWall, storeyH: number): number {
 }
 
 /** A rectangle on the wall: along it (m from `a`) and up (absolute). */
-export interface Rect {
+interface Rect {
   s0: number;
   s1: number;
   z0: number;
   z1: number;
 }
 
-export type Frame = ReturnType<typeof wallFrame>;
+type Frame = ReturnType<typeof wallFrame>;
 
 /** A point of a soft edge's cross-section: `e` out from the rectangle's
  *  edge (in the wall's plane; negative inside it), `o` out of the wall,
  *  and its normal's components along the edge's outward direction (`nu`)
  *  and out of the wall (`no`). */
-export interface EdgePoint {
+interface EdgePoint {
   e: number;
   no: number;
   nu: number;
@@ -338,7 +338,7 @@ function reveal(inner: number, proud: number, r: number): EdgePoint[] {
 }
 
 /** The unit direction `ds` along the wall, `dout` out of it, `dz` up. */
-export function dir3(f: Frame, ds: number, dout: number, dz: number): V3 {
+function dir3(f: Frame, ds: number, dout: number, dz: number): V3 {
   const v: V3 = [f.t[0] * ds + f.n[0] * dout, f.t[1] * ds + f.n[1] * dout, dz];
   const l = Math.hypot(...v) || 1;
   return [v[0] / l, v[1] / l, v[2] / l];
@@ -359,7 +359,7 @@ function newell(p: readonly V3[]): V3 {
 
 /** A convex polygon as a fan of triangles wound to face `facing` (its
  *  vertices' normals `normals`); nothing where it has no area. */
-export function polygon(
+function polygon(
   out: Shaded,
   p: readonly V3[],
   normals: readonly V3[],
@@ -399,7 +399,7 @@ const between = (xs: readonly number[], lo: number, hi: number) =>
  * cracks open once the glTF quantises them). `open`: no bottom side, the
  * rectangle's foot in the ground, not offset.
  */
-export function softEdge(
+function softEdge(
   out: Shaded,
   f: Frame,
   r: Rect,
@@ -468,7 +468,7 @@ export function softEdge(
  * glass). The front is cut on one grid, every cell edge to edge with its
  * neighbours and the rounds. `open`: its foot in the ground (no bottom).
  */
-export function softBand(
+function softBand(
   out: Shaded,
   f: Frame,
   outer: Rect,

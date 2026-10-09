@@ -1087,8 +1087,13 @@ async function bootApp(
   }
   cleanups.push(() => lampLights.dispose());
 
-  // The facades share the ground's Himmelslicht strength (the same node).
-  const styleResources = createStyleResources(clayNight, ground.skyView);
+  // The facades share the ground's Himmelslicht strength and the sun (the
+  // same nodes).
+  const styleResources = createStyleResources(
+    clayNight,
+    ground.skyView,
+    ground.sunDirection
+  );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: () => void = () => undefined;
