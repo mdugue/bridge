@@ -2484,10 +2484,9 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 - **River mist** `❝ taken` `≈ assumed` — DLM water mask (the painted splat's alpha) → a drifting,
   sun-lit mist sheet over the Elbe; HUD *Flussnebel*. None within 120 m of
   the eye, full from 1.2 km, at most 40 % opaque and only 30 % of the way
-  from the sky's tint to white (it was full from 90 m, opaque and white,
-  and the near river lay under streaks that read as a smear on the
-  screen; full from 300 m it still drew a pale band over the Elbe in the
-  start view). `water-layer.ts`
+  from the sky's tint to white (it was full from 90 m at up to 62 % and
+  60 % of the way to white, and the near river in the start view lay
+  under a pale, drifting band that read as a smear on the screen). `water-layer.ts`
   `createWaterMist`.
 - **Drifting clouds** `≈ assumed` — `SkyMesh`'s procedural clouds drift on TSL `time`
   (slow `cloudSpeed`), lit by the sun instant. `sun-rig.ts`.

@@ -168,9 +168,9 @@ function createWaterMist(
   const steam = mix(0.25, 1, banks).mul(mix(0.7, 1.15, wisps));
   // A sheet has an outline where it meets the eye up close: thin it out
   // over the first kilometre so it gathers with distance, as air does. It
-  // used to be full from 90 m, later from 300 m: either way the river in
-  // the lower half of the start view lay under a pale, drifting band that
-  // read as a smear on the screen, not as mist out on the water.
+  // used to be full from 90 m, and the river in the lower half of the
+  // start view lay under a pale, drifting band that read as a smear on the
+  // screen, not as mist out on the water.
   const nearFade = smoothstep(
     MIST_NEAR_M,
     MIST_FULL_M,
