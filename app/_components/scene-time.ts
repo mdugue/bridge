@@ -38,9 +38,10 @@ export interface FrameGate {
 }
 
 /**
- * Runs `run` at most once per animation frame, and never late: the first
- * request of a frame runs at once, the ones after it in the same frame
- * collapse into one run as the next frame starts. A slider dragged by a
+ * Runs `run` at most once per animation frame: the first request of a
+ * frame runs at once, the ones after it in the same frame collapse into
+ * one run as the next frame starts (after that frame's render, which three
+ * asked for first — so the scene trails a drag by a frame). A slider dragged by a
  * mouse that reports more often than the screen draws (or a touch) asks
  * many times a frame; the scene only needs the last.
  */

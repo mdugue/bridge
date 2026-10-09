@@ -694,6 +694,28 @@ function SunControls({
   // a transition) follow behind; letting go hands it over as the minute.
   const [moving, setMoving] = useState<number | null>(null);
   const shown = moving ?? minutes;
+  // A touch the system cancels ends the drag without a commit (the slider
+  // listens for the release only): hand over the minute it had reached.
+  const dragging = moving !== null;
+  const reached = useRef<number | null>(null);
+  useEffect(() => {
+    if (!dragging) {
+      return;
+    }
+    const cancel = () => {
+      const last = reached.current;
+      setMoving(null);
+      if (last !== null) {
+        updateSun(day, last);
+      }
+    };
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("touchcancel", cancel);
+    return () => {
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("touchcancel", cancel);
+    };
+  }, [dragging, day, updateSun]);
   const times = latLng ? getTimes(day, latLng.lat, latLng.lng) : null;
   const sunrise = times?.sunrise;
   const sunset = times?.sunset;
@@ -755,12 +777,18 @@ function SunControls({
         id="sun-time"
         max={24 * 60 - 1}
         min={0}
-        onValueChange={(value) => {
+        onValueChange={(value, details) => {
           const next = Number(Array.isArray(value) ? value[0] : value);
+          reached.current = next;
           setMoving(next);
-          previewSun(day, next);
+          // a key or the input commits in the same call: the scene takes
+          // the step from there, once
+          if (details.reason === "drag" || details.reason === "track-press") {
+            previewSun(day, next);
+          }
         }}
         onValueCommitted={(value) => {
+          reached.current = null;
           setMoving(null);
           updateSun(day, Number(Array.isArray(value) ? value[0] : value));
         }}
