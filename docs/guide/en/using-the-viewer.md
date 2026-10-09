@@ -382,7 +382,7 @@ mistake); the switch stays as you set it.
 |---|---|---|
 | Atmosphäre | *Nebel* | distance haze |
 | | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height |
-| | *Flussnebel* | drifting mist sheet over the water |
+| | *Flussnebel* | drifting mist sheet over the water, from about 30 m ahead and denser with distance |
 | | *Tiefenfärbung* | warm near, cool far: a depth-based colour grade |
 | Gebäude | *Transparenz* | see through buildings (dithered), up to 90 % |
 | | *Boden-Verlauf* | darkening of walls towards the ground |
@@ -408,7 +408,7 @@ mistake); the switch stays as you set it.
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
-| | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance; not offered on phones |
+| | *Tiefenschärfe* (switch) | photographic depth of field, only behind the focus (the foreground stays sharp); *Auto* focuses on the crosshair, *Manuell* on a fixed distance; not offered on phones |
 
 While the camera moves, the depth-of-field blur is switched off (the eye
 cannot resolve it in motion) and comes back when you stop. Phones do not

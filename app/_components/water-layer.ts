@@ -114,6 +114,10 @@ function mistCoverage(splat: SplatLayer, uv: V2, size: [number, number]): F {
     .add(tap(0, -oy).mul(0.15));
 }
 
+/** m from the eye where the river mist begins, and where it is full. */
+const MIST_NEAR_M = 30;
+const MIST_FULL_M = 300;
+
 /**
  * Drifting river haze as a SINGLE masked sheet sharing the Z-up terrain
  * geometry (the right tool — thousands of particles over a river is not).
@@ -157,9 +161,16 @@ function createWaterMist(
   const banks = smoothstep(0.15, 0.85, mistFbm(q));
   const wisps = mistFbm(r.add(banks.mul(1.7)));
   const steam = mix(0.25, 1, banks).mul(mix(0.7, 1.15, wisps));
-  // A sheet has an outline where it meets the eye up close: thin it out in
-  // the first tens of metres so it reads as air, not as a plane.
-  const nearFade = smoothstep(8, 90, distance(cameraPosition, positionWorld));
+  // A sheet has an outline where it meets the eye up close: thin it out
+  // over the first few hundred metres so it gathers with distance, as air
+  // does. It used to be full from 90 m: over the Elbe the near river, the
+  // lower half of the view, lay under drifting streaks that read as a
+  // smear on the screen, not as mist out on the water.
+  const nearFade = smoothstep(
+    MIST_NEAR_M,
+    MIST_FULL_M,
+    distance(cameraPosition, positionWorld)
+  );
   const alpha = wcov.mul(steam).mul(nearFade).mul(strength).mul(0.62);
   material.maskNode = cov.greaterThan(0.01).and(alpha.greaterThan(0.002));
   // Near-white warm haze (brighter than the sky tint) so it clearly reads

@@ -2217,7 +2217,9 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   `ground`). Dresden, Grimma, Meißen and Unna keep 28 m; Hamburg ≈ 9.6 m,
   Leipzig ≈ 12 m, Munich ≈ 15 m. Not yet judged on a real GPU.
 - **River mist** — DLM water mask (the painted splat's alpha) → a drifting,
-  sun-lit mist sheet over the Elbe; HUD *Flussnebel*. `water-layer.ts`
+  sun-lit mist sheet over the Elbe; HUD *Flussnebel*. None within 30 m of
+  the eye, full from 300 m (it was full from 90 m, and the near river lay
+  under streaks that read as a smear on the screen). `water-layer.ts`
   `createWaterMist`.
 - **Drifting clouds** — `SkyMesh`'s procedural clouds drift on TSL `time`
   (slow `cloudSpeed`), lit by the sun instant. `sun-rig.ts`.
