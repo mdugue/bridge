@@ -110,6 +110,14 @@ export interface SunRig {
 
 const SUN_INTENSITY = 2.4;
 
+/**
+ * Least time (ms) between two shadow-map redraws while the time of day is
+ * dragged: the map is the heaviest pass (every caster), and a drag turns
+ * the sun at every frame. Ten a second keep the shadows moving with it; the
+ * drag's end redraws at once.
+ */
+const PREVIEW_SHADOW_MS = 100;
+
 /** What three's ShadowNode makes the map in: its documented override. */
 interface ShadowTargets {
   depthTexture: DepthTexture;
@@ -305,6 +313,14 @@ export function createSunRig(
       sun.shadow.needsUpdate = true;
     }
   };
+  let shadowAskedAt = Number.NEGATIVE_INFINITY;
+  let shadowWait: ReturnType<typeof setTimeout> | null = null;
+  const cancelShadowWait = () => {
+    if (shadowWait !== null) {
+      clearTimeout(shadowWait);
+      shadowWait = null;
+    }
+  };
   sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   const cam = sun.shadow.camera;
   /**
@@ -468,8 +484,26 @@ export function createSunRig(
     const aboveHorizon = dir.y > 0;
     sunUp = aboveHorizon;
     reposition();
-    // The sun moved: redraw by day; by night drop a request still open.
-    sun.shadow.needsUpdate = aboveHorizon;
+    // The sun moved: redraw by day (a drag's step at most every
+    // PREVIEW_SHADOW_MS, the last after the wait); by night drop a request
+    // still open.
+    if (!aboveHorizon || !preview) {
+      cancelShadowWait();
+      sun.shadow.needsUpdate = aboveHorizon;
+      shadowAskedAt = performance.now();
+    } else if (shadowWait === null) {
+      const wait = shadowAskedAt + PREVIEW_SHADOW_MS - performance.now();
+      if (wait <= 0) {
+        sun.shadow.needsUpdate = true;
+        shadowAskedAt = performance.now();
+      } else {
+        shadowWait = setTimeout(() => {
+          shadowWait = null;
+          shadowAskedAt = performance.now();
+          redrawShadow();
+        }, wait);
+      }
+    }
     // Quick ramp after sunrise, flat during the day.
     sun.intensity = SUN_INTENSITY * Math.min(1, Math.max(dir.y, 0) * 5);
     const altitudeDeg =
@@ -507,12 +541,13 @@ export function createSunRig(
     followFootprint,
     setParallel,
     invalidateShadow,
-    // Below the horizon nothing is redrawn; sunrise asks for the map anew.
-    shadowPending: () => sunUp && sun.shadow.needsUpdate,
+    // Below the horizon nothing asks for a redraw; sunrise asks anew.
+    shadowPending: () => sun.shadow.needsUpdate,
     shadowMapBytes: shadowMapBytesFor(shadowMapSize),
     shadowReach,
     shadowCamera: sun.shadow.camera,
     dispose: () => {
+      cancelShadowWait();
       reflection?.dispose();
       mirrored.mesh.geometry.dispose();
       mirrored.mesh.material.dispose();

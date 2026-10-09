@@ -251,3 +251,21 @@ for (const [when, date] of [
     expect(after.x - before.x).toBeGreaterThan(700);
   });
 }
+
+// A drag through the day turns the sun at every frame; the map, the
+// heaviest pass, follows ten times a second and at once when it ends.
+test("a drag's steps redraw the shadow map at most every 100 ms", async () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T12:00:00+02:00"));
+  expect(sunRig.shadowPending()).toBe(true);
+  sun.shadow.needsUpdate = false; // three drew it
+  sunRig.update(new Date("2026-06-21T12:05:00+02:00"), true);
+  expect(sunRig.shadowPending()).toBe(false);
+  await new Promise((resolve) => setTimeout(resolve, 130));
+  expect(sunRig.shadowPending()).toBe(true);
+  sun.shadow.needsUpdate = false;
+  sunRig.update(new Date("2026-06-21T12:10:00+02:00"), true);
+  sunRig.update(new Date("2026-06-21T12:15:00+02:00"));
+  expect(sunRig.shadowPending()).toBe(true);
+  sunRig.dispose();
+});

@@ -548,7 +548,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         const h = handleRef.current;
         return h
           ? JSON.stringify(
-              encodeSnapshot(look.get(), h.getCameraState(), time.date)
+              encodeSnapshot(look.get(), h.getCameraState(), time.current())
             )
           : null;
       },
@@ -961,7 +961,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     if (!h) {
       return;
     }
-    const snap = encodeSnapshot(look.get(), h.getCameraState(), time.date);
+    const snap = encodeSnapshot(look.get(), h.getCameraState(), time.current());
     const text = JSON.stringify(snap, null, 2);
     setSnapshotText(text);
     navigator.clipboard?.writeText(text).then(
@@ -1012,7 +1012,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     hud.say(busy, true);
     what(h, {
       site,
-      date: time.date,
+      date: time.current(),
       model: h.getModelHud(),
       style: look.get().style,
     })

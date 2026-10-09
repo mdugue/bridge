@@ -89,7 +89,7 @@ export interface SceneTime {
   set: (day: Date, minutes: number) => void;
   /**
    * The same for every step of a drag: the scene follows at most once a
-   * frame, and the rest of the HUD re-renders as a transition, behind the
+   * frame, and the rest of the HUD with it, as a transition behind the
    * frames — the slider shows its own value meanwhile. `set` ends a drag.
    */
   preview: (day: Date, minutes: number) => void;
@@ -121,11 +121,17 @@ export function useSceneTime(
 
   // A drag's steps reach the scene through the gate, and the scene's answer
   // reaches the HUD as a transition: one sun a frame, no HUD render in one.
+  const previewed = useRef({ day: initialDay, minutes: INITIAL_MINUTES });
   const toScene = useCallback(() => {
     const state = applyRef.current(now.current, true);
-    if (state) {
-      startTransition(() => setSun(state));
-    }
+    const step = previewed.current;
+    startTransition(() => {
+      setDay(step.day);
+      setMinutes(step.minutes);
+      if (state) {
+        setSun(state);
+      }
+    });
   }, []);
   const gate = useRef<FrameGate | null>(null);
   useEffect(() => {
@@ -151,10 +157,7 @@ export function useSceneTime(
   const preview = useCallback(
     (nextDay: Date, nextMinutes: number) => {
       now.current = composeDate(nextDay, nextMinutes);
-      startTransition(() => {
-        setDay(nextDay);
-        setMinutes(nextMinutes);
-      });
+      previewed.current = { day: nextDay, minutes: nextMinutes };
       if (gate.current) {
         gate.current.request();
       } else {

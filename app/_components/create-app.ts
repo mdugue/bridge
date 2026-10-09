@@ -1389,7 +1389,11 @@ async function bootApp(
     clayNight.value = state.nightFactor;
     seasonClock.set(date);
     clockToOverlays?.(date);
-    invalidateShadows();
+    // The sun's move has asked for the map already; a drag's step leaves
+    // it to the rig's pace.
+    if (!preview) {
+      invalidateShadows();
+    }
     return state;
   };
   setSun(opts.initialDate);
