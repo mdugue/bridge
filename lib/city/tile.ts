@@ -47,7 +47,8 @@ export function cityJsonFile(tile: string): string {
  *  the surface model shows beyond LoD2 + the landmarks Wikidata knows +
  *  the roofs rebuilt from DOM1 + OSM's entrances on the walls + the
  *  dormers DOM1 shows on the pitched roofs + the shopfronts street photos
- *  show on the ground floors, with the canopies DOM1 shows over them). */
+ *  show on the ground floors, with the canopies DOM1 shows over them +
+ *  the facade traits they measure on the upper walls, the windows). */
 export function cityMeshSourceFiles(
   site: Site,
   tile: string
@@ -63,6 +64,7 @@ export function cityMeshSourceFiles(
   shopfronts: string;
   smallBuild: string;
   structures: string;
+  windows: string;
 } {
   const dir = siteDataDir(site);
   return {
@@ -77,6 +79,7 @@ export function cityMeshSourceFiles(
     smallBuild: `${dir}/dlm/smallbuild_${tile}.geojson`,
     structures: `${dir}/dlm/structures_${tile}.geojson`,
     landmarks: `${dir}/dlm/landmarks_${tile}.json`,
+    windows: `${dir}/dlm/windows_${tile}.json`,
   };
 }
 

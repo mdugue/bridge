@@ -50,6 +50,7 @@ import {
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
+  OBJECT_SOURCE_WINDOW,
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
@@ -115,6 +116,20 @@ import {
   structureShape,
 } from "../lib/city/structures";
 import type { CityJsonDocument } from "../lib/city/types";
+import {
+  cutFace,
+  cutOf,
+  bandMeshes as windowBands,
+  FACE_MARGIN_M,
+  faceSpan,
+  fitsFace,
+  footprintOf,
+  nicheMesh,
+  type WindowMesh,
+  type WindowWall,
+  wallFaces,
+  windowLayout,
+} from "../lib/city/windows";
 import { measuredRoofMesh, measuredRoofsById } from "./measured-roofs";
 
 /** RoofSurface index in the loader's fixed `defaultSemanticsColors` order. */
@@ -507,6 +522,7 @@ export function bakeCityMesh(
     dormers?: readonly DormerFeature[];
     plinths?: readonly PlinthFeature[];
     shopfronts?: readonly ShopfrontWall[];
+    windows?: readonly WindowWall[];
   } = {}
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
@@ -662,6 +678,7 @@ function appendBeyondLod2(
     shopfronts?: readonly ShopfrontWall[];
     gaps?: readonly StructureFeature[];
     scan?: readonly SmallBuildingFeature[];
+    windows?: readonly WindowWall[];
   }
 ): void {
   if (extra.scan) {
@@ -673,6 +690,11 @@ function appendBeyondLod2(
   }
   if (extra.plinths) {
     appendPlinths(baked, extra.plinths, objectIndex);
+  }
+  if (extra.windows) {
+    // before the shopfronts and doors: they lay themselves on the wall the
+    // windows cut, but only on its ground floor, which the windows keep
+    appendWindows(baked, extra.windows, extra.shopfronts ?? [], objectIndex);
   }
   if (extra.shopfronts) {
     // before the doors: a bay is cut at a door, which the doors then draw
@@ -1273,4 +1295,236 @@ export function appendDormers(
     isRoof: concat(v.isRoof, isRoof),
     ...flatNormalsAfter(v, positions.length),
   };
+}
+
+/** A niche's back: its wall's tint, darker, as if in its own shadow. */
+const NICHE_SHADE = 0.78;
+/** What a window's host must not be: the plinths' gate (a landmark, a
+ *  part with its own colour, glass or metal, a flat-roofed block). */
+const NO_WINDOWS = NO_PLINTH;
+/** A host this far above the ground in front of its wall stands on another
+ *  part: no windows on it. */
+const WINDOW_HOST_ABOVE_M = 1.5;
+/** How far over a shopfront's top a wall's first window sill keeps. */
+const OVER_SHOP_M = 0.3;
+
+/** A shopfront's top over its ground (m): its windows' head, sign or
+ *  canopy — the most a shop reaches up (the windows start above it). */
+function shopTop(w: ShopfrontWall, storeyH: number): number {
+  return Math.max(
+    paneTop(w, storeyH) + SHOPFRONT.head + CANOPY.tuck,
+    w.sign?.z?.[1] ?? 0,
+    ...(w.canopy ?? []).map((c) => c.h)
+  );
+}
+
+/** Each object's wall triangles (each one's first vertex). */
+function objectTriangles(v: CityVertices): Map<number, number[]> {
+  const out = new Map<number, number[]>();
+  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
+    if (v.isRoof[t] === 1) {
+      continue;
+    }
+    const id = v.objectIds[t];
+    const list = out.get(id);
+    if (list) {
+      list.push(t);
+    } else {
+      out.set(id, [t]);
+    }
+  }
+  return out;
+}
+
+const emptyWindowMesh = (): WindowMesh => ({
+  backs: { normals: [], positions: [] },
+  bands: { normals: [], positions: [] },
+  reveals: { normals: [], positions: [] },
+});
+
+/** The walls' windows, cut into their faces: per face its new triangles,
+ *  the old ones it replaces, and per host the niches and bands. */
+function cutWindows(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  walls: readonly WindowWall[],
+  shopfronts: readonly ShopfrontWall[],
+  objectIndex: ReadonlyMap<string, number>
+) {
+  const v = baked.vertices;
+  const byObject = objectTriangles(v);
+  const shops = new Map(shopfronts.map((w) => [`${w.oid}/${w.wi}`, w]));
+  const removed = new Set<number>();
+  const cut: { id: number; positions: number[] }[] = [];
+  const meshes = new Map<number, WindowMesh>();
+  let drawnWalls = 0;
+  let drawn = 0;
+  for (const w of walls) {
+    const m = w.model;
+    const hostIndex = objectIndex.get(w.oid);
+    const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
+    if (!(m && host && hostIndex !== undefined)) {
+      continue;
+    }
+    const ground = Math.min(...(w.z ?? [host.baseZ]));
+    if (
+      (host.flags & NO_WINDOWS) !== 0 ||
+      host.baseZ > ground + WINDOW_HOST_ABOVE_M
+    ) {
+      continue;
+    }
+    const shop = shops.get(`${w.oid}/${w.wi}`);
+    const above = shop
+      ? ground + shopTop(shop, host.storeyH) + OVER_SHOP_M
+      : undefined;
+    const wins = windowLayout(w, m, host, above);
+    const tris = (byObject.get(hostIndex) ?? []).filter((t) => !removed.has(t));
+    let onWall = 0;
+    for (const face of wins.length > 0
+      ? wallFaces(w, baked.offset, v.positions, tris)
+      : []) {
+      const fit = wins.filter((r) =>
+        fitsFace(face, footprintOf(r, m), FACE_MARGIN_M)
+      );
+      const positions =
+        fit.length > 0
+          ? cutFace(
+              face,
+              fit.map((r) => cutOf(r, m)),
+              v.positions,
+              triangulateXY
+            )
+          : undefined;
+      if (!positions) {
+        continue;
+      }
+      for (const t of face.triangles) {
+        removed.add(t);
+      }
+      cut.push({ id: hostIndex, positions });
+      const mesh = meshes.get(hostIndex) ?? emptyWindowMesh();
+      meshes.set(hostIndex, mesh);
+      for (const r of fit) {
+        nicheMesh(mesh, face.frame, r, m);
+      }
+      const [s0, s1] = faceSpan(face);
+      windowBands(mesh, face.frame, fit, m, [
+        s0 + FACE_MARGIN_M,
+        s1 - FACE_MARGIN_M,
+      ]);
+      onWall += fit.length;
+    }
+    drawnWalls += onWall > 0 ? 1 : 0;
+    drawn += onWall;
+  }
+  return { cut, drawn, drawnWalls, meshes, removed };
+}
+
+/**
+ * The facades street photos' traits model (pipeline/bake/windows.py,
+ * lib/city/windows.ts): on each measured wall with a model, per upper
+ * storey a row of soft niches cut into the host's LoD2 wall — its face
+ * re-triangulated round them, under its own row — the niches' reveals in
+ * the host's row, their backs a darker own-colour object and the Faschen,
+ * sill bands, lisenes and ornament fields one more, in a plaster shade a
+ * touch paler than the wall (as the plinths' cornices), `source` 7, the
+ * host's building tree. Not on a landmark, a part with its own colour,
+ * glass or metal, a flat-roofed block (`NO_WINDOWS`), nor a host standing
+ * on another part; above a shopfront on the wall. Returns the walls and
+ * windows drawn.
+ */
+export function appendWindows(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  walls: readonly WindowWall[],
+  shopfronts: readonly ShopfrontWall[],
+  objectIndex: ReadonlyMap<string, number>
+): { walls: number; windows: number } {
+  const { cut, drawn, drawnWalls, meshes, removed } = cutWindows(
+    baked,
+    walls,
+    shopfronts,
+    objectIndex
+  );
+  if (removed.size === 0) {
+    return { walls: 0, windows: 0 };
+  }
+  const v = baked.vertices;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const objectIds: number[] = [];
+  const isRoof: number[] = [];
+  const own =
+    v.normals ?? new Float32Array(v.positions.length).fill(Number.NaN);
+  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
+    if (removed.has(t)) {
+      continue;
+    }
+    for (let k = 0; k < 9; k++) {
+      positions.push(v.positions[3 * t + k]);
+      normals.push(own[3 * t + k]);
+    }
+    for (let k = 0; k < 3; k++) {
+      objectIds.push(v.objectIds[t + k]);
+      isRoof.push(v.isRoof[t + k]);
+    }
+  }
+  const add = (tris: Shaded, id: number) => {
+    for (let i = 0; i < tris.positions.length; i++) {
+      positions.push(tris.positions[i]);
+      normals.push(tris.normals[i]);
+    }
+    for (let i = 0; i < tris.positions.length / 3; i++) {
+      objectIds.push(id);
+      isRoof.push(0);
+    }
+  };
+  for (const c of cut) {
+    add(
+      { positions: c.positions, normals: c.positions.map(() => Number.NaN) },
+      c.id
+    );
+  }
+  for (const [hostIndex, mesh] of meshes) {
+    const host = baked.objects[hostIndex];
+    add(mesh.reveals, hostIndex);
+    const part = (tris: Shaded, tint: [number, number, number]) => {
+      if (tris.positions.length === 0) {
+        return;
+      }
+      const zs = tris.positions.filter((_, i) => i % 3 === 2);
+      const base = Math.min(...zs);
+      const above = cm(Math.max(...zs) - base + 1);
+      const index = baked.objects.length;
+      add(tris, index);
+      baked.objects.push({
+        ...host,
+        building: false,
+        baseZ: cm(base),
+        // above its top: no eave stroke, no storey band on it
+        eaveH: above,
+        storeyH: above,
+        glow: 0,
+        // its own colour, none of the host's OSM looks (no shop wash)
+        flags: OBJECT_FLAG_OWN_COLOUR,
+        tint,
+        source: OBJECT_SOURCE_WINDOW,
+        footprints: [],
+      });
+    };
+    part(
+      mesh.backs,
+      rgb([
+        host.tint[0] * NICHE_SHADE,
+        host.tint[1] * NICHE_SHADE,
+        host.tint[2] * NICHE_SHADE,
+      ])
+    );
+    part(mesh.bands, mixRgb(host.tint, SURROUND_STONE, 0.08));
+  }
+  baked.vertices = {
+    positions: new Float32Array(positions),
+    objectIds: new Float32Array(objectIds),
+    isRoof: new Float32Array(isRoof),
+    normals: new Float32Array(normals),
+  };
+  return { walls: drawnWalls, windows: drawn };
 }

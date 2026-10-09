@@ -112,6 +112,7 @@ import {
   type TilesetExtras,
 } from "../lib/city/tileset";
 import type { CityJsonDocument } from "../lib/city/types";
+import type { WindowFile } from "../lib/city/windows";
 import {
   TRAM_TIMETABLE_FILE,
   tramTimetableSource,
@@ -589,6 +590,9 @@ function parseCity(tile: string): BakedCityMesh {
         readJson<ShopfrontFile>(at(src.shopfronts)).buildings
       ).flat()
     : undefined;
+  const windows = existsSync(at(src.windows))
+    ? Object.values(readJson<WindowFile>(at(src.windows)).buildings).flat()
+    : undefined;
   const baked = bakeCityMesh(
     tile,
     doc,
@@ -599,7 +603,7 @@ function parseCity(tile: string): BakedCityMesh {
     osmDoc?.context ?? "render",
     gaps,
     measured,
-    { doors, dormers, plinths, shopfronts }
+    { doors, dormers, plinths, shopfronts, windows }
   );
   sharedMatrix ??= baked.matrix;
   return baked;
@@ -648,6 +652,7 @@ async function bakeCity(
     at(src.plinths),
     at(src.dormers),
     at(src.shopfronts),
+    at(src.windows),
   ];
   const bake = [
     "scripts/bake-city-mesh.ts",

@@ -267,6 +267,12 @@ export const OBJECT_SOURCE_SHOPFRONT = 6;
  *  (pipeline/bake/plinths.py, LoD2 + DGM1). */
 export const OBJECT_SOURCE_PLINTH = 5;
 
+/** A window niche's back, or the Faschen and bands round the windows, part
+ *  of the building whose wall they are on (pipeline/bake/windows.py: the
+ *  facade traits street photos measure). The niches' reveals are the
+ *  host's own row. */
+export const OBJECT_SOURCE_WINDOW = 7;
+
 /** The property table as typed columns — how the glTF carries it. */
 export interface CityObjectTable {
   baseZ: Float32Array;

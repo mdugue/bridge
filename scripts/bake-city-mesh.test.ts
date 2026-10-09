@@ -8,6 +8,7 @@ import {
   OBJECT_SOURCE_DORMER,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SHOPFRONT,
+  OBJECT_SOURCE_WINDOW,
 } from "../lib/city/city-mesh";
 import type {
   DormerFeature,
@@ -16,7 +17,13 @@ import type {
 } from "../lib/city/features";
 import { paneTop, SHOPFRONT_SINK } from "../lib/city/shopfronts";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
-import { bakeCityMesh, PANE_ROUGH, scanStructureId } from "./bake-city-mesh";
+import type { WindowWall } from "../lib/city/windows";
+import {
+  appendWindows,
+  bakeCityMesh,
+  PANE_ROUGH,
+  scanStructureId,
+} from "./bake-city-mesh";
 import { cityMesh } from "./bake-tiles";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
@@ -547,4 +554,57 @@ test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
   expect(canopy?.tint).toEqual(sheltered.objects[2].tint);
   expect((canopy?.flags ?? 0) & OBJECT_FLAG_GLASS).toBe(0);
   expect((canopy?.flags ?? 0) & OBJECT_FLAG_OWN_COLOUR).toBe(0);
+});
+
+test("measured windows are cut into their host's wall as soft niches, source 7", () => {
+  // the house's south wall again, 12 m to the eave, a window every 3 m
+  const wall: WindowWall = {
+    oid: "house",
+    wi: 0,
+    a: [412_040, 5_656_000],
+    b: [412_050, 5_656_000],
+    L: 10,
+    n: [0, -1],
+    z: [100, 100],
+    eave: 12,
+    imgs: 6,
+    seqs: 2,
+    traits: {},
+    model: { axis: 3, grid: "regular", w: 1.2, h: 1.6, storey: 3.2 },
+  };
+  const bake = () => bakeCityMesh("t", fixture(), undefined, null);
+  const index = new Map([
+    ["shop", 0],
+    ["shop-part", 1],
+    ["house", 2],
+  ]);
+  // the fixture's boxes are flat-roofed blocks: none there
+  const flat = bake();
+  const count = flat.objects.length;
+  expect(appendWindows(flat, [wall], [], index)).toEqual({
+    walls: 0,
+    windows: 0,
+  });
+  expect(flat.objects.length).toBe(count);
+  // under a pitched roof, two storeys of three
+  const baked = bake();
+  baked.objects[2].flags &= ~OBJECT_FLAG_FLAT_ROOF;
+  const tris = baked.vertices.positions.length / 9;
+  const drawn = appendWindows(baked, [wall], [], index);
+  expect(drawn.walls).toBe(1);
+  expect(drawn.windows).toBeGreaterThanOrEqual(3);
+  expect(baked.vertices.positions.length / 9).toBeGreaterThan(tris);
+  const [backs, bands] = baked.objects.slice(count);
+  expect(bands).toBeUndefined();
+  expect(backs.source).toBe(OBJECT_SOURCE_WINDOW);
+  expect(backs.root).toBe(baked.objects[2].root);
+  expect(backs.flags & OBJECT_FLAG_OWN_COLOUR).toBe(OBJECT_FLAG_OWN_COLOUR);
+  // the niche's back is the wall's tint, darker
+  expect(backs.tint[0]).toBeLessThan(baked.objects[2].tint[0]);
+  // a Fasche or sill band is one object more
+  const framed = bake();
+  framed.objects[2].flags &= ~OBJECT_FLAG_FLAT_ROOF;
+  const sill = { ...wall, model: { ...wall.model!, sill: true } };
+  appendWindows(framed, [sill], [], index);
+  expect(framed.objects.length).toBe(count + 2);
 });
