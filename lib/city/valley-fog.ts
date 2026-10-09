@@ -12,6 +12,11 @@ export const VALLEY_FALLOFF_MAX = 28;
 export const VALLEY_FALLOFF_MIN = 8;
 /** The share of the relief the pool fills. */
 export const VALLEY_SHARE = 0.6;
+/** The pool sets in with distance from the camera (m): none up to the
+ *  first, all of it from the second. Haze is what lies between the eye and
+ *  far things; at 10 m the pool's full share only greyed every nearby
+ *  surface (a shop window read mid-grey, not dark). */
+export const VALLEY_NEAR_M: readonly [number, number] = [15, 90];
 
 /** The 2nd and 90th percentile of ground heights: the river and the
  *  typical high ground, robust to a pit or a hilltop. */

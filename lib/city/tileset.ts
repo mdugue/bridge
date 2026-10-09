@@ -137,6 +137,9 @@ export interface TerrainExtras {
 }
 
 export interface CityExtras {
+  /** what street photos say about the tile's facades
+   *  (lib/city/facade-reading.ts) */
+  facades?: string;
   kind: "city";
   /** the tile's sky-view raster, shared with its terrain (the facades'
    *  ambient light) */

@@ -28,6 +28,7 @@ import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { cardCredits } from "@/lib/city/card-lines";
 import { InquiryData } from "./inquiry-data";
 import { isTextEntry } from "./keyboard-controls";
+import { MethodMark } from "./method-badge";
 import { useSite } from "./site-context";
 
 type DrawerSnapPoint = DrawerPrimitive.Root.SnapPoint;
@@ -402,7 +403,10 @@ function CardDetails({
           {card.facts.map((fact) => (
             <div className="contents" key={fact.label}>
               <dt className="text-muted-foreground">{fact.label}</dt>
-              <dd className="tabular-nums">{fact.value}</dd>
+              <dd className="tabular-nums">
+                {fact.value}
+                {fact.method && <MethodMark method={fact.method} />}
+              </dd>
             </div>
           ))}
         </dl>

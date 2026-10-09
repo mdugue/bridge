@@ -33,6 +33,7 @@ import {
 } from "three/tsl";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
+import { reflectionStrength, skyReflection } from "./sky-reflection";
 import { type SplatLayer, splatUv } from "./terrain-layer";
 
 /** Animated water surface, masked to the land-cover "water" class (id 8). */
@@ -199,7 +200,7 @@ function createWaterMist(
 // --- the water sheet -----------------------------------------------------------------
 
 /** The sheet's diffuse colour: the depth tone by distance from the bank,
- *  then the Fresnel sky tint. */
+ *  then the Fresnel sky — mirrored, or the fog's tint. */
 function waterColour(
   splat: SplatLayer,
   uv: V2,
@@ -218,7 +219,15 @@ function waterColour(
     mix(vec3(1.1, 1.08, 1.04), vec3(0.86, 0.92, 0.98), deep)
   );
   const fresnel = pow(float(1).sub(clamp(view.y, 0, 1)), 4);
-  return mix(toned, skyTint.rgb, fresnel.mul(FRESNEL));
+  // Spiegelung (sky-reflection.ts): the sky the level sheet mirrors, its
+  // gradient and the glow around the sun; turned down, the fog's flat
+  // colour it stood in for.
+  const sky = mix(
+    skyTint.rgb,
+    skyReflection(vec3(0, 1, 0), 0.3),
+    reflectionStrength
+  );
+  return mix(toned, sky, fresnel.mul(FRESNEL));
 }
 
 /**

@@ -16,6 +16,7 @@ already there, so a rerun only fetches what is missing:
     data/_raw/gtfs/nv_free.zip                           Germany's timetable (sites with trams)
     data/_raw/<provider>/wikidata/bridges_<tile>.json    the bridges Wikidata knows
     data/_raw/<provider>/wikidata/landmarks_<tile>.json  its notable buildings and structures
+    data/_raw/<provider>/wikidata/monuments_<tile>.json  the monuments it knows the material of
     data/_raw/<provider>/lsc/<tile>.laz                  laser scan (`--lsc` only)
 
 Statewide packages, and the LoD2 files a tile shares with its neighbours
@@ -41,7 +42,7 @@ from typing import Protocol
 
 from rasterio.enums import Resampling
 
-from . import bridge, cadastre, landmarks, mapillary, traffic_sources, transit
+from . import bridge, cadastre, facades, landmarks, mapillary, monuments, traffic_sources, transit
 from .citygml import write_cityjson
 from .common import Tile, dlm_complete
 from .net import download
@@ -217,6 +218,7 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> li
     _try("tree cadastre", tile, lambda: cadastre.fetch(tile))
     _try("traffic counts", tile, lambda: traffic_sources.fetch(tile))
     _try("Mapillary objects", tile, lambda: mapillary.fetch(tile))
+    _try("Mapillary facades", tile, lambda: facades.fetch(tile))
     _try(
         "Wikidata bridges",
         tile,
@@ -226,6 +228,11 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> li
         "Wikidata landmarks",
         tile,
         lambda: landmarks.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg),
+    )
+    _try(
+        "Wikidata monuments",
+        tile,
+        lambda: monuments.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg),
     )
     return failed
 

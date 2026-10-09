@@ -56,6 +56,7 @@ import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { mapillaryParts } from "@/lib/city/mapillary";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { type CityLayer, dressCity } from "./city-layer";
+import type { FacadeReadings } from "@/lib/city/facade-reading";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
@@ -1371,6 +1372,17 @@ export class DressingPlugin {
     if (extras.svf) {
       entry.svf = this.url(extras.svf);
       this.shareSkyView(scene, entry, extras.tileId, entry.svf);
+    }
+    // What street photos say about the facades lands after the buildings
+    // show; until then (and without it) they are drawn as before.
+    if (extras.facades) {
+      void fetchOptionalJson<FacadeReadings>(this.url(extras.facades)).then(
+        (readings) => {
+          if (readings && this.dressed.get(scene) === entry) {
+            city.facadeReadings(readings);
+          }
+        }
+      );
     }
   }
 

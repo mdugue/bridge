@@ -17,7 +17,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { doorJoins } from "../lib/city/doors";
-import type { DoorFeature, SmallBuildingFeature } from "../lib/city/features";
+import { plinthJoins } from "../lib/city/plinths";
+import type {
+  DoorFeature,
+  PlinthFeature,
+  ShopfrontFile,
+  ShopfrontWall,
+  SmallBuildingFeature,
+} from "../lib/city/features";
 import { cutWallGates, fenceGeometry } from "../lib/city/fences";
 import {
   checkJoins,
@@ -32,6 +39,7 @@ import {
   type TerrainBounds,
 } from "../lib/city/terrain-geometry";
 import { tileExtentOf, tileIdOf } from "../lib/city/site";
+import { doorSpans, shopfrontJoins, wallBays } from "../lib/city/shopfronts";
 import { structureJoins } from "../lib/city/small-buildings";
 import { cityMeshSourceFiles, dgmSourceFiles, tileIds } from "../lib/city/tile";
 import { ownsPoint } from "../lib/city/tileset";
@@ -57,6 +65,8 @@ export const JOIN_PARTS = [
   "fences",
   "sheds",
   "doors",
+  "shopfronts",
+  "plinths",
 ] as const;
 export type JoinPart = (typeof JOIN_PARTS)[number];
 
@@ -90,6 +100,18 @@ async function tileGround(site: Site, tile: string): Promise<Ground> {
   };
 }
 
+/** The LoD2 walls' street side the bake draws as plinths. */
+function plinths(site: Site, tile: string): PlinthFeature[] {
+  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).plinths);
+  return existsSync(path)
+    ? ((
+        JSON.parse(readFileSync(path, "utf8")) as {
+          features?: PlinthFeature[];
+        }
+      ).features ?? [])
+    : [];
+}
+
 /** OSM's entrances the bake draws as doors on a tile's walls. */
 function doors(site: Site, tile: string): DoorFeature[] {
   const path = join(process.cwd(), cityMeshSourceFiles(site, tile).doors);
@@ -100,6 +122,32 @@ function doors(site: Site, tile: string): DoorFeature[] {
         }
       ).features ?? [])
     : [];
+}
+
+/** The shopfront walls the bake draws on a tile's ground floors. */
+function shopfronts(site: Site, tile: string): ShopfrontWall[] {
+  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).shopfronts);
+  return existsSync(path)
+    ? Object.values(
+        (JSON.parse(readFileSync(path, "utf8")) as ShopfrontFile).buildings
+      ).flat()
+    : [];
+}
+
+/** A shopfront wall's joins: its risers' and piers' feet, the bays cut at
+ *  the doors on its line (any building's: the bake's own test is the
+ *  host's tree, which this file does not read). */
+function shopfrontWallJoins(
+  w: ShopfrontWall,
+  tileDoors: readonly DoorFeature[]
+): JoinPoint[] {
+  return shopfrontJoins(
+    w,
+    wallBays(
+      w,
+      doorSpans(w, tileDoors, () => true)
+    )
+  );
 }
 
 /** The scan's small structures the bake appends to a tile's buildings. */
@@ -141,6 +189,10 @@ function tileJoins(
         ?.joins ?? [],
     sheds: smallBuildings(site, tile).flatMap(structureJoins),
     doors: doors(site, tile).flatMap(doorJoins),
+    shopfronts: shopfronts(site, tile).flatMap((w) =>
+      shopfrontWallJoins(w, doors(site, tile))
+    ),
+    plinths: plinths(site, tile).flatMap(plinthJoins),
   };
 }
 

@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 import type { CardCredits } from "./card-lines";
 import { canopyCard, furnitureCard, hedgeCard, lampCard } from "./inquiry-more";
+import type { Stated } from "./methods";
+
+const lines = (sources: readonly Stated[]) => sources.map((l) => l.text);
 
 /** Dresden's credits (sites/providers.ts) as the HUD hands them over. */
 const DRESDEN: CardCredits = {
@@ -26,7 +29,10 @@ test("a tree without a register says what was measured, and no species", () => {
     value: "17,4 m, gemessen",
   });
   expect(card.facts).toContainEqual({ label: "Art", value: "nicht bekannt" });
-  expect(card.sources[0]).toContain("Digitales Oberflächenmodell DOM1");
+  expect(card.sources[0]?.text).toContain("Digitales Oberflächenmodell DOM1");
+  // the crown's place is found in the surface, not measured as such
+  expect(card.sources[0]?.method).toBe("detected");
+  expect(card.address).toBe("Eine Krone, im Oberflächenmodell erkannt");
 });
 
 test("a hedge's height is measured only where the laser scan said so", () => {
@@ -37,7 +43,7 @@ test("a hedge's height is measured only where the laser scan said so", () => {
     DRESDEN
   );
   expect(scanned.facts[0].value).toBe("2 m, gemessen");
-  expect(scanned.sources).toHaveLength(2);
+  expect(lines(scanned.sources)).toHaveLength(2);
   const tagged = hedgeCard(
     { ...hedge, source: "osm", height: 2 },
     null,
@@ -49,24 +55,35 @@ test("a hedge's height is measured only where the laser scan said so", () => {
 test("a tree row or hedge credits the site's own source, not GeoSN", () => {
   const row = { kind: "canopy" as const, tile: "t", position: at };
   const dresden = canopyCard({ ...row, source: "row" }, null, DRESDEN);
-  expect(dresden.sources[0]).toContain("Basis-DLM");
-  expect(dresden.sources[0]).toContain("GeoSN");
+  expect(dresden.sources[0]?.text).toContain("Basis-DLM");
+  expect(dresden.sources[0]?.text).toContain("GeoSN");
   const hamburg = canopyCard({ ...row, source: "row" }, null, HAMBURG);
-  expect(hamburg.sources[0]).toContain("OpenStreetMap");
-  expect(hamburg.sources[0]).not.toContain("GeoSN");
+  expect(hamburg.sources[0]?.text).toContain("OpenStreetMap");
+  expect(hamburg.sources[0]?.text).not.toContain("GeoSN");
   const scan = canopyCard({ ...row, source: "lsc" }, null, HAMBURG);
-  expect(scan.sources[0]).toContain("LGV");
+  expect(scan.sources[0]?.text).toContain("LGV");
   const hedge = hedgeCard(
     { kind: "hedge", tile: "t", position: at, length: 12, source: "dlm" },
     null,
     HAMBURG
   );
-  expect(hedge.sources[0]).toContain("OpenStreetMap");
+  expect(hedge.sources[0]?.text).toContain("OpenStreetMap");
 });
 
 test("a lamp's post is assumed, and the card says so", () => {
   const card = lampCard({ kind: "lamp", tile: "t", position: at }, null);
-  expect(card.facts).toEqual([{ label: "Mast", value: "5 m, angenommen" }]);
+  expect(card.facts).toEqual([
+    { label: "Mast", value: "5 m, angenommen", method: "assumed" },
+  ]);
+});
+
+test("a lamp hung across the street has no post, and says how it hangs", () => {
+  const card = lampCard(
+    { kind: "lamp", tile: "t", position: at, hung: true },
+    null
+  );
+  expect(card.title).toBe("Hängeleuchte");
+  expect(card.facts.map((f) => f.label)).toEqual(["Aufhängung", "Höhe"]);
 });
 
 test("a lamp or bin Mapillary detected names Mapillary, not OSM", () => {
@@ -74,8 +91,8 @@ test("a lamp or bin Mapillary detected names Mapillary, not OSM", () => {
     { kind: "lamp", tile: "t", position: at, src: "mly" },
     null
   );
-  expect(lamp.sources[0]).toStartWith("Laterne: Mapillary");
-  expect(lamp.sources[0]).toContain("CC BY-SA 4.0");
+  expect(lamp.sources[0]?.text).toStartWith("Laterne: Mapillary");
+  expect(lamp.sources[0]?.text).toContain("CC BY-SA 4.0");
   const bin = furnitureCard(
     {
       kind: "furniture",
@@ -85,9 +102,9 @@ test("a lamp or bin Mapillary detected names Mapillary, not OSM", () => {
     },
     null
   );
-  expect(bin.sources[0]).toStartWith("Papierkorb: Mapillary");
+  expect(bin.sources[0]?.text).toStartWith("Papierkorb: Mapillary");
   const osmLamp = lampCard({ kind: "lamp", tile: "t", position: at }, null);
-  expect(osmLamp.sources[0]).toContain("OpenStreetMap");
+  expect(osmLamp.sources[0]?.text).toContain("OpenStreetMap");
 });
 
 test("a bench faces where OSM or the nearest way says", () => {

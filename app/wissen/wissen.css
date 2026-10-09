@@ -129,6 +129,56 @@
   white-space: nowrap;
 }
 
+/* --- method badges ---------------------------------------------------------- */
+
+/* How the viewer came by a statement (lib/city/methods.ts), the inquiry
+   card's badges: solid for the deterministic two, dashed for the inferred
+   two. Tailwind's slate, teal, amber and violet, as the card has them. */
+.typeset-wissen .method-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  padding: 0.05em 0.5em 0.05em 0.4em;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  vertical-align: 0.1em;
+}
+
+.typeset-wissen .method-badge > span {
+  font-weight: 700;
+}
+
+.typeset-wissen .method-badge[data-method="taken"] {
+  border-color: oklch(0.869 0.022 252.894);
+  background: oklch(0.984 0.003 247.858);
+  color: oklch(0.446 0.043 257.281);
+}
+
+.typeset-wissen .method-badge[data-method="computed"] {
+  border-color: oklch(0.855 0.138 181.071);
+  background: oklch(0.984 0.014 180.72);
+  color: oklch(0.437 0.078 188.216);
+}
+
+.typeset-wissen .method-badge[data-method="detected"] {
+  border-style: dashed;
+  border-color: oklch(0.828 0.189 84.429);
+  background: oklch(0.987 0.022 95.277);
+  color: oklch(0.473 0.137 46.201);
+}
+
+.typeset-wissen .method-badge[data-method="assumed"] {
+  border-style: dashed;
+  border-color: oklch(0.811 0.111 293.571);
+  background: oklch(0.969 0.016 293.756);
+  color: oklch(0.491 0.27 292.581);
+}
+
 /* --- diagrams --------------------------------------------------------------- */
 
 .typeset-wissen .diagram {

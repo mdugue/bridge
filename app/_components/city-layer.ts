@@ -23,6 +23,10 @@ import {
   packObjectTexels,
 } from "@/lib/city/city-mesh";
 import { type ObjectFacts, readFacts } from "@/lib/city/object-facts";
+import {
+  applyFacadeReadings,
+  type FacadeReadings,
+} from "@/lib/city/facade-reading";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createClayMaterial, type StyleResources } from "./visual-style";
 
@@ -38,6 +42,9 @@ export interface CityLayer {
   /** drops the object's building tree; true when anything changed */
   demolish: (objectIndex: number) => boolean;
   dispose: () => void;
+  /** what street photos say about the tile's facades, once they land
+   *  (lib/city/facade-reading.ts) */
+  facadeReadings: (readings: FacadeReadings) => void;
   /** what the twin knows about one object (read from the table on demand) */
   facts: (objectIndex: number) => ObjectFacts;
   /** marks the objects someone asks about (the clay's pencil hatch); an
@@ -245,6 +252,8 @@ export function dressCity(
     geometry.computeBoundsTree();
   }
 
+  // the asked objects, kept for the facade readings' repack
+  let marked: ReadonlySet<number> = new Set();
   const layer: CityLayer = {
     tile,
     mesh,
@@ -265,8 +274,24 @@ export function dressCity(
       geometry.disposeBoundsTree();
       objects.texture.dispose();
     },
+    facadeReadings: (readings) => {
+      const ids = metadata.tableAccessors[0];
+      if (
+        ids &&
+        "buildingId" in ids.properties &&
+        applyFacadeReadings(
+          table.flags,
+          (i) => String(ids.getPropertyValue("buildingId", i)),
+          readings
+        ) &&
+        markObjects(objects.texture, table, marked)
+      ) {
+        objects.texture.needsUpdate = true;
+      }
+    },
     facts: (objectIndex) => readObjectFacts(metadata, objectIndex),
-    mark: (marked) => {
+    mark: (next) => {
+      marked = next;
       if (markObjects(objects.texture, table, marked)) {
         objects.texture.needsUpdate = true;
       }

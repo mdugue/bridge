@@ -23,6 +23,7 @@ import {
   metres,
   osmSource,
   squareMetres,
+  stated,
   whole,
 } from "./card-lines";
 import {
@@ -33,6 +34,7 @@ import {
   treeCard,
 } from "./inquiry-features";
 import { moreCard } from "./inquiry-more";
+import type { Stated } from "./methods";
 import { bikeCard, trafficCard } from "./inquiry-traffic";
 import {
   isMeasuredRoof,
@@ -231,12 +233,18 @@ function cardFacts(
     ["Nutzung", scan || use ? "" : "nicht angegeben"],
     ["Höhe", known(t.height) ? metres(t.height) : ""],
     ["Traufe", !scan && pick.eaveH > 0 ? metres(pick.eaveH) : ""],
-    ["Dach", roofLabel(pick.facts.roofType, pick.facts.roofPitch)],
+    [
+      "Dach",
+      roofLabel(pick.facts.roofType, pick.facts.roofPitch),
+      // roofs.py rebuilt it where the model's roof misses the surface
+      isMeasuredRoof(pick.facts.roofType) ? "detected" : undefined,
+    ],
     ["Grundfläche", t.area > 0 ? squareMetres(t.area) : ""],
     ["Geschosse", known(t.levels) ? whole.format(t.levels) : ""],
     ["Gebäudeteile", t.parts > 1 ? whole.format(t.parts) : ""],
     ["Denkmal", t.heritage ? "Kulturdenkmal" : ""],
-    ["Erdgeschoss", t.shop ? "Laden oder Gastronomie" : ""],
+    // a shop point matched to the footprint (osm_buildings.py)
+    ["Erdgeschoss", t.shop ? "Laden oder Gastronomie" : "", "detected"],
   ]);
 }
 
@@ -294,18 +302,28 @@ function buildingCard(
     t.address ? "Adresse" : "",
     t.levels !== NO_FACT ? "Geschosse" : "",
     t.heritage ? "Denkmal" : "",
-    t.shop ? "Erdgeschoss" : "",
   ].filter(Boolean);
-  const sources = [
-    scan
-      ? scanSource(provenance, credits, inquiry.tile)
-      : lod2Source(provenance, credits, inquiry.tile, t.created, t.rebuilt),
-  ];
+  const sources: Stated[] = scan
+    ? // small_buildings.py: found where the scan stands above the ground
+      stated("detected", scanSource(provenance, credits, inquiry.tile))
+    : stated(
+        "taken",
+        lod2Source(provenance, credits, inquiry.tile, t.created, t.rebuilt)
+      );
   if (t.rebuilt) {
-    sources.push(rebuiltSource(provenance, credits, inquiry.tile));
+    sources.push(
+      ...stated("detected", rebuiltSource(provenance, credits, inquiry.tile))
+    );
   }
   if (fromOsm.length > 0) {
-    sources.push(osmSource(provenance, fromOsm, "buildings"));
+    sources.push(
+      ...stated("taken", osmSource(provenance, fromOsm, "buildings"))
+    );
+  }
+  if (t.shop) {
+    sources.push(
+      ...stated("detected", osmSource(provenance, ["Erdgeschoss"], "buildings"))
+    );
   }
   return {
     kicker,

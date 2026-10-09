@@ -51,8 +51,10 @@ export interface MoreContext {
 const CANOPY = { base: 1.6, top: BASE_TREE_H + 0.4, r: 2.3 };
 /** A crown narrower than this is still a target a finger can hit (m). */
 const MIN_CROWN_R = 0.8;
-/** The street lamp's post (lamp-layer.ts LAMP_H) and how wide it is picked. */
+/** The street lamp's post (lamp-layer.ts LAMP_H) and how wide it is picked;
+ *  a lamp hung across the street is picked round its head (HUNG_H). */
 const LAMP = { h: 5.4, r: 0.45 };
+const HUNG_LAMP = { y0: 6.4, y1: 7.5, r: 0.6 };
 /** The tram stop's sign, picked a little wider than drawn. */
 const STOP = { h: 2.8, r: 0.5 };
 /** How far apart a hedge's picks stand along it (m). */
@@ -109,6 +111,20 @@ function standing(
   }
   const { x, z } = epsgToWorld(ex, ey, ctx.offset);
   return { cylinder: { x, z, y0: y - 0.2, y1: y + h, r } };
+}
+
+/** A lamp's head hung over the street at EPSG (x, y). */
+function hanging(
+  [ex, ey]: readonly [number, number],
+  ctx: MoreContext
+): AskSolid | null {
+  const y = ctx.heightAt(ex, ey);
+  if (y === null) {
+    return null;
+  }
+  const { x, z } = epsgToWorld(ex, ey, ctx.offset);
+  const { y0, y1, r } = HUNG_LAMP;
+  return { cylinder: { x, z, y0: y + y0, y1: y + y1, r } };
 }
 
 /** A placed canopy tree as a packed trunk and crown. */
@@ -269,12 +285,16 @@ export function pointItems(
   };
   for (const f of lamps) {
     const at = f.geometry.coordinates;
-    add(standing(at, LAMP.r, LAMP.h, ctx), {
-      kind: "lamp",
-      tile: ctx.tile,
-      position: [at[0], at[1]],
-      ...(f.properties?.src ? { src: f.properties.src } : {}),
-    });
+    add(
+      f.properties?.wire ? hanging(at, ctx) : standing(at, LAMP.r, LAMP.h, ctx),
+      {
+        kind: "lamp",
+        tile: ctx.tile,
+        position: [at[0], at[1]],
+        ...(f.properties?.wire ? { hung: true } : {}),
+        ...(f.properties?.src ? { src: f.properties.src } : {}),
+      }
+    );
   }
   for (const f of furniture) {
     const p = f.properties;

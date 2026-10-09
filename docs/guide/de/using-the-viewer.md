@@ -404,7 +404,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | Gruppe | Regler | Was er tut |
 |---|---|---|
 | Atmosphäre | *Nebel* | Entfernungsdunst |
-| | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe |
+| | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
 | | *Flussnebel* | treibende Nebelschicht über dem Wasser, erst ab etwa 30 m vor dir und mit der Entfernung dichter |
 | | *Tiefenfärbung* | warm nah, kühl fern: eine tiefenabhängige Farbgebung |
 | Gebäude | *Transparenz* | durch Gebäude hindurchsehen (gerastert), bis 90 % |
@@ -415,7 +415,8 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Dachfarbe* | wie stark die echte (oder synthetische) Dachfarbe durchkommt |
 | | *Dachsättigung* | hebt die Sättigung der Luftbild-Dachfarben, ohne den Farbton zu verschieben; 0 = rohes Luftbild |
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
-| | *Gliederung* | was ein Haus auf Augenhöhe vor seinen Fenstern zeigt: ein steinerner Sockel, ein Gesims über dem Erdgeschoss, ein tieferes unter der Traufe und eine dunklere Ladenzone, wo ein Laden erfasst ist — keine Fenster |
+| | *Gliederung* | was ein Haus auf Augenhöhe vor seinen Fenstern zeigt, gemalt: eine dunklere Ladenzone, wo ein Laden erfasst ist — keine Fenster. Sockel, Gesims über dem Erdgeschoss und Traufgesims sind modelliert, laufen von Haus zu Haus durch und sind immer da |
+| | *Fassadenbild* | was Straßenfotos (Mapillary) über eine Fassade sagen, abstrahiert: ein feines Relief, wo sie unruhig ist, ein Gesims an jedem Geschoss einer unruhigen Gründerzeitfront, ein etwas dunklerer oder hellerer Ton, ein Ladensockel, wo ein Ladenschild hängt — keine Fenster; nur in Dresden, wo Rundumfotos die Fassade zeigen |
 | | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
@@ -429,6 +430,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
+| | *Spiegelung* | der Himmel spiegelt sich in Glasfassaden, Vergoldungen und im Wasser; nur der Himmel, nicht die Häuser gegenüber |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
 | | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe, nur hinter dem Fokus (der Vordergrund bleibt scharf); *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung; auf Telefonen nicht angeboten |

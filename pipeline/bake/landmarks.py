@@ -73,9 +73,13 @@ MATERIAL_ORDER = ("glass", "brick", "stone", "metal", "concrete", "wood", "plast
 MAX_SPLIT = 2
 
 
-def query_box(lons: tuple[float, float], lats: tuple[float, float], depth: int = 0) -> list[dict]:
-    """Wikidata's answer for a lon/lat box, quartered where it times out."""
-    query = QUERY % {
+def query_box(
+    lons: tuple[float, float], lats: tuple[float, float], depth: int = 0, template: str = QUERY
+) -> list[dict]:
+    """Wikidata's answer for a lon/lat box, quartered where it times out
+    (`template`: a query with the box's corners as `%(w)f` … `%(n)f`; the
+    monuments bake asks its own)."""
+    query = template % {
         "w": lons[0],
         "s": lats[0],
         "e": lons[1],
@@ -100,7 +104,7 @@ def query_box(lons: tuple[float, float], lats: tuple[float, float], depth: int =
     rows = []
     for qx in ((lons[0], mx), (mx, lons[1])):
         for qy in ((lats[0], my), (my, lats[1])):
-            rows += query_box(qx, qy, depth + 1)
+            rows += query_box(qx, qy, depth + 1, template)
     return rows
 
 

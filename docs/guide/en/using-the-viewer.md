@@ -381,7 +381,7 @@ mistake); the switch stays as you set it.
 | Group | Slider | What it does |
 |---|---|---|
 | Atmosphäre | *Nebel* | distance haze |
-| | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height |
+| | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height and sets in some way off, so what stands right in front of you stays clear |
 | | *Flussnebel* | drifting mist sheet over the water, from about 30 m ahead and denser with distance |
 | | *Tiefenfärbung* | warm near, cool far: a depth-based colour grade |
 | Gebäude | *Transparenz* | see through buildings (dithered), up to 90 % |
@@ -392,7 +392,8 @@ mistake); the switch stays as you set it.
 | | *Dachfarbe* | how strongly the real (or synthesised) roof colour shows |
 | | *Dachsättigung* | lifts the saturation of the aerial-photo roof colours without shifting their hue; 0 = raw photo |
 | | *Traufkante* | a soft line where wall meets roof |
-| | *Gliederung* | what a house shows at eye level before its windows: a stone plinth, a ledge over the ground floor, a deeper one under the eaves, and a darker shop zone where a shop is mapped — no windows |
+| | *Gliederung* | what a house shows at eye level before its windows, painted: a darker shop zone where a shop is mapped — no windows. The plinth, the ledge over the ground floor and the eave cornice are modelled, run on from house to house and are always there |
+| | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs — no windows; Dresden only, where panoramas show the front |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
@@ -406,6 +407,7 @@ mistake); the switch stays as you set it.
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
+| | *Spiegelung* | the sky mirrored in glass facades, gilding and water; the sky only, not the buildings across the street |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
 | | *Tiefenschärfe* (switch) | photographic depth of field, only behind the focus (the foreground stays sharp); *Auto* focuses on the crosshair, *Manuell* on a fixed distance; not offered on phones |
