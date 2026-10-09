@@ -313,7 +313,9 @@ and therefore what keeps builds out of frames:
   instancePosition()`; the bare crown thins its shadow through its mask.
 - **Vertex formats.** WebGPU has no 1-component 8/16-bit vertex formats
   (and the WebGL2 backend rejects them against TSL's float attribute): the
-  feature id and roof flag are baked as FLOAT (`scripts/tile-glb.ts`).
+  feature id is baked as FLOAT (`scripts/tile-glb.ts`); the roof flag
+  rides in the windows' snorm16 `_FACADE` (−1 in its third,
+  `lib/city/windows.ts` `FACADE_ROOF`).
   3-component snorm8/16 positions and normals are fine (three pads them).
 - **Eight vertex buffers a draw on WebGPU** (the device's default limit;
   three requests no more). Each non-interleaved attribute is one buffer,

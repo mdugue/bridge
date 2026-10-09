@@ -34,6 +34,7 @@ import type {
 } from "./features";
 import { SITES } from "../../sites";
 import { STRUCTURE_KINDS } from "./features";
+import type { WindowFile } from "./windows";
 import { type Site, tileExtentOf, tileIdOf } from "./site";
 import { TREE_GENERA } from "./tree-season";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
@@ -321,6 +322,49 @@ test.each(tiles)(
         // a wall only a canopy speaks for is under one
         if (w.src === "canopy") {
           expect(w.canopy?.length ?? 0).toBeGreaterThan(0);
+        }
+      }
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: window models keep to the ranges the bake draws",
+  (tile, site) => {
+    const path = join(ROOT, cityMeshSourceFiles(site, tile).windows);
+    if (!existsSync(path)) {
+      return;
+    }
+    const doc = JSON.parse(readFileSync(path, "utf8")) as WindowFile;
+    expect(doc.attribution).toContain("Mapillary");
+    for (const [rho, n] of Object.values(doc.reliability)) {
+      expect(rho === null || Math.abs(rho) <= 1).toBe(true);
+      expect(Number.isInteger(n)).toBe(true);
+    }
+    for (const walls of Object.values(doc.buildings)) {
+      for (const w of walls) {
+        expect(w.oid.length).toBeGreaterThan(0);
+        expect(Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1])).toBeCloseTo(
+          w.L,
+          1
+        );
+        expect(Math.hypot(...w.n)).toBeCloseTo(1, 3);
+        expect(w.seqs).toBeGreaterThanOrEqual(1);
+        const m = w.model;
+        if (!m) {
+          continue;
+        }
+        expect(["regular", "loose"]).toContain(m.grid);
+        expect(m.axis).toBeGreaterThanOrEqual(1.8);
+        expect(m.axis).toBeLessThanOrEqual(4.8);
+        // a pier between two windows
+        expect(m.w).toBeLessThanOrEqual(m.axis - 0.6 + 1e-6);
+        expect(m.w).toBeGreaterThanOrEqual(0.7);
+        expect(m.h).toBeGreaterThanOrEqual(0.8);
+        expect(m.h).toBeLessThanOrEqual(2.4);
+        if (m.storey !== undefined) {
+          expect(m.storey).toBeGreaterThanOrEqual(2.8);
+          expect(m.storey).toBeLessThanOrEqual(4.6);
         }
       }
     }

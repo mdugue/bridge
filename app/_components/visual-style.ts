@@ -2,8 +2,12 @@ import {
   type DataTexture,
   DoubleSide,
   FrontSide,
+  InterpolationSamplingType,
   MeshStandardNodeMaterial,
+  type Node,
   type Texture,
+  type UniformNode,
+  Vector3,
 } from "three/webgpu";
 import {
   abs,
@@ -42,6 +46,7 @@ import {
 } from "three/tsl";
 import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
 import { SELECTION_ACCENT } from "@/lib/city/outline";
+import { FACADE_ROOF } from "@/lib/city/windows";
 import {
   type ClayLookKey,
   LOOK_DEFAULTS,
@@ -62,6 +67,7 @@ import {
   slotTexture,
   slotUniform,
 } from "./material-slots";
+import { clayWindows } from "./clay-windows";
 import { claySkySlots, createClaySky, openSkySlots } from "./sky-light";
 import {
   mirrorWeight,
@@ -81,6 +87,8 @@ interface ClayGraph {
   colour: V3;
   emissive: V3;
   normal: V3;
+  /** the sun's light where a window's sill or reveal shades it */
+  receivedShadow: (shadow?: Node) => Node;
   roughness: F;
 }
 
@@ -118,7 +126,12 @@ export interface ClayDetailUniforms {
   /** the sky view's hold on the facades' ambient light (Himmelslicht; the
    *  terrain's node, a scene row) */
   uSkyView: Live;
+  /** world, surface → sun (the sun rig's vector, shared by reference):
+   *  the windows' own shadows */
+  uSun: UniformNode<"vec3", Vector3>;
   uTint: Live;
+  /** the windows (Fenster, clay-windows.ts) */
+  uWindows: Live;
 }
 
 /**
@@ -192,14 +205,25 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   const a = band(0);
   const b = band(1);
   const c = band(2);
-  const roof = attribute("roof", "float");
+  // Flat: the windows' style word runs to 2²¹, where an interpolated
+  // float's drift of a few ulps (0.125 there) reaches its low bits.
+  const spec = varying(band(3)).setInterpolation(
+    InterpolationSamplingType.FLAT
+  );
+  // The roof flag rides in the place on the wall's first door slot
+  // (FACADE_ROOF, lib/city/windows.ts): one vertex buffer less.
+  const facade = attribute("facade", "vec4");
+  const roof = step(facade.z, float(FACADE_ROOF + 1e-3));
   const localH = varying(dataPosition().z.sub(a.w));
   // A mix, not a select: three emits a select as if/else, and the texel
   // reads first built inside one arm would be assigned in that arm only —
   // every other varying here reads them too.
   const tint = varying(mix(a.rgb, b.rgb, step(0.5, roof)));
   const build = varying(vec4(roof, c.x, b.w, c.y));
-  const rough = varying(c.z);
+  // Flat: it seeds the windows' hashes (clay-windows.ts), which magnify an
+  // interpolated float's last-bit drift into a different window position
+  // every pixel — a loose grid's openings frayed at their sides.
+  const rough = varying(c.z).setInterpolation(InterpolationSamplingType.FLAT);
   const flags = varying(c.w);
   // A triangle that was degenerate when its flat normal was baked has a zero
   // normal, and position quantisation can give it area again: it then
@@ -211,8 +235,31 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   const wn = normalize(varying(modelWorldMatrix.mul(vec4(safe, 0)).xyz));
   const h = max(localH, 0);
   const wall = float(1).sub(smoothstep(0.5, 0.7, abs(wn.y)));
+  const windows = clayWindows({
+    eave: build.z,
+    facade: varying(facade),
+    h,
+    seed: rough,
+    shop: shopOf(d, flags),
+    spec,
+    storey: build.y,
+    strength: d.uWindows,
+    sun: d.uSun,
+    wall,
+    wn,
+  });
+  // the wall's own looks (relief, tone, ledges) stay off the openings
+  const plaster = wall.mul(float(1).sub(windows.opening));
   return {
-    normal: normalize(varying(transformNormalToView(safe))),
+    normal: normalize(
+      mix(
+        normalize(varying(transformNormalToView(safe))),
+        windows.normal,
+        windows.normalMix
+      )
+    ),
+    receivedShadow: (shadow?: Node) =>
+      shadow ? (shadow as F).mul(windows.sun) : windows.sun,
     // Materialstreuung: nudge roughness per building so the matte sheen
     // varies house-to-house (clamped to stay matte, no shiny clay).
     roughness: facadeRoughness(
@@ -225,24 +272,31 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
       clayPoche.greaterThan(0.5).and(frontFacing.not()),
       POCHE,
       askedColour(
-        facadeReading(
-          d,
-          clayColour(d, tint, build, h, wall, flags),
-          build,
-          h,
-          wall,
-          flags,
-          wn
-        ).mul(float(1).sub(facadeMirror(flags, wall, wn).mul(0.6))),
+        windows
+          .colour(
+            facadeReading(
+              d,
+              clayColour(d, tint, build, h, wall, flags),
+              build,
+              h,
+              plaster,
+              flags,
+              wn
+            )
+          )
+          .mul(float(1).sub(facadeMirror(flags, wall, wn).mul(0.6))),
         h,
         wall,
         flags,
         wn
       )
     ),
-    // Himmelslicht: the courtyard's ground floor gets less of the sky.
-    ao: createClaySky().ao(h, build.z, d.uSkyView),
-    emissive: clayGlow(d, build, h, wall, flags, wn),
+    // Himmelslicht: the courtyard's ground floor gets less of the sky;
+    // a window's recess and the wall under its sill less still.
+    ao: createClaySky().ao(h, build.z, d.uSkyView).mul(windows.ao),
+    emissive: clayGlow(d, build, h, wall, flags, wn).add(
+      windows.glow.mul(d.uDuskGlow).mul(d.uNight)
+    ),
   };
 }
 
@@ -767,7 +821,8 @@ function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
  */
 export function createStyleResources(
   night: Live,
-  skyView: Live
+  skyView: Live,
+  sun: UniformNode<"vec3", Vector3> = uniform(new Vector3(0, 1, 0))
 ): StyleResources {
   // Booted at the table defaults; applyCityLook retunes them live.
   return {
@@ -784,7 +839,9 @@ export function createStyleResources(
       uRoofVibrance: uniform(LOOK_DEFAULTS.roofVibrance),
       uRough: uniform(LOOK_DEFAULTS.roughness),
       uSkyView: skyView,
+      uSun: sun,
       uTint: uniform(LOOK_DEFAULTS.tint),
+      uWindows: uniform(LOOK_DEFAULTS.windows),
     },
     materials: new Set(),
     transparency: LOOK_DEFAULTS.transparency,
@@ -820,6 +877,8 @@ export function createClayMaterial(
   clay.colorNode = graph.colour;
   clay.aoNode = graph.ao;
   clay.emissiveNode = graph.emissive;
+  // three's ShadowNode hands this the sun's filtered shadow term
+  clay.receivedShadowNode = graph.receivedShadow;
   setSlots(clay, {
     clayObjects: objects.texture,
     clayRows: objects.rows,
@@ -916,7 +975,7 @@ export function setCityTransparency(
  */
 const CLAY_UNIFORM_FOR: Record<
   Exclude<ClayLookKey, "transparency">,
-  keyof Omit<ClayDetailUniforms, "uNight">
+  keyof Omit<ClayDetailUniforms, "uNight" | "uSun">
 > = {
   articulation: "uArticulation",
   facadeReading: "uFacadeReading",
@@ -929,11 +988,12 @@ const CLAY_UNIFORM_FOR: Record<
   roofVibrance: "uRoofVibrance",
   roughness: "uRough",
   tint: "uTint",
+  windows: "uWindows",
 };
 
 /**
- * Pushes the building rows of the look into the clay: the nine facade
- * detail uniforms (shared nodes, no rebuild) and the transparency.
+ * Pushes the building rows of the look into the clay: the facade detail
+ * uniforms (shared nodes, no rebuild) and the transparency.
  */
 export function applyCityLook(
   resources: StyleResources,
@@ -941,7 +1001,7 @@ export function applyCityLook(
 ): void {
   for (const [key, uniform] of Object.entries(CLAY_UNIFORM_FOR) as [
     keyof typeof CLAY_UNIFORM_FOR,
-    keyof ClayDetailUniforms,
+    keyof Omit<ClayDetailUniforms, "uNight" | "uSun">,
   ][]) {
     resources.clayDetail[uniform].value = look[key];
   }

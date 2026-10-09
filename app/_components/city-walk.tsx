@@ -455,7 +455,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
   const applySceneTime = useCallback(
-    (date: Date) => handleRef.current?.setSun(date),
+    (date: Date, preview?: boolean) => handleRef.current?.setSun(date, preview),
     []
   );
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
@@ -562,7 +562,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         const h = handleRef.current;
         return h
           ? JSON.stringify(
-              encodeSnapshot(look.get(), h.getCameraState(), time.date)
+              encodeSnapshot(look.get(), h.getCameraState(), time.current())
             )
           : null;
       },
@@ -975,7 +975,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     if (!h) {
       return;
     }
-    const snap = encodeSnapshot(look.get(), h.getCameraState(), time.date);
+    const snap = encodeSnapshot(look.get(), h.getCameraState(), time.current());
     const text = JSON.stringify(snap, null, 2);
     setSnapshotText(text);
     navigator.clipboard?.writeText(text).then(
@@ -1026,7 +1026,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     hud.say(busy, true);
     what(h, {
       site,
-      date: time.date,
+      date: time.current(),
       model: h.getModelHud(),
       style: look.get().style,
     })
@@ -1270,6 +1270,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         onTravel={(view, label) =>
           goTo({ label: label ?? "Gemerkte Ansicht", view })
         }
+        previewSun={time.preview}
         ready={booted}
         rememberedView={rememberedView}
         // The sliders go back to their defaults; the picture style and

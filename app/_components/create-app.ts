@@ -580,7 +580,13 @@ export interface CityWalkHandle {
   setFollowAim: (aim: FollowAim | null) => void;
   /** live mode's GPS ground point (EPSG), null stops (camera-pose.ts) */
   setFollowPosition: (epsg: { x: number; y: number } | null) => void;
-  setSun: (date: Date) => SunState;
+  /**
+   * Moves the sun to an instant. `preview` marks a step of a drag through
+   * the day: what is dear and not needed at every step (the sky's
+   * reflection) follows a few times a second; the call without it, which
+   * ends the drag, brings everything up to date at once.
+   */
+  setSun: (date: Date, preview?: boolean) => SunState;
   /**
    * Lets the heavy dressing start — vegetation, lamps, rails — and
    * the terrain BVHs. Held back so its synchronous chunks cannot stutter the
@@ -1123,8 +1129,13 @@ async function bootApp(
   }
   cleanups.push(() => lampLights.dispose());
 
-  // The facades share the ground's Himmelslicht strength (the same node).
-  const styleResources = createStyleResources(clayNight, ground.skyView);
+  // The facades share the ground's Himmelslicht strength and the sun (the
+  // same nodes).
+  const styleResources = createStyleResources(
+    clayNight,
+    ground.skyView,
+    ground.sunDirection
+  );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: () => void = () => undefined;
@@ -1367,8 +1378,8 @@ async function bootApp(
       stream.tiles.deleteCamera(shadow);
     }
   };
-  const setSun = (date: Date): SunState => {
-    const state = sunRig.update(date);
+  const setSun = (date: Date, preview = false): SunState => {
+    const state = sunRig.update(date, preview);
     streamShadowTiles(state.aboveHorizon);
     currentNight = state.nightFactor;
     sunAltitude = state.altitudeDeg;
@@ -1383,7 +1394,11 @@ async function bootApp(
     clayNight.value = state.nightFactor;
     seasonClock.set(date);
     clockToOverlays?.(date);
-    invalidateShadows();
+    // The sun's move has asked for the map already; a drag's step leaves
+    // it to the rig's pace.
+    if (!preview) {
+      invalidateShadows();
+    }
     return state;
   };
   setSun(opts.initialDate);

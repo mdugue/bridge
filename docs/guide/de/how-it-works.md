@@ -140,18 +140,21 @@ Himmelslicht und Horizont, der Sonnenstand und alle Schatten.
 `◎ erkannt` **durch Mustererkennung — kann sich irren:** die Bäume ohne
 Kataster (an Kronenspitzen in der Oberfläche), Schuppen und Lauben (im
 Laserscan), neu gemessene Dächer, Schornsteine, Türme und Gauben, Bögen und
-Fachwerke über Brücken, welcher Laden zu welchem Gebäude gehört und welches
-Gebäude ein Wahrzeichen ist.
+Fachwerke über Brücken, welcher Laden zu welchem Gebäude gehört, welches
+Gebäude ein Wahrzeichen ist und der Fensterrhythmus der Häuser, die
+Straßenfotos gesehen haben.
 
 `≈ angenommen` **für den Look gestaltet oder ohne Daten gesetzt:** die
 Pastellpalette, Papierkorn und Vignette, die Form der Baumkronen, der
 Wandton je Gebäude, Backstein oder Putz, wo nichts eingetragen ist, die
 Wellen auf dem Wasser, die Steine und Platten der Belagsmuster, die Pfeiler
-unter Brücken, die warmen Fenster in der Dämmerung (dass es ein Laden oder
-öffentliches Gebäude *ist*, stimmt; seine leuchtenden Fenster sind
-erfunden).
+unter Brücken, die Fenster der Häuser, die kein Foto vermessen hat (der
+Rhythmus eines gemessenen Nachbarn oder der des Haustyps), die warmen
+Fenster in der Dämmerung (dass es ein Laden oder öffentliches Gebäude
+*ist*, stimmt; seine leuchtenden Fenster sind erfunden).
 
-**Gar nicht in den Daten:** Fenster, die kleineren Stadtmöbel (Pflanzkübel;
+**Gar nicht in den Daten:** wo genau jedes Fenster auf seiner Wand sitzt
+(die Reihen stehen mittig darauf), die kleineren Stadtmöbel (Pflanzkübel;
 Verkehrs- und Straßennamensschilder sind zu lückenhaft erfasst, um sie zu
 zeigen), Fahrzeuge (Gleise und Oberleitung der Straßenbahn sind da; die
 Bahnen gibt es nur als Datenebene nach Fahrplan), Menschen, Bewuchs unter
