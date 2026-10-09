@@ -97,6 +97,7 @@ import {
   type ViewMode,
 } from "./model-rig";
 import type { ModelCamera } from "./model-camera";
+import { setViewDirection } from "./view-direction";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
 import { countBuildings, pickCityObject } from "./city-layer";
@@ -2655,8 +2656,10 @@ async function bootApp(
     lastEquivalent = equivalent ?? 600;
     updateCuts();
     aimCaptureTile();
-    // What the post passes know of the camera drawing this frame.
+    // What the post passes and the scene's materials know of the camera
+    // drawing this frame.
     lens.update(view, lastEquivalent);
+    setViewDirection(view);
     // The fountains' jets and water shimmer (one shared uniform).
     setFountainTime(elapsed);
     // The data layers' light (one shared uniform; drawn only when on).

@@ -189,6 +189,22 @@ describe("markGrounded", () => {
     markGrounded(objects);
     expect(objects[1].flags).toBe(OBJECT_FLAG_GROUNDED);
   });
+
+  test("judges a part lifted to its street on its base as LoD2 built it", () => {
+    // the street lift moved the front part 0.5 m up, the courtyard part
+    // (the tree's lowest, 3.2 m under the street) stayed
+    const objects = [
+      { baseZ: 100, eaveH: 6, flags: 0, root: 0 },
+      { baseZ: 103.2, eaveH: 11.5, flags: 0, root: 0 },
+    ];
+    const asBuilt = new Map([[1, { baseZ: 102.7, eaveH: 12 }]]);
+    markGrounded(objects, asBuilt);
+    expect(objects[1].flags).toBe(OBJECT_FLAG_GROUNDED);
+    // read on the lifted base, it would stand over the slack
+    const lifted = objects.map((o) => ({ ...o, flags: 0 }));
+    markGrounded(lifted);
+    expect(lifted[1].flags).toBe(0);
+  });
 });
 
 test("markFlatRoofs: a roof mostly level is flat, a pitched one not", () => {

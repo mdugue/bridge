@@ -679,10 +679,11 @@ function dressWalls(
 ): void {
   const plinths = onWalls.plinths ?? [];
   // the storeys count from the street, where the plinths say where it is
-  liftToStreet(baked.objects, keys, plinths);
+  const asBuilt = liftToStreet(baked.objects, keys, plinths);
   assignWindows(baked.objects, keys, hosts, onWalls.windows ?? [], plinths);
   appendBeyondLod2(tile, baked, keys, { ...onWalls, ...extra });
-  markGrounded(baked.objects);
+  // standing on the ground or on a roof: as LoD2 built them
+  markGrounded(baked.objects, asBuilt);
   // the parts laid on the walls copied their host's row: windows are the
   // LoD2 walls' alone
   for (const o of baked.objects) {
@@ -1393,13 +1394,14 @@ const STREET_UNDER_M = 1.5;
  * median 0.3 m under the street on Dresden's spawn tile, so storeys, bands
  * and windows counted from it put the ground floor's windows behind the
  * plinth. Every part of the building moves to the same level, so their
- * storeys meet.
+ * storeys meet. Returns the base and eave of each object it moved, as they
+ * were.
  */
 export function liftToStreet(
   objects: CityObjectRow[],
   keys: readonly string[],
   plinths: readonly PlinthFeature[]
-): void {
+): Map<number, { baseZ: number; eaveH: number }> {
   const index = new Map(keys.map((id, i) => [id, i]));
   const ground = new Map<number, { lo: number; hi: number }>();
   for (const f of plinths) {
@@ -1414,18 +1416,21 @@ export function liftToStreet(
       });
     }
   }
-  for (const o of objects) {
+  const asBuilt = new Map<number, { baseZ: number; eaveH: number }>();
+  objects.forEach((o, i) => {
     const g = ground.get(o.root);
     if (!g || (o.source ?? OBJECT_SOURCE_LOD2) !== OBJECT_SOURCE_LOD2) {
-      continue;
+      return;
     }
     const street = Math.min(g.hi, g.lo + STREET_RISE_M);
     const rise = street - o.baseZ;
     if (rise > 0 && rise <= STREET_UNDER_M) {
+      asBuilt.set(i, { baseZ: o.baseZ, eaveH: o.eaveH });
       o.eaveH = cm(Math.max(o.eaveH - rise, 0));
       o.baseZ = cm(street);
     }
-  }
+  });
+  return asBuilt;
 }
 
 /** How high each object's plinth stands over its base (m), where one is
@@ -1514,6 +1519,7 @@ function facadeOf(
         object,
         at: [x - cx, y - cy] as [number, number],
         n: [p.nx, p.ny] as [number, number],
+        w: p.w,
       },
     ];
   });

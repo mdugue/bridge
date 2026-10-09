@@ -12,7 +12,6 @@ import {
 import {
   abs,
   attribute,
-  cameraPosition,
   clamp,
   dot,
   float,
@@ -69,6 +68,7 @@ import {
 } from "./material-slots";
 import { clayWindows } from "./clay-windows";
 import { claySkySlots, createClaySky, openSkySlots } from "./sky-light";
+import { viewDirection } from "./view-direction";
 import {
   mirrorWeight,
   reflectionStrength,
@@ -133,6 +133,10 @@ export interface ClayDetailUniforms {
   /** the windows (Fenster, clay-windows.ts) */
   uWindows: Live;
 }
+
+/** The clay uniforms the look's rows drive: all but the sun's and the
+ *  night's. */
+type ClayLookUniform = keyof Omit<ClayDetailUniforms, "uNight" | "uSun">;
 
 /**
  * What every tile's clay material shares: the facade uniforms and the
@@ -235,6 +239,8 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   const wn = normalize(varying(modelWorldMatrix.mul(vec4(safe, 0)).xyz));
   const h = max(localH, 0);
   const wall = float(1).sub(smoothstep(0.5, 0.7, abs(wn.y)));
+  // along the view, in Modell's parallel projection too
+  const view = viewDirection();
   const windows = clayWindows({
     eave: build.z,
     facade: varying(facade),
@@ -245,6 +251,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     storey: build.y,
     strength: d.uWindows,
     sun: d.uSun,
+    view,
     wall,
     wn,
   });
@@ -268,9 +275,11 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
       shopPane(flags),
       rough
     ),
-    colour: select(
-      clayPoche.greaterThan(0.5).and(frontFacing.not()),
-      POCHE,
+    // A mix, not a select: three emits a select as if/else, and the facade
+    // drawn inside its arm — the windows first among it — would be built
+    // twice (the normal, light and glow read it outside), its derivatives in
+    // a branch.
+    colour: mix(
       askedColour(
         windows
           .colour(
@@ -289,7 +298,9 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
         wall,
         flags,
         wn
-      )
+      ),
+      POCHE,
+      step(0.5, clayPoche).mul(float(1).sub(float(frontFacing)))
     ),
     // Himmelslicht: the courtyard's ground floor gets less of the sky;
     // a window's recess and the wall under its sill less still.
@@ -696,7 +707,7 @@ function clayGlow(
   flags: F,
   wn: V3
 ): V3 {
-  const view = normalize(cameraPosition.sub(positionWorld));
+  const view = viewDirection().negate();
   const fres = float(1).sub(clamp(dot(view, wn), 0, 1));
   // a shop window has its own grazing light (paneSky), not the clay's rim
   const pane = shopPane(flags);
@@ -975,7 +986,7 @@ export function setCityTransparency(
  */
 const CLAY_UNIFORM_FOR: Record<
   Exclude<ClayLookKey, "transparency">,
-  keyof Omit<ClayDetailUniforms, "uNight" | "uSun">
+  ClayLookUniform
 > = {
   articulation: "uArticulation",
   facadeReading: "uFacadeReading",
@@ -1001,7 +1012,7 @@ export function applyCityLook(
 ): void {
   for (const [key, uniform] of Object.entries(CLAY_UNIFORM_FOR) as [
     keyof typeof CLAY_UNIFORM_FOR,
-    keyof Omit<ClayDetailUniforms, "uNight" | "uSun">,
+    ClayLookUniform,
   ][]) {
     resources.clayDetail[uniform].value = look[key];
   }

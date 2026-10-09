@@ -40,7 +40,6 @@ import {
   normalWorld,
   normalWorldGeometry,
   positionLocal,
-  positionViewDirection,
   positionWorld,
   select,
   sin,
@@ -94,6 +93,7 @@ import {
   skyReflection,
 } from "./sky-reflection";
 import { sceneMaterial } from "./three-utils";
+import { viewDirection } from "./view-direction";
 
 /**
  * Fountains, statues, memorial stones and columns
@@ -776,7 +776,7 @@ function clayMaterial(): MeshStandardNodeMaterial {
   // gold-tinted and strong on gilding, faint on a patina. Turned down, the
   // row hands back to the old stand-in — the sky caught at a grazing angle.
   const grazing = float(1)
-    .sub(dot(normalView, positionViewDirection).abs().clamp(0, 1))
+    .sub(dot(normalWorld, viewDirection()).abs().clamp(0, 1))
     .pow(3);
   const standIn = vec3(0.95, 0.75, 0.38)
     .mul(f.gilded)

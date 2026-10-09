@@ -689,13 +689,15 @@ test("a building's base moves up to the street its plinths stand on", () => {
   const objects = pitched();
   const [, part, house] = objects;
   const [base, eave, partBase] = [house.baseZ, house.eaveH, part.baseZ];
-  liftToStreet(objects, keys, [
+  const asBuilt = liftToStreet(objects, keys, [
     piece("house", base + 0.3),
     piece("house", base + 0.5),
   ]);
   // the higher piece's ground, the eave where it was
   expect(house.baseZ).toBeCloseTo(base + 0.5, 2);
   expect(house.baseZ + house.eaveH).toBeCloseTo(base + eave, 2);
+  // what it moved, as it was
+  expect([...asBuilt]).toEqual([[2, { baseZ: base, eaveH: eave }]]);
   // another building keeps its base
   expect(part.baseZ).toBe(partBase);
   // up a steep street: a metre over its lowest piece at most

@@ -147,20 +147,28 @@ export const GROUNDED_SLACK_M = 3;
  * Sets OBJECT_FLAG_GROUNDED on every object whose base lies within
  * `GROUNDED_SLACK_M` of the lowest base in its building tree (a lone
  * building is its own tree, so it always does). A Building drawn only by
- * its parts has no geometry (no height, base 0) and takes no part. In
- * place.
+ * its parts has no geometry (no height, base 0) and takes no part. `asBuilt`
+ * holds the base and eave of the objects the storeys' street lift moved
+ * (scripts/bake-city-mesh.ts `liftToStreet`) as LoD2 built them: whether a
+ * part stands on the ground is LoD2's, and a part lifted while the tree's
+ * lowest, in a courtyard, stayed would end up over the slack. In place.
  */
 export function markGrounded(
-  objects: readonly Pick<CityObjectRow, "baseZ" | "eaveH" | "flags" | "root">[]
+  objects: readonly Pick<CityObjectRow, "baseZ" | "eaveH" | "flags" | "root">[],
+  asBuilt: ReadonlyMap<number, { baseZ: number; eaveH: number }> = new Map()
 ): void {
-  const drawn = objects.filter((o) => o.eaveH > 0);
+  const rows = objects.map((o, i) => ({ ...o, ...asBuilt.get(i) }));
+  const drawn = rows.flatMap((r, i) => (r.eaveH > 0 ? [i] : []));
   const lowest = new Map<number, number>();
-  for (const o of drawn) {
-    lowest.set(o.root, Math.min(lowest.get(o.root) ?? Infinity, o.baseZ));
+  for (const i of drawn) {
+    const r = rows[i];
+    lowest.set(r.root, Math.min(lowest.get(r.root) ?? Infinity, r.baseZ));
   }
-  for (const o of drawn) {
+  for (const i of drawn) {
+    const r = rows[i];
+    const o = objects[i];
     const grounded =
-      o.baseZ <= (lowest.get(o.root) ?? o.baseZ) + GROUNDED_SLACK_M;
+      r.baseZ <= (lowest.get(r.root) ?? r.baseZ) + GROUNDED_SLACK_M;
     if (grounded && !hasObjectFlag(o.flags, OBJECT_FLAG_GROUNDED)) {
       o.flags += OBJECT_FLAG_GROUNDED;
     }

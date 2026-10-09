@@ -228,7 +228,8 @@ config change.
     `model-rig.ts` (owns the view while on: pan/zoom/turn/tilt, the
     dolly zoom in and out, the presets), `model-camera.ts` (the ortho
     camera, sheared for the Militärperspektive), `view-lens.ts` (what
-    every post pass reads of the camera drawing the frame), `view-ray.ts`
+    every post pass reads of the camera drawing the frame),
+    `view-direction.ts` (what a material reads of the view), `view-ray.ts`
     (pick rays for any camera), `model-cuts.ts` (the Schnitt's ground
     profile, the Ausschnitt's clipping and plinth), `model-instruments.tsx`
     (scale bar, north arrow), `projection-panel.tsx` (the sidebar's
@@ -603,6 +604,18 @@ main thread) out of the frames:
   the mesh simply does not draw, while WebGL2 (sixteen, the headless e2e's
   backend) draws it: pack scalars into vec4s (`traffic-layer.ts`
   `TRAFFIC_ATTRIBUTES`, its test holds the count).
+- **The clay passes as many varyings as WebGPU allows**: sixteen
+  inter-stage variables, one of them `front_facing`'s, and with
+  transparency on and the Ausschnitt's clip distances the clay uses the
+  other fifteen. A new value per building or per vertex rides in a
+  varying it already passes, or the buildings vanish on WebGPU while
+  WebGL2 still draws them (ADR 0049).
+- **A TSL `select` is an if/else in the shader.** three builds each arm in
+  its own scope: what an arm builds first is built again where it is used
+  outside, and a derivative or texture read first built in an arm runs in
+  non-uniform control flow (three turns WGSL's uniformity check off, so
+  nothing says so). In a per-pixel graph use `mix`/`step` with safe
+  denominators; a select whose arms are constants is harmless.
 
 **Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
 5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈
@@ -810,10 +823,14 @@ matrices, `ortho`, `equivalent`), so the same pipeline draws the
 perspective and the parallel (and sheared) camera. A new pass that turns
 depth into distance goes through `lens.viewZ`/`lens.distance`, a new ray
 through `setPickRay`, a new distance-keyed look through the equivalent
-distance — reading `camera.fov` or `camera.position` directly is a bug in
-Modell. Screen passes built on `NodeUpdateType.FRAME` (SMAA, GTAO) render
-once per animation frame: anything that renders the frame twice in one
-(the export's tiles) must spread over frames.
+distance, a material's view direction through `viewDirection()`
+(`view-direction.ts`; `eyeDirectionView()` beside `normalView`) — reading
+`camera.fov`, `camera.position`, or TSL's `cameraPosition`,
+`positionViewDirection` or `reflectVector` for a direction is a bug in
+Modell (a Militärperspektive looks in 45° off its camera's forward). Screen passes built on
+`NodeUpdateType.FRAME` (SMAA, GTAO) render once per animation frame:
+anything that renders the frame twice in one (the export's tiles) must
+spread over frames.
 
 **Verify renders from oblique angles**, not head-on — a tree growing through a
 bridge or a misplaced layer is invisible looking straight down.
