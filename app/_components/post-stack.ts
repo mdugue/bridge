@@ -338,7 +338,9 @@ function lensBlurOf(lit: V4, viewZ: F, focusDistance: Live, focusRange: Live) {
   // at the focus (view Z is negative ahead): a lens blurs the foreground
   // too, but in a first-person view the foreground is the street at your
   // feet, the lower half of the screen — blurred, it read as a streaky
-  // veil lying flat on the screen rather than as depth.
+  // veil lying flat on the screen rather than as depth. The node still
+  // runs its near-field passes, now over an empty field: the clamp saves
+  // no work, a far-only pass of our own would.
   const behindFocus = viewZ.min(focusDistance.negate());
   const node = dof(
     input,

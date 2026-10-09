@@ -234,8 +234,8 @@ come from sampling it several times (PCF).
 objects meet the ground, computed from the depth buffer. The viewer uses
 one of them, *GTAO* (ground-truth ambient occlusion), at half resolution.
 
-**Depth of field (DoF)** — the photographic blur outside the focus
-distance; here focused on the crosshair by default. Not on phones.
+**Depth of field (DoF)** — the photographic blur beyond the focus
+distance (the foreground stays sharp); here focused on the crosshair by default. Not on phones.
 
 **Post-processing** — effects applied to the finished image: contact
 shadows, depth of field, anti-aliasing (SMAA; on phones the lighter
