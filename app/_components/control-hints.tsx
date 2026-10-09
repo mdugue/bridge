@@ -28,8 +28,8 @@ export const CONTROL_HINTS: readonly ControlHint[] = [
   { key: "1 – 9", action: "zu den ersten Orten" },
   { key: "Scroll", action: "vor / zurück" },
   { key: "Alt + Scroll", action: "zoomen" },
-  { key: "I", action: "befragen, was in der Mitte steht" },
-  { key: "R", action: "abreißen" },
+  { key: "I", action: "befragen, was unter dem Mauszeiger steht" },
+  { key: "R", action: "abreißen, was unter dem Mauszeiger steht" },
   { key: "V", action: "Bildstil wechseln" },
   { key: "Esc", action: "immersiv beenden" },
 ];

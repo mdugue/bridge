@@ -70,8 +70,8 @@ Werkzeuge und das Speichern eines Bildes warten, bis die Szene steht.
 | Klick auf die Minikarte | dorthin gleiten (zu Fuß landest du stehend, im Flug in gleicher Höhe) |
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren |
 | Klick auf ein Gebäude | es befragen: eine Karte sagt, was die Daten darüber wissen |
-| `I` | befragen, was unter dem Fadenkreuz steht (auch immersiv) |
-| `R` | Gebäude unter dem Fadenkreuz abreißen |
+| `I` | befragen, was unter dem Mauszeiger steht (immersiv: in der Bildmitte) |
+| `R` | Gebäude unter dem Mauszeiger abreißen (immersiv: in der Bildmitte) |
 | `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City → Papier → Strich → Schwarzplan) |
 | `M` | ins *Modell* wechseln, die Stadt in Parallelprojektion, und zurück (siehe [Modell](#modell-die-stadt-als-planzeichnung)) |
 | `Esc` | immersiven Modus verlassen |
@@ -231,7 +231,9 @@ Quellenvermerken.
 Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
 Mit der Maus genügt ein **Klick** auf ein Gebäude, auf einem Touchscreen
 **langes Drücken** (den Finger eine halbe Sekunde ruhig halten); `I`
-fragt, was unter dem Fadenkreuz steht. Das Gebäude bekommt eine feine
+fragt, was unter dem Mauszeiger steht (im immersiven Modus, der den
+Zeiger ausblendet, was in der Bildmitte steht; nur dort markiert ein
+Punkt die Mitte). Das Gebäude bekommt eine feine
 Schraffur und eine Linie um seinen Umriss, beide in der pinken
 Akzentfarbe der Bedienelemente, und eine Karte öffnet sich. Ein Klick ins Leere
 schließt sie wieder. Ein kleines Haus musst du
@@ -440,7 +442,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
-| | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung; auf Telefonen nicht angeboten |
+| | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf die Bildmitte, *Manuell* auf eine feste Entfernung; auf Telefonen nicht angeboten |
 
 Solange sich die Kamera bewegt, ist die Tiefenschärfe-Unschärfe
 abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
@@ -450,8 +452,8 @@ erübrigen kann, den ein kleiner Bildschirm kaum zeigt.
 
 ### Erweitert
 
-- **Werkzeuge** — *Gebäude unter dem Fadenkreuz abreißen* entfernt das
-  Gebäude, das du anschaust (wie `R`), auf jeder Kachel im Blick; das
+- **Werkzeuge** — *Gebäude in der Bildmitte abreißen* entfernt das
+  Gebäude, das du anschaust (`R` das unter dem Mauszeiger), auf jeder Kachel im Blick; das
   lässt sich nicht rückgängig machen. *Bild speichern* speichert die
   Ansicht als PNG mit ihren Quellen (siehe [Modell](#modell-die-stadt-als-planzeichnung)). *Immersiver Modus* fängt den
   Mauszeiger für ein Ego-Perspektive-Gefühl ein; `Esc` verlässt ihn.

@@ -2043,8 +2043,9 @@ async function bootApp(
     checkLoaded();
   };
 
-  const demolishAtCrosshair = () => {
-    const picked = pickCityObject(activeCamera(), stream.visibleCities());
+  /** Demolishes the building at a screen point (NDC; the centre without). */
+  const demolishAt = (ndc?: { x: number; y: number }) => {
+    const picked = pickCityObject(activeCamera(), stream.visibleCities(), ndc);
     if (!picked?.layer.demolish(picked.objectIndex)) {
       return;
     }
@@ -2059,6 +2060,35 @@ async function bootApp(
     invalidateShadows();
     scheduleStats();
   };
+  const demolishAtCrosshair = () => demolishAt();
+
+  // Where the mouse rests over the scene (NDC): `I` and `R` act on what is
+  // under the pointer, as a hover shortcut does — there is no dot in the
+  // middle to aim with. Without a pointer there (a touch screen, the
+  // pointer off the canvas or locked in immersive mode) they act at the
+  // centre.
+  let hoverNdc: { x: number; y: number } | undefined;
+  const canvas = renderer.domElement;
+  const onHover = (e: PointerEvent) => {
+    if (e.pointerType !== "mouse" || document.pointerLockElement === canvas) {
+      hoverNdc = undefined;
+      return;
+    }
+    const r = canvas.getBoundingClientRect();
+    hoverNdc = {
+      x: ((e.clientX - r.left) / r.width) * 2 - 1,
+      y: -(((e.clientY - r.top) / r.height) * 2 - 1),
+    };
+  };
+  const onLeave = () => {
+    hoverNdc = undefined;
+  };
+  canvas.addEventListener("pointermove", onHover);
+  canvas.addEventListener("pointerleave", onLeave);
+  cleanups.push(() => {
+    canvas.removeEventListener("pointermove", onHover);
+    canvas.removeEventListener("pointerleave", onLeave);
+  });
 
   cleanups.push(
     attachKeyboardControls(
@@ -2079,11 +2109,11 @@ async function bootApp(
           modelRig.owns() ? modelRig.leave("fly") : pose.toggleMode(),
         toggleModel: () =>
           modelRig.owns() ? modelRig.leave() : modelRig.enter(),
-        demolish: demolishAtCrosshair,
-        // I asks at the crosshair: in pointer lock there is no pointer
-        // to click with.
+        demolish: () => demolishAt(hoverNdc),
+        // I asks under the pointer, or at the centre in pointer lock,
+        // where there is no pointer to click with.
         inquire: () => {
-          inquireAt();
+          inquireAt(hoverNdc);
         },
         cycleStyle: () =>
           opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),

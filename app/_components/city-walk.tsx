@@ -149,6 +149,18 @@ const INITIAL_DATE = new Date();
 /** A little air after the veil is gone before the heavy work resumes. */
 const STREAM_SETTLE_MS = 250;
 
+/** Whether the mouse is locked to the scene (immersive mode). */
+function usePointerLocked(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      document.addEventListener("pointerlockchange", onChange);
+      return () => document.removeEventListener("pointerlockchange", onChange);
+    },
+    () => document.pointerLockElement !== null,
+    () => false
+  );
+}
+
 /** Floating button that opens the sidebar; hidden while it is open. */
 function SettingsToggle() {
   const { toggleSidebar, state, isMobile, openMobile } = useSidebar();
@@ -426,6 +438,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   );
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
+  const immersive = usePointerLocked();
   const hud = useHudMessage();
   const sayHud = hud.say;
   const locate = useLocateMe(handleRef, hud);
@@ -1066,8 +1079,10 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
 
         {booted && (
           <>
-            {/* crosshair — none on Modell's sheet, which has no eye */}
-            {mode !== "model" && (
+            {/* No dot in the middle: the pointer aims (I and R act under
+                it). Only immersive mode, which hides the pointer, marks
+                the centre it aims at instead — never on Modell's sheet. */}
+            {immersive && mode !== "model" && (
               <div
                 aria-hidden
                 className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"

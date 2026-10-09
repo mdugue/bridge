@@ -295,7 +295,7 @@ function FocusControls({
         </ToggleGroup>
         <FieldDescription className="text-[11px] leading-snug">
           {mode === "auto"
-            ? "Scharf auf das, was unter dem Fadenkreuz liegt"
+            ? "Scharf auf das, was in der Bildmitte liegt"
             : "Feste Fokusdistanz — als Ring auf der Minikarte"}
         </FieldDescription>
       </Field>
@@ -1046,7 +1046,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
                   disabled={!props.ready}
                   hint="R"
                   icon={HammerIcon}
-                  label="Gebäude unter dem Fadenkreuz abreißen"
+                  label="Gebäude in der Bildmitte abreißen — mit R unter dem Mauszeiger"
                   onClick={() => handleRef.current?.demolishAtCrosshair()}
                 />
                 <ToolButton

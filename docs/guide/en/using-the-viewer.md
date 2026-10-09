@@ -67,8 +67,8 @@ the tools and saving a picture wait until the scene is up.
 | Click on the minimap | glide there (on foot you land standing; flying, at the same height) |
 | *Standort* (toolbar, bottom right) | teleport to where you really are |
 | Click on a building | ask it: a card says what the data knows about it |
-| `I` | ask what stands under the crosshair (immersive too) |
-| `R` | demolish the building under the crosshair |
+| `I` | ask what stands under the mouse pointer (immersive: at the centre) |
+| `R` | demolish the building under the mouse pointer (immersive: at the centre) |
 | `V` | switch to the next picture style (Pastell → Comic → Film noir → Sin City → Papier → Strich → Schwarzplan) |
 | `M` | switch to *Modell*, the city in parallel projection, and back (see [Modell](#modell-the-city-as-a-planner-draws-it)) |
 | `Esc` | leave immersive mode |
@@ -221,7 +221,8 @@ the frame as you see it, with the credits.
 The city itself carries no text. Ask it instead: with a mouse, a
 **click** on a building; on a touch screen, a **long press** (hold a
 finger still for half a second); `I` asks what stands under the
-crosshair. The building gets a fine hatch and a line round its outline,
+mouse pointer (in immersive mode, which hides the pointer, what stands at
+the centre; only there a dot marks it). The building gets a fine hatch and a line round its outline,
 both in the controls' pink accent, and a card opens; a
 click on nothing closes it again. You need not hit a small house exactly:
 when nothing stands right under your finger, the building most of the
@@ -416,7 +417,7 @@ mistake); the switch stays as you set it.
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
-| | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance; not offered on phones |
+| | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the centre of the view, *Manuell* on a fixed distance; not offered on phones |
 
 While the camera moves, the depth-of-field blur is switched off (the eye
 cannot resolve it in motion) and comes back when you stop. Phones do not
@@ -425,8 +426,8 @@ can spare for a hint a small screen barely shows.
 
 ### Erweitert ("Advanced")
 
-- **Werkzeuge** — *Gebäude unter dem Fadenkreuz abreißen* demolishes the
-  building you are looking at (same as `R`), on any tile in view; it is
+- **Werkzeuge** — *Gebäude in der Bildmitte abreißen* demolishes the
+  building you are looking at (`R` the one under the pointer), on any tile in view; it is
   not undoable. *Bild speichern* saves the view as a PNG with its sources
   (see [Modell](#modell-the-city-as-a-planner-draws-it)). *Immersiver Modus* locks the mouse pointer
   for a first-person feel; `Esc` leaves it.

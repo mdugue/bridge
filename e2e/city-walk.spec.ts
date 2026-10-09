@@ -956,12 +956,13 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
   test("the inquiry card tells what the data knows, and where it comes from", async () => {
     // Befragen (ADR 0042): a plain click asks — no mode first. It marks
     // the building and opens the card with its identity, its facts and a
-    // source line per source; I asks again at the crosshair. Before
+    // source line per source; I asks again under the pointer. Before
     // demolish, which takes a building of the same kind away.
     await aimAtBuilding(page);
     const box = await page.locator("canvas[data-engine]").boundingBox();
     await withFramesHeld(page, async () => {
-      // the crosshair's own spot: the dot over it must not take the click
+      // the centre, where the aimed building stands (the pointer stays
+      // there for I)
       await page.mouse.click(
         (box?.x ?? 0) + (box?.width ?? 0) / 2,
         (box?.y ?? 0) + (box?.height ?? 0) / 2
