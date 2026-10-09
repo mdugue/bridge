@@ -295,6 +295,16 @@ export function createSunRig(
   // thousands of shadow-casting trees.
   sun.shadow.autoUpdate = false;
   sun.shadow.needsUpdate = true;
+  // The sun stays in the scene by night, at intensity 0: three keys every
+  // material's build by the lights it draws with, so a light that left the
+  // scene at dusk rebuilt every material in view, inside the frame, at every
+  // dusk and dawn. Below the horizon the map is simply never asked for.
+  let sunUp = true;
+  const redrawShadow = () => {
+    if (sunUp) {
+      sun.shadow.needsUpdate = true;
+    }
+  };
   sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   const cam = sun.shadow.camera;
   /**
@@ -364,12 +374,12 @@ export function createSunRig(
     // fy matters too: ascending straight up in fly mode keeps fx/fz fixed
     // while the frustum's vertical slice shifts.
     if (fx !== lastCentre.x || fy !== lastCentre.y || fz !== lastCentre.z) {
-      sun.shadow.needsUpdate = true;
+      redrawShadow();
       lastCentre.set(fx, fy, fz);
     }
     // The shadow camera is also a streaming camera (create-app.ts): three
-    // updates it only while drawing the shadow, which an invisible sun (at
-    // night) never does — a stale frustum would keep its tiles loaded.
+    // updates it only while drawing the shadow, which by night it never
+    // does — a stale frustum would keep its tiles loaded.
     sun.updateMatrixWorld();
     sun.target.updateMatrixWorld();
     sun.shadow.updateMatrices(sun);
@@ -403,7 +413,7 @@ export function createSunRig(
       resizeFrustum(nextRadius);
       // A resized frustum covers different world even from the same centre,
       // and the texel grid it snaps to has changed — always redraw.
-      sun.shadow.needsUpdate = true;
+      redrawShadow();
     }
     focus.set(wantX, groundY, wantZ);
     reposition();
@@ -427,7 +437,7 @@ export function createSunRig(
     }
     if (nextRadius !== radius) {
       resizeFrustum(nextRadius);
-      sun.shadow.needsUpdate = true;
+      redrawShadow();
     }
     focus.set(x, groundY, z);
     reposition();
@@ -456,9 +466,10 @@ export function createSunRig(
     dir.set(d.x, d.y, d.z);
     sunDirectionOut?.copy(dir);
     const aboveHorizon = dir.y > 0;
+    sunUp = aboveHorizon;
     reposition();
-    sun.shadow.needsUpdate = true; // sun moved — force a shadow re-render
-    sun.visible = aboveHorizon;
+    // The sun moved: redraw by day; by night drop a request still open.
+    sun.shadow.needsUpdate = aboveHorizon;
     // Quick ramp after sunrise, flat during the day.
     sun.intensity = SUN_INTENSITY * Math.min(1, Math.max(dir.y, 0) * 5);
     const altitudeDeg =
@@ -488,9 +499,7 @@ export function createSunRig(
     return { altitudeDeg, aboveHorizon, nightFactor };
   };
 
-  const invalidateShadow = () => {
-    sun.shadow.needsUpdate = true;
-  };
+  const invalidateShadow = redrawShadow;
 
   return {
     update,
@@ -498,9 +507,8 @@ export function createSunRig(
     followFootprint,
     setParallel,
     invalidateShadow,
-    // three only draws the map for a VISIBLE light: below the horizon the
-    // flag stays raised (and is consumed at sunrise), so it is not "pending".
-    shadowPending: () => sun.visible && sun.shadow.needsUpdate,
+    // Below the horizon nothing is redrawn; sunrise asks for the map anew.
+    shadowPending: () => sunUp && sun.shadow.needsUpdate,
     shadowMapBytes: shadowMapBytesFor(shadowMapSize),
     shadowReach,
     shadowCamera: sun.shadow.camera,

@@ -213,17 +213,33 @@ test("the palette's fog colour lands in the scene fog's uniform", () => {
   expect(fogColor.value.getHex()).not.toBe(0);
 });
 
+// three keys every material's build by the lights it draws with: a sun that
+// left the scene at dusk rebuilt every material on screen. It stays, dark,
+// and by night its map is never asked for.
+test("the sun stays in the scene by night, dark and without a shadow pass", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-12-21T23:00:00+01:00"));
+  expect(sun.visible).toBe(true);
+  expect(sun.intensity).toBe(0);
+  expect(sunRig.shadowPending()).toBe(false);
+  sunRig.invalidateShadow();
+  walkTo(sunRig, 800, 0);
+  expect(sunRig.shadowPending()).toBe(false);
+  sunRig.update(new Date("2026-06-21T12:00:00+02:00"));
+  expect(sun.visible).toBe(true);
+  expect(sunRig.shadowPending()).toBe(true);
+});
+
 // The shadow camera is a streaming camera: a frustum left behind keeps its
-// tiles loaded. three updates it only while drawing the shadow, which an
-// invisible sun (at night) never does.
+// tiles loaded. three updates it only while drawing the shadow, which by
+// night it never does.
 for (const [when, date] of [
   ["by night", "2026-12-21T23:00:00+01:00"],
   ["by day", "2026-06-21T12:00:00+02:00"],
 ] as const) {
   test(`the shadow camera follows the player ${when}`, () => {
-    const { sunRig, sun } = rig();
+    const { sunRig } = rig();
     sunRig.update(new Date(date));
-    expect(sun.visible).toBe(when === "by day");
     walkTo(sunRig, 0, 0);
     const before = new Vector3().setFromMatrixPosition(
       sunRig.shadowCamera.matrixWorld
