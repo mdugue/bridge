@@ -1,5 +1,11 @@
 # Plan 068: Window axes from street photos — spike result
 
+> **Superseded (2026-10-09)** by [ADR 0049](../adr/0049-windows-drawn-by-the-clay.md):
+> the photos now drive windows on every house through what does not move
+> with the camera — the rhythm, not the positions. See *What came of it*
+> at the end; this plan stays the record of why the positions are not
+> measured.
+
 > **Executor instructions**: Read fully first. The window-grid veto
 > (`docs/transformations.md`, discontinued table) was loosened on
 > 2026-10-07 for one case only: window axes **measured** in open street
@@ -14,7 +20,7 @@
 - **Effort**: L (pose refinement and facade rectification are the bulk)
 - **Risk**: HIGH — a wrongly placed axis is an invented one
 - **Planned at**: 2026-10-07
-- **Status**: **BLOCKED** on pose accuracy — nothing drawn (Mapillary tried 2026-10-07)
+- **Status**: **SUPERSEDED** (2026-10-09, ADR 0049) — the rhythm is drawn on every house; the axes' positions stay BLOCKED on pose accuracy (Mapillary tried 2026-10-07)
 
 ## What the spike found (Panoramax, spawn tile `33412_5656_2_sn`)
 
@@ -108,3 +114,22 @@ invented axis by the veto's rule.
 
 Revisit when (1) is possible; until then the facades keep the storey
 lines, the *Gliederung* (plinth, cornices, shop zones) and the doors.
+
+## What came of it (2026-10-09)
+
+The way round the poses was to measure only what does not move with the
+camera. `pipeline/bake/facade_traits.py` and `windows.py` read per wall,
+from Mapillary's panoramas, the column profile's period (the axis
+spacing) and its peak (a regular or a loose grid), the row profile's
+period (the storey), the openings' width and proportion and ornament —
+each feature only where two sequences agree at Spearman ρ ≥ 0.6. The
+clay draws windows from that rhythm on every house (ADR 0049, PR #143):
+over Dresden's fifteen tiles 891 buildings carry their own measured
+rhythm, 4 823 borrow a measured neighbour's of the same roof form and
+eave, and 31 361 take their type's, whose numbers are the photos'
+medians. The drawing is the clay's recess per window, not pencil lines
+(step 5 above).
+
+What this plan wanted beyond that — each axis where the photo saw it —
+is still blocked on step 1: the axes are centred on each wall, and a
+measured position would need poses good to about 0.2 m along the wall.
