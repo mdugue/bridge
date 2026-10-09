@@ -942,7 +942,11 @@ the loading screen sits under it. The tileset's extras reach the HUD as
 soon as they are read (`onSiteInfo`: places, minimap, sun readout). A
 place, a map spot or a snapshot picked before the first frame boots the
 scene again from there (`initialView`, or `initialCamera` for a
-snapshot), the same way a recovered page starts on its own tile.
+snapshot), the same way a recovered page starts on its own tile — a
+picked place from above the top of its tile's box, since its height is
+over a ground not yet known (`lib/city/boot-start.ts`). Each boot waits
+for the one before it to settle, so quick picks never hold two
+renderers at once, and the page keeps one crash trail across them.
 Everything else is the tiles renderer's call: it loads and
 unloads by screen-space error from both cameras, and a `DressingPlugin`
 (`tile-stream.ts`) dresses each landing tile inside the renderer's own

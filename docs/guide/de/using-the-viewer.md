@@ -52,7 +52,8 @@ Karte anklicken oder einen Snapshot anwenden: Das Laden beginnt dann
 dort neu (der Ladebildschirm nennt ihn als *Start*), und du kommst gleich
 dort an statt am üblichen Startpunkt mit anschließender Reise. Sonne,
 Uhrzeit und Look lassen sich ebenfalls schon einstellen; Modell, die
-Werkzeuge und das Speichern eines Bildes warten, bis die Szene steht.
+Werkzeuge, *Sicht merken*, der Klang und das Speichern eines Bildes
+warten, bis die Szene steht.
 
 ## Bewegen
 

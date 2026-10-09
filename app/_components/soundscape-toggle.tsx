@@ -58,6 +58,8 @@ function preferAmbientSession() {
 
 export interface SoundscapeControl {
   on: boolean;
+  /** it can be switched on: the scene is running and the veil gone */
+  ready: boolean;
   toggle: () => void;
 }
 
@@ -238,7 +240,7 @@ export function useSoundscape({
     []
   );
 
-  return { on, toggle };
+  return { on, ready, toggle };
 }
 
 /** The speaker glyph in the HUD corner while the soundscape plays. */

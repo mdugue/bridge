@@ -52,7 +52,7 @@ import { BootError, layerErrorText } from "./boot-error";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
 import { startCrashReports } from "./crash-reports";
-import { startCrashTrail } from "./crash-trail";
+import { type CrashTrail, startCrashTrail } from "./crash-trail";
 import { GpuFailureCard } from "./gpu-failure-card";
 import {
   peekRecoverySnapshot,
@@ -142,6 +142,28 @@ type Status =
   | { phase: "error"; message: string }
   | { phase: "loading" }
   | { phase: "running" };
+
+/**
+ * What stopped the boot, for its card: the scene's own failure (tried
+ * again by a reload — not without a GPU, where that cannot help), or the
+ * data manifest that never came (city-walk-client.tsx tries again). Null
+ * while nothing has.
+ */
+function bootFailureOf(
+  status: Status,
+  supported: boolean,
+  manifestError: Props["manifestError"]
+): { message: string; onRetry?: () => void } | null {
+  if (status.phase === "error") {
+    return {
+      message: status.message,
+      onRetry: supported ? () => location.reload() : undefined,
+    };
+  }
+  return manifestError
+    ? { message: manifestError.message, onRetry: manifestError.retry }
+    : null;
+}
 
 // Evaluated once in the browser (the component is loaded with ssr: false).
 const INITIAL_DATE = new Date();
@@ -573,7 +595,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
    * Somewhere to go, from the panel: a glide once the scene is up, before
    * that the place the scene starts at — a boot already under way is
    * dropped and starts again there, so the page loads that place's tile
-   * first instead of the spawn's and then the way to it.
+   * first instead of the spawn's and then the way to it. After a failed
+   * boot that is trying again, from there; without a GPU the scene never
+   * boots (the panel's travel is off then).
    */
   const goTo = (pick: StartPick) => {
     const h = handleRef.current;
@@ -585,6 +609,10 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       }
       return;
     }
+    if (!supported) {
+      return;
+    }
+    setStatus({ phase: "loading" });
     setProgress({ fractions: {}, skipped: {} });
     setStart(pick);
   };
@@ -596,6 +624,30 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     setLandcoverTiles(info.landcoverTiles);
     setLandmarks(info.landmarks);
   }, []);
+
+  // This page's crash trail, from before the renderer exists: a page the
+  // browser kills leaves its last steps for the next load (crash-trail.ts),
+  // which reports them where the build has a DSN (crash-reports.ts). One
+  // per mount, not per boot: a place picked while loading boots the scene
+  // again, which the trail notes — it is still the same page, and the
+  // error tracker hears of one session (ADR 0043), not one per pick.
+  const trailRef = useRef<CrashTrail | null>(null);
+  const pageTrail = useCallback(() => {
+    trailRef.current ??= startCrashTrail(startCrashReports() ?? undefined);
+    return trailRef.current;
+  }, []);
+  useEffect(
+    () => () => {
+      trailRef.current?.end();
+      trailRef.current = null;
+    },
+    []
+  );
+  // The last boot, settled: running, or failed or aborted and torn down. A
+  // boot waits for the one before it, so picks in quick succession never
+  // hold two renderers (two GPU devices) at once — and a boot aborted
+  // while it waited never creates one.
+  const lastBoot = useRef<Promise<void>>(Promise.resolve());
 
   const subscribePose = useCallback((cb: (pose: PlayerPose) => void) => {
     poseListeners.current.add(cb);
@@ -623,10 +675,11 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     let streamFallback: ReturnType<typeof setTimeout> | undefined;
     const beginStreaming = () => handleRef.current?.startStreaming();
     const aborter = new AbortController();
-    // This page's crash trail, from before the renderer exists: a page the
-    // browser kills leaves its last steps for the next load (crash-trail.ts),
-    // which reports them where the build has a DSN (crash-reports.ts).
-    const trail = startCrashTrail(startCrashReports() ?? undefined);
+    const trail = pageTrail();
+    if (start) {
+      // (not which: the reports carry no position, ADR 0043)
+      trail.note("boot restarted", "a place picked while loading");
+    }
     // Back where the player stood before the GPU was lost (gpu-recovery.ts):
     // read now, taken once the scene is up — a boot that StrictMode aborts
     // leaves it for the next.
@@ -639,7 +692,13 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       recovery.current?.prepare(restored);
     }
 
-    loadScene()
+    let settled = () => {};
+    const previous = lastBoot.current;
+    lastBoot.current = new Promise((resolve) => {
+      settled = resolve;
+    });
+    previous
+      .then(loadScene)
       .then(({ createCityWalkApp }) => {
         if (aborter.signal.aborted) {
           throw new DOMException("CityWalk startup aborted", "AbortError");
@@ -860,12 +919,12 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
             message: err instanceof Error ? err.message : String(err),
           });
         }
-      });
+      })
+      .finally(settled);
 
     return () => {
       cancelled = true;
       aborter.abort();
-      trail.end();
       // The card belongs to the scene that marked its building: a route
       // kept hidden (and shown again) boots a new scene without that mark.
       setInquiry(null);
@@ -894,6 +953,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     syncTime,
     sayHud,
     applySiteInfo,
+    pageTrail,
   ]);
 
   const copySnapshot = () => {
@@ -1003,6 +1063,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   );
   const percent = loadPercent(progress.fractions, progress.skipped);
   const booted = status.phase === "running";
+  const failure = bootFailureOf(status, supported, manifestError);
 
   return (
     <SidebarProvider
@@ -1017,11 +1078,15 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       {/* No text selection or callout over the scene: a long press asks a
           building (ADR 0042), it must not also mark the HUD's text. Its own
           stacking context (isolate): the loading screen covers the scene,
-          never the panel, which is open while the city loads. */}
+          never the panel, which is open while the city loads. The cards
+          that stop the page (a failed boot, a lost GPU, the crash report)
+          stand outside it, over the panel too. */}
       <div className="absolute inset-0 isolate overflow-hidden bg-[image:var(--hud-scrim)] select-none [-webkit-touch-callout:none]">
         <div className="absolute inset-0" ref={mountRef} />
 
-        {veilUp && (
+        {/* Not over a failure: its card is what there is to read, and to
+            click (it tries again). */}
+        {veilUp && failure === null && (
           <ShellLoadScreen
             destination={start?.label}
             handedOver={status.phase === "running"}
@@ -1032,36 +1097,12 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
 
         <SettingsToggle />
 
-        <CrashReport />
-
-        {gpuFailure !== null && (
-          <GpuFailureCard
-            detail={gpuFailure}
-            onLighter={() => reloadAfterFailure(true)}
-            onReload={() => reloadAfterFailure(false)}
-          />
-        )}
-
         {exportVeil && (
           <div
             aria-hidden
             className="absolute inset-0 z-10 bg-background/80 backdrop-blur-md"
             data-testid="export-veil"
           />
-        )}
-
-        {status.phase === "error" ? (
-          <BootError
-            message={status.message}
-            onRetry={supported ? () => location.reload() : undefined}
-          />
-        ) : (
-          manifestError && (
-            <BootError
-              message={manifestError.message}
-              onRetry={manifestError.retry}
-            />
-          )
         )}
 
         {booted && (
@@ -1128,6 +1169,20 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         )}
       </div>
 
+      <CrashReport />
+
+      {gpuFailure !== null && (
+        <GpuFailureCard
+          detail={gpuFailure}
+          onLighter={() => reloadAfterFailure(true)}
+          onReload={() => reloadAfterFailure(false)}
+        />
+      )}
+
+      {failure && (
+        <BootError message={failure.message} onRetry={failure.onRetry} />
+      )}
+
       <SceneSidebar
         dataLayerDetail={{
           bikeLayer: (
@@ -1153,6 +1208,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         }}
         applySnapshot={applySnapshot}
         bounds={bounds}
+        canTravel={supported}
         coarse={coarse}
         copySnapshot={copySnapshot}
         day={time.day}

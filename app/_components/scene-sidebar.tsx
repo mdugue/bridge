@@ -856,6 +856,11 @@ export interface SceneSidebarProps {
    *  where it starts */
   onTravel: (view: ViewpointGeometry, label?: string) => void;
   /**
+   * The scene can start (the browser has a GPU it draws with): without
+   * one a place, or a snapshot, has nowhere to go.
+   */
+  canTravel: boolean;
+  /**
    * The scene is up. Before that the panel is already open — places, the
    * map, the sun and the look can be chosen while the city loads — but
    * what needs a camera (Modell, the tools, the pictures) waits.
@@ -948,6 +953,8 @@ export function SceneSidebar(props: SceneSidebarProps) {
               />
             )}
             <PlacesList
+              canRemember={props.ready}
+              canTravel={props.canTravel}
               onForget={() => props.setRememberedView(null)}
               onRemember={() => {
                 const here = handleRef.current?.captureViewpoint();
@@ -1086,6 +1093,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
                   Kopieren
                 </Button>
                 <Button
+                  disabled={!props.canTravel}
                   onClick={props.applySnapshot}
                   size="sm"
                   type="button"
@@ -1146,6 +1154,9 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 </FieldLabel>
                 <Switch
                   checked={props.sound.on}
+                  // (it starts once the city is up: before, a switch that
+                  // stayed off would say nothing)
+                  disabled={!(props.sound.on || props.sound.ready)}
                   id="soundscape"
                   onCheckedChange={props.sound.toggle}
                   size="sm"
