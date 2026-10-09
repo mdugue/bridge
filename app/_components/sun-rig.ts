@@ -105,7 +105,7 @@ export interface SunRig {
   /** True when the next render will redraw the shadow map. */
   shadowPending: () => boolean;
   /** Re-aims sun, sky dome, fog and fill light for the given instant. */
-  update: (date: Date) => SunState;
+  update: (date: Date, preview?: boolean) => SunState;
 }
 
 const SUN_INTENSITY = 2.4;
@@ -451,7 +451,7 @@ export function createSunRig(
     }
   };
 
-  const update = (date: Date): SunState => {
+  const update = (date: Date, preview = false): SunState => {
     const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
     dir.set(d.x, d.y, d.z);
     sunDirectionOut?.copy(dir);
@@ -477,7 +477,7 @@ export function createSunRig(
     fogColor.value.set(palette.fog);
     sky.setHaze(palette.fog);
     mirrored.setHaze(palette.fog);
-    reflection?.refresh(dir);
+    reflection?.refresh(dir, preview);
     paletteBackground = new Color(palette.fog).getHex();
     if (scene.background instanceof Color && !parallel) {
       scene.background.set(palette.fog);

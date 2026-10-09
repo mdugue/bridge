@@ -375,7 +375,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
   const applySceneTime = useCallback(
-    (date: Date) => handleRef.current?.setSun(date),
+    (date: Date, preview?: boolean) => handleRef.current?.setSun(date, preview),
     []
   );
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
@@ -1061,6 +1061,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           subscribePose={subscribePose}
           sun={time.sun}
           tab={tab}
+          previewSun={time.preview}
           updateSun={time.set}
         />
       )}

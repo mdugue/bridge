@@ -676,6 +676,7 @@ function SunControls({
   minutes,
   onDefaultTime,
   onStudy,
+  previewSun,
   sun,
   updateSun,
 }: {
@@ -684,9 +685,15 @@ function SunControls({
   minutes: number;
   onDefaultTime: () => void;
   onStudy: () => void;
+  previewSun: (day: Date, minutes: number) => void;
   sun: SunState | null;
   updateSun: (day: Date, minutes: number) => void;
 }) {
+  // The minute under the thumb while it moves: the thumb and the clock show
+  // it at once, while the scene (once a frame) and the rest of the HUD (as
+  // a transition) follow behind; letting go hands it over as the minute.
+  const [moving, setMoving] = useState<number | null>(null);
+  const shown = moving ?? minutes;
   const times = latLng ? getTimes(day, latLng.lat, latLng.lng) : null;
   const sunrise = times?.sunrise;
   const sunset = times?.sunset;
@@ -739,7 +746,7 @@ function SunControls({
           </PopoverContent>
         </Popover>
         <span className="flex h-7.5 items-center rounded-lg border px-2.5 font-medium font-mono text-xs tabular-nums">
-          {formatMinutes(minutes)}
+          {formatMinutes(shown)}
         </span>
       </div>
       <Slider
@@ -748,12 +755,18 @@ function SunControls({
         id="sun-time"
         max={24 * 60 - 1}
         min={0}
-        onValueChange={(value) =>
-          updateSun(day, Number(Array.isArray(value) ? value[0] : value))
-        }
+        onValueChange={(value) => {
+          const next = Number(Array.isArray(value) ? value[0] : value);
+          setMoving(next);
+          previewSun(day, next);
+        }}
+        onValueCommitted={(value) => {
+          setMoving(null);
+          updateSun(day, Number(Array.isArray(value) ? value[0] : value));
+        }}
         step={1}
         style={{ "--sun-gradient": gradient } as CSSProperties}
-        value={[minutes]}
+        value={[shown]}
       />
       <div className="flex justify-between font-mono text-[10px] text-muted-foreground leading-none">
         <span>0:00</span>
@@ -851,6 +864,9 @@ export interface SceneSidebarProps {
   sun: SunState | null;
   tab: SceneTabId;
   updateSun: (day: Date, minutes: number) => void;
+  /** a step of a time drag (scene-time.ts `preview`): the scene follows
+   *  once a frame, the HUD behind the frames */
+  previewSun: (day: Date, minutes: number) => void;
 }
 
 export function SceneSidebar(props: SceneSidebarProps) {
@@ -967,6 +983,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
               onStudy={props.onStudy}
               latLng={props.latLng}
               minutes={props.minutes}
+              previewSun={props.previewSun}
               sun={props.sun}
               updateSun={props.updateSun}
             />
