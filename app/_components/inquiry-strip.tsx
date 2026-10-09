@@ -24,7 +24,7 @@ import {
   inquiryCard,
 } from "@/lib/city/inquiry";
 import { cardCredits } from "@/lib/city/card-lines";
-import { TOLERANCE_PX } from "./inquiry-probe";
+import { TOLERANCE_PX } from "@/lib/city/inquiry";
 import { useSite } from "./site-context";
 
 /** The icon a candidate is drawn with. */

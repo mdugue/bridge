@@ -15,7 +15,7 @@ import { BootError } from "./boot-error";
 import { type FetchedBytes, fetchBytes, isAbortError } from "./fetch-optional";
 import { pageSafety } from "./gpu-safety";
 import { LoadScreen } from "./load-screen";
-import { currentSceneBudget, type SceneBudget } from "./scene-profile";
+import { currentSceneBudget } from "./scene-profile";
 import { SiteProvider } from "./site-context";
 import { siteById } from "@/sites";
 
@@ -49,13 +49,15 @@ const CityWalk = dynamic(() => import("./city-walk"), {
 });
 
 /**
- * The viewer chunk does not depend on the manifest: SiteViewer starts both
- * at once — next/dynamic alone starts the import only once <CityWalk> first
- * renders, after the manifest's round trip. The same module, so the same
- * chunk. Called from an effect, never at module scope: this module renders
- * on the server too, and three must not load there.
+ * The viewer's two chunks — the HUD (city-walk.tsx) and the scene with
+ * three.js (create-app.ts, which the HUD imports only when it boots) — do
+ * not depend on the manifest: SiteViewer starts all three at once. The same
+ * modules, so the same chunks. Called from an effect, never at module
+ * scope: this module renders on the server too, and three must not load
+ * there.
  */
-const loadViewer = () => import("./city-walk");
+const loadViewer = () =>
+  Promise.all([import("./city-walk"), import("./create-app")]);
 
 /**
  * The artifact manifest (logical → content-hashed file names, see
@@ -202,23 +204,35 @@ function SiteViewer({ base }: { base: string }) {
   // streams, the device's safety level) is read from the page ONCE, here,
   // and handed down; the scene never re-reads the window. The lite profile
   // streams the spawn tile alone.
-  const setup = useMemo(() => {
-    if (manifest === undefined || safety === null) {
+  // The HUD mounts as soon as the budget is made; the scene inside it waits
+  // for the manifest that names its tileset. The panel is usable meanwhile.
+  const budget = useMemo(
+    () => (safety === null ? null : currentSceneBudget(safety)),
+    [safety]
+  );
+  const tilesetUrl = useMemo(() => {
+    if (manifest === undefined || budget === null) {
       return null;
     }
-    const budget: SceneBudget = currentSceneBudget(safety);
     const tileset = budget.neighbourTiles ? TILESET_FILE : TILESET_SPAWN_FILE;
-    return { budget, tilesetUrl: manifestUrl(manifest, tileset, base) };
-  }, [base, manifest, safety]);
-  if (failed !== undefined) {
-    return (
+    return manifestUrl(manifest, tileset, base);
+  }, [base, budget, manifest]);
+  if (!budget) {
+    return failed === undefined ? (
+      <BootScreen />
+    ) : (
       <div className="relative h-full w-full bg-[image:var(--hud-scrim)]">
         <BootError message={failed} onRetry={retry} />
       </div>
     );
   }
-  if (!setup) {
-    return <BootScreen />;
-  }
-  return <CityWalk budget={setup.budget} tilesetUrl={setup.tilesetUrl} />;
+  return (
+    <CityWalk
+      budget={budget}
+      manifestError={
+        failed === undefined ? undefined : { message: failed, retry }
+      }
+      tilesetUrl={tilesetUrl}
+    />
+  );
 }

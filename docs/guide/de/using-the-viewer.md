@@ -46,6 +46,14 @@ Moment, etwa bei einem langen Flug, zeigt ein kleiner Hinweis *Umgebung
 lädt* oben im Bild (siehe
 [Wie ein Besuch abläuft](./how-it-works.md#wie-ein-besuch-abläuft)).
 
+Die Seitenleiste ist von Anfang an da, über dem Ladebildschirm. Schon
+während die Stadt lädt, kannst du einen Ort wählen, einen Punkt auf der
+Karte anklicken oder einen Snapshot anwenden: Das Laden beginnt dann
+dort neu (der Ladebildschirm nennt ihn als *Start*), und du kommst gleich
+dort an statt am üblichen Startpunkt mit anschließender Reise. Sonne,
+Uhrzeit und Look lassen sich ebenfalls schon einstellen; Modell, die
+Werkzeuge und das Speichern eines Bildes warten, bis die Szene steht.
+
 ## Bewegen
 
 | Eingabe (Desktop) | Wirkung |
