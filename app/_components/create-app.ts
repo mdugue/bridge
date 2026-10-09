@@ -30,8 +30,8 @@ import {
   type GpuLoss,
   type SafetyLevel,
   shadowTilesStream,
-  startTileOf,
 } from "@/lib/city/gpu-safety";
+import { bootingPose, startOf } from "@/lib/city/boot-start";
 import { createGround } from "@/lib/city/ground";
 import {
   createPageLifecycle,
@@ -82,7 +82,11 @@ import {
   type ViewpointGeometry,
 } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
+import {
+  parseTilesetExtras,
+  type TilesetExtras,
+  tileTopsOf,
+} from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import { createCameraPose, type FollowAim } from "./camera-pose";
@@ -936,28 +940,6 @@ function unionBounds(extras: TilesetExtras): TerrainBounds {
   );
 }
 
-/**
- * Where the boot starts: a recovered page's camera, else a place picked in
- * the HUD while loading, each only on a tile of the site; and the tile the
- * boot waits for — theirs, or the spawn's.
- */
-function startOf<
-  T extends { bounds: readonly [number, number, number, number] },
->(
-  opts: Pick<CityWalkOptions, "initialCamera" | "initialView">,
-  tiles: readonly T[]
-): { picked?: ViewpointGeometry; restored?: CameraState; spawn: T } {
-  const onCamera = startTileOf(tiles, opts.initialCamera?.epsg);
-  if (onCamera) {
-    return { restored: opts.initialCamera, spawn: onCamera };
-  }
-  const onView = startTileOf(tiles, opts.initialView?.epsg);
-  if (onView) {
-    return { picked: opts.initialView, spawn: onView };
-  }
-  return { spawn: tiles[0] };
-}
-
 async function bootApp(
   opts: CityWalkOptions,
   renderer: WebGPURenderer,
@@ -1016,13 +998,13 @@ async function bootApp(
   stage("buildings", 0);
   // What the viewer needs before any content: the frame and the tile list.
   const tilesetUrl = new URL(opts.tilesetUrl, window.location.href).href;
-  const extras = parseTilesetExtras(
-    await fetchRequiredJson(tilesetUrl, opts.signal)
-  );
+  const tileset = await fetchRequiredJson<unknown>(tilesetUrl, opts.signal);
+  const extras = parseTilesetExtras(tileset);
   ensureAlive();
   const { offset } = extras;
   // The tile the boot starts on and waits for: the spawn tile, or the one
-  // a recovered page's camera stands on (lib/city/gpu-safety.ts).
+  // a recovered page's camera, or a place picked in the HUD while the page
+  // was loading, stands on (lib/city/boot-start.ts).
   const { picked, restored, spawn } = startOf(opts, extras.tiles);
   const siteBounds = unionBounds(extras);
 
@@ -1643,28 +1625,30 @@ async function bootApp(
   // (below) — the height is above the ground, which is not there yet. A
   // recovered page starts where its player stood instead, on the tile the
   // boot waits for (`spawn`), on foot or in the air (Modell is the HUD's
-  // to put back): its first update streams that place, not the spawn. It
-  // boots looking straight down (clamped to the pitch limit) onto that
-  // tile: a pose that looks at the sky, or out past the site's edge, from
-  // the air sees no tile — nothing would load, and by night or from safety
-  // level 2 no shadow camera streams one either, so the boot would wait
-  // for ever. Its own aim goes back once the tile has landed (below, and
-  // the HUD's after the first frame). A place picked in the HUD while the
-  // page was loading (`initialView`) boots the same way, looking down onto
-  // its tile, and is put on its vantage once that tile has landed.
+  // to put back): its first update streams that place, not the spawn; a
+  // place picked in the HUD while the page was loading (`initialView`)
+  // likewise. Both boot looking straight down onto that tile, the picked
+  // place from above the tile's top (lib/city/boot-start.ts): a pose that
+  // sees no tile loads none, and by night or from safety level 2 no
+  // shadow camera streams one either, so the boot would wait for ever.
+  // Their own pose goes back once the tile has landed (below, and the
+  // HUD's after the first frame).
   const spawnView = picked ?? spawnViewpoint(opts.site);
   /** the boot does not start on the spawn vantage, which looks at its tile */
   const startsElsewhere = restored !== undefined || picked !== undefined;
-  const placeStart = (booting = false) => {
-    if (restored) {
-      pose.applyCameraState(
-        booting ? { ...restored, pitchDeg: -90 } : restored
-      );
+  const booting = bootingPose(
+    { picked, restored },
+    spawnView,
+    tileTopsOf(tileset)[extras.tiles.indexOf(spawn)],
+    offset
+  );
+  const placeStart = (boot = false) => {
+    const camera = boot ? "camera" in booting && booting.camera : restored;
+    if (camera) {
+      pose.applyCameraState(camera);
       return;
     }
-    pose.placeAt(
-      booting && picked ? { ...spawnView, pitchDeg: -90 } : spawnView
-    );
+    pose.placeAt(spawnView);
   };
   placeStart(true);
 
