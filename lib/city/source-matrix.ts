@@ -27,7 +27,8 @@ export type Reason =
   | "noTrafficCounts"
   | "noLiveBikes"
   | "noTrams"
-  | "panoramasNotRead";
+  | "panoramasNotRead"
+  | "noPanoramas";
 
 export interface Cell {
   quality: Quality;
@@ -89,6 +90,8 @@ const REASONS: Record<Lang, Record<Reason, string>> = {
     noTrams: "The city has no trams.",
     panoramasNotRead:
       "The pipeline has not measured this city's street photos (Mapillary) yet.",
+    noPanoramas:
+      "Mapillary has no street panoramas here, only flat photos, which the measurement cannot place on a wall.",
   },
   de: {
     noDlm:
@@ -114,6 +117,8 @@ const REASONS: Record<Lang, Record<Reason, string>> = {
     noTrams: "Die Stadt hat keine Straßenbahn.",
     panoramasNotRead:
       "Die Pipeline hat die Straßenfotos (Mapillary) dieser Stadt noch nicht vermessen.",
+    noPanoramas:
+      "Mapillary hat hier keine Straßenpanoramen, nur flache Fotos, die die Vermessung nicht auf eine Wand legen kann.",
   },
 };
 
@@ -142,6 +147,9 @@ const none = (reason: Reason): Cell => ({
 
 /** Lands without a laser scan: not published openly, or not read yet. */
 const SCAN_GAPS: Partial<Record<string, Reason>> = { hh: "noLsc" };
+
+/** Sites whose street photos give no shop windows (checked 2026-10-09). */
+const PANORAMA_GAPS: Partial<Record<string, Reason>> = { unna: "noPanoramas" };
 
 /** Registers whose records lack something the viewer then derives. */
 const CADASTRE_GAPS: Partial<Record<string, Reason>> = { hamburg: "noHeight" };
@@ -251,7 +259,10 @@ const ROWS: Row[] = [
       de: "Schaufenster, Fassadenbild",
     },
     // measured in the site's panoramas (Site.mapillary)
-    cell: (s) => (s.mapillary ? best("Mapillary") : none("panoramasNotRead")),
+    cell: (s) =>
+      s.mapillary
+        ? best("Mapillary")
+        : none(PANORAMA_GAPS[s.id] ?? "panoramasNotRead"),
   },
   {
     label: {

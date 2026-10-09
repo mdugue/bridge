@@ -19,13 +19,13 @@ Lizenzen) beschreibt [Woher die Daten kommen](./data-sources.md).
 | Baumreihen, Hecken | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
 | Schuppen, weitere Bäume, Heckenhöhen | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁴ | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁵ |
 | Vegetationsfarbe (Vitalität) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟡 DOP RGB (GLI) ⁶ | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) |
-| Schaufenster, Fassadenbild | 🟢 Mapillary | ⚪ — ⁷ | 🟢 Mapillary | 🟢 Mapillary | ⚪ — ⁷ | ⚪ — ⁷ | ⚪ — ⁷ | ⚪ — ⁷ |
+| Schaufenster, Fassadenbild | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | ⚪ — ⁷ | ⚪ — ⁸ | ⚪ — ⁷ |
 | Denkmäler, Brunnen | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
 | Stadtmobiliar, Lampen, Treppen, Mauern, Zäune, Markierungen, Beläge, Sportplätze, Straßenbahn, Anleger | 🔵 OSM + Mapillary | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM |
-| Datenebene: Kfz-Verkehr | 🟢 Zählungen der Stadt | 🟡 Straßenverkehrszählung ⁸ | 🟢 Zählungen der Stadt (Hauptstraßen) | ⚪ — ⁹ | 🟡 Straßenverkehrszählung ⁸ | ⚪ — ⁹ | 🟡 Straßenverkehrszählung ⁸ | 🟢 Zählungen der Stadt |
-| Datenebene: Radverkehr live | 🟢 Zählstellen der Stadt | ⚪ — ¹⁰ | 🟢 Zählstellen der Stadt | ⚪ — ¹⁰ | ⚪ — ¹⁰ | ⚪ — ¹⁰ | ⚪ — ¹⁰ | ⚪ — ¹⁰ |
-| Datenebene: Straßenbahnen (Fahrplan) | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹¹ | ⚪ — ¹¹ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹¹ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹¹ | 🟢 GTFS (DELFI) + OSM |
-| 🟢 aus der besten Quelle | **20** / 22 | **15** / 22 | **12** / 22 | **18** / 22 | **15** / 22 | **15** / 22 | **15** / 22 | **12** / 22 |
+| Datenebene: Kfz-Verkehr | 🟢 Zählungen der Stadt | 🟡 Straßenverkehrszählung ⁹ | 🟢 Zählungen der Stadt (Hauptstraßen) | ⚪ — ¹⁰ | 🟡 Straßenverkehrszählung ⁹ | ⚪ — ¹⁰ | 🟡 Straßenverkehrszählung ⁹ | 🟢 Zählungen der Stadt |
+| Datenebene: Radverkehr live | 🟢 Zählstellen der Stadt | ⚪ — ¹¹ | 🟢 Zählstellen der Stadt | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ |
+| Datenebene: Straßenbahnen (Fahrplan) | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM |
+| 🟢 aus der besten Quelle | **20** / 22 | **16** / 22 | **12** / 22 | **18** / 22 | **16** / 22 | **15** / 22 | **15** / 22 | **12** / 22 |
 
 ## Legende
 
@@ -43,10 +43,11 @@ Lizenzen) beschreibt [Woher die Daten kommen](./data-sources.md).
 5. Die Pipeline liest den Laserscan dieses Landes noch nicht (kein Adapter dafür).
 6. Das offene Luftbild hat keinen Infrarotkanal: Der Vegetationsindex wird aus seinen sichtbaren Farben berechnet (Green Leaf Index) — er unterscheidet Grün von Grau gut, die Vitalität weniger gut.
 7. Die Pipeline hat die Straßenfotos (Mapillary) dieser Stadt noch nicht vermessen.
-8. Die Stadt veröffentlicht keine eigenen Zählungen: Die Straßenverkehrszählung zählt nur Bundes-, Landes- und Kreisstraßen, beide Richtungen zusammen (je zur Hälfte gezeigt).
-9. Keine offenen Zählwerte je Straßenabschnitt: Die Stadt veröffentlicht keine, und die Straßenverkehrszählung reicht nicht bis in ihre Mitte.
-10. Keine offene Radzählstelle, die der Browser live lesen kann (Zählwerte nur jährlich, monatlich oder täglich, oder gar keine).
-11. Die Stadt hat keine Straßenbahn.
+8. Mapillary hat hier keine Straßenpanoramen, nur flache Fotos, die die Vermessung nicht auf eine Wand legen kann.
+9. Die Stadt veröffentlicht keine eigenen Zählungen: Die Straßenverkehrszählung zählt nur Bundes-, Landes- und Kreisstraßen, beide Richtungen zusammen (je zur Hälfte gezeigt).
+10. Keine offenen Zählwerte je Straßenabschnitt: Die Stadt veröffentlicht keine, und die Straßenverkehrszählung reicht nicht bis in ihre Mitte.
+11. Keine offene Radzählstelle, die der Browser live lesen kann (Zählwerte nur jährlich, monatlich oder täglich, oder gar keine).
+12. Die Stadt hat keine Straßenbahn.
 
 ## In jeder Stadt gleich
 

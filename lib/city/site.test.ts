@@ -100,10 +100,14 @@ test("Dresden keeps its tile ids, credits and extract", () => {
     "Lampen, Mülleimer, Schaufenster: Mapillary, CC BY-SA 4.0",
     "Verkehrsmengen: Landeshauptstadt Dresden, dl-de/by-2-0 · Tagesgang: Freie und Hansestadt Hamburg, dl-de/by-2-0 · Radzählstellen: Landeshauptstadt Dresden, dl-de/by-2-0 · Straßenbahn-Fahrplan: DELFI e.V. via gtfs.de, CC BY 4.0",
   ]);
-  // A site without a tree register credits two sources, and its data
-  // layers' in one more line.
-  expect(siteAttribution(SITES.grimma)).toHaveLength(3);
-  expect(siteAttribution(SITES.grimma)[2]).toStartWith(
+  // A site without a tree register credits two sources, the panoramas its
+  // shop windows were measured in (no lamps or bins from them), and its
+  // data layers' in one more line.
+  expect(siteAttribution(SITES.grimma)).toHaveLength(4);
+  expect(siteAttribution(SITES.grimma)[2]).toBe(
+    "Fassaden, Schaufenster: Mapillary, CC BY-SA 4.0"
+  );
+  expect(siteAttribution(SITES.grimma)[3]).toStartWith(
     "Straßenverkehrszählung 2021: Freistaat Sachsen"
   );
   expect(siteTitle(DRESDEN)).toBe("City Walk — Dresden");
