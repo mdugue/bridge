@@ -540,7 +540,8 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   (WebKit colour-manages untagged greyscale even with
   `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
   with neighbouring classes).
-- `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
+- `prepare-data.ts` caches by content in `.cache/prepare-data` (on Vercel
+  `.next/cache/prepare-data`, the folder its build cache keeps; cold run
   ≈ 2 min for fifteen tiles, warm ≈ 1 s; CI restores it between runs): the key covers the inputs'
   contents, `COMMON_SOURCES` (`prepare-data.ts` itself, the site's own
   config, `sites/providers.ts`, `bun.lock`, `patches/`) and every module
