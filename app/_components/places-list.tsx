@@ -18,7 +18,7 @@ const SECTION_LABEL =
   "font-semibold text-[11px] uppercase leading-none tracking-widest text-muted-foreground";
 
 const ROW =
-  "flex h-8 w-full min-w-0 items-center gap-2.5 rounded-md px-2 text-left text-xs hover:bg-accent";
+  "flex h-8 w-full min-w-0 items-center gap-2.5 rounded-md px-2 text-left text-xs hover:bg-accent disabled:pointer-events-none disabled:opacity-50";
 
 /** What a row's icon says: on foot, from the air, or a landmark. */
 function PlaceIcon({ place }: { place: Place }) {
@@ -48,10 +48,12 @@ function titleOf(place: Place): string {
 }
 
 function PlaceRow({
+  disabled,
   onTravel,
   place,
   showKey,
 }: {
+  disabled: boolean;
   onTravel: (place: Place) => void;
   place: Place;
   showKey: boolean;
@@ -61,6 +63,7 @@ function PlaceRow({
       <button
         className={ROW}
         data-place={place.id}
+        disabled={disabled}
         onClick={() => onTravel(place)}
         title={titleOf(place)}
         type="button"
@@ -126,6 +129,8 @@ function RememberedRow({
  * travels there (in Modell: centres the picture on it).
  */
 export function PlacesList({
+  canRemember,
+  canTravel,
   onForget,
   onRemember,
   onRestore,
@@ -134,6 +139,10 @@ export function PlacesList({
   remembered,
   showKeys,
 }: {
+  /** there is a view to keep: the scene is up */
+  canRemember: boolean;
+  /** a row can go somewhere: the scene is up or can start (a GPU) */
+  canTravel: boolean;
   onForget: () => void;
   onRemember: () => void;
   onRestore: () => void;
@@ -160,7 +169,8 @@ export function PlacesList({
         {!remembered && (
           <button
             aria-label="Aktuelle Sicht merken"
-            className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+            className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
+            disabled={!canRemember}
             onClick={onRemember}
             title="Die aktuelle Sicht merken — sie steht dann oben in der Liste"
             type="button"
@@ -194,6 +204,7 @@ export function PlacesList({
         )}
         {shown.map((place) => (
           <PlaceRow
+            disabled={!canTravel}
             key={place.id}
             onTravel={onTravel}
             place={place}

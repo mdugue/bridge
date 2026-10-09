@@ -251,7 +251,7 @@ abdunkeln. Der Viewer nutzt eines davon, *GTAO* (Ground-Truth Ambient
 Occlusion), in halber Auflösung.
 
 **Tiefenschärfe (DoF)** — die fotografische Unschärfe hinter der
-Fokusentfernung (der Vordergrund bleibt scharf); hier standardmäßig auf das Fadenkreuz fokussiert. Nicht
+Fokusentfernung (der Vordergrund bleibt scharf); hier standardmäßig auf die Bildmitte fokussiert. Nicht
 auf Telefonen.
 
 **Nachbearbeitung (Post-Processing)** — Effekte auf dem fertigen Bild:
@@ -265,7 +265,7 @@ der Hauptkostentreiber der Szene, weshalb Handys weniger Pixel rendern.
 Schattenkamera) sieht; alles außerhalb wird übersprungen.
 
 **BVH** — *Bounding Volume Hierarchy*, ein Suchbaum über Dreiecke, der
-„was liegt unter dem Fadenkreuz“ und Kollisionsprüfungen schnell macht.
+„was liegt unter dem Mauszeiger“ und Kollisionsprüfungen schnell macht.
 
 **Pixelverhältnis (DPR)** — wie viele gerenderte Pixel je Bildschirmpixel;
 auf Handys gesenkt, um Füllrate zu sparen.

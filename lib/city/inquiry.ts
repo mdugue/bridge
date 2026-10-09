@@ -81,7 +81,7 @@ export type Inquiry = BuildingInquiry | FeatureInquiry;
  * inquiry, and which one the card shows.
  */
 export interface InquiryAlong {
-  /** where it was asked (NDC), null at the crosshair */
+  /** where it was asked (NDC), null at the centre */
   at: { x: number; y: number } | null;
   candidates: { distance: number; inquiry: Inquiry; key: string }[];
   selected: number;
@@ -335,3 +335,6 @@ function buildingCard(
     sources,
   };
 }
+
+/** The radius (CSS px) of the outer ring of rays around a tap. */
+export const TOLERANCE_PX = 22;

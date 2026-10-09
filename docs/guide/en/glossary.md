@@ -235,7 +235,7 @@ objects meet the ground, computed from the depth buffer. The viewer uses
 one of them, *GTAO* (ground-truth ambient occlusion), at half resolution.
 
 **Depth of field (DoF)** — the photographic blur beyond the focus
-distance (the foreground stays sharp); here focused on the crosshair by default. Not on phones.
+distance (the foreground stays sharp); here focused on the centre of the view by default. Not on phones.
 
 **Post-processing** — effects applied to the finished image: contact
 shadows, depth of field, anti-aliasing (SMAA; on phones the lighter
@@ -248,7 +248,7 @@ the scene's main cost driver, which is why phones render fewer pixels.
 things outside it are skipped.
 
 **BVH** — *bounding volume hierarchy*, a search tree over triangles that
-makes "what is under the crosshair" and collision checks fast.
+makes "what is under the pointer" and collision checks fast.
 
 **Pixel ratio (DPR)** — how many rendered pixels per screen pixel; lowered
 on phones to save fill-rate.

@@ -37,7 +37,7 @@ import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import type { Landmark } from "@/lib/city/landmarks";
 import { createLookState } from "@/lib/city/look-state";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
-import type { PlayerPose } from "@/lib/city/pose";
+import type { CameraState, PlayerPose } from "@/lib/city/pose";
 import {
   decodeLook,
   encodeSnapshot,
@@ -52,7 +52,7 @@ import { BootError, layerErrorText } from "./boot-error";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
 import { startCrashReports } from "./crash-reports";
-import { startCrashTrail } from "./crash-trail";
+import { type CrashTrail, startCrashTrail } from "./crash-trail";
 import { GpuFailureCard } from "./gpu-failure-card";
 import {
   peekRecoverySnapshot,
@@ -62,14 +62,10 @@ import {
 } from "./gpu-recovery";
 import { raiseSafety } from "./gpu-safety";
 import { VEIL_HOLD_MS } from "./handover";
-import {
-  type CityWalkHandle,
-  type CityWalkStats,
-  createCityWalkApp,
-} from "./create-app";
+import type { CityWalkHandle, CityWalkStats, SiteInfo } from "./create-app";
 import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
-import { type ExportContext, saveImage, saveShadowStudy } from "./image-export";
+import type { ExportContext } from "./image-export";
 import { InquiryCard } from "./inquiry-card";
 import { InquiryStrip, InquiryTapRing } from "./inquiry-strip";
 import { useLiveMode } from "./live-mode";
@@ -84,7 +80,11 @@ import { ModelInstruments } from "./model-instruments";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { updatePocDebug } from "./poc-debug";
 import { postProfileFor, type SceneBudget } from "./scene-profile";
-import { overlook, type ViewpointGeometry } from "@/lib/city/site";
+import {
+  overlook,
+  spawnViewpoint,
+  type ViewpointGeometry,
+} from "@/lib/city/site";
 import {
   BikeCountList,
   TrafficHourLine,
@@ -105,9 +105,32 @@ import { missingPrerequisite } from "./gpu-support";
 interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
   budget: SceneBudget;
-  /** the tileset the scene streams (lib/city/tileset.ts) */
-  tilesetUrl: string;
+  /**
+   * The data manifest could not be read (city-walk-client.tsx): the boot
+   * error says why and tries again.
+   */
+  manifestError?: { message: string; retry: () => void };
+  /**
+   * the tileset the scene streams (lib/city/tileset.ts); null while the
+   * data manifest that names it is still on its way — the HUD is up
+   * already, the scene waits for it
+   */
+  tilesetUrl: string | null;
 }
+
+/**
+ * Where the scene starts when a place was picked before it was up: a
+ * vantage (a place, a spot on the map) or a snapshot's camera, and what to
+ * call it on the loading screen. Null: the spawn.
+ */
+interface StartPick {
+  camera?: CameraState;
+  label: string;
+  view?: ViewpointGeometry;
+}
+
+/** The three.js half of the viewer, loaded beside the HUD (create-app.ts). */
+const loadScene = () => import("./create-app");
 
 /**
  * Two phases, one handover. `loading` is the full-bleed Laden screen; `running`
@@ -120,11 +143,45 @@ type Status =
   | { phase: "loading" }
   | { phase: "running" };
 
+/**
+ * What stopped the boot, for its card: the scene's own failure (tried
+ * again by a reload — not without a GPU, where that cannot help), or the
+ * data manifest that never came (city-walk-client.tsx tries again). Null
+ * while nothing has.
+ */
+function bootFailureOf(
+  status: Status,
+  supported: boolean,
+  manifestError: Props["manifestError"]
+): { message: string; onRetry?: () => void } | null {
+  if (status.phase === "error") {
+    return {
+      message: status.message,
+      onRetry: supported ? () => location.reload() : undefined,
+    };
+  }
+  return manifestError
+    ? { message: manifestError.message, onRetry: manifestError.retry }
+    : null;
+}
+
 // Evaluated once in the browser (the component is loaded with ssr: false).
 const INITIAL_DATE = new Date();
 
 /** A little air after the veil is gone before the heavy work resumes. */
 const STREAM_SETTLE_MS = 250;
+
+/** Whether the mouse is locked to the scene (immersive mode). */
+function usePointerLocked(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      document.addEventListener("pointerlockchange", onChange);
+      return () => document.removeEventListener("pointerlockchange", onChange);
+    },
+    () => document.pointerLockElement !== null,
+    () => false
+  );
+}
 
 /** Floating button that opens the sidebar; hidden while it is open. */
 function SettingsToggle() {
@@ -136,7 +193,7 @@ function SettingsToggle() {
   return (
     <Button
       aria-label="Szeneneinstellungen"
-      className="absolute top-4 right-4 z-20 size-9 rounded-full border-0 bg-hud/85 text-hud-foreground shadow-lg backdrop-blur-lg hover:bg-hud/95"
+      className="absolute top-4 right-4 z-40 size-9 rounded-full border-0 bg-hud/85 text-hud-foreground shadow-lg backdrop-blur-lg hover:bg-hud/95"
       onClick={toggleSidebar}
       size="icon"
       variant="secondary"
@@ -370,7 +427,30 @@ function arriveAt(h: CityWalkHandle, site: Site, say: Say): void {
   say(`Willkommen in ${site.name} — du stehst, wo du bist`);
 }
 
-export default function CityWalk({ budget, tilesetUrl }: Props) {
+/** The camera stands on the vantage (within a few metres of it). */
+function standsAt(h: CityWalkHandle, view: ViewpointGeometry): boolean {
+  const { epsg } = h.getCameraState();
+  return Math.hypot(epsg.x - view.epsg.x, epsg.y - view.epsg.y) < 5;
+}
+
+/**
+ * The loading screen inside the shell: the panel is open over it on a
+ * desktop, so its text keeps clear of the panel, and a place picked there
+ * is named — the scene starts at it.
+ */
+function ShellLoadScreen(props: {
+  destination?: string;
+  handedOver: boolean;
+  percent: number;
+  stages: LoadStageState[];
+}) {
+  const { isMobile, state } = useSidebar();
+  return (
+    <LoadScreen {...props} besidePanel={!isMobile && state === "expanded"} />
+  );
+}
+
+export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   const site = useSite();
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
@@ -380,6 +460,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   );
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
+  const immersive = usePointerLocked();
+  const [aimingCentre, setAimingCentre] = useState(false);
   const hud = useHudMessage();
   const sayHud = hud.say;
   const locate = useLocateMe(handleRef, hud);
@@ -521,6 +603,65 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const [tab, setTab] = useState<SceneTabId>("erkunden");
   const [rememberedView, setRememberedView] =
     useState<ViewpointGeometry | null>(null);
+  // A place picked while the scene loads: the boot starts over there.
+  const [start, setStart] = useState<StartPick | null>(null);
+  /**
+   * Somewhere to go, from the panel: a glide once the scene is up, before
+   * that the place the scene starts at — a boot already under way is
+   * dropped and starts again there, so the page loads that place's tile
+   * first instead of the spawn's and then the way to it. After a failed
+   * boot that is trying again, from there; without a GPU the scene never
+   * boots (the panel's travel is off then).
+   */
+  const goTo = (pick: StartPick) => {
+    const h = handleRef.current;
+    if (h) {
+      if (pick.camera) {
+        h.applyCameraState(pick.camera);
+      } else if (pick.view) {
+        h.flyToViewpoint(pick.view);
+      }
+      return;
+    }
+    if (!supported) {
+      return;
+    }
+    setStatus({ phase: "loading" });
+    setProgress({ fractions: {}, skipped: {} });
+    setStart(pick);
+  };
+  /** The site as the tileset describes it (create-app.ts `onSiteInfo`). */
+  const applySiteInfo = useCallback((info: SiteInfo) => {
+    setBounds(info.terrainBounds);
+    setProvenanceUrl(info.provenanceUrl);
+    setLatLng(info.latLng);
+    setLandcoverTiles(info.landcoverTiles);
+    setLandmarks(info.landmarks);
+  }, []);
+
+  // This page's crash trail, from before the renderer exists: a page the
+  // browser kills leaves its last steps for the next load (crash-trail.ts),
+  // which reports them where the build has a DSN (crash-reports.ts). One
+  // per mount, not per boot: a place picked while loading boots the scene
+  // again, which the trail notes — it is still the same page, and the
+  // error tracker hears of one session (ADR 0043), not one per pick.
+  const trailRef = useRef<CrashTrail | null>(null);
+  const pageTrail = useCallback(() => {
+    trailRef.current ??= startCrashTrail(startCrashReports() ?? undefined);
+    return trailRef.current;
+  }, []);
+  useEffect(
+    () => () => {
+      trailRef.current?.end();
+      trailRef.current = null;
+    },
+    []
+  );
+  // The last boot, settled: running, or failed or aborted and torn down. A
+  // boot waits for the one before it, so picks in quick succession never
+  // hold two renderers (two GPU devices) at once — and a boot aborted
+  // while it waited never creates one.
+  const lastBoot = useRef<Promise<void>>(Promise.resolve());
 
   const subscribePose = useCallback((cb: (pose: PlayerPose) => void) => {
     poseListeners.current.add(cb);
@@ -535,8 +676,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       return;
     }
     // The GPU preflight already failed (see the status initializer): no
-    // renderer, no handle, nothing to clean up.
-    if (!supported) {
+    // renderer, no handle, nothing to clean up. Without the tileset's name
+    // (the manifest is still on its way) the HUD is up and the scene waits.
+    if (!supported || tilesetUrl === null) {
       return;
     }
     let cancelled = false;
@@ -547,158 +689,181 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     let streamFallback: ReturnType<typeof setTimeout> | undefined;
     const beginStreaming = () => handleRef.current?.startStreaming();
     const aborter = new AbortController();
-    // This page's crash trail, from before the renderer exists: a page the
-    // browser kills leaves its last steps for the next load (crash-trail.ts),
-    // which reports them where the build has a DSN (crash-reports.ts).
-    const trail = startCrashTrail(startCrashReports() ?? undefined);
+    const trail = pageTrail();
+    if (start) {
+      // (not which: the reports carry no position, ADR 0043)
+      trail.note("boot restarted", "a place picked while loading");
+    }
     // Back where the player stood before the GPU was lost (gpu-recovery.ts):
     // read now, taken once the scene is up — a boot that StrictMode aborts
     // leaves it for the next.
     const text = peekRecoverySnapshot();
     const parsed = text ? parseSnapshot(text) : null;
     const restored = parsed?.ok ? parsed.snapshot : null;
-    if (restored) {
+    // A place picked in the panel meanwhile wins over the recovered one,
+    // and the time and look the player set are theirs.
+    if (restored && !start) {
       recovery.current?.prepare(restored);
     }
 
-    createCityWalkApp({
-      container,
-      budget,
-      look,
-      site,
-      tilesetUrl,
-      initialCamera: restored?.camera,
-      initialDate: timeNow(),
-      signal: aborter.signal,
-      trail,
-      onStage: ({ id, fraction, skipped: isSkipped }) => {
-        if (cancelled) {
-          return;
+    let settled = () => {};
+    const previous = lastBoot.current;
+    lastBoot.current = new Promise((resolve) => {
+      settled = resolve;
+    });
+    previous
+      .then(loadScene)
+      .then(({ createCityWalkApp }) => {
+        if (aborter.signal.aborted) {
+          throw new DOMException("CityWalk startup aborted", "AbortError");
         }
-        // Deliberately NOT an urgent update. These arrive many times a second
-        // while a tile streams, and urgent work at that rate starves whatever
-        // else React has queued — including, when it was still a transition,
-        // the handover itself, which landed ten seconds late without this.
-        startTransition(() => {
-          setProgress((prev) => ({
-            fractions: { ...prev.fractions, [id]: fraction },
-            skipped: isSkipped ? { ...prev.skipped, [id]: true } : prev.skipped,
-          }));
+        return createCityWalkApp({
+          container,
+          budget,
+          look,
+          site,
+          tilesetUrl,
+          initialCamera: start ? start.camera : restored?.camera,
+          initialView: start?.view,
+          initialDate: timeNow(),
+          onSiteInfo: (info) => {
+            if (!cancelled) {
+              startTransition(() => applySiteInfo(info));
+            }
+          },
+          signal: aborter.signal,
+          trail,
+          onStage: ({ id, fraction, skipped: isSkipped }) => {
+            if (cancelled) {
+              return;
+            }
+            // Deliberately NOT an urgent update. These arrive many times a second
+            // while a tile streams, and urgent work at that rate starves whatever
+            // else React has queued — including, when it was still a transition,
+            // the handover itself, which landed ten seconds late without this.
+            startTransition(() => {
+              setProgress((prev) => ({
+                fractions: { ...prev.fractions, [id]: fraction },
+                skipped: isSkipped
+                  ? { ...prev.skipped, [id]: true }
+                  : prev.skipped,
+              }));
+            });
+          },
+          onLoaded: () => {
+            if (!cancelled) {
+              updatePocDebug({ ready: true });
+            }
+          },
+          onBusy: (isBusy) => {
+            if (!cancelled) {
+              startTransition(() => setStreamingMore(isBusy));
+            }
+          },
+          // A loss raises the level as this page's (`by`): after its own
+          // memory emergency the same incident, renewed rather than raised
+          // again (gpu-safety.ts).
+          onGpuLost: (how) =>
+            !cancelled &&
+            recoverFromGpuLoss(
+              how,
+              recovery.current?.capture() ?? null,
+              budget.safety,
+              (from) => raiseSafety(from, { by: trail.startedAt })
+            )
+              ? () => location.reload()
+              : null,
+          onError: (message) => {
+            // After a fatal one the render has stopped: a tile still in flight
+            // failing must not add a layer's hole under the failure card.
+            if (cancelled || fatal) {
+              return;
+            }
+            // One tile (or one tile's dressing) failed after the first frame: it
+            // leaves a hole, and the rest keeps streaming — the stages still
+            // finish on their own (a failed tile counts as done), so they are
+            // not settled here. A failure before the first frame rejects the
+            // boot instead.
+            setStreamError(layerErrorText(message));
+          },
+          onErrorCleared: () => {
+            // the tile it named came back (a fatal message stays)
+            if (!(cancelled || fatal)) {
+              setStreamError(null);
+            }
+          },
+          onFatal: (message) => {
+            if (!cancelled) {
+              fatal = true;
+              setGpuFailure(message);
+            }
+          },
+          onStats: (s) => {
+            if (cancelled) {
+              return;
+            }
+            updatePocDebug({ stats: s });
+            const h = handleRef.current;
+            startTransition(() => {
+              setStats(s);
+              if (h) {
+                setFootprints(h.getFootprints());
+              }
+            });
+          },
+          onTramStatus: (status) => {
+            if (!cancelled) {
+              startTransition(() => setTramStatus(status));
+            }
+          },
+          onTrafficHour: (status) => {
+            if (!cancelled) {
+              startTransition(() => setTrafficHour(status));
+            }
+          },
+          onBikeCounts: (counters) => {
+            if (!cancelled) {
+              startTransition(() => setBikeCounters(counters));
+            }
+          },
+          onFps: (value) => {
+            if (!cancelled) {
+              // Twice a second, read only in the Erweitert tab's counters.
+              startTransition(() => setFps(value));
+            }
+          },
+          onFollowEnd: () => {
+            if (!cancelled) {
+              liveEnded.current();
+            }
+          },
+          onModeChange: (m) => {
+            if (!cancelled) {
+              setMode(m);
+            }
+          },
+          onModelView: (view) => {
+            if (!cancelled) {
+              // At the pose tick's rate, read by the instruments and the panel.
+              startTransition(() => setModelView(view));
+            }
+          },
+          onInquiry: (asked, met) => {
+            if (!cancelled) {
+              setInquiry(asked);
+              setAlong(met);
+            }
+          },
+          onPose: (pose) => {
+            if (cancelled) {
+              return;
+            }
+            for (const cb of poseListeners.current) {
+              cb(pose);
+            }
+          },
         });
-      },
-      onLoaded: () => {
-        if (!cancelled) {
-          updatePocDebug({ ready: true });
-        }
-      },
-      onBusy: (isBusy) => {
-        if (!cancelled) {
-          startTransition(() => setStreamingMore(isBusy));
-        }
-      },
-      // A loss raises the level as this page's (`by`): after its own
-      // memory emergency the same incident, renewed rather than raised
-      // again (gpu-safety.ts).
-      onGpuLost: (how) =>
-        !cancelled &&
-        recoverFromGpuLoss(
-          how,
-          recovery.current?.capture() ?? null,
-          budget.safety,
-          (from) => raiseSafety(from, { by: trail.startedAt })
-        )
-          ? () => location.reload()
-          : null,
-      onError: (message) => {
-        // After a fatal one the render has stopped: a tile still in flight
-        // failing must not add a layer's hole under the failure card.
-        if (cancelled || fatal) {
-          return;
-        }
-        // One tile (or one tile's dressing) failed after the first frame: it
-        // leaves a hole, and the rest keeps streaming — the stages still
-        // finish on their own (a failed tile counts as done), so they are
-        // not settled here. A failure before the first frame rejects the
-        // boot instead.
-        setStreamError(layerErrorText(message));
-      },
-      onErrorCleared: () => {
-        // the tile it named came back (a fatal message stays)
-        if (!(cancelled || fatal)) {
-          setStreamError(null);
-        }
-      },
-      onFatal: (message) => {
-        if (!cancelled) {
-          fatal = true;
-          setGpuFailure(message);
-        }
-      },
-      onStats: (s) => {
-        if (cancelled) {
-          return;
-        }
-        updatePocDebug({ stats: s });
-        const h = handleRef.current;
-        startTransition(() => {
-          setStats(s);
-          if (h) {
-            setFootprints(h.getFootprints());
-          }
-        });
-      },
-      onTramStatus: (status) => {
-        if (!cancelled) {
-          startTransition(() => setTramStatus(status));
-        }
-      },
-      onTrafficHour: (status) => {
-        if (!cancelled) {
-          startTransition(() => setTrafficHour(status));
-        }
-      },
-      onBikeCounts: (counters) => {
-        if (!cancelled) {
-          startTransition(() => setBikeCounters(counters));
-        }
-      },
-      onFps: (value) => {
-        if (!cancelled) {
-          // Twice a second, read only in the Erweitert tab's counters.
-          startTransition(() => setFps(value));
-        }
-      },
-      onFollowEnd: () => {
-        if (!cancelled) {
-          liveEnded.current();
-        }
-      },
-      onModeChange: (m) => {
-        if (!cancelled) {
-          setMode(m);
-        }
-      },
-      onModelView: (view) => {
-        if (!cancelled) {
-          // At the pose tick's rate, read by the instruments and the panel.
-          startTransition(() => setModelView(view));
-        }
-      },
-      onInquiry: (asked, met) => {
-        if (!cancelled) {
-          setInquiry(asked);
-          setAlong(met);
-        }
-      },
-      onPose: (pose) => {
-        if (cancelled) {
-          return;
-        }
-        for (const cb of poseListeners.current) {
-          cb(pose);
-        }
-      },
-    })
+      })
       .then((h) => {
         if (cancelled) {
           h.dispose();
@@ -707,7 +872,20 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         handle = h;
         handleRef.current = h;
         trail.note("first frame");
-        if (restored) {
+        if (start) {
+          // Not back where the GPU was lost: the player chose a place.
+          if (restored) {
+            takeRecoverySnapshot();
+          }
+          // The boot stood on the camera's spot; Modell only now. A place
+          // off every tile the boot streams (the lite profile's spawn tile
+          // alone) is glided to from the spawn.
+          if (start.camera) {
+            h.applyCameraState(start.camera);
+          } else if (start.view && !standsAt(h, start.view)) {
+            h.flyToViewpoint(start.view);
+          }
+        } else if (restored) {
           // The scene booted there; Modell (where the safety level keeps
           // it) and a place off every tile only now.
           takeRecoverySnapshot();
@@ -722,11 +900,6 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         }
         syncTime();
         setFootprints(h.getFootprints());
-        setBounds(h.terrainBounds);
-        setProvenanceUrl(h.provenanceUrl);
-        setLatLng(h.latLng);
-        setLandcoverTiles(h.landcoverTiles);
-        setLandmarks(h.landmarks);
         updatePocDebug({ handle: h, look, firstFrame: true });
         // The frame the scene goes live in. The loading screen stays up and
         // stops taking input: the city is now rendering behind its glass, and
@@ -760,12 +933,12 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             message: err instanceof Error ? err.message : String(err),
           });
         }
-      });
+      })
+      .finally(settled);
 
     return () => {
       cancelled = true;
       aborter.abort();
-      trail.end();
       // The card belongs to the scene that marked its building: a route
       // kept hidden (and shown again) boots a new scene without that mark.
       setInquiry(null);
@@ -783,7 +956,19 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         look: undefined,
       });
     };
-  }, [budget, look, site, tilesetUrl, supported, timeNow, syncTime, sayHud]);
+  }, [
+    budget,
+    look,
+    site,
+    start,
+    tilesetUrl,
+    supported,
+    timeNow,
+    syncTime,
+    sayHud,
+    applySiteInfo,
+    pageTrail,
+  ]);
 
   const copySnapshot = () => {
     const h = handleRef.current;
@@ -800,10 +985,6 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   };
 
   const applySnapshot = () => {
-    const h = handleRef.current;
-    if (!h) {
-      return;
-    }
     // Validate every field before anything is applied: a trimmed or
     // hand-edited snapshot names what is wrong instead of yielding a NaN
     // camera and "Snapshot applied".
@@ -813,12 +994,17 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       return;
     }
     const snap = parsed.snapshot;
-    h.applyCameraState(snap.camera);
+    const loading = handleRef.current === null;
+    goTo({ camera: snap.camera, label: "Snapshot" });
     // The minute the sliders can show (see snapshotInstant), for the sun and
     // the two time controls alike.
     time.setInstant(snapshotInstant(snap));
     look.set(decodeLook(snap.look));
-    setSnapshotMsg("Snapshot angewendet");
+    setSnapshotMsg(
+      loading
+        ? "Snapshot gewählt — die Szene startet dort"
+        : "Snapshot angewendet"
+    );
   };
 
   // Bild speichern and the Verschattungsstudie (plan 055): one at a time.
@@ -856,13 +1042,21 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         setExportVeil(false);
       });
   };
+  // (image-export.ts is the scene's: loaded with it, not with the HUD)
   const exportImage = () =>
-    runExport(saveImage, "Bild wird gerendert …", "Bild gespeichert");
+    runExport(
+      (h, info) =>
+        import("./image-export").then(({ saveImage }) => saveImage(h, info)),
+      "Bild wird gerendert …",
+      "Bild gespeichert"
+    );
   const exportStudy = () =>
     runExport(
       (h, info) =>
-        saveShadowStudy(h, info, (n, total) =>
-          hud.say(`Verschattungsstudie: Bild ${n} von ${total} …`, true)
+        import("./image-export").then(({ saveShadowStudy }) =>
+          saveShadowStudy(h, info, (n, total) =>
+            hud.say(`Verschattungsstudie: Bild ${n} von ${total} …`, true)
+          )
         ),
       "Verschattungsstudie wird gerendert …",
       "Verschattungsstudie gespeichert"
@@ -883,6 +1077,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   );
   const percent = loadPercent(progress.fractions, progress.skipped);
   const booted = status.phase === "running";
+  const failure = bootFailureOf(status, supported, manifestError);
 
   return (
     <SidebarProvider
@@ -895,27 +1090,26 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
           it), so toggling the panel can't flash the canvas. */}
       {/* No text selection or callout over the scene: a long press asks a
-          building (ADR 0042), it must not also mark the HUD's text. */}
-      <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)] select-none [-webkit-touch-callout:none]">
+          building (ADR 0042), it must not also mark the HUD's text. Its own
+          stacking context (isolate): the loading screen covers the scene,
+          never the panel, which is open while the city loads. The cards
+          that stop the page (a failed boot, a lost GPU, the crash report)
+          stand outside it, over the panel too. */}
+      <div className="absolute inset-0 isolate overflow-hidden bg-[image:var(--hud-scrim)] select-none [-webkit-touch-callout:none]">
         <div className="absolute inset-0" ref={mountRef} />
 
-        {veilUp && (
-          <LoadScreen
+        {/* Not over a failure: its card is what there is to read, and to
+            click (it tries again). */}
+        {veilUp && failure === null && (
+          <ShellLoadScreen
+            destination={start?.label}
             handedOver={status.phase === "running"}
             percent={percent}
             stages={stages}
           />
         )}
 
-        <CrashReport />
-
-        {gpuFailure !== null && (
-          <GpuFailureCard
-            detail={gpuFailure}
-            onLighter={() => reloadAfterFailure(true)}
-            onReload={() => reloadAfterFailure(false)}
-          />
-        )}
+        <SettingsToggle />
 
         {exportVeil && (
           <div
@@ -925,17 +1119,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           />
         )}
 
-        {status.phase === "error" && (
-          <BootError
-            message={status.message}
-            onRetry={supported ? () => location.reload() : undefined}
-          />
-        )}
-
         {booted && (
           <>
-            {/* crosshair — none on Modell's sheet, which has no eye */}
-            {mode !== "model" && (
+            {/* No dot in the middle: the pointer aims (I and R act under
+                it). Only immersive mode, which hides the pointer, marks
+                the centre it aims at instead, and so does the panel's
+                demolish button while it is pointed at or focused — it acts
+                at the centre. Never on Modell's sheet. */}
+            {(immersive || aimingCentre) && mode !== "model" && (
               <div
                 aria-hidden
                 className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
@@ -974,7 +1165,6 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
                 provenanceUrl={provenanceUrl}
               />
             )}
-            <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
               covered={coarse && inquiry !== null}
@@ -997,73 +1187,111 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         )}
       </div>
 
-      {booted && (
-        <SceneSidebar
-          dataLayerDetail={{
-            bikeLayer: (
-              <BikeCountList
-                counters={bikeCounters}
-                onFly={(c) =>
-                  handleRef.current?.flyToViewpoint(
-                    overlook(c, {
-                      altitude: 45,
-                      description: c.where,
-                      headingDeg: 0,
-                      id: c.id,
-                      label: c.name,
-                      pitchDeg: -30,
-                    })
-                  )
-                }
-              />
-            ),
-            trafficLayer: <TrafficHourLine status={trafficHour} />,
-            tramLayer: <TramStatusLine status={tramStatus} />,
-          }}
-          applySnapshot={applySnapshot}
-          bounds={bounds}
-          coarse={coarse}
-          copySnapshot={copySnapshot}
-          day={time.day}
-          footprints={footprints}
-          fps={fps}
-          handleRef={handleRef}
-          landcoverTiles={landcoverTiles}
-          landmarks={landmarks}
-          latLng={latLng}
-          lensBlur={postProfileFor(budget.tier).dof}
-          look={lookValues}
-          minutes={time.minutes}
-          mode={mode}
-          modelView={modelView}
-          onLook={look.set}
-          onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
-          onExport={exportImage}
-          onStudy={exportStudy}
-          onTab={setTab}
-          onTeleport={(x, y) => handleRef.current?.glideToSpot(x, y)}
-          rememberedView={rememberedView}
-          // The sliders go back to their defaults; the picture style and
-          // the data layers are choices of their own, and stay.
-          resetLook={() =>
-            look.set({
-              ...LOOK_DEFAULTS,
-              ...dataLayersOf(look.get()),
-              style: look.get().style,
-            })
-          }
-          setRememberedView={setRememberedView}
-          setSnapshotText={setSnapshotText}
-          snapshotMsg={snapshotMsg}
-          snapshotText={snapshotText}
-          sound={sound}
-          stats={stats}
-          subscribePose={subscribePose}
-          sun={time.sun}
-          tab={tab}
-          updateSun={time.set}
+      <CrashReport />
+
+      {gpuFailure !== null && (
+        <GpuFailureCard
+          detail={gpuFailure}
+          onLighter={() => reloadAfterFailure(true)}
+          onReload={() => reloadAfterFailure(false)}
         />
       )}
+
+      {failure && (
+        <BootError message={failure.message} onRetry={failure.onRetry} />
+      )}
+
+      <SceneSidebar
+        dataLayerDetail={{
+          bikeLayer: (
+            <BikeCountList
+              counters={bikeCounters}
+              onFly={(c) =>
+                goTo({
+                  label: c.name,
+                  view: overlook(c, {
+                    altitude: 45,
+                    description: c.where,
+                    headingDeg: 0,
+                    id: c.id,
+                    label: c.name,
+                    pitchDeg: -30,
+                  }),
+                })
+              }
+            />
+          ),
+          trafficLayer: <TrafficHourLine status={trafficHour} />,
+          tramLayer: <TramStatusLine status={tramStatus} />,
+        }}
+        applySnapshot={applySnapshot}
+        bounds={bounds}
+        canTravel={supported}
+        coarse={coarse}
+        onAimCentre={setAimingCentre}
+        copySnapshot={copySnapshot}
+        day={time.day}
+        footprints={footprints}
+        fps={fps}
+        handleRef={handleRef}
+        landcoverTiles={landcoverTiles}
+        landmarks={landmarks}
+        latLng={latLng}
+        lensBlur={postProfileFor(budget.tier).dof}
+        look={lookValues}
+        minutes={time.minutes}
+        mode={mode}
+        modelView={modelView}
+        onLook={look.set}
+        onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
+        onExport={exportImage}
+        onStudy={exportStudy}
+        onTab={setTab}
+        onTeleport={(x, y) => {
+          const h = handleRef.current;
+          if (h) {
+            h.glideToSpot(x, y);
+            return;
+          }
+          // On foot there, looking the way the spawn looks.
+          const { fov, headingDeg } = spawnViewpoint(site);
+          goTo({
+            label: "Punkt auf der Karte",
+            view: {
+              aboveGround: EYE_HEIGHT,
+              epsg: { x, y },
+              fov,
+              headingDeg,
+              mode: "walk",
+              pitchDeg: 0,
+            },
+          });
+        }}
+        onTravel={(view, label) =>
+          goTo({ label: label ?? "Gemerkte Ansicht", view })
+        }
+        ready={booted}
+        rememberedView={rememberedView}
+        // The sliders go back to their defaults; the picture style and
+        // the data layers are choices of their own, and stay.
+        resetLook={() =>
+          look.set({
+            ...LOOK_DEFAULTS,
+            ...dataLayersOf(look.get()),
+            style: look.get().style,
+          })
+        }
+        setRememberedView={setRememberedView}
+        setSnapshotText={setSnapshotText}
+        snapshotMsg={snapshotMsg}
+        snapshotText={snapshotText}
+        sound={sound}
+        stats={stats}
+        subscribePose={subscribePose}
+        sun={time.sun}
+        tab={tab}
+        updateSun={time.set}
+      />
     </SidebarProvider>
   );
 }
