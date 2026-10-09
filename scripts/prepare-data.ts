@@ -20,7 +20,8 @@
  *     one file served `no-cache` (next.config.ts), everything else is
  *     immutable. Files the manifest no longer references are pruned.
  *
- * Baked outputs are cached in `.cache/prepare-data/` (gitignored) under a
+ * Baked outputs are cached in `.cache/prepare-data/` (gitignored; on Vercel
+ * `.next/cache/prepare-data/`, which its build cache keeps) under a
  * key of their inputs' contents, every module the artifact's own bake
  * imports (bake-sources.ts, walked from that bake's entry), this file, the
  * site's own config and the names they reference, so a rerun is cheap, a
@@ -151,7 +152,13 @@ import {
   wallLines,
 } from "./tile-sources";
 
-const CACHE_DIR = join(process.cwd(), ".cache/prepare-data");
+/** On Vercel the cache lives under `.next/cache`, the one folder (with
+ *  node_modules) its Next.js builds carry from one deployment to the next;
+ *  elsewhere under `.cache`, so clearing `.next` keeps a local bake. */
+const CACHE_DIR = join(
+  process.cwd(),
+  process.env.VERCEL ? ".next/cache/prepare-data" : ".cache/prepare-data"
+);
 const SITE = (() => {
   try {
     return siteFromArgs(process.argv.slice(2)).site;
