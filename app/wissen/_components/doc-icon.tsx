@@ -12,6 +12,7 @@ import {
   MousePointerClickIcon,
   RouteIcon,
   ScaleIcon,
+  ScanSearchIcon,
   WaypointsIcon,
   WorkflowIcon,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const ICONS: Record<string, Glyph> = {
   "how-it-works": (p) => <EyeIcon {...p} />,
   "data-sources": (p) => <DatabaseIcon {...p} />,
   "data-journey": (p) => <RouteIcon {...p} />,
+  methods: (p) => <ScanSearchIcon {...p} />,
   "using-the-viewer": (p) => <MousePointerClickIcon {...p} />,
   glossary: (p) => <BookOpenTextIcon {...p} />,
   README: (p) => <LibraryIcon {...p} />,

@@ -18,6 +18,7 @@ export type SceneLookKey =
   | "heightFog"
   | "horizonShade"
   | "meadowNdvi"
+  | "reflections"
   | "skyView"
   | "urbanGreen"
   | "waterMist";
@@ -27,6 +28,7 @@ export type ClayLookKey =
   | "bands"
   | "duskGlow"
   | "eave"
+  | "facadeReading"
   | "groundShade"
   | "rim"
   | "roofTint"
@@ -217,10 +219,20 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "building-articulation",
     label: "Gliederung",
     description:
-      "Sockel, Gesims über dem Erdgeschoss, Traufgesims und Ladenzonen — keine Fenster",
+      "Gemalter Sockel, Traufgesims und Ladenzonen — keine Fenster; Sockel und Gesims über dem Erdgeschoss sind modelliert",
     group: "buildings",
     initial: 0.8,
     snapshotKey: "articulationPct",
+  },
+  {
+    key: "facadeReading",
+    id: "building-facade-reading",
+    label: "Fassadenbild",
+    description:
+      "Was Straßenfotos über eine Fassade sagen: feines Relief, wo sie unruhig ist, ein dunklerer Ton, Ladensockel — keine Fenster",
+    group: "buildings",
+    initial: 1,
+    snapshotKey: "facadeReadingPct",
   },
   {
     key: "duskGlow",
@@ -340,6 +352,16 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     // Below full strength until judged on GPU plates (plan 033).
     initial: 0.8,
     snapshotKey: "horizonShadePct",
+  },
+  {
+    key: "reflections",
+    id: "reflections",
+    label: "Spiegelung",
+    description:
+      "Der Himmel spiegelt sich in Glasfassaden, Vergoldungen und im Wasser (nur der Himmel, nicht die Stadt)",
+    group: "rendering",
+    initial: 1,
+    snapshotKey: "reflectionPct",
   },
   {
     key: "grain",

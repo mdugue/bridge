@@ -395,6 +395,7 @@ def _fetch_run(tmp_path, monkeypatch, fail: str, dlm: bool = False):
 
     monkeypatch.setattr(fetch.bridge, "fetch_wikidata", broken_wikidata)
     monkeypatch.setattr(fetch.landmarks, "fetch_wikidata", lambda *a: extras.append("landmarks"))
+    monkeypatch.setattr(fetch.monuments, "fetch_wikidata", lambda *a: extras.append("monuments"))
     fetch.run(spec, spec.tiles)
     return tried, extras
 
@@ -415,7 +416,7 @@ def test_a_failed_optional_product_or_extra_is_a_note(tmp_path, monkeypatch):
     # both are a printed line, and the landmarks after it are still fetched
     tried, extras = _fetch_run(tmp_path, monkeypatch, "dop")
     assert set(tried) == {"osm", "dgm", "lod2", "dom", "dop"}
-    assert extras == ["trees", "traffic", "bridges", "landmarks"]
+    assert extras == ["trees", "traffic", "bridges", "landmarks", "monuments"]
 
 
 def test_a_failed_basis_dlm_or_osm_extract_fails_the_fetch_after_the_tiles(tmp_path, monkeypatch):

@@ -3,12 +3,20 @@ import type { CityJsonDocument } from "../lib/city/types";
 import {
   OBJECT_FLAG_FLAT_ROOF,
   OBJECT_FLAG_GROUNDED,
+  OBJECT_FLAG_GLASS,
+  OBJECT_FLAG_OWN_COLOUR,
   OBJECT_SOURCE_DORMER,
   OBJECT_SOURCE_GAP,
+  OBJECT_SOURCE_SHOPFRONT,
 } from "../lib/city/city-mesh";
-import type { DormerFeature, StructureFeature } from "../lib/city/features";
+import type {
+  DormerFeature,
+  ShopfrontWall,
+  StructureFeature,
+} from "../lib/city/features";
+import { paneTop, SHOPFRONT_SINK } from "../lib/city/shopfronts";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
-import { bakeCityMesh, scanStructureId } from "./bake-city-mesh";
+import { bakeCityMesh, PANE_ROUGH, scanStructureId } from "./bake-city-mesh";
 import { cityMesh } from "./bake-tiles";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
@@ -460,4 +468,83 @@ test("dormers join their host as one object, roof-flagged on top, source 4", () 
   expect(added).toBe(2 * 6 * 3);
   const roofs = Array.from(baked.vertices.isRoof.slice(-added));
   expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 2 * 3);
+});
+
+test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
+  // the house's south wall (x 40–50 m, y 0), facing −y
+  const front = (oid = "house"): ShopfrontWall => ({
+    oid,
+    wi: 0,
+    a: [412_040, 5_656_000],
+    b: [412_050, 5_656_000],
+    L: 10,
+    n: [0, -1],
+    z: [100, 100],
+    src: "photo",
+    bays: [
+      [1, 3],
+      [3.5, 6.5],
+    ],
+    sign: { at: [[1, 7]], z: [3.3, 3.9] },
+  });
+  const bake = (walls: ShopfrontWall[], glass = false) =>
+    bakeCityMesh(
+      "t",
+      fixture(),
+      undefined,
+      null,
+      glass ? { house: { material: "glass" } } : undefined,
+      undefined,
+      "render",
+      undefined,
+      undefined,
+      { shopfronts: walls }
+    );
+  const lod2 = bakeCityMesh("t", fixture(), undefined, null);
+  const baked = bake([front(), front("elsewhere")]);
+  expect(baked.objects.length).toBe(lod2.objects.length + 2);
+  const house = baked.objects[2];
+  const [pane, frame] = baked.objects.slice(-2);
+  for (const o of [pane, frame]) {
+    expect(o.root).toBe(house.root);
+    expect(o.source).toBe(OBJECT_SOURCE_SHOPFRONT);
+    expect(o.building).toBe(false);
+    expect(o.footprints).toEqual([]);
+    expect(o.flags & OBJECT_FLAG_OWN_COLOUR).toBe(OBJECT_FLAG_OWN_COLOUR);
+  }
+  expect(pane.flags & OBJECT_FLAG_GLASS).toBe(OBJECT_FLAG_GLASS);
+  expect(frame.flags & OBJECT_FLAG_GLASS).toBe(0);
+  expect(pane.rough).toBe(PANE_ROUGH);
+  // muted glass, darker and cooler than its surround — not a black hole
+  const lum = (c: readonly number[]) => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+  expect(lum(pane.tint)).toBeLessThan(0.6 * lum(frame.tint));
+  expect(lum(pane.tint)).toBeGreaterThan(0.1);
+  expect(pane.tint[2] / pane.tint[0]).toBeGreaterThan(
+    frame.tint[2] / frame.tint[0]
+  );
+  // the glass's eave is its top, over the shopfront's sunk foot
+  expect(pane.eaveH).toBeCloseTo(
+    paneTop(front(), house.storeyH) + SHOPFRONT_SINK,
+    2
+  );
+  expect(frame.eaveH).toBeGreaterThan(4);
+  // the surround and the canopy shaded smooth: their own normals
+  const normals = baked.vertices.normals ?? new Float32Array();
+  expect(
+    normals.some(
+      (n) => !Number.isNaN(n) && Math.abs(n) > 0.2 && Math.abs(n) < 0.95
+    )
+  ).toBe(true);
+  // a glass facade wears its own front
+  expect(bake([front()], true).objects.length).toBe(lod2.objects.length);
+  // a canopy is a third object, in the host's own clay
+  const sheltered = bake([
+    { ...front(), canopy: [{ at: [0, 10], d: 3.5, h: 4.2 }] },
+  ]);
+  expect(sheltered.objects.length).toBe(lod2.objects.length + 3);
+  const canopy = sheltered.objects.at(-1);
+  expect(canopy?.source).toBe(OBJECT_SOURCE_SHOPFRONT);
+  expect(canopy?.tint).toEqual(sheltered.objects[2].tint);
+  expect((canopy?.flags ?? 0) & OBJECT_FLAG_GLASS).toBe(0);
+  expect((canopy?.flags ?? 0) & OBJECT_FLAG_OWN_COLOUR).toBe(0);
 });

@@ -2,11 +2,12 @@
 a `.part` file, and a truncated one is deleted and named, not kept."""
 
 import json
+import urllib.request
 from pathlib import Path
 
 import pytest
 
-from bake import bridge, landmarks
+from bake import bridge, landmarks, monuments
 from bake.common import Tile
 
 BOUNDS = (412000.0, 5656000.0, 414000.0, 5658000.0)
@@ -30,7 +31,10 @@ def _tile(raw: Path) -> Tile:
     return Tile("t", BOUNDS, 25833, raw, raw.parent / "data")
 
 
-@pytest.mark.parametrize("module,name", [(landmarks, "landmarks"), (bridge, "bridges")])
+WIKIDATA_CACHES = [(landmarks, "landmarks"), (bridge, "bridges"), (monuments, "monuments")]
+
+
+@pytest.mark.parametrize("module,name", WIKIDATA_CACHES)
 def test_a_truncated_wikidata_cache_is_deleted_and_named(tmp_path, module, name):
     path = tmp_path / "raw" / "wikidata" / f"{name}_t.json"
     path.parent.mkdir(parents=True)
@@ -53,17 +57,26 @@ ROWS = {
         "coord": {"value": "Point(13.74 51.05)"},
         "types": {"value": "arch bridge"},
     },
+    "monuments": {
+        "i": {"value": "http://www.wikidata.org/entity/Q42"},
+        "label": {"value": "Goldener Reiter"},
+        "coord": {"value": "Point(13.74 51.05)"},
+        "materials": {"value": "copper|gold leaf"},
+    },
 }
 
 
-@pytest.mark.parametrize("module,name", [(landmarks, "landmarks"), (bridge, "bridges")])
+WIKIDATA_CACHES = [(landmarks, "landmarks"), (bridge, "bridges"), (monuments, "monuments")]
+
+
+@pytest.mark.parametrize("module,name", WIKIDATA_CACHES)
 def test_a_wikidata_cache_killed_mid_write_leaves_no_file_by_its_name(
     tmp_path, monkeypatch, module, name
 ):
     # The write dies half-way (a killed run, a full disk): what it left
     # must not carry the cache's name, or every later fetch would skip the
     # tile and every bake would read the truncated file.
-    monkeypatch.setattr(module.urllib.request, "urlopen", lambda req, timeout: Answer([ROWS[name]]))
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout: Answer([ROWS[name]]))
     write_text = Path.write_text
     killed = []
 

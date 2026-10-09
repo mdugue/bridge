@@ -47,6 +47,8 @@ import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import type {
   CanopyFeature,
   DoorFeature,
+  ShopfrontFile,
+  PlinthFeature,
   DormerFeature,
   FeatureCollection,
   RailFeature,
@@ -573,11 +575,19 @@ function parseCity(tile: string): BakedCityMesh {
     ? readJson<FeatureCollection<MeasuredRoofFeature>>(at(src.measuredRoofs))
         .features
     : undefined;
+  const plinths = existsSync(at(src.plinths))
+    ? readJson<FeatureCollection<PlinthFeature>>(at(src.plinths)).features
+    : undefined;
   const doors = existsSync(at(src.doors))
     ? readJson<FeatureCollection<DoorFeature>>(at(src.doors)).features
     : undefined;
   const dormers = existsSync(at(src.dormers))
     ? readJson<FeatureCollection<DormerFeature>>(at(src.dormers)).features
+    : undefined;
+  const shopfronts = existsSync(at(src.shopfronts))
+    ? Object.values(
+        readJson<ShopfrontFile>(at(src.shopfronts)).buildings
+      ).flat()
     : undefined;
   const baked = bakeCityMesh(
     tile,
@@ -589,7 +599,7 @@ function parseCity(tile: string): BakedCityMesh {
     osmDoc?.context ?? "render",
     gaps,
     measured,
-    { doors, dormers }
+    { doors, dormers, plinths, shopfronts }
   );
   sharedMatrix ??= baked.matrix;
   return baked;
@@ -635,7 +645,9 @@ async function bakeCity(
     at(src.landmarks),
     at(src.measuredRoofs),
     at(src.doors),
+    at(src.plinths),
     at(src.dormers),
+    at(src.shopfronts),
   ];
   const bake = [
     "scripts/bake-city-mesh.ts",
@@ -660,11 +672,14 @@ async function bakeCity(
     )
   );
   const svf = sideFiles.get(tile)?.svf;
+  const facades = sideFiles.get(tile)?.facades;
   const extras: CityExtras = {
     kind: "city",
     tileId: tile,
     // The facades' ambient light reads the terrain's sky-view raster.
     ...(svf ? { svf } : {}),
+    // ...and their relief and tone what street photos saw of them.
+    ...(facades ? { facades } : {}),
   };
   const name = `city_${tile}.glb.gz`;
   const glb = await cached(

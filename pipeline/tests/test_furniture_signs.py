@@ -106,3 +106,31 @@ def test_street_signs_and_fixtures_come_from_the_tags():
     assert kind_of(None, None, '"amenity"=>"drinking_water"') == "water"
     # a platform node without a shelter stands nothing (its bus_stop has the sign)
     assert kind_of(None, None, '"public_transport"=>"platform"') is None
+
+
+def test_a_bicycle_stand_in_a_streets_lanes_moves_to_the_kerb(tmp_path, monkeypatch):
+    """A stand mapped in a residential street's lanes stands at the kerb; a
+    bench on a square the class raster also counts as road (its nearest way
+    a footway) stays where it is mapped."""
+    from bake import furniture
+
+    cls = np.zeros((200, 200), np.uint8)
+    cls[95:105, :] = 7  # the street, y 95..105
+    cls[20:60, 20:60] = 7  # a paved square, x 20..60, y 140..180
+    nodes = {
+        1: (0, 100, ""),
+        2: (200, 100, ""),
+        3: (20, 160, ""),
+        4: (60, 160, ""),
+        10: (80, 102, tags(amenity="bicycle_parking", capacity="4")),
+        11: (40, 158, tags(amenity="bench")),
+    }
+    ways = way(1, [1, 2], {"highway": "residential"}) + way(2, [3, 4], {"highway": "footway"})
+    tile = osm_tile(tmp_path, monkeypatch, nodes, ways, classes=cls)
+    furniture.run(tile)
+    kinds = _by_kind(tile)
+    [bike] = kinds["bike"]
+    x, y = local(bike["geometry"]["coordinates"])
+    assert x == 80.0 and 105.0 < y < 107.0  # the nearer, northern kerb
+    [bench] = kinds["bench"]
+    assert local(bench["geometry"]["coordinates"]) == (40.0, 158.0)

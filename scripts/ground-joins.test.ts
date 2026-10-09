@@ -106,7 +106,9 @@ test("every builder's joins hold on the ground it stood on", () => {
  * before ADR 0035's audit the walls missed 3.5 %, the stairs 4.5 %, the
  * fences 1.6 %)
  * fails here. The doors' misses (0.8 % at first bake) are sills at the
- * top of a mapped flight of steps, whose ground the stairs lower. Lower a budget when a fix lowers its share; raising one
+ * top of a mapped flight of steps, whose ground the stairs lower; the
+ * shopfronts' (0.36 % at first bake) a riser whose ground dips below
+ * the line between its wall's two ends. Lower a budget when a fix lowers its share; raising one
  * needs a reason in the commit. `bun scripts/ground-joins.ts` prints the
  * table and the worst places for the whole site.
  */
@@ -117,6 +119,8 @@ const BUDGET: Record<JoinPart, number> = {
   fences: 0.003,
   sheds: 0.001,
   doors: 0.01,
+  shopfronts: 0.005,
+  plinths: 0.01,
 };
 
 test("the committed parts meet the ground within their budgets", async () => {
