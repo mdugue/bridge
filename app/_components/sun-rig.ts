@@ -11,7 +11,7 @@ import {
   type NodeBuilder,
   RedFormat,
   type RenderTarget,
-  type Scene,
+  Scene,
   ShadowNode,
   UnsignedByteType,
   Vector3,
@@ -32,7 +32,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import type { UniformNode } from "three/webgpu";
+import type { UniformNode, WebGPURenderer } from "three/webgpu";
 import { atmosphereAt } from "@/lib/city/atmosphere";
 import { fitModelShadow } from "@/lib/city/model-view";
 import {
@@ -43,6 +43,7 @@ import {
 } from "@/lib/city/shadow-fit";
 import { sunDirectionWorld } from "@/lib/city/sun";
 import { shadowMapBytesFor } from "./scene-profile";
+import { createSkyReflection } from "./sky-reflection";
 import type { V3, V4 } from "./shader-chunks";
 
 export interface SunState {
@@ -256,7 +257,10 @@ export function createSunRig(
    * (surface→sun) so other materials (e.g. the crown shimmer) can read it. */
   sunDirectionOut: Vector3 | undefined,
   /** The scene fog's colour (height-fog.ts): it follows the palette. */
-  fogColor: UniformNode<"color", Color>
+  fogColor: UniformNode<"color", Color>,
+  /** Renders the sky's reflection map (sky-reflection.ts); without one
+   *  (the unit tests) the map stays dark. */
+  renderer?: WebGPURenderer
 ): SunRig {
   const center = worldBounds.getCenter(new Vector3());
   // The frustum half-size is not fixed: it starts at the base radius (eye
@@ -276,6 +280,13 @@ export function createSunRig(
   scene.add(hemisphere);
 
   const sky = createSkyDome(scene);
+  // The same dome once more, alone in a scene of its own: what glass,
+  // gilding and water mirror (sky-reflection.ts).
+  const mirroredSky = new Scene();
+  const mirrored = createSkyDome(mirroredSky);
+  const reflection = renderer
+    ? createSkyReflection(renderer, mirroredSky)
+    : undefined;
 
   const sun = new DirectionalLight(0xff_f4_e0, SUN_INTENSITY);
   sun.castShadow = true;
@@ -461,9 +472,12 @@ export function createSunRig(
 
     // Sky dome follows the same sun; fog + fill colors follow the palette.
     sky.setSun(dir);
+    mirrored.setSun(dir);
     const palette = atmosphereAt(altitudeDeg);
     fogColor.value.set(palette.fog);
     sky.setHaze(palette.fog);
+    mirrored.setHaze(palette.fog);
+    reflection?.refresh(dir);
     paletteBackground = new Color(palette.fog).getHex();
     if (scene.background instanceof Color && !parallel) {
       scene.background.set(palette.fog);
@@ -491,6 +505,9 @@ export function createSunRig(
     shadowReach,
     shadowCamera: sun.shadow.camera,
     dispose: () => {
+      reflection?.dispose();
+      mirrored.mesh.geometry.dispose();
+      mirrored.mesh.material.dispose();
       sun.dispose();
       shadowNode.dispose();
     },

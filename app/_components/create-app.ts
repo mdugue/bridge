@@ -140,6 +140,7 @@ import {
   shadowMapSizeFor,
   tileCacheBytesFor,
 } from "./scene-profile";
+import { reflectionStrength } from "./sky-reflection";
 import { createSunRig, type SunState } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
@@ -1047,7 +1048,8 @@ async function bootApp(
     latLng,
     shadowMapSizeFor(budget.profile, budget.tier, budget.safety),
     sunDirection,
-    sceneFog.color
+    sceneFog.color,
+    renderer
   );
   cleanups.push(sunRig.dispose);
   // The horizon's near band hands over to the shadow map inside the frustum.
@@ -1447,6 +1449,9 @@ async function bootApp(
     },
     horizonShade: (strength) => {
       ground.horizonShade.value = strength;
+    },
+    reflections: (strength) => {
+      reflectionStrength.value = strength;
     },
     waterMist: (strength) => {
       for (const t of stream.terrains) {

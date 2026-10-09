@@ -37,6 +37,7 @@ import {
   mix,
   normalize,
   normalView,
+  normalWorld,
   normalWorldGeometry,
   positionLocal,
   positionViewDirection,
@@ -87,6 +88,11 @@ import { ashlar, footprint } from "./bridge-surface";
 import { gdNoise } from "./ground-detail";
 import { Instances, instanceFloat, instancePosition } from "./instancing";
 import type { F, Live } from "./shader-chunks";
+import {
+  mirrorWeight,
+  reflectionStrength,
+  skyReflection,
+} from "./sky-reflection";
 import { sceneMaterial } from "./three-utils";
 
 /**
@@ -722,6 +728,11 @@ function waterMaterial(): MeshStandardNodeMaterial {
   );
   m.emissiveNode = materialEmissive
     .add(vec3(0.03, 0.04, 0.045).mul(ripA.mul(0.5).add(0.5)))
+    .add(
+      skyReflection(normalWorld, 0.15).mul(
+        mirrorWeight(normalWorld, 0.04).mul(reflectionStrength).mul(0.6)
+      )
+    )
     .add(vec3(0.12, 0.17, 0.2).mul(fountainNight).mul(ripA.mul(0.2).add(0.8)));
   return m;
 }
@@ -761,16 +772,28 @@ function clayMaterial(): MeshStandardNodeMaterial {
     .sub(f.worked.mul(0.07))
     .sub(f.patina.mul(0.4))
     .sub(f.gilded.mul(0.62));
-  // No environment map lights the scene: a metal's sheen is the sky it
-  // catches at a grazing angle, warm on gilding, faint on a patina.
+  // A metal's sheen is the sky it mirrors (Spiegelung, sky-reflection.ts):
+  // gold-tinted and strong on gilding, faint on a patina. Turned down, the
+  // row hands back to the old stand-in — the sky caught at a grazing angle.
   const grazing = float(1)
     .sub(dot(normalView, positionViewDirection).abs().clamp(0, 1))
     .pow(3);
-  m.emissiveNode = materialEmissive.add(
-    vec3(0.95, 0.75, 0.38)
+  const standIn = vec3(0.95, 0.75, 0.38)
+    .mul(f.gilded)
+    .mul(grazing.mul(0.4).add(0.04))
+    .add(vec3(0.5, 0.58, 0.55).mul(f.patina).mul(grazing.mul(0.12)));
+  const mirrored = skyReflection(normalWorld, 0.3).mul(
+    vec3(1, 0.78, 0.42)
       .mul(f.gilded)
-      .mul(grazing.mul(0.4).add(0.04))
-      .add(vec3(0.5, 0.58, 0.55).mul(f.patina).mul(grazing.mul(0.12)))
+      .mul(mirrorWeight(normalWorld, 0.45))
+      .add(
+        vec3(0.55, 0.62, 0.58)
+          .mul(f.patina)
+          .mul(mirrorWeight(normalWorld, 0.04).mul(0.25))
+      )
+  );
+  m.emissiveNode = materialEmissive.add(
+    mix(standIn, mirrored, reflectionStrength)
   );
   return m;
 }
