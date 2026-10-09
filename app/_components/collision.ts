@@ -40,6 +40,11 @@ export interface CityCollider {
   /** world height of the highest building surface over (x, z), or null */
   topAt: (x: number, z: number) => number | null;
   /**
+   * Distance along a world ray (unit direction) to the first building
+   * surface, or null within `far`.
+   */
+  along: (origin: Vector3, direction: Vector3, far: number) => number | null;
+  /**
    * Adjusts a proposed horizontal step so it cannot cross a building wall:
    * unobstructed steps pass through, oblique hits slide along the facade,
    * head-on hits stop.
@@ -202,6 +207,13 @@ export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
 
   return {
     resolveStep,
+    along: (from, direction, far) => {
+      raycaster.set(from, direction);
+      raycaster.far = far;
+      return (
+        raycaster.intersectObjects(getTargets(), true)[0]?.distance ?? null
+      );
+    },
     // Seen from inside a closed solid, the surface straight above faces up
     // (its outside is above it); from under a bridge or a balcony it faces
     // down.

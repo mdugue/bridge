@@ -56,13 +56,14 @@ picture wait until the scene is up.
 
 | Input (desktop) | Does |
 |---|---|
-| Drag with the mouse | look around |
+| Drag with the mouse | look around (the pointer is a hand that grabs the view) |
 | `W` `A` `S` `D` | walk (or fly) |
+| `↑` `↓` / `←` `→` | walk forward and back / turn left and right |
 | `Shift` | sprint |
 | `F` | switch between walking and flying (take off / land) |
 | `Space` / `Shift` (or `E` / `Q`) | up / down while flying |
 | `1` – `9` | glide to the first to ninth viewpoint |
-| Mouse wheel (or a two-finger trackpad gesture) | move forward or back |
+| Mouse wheel (or a two-finger trackpad gesture, or pinching on it) | move towards the spot under the pointer (the crosshair in immersive mode), or back from it: on foot along the ground, flying along the line to that spot, which stays under the pointer; each step covers most of the way left, never past it, and over the sky the flight stays level |
 | `Alt` + mouse wheel | zoom (narrows or widens the field of view) |
 | Double-click on the ground | travel there in a short glide; flying, glide part of the way towards it |
 | Click on the minimap | glide there (on foot you land standing; flying, at the same height) |
@@ -86,7 +87,7 @@ picture wait until the scene is up.
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (above the toolbar, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there in a short glide; flying, glide part of the way towards it |
-| Two fingers apart / together | forward / back: on foot along the ground, flying along the view (the higher, the further) |
+| Two fingers apart / together | towards / away from the spot between the fingers: on foot along the ground, flying along the line to it (the higher, the further) |
 
 While walking you are held at eye height on the terrain and collide with
 buildings and walls. Flying, you meet facades too, sinking stops at eye
@@ -390,7 +391,7 @@ mistake); the switch stays as you set it.
 | Group | Slider | What it does |
 |---|---|---|
 | Atmosphäre | *Nebel* | distance haze |
-| | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height |
+| | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height and sets in some way off, so what stands right in front of you stays clear |
 | | *Flussnebel* | drifting mist sheet over the water |
 | | *Tiefenfärbung* | warm near, cool far: a depth-based colour grade |
 | Gebäude | *Transparenz* | see through buildings (dithered), up to 90 % |
@@ -416,6 +417,7 @@ mistake); the switch stays as you set it.
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
+| | *Spiegelung* | the sky mirrored in glass facades, gilding and water; the sky only, not the buildings across the street |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
 | | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the centre of the view, *Manuell* on a fixed distance; not offered on phones |

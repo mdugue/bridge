@@ -144,6 +144,7 @@ import {
   shadowMapSizeFor,
   tileCacheBytesFor,
 } from "./scene-profile";
+import { reflectionStrength } from "./sky-reflection";
 import { createSunRig, type SunState } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
@@ -1083,7 +1084,8 @@ async function bootApp(
     latLng,
     shadowMapSizeFor(budget.profile, budget.tier, budget.safety),
     sunDirection,
-    sceneFog.color
+    sceneFog.color,
+    renderer
   );
   cleanups.push(sunRig.dispose);
   // The horizon's near band hands over to the shadow map inside the frustum.
@@ -1484,6 +1486,9 @@ async function bootApp(
     horizonShade: (strength) => {
       ground.horizonShade.value = strength;
     },
+    reflections: (strength) => {
+      reflectionStrength.value = strength;
+    },
     waterMist: (strength) => {
       for (const t of stream.terrains) {
         t.water?.setMist(strength);
@@ -1856,13 +1861,13 @@ async function bootApp(
         modelRig.zoomAt({ x: midX, y: midY }, ratio / lastPinch);
         lastPinch = ratio;
       } else {
-        pose.pinchTo(ratio);
+        pose.pinchTo(ratio, { x: midX, y: midY });
       }
     },
     onWheelDolly: (amount, ndcX, ndcY) =>
       modelRig.owns()
         ? modelRig.zoomAt({ x: ndcX, y: ndcY }, Math.exp(amount))
-        : pose.dolly(amount),
+        : pose.dolly(amount, { x: ndcX, y: ndcY }),
     onWheelZoom: (ratio) => {
       if (!modelRig.owns()) {
         pose.zoomBy(ratio);

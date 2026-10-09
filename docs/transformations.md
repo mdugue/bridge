@@ -851,9 +851,10 @@ visual-variable codebook is in
 - **Glass and metal facades** `❝ taken` `≈ assumed` (*Streiflicht*; plan 050) — the material's
   glass and metal set object flags (4, 8; a part takes its root's): the
   clay turns a little cooler (×(0.93, 0.99, 1.07), metal at 60 %) and
-  smoother (roughness 0.42 glass, 0.5 metal), and glass catches a pale sky
-  sheen at grazing angles (Fresnel³ on the rim slider, dimmed 70 % at
-  night). No panes, no mullions, no texture — the window-grid veto holds
+  smoother (roughness 0.42 glass, 0.5 metal), and glass mirrors the sky
+  (*Spiegelung*, `sky-reflection.ts`: a PMREM of the sky dome, 10 % face
+  on to all of it at a grazing view; metal a third as much; at 0 the old
+  pale Fresnel³ sheen on the rim slider). No panes, no mullions, no texture — the window-grid veto holds
   (🗃️ below). `osmColour` / `clayGlow` in `visual-style.ts`. Conservative strengths,
   not yet judged on a real GPU.
 - **Landmarks from Wikidata** `◎ detected` `❝ taken` (HUD *Erkunden* → *Orte*; plan 050)
@@ -2465,7 +2466,10 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 - **Height-term fog** `= computed` `≈ assumed` — DGM elevation (per-fragment world height) → extra haze
   pooling in low ground, a term of the one `scene.fogNode` every material
   takes (`fog = false` opts out: the river mist); HUD *Talnebel*.
-  `height-fog.ts`. **Depth from the site's relief** (2026-10-01, ADR
+  `height-fog.ts`. **Sets in with distance** (2026-10-09): none within
+  15 m of the camera, all of it from 90 m (`VALLEY_NEAR_M`); at the full
+  share 10 m off, the default 0.2 greyed every nearby surface by ≈ 18 %
+  (a shop pane at sRGB 102/105/108 against 56/61/65 without it). **Depth from the site's relief** (2026-10-01, ADR
   0039): the pool's fade height (`heightFalloff`) was Dresden's
   Elbe-to-rim 28 m everywhere, which hazed flat Hamburg and Munich from
   the river to the rooftops. `prepare-data.ts` samples each tile's coarse

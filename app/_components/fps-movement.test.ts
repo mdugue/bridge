@@ -49,6 +49,52 @@ test("S, D and A move back, right and left", () => {
   expect(leftward.camera.position.x).toBeCloseTo(-WALK_STEP, 5);
 });
 
+test("the arrows walk (up, down) and turn (left, right), as in Street View", () => {
+  const { camera, movement } = rig();
+  movement.press("ArrowUp");
+  movement.update(1);
+  expect(camera.position.z).toBeCloseTo(-WALK_STEP, 5);
+  movement.release("ArrowUp");
+  expect(movement.turnInput()).toBe(0);
+  movement.press("ArrowRight");
+  expect(movement.turnInput()).toBe(1);
+  movement.press("ArrowLeft");
+  expect(movement.turnInput()).toBe(0);
+  movement.release("ArrowRight");
+  expect(movement.turnInput()).toBe(-1);
+  // turning is not walking
+  const z = camera.position.z;
+  movement.update(1);
+  expect(camera.position.z).toBeCloseTo(z, 5);
+});
+
+test("a dolly given a line runs along it; on foot only its level part", () => {
+  const { camera, movement } = rig();
+  movement.dolly(10, new Vector3(1, -1, 0).normalize());
+  for (let i = 0; i < 120; i += 1) {
+    movement.update(1 / 60);
+  }
+  // 10 m along a 45° ray: as far ahead as that ray runs level
+  expect(camera.position.x).toBeCloseTo(10 * Math.SQRT1_2, 2);
+  expect(camera.position.z).toBeCloseTo(0, 5);
+  expect(camera.position.y).toBeCloseTo(EYE, 5);
+});
+
+test("on foot a ray steeply down walks little, and no jump across the feet", () => {
+  // Rays either side of straight down: the walk fades out and turns over
+  // smoothly instead of a full step one way, then the other.
+  const ahead = rig();
+  ahead.movement.dolly(10, new Vector3(0, -1, -0.01).normalize());
+  const behind = rig();
+  behind.movement.dolly(10, new Vector3(0, -1, 0.01).normalize());
+  for (let i = 0; i < 120; i += 1) {
+    ahead.movement.update(1 / 60);
+    behind.movement.update(1 / 60);
+  }
+  expect(ahead.camera.position.z).toBeCloseTo(-0.1, 2);
+  expect(behind.camera.position.z).toBeCloseTo(0.1, 2);
+});
+
 test("Shift sprints at three times walking speed", () => {
   const { camera, movement } = rig();
   movement.press("KeyW");

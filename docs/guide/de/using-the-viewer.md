@@ -59,13 +59,14 @@ warten, bis die Szene steht.
 
 | Eingabe (Desktop) | Wirkung |
 |---|---|
-| Mit der Maus ziehen | umsehen |
+| Mit der Maus ziehen | umsehen (der Zeiger ist eine Hand, die den Blick greift) |
 | `W` `A` `S` `D` | gehen (oder fliegen) |
+| `↑` `↓` / `←` `→` | vor und zurück gehen / nach links und rechts drehen |
 | `Shift` | sprinten |
 | `F` | zwischen Gehen und Fliegen wechseln (abheben / landen) |
 | `Leertaste` / `Shift` (oder `E` / `Q`) | hoch / runter im Flug |
 | `1` – `9` | zum ersten bis neunten Aussichtspunkt gleiten |
-| Mausrad (oder Zwei-Finger-Geste auf dem Trackpad) | vor oder zurück |
+| Mausrad (oder Zwei-Finger-Geste auf dem Trackpad, auch Aufziehen) | zu der Stelle unter dem Mauszeiger (im immersiven Modus: dem Fadenkreuz) hin oder von ihr weg: zu Fuß den Boden entlang, im Flug auf der Linie zu ihr, die Stelle bleibt unter dem Zeiger; jeder Schritt legt den Großteil des restlichen Wegs zurück, nie über sie hinaus, und über dem Himmel bleibt der Flug waagerecht |
 | `Alt` + Mausrad | zoomen (Blickwinkel enger oder weiter) |
 | Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
 | Klick auf die Minikarte | dorthin gleiten (zu Fuß landest du stehend, im Flug in gleicher Höhe) |
@@ -89,7 +90,7 @@ warten, bis die Szene steht.
 | ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
 | Höhenregler (über der Werkzeugleiste, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
-| Zwei Finger auseinander / zusammen | vor / zurück: zu Fuß den Weg entlang, im Flug in Blickrichtung (je höher, desto weiter) |
+| Zwei Finger auseinander / zusammen | zur Stelle zwischen den Fingern hin / von ihr weg: zu Fuß den Weg entlang, im Flug auf der Linie zu ihr (je höher, desto weiter) |
 
 Beim Gehen bleibst du in Augenhöhe auf dem Gelände und stößt an Gebäuden
 und Mauern an. Auch im Flug stößt du an Fassaden, sinken kannst du nicht
@@ -415,7 +416,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | Gruppe | Regler | Was er tut |
 |---|---|---|
 | Atmosphäre | *Nebel* | Entfernungsdunst |
-| | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe |
+| | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
 | | *Flussnebel* | treibende Nebelschicht über dem Wasser |
 | | *Tiefenfärbung* | warm nah, kühl fern: eine tiefenabhängige Farbgebung |
 | Gebäude | *Transparenz* | durch Gebäude hindurchsehen (gerastert), bis 90 % |
@@ -441,6 +442,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
+| | *Spiegelung* | der Himmel spiegelt sich in Glasfassaden, Vergoldungen und im Wasser; nur der Himmel, nicht die Häuser gegenüber |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
 | | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf die Bildmitte, *Manuell* auf eine feste Entfernung; auf Telefonen nicht angeboten |
