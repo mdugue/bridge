@@ -67,6 +67,8 @@ export interface CameraSolids {
 
 /** rad per CSS px of grab-look drag — a full phone-width swipe ≈ 90° */
 const GRAB_RADIANS_PER_PX = 0.004;
+/** rad/s an arrow key turns the view (a full turn in about five seconds). */
+const KEY_TURN_RADIANS_PER_S = 1.25;
 /** rad per CSS px of pointer-locked mouse motion (half the grab speed). */
 const MOUSE_RADIANS_PER_PX = 0.002;
 
@@ -141,6 +143,18 @@ export interface CameraPoseOptions {
   solids?: CameraSolids;
 }
 
+/** A screen point in normalised device coordinates (−1…1, y up). */
+export interface Ndc {
+  x: number;
+  y: number;
+}
+
+/**
+ * A forward dolly in the air stops this share of the way to the ground
+ * the ray points at: the spot comes nearer, the camera never lands on it.
+ */
+const DOLLY_GROUND_SHARE = 0.8;
+
 export interface CameraPose {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState: (state: CameraState) => void;
@@ -150,10 +164,13 @@ export interface CameraPose {
   cancelGlide: () => void;
   /**
    * Moves the camera forward (> 0) or back by `amount` units of
-   * ln(zoom ratio) — the pinch and the wheel. On foot it walks along the
-   * ground; in the air it flies along the view, further the higher it is.
+   * ln(zoom ratio) — the pinch and the wheel — towards the screen point
+   * `at` (NDC: the pointer, the fingers' midpoint; the centre without
+   * it), as maps zoom about the cursor: what is under it stays under it.
+   * On foot it walks along the ground that way; in the air it flies along
+   * the ray, further the higher it is, never past the ground it points at.
    */
-  dolly: (amount: number) => void;
+  dolly: (amount: number, at?: Ndc) => void;
   /**
    * Teleports the camera (world/Y-up coords) — used by tests and QA.
    * Switches to fly mode so the ground clamp doesn't drag the camera down.
@@ -226,8 +243,9 @@ export interface CameraPose {
    * air part of the way along the line of sight.
    */
   travelTo: (point: Xyz) => void;
-  /** Pinch: `ratio` = finger distance / distance at beginPinch. */
-  pinchTo: (ratio: number) => void;
+  /** Pinch: `ratio` = finger distance / distance at beginPinch, towards
+   *  the fingers' midpoint `at` (NDC) */
+  pinchTo: (ratio: number, at?: Ndc) => void;
   /** Wheel zoom (FOV): `ratio` > 1 zooms in, relative to the current FOV. */
   zoomBy: (ratio: number) => void;
 }
@@ -570,22 +588,37 @@ export function createCameraPose(
     camera.quaternion.setFromEuler(euler);
   };
 
-  /** Pushes the camera along by `amount` units of ln(zoom ratio). */
-  const dolly = (amount: number) => {
+  /** The world ray through a screen point (unit length). */
+  const rayThrough = (at: Ndc): Vector3 =>
+    new Vector3(at.x, at.y, 0.5)
+      .unproject(camera)
+      .sub(camera.position)
+      .normalize();
+
+  /**
+   * Pushes the camera along by `amount` units of ln(zoom ratio), towards
+   * the screen point `at` (the view's centre without it).
+   */
+  const dolly = (amount: number, at?: Ndc) => {
     if (amount === 0 || !Number.isFinite(amount)) {
       return;
     }
     cancelGlide();
     endFollow();
+    const towards = at ? rayThrough(at) : camera.getWorldDirection(dir);
+    if (movement.getMode() === "walk") {
+      movement.dolly(amount * WALK_DOLLY_M, towards);
+      return;
+    }
     const p = camera.position;
-    const metres =
-      movement.getMode() === "walk"
-        ? WALK_DOLLY_M
-        : Math.max(
-            FLY_DOLLY_MIN_M,
-            (p.y - groundWorld(p.x, p.z)) * FLY_DOLLY_PER_M
-          );
-    movement.dolly(amount * metres);
+    const above = p.y - groundWorld(p.x, p.z);
+    let metres = amount * Math.max(FLY_DOLLY_MIN_M, above * FLY_DOLLY_PER_M);
+    // Down a ray, no further than most of the way to the ground below.
+    if (metres > 0 && towards.y < 0) {
+      const reach = Math.max(above - EYE_HEIGHT, 0) / -towards.y;
+      metres = Math.min(metres, reach * DOLLY_GROUND_SHARE);
+    }
+    movement.dolly(metres, towards);
   };
 
   const travelTo = (point: Xyz) => {
@@ -786,6 +819,10 @@ export function createCameraPose(
       if (followPos) {
         followPositionStep(followPos, dt);
       }
+      const turn = movement.turnInput();
+      if (turn !== 0) {
+        rotate(-turn * KEY_TURN_RADIANS_PER_S * dt, 0);
+      }
       movement.update(dt);
       // Also catches the world changing under a still camera: a finer
       // terrain or a building tile landing where the player stands.
@@ -854,9 +891,9 @@ export function createCameraPose(
     beginPinch: () => {
       lastPinch = 1;
     },
-    pinchTo: (ratio) => {
+    pinchTo: (ratio, at) => {
       if (ratio > 0 && Number.isFinite(ratio)) {
-        dolly(Math.log(ratio / lastPinch));
+        dolly(Math.log(ratio / lastPinch), at);
         lastPinch = ratio;
       }
     },

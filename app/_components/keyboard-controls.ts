@@ -61,6 +61,24 @@ export function isTextEntry(target: EventTarget | null): boolean {
   );
 }
 
+/**
+ * True for a key the focused control uses itself: the arrows on a slider,
+ * a tab, a radio or a toggle group's item in the panel — they step that
+ * control, they do not also walk or turn.
+ */
+export function isControlKey(
+  code: string,
+  target: EventTarget | null
+): boolean {
+  const el = target as { closest?: (selector: string) => unknown } | null;
+  return (
+    code.startsWith("Arrow") &&
+    el?.closest?.(
+      "[role=slider], [role=tab], [role=radio], [role=option], [role=menuitem], [role=group] button, [role=toolbar] button"
+    ) != null
+  );
+}
+
 export function attachKeyboardControls(
   { document, window }: KeyboardTargets,
   actions: KeyboardActions
@@ -69,7 +87,7 @@ export function attachKeyboardControls(
     // Held keys auto-repeat. Movement doesn't care (the key set is
     // idempotent), but the one-shot actions must fire once per press —
     // holding R used to re-parse the whole tile on every repeat.
-    if (e.repeat || isTextEntry(e.target)) {
+    if (e.repeat || isTextEntry(e.target) || isControlKey(e.code, e.target)) {
       return;
     }
     // macOS browsers send no keyup for a key released while ⌘ is down, so a

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { PerspectiveCamera } from "three/webgpu";
+import { PerspectiveCamera, Vector3 } from "three/webgpu";
 import { EYE_HEIGHT, PITCH_LIMIT, RAD2DEG } from "@/lib/city/pose";
 import { type CameraPoseOptions, createCameraPose } from "./camera-pose";
 import type { MovementMode } from "./fps-movement";
@@ -277,6 +277,67 @@ test("in the air a pinch flies along the view, further the higher, never into th
   }
   expect(camera.position.y).toBeGreaterThanOrEqual(GROUND + EYE_HEIGHT - 1e-6);
   expect(pose.getMode()).toBe("fly");
+});
+
+test("a wheel or a pinch heads for the spot under the pointer, not the centre", () => {
+  // On foot, facing north: a notch over the right edge walks north-east,
+  // along the ground.
+  const walker = rig();
+  walker.camera.updateMatrixWorld();
+  walker.pose.dolly(1, { x: 0.9, y: 0 });
+  settle(walker.pose);
+  const w = walker.camera.position;
+  expect(w.x).toBeGreaterThan(1);
+  expect(-w.z).toBeGreaterThan(1);
+  expect(w.y).toBeCloseTo(GROUND + EYE_HEIGHT, 6);
+  // the view itself does not turn
+  expect(walker.pose.getCameraState().headingDeg).toBeCloseTo(0, 6);
+
+  // In the air the camera runs along the ray under the pointer, so that
+  // spot stays where it is on screen while it comes nearer.
+  const flyer = rig();
+  flyer.pose.applyCameraState({
+    mode: "fly",
+    pos: { x: 0, y: GROUND + 200, z: 0 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 0,
+    pitchDeg: -30,
+    fov: 55,
+  });
+  const { camera } = flyer;
+  camera.updateMatrixWorld();
+  const at = { x: -0.5, y: -0.4 };
+  const spot = new Vector3(at.x, at.y, 0.5).unproject(camera);
+  const ray = spot.clone().sub(camera.position).normalize();
+  // where that ray meets the ground
+  const ground = camera.position
+    .clone()
+    .addScaledVector(ray, (camera.position.y - GROUND) / -ray.y);
+  flyer.pose.dolly(0.5, at);
+  settle(flyer.pose);
+  camera.updateMatrixWorld();
+  const seen = ground.clone().project(camera);
+  expect(seen.x).toBeCloseTo(at.x, 4);
+  expect(seen.y).toBeCloseTo(at.y, 4);
+  expect(camera.position.y).toBeLessThan(GROUND + 200);
+});
+
+test("a forward dolly in the air stops short of the ground it points at", () => {
+  const { camera, pose } = rig();
+  pose.applyCameraState({
+    mode: "fly",
+    pos: { x: 0, y: GROUND + 20, z: 0 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 0,
+    pitchDeg: -80,
+    fov: 55,
+  });
+  // 2 × max(15, 18) m would be past the ground at this pitch; the step
+  // ends 80 % of the way down to eye height.
+  pose.dolly(2);
+  settle(pose);
+  const drop = GROUND + 20 - camera.position.y;
+  expect(drop).toBeCloseTo((20 - EYE_HEIGHT) * 0.8, 4);
 });
 
 test("fly → walk glides down onto the ground and levels the view", () => {

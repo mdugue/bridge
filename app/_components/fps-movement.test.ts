@@ -49,6 +49,36 @@ test("S, D and A move back, right and left", () => {
   expect(leftward.camera.position.x).toBeCloseTo(-WALK_STEP, 5);
 });
 
+test("the arrows walk (up, down) and turn (left, right), as in Street View", () => {
+  const { camera, movement } = rig();
+  movement.press("ArrowUp");
+  movement.update(1);
+  expect(camera.position.z).toBeCloseTo(-WALK_STEP, 5);
+  movement.release("ArrowUp");
+  expect(movement.turnInput()).toBe(0);
+  movement.press("ArrowRight");
+  expect(movement.turnInput()).toBe(1);
+  movement.press("ArrowLeft");
+  expect(movement.turnInput()).toBe(0);
+  movement.release("ArrowRight");
+  expect(movement.turnInput()).toBe(-1);
+  // turning is not walking
+  const z = camera.position.z;
+  movement.update(1);
+  expect(camera.position.z).toBeCloseTo(z, 5);
+});
+
+test("a dolly given a line runs along it; on foot only its level part", () => {
+  const { camera, movement } = rig();
+  movement.dolly(10, new Vector3(1, -1, 0).normalize());
+  for (let i = 0; i < 120; i += 1) {
+    movement.update(1 / 60);
+  }
+  expect(camera.position.x).toBeCloseTo(10, 2);
+  expect(camera.position.z).toBeCloseTo(0, 5);
+  expect(camera.position.y).toBeCloseTo(EYE, 5);
+});
+
 test("Shift sprints at three times walking speed", () => {
   const { camera, movement } = rig();
   movement.press("KeyW");

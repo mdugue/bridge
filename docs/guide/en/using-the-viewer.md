@@ -48,13 +48,14 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 
 | Input (desktop) | Does |
 |---|---|
-| Drag with the mouse | look around |
+| Drag with the mouse | look around (the pointer is a hand that grabs the view) |
 | `W` `A` `S` `D` | walk (or fly) |
+| `↑` `↓` / `←` `→` | walk forward and back / turn left and right |
 | `Shift` | sprint |
 | `F` | switch between walking and flying (take off / land) |
 | `Space` / `Shift` (or `E` / `Q`) | up / down while flying |
 | `1` – `9` | glide to the first to ninth viewpoint |
-| Mouse wheel (or a two-finger trackpad gesture) | move forward or back |
+| Mouse wheel (or a two-finger trackpad gesture, or pinching on it) | move towards the spot under the pointer, or back from it: on foot along the ground, flying along the line to that spot, which stays under the pointer |
 | `Alt` + mouse wheel | zoom (narrows or widens the field of view) |
 | Double-click on the ground | travel there in a short glide; flying, glide part of the way towards it |
 | Click on the minimap | glide there (on foot you land standing; flying, at the same height) |
@@ -78,7 +79,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (above the toolbar, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there in a short glide; flying, glide part of the way towards it |
-| Two fingers apart / together | forward / back: on foot along the ground, flying along the view (the higher, the further) |
+| Two fingers apart / together | towards / away from the spot between the fingers: on foot along the ground, flying along the line to it (the higher, the further) |
 
 While walking you are held at eye height on the terrain and collide with
 buildings and walls. Flying, you meet facades too, sinking stops at eye

@@ -32,6 +32,7 @@ function harness() {
       handlers.set(type, fn),
     removeEventListener: (type: string) => handlers.delete(type),
     setPointerCapture: () => undefined,
+    style: { cursor: "" },
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 800 }),
   } as unknown as HTMLElement;
 
@@ -45,6 +46,7 @@ function harness() {
     tapBy: [] as string[],
     longPress: [] as [number, number][],
     wheel: [] as number[],
+    wheelAt: [] as [number, number][],
     zoom: [] as number[],
   };
   const callbacks: TouchControlsCallbacks = {
@@ -55,7 +57,10 @@ function harness() {
     },
     onPinch: (ratio) => calls.pinch.push(ratio),
     onDoubleTap: (x, y) => calls.doubleTap.push([x, y]),
-    onWheelDolly: (amount) => calls.wheel.push(amount),
+    onWheelDolly: (amount, x, y) => {
+      calls.wheel.push(amount);
+      calls.wheelAt.push([x, y]);
+    },
     onWheelZoom: (ratio) => calls.zoom.push(ratio),
     onTap: (x, y, pointerType) => {
       calls.tap.push([x, y]);
@@ -100,12 +105,20 @@ function harness() {
     } as unknown as PointerEvent);
   const wheel = (
     deltaY: number,
-    mods: { altKey?: boolean; ctrlKey?: boolean; deltaMode?: number } = {}
+    mods: {
+      altKey?: boolean;
+      clientX?: number;
+      clientY?: number;
+      ctrlKey?: boolean;
+      deltaMode?: number;
+    } = {}
   ) => {
     let prevented = false;
     handlers.get("wheel")?.({
       deltaY,
       deltaMode: 0,
+      clientX: 200,
+      clientY: 400,
       ...mods,
       preventDefault: () => {
         prevented = true;
@@ -122,10 +135,20 @@ function harness() {
     } as unknown as PointerEvent);
     return prevented;
   };
+  /** Safari's trackpad pinch: its gesture events, at a client point */
+  const gesture = (type: string, scale: number, clientX = 200, clientY = 400) =>
+    handlers.get(type)?.({
+      clientX,
+      clientY,
+      scale,
+      preventDefault: () => undefined,
+    } as unknown as PointerEvent);
   return {
     calls,
     contextMenu,
     detach,
+    element,
+    gesture,
     elapse,
     fire,
     lock,
@@ -259,6 +282,46 @@ test("the wheel moves like a pinch: up = forward, proportional, capped, and the 
   wheel(-100_000);
   expect(calls.wheel[4]).toBe(0.5);
   expect(calls.zoom).toEqual([]);
+});
+
+test("the wheel heads for the pointer: its spot comes along in NDC", () => {
+  const { wheel, calls } = harness();
+  // the element is 400 × 800 at the origin
+  wheel(-100, { clientX: 300, clientY: 200 });
+  expect(calls.wheelAt).toEqual([[0.5, 0.5]]);
+});
+
+test("Safari's trackpad pinch dollies like a pinch, about the pointer", () => {
+  const { gesture, calls } = harness();
+  gesture("gesturestart", 1);
+  gesture("gesturechange", 2, 100, 600);
+  gesture("gesturechange", 2);
+  gesture("gesturechange", 1);
+  expect(calls.wheel).toHaveLength(3);
+  // twice the spread is ln 2 forward, capped like a flung wheel
+  expect(calls.wheel[0]).toBe(0.5);
+  expect(calls.wheel[1]).toBe(0);
+  expect(calls.wheel[2]).toBe(-0.5);
+  expect(calls.wheelAt[0]).toEqual([-0.5, -0.5]);
+});
+
+test("the mouse cursor is an open hand, closed while it drags", () => {
+  const { element, fire } = harness();
+  expect(element.style.cursor).toBe("grab");
+  fire("pointerdown", {
+    pointerId: 1,
+    clientX: 0,
+    clientY: 0,
+    pointerType: "mouse",
+  });
+  expect(element.style.cursor).toBe("grabbing");
+  fire("pointerup", {
+    pointerId: 1,
+    clientX: 30,
+    clientY: 0,
+    pointerType: "mouse",
+  });
+  expect(element.style.cursor).toBe("grab");
 });
 
 test("Alt + wheel is one zoom step, up = in", () => {

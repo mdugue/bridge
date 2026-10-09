@@ -114,6 +114,16 @@ test("keys typed into a text field are the HUD's, but their release still reache
   expect(calls).toEqual(["release:KeyW"]);
 });
 
+test("the arrows step a focused slider or tab, not the camera; elsewhere they walk", () => {
+  const { fire, calls } = harness();
+  const slider = { closest: (s: string) => (s.includes("slider") ? {} : null) };
+  fire("keydown", { code: "ArrowLeft", target: slider });
+  // other keys on that slider still walk
+  fire("keydown", { code: "KeyW", target: slider });
+  fire("keydown", { code: "ArrowUp", target: { closest: () => null } });
+  expect(calls).toEqual(["press:KeyW", "press:ArrowUp"]);
+});
+
 test("losing focus or being hidden releases every key", () => {
   const { fire, calls, state } = harness();
   fire("blur");
