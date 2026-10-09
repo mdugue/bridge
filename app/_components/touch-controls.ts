@@ -8,8 +8,11 @@ import { isDoubleTap, type TapSample } from "@/lib/city/touch";
  *  - a right-button drag, or Ctrl/⌘ + drag (`onAltDrag`, Shift held or not):
  *    Modell turns (and tilts) by it; `onDragEnd` when it, or a two-finger
  *    gesture, ends
- *  - mouse wheel / trackpad pinch: the same; with Alt, zoom (FOV); the
- *    pointer's NDC comes along (Modell zooms about it)
+ *  - mouse wheel / trackpad pinch (Safari's gesture events too): the same;
+ *    with Alt, zoom (FOV); the pointer's NDC comes along — the move heads
+ *    for what is under the pointer, as a map zooms about the cursor
+ *  - the mouse cursor is a hand: open over the canvas, closed while it
+ *    drags (the grab convention of maps and Street View)
  *  - double-tap / double-click: travel to the tapped spot
  *  - a single tap / click: `onTap`, with the pointer's type (a click asks
  *    what is there; the first tap of a double one fires it too)
@@ -73,6 +76,16 @@ const MAX_WHEEL_UNITS = 0.5;
 /** px per line / page, for wheels that do not report pixels. */
 const LINE_PX = 16;
 const PAGE_PX = 800;
+
+/**
+ * Safari's trackpad pinch (it sends no ctrl+wheel): the gesture's scale
+ * since it began, at the pointer. Not in TypeScript's DOM types.
+ */
+interface GestureEventLike extends UIEvent {
+  clientX: number;
+  clientY: number;
+  scale: number;
+}
 
 /** Drags beyond this no longer count as a tap. */
 const TAP_SLOP_PX = 12;
@@ -156,6 +169,12 @@ export function attachTouchControls(
 
   const locked = () => element.ownerDocument.pointerLockElement === element;
 
+  /** The hand: closed while a mouse button drags, else open. */
+  const setGrabbing = (grabbing: boolean) => {
+    element.style.cursor = grabbing ? "grabbing" : "grab";
+  };
+  setGrabbing(false);
+
   const acceptsPointer = (e: PointerEvent): boolean => {
     if (e.pointerType === "touch" || e.pointerType === "pen") {
       return true;
@@ -226,6 +245,9 @@ export function attachTouchControls(
       y: e.clientY,
     });
     dragged = pointers.size > 1 ? true : dragged;
+    if (e.pointerType === "mouse") {
+      setGrabbing(true);
+    }
     syncPinchBaseline();
     if (pointers.size === 1) {
       longPressed = false;
@@ -288,6 +310,9 @@ export function attachTouchControls(
     }
     const wasPair = pointers.size === 2;
     pointers.delete(e.pointerId);
+    if (pointers.size === 0) {
+      setGrabbing(false);
+    }
     syncPinchBaseline();
     cancelPress();
     if (state.alt) {
@@ -334,6 +359,14 @@ export function attachTouchControls(
     }
   };
 
+  /**
+   * Where a wheel or a trackpad pinch points: the pointer, or the centre
+   * while it is locked (its client position then stays where the lock
+   * began, and the crosshair is what aims).
+   */
+  const aimOf = (clientX: number, clientY: number): [number, number] =>
+    locked() ? [0, 0] : ndcOf(clientX, clientY);
+
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     if (e.deltaY === 0) {
@@ -352,7 +385,29 @@ export function attachTouchControls(
       -px / (e.ctrlKey ? TRACKPAD_PINCH_PX_PER_UNIT : WHEEL_PX_PER_UNIT);
     callbacks.onWheelDolly(
       Math.min(Math.max(units, -MAX_WHEEL_UNITS), MAX_WHEEL_UNITS),
-      ...ndcOf(e.clientX, e.clientY)
+      ...aimOf(e.clientX, e.clientY)
+    );
+  };
+
+  // Safari's trackpad pinch: its own events, in place of a ctrl+wheel. On
+  // an iPhone they come alongside the touch pointers, which already pinch —
+  // those win (a trackpad's pinch has no pointer down).
+  let gestureScale = 1;
+  const onGestureStart = (e: Event) => {
+    e.preventDefault();
+    gestureScale = 1;
+  };
+  const onGestureChange = (e: Event) => {
+    e.preventDefault();
+    const g = e as GestureEventLike;
+    if (pointers.size > 0 || !(g.scale > 0)) {
+      return;
+    }
+    const units = Math.log(g.scale / gestureScale);
+    gestureScale = g.scale;
+    callbacks.onWheelDolly(
+      Math.min(Math.max(units, -MAX_WHEEL_UNITS), MAX_WHEEL_UNITS),
+      ...aimOf(g.clientX, g.clientY)
     );
   };
 
@@ -380,6 +435,8 @@ export function attachTouchControls(
   element.addEventListener("pointerup", onPointerEnd);
   element.addEventListener("pointercancel", onPointerEnd);
   element.addEventListener("wheel", onWheel, { passive: false });
+  element.addEventListener("gesturestart", onGestureStart);
+  element.addEventListener("gesturechange", onGestureChange);
   element.addEventListener("mousemove", onMouseMove);
 
   return {
@@ -396,6 +453,9 @@ export function attachTouchControls(
       element.removeEventListener("pointerup", onPointerEnd);
       element.removeEventListener("pointercancel", onPointerEnd);
       element.removeEventListener("wheel", onWheel);
+      element.removeEventListener("gesturestart", onGestureStart);
+      element.removeEventListener("gesturechange", onGestureChange);
+      element.style.cursor = "";
       element.removeEventListener("mousemove", onMouseMove);
       if (locked()) {
         element.ownerDocument.exitPointerLock();

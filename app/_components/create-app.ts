@@ -1818,13 +1818,13 @@ async function bootApp(
         modelRig.zoomAt({ x: midX, y: midY }, ratio / lastPinch);
         lastPinch = ratio;
       } else {
-        pose.pinchTo(ratio);
+        pose.pinchTo(ratio, { x: midX, y: midY });
       }
     },
     onWheelDolly: (amount, ndcX, ndcY) =>
       modelRig.owns()
         ? modelRig.zoomAt({ x: ndcX, y: ndcY }, Math.exp(amount))
-        : pose.dolly(amount),
+        : pose.dolly(amount, { x: ndcX, y: ndcY }),
     onWheelZoom: (ratio) => {
       if (!modelRig.owns()) {
         pose.zoomBy(ratio);
