@@ -4,6 +4,7 @@ import { DRESDEN } from "../../sites/dresden";
 import { directionOf } from "./pose";
 import {
   landcoverCredit,
+  mapillaryCredit,
   osmExtractUrl,
   siteAttribution,
   siteCredit,
@@ -173,4 +174,16 @@ test("the short credit names every licensor and licence once", () => {
     "Geobasis NRW (dl-de/zero-2-0) · Straßen.NRW, Freie und Hansestadt Hamburg (dl-de/by-2-0) · © OpenStreetMap (ODbL)"
   );
   expect(siteCredit(SITES.hamburg)).toContain("LGV");
+});
+
+test("Mapillary is credited where its photos are measured, naming what it gave", () => {
+  expect(mapillaryCredit(SITES.dresden)).toEqual([
+    "Lampen, Mülleimer, Schaufenster: Mapillary, CC BY-SA 4.0",
+  ]);
+  expect(mapillaryCredit(SITES.leipzig)).toEqual([
+    "Fassaden, Schaufenster: Mapillary, CC BY-SA 4.0",
+  ]);
+  expect(mapillaryCredit({ ...SITES.leipzig, mapillary: undefined })).toEqual(
+    []
+  );
 });

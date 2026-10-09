@@ -374,10 +374,17 @@ def _bbox(cell, to_wgs) -> str:
 
 
 def _search(path: str, query: dict, cell, to_wgs, depth: int = 0) -> list[dict]:
-    """A cell's answer; a full one is split in four (to 1/64 of a cell)."""
+    """A cell's answer; a full one is split in four (to 1/64 of a cell), and
+    so is one the API keeps failing on: a dense cell (Leipzig's centre) can
+    answer 500 every time where its quarters answer at once."""
     q = urllib.parse.urlencode(query | {"bbox": _bbox(cell, to_wgs), "limit": LIMIT})
-    data = json.loads(_get(f"{GRAPH}/{path}?{q}")).get("data", [])
-    if len(data) < LIMIT or depth >= 3:
+    try:
+        data = json.loads(_get(f"{GRAPH}/{path}?{q}", tries=3)).get("data", [])
+    except Transient:
+        if depth >= 3:
+            raise
+        data = None
+    if data is not None and (len(data) < LIMIT or depth >= 3):
         return data
     x0, y0, x1, y1 = cell
     xm, ym = (x0 + x1) / 2, (y0 + y1) / 2

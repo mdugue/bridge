@@ -98,7 +98,7 @@ def _cell(url: str, tries: int = 4) -> list[dict]:
 def fetch(tile: Tile) -> None:
     """The tile's map features, unless cached. Needs MAPILLARY_TOKEN; without
     it (or for a site that does not use Mapillary) this is a note."""
-    if not tile.mapillary:
+    if not tile.mapillary_objects:
         return
     path = cache_path(tile)
     if path.exists():
@@ -203,8 +203,8 @@ class Hangers:
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"mly_{tile.id}.geojson")
     path = cache_path(tile)
-    if not tile.mapillary or not path.exists():
-        if tile.mapillary:
+    if not tile.mapillary_objects or not path.exists():
+        if tile.mapillary_objects:
             print(f"{tile.id}: no Mapillary cache — lamps and bins are OSM's alone")
         write_geojson(out, [], tile.epsg, ATTRIBUTION)
         return
