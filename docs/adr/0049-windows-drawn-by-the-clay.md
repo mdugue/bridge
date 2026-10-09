@@ -112,10 +112,10 @@ neighbours carry windows.
   Windows follow each building's own rhythm and its storeys, keep off
   party walls, doors and shopfronts, and stop under the eave.
 - The clay's fragment cost grows on walls (a parallax step, a few
-  smoothsteps), built once: the window graph and the colour round it are
-  steps and mixes, never a TSL `select`, which three emits as if/else and
-  builds again inside its arm (a first cut ran the windows twice a
-  pixel, a derivative in a branch). Its vertex buffers stay four of
+  smoothsteps), built once: the window graph, and the Schnitt's poché
+  round the facade colour, are steps and mixes, never a TSL `select`,
+  which three emits as if/else and builds again inside its arm (a first
+  cut ran the windows twice a pixel, a derivative in a branch). Its vertex buffers stay four of
   WebGPU's eight, the roof flag riding in the wall coordinate's first
   door slot (−1, `FACADE_ROOF`). Its varyings grow by two vec4 (the
   rhythm, the wall coordinate), which brings the clay to WebGPU's limit:

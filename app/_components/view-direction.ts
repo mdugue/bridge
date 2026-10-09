@@ -1,10 +1,13 @@
 import { type Camera, type UniformNode, Vector3 } from "three/webgpu";
 import {
   cameraPosition,
+  cameraViewMatrix,
   mix,
   normalize,
+  positionView,
   positionWorld,
   uniform,
+  vec4,
 } from "three/tsl";
 import type { Live, V3 } from "./shader-chunks";
 import { parallelDirection } from "./view-ray";
@@ -30,6 +33,23 @@ export const viewRay: UniformNode<"vec3", Vector3> = uniform(
 export function viewDirection(): V3 {
   return normalize(
     mix(positionWorld.sub(cameraPosition), viewRay, viewParallel)
+  );
+}
+
+/**
+ * `viewDirection()` turned round, in view space: from the fragment to the
+ * eye, for a material that works beside `normalView`. In perspective it is
+ * TSL's `positionViewDirection`; in a parallel projection the view's one
+ * direction, where that node — built for the perspective camera the tiles
+ * compile with — would look from the camera's place.
+ */
+export function eyeDirectionView(): V3 {
+  return normalize(
+    mix(
+      positionView.negate(),
+      cameraViewMatrix.mul(vec4(viewRay, 0)).xyz.negate(),
+      viewParallel
+    )
   );
 }
 

@@ -513,10 +513,11 @@ perspective camera's builds, are within a fraction of a degree of right —
 except in a Militärperspektive, whose shear tilts the true view 45° off
 the camera's forward. So what the scene's own materials read of the view
 (the clay's rim, windows and mirrors, the crowns' backlight, the water's
-Fresnel and glitter) comes from `viewDirection()` (`view-direction.ts`):
-from the camera's place in perspective, one direction for every pixel in
-a parallel projection, set each frame with the lens. Nothing is built for
-Modell.
+Fresnel and glitter, the data layers' glass, the monuments' gilding and
+noir's lamp cones) comes from `viewDirection()` (`view-direction.ts`;
+`eyeDirectionView()` is the same in view space): from the camera's place
+in perspective, one direction for every pixel in a parallel projection,
+set each frame with the lens. Nothing is built for Modell.
 
 - **The view lens** (`view-lens.ts`). No post pass holds the real camera;
   they read a stand-in whose near, far, projection and world matrices are

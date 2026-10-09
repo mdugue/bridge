@@ -824,9 +824,10 @@ perspective and the parallel (and sheared) camera. A new pass that turns
 depth into distance goes through `lens.viewZ`/`lens.distance`, a new ray
 through `setPickRay`, a new distance-keyed look through the equivalent
 distance, a material's view direction through `viewDirection()`
-(`view-direction.ts`) — reading `camera.fov`, `camera.position` or TSL's
-`cameraPosition` for a direction is a bug in Modell (a Militärperspektive
-looks in 45° off its camera's forward). Screen passes built on
+(`view-direction.ts`; `eyeDirectionView()` beside `normalView`) — reading
+`camera.fov`, `camera.position`, or TSL's `cameraPosition`,
+`positionViewDirection` or `reflectVector` for a direction is a bug in
+Modell (a Militärperspektive looks in 45° off its camera's forward). Screen passes built on
 `NodeUpdateType.FRAME` (SMAA, GTAO) render once per animation frame:
 anything that renders the frame twice in one (the export's tiles) must
 spread over frames.

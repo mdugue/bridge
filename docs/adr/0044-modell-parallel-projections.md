@@ -54,9 +54,10 @@ fraction of a degree of the true direction — except in a
 Militärperspektive, whose shear tilts the true direction 45° off the
 camera's forward. What the scene's materials read of the view (a Fresnel
 rim, a mirror, a window's recess) therefore comes from `viewDirection()`
-(`view-direction.ts`, 2026-10-09): the camera's place in perspective, one
-direction for every pixel in a parallel projection, unprojected each
-frame like a pick ray. Tiles and dressings still compile with the
+(`view-direction.ts`, 2026-10-09; `eyeDirectionView()` in view space, in
+place of TSL's `positionViewDirection`): the camera's place in
+perspective, one direction for every pixel in a parallel projection,
+unprojected each frame like a pick ray. Tiles and dressings still compile with the
 perspective camera. Entering Modell builds nothing.
 
 **Picking unprojects.** One `setPickRay` (`view-ray.ts`) unprojects the
