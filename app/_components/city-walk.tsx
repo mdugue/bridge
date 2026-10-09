@@ -171,14 +171,15 @@ const INITIAL_DATE = new Date();
 /** A little air after the veil is gone before the heavy work resumes. */
 const STREAM_SETTLE_MS = 250;
 
-/** Whether the mouse is locked to the scene (immersive mode). */
+/** Whether the mouse is locked to the scene (immersive mode). iOS Safari
+ *  has no Pointer Lock: its `pointerLockElement` is undefined, not null. */
 function usePointerLocked(): boolean {
   return useSyncExternalStore(
     (onChange) => {
       document.addEventListener("pointerlockchange", onChange);
       return () => document.removeEventListener("pointerlockchange", onChange);
     },
-    () => document.pointerLockElement !== null,
+    () => document.pointerLockElement != null,
     () => false
   );
 }
