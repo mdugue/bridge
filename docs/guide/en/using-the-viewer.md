@@ -393,6 +393,7 @@ mistake); the switch stays as you set it.
 | | *Dachsättigung* | lifts the saturation of the aerial-photo roof colours without shifting their hue; 0 = raw photo |
 | | *Traufkante* | a soft line where wall meets roof |
 | | *Gliederung* | what a house shows at eye level before its windows, painted: a darker shop zone where a shop is mapped — no windows. The plinth, the ledge over the ground floor and the eave cornice are modelled, run on from house to house and are always there |
+| | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs — no windows; Dresden only, where panoramas show the front |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |

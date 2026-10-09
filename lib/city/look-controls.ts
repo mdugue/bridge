@@ -28,6 +28,7 @@ export type ClayLookKey =
   | "bands"
   | "duskGlow"
   | "eave"
+  | "facadeReading"
   | "groundShade"
   | "rim"
   | "roofTint"
@@ -222,6 +223,16 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     group: "buildings",
     initial: 0.8,
     snapshotKey: "articulationPct",
+  },
+  {
+    key: "facadeReading",
+    id: "building-facade-reading",
+    label: "Fassadenbild",
+    description:
+      "Was Straßenfotos über eine Fassade sagen: feines Relief, wo sie unruhig ist, ein dunklerer Ton, Ladensockel — keine Fenster",
+    group: "buildings",
+    initial: 1,
+    snapshotKey: "facadeReadingPct",
   },
   {
     key: "duskGlow",

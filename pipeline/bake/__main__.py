@@ -13,6 +13,7 @@ from . import (
     doors,
     dormers,
     edges,
+    facades,
     fetch,
     furniture,
     lamps,
@@ -29,6 +30,7 @@ from . import (
     riverside,
     roof_colour,
     roofs,
+    shopfronts,
     skyview,
     small_buildings,
     soundmarks,
@@ -66,6 +68,12 @@ STEPS = {
     # After the lamps and the furniture: Mapillary's lamps and bins where
     # OSM has none.
     "mapillary": mapillary.run,
+    # What Mapillary's panoramas say about the facades (measured by the
+    # fetch): three readings per building for the clay.
+    "facades": facades.run,
+    # The same measurements per wall: the ground floor's bays and store
+    # signs (OSM's shops where no photo shows one).
+    "shopfronts": shopfronts.run,
     "walls": walls.run,
     "stairs": stairs.run,
     "surface": surface.run,

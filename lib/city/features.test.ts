@@ -8,6 +8,7 @@ import type {
   CanopyFeature,
   CultivatedFeature,
   DoorFeature,
+  ShopfrontFile,
   PlinthFeature,
   FeatureCollection,
   FurnitureFeature,
@@ -276,6 +277,52 @@ test.each(tiles)(
       expect(p?.h ?? 0).toBeGreaterThanOrEqual(1.8);
       expect(p?.h ?? 99).toBeLessThanOrEqual(5);
       expect(Number.isFinite(p?.z)).toBe(true);
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: shopfronts are walls with a frame, bays on them and a ground",
+  (tile, site) => {
+    const path = join(ROOT, cityMeshSourceFiles(site, tile).shopfronts);
+    if (!existsSync(path)) {
+      return;
+    }
+    const doc = JSON.parse(readFileSync(path, "utf8")) as ShopfrontFile;
+    expect(doc.attribution).toContain("Mapillary");
+    for (const walls of Object.values(doc.buildings)) {
+      for (const w of walls) {
+        expect(w.oid.length).toBeGreaterThan(0);
+        expect(Number.isInteger(w.wi)).toBe(true);
+        const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+        expect(len).toBeCloseTo(w.L, 1);
+        expect(Math.hypot(...w.n)).toBeCloseTo(1, 3);
+        // the normal stands square on the wall
+        expect(
+          Math.abs((w.b[0] - w.a[0]) * w.n[0] + (w.b[1] - w.a[1]) * w.n[1])
+        ).toBeLessThan(0.01 * w.L);
+        for (const z of w.z ?? []) {
+          expect(Number.isFinite(z)).toBe(true);
+        }
+        expect(["photo", "canopy"]).toContain(w.src);
+        for (const [s0, s1] of w.bays ?? []) {
+          expect(s0).toBeGreaterThanOrEqual(0);
+          expect(s1).toBeLessThanOrEqual(w.L + 0.01);
+          expect(s1 - s0).toBeGreaterThanOrEqual(1.2 - 1e-6);
+        }
+        for (const c of w.canopy ?? []) {
+          expect(c.at[0]).toBeGreaterThanOrEqual(0);
+          expect(c.at[1]).toBeLessThanOrEqual(w.L + 0.01);
+          expect(c.d).toBeGreaterThanOrEqual(1.5);
+          expect(c.d).toBeLessThanOrEqual(8);
+          expect(c.h).toBeGreaterThanOrEqual(2.6);
+          expect(c.h).toBeLessThanOrEqual(6.5);
+        }
+        // a wall only a canopy speaks for is under one
+        if (w.src === "canopy") {
+          expect(w.canopy?.length ?? 0).toBeGreaterThan(0);
+        }
+      }
     }
   }
 );

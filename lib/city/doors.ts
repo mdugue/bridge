@@ -25,7 +25,7 @@ export interface DoorMesh {
   surround: number[];
 }
 
-type V3 = [number, number, number];
+export type V3 = [number, number, number];
 
 /** How far from the footprint line a door looks for its wall, either way:
  *  LoD2's walls stand up to a decimetre or two off it. */
@@ -336,7 +336,7 @@ function lineThrough(read: readonly [number, number][]): [number, number] {
 
 /** Where a ray from `o` along −n meets the triangle facing it (its first
  *  vertex at `t`), as the distance along the ray; undefined if it misses. */
-function rayHit(
+export function rayHit(
   o: V3,
   n: V3,
   positions: ArrayLike<number>,
@@ -442,11 +442,11 @@ export function doorMesh(
   return out;
 }
 
-type Face = "+a" | "-a" | "+b" | "+c" | "-c";
+export type Face = "+a" | "-a" | "+b" | "+c" | "-c";
 
 /** The listed faces of a box spanning [a0, a1] along the wall, [b0, b1] out
  *  of it and [c0, c1] up, pushed onto `positions` as triangles. */
-function box(
+export function box(
   positions: number[],
   at: (a: number, b: number, c: number) => V3,
   [a0, a1]: [number, number],

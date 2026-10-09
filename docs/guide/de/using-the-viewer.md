@@ -416,6 +416,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Dachsättigung* | hebt die Sättigung der Luftbild-Dachfarben, ohne den Farbton zu verschieben; 0 = rohes Luftbild |
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
 | | *Gliederung* | was ein Haus auf Augenhöhe vor seinen Fenstern zeigt, gemalt: eine dunklere Ladenzone, wo ein Laden erfasst ist — keine Fenster. Sockel, Gesims über dem Erdgeschoss und Traufgesims sind modelliert, laufen von Haus zu Haus durch und sind immer da |
+| | *Fassadenbild* | was Straßenfotos (Mapillary) über eine Fassade sagen, abstrahiert: ein feines Relief, wo sie unruhig ist, ein Gesims an jedem Geschoss einer unruhigen Gründerzeitfront, ein etwas dunklerer oder hellerer Ton, ein Ladensockel, wo ein Ladenschild hängt — keine Fenster; nur in Dresden, wo Rundumfotos die Fassade zeigen |
 | | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |

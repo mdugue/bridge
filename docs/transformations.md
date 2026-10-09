@@ -1593,6 +1593,107 @@ the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-dem
   tile), traffic signs (no layer draws them), signals (OSM's are placed by
   the direction they face, which a detection lacks).
 
+- **Facade readings from street photos (experimental)** `◎ detected` —
+  Mapillary's panoramas of a street front (since 2016; on Dresden nearly
+  all from 2025), rectified onto the LoD2 wall with their computed poses
+  and masked to the "building" class, give
+  per wall the share of the upper wall that is not plain render (openings,
+  frames, stucco, glass), the share clearly darker than the render, and
+  how open the ground floor is; two sequences of one wall agree at
+  Spearman ρ 0.66–0.71 (window size, window count, storey height and
+  "ornament" did not, and stucco cannot be told from glass). A building
+  takes the length-weighted median of its walls, graded: busy 1–3 (busy
+  only where two sequences saw it), dark 1–3, and a shop where a shop sign
+  hangs within 4 m of the wall or the ground floor is more than 80 % open.
+  On Dresden 2 798 walls of 1 957 buildings over thirteen tiles (864 walls
+  and 614 buildings on the spawn tile, a third of its street fronts;
+  courtyards hardly at all; two tiles have no usable panorama). Its own file
+  (`dlm/facades_<t>.json`, CC BY-SA 4.0), read at runtime into the flags
+  column above the OSM bits (`lib/city/facade-reading.ts`); the clay draws
+  a fine plaster relief lit from above on mid and busy facades, a tone a few per
+  cent darker or lighter, a ledge at every storey of a busy front under a
+  pitched roof, and the shop zone of a signed shop (*Fassadenbild*,
+  `visual-style.ts` `facadeReading`). No windows: the grid veto holds.
+  The photo analysis is the `facades` step (`pipeline/bake/facades.py`,
+  `facade_measure.py`): `bun run fetch` plans the walls, asks Mapillary
+  for each panorama's pose and segmentation, measures its 2048 px
+  thumbnail on every wall it serves and deletes it, caching only the
+  measurements (`<raw>/mapillary/facades/<t>.jsonl`); `bun run bake
+  --step facades` grades them per building. 13 717 panoramas measured
+  for Dresden's fifteen tiles in about an hour (the spawn tile's 3 341 in
+  six minutes); re-baked from the step, the spawn tile agrees with the
+  spike's hand-converted file on busy for 584 of 590 shared buildings and
+  on dark for 581; shop is set on 59 more, since the step joins the store
+  signs per building (the spike's table had matched them to walls by an
+  index from a different wall list).
+
+- **Shopfronts from street photos (experimental)** `◎ detected` `≈ assumed` — the same
+  panoramas measured once more per wall (`<raw>/mapillary/facades/<t>.v2.jsonl`;
+  the first fetch's cache stays): the ground floor's profile along the
+  LoD2 wall in 0.5 m bins from its start vertex — how open each 0.3 m row
+  of the band 0.3–3.4 m is against the ground floor's own plaster (the
+  brighter half of its smooth pixels: a mean over piers and glass, as the
+  upper-wall reading takes, makes a whole shopfront read open), where
+  Mapillary's segmentation finds a store sign (`object--sign--store`, its
+  band in metres), and the top of wide, low openings. Per wall
+  (`pipeline/bake/shopfronts.py`) each sequence's median profile is shifted
+  onto the best-seen one by the best correlation within ±1.5 m (taken only
+  where it beats no shift by 0.15 and reaches 0.5), every image votes per
+  bin — open where both knee height (0.6–1.2 m) and eye height (1.2–2.4 m)
+  are at least 60 % open, so a house window above its sill and a dark
+  plinth are no opening —, two images must agree, and the runs of open
+  bins at least 1.2 m wide are the bays (three or more of nearly one width
+  take their median width; none is added). A **glazed row** — the bins
+  any image saw at least 75 % open over at least 6 m of the wall, the
+  modernist shop rows the boulevard's panoramas see one stretch at a
+  time — takes one image's verdict where no other looked and bridges
+  unknown gaps up to 1 m (a tree trunk, a column): its glass runs from
+  pier to pier (`row`). A wall is a shopfront with a bay over at least
+  half its decided bins, as a glazed row, or with a store sign seen twice
+  (or once beside a Mapillary sign feature). Over a shopfront the surface
+  model may show a **canopy** (`canopy`): per metre along the wall nDOM =
+  DOM1 − DGM1 every 0.5 m out to 8 m; where it is 2.6–6.5 m high a metre
+  out, no higher than the building behind, and stays level (−0.6/+1 m)
+  until it drops off, that is the canopy's depth; runs of at least 4 m
+  (one miss bridged) keep their median depth and height. Under a canopy
+  the glass runs its whole length but for runs of 1.5 m or more two
+  images agree are wall — the Hauptstraße's GDR pavilions are glass from
+  end to end, and their canopy's shade and columns break the photo
+  profile up —, and a wall of the same LoD2 object facing the same way
+  that no photo measured gets the row too where its canopy goes on
+  (`src: "canopy"`). `dlm/shopfronts_<t>.json` (per Building, per wall:
+  base points in the tile's CRS, bays, sign, ground-floor top, canopies;
+  credited to Mapillary and, with a canopy, GeoSN). All fifteen Dresden
+  tiles measured (2026-10-08: 13 717 panoramas — the spawn tile's 3 341
+  first, the other fourteen tiles' 10 376 in 30 min of fetch at ≈ 6
+  images/s on four cores): 1 003 shopfront walls on 780 buildings, 223 of them
+  glazed rows, 19 under a canopy (3 of them continuing one). Noisy: two
+  sequences' profiles correlate at a median 0.31 unshifted, 0.56 after
+  the shift; a single image misreads graffiti and painted panels as
+  openings; a long wall is often seen by two images only. The building
+  bake draws them (`lib/city/shopfronts.ts`, `appendShopfronts`, column
+  `source` = 6), soft and abstract (*Weiche Nische*, 2026-10-08): per
+  run of bays a surround 15 cm proud with rounded outer edges, a niche
+  per bay whose reveal rolls into the front over a 7 cm quarter round
+  (smooth normals), the glass at the niche's back 6 cm out of the wall
+  from 0.5 m (a glazed row: 0.3 m) to the measured ground-floor top (3 m
+  where none; under a canopy's slab, into which the head reaches over
+  a strip of wall under 0.25 m) —
+  no mullions, no frame boards —, a rounded fascia band 10 cm proud at
+  the measured sign band (none under a canopy: its fascia is the sign
+  band); a canopy is a slab 0.3 m thick under its measured top from the
+  wall out to a 0.2 m deep fascia at its edge, at most 1 m tall, with
+  2.6 m headroom, its outer edges rounded, in the host's own clay (its
+  columns are not measured and not drawn). The glass is a muted tone a
+  little darker and cooler than its wall (not black), with the head's
+  soft shadow over its top (`paneShade`); it is smooth (roughness 0.2)
+  and catches the sun calmly; the upper pane and a grazing view hold a
+  calm sky (`paneSky`), so it reads as glass
+  out of the sun too. Shop windows on a shop's ground floor are the one
+  exception to the glass veto (🗃️ *Procedural window grid*, user
+  decision 2026-10-08); a wall no photo shows as a shopfront gets none
+  (🗃️ *A shop window at an OSM shop node*).
+
 - **Street furniture** `❝ taken` `≈ assumed` — OSM benches (`amenity=bench`, points and the
   ways a bench is sometimes drawn as), picnic tables, litter bins
   (`waste_basket`), bicycle stands (`bicycle_parking`, not wall loops),
@@ -2788,7 +2889,8 @@ research that produced them):
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
 | **A raised pavement behind the kerb** (plan 023's leftover: lift the pavement a kerb's height above the road) | The DGM1 has no such step to lift, and ADR 0035 makes every part meet the ground at the ground's own level: the kerb's back now runs down to the pavement (`meetGround`), which took its ground-join misses from 32 % to 2 % (2026-10-01 audit). | Only with a measured kerb height per street (none of the sources carries it) and a terrain cut that ADR 0035's join check accepts. |
 | **DGM1 micro-relief as a normal texture** (plan 023 phase 7: a 1 m normal map over the "2 m mesh") | The fine level is a ±0.15 m TIN of the native DGM (ADR 0030), not a 2 m grid, and `terrainNormal` (`terrain-layer.ts`) deliberately pulls near-flat normals up: the DGM's ruts, survey wobble and 8-bit normals read as dirty flecks under a low sun. Kerbs are real geometry now. | Revisit only if a real-GPU plate shows the ground too flat — and then as a softer calm threshold, not more relief. |
-| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. Re-affirmed by plan 050: a glass facade (OSM `building:material=glass`) gets a cool tint and a sky sheen, never panes, mullions or a texture. |
+| **A shop window at an OSM shop node** (2026-10-08, the shopfronts' first bake: a wall no photo showed as a shopfront, with an OSM `shop=*` or café node within 3 m, got one 2.4 m bay centred on the node — 1 074 walls over the fifteen Dresden tiles, all but the spawn tile's) | A node says a shop is there, not where its windows are or how wide: the lone narrow bay with its riser, head and piers read as a door, not a shop window (the Hauptstraße's GDR pavilions, glass from end to end, showed a row of "doors"; owner's review). Better no window than a wrong one. | Every tile's panoramas are measured now; a wall they do not show stays plain. The OSM shop still tints the ground floor (*Ladenzone*) and lights it at dusk. |
+| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. Re-affirmed by plan 050: a glass facade (OSM `building:material=glass`) gets a cool tint and a sky sheen, never panes, mullions or a texture. One exception (user decision, 2026-10-08): **shop windows on a shop's ground floor may show glass** — dark, slightly reflecting panes where street photos measured the bays, divided only by a shop window's own mullions, never a grid and never above the ground floor (*Shopfronts from street photos*). |
 | **Structures from the surface model alone** (plan 050: every tall gap between DOM1 and `max(DGM1, LoD2 roof)` as a column or block) | The gap is mostly not buildings: tree crowns, power pylons, and on the flight day the construction cranes — Leipzig's centre showed dozens of 50–95 m spikes with no mapped structure, Hamburg 90–98 m ones beside a 2023 building. | Only where OSM names the structure (`man_made=*`, a building outline) does the surface model measure it; a landmark's roof relief is the one gap drawn without a mapped outline, and only over its own LoD2 roof. |
 | **Invented or imported landmark geometry** (hand-modelled landmarks per city, glTF models from 3D warehouses, a stock spire or dome by type) | Not repeatable for the next city, a licence per model, and a detailed model breaks the clay style next to LoD2 boxes. | Geometry beyond LoD2 comes only from a measurement confirmed by a name ([ADR 0038](./adr/0038-measured-and-named-additions.md)). |
 | **Landmark roof relief as stacked slabs** (plan 050 as first built: the excess over the highest LoD2 roof cut into ≥ 2 m bands, at most 8, each band's smoothed outline extruded as a flat slab — a contour model) | A spire LoD2 cuts short became a stepped pyramid (Unna's Stadtkirche: LoD2 stops at 137 m, the surface model at ≈ 178 m) and the Elbphilharmonie's crests a flight of terraces — the plan's own STOP ("reads as a stack of plates"); 508 slabs on 74 objects in the first bake. | Replaced by the measured height field on the 1 m grid, lightly smoothed, built as one surface with corner heights averaged (✅ *Landmark roof relief*). Still no invented smooth roof: every height is a surface-model cell. |

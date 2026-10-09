@@ -49,6 +49,7 @@ import {
   OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
+  OBJECT_SOURCE_SHOPFRONT,
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
@@ -80,11 +81,22 @@ import type {
   DoorFeature,
   DormerFeature,
   MeasuredRoofFeature,
+  ShopfrontWall,
   PlinthFeature,
   SmallBuildingFeature,
   StructureFeature,
 } from "../lib/city/features";
 import { buildingFootprintPolys } from "../lib/city/minimap";
+import {
+  doorSpans,
+  footAt,
+  paneTop,
+  CANOPY,
+  SHOPFRONT,
+  shopfrontMesh,
+  wallBays,
+  wallShiftAt,
+} from "../lib/city/shopfronts";
 import {
   inheritedOsm,
   lod2Facts,
@@ -380,6 +392,17 @@ function flatNormalsAfter(
   return { normals };
 }
 
+/** The stream's normals run on with `appended` (NaN: flat), the stream's
+ *  own flat where it carries none. */
+function shadedNormalsAfter(
+  v: CityVertices,
+  appended: readonly number[]
+): Float32Array<ArrayBuffer> {
+  const own =
+    v.normals ?? new Float32Array(v.positions.length).fill(Number.NaN);
+  return concat(own, appended);
+}
+
 function concat(
   a: Float32Array<ArrayBuffer>,
   b: readonly number[]
@@ -466,7 +489,8 @@ export function withMeasuredRoofs(
  * tile's wall material (the tint palette; osm_buildings.py `context`), an
  * object's own neighbourhood overriding it.
  * `measured` are the roofs rebuilt from DOM1, when baked; `onWalls` OSM's
- * doors and the surface model's dormers, each on its LoD2 host.
+ * doors, the surface model's dormers and the shopfronts (street photos,
+ * the surface model's canopies), each on its LoD2 host.
  */
 export function bakeCityMesh(
   tile: string,
@@ -482,6 +506,7 @@ export function bakeCityMesh(
     doors?: readonly DoorFeature[];
     dormers?: readonly DormerFeature[];
     plinths?: readonly PlinthFeature[];
+    shopfronts?: readonly ShopfrontWall[];
   } = {}
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
@@ -634,6 +659,7 @@ function appendBeyondLod2(
     dormers?: readonly DormerFeature[];
     facades: FacadeMaterial;
     plinths?: readonly PlinthFeature[];
+    shopfronts?: readonly ShopfrontWall[];
     gaps?: readonly StructureFeature[];
     scan?: readonly SmallBuildingFeature[];
   }
@@ -647,6 +673,10 @@ function appendBeyondLod2(
   }
   if (extra.plinths) {
     appendPlinths(baked, extra.plinths, objectIndex);
+  }
+  if (extra.shopfronts) {
+    // before the doors: a bay is cut at a door, which the doors then draw
+    appendShopfronts(baked, extra.shopfronts, extra.doors ?? [], objectIndex);
   }
   if (extra.doors) {
     appendDoors(baked, extra.doors, objectIndex);
@@ -992,6 +1022,189 @@ export function appendDoors(
     ),
     ...flatNormalsAfter(v, positions.length),
   };
+}
+
+/** The clay's base colour (the material's 0xece7df, linear) and how much
+ *  of a building's tint the walls show at the Farbvariation slider's
+ *  default (lib/city/look-controls.ts): a wall as one sees it. */
+const CLAY_BASE: [number, number, number] = [0.838, 0.799, 0.737];
+const WALL_TINT_SHOWN = 0.6;
+/** A shop window: a muted glass a little darker and cooler than its wall
+ *  — the wall as shown, darkened, drawn towards a cool slate — not a
+ *  black hole; smooth enough to hold a calm reflection of the sun (its
+ *  `rough` column is the pane's roughness, read as such for own-colour
+ *  glass) and of the sky (the clay's `paneSky`,
+ *  app/_components/visual-style.ts). */
+const PANE_SLATE: [number, number, number] = [0.07, 0.09, 0.12];
+export const PANE_ROUGH = 0.2;
+/** A shopfront's surround and fascia: its wall as shown, a shade darker
+ *  and a touch cooler — part of the wall, not a frame. */
+const SURROUND_COOL: [number, number, number] = [0.52, 0.55, 0.6];
+/** A host this far above the ground in front of its wall stands on another
+ *  part (a storey on a podium, a roof terrace): no shopfront on it. */
+const SHOP_HOST_ABOVE_M = 2;
+
+/** The shop glass and the surround for a host of tint `tint` (linear). */
+export function shopfrontColours(tint: readonly number[]): {
+  glass: [number, number, number];
+  surround: [number, number, number];
+} {
+  const wall = mixRgb(CLAY_BASE, tint, WALL_TINT_SHOWN);
+  return {
+    glass: mixRgb(
+      wall.map((c) => c * 0.4),
+      PANE_SLATE,
+      0.45
+    ),
+    surround: mixRgb(
+      wall.map((c) => c * 0.9),
+      SURROUND_COOL,
+      0.12
+    ),
+  };
+}
+
+/**
+ * The shopfronts on the LoD2 walls (pipeline/bake/shopfronts.py: bays and
+ * signs from street photos, canopies from the surface model), appended as
+ * part of the object they front, like the doors: per wall one object per
+ * run of glass (its `eaveH` the pane's top, where the head's soft shadow
+ * falls — `paneShade` in visual-style.ts), the surrounds and fascias as one
+ * (rounded: their own smooth normals), the canopy in the host's own clay;
+ * the host's building tree (asking or demolishing one takes the
+ * building), no footprint, no storey band or eave line on them, `source` 6
+ * (a wall with a sign and no bay gets its fascia alone).
+ * Skipped: a host the tile does not hold, a glass or metal
+ * facade (its own front), a host not on the ground; a bay is cut where an
+ * OSM door stands. Returns the walls drawn.
+ */
+export function appendShopfronts(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  walls: readonly ShopfrontWall[],
+  doors: readonly DoorFeature[],
+  objectIndex: ReadonlyMap<string, number>
+): number {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const objectIds: number[] = [];
+  const trees = treeTriangles(baked);
+  const rootOf = (id: string) => {
+    const i = objectIndex.get(id);
+    return i === undefined ? undefined : baked.objects[i]?.root;
+  };
+  let drawn = 0;
+  for (const w of walls) {
+    const hostIndex = objectIndex.get(w.oid);
+    const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
+    if (!(host && w.z) || !shopHost(host, w)) {
+      continue;
+    }
+    const bays = wallBays(
+      w,
+      doorSpans(w, doors, (of) => rootOf(of) === host.root)
+    );
+    const triangles = trees.get(host.root) ?? [];
+    const mesh = shopfrontMesh(w, bays, host.storeyH, baked.offset, (span) =>
+      wallShiftAt(w, span, baked.offset, baked.vertices.positions, triangles)
+    );
+    if (
+      mesh.panes.length === 0 &&
+      mesh.frame.positions.length === 0 &&
+      mesh.canopy.positions.length === 0
+    ) {
+      continue;
+    }
+    drawn++;
+    const base = footAt(w, [0, w.L]);
+    const above = cm(
+      Math.max(...(w.z ?? [0])) -
+        base +
+        Math.max(
+          paneTop(w, host.storeyH) + SHOPFRONT.head + CANOPY.tuck,
+          w.sign?.z?.[1] ?? 0,
+          ...(w.canopy ?? []).map((c) => c.h)
+        ) +
+        1
+    );
+    const part = (
+      tris: Shaded,
+      tint: [number, number, number],
+      flags: number,
+      rough: number,
+      eaveH = above
+    ) => {
+      const index = baked.objects.length;
+      positions.push(...tris.positions);
+      normals.push(...tris.normals);
+      for (let i = 0; i < tris.positions.length / 9; i++) {
+        objectIds.push(index, index, index);
+      }
+      baked.objects.push({
+        ...host,
+        building: false,
+        baseZ: cm(base),
+        // above the shopfront: no eave stroke, no storey band on it
+        eaveH,
+        storeyH: above,
+        glow: 0,
+        // its own colour, none of the host's OSM looks (no shop wash)
+        flags,
+        rough,
+        tint,
+        source: OBJECT_SOURCE_SHOPFRONT,
+        footprints: [],
+      });
+    };
+    const colours = shopfrontColours(host.tint);
+    for (const pane of mesh.panes) {
+      part(
+        {
+          positions: pane.positions,
+          normals: pane.positions.map(() => Number.NaN),
+        },
+        colours.glass,
+        OBJECT_FLAG_OWN_COLOUR + OBJECT_FLAG_GLASS,
+        PANE_ROUGH,
+        // the glass's eave is its top: the head's shadow under it
+        cm(pane.top - base)
+      );
+    }
+    if (mesh.frame.positions.length > 0) {
+      part(mesh.frame, colours.surround, OBJECT_FLAG_OWN_COLOUR, host.rough);
+    }
+    // the canopy is the building's own: its clay and tint, lit like its
+    // walls (not a frame's darker own colour), the shop wash left to the
+    // ground floor behind it
+    if (mesh.canopy.positions.length > 0) {
+      part(mesh.canopy, host.tint, host.flags & ~OBJECT_FLAG_SHOP, host.rough);
+    }
+  }
+  const v = baked.vertices;
+  baked.vertices = {
+    positions: concat(v.positions, positions),
+    objectIds: concat(v.objectIds, objectIds),
+    isRoof: concat(
+      v.isRoof,
+      objectIds.map(() => 0)
+    ),
+    normals: shadedNormalsAfter(v, normals),
+  };
+  return drawn;
+}
+
+/** Whether a host may wear a shopfront: not a glass or metal facade (its
+ *  own front), and standing on the ground in front of the wall. */
+function shopHost(
+  host: Pick<CityObjectRow, "baseZ" | "flags">,
+  w: ShopfrontWall
+): boolean {
+  if (
+    hasObjectFlag(host.flags, OBJECT_FLAG_GLASS) ||
+    hasObjectFlag(host.flags, OBJECT_FLAG_METAL)
+  ) {
+    return false;
+  }
+  return host.baseZ <= Math.min(...(w.z ?? [host.baseZ])) + SHOP_HOST_ABOVE_M;
 }
 
 /**
