@@ -87,7 +87,11 @@ import {
   groundNormal,
   urbanGreen,
 } from "./ground-detail";
-import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
+import {
+  type LandcoverSplat,
+  paintLandcoverSplat,
+  splatScaleFor,
+} from "./landcover-splat";
 import { PAPER_HEX, paperGroundOn } from "./paper-scene";
 import {
   dropDataOnUpload,
@@ -438,14 +442,20 @@ export async function loadSplatRasters(
   }
   const { texture, width, height } = raster;
   // every level that wanted it gone while it decoded: no splat painted (a
-  // mipmapped RGBA target of the raster's size) for nobody
+  // mipmapped RGBA target, half the raster's size at 4096²) for nobody
   if (signal?.aborted) {
     texture.dispose();
     signal.throwIfAborted();
   }
   return {
     ...raster,
-    painted: paintLandcoverSplat(renderer, texture, width, height),
+    painted: paintLandcoverSplat(
+      renderer,
+      texture,
+      width,
+      height,
+      splatScaleFor(width)
+    ),
   };
 }
 
