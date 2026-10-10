@@ -200,8 +200,10 @@ const GB = 1024 * MB;
  * terrain holds (tile-stream.ts `calculateBytesUsed`, the shared ones in
  * shares: whole once the coarse level has gone) and its dressing's
  * geometry (≲ 20 MB, the trees' instances most of it), with headroom. On
- * the desktop the rasters are the 4096² class raster and the splat painted
- * from it and the 8192-wide surface, sports and markings rasters (~160 MB).
+ * the desktop the rasters are the 4096² class raster and the 2048² splat
+ * painted from it (landcover-splat.ts `splatScaleFor`; 4096² until
+ * 2026-10-10, 64 MiB more) and the 8192-wide surface, sports and markings
+ * rasters (~100 MB; the bound stays what it was, conservative now).
  * On a phone they are 75.7 MiB: the 2048² class raster, its splat with its
  * mips, NDVI, sky view, horizon and sports grounds (45.7, shared with the
  * coarse level), and the level's own surface, edges, markings and

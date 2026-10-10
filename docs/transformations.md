@@ -151,7 +151,14 @@ visual-variable codebook is in
   `landcover-splat.ts` paints it on the GPU once per tile at load (RGB =
   palette, A = water coverage from a 3×3 tent over class 8) into an sRGB,
   mipmapped, anisotropy-16 target — what the baked PNG used to be sampled
-  with. The minimap and the site's map picture (`site-map.webp`: the start
+  with. A desktop's fine level paints its 4096² raster at **half size**
+  (2026-10-10, plan 070 step 4, `splatScaleFor`): a texel is the mean of
+  the 2×2 class colours under it and the water the four tents' mean — the
+  full-size splat's first mip, so only the near field changes, where a
+  boundary now blends over 1 m instead of 0.5 m and the 0.5 m staircase
+  of a diagonal edge is gone. 64 MiB less per fine tile (85 → 21 MiB with
+  mips); SwiftShader plates of the Elbe shore, a road's meadow edge at eye
+  level and the Großer Garten from 50 m showed nothing blockier. The minimap and the site's map picture (`site-map.webp`: the start
   page's city card, the `/wissen` hero) use the same table; a colour
   change is a look change, not a re-bake
   ([ADR 0023](./adr/0023-land-cover-colours-painted-at-runtime.md)).
