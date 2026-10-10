@@ -14,6 +14,7 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
+import { streamTimings } from "./stream-timing";
 import { setPickRay } from "./view-ray";
 import {
   type CityObjectTable,
@@ -227,7 +228,11 @@ function objectTexture(table: CityObjectTable): {
  */
 export function ensureCityBvh(mesh: Mesh): void {
   if (!mesh.geometry.boundsTree) {
-    mesh.geometry.computeBoundsTree();
+    streamTimings.timedSync(
+      "tile:bvh",
+      () => mesh.geometry.computeBoundsTree(),
+      mesh.name
+    );
   }
 }
 

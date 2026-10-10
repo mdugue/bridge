@@ -179,6 +179,13 @@ import {
 } from "./tile-stream";
 import { createNetworkWatch } from "./tile-retry";
 import { installMainYield, whenIdle } from "./main-yield";
+import {
+  bootFrames,
+  printTrace,
+  startTrace,
+  streamTimings,
+  traceRequested,
+} from "./stream-timing";
 import { attachTouchControls } from "./touch-controls";
 import {
   updateVegetationLod,
@@ -904,6 +911,12 @@ export async function createCityWalkApp(
     retainSceneMaterials(),
     retainOpenSkyTexture(),
   ];
+  // `?trace=1`: the stream's timings on the browser's timeline, the long
+  // tasks counted, the summary printed once loaded (stream-timing.ts).
+  const tracing = traceRequested(window.location.search);
+  if (tracing) {
+    cleanups.push(startTrace());
+  }
   try {
     return await bootApp(opts, renderer, scene, cleanups);
   } catch (err) {
@@ -2744,7 +2757,9 @@ async function bootApp(
     }
   };
   // One frame: the scene steps, streams and renders.
+  const timeBootFrame = bootFrames(streamTimings);
   const frame = (time: number) => {
+    const frameStart = streamTimings.now();
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     const elapsed = timer.getElapsed();
@@ -2816,6 +2831,7 @@ async function bootApp(
     takeCaptureTile();
     frames++;
     tickPocFrame(shadowRendered);
+    timeBootFrame(frameStart, shadowRendered);
   };
   // (It resolves once the loop is installed: nothing to wait for.) The
   // whole frame is guarded, not the render alone: three asks for the next
@@ -2990,6 +3006,7 @@ async function bootApp(
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
   stage("light", 1);
+  streamTimings.markOnce("boot:light-done");
 
   // --- everything after the first frame -------------------------------------
   // The rest of the site keeps streaming (the renderer decides what, from
@@ -3017,6 +3034,25 @@ async function bootApp(
     } else {
       setTimeout(warm, 1000);
     }
+  }
+
+  /** "Loaded" on the trace: the time since the veil dropped, and the
+   *  summary printed now and 20 s on (`?trace=1`). */
+  function traceLoaded(): void {
+    const veil = streamTimings.markedAt("boot:veil-drop");
+    if (
+      veil !== undefined &&
+      streamTimings.markedAt("boot:loaded") === undefined
+    ) {
+      streamTimings.since("boot:veil-to-loaded", veil);
+    }
+    streamTimings.markOnce("boot:loaded");
+    if (!traceRequested(window.location.search)) {
+      return;
+    }
+    printTrace("loaded");
+    const later = setTimeout(() => printTrace("loaded + 20 s"), 20_000);
+    cleanups.push(() => clearTimeout(later));
   }
 
   // The two stages after the first frame measure what the cameras see:
@@ -3052,6 +3088,7 @@ async function bootApp(
       applyFog();
       opts.onLoaded?.();
       warmStylesWhenIdle();
+      traceLoaded();
     }
     if (step.busy !== undefined) {
       opts.onBusy?.(step.busy);

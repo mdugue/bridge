@@ -100,6 +100,7 @@ import type { DeviceTier } from "./scene-profile";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
+import { streamTimings } from "./stream-timing";
 import { bvhBytesUnder } from "./collision";
 import {
   type AnyAttribute,
@@ -1131,28 +1132,34 @@ async function buildDressing(
       ? (x: number, y: number) => ownsPoint(extent, x, y)
       : undefined,
   };
-  const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
   await nextTask();
-  const asks = [
-    ...treeSets(trees, askCtx),
-    ...askSets(monumentItems(monuments, askCtx)),
-    ...(bridgeSet ? [bridgeSet] : []),
-    // every other tree, the hedges, lamps, furniture, stops and landings
-    ...moreSets(
-      {
-        canopy: ownCanopy,
-        scan: ownScan,
-        rows,
-        hedges,
-        lamps: ownLamps,
-        furniture,
-        trams,
-        river,
-      },
-      { offset: ctx.offset, heightAt: terrain.heightAt, tile },
-      keepTree
-    ),
-  ];
+  const asks = streamTimings.timedSync(
+    "dressing:asks",
+    () => {
+      const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
+      return [
+        ...treeSets(trees, askCtx),
+        ...askSets(monumentItems(monuments, askCtx)),
+        ...(bridgeSet ? [bridgeSet] : []),
+        // every other tree, the hedges, lamps, furniture, stops and landings
+        ...moreSets(
+          {
+            canopy: ownCanopy,
+            scan: ownScan,
+            rows,
+            hedges,
+            lamps: ownLamps,
+            furniture,
+            trams,
+            river,
+          },
+          { offset: ctx.offset, heightAt: terrain.heightAt, tile },
+          keepTree
+        ),
+      ];
+    },
+    tile
+  );
   // Sections are cut at the tile edge by the bake; a bridge street rides
   // the decks of this tile's bridge file (which names a seam deck in both).
   // The counted sections are asked on their bodies, while the layer shows;
@@ -1402,27 +1409,34 @@ export class DressingPlugin {
       return;
     }
     this.sceneOf.set(tile, scene);
+    // (A city's own dressing in this task: its compile is counted on the
+    // tile before anything can unload it.)
     let dressed: Promise<void> | undefined;
     if (extras.kind === "city") {
-      this.dressCity(scene, mesh, extras);
+      streamTimings.timedSync(
+        "tile:city",
+        () => this.dressCity(scene, mesh, extras),
+        extras.tileId
+      );
     } else if (extras.kind === "terrain") {
-      ({ dressed } = await this.dressTerrain(scene, mesh, extras));
+      ({ dressed } = await streamTimings.timed(
+        "tile:rasters",
+        () => this.dressTerrain(scene, mesh, extras),
+        extras.tileId
+      ));
     }
     // The renderer shows the tile once this resolves: its programs are
     // ready by then instead of compiling inside a frame. (A tile that left
     // meanwhile is not compiled: that would upload what nothing shows.)
     if (!this.released.has(scene)) {
-      await withinCompileWait(this.compileContent(scene));
+      await streamTimings.timed(
+        "tile:compile",
+        () => withinCompileWait(this.compileContent(scene)),
+        extras.tileId
+      );
     }
-    // ...and, where it takes over from the tile's other level, its
-    // dressing with it (handsOver).
-    if (
-      dressed &&
-      extras.kind === "terrain" &&
-      !this.released.has(scene) &&
-      this.handsOver(extras)
-    ) {
-      await withinWait(dressed, HAND_OVER_WAIT_MS);
+    if (dressed && extras.kind === "terrain") {
+      await this.waitHandOver(scene, extras, dressed);
     }
     // Disposed while it was being dressed: the renderer drops an aborted
     // load without ever recording the scene, so nothing else frees it. The
@@ -1448,6 +1462,23 @@ export class DressingPlugin {
       this.released.add(scene);
       this.release(scene);
     }, 0);
+  }
+
+  /** ...and, where a level takes over from its tile's other level, its
+   *  dressing with it (handsOver) — for as long as a parse slot may wait. */
+  private async waitHandOver(
+    scene: Object3D,
+    extras: TerrainExtras,
+    dressed: Promise<void>
+  ): Promise<void> {
+    if (this.released.has(scene) || !this.handsOver(extras)) {
+      return;
+    }
+    await streamTimings.timed(
+      "tile:handover-wait",
+      () => withinWait(dressed, HAND_OVER_WAIT_MS),
+      extras.tileId
+    );
   }
 
   private dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras): void {
@@ -1663,6 +1694,7 @@ export class DressingPlugin {
     });
     // a tile that leaves stops waiting for it at once (disposeTile)
     this.builtOf.set(scene, built);
+    const queuedAt = streamTimings.now();
     this.chain = this.chain
       .then(() => this.ctx.dressingGate)
       .then(async () => {
@@ -1670,13 +1702,13 @@ export class DressingPlugin {
         if (!entry || this.disposed) {
           return; // the tile (or the stream) left before its turn
         }
+        streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
         entry.aborter = new AbortController();
-        const dressing = await buildDressing(
-          terrain,
-          extras,
-          this.ctx,
-          this.url,
-          entry.aborter.signal
+        const signal = entry.aborter.signal;
+        const dressing = await streamTimings.timed(
+          "dressing:build",
+          () => buildDressing(terrain, extras, this.ctx, this.url, signal),
+          extras.tileId
         );
         entry.aborter = undefined;
         const parts = dressingParts(dressing);
@@ -1700,7 +1732,11 @@ export class DressingPlugin {
             outcome = ended;
           })
           .catch(() => undefined);
-        await withinCompileWait(compiled);
+        await streamTimings.timed(
+          "dressing:compile",
+          () => withinCompileWait(compiled),
+          extras.tileId
+        );
         built();
         // Not before the renderer has recorded the tile's own content (see
         // `loaded`): the dressing's materials are the scene's.

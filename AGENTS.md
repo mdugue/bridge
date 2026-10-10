@@ -117,7 +117,9 @@ config change.
     `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount,
     given the site id; which tileset to stream), `site-context.tsx`
     (`SiteProvider`/`useSite`: the site the HUD describes),
-    `poc-debug.ts` (the `window.__poc` test/QA hook), `scene-profile.ts`
+    `poc-debug.ts` (the `window.__poc` test/QA hook), `stream-timing.ts`
+    (`?trace=1`: the boot's and the stream's spans by category, local
+    only), `scene-profile.ts`
     (`?scene=lite`, `?gpu=webgl2`; the budget per tier and safety level —
     pixel ratio, shadow map, tile cache, `postProfileFor` and
     `shadowMapBytesFor`), `gpu-support.ts` (the WebGPU-or-WebGL2
@@ -840,7 +842,11 @@ screenshots are optional there.
 URL knobs: `?scene=lite` (the CI profile, below), `?gpu=webgl2` (the
 WebGL2 backend where WebGPU exists), `?safety=N` (0–3: the page at that
 safety level, nothing stored — ADR 0046), `?trail=1` (the crash trail's
-card always), `#at=lat,lng` (the off-site dialog's hand-off to another
+card always), `?trace=1` (the boot's and the stream's timings —
+`stream-timing.ts`, plan 069: each `tile:*`, `dressing:*` and `boot:*`
+span on the browser's *Timings* track with its tile id, the long tasks
+counted, and a `console.table` of the categories once loaded and 20 s
+later; never in the trail or the reports), `#at=lat,lng` (the off-site dialog's hand-off to another
 city's page: placed there after the first frame, then dropped — a
 fragment, so it never reaches the server or the crash trail).
 

@@ -1096,6 +1096,20 @@ lädt* hint instead (`onBusy`). The minimap loads every tile's footprints
 up front (named in the tileset's root extras), so it is complete from the
 start.
 
+**The boot and the stream time themselves** (`stream-timing.ts`, plan
+069). Every span is counted by its category — `tile:city`, `tile:bvh`,
+`tile:rasters`, `tile:compile`, `tile:handover-wait`,
+`dressing:queue-wait`, `dressing:build`, `dressing:compile`,
+`dressing:asks`, `boot:frame` (the first 60 frames after the light
+stage), `boot:first-shadow-frame`, `boot:light-to-veil`,
+`boot:veil-to-loaded`. With `?trace=1` each span also lands on the
+browser's own timeline (DevTools' and Web Inspector's *Timings* track)
+with its tile id, the long tasks are counted where the browser reports
+them (Chromium; Safari has none), and the page prints the table once
+loaded and 20 s later (`console.table`). The names are a contract for
+later perf work: add one rather than rename one. None of it reaches the
+crash trail or the reports — a tile's id names where the player was.
+
 ## Verifying a change
 
 Headless CI runs the lite profile under SwiftShader and asserts *presence*
