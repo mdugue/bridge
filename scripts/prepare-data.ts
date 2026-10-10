@@ -41,7 +41,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import type { Matrix4 } from "three";
 import type { FacadeMaterial, RoofColorLut } from "../lib/city/building-tint";
 import type { OsmBuildingLut, WallMaterial } from "../lib/city/city-mesh";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
@@ -118,7 +117,12 @@ import {
   tramTimetableSource,
 } from "../lib/city/tram-timetable";
 import { siteFromArgs } from "../sites";
-import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
+import {
+  type BakedCityMesh,
+  bakeCityMesh,
+  type CityFrame,
+  cityFrame,
+} from "./bake-city-mesh";
 import { bakeCoarseCrowns } from "./coarse-crowns";
 import { contentKey, createContentHasher, moduleGraph } from "./bake-sources";
 import {
@@ -548,18 +552,29 @@ function withLandmarks(
 }
 
 /**
- * Every tile is recentered on one offset: the spawn tile's CityJSON loader
- * matrix, reused for the rest (the frame snapshots are recorded in).
+ * Every tile is recentered on one offset, the spawn tile's (the frame
+ * snapshots are recorded in): its bake finds it as the loader parses it,
+ * the rest take it from `cityFrame`, which reads the spawn tile's CityJSON
+ * without parsing a building — once, when the frame or another tile's
+ * buildings are baked.
  */
-let sharedMatrix: Matrix4 | null = null;
+let spawn: CityFrame | null = null;
+
+function spawnFrame(): CityFrame {
+  if (!spawn) {
+    const src = cityMeshSourceFiles(SITE, TILES[0]);
+    if (!existsSync(at(src.city))) {
+      fail(`missing source file ${src.city}${HINT}`);
+    }
+    spawn = cityFrame(TILES[0], readJson<CityJsonDocument>(at(src.city)));
+  }
+  return spawn;
+}
 
 function parseCity(tile: string): BakedCityMesh {
   const src = cityMeshSourceFiles(SITE, tile);
   if (!existsSync(at(src.city))) {
     fail(`missing source file ${src.city}${HINT}`);
-  }
-  if (!sharedMatrix && tile !== TILES[0]) {
-    parseCity(TILES[0]);
   }
   const doc = readJson<CityJsonDocument>(at(src.city));
   const roofLut = existsSync(at(src.roofColor))
@@ -599,11 +614,11 @@ function parseCity(tile: string): BakedCityMesh {
   const windows = existsSync(at(src.windows))
     ? Object.values(readJson<WindowFile>(at(src.windows)).buildings).flat()
     : undefined;
-  const baked = bakeCityMesh(
+  return bakeCityMesh(
     tile,
     doc,
     roofLut,
-    sharedMatrix,
+    tile === TILES[0] ? null : spawnFrame().matrix,
     osmLut,
     scan,
     osmDoc?.context ?? "render",
@@ -611,8 +626,6 @@ function parseCity(tile: string): BakedCityMesh {
     measured,
     { doors, dormers, plinths, shopfronts, windows }
   );
-  sharedMatrix ??= baked.matrix;
-  return baked;
 }
 
 /** The shared offset and CRS, cached with the spawn tile's CityJSON. */
@@ -624,8 +637,8 @@ const frame = parse<{ cx: number; cy: number; epsg: number }>(
       ["scripts/bake-city-mesh.ts"]
     ),
     () => {
-      const baked = parseCity(TILES[0]);
-      return utf8({ ...baked.offset, epsg: baked.epsg });
+      const { offset, epsg } = spawnFrame();
+      return utf8({ ...offset, epsg });
     }
   )
 );

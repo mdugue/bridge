@@ -28,6 +28,7 @@ import {
 import {
   assignWindows,
   bakeCityMesh,
+  cityFrame,
   liftToStreet,
   PANE_ROUGH,
   scanStructureId,
@@ -709,4 +710,24 @@ test("a building's base moves up to the street its plinths stand on", () => {
   const deep = pitched();
   liftToStreet(deep, keys, [piece("house", base + 1.8)]);
   expect(deep[2].baseZ).toBe(base);
+});
+
+test("cityFrame is the frame the bake recenters a tile in, without the parse", () => {
+  // a bridge slab the bake leaves out still spans the box the frame centres
+  const withBridge = (): CityJsonDocument => {
+    const doc = fixture();
+    doc.vertices.push(...boxVertices(300, 200, 6));
+    doc.CityObjects.bridge = {
+      type: "Building",
+      attributes: { function: "53001_1800" },
+      geometry: [box(16)],
+    };
+    return doc;
+  };
+  const frame = cityFrame("t", withBridge());
+  const baked = bakeCityMesh("t", withBridge(), undefined, null);
+  expect(frame.offset).toEqual({ cx: 412_155, cy: 5_656_105 });
+  expect([...frame.matrix.elements]).toEqual([...baked.matrix.elements]);
+  expect(frame.offset).toEqual(baked.offset);
+  expect(frame.epsg).toBe(25833);
 });

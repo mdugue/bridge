@@ -536,7 +536,9 @@ open in any glTF or 3D Tiles tool.
 
 Scene `extras` name the tile under **`tileId`, never `tile`**: the renderer
 writes `userData.tile` itself. Every tile is recentered on one offset: the
-spawn tile's CityJSON loader matrix, reused for the rest; the EPSG code
+spawn tile's CityJSON loader matrix (the centre of its vertices' bounding
+box, which `cityFrame` reads without parsing a building, so no bake parses
+the spawn tile twice), reused for the rest; the EPSG code
 comes from the CityJSON's `metadata.referenceSystem` (25832 or 25833).
 
 The client reads the property table with a GLTFLoader plugin of its own

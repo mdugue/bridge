@@ -499,6 +499,40 @@ export function withMeasuredRoofs(
   };
 }
 
+/** A tile's CRS, from its CityJSON's metadata; anything but ETRS89/UTM
+ *  fails. */
+function epsgOf(tile: string, doc: CityJsonDocument): number {
+  const epsg = epsgCodeFromReferenceSystem(doc.metadata?.referenceSystem);
+  if (epsg === null) {
+    throw new Error(
+      `Unsupported CityJSON CRS "${doc.metadata?.referenceSystem}" in ${tile} — ` +
+        "expected ETRS89/UTM (EPSG:25832 or 25833)."
+    );
+  }
+  return epsg;
+}
+
+/** The frame a tile's buildings are recentered in. */
+export interface CityFrame {
+  epsg: number;
+  /** the recenter matrix (`bakeCityMesh`'s `sharedMatrix`) */
+  matrix: Matrix4;
+  offset: { cx: number; cy: number };
+}
+
+/**
+ * The frame `bakeCityMesh` recenters a tile in when it is given none — the
+ * loader's translation to the centre of the vertices' bounding box — without
+ * parsing a building: the loader reads the document's vertices alone. The
+ * spawn tile's frame is all the other tiles need of it.
+ */
+export function cityFrame(tile: string, source: CityJsonDocument): CityFrame {
+  const epsg = epsgOf(tile, source);
+  const loader = new CityJSONLoader(new CityJSONParser());
+  loader.load({ ...source, CityObjects: {} });
+  return { epsg, matrix: loader.matrix, offset: recenterOffset(loader.matrix) };
+}
+
 /**
  * Parses and annotates one tile. `sharedMatrix` is the spawn tile's
  * recenter matrix (null for the primary itself), exactly as the browser
@@ -525,13 +559,7 @@ export function bakeCityMesh(
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
   const doc = withoutTrafficStructures(source);
-  const epsg = epsgCodeFromReferenceSystem(doc.metadata?.referenceSystem);
-  if (epsg === null) {
-    throw new Error(
-      `Unsupported CityJSON CRS "${doc.metadata?.referenceSystem}" in ${tile} — ` +
-        "expected ETRS89/UTM (EPSG:25832 or 25833)."
-    );
-  }
+  const epsg = epsgOf(tile, doc);
   const keys = Object.keys(doc.CityObjects);
   // Footprints first: the loader rewrites the document it parses (a
   // Solid's semantic `values` come back flattened), after which a Solid's
