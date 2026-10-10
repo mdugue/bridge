@@ -99,7 +99,6 @@ import { roadMarkings } from "./road-markings";
 import {
   dataXY,
   type F,
-  type Live,
   rasterUv,
   type Tex,
   type V2,
@@ -176,8 +175,8 @@ export interface TerrainOptions {
   fogColor: UniformNode<"color", Color>;
   /** phones sample the ≤ 2048² class raster */
   lowRasters: boolean;
-  /** the ground's look rows and the sun (uniform nodes, shared by every
-   *  tile) */
+  /** the ground's light: the shadow frustum and the sun (uniform nodes,
+   *  shared by every tile) */
   ground: GroundUniforms;
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
@@ -202,20 +201,13 @@ export interface TerrainOptions {
 }
 
 /**
- * The terrain's look rows and the sun: uniform nodes shared by every tile's
- * material, so a slider retunes them live (a uniform write, no rebuild).
+ * What the sun rig keeps for the terrain: uniform nodes shared by every
+ * tile's material (a uniform write, no rebuild). The ground's look
+ * strengths are constants of their terms (`GROUND_DETAIL`, `URBAN_GREEN`
+ * in ground-detail.ts, `MEADOW_NDVI` below, `SKY_VIEW`, `HORIZON_SHADE`
+ * in sky-light.ts).
  */
 export interface GroundUniforms {
-  /** kerbs, lawn edges and paving patterns (ground-detail.ts) */
-  groundDetail: Live;
-  /** the meadow's DOP greenness tint */
-  meadowNdvi: Live;
-  /** meadow colour on green built-up ground (courtyards, parks) */
-  urbanGreen: Live;
-  /** the sky-view factor's hold on the ambient light (sky-light.ts) */
-  skyView: Live;
-  /** the far horizon's cut of the sun (sky-light.ts) */
-  horizonShade: Live;
   /** the shadow frustum's centre (data frame x, y) and half-size (z), kept
    *  by the sun rig: where the horizon's near band takes over (sky-light.ts) */
   shadowReach: UniformNode<"vec3", Vector3>;
@@ -651,7 +643,7 @@ export interface SplatLayer {
   /** the palette-painted colours (RGB) + water coverage (A); LINEAR +
    *  mipmapped for soft transitions (landcover-splat.ts) */
   colorTexture: Texture;
-  /** the look rows and the sun (shared uniform nodes) */
+  /** the shadow reach and the sun (shared uniform nodes) */
   ground: GroundUniforms;
   /** DOP NDVI raster (LINEAR) for the meadow and urban-green tints */
   ndviTexture?: Texture;
@@ -697,8 +689,8 @@ export function splatUv(splat: SplatLayer): V2 {
 
 /**
  * What a terrain variant's shared graph reads (material-slots.ts): the
- * tile's rasters and corner as slots, the look's rows as they are (every
- * tile shares those anyway). A tile's own values are `splatSlots`.
+ * tile's rasters and corner as slots, the shared uniforms as they are
+ * (every tile shares those anyway). A tile's own values are `splatSlots`.
  */
 interface SplatNodes {
   size: [number, number];
@@ -838,6 +830,12 @@ function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
 }
 
 /**
+ * Wiesenfärbung's strength: a middling tint reads without looking like a
+ * heat map — fixed at what its slider stood at (plan 073).
+ */
+const MEADOW_NDVI = float(0.6);
+
+/**
  * Meadow NDVI tint (Wiesenfärbung): on class-1 farmland/meadow only, shift
  * the pastel sage toward lush deep-green where the DOP greenness is high
  * and a drier yellow-tan where it's low — large-area colour variation the
@@ -849,7 +847,7 @@ function meadowNdvi(
   inp: GroundInputs,
   col: GroundColour,
   ndvi: Tex,
-  strength: Live
+  strength: F
 ): void {
   // Read from a coarser mip (a bias of 2.5): the 2 m raster carries every
   // path, tree shadow and bare patch, which painted the meadows in dark
@@ -931,8 +929,6 @@ function splatColour(splat: SplatNodes): V3 {
       classTexture: splat.classTexture,
       fw: max(fwidth(xy.x), fwidth(xy.y)).toVar(),
       cls: floor(texture(splat.classTexture, uv).r.mul(255).add(0.5)).toVar(),
-      groundDetail: splat.ground.groundDetail,
-      urbanGreen: splat.ground.urbanGreen,
       sunDirection: splat.ground.sunDirection,
       meadowColor: vec3(MEADOW_LINEAR[0], MEADOW_LINEAR[1], MEADOW_LINEAR[2]),
       roadColor: vec3(ROAD_LINEAR[0], ROAD_LINEAR[1], ROAD_LINEAR[2]),
@@ -951,7 +947,7 @@ function splatColour(splat: SplatNodes): V3 {
       roadMarkings(inp, col, g, splat.markings);
     }
     if (splat.ndvi) {
-      meadowNdvi(inp, col, splat.ndvi, splat.ground.meadowNdvi);
+      meadowNdvi(inp, col, splat.ndvi, MEADOW_NDVI);
     }
     const baseCol = paperGround(col, texture(splat.colorTexture, uv).a);
     grassDetail.assign(col.detail);
@@ -1595,8 +1591,6 @@ function groundLightOf(splat: SplatLayer): GroundLight | undefined {
     horizon: splat.horizonTexture,
     origin: [minX - splat.offset.cx, maxY - splat.offset.cy],
     size: splatSize(splat),
-    skyView: ground.skyView,
-    horizonShade: ground.horizonShade,
     shadowReach: ground.shadowReach,
     sunDirection: ground.sunDirection,
   };

@@ -4,13 +4,12 @@ import {
   DoubleSide,
   FrontSide,
   MeshStandardNodeMaterial,
+  Vector3,
 } from "three/webgpu";
 import { uniform } from "three/tsl";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { graphOf, slotsOf } from "./material-slots";
 import { openSkyTexture } from "./sky-light";
 import {
-  applyCityLook,
   createClayMaterial,
   createStyleResources,
   setClaySection,
@@ -22,7 +21,7 @@ import {
 // exactly when a rebuild is forced.
 
 const objects = () => ({ rows: 1, texture: new DataTexture() });
-const resourcesAt = () => createStyleResources(uniform(0), uniform(1));
+const resourcesAt = () => createStyleResources(uniform(0));
 
 test("the Schnitt draws the clay from both sides and back, one rebuild each way", () => {
   const resources = resourcesAt();
@@ -54,28 +53,14 @@ test("a disposed tile's material leaves the Schnitt's fan-out", () => {
   expect(resources.materials.has(clay)).toBe(false);
 });
 
-test("applyCityLook pushes the building rows into the uniforms, no rebuild", () => {
-  const resources = resourcesAt();
-  const clay = createClayMaterial(resources, objects());
-  const before = clay.version;
-  applyCityLook(resources, {
-    ...LOOK_DEFAULTS,
-    tint: 0.42,
-    roughness: 0.3,
-  });
-  expect(resources.clayDetail.uTint.value).toBe(0.42);
-  expect(resources.clayDetail.uRough.value).toBe(0.3);
-  expect(clay.version).toBe(before);
-});
-
-test("the clay shares the scene's night and sky-view nodes", () => {
+test("the clay shares the scene's night and sun nodes", () => {
   const night = uniform(0);
-  const skyView = uniform(1);
-  const resources = createStyleResources(night, skyView);
-  // The sun rig and the terrain's row write these in place — a copy would
-  // silently stop driving every tile's clay.
+  const sun = uniform(new Vector3(0, 1, 0));
+  const resources = createStyleResources(night, sun);
+  // The sun rig writes these in place — a copy would silently stop
+  // driving every tile's clay.
   expect(resources.clayDetail.uNight).toBe(night);
-  expect(resources.clayDetail.uSkyView).toBe(skyView);
+  expect(resources.clayDetail.uSun).toBe(sun);
 });
 
 test("a tile's clay is a node material with the facade detail wired", () => {

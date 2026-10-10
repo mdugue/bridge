@@ -16,7 +16,6 @@ import {
   vec3,
 } from "three/tsl";
 import type { Node, NodeBuilder, UniformNode } from "three/webgpu";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import type { F } from "./shader-chunks";
 
 /**
@@ -39,8 +38,8 @@ import type { F } from "./shader-chunks";
  *   the edge does not wade through a wall of mist.
  *
  * Every term is a uniform node: the sun rig writes the colour, the look the
- * range and the pool's strength, the stream the pool's start — uniform
- * writes, never a rebuild.
+ * range, Modell the pool's strength (`VALLEY_HAZE`, faded out as it backs
+ * away), the stream the pool's start — uniform writes, never a rebuild.
  */
 export interface SceneFog {
   /** the palette fog colour (sun-rig.ts); also the water's sky tint */
@@ -58,6 +57,13 @@ export interface SceneFog {
    *  no edge haze */
   siteRect: UniformNode<"vec4", Vector4>;
 }
+
+/**
+ * Talnebel: how much haze pools at the valley floor and over the Elbe —
+ * light, a faint valley haze on a clear day that pairs with the ~0.2
+ * distance fog; fixed at what its slider stood at (plan 073).
+ */
+export const VALLEY_HAZE = 0.2;
 
 /** Default fade height (m) above the valley floor — ~the Elbe-to-rim drop;
  *  the site's own relief sets it once the tileset is read
@@ -83,7 +89,7 @@ export function createSceneFog(
     far: uniform(range.far),
     heightStart: uniform(0),
     heightFalloff: uniform(DEFAULT_FALLOFF),
-    heightStrength: uniform(LOOK_DEFAULTS.heightFog),
+    heightStrength: uniform(VALLEY_HAZE),
     siteRect: uniform(new Vector4(-far, -far, far, far)),
   };
 }

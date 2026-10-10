@@ -32,11 +32,6 @@ import {
 import { isSceneShared } from "./three-utils";
 
 const ground = (): GroundUniforms => ({
-  groundDetail: uniform(1),
-  meadowNdvi: uniform(1),
-  urbanGreen: uniform(1),
-  skyView: uniform(1),
-  horizonShade: uniform(1),
   shadowReach: uniform(new Vector3()),
   sunDirection: uniform(new Vector3(0, 1, 0)),
 });

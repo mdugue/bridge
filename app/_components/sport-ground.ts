@@ -37,6 +37,7 @@ import {
   floorMod,
   gdNoise,
   loadTexel,
+  GROUND_DETAIL,
   type GroundColour,
   type GroundFields,
   type GroundInputs,
@@ -346,7 +347,7 @@ function surfacePaint(
   surf: I,
   inside: F
 ): void {
-  const tex = inp.groundDetail;
+  const tex = GROUND_DETAIL;
   If(and(surf.greaterThan(0), inside.greaterThan(0)), () => {
     const c = surfaceColour(surf).toVar();
     const grain = gdNoise(inp.xy.mul(2.3))

@@ -365,10 +365,12 @@ The button in the corner opens a panel with three tabs.
   current view at all twelve instants and saves them as one sheet — a row
   per date, a column per hour — with the legend under it (in Modell with
   scale bar and north arrow). The hours are your device's local time.
-- **Darstellung** ("look") — the **Bildstil** (picture style) on top, then
-  sliders in four collapsible groups. Every slider is a percentage; the
-  defaults are the tuned look. *Zurücksetzen* ("reset") returns the
-  sliders and leaves the picture style as it is.
+- **Darstellung** ("look") — the **Bildstil** (picture style) on top,
+  then the one slider left, *Nebel* (the distance haze, a percentage),
+  and the *Multi-Tuft-Kronen (nah)* switch (rich multi-tuft crowns near
+  the camera; off = the cheap crown everywhere). *Zurücksetzen* ("reset")
+  returns both to their start values and leaves the picture style as it
+  is. The rest of the look is fixed (below).
 
 A picture style draws the same city another way; switch it at any time,
 with a click or with `V`. The browser remembers the last style for your
@@ -388,10 +390,14 @@ In the graphic styles *Comic*, *Sin City*, *Strich* and *Schwarzplan* the
 depth of field rests (a blurred background under crisp lines reads as a
 mistake).
 
-| Group | Slider | What it does |
+The look itself is fixed: the tuned look, the same for every visitor and
+in every snapshot — changing it is a change to the code, not a setting.
+These are the terms it draws, under the German names the code and the
+knowledge base use for them:
+
+| Group | Term | What it draws |
 |---|---|---|
-| Atmosphäre | *Nebel* | distance haze |
-| | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height and sets in some way off, so what stands right in front of you stays clear |
+| Atmosphäre | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height and sets in some way off, so what stands right in front of you stays clear |
 | | *Tiefenfärbung* | warm near, cool far: a depth-based colour grade |
 | Gebäude | *Boden-Verlauf* | darkening of walls towards the ground |
 | | *Höhenlinien* | faint storey bands, spaced from the measured height |
@@ -410,7 +416,6 @@ mistake).
 | | *Wiesenfärbung* | tints meadows lush-to-dry from the infrared aerial photo |
 | | *Gegenlicht-Schimmer* | backlight shimmer on crowns between you and the sun |
 | | *Blattdurchscheinen* | translucency of nearby, large crowns (shadow-dependent) |
-| | *Multi-Tuft-Kronen (nah)* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
@@ -418,8 +423,8 @@ mistake).
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
 
-Two effects have no control at all. The mist over the river drifts over
-the water from about 120 m ahead, denser only far off. The photographic
+Two more effects belong to the fixed look. The mist over the river
+drifts over the water from about 120 m ahead, denser only far off. The photographic
 depth of field blurs only what lies behind the focus (the foreground stays
 sharp), and the focus is always what lies at the centre of the view. While
 the camera moves, the blur is switched off (the eye cannot resolve it in
@@ -435,9 +440,11 @@ screen barely shows.
   (see [Modell](#modell-the-city-as-a-planner-draws-it)). *Immersiver Modus* locks the mouse pointer
   for a first-person feel; `Esc` leaves it.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
-  the picture style and every slider as a small JSON text; paste such a text into the box and
-  press *Anwenden* to restore it. This is how a specific view is shared or
-  reproduced for a screenshot. A malformed snapshot is rejected with a
+  the picture style, *Nebel*, the crown switch and the data layers as a
+  small JSON text; paste such a text into the box and press *Anwenden* to
+  restore it. This is how a specific view is shared or reproduced for a
+  screenshot. A snapshot from before the look was fixed still loads; the
+  sliders it names are ignored. A malformed snapshot is rejected with a
   message instead of breaking the scene.
 - **Statistik** — number of buildings and terrain points currently in
   view, estimated graphics memory and the frame rate.
@@ -456,8 +463,9 @@ until it is clicked.
   also how the maintainers check it.
 - Golden hour (sun a few degrees above the horizon) and blue hour (a few
   degrees below) give the richest colours; try 07:00 or 20:00 in summer.
-- On a laptop without a discrete graphics card, lower *Kontaktschatten*
-  for a higher frame rate.
+- On a laptop without a discrete graphics card, a smaller browser window
+  gives a higher frame rate: the scene's cost grows with the pixels it
+  draws.
 - `?scene=lite` after the city's address (`/dresden?scene=lite`) streams
   only the start tile, with coarse shadows. It exists for automated tests
   and is not how the scene is meant to look.

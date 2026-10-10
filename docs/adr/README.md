@@ -26,7 +26,7 @@ each data → look transformation does and its status.
 | [0014](./0014-wall-to-terrain-breakline-conflation.md) | Burn OSM wall lines into the heightfield as breaklines | accepted (at bake time: 0024); the coarse level only since 0030 |
 | [0015](./0015-roof-colour-from-orthophotos-with-vibrance-lift.md) | Roof colour from orthophotos with a hue-preserving vibrance lift | accepted |
 | [0016](./0016-land-cover-rasters-downsampled-with-alpha-as-data.md) | Land-cover rasters downsampled to 2048² with the alpha channel treated as data | superseded by 0023 |
-| [0017](./0017-look-controls-table-and-snapshot-contract.md) | Look controls declared in one table; the Snapshot is a validated, versioned contract | accepted; amended 2026-10-10 (no `max`; removed controls' keys ignored) |
+| [0017](./0017-look-controls-table-and-snapshot-contract.md) | Look controls declared in one table; the Snapshot is a validated, versioned contract | accepted; amended 2026-10-10 (no `max`; removed controls' keys ignored) and 2026-10 (plan 073: only *Nebel* left; the look's strengths are constants in their owners; retired keys never reused) |
 | [0018](./0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md) | Headless tests run a lite profile and assert presence; visuals are judged on a real GPU | accepted |
 | [0019](./0019-oxlint-oxfmt-and-native-typescript.md) | oxlint + oxfmt and the native TypeScript 7 compiler; no ESLint, no biome | accepted |
 | [0020](./0020-fixed-light-pool-and-static-shadow-casters.md) | A fixed pool of real point lights; animated geometry never updates the shadow map | accepted |

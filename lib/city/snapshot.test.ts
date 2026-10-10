@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { LOOK_DEFAULTS } from "./look-controls";
+import { DATA_LAYERS } from "./data-layers";
+import { LOOK_DEFAULTS, RETIRED_SNAPSHOT_KEYS } from "./look-controls";
 import {
   decodeLook,
   encodeSnapshot,
@@ -21,8 +22,6 @@ const valid: Snapshot = {
   date: "2026-06-21T12:00:00.000Z",
   look: {
     fogPct: 30,
-    heightFogPct: 40,
-    grainPct: 20,
     multiTuft: false,
     style: "comic",
   },
@@ -102,10 +101,11 @@ test("look flags are type- and enum-checked", () => {
   expect(reason(withLook({ style: 2 }))).toMatch(/look.style/);
 });
 
-// The controls the maintainer removed (2026-10-10): the see-through
-// buildings, the leaf flutter and its gust brightness, the river mist's
-// strength, the depth of field's switch and its focus. Snapshots copied
-// before then carry their keys.
+// The controls the maintainer removed (2026-10-10): on the performance PR
+// the see-through buildings, the leaf flutter and its gust brightness, the
+// river mist's strength, the depth of field's switch and its focus; then
+// every slider but Nebel (plan 073). Snapshots copied before then — in PR
+// descriptions, in shots/ — carry their keys.
 const REMOVED_LOOK = {
   transparencyPct: 40,
   leafFlutterPct: 70,
@@ -114,6 +114,17 @@ const REMOVED_LOOK = {
   dof: false,
   focusMode: "manual",
   focusDistanceM: 80,
+  heightFogPct: 40,
+  gradingPct: 50,
+  tintPct: 25,
+  windowsPct: 0,
+  facadeReadingPct: 0,
+  duskGlowPct: 100,
+  shimmerPct: 45,
+  contactPct: 90,
+  reflectionPct: 0,
+  grainPct: 20,
+  inkPct: 100,
 };
 
 test("an old snapshot with removed controls still loads, and they are ignored", () => {
@@ -138,8 +149,42 @@ test("a removed control's key is no longer checked", () => {
     { dof: "yes" },
     { focusDistanceM: 0.5 },
     { transparencyPct: "20" },
+    { tintPct: "20" },
+    { inkPct: null },
   ]) {
     expect(parseSnapshot(withLook(look)).ok).toBe(true);
+  }
+});
+
+test("every retired key is read and ignored, and the camera applies as before", () => {
+  const retired = Object.fromEntries(
+    RETIRED_SNAPSHOT_KEYS.map((key) => [key, 40])
+  );
+  const r = parseSnapshot(withLook({ ...retired, fogPct: 30 }));
+  expect(r.ok).toBe(true);
+  if (!r.ok) {
+    return;
+  }
+  expect(r.snapshot.camera).toEqual(valid.camera);
+  expect(decodeLook(r.snapshot.look)).toEqual({ fogAmount: 0.3 });
+});
+
+test("Copy writes the controls there are, and no retired key", () => {
+  const snap = encodeSnapshot(
+    LOOK_DEFAULTS,
+    valid.camera,
+    new Date(valid.date)
+  );
+  expect(Object.keys(snap.look ?? {}).sort()).toEqual(
+    [
+      "fogPct",
+      "multiTuft",
+      "style",
+      ...DATA_LAYERS.map((d) => d.snapshotKey),
+    ].sort()
+  );
+  for (const key of RETIRED_SNAPSHOT_KEYS) {
+    expect(snap.look).not.toHaveProperty(key);
   }
 });
 
