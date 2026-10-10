@@ -1388,9 +1388,10 @@ async function bootApp(
   // distance, and at the map's resolution it pinned the fine terrain level
   // under its whole frustum, beyond any error target the governor set.
   let shadowStreams = true;
-  // From safety level 2 (lib/city/gpu-safety.ts) it streams nothing, nor
-  // for a while after a memory emergency (memoryEmergency, below).
-  let shadowHeldUntil = shadowTilesStream(budget.safety)
+  // On a phone, and on a desktop from safety level 2 (lib/city/gpu-safety.ts)
+  // it streams nothing, nor for a while after a memory emergency
+  // (memoryEmergency, below).
+  let shadowHeldUntil = shadowTilesStream(budget.safety, budget.tier)
     ? 0
     : Number.POSITIVE_INFINITY;
   // what the sun last asked for
@@ -1698,8 +1699,9 @@ async function bootApp(
   // place picked in the HUD while the page was loading (`initialView`)
   // likewise. Both boot looking straight down onto that tile, the picked
   // place from above the tile's top (lib/city/boot-start.ts): a pose that
-  // sees no tile loads none, and by night or from safety level 2 no
-  // shadow camera streams one either, so the boot would wait for ever.
+  // sees no tile loads none, and by night, on a phone or from safety
+  // level 2 no shadow camera streams one either, so the boot would wait
+  // for ever.
   // Their own pose goes back once the tile has landed (below, and the
   // HUD's after the first frame).
   const spawnView = picked ?? spawnViewpoint(opts.site);

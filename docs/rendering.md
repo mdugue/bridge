@@ -263,31 +263,32 @@ is spelled: changing one is a look change, not a re-bake
   season change that thins or fills crowns, and every tile that lands, leaves or changes visibility through the stream's
   change hook). Animated geometry (sway, clouds) deliberately does **not**
   update it.
-- **The shadow camera streams, at a resolution of its own.** The sun's
-  shadow camera is registered with the tiles renderer as a second camera,
-  so a tile that casts into the view stays loaded even when it is behind
-  the player — at a resolution of its own (`SHADOW_STREAM_PX` in
-  `lib/city/shadow-fit.ts`: 128 px on a desktop, 64 on a phone), not at
-  the map's. The tile renderer measures an orthographic
+- **The shadow camera streams on a desktop, at a resolution of its
+  own.** The sun's shadow camera is registered with the tiles renderer
+  as a second camera, so a tile that casts into the view stays loaded
+  even when it is behind the player — at a resolution of its own
+  (`SHADOW_STREAM_PX` in `lib/city/shadow-fit.ts`, 128 px), not at the
+  map's. The tile renderer measures an orthographic
   camera's error as a tile's geometric error over its pixel (the
   frustum's width over the resolution), whatever the distance: at the
   map's 2048 px the coarse terrain's 40 m came to 372, 186, 93 and 46.5 px
   at half-sizes of 110, 220, 440 and 880 m, against a target of 16, so every tile the
   frustum touched was refined to its fine level — up to four from the air
-  (an iPhone flying at 228 m: 642 → 677 MB held). On a phone, at 64 px,
-  the coarse level stays at or below 11.6 px at every radius, so the
-  shadow camera never refines terrain, while a tile's buildings
-  (≥ 3 636 px) and the coarse ground under them still load for the
-  shadow: what the main camera refines is refined for the view, and near
-  a seam with the sun behind, a neighbour the view does not refine casts
-  its coarse crowns' shadows. A desktop has the memory for the fine
-  level under the eye-level frustum: at 128 px the coarse level's 23 px
-  at 110 m still refine it (a neighbour behind the player casts its own
-  trees' shadows, and the whole-site boot asks for the spawn tile's fine
-  level as early as it did), but no longer from the air (11.6 px and less
-  from 220 m on). By
-  night the shadow camera streams nothing (`streamShadowTiles`); nor from
-  safety level 2, nor for two minutes after a memory emergency
+  (an iPhone flying at 228 m: 642 → 677 MB held). A desktop has the
+  memory for the fine level under the eye-level frustum: at 128 px the
+  coarse level's 23 px at 110 m still refine it (a neighbour behind the
+  player casts its own trees' shadows, and the whole-site boot asks for
+  the spawn tile's fine level as early as it did), but no longer from
+  the air (11.6 px and less from 220 m on). **A phone's shadow camera
+  streams nothing** (`shadowTilesStream`, plan 071; at the 64 px it
+  streamed at until 2026-10-10 it refined no terrain, but kept every
+  building tile and coarse level its frustum touched): those are tiles
+  in use, which the memory governor cannot free, and the casters that
+  matter stand on the tile the player is on, loaded for the view anyway.
+  The price: at a seam with the sun behind the player, the neighbour's
+  buildings cast no shadow into the view until the view loads that tile.
+  By night the shadow camera streams nothing (`streamShadowTiles`); nor
+  from safety level 2, nor for two minutes after a memory emergency
   ([ADR 0046](./adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)).
   `displayActiveTiles` keeps every loaded tile drawn
   (turning on the spot never blinks one); three's own frustum culling keeps
@@ -575,7 +576,7 @@ the safety levels 1, 2 and 3:
 | Tiles | the whole site streams (`tileset.json`) | same | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
 | Terrain | L0 TIN (±0.15 m) near, L1 512² grid beyond (the switch at ≈ 2.6 km from a tile for a viewport 1080 CSS px high; ≈ 2.1 km on an iPhone in portrait) | same | same |
 | Shadow map | 3072² (2048², 2048², 1024²) | 2048² (2048², 1024², 1024²) | 512² |
-| Shadow camera streams at | 128 px, by day; from level 2 never | 64 px, by day; from level 2 never | as the tier |
+| Shadow camera streams at | 128 px, by day; from level 2 never | never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
 | Pixel ratio | ≤ 2 (1.5, 1.25, 1.0) | ≤ 1.5 (1.25, 1.0, 0.85) | 0.5 |
 | Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
@@ -826,9 +827,9 @@ process. A page hidden at that moment reloads once it is visible. The
 recovered page sets its pose before the stream's first update (its start
 tile is the one under the camera, `startTileOf`), **looking straight
 down** onto that tile — a pose that looks at the sky or out past the
-site's edge from the air sees no tile, and by night or from level 2 no
-shadow camera streams one, so nothing would load — and puts the player's
-own aim back once the tile has landed; its first frame waits for that
+site's edge from the air sees no tile, and by night, on a phone or
+from level 2 no shadow camera streams one, so nothing would load — and
+puts the player's own aim back once the tile has landed; its first frame waits for that
 tile, or for any shown tile once the renderer is idle without it. From
 level 2 it puts back neither the picture style nor Modell. A page lost
 before its first frame leaves the snapshot it booted with for the next;

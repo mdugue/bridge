@@ -49,8 +49,8 @@ export function startOf<T extends Tile>(
  * landed the ground under a vantage is not known (it falls back to the
  * floor, 0 m), so a vantage's height above it may put the camera far
  * below the tile's box. A pose that sees no tile loads none — and by
- * night, or from safety level 2, no shadow camera streams one either —
- * so the boot would wait for ever.
+ * night, on a phone, or from safety level 2, no shadow camera streams
+ * one either — so the boot would wait for ever.
  *
  * - the spawn: its own vantage, which looks across its tile;
  * - a recovered camera: where it stood (its height is its own), looking
