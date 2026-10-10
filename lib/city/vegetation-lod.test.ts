@@ -4,6 +4,7 @@ import {
   FAR_IN_M,
   FAR_OUT_M,
   keepInFarTier,
+  PHONE_RICH_TREE_BUDGET,
   planCrownTiers,
   RICH_IN_M,
   RICH_OUT_M,
@@ -72,5 +73,20 @@ test("the far tier thins dense chunks only", () => {
     false,
     true,
     false,
+  ]);
+});
+
+test("planCrownTiers spends a phone's smaller budget on the nearest chunks", () => {
+  const chunks = [100, 50, 150].map((near) => ({
+    allowRich: true,
+    current: "mid" as const,
+    near,
+    trees: 500,
+  }));
+  expect(planCrownTiers(chunks)).toEqual(["rich", "rich", "rich"]);
+  expect(planCrownTiers(chunks, PHONE_RICH_TREE_BUDGET)).toEqual([
+    "mid",
+    "rich",
+    "mid",
   ]);
 });

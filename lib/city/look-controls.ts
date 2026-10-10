@@ -11,7 +11,7 @@ import { DEFAULT_RENDER_STYLE, type RenderStyle } from "./render-style";
 
 export type LookGroup = "atmosphere" | "buildings" | "rendering" | "vegetation";
 
-/** Rows the scene itself applies: fog, the valley haze, the ground, the river mist. */
+/** Rows the scene itself applies: fog, the valley haze, the ground, the sky's reflection. */
 export type SceneLookKey =
   | "fogAmount"
   | "groundDetail"
@@ -20,8 +20,7 @@ export type SceneLookKey =
   | "meadowNdvi"
   | "reflections"
   | "skyView"
-  | "urbanGreen"
-  | "waterMist";
+  | "urbanGreen";
 /** Rows the shared clay material applies (visual-style.ts). */
 export type ClayLookKey =
   | "articulation"
@@ -35,16 +34,11 @@ export type ClayLookKey =
   | "roofVibrance"
   | "roughness"
   | "tint"
-  | "transparency"
   | "windows";
 /** Rows the post stack applies (post-stack.ts). */
 export type PostLookKey = "contact" | "grading" | "grain" | "ink";
 /** Rows every vegetation tile applies (vegetation-layer.ts). */
-export type VegetationLookKey =
-  | "leafBright"
-  | "leafFlutter"
-  | "shimmer"
-  | "translucency";
+export type VegetationLookKey = "shimmer" | "translucency";
 /**
  * Every percent row. Each key belongs to exactly one owner union above, and
  * each owner applies its rows through a `Record<…LookKey, …>` the compiler
@@ -57,9 +51,6 @@ export type LookKey =
   | SceneLookKey
   | VegetationLookKey;
 
-/** Depth-of-field focus: "auto" tracks the crosshair, "manual" uses a fixed distance. */
-export type FocusMode = "auto" | "manual";
-
 export interface LookControlDef {
   /** slider help text (also the row's documentation) */
   description?: string;
@@ -71,8 +62,6 @@ export interface LookControlDef {
   /** state key */
   key: LookKey;
   label: string;
-  /** slider maximum in percent (default 100) */
-  max?: number;
   /**
    * Key inside Snapshot.look — the persisted format. Never rename one (old
    * snapshots would silently lose that slider).
@@ -83,16 +72,13 @@ export interface LookControlDef {
 /**
  * Every look value the scene renders with, as the scene consumes it: the
  * table rows as 0..1 floats (percent is only how the HUD and the snapshot
- * show them), the five controls that are not percent sliders, and one flag
- * per data layer (data-layers.ts).
+ * show them), the two controls that are not percent sliders, and one flag
+ * per data layer (data-layers.ts). The depth of field (autofocus), the
+ * river mist and the crowns' gust brightening are no controls any more:
+ * fixed at what their controls defaulted to.
  */
 export interface LookValues
   extends Record<LookKey, number>, Record<DataLayerKey, boolean> {
-  /** photographic depth of field with crosshair autofocus */
-  dof: boolean;
-  /** manual focus distance (m), used when focusMode is "manual" */
-  focusDistanceM: number;
-  focusMode: FocusMode;
   /** rich multi-tuft crown near the camera (LOD); off = cheap crown everywhere */
   multiTuft: boolean;
   /** the picture style (render-style.ts): pastel, comic, film noir, Sin City, Papier */
@@ -123,15 +109,6 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     snapshotKey: "heightFogPct",
   },
   {
-    key: "waterMist",
-    id: "water-mist",
-    label: "Flussnebel",
-    description: "Treibender Nebel über dem Fluss",
-    group: "atmosphere",
-    initial: 0.6,
-    snapshotKey: "waterMistPct",
-  },
-  {
     key: "grading",
     id: "depth-grading",
     label: "Tiefenfärbung",
@@ -141,16 +118,6 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     snapshotKey: "gradingPct",
   },
   // --- Buildings ---
-  {
-    key: "transparency",
-    id: "building-transparency",
-    label: "Transparenz",
-    description: "Einfaches Durchsehen",
-    group: "buildings",
-    initial: 0,
-    max: 90,
-    snapshotKey: "transparencyPct",
-  },
   {
     key: "groundShade",
     id: "building-ground-shade",
@@ -312,26 +279,6 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     initial: 0.5,
     snapshotKey: "translucencyPct",
   },
-  {
-    key: "leafFlutter",
-    id: "tree-leaf-flutter",
-    label: "Blattflimmern",
-    description:
-      "(A) Windböen lassen Blätter ihre helle Unterseite zeigen — Farbe flimmert über sonnige Kronen. 0 = nur (B) sichtbar.",
-    group: "vegetation",
-    initial: 0.5,
-    snapshotKey: "leafFlutterPct",
-  },
-  {
-    key: "leafBright",
-    id: "tree-leaf-bright",
-    label: "Windhelligkeit",
-    description:
-      "(B) Krone hellt auf, wenn sie sich in die Böe neigt (an die Wiege-Bewegung gekoppelt). 0 = nur (A) sichtbar.",
-    group: "vegetation",
-    initial: 0.5,
-    snapshotKey: "leafBrightPct",
-  },
   // --- Rendering ---
   {
     key: "contact",
@@ -400,24 +347,16 @@ export const LOOK_BY_KEY: Readonly<Record<LookKey, LookControlDef>> =
     LookControlDef
   >;
 
-/** What the scene boots with: each row's `initial` plus the five flags,
+/** What the scene boots with: each row's `initial` plus the two flags,
  *  every data layer off. */
 export const LOOK_DEFAULTS: Readonly<LookValues> = Object.freeze<LookValues>({
   ...(Object.fromEntries(
     LOOK_CONTROLS.map((def) => [def.key, def.initial])
   ) as Record<LookKey, number>),
-  dof: true,
-  focusMode: "auto",
-  focusDistanceM: 40,
   multiTuft: true,
   style: DEFAULT_RENDER_STYLE,
   ...DATA_LAYER_DEFAULTS,
 });
-
-/** A row's slider maximum as a 0..1 value. */
-export function maxValueOf(def: LookControlDef): number {
-  return (def.max ?? 100) / 100;
-}
 
 /** A one-row patch for the look store (`{ [key]: value01 }`, typed). */
 export function lookPatch(key: LookKey, value01: number): Partial<LookValues> {

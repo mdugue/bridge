@@ -1169,13 +1169,20 @@ See the ledger's *Small structures from the laser scan* row
 ([transformations.md](../transformations.md)), [ADR 0035](../adr/0035-parts-meet-the-ground.md)
 (the box's ground join) and plan 019.
 
-## 035 — A hidden soundscape · DONE (2026-09-26; unheard: the listening pass is a maintainer action)
+## 035 — A hidden soundscape · REJECTED (removed 2026-10-10)
 
 **Problem.** The maintainer asked for a surprise, opt-in and hidden: the
 city made audible from the same data the picture reads — footsteps by
 paving, the Elbe, wind and leaves, birds and crickets by season and hour,
 the city's hum, church bells at the full hour, a tram bell — with no
 audio files and no dependency.
+
+**Removed 2026-10-10**, never heard: the maintainer decided to drop it
+to cut code and maintenance, before the listening pass (plan 019) was
+done. The engine, the switch and the L key, the tileset's `sound`
+column, the `soundmarks` bake, its committed files and their docs are
+gone; the full implementation is in git history (`5b59b79`, the last
+commit carrying it). What follows is the record of what was built.
 
 **Outcome.** All four phases built, everything synthesized with WebAudio.
 - *Entry.* **L** (not in the control hints) and one quiet switch,
@@ -1214,9 +1221,8 @@ audio files and no dependency.
 - Plan 036's rank 6 (a soundscape from measured data: the WFS noise maps,
   OSM acoustic signals, streams and weirs) waits for the listening pass.
 
-See the ledger's *Sound* section ([transformations.md](../transformations.md)),
-[rendering.md](../rendering.md) and plan 019 (the listening pass rides
-along with its phone session).
+See the ledger's 🗃️ row ([transformations.md](../transformations.md)).
+Revive only with a listening pass first, not as a re-audit finding.
 
 ## 037 — The commands agents run, and docs that say what the code does · DONE (2026-10-03)
 
@@ -1353,3 +1359,30 @@ a millimetre.
 **Keep in mind.** If the dressing still shows a long task here, hand the
 `Float32Array` to the vegetation instead of feature objects (phase 2), and
 pack the street-tree cadastre (`trees`) with a small column set.
+
+## 068 — The tile stream loads only what the fog lets you see · DONE (2026-10-10)
+
+**Problem.** The tile renderer streamed for the walk/fly camera itself,
+whose far plane is 6 km (the sky dome needs it). Three's range fog runs on
+view depth — the far plane's measure — and ends at ≈ 2.6 km at the
+default *Nebel* (1.1 km during the boot), and the sky's horizon band takes
+the fog colour: every building tile and coarse level between the two was
+loaded, compiled, given a BVH and drawn as plain fog colour, and city
+tiles (error 100 000, ADD) never leave while in a frustum.
+
+**Outcome.** A stream camera, the walk/fly camera's twin synced every
+frame before the stream's update, with its far plane at
+`streamFarFor(max(fog applied, the look's fog), camera.far)` = the fog's
+end × 1.1 (`lib/city/atmosphere.ts`, `create-app.ts`). The larger of the
+two fogs, so the boot's partial-world fog does not leave the tiles it
+hides to load once it opens. Modell streams for its own camera
+(`swapCamera`), the sun's shadow camera as before. Measured at Dresden's
+spawn view (SwiftShader, full profile): the same tiles load — the view
+looks south-west, and the site's edge lies inside 2.85 km there — so the
+saving is in the views across the city (east from the spawn the second
+ring of tiles, 3.8 km out, no longer loads) and from the air; the
+plan's step 5 (stream at the boot's own fog) was not built.
+
+**Keep in mind.** A new camera-driven streaming need registers against
+the stream camera, not the camera. A future look term drawn past the fog
+(`material.fog = false` on tile content) would vanish beyond its reach.

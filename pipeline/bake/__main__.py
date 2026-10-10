@@ -33,7 +33,6 @@ from . import (
     shopfronts,
     skyview,
     small_buildings,
-    soundmarks,
     sport,
     stairs,
     structures,
@@ -97,9 +96,6 @@ STEPS = {
     # Committed inputs only (DGM + LoD2 + the rebuilt roofs): the sky-view
     # factor and far horizon.
     "skyview": skyview.run,
-    # OSM churches + the committed LoD2/DGM: the bell towers the hidden
-    # soundscape strikes the hour from (plan 035).
-    "soundmarks": soundmarks.run,
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,

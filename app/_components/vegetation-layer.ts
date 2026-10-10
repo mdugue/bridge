@@ -26,7 +26,6 @@ import {
   max,
   mix,
   normalize,
-  normalWorldGeometry,
   positionGeometry,
   positionWorld,
   pow,
@@ -169,20 +168,9 @@ const FAR_THIN_WIDEN = 1.35;
 export interface VegetationControl {
   /**
    * Pushes the vegetation rows of the look into the crowns: the backlit
-   * shimmer, the shadow-gated translucency, the multi-tuft crown LOD toggle,
-   * and the two coupled "moving leaves" effects, each independently tunable
-   * (zero one to preview the other):
-   * - (A) leafFlutter: small, irregular bright specks (world-space value
-   *   noise, ~1-2 m cells, two octaves + drift) where wind flips leaves to
-   *   their paler underside; the crown albedo blends toward a lighter
-   *   silver-sage — gated to SUNLIT, sun-facing leaves so it reads as light
-   *   glinting off turning leaves, not a tree-group-wide band.
-   * - (B) leafBright: the crown brightens as it leans into the same gust and
-   *   dims as it rocks back (centred on the wind sway, so the mean colour is
-   *   unchanged) — motion and light agree.
-   * Both are lit-pass terms only (the shadow pass draws the crown rigid,
-   * `castShadowPositionNode`, and keeps nothing of its colour but the
-   * alpha), and they need no extra attribute or buffer upload.
+   * shimmer, the shadow-gated translucency and the multi-tuft crown LOD
+   * toggle. (The gust's brightening, `GUST_BRIGHTEN`, is no row: it is
+   * fixed.)
    */
   applyLook: (look: LookValues) => void;
   /** the tile's canopy chunks; `updateVegetationLod` sets their crown tier
@@ -218,46 +206,6 @@ export interface VegetationChunk {
   /** crowned trees in the chunk (what the rich-crown budget counts) */
   trees: number;
   trunks: Instances;
-}
-
-const nearInverse = new Matrix4();
-const nearPoint = new Vector3();
-
-/**
- * How many trees stand within `radius` m (horizontally) of a world (Y-up)
- * point, over the chunks — what the hidden soundscape's leaves rustle with
- * (plan 035). Read at the pose rate while the sound plays, never per frame.
- */
-export function treesWithin(
-  chunks: readonly VegetationChunk[],
-  x: number,
-  z: number,
-  radius: number
-): number {
-  let count = 0;
-  const r2 = radius * radius;
-  for (const chunk of chunks) {
-    const mesh = chunk.mid;
-    nearInverse.copy(mesh.matrixWorld).invert();
-    nearPoint.set(x, 0, z).applyMatrix4(nearInverse);
-    const sphere = mesh.geometry.boundingSphere;
-    if (
-      sphere &&
-      Math.hypot(sphere.center.x - nearPoint.x, sphere.center.z - nearPoint.z) >
-        sphere.radius + radius
-    ) {
-      continue;
-    }
-    const m = mesh.instanceMatrix.array;
-    for (let i = 0; i < chunk.trees; i++) {
-      const dx = m[i * 16 + 12] - nearPoint.x;
-      const dz = m[i * 16 + 14] - nearPoint.z;
-      if (dx * dx + dz * dz <= r2) {
-        count++;
-      }
-    }
-  }
-  return count;
 }
 
 /** A canopy or row tree's season: the generic deciduous curve, offset by
@@ -569,9 +517,9 @@ function leafHash(p: V2): F {
 }
 
 /**
- * Cheap value noise (smoothed hash lattice), 0..1: the crowns' leaf
- * twinkle and the hedges' foliage mottle (low-vegetation-layer.ts) — small,
- * irregular specks instead of a clean rolling sine band.
+ * Cheap value noise (smoothed hash lattice), 0..1: the hedges' foliage
+ * mottle (low-vegetation-layer.ts) — small, irregular specks instead of a
+ * clean rolling sine band.
  */
 export function leafNoise(p: V2): F {
   const i = floor(p);
@@ -587,8 +535,6 @@ export function leafNoise(p: V2): F {
 /** The crown's live uniform nodes, shared by every crown material of the
  *  scene (the look writes them, the loop the clock). */
 export interface CrownUniforms {
-  leafBright: Live;
-  leafFlutter: Live;
   shimmer: Live;
   /** world-space surface → sun; its value is the sun rig's vector, by
    *  reference (sceneCrowns) */
@@ -601,8 +547,6 @@ export interface CrownUniforms {
 /** Fresh crown uniforms at the look table's defaults. */
 function createCrownUniforms(): CrownUniforms {
   return {
-    leafBright: uniform(LOOK_DEFAULTS.leafBright),
-    leafFlutter: uniform(LOOK_DEFAULTS.leafFlutter),
     shimmer: uniform(LOOK_DEFAULTS.shimmer),
     sunDirection: uniform(new Vector3(0, 1, 0)),
     time: uniform(0),
@@ -673,15 +617,25 @@ export function crownShape(): V3 {
 }
 
 /**
+ * How much a crown brightens leaning into a gust and dims rocking back
+ * (its colour × (1 + this × gust)): the *Windhelligkeit* slider's default
+ * (50 % of 0.18), fixed since the slider went with the leaf twinkle.
+ */
+const GUST_BRIGHTEN = 0.09;
+
+/**
  * The crown's light terms (all in world space, off the swayed fragment's
- * `positionWorld`): the backlit shimmer, the translucency, the leaf
- * twinkle and the sway-coupled brightness. `base` is the crown's own
- * colour (tint, twigs); returns the lit colour and the emissive glow.
+ * `positionWorld`): the backlit shimmer, the translucency and the
+ * sway-coupled brightness. `base` is the crown's own colour (tint,
+ * twigs); returns the lit colour and the emissive glow. All are lit-pass
+ * terms only (the shadow pass draws the crown rigid,
+ * `castShadowPositionNode`, and keeps nothing of its colour but the
+ * alpha), and they need no extra attribute or buffer upload.
  *
  * The shimmer and translucency glow where the sun is behind the canopy.
- * The GLSL crown gated both, and the twinkle, on the sun's shadow map
- * sampled 2 m toward the sun (so a building behind the tree killed the
- * glow while the crown's own self-shadow did not). Node lights keep their
+ * The GLSL crown gated both on the sun's shadow map sampled 2 m toward the
+ * sun (so a building behind the tree killed the glow while the crown's own
+ * self-shadow did not). Node lights keep their
  * shadow map to themselves: r186's public TSL offers only `shadow(light)`,
  * which builds a second shadow node that renders its own map, and the
  * scene's shadow node is the light node's, reachable only from inside the
@@ -697,7 +651,6 @@ function crownLight(
   crownScale: F
 ): { colour: V3; emissive: V3 } {
   const sun = u.sunDirection;
-  const t = u.time;
   const shimVis = clamp(sun.y.mul(5), 0, 1);
   const daylight = clamp(sun.y, 0, 1);
   const view = normalize(cameraPosition.sub(positionWorld));
@@ -717,38 +670,12 @@ function crownLight(
     .mul(shimVis)
     .mul(max(trLarge, trNear).mul(daylight))
     .mul(vec3(0.45, 0.62, 0.3));
-  // (A) Leaf twinkle — small, irregular bright specks where wind flips
-  // leaves to their pale underside. World-space value noise at ~1-2 m cells
-  // (two octaves + drift) keeps each speck leaf-clump-sized and noisy, NOT a
-  // tree-group-wide band; the height offset stops them forming vertical
-  // columns. Gated to daylight, sun-facing (N·L) leaves and faded with
-  // distance so far crowns don't crawl. Blends the crown's OWN colour
-  // toward a paler silver-sage + a faint glint, in the diffuse colour, so
-  // it still shades naturally.
-  const leafUV = positionWorld.xz.add(positionWorld.y.mul(vec2(0.7, 0.5)));
-  const twk = leafNoise(leafUV.mul(1.2).add(vec2(t.mul(0.7), t.mul(0.45)))).add(
-    leafNoise(leafUV.mul(2.8).sub(vec2(t.mul(1.1), t.mul(0.8)))).mul(0.6)
-  );
-  const sunFace = clamp(dot(normalWorldGeometry, sun), 0, 1);
-  const twDist = float(1).sub(smoothstep(150, 420, far).mul(0.7));
-  const twinkle = smoothstep(0.95, 1.45, twk)
-    .mul(shimVis)
-    .mul(daylight)
-    .mul(sunFace.mul(0.7).add(0.3))
-    .mul(twDist);
-  const luma = dot(base, vec3(0.299, 0.587, 0.114));
-  const under = mix(base, vec3(luma.mul(1.25).add(0.06)), 0.6);
-  const flipped = mix(base, under, clamp(u.leafFlutter.mul(twinkle), 0, 1));
-  const glint = u.leafFlutter
-    .mul(twinkle)
-    .mul(0.14)
-    .mul(vec3(0.9, 0.95, 0.6));
-  // (B) Sway-coupled brightness — the SAME centred gust signal that bends
-  // the geometry, so the whole crown brightens leaning in and dims rocking
+  // Sway-coupled brightness — the SAME centred gust signal that bends the
+  // geometry, so the whole crown brightens leaning in and dims rocking
   // back; centred so the average colour is unchanged.
   return {
-    colour: flipped.mul(u.leafBright.mul(gust).mul(0.18).add(1)),
-    emissive: shimmer.add(translucency).add(glint),
+    colour: base.mul(gust.mul(GUST_BRIGHTEN).add(1)),
+    emissive: shimmer.add(translucency),
   };
 }
 
@@ -1215,8 +1142,6 @@ export function buildVegetation(
   // The crown uniform each vegetation row drives — a Record over the keys, so
   // a row added to the table cannot go unapplied.
   const rowUniform: Record<VegetationLookKey, Live> = {
-    leafBright: u.leafBright,
-    leafFlutter: u.leafFlutter,
     shimmer: u.shimmer,
     translucency: u.translucency,
   };
@@ -1283,7 +1208,8 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
  */
 export function updateVegetationLod(
   controls: readonly VegetationControl[],
-  cameraPos: Vector3
+  cameraPos: Vector3,
+  richBudget?: number
 ): boolean {
   const all: VegetationChunk[] = [];
   const states: ChunkLodState[] = [];
@@ -1299,7 +1225,7 @@ export function updateVegetationLod(
       });
     }
   }
-  const tiers = planCrownTiers(states);
+  const tiers = planCrownTiers(states, richBudget);
   let changed = false;
   for (let i = 0; i < all.length; i++) {
     if (tiers[i] !== all[i].tier) {

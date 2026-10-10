@@ -105,7 +105,7 @@ is the codebook.
 | Urban green | the edge raster's meadow side on classes 0 and 4 (NDVI > 0.3, not OSM-paved) → painted exactly as meadow: colour, mottle, NDVI tint, lawn edge (*Stadtgrün*) | DOP | `ground-detail.ts` `urbanGreen`, `edges.py` |
 | Water extent + shoreline | splat alpha (3×3 tent over class 8), `smoothstep`ed | Basis-DLM | `landcover-splat.ts`, `water-layer.ts` |
 | Water ripple, glitter, sky tint | time, sun direction, fog palette; the sheet shades from a level normal, not the terrain grid's | — (synth) | `water-layer.ts` |
-| River mist | water mask blurred over ~20 m (coarse mip, five taps) so it thins out over the banks; two drifting fbm layers, no threshold; none within 120 m of the eye, full from 1.2 km, at most 40 % opaque and only a little whiter than the sky, so it gathers far off and never lies as a veil over the near river | Basis-DLM (mask) | `createWaterMist` (*Flussnebel*) |
+| River mist | water mask blurred over ~20 m (coarse mip, five taps) so it thins out over the banks; two drifting fbm layers, no threshold; none within 120 m of the eye, full from 1.2 km, at most 24 % opaque and only a little whiter than the sky, so it gathers far off and never lies as a veil over the near river; always on (no slider) | Basis-DLM (mask) | `createWaterMist` |
 | Building silhouette | solid geometry | LoD2 | `city-layer.ts` |
 | Roofs rebuilt from the scan | where a LoD2 roof misses DOM1 (> 40 % of its cells > 2 m off: free-form roofs of complex buildings, 3 m placeholders of new ones), the object's triangles are replaced at bake time by what DOM1 measures inside its footprint — flat levels, and the measured surface where it slopes or curves (a pitched roof, a vault, a dome; an error-bounded TIN) — each part standing from the object's LoD2 base, same object id, so every row below applies unchanged; 886 objects on the site; a LoD2 roof whose form the scan confirms (the Frauenkirche's dome) is kept; faces shade with normals smoothed over them, creases > 30° kept (ADR 0036) | DOM1, LoD2 (+ DOP NDVI) | `scripts/measured-roofs.ts`, `bake-city-mesh.ts` `withMeasuredRoofs`; `pipeline/bake/roofs.py` |
 | Small structures LoD2 lacks | a closed box per structure the laser scan measured (garden houses, sheds, container buildings): its rectangle, from the lowest ground under the rectangle (sunk 0.2 m) to the fitted top, flat or pent, no storey band; appended to the tile's building mesh as objects of their own (column `source` = 1), so the clay look, demolish, picking, collision and the minimap treat them as buildings; wall tint hashed from its first corner, the flat-roof slate palette, no glow; the canopy and scan points in or within 0.5 m of one are dropped at build time (its roof, read as a tree) | LSC (+ OSM exclusions, DOP NDVI) | `lib/city/small-buildings.ts`, `bake-city-mesh.ts` `appendScanStructures`; `pipeline/bake/small_buildings.py` |
@@ -138,11 +138,10 @@ is the codebook.
 | The asked traffic flow or bicycle counter | while its layer shows: a ray on the flow's drawn bodies (the vertex names its section) or on the counter's columns as tall as they stand → the outline alone, a flow's with the layer's own grown and widened positions, tested only against what stands in front of the glass | the viewer's question | `traffic-ask.ts`, `bike-ask.ts`, `lib/city/inquiry-traffic.ts` |
 | The outline of the asked element | its triangles (a building's or bridge's own; a tree's crown and trunk, a monument's cylinder, a basin's prism as stand-ins) → a two-byte mask, red the whole element, green where the scene's depth shows it (MAX blending), blurred at half resolution by its own two-byte blur (GaussianBlurNode's kernel, `outlineKernel`) → the band 0.07–0.66 of red's blur: one rounded line round the element's whole silhouette, never along what stands in front, 4.5 CSS px of the HUD's accent pink (`SELECTION_ACCENT`, the hatch's too) on a hair of its pale, flashing wider and in the accent for 650 ms on a new question (`OUTLINE_PULSE`), fwidth-smoothed, at 42 % of its ink where green says the element is hidden (`OUTLINE_HIDDEN`, the hidden edge); over the finished frame and everything in it, in every picture style; mask and blur drawn only while something is asked | the viewer's question | `selection-outline.ts`, `selection-shape.ts`, `lib/city/outline.ts`, `post-stack.ts` |
 | The inquiry card (HUD, not the scene; a bottom sheet on touch) | the fact columns (`buildingId`, ALKIS use, roof form and pitch, height, area, OSM name, address, storeys), a tree's register facts (`treefacts_<tile>.json`), a monument's or bridge's feature, and the provenance manifest (each source's edition and licence), on demand only | LoD2, OSM, `data/<site>/provenance.json` | `lib/city/object-facts.ts`, `lib/city/inquiry.ts`, `lib/city/provenance.ts`, `inquiry-card.tsx` (ADR 0042) |
-| Transparency | slider, hash-dithered (no transmission) | — | (*Transparenz*) |
 | Tree position and height | canopy point + `h` (3–45 m): as tall as measured, crown 0.58 × h wide (the cadastre's measured median; a scan crown 2r within 0.4–0.75 × h); rows every 9 m along `veg04_l` | DOM1−DGM1, LSC, Basis-DLM | `vegetation-layer.ts`, `lib/city/tree-placement.ts` |
 | Tree gate | none on classes 5–8 | Basis-DLM | `pipeline/bake/canopy.py` |
 | Crown colour | NDVI 5×5 footprint max, recentred on the median; where the DOP has no near-IR (Munich) the GLI from its RGB, mapped onto the NDVI's scale | DOP | `crownColor` (+ hash sage fallback) |
-| Crown motion | wind sway (vertex), leaf flutter, sway-coupled brightness | — | (*Blattflimmern*, *Windhelligkeit*) |
+| Crown motion | wind sway (vertex); the crown brightens leaning into the gust and dims rocking back (× (1 ± 0.09 · gust), fixed) | — | `crownSway`, `crownLight` |
 | Crown silhouette | every tree its own crown: the shared geometry pushed in and out by three broad waves over the direction from the crown's centre, their phases from where the tree stands, and its top leaned a little — in the vertex stage, the cast shadow too; no draw call or build added | where the tree stands | `vegetation-layer.ts` `crownShape` |
 | Crown detail | three tiers per 250 m chunk, decided over the whole site each frame: rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `updateVegetationLod` (*Multi-Tuft-Kronen (nah)*) |
 | Coarse-level trees | a fixed third of the fine level's trees (a hash of where each stands), as tall, crowns √3 wider, in their colours and season, no trunks — wherever the tile renderer shows the coarse terrain: far off, from the air, in Modell past 2.5 m/px or wherever a coarsened stream or a load leaves the fine level out, at any scale; the fine level draws every tree | where each tree stands (`drawnCoarse`) | `coarse-crowns-layer.ts`, `lib/city/coarse-crowns.ts`, `scripts/coarse-crowns.ts`, `crowns_<t>.crw.gz` |
@@ -213,7 +212,7 @@ is the codebook.
 | Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, from the bare ground; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
 | Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80–1 500 m and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
 | Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, prefiltered into a 64 px PMREM (≈ 0.7 MB, as much again for the generator) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades, gilding and patina, fountain water and the river sheet, weighted by a softened Schlick; mirrors the sky, never the city | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
-| Depth of field | crosshair raycast distance; only what lies beyond the focus blurs (nearer is read as at the focus; blurring the foreground had laid a veil over the lower half — three's node still runs its near-field passes, over an empty field), focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving; desktop only — a phone does not build it (ADR 0047) | — | `post-stack.ts` (*Tiefenschärfe*) |
+| Depth of field | crosshair raycast distance; only what lies beyond the focus blurs (nearer is read as at the focus; blurring the foreground had laid a veil over the lower half — three's node still runs its near-field passes, over an empty field), focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving; always on otherwise (no switch, no manual focus); desktop only — a phone does not build it (ADR 0047) | — | `post-stack.ts` |
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `post-stack.ts` (*Papierkorn*) |
 | Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier, Strich, Schwarzplan — one post pass over the finished frame (below); Papier and Strich also swap every surface for one white paper material for the frame (Papier's ground keeps its paint and water as greys, Strich's turns plan-coloured), the Schwarzplan draws the buildings unlit black and hides everything but them and the white ground; remembered per browser | sun altitude (noir's dusk exposure) | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts`, `style-memory.ts` |
 | Modell's picture | a parallel camera (`model-camera.ts`, sheared for the Militärperspektive) at a scale (metres per CSS px ↔ 1 : n at 96 dpi); the post passes read it through the view lens; DoF, grading and vignette off, the distance fog open, the sky dome hidden, the background the style's paper; the shadow frustum fits the picture's footprint | the view (pivot, turn, tilt, scale) | `lib/city/model-view.ts`, `model-rig.ts`, `view-lens.ts`, ADR 0044 |
@@ -334,7 +333,7 @@ frames use (a build is keyed by render context, a context by target and
 call depth). The target has no MSAA (`antialias: false`); SMAA or FXAA
 carries the anti-aliasing. There is no tone mapping: the look was tuned
 without it. The GTAO sample count is a construction-time setting (16;
-8 in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
+8 on a phone and in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
 GLSL and stay unused.
 
 **What the stack builds follows the device tier** (`postProfileFor` in
@@ -354,10 +353,9 @@ step of the memory governor can shrink them.
   a third more memory, and nothing reads it).
 - **Phone.** No DoF is built: its six targets and its copy of the input
   held 23 MiB at an iPhone's 603×1311 drawing buffer from the first frame,
-  standing still or not, for a lens hint a six-inch screen barely shows;
-  the HUD hides the *Tiefenschärfe* switch, the look keeps its value. FXAA
-  replaces SMAA's three half-float targets and the frame copy before them
-  (24 MiB): `fxaa.ts` is three's FXAANode ported with a **perceptual
+  standing still or not, for a lens hint a six-inch screen barely shows.
+  FXAA replaces SMAA's three half-float targets and the frame copy before
+  them (24 MiB): `fxaa.ts` is three's FXAANode ported with a **perceptual
   luma** — the square root of the linear luma, since three's expects sRGB
   and this frame is linear half-float, above 1 in the sun's glow — and
   explicit level-0 samples (no derivatives inside its branches). It runs
@@ -391,7 +389,8 @@ cleared 0.38 MiB blur
 target, and the mask and the first blur target are freed
 `OUTLINE_KEEP_MS` (10 s) after the last question and made again by the
 next. Their programs compile with the idle warm-up on every tier, so the
-first question builds nothing. (The mask stays at full resolution: the
+first question builds nothing (the outline is all that warm-up still
+compiles). (The mask stays at full resolution: the
 blur's taps step a fraction of a texel, and a half-resolution mask would
 move the line's edge by up to two pixels.)
 
@@ -401,22 +400,18 @@ redraw the finished frame; no material knows about them (the ground's
 Papier tones aside, below). They are one node (`stylize-effect.ts`) in a
 second pipeline pair — the default pastel draws the pair without it — and
 its mode and pen are uniforms, so a switch between styles rebuilds
-nothing. Once the scene has loaded and the browser is idle
-(`PostStack.warmStyles`) the styled pipelines are built, one per frame
-(three builds a pipeline's graph on its first render),
-and the style dressing and the Papier programs of the scene's objects are
-compiled ahead with `compileAsync` under the swap itself; afterwards a
-tile that lands compiles its Papier programs with its own (one drawable
-per material and layout — the override's build key). So the first switch
-does not hitch. **Not on a phone** (`postProfileFor`: `warmStyles`
-`"outline-only"`, `warmPaper` off): there the warm-up compiles only the
-outline's programs — no styled pipelines, no style dressing, no Papier
-programs. Those doubled the pipelines the GPU process holds (and the
-sibling crown sets inflated what three counts), and the Papier programs
-took half a minute of main thread on an iPhone, whose tab died of memory
-on a flight afterwards. A phone's first switch to a style builds its
-pipelines and its dressing in that frame — one hitch, for a style most
-never pick. The viewer's last style is kept in local storage
+nothing. **No tier warms them** (`postProfileFor`: `warmStyles`
+`"outline-only"`, `warmPaper` off; since 2026-10-10 on the desktop too):
+the idle warm-up compiles only the outline's programs — no styled
+pipelines, no style dressing, no Papier programs. On a desktop it used to
+build all of them once the scene was idle, and from then on every tile
+that landed compiled its Papier and figure-ground programs with its own,
+for the rest of the session; on a phone those doubled the pipelines the
+GPU process holds and took half a minute of main thread on an iPhone,
+whose tab died of memory on a flight afterwards. The first switch to a
+style builds its pipelines and its dressing in that frame — one hitch,
+for a style most visits never pick (`PostStack.warmStyles` still prepares
+them all where a profile asks for `"all"`). The viewer's last style is kept in local storage
 (`style-memory.ts`). The table is `lib/city/render-style.ts`; per style it
 sets the node's mode, a weight on the *Tuschelinien*, *Tiefenfärbung* and
 *Papierkorn* sliders, the vignette, animated film grain and whether depth
@@ -522,8 +517,8 @@ Nothing is built for Modell.
   camera picks right; a parallel ray starts at the scene's top.
 - **Scale, not distance.** The shadow frustum fits the footprint in
   half-octave steps (110–1600 m; 880 m on phones); vegetation tiers, lamp
-  lights, the map overlay and the soundscape read an eye over the pivot at
-  the equivalent distance.
+  lights and the map overlay read an eye over the pivot at the equivalent
+  distance.
 - **Trees at every scale.** The picture loads one terrain level across
   the sheet (the tile renderer's error for a parallel camera is the
   geometric error over the pixel size): fine below 2.5 m/px, coarse
@@ -583,9 +578,10 @@ the safety levels 1, 2 and 3:
 | Shadow camera streams at | 128 px, by day; from level 2 never | 64 px, by day; from level 2 never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
 | Pixel ratio | ≤ 2 (1.5, 1.25, 1.0) | ≤ 1.5 (1.25, 1.0, 0.85) | 0.5 |
-| Post (`postProfileFor`) | DoF, SMAA, every style warmed | no DoF, FXAA, only the outline warmed | as the tier |
-| Land-cover rasters | L0 4096², L1 2048² | 2048² everywhere; the coarse level without the sports raster | L0 4096², L1 2048² |
-| GTAO samples | 16 | 16 | 8 |
+| Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
+| Land-cover rasters | L0 4096², L1 1024² | L0 2048², L1 1024²; no sports raster | L0 4096², L1 1024² |
+| GTAO samples | 16 | 8 | 8 |
+| Rich crowns at most (`vegetation-lod.ts`) | 2 500 (≈ 3.6 M triangles) | 800 | as the tier |
 | Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
 | Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 168–336 MiB (148–296, 136–272, 96–232) | as the tier |
 | Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 480 / 560 MB (a last one 10 s past 560); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
@@ -643,20 +639,38 @@ stays their measure; the tile cache counts true bytes.
   phone's post profile and the one-byte shadow colour target (above) they
   are ~30 MiB: 9.6 of targets, 20 of shadow map — +0.9 while something is
   asked, +6 while a picture style is on.
-- **Per tile.** A coarse terrain level holds, on a phone, its class raster
-  (2048², 4 MiB), the splat painted from it with its mips (21.3), NDVI
-  (1.3), sky view (1) and horizon (2): ~30 MiB. A tile showing its fine
-  level holds 75.7: the same set and the sports raster (16) — shared by
-  file with the coarse level (`shared-rasters.ts`; the cache weighs a
-  shared raster half by each level) — and its own surface (16), edges (8),
-  markings (4) and allotments (≤ 2) rasters. The sports raster is read by
-  the fine level only on a phone (`readsSportGrounds`; it was 16 MiB per
-  coarse tile, 14 of Dresden's 15 have grounds). The coarse level is lean
+- **Per tile.** A coarse terrain level holds, on every tier, its 1024²
+  class raster (1 MiB) and the splat painted from it with its mips (5.3),
+  NDVI (1.3), sky view (1) and horizon (2): ~11 MiB (~30 at 2048², before
+  2026-10-10: the coarse level is a 40 m-error mesh 2.1–2.6 km out, where
+  2 m texels are about a pixel). A phone's tile showing its fine level
+  holds its 2048² class raster and splat (25.3), the NDVI, sky view and
+  horizon shared by file with the coarse level (`shared-rasters.ts`; the
+  cache weighs a shared raster half by each level) and its own surface
+  (16), edges (8), markings (4) and allotments (≤ 2) rasters: ~60 MiB.
+  The sports raster (2048² RGBA, 16 MiB for a PNG of a few dozen kB) is
+  read by a desktop's fine level only (`readsSportGrounds`): a phone draws
+  its pitches in their land-cover green without lines, the goals and nets
+  stay (14 of Dresden's 15 tiles have grounds). The coarse level is lean
   besides: its grid index and the water index derived from it are one
   copy for the site (`createGridShare`, kept only where a tile's numbers
   equal the site's: −12 MiB per coarse tile after the first, on the GPU
   and the CPU), and it carries only its coarse crowns, traffic and
   bridges.
+- **The stream camera.** The tile renderer streams for a twin of the
+  walk/fly camera whose far plane ends where the fog does — the larger of
+  the fog applied now and the look's own, × 1.1
+  (`lib/city/atmosphere.ts` `streamFarFor`, synced every frame before the
+  stream's update in `create-app.ts`). Three's range fog runs on view
+  depth, the far plane's measure, and the sky's horizon band takes the
+  fog colour, so a tile wholly past the fog's end shows nothing; with the
+  camera's own 6 km far plane every building tile out to the site's edge
+  in that direction was loaded, compiled, given a BVH and drawn as fog
+  colour (≈ 2.85 km at the default *Nebel*; 4.4 km at none). The camera
+  keeps 6 km for the sky dome; Modell streams for its own camera; the
+  sun's shadow camera streams as before. At Dresden's spawn view the
+  site's edge lies inside that reach anyway — the saving is in the views
+  across the city and from the air.
 - **The tile cache** weighs a tile as the GPU holds it: the glTF (by
   count, so a buffer whose CPU copy is gone weighs what it did), the
   terrain's rasters and the dressing's geometry, less the buffers the
@@ -928,7 +942,7 @@ sequenceDiagram
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
   B->>S: per fine terrain tile: canopy, rows, scan trees, cadastre, hedges, NDVI, lamps, monuments, furniture, rail, bridge, platform
-  Note over B: each change: shadows invalidated · lamp heads · stats
+  Note over B: each task's changes, once: shadows invalidated · lamp heads · stats
   Note over B: spawn dressed, renderer idle, no dressing pending → onLoaded (__poc.ready)
 ```
 
@@ -996,7 +1010,10 @@ corrupt file, not a blip, and is not retried), and so do the terrain,
 sky-view and horizon rasters (`fetchRasterBytes`) and the trees' NDVI
 sampler: an abort is never retried, a 404 means absent, a network error
 or a 408/425/429/5xx is retried with jittered backoff (0.5 s doubling to
-15 s, × 0.5–1.5, a `Retry-After` honoured) — the first try at once, each
+15 s, × 0.5–1.5, a `Retry-After` honoured), and so is an attempt that
+goes 30 s without a byte, before its headers or between two chunks of
+its body (`STALL_MS`: a browser leaves a request on a silent connection
+pending for minutes, and the boot waited on it) — the first try at once, each
 retry once the page is usable, visible and online, or visible and called
 offline every 15 s (`net-gate.ts`). The budget counts the page's visible
 time, offline or not — a phone in a pocket spends nothing, one in a
@@ -1033,9 +1050,25 @@ upload one at a time for the whole site (`raster-upload.ts`,
 compile, as before): a raster is on the GPU, its bytes gone, before the
 next one decodes. The ground fills in a little
 later for it. A level whose tile leaves meanwhile takes no more turns.
+The *downloads* do not take turns: a terrain level asks for all of its
+rasters at once (`loadTerrainRasters` in `terrain-layer.ts` — a fine
+level names up to ten, which used to be ten round trips one after
+another on the spawn tile's critical path); only their decodes and
+uploads queue. A tile's meshopt buffers decode in the decoder's two
+workers (`MeshoptDecoder.useWorkers`), not inside the parse on the main
+thread (75 MB decoded for a dense building tile). three's async compiles
+yield to the main thread between their steps with `scheduler.yield`, and
+without it — every WebKit browser, so every iPhone — with
+`requestAnimationFrame`: a node build waited nine frames whatever it
+cost. `main-yield.ts` gives WebKit a message-channel `scheduler.yield`
+before the renderer exists, so the compiles there run as in Chromium.
 
 The HUD's five load stages and their weights are declared once in
-`lib/city/load-stages.ts`. The first three are the first frame; the other
+`lib/city/load-stages.ts`; the scene passes a stage on only when its
+value changes (the spawn wait polls every 50 ms, and each report is a
+transition over the whole HUD), and the compile of the scene's own
+objects before the first frame is bounded like a tile's (3 s,
+`withinCompileWait`). The first three are the first frame; the other
 two measure **what the cameras see**, not the whole site: *Umgebung* is
 the tile renderer's own load progress, *Details* the dressings built
 against those queued. Both only move forward. Once everything in view is
@@ -1043,51 +1076,6 @@ in, the pill leaves; later loads (a flight) show a small, late *Umgebung
 lädt* hint instead (`onBusy`). The minimap loads every tile's footprints
 up front (named in the tileset's root extras), so it is complete from the
 start.
-
-## Sound (hidden, opt-in)
-
-The viewer is silent. A hidden soundscape ([plan 035](./plans/completed.md#035--a-hidden-soundscape--done-2026-09-26-unheard-the-listening-pass-is-a-maintainer-action))
-plays only after an explicit toggle — the **L** key (listed in no hint) or
-the quiet *Klang (experimentell)* switch at the bottom of the Erweitert
-tab — and is off again at every load. No `AudioContext` exists before
-that gesture (the e2e suite asserts it); the context is created inside
-it, as iOS Safari requires, with an *ambient* audio session where Safari
-offers one (it mixes with the visitor's own audio and keeps to the silent
-switch). The engine (`app/_components/soundscape/`, 17 kB) is a dynamic
-import on the first toggle; the viewer carries only the switch, the
-speaker glyph that shows while it plays (a click turns it off) and
-`lib/city/sound-entry.ts` (≈ 6 kB of boot JS in all). A hidden tab fades
-out and suspends the context.
-
-It is one WebAudio graph, all synthesized (no samples, no dependency):
-looped noise beds through filters, short scheduled event graphs that free
-themselves, a dark generated "air" reverb for the far sounds, a quiet
-master (0.32) and a gentle compressor. Levels move by `setTargetAtTime`
-ramps on the audio thread (0.4 s; the master fades over ≈ 2 s). The scene
-is sampled at the **10 Hz pose tick** (the render loop's throttled pose
-callback, ~100 ms apart — no per-frame work): the
-handle's `listen` (height above ground, mode, trees within 40 m of the
-loaded vegetation chunks, the crowns' sway clock) and the tiles' own
-rasters, fetched and decoded on the CPU only while the sound plays and
-dropped with it (the class raster kept at 4 m, the sky view, the paving
-raster's surface byte for the tile underfoot).
-
-| Data | Sound (`lib/city/soundscape.ts`) |
-|---|---|
-| sky-view factor (else the built-up share), height above ground, the crowns' sway phase | wind: low-passed pink noise, gusting with the same signal the crowns bend with |
-| road / rail / built-up share within 30 m, height, night factor | the city's far hum (brown noise under 170 Hz), half of it at night |
-| distance to the water class (16 rays, 260 m), its bearing | the Elbe's low murmur, panned towards it |
-| fountains (monuments file), date and hour | a fountain's splash within 45 m, April–October, 8–22 h |
-| trees within 40 m, the generic leaf-cover year, the wind | leaves: high-passed noise that swells in the gusts |
-| green share, trees, sun (night factor), day of year, hour | birds by day — sparrows in streets, tits in parks, a blackbird's phrase at dusk and in the spring dawn chorus; silent at night, sparse in winter |
-| meadow share, summer nights | two crickets |
-| paving raster (sett, asphalt, concrete, slabs, gravel, grass) + class | footsteps on foot, one per 0.75 m at walking pace, the stride lengthening above it |
-| bell towers (`soundmarks_<tile>.geojson`), the scene clock | the full hour a forward clock change crosses, struck by the nearest four towers within 1.5 km, each **delayed by its distance at 343 m/s**, quieter and duller with distance, a deeper bell in a taller tower |
-| tram tracks (`tram_<tile>.geojson`) | now and then (≈ once in 2½ min beside a track, 4:30–0:30) a two-stroke tram bell |
-
-Unjudged by ear: the levels and timbres are designed, not listened to
-(the plan's STOP rule applies — a source that sounds cheesy is removed,
-not tuned endlessly).
 
 ## Verifying a change
 

@@ -79,7 +79,7 @@ import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { ModelInstruments } from "./model-instruments";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { updatePocDebug } from "./poc-debug";
-import { postProfileFor, type SceneBudget } from "./scene-profile";
+import type { SceneBudget } from "./scene-profile";
 import {
   overlook,
   spawnViewpoint,
@@ -93,7 +93,6 @@ import {
 import type { TramCarsStatus } from "./tram-cars";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { SceneSidebar } from "./scene-sidebar";
-import { SoundGlyph, useSoundscape } from "./soundscape-toggle";
 import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
 import { readStoredStyle, writeStoredStyle } from "./style-memory";
@@ -1063,15 +1062,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       "Verschattungsstudie gespeichert"
     );
 
-  // The hidden soundscape (plan 035): off until L or the Erweitert switch.
-  const sound = useSoundscape({
-    date: time.date,
-    handleRef,
-    nightFactor: time.sun?.nightFactor ?? 0,
-    ready: status.phase === "running" && !veilUp,
-    subscribePose,
-  });
-
   const stages: LoadStageState[] = loadStageStates(
     progress.fractions,
     progress.skipped
@@ -1154,7 +1144,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
               onTab={setTab}
             />
 
-            {sound.on && <SoundGlyph onClick={sound.toggle} />}
             {inquiry && (
               <InquiryPanel
                 along={along}
@@ -1238,7 +1227,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         landcoverTiles={landcoverTiles}
         landmarks={landmarks}
         latLng={latLng}
-        lensBlur={postProfileFor(budget.tier).dof}
         look={lookValues}
         minutes={time.minutes}
         mode={mode}
@@ -1287,7 +1275,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         setSnapshotText={setSnapshotText}
         snapshotMsg={snapshotMsg}
         snapshotText={snapshotText}
-        sound={sound}
         stats={stats}
         subscribePose={subscribePose}
         sun={time.sun}

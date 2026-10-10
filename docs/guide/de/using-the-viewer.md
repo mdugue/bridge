@@ -52,8 +52,8 @@ Karte anklicken oder einen Snapshot anwenden: Das Laden beginnt dann
 dort neu (der Ladebildschirm nennt ihn als *Start*), und du kommst gleich
 dort an statt am üblichen Startpunkt mit anschließender Reise. Sonne,
 Uhrzeit und Look lassen sich ebenfalls schon einstellen; Modell, die
-Werkzeuge, *Sicht merken*, der Klang und das Speichern eines Bildes
-warten, bis die Szene steht.
+Werkzeuge, *Sicht merken* und das Speichern eines Bildes warten, bis
+die Szene steht.
 
 ## Bewegen
 
@@ -411,16 +411,14 @@ zuletzt gewählten Stil für den nächsten Besuch:
 
 In den grafischen Stilen *Comic*, *Sin City*, *Strich* und *Schwarzplan*
 ruht die Tiefenschärfe (ein unscharfer Hintergrund unter scharfen Linien
-wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
+wirkt wie ein Fehler).
 
 | Gruppe | Regler | Was er tut |
 |---|---|---|
 | Atmosphäre | *Nebel* | Entfernungsdunst |
 | | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
-| | *Flussnebel* | treibende Nebelschicht über dem Wasser, erst ab etwa 120 m vor dir, dichter erst in der Ferne |
 | | *Tiefenfärbung* | warm nah, kühl fern: eine tiefenabhängige Farbgebung |
-| Gebäude | *Transparenz* | durch Gebäude hindurchsehen (gerastert), bis 90 % |
-| | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
+| Gebäude | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
 | | *Höhenlinien* | zarte Geschossbänder, aus der gemessenen Höhe abgeleitet |
 | | *Streiflicht* | Kantenlicht an sonnenabgewandten Kanten |
 | | *Farbvariation* | Wandton je Gebäude aus Nutzung und Höhe |
@@ -437,8 +435,6 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
 | | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |
 | | *Blattdurchscheinen* | Durchleuchtung naher, großer Kronen (schattenabhängig) |
-| | *Blattflimmern* | Böen drehen Blätter auf sonnigen Kronen auf die helle Unterseite |
-| | *Windhelligkeit* | Kronen hellen auf, wenn sie sich in eine Böe neigen |
 | | *Multi-Tuft-Kronen (nah)* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
@@ -446,13 +442,16 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Spiegelung* | der Himmel spiegelt sich in Glasfassaden, Vergoldungen und im Wasser; nur der Himmel, nicht die Häuser gegenüber |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
-| | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe, nur hinter dem Fokus (der Vordergrund bleibt scharf); *Auto* fokussiert auf die Bildmitte, *Manuell* auf eine feste Entfernung; auf Telefonen nicht angeboten |
 
-Solange sich die Kamera bewegt, ist die Tiefenschärfe-Unschärfe
+Zwei Effekte haben gar keinen Regler. Der Nebel über dem Fluss treibt
+erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der Ferne.
+Die fotografische Tiefenschärfe macht nur unscharf, was hinter dem Fokus
+liegt (der Vordergrund bleibt scharf), und scharf ist immer, was in der
+Bildmitte liegt. Solange sich die Kamera bewegt, ist die Unschärfe
 abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
-zurück, sobald du stehst. Telefone bieten den Schalter gar nicht an: Die
-Unschärfe braucht mehr Grafikspeicher, als ein Telefon für einen Hauch
-erübrigen kann, den ein kleiner Bildschirm kaum zeigt.
+zurück, sobald du stehst. Telefone zeichnen ohne sie: Die Unschärfe
+braucht mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen
+kann, den ein kleiner Bildschirm kaum zeigt.
 
 ### Erweitert
 
@@ -485,8 +484,8 @@ der erst beim Klick etwas von Ko-fi lädt.
 - Goldene Stunde (Sonne wenige Grad über dem Horizont) und blaue Stunde
   (wenige Grad darunter) geben die reichsten Farben; probiere 07:00 oder
   20:00 im Sommer.
-- Auf einem Laptop ohne eigene Grafikkarte senke *Kontaktschatten* und
-  schalte *Tiefenschärfe* aus, um mehr Bilder pro Sekunde zu bekommen.
+- Auf einem Laptop ohne eigene Grafikkarte senke *Kontaktschatten*, um
+  mehr Bilder pro Sekunde zu bekommen.
 - `?scene=lite` hinter der Adresse der Stadt (`/dresden?scene=lite`)
   streamt nur die Startkachel, mit groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
   die Szene aussehen soll.
@@ -538,14 +537,3 @@ Seitenleiste) schaltet die Berichte für deinen Browser sofort aus. Dort
 steht auch, wer die Seite betreibt, wo die Berichte liegen und wie lange.
 Ist kein Fehlerdienst eingerichtet, bietet die Karte das Protokoll
 stattdessen zum Kopieren an.
-
-## Kleinigkeiten
-
-- **Lauschen.** Drücke **L** (oder schalte auf dem Telefon ganz unten in
-  *Erweitert* *Klang (experimentell)* ein), und die Stadt klingt leise:
-  Wind, die Elbe, Vögel am Tag und Grillen in Sommernächten, Schritte, die
-  das Pflaster unter den Füßen kennen — und wenn du die Uhr über eine
-  volle Stunde schiebst, schlagen die Kirchen in der Nähe sie, jede ein
-  wenig später, je weiter sie entfernt steht, so wie der Schall reist. Bei
-  jedem Laden der Seite ist er aus, in einem Hintergrund-Tab verstummt er,
-  und der kleine Lautsprecher oben links schaltet ihn wieder aus.

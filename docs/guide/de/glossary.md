@@ -251,7 +251,7 @@ abdunkeln. Der Viewer nutzt eines davon, *GTAO* (Ground-Truth Ambient
 Occlusion), in halber Auflösung.
 
 **Tiefenschärfe (DoF)** — die fotografische Unschärfe hinter der
-Fokusentfernung (der Vordergrund bleibt scharf); hier standardmäßig auf die Bildmitte fokussiert. Nicht
+Fokusentfernung (der Vordergrund bleibt scharf); hier immer auf die Bildmitte fokussiert. Nicht
 auf Telefonen.
 
 **Nachbearbeitung (Post-Processing)** — Effekte auf dem fertigen Bild:

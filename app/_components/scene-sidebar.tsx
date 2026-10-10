@@ -1,7 +1,5 @@
 "use client";
 
-import { format } from "date-fns";
-import { de } from "date-fns/locale";
 import {
   BoxIcon,
   Building2Icon,
@@ -28,12 +26,12 @@ import type {
   RefObject,
   SetStateAction,
 } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { getTimes } from "suncalc";
 import { Button } from "@/components/ui/button";
 import { SUPPORT_URL } from "@/lib/brand";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Collapsible,
   CollapsibleContent,
@@ -62,7 +60,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  type FocusMode,
   LOOK_CONTROLS,
   type LookGroup,
   lookPatch,
@@ -89,7 +86,6 @@ import { hintsFor } from "./control-hints";
 import { LegalLinks } from "./legal-links";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { ProjectionPanel } from "./projection-panel";
-import type { SoundscapeControl } from "./soundscape-toggle";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
 import {
@@ -121,6 +117,31 @@ import { useSite } from "./site-context";
 const SECTION_LABEL =
   "font-semibold text-[11px] uppercase leading-none tracking-widest text-muted-foreground";
 
+/**
+ * The date picker (react-day-picker and the date-fns under it) is the HUD's
+ * only use of either, and only inside its popover, which mounts on open: it
+ * loads then — or a little earlier, when a pointer or the focus reaches the
+ * date (`preloadCalendar`) — in a chunk of its own. Until it lands the
+ * popover holds about its size. (The import stays written out inside
+ * dynamic(): Next matches the call to its chunk by it.)
+ */
+const Calendar = dynamic(
+  () => import("@/components/ui/calendar").then((m) => m.Calendar),
+  { ssr: false, loading: () => <div className="h-60 w-48" /> }
+);
+const preloadCalendar = () => {
+  // a failed load is next/dynamic's to report when the popover renders
+  import("@/components/ui/calendar").catch(() => undefined);
+};
+
+/** The day on the date button, "5. März 2026" (what date-fns' `d. MMMM
+ *  yyyy` in `de` wrote; the browser's own German needs no locale data). */
+const DAY_LABEL = new Intl.DateTimeFormat("de-DE", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
 const LOOK_GROUPS: {
   group: LookGroup;
   icon: LucideIcon;
@@ -148,7 +169,7 @@ const LOOK_GROUPS: {
   {
     group: "rendering",
     icon: SparklesIcon,
-    note: "Tiefenschärfe & Korn",
+    note: "Schatten & Korn",
     title: "Rendering",
   },
 ];
@@ -176,26 +197,18 @@ function sunTimeLabel(arrow: string, date: Date | null | undefined): string {
     : `${arrow} –`;
 }
 
-/** A labelled 0–100(+) percent slider that writes straight to the look store. */
+/** A labelled 0–100 percent slider that writes straight to the look store. */
 function PctSlider({
   description,
   id,
   label,
-  max = 100,
-  min = 0,
   onChange,
-  step = 1,
-  unit = "%",
   value,
 }: {
   description?: ReactNode;
   id: string;
   label: string;
-  max?: number;
-  min?: number;
   onChange: (value: number) => void;
-  step?: number;
-  unit?: string;
   value: number;
 }) {
   return (
@@ -203,15 +216,15 @@ function PctSlider({
       <FieldLabel className="justify-between font-medium text-xs" htmlFor={id}>
         {label}
         <span className="font-mono font-normal text-[11px] text-muted-foreground tabular-nums">
-          {value} {unit}
+          {value} %
         </span>
       </FieldLabel>
       <Slider
         id={id}
-        max={max}
-        min={min}
+        max={100}
+        min={0}
         onValueChange={(v) => onChange(Number(Array.isArray(v) ? v[0] : v))}
-        step={step}
+        step={1}
         value={[value]}
       />
       {description ? (
@@ -241,7 +254,6 @@ function LookSliders({
           id={def.id}
           key={def.key}
           label={def.label}
-          max={def.max}
           onChange={(n) => onLook(lookPatch(def.key, n / 100))}
           value={Math.round(look[def.key] * 100)}
         />
@@ -250,111 +262,10 @@ function LookSliders({
   );
 }
 
-/** DoF focus controls (mode toggle + manual distance); null when DoF is off. */
-function FocusControls({
-  distance,
-  enabled,
-  mode,
-  onDistance,
-  onMode,
-}: {
-  distance: number;
-  enabled: boolean;
-  mode: FocusMode;
-  onDistance: (meters: number) => void;
-  onMode: (mode: FocusMode) => void;
-}) {
-  if (!enabled) {
-    return null;
-  }
-  return (
-    <>
-      <Field>
-        <FieldLabel className="font-medium text-xs" htmlFor="focus-mode">
-          Fokus
-        </FieldLabel>
-        <ToggleGroup
-          className="w-full"
-          id="focus-mode"
-          onValueChange={(value: string[]) => {
-            const next = value[0] as FocusMode | undefined;
-            if (next) {
-              onMode(next);
-            }
-          }}
-          size="sm"
-          value={[mode]}
-          variant="outline"
-        >
-          <ToggleGroupItem className="flex-1" value="auto">
-            Automatisch
-          </ToggleGroupItem>
-          <ToggleGroupItem className="flex-1" value="manual">
-            Manuell
-          </ToggleGroupItem>
-        </ToggleGroup>
-        <FieldDescription className="text-[11px] leading-snug">
-          {mode === "auto"
-            ? "Scharf auf das, was in der Bildmitte liegt"
-            : "Feste Fokusdistanz — als Ring auf der Minikarte"}
-        </FieldDescription>
-      </Field>
-      {mode === "manual" && (
-        <PctSlider
-          id="focus-distance"
-          label="Fokusdistanz"
-          max={3000}
-          min={1}
-          onChange={onDistance}
-          step={5}
-          unit=" m"
-          value={distance}
-        />
-      )}
-    </>
-  );
-}
-
-/**
- * The lens blur's switch and its focus. Not shown where the device builds
- * no lens blur (a phone, scene-profile.ts `PostProfile.dof`): the look
- * keeps its value, and a snapshot taken there still carries it.
- */
-function DepthOfFieldControls({
-  look,
-  onLook,
-}: {
-  look: LookValues;
-  onLook: (patch: Partial<LookValues>) => void;
-}) {
-  return (
-    <>
-      <Field orientation="horizontal">
-        <FieldLabel className="font-medium text-xs" htmlFor="depth-of-field">
-          Tiefenschärfe
-        </FieldLabel>
-        <Switch
-          checked={look.dof}
-          id="depth-of-field"
-          onCheckedChange={(checked) => onLook({ dof: checked })}
-          size="sm"
-        />
-      </Field>
-      <FocusControls
-        distance={look.focusDistanceM}
-        enabled={look.dof}
-        mode={look.focusMode}
-        onDistance={(m) => onLook({ focusDistanceM: m })}
-        onMode={(m) => onLook({ focusMode: m })}
-      />
-    </>
-  );
-}
-
 /**
  * The picture style: five swatch cards, exactly one pressed — the same
- * single-value ToggleGroup as walk/fly and the focus mode, so the keyboard
- * moves through it the same way.
+ * single-value ToggleGroup as walk/fly, so the keyboard moves through it
+ * the same way.
  */
 function StylePicker({
   onStyle,
@@ -442,14 +353,12 @@ function LookGroupRow({
 /** The minimap card: click to teleport, the blue dot is you. */
 function MinimapCard({
   bounds,
-  focusRingM,
   footprints,
   landcoverTiles,
   onTeleport,
   subscribePose,
 }: {
   bounds: TerrainBounds;
-  focusRingM: number | null;
   footprints: FootprintPoly[];
   landcoverTiles: MapTile[];
   onTeleport: (epsgX: number, epsgY: number) => void;
@@ -479,7 +388,6 @@ function MinimapCard({
         {size > 0 && (
           <Minimap
             bounds={bounds}
-            focusRingM={focusRingM}
             footprints={footprints}
             landcoverTiles={landcoverTiles}
             onTeleport={onTeleport}
@@ -757,6 +665,8 @@ function SunControls({
       <div className="grid grid-cols-[1fr_auto] items-center gap-2">
         <Popover>
           <PopoverTrigger
+            onFocus={preloadCalendar}
+            onPointerEnter={preloadCalendar}
             render={
               <Button
                 className="h-7.5 justify-start font-normal text-xs"
@@ -767,7 +677,7 @@ function SunControls({
             }
           >
             <CalendarIcon data-icon="inline-start" />
-            {format(day, "d. MMMM yyyy", { locale: de })}
+            {DAY_LABEL.format(day)}
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto p-0">
             <Calendar
@@ -889,12 +799,6 @@ export interface SceneSidebarProps {
   /** the site's landmarks (Wikidata), most notable first */
   landmarks: Landmark[];
   latLng: { lat: number; lng: number } | null;
-  /**
-   * Whether the scene has a lens blur — the budget it was built with
-   * (scene-profile.ts `postProfileFor`), not the pointer as it is now: a
-   * keyboard detached after the boot leaves the blur on, and its switch.
-   */
-  lensBlur: boolean;
   look: LookValues;
   minutes: number;
   mode: ViewMode;
@@ -928,8 +832,6 @@ export interface SceneSidebarProps {
   setSnapshotText: Dispatch<SetStateAction<string>>;
   snapshotMsg: string | null;
   snapshotText: string;
-  /** the hidden soundscape's switch (plan 035) */
-  sound: SoundscapeControl;
   stats: CityWalkStats | null;
   subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
   sun: SunState | null;
@@ -942,7 +844,7 @@ export interface SceneSidebarProps {
 
 export function SceneSidebar(props: SceneSidebarProps) {
   const { toggleSidebar } = useSidebar();
-  const { handleRef, lensBlur, look, onLook } = props;
+  const { handleRef, look, onLook } = props;
   const site = useSite();
   const places = useMemo(
     () => sitePlaces(site.viewpoints, props.landmarks, site.name),
@@ -981,11 +883,6 @@ export function SceneSidebar(props: SceneSidebarProps) {
             {props.bounds && (
               <MinimapCard
                 bounds={props.bounds}
-                focusRingM={
-                  lensBlur && look.dof && look.focusMode === "manual"
-                    ? look.focusDistanceM
-                    : null
-                }
                 footprints={props.footprints}
                 landcoverTiles={props.landcoverTiles}
                 onTeleport={props.onTeleport}
@@ -1097,9 +994,6 @@ export function SceneSidebar(props: SceneSidebarProps) {
                       />
                     </Field>
                   )}
-                  {group === "rendering" && lensBlur && (
-                    <DepthOfFieldControls look={look} onLook={onLook} />
-                  )}
                 </LookGroupRow>
               ))}
             </div>
@@ -1201,28 +1095,6 @@ export function SceneSidebar(props: SceneSidebarProps) {
                   {props.fps === null ? "–" : `${Math.round(props.fps)} fps`}
                 </span>
               </div>
-            </div>
-
-            {/* The one visible trace of the soundscape (plan 035), quiet and
-                last: touch screens have no L key. */}
-            <div className="border-t px-4 pt-2.5 pb-3">
-              <Field orientation="horizontal">
-                <FieldLabel
-                  className="font-normal text-[11px] text-muted-foreground"
-                  htmlFor="soundscape"
-                >
-                  Klang (experimentell)
-                </FieldLabel>
-                <Switch
-                  checked={props.sound.on}
-                  // (it starts once the city is up: before, a switch that
-                  // stayed off would say nothing)
-                  disabled={!(props.sound.on || props.sound.ready)}
-                  id="soundscape"
-                  onCheckedChange={props.sound.toggle}
-                  size="sm"
-                />
-              </Field>
             </div>
           </SceneTabPanel>
         </SceneTabs>

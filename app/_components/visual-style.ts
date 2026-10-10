@@ -142,10 +142,8 @@ export interface ClayDetailUniforms {
 export interface StyleResources {
   /** the clay's facade uniforms (Boden-Verlauf, Streiflicht, …) */
   clayDetail: ClayDetailUniforms;
-  /** every live clay material, for the look (transparency) fan-out */
+  /** every live clay material, for the Schnitt's fan-out (setClaySection) */
   materials: Set<MeshStandardNodeMaterial>;
-  /** the current transparency, applied to materials created later too */
-  transparency: number;
   /** Modell's Schnitt is shown: the clay is drawn from both sides */
   section: boolean;
 }
@@ -844,7 +842,6 @@ export function createStyleResources(
       uWindows: uniform(LOOK_DEFAULTS.windows),
     },
     materials: new Set(),
-    transparency: LOOK_DEFAULTS.transparency,
     section: false,
   };
 }
@@ -887,7 +884,7 @@ export function createClayMaterial(
   clay.name = "clay";
   // the figure of a figure-ground plan (the Schwarzplan, paper-scene.ts)
   clay.userData.figure = true;
-  applyTransparency(clay, resources.transparency, resources.section);
+  applySides(clay, resources.section);
   resources.materials.add(clay);
   clay.addEventListener("dispose", () => resources.materials.delete(clay));
   return clay;
@@ -909,35 +906,15 @@ export function setClaySkyView(
 }
 
 /**
- * Building transparency, 0 (solid) .. 1 (fully see-through).
- *
- * Hash-dithered (`alphaHash`): stochastic coverage composited in the OPAQUE
- * pass with full depth testing, so buildings behind buildings, backsides and
- * roofs all occlude correctly — the batched mesh makes sorted alpha blending
- * impossible.
- *
- * NOTE on needsUpdate: the alpha-hash test is part of the built node graph.
- * Crossing the on/off boundary without flagging needsUpdate leaves the stale
- * build running until something else happens to force a rebuild.
+ * The clay's sides: the front only, or both while a Schnitt shows its
+ * poché. The side is part of the built node graph, so a switch flags
+ * needsUpdate — the two builds of the one graph (material-slots.ts).
  */
-function applyTransparency(
-  clay: MeshStandardNodeMaterial,
-  t: number,
-  section: boolean
-): void {
-  const wasHashed = clay.alphaHash;
+function applySides(clay: MeshStandardNodeMaterial, section: boolean): void {
   const wasSide = clay.side;
-  clay.opacity = 1 - t;
-  clay.alphaHash = t > 0;
-  clay.transparent = false;
   clay.side = section ? DoubleSide : FrontSide;
-  // The builds of the one graph (material-slots.ts): solid or hashed, and
-  // two-sided while a Schnitt shows its poché.
-  setGraph(
-    clay,
-    `clay|${clay.alphaHash ? "hashed" : "solid"}${section ? "|double" : ""}`
-  );
-  if (clay.alphaHash !== wasHashed || clay.side !== wasSide) {
+  setGraph(clay, section ? "clay|double" : "clay");
+  if (clay.side !== wasSide) {
     clay.needsUpdate = true;
   }
 }
@@ -954,27 +931,16 @@ export function setClaySection(resources: StyleResources, on: boolean): void {
   resources.section = on;
   clayPoche.value = on ? 1 : 0;
   for (const clay of resources.materials) {
-    applyTransparency(clay, resources.transparency, on);
-  }
-}
-
-export function setCityTransparency(
-  resources: StyleResources,
-  transparency: number
-): void {
-  resources.transparency = Math.min(Math.max(transparency, 0), 1);
-  for (const clay of resources.materials) {
-    applyTransparency(clay, resources.transparency, resources.section);
+    applySides(clay, on);
   }
 }
 
 /**
- * The clay uniform each building row drives. Transparency is the material's
- * opacity (setCityTransparency), not a uniform. A Record over the row keys,
+ * The clay uniform each building row drives. A Record over the row keys,
  * so a row added to the table cannot go unapplied.
  */
 const CLAY_UNIFORM_FOR: Record<
-  Exclude<ClayLookKey, "transparency">,
+  ClayLookKey,
   keyof Omit<ClayDetailUniforms, "uNight" | "uSun">
 > = {
   articulation: "uArticulation",
@@ -993,7 +959,7 @@ const CLAY_UNIFORM_FOR: Record<
 
 /**
  * Pushes the building rows of the look into the clay: the facade detail
- * uniforms (shared nodes, no rebuild) and the transparency.
+ * uniforms (shared nodes, no rebuild).
  */
 export function applyCityLook(
   resources: StyleResources,
@@ -1005,5 +971,4 @@ export function applyCityLook(
   ][]) {
     resources.clayDetail[uniform].value = look[key];
   }
-  setCityTransparency(resources, look.transparency);
 }

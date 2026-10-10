@@ -24,12 +24,7 @@
  */
 import type { Landmark } from "./landmarks";
 import type { TerrainBounds } from "./terrain-geometry";
-import type {
-  AskKind,
-  CoarseDressingKind,
-  DressingKind,
-  SoundKind,
-} from "./tile";
+import type { AskKind, CoarseDressingKind, DressingKind } from "./tile";
 
 /**
  * Whether a tile owns the point: west and south edges in, east and north
@@ -149,14 +144,6 @@ export interface CityExtras {
 
 export type ContentExtras = CityExtras | TerrainExtras;
 
-/**
- * What the hidden soundscape reads of a tile (plan 035; published names),
- * fetched only while it plays — the artifact table's `sound` column
- * (lib/city/tile.ts): the paving raster (footsteps), the sky view (the
- * wind), the bell towers, the tram tracks, the fountains.
- */
-export type TileSoundFiles = Partial<Record<SoundKind, string>>;
-
 /** A tile's side files only the inquiry card fetches (ADR 0042): the
  *  artifact table's `ask` column (lib/city/tile.ts). */
 export type TileAskFiles = Partial<Record<AskKind, string>>;
@@ -172,14 +159,12 @@ export interface TilesetTileInfo {
    */
   footprints: string;
   id: string;
-  /** the 512² class raster the minimap and the soundscape read
-   *  (`landcoverSmall`, lib/city/tile.ts) */
+  /** the 512² class raster the minimap reads (`landcoverSmall`,
+   *  lib/city/tile.ts) */
   minimap: string;
   /** the tile's bridge decks (the artifact `bridge`): the minimap draws
    *  them over the class raster, which shows the river under a bridge */
   bridges?: string;
-  /** the soundscape's files (plan 035) */
-  sound?: TileSoundFiles;
 }
 
 /** What the viewer needs before any content has loaded. */

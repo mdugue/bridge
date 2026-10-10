@@ -22,12 +22,12 @@ demand and would be forced every frame by anything that moves and casts.
   false`, `polygonOffset`), all scaled by one `nightFactor =
   smoothstep(2°, −6°)` of sun altitude. Lamps never cast shadows (the
   crown shimmer hard-codes `directionalLightShadows[0]`).
-- **Animation and shadows:** wind sway, leaf flutter, cloud drift and
-  water motion run in the main pass only; the depth/shadow materials carry
-  none of it. The cast shadow of a swaying crown does not follow the sway,
-  and clouds cast no shadows — accepted, because forcing
-  `shadow.needsUpdate` per frame would re-render the 3072² map over tens
-  of thousands of trees and destroy the on-demand win.
+- **Animation and shadows:** wind sway, cloud drift and water motion (and
+  the leaf flutter, until 2026-10-10) run in the main pass only; the
+  depth/shadow materials carry none of it. The cast shadow of a swaying
+  crown does not follow the sway, and clouds cast no shadows — accepted,
+  because forcing `shadow.needsUpdate` per frame would re-render the 3072²
+  map over tens of thousands of trees and destroy the on-demand win.
 - More generally, look features are driven by by-reference `{ value }`
   uniforms, never by `#define`s or light counts that change at runtime.
 

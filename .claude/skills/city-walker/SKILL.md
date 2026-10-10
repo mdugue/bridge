@@ -124,7 +124,8 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   vignette, paper grain — built per tier (`postProfileFor`, ADR 0047): a
   phone builds no DoF, antialiases with FXAA inside the last pass
   (`fxaa.ts`: a perceptual luma over the linear frame), draws `BeforeAA`
-  only while a style is on and warms only the outline's programs; the AO
+  only while a style is on; no tier warms more than the outline's programs
+  (a picture style builds on its first frame); the AO
   smoothing and the outline's mask and blur are one-byte targets, the
   outline drawn only while something is asked. The picture styles (Comic, Film noir, Sin City,
   Papier; `lib/city/render-style.ts`) are one node, `stylize-effect.ts`
@@ -141,8 +142,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   pixel ratio 0.5 hides the stroke widths, so judge them at ≥ 1.
 - `visual-style.ts` — the one building style: opaque archviz clay + facade
   detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
-  glow) as a `MeshStandardNodeMaterial`, hash-dithered transparency
-  (`alphaHash`). The old ghost/standard styles are gone.
+  glow) as a `MeshStandardNodeMaterial`, always opaque (the see-through
+  slider and its `alphaHash` build are gone too). The old ghost/standard
+  styles are gone.
 - The map's own marks: the ferry wakes of `riverside-layer.ts` (landing
   stages, groynes, ferries), faded in with height by `map-overlay.ts`. No
   text anywhere in the scene or HUD (plan 032's street names were removed;
@@ -223,11 +225,6 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   Modell's scale; anything else on the fine level vanishes there at
   once. A two-finger twist turns the ground with the fingers
   (`twistedTurn`).
-- Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
-  AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
-  `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),
-  `lib/city/soundscape.ts` (the mix) and `lib/city/sound-entry.ts` (the
-  boot-side half).
 - `minimap.tsx`, `city-walk.tsx` (HUD), `poc-debug.ts` (`window.__poc`).
 
 Constants live in the layer files and are the source of truth; values quoted
@@ -303,7 +300,7 @@ and therefore what keeps builds out of frames:
   not load leaves its term out of the terrain's colour node, so that tile
   builds apart; that is fine, but do not branch a graph on per-tile
   *values* — put them in uniforms. Toggling a graph-level flag
-  (`alphaHash`, a new slot) needs `material.needsUpdate = true`.
+  (`side`, `alphaHash`, a new slot) needs `material.needsUpdate = true`.
 - **Fog is `scene.fogNode`** (`height-fog.ts` `installSceneFog`): every
   material gets it; `material.fog = false` opts out (the river mist, the
   splat pass). Never fog a material by hand.
@@ -757,8 +754,8 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
   "camera": { "mode": "fly", "pos": {"x":0,"y":0,"z":0}, "epsg": {"x":0,"y":0},
               "headingDeg": 0, "pitchDeg": 0, "fov": 55 },
   "date": "2026-06-15T08:30:00.000Z",
-  "look": { "transparencyPct":0,"fogPct":35,"gradingPct":50,
-            "contactPct":50,"grainPct":25,"dof":true } }
+  "look": { "fogPct":35,"gradingPct":50,
+            "contactPct":50,"grainPct":25,"style":"pastel" } }
 ```
 
 ### The `lite` scene profile (headless e2e only)
@@ -815,7 +812,7 @@ bun run bake dresden 33412_5656_2_sn   # one tile, all steps
 bun run bake dresden --step canopy     # one step (STEPS in pipeline/bake/__main__.py, in this order):
                                        #   landcover islands rail canopy trees ndvi roof-colour
                                        #   osm-buildings lamps monuments furniture walls stairs surface edges
-                                       #   markings sport tram riverside traffic roofs skyview soundmarks
+                                       #   markings sport tram riverside traffic roofs skyview
                                        #   lowveg cultivated small-buildings
                                        #   landmarks structures
                                        # `transit` runs once for the site after every tile (SITE_STEPS)
@@ -841,8 +838,7 @@ intensities are normalised against its own ground (`lsc.rasterise`).
 The later modules, one step each: `osm_buildings.py` (shops, heritage,
 material and colours per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
 `riverside.py`, `skyview.py` (DGM + LoD2, the rebuilt roofs of `roofs.py`
-in place of theirs),
-`soundmarks.py` (bell towers), `small_buildings.py` (plan 034),
+in place of theirs), `small_buildings.py` (plan 034),
 `landmarks.py` and `structures.py` (plan 050; landmarks first, the relief
 is measured on their objects). **Seams:**
 a step whose result must agree on both sides of a tile edge reads the

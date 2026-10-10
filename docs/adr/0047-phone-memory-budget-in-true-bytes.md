@@ -46,8 +46,8 @@ drawing buffer, 790 533 px):
 ## Decision
 
 **A post profile per device tier** (`postProfileFor` in
-`scene-profile.ts`). A phone builds no depth of field (the HUD hides its
-switch, the look keeps its value), antialiases with FXAA inside the last
+`scene-profile.ts`). A phone builds no depth of field (since 2026-10-10
+no device has a switch for it), antialiases with FXAA inside the last
 pass (`fxaa.ts`: three's FXAANode ported with a perceptual luma, √ of the
 linear luma, over the linear frame, and explicit level-0 samples), draws
 into `BeforeAA` only while a picture style is on (freed on the first

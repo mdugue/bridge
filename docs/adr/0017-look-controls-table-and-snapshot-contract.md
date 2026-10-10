@@ -1,6 +1,12 @@
 # ADR 0017: Look controls declared in one table; the Snapshot is a validated, versioned contract
 
-- **Status:** accepted
+- **Status:** accepted; amended 2026-10-10: a row has no `max` any more
+  (only the removed *Transparenz* had one); `focusMode`/`focusDistanceM`
+  are no longer checked (depth of field lost its switch and its manual
+  focus); and a removed control's key — `transparencyPct`,
+  `leafFlutterPct`, `leafBrightPct`, `waterMistPct`, `dof`, `focusMode`,
+  `focusDistanceM` — is an unknown key: kept, ignored on Apply, never an
+  error
 - **Date:** 2026-09-21 (plan 012)
 
 ## Context

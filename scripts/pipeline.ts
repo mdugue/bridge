@@ -18,8 +18,7 @@
  *                                     lamps, monuments, furniture, walls,
  *                                     stairs, surface, edges, markings,
  *                                     sport, tram, riverside, traffic,
- *                                     skyview,
- *                                     soundmarks, lowveg, cultivated,
+ *                                     skyview, lowveg, cultivated,
  *                                     small-buildings)
  *   bun run bake <site> --step lowveg --research   also every hedge/shrub
  *                                     candidate, under the raw folder

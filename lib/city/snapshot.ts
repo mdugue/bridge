@@ -6,11 +6,7 @@
  * wrong instead of yielding NaN camera matrices. No THREE, no DOM.
  */
 import { DATA_LAYERS } from "./data-layers";
-import {
-  type FocusMode,
-  LOOK_CONTROLS,
-  type LookValues,
-} from "./look-controls";
+import { LOOK_CONTROLS, type LookValues } from "./look-controls";
 import { isModelPreset, type ModelPresetId } from "./model-view";
 import { isRenderStyle, RENDER_STYLES, type RenderStyle } from "./render-style";
 
@@ -47,15 +43,14 @@ export interface CameraStateJson {
 }
 
 export interface SnapshotLook {
-  dof?: boolean;
-  focusDistanceM?: number;
-  focusMode?: FocusMode;
   multiTuft?: boolean;
   /** the picture style; absent in older snapshots (they keep the current one) */
   style?: RenderStyle;
   /**
    * Per-control percentages, keyed by LookControlDef.snapshotKey (all
-   * optional: older snapshots omit newer controls).
+   * optional: older snapshots omit newer controls). Keys of removed
+   * controls (`transparencyPct`, `dof`, `focusMode`, …) are unknown keys:
+   * kept, never checked, never applied.
    */
   [pctKey: string]: boolean | number | string | undefined;
 }
@@ -167,21 +162,12 @@ function checkDate(v: unknown): string {
 
 function checkLookFlags(look: Record<string, unknown>): void {
   for (const key of [
-    "dof",
     "multiTuft",
     ...DATA_LAYERS.map((def) => def.snapshotKey),
   ]) {
     if (look[key] !== undefined && typeof look[key] !== "boolean") {
       throw new SnapshotError(`look.${key} must be a boolean`);
     }
-  }
-  const mode = look.focusMode;
-  if (mode !== undefined && mode !== "auto" && mode !== "manual") {
-    throw new SnapshotError('look.focusMode must be "auto" or "manual"');
-  }
-  const dist = look.focusDistanceM;
-  if (dist !== undefined && finite(dist, "look.focusDistanceM") < 1) {
-    throw new SnapshotError("look.focusDistanceM must be at least 1");
   }
   if (look.style !== undefined && !isRenderStyle(look.style)) {
     const ids = RENDER_STYLES.map((def) => `"${def.id}"`).join(", ");
@@ -204,7 +190,7 @@ function checkLook(v: unknown): SnapshotLook {
 
 /**
  * The persisted document for the live values: one `<snapshotKey>` percent per
- * table row, the five flags, the data layers and the sun instant. What Copy writes.
+ * table row, the two flags, the data layers and the sun instant. What Copy writes.
  */
 export function encodeSnapshot(
   look: LookValues,
@@ -212,9 +198,6 @@ export function encodeSnapshot(
   date: Date
 ): Snapshot {
   const lookJson: SnapshotLook = {
-    dof: look.dof,
-    focusMode: look.focusMode,
-    focusDistanceM: look.focusDistanceM,
     multiTuft: look.multiTuft,
     style: look.style,
   };
@@ -235,8 +218,9 @@ export function encodeSnapshot(
 /**
  * The look values a parsed snapshot carries, as a store patch: every percent
  * key that is present (older snapshots omit newer controls, which keep their
- * current value) and each of the five flags and the data layers when present. Ranges are clamped
- * by the store on apply. What Apply reads.
+ * current value) and each of the two flags and the data layers when present;
+ * a removed control's key is left out. Ranges are clamped by the store on
+ * apply. What Apply reads.
  */
 export function decodeLook(
   look: SnapshotLook | undefined
@@ -250,15 +234,6 @@ export function decodeLook(
     if (typeof raw === "number") {
       patch[def.key] = raw / 100;
     }
-  }
-  if (look.dof !== undefined) {
-    patch.dof = look.dof;
-  }
-  if (look.focusMode !== undefined) {
-    patch.focusMode = look.focusMode;
-  }
-  if (look.focusDistanceM !== undefined) {
-    patch.focusDistanceM = look.focusDistanceM;
   }
   if (look.multiTuft !== undefined) {
     patch.multiTuft = look.multiTuft;
