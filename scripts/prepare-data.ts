@@ -137,19 +137,32 @@ import {
 } from "./bake-sources";
 import { cachedEntry, writeEntry } from "./bake-cache";
 import {
+  type Dgm,
   fenceMesh,
+  fineTin,
+  gridHeightAt,
+  gridMesh,
   kerbMesh,
   readDgm,
+  shapeGrid,
   stairMesh,
+  type TerrainFeatures,
   type TerrainMesh,
   terrainMesh,
-  tinTerrainMesh,
+  tinHeightAt,
+  tinMesh,
   wallMesh,
 } from "./bake-tiles";
 import { FINE_TIN_MAX_ERROR } from "./bake-terrain-tin";
 import { bakeWissenHero } from "./bake-wissen-hero";
 import { type ColonyCrop, cropColonyRaster } from "./crop-raster";
 import { downsampleClassRaster } from "./downsample-raster";
+import {
+  type FineGround,
+  packGround,
+  readGroundHeader,
+  unpackGround,
+} from "./ground-pack";
 import {
   levelInputs,
   type SiteLevels,
@@ -368,6 +381,19 @@ async function cached(
   const bytes = await bake();
   writeEntry(CACHE_DIR, name, key, bytes);
   return bytes;
+}
+
+/** Where the cached entry for `key` lies, baked first when it is not
+ *  there — for an entry read later, or only in part. */
+async function cachedFile(
+  name: string,
+  key: string,
+  bake: () => Promise<Uint8Array> | Uint8Array
+): Promise<string> {
+  return (
+    cachedEntry(CACHE_DIR, name, key) ??
+    writeEntry(CACHE_DIR, name, key, await bake())
+  );
 }
 
 // --- 1. side files --------------------------------------------------------------
@@ -788,10 +814,79 @@ function terrainInputs(tile: string): string[] {
   ];
 }
 
-/** A tile's shaped terrain at one level (memoised: the fine levels of every
- *  tile are also the ground the walls stand on). The fine level is a TIN
- *  over the native DGM (bake-terrain-tin.ts), unless the DGM has holes; the
- *  coarse one the resampled grid. */
+/** A tile's DGM read at `size` (`"native"`: its own resolution). */
+async function tileDgm(tile: string, size: number | "native"): Promise<Dgm> {
+  const source = dgmSourceFiles(SITE, tile);
+  const tfw = at(source.tfw);
+  const buf = readFileSync(at(source.tif));
+  return readDgm(
+    buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+    existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
+    size
+  );
+}
+
+/** What a tile's ground is shaped with besides its walls. */
+function groundFeatures(tile: string): TerrainFeatures {
+  return {
+    passages: passagesIn(tile),
+    stairs: stairLines(SITE, tile),
+    terraces: terraces(SITE, tile),
+  };
+}
+
+/** A tile's fine ground: a TIN over the native DGM (bake-terrain-tin.ts),
+ *  unless the DGM has holes; then the grid. */
+async function bakeFineGround(tile: string): Promise<FineGround> {
+  const walls = wallLines(SITE, tile);
+  const tin = fineTin(
+    await tileDgm(tile, "native"),
+    walls,
+    groundFeatures(tile),
+    FINE_TIN_MAX_ERROR
+  );
+  if (tin) {
+    return { kind: "tin", tin };
+  }
+  log(`${tile}: the DGM has NoData, the fine level stays a grid`);
+  const dgm = await tileDgm(tile, TERRAIN_LEVELS[0].n);
+  return { kind: "grid", grid: shapeGrid(dgm, walls, groundFeatures(tile)) };
+}
+
+/**
+ * Where a tile's fine ground lies in the cache (ground-pack.ts), baked first
+ * when it is not there. Cached apart from the fine level's glTF, which
+ * stands its walls, kerbs, stairs and fences on every tile's fine ground:
+ * a process baking some of the site's tiles (prepare-sites.ts' warmers)
+ * reads the others' grounds instead of refining their TINs again.
+ */
+const groundFiles = new Map<string, Promise<string>>();
+function groundFile(tile: string): Promise<string> {
+  let file = groundFiles.get(tile);
+  if (!file) {
+    file = cachedFile(
+      `ground_${tile}.bin`,
+      cacheKey(
+        terrainInputs(tile),
+        [...GROUND_BAKE, "scripts/ground-pack.ts"],
+        offset,
+        passagesIn(tile)
+      ),
+      async () => {
+        const t0 = performance.now();
+        const packed = packGround(await bakeFineGround(tile));
+        log(`ground ${tile}: built in ${since(t0)} ms`);
+        return packed;
+      }
+    );
+    groundFiles.set(tile, file);
+  }
+  return file;
+}
+
+/** A tile's shaped terrain at one level (memoised until the tile is baked:
+ *  `dropTerrain`). The fine level is the cached ground meshed (`groundFile`),
+ *  the coarse one the resampled grid. */
 const terrains = new Map<
   string,
   Promise<TerrainMesh & { bounds: TerrainBounds }>
@@ -804,37 +899,22 @@ function shapedTerrain(
   let built = terrains.get(memo);
   if (!built) {
     built = (async () => {
-      const source = dgmSourceFiles(SITE, tile);
-      const tif = at(source.tif);
-      const tfw = at(source.tfw);
-      const buf = readFileSync(tif);
-      const read = (size: number | "native") =>
-        readDgm(
-          buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
-          existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
-          size
-        );
-      const features = {
-        passages: passagesIn(tile),
-        stairs: stairLines(SITE, tile),
-        terraces: terraces(SITE, tile),
-      };
       if (level === 0) {
-        const dgm = await read("native");
-        const tin = tinTerrainMesh(
-          dgm,
-          wallLines(SITE, tile),
-          offset,
-          features,
-          FINE_TIN_MAX_ERROR
-        );
-        if (tin) {
-          return { ...tin, bounds: dgm.bounds };
-        }
-        log(`${tile}: the DGM has NoData, the fine level stays a grid`);
+        const ground = unpackGround(readFileSync(await groundFile(tile)));
+        return ground.kind === "tin"
+          ? {
+              ...tinMesh(ground.tin, offset, FINE_TIN_MAX_ERROR),
+              bounds: ground.tin.bounds,
+            }
+          : { ...gridMesh(ground.grid, offset), bounds: ground.grid.bounds };
       }
-      const dgm = await read(TERRAIN_LEVELS[level].n);
-      const mesh = terrainMesh(dgm, wallLines(SITE, tile), offset, features);
+      const dgm = await tileDgm(tile, TERRAIN_LEVELS[level].n);
+      const mesh = terrainMesh(
+        dgm,
+        wallLines(SITE, tile),
+        offset,
+        groundFeatures(tile)
+      );
       return { ...mesh, bounds: dgm.bounds };
     })();
     terrains.set(memo, built);
@@ -842,25 +922,58 @@ function shapedTerrain(
   return built;
 }
 
+/** Frees a baked tile's shaped terrain (its meshes' arrays). */
+function dropTerrain(tile: string): void {
+  terrains.delete(`${tile}:0`);
+  terrains.delete(`${tile}:1`);
+}
+
+/** Each tile's fine ground height, read from the cache when first asked
+ *  for (the index over a TIN is ~10 MB, kept). */
+const heights = new Map<string, (x: number, y: number) => number | null>();
+function heightOver(
+  tile: string,
+  path: string
+): (x: number, y: number) => number | null {
+  let heightAt = heights.get(tile);
+  if (!heightAt) {
+    const ground = unpackGround(readFileSync(path));
+    heightAt =
+      ground.kind === "tin"
+        ? tinHeightAt(ground.tin)
+        : gridHeightAt(ground.grid);
+    heights.set(tile, heightAt);
+  }
+  return heightAt;
+}
+
 /** Ground height over the whole site: the fine, shaped ground of the tile
  *  holding the point — what the walker stands on at runtime. `tin` is true
  *  when every tile's fine level is a TIN (nothing burned to the wall line,
- *  so the walls snap to the measured step). */
+ *  so the walls snap to the measured step). Every tile's ground is cached
+ *  first, one at a time; a tile's heights are read once a point asks. */
 let groundTimed = false;
 async function siteGround(): Promise<{
   heightAt: (x: number, y: number) => number | null;
   tin: boolean;
 }> {
   const t0 = performance.now();
-  const fine = await Promise.all(TILES.map((t) => shapedTerrain(t, 0)));
+  const fine: { bounds: TerrainBounds; path: string; tin: boolean }[] = [];
+  for (const t of TILES) {
+    const path = await groundFile(t);
+    const { bounds, kind } = readGroundHeader(path);
+    fine.push({ bounds, path, tin: kind === "tin" });
+  }
   if (!groundTimed) {
     groundTimed = true;
     log(`site ground: ${since(t0)} ms`);
   }
   return {
-    heightAt: (x, y) =>
-      fine.find((g) => ownsPoint(g.bounds, x, y))?.heightAt(x, y) ?? null,
-    tin: fine.every((g) => g.tin !== undefined),
+    heightAt: (x, y) => {
+      const i = fine.findIndex((g) => ownsPoint(g.bounds, x, y));
+      return i < 0 ? null : heightOver(TILES[i], fine[i].path)(x, y);
+    },
+    tin: fine.every((g) => g.tin),
   };
 }
 
@@ -1141,7 +1254,9 @@ for (const [i, tile] of TILES.entries()) {
   // A tile's meshes are hundreds of MB of typed arrays that Bun's lazy
   // collector let pile up over the loop: a cold Dresden reached ~7 GB,
   // more than a 4-core, 8 GB build machine running two sites side by side
-  // holds. Collected after each tile, the loop stays near one tile's peak.
+  // holds. Dropped and collected after each tile, the loop stays near one
+  // tile's peak.
+  dropTerrain(tile);
   Bun.gc(true);
 }
 log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
