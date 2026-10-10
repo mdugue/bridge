@@ -142,8 +142,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   pixel ratio 0.5 hides the stroke widths, so judge them at ≥ 1.
 - `visual-style.ts` — the one building style: opaque archviz clay + facade
   detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
-  glow) as a `MeshStandardNodeMaterial`, hash-dithered transparency
-  (`alphaHash`). The old ghost/standard styles are gone.
+  glow) as a `MeshStandardNodeMaterial`, always opaque (the see-through
+  slider and its `alphaHash` build are gone too). The old ghost/standard
+  styles are gone.
 - The map's own marks: the ferry wakes of `riverside-layer.ts` (landing
   stages, groynes, ferries), faded in with height by `map-overlay.ts`. No
   text anywhere in the scene or HUD (plan 032's street names were removed;
@@ -304,7 +305,7 @@ and therefore what keeps builds out of frames:
   not load leaves its term out of the terrain's colour node, so that tile
   builds apart; that is fine, but do not branch a graph on per-tile
   *values* — put them in uniforms. Toggling a graph-level flag
-  (`alphaHash`, a new slot) needs `material.needsUpdate = true`.
+  (`side`, `alphaHash`, a new slot) needs `material.needsUpdate = true`.
 - **Fog is `scene.fogNode`** (`height-fog.ts` `installSceneFog`): every
   material gets it; `material.fog = false` opts out (the river mist, the
   splat pass). Never fog a material by hand.
@@ -758,7 +759,7 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
   "camera": { "mode": "fly", "pos": {"x":0,"y":0,"z":0}, "epsg": {"x":0,"y":0},
               "headingDeg": 0, "pitchDeg": 0, "fov": 55 },
   "date": "2026-06-15T08:30:00.000Z",
-  "look": { "transparencyPct":0,"fogPct":35,"gradingPct":50,
+  "look": { "fogPct":35,"gradingPct":50,
             "contactPct":50,"grainPct":25,"dof":true } }
 ```
 

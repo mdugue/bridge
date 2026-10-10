@@ -35,7 +35,6 @@ export type ClayLookKey =
   | "roofVibrance"
   | "roughness"
   | "tint"
-  | "transparency"
   | "windows";
 /** Rows the post stack applies (post-stack.ts). */
 export type PostLookKey = "contact" | "grading" | "grain" | "ink";
@@ -71,8 +70,6 @@ export interface LookControlDef {
   /** state key */
   key: LookKey;
   label: string;
-  /** slider maximum in percent (default 100) */
-  max?: number;
   /**
    * Key inside Snapshot.look — the persisted format. Never rename one (old
    * snapshots would silently lose that slider).
@@ -141,16 +138,6 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     snapshotKey: "gradingPct",
   },
   // --- Buildings ---
-  {
-    key: "transparency",
-    id: "building-transparency",
-    label: "Transparenz",
-    description: "Einfaches Durchsehen",
-    group: "buildings",
-    initial: 0,
-    max: 90,
-    snapshotKey: "transparencyPct",
-  },
   {
     key: "groundShade",
     id: "building-ground-shade",
@@ -413,11 +400,6 @@ export const LOOK_DEFAULTS: Readonly<LookValues> = Object.freeze<LookValues>({
   style: DEFAULT_RENDER_STYLE,
   ...DATA_LAYER_DEFAULTS,
 });
-
-/** A row's slider maximum as a 0..1 value. */
-export function maxValueOf(def: LookControlDef): number {
-  return (def.max ?? 100) / 100;
-}
 
 /** A one-row patch for the look store (`{ [key]: value01 }`, typed). */
 export function lookPatch(key: LookKey, value01: number): Partial<LookValues> {

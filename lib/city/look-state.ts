@@ -6,12 +6,7 @@
  * is born with the current look instead of a default. Values are clamped
  * here, once, so no writer can push a row past its range. No THREE, no DOM.
  */
-import {
-  LOOK_CONTROLS,
-  LOOK_DEFAULTS,
-  type LookValues,
-  maxValueOf,
-} from "./look-controls";
+import { LOOK_CONTROLS, LOOK_DEFAULTS, type LookValues } from "./look-controls";
 import { DATA_LAYERS } from "./data-layers";
 import { isRenderStyle } from "./render-style";
 
@@ -30,7 +25,7 @@ export interface LookState {
 }
 
 /**
- * The part of a patch the scene accepts: percent rows clamped to [0, max],
+ * The part of a patch the scene accepts: percent rows clamped to [0, 1],
  * the focus distance to ≥ 1 m, the flags as they are, the style only when it
  * names one. Non-finite numbers, unknown styles and unknown keys are dropped.
  */
@@ -39,7 +34,7 @@ export function clampLook(patch: Partial<LookValues>): Partial<LookValues> {
   for (const def of LOOK_CONTROLS) {
     const value = patch[def.key];
     if (typeof value === "number" && Number.isFinite(value)) {
-      out[def.key] = Math.min(Math.max(value, 0), maxValueOf(def));
+      out[def.key] = Math.min(Math.max(value, 0), 1);
     }
   }
   const distance = patch.focusDistanceM;

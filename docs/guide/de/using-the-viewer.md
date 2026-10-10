@@ -419,8 +419,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
 | | *Flussnebel* | treibende Nebelschicht über dem Wasser, erst ab etwa 120 m vor dir, dichter erst in der Ferne |
 | | *Tiefenfärbung* | warm nah, kühl fern: eine tiefenabhängige Farbgebung |
-| Gebäude | *Transparenz* | durch Gebäude hindurchsehen (gerastert), bis 90 % |
-| | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
+| Gebäude | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
 | | *Höhenlinien* | zarte Geschossbänder, aus der gemessenen Höhe abgeleitet |
 | | *Streiflicht* | Kantenlicht an sonnenabgewandten Kanten |
 | | *Farbvariation* | Wandton je Gebäude aus Nutzung und Höhe |

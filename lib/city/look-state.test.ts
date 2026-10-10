@@ -27,10 +27,9 @@ test("set notifies once per change with the new values, never for a no-op", () =
   expect(seen).toEqual([0.5]);
 });
 
-test("clampLook keeps percent rows inside [0, max] and the focus distance at 1 m or more", () => {
-  expect(clampLook({ fogAmount: 1.5, transparency: 0.95, grain: -1 })).toEqual({
+test("clampLook keeps percent rows inside [0, 1] and the focus distance at 1 m or more", () => {
+  expect(clampLook({ fogAmount: 1.5, grain: -1 })).toEqual({
     fogAmount: 1,
-    transparency: 0.9,
     grain: 0,
   });
   expect(clampLook({ focusDistanceM: 0 })).toEqual({ focusDistanceM: 1 });

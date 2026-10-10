@@ -1583,7 +1583,6 @@ async function bootApp(
       }
     },
   };
-  let lastTransparency = Number.NaN;
   let lastStyle = opts.look.get().style;
   const applyLook = (look: LookValues) => {
     if (look.style !== lastStyle) {
@@ -1601,11 +1600,6 @@ async function bootApp(
       sceneRows[key](look[key]);
     }
     applyCityLook(styleResources, look);
-    if (look.transparency !== lastTransparency) {
-      lastTransparency = look.transparency;
-      // Clay's alpha-hash cutout changes what the depth pass writes.
-      invalidateShadows();
-    }
     postStack.applyLook(look);
     for (const d of stream.dressings) {
       d.vegetation?.applyLook(look);

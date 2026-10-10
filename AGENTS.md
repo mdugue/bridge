@@ -729,7 +729,7 @@ off-screen chunks frustum-cull out of both the main and shadow pass. After
 is off-screen.
 
 **Buildings render in exactly one style: the opaque "clay"** (`visual-style.ts`
-— archviz clay plus the facade-detail shader, with hash-dithered transparency).
+— archviz clay plus the facade-detail shader).
 The earlier "ghost" (`MeshPhysicalMaterial.transmission`) and "standard" (the
 loader's raw LoD colours) styles were removed. Keep transmission out of the
 scene: it re-renders everything into a buffer each frame (~2× cost). The

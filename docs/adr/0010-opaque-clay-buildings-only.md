@@ -2,7 +2,10 @@
 
 - **Status:** accepted; its "no outlines" and "no `style` key" consequences
   are narrowed by [ADR 0034](./0034-picture-styles-as-one-post-pass.md)
-  (outlines exist as an optional picture style, never in the default look)
+  (outlines exist as an optional picture style, never in the default look);
+  the see-through slider's hash-dithered transparency was removed
+  2026-10-10 (the maintainer chose fewer settings): the clay is always
+  opaque
 - **Date:** 2026-06 (aesthetic PR #16), reaffirmed 2026-09
 
 ## Context

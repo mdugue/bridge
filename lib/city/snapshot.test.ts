@@ -22,7 +22,7 @@ const valid: Snapshot = {
   look: {
     fogPct: 30,
     heightFogPct: 40,
-    transparencyPct: 20,
+    grainPct: 20,
     dof: true,
     focusMode: "manual",
     focusDistanceM: 80,
@@ -149,7 +149,6 @@ test("what Copy encodes, Apply decodes back — through the same parser", () => 
   const values = {
     ...LOOK_DEFAULTS,
     fogAmount: 0.35,
-    transparency: 0.9,
     dof: false,
     focusMode: "manual" as const,
     focusDistanceM: 80,
@@ -164,7 +163,6 @@ test("what Copy encodes, Apply decodes back — through the same parser", () => 
   expect(snap.v).toBe(1);
   expect(snap.date).toBe(valid.date);
   expect(snap.look?.fogPct).toBe(35);
-  expect(snap.look?.transparencyPct).toBe(90);
   expect(snap.look?.style).toBe("sincity");
   const parsed = parseSnapshot(JSON.stringify(snap));
   expect(parsed.ok).toBe(true);

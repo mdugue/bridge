@@ -241,7 +241,6 @@ function LookSliders({
           id={def.id}
           key={def.key}
           label={def.label}
-          max={def.max}
           onChange={(n) => onLook(lookPatch(def.key, n / 100))}
           value={Math.round(look[def.key] * 100)}
         />
