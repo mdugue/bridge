@@ -2226,6 +2226,7 @@ async function bootApp(
   focusRaycaster.far = 6000;
   const focusCrosshair = new Vector2(0, 0);
   let lastFocusHit: { dist: number; name: string } | null = null;
+  const lensBlur = postProfileFor(budget.tier).dof;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
     const targets: Object3D[] = stream.visibleCities().map((c) => c.mesh);
@@ -2739,7 +2740,11 @@ async function bootApp(
       } else {
         tickModelOff();
         opts.onPose?.(pose.getPose());
-        updateFocus();
+        // a ray through the buildings and a march over the ground: only
+        // where there is a lens blur to focus (not on a phone)
+        if (lensBlur) {
+          updateFocus();
+        }
       }
     }
     // FPS at ~2 Hz on its own channel — must NOT churn the heavier stats
