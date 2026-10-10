@@ -468,9 +468,10 @@ tileset under `public/data/<site>/`
 
 1. **Side files.** Each tile's rasters and feature collections
    (`tileArtifacts` in `lib/city/tile.ts`) are published as committed,
-   plus two downsampled class rasters (NEAREST, single band,
+   plus three downsampled class rasters (NEAREST, single band,
    `scripts/downsample-raster.ts`, sharp): `landcover_<t>.r2048.png` for
-   phones and the coarse terrain, and `landcover_<t>.r512.png` for the
+   a phone's fine terrain, `landcover_<t>.r1024.png` for the coarse
+   terrain on every tier, and `landcover_<t>.r512.png` for the
    minimap (256² a tile) and the soundscape (512² a tile). Which files a
    tile has, where the viewer finds each (`dressing`, `sound`) and which
    carry the ODbL credit (`osm`, checked by `features.test.ts`) is one

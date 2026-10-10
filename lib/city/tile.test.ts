@@ -3,6 +3,7 @@ import { DRESDEN } from "../../sites/dresden";
 import {
   wallSourceFile,
   cityMeshSourceFiles,
+  COARSE_RASTER_PX,
   type DataManifest,
   dgmSourceFiles,
   DRESSING_KINDS,
@@ -50,10 +51,20 @@ test("only the class rasters and the vegetation rows are required", () => {
     .sort();
   expect(required).toEqual([
     "landcover",
+    "landcoverCoarse",
     "landcoverLow",
     "landcoverSmall",
     "vegrows",
   ]);
+});
+
+test("the coarse terrain reads a 1024² class raster baked from the 4096² one", () => {
+  const { landcover, landcoverCoarse } = tileArtifacts(PRIMARY_TILE);
+  expect(landcoverCoarse.bakedFrom).toEqual({
+    file: landcover.file,
+    raster: COARSE_RASTER_PX,
+  });
+  expect(COARSE_RASTER_PX).toBe(1024);
 });
 
 test("the minimap and the soundscape read a 512² class raster baked from the 4096² one", () => {

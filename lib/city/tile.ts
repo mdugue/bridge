@@ -32,6 +32,15 @@ export function providerRawDir(site: Site): string {
  *  colour of one tile. */
 export const MOBILE_RASTER_PX = 2048;
 
+/**
+ * The coarse terrain's edge, on every tier: a 40 m-error mesh shown from
+ * ≈ 2.1 km on a phone and ≈ 2.6 km on a desktop — where the fog ends —
+ * whose 2 m texels are about a pixel out there. At 2048² its class raster
+ * and painted splat held 25 MiB per tile, and most tiles in view are
+ * coarse-only.
+ */
+export const COARSE_RASTER_PX = 1024;
+
 /** The site's tile ids, the spawn tile first. */
 export function tileIds(site: Site): string[] {
   return site.tiles.map((cell) => tileIdOf(site, cell));
@@ -137,6 +146,12 @@ const ARTIFACTS = {
     file: (tile) => `landcover_${tile}.r${MOBILE_RASTER_PX}.png`,
     required: true,
     bakedFrom: { file: named("landcover", "png"), raster: MOBILE_RASTER_PX },
+  },
+  // The coarse level's (COARSE_RASTER_PX), on every tier.
+  landcoverCoarse: {
+    file: (tile) => `landcover_${tile}.r${COARSE_RASTER_PX}.png`,
+    required: true,
+    bakedFrom: { file: named("landcover", "png"), raster: COARSE_RASTER_PX },
   },
   // The minimap's and the soundscape's class raster: 1/16 of the phone
   // raster's pixels, which is all either of them keeps.

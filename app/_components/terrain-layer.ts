@@ -1453,16 +1453,17 @@ async function settledAll<T extends readonly unknown[]>(promises: {
 }
 
 /**
- * Whether a terrain level reads its tile's sports grounds: both levels on a
- * desktop, the fine one only on a phone. Their index raster is a 2048²
- * RGBA, 16 MB on the GPU for each coarse tile in view (14 of Dresden's 15
- * tiles have grounds); beyond the fine level's reach a pitch shows its
- * land-cover class, its lines a pixel or less there anyway. The coarse
- * level then builds the variant without the slot, which every tile
- * without grounds shares.
+ * Whether a terrain level reads its tile's sports grounds: the fine level
+ * on a desktop only. The index raster is a 2048² RGBA — 16 MiB on the GPU
+ * for a PNG of a few dozen kB (14 of Dresden's 15 tiles have grounds) —
+ * and the lines it places are a pixel or less beyond the fine level's
+ * reach. A phone draws its pitches in their land-cover class, without
+ * lines (the goals and nets come from the table, sport-fixtures.ts): 16
+ * MiB a fine tile against a 336 MiB cache. Without the slot a level builds
+ * the variant every tile without grounds shares.
  */
 export function readsSportGrounds(level: 0 | 1, lowRasters: boolean): boolean {
-  return !(lowRasters && level === 1);
+  return level === 0 && !lowRasters;
 }
 
 /** A raster the level owns, taken into `owned` as soon as it lands. */

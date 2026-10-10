@@ -579,7 +579,7 @@ the safety levels 1, 2 and 3:
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
 | Pixel ratio | ≤ 2 (1.5, 1.25, 1.0) | ≤ 1.5 (1.25, 1.0, 0.85) | 0.5 |
 | Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
-| Land-cover rasters | L0 4096², L1 2048² | 2048² everywhere; the coarse level without the sports raster | L0 4096², L1 2048² |
+| Land-cover rasters | L0 4096², L1 1024² | L0 2048², L1 1024²; no sports raster | L0 4096², L1 1024² |
 | GTAO samples | 16 | 8 | 8 |
 | Rich crowns at most (`vegetation-lod.ts`) | 2 500 (≈ 3.6 M triangles) | 800 | as the tier |
 | Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
@@ -639,15 +639,19 @@ stays their measure; the tile cache counts true bytes.
   phone's post profile and the one-byte shadow colour target (above) they
   are ~30 MiB: 9.6 of targets, 20 of shadow map — +0.9 while something is
   asked, +6 while a picture style is on.
-- **Per tile.** A coarse terrain level holds, on a phone, its class raster
-  (2048², 4 MiB), the splat painted from it with its mips (21.3), NDVI
-  (1.3), sky view (1) and horizon (2): ~30 MiB. A tile showing its fine
-  level holds 75.7: the same set and the sports raster (16) — shared by
-  file with the coarse level (`shared-rasters.ts`; the cache weighs a
-  shared raster half by each level) — and its own surface (16), edges (8),
-  markings (4) and allotments (≤ 2) rasters. The sports raster is read by
-  the fine level only on a phone (`readsSportGrounds`; it was 16 MiB per
-  coarse tile, 14 of Dresden's 15 have grounds). The coarse level is lean
+- **Per tile.** A coarse terrain level holds, on every tier, its 1024²
+  class raster (1 MiB) and the splat painted from it with its mips (5.3),
+  NDVI (1.3), sky view (1) and horizon (2): ~11 MiB (~30 at 2048², before
+  2026-10-10: the coarse level is a 40 m-error mesh 2.1–2.6 km out, where
+  2 m texels are about a pixel). A phone's tile showing its fine level
+  holds its 2048² class raster and splat (25.3), the NDVI, sky view and
+  horizon shared by file with the coarse level (`shared-rasters.ts`; the
+  cache weighs a shared raster half by each level) and its own surface
+  (16), edges (8), markings (4) and allotments (≤ 2) rasters: ~60 MiB.
+  The sports raster (2048² RGBA, 16 MiB for a PNG of a few dozen kB) is
+  read by a desktop's fine level only (`readsSportGrounds`): a phone draws
+  its pitches in their land-cover green without lines, the goals and nets
+  stay (14 of Dresden's 15 tiles have grounds). The coarse level is lean
   besides: its grid index and the water index derived from it are one
   copy for the site (`createGridShare`, kept only where a tile's numbers
   equal the site's: −12 MiB per coarse tile after the first, on the GPU

@@ -939,8 +939,11 @@ async function bakeTerrain(
     tileId: tile,
     level,
     n,
-    landcover: (level === 0 ? names.landcover : names.landcoverLow) ?? "",
-    landcoverLow: names.landcoverLow ?? "",
+    // the coarse level reads its 1024² raster on every tier
+    // (lib/city/tile.ts COARSE_RASTER_PX)
+    landcover: (level === 0 ? names.landcover : names.landcoverCoarse) ?? "",
+    landcoverLow:
+      (level === 0 ? names.landcoverLow : names.landcoverCoarse) ?? "",
     ...(names.ndvi ? { ndvi: names.ndvi } : {}),
     ...(level === 0 && names.surface ? { surface: names.surface } : {}),
     ...(level === 0 && names.edges ? { edges: names.edges } : {}),
