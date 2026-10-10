@@ -93,8 +93,8 @@ the decks the lines ride and the ballast leaves out.
 fine glTF 1.86 → 2.07 MB gzipped (+11 %), the site's fifteen 31.2 →
 34.4 MB (+10 %; the Neustadt's yards +35 %); 19 → 14 requests per fine
 level (75 files, 138 kB gzipped, no longer fetched over the site); the
-fine level's `dressing:build` on the spawn tile 1.7–2.9 → 1.0–1.8 s
-(headless, lite, a loaded box: directional), while the line materials'
+fine level's `dressing:build` on the spawn tile 1.7–2.9 → 1.3–1.8 s
+at the same load (headless, lite, a loaded box: directional), while the line materials'
 programs now build in the fine content's compile instead of the
 dressing's — see the plan. Float positions for the lines (16 bits over a
 tile step by 3 cm; a street rail stands 2 cm over the road) cost +28 % on

@@ -179,10 +179,8 @@ things live", ADR 0029 amended for part A) current.
   `RIVERSIDE_LOOKS`); their CPU copies go after the compile with the
   terrain's (`cpuDroppable`); the census counts them under rail, tram and
   riverside.
-- The inquiry: the tram stops and landing stages it asks travel in the
-  fine level's extras (`asked`; with them and the new nodes the spawn
-  tile's glTF JSON grows from 8 to 35 kB); the stop signs are still the
-  furniture's instanced model, stood at runtime.
+- The tram stops' signs are still the furniture's instanced model, stood
+  at runtime.
 
 **Deviations from the plan.**
 
@@ -198,7 +196,14 @@ things live", ADR 0029 amended for part A) current.
    the coarse level draws the same bridges from the same file. The
    `bridge` file is still fetched by both levels; the bake reads it for
    the decks the lines ride and the ballast leaves out.
-3. **Float positions were measured and left out.** 16 bits over a 2 km
+3. **What the inquiry asks rides in the fine level's extras**, not in a
+   file fetched with the first question (the plan's `ask` column). The
+   tram stops and the landing stages are all it needs of these files.
+   They are few — 23 stops and 20 landing stages on the spawn tile — and
+   the stop signs need the stops at load anyway. With them and the new
+   nodes, the spawn tile's glTF JSON grows from 8 to 35 kB. A per-tile
+   `ask` file is the way once the furniture and monuments follow.
+4. **Float positions were measured and left out.** 16 bits over a 2 km
    tile step by about 3 cm, and a street rail stands 2 cm over the road.
    Floats for the line nodes cost +27.6 % on the spawn tile, +23.9 % over
    the site and +82 % on the Neustadt's yards (33410_5656). Quantised, a
@@ -224,12 +229,14 @@ glTF, −11 kB of GeoJSON), the site 3.0 MB more. What it buys is the
 requests and the main thread's parse and build.
 
 **`dressing:build` and the compiles** (plan 069's marks, `?trace=1`,
-`/dresden?scene=lite` — the spawn tile only —, headless Chromium over
+`/dresden?scene=lite` — the spawn tile only, so one fine level per run,
+not every tile's —, headless Chromium over
 SwiftShader at 800×600, production builds with `NEXT_PUBLIC_POC_DEBUG=1`,
-three runs each). The box was shared with other agents' builds and
-browsers: load average 10–12 on four cores in every run but *after 3*,
-which ran at about 7. **The times are directional**; the third after-run
-is not comparable with the others.
+three runs each, and a fourth after-run once the box had quietened).
+The box was shared with other agents' builds and browsers: load average
+10–12 on four cores in the before-runs and the first two after-runs,
+about 7 and 4 in the last two. **The times are directional**; the last
+two after-runs have no before at their load.
 
 | run | fine `dressing:build` s | coarse `dressing:build` s | fine content `tile:compile` s | fine `dressing:compile` s | veil → loaded s | ready s |
 |---|---|---|---|---|---|---|
@@ -238,16 +245,22 @@ is not comparable with the others.
 | before 3 | 1.65 | 16.6 | 37.9 | 65.1 | 101.9 | 216.2 |
 | after 1 | 1.75 | 15.9 | 80.4 | 87.0 | 126.9 | 262.9 |
 | after 2 | 1.34 | 18.7 | 67.7 | 71.5 | 105.6 | 225.1 |
-| after 3 (lighter load) | 0.99 | 5.3 | 20.1 | 30.5 | 46.8 | 133.3 |
+| after 3 (load ≈ 7) | 0.99 | 5.3 | 20.1 | 30.5 | 46.8 | 133.3 |
+| after 4 (load ≈ 4) | 0.78 | 5.2 | 17.2 | 28.6 | 45.4 | 90.7 |
 
 - The fine level's `dressing:build` — the main thread's parse and build
-  of its side files — fell from 1.7–2.9 s to 1.0–1.8 s: the rails, trams
-  and riverside left it. The coarse level's dressing is untouched (it
+  of its side files — fell from 1.7–2.9 s to 1.3–1.8 s at the same load
+  (0.8–1.0 s at the lighter ones): the rails, trams and riverside left
+  it. The coarse level's dressing is untouched (it
   draws the bridges, as before).
 - **The line materials' programs now build in the fine content's
   compile** (`tile:compile`, inside the tile renderer's parse of the
-  level) instead of in its dressing's compile. At the same load that
-  compile measured 68–80 s against 32–38 s before. The programs are
+  level) instead of in its dressing's compile. That is structural; what
+  it costs is not measured here. At load 10–12 that compile read 68–80 s
+  against 32–38 s before, and 17–20 s at load 4–7, below every
+  before-run. At
+  this load the marks are mostly timer starvation: plan 069 saw a bare
+  1 s timer fire up to 71 s late in lite runs. The programs are
   site-wide (each line material is one build), so only the first fine
   level pays them — here the only one. It is a cost that moved, not one
   that went; but it moved into `processTileModel`, which holds one of
@@ -299,9 +312,12 @@ second run. Its first run timed out on *Modell* at the 120 s test
 budget, which left three tests unrun. Every wait in that test had
 succeeded — entering took 62 s and the turn 18 s at a load average
 above 10 — and the way back was still running. The whole-site smoke ran out of its
-local budget (240 s to `ready`; CI gives it three times that). It was
-not stuck: five dressings were built and one pending, the second fine
-level had landed at 254 s, and nothing had errored.
+local budget (240 s to `ready`; CI gives it three times that), with five
+dressings built, one pending, the second fine level landed at 254 s and
+no error. The same load without the budget (`block=1`, 400×300) reached
+`ready` at 391 s with eight dressings built and no page or console
+error. Its census: 5 terrains, 5 building tiles, 205 552 tree
+instances, 310 k rail, 446 k tram and 8.6 k riverside triangles.
 Not done: plates on a real GPU (none here), so the unchanged look rests
 on the builders being the ones the viewer ran (their tests ported) and
 on positions within ±1.5 cm. Snapshots for the reviewer, oblique
