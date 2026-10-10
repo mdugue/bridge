@@ -2590,11 +2590,15 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 - **Soft shadows** `= computed` — `PCFShadowMap` + raised `shadow.radius`; terrain
   `castShadow=false`; `normalBias=0`; tight camera-following frustum, whose
   camera also drives the tile streaming (casters behind the player stay
-  loaded) — at a resolution of its own, not the map's: 64 px on a phone,
-  where it loads a tile's buildings and coarse ground but never refines
-  terrain, 128 px on a desktop, where it still refines the eye-level
-  frustum's fine level but never from the air
-  (`SHADOW_STREAM_PX`, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md));
+  loaded) — on a desktop, at a resolution of its own, not the map's:
+  128 px, where it still refines the eye-level frustum's fine level but
+  never from the air
+  (`SHADOW_STREAM_PX`, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)).
+  A phone's shadow camera streams no tiles at all since 2026-10-10
+  (`shadowTilesStream`, plan 071; at its 64 px it had loaded a tile's
+  buildings and coarse ground, tiles in use the memory governor cannot
+  free): at a seam with the sun behind the player, the neighbour's
+  buildings cast no shadow until the view loads that tile;
   the map's colour target is one byte (`OneByteShadowNode`). Full recipe and dead-ends in the
   [city-walker skill](../.claude/skills/city-walker/SKILL.md).
 - **Sky-view factor** `= computed` (*Himmelslicht*, plan 033) — the committed DGM1 with
