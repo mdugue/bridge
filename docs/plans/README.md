@@ -100,7 +100,7 @@ history. Decisions that came out of plans are written up as
 | 066 | The page's GPU-loss, memory-emergency and resume decisions as one pure machine (`lib/city/page-lifecycle.ts`, signals → effects, like `boot-phases.ts`) with the incident sequences of the 2026-10-06 fixes as its tests; `create-app.ts` keeps a binder | DONE (2026-10-07) — steps 1–5; deviations: `gpuAnswers`/`gpuFailure` are lazy thunks (the probe asked only where the closures asked it), an initial `hiddenAt` option for a page that starts hidden, `onGpuLost` is now asked inside `dispatch` (before the stop's effects run; trail-note order unchanged), 15 tests not 10; `create-app.ts` shrank by 45 lines (3 024 → 2 979), not ≥ 80 (the binder keeps the effect map and the hooks' comments); e2e `@desktop-render\|@phone` 9 passed locally | [066-page-lifecycle-as-a-pure-machine.md](./066-page-lifecycle-as-a-pure-machine.md) |
 | 067 | The data layers and the twin: a tram timetable that failed to load can be tried again (`loading` never reset), Dresden's counts judged in Europe/Berlin (today the viewer's zone: all grey in Tokyo, a dead counter lit in New York), orchard trees askable, the card credits the site's own provider and register (not GeoSN/Dresden on Hamburg), a malformed feed element left out instead of thrown, polling only in view | DONE (2026-10-07) — all six steps; deviations: the tram failure is `TramCarsStatus.failed` shown by `TramStatusLine` in `data-layers-panel.tsx` (a two-line edit, not `city-walk.tsx`); orchard trees are marked `s: "orchard"` (`cultivated.ts`, `features.ts` type, a flag bit in `ask-items.ts`, tests in `cultivated`/`ask-items`); the zone is a feed fact (`BikeFeedReader.zone`); credits via `cardCredits(site)` in `card-lines.ts`, `GEOSN_CREDIT` deleted; the bike card still formats the count time in the visitor's zone (`inquiry-traffic.ts`, out of scope); e2e `@desktop-hud` not run here (Playwright's chromium 1243 missing in the container) | [067-data-layers-and-the-twin-small-fixes.md](./067-data-layers-and-the-twin-small-fixes.md) |
 | 068 | The tile stream loads only what the fog lets you see: a stream camera whose far plane ends at the fog (`streamFarFor`), the camera keeps 6 km for the sky | DONE (2026-10-10) — steps 1–4, 6; step 5 (the boot's own fog) not built; no saving at Dresden's south-west spawn view (the site's edge is inside the reach), the gain is across the city and from the air | [completed.md](./completed.md#068--the-tile-stream-loads-only-what-the-fog-lets-you-see--done-2026-10-10) |
-| 069 | Find what holds the load at 52 %, then take it off the tile path: local timing marks, an honest 52 %, a per-tier hand-over wait, meshopt workers, ask sets in idle time, a lazy BVH | **PARTIAL** (2026-10-10) — step 5 built, and beside it a bounded scene compile, deduplicated stage reports, concurrent raster fetches, a stall guard, one change pass per task, WebKit's `scheduler.yield`; steps 1–4, 6, 7 open | [069-streaming-without-stalls.md](./069-streaming-without-stalls.md) |
+| 069 | Find what holds the load at 52 %, then take it off the tile path: local timing marks, an honest 52 %, a per-tier hand-over wait, meshopt workers, ask sets in idle time, a lazy BVH | **PARTIAL** (2026-10-10) — steps 1, 3–7 built (5 on the performance PR with a bounded scene compile, deduplicated stage reports, concurrent raster fetches, a stall guard, one change pass per task, WebKit's `scheduler.yield`; then one meshopt worker on a phone, the tiles' CPU arrays counted (`cpuMB`), step 7 ungated by the iPhone crash reports — the BVH when a ray needs it); step 2's device rows open: measured locally, mobile-emulated (the plan's Findings) | [069-streaming-without-stalls.md](./069-streaming-without-stalls.md) |
 | 070 | Each tile holds a fraction of the raster memory: a 1024² coarse class raster, the sports raster on a desktop's fine level only, optionally a half-resolution desktop splat | **PARTIAL** (2026-10-10) — steps 1–3 built; step 4 needs a GPU look | [070-raster-diet.md](./070-raster-diet.md) |
 | 071 | A phone renders a lean scene, a desktop a lighter one | **PARTIAL** (2026-10-10) — phone GTAO at 8 samples (not 0), a phone rich-crown budget of 800 (not *Multi-Tuft* off), no autofocus ray without a lens blur; step 4.2 (no desktop DoF) REJECTED by the maintainer; steps 3, 4.1, 5–7 open | [071-tier-budgets-lean-phone-lighter-desktop.md](./071-tier-budgets-lean-phone-lighter-desktop.md) |
 | 072 | A cold build bakes a site's tiles on every core | **TODO** — cheaper since 2026-10-10 (no second spawn parse, typed-array plinths, cache keys on the bakes' own packages); re-measure first | [072-parallel-site-bake.md](./072-parallel-site-bake.md) |
@@ -347,11 +347,23 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
 
 **Vetted, not planned (backlog, S unless noted):**
 
-- **The parse slot waits on the dressing chain** (plan 069 step 4): a
-  fine level holds a tile-renderer parse slot up to 10 s
-  (`HAND_OVER_WAIT_MS`) while dressings build one at a time — on a phone
-  with two slots that blocks every other tile. The likeliest cause of the
-  *Umgebung* stage standing still after 52 %; measure first (step 2).
+- ~~**The parse slot waits on the dressing chain**~~ — built (plan 069
+  step 4): `handOverWaitMs`, 0 on a phone, 1.5 s on a desktop.
+- **Timers starve on a saturated main thread** (plan 069's Findings, M):
+  in the local mobile-emulated runs a 1 s `setTimeout` fired up to 206 s
+  late, on `main` too — every `withinWait` bound (the 3 s compile wait,
+  the hand-over wait), the veil's 600 ms timer and `whenIdle` with it.
+  three's compile steps yield through Chromium's native
+  `scheduler.yield`, whose continuations run ahead of timers. A bound
+  that must hold needs a clock the frames check (`performance.now()`
+  against a deadline in the loop), not a timer. Measure on a device
+  first: SwiftShader's 1–26 s frames saturate the thread as a phone may
+  not.
+- **The tiles' CPU arrays are not weighed** (plan 069; S once measured):
+  `cpuBytesOf` counts them (`cpuMB` in the trail, `max_cpu_mb` in the
+  reports) but neither the tile cache nor the memory governor reads it;
+  their lines were derived against three's GPU count. Bring it in once
+  the reports show `cpuMB` on the iPhones that die.
 - **Shadow-pass pipelines compile in the frame** that first draws a new
   caster (`compileAsync` covers the main pass only) — a hitch per new
   kind of tree, lamp or furniture (M–L, needs a public-API spike).
@@ -359,8 +371,9 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
   two arrays of ~1 000 entries; the 10 Hz pose tick would do.
 - **The crash trail's heartbeat walks the scene** every 2 s and rewrites
   the whole trail into local storage synchronously.
-- **The inquiry's ask sets are built eagerly** per tile, placing every
-  canopy tree a second time (plan 069 step 6, gated).
+- ~~**The inquiry's ask sets are built eagerly**~~ — built (plan 069
+  step 6): in idle time once the dressing hangs; `canopySets` still places
+  every canopy tree a second time there.
 - **A desktop at DPR 2 runs SMAA's three full-resolution passes** plus a
   copy of the frame; skipping the copy (SMAA on the scene target, the AO
   multiplied after, as the FXAA path does) saves a full-resolution pass.

@@ -1008,8 +1008,10 @@ inquiry probe can ask of its trees, monuments, decks, hedges, lamps and
 furniture — are built once it hangs, when the main thread is idle (at
 most 2 s on, `buildAsksWhenIdle`), not inside its build: they place
 every canopy tree a second time for a card nobody may open (0.3 s of a
-dense tile's build in the local trace); until then a click on that
-tile's trees finds nothing to ask. **Ready** (`onLoaded`,
+dense tile's build in the local trace); a question that comes first
+builds them at once (`asksOf`) — on a saturated page the idle time can be
+minutes in coming (timers and idle callbacks wait behind three's compile
+steps there; plan 069's Findings). **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile
 is dressed, the renderer is idle and no dressing is pending; it also lifts
 the fog clamp. A tile that fails to load for any reason but the network
@@ -1122,8 +1124,10 @@ start.
 069). Every span is counted by its category — `tile:city`, `tile:bvh`,
 `tile:rasters`, `tile:compile`, `tile:handover-wait`,
 `dressing:queue-wait`, `dressing:build`, `dressing:compile`,
-`dressing:asks`, `boot:frame` (the first 60 frames at the start pose),
-`boot:first-shadow-frame`, `boot:light-to-veil`,
+`dressing:asks`, the boot's last steps before the light stage
+(`boot:scene-compile`, `boot:place` — the spawn tile's BVH among it —
+and `boot:light-wait`), `boot:frame` (the first 60 frames at the start
+pose), `boot:first-shadow-frame`, `boot:light-to-veil`,
 `boot:veil-to-loaded`. With `?trace=1` each span also lands on the
 browser's own timeline (DevTools' and Web Inspector's *Timings* track)
 with its tile id, the long tasks are counted where the browser reports

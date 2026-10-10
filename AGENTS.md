@@ -709,7 +709,13 @@ detach it first. A lost GPU reloads a safety level lighter, where the
 player stood (`gpu-recovery.ts`, ADR 0046).
 The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
-triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
+triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`).
+**A building tile's BVH is built when a ray first needs it** (ADR 0050,
+`ensureCityBvh`), so a ray against the buildings goes through
+`nearestCityHit`, `cityObjectsAlong` or the collider, which ask only the
+tiles whose box the ray enters and build (or skip) a missing BVH — a
+plain `intersectObject(city.mesh)` on a tile without one is
+three-mesh-bvh's brute-force fallback over two million triangles. The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The
 walk/fly camera does not stream itself: the renderer streams for its twin
 whose far plane ends where the fog does (`streamFarFor`,
