@@ -9,9 +9,9 @@
  * where they stand from three's cylinder and box (the viewer instanced
  * them). Positions are quantised like the walls' (16 bits over the
  * node's extent: ±1.5 cm over a tile; float positions were measured and
- * left out, plan 074's findings). The features come from scripts/line-sources.ts. Apart from bake-tiles.ts, so
- * the ground's cache key does not carry these modules. Build-time only;
- * no DOM.
+ * left out, plan 074's findings). The features come from
+ * scripts/line-sources.ts. Apart from bake-tiles.ts, so the ground's cache
+ * key does not carry these modules. Build-time only; no DOM.
  */
 import {
   BoxGeometry,

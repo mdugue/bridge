@@ -176,13 +176,17 @@ config change.
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
     green in the terrain's fragment pass), `sport-ground.ts` (sports
     grounds: surface and lines in the same pass), `sport-fixtures.ts`
-    (their goals, posts and nets), `rail-layer.ts` (rails, ballast,
-    platforms and the bridges: decks, the measured steel above them,
-    arches, pylons, piers — ADR 0033; `bridge-surface.ts`, their deck
-    laid out by its axis and their ashlar), `wall-layer.ts`,
+    (their goals, posts and nets), `rail-layer.ts` (the bridges: decks,
+    the measured steel above them, arches, pylons, piers — ADR 0033;
+    `bridge-surface.ts`, their deck laid out by its axis and their
+    ashlar — and only the materials of the rails, ballast, platforms
+    and span decks), `wall-layer.ts`,
     `kerb-layer.ts`, `stair-layer.ts` and `fence-layer.ts` (only their
     materials: walls, kerbs, stairs and fences are baked into the fine
     terrain glTF; a fence is one low band in a muted tone — no pattern),
+    `line-looks.ts` (the baked rails, trams and riverside found by node
+    name and given their layer's look, each on a per-tile copy of its
+    scene-wide material — plan 074 part A),
     `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
     `furniture-layer.ts` (benches, picnic tables, bins, bicycle stands,
     bollards, post boxes, stop shelters and bus-stop signs, advertising
@@ -190,9 +194,11 @@ config change.
     playgrounds with their mapped equipment),
     `road-markings.ts` (crossings, stop, cycle and centre lines in the
     terrain pass), `cultivated-layer.ts` (allotment beds in the same pass,
-    vine rows), `tram-layer.ts` (tracks in their bed, the overhead line,
-    stop signs), `riverside-layer.ts` (landing stages, groynes, ferry
-    lines) and `map-overlay.ts` (fades the ferry lines in with height,
+    vine rows), `tram-layer.ts` (only the materials of the tracks in
+    their bed, the masts and the overhead line, which are baked into the
+    fine terrain glTF; the stop signs, from the level's extras),
+    `riverside-layer.ts` (only the materials of the landing stages,
+    groynes and ferry lines, baked likewise) and `map-overlay.ts` (fades the ferry lines in with height,
     widens the data layers from the air), the data layers
     (`lib/city/data-layers.ts`, switched in the HUD, all off at start —
     ADR 0040): `traffic-layer.ts` (the counted motor traffic as flowing
@@ -303,7 +309,12 @@ config change.
   `source-matrix.ts` (the *Sources by city* table: per site and drawn
   layer, the source and how good it is — ADR 0039), `markings.ts`,
   `cultivated.ts`, `tram.ts` and `skyview.ts` (the pure halves
-  of those layers), `site.ts` (the
+  of those layers), `mesh3.ts` (triangle soups wound to their
+  normals), `rail-mesh.ts`, `tram-mesh.ts`, `riverside-mesh.ts` and
+  `wire-mesh.ts` (the rails', trams' and riverside's geometry and
+  joins, which the build bakes into the fine terrain glTF; the decks'
+  lift table with its approaches), `line-nodes.ts` (the baked line
+  nodes' names and layers), `site.ts` (the
   site type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
   extras), `landcover.ts` (the classes and the one palette), `sport.ts`
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
@@ -386,7 +397,8 @@ config change.
   CityJSON loader and, `cityMesh`, turns it into glTF with a per-object
   property table) and the terrain at two levels (`bake-tiles.ts`; fine: an
   error-bounded TIN of the native DGM, `bake-terrain-tin.ts`, the walls snapped to its
-  measured steps; coarse: the DGM resampled to 512², the wall breaklines
+  measured steps, and the rails, trams and riverside on it,
+  `bake-lines.ts` with `line-sources.ts`; coarse: the DGM resampled to 512², the wall breaklines
   burned in), written by `tile-glb.ts` (meshopt, quantised,
   `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
   `pipeline.ts` (fetch/bake runner), `site-report.ts` (`bun run site`),
@@ -831,9 +843,10 @@ the build step (`scripts/line-levels.ts`, run by `prepare-data.ts`) solves
 each line's level along its whole run within its grade — the ground, a
 deck, a *span* over the gap the DGM leaves beside a bridge (the layer
 draws its deck), a *cut* through the fill under one (the terrain bake
-opens it under a drawn deck, `lib/city/passages.ts`) — and publishes it
-as `lv` in the rail and tram files. A new line layer takes its levels the
-same way (`lineLevelsAt` in `rail-layer.ts`); `scripts/line-levels.test.ts`
+opens it under a drawn deck, `lib/city/passages.ts`) — and bakes the
+lines on it (`lv` on each line, `scripts/line-sources.ts`) into the fine
+terrain glTF. A new line layer takes its levels the
+same way (`lineLevelsAt` in `lib/city/rail-mesh.ts`); `scripts/line-levels.test.ts`
 holds the reference site's jumps to a budget, `bun scripts/line-levels-cli.ts
 <site>` prints them.
 

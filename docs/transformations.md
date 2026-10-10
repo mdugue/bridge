@@ -359,8 +359,10 @@ visual-variable codebook is in
   ground under it** (`waterLevel`), never on a baked DGM value. `bank` is
   the nearest dry point (≤ 30 m) for its gangway, unless a fixed pier
   reaches it (28 of 31 have one). Ferry routes are cut to their stretches
-  over the water class. Runtime `riverside-layer.ts`: a pier is a timber
-  deck 0.3 m thick on instanced piles every 4 m round its edge where it
+  over the water class. Baked into the fine terrain glTF since plan 074
+  part A (`lib/city/riverside-mesh.ts`, `scripts/bake-lines.ts`;
+  `riverside-layer.ts` gives the nodes their materials): a pier is a timber
+  deck 0.3 m thick on piles (merged at build) every 4 m round its edge where it
   stands over the water, with a railing (top rail + posts every 2 m) along
   the edges over the water (plan 029's fence panel is not merged here); a
   pontoon a soft slate hull (−0.3 → +0.35 m) under a pale deck (+0.5 m), a
@@ -2085,11 +2087,17 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   landmarks was found.
 
 ### Railway & bridges
-All baked by `pipeline/bake/rail.py`, built **per fine terrain tile** in
-`app/_components/rail-layer.ts` (Y-up, part of the tile's dressing) on the
-cross-tile `heightAt` over every loaded terrain, so tracks don't truncate at
-seams (until [ADR 0024](./adr/0024-site-streams-as-3d-tiles.md) it was built
-once for the fixed block). Replaces the old "brown smear". All geometry is
+All baked by `pipeline/bake/rail.py`. The rails, ballast yards, platforms
+and span decks are built by the build step into the fine terrain glTF
+(`lib/city/rail-mesh.ts`, `scripts/bake-lines.ts`, plan 074 part A,
+[ADR 0029](./adr/0029-static-dressing-baked-into-the-fine-terrain.md);
+`rail-layer.ts` gives the nodes their materials) on every tile's fine
+ground, so tracks don't truncate at seams; the bridges are still built
+**per fine terrain tile** in `app/_components/rail-layer.ts` (Y-up, part
+of the tile's dressing — the inquiry asks a bridge by its meshes) on the
+cross-tile `heightAt` over every loaded terrain (until
+[ADR 0024](./adr/0024-site-streams-as-3d-tiles.md) all of it was built
+once for the fixed block; until plan 074 the rails per tile at runtime). Replaces the old "brown smear". All geometry is
 hand-wound to match its supplied normal (`pushTri`), so every material is
 `FrontSide` (halves shadow/fill cost). *(Redesigned after the v1 per-line approach
 z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — see
@@ -2382,7 +2390,10 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   fragments of different gauges are not chained) — Dresden 1450, Leipzig
   1458, Munich 1435 mm; an untagged track gets standard gauge
   (`TRAM_GAUGE` = 1.435 m in `lib/city/tram.ts`, Dresden's 1.45 until
-  then). Runtime `app/_components/tram-layer.ts`: two rails per track at
+  then). Baked into the fine terrain glTF since plan 074 part A
+  (`lib/city/tram-mesh.ts`, `scripts/bake-lines.ts`, on every tile's fine
+  ground; `app/_components/tram-layer.ts` gives the nodes their materials
+  and stands the stop signs from the level's extras): two rails per track at
   ± half its gauge (`addTrack`; Dresden's ±0.725 m) with the rail layer's profile (`addRibbon`), in the road's
   lavender-grey a shade deeper — **street**: the heads flush with the road
   (+2 cm), no sleepers, and no groove (the plan's darker groove strip was
