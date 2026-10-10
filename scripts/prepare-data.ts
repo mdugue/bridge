@@ -135,6 +135,7 @@ import {
   packageImports,
   readLockfile,
 } from "./bake-sources";
+import { cachedEntry, writeEntry } from "./bake-cache";
 import {
   fenceMesh,
   kerbMesh,
@@ -353,25 +354,19 @@ const GROUND_BAKE = [
  */
 const siteWide = (name: string) => `${SITE.id}.${name}`;
 
-/** The cached bytes for `key`, or the baked ones (then cached). */
+/** The cached bytes for `key`, or the baked ones (then cached: one entry
+ *  per name, written whole — bake-cache.ts). */
 async function cached(
   name: string,
   key: string,
   bake: () => Promise<Uint8Array> | Uint8Array
 ): Promise<Uint8Array> {
-  const path = join(CACHE_DIR, `${key}.${name}`);
-  if (existsSync(path)) {
+  const path = cachedEntry(CACHE_DIR, name, key);
+  if (path) {
     return readFileSync(path);
   }
   const bytes = await bake();
-  mkdirSync(CACHE_DIR, { recursive: true });
-  // One entry per name: drop this artifact's stale keys.
-  for (const entry of readdirSync(CACHE_DIR)) {
-    if (entry.endsWith(`.${name}`)) {
-      rmSync(join(CACHE_DIR, entry));
-    }
-  }
-  writeFileSync(path, bytes);
+  writeEntry(CACHE_DIR, name, key, bytes);
   return bytes;
 }
 
