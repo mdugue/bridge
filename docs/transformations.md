@@ -406,7 +406,7 @@ visual-variable codebook is in
   everywhere.
 - **Buildings** `❝ taken` — CityJSON LoD2 → **build-time** glTF per tile:
   `scripts/bake-city-mesh.ts` runs cityjson-threejs-loader, and
-  `scripts/bake-tiles.ts` `cityMesh` welds it into one mesh with an
+  its `cityMesh` welds it into one mesh with an
   `EXT_mesh_features` feature id per vertex (`_FEATURE_ID_0`) and a roof
   flag. The per-object style (tint, roof colour, base, eave and storey
   heights, glow, roughness) and the demolish tree ride as an

@@ -373,9 +373,9 @@ config change.
   artifacts into `public/data/<site>/` as a **3D Tiles tileset** (`tileset.json`,
   `tileset-spawn.json`) with glTF content under content-hashed names +
   `manifest.json` — per tile the buildings (`bake-city-mesh.ts` runs the
-  CityJSON loader, `bake-tiles.ts` turns it into glTF with a per-object
-  property table) and the terrain at two levels (fine: an error-bounded TIN
-  of the native DGM, `bake-terrain-tin.ts`, the walls snapped to its
+  CityJSON loader and, `cityMesh`, turns it into glTF with a per-object
+  property table) and the terrain at two levels (`bake-tiles.ts`; fine: an
+  error-bounded TIN of the native DGM, `bake-terrain-tin.ts`, the walls snapped to its
   measured steps; coarse: the DGM resampled to 512², the wall breaklines
   burned in), written by `tile-glb.ts` (meshopt, quantised,
   `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
@@ -547,9 +547,11 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   `.next/cache/prepare-data`, the folder its build cache keeps; cold run
   ≈ 6 min for fifteen tiles, warm ≈ 1 s; CI restores it between runs): the key covers the inputs'
   contents, `COMMON_SOURCES` (`prepare-data.ts` itself, the site's own
-  config, `sites/providers.ts`, `bun.lock`, `patches/`) and every module
-  reachable from the artifact's bake entries (`scripts/bake-sources.ts`
-  walks the imports). Those entries **are listed by hand** in
+  config, `sites/providers.ts`, `patches/`), every module reachable from
+  the artifact's bake entries (`scripts/bake-sources.ts` walks the
+  imports) and what `bun.lock` resolved for the packages those modules
+  import, with their dependencies (`lockedVersions` — not the whole
+  lockfile, so a viewer-only bump re-bakes nothing). Those entries **are listed by hand** in
   `prepare-data.ts` (`GROUND_BAKE`, each `bake` array, the `entries` passed
   to `cacheKey`): a module it calls for an artifact must be one of them or
   imported from one, or that artifact's cache goes stale. Another site's
@@ -649,8 +651,8 @@ switching between two prebuilt pipelines, never by
 swapping one pipeline's output node (that re-translates the whole graph).
 
 **Buildings are already batched.** Each tile's buildings are ONE glTF mesh
-(`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time,
-`scripts/bake-tiles.ts` writes it with a per-vertex feature id,
+(`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time
+and, `cityMesh`, writes it with a per-vertex feature id,
 `EXT_mesh_features`), so draw calls are already low and **BatchedMesh would
 not help** (and would break feature-id picking/demolish). Per-building data
 (tint, heights, roof colour, glow, roughness, the demolish tree) is **one row

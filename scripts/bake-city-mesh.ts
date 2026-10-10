@@ -1,18 +1,20 @@
 /**
- * Parses one tile's CityJSON into the building mesh the viewer streams (as
- * glTF, scripts/bake-tiles.ts): runs cityjson-threejs-loader once, then
- * folds in everything the clay style needs per building (tints, roof colour
- * incl. the DOP LUT, storey/eave heights, dusk glow, roughness jitter), the
- * OSM flags (shop, heritage; a part carries its Building's too), the
- * demolish tree and the minimap footprints, then appends the small
- * structures the laser scan saw and LoD2 lacks (`appendScanStructures`).
- * An object whose LoD2 roof misses DOM1 wears its measured parts
- * instead (`withMeasuredRoofs`, scripts/measured-roofs.ts).
+ * Parses one tile's CityJSON into the building mesh the viewer streams:
+ * runs cityjson-threejs-loader once, then folds in everything the clay
+ * style needs per building (tints, roof colour incl. the DOP LUT,
+ * storey/eave heights, dusk glow, roughness jitter), the OSM flags (shop,
+ * heritage; a part carries its Building's too), the demolish tree and the
+ * minimap footprints, then appends the small structures the laser scan saw
+ * and LoD2 lacks (`appendScanStructures`). An object whose LoD2 roof misses
+ * DOM1 wears its measured parts instead (`withMeasuredRoofs`,
+ * scripts/measured-roofs.ts). `cityMesh` turns the result into the glTF
+ * writer's input (scripts/tile-glb.ts) with its per-object property table.
  * Called by scripts/prepare-data.ts; no DOM.
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import {
-  type BufferGeometry,
+  BufferAttribute,
+  BufferGeometry,
   type Matrix4,
   type Mesh,
   ShapeUtils,
@@ -51,6 +53,7 @@ import {
   OBJECT_SOURCE_LOD2,
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
+  objectTable,
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
@@ -99,8 +102,10 @@ import {
   wallShiftAt,
 } from "../lib/city/shopfronts";
 import {
+  factColumns,
   inheritedOsm,
   lod2Facts,
+  NO_FACT,
   scanFacts,
   treeFacts,
 } from "../lib/city/object-facts";
@@ -123,6 +128,7 @@ import {
   windowSpecs,
 } from "../lib/city/windows";
 import { measuredRoofMesh, measuredRoofsById } from "./measured-roofs";
+import type { Column, MeshInput, PropertyTable } from "./tile-glb";
 
 /** RoofSurface index in the loader's fixed `defaultSemanticsColors` order. */
 const ROOF_SURFACE_TYPE = 2;
@@ -684,6 +690,119 @@ export function bakeCityMesh(
   markFlatRoofs(objects, v);
   dressWalls(tile, baked, keys, hosts, onWalls, { facades, gaps, scan });
   return baked;
+}
+
+export interface CityMesh {
+  /** per-object minimap footprints (EPSG) */
+  footprints: [number, number][][][];
+  input: Omit<MeshInput, "extras" | "name">;
+  maxElevation: number;
+}
+
+/** Flat vertex normals of a non-indexed stream, as three computes them. */
+function flatNormals(positions: Float32Array): Float32Array {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return geometry.getAttribute("normal").array as Float32Array;
+}
+
+/** The flat normals with every vertex `shading` gives one (not NaN) — a
+ *  measured roof face's, smoothed over it — taking that one instead. */
+function withShading(
+  flat: Float32Array,
+  shading: Float32Array | undefined
+): Float32Array {
+  if (!shading) {
+    return flat;
+  }
+  for (let i = 0; i < flat.length; i++) {
+    if (!Number.isNaN(shading[i])) {
+      flat[i] = shading[i];
+    }
+  }
+  return flat;
+}
+
+/**
+ * The building mesh with its property table: flat normals from the
+ * non-indexed stream, then welded (vertices of equal position, normal,
+ * object and place on their wall, the roof flag in it, merge — never across
+ * objects).
+ */
+export function cityMesh(baked: BakedCityMesh): CityMesh {
+  const v = baked.vertices;
+  const t = objectTable(baked.objects);
+  const facts = factColumns(baked.objects.map((o) => o.facts));
+  const table: PropertyTable = {
+    className: "building",
+    count: t.count,
+    properties: {
+      baseZ: { type: "SCALAR", componentType: "FLOAT32", values: t.baseZ },
+      building: { type: "SCALAR", componentType: "UINT8", values: t.building },
+      eaveH: { type: "SCALAR", componentType: "FLOAT32", values: t.eaveH },
+      flags: { type: "SCALAR", componentType: "UINT16", values: t.flags },
+      glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
+      roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
+      root: { type: "SCALAR", componentType: "UINT32", values: t.root },
+      rough: { type: "SCALAR", componentType: "FLOAT32", values: t.rough },
+      source: { type: "SCALAR", componentType: "UINT8", values: t.source },
+      storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },
+      tint: { type: "VEC3", componentType: "FLOAT32", values: t.tint },
+      // the windows the clay draws (lib/city/windows.ts)
+      winAxis: { type: "SCALAR", componentType: "FLOAT32", values: t.winAxis },
+      winH: { type: "SCALAR", componentType: "FLOAT32", values: t.winH },
+      winStyle: { type: "SCALAR", componentType: "UINT32", values: t.winStyle },
+      winW: { type: "SCALAR", componentType: "FLOAT32", values: t.winW },
+      // What the object is, for the inquiry card (ADR 0042): read one row
+      // at a time, only when asked — never packed for the shader.
+      ...Object.fromEntries(
+        Object.entries(facts.strings).map(([name, values]) => [
+          name,
+          { type: "STRING", values } satisfies Column,
+        ])
+      ),
+      ...Object.fromEntries(
+        Object.entries(facts.enums).map(([name, values]) => [
+          name,
+          { type: "ENUM", values } satisfies Column,
+        ])
+      ),
+      ...Object.fromEntries(
+        Object.entries(facts.numbers).map(([name, values]) => [
+          name,
+          {
+            type: "SCALAR",
+            componentType: "FLOAT32",
+            values,
+            noData: NO_FACT,
+          } satisfies Column,
+        ])
+      ),
+    },
+  };
+  let maxElevation = Number.NEGATIVE_INFINITY;
+  for (let i = 2; i < v.positions.length; i += 3) {
+    maxElevation = Math.max(maxElevation, v.positions[i]);
+  }
+  return {
+    footprints: baked.objects.map((o) => o.footprints),
+    input: {
+      positions: v.positions,
+      normals: withShading(flatNormals(v.positions), v.normals),
+      attributes: { _FEATURE_ID_0: v.objectIds },
+      // the place on the wall, a roof vertex flagged in it (FACADE_ROOF)
+      vectors: {
+        _FACADE: {
+          array: v.facade ?? facadeAttribute(v, () => false),
+          type: "VEC4",
+        },
+      },
+      table,
+      weld: true,
+    },
+    maxElevation,
+  };
 }
 
 /**

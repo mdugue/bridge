@@ -6,7 +6,7 @@ import type { WindowSpec } from "./windows";
 
 /**
  * The buildings' per-object table. The bake (scripts/bake-city-mesh.ts)
- * produces one row per CityJSON object; scripts/bake-tiles.ts writes the rows
+ * produces one row per CityJSON object and writes the rows (`cityMesh`)
  * into the building glTF as an EXT_structural_metadata property table (one
  * column per field), with every vertex carrying its object's index as
  * EXT_mesh_features `_FEATURE_ID_0`. The runtime packs the columns into one

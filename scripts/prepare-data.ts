@@ -24,9 +24,11 @@
  * `.next/cache/prepare-data/`, which its build cache keeps) under a
  * key of their inputs' contents, every module the artifact's own bake
  * imports (bake-sources.ts, walked from that bake's entry), this file, the
- * site's own config and the names they reference, so a rerun is cheap, a
- * changed bake never serves a stale cache, and an edit to another site or
- * to what only the viewer reads re-bakes nothing.
+ * site's own config, the names they reference and the locked versions of
+ * the packages those modules import, so a rerun is cheap, a changed bake
+ * never serves a stale cache, and an edit to another site or to what only
+ * the viewer reads (or a bump of a package only it imports) re-bakes
+ * nothing.
  * Writes public/data/<site>/ (gitignored), the folder the route /<site>
  * streams from.
  */
@@ -122,11 +124,18 @@ import {
   bakeCityMesh,
   type CityFrame,
   cityFrame,
+  cityMesh,
 } from "./bake-city-mesh";
 import { bakeCoarseCrowns } from "./coarse-crowns";
-import { contentKey, createContentHasher, moduleGraph } from "./bake-sources";
 import {
-  cityMesh,
+  contentKey,
+  createContentHasher,
+  lockedVersions,
+  moduleGraph,
+  packageImports,
+  readLockfile,
+} from "./bake-sources";
+import {
   fenceMesh,
   kerbMesh,
   readDgm,
@@ -224,17 +233,16 @@ function publish(logical: string, content: Uint8Array): string {
 // --- cache --------------------------------------------------------------------
 
 /** What every key carries: this file (the orchestration), the site's own
- *  config, the lockfile and the dependency patches (the glTF tools'
- *  versions shape the output too). Not the other sites' configs, nor what
- *  only the viewer reads: an artifact's own bake brings its sources
- *  (`cacheKey`'s `entries`). Each must exist: the hasher reads a missing
- *  file as "absent" (an optional input's right answer), which would drop
- *  it from every key without a word. */
+ *  config and the dependency patches (the glTF tools' versions shape the
+ *  output too). Not the other sites' configs, nor what only the viewer
+ *  reads: an artifact's own bake brings its sources (`cacheKey`'s
+ *  `entries`). Each must exist: the hasher reads a missing file as
+ *  "absent" (an optional input's right answer), which would drop it from
+ *  every key without a word. */
 const COMMON_SOURCES = [
   "scripts/prepare-data.ts",
   `sites/${SITE.id}.ts`,
   "sites/providers.ts",
-  "bun.lock",
   ...readdirSync(at("patches")).map((name) => `patches/${name}`),
 ].map((source) => {
   if (!existsSync(at(source))) {
@@ -244,6 +252,44 @@ const COMMON_SOURCES = [
   }
   return at(source);
 });
+
+/** The lockfile, of which a key carries only what it resolved for the
+ *  packages the key's modules import (and their dependencies): a bump of
+ *  a package only the viewer imports re-bakes nothing. */
+const LOCKFILE = "bun.lock";
+if (!existsSync(at(LOCKFILE))) {
+  fail(`missing ${LOCKFILE} — every cache key carries the versions it holds`);
+}
+const lockfile = readLockfile(readFileSync(at(LOCKFILE), "utf8"));
+const packagesIn = new Map<string, string[]>();
+const locked = new Map<string, string[]>();
+
+/** The lockfile's lines for every package `sources` import, memoised per
+ *  set of packages. */
+function lockedFor(sources: Iterable<string>): string[] {
+  const packages = new Set<string>();
+  for (const file of sources) {
+    // the patches are no modules
+    if (!/\.tsx?$/u.test(file)) {
+      continue;
+    }
+    let own = packagesIn.get(file);
+    if (!own) {
+      own = packageImports(file);
+      packagesIn.set(file, own);
+    }
+    for (const name of own) {
+      packages.add(name);
+    }
+  }
+  const names = [...packages].toSorted();
+  let lines = locked.get(names.join(" "));
+  if (!lines) {
+    lines = lockedVersions(lockfile, names);
+    locked.set(names.join(" "), lines);
+  }
+  return lines;
+}
 
 const hashOf = createContentHasher();
 const graphs = new Map<string, string[]>();
@@ -261,7 +307,8 @@ function sourcesOf(entry: string): string[] {
 /** A cache key over the contents of the input files, the sources of the
  *  bake that makes the artifact (each entry module and every module it
  *  imports: the bake modules and the lib/city helpers this file calls for
- *  it), the common sources, and any extra values. */
+ *  it), the common sources, the locked versions of the packages they all
+ *  import, and any extra values. */
 function cacheKey(
   inputs: string[],
   entries: string[],
@@ -273,7 +320,11 @@ function cacheKey(
       sources.add(file);
     }
   }
-  return contentKey(hashOf, [...inputs, ...[...sources].toSorted()], extra);
+  return contentKey(
+    hashOf,
+    [...inputs, ...[...sources].toSorted()],
+    [lockedFor(sources), ...extra]
+  );
 }
 
 /** The modules a tile's shaped ground is baked by (`shapedTerrain`): the
@@ -675,7 +726,6 @@ async function bakeCity(
   ];
   const bake = [
     "scripts/bake-city-mesh.ts",
-    "scripts/bake-tiles.ts",
     "scripts/tile-glb.ts",
     "scripts/measured-roofs.ts",
   ];

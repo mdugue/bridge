@@ -32,7 +32,7 @@ import { textureBytes, trackTexture } from "./three-utils";
 import { createClayMaterial, type StyleResources } from "./visual-style";
 
 /**
- * One tile's buildings: the streamed glTF mesh (scripts/bake-tiles.ts), its
+ * One tile's buildings: the streamed glTF mesh (scripts/bake-city-mesh.ts), its
  * per-object table (EXT_structural_metadata, read by gltf-content.ts) as a
  * float texture the clay shader reads per vertex, and the demolish state.
  * Demolish filters the index buffer — no re-parse, no vertex copies.

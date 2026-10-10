@@ -29,11 +29,11 @@ import {
   assignWindows,
   bakeCityMesh,
   cityFrame,
+  cityMesh,
   liftToStreet,
   PANE_ROUGH,
   scanStructureId,
 } from "./bake-city-mesh";
-import { cityMesh } from "./bake-tiles";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
 function box(first: number) {

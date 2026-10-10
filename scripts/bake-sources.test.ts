@@ -1,8 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { contentKey, createContentHasher, moduleGraph } from "./bake-sources";
+import {
+  contentKey,
+  createContentHasher,
+  lockedVersions,
+  moduleGraph,
+  packageImports,
+  readLockfile,
+} from "./bake-sources";
 
 describe("moduleGraph", () => {
   test("a tile bake's graph holds its own modules, not the site configs or the palette", () => {
@@ -19,6 +26,10 @@ describe("moduleGraph", () => {
       "sites/dresden.ts",
       "lib/city/landcover.ts",
       "lib/city/pose.ts",
+      // the buildings' modules: a change to them re-bakes no terrain
+      "lib/city/city-mesh.ts",
+      "lib/city/object-facts.ts",
+      "lib/city/windows.ts",
     ]) {
       expect(terrain).not.toContain(path);
     }
@@ -74,5 +85,97 @@ describe("contentKey", () => {
   test("changes with the extra values", () => {
     const hash = createContentHasher();
     expect(contentKey(hash, [], [1])).not.toBe(contentKey(hash, [], [2]));
+  });
+});
+
+describe("packageImports", () => {
+  test("names each package a file imports, not its own modules or Node's", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bake-packages-"));
+    const file = join(dir, "a.ts");
+    writeFileSync(
+      file,
+      [
+        'import { WebGPURenderer } from "three/webgpu";',
+        'import { Document } from "@gltf-transform/core";',
+        'import { readFileSync } from "node:fs";',
+        'import { join } from "path";',
+        'import type { Feature } from "geojson";',
+        'import { b } from "./b";',
+        'import { c } from "@/c";',
+        "export const used = [WebGPURenderer, Document, readFileSync, join, b, c];",
+        "export type Used = Feature;",
+      ].join("\n")
+    );
+    expect(packageImports(file)).toEqual(["@gltf-transform/core", "three"]);
+  });
+});
+
+describe("lockedVersions", () => {
+  const lockfile = (b: string, viewer: string) =>
+    readLockfile(`{
+      "lockfileVersion": 1,
+      "packages": {
+        "a": ["a@1.0.0", "", { "dependencies": { "b": "^1", "c": "^2" }, "optionalDependencies": { "gone": "1" }, "peerDependencies": { "@types/node": "*" } }, "sha512-a"],
+        "b": ["b@${b}", "", {}, "sha512-b"],
+        "c": ["c@1.0.0", "", {}, "sha512-c1"],
+        "a/c": ["c@2.0.0", "", {}, "sha512-c2"],
+        "@types/node": ["@types/node@26.0.0", "", {}, "sha512-t"],
+        "viewer": ["viewer@${viewer}", "", {}, "sha512-v"],
+      },
+    }`);
+  const keys = (lines: string[]) => lines.map((line) => line.split(" ")[0]);
+
+  test("holds a package and what it depends on, the copy nested under it first", () => {
+    expect(keys(lockedVersions(lockfile("1.0.0", "3.0.0"), ["a"]))).toEqual([
+      "a",
+      "a/c",
+      "b",
+    ]);
+  });
+
+  test("changes with a dependency's version, not an unrelated package's", () => {
+    const first = lockedVersions(lockfile("1.0.0", "3.0.0"), ["a"]);
+    expect(lockedVersions(lockfile("1.0.0", "4.0.0"), ["a"])).toEqual(first);
+    expect(lockedVersions(lockfile("1.1.0", "3.0.0"), ["a"])).not.toEqual(
+      first
+    );
+  });
+
+  test("fails for a package or a dependency the lockfile lacks", () => {
+    const lock = lockfile("1.0.0", "3.0.0");
+    expect(() => lockedVersions(lock, ["missing"])).toThrow(
+      "not in the lockfile"
+    );
+    const { b: _, ...withoutB } = lock;
+    expect(() => lockedVersions(withoutB, ["a"])).toThrow(
+      '"b", a dependency of "a"'
+    );
+  });
+
+  test("the bake's packages are in the repo's lockfile, down to their dependencies; the viewer's are not", () => {
+    const lock = readLockfile(readFileSync("bun.lock", "utf8"));
+    const packages = moduleGraph("scripts/prepare-data.ts").flatMap(
+      packageImports
+    );
+    const locked = keys(lockedVersions(lock, packages));
+    for (const name of [
+      "three",
+      "@gltf-transform/core",
+      "@gltf-transform/extensions",
+      "@gltf-transform/functions",
+      "meshoptimizer",
+      "cityjson-threejs-loader",
+      "geotiff",
+      // geotiff's own
+      "pako",
+      "delatin",
+      "delaunator",
+      "sharp",
+    ]) {
+      expect(locked).toContain(name);
+    }
+    for (const name of ["next", "react", "3d-tiles-renderer", "@types/node"]) {
+      expect(locked).not.toContain(name);
+    }
   });
 });
