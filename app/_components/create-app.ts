@@ -1184,6 +1184,21 @@ async function bootApp(
 
   // The stream: what lands and leaves, and everything that follows from it.
   let onChange: () => void = () => undefined;
+  // One pass for every change of a task: an update of the tile renderer
+  // reports each tile that came into or left view on its own, and each
+  // report walked the lamps, the ground's sources and the styles' gathering
+  // again and redrew the shadow map.
+  let changeQueued = false;
+  const queueChange = () => {
+    if (changeQueued) {
+      return;
+    }
+    changeQueued = true;
+    queueMicrotask(() => {
+      changeQueued = false;
+      onChange();
+    });
+  };
   // Shader compiles go through the post stack (it knows the target the
   // scene renders into). It is created a few lines below, before the render
   // loop runs the stream's first update, so no tile lands without it.
@@ -1241,7 +1256,7 @@ async function bootApp(
       night: () => currentNight,
       season: () => seasonClock.day(),
       offset,
-      onChange: () => onChange(),
+      onChange: queueChange,
       renderer,
       styleResources,
       sunDirection,
@@ -1270,11 +1285,11 @@ async function bootApp(
   let tilesIdle = false;
   stream.tiles.addEventListener("tiles-load-start", () => {
     tilesIdle = false;
-    onChange();
+    queueChange();
   });
   stream.tiles.addEventListener("tiles-load-end", () => {
     tilesIdle = true;
-    onChange();
+    queueChange();
   });
   // A tile that fails to load (or to dress) leaves a hole, not a dead scene:
   // the HUD says so once, the rest keeps streaming. Before the first frame
