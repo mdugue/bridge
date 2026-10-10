@@ -55,6 +55,57 @@ test("a mesh glb is meshopt-compressed, quantised and Y-up", async () => {
   expect(json.accessors.some((a) => a.normalized === true)).toBe(true);
 });
 
+test("a child is welded on its own; a wire carries its direction and no normals", async () => {
+  // a quad as a soup: six vertices, four distinct
+  const quad = new Float32Array([
+    0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0,
+  ]);
+  const up = new Float32Array(
+    Array.from({ length: 18 }, (_, i) => (i % 3 === 2 ? 1 : 0))
+  );
+  const glb = await writeMeshGlb({
+    name: "terrain",
+    positions,
+    normals,
+    indices: new Uint32Array([0, 1, 2, 3, 4, 5]),
+    extras: {},
+    children: [
+      { name: "kerbs", positions: quad, normals: up, weld: true },
+      {
+        name: "tram-wires",
+        positions: quad,
+        attributes: {
+          _WIREDIR: { array: quad, type: "VEC3" },
+          _WIREHALF: new Float32Array(6).fill(0.01),
+        },
+      },
+    ],
+  });
+  const json = gltfJson(glb) as {
+    accessors: { componentType: number; count: number; type: string }[];
+    meshes: {
+      name: string;
+      primitives: { attributes: Record<string, number>; indices?: number }[];
+    }[];
+    nodes: { name: string; mesh: number }[];
+  };
+  const prim = (name: string) => {
+    const node = json.nodes.find((n) => n.name === name);
+    return json.meshes[node?.mesh ?? -1].primitives[0];
+  };
+  const FLOAT = 5126;
+  const kerbs = prim("kerbs");
+  // welded to its four corners, quantised like the terrain
+  expect(json.accessors[kerbs.attributes.POSITION].count).toBe(4);
+  expect(json.accessors[kerbs.attributes.POSITION].componentType).not.toBe(
+    FLOAT
+  );
+  const wires = prim("tram-wires");
+  expect(wires.attributes.NORMAL).toBeUndefined();
+  expect(json.accessors[wires.attributes._WIREDIR].type).toBe("VEC3");
+  expect(json.accessors[wires.attributes._WIREDIR].componentType).toBe(FLOAT);
+});
+
 test("a feature table rides along as EXT_structural_metadata", async () => {
   const glb = await writeMeshGlb({
     name: "city",

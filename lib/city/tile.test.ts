@@ -7,6 +7,7 @@ import {
   type DataManifest,
   dgmSourceFiles,
   DRESSING_KINDS,
+  LINE_KINDS,
   manifestUrl,
   OSM_KINDS,
   pickFiles,
@@ -85,12 +86,24 @@ test("the dressing and OSM columns name only kinds of the table", () => {
   }
   expect(DRESSING_KINDS).toContain("vegrows");
   expect(DRESSING_KINDS).not.toContain("landcover");
+  // the lines baked into the fine terrain glTF are read by the build only
+  expect([...LINE_KINDS].sort()).toEqual([
+    "platform",
+    "rail",
+    "railarea",
+    "riverside",
+    "tram",
+  ]);
+  for (const kind of LINE_KINDS) {
+    expect(tileArtifacts(PRIMARY_TILE)[kind].baked).toBe(true);
+    expect(DRESSING_KINDS as readonly string[]).not.toContain(kind);
+  }
 });
 
 test("pickFiles keeps only the named kinds a tile has", () => {
   expect(
-    pickFiles({ tram: "t.geojson", lamps: "", svf: "s.png" }, DRESSING_KINDS)
-  ).toEqual({ tram: "t.geojson" });
+    pickFiles({ trees: "t.geojson", lamps: "", svf: "s.png" }, DRESSING_KINDS)
+  ).toEqual({ trees: "t.geojson" });
 });
 
 test("the site's tiles, the spawn tile first", () => {

@@ -26,16 +26,17 @@ import {
   vec4,
   viewportSize,
 } from "three/tsl";
-import type { Pt } from "./rail-layer";
+import type { Wires } from "@/lib/city/wire-mesh";
 import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
 /**
  * Thin wires as camera-facing ribbons, one scene-wide material: the trams'
- * overhead line (tram-layer.ts) and the wires the street lamps hang on
- * across a street (lamp-layer.ts). A wire is never thinner on screen than
- * a pixel floor (its coverage then carried by the alpha) and fades out
- * with distance; wires never cast.
+ * overhead line (baked with the fine terrain, tram-layer.ts gives it this
+ * material) and the wires the street lamps hang on across a street
+ * (lamp-layer.ts). A wire is never thinner on screen than a pixel floor
+ * (its coverage then carried by the alpha) and fades out with distance;
+ * wires never cast. The ribbons themselves are lib/city/wire-mesh.ts's.
  */
 
 /** the pixel floor of a wire's drawn width, and its fade with distance (m) */
@@ -49,43 +50,6 @@ export interface WireInk {
 
 /** The trams' overhead line: light and faint. */
 export const TRAM_INK: WireInk = { color: 0x80_85_90, opacity: 0.6 };
-
-/** Wire segments as camera-facing ribbons: each vertex is a centre point,
- *  the segment's direction, the side (±1) and the half-width. */
-export interface Wires {
-  dir: number[];
-  half: number[];
-  index: number[];
-  pos: number[];
-  side: number[];
-}
-
-export function wires(): Wires {
-  return { pos: [], dir: [], side: [], half: [], index: [] };
-}
-
-export function addWire(w: Wires, pts: Pt[], half: number): void {
-  for (let i = 0; i < pts.length - 1; i++) {
-    const a = pts[i];
-    const b = pts[i + 1];
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const dz = b.z - a.z;
-    if (dx === 0 && dy === 0 && dz === 0) {
-      continue;
-    }
-    const base = w.pos.length / 3;
-    for (const p of [a, b]) {
-      for (const s of [-1, 1]) {
-        w.pos.push(p.x, p.y, p.z);
-        w.dir.push(dx, dy, dz);
-        w.side.push(s);
-        w.half.push(half);
-      }
-    }
-    w.index.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
-  }
-}
 
 /**
  * The wire's frame at this vertex, all in view space from the vertex's
@@ -135,7 +99,7 @@ function wireFrame() {
  * distance fade, at the ink's own faint opacity; it is worked out per
  * vertex and interpolated, as a varying.
  */
-function wireMaterial(ink: WireInk): MeshBasicNodeMaterial {
+export function wireMaterial(ink: WireInk): MeshBasicNodeMaterial {
   return sceneMaterial(`wire-${ink.color}-${ink.opacity}`, () => {
     const m = new MeshBasicNodeMaterial({
       color: new Color(ink.color),

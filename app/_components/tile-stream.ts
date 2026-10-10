@@ -16,7 +16,6 @@ import {
 } from "three/webgpu";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import type {
-  AreaFeature,
   BridgeFeature,
   CanopyExtraFeature,
   CultivatedFeature,
@@ -25,10 +24,7 @@ import type {
   LampFeature,
   LowVegFeature,
   MonumentFeature,
-  RailFeature,
-  RiversideFeature,
   TrafficFeature,
-  TramFeature,
   TreeFeature,
   VegRowFeature,
 } from "@/lib/city/features";
@@ -73,9 +69,9 @@ import { buildFurniture } from "./furniture-layer";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
-import { buildRail } from "./rail-layer";
+import { buildBridgeLayer } from "./rail-layer";
 import { bridgeAskSet } from "./bridge-ask";
-import { buildRiverside } from "./riverside-layer";
+import { dressLines, lineMeshes } from "./line-looks";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
   cpuDroppable,
@@ -116,7 +112,7 @@ import {
 } from "./three-utils";
 import { buildTraffic, type TrafficDetail } from "./traffic-layer";
 import { trafficAskSet } from "./traffic-ask";
-import { buildTram } from "./tram-layer";
+import { buildTramStops } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
   buildCrownWarmup,
@@ -135,8 +131,10 @@ import { dressWalls } from "./wall-layer";
  * the screen-space error and a memory budget. This module only dresses what
  * lands — the terrain material, water, buildings, vegetation (canopy,
  * street-tree cadastre, laser-scan trees, hedges), lamps, monuments, street
- * furniture, rails, walls — and undresses what leaves, so every tile is one
- * handle whose content comes and goes with it.
+ * furniture, bridges, and the materials of what the fine level carries
+ * baked (walls, stairs, kerbs, fences, rails, trams, riverside) — and
+ * undresses what leaves, so every tile is one handle whose content comes
+ * and goes with it.
  */
 export interface TileDressing {
   /** the trees, monuments and bridge decks the inquiry probe can ask
@@ -152,13 +150,14 @@ export interface TileDressing {
   /** OSM hedges (low-vegetation-layer.ts): static, no per-frame work */
   lowVegetation?: Group;
   monuments?: MonumentLayer;
+  /** the bridges (rail-layer.ts): the rails, ballast and platforms are
+   *  baked into the fine level (line-looks.ts) */
   rail?: Group;
   sport?: SportFixtureLayer;
   tile: string;
-  /** OSM trams: tracks, masts, the overhead line (tram-layer.ts) */
+  /** the tram stops' signs (tram-layer.ts): the tracks, masts and the
+   *  overhead line are baked into the fine level */
   tram?: Group;
-  /** the Elbe's landing stages, groynes, ferry lines (riverside-layer.ts) */
-  riverside?: Group;
   /** the counted motor traffic (traffic-layer.ts): a data layer, its
    *  bodies built on the first switch-on (`TrafficSlot`) */
   traffic?: TrafficSlot;
@@ -419,7 +418,6 @@ export const DRESSING_PARTS = {
   furniture: (d) => d.furniture,
   rail: (d) => d.rail,
   tram: (d) => d.tram,
-  riverside: (d) => d.riverside,
   traffic: (d) => d.traffic?.group ?? undefined,
   sport: (d) => d.sport?.group,
   vineyards: (d) => d.vineyards,
@@ -501,6 +499,7 @@ export function cpuBytesOf(
       t.walls,
       t.kerbs,
       t.fences,
+      ...lineMeshes(t.lines),
     ]);
     out.heights += t.heightBytes;
   }
@@ -955,10 +954,7 @@ async function buildCoarseDressing(
   const ground = { offset, heightAt: ctx.heightAt };
   const rail =
     bridges.length > 0
-      ? buildRail(
-          { bridges, rails: [], ballast: [], platforms: [] },
-          { ...ground, owns }
-        )
+      ? buildBridgeLayer(bridges, { ...ground, owns })
       : undefined;
   const decks = rail
     ? bridgeAskSet(
@@ -1048,17 +1044,12 @@ async function buildDressing(
     monuments,
     furniture: osmFurniture,
     mly,
-    rails,
     bridges,
-    ballast,
-    platforms,
     sportTable,
     inventory,
     scanTrees,
     hedges,
     cultivated,
-    trams,
-    river,
     traffic,
   } = await allNamed({
     rows: get<VegRowFeature>("vegrows"),
@@ -1071,10 +1062,9 @@ async function buildDressing(
     furniture: get<FurnitureFeature>("furniture"),
     // the lamps and bins OSM lacks, Mapillary's (lib/city/mapillary.ts)
     mly: get<MapillaryFeature>("mly"),
-    rails: get<RailFeature>("rail"),
+    // the bridges (drawn here: the inquiry asks them by their meshes); the
+    // rails, trams and riverside came baked with the level
     bridges: get<BridgeFeature>("bridge"),
-    ballast: get<AreaFeature>("railarea"),
-    platforms: get<AreaFeature>("platform"),
     // the table only: its fixtures are built once every fetch has landed,
     // so an aborted dressing leaves nothing built behind
     sportTable: extras.sportTable
@@ -1087,17 +1077,19 @@ async function buildDressing(
     hedges: get<LowVegFeature>("lowveg"),
     // allotments, orchards, vineyards (cultivated-layer.ts)
     cultivated: get<CultivatedFeature>("cultivated"),
-    trams: get<TramFeature>("tram"),
-    river: get<RiversideFeature>("riverside"),
     traffic: get<TrafficFeature>("traffic"),
   });
+  // the tram stops and landing stages the inquiry asks, carried by the
+  // level's extras with the lines baked into it (scripts/bake-lines.ts)
+  const trams = extras.asked?.stops ?? [];
+  const river = extras.asked?.landings ?? [];
   const fromMapillary = mapillaryParts(mly);
   const lamps = [...osmLamps, ...fromMapillary.lamps];
   const furniture = [...osmFurniture, ...fromMapillary.furniture];
   const sport = buildSport(terrain, sportTable, ctx);
   await nextTask();
-  // Rails may run past the tile edge: they sample the ground over
-  // every loaded terrain, not this tile's alone.
+  // A bridge's piers may stand past the tile edge: they sample the ground
+  // over every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
   // Orchard trees join the cadastre as its "small" archetype, appended: an
   // index stays the trees file's (and its facts row), the orchard's past it.
@@ -1145,14 +1137,11 @@ async function buildDressing(
   });
   lampControl.setNightFactor(ctx.night());
   await nextTask();
-  const rail = buildRail(
-    { rails, bridges, ballast, platforms },
-    {
-      ...ground,
-      // a deck across a seam is in both tiles' files; its owner draws it
-      owns: extent ? (x, y) => ownsPoint(extent, x, y) : undefined,
-    }
-  );
+  const rail = buildBridgeLayer(bridges, {
+    ...ground,
+    // a deck across a seam is in both tiles' files; its owner draws it
+    owns: extent ? (x, y) => ownsPoint(extent, x, y) : undefined,
+  });
   await nextTask();
   // The bake writes only the monuments a tile owns; a basin that reaches
   // past the seam samples the neighbour's ground.
@@ -1173,14 +1162,8 @@ async function buildDressing(
           heightAt: terrain.heightAt,
         })
       : undefined;
-  // Tracks are cut at the tile edge by the bake; they and the span wires
-  // sample the ground over every loaded terrain, like the rails.
-  await nextTask();
-  const tram = trams.length > 0 ? buildTram(trams, bridges, ground) : undefined;
-  // Piers and pontoons are the tile's own; a ferry line or groyne cut at
-  // the seam samples the neighbour's ground past it.
-  const riverside =
-    river.length > 0 ? buildRiverside(river, ground) : undefined;
+  // The tram stops' signs: the tracks, wires and masts came baked.
+  const tram = buildTramStops(trams, ground) ?? undefined;
   // What the probe can ask, sized as drawn: the trees on the tile's own
   // ground (as the inventory stands them), decks only where this tile
   // draws them — built once the dressing hangs, in idle time (`buildAsks`,
@@ -1249,7 +1232,6 @@ async function buildDressing(
     buildAsks,
     tile,
     tram,
-    riverside,
     traffic: trafficFlows,
     vegetation,
     lowVegetation,
@@ -1659,6 +1641,9 @@ export class DressingPlugin {
       dressKerbs(kerbs, terrain.light);
       terrain.kerbs = kerbs;
     }
+    // ...and its baked rails, trams and riverside: their layers' looks
+    // (line-looks.ts), on a copy of each scene-wide material
+    terrain.lines = dressLines(scene);
     const fences = meshNamed(scene, "fences");
     if (fences) {
       dressFences(fences, terrain.light);

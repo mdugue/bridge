@@ -22,6 +22,7 @@
  * renderer rotates it in. The tileset's group sits in the viewer's rotated
  * `world` group like every other data-frame layer.
  */
+import type { RiversideFeature, TramFeature } from "./features";
 import type { Landmark } from "./landmarks";
 import type { TerrainBounds } from "./terrain-geometry";
 import type { AskKind, CoarseDressingKind, DressingKind } from "./tile";
@@ -77,6 +78,12 @@ export const TILE_ERROR = 100_000;
 export type DressingFiles = Partial<Record<DressingKind, string>>;
 
 export interface TerrainExtras {
+  /**
+   * fine level only: what the inquiry asks of the lines baked into this
+   * glTF (scripts/bake-lines.ts) — the tram stops (the viewer stands their
+   * signs too) and the landing stages, as their files hold them
+   */
+  asked?: { landings: RiversideFeature[]; stops: TramFeature[] };
   bounds: TerrainBounds;
   /** fine level only */
   dressing?: DressingFiles;

@@ -18,11 +18,12 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { color, float, mix, select, uniform, uv, vec3, vec4 } from "three/tsl";
 import type { LampFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import type { Pt } from "@/lib/city/mesh3";
+import { addWire, wires, type Wires } from "@/lib/city/wire-mesh";
 import { Instances, instancePosition } from "./instancing";
-import type { Pt } from "./rail-layer";
 import type { F, Live } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
-import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
+import { wireMesh } from "./wire-ribbons";
 
 /** Lamp post height (m). OSM rarely tags it; the bake defaults each lamp to 5 m. */
 const LAMP_H = 5;

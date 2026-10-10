@@ -108,9 +108,20 @@ test("every builder's joins hold on the ground it stood on", () => {
  * fails here. The doors' misses (0.8 % at first bake) are sills at the
  * top of a mapped flight of steps, whose ground the stairs lower; the
  * shopfronts' (0.36 % at first bake) a riser whose ground dips below
- * the line between its wall's two ends. Lower a budget when a fix lowers its share; raising one
- * needs a reason in the commit. `bun scripts/ground-joins.ts` prints the
- * table and the worst places for the whole site.
+ * the line between its wall's two ends. The rails, trams and riverside
+ * were built in the viewer until plan 074 part A baked them, and came with
+ * their misses (measured at first bake, 2026-10-10): the rails' are the
+ * polygon platforms' fascia (down to the ground at each outline vertex
+ * only, straight between them: 38 % of their feet site-wide — dips, and
+ * platforms on a viaduct, clamped to the ground at its ends) and the
+ * ballast yards' fascia over a dip between two of its 6 m samples (3.6 %);
+ * the trams' a lawn or ballast strip's downhill edge across a slope and
+ * street rails over the ground's dips between their 2 m samples. Here:
+ * rails 16.9 % (10.5 % over the site), trams 0.31 % (0.59 %), riverside
+ * none (the pontoons float; piles, groyne flanks, gangways). Lower a
+ * budget when a fix lowers its share; raising one needs a reason in the
+ * commit. `bun scripts/ground-joins.ts` prints the table and the worst
+ * places for the whole site.
  */
 const BUDGET: Record<JoinPart, number> = {
   kerbs: 0.003,
@@ -121,12 +132,43 @@ const BUDGET: Record<JoinPart, number> = {
   doors: 0.01,
   shopfronts: 0.005,
   plinths: 0.01,
+  rails: 0.175,
+  tram: 0.004,
+  riverside: 0.001,
+};
+
+/** The tile a part is measured on where the spawn tile has none of it:
+ *  the spawn tile's rails are line-mapped platforms (a ribbon at platform
+ *  height: no joins), so the rails are measured on the tile west of it,
+ *  the Neustadt's yards and platforms. The lines' levels are solved per
+ *  piece here (`measureJoins` without the site's): over the site the
+ *  trams' share is the same within 0.01 %. */
+const MEASURED_ON: Partial<Record<JoinPart, string>> = {
+  rails: "33410_5656_2_sn",
 };
 
 test("the committed parts meet the ground within their budgets", async () => {
-  const reports = await measureJoins(["33412_5656_2_sn"]);
+  const spawnParts = JOIN_PARTS.filter((p) => !MEASURED_ON[p]);
+  const reports = {
+    ...(await measureJoins(
+      ["33412_5656_2_sn"],
+      undefined,
+      undefined,
+      spawnParts
+    )),
+  };
+  for (const [part, tile] of Object.entries(MEASURED_ON)) {
+    Object.assign(
+      reports,
+      await measureJoins([tile], undefined, undefined, [part as JoinPart])
+    );
+  }
   for (const part of JOIN_PARTS) {
     const r = reports[part];
+    expect(r).toBeDefined();
+    if (!r) {
+      continue;
+    }
     expect(r.edges + r.feet).toBeGreaterThan(0);
     // a failure names the part and its share
     const share = missShare(r);
@@ -135,4 +177,4 @@ test("the committed parts meet the ground within their budgets", async () => {
       share: "within",
     });
   }
-}, 60_000);
+}, 120_000);

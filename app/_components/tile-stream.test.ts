@@ -114,7 +114,6 @@ test("every part of a dressing is in the part table, so disposal and the census 
     furniture: group(),
     rail: group(),
     tram: group(),
-    riverside: group(),
     traffic: control(),
     sport: control(),
     vineyards: group(),

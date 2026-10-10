@@ -18,7 +18,12 @@ import {
   EXTMeshoptCompression,
   KHRMeshQuantization,
 } from "@gltf-transform/extensions";
-import { quantize, reorder, weld } from "@gltf-transform/functions";
+import {
+  quantize,
+  reorder,
+  weld,
+  weldPrimitive,
+} from "@gltf-transform/functions";
 import { MeshoptEncoder } from "meshoptimizer";
 
 /**
@@ -51,24 +56,44 @@ export interface PropertyTable {
   properties: Record<string, Column>;
 }
 
+/** A custom float attribute of more than one component per vertex (never
+ *  quantised): a wire's direction, in the glTF's Y-up frame as it is. */
+export interface FloatVector {
+  array: Float32Array<ArrayBuffer>;
+  type: "VEC2" | "VEC3" | "VEC4";
+}
+
+/**
+ * A further mesh on a node of its own next to the main one (a tile's
+ * stairs beside its terrain); only its geometry is read. `weld` merges its
+ * vertices whose every attribute is equal (a triangle soup's shared
+ * corners) on this mesh alone.
+ */
+export type ChildInput = Omit<
+  MeshInput,
+  "children" | "extras" | "table" | "reorder"
+>;
+
 export interface MeshInput {
   /**
    * custom vertex attributes (glTF names, `_UPPER_CASE`). Float32: three's
    * WebGPU backend has no 1-component 8/16-bit vertex format, and every
-   * renderer reads these as floats anyway (whole-number feature ids).
+   * renderer reads these as floats anyway (whole-number feature ids). A
+   * `FloatVector` is one of more components.
    */
-  attributes?: Record<string, Float32Array<ArrayBuffer>>;
+  attributes?: Record<string, Float32Array<ArrayBuffer> | FloatVector>;
   /** further meshes, each on a node of its own next to this one (a tile's
    *  stairs beside its terrain); only their geometry is read */
-  children?: Omit<MeshInput, "children" | "extras" | "table" | "weld">[];
+  children?: ChildInput[];
   /** linear RGB per vertex (COLOR_0) */
   colors?: Float32Array<ArrayBuffer>;
   /** glTF `extras` of the scene: whatever the runtime needs next to the mesh */
   extras: Record<string, unknown>;
   indices?: Uint32Array<ArrayBuffer>;
   name: string;
-  /** vertex normals; bake them, the runtime never recomputes */
-  normals: Float32Array;
+  /** vertex normals; bake them, the runtime never recomputes (none: an
+   *  unlit mesh, a wire, a wake) */
+  normals?: Float32Array;
   positions: Float32Array;
   /** per-feature table; requires a `_FEATURE_ID_0` attribute */
   table?: PropertyTable;
@@ -124,20 +149,27 @@ function addPrimitive(
     | Uint8Array<ArrayBuffer>
     | Uint16Array<ArrayBuffer>
     | Uint32Array<ArrayBuffer>;
-  const accessor = (array: Array, type: "SCALAR" | "VEC2" | "VEC3") =>
+  const accessor = (array: Array, type: "SCALAR" | "VEC2" | "VEC3" | "VEC4") =>
     doc.createAccessor().setArray(array).setType(type).setBuffer(buffer);
   const prim = doc
     .createPrimitive()
-    .setAttribute("POSITION", accessor(toYUp(input.positions), "VEC3"))
-    .setAttribute("NORMAL", accessor(toYUp(input.normals), "VEC3"));
+    .setAttribute("POSITION", accessor(toYUp(input.positions), "VEC3"));
+  if (input.normals) {
+    prim.setAttribute("NORMAL", accessor(toYUp(input.normals), "VEC3"));
+  }
   if (input.colors) {
     prim.setAttribute("COLOR_0", accessor(input.colors, "VEC3"));
   }
   if (input.uvs) {
     prim.setAttribute("TEXCOORD_0", accessor(input.uvs, "VEC2"));
   }
-  for (const [name, array] of Object.entries(input.attributes ?? {})) {
-    prim.setAttribute(name, accessor(array, "SCALAR"));
+  for (const [name, value] of Object.entries(input.attributes ?? {})) {
+    prim.setAttribute(
+      name,
+      value instanceof Float32Array
+        ? accessor(value, "SCALAR")
+        : accessor(value.array, value.type)
+    );
   }
   for (const [name, v] of Object.entries(input.vectors ?? {})) {
     prim.setAttribute(
@@ -172,11 +204,18 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
   const scene = doc
     .createScene(input.name)
     .addChild(doc.createNode(input.name).setMesh(mesh));
-  for (const child of input.children ?? []) {
-    const childMesh = doc
-      .createMesh(child.name)
-      .addPrimitive(addPrimitive(doc, child));
+  const addChild = (child: ChildInput) => {
+    const prim = addPrimitive(doc, child);
+    if (child.weld) {
+      // a soup's shared corners, on this mesh alone (`weld` below would
+      // weld every mesh, the terrain's grid too)
+      weldPrimitive(prim);
+    }
+    const childMesh = doc.createMesh(child.name).addPrimitive(prim);
     scene.addChild(doc.createNode(child.name).setMesh(childMesh));
+  };
+  for (const child of input.children ?? []) {
+    addChild(child);
   }
   scene.setExtras(input.extras);
   // Only positions, normals, colours and texture coordinates are quantised:

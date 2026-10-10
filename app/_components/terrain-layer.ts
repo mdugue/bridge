@@ -74,6 +74,7 @@ import {
 } from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import { colonyGarden } from "./cultivated-layer";
+import { type LineMeshes, lineMeshes } from "./line-looks";
 import {
   fetchOptionalJson,
   isAbortError,
@@ -160,6 +161,9 @@ export interface TerrainLayer {
   fences?: Mesh;
   /** the tile's baked walls (fine level only; wall-layer.ts) */
   walls?: Mesh;
+  /** the tile's baked rails, trams and riverside, by layer (fine level
+   *  only; line-looks.ts) */
+  lines?: LineMeshes;
   /** lowest valid elevation (m) on this tile — the valley/river floor */
   minElevation: number;
   tile: string;
@@ -1639,6 +1643,10 @@ export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
     ...of(layer.walls, ["position", "normal"]),
     ...of(layer.kerbs, ["position", "normal"]),
     ...of(layer.fences, ["position", "uv"]),
+    // the baked lines: nothing reads them on the CPU (no ray asks them)
+    ...lineMeshes(layer.lines).flatMap((mesh) =>
+      of(mesh, Object.keys(mesh.geometry.attributes))
+    ),
   ].filter((a): a is AnyAttribute => a !== null && a !== undefined);
 }
 
