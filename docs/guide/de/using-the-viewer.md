@@ -52,8 +52,8 @@ Karte anklicken oder einen Snapshot anwenden: Das Laden beginnt dann
 dort neu (der Ladebildschirm nennt ihn als *Start*), und du kommst gleich
 dort an statt am üblichen Startpunkt mit anschließender Reise. Sonne,
 Uhrzeit und Look lassen sich ebenfalls schon einstellen; Modell, die
-Werkzeuge, *Sicht merken*, der Klang und das Speichern eines Bildes
-warten, bis die Szene steht.
+Werkzeuge, *Sicht merken* und das Speichern eines Bildes warten, bis
+die Szene steht.
 
 ## Bewegen
 
@@ -537,14 +537,3 @@ Seitenleiste) schaltet die Berichte für deinen Browser sofort aus. Dort
 steht auch, wer die Seite betreibt, wo die Berichte liegen und wie lange.
 Ist kein Fehlerdienst eingerichtet, bietet die Karte das Protokoll
 stattdessen zum Kopieren an.
-
-## Kleinigkeiten
-
-- **Lauschen.** Drücke **L** (oder schalte auf dem Telefon ganz unten in
-  *Erweitert* *Klang (experimentell)* ein), und die Stadt klingt leise:
-  Wind, die Elbe, Vögel am Tag und Grillen in Sommernächten, Schritte, die
-  das Pflaster unter den Füßen kennen — und wenn du die Uhr über eine
-  volle Stunde schiebst, schlagen die Kirchen in der Nähe sie, jede ein
-  wenig später, je weiter sie entfernt steht, so wie der Schall reist. Bei
-  jedem Laden der Seite ist er aus, in einem Hintergrund-Tab verstummt er,
-  und der kleine Lautsprecher oben links schaltet ihn wieder aus.

@@ -225,11 +225,6 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   Modell's scale; anything else on the fine level vanishes there at
   once. A two-finger twist turns the ground with the fingers
   (`twistedTurn`).
-- Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
-  AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
-  `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),
-  `lib/city/soundscape.ts` (the mix) and `lib/city/sound-entry.ts` (the
-  boot-side half).
 - `minimap.tsx`, `city-walk.tsx` (HUD), `poc-debug.ts` (`window.__poc`).
 
 Constants live in the layer files and are the source of truth; values quoted
@@ -817,7 +812,7 @@ bun run bake dresden 33412_5656_2_sn   # one tile, all steps
 bun run bake dresden --step canopy     # one step (STEPS in pipeline/bake/__main__.py, in this order):
                                        #   landcover islands rail canopy trees ndvi roof-colour
                                        #   osm-buildings lamps monuments furniture walls stairs surface edges
-                                       #   markings sport tram riverside traffic roofs skyview soundmarks
+                                       #   markings sport tram riverside traffic roofs skyview
                                        #   lowveg cultivated small-buildings
                                        #   landmarks structures
                                        # `transit` runs once for the site after every tile (SITE_STEPS)
@@ -843,8 +838,7 @@ intensities are normalised against its own ground (`lsc.rasterise`).
 The later modules, one step each: `osm_buildings.py` (shops, heritage,
 material and colours per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
 `riverside.py`, `skyview.py` (DGM + LoD2, the rebuilt roofs of `roofs.py`
-in place of theirs),
-`soundmarks.py` (bell towers), `small_buildings.py` (plan 034),
+in place of theirs), `small_buildings.py` (plan 034),
 `landmarks.py` and `structures.py` (plan 050; landmarks first, the relief
 is measured on their objects). **Seams:**
 a step whose result must agree on both sides of a tile edge reads the

@@ -63,7 +63,6 @@ flowchart LR
     RAIL["Railway tracks"]
     TRAM["Trams<br/>tracks · masts · contact wire"]
     RIV["Elbe landing stages<br/>piers · pontoons · groynes · ferry lines"]
-    SND["Sound (hidden, opt-in)<br/>hour bells · footsteps · river · birds"]
     TRF["Data layer: motor traffic<br/>flowing bands per direction"]
     BIK["Data layer: bicycle counters<br/>a column per direction (live)"]
     TCAR["Data layer: trams by timetable<br/>cars at the scene's clock"]
@@ -174,10 +173,6 @@ flowchart LR
   OSM ==>|"tram tracks → the way between two stops"| TCAR
   BRG -. "deck under a bridge track" .-> TCAR
   SUN -. "the scene's clock" .-> TCAR
-  OSM ==>|"churches · bell towers · paving · tram tracks"| SND
-  CJ -. "tower tip + height" .-> SND
-  DLM -. "water · green · roads" .-> SND
-  SUN -. "night · season · the hour" .-> SND
   OSM ==>|"barrier=retaining_wall/city_wall · natural=cliff + height"| WAL
   DGM -. "snap to the measured step (fine TIN)" .-> WAL
   WAL -. "breakline burned into the coarse grid at build" .-> TER
@@ -241,7 +236,6 @@ flowchart LR
 | **Data layer: bicycle counters** (off by default) | Dresden's Rad-Dauerzählstellen (WFS `cls:L1781`) and Hamburg's counting network (SensorThings), read live by the browser: bicycles of the last hour per direction | DGM1 (ground-clamp) · the HUD's switch and list | `bike-layer.ts`, `data-overlays.ts`, `lib/city/bike-counts.ts`; asked through `bike-ask.ts` → `lib/city/inquiry-traffic.ts` |
 | **Data layer: trams by timetable** (off by default) | GTFS from DELFI via gtfs.de: every tram trip of the site (DVB, LVB, MVG), its stops and times, three kinds of day | OSM tram tracks (the way between two stops) · DGM1 (rail top) · the bridge decks · the scene's clock · the HUD's switch | `tram-cars.ts`, `data-overlays.ts`, `lib/city/tram-timetable.ts`; baked once for the site by `pipeline/bake/transit.py` |
 | **Elbe landing stages** | OSM `man_made=pier` (fixed or `floating`), `man_made=groyne`, `route=ferry` | DLM water class (a pontoon and a ferry line cut to the water) · DGM1 (a pier's deck from the bank; a pontoon floats on the terrain the water sheet lies on) | `riverside-layer.ts`, `map-overlay.ts` (the ferry lines show from the air only); baked by `pipeline/bake/riverside.py` |
-| **Sound** (hidden, opt-in: L or *Klang*) | OSM churches and bell towers at the tip and height the LoD2 measures (`soundmarks_<t>.geojson`) — the hour bells | Basis-DLM class raster (water, green, roads) · the sky-view factor · the OSM paving raster (footsteps) · OSM tram tracks · the fountains · the loaded trees · sun and date | `app/_components/soundscape/`, `soundscape-toggle.tsx`, `lib/city/soundscape.ts`; baked by `pipeline/bake/soundmarks.py` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints); without a DLM OSM's `bridge` ways on roads, paths and railways (+ `man_made=bridge` outlines), one bridge's ways merged per `layer` | DGM1 (abutment ramp, piers, the water under the fairway) · DOM1 (the roadway's height; the superstructure — truss, pylons, steel arch — as ribs) · OSM `bridge:structure` and the fairway's clearance (deck depth, a pier-free fairway) · Wikidata (class, main span) — *LoD2's bridge slabs are left out of the buildings*; drawn on both terrain levels (the coarse one without rails); the deck laid out by its axis (footways, kerbs, carriageway, centre dashes), the stone as ashlar | `rail-layer.ts`, `bridge-surface.ts`, `lib/city/bridge.ts`; baked by `pipeline/bake/rail.py` + `bridge.py` (+ `rail_osm.py`) |
 | **Station platforms** | OSM `railway=platform` (Geofabrik extract; none below ground — tunnel, `location=underground`, negative `layer`/`level`) | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` + `height` (Geofabrik extract) | DGM1 (ribbon snapped to the measured step of the fine TIN; the coarse grid is conflated to a step instead) — *no DGM/DOM/LiDAR product has the wall as a vertical face* | `lib/city/walls.ts` + `lib/city/wall-snap.ts` (at build, into the fine terrain glTF), `lib/city/terrain-conflate.ts` (coarse grid), `wall-layer.ts` (material); baked by `pipeline/bake/walls.py` |

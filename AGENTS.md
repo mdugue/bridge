@@ -260,10 +260,6 @@ config change.
     numbers); a tree's facts are its tile's
     `treefacts` file, fetched with the question (the artifact table's `ask`
     column, `lib/city/tile.ts`)
-  - sound: `soundscape-toggle.tsx` (the hidden soundscape's switch — the L
-    key; no AudioContext before it) and `soundscape/` (`engine.ts`,
-    `hearing.ts`, `voices.ts`: loaded by dynamic import on the first
-    toggle, driven from the 10 Hz pose tick, all synthesized)
 - `lib/brand.ts` — `SUPPORT_URL`, the Ko-fi link in the HUD footer
   (`scene-sidebar.tsx`): a plain link, never Ko-fi's widget, so nothing
   loads from there until it is clicked
@@ -279,7 +275,7 @@ config change.
   `task-gate.ts` (a concurrency gate: the rasters' turns),
   `ground.ts` (the
   site's ground: terrain heights, the floor, rays — one owner for the pose,
-  focus, shadow fit and soundscape), `ground-join.ts` (how a part meets
+  focus and shadow fit), `ground-join.ts` (how a part meets
   the ground: foot depths, edges, the join contract — ADR 0035),
   `boot-phases.ts` (the load after the
   first frame as a pure state machine), `terrain-tin.ts`
@@ -302,8 +298,7 @@ config change.
   `source-matrix.ts` (the *Sources by city* table: per site and drawn
   layer, the source and how good it is — ADR 0039), `markings.ts`,
   `cultivated.ts`, `tram.ts` and `skyview.ts` (the pure halves
-  of those layers), `soundscape.ts` and `sound-entry.ts` (the soundscape's
-  mix and its boot-side half), `site.ts` (the
+  of those layers), `site.ts` (the
   site type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
   extras), `landcover.ts` (the classes and the one palette), `sport.ts`
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
@@ -364,7 +359,7 @@ config change.
   `skyview.py`, `osm_buildings.py` (shops, heritage, material and
   colours per LoD2 object; the walls' `context`, brick or plaster as the
   neighbourhood is mapped),
-  `tram.py`, `riverside.py`, `soundmarks.py` (the bell towers),
+  `tram.py`, `riverside.py`,
   `traffic.py` (the counted traffic; its sources per site in
   `traffic_sources.py`), `transit.py` (the trams' timetable, once for the
   site), `osm.py`);
@@ -541,7 +536,7 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   quietly poorer. After merging a new step, or adding a tile, bake it on
   every tile the test names; a step that finds nothing writes an empty file.
 - `prepare-data.ts` downsamples the class raster to 2048² (phones, the
-  coarse terrain) and 512² (the minimap, the soundscape) with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
+  coarse terrain) and 512² (the minimap) with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
   through an image resize any more (sharp premultiplies alpha — that once
   painted the ground black). Nor through the browser's image decoder: the
   class and NDVI PNGs are inflated byte-exact by `lib/city/png-raster.ts`

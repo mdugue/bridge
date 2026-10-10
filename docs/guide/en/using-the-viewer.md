@@ -49,8 +49,8 @@ the city loads you can already pick a place, click a spot on the map or
 apply a snapshot: the load starts over at that place (the loading screen
 names it as *Start*), so you arrive there instead of at the usual start
 and then travel. The sun, the time and the look can be set too; Modell,
-the tools, *Sicht merken* (remember this view), the sound and saving a
-picture wait until the scene is up.
+the tools, *Sicht merken* (remember this view) and saving a picture
+wait until the scene is up.
 
 ## Moving around
 
@@ -509,14 +509,3 @@ foot of every page and of the sidebar) turns the reports off for your
 browser at once. That page also says who runs the site, where the reports
 are kept and for how long. Without the tracker set up, the card offers the
 record to copy instead.
-
-## Small things
-
-- **Listen.** Press **L** (or, on a phone, turn on *Klang (experimentell)*
-  at the very bottom of *Erweitert*) and the city makes a quiet sound: wind,
-  the Elbe, birds by day and crickets on summer nights, footsteps that
-  know the paving underfoot — and when you move the clock past a full
-  hour, the nearby churches strike it, each a little later the further
-  away it stands, as sound travels. It is off every time the page loads,
-  goes quiet in a background tab, and the small speaker in the top left
-  corner turns it off again.

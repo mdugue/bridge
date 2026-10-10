@@ -1169,13 +1169,20 @@ See the ledger's *Small structures from the laser scan* row
 ([transformations.md](../transformations.md)), [ADR 0035](../adr/0035-parts-meet-the-ground.md)
 (the box's ground join) and plan 019.
 
-## 035 — A hidden soundscape · DONE (2026-09-26; unheard: the listening pass is a maintainer action)
+## 035 — A hidden soundscape · REJECTED (removed 2026-10-10)
 
 **Problem.** The maintainer asked for a surprise, opt-in and hidden: the
 city made audible from the same data the picture reads — footsteps by
 paving, the Elbe, wind and leaves, birds and crickets by season and hour,
 the city's hum, church bells at the full hour, a tram bell — with no
 audio files and no dependency.
+
+**Removed 2026-10-10**, never heard: the maintainer decided to drop it
+to cut code and maintenance, before the listening pass (plan 019) was
+done. The engine, the switch and the L key, the tileset's `sound`
+column, the `soundmarks` bake, its committed files and their docs are
+gone; the full implementation is in git history (`5b59b79`, the last
+commit carrying it). What follows is the record of what was built.
 
 **Outcome.** All four phases built, everything synthesized with WebAudio.
 - *Entry.* **L** (not in the control hints) and one quiet switch,
@@ -1214,9 +1221,8 @@ audio files and no dependency.
 - Plan 036's rank 6 (a soundscape from measured data: the WFS noise maps,
   OSM acoustic signals, streams and weirs) waits for the listening pass.
 
-See the ledger's *Sound* section ([transformations.md](../transformations.md)),
-[rendering.md](../rendering.md) and plan 019 (the listening pass rides
-along with its phone session).
+See the ledger's 🗃️ row ([transformations.md](../transformations.md)).
+Revive only with a listening pass first, not as a re-audit finding.
 
 ## 037 — The commands agents run, and docs that say what the code does · DONE (2026-10-03)
 

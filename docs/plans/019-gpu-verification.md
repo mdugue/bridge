@@ -196,11 +196,6 @@ On the dev server over the LAN (`bun dev` serves HTTPS for exactly this):
   view; it does not loop (ADR 0046 — the details are section M).
 - [ ] Locate me and live mode with the compass; a minimap jump ends live
   mode (plan 038 step 5).
-- [ ] **Listening pass** (plan 035, rides along — not a GPU check): the
-  soundscape (key `L` / *Klang*) in Chrome, Safari and on the iPhone:
-  levels and timbres; iOS unlock with the `ambient` audio session (fall
-  back to `"playback"` if the iPhone stays silent); CPU cost on the phone.
-  A source that sounds cheesy is removed (plan 035's rule).
 
 ### J. Deploy host
 
@@ -619,62 +614,11 @@ style. Checked headless only so far.
   structures straddle one). Good: a straddling shed is drawn once, whole,
   from the tile that owns its centre.
 
-#### 035 — The soundscape — listening pass (rides along with section I)
+#### 035 — The soundscape — withdrawn
 
-([record](./completed.md#035--a-hidden-soundscape--done-2026-09-26-unheard-the-listening-pass-is-a-maintainer-action))
-
-Not a GPU check, but it needs real browsers and a real phone, so it rides
-along with plan 019's phone session. Listen with headphones and with
-speakers, in Chrome, Safari and iOS Safari, full profile. Nothing has
-been heard yet: every level and timbre was set on paper. The plan's rule
-for the whole pass: a source the maintainer finds cheesy is **removed,
-not tuned** — the soundscape is better sparse.
-
-- [ ] **Nothing before the toggle (blocker).** Load the viewer in each
-  browser, walk and fly, scrub the time slider: silence. A sound before
-  **L** or the *Klang (experimentell)* switch, in any browser, is a
-  blocker. Also: no sound while the loading overlay shows, and the sound
-  fades out on a hidden tab.
-- [ ] **iOS unlock and the audio session.** On an iPhone, turn it on with
-  the *Klang* switch (the Erweitert tab). Good: it plays, mixes with the
-  phone's own audio and keeps to the silent switch (the `ambient`
-  session). Fallback the build set: if iPhones stay silent, switch the
-  session type to `"playback"` and listen again.
-- [ ] **Beds: wind, hum, water, leaves.** On foot on the Elbwiesen (the
-  *Elbufer* viewpoint), in a narrow Neustadt street (*Äußere Neustadt*),
-  among trees in the *Großer Garten*, and flying at ~150 m. Good: the
-  Elbe's low murmur rises as you near the water and pans to its side;
-  wind grows with height and open sky; the city's hum is far and low,
-  quieter at night; leaf rustle follows the crowns' sway and is gone in
-  winter (Dec–Mar) and above the crowns.
-- [ ] **Events: birds, crickets, fountains.** In the *Großer Garten* at a
-  spring dawn (e.g. 5 May, 05:30), at noon and at night; on a meadow on a
-  warm July night; next to a fountain (April–October, 8–22 h). Good:
-  birds sparse and natural (sparrows in streets, tits in parks, a
-  blackbird at dusk), silent at night; crickets only on summer nights
-  near meadows; the fountain's splash only within ~45 m.
-- [ ] **Footsteps by paving.** Walk over sett in the Neustadt, asphalt,
-  a gravel path in the *Großer Garten*, the grass of the Elbwiesen; then
-  sprint, then fly. Good: the surface is audible in each step; sprinting
-  lengthens the stride instead of a drum roll; silent in fly mode and on
-  a jump.
-- [ ] **Hour bells.** On the *Neumarkt*, scrub the time slider past 18:00
-  and let go. Good: after ~0.7 s the Frauenkirche strikes first, the
-  Kreuzkirche a beat later from its own direction (distance at 343 m/s);
-  six strokes; a minor-third bell, deep for the large towers; nothing on
-  a backward scrub.
-- [ ] **Tram bell.** Within 70 m of a track between 4:30 and 0:30, wait a
-  few minutes. Good: a rare two-stroke bell from the track's side, about
-  once in 2½ minutes — not a nag.
-- [ ] **Cost on a phone (the plan's STOP).** On the same iPhone and
-  Android device, frame time with sound off and on at the same view.
-  Good: no measurable change (the 10 Hz sampling is ≈ 600 raster reads
-  and a tree count; the reverb is one 2.4 s convolver). If it shows,
-  move the work out of the 10 Hz handler into scheduled audio parameters
-  or lower its rate.
-- [ ] **Write down** the levels kept or changed and every source removed,
-  in the ledger's *Sound* section, and say whether plan 036's rank 6 (a
-  soundscape from measured data) is worth building on what was heard.
+Withdrawn 2026-10-10: the soundscape was removed before it was heard
+([record](./completed.md#035--a-hidden-soundscape--rejected-removed-2026-10-10)),
+so there is nothing to listen to.
 
 ### L. To decide on a GPU before building (backlog)
 

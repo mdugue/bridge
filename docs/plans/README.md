@@ -66,7 +66,7 @@ history. Decisions that came out of plans are written up as
 | 032 | Street names: map lettering in fly mode, a caption on foot | REJECTED — built 2026-09-25, removed 2026-09-26 by the maintainer's decision after seeing it | [completed.md](./completed.md#032--street-names-lettering-and-the-on-foot-caption--rejected-removed-2026-09-26) |
 | 033 | Sky-view factor and baked horizon map: city-scale ambient light and far-field shadows | DONE (2026-09-25) — plates and tuning in plan 019; horizon on facades folded into ledger 📋 #7 (CSM) | [completed.md](./completed.md#033--sky-view-factor-and-baked-horizon-shading--done-2026-09-25-plates-and-tuning-open-on-a-gpu--plan-019) |
 | 034 | Small structures from DOM − LoD2 (kiosks, sheds, carports), gated on a measurement | DONE (2026-09-26) — look in plan 019 | [completed.md](./completed.md#034--small-structures-from-dom--lod2--done-2026-09-26-look-unjudged-on-a-gpu--plan-019) |
-| 035 | A hidden, opt-in soundscape synthesised from the scene's data | DONE (2026-09-26) — unheard: the listening pass rides along with plan 019's phone session | [completed.md](./completed.md#035--a-hidden-soundscape--done-2026-09-26-unheard-the-listening-pass-is-a-maintainer-action) |
+| 035 | A hidden, opt-in soundscape synthesised from the scene's data | REJECTED — built 2026-09-26, never heard; removed 2026-10-10 by the maintainer's decision, to cut code and maintenance (the listening pass withdrawn) | [completed.md](./completed.md#035--a-hidden-soundscape--rejected-removed-2026-10-10) |
 | 036 | What the data streams carry that we do not use (OSM, LoD2, the city's WFS, Wikidata, GeoSN, DLM): a measured survey and a ranking | **REFERENCE** — moved to [docs/data-streams.md](../data-streams.md) on 2026-10-01 (a survey, not a plan); pick an item into its own plan | [data-streams.md](../data-streams.md) |
 | 037 | The commands agents run work (`bun run build`/`test`, E2E_DEV over HTTPS), the skill's phone cache numbers, "1024²" → TIN, guide viewpoints and sizes, codebook pointers, Dependabot/CI paths, lockfile header; a test pins the guide to the HUD | DONE (2026-10-03) — `bunfig.toml` keeps a bare `bun test` out of e2e; coverage gaps listed in CI; a docs link test besides the guide test | [completed.md](./completed.md#037--the-commands-agents-run-and-docs-that-say-what-the-code-does--done-2026-10-03) |
 | 038 | Runtime spine: the shadow camera follows by night (no pinned tile), "loaded" without a spawn dressing nobody builds, no GPU-recovery loop and the crash it hid, no stuck key after a ⌘ chord, a jump ends live mode | DONE (2026-10-03) — step 2's decision moved into the pure boot machine; the GPU failure has its own HUD path | [completed.md](./completed.md#038--five-runtime-fixes-in-the-viewers-spine--done-2026-10-03) |
@@ -257,8 +257,8 @@ S/M/L.
     unifying the winding changes baked geometry — needs its own earcut
     (`lib/city` forbids `three`) and a headed shot comparison.
 22. **One terrain raster loader driven by the artifact table (M).** The
-    artifact table (`lib/city/tile.ts`) now names the dressing, sound and
-    OSM files, but the terrain's rasters still go their own way:
+    artifact table (`lib/city/tile.ts`) now names the dressing, coarse,
+    ask and OSM files, but the terrain's rasters still go their own way:
     `prepare-data.ts` spells their names into the terrain extras by hand,
     and `terrain-layer.ts` has one loader per raster (splat, NDVI, paving,
     edges, sports grounds, colonies, markings) plus the detail-raster
