@@ -11,8 +11,8 @@ import {
 } from "@/lib/city/bike-counts";
 import type { DataLayerDef, DataLayerKey } from "@/lib/city/data-layers";
 import type { LookValues } from "@/lib/city/look-controls";
-import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { DataLayerSwatch } from "./data-layer-swatch";
+import { useSceneStatus } from "./scene-status";
 import type { TramCarsStatus } from "./tram-cars";
 
 /**
@@ -87,15 +87,15 @@ function countHour(counters: BikeCounter[]): string | null {
 /**
  * The live bicycle counts in words (the scene shows them as columns): one
  * row per counter, busiest first, a count per direction in its column's
- * colour; a click flies there.
+ * colour; a click flies there. Read from the scene's status
+ * (scene-status.ts), as the two lines below are.
  */
 export function BikeCountList({
-  counters,
   onFly,
 }: {
-  counters: BikeCounter[];
   onFly: (counter: BikeCounter) => void;
 }) {
+  const counters = useSceneStatus("bikeCounters");
   if (counters.length === 0) {
     return (
       <span className="text-[11px] text-muted-foreground">
@@ -176,11 +176,8 @@ function busyWord(factor: number): string {
  * scene's hour on a typical daily curve — said here, so the picture is
  * not read as a live measurement.
  */
-export function TrafficHourLine({
-  status,
-}: {
-  status: TrafficHourStatus | null;
-}) {
+export function TrafficHourLine() {
+  const status = useSceneStatus("trafficHour");
   if (!status) {
     return null;
   }
@@ -203,7 +200,8 @@ function germanDate(iso: string): string {
 
 /** The timetable trams in words: how many run now, from which day's
  *  timetable. */
-export function TramStatusLine({ status }: { status: TramCarsStatus | null }) {
+export function TramStatusLine() {
+  const status = useSceneStatus("tramStatus");
   if (!status || status.failed) {
     return (
       <span className="text-[11px] text-muted-foreground">

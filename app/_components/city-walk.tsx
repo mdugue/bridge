@@ -13,7 +13,6 @@ import {
 import {
   type CSSProperties,
   type RefObject,
-  startTransition,
   useCallback,
   useEffect,
   useRef,
@@ -23,21 +22,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
-import {
-  loadPercent,
-  type LoadStageState,
-  loadStageStates,
-  type SkippedStages,
-  type StageFractions,
-} from "@/lib/city/load-stages";
-import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
-import type { BikeCounter } from "@/lib/city/bike-counts";
+import { loadPercent, loadStageStates } from "@/lib/city/load-stages";
 import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
-import type { Landmark } from "@/lib/city/landmarks";
 import { createLookState } from "@/lib/city/look-state";
-import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
-import type { CameraState, PlayerPose } from "@/lib/city/pose";
+import type { CameraState } from "@/lib/city/pose";
 import {
   decodeLook,
   encodeSnapshot,
@@ -46,9 +35,8 @@ import {
   snapshotInstant,
 } from "@/lib/city/snapshot";
 import { restoresLook } from "@/lib/city/gpu-safety";
-import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { AltitudeStick } from "./altitude-stick";
-import { BootError, layerErrorText } from "./boot-error";
+import { BootError } from "./boot-error";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
 import { startCrashReports } from "./crash-reports";
@@ -62,7 +50,7 @@ import {
 } from "./gpu-recovery";
 import { raiseSafety } from "./gpu-safety";
 import { VEIL_HOLD_MS } from "./handover";
-import type { CityWalkHandle, CityWalkStats, SiteInfo } from "./create-app";
+import type { CityWalkHandle } from "./create-app";
 import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
 import type { ExportContext } from "./image-export";
@@ -77,7 +65,7 @@ import {
 } from "./locate-button";
 import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { ModelInstruments } from "./model-instruments";
-import type { ModelHud, ViewMode } from "./model-rig";
+import type { ViewMode } from "./model-rig";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
 import {
@@ -90,9 +78,16 @@ import {
   TrafficHourLine,
   TramStatusLine,
 } from "./data-layers-panel";
-import type { TramCarsStatus } from "./tram-cars";
-import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { SceneSidebar } from "./scene-sidebar";
+import {
+  afterTask,
+  createSceneStatus,
+  NO_PROGRESS,
+  SceneStatusContext,
+  sceneReports,
+  useSceneStatus,
+  useSlice,
+} from "./scene-status";
 import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
 import { readStoredStyle, writeStoredStyle } from "./style-memory";
@@ -279,46 +274,44 @@ function sceneTools({
  */
 function SceneOverlays({
   coarse,
-  covered,
   live,
   locate,
-  mode,
-  modelView,
   onClimb,
+  onMovementMode,
   onMove,
   onNorth,
-  onToggleMode,
   onToggleModel,
   onTurn,
 }: {
   coarse: boolean;
-  /** the inquiry sheet covers the bottom of the screen (touch) */
-  covered: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
-  mode: ViewMode;
-  /** Modell's view, while it is shown (plan 055) */
-  modelView: ModelHud | null;
   onClimb: (v: number) => void;
+  /** walk or fly (the touch toolbar's switch) */
+  onMovementMode: (mode: "fly" | "walk") => void;
   onMove: (x: number, y: number) => void;
   onNorth: () => void;
-  onToggleMode: () => void;
   onToggleModel: () => void;
   onTurn: (deg: number) => void;
 }) {
   const { state, isMobile, openMobile } = useSidebar();
+  const mode = useSceneStatus("mode");
+  const inquiry = useSceneStatus("inquiry");
   const model = mode === "model";
-  if (covered || (isMobile && openMobile)) {
+  // (the inquiry sheet covers the bottom of the screen on touch)
+  if ((coarse && inquiry !== null) || (isMobile && openMobile)) {
     return null;
   }
   // On a desktop the open panel floats at the right: Modell's instruments
   // (bottom left) are its legend and stay; the walker's controls step
   // aside as before.
   if (!isMobile && state === "expanded") {
-    return model && modelView ? (
-      <div className="absolute bottom-6 left-5">
-        <ModelInstruments onNorth={onNorth} onTurn={onTurn} view={modelView} />
-      </div>
+    return model ? (
+      <LiveModelInstruments
+        className="absolute bottom-6 left-5"
+        onNorth={onNorth}
+        onTurn={onTurn}
+      />
     ) : null;
   }
   const flying = mode === "fly";
@@ -331,13 +324,7 @@ function SceneOverlays({
           bar and the north arrow between the two quarter turns. */}
       <div className="absolute bottom-24 left-5">
         {model ? (
-          modelView && (
-            <ModelInstruments
-              onNorth={onNorth}
-              onTurn={onTurn}
-              view={modelView}
-            />
-          )
+          <LiveModelInstruments onNorth={onNorth} onTurn={onTurn} />
         ) : (
           <VirtualJoystick onChange={onMove} />
         )}
@@ -352,12 +339,41 @@ function SceneOverlays({
             live,
             locate,
             mode,
-            onToggleMode,
+            onToggleMode: () => onMovementMode(flying ? "walk" : "fly"),
             onToggleModel,
           })}
         />
       </div>
     </>
+  );
+}
+
+/**
+ * Modell's scale bar and north arrow, at its view's rate (the pose tick):
+ * the only part of the overlays that follows the view. Nothing until the
+ * first view is in.
+ */
+function LiveModelInstruments({
+  className,
+  onNorth,
+  onTurn,
+}: {
+  /** a box of their own to stand in */
+  className?: string;
+  onNorth: () => void;
+  onTurn: (deg: number) => void;
+}) {
+  const view = useSceneStatus("modelView");
+  if (!view) {
+    return null;
+  }
+  const instruments = (
+    <ModelInstruments onNorth={onNorth} onTurn={onTurn} view={view} />
+  );
+  return className ? (
+    <div className={className}>{instruments}</div>
+  ) : (
+    instruments
   );
 }
 
@@ -438,15 +454,68 @@ function standsAt(h: CityWalkHandle, view: ViewpointGeometry): boolean {
  * desktop, so its text keeps clear of the panel, and a place picked there
  * is named — the scene starts at it.
  */
-function ShellLoadScreen(props: {
-  destination?: string;
-  handedOver: boolean;
-  percent: number;
-  stages: LoadStageState[];
-}) {
+function ShellLoadScreen(props: { destination?: string; handedOver: boolean }) {
   const { isMobile, state } = useSidebar();
+  const { fractions, skipped } = useSceneStatus("progress");
   return (
-    <LoadScreen {...props} besidePanel={!isMobile && state === "expanded"} />
+    <LoadScreen
+      {...props}
+      besidePanel={!isMobile && state === "expanded"}
+      percent={loadPercent(fractions, skipped)}
+      stages={loadStageStates(fractions, skipped)}
+    />
+  );
+}
+
+/** The loading screen at pill size, once the scene is up (stream-pill.tsx). */
+function ScenePill() {
+  const { fractions, skipped } = useSceneStatus("progress");
+  const busy = useSceneStatus("busy");
+  return (
+    <StreamPill busy={busy} stages={loadStageStates(fractions, skipped)} />
+  );
+}
+
+/** A tile that failed after the first frame, until it comes back. */
+function StreamErrorLine() {
+  const message = useSceneStatus("streamError");
+  return message ? (
+    <output
+      aria-live="polite"
+      className="pointer-events-none absolute top-15 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full bg-destructive/90 px-3 py-1 text-[11px] text-white"
+    >
+      {message}
+    </output>
+  ) : null;
+}
+
+/**
+ * No dot in the middle: the pointer aims (I and R act under it). Only
+ * immersive mode, which hides the pointer, marks the centre it aims at
+ * instead, and so does the panel's demolish button while it is pointed at
+ * or focused — it acts at the centre. Never on Modell's sheet.
+ */
+function CentreMark({ shown }: { shown: boolean }) {
+  const mode = useSceneStatus("mode");
+  return shown && mode !== "model" ? (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
+    />
+  ) : null;
+}
+
+/** The failure card once the render stopped for good (gpu-failure-card.tsx). */
+function GpuFailure({
+  onLighter,
+  onReload,
+}: {
+  onLighter: () => void;
+  onReload: () => void;
+}) {
+  const detail = useSceneStatus("gpuFailure");
+  return detail === null ? null : (
+    <GpuFailureCard detail={detail} onLighter={onLighter} onReload={onReload} />
   );
 }
 
@@ -458,7 +527,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     (date: Date, preview?: boolean) => handleRef.current?.setSun(date, preview),
     []
   );
-  const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
   const immersive = usePointerLocked();
   const [aimingCentre, setAimingCentre] = useState(false);
@@ -476,27 +544,14 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       ? { phase: "loading" }
       : { phase: "error", message: missing }
   );
-  // What the scene has reported per load stage (lib/city/load-stages.ts): the
-  // loading screen, the handover and the pill all read this. One piece of
-  // state, not two, because a streaming failure has to settle both at once.
-  const [progress, setProgress] = useState<{
-    fractions: StageFractions;
-    skipped: SkippedStages;
-  }>({ fractions: {}, skipped: {} });
-  const [streamError, setStreamError] = useState<string | null>(null);
-  // After the first full load: tiles or their details streaming in (flights).
-  const [streamingMore, setStreamingMore] = useState(false);
+  // What the scene reports (the stages, the stats, the frame rate, Modell's
+  // view, the data layers, the inquiry: scene-status.ts), each widget
+  // reading its own slice — a report re-renders what shows it, not this
+  // component. It outlives the boots, as these states did.
+  const [sceneStatus] = useState(() => createSceneStatus(afterTask));
   // Kept past the handover: the city arrives behind the frosted screen, which
   // is only then removed (handover.ts).
   const [veilUp, setVeilUp] = useState(true);
-  const [stats, setStats] = useState<CityWalkStats | null>(null);
-  // The live bicycle counts while their data layer is on (data-overlays.ts).
-  const [bikeCounters, setBikeCounters] = useState<BikeCounter[]>([]);
-  // The timetable trams' day and count while their layer is on.
-  const [tramStatus, setTramStatus] = useState<TramCarsStatus | null>(null);
-  const [trafficHour, setTrafficHour] = useState<TrafficHourStatus | null>(
-    null
-  );
   const time = useSceneTime(applySceneTime, INITIAL_DATE);
   const { current: timeNow, sync: syncTime } = time;
   // The look store outlives the scene: a remount (StrictMode, a tile switch)
@@ -521,24 +576,13 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       }
     });
   }, [look]);
-  const [mode, setMode] = useState<ViewMode>("walk");
-  // Modell's view while it is shown (plan 055): scale, turn, the instruments.
-  const [modelView, setModelView] = useState<ModelHud | null>(null);
-  // Befragen (ADR 0042): what was asked last, while its card is open.
-  const [inquiry, setInquiry] = useState<Inquiry | null>(null);
-  // everything the question's ray met (the strip beside the tap)
-  const [along, setAlong] = useState<InquiryAlong | null>(null);
-  const [provenanceUrl, setProvenanceUrl] = useState<string | null>(null);
+  // Befragen (ADR 0042): the card closes, and the scene's mark with it.
   const closeInquiry = useCallback(() => {
     handleRef.current?.clearInquiry();
-    setInquiry(null);
-    setAlong(null);
-  }, []);
-  const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
-  const [bounds, setBounds] = useState<TerrainBounds | null>(null);
-  const [latLng, setLatLng] = useState<{ lat: number; lng: number } | null>(
-    null
-  );
+    sceneStatus.set("inquiry", null);
+  }, [sceneStatus]);
+  // (the site's place: set once per boot, from the tileset)
+  const latLng = useSlice(sceneStatus, "site")?.latLng ?? null;
   const live = useLiveMode(handleRef, hud.say, coarse, latLng);
   // The scene reports a manual look or move that ended live mode; the boot
   // effect below must not re-run for it, so it reads the hook through a ref.
@@ -576,9 +620,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       },
     };
   });
-  // The render stopped and the page did not recover by itself: the
-  // browser's words, for the failure card (gpu-failure-card.tsx).
-  const [gpuFailure, setGpuFailure] = useState<string | null>(null);
   /**
    * The card's buttons: a level lighter where the player stood, or not —
    * a raise on top of what the page itself raised (no `by`), so that
@@ -595,9 +636,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     const released = handleRef.current?.releaseGpu() ?? Promise.resolve();
     void released.then(() => location.reload());
   };
-  const [landcoverTiles, setLandcoverTiles] = useState<MapTile[]>([]);
-  const [landmarks, setLandmarks] = useState<Landmark[]>([]);
-  const [fps, setFps] = useState<number | null>(null);
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
   const [tab, setTab] = useState<SceneTabId>("erkunden");
@@ -627,17 +665,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       return;
     }
     setStatus({ phase: "loading" });
-    setProgress({ fractions: {}, skipped: {} });
+    sceneStatus.set("progress", NO_PROGRESS);
     setStart(pick);
   };
-  /** The site as the tileset describes it (create-app.ts `onSiteInfo`). */
-  const applySiteInfo = useCallback((info: SiteInfo) => {
-    setBounds(info.terrainBounds);
-    setProvenanceUrl(info.provenanceUrl);
-    setLatLng(info.latLng);
-    setLandcoverTiles(info.landcoverTiles);
-    setLandmarks(info.landmarks);
-  }, []);
 
   // This page's crash trail, from before the renderer exists: a page the
   // browser kills leaves its last steps for the next load (crash-trail.ts),
@@ -663,13 +693,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   // while it waited never creates one.
   const lastBoot = useRef<Promise<void>>(Promise.resolve());
 
-  const subscribePose = useCallback((cb: (pose: PlayerPose) => void) => {
-    poseListeners.current.add(cb);
-    return () => {
-      poseListeners.current.delete(cb);
-    };
-  }, []);
-
   useEffect(() => {
     const container = mountRef.current;
     if (!container) {
@@ -682,8 +705,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       return;
     }
     let cancelled = false;
-    // The render stopped for good (onFatal): its message stays.
-    let fatal = false;
     let handle: CityWalkHandle | null = null;
     let veilTimer: ReturnType<typeof setTimeout> | undefined;
     let streamFallback: ReturnType<typeof setTimeout> | undefined;
@@ -726,40 +747,15 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           initialCamera: start ? start.camera : restored?.camera,
           initialView: start?.view,
           initialDate: timeNow(),
-          onSiteInfo: (info) => {
-            if (!cancelled) {
-              startTransition(() => applySiteInfo(info));
-            }
-          },
           signal: aborter.signal,
           trail,
-          onStage: ({ id, fraction, skipped: isSkipped }) => {
-            if (cancelled) {
-              return;
-            }
-            // Deliberately NOT an urgent update. These arrive many times a second
-            // while a tile streams, and urgent work at that rate starves whatever
-            // else React has queued — including, when it was still a transition,
-            // the handover itself, which landed ten seconds late without this.
-            startTransition(() => {
-              setProgress((prev) => ({
-                fractions: { ...prev.fractions, [id]: fraction },
-                skipped: isSkipped
-                  ? { ...prev.skipped, [id]: true }
-                  : prev.skipped,
-              }));
-            });
-          },
-          onLoaded: () => {
-            if (!cancelled) {
-              updatePocDebug({ ready: true });
-            }
-          },
-          onBusy: (isBusy) => {
-            if (!cancelled) {
-              startTransition(() => setStreamingMore(isBusy));
-            }
-          },
+          // Everything the scene only reports goes to the store, for the
+          // widgets that show it (scene-status.ts) — while this boot is
+          // the page's.
+          ...sceneReports(sceneStatus, {
+            footprints: () => handleRef.current?.getFootprints(),
+            live: () => !cancelled,
+          }),
           // A loss raises the level as this page's (`by`): after its own
           // memory emergency the same incident, renewed rather than raised
           // again (gpu-safety.ts).
@@ -773,93 +769,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
             )
               ? () => location.reload()
               : null,
-          onError: (message) => {
-            // After a fatal one the render has stopped: a tile still in flight
-            // failing must not add a layer's hole under the failure card.
-            if (cancelled || fatal) {
-              return;
-            }
-            // One tile (or one tile's dressing) failed after the first frame: it
-            // leaves a hole, and the rest keeps streaming — the stages still
-            // finish on their own (a failed tile counts as done), so they are
-            // not settled here. A failure before the first frame rejects the
-            // boot instead.
-            setStreamError(layerErrorText(message));
-          },
-          onErrorCleared: () => {
-            // the tile it named came back (a fatal message stays)
-            if (!(cancelled || fatal)) {
-              setStreamError(null);
-            }
-          },
-          onFatal: (message) => {
-            if (!cancelled) {
-              fatal = true;
-              setGpuFailure(message);
-            }
-          },
-          onStats: (s) => {
-            if (cancelled) {
-              return;
-            }
-            updatePocDebug({ stats: s });
-            const h = handleRef.current;
-            startTransition(() => {
-              setStats(s);
-              if (h) {
-                setFootprints(h.getFootprints());
-              }
-            });
-          },
-          onTramStatus: (status) => {
-            if (!cancelled) {
-              startTransition(() => setTramStatus(status));
-            }
-          },
-          onTrafficHour: (status) => {
-            if (!cancelled) {
-              startTransition(() => setTrafficHour(status));
-            }
-          },
-          onBikeCounts: (counters) => {
-            if (!cancelled) {
-              startTransition(() => setBikeCounters(counters));
-            }
-          },
-          onFps: (value) => {
-            if (!cancelled) {
-              // Twice a second, read only in the Erweitert tab's counters.
-              startTransition(() => setFps(value));
-            }
-          },
           onFollowEnd: () => {
             if (!cancelled) {
               liveEnded.current();
-            }
-          },
-          onModeChange: (m) => {
-            if (!cancelled) {
-              setMode(m);
-            }
-          },
-          onModelView: (view) => {
-            if (!cancelled) {
-              // At the pose tick's rate, read by the instruments and the panel.
-              startTransition(() => setModelView(view));
-            }
-          },
-          onInquiry: (asked, met) => {
-            if (!cancelled) {
-              setInquiry(asked);
-              setAlong(met);
-            }
-          },
-          onPose: (pose) => {
-            if (cancelled) {
-              return;
-            }
-            for (const cb of poseListeners.current) {
-              cb(pose);
             }
           },
         });
@@ -899,7 +811,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           arriveAt(h, site, sayHud);
         }
         syncTime();
-        setFootprints(h.getFootprints());
+        sceneStatus.set("footprints", h.getFootprints());
         updatePocDebug({ handle: h, look, firstFrame: true });
         // The frame the scene goes live in. The loading screen stays up and
         // stops taking input: the city is now rendering behind its glass, and
@@ -941,8 +853,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       aborter.abort();
       // The card belongs to the scene that marked its building: a route
       // kept hidden (and shown again) boots a new scene without that mark.
-      setInquiry(null);
-      setAlong(null);
+      sceneStatus.set("inquiry", null);
       clearTimeout(veilTimer);
       clearTimeout(streamFallback);
       handleRef.current = null;
@@ -966,7 +877,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     timeNow,
     syncTime,
     sayHud,
-    applySiteInfo,
+    sceneStatus,
     pageTrail,
   ]);
 
@@ -1062,227 +973,179 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       "Verschattungsstudie gespeichert"
     );
 
-  const stages: LoadStageState[] = loadStageStates(
-    progress.fractions,
-    progress.skipped
-  );
-  const percent = loadPercent(progress.fractions, progress.skipped);
   const booted = status.phase === "running";
   const failure = bootFailureOf(status, supported, manifestError);
 
   return (
-    <SidebarProvider
-      className="relative h-full overflow-hidden"
-      // Open on a desktop, where there is room beside the scene, and closed on
-      // a touch device, where the panel would cover the view it describes.
-      defaultOpen={!coarse}
-      style={{ "--sidebar-width": "21.25rem" } as CSSProperties}
-    >
-      {/* Scene is full-bleed and never resized by the sidebar (which overlays
+    <SceneStatusContext value={sceneStatus}>
+      <SidebarProvider
+        className="relative h-full overflow-hidden"
+        // Open on a desktop, where there is room beside the scene, and closed on
+        // a touch device, where the panel would cover the view it describes.
+        defaultOpen={!coarse}
+        style={{ "--sidebar-width": "21.25rem" } as CSSProperties}
+      >
+        {/* Scene is full-bleed and never resized by the sidebar (which overlays
           it), so toggling the panel can't flash the canvas. */}
-      {/* No text selection or callout over the scene: a long press asks a
+        {/* No text selection or callout over the scene: a long press asks a
           building (ADR 0042), it must not also mark the HUD's text. Its own
           stacking context (isolate): the loading screen covers the scene,
           never the panel, which is open while the city loads. The cards
           that stop the page (a failed boot, a lost GPU, the crash report)
           stand outside it, over the panel too. */}
-      <div className="absolute inset-0 isolate overflow-hidden bg-[image:var(--hud-scrim)] select-none [-webkit-touch-callout:none]">
-        <div className="absolute inset-0" ref={mountRef} />
+        <div className="absolute inset-0 isolate overflow-hidden bg-[image:var(--hud-scrim)] select-none [-webkit-touch-callout:none]">
+          <div className="absolute inset-0" ref={mountRef} />
 
-        {/* Not over a failure: its card is what there is to read, and to
+          {/* Not over a failure: its card is what there is to read, and to
             click (it tries again). */}
-        {veilUp && failure === null && (
-          <ShellLoadScreen
-            destination={start?.label}
-            handedOver={status.phase === "running"}
-            percent={percent}
-            stages={stages}
-          />
-        )}
-
-        <SettingsToggle />
-
-        {exportVeil && (
-          <div
-            aria-hidden
-            className="absolute inset-0 z-10 bg-background/80 backdrop-blur-md"
-            data-testid="export-veil"
-          />
-        )}
-
-        {booted && (
-          <>
-            {/* No dot in the middle: the pointer aims (I and R act under
-                it). Only immersive mode, which hides the pointer, marks
-                the centre it aims at instead, and so does the panel's
-                demolish button while it is pointed at or focused — it acts
-                at the centre. Never on Modell's sheet. */}
-            {(immersive || aimingCentre) && mode !== "model" && (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
-              />
-            )}
-
-            {/* The loading screen, at pill size. It retires itself once the
-                last layer has landed and it has been readable for a moment. */}
-            <StreamPill busy={streamingMore} stages={stages} />
-
-            {streamError && (
-              <output
-                aria-live="polite"
-                className="pointer-events-none absolute top-15 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full bg-destructive/90 px-3 py-1 text-[11px] text-white"
-              >
-                {streamError}
-              </output>
-            )}
-
-            <LocateMessage message={hud.message} />
-            <OffsiteDialog
-              handleRef={handleRef}
-              locate={locate}
-              onTab={setTab}
+          {veilUp && failure === null && (
+            <ShellLoadScreen
+              destination={start?.label}
+              handedOver={status.phase === "running"}
             />
+          )}
 
-            {inquiry && (
+          <SettingsToggle />
+
+          {exportVeil && (
+            <div
+              aria-hidden
+              className="absolute inset-0 z-10 bg-background/80 backdrop-blur-md"
+              data-testid="export-veil"
+            />
+          )}
+
+          {booted && (
+            <>
+              <CentreMark shown={immersive || aimingCentre} />
+
+              {/* The loading screen, at pill size. It retires itself once the
+                last layer has landed and it has been readable for a moment. */}
+              <ScenePill />
+
+              <StreamErrorLine />
+
+              <LocateMessage message={hud.message} />
+              <OffsiteDialog
+                handleRef={handleRef}
+                locate={locate}
+                onTab={setTab}
+              />
+
               <InquiryPanel
-                along={along}
                 coarse={coarse}
-                inquiry={inquiry}
                 onClose={closeInquiry}
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
                 onSelect={(i) => handleRef.current?.selectCandidate(i)}
-                provenanceUrl={provenanceUrl}
               />
-            )}
-            <SceneOverlays
-              coarse={coarse}
-              covered={coarse && inquiry !== null}
-              live={live}
-              locate={locate}
-              mode={mode}
-              modelView={modelView}
-              onClimb={(v) => handleRef.current?.setClimbInput(v)}
-              onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
-              onNorth={() => handleRef.current?.turnModelTo(0)}
-              onToggleMode={() =>
-                handleRef.current?.setMovementMode(
-                  mode === "fly" ? "walk" : "fly"
-                )
-              }
-              onToggleModel={() => handleRef.current?.toggleModel()}
-              onTurn={(deg) => handleRef.current?.turnModel(deg)}
-            />
-          </>
-        )}
-      </div>
+              <SceneOverlays
+                coarse={coarse}
+                live={live}
+                locate={locate}
+                onClimb={(v) => handleRef.current?.setClimbInput(v)}
+                onMovementMode={(m) => handleRef.current?.setMovementMode(m)}
+                onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
+                onNorth={() => handleRef.current?.turnModelTo(0)}
+                onToggleModel={() => handleRef.current?.toggleModel()}
+                onTurn={(deg) => handleRef.current?.turnModel(deg)}
+              />
+            </>
+          )}
+        </div>
 
-      <CrashReport />
+        <CrashReport />
 
-      {gpuFailure !== null && (
-        <GpuFailureCard
-          detail={gpuFailure}
+        <GpuFailure
           onLighter={() => reloadAfterFailure(true)}
           onReload={() => reloadAfterFailure(false)}
         />
-      )}
 
-      {failure && (
-        <BootError message={failure.message} onRetry={failure.onRetry} />
-      )}
+        {failure && (
+          <BootError message={failure.message} onRetry={failure.onRetry} />
+        )}
 
-      <SceneSidebar
-        dataLayerDetail={{
-          bikeLayer: (
-            <BikeCountList
-              counters={bikeCounters}
-              onFly={(c) =>
-                goTo({
-                  label: c.name,
-                  view: overlook(c, {
-                    altitude: 45,
-                    description: c.where,
-                    headingDeg: 0,
-                    id: c.id,
+        <SceneSidebar
+          dataLayerDetail={{
+            bikeLayer: (
+              <BikeCountList
+                onFly={(c) =>
+                  goTo({
                     label: c.name,
-                    pitchDeg: -30,
-                  }),
-                })
-              }
-            />
-          ),
-          trafficLayer: <TrafficHourLine status={trafficHour} />,
-          tramLayer: <TramStatusLine status={tramStatus} />,
-        }}
-        applySnapshot={applySnapshot}
-        bounds={bounds}
-        canTravel={supported}
-        coarse={coarse}
-        onAimCentre={setAimingCentre}
-        copySnapshot={copySnapshot}
-        day={time.day}
-        footprints={footprints}
-        fps={fps}
-        handleRef={handleRef}
-        landcoverTiles={landcoverTiles}
-        landmarks={landmarks}
-        latLng={latLng}
-        look={lookValues}
-        minutes={time.minutes}
-        mode={mode}
-        modelView={modelView}
-        onLook={look.set}
-        onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
-        onExport={exportImage}
-        onStudy={exportStudy}
-        onTab={setTab}
-        onTeleport={(x, y) => {
-          const h = handleRef.current;
-          if (h) {
-            h.glideToSpot(x, y);
-            return;
+                    view: overlook(c, {
+                      altitude: 45,
+                      description: c.where,
+                      headingDeg: 0,
+                      id: c.id,
+                      label: c.name,
+                      pitchDeg: -30,
+                    }),
+                  })
+                }
+              />
+            ),
+            trafficLayer: <TrafficHourLine />,
+            tramLayer: <TramStatusLine />,
+          }}
+          applySnapshot={applySnapshot}
+          canTravel={supported}
+          coarse={coarse}
+          onAimCentre={setAimingCentre}
+          copySnapshot={copySnapshot}
+          day={time.day}
+          handleRef={handleRef}
+          look={lookValues}
+          minutes={time.minutes}
+          onLook={look.set}
+          onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
+          onExport={exportImage}
+          onStudy={exportStudy}
+          onTab={setTab}
+          onTeleport={(x, y) => {
+            const h = handleRef.current;
+            if (h) {
+              h.glideToSpot(x, y);
+              return;
+            }
+            // On foot there, looking the way the spawn looks.
+            const { fov, headingDeg } = spawnViewpoint(site);
+            goTo({
+              label: "Punkt auf der Karte",
+              view: {
+                aboveGround: EYE_HEIGHT,
+                epsg: { x, y },
+                fov,
+                headingDeg,
+                mode: "walk",
+                pitchDeg: 0,
+              },
+            });
+          }}
+          onTravel={(view, label) =>
+            goTo({ label: label ?? "Gemerkte Ansicht", view })
           }
-          // On foot there, looking the way the spawn looks.
-          const { fov, headingDeg } = spawnViewpoint(site);
-          goTo({
-            label: "Punkt auf der Karte",
-            view: {
-              aboveGround: EYE_HEIGHT,
-              epsg: { x, y },
-              fov,
-              headingDeg,
-              mode: "walk",
-              pitchDeg: 0,
-            },
-          });
-        }}
-        onTravel={(view, label) =>
-          goTo({ label: label ?? "Gemerkte Ansicht", view })
-        }
-        previewSun={time.preview}
-        ready={booted}
-        rememberedView={rememberedView}
-        // The fog and the crowns' switch go back to their defaults; the
-        // picture style and the data layers are choices of their own, and
-        // stay.
-        resetLook={() =>
-          look.set({
-            ...LOOK_DEFAULTS,
-            ...dataLayersOf(look.get()),
-            style: look.get().style,
-          })
-        }
-        setRememberedView={setRememberedView}
-        setSnapshotText={setSnapshotText}
-        snapshotMsg={snapshotMsg}
-        snapshotText={snapshotText}
-        stats={stats}
-        subscribePose={subscribePose}
-        sun={time.sun}
-        tab={tab}
-        updateSun={time.set}
-      />
-    </SidebarProvider>
+          previewSun={time.preview}
+          ready={booted}
+          rememberedView={rememberedView}
+          // The fog and the crowns' switch go back to their defaults; the
+          // picture style and the data layers are choices of their own, and
+          // stay.
+          resetLook={() =>
+            look.set({
+              ...LOOK_DEFAULTS,
+              ...dataLayersOf(look.get()),
+              style: look.get().style,
+            })
+          }
+          setRememberedView={setRememberedView}
+          setSnapshotText={setSnapshotText}
+          snapshotMsg={snapshotMsg}
+          snapshotText={snapshotText}
+          sun={time.sun}
+          tab={tab}
+          updateSun={time.set}
+        />
+      </SidebarProvider>
+    </SceneStatusContext>
   );
 }
 
@@ -1292,22 +1155,22 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
  * with the chips above it. The tap's ring either way.
  */
 function InquiryPanel({
-  along,
   coarse,
-  inquiry,
   onClose,
   onPreview,
   onSelect,
-  provenanceUrl,
 }: {
-  along: InquiryAlong | null;
   coarse: boolean;
-  inquiry: Inquiry;
   onClose: () => void;
   onPreview: (index: number | null) => void;
   onSelect: (index: number) => void;
-  provenanceUrl: string | null;
 }) {
+  const asked = useSceneStatus("inquiry");
+  const provenanceUrl = useSceneStatus("site")?.provenanceUrl ?? null;
+  if (!asked) {
+    return null;
+  }
+  const { along, inquiry } = asked;
   const strip = along && (
     <InquiryStrip
       along={along}
