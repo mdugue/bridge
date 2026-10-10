@@ -5,6 +5,10 @@
  * prepare-data.ts runs as **warmers** that only fill the bake cache for one
  * of its tiles, before one plain run finds everything cached and publishes.
  *
+ *  0. the plain run with `--if-cached`: when every entry is cached it
+ *     publishes, and that is all (a warm build runs no warmer); at the
+ *     first entry it would bake it stops (`NOT_CACHED`), and the warmers
+ *     follow;
  *  1. `--warm-ground=<first tile>` alone: the site-wide values every later
  *     process reads (the frame, the line levels) and that tile's fine ground;
  *  2. `--warm-ground=<tile>` for each other tile: its fine ground, which
@@ -25,10 +29,13 @@ export const WARM_ABOVE = 4;
 
 const WARM_GROUND = "--warm-ground=";
 const WARM_TILES = "--warm=";
+const IF_CACHED = "--if-cached";
+/** prepare-data.ts's exit code when `--if-cached` met an entry not cached. */
+export const NOT_CACHED = 3;
 
 /** What one prepare-data.ts run does. */
 export type BakeMode =
-  | { kind: "publish" }
+  | { kind: "publish"; ifCached: boolean }
   | { kind: "ground"; tiles: string[] }
   | { kind: "tiles"; tiles: string[] };
 
@@ -37,8 +44,8 @@ export function bakeMode(
   args: readonly string[],
   siteTiles: readonly string[]
 ): BakeMode {
-  if (args.length === 0) {
-    return { kind: "publish" };
+  if (args.length === 0 || (args.length === 1 && args[0] === IF_CACHED)) {
+    return { kind: "publish", ifCached: args.length === 1 };
   }
   const [arg] = args;
   const kind = arg.startsWith(WARM_GROUND)
@@ -48,7 +55,7 @@ export function bakeMode(
       : null;
   if (args.length > 1 || kind === null) {
     throw new Error(
-      `unknown arguments "${args.join(" ")}"; a warmer takes one ${WARM_GROUND}<tile>,… or ${WARM_TILES}<tile>,…`
+      `unknown arguments "${args.join(" ")}"; a warmer takes one ${WARM_GROUND}<tile>,… or ${WARM_TILES}<tile>,…, a plain run ${IF_CACHED}`
     );
   }
   const tiles = arg.slice(arg.indexOf("=") + 1).split(",");
@@ -79,7 +86,11 @@ export interface BakeRun {
   peak: number;
 }
 
-/** A large site's bake, step by step; a step's runs may go side by side. */
+/** Step 0: the plain run, if every entry is cached. */
+export const IF_CACHED_RUN: BakeRun = { args: [IF_CACHED], peak: PROCESS_PEAK };
+
+/** A large site's bake after step 0, step by step; a step's runs may go
+ *  side by side. */
 export function warmSteps(tiles: readonly string[]): BakeRun[][] {
   const [first, ...rest] = tiles;
   const ground = (tile: string) => ({

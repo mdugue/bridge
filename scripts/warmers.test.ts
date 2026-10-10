@@ -12,7 +12,11 @@ const TILES = ["a", "b", "c", "d", "e"];
 
 describe("bakeMode", () => {
   test("reads a warmer's tiles, and publishes without one", () => {
-    expect(bakeMode([], TILES)).toEqual({ kind: "publish" });
+    expect(bakeMode([], TILES)).toEqual({ kind: "publish", ifCached: false });
+    expect(bakeMode(["--if-cached"], TILES)).toEqual({
+      kind: "publish",
+      ifCached: true,
+    });
     expect(bakeMode(["--warm-ground=a,c"], TILES)).toEqual({
       kind: "ground",
       tiles: ["a", "c"],
@@ -27,6 +31,9 @@ describe("bakeMode", () => {
     expect(() => bakeMode(["--warm=a,x"], TILES)).toThrow("x");
     expect(() => bakeMode(["--warm=a", "b"], TILES)).toThrow("unknown");
     expect(() => bakeMode(["--warm-grounds=a"], TILES)).toThrow("unknown");
+    expect(() => bakeMode(["--if-cached", "--warm=a"], TILES)).toThrow(
+      "unknown"
+    );
   });
 });
 

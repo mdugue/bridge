@@ -37,6 +37,8 @@ import { type SiteId, SITES, siteById } from "../sites";
 import {
   bakeLimits,
   createSlots,
+  IF_CACHED_RUN,
+  NOT_CACHED,
   PROCESS_PEAK,
   WARM_ABOVE,
   warmSteps,
@@ -104,6 +106,12 @@ async function prepareAll(
     const tiles = tileIds(SITES[id]);
     if (tiles.length <= WARM_ABOVE) {
       return (await slots.run(0, PROCESS_PEAK, () => prepare(id, []))) === 0;
+    }
+    const warm = await slots.run(1, IF_CACHED_RUN.peak, () =>
+      prepare(id, IF_CACHED_RUN.args)
+    );
+    if (warm !== NOT_CACHED) {
+      return warm === 0;
     }
     for (const step of warmSteps(tiles)) {
       const codes = await Promise.all(

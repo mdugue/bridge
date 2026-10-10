@@ -119,7 +119,7 @@ import {
   tramTimetableSource,
 } from "../lib/city/tram-timetable";
 import { siteFromArgs } from "../sites";
-import { bakeMode } from "./warmers";
+import { bakeMode, NOT_CACHED } from "./warmers";
 import {
   type BakedCityMesh,
   bakeCityMesh,
@@ -377,6 +377,14 @@ const GROUND_BAKE = [
  */
 const siteWide = (name: string) => `${SITE.id}.${name}`;
 
+/** `--if-cached` (warmers.ts) stops at the first entry it would bake. */
+function mayBake(name: string): void {
+  if (MODE.kind === "publish" && MODE.ifCached) {
+    log(`${name} is not cached: the warmers bake the site`);
+    process.exit(NOT_CACHED);
+  }
+}
+
 /** The cached bytes for `key`, or the baked ones (then cached: one entry
  *  per name, written whole — bake-cache.ts). */
 async function cached(
@@ -388,6 +396,7 @@ async function cached(
   if (path) {
     return readFileSync(path);
   }
+  mayBake(name);
   const bytes = await bake();
   writeEntry(CACHE_DIR, name, key, bytes);
   return bytes;
@@ -400,10 +409,12 @@ async function cachedFile(
   key: string,
   bake: () => Promise<Uint8Array> | Uint8Array
 ): Promise<string> {
-  return (
-    cachedEntry(CACHE_DIR, name, key) ??
-    writeEntry(CACHE_DIR, name, key, await bake())
-  );
+  const path = cachedEntry(CACHE_DIR, name, key);
+  if (path) {
+    return path;
+  }
+  mayBake(name);
+  return writeEntry(CACHE_DIR, name, key, await bake());
 }
 
 // --- 1. side files --------------------------------------------------------------
