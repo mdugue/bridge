@@ -62,7 +62,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  type FocusMode,
   LOOK_CONTROLS,
   type LookGroup,
   lookPatch,
@@ -148,7 +147,7 @@ const LOOK_GROUPS: {
   {
     group: "rendering",
     icon: SparklesIcon,
-    note: "Tiefenschärfe & Korn",
+    note: "Schatten & Korn",
     title: "Rendering",
   },
 ];
@@ -176,26 +175,18 @@ function sunTimeLabel(arrow: string, date: Date | null | undefined): string {
     : `${arrow} –`;
 }
 
-/** A labelled 0–100(+) percent slider that writes straight to the look store. */
+/** A labelled 0–100 percent slider that writes straight to the look store. */
 function PctSlider({
   description,
   id,
   label,
-  max = 100,
-  min = 0,
   onChange,
-  step = 1,
-  unit = "%",
   value,
 }: {
   description?: ReactNode;
   id: string;
   label: string;
-  max?: number;
-  min?: number;
   onChange: (value: number) => void;
-  step?: number;
-  unit?: string;
   value: number;
 }) {
   return (
@@ -203,15 +194,15 @@ function PctSlider({
       <FieldLabel className="justify-between font-medium text-xs" htmlFor={id}>
         {label}
         <span className="font-mono font-normal text-[11px] text-muted-foreground tabular-nums">
-          {value} {unit}
+          {value} %
         </span>
       </FieldLabel>
       <Slider
         id={id}
-        max={max}
-        min={min}
+        max={100}
+        min={0}
         onValueChange={(v) => onChange(Number(Array.isArray(v) ? v[0] : v))}
-        step={step}
+        step={1}
         value={[value]}
       />
       {description ? (
@@ -249,111 +240,10 @@ function LookSliders({
   );
 }
 
-/** DoF focus controls (mode toggle + manual distance); null when DoF is off. */
-function FocusControls({
-  distance,
-  enabled,
-  mode,
-  onDistance,
-  onMode,
-}: {
-  distance: number;
-  enabled: boolean;
-  mode: FocusMode;
-  onDistance: (meters: number) => void;
-  onMode: (mode: FocusMode) => void;
-}) {
-  if (!enabled) {
-    return null;
-  }
-  return (
-    <>
-      <Field>
-        <FieldLabel className="font-medium text-xs" htmlFor="focus-mode">
-          Fokus
-        </FieldLabel>
-        <ToggleGroup
-          className="w-full"
-          id="focus-mode"
-          onValueChange={(value: string[]) => {
-            const next = value[0] as FocusMode | undefined;
-            if (next) {
-              onMode(next);
-            }
-          }}
-          size="sm"
-          value={[mode]}
-          variant="outline"
-        >
-          <ToggleGroupItem className="flex-1" value="auto">
-            Automatisch
-          </ToggleGroupItem>
-          <ToggleGroupItem className="flex-1" value="manual">
-            Manuell
-          </ToggleGroupItem>
-        </ToggleGroup>
-        <FieldDescription className="text-[11px] leading-snug">
-          {mode === "auto"
-            ? "Scharf auf das, was in der Bildmitte liegt"
-            : "Feste Fokusdistanz — als Ring auf der Minikarte"}
-        </FieldDescription>
-      </Field>
-      {mode === "manual" && (
-        <PctSlider
-          id="focus-distance"
-          label="Fokusdistanz"
-          max={3000}
-          min={1}
-          onChange={onDistance}
-          step={5}
-          unit=" m"
-          value={distance}
-        />
-      )}
-    </>
-  );
-}
-
-/**
- * The lens blur's switch and its focus. Not shown where the device builds
- * no lens blur (a phone, scene-profile.ts `PostProfile.dof`): the look
- * keeps its value, and a snapshot taken there still carries it.
- */
-function DepthOfFieldControls({
-  look,
-  onLook,
-}: {
-  look: LookValues;
-  onLook: (patch: Partial<LookValues>) => void;
-}) {
-  return (
-    <>
-      <Field orientation="horizontal">
-        <FieldLabel className="font-medium text-xs" htmlFor="depth-of-field">
-          Tiefenschärfe
-        </FieldLabel>
-        <Switch
-          checked={look.dof}
-          id="depth-of-field"
-          onCheckedChange={(checked) => onLook({ dof: checked })}
-          size="sm"
-        />
-      </Field>
-      <FocusControls
-        distance={look.focusDistanceM}
-        enabled={look.dof}
-        mode={look.focusMode}
-        onDistance={(m) => onLook({ focusDistanceM: m })}
-        onMode={(m) => onLook({ focusMode: m })}
-      />
-    </>
-  );
-}
-
 /**
  * The picture style: five swatch cards, exactly one pressed — the same
- * single-value ToggleGroup as walk/fly and the focus mode, so the keyboard
- * moves through it the same way.
+ * single-value ToggleGroup as walk/fly, so the keyboard moves through it
+ * the same way.
  */
 function StylePicker({
   onStyle,
@@ -441,14 +331,12 @@ function LookGroupRow({
 /** The minimap card: click to teleport, the blue dot is you. */
 function MinimapCard({
   bounds,
-  focusRingM,
   footprints,
   landcoverTiles,
   onTeleport,
   subscribePose,
 }: {
   bounds: TerrainBounds;
-  focusRingM: number | null;
   footprints: FootprintPoly[];
   landcoverTiles: MapTile[];
   onTeleport: (epsgX: number, epsgY: number) => void;
@@ -478,7 +366,6 @@ function MinimapCard({
         {size > 0 && (
           <Minimap
             bounds={bounds}
-            focusRingM={focusRingM}
             footprints={footprints}
             landcoverTiles={landcoverTiles}
             onTeleport={onTeleport}
@@ -888,12 +775,6 @@ export interface SceneSidebarProps {
   /** the site's landmarks (Wikidata), most notable first */
   landmarks: Landmark[];
   latLng: { lat: number; lng: number } | null;
-  /**
-   * Whether the scene has a lens blur — the budget it was built with
-   * (scene-profile.ts `postProfileFor`), not the pointer as it is now: a
-   * keyboard detached after the boot leaves the blur on, and its switch.
-   */
-  lensBlur: boolean;
   look: LookValues;
   minutes: number;
   mode: ViewMode;
@@ -941,7 +822,7 @@ export interface SceneSidebarProps {
 
 export function SceneSidebar(props: SceneSidebarProps) {
   const { toggleSidebar } = useSidebar();
-  const { handleRef, lensBlur, look, onLook } = props;
+  const { handleRef, look, onLook } = props;
   const site = useSite();
   const places = useMemo(
     () => sitePlaces(site.viewpoints, props.landmarks, site.name),
@@ -980,11 +861,6 @@ export function SceneSidebar(props: SceneSidebarProps) {
             {props.bounds && (
               <MinimapCard
                 bounds={props.bounds}
-                focusRingM={
-                  lensBlur && look.dof && look.focusMode === "manual"
-                    ? look.focusDistanceM
-                    : null
-                }
                 footprints={props.footprints}
                 landcoverTiles={props.landcoverTiles}
                 onTeleport={props.onTeleport}
@@ -1095,9 +971,6 @@ export function SceneSidebar(props: SceneSidebarProps) {
                         size="sm"
                       />
                     </Field>
-                  )}
-                  {group === "rendering" && lensBlur && (
-                    <DepthOfFieldControls look={look} onLook={onLook} />
                   )}
                 </LookGroupRow>
               ))}

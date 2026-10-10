@@ -1212,19 +1212,17 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
    * batched together rather than spent one per frame.
    */
   test("post and shader controls survive real frames", async () => {
-    const CONTROL_STEPS = 10;
+    const CONTROL_STEPS = 9;
     for (let i = 0; i < CONTROL_STEPS; i++) {
       await page.evaluate((index) => {
         // Driven through the look store the sliders write to — one set() per
         // step is one batch of uniform writes.
         const look = window.__poc?.look;
         const steps: Array<() => void> = [
-          () => look?.set({ dof: false }),
           // Post-stack uniforms compile nothing, so they share two steps: one
           // at full strength, one back down.
           () =>
             look?.set({
-              dof: true,
               fogAmount: 1,
               grading: 1,
               contact: 1,

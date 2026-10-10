@@ -79,7 +79,7 @@ import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { ModelInstruments } from "./model-instruments";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { updatePocDebug } from "./poc-debug";
-import { postProfileFor, type SceneBudget } from "./scene-profile";
+import type { SceneBudget } from "./scene-profile";
 import {
   overlook,
   spawnViewpoint,
@@ -1238,7 +1238,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         landcoverTiles={landcoverTiles}
         landmarks={landmarks}
         latLng={latLng}
-        lensBlur={postProfileFor(budget.tier).dof}
         look={lookValues}
         minutes={time.minutes}
         mode={mode}

@@ -26,8 +26,8 @@ export interface LookState {
 
 /**
  * The part of a patch the scene accepts: percent rows clamped to [0, 1],
- * the focus distance to ≥ 1 m, the flags as they are, the style only when it
- * names one. Non-finite numbers, unknown styles and unknown keys are dropped.
+ * the flags as they are, the style only when it names one. Non-finite
+ * numbers, unknown styles and unknown keys are dropped.
  */
 export function clampLook(patch: Partial<LookValues>): Partial<LookValues> {
   const out: Partial<LookValues> = {};
@@ -36,16 +36,6 @@ export function clampLook(patch: Partial<LookValues>): Partial<LookValues> {
     if (typeof value === "number" && Number.isFinite(value)) {
       out[def.key] = Math.min(Math.max(value, 0), 1);
     }
-  }
-  const distance = patch.focusDistanceM;
-  if (typeof distance === "number" && Number.isFinite(distance)) {
-    out.focusDistanceM = Math.max(distance, 1);
-  }
-  if (patch.dof !== undefined) {
-    out.dof = patch.dof;
-  }
-  if (patch.focusMode !== undefined) {
-    out.focusMode = patch.focusMode;
   }
   if (patch.multiTuft !== undefined) {
     out.multiTuft = patch.multiTuft;

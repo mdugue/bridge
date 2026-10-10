@@ -166,8 +166,6 @@ function drawPictureFrame(
 
 interface MinimapProps {
   bounds: TerrainBounds;
-  /** manual DoF focus distance (m) to draw as a ring around the player; null = off */
-  focusRingM?: number | null;
   footprints: FootprintPoly[];
   /** per-tile land-cover class PNGs + their EPSG bounds, drawn as
    *  background, and each tile's bridge decks over them */
@@ -235,7 +233,6 @@ function setupCanvas(
  */
 export function Minimap({
   bounds,
-  focusRingM,
   footprints,
   landcoverTiles,
   onTeleport,
@@ -246,12 +243,6 @@ export function Minimap({
   const height = mapHeightPx(bounds, size);
   const staticRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
-  // Read by the pose callback so the ring tracks the slider without re-subscribing
-  // (synced in an effect — refs must not be written during render).
-  const focusRingRef = useRef<number | null>(null);
-  useEffect(() => {
-    focusRingRef.current = focusRingM ?? null;
-  }, [focusRingM]);
 
   // Decoded + recoloured land-cover tiles, kept for the life of the component:
   // one 512² PNG per site tile (the tileset's `minimap` raster) is cheap once
@@ -354,19 +345,6 @@ export function Minimap({
       ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-
-      // Manual DoF focus ring: a dashed circle at the focus distance.
-      const ring = focusRingRef.current;
-      if (ring && ring > 0) {
-        const pxPerM = size / Math.max(bounds[2] - bounds[0], 1);
-        ctx.strokeStyle = "rgba(37, 99, 235, 0.6)";
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
-        ctx.beginPath();
-        ctx.arc(px, py, ring * pxPerM, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
     });
   }, [subscribePose, bounds, size, height]);
 

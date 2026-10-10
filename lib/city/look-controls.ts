@@ -51,9 +51,6 @@ export type LookKey =
   | SceneLookKey
   | VegetationLookKey;
 
-/** Depth-of-field focus: "auto" tracks the crosshair, "manual" uses a fixed distance. */
-export type FocusMode = "auto" | "manual";
-
 export interface LookControlDef {
   /** slider help text (also the row's documentation) */
   description?: string;
@@ -75,16 +72,13 @@ export interface LookControlDef {
 /**
  * Every look value the scene renders with, as the scene consumes it: the
  * table rows as 0..1 floats (percent is only how the HUD and the snapshot
- * show them), the five controls that are not percent sliders, and one flag
- * per data layer (data-layers.ts).
+ * show them), the two controls that are not percent sliders, and one flag
+ * per data layer (data-layers.ts). The depth of field (autofocus), the
+ * river mist and the crowns' gust brightening are no controls any more:
+ * fixed at what their controls defaulted to.
  */
 export interface LookValues
   extends Record<LookKey, number>, Record<DataLayerKey, boolean> {
-  /** photographic depth of field with crosshair autofocus */
-  dof: boolean;
-  /** manual focus distance (m), used when focusMode is "manual" */
-  focusDistanceM: number;
-  focusMode: FocusMode;
   /** rich multi-tuft crown near the camera (LOD); off = cheap crown everywhere */
   multiTuft: boolean;
   /** the picture style (render-style.ts): pastel, comic, film noir, Sin City, Papier */
@@ -353,15 +347,12 @@ export const LOOK_BY_KEY: Readonly<Record<LookKey, LookControlDef>> =
     LookControlDef
   >;
 
-/** What the scene boots with: each row's `initial` plus the five flags,
+/** What the scene boots with: each row's `initial` plus the two flags,
  *  every data layer off. */
 export const LOOK_DEFAULTS: Readonly<LookValues> = Object.freeze<LookValues>({
   ...(Object.fromEntries(
     LOOK_CONTROLS.map((def) => [def.key, def.initial])
   ) as Record<LookKey, number>),
-  dof: true,
-  focusMode: "auto",
-  focusDistanceM: 40,
   multiTuft: true,
   style: DEFAULT_RENDER_STYLE,
   ...DATA_LAYER_DEFAULTS,

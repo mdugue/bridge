@@ -411,7 +411,7 @@ zuletzt gewählten Stil für den nächsten Besuch:
 
 In den grafischen Stilen *Comic*, *Sin City*, *Strich* und *Schwarzplan*
 ruht die Tiefenschärfe (ein unscharfer Hintergrund unter scharfen Linien
-wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
+wirkt wie ein Fehler).
 
 | Gruppe | Regler | Was er tut |
 |---|---|---|
@@ -442,16 +442,16 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Spiegelung* | der Himmel spiegelt sich in Glasfassaden, Vergoldungen und im Wasser; nur der Himmel, nicht die Häuser gegenüber |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
-| | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe, nur hinter dem Fokus (der Vordergrund bleibt scharf); *Auto* fokussiert auf die Bildmitte, *Manuell* auf eine feste Entfernung; auf Telefonen nicht angeboten |
 
-Der Nebel über dem Fluss hat keinen Regler: Er treibt erst ab etwa 120 m
-vor dir über dem Wasser, dichter erst in der Ferne.
-
-Solange sich die Kamera bewegt, ist die Tiefenschärfe-Unschärfe
+Zwei Effekte haben gar keinen Regler. Der Nebel über dem Fluss treibt
+erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der Ferne.
+Die fotografische Tiefenschärfe macht nur unscharf, was hinter dem Fokus
+liegt (der Vordergrund bleibt scharf), und scharf ist immer, was in der
+Bildmitte liegt. Solange sich die Kamera bewegt, ist die Unschärfe
 abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
-zurück, sobald du stehst. Telefone bieten den Schalter gar nicht an: Die
-Unschärfe braucht mehr Grafikspeicher, als ein Telefon für einen Hauch
-erübrigen kann, den ein kleiner Bildschirm kaum zeigt.
+zurück, sobald du stehst. Telefone zeichnen ohne sie: Die Unschärfe
+braucht mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen
+kann, den ein kleiner Bildschirm kaum zeigt.
 
 ### Erweitert
 
@@ -484,8 +484,8 @@ der erst beim Klick etwas von Ko-fi lädt.
 - Goldene Stunde (Sonne wenige Grad über dem Horizont) und blaue Stunde
   (wenige Grad darunter) geben die reichsten Farben; probiere 07:00 oder
   20:00 im Sommer.
-- Auf einem Laptop ohne eigene Grafikkarte senke *Kontaktschatten* und
-  schalte *Tiefenschärfe* aus, um mehr Bilder pro Sekunde zu bekommen.
+- Auf einem Laptop ohne eigene Grafikkarte senke *Kontaktschatten*, um
+  mehr Bilder pro Sekunde zu bekommen.
 - `?scene=lite` hinter der Adresse der Stadt (`/dresden?scene=lite`)
   streamt nur die Startkachel, mit groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
   die Szene aussehen soll.

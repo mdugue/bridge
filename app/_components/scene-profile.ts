@@ -308,8 +308,8 @@ export interface PostProfile {
    * Whether depth of field exists at all. Its pass holds six targets and
    * a full-resolution copy of its input (23 MB at an iPhone's 603×1311
    * drawing buffer) from the first frame, standing still or not — for a
-   * lens hint a six-inch screen barely shows. Off: the HUD hides its switch,
-   * the look keeps its value.
+   * lens hint a six-inch screen barely shows. Off: a phone draws without
+   * it (there is no switch for it anywhere).
    */
   dof: boolean;
   /**

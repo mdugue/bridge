@@ -27,15 +27,12 @@ test("set notifies once per change with the new values, never for a no-op", () =
   expect(seen).toEqual([0.5]);
 });
 
-test("clampLook keeps percent rows inside [0, 1] and the focus distance at 1 m or more", () => {
+test("clampLook keeps percent rows inside [0, 1] and the flags as they are", () => {
   expect(clampLook({ fogAmount: 1.5, grain: -1 })).toEqual({
     fogAmount: 1,
     grain: 0,
   });
-  expect(clampLook({ focusDistanceM: 0 })).toEqual({ focusDistanceM: 1 });
-  expect(
-    clampLook({ dof: false, focusMode: "manual", multiTuft: false })
-  ).toEqual({ dof: false, focusMode: "manual", multiTuft: false });
+  expect(clampLook({ multiTuft: false })).toEqual({ multiTuft: false });
 });
 
 test("clampLook keeps the data layers' flags and drops anything else there", () => {
@@ -60,7 +57,7 @@ test("clampLook keeps a known style and drops an unknown one", () => {
 
 test("non-finite numbers and unknown keys are dropped", () => {
   const look = createLookState();
-  look.set({ fogAmount: Number.NaN, focusDistanceM: Number.POSITIVE_INFINITY });
+  look.set({ fogAmount: Number.NaN, grain: Number.POSITIVE_INFINITY });
   look.set({ sparkle: 1 } as unknown as Partial<LookValues>);
   expect(look.get()).toEqual(LOOK_DEFAULTS);
 });

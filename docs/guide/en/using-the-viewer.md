@@ -386,7 +386,7 @@ next visit:
 
 In the graphic styles *Comic*, *Sin City*, *Strich* and *Schwarzplan* the
 depth of field rests (a blurred background under crisp lines reads as a
-mistake); the switch stays as you set it.
+mistake).
 
 | Group | Slider | What it does |
 |---|---|---|
@@ -417,15 +417,15 @@ mistake); the switch stays as you set it.
 | | *Spiegelung* | the sky mirrored in glass facades, gilding and water; the sky only, not the buildings across the street |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
-| | *Tiefenschärfe* (switch) | photographic depth of field, only behind the focus (the foreground stays sharp); *Auto* focuses on the centre of the view, *Manuell* on a fixed distance; not offered on phones |
 
-The mist over the river has no slider: it drifts over the water from about
-120 m ahead, denser only far off.
-
-While the camera moves, the depth-of-field blur is switched off (the eye
-cannot resolve it in motion) and comes back when you stop. Phones do not
-offer the switch at all: the blur needs more graphics memory than a phone
-can spare for a hint a small screen barely shows.
+Two effects have no control at all. The mist over the river drifts over
+the water from about 120 m ahead, denser only far off. The photographic
+depth of field blurs only what lies behind the focus (the foreground stays
+sharp), and the focus is always what lies at the centre of the view. While
+the camera moves, the blur is switched off (the eye cannot resolve it in
+motion) and comes back when you stop. Phones draw without it: the blur
+needs more graphics memory than a phone can spare for a hint a small
+screen barely shows.
 
 ### Erweitert ("Advanced")
 
@@ -457,7 +457,7 @@ until it is clicked.
 - Golden hour (sun a few degrees above the horizon) and blue hour (a few
   degrees below) give the richest colours; try 07:00 or 20:00 in summer.
 - On a laptop without a discrete graphics card, lower *Kontaktschatten*
-  and switch off *Tiefenschärfe* for a higher frame rate.
+  for a higher frame rate.
 - `?scene=lite` after the city's address (`/dresden?scene=lite`) streams
   only the start tile, with coarse shadows. It exists for automated tests
   and is not how the scene is meant to look.

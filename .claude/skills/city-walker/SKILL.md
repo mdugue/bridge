@@ -760,7 +760,7 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
               "headingDeg": 0, "pitchDeg": 0, "fov": 55 },
   "date": "2026-06-15T08:30:00.000Z",
   "look": { "fogPct":35,"gradingPct":50,
-            "contactPct":50,"grainPct":25,"dof":true } }
+            "contactPct":50,"grainPct":25,"style":"pastel" } }
 ```
 
 ### The `lite` scene profile (headless e2e only)
