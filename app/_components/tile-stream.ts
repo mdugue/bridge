@@ -525,9 +525,18 @@ export const MESHOPT_WORKERS: Readonly<Record<DeviceTier, number>> = {
   desktop: 2,
   mobile: 1,
 };
-/** How long a level may wait on its dressing while the tile's other level
- *  stands in for it (DressingPlugin.handsOver) before it shows regardless. */
-const HAND_OVER_WAIT_MS = 10_000;
+/**
+ * How long a level may wait on its dressing while the tile's other level
+ * stands in for it (DressingPlugin.handsOver): the wait holds one of the
+ * renderer's parse slots (processTileModel runs inside the parse job), and
+ * dressings build one at a time. A phone has two slots: it shows the level
+ * bare and dresses it after (the trees appear a moment later); a desktop
+ * waits a little, so most hand-overs still swap the trees in one frame.
+ * (It was 10 s on every tier: a phone's stream stood still behind it.)
+ */
+export function handOverWaitMs(tier: DeviceTier): number {
+  return tier === "mobile" ? 0 : 1500;
+}
 
 function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
   return Promise.race([
@@ -1465,18 +1474,20 @@ export class DressingPlugin {
   }
 
   /** ...and, where a level takes over from its tile's other level, its
-   *  dressing with it (handsOver) — for as long as a parse slot may wait. */
+   *  dressing with it (handsOver) — for as long as a parse slot may wait
+   *  on this tier (`handOverWaitMs`; a phone's not at all). */
   private async waitHandOver(
     scene: Object3D,
     extras: TerrainExtras,
     dressed: Promise<void>
   ): Promise<void> {
-    if (this.released.has(scene) || !this.handsOver(extras)) {
+    const wait = handOverWaitMs(this.ctx.tier);
+    if (wait === 0 || this.released.has(scene) || !this.handsOver(extras)) {
       return;
     }
     await streamTimings.timed(
       "tile:handover-wait",
-      () => withinWait(dressed, HAND_OVER_WAIT_MS),
+      () => withinWait(dressed, wait),
       extras.tileId
     );
   }

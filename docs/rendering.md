@@ -989,13 +989,21 @@ second phase) and is built one tile at a time. A tile with nothing on
 screen shows at once, bare, and is dressed after; a terrain level that
 takes over from its tile's other level on screen — the fine one replacing
 the coarse one as the view comes closer, or back — is loaded only once
-its dressing is built and compiled too (`handsOver`, at most 10 s), and
+its dressing is built and compiled too (`handsOver`), and
 the dressing hangs on it in the task the renderer records it, before any
 frame. The renderer keeps the old level drawn until the new one is loaded
 (3D Tiles' REPLACE refinement, both ways), so one level's trees, lamps
 and bridges leave in the frame the next level's arrive; the old way, the
 new level showed bare first and its trees came after — a blink of no
-trees at every change of level. **Ready** (`onLoaded`,
+trees at every change of level. **That wait is per tier**
+(`handOverWaitMs`): it holds one of the renderer's parse slots — the
+dressing is awaited inside the parse job — while dressings build one at
+a time for the site, and with 10 s on every tier a phone's two slots
+stood still behind it. A desktop waits up to 1.5 s, so most hand-overs
+still swap the trees in one frame; a phone does not wait at all: the
+fine level shows bare and its trees, lamps and rails arrive once its
+dressing is built — on a phone that blink of no trees is back, the price
+of a stream that keeps moving. **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile
 is dressed, the renderer is idle and no dressing is pending; it also lifts
 the fog clamp. A tile that fails to load for any reason but the network

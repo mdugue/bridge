@@ -25,6 +25,7 @@ import {
   DRESSING_PART_NAMES,
   DressingPlugin,
   dressingParts,
+  handOverWaitMs,
   PHONE_STREAM,
   paceStreaming,
   showDataLayers,
@@ -463,6 +464,13 @@ test("a phone streams fewer contents at once, on queues of its own", () => {
   expect(desktop.downloadQueue).toBe(DEFAULT_DOWNLOAD_QUEUE);
   phone.dispose();
   desktop.dispose();
+});
+
+test("a phone's parse slot never waits on a dressing; a desktop's a little", () => {
+  expect(handOverWaitMs("mobile")).toBe(0);
+  expect(handOverWaitMs("desktop")).toBeGreaterThan(0);
+  // well under the compile's own bound and the old 10 s
+  expect(handOverWaitMs("desktop")).toBeLessThanOrEqual(3000);
 });
 
 test("a level waits for its dressing only where it takes over from its tile's other level", () => {
