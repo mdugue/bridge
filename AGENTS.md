@@ -372,8 +372,8 @@ config change.
   <site>` for every site whose data is ready (or only the ids it is given),
   side by side within the cores and the memory (`warmers.ts`; one process
   per site; `PREPARE_WARMERS=1` bakes a site with more than four tiles one
-  tile per process — slower on Vercel's 4-core builder, so off by default;
-  `PREPARE_JOBS`, `PREPARE_MEMORY_GB` override), writes the index
+  tile per process — no gain measured on Vercel's 4-core builder, so off
+  by default; `PREPARE_JOBS`, `PREPARE_MEMORY_GB` override), writes the index
   `public/data/sites.json`
   and prunes the folders of sites no longer built; `prepare-data.ts` bakes
   one site's committed

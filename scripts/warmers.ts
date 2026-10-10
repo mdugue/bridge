@@ -26,15 +26,18 @@
  * 2.7 GB), and a free slot takes the next tile, so a slot that frees late
  * still finds work.
  *
- * The warmers are off by default because on Vercel's 4-core, 8.6 GB
- * builder they lost (2026-10-10, a cold build of all seven sites):
- * `prepare-sites` took 322 s with them against 235 s with one process per
- * site. A warmer runs its tile's buildings at about twice the per-tile time
- * of a process that bakes all fifteen — each starts cold, its modules
- * loaded and its code compiled again — and `TILE_PEAK` lets two run at once
- * in that memory, so Dresden's tiles took 179 s two at a time where the
- * single process took 235 s for everything. They may pay on a machine with
- * more cores and memory (not measured).
+ * The warmers are off by default: on Vercel's 4-core, 8.6 GB builder they
+ * showed no gain (2026-10-10, cold builds of all seven sites). With them
+ * `prepare-sites` took 322 s; main took 232–235 s, and this module's
+ * default 387 s — but those builders differed by about 1.4× in a step none
+ * of this touches (Next's static pages: 7.5–8.7 s in main's builds,
+ * 11.3–11.9 s in these), so single builds there cannot settle it. What is
+ * structural: `TILE_PEAK` lets two tile warmers run at once in that memory,
+ * the parallelism main already gets from baking two sites side by side,
+ * and the warmers' processes add ≈ 10 % CPU. On one box, alternating, the
+ * default costs main's CPU (Grimma 28.6/28.7 s, Hamburg 59.7/60.1 s). They
+ * may pay on a machine with the cores and memory for four or more tile
+ * warmers at once (not measured).
  */
 
 /** A site with more tiles than this is baked by warmers. */
