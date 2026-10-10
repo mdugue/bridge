@@ -167,7 +167,8 @@ config change.
     `coarse-crowns-layer.ts`, the coarse terrain level's trees — a
     third of them, wider —, and `low-vegetation-layer.ts`, the OSM
     hedges), `city-layer.ts` (dresses a
-    building tile: clay material, object table, BVH, demolish),
+    building tile: clay material, object table, demolish; its BVH built
+    when a ray first needs it, `ensureCityBvh`),
     `clay-windows.ts` (every house's windows, drawn by the clay's
     fragment pass as recesses — no geometry, no glass; ADR 0049),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban

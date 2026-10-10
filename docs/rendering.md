@@ -29,7 +29,7 @@ flowchart TB
   TILES["TilesRenderer group<br/>3D Tiles, one subtree per site tile"]
   SCENE --> WORLD
   WORLD --> TILES
-  TILES --> CITY["buildings (refine ADD)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH"]
+  TILES --> CITY["buildings (refine ADD)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH once a ray needs it"]
   TILES --> TER["terrain, L1 512² grid → L0 TIN (REPLACE)<br/>glTF + 30 m skirt, lowered under stairs<br/>(walls burned into L1 only)<br/>palette-painted splat, receives shadows only"]
   TER --> WAT["water + mist sheets<br/>terrain geometry masked by splat alpha"]
   TER --> STAIR["L0: stairs node, baked with the ground<br/>treads, risers, cheeks per flight"]
@@ -937,7 +937,7 @@ sequenceDiagram
   Note over B: renderer, sun rig, lamp light pool, post stack, tile stream
   B->>S: every tile's footprints (minimap)
   B->>S: spawn tile: buildings glb, a terrain level + class raster, NDVI
-  Note over B: dress: clay + object texture + BVH · splat painted + water · compileAsync
+  Note over B: dress: clay + object texture · splat painted + water · compileAsync
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
@@ -995,6 +995,25 @@ leaves a hole and one `onError` message; a dressing that fails leaves its
 tile bare — neither takes the scene down. Collision, demolish, autofocus and double-tap work on every
 visible tile; the two ground rays (double-tap travel, autofocus) march the
 terrain's height grid (`lib/city/ground-ray.ts`) — the terrain has no BVH.
+**A building tile gets its BVH when a ray first needs it**, not as it
+lands (`ensureCityBvh` in `city-layer.ts`): the build held a dense tile's
+parse on the main thread (≈75 ms on a desktop, several times that on a
+phone) and allocated six floats per triangle beside the node buffers it
+keeps — on an iPhone, while the boot's other contents were still
+parsing, the page's process ran out with three's GPU count at 257 MB. A
+ray asks only the tiles whose box it reaches, nearest first: the
+collider's rays (collision.ts) and a user's pick, double tap or question
+build each such tile as they reach it — a pick only up to its first hit,
+the probe and the double tap only up to the ground — while the autofocus
+passes over a tile without one; none walks a tile's triangles one by one,
+three-mesh-bvh's fallback on a mesh without a BVH. The tiles within 400 m
+of the camera are built in idle time, one at a time
+(`nearestWithoutBvh`, at the 10 Hz pose tick), so a walk into the next
+tile finds its BVH there. The spawn tile's is built by the placing on its
+ground before the first frame (ADR 0032 needs it there): after its
+terrain has landed, not inside the parse that landed its buildings. The
+collider builds nothing before that placing — the frames before it stand
+over a floor that is not there.
 Whatever moves the camera — walking, flying, a glide on its way, a double
 tap, a snapshot, a GPS fix, a tile landing — it ends up neither below the
 ground nor inside a building: `camera-pose.ts` sets a walker out beside a

@@ -103,7 +103,13 @@ import {
 import type { ModelCamera } from "./model-camera";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
-import { countBuildings, pickCityObject } from "./city-layer";
+import {
+  countBuildings,
+  ensureCityBvh,
+  nearestCityHit,
+  nearestWithoutBvh,
+  pickCityObject,
+} from "./city-layer";
 import { createInquiryProbe, type OutlineSubject } from "./inquiry-probe";
 import {
   bridgeShape,
@@ -172,7 +178,7 @@ import {
   withinCompileWait,
 } from "./tile-stream";
 import { createNetworkWatch } from "./tile-retry";
-import { installMainYield } from "./main-yield";
+import { installMainYield, whenIdle } from "./main-yield";
 import { attachTouchControls } from "./touch-controls";
 import {
   updateVegetationLod,
@@ -204,6 +210,11 @@ const EMERGENCY_GAP_MS = 5000;
 const RELEASE_WAIT_MS = 300;
 /** How often the memory governor looks at the GPU memory held. */
 const GOVERN_MS = 1000;
+/** How near the camera (m, in plan, to the tile's box) a building tile
+ *  gets its BVH before any ray needs it, and how long that build waits
+ *  for an idle main thread at most. */
+const BVH_NEAR_M = 400;
+const BVH_IDLE_MS = 1000;
 
 /** Modell's sheet: the picture style's paper (its first swatch). */
 const paperOf = (style: RenderStyle): Color =>
@@ -1597,9 +1608,22 @@ async function bootApp(
   cleanups.push(opts.look.subscribe(applyLook));
 
   // Wall collision against the buildings of every visible tile, and the
-  // vertical rays that keep the camera out of them.
-  const collider = createCityCollider(() =>
-    stream.visibleCities().map((c) => c.mesh)
+  // vertical rays that keep the camera out of them — through each tile's
+  // BVH, built when a ray first reaches the tile (city-layer.ts
+  // `ensureCityBvh`). Not before the boot places the player on the spawn
+  // tile's ground (`bvhOnDemand`): until then the pose stands over a floor
+  // that is not there, and the spawn tile's build would come in the frame
+  // its buildings land, beside the terrain still parsing — on a phone the
+  // page's process ran out there. The frames before see no building, and
+  // the placing asks again.
+  let bvhOnDemand = false;
+  const collider = createCityCollider(
+    () => stream.visibleCities().map((c) => c.mesh),
+    (mesh) => {
+      if (bvhOnDemand) {
+        ensureCityBvh(mesh);
+      }
+    }
   );
   // Where the player stands and looks, walk/fly, the scenic glides — and the
   // one rule that any player input cancels a glide (camera-pose.ts).
@@ -1952,16 +1976,20 @@ async function bootApp(
       // pose sets a spot inside one out beside it). In the air the glide
       // goes part of the way along the line of sight (camera-pose.ts).
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
-      tapRaycaster.far = 6000;
-      const building = tapRaycaster.intersectObjects(
-        stream.visibleCities().map((c) => c.mesh),
-        false
-      )[0];
-      const t = groundAlong(tapRaycaster, building?.distance ?? 6000);
-      const hit =
-        t === null
-          ? (building?.point.clone().add(towardsCamera(building.point)) ?? null)
-          : tapRaycaster.ray.at(t, new Vector3());
+      // The ground first: no building tile past it needs its BVH for this
+      // (`nearestCityHit` builds the ones the ray reaches before).
+      const ground = groundAlong(tapRaycaster, 6000);
+      tapRaycaster.far = ground ?? 6000;
+      const building = nearestCityHit(
+        tapRaycaster,
+        stream.visibleCities(),
+        true
+      )?.hit;
+      const hit = building
+        ? building.point.clone().add(towardsCamera(building.point))
+        : ground === null
+          ? null
+          : tapRaycaster.ray.at(ground, new Vector3());
       if (hit) {
         pose.travelTo(hit);
       }
@@ -2220,8 +2248,14 @@ async function bootApp(
   const lensBlur = postProfileFor(budget.tier).dof;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
-    const targets: Object3D[] = stream.visibleCities().map((c) => c.mesh);
-    const hit = focusRaycaster.intersectObjects(targets, false)[0];
+    // Only the tiles whose BVH is built: the focus never builds one (ten
+    // times a second), and a far tile without one lies past the lens's
+    // depth anyway.
+    const hit = nearestCityHit(
+      focusRaycaster,
+      stream.visibleCities(),
+      false
+    )?.hit;
     const ground = groundAlong(
       focusRaycaster,
       hit?.distance ?? focusRaycaster.far
@@ -2242,6 +2276,34 @@ async function bootApp(
         }
       : null;
     postStack.setFocusTarget(hit?.point ?? null);
+  };
+
+  // The building tiles near the camera get their BVH in idle time, one at
+  // a time (city-layer.ts `ensureCityBvh`): a walk into the next tile, a
+  // pick or a landing there finds it built instead of building it in the
+  // frame that needs it. The farther ones wait for a ray, or never get one.
+  let bvhPending = false;
+  const prepareBvhNear = () => {
+    if (!bvhOnDemand || bvhPending) {
+      return;
+    }
+    const at = activeCamera().position;
+    const next = nearestWithoutBvh(
+      stream.visibleCities(),
+      at.x,
+      at.z,
+      BVH_NEAR_M
+    );
+    if (!next) {
+      return;
+    }
+    bvhPending = true;
+    whenIdle(() => {
+      bvhPending = false;
+      if (!disposed && stream.cities.has(next)) {
+        next.ensureBvh();
+      }
+    }, BVH_IDLE_MS);
   };
 
   // Motion-keyed quality regression. Derived from the CAMERA, not the input
@@ -2726,6 +2788,7 @@ async function bootApp(
     overlays.step(performance.now());
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
+      prepareBvhNear();
       if (modelRig.owns()) {
         tickModel();
       } else {
@@ -2919,7 +2982,10 @@ async function bootApp(
   await withinCompileWait(postStack.compile(scene).catch(() => undefined));
   // On the spawn vantage (or where a recovered page stood) now that its
   // ground exists (the pose was placed before any terrain had landed,
-  // over the fallback floor).
+  // over the fallback floor). Its buildings' BVH is built here, as the
+  // placing's rays reach them (ADR 0032: never inside a building) — after
+  // the tile's ground has landed, not inside the parse that landed them.
+  bvhOnDemand = true;
   placeStart();
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.

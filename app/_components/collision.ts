@@ -1,4 +1,4 @@
-import type { Object3D } from "three/webgpu";
+import type { Intersection, Object3D } from "three/webgpu";
 import {
   Box3,
   BufferGeometry,
@@ -93,14 +93,86 @@ interface MeshFrame {
 /**
  * Wall collision against whatever `getTargets` returns — the building meshes
  * of every visible tile — and the vertical rays that keep the camera out of
- * them (camera-pose.ts).
+ * them (camera-pose.ts). A ray asks only the targets whose box it reaches,
+ * and those through their BVH: one without is built first by `build`
+ * (city-layer.ts `ensureCityBvh` — a building tile gets its BVH when a ray
+ * first needs it) and passed over without it, never walked triangle by
+ * triangle (three-mesh-bvh's raycast falls back to that on a mesh with no
+ * BVH: two million triangles a ray, every frame).
  */
-export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
+export function createCityCollider(
+  getTargets: () => Object3D[],
+  build?: (mesh: Mesh) => void
+): CityCollider {
   const raycaster = new Raycaster();
   raycaster.firstHitOnly = true;
   const normalMatrix = new Matrix3();
   const dir = new Vector3();
   const origin = new Vector3();
+
+  const frames = new WeakMap<Mesh, MeshFrame>();
+  /** The mesh's world frame, refreshed when its matrix changed. */
+  const frameOf = (mesh: Mesh): MeshFrame => {
+    const geometry = mesh.geometry;
+    let frame = frames.get(mesh);
+    if (!frame?.matrix.equals(mesh.matrixWorld)) {
+      if (!geometry.boundingBox) {
+        geometry.computeBoundingBox();
+      }
+      frame = {
+        box: (geometry.boundingBox ?? new Box3())
+          .clone()
+          .applyMatrix4(mesh.matrixWorld),
+        inverse: mesh.matrixWorld.clone().invert(),
+        matrix: mesh.matrixWorld.clone(),
+        normal: new Matrix3().getNormalMatrix(mesh.matrixWorld),
+      };
+      frames.set(mesh, frame);
+    }
+    return frame;
+  };
+
+  /** Whether a mesh a ray reaches has its BVH, built now where it may. */
+  const withBvh = (mesh: Mesh): boolean => {
+    if (!mesh.geometry.boundsTree) {
+      build?.(mesh);
+    }
+    return Boolean(mesh.geometry.boundsTree);
+  };
+
+  const entry = new Vector3();
+  /**
+   * The raycaster's first hit within its `far`: the targets whose box the
+   * ray enters, nearest entry first, until none ahead can hold a nearer
+   * hit — so a long ray (a dolly's) builds only the tiles before its hit.
+   */
+  const firstHit = (): Intersection | null => {
+    const { ray, far } = raycaster;
+    const reached: { enter: number; mesh: Mesh }[] = [];
+    for (const target of getTargets()) {
+      const mesh = target as Mesh;
+      if (mesh.isMesh && ray.intersectBox(frameOf(mesh).box, entry)) {
+        const enter = entry.distanceTo(ray.origin);
+        if (enter <= far) {
+          reached.push({ enter, mesh });
+        }
+      }
+    }
+    reached.sort((a, b) => a.enter - b.enter);
+    let best: Intersection | null = null;
+    for (const { enter, mesh } of reached) {
+      if (best && enter > best.distance) {
+        break;
+      }
+      const hit = withBvh(mesh)
+        ? raycaster.intersectObject(mesh, false)[0]
+        : undefined;
+      if (hit && (!best || hit.distance < best.distance)) {
+        best = hit;
+      }
+    }
+    return best;
+  };
 
   /** World-space wall normal when the step is blocked, else null. */
   const blockingNormal = (
@@ -114,7 +186,7 @@ export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
       origin.copy(position);
       origin.y -= drop;
       raycaster.set(origin, dir);
-      const hit = raycaster.intersectObjects(getTargets(), true)[0];
+      const hit = firstHit();
       if (hit?.face) {
         normalMatrix.getNormalMatrix(hit.object.matrixWorld);
         return hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
@@ -143,31 +215,6 @@ export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
     return blockingNormal(position, slidStep) ? new Vector3() : slidStep;
   };
 
-  const frames = new WeakMap<Mesh, MeshFrame>();
-  /** The mesh's world frame, refreshed when its matrix changed. */
-  const frameOf = (mesh: Mesh): MeshFrame | null => {
-    const geometry = mesh.geometry;
-    if (!geometry.boundsTree) {
-      return null;
-    }
-    let frame = frames.get(mesh);
-    if (!frame?.matrix.equals(mesh.matrixWorld)) {
-      if (!geometry.boundingBox) {
-        geometry.computeBoundingBox();
-      }
-      frame = {
-        box: (geometry.boundingBox ?? new Box3())
-          .clone()
-          .applyMatrix4(mesh.matrixWorld),
-        inverse: mesh.matrixWorld.clone().invert(),
-        matrix: mesh.matrixWorld.clone(),
-        normal: new Matrix3().getNormalMatrix(mesh.matrixWorld),
-      };
-      frames.set(mesh, frame);
-    }
-    return frame;
-  };
-
   const worldRay = new Ray();
   const localRay = new Ray();
   const point = new Vector3();
@@ -177,7 +224,8 @@ export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
    * roof seen from inside a building is a back face): its world height and
    * whether its face looks up.
    */
-  /** The mesh's frame when a vertical ray through (x, y, z) can meet it. */
+  /** The mesh's frame when a vertical ray through (x, y, z) can meet it,
+   *  its BVH ready. */
   const reachable = (
     target: Object3D,
     x: number,
@@ -197,7 +245,7 @@ export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
     ) {
       return null;
     }
-    return frame;
+    return withBvh(target as Mesh) ? frame : null;
   };
 
   const vertical = (
@@ -237,9 +285,7 @@ export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
     along: (from, direction, far) => {
       raycaster.set(from, direction);
       raycaster.far = far;
-      return (
-        raycaster.intersectObjects(getTargets(), true)[0]?.distance ?? null
-      );
+      return firstHit()?.distance ?? null;
     },
     // Seen from inside a closed solid, the surface straight above faces up
     // (its outside is above it); from under a bridge or a balcony it faces

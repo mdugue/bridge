@@ -41,3 +41,18 @@ export function installMainYield(): void {
     host.scheduler = { yield: yieldNow };
   }
 }
+
+/**
+ * Runs `work` once the main thread is idle — at the latest after
+ * `timeoutMs`, since a busy page never is. Where `requestIdleCallback` is
+ * missing (Safari before 18) a timer of half that stands in. Returns what
+ * cancels it.
+ */
+export function whenIdle(work: () => void, timeoutMs: number): () => void {
+  if (typeof requestIdleCallback === "function") {
+    const id = requestIdleCallback(work, { timeout: timeoutMs });
+    return () => cancelIdleCallback(id);
+  }
+  const id = setTimeout(work, timeoutMs / 2);
+  return () => clearTimeout(id);
+}
