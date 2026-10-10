@@ -103,7 +103,7 @@ history. Decisions that came out of plans are written up as
 | 069 | Find what holds the load at 52 %, then take it off the tile path: local timing marks, an honest 52 %, a per-tier hand-over wait, meshopt workers, ask sets in idle time, a lazy BVH | **PARTIAL** (2026-10-10) — step 5 built, and beside it a bounded scene compile, deduplicated stage reports, concurrent raster fetches, a stall guard, one change pass per task, WebKit's `scheduler.yield`; steps 1–4, 6, 7 open | [069-streaming-without-stalls.md](./069-streaming-without-stalls.md) |
 | 070 | Each tile holds a fraction of the raster memory: a 1024² coarse class raster, the sports raster on a desktop's fine level only, optionally a half-resolution desktop splat | **PARTIAL** (2026-10-10) — steps 1–3 built; step 4 needs a GPU look | [070-raster-diet.md](./070-raster-diet.md) |
 | 071 | A phone renders a lean scene, a desktop a lighter one | **PARTIAL** (2026-10-10) — phone GTAO at 8 samples (not 0), a phone rich-crown budget of 800 (not *Multi-Tuft* off), no autofocus ray without a lens blur; step 4.2 (no desktop DoF) REJECTED by the maintainer; steps 3, 4.1, 5–7 open | [071-tier-budgets-lean-phone-lighter-desktop.md](./071-tier-budgets-lean-phone-lighter-desktop.md) |
-| 072 | A cold build bakes a site's tiles on every core | **TODO** — cheaper since 2026-10-10 (no second spawn parse, typed-array plinths, cache keys on the bakes' own packages); re-measure first | [072-parallel-site-bake.md](./072-parallel-site-bake.md) |
+| 072 | A cold build bakes a site's tiles on every core | DONE (2026-10-10) — steps 1, 3–6, step 2 gated out; deviations: one tile per warmer, admission by cores and memory (`PREPARE_JOBS`, `PREPARE_MEMORY_GB`), small sites first, a `--if-cached` probe, `bake-tiles.ts` split into shaping and meshing halves; manifests identical to main's; on an idle 4-core machine ≈ 491 → 280 s (8 GB: → 340 s), estimated from the bakes' CPU — the box measured on was shared; peak as on an 8 GB builder 4.07 GB | [072-parallel-site-bake.md](./072-parallel-site-bake.md) |
 | 073 | The look is fixed; the sidebar keeps only the controls people use | **PARTIAL — awaits the maintainer** — *Transparenz* and *Blattflimmern* removed, *Flussnebel* and *Tiefenschärfe* fixed (2026-10-10); the ~20 cosmetic sliders undecided (they cost the GPU nothing) | [073-freeze-the-look-table.md](./073-freeze-the-look-table.md) |
 | 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **TODO** — direction plan; each part opens with a spike | [074-architecture-deepening.md](./074-architecture-deepening.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
@@ -372,6 +372,18 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
   texel size for fewer redraws.
 - **The minimap's 512² class raster** has one reader left that paints
   256² a tile (a re-bake and a look).
+- **A tile's fine level re-bakes when any tile's terrain inputs change**
+  (plan 072's maintenance note, M): its key covers every tile's DGM,
+  walls, stairs, terraces and kerbs (ADR 0029), though its walls, kerbs,
+  stairs and fences ask only the grounds near them — since plan 072 the
+  site ground reads a tile's heights only once a point asks, so the bake
+  could record which tiles it read and key on those alone (1–9, not 15).
+- **A tile warmer is admitted with Dresden's heaviest tile's peak**
+  (plan 072, `TILE_PEAK` 3 GB): on an 8 GB builder two run at once,
+  though ten of the fifteen tiles peak under 2 GB. An estimate from the
+  tile's CityJSON size (≈ 0.6 GB + 0.17 GB per MB on Dresden's) would
+  let three run beside a heavy one — measure it on another city before
+  trusting it.
 
 **Measured, not built:** WebKit's missing `scheduler.yield` is shimmed
 (`main-yield.ts`) but unmeasured on an iPhone — in Chromium with the API

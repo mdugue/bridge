@@ -447,9 +447,8 @@ environment.
 `bun run site --all` report; or only the ids it is given,
 `bun scripts/prepare-sites.ts leipzig unna`), runs
 `bun scripts/prepare-data.ts <site>` for each — one process per site,
-several side by side (largest site first; as many as the cores and the
-memory allow, a cold Dresden peaks at ~3 GB), each line prefixed with the
-site's id — then writes the index
+several side by side, each line prefixed with the site's id (see *Bakes
+side by side* below) — then writes the index
 **`public/data/sites.json`** (`{ version: 1, sites: [{ id, map, stats }] }`,
 `lib/city/site-index.ts`) — what the start page lists and what
 `app/[site]/page.tsx` prerenders from (`generateStaticParams`, through
@@ -578,6 +577,51 @@ start page (`app/_components/city-grid.tsx`) offers *Empfohlen* — the
 reference site first, then by name — and one ordering per figure, each
 card showing the figure it is ranked by.
 
+### Bakes side by side
+
+A bake is single-threaded, so `prepare-sites.ts` runs several
+`prepare-data.ts` processes at once, within two limits
+(`scripts/warmers.ts` `bakeLimits`, logged first): as many as the cores
+(`os.availableParallelism()`), and their peaks together within 80 % of the
+memory — the machine's, or the container's limit where it sets a lower one
+(`process.constrainedMemory()`). Each bake counts the resident memory it
+is measured to peak at, with a margin: a tile warmer (below) 3 GB — its
+buildings are the peak, Dresden's heaviest tile (`33414_5654`) 2.7 GB —,
+every other bake 1.6 GB (1.43 GB at most: München's, and the warmer that
+solves Dresden's line levels). A 4-core, 8 GB builder thus runs two tile
+warmers or four other bakes at once, their peaks under 6.5 GB together.
+`PREPARE_JOBS=<n>` sets the number of bakes at once,
+`PREPARE_MEMORY_GB=<gb>` the memory they share (as on a smaller machine:
+the bakes still keep to 80 % of it).
+
+A site with more than four tiles (Dresden) is split further, one tile per
+process: `prepare-data.ts <site>` runs as **warmers**, which only fill the
+cache, before one plain run finds everything cached and publishes.
+
+0. `--if-cached`: the plain run, which publishes when every entry is
+   cached — a warm build runs no warmer — and stops at the first entry it
+   would bake (exit 3), when the warmers follow;
+1. `--warm-ground=<first tile>`, alone: the site-wide values every later
+   process reads — the frame, the line levels — and that tile's fine
+   ground;
+2. `--warm-ground=<tile>` for each other tile, side by side: its fine
+   ground (a cache entry of its own, below);
+3. `--warm=<tile>` for every tile, side by side: its side files, its
+   buildings and both terrain levels, the fine level's walls, kerbs,
+   stairs and fences on the cached grounds (a ground it has to build
+   itself logs `ground <tile>: built`, which step 2 leaves none to);
+4. the plain run: all cache hits; it publishes.
+
+Each step waits for the one before it. A warmer publishes nothing — no
+file under `public/data/`, no manifest, no prune — so it can never remove
+what another process wrote. One tile per warmer because a process's memory
+grows with every tile it bakes (all fifteen of Dresden's in one: 4.3 GiB),
+and a slot that frees late still finds a tile to take. The smaller sites go
+first, largest first: each is one process that cannot be split, and
+started late it would be the build's tail; the warmers fill every slot
+they leave. Anything new that is computed from every tile must be cached
+by step 1, or every warmer computes it again.
+
 ### Cache and publish
 
 **Cache.** Baked outputs are cached in `.cache/prepare-data/` (gitignored;
@@ -608,13 +652,31 @@ A changed input, a changed bake or a renamed side file re-bakes; a checkout
 or a touch alone does not; anything else is a cache
 read. Every site shares the directory, and it keeps one entry per name: a
 tile's names are unique across sites, the site-wide ones (the frame, the
-map picture, the stats) carry the site's id. A cold run of the Dresden site
-(fifteen tiles) takes ≈ 2 min on four cores, and so does a cold run of all
-seven sites, side by side; a warm one ≈ 1 s. CI keeps the directory between runs (`actions/cache`
-in the e2e job): any earlier entry is a sound start, since every artifact is
-keyed by what it was baked from. Most of a cold run is decoding the DGM
-GeoTIFFs (LZW, twice per tile: once per terrain level), the fine level's TIN
-(delatin) and the glTF quantisation.
+map picture, the stats) carry the site's id. An entry is written whole
+(`scripts/bake-cache.ts`): to a part file, renamed into place, the name's
+stale keys dropped first — never the entry itself nor another process's
+part file — so processes baking side by side never read half an entry nor
+delete each other's. Each tile's **fine ground** is an entry of its own
+(`ground_<t>.bin`, `scripts/ground-pack.ts`: the TIN, or the shaped grid
+where the DGM has NoData, as its typed arrays), keyed on the tile's
+terrain inputs, its passages and the ground bake: every fine level's
+walls, kerbs, stairs and fences stand on every tile's fine ground, so a
+process reads the other tiles' grounds from the cache — each tile's
+heights only once a point asks — instead of refining their TINs again,
+and the fine level's mesh is rebuilt from the same entry (`tinMesh`,
+`gridMesh`; ≈ 6.7 MB a Dresden tile; the cache of all seven sites
+≈ 420 MB). A cold run of all seven sites is ≈ 890 CPU seconds of bakes,
+Dresden ≈ 540 of them; side by side as above that is ≈ 4.6 min on an idle
+4-core machine and ≈ 5.7 min on a 4-core, 8 GB builder (2026-10-10,
+estimated from each bake's measured CPU time — the box measured on was
+shared; Dresden in one process, as before plan 072, had taken ≈ 8 min on
+either). A warm run takes ≈ 3 s for Dresden, ≈ 10 s for all seven. CI
+keeps the directory between runs (`actions/cache` in the e2e job): any
+earlier entry is a sound start, since every artifact is keyed by what it
+was baked from. Most of a cold Dresden is its buildings (≈ 390 of its 540
+CPU seconds: the doors' rays, the footprints' union areas, glTF-Transform's
+weld and quantisation, the gzip), then the fine grounds (≈ 140, the line
+levels' ≈ 20 among them: Delatin and the DGMs' LZW).
 
 **Publish.** Each file is written to `public/data/<site>/` as
 `<stem>.<8 hex of sha1>.<ext>` (`.glb.gz` keeps both suffixes);
