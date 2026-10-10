@@ -417,14 +417,22 @@ out to need more than these filters, STOP and report.
 
 ## Done criteria
 
-- [ ] `bun typecheck`, `bun lint`, `bun run test` exit 0
-- [ ] `bun run build && bun run test:e2e` passes
-- [ ] `grep -n "HAND_OVER_WAIT_MS" app/_components/tile-stream.ts` returns nothing; `handOverWaitMs` is exported and tested
-- [ ] `grep -n "useWorkers" app/_components/tile-stream.ts` returns one line
-- [ ] Step 2's measurement table (before) and a re-measurement (after) are in the PR and in this plan's Findings
-- [ ] `grep -rn "trail" app/_components/stream-timing.ts` returns nothing (timings never reach the crash trail)
-- [ ] `docs/rendering.md`'s boot sequence names the honest light stage and the per-tier hand-over wait; AGENTS.md lists `?trace=1`
-- [ ] No files outside the in-scope list modified
+- [x] `bun typecheck`, `bun lint`, `bun run test` exit 0 (`bun run verify`)
+- [ ] `bun run build && bun run test:e2e` passes — on the loaded local
+      machine only with CI's budgets and a raised per-test limit, and the
+      whole-site spec not even then (Findings); to be judged on CI
+- [x] `grep -n "HAND_OVER_WAIT_MS" app/_components/tile-stream.ts` returns nothing; `handOverWaitMs` is exported and tested
+- [x] `grep -n "useWorkers" app/_components/tile-stream.ts` returns one line
+- [ ] Step 2's measurement table (before) and a re-measurement (after) are in the PR and in this plan's Findings — in the Findings as a
+      local mobile-emulated substitute; the device rows are open; no PR
+- [x] `grep -rn "trail" app/_components/stream-timing.ts` returns nothing (timings never reach the crash trail)
+- [x] `docs/rendering.md`'s boot sequence names the honest light stage and the per-tier hand-over wait; AGENTS.md lists `?trace=1`
+- [ ] No files outside the in-scope list modified — the operator widened
+      the scope (one meshopt worker on a phone, the tiles' CPU arrays
+      counted, step 7 ungated): `crash-trail.ts`/`crash-reports.ts` (lib),
+      `terrain-tin.ts`, `terrain-layer.ts`, `three-utils.ts`,
+      `collision.ts`, `city-layer.ts`'s picks, `inquiry-probe.ts`,
+      `main-yield.ts`, the privacy page, ADR 0050
 
 ## STOP conditions
 
