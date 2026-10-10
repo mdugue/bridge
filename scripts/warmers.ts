@@ -58,3 +58,126 @@ export function bakeMode(
   }
   return { kind, tiles };
 }
+
+/**
+ * The most resident memory one bake process reaches, measured on the
+ * committed sites (2026-10-10, Bun 1.4.2) with a margin: a tile warmer's is
+ * its buildings' (Dresden's heaviest tile, 33414_5654: 2.8 GB); every other
+ * process stays under `PROCESS_PEAK` (a small site's plain run, a ground
+ * warmer, a large site's publishing run: 1.43 GB at most — München's, and
+ * the first ground warmer, which solves the line levels on every DGM).
+ */
+export const TILE_PEAK = 3e9;
+export const PROCESS_PEAK = 1.6e9;
+/** The share of the machine's memory the bakes may hold together. */
+export const MEMORY_SHARE = 0.8;
+
+/** One prepare-data.ts run: its arguments after the site id, and the peak
+ *  it is admitted with. */
+export interface BakeRun {
+  args: string[];
+  peak: number;
+}
+
+/** A large site's bake, step by step; a step's runs may go side by side. */
+export function warmSteps(tiles: readonly string[]): BakeRun[][] {
+  const [first, ...rest] = tiles;
+  const ground = (tile: string) => ({
+    args: [`${WARM_GROUND}${tile}`],
+    peak: PROCESS_PEAK,
+  });
+  return [
+    [ground(first)],
+    ...(rest.length > 0 ? [rest.map(ground)] : []),
+    tiles.map((tile) => ({ args: [`${WARM_TILES}${tile}`], peak: TILE_PEAK })),
+    [{ args: [], peak: PROCESS_PEAK }],
+  ];
+}
+
+/** A number above 0 from an environment override (PREPARE_JOBS: a whole
+ *  one), or undefined when it is not set. */
+function overridden(
+  name: string,
+  value: string | undefined
+): number | undefined {
+  if (value === undefined || value === "") {
+    return undefined;
+  }
+  const n = Number(value);
+  if (!(n > 0) || (name === "PREPARE_JOBS" && !Number.isInteger(n))) {
+    throw new Error(`${name} must be a number above 0, got "${value}"`);
+  }
+  return n;
+}
+
+/**
+ * What the bakes may take together: `jobs` processes at once (the cores,
+ * or PREPARE_JOBS) and `memory` bytes of their peaks (`MEMORY_SHARE` of the
+ * machine's memory, or of PREPARE_MEMORY_GB gigabytes).
+ */
+export function bakeLimits(opts: {
+  cores: number;
+  memory: number;
+  env?: { PREPARE_JOBS?: string; PREPARE_MEMORY_GB?: string };
+}): { jobs: number; memory: number } {
+  const { cores, env = {} } = opts;
+  const jobs = overridden("PREPARE_JOBS", env.PREPARE_JOBS) ?? cores;
+  const gb = overridden("PREPARE_MEMORY_GB", env.PREPARE_MEMORY_GB);
+  return {
+    jobs,
+    memory: MEMORY_SHARE * (gb === undefined ? opts.memory : gb * 1e9),
+  };
+}
+
+/**
+ * Runs tasks within `limits`: at most `jobs` at once, their peaks together
+ * within `memory` (a task alone always runs). The waiting go by `priority`
+ * (lower first), then in the order they asked; one that does not fit yet
+ * holds back the ones behind it, so a heavy task is never passed over for
+ * good.
+ */
+export function createSlots(limits: { jobs: number; memory: number }): {
+  run: <T>(
+    priority: number,
+    peak: number,
+    task: () => Promise<T>
+  ) => Promise<T>;
+} {
+  let running = 0;
+  let held = 0;
+  const waiting: { peak: number; priority: number; start: () => void }[] = [];
+  const admit = () => {
+    for (let next = waiting[0]; next; next = waiting[0]) {
+      const fits =
+        running === 0 ||
+        (running < limits.jobs && held + next.peak <= limits.memory);
+      if (!fits) {
+        return;
+      }
+      waiting.shift();
+      running++;
+      held += next.peak;
+      next.start();
+    }
+  };
+  return {
+    run: async (priority, peak, task) => {
+      await new Promise<void>((start) => {
+        const at = waiting.findIndex((w) => w.priority > priority);
+        waiting.splice(at < 0 ? waiting.length : at, 0, {
+          peak,
+          priority,
+          start,
+        });
+        admit();
+      });
+      try {
+        return await task();
+      } finally {
+        running--;
+        held -= peak;
+        admit();
+      }
+    },
+  };
+}
