@@ -26,7 +26,8 @@
   run fixed the other 25 percent rows but *Nebel* (the decision table
   below); old snapshots still load. Not done here: the real-GPU plates
   (step 6.2 — no GPU in the container; the PR's snapshots are the check)
-  and `bun run test:e2e` (the spec was edited, `bun typecheck` covers it).
+  and the whole `bun run test:e2e`: only the two edited specs ran (both
+  pass), the rest is CI's.
   The drift check fails by design: the performance PR changed every
   in-scope file after `85a41b7` (it built the four rows above); the
   excerpts below are from before it.
@@ -286,13 +287,13 @@ no `tint`. Follow ADR 0017's rule: never reuse a removed `snapshotKey`.
 
 ## Done criteria
 
-- [ ] `bun typecheck`, `bun lint`, `bun run test` exit 0
+- [x] `bun typecheck`, `bun lint`, `bun run test` exit 0
 - [ ] `bun run build && bun run test:e2e` passes
-- [ ] `LOOK_CONTROLS` holds only the rows the decision table keeps
-- [ ] `grep -n "alphaHash" app/_components/visual-style.ts` returns nothing
-- [ ] An old snapshot with removed keys parses and applies (tested)
-- [ ] ADR 0017 amended; pr-snapshots skill and AGENTS.md updated; both guides updated
-- [ ] Bundle sizes before/after recorded
+- [x] `LOOK_CONTROLS` holds only the rows the decision table keeps
+- [x] `grep -n "alphaHash" app/_components/visual-style.ts` returns nothing
+- [x] An old snapshot with removed keys parses and applies (tested)
+- [x] ADR 0017 amended; pr-snapshots skill and AGENTS.md updated; both guides updated
+- [x] Bundle sizes before/after recorded
 
 ## STOP conditions
 
@@ -332,12 +333,16 @@ no `tint`. Follow ADR 0017's rule: never reuse a removed `snapshotKey`.
 ## Findings (2026-10-10 run)
 
 - Steps 1–5 and 6.1, 6.3, 6.4 built with the default table; 6.2 (plates)
-  not taken — no GPU in the container — and `bun run test:e2e` not run
-  (the spec typechecks). Every constant is the old `initial` and every
-  expression is unchanged, so the default picture is the same by
-  construction; the PR's snapshots (the start view; the Neumarkt at
-  dusk; the Neustädter Elbufer against the June evening sun) are the
-  maintainer's check against production.
+  not taken — no GPU in the container. Of the e2e only the two edited
+  specs ran, against a production build on SwiftShader: *the sidebar
+  tabs reach every group of controls* and *post and shader controls
+  survive real frames* pass (16 min with the CI timeouts lifted: another
+  bake held the machine at a load of 15–20, and each boot took ~4 min to
+  `ready`, with no error in its trail). Every constant is the old
+  `initial` and every expression is unchanged, so the default picture is
+  the same by construction; the PR's snapshots (the start view; the
+  Neumarkt at dusk; the Neustädter Elbufer against the June evening sun)
+  are the maintainer's check against production.
 - Production code +382 −820 lines; `LookKey` is `"fogAmount"`;
   `RETIRED_SNAPSHOT_KEYS` holds 32 keys. The storage keys did not
   change, so the privacy page needed nothing.
