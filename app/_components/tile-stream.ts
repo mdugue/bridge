@@ -433,6 +433,9 @@ export function dressingParts(d: TileDressing): Object3D[] {
 
 /** How long a tile may wait on its compile before it shows regardless. */
 const COMPILE_WAIT_MS = 3000;
+/** Meshopt decode workers: two parse slots on a phone, a few more on a
+ *  desktop, and the decode is a fraction of each parse. */
+const MESHOPT_WORKERS = 2;
 /** How long a level may wait on its dressing while the tile's other level
  *  stands in for it (DressingPlugin.handsOver) before it shows regardless. */
 const HAND_OVER_WAIT_MS = 10_000;
@@ -444,7 +447,7 @@ function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
   ]);
 }
 
-function withinCompileWait(done: Promise<unknown>): Promise<void> {
+export function withinCompileWait(done: Promise<unknown>): Promise<void> {
   return withinWait(done, COMPILE_WAIT_MS);
 }
 
@@ -2001,6 +2004,11 @@ export function createTileStream(
   paceStreaming(tiles, ctx.tier);
   setRasterTier(ctx.tier);
   tiles.registerPlugin(new ContentFetchPlugin());
+  // The decoder's own workers: without them a tile's meshopt buffers (75 MB
+  // decoded for a dense building tile) decode on the main thread, inside
+  // the parse that lands it. Idempotent: a remount keeps the same workers.
+  // oxlint-disable-next-line react-hooks/rules-of-hooks -- the decoder's method, no React hook
+  MeshoptDecoder.useWorkers(MESHOPT_WORKERS);
   tiles.registerPlugin(
     new GLTFExtensionsPlugin({ metadata: true, meshoptDecoder: MeshoptDecoder })
   );

@@ -37,6 +37,11 @@ export const FAR_IN_M = 650;
 export const FAR_OUT_M = 550;
 /** Rich crowns on screen at most, over the whole site (≈ 3.6 M triangles). */
 export const RICH_TREE_BUDGET = 2500;
+/**
+ * A phone's share of it (≈ 1.2 M triangles, paid twice with the shadow
+ * pass): the nearest street trees stay rich, a park's interior goes mid.
+ */
+export const PHONE_RICH_TREE_BUDGET = 800;
 /** A rich chunk competes for the budget as if it were this much closer. */
 const RICH_KEEP_BONUS_M = 60;
 
@@ -49,7 +54,10 @@ function distanceTier(c: ChunkLodState): "far" | "mid" {
  * The tier for each chunk, in input order: the distance tier, upgraded to
  * `rich` for the nearest eligible chunks while their trees fit the budget.
  */
-export function planCrownTiers(chunks: readonly ChunkLodState[]): CrownTier[] {
+export function planCrownTiers(
+  chunks: readonly ChunkLodState[],
+  budget: number = RICH_TREE_BUDGET
+): CrownTier[] {
   const tiers: CrownTier[] = chunks.map(distanceTier);
   const candidates: { key: number; index: number }[] = [];
   for (let i = 0; i < chunks.length; i++) {
@@ -63,7 +71,7 @@ export function planCrownTiers(chunks: readonly ChunkLodState[]): CrownTier[] {
     }
   }
   candidates.sort((a, b) => a.key - b.key);
-  let left = RICH_TREE_BUDGET;
+  let left = budget;
   for (const { index } of candidates) {
     const { trees } = chunks[index];
     if (trees <= left) {

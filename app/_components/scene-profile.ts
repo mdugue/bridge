@@ -285,14 +285,16 @@ export function tileCacheBytesFor(
 }
 
 /**
- * GTAO samples for a profile: headless SwiftShader cannot afford the
- * product's sample count. Keyed on the profile, not `navigator.webdriver` —
- * Playwright sets that flag in the `--headed` shot harness too, which must
- * render the product's AO. A construction-time setting: a change of the
- * count rebuilds the pass's material.
+ * GTAO samples for a profile and tier: headless SwiftShader cannot afford
+ * the product's sample count, and on a phone half of it is what the 5×5
+ * smoothing pass leaves visible anyway (post-stack.ts `aoSmoothed`) — the
+ * rest was fill rate a hot phone throttles for. Keyed on the profile, not
+ * `navigator.webdriver` — Playwright sets that flag in the `--headed` shot
+ * harness too, which must render the product's AO. A construction-time
+ * setting: a change of the count rebuilds the pass's material.
  */
-export function aoSamplesFor(profile: SceneProfile): number {
-  return profile === "lite" ? 8 : 16;
+export function aoSamplesFor(profile: SceneProfile, tier: DeviceTier): number {
+  return profile === "lite" || tier === "mobile" ? 8 : 16;
 }
 
 /**
@@ -333,7 +335,14 @@ export interface PostProfile {
   warmPaper: boolean;
 }
 
-/** The post profile of a device tier (see `PostProfile`). */
+/**
+ * The post profile of a device tier (see `PostProfile`). No tier warms the
+ * picture styles any more: on a desktop the idle warm-up built both styled
+ * pipelines, every style's crowns and lamp cones and Papier's and the
+ * figure ground's programs for the whole scene — and from then on every
+ * tile that landed compiled those too, for the session, for styles most
+ * visits never pick. A style now builds on its first frame (a hitch once).
+ */
 export function postProfileFor(tier: DeviceTier): PostProfile {
   return tier === "mobile"
     ? {
@@ -342,7 +351,12 @@ export function postProfileFor(tier: DeviceTier): PostProfile {
         warmStyles: "outline-only",
         warmPaper: false,
       }
-    : { dof: true, antialias: "smaa", warmStyles: "all", warmPaper: true };
+    : {
+        dof: true,
+        antialias: "smaa",
+        warmStyles: "outline-only",
+        warmPaper: false,
+      };
 }
 
 /**

@@ -97,3 +97,19 @@ export function fogRangeFor(t: number): { far: number; near: number } {
     far: FOG_CLEAR.far * (FOG_DENSE.far / FOG_CLEAR.far) ** k,
   };
 }
+
+/** How far past the fog's end the tiles still stream (a share of it). */
+const STREAM_FAR_MARGIN = 1.1;
+
+/**
+ * The far plane the tile renderer streams for: where the fog ends, plus a
+ * margin, never past the camera's own. Three's range fog runs on view
+ * depth — the far plane's measure — so past `fogFar` every fragment is the
+ * fog colour, which the sky's horizon band takes up too (sun-rig.ts): a
+ * tile wholly beyond it shows nothing. `fogFar` is the larger of the fog
+ * applied now and the one the look will open to, so the boot's tighter
+ * partial-world fog does not leave the tiles it hides to load later.
+ */
+export function streamFarFor(fogFar: number, cameraFar: number): number {
+  return Math.min(cameraFar, fogFar * STREAM_FAR_MARGIN);
+}

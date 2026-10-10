@@ -15,7 +15,7 @@ import {
   WebGPURenderer,
 } from "three/webgpu";
 import { uniform } from "three/tsl";
-import { fogRangeFor } from "@/lib/city/atmosphere";
+import { fogRangeFor, streamFarFor } from "@/lib/city/atmosphere";
 import { utmToLatLng } from "@/lib/city/crs";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
 import { createBootPhases } from "@/lib/city/boot-phases";
@@ -89,6 +89,10 @@ import {
 } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { valleyFalloff } from "@/lib/city/valley-fog";
+import {
+  PHONE_RICH_TREE_BUDGET,
+  RICH_TREE_BUDGET,
+} from "@/lib/city/vegetation-lod";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import {
   createModelRig,
@@ -163,6 +167,7 @@ import {
   type DressingPartName,
   showDataLayers,
   type TileDressing,
+  withinCompileWait,
 } from "./tile-stream";
 import { createNetworkWatch } from "./tile-retry";
 import { attachTouchControls } from "./touch-controls";
@@ -963,6 +968,18 @@ async function bootApp(
     6000
   );
   scene.add(camera);
+  // What the tile renderer streams for while walking or flying: the
+  // camera's twin with its far plane where the fog ends (`streamFarFor`,
+  // synced every frame before the stream's update). The 6 km frustum loaded,
+  // compiled, gave a BVH to and drew every building tile out to the site's
+  // edge as plain fog colour; the camera itself keeps its far plane for the
+  // sky dome. Modell streams for its own camera (`swapCamera`).
+  const streamCamera = new PerspectiveCamera(
+    camera.fov,
+    camera.aspect,
+    camera.near,
+    camera.far
+  );
   // What the post passes know of the camera drawing the frame (view-lens.ts),
   // and that camera: walk/fly's, or Modell's parallel one (model-rig.ts,
   // created with the pose below).
@@ -992,13 +1009,24 @@ async function bootApp(
     }
   };
 
-  /** One stage report for the HUD (lib/city/load-stages.ts). */
+  /**
+   * One stage report for the HUD (lib/city/load-stages.ts), passed on only
+   * when it says something new: the spawn wait polls every 50 ms and every
+   * tile event re-reports both streaming stages, and each report is a
+   * transition that re-renders the whole HUD.
+   */
   const stagesDone = new Set<LoadStageId>();
+  const stagesSent = new Map<LoadStageId, string>();
   const stage = (id: LoadStageId, fraction: number, skipped?: boolean) => {
     if ((fraction >= 1 || skipped) && !stagesDone.has(id)) {
       stagesDone.add(id);
       opts.trail?.note(`stage ${id}`, skipped ? "skipped" : undefined);
     }
+    const said = `${fraction}${skipped ? "s" : ""}`;
+    if (stagesSent.get(id) === said) {
+      return;
+    }
+    stagesSent.set(id, said);
     opts.onStage?.({ id, fraction, skipped });
   };
 
@@ -1220,7 +1248,7 @@ async function bootApp(
     world,
     [
       {
-        camera,
+        camera: streamCamera,
         width: container.clientWidth,
         height: container.clientHeight,
       },
@@ -1434,6 +1462,32 @@ async function bootApp(
     }
   };
   applyFog();
+  /** The stream camera onto the walk/fly camera, its far at the fog's end. */
+  const syncStreamCamera = () => {
+    camera.matrixWorld.decompose(
+      streamCamera.position,
+      streamCamera.quaternion,
+      streamCamera.scale
+    );
+    const far = streamFarFor(
+      Math.max(sceneFog.far.value, fogRangeFor(fogAmount).far),
+      camera.far
+    );
+    if (
+      streamCamera.far !== far ||
+      streamCamera.fov !== camera.fov ||
+      streamCamera.aspect !== camera.aspect ||
+      streamCamera.zoom !== camera.zoom
+    ) {
+      streamCamera.far = far;
+      streamCamera.fov = camera.fov;
+      streamCamera.aspect = camera.aspect;
+      streamCamera.zoom = camera.zoom;
+      streamCamera.updateProjectionMatrix();
+    }
+    streamCamera.updateMatrixWorld();
+  };
+  syncStreamCamera();
 
   stage("light", 0);
   const postStack = createPostStack(
@@ -1442,7 +1496,7 @@ async function bootApp(
     camera,
     activeCamera,
     lens,
-    aoSamplesFor(budget.profile),
+    aoSamplesFor(budget.profile, budget.tier),
     sceneFog,
     postProfileFor(budget.tier)
   );
@@ -1581,10 +1635,11 @@ async function bootApp(
     if (parallel) {
       stream.tiles.setCamera(model);
       stream.tiles.setResolution(model, width, height);
-      stream.tiles.deleteCamera(camera);
+      stream.tiles.deleteCamera(streamCamera);
     } else {
-      stream.tiles.setCamera(camera);
-      stream.tiles.setResolution(camera, width, height);
+      syncStreamCamera();
+      stream.tiles.setCamera(streamCamera);
+      stream.tiles.setResolution(streamCamera, width, height);
       stream.tiles.deleteCamera(model);
     }
     postStack.setModel(parallel);
@@ -2147,7 +2202,7 @@ async function bootApp(
     postStack.setSize();
     modelRig.resize();
     stream.tiles.setResolution(
-      modelRig.parallel() ? modelRig.camera : camera,
+      modelRig.parallel() ? modelRig.camera : streamCamera,
       container.clientWidth,
       container.clientHeight
     );
@@ -2235,10 +2290,15 @@ async function bootApp(
   // shadows, so it invalidates the map.
   const vegetationControls: VegetationControl[] = [];
   /** `eye`: where the tiers are measured from (Modell: above the pivot). */
+  const richTrees =
+    budget.tier === "mobile" ? PHONE_RICH_TREE_BUDGET : RICH_TREE_BUDGET;
   const stepVegetation = (elapsed: number, eye: Vector3) => {
     vegetationControls.length = 0;
     let lodChanged = false;
-    for (const d of stream.dressings) {
+    // The shown tiles only: a cached tile or the hidden level of a shown
+    // one would spend the rich-crown budget the view needs, and its tier
+    // flips redrew the shadow map for trees nobody sees.
+    for (const d of stream.visibleDressings()) {
       if (d.vegetation) {
         vegetationControls.push(d.vegetation);
         d.vegetation.setTime(elapsed);
@@ -2247,7 +2307,7 @@ async function bootApp(
         }
       }
     }
-    if (updateVegetationLod(vegetationControls, eye)) {
+    if (updateVegetationLod(vegetationControls, eye, richTrees)) {
       lodChanged = true;
     }
     if (lodChanged) {
@@ -2645,6 +2705,7 @@ async function bootApp(
     // What to stream, from where the cameras look now.
     const view = activeCamera();
     view.updateMatrixWorld();
+    syncStreamCamera();
     stream.tiles.update();
     // Advance every tile's water ripple and glitter (its sky tint is the
     // fog colour's node, in lockstep with the sun by construction).
@@ -2847,8 +2908,10 @@ async function bootApp(
   flushStats();
   // Tiles compile themselves before they show; this covers the rest of the
   // scene (sky, sun rig, lamp light pool), under the overlay instead of in
-  // the first visible frame.
-  await postStack.compile(scene).catch(() => undefined);
+  // the first visible frame. Bounded like a tile's compile: it resolves
+  // only once every compile in flight has (compile-lanes.ts), neighbours'
+  // included, and a frame skips what is not ready rather than stall.
+  await withinCompileWait(postStack.compile(scene).catch(() => undefined));
   // On the spawn vantage (or where a recovered page stood) now that its
   // ground exists (the pose was placed before any terrain had landed,
   // over the fallback floor).

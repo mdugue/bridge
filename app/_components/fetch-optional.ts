@@ -69,6 +69,8 @@ export interface FetchBytesOptions {
   gunzip?: boolean;
   /** the rest of the request (`cache`, headers) */
   init?: RequestInit;
+  /** how long an attempt may go without a byte (default `STALL_MS`) */
+  stallMs?: number;
 }
 
 const NO_BYTES = new Uint8Array(0);
@@ -93,35 +95,119 @@ async function inflate(
 }
 
 /**
- * Fetches `url` and reads its body, retrying network failures and
- * transient statuses (lib/city/fetch-retry.ts `withRetry`): resolves with
- * the final status — the body only when it is ok —, rejects with an
- * AbortError on abort, the error itself when it is not the network's, or a
- * NetworkError (`transient`, `attempts`) once the budget is spent.
+ * How long one attempt may go without a byte — before its headers, or
+ * between two chunks of its body — before it counts as failed and is
+ * tried again. A browser leaves a request whose connection went silent
+ * (a captive Wi-Fi, a mobile handover) pending for minutes, and the boot
+ * waited on it: the bar stood still with nothing left to retry. A slow
+ * link that keeps delivering is never cut.
+ */
+export const STALL_MS = 30_000;
+
+/** An attempt that went silent (`STALL_MS`): the network's, so retried. */
+class StalledError extends Error {
+  readonly transient = true;
+  constructor(url: string, ms: number) {
+    super(`No data from ${url} for ${ms / 1000} s`);
+    this.name = "StalledError";
+  }
+}
+
+/** The body read chunk by chunk, each chunk proof of life (`touch`). */
+async function readBody(
+  res: Response,
+  touch: () => void
+): Promise<Uint8Array<ArrayBuffer>> {
+  const reader = res.body?.getReader();
+  if (!reader) {
+    return new Uint8Array(await res.arrayBuffer());
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    touch();
+    chunks.push(value);
+    size += value.byteLength;
+  }
+  const body = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return body;
+}
+
+/**
+ * One attempt at `url` under the stall guard: its own abort, fired by the
+ * caller's signal or by `STALL_MS` without a byte — the latter rethrown as
+ * a `StalledError`, which the retries take for the network's.
+ */
+async function attempt(
+  url: string,
+  opts: FetchBytesOptions
+): Promise<{
+  status: number;
+  retryAfter?: string | null;
+  value: Uint8Array<ArrayBuffer>;
+}> {
+  const stall = new AbortController();
+  const { signal, release } = eitherSignal(opts.signal, stall.signal);
+  const stallMs = opts.stallMs ?? STALL_MS;
+  let timer = setTimeout(() => stall.abort(), stallMs);
+  const touch = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => stall.abort(), stallMs);
+  };
+  try {
+    const res = await fetch(url, { ...opts.init, signal });
+    touch();
+    if (!res.ok) {
+      // an error page's body is never read
+      void res.body?.cancel().catch(() => undefined);
+      return {
+        status: res.status,
+        retryAfter: res.headers.get("retry-after"),
+        value: NO_BYTES,
+      };
+    }
+    const raw = await readBody(res, touch);
+    const bytes = opts.gunzip && isGzipped(raw) ? await inflate(raw) : raw;
+    return { status: res.status, value: bytes };
+  } catch (err) {
+    if (stall.signal.aborted && !opts.signal?.aborted) {
+      throw new StalledError(url, stallMs);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    release();
+  }
+}
+
+/**
+ * Fetches `url` and reads its body, retrying network failures, stalls
+ * (`STALL_MS`) and transient statuses (lib/city/fetch-retry.ts
+ * `withRetry`): resolves with the final status — the body only when it is
+ * ok —, rejects with an AbortError on abort, the error itself when it is
+ * not the network's, or a NetworkError (`transient`, `attempts`) once the
+ * budget is spent.
  */
 export async function fetchBytes(
   url: string,
   opts: FetchBytesOptions
 ): Promise<FetchedBytes> {
-  const { signal, budgetMs, init } = opts;
-  const answer = await withRetry(
-    async () => {
-      const res = await fetch(url, { ...init, signal });
-      if (!res.ok) {
-        // an error page's body is never read
-        void res.body?.cancel().catch(() => undefined);
-        return {
-          status: res.status,
-          retryAfter: res.headers.get("retry-after"),
-          value: NO_BYTES,
-        };
-      }
-      const raw = new Uint8Array(await res.arrayBuffer());
-      const bytes = opts.gunzip && isGzipped(raw) ? await inflate(raw) : raw;
-      return { status: res.status, value: bytes };
-    },
-    { budgetMs, env: PAGE_RETRY_ENV, signal, onRetry: reportRetry }
-  );
+  const { signal, budgetMs } = opts;
+  const answer = await withRetry(() => attempt(url, opts), {
+    budgetMs,
+    env: PAGE_RETRY_ENV,
+    signal,
+    onRetry: reportRetry,
+  });
   return {
     status: answer.status,
     ok: answer.status >= 200 && answer.status < 300,

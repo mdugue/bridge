@@ -1283,7 +1283,8 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
  */
 export function updateVegetationLod(
   controls: readonly VegetationControl[],
-  cameraPos: Vector3
+  cameraPos: Vector3,
+  richBudget?: number
 ): boolean {
   const all: VegetationChunk[] = [];
   const states: ChunkLodState[] = [];
@@ -1299,7 +1300,7 @@ export function updateVegetationLod(
       });
     }
   }
-  const tiers = planCrownTiers(states);
+  const tiers = planCrownTiers(states, richBudget);
   let changed = false;
   for (let i = 0; i < all.length; i++) {
     if (tiers[i] !== all[i].tier) {

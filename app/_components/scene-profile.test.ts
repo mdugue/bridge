@@ -92,9 +92,10 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
   expect(sceneBudgetFor("?gpu=webgpu", false).forceWebGL).toBe(false);
 });
 
-test("aoSamplesFor halves the GTAO samples only in the lite profile", () => {
-  expect(aoSamplesFor("full")).toBe(16);
-  expect(aoSamplesFor("lite")).toBe(8);
+test("aoSamplesFor halves the GTAO samples in the lite profile and on a phone", () => {
+  expect(aoSamplesFor("full", "desktop")).toBe(16);
+  expect(aoSamplesFor("full", "mobile")).toBe(8);
+  expect(aoSamplesFor("lite", "desktop")).toBe(8);
 });
 
 test("tileCacheBytesFor keeps less out-of-view content on a phone", () => {
@@ -122,12 +123,13 @@ test("tileCacheBytesFor can always unload the largest tile", () => {
 test("postProfileFor leaves the costly post work to the desktop", () => {
   const desktop = postProfileFor("desktop");
   const phone = postProfileFor("mobile");
-  // the desktop keeps the full picture: lens blur, SMAA, every style warm
+  // the desktop keeps the full picture: lens blur and SMAA; no tier warms
+  // the picture styles
   expect(desktop).toEqual({
     dof: true,
     antialias: "smaa",
-    warmStyles: "all",
-    warmPaper: true,
+    warmStyles: "outline-only",
+    warmPaper: false,
   });
   // a phone builds no lens blur, antialiases without targets of its own
   // and warms nothing but the outline

@@ -1381,12 +1381,14 @@ interface TerrainRasters {
 }
 
 /**
- * The level's rasters, one after another on purpose: several 4096² rasters
- * decoding at once is a peak mobile Safari kills the tab for (and across
- * the levels the tile renderer parses at once, each raster decodes and
- * uploads in its turn: raster-upload.ts). Those a tile's two levels share
- * (tile-stream.ts) are held, not owned; on an abort everything taken so far
- * is let go again — on the GPU already, so let go means freed there too.
+ * The level's rasters. They are all asked for at once — each is a round
+ * trip of its own, and a fine level names up to ten — while their decodes
+ * and uploads still take turns site-wide (raster-upload.ts): several 4096²
+ * rasters decoding at once is a peak mobile Safari kills the tab for, a
+ * few compressed files waiting for their turn are not. Those a tile's two
+ * levels share (tile-stream.ts) are held, not owned; on an abort or a
+ * failure everything taken is let go again — on the GPU already, so let
+ * go means freed there too.
  */
 async function loadTerrainRasters(
   extras: TerrainExtras,
@@ -1414,19 +1416,40 @@ async function loadTerrainRasters(
   };
   try {
     const classFile = opts.lowRasters ? extras.landcoverLow : extras.landcover;
-    const rasters = await hold(
-      opts.splats,
-      classFile ? opts.fileUrl(classFile) : undefined
-    );
+    const [rasters, detail] = await settledAll([
+      hold(opts.splats, classFile ? opts.fileUrl(classFile) : undefined),
+      loadDetailRasters(extras, opts, hold, owned),
+    ]);
     opts.signal?.throwIfAborted();
-    const detail = rasters
-      ? await loadDetailRasters(extras, opts, hold, owned)
-      : NO_DETAIL;
+    if (!rasters) {
+      // no class raster to paint the detail over: the flat sage ground
+      free();
+      return { rasters, detail: NO_DETAIL, free };
+    }
     return { rasters, detail, free };
   } catch (err) {
     free();
     throw err;
   }
+}
+
+/**
+ * Every promise settled, then their values — or the first rejection, once
+ * none is still running: what the others brought is in `owned` / `holds`
+ * by then, so the caller's `free` lets go of all of it.
+ */
+async function settledAll<T extends readonly unknown[]>(promises: {
+  [K in keyof T]: Promise<T[K]>;
+}): Promise<T> {
+  const results = await Promise.allSettled(promises);
+  const failed = results.find((r) => r.status === "rejected");
+  if (failed) {
+    throw failed.reason;
+  }
+  // reason: every result is fulfilled here, in the tuple's order
+  return results.map(
+    (r) => (r as PromiseFulfilledResult<unknown>).value
+  ) as unknown as T;
 }
 
 /**
@@ -1442,9 +1465,22 @@ export function readsSportGrounds(level: 0 | 1, lowRasters: boolean): boolean {
   return !(lowRasters && level === 1);
 }
 
-/** The optional rasters over the class raster, one after another (see
+/** A raster the level owns, taken into `owned` as soon as it lands. */
+function owning<T extends Texture>(
+  owned: Texture[],
+  load: Promise<T | null> | null
+): Promise<T | null> {
+  return (load ?? Promise.resolve(null)).then((texture) => {
+    if (texture) {
+      owned.push(texture);
+    }
+    return texture;
+  });
+}
+
+/** The optional rasters over the class raster, all asked for at once (see
  *  loadTerrainRasters); each absent one is null. The level's own go into
- *  `owned`. */
+ *  `owned` as they land. */
 async function loadDetailRasters(
   extras: TerrainExtras,
   opts: TerrainOptions,
@@ -1452,64 +1488,66 @@ async function loadDetailRasters(
   owned: Texture[]
 ): Promise<DetailRasters> {
   const url = (file?: string) => (file ? opts.fileUrl(file) : undefined);
-  const own = <T extends Texture>(texture: T | null): T | null => {
-    if (texture) {
-      owned.push(texture);
-    }
-    return texture;
-  };
-  const ndviTexture = await hold(opts.ndvis, url(extras.ndvi));
-  opts.signal?.throwIfAborted();
+  const { renderer, signal } = opts;
   // The paving patterns are close-range: the build names the raster on the
   // fine level only.
   const surface = url(extras.surface);
-  const surfaceTexture = own(
-    surface
-      ? await loadSurfaceTexture(surface, opts.renderer, opts.signal)
-      : null
-  );
   const edges = url(extras.edges);
-  const edgesTexture = own(
-    edges ? await loadEdgesTexture(edges, opts.renderer, opts.signal) : null
-  );
   const sportRaster = readsSportGrounds(extras.level, opts.lowRasters)
     ? url(extras.sport)
     : undefined;
   const sportTable = url(extras.sportTable);
-  const sport = await hold(
-    opts.sports,
-    sportRaster && sportTable ? sportKey(sportRaster, sportTable) : undefined
-  );
-  opts.signal?.throwIfAborted();
   // Road markings: close-range paint, the fine level only; phones read the
   // 1024² twin (the same table).
   const markingsRaster = url(
     (opts.lowRasters ? extras.markingsLow : undefined) ?? extras.markings
   );
   const markingsTable = url(extras.markingsTable);
-  const markings =
-    markingsRaster && markingsTable
-      ? await loadMarkings(
-          markingsRaster,
-          markingsTable,
-          opts.renderer,
-          opts.signal
-        )
-      : null;
-  own(markings?.raster ?? null);
-  own(markings?.table ?? null);
   // Allotment colonies: the fine level only, phones the half-resolution
   // twin of the same crop.
   const colonies = url(
     (opts.lowRasters ? extras.cultivatedLow : undefined) ?? extras.cultivated
   );
-  const colonyTexture = own(
-    colonies
-      ? await loadColonyTexture(colonies, opts.renderer, opts.signal)
-      : null
-  );
-  const horizon = await hold(opts.horizon, url(extras.horizon));
-  const svf = await hold(opts.skyView, url(extras.svf));
+  const markingsLoad =
+    markingsRaster && markingsTable
+      ? loadMarkings(markingsRaster, markingsTable, renderer, signal).then(
+          (markings) => {
+            if (markings) {
+              owned.push(markings.raster, markings.table);
+            }
+            return markings;
+          }
+        )
+      : Promise.resolve(null);
+  const [
+    ndviTexture,
+    surfaceTexture,
+    edgesTexture,
+    sport,
+    markings,
+    colonyTexture,
+    horizon,
+    svf,
+  ] = await settledAll([
+    hold(opts.ndvis, url(extras.ndvi)),
+    owning(
+      owned,
+      surface ? loadSurfaceTexture(surface, renderer, signal) : null
+    ),
+    owning(owned, edges ? loadEdgesTexture(edges, renderer, signal) : null),
+    hold(
+      opts.sports,
+      sportRaster && sportTable ? sportKey(sportRaster, sportTable) : undefined
+    ),
+    markingsLoad,
+    owning(
+      owned,
+      colonies ? loadColonyTexture(colonies, renderer, signal) : null
+    ),
+    hold(opts.horizon, url(extras.horizon)),
+    hold(opts.skyView, url(extras.svf)),
+  ]);
+  signal?.throwIfAborted();
   return {
     ndviTexture,
     surfaceTexture,
