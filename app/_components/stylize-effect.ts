@@ -287,7 +287,8 @@ export interface Stylize {
   node: (input: V4) => V4;
   /** Sets the mode and pen of a style (no rebuild: uniforms). */
   setStyle: (style: RenderStyleDef) => void;
-  /** Outline strength, 0..~1.25 (the ink slider times the style's weight). */
+  /** Outline strength, 0..~1.25 (post-stack.ts `INK` times the style's
+   *  weight). */
   setInk: (value: number) => void;
   /**
    * The sun's altitude, for Film noir's exposure: the light starts to go

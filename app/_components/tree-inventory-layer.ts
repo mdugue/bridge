@@ -14,11 +14,7 @@ import { familyLook, TRUNK_BASE } from "@/lib/city/tree-family";
 import { ageLook } from "@/lib/city/tree-age";
 import { buildTreeStakes } from "./tree-stakes";
 import { buildTreePlan } from "./tree-plan";
-import {
-  LOOK_DEFAULTS,
-  type VegetationLookKey,
-} from "@/lib/city/look-controls";
-import type { Live } from "./shader-chunks";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
   CROWN_SHAPES,
   type CrownShape,
@@ -524,10 +520,6 @@ export function buildTreeInventory(
   // The scene's crown materials and uniforms, as the canopy's (sceneCrowns).
   const crownMats = sceneCrowns(ctx.sunDirection);
   const u = crownMats.uniforms;
-  const rowUniform: Record<VegetationLookKey, Live> = {
-    shimmer: u.shimmer,
-    translucency: u.translucency,
-  };
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   const counts = { broad: 0, spindle: 0, cone: 0, weep: 0 };
 
@@ -578,9 +570,6 @@ export function buildTreeInventory(
       chunks: [],
       multiTuft: () => multiTuft,
       applyLook: (look) => {
-        for (const key of Object.keys(rowUniform) as VegetationLookKey[]) {
-          rowUniform[key].value = look[key];
-        }
         multiTuft = look.multiTuft;
       },
       setTime: (seconds) => {

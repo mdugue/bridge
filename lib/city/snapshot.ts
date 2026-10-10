@@ -1,6 +1,8 @@
 /**
  * The Snapshot contract: a fully reproducible capture of the view (camera
  * pose + sun instant + every look control) as it round-trips through JSON.
+ * The look's fixed strengths are not in it: they are the code's, so a
+ * snapshot shows them as the build it is pasted into has them.
  * `parseSnapshot` validates a pasted snapshot before anything is applied, so
  * a trimmed or hand-edited one (the documented QA workflow) reports what is
  * wrong instead of yielding NaN camera matrices. No THREE, no DOM.
@@ -49,8 +51,8 @@ export interface SnapshotLook {
   /**
    * Per-control percentages, keyed by LookControlDef.snapshotKey (all
    * optional: older snapshots omit newer controls). Keys of removed
-   * controls (`transparencyPct`, `dof`, `focusMode`, …) are unknown keys:
-   * kept, never checked, never applied.
+   * controls (`RETIRED_SNAPSHOT_KEYS`: `tintPct`, `inkPct`, `dof`, …) are
+   * unknown keys: kept, never checked, never applied.
    */
   [pctKey: string]: boolean | number | string | undefined;
 }

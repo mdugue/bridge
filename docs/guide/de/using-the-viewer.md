@@ -390,10 +390,12 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   Blatt — eine Zeile je Tag, eine Spalte je Uhrzeit — mit der Legende
   darunter (im Modell mit Maßstabsleiste und Nordpfeil). Die Uhrzeiten
   sind die Ortszeit deines Geräts.
-- **Darstellung** — ganz oben der **Bildstil**, darunter Regler in vier
-  aufklappbaren Gruppen. Jeder Regler ist eine Prozentzahl; die
-  Voreinstellungen sind der abgestimmte Look. *Zurücksetzen* stellt die
-  Regler zurück und lässt den Bildstil, wie er ist.
+- **Darstellung** — ganz oben der **Bildstil**, darunter der eine
+  verbliebene Regler, *Nebel* (der Entfernungsdunst, eine Prozentzahl),
+  und der Schalter *Multi-Tuft-Kronen (nah)* (reiche Mehrbüschel-Kronen
+  nahe der Kamera; aus = die einfache Krone überall). *Zurücksetzen*
+  stellt beide auf ihren Startwert zurück und lässt den Bildstil, wie er
+  ist. Der übrige Look ist fest (unten).
 
 Der Bildstil zeichnet dieselbe Stadt auf eine andere Art; er lässt sich
 jederzeit wechseln, per Klick oder mit `V`. Der Browser merkt sich den
@@ -413,10 +415,14 @@ In den grafischen Stilen *Comic*, *Sin City*, *Strich* und *Schwarzplan*
 ruht die Tiefenschärfe (ein unscharfer Hintergrund unter scharfen Linien
 wirkt wie ein Fehler).
 
-| Gruppe | Regler | Was er tut |
+Der Look selbst ist fest: der abgestimmte Look, für jeden Besucher und in
+jedem Snapshot derselbe — ihn zu ändern ist eine Änderung am Code, keine
+Einstellung. Das sind die Anteile, die er zeichnet, unter den Namen, die
+Code und Wissensbasis für sie verwenden:
+
+| Gruppe | Anteil | Was er zeichnet |
 |---|---|---|
-| Atmosphäre | *Nebel* | Entfernungsdunst |
-| | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
+| Atmosphäre | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
 | | *Tiefenfärbung* | warm nah, kühl fern: eine tiefenabhängige Farbgebung |
 | Gebäude | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
 | | *Höhenlinien* | zarte Geschossbänder, aus der gemessenen Höhe abgeleitet |
@@ -435,7 +441,6 @@ wirkt wie ein Fehler).
 | | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
 | | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |
 | | *Blattdurchscheinen* | Durchleuchtung naher, großer Kronen (schattenabhängig) |
-| | *Multi-Tuft-Kronen (nah)* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
@@ -443,8 +448,9 @@ wirkt wie ein Fehler).
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
 
-Zwei Effekte haben gar keinen Regler. Der Nebel über dem Fluss treibt
-erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der Ferne.
+Zwei weitere Effekte gehören zum festen Look. Der Nebel über dem Fluss
+treibt erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der
+Ferne.
 Die fotografische Tiefenschärfe macht nur unscharf, was hinter dem Fokus
 liegt (der Vordergrund bleibt scharf), und scharf ist immer, was in der
 Bildmitte liegt. Solange sich die Kamera bewegt, ist die Unschärfe
@@ -460,12 +466,14 @@ kann, den ein kleiner Bildschirm kaum zeigt.
   lässt sich nicht rückgängig machen. *Bild speichern* speichert die
   Ansicht als PNG mit ihren Quellen (siehe [Modell](#modell-die-stadt-als-planzeichnung)). *Immersiver Modus* fängt den
   Mauszeiger für ein Ego-Perspektive-Gefühl ein; `Esc` verlässt ihn.
-- **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und Uhrzeit,
-  den Bildstil und jeden Regler als kleinen JSON-Text; einen solchen Text in das Feld
+- **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und
+  Uhrzeit, den Bildstil, den *Nebel*, den Kronen-Schalter und die
+  Datenebenen als kleinen JSON-Text; einen solchen Text in das Feld
   einfügen und *Anwenden* drücken stellt ihn wieder her. So wird eine
   bestimmte Ansicht geteilt oder für einen Screenshot reproduziert. Ein
-  fehlerhafter Snapshot wird mit einer Meldung abgelehnt, statt die Szene
-  zu zerstören.
+  Snapshot von vor dem festen Look lädt weiter; die Regler, die er nennt,
+  werden übergangen. Ein fehlerhafter Snapshot wird mit einer Meldung
+  abgelehnt, statt die Szene zu zerstören.
 - **Statistik** — Anzahl der Gebäude und Geländepunkte, die gerade im
   Blick sind, geschätzter Grafikspeicher und die Bildrate.
 
@@ -484,8 +492,9 @@ der erst beim Klick etwas von Ko-fi lädt.
 - Goldene Stunde (Sonne wenige Grad über dem Horizont) und blaue Stunde
   (wenige Grad darunter) geben die reichsten Farben; probiere 07:00 oder
   20:00 im Sommer.
-- Auf einem Laptop ohne eigene Grafikkarte senke *Kontaktschatten*, um
-  mehr Bilder pro Sekunde zu bekommen.
+- Auf einem Laptop ohne eigene Grafikkarte bringt ein kleineres
+  Browserfenster mehr Bilder pro Sekunde: Die Szene kostet mit jedem
+  Pixel, das sie zeichnet.
 - `?scene=lite` hinter der Adresse der Stadt (`/dresden?scene=lite`)
   streamt nur die Startkachel, mit groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
   die Szene aussehen soll.

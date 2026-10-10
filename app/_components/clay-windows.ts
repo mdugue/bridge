@@ -34,7 +34,7 @@ import {
   WINDOW_SILL,
   WINDOW_STYLE,
 } from "@/lib/city/windows";
-import type { F, Live, V3, V4 } from "./shader-chunks";
+import type { F, V3, V4 } from "./shader-chunks";
 
 /**
  * The parts round a window (m), drawn on the wall: the sill (Sohlbank)
@@ -86,8 +86,8 @@ export interface WindowInputs {
   /** the object's window row: axis, width, height, style */
   spec: V4;
   storey: F;
-  /** the windows' strength (the *Fenster* row) */
-  strength: Live;
+  /** the windows' strength (*Fenster*, visual-style.ts `WINDOWS`) */
+  strength: F;
   /** world, surface → sun */
   sun: UniformNode<"vec3", Vector3>;
   /** 1 on walls */
@@ -482,8 +482,8 @@ function arris(g: Grid, wn: V3, px: Px) {
  * Every edge is anti-aliased by its pixel footprint; once a window is a few
  * pixels wide the drawing hands over to the facade's mean tone (the
  * openings' share of a storey, darker), so a far street never shimmers.
- * At night a share of the windows is lit, warm (`glow`, on the dusk light's
- * row). Branch-free: fwidth needs uniform control flow.
+ * At night a share of the windows is lit, warm (`glow`, at the dusk light's
+ * strength). Branch-free: fwidth needs uniform control flow.
  */
 export function clayWindows(i: WindowInputs): ClayWindows {
   const g = grid(i);
