@@ -157,55 +157,18 @@ const yieldToFrame = () =>
   });
 
 /**
- * Where the unfiltered rows go: straight into the raster (every column
- * kept), or through two row buffers from which every `every`-th byte is
- * kept — the unfilter needs the whole row above, the raster does not.
- */
-function rowSink(width: number, height: number, every: number) {
-  const outWidth = Math.ceil(width / every);
-  const data = new Uint8Array(outWidth * height);
-  let prev = new Uint8Array(width);
-  let cur = new Uint8Array(width);
-  return {
-    data,
-    outWidth,
-    /** unfilters row y (filter byte + scanline) into the raster */
-    push: (y: number, filter: number, line: Uint8Array) => {
-      if (every === 1) {
-        const out = data.subarray(y * width, (y + 1) * width);
-        const above = y > 0 ? data.subarray((y - 1) * width, y * width) : prev;
-        unfilterRow(filter, line, above, out);
-        return;
-      }
-      unfilterRow(filter, line, prev, cur);
-      const at = y * outWidth;
-      for (let i = 0; i < outWidth; i++) {
-        data[at + i] = cur[i * every];
-      }
-      [prev, cur] = [cur, prev];
-    },
-  };
-}
-
-/**
  * Decodes an 8-bit greyscale PNG to its exact bytes. Throws on anything else.
  * The inflate runs in the browser's stream machinery and is unfiltered row
  * by row as it arrives, so the inflated stream is never held whole; the
  * work is sliced (yielding every few hundred rows) so a 4096² raster —
  * ~80 ms of work — never stalls a frame while a tile streams in.
- *
- * `every` keeps one column in that many (the first of each run): a raster
- * packed several bytes per texel keeps one of its bytes without the rest
- * ever being allocated — the soundscape's 8192 × 2048 paving raster is
- * 4 MB of R, not 16 MB of RGBA (soundscape/hearing.ts).
  */
-export async function decodeGreyPng(
-  png: Uint8Array,
-  every = 1
-): Promise<GreyRaster> {
+export async function decodeGreyPng(png: Uint8Array): Promise<GreyRaster> {
   const { width, height, idat } = readParts(png);
   const stride = width + 1;
-  const sink = rowSink(width, height, every);
+  const data = new Uint8Array(width * height);
+  // The row above the first: the filters read it as zeros.
+  const zeroRow = new Uint8Array(width);
   const row = new Uint8Array(stride);
   let filled = 0;
   let y = 0;
@@ -224,7 +187,9 @@ export async function decodeGreyPng(
       if (filled < stride) {
         break;
       }
-      sink.push(y, row[0], row.subarray(1));
+      const out = data.subarray(y * width, (y + 1) * width);
+      const above = y > 0 ? data.subarray((y - 1) * width, y * width) : zeroRow;
+      unfilterRow(row[0], row.subarray(1), above, out);
       filled = 0;
       y++;
       if (y % ROWS_PER_SLICE === 0) {
@@ -236,5 +201,5 @@ export async function decodeGreyPng(
     throw new Error("truncated PNG data");
   }
   await reader.cancel();
-  return { width: sink.outWidth, height, data: sink.data };
+  return { width, height, data };
 }

@@ -104,18 +104,17 @@ export interface TileArtifact {
   required: boolean;
 }
 
-/** The edge of the class raster the minimap and the soundscape read: the
- *  minimap paints 256² per tile, the soundscape keeps 512². */
+/** The edge of the class raster the minimap reads (it paints 256² per
+ *  tile). */
 export const SMALL_RASTER_PX = 512;
 
 /**
  * One row per side file. Besides its name, a row says where the viewer
  * finds it — `dressing`: named in the fine terrain's dressing extras
  * (tile-stream.ts fetches it per tile); `coarse`: named in the coarse
- * terrain's, for what must show beyond the fine level's reach; `sound`: named in the tileset's
- * tile list for the soundscape (plan 035); `ask`: named there for the
- * inquiry card (ADR 0042), fetched only when something is asked — and
- * `osm`: the file is derived
+ * terrain's, for what must show beyond the fine level's reach; `ask`:
+ * named in the tileset's tile list for the inquiry card (ADR 0042),
+ * fetched only when something is asked — and `osm`: the file is derived
  * from OpenStreetMap, so its JSON carries the ODbL credit (checked over
  * every committed file by features.test.ts). The raster rows the terrain
  * reads are named by prepare-data.ts's terrain extras.
@@ -130,7 +129,6 @@ interface ArtifactSpec {
   file: (tile: string) => string;
   osm?: true;
   required?: true;
-  sound?: true;
 }
 
 const named =
@@ -153,8 +151,7 @@ const ARTIFACTS = {
     required: true,
     bakedFrom: { file: named("landcover", "png"), raster: COARSE_RASTER_PX },
   },
-  // The minimap's and the soundscape's class raster: 1/16 of the phone
-  // raster's pixels, which is all either of them keeps.
+  // The minimap's class raster: 1/16 of the phone raster's pixels.
   landcoverSmall: {
     file: (tile) => `landcover_${tile}.r${SMALL_RASTER_PX}.png`,
     required: true,
@@ -170,7 +167,7 @@ const ARTIFACTS = {
   ndvi: { file: named("ndvi", "png") },
   // Optional: the OSM paving raster (pipeline/bake/surface.py); without
   // it the ground draws the land-cover class's default pattern.
-  surface: { file: named("surface", "png"), sound: true },
+  surface: { file: named("surface", "png") },
   // Optional: the smoothed road/meadow edge distances
   // (pipeline/bake/edges.py); without them the shader reads the class
   // texels (kerb band only, no parking lanes).
@@ -184,7 +181,7 @@ const ARTIFACTS = {
   // (pipeline/bake/skyview.py, from the committed DGM + LoD2): the
   // ambient light the city lets through and the long shadows past the
   // shadow map. Without them the light is as before.
-  svf: { file: named("svf", "png"), sound: true },
+  svf: { file: named("svf", "png") },
   horizon: { file: named("horizon", "png") },
   // Optional: what street photos say about each building's facade
   // (lib/city/facade-reading.ts; Mapillary, CC BY-SA 4.0): the clay's
@@ -210,11 +207,7 @@ const ARTIFACTS = {
   lamps: { file: named("lamps", "geojson"), dressing: true, osm: true },
   // Basis-DLM monuments, plus the OSM fountain basins where the tile has
   // them: the bake credits OSM only then, so the row is not `osm`.
-  monuments: {
-    file: named("monuments", "geojson"),
-    dressing: true,
-    sound: true,
-  },
+  monuments: { file: named("monuments", "geojson"), dressing: true },
   furniture: { file: named("furniture", "geojson"), dressing: true, osm: true },
   // Optional: the lamps and bins OSM lacks, from Mapillary's detected
   // objects (pipeline/bake/mapillary.py, CC BY-SA — its own file, never
@@ -231,19 +224,10 @@ const ARTIFACTS = {
   platform: { file: named("platform", "geojson"), dressing: true, osm: true },
   // Optional: the OSM trams — tracks, catenary supports, stop signs
   // (pipeline/bake/tram.py); without it the tile has no trams.
-  tram: {
-    file: named("tram", "geojson"),
-    dressing: true,
-    sound: true,
-    osm: true,
-  },
+  tram: { file: named("tram", "geojson"), dressing: true, osm: true },
   // Optional: the OSM landing stages, groynes and ferry lines
   // (pipeline/bake/riverside.py); a tile without the river has none.
   riverside: { file: named("riverside", "geojson"), dressing: true, osm: true },
-  // Optional: the bell towers (pipeline/bake/soundmarks.py) the hidden
-  // soundscape strikes the hour from (plan 035); fetched only while it
-  // plays.
-  soundmarks: { file: named("soundmarks", "geojson"), sound: true, osm: true },
   // Optional: the street-tree cadastre (pipeline/bake/trees.py), the OSM
   // hedges and the laser-scan crowns outside the canopy mask
   // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).
@@ -273,14 +257,12 @@ const ARTIFACTS = {
 
 type Specs = typeof ARTIFACTS;
 export type TileArtifactKind = keyof Specs;
-type Flag = "ask" | "coarse" | "dressing" | "osm" | "sound";
+type Flag = "ask" | "coarse" | "dressing" | "osm";
 type KindsWith<F extends Flag> = {
   [K in TileArtifactKind]: Specs[K] extends Record<F, true> ? K : never;
 }[TileArtifactKind];
 /** The side files named in a fine terrain's dressing extras. */
 export type DressingKind = KindsWith<"dressing">;
-/** The side files the soundscape fetches. */
-export type SoundKind = KindsWith<"sound">;
 
 const kindsWith = <F extends Flag>(flag: F) =>
   (Object.keys(ARTIFACTS) as TileArtifactKind[]).filter(
@@ -299,7 +281,6 @@ export const DRESSING_KINDS: readonly DressingKind[] = kindsWith("dressing");
 export type CoarseDressingKind = KindsWith<"coarse">;
 export const COARSE_DRESSING_KINDS: readonly CoarseDressingKind[] =
   kindsWith("coarse");
-export const SOUND_KINDS: readonly SoundKind[] = kindsWith("sound");
 /** The side files only the inquiry card fetches. */
 export type AskKind = KindsWith<"ask">;
 export const ASK_KINDS: readonly AskKind[] = kindsWith("ask");

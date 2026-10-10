@@ -173,15 +173,9 @@ import { createNetworkWatch } from "./tile-retry";
 import { installMainYield } from "./main-yield";
 import { attachTouchControls } from "./touch-controls";
 import {
-  treesWithin,
   updateVegetationLod,
   type VegetationControl,
 } from "./vegetation-layer";
-import {
-  type Listening,
-  type SoundTile,
-  soundTileOf,
-} from "@/lib/city/sound-entry";
 import {
   applyCityLook,
   createStyleResources,
@@ -613,14 +607,6 @@ export interface CityWalkHandle {
   getGlideTarget: () => { epsgX: number; epsgY: number } | null;
   /** the site's extent in EPSG coordinates — the minimap frame */
   terrainBounds: TerrainBounds;
-  /**
-   * The hidden soundscape's ear (plan 035): the camera's height above the
-   * ground, the movement mode, the trees within `treeRadius` m and the
-   * clock the crowns sway with. Read at the pose rate while sound plays.
-   */
-  listen: (treeRadius: number) => Listening;
-  /** per tile, the files the soundscape fetches while it plays (URLs) */
-  soundTiles: SoundTile[];
 }
 
 /**
@@ -3159,26 +3145,6 @@ async function bootApp(
     getFootprints: currentFootprints,
     ...siteInfo,
     offset,
-    // In Modell the ear hangs over the pivot, as high as the picture is
-    // equivalent to: a model on a table hears the city from above.
-    listen: (treeRadius) => {
-      const target = modelRig.owns() ? modelRig.targetView() : null;
-      const at = target?.pivot ?? camera.position;
-      return {
-        clock: timer.getElapsed(),
-        heightAboveGround: target
-          ? (modelRig.equivalentDistance() ?? 600)
-          : camera.position.y - groundUnderCamera(),
-        mode: target ? "fly" : pose.getMode(),
-        trees: treesWithin(
-          [...stream.dressings].flatMap((d) => d.vegetation?.chunks ?? []),
-          at.x,
-          at.z,
-          treeRadius
-        ),
-      };
-    },
-    soundTiles: extras.tiles.map((t) => soundTileOf(t, tilesetUrl)),
     dispose: () => {
       if (disposed) {
         return;

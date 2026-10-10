@@ -1,9 +1,9 @@
 /**
  * The site's walkable ground, one owner for every caller that asks where
  * the ground is — the pose, the double-tap target, the focus, the shadow
- * frustum, the soundscape: the visible terrains' heights (fine level
- * first), the lowest terrain seen so far as the floor off every tile, and
- * rays against both. No THREE, no DOM.
+ * frustum: the visible terrains' heights (fine level first), the lowest
+ * terrain seen so far as the floor off every tile, and rays against both.
+ * No THREE, no DOM.
  */
 import { type RecenterOffset, worldToEpsg } from "./ground-clamp";
 import { groundRayDistance } from "./ground-ray";

@@ -86,7 +86,6 @@ import { hintsFor } from "./control-hints";
 import { LegalLinks } from "./legal-links";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { ProjectionPanel } from "./projection-panel";
-import type { SoundscapeControl } from "./soundscape-toggle";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
 import {
@@ -833,8 +832,6 @@ export interface SceneSidebarProps {
   setSnapshotText: Dispatch<SetStateAction<string>>;
   snapshotMsg: string | null;
   snapshotText: string;
-  /** the hidden soundscape's switch (plan 035) */
-  sound: SoundscapeControl;
   stats: CityWalkStats | null;
   subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
   sun: SunState | null;
@@ -1098,28 +1095,6 @@ export function SceneSidebar(props: SceneSidebarProps) {
                   {props.fps === null ? "–" : `${Math.round(props.fps)} fps`}
                 </span>
               </div>
-            </div>
-
-            {/* The one visible trace of the soundscape (plan 035), quiet and
-                last: touch screens have no L key. */}
-            <div className="border-t px-4 pt-2.5 pb-3">
-              <Field orientation="horizontal">
-                <FieldLabel
-                  className="font-normal text-[11px] text-muted-foreground"
-                  htmlFor="soundscape"
-                >
-                  Klang (experimentell)
-                </FieldLabel>
-                <Switch
-                  checked={props.sound.on}
-                  // (it starts once the city is up: before, a switch that
-                  // stayed off would say nothing)
-                  disabled={!(props.sound.on || props.sound.ready)}
-                  id="soundscape"
-                  onCheckedChange={props.sound.toggle}
-                  size="sm"
-                />
-              </Field>
             </div>
           </SceneTabPanel>
         </SceneTabs>

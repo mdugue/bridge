@@ -7,8 +7,8 @@
  * (lib/city/fetch-retry.ts, net-gate.ts), the body read inside the
  * retries, so a blip — a Wi-Fi handover, a resume from the background — is
  * never taken for the answer.
- * Not yet: the minimap's and the soundscape's rasters and the inquiry
- * card's facts fetch directly (a failure there is that widget's), and the
+ * Not yet: the minimap's rasters and the inquiry card's facts fetch
+ * directly (a failure there is that widget's), and the
  * reports' beacons are fire-and-forget.
  *
  * OPTIONAL artifacts (lamps, walls, rails, roof colours, a live feed, …):

@@ -11,7 +11,6 @@ import {
   OSM_KINDS,
   pickFiles,
   SMALL_RASTER_PX,
-  SOUND_KINDS,
   tileArtifacts,
   tileIds,
 } from "./tile";
@@ -67,7 +66,7 @@ test("the coarse terrain reads a 1024² class raster baked from the 4096² one",
   expect(COARSE_RASTER_PX).toBe(1024);
 });
 
-test("the minimap and the soundscape read a 512² class raster baked from the 4096² one", () => {
+test("the minimap reads a 512² class raster baked from the 4096² one", () => {
   const { landcover, landcoverSmall } = tileArtifacts(PRIMARY_TILE);
   expect(landcoverSmall.bakedFrom).toEqual({
     file: landcover.file,
@@ -76,28 +75,21 @@ test("the minimap and the soundscape read a 512² class raster baked from the 40
   expect(SMALL_RASTER_PX).toBe(512);
 });
 
-test("the dressing, sound and OSM columns name only kinds of the table", () => {
+test("the dressing and OSM columns name only kinds of the table", () => {
   const kinds = Object.keys(tileArtifacts(PRIMARY_TILE));
-  for (const list of [DRESSING_KINDS, SOUND_KINDS, OSM_KINDS]) {
+  for (const list of [DRESSING_KINDS, OSM_KINDS]) {
     expect(list.length).toBeGreaterThan(0);
     for (const kind of list) {
       expect(kinds).toContain(kind);
     }
   }
-  expect([...SOUND_KINDS].sort()).toEqual([
-    "monuments",
-    "soundmarks",
-    "surface",
-    "svf",
-    "tram",
-  ]);
   expect(DRESSING_KINDS).toContain("vegrows");
   expect(DRESSING_KINDS).not.toContain("landcover");
 });
 
 test("pickFiles keeps only the named kinds a tile has", () => {
   expect(
-    pickFiles({ tram: "t.geojson", svf: "", lamps: "l.geojson" }, SOUND_KINDS)
+    pickFiles({ tram: "t.geojson", lamps: "", svf: "s.png" }, DRESSING_KINDS)
   ).toEqual({ tram: "t.geojson" });
 });
 
