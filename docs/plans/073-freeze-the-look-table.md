@@ -17,14 +17,19 @@
 
 ## Status
 
-- **Status (2026-10-10)**: **PARTIAL — awaits the maintainer** for the
-  rest. Asked which settings can go, the maintainer decided: *Transparenz*
-  removed, *Blattflimmern* removed (*Windhelligkeit* baked), *Flussnebel*
-  and *Tiefenschärfe* stay but are no longer parametrisable (all four built
-  on the performance PR, with old snapshots still loading). The ~20
-  cosmetic sliders were not decided: they cost the GPU nothing (uniform
-  multipliers), only code and UI — step 1's decision table needs the
-  maintainer's answer before steps 2–6.
+- **Status (2026-10-10)**: **DONE** with step 1's default decision table
+  (the maintainer: "continue with all follow-up plans, don't ask in
+  between", after "we don't need many of the settings anyway"). Before
+  it, on the performance PR, the maintainer had decided four rows
+  himself: *Transparenz* and *Blattflimmern* removed (*Windhelligkeit*
+  baked), *Flussnebel* and *Tiefenschärfe* fixed without controls. This
+  run fixed the other 25 percent rows but *Nebel* (the decision table
+  below); old snapshots still load. Not done here: the real-GPU plates
+  (step 6.2 — no GPU in the container; the PR's snapshots are the check)
+  and `bun run test:e2e` (the spec was edited, `bun typecheck` covers it).
+  The drift check fails by design: the performance PR changed every
+  in-scope file after `85a41b7` (it built the four rows above); the
+  excerpts below are from before it.
 
 - **Priority**: P3
 - **Effort**: M
@@ -64,6 +69,53 @@ So: freezing the values is a simplification with a small runtime gain; the
 GPU gain comes from deleting terms, which this plan does only where the
 frozen value is 0 (`transparency`) and leaves to a measured follow-up
 otherwise.
+
+## Decision table (applied 2026-10-10)
+
+Step 1's default, as applied. "At 0" is what the row's term did at 0 —
+in every case the term still ran (a uniform multiplier); only the
+`If(groundDetail > 0)` gates skipped work. "Internal uniform" marks a
+row whose uniform stays because something besides the slider writes it
+(the STOP condition's case): the slider's raw value is now the constant
+that feeds it.
+
+| Key | Label | Owner | At 0 | Decision |
+|---|---|---|---|---|
+| `fogAmount` | *Nebel* | `create-app.ts` (`fogRangeFor`) | the thinnest haze | **kept** — the one slider |
+| `heightFog` | *Talnebel* | `height-fog.ts` | no valley pool | fixed 0.2, `VALLEY_HAZE`; internal uniform (Modell fades it out) |
+| `grading` | *Tiefenfärbung* | `post-stack.ts` (finish) | no warm/cool grade | fixed 0.5, `GRADING`; internal uniform (the style's weight, Modell's 0) |
+| `groundShade` | *Boden-Verlauf* | `visual-style.ts` | hides the term | fixed 0.34, `GROUND_SHADE` |
+| `bands` | *Höhenlinien* | `visual-style.ts` | hides | fixed 0.18, `BANDS` |
+| `rim` | *Streiflicht* | `visual-style.ts` | hides the rim and the glass sheen | fixed 0.6, `RIM` |
+| `tint` | *Farbvariation* | `visual-style.ts` | the base clay, no listed lift | fixed 0.6, `TINT` |
+| `roofTint` | *Dachfarbe* | `visual-style.ts` | the base clay on roofs | fixed 0.7, `ROOF_TINT` |
+| `roofVibrance` | *Dachsättigung* | `visual-style.ts` | the raw aerial colour | fixed 0.5, `ROOF_VIBRANCE` |
+| `eave` | *Traufkante* | `visual-style.ts` | hides the stroke and the listed cornice | fixed 0.35, `EAVE` |
+| `articulation` | *Gliederung* | `visual-style.ts` | hides plinth, shop zone, storey ledges | fixed 0.8, `ARTICULATION` |
+| `windows` | *Fenster* | `visual-style.ts` → `clay-windows.ts` | hides the windows (their math ran) | fixed 1, `WINDOWS` |
+| `facadeReading` | *Fassadenbild* | `visual-style.ts` | hides relief and tone; photo shops not shops | fixed 1, `FACADE_READING` |
+| `duskGlow` | *Abendlicht* | `visual-style.ts` | no dusk glow, shop light, lit windows | fixed 0.5, `DUSK_GLOW` |
+| `roughness` | *Materialstreuung* | `visual-style.ts` | one roughness for all | fixed 0.12, `ROUGHNESS` |
+| `groundDetail` | *Bodendetail* | `ground-detail.ts` (+ `road-markings.ts`, `cultivated-layer.ts`, `sport-ground.ts`) | skips kerbs, markings, beds (`If`); paving × 0 | fixed 0.7, `GROUND_DETAIL` |
+| `urbanGreen` | *Stadtgrün* | `ground-detail.ts` | no urban green | fixed 1, `URBAN_GREEN` |
+| `meadowNdvi` | *Wiesenfärbung* | `terrain-layer.ts` | no NDVI tint | fixed 0.6, `MEADOW_NDVI` |
+| `shimmer` | *Gegenlicht-Schimmer* | `vegetation-layer.ts` | hides | fixed 0.45, `SHIMMER` |
+| `translucency` | *Blattdurchscheinen* | `vegetation-layer.ts` | hides | fixed 0.5, `TRANSLUCENCY` |
+| `contact` | *Kontaktschatten* | `post-stack.ts` | AO^0: no contact shadows (the pass ran) | fixed: exponent 1.5 (50 % of 3), `AO_EXPONENT` |
+| `skyView` | *Himmelslicht* | `sky-light.ts` (ground, baked parts, clay) | ambient unscaled | fixed 0.5, `SKY_VIEW` |
+| `horizonShade` | *Ferne Schatten* | `sky-light.ts` | no far shadows | fixed 0.8, `HORIZON_SHADE` |
+| `reflections` | *Spiegelung* | `sky-reflection.ts` (clay, water, monuments) | the stand-ins instead of the sky | fixed 1, `REFLECTIONS` |
+| `grain` | *Papierkorn* | `post-stack.ts` (finish) | no grain | fixed 0.25, `GRAIN`; internal uniform (the style's weight) |
+| `ink` | *Tuschelinien* | `post-stack.ts` → `stylize-effect.ts` | no outlines in the graphic styles | fixed 0.7, `INK` (times the style's weight) |
+| `transparency` | *Transparenz* | — | — | removed on the performance PR (the hashed build went with it) |
+| `leafFlutter`, `leafBright` | *Blattflimmern*, *Windhelligkeit* | — | — | removed / baked on the performance PR (`GUST_BRIGHTEN`) |
+| `waterMist` | *Flussnebel* | — | — | fixed on the performance PR |
+| `dof`, `focusMode`, `focusDistanceM` | *Tiefenschärfe*, *Fokus* | — | — | fixed on the performance PR (autofocus, desktop) |
+| `multiTuft` | *Multi-Tuft-Kronen (nah)* | `vegetation-layer.ts`, `tree-inventory-layer.ts` | — | **kept** — a switch |
+
+The picture style and the data layers are out of scope (features, not
+look tuning) and stay. 26 rows were in the table when this ran; one is
+left (`grep -c 'key: "' lib/city/look-controls.ts` → 1).
 
 ## Current state
 
@@ -265,3 +317,31 @@ no `tint`. Follow ADR 0017's rule: never reuse a removed `snapshotKey`.
   construction-time variant per tier, like plan 071's AO.
 - Reviewer: check that every removed key is still parsed by the snapshot
   codec and never written.
+- Dead terms since this plan, for the same follow-up: under the fixed
+  full *Spiegelung* (`REFLECTIONS` = 1) the glass facades' sheen
+  (`clayGlow`, × (1 − 1)), the gilding's stand-in (`monument-layer.ts`,
+  `mix(standIn, mirrored, 1)`) and the water's fog-colour stand-in
+  (`water-layer.ts`) compute nothing that shows; delete them with a plate
+  pair.
+- Two comments in modules the bakes import still call a term's
+  strength a slider (`lib/city/building-tint.ts` on `uTint`,
+  `scripts/bake-city-mesh.ts` on `WALL_TINT_SHOWN`): left alone, because
+  an edit there changes the city meshes' cache key and re-bakes every
+  site's buildings. Fix them with the next change that re-bakes anyway.
+
+## Findings (2026-10-10 run)
+
+- Steps 1–5 and 6.1, 6.3, 6.4 built with the default table; 6.2 (plates)
+  not taken — no GPU in the container — and `bun run test:e2e` not run
+  (the spec typechecks). Every constant is the old `initial` and every
+  expression is unchanged, so the default picture is the same by
+  construction; the PR's snapshots (the start view; the Neumarkt at
+  dusk; the Neustädter Elbufer against the June evening sun) are the
+  maintainer's check against production.
+- Production code +382 −820 lines; `LookKey` is `"fogAmount"`;
+  `RETIRED_SNAPSHOT_KEYS` holds 32 keys. The storage keys did not
+  change, so the privacy page needed nothing.
+- Bundle (`bun run build`, gzip -9), `main` 266bb89 → branch: the HUD
+  chunk (`Erweitert`) 101 176 → 100 444 B, the scene chunk
+  (`TilesRenderer`) 490 020 → 489 226 B, all chunks 996 759 →
+  993 509 B — about 3 kB gzip: the gain is code and UI, not bytes.

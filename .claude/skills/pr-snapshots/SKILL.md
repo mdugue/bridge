@@ -33,16 +33,22 @@ the PR evolves), under `## Snapshots`:
    look for there.
 3. Per view a `<details>` block holding the snapshot JSON in a ```json
    fence, so the description stays short.
-4. **Before and after in one place where the change has a slider or a
-   switch**: give the pair as two snapshots that differ only in that look
-   key (e.g. `"look": {"facadeReadingPct": 0}` vs `100`), so the reviewer
-   flips between them in the same preview. Where it has none, say that
+4. **Before and after in one place where the change has a control**:
+   give the pair as two snapshots that differ only in that look key
+   (e.g. `"look": {"fogPct": 0}` vs `100`, `"multiTuft": false` vs
+   `true`), so the reviewer flips between them in the same preview. Only
+   *Nebel*, the crown switch, the picture style and the data layers are
+   controls; the rest of the look is fixed — named constants in the code
+   (ADR 0017, plan 073) — so a change to it has no look key: say that
    *before* is the same snapshot on the production site or the base PR's
    preview.
 5. On a stacked PR, say which preview shows the base.
 
 Keep `look` to the keys the comparison needs: a snapshot's look keys are
-all optional, and every key left out keeps the reviewer's current value.
+all optional, and every key left out keeps the reviewer's current value
+(set `fogPct` and `style` when the view depends on them). Never write a
+retired key (`RETIRED_SNAPSHOT_KEYS` in `lib/city/look-controls.ts`):
+it is ignored, and suggests a slider that is not there.
 Set `date` to an instant whose light shows the change (afternoon sun for
 relief and shadow, night for lamps).
 
