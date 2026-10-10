@@ -60,6 +60,7 @@ each data → look transformation does and its status.
 | [0048](./0048-network-failures-are-retried.md) | A network failure is retried for a budget of the page's visible time, never decided at once; a tile that gave up is healed; the boot waits a minute of a usable page; the manifest never falls back to an unhashed name; nothing decided while the page leaves | accepted |
 | [0049](./0049-windows-drawn-by-the-clay.md) | Windows are drawn by the clay's fragment shader on every house (a recess, no geometry, no glass): their rhythm per building measured where street photos saw it, else a neighbour's, else its type's; per wall vertex its place along the wall; none on party walls, doors, shopfronts or a monumental facade | accepted |
 | [0050](./0050-a-building-tiles-bvh-when-a-ray-needs-it.md) | A building tile's BVH is built when a ray first reaches it (the collider, a pick, the probe; near the camera in idle time), not as it lands; no ray walks a tile without one | accepted |
+| [0051](./0051-optional-features-start-on-first-use-in-the-scene-chunk.md) | Optional features (the data layers first) start on first use and hear the spine through its hooks (`feature-seam.ts`); their code ships in the scene's chunk while they import three.js — as an `import()` chunk the data layers grew the first load by 22.7 KB gz | accepted |
 
 ## Format
 

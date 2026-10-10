@@ -152,4 +152,92 @@ things live", ADR 0029 amended for part A) current.
 
 ## Findings
 
-(none yet)
+### Part B — the data layers behind the seam (2026-10-10): STOPPED at the chunk
+
+Built on plan 069's branch (`claude/plan-069-streaming-without-stalls`).
+
+**Method.** Both sides built the same way: `NEXT_PUBLIC_POC_DEBUG=1 next
+build` (the e2e build; the `__poc` hook is the same constant on both
+sides), Next.js 16.3.7 with Turbopack, all seven sites' data. The base is
+the branch's head exported to a scratch folder (`git archive`). Each build
+served by `next start`; headless Chromium (SwiftShader, as the e2e) at
+`/dresden?scene=lite`, 800×600, records every `/_next/static/*.js` it
+fetches until `__poc.ready` — the first-load set: the route's own chunks,
+the HUD's (`city-walk.tsx`) and the scene's (`create-app.ts` and three.js);
+each file then `gzip -9`-ed from the build's own `.next/static`. Then
+`__poc.look.set({ trafficLayer: true })`, and the chunks fetched after it.
+The scene chunk is told by a string only `create-app.ts` holds, the data
+layers' code by `DataGlassBackdrop` / `traffic-glass` / the tram status's
+failure text.
+
+| build | first-load JS, gz | raw | the scene's chunk(s), raw / gz | on the first switch-on |
+|---|---|---|---|---|
+| base | **904 619** | 2 799 471 | 1 574 194 / 493 506 (data layers inside) | nothing |
+| data layers behind `import()` | **927 361** (+22 742) | 2 896 987 (+97 516) | 576 471 + 1 086 665 / 211 003 + 301 060 | 23 749 / **10 089** |
+| … and the rail module out of its reach (a stub, measured only) | 924 669 (+20 050) | 2 891 542 | 618 739 + 1 040 073 | 23 709 / 10 080 |
+| the seam with the module imported statically (built) | **904 716** (+97) | 2 801 048 | 1 575 601 / 493 561 | nothing |
+
+**Why the chunk cost more than it moved.** Turbopack hoists the modules
+one chunk group alone needs into one scope: the scene's own code and
+three.js were one scope, three's functions called by local, mangled
+names. The data layers import `three/webgpu` and `three/tsl` too, so as a
+chunk group of their own three.js became a module both groups share — it
+left the scene's scope for a shared chunk (its WebGPU backend moved from
+the scene's chunk to the second one), and every call into it became a
+property access on the module: the scene's code made 180 such
+`(0,X.fn)(…)` calls before and 2 929 after. Taking the rail module (the
+largest the data layers share with the scene, via `buildDeckTable`) out
+of their reach won back only 2.7 KB: the cost is three's, not the app
+modules'. It is paid once, by the first lazy chunk that imports three —
+≈ 32.8 KB gz (22.7 net + the 10.1 moved) — and this part's own estimate
+of everything it could move is ≈ 33 KB gz. Styles and Modell import
+three/tsl as much as the data layers do, so even all three behind
+`import()` would about break even, for a seam with Modell's ≈ 111
+references still to untangle. Escaping the tax means a lazy chunk that
+takes TSL from the spine instead of importing it — every layer module a
+factory with a prologue of injected functions, a bigger framework than
+the three features need.
+
+**What was kept** (`refactor(scene)`, byte-neutral as measured: +97 B
+gz; the decision is ADR 0051): the seam itself. `feature-seam.ts` — the
+spine's hooks (`frame`, `streamChange`, the look store, the scene's
+clock as a watched value a late starter reads first), `lazyFeature` (starts once, on first want;
+never after the spine is gone; a failed load asked for again);
+`data-layers-feature.ts` — the data layers start on the first switch-on
+of any of them against those hooks (create-app.ts no longer wires the
+overlays into `setSun`, `applyLook`, the stream-change handler and the
+frame by hand, nor writes the glass's clock: it emits, and keeps three
+reads of a started feature — the probe's asks, the census, the card's
+hour); the tiles' traffic
+slot takes its builder through `TileStreamContext.trafficBuilder` and
+waits for it outside the dressings' turn — a tile hung before the first
+switch-on and one landing after build from the same start, a builder
+that did not come is asked for again on the next switch-on and never
+reported as the tile's failed build, one that comes after the layer went
+off again builds nothing (three new `tile-stream.test.ts` cases);
+`traffic-flow.ts` — the flows' hour uniforms, position node, attributes
+and mesh lookup, which the outline (compiled at boot) and the card read,
+split from the layer's builder. Going lazy is then the one line in
+`create-app.ts` (`() => Promise.resolve(dataLayersModule)` → an
+`import()`), at the cost measured above.
+
+**What stopped and why.** The `import()` itself, and with it the styles
+and Modell: not by the plan's STOP conditions (no module global was
+needed; the first switch-on's extra cost would have been the chunk's
+fetch, 48–173 ms from a local server, and its parse) but by the
+measurement — the chunk makes the first load larger, the one number this
+part exists to lower. Neither the styles nor Modell was started.
+
+**Timings, for the record, not for conclusions.** Boot to `ready` 228 s
+(base), 204 s (lazy), 230 s (rail stub), 186 s (static); first
+switch-on of the traffic to its first triangles in the stats (a 250 ms
+timer) 26.2 s, 36.7 s, 40.4 s, 27.7 s. One run each on a shared
+four-core box at load 7–11 under SwiftShader: noise-dominated.
+
+**Verified.** `bun run verify` green (2 468 pass); e2e against the
+static build (production, `NEXT_PUBLIC_POC_DEBUG=1`): `@desktop-hud` 10
+passed (7.9 min) — the data layers' switch-on spec among them —,
+`@desktop-render` 8 passed (13.1 min). Run with CI's timeouts (`CI=1`,
+`--timeout=900000`): on this box the boot took longer than the local
+120 s wait for `ready`, and the first local run stopped there before any
+test ran. The whole-site shard and `@phone` were not run.

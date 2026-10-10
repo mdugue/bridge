@@ -105,7 +105,7 @@ history. Decisions that came out of plans are written up as
 | 071 | A phone renders a lean scene, a desktop a lighter one | **PARTIAL** (2026-10-10) — phone GTAO at 8 samples (not 0), a phone rich-crown budget of 800 (not *Multi-Tuft* off), no autofocus ray without a lens blur; step 4.2 (no desktop DoF) REJECTED by the maintainer; steps 3, 4.1, 5–7 open | [071-tier-budgets-lean-phone-lighter-desktop.md](./071-tier-budgets-lean-phone-lighter-desktop.md) |
 | 072 | A cold build bakes a site's tiles on every core | **TODO** — cheaper since 2026-10-10 (no second spawn parse, typed-array plinths, cache keys on the bakes' own packages); re-measure first | [072-parallel-site-bake.md](./072-parallel-site-bake.md) |
 | 073 | The look is fixed; the sidebar keeps only the controls people use | **DONE** (2026-10-10) — the default table: *Nebel* the one slider left, the multi-tuft switch kept, the other 25 fixed at their defaults as named constants in their owners (four keep an internal uniform a style or Modell writes); old snapshots load, their keys retired for good (`RETIRED_SNAPSHOT_KEYS`); ADR 0017 amended; ~3 kB gzip; the two edited e2e specs pass; not done: GPU plates (none in the container), the rest of the e2e (CI) | [073-freeze-the-look-table.md](./073-freeze-the-look-table.md) |
-| 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **TODO** — direction plan; each part opens with a spike | [074-architecture-deepening.md](./074-architecture-deepening.md) |
+| 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **PARTIAL** (2026-10-10) — part B: the seam built (`feature-seam.ts`: the spine's hooks, `lazyFeature`; the data layers start on their first switch-on, the traffic slot waits for its builder), the `import()` measured and **stopped** — the data layers as a chunk of their own made the first-load JS 22.7 KB gz larger for 10.1 KB moved (three.js lost its scope hoisting with the scene), so their code ships with the scene, and the styles and Modell were not started (the Findings); A, C, D open | [074-architecture-deepening.md](./074-architecture-deepening.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -142,8 +142,8 @@ S/M/L.
    **Plans 068–074 (2026-10-10 performance audit) — order:** 069 steps
    1–2 first (the timing marks, measured on a desktop and an iPhone: they
    decide 069's gated steps and 074 part A) → 071's open steps (3, 4.1,
-   5) → 070 step 4 (GPU look) → 072 → 074 B (the lazy seam, the data
-   layers first) → 074 A. (073 is built: the maintainer let the
+   5) → 070 step 4 (GPU look) → 072 → 074 B (built as far as it pays:
+   the seam, no lazy chunk — see its row) → 074 A. (073 is built: the maintainer let the
    default table stand.) Authorize the Sentry connector before measuring: the
    per-device frame-rate and memory summaries already arrive there (ADR
    0043).
