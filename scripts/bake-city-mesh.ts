@@ -850,9 +850,7 @@ export function appendPlinths(
   plinths: readonly PlinthFeature[],
   objectIndex: ReadonlyMap<string, number>
 ): void {
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const objectIds: number[] = [];
+  const parts: AppendedPart[] = [];
   const walls = treeTriangles(baked);
   const vertices = baked.vertices.positions;
   const isRoof = baked.vertices.isRoof;
@@ -868,17 +866,16 @@ export function appendPlinths(
     host: CityObjectRow,
     tint: [number, number, number]
   ) => {
-    const zs = tris.positions.filter((_, i) => i % 3 === 2);
-    if (zs.length === 0) {
+    if (tris.positions.length < 3) {
       return;
     }
-    const [base, top] = [Math.min(...zs), Math.max(...zs)];
-    const index = baked.objects.length;
-    positions.push(...tris.positions);
-    normals.push(...tris.normals);
-    for (let i = 0; i < tris.positions.length / 3; i++) {
-      objectIds.push(index);
+    let base = Number.POSITIVE_INFINITY;
+    let top = Number.NEGATIVE_INFINITY;
+    for (let i = 2; i < tris.positions.length; i += 3) {
+      base = Math.min(base, tris.positions[i]);
+      top = Math.max(top, tris.positions[i]);
     }
+    parts.push({ id: baked.objects.length, ...tris });
     const above = cm(top - base + 1);
     baked.objects.push({
       ...host,
@@ -959,22 +956,52 @@ export function appendPlinths(
       part(tris, host, tint);
     }
   }
-  if (positions.length === 0) {
-    return;
+  if (parts.length > 0) {
+    baked.vertices = withParts(baked.vertices, parts);
   }
-  const v = baked.vertices;
-  baked.vertices = {
-    positions: concat(v.positions, positions),
-    objectIds: concat(v.objectIds, objectIds),
-    isRoof: concat(
-      v.isRoof,
-      objectIds.map(() => 0)
-    ),
-    normals: concat(
-      v.normals ?? new Float32Array(v.positions.length).fill(Number.NaN),
-      normals
-    ),
-  };
+}
+
+/** Triangles appended to the stream under one object id, a normal per
+ *  vertex (NaN: flat). */
+interface AppendedPart {
+  id: number;
+  normals: readonly number[];
+  positions: readonly number[];
+}
+
+/** The vertex stream with `parts` appended (none of them roof), written
+ *  straight into typed arrays: a tile's plinths and bands run to millions
+ *  of coordinates, which a spread push and a copy through plain arrays
+ *  spent seconds a tile on. */
+function withParts(
+  v: CityVertices,
+  parts: readonly AppendedPart[]
+): CityVertices {
+  const own = v.objectIds.length;
+  const total = parts.reduce((n, p) => n + p.positions.length / 3, own);
+  const positions = new Float32Array(3 * total);
+  const normals = new Float32Array(3 * total);
+  const objectIds = new Float32Array(total);
+  const isRoof = new Float32Array(total);
+  positions.set(v.positions);
+  if (v.normals) {
+    normals.set(v.normals);
+  } else {
+    normals.fill(Number.NaN, 0, v.positions.length);
+  }
+  objectIds.set(v.objectIds);
+  isRoof.set(v.isRoof);
+  let at = own;
+  for (const p of parts) {
+    for (let i = 0; i < p.positions.length; i++) {
+      positions[3 * at + i] = p.positions[i];
+      normals[3 * at + i] = p.normals[i];
+    }
+    const n = p.positions.length / 3;
+    objectIds.fill(p.id, at, at + n);
+    at += n;
+  }
+  return { positions, objectIds, isRoof, normals };
 }
 
 /** Neighbouring houses' Traufgesimse this close in height run as one. */

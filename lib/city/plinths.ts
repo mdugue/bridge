@@ -131,10 +131,10 @@ function extrude(
   const flat = [Number.NaN, Number.NaN, Number.NaN];
   const tri = (ps: number[][], ns: number[][]) => {
     for (const p of ps) {
-      out.positions.push(...p);
+      out.positions.push(p[0], p[1], p[2]);
     }
     for (const nn of ns) {
-      out.normals.push(...nn);
+      out.normals.push(nn[0], nn[1], nn[2]);
     }
   };
   profile.forEach((p, k) => {
