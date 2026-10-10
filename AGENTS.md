@@ -110,8 +110,10 @@ config change.
 - `app/_components/` — the viewer, grouped:
   - spine: `create-app.ts` (scene/loop/handle), `tile-stream.ts` (the
     3DTilesRendererJS setup: the retrying, inflating content fetch, the
-    glTF-metadata plugin and the dressing plugin that builds and disposes
-    everything a tile carries; a phone's paced queues),
+    glTF loader (`gltf-content.ts`: meshopt and the property tables, read
+    by `lib/city/property-table.ts` — not the library's metadata plugin,
+    which ships a classic WebGLRenderer) and the dressing plugin that
+    builds and disposes everything a tile carries; a phone's paced queues),
     `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount,
     given the site id; which tileset to stream), `site-context.tsx`
     (`SiteProvider`/`useSite`: the site the HUD describes),

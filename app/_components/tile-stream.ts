@@ -1,6 +1,5 @@
 import { DownloadPriorityQueue, PriorityQueue } from "3d-tiles-renderer/core";
 import { TilesRenderer } from "3d-tiles-renderer/three";
-import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
   type BufferGeometry,
   type Camera,
@@ -56,6 +55,7 @@ import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { mapillaryParts } from "@/lib/city/mapillary";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { type CityLayer, dressCity } from "./city-layer";
+import { GltfContentPlugin } from "./gltf-content";
 import type { FacadeReadings } from "@/lib/city/facade-reading";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import type { CrownWarmup } from "./crown-season";
@@ -2008,9 +2008,7 @@ export function createTileStream(
   // the parse that lands it. Idempotent: a remount keeps the same workers.
   // oxlint-disable-next-line react-hooks/rules-of-hooks -- the decoder's method, no React hook
   MeshoptDecoder.useWorkers(MESHOPT_WORKERS);
-  tiles.registerPlugin(
-    new GLTFExtensionsPlugin({ metadata: true, meshoptDecoder: MeshoptDecoder })
-  );
+  tiles.registerPlugin(new GltfContentPlugin(MeshoptDecoder));
   // Out-of-view tiles that are still active stay drawn (shadows, turning on
   // the spot); three's own frustum culling keeps them out of the main pass.
   tiles.displayActiveTiles = true;

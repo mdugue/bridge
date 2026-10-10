@@ -541,10 +541,14 @@ writes `userData.tile` itself. Every tile is recentered on one offset: the
 spawn tile's CityJSON loader matrix, reused for the rest; the EPSG code
 comes from the CityJSON's `metadata.referenceSystem` (25832 or 25833).
 
-The client reads the property table through 3DTilesRendererJS's
-`GLTFExtensionsPlugin` (`metadata: true`, meshopt decoder) and packs it
-into a float texture the clay shader reads per object; demolish filters
-the index buffer. That half is in [rendering.md](./rendering.md).
+The client reads the property table with a GLTFLoader plugin of its own
+(`app/_components/gltf-content.ts`, the reader `lib/city/property-table.ts`,
+which answers as 3DTilesRendererJS's `PropertyTableAccessor` did; that
+library's metadata extension also reads property textures, through a
+classic WebGLRenderer that would ship all of three's WebGL with the viewer)
+and packs it into a float texture the clay shader reads per object;
+demolish filters the index buffer. That half is in
+[rendering.md](./rendering.md).
 
 ### The site's map picture
 

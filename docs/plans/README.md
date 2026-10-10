@@ -567,7 +567,9 @@ S each unless noted):
   `PointLight`s are shaded by every lit fragment by day (intensity 0);
   `WebGLRenderer`/GLSL may ride into the viewer chunk through
   3d-tiles-renderer's metadata `TextureReadUtility` (plain `three`
-  import) — check with a bundle analyser.
+  import) — check with a bundle analyser. (It did, ~380 KB of the scene
+  chunk; gone 2026-10-10: the viewer reads the property tables itself,
+  `app/_components/gltf-content.ts`.)
 - **Small robustness:** only `postStack.render` is guarded in the frame
   loop (a throw before it freezes silently while the crash trail writes
   on every error); the stream's `dispose()` during an in-flight compile
