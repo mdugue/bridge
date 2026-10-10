@@ -2,11 +2,9 @@
 
 import {
   BoxIcon,
-  Building2Icon,
   CalendarIcon,
   ChevronDownIcon,
   ClipboardPasteIcon,
-  CloudFogIcon,
   CoffeeIcon,
   CopyIcon,
   FootprintsIcon,
@@ -15,8 +13,6 @@ import {
   ImageDownIcon,
   type LucideIcon,
   PlaneIcon,
-  SparklesIcon,
-  TreesIcon,
   XIcon,
 } from "lucide-react";
 import type {
@@ -61,7 +57,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   LOOK_CONTROLS,
-  type LookGroup,
   lookPatch,
   type LookValues,
 } from "@/lib/city/look-controls";
@@ -105,7 +100,8 @@ import { useSite } from "./site-context";
  *    shown), the data layers (traffic, bikes, trams), the keys (folded).
  *    Everything a first visit needs.
  *  - **Szene** — what the scene looks like right now: sun and time, then the
- *    look groups, each collapsed until asked for.
+ *    picture style, the fog and the crowns' switch. The look itself is
+ *    fixed (its strengths are constants of the terms they tune).
  *  - **Erweitert** — the tools, the snapshot codec and the counters.
  *
  * It is the shadcn Sidebar in its `floating` variant: the scene stays
@@ -141,38 +137,6 @@ const DAY_LABEL = new Intl.DateTimeFormat("de-DE", {
   month: "long",
   year: "numeric",
 });
-
-const LOOK_GROUPS: {
-  group: LookGroup;
-  icon: LucideIcon;
-  note: string;
-  title: string;
-}[] = [
-  {
-    group: "atmosphere",
-    icon: CloudFogIcon,
-    note: "Nebel & Tiefe",
-    title: "Atmosphäre",
-  },
-  {
-    group: "buildings",
-    icon: Building2Icon,
-    note: "Farbe & Kanten",
-    title: "Gebäude",
-  },
-  {
-    group: "vegetation",
-    icon: TreesIcon,
-    note: "Kronen & Wiesen",
-    title: "Vegetation",
-  },
-  {
-    group: "rendering",
-    icon: SparklesIcon,
-    note: "Schatten & Korn",
-    title: "Rendering",
-  },
-];
 
 function formatMinutes(minutes: number): string {
   const h = String(Math.floor(minutes / 60)).padStart(2, "0");
@@ -236,19 +200,17 @@ function PctSlider({
   );
 }
 
-/** Every percent slider of one look group, rendered from LOOK_CONTROLS. */
+/** Every percent slider, rendered from LOOK_CONTROLS. */
 function LookSliders({
-  group,
   look,
   onLook,
 }: {
-  group: LookGroup;
   look: LookValues;
   onLook: (patch: Partial<LookValues>) => void;
 }) {
   return (
     <>
-      {LOOK_CONTROLS.filter((def) => def.group === group).map((def) => (
+      {LOOK_CONTROLS.map((def) => (
         <PctSlider
           description={def.description}
           id={def.id}
@@ -315,38 +277,6 @@ function StylePicker({
         <span className="hidden [@media(pointer:fine)]:inline"> · Taste V</span>
       </span>
     </div>
-  );
-}
-
-/** One collapsed look group in the Szene tab. */
-function LookGroupRow({
-  children,
-  icon: Icon,
-  note,
-  title,
-}: {
-  children: ReactNode;
-  icon: LucideIcon;
-  note: string;
-  title: string;
-}) {
-  return (
-    <Collapsible>
-      {/* base-ui's trigger already renders a <button>; naming it here keeps
-          the group readable to a screen reader, whose users get no chevron. */}
-      <CollapsibleTrigger
-        aria-label={`${title} — Regler ein- und ausklappen`}
-        className="group/look -mx-2 flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left hover:bg-accent"
-      >
-        <Icon className="size-3.5 shrink-0 opacity-70" />
-        <span className="flex-1 font-medium text-xs">{title}</span>
-        <span className="text-[11px] text-muted-foreground">{note}</span>
-        <ChevronDownIcon className="size-3 opacity-35 transition-transform group-aria-expanded/look:rotate-180" />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <FieldGroup className="gap-3 py-2 pb-3.5 pl-6">{children}</FieldGroup>
-      </CollapsibleContent>
-    </Collapsible>
   );
 }
 
@@ -963,7 +893,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 <button
                   className="text-[11px] text-primary hover:underline"
                   onClick={props.resetLook}
-                  title="Alle Regler zurück auf ihren Startwert — der Bildstil bleibt"
+                  title="Nebel und Kronen zurück auf ihren Startwert — der Bildstil bleibt"
                   type="button"
                 >
                   Zurücksetzen
@@ -973,29 +903,25 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 onStyle={(next) => onLook({ style: next })}
                 style={look.style}
               />
-              {LOOK_GROUPS.map(({ group, icon, note, title }) => (
-                <LookGroupRow icon={icon} key={group} note={note} title={title}>
-                  <LookSliders group={group} look={look} onLook={onLook} />
-                  {group === "vegetation" && (
-                    <Field orientation="horizontal">
-                      <FieldLabel
-                        className="font-medium text-xs"
-                        htmlFor="tree-multituft"
-                      >
-                        Multi-Tuft-Kronen (nah)
-                      </FieldLabel>
-                      <Switch
-                        checked={look.multiTuft}
-                        id="tree-multituft"
-                        onCheckedChange={(checked) =>
-                          onLook({ multiTuft: checked })
-                        }
-                        size="sm"
-                      />
-                    </Field>
-                  )}
-                </LookGroupRow>
-              ))}
+              <FieldGroup className="gap-3 pt-1">
+                <LookSliders look={look} onLook={onLook} />
+                <Field orientation="horizontal">
+                  <FieldLabel
+                    className="font-medium text-xs"
+                    htmlFor="tree-multituft"
+                  >
+                    Multi-Tuft-Kronen (nah)
+                  </FieldLabel>
+                  <Switch
+                    checked={look.multiTuft}
+                    id="tree-multituft"
+                    onCheckedChange={(checked) =>
+                      onLook({ multiTuft: checked })
+                    }
+                    size="sm"
+                  />
+                </Field>
+              </FieldGroup>
             </div>
           </SceneTabPanel>
 

@@ -29,6 +29,7 @@ import {
 import type { F, Tex, V2, V3 } from "./shader-chunks";
 import {
   gdNoise,
+  GROUND_DETAIL,
   type GroundColour,
   type GroundFields,
   type GroundInputs,
@@ -166,7 +167,7 @@ export function roadMarkings(
   g: GroundFields,
   markings: { raster: Tex; table: Tex }
 ): void {
-  If(and(inp.groundDetail.greaterThan(0), inp.fw.lessThan(1.5)), () => {
+  If(and(GROUND_DETAIL.greaterThan(0), inp.fw.lessThan(1.5)), () => {
     const size = texelSize(markings.raster, inp.uv).toVar();
     const p = inp.uv.mul(vec2(size)).sub(0.5).toVar();
     const i = ivec2(floor(p)).toVar();
@@ -197,7 +198,7 @@ export function roadMarkings(
     const road = g.hasEdge ? smoothstep(w.negate(), w, g.dr) : float(1);
     const wear = gdNoise(inp.xy.mul(0.37).add(3)).mul(0.22).add(0.78);
     const fade = float(1).sub(smoothstep(0.5, 1.5, inp.fw));
-    const on = min(inp.groundDetail.div(0.7), 1).mul(0.85);
+    const on = min(GROUND_DETAIL.div(0.7), 1).mul(0.85);
     const mark = clamp(paint, 0, 1)
       .mul(road)
       .mul(wear)

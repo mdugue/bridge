@@ -1272,8 +1272,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         previewSun={time.preview}
         ready={booted}
         rememberedView={rememberedView}
-        // The sliders go back to their defaults; the picture style and
-        // the data layers are choices of their own, and stay.
+        // The fog and the crowns' switch go back to their defaults; the
+        // picture style and the data layers are choices of their own, and
+        // stay.
         resetLook={() =>
           look.set({
             ...LOOK_DEFAULTS,

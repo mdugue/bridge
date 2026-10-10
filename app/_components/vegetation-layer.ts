@@ -40,11 +40,7 @@ import {
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
-import {
-  LOOK_DEFAULTS,
-  type LookValues,
-  type VegetationLookKey,
-} from "@/lib/city/look-controls";
+import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
 import { decodeGreyPng } from "@/lib/city/png-raster";
 import {
   maxWindowSampler,
@@ -162,15 +158,15 @@ export const LOD_NEAR_OUT_M = RICH_OUT_M;
 const FAR_THIN_WIDEN = 1.35;
 
 /**
- * Runtime handle for a loaded vegetation group: a per-frame LOD swap plus live
- * tuning of the shimmer and the rich-crown toggle.
+ * Runtime handle for a loaded vegetation group: a per-frame LOD swap plus the
+ * rich-crown toggle.
  */
 export interface VegetationControl {
   /**
-   * Pushes the vegetation rows of the look into the crowns: the backlit
-   * shimmer, the shadow-gated translucency and the multi-tuft crown LOD
-   * toggle. (The gust's brightening, `GUST_BRIGHTEN`, is no row: it is
-   * fixed.)
+   * Pushes the vegetation's part of the look into the crowns: the
+   * multi-tuft crown LOD toggle. (The backlit shimmer, the translucency
+   * and the gust's brightening are fixed: `SHIMMER`, `TRANSLUCENCY`,
+   * `GUST_BRIGHTEN`.)
    */
   applyLook: (look: LookValues) => void;
   /** the tile's canopy chunks; `updateVegetationLod` sets their crown tier
@@ -533,24 +529,20 @@ export function leafNoise(p: V2): F {
 }
 
 /** The crown's live uniform nodes, shared by every crown material of the
- *  scene (the look writes them, the loop the clock). */
+ *  scene (the sun rig writes the sun, the loop the clock). */
 export interface CrownUniforms {
-  shimmer: Live;
   /** world-space surface → sun; its value is the sun rig's vector, by
    *  reference (sceneCrowns) */
   sunDirection: UniformNode<"vec3", Vector3>;
   /** the wind-sway clock (s) */
   time: Live;
-  translucency: Live;
 }
 
-/** Fresh crown uniforms at the look table's defaults. */
+/** Fresh crown uniforms. */
 function createCrownUniforms(): CrownUniforms {
   return {
-    shimmer: uniform(LOOK_DEFAULTS.shimmer),
     sunDirection: uniform(new Vector3(0, 1, 0)),
     time: uniform(0),
-    translucency: uniform(LOOK_DEFAULTS.translucency),
   };
 }
 
@@ -623,6 +615,13 @@ export function crownShape(): V3 {
  */
 const GUST_BRIGHTEN = 0.09;
 
+/** Gegenlicht-Schimmer: the warm glow of a crown between the eye and the
+ *  sun — fixed at what its slider stood at (plan 073). */
+const SHIMMER = float(0.45);
+/** Blattdurchscheinen: the broader backlit glow of near and large crowns
+ *  — fixed at what its slider stood at (plan 073). */
+const TRANSLUCENCY = float(0.5);
+
 /**
  * The crown's light terms (all in world space, off the swayed fragment's
  * `positionWorld`): the backlit shimmer, the translucency and the
@@ -656,8 +655,7 @@ function crownLight(
   const view = normalize(cameraPosition.sub(positionWorld));
   const back = clamp(dot(view, sun.negate()), 0, 1);
   const far = distance(cameraPosition, positionWorld);
-  const shimmer = u.shimmer
-    .mul(pow(back, 3.6))
+  const shimmer = SHIMMER.mul(pow(back, 3.6))
     .mul(shimVis)
     .mul(vec3(0.95, 0.85, 0.45));
   // Backlit translucency: a BROADER subsurface glow (low exponent) with the
@@ -665,8 +663,7 @@ function crownLight(
   // reads as far-field "noise".
   const trLarge = smoothstep(1.2, 3, crownScale);
   const trNear = float(1).sub(smoothstep(120, 260, far));
-  const translucency = u.translucency
-    .mul(pow(back, 1.6))
+  const translucency = TRANSLUCENCY.mul(pow(back, 1.6))
     .mul(shimVis)
     .mul(max(trLarge, trNear).mul(daylight))
     .mul(vec3(0.45, 0.62, 0.3));
@@ -683,7 +680,7 @@ function crownLight(
  * Sage crown material with a backlit shimmer: when the sun is behind the
  * canopy the camera-facing leaves glow warm (crownLight). Shared by every
  * crown set of the scene, every tier (sceneCrowns). The uniforms are live:
- * writing `shimmer.value` retunes without a rebuild. `bare` builds the
+ * the sun and the clock move without a rebuild. `bare` builds the
  * seasonal variant: the per-instance leaf cover thins the crown to twigs
  * (crown-season.ts) through `maskNode`, which the shadow pass honours, so
  * the thinned crown thins its shadow too; a chunk wears it only while any
@@ -1134,17 +1131,10 @@ export function buildVegetation(
   group.name = "vegetation";
 
   // The crown uniforms are the scene's (sceneCrowns): every tile's control
-  // writes the same nodes — the look's rows and the wind clock, which the
-  // render loop advances once per frame (same elapsed seconds as the water
-  // ripple).
+  // writes the same nodes — the wind clock, which the render loop advances
+  // once per frame (same elapsed seconds as the water ripple).
   const crownMats = sceneCrowns(ctx.sunDirection);
   const u = crownMats.uniforms;
-  // The crown uniform each vegetation row drives — a Record over the keys, so
-  // a row added to the table cannot go unapplied.
-  const rowUniform: Record<VegetationLookKey, Live> = {
-    shimmer: u.shimmer,
-    translucency: u.translucency,
-  };
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   let chunks: VegetationChunk[] = [];
   let seasons: SeasonalCrowns[] = [];
@@ -1167,9 +1157,6 @@ export function buildVegetation(
     group,
     chunks,
     applyLook: (look) => {
-      for (const key of Object.keys(rowUniform) as VegetationLookKey[]) {
-        rowUniform[key].value = look[key];
-      }
       multiTuft = look.multiTuft;
     },
     multiTuft: () => multiTuft,

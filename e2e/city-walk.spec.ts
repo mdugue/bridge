@@ -686,7 +686,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
 
   test("the sidebar tabs reach every group of controls", async () => {
     // The controls are no longer one long list: Erkunden holds the map and
-    // the places, Szene the sun and the look groups (each collapsed), and
+    // the places, Szene the sun, the picture style and the fog, and
     // Erweitert the tools and counters. A slider is only two taps away, and
     // this is what proves the three panels are actually wired.
     await withFramesHeld(page, async () => {
@@ -709,13 +709,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
 
       await page.getByRole("tab", { name: "Szene" }).click();
       await expect(page.getByText("Sonne & Zeit")).toBeVisible();
-      // Look sliders live one collapsed group down, and stay collapsed until
-      // asked for — that is the point of the restructure.
-      await expect(page.getByText("Boden-Verlauf")).toHaveCount(0);
-      await page.getByRole("button", { name: /^Gebäude/ }).click();
-      await expect(page.getByText("Boden-Verlauf")).toBeVisible({
-        timeout: slow(30_000),
-      });
+      // The look is fixed: under the picture style only the fog's slider
+      // and the crowns' switch are left, in plain view.
+      await expect(page.locator("#atmosphere")).toBeVisible();
+      await expect(page.locator("#tree-multituft")).toBeVisible();
 
       await page.getByRole("tab", { name: "Erweitert" }).click();
       await expect(page.getByText("Statistik")).toBeVisible();
@@ -1156,46 +1153,25 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
    * batched together rather than spent one per frame.
    */
   test("post and shader controls survive real frames", async () => {
-    const CONTROL_STEPS = 9;
+    const CONTROL_STEPS = 8;
     for (let i = 0; i < CONTROL_STEPS; i++) {
       await page.evaluate((index) => {
         // Driven through the look store the sliders write to — one set() per
         // step is one batch of uniform writes.
         const look = window.__poc?.look;
         const steps: Array<() => void> = [
-          // Post-stack uniforms compile nothing, so they share two steps: one
-          // at full strength, one back down.
-          () =>
-            look?.set({
-              fogAmount: 1,
-              grading: 1,
-              contact: 1,
-              grain: 1,
-            }),
-          () =>
-            look?.set({
-              fogAmount: 0.35,
-              grading: 0.5,
-              contact: 0.5,
-              grain: 0.25,
-            }),
-          // Shader paths the aesthetic work added — the terrain's NDVI meadow
-          // tint, the height-fog chunk patch and the crown shaders
-          // (multi-tuft swaps the instanced LOD meshes). They compile
-          // independent programs, but one frame compiles them all.
-          () =>
-            look?.set({
-              heightFog: 1,
-              meadowNdvi: 1,
-              shimmer: 1,
-              translucency: 1,
-              multiTuft: true,
-            }),
+          // What is left of the look: the fog (a uniform, it compiles
+          // nothing) at full strength and back down, and the crowns' switch
+          // (off swaps the near multi-tuft crowns for the cheap ones, on
+          // brings them back). The look's other strengths are constants,
+          // compiled with the boot.
+          () => look?.set({ fogAmount: 1, multiTuft: false }),
+          () => look?.set({ fogAmount: 0.35, multiTuft: true }),
           // The picture styles: the first non-default style compiles the
           // stylize pass (one program for all of them), the next only moves
           // its uniforms and the grain's film switch; pastel switches the
           // pass off again. DoF is on here, so the style's gate runs too.
-          () => look?.set({ style: "comic", ink: 1 }),
+          () => look?.set({ style: "comic" }),
           () => look?.set({ style: "sincity" }),
           // Papier swaps every surface for one paper material for the frame
           // — its own programs (instanced, vertex-coloured, plain).
@@ -1204,7 +1180,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
           // draws the buildings with its own black and hides the rest.
           () => look?.set({ style: "line" }),
           () => look?.set({ style: "figure" }),
-          () => look?.set({ style: "pastel", ink: 0.7 }),
+          () => look?.set({ style: "pastel" }),
         ];
         steps[index]?.();
       }, i);

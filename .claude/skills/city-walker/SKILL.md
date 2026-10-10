@@ -242,8 +242,11 @@ A look term is a TSL node in a slot of a node material
 `opacityNode`, `aoNode` (indirect light only), `receivedShadowNode` (the
 shadow a fragment receives), `maskNode` (discard — the shadow pass honours
 it), `castShadowPositionNode` (what the shadow pass draws instead of
-`positionNode`). A slider is a `uniform()` node every tile's materials
-share; writing its `.value` retunes live, no rebuild. A shared `Vector3`
+`positionNode`). A fixed look strength is a constant node named after
+its term, beside it in its owner (`TINT`, `WINDOWS`, `GROUND_DETAIL`, …;
+plan 073); a slider (only *Nebel* is left) or anything else that moves
+is a `uniform()` node every tile's materials share; writing its
+`.value` retunes live, no rebuild. A shared `Vector3`
 passed to `uniform(v)` stays a live reference. Module-level uniform nodes
 that a setter writes (`fountainTime`, `lampNight`, `mapAltitude`) are
 fine. Inside `If`/branches read textures with an explicit `.level(0)` or
@@ -497,7 +500,7 @@ Rotating patterns by the bearing about the far data origin made every bend
 a shower of arcs — don't. Both rasters are greyscale PNGs 2×/4× wide with
 the bytes interleaved, so the viewer's own decoder (`lib/city/png-raster.ts`)
 reads them exactly. *Bodendetail* and *Stadtgrün* (urban green painted as
-meadow) are the sliders. The contour ink guards `fwidth == 0`.
+meadow) are their fixed strengths (`GROUND_DETAIL`, `URBAN_GREEN`). The contour ink guards `fwidth == 0`.
 
 **Sports grounds** (`sport-ground.ts` `sportGround`, same node, after the ground
 detail): `pipeline/bake/sport.py` writes a table of grounds (frame,
@@ -709,8 +712,8 @@ phone does not build it at all — its targets were the cost there, not its
 passes). **AO is
 not**: the contact shadows blinked on every footstep, so GTAO instead runs
 permanently at half resolution (`resolutionScale = 0.5`, normals
-reconstructed from depth, radius 6 m, occlusion raised to the contact
-slider's exponent) — about what the skip saved, paid every frame. Its sample
+reconstructed from depth, radius 2 m, occlusion raised to
+`AO_EXPONENT`, 1.5) — about what the skip saved, paid every frame. Its sample
 count (`aoSamplesFor`: 16, lite 8) rebuilds the pass's material, so it is a
 construction-time setting. DoF is dropped by switching between **two
 prebuilt `RenderPipeline`s** (with and without `DepthOfFieldNode`, both
@@ -729,8 +732,8 @@ the WebGL2 backend on par in steady state but stalling while it compiles
 
 ## QA: self-verify on a real GPU
 
-The in-app **Snapshot** panel serializes camera + sun time + look sliders to
-JSON; `__poc.handle.getCameraState()` / `applyCameraState()` replay it. To eyeball a
+The in-app **Snapshot** panel serializes camera + sun time + the look's
+controls (*Nebel*, the crown switch, the style, the data layers) to JSON; `__poc.handle.getCameraState()` / `applyCameraState()` replay it. To eyeball a
 change yourself:
 
 ```bash
@@ -757,8 +760,7 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
   "camera": { "mode": "fly", "pos": {"x":0,"y":0,"z":0}, "epsg": {"x":0,"y":0},
               "headingDeg": 0, "pitchDeg": 0, "fov": 55 },
   "date": "2026-06-15T08:30:00.000Z",
-  "look": { "fogPct":35,"gradingPct":50,
-            "contactPct":50,"grainPct":25,"style":"pastel" } }
+  "look": { "fogPct":35,"multiTuft":true,"style":"pastel" } }
 ```
 
 ### The `lite` scene profile (headless e2e only)

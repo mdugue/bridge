@@ -61,7 +61,6 @@ import {
 import {
   dataXY,
   type F,
-  type Live,
   rasterUv,
   type Tex,
   type V2,
@@ -100,16 +99,29 @@ import { sceneShared, textureBytes, trackTexture } from "./three-utils";
  *   The ground only, with what is baked into it (kerbs, fences, stairs,
  *   walls: `applyGroundLight`); the plan's facade step waits on plates.
  *
- * Both rows at 0 are the picture without them.
+ * Both at 0 are the picture without them.
  */
+
+/**
+ * Himmelslicht's hold on the ambient light (ground, the things baked into
+ * it, and the facades): half the physical darkening, so the contact
+ * shadows (GTAO) do not stack into dirt — fixed at what its slider stood
+ * at (plan 073), until judged on GPU plates (plan 033).
+ */
+export const SKY_VIEW: F = float(0.5);
+/**
+ * Ferne Schatten's cut of the sun: below full strength, as its slider
+ * stood (plan 073), until judged on GPU plates (plan 033).
+ */
+export const HORIZON_SHADE: F = float(0.8);
 
 // --- the tile's baked light ------------------------------------------------------
 
 /**
  * A tile's baked light as the ground and the things baked into its fine
  * terrain read it (kerbs, fences, stairs, walls): the terrain's own
- * rasters, where they lie, and the rows, the frustum and the sun it binds
- * (uniform nodes, shared by every tile). Without it a kerb on a
+ * rasters, where they lie, and the frustum and the sun it binds (uniform
+ * nodes, shared by every tile). Without it a kerb on a
  * far-shadowed street stayed sunlit on a shadowed carriageway.
  */
 export interface GroundLight {
@@ -118,8 +130,6 @@ export interface GroundLight {
   /** the tile's recentered north-west corner and size (data frame, m) */
   origin: [number, number];
   size: [number, number];
-  skyView: Live;
-  horizonShade: Live;
   /** the shadow frustum's centre (data frame x, y) and half-size (z) */
   shadowReach: UniformNode<"vec3", Vector3>;
   /** world (Y-up), surface → sun */
@@ -155,7 +165,7 @@ function hzAngle(horizon: Tex, uv: V2, k: F, base: number, maxDeg: number): F {
 }
 
 /**
- * How much of the sun clears the skyline (1 = all), before the row
+ * How much of the sun clears the skyline (1 = all), before its strength
  * (lib/city/skyview.ts horizonSunVisibility): the far band always; the
  * near band by its weight, 0 inside the shadow frustum and 1 beyond it
  * (lib/city/skyview.ts nearBandWeight) — skipped where it is 0, which is
@@ -262,17 +272,13 @@ function lightGraph(
   const uv = rasterUv(dataXY(), origin, light.size);
   graph = {};
   if (svf) {
-    graph.ao = mix(
-      1,
-      texture(slotTexture("lightSvf", svf), uv).r,
-      light.skyView
-    );
+    graph.ao = mix(1, texture(slotTexture("lightSvf", svf), uv).r, SKY_VIEW);
   }
   if (horizon) {
     const lit = mix(
       1,
       hzSunVisible(light, slotTexture("lightHorizon", horizon), uv),
-      light.horizonShade
+      HORIZON_SHADE
     );
     // three's ShadowNode calls this with the light's shadow term (the
     // filtered shadow map, 1 outside its frustum) and multiplies the light
@@ -348,7 +354,8 @@ export interface ClaySky {
    * its foot the wall too), faded to the open sky toward the eaves — a
    * courtyard's ground floor is dim, its eaves are not. Roofs sit above the
    * eaves: unchanged. `localH` is the fragment's height above the
-   * building's ground, `eaveH` the eave height, `skyView` the row;
+   * building's ground, `eaveH` the eave height, `skyView` its strength
+   * (`SKY_VIEW`);
    * `normal` the world geometric normal. lib/city/skyview.ts
    * `facadeSkyView` is the same curve.
    */
