@@ -479,31 +479,31 @@ function common(trail: Trail, ctx: ReportContext, t: number) {
   };
 }
 
+/** A number rounded, or nothing where there is none. */
+const roundOrNone = (value: number | undefined, digits: number) =>
+  value === undefined ? undefined : round(value, digits);
+
 /** The page's numbers, shown with every report. */
 function pageContext(trail: Trail) {
   const stats = trail.stats;
   const beats = stats?.beats ?? 0;
   const last = trail.beats.at(-1);
-  const firstFrame = firstAt(trail, "first frame");
-  const loaded = firstAt(trail, "loaded");
   return {
-    first_frame_s: firstFrame === undefined ? undefined : round(firstFrame, 1),
-    loaded_s: loaded === undefined ? undefined : round(loaded, 1),
+    first_frame_s: roundOrNone(firstAt(trail, "first frame"), 1),
+    loaded_s: roundOrNone(firstAt(trail, "loaded"), 1),
     beats_in_view: beats,
     fps_mean: stats && beats > 0 ? round(stats.fpsSum / beats, 1) : undefined,
-    max_held_mb: stats ? round(stats.maxHeldMB, 0) : undefined,
-    max_gpu_mb: stats ? round(stats.maxGpuMB, 0) : undefined,
-    max_heap_mb:
-      stats?.maxHeapMB === undefined ? undefined : round(stats.maxHeapMB, 0),
-    last_held_mb:
-      last?.heldMB === undefined ? undefined : round(last.heldMB, 0),
-    last_fps: last ? round(last.fps, 1) : undefined,
+    max_held_mb: roundOrNone(stats?.maxHeldMB, 0),
+    max_gpu_mb: roundOrNone(stats?.maxGpuMB, 0),
+    max_heap_mb: roundOrNone(stats?.maxHeapMB, 0),
+    max_cpu_mb: roundOrNone(stats?.maxCpuMB, 0),
+    last_held_mb: roundOrNone(last?.heldMB, 0),
+    last_cpu_mb: roundOrNone(last?.cpuMB, 0),
+    last_fps: roundOrNone(last?.fps, 1),
     last_tiles: last ? `${last.cities}/${last.dressings}` : undefined,
-    last_raster_mb:
-      last?.rasterMB === undefined ? undefined : round(last.rasterMB, 0),
-    last_cache_mb:
-      last?.cacheMB === undefined ? undefined : round(last.cacheMB, 0),
-    last_height_m: last ? round(last.heightM, 0) : undefined,
+    last_raster_mb: roundOrNone(last?.rasterMB, 0),
+    last_cache_mb: roundOrNone(last?.cacheMB, 0),
+    last_height_m: roundOrNone(last?.heightM, 0),
   };
 }
 
@@ -674,6 +674,7 @@ export function summaryReport(
     });
     measure("held_max", trail.stats?.maxHeldMB, "megabyte");
     measure("heap_max", trail.stats?.maxHeapMB, "megabyte");
+    measure("cpu_max", trail.stats?.maxCpuMB, "megabyte");
   }
   return {
     ...base,

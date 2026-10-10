@@ -76,7 +76,10 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   (`lib/city/city-mesh.ts`). Demolish = drop the object's building tree from
   the index buffer and rebuild the tile's BVH (you can't hide one building
   in a batched mesh). Picking/collision use `three-mesh-bvh` on every loaded
-  tile. No CityJSON reaches the browser.
+  tile — its BVH built when a ray first reaches the tile's box
+  (`ensureCityBvh`; within 400 m of the camera in idle time), never a ray
+  walking a tile without one (three-mesh-bvh's brute-force fallback). No
+  CityJSON reaches the browser.
 - `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF mesh
   gets the land-cover material and hangs the water and mist sheets. The
   fine level is a TIN of the native 1 m DGM1 (±0.15 m,

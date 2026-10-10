@@ -21,10 +21,13 @@ import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
 import { markSceneShared } from "./three-utils";
 import {
+  asksOf,
+  buildAsksWhenIdle,
   catchUp,
   DRESSING_PART_NAMES,
   DressingPlugin,
   dressingParts,
+  handOverWaitMs,
   PHONE_STREAM,
   paceStreaming,
   showDataLayers,
@@ -463,6 +466,52 @@ test("a phone streams fewer contents at once, on queues of its own", () => {
   expect(desktop.downloadQueue).toBe(DEFAULT_DOWNLOAD_QUEUE);
   phone.dispose();
   desktop.dispose();
+});
+
+test("a hung dressing's ask sets come in idle time, into the same array; none for a dressing that left", () => {
+  const idle: (() => void)[] = [];
+  const later = (work: () => void) => {
+    idle.push(work);
+    return () => undefined;
+  };
+  const set = {
+    box: {},
+    nearest: () => null,
+  } as unknown as AskSet<FeatureInquiry>;
+  const dressing = (): TileDressing => {
+    const asks: AskSet<FeatureInquiry>[] = [];
+    return { tile: "t", asks, buildAsks: () => asks.push(set) };
+  };
+  const hung = dressing();
+  const asks = hung.asks;
+  buildAsksWhenIdle(hung, () => true, later);
+  expect(hung.asks).toEqual([]);
+  idle.shift()?.();
+  expect(hung.asks).toBe(asks);
+  expect(hung.asks).toEqual([set]);
+  // run once, and its features let go of
+  expect(hung.buildAsks).toBeUndefined();
+  const gone = dressing();
+  buildAsksWhenIdle(gone, () => false, later);
+  idle.shift()?.();
+  expect(gone.asks).toEqual([]);
+  // a dressing with nothing to build waits for nothing
+  buildAsksWhenIdle({ tile: "t" }, () => true, later);
+  expect(idle).toHaveLength(0);
+  // a question before the idle time builds them at once, and only once
+  const early = dressing();
+  buildAsksWhenIdle(early, () => true, later);
+  expect(asksOf(early)).toEqual([set]);
+  expect(asksOf(early)).toEqual([set]);
+  idle.shift()?.();
+  expect(early.asks).toEqual([set]);
+});
+
+test("a phone's parse slot never waits on a dressing; a desktop's a little", () => {
+  expect(handOverWaitMs("mobile")).toBe(0);
+  expect(handOverWaitMs("desktop")).toBeGreaterThan(0);
+  // well under the compile's own bound and the old 10 s
+  expect(handOverWaitMs("desktop")).toBeLessThanOrEqual(3000);
 });
 
 test("a level waits for its dressing only where it takes over from its tile's other level", () => {

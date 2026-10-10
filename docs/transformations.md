@@ -419,7 +419,10 @@ visual-variable codebook is in
   for the minimap (which draws the bridge decks from each tile's `bridge`
   file too, in the colour of the class they carry — the class raster
   shows the river under them). Demolish = filter the building tree out of the index
-  buffer + rebuild the BVH; BVH picking/collision. `city-layer.ts`. The DOP
+  buffer + rebuild the BVH; BVH picking/collision, each tile's BVH built
+  when a ray first reaches it (`ensureCityBvh`, plan 069,
+  [ADR 0050](./adr/0050-a-building-tiles-bvh-when-a-ray-needs-it.md)), not as it
+  lands. `city-layer.ts`. The DOP
   roof LUT is folded in at bake time.
 - **Small structures from the laser scan** `◎ detected` (plan 034) — what the laser saw
   2–6.5 m above ground and LoD2 does not carry: garden and allotment

@@ -467,6 +467,18 @@ export class TinIndex {
     }
   }
 
+  /**
+   * The bytes the index keeps on the page's process: its buckets and the
+   * vertices it reads, when they are typed arrays — not the triangles,
+   * which are the mesh's own index (counted with the mesh).
+   */
+  get bytes(): number {
+    const typed = (a: ArrayLike<number>) =>
+      ArrayBuffer.isView(a) ? a.byteLength : 0;
+    const { xy, z } = this.surface;
+    return this.items.byteLength + this.start.byteLength + typed(xy) + typed(z);
+  }
+
   /** Elevation at projected (x, y); null outside the tile. */
   heightAt(x: number, y: number): number | null {
     const [minX, minY, maxX, maxY] = this.surface.bounds;

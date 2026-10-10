@@ -26,9 +26,21 @@
   pass per task (`queueChange` in `create-app.ts`) and a message-channel
   `scheduler.yield` for WebKit (`main-yield.ts` — three's compiles waited a
   frame per step there; unmeasured on an iPhone, step 2 should check it).
-  Open: steps 1–4, 6, 7. Re-read the "Current state" excerpts against the
-  code before starting (the drift check will flag `tile-stream.ts` and
-  `create-app.ts`).
+  **Then (branch `worktree-agent-aa0338b64fd10a649`, after the iPhone
+  crash reports):** one meshopt worker on a phone (`MESHOPT_WORKERS` per
+  tier: each worker's WebAssembly heap keeps its largest buffer); the
+  tiles' CPU arrays counted (`cpuBytesOf` → `getGpuDebug().cpuMB`, the
+  trail's `cpuMB`, the reports' `max_cpu_mb`/`last_cpu_mb`/`cpu_max`);
+  **step 7, ungated** — every crash is an iPhone that ran out of process
+  memory with three's GPU count low (CITY-WALK-B: 257 MB held, one
+  building tile, no terrain, "boot after buildings"), so the BVH comes
+  when a ray first needs it, not as the tile lands (it needed more than
+  filters: see step 7's note); steps 1, 3, 4 and 6 as written (step 6's
+  gate held: `dressing:asks` 190–299 ms locally). Step 2's device rows
+  are open: no device here — measured instead with a mobile-emulated
+  headless Chromium A/B against `main` (Findings). Not fed into the
+  cache's weighing or the governor yet: the `cpuMB` figure is recorded so
+  a later step can.
 
 - **Priority**: P1
 - **Effort**: M (steps 1–5); +M for each gated step
@@ -377,6 +389,23 @@ still exist before `placeStart()` (ADR 0032: the camera is never inside a
 building). This is the cheap half of plan 043 (no worker); if it turns
 out to need more than these filters, STOP and report.
 
+> **As built (2026-10-10).** Ungated by the iPhone crash reports (the
+> page's process memory, not three's count). It needed more than
+> filters, and the operator asked for it regardless: the collider's two
+> horizontal rays (`resolveStep`, `along`) went through
+> `intersectObjects` and would have fallen back to three-mesh-bvh's
+> brute-force loop — only its vertical rays skipped a mesh without a
+> BVH. Every ray now asks only the tiles whose world box it enters,
+> nearest first, and builds a missing BVH where it may: the collider
+> always (once the boot has placed the player — the spawn tile's BVH is
+> built by that placing, so ADR 0032 holds at the start pose), a pick up
+> to its first hit, the probe and the double tap up to the ground; the
+> autofocus never. The tiles within 400 m of the camera are built in idle
+> time at the 10 Hz tick (`nearestWithoutBvh`). three-mesh-bvh sorts the
+> index in place without marking it for upload (checked in
+> `node_modules/three-mesh-bvh/src/core`): the GPU keeps its order, the
+> same triangles.
+
 ## Test plan
 
 - `app/_components/stream-timing.test.ts` (new): aggregation, no tile id
@@ -388,14 +417,22 @@ out to need more than these filters, STOP and report.
 
 ## Done criteria
 
-- [ ] `bun typecheck`, `bun lint`, `bun run test` exit 0
-- [ ] `bun run build && bun run test:e2e` passes
-- [ ] `grep -n "HAND_OVER_WAIT_MS" app/_components/tile-stream.ts` returns nothing; `handOverWaitMs` is exported and tested
-- [ ] `grep -n "useWorkers" app/_components/tile-stream.ts` returns one line
-- [ ] Step 2's measurement table (before) and a re-measurement (after) are in the PR and in this plan's Findings
-- [ ] `grep -rn "trail" app/_components/stream-timing.ts` returns nothing (timings never reach the crash trail)
-- [ ] `docs/rendering.md`'s boot sequence names the honest light stage and the per-tier hand-over wait; AGENTS.md lists `?trace=1`
-- [ ] No files outside the in-scope list modified
+- [x] `bun typecheck`, `bun lint`, `bun run test` exit 0 (`bun run verify`)
+- [ ] `bun run build && bun run test:e2e` passes — on the loaded local
+      machine only with CI's budgets and a raised per-test limit, and the
+      whole-site spec not even then (Findings); to be judged on CI
+- [x] `grep -n "HAND_OVER_WAIT_MS" app/_components/tile-stream.ts` returns nothing; `handOverWaitMs` is exported and tested
+- [x] `grep -n "useWorkers" app/_components/tile-stream.ts` returns one line
+- [ ] Step 2's measurement table (before) and a re-measurement (after) are in the PR and in this plan's Findings — in the Findings as a
+      local mobile-emulated substitute; the device rows are open; no PR
+- [x] `grep -rn "trail" app/_components/stream-timing.ts` returns nothing (timings never reach the crash trail)
+- [x] `docs/rendering.md`'s boot sequence names the honest light stage and the per-tier hand-over wait; AGENTS.md lists `?trace=1`
+- [ ] No files outside the in-scope list modified — the operator widened
+      the scope (one meshopt worker on a phone, the tiles' CPU arrays
+      counted, step 7 ungated): `crash-trail.ts`/`crash-reports.ts` (lib),
+      `terrain-tin.ts`, `terrain-layer.ts`, `three-utils.ts`,
+      `collision.ts`, `city-layer.ts`'s picks, `inquiry-probe.ts`,
+      `main-yield.ts`, the privacy page, ADR 0050
 
 ## STOP conditions
 
@@ -423,4 +460,132 @@ out to need more than these filters, STOP and report.
 
 ## Findings
 
-(append step 2's table and decision here)
+### 2026-10-10 — a local substitute for step 2 (no device here)
+
+**Setup.** No iPhone or Android phone was available. Instead: headless
+Chromium (Playwright's chromium-1194) with Playwright's `devices['iPhone
+13']` descriptor (390×664 at DPR 3, touch: the viewer took the **mobile
+tier** in every run — `(pointer: coarse) and (hover: none)` matched),
+the renderer's WebGL2 backend over SwiftShader (headless Chromium has no
+WebGPU adapter), **no CPU throttling**; production builds with
+`NEXT_PUBLIC_POC_DEBUG=1` of `main` (266bb89) and of this branch, `next
+start`, a cold browser profile per run, `?trace=1` on both (main ignores
+it). Two URLs: `/dresden?scene=lite` (the spawn tile only) and
+`/dresden?scene=lite&block=1` (the whole site, lite). The machine was
+shared: **load average 10–21 on four cores** from other agents' builds
+and browsers in every run — the times are directional at best; the
+memory figures are the reliable ones. "After GC" is CDP
+`HeapProfiler.collectGarbage` then `Runtime.getHeapUsage`
+(`backingStorageSize`: the page's ArrayBuffers) — the like-for-like
+retained figure against `main`, which has no `cpuMB`; the GC columns
+exist from the second pair on. "Timer late" is a bare 1 s `setTimeout`
+chain in the page: how late it fired at worst.
+
+**A/B, mobile-emulated** (ff = first frame):
+
+| run | first frame s | ready s | JS heap MB ff / ready | ArrayBuffers MB ff / ready (after GC) | peak ArrayBuffers MB | renderer RSS MB ff / ready (after GC) | peak renderer RSS MB | three's held MB ff / ready | cpuMB ff / ready (bvh) | long tasks to ready: n / total s / max s | timer late max s |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| main lite 1 | 51 | 252 | 203 / 223 | 188 / 177 | 203 | 454 / 560 | 605 | 102 / 192 | – | 38 / 65 / 12.0 | – |
+| branch lite 1 | 72 | 225 | 251 / 216 | 236 / 157 | 236 | 591 / 520 | 629 | 128 / 192 | 82 / 110 (19) | 42 / 68 / 13.6 | – |
+| main lite 2 | 42 | 221 | 182 / 195 | 183 (189) / 157 (157) | 235 | 443 (454) / 539 (445) | 675 | 102 / 192 | – | 34 / 53 / 12.4 | 71 |
+| branch lite 2 | 50 | 186 | 216 / 231 | 209 (139) / 157 (157) | 229 | 569 (411) / 499 (415) | 615 | 144 / 192 | 82 / 110 (19) | 30 / 38 / 6.1 | 70 |
+| main site 1 | 189 | 759 | 511 / 534 | 494 / 475 | 544 | 838 / 875 | 1066 | 319 / 417 | – | 52 / 197 / 33.1 | – |
+| branch site 1 | 155 | 601 | 597 / 541 | 504 / 421 | 504 | 941 / 779 | 941 | 350 / 416 | 234 / 266 (32) | 53 / 141 / 19.9 | – |
+| main site 2 | 135 | 636 | 509 / 525 | 494 (493) / 466 (464) | 527 | 823 (812) / 873 (858) | 1082 | 312 / 417 | – | 46 / 165 / 29.2 | 206 |
+| branch site 2 | 188 | 693 | 578 / 476 | 484 (484) / 421 (421) | 504 | 934 (826) / 775 (766) | 954 | 325 / 416 | 234 / 266 (32) | 52 / 207 / 32.0 | 181 |
+
+A third branch lite run on the last build (with `boot:place` and its
+neighbours timed): first frame 50 s, ready 193 s, ArrayBuffers after GC
+at the first frame 176 MB.
+
+**The branch's trace** (count · total s · max s). "Step-1 build" is this
+branch before steps 3, 4 and 6 (workers, `cpuMB`, the lazy BVH and the
+marks only) — the "before" of those three steps; `main` has no marks.
+
+| category | step-1 build, lite | step-1 build, site | final, lite 1 | final, lite 2 | final, lite 3 | final, site 1 | final, site 2 |
+|---|---|---|---|---|---|---|---|
+| `boot:scene-compile` | – | – | – | – | 1 · 5.1 · 5.05 | – | – |
+| `boot:place` | – | – | – | – | 1 · 7.2 · 7.24 | – | – |
+| `boot:light-wait` | – | – | – | – | 1 · 0.5 · 0.49 | – | – |
+| `boot:first-shadow-frame` | 1 · 0.0 · 0.00 | 1 · 0.0 · 0.01 | 1 · 0.0 · 0.00 | 1 · 0.0 · 0.00 | 1 · 0.0 · 0.01 | 1 · 0.1 · 0.12 | 1 · 0.0 · 0.01 |
+| `boot:frame` | 41 · 7.6 · 4.61 | 47 · 34.6 · 12.47 | 38 · 7.5 · 3.66 | 35 · 4.0 · 3.79 | 41 · 7.0 · 4.09 | 41 · 30.0 · 11.89 | 43 · 52.9 · 26.49 |
+| `boot:light-to-veil` | 1 · 7.3 · 7.31 | 1 · 0.7 · 0.73 | 1 · 0.7 · 0.70 | 1 · 34.6 · 34.61 | 1 · 8.8 · 8.83 | 1 · 7.4 · 7.37 | 1 · 24.9 · 24.88 |
+| `boot:veil-to-loaded` | 1 · 99.5 · 99.55 | 1 · 494.9 · 494.85 | 1 · 149.8 · 149.82 | 1 · 98.0 · 97.97 | 1 · 130.5 · 130.49 | 1 · 439.0 · 439.03 | 1 · 480.1 · 480.06 |
+| `tile:city` | 1 · 0.4 · 0.39 | 4 · 1.4 · 0.76 | 1 · 0.6 · 0.55 | 1 · 0.2 · 0.16 | 1 · 0.2 · 0.18 | 4 · 0.9 · 0.49 | 4 · 1.8 · 0.85 |
+| `tile:bvh` | 1 · 4.9 · 4.86 | 2 · 9.2 · 5.05 | 1 · 9.1 · 9.14 | 1 · 5.4 · 5.42 | 1 · 7.2 · 7.23 | 2 · 15.2 · 8.30 | 2 · 21.9 · 16.57 |
+| `tile:rasters` | 2 · 48.9 · 44.65 | 4 · 696.0 · 408.30 | 2 · 116.7 · 101.07 | 2 · 42.3 · 40.30 | 2 · 89.7 · 82.24 | 4 · 478.7 · 218.41 | 4 · 694.0 · 320.88 |
+| `tile:compile` | 3 · 33.0 · 20.53 | 8 · 135.9 · 63.43 | 3 · 43.8 · 29.92 | 3 · 43.9 · 34.10 | 3 · 35.9 · 26.43 | 7 · 141.8 · 69.43 | 7 · 186.8 · 91.54 |
+| `tile:handover-wait` | 1 · 14.0 · 13.97 | 1 · 231.8 · 231.82 | – | – | – | – | – |
+| `dressing:queue-wait` | 2 · 69.1 · 37.49 | 4 · 190.8 · 103.23 | 2 · 50.4 · 49.56 | 2 · 134.5 · 72.73 | 2 · 45.2 · 44.55 | 3 · 215.8 · 112.32 | 3 · 268.3 · 137.62 |
+| `dressing:build` | 2 · 37.4 · 27.30 | 4 · 148.2 · 64.93 | 2 · 52.7 · 36.41 | 2 · 22.3 · 18.87 | 2 · 45.3 · 31.49 | 3 · 153.8 · 84.25 | 3 · 206.9 · 104.56 |
+| `dressing:compile` | 2 · 61.0 · 50.43 | 3 · 292.4 · 229.71 | 2 · 83.2 · 67.17 | 2 · 74.5 · 65.97 | 2 · 78.9 · 66.55 | 3 · 274.8 · 215.86 | 3 · 243.5 · 179.42 |
+| `dressing:asks` | 1 · 0.3 · 0.30 | 1 · 0.2 · 0.19 | – | – | – | – | – |
+| `longtask` | 31 · 37.7 · 10.06 | 43 · 133.6 · 25.80 | 36 · 61.7 · 13.59 | 27 · 33.4 · 6.08 | 30 · 49.9 · 13.84 | 50 · 138.8 · 19.86 | 49 · 205.3 · 31.96 |
+
+**Decision.**
+
+- **(b) dominates** on the emulated phone: in the step-1 full-site run
+  `tile:handover-wait` + `dressing:queue-wait` = 232 + 191 s, 85 % of the
+  495 s from the veil to "loaded" (the gate's 50 %). Step 4 (built) removes
+  the wait on a phone: no `tile:handover-wait` since.
+- **(a) holds by the letter** (`boot:light-to-veil` > 2 s in five of seven
+  runs, up to 35 s) **but not by the plan's mechanism**: the first shadow
+  frame costs ≤ 0.12 s and the honest light stage's wait 0.5 s. What holds
+  the veil is its 600 ms timer firing late — next point.
+- **Timers starve under this load — a finding the plan did not foresee.**
+  A bare 1 s `setTimeout` fired up to 71 s late in the lite runs and up
+  to 206 s in the full-site ones, on `main` as much as on the branch. The
+  bounded waits are therefore nominal: the 3 s compile bound measured up
+  to 230 s (`dressing:compile`), the 10 s hand-over bound 232 s, and step
+  6's idle callbacks had not run by "loaded" in any branch run (no
+  `dressing:asks` row; a question now builds a tile's pending sets at
+  once, `asksOf`). In Chromium three's compile steps yield through the
+  native `scheduler.yield`, whose continuations run ahead of timers, and
+  with the main thread saturated (SwiftShader frames of 1–26 s) a timer
+  waits behind them for minutes. Unmeasured on WebKit, where
+  `main-yield.ts`'s message-channel shim is an ordinary task source.
+  Whether a real phone's main thread ever saturates like this is step 2's
+  open device row. Not fixed here (backlog).
+- **Step 6's gate** held: `dressing:asks` 190–299 ms on this desktop-class
+  CPU (gate: 8 ms) — built.
+- **Step 7** was ungated by the crash reports (the page's process memory,
+  not three's count) — built.
+
+**What changed, in numbers.** *Memory* (what the iPhones die of): after a
+GC the page keeps 139 / 176 MB of ArrayBuffers at the first frame on the
+spawn tile against `main`'s 189, the same 157 MB at "ready"; over the
+whole site 484 against 493 at the first frame and **421 against 464 MB at
+"ready"**; the renderer process peaked at **941 / 954 MB against 1066 /
+1082 MB** and held 766 against 858 MB after a GC at "ready"; three's GPU
+count is the same (192 / 416 MB). The branch's own count (`cpuMB`): the
+spawn tile keeps 82 MB at the first frame — its buildings' positions,
+index and feature ids 48 MB, its BVH 19 MB — and the whole site 266 MB at
+"ready", with **two BVHs (32 MB) for the four building tiles loaded**
+(`main` builds one for each). The raw peaks of ArrayBuffers include
+garbage not yet collected and move both ways in the lite runs. *Times*
+(directional): the spawn tile's ready came 225 / 186 / 193 s against 252
+/ 221 s; its **first frame 50–72 s against 42–51 s** — the spawn tile's
+BVH now runs after its terrain has landed, on the boot's path
+(`boot:place` 7.2 s of the 12.8 s from the terrain to 52 % in the third
+run, all of it `tile:bvh`), where `main` ran it inside the city's parse
+while the terrain still downloaded; the whole site's first frame and
+ready moved both ways (155 / 188 against 189 / 135 s; 601 / 693 against
+759 / 636 s); long tasks no clear change. The BVH's cost itself
+(5–17 s here under four-fold contention) is far above the "≈75 ms a tile"
+this plan assumed: re-measure on a device.
+
+**E2E on the same machine, against the branch's build.** The default
+local config (120 s per test) failed the four viewer groups' boots — each
+still in *Details laden* when its 120 s ran out (slow, not hung: the
+bench's lite boots took 186–252 s to "ready" on `main` and the branch
+alike under this load); with CI's budgets (`CI=1`: `slow()` × 3, one
+worker) and the per-test limit raised (`--timeout=900000`) **29 passed**
+— the collision, demolish, double-tap, building and tree inquiry specs
+among them — and the whole-site spec ran past its 810 s while still
+streaming (five of six dressings built at 707 s), no page errors.
+
+**Seen on a phone after this branch** (not by eye here — headless):
+a fine terrain level that replaces the coarse one shows bare for a
+moment, its trees, lamps and rails arriving once its dressing is built;
+a tile's ask sets come in idle time or with the first question; the boot
+reaches 52 % one shadow frame later and after the spawn tile's BVH.

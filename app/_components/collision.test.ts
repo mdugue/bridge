@@ -6,7 +6,7 @@ import {
   MeshBasicNodeMaterial,
   Vector3,
 } from "three/webgpu";
-import { createCityCollider } from "./collision";
+import { bvhBytesUnder, createCityCollider } from "./collision";
 
 /**
  * The building collider through a real three-mesh-bvh BVH (ADR 0032: the
@@ -15,7 +15,10 @@ import { createCityCollider } from "./collision";
  * y 6…6.2 over x 120…130 (a balcony, a bridge deck); a 1 m low wall around
  * (200, 100) that only the knee ray can see.
  */
-function city() {
+function city({
+  bvh = true,
+  build,
+}: { bvh?: boolean; build?: (mesh: Mesh) => void } = {}) {
   const group = new Group();
   const solid = (
     size: [number, number, number],
@@ -26,7 +29,9 @@ function city() {
       new MeshBasicNodeMaterial()
     );
     mesh.position.set(...at);
-    mesh.geometry.computeBoundsTree();
+    if (bvh) {
+      mesh.geometry.computeBoundsTree();
+    }
     group.add(mesh);
     return mesh;
   };
@@ -36,7 +41,7 @@ function city() {
     solid([10, 1, 10], [200, 0.5, 100]),
   ];
   group.updateMatrixWorld(true);
-  return { collider: createCityCollider(() => meshes), group };
+  return { collider: createCityCollider(() => meshes, build), group };
 }
 
 test("inside a building the roof above is found; outside or under a slab there is none", () => {
@@ -95,4 +100,51 @@ test("a building that moves is found where it went", () => {
   group.updateMatrixWorld(true);
   expect(collider.topAt(150, 100)).toBeCloseTo(10, 5);
   expect(collider.topAt(100, 100)).toBeNull();
+});
+
+test("a building without a BVH is passed over — never walked triangle by triangle — or built as a ray reaches it", () => {
+  const bare = city({ bvh: false });
+  expect(bare.collider.topAt(100, 100)).toBeNull();
+  const step = new Vector3(1, 0, 0);
+  expect(bare.collider.resolveStep(new Vector3(94.5, 1.7, 100), step)).toEqual(
+    step
+  );
+  // with a builder the same rays build what they reach, and only that
+  const built: Mesh[] = [];
+  const lazy = city({
+    bvh: false,
+    build: (mesh) => {
+      built.push(mesh);
+      mesh.geometry.computeBoundsTree();
+    },
+  });
+  expect(lazy.collider.topAt(100, 100)).toBeCloseTo(10, 5);
+  expect(built).toHaveLength(1);
+  // a long ray through the cube toward the low wall: the cube is hit
+  // first, so the wall behind it is not built for it
+  const along = lazy.collider.along(
+    new Vector3(80, 0.5, 100),
+    new Vector3(1, 0, 0),
+    200
+  );
+  expect(along).toBeCloseTo(15, 5);
+  expect(built).toHaveLength(1);
+  expect(
+    lazy.collider.resolveStep(new Vector3(194.5, 1.7, 100), step).length()
+  ).toBeCloseTo(0, 6);
+  expect(built).toHaveLength(2);
+});
+
+test("a mesh's BVH weighs its node buffers; one without a BVH weighs nothing", () => {
+  const { group } = city();
+  const nodes = bvhBytesUnder(group);
+  expect(nodes).toBeGreaterThan(0);
+  // each geometry once, however many meshes draw it
+  const twin = new Group();
+  for (const child of group.children) {
+    twin.add(child.clone(), child.clone());
+  }
+  expect(bvhBytesUnder(twin)).toBe(nodes);
+  const bare = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicNodeMaterial());
+  expect(bvhBytesUnder(bare)).toBe(0);
 });

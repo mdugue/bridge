@@ -14,6 +14,7 @@ import {
 } from "three/webgpu";
 import {
   aloneUnder,
+  cpuArrayBytes,
   disposeObject3D,
   dropCpuCopies,
   estimateGeometryBytes,
@@ -227,6 +228,30 @@ test("a buffer still read through another attribute, or shared by the scene, kee
   dropCpuCopies(root, [mesh.geometry.getAttribute("normal"), shared]);
   expect(mesh.geometry.getAttribute("normal").array.length).toBe(12);
   expect(shared?.array.length).toBe(3);
+});
+
+test("the CPU arrays a tile keeps: each buffer whole and once, a dropped copy nothing", () => {
+  const mesh = gltfMesh();
+  // a second accessor over the positions' buffer, as two glTF accessors
+  // view one bufferView: the buffer is held once, and whole
+  const view = new Int16Array(
+    (mesh.geometry.getAttribute("position") as InterleavedBufferAttribute).data
+      .array.buffer,
+    8,
+    4
+  );
+  mesh.geometry.setAttribute("_extra", new BufferAttribute(view, 1));
+  const root = new Object3D();
+  root.add(mesh);
+  expect(cpuArrayBytes(root)).toBe(24 + 12 + 12);
+  dropCpuCopies(root, [mesh.geometry.getAttribute("normal")]);
+  expect(cpuArrayBytes(root)).toBe(24 + 12);
+  // a buffer another root already counted is not counted again
+  const seen = new Set<ArrayBufferLike>();
+  cpuArrayBytes(root, seen);
+  const twin = new Object3D();
+  twin.add(new Mesh(mesh.geometry, mesh.material));
+  expect(cpuArrayBytes(twin, seen)).toBe(0);
 });
 
 test("textureBytes adds a third for a mip chain", () => {

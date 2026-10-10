@@ -42,7 +42,14 @@ const PREVIOUS_KEY = STORAGE_KEYS.trailPrevious;
 /** The query parameters worth a record (the QA knobs, AGENTS.md): anything
  *  else a page was opened with stays out of the trail — it goes into
  *  reports and the crash card's text. */
-const TRAIL_QUERY = ["scene", "gpu", "block", "safety", "trail"] as const;
+const TRAIL_QUERY = [
+  "scene",
+  "gpu",
+  "block",
+  "safety",
+  "trail",
+  "trace",
+] as const;
 
 /** The path plus the known knobs of `search`, in TRAIL_QUERY's order. */
 export function trailUrl(pathname: string, search: string): string {
