@@ -43,7 +43,7 @@ import {
   surfaceId,
 } from "@/lib/city/landcover";
 import { KERB_HEIGHT } from "@/lib/city/kerbs";
-import type { F, Live, Tex, V2, V3, V4 } from "./shader-chunks";
+import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
 
 /**
  * Ground detail in the terrain's colour node, next to the meadow mottle
@@ -75,7 +75,7 @@ import type { F, Live, Tex, V2, V3, V4 } from "./shader-chunks";
  * - **Urban green.** Green courtyards, front gardens and parks inside the
  *   DLM's built-up class are painted exactly as meadow.
  *
- * All strengths scale with the look rows `groundDetail` and `urbanGreen`.
+ * All strengths scale with `GROUND_DETAIL` and `URBAN_GREEN` (below).
  * The class and paving rasters are read with `textureLoad`, the edge
  * raster at an explicit level 0, so no implicit derivative is taken in
  * non-uniform control flow.
@@ -92,6 +92,20 @@ type I = Node<"int">;
 type I2 = Node<"ivec2">;
 type B = Node<"bool">;
 
+/**
+ * Bodendetail: how strongly the kerbs, lawn edges, parking, road markings,
+ * allotment beds, sports grounds' texture and the paving show from close
+ * by — fixed at what its slider stood at (plan 073). The markings and the
+ * beds reach full strength at it (`÷ 0.7`).
+ */
+export const GROUND_DETAIL: F = float(0.7);
+/**
+ * Stadtgrün: green courtyards, front gardens and parks inside the
+ * settlement painted as meadow, at full strength — fixed since its slider
+ * went (plan 073).
+ */
+export const URBAN_GREEN: F = float(1);
+
 /** What every ground chunk reads (the terrain's colour node makes it). */
 export interface GroundInputs {
   /** the splat uv (v grows southward), a var */
@@ -106,9 +120,6 @@ export interface GroundInputs {
   fw: F;
   /** the class id at the fragment (float), a var */
   cls: F;
-  /** the look rows (shared uniform nodes) */
-  groundDetail: Live;
-  urbanGreen: Live;
   /** world, surface → sun */
   sunDirection: UniformNode<"vec3", Vector3>;
   /** the meadow's and the road's palette colours, linear */
@@ -356,7 +367,7 @@ function classDistances(
   g: GroundFields,
   grid: { f: V2; i: I2; lawn: V3; mpt: V2; road: V3; size: I2 }
 ) {
-  If(and(inp.fw.lessThan(0.5), inp.groundDetail.greaterThan(0)), () => {
+  If(and(inp.fw.lessThan(0.5), GROUND_DETAIL.greaterThan(0)), () => {
     const s = gdSmooth(inp, grid.i, grid.f, grid.mpt, grid.size);
     const re = s.road.toVar();
     const le = s.lawn.toVar();
@@ -534,7 +545,7 @@ export function urbanGreen(
       .mul(select(paved, 0, 1))
       .mul(select(g.onRoad, 0, 1));
   }
-  const strength = ndvi || g.hasEdge ? inp.urbanGreen : float(0);
+  const strength = ndvi || g.hasEdge ? URBAN_GREEN : float(0);
   const ugW = mask.mul(strength).toVar();
   // Meadow from here on: the colour, the mottle, and (the NDVI tint,
   // after) the lush-to-dry tint and the normal break-up.
@@ -556,7 +567,7 @@ function kerb(inp: GroundInputs, col: GroundColour, g: GroundFields): void {
   // On the fine level a real kerb stone stands on the band (kerbs.ts);
   // the band carries it into the coarse level and the far field. No
   // shading-normal step: on the raster's staircase it read as dashes.
-  const on = inp.groundDetail;
+  const on = GROUND_DETAIL;
   const k = smoothstep(0.15, 0.35, g.kerbOk).mul(g.near).mul(on).toVar();
   const top = gdBand(g.dr, -0.25, 0, g.w);
   const gutter = gdBand(g.dr, 0, 0.35, g.w);
@@ -586,7 +597,7 @@ function kerb(inp: GroundInputs, col: GroundColour, g: GroundFields): void {
 
 /** Lawn edge: a darker lip and a kink where the grass stops. */
 function lawnEdge(inp: GroundInputs, col: GroundColour, g: GroundFields): void {
-  const on = inp.groundDetail;
+  const on = GROUND_DETAIL;
   const lip = gdBand(g.dl, 0, 0.25, g.w).mul(g.near).mul(on);
   col.baseCol.mulAssign(float(1).sub(lip.mul(0.12)));
   g.tilt.addAssign(
@@ -741,14 +752,14 @@ function parking(
       );
       paint.assign(max(edge, sep.mul(lane)));
       col.baseCol.mulAssign(
-        float(1).sub(lane.mul(0.03).mul(g.mid).mul(inp.groundDetail))
+        float(1).sub(lane.mul(0.03).mul(g.mid).mul(GROUND_DETAIL))
       );
     }).ElseIf(isLot, lot);
   } else {
     If(isLot, lot);
   }
   const fade = float(1).sub(smoothstep(0.06, 0.25, inp.fw));
-  const amount = paint.mul(fade).mul(inp.groundDetail).mul(0.8).toVar();
+  const amount = paint.mul(fade).mul(GROUND_DETAIL).mul(0.8).toVar();
   col.baseCol.assign(
     mix(col.baseCol, max(col.baseCol, vec3(0.86, 0.85, 0.82)), amount)
   );
@@ -765,7 +776,7 @@ export function groundDetail(
   kerb(inp, col, g);
   lawnEdge(inp, col, g);
   const q = streetFrame(inp, g);
-  const pave = inp.groundDetail.mul(float(1).sub(ugW)).toVar();
+  const pave = GROUND_DETAIL.mul(float(1).sub(ugW)).toVar();
   // Sealed ground off the carriageway (a car park, an asphalt path, a
   // concreted yard) takes on the road's grey, so it reads from afar too.
   const sealed = or(g.kind.equal(id("asphalt")), g.kind.equal(id("concrete")));

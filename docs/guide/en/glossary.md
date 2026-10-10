@@ -324,8 +324,9 @@ changes whenever the content changes, so caches never serve stale data.
 **Lite profile** — `?scene=lite` (`/dresden?scene=lite`): the spawn tile only, tiny shadow map,
 half resolution; for automated tests only.
 
-**Snapshot** — the JSON text that captures camera, date/time and every
-slider, used to reproduce a view.
+**Snapshot** — the JSON text that captures camera, date/time, the
+picture style, the fog, the crown switch and the data layers, used to
+reproduce a view.
 
 **Scenic view / Aussichtspunkt** — one of the authored vantages the
 camera can glide to; one of them is the start view.

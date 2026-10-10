@@ -104,7 +104,7 @@ history. Decisions that came out of plans are written up as
 | 070 | Each tile holds a fraction of the raster memory: a 1024² coarse class raster, the sports raster on a desktop's fine level only, optionally a half-resolution desktop splat | **PARTIAL** (2026-10-10) — steps 1–4 built (step 4, the desktop's fine splat at 2048², judged on SwiftShader plates: nothing blockier, −64 MiB a fine tile; one real-GPU glance at the PR's snapshots left); step 5's GPU and phone measurements open | [070-raster-diet.md](./070-raster-diet.md) |
 | 071 | A phone renders a lean scene, a desktop a lighter one | **PARTIAL** (2026-10-10) — phone GTAO at 8 samples (not 0), a phone rich-crown budget of 800 (not *Multi-Tuft* off), no autofocus ray without a lens blur; step 4.2 (no desktop DoF) REJECTED by the maintainer; steps 3 (no shadow-camera tiles on a phone), 4.1 (desktop DPR ≤ 1.5), 5 (a phone streams to 2.2 km) and 7 built in a second pass; step 6 measured headless only — frame rates, an iPhone's memory and real-GPU plates open | [071-tier-budgets-lean-phone-lighter-desktop.md](./071-tier-budgets-lean-phone-lighter-desktop.md) |
 | 072 | A cold build bakes a site's tiles on every core | **TODO** — cheaper since 2026-10-10 (no second spawn parse, typed-array plinths, cache keys on the bakes' own packages); re-measure first | [072-parallel-site-bake.md](./072-parallel-site-bake.md) |
-| 073 | The look is fixed; the sidebar keeps only the controls people use | **PARTIAL — awaits the maintainer** — *Transparenz* and *Blattflimmern* removed, *Flussnebel* and *Tiefenschärfe* fixed (2026-10-10); the ~20 cosmetic sliders undecided (they cost the GPU nothing) | [073-freeze-the-look-table.md](./073-freeze-the-look-table.md) |
+| 073 | The look is fixed; the sidebar keeps only the controls people use | **DONE** (2026-10-10) — the default table: *Nebel* the one slider left, the multi-tuft switch kept, the other 25 fixed at their defaults as named constants in their owners (four keep an internal uniform a style or Modell writes); old snapshots load, their keys retired for good (`RETIRED_SNAPSHOT_KEYS`); ADR 0017 amended; ~3 kB gzip; the two edited e2e specs pass; not done: GPU plates (none in the container), the rest of the e2e (CI) | [073-freeze-the-look-table.md](./073-freeze-the-look-table.md) |
 | 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **TODO** — direction plan; each part opens with a spike | [074-architecture-deepening.md](./074-architecture-deepening.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
@@ -144,8 +144,8 @@ S/M/L.
    decide 069's gated steps and 074 part A) → 071 step 6 and 070 step 5
    on a real GPU and an iPhone (071's 3, 4.1, 5 and 070's 4 are built)
    → 072 → 074 B (the lazy seam, the data
-   layers first) → 074 A → 073 once the maintainer has decided the
-   cosmetic sliders. Authorize the Sentry connector before measuring: the
+   layers first) → 074 A. (073 is built: the maintainer let the
+   default table stand.) Authorize the Sentry connector before measuring: the
    per-device frame-rate and memory summaries already arrive there (ADR
    0043).
 
@@ -330,9 +330,11 @@ eight dressings — and 1.26 GB held on the GPU, 750 MB of it textures.
 styles, Modell and the data layers stay but must not weigh on the
 initial load ("lazy?"); *Transparenz* and *Blattflimmern* removed;
 *Tiefenschärfe* and *Flussnebel* stay but are not parametrisable. The
-~20 cosmetic sliders went unanswered — they cost the GPU nothing (a
-uniform multiplier; baking a constant emits the same instruction), only
-code and UI (plan 073).
+~20 cosmetic sliders went unanswered at first — they cost the GPU
+nothing (a uniform multiplier; baking a constant emits the same
+instruction), only code and UI — then the maintainer said to continue
+without asking: plan 073 fixed them with its default table, *Nebel*
+the one slider left.
 
 **Built on the performance PR (branch `claude/perf-optimizations`):**
 plan 068; plan 069 step 5 and the items listed in its row; plan 070

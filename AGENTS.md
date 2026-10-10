@@ -213,8 +213,10 @@ config change.
     render-time white material), `style-dressing.ts` (a style's own crowns
     and noir's lamp cones, shown for its frames), `style-memory.ts`
     (the last style, kept in local storage), `visual-style.ts`
-    (the look table with its defaults is `lib/city/look-controls.ts`; the
-    store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
+    (the look table is `lib/city/look-controls.ts` — *Nebel* alone, the
+    look's other strengths are named constants beside their terms, plan
+    073; the store the HUD owns and the scene subscribes to is
+    `lib/city/look-state.ts`)
   - input/camera: `camera-pose.ts` (the one owner of where the player
     stands and looks, walk/fly and the scenic glides; every input cancels a
     glide; the camera is never below the ground or inside a building —
@@ -565,7 +567,9 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
 of three's internals (no prototype patches, no private `_` members): a look
 term is a TSL node (`colorNode`, `normalNode`, `emissiveNode`, `aoNode`,
 `receivedShadowNode`, `maskNode`, `positionNode`, `castShadowPositionNode`),
-a slider is a shared uniform node's `.value` (no rebuild), fog is
+a fixed look strength is a constant node named after its term (`TINT`,
+`WINDOWS`, … — ADR 0017), a slider (only *Nebel* is left) or anything
+else that moves is a shared uniform node's `.value` (no rebuild), fog is
 `scene.fogNode` (`height-fog.ts`; never per material — opt out with
 `material.fog = false`). Import from `three/webgpu` (the core re-exported with
 the node materials), `three/tsl` and `three/addons`, never plain `three` in
@@ -833,7 +837,10 @@ bridge or a misplaced layer is invisible looking straight down.
 
 **A PR that changes what the viewer shows carries JSON snapshots** in its
 description — views the reviewer pastes into the preview's Snapshot panel,
-before and after as a look-key pair where the change has a slider. The
+before and after as a look-key pair where the change has a control (only
+*Nebel*, the crown switch, the style and the data layers have one); a
+change to the fixed look is a code change, judged by the same snapshots
+of place and time on the preview against production. The
 **`pr-snapshots` skill** (`.claude/skills/pr-snapshots/`) says how;
 screenshots are optional there.
 
@@ -845,8 +852,9 @@ city's page: placed there after the first frame, then dropped — a
 fragment, so it never reaches the server or the crash trail).
 
 There is a **snapshot system**: the in-app Snapshot panel copies the full
-camera pose + sun time + look sliders as JSON; `__poc.handle.getCameraState()`
-/ `applyCameraState()` replay it and `__poc.look.set()` drives the sliders. To check a visual change on a **real GPU**, drop
+camera pose + sun time + the look's controls as JSON (an old snapshot's
+retired keys are ignored); `__poc.handle.getCameraState()`
+/ `applyCameraState()` replay it and `__poc.look.set()` drives the controls. To check a visual change on a **real GPU**, drop
 a snapshot JSON into `shots/` and run:
 
 ```bash

@@ -177,12 +177,9 @@ test("every tile wears the scene's crown and trunk materials; the warm-up carrie
   expect(leafy.userData.shared).toBe(true);
   // the sun uniform holds the rig's vector by reference
   expect(uniforms.sunDirection.value).toBe(sun);
-  // the look and the clock write the shared uniforms
-  a.applyLook({ ...LOOK_DEFAULTS, shimmer: 0.42 });
-  expect(uniforms.shimmer.value).toBe(0.42);
+  // the clock writes the shared uniform
   b.setTime(12.5);
   expect(uniforms.time.value).toBe(12.5);
-  a.applyLook(LOOK_DEFAULTS);
   const warm = buildCrownWarmup();
   expect(warm.main.map((m) => m.material)).toEqual([bare, leafy]);
   expect(warm.main[0].geometry.getAttribute("normal")).toBeDefined();

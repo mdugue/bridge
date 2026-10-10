@@ -40,11 +40,7 @@ import {
 } from "@/lib/city/page-lifecycle";
 import type { Landmark } from "@/lib/city/landmarks";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
-import {
-  LOOK_DEFAULTS,
-  type LookValues,
-  type SceneLookKey,
-} from "@/lib/city/look-controls";
+import type { LookKey, LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import type { BikeCounter } from "@/lib/city/bike-counts";
 import {
@@ -126,7 +122,7 @@ import type { MovementMode } from "./fps-movement";
 import { NO_GPU_MESSAGE } from "./gpu-support";
 import { raiseSafety } from "./gpu-safety";
 import { pageLeaving } from "./net-gate";
-import { createSceneFog, installSceneFog } from "./height-fog";
+import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
@@ -148,7 +144,6 @@ import {
   shadowMapSizeFor,
   tileCacheBytesFor,
 } from "./scene-profile";
-import { reflectionStrength } from "./sky-reflection";
 import { createSunRig, type SunState } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
@@ -176,11 +171,7 @@ import {
   updateVegetationLod,
   type VegetationControl,
 } from "./vegetation-layer";
-import {
-  applyCityLook,
-  createStyleResources,
-  setClaySection,
-} from "./visual-style";
+import { createStyleResources, setClaySection } from "./visual-style";
 import { createModelCuts } from "./model-cuts";
 
 /**
@@ -1054,14 +1045,9 @@ async function bootApp(
     siteBounds[2] - offset.cx,
     -(siteBounds[1] - offset.cy)
   );
-  // The ground's look strengths and the sun: uniform nodes every tile's
-  // materials share, so a slider is one uniform write.
+  // The ground's shadow reach and the sun: uniform nodes every tile's
+  // materials share, kept by the sun rig.
   const ground: GroundUniforms = {
-    groundDetail: uniform(LOOK_DEFAULTS.groundDetail),
-    meadowNdvi: uniform(LOOK_DEFAULTS.meadowNdvi),
-    urbanGreen: uniform(LOOK_DEFAULTS.urbanGreen),
-    skyView: uniform(LOOK_DEFAULTS.skyView),
-    horizonShade: uniform(LOOK_DEFAULTS.horizonShade),
     // the sun rig's own vector once it exists (below)
     shadowReach: uniform(new Vector3()),
     sunDirection: uniform(sunDirection),
@@ -1147,13 +1133,8 @@ async function bootApp(
   }
   cleanups.push(() => lampLights.dispose());
 
-  // The facades share the ground's Himmelslicht strength and the sun (the
-  // same nodes).
-  const styleResources = createStyleResources(
-    clayNight,
-    ground.skyView,
-    ground.sunDirection
-  );
+  // The facades share the ground's sun (the same node).
+  const styleResources = createStyleResources(clayNight, ground.sunDirection);
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: () => void = () => undefined;
@@ -1441,7 +1422,6 @@ async function bootApp(
   // spawn tile's edge; a tighter fog turns that edge into haze. The slider
   // value is kept and re-applied once the stream has settled.
   let fogAmount = opts.look.get().fogAmount;
-  let heightFogAmount = opts.look.get().heightFog;
   let worldPartial = extras.tiles.length > 1;
   // The site's edge haze, kept to restore after Modell (which shows the
   // site's edge as an edge).
@@ -1460,7 +1440,7 @@ async function bootApp(
     const open = 1 / Math.max(1 - blend, 0.002) ** 2;
     sceneFog.far.value = far * open;
     sceneFog.near.value = Math.min(range.near, far * 0.6) * open;
-    sceneFog.heightStrength.value = heightFogAmount * (1 - blend);
+    sceneFog.heightStrength.value = VALLEY_HAZE * (1 - blend);
     if (rig?.parallel()) {
       sceneFog.siteRect.value.set(-1e9, -1e9, 1e9, 1e9);
     } else {
@@ -1535,35 +1515,15 @@ async function bootApp(
   cleanups.push(() => overlays.dispose());
   postStack.setSunAltitude(sunAltitude);
 
-  // The look store is the one source of every slider value: applied now, on
+  // The look store is the one source of every look value: applied now, on
   // every change, and (in tile-stream.ts) to each tile that lands later. The
-  // store outlives this instance — unsubscribe on dispose.
-  const sceneRows: Record<SceneLookKey, (value: number) => void> = {
+  // store outlives this instance — unsubscribe on dispose. One writer per
+  // slider — a Record over the keys, so a row added to the table cannot go
+  // unapplied; the look's other strengths are constants of their terms.
+  const sceneRows: Record<LookKey, (value: number) => void> = {
     fogAmount: (amount) => {
       fogAmount = amount;
       applyFog();
-    },
-    heightFog: (strength) => {
-      heightFogAmount = strength;
-      applyFog();
-    },
-    groundDetail: (strength) => {
-      ground.groundDetail.value = strength;
-    },
-    meadowNdvi: (strength) => {
-      ground.meadowNdvi.value = strength;
-    },
-    urbanGreen: (strength) => {
-      ground.urbanGreen.value = strength;
-    },
-    skyView: (strength) => {
-      ground.skyView.value = strength;
-    },
-    horizonShade: (strength) => {
-      ground.horizonShade.value = strength;
-    },
-    reflections: (strength) => {
-      reflectionStrength.value = strength;
     },
   };
   let lastStyle = opts.look.get().style;
@@ -1579,10 +1539,9 @@ async function bootApp(
       // crowns cast: the shadow map is redrawn with the new ones.
       invalidateShadows();
     }
-    for (const key of Object.keys(sceneRows) as SceneLookKey[]) {
+    for (const key of Object.keys(sceneRows) as LookKey[]) {
       sceneRows[key](look[key]);
     }
-    applyCityLook(styleResources, look);
     postStack.applyLook(look);
     for (const d of stream.dressings) {
       d.vegetation?.applyLook(look);

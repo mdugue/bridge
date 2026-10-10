@@ -173,8 +173,8 @@ visual-variable codebook is in
 - **Meadow NDVI tint** `= computed` (*Wiesenfärbung*) — on class-1 farmland/meadow only, the
   DOP greenness (`ndvi_<tile>.png`, LINEAR-filtered to low-pass the ~2 m raster)
   shifts the pastel sage lush deep-green↔dry hay. In the terrain's colour node
-  (`meadowNdvi`, gated by the meadow class of the raster), HUD slider
-  *Wiesenfärbung* (default 0.5). The higher-variance NDVI canvas the analysis
+  (`meadowNdvi`, gated by the meadow class of the raster), at
+  *Wiesenfärbung*'s fixed strength (`MEADOW_NDVI`, 0.6). The higher-variance NDVI canvas the analysis
   flagged (meadow carries 1.46× the crown NDVI variance). Absent raster → no-op.
 - **Kerbs and lawn edges** `= computed` `≈ assumed` (*Bordsteine, Rasenkanten*) — the DLM road
   class (7) is the surveyed carriageway, so its edge is the kerb line.
@@ -202,7 +202,7 @@ visual-variable codebook is in
   shadow on the road is drawn from the sun: when the sun stands behind the
   kerb, the strip out to 12 cm · cot(elevation) is shaded — a shadow the
   shadow map cannot hold (7 cm texels spread by the soft PCF, less the depth
-  bias). HUD *Bodendetail*.
+  bias). On *Bodendetail* (`GROUND_DETAIL`).
   Plan [023](./plans/completed.md#023--the-ground-up-close-kerbs-paving-lawn-edges-urban-green--closed-2026-09-25-phases-13-and-5-built-rest-rejected-or-moved).
 - **Paving materials** `❝ taken` `≈ assumed` (*Beläge*) — OSM `surface=*` on the highways (plus
   `sidewalk:*:surface` bands beside the roads, `footway:surface`, pedestrian
@@ -222,7 +222,7 @@ visual-variable codebook is in
   stays at any distance. Coverage (Dresden, 2026-09-19 extract): ~87 % of the
   highway ways carry `surface`, ~68 % of the DLM carriageway texels get a
   material. Fine terrain level only; absent raster → the class defaults.
-  HUD *Bodendetail*. `ground-detail.ts`, `terrain-layer.ts`.
+  On *Bodendetail*. `ground-detail.ts`, `terrain-layer.ts`.
 - **Parking** `❝ taken` `≈ assumed` (*Parkplätze*) — OSM street parking (`parking:{left,right,both}`
   = lane / yes / street_side / on_kerb …, with `:orientation`) and car parks
   on the ground (`amenity=parking`, `amenity=parking_space`; the
@@ -233,7 +233,7 @@ visual-variable codebook is in
   the aisle (or, without a mapped aisle, the lot's long axis). Pale painted
   lines, faded out past ~15 cm/px; a car park without `surface` is asphalt.
   Dresden: ~600 surface car parks, ~530 mapped bays, ~780 aisles, street
-  parking on ~1 000 roads. No cars (not in any dataset). HUD *Bodendetail*.
+  parking on ~1 000 roads. No cars (not in any dataset). On *Bodendetail*.
   `ground-detail.ts`.
 - **Sports grounds** `❝ taken` `≈ assumed` (*Sportplätze*) — OSM `leisure=pitch` / `track`
   (areas, and tracks mapped as a line), nothing `indoor`, `covered` or on
@@ -266,7 +266,7 @@ visual-variable codebook is in
   (🗃️ *Sports-ground lines beyond a desktop's fine level*); absent files
   → the land-cover class. Dresden (2026-09-19 extract): 431 grounds over the fifteen tiles
   (175 on the four first; a table row per tile a ground reaches).
-  Textures scale with HUD *Bodendetail*; colours and lines stay.
+  Textures scale with *Bodendetail*; colours and lines stay.
 - **Road markings** `❝ taken` `≈ assumed` (plan 026) — OSM `highway=crossing` nodes,
   `highway=traffic_signals` nodes with a `traffic_signals:direction` (or
   `direction`), and the roads' `lanes`, `oneway`, `lane_markings` and
@@ -339,7 +339,8 @@ visual-variable codebook is in
   does not call the ground paved, `edges.py` counts it as meadow; the
   shader paints it exactly as meadow — its colour, mottle, NDVI tint and
   lawn edge. The first cut blended toward the meadow colour at 0.85 ×
-  slider and read as barely there. HUD *Stadtgrün* (default 1).
+  slider and read as barely there. *Stadtgrün* at full strength
+  (`URBAN_GREEN`, fixed).
   `ground-detail.ts` `urbanGreen`.
 - **Water** `❝ taken` `≈ assumed` — the painted splat's alpha (water coverage, `smoothstep`ed
   shoreline) + the terrain geometry + animated normal wobble; the water and
@@ -674,8 +675,8 @@ visual-variable codebook is in
   synthesized palette (`surfacetype==RoofSurface` + `roofType` / `Dachneigung` →
   terracotta pitched / slate flat). Bake: `pipeline/bake/roof_colour.py`.
 - **Roof vividness** `≈ assumed` (*Dachsättigung*) — raw DOP reads drab/hazy (audited: 38 %
-  near-grey, mean R−B slightly negative). `uRoofVibrance` (default **0.5**, HUD
-  slider *Dachsättigung*) applies a **hue-preserving chroma
+  near-grey, mean R−B slightly negative). `ROOF_VIBRANCE` (**0.5**,
+  *Dachsättigung*, fixed) applies a **hue-preserving chroma
   boost**: it lifts each roof's saturation around the grey axis, weighted so
   dull/hazy roofs lift most and vivid ones barely (nothing blows out), plus a
   tiny warm nudge on the muddy greys only. **Keeps each roof's TRUE hue** —
@@ -702,8 +703,8 @@ visual-variable codebook is in
   roof (flag 256: three quarters of the LoD2 roof area level — post-war
   slabs and modern blocks have no town house's cornices); the ground floor's three only on a part
   standing on the ground (flag 128: within 3 m of its tree's lowest base,
-  so a tower's part on a roof gets no plinth). Slider *Gliederung*,
-  default 80 %. The windows are the clay's too (*Windows on every house*),
+  so a tower's part on a roof gets no plinth). *Gliederung*, fixed
+  at 80 % (`ARTICULATION`). The windows are the clay's too (*Windows on every house*),
   on a gate of their own: a Wikidata landmark's flag alone does not keep
   them off, a monumental use or a hall's storeys do.
 - **Plinths** `= computed` `≈ assumed` — modelled, not painted: every open stretch of a LoD2
@@ -818,7 +819,8 @@ visual-variable codebook is in
   ≥ 50 %. The bit rides in the property table's `flags` column (band 2's
   free float); the clay shader lays a warm wash under the first storey line
   (soft top edge, walls only, a ≈3.5 m hash along the facade so a long
-  front is not one strip) on the dusk-glow slider × `nightFactor`. No window
+  front is not one strip) at the dusk glow's strength (`DUSK_GLOW`) ×
+  `nightFactor`. No window
   structure (the grid is a recorded veto, 🗃️ below). 1 555 of 1 855 ground-
   floor points placed (per-tile sums); 264–323 objects with a shop per
   tile, 1 188 in all, matched directly — a part also carries its root
@@ -863,8 +865,9 @@ visual-variable codebook is in
   clay turns a little cooler (×(0.93, 0.99, 1.07), metal at 60 %) and
   smoother (roughness 0.42 glass, 0.5 metal), and glass mirrors the sky
   (*Spiegelung*, `sky-reflection.ts`: a PMREM of the sky dome, 10 % face
-  on to all of it at a grazing view; metal a third as much; at 0 the old
-  pale Fresnel³ sheen on the rim slider). No panes, no mullions, no texture
+  on to all of it at a grazing view; metal a third as much; fixed at full,
+  `REFLECTIONS` — below it the old pale Fresnel³ sheen at the rim's
+  strength would show). No panes, no mullions, no texture
   and no drawn windows (*Windows on every house* leaves glass and metal
   plain) — the window-grid veto holds (🗃️ below). `osmColour` / `clayGlow` in `visual-style.ts`. Conservative strengths,
   not yet judged on a real GPU.
@@ -1877,7 +1880,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   darker by 0.6 × the openings' share of a storey) and under 2.5 pixels
   only that tone is left, so a far street does not shimmer. At night 40 %
   of the windows glow warm (a hash per window, on *Abendlicht* × night).
-  Slider *Fenster* (`windows`, default 100 %). **Drawn on Dresden's
+  *Fenster* at full strength (`WINDOWS`, fixed). **Drawn on Dresden's
   spawn tile** (2026-10-09): windows on 308 buildings measured, 1 223 by
   a neighbour, 1 638 by type; of the window-carrying wall area 70 % has
   windows, 27 % is party wall, 3 % stands over shops (over all fifteen
@@ -2668,7 +2671,8 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 ### Atmosphere & time of day
 - **Height-term fog** `= computed` `≈ assumed` — DGM elevation (per-fragment world height) → extra haze
   pooling in low ground, a term of the one `scene.fogNode` every material
-  takes (`fog = false` opts out: the river mist); HUD *Talnebel*.
+  takes (`fog = false` opts out: the river mist); *Talnebel*, fixed at
+  0.2 (`VALLEY_HAZE`; Modell fades it out).
   `height-fog.ts`. **Sets in with distance** (2026-10-09): none within
   40 m of the camera, all of it from 900 m (`VALLEY_NEAR_M`); at the full
   share 10 m off, the default 0.2 greyed every nearby surface by ≈ 18 %
@@ -3042,6 +3046,7 @@ research that produced them):
 | **A depth-of-field switch and manual focus** (*Tiefenschärfe* on/off, *Fokus: Automatisch / Manuell* with a *Fokusdistanz* slider, 1–3 000 m, drawn as a ring on the minimap; until 2026-10-10) | The maintainer chose fewer settings: the depth of field must stay, but it need not be parametrised. | DoF is always on where it is built (desktops; a phone builds none, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)), focused on the crosshair; it still rests while moving, in the graphic styles and in Modell (two prebuilt pipelines, [ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). An old snapshot's `dof`, `focusMode` and `focusDistanceM` are ignored. |
 | **A river-mist slider** (*Flussnebel*, until 2026-10-10: the sheet's strength 0–100 %, the sheet hidden at 0) | The maintainer chose fewer settings: the mist stays, but it is not something to tune. | The sheet is always drawn, at the slider's default (60 %: at most 24 % opaque, `MIST_OPACITY`). An old snapshot's `waterMistPct` is ignored. |
 | **Leaf flutter** (*Blattflimmern*, until 2026-10-10: small world-space value-noise specks, two octaves at ~1–2 m cells drifting with the wind, blending sunlit, sun-facing crowns toward a paler silver-sage "underside" with a faint glint; and its companion slider *Windhelligkeit*) | The maintainer chose fewer settings, and the twinkle was not free: two `leafNoise` calls — eight `sin` hashes — on every crown fragment. | The sway-coupled brightness stays, fixed at its slider's default (`GUST_BRIGHTEN`, 0.09 = 50 % of 0.18); it rides on the sway's gust signal, not on the twinkle. An old snapshot's `leafFlutterPct` and `leafBrightPct` are ignored. |
+| **The look's sliders** (25 of the HUD's 26 percent sliders, until 2026-10-10: *Talnebel*, *Tiefenfärbung*; the buildings' *Boden-Verlauf*, *Höhenlinien*, *Streiflicht*, *Farbvariation*, *Dachfarbe*, *Dachsättigung*, *Traufkante*, *Gliederung*, *Fenster*, *Fassadenbild*, *Abendlicht*, *Materialstreuung*; *Bodendetail*, *Stadtgrün*, *Wiesenfärbung*, *Gegenlicht-Schimmer*, *Blattdurchscheinen*; *Kontaktschatten*, *Himmelslicht*, *Ferne Schatten*, *Spiegelung*, *Papierkorn*, *Tuschelinien*) | The maintainer chose fewer settings ("we don't need many of the settings anyway", plan 073). A slider cost the GPU almost nothing — a uniform multiplier; every term ran at any value, 0 included — but each was a table row, a store value, a snapshot key, a writer in its owner and a guide line in two languages. | Every term stays, at its slider's default, as a named constant beside it in its owner (`TINT`, `WINDOWS`, `GROUND_DETAIL`, `SKY_VIEW`, `VALLEY_HAZE`, `AO_EXPONENT`, …), so the default picture is unchanged; the depth grading, paper grain, ink and valley haze keep their uniforms, which a picture style or Modell writes. *Nebel* and the multi-tuft switch stay. Tuning a term is a code change, judged by snapshots of place and time ([ADR 0017](./adr/0017-look-controls-table-and-snapshot-contract.md)). An old snapshot's keys (`tintPct`, `windowsPct`, …: `RETIRED_SNAPSHOT_KEYS`) are ignored and never reused. The measured follow-up: delete what now runs at a fixed 0 (the glass sheen and the gilding's and water's stand-ins under full *Spiegelung*) and tier-gate the costly terms (windows, facade reading, ground detail) on phones. |
 | **See-through buildings** (*Transparenz*, until 2026-10-10: the clay's opacity hash-dithered, `alphaHash`, up to 90 %, in the opaque pass) | The maintainer chose fewer settings. It was a second build of the clay's graph — compiled in the frame the slider first left 0 — and every crossing of 0 redrew the shadow map, for a look that judges nothing in the city. | The clay is always opaque; an old snapshot's `transparencyPct` is ignored. To see what a building hides, demolish it (`R`) or cut the model open (Modell's *Ausschnitt*). |
 | **The hidden soundscape** (plan 035, 2026-09-26 → 2026-10-10: wind, the city's hum, the Elbe, leaves, birds, crickets, fountains, footsteps by paving, a tram bell and the hour struck from the bell towers, all synthesized with WebAudio behind the **L** key and the *Klang (experimentell)* switch; `app/_components/soundscape/`, `lib/city/soundscape.ts`; the towers baked by `pipeline/bake/soundmarks.py` → `soundmarks_<tile>.geojson`) | Removed at the maintainer's decision (2026-10-10) to cut code and maintenance: about 3 000 lines, a bake and a tileset column for a feature that never shipped audibly — none of it was ever listened to (plan 019's listening pass stayed open). | Engine, switch, bake and committed files all went; the viewer creates no `AudioContext`. Revive only with a listening pass first, from git history (`5b59b79`). |
 | **Sports-ground lines beyond a desktop's fine level** (until 2026-10-06 on both levels on every device; until 2026-10-10 on a phone's fine level and a desktop's coarse level too: `sport_<t>.png` read there, `sport-ground.ts` in that level's colour node) | The index raster is a 2048² RGBA texture, 16 MiB on the GPU for a PNG of a few dozen kB, per tile that reads it (14 of Dresden's 15 tiles have grounds) — on a phone against a 336 MiB tile cache ([ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)). Beyond the fine level a pitch is a few pixels and its lines a pixel or less; on a phone the lines were the price of a sixth of a fine tile's rasters. A pitch then shows its land-cover class (`readsSportGrounds`; the level builds the shared variant without the slot); the goals and nets come from the table and stay. | A 1024² phone twin of the raster (`sport_low`, as `markings_low`) would bring the lines back on a phone at a quarter of the cost; it needs a bake and a look on a GPU. |

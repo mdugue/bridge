@@ -39,8 +39,8 @@ import type { VegetationControl } from "./vegetation-layer";
 test("a dressing that joins the stream late takes the season, night and look of now", () => {
   const calls: string[] = [];
   const vegetation = {
-    applyLook: (look: { shimmer: number }) =>
-      calls.push(`look ${look.shimmer}`),
+    applyLook: (look: { multiTuft: boolean }) =>
+      calls.push(`look ${look.multiTuft}`),
     setSeason: (day: number) => {
       calls.push(`season ${day}`);
       return true;
@@ -50,11 +50,11 @@ test("a dressing that joins the stream late takes the season, night and look of 
     setNightFactor: (night: number) => calls.push(`night ${night}`),
   } as unknown as LampControl;
   const look = createLookState();
-  look.set({ shimmer: 0.25 });
+  look.set({ multiTuft: false });
   // Built on 10 July by day; the scene moved on to a January night while
   // its compile was pending.
   catchUp({ vegetation, lamps }, { look, night: () => 1, season: () => 9 });
-  expect(calls).toEqual(["look 0.25", "season 9", "night 1"]);
+  expect(calls).toEqual(["look false", "season 9", "night 1"]);
 });
 
 test("the stream's dispose releases every dressed tile, quietly", () => {

@@ -346,8 +346,9 @@ veraltete Daten liefern.
 **Lite-Profil** — `?scene=lite` (`/dresden?scene=lite`): nur die Startkachel, winzige
 Schattenkarte, halbe Auflösung; nur für automatische Tests.
 
-**Snapshot** — der JSON-Text, der Kamera, Datum/Uhrzeit und jeden Regler
-festhält, um eine Ansicht zu reproduzieren.
+**Snapshot** — der JSON-Text, der Kamera, Datum/Uhrzeit, den Bildstil,
+den Nebel, den Kronen-Schalter und die Datenebenen festhält, um eine
+Ansicht zu reproduzieren.
 
 **Aussichtspunkt** — einer der gestalteten Standpunkte, zu denen die
 Kamera gleiten kann; einer davon ist der Startblick.
