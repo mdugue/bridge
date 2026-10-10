@@ -11,7 +11,7 @@ import { DEFAULT_RENDER_STYLE, type RenderStyle } from "./render-style";
 
 export type LookGroup = "atmosphere" | "buildings" | "rendering" | "vegetation";
 
-/** Rows the scene itself applies: fog, the valley haze, the ground, the river mist. */
+/** Rows the scene itself applies: fog, the valley haze, the ground, the sky's reflection. */
 export type SceneLookKey =
   | "fogAmount"
   | "groundDetail"
@@ -20,8 +20,7 @@ export type SceneLookKey =
   | "meadowNdvi"
   | "reflections"
   | "skyView"
-  | "urbanGreen"
-  | "waterMist";
+  | "urbanGreen";
 /** Rows the shared clay material applies (visual-style.ts). */
 export type ClayLookKey =
   | "articulation"
@@ -114,15 +113,6 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     // distance fog for a regular day. Dial up for foggy-morning moods.
     initial: 0.2,
     snapshotKey: "heightFogPct",
-  },
-  {
-    key: "waterMist",
-    id: "water-mist",
-    label: "Flussnebel",
-    description: "Treibender Nebel über dem Fluss",
-    group: "atmosphere",
-    initial: 0.6,
-    snapshotKey: "waterMistPct",
   },
   {
     key: "grading",

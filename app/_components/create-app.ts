@@ -1577,11 +1577,6 @@ async function bootApp(
     reflections: (strength) => {
       reflectionStrength.value = strength;
     },
-    waterMist: (strength) => {
-      for (const t of stream.terrains) {
-        t.water?.setMist(strength);
-      }
-    },
   };
   let lastStyle = opts.look.get().style;
   const applyLook = (look: LookValues) => {

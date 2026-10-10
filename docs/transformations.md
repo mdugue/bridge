@@ -2673,12 +2673,13 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   `ground`). Dresden, Grimma, Meißen and Unna keep 28 m; Hamburg ≈ 9.6 m,
   Leipzig ≈ 12 m, Munich ≈ 15 m. Not yet judged on a real GPU.
 - **River mist** `❝ taken` `≈ assumed` — DLM water mask (the painted splat's alpha) → a drifting,
-  sun-lit mist sheet over the Elbe; HUD *Flussnebel*. None within 120 m of
-  the eye, full from 1.2 km, at most 40 % opaque and only 30 % of the way
+  sun-lit mist sheet over the Elbe, always on. None within 120 m of
+  the eye, full from 1.2 km, at most 24 % opaque and only 30 % of the way
   from the sky's tint to white (it was full from 90 m at up to 62 % and
   60 % of the way to white, and the near river in the start view lay
-  under a pale, drifting band that read as a smear on the screen). `water-layer.ts`
-  `createWaterMist`.
+  under a pale, drifting band that read as a smear on the screen). The
+  strength is the *Flussnebel* slider's old default (60 % of 0.4) since the
+  slider went (🗃️ below). `water-layer.ts` `createWaterMist`.
 - **Drifting clouds** `≈ assumed` — `SkyMesh`'s procedural clouds drift on TSL `time`
   (slow `cloudSpeed`), lit by the sun instant. `sun-rig.ts`.
 - **Golden/blue-hour palette stops** `= computed` `≈ assumed` — sun altitude → sky/fog/hemisphere colours
@@ -3080,6 +3081,7 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
+| **A river-mist slider** (*Flussnebel*, until 2026-10-10: the sheet's strength 0–100 %, the sheet hidden at 0) | The maintainer chose fewer settings: the mist stays, but it is not something to tune. | The sheet is always drawn, at the slider's default (60 %: at most 24 % opaque, `MIST_OPACITY`). An old snapshot's `waterMistPct` is ignored. |
 | **Leaf flutter** (*Blattflimmern*, until 2026-10-10: small world-space value-noise specks, two octaves at ~1–2 m cells drifting with the wind, blending sunlit, sun-facing crowns toward a paler silver-sage "underside" with a faint glint; and its companion slider *Windhelligkeit*) | The maintainer chose fewer settings, and the twinkle was not free: two `leafNoise` calls — eight `sin` hashes — on every crown fragment. | The sway-coupled brightness stays, fixed at its slider's default (`GUST_BRIGHTEN`, 0.09 = 50 % of 0.18); it rides on the sway's gust signal, not on the twinkle. An old snapshot's `leafFlutterPct` and `leafBrightPct` are ignored. |
 | **See-through buildings** (*Transparenz*, until 2026-10-10: the clay's opacity hash-dithered, `alphaHash`, up to 90 %, in the opaque pass) | The maintainer chose fewer settings. It was a second build of the clay's graph — compiled in the frame the slider first left 0 — and every crossing of 0 redrew the shadow map, for a look that judges nothing in the city. | The clay is always opaque; an old snapshot's `transparencyPct` is ignored. To see what a building hides, demolish it (`R`) or cut the model open (Modell's *Ausschnitt*). |
 | **Sports grounds on a phone's coarse terrain level** (until 2026-10-06: `sport_<t>.png` read on both levels on every device, `sport-ground.ts` in the coarse terrain's colour node) | The index raster is a 2048² RGBA texture, 16 MiB on the GPU for each coarse tile in view (14 of Dresden's 15 tiles have grounds) — on a phone whose post targets and shadow map together now hold ~30 MiB, and whose tile cache is 336 MiB ([ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)). Beyond the fine level a pitch is a few pixels and its lines a pixel or less: it shows its land-cover class (`readsSportGrounds`; the coarse level builds the shared variant without the slot). | A desktop still draws them on both levels, and a phone's fine level draws them as before. A 1024² phone twin of the raster (`sport_low`, as `markings_low`) would bring them back at a quarter of the cost; it needs a bake and a look on a GPU. |

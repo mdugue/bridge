@@ -417,7 +417,6 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 |---|---|---|
 | Atmosphäre | *Nebel* | Entfernungsdunst |
 | | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
-| | *Flussnebel* | treibende Nebelschicht über dem Wasser, erst ab etwa 120 m vor dir, dichter erst in der Ferne |
 | | *Tiefenfärbung* | warm nah, kühl fern: eine tiefenabhängige Farbgebung |
 | Gebäude | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
 | | *Höhenlinien* | zarte Geschossbänder, aus der gemessenen Höhe abgeleitet |
@@ -444,6 +443,9 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
 | | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe, nur hinter dem Fokus (der Vordergrund bleibt scharf); *Auto* fokussiert auf die Bildmitte, *Manuell* auf eine feste Entfernung; auf Telefonen nicht angeboten |
+
+Der Nebel über dem Fluss hat keinen Regler: Er treibt erst ab etwa 120 m
+vor dir über dem Wasser, dichter erst in der Ferne.
 
 Solange sich die Kamera bewegt, ist die Tiefenschärfe-Unschärfe
 abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt

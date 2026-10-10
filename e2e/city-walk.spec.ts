@@ -1238,14 +1238,13 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
               grain: 0.25,
             }),
           // Shader paths the aesthetic work added — the terrain's NDVI meadow
-          // tint, the height-fog chunk patch, the water mist sheet, and the
-          // crown shaders (multi-tuft swaps the instanced LOD meshes). They
-          // compile independent programs, but one frame compiles them all.
+          // tint, the height-fog chunk patch and the crown shaders
+          // (multi-tuft swaps the instanced LOD meshes). They compile
+          // independent programs, but one frame compiles them all.
           () =>
             look?.set({
               heightFog: 1,
               meadowNdvi: 1,
-              waterMist: 1,
               shimmer: 1,
               translucency: 1,
               multiTuft: true,

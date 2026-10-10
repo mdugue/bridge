@@ -1452,7 +1452,6 @@ export class DressingPlugin {
       either.release();
       this.loadAborts.delete(scene);
     }
-    terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls, kerbs and fences: only their
     // materials here, lit by the tile's baked light as the ground is.
     const stairs = meshNamed(scene, "stairs");
