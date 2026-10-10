@@ -614,26 +614,45 @@ function disposeDressing(d: TileDressing): unknown[] {
 const ASKS_IDLE_MS = 2000;
 
 /**
- * Builds a hung dressing's ask sets (`TileDressing.buildAsks`) once the
- * main thread is idle — if the dressing still hangs on its tile then
- * (`stillHung`). Into its `asks`, whose identity the traffic's sets rely
- * on; the closure goes once run, and with it the features it held.
+ * Builds a dressing's pending ask sets (`TileDressing.buildAsks`) now, at
+ * most once: into its `asks`, whose identity the traffic's sets rely on;
+ * the closure goes, and with it the features it held.
+ */
+function buildAsksNow(dressing: TileDressing): void {
+  const build = dressing.buildAsks;
+  dressing.buildAsks = undefined;
+  build?.();
+}
+
+/**
+ * Builds a hung dressing's ask sets once the main thread is idle — if the
+ * dressing still hangs on its tile then (`stillHung`). A question that
+ * comes first builds them at once (`asksOf`): a busy page's idle time can
+ * be long in coming, and its callback's timeout late (timers wait behind
+ * three's compile steps there — plan 069's Findings).
  */
 export function buildAsksWhenIdle(
   dressing: TileDressing,
   stillHung: () => boolean,
   idle: typeof whenIdle = whenIdle
 ): void {
-  const build = dressing.buildAsks;
-  if (!build) {
+  if (!dressing.buildAsks) {
     return;
   }
   idle(() => {
-    dressing.buildAsks = undefined;
     if (stillHung()) {
-      build();
+      buildAsksNow(dressing);
+    } else {
+      dressing.buildAsks = undefined;
     }
   }, ASKS_IDLE_MS);
+}
+
+/** What the probe can ask of a dressing: its ask sets, the pending ones
+ *  built first (a question before its idle time). */
+export function asksOf(dressing: TileDressing): AskSet<FeatureInquiry>[] {
+  buildAsksNow(dressing);
+  return dressing.asks ?? [];
 }
 
 /** The site tile a content root is of (its extras), for the trail. */

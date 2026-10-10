@@ -167,6 +167,7 @@ import {
   trackedTextureBytes,
 } from "./three-utils";
 import {
+  asksOf,
   type CpuBytes,
   cpuBytesOf,
   createTileStream,
@@ -1838,8 +1839,9 @@ async function bootApp(
     isLoaded: (layer) => stream.cities.has(layer),
     groundAlong,
     outline,
+    // (a tile's ask sets come in idle time; a question before builds them)
     things: () => [
-      ...stream.visibleDressings().flatMap((d) => d.asks ?? []),
+      ...stream.visibleDressings().flatMap(asksOf),
       ...overlays.asks(),
     ],
     viewport: () => ({

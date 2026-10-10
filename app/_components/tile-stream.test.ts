@@ -21,6 +21,7 @@ import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
 import { markSceneShared } from "./three-utils";
 import {
+  asksOf,
   buildAsksWhenIdle,
   catchUp,
   DRESSING_PART_NAMES,
@@ -497,6 +498,13 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
   // a dressing with nothing to build waits for nothing
   buildAsksWhenIdle({ tile: "t" }, () => true, later);
   expect(idle).toHaveLength(0);
+  // a question before the idle time builds them at once, and only once
+  const early = dressing();
+  buildAsksWhenIdle(early, () => true, later);
+  expect(asksOf(early)).toEqual([set]);
+  expect(asksOf(early)).toEqual([set]);
+  idle.shift()?.();
+  expect(early.asks).toEqual([set]);
 });
 
 test("a phone's parse slot never waits on a dressing; a desktop's a little", () => {
