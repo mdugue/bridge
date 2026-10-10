@@ -164,8 +164,12 @@ const limits = (() => {
   }
 })();
 // a slow deploy shows why
+const overrides = (["PREPARE_JOBS", "PREPARE_MEMORY_GB"] as const)
+  .filter((name) => process.env[name])
+  .map((name) => `, ${name}=${process.env[name]}`)
+  .join("");
 log(
-  `up to ${limits.jobs} bakes at once, ${(limits.memory / 1e9).toFixed(1)} GB of peaks between them (${availableParallelism()} cores, ${(machineMemory() / 1e9).toFixed(1)} GB${process.env.PREPARE_JOBS ? ", PREPARE_JOBS" : ""}${process.env.PREPARE_MEMORY_GB ? ", PREPARE_MEMORY_GB" : ""})`
+  `up to ${limits.jobs} bakes at once, ${(limits.memory / 1e9).toFixed(1)} GB of peaks between them (${availableParallelism()} cores, ${(machineMemory() / 1e9).toFixed(1)} GB${overrides})`
 );
 
 mkdirSync(OUT_DIR, { recursive: true });
