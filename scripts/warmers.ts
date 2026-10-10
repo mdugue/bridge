@@ -9,8 +9,9 @@
  *     publishes, and that is all (a warm build runs no warmer); at the
  *     first entry it would bake it stops (`NOT_CACHED`), and the warmers
  *     follow;
- *  1. `--warm-ground=<first tile>` alone: the site-wide values every later
- *     process reads (the frame, the line levels) and that tile's fine ground;
+ *  1. `--warm-ground=<first tile>` alone, in step 0's slot: the site-wide
+ *     values every later process reads (the frame, the line levels) and
+ *     that tile's fine ground — everything else waits for it;
  *  2. `--warm-ground=<tile>` for each other tile: its fine ground, which
  *     every fine level's walls, kerbs, stairs and fences stand on;
  *  3. `--warm=<tile>` for every tile: its buildings and both terrain levels,
@@ -69,7 +70,7 @@ export function bakeMode(
 /**
  * The most resident memory one bake process reaches, measured on the
  * committed sites (2026-10-10, Bun 1.4.2) with a margin: a tile warmer's is
- * its buildings' (Dresden's heaviest tile, 33414_5654: 2.8 GB); every other
+ * its buildings' (Dresden's heaviest tile, 33414_5654: 2.7 GB); every other
  * process stays under `PROCESS_PEAK` (a small site's plain run, a ground
  * warmer, a large site's publishing run: 1.43 GB at most — München's, and
  * the first ground warmer, which solves the line levels on every DGM).

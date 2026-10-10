@@ -107,13 +107,19 @@ async function prepareAll(
     if (tiles.length <= WARM_ABOVE) {
       return (await slots.run(0, PROCESS_PEAK, () => prepare(id, []))) === 0;
     }
-    const warm = await slots.run(1, IF_CACHED_RUN.peak, () =>
-      prepare(id, IF_CACHED_RUN.args)
-    );
-    if (warm !== NOT_CACHED) {
-      return warm === 0;
+    const [[first], ...later] = warmSteps(tiles);
+    // Step 0, then step 1 in its slot: the first warmer starts at once,
+    // ahead of the smaller sites waiting.
+    const start = await slots.run(1, first.peak, async () => {
+      const code = await prepare(id, IF_CACHED_RUN.args);
+      return code === NOT_CACHED
+        ? { code: await prepare(id, first.args), warmed: true }
+        : { code, warmed: false };
+    });
+    if (!start.warmed || start.code !== 0) {
+      return start.code === 0;
     }
-    for (const step of warmSteps(tiles)) {
+    for (const step of later) {
       const codes = await Promise.all(
         step.map(({ args, peak }) =>
           slots.run(1, peak, () => prepare(id, args))
