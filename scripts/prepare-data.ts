@@ -119,6 +119,7 @@ import {
   tramTimetableSource,
 } from "../lib/city/tram-timetable";
 import { siteFromArgs } from "../sites";
+import { bakeMode } from "./warmers";
 import {
   type BakedCityMesh,
   bakeCityMesh,
@@ -186,9 +187,10 @@ const CACHE_DIR = join(
   process.cwd(),
   process.env.VERCEL ? ".next/cache/prepare-data" : ".cache/prepare-data"
 );
-const SITE = (() => {
+const { MODE, SITE } = (() => {
   try {
-    return siteFromArgs(process.argv.slice(2)).site;
+    const { rest, site } = siteFromArgs(process.argv.slice(2));
+    return { MODE: bakeMode(rest, tileIds(site)), SITE: site };
   } catch (error) {
     process.stderr.write(`prepare-data: ${(error as Error).message}\n`);
     process.exit(2);
@@ -196,6 +198,11 @@ const SITE = (() => {
 })();
 const OUT_DIR = join(process.cwd(), "public/data", SITE.id);
 const TILES = tileIds(SITE);
+/** A warmer (warmers.ts) only fills the cache for its own tiles: it
+ *  publishes nothing — no file under public/data, no manifest, no prune. */
+const WARMING = MODE.kind !== "publish";
+/** The tiles this run bakes. */
+const OWN = new Set(MODE.kind === "publish" ? TILES : MODE.tiles);
 /** What a missing source means for a site that has not been fetched yet. */
 const HINT = ` — run \`bun run fetch ${SITE.id}\` and \`bun run bake ${SITE.id}\``;
 
@@ -223,7 +230,9 @@ const readJson = <T>(path: string): T =>
 
 // --- publish ------------------------------------------------------------------
 
-mkdirSync(OUT_DIR, { recursive: true });
+if (!WARMING) {
+  mkdirSync(OUT_DIR, { recursive: true });
+}
 const manifest: DataManifest = { version: 1, files: {} };
 const keep = new Set<string>([MANIFEST_FILE]);
 let published = 0;
@@ -236,13 +245,14 @@ function hashedName(file: string, content: Uint8Array): string {
   return `${basename(file, ext)}.${hash}${ext}`;
 }
 
-/** Publishes one artifact and returns the name it is served under. */
+/** Publishes one artifact and returns the name it is served under (a
+ *  warmer only names it: the names go into the glTF's extras). */
 function publish(logical: string, content: Uint8Array): string {
   const hashed = hashedName(logical, content);
   manifest.files[logical] = hashed;
   keep.add(hashed);
   const dest = join(OUT_DIR, hashed);
-  if (!existsSync(dest)) {
+  if (!WARMING && !existsSync(dest)) {
     writeFileSync(dest, content);
     published++;
   }
@@ -535,8 +545,11 @@ function publishLevels(tile: string, line: LevelLine, file: string): string {
   return publish(file, utf8({ ...doc, features }));
 }
 
+// A ground warmer needs none; a tile warmer its own tiles'.
 const sidesStarted = performance.now();
-for (const tile of TILES) {
+for (const tile of MODE.kind === "ground"
+  ? []
+  : TILES.filter((t) => OWN.has(t))) {
   const names: Published = {};
   const artifacts = Object.entries(tileArtifacts(tile)) as [
     TileArtifactKind,
@@ -1224,10 +1237,29 @@ function groundSamples(m: {
   return out;
 }
 
+/** A warmer's last line: what it cached, how long it took, its peak. */
+function warmed(what: string): never {
+  log(
+    `warmed ${what} in ${since(started)} ms, peak RSS ${(process.resourceUsage().maxRSS / 1024 ** 2).toFixed(2)} GiB (published nothing)`
+  );
+  process.exit(0);
+}
+
+if (MODE.kind === "ground") {
+  for (const tile of MODE.tiles) {
+    await groundFile(tile);
+    Bun.gc(true);
+  }
+  warmed(`the fine ground of ${MODE.tiles.join(", ")}`);
+}
+
 const baked: BakedTile[] = [];
 const footprintFiles = new Map<string, string>();
 const groundHeights: number[] = [];
 for (const [i, tile] of TILES.entries()) {
+  if (!OWN.has(tile)) {
+    continue;
+  }
   let t0 = performance.now();
   const city = await bakeCity(tile);
   const cityMs = since(t0);
@@ -1258,6 +1290,9 @@ for (const [i, tile] of TILES.entries()) {
   // tile's peak.
   dropTerrain(tile);
   Bun.gc(true);
+}
+if (WARMING) {
+  warmed(`${baked.map((t) => t.id).join(", ")} (buildings + terrain)`);
 }
 log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
