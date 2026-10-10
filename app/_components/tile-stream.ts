@@ -433,9 +433,19 @@ export function dressingParts(d: TileDressing): Object3D[] {
 
 /** How long a tile may wait on its compile before it shows regardless. */
 const COMPILE_WAIT_MS = 3000;
-/** Meshopt decode workers: two parse slots on a phone, a few more on a
- *  desktop, and the decode is a fraction of each parse. */
-const MESHOPT_WORKERS = 2;
+/**
+ * Meshopt decode workers per tier. Each worker's WebAssembly heap grows to
+ * the largest buffer it has decoded (a dense building tile's 75 MB) and
+ * never shrinks, so every worker is a heap of that size on the page's
+ * process for good: a phone, which the page's process memory ends (an
+ * iPhone's crashes come with three's GPU count at 257 MB), keeps one — its
+ * two parse slots queue their decodes, a fraction of each parse — and a
+ * desktop two.
+ */
+export const MESHOPT_WORKERS: Readonly<Record<DeviceTier, number>> = {
+  desktop: 2,
+  mobile: 1,
+};
 /** How long a level may wait on its dressing while the tile's other level
  *  stands in for it (DressingPlugin.handsOver) before it shows regardless. */
 const HAND_OVER_WAIT_MS = 10_000;
@@ -2007,7 +2017,7 @@ export function createTileStream(
   // decoded for a dense building tile) decode on the main thread, inside
   // the parse that lands it. Idempotent: a remount keeps the same workers.
   // oxlint-disable-next-line react-hooks/rules-of-hooks -- the decoder's method, no React hook
-  MeshoptDecoder.useWorkers(MESHOPT_WORKERS);
+  MeshoptDecoder.useWorkers(MESHOPT_WORKERS[ctx.tier]);
   tiles.registerPlugin(new GltfContentPlugin(MeshoptDecoder));
   // Out-of-view tiles that are still active stay drawn (shadows, turning on
   // the spot); three's own frustum culling keeps them out of the main pass.
