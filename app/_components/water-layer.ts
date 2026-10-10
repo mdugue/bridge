@@ -32,7 +32,7 @@ import {
   vec4,
 } from "three/tsl";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
-import { reflectionStrength, skyReflection } from "./sky-reflection";
+import { REFLECTIONS, skyReflection } from "./sky-reflection";
 import { type SplatLayer, splatUv } from "./terrain-layer";
 
 /** Animated water surface, masked to the land-cover "water" class (id 8). */
@@ -210,13 +210,9 @@ function waterColour(
   );
   const fresnel = pow(float(1).sub(clamp(view.y, 0, 1)), 4);
   // Spiegelung (sky-reflection.ts): the sky the level sheet mirrors, its
-  // gradient and the glow around the sun; turned down, the fog's flat
-  // colour it stood in for.
-  const sky = mix(
-    skyTint.rgb,
-    skyReflection(vec3(0, 1, 0), 0.3),
-    reflectionStrength
-  );
+  // gradient and the glow around the sun; below full strength, the fog's
+  // flat colour it stood in for (REFLECTIONS is 1: none).
+  const sky = mix(skyTint.rgb, skyReflection(vec3(0, 1, 0), 0.3), REFLECTIONS);
   return mix(toned, sky, fresnel.mul(FRESNEL));
 }
 

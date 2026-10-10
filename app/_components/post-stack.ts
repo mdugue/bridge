@@ -48,11 +48,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import {
-  LOOK_DEFAULTS,
-  type LookValues,
-  type PostLookKey,
-} from "@/lib/city/look-controls";
+import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
 import {
   type PaperKind,
   RENDER_STYLE_BY_ID,
@@ -142,8 +138,23 @@ function aoSmoothed(
  */
 const AO_RADIUS_M = 2;
 const AO_THICKNESS_M = 0.15;
-/** The AO's exponent at contact-shadows slider = 1 (occlusion^k). */
-const AO_INTENSITY_MAX = 3;
+/**
+ * Kontaktschatten: the AO raised to this exponent (occlusion^k) — what its
+ * slider stood at by default (50 % of 3), fixed since it went (plan 073).
+ */
+const AO_EXPONENT = 1.5;
+
+// The finish's strengths before the picture style weights them
+// (RenderStyleDef's gradingWeight, grainWeight, inkWeight): what their
+// sliders stood at by default, fixed since they went (plan 073). The
+// uniforms they feed stay: a style switch and Modell write those.
+/** Tiefenfärbung: warm near, cool far. */
+const GRADING = 0.5;
+/** Papierkorn: the paper grain over the frame (film grain in the
+ *  monochrome styles). */
+const GRAIN = 0.25;
+/** Tuschelinien: the outlines' strength in the graphic styles. */
+const INK = 0.7;
 
 // focusRange is the metric over which a fragment ramps from sharp to fully
 // blurred. A fixed value can't serve a 2 km-deep scene, so — like a real
@@ -187,10 +198,10 @@ export interface PostStack {
    */
   compile: (object: Object3D) => Promise<void>;
   /**
-   * Pushes the rendering rows of the look — the picture style, depth
-   * grading, contact shadows, paper grain, ink — into the passes. (Depth
-   * of field is no row: always on where it is built, focused on the
-   * crosshair.)
+   * Pushes the picture style into the passes: its weights on the depth
+   * grading, the paper grain and the ink. (Their strengths and the contact
+   * shadows' are fixed; depth of field is always on where it is built,
+   * focused on the crosshair.)
    */
   applyLook: (look: LookValues) => void;
   dispose: () => void;
@@ -214,7 +225,7 @@ export interface PostStack {
   /**
    * Modell (plan 055): a parallel view draws without depth of field, depth
    * grading and vignette — far means higher up the sheet there, and a haze
-   * or a dark corner reads as an error. The sliders keep their values.
+   * or a dark corner reads as an error.
    */
   setModel: (on: boolean) => void;
   /**
@@ -262,7 +273,8 @@ function hash21(p: V2): F {
   return fract(r.x.mul(r.y));
 }
 
-/** The finish's live settings (the sliders times the style's weights). */
+/** The finish's live settings (the fixed strengths times the style's
+ *  weights). */
 interface Finish {
   grading: Live;
   grain: Live;
@@ -436,7 +448,7 @@ const COMPILE_LANES = 4;
  * a context by target *and* call depth; a scene pass nested inside the post
  * pipeline would sit one level deeper than any compile) — then three's node
  * `RenderPipeline` from its colour and depth: GTAO (half resolution, normals
- * reconstructed from depth) × the contact slider → DoF (`DepthOfFieldNode`,
+ * reconstructed from depth) ^ `AO_EXPONENT` → DoF (`DepthOfFieldNode`,
  * crosshair autofocus, dropped while moving; not built on a phone) → the
  * picture style (ink + tone; not in the default pastel style's pipelines
  * at all) → SMAA (FXAA on a phone) → depth grading, vignette and paper
@@ -491,7 +503,7 @@ export function createPostStack(
   aoPass.thickness.value = AO_THICKNESS_M;
   aoPass.samples.value = aoSamples;
   const aoTexture = aoSmoothed(aoPass.getTextureNode(), depthTexture, lens);
-  const contact = uniform(LOOK_DEFAULTS.contact * AO_INTENSITY_MAX);
+  const contact = float(AO_EXPONENT);
   const occlusion = pow(aoTexture.r, contact);
   const lit = vec4(colour.rgb.mul(occlusion), colour.a);
   // The same, at any uv: the styles read the frame's neighbourhood.
@@ -512,8 +524,8 @@ export function createPostStack(
   const styleDressing = createStyleDressing(scene);
 
   const finishing: Finish = {
-    grading: uniform(LOOK_DEFAULTS.grading),
-    grain: uniform(LOOK_DEFAULTS.grain),
+    grading: uniform(GRADING),
+    grain: uniform(GRAIN),
     film: uniform(0),
     vignetteOffset: uniform(style.vignette.offset),
     vignetteDarkness: uniform(style.vignette.darkness),
@@ -633,21 +645,15 @@ export function createPostStack(
     }
   };
 
-  // The sliders' raw values; the style weights them on the way in, so a
-  // style switch re-applies them without the store changing.
-  const raw = {
-    grading: LOOK_DEFAULTS.grading,
-    grain: LOOK_DEFAULTS.grain,
-    ink: LOOK_DEFAULTS.ink,
-  };
+  // The style weights the fixed strengths; Modell drops the grading.
   const applyStyleWeights = () => {
-    finishing.grading.value = model ? 0 : raw.grading * style.gradingWeight;
-    finishing.grain.value = Math.min(raw.grain * style.grainWeight, 2);
+    finishing.grading.value = model ? 0 : GRADING * style.gradingWeight;
+    finishing.grain.value = Math.min(GRAIN * style.grainWeight, 2);
     finishing.film.value = style.grainAnimated ? 1 : 0;
     // offset and darkness 0: the vignette's smoothstep is 1 everywhere
     finishing.vignetteOffset.value = model ? 0 : style.vignette.offset;
     finishing.vignetteDarkness.value = model ? 0 : style.vignette.darkness;
-    stylize.setInk(raw.ink * style.inkWeight);
+    stylize.setInk(INK * style.inkWeight);
     stylize.setStyle(style);
   };
   applyStyleWeights();
@@ -660,23 +666,6 @@ export function createPostStack(
     const d = Math.max(1, -inView.z);
     focusDistance.value = d;
     focusRange.value = focusRangeFor(d);
-  };
-
-  // One writer per rendering row — a Record over the keys, so a row added
-  // to the table cannot go unapplied.
-  const rows: Record<PostLookKey, (value: number) => void> = {
-    contact: (strength) => {
-      contact.value = Math.max(strength, 0) * AO_INTENSITY_MAX;
-    },
-    grading: (v) => {
-      raw.grading = Math.min(Math.max(v, 0), 1);
-    },
-    grain: (v) => {
-      raw.grain = Math.min(Math.max(v, 0), 1);
-    },
-    ink: (strength) => {
-      raw.ink = strength;
-    },
   };
 
   /**
@@ -964,9 +953,6 @@ export function createPostStack(
       applyStyleWeights();
     },
     applyLook: (look) => {
-      for (const key of Object.keys(rows) as PostLookKey[]) {
-        rows[key](look[key]);
-      }
       style = RENDER_STYLE_BY_ID[look.style];
       applyStyleWeights();
     },

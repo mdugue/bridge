@@ -44,11 +44,12 @@ export interface RenderStyleDef {
   crowns: CrownStyle | null;
   /** one line for the picker (German, like the rest of the HUD) */
   description: string;
-  /** weight on the depth-grading slider (warm near / cool far); 0 for monochrome */
+  /** weight on the depth grading (warm near / cool far; post-stack.ts
+   *  `GRADING`); 0 for monochrome */
   gradingWeight: number;
   /** animated film grain instead of the static paper speckle */
   grainAnimated: boolean;
-  /** weight on the grain slider */
+  /** weight on the paper grain (post-stack.ts `GRAIN`) */
   grainWeight: number;
   /**
    * Draw every surface with one material under the real light
@@ -59,7 +60,7 @@ export interface RenderStyleDef {
   paperScene: PaperKind | null;
   /** stable id — persisted in snapshots, never rename */
   id: RenderStyle;
-  /** weight on the ink slider (the outline strength) */
+  /** weight on the outline strength (post-stack.ts `INK`) */
   inkWeight: number;
   label: string;
   /** Soft light cones under the street lamps (style-dressing.ts). */

@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
-import { LOOK_BY_KEY, LOOK_CONTROLS, LOOK_DEFAULTS } from "./look-controls";
+import {
+  LOOK_BY_KEY,
+  LOOK_CONTROLS,
+  LOOK_DEFAULTS,
+  RETIRED_SNAPSHOT_KEYS,
+} from "./look-controls";
 
-const GROUPS = new Set(["atmosphere", "buildings", "vegetation", "rendering"]);
-
-test("the table has 26 rows with unique keys, ids and snapshot keys", () => {
-  expect(LOOK_CONTROLS).toHaveLength(26);
+test("the table holds the one slider people use, Nebel", () => {
+  expect(LOOK_CONTROLS.map((def) => def.key)).toEqual(["fogAmount"]);
   for (const field of ["key", "id", "snapshotKey"] as const) {
     const values = LOOK_CONTROLS.map((def) => def[field]);
     expect(new Set(values).size).toBe(values.length);
@@ -14,7 +17,6 @@ test("the table has 26 rows with unique keys, ids and snapshot keys", () => {
 test("every row follows the naming conventions and boots inside its range", () => {
   for (const def of LOOK_CONTROLS) {
     expect(def.snapshotKey.endsWith("Pct")).toBe(true);
-    expect(GROUPS.has(def.group)).toBe(true);
     expect(LOOK_BY_KEY[def.key]).toBe(def);
     expect(def.initial).toBeGreaterThanOrEqual(0);
     expect(def.initial).toBeLessThanOrEqual(1);
@@ -23,5 +25,15 @@ test("every row follows the naming conventions and boots inside its range", () =
       Math.abs(def.initial * 100 - Math.round(def.initial * 100))
     ).toBeLessThan(1e-9);
     expect(LOOK_DEFAULTS[def.key]).toBe(def.initial);
+  }
+});
+
+test("no row takes a retired snapshot key", () => {
+  // A pasted old snapshot would otherwise set the new control (ADR 0017).
+  expect(new Set(RETIRED_SNAPSHOT_KEYS).size).toBe(
+    RETIRED_SNAPSHOT_KEYS.length
+  );
+  for (const def of LOOK_CONTROLS) {
+    expect(RETIRED_SNAPSHOT_KEYS).not.toContain(def.snapshotKey);
   }
 });

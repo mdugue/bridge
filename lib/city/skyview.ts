@@ -84,7 +84,7 @@ export function horizonTexel(k: number): { channel: number; layer: number } {
 /**
  * How much of the sun's direct light reaches a point whose horizon in the
  * sun's direction stands at `horizonDeg`: the shader's smoothstep, at full
- * strength (the look row mixes it toward 1).
+ * strength (`HORIZON_SHADE`, sky-light.ts, mixes it toward 1).
  */
 export function farSunVisibility(
   horizonDeg: number,

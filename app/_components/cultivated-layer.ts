@@ -46,6 +46,7 @@ import {
   byteOf,
   gdHash,
   gdNoise,
+  GROUND_DETAIL,
   type GroundColour,
   type GroundFields,
   type GroundInputs,
@@ -273,7 +274,7 @@ export function colonyGarden(
     uv.x.lessThan(1),
     uv.y.lessThan(1)
   );
-  If(and(inp.groundDetail.greaterThan(0), inTile), () => {
+  If(and(GROUND_DETAIL.greaterThan(0), inTile), () => {
     // explicit level: implicit derivatives are undefined in non-uniform
     // control flow (the texture has no mips; level 0 is what it read)
     const r = texture(colonies.texture, uv).level(float(0)).r.mul(255).toVar();
@@ -294,7 +295,7 @@ export function colonyGarden(
         edge,
         w
       );
-      const on = min(inp.groundDetail.div(0.7), 1).mul(G.strength);
+      const on = min(GROUND_DETAIL.div(0.7), 1).mul(G.strength);
       col.baseCol.assign(mix(col.baseCol, garden, inside.mul(on)));
     });
   });
