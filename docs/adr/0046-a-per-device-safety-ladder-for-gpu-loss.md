@@ -86,7 +86,7 @@ raised (`SAFETY_DECAY_MS`; a clock set back gains nothing). `?safety=N`
 
 | Level | 0 | 1 | 2 | 3 |
 |---|---|---|---|---|
-| pixel-ratio cap, phone · desktop | 1.5 · 2 | 1.25 · 1.5 | 1.0 · 1.25 | 0.85 · 1.0 |
+| pixel-ratio cap, phone · desktop (a desktop's 2 · 1.5 · 1.25 · 1.0 until plan 071) | 1.5 · 1.5 | 1.25 · 1.25 | 1.0 · 1.0 | 0.85 · 1.0 |
 | shadow map, phone · desktop | 2048² · 3072² | 2048² · 2048² | 1024² · 2048² | 1024² · 1024² |
 | tile cache, phone (min–max, MiB) | 168–336 | 148–296 | 136–272 | 96–232 |
 | tile cache, desktop (min–max, GB) | 1.2–1.6 | 1.0–1.4 | 0.8–1.2 | 0.6–1.0 |

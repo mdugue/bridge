@@ -578,7 +578,7 @@ the safety levels 1, 2 and 3:
 | Shadow map | 3072² (2048², 2048², 1024²) | 2048² (2048², 1024², 1024²) | 512² |
 | Shadow camera streams at | 128 px, by day; from level 2 never | never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
-| Pixel ratio | ≤ 2 (1.5, 1.25, 1.0) | ≤ 1.5 (1.25, 1.0, 0.85) | 0.5 |
+| Pixel ratio | ≤ 1.5 (1.25, 1.0, 1.0; ≤ 2 until 2026-10-10: a retina laptop's 5.2 MP of post stack, 1.5 is 56 % of it) | ≤ 1.5 (1.25, 1.0, 0.85) | 0.5 |
 | Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
 | Land-cover rasters | L0 4096², L1 1024² | L0 2048², L1 1024²; no sports raster | L0 4096², L1 1024² |
 | GTAO samples | 16 | 8 | 8 |

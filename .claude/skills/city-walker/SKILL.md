@@ -769,7 +769,7 @@ render scale, AO samples), all resolved once in `city-walk-client.tsx`
 |---|---|---|---|
 | tileset streamed | `tileset.json` (every site tile) | **`tileset-spawn.json`** (spawn tile only) | 3/4 of the geometry AND 3/4 of the boot (measured on the old block loader: 14 s → 4.4 s, 74 MB → 18 MB) |
 | shadow map size (`shadowMapSizeFor`) | 3072 | **512** | the depth pass is per-frame fill that does *not* shrink with the canvas |
-| `pixelRatio` | dpr≤2 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
+| `pixelRatio` | dpr≤1.5 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
 | GTAO samples (`aoSamplesFor`) | 16 | **8** | half the AO samples; keyed on the profile, not `navigator.webdriver` (Playwright sets that in the `--headed` shot harness too, which must show the product's AO) |
 
 Everything a spec asserts on — loaders, layer construction, every node
