@@ -1003,7 +1003,13 @@ stood still behind it. A desktop waits up to 1.5 s, so most hand-overs
 still swap the trees in one frame; a phone does not wait at all: the
 fine level shows bare and its trees, lamps and rails arrive once its
 dressing is built — on a phone that blink of no trees is back, the price
-of a stream that keeps moving. **Ready** (`onLoaded`,
+of a stream that keeps moving. A dressing's **ask sets** — what the
+inquiry probe can ask of its trees, monuments, decks, hedges, lamps and
+furniture — are built once it hangs, when the main thread is idle (at
+most 2 s on, `buildAsksWhenIdle`), not inside its build: they place
+every canopy tree a second time for a card nobody may open (0.3 s of a
+dense tile's build in the local trace); until then a click on that
+tile's trees finds nothing to ask. **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile
 is dressed, the renderer is idle and no dressing is pending; it also lifts
 the fog clamp. A tile that fails to load for any reason but the network

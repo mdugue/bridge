@@ -101,6 +101,7 @@ import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import { streamTimings } from "./stream-timing";
+import { whenIdle } from "./main-yield";
 import { bvhBytesUnder } from "./collision";
 import {
   type AnyAttribute,
@@ -141,6 +142,11 @@ export interface TileDressing {
   /** the trees, monuments and bridge decks the inquiry probe can ask
    *  (lib/city/ask-items.ts; plan 052 phase 4): data, nothing drawn */
   asks?: AskSet<FeatureInquiry>[];
+  /** fills `asks` (the same array) — in idle time once the dressing hangs
+   *  (`DressingPlugin.hangDressing`), not on its critical path: a card
+   *  nobody may open placed every canopy tree a second time inside the
+   *  dressing's build. Gone once it has run. */
+  buildAsks?: () => void;
   furniture?: Group;
   lamps?: LampControl;
   /** OSM hedges (low-vegetation-layer.ts): static, no per-frame work */
@@ -420,7 +426,7 @@ export const DRESSING_PARTS = {
 } as const satisfies Record<
   // every field but the id and the askables (data): a new part cannot be
   // left out
-  Exclude<keyof TileDressing, "asks" | "tile">,
+  Exclude<keyof TileDressing, "asks" | "buildAsks" | "tile">,
   (d: TileDressing) => Object3D | undefined
 >;
 
@@ -602,6 +608,32 @@ function disposeDressing(d: TileDressing): unknown[] {
     errors.push(...disposeObject3D(part));
   }
   return errors;
+}
+
+/** How long a hung dressing's ask sets wait for an idle main thread. */
+const ASKS_IDLE_MS = 2000;
+
+/**
+ * Builds a hung dressing's ask sets (`TileDressing.buildAsks`) once the
+ * main thread is idle — if the dressing still hangs on its tile then
+ * (`stillHung`). Into its `asks`, whose identity the traffic's sets rely
+ * on; the closure goes once run, and with it the features it held.
+ */
+export function buildAsksWhenIdle(
+  dressing: TileDressing,
+  stillHung: () => boolean,
+  idle: typeof whenIdle = whenIdle
+): void {
+  const build = dressing.buildAsks;
+  if (!build) {
+    return;
+  }
+  idle(() => {
+    dressing.buildAsks = undefined;
+    if (stillHung()) {
+      build();
+    }
+  }, ASKS_IDLE_MS);
 }
 
 /** The site tile a content root is of (its extras), for the trail. */
@@ -1132,7 +1164,9 @@ async function buildDressing(
     river.length > 0 ? buildRiverside(river, ground) : undefined;
   // What the probe can ask, sized as drawn: the trees on the tile's own
   // ground (as the inventory stands them), decks only where this tile
-  // draws them.
+  // draws them — built once the dressing hangs, in idle time (`buildAsks`,
+  // hangDressing), into the array the traffic's sets join too. Until then
+  // a click on the tile's trees finds nothing to ask.
   const askCtx = {
     ...ground,
     tile,
@@ -1141,34 +1175,40 @@ async function buildDressing(
       ? (x: number, y: number) => ownsPoint(extent, x, y)
       : undefined,
   };
-  await nextTask();
-  const asks = streamTimings.timedSync(
-    "dressing:asks",
-    () => {
-      const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
-      return [
-        ...treeSets(trees, askCtx),
-        ...askSets(monumentItems(monuments, askCtx)),
-        ...(bridgeSet ? [bridgeSet] : []),
-        // every other tree, the hedges, lamps, furniture, stops and landings
-        ...moreSets(
-          {
-            canopy: ownCanopy,
-            scan: ownScan,
-            rows,
-            hedges,
-            lamps: ownLamps,
-            furniture,
-            trams,
-            river,
-          },
-          { offset: ctx.offset, heightAt: terrain.heightAt, tile },
-          keepTree
-        ),
-      ];
-    },
-    tile
-  );
+  const asks: AskSet<FeatureInquiry>[] = [];
+  const buildAsks = () => {
+    const sets = streamTimings.timedSync(
+      "dressing:asks",
+      () => {
+        const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
+        return [
+          ...treeSets(trees, askCtx),
+          ...askSets(monumentItems(monuments, askCtx)),
+          ...(bridgeSet ? [bridgeSet] : []),
+          // every other tree, the hedges, lamps, furniture, stops and
+          // landings
+          ...moreSets(
+            {
+              canopy: ownCanopy,
+              scan: ownScan,
+              rows,
+              hedges,
+              lamps: ownLamps,
+              furniture,
+              trams,
+              river,
+            },
+            { offset: ctx.offset, heightAt: terrain.heightAt, tile },
+            keepTree
+          ),
+        ];
+      },
+      tile
+    );
+    for (const set of sets) {
+      asks.push(set);
+    }
+  };
   // Sections are cut at the tile edge by the bake; a bridge street rides
   // the decks of this tile's bridge file (which names a seam deck in both).
   // The counted sections are asked on their bodies, while the layer shows;
@@ -1187,6 +1227,7 @@ async function buildDressing(
       : undefined;
   return {
     asks,
+    buildAsks,
     tile,
     tram,
     riverside,
@@ -1823,6 +1864,10 @@ export class DressingPlugin {
     this.weighDressing(entry, dressing);
     this.tiles?.recalculateBytesUsed();
     this.stream.dressings.add(dressing);
+    buildAsksWhenIdle(
+      dressing,
+      () => !this.disposed && entry.dressing === dressing
+    );
     // The traffic's bodies hang here once its layer is switched on.
     dressing.traffic?.attach({
       root: scene,

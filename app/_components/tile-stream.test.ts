@@ -21,6 +21,7 @@ import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
 import { markSceneShared } from "./three-utils";
 import {
+  buildAsksWhenIdle,
   catchUp,
   DRESSING_PART_NAMES,
   DressingPlugin,
@@ -464,6 +465,38 @@ test("a phone streams fewer contents at once, on queues of its own", () => {
   expect(desktop.downloadQueue).toBe(DEFAULT_DOWNLOAD_QUEUE);
   phone.dispose();
   desktop.dispose();
+});
+
+test("a hung dressing's ask sets come in idle time, into the same array; none for a dressing that left", () => {
+  const idle: (() => void)[] = [];
+  const later = (work: () => void) => {
+    idle.push(work);
+    return () => undefined;
+  };
+  const set = {
+    box: {},
+    nearest: () => null,
+  } as unknown as AskSet<FeatureInquiry>;
+  const dressing = (): TileDressing => {
+    const asks: AskSet<FeatureInquiry>[] = [];
+    return { tile: "t", asks, buildAsks: () => asks.push(set) };
+  };
+  const hung = dressing();
+  const asks = hung.asks;
+  buildAsksWhenIdle(hung, () => true, later);
+  expect(hung.asks).toEqual([]);
+  idle.shift()?.();
+  expect(hung.asks).toBe(asks);
+  expect(hung.asks).toEqual([set]);
+  // run once, and its features let go of
+  expect(hung.buildAsks).toBeUndefined();
+  const gone = dressing();
+  buildAsksWhenIdle(gone, () => false, later);
+  idle.shift()?.();
+  expect(gone.asks).toEqual([]);
+  // a dressing with nothing to build waits for nothing
+  buildAsksWhenIdle({ tile: "t" }, () => true, later);
+  expect(idle).toHaveLength(0);
 });
 
 test("a phone's parse slot never waits on a dressing; a desktop's a little", () => {
