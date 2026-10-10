@@ -566,6 +566,16 @@ ready moved both ways (155 / 188 against 189 / 135 s; 601 / 693 against
 (5–17 s here under four-fold contention) is far above the "≈75 ms a tile"
 this plan assumed: re-measure on a device.
 
+**E2E on the same machine, against the branch's build.** The default
+local config (120 s per test) failed the four viewer groups' boots — each
+still in *Details laden* when its 120 s ran out (slow, not hung: the
+bench's lite boots took 186–252 s to "ready" on `main` and the branch
+alike under this load); with CI's budgets (`CI=1`: `slow()` × 3, one
+worker) and the per-test limit raised (`--timeout=900000`) **29 passed**
+— the collision, demolish, double-tap, building and tree inquiry specs
+among them — and the whole-site spec ran past its 810 s while still
+streaming (five of six dressings built at 707 s), no page errors.
+
 **Seen on a phone after this branch** (not by eye here — headless):
 a fine terrain level that replaces the coarse one shows bare for a
 moment, its trees, lamps and rails arriving once its dressing is built;
