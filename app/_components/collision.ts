@@ -14,7 +14,7 @@ import {
   acceleratedRaycast,
   computeBoundsTree,
   disposeBoundsTree,
-  type MeshBVH,
+  MeshBVH,
 } from "three-mesh-bvh";
 import { horizontalSlide } from "@/lib/city/collision";
 
@@ -23,6 +23,33 @@ import { horizontalSlide } from "@/lib/city/collision";
 BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 Mesh.prototype.raycast = acceleratedRaycast;
+
+/**
+ * The bytes the BVHs under `root` hold on the page's process: their node
+ * buffers (the index a BVH sorts is its geometry's own, counted there).
+ * Read through `serialize` without copies — a reference to the buffers.
+ */
+export function bvhBytesUnder(root: Object3D): number {
+  const seen = new Set<BufferGeometry>();
+  let bytes = 0;
+  root.traverse((object) => {
+    const geometry = (object as Mesh).geometry as BufferGeometry | undefined;
+    // reason: computeBoundsTree (the default) builds a MeshBVH.
+    const bvh = geometry?.boundsTree as MeshBVH | undefined;
+    if (!(geometry && bvh) || seen.has(geometry)) {
+      return;
+    }
+    seen.add(geometry);
+    const { roots, indirectBuffer } = MeshBVH.serialize(bvh, {
+      cloneBuffers: false,
+    });
+    for (const buffer of roots) {
+      bytes += buffer.byteLength;
+    }
+    bytes += indirectBuffer?.byteLength ?? 0;
+  });
+  return bytes;
+}
 
 /** Body radius the player keeps from facades. */
 const BODY_RADIUS = 0.6;

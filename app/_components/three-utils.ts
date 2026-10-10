@@ -259,6 +259,32 @@ export function estimateGeometryBytes(root: Object3D): number {
   return bytes;
 }
 
+/**
+ * The bytes the CPU arrays of `root`'s geometries still hold on the page's
+ * process — what three's GPU count, and the memory governor that watches
+ * it, never see. Each array's whole ArrayBuffer, once: a glTF bufferView
+ * decodes into one buffer its accessors view, and one attribute still
+ * viewing it keeps all of it, while a copy dropped by every attribute
+ * (`dropCpuCopies`) holds nothing. `seen` carries over between roots, so a
+ * buffer two roots share (the site's grid index) counts once.
+ */
+export function cpuArrayBytes(
+  root: Object3D,
+  seen: Set<ArrayBufferLike> = new Set()
+): number {
+  let bytes = 0;
+  for (const geometry of geometriesUnder(root)) {
+    for (const attribute of attributesOf(geometry)) {
+      const { array } = bufferOf(attribute);
+      if (array.length > 0 && !seen.has(array.buffer)) {
+        seen.add(array.buffer);
+        bytes += array.buffer.byteLength;
+      }
+    }
+  }
+  return bytes;
+}
+
 // --- CPU copies -------------------------------------------------------------------
 
 /** A typed array's constructor, for an empty one of its kind. */

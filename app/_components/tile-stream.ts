@@ -100,9 +100,11 @@ import type { DeviceTier } from "./scene-profile";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
+import { bvhBytesUnder } from "./collision";
 import {
   type AnyAttribute,
   compileRepresentatives,
+  cpuArrayBytes,
   detachSceneShared,
   disposeGeometry,
   disposeObject3D,
@@ -429,6 +431,82 @@ export const DRESSING_PART_NAMES = Object.keys(
 
 export function dressingParts(d: TileDressing): Object3D[] {
   return DRESSING_PART_NAMES.flatMap((name) => DRESSING_PARTS[name](d) ?? []);
+}
+
+/**
+ * What the loaded tiles keep on the page's process, by what keeps it
+ * (bytes) — beside what three counts on the GPU, which is all the memory
+ * governor and the tile cache's weighing see. An iPhone's page died at the
+ * boot with three's count at 257 MB: the process ran out first. The typed
+ * arrays only (`cpuArrayBytes`, `bvhBytesUnder`): not the meshopt
+ * workers' heaps, the loaders' transient copies or plain JS objects (the
+ * ask sets), which nothing can weigh from here.
+ */
+export interface CpuBytes {
+  /** the buildings' positions, index and feature ids, which picks, the
+   *  BVH, demolish and the selection outline read */
+  city: number;
+  /** the buildings' BVHs (city-layer.ts builds them as rays need them) */
+  bvh: number;
+  /** the buildings' object tables and the textures packed from them */
+  tables: number;
+  /** the terrain levels' kept arrays (a TIN's index, the water's) */
+  terrain: number;
+  /** their height lookups: a TIN's vertices and buckets, a grid's heights */
+  heights: number;
+  /** the dressings' geometry and instance arrays, and the BVHs of what
+   *  was asked (bridge decks, traffic bodies) */
+  dressing: number;
+  total: number;
+}
+
+/** The loaded tiles' CPU arrays (`CpuBytes`), each buffer once. */
+export function cpuBytesOf(
+  stream: Pick<TileStream, "cities" | "dressings" | "terrains">
+): CpuBytes {
+  const seen = new Set<ArrayBufferLike>();
+  const arrays = (roots: (Object3D | undefined)[]) =>
+    roots.reduce(
+      (sum, root) => sum + (root ? cpuArrayBytes(root, seen) : 0),
+      0
+    );
+  const out: CpuBytes = {
+    city: 0,
+    bvh: 0,
+    tables: 0,
+    terrain: 0,
+    heights: 0,
+    dressing: 0,
+    total: 0,
+  };
+  for (const city of stream.cities) {
+    out.city += arrays([city.mesh]);
+    out.bvh += bvhBytesUnder(city.mesh);
+    out.tables += city.tableBytes;
+  }
+  for (const t of stream.terrains) {
+    // the level's own meshes, not the dressing hung beside them
+    out.terrain += arrays([
+      t.mesh,
+      t.water?.mesh,
+      t.water?.mistMesh,
+      t.stairs,
+      t.walls,
+      t.kerbs,
+      t.fences,
+    ]);
+    out.heights += t.heightBytes;
+  }
+  for (const d of stream.dressings) {
+    const parts = dressingParts(d);
+    out.dressing += arrays(parts);
+    for (const part of parts) {
+      out.dressing += bvhBytesUnder(part);
+    }
+  }
+  out.total =
+    out.city + out.bvh + out.tables + out.terrain + out.heights + out.dressing;
+  return out;
 }
 
 /** How long a tile may wait on its compile before it shows regardless. */

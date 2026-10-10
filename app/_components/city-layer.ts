@@ -53,7 +53,21 @@ export interface CityLayer {
   mark: (objects: ReadonlySet<number>) => void;
   mesh: Mesh;
   table: CityObjectTable;
+  /** what the table's columns and the texture packed from them keep on the
+   *  page's process (bytes): the mark writes into the texture's data */
+  tableBytes: number;
   tile: string;
+}
+
+/** The bytes of an object's typed-array members. */
+function typedBytes(record: object): number {
+  let bytes = 0;
+  for (const value of Object.values(record)) {
+    if (ArrayBuffer.isView(value)) {
+      bytes += value.byteLength;
+    }
+  }
+  return bytes;
 }
 
 /** Marker the collision helpers look for on city meshes. */
@@ -255,6 +269,9 @@ export function dressCity(
     tile,
     mesh,
     table,
+    tableBytes:
+      typedBytes(table) +
+      (objects.texture.image.data as Float32Array).byteLength,
     alive,
     demolish: (objectIndex) => {
       const doomed = doomedObjects(table.root, objectIndex);

@@ -6,7 +6,7 @@ import {
   MeshBasicNodeMaterial,
   Vector3,
 } from "three/webgpu";
-import { createCityCollider } from "./collision";
+import { bvhBytesUnder, createCityCollider } from "./collision";
 
 /**
  * The building collider through a real three-mesh-bvh BVH (ADR 0032: the
@@ -95,4 +95,18 @@ test("a building that moves is found where it went", () => {
   group.updateMatrixWorld(true);
   expect(collider.topAt(150, 100)).toBeCloseTo(10, 5);
   expect(collider.topAt(100, 100)).toBeNull();
+});
+
+test("a mesh's BVH weighs its node buffers; one without a BVH weighs nothing", () => {
+  const { group } = city();
+  const nodes = bvhBytesUnder(group);
+  expect(nodes).toBeGreaterThan(0);
+  // each geometry once, however many meshes draw it
+  const twin = new Group();
+  for (const child of group.children) {
+    twin.add(child.clone(), child.clone());
+  }
+  expect(bvhBytesUnder(twin)).toBe(nodes);
+  const bare = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicNodeMaterial());
+  expect(bvhBytesUnder(bare)).toBe(0);
 });

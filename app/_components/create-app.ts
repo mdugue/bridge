@@ -161,6 +161,8 @@ import {
   trackedTextureBytes,
 } from "./three-utils";
 import {
+  type CpuBytes,
+  cpuBytesOf,
   createTileStream,
   DRESSING_PART_NAMES,
   DRESSING_PARTS,
@@ -254,6 +256,9 @@ export interface GpuDebug {
   sceneBufferBytes: number;
   /** three's `info.memory` */
   held: Readonly<Record<string, number>>;
+  /** what the loaded tiles keep on the page's process, by kind, MB
+   *  (tile-stream.ts `CpuBytes`): three's count above never sees it */
+  cpuMB: Readonly<Record<keyof CpuBytes, number>>;
   /** pipeline anchors holding scene-wide pipelines (pipeline-anchors.ts) */
   anchors: number;
   /** the tile cache: bytes it counts against its budget, tiles in it, in use */
@@ -271,7 +276,7 @@ export interface GpuDebug {
 /** Counts the distinct buffers under a scene (shared ones once). */
 function sceneBuffers(
   scene: Object3D
-): Omit<GpuDebug, "held" | "tileCache" | "anchors"> {
+): Omit<GpuDebug, "held" | "tileCache" | "anchors" | "cpuMB"> {
   const indices = new Map<object, number>();
   const buffers = new Map<object, number>();
   let drawables = 0;
@@ -2796,6 +2801,7 @@ async function bootApp(
         calls: renderer.info.render.drawCalls,
         triangles: renderer.info.render.triangles,
         heapMB: heap ? heap.usedJSHeapSize / 1_048_576 : undefined,
+        cpuMB: cpuBytesOf(stream).total / 1_048_576,
         cities: stream.visibleCities().length,
         dressings: stream.dressings.size,
         ...streamByKind(stream),
@@ -3089,9 +3095,16 @@ async function bootApp(
         loadedSet: Set<unknown>;
         bytesMap: Map<unknown, number>;
       };
+      const cpu = cpuBytesOf(stream);
       return {
         ...sceneBuffers(scene),
         held: { ...renderer.info.memory },
+        cpuMB: Object.fromEntries(
+          Object.entries(cpu).map(([kind, bytes]) => [
+            kind,
+            Math.round(bytes / 104_857.6) / 10,
+          ])
+        ) as Record<keyof CpuBytes, number>,
         anchors: postStack.anchorCount(),
         tileCache: {
           bytes: cache.cachedBytes,

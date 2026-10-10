@@ -219,3 +219,20 @@ test("planTriangles keeps the surface and drops the skirt, quantised or not", ()
     Uint16Array
   );
 });
+
+test("an index weighs its buckets and the vertices it reads, never the mesh's triangles", () => {
+  const xy = new Float64Array([0, 0, 10, 0, 0, 10]);
+  const z = new Float32Array([1, 2, 3]);
+  const bounds: [number, number, number, number] = [0, 0, 10, 10];
+  const typed = new TinIndex(
+    { bounds, xy, z, triangles: new Uint32Array([0, 1, 2]) },
+    5
+  );
+  const plain = new TinIndex(
+    { bounds, xy: [...xy], z: [...z], triangles: [0, 1, 2] },
+    5
+  );
+  // the same buckets either way; the typed vertices on top
+  expect(typed.bytes - plain.bytes).toBe(xy.byteLength + z.byteLength);
+  expect(plain.bytes).toBeGreaterThan(0);
+});
