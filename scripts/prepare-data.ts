@@ -194,6 +194,11 @@ function log(message: string): void {
   process.stdout.write(`prepare-data: ${message}\n`);
 }
 
+/** Whole milliseconds since `t0` (`performance.now()`), for the timing
+ *  lines. */
+const since = (t0: number) => Math.round(performance.now() - t0);
+const started = performance.now();
+
 const at = (path: string) => join(process.cwd(), path);
 const utf8 = (value: unknown) =>
   new TextEncoder().encode(`${JSON.stringify(value)}\n`);
@@ -462,6 +467,7 @@ async function publishCanopy(tile: string, file: string): Promise<string> {
 /** The levels of the site's rail and tram lines, solved over whole lines on
  *  every tile's DGM (scripts/line-levels.ts): each tile's file publishes
  *  with them. */
+const levelsStarted = performance.now();
 const lineLevels = parse<SiteLevels>(
   await cached(
     `line-levels-${SITE.id}.json`,
@@ -469,6 +475,7 @@ const lineLevels = parse<SiteLevels>(
     async () => utf8(await siteLineLevels(SITE))
   )
 );
+log(`line levels: ${since(levelsStarted)} ms`);
 
 /** The passages the lines open through the fill under the decks
  *  (lib/city/passages.ts): the terrain bake opens each in the tiles it
@@ -507,6 +514,7 @@ function publishLevels(tile: string, line: LevelLine, file: string): string {
   return publish(file, utf8({ ...doc, features }));
 }
 
+const sidesStarted = performance.now();
 for (const tile of TILES) {
   const names: Published = {};
   const artifacts = Object.entries(tileArtifacts(tile)) as [
@@ -567,6 +575,7 @@ for (const tile of TILES) {
   }
   sideFiles.set(tile, names);
 }
+log(`side files: ${since(sidesStarted)} ms`);
 
 // --- 2. content -----------------------------------------------------------------
 
@@ -842,11 +851,17 @@ function shapedTerrain(
  *  holding the point — what the walker stands on at runtime. `tin` is true
  *  when every tile's fine level is a TIN (nothing burned to the wall line,
  *  so the walls snap to the measured step). */
+let groundTimed = false;
 async function siteGround(): Promise<{
   heightAt: (x: number, y: number) => number | null;
   tin: boolean;
 }> {
+  const t0 = performance.now();
   const fine = await Promise.all(TILES.map((t) => shapedTerrain(t, 0)));
+  if (!groundTimed) {
+    groundTimed = true;
+    log(`site ground: ${since(t0)} ms`);
+  }
   return {
     heightAt: (x, y) =>
       fine.find((g) => ownsPoint(g.bounds, x, y))?.heightAt(x, y) ?? null,
@@ -1105,10 +1120,16 @@ const baked: BakedTile[] = [];
 const footprintFiles = new Map<string, string>();
 const groundHeights: number[] = [];
 for (const [i, tile] of TILES.entries()) {
+  let t0 = performance.now();
   const city = await bakeCity(tile);
+  const cityMs = since(t0);
   footprintFiles.set(tile, city.footprints);
+  t0 = performance.now();
   const fine = await bakeTerrain(tile, 0);
+  const fineMs = since(t0);
+  t0 = performance.now();
   const coarse = await bakeTerrain(tile, 1);
+  log(`${tile}: city ${cityMs} ms, fine ${fineMs} ms, coarse ${since(t0)} ms`);
   groundHeights.push(...(coarse.ground ?? []));
   const minZ = Math.min(fine.minZ, coarse.minZ);
   const maxZ = Math.max(fine.maxZ, coarse.maxZ, city.maxZ);
@@ -1319,4 +1340,8 @@ for (const entry of readdirSync(OUT_DIR)) {
 }
 log(
   `${Object.keys(manifest.files).length} artifacts in public/data/${SITE.id} (${published} new, ${pruned} pruned)`
+);
+// resourceUsage's maxRSS is in KiB
+log(
+  `done in ${since(started)} ms, peak RSS ${(process.resourceUsage().maxRSS / 1024 ** 2).toFixed(2)} GiB`
 );
