@@ -39,8 +39,9 @@ import {
   createSlots,
   IF_CACHED_RUN,
   NOT_CACHED,
-  PROCESS_PEAK,
+  SITE_PEAK,
   WARM_ABOVE,
+  warmersOn,
   warmSteps,
 } from "./warmers";
 
@@ -91,21 +92,24 @@ function machineMemory(): number {
  * Bakes the sites, every bake a process of its own, several at a time
  * (`bakeLimits`: as many as the cores, their peaks within the memory): a
  * bake is single-threaded, so one after the other a cold build waited for
- * every site in turn. A site with more tiles than `WARM_ABOVE` is baked by
- * warmers (warmers.ts), one tile each, which fill every slot the smaller
- * sites leave: those go first, largest first, since each is one process
- * that cannot be split — started late, it would be the build's tail.
+ * every site in turn. Each site is one process, counted at `SITE_PEAK`,
+ * largest first so it never starts last. With `warm`, a site with more
+ * tiles than `WARM_ABOVE` is baked by warmers (warmers.ts), one tile each,
+ * which fill every slot the smaller sites leave: those go first, largest
+ * first, since each is one process that cannot be split — started late, it
+ * would be the build's tail.
  */
 async function prepareAll(
   ids: readonly SiteId[],
-  limits: { jobs: number; memory: number }
+  limits: { jobs: number; memory: number },
+  warm: boolean
 ): Promise<SiteId[]> {
   const slots = createSlots(limits);
   const failed: SiteId[] = [];
   const bakeSite = async (id: SiteId): Promise<boolean> => {
     const tiles = tileIds(SITES[id]);
-    if (tiles.length <= WARM_ABOVE) {
-      return (await slots.run(0, PROCESS_PEAK, () => prepare(id, []))) === 0;
+    if (!warm || tiles.length <= WARM_ABOVE) {
+      return (await slots.run(0, SITE_PEAK, () => prepare(id, []))) === 0;
     }
     const [[first], ...later] = warmSteps(tiles);
     // Step 0, then step 1 in its slot: the first warmer starts at once,
@@ -163,22 +167,27 @@ log(
   `building ${ids.join(", ")}${skipped.length > 0 ? ` (not ready or not named: ${skipped.join(", ")})` : ""}`
 );
 
-const limits = (() => {
+const { limits, warm } = (() => {
   try {
-    return bakeLimits({
-      cores: availableParallelism(),
-      memory: machineMemory(),
-      env: {
-        PREPARE_JOBS: process.env.PREPARE_JOBS,
-        PREPARE_MEMORY_GB: process.env.PREPARE_MEMORY_GB,
-      },
-    });
+    return {
+      warm: warmersOn({ PREPARE_WARMERS: process.env.PREPARE_WARMERS }),
+      limits: bakeLimits({
+        cores: availableParallelism(),
+        memory: machineMemory(),
+        env: {
+          PREPARE_JOBS: process.env.PREPARE_JOBS,
+          PREPARE_MEMORY_GB: process.env.PREPARE_MEMORY_GB,
+        },
+      }),
+    };
   } catch (error) {
     fail((error as Error).message);
   }
 })();
 // a slow deploy shows why
-const overrides = (["PREPARE_JOBS", "PREPARE_MEMORY_GB"] as const)
+const overrides = (
+  ["PREPARE_JOBS", "PREPARE_MEMORY_GB", "PREPARE_WARMERS"] as const
+)
   .filter((name) => process.env[name])
   .map((name) => `, ${name}=${process.env[name]}`)
   .join("");
@@ -187,7 +196,7 @@ log(
 );
 
 mkdirSync(OUT_DIR, { recursive: true });
-const failed = await prepareAll(ids, limits);
+const failed = await prepareAll(ids, limits, warm);
 if (failed.length > 0) {
   fail(`${failed.join(", ")} failed`);
 }

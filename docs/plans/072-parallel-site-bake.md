@@ -16,8 +16,25 @@
 
 ## Status
 
-- **Status (2026-10-10)**: **DONE** — steps 1, 3–6 on `266bb89` (the
-  performance PR's base); step 2 skipped by its gate.
+- **Status (2026-10-10)**: **PARTIAL — the warmers lost on Vercel and are
+  opt-in** (`PREPARE_WARMERS=1`). Built: steps 1, 3–6 on `266bb89` (the
+  performance PR's base); step 2 skipped by its gate. On Vercel's builder
+  (4 cores, 8.6 GB; `process.constrainedMemory()` reports the 8.6) a cold
+  build of all seven sites took **322 s with the warmers against 235 s**
+  for main's one process per site (main's last cold production build,
+  #149). The log names why: a tile warmer's buildings took 6–37 s (sum
+  ≈ 350 s for fifteen), about twice the per-tile time of the one process
+  that bakes all fifteen — each warmer starts cold, its modules loaded and
+  its code compiled again; 3 GB a tile warmer lets two run at once in
+  6.9 GB (the measured peaks there: 0.6–2.3 GiB), so Dresden's tiles took
+  179 s two at a time; and the smaller sites, first by priority, held the
+  slots until t ≈ 95 s while Dresden's ground warmers waited. The
+  default is therefore main's schedule again (one process per site,
+  counted at 3 GB, largest first — two at once on that builder); what
+  stands on its own stays on: atomic cache entries (two sites already
+  baked side by side into one cache), each tile's fine ground as its own
+  entry, the timing lines. The local numbers below came from a box shared
+  with other agents' e2e runs and are superseded by Vercel's.
   - **Step 1** (cold, all seven sites side by side, Dresden one process,
     load ≈ 7): Dresden's 15 tiles — buildings 268.9 s, fine 265.3 s (of
     which the site ground's first call, fifteen TINs, 202.7 s), coarse

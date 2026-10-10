@@ -1,9 +1,11 @@
 /**
  * How prepare-sites.ts spreads a cold build over the machine. Every bake is
  * a prepare-data.ts process, and single-threaded, so the sites run side by
- * side; a site with more tiles than `WARM_ABOVE` is split further:
- * prepare-data.ts runs as **warmers** that only fill the bake cache for one
- * of its tiles, before one plain run finds everything cached and publishes.
+ * side, each in one process — as many at once as the cores allow and
+ * `SITE_PEAK` fits in the memory. With `PREPARE_WARMERS=1` a site with more
+ * tiles than `WARM_ABOVE` is split further: prepare-data.ts runs as
+ * **warmers** that only fill the bake cache for one of its tiles, before
+ * one plain run finds everything cached and publishes.
  *
  *  0. the plain run with `--if-cached`: when every entry is cached it
  *     publishes, and that is all (a warm build runs no warmer); at the
@@ -23,6 +25,16 @@
  * cold Dresden in one process peaked at 4.3 GiB, its heaviest tile alone at
  * 2.7 GB), and a free slot takes the next tile, so a slot that frees late
  * still finds work.
+ *
+ * The warmers are off by default because on Vercel's 4-core, 8.6 GB
+ * builder they lost (2026-10-10, a cold build of all seven sites):
+ * `prepare-sites` took 322 s with them against 235 s with one process per
+ * site. A warmer runs its tile's buildings at about twice the per-tile time
+ * of a process that bakes all fifteen — each starts cold, its modules
+ * loaded and its code compiled again — and `TILE_PEAK` lets two run at once
+ * in that memory, so Dresden's tiles took 179 s two at a time where the
+ * single process took 235 s for everything. They may pay on a machine with
+ * more cores and memory (not measured).
  */
 
 /** A site with more tiles than this is baked by warmers. */
@@ -77,6 +89,14 @@ export function bakeMode(
  */
 export const TILE_PEAK = 3e9;
 export const PROCESS_PEAK = 1.6e9;
+/**
+ * A whole site in one process, as every site is baked without the warmers:
+ * counted at 3 GB whichever site it is — the largest peaks higher (a cold
+ * Dresden 4.3–5.7 GiB), the others near 1 GB — so a 4-core, 8 GB builder
+ * bakes two sites at once, the rule the builds kept before the warmers
+ * (`floor(memory / 3 GB)`), measured there at 235 s cold.
+ */
+export const SITE_PEAK = 3e9;
 /** The share of the machine's memory the bakes may hold together. */
 export const MEMORY_SHARE = 0.8;
 
@@ -104,6 +124,16 @@ export function warmSteps(tiles: readonly string[]): BakeRun[][] {
     tiles.map((tile) => ({ args: [`${WARM_TILES}${tile}`], peak: TILE_PEAK })),
     [{ args: [], peak: PROCESS_PEAK }],
   ];
+}
+
+/** Whether `PREPARE_WARMERS=1` asks for the warmers (off by default, see
+ *  the module's comment). */
+export function warmersOn(env: { PREPARE_WARMERS?: string }): boolean {
+  const value = env.PREPARE_WARMERS ?? "";
+  if (value !== "" && value !== "0" && value !== "1") {
+    throw new Error(`PREPARE_WARMERS must be 0 or 1, got "${value}"`);
+  }
+  return value === "1";
 }
 
 /** A number above 0 from an environment override (PREPARE_JOBS: a whole

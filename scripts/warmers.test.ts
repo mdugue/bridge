@@ -4,7 +4,9 @@ import {
   bakeMode,
   createSlots,
   PROCESS_PEAK,
+  SITE_PEAK,
   TILE_PEAK,
+  warmersOn,
   warmSteps,
 } from "./warmers";
 
@@ -68,6 +70,11 @@ describe("bakeLimits", () => {
     expect(Math.floor(memory / PROCESS_PEAK)).toBeGreaterThanOrEqual(4);
   });
 
+  test("on Vercel's 4-core, 8.6 GB builder two whole sites bake at once, as before the warmers", () => {
+    const { memory } = bakeLimits({ cores: 4, memory: 8.6e9 });
+    expect(Math.floor(memory / SITE_PEAK)).toBe(2);
+  });
+
   test("PREPARE_JOBS and PREPARE_MEMORY_GB override, or fail", () => {
     expect(
       bakeLimits({
@@ -89,6 +96,18 @@ describe("bakeLimits", () => {
         "PREPARE_"
       );
     }
+  });
+});
+
+describe("warmersOn", () => {
+  test("off unless PREPARE_WARMERS=1, and a stray value fails", () => {
+    expect(warmersOn({})).toBe(false);
+    expect(warmersOn({ PREPARE_WARMERS: "" })).toBe(false);
+    expect(warmersOn({ PREPARE_WARMERS: "0" })).toBe(false);
+    expect(warmersOn({ PREPARE_WARMERS: "1" })).toBe(true);
+    expect(() => warmersOn({ PREPARE_WARMERS: "yes" })).toThrow(
+      "PREPARE_WARMERS"
+    );
   });
 });
 

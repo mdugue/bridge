@@ -370,10 +370,11 @@ config change.
   Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0037
 - `scripts/` — the build step: `prepare-sites.ts` runs `prepare-data.ts
   <site>` for every site whose data is ready (or only the ids it is given),
-  side by side within the cores and the memory (`warmers.ts`: a site with
-  more than four tiles is baked one tile per process, `--warm-ground` then
-  `--warm`, before a plain run publishes; `PREPARE_JOBS`,
-  `PREPARE_MEMORY_GB` override), writes the index `public/data/sites.json`
+  side by side within the cores and the memory (`warmers.ts`; one process
+  per site; `PREPARE_WARMERS=1` bakes a site with more than four tiles one
+  tile per process — slower on Vercel's 4-core builder, so off by default;
+  `PREPARE_JOBS`, `PREPARE_MEMORY_GB` override), writes the index
+  `public/data/sites.json`
   and prunes the folders of sites no longer built; `prepare-data.ts` bakes
   one site's committed
   artifacts into `public/data/<site>/` as a **3D Tiles tileset** (`tileset.json`,
@@ -551,11 +552,10 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (on Vercel
   `.next/cache/prepare-data`, the folder its build cache keeps; a cold run
-  of all seven sites ≈ 4.6 min on four idle cores, ≈ 5.7 min on a 4-core,
-  8 GB builder, warm ≈ 3 s for Dresden; CI restores it between runs;
-  entries are written whole,
+  of all seven sites 235 s on Vercel's 4-core, 8.6 GB builder, warm ≈ 3 s
+  for Dresden; CI restores it between runs; entries are written whole,
   `bake-cache.ts`, and each tile's fine ground is one of them,
-  `ground-pack.ts`, so the warmers share it): the key covers the inputs'
+  `ground-pack.ts`): the key covers the inputs'
   contents, `COMMON_SOURCES` (`prepare-data.ts` itself, the site's own
   config, `sites/providers.ts`, `patches/`), every module reachable from
   the artifact's bake entries (`scripts/bake-sources.ts` walks the

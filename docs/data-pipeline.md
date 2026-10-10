@@ -584,19 +584,21 @@ A bake is single-threaded, so `prepare-sites.ts` runs several
 (`scripts/warmers.ts` `bakeLimits`, logged first): as many as the cores
 (`os.availableParallelism()`), and their peaks together within 80 % of the
 memory — the machine's, or the container's limit where it sets a lower one
-(`process.constrainedMemory()`). Each bake counts the resident memory it
-is measured to peak at, with a margin: a tile warmer (below) 3 GB — its
-buildings are the peak, Dresden's heaviest tile (`33414_5654`) 2.7 GB —,
-every other bake 1.6 GB (1.43 GB at most: München's, and the warmer that
-solves Dresden's line levels). A 4-core, 8 GB builder thus runs two tile
-warmers or four other bakes at once, their peaks under 6.5 GB together.
+(`process.constrainedMemory()`). By default every site is one process,
+counted at 3 GB (`SITE_PEAK`: a cold Dresden peaks at 4.3–5.7 GiB, the
+others near 1 GB), largest first: Vercel's 4-core, 8.6 GB builder bakes
+two sites at once, and a cold build of all seven takes 235 s there
+(2026-10-10), Dresden's single process the whole of it.
 `PREPARE_JOBS=<n>` sets the number of bakes at once,
 `PREPARE_MEMORY_GB=<gb>` the memory they share (as on a smaller machine:
 the bakes still keep to 80 % of it).
 
-A site with more than four tiles (Dresden) is split further, one tile per
+**Warmers (`PREPARE_WARMERS=1`, off by default).** A site with more than four tiles (Dresden) is split further, one tile per
 process: `prepare-data.ts <site>` runs as **warmers**, which only fill the
-cache, before one plain run finds everything cached and publishes.
+cache, before one plain run finds everything cached and publishes. A tile
+warmer counts as 3 GB (its buildings are the peak, Dresden's heaviest tile
+`33414_5654` 2.3–2.7 GB), every other bake as 1.6 GB (1.43 GB at most:
+München's, and the warmer that solves Dresden's line levels).
 
 0. `--if-cached`: the plain run, which publishes when every entry is
    cached — a warm build runs no warmer — and stops at the first entry it
@@ -621,6 +623,17 @@ first, largest first: each is one process that cannot be split, and
 started late it would be the build's tail; the warmers fill every slot
 they leave. Anything new that is computed from every tile must be cached
 by step 1, or every warmer computes it again.
+
+They are off by default because they lost where it counts. On Vercel's
+builder (4 cores, 8.6 GB) a cold build of all seven sites took 322 s with
+them against 235 s without (2026-10-10: plan 072's first preview build
+against main's last cold production build): a warmer runs its tile's buildings at about twice the per-tile
+time of the single process that bakes all fifteen — each starts cold, its
+modules loaded and its code compiled again — and 8.6 GB lets two tile
+warmers run at once, so Dresden's tiles alone took 179 s two at a time,
+behind the smaller sites that went first. They may pay on a machine with
+many cores and the memory to run four or more tile warmers at once; that
+has not been measured.
 
 ### Cache and publish
 
@@ -665,12 +678,8 @@ process reads the other tiles' grounds from the cache — each tile's
 heights only once a point asks — instead of refining their TINs again,
 and the fine level's mesh is rebuilt from the same entry (`tinMesh`,
 `gridMesh`; ≈ 6.7 MB a Dresden tile; the cache of all seven sites
-≈ 420 MB). A cold run of all seven sites is ≈ 890 CPU seconds of bakes,
-Dresden ≈ 540 of them; side by side as above that is ≈ 4.6 min on an idle
-4-core machine and ≈ 5.7 min on a 4-core, 8 GB builder (2026-10-10,
-estimated from each bake's measured CPU time — the box measured on was
-shared; Dresden in one process, as before plan 072, had taken ≈ 8 min on
-either). A warm run takes ≈ 3 s for Dresden, ≈ 10 s for all seven. CI
+≈ 420 MB). A cold run of all seven sites takes 235 s on Vercel's
+builder (above); a warm one ≈ 3 s for Dresden, ≈ 10 s for all seven. CI
 keeps the directory between runs (`actions/cache` in the e2e job): any
 earlier entry is a sound start, since every artifact is keyed by what it
 was baked from. Most of a cold Dresden is its buildings (≈ 390 of its 540
