@@ -334,7 +334,7 @@ frames use (a build is keyed by render context, a context by target and
 call depth). The target has no MSAA (`antialias: false`); SMAA or FXAA
 carries the anti-aliasing. There is no tone mapping: the look was tuned
 without it. The GTAO sample count is a construction-time setting (16;
-8 in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
+8 on a phone and in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
 GLSL and stay unused.
 
 **What the stack builds follows the device tier** (`postProfileFor` in
@@ -391,7 +391,8 @@ cleared 0.38 MiB blur
 target, and the mask and the first blur target are freed
 `OUTLINE_KEEP_MS` (10 s) after the last question and made again by the
 next. Their programs compile with the idle warm-up on every tier, so the
-first question builds nothing. (The mask stays at full resolution: the
+first question builds nothing (the outline is all that warm-up still
+compiles). (The mask stays at full resolution: the
 blur's taps step a fraction of a texel, and a half-resolution mask would
 move the line's edge by up to two pixels.)
 
@@ -401,22 +402,18 @@ redraw the finished frame; no material knows about them (the ground's
 Papier tones aside, below). They are one node (`stylize-effect.ts`) in a
 second pipeline pair — the default pastel draws the pair without it — and
 its mode and pen are uniforms, so a switch between styles rebuilds
-nothing. Once the scene has loaded and the browser is idle
-(`PostStack.warmStyles`) the styled pipelines are built, one per frame
-(three builds a pipeline's graph on its first render),
-and the style dressing and the Papier programs of the scene's objects are
-compiled ahead with `compileAsync` under the swap itself; afterwards a
-tile that lands compiles its Papier programs with its own (one drawable
-per material and layout — the override's build key). So the first switch
-does not hitch. **Not on a phone** (`postProfileFor`: `warmStyles`
-`"outline-only"`, `warmPaper` off): there the warm-up compiles only the
-outline's programs — no styled pipelines, no style dressing, no Papier
-programs. Those doubled the pipelines the GPU process holds (and the
-sibling crown sets inflated what three counts), and the Papier programs
-took half a minute of main thread on an iPhone, whose tab died of memory
-on a flight afterwards. A phone's first switch to a style builds its
-pipelines and its dressing in that frame — one hitch, for a style most
-never pick. The viewer's last style is kept in local storage
+nothing. **No tier warms them** (`postProfileFor`: `warmStyles`
+`"outline-only"`, `warmPaper` off; since 2026-10-10 on the desktop too):
+the idle warm-up compiles only the outline's programs — no styled
+pipelines, no style dressing, no Papier programs. On a desktop it used to
+build all of them once the scene was idle, and from then on every tile
+that landed compiled its Papier and figure-ground programs with its own,
+for the rest of the session; on a phone those doubled the pipelines the
+GPU process holds and took half a minute of main thread on an iPhone,
+whose tab died of memory on a flight afterwards. The first switch to a
+style builds its pipelines and its dressing in that frame — one hitch,
+for a style most visits never pick (`PostStack.warmStyles` still prepares
+them all where a profile asks for `"all"`). The viewer's last style is kept in local storage
 (`style-memory.ts`). The table is `lib/city/render-style.ts`; per style it
 sets the node's mode, a weight on the *Tuschelinien*, *Tiefenfärbung* and
 *Papierkorn* sliders, the vignette, animated film grain and whether depth
@@ -583,9 +580,10 @@ the safety levels 1, 2 and 3:
 | Shadow camera streams at | 128 px, by day; from level 2 never | 64 px, by day; from level 2 never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
 | Pixel ratio | ≤ 2 (1.5, 1.25, 1.0) | ≤ 1.5 (1.25, 1.0, 0.85) | 0.5 |
-| Post (`postProfileFor`) | DoF, SMAA, every style warmed | no DoF, FXAA, only the outline warmed | as the tier |
+| Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
 | Land-cover rasters | L0 4096², L1 2048² | 2048² everywhere; the coarse level without the sports raster | L0 4096², L1 2048² |
-| GTAO samples | 16 | 16 | 8 |
+| GTAO samples | 16 | 8 | 8 |
+| Rich crowns at most (`vegetation-lod.ts`) | 2 500 (≈ 3.6 M triangles) | 800 | as the tier |
 | Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
 | Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 168–336 MiB (148–296, 136–272, 96–232) | as the tier |
 | Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 480 / 560 MB (a last one 10 s past 560); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
@@ -657,6 +655,20 @@ stays their measure; the tile cache counts true bytes.
   equal the site's: −12 MiB per coarse tile after the first, on the GPU
   and the CPU), and it carries only its coarse crowns, traffic and
   bridges.
+- **The stream camera.** The tile renderer streams for a twin of the
+  walk/fly camera whose far plane ends where the fog does — the larger of
+  the fog applied now and the look's own, × 1.1
+  (`lib/city/atmosphere.ts` `streamFarFor`, synced every frame before the
+  stream's update in `create-app.ts`). Three's range fog runs on view
+  depth, the far plane's measure, and the sky's horizon band takes the
+  fog colour, so a tile wholly past the fog's end shows nothing; with the
+  camera's own 6 km far plane every building tile out to the site's edge
+  in that direction was loaded, compiled, given a BVH and drawn as fog
+  colour (≈ 2.85 km at the default *Nebel*; 4.4 km at none). The camera
+  keeps 6 km for the sky dome; Modell streams for its own camera; the
+  sun's shadow camera streams as before. At Dresden's spawn view the
+  site's edge lies inside that reach anyway — the saving is in the views
+  across the city and from the air.
 - **The tile cache** weighs a tile as the GPU holds it: the glTF (by
   count, so a buffer whose CPU copy is gone weighs what it did), the
   terrain's rasters and the dressing's geometry, less the buffers the
@@ -928,7 +940,7 @@ sequenceDiagram
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
   B->>S: per fine terrain tile: canopy, rows, scan trees, cadastre, hedges, NDVI, lamps, monuments, furniture, rail, bridge, platform
-  Note over B: each change: shadows invalidated · lamp heads · stats
+  Note over B: each task's changes, once: shadows invalidated · lamp heads · stats
   Note over B: spawn dressed, renderer idle, no dressing pending → onLoaded (__poc.ready)
 ```
 
@@ -996,7 +1008,10 @@ corrupt file, not a blip, and is not retried), and so do the terrain,
 sky-view and horizon rasters (`fetchRasterBytes`) and the trees' NDVI
 sampler: an abort is never retried, a 404 means absent, a network error
 or a 408/425/429/5xx is retried with jittered backoff (0.5 s doubling to
-15 s, × 0.5–1.5, a `Retry-After` honoured) — the first try at once, each
+15 s, × 0.5–1.5, a `Retry-After` honoured), and so is an attempt that
+goes 30 s without a byte, before its headers or between two chunks of
+its body (`STALL_MS`: a browser leaves a request on a silent connection
+pending for minutes, and the boot waited on it) — the first try at once, each
 retry once the page is usable, visible and online, or visible and called
 offline every 15 s (`net-gate.ts`). The budget counts the page's visible
 time, offline or not — a phone in a pocket spends nothing, one in a
@@ -1033,9 +1048,25 @@ upload one at a time for the whole site (`raster-upload.ts`,
 compile, as before): a raster is on the GPU, its bytes gone, before the
 next one decodes. The ground fills in a little
 later for it. A level whose tile leaves meanwhile takes no more turns.
+The *downloads* do not take turns: a terrain level asks for all of its
+rasters at once (`loadTerrainRasters` in `terrain-layer.ts` — a fine
+level names up to ten, which used to be ten round trips one after
+another on the spawn tile's critical path); only their decodes and
+uploads queue. A tile's meshopt buffers decode in the decoder's two
+workers (`MeshoptDecoder.useWorkers`), not inside the parse on the main
+thread (75 MB decoded for a dense building tile). three's async compiles
+yield to the main thread between their steps with `scheduler.yield`, and
+without it — every WebKit browser, so every iPhone — with
+`requestAnimationFrame`: a node build waited nine frames whatever it
+cost. `main-yield.ts` gives WebKit a message-channel `scheduler.yield`
+before the renderer exists, so the compiles there run as in Chromium.
 
 The HUD's five load stages and their weights are declared once in
-`lib/city/load-stages.ts`. The first three are the first frame; the other
+`lib/city/load-stages.ts`; the scene passes a stage on only when its
+value changes (the spawn wait polls every 50 ms, and each report is a
+transition over the whole HUD), and the compile of the scene's own
+objects before the first frame is bounded like a tile's (3 s,
+`withinCompileWait`). The first three are the first frame; the other
 two measure **what the cameras see**, not the whole site: *Umgebung* is
 the tile renderer's own load progress, *Details* the dressings built
 against those queued. Both only move forward. Once everything in view is

@@ -124,7 +124,8 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   vignette, paper grain — built per tier (`postProfileFor`, ADR 0047): a
   phone builds no DoF, antialiases with FXAA inside the last pass
   (`fxaa.ts`: a perceptual luma over the linear frame), draws `BeforeAA`
-  only while a style is on and warms only the outline's programs; the AO
+  only while a style is on; no tier warms more than the outline's programs
+  (a picture style builds on its first frame); the AO
   smoothing and the outline's mask and blur are one-byte targets, the
   outline drawn only while something is asked. The picture styles (Comic, Film noir, Sin City,
   Papier; `lib/city/render-style.ts`) are one node, `stylize-effect.ts`

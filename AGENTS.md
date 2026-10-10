@@ -128,8 +128,10 @@ config change.
     card past the caps: *Leichter weiter*, *Neu laden*), `instancing.ts`
     (`Instances`: instanced sets that share one node build),
     `fetch-optional.ts` (the one fetch/abort policy: `fetchBytes` retries a
-    network failure for a budget of the page's visible time, offline or
-    not, ADR 0048), `net-gate.ts` (the page's view of the network:
+    network failure — and an attempt that went 30 s without a byte — for a
+    budget of the page's visible time, offline or not, ADR 0048),
+    `main-yield.ts` (WebKit's missing `scheduler.yield`, so three's async
+    compiles do not wait a frame per step), `net-gate.ts` (the page's view of the network:
     visible, online, the budgets' clock, `pageLeaving` from pagehide),
     `tile-retry.ts` (tiles that gave up on the network asked for again;
     the boot waits for them), `boot-error.tsx` (the boot's
@@ -706,7 +708,13 @@ player stood (`gpu-recovery.ts`, ADR 0046).
 The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
 triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
-renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
+renderer writes `userData.tile` itself and would overwrite ours. The
+walk/fly camera does not stream itself: the renderer streams for its twin
+whose far plane ends where the fog does (`streamFarFor`,
+`lib/city/atmosphere.ts`; synced each frame before the update) — past the
+fog's end a tile shows nothing, and the camera's 6 km far plane loaded the
+site's every building tile in that direction as fog colour; register a new
+streaming need against that twin, not the camera. The sun's shadow camera is a second
 streaming camera while the sun is up, so tiles that cast into the view stay
 loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`)
 — at 128 px on a desktop and 64 on a phone (`SHADOW_STREAM_PX`), not the
@@ -741,12 +749,15 @@ is the ground: the terrain material (`userData.paperOwn`) opts out of the
 override and draws Papier's paper, paint and water itself under the
 shared `paperGroundOn` uniform node. Give a new style a row in
 `lib/city/render-style.ts` and a mode in that node — never a branch in a
-scene material. `PostStack.warmStyles` prepares them all once the scene
-is idle: the styled pipelines build one per frame (a pipeline builds its
-graph and its SMAA passes on its first render), and the dressing and the
-scene's own objects are compiled under the Papier swap with
-`compileAsync` (not on phones: `postProfileFor` warms only the outline
-there — the extra pipelines cost an iPhone tab its memory) — no stand-ins: the override takes each source material's
+scene material. No tier warms the styles any more (`postProfileFor`
+warms only the outline: on a phone the extra pipelines cost an iPhone tab
+its memory, and on a desktop every landing tile compiled Papier's
+programs for the session); a style builds on its first frame. Where a
+profile asks for `"all"`, `PostStack.warmStyles` prepares them all once
+the scene is idle: the styled pipelines build one per frame (a pipeline
+builds its graph and its SMAA passes on its first render), and the
+dressing and the scene's own objects are compiled under the Papier swap
+with `compileAsync` — no stand-ins: the override takes each source material's
 position node, so only the real objects match what a frame builds. The
 node's only branch is on the mode (a uniform); per pixel it selects, so
 derivatives and texture reads stay in uniform control flow (WGSL), and
