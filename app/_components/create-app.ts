@@ -1477,7 +1477,8 @@ async function bootApp(
     );
     const far = streamFarFor(
       Math.max(sceneFog.far.value, fogRangeFor(fogAmount).far),
-      camera.far
+      camera.far,
+      budget.tier
     );
     if (
       streamCamera.far !== far ||

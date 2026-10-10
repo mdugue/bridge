@@ -3,6 +3,7 @@ import {
   atmosphereAt,
   fogRangeFor,
   lerpHexColor,
+  PHONE_STREAM_FAR_M,
   streamFarFor,
 } from "./atmosphere";
 
@@ -61,4 +62,20 @@ test("streamFarFor: the fog's end plus a margin, never past the camera's far", (
   expect(streamFarFor(fogFar, 6000)).toBeLessThan(fogFar * 1.25);
   // the clearest fog's end with its margin stays inside the camera
   expect(streamFarFor(fogRangeFor(0).far, 4200)).toBe(4200);
+});
+
+test("streamFarFor: a phone's stream ends at the fine level's reach, inside a thicker fog's", () => {
+  const fogFar = fogRangeFor(0.2).far;
+  expect(streamFarFor(fogFar, 6000, "mobile")).toBe(PHONE_STREAM_FAR_M);
+  expect(streamFarFor(fogRangeFor(0).far, 6000, "mobile")).toBe(
+    PHONE_STREAM_FAR_M
+  );
+  // where the fog ends sooner, it is the fog's end that counts
+  const dense = fogRangeFor(0.6).far;
+  expect(streamFarFor(dense, 6000, "mobile")).toBe(
+    streamFarFor(dense, 6000, "desktop")
+  );
+  expect(streamFarFor(dense, 6000, "mobile")).toBeLessThan(PHONE_STREAM_FAR_M);
+  // a desktop streams as far as the fog
+  expect(streamFarFor(fogFar, 6000, "desktop")).toBeGreaterThan(fogFar);
 });

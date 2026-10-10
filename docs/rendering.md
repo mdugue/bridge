@@ -573,7 +573,7 @@ the safety levels 1, 2 and 3:
 
 | Knob | full · desktop | full · mobile | lite (tests) |
 |---|---|---|---|
-| Tiles | the whole site streams (`tileset.json`) | same | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
+| Tiles | the whole site streams (`tileset.json`), out to the fog's end × 1.1 (`streamFarFor`) | same, but to 2.2 km at most | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
 | Terrain | L0 TIN (±0.15 m) near, L1 512² grid beyond (the switch at ≈ 2.6 km from a tile for a viewport 1080 CSS px high; ≈ 2.1 km on an iPhone in portrait) | same | same |
 | Shadow map | 3072² (2048², 2048², 1024²) | 2048² (2048², 1024², 1024²) | 512² |
 | Shadow camera streams at | 128 px, by day; from level 2 never | never | as the tier |
@@ -667,9 +667,16 @@ stays their measure; the tile cache counts true bytes.
   fog colour, so a tile wholly past the fog's end shows nothing; with the
   camera's own 6 km far plane every building tile out to the site's edge
   in that direction was loaded, compiled, given a BVH and drawn as fog
-  colour (≈ 2.85 km at the default *Nebel*; 4.4 km at none). The camera
-  keeps 6 km for the sky dome; Modell streams for its own camera; the
-  sun's shadow camera streams as before. At Dresden's spawn view the
+  colour (≈ 2.85 km at the default *Nebel*; 4.4 km at none). **A
+  phone's stream ends at 2.2 km at the latest** (`PHONE_STREAM_FAR_M`,
+  plan 071): the fine level's reach on an iPhone, past which it would
+  only have streamed coarse levels and building tiles it draws at ~90 %
+  fog at the default *Nebel*. A tile any part of which is inside still
+  loads whole, so the ground runs on to 2.2–4.2 km; at *Nebel* 0 (the fog
+  ends at 4 km, a tile at 2.2 km is ~30 % fogged) a phone shows the
+  loaded world's edge there — the accepted price. The camera keeps 6 km
+  for the sky dome; Modell streams for its own camera; the sun's shadow
+  camera streams as before (on a desktop). At Dresden's spawn view the
   site's edge lies inside that reach anyway — the saving is in the views
   across the city and from the air.
 - **The tile cache** weighs a tile as the GPU holds it: the glTF (by

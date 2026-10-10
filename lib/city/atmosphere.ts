@@ -102,14 +102,33 @@ export function fogRangeFor(t: number): { far: number; near: number } {
 const STREAM_FAR_MARGIN = 1.1;
 
 /**
- * The far plane the tile renderer streams for: where the fog ends, plus a
- * margin, never past the camera's own. Three's range fog runs on view
- * depth — the far plane's measure — so past `fogFar` every fragment is the
- * fog colour, which the sky's horizon band takes up too (sun-rig.ts): a
- * tile wholly beyond it shows nothing. `fogFar` is the larger of the fog
- * applied now and the one the look will open to, so the boot's tighter
- * partial-world fog does not leave the tiles it hides to load later.
+ * Where a phone's stream ends at the latest (m): the fine terrain level's
+ * reach on an iPhone (≈ 2.1 km, a 40 m error at 16 px over its 874 CSS px;
+ * docs/rendering.md, "The frame budget"). Past it a phone would stream only
+ * coarse levels and building tiles it draws at ~90 % fog at the default
+ * *Nebel* (the fog ends at 2.58 km) — memory a phone has better uses for.
+ * A tile still loads when any part of it is inside, so the ground runs on
+ * to the far side of the last such tile, 2.2–4.2 km out. The price is in
+ * the clear-air look: at *Nebel* 0 the fog ends at 4 km, a tile 2.2 km out
+ * is only ~30 % fogged, and a phone shows the loaded world's edge there.
  */
-export function streamFarFor(fogFar: number, cameraFar: number): number {
-  return Math.min(cameraFar, fogFar * STREAM_FAR_MARGIN);
+export const PHONE_STREAM_FAR_M = 2200;
+
+/**
+ * The far plane the tile renderer streams for: where the fog ends, plus a
+ * margin, never past the camera's own — nor, on a phone, past
+ * `PHONE_STREAM_FAR_M`. Three's range fog runs on view depth — the far
+ * plane's measure — so past `fogFar` every fragment is the fog colour,
+ * which the sky's horizon band takes up too (sun-rig.ts): a tile wholly
+ * beyond it shows nothing. `fogFar` is the larger of the fog applied now
+ * and the one the look will open to, so the boot's tighter partial-world
+ * fog does not leave the tiles it hides to load later.
+ */
+export function streamFarFor(
+  fogFar: number,
+  cameraFar: number,
+  tier: "desktop" | "mobile" = "desktop"
+): number {
+  const far = Math.min(cameraFar, fogFar * STREAM_FAR_MARGIN);
+  return tier === "mobile" ? Math.min(far, PHONE_STREAM_FAR_M) : far;
 }
