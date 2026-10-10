@@ -268,7 +268,8 @@ Schattenkamera) sieht; alles außerhalb wird übersprungen.
 „was liegt unter dem Mauszeiger“ und Kollisionsprüfungen schnell macht.
 
 **Pixelverhältnis (DPR)** — wie viele gerenderte Pixel je Bildschirmpixel;
-auf Handys gesenkt, um Füllrate zu sparen.
+hier höchstens 1,5, auf Handys wie auf Rechnern mit hochauflösendem
+Bildschirm, um Füllrate zu sparen.
 
 **SwiftShader** — ein Software-Renderer, den der Test-Browser ohne
 Bildschirm nutzt; er zeichnet die Szene auf der CPU, langsam und ohne den

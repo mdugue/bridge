@@ -250,8 +250,9 @@ things outside it are skipped.
 **BVH** — *bounding volume hierarchy*, a search tree over triangles that
 makes "what is under the pointer" and collision checks fast.
 
-**Pixel ratio (DPR)** — how many rendered pixels per screen pixel; lowered
-on phones to save fill-rate.
+**Pixel ratio (DPR)** — how many rendered pixels per screen pixel; at most
+1.5 here, on phones and on computers with a high-resolution screen alike,
+to save fill-rate.
 
 **SwiftShader** — a software renderer used by the headless test browser;
 it draws the scene on the CPU, slowly and without the real look.
