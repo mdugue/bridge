@@ -528,7 +528,8 @@ noted), then what was refuted or judged not worth doing.
 - *The joystick's `setThumb` state at pointer-move rate*, *`nextTask`'s
   nested timers*, *the beat's 2 s traverse*, *per-pass `updateMatrixWorld`*,
   *the date popover's calendar in the viewer chunk* — small or
-  unmeasured; profile first.
+  unmeasured; profile first. (The calendar: 56 KB, 17 KB gzip; it loads
+  with its popover since 2026-10-10.)
 - *The serial `@desktop-hud` group's failure cascade* — the trade-off
   AGENTS.md prescribes; split only if flakes appear. *"Exported for
   tests" seams* (`buildBallast`, `vineInstances`, `model-view.ts:760`) —

@@ -1,7 +1,5 @@
 "use client";
 
-import { format } from "date-fns";
-import { de } from "date-fns/locale";
 import {
   BoxIcon,
   Building2Icon,
@@ -28,12 +26,12 @@ import type {
   RefObject,
   SetStateAction,
 } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { getTimes } from "suncalc";
 import { Button } from "@/components/ui/button";
 import { SUPPORT_URL } from "@/lib/brand";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Collapsible,
   CollapsibleContent,
@@ -119,6 +117,31 @@ import { useSite } from "./site-context";
 
 const SECTION_LABEL =
   "font-semibold text-[11px] uppercase leading-none tracking-widest text-muted-foreground";
+
+/**
+ * The date picker (react-day-picker and the date-fns under it) is the HUD's
+ * only use of either, and only inside its popover, which mounts on open: it
+ * loads then — or a little earlier, when a pointer or the focus reaches the
+ * date (`preloadCalendar`) — in a chunk of its own. Until it lands the
+ * popover holds about its size. (The import stays written out inside
+ * dynamic(): Next matches the call to its chunk by it.)
+ */
+const Calendar = dynamic(
+  () => import("@/components/ui/calendar").then((m) => m.Calendar),
+  { ssr: false, loading: () => <div className="h-60 w-48" /> }
+);
+const preloadCalendar = () => {
+  // a failed load is next/dynamic's to report when the popover renders
+  import("@/components/ui/calendar").catch(() => undefined);
+};
+
+/** The day on the date button, "5. März 2026" (what date-fns' `d. MMMM
+ *  yyyy` in `de` wrote; the browser's own German needs no locale data). */
+const DAY_LABEL = new Intl.DateTimeFormat("de-DE", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
 
 const LOOK_GROUPS: {
   group: LookGroup;
@@ -643,6 +666,8 @@ function SunControls({
       <div className="grid grid-cols-[1fr_auto] items-center gap-2">
         <Popover>
           <PopoverTrigger
+            onFocus={preloadCalendar}
+            onPointerEnter={preloadCalendar}
             render={
               <Button
                 className="h-7.5 justify-start font-normal text-xs"
@@ -653,7 +678,7 @@ function SunControls({
             }
           >
             <CalendarIcon data-icon="inline-start" />
-            {format(day, "d. MMMM yyyy", { locale: de })}
+            {DAY_LABEL.format(day)}
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto p-0">
             <Calendar
