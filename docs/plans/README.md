@@ -191,9 +191,13 @@ S/M/L.
     target, one drawable per material and attribute layout). Open: the
     shadow pass's pipelines for new casters still build in-frame, and the
     WebGL2 backend compiles synchronously (ADR 0027).
-13. **Bundle: `proj4` for one conversion (S).** A 40-line UTM inverse for
-    zones 32/33 replaces it (`lib/city/crs.ts`). Size unmeasured.
-    (`GLTFLoader` is load-bearing now: every tile is glTF.)
+13. ~~**Bundle: `proj4` for one conversion (S).**~~ Done 2026-10-10:
+    `lib/city/crs.ts` sums Krüger's series to n⁶ (forward, inverse and the
+    convergence), held to proj4 over every site's tiles by its test;
+    proj4 is a devDependency (that test, the e2e). The chunk the HUD and
+    the scene both wait on went from 178 965 to 51 263 bytes (60 686 to
+    20 058 gzip -9). (`GLTFLoader` is load-bearing now: every tile is
+    glTF.)
 14. **Split the `create-app.ts` closure (L; 1 598 lines at `a28de75`).**
     Partly done 2026-09-26: the ground (`lib/city/ground.ts`) and the
     second boot phase (`lib/city/boot-phases.ts`) left the closure.
