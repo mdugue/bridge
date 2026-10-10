@@ -170,6 +170,7 @@ import {
   withinCompileWait,
 } from "./tile-stream";
 import { createNetworkWatch } from "./tile-retry";
+import { installMainYield } from "./main-yield";
 import { attachTouchControls } from "./touch-controls";
 import {
   treesWithin,
@@ -880,6 +881,9 @@ function siteLatLng(
 export async function createCityWalkApp(
   opts: CityWalkOptions
 ): Promise<CityWalkHandle> {
+  // before the first compile: WebKit's compiles otherwise wait a frame
+  // per step (main-yield.ts)
+  installMainYield();
   const renderer = await createRenderer(opts.container, opts.budget);
   if (opts.trail) {
     traceRenderer(renderer, opts.trail, opts.budget.safety);
