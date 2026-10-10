@@ -3017,14 +3017,16 @@ async function bootApp(
   // the first visible frame. Bounded like a tile's compile: it resolves
   // only once every compile in flight has (compile-lanes.ts), neighbours'
   // included, and a frame skips what is not ready rather than stall.
-  await withinCompileWait(postStack.compile(scene).catch(() => undefined));
+  await streamTimings.timed("boot:scene-compile", () =>
+    withinCompileWait(postStack.compile(scene).catch(() => undefined))
+  );
   // On the spawn vantage (or where a recovered page stood) now that its
   // ground exists (the pose was placed before any terrain had landed,
   // over the fallback floor). Its buildings' BVH is built here, as the
   // placing's rays reach them (ADR 0032: never inside a building) — after
   // the tile's ground has landed, not inside the parse that landed them.
   bvhOnDemand = true;
-  placeStart();
+  streamTimings.timedSync("boot:place", () => placeStart());
   streamTimings.markOnce("boot:placed");
   // The light stage ends once a frame at the start pose has drawn its
   // shadow map (or found none to draw): the shadow pass's pipelines build
@@ -3032,7 +3034,9 @@ async function bootApp(
   // already at 52 % and the veil's timer held up behind them — a load that
   // looked frozen. Bounded like a compile: a stalled frame never holds the
   // boot.
-  await withinCompileWait(firstShadowFrame());
+  await streamTimings.timed("boot:light-wait", () =>
+    withinCompileWait(firstShadowFrame())
+  );
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
   stage("light", 1);
