@@ -43,6 +43,7 @@ import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import type { LookKey, LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import type { BikeCounter } from "@/lib/city/bike-counts";
+import { activeDataLayers } from "@/lib/city/data-layers";
 import {
   nextRenderStyle,
   RENDER_STYLE_BY_ID,
@@ -115,7 +116,7 @@ import {
   trafficTriangles,
 } from "./selection-shape";
 import type { OutlineSelection } from "./selection-outline";
-import { trafficMesh } from "./traffic-ask";
+import { trafficMesh } from "./traffic-flow";
 import { createCityCollider } from "./collision";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
@@ -134,8 +135,6 @@ import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
-import { setDataTime } from "./glass";
-import { createDataOverlays } from "./data-overlays";
 import type { TramCarsStatus } from "./tram-cars";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { pocFramesHeld, tickPocFrame, updatePocDebug } from "./poc-debug";
@@ -189,6 +188,14 @@ import {
 } from "./vegetation-layer";
 import { createStyleResources, setClaySection } from "./visual-style";
 import { createModelCuts } from "./model-cuts";
+import * as dataLayersModule from "./data-layers-feature";
+import {
+  createHook,
+  createWatch,
+  lazyFeature,
+  type SceneClock,
+  type SpineHooks,
+} from "./feature-seam";
 
 /**
  * Vertical FOV. 55° (~85° horizontal at 16:9) reads like a natural human
@@ -1151,9 +1158,13 @@ async function bootApp(
   // post stack is built after the first setSun, so it catches up there.
   let sunAltitude = 90;
   let sunToStyles: ((altitudeDeg: number) => void) | null = null;
-  // The data layers' clock (the timetable trams) follows the HUD's instant;
-  // they are created with the post stack, after the first setSun.
-  let clockToOverlays: ((date: Date) => void) | null = null;
+  // The scene's instant as the HUD set it last: the data layers' clock
+  // (the timetable trams, the traffic's hour) runs on from it — read when
+  // they start, which may be long after (feature-seam.ts).
+  const sceneClock = createWatch<SceneClock>({
+    date: opts.initialDate,
+    atMs: performance.now(),
+  });
   // Single fixed pool of real point lights for the nearest lamps across ALL
   // tiles, built before the first render so the light count is part of
   // every lit node build once (ADR 0020); each tile's lamps retarget it.
@@ -1213,6 +1224,17 @@ async function bootApp(
     }
   });
   cleanups.push(() => seasonClock.dispose());
+  // What a feature that starts on its first use (feature-seam.ts: the
+  // data layers) hooks into: the frame, the stream's changes, the look
+  // store and the scene's clock.
+  const frameHook = createHook<[elapsed: number, nowMs: number]>();
+  const streamHook = createHook<[]>();
+  const hooks: SpineHooks = {
+    frame: frameHook,
+    streamChange: streamHook,
+    look: opts.look,
+    clock: sceneClock,
+  };
   const stream = createTileStream(
     {
       // whether it compiled (a tile drops the CPU copies of what it
@@ -1260,6 +1282,11 @@ async function bootApp(
       tier: budget.tier,
       tileBounds: (id) => extras.tiles.find((t) => t.id === id)?.bounds,
       tilesetUrl,
+      // the data layers' traffic builder (they are set up with the post
+      // stack below; a slot asks only once the look has a layer on and
+      // its tile has landed)
+      trafficBuilder: () =>
+        dataLayers.want().then((layers) => layers?.traffic ?? null),
     },
     world,
     [
@@ -1437,7 +1464,7 @@ async function bootApp(
     setClockTime(date);
     clayNight.value = state.nightFactor;
     seasonClock.set(date);
-    clockToOverlays?.(date);
+    sceneClock.set({ date, atMs: performance.now() });
     // The sun's move has asked for the map already; a drag's step leaves
     // it to the rig's pace.
     if (!preview) {
@@ -1518,29 +1545,50 @@ async function bootApp(
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
   sunToStyles = postStack.setSunAltitude;
-  // The site-wide data layers (the live bicycle counters): built, fetched
-  // and polled only once switched on (lib/city/data-layers.ts).
-  const overlays = createDataOverlays({
-    bikeFeed: opts.site.dataLayers?.bikes?.feed,
-    bounds: unionBounds(extras),
-    bridgeUrls: extras.tiles.flatMap((t) =>
-      t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
-    ),
-    compile: (object) => postStack.compile(object).catch(() => undefined),
-    epsg: extras.epsg,
-    ground: { offset, heightAt },
-    initialDate: opts.initialDate,
-    onBikeCounts: opts.onBikeCounts,
-    onChange: () => scheduleStats(),
-    onTramStatus: opts.onTramStatus,
-    onTrafficHour: opts.onTrafficHour,
-    parent: scene,
-    tramTimetableUrl: extras.trams
-      ? new URL(extras.trams, tilesetUrl).href
-      : undefined,
-  });
-  clockToOverlays = overlays.setClock;
-  cleanups.push(() => overlays.dispose());
+  // The data layers (lib/city/data-layers.ts, data-layers-feature.ts):
+  // started with the first switch-on of any of them — the tiles' traffic
+  // slots wait on the same start — and from then on driven by the spine's
+  // hooks (feature-seam.ts). They start only after this synchronous setup
+  // has run (the module's promise resolves later), so what they read below
+  // is all there. (Their code ships with the scene: as a chunk of its own
+  // it cost more first-load JS than it moved — feature-seam.ts.)
+  const dataLayers = lazyFeature(
+    () => Promise.resolve(dataLayersModule),
+    ({ startDataLayers }) =>
+      startDataLayers(hooks, {
+        bikeFeed: opts.site.dataLayers?.bikes?.feed,
+        bounds: unionBounds(extras),
+        bridgeUrls: extras.tiles.flatMap((t) =>
+          t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
+        ),
+        compile: (object) => postStack.compile(object).catch(() => undefined),
+        epsg: extras.epsg,
+        ground: { offset, heightAt },
+        onBikeCounts: opts.onBikeCounts,
+        onChange: () => scheduleStats(),
+        onTramStatus: opts.onTramStatus,
+        onTrafficHour: opts.onTrafficHour,
+        parent: scene,
+        tramTimetableUrl: extras.trams
+          ? new URL(extras.trams, tilesetUrl).href
+          : undefined,
+      })
+  );
+  cleanups.push(() => dataLayers.dispose());
+  // The first switch-on starts them; a start that threw (a bug) leaves
+  // them off, noted and said once, like a layer's hole.
+  let dataLayersAsked = false;
+  const wantDataLayers = (look: LookValues) => {
+    if (dataLayersAsked || activeDataLayers(look).length === 0) {
+      return;
+    }
+    dataLayersAsked = true;
+    dataLayers.want().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      opts.trail?.note("feature failed", `data layers ${message}`);
+      sayLayerFailed(`Datenebenen: ${message}`);
+    });
+  };
   postStack.setSunAltitude(sunAltitude);
 
   // The look store is the one source of every look value: applied now, on
@@ -1575,7 +1623,7 @@ async function bootApp(
       d.vegetation?.applyLook(look);
       showDataLayers(d, look);
     }
-    overlays.apply(look);
+    wantDataLayers(look);
   };
   applyLook(opts.look.get());
   cleanups.push(opts.look.subscribe(applyLook));
@@ -1801,7 +1849,7 @@ async function bootApp(
     // (a tile's ask sets come in idle time; a question before builds them)
     things: () => [
       ...stream.visibleDressings().flatMap(asksOf),
-      ...overlays.asks(),
+      ...(dataLayers.current()?.asks() ?? []),
     ],
     viewport: () => ({
       width: renderer.domElement.clientWidth || 1,
@@ -1816,6 +1864,8 @@ async function bootApp(
   // What the card needs beyond what was met: a tree's facts file, a data
   // layer's credit (the site's) and, for a counted section, the hour.
   const layerSources = opts.site.dataLayers;
+  // (a section is asked only on bodies the data layers built: they are here)
+  const trafficHour = () => dataLayers.current()?.trafficHour();
   const answered = (asked: Inquiry | null): Inquiry | null => {
     switch (asked?.kind) {
       case "tree": {
@@ -1826,7 +1876,7 @@ async function bootApp(
         return {
           ...asked,
           credit: layerSources?.traffic?.credit,
-          hour: overlays.trafficHour(),
+          hour: trafficHour(),
         };
       case "bikes":
         return { ...asked, credit: layerSources?.bikes?.credit };
@@ -1999,8 +2049,8 @@ async function bootApp(
         stairs: census(terrains.map((t) => t.stairs)),
         kerbs: census(terrains.map((t) => t.kerbs)),
         fences: census(terrains.map((t) => t.fences)),
-        bikes: census([overlays.parts().bikes]),
-        trams: census([overlays.parts().trams]),
+        bikes: census([dataLayers.current()?.parts().bikes]),
+        trams: census([dataLayers.current()?.parts().trams]),
       },
     });
   };
@@ -2096,7 +2146,7 @@ async function bootApp(
     lampLights.setHeads(
       stream.visibleDressings().flatMap((d) => d.lamps?.headPositions ?? [])
     );
-    overlays.streamChanged();
+    streamHook.emit();
     postStack.sceneChanged();
     invalidateShadows();
     scheduleStats();
@@ -2777,10 +2827,9 @@ async function bootApp(
     lens.update(view, lastEquivalent);
     // The fountains' jets and water shimmer (one shared uniform).
     setFountainTime(elapsed);
-    // The data layers' light (one shared uniform; drawn only when on).
-    setDataTime(elapsed);
-    // The timetable trams move on (only while their layer is on).
-    overlays.step(performance.now());
+    // The features that hook the frame (the data layers' light, the
+    // timetable trams), once they are here.
+    frameHook.emit(elapsed, performance.now());
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
       prepareBvhNear();

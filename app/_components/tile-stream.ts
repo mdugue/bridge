@@ -114,8 +114,8 @@ import {
   estimateGeometryBytes,
   sceneSharedBytes,
 } from "./three-utils";
-import { buildTraffic, type TrafficDetail } from "./traffic-layer";
-import { trafficAskSet } from "./traffic-ask";
+import type { TrafficBuilder } from "./data-layers-feature";
+import type { TrafficDetail } from "./traffic-layer";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
@@ -269,6 +269,14 @@ export interface TileStreamContext {
   /** a site tile's exact extent (the tileset's root extras) */
   tileBounds: (tileId: string) => TerrainBounds | undefined;
   tilesetUrl: string;
+  /**
+   * The traffic bodies' builder, from the data layers' feature
+   * (data-layers-feature.ts), which starts on the first switch-on: the
+   * slots wait on it, so the stream does not depend on the layer's code.
+   * Null once the scene is gone; rejects when the feature could not
+   * start (the next switch-on asks again).
+   */
+  trafficBuilder: () => Promise<TrafficBuilder | null>;
 }
 
 export interface TileStream {
@@ -775,6 +783,9 @@ const nextTask = () =>
 /** What a tile's traffic bodies are built from (traffic-layer.ts
  *  `buildTraffic`), and where the probe's ask set goes once they are. */
 export interface TrafficSource {
+  /** the builder: the data layers' feature, started on the first show
+   *  (`TileStreamContext.trafficBuilder`) */
+  load: () => Promise<TrafficBuilder | null>;
   features: TrafficFeature[];
   bridges: BridgeFeature[];
   ground: GroundContext;
@@ -789,12 +800,14 @@ export interface TrafficSource {
 
 /**
  * A tile's counted traffic, its bodies built on demand (`TrafficSlot`):
- * the first `show` once the dressing hangs builds them in the host's turn
- * (a switch-on builds every loaded tile's bodies one after another, like
- * the dressings), hangs them hidden on the tile, compiles them, and only
- * then shows them, weighs them into the tile and adds their ask set. A
- * tile that leaves meanwhile gets nothing hung (its release frees what
- * was).
+ * the first `show` once the dressing hangs waits for the builder (the
+ * data layers' feature, started once for the scene — a tile that landed
+ * before the first switch-on and one landing after wait on the same
+ * start), then builds them in the host's turn (a switch-on builds every
+ * loaded tile's bodies one after another, like the dressings), hangs them
+ * hidden on the tile, compiles them, and only then shows them, weighs
+ * them into the tile and adds their ask set. A tile that leaves
+ * meanwhile gets nothing hung (its release frees what was).
  */
 export function trafficSlot(src: TrafficSource): TrafficSlot {
   let host: TrafficHost | null = null;
@@ -808,13 +821,13 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
   const gone = (h: TrafficHost) => disposed || h.gone();
   /** The bodies built, hung hidden and their compile started — in the
    *  host's turn, which waits on the compile as a dressing's does. */
-  const start = (h: TrafficHost) =>
+  const start = (h: TrafficHost, builder: TrafficBuilder) =>
     h.turn(async () => {
       await nextTask();
       if (gone(h)) {
         return null;
       }
-      const group = buildTraffic(
+      const group = builder.build(
         src.features,
         src.bridges,
         src.ground,
@@ -822,7 +835,7 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
         src.bounds
       );
       // asked as built, before it hangs (traffic-ask.ts)
-      const asks = trafficAskSet(group, src.features, src.tile);
+      const asks = builder.askSet(group, src.features, src.tile);
       group.visible = false;
       h.root.add(group);
       slot.group = group;
@@ -839,8 +852,24 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
       // (an object: a promise returned bare would be awaited whole)
       return { asks, compiled, group };
     });
+  /** The builder, before the turn: waiting for it must not hold the
+   *  dressings' chain. One that did not come is no failed build of this
+   *  tile (the spine says so once): the next show asks again; nor is one
+   *  that came after the layer went off again — built on the next show. */
+  const builderNow = async (): Promise<TrafficBuilder | null> => {
+    const builder = await src.load().catch(() => null);
+    if (builder && wanted) {
+      return builder;
+    }
+    building = null;
+    return null;
+  };
   const build = async (h: TrafficHost): Promise<void> => {
-    const started = await start(h);
+    const builder = await builderNow();
+    if (!builder || gone(h)) {
+      return;
+    }
+    const started = await start(h, builder);
     if (!started || gone(h)) {
       return;
     }
@@ -977,6 +1006,7 @@ async function buildCoarseDressing(
   const flows =
     traffic.length > 0
       ? trafficSlot({
+          load: ctx.trafficBuilder,
           features: traffic,
           bridges,
           ground: { offset, heightAt: terrain.heightAt },
@@ -1231,10 +1261,12 @@ async function buildDressing(
   // Sections are cut at the tile edge by the bake; a bridge street rides
   // the decks of this tile's bridge file (which names a seam deck in both).
   // The counted sections are asked on their bodies, while the layer shows;
-  // the bodies come with the first switch-on.
+  // the bodies (and their builder, the data layers' feature) come with
+  // the first switch-on.
   const trafficFlows =
     traffic.length > 0
       ? trafficSlot({
+          load: ctx.trafficBuilder,
           features: traffic,
           bridges,
           ground,
