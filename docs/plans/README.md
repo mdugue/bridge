@@ -99,6 +99,13 @@ history. Decisions that came out of plans are written up as
 | 065 | The reference docs say what the code does: the skill's per-provider frame and complete bake list (`traffic`, `transit`), README's CRS and "nothing persisted", ADR 0001's storage list (`gpu-safety`), ADR 0003/0015 references, the ledger's and survey's built rows, `report-choice` under `app/_components/`, `?at`/`safety` among the URL reads; optionally a backtick-path check in `links.test.ts` | **DONE (2026-10-07)** — steps 1–6 as planned (058 had already added `#at=lat,lng` to AGENTS.md's knobs; ledger #15 marks only its built part ✅, the rest of the row stays 📋; the survey got a Status column); optional step 7 not built: its check also fails on paths that open plans (043, 045, 046, 048, 066) propose to create — its STOP condition | [065-docs-say-what-the-code-does.md](./065-docs-say-what-the-code-does.md) |
 | 066 | The page's GPU-loss, memory-emergency and resume decisions as one pure machine (`lib/city/page-lifecycle.ts`, signals → effects, like `boot-phases.ts`) with the incident sequences of the 2026-10-06 fixes as its tests; `create-app.ts` keeps a binder | DONE (2026-10-07) — steps 1–5; deviations: `gpuAnswers`/`gpuFailure` are lazy thunks (the probe asked only where the closures asked it), an initial `hiddenAt` option for a page that starts hidden, `onGpuLost` is now asked inside `dispatch` (before the stop's effects run; trail-note order unchanged), 15 tests not 10; `create-app.ts` shrank by 45 lines (3 024 → 2 979), not ≥ 80 (the binder keeps the effect map and the hooks' comments); e2e `@desktop-render\|@phone` 9 passed locally | [066-page-lifecycle-as-a-pure-machine.md](./066-page-lifecycle-as-a-pure-machine.md) |
 | 067 | The data layers and the twin: a tram timetable that failed to load can be tried again (`loading` never reset), Dresden's counts judged in Europe/Berlin (today the viewer's zone: all grey in Tokyo, a dead counter lit in New York), orchard trees askable, the card credits the site's own provider and register (not GeoSN/Dresden on Hamburg), a malformed feed element left out instead of thrown, polling only in view | DONE (2026-10-07) — all six steps; deviations: the tram failure is `TramCarsStatus.failed` shown by `TramStatusLine` in `data-layers-panel.tsx` (a two-line edit, not `city-walk.tsx`); orchard trees are marked `s: "orchard"` (`cultivated.ts`, `features.ts` type, a flag bit in `ask-items.ts`, tests in `cultivated`/`ask-items`); the zone is a feed fact (`BikeFeedReader.zone`); credits via `cardCredits(site)` in `card-lines.ts`, `GEOSN_CREDIT` deleted; the bike card still formats the count time in the visitor's zone (`inquiry-traffic.ts`, out of scope); e2e `@desktop-hud` not run here (Playwright's chromium 1243 missing in the container) | [067-data-layers-and-the-twin-small-fixes.md](./067-data-layers-and-the-twin-small-fixes.md) |
+| 068 | The tile stream loads only what the fog lets you see: a stream camera whose far plane ends at the fog (`streamFarFor`), the camera keeps 6 km for the sky | DONE (2026-10-10) — steps 1–4, 6; step 5 (the boot's own fog) not built; no saving at Dresden's south-west spawn view (the site's edge is inside the reach), the gain is across the city and from the air | [completed.md](./completed.md#068--the-tile-stream-loads-only-what-the-fog-lets-you-see--done-2026-10-10) |
+| 069 | Find what holds the load at 52 %, then take it off the tile path: local timing marks, an honest 52 %, a per-tier hand-over wait, meshopt workers, ask sets in idle time, a lazy BVH | **PARTIAL** (2026-10-10) — step 5 built, and beside it a bounded scene compile, deduplicated stage reports, concurrent raster fetches, a stall guard, one change pass per task, WebKit's `scheduler.yield`; steps 1–4, 6, 7 open | [069-streaming-without-stalls.md](./069-streaming-without-stalls.md) |
+| 070 | Each tile holds a fraction of the raster memory: a 1024² coarse class raster, the sports raster on a desktop's fine level only, optionally a half-resolution desktop splat | **PARTIAL** (2026-10-10) — steps 1–3 built; step 4 needs a GPU look | [070-raster-diet.md](./070-raster-diet.md) |
+| 071 | A phone renders a lean scene, a desktop a lighter one | **PARTIAL** (2026-10-10) — phone GTAO at 8 samples (not 0), a phone rich-crown budget of 800 (not *Multi-Tuft* off), no autofocus ray without a lens blur; step 4.2 (no desktop DoF) REJECTED by the maintainer; steps 3, 4.1, 5–7 open | [071-tier-budgets-lean-phone-lighter-desktop.md](./071-tier-budgets-lean-phone-lighter-desktop.md) |
+| 072 | A cold build bakes a site's tiles on every core | **TODO** — cheaper since 2026-10-10 (no second spawn parse, typed-array plinths, cache keys on the bakes' own packages); re-measure first | [072-parallel-site-bake.md](./072-parallel-site-bake.md) |
+| 073 | The look is fixed; the sidebar keeps only the controls people use | **PARTIAL — awaits the maintainer** — *Transparenz* and *Blattflimmern* removed, *Flussnebel* and *Tiefenschärfe* fixed (2026-10-10); the ~20 cosmetic sliders undecided (they cost the GPU nothing) | [073-freeze-the-look-table.md](./073-freeze-the-look-table.md) |
+| 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **TODO** — direction plan; each part opens with a spike | [074-architecture-deepening.md](./074-architecture-deepening.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -132,6 +139,14 @@ S/M/L.
    they run (their rows and amendments say what moved); 039's step 3 is
    moot. The non-interactive run picked these twelve by leverage from the
    vetted findings below; the rest is the 2026-10-06 backlog.
+   **Plans 068–074 (2026-10-10 performance audit) — order:** 069 steps
+   1–2 first (the timing marks, measured on a desktop and an iPhone: they
+   decide 069's gated steps and 074 part A) → 071's open steps (3, 4.1,
+   5) → 070 step 4 (GPU look) → 072 → 074 B (the lazy seam, the data
+   layers first) → 074 A → 073 once the maintainer has decided the
+   cosmetic sliders. Authorize the Sentry connector before measuring: the
+   per-device frame-rate and memory summaries already arrive there (ADR
+   0043).
 
 1. **Plan 019 (M, GPU) — the one GPU checklist.** Everything since the 3D
    Tiles switch was verified headless only. Since 2026-10-01 every "look
@@ -292,6 +307,76 @@ S/M/L.
     [data-streams survey](../data-streams.md)) instead of the OSM heritage
     join; tram tracks have no ground-join test (ADR 0035: a runtime part is
     tested with `checkJoins`).
+
+### 2026-10-10 audit (performance and stability, against `85a41b7`)
+
+Asked by the maintainer: *the load sometimes freezes at 52 %, movement is
+jerky, phones crash often, the build takes very long — which sidebar
+parameters cost performance and bundle size, which effects have cheaper
+alternatives, can the architecture be slimmed?* Six parallel auditors
+(`improve`, standard; `improve-codebase-architecture`; the HUD's
+parameters; the boot to 52 %; frame time and phone memory; bundle and
+build), their top claims re-opened in the code, and a baseline measured
+before any change: a cold build of the seven sites 419 s (Dresden's 15
+tiles 414 s, serial, on one of four cores) + `next build` 61 s; the
+viewer's boot payload 811 KB gz (scene chunk 578 KB, a dead classic
+`WebGLRenderer` with every GLSL chunk in it, proj4 in a shared chunk);
+headless (SwiftShader, full profile, 400×300) the first frame at 58 s,
+*loaded* at 501 s, *Umgebung* done at 456 s — right after the sixth of
+eight dressings — and 1.26 GB held on the GPU, 750 MB of it textures.
+
+**The maintainer's decisions:** the soundscape removed; the picture
+styles, Modell and the data layers stay but must not weigh on the
+initial load ("lazy?"); *Transparenz* and *Blattflimmern* removed;
+*Tiefenschärfe* and *Flussnebel* stay but are not parametrisable. The
+~20 cosmetic sliders went unanswered — they cost the GPU nothing (a
+uniform multiplier; baking a constant emits the same instruction), only
+code and UI (plan 073).
+
+**Built on the performance PR (branch `claude/perf-optimizations`):**
+plan 068; plan 069 step 5 and the items listed in its row; plan 070
+steps 1–3; plan 071's phone half as listed in its row; no tier warms the
+picture styles any more (a desktop compiled Papier's programs for every
+landing tile, for the session); the four look decisions; the soundscape's
+removal (≈ 3 600 lines, its bake and 32 data files); the property tables
+read by `gltf-content.ts` (the WebGL renderer gone), the date picker on
+demand, proj4 replaced by `lib/city/crs.ts`'s own transverse Mercator —
+the boot payload 811 → 657 KB gz; on the build side Shiki loading seven
+grammars (the 104 docs pages 13.3 → 6.3 s to render), the spawn tile
+parsed once, typed-array plinths, cache keys on the bakes' own packages.
+
+**Vetted, not planned (backlog, S unless noted):**
+
+- **The parse slot waits on the dressing chain** (plan 069 step 4): a
+  fine level holds a tile-renderer parse slot up to 10 s
+  (`HAND_OVER_WAIT_MS`) while dressings build one at a time — on a phone
+  with two slots that blocks every other tile. The likeliest cause of the
+  *Umgebung* stage standing still after 52 %; measure first (step 2).
+- **Shadow-pass pipelines compile in the frame** that first draws a new
+  caster (`compileAsync` covers the main pass only) — a hitch per new
+  kind of tree, lamp or furniture (M–L, needs a public-API spike).
+- **The vegetation LOD runs every frame** over every chunk, allocating
+  two arrays of ~1 000 entries; the 10 Hz pose tick would do.
+- **The crash trail's heartbeat walks the scene** every 2 s and rewrites
+  the whole trail into local storage synchronously.
+- **The inquiry's ask sets are built eagerly** per tile, placing every
+  canopy tree a second time (plan 069 step 6, gated).
+- **A desktop at DPR 2 runs SMAA's three full-resolution passes** plus a
+  copy of the frame; skipping the copy (SMAA on the scene target, the AO
+  multiplied after, as the FXAA path does) saves a full-resolution pass.
+- **Three real point lights** sit in every lit build even by day
+  (`lamp-layer.ts`); a phone could build one (a tier constant, no
+  rebuild).
+- **A shadow redraw every ~20 m** while walking (the dead zone,
+  `shadow-fit.ts`); a larger zone with a slightly larger radius trades
+  texel size for fewer redraws.
+- **The minimap's 512² class raster** has one reader left that paints
+  256² a tile (a re-bake and a look).
+
+**Measured, not built:** WebKit's missing `scheduler.yield` is shimmed
+(`main-yield.ts`) but unmeasured on an iPhone — in Chromium with the API
+removed the lite boot was not slower; plan 069 step 2 should time it on
+the device.
 
 ### 2026-10-06 audit (`improve deep`, against `4b0310a`)
 
@@ -990,3 +1075,12 @@ prompt-injection content only (none found).
   refuted ones recorded above; 039 step 3 marked moot (ADR 0041), 040 and
   046 marked drifted with amendments. Baseline green (2 082 unit tests,
   359 pipeline tests).
+- **2026-10-10 run** (against `85a41b7`): a performance and stability
+  audit on the maintainer's report (a load stuck at 52 %, jerky movement,
+  phones crashing, a slow build): `improve` (standard) and
+  `improve-codebase-architecture` in parallel with four focused auditors,
+  a measured baseline (build timing, chunk sizes, headless boot timelines
+  and CPU profiles), and the maintainer's decisions on the features and
+  the HUD's settings. Plans 068–074 written; 068, most of 070 and parts of
+  069, 071 and 073 built on the same PR; see the "2026-10-10 audit"
+  section.

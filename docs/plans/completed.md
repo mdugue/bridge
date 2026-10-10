@@ -1359,3 +1359,30 @@ a millimetre.
 **Keep in mind.** If the dressing still shows a long task here, hand the
 `Float32Array` to the vegetation instead of feature objects (phase 2), and
 pack the street-tree cadastre (`trees`) with a small column set.
+
+## 068 — The tile stream loads only what the fog lets you see · DONE (2026-10-10)
+
+**Problem.** The tile renderer streamed for the walk/fly camera itself,
+whose far plane is 6 km (the sky dome needs it). Three's range fog runs on
+view depth — the far plane's measure — and ends at ≈ 2.6 km at the
+default *Nebel* (1.1 km during the boot), and the sky's horizon band takes
+the fog colour: every building tile and coarse level between the two was
+loaded, compiled, given a BVH and drawn as plain fog colour, and city
+tiles (error 100 000, ADD) never leave while in a frustum.
+
+**Outcome.** A stream camera, the walk/fly camera's twin synced every
+frame before the stream's update, with its far plane at
+`streamFarFor(max(fog applied, the look's fog), camera.far)` = the fog's
+end × 1.1 (`lib/city/atmosphere.ts`, `create-app.ts`). The larger of the
+two fogs, so the boot's partial-world fog does not leave the tiles it
+hides to load once it opens. Modell streams for its own camera
+(`swapCamera`), the sun's shadow camera as before. Measured at Dresden's
+spawn view (SwiftShader, full profile): the same tiles load — the view
+looks south-west, and the site's edge lies inside 2.85 km there — so the
+saving is in the views across the city (east from the spawn the second
+ring of tiles, 3.8 km out, no longer loads) and from the air; the
+plan's step 5 (stream at the boot's own fog) was not built.
+
+**Keep in mind.** A new camera-driven streaming need registers against
+the stream camera, not the camera. A future look term drawn past the fog
+(`material.fog = false` on tile content) would vanish beyond its reach.
