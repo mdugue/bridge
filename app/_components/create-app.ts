@@ -2756,6 +2756,25 @@ async function bootApp(
       c.request.resolve({ canvas: c.out, imagePxPerCssPx: c.imagePxPerCssPx });
     }
   };
+  /**
+   * The boot's wait for the start pose's first shadow map (the light
+   * stage, below): ended by the frame that draws it — three builds the
+   * shadow pass's pipelines for its casters inside that frame — or by the
+   * second frame in a row with none to draw (by night the sun rig asks for
+   * none).
+   */
+  let shadowFrameSeen: ((drawn: boolean) => void) | null = null;
+  const firstShadowFrame = () =>
+    new Promise<void>((resolve) => {
+      let quiet = 0;
+      shadowFrameSeen = (drawn) => {
+        quiet = drawn || sunRig.shadowPending() ? 0 : quiet + 1;
+        if (drawn || quiet >= 2) {
+          shadowFrameSeen = null;
+          resolve();
+        }
+      };
+    });
   // One frame: the scene steps, streams and renders.
   const timeBootFrame = bootFrames(streamTimings);
   const frame = (time: number) => {
@@ -2832,6 +2851,7 @@ async function bootApp(
     frames++;
     tickPocFrame(shadowRendered);
     timeBootFrame(frameStart, shadowRendered);
+    shadowFrameSeen?.(shadowRendered);
   };
   // (It resolves once the loop is installed: nothing to wait for.) The
   // whole frame is guarded, not the render alone: three asks for the next
@@ -3003,6 +3023,14 @@ async function bootApp(
   // the tile's ground has landed, not inside the parse that landed them.
   bvhOnDemand = true;
   placeStart();
+  streamTimings.markOnce("boot:placed");
+  // The light stage ends once a frame at the start pose has drawn its
+  // shadow map (or found none to draw): the shadow pass's pipelines build
+  // inside that frame, synchronously, and before they did so with the bar
+  // already at 52 % and the veil's timer held up behind them — a load that
+  // looked frozen. Bounded like a compile: a stalled frame never holds the
+  // boot.
+  await withinCompileWait(firstShadowFrame());
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
   stage("light", 1);

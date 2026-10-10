@@ -140,14 +140,15 @@ export function createStreamTimings(now: () => number): StreamTimings {
   };
 }
 
-/** How many frames after the light stage `bootFrames` times. */
+/** How many frames at the start pose `bootFrames` times. */
 export const BOOT_FRAMES = 60;
 
 /**
- * The boot's first frames after the light stage (`boot:light-done`), each
- * timed whole from its `start`: the first one that draws the shadow map
- * (`boot:first-shadow-frame` — three builds the shadow pass's pipelines
- * inside it) and the first BOOT_FRAMES of them (`boot:frame`).
+ * The boot's first frames once it has placed the player at the start
+ * (`boot:placed`), each timed whole from its `start`: the first one that
+ * draws the shadow map (`boot:first-shadow-frame` — three builds the
+ * shadow pass's pipelines inside it; the light stage waits for it) and the
+ * first BOOT_FRAMES of them (`boot:frame`).
  */
 export function bootFrames(
   timings: StreamTimings
@@ -155,7 +156,7 @@ export function bootFrames(
   let counted = 0;
   let shadowSeen = false;
   return (start, shadowDrawn) => {
-    if (timings.markedAt("boot:light-done") === undefined) {
+    if (timings.markedAt("boot:placed") === undefined) {
       return;
     }
     if (counted < BOOT_FRAMES) {

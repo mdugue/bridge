@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { createStreamTimings, traceRequested } from "./stream-timing";
+import {
+  BOOT_FRAMES,
+  bootFrames,
+  createStreamTimings,
+  traceRequested,
+} from "./stream-timing";
 
 /** A clock the test moves by hand. */
 function fakeClock() {
@@ -95,6 +100,33 @@ test("a mark is set once; the long tasks have a row only where the browser repor
     totalMs: 180,
     maxMs: 120,
   });
+});
+
+test("the boot's frames are timed from the placing on: the first with a shadow map once, at most BOOT_FRAMES", () => {
+  const clock = fakeClock();
+  const timings = createStreamTimings(clock.now);
+  const frame = bootFrames(timings);
+  const draw = (ms: number, shadow: boolean) => {
+    const start = clock.now();
+    clock.advance(ms);
+    frame(start, shadow);
+  };
+  draw(500, true); // still under the overlay, before the placing
+  timings.markOnce("boot:placed");
+  draw(40, false);
+  draw(900, true);
+  draw(30, true);
+  for (let i = 0; i < BOOT_FRAMES; i++) {
+    draw(10, false);
+  }
+  const summary = timings.summary();
+  expect(summary["boot:first-shadow-frame"]).toEqual({
+    count: 1,
+    totalMs: 900,
+    maxMs: 900,
+  });
+  expect(summary["boot:frame"]?.count).toBe(BOOT_FRAMES);
+  expect(summary["boot:frame"]?.maxMs).toBe(900);
 });
 
 test("the trace is asked for with ?trace=1", () => {

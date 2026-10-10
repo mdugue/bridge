@@ -938,6 +938,7 @@ sequenceDiagram
   B->>S: every tile's footprints (minimap)
   B->>S: spawn tile: buildings glb, a terrain level + class raster, NDVI
   Note over B: dress: clay + object texture · splat painted + water · compileAsync
+  Note over B: placed on the spawn ground (its buildings' BVH) · a frame draws the shadow map → light stage, 52 %
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
@@ -949,7 +950,14 @@ sequenceDiagram
 The **first frame** waits on the spawn tile's buildings and *any* of its
 terrain levels (`bootApp` in `create-app.ts`); the player is then placed
 again on the spawn tile's ground, which did not exist when the pose was
-first set. A page that recovers a lost GPU starts on the tile under the
+first set. **The light stage is honest**: the bar reaches its 52 %
+(*Licht und Schatten*, `WALKABLE_PERCENT`) only once a frame at that
+pose has drawn the shadow map — three builds the shadow pass's
+pipelines for its casters inside that frame, synchronously — or two
+frames in a row found none to draw (by night the sun rig asks for none),
+at most 3 s (`firstShadowFrame`). Before, that frame came after the
+stage, with the bar at 52 % and the veil's timer held up behind it: a
+load that looked frozen there. A page that recovers a lost GPU starts on the tile under the
 player's camera instead, its pose set before the stream's first update,
 looking straight down onto that tile until it has landed
 ([ADR 0046](./adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)).
@@ -1100,8 +1108,8 @@ start.
 069). Every span is counted by its category — `tile:city`, `tile:bvh`,
 `tile:rasters`, `tile:compile`, `tile:handover-wait`,
 `dressing:queue-wait`, `dressing:build`, `dressing:compile`,
-`dressing:asks`, `boot:frame` (the first 60 frames after the light
-stage), `boot:first-shadow-frame`, `boot:light-to-veil`,
+`dressing:asks`, `boot:frame` (the first 60 frames at the start pose),
+`boot:first-shadow-frame`, `boot:light-to-veil`,
 `boot:veil-to-loaded`. With `?trace=1` each span also lands on the
 browser's own timeline (DevTools' and Web Inspector's *Timings* track)
 with its tile id, the long tasks are counted where the browser reports
