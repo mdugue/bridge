@@ -205,7 +205,7 @@ können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
 | Gebäudegrundrisse (Minikarte) | 48 kB | bis 75 kB | mit den Gebäuden |
 | Grobes Gelände (512²) | 0,41 MB | 0,44–0,65 MB | die Kachel im Blick ist |
 | Detailliertes Gelände (ein TIN, mit seinen Mauern, Treppen und Bordsteinen) | 1,61 MB | 1,31–3,56 MB | die Kamera nahe kommt |
-| Landnutzungsklassen, 512² | 15 kB | 9–18 kB | beim Start, für die Minikarte (die Klangkulisse nutzt es mit) |
+| Landnutzungsklassen, 512² | 15 kB | 9–18 kB | beim Start, für die Minikarte |
 | Landnutzungsklassen, 2048² | 0,08 MB | 0,06–0,11 MB | mit dem groben Gelände (auf Handys mit jeder Stufe) |
 | Landnutzungsklassen, 4096² | 0,22 MB | 0,15–0,29 MB | mit dem detaillierten Gelände (nur Desktop) |
 | Grün (NDVI) | 0,39 MB | 0,32–0,77 MB | mit dem Gelände |

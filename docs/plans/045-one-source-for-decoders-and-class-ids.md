@@ -16,6 +16,11 @@
 > Saxony's adapter is `pipeline/bake/providers/sn.py`). Read the paths and
 > commands below in that layout; this is drift, not a STOP condition.
 >
+> **Soundscape removed (2026-10-10)**: `lib/city/soundscape.ts` and its
+> test are gone with the soundscape (plan 035). Skip step 1.2, drop the
+> file from the drift check, the scope and the verify line, and the
+> `classId === 7` done criterion; this is drift, not a STOP condition.
+>
 > **Drift check (run first)**:
 > `git diff --stat dd470e9..HEAD -- lib/city/landcover.ts lib/city/landcover.test.ts lib/city/soundscape.ts lib/city/markings.ts lib/city/cultivated.ts pipeline/bake`
 

@@ -49,7 +49,6 @@ import {
   vec4,
 } from "three/tsl";
 import {
-  type FocusMode,
   LOOK_DEFAULTS,
   type LookValues,
   type PostLookKey,
@@ -171,7 +170,7 @@ const GRADE_DISTANCE_M = 800;
 /** Live DoF state for QA/diagnostics. */
 export interface FocusInfo {
   bokehScale: number;
-  /** the focus distance in metres (auto: distance to the crosshair hit) */
+  /** the focus distance in metres: the distance to the crosshair's hit */
   focusDistance: number;
   /** the sharp-ramp distance in metres */
   focusRange: number;
@@ -189,8 +188,9 @@ export interface PostStack {
   compile: (object: Object3D) => Promise<void>;
   /**
    * Pushes the rendering rows of the look — the picture style, depth
-   * grading, contact shadows, paper grain, ink, depth of field and its
-   * focus mode/distance — into the passes.
+   * grading, contact shadows, paper grain, ink — into the passes. (Depth
+   * of field is no row: always on where it is built, focused on the
+   * crosshair.)
    */
   applyLook: (look: LookValues) => void;
   dispose: () => void;
@@ -205,9 +205,8 @@ export interface PostStack {
    * bokeh the eye cannot resolve through motion anyway. Contact shadows (AO)
    * stay on — the pass runs at half resolution for that — because a shadow
    * that vanishes the moment you move and reappears when you stop reads as
-   * a bug, not as a saving. Layered under the sliders: it never resurrects a
-   * pass the user turned off, and recovery restores exactly what they asked
-   * for.
+   * a bug, not as a saving. Layered beside the picture style's gate and
+   * Modell's: recovery brings DoF back only where those allow it.
    */
   setRegressed: (on: boolean) => void;
   /** Follows the canvas (the scene target is drawing-buffer sized). */
@@ -584,18 +583,16 @@ export function createPostStack(
     plain: pipelineOf(stylize.node(lit)),
   };
 
-  // User intent vs. motion regression are two independent layers: the look
-  // writes dofWanted, the render loop `regressed`, and only the choice below
-  // combines them — recovery never clobbers the user's choice. The picture
-  // style is a third layer of the same kind: a graphic style gates DoF off
-  // (RenderStyleDef.allowDof) without touching the switch.
-  let dofWanted = LOOK_DEFAULTS.dof;
+  // Three independent layers gate the lens blur, and only the choice below
+  // combines them: the render loop writes `regressed` (moving), the picture
+  // style its gate (RenderStyleDef.allowDof: a graphic style draws without
+  // it), Modell `model` — recovery from one never overrides another.
   let regressed = false;
   let model = false;
   /** What draws into `beforeAa` this frame (null: nothing), and the last pass. */
   const frame = () => {
     const pair = style.shaderMode > 0 ? styled : pastel;
-    const lensOn = dofWanted && style.allowDof && !regressed && !model;
+    const lensOn = style.allowDof && !regressed && !model;
     const pre = (lensOn ? pair.dof : null) ?? pair.plain;
     return {
       pre,
@@ -655,16 +652,12 @@ export function createPostStack(
   };
   applyStyleWeights();
 
-  let focusMode: FocusMode = LOOK_DEFAULTS.focusMode;
-  let manualDistance = LOOK_DEFAULTS.focusDistanceM;
+  // Autofocus: the distance, along the view, to the crosshair's last hit.
   const focusPoint = new Vector3(0, 0, -HYPERFOCAL_M);
   const inView = new Vector3();
   const updateFocus = () => {
-    let d = manualDistance;
-    if (focusMode === "auto") {
-      inView.copy(focusPoint).applyMatrix4(active().matrixWorldInverse);
-      d = Math.max(1, -inView.z);
-    }
+    inView.copy(focusPoint).applyMatrix4(active().matrixWorldInverse);
+    const d = Math.max(1, -inView.z);
     focusDistance.value = d;
     focusRange.value = focusRangeFor(d);
   };
@@ -976,17 +969,14 @@ export function createPostStack(
       }
       style = RENDER_STYLE_BY_ID[look.style];
       applyStyleWeights();
-      dofWanted = look.dof;
-      focusMode = look.focusMode;
-      manualDistance = Math.max(1, look.focusDistanceM);
     },
     setRegressed: (on) => {
       regressed = on;
     },
     setFocusTarget: (point) => {
-      // Manual mode pins its own distance; no hit (sky) keeps the last focus,
-      // so tilting a degree above a far building doesn't snap it near.
-      if (focusMode === "auto" && point) {
+      // No hit (sky) keeps the last focus, so tilting a degree above a far
+      // building doesn't snap it near.
+      if (point) {
         focusPoint.copy(point);
       }
     },

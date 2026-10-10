@@ -49,8 +49,8 @@ the city loads you can already pick a place, click a spot on the map or
 apply a snapshot: the load starts over at that place (the loading screen
 names it as *Start*), so you arrive there instead of at the usual start
 and then travel. The sun, the time and the look can be set too; Modell,
-the tools, *Sicht merken* (remember this view), the sound and saving a
-picture wait until the scene is up.
+the tools, *Sicht merken* (remember this view) and saving a picture
+wait until the scene is up.
 
 ## Moving around
 
@@ -386,16 +386,14 @@ next visit:
 
 In the graphic styles *Comic*, *Sin City*, *Strich* and *Schwarzplan* the
 depth of field rests (a blurred background under crisp lines reads as a
-mistake); the switch stays as you set it.
+mistake).
 
 | Group | Slider | What it does |
 |---|---|---|
 | Atmosphäre | *Nebel* | distance haze |
 | | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height and sets in some way off, so what stands right in front of you stays clear |
-| | *Flussnebel* | drifting mist sheet over the water, from about 120 m ahead, denser only far off |
 | | *Tiefenfärbung* | warm near, cool far: a depth-based colour grade |
-| Gebäude | *Transparenz* | see through buildings (dithered), up to 90 % |
-| | *Boden-Verlauf* | darkening of walls towards the ground |
+| Gebäude | *Boden-Verlauf* | darkening of walls towards the ground |
 | | *Höhenlinien* | faint storey bands, spaced from the measured height |
 | | *Streiflicht* | rim light on edges facing away from the sun |
 | | *Farbvariation* | per-building wall tint from function and height |
@@ -412,8 +410,6 @@ mistake); the switch stays as you set it.
 | | *Wiesenfärbung* | tints meadows lush-to-dry from the infrared aerial photo |
 | | *Gegenlicht-Schimmer* | backlight shimmer on crowns between you and the sun |
 | | *Blattdurchscheinen* | translucency of nearby, large crowns (shadow-dependent) |
-| | *Blattflimmern* | gusts flip leaves to their pale underside on sunlit crowns |
-| | *Windhelligkeit* | crowns brighten as they lean into a gust |
 | | *Multi-Tuft-Kronen (nah)* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
@@ -421,12 +417,15 @@ mistake); the switch stays as you set it.
 | | *Spiegelung* | the sky mirrored in glass facades, gilding and water; the sky only, not the buildings across the street |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
-| | *Tiefenschärfe* (switch) | photographic depth of field, only behind the focus (the foreground stays sharp); *Auto* focuses on the centre of the view, *Manuell* on a fixed distance; not offered on phones |
 
-While the camera moves, the depth-of-field blur is switched off (the eye
-cannot resolve it in motion) and comes back when you stop. Phones do not
-offer the switch at all: the blur needs more graphics memory than a phone
-can spare for a hint a small screen barely shows.
+Two effects have no control at all. The mist over the river drifts over
+the water from about 120 m ahead, denser only far off. The photographic
+depth of field blurs only what lies behind the focus (the foreground stays
+sharp), and the focus is always what lies at the centre of the view. While
+the camera moves, the blur is switched off (the eye cannot resolve it in
+motion) and comes back when you stop. Phones draw without it: the blur
+needs more graphics memory than a phone can spare for a hint a small
+screen barely shows.
 
 ### Erweitert ("Advanced")
 
@@ -458,7 +457,7 @@ until it is clicked.
 - Golden hour (sun a few degrees above the horizon) and blue hour (a few
   degrees below) give the richest colours; try 07:00 or 20:00 in summer.
 - On a laptop without a discrete graphics card, lower *Kontaktschatten*
-  and switch off *Tiefenschärfe* for a higher frame rate.
+  for a higher frame rate.
 - `?scene=lite` after the city's address (`/dresden?scene=lite`) streams
   only the start tile, with coarse shadows. It exists for automated tests
   and is not how the scene is meant to look.
@@ -510,14 +509,3 @@ foot of every page and of the sidebar) turns the reports off for your
 browser at once. That page also says who runs the site, where the reports
 are kept and for how long. Without the tracker set up, the card offers the
 record to copy instead.
-
-## Small things
-
-- **Listen.** Press **L** (or, on a phone, turn on *Klang (experimentell)*
-  at the very bottom of *Erweitert*) and the city makes a quiet sound: wind,
-  the Elbe, birds by day and crickets on summer nights, footsteps that
-  know the paving underfoot — and when you move the clock past a full
-  hour, the nearby churches strike it, each a little later the further
-  away it stands, as sound travels. It is off every time the page loads,
-  goes quiet in a background tab, and the small speaker in the top left
-  corner turns it off again.

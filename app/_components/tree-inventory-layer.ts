@@ -61,8 +61,8 @@ import {
  *
  * It reuses everything the canopy trees are made of — the lobed crown and the
  * multi-tuft rich crown, the scene's crown materials (sway, shimmer,
- * translucency, flutter; the same builds as the canopy's), the trunk, the
- * 250 m chunks and the distance LOD swap — and adds
+ * translucency, gust brightening; the same builds as the canopy's), the
+ * trunk, the 250 m chunks and the distance LOD swap — and adds
  * only what a per-instance scale cannot express: two reshaped variants of
  * the SAME two crown geometries (a flame for fastigiate cultivars, a
  * curtained dome for weeping trees) and a tiered lathe cone for conifers,
@@ -525,8 +525,6 @@ export function buildTreeInventory(
   const crownMats = sceneCrowns(ctx.sunDirection);
   const u = crownMats.uniforms;
   const rowUniform: Record<VegetationLookKey, Live> = {
-    leafBright: u.leafBright,
-    leafFlutter: u.leafFlutter,
     shimmer: u.shimmer,
     translucency: u.translucency,
   };

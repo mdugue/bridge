@@ -254,9 +254,10 @@ visual-variable codebook is in
   level the dressing stands **goals**, **basketball posts** and **nets**
   (`sport-fixtures.ts`, `sportFixtures`): pale-clay bars, the nets a
   lavender-grey veil in the street furniture's palette and matte material, one merged mesh each per tile, in the tile that owns
-  the ground's centre. Both terrain levels on a desktop, the fine level
-  only on a phone (🗃️ *Sports grounds on a phone's coarse terrain
-  level*); absent files → the land-cover class. Dresden (2026-09-19 extract): 431 grounds over the fifteen tiles
+  the ground's centre. The lines on a desktop's fine level only; a
+  phone's pitches show their land-cover class, its goals and nets stay
+  (🗃️ *Sports-ground lines beyond a desktop's fine level*); absent files
+  → the land-cover class. Dresden (2026-09-19 extract): 431 grounds over the fifteen tiles
   (175 on the four first; a table row per tile a ground reaches).
   Textures scale with HUD *Bodendetail*; colours and lines stay.
 - **Road markings** `❝ taken` `≈ assumed` (plan 026) — OSM `highway=crossing` nodes,
@@ -397,7 +398,7 @@ visual-variable codebook is in
   NEAREST, one band (`scripts/downsample-raster.ts` `downsampleClassRaster`),
   to a quarter of the texture memory: for the coarse terrain level on every
   device, for every level on phones (`MOBILE_RASTER_PX`, chosen by the
-  client per device tier); a 512² one for the minimap and the soundscape.
+  client per device tier); a 512² one for the minimap.
   No raster whose alpha is
   data goes through an image resize any more (the painted splat has the
   only such alpha, and it is made on the GPU). Cost: ~1 m instead of ~0.5 m
@@ -405,7 +406,7 @@ visual-variable codebook is in
   everywhere.
 - **Buildings** `❝ taken` — CityJSON LoD2 → **build-time** glTF per tile:
   `scripts/bake-city-mesh.ts` runs cityjson-threejs-loader, and
-  `scripts/bake-tiles.ts` `cityMesh` welds it into one mesh with an
+  its `cityMesh` welds it into one mesh with an
   `EXT_mesh_features` feature id per vertex (`_FEATURE_ID_0`) and a roof
   flag. The per-object style (tint, roof colour, base, eave and storey
   heights, glow, roughness) and the demolish tree ride as an
@@ -1182,13 +1183,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   shadow pass draws the rigid `castShadowPositionNode` → no shadow-pass cost, no
   extra buffers):
   **wind sway** (vertex bend, stiff base → loose top, per-tree phase from the
-  instance origin); **leaf flutter** (small world-space value-noise specks, ~1-2 m,
-  blend the crown toward a paler silver-sage "underside" on *sunlit, sun-facing*
-  leaves — daylight + NdotL gated + distance-faded, so it reads as light glinting off
-  turning leaves, leaf-clump-sized, not a tree-group-wide band);
-  **sway-coupled brightness** (the crown brightens leaning into the same gust,
-  centred so the mean colour is unchanged). Flutter & brightness are independent
-  HUD sliders (*Blattflimmern* / *Windhelligkeit*) — zero one to preview the other.
+  instance origin) and **sway-coupled brightness** (the crown brightens
+  leaning into the same gust, × (1 + 0.09 · gust), centred so the mean colour
+  is unchanged). The brightness is fixed at what its slider
+  (*Windhelligkeit*) defaulted to; the leaf flutter is gone (🗃️ below).
 - **Tree inventory from the Dresden street-tree cadastre** `❝ taken` `≈ assumed` (every tile, by
   default) — *inputs:* the city's *Stadtbaumkataster* (WFS `cls:L1261`, dl-de/by-2-0
   "Landeshauptstadt Dresden"; street trees, parks, schools — not the Großer
@@ -2676,12 +2674,13 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   `ground`). Dresden, Grimma, Meißen and Unna keep 28 m; Hamburg ≈ 9.6 m,
   Leipzig ≈ 12 m, Munich ≈ 15 m. Not yet judged on a real GPU.
 - **River mist** `❝ taken` `≈ assumed` — DLM water mask (the painted splat's alpha) → a drifting,
-  sun-lit mist sheet over the Elbe; HUD *Flussnebel*. None within 120 m of
-  the eye, full from 1.2 km, at most 40 % opaque and only 30 % of the way
+  sun-lit mist sheet over the Elbe, always on. None within 120 m of
+  the eye, full from 1.2 km, at most 24 % opaque and only 30 % of the way
   from the sky's tint to white (it was full from 90 m at up to 62 % and
   60 % of the way to white, and the near river in the start view lay
-  under a pale, drifting band that read as a smear on the screen). `water-layer.ts`
-  `createWaterMist`.
+  under a pale, drifting band that read as a smear on the screen). The
+  strength is the *Flussnebel* slider's old default (60 % of 0.4) since the
+  slider went (🗃️ below). `water-layer.ts` `createWaterMist`.
 - **Drifting clouds** `≈ assumed` — `SkyMesh`'s procedural clouds drift on TSL `time`
   (slow `cloudSpeed`), lit by the sun instant. `sun-rig.ts`.
 - **Golden/blue-hour palette stops** `= computed` `≈ assumed` — sun altitude → sky/fog/hemisphere colours
@@ -2834,61 +2833,6 @@ GPU**.
   mesh for all trams rewritten every frame; it widens from the air. **Not live positions**: a delay or a
   diversion is not shown. The sidebar says how many trams run and from
   which day's timetable.
-
-### Sound
-Hidden and opt-in (plan [035](./plans/completed.md#035--a-hidden-soundscape--done-2026-09-26-unheard-the-listening-pass-is-a-maintainer-action)): nothing below
-sounds, and no `AudioContext` exists, until the visitor presses **L** or
-turns on *Klang (experimentell)* (Erweitert tab); off at every load. All
-synthesized with WebAudio, the engine a dynamic import
-(`app/_components/soundscape/`); the pure core is `lib/city/soundscape.ts`,
-sampled at the 10 Hz pose tick (no per-frame work). **None of it has been listened to** —
-levels and timbres are by design; a source that sounds cheesy is to be
-removed, not tuned.
-- **Bell towers** `❝ taken` `= computed` — OSM churches (`building=church|cathedral|chapel`, a
-  Christian `place_of_worship`, stand-alone bell towers) + the committed
-  LoD2 and DGM1 (ODbL; GeoSN dl-de/by-2-0) → `pipeline/bake/soundmarks.py`
-  → `soundmarks_<tile>.geojson`: the tower's tip (the highest LoD2 vertex
-  inside the outline), its height, a size class (large ≥ 65 m, medium
-  ≥ 40 m, none under 22 m). 20 towers over the fifteen tiles — the
-  Frauenkirche 94 m, Kreuzkirche 90 m, Dreikönigskirche 86 m, Hofkirche
-  83 m, Martin-Luther-Kirche 81 m, Garnisonkirche 77 m, … — six tiles
-  have none. Runtime: the full hour a **forward** change of the scene clock
-  crosses (the last one of a long scrub, struck once the clock rests
-  0.7 s; none going back or stepping a day) is struck 1–12 times by the
-  nearest four towers within 1.5 km, each **delayed by its distance at
-  343 m/s**, 1/d quieter (full within 120 m) and low-passed by distance, a
-  minor-third bell (hum, prime, tierce, quint, nominal …; prime 147 / 196
-  / 294 Hz by size), panned by its bearing.
-- **Footsteps by paving** `❝ taken` `≈ assumed` — the paving raster's packed byte (road surface
-  on class 7, the walkway's elsewhere) + the class (fallback) → sett
-  (a hard heel-and-toe clack), asphalt (soft, low), concrete, slabs,
-  gravel (a crunch of grains), grass (muffled); on foot only, one step per
-  0.75 m at walking pace, the stride lengthening above it (the walker's
-  9 m/s is ~2.2 steps/s), none on a jump or after a gap > 1.5 s.
-- **The Elbe** `= computed` `≈ assumed` — the class raster's water (16 rays, 8 m steps, 260 m)
-  → a low pink-noise murmur rising as (1 − slant distance / 260 m)²,
-  panned to the water's bearing.
-- **Wind** `= computed` `≈ assumed` — the sky-view factor (else 1 − 0.7 × the built-up share) and
-  the height above ground → level; the crowns' own sway signal
-  (`windSway`, the crown shader's formula at the listener) → its gusts
-  (level and filter corner).
-- **The city's hum** `= computed` `≈ assumed` — road, rail and built-up shares within 30 m (and,
-  from the air, the whole city) → a brown-noise hum under 170 Hz, × 0.45
-  at full night.
-- **Leaves** `= computed` `≈ assumed` — trees within 40 m (`treesWithin` over the loaded
-  vegetation chunks) × the generic leaf-cover year (bare Dec–Mar) × the
-  gusts; gone above the crowns.
-- **Birds** `≈ assumed` — green share and trees, the sun's night factor, the day of
-  year and the hour → a call rate (≤ 0.45/s); sparrows in the streets,
-  tits in the parks, a blackbird's phrase at dusk and in the spring dawn
-  chorus; silent at night, sparse in winter and late summer.
-- **Crickets** `≈ assumed` — summer nights (late June–mid-Aug, fading either side)
-  near meadows.
-- **Fountains** `❝ taken` `≈ assumed` — the monuments file's fountains → a splash within 45 m,
-  April–October, 8–22 h.
-- **Tram bell** `❝ taken` `≈ assumed` — the tram tracks → within 70 m of one, while trams run
-  (4:30–0:30), about once in 2½ minutes, a two-stroke bell from the
-  nearest point of the track.
 
 ---
 
@@ -3054,11 +2998,12 @@ research that produced them):
     Elbe landing stages, groynes and ferries (031), street names (032 —
     built, then removed: 🗃️ below),
     sky-view factor and a baked horizon map (033), small structures from
-    DOM − LoD2 (034), a hidden soundscape (035). Built since (✅ above,
+    DOM − LoD2 (034), a hidden soundscape (035 — built, then removed:
+    🗃️ below). Built since (✅ above,
     looks unverified on a GPU): 024 (Trams), 026 (Road markings), 028
     (Cultivated land), 030 (Signs and fixtures), 031 (Landing stages,
     groynes, ferries), 033 (Sky-view factor, Horizon shade),
-    034 (Small structures from the laser scan), 035 (Sound — unheard).
+    034 (Small structures from the laser scan).
 14. **The traffic data layers, next** (✅ *Traffic* above) — tram delays
     from the VVO's departure monitor (`webapi.vvo-online.de/dm`, real time
     per stop, answers any origin: poll the stops in view, shift each trip
@@ -3083,7 +3028,12 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
-| **Sports grounds on a phone's coarse terrain level** (until 2026-10-06: `sport_<t>.png` read on both levels on every device, `sport-ground.ts` in the coarse terrain's colour node) | The index raster is a 2048² RGBA texture, 16 MiB on the GPU for each coarse tile in view (14 of Dresden's 15 tiles have grounds) — on a phone whose post targets and shadow map together now hold ~30 MiB, and whose tile cache is 336 MiB ([ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)). Beyond the fine level a pitch is a few pixels and its lines a pixel or less: it shows its land-cover class (`readsSportGrounds`; the coarse level builds the shared variant without the slot). | A desktop still draws them on both levels, and a phone's fine level draws them as before. A 1024² phone twin of the raster (`sport_low`, as `markings_low`) would bring them back at a quarter of the cost; it needs a bake and a look on a GPU. |
+| **A depth-of-field switch and manual focus** (*Tiefenschärfe* on/off, *Fokus: Automatisch / Manuell* with a *Fokusdistanz* slider, 1–3 000 m, drawn as a ring on the minimap; until 2026-10-10) | The maintainer chose fewer settings: the depth of field must stay, but it need not be parametrised. | DoF is always on where it is built (desktops; a phone builds none, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)), focused on the crosshair; it still rests while moving, in the graphic styles and in Modell (two prebuilt pipelines, [ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). An old snapshot's `dof`, `focusMode` and `focusDistanceM` are ignored. |
+| **A river-mist slider** (*Flussnebel*, until 2026-10-10: the sheet's strength 0–100 %, the sheet hidden at 0) | The maintainer chose fewer settings: the mist stays, but it is not something to tune. | The sheet is always drawn, at the slider's default (60 %: at most 24 % opaque, `MIST_OPACITY`). An old snapshot's `waterMistPct` is ignored. |
+| **Leaf flutter** (*Blattflimmern*, until 2026-10-10: small world-space value-noise specks, two octaves at ~1–2 m cells drifting with the wind, blending sunlit, sun-facing crowns toward a paler silver-sage "underside" with a faint glint; and its companion slider *Windhelligkeit*) | The maintainer chose fewer settings, and the twinkle was not free: two `leafNoise` calls — eight `sin` hashes — on every crown fragment. | The sway-coupled brightness stays, fixed at its slider's default (`GUST_BRIGHTEN`, 0.09 = 50 % of 0.18); it rides on the sway's gust signal, not on the twinkle. An old snapshot's `leafFlutterPct` and `leafBrightPct` are ignored. |
+| **See-through buildings** (*Transparenz*, until 2026-10-10: the clay's opacity hash-dithered, `alphaHash`, up to 90 %, in the opaque pass) | The maintainer chose fewer settings. It was a second build of the clay's graph — compiled in the frame the slider first left 0 — and every crossing of 0 redrew the shadow map, for a look that judges nothing in the city. | The clay is always opaque; an old snapshot's `transparencyPct` is ignored. To see what a building hides, demolish it (`R`) or cut the model open (Modell's *Ausschnitt*). |
+| **The hidden soundscape** (plan 035, 2026-09-26 → 2026-10-10: wind, the city's hum, the Elbe, leaves, birds, crickets, fountains, footsteps by paving, a tram bell and the hour struck from the bell towers, all synthesized with WebAudio behind the **L** key and the *Klang (experimentell)* switch; `app/_components/soundscape/`, `lib/city/soundscape.ts`; the towers baked by `pipeline/bake/soundmarks.py` → `soundmarks_<tile>.geojson`) | Removed at the maintainer's decision (2026-10-10) to cut code and maintenance: about 3 000 lines, a bake and a tileset column for a feature that never shipped audibly — none of it was ever listened to (plan 019's listening pass stayed open). | Engine, switch, bake and committed files all went; the viewer creates no `AudioContext`. Revive only with a listening pass first, from git history (`5b59b79`). |
+| **Sports-ground lines beyond a desktop's fine level** (until 2026-10-06 on both levels on every device; until 2026-10-10 on a phone's fine level and a desktop's coarse level too: `sport_<t>.png` read there, `sport-ground.ts` in that level's colour node) | The index raster is a 2048² RGBA texture, 16 MiB on the GPU for a PNG of a few dozen kB, per tile that reads it (14 of Dresden's 15 tiles have grounds) — on a phone against a 336 MiB tile cache ([ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)). Beyond the fine level a pitch is a few pixels and its lines a pixel or less; on a phone the lines were the price of a sixth of a fine tile's rasters. A pitch then shows its land-cover class (`readsSportGrounds`; the level builds the shared variant without the slot); the goals and nets come from the table and stay. | A 1024² phone twin of the raster (`sport_low`, as `markings_low`) would bring the lines back on a phone at a quarter of the cost; it needs a bake and a look on a GPU. |
 | **Modell's trees thinned by scale** (2026-10-04 → 2026-10-05: every tree to 1 : 5 000, fewer to 1 : 9 000, a floor of 30 % beyond, the kept crowns widened by 1/√share — `treeShare`, `treeSpread`, the crown shader's `crownKept` folding the others onto their origin; the coarse level's crowns, the floor's selection, fetched only once Modell thinned. The version before it thinned to none at 1 : 9 000) | Two rules for one picture: the scale set the share, the tile renderer the level, and the two disagree. The coarse level shows wherever the fine one is not loaded, not only past 2.5 m/px — at 1 : 3 000 on a phone whose memory governor coarsens the stream, or while fine tiles load — and there the picture showed no tree at all, since its crowns came only once Modell thinned (maintainer, 2026-10-05: trees at large and at small scales, none at 1 : 3 000). The version before showed no tree in an overview of the city. | Each terrain level carries its own trees, whatever the mode or scale (✅ *The coarse level's trees*): the fine level all, the coarse one a fixed third. A generalization by scale, if it comes back, has to follow the level the renderer shows, not run as a second rule beside it. |
 | **Pedestrian counts** (for the traffic data layers, 2026-10-01) | No open measured source for the site: the only pedestrian counter, hystreet.com's laser count on the Prager Straße, is commercial (access on request); the city's "Fußgängerquerung St. Petersburger Straße" is a *bicycle* counter. A density modelled from stops, shops and census cells would be a model drawn as if measured. | Revisit with an open counter network (Telraam sensors in the site, if any, through its API with a key). |
 | **Live tram positions** (GTFS-RT, the TLMS radio telegrams) | gtfs.de's realtime feed is one protobuf for all of Germany, too heavy for a browser to poll; TLMS (`wss://socket.tlm.solutions`) is a volunteer service whose coverage and uptime the viewer cannot vouch for. | The timetable runs instead (✅ *Trams by timetable*); delays could come from the VVO's departure monitor (`webapi.vvo-online.de/dm`, answers any origin) per stop — 📋. |
@@ -3131,7 +3081,7 @@ research that produced them):
 | **Per-tile ground for bridge decks** | The rasters stopped at the tile edge (sampling clamped there), so a deck across a seam got two different profiles — and both tiles drew it: two decks metres apart (Schlachthofbrücke). | A DGM/DOM mosaic around the tile; the owner draws, every copy lifts rails. |
 | **`ver06_f`-only bridge decks** (rail v2 first cut) | `ver06_f` has area polygons only for (mostly rail) major spans → road/path bridges (Augustusbrücke etc.) vanished + everything mis-classified rail. | Drive from the **complete `ver06_l`** set, footprint from `ver06_f` where matched. |
 | **Motion-gated SSAO** (plan 007 as first shipped) | The contact shadows blinked on every footstep — reads as a bug, not a saving. | The AO pass runs permanently at half resolution (N8AO's `halfRes` then, GTAO since plan 020); only DoF is dropped while moving ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). |
-| **Cloud shadows / per-frame shadow updates for wind sway** | Would force the 3072² depth pass every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway, flutter and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
+| **Cloud shadows / per-frame shadow updates for wind sway** | Would force the 3072² depth pass every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
 | **Multi-echo ratio as the low-vegetation cue** (LSC, low vegetation) | Measured: only 26 % of OSM-hedge pixels reach echo ≥ 0.5, fences 56 % (AUC hedge-vs-fence 0.28); recall 25 % of observable hedge length vs 58 % for the NDVI + intensity rule. | Keep it as the *tall*-vegetation cue (100 % of > 5 m forest vs 3 % of roofs) and as a qualifier of intensity. |
 | **Blob-wide "multi-echo ≈ 0" for small structures** (plan 034 as planned) | A shed's roof edge splits the pulse (part roof, part ground), so no blob's multi-echo share is ≈ 0: 4 blobs on the spawn tile at ≤ 0.05, 43 at ≤ 0.10 (median over all band blobs 0.93); the interior share admits 377, 112 of them against tree crowns. | The rule works per cell: no multi-echo return in a cell's 3 × 3 window, the rim grown back after (the ✅ "Small structures from the laser scan"). |
 | **OSM scrub polygons filled with shrubs** (OSM-only tiles) | A jittered 3–4 m grid gave 4–9 k shrubs per neighbour tile — more than the laser scan finds on the primary — mostly under existing crowns. | OSM-only tiles get the OSM hedges only. |

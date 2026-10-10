@@ -1,18 +1,20 @@
 /**
- * Parses one tile's CityJSON into the building mesh the viewer streams (as
- * glTF, scripts/bake-tiles.ts): runs cityjson-threejs-loader once, then
- * folds in everything the clay style needs per building (tints, roof colour
- * incl. the DOP LUT, storey/eave heights, dusk glow, roughness jitter), the
- * OSM flags (shop, heritage; a part carries its Building's too), the
- * demolish tree and the minimap footprints, then appends the small
- * structures the laser scan saw and LoD2 lacks (`appendScanStructures`).
- * An object whose LoD2 roof misses DOM1 wears its measured parts
- * instead (`withMeasuredRoofs`, scripts/measured-roofs.ts).
+ * Parses one tile's CityJSON into the building mesh the viewer streams:
+ * runs cityjson-threejs-loader once, then folds in everything the clay
+ * style needs per building (tints, roof colour incl. the DOP LUT,
+ * storey/eave heights, dusk glow, roughness jitter), the OSM flags (shop,
+ * heritage; a part carries its Building's too), the demolish tree and the
+ * minimap footprints, then appends the small structures the laser scan saw
+ * and LoD2 lacks (`appendScanStructures`). An object whose LoD2 roof misses
+ * DOM1 wears its measured parts instead (`withMeasuredRoofs`,
+ * scripts/measured-roofs.ts). `cityMesh` turns the result into the glTF
+ * writer's input (scripts/tile-glb.ts) with its per-object property table.
  * Called by scripts/prepare-data.ts; no DOM.
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import {
-  type BufferGeometry,
+  BufferAttribute,
+  BufferGeometry,
   type Matrix4,
   type Mesh,
   ShapeUtils,
@@ -51,6 +53,7 @@ import {
   OBJECT_SOURCE_LOD2,
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
+  objectTable,
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
@@ -99,8 +102,10 @@ import {
   wallShiftAt,
 } from "../lib/city/shopfronts";
 import {
+  factColumns,
   inheritedOsm,
   lod2Facts,
+  NO_FACT,
   scanFacts,
   treeFacts,
 } from "../lib/city/object-facts";
@@ -123,6 +128,7 @@ import {
   windowSpecs,
 } from "../lib/city/windows";
 import { measuredRoofMesh, measuredRoofsById } from "./measured-roofs";
+import type { Column, MeshInput, PropertyTable } from "./tile-glb";
 
 /** RoofSurface index in the loader's fixed `defaultSemanticsColors` order. */
 const ROOF_SURFACE_TYPE = 2;
@@ -499,6 +505,40 @@ export function withMeasuredRoofs(
   };
 }
 
+/** A tile's CRS, from its CityJSON's metadata; anything but ETRS89/UTM
+ *  fails. */
+function epsgOf(tile: string, doc: CityJsonDocument): number {
+  const epsg = epsgCodeFromReferenceSystem(doc.metadata?.referenceSystem);
+  if (epsg === null) {
+    throw new Error(
+      `Unsupported CityJSON CRS "${doc.metadata?.referenceSystem}" in ${tile} — ` +
+        "expected ETRS89/UTM (EPSG:25832 or 25833)."
+    );
+  }
+  return epsg;
+}
+
+/** The frame a tile's buildings are recentered in. */
+export interface CityFrame {
+  epsg: number;
+  /** the recenter matrix (`bakeCityMesh`'s `sharedMatrix`) */
+  matrix: Matrix4;
+  offset: { cx: number; cy: number };
+}
+
+/**
+ * The frame `bakeCityMesh` recenters a tile in when it is given none — the
+ * loader's translation to the centre of the vertices' bounding box — without
+ * parsing a building: the loader reads the document's vertices alone. The
+ * spawn tile's frame is all the other tiles need of it.
+ */
+export function cityFrame(tile: string, source: CityJsonDocument): CityFrame {
+  const epsg = epsgOf(tile, source);
+  const loader = new CityJSONLoader(new CityJSONParser());
+  loader.load({ ...source, CityObjects: {} });
+  return { epsg, matrix: loader.matrix, offset: recenterOffset(loader.matrix) };
+}
+
 /**
  * Parses and annotates one tile. `sharedMatrix` is the spawn tile's
  * recenter matrix (null for the primary itself), exactly as the browser
@@ -525,13 +565,7 @@ export function bakeCityMesh(
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
   const doc = withoutTrafficStructures(source);
-  const epsg = epsgCodeFromReferenceSystem(doc.metadata?.referenceSystem);
-  if (epsg === null) {
-    throw new Error(
-      `Unsupported CityJSON CRS "${doc.metadata?.referenceSystem}" in ${tile} — ` +
-        "expected ETRS89/UTM (EPSG:25832 or 25833)."
-    );
-  }
+  const epsg = epsgOf(tile, doc);
   const keys = Object.keys(doc.CityObjects);
   // Footprints first: the loader rewrites the document it parses (a
   // Solid's semantic `values` come back flattened), after which a Solid's
@@ -656,6 +690,119 @@ export function bakeCityMesh(
   markFlatRoofs(objects, v);
   dressWalls(tile, baked, keys, hosts, onWalls, { facades, gaps, scan });
   return baked;
+}
+
+export interface CityMesh {
+  /** per-object minimap footprints (EPSG) */
+  footprints: [number, number][][][];
+  input: Omit<MeshInput, "extras" | "name">;
+  maxElevation: number;
+}
+
+/** Flat vertex normals of a non-indexed stream, as three computes them. */
+function flatNormals(positions: Float32Array): Float32Array {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return geometry.getAttribute("normal").array as Float32Array;
+}
+
+/** The flat normals with every vertex `shading` gives one (not NaN) — a
+ *  measured roof face's, smoothed over it — taking that one instead. */
+function withShading(
+  flat: Float32Array,
+  shading: Float32Array | undefined
+): Float32Array {
+  if (!shading) {
+    return flat;
+  }
+  for (let i = 0; i < flat.length; i++) {
+    if (!Number.isNaN(shading[i])) {
+      flat[i] = shading[i];
+    }
+  }
+  return flat;
+}
+
+/**
+ * The building mesh with its property table: flat normals from the
+ * non-indexed stream, then welded (vertices of equal position, normal,
+ * object and place on their wall, the roof flag in it, merge — never across
+ * objects).
+ */
+export function cityMesh(baked: BakedCityMesh): CityMesh {
+  const v = baked.vertices;
+  const t = objectTable(baked.objects);
+  const facts = factColumns(baked.objects.map((o) => o.facts));
+  const table: PropertyTable = {
+    className: "building",
+    count: t.count,
+    properties: {
+      baseZ: { type: "SCALAR", componentType: "FLOAT32", values: t.baseZ },
+      building: { type: "SCALAR", componentType: "UINT8", values: t.building },
+      eaveH: { type: "SCALAR", componentType: "FLOAT32", values: t.eaveH },
+      flags: { type: "SCALAR", componentType: "UINT16", values: t.flags },
+      glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
+      roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
+      root: { type: "SCALAR", componentType: "UINT32", values: t.root },
+      rough: { type: "SCALAR", componentType: "FLOAT32", values: t.rough },
+      source: { type: "SCALAR", componentType: "UINT8", values: t.source },
+      storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },
+      tint: { type: "VEC3", componentType: "FLOAT32", values: t.tint },
+      // the windows the clay draws (lib/city/windows.ts)
+      winAxis: { type: "SCALAR", componentType: "FLOAT32", values: t.winAxis },
+      winH: { type: "SCALAR", componentType: "FLOAT32", values: t.winH },
+      winStyle: { type: "SCALAR", componentType: "UINT32", values: t.winStyle },
+      winW: { type: "SCALAR", componentType: "FLOAT32", values: t.winW },
+      // What the object is, for the inquiry card (ADR 0042): read one row
+      // at a time, only when asked — never packed for the shader.
+      ...Object.fromEntries(
+        Object.entries(facts.strings).map(([name, values]) => [
+          name,
+          { type: "STRING", values } satisfies Column,
+        ])
+      ),
+      ...Object.fromEntries(
+        Object.entries(facts.enums).map(([name, values]) => [
+          name,
+          { type: "ENUM", values } satisfies Column,
+        ])
+      ),
+      ...Object.fromEntries(
+        Object.entries(facts.numbers).map(([name, values]) => [
+          name,
+          {
+            type: "SCALAR",
+            componentType: "FLOAT32",
+            values,
+            noData: NO_FACT,
+          } satisfies Column,
+        ])
+      ),
+    },
+  };
+  let maxElevation = Number.NEGATIVE_INFINITY;
+  for (let i = 2; i < v.positions.length; i += 3) {
+    maxElevation = Math.max(maxElevation, v.positions[i]);
+  }
+  return {
+    footprints: baked.objects.map((o) => o.footprints),
+    input: {
+      positions: v.positions,
+      normals: withShading(flatNormals(v.positions), v.normals),
+      attributes: { _FEATURE_ID_0: v.objectIds },
+      // the place on the wall, a roof vertex flagged in it (FACADE_ROOF)
+      vectors: {
+        _FACADE: {
+          array: v.facade ?? facadeAttribute(v, () => false),
+          type: "VEC4",
+        },
+      },
+      table,
+      weld: true,
+    },
+    maxElevation,
+  };
 }
 
 /**
@@ -822,9 +969,7 @@ export function appendPlinths(
   plinths: readonly PlinthFeature[],
   objectIndex: ReadonlyMap<string, number>
 ): void {
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const objectIds: number[] = [];
+  const parts: AppendedPart[] = [];
   const walls = treeTriangles(baked);
   const vertices = baked.vertices.positions;
   const isRoof = baked.vertices.isRoof;
@@ -840,17 +985,16 @@ export function appendPlinths(
     host: CityObjectRow,
     tint: [number, number, number]
   ) => {
-    const zs = tris.positions.filter((_, i) => i % 3 === 2);
-    if (zs.length === 0) {
+    if (tris.positions.length < 3) {
       return;
     }
-    const [base, top] = [Math.min(...zs), Math.max(...zs)];
-    const index = baked.objects.length;
-    positions.push(...tris.positions);
-    normals.push(...tris.normals);
-    for (let i = 0; i < tris.positions.length / 3; i++) {
-      objectIds.push(index);
+    let base = Number.POSITIVE_INFINITY;
+    let top = Number.NEGATIVE_INFINITY;
+    for (let i = 2; i < tris.positions.length; i += 3) {
+      base = Math.min(base, tris.positions[i]);
+      top = Math.max(top, tris.positions[i]);
     }
+    parts.push({ id: baked.objects.length, ...tris });
     const above = cm(top - base + 1);
     baked.objects.push({
       ...host,
@@ -931,22 +1075,52 @@ export function appendPlinths(
       part(tris, host, tint);
     }
   }
-  if (positions.length === 0) {
-    return;
+  if (parts.length > 0) {
+    baked.vertices = withParts(baked.vertices, parts);
   }
-  const v = baked.vertices;
-  baked.vertices = {
-    positions: concat(v.positions, positions),
-    objectIds: concat(v.objectIds, objectIds),
-    isRoof: concat(
-      v.isRoof,
-      objectIds.map(() => 0)
-    ),
-    normals: concat(
-      v.normals ?? new Float32Array(v.positions.length).fill(Number.NaN),
-      normals
-    ),
-  };
+}
+
+/** Triangles appended to the stream under one object id, a normal per
+ *  vertex (NaN: flat). */
+interface AppendedPart {
+  id: number;
+  normals: readonly number[];
+  positions: readonly number[];
+}
+
+/** The vertex stream with `parts` appended (none of them roof), written
+ *  straight into typed arrays: a tile's plinths and bands run to millions
+ *  of coordinates, which a spread push and a copy through plain arrays
+ *  spent seconds a tile on. */
+function withParts(
+  v: CityVertices,
+  parts: readonly AppendedPart[]
+): CityVertices {
+  const own = v.objectIds.length;
+  const total = parts.reduce((n, p) => n + p.positions.length / 3, own);
+  const positions = new Float32Array(3 * total);
+  const normals = new Float32Array(3 * total);
+  const objectIds = new Float32Array(total);
+  const isRoof = new Float32Array(total);
+  positions.set(v.positions);
+  if (v.normals) {
+    normals.set(v.normals);
+  } else {
+    normals.fill(Number.NaN, 0, v.positions.length);
+  }
+  objectIds.set(v.objectIds);
+  isRoof.set(v.isRoof);
+  let at = own;
+  for (const p of parts) {
+    for (let i = 0; i < p.positions.length; i++) {
+      positions[3 * at + i] = p.positions[i];
+      normals[3 * at + i] = p.normals[i];
+    }
+    const n = p.positions.length / 3;
+    objectIds.fill(p.id, at, at + n);
+    at += n;
+  }
+  return { positions, objectIds, isRoof, normals };
 }
 
 /** Neighbouring houses' Traufgesimse this close in height run as one. */

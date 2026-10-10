@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import rehypeShiki from "@shikijs/rehype";
+import rehypeShiki, { type RehypeShikiOptions } from "@shikijs/rehype";
 import type { Element, Root as HastRoot } from "hast";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { toString as hastText } from "hast-util-to-string";
@@ -197,6 +197,18 @@ function DocLink({ children, href = "", ...rest }: ComponentProps<"a">) {
   );
 }
 
+/** The code fences' languages the highlighter loads up front (```mermaid
+ *  becomes a diagram before it runs). */
+const SHIKI_LANGS: RehypeShikiOptions["langs"] = [
+  "bash",
+  "markdown",
+  "python",
+  "toml",
+  "tsx",
+  "typescript",
+  "yaml",
+];
+
 /** One docs file, rendered: Markdown → hast → React, on the server only. */
 export async function renderDoc(
   file: string,
@@ -216,6 +228,12 @@ export async function renderDoc(
     .use(rehypeMethodBadges(lang))
     .use(rehypeShiki, {
       theme: "github-light",
+      // The languages docs/ fences: without a list the plugin loads every
+      // grammar Shiki bundles (346, ~5.5 s per build worker). Any other one
+      // Shiki has loads when a page first fences it (`lazy`); a name it does
+      // not know stays plain text.
+      langs: SHIKI_LANGS,
+      lazy: true,
       defaultLanguage: "text",
       fallbackLanguage: "text",
     });

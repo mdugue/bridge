@@ -149,8 +149,8 @@ so.
 - `resetFailedTiles()` also turns a tile that FAILED for another reason (a
   404, a parse error) back to UNLOADED: it is not asked for again until
   evicted, and its parent is drawn instead of a hole.
-- Not yet through the policy: the soundscape's and the minimap's PNGs and
-  the inquiry card's facts fetch directly, and a dressing that failed
+- Not yet through the policy: the minimap's PNGs and the inquiry
+  card's facts fetch directly, and a dressing that failed
   transiently is not queued again — follow-ups. The optional fetchers
   still return null after their budget (throwing would turn two callers'
   failures into unhandled rejections and settle a dressing for good); a

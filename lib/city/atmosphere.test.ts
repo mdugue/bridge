@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { atmosphereAt, fogRangeFor, lerpHexColor } from "./atmosphere";
+import {
+  atmosphereAt,
+  fogRangeFor,
+  lerpHexColor,
+  streamFarFor,
+} from "./atmosphere";
 
 test("lerpHexColor blends channel-wise and clamps t", () => {
   expect(lerpHexColor("#000000", "#ffffff", 0.5)).toBe("#808080");
@@ -48,4 +53,12 @@ test("fogRangeFor: more atmosphere pulls the fog closer, clamped to [0,1]", () =
   }
   expect(fogRangeFor(-5)).toEqual(clear);
   expect(fogRangeFor(5)).toEqual(dense);
+});
+
+test("streamFarFor: the fog's end plus a margin, never past the camera's far", () => {
+  const fogFar = fogRangeFor(0.2).far;
+  expect(streamFarFor(fogFar, 6000)).toBeGreaterThan(fogFar);
+  expect(streamFarFor(fogFar, 6000)).toBeLessThan(fogFar * 1.25);
+  // the clearest fog's end with its margin stays inside the camera
+  expect(streamFarFor(fogRangeFor(0).far, 4200)).toBe(4200);
 });

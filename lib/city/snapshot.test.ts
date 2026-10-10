@@ -22,10 +22,7 @@ const valid: Snapshot = {
   look: {
     fogPct: 30,
     heightFogPct: 40,
-    transparencyPct: 20,
-    dof: true,
-    focusMode: "manual",
-    focusDistanceM: 80,
+    grainPct: 20,
     multiTuft: false,
     style: "comic",
   },
@@ -99,15 +96,51 @@ test("look percentages must be numbers", () => {
 });
 
 test("look flags are type- and enum-checked", () => {
-  expect(reason(withLook({ focusMode: "fixed" }))).toMatch(/look.focusMode/);
-  expect(reason(withLook({ dof: "yes" }))).toMatch(/look.dof/);
   expect(reason(withLook({ multiTuft: 1 }))).toMatch(/look.multiTuft/);
   expect(reason(withLook({ bikeLayer: "on" }))).toMatch(/look.bikeLayer/);
   expect(reason(withLook({ style: "ghost" }))).toMatch(/look.style/);
   expect(reason(withLook({ style: 2 }))).toMatch(/look.style/);
-  expect(reason(withLook({ focusDistanceM: 0.5 }))).toMatch(
-    /look.focusDistanceM/
+});
+
+// The controls the maintainer removed (2026-10-10): the see-through
+// buildings, the leaf flutter and its gust brightness, the river mist's
+// strength, the depth of field's switch and its focus. Snapshots copied
+// before then carry their keys.
+const REMOVED_LOOK = {
+  transparencyPct: 40,
+  leafFlutterPct: 70,
+  leafBrightPct: 30,
+  waterMistPct: 0,
+  dof: false,
+  focusMode: "manual",
+  focusDistanceM: 80,
+};
+
+test("an old snapshot with removed controls still loads, and they are ignored", () => {
+  const r = parseSnapshot(
+    withLook({ ...REMOVED_LOOK, fogPct: 30, multiTuft: false })
   );
+  expect(r.ok).toBe(true);
+  if (!r.ok) {
+    return;
+  }
+  // Apply sets what is still a control, and nothing else.
+  expect(decodeLook(r.snapshot.look)).toEqual({
+    fogAmount: 0.3,
+    multiTuft: false,
+  });
+});
+
+test("a removed control's key is no longer checked", () => {
+  // Rejected while they were controls; now unknown keys like any other.
+  for (const look of [
+    { focusMode: "fixed" },
+    { dof: "yes" },
+    { focusDistanceM: 0.5 },
+    { transparencyPct: "20" },
+  ]) {
+    expect(parseSnapshot(withLook(look)).ok).toBe(true);
+  }
 });
 
 test("a snapshot without look is accepted", () => {
@@ -149,10 +182,6 @@ test("what Copy encodes, Apply decodes back — through the same parser", () => 
   const values = {
     ...LOOK_DEFAULTS,
     fogAmount: 0.35,
-    transparency: 0.9,
-    dof: false,
-    focusMode: "manual" as const,
-    focusDistanceM: 80,
     multiTuft: false,
     style: "sincity" as const,
     trafficLayer: true,
@@ -164,7 +193,6 @@ test("what Copy encodes, Apply decodes back — through the same parser", () => 
   expect(snap.v).toBe(1);
   expect(snap.date).toBe(valid.date);
   expect(snap.look?.fogPct).toBe(35);
-  expect(snap.look?.transparencyPct).toBe(90);
   expect(snap.look?.style).toBe("sincity");
   const parsed = parseSnapshot(JSON.stringify(snap));
   expect(parsed.ok).toBe(true);
@@ -192,9 +220,9 @@ test("snapshotInstant floors a hand-edited instant to the minute the slider show
 });
 
 test("decodeLook leaves absent keys out, so an older snapshot keeps the current values", () => {
-  expect(decodeLook({ fogPct: 30, dof: false })).toEqual({
+  expect(decodeLook({ fogPct: 30, multiTuft: false })).toEqual({
     fogAmount: 0.3,
-    dof: false,
+    multiTuft: false,
   });
   expect(decodeLook(undefined)).toEqual({});
 });

@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { DataTexture, MeshStandardNodeMaterial } from "three/webgpu";
+import {
+  DataTexture,
+  DoubleSide,
+  FrontSide,
+  MeshStandardNodeMaterial,
+} from "three/webgpu";
 import { uniform } from "three/tsl";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { graphOf, slotsOf } from "./material-slots";
@@ -8,47 +13,40 @@ import {
   applyCityLook,
   createClayMaterial,
   createStyleResources,
-  setCityTransparency,
+  setClaySection,
   setClaySkyView,
 } from "./visual-style";
 
-// The alpha-hash test is part of the built node graph, so these tests watch
+// The clay's side is part of the built node graph, so these tests watch
 // `material.version` (the counter that `needsUpdate` increments) to pin down
 // exactly when a rebuild is forced.
 
 const objects = () => ({ rows: 1, texture: new DataTexture() });
 const resourcesAt = () => createStyleResources(uniform(0), uniform(1));
 
-test("clay switches to hash-dithered transparency and back", () => {
+test("the Schnitt draws the clay from both sides and back, one rebuild each way", () => {
   const resources = resourcesAt();
   const clay = createClayMaterial(resources, objects());
   const before = clay.version;
+  expect(clay.side).toBe(FrontSide);
 
-  setCityTransparency(resources, 0.5);
-  expect(clay.opacity).toBeCloseTo(0.5, 5);
-  expect(clay.alphaHash).toBe(true);
-  expect(clay.transparent).toBe(false);
+  setClaySection(resources, true);
+  expect(clay.side).toBe(DoubleSide);
+  expect(graphOf(clay)).toBe("clay|double");
+  expect(clay.version).toBe(before + 1);
+  // a tile that lands while the Schnitt shows is born two-sided
+  expect(createClayMaterial(resources, objects()).side).toBe(DoubleSide);
+
+  setClaySection(resources, true);
   expect(clay.version).toBe(before + 1);
 
-  setCityTransparency(resources, 0.8);
-  expect(clay.opacity).toBeCloseTo(0.2, 5);
-  expect(clay.version).toBe(before + 1);
-
-  setCityTransparency(resources, 0);
-  expect(clay.alphaHash).toBe(false);
-  expect(clay.opacity).toBeCloseTo(1, 5);
+  setClaySection(resources, false);
+  expect(clay.side).toBe(FrontSide);
+  expect(graphOf(clay)).toBe("clay");
   expect(clay.version).toBe(before + 2);
 });
 
-test("transparency is clamped to 0..1 and reaches tiles that land later", () => {
-  const resources = resourcesAt();
-  setCityTransparency(resources, 2);
-  expect(createClayMaterial(resources, objects()).opacity).toBe(0);
-  setCityTransparency(resources, -1);
-  expect(createClayMaterial(resources, objects()).opacity).toBe(1);
-});
-
-test("a disposed tile's material leaves the look fan-out", () => {
+test("a disposed tile's material leaves the Schnitt's fan-out", () => {
   const resources = resourcesAt();
   const clay = createClayMaterial(resources, objects());
   expect(resources.materials.has(clay)).toBe(true);
@@ -56,19 +54,18 @@ test("a disposed tile's material leaves the look fan-out", () => {
   expect(resources.materials.has(clay)).toBe(false);
 });
 
-test("applyCityLook pushes the building rows into the uniforms and the transparency", () => {
+test("applyCityLook pushes the building rows into the uniforms, no rebuild", () => {
   const resources = resourcesAt();
   const clay = createClayMaterial(resources, objects());
+  const before = clay.version;
   applyCityLook(resources, {
     ...LOOK_DEFAULTS,
     tint: 0.42,
     roughness: 0.3,
-    transparency: 0.5,
   });
   expect(resources.clayDetail.uTint.value).toBe(0.42);
   expect(resources.clayDetail.uRough.value).toBe(0.3);
-  expect(clay.opacity).toBeCloseTo(0.5, 5);
-  expect(clay.alphaHash).toBe(true);
+  expect(clay.version).toBe(before);
 });
 
 test("the clay shares the scene's night and sky-view nodes", () => {
@@ -102,7 +99,7 @@ test("every building tile's clay shares one graph and reads its own table", () =
   expect(clayB.aoNode).toBe(clayA.aoNode);
   expect(slotsOf(clayB).clayObjects).toBe(b.texture);
   expect(slotsOf(clayB).clayRows).toBe(7);
-  expect(graphOf(clayB)).toBe("clay|solid");
+  expect(graphOf(clayB)).toBe("clay");
   // the open sky until the tile's raster lands, then a swap of values
   expect(slotsOf(clayA).claySvf).toBe(openSkyTexture());
   const before = clayA.version;
@@ -111,6 +108,4 @@ test("every building tile's clay shares one graph and reads its own table", () =
   expect(slotsOf(clayA).claySvf).toBe(raster);
   expect(slotsOf(clayA).clayObjects).toBe(a.texture);
   expect(clayA.version).toBe(before);
-  setCityTransparency(resources, 0.5);
-  expect(graphOf(clayA)).toBe("clay|hashed");
 });

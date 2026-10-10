@@ -23,6 +23,7 @@ import {
   packObjectTexels,
 } from "@/lib/city/city-mesh";
 import { type ObjectFacts, readFacts } from "@/lib/city/object-facts";
+import type { StructuralMetadata } from "@/lib/city/property-table";
 import {
   applyFacadeReadings,
   type FacadeReadings,
@@ -31,8 +32,8 @@ import { textureBytes, trackTexture } from "./three-utils";
 import { createClayMaterial, type StyleResources } from "./visual-style";
 
 /**
- * One tile's buildings: the streamed glTF mesh (scripts/bake-tiles.ts), its
- * per-object table (EXT_structural_metadata, read by 3DTilesRendererJS) as a
+ * One tile's buildings: the streamed glTF mesh (scripts/bake-city-mesh.ts), its
+ * per-object table (EXT_structural_metadata, read by gltf-content.ts) as a
  * float texture the clay shader reads per vertex, and the demolish state.
  * Demolish filters the index buffer — no re-parse, no vertex copies.
  */
@@ -60,19 +61,6 @@ export interface CityMesh extends Mesh {
   isCityObjectMesh?: boolean;
 }
 
-/** One property table as 3DTilesRendererJS exposes it. */
-interface PropertyTableLike {
-  count: number;
-  getPropertyValue: (name: string, id: number) => unknown;
-  /** the class's properties (a column the tile lacks is absent here) */
-  properties: Record<string, unknown>;
-}
-
-/** The glTF's EXT_structural_metadata as 3DTilesRendererJS exposes it. */
-interface StructuralMetadataLike {
-  tableAccessors: PropertyTableLike[];
-}
-
 const xyz = (v: unknown): number[] => {
   const p = v as { x?: number; y?: number; z?: number } | number[];
   return Array.isArray(p) ? p : [p.x ?? 0, p.y ?? 0, p.z ?? 0];
@@ -84,7 +72,7 @@ const xyz = (v: unknown): number[] => {
  * string of every object, which only the inquiry card ever needs.
  */
 export function readObjectTable(
-  metadata: StructuralMetadataLike,
+  metadata: StructuralMetadata,
   count: number
 ): CityObjectTable {
   const table: CityObjectTable = {
@@ -145,7 +133,7 @@ export function readObjectTable(
 /** One object's facts from the tile's table (ADR 0042); a tile baked before
  *  the fact columns answers with unknowns and its feature index. */
 function readObjectFacts(
-  metadata: StructuralMetadataLike,
+  metadata: StructuralMetadata,
   objectIndex: number
 ): ObjectFacts {
   const accessor = metadata.tableAccessors[0];
@@ -213,7 +201,7 @@ export function dressCity(
   demolished: ReadonlySet<number>
 ): CityLayer {
   const geometry = mesh.geometry;
-  const metadata = mesh.userData.structuralMetadata as StructuralMetadataLike;
+  const metadata = mesh.userData.structuralMetadata as StructuralMetadata;
   const count = metadata.tableAccessors[0]?.count ?? 0;
   for (const [from, to] of [
     ["_feature_id_0", "featureId"],

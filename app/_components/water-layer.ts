@@ -31,7 +31,6 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
 import { reflectionStrength, skyReflection } from "./sky-reflection";
 import { type SplatLayer, splatUv } from "./terrain-layer";
@@ -41,8 +40,6 @@ export interface WaterLayer {
   mesh: Mesh;
   /** drifting river-haze sheet (added to the Z-up `world`, like the water) */
   mistMesh: Mesh;
-  /** 0..1 — river-mist (Flussnebel) strength */
-  setMist: (strength: number) => void;
   /** Advance the ripple, glitter and mist animation (elapsed seconds). The
    *  sky tint is the fog's colour node itself: nothing to copy per frame. */
   update: (seconds: number) => void;
@@ -118,9 +115,10 @@ function mistCoverage(splat: SplatLayer, uv: V2, size: [number, number]): F {
 /** m from the eye where the river mist begins, and where it is full. */
 const MIST_NEAR_M = 120;
 const MIST_FULL_M = 1200;
-/** The sheet's opacity at full strength and distance, and how far its
+/** The sheet's opacity at full distance — 60 % of 0.4, where the
+ *  *Flussnebel* slider stood by default before it went — and how far its
  *  colour goes from the sky's tint towards white. */
-const MIST_OPACITY = 0.4;
+const MIST_OPACITY = 0.24;
 const MIST_WHITE = 0.3;
 
 /**
@@ -136,8 +134,7 @@ function createWaterMist(
   splat: SplatLayer,
   size: [number, number],
   skyTint: UniformNode<"color", Color>
-): { mesh: Mesh; setMist: (strength: number) => void } {
-  const strength = uniform(LOOK_DEFAULTS.waterMist);
+): Mesh {
   const material = new MeshBasicNodeMaterial({
     transparent: true,
     depthWrite: false,
@@ -176,7 +173,7 @@ function createWaterMist(
     MIST_FULL_M,
     distance(cameraPosition, positionWorld)
   );
-  const alpha = wcov.mul(steam).mul(nearFade).mul(strength).mul(MIST_OPACITY);
+  const alpha = wcov.mul(steam).mul(nearFade).mul(MIST_OPACITY);
   material.maskNode = cov.greaterThan(0.01).and(alpha.greaterThan(0.002));
   // A haze a little brighter than the sky's tint, so it reads as mist over
   // the water; near-white, it turned the far river into a white band.
@@ -187,18 +184,7 @@ function createWaterMist(
   mesh.renderOrder = 3; // after the water sheet (2)
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  mesh.visible = LOOK_DEFAULTS.waterMist > 0.001;
-  return {
-    mesh,
-    setMist: (s) => {
-      const v = Math.min(Math.max(s, 0), 1);
-      strength.value = v;
-      // Drop the sheet from the render submission entirely when off
-      // (mirrors the lamp-glow visibility gate — keep additive overdraw
-      // fading to 0).
-      mesh.visible = v > 0.001;
-    },
-  };
+  return mesh;
 }
 
 // --- the water sheet -----------------------------------------------------------------
@@ -310,12 +296,11 @@ export function createWaterLayer(
 
   // River mist: a second masked sheet on the SAME (shared) geometry, on the
   // same clock and sky tint.
-  const mist = createWaterMist(geometry, splat, size, skyTint);
+  const mistMesh = createWaterMist(geometry, splat, size, skyTint);
 
   return {
     mesh,
-    mistMesh: mist.mesh,
-    setMist: mist.setMist,
+    mistMesh,
     update: (seconds) => {
       waterTime.value = seconds;
     },

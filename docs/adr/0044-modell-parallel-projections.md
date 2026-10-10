@@ -60,7 +60,7 @@ demolish and double-click centring all use it.
 
 **Scale, not distance.** In Modell the shadow frustum fits the
 footprint (half-octave steps, 110–1600 m on desktop, 880 m on phones),
-the vegetation tiers, lamp lights, map overlay and soundscape read an
+the vegetation tiers, lamp lights and map overlay read an
 eye above the pivot at the equivalent distance, the distance fog is
 open, the sky dome hidden and the background the style's paper. Depth
 of field, grading and the vignette are off.

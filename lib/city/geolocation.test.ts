@@ -66,7 +66,7 @@ describe("placementOf", () => {
   const bounds: TerrainBounds = [412_000, 5_656_000, 414_000, 5_658_000];
   const inside = utmToLatLng(25_833, 413_000, 5_657_000);
   if (!inside) {
-    throw new Error("proj4 unavailable");
+    throw new Error("EPSG:25833 unsupported");
   }
 
   test("a fix on the site lands on its projected coordinates", () => {
