@@ -411,8 +411,6 @@ mistake); the switch stays as you set it.
 | | *Wiesenfärbung* | tints meadows lush-to-dry from the infrared aerial photo |
 | | *Gegenlicht-Schimmer* | backlight shimmer on crowns between you and the sun |
 | | *Blattdurchscheinen* | translucency of nearby, large crowns (shadow-dependent) |
-| | *Blattflimmern* | gusts flip leaves to their pale underside on sunlit crowns |
-| | *Windhelligkeit* | crowns brighten as they lean into a gust |
 | | *Multi-Tuft-Kronen (nah)* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |

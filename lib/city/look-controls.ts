@@ -39,11 +39,7 @@ export type ClayLookKey =
 /** Rows the post stack applies (post-stack.ts). */
 export type PostLookKey = "contact" | "grading" | "grain" | "ink";
 /** Rows every vegetation tile applies (vegetation-layer.ts). */
-export type VegetationLookKey =
-  | "leafBright"
-  | "leafFlutter"
-  | "shimmer"
-  | "translucency";
+export type VegetationLookKey = "shimmer" | "translucency";
 /**
  * Every percent row. Each key belongs to exactly one owner union above, and
  * each owner applies its rows through a `Record<…LookKey, …>` the compiler
@@ -298,26 +294,6 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     group: "vegetation",
     initial: 0.5,
     snapshotKey: "translucencyPct",
-  },
-  {
-    key: "leafFlutter",
-    id: "tree-leaf-flutter",
-    label: "Blattflimmern",
-    description:
-      "(A) Windböen lassen Blätter ihre helle Unterseite zeigen — Farbe flimmert über sonnige Kronen. 0 = nur (B) sichtbar.",
-    group: "vegetation",
-    initial: 0.5,
-    snapshotKey: "leafFlutterPct",
-  },
-  {
-    key: "leafBright",
-    id: "tree-leaf-bright",
-    label: "Windhelligkeit",
-    description:
-      "(B) Krone hellt auf, wenn sie sich in die Böe neigt (an die Wiege-Bewegung gekoppelt). 0 = nur (A) sichtbar.",
-    group: "vegetation",
-    initial: 0.5,
-    snapshotKey: "leafBrightPct",
   },
   // --- Rendering ---
   {

@@ -3,8 +3,8 @@ import { LOOK_BY_KEY, LOOK_CONTROLS, LOOK_DEFAULTS } from "./look-controls";
 
 const GROUPS = new Set(["atmosphere", "buildings", "vegetation", "rendering"]);
 
-test("the table has 29 rows with unique keys, ids and snapshot keys", () => {
-  expect(LOOK_CONTROLS).toHaveLength(29);
+test("the table has 27 rows with unique keys, ids and snapshot keys", () => {
+  expect(LOOK_CONTROLS).toHaveLength(27);
   for (const field of ["key", "id", "snapshotKey"] as const) {
     const values = LOOK_CONTROLS.map((def) => def[field]);
     expect(new Set(values).size).toBe(values.length);

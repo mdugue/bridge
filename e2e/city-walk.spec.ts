@@ -1248,8 +1248,6 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
               waterMist: 1,
               shimmer: 1,
               translucency: 1,
-              leafFlutter: 1,
-              leafBright: 1,
               multiTuft: true,
             }),
           // The picture styles: the first non-default style compiles the
