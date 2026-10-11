@@ -427,7 +427,9 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
   inside frames over two walk/stand rounds (51 frames), counted with
   `getRenderInfo().framedBuilds` — and keeps every render context
   (they key by the target drawn into). Passes a frame (`frameCalls`, lite,
-  headless): standing 18 → 18, one of them now one pixel; walking 8 → 7.
+  headless): standing 18 → 18, one of them now one pixel; walking 8 → 7;
+  Modell 8 → 8, its pipeline warmed into the 1×1 target (entering it
+  built nothing in the frame — the pixel's context is `BeforeAA`'s).
   `BeforeAA` (8 B a pixel: 36 MiB at 1920×1080 × 1.5) is held only in
   Modell or a picture style. Fill-rate and memory are not measurable on
   SwiftShader; the saving is one full-resolution read and write a frame.
