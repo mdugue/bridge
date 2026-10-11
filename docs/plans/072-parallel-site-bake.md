@@ -16,25 +16,29 @@
 
 ## Status
 
-- **Status (2026-10-10)**: **PARTIAL — the warmers lost on Vercel and are
-  opt-in** (`PREPARE_WARMERS=1`). Built: steps 1, 3–6 on `266bb89` (the
-  performance PR's base); step 2 skipped by its gate. On Vercel's builder
-  (4 cores, 8.6 GB; `process.constrainedMemory()` reports the 8.6) a cold
-  build of all seven sites took **322 s with the warmers against 235 s**
-  for main's one process per site (main's last cold production build,
-  #149). The log names why: a tile warmer's buildings took 6–37 s (sum
-  ≈ 350 s for fifteen), about twice the per-tile time of the one process
-  that bakes all fifteen — each warmer starts cold, its modules loaded and
-  its code compiled again; 3 GB a tile warmer lets two run at once in
-  6.9 GB (the measured peaks there: 0.6–2.3 GiB), so Dresden's tiles took
-  179 s two at a time; and the smaller sites, first by priority, held the
-  slots until t ≈ 95 s while Dresden's ground warmers waited. The
-  default is therefore main's schedule again (one process per site,
-  counted at 3 GB, largest first — two at once on that builder); what
-  stands on its own stays on: atomic cache entries (two sites already
-  baked side by side into one cache), each tile's fine ground as its own
-  entry, the timing lines. The local numbers below came from a box shared
-  with other agents' e2e runs and are superseded by Vercel's.
+- **Status (2026-10-10)**: **PARTIAL — the warmers showed no gain on
+  Vercel and are opt-in** (`PREPARE_WARMERS=1`). Built: steps 1, 3–6 on
+  `266bb89` (the performance PR's base); step 2 skipped by its gate.
+  Measured on Vercel's builder (4 cores, 8.6 GB; `process.constrainedMemory()`
+  reports the 8.6), cold builds of all seven sites, `prepare-sites`:
+  main 235 s (#149's production build) and 232 s (its preview); the
+  warmers 322 s; this plan's default schedule 387 s. The builders
+  differed: Next's static pages, which none of this touches, took 7.5–8.7 s
+  in main's builds and 11.3–11.9 s in the branch's, so these single builds
+  cannot settle a difference under ≈ 40 %. What the logs do show: at 3 GB a
+  tile warmer, two run at once in 6.9 GB — the parallelism main already
+  gets from two sites side by side —, the smaller sites held the slots
+  until t ≈ 95 s while Dresden's ground warmers waited, and the warmers'
+  31 processes cost ≈ 10 % more CPU. On one box, alternating, the default
+  schedule costs main's CPU (Grimma 28.6/28.7 s, Hamburg 59.7/60.1 s of
+  user time; main/branch). So the default is main's schedule again (one
+  process per site, counted at 3 GB, largest first — two at once on that
+  builder, four on CI's 16.8 GB runner; against 80 % of the memory where
+  main counted all of it, so one fewer on a 12–15 GB box); on by default:
+  atomic cache entries (two sites already baked
+  side by side into one cache), each tile's fine ground as its own entry,
+  the timing lines. The local numbers below came from a box shared with
+  other agents' e2e runs.
   - **Step 1** (cold, all seven sites side by side, Dresden one process,
     load ≈ 7): Dresden's 15 tiles — buildings 268.9 s, fine 265.3 s (of
     which the site ground's first call, fifteen TINs, 202.7 s), coarse

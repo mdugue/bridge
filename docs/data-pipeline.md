@@ -624,16 +624,19 @@ started late it would be the build's tail; the warmers fill every slot
 they leave. Anything new that is computed from every tile must be cached
 by step 1, or every warmer computes it again.
 
-They are off by default because they lost where it counts. On Vercel's
-builder (4 cores, 8.6 GB) a cold build of all seven sites took 322 s with
-them against 235 s without (2026-10-10: plan 072's first preview build
-against main's last cold production build): a warmer runs its tile's buildings at about twice the per-tile
-time of the single process that bakes all fifteen — each starts cold, its
-modules loaded and its code compiled again — and 8.6 GB lets two tile
-warmers run at once, so Dresden's tiles alone took 179 s two at a time,
-behind the smaller sites that went first. They may pay on a machine with
-many cores and the memory to run four or more tile warmers at once; that
-has not been measured.
+They are off by default because they showed no gain where it counts. On
+Vercel's builder (4 cores, 8.6 GB) a cold build of all seven sites took
+322 s with them; main's took 232–235 s and the default schedule 387 s on
+the same branch — but the builders differed by about 1.4× in a step the
+warmers do not touch (Next's static pages: 7.5–8.7 s in main's builds,
+11.3–11.9 s in the branch's), so single builds there cannot settle a
+difference of that size (2026-10-10). What is structural: 8.6 GB lets two
+tile warmers run at once, the parallelism main already gets from baking two
+sites side by side, and the warmers' processes add ≈ 10 % CPU. On one box,
+alternating, the default schedule costs main's CPU (Grimma 28.6 and
+28.7 s, Hamburg 59.7 and 60.1 s of user time). They may pay on a machine
+with the cores and memory for four or more tile warmers at once; that has
+not been measured.
 
 ### Cache and publish
 

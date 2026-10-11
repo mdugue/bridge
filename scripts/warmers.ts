@@ -26,15 +26,18 @@
  * 2.7 GB), and a free slot takes the next tile, so a slot that frees late
  * still finds work.
  *
- * The warmers are off by default because on Vercel's 4-core, 8.6 GB
- * builder they lost (2026-10-10, a cold build of all seven sites):
- * `prepare-sites` took 322 s with them against 235 s with one process per
- * site. A warmer runs its tile's buildings at about twice the per-tile time
- * of a process that bakes all fifteen — each starts cold, its modules
- * loaded and its code compiled again — and `TILE_PEAK` lets two run at once
- * in that memory, so Dresden's tiles took 179 s two at a time where the
- * single process took 235 s for everything. They may pay on a machine with
- * more cores and memory (not measured).
+ * The warmers are off by default: on Vercel's 4-core, 8.6 GB builder they
+ * showed no gain (2026-10-10, cold builds of all seven sites). With them
+ * `prepare-sites` took 322 s; main took 232–235 s, and this module's
+ * default 387 s — but those builders differed by about 1.4× in a step none
+ * of this touches (Next's static pages: 7.5–8.7 s in main's builds,
+ * 11.3–11.9 s in these), so single builds there cannot settle it. What is
+ * structural: `TILE_PEAK` lets two tile warmers run at once in that memory,
+ * the parallelism main already gets from baking two sites side by side,
+ * and the warmers' processes add ≈ 10 % CPU. On one box, alternating, the
+ * default costs main's CPU (Grimma 28.6/28.7 s, Hamburg 59.7/60.1 s). They
+ * may pay on a machine with the cores and memory for four or more tile
+ * warmers at once (not measured).
  */
 
 /** A site with more tiles than this is baked by warmers. */
@@ -92,9 +95,12 @@ export const PROCESS_PEAK = 1.6e9;
 /**
  * A whole site in one process, as every site is baked without the warmers:
  * counted at 3 GB whichever site it is — the largest peaks higher (a cold
- * Dresden 4.3–5.7 GiB), the others near 1 GB — so a 4-core, 8 GB builder
- * bakes two sites at once, the rule the builds kept before the warmers
- * (`floor(memory / 3 GB)`), measured there at 235 s cold.
+ * Dresden 4.3–5.7 GiB), the others near 1 GB — so Vercel's 4-core, 8.6 GB
+ * builder bakes two sites at once (main's build there: 235 s cold) and
+ * CI's 4-core, 16.8 GB runner four, as before the warmers. Before them the
+ * count was `floor(memory / 3 GB)` of all the memory; against
+ * `MEMORY_SHARE` of it, a machine of 6–7.5, 9–11.25 or 12–15 GB bakes one
+ * site fewer at once.
  */
 export const SITE_PEAK = 3e9;
 /** The share of the machine's memory the bakes may hold together. */
