@@ -78,10 +78,10 @@ function headerOf(bytes: Uint8Array): Float64Array {
   if (bytes.byteLength < HEADER_BYTES) {
     throw new Error("ground entry: shorter than its header");
   }
+  // a copy from the view's own offset: a Buffer's slice() is a view, and
+  // its buffer can start before the entry
   const header = new Float64Array(
-    bytes.slice(0, HEADER_BYTES).buffer,
-    0,
-    HEADER_NUMBERS
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + HEADER_BYTES)
   );
   if (header[0] !== VERSION || KINDS[header[1]] === undefined) {
     throw new Error(`ground entry: version ${header[0]}, kind ${header[1]}`);

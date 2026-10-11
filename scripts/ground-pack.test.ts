@@ -73,6 +73,19 @@ test("the shaped grid of a DGM with NoData comes back as the grid mesh", () => {
   expect(heights(rebuilt.heightAt)).toEqual(heights(baked.heightAt));
 });
 
+test("an entry read as a Buffer at an offset comes back whole", () => {
+  const tin = fineTin(dgm(), [], {}, 0.1);
+  if (!tin) {
+    throw new Error("the fixture has no hole");
+  }
+  // a Buffer's slice() shares its memory, unlike a Uint8Array's
+  const bytes = Buffer.concat([
+    Buffer.alloc(8),
+    packGround({ kind: "tin", tin }),
+  ]).subarray(8);
+  expect(unpackGround(bytes)).toEqual({ kind: "tin", tin });
+});
+
 test("the header alone names the kind and the bounds", () => {
   const tin = fineTin(dgm(), [], {}, 0.1);
   const path = join(mkdtempSync(join(tmpdir(), "ground-pack-")), "g.bin");
