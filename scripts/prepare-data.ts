@@ -119,6 +119,7 @@ import {
   tramTimetableSource,
 } from "../lib/city/tram-timetable";
 import { siteFromArgs } from "../sites";
+import { bakeMode, NOT_CACHED } from "./warmers";
 import {
   type BakedCityMesh,
   bakeCityMesh,
@@ -135,20 +136,34 @@ import {
   packageImports,
   readLockfile,
 } from "./bake-sources";
+import { cachedEntry, writeEntry } from "./bake-cache";
 import {
+  type Dgm,
   fenceMesh,
+  fineTin,
+  gridHeightAt,
+  gridMesh,
   kerbMesh,
   readDgm,
+  shapeGrid,
   stairMesh,
+  type TerrainFeatures,
   type TerrainMesh,
   terrainMesh,
-  tinTerrainMesh,
+  tinHeightAt,
+  tinMesh,
   wallMesh,
 } from "./bake-tiles";
 import { FINE_TIN_MAX_ERROR } from "./bake-terrain-tin";
 import { bakeWissenHero } from "./bake-wissen-hero";
 import { type ColonyCrop, cropColonyRaster } from "./crop-raster";
 import { downsampleClassRaster } from "./downsample-raster";
+import {
+  type FineGround,
+  packGround,
+  readGroundHeader,
+  unpackGround,
+} from "./ground-pack";
 import {
   levelInputs,
   type SiteLevels,
@@ -172,9 +187,10 @@ const CACHE_DIR = join(
   process.cwd(),
   process.env.VERCEL ? ".next/cache/prepare-data" : ".cache/prepare-data"
 );
-const SITE = (() => {
+const { MODE, SITE } = (() => {
   try {
-    return siteFromArgs(process.argv.slice(2)).site;
+    const { rest, site } = siteFromArgs(process.argv.slice(2));
+    return { MODE: bakeMode(rest, tileIds(site)), SITE: site };
   } catch (error) {
     process.stderr.write(`prepare-data: ${(error as Error).message}\n`);
     process.exit(2);
@@ -182,6 +198,12 @@ const SITE = (() => {
 })();
 const OUT_DIR = join(process.cwd(), "public/data", SITE.id);
 const TILES = tileIds(SITE);
+/** A warmer (warmers.ts; prepare-sites.ts runs them only with
+ *  PREPARE_WARMERS=1) only fills the cache for its own tiles: it publishes
+ *  nothing — no file under public/data, no manifest, no prune. */
+const WARMING = MODE.kind !== "publish";
+/** The tiles this run bakes. */
+const OWN = new Set(MODE.kind === "publish" ? TILES : MODE.tiles);
 /** What a missing source means for a site that has not been fetched yet. */
 const HINT = ` — run \`bun run fetch ${SITE.id}\` and \`bun run bake ${SITE.id}\``;
 
@@ -194,6 +216,11 @@ function log(message: string): void {
   process.stdout.write(`prepare-data: ${message}\n`);
 }
 
+/** Whole milliseconds since `t0` (`performance.now()`), for the timing
+ *  lines. */
+const since = (t0: number) => Math.round(performance.now() - t0);
+const started = performance.now();
+
 const at = (path: string) => join(process.cwd(), path);
 const utf8 = (value: unknown) =>
   new TextEncoder().encode(`${JSON.stringify(value)}\n`);
@@ -204,7 +231,9 @@ const readJson = <T>(path: string): T =>
 
 // --- publish ------------------------------------------------------------------
 
-mkdirSync(OUT_DIR, { recursive: true });
+if (!WARMING) {
+  mkdirSync(OUT_DIR, { recursive: true });
+}
 const manifest: DataManifest = { version: 1, files: {} };
 const keep = new Set<string>([MANIFEST_FILE]);
 let published = 0;
@@ -217,13 +246,14 @@ function hashedName(file: string, content: Uint8Array): string {
   return `${basename(file, ext)}.${hash}${ext}`;
 }
 
-/** Publishes one artifact and returns the name it is served under. */
+/** Publishes one artifact and returns the name it is served under (a
+ *  warmer only names it: the names go into the glTF's extras). */
 function publish(logical: string, content: Uint8Array): string {
   const hashed = hashedName(logical, content);
   manifest.files[logical] = hashed;
   keep.add(hashed);
   const dest = join(OUT_DIR, hashed);
-  if (!existsSync(dest)) {
+  if (!WARMING && !existsSync(dest)) {
     writeFileSync(dest, content);
     published++;
   }
@@ -330,10 +360,12 @@ function cacheKey(
 /** The modules a tile's shaped ground is baked by (`shapedTerrain`): the
  *  DGM reader and meshers, the TIN's tolerance, the stair, terrace and wall
  *  sources, the passages the site's lines open, the levels' grid sizes and
- *  the tile's extent. */
+ *  the tile's extent — and the cache entry the fine ground is read back
+ *  from (`groundFile`): every artifact made from it keys on its reader. */
 const GROUND_BAKE = [
   "scripts/bake-tiles.ts",
   "scripts/bake-terrain-tin.ts",
+  "scripts/ground-pack.ts",
   "scripts/tile-sources.ts",
   "scripts/line-levels.ts",
   "lib/city/tileset.ts",
@@ -348,26 +380,44 @@ const GROUND_BAKE = [
  */
 const siteWide = (name: string) => `${SITE.id}.${name}`;
 
-/** The cached bytes for `key`, or the baked ones (then cached). */
+/** `--if-cached` (warmers.ts) stops at the first entry it would bake. */
+function mayBake(name: string): void {
+  if (MODE.kind === "publish" && MODE.ifCached) {
+    log(`${name} is not cached: the warmers bake the site`);
+    process.exit(NOT_CACHED);
+  }
+}
+
+/** The cached bytes for `key`, or the baked ones (then cached: one entry
+ *  per name, written whole — bake-cache.ts). */
 async function cached(
   name: string,
   key: string,
   bake: () => Promise<Uint8Array> | Uint8Array
 ): Promise<Uint8Array> {
-  const path = join(CACHE_DIR, `${key}.${name}`);
-  if (existsSync(path)) {
+  const path = cachedEntry(CACHE_DIR, name, key);
+  if (path) {
     return readFileSync(path);
   }
+  mayBake(name);
   const bytes = await bake();
-  mkdirSync(CACHE_DIR, { recursive: true });
-  // One entry per name: drop this artifact's stale keys.
-  for (const entry of readdirSync(CACHE_DIR)) {
-    if (entry.endsWith(`.${name}`)) {
-      rmSync(join(CACHE_DIR, entry));
-    }
-  }
-  writeFileSync(path, bytes);
+  writeEntry(CACHE_DIR, name, key, bytes);
   return bytes;
+}
+
+/** Where the cached entry for `key` lies, baked first when it is not
+ *  there — for an entry read later, or only in part. */
+async function cachedFile(
+  name: string,
+  key: string,
+  bake: () => Promise<Uint8Array> | Uint8Array
+): Promise<string> {
+  const path = cachedEntry(CACHE_DIR, name, key);
+  if (path) {
+    return path;
+  }
+  mayBake(name);
+  return writeEntry(CACHE_DIR, name, key, await bake());
 }
 
 // --- 1. side files --------------------------------------------------------------
@@ -462,6 +512,7 @@ async function publishCanopy(tile: string, file: string): Promise<string> {
 /** The levels of the site's rail and tram lines, solved over whole lines on
  *  every tile's DGM (scripts/line-levels.ts): each tile's file publishes
  *  with them. */
+const levelsStarted = performance.now();
 const lineLevels = parse<SiteLevels>(
   await cached(
     `line-levels-${SITE.id}.json`,
@@ -469,6 +520,7 @@ const lineLevels = parse<SiteLevels>(
     async () => utf8(await siteLineLevels(SITE))
   )
 );
+log(`line levels: ${since(levelsStarted)} ms`);
 
 /** The passages the lines open through the fill under the decks
  *  (lib/city/passages.ts): the terrain bake opens each in the tiles it
@@ -507,7 +559,11 @@ function publishLevels(tile: string, line: LevelLine, file: string): string {
   return publish(file, utf8({ ...doc, features }));
 }
 
-for (const tile of TILES) {
+// A ground warmer needs none; a tile warmer its own tiles'.
+const sidesStarted = performance.now();
+for (const tile of MODE.kind === "ground"
+  ? []
+  : TILES.filter((t) => OWN.has(t))) {
   const names: Published = {};
   const artifacts = Object.entries(tileArtifacts(tile)) as [
     TileArtifactKind,
@@ -567,6 +623,7 @@ for (const tile of TILES) {
   }
   sideFiles.set(tile, names);
 }
+log(`side files: ${since(sidesStarted)} ms`);
 
 // --- 2. content -----------------------------------------------------------------
 
@@ -784,10 +841,74 @@ function terrainInputs(tile: string): string[] {
   ];
 }
 
-/** A tile's shaped terrain at one level (memoised: the fine levels of every
- *  tile are also the ground the walls stand on). The fine level is a TIN
- *  over the native DGM (bake-terrain-tin.ts), unless the DGM has holes; the
- *  coarse one the resampled grid. */
+/** A tile's DGM read at `size` (`"native"`: its own resolution). */
+async function tileDgm(tile: string, size: number | "native"): Promise<Dgm> {
+  const source = dgmSourceFiles(SITE, tile);
+  const tfw = at(source.tfw);
+  const buf = readFileSync(at(source.tif));
+  return readDgm(
+    buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+    existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
+    size
+  );
+}
+
+/** What a tile's ground is shaped with besides its walls. */
+function groundFeatures(tile: string): TerrainFeatures {
+  return {
+    passages: passagesIn(tile),
+    stairs: stairLines(SITE, tile),
+    terraces: terraces(SITE, tile),
+  };
+}
+
+/** A tile's fine ground: a TIN over the native DGM (bake-terrain-tin.ts),
+ *  unless the DGM has holes; then the grid. */
+async function bakeFineGround(tile: string): Promise<FineGround> {
+  const walls = wallLines(SITE, tile);
+  const tin = fineTin(
+    await tileDgm(tile, "native"),
+    walls,
+    groundFeatures(tile),
+    FINE_TIN_MAX_ERROR
+  );
+  if (tin) {
+    return { kind: "tin", tin };
+  }
+  log(`${tile}: the DGM has NoData, the fine level stays a grid`);
+  const dgm = await tileDgm(tile, TERRAIN_LEVELS[0].n);
+  return { kind: "grid", grid: shapeGrid(dgm, walls, groundFeatures(tile)) };
+}
+
+/**
+ * Where a tile's fine ground lies in the cache (ground-pack.ts), baked first
+ * when it is not there. Cached apart from the fine level's glTF, which
+ * stands its walls, kerbs, stairs and fences on every tile's fine ground:
+ * a process baking some of the site's tiles (prepare-sites.ts' warmers)
+ * reads the others' grounds instead of refining their TINs again.
+ */
+const groundFiles = new Map<string, Promise<string>>();
+function groundFile(tile: string): Promise<string> {
+  let file = groundFiles.get(tile);
+  if (!file) {
+    file = cachedFile(
+      `ground_${tile}.bin`,
+      cacheKey(terrainInputs(tile), GROUND_BAKE, offset, passagesIn(tile)),
+      async () => {
+        const t0 = performance.now();
+        const packed = packGround(await bakeFineGround(tile));
+        log(`ground ${tile}: built in ${since(t0)} ms`);
+        return packed;
+      }
+    );
+    groundFiles.set(tile, file);
+  }
+  return file;
+}
+
+/** A tile's shaped terrain at one level (memoised until the tile is baked:
+ *  `dropTerrain`). The fine level is the cached ground meshed (`groundFile`),
+ *  the coarse one the resampled grid. */
 const terrains = new Map<
   string,
   Promise<TerrainMesh & { bounds: TerrainBounds }>
@@ -800,37 +921,22 @@ function shapedTerrain(
   let built = terrains.get(memo);
   if (!built) {
     built = (async () => {
-      const source = dgmSourceFiles(SITE, tile);
-      const tif = at(source.tif);
-      const tfw = at(source.tfw);
-      const buf = readFileSync(tif);
-      const read = (size: number | "native") =>
-        readDgm(
-          buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
-          existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
-          size
-        );
-      const features = {
-        passages: passagesIn(tile),
-        stairs: stairLines(SITE, tile),
-        terraces: terraces(SITE, tile),
-      };
       if (level === 0) {
-        const dgm = await read("native");
-        const tin = tinTerrainMesh(
-          dgm,
-          wallLines(SITE, tile),
-          offset,
-          features,
-          FINE_TIN_MAX_ERROR
-        );
-        if (tin) {
-          return { ...tin, bounds: dgm.bounds };
-        }
-        log(`${tile}: the DGM has NoData, the fine level stays a grid`);
+        const ground = unpackGround(readFileSync(await groundFile(tile)));
+        return ground.kind === "tin"
+          ? {
+              ...tinMesh(ground.tin, offset, FINE_TIN_MAX_ERROR),
+              bounds: ground.tin.bounds,
+            }
+          : { ...gridMesh(ground.grid, offset), bounds: ground.grid.bounds };
       }
-      const dgm = await read(TERRAIN_LEVELS[level].n);
-      const mesh = terrainMesh(dgm, wallLines(SITE, tile), offset, features);
+      const dgm = await tileDgm(tile, TERRAIN_LEVELS[level].n);
+      const mesh = terrainMesh(
+        dgm,
+        wallLines(SITE, tile),
+        offset,
+        groundFeatures(tile)
+      );
       return { ...mesh, bounds: dgm.bounds };
     })();
     terrains.set(memo, built);
@@ -838,19 +944,58 @@ function shapedTerrain(
   return built;
 }
 
+/** Frees a baked tile's shaped terrain (its meshes' arrays). */
+function dropTerrain(tile: string): void {
+  terrains.delete(`${tile}:0`);
+  terrains.delete(`${tile}:1`);
+}
+
+/** Each tile's fine ground height, read from the cache when first asked
+ *  for (the index over a TIN is ~10 MB, kept). */
+const heights = new Map<string, (x: number, y: number) => number | null>();
+function heightOver(
+  tile: string,
+  path: string
+): (x: number, y: number) => number | null {
+  let heightAt = heights.get(tile);
+  if (!heightAt) {
+    const ground = unpackGround(readFileSync(path));
+    heightAt =
+      ground.kind === "tin"
+        ? tinHeightAt(ground.tin)
+        : gridHeightAt(ground.grid);
+    heights.set(tile, heightAt);
+  }
+  return heightAt;
+}
+
 /** Ground height over the whole site: the fine, shaped ground of the tile
  *  holding the point — what the walker stands on at runtime. `tin` is true
  *  when every tile's fine level is a TIN (nothing burned to the wall line,
- *  so the walls snap to the measured step). */
+ *  so the walls snap to the measured step). Every tile's ground is cached
+ *  first, one at a time; a tile's heights are read once a point asks. */
+let groundTimed = false;
 async function siteGround(): Promise<{
   heightAt: (x: number, y: number) => number | null;
   tin: boolean;
 }> {
-  const fine = await Promise.all(TILES.map((t) => shapedTerrain(t, 0)));
+  const t0 = performance.now();
+  const fine: { bounds: TerrainBounds; path: string; tin: boolean }[] = [];
+  for (const t of TILES) {
+    const path = await groundFile(t);
+    const { bounds, kind } = readGroundHeader(path);
+    fine.push({ bounds, path, tin: kind === "tin" });
+  }
+  if (!groundTimed) {
+    groundTimed = true;
+    log(`site ground: ${since(t0)} ms`);
+  }
   return {
-    heightAt: (x, y) =>
-      fine.find((g) => ownsPoint(g.bounds, x, y))?.heightAt(x, y) ?? null,
-    tin: fine.every((g) => g.tin !== undefined),
+    heightAt: (x, y) => {
+      const i = fine.findIndex((g) => ownsPoint(g.bounds, x, y));
+      return i < 0 ? null : heightOver(TILES[i], fine[i].path)(x, y);
+    },
+    tin: fine.every((g) => g.tin),
   };
 }
 
@@ -1101,14 +1246,39 @@ function groundSamples(m: {
   return out;
 }
 
+/** A warmer's last line: what it cached, how long it took, its peak. */
+function warmed(what: string): never {
+  log(
+    `warmed ${what} in ${since(started)} ms, peak RSS ${(process.resourceUsage().maxRSS / 1024 ** 2).toFixed(2)} GiB (published nothing)`
+  );
+  process.exit(0);
+}
+
+if (MODE.kind === "ground") {
+  for (const tile of MODE.tiles) {
+    await groundFile(tile);
+    Bun.gc(true);
+  }
+  warmed(`the fine ground of ${MODE.tiles.join(", ")}`);
+}
+
 const baked: BakedTile[] = [];
 const footprintFiles = new Map<string, string>();
 const groundHeights: number[] = [];
 for (const [i, tile] of TILES.entries()) {
+  if (!OWN.has(tile)) {
+    continue;
+  }
+  let t0 = performance.now();
   const city = await bakeCity(tile);
+  const cityMs = since(t0);
   footprintFiles.set(tile, city.footprints);
+  t0 = performance.now();
   const fine = await bakeTerrain(tile, 0);
+  const fineMs = since(t0);
+  t0 = performance.now();
   const coarse = await bakeTerrain(tile, 1);
+  log(`${tile}: city ${cityMs} ms, fine ${fineMs} ms, coarse ${since(t0)} ms`);
   groundHeights.push(...(coarse.ground ?? []));
   const minZ = Math.min(fine.minZ, coarse.minZ);
   const maxZ = Math.max(fine.maxZ, coarse.maxZ, city.maxZ);
@@ -1125,8 +1295,13 @@ for (const [i, tile] of TILES.entries()) {
   // A tile's meshes are hundreds of MB of typed arrays that Bun's lazy
   // collector let pile up over the loop: a cold Dresden reached ~7 GB,
   // more than a 4-core, 8 GB build machine running two sites side by side
-  // holds. Collected after each tile, the loop stays near one tile's peak.
+  // holds. Dropped and collected after each tile, the loop stays near one
+  // tile's peak.
+  dropTerrain(tile);
   Bun.gc(true);
+}
+if (WARMING) {
+  warmed(`${baked.map((t) => t.id).join(", ")} (buildings + terrain)`);
 }
 log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
@@ -1319,4 +1494,8 @@ for (const entry of readdirSync(OUT_DIR)) {
 }
 log(
   `${Object.keys(manifest.files).length} artifacts in public/data/${SITE.id} (${published} new, ${pruned} pruned)`
+);
+// resourceUsage's maxRSS is in KiB
+log(
+  `done in ${since(started)} ms, peak RSS ${(process.resourceUsage().maxRSS / 1024 ** 2).toFixed(2)} GiB`
 );
