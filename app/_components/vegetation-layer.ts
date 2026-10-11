@@ -75,6 +75,7 @@ import {
 } from "./crown-season";
 import {
   type ChunkLodState,
+  createCrownPlanScratch,
   type CrownTier,
   keepInFarTier,
   planCrownTiers,
@@ -149,7 +150,7 @@ export interface VegetationContext extends GroundContext {
  * cheap chunk switches to rich within NEAR_IN; a rich chunk only drops past
  * NEAR_OUT, so chunks straddling the line don't flicker. These drive
  * swapCrownLod (the cadastre's own silhouettes); the canopy chunks take the
- * same distances through updateVegetationLod, which adds the far tier and
+ * same distances through createVegetationLod, which adds the far tier and
  * the site-wide rich budget.
  */
 export const LOD_NEAR_IN_M = RICH_IN_M;
@@ -158,8 +159,8 @@ export const LOD_NEAR_OUT_M = RICH_OUT_M;
 const FAR_THIN_WIDEN = 1.35;
 
 /**
- * Runtime handle for a loaded vegetation group: a per-frame LOD swap plus the
- * rich-crown toggle.
+ * Runtime handle for a loaded vegetation group: the LOD swap (on the pose
+ * tick, create-app.ts) plus the rich-crown toggle.
  */
 export interface VegetationControl {
   /**
@@ -169,7 +170,7 @@ export interface VegetationControl {
    * `GUST_BRIGHTEN`.)
    */
   applyLook: (look: LookValues) => void;
-  /** the tile's canopy chunks; `updateVegetationLod` sets their crown tier
+  /** the tile's canopy chunks; `createVegetationLod` sets their crown tier
    *  over every loaded tile at once */
   chunks: VegetationChunk[];
   group: Group;
@@ -185,7 +186,7 @@ export interface VegetationControl {
   setSeason: (day: number) => boolean;
   /** swaps the crowns a layer keeps outside the chunks (the cadastre's own
    *  silhouettes, swapCrownLod); true when any changed (the shadow map must
-   *  then be redrawn). The canopy's chunks are `updateVegetationLod`'s. */
+   *  then be redrawn). The canopy's chunks are `createVegetationLod`'s. */
   updateLod: (cameraPos: Vector3) => boolean;
 }
 
@@ -889,7 +890,7 @@ function paintBark(
 
 /**
  * One chunk's sets: a trunk per tree, and — when the chunk has any crown
- * — the mid, rich and far crowns (one is visible; updateVegetationLod
+ * — the mid, rich and far crowns (one is visible; createVegetationLod
  * picks). A chunk without precomputed trees (every forest chunk) lets the
  * trunks and both near crowns share ONE matrix buffer and the crowns one
  * tint buffer, on the CPU and, since GPU buffers are keyed by the buffer,
@@ -956,7 +957,7 @@ function buildTreeCell(
     "cheap",
     farTrees.length < trees.length ? FAR_THIN_WIDEN : 1
   );
-  // updateVegetationLod() picks the tier each frame; start on mid.
+  // createVegetationLod() picks the tier on the pose tick; start on mid.
   rich.visible = false;
   far.visible = false;
   // Which crown each set is, for the picture styles' crowns
@@ -1164,7 +1165,7 @@ export function buildVegetation(
       u.time.value = seconds;
     },
     setSeason: (day) => applySeasons(seasons, day),
-    // The chunks' tiers are updateVegetationLod's; the canopy keeps no other
+    // The chunks' tiers are createVegetationLod's; the canopy keeps no other
     // crowns.
     updateLod: () => false,
   };
@@ -1190,35 +1191,49 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
 /**
  * Picks every loaded chunk's crown tier at once (lib/city/vegetation-lod.ts):
  * the rich-crown budget is shared by the whole site, not granted per tile.
- * Returns true when any chunk changed — what casts shadows changed, so the
- * shadow map must be redrawn.
+ * The returned pass answers true when any chunk changed — what casts
+ * shadows changed, so the shadow map must be redrawn. It keeps its arrays
+ * and the chunks' plan states between passes (one each per chunk, ~1 000
+ * over a site, were allocated on every pass): only what a pass met stays
+ * referenced, so a tile that left is let go at the next.
  */
-export function updateVegetationLod(
+export function createVegetationLod(): (
   controls: readonly VegetationControl[],
   cameraPos: Vector3,
   richBudget?: number
-): boolean {
+) => boolean {
   const all: VegetationChunk[] = [];
   const states: ChunkLodState[] = [];
-  for (const control of controls) {
-    const allowRich = control.multiTuft();
-    for (const chunk of control.chunks) {
-      all.push(chunk);
-      states.push({
-        allowRich,
-        current: chunk.tier,
-        near: nearestTree(chunk, cameraPos),
-        trees: chunk.trees,
-      });
+  const scratch = createCrownPlanScratch();
+  return (controls, cameraPos, richBudget) => {
+    let n = 0;
+    for (const control of controls) {
+      const allowRich = control.multiTuft();
+      for (const chunk of control.chunks) {
+        all[n] = chunk;
+        const state = (states[n] ??= {
+          allowRich,
+          current: chunk.tier,
+          near: 0,
+          trees: 0,
+        });
+        state.allowRich = allowRich;
+        state.current = chunk.tier;
+        state.near = nearestTree(chunk, cameraPos);
+        state.trees = chunk.trees;
+        n++;
+      }
     }
-  }
-  const tiers = planCrownTiers(states, richBudget);
-  let changed = false;
-  for (let i = 0; i < all.length; i++) {
-    if (tiers[i] !== all[i].tier) {
-      showTier(all[i], tiers[i]);
-      changed = true;
+    all.length = n;
+    states.length = n;
+    const tiers = planCrownTiers(states, richBudget, scratch);
+    let changed = false;
+    for (let i = 0; i < n; i++) {
+      if (tiers[i] !== all[i].tier) {
+        showTier(all[i], tiers[i]);
+        changed = true;
+      }
     }
-  }
-  return changed;
+    return changed;
+  };
 }

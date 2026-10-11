@@ -74,7 +74,7 @@ history. Decisions that came out of plans are written up as
 | 040 | Bakes: step-major `bun run bake`, seam stair flights kept, atomic ingest + timeouts + https check, atomic `prepare-data` writes, the `/wissen` hero as tall as the site | **TODO** — P1/P2; the stairs then need a re-bake (maintainer); **drifted** (2026-10-06 audit): its step bodies cite `scripts/bake.ts`, `ingest_sn.py`, `test_ingest.py` (gone — `scripts/pipeline.ts`, `fetch.py` + `providers/`, `test_fetch.py`), the runner takes one JSON spec, step 3 is partly done (`net.py` timeouts, `.part` writes), step 5 appears done (`bake-wissen-hero.ts` `cell * rows`); refresh before executing and fold in the bake runner's order test — see the plan's amendment | [040-bake-pipeline-fixes.md](./040-bake-pipeline-fixes.md) |
 | 041 | Test net: raster shares and the aborted-load free, the collider through a real BVH, census for stairs/sport/kerbs, eye height vs the DGM, pens per style, three's real geometry key | DONE (2026-10-03) — raster shares in their own module; tree rows left allowed empty (Grimma, Munich) | [completed.md](./completed.md#041--tests-where-the-regressions-are--done-2026-10-03) |
 | 042 | Main thread while streaming: stats coalesced, footprints only when they change (no minimap repaint per tile event), footprints after the handover, the viewer chunk fetched with the manifest | DONE (2026-10-03) — the first frame and "loaded" flush the coalesced stats | [completed.md](./completed.md#042--less-main-thread-churn-while-tiles-stream--done-2026-10-03) |
-| 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **BLOCKED** (2026-10-03) — gate passed (BVH median 75 ms a tile), the worker built and tested, but Next 16.3.7's Turbopack emits `new Worker(new URL(…))` as a raw asset; three options in the plan's findings | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
+| 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **BLOCKED** (2026-10-03, re-tried 2026-10-11) — gate passed (BVH median 75 ms a tile), the worker built and tested; the first attempt read Turbopack's leftover `media/*.worker.ts` asset as the worker, but Next 16.3.7's Turbopack **does** bundle it (re-tried for the spawn tile alone, branch `claude/spawn-bvh-worker`). Stopped at the chunk instead: three's core and three-mesh-bvh shared with the worker leave the scene's scope (ADR 0051), +20.8 KB gz on the first load (904 985 → 925 796), and mobile-emulated the first frame came later, not earlier (the lite boot has nothing to overlap once its ground has landed; the worker's build ran 3× slower beside SwiftShader's frames). Five options for the maintainer in the plan's findings | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
 | 044 | The canopy points as a packed binary instead of a 9.5 MB GeoJSON parsed in one task | DONE (2026-10-03) — 96 ms of JSON.parse → ≈ 13 ms to unpack on the biggest tile; published pre-gzipped (`.pts.gz`) | [completed.md](./completed.md#044--the-canopy-points-packed-not-geojson--done-2026-10-03) |
 | 045 | One source for the raster decoders (the stale `surfaceHeading`) and the Python class ids; one OSM number parser; the byte scales pinned across languages | **TODO** — P3; before plan 017 phase 4 | [045-one-source-for-decoders-and-class-ids.md](./045-one-source-for-decoders-and-class-ids.md) |
 | 046 | Moves only: `rail-layer.ts` into mesh kit / deck table / bridge, telemetry and picking out of `bootApp`, a home for the TSL helpers, the terrain↔water cycle, the dead-code sweep | **TODO** — P3; after 039, 041–043; **drifted** (2026-10-06 audit): the deck table moved to `lib/city/decks.ts` on the day 046 was planned, `rail-layer.ts` is 2 485 lines with the span-deck code (ADR 0041) and two more importers (`traffic-layer.ts`, `data-overlays.ts`), `bootApp` doubled to ≈ 2 050 lines (plans 060/066 take its GPU-loss slice); refresh its drift block before executing — see the plan's amendment | [046-split-the-god-modules-and-sweep.md](./046-split-the-god-modules-and-sweep.md) |
@@ -122,8 +122,9 @@ S/M/L.
 
 0. **Plans 037–048 (2026-10-01 audit) — before the items below.** Done
    2026-10-03 (picked for the phones: crashes and slowness): 037, 038,
-   041, 042, 044; 043 is BLOCKED on bundling a worker (its findings name
-   the options). Left, in order: 040 → 039 → 045 → 046 (moves only, after
+   041, 042, 044; 043 is BLOCKED — not on bundling a worker, as first
+   thought, but on what the worker's three costs the scene's chunk (its
+   2026-10-11 findings name the options). Left, in order: 040 → 039 → 045 → 046 (moves only, after
    039, which edits the same files). The spikes 047 and
    048 can go any time after 038. Plan 019 (item 1) stays the one that
    needs a GPU; 039 step 4 and 048 part B add to its checklist. Plan 022
@@ -370,19 +371,30 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
 - **Shadow-pass pipelines compile in the frame** that first draws a new
   caster (`compileAsync` covers the main pass only) — a hitch per new
   kind of tree, lamp or furniture (M–L, needs a public-API spike).
-- **The vegetation LOD runs every frame** over every chunk, allocating
-  two arrays of ~1 000 entries; the 10 Hz pose tick would do.
-- **The crash trail's heartbeat walks the scene** every 2 s and rewrites
-  the whole trail into local storage synchronously.
+- ~~**The vegetation LOD runs every frame**~~ — built (2026-10-11): on
+  the 10 Hz pose tick, and in the frame the tiles in view or the crown
+  switch change or the eye jumps 25 m (`createLodSchedule`, no timer);
+  its arrays and plan states kept between passes. A pass over 1 024
+  chunks 260 → 40 µs in Bun, and 60 → 10 passes a second at 60 fps
+  (SwiftShader's ~1 fps frames are each a tick apart: it shows neither).
+- ~~**The crash trail's heartbeat walks the scene**~~ — built
+  (2026-10-11): its two walks (`gpu`'s geometry, `cpu`) counted again
+  only once what they count changed (`createRecount`); over the streamed
+  site (lite, eight dressings, SwiftShader) the walk a beat skips is
+  13.7 ms (median of 17 beats, 23 ms the most), what a beat still takes
+  0.7 ms, none of the 17 recounted. The write stays: one JSON value
+  under one key (nothing to append to), bounded by its rings, 8 KB in
+  0.05 ms.
 - ~~**The inquiry's ask sets are built eagerly**~~ — built (plan 069
   step 6): in idle time once the dressing hangs; `canopySets` still places
   every canopy tree a second time there.
 - **A desktop at DPR 2 runs SMAA's three full-resolution passes** plus a
   copy of the frame; skipping the copy (SMAA on the scene target, the AO
   multiplied after, as the FXAA path does) saves a full-resolution pass.
-- **Three real point lights** sit in every lit build even by day
-  (`lamp-layer.ts`); a phone could build one (a tier constant, no
-  rebuild).
+- ~~**Three real point lights** sit in every lit build even by day~~ —
+  built (2026-10-11): a phone builds one (`LAMP_LIGHTS`, a tier constant
+  fixed before the first frame), faded through zero where it hands over
+  to the next head; the desktop keeps three.
 - ~~**A shadow redraw every ~20 m** while walking~~ — built
   (2026-10-11): on foot a 30 m dead zone and a 121 m half-size (was
   19.8 m and 110 m), the walker as far from every edge as before (91 m,
@@ -697,7 +709,8 @@ S each unless noted):
   style-dressing siblings dispose a shared geometry's buffers on every
   tile release (re-uploaded by the next frame — churn, not a bug);
   vegetation LOD re-plans and allocates every frame though only camera
-  movement can change it.
+  movement can change it (built 2026-10-11: on the pose tick, see the
+  2026-10-10 audit).
 - **Docs:** the crash trail is in the guide (*When it crashes*) and ADR
   0001's amendment since ADR 0043 (2026-10-03); `cityjson-threejs-loader` 0.4.0 is unmaintained
   (last release 2023) — on a three bump, a cold `prepare-data` is its
@@ -838,9 +851,11 @@ the port (2026-09-26) made of it:
    named attributes). The cheaper interim is done (efae831: the builders
    run in separate tasks, `tile-stream.ts` `nextTask`); what is left is the
    worker itself. Plan 044 took the canopy's parse off (packed points,
-   2026-10-03); plan 043 (the city BVH) found that Turbopack does not
-   bundle a module worker — the same wall this option meets, so its
-   findings' options apply here too.
+   2026-10-03); plan 043 (the city BVH) found on 2026-10-11 that
+   Turbopack does bundle a module worker, but that one importing three
+   takes three's core out of the scene chunk's scope (ADR 0051: +20.8 KB
+   gz on the first load for three's core and three-mesh-bvh) — the cost
+   this option meets too, so those findings' options apply here.
 9. **A bilingual HUD (M).** The page is `lang="de"` since 2026-09-26: the
    HUD, the spoken feedback and the `/wissen` landing are German, while
    the guide comes in both languages. About sixty HUD strings, picked by
