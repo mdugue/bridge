@@ -117,6 +117,12 @@ config change.
     `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount,
     given the site id; which tileset to stream), `site-context.tsx`
     (`SiteProvider`/`useSite`: the site the HUD describes),
+    `scene-status.ts` (what the scene reports to the HUD — the stages,
+    the stats and frame rate, the site, the mode, Modell's view, the data
+    layers, the inquiry, the pose — as one store of slices that each
+    widget reads its own of with `useSceneStatus`, so a report re-renders
+    what shows it, not the HUD; `sceneReports` turns it into the scene's
+    callbacks; the store itself is `lib/city/slice-store.ts`; plan 074),
     `poc-debug.ts` (the `window.__poc` test/QA hook), `stream-timing.ts`
     (`?trace=1`: the boot's and the stream's spans by category, local
     only), `scene-profile.ts`
@@ -276,7 +282,9 @@ config change.
   loads from there until it is clicked
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
-  policy, the look table + store, the Snapshot codec, `gpu-safety.ts`
+  policy, the look table + store, the Snapshot codec, `slice-store.ts`
+  (a store of named slices: per-slice equality, one notify per burst on
+  a schedule — the HUD's scene status), `gpu-safety.ts`
   (the safety ladder: levels, raise and decay, the recovery's caps, a
   recovered page's start tile — ADR 0046), `gpu-allocation.ts` (which
   errors are a GPU allocation that failed), `page-lifecycle.ts` (the
@@ -402,7 +410,7 @@ config change.
   burned in), written by `tile-glb.ts` (meshopt, quantised,
   `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
   `pipeline.ts` (fetch/bake runner), `site-report.ts` (`bun run site`),
-  `downsample-raster.ts` (the 2048² and 512² class rasters),
+  `downsample-raster.ts` (the 2048², 1024² and 512² class rasters),
   `coarse-crowns.ts` (a tile's coarse crowns from its tree files),
   `bake-wissen-hero.ts`
   (the site's land-cover map, `site-map.webp`),
@@ -557,8 +565,9 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   added before a new bake step (or a step run on some tiles only) ships
   quietly poorer. After merging a new step, or adding a tile, bake it on
   every tile the test names; a step that finds nothing writes an empty file.
-- `prepare-data.ts` downsamples the class raster to 2048² (phones, the
-  coarse terrain) and 512² (the minimap) with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
+- `prepare-data.ts` downsamples the class raster to 2048² (a phone's fine
+  terrain), 1024² (the coarse terrain, every tier) and 512² (the minimap)
+  with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
   through an image resize any more (sharp premultiplies alpha — that once
   painted the ground black). Nor through the browser's image decoder: the
   class and NDVI PNGs are inflated byte-exact by `lib/city/png-raster.ts`
@@ -742,15 +751,17 @@ plain `intersectObject(city.mesh)` on a tile without one is
 three-mesh-bvh's brute-force fallback over two million triangles. The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The
 walk/fly camera does not stream itself: the renderer streams for its twin
-whose far plane ends where the fog does (`streamFarFor`,
-`lib/city/atmosphere.ts`; synced each frame before the update) — past the
+whose far plane ends where the fog does, on a phone at 2.2 km at the
+latest — not through Modell's dolly zooms, which back it kilometres away
+(`streamFarFor`, `lib/city/atmosphere.ts`; synced each frame
+before the update) — past the
 fog's end a tile shows nothing, and the camera's 6 km far plane loaded the
 site's every building tile in that direction as fog colour; register a new
 streaming need against that twin, not the camera. The sun's shadow camera is a second
 streaming camera while the sun is up, so tiles that cast into the view stay
-loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`)
-— at 128 px on a desktop and 64 on a phone (`SHADOW_STREAM_PX`), not the
-map's resolution: an orthographic camera's error ignores distance, and at
+loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`;
+on a phone never, `shadowTilesStream`) — at 128 px on a desktop
+(`SHADOW_STREAM_PX`), not the map's resolution: an orthographic camera's error ignores distance, and at
 2048 px it refined the terrain under its whole frustum;
 `displayActiveTiles` keeps loaded tiles drawn while turning.
 

@@ -151,7 +151,14 @@ visual-variable codebook is in
   `landcover-splat.ts` paints it on the GPU once per tile at load (RGB =
   palette, A = water coverage from a 3×3 tent over class 8) into an sRGB,
   mipmapped, anisotropy-16 target — what the baked PNG used to be sampled
-  with. The minimap and the site's map picture (`site-map.webp`: the start
+  with. A desktop's fine level paints its 4096² raster at **half size**
+  (2026-10-10, plan 070 step 4, `splatScaleFor`): a texel is the mean of
+  the 2×2 class colours under it and the water the four tents' mean — the
+  full-size splat's first mip, so only the near field changes, where a
+  boundary now blends over 1 m instead of 0.5 m and the 0.5 m staircase
+  of a diagonal edge is gone. 64 MiB less per fine tile (85 → 21 MiB with
+  mips); SwiftShader plates of the Elbe shore, a road's meadow edge at eye
+  level and the Großer Garten from 50 m showed nothing blockier. The minimap and the site's map picture (`site-map.webp`: the start
   page's city card, the `/wissen` hero) use the same table; a colour
   change is a look change, not a re-bake
   ([ADR 0023](./adr/0023-land-cover-colours-painted-at-runtime.md)).
@@ -399,14 +406,15 @@ visual-variable codebook is in
   flight read as haze ([ADR 0008](./adr/0008-progressive-two-phase-boot.md)).
 - **Rasters at 2048²** `= computed` — `prepare-data.ts` downsamples the 4096² class raster
   NEAREST, one band (`scripts/downsample-raster.ts` `downsampleClassRaster`),
-  to a quarter of the texture memory: for the coarse terrain level on every
-  device, for every level on phones (`MOBILE_RASTER_PX`, chosen by the
-  client per device tier); a 512² one for the minimap.
+  to a quarter of the texture memory: for the fine level on phones
+  (`MOBILE_RASTER_PX`, chosen by the client per device tier); a 1024² one
+  for the coarse terrain level on every device (`COARSE_RASTER_PX`, since
+  2026-10-10 — 2048² before) and a 512² one for the minimap.
   No raster whose alpha is
   data goes through an image resize any more (the painted splat has the
   only such alpha, and it is made on the GPU). Cost: ~1 m instead of ~0.5 m
-  class boundaries — on desktop only on the far terrain, on phones
-  everywhere.
+  class boundaries on a phone's fine level, ~2 m on the far terrain on
+  every device (a pixel or less out there).
 - **Buildings** `❝ taken` — CityJSON LoD2 → **build-time** glTF per tile:
   `scripts/bake-city-mesh.ts` runs cityjson-threejs-loader, and
   its `cityMesh` welds it into one mesh with an
@@ -2600,11 +2608,15 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 - **Soft shadows** `= computed` — `PCFShadowMap` + raised `shadow.radius`; terrain
   `castShadow=false`; `normalBias=0`; tight camera-following frustum, whose
   camera also drives the tile streaming (casters behind the player stay
-  loaded) — at a resolution of its own, not the map's: 64 px on a phone,
-  where it loads a tile's buildings and coarse ground but never refines
-  terrain, 128 px on a desktop, where it still refines the eye-level
-  frustum's fine level but never from the air
-  (`SHADOW_STREAM_PX`, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md));
+  loaded) — on a desktop, at a resolution of its own, not the map's:
+  128 px, where it still refines the eye-level frustum's fine level but
+  never from the air
+  (`SHADOW_STREAM_PX`, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)).
+  A phone's shadow camera streams no tiles at all since 2026-10-10
+  (`shadowTilesStream`, plan 071; at its 64 px it had loaded a tile's
+  buildings and coarse ground, tiles in use the memory governor cannot
+  free): at a seam with the sun behind the player, the neighbour's
+  buildings cast no shadow until the view loads that tile;
   the map's colour target is one byte (`OneByteShadowNode`). Full recipe and dead-ends in the
   [city-walker skill](../.claude/skills/city-walker/SKILL.md).
 - **Sky-view factor** `= computed` (*Himmelslicht*, plan 033) — the committed DGM1 with

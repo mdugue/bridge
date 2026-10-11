@@ -46,8 +46,9 @@ test("the mobile tier shrinks the shadow map unless lite already did", () => {
   expect(shadowMapSizeFor("lite", "mobile")).toBe(512);
 });
 
-test("pixelRatioFor caps phones at 1.5, desktops at 2, lite at 0.5", () => {
-  expect(pixelRatioFor("full", "desktop", 3)).toBe(2);
+test("pixelRatioFor caps phones and desktops at 1.5, lite at 0.5", () => {
+  expect(pixelRatioFor("full", "desktop", 3)).toBe(1.5);
+  expect(pixelRatioFor("full", "desktop", 2)).toBe(1.5);
   expect(pixelRatioFor("full", "desktop", 1)).toBe(1);
   expect(pixelRatioFor("full", "mobile", 3)).toBe(1.5);
   expect(pixelRatioFor("full", "mobile", 1)).toBe(1);
@@ -180,14 +181,18 @@ test("every safety level is a lighter page than the one before", () => {
       const before = tileCacheBytesFor(tier, (safety - 1) as 0);
       expect(lighter.max).toBeLessThan(before.max);
       expect(lighter.min).toBeLessThan(before.min);
-      expect(pixelRatioFor("full", tier, 3, safety)).toBeLessThan(
+      expect(pixelRatioFor("full", tier, 3, safety)).toBeLessThanOrEqual(
         pixelRatioFor("full", tier, 3, (safety - 1) as 0)
       );
       expect(shadowMapSizeFor("full", tier, safety)).toBeLessThanOrEqual(
         shadowMapSizeFor("full", tier, (safety - 1) as 0)
       );
     }
-    // the lightest page has a smaller shadow map than the first
+    // the lightest page has fewer pixels and a smaller shadow map than the
+    // first (a desktop's pixel ratio stops at 1)
+    expect(pixelRatioFor("full", tier, 3, 3)).toBeLessThan(
+      pixelRatioFor("full", tier, 3, 0)
+    );
     expect(shadowMapSizeFor("full", tier, 3)).toBeLessThan(
       shadowMapSizeFor("full", tier, 0)
     );

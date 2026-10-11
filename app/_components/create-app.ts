@@ -19,6 +19,7 @@ import { fogRangeFor, streamFarFor } from "@/lib/city/atmosphere";
 import { utmToLatLng } from "@/lib/city/crs";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
 import { createBootPhases } from "@/lib/city/boot-phases";
+import { createCoalescer } from "@/lib/city/coalesce";
 import {
   createMemoryGovernor,
   memoryFloorFor,
@@ -1199,18 +1200,11 @@ async function bootApp(
   // One pass for every change of a task: an update of the tile renderer
   // reports each tile that came into or left view on its own, and each
   // report walked the lamps, the ground's sources and the styles' gathering
-  // again and redrew the shadow map.
-  let changeQueued = false;
-  const queueChange = () => {
-    if (changeQueued) {
-      return;
-    }
-    changeQueued = true;
-    queueMicrotask(() => {
-      changeQueued = false;
-      onChange();
-    });
-  };
+  // again and redrew the shadow map. The frame flushes it right after the
+  // update (`frame`), so what the update showed renders with its shadows
+  // and lamps in that same frame, not one late.
+  const streamChange = createCoalescer(() => onChange());
+  const queueChange = streamChange.queue;
   // Shader compiles go through the post stack (it knows the target the
   // scene renders into). It is created a few lines below, before the render
   // loop runs the stream's first update, so no tile lands without it.
@@ -1414,9 +1408,10 @@ async function bootApp(
   // distance, and at the map's resolution it pinned the fine terrain level
   // under its whole frustum, beyond any error target the governor set.
   let shadowStreams = true;
-  // From safety level 2 (lib/city/gpu-safety.ts) it streams nothing, nor
-  // for a while after a memory emergency (memoryEmergency, below).
-  let shadowHeldUntil = shadowTilesStream(budget.safety)
+  // On a phone, and on a desktop from safety level 2 (lib/city/gpu-safety.ts)
+  // it streams nothing, nor for a while after a memory emergency
+  // (memoryEmergency, below).
+  let shadowHeldUntil = shadowTilesStream(budget.safety, budget.tier)
     ? 0
     : Number.POSITIVE_INFINITY;
   // what the sun last asked for
@@ -1492,7 +1487,9 @@ async function bootApp(
     }
   };
   applyFog();
-  /** The stream camera onto the walk/fly camera, its far at the fog's end. */
+  /** The stream camera onto the walk/fly camera, its far at the fog's end
+   *  (through Modell's dolly zooms, which move that camera kilometres
+   *  back, at the opened fog's, uncapped on a phone too). */
   const syncStreamCamera = () => {
     camera.matrixWorld.decompose(
       streamCamera.position,
@@ -1501,7 +1498,9 @@ async function bootApp(
     );
     const far = streamFarFor(
       Math.max(sceneFog.far.value, fogRangeFor(fogAmount).far),
-      camera.far
+      camera.far,
+      budget.tier,
+      rig?.owns() ?? false
     );
     if (
       streamCamera.far !== far ||
@@ -1715,8 +1714,10 @@ async function bootApp(
   // place picked in the HUD while the page was loading (`initialView`)
   // likewise. Both boot looking straight down onto that tile, the picked
   // place from above the tile's top (lib/city/boot-start.ts): a pose that
-  // sees no tile loads none, and by night or from safety level 2 no
-  // shadow camera streams one either, so the boot would wait for ever.
+  // sees no tile loads none, and by night, on a phone or from safety
+  // level 2 no shadow camera streams one either, so the boot would wait
+  // for ever — as it would from higher above the tile than its stream
+  // reaches, so neither boots higher than half that reach above its top.
   // Their own pose goes back once the tile has landed (below, and the
   // HUD's after the first frame).
   const spawnView = picked ?? spawnViewpoint(opts.site);
@@ -1726,7 +1727,9 @@ async function bootApp(
     { picked, restored },
     spawnView,
     tileTopsOf(tileset)[extras.tiles.indexOf(spawn)],
-    offset
+    offset,
+    // the boot's stream far (`syncStreamCamera`), at the least
+    streamFarFor(fogRangeFor(fogAmount).far, camera.far, budget.tier)
   );
   const placeStart = (boot = false) => {
     const camera = boot ? "camera" in booting && booting.camera : restored;
@@ -2779,6 +2782,9 @@ async function bootApp(
     view.updateMatrixWorld();
     syncStreamCamera();
     stream.tiles.update();
+    // what the update brought into view or took out, before this frame
+    // draws it (the shadow map, the lamp pool, the styles' gathering)
+    streamChange.flush();
     // Advance every tile's water ripple and glitter (its sky tint is the
     // fog colour's node, in lockstep with the sun by construction).
     for (const t of terrains) {

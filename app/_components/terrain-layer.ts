@@ -88,7 +88,11 @@ import {
   groundNormal,
   urbanGreen,
 } from "./ground-detail";
-import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
+import {
+  type LandcoverSplat,
+  paintLandcoverSplat,
+  splatScaleFor,
+} from "./landcover-splat";
 import { PAPER_HEX, paperGroundOn } from "./paper-scene";
 import {
   dropDataOnUpload,
@@ -422,9 +426,10 @@ export interface SplatRasters {
 }
 
 /**
- * Loads a class raster and paints its colour splat: what a tile's two
- * terrain levels share (tile-stream.ts; on a phone both name the 2048²
- * raster). Null when the raster is missing or undecodable.
+ * Loads a class raster and paints its colour splat, held by file
+ * (tile-stream.ts `splats`): the coarse level reads its own 1024² one on
+ * every tier, the fine level the 4096² one, or the 2048² on a phone. Null
+ * when the raster is missing or undecodable.
  */
 export async function loadSplatRasters(
   url: string,
@@ -437,14 +442,20 @@ export async function loadSplatRasters(
   }
   const { texture, width, height } = raster;
   // every level that wanted it gone while it decoded: no splat painted (a
-  // mipmapped RGBA target of the raster's size) for nobody
+  // mipmapped RGBA target, half the raster's size at 4096²) for nobody
   if (signal?.aborted) {
     texture.dispose();
     signal.throwIfAborted();
   }
   return {
     ...raster,
-    painted: paintLandcoverSplat(renderer, texture, width, height),
+    painted: paintLandcoverSplat(
+      renderer,
+      texture,
+      width,
+      height,
+      splatScaleFor(width)
+    ),
   };
 }
 

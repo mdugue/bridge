@@ -353,7 +353,7 @@ flowchart LR
     direction TB
     tTER["terrain glTF<br/>L0 TIN ±0.15 m · L1 512²"]
     tCITY["city glTF<br/>+ property table"]
-    tSIDE["side files<br/>+ 2048² class raster"]
+    tSIDE["side files<br/>+ 2048² and 1024² class rasters"]
   end
 
   iDLM ==> bLC ==> dCLS

@@ -198,10 +198,13 @@ test("a frame that throws on a GPU that still answers is a bug, not a loss", () 
   expect(probed).toBe(false);
 });
 
-test("from level 2 the shadow camera streams nothing and the look starts plain", () => {
-  expect([0, 1, 2, 3].map((l) => shadowTilesStream(l as 0))).toEqual([
-    true,
-    true,
+test("the shadow camera streams nothing on a phone, nor from level 2; the look starts plain from level 2", () => {
+  expect([0, 1, 2, 3].map((l) => shadowTilesStream(l as 0, "desktop"))).toEqual(
+    [true, true, false, false]
+  );
+  expect([0, 1, 2, 3].map((l) => shadowTilesStream(l as 0, "mobile"))).toEqual([
+    false,
+    false,
     false,
     false,
   ]);

@@ -115,7 +115,8 @@ export interface ClayDetailUniforms {
 
 /** Farbvariation: the clay colour each building takes from its use and
  *  height, mixed into the base — a middling mix breaks the uniform massing
- *  and stays painterly. */
+ *  and stays painterly. The shopfronts' baked colours assume it
+ *  (scripts/bake-city-mesh.ts `WALL_TINT_SHOWN`): tune both together. */
 const TINT = float(0.6);
 /** Dachfarbe: terracotta or slate per roof, from its form and pitch —
  *  roofs carry more colour than walls, the strongest readability cue. */
