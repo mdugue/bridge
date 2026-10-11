@@ -51,6 +51,23 @@ export function bvhBytesUnder(root: Object3D): number {
   return bytes;
 }
 
+const exitOrEntry = new Vector3();
+
+/**
+ * How far along `ray` it enters `box`, or null where it misses: 0 from
+ * inside it. three's `intersectBox` gives the exit point there — and the
+ * player's eye stands inside its own building tile's box: by that, the
+ * tile's walls lay hundreds of metres off, past a step's reach.
+ */
+export function rayEntry(ray: Ray, box: Box3): number | null {
+  if (box.containsPoint(ray.origin)) {
+    return 0;
+  }
+  return ray.intersectBox(box, exitOrEntry)
+    ? exitOrEntry.distanceTo(ray.origin)
+    : null;
+}
+
 /** Body radius the player keeps from facades. */
 const BODY_RADIUS = 0.6;
 /** Second ray below the eye so low parts/roof edges on slopes still block. */
@@ -140,22 +157,20 @@ export function createCityCollider(
     return Boolean(mesh.geometry.boundsTree);
   };
 
-  const entry = new Vector3();
   /**
    * The raycaster's first hit within its `far`: the targets whose box the
-   * ray enters, nearest entry first, until none ahead can hold a nearer
-   * hit — so a long ray (a dolly's) builds only the tiles before its hit.
+   * ray enters (from inside one, at once), nearest entry first, until none
+   * ahead can hold a nearer hit — so a long ray (a dolly's) builds only
+   * the tiles before its hit.
    */
   const firstHit = (): Intersection | null => {
     const { ray, far } = raycaster;
     const reached: { enter: number; mesh: Mesh }[] = [];
     for (const target of getTargets()) {
       const mesh = target as Mesh;
-      if (mesh.isMesh && ray.intersectBox(frameOf(mesh).box, entry)) {
-        const enter = entry.distanceTo(ray.origin);
-        if (enter <= far) {
-          reached.push({ enter, mesh });
-        }
+      const enter = mesh.isMesh ? rayEntry(ray, frameOf(mesh).box) : null;
+      if (enter !== null && enter <= far) {
+        reached.push({ enter, mesh });
       }
     }
     reached.sort((a, b) => a.enter - b.enter);

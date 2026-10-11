@@ -590,6 +590,10 @@ export function showDataLayers(
 /** Frees a dressing; a part that throws does not keep the others (what
  *  was thrown is returned). */
 function disposeDressing(d: TileDressing): unknown[] {
+  // its ask sets, if still pending, are never built: their idle callback
+  // may come after the tile has left (the entry it checks keeps the
+  // dressing), over a terrain already disposed
+  d.buildAsks = undefined;
   const errors: unknown[] = [];
   for (const own of [d.lamps, d.monuments, d.sport]) {
     try {
