@@ -581,8 +581,10 @@ not sky.
 - Trees = `Instances` sets (trunk + crown), hedges = `Instances` boxes, all
   on scene-wide materials (`sceneCrowns`, `sceneMaterial`). Crown =
   `IcosahedronGeometry(r, 2)` (180 tris) with lobes and radial normals. Three
-  tiers per 250 m chunk, planned over the whole site each frame
-  (`lib/city/vegetation-lod.ts`, applied by `updateVegetationLod`): the
+  tiers per 250 m chunk, planned over the whole site on the 10 Hz pose
+  tick (`lib/city/vegetation-lod.ts`, applied by `createVegetationLod`,
+  whose arrays are kept between passes; `createLodSchedule` runs it in the
+  frame the tiles in view or the crown switch change, or the eye jumps): the
   **rich multi-tuft crown** (~1 440 tris) near the camera (in 220 m / out
   300 m) but only within a **site-wide budget of 2 500 trees**, nearest
   chunks first — forest tiles (one tree per 7 m, up to ~1 300 per chunk)

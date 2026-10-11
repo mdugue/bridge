@@ -371,10 +371,20 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
 - **Shadow-pass pipelines compile in the frame** that first draws a new
   caster (`compileAsync` covers the main pass only) — a hitch per new
   kind of tree, lamp or furniture (M–L, needs a public-API spike).
-- **The vegetation LOD runs every frame** over every chunk, allocating
-  two arrays of ~1 000 entries; the 10 Hz pose tick would do.
-- **The crash trail's heartbeat walks the scene** every 2 s and rewrites
-  the whole trail into local storage synchronously.
+- ~~**The vegetation LOD runs every frame**~~ — built (2026-10-11): on
+  the 10 Hz pose tick, and in the frame the tiles in view or the crown
+  switch change or the eye jumps 25 m (`createLodSchedule`, no timer);
+  its arrays and plan states kept between passes. A pass over 1 024
+  chunks 260 → 40 µs in Bun, and 60 → 10 passes a second at 60 fps
+  (SwiftShader's ~1 fps frames are each a tick apart: it shows neither).
+- ~~**The crash trail's heartbeat walks the scene**~~ — built
+  (2026-10-11): its two walks (`gpu`'s geometry, `cpu`) counted again
+  only once what they count changed (`createRecount`); over the streamed
+  site (lite, eight dressings, SwiftShader) the walk a beat skips is
+  13.7 ms (median of 17 beats, 23 ms the most), what a beat still takes
+  0.7 ms, none of the 17 recounted. The write stays: one JSON value
+  under one key (nothing to append to), bounded by its rings, 8 KB in
+  0.05 ms.
 - ~~**The inquiry's ask sets are built eagerly**~~ — built (plan 069
   step 6): in idle time once the dressing hangs; `canopySets` still places
   every canopy tree a second time there.
@@ -697,7 +707,8 @@ S each unless noted):
   style-dressing siblings dispose a shared geometry's buffers on every
   tile release (re-uploaded by the next frame — churn, not a bug);
   vegetation LOD re-plans and allocates every frame though only camera
-  movement can change it.
+  movement can change it (built 2026-10-11: on the pose tick, see the
+  2026-10-10 audit).
 - **Docs:** the crash trail is in the guide (*When it crashes*) and ADR
   0001's amendment since ADR 0043 (2026-10-03); `cityjson-threejs-loader` 0.4.0 is unmaintained
   (last release 2023) — on a three bump, a cold `prepare-data` is its

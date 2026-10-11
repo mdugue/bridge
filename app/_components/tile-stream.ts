@@ -261,6 +261,13 @@ export interface TileStreamContext {
   /** a dressing whose build threw (not an abort, not an allocation
    *  failure — those go to `onAllocationFailure`): the tile stays bare */
   onDressingFailed?: (error: unknown, tile: string) => void;
+  /**
+   * A content's CPU copies went once its compile had uploaded them
+   * (`dropContentCopies`): what the tiles keep on the page's process
+   * changed, without a change of the stream when the compile outlasted
+   * its wait and the tile showed first (`cpuBytesOf` is counted again).
+   */
+  onCopiesDropped?: () => void;
   renderer: WebGPURenderer;
   styleResources: StyleResources;
   sunDirection: Vector3;
@@ -2091,6 +2098,7 @@ export class DressingPlugin {
         ? cityCpuDroppable(entry.city)
         : [];
     dropCpuCopies(scene, drop);
+    this.ctx.onCopiesDropped?.();
   }
 
   /** Frees everything dressed onto one content root — once its compiles
