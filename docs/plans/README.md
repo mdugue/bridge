@@ -380,9 +380,10 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
 - **A desktop at DPR 2 runs SMAA's three full-resolution passes** plus a
   copy of the frame; skipping the copy (SMAA on the scene target, the AO
   multiplied after, as the FXAA path does) saves a full-resolution pass.
-- **Three real point lights** sit in every lit build even by day
-  (`lamp-layer.ts`); a phone could build one (a tier constant, no
-  rebuild).
+- ~~**Three real point lights** sit in every lit build even by day~~ —
+  built (2026-10-11): a phone builds one (`LAMP_LIGHTS`, a tier constant
+  fixed before the first frame), faded through zero where it hands over
+  to the next head; the desktop keeps three.
 - **A shadow redraw every ~20 m** while walking (the dead zone,
   `shadow-fit.ts`); a larger zone with a slightly larger radius trades
   texel size for fewer redraws.

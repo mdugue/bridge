@@ -64,6 +64,20 @@ target, so the renderer's ACES setting was inert), so additive terms no
 longer fight ACES. Clustered lighting is available on `WebGPURenderer`,
 still its own decision.
 
+## Update (2026-10-11): a phone lights one
+
+The pool's size is a per-tier constant (`LAMP_LIGHTS` in `lamp-layer.ts`),
+chosen from the page's budget before the first frame and never changed
+after: three on a desktop, as before, **one on a phone** — every lit
+fragment shades each light, by day too, at intensity 0. The selection is
+the nearest N heads. Three hand over at the third-nearest head, which the
+distance falloff has mostly dimmed; a lone light hands over at the
+nearest, on the bisector between two lamps (~15 m from each at street
+spacing, where the falloff is still ~1), so on a phone it fades through
+zero over a 6 m band of the next head's lead instead of jumping from one
+lamp to the next at full strength: a dip between two lamps, which keep
+their halos and pools. The desktop's three are unchanged.
+
 ## References
 
 - [plans/completed.md](../plans/completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes)
