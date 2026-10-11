@@ -99,7 +99,13 @@ import {
 import type { ModelCamera } from "./model-camera";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
-import { countBuildings, pickCityObject } from "./city-layer";
+import {
+  countBuildings,
+  ensureCityBvh,
+  nearestCityHit,
+  nearestWithoutBvh,
+  pickCityObject,
+} from "./city-layer";
 import { createInquiryProbe, type OutlineSubject } from "./inquiry-probe";
 import {
   bridgeShape,
@@ -156,6 +162,9 @@ import {
   trackedTextureBytes,
 } from "./three-utils";
 import {
+  asksOf,
+  type CpuBytes,
+  cpuBytesOf,
   createTileStream,
   DRESSING_PART_NAMES,
   DRESSING_PARTS,
@@ -165,7 +174,14 @@ import {
   withinCompileWait,
 } from "./tile-stream";
 import { createNetworkWatch } from "./tile-retry";
-import { installMainYield } from "./main-yield";
+import { installMainYield, whenIdle } from "./main-yield";
+import {
+  bootFrames,
+  printTrace,
+  startTrace,
+  streamTimings,
+  traceRequested,
+} from "./stream-timing";
 import { attachTouchControls } from "./touch-controls";
 import {
   updateVegetationLod,
@@ -193,6 +209,11 @@ const EMERGENCY_GAP_MS = 5000;
 const RELEASE_WAIT_MS = 300;
 /** How often the memory governor looks at the GPU memory held. */
 const GOVERN_MS = 1000;
+/** How near the camera (m, in plan, to the tile's box) a building tile
+ *  gets its BVH before any ray needs it, and how long that build waits
+ *  for an idle main thread at most. */
+const BVH_NEAR_M = 400;
+const BVH_IDLE_MS = 1000;
 
 /** Modell's sheet: the picture style's paper (its first swatch). */
 const paperOf = (style: RenderStyle): Color =>
@@ -245,6 +266,9 @@ export interface GpuDebug {
   sceneBufferBytes: number;
   /** three's `info.memory` */
   held: Readonly<Record<string, number>>;
+  /** what the loaded tiles keep on the page's process, by kind, MB
+   *  (tile-stream.ts `CpuBytes`): three's count above never sees it */
+  cpuMB: Readonly<Record<keyof CpuBytes, number>>;
   /** pipeline anchors holding scene-wide pipelines (pipeline-anchors.ts) */
   anchors: number;
   /** the tile cache: bytes it counts against its budget, tiles in it, in use */
@@ -262,7 +286,7 @@ export interface GpuDebug {
 /** Counts the distinct buffers under a scene (shared ones once). */
 function sceneBuffers(
   scene: Object3D
-): Omit<GpuDebug, "held" | "tileCache" | "anchors"> {
+): Omit<GpuDebug, "held" | "tileCache" | "anchors" | "cpuMB"> {
   const indices = new Map<object, number>();
   const buffers = new Map<object, number>();
   let drawables = 0;
@@ -879,6 +903,12 @@ export async function createCityWalkApp(
     retainSceneMaterials(),
     retainOpenSkyTexture(),
   ];
+  // `?trace=1`: the stream's timings on the browser's timeline, the long
+  // tasks counted, the summary printed once loaded (stream-timing.ts).
+  const tracing = traceRequested(window.location.search);
+  if (tracing) {
+    cleanups.push(startTrace());
+  }
   try {
     return await bootApp(opts, renderer, scene, cleanups);
   } catch (err) {
@@ -1551,9 +1581,22 @@ async function bootApp(
   cleanups.push(opts.look.subscribe(applyLook));
 
   // Wall collision against the buildings of every visible tile, and the
-  // vertical rays that keep the camera out of them.
-  const collider = createCityCollider(() =>
-    stream.visibleCities().map((c) => c.mesh)
+  // vertical rays that keep the camera out of them — through each tile's
+  // BVH, built when a ray first reaches the tile (city-layer.ts
+  // `ensureCityBvh`). Not before the boot places the player on the spawn
+  // tile's ground (`bvhOnDemand`): until then the pose stands over a floor
+  // that is not there, and the spawn tile's build would come in the frame
+  // its buildings land, beside the terrain still parsing — on a phone the
+  // page's process ran out there. The frames before see no building, and
+  // the placing asks again.
+  let bvhOnDemand = false;
+  const collider = createCityCollider(
+    () => stream.visibleCities().map((c) => c.mesh),
+    (mesh) => {
+      if (bvhOnDemand) {
+        ensureCityBvh(mesh);
+      }
+    }
   );
   // Where the player stands and looks, walk/fly, the scenic glides — and the
   // one rule that any player input cancels a glide (camera-pose.ts).
@@ -1755,8 +1798,9 @@ async function bootApp(
     isLoaded: (layer) => stream.cities.has(layer),
     groundAlong,
     outline,
+    // (a tile's ask sets come in idle time; a question before builds them)
     things: () => [
-      ...stream.visibleDressings().flatMap((d) => d.asks ?? []),
+      ...stream.visibleDressings().flatMap(asksOf),
       ...overlays.asks(),
     ],
     viewport: () => ({
@@ -1906,16 +1950,20 @@ async function bootApp(
       // pose sets a spot inside one out beside it). In the air the glide
       // goes part of the way along the line of sight (camera-pose.ts).
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
-      tapRaycaster.far = 6000;
-      const building = tapRaycaster.intersectObjects(
-        stream.visibleCities().map((c) => c.mesh),
-        false
-      )[0];
-      const t = groundAlong(tapRaycaster, building?.distance ?? 6000);
-      const hit =
-        t === null
-          ? (building?.point.clone().add(towardsCamera(building.point)) ?? null)
-          : tapRaycaster.ray.at(t, new Vector3());
+      // The ground first: no building tile past it needs its BVH for this
+      // (`nearestCityHit` builds the ones the ray reaches before).
+      const ground = groundAlong(tapRaycaster, 6000);
+      tapRaycaster.far = ground ?? 6000;
+      const building = nearestCityHit(
+        tapRaycaster,
+        stream.visibleCities(),
+        true
+      )?.hit;
+      const hit = building
+        ? building.point.clone().add(towardsCamera(building.point))
+        : ground === null
+          ? null
+          : tapRaycaster.ray.at(ground, new Vector3());
       if (hit) {
         pose.travelTo(hit);
       }
@@ -2174,8 +2222,14 @@ async function bootApp(
   const lensBlur = postProfileFor(budget.tier).dof;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
-    const targets: Object3D[] = stream.visibleCities().map((c) => c.mesh);
-    const hit = focusRaycaster.intersectObjects(targets, false)[0];
+    // Only the tiles whose BVH is built: the focus never builds one (ten
+    // times a second), and a far tile without one lies past the lens's
+    // depth anyway.
+    const hit = nearestCityHit(
+      focusRaycaster,
+      stream.visibleCities(),
+      false
+    )?.hit;
     const ground = groundAlong(
       focusRaycaster,
       hit?.distance ?? focusRaycaster.far
@@ -2196,6 +2250,34 @@ async function bootApp(
         }
       : null;
     postStack.setFocusTarget(hit?.point ?? null);
+  };
+
+  // The building tiles near the camera get their BVH in idle time, one at
+  // a time (city-layer.ts `ensureCityBvh`): a walk into the next tile, a
+  // pick or a landing there finds it built instead of building it in the
+  // frame that needs it. The farther ones wait for a ray, or never get one.
+  let bvhPending = false;
+  const prepareBvhNear = () => {
+    if (!bvhOnDemand || bvhPending) {
+      return;
+    }
+    const at = activeCamera().position;
+    const next = nearestWithoutBvh(
+      stream.visibleCities(),
+      at.x,
+      at.z,
+      BVH_NEAR_M
+    );
+    if (!next) {
+      return;
+    }
+    bvhPending = true;
+    whenIdle(() => {
+      bvhPending = false;
+      if (!disposed && stream.cities.has(next)) {
+        next.ensureBvh();
+      }
+    }, BVH_IDLE_MS);
   };
 
   // Motion-keyed quality regression. Derived from the CAMERA, not the input
@@ -2635,8 +2717,29 @@ async function bootApp(
       c.request.resolve({ canvas: c.out, imagePxPerCssPx: c.imagePxPerCssPx });
     }
   };
+  /**
+   * The boot's wait for the start pose's first shadow map (the light
+   * stage, below): ended by the frame that draws it — three builds the
+   * shadow pass's pipelines for its casters inside that frame — or by the
+   * second frame in a row with none to draw (by night the sun rig asks for
+   * none).
+   */
+  let shadowFrameSeen: ((drawn: boolean) => void) | null = null;
+  const firstShadowFrame = () =>
+    new Promise<void>((resolve) => {
+      let quiet = 0;
+      shadowFrameSeen = (drawn) => {
+        quiet = drawn || sunRig.shadowPending() ? 0 : quiet + 1;
+        if (drawn || quiet >= 2) {
+          shadowFrameSeen = null;
+          resolve();
+        }
+      };
+    });
   // One frame: the scene steps, streams and renders.
+  const timeBootFrame = bootFrames(streamTimings);
   const frame = (time: number) => {
+    const frameStart = streamTimings.now();
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     const elapsed = timer.getElapsed();
@@ -2680,6 +2783,7 @@ async function bootApp(
     overlays.step(performance.now());
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
+      prepareBvhNear();
       if (modelRig.owns()) {
         tickModel();
       } else {
@@ -2707,6 +2811,8 @@ async function bootApp(
     takeCaptureTile();
     frames++;
     tickPocFrame(shadowRendered);
+    timeBootFrame(frameStart, shadowRendered);
+    shadowFrameSeen?.(shadowRendered);
   };
   // (It resolves once the loop is installed: nothing to wait for.) The
   // whole frame is guarded, not the render alone: three asks for the next
@@ -2755,6 +2861,7 @@ async function bootApp(
         calls: renderer.info.render.drawCalls,
         triangles: renderer.info.render.triangles,
         heapMB: heap ? heap.usedJSHeapSize / 1_048_576 : undefined,
+        cpuMB: cpuBytesOf(stream).total / 1_048_576,
         cities: stream.visibleCities().length,
         dressings: stream.dressings.size,
         ...streamByKind(stream),
@@ -2869,14 +2976,30 @@ async function bootApp(
   // the first visible frame. Bounded like a tile's compile: it resolves
   // only once every compile in flight has (compile-lanes.ts), neighbours'
   // included, and a frame skips what is not ready rather than stall.
-  await withinCompileWait(postStack.compile(scene).catch(() => undefined));
+  await streamTimings.timed("boot:scene-compile", () =>
+    withinCompileWait(postStack.compile(scene).catch(() => undefined))
+  );
   // On the spawn vantage (or where a recovered page stood) now that its
   // ground exists (the pose was placed before any terrain had landed,
-  // over the fallback floor).
-  placeStart();
+  // over the fallback floor). Its buildings' BVH is built here, as the
+  // placing's rays reach them (ADR 0032: never inside a building) — after
+  // the tile's ground has landed, not inside the parse that landed them.
+  bvhOnDemand = true;
+  streamTimings.timedSync("boot:place", () => placeStart());
+  streamTimings.markOnce("boot:placed");
+  // The light stage ends once a frame at the start pose has drawn its
+  // shadow map (or found none to draw): the shadow pass's pipelines build
+  // inside that frame, synchronously, and before they did so with the bar
+  // already at 52 % and the veil's timer held up behind them — a load that
+  // looked frozen. Bounded like a compile: a stalled frame never holds the
+  // boot.
+  await streamTimings.timed("boot:light-wait", () =>
+    withinCompileWait(firstShadowFrame())
+  );
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
   stage("light", 1);
+  streamTimings.markOnce("boot:light-done");
 
   // --- everything after the first frame -------------------------------------
   // The rest of the site keeps streaming (the renderer decides what, from
@@ -2904,6 +3027,25 @@ async function bootApp(
     } else {
       setTimeout(warm, 1000);
     }
+  }
+
+  /** "Loaded" on the trace: the time since the veil dropped, and the
+   *  summary printed now and 20 s on (`?trace=1`). */
+  function traceLoaded(): void {
+    const veil = streamTimings.markedAt("boot:veil-drop");
+    if (
+      veil !== undefined &&
+      streamTimings.markedAt("boot:loaded") === undefined
+    ) {
+      streamTimings.since("boot:veil-to-loaded", veil);
+    }
+    streamTimings.markOnce("boot:loaded");
+    if (!traceRequested(window.location.search)) {
+      return;
+    }
+    printTrace("loaded");
+    const later = setTimeout(() => printTrace("loaded + 20 s"), 20_000);
+    cleanups.push(() => clearTimeout(later));
   }
 
   // The two stages after the first frame measure what the cameras see:
@@ -2939,6 +3081,7 @@ async function bootApp(
       applyFog();
       opts.onLoaded?.();
       warmStylesWhenIdle();
+      traceLoaded();
     }
     if (step.busy !== undefined) {
       opts.onBusy?.(step.busy);
@@ -3048,9 +3191,16 @@ async function bootApp(
         loadedSet: Set<unknown>;
         bytesMap: Map<unknown, number>;
       };
+      const cpu = cpuBytesOf(stream);
       return {
         ...sceneBuffers(scene),
         held: { ...renderer.info.memory },
+        cpuMB: Object.fromEntries(
+          Object.entries(cpu).map(([kind, bytes]) => [
+            kind,
+            Math.round(bytes / 104_857.6) / 10,
+          ])
+        ) as Record<keyof CpuBytes, number>,
         anchors: postStack.anchorCount(),
         tileCache: {
           bytes: cache.cachedBytes,

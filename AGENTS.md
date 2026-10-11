@@ -117,7 +117,9 @@ config change.
     `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount,
     given the site id; which tileset to stream), `site-context.tsx`
     (`SiteProvider`/`useSite`: the site the HUD describes),
-    `poc-debug.ts` (the `window.__poc` test/QA hook), `scene-profile.ts`
+    `poc-debug.ts` (the `window.__poc` test/QA hook), `stream-timing.ts`
+    (`?trace=1`: the boot's and the stream's spans by category, local
+    only), `scene-profile.ts`
     (`?scene=lite`, `?gpu=webgl2`; the budget per tier and safety level —
     pixel ratio, shadow map, tile cache, `postProfileFor` and
     `shadowMapBytesFor`), `gpu-support.ts` (the WebGPU-or-WebGL2
@@ -167,7 +169,8 @@ config change.
     `coarse-crowns-layer.ts`, the coarse terrain level's trees — a
     third of them, wider —, and `low-vegetation-layer.ts`, the OSM
     hedges), `city-layer.ts` (dresses a
-    building tile: clay material, object table, BVH, demolish),
+    building tile: clay material, object table, demolish; its BVH built
+    when a ray first needs it, `ensureCityBvh`),
     `clay-windows.ts` (every house's windows, drawn by the clay's
     fragment pass as recesses — no geometry, no glass; ADR 0049),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
@@ -710,7 +713,13 @@ detach it first. A lost GPU reloads a safety level lighter, where the
 player stood (`gpu-recovery.ts`, ADR 0046).
 The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
-triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
+triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`).
+**A building tile's BVH is built when a ray first needs it** (ADR 0050,
+`ensureCityBvh`), so a ray against the buildings goes through
+`nearestCityHit`, `cityObjectsAlong` or the collider, which ask only the
+tiles whose box the ray enters and build (or skip) a missing BVH — a
+plain `intersectObject(city.mesh)` on a tile without one is
+three-mesh-bvh's brute-force fallback over two million triangles. The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The
 walk/fly camera does not stream itself: the renderer streams for its twin
 whose far plane ends where the fog does (`streamFarFor`,
@@ -777,7 +786,9 @@ kerbs and fences are baked into the fine terrain glTF and arrive with it)
 (the streaming pill). After the gate a terrain level that replaces its
 tile's other level on screen waits for its dressing before it counts as
 loaded, so the renderer keeps the old level (and its trees) drawn until
-the new one is complete (`DressingPlugin.handsOver`); the dressing is
+the new one is complete (`DressingPlugin.handsOver`) — on a desktop, for
+up to 1.5 s; a phone does not wait (`handOverWaitMs`: the wait holds a
+parse slot, and a phone has two), its trees arrive a moment later; the dressing is
 compiled off the scene and hung on the content root at the renderer's
 `load-model`, after it has recorded the content's materials.
 `onLoaded` flips it to `ready` once the
@@ -846,7 +857,11 @@ screenshots are optional there.
 URL knobs: `?scene=lite` (the CI profile, below), `?gpu=webgl2` (the
 WebGL2 backend where WebGPU exists), `?safety=N` (0–3: the page at that
 safety level, nothing stored — ADR 0046), `?trail=1` (the crash trail's
-card always), `#at=lat,lng` (the off-site dialog's hand-off to another
+card always), `?trace=1` (the boot's and the stream's timings —
+`stream-timing.ts`, plan 069: each `tile:*`, `dressing:*` and `boot:*`
+span on the browser's *Timings* track with its tile id, the long tasks
+counted, and a `console.table` of the categories once loaded and 20 s
+later; never in the trail or the reports), `#at=lat,lng` (the off-site dialog's hand-off to another
 city's page: placed there after the first frame, then dropped — a
 fragment, so it never reaches the server or the crash trail).
 
