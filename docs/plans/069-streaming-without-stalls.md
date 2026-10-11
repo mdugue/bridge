@@ -589,3 +589,29 @@ a fine terrain level that replaces the coarse one shows bare for a
 moment, its trees, lamps and rails arriving once its dressing is built;
 a tile's ask sets come in idle time or with the first question; the boot
 reaches 52 % one shadow frame later and after the spawn tile's BVH.
+
+### 2026-10-11 — the spawn tile's BVH in a worker (plan 043, re-tried)
+
+The one BVH build step 7 left on the boot's path — the spawn tile's, in
+`boot:place` — built in a worker on branch `claude/spawn-bvh-worker`
+(the arrays lent once the tile's compile has uploaded them, after its
+ground has landed, awaited before the placing: ADR 0032). Same setup as
+above (POC builds of `main` 7cf7d2f and the branch, `devices['iPhone
+13']`, headless Chromium over SwiftShader, `/dresden?scene=lite&trace=1`,
+alternating, load 16–23 on four cores — directional):
+
+| run | first frame s | ready s | `boot:place` s (waiting) | BVH build s | long tasks to first frame: n / total s / max s |
+|---|---|---|---|---|---|
+| branch 1 | 62.7 | 297.4 | 10.36 (10.36) | 10.37, worker | 54 / 59.0 / 7.27 |
+| main 1 | 39.3 | 247.5 | 3.09 | 3.09, main thread | 54 / 33.3 / 5.36 |
+| branch 2 | 71.9 | 270.0 | 4.15 (4.15) | 11.20, worker | 72 / 67.5 / 8.08 |
+| main 2 | 52.6 | 268.0 | 3.46 | 3.46, main thread | 52 / 46.1 / 6.87 |
+
+`boot:place` was shorter only where the scene's compile ran beside the
+build (branch 2: 7.2 s of it); otherwise the lite boot has nothing left on
+the main thread after its ground lands (`boot:scene-compile` 0.02–0.04 s),
+and the build ran 3× slower in the worker beside the frames that keep
+rendering on SwiftShader's CPU meanwhile. The worker also costs the first
+load 20.8 KB gz (ADR 0051's chunk effect: three's core and three-mesh-bvh
+left the scene's scope). Stopped there: plan 043's 2026-10-11 findings
+have the numbers, the five options and the rest.
