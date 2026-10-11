@@ -56,7 +56,8 @@ the renderer's error for an orthographic camera ignores distance, so at
 128 px it refines the fine level under the eye-level frustum only (ADR
 0047), and on a phone it streams nothing (`shadowTilesStream`, plan 071:
 the tiles it kept were tiles in use the memory governor cannot free).
-On a phone the view's own stream also ends at 2.2 km (`streamFarFor`). A dressing plugin builds
+On a phone the view's own stream also ends at 2.2 km (`streamFarFor`;
+not through Modell's dolly zooms, which back the camera kilometres away). A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
 heavy part (vegetation incl. the street-tree cadastre and the OSM hedges,
 lamps, rails on the fine terrain level; its walls

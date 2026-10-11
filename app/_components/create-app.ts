@@ -1664,7 +1664,8 @@ async function bootApp(
   // place from above the tile's top (lib/city/boot-start.ts): a pose that
   // sees no tile loads none, and by night, on a phone or from safety
   // level 2 no shadow camera streams one either, so the boot would wait
-  // for ever.
+  // for ever — as it would from higher above the tile than its stream
+  // reaches, so neither boots higher than half that reach above its top.
   // Their own pose goes back once the tile has landed (below, and the
   // HUD's after the first frame).
   const spawnView = picked ?? spawnViewpoint(opts.site);
