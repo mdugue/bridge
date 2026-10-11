@@ -360,10 +360,12 @@ function cacheKey(
 /** The modules a tile's shaped ground is baked by (`shapedTerrain`): the
  *  DGM reader and meshers, the TIN's tolerance, the stair, terrace and wall
  *  sources, the passages the site's lines open, the levels' grid sizes and
- *  the tile's extent. */
+ *  the tile's extent — and the cache entry the fine ground is read back
+ *  from (`groundFile`): every artifact made from it keys on its reader. */
 const GROUND_BAKE = [
   "scripts/bake-tiles.ts",
   "scripts/bake-terrain-tin.ts",
+  "scripts/ground-pack.ts",
   "scripts/tile-sources.ts",
   "scripts/line-levels.ts",
   "lib/city/tileset.ts",
@@ -891,12 +893,7 @@ function groundFile(tile: string): Promise<string> {
   if (!file) {
     file = cachedFile(
       `ground_${tile}.bin`,
-      cacheKey(
-        terrainInputs(tile),
-        [...GROUND_BAKE, "scripts/ground-pack.ts"],
-        offset,
-        passagesIn(tile)
-      ),
+      cacheKey(terrainInputs(tile), GROUND_BAKE, offset, passagesIn(tile)),
       async () => {
         const t0 = performance.now();
         const packed = packGround(await bakeFineGround(tile));
