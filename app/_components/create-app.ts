@@ -20,6 +20,7 @@ import { utmToLatLng } from "@/lib/city/crs";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
 import { createBootPhases } from "@/lib/city/boot-phases";
 import { createCoalescer } from "@/lib/city/coalesce";
+import { createRecount } from "@/lib/city/recount";
 import {
   createMemoryGovernor,
   memoryFloorFor,
@@ -1208,6 +1209,32 @@ async function bootApp(
     }
   });
   cleanups.push(() => seasonClock.dispose());
+  // The two walks of the whole scene that the stats and the crash trail's
+  // heartbeat report — every geometry under it, and the tiles' CPU arrays
+  // — are taken again only once what they count may have changed
+  // (lib/city/recount.ts; the heartbeat walked both every 2 s): the stream
+  // (a tile, a level or a dressing came or went, traffic bodies were
+  // built: `onChange`), a demolish and the data layers (all three through
+  // `scheduleStats`), a question (its rays build the BVHs of what they
+  // reach, its outline a mesh: `inquireAt`, `selectCandidate`), the CPU
+  // copies a compile let go of after its tile showed
+  // (`onCopiesDropped`), and — in the key, a count over the loaded
+  // building tiles — their BVHs, built as rays reach them. What comes and
+  // goes besides (a Schnitt's profile, a style's crowns) is kilobytes,
+  // counted with the next change.
+  const geometryCount = createRecount(() => estimateGeometryBytes(scene));
+  const cpuCount = createRecount(() => cpuBytesOf(stream).total);
+  const cityBvhs = () => {
+    let built = 0;
+    for (const city of stream.cities) {
+      built += city.hasBvh() ? 1 : 0;
+    }
+    return built;
+  };
+  const sceneCounted = () => {
+    geometryCount.changed();
+    cpuCount.changed();
+  };
   const stream = createTileStream(
     {
       // whether it compiled (a tile drops the CPU copies of what it
@@ -1238,6 +1265,7 @@ async function bootApp(
         opts.trail?.note("dressing failed", `${tile} ${message}`);
         sayLayerFailed(`${message} (Kachel ${tile})`);
       },
+      onCopiesDropped: () => cpuCount.changed(),
       dressingGate,
       fogColor: sceneFog.color,
       heightAt,
@@ -1858,6 +1886,8 @@ async function bootApp(
   let along: InquiryAlong | null = null;
   const inquireAt = (ndc?: { x: number; y: number }): Inquiry | null => {
     const asked = probe.ask(ndc);
+    // its rays built the BVHs of what they reached, its outline a mesh
+    sceneCounted();
     along = asked
       ? {
           at: ndc ?? null,
@@ -1877,6 +1907,7 @@ async function bootApp(
     if (!(along && chosen && probe.select(index))) {
       return null;
     }
+    sceneCounted();
     along = { ...along, selected: index };
     opts.onInquiry?.(chosen.inquiry, along);
     return chosen.inquiry;
@@ -1983,11 +2014,12 @@ async function bootApp(
 
   let fps = 0;
   // Geometry + tracked textures + the shadow map; the post stack's screen
-  // buffers are excluded (they scale with the canvas, not the world).
-  const gpuBytes = () =>
-    estimateGeometryBytes(scene) +
-    trackedTextureBytes() +
-    sunRig.shadowMapBytes;
+  // buffers are excluded (they scale with the canvas, not the world). The
+  // geometry as last counted (`geometryCount`); the textures come and go
+  // with the rasters' decode turns, and are a sum over a map.
+  const gpuBytesWith = (geometryBytes: number) =>
+    geometryBytes + trackedTextureBytes() + sunRig.shadowMapBytes;
+  const gpuBytes = () => gpuBytesWith(geometryCount.get());
   const census = (roots: (Object3D | undefined)[]): SceneCensus =>
     sceneCensus(roots.filter((r): r is Object3D => r !== undefined));
   const emitStats = () => {
@@ -2021,6 +2053,8 @@ async function bootApp(
   // while the e2e holds the frames (`__poc.hold`).
   let statsTimer: ReturnType<typeof setTimeout> | null = null;
   const scheduleStats = () => {
+    // what changes the stats changes what the scene's walks count
+    sceneCounted();
     if (statsTimer !== null || disposed) {
       return;
     }
@@ -2893,7 +2927,7 @@ async function bootApp(
         calls: renderer.info.render.drawCalls,
         triangles: renderer.info.render.triangles,
         heapMB: heap ? heap.usedJSHeapSize / 1_048_576 : undefined,
-        cpuMB: cpuBytesOf(stream).total / 1_048_576,
+        cpuMB: cpuCount.get(cityBvhs()) / 1_048_576,
         cities: stream.visibleCities().length,
         dressings: stream.dressings.size,
         ...streamByKind(stream),
@@ -3211,7 +3245,8 @@ async function bootApp(
     getRenderInfo: () => ({
       calls: renderer.info.render.drawCalls,
       triangles: renderer.info.render.triangles,
-      gpuBytes: gpuBytes(),
+      // counted now: a debug read, on demand
+      gpuBytes: gpuBytesWith(estimateGeometryBytes(scene)),
       memory: { ...renderer.info.memory },
     }),
     getGpuDebug: () => {

@@ -822,6 +822,16 @@ cabled Web Inspector) print it as one line:
 
 An older record prints as it was.
 
+A beat is cheap: the two figures that walk the whole scene — `gpu`'s
+geometry and `cpu`, the tiles' typed arrays — are counted again only once
+what they count may have changed (`createRecount`, `lib/city/recount.ts`:
+a tile, a level or a dressing came or went, a demolish, a data layer, a
+question, the CPU copies a compile let go of, a building tile's BVH),
+shared with the HUD's stats; everything else is read live. The record
+itself is one JSON value under one key, bounded by its rings (40 events,
+12 beats), so each beat writes it whole — ≈ 8 KB a few minutes into the
+spawn tile, 0.05 ms to serialise and store on a desktop.
+
 **If the GPU is lost anyway**, or a frame throws, the render stops and the
 page reloads where the player stood, **a safety level lighter**
 (`gpu-recovery.ts`, `lib/city/gpu-safety.ts`,
