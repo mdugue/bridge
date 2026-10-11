@@ -8,7 +8,7 @@ import { createLookState } from "@/lib/city/look-state";
 import {
   BoxGeometry,
   BufferAttribute,
-  type Group,
+  Group,
   Mesh,
   MeshBasicNodeMaterial,
   Object3D,
@@ -505,6 +505,68 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
   expect(asksOf(early)).toEqual([set]);
   idle.shift()?.();
   expect(early.asks).toEqual([set]);
+});
+
+test("a dressing whose tile leaves before its idle time never builds its ask sets", () => {
+  // the idle callback whenIdle (main-yield.ts) asks the browser for
+  const idle: (() => void)[] = [];
+  const host = globalThis as { requestIdleCallback?: unknown };
+  const had = "requestIdleCallback" in host;
+  const saved = host.requestIdleCallback;
+  host.requestIdleCallback = (work: () => void) => idle.push(work);
+  try {
+    const stream = {
+      cities: new Set<CityLayer>(),
+      terrains: new Set<TerrainLayer>(),
+      dressings: new Set<TileDressing>(),
+      demolished: new Map<string, Set<number>>(),
+    };
+    const plugin = new DressingPlugin(
+      {
+        dressingGate: new Promise<void>(() => undefined),
+        look: createLookState(),
+        night: () => 0,
+        season: () => 180,
+        onChange: () => undefined,
+      } as unknown as TileStreamContext,
+      stream
+    );
+    const scene = new Object3D();
+    const terrain = {
+      rasters: [],
+      dispose: () => undefined,
+    } as unknown as TerrainLayer;
+    const entry = { terrain };
+    plugin.dressed.set(scene, entry);
+    let built = 0;
+    const dressing: TileDressing = {
+      tile: "t",
+      asks: [],
+      buildAsks: () => {
+        built++;
+      },
+      furniture: new Group(),
+    };
+    // reason: the hang is private; the test hangs a built dressing without
+    // the terrain build a renderer would need
+    const inner = plugin as unknown as {
+      hangDressing: (scene: Object3D, entry: object, d: TileDressing) => void;
+    };
+    inner.hangDressing(scene, entry, dressing);
+    expect(idle).toHaveLength(1);
+    // the renderer unloads the tile before the page is idle
+    plugin.disposeTile({ engineData: { scene } });
+    idle.shift()?.();
+    expect(built).toBe(0);
+    expect(asksOf(dressing)).toEqual([]);
+    expect(built).toBe(0);
+  } finally {
+    if (had) {
+      host.requestIdleCallback = saved;
+    } else {
+      delete host.requestIdleCallback;
+    }
+  }
 });
 
 test("a phone's parse slot never waits on a dressing; a desktop's a little", () => {
