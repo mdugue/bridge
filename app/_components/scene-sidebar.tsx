@@ -24,7 +24,14 @@ import type {
 } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { getTimes } from "suncalc";
 import { Button } from "@/components/ui/button";
 import { SUPPORT_URL } from "@/lib/brand";
@@ -62,9 +69,8 @@ import {
 } from "@/lib/city/look-controls";
 import { type DataLayerKey, siteDataLayers } from "@/lib/city/data-layers";
 import { STUDY_DATES, STUDY_HOURS } from "@/lib/city/image-export";
-import type { Landmark } from "@/lib/city/landmarks";
 import { sitePlaces } from "@/lib/city/places";
-import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
+import type { MapTile } from "@/lib/city/minimap";
 import {
   RENDER_STYLE_BY_ID,
   RENDER_STYLES,
@@ -73,14 +79,15 @@ import {
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { cn } from "cn";
-import type { CityWalkHandle, CityWalkStats } from "./create-app";
+import type { CityWalkHandle } from "./create-app";
 import { DataLayersPanel } from "./data-layers-panel";
 import { Minimap } from "./minimap";
 import { PlacesList } from "./places-list";
 import { hintsFor } from "./control-hints";
 import { LegalLinks } from "./legal-links";
-import type { ModelHud, ViewMode } from "./model-rig";
+import type { ViewMode } from "./model-rig";
 import { ProjectionPanel } from "./projection-panel";
+import { useSceneStatus, useSceneStatusStore } from "./scene-status";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
 import {
@@ -280,20 +287,31 @@ function StylePicker({
   );
 }
 
-/** The minimap card: click to teleport, the blue dot is you. */
+/**
+ * The minimap card: click to teleport, the blue dot is you. The footprints
+ * and the pose come from the scene's status (scene-status.ts); the pose
+ * moves the dot on the map's canvas without a render.
+ */
 function MinimapCard({
   bounds,
-  footprints,
   landcoverTiles,
   onTeleport,
-  subscribePose,
 }: {
   bounds: TerrainBounds;
-  footprints: FootprintPoly[];
   landcoverTiles: MapTile[];
   onTeleport: (epsgX: number, epsgY: number) => void;
-  subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
 }) {
+  const footprints = useSceneStatus("footprints");
+  const status = useSceneStatusStore();
+  const subscribePose = useCallback(
+    (cb: (pose: PlayerPose) => void) =>
+      status.subscribe("pose", (pose) => {
+        if (pose) {
+          cb(pose);
+        }
+      }),
+    [status]
+  );
   // The minimap paints into a fixed-size canvas, so it needs a pixel count
   // rather than a CSS width: measure the card and hand it the result.
   const ref = useRef<HTMLDivElement>(null);
@@ -338,7 +356,8 @@ function MinimapCard({
  * four of, folded away until asked for: the bar already teaches the first
  * steps. Touch devices get the gestures instead: a phone has no W A S D.
  */
-function ControlTable({ coarse, model }: { coarse: boolean; model: boolean }) {
+function ControlTable({ coarse }: { coarse: boolean }) {
+  const model = useSceneStatus("mode") === "model";
   return (
     <Collapsible className="border-t px-4 pt-1.5 pb-2">
       <CollapsibleTrigger
@@ -375,14 +394,13 @@ function ControlTable({ coarse, model }: { coarse: boolean; model: boolean }) {
  */
 function ViewModeSwitch({
   disabled,
-  mode,
   onMode,
 }: {
   /** the scene is still loading: there is no camera to switch yet */
   disabled: boolean;
-  mode: ViewMode;
   onMode: (mode: ViewMode) => void;
 }) {
+  const mode = useSceneStatus("mode");
   return (
     <ToggleGroup
       aria-label="Ansicht"
@@ -709,9 +727,74 @@ function ToolButton({
   );
 }
 
+/**
+ * Modell's *Projektion*, while Modell is shown: at its view's rate (the
+ * pose tick), so it reads the view itself rather than the whole panel.
+ */
+function ModelProjection({
+  handleRef,
+  onExport,
+}: {
+  handleRef: RefObject<CityWalkHandle | null>;
+  onExport: () => void;
+}) {
+  const mode = useSceneStatus("mode");
+  const view = useSceneStatus("modelView");
+  if (mode !== "model" || !view) {
+    return null;
+  }
+  return (
+    <ProjectionPanel
+      onCutOut={(on) => handleRef.current?.setCutOut(on)}
+      onExport={onExport}
+      onPreset={(p) => handleRef.current?.setModelPreset(p)}
+      onScale={(d) => handleRef.current?.setModelScale(d)}
+      onShear={(k) => handleRef.current?.setModelShear(k)}
+      onTilt={(deg) => handleRef.current?.setModelTilt(deg)}
+      onTurnTo={(deg) => handleRef.current?.turnModelTo(deg)}
+      view={view}
+    />
+  );
+}
+
+/** The counters: what the scene holds, and how fast it draws. */
+function SceneCounters() {
+  const stats = useSceneStatus("stats");
+  const fps = useSceneStatus("fps");
+  return (
+    <div className="flex flex-col gap-2 border-t px-4 pt-3 pb-3.5">
+      <span className={SECTION_LABEL}>Statistik</span>
+      <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 text-muted-foreground text-xs">
+        <span>Gebäude</span>
+        <span className="font-mono tabular-nums">
+          {stats?.buildingCount.toLocaleString("de-DE") ?? "–"}
+        </span>
+        <span>Geländepunkte</span>
+        <span className="font-mono tabular-nums">
+          {stats?.terrainVertexCount.toLocaleString("de-DE") ?? "–"}
+        </span>
+        <span>GPU-Speicher</span>
+        <span className="font-mono tabular-nums">
+          {stats ? `≈ ${stats.gpuMegabytes} MB` : "–"}
+        </span>
+        <span>Bildrate</span>
+        <span className="font-mono tabular-nums">
+          {fps === null ? "–" : `${fps} fps`}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Everything the panel is handed is the HUD's own state (the time, the
+ * look, the tab, the snapshot); what the scene reports (the site, the
+ * mode, Modell's view, the counters, the footprints) each part reads from
+ * the scene's status itself (scene-status.ts), so a report re-renders the
+ * part that shows it, not the panel.
+ */
 export interface SceneSidebarProps {
   applySnapshot: () => void;
-  bounds: TerrainBounds | null;
   coarse: boolean;
   copySnapshot: () => void;
   /**
@@ -722,18 +805,9 @@ export interface SceneSidebarProps {
   /** what a data layer that is on says in words (the bike counts) */
   dataLayerDetail?: Partial<Record<DataLayerKey, ReactNode>>;
   day: Date;
-  footprints: FootprintPoly[];
-  fps: number | null;
   handleRef: RefObject<CityWalkHandle | null>;
-  landcoverTiles: MapTile[];
-  /** the site's landmarks (Wikidata), most notable first */
-  landmarks: Landmark[];
-  latLng: { lat: number; lng: number } | null;
   look: LookValues;
   minutes: number;
-  mode: ViewMode;
-  /** Modell's view while it is shown (plan 055) */
-  modelView: ModelHud | null;
   onDefaultTime: () => void;
   /** Bild speichern: the picture with its legend (image-export.ts) */
   onExport: () => void;
@@ -762,8 +836,6 @@ export interface SceneSidebarProps {
   setSnapshotText: Dispatch<SetStateAction<string>>;
   snapshotMsg: string | null;
   snapshotText: string;
-  stats: CityWalkStats | null;
-  subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
   sun: SunState | null;
   tab: SceneTabId;
   updateSun: (day: Date, minutes: number) => void;
@@ -776,9 +848,12 @@ export function SceneSidebar(props: SceneSidebarProps) {
   const { toggleSidebar } = useSidebar();
   const { handleRef, look, onLook } = props;
   const site = useSite();
+  // the site as the tileset describes it: set once per boot
+  const info = useSceneStatus("site");
+  const landmarks = info?.landmarks;
   const places = useMemo(
-    () => sitePlaces(site.viewpoints, props.landmarks, site.name),
-    [site, props.landmarks]
+    () => sitePlaces(site.viewpoints, landmarks ?? [], site.name),
+    [site, landmarks]
   );
   return (
     <Sidebar
@@ -810,34 +885,20 @@ export function SceneSidebar(props: SceneSidebarProps) {
       <SidebarContent className="overflow-hidden">
         <SceneTabs onValueChange={props.onTab} value={props.tab}>
           <SceneTabPanel value="erkunden">
-            {props.bounds && (
+            {info?.terrainBounds && (
               <MinimapCard
-                bounds={props.bounds}
-                footprints={props.footprints}
-                landcoverTiles={props.landcoverTiles}
+                bounds={info.terrainBounds}
+                landcoverTiles={info.landcoverTiles}
                 onTeleport={props.onTeleport}
-                subscribePose={props.subscribePose}
               />
             )}
             <div className="px-3 pb-3.5">
               <ViewModeSwitch
                 disabled={!props.ready}
-                mode={props.mode}
                 onMode={(next) => handleRef.current?.setViewMode(next)}
               />
             </div>
-            {props.mode === "model" && props.modelView && (
-              <ProjectionPanel
-                onCutOut={(on) => handleRef.current?.setCutOut(on)}
-                onExport={props.onExport}
-                onPreset={(p) => handleRef.current?.setModelPreset(p)}
-                onScale={(d) => handleRef.current?.setModelScale(d)}
-                onShear={(k) => handleRef.current?.setModelShear(k)}
-                onTilt={(deg) => handleRef.current?.setModelTilt(deg)}
-                onTurnTo={(deg) => handleRef.current?.turnModelTo(deg)}
-                view={props.modelView}
-              />
-            )}
+            <ModelProjection handleRef={handleRef} onExport={props.onExport} />
             <PlacesList
               canRemember={props.ready}
               canTravel={props.canTravel}
@@ -869,10 +930,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 />
               </div>
             )}
-            <ControlTable
-              coarse={props.coarse}
-              model={props.mode === "model"}
-            />
+            <ControlTable coarse={props.coarse} />
           </SceneTabPanel>
 
           <SceneTabPanel value="szene">
@@ -880,7 +938,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
               day={props.day}
               onDefaultTime={props.onDefaultTime}
               onStudy={props.onStudy}
-              latLng={props.latLng}
+              latLng={info?.latLng ?? null}
               minutes={props.minutes}
               previewSun={props.previewSun}
               ready={props.ready}
@@ -1000,28 +1058,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
               )}
             </div>
 
-            <div className="flex flex-col gap-2 border-t px-4 pt-3 pb-3.5">
-              <span className={SECTION_LABEL}>Statistik</span>
-              <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 text-muted-foreground text-xs">
-                <span>Gebäude</span>
-                <span className="font-mono tabular-nums">
-                  {props.stats?.buildingCount.toLocaleString("de-DE") ?? "–"}
-                </span>
-                <span>Geländepunkte</span>
-                <span className="font-mono tabular-nums">
-                  {props.stats?.terrainVertexCount.toLocaleString("de-DE") ??
-                    "–"}
-                </span>
-                <span>GPU-Speicher</span>
-                <span className="font-mono tabular-nums">
-                  {props.stats ? `≈ ${props.stats.gpuMegabytes} MB` : "–"}
-                </span>
-                <span>Bildrate</span>
-                <span className="font-mono tabular-nums">
-                  {props.fps === null ? "–" : `${Math.round(props.fps)} fps`}
-                </span>
-              </div>
-            </div>
+            <SceneCounters />
           </SceneTabPanel>
         </SceneTabs>
       </SidebarContent>

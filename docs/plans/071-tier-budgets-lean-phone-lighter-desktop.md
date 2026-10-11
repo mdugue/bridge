@@ -25,6 +25,38 @@
   field stays, always on, not parametrisable (the switch and focus
   controls went on the same PR). Open: step 3, step 4.1 (desktop DPR 1.5),
   step 5 (`streamFarFor` exists now), steps 6–7.
+- **Second pass (2026-10-10)**: steps **3, 4.1, 5 and 7 BUILT**, step 6
+  **headless only**. Step 3: `shadowTilesStream(level, tier)` — a
+  desktop below level 2 only. Step 4.1: `PIXEL_RATIO_CAP.desktop` =
+  1.5, 1.25, 1, 1 — the ladder test now asks each level for *no more*
+  pixels than the one before and the last for fewer than the first (the
+  desktop's levels 2 and 3 both draw at 1, as its shadow map's levels 1
+  and 2 share 2048²). Step 5: `streamFarFor(fogFar, cameraFar, tier)`
+  ends a phone's stream at `PHONE_STREAM_FAR_M` = 2200 m; the price,
+  stated where it is defined: at *Nebel* 0 (the fog ends at 4 km, a tile
+  2.2 km out is ~30 % fogged) a phone shows the loaded world's edge
+  2.2–4.2 km out — at the default *Nebel* that distance is ~90 % fog.
+  Step 7: `docs/rendering.md` (budget rows *Tiles*, *Shadow camera*,
+  *Pixel ratio*, the shadow-camera and stream-camera paragraphs), ADR
+  0046's level table, AGENTS.md, the city-walker skill, the ledger and
+  the glossary's *Pixel ratio* in both languages.
+  **Measured (SwiftShader, no GPU, no phone in the container)**: a
+  desktop at `devicePixelRatio` 2 (400×300 CSS) draws 800×600 on `main`,
+  600×450 on the branch (56 %). A phone (390×844 CSS, touch, `(pointer:
+  coarse)` true; `?scene=lite&block=1`, which streams as the full
+  profile does, CSS pixels deciding, at lite's pixel cost), by day: at
+  the spawn 12 tile contents requested on `main` (the farthest tile's
+  centre 3.7 km off) against 9 (2.2 km); a flight to 200 m over the
+  Altstadt bank looking up the Elbe asked for 11 more on `main` (out to
+  4.1 km) against 2 (3.2 km, a box 2.1 km off); 21 distinct contents
+  over the visit against 11. *Held* is the same (420.6 / 425.4 MiB back
+  at the spawn): the 336 MiB tile cache binds both, and the branch fills
+  it with nearer tiles (more fine levels; textures 85 → 136–146 MiB)
+  instead of fog. **Not measured**: frame rates (a SwiftShader frame
+  time measures nothing), an iPhone's `heldMB` and its crash trail,
+  real-GPU plates of the 1.5× desktop and of the seam shadow; the
+  `@phone` e2e group timed out at its 180 s budget waiting for `ready`
+  on the shared, loaded container — on `main` exactly as on the branch.
 
 - **Priority**: P2 (P1 for the phone half if crashes are the top complaint)
 - **Effort**: M
