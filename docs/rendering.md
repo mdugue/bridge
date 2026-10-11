@@ -1005,6 +1005,18 @@ picked place from above the top of its tile's box, since its height is
 over a ground not yet known (`lib/city/boot-start.ts`). Each boot waits
 for the one before it to settle, so quick picks never hold two
 renderers at once, and the page keeps one crash trail across them.
+The data layers build nothing at boot: they start as one feature
+(`data-layers-feature.ts`) on the first switch-on of any of them, and
+from then on hear the spine through its hooks (`feature-seam.ts`: the
+frame, the stream's changes, the look store, the scene's clock — read
+first, since they may start long after it was set); a tile's traffic
+slot waits for the same start before it builds its bodies, outside the
+dressings' turn. Their code ships in the scene's chunk: loaded by
+`import()` as a chunk of its own, it made the first-load JS 22.7 KB gz
+larger while moving 10.1 KB out, three.js shared by both chunks losing
+its scope hoisting with the scene's code ([ADR 0051](./adr/0051-optional-features-start-on-first-use-in-the-scene-chunk.md)) — and the
+picture styles and Modell, which import three as much, stay in the
+scene's chunk for the same reason.
 Everything else is the tiles renderer's call: it loads and
 unloads by screen-space error from both cameras, and a `DressingPlugin`
 (`tile-stream.ts`) dresses each landing tile inside the renderer's own

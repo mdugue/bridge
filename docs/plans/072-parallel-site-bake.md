@@ -16,15 +16,78 @@
 
 ## Status
 
-- **Status (2026-10-10)**: **TODO** — the performance PR made the cold
-  bake cheaper beside this plan: the spawn tile's CityJSON is no longer
-  parsed twice (`cityFrame`), the plinth and band appends write typed
-  arrays (the four heaviest Dresden tiles' city parse 51.8 → 34.2 s), and
-  the cache keys hash the locked versions of the packages a bake imports
-  instead of the whole `bun.lock` (a client-only dependency bump no
-  longer re-bakes every site; `bake-tiles.ts`' city mesher moved to
-  `bake-city-mesh.ts`, so a building-only change no longer re-bakes the
-  terrain). Step 1's measurement must be redone on that base.
+- **Status (2026-10-10)**: **PARTIAL — the warmers showed no gain on
+  Vercel and are opt-in** (`PREPARE_WARMERS=1`). Built: steps 1, 3–6 on
+  `266bb89` (the performance PR's base); step 2 skipped by its gate.
+  Measured on Vercel's builder (4 cores, 8.6 GB; `process.constrainedMemory()`
+  reports the 8.6), cold builds of all seven sites, `prepare-sites`:
+  main 235 s (#149's production build) and 232 s (its preview); the
+  warmers 322 s; this plan's default schedule 387 s. The builders
+  differed: Next's static pages, which none of this touches, took 7.5–8.7 s
+  in main's builds and 11.3–11.9 s in the branch's, so these single builds
+  cannot settle a difference under ≈ 40 %. What the logs do show: at 3 GB a
+  tile warmer, two run at once in 6.9 GB — the parallelism main already
+  gets from two sites side by side —, the smaller sites held the slots
+  until t ≈ 95 s while Dresden's ground warmers waited, and the warmers'
+  31 processes cost ≈ 10 % more CPU. On one box, alternating, the default
+  schedule costs main's CPU (Grimma 28.6/28.7 s, Hamburg 59.7/60.1 s of
+  user time; main/branch). So the default is main's schedule again (one
+  process per site, counted at 3 GB, largest first — two at once on that
+  builder, four on CI's 16.8 GB runner; against 80 % of the memory where
+  main counted all of it, so one fewer on a 12–15 GB box); on by default:
+  atomic cache entries (two sites already baked
+  side by side into one cache), each tile's fine ground as its own entry,
+  the timing lines. The local numbers below came from a box shared with
+  other agents' e2e runs.
+  - **Step 1** (cold, all seven sites side by side, Dresden one process,
+    load ≈ 7): Dresden's 15 tiles — buildings 268.9 s, fine 265.3 s (of
+    which the site ground's first call, fifteen TINs, 202.7 s), coarse
+    31.8 s; line levels 105.6 s (20 s alone), side files 34.1 s. The
+    whole-run CPU profile could not run on the shared box (the profiler
+    held 8–12 GB within 2–5 min); the two warmers were profiled instead:
+    a ground warmer is Delatin (`_findCandidate`, `_queueLess`,
+    `_legalize`, `_queueRemove`) and the DGM's LZW (`decompress`,
+    `getNext`, `appendReversed`); a tile warmer (the heaviest tile)
+    `rayHit` (lib/city/doors.ts) 5.9 %, `unionArea` (object-facts.ts)
+    4.2 %, `set` 4.2 %, glTF-Transform's `hashLookup` 4.0 %, meshopt's wasm
+    3.8 %, `quantizeAttribute` 3.6 %, `compactAttribute` 3.1 %, `gzipSync`
+    2.9 %, `murmurHash2` 2.6 %, `hashLookup` 2.3 %.
+  - **Step 2 skipped**: gz is not in the top 3 (11.0 s over Dresden's 45
+    glbs at level 9; level 6 5.4 s, +0.98 % bytes — and it would change
+    every `.glb.gz`, which the byte-identical output forbids).
+  - **Step 3**: atomic entries (`scripts/bake-cache.ts`); each tile's fine
+    ground cached (`scripts/ground-pack.ts`, `ground_<t>.bin`, ≈ 6.7 MB a
+    Dresden tile); the site ground reads a tile's heights only once a point
+    asks. To rebuild the mesh from the entry, `scripts/bake-tiles.ts` (out
+    of this plan's scope) splits its two meshers into their shaping and
+    meshing halves (`fineTin` + `tinMesh`, `shapeGrid` + `gridMesh`),
+    computing the same — the manifests prove it.
+  - **Steps 4–5, with deviations**: one tile per warmer, not K round-robin
+    lists (a process's memory grows with every tile it bakes: all fifteen
+    in one, 4.3 GiB; the heaviest tile alone, 2.7 GB — and a slot that
+    frees late still finds a tile); admission by cores and by memory
+    (`warmers.ts` `bakeLimits`: 80 % of the memory or the container's
+    limit, a tile warmer counted at 3 GB, any other bake at 1.6 GB), with
+    `PREPARE_MEMORY_GB` beside `PREPARE_JOBS`; the smaller sites first
+    (each is one process that cannot be split); a `--if-cached` plain run
+    first, so a warm build runs no warmer (it had made a warm build of all
+    sites 9.3 → 22.3 s), the first warmer in its slot.
+  - **Measured** on a shared 4-core, 15 GB box (other agents' e2e; load
+    12–19), cold, all seven sites, back to back: main 1115 s, the branch
+    1206 s wall — the box's CPU bound both, not their parallelism; the
+    bakes' CPU 836 s (main) and 916 s (the branch: +10 %, 31 processes'
+    start-up). From each bake's measured CPU time, on an idle machine:
+    main ≈ 491 s (Dresden's one process) → the branch ≈ 280 s on four
+    cores; on a 4-core, 8 GB builder (main runs two jobs there) 491 →
+    ≈ 340 s. Warm: 9.1 → 9.8 s for all sites (loaded), 3.5 s for Dresden;
+    a warm build runs no warmer. The last cold run (the first warmer in
+    the probe's slot: it started at 6 s) again matched every manifest.
+    Peak RSS: Dresden in one process 4.5–4.9 GiB, a tile warmer at most
+    2.7 GB; all sites cold as on an 8 GB builder (`PREPARE_MEMORY_GB=8`):
+    4.07 GB summed (main at its default on the 15 GB box: 5.3–6.2 GB).
+    Every `manifest.json` identical to main's, seven sites, every cold run.
+  - Backlog: a finer L0 key, and tile warmers admitted by a size-based
+    estimate ([README](./README.md), 2026-10-10 list).
 
 - **Priority**: P2
 - **Effort**: M–L

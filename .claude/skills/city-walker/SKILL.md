@@ -28,7 +28,15 @@ streaming the site and the animation loop, and returns a `CityWalkHandle`
 (the imperative API the React HUD calls) once the spawn tile's buildings and
 any of its terrain levels are on screen — the first frame. The fixed
 lamp-light pool and the fog floor are created before the first frame and
-retargeted/lowered as tiles land.
+retargeted/lowered as tiles land. The data layers are not wired into
+`bootApp` by hand: they start on their first switch-on (`lazyFeature`,
+`data-layers-feature.ts`) and hear the spine through its hooks
+(`feature-seam.ts`: frame, stream change, the look store, the scene's
+clock — a watched value a late starter reads first); a tile's traffic
+slot waits for their builder. The picture styles and Modell are still
+wired by hand. The data layers' code stays in the scene chunk: the first `import()` chunk that imports three.js costs the first
+load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
+data layers moved (ADR 0051) — measure before splitting one off.
 
 **The renderer** is three r186's `WebGPURenderer` — its WebGPU backend, or
 its WebGL2 backend where the browser has no WebGPU (`?gpu=webgl2` forces it:

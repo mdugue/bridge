@@ -103,9 +103,9 @@ history. Decisions that came out of plans are written up as
 | 069 | Find what holds the load at 52 %, then take it off the tile path: local timing marks, an honest 52 %, a per-tier hand-over wait, meshopt workers, ask sets in idle time, a lazy BVH | **PARTIAL** (2026-10-10) — steps 1, 3–7 built (5 on the performance PR with a bounded scene compile, deduplicated stage reports, concurrent raster fetches, a stall guard, one change pass per task, WebKit's `scheduler.yield`; then one meshopt worker on a phone, the tiles' CPU arrays counted (`cpuMB`), step 7 ungated by the iPhone crash reports — the BVH when a ray needs it); step 2's device rows open: measured locally, mobile-emulated (the plan's Findings) | [069-streaming-without-stalls.md](./069-streaming-without-stalls.md) |
 | 070 | Each tile holds a fraction of the raster memory: a 1024² coarse class raster, the sports raster on a desktop's fine level only, optionally a half-resolution desktop splat | **PARTIAL** (2026-10-10) — steps 1–4 built (step 4, the desktop's fine splat at 2048², judged on SwiftShader plates: nothing blockier, −64 MiB a fine tile; one real-GPU glance at the PR's snapshots left); step 5's GPU and phone measurements open | [070-raster-diet.md](./070-raster-diet.md) |
 | 071 | A phone renders a lean scene, a desktop a lighter one | **PARTIAL** (2026-10-10) — phone GTAO at 8 samples (not 0), a phone rich-crown budget of 800 (not *Multi-Tuft* off), no autofocus ray without a lens blur; step 4.2 (no desktop DoF) REJECTED by the maintainer; steps 3 (no shadow-camera tiles on a phone), 4.1 (desktop DPR ≤ 1.5), 5 (a phone streams to 2.2 km) and 7 built in a second pass; step 6 measured headless only — frame rates, an iPhone's memory and real-GPU plates open | [071-tier-budgets-lean-phone-lighter-desktop.md](./071-tier-budgets-lean-phone-lighter-desktop.md) |
-| 072 | A cold build bakes a site's tiles on every core | **TODO** — cheaper since 2026-10-10 (no second spawn parse, typed-array plinths, cache keys on the bakes' own packages); re-measure first | [072-parallel-site-bake.md](./072-parallel-site-bake.md) |
+| 072 | A cold build bakes a site's tiles on every core | **PARTIAL** (2026-10-10) — built (steps 1, 3–6; step 2 gated out); on Vercel's 4-core, 8.6 GB builder the warmers showed no gain (322 s cold; main 232–235 s; the builders varied ≈ 1.4× in an untouched step), two tile warmers fit at once — main's parallelism already —, so they are opt-in (`PREPARE_WARMERS=1`) and the default is one process per site again, at main's CPU (local A/B); kept: atomic cache entries, each tile's fine ground as its own entry, the timing lines; manifests identical to main's | [072-parallel-site-bake.md](./072-parallel-site-bake.md) |
 | 073 | The look is fixed; the sidebar keeps only the controls people use | **DONE** (2026-10-10) — the default table: *Nebel* the one slider left, the multi-tuft switch kept, the other 25 fixed at their defaults as named constants in their owners (four keep an internal uniform a style or Modell writes); old snapshots load, their keys retired for good (`RETIRED_SNAPSHOT_KEYS`); ADR 0017 amended; ~3 kB gzip; the two edited e2e specs pass; not done: GPU plates (none in the container), the rest of the e2e (CI) | [073-freeze-the-look-table.md](./073-freeze-the-look-table.md) |
-| 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **PARTIAL** (2026-10-10) — part D built: the HUD's scene-status store (`lib/city/slice-store.ts`, `app/_components/scene-status.ts`), each widget reading its own slice, `create-app.ts` unchanged; over a lite boot, 30 frames standing and 30 in Modell `CityWalk` committed 4 times instead of 75 and `SceneSidebar` 4 instead of 75; parts A–C open (each opens with a spike) | [074-architecture-deepening.md](./074-architecture-deepening.md) |
+| 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **PARTIAL** (2026-10-10) — part D built: the HUD's scene-status store (`lib/city/slice-store.ts`, `app/_components/scene-status.ts`), each widget reading its own slice, `create-app.ts` unchanged; over a lite boot, 30 frames standing and 30 in Modell `CityWalk` committed 4 times instead of 75 and `SceneSidebar` 4 instead of 75; part B: the seam built (`feature-seam.ts`: the spine's hooks, `lazyFeature`; the data layers start on their first switch-on, the traffic slot waits for its builder), the `import()` measured and **stopped** — the data layers as a chunk of their own made the first-load JS 22.7 KB gz larger for 10.1 KB moved (three.js lost its scope hoisting with the scene), so their code ships with the scene, and the styles and Modell were not started (the Findings); parts A and C open (each opens with a spike) | [074-architecture-deepening.md](./074-architecture-deepening.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -143,8 +143,8 @@ S/M/L.
    1–2 first (the timing marks, measured on a desktop and an iPhone: they
    decide 069's gated steps and 074 part A) → 071 step 6 and 070 step 5
    on a real GPU and an iPhone (071's 3, 4.1, 5 and 070's 4 are built)
-   → 072 → 074 B (the lazy seam, the data
-   layers first) → 074 A. (073 is built: the maintainer let the
+   → 072 → 074 B (built as far as it pays: the seam, no lazy chunk —
+   see its row) → 074 A. (073 is built: the maintainer let the
    default table stand.) Authorize the Sentry connector before measuring: the
    per-device frame-rate and memory summaries already arrive there (ADR
    0043).
@@ -398,6 +398,18 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
   texel size for fewer redraws.
 - **The minimap's 512² class raster** has one reader left that paints
   256² a tile (a re-bake and a look).
+- **A tile's fine level re-bakes when any tile's terrain inputs change**
+  (plan 072's maintenance note, M): its key covers every tile's DGM,
+  walls, stairs, terraces and kerbs (ADR 0029), though its walls, kerbs,
+  stairs and fences ask only the grounds near them — since plan 072 the
+  site ground reads a tile's heights only once a point asks, so the bake
+  could record which tiles it read and key on those alone (1–9, not 15).
+- **A tile warmer is admitted with Dresden's heaviest tile's peak**
+  (plan 072, `TILE_PEAK` 3 GB): on an 8 GB builder two run at once,
+  though ten of the fifteen tiles peak under 2 GB. An estimate from the
+  tile's CityJSON size (≈ 0.6 GB + 0.17 GB per MB on Dresden's) would
+  let three run beside a heavy one — measure it on another city before
+  trusting it.
 
 **Measured, not built:** WebKit's missing `scheduler.yield` is shimmed
 (`main-yield.ts`) but unmeasured on an iPhone — in Chromium with the API
