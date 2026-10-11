@@ -1448,7 +1448,9 @@ async function bootApp(
     }
   };
   applyFog();
-  /** The stream camera onto the walk/fly camera, its far at the fog's end. */
+  /** The stream camera onto the walk/fly camera, its far at the fog's end
+   *  (through Modell's dolly zooms, which move that camera kilometres
+   *  back, at the opened fog's, uncapped on a phone too). */
   const syncStreamCamera = () => {
     camera.matrixWorld.decompose(
       streamCamera.position,
@@ -1458,7 +1460,8 @@ async function bootApp(
     const far = streamFarFor(
       Math.max(sceneFog.far.value, fogRangeFor(fogAmount).far),
       camera.far,
-      budget.tier
+      budget.tier,
+      rig?.owns() ?? false
     );
     if (
       streamCamera.far !== far ||

@@ -111,24 +111,34 @@ const STREAM_FAR_MARGIN = 1.1;
  * to the far side of the last such tile, 2.2–4.2 km out. The price is in
  * the clear-air look: at *Nebel* 0 the fog ends at 4 km, a tile 2.2 km out
  * is only ~30 % fogged, and a phone shows the loaded world's edge there.
+ * Not in Modell, whose fog opens as its dolly zooms back away
+ * (`streamFarFor`).
  */
 export const PHONE_STREAM_FAR_M = 2200;
 
 /**
  * The far plane the tile renderer streams for: where the fog ends, plus a
- * margin, never past the camera's own — nor, on a phone, past
- * `PHONE_STREAM_FAR_M`. Three's range fog runs on view depth — the far
- * plane's measure — so past `fogFar` every fragment is the fog colour,
- * which the sky's horizon band takes up too (sun-rig.ts): a tile wholly
- * beyond it shows nothing. `fogFar` is the larger of the fog applied now
- * and the one the look will open to, so the boot's tighter partial-world
- * fog does not leave the tiles it hides to load later.
+ * margin, never past the camera's own — nor, on a phone walking or
+ * flying, past `PHONE_STREAM_FAR_M`. Three's range fog runs on view
+ * depth — the far plane's measure — so past `fogFar` every fragment is
+ * the fog colour, which the sky's horizon band takes up too
+ * (sun-rig.ts): a tile wholly beyond it shows nothing. `fogFar` is the
+ * larger of the fog applied now and the one the look will open to, so the
+ * boot's tighter partial-world fog does not leave the tiles it hides to
+ * load later.
+ *
+ * `modell`: Modell owns the view (its dolly zooms, which still stream for
+ * this camera). The dolly backs the camera kilometres away and opens the
+ * fog with it (create-app.ts `applyFog`) so the city stays in view; a
+ * phone's cap there ended the stream short of the city, and every tile
+ * dropped out of the picture mid-zoom.
  */
 export function streamFarFor(
   fogFar: number,
   cameraFar: number,
-  tier: "desktop" | "mobile" = "desktop"
+  tier: "desktop" | "mobile" = "desktop",
+  modell = false
 ): number {
   const far = Math.min(cameraFar, fogFar * STREAM_FAR_MARGIN);
-  return tier === "mobile" ? Math.min(far, PHONE_STREAM_FAR_M) : far;
+  return tier === "mobile" && !modell ? Math.min(far, PHONE_STREAM_FAR_M) : far;
 }

@@ -79,3 +79,14 @@ test("streamFarFor: a phone's stream ends at the fine level's reach, inside a th
   // a desktop streams as far as the fog
   expect(streamFarFor(fogFar, 6000, "desktop")).toBeGreaterThan(fogFar);
 });
+
+test("streamFarFor: Modell's dolly zoom streams as far on a phone as on a desktop", () => {
+  // mid-dolly: the camera kilometres back, the fog opened past it
+  const opened = 20_000;
+  const cameraFar = 30_000;
+  const phone = streamFarFor(opened, cameraFar, "mobile", true);
+  expect(phone).toBe(streamFarFor(opened, cameraFar, "desktop", true));
+  expect(phone).toBe(22_000);
+  // walking or flying, the same fog would still be capped
+  expect(streamFarFor(opened, cameraFar, "mobile")).toBe(PHONE_STREAM_FAR_M);
+});

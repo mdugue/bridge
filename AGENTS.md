@@ -714,7 +714,8 @@ triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glT
 renderer writes `userData.tile` itself and would overwrite ours. The
 walk/fly camera does not stream itself: the renderer streams for its twin
 whose far plane ends where the fog does, on a phone at 2.2 km at the
-latest (`streamFarFor`, `lib/city/atmosphere.ts`; synced each frame
+latest — not through Modell's dolly zooms, which back it kilometres away
+(`streamFarFor`, `lib/city/atmosphere.ts`; synced each frame
 before the update) — past the
 fog's end a tile shows nothing, and the camera's 6 km far plane loaded the
 site's every building tile in that direction as fog colour; register a new

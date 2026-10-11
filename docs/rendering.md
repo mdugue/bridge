@@ -682,9 +682,12 @@ stays their measure; the tile cache counts true bytes.
   fog at the default *Nebel*. A tile any part of which is inside still
   loads whole, so the ground runs on to 2.2–4.2 km; at *Nebel* 0 (the fog
   ends at 4 km, a tile at 2.2 km is ~30 % fogged) a phone shows the
-  loaded world's edge there — the accepted price. The camera keeps 6 km
-  for the sky dome; Modell streams for its own camera; the sun's shadow
-  camera streams as before (on a desktop). At Dresden's spawn view the
+  loaded world's edge there — the accepted price. Not through Modell's
+  dolly zooms, which still stream for this twin while they back the
+  camera kilometres away and open the fog with it: capped there, a
+  phone's whole city dropped out of the picture mid-zoom. The camera
+  keeps 6 km for the sky dome; Modell's parallel view streams for its own
+  camera; the sun's shadow camera streams as before (on a desktop). At Dresden's spawn view the
   site's edge lies inside that reach anyway — the saving is in the views
   across the city and from the air.
 - **The tile cache** weighs a tile as the GPU holds it: the glTF (by
