@@ -52,9 +52,12 @@ camera while the sun is up, so casters outside the view stay loaded (by
 night it is taken off the stream: it draws no shadow) — at a resolution
 of its own (`SHADOW_STREAM_PX`, `lib/city/shadow-fit.ts`), not the map's:
 the renderer's error for an orthographic camera ignores distance, so at
-2048 px it refined the terrain under the whole frustum; at a phone's 64 px
-it loads a tile's buildings and coarse level, never its fine terrain, at a
-desktop's 128 px the fine level under the eye-level frustum only (ADR 0047). A dressing plugin builds
+2048 px it refined the terrain under the whole frustum; at a desktop's
+128 px it refines the fine level under the eye-level frustum only (ADR
+0047), and on a phone it streams nothing (`shadowTilesStream`, plan 071:
+the tiles it kept were tiles in use the memory governor cannot free).
+On a phone the view's own stream also ends at 2.2 km (`streamFarFor`;
+not through Modell's dolly zooms, which back the camera kilometres away). A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
 heavy part (vegetation incl. the street-tree cadastre and the OSM hedges,
 lamps, rails on the fine terrain level; its walls
@@ -76,7 +79,10 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   (`lib/city/city-mesh.ts`). Demolish = drop the object's building tree from
   the index buffer and rebuild the tile's BVH (you can't hide one building
   in a batched mesh). Picking/collision use `three-mesh-bvh` on every loaded
-  tile. No CityJSON reaches the browser.
+  tile — its BVH built when a ray first reaches the tile's box
+  (`ensureCityBvh`; within 400 m of the camera in idle time), never a ray
+  walking a tile without one (three-mesh-bvh's brute-force fallback). No
+  CityJSON reaches the browser.
 - `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF mesh
   gets the land-cover material and hangs the water and mist sheets. The
   fine level is a TIN of the native 1 m DGM1 (±0.15 m,
@@ -771,7 +777,7 @@ render scale, AO samples), all resolved once in `city-walk-client.tsx`
 |---|---|---|---|
 | tileset streamed | `tileset.json` (every site tile) | **`tileset-spawn.json`** (spawn tile only) | 3/4 of the geometry AND 3/4 of the boot (measured on the old block loader: 14 s → 4.4 s, 74 MB → 18 MB) |
 | shadow map size (`shadowMapSizeFor`) | 3072 | **512** | the depth pass is per-frame fill that does *not* shrink with the canvas |
-| `pixelRatio` | dpr≤2 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
+| `pixelRatio` | dpr≤1.5 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
 | GTAO samples (`aoSamplesFor`) | 16 | **8** | half the AO samples; keyed on the profile, not `navigator.webdriver` (Playwright sets that in the `--headed` shot harness too, which must show the product's AO) |
 
 Everything a spec asserts on — loaders, layer construction, every node

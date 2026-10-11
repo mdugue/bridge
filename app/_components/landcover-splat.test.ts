@@ -10,8 +10,12 @@ import {
   SRGBColorSpace,
   type WebGPURenderer,
 } from "three/webgpu";
-import { paintLandcoverSplat } from "./landcover-splat";
-import { retainSceneMaterials } from "./three-utils";
+import { paintLandcoverSplat, splatScaleFor } from "./landcover-splat";
+import {
+  retainSceneMaterials,
+  textureBytes,
+  trackedBytesOf,
+} from "./three-utils";
 
 /** A renderer that records what it was asked to draw, and into what. */
 function fakeRenderer() {
@@ -68,5 +72,24 @@ test("every tile of a raster size paints with one pass, into its own target", ()
   for (const splat of [a, b, c]) {
     splat.dispose();
   }
+  release();
+});
+
+test("a desktop's 4096² class raster paints a half-size splat, with a pass of its own", () => {
+  // phones (2048²) and every coarse level (1024²) paint at their own size
+  expect([4096, 2048, 1024].map(splatScaleFor)).toEqual([2, 1, 1]);
+  const release = retainSceneMaterials();
+  const { draws, renderer } = fakeRenderer();
+  const full = paintLandcoverSplat(renderer, new DataTexture(), 64, 64);
+  const half = paintLandcoverSplat(renderer, new DataTexture(), 64, 64, 2);
+  // the averaging pass is built apart from the one-texel pass of that size
+  expect(draws[1].material).not.toBe(draws[0].material);
+  expect([draws[0].target?.width, draws[1].target?.width]).toEqual([64, 32]);
+  expect(half.texture.height).toBe(32);
+  // the tile cache weighs the half-size target, mips included
+  expect(trackedBytesOf(half.texture)).toBe(textureBytes(32, 32, 4, true));
+  expect(trackedBytesOf(full.texture)).toBe(textureBytes(64, 64, 4, true));
+  full.dispose();
+  half.dispose();
   release();
 });

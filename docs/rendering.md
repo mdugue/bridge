@@ -29,7 +29,7 @@ flowchart TB
   TILES["TilesRenderer group<br/>3D Tiles, one subtree per site tile"]
   SCENE --> WORLD
   WORLD --> TILES
-  TILES --> CITY["buildings (refine ADD)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH"]
+  TILES --> CITY["buildings (refine ADD)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH once a ray needs it"]
   TILES --> TER["terrain, L1 512² grid → L0 TIN (REPLACE)<br/>glTF + 30 m skirt, lowered under stairs<br/>(walls burned into L1 only)<br/>palette-painted splat, receives shadows only"]
   TER --> WAT["water + mist sheets<br/>terrain geometry masked by splat alpha"]
   TER --> STAIR["L0: stairs node, baked with the ground<br/>treads, risers, cheeks per flight"]
@@ -89,7 +89,7 @@ is the codebook.
 | Ground shading | the grid's normals, pulled to straight up below ~12° of tilt (the DGM's micro-relief and the 8-bit normals lit as blotches); real slopes keep their shading | DGM1 | `terrain-layer.ts` (`terrainNormal()`) |
 | Ground step at walls (coarse level only) | wall line + `kind` ∈ retaining/city/embankment/cliff, height ≥ 1.5 m, burned into the 512² grid at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
 | Contour lines | data-frame elevation (`dataPosition`, `shader-chunks.ts`), 2 m minor / 10 m major; each set fades once its lines crowd closer than a few pixels, and on near-flat ground (< ~3 % grade) and under water, where the DGM's noise only drew squiggles | DGM1 | `terrain-layer.ts` (`contourInk()`) |
-| Ground colour | land-cover class → the one palette, painted on the GPU into an sRGB, mipmapped, anisotropy-16 splat; the class PNG is decoded byte-exact by `lib/city/png-raster.ts`, never by the browser (WebKit colour-managed and dithered the ids into speckles) | Basis-DLM | `lib/city/landcover.ts`, `landcover-splat.ts`, `terrain-layer.ts` |
+| Ground colour | land-cover class → the one palette, painted on the GPU into an sRGB, mipmapped, anisotropy-16 splat (a desktop's fine level at half its 4096² class raster's size: each texel the mean of the 2×2 classes under it — the full-size splat's first mip; `splatScaleFor`); the class PNG is decoded byte-exact by `lib/city/png-raster.ts`, never by the browser (WebKit colour-managed and dithered the ids into speckles) | Basis-DLM | `lib/city/landcover.ts`, `landcover-splat.ts`, `terrain-layer.ts` |
 | Meadow lush ↔ dry | NDVI on class 1 only (`meadowNdvi`), read from a coarse mip (~10 m) so it drifts rather than flecks | DOP | `terrain-layer.ts` |
 | Meadow relief | low-frequency colour + normal mottle on class 1 | — (synth) | `terrain-layer.ts`: `grassMottle()` (colour), `terrainNormal(true)` (normal) |
 | Kerb stone | a 12 × 24 cm stone band on the kerb lines (the smoothed road edge), its face toward the road, its top falling to the pavement's level at the back (no second step on the pavement side), in the fine terrain glTF, casting | Basis-DLM (+ OSM islands) | `lib/city/kerbs.ts`, `kerb-layer.ts` |
@@ -103,7 +103,7 @@ is the codebook.
 | Sports ground lines | the sport's lines at their standard dimensions (football, tennis, basketball, volleyball, handball / multi-sport court, running lanes 1.22 m, a chess board), scaled to fit a smaller ground; 12 cm, box-filtered over the pixel footprint (a steady hairline from afar), chalk white, blue tape on sand | OSM | `sport-ground.ts` |
 | Goals, posts, nets | football / handball goals on the goal lines, basketball posts behind the baselines, nets across tennis and volleyball courts; pale-clay bars (casting), the nets a translucent lavender-grey — the street furniture's palette and matte material; fine level only | OSM (+ DGM1 ground) | `sport-fixtures.ts`, `lib/city/sport.ts` `sportFixtures` |
 | Urban green | the edge raster's meadow side on classes 0 and 4 (NDVI > 0.3, not OSM-paved) → painted exactly as meadow: colour, mottle, NDVI tint, lawn edge (*Stadtgrün*) | DOP | `ground-detail.ts` `urbanGreen`, `edges.py` |
-| Water extent + shoreline | splat alpha (3×3 tent over class 8), `smoothstep`ed | Basis-DLM | `landcover-splat.ts`, `water-layer.ts` |
+| Water extent + shoreline | splat alpha (3×3 tent over class 8; at half size the four tents' mean, a (1,3,3,1)² box), `smoothstep`ed | Basis-DLM | `landcover-splat.ts`, `water-layer.ts` |
 | Water ripple, glitter, sky tint | time, sun direction, fog palette; the sheet shades from a level normal, not the terrain grid's | — (synth) | `water-layer.ts` |
 | River mist | water mask blurred over ~20 m (coarse mip, five taps) so it thins out over the banks; two drifting fbm layers, no threshold; none within 120 m of the eye, full from 1.2 km, at most 24 % opaque and only a little whiter than the sky, so it gathers far off and never lies as a veil over the near river; always on (no slider) | Basis-DLM (mask) | `createWaterMist` |
 | Building silhouette | solid geometry | LoD2 | `city-layer.ts` |
@@ -271,31 +271,32 @@ change, not a re-bake
   season change that thins or fills crowns, and every tile that lands, leaves or changes visibility through the stream's
   change hook). Animated geometry (sway, clouds) deliberately does **not**
   update it.
-- **The shadow camera streams, at a resolution of its own.** The sun's
-  shadow camera is registered with the tiles renderer as a second camera,
-  so a tile that casts into the view stays loaded even when it is behind
-  the player — at a resolution of its own (`SHADOW_STREAM_PX` in
-  `lib/city/shadow-fit.ts`: 128 px on a desktop, 64 on a phone), not at
-  the map's. The tile renderer measures an orthographic
+- **The shadow camera streams on a desktop, at a resolution of its
+  own.** The sun's shadow camera is registered with the tiles renderer
+  as a second camera, so a tile that casts into the view stays loaded
+  even when it is behind the player — at a resolution of its own
+  (`SHADOW_STREAM_PX` in `lib/city/shadow-fit.ts`, 128 px), not at the
+  map's. The tile renderer measures an orthographic
   camera's error as a tile's geometric error over its pixel (the
   frustum's width over the resolution), whatever the distance: at the
   map's 2048 px the coarse terrain's 40 m came to 372, 186, 93 and 46.5 px
   at half-sizes of 110, 220, 440 and 880 m, against a target of 16, so every tile the
   frustum touched was refined to its fine level — up to four from the air
-  (an iPhone flying at 228 m: 642 → 677 MB held). On a phone, at 64 px,
-  the coarse level stays at or below 11.6 px at every radius, so the
-  shadow camera never refines terrain, while a tile's buildings
-  (≥ 3 636 px) and the coarse ground under them still load for the
-  shadow: what the main camera refines is refined for the view, and near
-  a seam with the sun behind, a neighbour the view does not refine casts
-  its coarse crowns' shadows. A desktop has the memory for the fine
-  level under the eye-level frustum: at 128 px the coarse level's 23 px
-  at 110 m still refine it (a neighbour behind the player casts its own
-  trees' shadows, and the whole-site boot asks for the spawn tile's fine
-  level as early as it did), but no longer from the air (11.6 px and less
-  from 220 m on). By
-  night the shadow camera streams nothing (`streamShadowTiles`); nor from
-  safety level 2, nor for two minutes after a memory emergency
+  (an iPhone flying at 228 m: 642 → 677 MB held). A desktop has the
+  memory for the fine level under the eye-level frustum: at 128 px the
+  coarse level's 23 px at 110 m still refine it (a neighbour behind the
+  player casts its own trees' shadows, and the whole-site boot asks for
+  the spawn tile's fine level as early as it did), but no longer from
+  the air (11.6 px and less from 220 m on). **A phone's shadow camera
+  streams nothing** (`shadowTilesStream`, plan 071; at the 64 px it
+  streamed at until 2026-10-10 it refined no terrain, but kept every
+  building tile and coarse level its frustum touched): those are tiles
+  in use, which the memory governor cannot free, and the casters that
+  matter stand on the tile the player is on, loaded for the view anyway.
+  The price: at a seam with the sun behind the player, the neighbour's
+  buildings cast no shadow into the view until the view loads that tile.
+  By night the shadow camera streams nothing (`streamShadowTiles`); nor
+  from safety level 2, nor for two minutes after a memory emergency
   ([ADR 0046](./adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)).
   `displayActiveTiles` keeps every loaded tile drawn
   (turning on the spot never blinks one); three's own frustum culling keeps
@@ -580,14 +581,14 @@ the safety levels 1, 2 and 3:
 
 | Knob | full · desktop | full · mobile | lite (tests) |
 |---|---|---|---|
-| Tiles | the whole site streams (`tileset.json`) | same | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
+| Tiles | the whole site streams (`tileset.json`), out to the fog's end × 1.1 (`streamFarFor`) | same, but to 2.2 km at most | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
 | Terrain | L0 TIN (±0.15 m) near, L1 512² grid beyond (the switch at ≈ 2.6 km from a tile for a viewport 1080 CSS px high; ≈ 2.1 km on an iPhone in portrait) | same | same |
 | Shadow map | 3072² (2048², 2048², 1024²) | 2048² (2048², 1024², 1024²) | 512² |
-| Shadow camera streams at | 128 px, by day; from level 2 never | 64 px, by day; from level 2 never | as the tier |
+| Shadow camera streams at | 128 px, by day; from level 2 never | never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
-| Pixel ratio | ≤ 2 (1.5, 1.25, 1.0) | ≤ 1.5 (1.25, 1.0, 0.85) | 0.5 |
+| Pixel ratio | ≤ 1.5 (1.25, 1.0, 1.0; ≤ 2 until 2026-10-10: a retina laptop's 5.2 MP of post stack, 1.5 is 56 % of it) | ≤ 1.5 (1.25, 1.0, 0.85) | 0.5 |
 | Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
-| Land-cover rasters | L0 4096², L1 1024² | L0 2048², L1 1024²; no sports raster | L0 4096², L1 1024² |
+| Land-cover rasters | L0 4096², its splat 2048² (85 → 21 MiB with mips, since 2026-10-10), L1 1024² | L0 2048², L1 1024²; no sports raster | as the tier |
 | GTAO samples | 16 | 8 | 8 |
 | Rich crowns at most (`vegetation-lod.ts`) | 2 500 (≈ 3.6 M triangles) | 800 | as the tier |
 | Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
@@ -674,9 +675,19 @@ stays their measure; the tile cache counts true bytes.
   fog colour, so a tile wholly past the fog's end shows nothing; with the
   camera's own 6 km far plane every building tile out to the site's edge
   in that direction was loaded, compiled, given a BVH and drawn as fog
-  colour (≈ 2.85 km at the default *Nebel*; 4.4 km at none). The camera
-  keeps 6 km for the sky dome; Modell streams for its own camera; the
-  sun's shadow camera streams as before. At Dresden's spawn view the
+  colour (≈ 2.85 km at the default *Nebel*; 4.4 km at none). **A
+  phone's stream ends at 2.2 km at the latest** (`PHONE_STREAM_FAR_M`,
+  plan 071): the fine level's reach on an iPhone, past which it would
+  only have streamed coarse levels and building tiles it draws at ~90 %
+  fog at the default *Nebel*. A tile any part of which is inside still
+  loads whole, so the ground runs on to 2.2–4.2 km; at *Nebel* 0 (the fog
+  ends at 4 km, a tile at 2.2 km is ~30 % fogged) a phone shows the
+  loaded world's edge there — the accepted price. Not through Modell's
+  dolly zooms, which still stream for this twin while they back the
+  camera kilometres away and open the fog with it: capped there, a
+  phone's whole city dropped out of the picture mid-zoom. The camera
+  keeps 6 km for the sky dome; Modell's parallel view streams for its own
+  camera; the sun's shadow camera streams as before (on a desktop). At Dresden's spawn view the
   site's edge lies inside that reach anyway — the saving is in the views
   across the city and from the air.
 - **The tile cache** weighs a tile as the GPU holds it: the glTF (by
@@ -834,9 +845,12 @@ process. A page hidden at that moment reloads once it is visible. The
 recovered page sets its pose before the stream's first update (its start
 tile is the one under the camera, `startTileOf`), **looking straight
 down** onto that tile — a pose that looks at the sky or out past the
-site's edge from the air sees no tile, and by night or from level 2 no
-shadow camera streams one, so nothing would load — and puts the player's
-own aim back once the tile has landed; its first frame waits for that
+site's edge from the air sees no tile, and by night, on a phone or
+from level 2 no shadow camera streams one, so nothing would load; and it
+stands no higher above the tile's top than half the boot's stream reach
+(`bootingPose`), past which the tile lies beyond the stream camera's far
+plane — and
+puts the player's own aim back once the tile has landed; its first frame waits for that
 tile, or for any shown tile once the renderer is idle without it. From
 level 2 it puts back neither the picture style nor Modell. A page lost
 before its first frame leaves the snapshot it booted with for the next;
@@ -945,7 +959,8 @@ sequenceDiagram
   Note over B: renderer, sun rig, lamp light pool, post stack, tile stream
   B->>S: every tile's footprints (minimap)
   B->>S: spawn tile: buildings glb, a terrain level + class raster, NDVI
-  Note over B: dress: clay + object texture + BVH · splat painted + water · compileAsync
+  Note over B: dress: clay + object texture · splat painted + water · compileAsync
+  Note over B: placed on the spawn ground (its buildings' BVH) · a frame draws the shadow map → light stage, 52 %
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
@@ -957,7 +972,14 @@ sequenceDiagram
 The **first frame** waits on the spawn tile's buildings and *any* of its
 terrain levels (`bootApp` in `create-app.ts`); the player is then placed
 again on the spawn tile's ground, which did not exist when the pose was
-first set. A page that recovers a lost GPU starts on the tile under the
+first set. **The light stage is honest**: the bar reaches its 52 %
+(*Licht und Schatten*, `WALKABLE_PERCENT`) only once a frame at that
+pose has drawn the shadow map — three builds the shadow pass's
+pipelines for its casters inside that frame, synchronously — or two
+frames in a row found none to draw (by night the sun rig asks for none),
+at most 3 s (`firstShadowFrame`). Before, that frame came after the
+stage, with the bar at 52 % and the veil's timer held up behind it: a
+load that looked frozen there. A page that recovers a lost GPU starts on the tile under the
 player's camera instead, its pose set before the stream's first update,
 looking straight down onto that tile until it has landed
 ([ADR 0046](./adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)).
@@ -989,13 +1011,29 @@ second phase) and is built one tile at a time. A tile with nothing on
 screen shows at once, bare, and is dressed after; a terrain level that
 takes over from its tile's other level on screen — the fine one replacing
 the coarse one as the view comes closer, or back — is loaded only once
-its dressing is built and compiled too (`handsOver`, at most 10 s), and
+its dressing is built and compiled too (`handsOver`), and
 the dressing hangs on it in the task the renderer records it, before any
 frame. The renderer keeps the old level drawn until the new one is loaded
 (3D Tiles' REPLACE refinement, both ways), so one level's trees, lamps
 and bridges leave in the frame the next level's arrive; the old way, the
 new level showed bare first and its trees came after — a blink of no
-trees at every change of level. **Ready** (`onLoaded`,
+trees at every change of level. **That wait is per tier**
+(`handOverWaitMs`): it holds one of the renderer's parse slots — the
+dressing is awaited inside the parse job — while dressings build one at
+a time for the site, and with 10 s on every tier a phone's two slots
+stood still behind it. A desktop waits up to 1.5 s, so most hand-overs
+still swap the trees in one frame; a phone does not wait at all: the
+fine level shows bare and its trees, lamps and rails arrive once its
+dressing is built — on a phone that blink of no trees is back, the price
+of a stream that keeps moving. A dressing's **ask sets** — what the
+inquiry probe can ask of its trees, monuments, decks, hedges, lamps and
+furniture — are built once it hangs, when the main thread is idle (at
+most 2 s on, `buildAsksWhenIdle`), not inside its build: they place
+every canopy tree a second time for a card nobody may open (0.3 s of a
+dense tile's build in the local trace); a question that comes first
+builds them at once (`asksOf`) — on a saturated page the idle time can be
+minutes in coming (timers and idle callbacks wait behind three's compile
+steps there; plan 069's Findings). **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile
 is dressed, the renderer is idle and no dressing is pending; it also lifts
 the fog clamp. A tile that fails to load for any reason but the network
@@ -1003,6 +1041,25 @@ leaves a hole and one `onError` message; a dressing that fails leaves its
 tile bare — neither takes the scene down. Collision, demolish, autofocus and double-tap work on every
 visible tile; the two ground rays (double-tap travel, autofocus) march the
 terrain's height grid (`lib/city/ground-ray.ts`) — the terrain has no BVH.
+**A building tile gets its BVH when a ray first needs it**, not as it
+lands (`ensureCityBvh` in `city-layer.ts`): the build held a dense tile's
+parse on the main thread (≈75 ms on a desktop, several times that on a
+phone) and allocated six floats per triangle beside the node buffers it
+keeps — on an iPhone, while the boot's other contents were still
+parsing, the page's process ran out with three's GPU count at 257 MB. A
+ray asks only the tiles whose box it reaches, nearest first: the
+collider's rays (collision.ts) and a user's pick, double tap or question
+build each such tile as they reach it — a pick only up to its first hit,
+the probe and the double tap only up to the ground — while the autofocus
+passes over a tile without one; none walks a tile's triangles one by one,
+three-mesh-bvh's fallback on a mesh without a BVH. The tiles within 400 m
+of the camera are built in idle time, one at a time
+(`nearestWithoutBvh`, at the 10 Hz pose tick), so a walk into the next
+tile finds its BVH there. The spawn tile's is built by the placing on its
+ground before the first frame (ADR 0032 needs it there): after its
+terrain has landed, not inside the parse that landed its buildings. The
+collider builds nothing before that placing — the frames before it stand
+over a floor that is not there.
 Whatever moves the camera — walking, flying, a glide on its way, a double
 tap, a snapshot, a GPS fix, a tile landing — it ends up neither below the
 ground nor inside a building: `camera-pose.ts` sets a walker out beside a
@@ -1073,9 +1130,8 @@ before the renderer exists, so the compiles there run as in Chromium.
 
 The HUD's five load stages and their weights are declared once in
 `lib/city/load-stages.ts`; the scene passes a stage on only when its
-value changes (the spawn wait polls every 50 ms, and each report is a
-transition over the whole HUD), and the compile of the scene's own
-objects before the first frame is bounded like a tile's (3 s,
+value changes (the spawn wait polls every 50 ms), and the compile of the
+scene's own objects before the first frame is bounded like a tile's (3 s,
 `withinCompileWait`). The first three are the first frame; the other
 two measure **what the cameras see**, not the whole site: *Umgebung* is
 the tile renderer's own load progress, *Details* the dressings built
@@ -1084,6 +1140,36 @@ in, the pill leaves; later loads (a flight) show a small, late *Umgebung
 lädt* hint instead (`onBusy`). The minimap loads every tile's footprints
 up front (named in the tileset's root extras), so it is complete from the
 start.
+
+Everything the scene reports to the HUD — the stages, the busy flag, a
+failed tile, the stats and the frame rate, the site, the mode, Modell's
+view, the data layers' status, the inquiry, the pose — goes into one
+store of slices (`app/_components/scene-status.ts` over
+`lib/city/slice-store.ts`, plan 074 part D), and each widget reads the
+slice it shows: a report re-renders the loading screen, the pill, the
+counters or Modell's panel, not the whole HUD (`CityWalk` and the
+sidebar render on the HUD's own state alone). A report equal to the
+slice notifies no one (Modell's view or the counters rebuilt with the
+same numbers, a frame rate that rounds the same), and a burst is heard
+once, in the task after it — a report from inside a frame re-renders
+after the frame. create-app.ts's callbacks are unchanged:
+`sceneReports` writes them to the store.
+
+**The boot and the stream time themselves** (`stream-timing.ts`, plan
+069). Every span is counted by its category — `tile:city`, `tile:bvh`,
+`tile:rasters`, `tile:compile`, `tile:handover-wait`,
+`dressing:queue-wait`, `dressing:build`, `dressing:compile`,
+`dressing:asks`, the boot's last steps before the light stage
+(`boot:scene-compile`, `boot:place` — the spawn tile's BVH among it —
+and `boot:light-wait`), `boot:frame` (the first 60 frames at the start
+pose), `boot:first-shadow-frame`, `boot:light-to-veil`,
+`boot:veil-to-loaded`. With `?trace=1` each span also lands on the
+browser's own timeline (DevTools' and Web Inspector's *Timings* track)
+with its tile id, the long tasks are counted where the browser reports
+them (Chromium; Safari has none), and the page prints the table once
+loaded and 20 s later (`console.table`). The names are a contract for
+later perf work: add one rather than rename one. None of it reaches the
+crash trail or the reports — a tile's id names where the player was.
 
 ## Verifying a change
 

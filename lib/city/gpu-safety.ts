@@ -15,7 +15,8 @@
  * second sign (`raisedBy`). Each level is a lighter page: a lower
  * pixel-ratio cap, a smaller shadow map and tile cache (scene-profile.ts),
  * lower memory lines and a governor that starts — and stays — further
- * down (memory-governor.ts), no shadow-camera streaming from level 2, and
+ * down (memory-governor.ts), no shadow-camera streaming from level 2 (on
+ * a phone none at any level, `shadowTilesStream`), and
  * a recovered page that puts back the place and the time but neither the
  * picture style nor Modell from level 2. A level comes back down by
  * itself, one per three days since it was last raised; `?safety=N` sets
@@ -186,12 +187,19 @@ export function resolveSafety(inputs: SafetyInputs): {
 }
 
 /**
- * Whether the sun's shadow camera streams tiles at a level. From level 2 it
- * never does: it keeps the fine terrain loaded under its whole frustum,
- * tiles in use that no step of the memory governor can free.
+ * Whether the sun's shadow camera streams tiles at a level, on a tier. On a
+ * phone it never does, and on a desktop not from level 2: the tiles it
+ * keeps loaded are tiles in use, which no step of the memory governor can
+ * free, and on a phone the casters that matter stand on the tile the player
+ * is on — loaded for the view anyway. The price: at a tile seam with the
+ * sun behind the player, the neighbour's buildings cast no shadow into the
+ * view until the view itself loads that tile.
  */
-export function shadowTilesStream(level: SafetyLevel): boolean {
-  return level < 2;
+export function shadowTilesStream(
+  level: SafetyLevel,
+  tier: "desktop" | "mobile"
+): boolean {
+  return tier === "desktop" && level < 2;
 }
 
 /**

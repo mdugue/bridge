@@ -152,4 +152,79 @@ things live", ADR 0029 amended for part A) current.
 
 ## Findings
 
-(none yet)
+### Part D — built (2026-10-10)
+
+**What was built.** `lib/city/slice-store.ts`: a store of named slices,
+DOM- and React-free — `get`/`set`/`update`/`subscribe` per slice, an
+equality per slice (`Object.is`, or `dataEqual` for plain data), and an
+optional `schedule` that hears a burst once per slice. On it
+`app/_components/scene-status.ts`: the HUD's slices (the stages, *busy*,
+a failed tile, the GPU failure, the stats' three counters, the
+footprints, the frame rate in whole frames, the site, the mode, Modell's
+view, the inquiry, the data layers' three statuses, the pose), a
+`useSceneStatus(key)` hook over `useSyncExternalStore`, and
+`sceneReports`, which turns the store into the `CityWalkOptions`
+callbacks — **create-app.ts is unchanged**. The HUD's store notifies in
+the task after a write (`afterTask`), so a report from inside a frame
+(the frame rate, Modell's view, the pose) re-renders after it, as the
+transitions did. Each widget reads its own slice: the loading screen and
+the pill (`ShellLoadScreen`, `ScenePill`), the failed-tile line, the
+centre mark, the failure card, the inquiry panel, the overlays (mode,
+inquiry) and Modell's instruments, and in the sidebar the minimap
+(footprints; the pose straight to its canvas), the mode switch, the key
+table, *Projektion* (`ModelProjection`), the counters (`SceneCounters`)
+and the data layers' lines. `CityWalk` holds 12 `useState`s instead of
+30 (the store itself one of them; the rest HUD-local: boot phase, veil,
+tab, snapshot, …) and `SceneSidebar` takes 28 props instead of 38, none
+of them a scene report.
+
+**Measured** (production build with `NEXT_PUBLIC_POC_DEBUG=1`,
+`/dresden?scene=lite`, 800×600, headless Chromium on SwiftShader, on a
+4-core container at a load average of ~17 from other jobs — frames took
+4–8 s, so wall-clock rates mean little; the windows are anchored to the
+scene's milestones instead). Render calls (component bodies run) and
+commits, counted by a temporary counter on `window` (React's
+`<Profiler>` is a no-op in a production build), cumulative from `goto`:
+
+| window (end) | reports so far (stage / stats / fps / modelView) | `CityWalk` renders (commits) before → after | `SceneSidebar` commits before → after |
+|---|---|---|---|
+| first frame | 8 / 3 / 16 / 0 | 17 (9) → 3 (3) | 9 → 3 |
+| *ready* | 12 / 6 / 56 / 0 | 31 (17) → 4 (4) | 17 → 4 |
+| + 30 frames standing | 12 / 6 / 84 / 0 | 86 (44) → 4 (4) | 44 → 4 |
+| + 30 frames in Modell | 12 / 6 / 113 / 30 | 147 (75) → 4 (4) | 75 → 4 |
+
+Before, every frame-rate report (2 Hz on a real device) was one commit of
+the whole HUD, and in Modell every view report (10 Hz) another: up to 12
+whole-HUD renders a second in Modell on a phone. After, the HUD's two big
+components render only for the HUD's own state (4 times in the whole run:
+mount, the site, the first frame, the veil). What renders instead is
+small: over the same run `ShellLoadScreen` 6, `ScenePill` 5,
+`MinimapCard` 6, `ModelProjection` 7, Modell's instruments 3 (a view
+standing still is the same data, so 30 view reports were 3 renders), the
+counters 0 (their tab was not open).
+
+**The handover.** The veil leaves `VEIL_HOLD_MS` after the first frame
+on a timer, and a stage report is now an urgent render (an external
+store's update is never a transition) — the failure the old `onStage`
+comment warned about. Under this load the first frame is followed by
+seconds-long frames during which neither timers nor React's scheduled
+tasks run (presumably the compiles after the first frame), in both
+builds: first frame → veil gone took 0.8, 54.6, 95.3 and 67.5 s on the
+base and 72.5, 68.3, 87.9, 85.1 and 76.9 s on the branch; the veil's own
+600 ms timer fired 0.7, 62 and 49 s after it was set on the base, 71, 68
+and 61 s on the branch (traced by wrapping `setTimeout` in the page).
+The ranges overlap, the path (a timer, a default update in `CityWalk`)
+is unchanged code, and the stage renders are now a loading screen's, not
+the HUD's; judged no regression on this evidence, but the handover is
+worth a look on a phone.
+
+**Checks.** `bun run verify` green; the e2e against the same build (the
+counters are behaviourally inert) with the timeouts widened locally for
+the load: `@desktop-hud` 10/10 (a first run lost *live mode* to a race in
+the spec under the load — switched off, the button is gone a second
+later once the compass has been quiet for five seconds; the rerun
+passed), `@phone` 1/1, `@desktop-render` 8/8, the start page, the 404
+and the viewer shell 3/3; the whole-site spec not run.
+
+**Not done here**: a real-device profile (the numbers above are counts,
+not milliseconds). Parts A–C stay open.

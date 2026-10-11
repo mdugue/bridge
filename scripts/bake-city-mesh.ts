@@ -1273,8 +1273,8 @@ export function appendDoors(
 }
 
 /** The clay's base colour (the material's 0xece7df, linear) and how much
- *  of a building's tint the walls show at the Farbvariation slider's
- *  default (lib/city/look-controls.ts): a wall as one sees it. */
+ *  of a building's tint the walls show at Farbvariation's fixed strength
+ *  (app/_components/visual-style.ts `TINT`): a wall as one sees it. */
 const CLAY_BASE: [number, number, number] = [0.838, 0.799, 0.737];
 const WALL_TINT_SHOWN = 0.6;
 /** A shop window: a muted glass a little darker and cooler than its wall

@@ -104,7 +104,7 @@ export const GROUND_DETAIL: F = float(0.7);
  * settlement painted as meadow, at full strength — fixed since its slider
  * went (plan 073).
  */
-export const URBAN_GREEN: F = float(1);
+const URBAN_GREEN: F = float(1);
 
 /** What every ground chunk reads (the terrain's colour node makes it). */
 export interface GroundInputs {

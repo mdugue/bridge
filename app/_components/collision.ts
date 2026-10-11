@@ -1,4 +1,4 @@
-import type { Object3D } from "three/webgpu";
+import type { Intersection, Object3D } from "three/webgpu";
 import {
   Box3,
   BufferGeometry,
@@ -14,7 +14,7 @@ import {
   acceleratedRaycast,
   computeBoundsTree,
   disposeBoundsTree,
-  type MeshBVH,
+  MeshBVH,
 } from "three-mesh-bvh";
 import { horizontalSlide } from "@/lib/city/collision";
 
@@ -23,6 +23,50 @@ import { horizontalSlide } from "@/lib/city/collision";
 BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 Mesh.prototype.raycast = acceleratedRaycast;
+
+/**
+ * The bytes the BVHs under `root` hold on the page's process: their node
+ * buffers (the index a BVH sorts is its geometry's own, counted there).
+ * Read through `serialize` without copies — a reference to the buffers.
+ */
+export function bvhBytesUnder(root: Object3D): number {
+  const seen = new Set<BufferGeometry>();
+  let bytes = 0;
+  root.traverse((object) => {
+    const geometry = (object as Mesh).geometry as BufferGeometry | undefined;
+    // reason: computeBoundsTree (the default) builds a MeshBVH.
+    const bvh = geometry?.boundsTree as MeshBVH | undefined;
+    if (!(geometry && bvh) || seen.has(geometry)) {
+      return;
+    }
+    seen.add(geometry);
+    const { roots, indirectBuffer } = MeshBVH.serialize(bvh, {
+      cloneBuffers: false,
+    });
+    for (const buffer of roots) {
+      bytes += buffer.byteLength;
+    }
+    bytes += indirectBuffer?.byteLength ?? 0;
+  });
+  return bytes;
+}
+
+const exitOrEntry = new Vector3();
+
+/**
+ * How far along `ray` it enters `box`, or null where it misses: 0 from
+ * inside it. three's `intersectBox` gives the exit point there — and the
+ * player's eye stands inside its own building tile's box: by that, the
+ * tile's walls lay hundreds of metres off, past a step's reach.
+ */
+export function rayEntry(ray: Ray, box: Box3): number | null {
+  if (box.containsPoint(ray.origin)) {
+    return 0;
+  }
+  return ray.intersectBox(box, exitOrEntry)
+    ? exitOrEntry.distanceTo(ray.origin)
+    : null;
+}
 
 /** Body radius the player keeps from facades. */
 const BODY_RADIUS = 0.6;
@@ -66,14 +110,84 @@ interface MeshFrame {
 /**
  * Wall collision against whatever `getTargets` returns — the building meshes
  * of every visible tile — and the vertical rays that keep the camera out of
- * them (camera-pose.ts).
+ * them (camera-pose.ts). A ray asks only the targets whose box it reaches,
+ * and those through their BVH: one without is built first by `build`
+ * (city-layer.ts `ensureCityBvh` — a building tile gets its BVH when a ray
+ * first needs it) and passed over without it, never walked triangle by
+ * triangle (three-mesh-bvh's raycast falls back to that on a mesh with no
+ * BVH: two million triangles a ray, every frame).
  */
-export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
+export function createCityCollider(
+  getTargets: () => Object3D[],
+  build?: (mesh: Mesh) => void
+): CityCollider {
   const raycaster = new Raycaster();
   raycaster.firstHitOnly = true;
   const normalMatrix = new Matrix3();
   const dir = new Vector3();
   const origin = new Vector3();
+
+  const frames = new WeakMap<Mesh, MeshFrame>();
+  /** The mesh's world frame, refreshed when its matrix changed. */
+  const frameOf = (mesh: Mesh): MeshFrame => {
+    const geometry = mesh.geometry;
+    let frame = frames.get(mesh);
+    if (!frame?.matrix.equals(mesh.matrixWorld)) {
+      if (!geometry.boundingBox) {
+        geometry.computeBoundingBox();
+      }
+      frame = {
+        box: (geometry.boundingBox ?? new Box3())
+          .clone()
+          .applyMatrix4(mesh.matrixWorld),
+        inverse: mesh.matrixWorld.clone().invert(),
+        matrix: mesh.matrixWorld.clone(),
+        normal: new Matrix3().getNormalMatrix(mesh.matrixWorld),
+      };
+      frames.set(mesh, frame);
+    }
+    return frame;
+  };
+
+  /** Whether a mesh a ray reaches has its BVH, built now where it may. */
+  const withBvh = (mesh: Mesh): boolean => {
+    if (!mesh.geometry.boundsTree) {
+      build?.(mesh);
+    }
+    return Boolean(mesh.geometry.boundsTree);
+  };
+
+  /**
+   * The raycaster's first hit within its `far`: the targets whose box the
+   * ray enters (from inside one, at once), nearest entry first, until none
+   * ahead can hold a nearer hit — so a long ray (a dolly's) builds only
+   * the tiles before its hit.
+   */
+  const firstHit = (): Intersection | null => {
+    const { ray, far } = raycaster;
+    const reached: { enter: number; mesh: Mesh }[] = [];
+    for (const target of getTargets()) {
+      const mesh = target as Mesh;
+      const enter = mesh.isMesh ? rayEntry(ray, frameOf(mesh).box) : null;
+      if (enter !== null && enter <= far) {
+        reached.push({ enter, mesh });
+      }
+    }
+    reached.sort((a, b) => a.enter - b.enter);
+    let best: Intersection | null = null;
+    for (const { enter, mesh } of reached) {
+      if (best && enter > best.distance) {
+        break;
+      }
+      const hit = withBvh(mesh)
+        ? raycaster.intersectObject(mesh, false)[0]
+        : undefined;
+      if (hit && (!best || hit.distance < best.distance)) {
+        best = hit;
+      }
+    }
+    return best;
+  };
 
   /** World-space wall normal when the step is blocked, else null. */
   const blockingNormal = (
@@ -87,7 +201,7 @@ export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
       origin.copy(position);
       origin.y -= drop;
       raycaster.set(origin, dir);
-      const hit = raycaster.intersectObjects(getTargets(), true)[0];
+      const hit = firstHit();
       if (hit?.face) {
         normalMatrix.getNormalMatrix(hit.object.matrixWorld);
         return hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
@@ -116,31 +230,6 @@ export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
     return blockingNormal(position, slidStep) ? new Vector3() : slidStep;
   };
 
-  const frames = new WeakMap<Mesh, MeshFrame>();
-  /** The mesh's world frame, refreshed when its matrix changed. */
-  const frameOf = (mesh: Mesh): MeshFrame | null => {
-    const geometry = mesh.geometry;
-    if (!geometry.boundsTree) {
-      return null;
-    }
-    let frame = frames.get(mesh);
-    if (!frame?.matrix.equals(mesh.matrixWorld)) {
-      if (!geometry.boundingBox) {
-        geometry.computeBoundingBox();
-      }
-      frame = {
-        box: (geometry.boundingBox ?? new Box3())
-          .clone()
-          .applyMatrix4(mesh.matrixWorld),
-        inverse: mesh.matrixWorld.clone().invert(),
-        matrix: mesh.matrixWorld.clone(),
-        normal: new Matrix3().getNormalMatrix(mesh.matrixWorld),
-      };
-      frames.set(mesh, frame);
-    }
-    return frame;
-  };
-
   const worldRay = new Ray();
   const localRay = new Ray();
   const point = new Vector3();
@@ -150,7 +239,8 @@ export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
    * roof seen from inside a building is a back face): its world height and
    * whether its face looks up.
    */
-  /** The mesh's frame when a vertical ray through (x, y, z) can meet it. */
+  /** The mesh's frame when a vertical ray through (x, y, z) can meet it,
+   *  its BVH ready. */
   const reachable = (
     target: Object3D,
     x: number,
@@ -170,7 +260,7 @@ export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
     ) {
       return null;
     }
-    return frame;
+    return withBvh(target as Mesh) ? frame : null;
   };
 
   const vertical = (
@@ -210,9 +300,7 @@ export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
     along: (from, direction, far) => {
       raycaster.set(from, direction);
       raycaster.far = far;
-      return (
-        raycaster.intersectObjects(getTargets(), true)[0]?.distance ?? null
-      );
+      return firstHit()?.distance ?? null;
     },
     // Seen from inside a closed solid, the surface straight above faces up
     // (its outside is above it); from under a bridge or a balcony it faces

@@ -86,13 +86,13 @@ raised (`SAFETY_DECAY_MS`; a clock set back gains nothing). `?safety=N`
 
 | Level | 0 | 1 | 2 | 3 |
 |---|---|---|---|---|
-| pixel-ratio cap, phone · desktop | 1.5 · 2 | 1.25 · 1.5 | 1.0 · 1.25 | 0.85 · 1.0 |
+| pixel-ratio cap, phone · desktop (a desktop's 2 · 1.5 · 1.25 · 1.0 until plan 071) | 1.5 · 1.5 | 1.25 · 1.25 | 1.0 · 1.0 | 0.85 · 1.0 |
 | shadow map, phone · desktop | 2048² · 3072² | 2048² · 2048² | 1024² · 2048² | 1024² · 1024² |
 | tile cache, phone (min–max, MiB) | 168–336 | 148–296 | 136–272 | 96–232 |
 | tile cache, desktop (min–max, GB) | 1.2–1.6 | 1.0–1.4 | 0.8–1.2 | 0.6–1.0 |
 | governor lines (× 0.9 per level; phone soft / hard, MiB) | 480 / 560 | 432 / 504 | 389 / 454 | 350 / 408 |
 | governor floor, phone · desktop | 0 · 0 | 1 · 0 | 2 · 1 | 3 · 2 |
-| the sun's shadow camera streams tiles | yes | yes | no | no |
+| the sun's shadow camera streams tiles (a phone's never, since plan 071) | yes | yes | no | no |
 | a recovered page puts back the picture style and Modell | yes | yes | no | no |
 
 The governor starts at its floor — already for the stream's first update —
@@ -136,8 +136,12 @@ update — **looking straight down** onto that tile (the pitch clamped to
 its limit) — and the first frame waits for that tile, or for any shown
 tile once the renderer is idle without it. A pose that looks at the sky,
 or out past the site's edge, from the air sees no tile: nothing would be
-requested, and by night or from level 2 no shadow camera streams one, so
-the boot would wait for ever, every reload of the tab replaying it. The
+requested, and by night, on a phone or from level 2 no shadow camera
+streams one, so the boot would wait for ever, every reload of the tab replaying it.
+For the same reason it stands no higher above the tile's top than half
+the boot's stream reach (`bootingPose`; a phone's ends at 2.2 km since
+plan 071): from higher the tile lies past the stream camera's far
+plane. The
 player's own aim goes back once the tile has landed, and the HUD applies
 the whole camera after the first frame. A page lost before its first
 frame keeps the snapshot it booted with for the next load (it has no

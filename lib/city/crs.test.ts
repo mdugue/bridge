@@ -22,13 +22,26 @@ test("epsgCodeFromReferenceSystem parses the OGC CRS URL of the Saxony tiles", (
   expect(epsgCodeFromReferenceSystem("not a crs")).toBeNull();
 });
 
-test("utmToLatLng(25833) puts the Dresden tile center near 51.05N 13.76E", () => {
-  const result = utmToLatLng(25_833, 413_000, 5_657_000);
-  expect(result).not.toBeNull();
-  expect(result?.lat).toBeGreaterThan(50.9);
-  expect(result?.lat).toBeLessThan(51.2);
-  expect(result?.lng).toBeGreaterThan(13.5);
-  expect(result?.lng).toBeLessThan(14.0);
+test("a landmark in each zone lands where PROJ puts it", () => {
+  // PROJ 9.5.1 (pyproj 3.7.2), EPSG:4258 → the site's CRS: another
+  // implementation than proj4's below (Poder/Engsager, not Krüger's
+  // series), printed to 0.1 mm. PROJ's meridian convergence is grid north
+  // from true north, ours the other way round.
+  const landmarks = [
+    [25_833, 51.051_893, 13.741_522, 411_793.1247, 5_656_349.0498, -0.978_8],
+    [25_833, 52.516_275, 13.377_704, 389_918.0415, 5_819_699.1323, -1.287_5],
+    [25_832, 53.550_556, 9.992_222, 565_737.2899, 5_933_976.0674, 0.798_2],
+    [25_832, 48.138_611, 11.573_611, 691_458.0057, 5_334_909.9112, 1.917_3],
+  ] as const;
+  for (const [epsg, lat, lng, x, y, projConvergence] of landmarks) {
+    const there = latLngToUtm(epsg, lat, lng);
+    expect(there?.x).toBeCloseTo(x, 3);
+    expect(there?.y).toBeCloseTo(y, 3);
+    const back = utmToLatLng(epsg, x, y);
+    expect(back?.lat).toBeCloseTo(lat, 8);
+    expect(back?.lng).toBeCloseTo(lng, 8);
+    expect(gridConvergenceDeg(epsg, lat, lng)).toBeCloseTo(-projConvergence, 4);
+  }
 });
 
 test("unsupported codes project nothing", () => {
