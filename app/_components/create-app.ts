@@ -87,6 +87,7 @@ import {
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import {
+  createLodSchedule,
   PHONE_RICH_TREE_BUDGET,
   RICH_TREE_BUDGET,
 } from "@/lib/city/vegetation-lod";
@@ -185,7 +186,7 @@ import {
 } from "./stream-timing";
 import { attachTouchControls } from "./touch-controls";
 import {
-  updateVegetationLod,
+  createVegetationLod,
   type VegetationControl,
 } from "./vegetation-layer";
 import { createStyleResources, setClaySection } from "./visual-style";
@@ -1554,6 +1555,10 @@ async function bootApp(
     },
   };
   let lastStyle = opts.look.get().style;
+  // When the trees' crown tiers are picked (stepVegetation, below): on the
+  // pose tick, and in the next frame when the crown switch or the tiles in
+  // view change.
+  const crownTiers = createLodSchedule();
   const applyLook = (look: LookValues) => {
     if (look.style !== lastStyle) {
       lastStyle = look.style;
@@ -1574,6 +1579,8 @@ async function bootApp(
       d.vegetation?.applyLook(look);
       showDataLayers(d, look);
     }
+    // the crown switch: the tiers in the next frame, not the next tick
+    crownTiers.force();
     overlays.apply(look);
   };
   applyLook(opts.look.get());
@@ -2099,6 +2106,8 @@ async function bootApp(
     lampLights.setHeads(
       stream.visibleDressings().flatMap((d) => d.lamps?.headPositions ?? [])
     );
+    // a tile that lands is born on its mid crowns: its tiers in this frame
+    crownTiers.force();
     overlays.streamChanged();
     postStack.sceneChanged();
     invalidateShadows();
@@ -2322,31 +2331,44 @@ async function bootApp(
     siteGround.underWorld(camera.position.x, camera.position.z);
 
   const timer = new Timer();
-  // Pick every vegetation chunk's crown tier (rich / mid / far) over all
-  // loaded tiles at once — the rich crowns share one site-wide budget —,
-  // swap the cadastre's own silhouettes by distance, and advance the wind
-  // sway (same clock as the water ripple). A tier change changes what casts
-  // shadows, so it invalidates the map.
+  // Advance the wind sway every frame (same clock as the water ripple); on
+  // the pose tick — and in the frame the tiles in view or the crown switch
+  // change, or the eye jumps (`crownTiers`, lib/city/vegetation-lod.ts) —
+  // pick every vegetation chunk's crown tier (rich / mid / far) over all
+  // loaded tiles at once (the rich crowns share one site-wide budget) and
+  // swap the cadastre's own silhouettes by distance. (Per frame it cost a
+  // pass over ~1 000 chunks and their plan states 60 times a second; a
+  // tick's walk or flight, 18 m at the fastest, is well inside the tiers'
+  // 80–100 m hysteresis bands.) A tier change changes what casts shadows,
+  // so it invalidates the map.
   const vegetationControls: VegetationControl[] = [];
-  /** `eye`: where the tiers are measured from (Modell: above the pivot). */
+  const vegetationLod = createVegetationLod();
   const richTrees =
     budget.tier === "mobile" ? PHONE_RICH_TREE_BUDGET : RICH_TREE_BUDGET;
-  const stepVegetation = (elapsed: number, eye: Vector3) => {
-    vegetationControls.length = 0;
-    let lodChanged = false;
+  /** `eye`: where the tiers are measured from (Modell: above the pivot);
+   *  `tick`: the frame's pose tick is due. */
+  const stepVegetation = (elapsed: number, eye: Vector3, tick: boolean) => {
     // The shown tiles only: a cached tile or the hidden level of a shown
     // one would spend the rich-crown budget the view needs, and its tier
     // flips redrew the shadow map for trees nobody sees.
-    for (const d of stream.visibleDressings()) {
+    const shown = stream.visibleDressings();
+    for (const d of shown) {
+      d.vegetation?.setTime(elapsed);
+    }
+    if (!crownTiers.due(tick, eye)) {
+      return;
+    }
+    vegetationControls.length = 0;
+    let lodChanged = false;
+    for (const d of shown) {
       if (d.vegetation) {
         vegetationControls.push(d.vegetation);
-        d.vegetation.setTime(elapsed);
         if (d.vegetation.updateLod(eye)) {
           lodChanged = true;
         }
       }
     }
-    if (updateVegetationLod(vegetationControls, eye, richTrees)) {
+    if (vegetationLod(vegetationControls, eye, richTrees)) {
       lodChanged = true;
     }
     if (lodChanged) {
@@ -2360,10 +2382,11 @@ async function bootApp(
    * foot and in the air; in Modell from the ground the picture shows and
    * from above its pivot, as far up as the picture is equivalent to (so a
    * tree at the top of the sheet is drawn as one at the bottom). Returns
-   * that equivalent distance in Modell, else null.
+   * that equivalent distance in Modell, else null. `tick`: the frame's
+   * pose tick is due (the tree tiers').
    */
   const eye = new Vector3();
-  const followView = (elapsed: number): number | null => {
+  const followView = (elapsed: number, tick: boolean): number | null => {
     const target = modelRig.owns() ? modelRig.targetView() : null;
     if (!target) {
       // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
@@ -2374,7 +2397,7 @@ async function bootApp(
       setMapAltitude(camera.position.y - ground);
       // Repoint the shared real lamp lights at the nearest heads.
       lampLights.updateNearest(camera.position);
-      stepVegetation(elapsed, camera.position);
+      stepVegetation(elapsed, camera.position, tick);
       return null;
     }
     const foot = footprintCircle(modelFootprint(target, viewportCss()));
@@ -2390,7 +2413,7 @@ async function bootApp(
     eye.set(pivot.x, pivot.y + equivalent, pivot.z);
     setMapAltitude(equivalent);
     lampLights.updateNearest(eye);
-    stepVegetation(elapsed, eye);
+    stepVegetation(elapsed, eye, tick);
     return equivalent;
   };
   /**
@@ -2746,6 +2769,9 @@ async function bootApp(
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     const elapsed = timer.getElapsed();
+    // The 10 Hz tick (the minimap's pose, the BVHs near, the focus, the
+    // tree tiers): read here, as the trees step before it is spent.
+    const poseTick = elapsed >= tickDue;
     if (dt > 0) {
       fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
     }
@@ -2775,7 +2801,7 @@ async function bootApp(
     for (const t of terrains) {
       t.water?.update(elapsed);
     }
-    const equivalent = followView(elapsed);
+    const equivalent = followView(elapsed, poseTick);
     lastEquivalent = equivalent ?? 600;
     updateCuts();
     aimCaptureTile();
@@ -2787,8 +2813,8 @@ async function bootApp(
     setDataTime(elapsed);
     // The timetable trams move on (only while their layer is on).
     overlays.step(performance.now());
-    if (timer.getElapsed() >= tickDue) {
-      tickDue = timer.getElapsed() + 0.1;
+    if (poseTick) {
+      tickDue = elapsed + 0.1;
       prepareBvhNear();
       if (modelRig.owns()) {
         tickModel();
