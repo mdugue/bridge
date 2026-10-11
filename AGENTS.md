@@ -207,7 +207,16 @@ config change.
     columns — the feed per site in `lib/city/bike-feeds.ts` —, and
     `tram-cars.ts`, the trams by timetable with their light trails; which
     layers a site has is its `dataLayers`), `glass.ts` (their refracting glass: one copy of the frame,
-    not `transmission`),
+    not `transmission`) — all started on the first switch-on of any layer
+    as one feature, `data-layers-feature.ts`, behind the spine's feature
+    seam (`feature-seam.ts`: the hooks a feature registers on — frame,
+    stream change, the look store, the scene's clock — and
+    `lazyFeature`; the tiles' traffic slot waits for its builder through
+    `TileStreamContext.trafficBuilder`); their code ships with the scene
+    (as an `import()` chunk it grew the first-load JS: three.js lost its
+    scope hoisting — ADR 0051); `traffic-flow.ts` (what the asked
+    section's outline reads of the flows without the layer: the hour's
+    uniforms, the position node, the flow mesh),
     `shader-chunks.ts` (the shared TSL pieces: data-frame positions from
     world space, raster uv, node types)
   - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view
@@ -626,8 +635,8 @@ main thread) out of the frames:
   three asks for no more), and every non-interleaved attribute is one —
   `position` and `normal` included. A ninth makes the pipeline invalid and
   the mesh simply does not draw, while WebGL2 (sixteen, the headless e2e's
-  backend) draws it: pack scalars into vec4s (`traffic-layer.ts`
-  `TRAFFIC_ATTRIBUTES`, its test holds the count).
+  backend) draws it: pack scalars into vec4s (`traffic-flow.ts`
+  `TRAFFIC_ATTRIBUTES`; `traffic-layer.test.ts` holds the count).
 
 **Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
 5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈
