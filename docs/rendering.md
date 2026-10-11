@@ -263,14 +263,23 @@ change, not a re-bake
   `renderer.shadowMap.transmitted` off — coloured shadows would read a
   red-only target. Terrain **receives
   only**. `normalBias = 0`, a small negative `bias`. The frustum follows the
-  camera, half-size 110 m at eye level growing in octaves to 880 m with
-  altitude, centred on the ground and pushed ahead along the view
+  camera, half-size 121 m at eye level growing in octaves of 110 m to 880 m
+  with altitude, centred on the ground and pushed ahead along the view
   (`lib/city/shadow-fit.ts`). It re-renders only when the centre leaves a
-  dead zone (18 % of the half-size), the size re-fits, the sun moves or a
+  dead zone (30 m on foot, 18 % of the half-size above eye level and in
+  Modell), the size re-fits, the sun moves or a
   caster changes (`invalidateShadows()` — the crown LOD swap included, a
   season change that thins or fills crowns, and every tile that lands, leaves or changes visibility through the stream's
   change hook). Animated geometry (sway, clouds) deliberately does **not**
-  update it.
+  update it. On foot the frustum was 110 m with a 19.8 m dead zone until
+  2026-10-11: a redraw every ~20 m walked. Between two redraws the camera
+  is never nearer an edge than the half-size less the dead zone (across
+  the sun's azimuth; along it the footprint is longer by 1 / sin of the
+  sun's elevation): 121 − 30 = 91 m against 90.2 before, so the shadows end
+  no nearer in front of the walker, for texels 10 % coarser (0.079 m at
+  3072², 0.118 at 2048²) and 17 redraws over a straight 500 m instead of
+  26. The horizon's near band starts to fade in at 80 % of the half-size,
+  at worst 66.8 m ahead (68.2 before).
 - **The shadow camera streams on a desktop, at a resolution of its
   own.** The sun's shadow camera is registered with the tiles renderer
   as a second camera, so a tile that casts into the view stays loaded
@@ -284,7 +293,7 @@ change, not a re-bake
   frustum touched was refined to its fine level — up to four from the air
   (an iPhone flying at 228 m: 642 → 677 MB held). A desktop has the
   memory for the fine level under the eye-level frustum: at 128 px the
-  coarse level's 23 px at 110 m still refine it (a neighbour behind the
+  coarse level's 21 px at 121 m still refine it (a neighbour behind the
   player casts its own trees' shadows, and the whole-site boot asks for
   the spawn tile's fine level as early as it did), but no longer from
   the air (11.6 px and less from 220 m on). **A phone's shadow camera
