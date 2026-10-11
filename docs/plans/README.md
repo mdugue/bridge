@@ -370,6 +370,39 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
 - **Shadow-pass pipelines compile in the frame** that first draws a new
   caster (`compileAsync` covers the main pass only) — a hitch per new
   kind of tree, lamp or furniture (M–L, needs a public-API spike).
+  *Spiked 2026-10-11: not on public API — left as it is.* three r186
+  keeps the shadow pass out of every compile, three ways over: (1)
+  `compileAsync` sets `_isPreCompiling`, and `ShadowNode.updateBefore`
+  returns on it (ShadowNode.js:796) — no compile draws the map, so
+  none makes its render objects; (2) the map is drawn by
+  `renderer.render(scene, shadow.camera)` (ShadowNode.js:654) from inside
+  the main pass's first lit draw, so at call depth 1, while
+  `compileAsync` always takes the depth-0 context (Renderer.js:933 against
+  `_renderScene`'s 1733; `RenderContexts.get` keys by depth, the
+  context's id is in the material key, RenderObject.js:854, and the node
+  build is cached by that key, NodeManager.js:151); (3) each caster's
+  shadow nodes come from the private `_getShadowNodes` (Renderer.js:3498)
+  and sit on the light's shadow material only around the draw
+  (3757–3809) — `compileAsync` only queues there and makes the render
+  object after the restore (1061–1068), and node keys go by identity
+  (`customCacheKey` is the node's id, Node.js:470–474), so no stand-in can
+  match. The public detours — a one-off pass nested at depth 1 into a
+  target with the map's attachments, or an override material that
+  catches the swap — rest on that undocumented keying and ordering, and a
+  real draw builds synchronously anyway (NodeManager.js:198+): they move
+  the hitch, they do not take it off the main thread. The way out is
+  upstream (three's `compileAsync` building the shadow pass itself).
+  Measured headless (`getRenderInfo().framedBuilds`: three's public
+  `debug.onNodeBuilderCreated`, counted while a frame draws), over a lite
+  boot of Dresden's spawn tile: 16 shadow-pass node builds inside frames,
+  all in frames that redrew the shadow map — 1, then 3, then **12 in the
+  one frame** where the tile's dressing landed (the frame `ready` flips);
+  none in the 51 walking and standing frames after. The other 25
+  in-frame builds all fell in the first 34 frames (the post pipelines
+  build on their first render; not split further). On WebGL2 (the headless
+  backend) a program also links synchronously in the frame, so the count
+  transfers, SwiftShader's times do not; on WebGPU the node builds are
+  the main-thread half either way.
 - **The vegetation LOD runs every frame** over every chunk, allocating
   two arrays of ~1 000 entries; the 10 Hz pose tick would do.
 - **The crash trail's heartbeat walks the scene** every 2 s and rewrites
@@ -377,9 +410,27 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
 - ~~**The inquiry's ask sets are built eagerly**~~ — built (plan 069
   step 6): in idle time once the dressing hangs; `canopySets` still places
   every canopy tree a second time there.
-- **A desktop at DPR 2 runs SMAA's three full-resolution passes** plus a
+- ~~**A desktop at DPR 2 runs SMAA's three full-resolution passes** plus a
   copy of the frame; skipping the copy (SMAA on the scene target, the AO
-  multiplied after, as the FXAA path does) saves a full-resolution pass.
+  multiplied after, as the FXAA path does) saves a full-resolution pass.~~
+  Built 2026-10-11 (spiked first): the copy was on both paths — standing,
+  the DoF pipeline's quad copied the lens blur's own composite target into
+  `BeforeAA`; walking, `lit` was drawn there — and both went without a
+  second SMAA and without switching any pass's output target. SMAA's
+  input is a texture binding the frame switches (`Antialiasing.read`):
+  the composite where the blur leaves it (its passes run for a one-pixel
+  draw into a 1×1 target), or the scene target with the contact shadows
+  multiplied in after SMAA (walking, as FXAA does). Modell keeps drawing
+  into `BeforeAA` first, so its sheets are unchanged; a standing frame is
+  pixel for pixel what it was. *Whether a binding switch is the "input
+  target switch" this entry ruled out*: it builds nothing — 0 node builds
+  inside frames over two walk/stand rounds (51 frames), counted with
+  `getRenderInfo().framedBuilds` — and keeps every render context
+  (they key by the target drawn into). Passes a frame (`frameCalls`, lite,
+  headless): standing 18 → 18, one of them now one pixel; walking 8 → 7.
+  `BeforeAA` (8 B a pixel: 36 MiB at 1920×1080 × 1.5) is held only in
+  Modell or a picture style. Fill-rate and memory are not measurable on
+  SwiftShader; the saving is one full-resolution read and write a frame.
 - **Three real point lights** sit in every lit build even by day
   (`lamp-layer.ts`); a phone could build one (a tier constant, no
   rebuild).

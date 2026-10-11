@@ -541,6 +541,14 @@ export interface CityWalkHandle {
    */
   getRenderInfo: () => {
     calls: number;
+    /**
+     * Node builds made while a frame drew, since the boot: a compile
+     * builds between frames, so these were built by the frame that first
+     * drew them — `shadow` the shadow pass's (no compile reaches it: three
+     * skips the shadow map while it precompiles), `other` the rest (the
+     * post passes' first frames, anything a compile missed).
+     */
+    framedBuilds: { other: number; shadow: number };
     /** estimated GPU bytes of geometry + textures + shadow map */
     gpuBytes: number;
     /**
@@ -549,6 +557,8 @@ export interface CityWalkHandle {
      * and render targets — the counters to watch for a leak.
      */
     memory: Readonly<Record<string, number>>;
+    /** the last frame's render passes (three's `frameCalls`: every pass) */
+    passes: number;
     triangles: number;
   };
   /** the site's most notable landmarks (Wikidata), for the HUD's list */
@@ -687,6 +697,46 @@ async function createRenderer(
   renderer.domElement.style.touchAction = "none";
   container.appendChild(renderer.domElement);
   return renderer;
+}
+
+/**
+ * Counts the node builds (TSL → WGSL, on the main thread) made while a
+ * frame draws, through three's public debug hook: the in-frame builds
+ * `getRenderInfo` reports. A compile builds between frames, so nothing it
+ * builds is counted.
+ */
+function framedBuildCounter(renderer: WebGPURenderer) {
+  const counts = { other: 0, shadow: 0 };
+  let drawing = false;
+  renderer.debug.onNodeBuilderCreated = (_builder, renderObject) => {
+    if (!drawing) {
+      return;
+    }
+    // The render object's material, not the builder's: three calls the
+    // hook before it hands the builder the material it builds (the shadow
+    // pass's own, for a caster), and the builder holds the object's.
+    // reason: the hook types its render object `unknown`, and the shadow
+    // pass's material flag is not in the @types.
+    const { material } = renderObject as {
+      material?: { isShadowPassMaterial?: boolean };
+    };
+    if (material?.isShadowPassMaterial === true) {
+      counts.shadow++;
+    } else {
+      counts.other++;
+    }
+  };
+  return {
+    counts,
+    draw: (render: () => void) => {
+      drawing = true;
+      try {
+        render();
+      } finally {
+        drawing = false;
+      }
+    },
+  };
 }
 
 /**
@@ -972,6 +1022,7 @@ async function bootApp(
 ): Promise<CityWalkHandle> {
   const { container, budget } = opts;
   let disposed = false;
+  const framedBuilds = framedBuildCounter(renderer);
 
   const camera = new PerspectiveCamera(
     DEFAULT_FOV,
@@ -2813,7 +2864,7 @@ async function bootApp(
     // The counters cover this frame's passes only (autoReset is off: the
     // loop's own reset also ran on held frames, which read back as zero).
     renderer.info.reset();
-    postStack.render();
+    framedBuilds.draw(postStack.render);
     takeCaptureTile();
     frames++;
     tickPocFrame(shadowRendered);
@@ -3184,7 +3235,9 @@ async function bootApp(
     },
     getRenderInfo: () => ({
       calls: renderer.info.render.drawCalls,
+      passes: renderer.info.render.frameCalls,
       triangles: renderer.info.render.triangles,
+      framedBuilds: { ...framedBuilds.counts },
       gpuBytes: gpuBytes(),
       memory: { ...renderer.info.memory },
     }),
