@@ -10,7 +10,9 @@
  * where none is given) changes nothing and notifies no one. A write is
  * read back at once; its listeners run once per slice and burst — at once
  * without a `schedule`, or in the task `schedule` runs the flush in, so a
- * report from inside a frame is heard after it. No THREE, no DOM, no React.
+ * report from inside a frame is heard after it. A listener that throws
+ * keeps no other from hearing: every listener of the burst runs, and the
+ * first error is thrown after them. No THREE, no DOM, no React.
  */
 
 export type SliceListener<V> = (value: V) => void;
@@ -51,23 +53,36 @@ export function createSliceStore<S extends object>(
   const pending = new Set<keyof S>();
   let scheduled = false;
 
-  const notify = (key: keyof S) => {
+  /** Runs the slice's listeners; what they throw is kept in `errors`. */
+  const notify = (key: keyof S, errors: unknown[]) => {
     const own = listeners.get(key);
     if (!own) {
       return;
     }
     // a copy: a listener may unsubscribe itself, or another, as it runs
     for (const listener of Array.from(own)) {
-      (listener as SliceListener<S[keyof S]>)(values[key]);
+      try {
+        (listener as SliceListener<S[keyof S]>)(values[key]);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+  };
+  /** Notifies the slices, then throws the first error any listener threw. */
+  const notifyAll = (keys: Iterable<keyof S>) => {
+    const errors: unknown[] = [];
+    for (const key of keys) {
+      notify(key, errors);
+    }
+    if (errors.length > 0) {
+      throw errors[0];
     }
   };
   const flush = () => {
     scheduled = false;
     const keys = [...pending];
     pending.clear();
-    for (const key of keys) {
-      notify(key);
-    }
+    notifyAll(keys);
   };
 
   const set = <K extends keyof S>(key: K, value: S[K]): boolean => {
@@ -77,7 +92,7 @@ export function createSliceStore<S extends object>(
     }
     values[key] = value;
     if (!options.schedule) {
-      notify(key);
+      notifyAll([key]);
       return true;
     }
     pending.add(key);
@@ -110,19 +125,14 @@ export function createSliceStore<S extends object>(
  * Equal as plain data: primitives by `Object.is`, arrays element by element,
  * plain objects key by key — a report rebuilt each tick with the same
  * numbers (Modell's view while it stands still, the trams' count) is the
- * same report. Not for class instances, maps or cycles.
+ * same report. Anything else — a `Date`, a `Map` or `Set`, a class
+ * instance — is equal only to itself: its own keys say nothing of its
+ * value (two dates have none), so two of them never count as one. Not for
+ * cycles.
  */
 export function dataEqual(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) {
     return true;
-  }
-  if (
-    typeof a !== "object" ||
-    typeof b !== "object" ||
-    a === null ||
-    b === null
-  ) {
-    return false;
   }
   if (Array.isArray(a) || Array.isArray(b)) {
     return (
@@ -132,17 +142,26 @@ export function dataEqual(a: unknown, b: unknown): boolean {
       a.every((item, i) => dataEqual(item, b[i]))
     );
   }
+  return isPlainObject(a) && isPlainObject(b) && sameEntries(a, b);
+}
+
+/** An object literal (or one made without a prototype), not an instance. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/** The same own keys, each with `dataEqual` values. */
+function sameEntries(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>
+): boolean {
   const ka = Object.keys(a);
-  const kb = Object.keys(b);
   return (
-    ka.length === kb.length &&
-    ka.every(
-      (key) =>
-        Object.hasOwn(b, key) &&
-        dataEqual(
-          (a as Record<string, unknown>)[key],
-          (b as Record<string, unknown>)[key]
-        )
-    )
+    ka.length === Object.keys(b).length &&
+    ka.every((key) => Object.hasOwn(b, key) && dataEqual(a[key], b[key]))
   );
 }

@@ -114,6 +114,35 @@ test("a listener may unsubscribe itself or another while the slice is heard", ()
   expect(seen).toEqual(["c"]);
 });
 
+test("a listener that throws keeps no one else in its burst from hearing, and its error still surfaces", () => {
+  const clock = manualSchedule();
+  const store = createSliceStore(INITIAL, { schedule: clock.schedule });
+  const heard: string[] = [];
+  store.subscribe("busy", () => {
+    throw new Error("listener failed");
+  });
+  store.subscribe("busy", () => heard.push("busy"));
+  store.subscribe("fps", () => heard.push("fps"));
+  // one burst, the throwing listener's slice written first
+  store.set("busy", true);
+  store.set("fps", 30);
+  expect(clock.run).toThrow("listener failed");
+  expect(heard).toEqual(["busy", "fps"]);
+  // the store schedules the next burst as before
+  store.set("fps", 31);
+  expect(clock.queued).toHaveLength(1);
+  // without a schedule: the write stands, its other listeners hear it
+  const direct = createSliceStore(INITIAL);
+  const seen: boolean[] = [];
+  direct.subscribe("busy", () => {
+    throw new Error("listener failed");
+  });
+  direct.subscribe("busy", (v) => seen.push(v));
+  expect(() => direct.set("busy", true)).toThrow("listener failed");
+  expect(direct.get("busy")).toBe(true);
+  expect(seen).toEqual([true]);
+});
+
 test("update makes the next value from the current one", () => {
   const store = createSliceStore(INITIAL);
   store.set("fps", 1);
@@ -134,4 +163,23 @@ test("dataEqual compares plain data by value", () => {
   expect(dataEqual({ a: [1, 2] }, { a: [1, 2, 3] })).toBe(false);
   expect(dataEqual([1], { 0: 1 })).toBe(false);
   expect(dataEqual({ a: { b: 1 } }, { a: { b: 2 } })).toBe(false);
+});
+
+test("dataEqual counts a date, a map, a set or an instance equal only to itself", () => {
+  // none of them has own keys that carry its value: compared key by key,
+  // any two would be the same, and a slice holding one would never change
+  expect(dataEqual(new Date(1), new Date(2))).toBe(false);
+  expect(dataEqual(new Map([["a", 1]]), new Map())).toBe(false);
+  expect(dataEqual(new Set([1]), new Set([2]))).toBe(false);
+  expect(dataEqual({ at: new Date(1) }, { at: new Date(2) })).toBe(false);
+  const at = new Date(1);
+  expect(dataEqual({ at }, { at })).toBe(true);
+  class Point {
+    constructor(readonly x: number) {}
+  }
+  expect(dataEqual(new Point(1), new Point(1))).toBe(false);
+  // an object without a prototype is still plain data
+  expect(
+    dataEqual(Object.assign(Object.create(null), { a: 1 }), { a: 1 })
+  ).toBe(true);
 });
