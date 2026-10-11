@@ -117,6 +117,11 @@ export function lazyFeature<M, F extends { dispose: () => void }>(
   let disposed = false;
   return {
     want: () => {
+      // (a start that resolved before the spine went would hand out the
+      // stopped feature)
+      if (disposed) {
+        return Promise.resolve(null);
+      }
       pending ??= importer().then(
         (module) => {
           if (disposed) {
@@ -138,5 +143,25 @@ export function lazyFeature<M, F extends { dispose: () => void }>(
       feature?.dispose();
       feature = null;
     },
+  };
+}
+
+/**
+ * The spine's want of a feature that serves several switches (the data
+ * layers): called with whether any of them is on, it wants the feature on
+ * each switch-on — none on before — and not on every change while one is,
+ * so a load that failed is asked for again the next time, and `failed`
+ * hears each want that did not start it.
+ */
+export function wantOnSwitchOn(
+  feature: Pick<LazyFeature<unknown>, "want">,
+  failed: (error: unknown) => void
+): (on: boolean) => void {
+  let wasOn = false;
+  return (on) => {
+    if (on && !wasOn) {
+      feature.want().catch(failed);
+    }
+    wasOn = on;
   };
 }

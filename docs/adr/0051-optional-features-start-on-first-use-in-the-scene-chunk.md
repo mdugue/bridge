@@ -36,7 +36,8 @@ imports it; the styles and Modell import `three/tsl` as much.
   frame, the stream's changes, the look store and the scene's clock (a
   watched value: a feature that starts late reads it first, then hears
   its changes). `lazyFeature` starts it once, never after the spine is
-  gone, and asks for a failed load again on the next use. The data
+  gone, and asks for a failed load again on the next use (the spine
+  wants it on each switch-on, `wantOnSwitchOn`). The data
   layers are the first such feature (`data-layers-feature.ts`); a tile's
   traffic slot waits for the same start before it builds its bodies
   (`TileStreamContext.trafficBuilder`).

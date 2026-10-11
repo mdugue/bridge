@@ -202,7 +202,8 @@ the three features need.
 gz; the decision is ADR 0051): the seam itself. `feature-seam.ts` — the
 spine's hooks (`frame`, `streamChange`, the look store, the scene's
 clock as a watched value a late starter reads first), `lazyFeature` (starts once, on first want;
-never after the spine is gone; a failed load asked for again);
+never after the spine is gone; a failed load asked for again — by the
+spine on the next switch-on, `wantOnSwitchOn`);
 `data-layers-feature.ts` — the data layers start on the first switch-on
 of any of them against those hooks (create-app.ts no longer wires the
 overlays into `setSun`, `applyLook`, the stream-change handler and the
@@ -216,7 +217,8 @@ that did not come is asked for again on the next switch-on and never
 reported as the tile's failed build, one that comes after the layer went
 off again builds nothing (three new `tile-stream.test.ts` cases);
 `traffic-flow.ts` — the flows' hour uniforms, position node, attributes
-and mesh lookup, which the outline (compiled at boot) and the card read,
+and mesh lookup, which the asked section's outline (its pass compiled at
+boot, its shape) reads,
 split from the layer's builder. Going lazy is then the one line in
 `create-app.ts` (`() => Promise.resolve(dataLayersModule)` → an
 `import()`), at the cost measured above.

@@ -208,8 +208,8 @@ config change.
     `lazyFeature`; the tiles' traffic slot waits for its builder through
     `TileStreamContext.trafficBuilder`); their code ships with the scene
     (as an `import()` chunk it grew the first-load JS: three.js lost its
-    scope hoisting — ADR 0051); `traffic-flow.ts` (what the
-    outline and the card read of the flows without the layer: the hour's
+    scope hoisting — ADR 0051); `traffic-flow.ts` (what the asked
+    section's outline reads of the flows without the layer: the hour's
     uniforms, the position node, the flow mesh),
     `shader-chunks.ts` (the shared TSL pieces: data-frame positions from
     world space, raster uv, node types)

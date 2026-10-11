@@ -195,6 +195,7 @@ import {
   lazyFeature,
   type SceneClock,
   type SpineHooks,
+  wantOnSwitchOn,
 } from "./feature-seam";
 
 /**
@@ -1575,20 +1576,15 @@ async function bootApp(
       })
   );
   cleanups.push(() => dataLayers.dispose());
-  // The first switch-on starts them; a start that threw (a bug) leaves
-  // them off, noted and said once, like a layer's hole.
-  let dataLayersAsked = false;
-  const wantDataLayers = (look: LookValues) => {
-    if (dataLayersAsked || activeDataLayers(look).length === 0) {
-      return;
-    }
-    dataLayersAsked = true;
-    dataLayers.want().catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      opts.trail?.note("feature failed", `data layers ${message}`);
-      sayLayerFailed(`Datenebenen: ${message}`);
-    });
-  };
+  // The first switch-on starts them. One that did not start them is noted,
+  // said once like a layer's hole, and the next switch-on asks again (a
+  // module that did not load is loaded again; a start that threw, a bug,
+  // stays failed).
+  const wantDataLayers = wantOnSwitchOn(dataLayers, (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    opts.trail?.note("feature failed", `data layers ${message}`);
+    sayLayerFailed(`Datenebenen: ${message}`);
+  });
   postStack.setSunAltitude(sunAltitude);
 
   // The look store is the one source of every look value: applied now, on
@@ -1623,7 +1619,7 @@ async function bootApp(
       d.vegetation?.applyLook(look);
       showDataLayers(d, look);
     }
-    wantDataLayers(look);
+    wantDataLayers(activeDataLayers(look).length > 0);
   };
   applyLook(opts.look.get());
   cleanups.push(opts.look.subscribe(applyLook));
