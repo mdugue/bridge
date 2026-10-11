@@ -285,6 +285,14 @@ export interface TileStream {
   pendingDressings: () => number;
   /** whether a tile's dressing was tried: built, failed, or its tile left */
   dressingSettled: (tileId: string) => boolean;
+  /**
+   * Whether the city's content compile ended with its buffers on the GPU
+   * (it uploads them; false: it did not run to the end, or its tile left).
+   * From then on its CPU arrays may be lent to a worker (city-bvh.ts):
+   * three reads an uploaded buffer's array no more, while an array lent
+   * before the upload would upload empty.
+   */
+  cityUploaded: (city: CityLayer) => Promise<boolean>;
   /** demolished object indices per tile, kept across unload/reload */
   demolished: Map<string, Set<number>>;
   dispose: () => void;
@@ -1348,6 +1356,9 @@ export class DressingPlugin {
   private gateOpen = false;
   /** tiles whose dressing was tried (see TileStream.dressingSettled) */
   readonly settled = new Set<string>();
+  /** each city's content compile, once it ends: whether its buffers are on
+   *  the GPU (see TileStream.cityUploaded) */
+  readonly uploads = new WeakMap<CityLayer, Promise<boolean>>();
   private readonly toData = new Matrix4();
   private tiles: PluginTiles | null = null;
   /** the content roots whose terrain reads each raster (raster-shares.ts) */
@@ -2070,6 +2081,19 @@ export class DressingPlugin {
         }
       })
       .catch(() => undefined);
+    // Heard after the drop above (registered after it): what a city lends
+    // its BVH worker — its positions and index — is never on the drop's
+    // list (`cityCpuDroppable`), and is lent only from here on.
+    const city = this.dressed.get(scene)?.city;
+    if (city) {
+      this.uploads.set(
+        city,
+        compiled.then(
+          (ended) => ended === "done" && !this.released.has(scene),
+          () => false
+        )
+      );
+    }
     return compiled;
   }
 
@@ -2293,6 +2317,7 @@ export function createTileStream(
     demolished: new Map(),
     pendingDressings: () => 0,
     dressingSettled: () => false,
+    cityUploaded: () => Promise.resolve(false),
     visibleTerrains: memo(() =>
       [...stream.terrains]
         .filter((t) => isShown(t.mesh))
@@ -2312,6 +2337,8 @@ export function createTileStream(
   const dressing = new DressingPlugin({ ...ctx, onChange: changed }, stream);
   stream.pendingDressings = () => dressing.pending;
   stream.dressingSettled = (tileId) => dressing.settled.has(tileId);
+  stream.cityUploaded = (city) =>
+    dressing.uploads.get(city) ?? Promise.resolve(false);
   tiles.registerPlugin(dressing);
   for (const { camera, width, height } of cameras) {
     tiles.setCamera(camera);

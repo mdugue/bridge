@@ -101,6 +101,7 @@ import {
 import type { ModelCamera } from "./model-camera";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
+import { createBvhWorker, startSpawnBvh } from "./city-bvh";
 import {
   countBuildings,
   ensureCityBvh,
@@ -1299,6 +1300,11 @@ async function bootApp(
     ]
   );
   cleanups.push(() => stream.dispose());
+  // The spawn tile's BVH is built off the main thread (city-bvh.ts, plan
+  // 043): the worker loads while the tiles download, and goes once that
+  // build is over — or with the app.
+  const bvhWorker = createBvhWorker();
+  cleanups.push(bvhWorker.dispose);
   // Between the renderer's tiles-load-start and tiles-load-end: registered
   // before the first update, so no transition is missed.
   let tilesIdle = false;
@@ -2586,6 +2592,8 @@ async function bootApp(
     reload: () => {
       const reload = reloadNow;
       if (reload) {
+        // a page that waits to reload builds no BVH meanwhile
+        bvhWorker.dispose();
         void releaseGpu(renderer).then(() => whenVisible(reload));
       }
     },
@@ -3022,6 +3030,16 @@ async function bootApp(
   lifecycle.dispatch({ kind: "firstFrame" });
   onChange();
   flushStats();
+  // The spawn tile's BVH, in the worker from here (city-bvh.ts, plan 043):
+  // after the tile's ground has landed, as before — not beside the parse
+  // that landed it — but beside the scene's compile below instead of after
+  // it, once the tile's buffers are on the GPU and the worker has loaded.
+  const spawnCity = stream.visibleCities().find((c) => startsOn(c.tile));
+  const spawnBvh = spawnCity
+    ? startSpawnBvh(stream.cityUploaded(spawnCity), bvhWorker.ready, () =>
+        spawnCity.buildBvhIn(bvhWorker)
+      )
+    : null;
   // Tiles compile themselves before they show; this covers the rest of the
   // scene (sky, sun rig, lamp light pool), under the overlay instead of in
   // the first visible frame. Bounded like a tile's compile: it resolves
@@ -3032,11 +3050,22 @@ async function bootApp(
   );
   // On the spawn vantage (or where a recovered page stood) now that its
   // ground exists (the pose was placed before any terrain had landed,
-  // over the fallback floor). Its buildings' BVH is built here, as the
-  // placing's rays reach them (ADR 0032: never inside a building) — after
-  // the tile's ground has landed, not inside the parse that landed them.
-  bvhOnDemand = true;
-  streamTimings.timedSync("boot:place", () => placeStart());
+  // over the fallback floor) — once its buildings' BVH is there (ADR 0032:
+  // never inside a building): the worker's, waited for here (the main
+  // thread free for the frames and the neighbours' tiles meanwhile), or,
+  // where it did not start or failed, built as the placing's rays reach
+  // the tile, as without a worker.
+  await streamTimings.timed("boot:place", async () => {
+    const outcome = await streamTimings.timed("boot:bvh-wait", () =>
+      spawnBvh ? spawnBvh.settle() : Promise.resolve("skipped" as const)
+    );
+    bvhWorker.dispose();
+    if (outcome !== "built") {
+      opts.trail?.note("spawn bvh", outcome);
+    }
+    bvhOnDemand = true;
+    placeStart();
+  });
   streamTimings.markOnce("boot:placed");
   // The light stage ends once a frame at the start pose has drawn its
   // shadow map (or found none to draw): the shadow pass's pipelines build

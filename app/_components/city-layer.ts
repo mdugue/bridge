@@ -13,6 +13,7 @@ import {
   Raycaster,
   Vector2,
 } from "three/webgpu";
+import { arraysLent, type BvhOutcome, type BvhWorker } from "./city-bvh";
 import { rayEntry } from "./collision";
 import { streamTimings } from "./stream-timing";
 import { setPickRay } from "./view-ray";
@@ -56,8 +57,12 @@ export interface CityLayer {
   /** whether the tile's BVH is built (`ensureCityBvh`) */
   hasBvh: () => boolean;
   /** builds the tile's BVH unless it has one (a long task: ≈75 ms for a
-   *  dense tile on a desktop, several times that on a phone) */
+   *  dense tile on a desktop, several times that on a phone) — not while
+   *  its arrays are lent to the BVH worker */
   ensureBvh: () => void;
+  /** builds the tile's BVH in `worker` (the boot's spawn tile, city-bvh.ts);
+   *  a demolish meanwhile takes effect once the arrays are back */
+  buildBvhIn: (worker: BvhWorker) => Promise<BvhOutcome>;
   /** marks the objects someone asks about (the clay's pencil hatch); an
    *  empty set clears the mark */
   mark: (objects: ReadonlySet<number>) => void;
@@ -224,10 +229,12 @@ function objectTexture(table: CityObjectTable): {
  * collision.ts, `nearestCityHit`, `cityObjectsAlong`; `nearestWithoutBvh`
  * finds the ones near the camera, built in idle time — create-app.ts).
  * three-mesh-bvh sorts the index in place and does not mark it for upload:
- * the GPU keeps the order it was given, the same triangles.
+ * the GPU keeps the order it was given, the same triangles. Not while the
+ * tile's arrays are lent to the BVH worker (city-bvh.ts, the boot's spawn
+ * tile): they are empty here then, and the worker's BVH is on its way.
  */
 export function ensureCityBvh(mesh: Mesh): void {
-  if (!mesh.geometry.boundsTree) {
+  if (!(mesh.geometry.boundsTree || arraysLent(mesh.geometry))) {
     streamTimings.timedSync(
       "tile:bvh",
       () => mesh.geometry.computeBoundsTree(),
@@ -274,9 +281,16 @@ export function dressCity(
 
   const alive = new Uint8Array(count).fill(1);
   const featureIds = geometry.getAttribute("featureId");
+  // a demolish while the index is lent to the BVH worker: done once it is
+  // back (`buildBvhIn`) — the index here is empty until then
+  let rebuildLater = false;
   const rebuild = () => {
     const index = geometry.getIndex();
     if (!index) {
+      return;
+    }
+    if (arraysLent(geometry)) {
+      rebuildLater = true;
       return;
     }
     const had = Boolean(geometry.boundsTree);
@@ -344,6 +358,14 @@ export function dressCity(
     facts: (objectIndex) => readObjectFacts(metadata, objectIndex),
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => ensureCityBvh(mesh),
+    buildBvhIn: async (worker) => {
+      const outcome = await worker.build(geometry, tile);
+      if (rebuildLater && !arraysLent(geometry)) {
+        rebuildLater = false;
+        rebuild();
+      }
+      return outcome;
+    },
     mark: (next) => {
       marked = next;
       if (markObjects(objects.texture, table, marked)) {
@@ -442,7 +464,8 @@ export function nearestWithoutBvh(
   let best: CityLayer | null = null;
   let bestDistance = reach;
   for (const layer of layers) {
-    if (layer.hasBvh()) {
+    // a tile whose arrays are with the BVH worker gets its BVH from there
+    if (layer.hasBvh() || arraysLent(layer.mesh.geometry)) {
       continue;
     }
     const { min, max } = worldBox(layer.mesh);

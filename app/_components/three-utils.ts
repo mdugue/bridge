@@ -291,8 +291,9 @@ export function cpuArrayBytes(
 type ArrayKind = new (length: number) => BufferAttribute["array"];
 
 /** Sets a geometry's bounds while its positions are still there: three
- *  would otherwise compute them from an empty array (and cull the mesh). */
-function boundsNow(geometry: BufferGeometry): void {
+ *  would otherwise compute them from an empty array (and cull the mesh) —
+ *  before a drop here, and before city-bvh.ts lends them to its worker. */
+export function boundsNow(geometry: BufferGeometry): void {
   if (!geometry.boundingBox) {
     geometry.computeBoundingBox();
   }
