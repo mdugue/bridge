@@ -20,6 +20,7 @@ import { utmToLatLng } from "@/lib/city/crs";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
 import { createBootPhases } from "@/lib/city/boot-phases";
 import { createCoalescer } from "@/lib/city/coalesce";
+import { createRecount } from "@/lib/city/recount";
 import {
   createMemoryGovernor,
   memoryFloorFor,
@@ -44,6 +45,7 @@ import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import type { LookKey, LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import type { BikeCounter } from "@/lib/city/bike-counts";
+import { activeDataLayers } from "@/lib/city/data-layers";
 import {
   nextRenderStyle,
   RENDER_STYLE_BY_ID,
@@ -87,6 +89,7 @@ import {
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import {
+  createLodSchedule,
   PHONE_RICH_TREE_BUDGET,
   RICH_TREE_BUDGET,
 } from "@/lib/city/vegetation-lod";
@@ -116,7 +119,7 @@ import {
   trafficTriangles,
 } from "./selection-shape";
 import type { OutlineSelection } from "./selection-outline";
-import { trafficMesh } from "./traffic-ask";
+import { trafficMesh } from "./traffic-flow";
 import { createCityCollider } from "./collision";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
@@ -131,12 +134,10 @@ import { raiseSafety } from "./gpu-safety";
 import { pageLeaving } from "./net-gate";
 import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
-import { createLampLights } from "./lamp-layer";
+import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
-import { setDataTime } from "./glass";
-import { createDataOverlays } from "./data-overlays";
 import type { TramCarsStatus } from "./tram-cars";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { pocFramesHeld, tickPocFrame, updatePocDebug } from "./poc-debug";
@@ -185,11 +186,20 @@ import {
 } from "./stream-timing";
 import { attachTouchControls } from "./touch-controls";
 import {
-  updateVegetationLod,
+  createVegetationLod,
   type VegetationControl,
 } from "./vegetation-layer";
 import { createStyleResources, setClaySection } from "./visual-style";
 import { createModelCuts } from "./model-cuts";
+import * as dataLayersModule from "./data-layers-feature";
+import {
+  createHook,
+  createWatch,
+  lazyFeature,
+  type SceneClock,
+  type SpineHooks,
+  wantOnSwitchOn,
+} from "./feature-seam";
 
 /**
  * Vertical FOV. 55° (~85° horizontal at 16:9) reads like a natural human
@@ -1203,13 +1213,18 @@ async function bootApp(
   // post stack is built after the first setSun, so it catches up there.
   let sunAltitude = 90;
   let sunToStyles: ((altitudeDeg: number) => void) | null = null;
-  // The data layers' clock (the timetable trams) follows the HUD's instant;
-  // they are created with the post stack, after the first setSun.
-  let clockToOverlays: ((date: Date) => void) | null = null;
+  // The scene's instant as the HUD set it last: the data layers' clock
+  // (the timetable trams, the traffic's hour) runs on from it — read when
+  // they start, which may be long after (feature-seam.ts).
+  const sceneClock = createWatch<SceneClock>({
+    date: opts.initialDate,
+    atMs: performance.now(),
+  });
   // Single fixed pool of real point lights for the nearest lamps across ALL
   // tiles, built before the first render so the light count is part of
-  // every lit node build once (ADR 0020); each tile's lamps retarget it.
-  const lampLights = createLampLights();
+  // every lit node build once (ADR 0020): three on a desktop, one on a
+  // phone (`LAMP_LIGHTS`); each tile's lamps retarget it.
+  const lampLights = createLampLights(LAMP_LIGHTS[budget.tier]);
   for (const light of lampLights.lights) {
     scene.add(light);
   }
@@ -1258,6 +1273,43 @@ async function bootApp(
     }
   });
   cleanups.push(() => seasonClock.dispose());
+  // The two walks of the whole scene that the stats and the crash trail's
+  // heartbeat report — every geometry under it, and the tiles' CPU arrays
+  // — are taken again only once what they count may have changed
+  // (lib/city/recount.ts; the heartbeat walked both every 2 s): the stream
+  // (a tile, a level or a dressing came or went, traffic bodies were
+  // built: `onChange`), a demolish and the data layers (all three through
+  // `scheduleStats`), a question (its rays build the BVHs of what they
+  // reach, its outline a mesh: `inquireAt`, `selectCandidate`), the CPU
+  // copies a compile let go of after its tile showed
+  // (`onCopiesDropped`), and — in the key, a count over the loaded
+  // building tiles — their BVHs, built as rays reach them. What comes and
+  // goes besides (a Schnitt's profile, a style's crowns) is kilobytes,
+  // counted with the next change.
+  const geometryCount = createRecount(() => estimateGeometryBytes(scene));
+  const cpuCount = createRecount(() => cpuBytesOf(stream).total);
+  const cityBvhs = () => {
+    let built = 0;
+    for (const city of stream.cities) {
+      built += city.hasBvh() ? 1 : 0;
+    }
+    return built;
+  };
+  const sceneCounted = () => {
+    geometryCount.changed();
+    cpuCount.changed();
+  };
+  // What a feature that starts on its first use (feature-seam.ts: the
+  // data layers) hooks into: the frame, the stream's changes, the look
+  // store and the scene's clock.
+  const frameHook = createHook<[elapsed: number, nowMs: number]>();
+  const streamHook = createHook<[]>();
+  const hooks: SpineHooks = {
+    frame: frameHook,
+    streamChange: streamHook,
+    look: opts.look,
+    clock: sceneClock,
+  };
   const stream = createTileStream(
     {
       // whether it compiled (a tile drops the CPU copies of what it
@@ -1288,6 +1340,7 @@ async function bootApp(
         opts.trail?.note("dressing failed", `${tile} ${message}`);
         sayLayerFailed(`${message} (Kachel ${tile})`);
       },
+      onCopiesDropped: () => cpuCount.changed(),
       dressingGate,
       fogColor: sceneFog.color,
       heightAt,
@@ -1305,6 +1358,11 @@ async function bootApp(
       tier: budget.tier,
       tileBounds: (id) => extras.tiles.find((t) => t.id === id)?.bounds,
       tilesetUrl,
+      // the data layers' traffic builder (they are set up with the post
+      // stack below; a slot asks only once the look has a layer on and
+      // its tile has landed)
+      trafficBuilder: () =>
+        dataLayers.want().then((layers) => layers?.traffic ?? null),
     },
     world,
     [
@@ -1483,7 +1541,7 @@ async function bootApp(
     setClockTime(date);
     clayNight.value = state.nightFactor;
     seasonClock.set(date);
-    clockToOverlays?.(date);
+    sceneClock.set({ date, atMs: performance.now() });
     // The sun's move has asked for the map already; a drag's step leaves
     // it to the rig's pace.
     if (!preview) {
@@ -1568,29 +1626,45 @@ async function bootApp(
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
   sunToStyles = postStack.setSunAltitude;
-  // The site-wide data layers (the live bicycle counters): built, fetched
-  // and polled only once switched on (lib/city/data-layers.ts).
-  const overlays = createDataOverlays({
-    bikeFeed: opts.site.dataLayers?.bikes?.feed,
-    bounds: unionBounds(extras),
-    bridgeUrls: extras.tiles.flatMap((t) =>
-      t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
-    ),
-    compile: (object) => postStack.compile(object).catch(() => undefined),
-    epsg: extras.epsg,
-    ground: { offset, heightAt },
-    initialDate: opts.initialDate,
-    onBikeCounts: opts.onBikeCounts,
-    onChange: () => scheduleStats(),
-    onTramStatus: opts.onTramStatus,
-    onTrafficHour: opts.onTrafficHour,
-    parent: scene,
-    tramTimetableUrl: extras.trams
-      ? new URL(extras.trams, tilesetUrl).href
-      : undefined,
+  // The data layers (lib/city/data-layers.ts, data-layers-feature.ts):
+  // started with the first switch-on of any of them — the tiles' traffic
+  // slots wait on the same start — and from then on driven by the spine's
+  // hooks (feature-seam.ts). They start only after this synchronous setup
+  // has run (the module's promise resolves later), so what they read below
+  // is all there. (Their code ships with the scene: as a chunk of its own
+  // it cost more first-load JS than it moved — feature-seam.ts.)
+  const dataLayers = lazyFeature(
+    () => Promise.resolve(dataLayersModule),
+    ({ startDataLayers }) =>
+      startDataLayers(hooks, {
+        bikeFeed: opts.site.dataLayers?.bikes?.feed,
+        bounds: unionBounds(extras),
+        bridgeUrls: extras.tiles.flatMap((t) =>
+          t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
+        ),
+        compile: (object) => postStack.compile(object).catch(() => undefined),
+        epsg: extras.epsg,
+        ground: { offset, heightAt },
+        onBikeCounts: opts.onBikeCounts,
+        onChange: () => scheduleStats(),
+        onTramStatus: opts.onTramStatus,
+        onTrafficHour: opts.onTrafficHour,
+        parent: scene,
+        tramTimetableUrl: extras.trams
+          ? new URL(extras.trams, tilesetUrl).href
+          : undefined,
+      })
+  );
+  cleanups.push(() => dataLayers.dispose());
+  // The first switch-on starts them. One that did not start them is noted,
+  // said once like a layer's hole, and the next switch-on asks again (a
+  // module that did not load is loaded again; a start that threw, a bug,
+  // stays failed).
+  const wantDataLayers = wantOnSwitchOn(dataLayers, (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    opts.trail?.note("feature failed", `data layers ${message}`);
+    sayLayerFailed(`Datenebenen: ${message}`);
   });
-  clockToOverlays = overlays.setClock;
-  cleanups.push(() => overlays.dispose());
   postStack.setSunAltitude(sunAltitude);
 
   // The look store is the one source of every look value: applied now, on
@@ -1605,6 +1679,10 @@ async function bootApp(
     },
   };
   let lastStyle = opts.look.get().style;
+  // When the trees' crown tiers are picked (stepVegetation, below): on the
+  // pose tick, and in the next frame when the crown switch or the tiles in
+  // view change.
+  const crownTiers = createLodSchedule();
   const applyLook = (look: LookValues) => {
     if (look.style !== lastStyle) {
       lastStyle = look.style;
@@ -1625,7 +1703,9 @@ async function bootApp(
       d.vegetation?.applyLook(look);
       showDataLayers(d, look);
     }
-    overlays.apply(look);
+    // the crown switch: the tiers in the next frame, not the next tick
+    crownTiers.force();
+    wantDataLayers(activeDataLayers(look).length > 0);
   };
   applyLook(opts.look.get());
   cleanups.push(opts.look.subscribe(applyLook));
@@ -1855,7 +1935,7 @@ async function bootApp(
     // (a tile's ask sets come in idle time; a question before builds them)
     things: () => [
       ...stream.visibleDressings().flatMap(asksOf),
-      ...overlays.asks(),
+      ...(dataLayers.current()?.asks() ?? []),
     ],
     viewport: () => ({
       width: renderer.domElement.clientWidth || 1,
@@ -1870,6 +1950,8 @@ async function bootApp(
   // What the card needs beyond what was met: a tree's facts file, a data
   // layer's credit (the site's) and, for a counted section, the hour.
   const layerSources = opts.site.dataLayers;
+  // (a section is asked only on bodies the data layers built: they are here)
+  const trafficHour = () => dataLayers.current()?.trafficHour();
   const answered = (asked: Inquiry | null): Inquiry | null => {
     switch (asked?.kind) {
       case "tree": {
@@ -1880,7 +1962,7 @@ async function bootApp(
         return {
           ...asked,
           credit: layerSources?.traffic?.credit,
-          hour: overlays.trafficHour(),
+          hour: trafficHour(),
         };
       case "bikes":
         return { ...asked, credit: layerSources?.bikes?.credit };
@@ -1902,6 +1984,8 @@ async function bootApp(
   let along: InquiryAlong | null = null;
   const inquireAt = (ndc?: { x: number; y: number }): Inquiry | null => {
     const asked = probe.ask(ndc);
+    // its rays built the BVHs of what they reached, its outline a mesh
+    sceneCounted();
     along = asked
       ? {
           at: ndc ?? null,
@@ -1921,6 +2005,7 @@ async function bootApp(
     if (!(along && chosen && probe.select(index))) {
       return null;
     }
+    sceneCounted();
     along = { ...along, selected: index };
     opts.onInquiry?.(chosen.inquiry, along);
     return chosen.inquiry;
@@ -2027,11 +2112,12 @@ async function bootApp(
 
   let fps = 0;
   // Geometry + tracked textures + the shadow map; the post stack's screen
-  // buffers are excluded (they scale with the canvas, not the world).
-  const gpuBytes = () =>
-    estimateGeometryBytes(scene) +
-    trackedTextureBytes() +
-    sunRig.shadowMapBytes;
+  // buffers are excluded (they scale with the canvas, not the world). The
+  // geometry as last counted (`geometryCount`); the textures come and go
+  // with the rasters' decode turns, and are a sum over a map.
+  const gpuBytesWith = (geometryBytes: number) =>
+    geometryBytes + trackedTextureBytes() + sunRig.shadowMapBytes;
+  const gpuBytes = () => gpuBytesWith(geometryCount.get());
   const census = (roots: (Object3D | undefined)[]): SceneCensus =>
     sceneCensus(roots.filter((r): r is Object3D => r !== undefined));
   const emitStats = () => {
@@ -2053,8 +2139,8 @@ async function bootApp(
         stairs: census(terrains.map((t) => t.stairs)),
         kerbs: census(terrains.map((t) => t.kerbs)),
         fences: census(terrains.map((t) => t.fences)),
-        bikes: census([overlays.parts().bikes]),
-        trams: census([overlays.parts().trams]),
+        bikes: census([dataLayers.current()?.parts().bikes]),
+        trams: census([dataLayers.current()?.parts().trams]),
       },
     });
   };
@@ -2065,6 +2151,8 @@ async function bootApp(
   // while the e2e holds the frames (`__poc.hold`).
   let statsTimer: ReturnType<typeof setTimeout> | null = null;
   const scheduleStats = () => {
+    // what changes the stats changes what the scene's walks count
+    sceneCounted();
     if (statsTimer !== null || disposed) {
       return;
     }
@@ -2150,7 +2238,9 @@ async function bootApp(
     lampLights.setHeads(
       stream.visibleDressings().flatMap((d) => d.lamps?.headPositions ?? [])
     );
-    overlays.streamChanged();
+    // a tile that lands is born on its mid crowns: its tiers in this frame
+    crownTiers.force();
+    streamHook.emit();
     postStack.sceneChanged();
     invalidateShadows();
     scheduleStats();
@@ -2373,31 +2463,44 @@ async function bootApp(
     siteGround.underWorld(camera.position.x, camera.position.z);
 
   const timer = new Timer();
-  // Pick every vegetation chunk's crown tier (rich / mid / far) over all
-  // loaded tiles at once — the rich crowns share one site-wide budget —,
-  // swap the cadastre's own silhouettes by distance, and advance the wind
-  // sway (same clock as the water ripple). A tier change changes what casts
-  // shadows, so it invalidates the map.
+  // Advance the wind sway every frame (same clock as the water ripple); on
+  // the pose tick — and in the frame the tiles in view or the crown switch
+  // change, or the eye jumps (`crownTiers`, lib/city/vegetation-lod.ts) —
+  // pick every vegetation chunk's crown tier (rich / mid / far) over all
+  // loaded tiles at once (the rich crowns share one site-wide budget) and
+  // swap the cadastre's own silhouettes by distance. (Per frame it cost a
+  // pass over ~1 000 chunks and their plan states 60 times a second; a
+  // tick's walk or flight, 18 m at the fastest, is well inside the tiers'
+  // 80–100 m hysteresis bands.) A tier change changes what casts shadows,
+  // so it invalidates the map.
   const vegetationControls: VegetationControl[] = [];
-  /** `eye`: where the tiers are measured from (Modell: above the pivot). */
+  const vegetationLod = createVegetationLod();
   const richTrees =
     budget.tier === "mobile" ? PHONE_RICH_TREE_BUDGET : RICH_TREE_BUDGET;
-  const stepVegetation = (elapsed: number, eye: Vector3) => {
-    vegetationControls.length = 0;
-    let lodChanged = false;
+  /** `eye`: where the tiers are measured from (Modell: above the pivot);
+   *  `tick`: the frame's pose tick is due. */
+  const stepVegetation = (elapsed: number, eye: Vector3, tick: boolean) => {
     // The shown tiles only: a cached tile or the hidden level of a shown
     // one would spend the rich-crown budget the view needs, and its tier
     // flips redrew the shadow map for trees nobody sees.
-    for (const d of stream.visibleDressings()) {
+    const shown = stream.visibleDressings();
+    for (const d of shown) {
+      d.vegetation?.setTime(elapsed);
+    }
+    if (!crownTiers.due(tick, eye)) {
+      return;
+    }
+    vegetationControls.length = 0;
+    let lodChanged = false;
+    for (const d of shown) {
       if (d.vegetation) {
         vegetationControls.push(d.vegetation);
-        d.vegetation.setTime(elapsed);
         if (d.vegetation.updateLod(eye)) {
           lodChanged = true;
         }
       }
     }
-    if (updateVegetationLod(vegetationControls, eye, richTrees)) {
+    if (vegetationLod(vegetationControls, eye, richTrees)) {
       lodChanged = true;
     }
     if (lodChanged) {
@@ -2411,10 +2514,11 @@ async function bootApp(
    * foot and in the air; in Modell from the ground the picture shows and
    * from above its pivot, as far up as the picture is equivalent to (so a
    * tree at the top of the sheet is drawn as one at the bottom). Returns
-   * that equivalent distance in Modell, else null.
+   * that equivalent distance in Modell, else null. `tick`: the frame's
+   * pose tick is due (the tree tiers').
    */
   const eye = new Vector3();
-  const followView = (elapsed: number): number | null => {
+  const followView = (elapsed: number, tick: boolean): number | null => {
     const target = modelRig.owns() ? modelRig.targetView() : null;
     if (!target) {
       // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
@@ -2425,7 +2529,7 @@ async function bootApp(
       setMapAltitude(camera.position.y - ground);
       // Repoint the shared real lamp lights at the nearest heads.
       lampLights.updateNearest(camera.position);
-      stepVegetation(elapsed, camera.position);
+      stepVegetation(elapsed, camera.position, tick);
       return null;
     }
     const foot = footprintCircle(modelFootprint(target, viewportCss()));
@@ -2441,7 +2545,7 @@ async function bootApp(
     eye.set(pivot.x, pivot.y + equivalent, pivot.z);
     setMapAltitude(equivalent);
     lampLights.updateNearest(eye);
-    stepVegetation(elapsed, eye);
+    stepVegetation(elapsed, eye, tick);
     return equivalent;
   };
   /**
@@ -2797,6 +2901,9 @@ async function bootApp(
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     const elapsed = timer.getElapsed();
+    // The 10 Hz tick (the minimap's pose, the BVHs near, the focus, the
+    // tree tiers): read here, as the trees step before it is spent.
+    const poseTick = elapsed >= tickDue;
     if (dt > 0) {
       fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
     }
@@ -2826,7 +2933,7 @@ async function bootApp(
     for (const t of terrains) {
       t.water?.update(elapsed);
     }
-    const equivalent = followView(elapsed);
+    const equivalent = followView(elapsed, poseTick);
     lastEquivalent = equivalent ?? 600;
     updateCuts();
     aimCaptureTile();
@@ -2834,12 +2941,11 @@ async function bootApp(
     lens.update(view, lastEquivalent);
     // The fountains' jets and water shimmer (one shared uniform).
     setFountainTime(elapsed);
-    // The data layers' light (one shared uniform; drawn only when on).
-    setDataTime(elapsed);
-    // The timetable trams move on (only while their layer is on).
-    overlays.step(performance.now());
-    if (timer.getElapsed() >= tickDue) {
-      tickDue = timer.getElapsed() + 0.1;
+    // The features that hook the frame (the data layers' light, the
+    // timetable trams), once they are here.
+    frameHook.emit(elapsed, performance.now());
+    if (poseTick) {
+      tickDue = elapsed + 0.1;
       prepareBvhNear();
       if (modelRig.owns()) {
         tickModel();
@@ -2918,7 +3024,7 @@ async function bootApp(
         calls: renderer.info.render.drawCalls,
         triangles: renderer.info.render.triangles,
         heapMB: heap ? heap.usedJSHeapSize / 1_048_576 : undefined,
-        cpuMB: cpuBytesOf(stream).total / 1_048_576,
+        cpuMB: cpuCount.get(cityBvhs()) / 1_048_576,
         cities: stream.visibleCities().length,
         dressings: stream.dressings.size,
         ...streamByKind(stream),
@@ -3238,7 +3344,8 @@ async function bootApp(
       passes: renderer.info.render.frameCalls,
       triangles: renderer.info.render.triangles,
       framedBuilds: { ...framedBuilds.counts },
-      gpuBytes: gpuBytes(),
+      // counted now: a debug read, on demand
+      gpuBytes: gpuBytesWith(estimateGeometryBytes(scene)),
       memory: { ...renderer.info.memory },
     }),
     getGpuDebug: () => {

@@ -207,7 +207,16 @@ config change.
     columns — the feed per site in `lib/city/bike-feeds.ts` —, and
     `tram-cars.ts`, the trams by timetable with their light trails; which
     layers a site has is its `dataLayers`), `glass.ts` (their refracting glass: one copy of the frame,
-    not `transmission`),
+    not `transmission`) — all started on the first switch-on of any layer
+    as one feature, `data-layers-feature.ts`, behind the spine's feature
+    seam (`feature-seam.ts`: the hooks a feature registers on — frame,
+    stream change, the look store, the scene's clock — and
+    `lazyFeature`; the tiles' traffic slot waits for its builder through
+    `TileStreamContext.trafficBuilder`); their code ships with the scene
+    (as an `import()` chunk it grew the first-load JS: three.js lost its
+    scope hoisting — ADR 0051); `traffic-flow.ts` (what the asked
+    section's outline reads of the flows without the layer: the hour's
+    uniforms, the position node, the flow mesh),
     `shader-chunks.ts` (the shared TSL pieces: data-frame positions from
     world space, raster uv, node types)
   - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view
@@ -381,8 +390,13 @@ config change.
   Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0037
 - `scripts/` — the build step: `prepare-sites.ts` runs `prepare-data.ts
   <site>` for every site whose data is ready (or only the ids it is given),
-  writes the index `public/data/sites.json` and prunes the folders of sites
-  no longer built; `prepare-data.ts` bakes one site's committed
+  side by side within the cores and the memory (`warmers.ts`; one process
+  per site; `PREPARE_WARMERS=1` bakes a site with more than four tiles one
+  tile per process — no gain measured on Vercel's 4-core builder, so off
+  by default; `PREPARE_JOBS`, `PREPARE_MEMORY_GB` override), writes the index
+  `public/data/sites.json`
+  and prunes the folders of sites no longer built; `prepare-data.ts` bakes
+  one site's committed
   artifacts into `public/data/<site>/` as a **3D Tiles tileset** (`tileset.json`,
   `tileset-spawn.json`) with glTF content under content-hashed names +
   `manifest.json` — per tile the buildings (`bake-city-mesh.ts` runs the
@@ -558,8 +572,11 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
   with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (on Vercel
-  `.next/cache/prepare-data`, the folder its build cache keeps; cold run
-  ≈ 6 min for fifteen tiles, warm ≈ 1 s; CI restores it between runs): the key covers the inputs'
+  `.next/cache/prepare-data`, the folder its build cache keeps; a cold run
+  of all seven sites 235 s on Vercel's 4-core, 8.6 GB builder, warm ≈ 3 s
+  for Dresden; CI restores it between runs; entries are written whole,
+  `bake-cache.ts`, and each tile's fine ground is one of them,
+  `ground-pack.ts`): the key covers the inputs'
   contents, `COMMON_SOURCES` (`prepare-data.ts` itself, the site's own
   config, `sites/providers.ts`, `patches/`), every module reachable from
   the artifact's bake entries (`scripts/bake-sources.ts` walks the
@@ -622,8 +639,8 @@ main thread) out of the frames:
   three asks for no more), and every non-interleaved attribute is one —
   `position` and `normal` included. A ninth makes the pipeline invalid and
   the mesh simply does not draw, while WebGL2 (sixteen, the headless e2e's
-  backend) draws it: pack scalars into vec4s (`traffic-layer.ts`
-  `TRAFFIC_ATTRIBUTES`, its test holds the count).
+  backend) draws it: pack scalars into vec4s (`traffic-flow.ts`
+  `TRAFFIC_ATTRIBUTES`; `traffic-layer.test.ts` holds the count).
 
 **Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
 5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈

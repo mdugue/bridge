@@ -48,7 +48,7 @@ flowchart TB
   DRESS --> TRAF["traffic flows (data layer, off by default)<br/>one glass body per counted direction, running light"]
   TER --> TRAFC["L1 only: coarse traffic flows<br/>(where the fine level has not loaded)"]
   SCENE --> DATA["site-wide data layers (off by default)<br/>bicycle glass columns (live),<br/>timetable tram cars + light trails"]
-  SCENE --> LIGHTS["lamp light pool<br/>3 real point lights, fed by visible tiles"]
+  SCENE --> LIGHTS["lamp light pool<br/>3 real point lights (a phone 1), fed by visible tiles"]
   SCENE --> SUN["sun rig<br/>directional light + shadow camera, sky dome, hemisphere fill"]
 ```
 
@@ -143,7 +143,7 @@ is the codebook.
 | Crown colour | NDVI 5×5 footprint max, recentred on the median; where the DOP has no near-IR (Munich) the GLI from its RGB, mapped onto the NDVI's scale | DOP | `crownColor` (+ hash sage fallback) |
 | Crown motion | wind sway (vertex); the crown brightens leaning into the gust and dims rocking back (× (1 ± 0.09 · gust), fixed) | — | `crownSway`, `crownLight` |
 | Crown silhouette | every tree its own crown: the shared geometry pushed in and out by three broad waves over the direction from the crown's centre, their phases from where the tree stands, and its top leaned a little — in the vertex stage, the cast shadow too; no draw call or build added | where the tree stands | `vegetation-layer.ts` `crownShape` |
-| Crown detail | three tiers per 250 m chunk, decided over the whole site each frame: rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `updateVegetationLod` (*Multi-Tuft-Kronen (nah)*) |
+| Crown detail | three tiers per 250 m chunk, decided over the whole site on the 10 Hz pose tick (and in the frame the tiles in view or the crown switch change, or the eye jumps more than 25 m): rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `createVegetationLod` (*Multi-Tuft-Kronen (nah)*) |
 | Coarse-level trees | a fixed third of the fine level's trees (a hash of where each stands), as tall, crowns √3 wider, in their colours and season, no trunks — wherever the tile renderer shows the coarse terrain: far off, from the air, in Modell past 2.5 m/px or wherever a coarsened stream or a load leaves the fine level out, at any scale; the fine level draws every tree | where each tree stands (`drawnCoarse`) | `coarse-crowns-layer.ts`, `lib/city/coarse-crowns.ts`, `scripts/coarse-crowns.ts`, `crowns_<t>.crw.gz` |
 | Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; trunk diameter `t` → trunk girth (fitted to the drawn trunk's radius at 1.3 m, flared foot included, × 1.3; else from the height); drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes; OSM `natural=tree` (`s: "osm"`) fills in where the register has no tree within 3 m | Stadtbaumkataster Dresden, OSM | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Tree family | genus `gn` → family (`lib/city/tree-family.ts`): a lean of the summer green (HSL offsets on the NDVI colour, not on cultivars or evergreens), bark colour as the trunk's per-instance tint (`TreeInstance.bark`); eight genera flower (`Phenology.bloom`: cherries pink in April, pears/apples/hawthorn white, …), the crown mixed toward the blossom and kept full while in flower | Stadtbaumkataster (genus) | `tree-family.ts`, `tree-inventory-layer.ts` `inventoryColor`/`barkTint`, `crown-season.ts` `bloomTargets` |
@@ -157,7 +157,7 @@ is the codebook.
 | OSM hedge | polyline → ≤ 2.5 m superellipsoid pieces scaled to `h` × `w`; OSM line, LSC height where measured (else tag / 1.5 m) | OSM, LSC | `low-vegetation-layer.ts` |
 | Extra tree | LSC crown peak + `h` + `r` outside the canopy mask and away from any cadastre tree, appended to the canopy points | LSC | `tile-stream.ts` → `vegetation-layer.ts` |
 | Lamp post | point, 5 m default; none on classes 5 and 8; a lamp hung across the street (`wire`): its head 7 m up on a wire to the facades or to slim masts at the kerb (`masts`), no post; a post mapped in the lanes stands at the kerb; OSM's, plus Mapillary's detected street lights where OSM has none within 8 m (Dresden) | OSM, Mapillary | `lamp-layer.ts`, `pipeline/bake/lamps.py`, `pipeline/bake/mapillary.py` |
-| Lamp light | nearest three heads of the visible tiles get a real point light; the rest emissive + sprites, all × `nightFactor` | OSM, sun | `MAX_REAL_LAMPS = 3` |
+| Lamp light | nearest three heads of the visible tiles get a real point light (a phone: the nearest one, faded through zero over a 6 m band where the next head comes as near, so it never jumps lamps at full strength); the rest emissive + sprites, all × `nightFactor` | OSM, sun | `LAMP_LIGHTS` (`lamp-layer.ts`) |
 | Street furniture | OSM point → one small abstracted model per kind (bench, backless bench, picnic table, bin, bicycle hoop, bollard — stone or metal, at its tagged height —, post box, stop shelter): softened blocks, capsules, tube strokes in the scene's pastels, vertex-coloured under one matte material; front turned to the bake's bearing `a` (OSM `direction`, else the nearest highway), a bench stretched to its mapped length `l`, a stand as `n` hoops 0.9 m apart; none on classes 5 and 8 or bridge decks | OSM | `furniture-layer.ts`, `lib/city/furniture.ts`, `pipeline/bake/furniture.py` |
 | Signs and fixtures | OSM point → advertising column (paper drum Ø 1.2 m, 2.7 m, a darker ring and dome, three pastel poster fields; `lit` ones emissive × `nightFactor`), traffic signal (3.2 m pole, a three-lamp head a shade deeper than the metal, facing `a`, unlit), pillar hydrant (0.8 m, red ochre), underground-hydrant sign plate on a post (one soft rose field, at 70 %), clock on a 3.5 m post (double face) or on a facade (one face, bracket to the wall), drinking fountain (1 m bronze column + basin), bus-stop "H" sign (2.6 m pole, a soft green disc in a yellow one — no letter —, timetable box); clock hands (soft slate) turned by the scene's time (`clockMinutes`, on the minute), never casting | OSM | `furniture-layer.ts` (`column`, `signal`, `hydrant`, `hydrantSign`, `poleClock`, `wallClock`, `drinkingWater`, `stopSign`, `clockHands`), `pipeline/bake/furniture.py` |
 | Playground | OSM outline → a pale sand floor 4 cm over the ground, skirted 0.2 m; the mapped equipment only stands on it, each piece one soft single-coloured sculpture in a pastel from the scene at the buildings' brightness (swing = an arch with a pill seat, dusk blue; slide = an extruded wave, peach; climbing frame = a faceted dome, sage; springy = an egg on a stem, butter; seesaw = a plank on a half-round, lilac; roundabout = a rimmed disc; playhouse = an extruded house silhouette; sandpit = sand in a rounded sage frame); a sandpit area a sand slab 6 cm above | OSM | `furniture-layer.ts` (`addSlab`), `lib/city/furniture.ts` |
@@ -608,6 +608,7 @@ the safety levels 1, 2 and 3:
 | Land-cover rasters | L0 4096², its splat 2048² (85 → 21 MiB with mips, since 2026-10-10), L1 1024² | L0 2048², L1 1024²; no sports raster | as the tier |
 | GTAO samples | 16 | 8 | 8 |
 | Rich crowns at most (`vegetation-lod.ts`) | 2 500 (≈ 3.6 M triangles) | 800 | as the tier |
+| Real lamp lights (`LAMP_LIGHTS`, every lit fragment shades each, by day too) | 3 | 1 | as the tier |
 | Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
 | Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 168–336 MiB (148–296, 136–272, 96–232) | as the tier |
 | Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 480 / 560 MB (a last one 10 s past 560); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
@@ -839,6 +840,16 @@ cabled Web Inspector) print it as one line:
 
 An older record prints as it was.
 
+A beat is cheap: the two figures that walk the whole scene — `gpu`'s
+geometry and `cpu`, the tiles' typed arrays — are counted again only once
+what they count may have changed (`createRecount`, `lib/city/recount.ts`:
+a tile, a level or a dressing came or went, a demolish, a data layer, a
+question, the CPU copies a compile let go of, a building tile's BVH),
+shared with the HUD's stats; everything else is read live. The record
+itself is one JSON value under one key, bounded by its rings (40 events,
+12 beats), so each beat writes it whole — ≈ 8 KB a few minutes into the
+spawn tile, 0.05 ms to serialise and store on a desktop.
+
 **If the GPU is lost anyway**, or a frame throws, the render stops and the
 page reloads where the player stood, **a safety level lighter**
 (`gpu-recovery.ts`, `lib/city/gpu-safety.ts`,
@@ -1012,6 +1023,18 @@ picked place from above the top of its tile's box, since its height is
 over a ground not yet known (`lib/city/boot-start.ts`). Each boot waits
 for the one before it to settle, so quick picks never hold two
 renderers at once, and the page keeps one crash trail across them.
+The data layers build nothing at boot: they start as one feature
+(`data-layers-feature.ts`) on the first switch-on of any of them, and
+from then on hear the spine through its hooks (`feature-seam.ts`: the
+frame, the stream's changes, the look store, the scene's clock — read
+first, since they may start long after it was set); a tile's traffic
+slot waits for the same start before it builds its bodies, outside the
+dressings' turn. Their code ships in the scene's chunk: loaded by
+`import()` as a chunk of its own, it made the first-load JS 22.7 KB gz
+larger while moving 10.1 KB out, three.js shared by both chunks losing
+its scope hoisting with the scene's code ([ADR 0051](./adr/0051-optional-features-start-on-first-use-in-the-scene-chunk.md)) — and the
+picture styles and Modell, which import three as much, stay in the
+scene's chunk for the same reason.
 Everything else is the tiles renderer's call: it loads and
 unloads by screen-space error from both cameras, and a `DressingPlugin`
 (`tile-stream.ts`) dresses each landing tile inside the renderer's own

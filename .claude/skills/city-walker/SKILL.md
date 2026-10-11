@@ -28,7 +28,15 @@ streaming the site and the animation loop, and returns a `CityWalkHandle`
 (the imperative API the React HUD calls) once the spawn tile's buildings and
 any of its terrain levels are on screen — the first frame. The fixed
 lamp-light pool and the fog floor are created before the first frame and
-retargeted/lowered as tiles land.
+retargeted/lowered as tiles land. The data layers are not wired into
+`bootApp` by hand: they start on their first switch-on (`lazyFeature`,
+`data-layers-feature.ts`) and hear the spine through its hooks
+(`feature-seam.ts`: frame, stream change, the look store, the scene's
+clock — a watched value a late starter reads first); a tile's traffic
+slot waits for their builder. The picture styles and Modell are still
+wired by hand. The data layers' code stays in the scene chunk: the first `import()` chunk that imports three.js costs the first
+load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
+data layers moved (ADR 0051) — measure before splitting one off.
 
 **The renderer** is three r186's `WebGPURenderer` — its WebGPU backend, or
 its WebGL2 backend where the browser has no WebGPU (`?gpu=webgl2` forces it:
@@ -573,8 +581,10 @@ not sky.
 - Trees = `Instances` sets (trunk + crown), hedges = `Instances` boxes, all
   on scene-wide materials (`sceneCrowns`, `sceneMaterial`). Crown =
   `IcosahedronGeometry(r, 2)` (180 tris) with lobes and radial normals. Three
-  tiers per 250 m chunk, planned over the whole site each frame
-  (`lib/city/vegetation-lod.ts`, applied by `updateVegetationLod`): the
+  tiers per 250 m chunk, planned over the whole site on the 10 Hz pose
+  tick (`lib/city/vegetation-lod.ts`, applied by `createVegetationLod`,
+  whose arrays are kept between passes; `createLodSchedule` runs it in the
+  frame the tiles in view or the crown switch change, or the eye jumps): the
   **rich multi-tuft crown** (~1 440 tris) near the camera (in 220 m / out
   300 m) but only within a **site-wide budget of 2 500 trees**, nearest
   chunks first — forest tiles (one tree per 7 m, up to ~1 300 per chunk)

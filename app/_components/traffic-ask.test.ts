@@ -4,7 +4,8 @@ import type { GroundContext } from "@/lib/city/ground-clamp";
 // the BVH the set builds on its first question (collision.ts patches it in)
 import "./collision";
 import { trafficTriangles } from "./selection-shape";
-import { trafficAskSet, trafficMesh } from "./traffic-ask";
+import { trafficAskSet } from "./traffic-ask";
+import { trafficMesh } from "./traffic-flow";
 import { buildTraffic } from "./traffic-layer";
 
 const ctx: GroundContext = {

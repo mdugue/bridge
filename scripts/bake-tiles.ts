@@ -44,6 +44,7 @@ import {
 } from "../lib/city/terrain-geometry";
 import {
   buildTinGeometryData,
+  type TerrainTin,
   TinIndex,
   tinSurface,
 } from "../lib/city/terrain-tin";
@@ -239,11 +240,19 @@ function maxZ(positions: Float32Array, count: number): number {
   return max;
 }
 
+/** A DGM shaped for the grid mesh: n·n elevations over `bounds`, row-major,
+ *  row 0 = north. */
+export interface ShapedGrid {
+  bounds: TerrainBounds;
+  elevations: Float32Array;
+  n: number;
+}
+
 /**
  * The terrain grid (+ its 30 m skirt) in the recentered frame, the DGM
- * shaped by `shapeDgm` with the walls burned in. The first n·n vertices are
- * the grid, row 0 = north: the runtime samples ground height straight from
- * them.
+ * shaped by `shapeDgm` with the walls burned in (`shapeGrid`, then
+ * `gridMesh`). The first n·n vertices are the grid, row 0 = north: the
+ * runtime samples ground height straight from them.
  */
 export function terrainMesh(
   dgm: Dgm,
@@ -251,16 +260,38 @@ export function terrainMesh(
   offset: { cx: number; cy: number },
   features: TerrainFeatures = {}
 ): TerrainMesh {
-  const { n, bounds } = dgm;
-  const elevations = shapeDgm(dgm, walls, features, {
-    burnWalls: true,
-    stairMargin: 0,
-  });
+  return gridMesh(shapeGrid(dgm, walls, features), offset);
+}
+
+/** The DGM shaped for the grid mesh: the walls burned in, the terraces,
+ *  stairs and passages as `shapeDgm` shapes them. */
+export function shapeGrid(
+  dgm: Dgm,
+  walls: WallLine[],
+  features: TerrainFeatures = {}
+): ShapedGrid {
+  return {
+    bounds: dgm.bounds,
+    n: dgm.n,
+    elevations: shapeDgm(dgm, walls, features, {
+      burnWalls: true,
+      stairMargin: 0,
+    }),
+  };
+}
+
+/** A shaped grid as `terrainMesh`'s mesh: what scripts/prepare-data.ts
+ *  rebuilds a cached ground with. */
+export function gridMesh(
+  grid: ShapedGrid,
+  offset: { cx: number; cy: number }
+): TerrainMesh {
+  const { elevations, n, bounds } = grid;
   const { positions, indices, minElevation, surfaceIndexCount } =
     buildTerrainGeometryData({ elevations, n, bounds, offset });
   const index = Uint32Array.from(indices);
   return {
-    heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
+    heightAt: gridHeightAt(grid),
     input: {
       positions,
       normals: terrainNormals(positions, index, surfaceIndexCount, n * n),
@@ -269,6 +300,13 @@ export function terrainMesh(
     minElevation,
     maxElevation: maxZ(positions, n * n),
   };
+}
+
+/** Ground height over a shaped grid, bilinear: the grid mesh's `heightAt`. */
+export function gridHeightAt(
+  grid: ShapedGrid
+): (x: number, y: number) => number | null {
+  return (x, y) => sampleHeightfield(grid, x, y);
 }
 
 /**
@@ -288,6 +326,18 @@ export function tinTerrainMesh(
   features: TerrainFeatures,
   maxError: number
 ): TerrainMesh | null {
+  const tin = fineTin(dgm, walls, features, maxError);
+  return tin ? tinMesh(tin, offset, maxError) : null;
+}
+
+/** `tinTerrainMesh`'s TIN, before it is meshed: the DGM shaped, then refined
+ *  to `maxError`. Null when the DGM has NoData. */
+export function fineTin(
+  dgm: Dgm,
+  walls: WallLine[],
+  features: TerrainFeatures,
+  maxError: number
+): TerrainTin | null {
   const elevations = shapeDgm(dgm, walls, features, {
     burnWalls: false,
     stairMargin: maxError,
@@ -297,12 +347,20 @@ export function tinTerrainMesh(
   if (elevations.some((z) => !Number.isFinite(z))) {
     return null;
   }
-  const tin = tinFromGrid(elevations, dgm.n, dgm.bounds, maxError);
+  return tinFromGrid(elevations, dgm.n, dgm.bounds, maxError);
+}
+
+/** A TIN (`fineTin`, refined to `maxError`) as `tinTerrainMesh`'s mesh: what
+ *  scripts/prepare-data.ts rebuilds a cached ground with. */
+export function tinMesh(
+  tin: TerrainTin,
+  offset: { cx: number; cy: number },
+  maxError: number
+): TerrainMesh {
   const { positions, indices, minElevation, surfaceIndexCount } =
     buildTinGeometryData(tin, offset);
-  const index = new TinIndex(tinSurface(tin));
   return {
-    heightAt: (x, y) => index.heightAt(x, y),
+    heightAt: tinHeightAt(tin),
     input: {
       positions,
       normals: terrainNormals(
@@ -318,6 +376,15 @@ export function tinTerrainMesh(
     maxElevation: maxZ(positions, tin.z.length),
     tin: { maxError, triangles: tin.triangles.length / 3 },
   };
+}
+
+/** Ground height over a TIN's triangles (`TinIndex`): the TIN mesh's
+ *  `heightAt`. */
+export function tinHeightAt(
+  tin: TerrainTin
+): (x: number, y: number) => number | null {
+  const index = new TinIndex(tinSurface(tin));
+  return (x, y) => index.heightAt(x, y);
 }
 
 /** World frame (Y-up) → the recentered data frame (Z-up) the glTF writer

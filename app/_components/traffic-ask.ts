@@ -1,20 +1,9 @@
-import { Box3, type Group, type Mesh, Raycaster, Vector3 } from "three/webgpu";
+import { Box3, type Group, Raycaster, Vector3 } from "three/webgpu";
 import type { AskSet } from "@/lib/city/ask-solids";
 import type { TrafficFeature } from "@/lib/city/features";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { lineBearing } from "@/lib/city/inquiry-traffic";
-
-/** The tile's flow bodies (traffic-layer.ts): the one mesh that carries
- *  the vertex → section table, or none. */
-export function trafficMesh(group: Group | undefined): Mesh | null {
-  let found: Mesh | null = null;
-  group?.traverse((o) => {
-    if (!found && (o as Mesh).isMesh && o.userData.trafficSection) {
-      found = o as Mesh;
-    }
-  });
-  return found;
-}
+import { trafficMesh } from "./traffic-flow";
 
 /** A line's middle vertex (the site's CRS): where the card says it is. */
 function middle(coords: readonly (readonly number[])[]): [number, number] {
