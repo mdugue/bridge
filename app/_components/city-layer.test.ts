@@ -8,6 +8,7 @@ import {
   Raycaster,
   Vector3,
 } from "three/webgpu";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 // three-mesh-bvh's wiring (computeBoundsTree, the accelerated raycast)
 import "./collision";
 import {
@@ -20,10 +21,18 @@ import {
 
 type CountedLayer = CityLayer & { builds: number };
 
-/** A building tile stand-in: one 10 m cube centred at x on the x axis,
- *  counting the BVH builds it is asked for. */
-function tile(name: string, x: number, bvh = false): CountedLayer {
-  const geometry = new BoxGeometry(10, 10, 10);
+/** A building tile stand-in: one 10 m cube centred at x on the x axis
+ *  (and one more at each of `also`, metres along x from it: one mesh, as
+ *  a tile's houses are), counting the BVH builds it is asked for. */
+function tile(
+  name: string,
+  x: number,
+  bvh = false,
+  also: readonly number[] = []
+): CountedLayer {
+  const geometry = mergeGeometries(
+    [0, ...also].map((dx) => new BoxGeometry(10, 10, 10).translate(dx, 0, 0))
+  );
   const vertices = geometry.getAttribute("position").count;
   geometry.setAttribute(
     "featureId",
@@ -98,6 +107,26 @@ test("the probe's candidates: built up to the first hit, a built tile behind it 
       (h) => h.layer.tile
     )
   ).toEqual(["near"]);
+});
+
+test("a ray from inside a tile's box asks that tile first: its nearer hit is not passed over for a neighbour's", () => {
+  // the eye stands in the tile `here` (houses at -20, 10 and 60: its box
+  // runs from -25 to 65); the neighbour's box begins at 25
+  const here = tile("here", 10, false, [-30, 50]);
+  const next = tile("next", 30, true);
+  const found = nearestCityHit(rayAlongX(1000), [next, here], true);
+  expect(found?.layer).toBe(here);
+  expect(found?.hit.distance).toBeCloseTo(5, 5);
+  // the probe builds the tile it stands in, and offers the built one
+  // behind
+  const camera = new PerspectiveCamera(55, 1, 0.1, 6000);
+  camera.position.set(0, 5, 0);
+  camera.lookAt(1, 5, 0);
+  camera.updateMatrixWorld(true);
+  const inside = tile("inside", 10, false, [-30, 50]);
+  const hits = cityObjectsAlong(camera, [next, inside]);
+  expect(hits.map((h) => h.layer.tile)).toEqual(["inside", "next"]);
+  expect(inside.builds).toBe(1);
 });
 
 test("the tile built next in idle time is the nearest without a BVH within reach", () => {

@@ -12,8 +12,8 @@ import {
   RGBAFormat,
   Raycaster,
   Vector2,
-  Vector3,
 } from "three/webgpu";
+import { rayEntry } from "./collision";
 import { streamTimings } from "./stream-timing";
 import { setPickRay } from "./view-ray";
 import {
@@ -375,10 +375,8 @@ function worldBox(mesh: Mesh): Box3 {
   return kept.box;
 }
 
-const entry = new Vector3();
-
 /** The layers whose box `ray` enters within `far`, nearest entry first
- *  (0 from inside a box). */
+ *  (0 from inside a box: `rayEntry`). */
 function layersOnRay(
   ray: Ray,
   far: number,
@@ -386,11 +384,9 @@ function layersOnRay(
 ): { enter: number; layer: CityLayer }[] {
   const out: { enter: number; layer: CityLayer }[] = [];
   for (const layer of layers) {
-    if (ray.intersectBox(worldBox(layer.mesh), entry)) {
-      const enter = entry.distanceTo(ray.origin);
-      if (enter <= far) {
-        out.push({ enter, layer });
-      }
+    const enter = rayEntry(ray, worldBox(layer.mesh));
+    if (enter !== null && enter <= far) {
+      out.push({ enter, layer });
     }
   }
   return out.sort((a, b) => a.enter - b.enter);
