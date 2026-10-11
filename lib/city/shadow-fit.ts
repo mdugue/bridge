@@ -140,6 +140,12 @@ export const STREAM_ERROR_TARGET = 16;
  * the whole-site boot fetches the spawn tile's fine level as early as it
  * did — but no longer from the air, where the frustum grows (12 px and
  * less from 220 m on).
+ *
+ * A phone's 64 px is dormant since plan 071: its shadow camera streams no
+ * tiles at all (gpu-safety.ts `shadowTilesStream`; create-app.ts registers
+ * it with the stream and takes it off at the first `setSun`, before any
+ * update). It stays the resolution a phone would stream at, were that
+ * lifted.
  */
 export const SHADOW_STREAM_PX: Readonly<Record<"desktop" | "mobile", number>> =
   {

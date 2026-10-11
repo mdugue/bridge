@@ -20,6 +20,30 @@
   names it on every tier; `readsSportGrounds` = a desktop's fine level
   only). Open: step 4 (the desktop fine splat at half resolution — needs
   the real-GPU look) and step 5's measurements on a GPU and a phone.
+- **Step 4 (2026-10-10, second pass)**: **BUILT** — `paintLandcoverSplat`
+  takes a scale (`splatScaleFor`: 2 for a 4096² class raster, 1 for the
+  2048² and 1024² ones); at 2 a texel is the mean of the 2×2 class
+  colours under it and the water the (1,3,3,1)² box over their 4×4
+  neighbourhood (the four 3×3 tents averaged) — exactly the full-size
+  splat's first mip, so only the near field, where the 0.5 m texels were
+  magnified, can change. The pass's key carries the scale; the cache
+  weighs the half-size target. **The gate was SwiftShader plates**, not
+  a real GPU (none in the cloud container; colours render faithfully
+  there, light and shadow do not): `main` vs branch at 800×500, the full
+  profile, desktop tier, *Tiefenschärfe* on as shipped — the Elbe shore
+  from 18 m, a meadow path and a road's meadow edge at eye level looking
+  along them, and the Großer Garten (Carolasee, paths) from 50 m. No
+  class boundary is blockier: the near field's edges are a little softer
+  (a diagonal path's 0.5 m staircase seen from 18 m is gone), the road's
+  edge is drawn by its kerb as before; the Elbe's water edge there is the
+  revetment's mesh, but the Carolasee's banks are the splat's own
+  shoreline (the water sheet's `smoothstep` of its alpha), and they came
+  out alike at 4× — a touch softer at a corner, nowhere blockier.
+  Held textures at ready (full profile, 400×300, three fine tiles):
+  588.7 → 396.7 MiB (−192, 64 per fine tile); at the road view
+  823.0 → 544.4 MiB. A look on a real GPU is still worth one glance at
+  the PR's snapshots; if it disappoints, the scale is one function to
+  set back to 1.
 
 - **Priority**: P1
 - **Effort**: S–M (steps 1–3); M for optional step 4

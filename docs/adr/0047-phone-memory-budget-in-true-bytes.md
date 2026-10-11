@@ -150,7 +150,8 @@ level under the eye-level frustum, where the coarse level's 23 px still
 refine it (a neighbour behind the player casts its own trees' shadows,
 and the whole-site boot asks for the spawn tile's fine level as early as
 it did), but no longer under the wide frustums from the air (11.6 px and
-less from 220 m on).
+less from 220 m on). *Since plan 071 a phone's shadow camera streams no
+tiles at all (`shadowTilesStream`): the 64 px is dormant.*
 
 **A failed allocation costs a dressing, not the page.** A compile the GPU
 had no room for (`lib/city/gpu-allocation.ts`: the `createAttribute`

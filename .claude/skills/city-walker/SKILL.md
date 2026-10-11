@@ -52,9 +52,12 @@ camera while the sun is up, so casters outside the view stay loaded (by
 night it is taken off the stream: it draws no shadow) — at a resolution
 of its own (`SHADOW_STREAM_PX`, `lib/city/shadow-fit.ts`), not the map's:
 the renderer's error for an orthographic camera ignores distance, so at
-2048 px it refined the terrain under the whole frustum; at a phone's 64 px
-it loads a tile's buildings and coarse level, never its fine terrain, at a
-desktop's 128 px the fine level under the eye-level frustum only (ADR 0047). A dressing plugin builds
+2048 px it refined the terrain under the whole frustum; at a desktop's
+128 px it refines the fine level under the eye-level frustum only (ADR
+0047), and on a phone it streams nothing (`shadowTilesStream`, plan 071:
+the tiles it kept were tiles in use the memory governor cannot free).
+On a phone the view's own stream also ends at 2.2 km (`streamFarFor`;
+not through Modell's dolly zooms, which back the camera kilometres away). A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
 heavy part (vegetation incl. the street-tree cadastre and the OSM hedges,
 lamps, rails on the fine terrain level; its walls
@@ -774,7 +777,7 @@ render scale, AO samples), all resolved once in `city-walk-client.tsx`
 |---|---|---|---|
 | tileset streamed | `tileset.json` (every site tile) | **`tileset-spawn.json`** (spawn tile only) | 3/4 of the geometry AND 3/4 of the boot (measured on the old block loader: 14 s → 4.4 s, 74 MB → 18 MB) |
 | shadow map size (`shadowMapSizeFor`) | 3072 | **512** | the depth pass is per-frame fill that does *not* shrink with the canvas |
-| `pixelRatio` | dpr≤2 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
+| `pixelRatio` | dpr≤1.5 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
 | GTAO samples (`aoSamplesFor`) | 16 | **8** | half the AO samples; keyed on the profile, not `navigator.webdriver` (Playwright sets that in the `--headed` shot harness too, which must show the product's AO) |
 
 Everything a spec asserts on — loaders, layer construction, every node

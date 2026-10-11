@@ -723,15 +723,17 @@ plain `intersectObject(city.mesh)` on a tile without one is
 three-mesh-bvh's brute-force fallback over two million triangles. The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The
 walk/fly camera does not stream itself: the renderer streams for its twin
-whose far plane ends where the fog does (`streamFarFor`,
-`lib/city/atmosphere.ts`; synced each frame before the update) — past the
+whose far plane ends where the fog does, on a phone at 2.2 km at the
+latest — not through Modell's dolly zooms, which back it kilometres away
+(`streamFarFor`, `lib/city/atmosphere.ts`; synced each frame
+before the update) — past the
 fog's end a tile shows nothing, and the camera's 6 km far plane loaded the
 site's every building tile in that direction as fog colour; register a new
 streaming need against that twin, not the camera. The sun's shadow camera is a second
 streaming camera while the sun is up, so tiles that cast into the view stay
-loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`)
-— at 128 px on a desktop and 64 on a phone (`SHADOW_STREAM_PX`), not the
-map's resolution: an orthographic camera's error ignores distance, and at
+loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`;
+on a phone never, `shadowTilesStream`) — at 128 px on a desktop
+(`SHADOW_STREAM_PX`), not the map's resolution: an orthographic camera's error ignores distance, and at
 2048 px it refined the terrain under its whole frustum;
 `displayActiveTiles` keeps loaded tiles drawn while turning.
 

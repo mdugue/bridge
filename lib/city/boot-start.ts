@@ -49,8 +49,8 @@ export function startOf<T extends Tile>(
  * landed the ground under a vantage is not known (it falls back to the
  * floor, 0 m), so a vantage's height above it may put the camera far
  * below the tile's box. A pose that sees no tile loads none — and by
- * night, or from safety level 2, no shadow camera streams one either —
- * so the boot would wait for ever.
+ * night, on a phone, or from safety level 2, no shadow camera streams
+ * one either — so the boot would wait for ever.
  *
  * - the spawn: its own vantage, which looks across its tile;
  * - a recovered camera: where it stood (its height is its own), looking
@@ -59,17 +59,30 @@ export function startOf<T extends Tile>(
  *   over the ground, in the air, looking straight down onto it. Without
  *   that top (a tileset without boxes) its own vantage, as the spawn.
  *
+ * Either stands no higher above the tile's top than half the boot's
+ * stream `reach` (create-app.ts: where its stream camera's far plane
+ * ends — on a phone 2.2 km at most, lib/city/atmosphere.ts): from higher
+ * the tile lies past that plane, out of the view, and the boot would wait
+ * for ever the same way.
+ *
  * Each goes on its own pose once the tile has landed.
  */
 export function bootingPose(
   start: Pick<BootStart<Tile>, "picked" | "restored">,
   spawnView: ViewpointGeometry,
   tileTop: number | undefined,
-  offset: RecenterOffset
+  offset: RecenterOffset,
+  reach: number
 ): { camera: CameraState } | { view: ViewpointGeometry } {
   const { picked, restored } = start;
+  /** At most half the reach above the tile's top. */
+  const within = (y: number) =>
+    tileTop === undefined ? y : Math.min(y, tileTop + reach / 2);
   if (restored) {
-    return { camera: { ...restored, pitchDeg: -90 } };
+    const { pos } = restored;
+    return {
+      camera: { ...restored, pitchDeg: -90, pos: { ...pos, y: within(pos.y) } },
+    };
   }
   if (!picked) {
     return { view: spawnView };
@@ -85,7 +98,11 @@ export function bootingPose(
       headingDeg: picked.headingDeg,
       mode: "fly",
       pitchDeg: -90,
-      pos: { x: at.x, y: tileTop + Math.max(picked.aboveGround, 0), z: at.z },
+      pos: {
+        x: at.x,
+        y: within(tileTop + Math.max(picked.aboveGround, 0)),
+        z: at.z,
+      },
     },
   };
 }
