@@ -1,12 +1,15 @@
 import { expect, test } from "bun:test";
 import {
+  Box3,
   BoxGeometry,
   Group,
   Mesh,
   MeshBasicNodeMaterial,
+  Ray,
   Vector3,
 } from "three/webgpu";
-import { bvhBytesUnder, createCityCollider } from "./collision";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { bvhBytesUnder, createCityCollider, rayEntry } from "./collision";
 
 /**
  * The building collider through a real three-mesh-bvh BVH (ADR 0032: the
@@ -133,6 +136,41 @@ test("a building without a BVH is passed over — never walked triangle by trian
     lazy.collider.resolveStep(new Vector3(194.5, 1.7, 100), step).length()
   ).toBeCloseTo(0, 6);
   expect(built).toHaveLength(2);
+});
+
+test("the walls of the tile the player stands in block: its box holds the eye", () => {
+  // one building tile, as streamed: two houses in one mesh, whose box
+  // reaches from (38, 0, 38) to (105, 10, 105) — the eye inside it
+  const tile = new Mesh(
+    mergeGeometries([
+      new BoxGeometry(10, 10, 10).translate(100, 5, 100),
+      new BoxGeometry(4, 4, 4).translate(40, 2, 40),
+    ]),
+    new MeshBasicNodeMaterial()
+  );
+  tile.updateMatrixWorld(true);
+  const collider = createCityCollider(
+    () => [tile],
+    (mesh) => mesh.geometry.computeBoundsTree()
+  );
+  const step = collider.resolveStep(
+    new Vector3(94.5, 1.7, 100),
+    new Vector3(1, 0, 0)
+  );
+  expect(step.length()).toBeCloseTo(0, 6);
+  expect(
+    collider.along(new Vector3(80, 1.7, 100), new Vector3(1, 0, 0), 200)
+  ).toBeCloseTo(15, 5);
+});
+
+test("a ray enters a box where it meets it, and at once from inside it", () => {
+  const box = new Box3(new Vector3(10, 0, -5), new Vector3(20, 10, 5));
+  const along = (x: number) =>
+    rayEntry(new Ray(new Vector3(x, 5, 0), new Vector3(1, 0, 0)), box);
+  expect(along(0)).toBeCloseTo(10, 6);
+  // three's intersectBox gives the exit (at 20) from inside
+  expect(along(12)).toBe(0);
+  expect(along(30)).toBeNull();
 });
 
 test("a mesh's BVH weighs its node buffers; one without a BVH weighs nothing", () => {
