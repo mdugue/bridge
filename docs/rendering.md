@@ -991,7 +991,7 @@ material and attribute layout, shown and unculled for the call), so a
 landing tile never builds inside a frame. The shadow pass's pipelines for
 new casters are the exception: they compile in the frame that first draws
 them. The heavy dressing — vegetation,
-lamps, monuments, rails — waits behind a gate the HUD opens after the handover
+lamps, monuments, bridges — waits behind a gate the HUD opens after the handover
 (`startStreaming`, [ADR 0008](./adr/0008-progressive-two-phase-boot.md)'s
 second phase) and is built one tile at a time. A tile with nothing on
 screen shows at once, bare, and is dressed after; a terrain level that
@@ -1009,7 +1009,8 @@ dressing is awaited inside the parse job — while dressings build one at
 a time for the site, and with 10 s on every tier a phone's two slots
 stood still behind it. A desktop waits up to 1.5 s, so most hand-overs
 still swap the trees in one frame; a phone does not wait at all: the
-fine level shows bare and its trees, lamps and rails arrive once its
+fine level shows bare (its rails, trams and riverside, baked into it,
+come with it) and its trees, lamps and bridges arrive once its
 dressing is built — on a phone that blink of no trees is back, the price
 of a stream that keeps moving. A dressing's **ask sets** — what the
 inquiry probe can ask of its trees, monuments, decks, hedges, lamps and

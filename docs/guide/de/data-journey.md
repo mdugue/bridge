@@ -132,9 +132,10 @@ Insgesamt trägt das Repository etwa 400 MB Daten für die fünfzehn Kacheln.
 | Dachfarben | DOP + LoD2 | die Dachfarben-Tabelle | in die Tabelle des Gebäudenetzes eingearbeitet | im Gebäudenetz |
 | Ladenfronten, Baudenkmale | OpenStreetMap + LoD2 | die Tabelle je Gebäude | in die Tabelle des Gebäudenetzes eingearbeitet | im Gebäudenetz |
 | Denkmäler und Brunnen | Basis-DLM (Namen, Lage) + OpenStreetMap (Becken) | die GeoJSON-Dateien | — | wie eingecheckt |
-| Lampen, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
+| Lampen, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
 | Mauern, Zäune, Treppen, Terrassen | OpenStreetMap + DGM1 | die GeoJSON-Dateien | ins detaillierte Geländenetz eingebaut: der Boden an und unter ihnen geformt, Mauern, Zäune und Stufen Teil des Netzes | im Geländenetz |
-| Gleise, Schotter, Brücken | Basis-DLM (+ DOM1/DGM1 für Höhen) | die GeoJSON-Dateien | — | wie eingecheckt |
+| Gleise, Schotter, Bahnsteige, Straßenbahnen, Anleger | Basis-DLM + OpenStreetMap (+ DGM1 für Höhen) | die GeoJSON-Dateien | ins detaillierte Geländenetz eingebaut, auf dem Boden jeder Kachel, jede Linie auf der Ebene, auf der sie fährt | im Geländenetz |
+| Brücken | Basis-DLM (+ DOM1/DGM1 für Höhen) | die GeoJSON-Dateien | — | wie eingecheckt |
 
 ### Station 5 — der Build-Schritt (`scripts/prepare-data.ts`)
 
@@ -191,9 +192,9 @@ Manifest Dresdens (`/data/dresden/manifest.json`) und sein Tileset und
 Bibliothek namens 3DTilesRendererJS entscheidet danach, wo die Kamera
 steht und wohin sie schaut, welche Dateien geladen werden. Das erste Bild
 wartet nur auf Gebäude und Gelände der Kachel, auf der du startest.
-Kacheln nahe der Kamera bekommen das detaillierte Gelände – Mauern und
-Treppen sind darin schon eingebaut – und werden dann mit Bäumen, Lampen und
-Gleisen *ausgestattet*; weiter entfernte
+Kacheln nahe der Kamera bekommen das detaillierte Gelände – Mauern,
+Treppen, Gleise, Straßenbahnen und Anleger sind darin schon eingebaut – und
+werden dann mit Bäumen, Lampen und Brücken *ausgestattet*; weiter entfernte
 Kacheln zeigen ihre Gebäude auf dem groben Gelände; Kacheln außer Sicht
 werden gar nicht geladen, und Kacheln, die du hinter dir gelassen hast,
 können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
@@ -204,14 +205,14 @@ können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
 | Gebäude (mit Stiltabelle) | 1,34 MB | bis 1,91 MB | die Kachel im Blick ist |
 | Gebäudegrundrisse (Minikarte) | 48 kB | bis 75 kB | mit den Gebäuden |
 | Grobes Gelände (512²) | 0,41 MB | 0,44–0,65 MB | die Kachel im Blick ist |
-| Detailliertes Gelände (ein TIN, mit seinen Mauern, Treppen und Bordsteinen) | 1,61 MB | 1,31–3,56 MB | die Kamera nahe kommt |
+| Detailliertes Gelände (ein TIN, mit seinen Mauern, Treppen, Bordsteinen, Gleisen, Straßenbahnen und Anlegern) | 1,61 MB | 1,31–3,56 MB | die Kamera nahe kommt |
 | Landnutzungsklassen, 512² | 15 kB | 9–18 kB | beim Start, für die Minikarte |
 | Landnutzungsklassen, 2048² | 0,08 MB | 0,06–0,11 MB | mit dem groben Gelände (auf Handys mit jeder Stufe) |
 | Landnutzungsklassen, 4096² | 0,22 MB | 0,15–0,29 MB | mit dem detaillierten Gelände (nur Desktop) |
 | Grün (NDVI) | 0,39 MB | 0,32–0,77 MB | mit dem Gelände |
 | Baumpunkte | 36 kB | 41–526 kB | mit dem detaillierten Gelände |
 | Stadtmöbel | 19 kB | 0,3–19 kB | mit dem detaillierten Gelände |
-| Lampen, Gleise, Schotter, Brücken, Bahnsteige, Heckenreihen | je unter 5 kB | je unter 5 kB | mit dem detaillierten Gelände |
+| Lampen, Brücken, Heckenreihen | je unter 5 kB | je unter 5 kB | mit dem detaillierten Gelände |
 | Belag- und Straßenkanten-Raster | 2,18 MB | 0,28–2,76 MB | mit dem detaillierten Gelände |
 | **Je Kachel, volle Detailstufe** | **≈ 6,4 MB** | **≈ 4,0–9,7 MB** | |
 | **Je Kachel, nur als ferne Kulisse** | ≈ 2,3 MB | ≈ 1,3–3,3 MB | |

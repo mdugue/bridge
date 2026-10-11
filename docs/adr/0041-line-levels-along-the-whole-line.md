@@ -52,7 +52,10 @@ any tile's, for 450 m. It bakes the result into the published rail and
 tram files as each line's runs off the ground (`lv`: first and last
 sample, mode, level at both ends); the layers draw the ground from the
 loaded terrain, a deck from the deck table and a span or cut from the
-run. Without `lv` a layer solves its own piece. Under a span the layer
+run. Without `lv` a layer solves its own piece. (Since plan 074 part A
+the files are no longer published: the build draws the lines on their
+`lv` itself, on every tile's fine ground, into the fine terrain glTF —
+`scripts/line-sources.ts`, `scripts/bake-lines.ts`, ADR 0029's update.) Under a span the layer
 draws a deck: a slab as wide as the tracks, piers every 26 m where it
 clears the ground by 2.5 m.
 
@@ -121,10 +124,12 @@ road the bridge data lacks.
 
 - `lib/city/levels.ts`, `lib/city/line-levels.ts`, `lib/city/decks.ts`,
   `lib/city/passages.ts`; `scripts/line-levels.ts` (+ its test),
-  `scripts/prepare-data.ts` (`publishLevels`, the passages in
-  `shapedTerrain`), `scripts/bake-tiles.ts` (`shapeDgm`)
-- `app/_components/rail-layer.ts` (`lineLevelsAt`, `addSpanDeck`,
-  `addDrapedArea`),
-  `app/_components/tram-layer.ts` (`trackRuns`)
+  `scripts/prepare-data.ts` (the passages in `shapedTerrain`; until plan
+  074 part A `publishLevels`), `scripts/line-sources.ts` (`withLevels`),
+  `scripts/bake-tiles.ts` (`shapeDgm`)
+- `lib/city/rail-mesh.ts` (`lineLevelsAt`, `addSpanDeck`,
+  `addDrapedArea`), `lib/city/tram-mesh.ts` (`trackRuns`) — in
+  `app/_components/rail-layer.ts` and `tram-layer.ts` until plan 074
+  part A
 - Ledger: *Railway & bridges* → *Line levels*, *Passages under decks*;
   🗃️ *A line lifted onto every deck under it*

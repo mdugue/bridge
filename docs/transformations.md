@@ -2895,8 +2895,9 @@ GPU**.
   third of them, wider, where the coarse one shows. No scale thins them
   of its own (🗃️ *Modell's trees thinned by scale*).
 - **Bridges on both terrain levels** `❝ taken` `◎ detected` — the coarse level draws its tile's
-  bridges as the fine one does (`buildRail` with the decks alone: deck,
-  parapets, piers or arches, the measured steel; no rails), and they are
+  bridges as the fine one does (`buildBridgeLayer`: deck, parapets, piers
+  or arches, the measured steel; the rails are baked into the fine level
+  alone), and they are
   asked on it too. LoD2's bridge slabs are left out of the buildings, so
   every river crossing used to vanish where the fine level's reach ended:
   in the air beyond the fine level's reach (≈ 2.6 km on a viewport 1080

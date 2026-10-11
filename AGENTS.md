@@ -801,9 +801,9 @@ whole grazing streets).
 **The boot has two phases.** `bootApp` returns (and the overlay drops) as
 soon as the spawn tile's buildings and any of its terrain levels are on
 screen; `startStreaming` then opens the dressing gate, and vegetation,
-lamps and rails are built tile by tile behind a HUD chip (stairs, walls,
-kerbs and fences are baked into the fine terrain glTF and arrive with it)
-(the streaming pill). After the gate a terrain level that replaces its
+lamps and bridges are built tile by tile behind a HUD chip (stairs, walls,
+kerbs, fences, rails, trams and the riverside are baked into the fine
+terrain glTF and arrive with it) (the streaming pill). After the gate a terrain level that replaces its
 tile's other level on screen waits for its dressing before it counts as
 loaded, so the renderer keeps the old level (and its trees) drawn until
 the new one is complete (`DressingPlugin.handsOver`) — on a desktop, for
