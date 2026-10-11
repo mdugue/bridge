@@ -83,6 +83,8 @@ test("the dead zone scales with the radius and matches the old 20 m", () => {
 });
 
 test("a phone's shadow camera never refines terrain, at any radius it takes", () => {
+  // dormant while a phone's shadow camera streams nothing
+  // (gpu-safety.ts `shadowTilesStream`): the bound for the day it does
   const { width, height } = shadowStreamResolution("mobile");
   expect(width).toBe(height);
   // every radius the fit can hand out, and everything in between

@@ -15,7 +15,8 @@
  * second sign (`raisedBy`). Each level is a lighter page: a lower
  * pixel-ratio cap, a smaller shadow map and tile cache (scene-profile.ts),
  * lower memory lines and a governor that starts — and stays — further
- * down (memory-governor.ts), no shadow-camera streaming from level 2, and
+ * down (memory-governor.ts), no shadow-camera streaming from level 2 (on
+ * a phone none at any level, `shadowTilesStream`), and
  * a recovered page that puts back the place and the time but neither the
  * picture style nor Modell from level 2. A level comes back down by
  * itself, one per three days since it was last raised; `?safety=N` sets
