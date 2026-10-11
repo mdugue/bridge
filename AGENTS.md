@@ -117,6 +117,12 @@ config change.
     `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount,
     given the site id; which tileset to stream), `site-context.tsx`
     (`SiteProvider`/`useSite`: the site the HUD describes),
+    `scene-status.ts` (what the scene reports to the HUD — the stages,
+    the stats and frame rate, the site, the mode, Modell's view, the data
+    layers, the inquiry, the pose — as one store of slices that each
+    widget reads its own of with `useSceneStatus`, so a report re-renders
+    what shows it, not the HUD; `sceneReports` turns it into the scene's
+    callbacks; the store itself is `lib/city/slice-store.ts`; plan 074),
     `poc-debug.ts` (the `window.__poc` test/QA hook), `stream-timing.ts`
     (`?trace=1`: the boot's and the stream's spans by category, local
     only), `scene-profile.ts`
@@ -270,7 +276,9 @@ config change.
   loads from there until it is clicked
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
-  policy, the look table + store, the Snapshot codec, `gpu-safety.ts`
+  policy, the look table + store, the Snapshot codec, `slice-store.ts`
+  (a store of named slices: per-slice equality, one notify per burst on
+  a schedule — the HUD's scene status), `gpu-safety.ts`
   (the safety ladder: levels, raise and decay, the recovery's caps, a
   recovered page's start tile — ADR 0046), `gpu-allocation.ts` (which
   errors are a GPU allocation that failed), `page-lifecycle.ts` (the

@@ -1130,9 +1130,8 @@ before the renderer exists, so the compiles there run as in Chromium.
 
 The HUD's five load stages and their weights are declared once in
 `lib/city/load-stages.ts`; the scene passes a stage on only when its
-value changes (the spawn wait polls every 50 ms, and each report is a
-transition over the whole HUD), and the compile of the scene's own
-objects before the first frame is bounded like a tile's (3 s,
+value changes (the spawn wait polls every 50 ms), and the compile of the
+scene's own objects before the first frame is bounded like a tile's (3 s,
 `withinCompileWait`). The first three are the first frame; the other
 two measure **what the cameras see**, not the whole site: *Umgebung* is
 the tile renderer's own load progress, *Details* the dressings built
@@ -1141,6 +1140,20 @@ in, the pill leaves; later loads (a flight) show a small, late *Umgebung
 lädt* hint instead (`onBusy`). The minimap loads every tile's footprints
 up front (named in the tileset's root extras), so it is complete from the
 start.
+
+Everything the scene reports to the HUD — the stages, the busy flag, a
+failed tile, the stats and the frame rate, the site, the mode, Modell's
+view, the data layers' status, the inquiry, the pose — goes into one
+store of slices (`app/_components/scene-status.ts` over
+`lib/city/slice-store.ts`, plan 074 part D), and each widget reads the
+slice it shows: a report re-renders the loading screen, the pill, the
+counters or Modell's panel, not the whole HUD (`CityWalk` and the
+sidebar render on the HUD's own state alone). A report equal to the
+slice notifies no one (Modell's view or the counters rebuilt with the
+same numbers, a frame rate that rounds the same), and a burst is heard
+once, in the task after it — a report from inside a frame re-renders
+after the frame. create-app.ts's callbacks are unchanged:
+`sceneReports` writes them to the store.
 
 **The boot and the stream time themselves** (`stream-timing.ts`, plan
 069). Every span is counted by its category — `tile:city`, `tile:bvh`,
