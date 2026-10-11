@@ -123,6 +123,7 @@ test("a beat is one line, its parts two spaces apart, older records' too", () =>
     t: 12.34,
     heldMB: 512.4,
     held: "5482a 274MB 120t 339MB 31rt 120p 300u",
+    cpuMB: 141.3,
     rasterMB: 98.2,
     fine: 2,
     coarse: 5,
@@ -135,7 +136,7 @@ test("a beat is one line, its parts two spaces apart, older records' too", () =>
     online: false,
   };
   expect(formatBeat(full)).toBe(
-    "12.3s  f360 30fps  gpu 180MB rast 98MB held 512MB 5482a 274MB 120t 339MB 31rt 120p 300u" +
+    "12.3s  f360 30fps  gpu 180MB rast 98MB held 512MB 5482a 274MB 120t 339MB 31rt 120p 300u cpu 141MB" +
       "  90dc 1200k▲  tiles 3/2 terr 2f/5c  cache 412MB 320-600" +
       "  net 4d 2p 0f offline  pastel walk 2m"
   );
@@ -150,9 +151,9 @@ test("a beat is one line, its parts two spaces apart, older records' too", () =>
 test("the page's frame rate counts only the beats rendered in view; its memory every beat", () => {
   const trail = createTrail(setup);
   // before the first frame: the boot's memory, no frame rate
-  pushBeat(trail, { ...beat(1, 0), frames: 0, heapMB: 120 });
+  pushBeat(trail, { ...beat(1, 0), frames: 0, heapMB: 120, cpuMB: 300 });
   pushBeat(trail, beat(2, 8));
-  pushBeat(trail, { ...beat(3, 50), heldMB: 640, heapMB: 210 });
+  pushBeat(trail, { ...beat(3, 50), heldMB: 640, heapMB: 210, cpuMB: 90 });
   trail.state = "hidden";
   pushBeat(trail, { ...beat(4, 0), heldMB: 900 }); // a paused loop
   trail.state = "running";
@@ -164,6 +165,8 @@ test("the page's frame rate counts only the beats rendered in view; its memory e
     maxGpuMB: 180.4,
     maxHeldMB: 900,
     maxHeapMB: 210,
+    // the boot's peak counts: a phone dies of it before the first frame
+    maxCpuMB: 300,
   });
   // The ring still holds every beat, for the report's last seconds.
   expect(trail.beats).toHaveLength(5);

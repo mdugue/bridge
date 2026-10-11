@@ -397,14 +397,15 @@ visual-variable codebook is in
   flight read as haze ([ADR 0008](./adr/0008-progressive-two-phase-boot.md)).
 - **Rasters at 2048²** `= computed` — `prepare-data.ts` downsamples the 4096² class raster
   NEAREST, one band (`scripts/downsample-raster.ts` `downsampleClassRaster`),
-  to a quarter of the texture memory: for the coarse terrain level on every
-  device, for every level on phones (`MOBILE_RASTER_PX`, chosen by the
-  client per device tier); a 512² one for the minimap.
+  to a quarter of the texture memory: for the fine level on phones
+  (`MOBILE_RASTER_PX`, chosen by the client per device tier); a 1024² one
+  for the coarse terrain level on every device (`COARSE_RASTER_PX`, since
+  2026-10-10 — 2048² before) and a 512² one for the minimap.
   No raster whose alpha is
   data goes through an image resize any more (the painted splat has the
   only such alpha, and it is made on the GPU). Cost: ~1 m instead of ~0.5 m
-  class boundaries — on desktop only on the far terrain, on phones
-  everywhere.
+  class boundaries on a phone's fine level, ~2 m on the far terrain on
+  every device (a pixel or less out there).
 - **Buildings** `❝ taken` — CityJSON LoD2 → **build-time** glTF per tile:
   `scripts/bake-city-mesh.ts` runs cityjson-threejs-loader, and
   its `cityMesh` welds it into one mesh with an
@@ -419,7 +420,10 @@ visual-variable codebook is in
   for the minimap (which draws the bridge decks from each tile's `bridge`
   file too, in the colour of the class they carry — the class raster
   shows the river under them). Demolish = filter the building tree out of the index
-  buffer + rebuild the BVH; BVH picking/collision. `city-layer.ts`. The DOP
+  buffer + rebuild the BVH; BVH picking/collision, each tile's BVH built
+  when a ray first reaches it (`ensureCityBvh`, plan 069,
+  [ADR 0050](./adr/0050-a-building-tiles-bvh-when-a-ray-needs-it.md)), not as it
+  lands. `city-layer.ts`. The DOP
   roof LUT is folded in at bake time.
 - **Small structures from the laser scan** `◎ detected` (plan 034) — what the laser saw
   2–6.5 m above ground and LoD2 does not carry: garden and allotment

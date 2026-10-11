@@ -19,6 +19,8 @@ test("the trail keeps the path and the QA knobs of the URL, nothing else", () =>
   expect(trailUrl("/dresden", "?trail=1&scene=lite")).toBe(
     "/dresden?scene=lite&trail=1"
   );
+  // the timing trace is a QA knob too (stream-timing.ts)
+  expect(trailUrl("/dresden", "?trace=1&ref=mail")).toBe("/dresden?trace=1");
 });
 
 test("an error that comes back every frame is noted once, then counted", () => {

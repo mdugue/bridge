@@ -29,7 +29,7 @@ flowchart TB
   TILES["TilesRenderer group<br/>3D Tiles, one subtree per site tile"]
   SCENE --> WORLD
   WORLD --> TILES
-  TILES --> CITY["buildings (refine ADD)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH"]
+  TILES --> CITY["buildings (refine ADD)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH once a ray needs it"]
   TILES --> TER["terrain, L1 512² grid → L0 TIN (REPLACE)<br/>glTF + 30 m skirt, lowered under stairs<br/>(walls burned into L1 only)<br/>palette-painted splat, receives shadows only"]
   TER --> WAT["water + mist sheets<br/>terrain geometry masked by splat alpha"]
   TER --> STAIR["L0: stairs node, baked with the ground<br/>treads, risers, cheeks per flight"]
@@ -945,7 +945,8 @@ sequenceDiagram
   Note over B: renderer, sun rig, lamp light pool, post stack, tile stream
   B->>S: every tile's footprints (minimap)
   B->>S: spawn tile: buildings glb, a terrain level + class raster, NDVI
-  Note over B: dress: clay + object texture + BVH · splat painted + water · compileAsync
+  Note over B: dress: clay + object texture · splat painted + water · compileAsync
+  Note over B: placed on the spawn ground (its buildings' BVH) · a frame draws the shadow map → light stage, 52 %
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
@@ -957,7 +958,14 @@ sequenceDiagram
 The **first frame** waits on the spawn tile's buildings and *any* of its
 terrain levels (`bootApp` in `create-app.ts`); the player is then placed
 again on the spawn tile's ground, which did not exist when the pose was
-first set. A page that recovers a lost GPU starts on the tile under the
+first set. **The light stage is honest**: the bar reaches its 52 %
+(*Licht und Schatten*, `WALKABLE_PERCENT`) only once a frame at that
+pose has drawn the shadow map — three builds the shadow pass's
+pipelines for its casters inside that frame, synchronously — or two
+frames in a row found none to draw (by night the sun rig asks for none),
+at most 3 s (`firstShadowFrame`). Before, that frame came after the
+stage, with the bar at 52 % and the veil's timer held up behind it: a
+load that looked frozen there. A page that recovers a lost GPU starts on the tile under the
 player's camera instead, its pose set before the stream's first update,
 looking straight down onto that tile until it has landed
 ([ADR 0046](./adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)).
@@ -989,13 +997,29 @@ second phase) and is built one tile at a time. A tile with nothing on
 screen shows at once, bare, and is dressed after; a terrain level that
 takes over from its tile's other level on screen — the fine one replacing
 the coarse one as the view comes closer, or back — is loaded only once
-its dressing is built and compiled too (`handsOver`, at most 10 s), and
+its dressing is built and compiled too (`handsOver`), and
 the dressing hangs on it in the task the renderer records it, before any
 frame. The renderer keeps the old level drawn until the new one is loaded
 (3D Tiles' REPLACE refinement, both ways), so one level's trees, lamps
 and bridges leave in the frame the next level's arrive; the old way, the
 new level showed bare first and its trees came after — a blink of no
-trees at every change of level. **Ready** (`onLoaded`,
+trees at every change of level. **That wait is per tier**
+(`handOverWaitMs`): it holds one of the renderer's parse slots — the
+dressing is awaited inside the parse job — while dressings build one at
+a time for the site, and with 10 s on every tier a phone's two slots
+stood still behind it. A desktop waits up to 1.5 s, so most hand-overs
+still swap the trees in one frame; a phone does not wait at all: the
+fine level shows bare and its trees, lamps and rails arrive once its
+dressing is built — on a phone that blink of no trees is back, the price
+of a stream that keeps moving. A dressing's **ask sets** — what the
+inquiry probe can ask of its trees, monuments, decks, hedges, lamps and
+furniture — are built once it hangs, when the main thread is idle (at
+most 2 s on, `buildAsksWhenIdle`), not inside its build: they place
+every canopy tree a second time for a card nobody may open (0.3 s of a
+dense tile's build in the local trace); a question that comes first
+builds them at once (`asksOf`) — on a saturated page the idle time can be
+minutes in coming (timers and idle callbacks wait behind three's compile
+steps there; plan 069's Findings). **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile
 is dressed, the renderer is idle and no dressing is pending; it also lifts
 the fog clamp. A tile that fails to load for any reason but the network
@@ -1003,6 +1027,25 @@ leaves a hole and one `onError` message; a dressing that fails leaves its
 tile bare — neither takes the scene down. Collision, demolish, autofocus and double-tap work on every
 visible tile; the two ground rays (double-tap travel, autofocus) march the
 terrain's height grid (`lib/city/ground-ray.ts`) — the terrain has no BVH.
+**A building tile gets its BVH when a ray first needs it**, not as it
+lands (`ensureCityBvh` in `city-layer.ts`): the build held a dense tile's
+parse on the main thread (≈75 ms on a desktop, several times that on a
+phone) and allocated six floats per triangle beside the node buffers it
+keeps — on an iPhone, while the boot's other contents were still
+parsing, the page's process ran out with three's GPU count at 257 MB. A
+ray asks only the tiles whose box it reaches, nearest first: the
+collider's rays (collision.ts) and a user's pick, double tap or question
+build each such tile as they reach it — a pick only up to its first hit,
+the probe and the double tap only up to the ground — while the autofocus
+passes over a tile without one; none walks a tile's triangles one by one,
+three-mesh-bvh's fallback on a mesh without a BVH. The tiles within 400 m
+of the camera are built in idle time, one at a time
+(`nearestWithoutBvh`, at the 10 Hz pose tick), so a walk into the next
+tile finds its BVH there. The spawn tile's is built by the placing on its
+ground before the first frame (ADR 0032 needs it there): after its
+terrain has landed, not inside the parse that landed its buildings. The
+collider builds nothing before that placing — the frames before it stand
+over a floor that is not there.
 Whatever moves the camera — walking, flying, a glide on its way, a double
 tap, a snapshot, a GPS fix, a tile landing — it ends up neither below the
 ground nor inside a building: `camera-pose.ts` sets a walker out beside a
@@ -1097,6 +1140,22 @@ same numbers, a frame rate that rounds the same), and a burst is heard
 once, in the task after it — a report from inside a frame re-renders
 after the frame. create-app.ts's callbacks are unchanged:
 `sceneReports` writes them to the store.
+
+**The boot and the stream time themselves** (`stream-timing.ts`, plan
+069). Every span is counted by its category — `tile:city`, `tile:bvh`,
+`tile:rasters`, `tile:compile`, `tile:handover-wait`,
+`dressing:queue-wait`, `dressing:build`, `dressing:compile`,
+`dressing:asks`, the boot's last steps before the light stage
+(`boot:scene-compile`, `boot:place` — the spawn tile's BVH among it —
+and `boot:light-wait`), `boot:frame` (the first 60 frames at the start
+pose), `boot:first-shadow-frame`, `boot:light-to-veil`,
+`boot:veil-to-loaded`. With `?trace=1` each span also lands on the
+browser's own timeline (DevTools' and Web Inspector's *Timings* track)
+with its tile id, the long tasks are counted where the browser reports
+them (Chromium; Safari has none), and the page prints the table once
+loaded and 20 s later (`console.table`). The names are a contract for
+later perf work: add one rather than rename one. None of it reaches the
+crash trail or the reports — a tile's id names where the player was.
 
 ## Verifying a change
 

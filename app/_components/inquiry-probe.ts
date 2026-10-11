@@ -242,10 +242,18 @@ export function createInquiryProbe(deps: {
     ndc: { x: number; y: number } | undefined
   ): PickSample<ProbeHit>[] => {
     const camera = deps.camera();
-    const buildings = cityObjectsAlong(camera, deps.cities(), ndc);
     const reach = Math.max(
       setPickRay(ray, ndc ? new Vector2(ndc.x, ndc.y) : CENTRE, camera),
       FAR
+    );
+    // The ground first: a building tile behind it needs no BVH for this
+    // question (city-layer.ts builds the ones the ray reaches before).
+    const ground = deps.groundAlong(ray, reach);
+    const buildings = cityObjectsAlong(
+      camera,
+      deps.cities(),
+      ndc,
+      ground ?? undefined
     );
     const things = hitsInSets(
       ray.ray.origin,
@@ -266,11 +274,6 @@ export function createInquiryProbe(deps: {
         porous: porous(thing.target),
       })),
     ].sort((a, b) => a.distance - b.distance);
-    const farthest = hits.at(-1)?.distance;
-    if (farthest === undefined) {
-      return [];
-    }
-    const ground = deps.groundAlong(ray, farthest);
     return ground === null ? hits : hits.filter((h) => h.distance <= ground);
   };
 
