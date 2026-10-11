@@ -16,14 +16,14 @@ import type { DeviceTier } from "./scene-profile";
  * not hold the ground of every other tile.
  *
  * That is a phone's (`setRasterTier`). A desktop has the memory and keeps
- * what it always did, so its boot is not held up: five decodes at once (a
- * level decodes its rasters one after another, and the tile renderer
- * parses five tiles at once), each raster uploaded by the compile of the
- * first material that binds it. Through one turn, the spawn tile's ground
- * waited behind every neighbour's; uploaded as they decoded, every
- * neighbour's rasters took the main thread before the spawn tile's
- * compile (7 s of the first 18 under SwiftShader) — the whole-site boot
- * took 40 %, then 15 % longer than before.
+ * what it always did, so its boot is not held up: five decodes at once (the
+ * tile renderer parses five tiles at once, and a level asks for all its
+ * rasters together, terrain-layer.ts `loadTerrainRasters`), each raster
+ * uploaded by the compile of the first material that binds it. Through
+ * one turn, the spawn tile's ground waited behind every neighbour's;
+ * uploaded as they decoded, every neighbour's rasters took the main thread
+ * before the spawn tile's compile (7 s of the first 18 under SwiftShader)
+ * — the whole-site boot took 40 %, then 15 % longer than before.
  */
 const rasterGate = createTaskGate(1);
 let uploadAtDecode = true;
@@ -48,8 +48,8 @@ export function setRasterTier(tier: DeviceTier): void {
  * A raster's PNG bytes, through the viewer's one fetch policy
  * (fetch-optional.ts `fetchBytes`): a blip is retried for the budget of an
  * optional file — every raster is optional to its level, and a level
- * loads its rasters one after another inside its dressing, so a longer
- * budget each would hold it for minutes on a dead network. Rejects on an
+ * waits for all of its rasters inside its dressing, so a longer budget
+ * would hold it that much longer on a dead network. Rejects on an
  * HTTP error, a network give-up and an abort.
  */
 export async function fetchRasterBytes(

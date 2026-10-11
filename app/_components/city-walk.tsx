@@ -62,6 +62,7 @@ import {
 } from "./gpu-recovery";
 import { raiseSafety } from "./gpu-safety";
 import { VEIL_HOLD_MS } from "./handover";
+import { streamTimings } from "./stream-timing";
 import type { CityWalkHandle, CityWalkStats, SiteInfo } from "./create-app";
 import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
@@ -906,7 +907,16 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         // the player can already look around through it.
         setStatus({ phase: "running" });
         // Then the glass is removed, in one frame, with nothing in between.
-        veilTimer = setTimeout(() => setVeilUp(false), VEIL_HOLD_MS);
+        veilTimer = setTimeout(() => {
+          setVeilUp(false);
+          // how late the veil's timer fired after the light stage: what a
+          // busy page shows as a load frozen at 52 % (stream-timing.ts)
+          streamTimings.markOnce("boot:veil-drop");
+          const light = streamTimings.markedAt("boot:light-done");
+          if (light !== undefined) {
+            streamTimings.since("boot:light-to-veil", light);
+          }
+        }, VEIL_HOLD_MS);
         // The dressing (vegetation, lamps, rails, walls) and the terrain BVHs wait until
         // then: each is a long synchronous task, and the frames while the city
         // is arriving — and the first ones the player actually steers — are

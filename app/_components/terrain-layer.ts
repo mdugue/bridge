@@ -148,6 +148,9 @@ export interface TerrainLayer {
   dispose: () => void;
   /** bilinear elevation lookup at projected (not recentered) coordinates */
   heightAt: (x: number, y: number) => number | null;
+  /** what that lookup keeps on the page's process (bytes): a grid's
+   *  elevations, a TIN's vertices and bucket index */
+  heightBytes: number;
   level: 0 | 1;
   mesh: Mesh;
   /** whether the ground is a TIN (its height index reads the mesh's index:
@@ -419,9 +422,10 @@ export interface SplatRasters {
 }
 
 /**
- * Loads a class raster and paints its colour splat: what a tile's two
- * terrain levels share (tile-stream.ts; on a phone both name the 2048²
- * raster). Null when the raster is missing or undecodable.
+ * Loads a class raster and paints its colour splat, held by file
+ * (tile-stream.ts `splats`): the coarse level reads its own 1024² one on
+ * every tier, the fine level the 4096² one, or the 2048² on a phone. Null
+ * when the raster is missing or undecodable.
  */
 export async function loadSplatRasters(
   url: string,
@@ -1155,6 +1159,12 @@ function gridElevations(mesh: Mesh, n: number, toData: Matrix4): Float32Array {
   return out;
 }
 
+/** A level's ground height, and the bytes its lookup keeps on the CPU. */
+interface HeightLookup {
+  heightAt: (x: number, y: number) => number | null;
+  bytes: number;
+}
+
 /**
  * Ground height over a TIN (`extras.tin`, the fine level): its surface
  * triangles indexed in the projected frame (lib/city/terrain-tin.ts
@@ -1166,11 +1176,11 @@ function tinHeightAt(
   bounds: TerrainBounds,
   toData: Matrix4,
   offset: { cx: number; cy: number }
-): (x: number, y: number) => number | null {
+): HeightLookup {
   const position = mesh.geometry.getAttribute("position");
   const index = mesh.geometry.getIndex();
   if (!index) {
-    return () => null;
+    return { heightAt: () => null, bytes: 0 };
   }
   const xy = new Float64Array(position.count * 2);
   const z = new Float32Array(position.count);
@@ -1189,7 +1199,7 @@ function tinHeightAt(
     // triangles have no area in plan and the lookup never picks one.
     triangles: index.array,
   });
-  return (x, y) => tin.heightAt(x, y);
+  return { heightAt: (x, y) => tin.heightAt(x, y), bytes: tin.bytes };
 }
 
 /** A mesh's positions as the numbers they are stored as (quantised, maybe
@@ -1664,9 +1674,12 @@ export async function dressTerrain(
     mesh.geometry.setIndex(grids.index(n, index));
   }
   const elevations = extras.tin ? null : gridElevations(mesh, n, toData);
-  const heightAt = elevations
-    ? (x: number, y: number) =>
-        sampleHeightfield({ elevations, n, bounds }, x, y)
+  const { heightAt, bytes: heightBytes } = elevations
+    ? {
+        heightAt: (x: number, y: number) =>
+          sampleHeightfield({ elevations, n, bounds }, x, y),
+        bytes: elevations.byteLength,
+      }
     : tinHeightAt(mesh, bounds, toData, opts.offset);
 
   const { rasters, detail, free } = await loadTerrainRasters(extras, opts);
@@ -1723,6 +1736,7 @@ export async function dressTerrain(
     minElevation: extras.minElevation,
     water,
     heightAt,
+    heightBytes,
     dispose: () => {
       // Shares the tile's positions; only its own index (and normals) go —
       // not the site's (GridShare), which other tiles draw with.

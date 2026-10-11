@@ -8,7 +8,7 @@ import { createLookState } from "@/lib/city/look-state";
 import {
   BoxGeometry,
   BufferAttribute,
-  type Group,
+  Group,
   Mesh,
   MeshBasicNodeMaterial,
   Object3D,
@@ -21,10 +21,13 @@ import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
 import { markSceneShared } from "./three-utils";
 import {
+  asksOf,
+  buildAsksWhenIdle,
   catchUp,
   DRESSING_PART_NAMES,
   DressingPlugin,
   dressingParts,
+  handOverWaitMs,
   PHONE_STREAM,
   paceStreaming,
   showDataLayers,
@@ -463,6 +466,114 @@ test("a phone streams fewer contents at once, on queues of its own", () => {
   expect(desktop.downloadQueue).toBe(DEFAULT_DOWNLOAD_QUEUE);
   phone.dispose();
   desktop.dispose();
+});
+
+test("a hung dressing's ask sets come in idle time, into the same array; none for a dressing that left", () => {
+  const idle: (() => void)[] = [];
+  const later = (work: () => void) => {
+    idle.push(work);
+    return () => undefined;
+  };
+  const set = {
+    box: {},
+    nearest: () => null,
+  } as unknown as AskSet<FeatureInquiry>;
+  const dressing = (): TileDressing => {
+    const asks: AskSet<FeatureInquiry>[] = [];
+    return { tile: "t", asks, buildAsks: () => asks.push(set) };
+  };
+  const hung = dressing();
+  const asks = hung.asks;
+  buildAsksWhenIdle(hung, () => true, later);
+  expect(hung.asks).toEqual([]);
+  idle.shift()?.();
+  expect(hung.asks).toBe(asks);
+  expect(hung.asks).toEqual([set]);
+  // run once, and its features let go of
+  expect(hung.buildAsks).toBeUndefined();
+  const gone = dressing();
+  buildAsksWhenIdle(gone, () => false, later);
+  idle.shift()?.();
+  expect(gone.asks).toEqual([]);
+  // a dressing with nothing to build waits for nothing
+  buildAsksWhenIdle({ tile: "t" }, () => true, later);
+  expect(idle).toHaveLength(0);
+  // a question before the idle time builds them at once, and only once
+  const early = dressing();
+  buildAsksWhenIdle(early, () => true, later);
+  expect(asksOf(early)).toEqual([set]);
+  expect(asksOf(early)).toEqual([set]);
+  idle.shift()?.();
+  expect(early.asks).toEqual([set]);
+});
+
+test("a dressing whose tile leaves before its idle time never builds its ask sets", () => {
+  // the idle callback whenIdle (main-yield.ts) asks the browser for
+  const idle: (() => void)[] = [];
+  const host = globalThis as { requestIdleCallback?: unknown };
+  const had = "requestIdleCallback" in host;
+  const saved = host.requestIdleCallback;
+  host.requestIdleCallback = (work: () => void) => idle.push(work);
+  try {
+    const stream = {
+      cities: new Set<CityLayer>(),
+      terrains: new Set<TerrainLayer>(),
+      dressings: new Set<TileDressing>(),
+      demolished: new Map<string, Set<number>>(),
+    };
+    const plugin = new DressingPlugin(
+      {
+        dressingGate: new Promise<void>(() => undefined),
+        look: createLookState(),
+        night: () => 0,
+        season: () => 180,
+        onChange: () => undefined,
+      } as unknown as TileStreamContext,
+      stream
+    );
+    const scene = new Object3D();
+    const terrain = {
+      rasters: [],
+      dispose: () => undefined,
+    } as unknown as TerrainLayer;
+    const entry = { terrain };
+    plugin.dressed.set(scene, entry);
+    let built = 0;
+    const dressing: TileDressing = {
+      tile: "t",
+      asks: [],
+      buildAsks: () => {
+        built++;
+      },
+      furniture: new Group(),
+    };
+    // reason: the hang is private; the test hangs a built dressing without
+    // the terrain build a renderer would need
+    const inner = plugin as unknown as {
+      hangDressing: (scene: Object3D, entry: object, d: TileDressing) => void;
+    };
+    inner.hangDressing(scene, entry, dressing);
+    expect(idle).toHaveLength(1);
+    // the renderer unloads the tile before the page is idle
+    plugin.disposeTile({ engineData: { scene } });
+    idle.shift()?.();
+    expect(built).toBe(0);
+    expect(asksOf(dressing)).toEqual([]);
+    expect(built).toBe(0);
+  } finally {
+    if (had) {
+      host.requestIdleCallback = saved;
+    } else {
+      delete host.requestIdleCallback;
+    }
+  }
+});
+
+test("a phone's parse slot never waits on a dressing; a desktop's a little", () => {
+  expect(handOverWaitMs("mobile")).toBe(0);
+  expect(handOverWaitMs("desktop")).toBeGreaterThan(0);
+  // well under the compile's own bound and the old 10 s
+  expect(handOverWaitMs("desktop")).toBeLessThanOrEqual(3000);
 });
 
 test("a level waits for its dressing only where it takes over from its tile's other level", () => {
