@@ -14,10 +14,8 @@ import {
   hash,
   log,
   mix,
-  positionLocal,
   smoothstep,
   step,
-  uniform,
   vec3,
 } from "three/tsl";
 import type { BridgeFeature, TrafficFeature } from "@/lib/city/features";
@@ -35,11 +33,11 @@ import {
   trafficLanes,
 } from "@/lib/city/traffic";
 import { glassColour, glassGrazing } from "./glass";
-import { mapWidenNode } from "./map-overlay";
 import { type DeckPoly, deckLift } from "@/lib/city/decks";
 import { buildDeckTable } from "@/lib/city/rail-mesh";
-import type { F, Live, V3, V4 } from "./shader-chunks";
+import type { F, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
+import { trafficNow, trafficPositionNode, trafficTravel } from "./traffic-flow";
 
 /**
  * The counted motor traffic (pipeline/bake/traffic.py; Landeshauptstadt
@@ -102,25 +100,6 @@ const FOOT_SINK_M = 0.2;
  *  is the hour's (lib/city/traffic-hours.ts `trafficSpeed`). */
 const PULSE_PERIOD_M = 36;
 
-/** How the flows stand at the scene's hour (lib/city/traffic-hours.ts):
- *  the traffic as a multiple of the day's average hour, and how far the
- *  light has run (m) — integrated on the CPU, so a change of speed never
- *  jumps the comets. One pair for every tile's flows. */
-const trafficNow: Live = uniform(1);
-const trafficTravel: Live = uniform(0);
-
-/** The scene's hour moved on: how busy (`factor`, 1 = the day's average
- *  hour) and how far the light has run since the start (m). */
-export function setTrafficClock(factor: number, travel: number): void {
-  trafficNow.value = factor;
-  trafficTravel.value = travel;
-}
-
-/** The body's size against its daily one, with the hour: the root of the
- *  traffic (like its build), from a third at night to half again at the
- *  peak. */
-const GROW = { min: 0.35, max: 1.5 } as const;
-
 /** The colour of a lane carrying `dtv` vehicles a day at the hour's rate
  *  (`TRAFFIC_SCALE`, log-spaced between its stops), and its place on the
  *  scale 0..1. */
@@ -142,29 +121,13 @@ function liveRamp(dtv: F): { load: F; tint: V3 } {
   return { load, tint };
 }
 
-/**
- * Where a body's vertex stands at the hour: each vertex moves along its
- * own offset from the section's line (wider from the air, too — the two
- * directions of a street stay apart) and its own height over the feet.
- * The flows' material draws with it, and so does the asked section's
- * outline (selection-outline.ts), so the line follows the body as drawn.
- */
-export function trafficPositionNode(): V3 {
-  const lane = attribute("trafficLane", "vec4") as V4;
-  const across = attribute("trafficAcross", "vec3") as V3;
-  const grow = trafficNow.sqrt().clamp(GROW.min, GROW.max);
-  return positionLocal
-    .add(across.mul(mapWidenNode().mul(grow).sub(1)))
-    .add(vec3(0, lane.z.mul(grow.sub(1)), 0));
-}
-
 function trafficMaterial(): MeshBasicNodeMaterial {
   return sceneMaterial("traffic-glass", () => {
     const m = new MeshBasicNodeMaterial({
       transparent: true,
       depthWrite: false,
     });
-    // Packed (`TRAFFIC_ATTRIBUTES`): WebGPU draws from at most eight
+    // Packed (traffic-flow.ts `TRAFFIC_ATTRIBUTES`): WebGPU draws from at most eight
     // vertex buffers, and every attribute is one.
     const lane = attribute("trafficLane", "vec4") as V4;
     const count = attribute("trafficCount", "vec3") as V3;
@@ -213,25 +176,6 @@ function trafficMaterial(): MeshBasicNodeMaterial {
     return m;
   });
 }
-
-/**
- * The bodies' vertex attributes beside `position` and `normal`, packed:
- * WebGPU's default limit is eight vertex buffers a draw (three asks for
- * no more), and each attribute is one — ten single floats drew nothing
- * on a real GPU while WebGL2 (sixteen) drew them. Kept at or under six.
- *
- * - `trafficAcross` (vec3): the vertex's offset from the section's line
- *   in the world frame (it widens about the line)
- * - `trafficLane` (vec4): metres along the lane, the profile's rise 0..1,
- *   metres over the feet, 1 where the lane flows
- * - `trafficCount` (vec3): the daily load 0..1 on the colour scale, the
- *   vehicles per day, the heavy share
- */
-export const TRAFFIC_ATTRIBUTES = [
-  "trafficAcross",
-  "trafficLane",
-  "trafficCount",
-] as const;
 
 interface Body {
   across: number[];
@@ -392,7 +336,7 @@ export function buildTraffic(
   geo.computeVertexNormals();
   geo.computeBoundingSphere();
   // From the air the bodies widen up to MAP_WIDEN.max ×, and at the peak
-  // they grow by GROW.max: the sphere must hold them then too, or a
+  // they grow by GROW.max (traffic-flow.ts): the sphere must hold them then too, or a
   // street at the frame's edge culls out.
   if (geo.boundingSphere) {
     geo.boundingSphere.radius += 20;

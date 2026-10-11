@@ -17,9 +17,12 @@ import type { AskSet } from "@/lib/city/ask-solids";
 import type { TrafficFeature } from "@/lib/city/features";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import type { CityLayer } from "./city-layer";
+import type { TrafficBuilder } from "./data-layers-feature";
 import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
 import { markSceneShared } from "./three-utils";
+import { trafficAskSet } from "./traffic-ask";
+import { buildTraffic } from "./traffic-layer";
 import {
   asksOf,
   buildAsksWhenIdle,
@@ -422,7 +425,10 @@ function abortableLoad() {
   return { freed, plugin, scene };
 }
 
-const nextTask = () => new Promise((resolve) => setTimeout(resolve, 1));
+/** A task, long enough for the code under test's own next task: a traffic
+ *  slot sets its timer only after its builder's load has resolved, past
+ *  the microtasks of the call that showed it. */
+const nextTask = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 test("a load the renderer aborts after its compile is freed: it frees only the textures", async () => {
   const { freed, plugin, scene } = abortableLoad();
@@ -598,11 +604,17 @@ test("a level waits for its dressing only where it takes over from its tile's ot
   expect(takesOver(fine, [{ ...coarse, level: 0 }])).toBe(false);
 });
 
+/** The data layers' traffic builder as the slot waits for it, there at
+ *  once. */
+const builder: TrafficBuilder = { build: buildTraffic, askSet: trafficAskSet };
+const loaded = () => Promise.resolve(builder);
+
 /** A tile's counted traffic as a slot: one two-way street, its dressing's
  *  ask list, and a host whose compiles the test holds and counts. */
 function trafficTile(
   opts: {
     gone?: () => boolean;
+    load?: () => Promise<TrafficBuilder | null>;
     turn?: TrafficHost["turn"];
   } = {}
 ) {
@@ -618,6 +630,7 @@ function trafficTile(
   };
   const asks: AskSet<FeatureInquiry>[] = [];
   const slot = trafficSlot({
+    load: opts.load ?? loaded,
     features: [street],
     bridges: [],
     ground: { offset: { cx: 0, cy: 0 }, heightAt: () => 110 },
@@ -811,4 +824,78 @@ test("a dressing freed before its traffic's turn builds nothing", async () => {
   await showing;
   expect(slot.group).toBeNull();
   expect(compiled).toHaveLength(0);
+});
+
+/** The builder on its way (the data layers starting): it arrives when the
+ *  test says. */
+function builderOnItsWay() {
+  let arrive = (): void => undefined;
+  const coming = new Promise<TrafficBuilder>((resolve) => {
+    arrive = () => resolve(builder);
+  });
+  return { arrive: () => arrive(), load: () => coming };
+}
+
+test("tiles hung before the builder arrives get their bodies when it does, and later tiles too", async () => {
+  const { arrive, load } = builderOnItsWay();
+  const early = trafficTile({ load });
+  early.slot.attach(early.host);
+  const showing = early.slot.show();
+  await nextTask();
+  // nothing built while the builder is on its way
+  expect(early.compiled).toHaveLength(0);
+  expect(early.slot.group).toBeNull();
+  arrive();
+  await nextTask();
+  expect(early.compiled).toHaveLength(1);
+  early.finish();
+  await showing;
+  expect(early.slot.group?.visible).toBe(true);
+  // a tile that lands once it has come builds at once
+  const late = trafficTile({ load });
+  late.slot.attach(late.host);
+  const lateShowing = late.slot.show();
+  await nextTask();
+  expect(late.compiled).toHaveLength(1);
+  late.finish();
+  await lateShowing;
+  expect(late.slot.group?.visible).toBe(true);
+});
+
+test("a builder that did not come builds nothing and is asked for on the next switch-on", async () => {
+  let fails = true;
+  // (the host's `failed` throws: a builder that did not come is no failed
+  // build of this tile, and must not be reported as one)
+  const { compiled, finish, host, slot } = trafficTile({
+    load: () => (fails ? Promise.reject(new Error("start")) : loaded()),
+  });
+  slot.attach(host);
+  await slot.show();
+  expect(compiled).toHaveLength(0);
+  expect(slot.group).toBeNull();
+  fails = false;
+  const again = slot.show();
+  await nextTask();
+  expect(compiled).toHaveLength(1);
+  finish();
+  await again;
+  expect(slot.group?.visible).toBe(true);
+});
+
+test("a layer switched off while its builder comes builds nothing until it is on again", async () => {
+  const { arrive, load } = builderOnItsWay();
+  const { compiled, finish, host, slot } = trafficTile({ load });
+  slot.attach(host);
+  const showing = slot.show();
+  slot.hide();
+  arrive();
+  await showing;
+  expect(compiled).toHaveLength(0);
+  expect(slot.group).toBeNull();
+  const again = slot.show();
+  await nextTask();
+  expect(compiled).toHaveLength(1);
+  finish();
+  await again;
+  expect(slot.group?.visible).toBe(true);
 });
