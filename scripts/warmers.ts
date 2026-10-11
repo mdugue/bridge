@@ -95,9 +95,12 @@ export const PROCESS_PEAK = 1.6e9;
 /**
  * A whole site in one process, as every site is baked without the warmers:
  * counted at 3 GB whichever site it is — the largest peaks higher (a cold
- * Dresden 4.3–5.7 GiB), the others near 1 GB — so a 4-core, 8 GB builder
- * bakes two sites at once, the rule the builds kept before the warmers
- * (`floor(memory / 3 GB)`), measured there at 235 s cold.
+ * Dresden 4.3–5.7 GiB), the others near 1 GB — so Vercel's 4-core, 8.6 GB
+ * builder bakes two sites at once (main's build there: 235 s cold) and
+ * CI's 4-core, 16.8 GB runner four, as before the warmers. Before them the
+ * count was `floor(memory / 3 GB)` of all the memory; against
+ * `MEMORY_SHARE` of it, a machine of 6–7.5, 9–11.25 or 12–15 GB bakes one
+ * site fewer at once.
  */
 export const SITE_PEAK = 3e9;
 /** The share of the machine's memory the bakes may hold together. */

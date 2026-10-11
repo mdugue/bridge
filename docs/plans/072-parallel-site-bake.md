@@ -33,7 +33,9 @@
   schedule costs main's CPU (Grimma 28.6/28.7 s, Hamburg 59.7/60.1 s of
   user time; main/branch). So the default is main's schedule again (one
   process per site, counted at 3 GB, largest first — two at once on that
-  builder); on by default: atomic cache entries (two sites already baked
+  builder, four on CI's 16.8 GB runner; against 80 % of the memory where
+  main counted all of it, so one fewer on a 12–15 GB box); on by default:
+  atomic cache entries (two sites already baked
   side by side into one cache), each tile's fine ground as its own entry,
   the timing lines. The local numbers below came from a box shared with
   other agents' e2e runs.
