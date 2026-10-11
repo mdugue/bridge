@@ -846,7 +846,10 @@ recovered page sets its pose before the stream's first update (its start
 tile is the one under the camera, `startTileOf`), **looking straight
 down** onto that tile — a pose that looks at the sky or out past the
 site's edge from the air sees no tile, and by night, on a phone or
-from level 2 no shadow camera streams one, so nothing would load — and
+from level 2 no shadow camera streams one, so nothing would load; and it
+stands no higher above the tile's top than half the boot's stream reach
+(`bootingPose`), past which the tile lies beyond the stream camera's far
+plane — and
 puts the player's own aim back once the tile has landed; its first frame waits for that
 tile, or for any shown tile once the renderer is idle without it. From
 level 2 it puts back neither the picture style nor Modell. A page lost

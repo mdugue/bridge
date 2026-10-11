@@ -137,7 +137,11 @@ its limit) — and the first frame waits for that tile, or for any shown
 tile once the renderer is idle without it. A pose that looks at the sky,
 or out past the site's edge, from the air sees no tile: nothing would be
 requested, and by night, on a phone or from level 2 no shadow camera
-streams one, so the boot would wait for ever, every reload of the tab replaying it. The
+streams one, so the boot would wait for ever, every reload of the tab replaying it.
+For the same reason it stands no higher above the tile's top than half
+the boot's stream reach (`bootingPose`; a phone's ends at 2.2 km since
+plan 071): from higher the tile lies past the stream camera's far
+plane. The
 player's own aim goes back once the tile has landed, and the HUD applies
 the whole camera after the first frame. A page lost before its first
 frame keeps the snapshot it booted with for the next load (it has no

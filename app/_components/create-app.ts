@@ -1674,7 +1674,9 @@ async function bootApp(
     { picked, restored },
     spawnView,
     tileTopsOf(tileset)[extras.tiles.indexOf(spawn)],
-    offset
+    offset,
+    // the boot's stream far (`syncStreamCamera`), at the least
+    streamFarFor(fogRangeFor(fogAmount).far, camera.far, budget.tier)
   );
   const placeStart = (boot = false) => {
     const camera = boot ? "camera" in booting && booting.camera : restored;
