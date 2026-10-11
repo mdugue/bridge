@@ -19,6 +19,7 @@ import { fogRangeFor, streamFarFor } from "@/lib/city/atmosphere";
 import { utmToLatLng } from "@/lib/city/crs";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
 import { createBootPhases } from "@/lib/city/boot-phases";
+import { createCoalescer } from "@/lib/city/coalesce";
 import {
   createMemoryGovernor,
   memoryFloorFor,
@@ -1154,18 +1155,11 @@ async function bootApp(
   // One pass for every change of a task: an update of the tile renderer
   // reports each tile that came into or left view on its own, and each
   // report walked the lamps, the ground's sources and the styles' gathering
-  // again and redrew the shadow map.
-  let changeQueued = false;
-  const queueChange = () => {
-    if (changeQueued) {
-      return;
-    }
-    changeQueued = true;
-    queueMicrotask(() => {
-      changeQueued = false;
-      onChange();
-    });
-  };
+  // again and redrew the shadow map. The frame flushes it right after the
+  // update (`frame`), so what the update showed renders with its shadows
+  // and lamps in that same frame, not one late.
+  const streamChange = createCoalescer(() => onChange());
+  const queueChange = streamChange.queue;
   // Shader compiles go through the post stack (it knows the target the
   // scene renders into). It is created a few lines below, before the render
   // loop runs the stream's first update, so no tile lands without it.
@@ -2661,6 +2655,9 @@ async function bootApp(
     view.updateMatrixWorld();
     syncStreamCamera();
     stream.tiles.update();
+    // what the update brought into view or took out, before this frame
+    // draws it (the shadow map, the lamp pool, the styles' gathering)
+    streamChange.flush();
     // Advance every tile's water ripple and glitter (its sky tint is the
     // fog colour's node, in lockstep with the sun by construction).
     for (const t of terrains) {
