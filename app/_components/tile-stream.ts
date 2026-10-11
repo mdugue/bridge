@@ -1164,10 +1164,12 @@ export class DressingPlugin {
     (url, signal) => loadHorizonTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
-  /** the class rasters (and their painted splats), NDVI and sports grounds
-   *  a tile's two terrain levels share — on a phone both levels name the
-   *  same class and NDVI files, ~30 MB of GPU memory per tile loaded twice
-   *  (the sports grounds only the fine level reads there) */
+  /** the class rasters (and their painted splats), NDVI and sports grounds,
+   *  held by file: what a tile's two terrain levels name alike is loaded
+   *  once — the NDVI on every tier; the class raster no longer, since the
+   *  coarse level reads its own 1024² one (lib/city/tile.ts
+   *  COARSE_RASTER_PX); the sports grounds only a desktop's fine level
+   *  reads */
   readonly splats: SharedRasters<SplatRasters> = createSharedRasters(
     (url, signal) => loadSplatRasters(url, this.ctx.renderer, signal),
     freeSplatRasters
