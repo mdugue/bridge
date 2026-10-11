@@ -385,7 +385,7 @@ config change.
   burned in), written by `tile-glb.ts` (meshopt, quantised,
   `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
   `pipeline.ts` (fetch/bake runner), `site-report.ts` (`bun run site`),
-  `downsample-raster.ts` (the 2048² and 512² class rasters),
+  `downsample-raster.ts` (the 2048², 1024² and 512² class rasters),
   `coarse-crowns.ts` (a tile's coarse crowns from its tree files),
   `bake-wissen-hero.ts`
   (the site's land-cover map, `site-map.webp`),
@@ -540,8 +540,9 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   added before a new bake step (or a step run on some tiles only) ships
   quietly poorer. After merging a new step, or adding a tile, bake it on
   every tile the test names; a step that finds nothing writes an empty file.
-- `prepare-data.ts` downsamples the class raster to 2048² (phones, the
-  coarse terrain) and 512² (the minimap) with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
+- `prepare-data.ts` downsamples the class raster to 2048² (a phone's fine
+  terrain), 1024² (the coarse terrain, every tier) and 512² (the minimap)
+  with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
   through an image resize any more (sharp premultiplies alpha — that once
   painted the ground black). Nor through the browser's image decoder: the
   class and NDVI PNGs are inflated byte-exact by `lib/city/png-raster.ts`

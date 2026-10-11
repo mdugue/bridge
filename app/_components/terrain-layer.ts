@@ -418,9 +418,10 @@ export interface SplatRasters {
 }
 
 /**
- * Loads a class raster and paints its colour splat: what a tile's two
- * terrain levels share (tile-stream.ts; on a phone both name the 2048²
- * raster). Null when the raster is missing or undecodable.
+ * Loads a class raster and paints its colour splat, held by file
+ * (tile-stream.ts `splats`): the coarse level reads its own 1024² one on
+ * every tier, the fine level the 4096² one, or the 2048² on a phone. Null
+ * when the raster is missing or undecodable.
  */
 export async function loadSplatRasters(
   url: string,
