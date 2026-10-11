@@ -5,8 +5,8 @@ import { clamp01 } from "./math";
  *
  * The default clay material paints every building the same flat colour, so a
  * dense old-town block reads as one uniform mass. This derives a *stable* tint
- * per building and the clay shader blends it into the base colour (strength is a
- * live HUD slider — see `uTint` in visual-style). Two signals drive it:
+ * per building and the clay shader blends it into the base colour (at a fixed
+ * strength — `TINT` in visual-style). Two signals drive it:
  *
  *  1. A deterministic hash of the building id — the primary source of variation.
  *     86 % of the buildings carry the unspecified `function` code `31001_9998`,
