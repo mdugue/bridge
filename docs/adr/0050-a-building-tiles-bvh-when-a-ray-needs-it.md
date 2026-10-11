@@ -1,6 +1,6 @@
 # ADR 0050: A building tile's BVH is built when a ray first needs it, and no ray walks a tile without one
 
-- **Status:** accepted
+- **Status:** accepted; its worker alternative re-tried 2026-10-11 for the spawn tile ([plan 043](../plans/043-city-bvh-off-the-main-thread.md)'s findings): Turbopack does bundle the worker, but one importing three costs the scene's chunk its scope ([ADR 0051](./0051-optional-features-start-on-first-use-in-the-scene-chunk.md), +20.8 KB gz), and mobile-emulated it brought the first frame no earlier; the choice is open
 - **Date:** 2026-10-10
 
 ## Context
