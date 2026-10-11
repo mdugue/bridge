@@ -20,6 +20,7 @@ import type { LampFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
 import type { Pt } from "./rail-layer";
+import type { DeviceTier } from "./scene-profile";
 import type { F, Live } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
@@ -44,11 +45,33 @@ const GLOW_OPACITY = 0.55;
 /** Ground light-pool radius (m) + peak opacity. */
 const POOL_R = 6;
 const POOL_OPACITY = 0.5;
-/** Fixed pool of real point lights: allocated ONCE so NUM_POINT_LIGHTS never
- * changes (a count change recompiles every lit material — a visible hitch). */
-const MAX_REAL_LAMPS = 3;
-/** Real-light reach: bright within NEAR, faded to 0 by FAR so the nearest-N
- * hand-off (as the player walks) happens while a light is already dim — no pop. */
+/**
+ * A device tier's real lamp lights: how many (`lights`), and the band (m)
+ * over which the last of them hands over to the next head (`handOverM`,
+ * 0: none). The pool is allocated ONCE, before the first frame, so the
+ * light count never changes (three hashes every light into every lit node
+ * build: a count change rebuilds every lit material — a visible hitch).
+ */
+export interface LampLightBudget {
+  handOverM: number;
+  lights: number;
+}
+
+/**
+ * Real lamp lights per device tier. Every lit fragment shades each of them,
+ * by day too (at intensity 0), so a phone lights only the nearest head.
+ * Three hand over at the third-nearest head, which the distance falloff has
+ * mostly dimmed; a lone light hands over at the nearest — on the bisector
+ * between two lamps, ~15 m from each at street spacing, where the falloff
+ * is still ~1 — so it fades through zero across the hand-off instead of
+ * jumping from one lamp to the next at full strength.
+ */
+export const LAMP_LIGHTS: Readonly<Record<DeviceTier, LampLightBudget>> = {
+  desktop: { lights: 3, handOverM: 0 },
+  mobile: { lights: 1, handOverM: 6 },
+};
+/** Real-light reach: bright within NEAR, faded to 0 by FAR, so a hand-off
+ * at a far head (the third of three) happens while its light is dim. */
 const LIGHT_NEAR = 14;
 const LIGHT_FAR = 42;
 const LIGHT_BASE = 14;
@@ -411,45 +434,38 @@ export function buildLamps(
   };
 }
 
-// Pre-allocated scratch for nearestThree; read synchronously within the same
-// frame by updateNearest, so a shared mutable buffer is safe and allocation-free.
-const nearIdx = [-1, -1, -1];
-const nearDist = [
-  Number.POSITIVE_INFINITY,
-  Number.POSITIVE_INFINITY,
-  Number.POSITIVE_INFINITY,
-];
-
-/** Picks the indices of the up-to-three heads nearest the camera (one pass). */
-function nearestThree(heads: Vector3[], camPos: Vector3): number[] {
-  const idx = nearIdx;
-  const dist = nearDist;
-  idx[0] = -1;
-  idx[1] = -1;
-  idx[2] = -1;
-  dist[0] = Number.POSITIVE_INFINITY;
-  dist[1] = Number.POSITIVE_INFINITY;
-  dist[2] = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < heads.length; i++) {
-    const d = heads[i].distanceToSquared(camPos);
-    if (d < dist[0]) {
-      dist[2] = dist[1];
-      idx[2] = idx[1];
-      dist[1] = dist[0];
-      idx[1] = idx[0];
-      dist[0] = d;
-      idx[0] = i;
-    } else if (d < dist[1]) {
-      dist[2] = dist[1];
-      idx[2] = idx[1];
-      dist[1] = d;
-      idx[1] = i;
-    } else if (d < dist[2]) {
-      dist[2] = d;
-      idx[2] = i;
-    }
+/**
+ * Fills `idx` with the indices of the `idx.length` heads nearest `from`,
+ * nearest first, and `dist` with their squared distances (−1 and +∞ past
+ * the last head). One pass, no allocation; of two heads at the same
+ * distance the earlier keeps the nearer slot.
+ */
+function nearestHeads(
+  heads: readonly Vector3[],
+  from: Vector3,
+  idx: number[],
+  dist: number[]
+): void {
+  const n = idx.length;
+  idx.fill(-1);
+  dist.fill(Number.POSITIVE_INFINITY);
+  if (n === 0) {
+    return;
   }
-  return idx;
+  for (let i = 0; i < heads.length; i++) {
+    const d = heads[i].distanceToSquared(from);
+    if (!(d < dist[n - 1])) {
+      continue;
+    }
+    let s = n - 1;
+    while (s > 0 && d < dist[s - 1]) {
+      idx[s] = idx[s - 1];
+      dist[s] = dist[s - 1];
+      s--;
+    }
+    idx[s] = i;
+    dist[s] = d;
+  }
 }
 
 /** smoothstep(edge0, edge1, x) → 1 near edge0, 0 by edge1 (clamped). */
@@ -461,22 +477,41 @@ function falloff(d: number): number {
   return 1 - t * t * (3 - 2 * t);
 }
 
+/** 0 where the next head is as near as the light's own (squared distances
+ *  `near`, `next`), 1 once it is `band` m farther (smoothstep); 1 without a
+ *  band or a next head. */
+function handOver(near: number, next: number, band: number): number {
+  if (band <= 0) {
+    return 1;
+  }
+  const lead = Math.sqrt(next) - Math.sqrt(near);
+  const t = Math.min(Math.max(lead / band, 0), 1);
+  return t * t * (3 - 2 * t);
+}
+
 /**
- * A small fixed pool of real point lights shared by ALL tiles' lamps. Allocated
- * ONCE before the first frame (so `NUM_POINT_LIGHTS` is constant — no
- * recompile churn), never added or removed; at midday, and until the first
- * tile's lamps have streamed in (`setHeads`), they simply sit at intensity 0.
- * Each frame they jump to the nearest lamp heads with a distance falloff so
- * the hand-off is invisible.
+ * The pool of real point lights shared by ALL tiles' lamps, `budget.lights`
+ * of them (`LAMP_LIGHTS`, per device tier). Allocated ONCE before the first
+ * frame (so the light count is constant — no rebuild churn), never added
+ * or removed; at midday, and until the first tile's lamps have streamed in
+ * (`setHeads`), they simply sit at intensity 0. Each frame they jump to the
+ * nearest lamp heads with a distance falloff, the last of them faded over
+ * its hand-off band (`budget.handOverM`), so the hand-off is not seen.
  */
-export function createLampLights(initialHeads: Vector3[] = []): LampLights {
-  let heads = initialHeads;
+export function createLampLights(budget: LampLightBudget): LampLights {
+  let heads: Vector3[] = [];
   const lights: PointLight[] = [];
-  for (let i = 0; i < MAX_REAL_LAMPS; i++) {
-    const light = new PointLight(0xff_d0_89, 0, LIGHT_RANGE, 2);
+  for (let i = 0; i < budget.lights; i++) {
+    const light = new PointLight(LAMP_LIGHT, 0, LIGHT_RANGE, 2);
     light.castShadow = false;
     lights.push(light);
   }
+  // The nearest heads, one more than the lights where the last one hands
+  // over (its lead over the next decides its fade); read within the frame.
+  const ranked = budget.lights + (budget.handOverM > 0 ? 1 : 0);
+  const idx = Array.from({ length: ranked }, () => -1);
+  const dist = Array.from({ length: ranked }, () => Number.POSITIVE_INFINITY);
+  const last = lights.length - 1;
   let nightFactor = 0;
 
   return {
@@ -494,16 +529,17 @@ export function createLampLights(initialHeads: Vector3[] = []): LampLights {
         }
         return;
       }
-      const idx = nearestThree(heads, camPos);
+      nearestHeads(heads, camPos, idx, dist);
       for (let s = 0; s < lights.length; s++) {
-        const head = idx[s] >= 0 ? heads[idx[s]] : null;
-        if (!head) {
+        if (idx[s] < 0) {
           lights[s].intensity = 0;
           continue;
         }
-        lights[s].position.copy(head);
+        const fade =
+          s === last ? handOver(dist[s], dist[s + 1], budget.handOverM) : 1;
+        lights[s].position.copy(heads[idx[s]]);
         lights[s].intensity =
-          nightFactor * LIGHT_BASE * falloff(head.distanceTo(camPos));
+          nightFactor * LIGHT_BASE * falloff(Math.sqrt(dist[s])) * fade;
       }
     },
     dispose: () => {

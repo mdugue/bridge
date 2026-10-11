@@ -172,7 +172,8 @@ bun dev        # bakes public/data, then serves https://localhost:3000 (self-sig
 - [ ] The three always-present lamp `PointLight`s cost fill rate by day
   (intensity 0, still shaded): time the scene pass with and without them
   (`app/_components/lamp-layer.ts`); if it matters, note it for a
-  uniform-gated lighting term.
+  uniform-gated lighting term. (A phone builds one since 2026-10-11,
+  `LAMP_LIGHTS`; the desktop's three are the ones to time.)
 - [ ] Shadow-pass pipelines for new casters still build in a frame, and the
   WebGL2 backend compiles synchronously (ADR 0027): count the hitches on a
   fly-over on each backend.

@@ -132,7 +132,7 @@ import { raiseSafety } from "./gpu-safety";
 import { pageLeaving } from "./net-gate";
 import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
-import { createLampLights } from "./lamp-layer";
+import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
@@ -1169,8 +1169,9 @@ async function bootApp(
   });
   // Single fixed pool of real point lights for the nearest lamps across ALL
   // tiles, built before the first render so the light count is part of
-  // every lit node build once (ADR 0020); each tile's lamps retarget it.
-  const lampLights = createLampLights();
+  // every lit node build once (ADR 0020): three on a desktop, one on a
+  // phone (`LAMP_LIGHTS`); each tile's lamps retarget it.
+  const lampLights = createLampLights(LAMP_LIGHTS[budget.tier]);
   for (const light of lampLights.lights) {
     scene.add(light);
   }
