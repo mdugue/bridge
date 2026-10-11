@@ -275,3 +275,104 @@ Options for the maintainer (each a design decision):
    on a phone, against the memory budget this plan exists to protect.
 3. **Wait for Turbopack worker bundling** (or a Next upgrade that has it),
    then apply the patch as is.
+
+## Findings (2026-10-11, the spawn tile only, after plan 069): bundled, then stopped at the chunk
+
+Re-tried for the one build that still sits on the boot's path since plan
+069 made the BVH lazy (ADR 0050): the spawn tile's, which `placeStart`
+built synchronously (`boot:place`). Branch `claude/spawn-bvh-worker`
+(based on `main` at 7cf7d2f, pushed, no PR): `city-bvh.worker.ts` +
+`city-bvh-job.ts` (the job) + `city-bvh.ts` (the client), the spawn tile
+lent to the worker once its content's compile has uploaded it
+(`TileStream.cityUploaded`) and the worker has loaded, after the tile's
+ground has landed (as ADR 0050 placed the build), awaited in `boot:place`
+(`boot:bvh-wait`, `tile:bvh-worker`), every failure falling back to the
+synchronous build.
+
+- **The bundling STOP above was wrong — Turbopack bundles the worker.**
+  `new Worker(new URL("./city-bvh.worker.ts", import.meta.url), { type:
+  "module" })` compiles to Turbopack's worker bootstrap
+  (`turbopack-worker-<hash>.js`, 849 B) loading the worker's module
+  chunks with `importScripts` (its entry 1.1 KB, a runtime 10.9 KB, and
+  the chunk with three's core and three-mesh-bvh). It *also* still copies
+  the source to `/_next/static/media/city-bvh.worker.<hash>.ts`, behind a
+  module that only exports that URL — the asset the 2026-10-03 attempt
+  took for the worker. Nothing loads it. In every traced branch run the
+  worker built the BVH (`tile:bvh-worker`, no `tile:bvh` before
+  `boot:placed`).
+- **Quantisation is handled.** The job carries the positions as GLTFLoader
+  gives them — int16, `normalized`, interleaved at a stride of four (the
+  glTF's byteStride of 8) — and the worker rebuilds exactly that attribute.
+  three-mesh-bvh's `GenerateMeshBVHWorker` would throw on the interleaved
+  attribute (and reads any position array as plain, non-normalized
+  numbers). `city-bvh.test.ts`: the same nodes byte for byte, the same
+  sorted index and 64 rays hitting the same faces as `computeBoundsTree()`
+  on that layout; dropping `normalized` in the job fails it. The arrays are
+  transferred, not copied, so while they are away `ensureCityBvh`, the
+  demolish (deferred until they are back) and `nearestWithoutBvh` keep off
+  the tile; bounds are taken before the loan; a worker that never loads is
+  never lent anything, one that dies with the arrays leaves the tile
+  without a BVH rather than with one over empty arrays.
+- **STOP: the chunk (ADR 0051).** The worker imports `three` (its core)
+  and three-mesh-bvh, which the scene imports too: both left the scene
+  chunk's scope for a chunk the two groups share. Measured as ADR 0051's
+  protocol (POC production builds, headless Chromium at
+  `/dresden?scene=lite` 800×600, every `/_next/static/*.js` until
+  `__poc.ready`, `gzip -9` from each build's `.next/static`):
+
+  | build | first-load JS, gz | raw | the scene's chunk(s), gz | `(0,X.fn)(…)` calls in the scene chunk | the worker's own chunks, gz |
+  |---|---|---|---|---|---|
+  | main (7cf7d2f) | **904 985** | 2 803 803 | 493 512 | 193 | – |
+  | branch | **925 796** (+20 811) | 2 890 201 | 410 518 + 103 736 shared | 401 | 5 436 (+ the shared chunk, a cache hit) |
+
+  Smaller than ADR 0051's 33 KB because only three's core and the BVH are
+  shared, not `three/webgpu` and `three/tsl`.
+- **And it did not bring the first frame forward here.** Mobile-emulated
+  as plan 069's Findings (Playwright `devices['iPhone 13']`, headless
+  Chromium, SwiftShader, the WebGL2 backend, `/dresden?scene=lite&trace=1`,
+  a cold profile per run), alternating, load 16–23 on four cores from
+  other agents' builds — **directional only**:
+
+  | run | first frame s | ready s | `boot:place` s | of it waiting (`boot:bvh-wait`) | `boot:scene-compile` s | the BVH's build s (`tile:bvh` / `tile:bvh-worker`) | `boot:placed` at s | `boot:light-wait` s | long tasks to first frame: n / total s / max s |
+  |---|---|---|---|---|---|---|---|---|---|
+  | branch 1 | 62.7 | 297.4 | 10.36 | 10.36 | 0.02 | 10.37 (worker) | 42.4 | 3.72 | 54 / 59.0 / 7.27 |
+  | main 1 | 39.3 | 247.5 | 3.09 | – | 0.02 | 3.09 | 25.7 | 0.00 | 54 / 33.3 / 5.36 |
+  | branch 2 | 71.9 | 270.0 | 4.15 | 4.15 | 7.16 | 11.20 (worker) | 51.7 | 3.05 | 72 / 67.5 / 8.08 |
+  | main 2 | 52.6 | 268.0 | 3.46 | – | 0.04 | 3.46 | 33.1 | 0.00 | 52 / 46.1 / 6.87 |
+
+  `boot:place` itself shrank only where the scene's compile ran beside
+  the worker (branch 2: 4.2 s of an 11.2 s build); in three runs of four
+  the lite boot had nothing left to do on the main thread once its ground
+  had landed (`boot:scene-compile` 0.02–0.04 s), so the wait is the whole
+  build. And the build took three times as long in the worker (10.4 / 11.2
+  s against 3.1 / 3.5 s): the frames behind the veil keep rendering while
+  the boot waits, and under SwiftShader they rasterise on the CPU beside
+  it; the first shadow frame after the placing then hit the light stage's
+  3 s bound. The branch also reached the landed spawn tile 9–11 s later
+  (the worker's own chunks loading and evaluating at the start, or the
+  load) — the first frame came 19–23 s later in both pairs. A real phone
+  draws on its GPU, so the worker's build there should be about the main
+  thread's; but the first frame can only come earlier where the boot has
+  main-thread work to put beside it, and after the ground has landed the
+  lite boot has almost none.
+
+Options for the maintainer (each a decision; none built):
+
+1. **Leave it** (main as it is): the spawn tile's BVH in `boot:place`.
+2. **Accept the chunk**: +20.8 KB gz on the first load, for a build off
+   the main thread that these numbers do not show paying back.
+3. **A worker bundle of our own** (the first option above): `Bun.build`
+   the worker into `public/`, its name handed to the client — no
+   first-load tax, a separate fetch of its own (≤ the 104 KB gz of the
+   shared chunk, three's core tree-shaken to what the BVH needs).
+4. **A worker without three**: `buildPackedTree` (three-mesh-bvh's
+   `core/build/buildTree.js`) imports nothing from three, but its callers
+   do (`MeshBVH.js`, `core/build/geometryUtils.js`): the worker would
+   reimplement `getRootRanges` and `computePrimitiveBounds` (with the
+   normalized getters' rounding) against three-mesh-bvh's internals, and
+   the small build modules would still be shared — unmeasured.
+5. **Start it earlier**, at the city's upload, beside the terrain's
+   download and parse — the one overlap the lite boot has — which brings
+   the BVH's transient (≈ 50 MB, in the worker but in the same process)
+   back beside the parse ADR 0050 moved it away from for the iPhones; and
+   perhaps hold the veiled frames while the boot waits.
