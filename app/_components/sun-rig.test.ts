@@ -83,13 +83,48 @@ test("follow beyond the dead zone re-centres and redraws", () => {
   const { sunRig, sun } = rig();
   walkTo(sunRig, 0, 0);
   sun.shadow.needsUpdate = false;
-  walkTo(sunRig, 25, 0);
+  walkTo(sunRig, 35, 0);
   expect(sun.shadow.needsUpdate).toBe(true);
-  // Snapped to the texel grid: within one texel (0.07 m at 3072²) of the
+  // Snapped to the texel grid: within one texel (0.08 m at 3072²) of the
   // point, and anchored to the GROUND rather than to the eye.
-  expect(sun.target.position.distanceTo(new Vector3(25, 100, 0))).toBeLessThan(
+  expect(sun.target.position.distanceTo(new Vector3(35, 100, 0))).toBeLessThan(
     0.1
   );
+});
+
+test("walking 500 m straight redraws the map once every 30 m", () => {
+  const { sunRig, sun } = rig();
+  let redraws = 0;
+  for (let x = 0; x <= 500; x += 0.25) {
+    sun.shadow.needsUpdate = false;
+    walkTo(sunRig, x, 0);
+    if (sun.shadow.needsUpdate) {
+      redraws++;
+    }
+  }
+  // the first re-centre and one per 30 m (26 with the old 19.8 m zone)
+  expect(redraws).toBe(1 + Math.floor(500 / 30));
+});
+
+test("turning on the spot at eye level never moves the frustum", () => {
+  const { sunRig, sun } = rig();
+  walkTo(sunRig, 0, 0);
+  const centre = sun.target.position.clone();
+  sun.shadow.needsUpdate = false;
+  for (let deg = 0; deg < 360; deg += 15) {
+    const a = (deg * Math.PI) / 180;
+    // level, and pitched down by 30°
+    for (const pitch of [0, -Math.PI / 6]) {
+      const dir = new Vector3(
+        Math.sin(a) * Math.cos(pitch),
+        Math.sin(pitch),
+        -Math.cos(a) * Math.cos(pitch)
+      );
+      sunRig.follow(new Vector3(0, 101.7, 0), dir, 100);
+    }
+  }
+  expect(sun.shadow.needsUpdate).toBe(false);
+  expect(sun.target.position).toEqual(centre);
 });
 
 test("climbing straight up re-fits the frustum and redraws", () => {
@@ -157,12 +192,12 @@ test("the shadow map takes the size it is given (lite = 512²)", () => {
   expect(sun.shadow.mapSize.x).toBe(512);
   // the depth's four bytes and the colour target's one
   expect(sunRig.shadowMapBytes).toBe(512 * 512 * 5);
-  // Coarser texel (0.43 m over the 220 m frustum): the re-centre still snaps
+  // Coarser texel (0.47 m over the 242 m frustum): the re-centre still snaps
   // to it, so the frustum lands within one texel of the point.
   walkTo(sunRig, 0, 0);
-  walkTo(sunRig, 25, 0);
-  expect(sun.target.position.distanceTo(new Vector3(25, 100, 0))).toBeLessThan(
-    0.45
+  walkTo(sunRig, 35, 0);
+  expect(sun.target.position.distanceTo(new Vector3(35, 100, 0))).toBeLessThan(
+    0.48
   );
 });
 

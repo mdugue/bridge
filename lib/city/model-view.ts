@@ -501,7 +501,9 @@ export function footprintCircle(points: readonly Xyz[]): {
   return { x, z, radius };
 }
 
-/** The shadow frustum's half-size never goes below the walker's. */
+/** The shadow frustum's half-size never goes below 110 m (the walker's
+ *  until 2026-10-11, now 121 m with a wider dead zone; Modell's steps keep
+ *  the 18 % one, shadow-fit.ts `shadowDeadZone`). */
 export const MODEL_SHADOW_MIN = 110;
 /** …and stops here on a desktop: 1 600 m over 3 072² ≈ 1 m texels. */
 export const MODEL_SHADOW_MAX = 1600;

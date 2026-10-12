@@ -400,8 +400,8 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | terrain `castShadow` | **false** | a casting terrain self-shadows into triangle/staircase acne at grazing sun; ground only receives |
 | shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 (phones 2048; smaller at a raised safety level, ADR 0046) | soft radius lets 3072 look like 4096 at ~44% less fill |
 | the map's colour target | one red byte (`OneByteShadowNode`, set as `sun.shadow.shadowNode`) | three's shadow pass draws into a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
-| frustum half-size (`lib/city/shadow-fit.ts`) | 110 m at eye level, growing to 880 m with altitude | camera-following, texel-snapped; small = fine texels, but a fixed 110 m leaves a fly-over entirely unshadowed |
-| `shadow.autoUpdate` | false | re-render only when the frustum centre leaves a dead zone (18% of the half-size — 20 m at the base, as before), when the half-size re-fits, when the sun moves, or when a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
+| frustum half-size (`lib/city/shadow-fit.ts`) | 121 m at eye level, growing in octaves of 110 m to 880 m with altitude | camera-following, texel-snapped; small = fine texels, but a fixed 110 m leaves a fly-over entirely unshadowed |
+| `shadow.autoUpdate` | false | re-render only when the frustum centre leaves a dead zone (30 m on foot — 110 m and 19.8 m until 2026-10-11, the walker as far from every edge now, 91 m; 18% of the half-size above eye level and in Modell), when the half-size re-fits, when the sun moves, or when a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
 
 ### The frustum fit (`lib/city/shadow-fit.ts`)
 
@@ -413,12 +413,13 @@ flying" bug; `shots/` before/after at that snapshot show it plainly.) The rig
 therefore re-fits per frame, from two pure functions:
 
 - `fitShadowRadius(heightAboveGround, current)` — half-size = 2.5 × altitude,
-  clamped to [110, 880] m and **quantized to octaves with hysteresis** (0.6 in
-  log2), so hovering on a step boundary cannot flap the frustum. A flap is a
-  full depth-pass re-render, which is the whole cost here.
+  clamped to [121, 880] m and **quantized with hysteresis** (0.6 in log2) to
+  the walker's 121 m or an octave of 110 m (220, 440, 880), so hovering on a
+  step boundary cannot flap the frustum. A flap is a full depth-pass
+  re-render, which is the whole cost here.
 - `shadowFocusAhead(radius)` — how far along the camera's world direction to
-  push the centre: half of the radius *above the base*, so it is **zero at eye
-  level** (walking, and turning on the spot, behave exactly as before). Feed it
+  push the centre: above eye level half of the radius above 110 m, and **zero
+  at eye level** (turning on the spot never moves the frustum). Feed it
   the raw `dir.x`/`dir.z`, not a renormalized horizontal: the cos(pitch) factor
   collapses the offset when looking straight down, which is what you want.
 

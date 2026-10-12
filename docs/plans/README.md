@@ -395,9 +395,11 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
   built (2026-10-11): a phone builds one (`LAMP_LIGHTS`, a tier constant
   fixed before the first frame), faded through zero where it hands over
   to the next head; the desktop keeps three.
-- **A shadow redraw every ~20 m** while walking (the dead zone,
-  `shadow-fit.ts`); a larger zone with a slightly larger radius trades
-  texel size for fewer redraws.
+- ~~**A shadow redraw every ~20 m** while walking~~ — built
+  (2026-10-11): on foot a 30 m dead zone and a 121 m half-size (was
+  19.8 m and 110 m), the walker as far from every edge as before (91 m,
+  was 90.2), 17 redraws over a straight 500 m instead of 26, texels 10 %
+  coarser; the air and Modell unchanged.
 - **The minimap's 512² class raster** has one reader left that paints
   256² a tile (a re-bake and a look).
 - **A tile's fine level re-bakes when any tile's terrain inputs change**

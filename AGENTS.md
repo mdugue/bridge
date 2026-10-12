@@ -655,16 +655,20 @@ it here. Past the frustum the ground's shadows come from a baked horizon map (tw
 bands, ADR 0031); their *shapes* there (and on facades) remain a job for
 Cascaded Shadow Maps.
 
-**The shadow frustum is not fixed** (`lib/city/shadow-fit.ts`). A 110 m
+**The shadow frustum is not fixed** (`lib/city/shadow-fit.ts`). A 121 m
 half-size is right at eye level and wrong in fly mode: from 200 m up it covers
 a patch of ground directly below the camera that is barely on screen, so the
 whole view renders unshadowed. The half-size therefore grows with altitude, in
-octaves (110 → 880 m) with hysteresis, and the frustum is centred **on the
-ground**, pushed along the camera's world direction by a fraction of the extra
-radius. At eye level the offset is zero and the behaviour is byte-for-byte the
-old one — in particular turning on the spot still never moves the frustum.
-Per-render cost is unchanged (same map size, same PCF); only the caster set
-grows. This is the cheap 90% of CSM, not a replacement for it.
+octaves of 110 m (220 → 880 m) with hysteresis, and the frustum is centred **on
+the ground**, pushed along the camera's world direction by a fraction of the
+extra radius. At eye level the offset is zero — turning on the spot never
+moves the frustum — and it re-centres only after the camera has drifted
+30 m (`WALK_DEAD_ZONE_M`; 18 % of the half-size above eye level and in
+Modell). That is the 110 m / 19.8 m it was until 2026-10-11, widened so the
+camera stays as far from every edge (91 m, was 90.2) with a third fewer
+redraws while walking, for texels 10 % coarser. Per-render cost is unchanged
+(same map size, same PCF); only the caster set grows. This is the cheap 90%
+of CSM, not a replacement for it.
 
 **Contact shadows (GTAO) are smoothed and never motion-gated.** GTAO
 leaves its 5×5 rotation noise to a denoiser: drawn raw it speckled every

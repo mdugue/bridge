@@ -150,7 +150,7 @@ export function shadowMapSizeFor(
   }
   // A phone's shadow map is a quarter of the desktop's texels and a quarter
   // of the per-frame depth fill; the soft PCF radius hides the coarser
-  // texel over the 110 m frustum. The map is a depth texture and a one-byte
+  // texel over the 121 m frustum. The map is a depth texture and a one-byte
   // colour target (`shadowMapBytesFor`): 20 MiB at 2048², 5 MiB at 1024².
   return SHADOW_MAP_SIZE[tier][safety];
 }
