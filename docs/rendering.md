@@ -360,15 +360,31 @@ GLSL and stay unused.
 screen-sized targets live in the GPU process for the whole session, and no
 step of the memory governor can shrink them.
 
-- **Desktop.** Two pipelines, with and without DoF, are built once —
-  swapping one pipeline's output node would re-translate the whole post
-  graph every time a flight starts or stops. Each draws into one shared
-  half-float target (`BeforeAA`), and a last pipeline antialiases and
-  finishes it: one SMAA for every pipeline, not a copy of its input and
-  three targets per pipeline (sixteen full-resolution targets, ~95 MB on
-  an iPhone, once the styles were warmed). DoF reads its input from a
-  target of its own without a depth buffer (the one `dof()` makes has one,
-  a third more memory, and nothing reads it).
+- **Desktop.** The pipelines before the antialiasing (with and without
+  DoF, Modell's, the styles') are built once — swapping one pipeline's
+  output node would re-translate the whole post graph every time a
+  flight starts or stops — and a last pipeline antialiases and finishes
+  the frame: one SMAA for all of them, not a copy of its input and three
+  targets per pipeline (sixteen full-resolution targets, ~95 MB on an
+  iPhone, once the styles were warmed). SMAA reads its input **where it
+  lies** (since 2026-10-11): its input is a texture binding the frame
+  switches (`Antialiasing.read`) — a bind group three caches per texture,
+  no build, no new render context — between the lens blur's own
+  composite (standing), the scene target with the contact shadows
+  multiplied in after it (walking, as FXAA does on a phone) and the
+  shared half-float `BeforeAA` (a picture style; Modell, whose still
+  sheets keep the contact shadows under the antialiasing). The lens blur
+  composites into a target of its own; a frame runs its passes by drawing
+  one pixel of its output into a 1×1 target (`pixel`, where the
+  pipelines also warm — its render context is `BeforeAA`'s: three keys a
+  context by the target's attachments and the call depth, not its size).
+  Drawn into `BeforeAA`, both were copies of the whole frame: a standing
+  frame is one full-resolution pass lighter (18 passes, as before, but one
+  of them one pixel), a walking one 8 → 7, and `BeforeAA` (8 B a pixel:
+  36 MiB at 1920×1080 × 1.5, 63 MiB at 2560×1440 × 1.5) is held only in
+  Modell or a picture style. DoF reads its input from a target of its own
+  without a depth buffer (the one `dof()` makes has one, a third more
+  memory, and nothing reads it).
 - **Phone.** No DoF is built: its six targets and its copy of the input
   held 23 MiB at an iPhone's 603×1311 drawing buffer from the first frame,
   standing still or not, for a lens hint a six-inch screen barely shows.
@@ -389,7 +405,8 @@ step of the memory governor can shrink them.
 
 On the iPhone the post targets went from 68 to 9.6 MiB (+1.8 while
 something is asked, +6 while a picture style is on); at 2560×1440 on a
-desktop, from 316 to 251 MiB.
+desktop, from 316 to 251 MiB — and by `BeforeAA`'s 28 MiB more outside
+Modell and the picture styles since SMAA reads in place (2026-10-11).
 
 **The outline of the asked element** (`selection-outline.ts`) is a
 two-byte mask at the drawing buffer's resolution — red the element's

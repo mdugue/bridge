@@ -620,8 +620,12 @@ main thread) out of the frames:
   pipeline would never match what `compileAsync` prepared.
 - **Tiles and dressings compile before they show** (`PostStack.compile`, one
   drawable per material and attribute layout). The shadow pass's pipelines
-  for new casters still compile in the frame that first draws them, and the
-  WebGL2 backend compiles synchronously — measure before adding machinery.
+  for new casters still compile in the frame that first draws them — there
+  is no public way to build them ahead (`compileAsync` skips the shadow
+  map, which is drawn one call depth below it; spiked 2026-10-11,
+  docs/plans/README.md) — and the WebGL2 backend compiles synchronously —
+  measure before adding machinery (`getRenderInfo().framedBuilds` counts
+  the builds a frame makes, the shadow pass's apart).
 - **A `ClippingGroup` switch rebuilds everything under it.** three keeps
   one render object per drawable for both sides and keys its build by the
   clipping, freeing the side a switch leaves; a compile that does not walk
@@ -686,6 +690,11 @@ rebuild hitch. DoF (desktop only: a phone does not build it, ADR 0047) is
 still dropped while moving — motion has already destroyed the bokeh — by
 switching between two prebuilt pipelines, never by
 swapping one pipeline's output node (that re-translates the whole graph).
+SMAA is the other way round: one SMAA, its input a texture binding the
+frame switches (`Antialiasing.read` in `post-stack.ts` — a bind group, not
+a build) between the lens blur's composite, the scene target (the contact
+shadows multiplied in after it) and `BeforeAA` — never a second SMAA
+(three more full-resolution targets), and nothing copies the frame for it.
 
 **Buildings are already batched.** Each tile's buildings are ONE glTF mesh
 (`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time
