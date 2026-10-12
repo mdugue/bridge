@@ -446,6 +446,13 @@ screen barely shows.
   screenshot. A snapshot from before the look was fixed still loads; the
   sliders it names are ignored. A malformed snapshot is rejected with a
   message instead of breaking the scene.
+- **Qualität** ("quality") — the step the viewer draws at on your device
+  (*Volle Qualität*, full quality, or *Sparstufe* 1 to 3, a lighter step;
+  see [When it crashes](#when-it-crashes)), what it means here
+  (resolution, shadow map, memory for the tiles) and when it falls by
+  itself. *Volle Qualität* resets it and reloads the city with every
+  detail, where you stand; if the graphics fail again after that, the
+  viewer goes on a step lighter again.
 - **Statistik** — number of buildings and terrain points currently in
   view, estimated graphics memory and the frame rate.
 
@@ -487,7 +494,9 @@ by itself after a few days, one step every three days. If the graphics
 fail again at the lightest step, a card says *Die Grafik ist
 ausgefallen* ("the graphics failed") and offers *Leichter weiter* ("go on
 lighter": a step lighter, back where you stood) and *Neu laden*
-("reload"). A phone may also take the graphics away from a page that sat
+("reload"). Which step is in force is shown in the sidebar under
+*Erweitert › Qualität*, which also goes straight back to full detail. A
+phone may also take the graphics away from a page that sat
 in the background for a while; then the viewer simply reloads at the same
 step.
 

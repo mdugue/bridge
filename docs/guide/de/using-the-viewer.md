@@ -474,6 +474,13 @@ kann, den ein kleiner Bildschirm kaum zeigt.
   Snapshot von vor dem festen Look lädt weiter; die Regler, die er nennt,
   werden übergangen. Ein fehlerhafter Snapshot wird mit einer Meldung
   abgelehnt, statt die Szene zu zerstören.
+- **Qualität** — die Stufe, auf der der Viewer auf deinem Gerät zeichnet
+  (*Volle Qualität* oder *Sparstufe 1 bis 3*, siehe
+  [Wenn es abstürzt](#wenn-es-abstürzt)), was sie hier bedeutet
+  (Auflösung, Schattenkarte, Speicher für die Kacheln) und wann sie von
+  selbst sinkt. *Volle Qualität* setzt sie zurück und lädt die Stadt mit
+  allen Details neu, dort, wo du gerade bist; fällt die Grafik danach
+  wieder aus, geht es wieder eine Stufe leichter weiter.
 - **Statistik** — Anzahl der Gebäude und Geländepunkte, die gerade im
   Blick sind, geschätzter Grafikspeicher und die Bildrate.
 
@@ -517,7 +524,9 @@ und kehrt nach ein paar Tagen von selbst zu vollen Details zurück, alle
 drei Tage um eine Stufe. Fällt die Grafik auf der leichtesten Stufe
 wieder aus, sagt eine Karte *Die Grafik ist ausgefallen* und bietet
 *Leichter weiter* (eine Stufe leichter, zurück, wo du standest) und *Neu
-laden* an. Auch einer Seite, die eine Weile im Hintergrund lag, kann ein
+laden* an. Welche Stufe gerade gilt, steht in der Seitenleiste unter
+*Erweitert › Qualität*; dort geht es auch sofort zurück zu vollen
+Details. Auch einer Seite, die eine Weile im Hintergrund lag, kann ein
 Telefon die Grafik nehmen; dann lädt der Viewer einfach auf derselben
 Stufe neu.
 

@@ -130,11 +130,14 @@ config change.
     pixel ratio, shadow map, tile cache, `postProfileFor` and
     `shadowMapBytesFor`), `gpu-support.ts` (the WebGPU-or-WebGL2
     preflight), `gpu-safety.ts` (the device's safety level in local
-    storage, `gpu-safety`: `pageSafety`, `raiseSafety` — ADR 0046),
+    storage, `gpu-safety`: `pageSafety`, `raiseSafety`, `resetSafety` —
+    ADR 0046; `quality-panel.tsx`, the sidebar's *Qualität*, shows it and
+    goes back to full detail),
     `gpu-recovery.ts` (a lost GPU: one reload per safety level, the
     renderer released first, back at the player's pose; a GPU reclaimed in
     the background, or a frame that threw on a GPU still working — a bug —,
-    reloads at the same level), `gpu-failure-card.tsx` (the
+    reloads at the same level; `keepPlaceForReload`, the place kept for
+    *Leichter weiter* and *Qualität*'s reload), `gpu-failure-card.tsx` (the
     card past the caps: *Leichter weiter*, *Neu laden*), `instancing.ts`
     (`Instances`: instanced sets that share one node build),
     `fetch-optional.ts` (the one fetch/abort policy: `fetchBytes` retries a

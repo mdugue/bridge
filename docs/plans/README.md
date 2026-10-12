@@ -877,7 +877,10 @@ the port (2026-09-26) made of it:
    shadow texels and rasters on phones; a selectable `medium` tuple (DPR 1,
    2048² shadows, AO/DoF off) for weak desktops needs real-device looks.
    Since 2026-10-06 the safety ladder's levels (ADR 0046) are such tuples:
-   a menu would set the level `?safety=N` sets for QA.
+   a menu would set the level `?safety=N` sets for QA. Since 2026-10-12
+   the sidebar's *Erweitert › Qualität* shows the level, what it sets and
+   when it falls, and goes back to full detail (`quality-panel.tsx`); what
+   is left is choosing a lighter level by hand.
 6. ~~**A provenance manifest per tile (S).**~~ Now plan 017 phase A step 3
    (the ingest adapter writes `data/<site>/<tile>.provenance.json` from the
    values its checked downloads already know). `bun run fetch <site>

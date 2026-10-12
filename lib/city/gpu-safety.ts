@@ -19,8 +19,10 @@
  * a phone none at any level, `shadowTilesStream`), and
  * a recovered page that puts back the place and the time but neither the
  * picture style nor Modell from level 2. A level comes back down by
- * itself, one per three days since it was last raised; `?safety=N` sets
- * it for one page (QA) and stores nothing. A frame that throws on a GPU
+ * itself, one per three days since it was last raised, and the sidebar's
+ * *Qualität* shows it and puts it back to 0 on request (a new page where
+ * the player stood); `?safety=N` sets it for one page (QA) and stores
+ * nothing. A frame that throws on a GPU
  * that still answers is a bug, not a sign (`frameLoss`).
  *
  * Also here: the caps on the automatic recovery (one reload per level,
@@ -137,6 +139,50 @@ export function raisedSafety(
     raised.raisedBy = by;
   }
   return raised;
+}
+
+/**
+ * The record after the player put the device back to full detail (the
+ * sidebar's *Qualität*, quality-panel.tsx): level 0, with the counted crash
+ * and the raising page kept — a record already counted stays counted, and
+ * the death of a page that raised the level itself raises nothing on the
+ * next load. The decay has nothing left to take.
+ */
+export function clearedSafety(stored: StoredSafety): StoredSafety {
+  return { ...stored, level: 0 };
+}
+
+/** Where a device stands on the ladder, as the sidebar shows it. */
+export interface SafetyStanding {
+  /** the level this page runs at */
+  level: SafetyLevel;
+  /** set for this page by the address (`?safety=N`): nothing stored applies */
+  pinned: boolean;
+  /** the level the next page boots at, as stored now */
+  next: SafetyLevel;
+  /** when the stored level falls by one by itself (ms), null at 0 */
+  fallsAt: number | null;
+}
+
+/**
+ * Where a page at `level` stands: what the next page boots at (another tab
+ * may have raised it meanwhile, or the decay lowered it) and when that
+ * falls by a level. Pure.
+ */
+export function safetyStanding(
+  level: SafetyLevel,
+  stored: StoredSafety | null,
+  override: SafetyLevel | null,
+  now: number
+): SafetyStanding {
+  const next = decayedSafety(stored, now);
+  const fallsAt =
+    stored && next > 0
+      ? stored.raisedAt +
+        (Math.floor(Math.max(0, now - stored.raisedAt) / SAFETY_DECAY_MS) + 1) *
+          SAFETY_DECAY_MS
+      : null;
+  return { level, pinned: override !== null, next, fallsAt };
 }
 
 /** `?safety=N` (0–3) for one page (QA), or null. Pure. */

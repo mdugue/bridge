@@ -54,6 +54,8 @@ interface Stored {
   reclaims?: number[];
   /** when it reloaded for a frame that failed on a working GPU (ms) */
   failures?: number[];
+  /** the snapshot waits for a reload the player asked for full detail in */
+  reset?: boolean;
 }
 
 /** The reload times kept, as the caps read them. */
@@ -129,11 +131,32 @@ export function recoverOnRequest(
   store: Store | null = session()
 ): void {
   raise(level);
+  keepPlaceForReload(snapshot, store);
+}
+
+/**
+ * The place, the time and the look kept for a reload the caller is about
+ * to make — *Leichter weiter*, or the sidebar's reset to full detail
+ * (`reset`, so the next page's trail does not call it a lost GPU). The
+ * reload times stay as they were: such a page is no recovery
+ * (`recentlyRecovered`). Without storage the reload starts at the spawn.
+ */
+export function keepPlaceForReload(
+  snapshot: string | null,
+  store: Store | null = session(),
+  { reset = false }: { reset?: boolean } = {}
+): void {
   if (!(store && snapshot)) {
     return;
   }
   try {
-    store.setItem(KEY, JSON.stringify({ ...read(store), snapshot }));
+    const next: Stored = { ...read(store), snapshot };
+    if (reset) {
+      next.reset = true;
+    } else {
+      delete next.reset;
+    }
+    store.setItem(KEY, JSON.stringify(next));
   } catch {
     // The reload starts at the spawn.
   }
@@ -180,6 +203,21 @@ export function peekRecoverySnapshot(
   }
 }
 
+/**
+ * Whether the snapshot waiting for this load was kept for a reset to full
+ * detail (`keepPlaceForReload`), not for a lost GPU.
+ */
+export function recoveryWasReset(store: Store | null = session()): boolean {
+  if (!store) {
+    return false;
+  }
+  try {
+    return read(store).reset === true;
+  } catch {
+    return false;
+  }
+}
+
 /** The snapshot a recovery left for this load, once (the tries stay). */
 export function takeRecoverySnapshot(
   store: Store | null = session()
@@ -188,10 +226,13 @@ export function takeRecoverySnapshot(
     return null;
   }
   try {
-    const { snapshot, ...rest } = read(store);
+    const rest = read(store);
+    const { snapshot } = rest;
     if (!snapshot) {
       return null;
     }
+    delete rest.snapshot;
+    delete rest.reset;
     store.setItem(KEY, JSON.stringify(rest));
     return snapshot;
   } catch {

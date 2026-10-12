@@ -687,8 +687,9 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
   test("the sidebar tabs reach every group of controls", async () => {
     // The controls are no longer one long list: Erkunden holds the map and
     // the places, Szene the sun, the picture style and the fog, and
-    // Erweitert the tools and counters. A slider is only two taps away, and
-    // this is what proves the three panels are actually wired.
+    // Erweitert the tools, the quality and the counters. A slider is only
+    // two taps away, and this is what proves the three panels are actually
+    // wired.
     await withFramesHeld(page, async () => {
       await openSidebar(page);
       const places = page.getByRole("region", { name: "Orte" });
@@ -716,6 +717,14 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
 
       await page.getByRole("tab", { name: "Erweitert" }).click();
       await expect(page.getByText("Statistik")).toBeVisible();
+      // The device's safety level, in words: nothing ever ran out here.
+      const quality = page.getByRole("region", { name: "Qualität" });
+      await expect(
+        quality.getByText("Volle Qualität", { exact: true })
+      ).toBeVisible();
+      await expect(
+        quality.getByRole("button", { name: "Volle Qualität" })
+      ).toHaveCount(0);
     });
     expectNoErrors(errors);
   });

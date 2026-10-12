@@ -50,7 +50,8 @@ export function GpuFailureCard({
           <CardDescription>
             Dein Gerät hat dem Browser den Grafikspeicher entzogen – für die
             Stadt in dieser Ansicht war nicht genug frei. „Leichter weiter“ lädt
-            sie mit weniger Details neu, dort, wo du gerade warst.
+            sie mit weniger Details neu, dort, wo du gerade warst – zurück zur
+            vollen Qualität geht es unter Erweitert › Qualität.
           </CardDescription>
         </CardHeader>
         <CardContent>
