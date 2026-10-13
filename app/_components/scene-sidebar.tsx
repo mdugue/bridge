@@ -87,6 +87,8 @@ import { hintsFor } from "./control-hints";
 import { LegalLinks } from "./legal-links";
 import type { ViewMode } from "./model-rig";
 import { ProjectionPanel } from "./projection-panel";
+import { QualityPanel } from "./quality-panel";
+import type { SceneBudget } from "./scene-profile";
 import { useSceneStatus, useSceneStatusStore } from "./scene-status";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
@@ -795,6 +797,8 @@ function SceneCounters() {
  */
 export interface SceneSidebarProps {
   applySnapshot: () => void;
+  /** the page's budget: its safety level and what that level sets */
+  budget: SceneBudget;
   coarse: boolean;
   copySnapshot: () => void;
   /**
@@ -814,6 +818,12 @@ export interface SceneSidebarProps {
   /** the Verschattungsstudie sheet (image-export.ts) */
   onStudy: () => void;
   onLook: (patch: Partial<LookValues>) => void;
+  /**
+   * Back to full detail (*Qualität*): level 0 stored and, on a page that
+   * runs lighter, a reload where the player stands; false when it could
+   * not be stored.
+   */
+  onResetQuality: () => boolean;
   onTab: (tab: SceneTabId) => void;
   onTeleport: (epsgX: number, epsgY: number) => void;
   /** to a vantage (and its name): a glide, or while the scene loads,
@@ -1058,6 +1068,10 @@ export function SceneSidebar(props: SceneSidebarProps) {
               )}
             </div>
 
+            <QualityPanel
+              budget={props.budget}
+              onReset={props.onResetQuality}
+            />
             <SceneCounters />
           </SceneTabPanel>
         </SceneTabs>

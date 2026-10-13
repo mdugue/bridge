@@ -1,9 +1,12 @@
 import {
+  clearedSafety,
   parseStoredSafety,
   raisedSafety,
   resolveSafety,
   type SafetyLevel,
   safetyOverride,
+  type SafetyStanding,
+  safetyStanding,
   type StoredSafety,
 } from "@/lib/city/gpu-safety";
 import { offerAsCrash, type Trail } from "@/lib/city/crash-trail";
@@ -101,6 +104,34 @@ export function raiseSafety(
   { by, store = local(), now = Date.now() }: RaiseOptions = {}
 ): boolean {
   return writeStored(store, raisedSafety(readStored(store), from, now, by));
+}
+
+/**
+ * Where this page, at `level`, stands on the ladder (the sidebar's
+ * *Qualität*): what is stored now, and whether the address pins the page.
+ */
+export function currentSafetyStanding(
+  level: SafetyLevel,
+  {
+    search = typeof location === "undefined" ? "" : location.search,
+    store = local(),
+    now = Date.now(),
+  }: { search?: string; store?: Store | null; now?: number } = {}
+): SafetyStanding {
+  return safetyStanding(level, readStored(store), safetyOverride(search), now);
+}
+
+/**
+ * Full detail from the next page on (the sidebar's *Qualität*): the stored
+ * level back to 0, what was counted kept (lib/city/gpu-safety.ts
+ * `clearedSafety`). True when nothing stays raised; false when it could
+ * not be stored — a reload would come back no finer.
+ */
+export function resetSafety({
+  store = local(),
+}: { store?: Store | null } = {}): boolean {
+  const stored = readStored(store);
+  return stored === null || writeStored(store, clearedSafety(stored));
 }
 
 /**

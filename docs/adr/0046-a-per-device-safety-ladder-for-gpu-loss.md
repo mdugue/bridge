@@ -238,6 +238,32 @@ or its own after a reclaim.
   applies at boot, where everything is built once; inside the page the
   memory governor stays the knob.
 
+## Update (2026-10-12): the level is shown, and can be reset
+
+The ladder was invisible: a visitor whose page came back plainer could not
+tell why, nor that it would last days. The sidebar's *Erweitert* now has
+a **Qualität** section (`app/_components/quality-panel.tsx`): the level the
+page runs at, what it sets on this device (the pixel ratio, the shadow
+map, the tile cache's bound — read from `scene-profile.ts`'s tables, not
+restated), what the next page boots at and when the stored level falls by
+itself (`safetyStanding`).
+
+**Volle Qualität** puts the stored level back to 0 (`clearedSafety`: the
+counted crash and the raising page kept, so a record already counted is
+not counted again) and, on a page that runs lighter, reloads where the
+player stands. A level is the budget a page is built with, so the way
+back is a new page, never a step inside one (the last alternative above
+still holds). The reload keeps the place through the recovery's session
+record (`keepPlaceForReload`, marked `reset`): no reload time is added,
+so the next page is no recovery (`recentlyRecovered`), and its trail
+notes a *quality reset* rather than a lost GPU. A reset that cannot be
+stored does not reload; a page pinned by `?safety=N` offers none.
+
+This is the half of the deferred quality menu that needs no new rung: the
+visitor can go back up, not choose a level. If the device runs out again,
+the ladder climbs again. A page recovered at a raised level says so once
+in the HUD, and the failure card names the section.
+
 ## References
 
 - `lib/city/gpu-safety.ts` (+ test), `app/_components/gpu-safety.ts`

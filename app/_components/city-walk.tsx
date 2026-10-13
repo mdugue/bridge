@@ -43,12 +43,14 @@ import { startCrashReports } from "./crash-reports";
 import { type CrashTrail, startCrashTrail } from "./crash-trail";
 import { GpuFailureCard } from "./gpu-failure-card";
 import {
+  keepPlaceForReload,
   peekRecoverySnapshot,
   recoverFromGpuLoss,
   recoverOnRequest,
+  recoveryWasReset,
   takeRecoverySnapshot,
 } from "./gpu-recovery";
-import { raiseSafety } from "./gpu-safety";
+import { raiseSafety, resetSafety } from "./gpu-safety";
 import { VEIL_HOLD_MS } from "./handover";
 import { streamTimings } from "./stream-timing";
 import type { CityWalkHandle } from "./create-app";
@@ -637,6 +639,25 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     const released = handleRef.current?.releaseGpu() ?? Promise.resolve();
     void released.then(() => location.reload());
   };
+  /**
+   * *Qualität*'s way back to full detail: level 0 from the next page on,
+   * and — when this page runs lighter, its budget built at boot — that
+   * next page now, where the player stands (gpu-recovery.ts
+   * `keepPlaceForReload`). False when it could not be stored.
+   */
+  const resetQuality = (): boolean => {
+    if (!resetSafety()) {
+      return false;
+    }
+    if (budget.safety > 0) {
+      keepPlaceForReload(recovery.current?.capture() ?? null, undefined, {
+        reset: true,
+      });
+      const released = handleRef.current?.releaseGpu() ?? Promise.resolve();
+      void released.then(() => location.reload());
+    }
+    return true;
+  };
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
   const [tab, setTab] = useState<SceneTabId>("erkunden");
@@ -722,6 +743,8 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     const text = peekRecoverySnapshot();
     const parsed = text ? parseSnapshot(text) : null;
     const restored = parsed?.ok ? parsed.snapshot : null;
+    // (or where the player asked for full detail: Qualität)
+    const afterReset = restored !== null && recoveryWasReset();
     // A place picked in the panel meanwhile wins over the recovered one,
     // and the time and look the player set are theirs.
     if (restored && !start) {
@@ -807,7 +830,14 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
               ? restored.camera
               : { ...restored.camera, model: undefined }
           );
-          trail.note("recovered", "after a lost GPU");
+          if (afterReset) {
+            trail.note("quality reset", "back where the player stood");
+          } else {
+            trail.note("recovered", "after a lost GPU");
+            if (budget.safety > 0) {
+              sayHud("Mit weniger Details neu geladen – Erweitert › Qualität");
+            }
+          }
         } else {
           arriveAt(h, site, sayHud);
         }
@@ -1097,6 +1127,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
             tramLayer: <TramStatusLine />,
           }}
           applySnapshot={applySnapshot}
+          budget={budget}
           canTravel={supported}
           coarse={coarse}
           onAimCentre={setAimingCentre}
@@ -1106,6 +1137,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           look={lookValues}
           minutes={time.minutes}
           onLook={look.set}
+          onResetQuality={resetQuality}
           onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
           onExport={exportImage}
           onStudy={exportStudy}
