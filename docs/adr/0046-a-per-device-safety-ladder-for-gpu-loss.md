@@ -259,6 +259,28 @@ so the next page is no recovery (`recentlyRecovered`), and its trail
 notes a *quality reset* rather than a lost GPU. A reset that cannot be
 stored does not reload; a page pinned by `?safety=N` offers none.
 
+**The reload tears the whole app down first** (`disposeForReload`, since
+2026-10-13). The first version released the GPU as the failure card's
+reload does (`releaseGpu`: three's renderer, then the device, within
+300 ms), and on an iPhone both reset reloads died at once: one at 225 MB
+held and 129 MB on the CPU, one before its first heartbeat — while a fresh
+page at full detail (a private tab) ran at 465 + 245 MB (Sentry
+CITY-WALK-2, 2026-10-13). The new page boots in the old one's process,
+and the old page's GPU memory was still counted: three's `dispose` destroys
+no buffer or texture, only the device, and WebKit frees what a destroyed
+device held once the old document is collected. So the reset's reload now
+runs the app's own teardown (every tile, buffer and texture destroyed by
+three one by one; the stream's shared rasters a task later, while three
+still listens), then the renderer and its device, and reloads once the
+device reports itself lost, within 2 s. Headless (lite) the renderer held
+246 MB before it and 12 MB, in 1×1 placeholders and lookup tables, when
+the device went; the trail notes both (`teardown`, `teardown done`). The
+recovery's reloads keep `releaseGpu`: on a GPU that failed, a destroy can
+throw for an attribute whose upload never landed. The one after a frame
+that threw on a GPU that still answers (a bug, reloaded at the same level)
+has the reset's shape — a live GPU, the same process, no lighter page —
+and may want the same teardown; not changed here.
+
 This is the half of the deferred quality menu that needs no new rung: the
 visitor can go back up, not choose a level. If the device runs out again,
 the ladder climbs again. A page recovered at a raised level says so once

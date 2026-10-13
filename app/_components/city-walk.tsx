@@ -643,7 +643,10 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
    * *Qualität*'s way back to full detail: level 0 from the next page on,
    * and — when this page runs lighter, its budget built at boot — that
    * next page now, where the player stands (gpu-recovery.ts
-   * `keepPlaceForReload`). False when it could not be stored.
+   * `keepPlaceForReload`). The scene goes first, whole, and the reload
+   * waits for its device (create-app.ts `disposeForReload`): the heavier
+   * page boots in the same process, and with this one's memory still held
+   * it died on the way in. False when it could not be stored.
    */
   const resetQuality = (): boolean => {
     if (!resetSafety()) {
@@ -653,8 +656,8 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       keepPlaceForReload(recovery.current?.capture() ?? null, undefined, {
         reset: true,
       });
-      const released = handleRef.current?.releaseGpu() ?? Promise.resolve();
-      void released.then(() => location.reload());
+      const gone = handleRef.current?.disposeForReload() ?? Promise.resolve();
+      void gone.then(() => location.reload());
     }
     return true;
   };

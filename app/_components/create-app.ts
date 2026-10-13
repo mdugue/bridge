@@ -218,6 +218,11 @@ const EMERGENCY_SHADOW_HOLD_MS = 120_000;
 const EMERGENCY_GAP_MS = 5000;
 /** How long a reload waits for the old device to be destroyed. */
 const RELEASE_WAIT_MS = 300;
+/**
+ * How long a reload to a heavier page waits for the whole app to be gone
+ * (`disposeForReload`): the device reports itself destroyed well within it.
+ */
+const TEARDOWN_WAIT_MS = 2000;
 /** How often the memory governor looks at the GPU memory held. */
 const GOVERN_MS = 1000;
 /** How near the camera (m, in plan, to the tile's box) a building tile
@@ -512,6 +517,17 @@ export interface CityWalkHandle {
    */
   releaseGpu: () => Promise<void>;
   /**
+   * The page is about to reload to a heavier budget (*Qualität*'s full
+   * detail) on a GPU that works: the whole app torn down — every tile,
+   * buffer and texture destroyed one by one, then the renderer and its
+   * device — settling once the device reports itself destroyed, within
+   * TEARDOWN_WAIT_MS. A reload after `releaseGpu` alone left the old
+   * page's GPU memory to WebKit, which frees it only once the old document
+   * is collected: the new page, booting in the same process, died at a
+   * third of what a fresh one holds. Nothing draws after it.
+   */
+  disposeForReload: () => Promise<void>;
+  /**
    * Teleports the camera (world/Y-up coords) — used by tests and QA.
    * Switches to fly mode so the ground clamp doesn't drag the camera down.
    */
@@ -794,6 +810,20 @@ interface ProbedDevice {
 }
 
 /**
+ * Settles once the renderer's WebGPU device is lost — after its destroy,
+ * when the GPU process has taken it — or at once on the WebGL2 backend,
+ * which has none. three ignores a loss for `destroyed` (no recovery runs).
+ */
+function deviceGone(renderer: WebGPURenderer): Promise<void> {
+  const backend = renderer.backend as {
+    isWebGPUBackend?: boolean;
+    device?: { lost: Promise<unknown> } | null;
+  };
+  const device = backend.isWebGPUBackend ? backend.device : null;
+  return device ? device.lost.then(() => undefined) : Promise.resolve();
+}
+
+/**
  * Whether the GPU still answers: an empty command buffer, encoded and
  * submitted. When iOS has taken Safari's GPU process, WebKit throws right
  * here ("Unable to make command encoder", "Unable to finish") — before
@@ -975,7 +1005,7 @@ export async function createCityWalkApp(
   } catch (err) {
     // Centralized teardown: covers both abort (StrictMode remount) and real
     // load failures — otherwise the dead canvas would linger in the DOM.
-    teardown(cleanups, scene, renderer);
+    void teardown(cleanups, scene, renderer);
     throw err;
   }
 }
@@ -991,12 +1021,51 @@ function teardown(
   cleanups: Array<() => void>,
   scene: Scene,
   renderer: WebGPURenderer
-): void {
+): Promise<void> {
   runCleanups(cleanups);
   disposeObject3D(scene);
+  return releaseRenderer(renderer);
+}
+
+/**
+ * The teardown before a reload to a heavier page (`disposeForReload`):
+ * the same, but every buffer and texture is destroyed by three one by one
+ * while it still listens — the stream's shared rasters (the class raster,
+ * its splat, NDVI, sky view: tens of MB on a phone) free in a promise's
+ * turn (shared-rasters.ts `clear`), so the renderer goes a task later;
+ * after its dispose only the device's own destroy would reach them. Never
+ * rejects: a cleanup that throws still lets the renderer and its device go.
+ */
+async function teardownWhole(
+  cleanups: Array<() => void>,
+  scene: Scene,
+  renderer: WebGPURenderer,
+  /** what the renderer still holds once the scene is gone, before it goes */
+  onSceneGone: (memory: {
+    geometries: number;
+    textures: number;
+    total: number;
+  }) => void
+): Promise<void> {
+  try {
+    runCleanups(cleanups);
+    disposeObject3D(scene);
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    onSceneGone(renderer.info.memory);
+  } catch {
+    // The renderer and its device go regardless (below).
+  }
+  await releaseRenderer(renderer);
+}
+
+/** The renderer and its device (or its context), and its canvas. */
+function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
   // Async: it destroys the device (or loses the context) at the end.
-  renderer.dispose().catch(() => undefined);
+  const released = renderer.dispose().catch(() => undefined);
   renderer.domElement.remove();
+  return released;
 }
 
 /** Unwinds registered teardowns in reverse creation order. */
@@ -3271,6 +3340,16 @@ async function bootApp(
     checkLoaded();
   };
 
+  /** Marks the app gone, once: false when it already was. */
+  const leave = (): boolean => {
+    if (disposed) {
+      return false;
+    }
+    disposed = true;
+    lifecycle.dispatch({ kind: "dispose" });
+    return true;
+  };
+
   return {
     setSun,
     clearInquiry: () => {
@@ -3421,15 +3500,39 @@ async function bootApp(
     ...siteInfo,
     offset,
     dispose: () => {
-      if (disposed) {
-        return;
+      if (leave()) {
+        // Same list, same order as a failed boot unwinds: animation loop ->
+        // resize observer -> listeners -> touch -> post stack -> stream ->
+        // lights -> sun rig.
+        void teardown(cleanups, scene, renderer);
       }
-      disposed = true;
-      lifecycle.dispatch({ kind: "dispose" });
-      // Same list, same order as a failed boot unwinds: animation loop ->
-      // resize observer -> listeners -> touch -> post stack -> stream ->
-      // lights -> sun rig.
-      teardown(cleanups, scene, renderer);
+    },
+    disposeForReload: () => {
+      if (!leave()) {
+        return Promise.resolve();
+      }
+      const started = performance.now();
+      let gone = false;
+      const lost = deviceGone(renderer).then(() => {
+        gone = true;
+      });
+      const released = teardownWhole(cleanups, scene, renderer, (left) =>
+        opts.trail?.note(
+          "teardown",
+          `${left.geometries} geometries, ${left.textures} textures left, ${Math.round(left.total / 1_048_576)} MB`
+        )
+      );
+      return Promise.race([
+        Promise.all([released, lost]),
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, TEARDOWN_WAIT_MS);
+        }),
+      ]).then(() => {
+        opts.trail?.note(
+          "teardown done",
+          `${Math.round(performance.now() - started)} ms, device ${gone ? "gone" : "not confirmed"}`
+        );
+      });
     },
   };
 }
