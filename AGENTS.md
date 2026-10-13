@@ -132,7 +132,9 @@ config change.
     preflight), `gpu-safety.ts` (the device's safety level in local
     storage, `gpu-safety`: `pageSafety`, `raiseSafety`, `resetSafety` —
     ADR 0046; `quality-panel.tsx`, the sidebar's *Qualität*, shows it and
-    goes back to full detail),
+    goes back to full detail — a reload after the whole app is torn down
+    and its device gone, `disposeForReload`: the new page boots in the old
+    one's process),
     `gpu-recovery.ts` (a lost GPU: one reload per safety level, the
     renderer released first, back at the player's pose; a GPU reclaimed in
     the background, or a frame that threw on a GPU still working — a bug —,
