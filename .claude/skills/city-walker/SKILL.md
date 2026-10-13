@@ -159,12 +159,16 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   glow) as a `MeshStandardNodeMaterial`, always opaque (the see-through
   slider and its `alphaHash` build are gone too). The old ghost/standard
   styles are gone.
-- The map's own marks: the ferry wakes of `riverside-layer.ts` (landing
-  stages, groynes, ferries), faded in with height by `map-overlay.ts`. No
+- The map's own marks: the ferry wakes (landing stages, groynes and
+  ferries are baked into the fine terrain glTF, `lib/city/riverside-mesh.ts`;
+  `riverside-layer.ts` gives them their looks), faded in with height by
+  `map-overlay.ts`. No
   text anywhere in the scene or HUD (plan 032's street names were removed;
   🗃️ in the ledger).
-- More dressing: `tram-layer.ts` (tracks in their bed, the contact wire
-  sagging between spans and arms, stop signs; `lib/city/tram.ts`),
+- More dressing: `tram-layer.ts` (the looks of the tracks in their bed
+  and the contact wire sagging between spans and arms, both baked into the
+  fine terrain by `lib/city/tram-mesh.ts`; the stop signs, built at
+  runtime; `lib/city/tram.ts`),
   `fence-layer.ts` (the fences' material; baked into the fine terrain),
   `furniture-layer.ts` (benches … plan 030's advertising columns, signals,
   hydrants, clocks, drinking fountains, bus-stop signs), `crown-season.ts`
@@ -662,9 +666,11 @@ were ported from; the layer file, not the sandbox, is the source of truth.
 ## Bridges (ADR 0013, ADR 0033)
 
 Decks come from the Basis-DLM (`ver06_l` centrelines, `ver06_f` outlines),
-built per fine terrain tile by `rail-layer.ts`; **only the tile owning a
-deck's centre draws it** (`RailContext.owns`), every copy still lifts that
-tile's rails. The bake (`rail.py` + `bridge.py`) reads a DGM/DOM mosaic
+built per fine terrain tile by `rail-layer.ts` (`buildBridgeLayer`; the
+rails, ballast and platforms are baked into the fine terrain glTF,
+`lib/city/rail-mesh.ts`, plan 074 A); **only the tile owning a deck's
+centre draws it** (`RailContext.owns`), every copy still lifts that tile's
+rails. The bake (`rail.py` + `bridge.py`) reads a DGM/DOM mosaic
 700 m around the tile, so a seam bridge is the same in both files. What it
 measures in DOM1: the **roadway** (lower third across the deck, held
 −6/+4 m around the abutment ramp) and, on bridges whose class stands above

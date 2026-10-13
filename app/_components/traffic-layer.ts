@@ -34,7 +34,7 @@ import {
 } from "@/lib/city/traffic";
 import { glassColour, glassGrazing } from "./glass";
 import { type DeckPoly, deckLift } from "@/lib/city/decks";
-import { buildDeckTable } from "./rail-layer";
+import { buildDeckTable } from "@/lib/city/rail-mesh";
 import type { F, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 import { trafficNow, trafficPositionNode, trafficTravel } from "./traffic-flow";

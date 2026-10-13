@@ -32,7 +32,7 @@ test("the committed spawn-tile DGM resamples to a grid on the Elbe", async () =>
   const inner = 32 * 64 + 32;
   expect(mesh.input.positions[inner * 3 + 2]).toBe(dgm.elevations[inner]);
   expect(mesh.minElevation).toBeCloseTo(min, 3);
-  expect(mesh.input.normals[inner * 3 + 2]).toBeGreaterThan(0.5);
+  expect(mesh.input.normals?.[inner * 3 + 2]).toBeGreaterThan(0.5);
 });
 
 test("a raster without georeferencing is placed by its .tfw, or refused", async () => {

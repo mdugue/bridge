@@ -24,7 +24,7 @@ import {
   fetchOptionalJson,
   isAbortError,
 } from "./fetch-optional";
-import { buildDeckTable } from "./rail-layer";
+import { buildDeckTable } from "@/lib/city/rail-mesh";
 import { setTrafficClock } from "./traffic-flow";
 import {
   createTramCars,

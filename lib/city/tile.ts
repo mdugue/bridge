@@ -93,6 +93,8 @@ export function cityMeshSourceFiles(
 }
 
 export interface TileArtifact {
+  /** a bake input of the fine terrain glTF: never published */
+  baked?: true;
   /** for a downsampled raster: the committed full-size file it is baked
    *  from (under data/<site>/dlm/) and its edge (px) */
   bakedFrom?: { file: string; raster: number };
@@ -114,13 +116,18 @@ export const SMALL_RASTER_PX = 512;
  * (tile-stream.ts fetches it per tile); `coarse`: named in the coarse
  * terrain's, for what must show beyond the fine level's reach; `ask`:
  * named in the tileset's tile list for the inquiry card (ADR 0042),
- * fetched only when something is asked — and `osm`: the file is derived
+ * fetched only when something is asked; `baked`: never served, the build
+ * bakes it into the fine terrain glTF (scripts/bake-lines.ts) — and
+ * `osm`: the file is derived
  * from OpenStreetMap, so its JSON carries the ODbL credit (checked over
  * every committed file by features.test.ts). The raster rows the terrain
  * reads are named by prepare-data.ts's terrain extras.
  */
 interface ArtifactSpec {
   ask?: true;
+  /** a bake input of the fine terrain glTF (scripts/bake-lines.ts: the
+   *  rails, trams and riverside, ADR 0029): committed, never served */
+  baked?: true;
   bakedFrom?: { file: (tile: string) => string; raster: number };
   built?: true;
   /** named in the coarse terrain's extras: what that level is dressed with */
@@ -213,21 +220,28 @@ const ARTIFACTS = {
   // objects (pipeline/bake/mapillary.py, CC BY-SA — its own file, never
   // merged into OSM's); stood with the lamps and the furniture.
   mly: { file: named("mly", "geojson"), dressing: true },
-  rail: { file: named("rail", "geojson"), dressing: true },
+  // The rails, ballast yards and platforms: baked into the fine terrain
+  // glTF with the decks they ride (scripts/bake-lines.ts).
+  rail: { file: named("rail", "geojson"), baked: true },
+  // The bridges are still drawn by the viewer (the inquiry asks one by its
+  // meshes, bridge-ask.ts); the build reads them for what rides them.
   bridge: {
     file: named("bridge", "geojson"),
     dressing: true,
     coarse: true,
     osm: true,
   },
-  railarea: { file: named("railarea", "geojson"), dressing: true },
-  platform: { file: named("platform", "geojson"), dressing: true, osm: true },
+  railarea: { file: named("railarea", "geojson"), baked: true },
+  platform: { file: named("platform", "geojson"), baked: true, osm: true },
   // Optional: the OSM trams — tracks, catenary supports, stop signs
-  // (pipeline/bake/tram.py); without it the tile has no trams.
-  tram: { file: named("tram", "geojson"), dressing: true, osm: true },
+  // (pipeline/bake/tram.py); without it the tile has no trams. Baked into
+  // the fine terrain glTF; its stops ride in that level's extras (their
+  // signs and the inquiry: lib/city/tileset.ts `TerrainExtras.asked`).
+  tram: { file: named("tram", "geojson"), baked: true, osm: true },
   // Optional: the OSM landing stages, groynes and ferry lines
   // (pipeline/bake/riverside.py); a tile without the river has none.
-  riverside: { file: named("riverside", "geojson"), dressing: true, osm: true },
+  // Baked like the trams; the landings ride in the extras for the inquiry.
+  riverside: { file: named("riverside", "geojson"), baked: true, osm: true },
   // Optional: the street-tree cadastre (pipeline/bake/trees.py), the OSM
   // hedges and the laser-scan crowns outside the canopy mask
   // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).
@@ -257,7 +271,7 @@ const ARTIFACTS = {
 
 type Specs = typeof ARTIFACTS;
 export type TileArtifactKind = keyof Specs;
-type Flag = "ask" | "coarse" | "dressing" | "osm";
+type Flag = "ask" | "baked" | "coarse" | "dressing" | "osm";
 type KindsWith<F extends Flag> = {
   [K in TileArtifactKind]: Specs[K] extends Record<F, true> ? K : never;
 }[TileArtifactKind];
@@ -284,6 +298,10 @@ export const COARSE_DRESSING_KINDS: readonly CoarseDressingKind[] =
 /** The side files only the inquiry card fetches. */
 export type AskKind = KindsWith<"ask">;
 export const ASK_KINDS: readonly AskKind[] = kindsWith("ask");
+/** The side files the build bakes into the fine terrain glTF
+ *  (scripts/bake-lines.ts): bake inputs, never served. */
+export type LineKind = KindsWith<"baked">;
+export const LINE_KINDS: readonly LineKind[] = kindsWith("baked");
 /** Side files derived from OSM (their JSON must carry the ODbL credit). */
 export const OSM_KINDS: readonly TileArtifactKind[] = kindsWith("osm");
 
@@ -305,7 +323,8 @@ export function pickFiles<K extends TileArtifactKind>(
 
 /**
  * Every side file of a tile — the ONE list scripts/prepare-data.ts publishes
- * and names in the tile's glTF extras and the tileset. Under
+ * and names in the tile's glTF extras and the tileset (those it bakes into
+ * the fine terrain glTF instead, `baked`, it only reads). Under
  * data/<site>/dlm/, except the class rasters with `bakedFrom`, which
  * prepare-data downsamples (NEAREST) from the committed 4096² one.
  */
@@ -318,6 +337,7 @@ export function tileArtifacts(
     out[kind] = {
       file: spec.file(tile),
       required: spec.required === true,
+      ...(spec.baked ? { baked: true as const } : {}),
       ...(spec.built ? { built: true as const } : {}),
       ...(spec.bakedFrom
         ? {

@@ -53,8 +53,6 @@ import type {
   PlinthFeature,
   DormerFeature,
   FeatureCollection,
-  RailFeature,
-  TramFeature,
   MeasuredRoofFeature,
   SmallBuildingFeature,
   StructureFeature,
@@ -66,7 +64,6 @@ import {
   siteProvenance,
 } from "../lib/city/provenance";
 import type { Passage } from "../lib/city/passages";
-import type { LevelLine } from "../lib/city/levels";
 import { tileExtentOf } from "../lib/city/site";
 import { packPoints, pointOf } from "../lib/city/point-pack";
 import { treesOffStructures } from "../lib/city/small-buildings";
@@ -170,7 +167,9 @@ import {
   siteLineLevels,
   sitePassages,
 } from "./line-levels";
-import { writeMeshGlb } from "./tile-glb";
+import { askedLines, lineNodes } from "./bake-lines";
+import { lineFeatures, lineSourceFiles } from "./line-sources";
+import { type ChildInput, writeMeshGlb } from "./tile-glb";
 import {
   fenceLines,
   gatePoints,
@@ -510,8 +509,8 @@ async function publishCanopy(tile: string, file: string): Promise<string> {
 }
 
 /** The levels of the site's rail and tram lines, solved over whole lines on
- *  every tile's DGM (scripts/line-levels.ts): each tile's file publishes
- *  with them. */
+ *  every tile's DGM (scripts/line-levels.ts): each tile's lines are baked
+ *  into its fine terrain glTF on them (`lineChildren`). */
 const levelsStarted = performance.now();
 const lineLevels = parse<SiteLevels>(
   await cached(
@@ -541,24 +540,6 @@ function passagesIn(tile: string): Passage[] {
   );
 }
 
-/**
- * A tile's rail or tram file with each line's runs off the ground (`lv`,
- * lib/city/levels.ts), so the layer draws it on the level its whole run
- * says rather than deciding per sample.
- */
-function publishLevels(tile: string, line: LevelLine, file: string): string {
-  const src = at(sideFileSource(SITE, file));
-  const runs = lineLevels[tile]?.[line] ?? {};
-  if (Object.keys(runs).length === 0) {
-    return publish(file, readFileSync(src));
-  }
-  const doc = readJson<FeatureCollection<RailFeature | TramFeature>>(src);
-  const features = (doc.features ?? []).map((f, i) =>
-    runs[i] ? { ...f, properties: { ...f.properties, lv: runs[i] } } : f
-  );
-  return publish(file, utf8({ ...doc, features }));
-}
-
 // A ground warmer needs none; a tile warmer its own tiles'.
 const sidesStarted = performance.now();
 for (const tile of MODE.kind === "ground"
@@ -570,8 +551,10 @@ for (const tile of MODE.kind === "ground"
     TileArtifact,
   ][];
   for (const [kind, artifact] of artifacts) {
-    if (kind === "crowns") {
-      // baked from the tree files on the fine ground (publishCrowns)
+    if (kind === "crowns" || artifact.baked) {
+      // the crowns are baked from the tree files on the fine ground
+      // (publishCrowns); the rails, trams and riverside into the fine
+      // terrain glTF (lineChildren): never served
       continue;
     }
     if (
@@ -586,13 +569,6 @@ for (const tile of MODE.kind === "ground"
       existsSync(at(sideFileSource(SITE, artifact.file)))
     ) {
       names[kind] = await publishCanopy(tile, artifact.file);
-      continue;
-    }
-    if (
-      (kind === "rail" || kind === "tram") &&
-      existsSync(at(sideFileSource(SITE, artifact.file)))
-    ) {
-      names[kind] = publishLevels(tile, kind, artifact.file);
       continue;
     }
     if (artifact.bakedFrom) {
@@ -841,6 +817,23 @@ function terrainInputs(tile: string): string[] {
   ];
 }
 
+/**
+ * What the fine level adds to its key for its rails, trams and riverside
+ * (`lineChildren`): their side files and their bridges', the lines' levels
+ * — and what the inquiry asks of them, which its extras carry.
+ */
+function fineLines(tile: string): {
+  asked: TerrainExtras["asked"];
+  inputs: string[];
+  levels: unknown;
+} {
+  return {
+    inputs: lineSourceFiles(SITE, tile),
+    asked: askedLines(lineFeatures(SITE, tile)),
+    levels: lineLevels[tile] ?? {},
+  };
+}
+
 /** A tile's DGM read at `size` (`"native"`: its own resolution). */
 async function tileDgm(tile: string, size: number | "native"): Promise<Dgm> {
   const source = dgmSourceFiles(SITE, tile);
@@ -1001,7 +994,8 @@ async function siteGround(): Promise<{
 
 /** The fine level's own nodes beside the grid: the stairs it owns, its
  *  walls, its kerb stones and its fences, standing on every tile's shaped
- *  ground. Gates cut the fences and the freestanding walls. */
+ *  ground (gates cut the fences and the freestanding walls) — and its
+ *  rails, trams and riverside on the same ground (`lineChildren`). */
 async function fineChildren(
   tile: string,
   bounds: TerrainExtras["bounds"]
@@ -1024,7 +1018,29 @@ async function fineChildren(
     offset,
     cut.leaves
   );
-  return [stairs, walls, kerbs, fences].filter((m) => m !== null);
+  return [
+    ...[stairs, walls, kerbs, fences].filter((m) => m !== null),
+    ...lineChildren(tile, ground.heightAt),
+  ];
+}
+
+/**
+ * A tile's rails, ballast yards, platforms, trams and riverside as the
+ * fine level's nodes (scripts/bake-lines.ts, plan 074 part A), on the fine
+ * ground of every tile — the viewer used to build them per tile from the
+ * side files, on whatever terrain had loaded. A span's deck is its
+ * owner's (the tile holding its middle, as the viewer drew it).
+ */
+function lineChildren(
+  tile: string,
+  heightAt: (x: number, y: number) => number | null
+): ChildInput[] {
+  const extent = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+  return lineNodes(lineFeatures(SITE, tile, lineLevels[tile]), {
+    heightAt,
+    offset,
+    owns: (x, y) => ownsPoint(extent, x, y),
+  });
 }
 
 /** The fine level's allotment colonies (plan 028) and road markings (plan
@@ -1115,6 +1131,32 @@ async function publishCrowns(tile: string): Promise<string | undefined> {
   return publish(file, bytes);
 }
 
+/** What a terrain level's extras name before its ground is meshed: its
+ *  rasters and its side files (the published names, `names`). */
+function describedTerrain(tile: string, level: 0 | 1, names: Published) {
+  return {
+    kind: "terrain" as const,
+    tileId: tile,
+    level,
+    n: TERRAIN_LEVELS[level].n,
+    // the coarse level reads its 1024² raster on every tier
+    // (lib/city/tile.ts COARSE_RASTER_PX)
+    landcover: (level === 0 ? names.landcover : names.landcoverCoarse) ?? "",
+    landcoverLow:
+      (level === 0 ? names.landcoverLow : names.landcoverCoarse) ?? "",
+    ...(names.ndvi ? { ndvi: names.ndvi } : {}),
+    ...(level === 0 && names.surface ? { surface: names.surface } : {}),
+    ...(level === 0 && names.edges ? { edges: names.edges } : {}),
+    ...(names.sport && names.sportTable
+      ? { sport: names.sport, sportTable: names.sportTable }
+      : {}),
+    ...paintAndLight(names, level, colonyCrops.get(tile)),
+    ...(level === 0
+      ? { dressing: pickFiles(names, DRESSING_KINDS) }
+      : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
+  };
+}
+
 /** A tile's terrain at one level: glTF + its extent and elevation range. */
 async function bakeTerrain(
   tile: string,
@@ -1136,32 +1178,11 @@ async function bakeTerrain(
       names.crowns = crowns;
     }
   }
-  const { n } = TERRAIN_LEVELS[level];
   // The fine level's walls stand on the neighbours' ground too.
   const inputs =
     level === 0 ? TILES.flatMap(terrainInputs) : terrainInputs(tile);
   const stem = `terrain_${tile}_l${level}`;
-  const described = {
-    kind: "terrain" as const,
-    tileId: tile,
-    level,
-    n,
-    // the coarse level reads its 1024² raster on every tier
-    // (lib/city/tile.ts COARSE_RASTER_PX)
-    landcover: (level === 0 ? names.landcover : names.landcoverCoarse) ?? "",
-    landcoverLow:
-      (level === 0 ? names.landcoverLow : names.landcoverCoarse) ?? "",
-    ...(names.ndvi ? { ndvi: names.ndvi } : {}),
-    ...(level === 0 && names.surface ? { surface: names.surface } : {}),
-    ...(level === 0 && names.edges ? { edges: names.edges } : {}),
-    ...(names.sport && names.sportTable
-      ? { sport: names.sport, sportTable: names.sportTable }
-      : {}),
-    ...paintAndLight(names, level, colonyCrops.get(tile)),
-    ...(level === 0
-      ? { dressing: pickFiles(names, DRESSING_KINDS) }
-      : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
-  };
+  const described = describedTerrain(tile, level, names);
   // The passages come from every tile's lines and decks (line-levels.ts);
   // the fine level's walls, kerbs, stairs and fences stand on every tile's
   // fine ground, and so on every tile's passages.
@@ -1173,7 +1194,21 @@ async function bakeTerrain(
     "lib/city/fences.ts",
     "lib/city/tile.ts",
   ];
-  const key = cacheKey(inputs, bake, offset, described, opened);
+  // The fine level carries the tile's rails, trams and riverside too
+  // (lineChildren): their files, their builders, their lines' levels, and
+  // what the inquiry asks of them, in its extras.
+  const lines = level === 0 ? fineLines(tile) : undefined;
+  const key = lines
+    ? cacheKey(
+        [...inputs, ...lines.inputs],
+        [...bake, "scripts/bake-lines.ts", "scripts/line-sources.ts"],
+        offset,
+        described,
+        opened,
+        lines.levels,
+        lines.asked ?? null
+      )
+    : cacheKey(inputs, bake, offset, described, opened);
   const meta = parse<{
     bounds: TerrainExtras["bounds"];
     ground?: number[];
@@ -1198,6 +1233,7 @@ async function bakeTerrain(
   );
   const extras: TerrainExtras = {
     ...described,
+    ...(lines?.asked ? { asked: lines.asked } : {}),
     bounds: meta.bounds,
     minElevation: meta.minZ,
     ...(meta.tin ? { tin: meta.tin } : {}),
@@ -1210,7 +1246,7 @@ async function bakeTerrain(
         name: "terrain",
         extras: { ...extras },
         // The fine level carries the tile's stairs and walls, baked from the
-        // same files the ground was shaped with.
+        // same files the ground was shaped with, and its lines.
         children: level === 0 ? await fineChildren(tile, meta.bounds) : [],
       })
     )

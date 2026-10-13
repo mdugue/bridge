@@ -44,6 +44,7 @@ import type { Landmark } from "@/lib/city/landmarks";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import type { LookKey, LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
+import { LINE_LAYERS, type LineLayer } from "@/lib/city/line-nodes";
 import type { BikeCounter } from "@/lib/city/bike-counts";
 import { activeDataLayers } from "@/lib/city/data-layers";
 import {
@@ -235,8 +236,9 @@ const BVH_IDLE_MS = 1000;
 const paperOf = (style: RenderStyle): Color =>
   new Color(RENDER_STYLE_BY_ID[style].swatch[0]);
 
-/** The HUD census's layers: the content's own, and a dressing's parts
- *  (tile-stream.ts DRESSING_PARTS). */
+/** The HUD census's layers: the content's own, a dressing's parts
+ *  (tile-stream.ts DRESSING_PARTS) and the lines baked into the fine
+ *  level (lib/city/line-nodes.ts). */
 export type LayerName =
   | "bikes"
   | "trams"
@@ -247,20 +249,33 @@ export type LayerName =
   | "terrain"
   | "walls"
   | "water"
-  | DressingPartName;
+  | DressingPartName
+  | LineLayer;
 
-/** The census of every dressing part, over the visible dressings. */
+/** The census of every dressing part, over the visible dressings — the
+ *  rails and the trams with what of them the fine level carries baked
+ *  (the riverside is all baked). */
 function dressingCensus(
   dressings: TileDressing[],
+  terrains: TerrainLayer[],
   census: (roots: (Object3D | undefined)[]) => SceneCensus
-): Record<DressingPartName, SceneCensus> {
-  return Object.fromEntries(
+): Record<DressingPartName | LineLayer, SceneCensus> {
+  const baked = (layer: LineLayer) =>
+    terrains.flatMap((t) => t.lines?.[layer] ?? []);
+  const parts = Object.fromEntries(
     DRESSING_PART_NAMES.map((name) => [
       name,
-      census(dressings.map(DRESSING_PARTS[name])),
+      census([
+        ...dressings.map(DRESSING_PARTS[name]),
+        ...(isLineLayer(name) ? baked(name) : []),
+      ]),
     ])
   ) as Record<DressingPartName, SceneCensus>;
+  return { ...parts, riverside: census(baked("riverside")) };
 }
+
+const isLineLayer = (name: string): name is LineLayer =>
+  (LINE_LAYERS as readonly string[]).includes(name);
 
 export interface CityWalkStats {
   buildingCount: number;
@@ -2203,7 +2218,7 @@ async function bootApp(
         water: census(
           terrains.flatMap((t) => [t.water?.mesh, t.water?.mistMesh])
         ),
-        ...dressingCensus(dressings, census),
+        ...dressingCensus(dressings, terrains, census),
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
         kerbs: census(terrains.map((t) => t.kerbs)),

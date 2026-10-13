@@ -1,46 +1,21 @@
 import { expect, test } from "bun:test";
 import { Box3, type Mesh, MeshStandardNodeMaterial } from "three/webgpu";
-import type {
-  AreaFeature,
-  BridgeFeature,
-  RailFeature,
-} from "@/lib/city/features";
+import type { BridgeFeature } from "@/lib/city/features";
 import { deckMaterial, stoneMaterial } from "./bridge-surface";
 import {
-  approaches,
-  buildBallast,
-  buildDeckTable,
-  buildRail,
+  buildBridgeLayer,
   COLORS,
+  RAIL_LOOKS,
   type RailContext,
 } from "./rail-layer";
 import { axisFrame } from "@/lib/city/bridge";
-import { deckLift, ringToWorld } from "@/lib/city/decks";
 
-const ctx: RailContext = {
+/** What the bridges are built on (the layer adds the triangulation). */
+type Ground = Omit<RailContext, "triangulate">;
+
+const ctx: Ground = {
   offset: { cx: 0, cy: 0 },
   heightAt: () => 100,
-};
-
-const square = (x: number, y: number, s = 10): [number, number][] => [
-  [x, y],
-  [x + s, y],
-  [x + s, y + s],
-  [x, y + s],
-  [x, y],
-];
-
-const polygon: AreaFeature = {
-  geometry: { type: "Polygon", coordinates: [square(0, 0)] },
-  properties: {},
-};
-
-const multiPolygon: AreaFeature = {
-  geometry: {
-    type: "MultiPolygon",
-    coordinates: [[square(100, 0)], [square(200, 0)]],
-  },
-  properties: {},
 };
 
 const triangleCount = (mesh: Mesh | null): number => {
@@ -52,153 +27,26 @@ const triangleCount = (mesh: Mesh | null): number => {
   return n / 3;
 };
 
-test("a Polygon ballast area builds a slab", () => {
-  const mesh = buildBallast([polygon], ctx);
-  expect(mesh).not.toBeNull();
-  expect(triangleCount(mesh)).toBeGreaterThan(0);
-});
-
-test("a yard across an underpass follows the ground, not its corners", () => {
-  // the embankment at 117 m, a street at 111 m through it (x 40–60); the
-  // yard's outline has corners down in the street
-  const underpass: RailContext = {
-    offset: { cx: 0, cy: 0 },
-    heightAt: (x) => (x > 40 && x < 60 ? 111 : 117),
-  };
-  const yard: AreaFeature = {
-    geometry: {
-      type: "Polygon",
-      coordinates: [
-        [
-          [0, 0],
-          [45, 0],
-          [55, 0],
-          [100, 0],
-          [100, 30],
-          [55, 30],
-          [45, 30],
-          [0, 30],
-          [0, 0],
-        ],
-      ],
-    },
-    properties: {},
-  };
-  const mesh = buildBallast([yard], underpass);
-  const pos = mesh?.geometry.getAttribute("position");
-  expect(pos?.count ?? 0).toBeGreaterThan(0);
-  let overStreet = 0;
-  for (let i = 0; pos && i < pos.count; i += 3) {
-    const xs = [0, 1, 2].map((k) => pos.getX(i + k));
-    const mx = (xs[0] + xs[1] + xs[2]) / 3;
-    const top = Math.max(...[0, 1, 2].map((k) => pos.getY(i + k)));
-    if (mx > 44 && mx < 56 && top > 113) {
-      overStreet++;
-    }
-  }
-  // no sheet stands over the street, closing the passage
-  expect(overStreet).toBe(0);
-});
-
-test("MultiPolygon ballast contributes every part", () => {
-  const single = triangleCount(buildBallast([polygon], ctx));
-  const multi = triangleCount(buildBallast([polygon, multiPolygon], ctx));
-  // Two extra squares → roughly three times the geometry of one.
-  expect(multi).toBeGreaterThan(single);
-  expect(multi).toBe(single * 3);
-});
-
-test("null properties are tolerated", () => {
-  const feature: AreaFeature = {
-    geometry: { type: "Polygon", coordinates: [square(0, 0)] },
-    properties: null,
-  };
-  expect(buildBallast([feature], ctx)).not.toBeNull();
-});
-
-test("buildRail: empty inputs yield an empty group, a track and a platform each a mesh", () => {
-  const empty = buildRail(
-    { rails: [], bridges: [], ballast: [], platforms: [] },
-    ctx
-  );
+test("no bridges, an empty group named for the layer", () => {
+  const empty = buildBridgeLayer([], ctx);
   expect(empty.name).toBe("rail");
   expect(empty.children).toHaveLength(0);
-
-  const track: RailFeature = {
-    geometry: {
-      type: "LineString",
-      coordinates: [
-        [0, 0],
-        [40, 0],
-      ],
-    },
-    properties: { tracks: 2 },
-  };
-  const built = buildRail(
-    { rails: [track], bridges: [], ballast: [], platforms: [polygon] },
-    ctx
-  );
-  expect(built.children).toHaveLength(2);
-  for (const child of built.children) {
-    expect(triangleCount(child as Mesh)).toBeGreaterThan(0);
-  }
 });
 
-test("a track over the gap the DGM leaves beside a bridge spans it on a deck of its own", () => {
-  // an embankment at 117.5 with a 40 m gap down to the street at 111.5 —
-  // a bridge with no deck outline in the data
-  const gap: RailContext = {
-    offset: { cx: 0, cy: 0 },
-    heightAt: (x) => (x > 80 && x < 120 ? 111.5 : 117.5),
-  };
-  const track: RailFeature = {
-    geometry: {
-      type: "LineString",
-      coordinates: [
-        [0, 0],
-        [200, 0],
-      ],
-    },
-    properties: { tracks: 1 },
-  };
-  const built = buildRail(
-    { rails: [track], bridges: [], ballast: [], platforms: [] },
-    gap
-  );
-  // the rails (built first: no bridges, no ballast) never dip into the gap
-  const rails = new Box3().setFromObject(built.children[0]);
-  expect(rails.min.y).toBeGreaterThan(117.5);
-  // and a deck stands under them, at their level, on piers down to the
-  // street
-  expect(built.children.length).toBeGreaterThan(1);
-  const deck = new Box3();
-  for (const c of built.children.slice(1)) {
-    deck.union(new Box3().setFromObject(c));
-  }
-  expect(deck.min.x).toBeLessThan(85);
-  expect(deck.max.x).toBeGreaterThan(115);
-  expect(deck.max.y).toBeGreaterThan(117.5);
-  expect(deck.min.y).toBeLessThan(111.5);
-});
-
-test("a null geometry is skipped, not thrown", () => {
-  const feature: AreaFeature = { geometry: null, properties: null };
-  expect(buildBallast([feature, polygon], ctx)).not.toBeNull();
-  expect(buildBallast([feature], ctx)).toBeNull();
-});
-
-test("the materials are scene-wide lit node materials, one per look", () => {
-  const a = buildBallast([polygon], ctx);
-  const b = buildBallast([multiPolygon], ctx);
-  expect(a?.material).toBeInstanceOf(MeshStandardNodeMaterial);
-  // the same colour and finish on two builds is one shared material
-  expect(a?.material).toBe(b?.material as MeshStandardNodeMaterial);
-  const material = a?.material as MeshStandardNodeMaterial;
+test("the baked rails' looks are scene-wide lit node materials, one per look", () => {
+  const ballast = RAIL_LOOKS["rail-ballast"].material();
+  expect(ballast).toBeInstanceOf(MeshStandardNodeMaterial);
+  // the same colour and finish asked twice is one shared material
+  expect(RAIL_LOOKS["rail-ballast"].material()).toBe(ballast);
+  const material = ballast;
   expect(material.userData.shared).toBe(true);
   expect(material.polygonOffset).toBe(true);
   expect(material.polygonOffsetUnits).toBe(-2);
   expect(material.fog).toBe(true);
-  expect(a?.castShadow).toBe(false);
+  expect(RAIL_LOOKS["rail-ballast"].cast).toBe(false);
+  expect(RAIL_LOOKS["rail-span-top"].material()).toBe(
+    deckMaterial("rail", COLORS.deckRail)
+  );
 });
 
 /** A 200 m road deck along x at 120 m over ground at 100 m. */
@@ -227,9 +75,8 @@ function deck(
   };
 }
 
-const empty = { rails: [], ballast: [], platforms: [] };
-const trianglesOf = (bridge: BridgeFeature, c: RailContext = ctx) =>
-  buildRail({ ...empty, bridges: [bridge] }, c).children.reduce(
+const trianglesOf = (bridge: BridgeFeature, c: Ground = ctx) =>
+  buildBridgeLayer([bridge], c).children.reduce(
     (t, m) => t + triangleCount(m as Mesh),
     0
   );
@@ -244,19 +91,16 @@ test("a measured truss becomes an open frame with towers", () => {
     );
   });
   const plain = trianglesOf(deck({ structure: "suspension" }));
-  const truss = buildRail(
-    {
-      ...empty,
-      bridges: [
-        deck({
-          structure: "suspension",
-          ribs: [
-            { offset: 6, rise },
-            { offset: -6, rise },
-          ],
-        }),
-      ],
-    },
+  const truss = buildBridgeLayer(
+    [
+      deck({
+        structure: "suspension",
+        ribs: [
+          { offset: 6, rise },
+          { offset: -6, rise },
+        ],
+      }),
+    ],
     ctx
   );
   // deck + stone + the steel
@@ -277,11 +121,8 @@ test("an arch rib reaches down to its springing", () => {
   const rise = Array.from({ length: 101 }, (_, i) =>
     Math.max(0, arch(i * 2) - 120)
   );
-  const built = buildRail(
-    {
-      ...empty,
-      bridges: [deck({ structure: "arch", ribs: [{ offset: 6, rise }] })],
-    },
+  const built = buildBridgeLayer(
+    [deck({ structure: "arch", ribs: [{ offset: 6, rise }] })],
     ctx
   );
   const steel = built.children.at(-1) as Mesh;
@@ -299,7 +140,7 @@ test("a deck across a seam is drawn by its owner only", () => {
 
 test("the fairway stays free of piers", () => {
   const pierCount = (b: BridgeFeature) => {
-    const built = buildRail({ ...empty, bridges: [b] }, ctx);
+    const built = buildBridgeLayer([b], ctx);
     const stone = built.children.at(-1) as Mesh;
     return triangleCount(stone);
   };
@@ -309,7 +150,7 @@ test("the fairway stays free of piers", () => {
 });
 
 test("no parapet wall runs across the roadway at the abutments", () => {
-  const built = buildRail({ ...empty, bridges: [deck({})] }, ctx);
+  const built = buildBridgeLayer([deck({})], ctx);
   const stone = built.children.at(-1) as Mesh;
   const pos = stone.geometry.getAttribute("position");
   let across = 0;
@@ -332,10 +173,7 @@ test("no parapet wall runs across the roadway at the abutments", () => {
 test("a masonry bridge's walls hang from the deck's own edges", () => {
   // 200 m over a river at 100 m, deck 120 m, 12 m wide, the axis given
   // corner to corner the way the old bake wrote it would put walls off it
-  const built = buildRail(
-    { ...empty, bridges: [deck({ structure: "arch" })] },
-    ctx
-  );
+  const built = buildBridgeLayer([deck({ structure: "arch" })], ctx);
   const stone = built.children.at(-1) as Mesh;
   const pos = stone.geometry.getAttribute("position");
   let below = 0;
@@ -369,7 +207,7 @@ test("a curved deck's sides all face out, the inner edge too", () => {
       line: Array.from({ length: 79 }, () => 120),
     },
   };
-  const built = buildRail({ ...empty, bridges: [bridge] }, ctx);
+  const built = buildBridgeLayer([bridge], ctx);
   let sides = 0;
   for (const child of built.children) {
     const geo = (child as Mesh).geometry;
@@ -398,7 +236,7 @@ test("a curved deck's sides all face out, the inner edge too", () => {
 /** Every vertex of every mesh a bridge builds, with its normal. */
 function vertices(b: BridgeFeature) {
   const out: { x: number; y: number; z: number; ny: number }[] = [];
-  for (const child of buildRail({ ...empty, bridges: [b] }, ctx).children) {
+  for (const child of buildBridgeLayer([b], ctx).children) {
     const geo = (child as Mesh).geometry;
     const pos = geo.getAttribute("position");
     const nrm = geo.getAttribute("normal");
@@ -457,7 +295,7 @@ test("no face of a bridge is left without a normal (it would shade black)", () =
       [201, 0],
     ],
   });
-  for (const child of buildRail({ ...empty, bridges: [b] }, ctx).children) {
+  for (const child of buildBridgeLayer([b], ctx).children) {
     const nrm = (child as Mesh).geometry.getAttribute("normal");
     for (let i = 0; i < nrm.count; i++) {
       expect(Math.hypot(nrm.getX(i), nrm.getY(i), nrm.getZ(i))).toBeGreaterThan(
@@ -467,65 +305,8 @@ test("no face of a bridge is left without a normal (it would shade black)", () =
   }
 });
 
-test("a deck end above the ground gets an approach down to it", () => {
-  // 40 m along x, 10 m wide, its top 101 m over flat ground at 100 m
-  const ring = ringToWorld(
-    square(0, -5, 10).map(([x, y]) => [x * 4, y]),
-    {
-      cx: 0,
-      cy: 0,
-    }
-  );
-  const topY = ring.pts.map(() => 101);
-  const found = approaches(ring, topY, "road", undefined, ctx, []);
-  expect(found.length).toBe(2);
-  for (const a of found) {
-    for (const c of a.columns) {
-      const run = Math.hypot(c.land.x - c.x, c.land.z - c.z);
-      // at 8 % a metre's drop lands 12 m out, at the ground
-      expect(run).toBeCloseTo(12, 5);
-      expect(c.land.y).toBeCloseTo(100.04, 5);
-      // it runs away from the deck, along x
-      expect(Math.abs(a.dir.x)).toBeCloseTo(1, 5);
-      expect(c.land.x < 0 || c.land.x > 40).toBe(true);
-    }
-  }
-  // flush with the ground: none
-  const flush = ring.pts.map(() => 100.02);
-  expect(approaches(ring, flush, "road", undefined, ctx, [])).toEqual([]);
-  // an end continued by another deck: none there
-  const next = ringToWorld(square(40, -5, 10), { cx: 0, cy: 0 });
-  const other = buildDeckTable(
-    [
-      {
-        geometry: { type: "Polygon", coordinates: [square(40, -5, 10)] },
-        properties: { kind: "road", deck: next.pts.map(() => 101) },
-      },
-    ],
-    { offset: ctx.offset }
-  );
-  expect(approaches(ring, topY, "road", undefined, ctx, other).length).toBe(1);
-});
-
-test("the lift table carries the approaches for what rides up to a deck", () => {
-  const bridge: BridgeFeature = {
-    geometry: {
-      type: "Polygon",
-      coordinates: [square(0, -5, 10).map(([x, y]) => [x * 4, y])],
-    },
-    properties: { kind: "road", deck: [101, 101, 101, 101, 101] },
-  };
-  const decks = buildDeckTable([bridge], ctx);
-  // 6 m out from the west end (world x = −6), halfway down the approach
-  expect(deckLift(decks, -6, 0, undefined, "ramps")).toBeCloseTo(100.52, 1);
-  expect(deckLift(decks, -6, 0, undefined, "decks")).toBeNull();
-  expect(deckLift(decks, 20, 0, undefined, "decks")).toBeCloseTo(101, 5);
-  // without the ground, only the decks
-  expect(buildDeckTable([bridge], { offset: ctx.offset }).length).toBe(1);
-});
-
 test("a deck's top is laid out by its frame; its stone is dressed", () => {
-  const built = buildRail({ ...empty, bridges: [deck({})] }, ctx);
+  const built = buildBridgeLayer([deck({})], ctx);
   const [top, stone] = built.children as Mesh[];
   expect(top.material).toBe(deckMaterial("road", COLORS.deckRoad));
   expect(stone.material).toBe(stoneMaterial(COLORS.deckStone));
@@ -542,8 +323,8 @@ test("a deck's top is laid out by its frame; its stone is dressed", () => {
     expect(frame.getW(i)).toBeCloseTo(-6, 6);
   }
   // an older file without an axis keeps its colour: no frame to lay out
-  const plain = buildRail(
-    { ...empty, bridges: [deck({ axis: undefined, line: undefined })] },
+  const plain = buildBridgeLayer(
+    [deck({ axis: undefined, line: undefined })],
     ctx
   ).children[0] as Mesh;
   const zeros = plain.geometry.getAttribute("aDeck");
@@ -572,8 +353,7 @@ test("a curved deck's frame holds inside every triangle, not only at its corners
     line: Array.from({ length: 160 }, () => 120),
   });
   bridge.geometry.coordinates = [ring];
-  const top = buildRail({ ...empty, bridges: [bridge] }, ctx)
-    .children[0] as Mesh;
+  const top = buildBridgeLayer([bridge], ctx).children[0] as Mesh;
   const pos = top.geometry.getAttribute("position");
   const nrm = top.geometry.getAttribute("normal");
   const frame = top.geometry.getAttribute("aDeck");

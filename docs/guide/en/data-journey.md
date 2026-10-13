@@ -126,9 +126,10 @@ In total the repository carries about 400 MB of data for the fifteen tiles.
 | Roof colours | DOP + LoD2 | the roof colour table | folded into the building mesh's table | inside the building mesh |
 | Shop fronts, listed buildings | OpenStreetMap + LoD2 | the per-building table | folded into the building mesh's table | inside the building mesh |
 | Monuments and fountains | Basis-DLM (names, positions) + OpenStreetMap (basins) | the GeoJSON files | — | as committed |
-| Lamps, platforms, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
+| Lamps, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
 | Walls, fences, stairs, terraces | OpenStreetMap + DGM1 | the GeoJSON files | built into the detailed terrain mesh: the ground shaped along and under them, the walls, fences and steps as part of the mesh | inside the terrain mesh |
-| Rails, ballast, bridges | Basis-DLM (+ DOM1/DGM1 for heights) | the GeoJSON files | — | as committed |
+| Rails, ballast, platforms, trams, landing stages | Basis-DLM + OpenStreetMap (+ DGM1 for heights) | the GeoJSON files | built into the detailed terrain mesh, on the ground of every tile, each line on the level it runs on | inside the terrain mesh |
+| Bridges | Basis-DLM (+ DOM1/DGM1 for heights) | the GeoJSON files | — | as committed |
 
 ### Station 5 — the build step (`scripts/prepare-data.ts`)
 
@@ -180,8 +181,9 @@ manifest (`/data/dresden/manifest.json`) and its tileset, then **streams**: a
 library called 3DTilesRendererJS decides, from where the camera stands and
 where it looks, which files to fetch. The first picture waits only for the
 buildings and the terrain of the tile you start on. Tiles near the camera
-get the detailed terrain — with their walls and stairs already built in —
-and are then *dressed* with trees, lamps and rails; tiles further away show their buildings on the coarse terrain;
+get the detailed terrain — with their walls, stairs, rails, trams and
+landing stages already built in — and are then *dressed* with trees, lamps
+and bridges; tiles further away show their buildings on the coarse terrain;
 tiles out of sight are not fetched, and tiles you have left behind can be
 dropped from memory again. Measured on the current data (compressed size,
 as sent over the network):
@@ -191,14 +193,14 @@ as sent over the network):
 | Buildings (with the style table) | 1.34 MB | up to 1.91 MB | the tile is in view |
 | Building footprints (minimap) | 48 kB | up to 75 kB | with the buildings |
 | Coarse terrain (512²) | 0.41 MB | 0.44–0.65 MB | the tile is in view |
-| Detailed terrain (a TIN, with its walls, stairs and kerb stones) | 1.61 MB | 1.31–3.56 MB | the camera comes close |
+| Detailed terrain (a TIN, with its walls, stairs, kerb stones, rails, trams and landing stages) | 1.61 MB | 1.31–3.56 MB | the camera comes close |
 | Land-use classes, 512² | 15 kB | 9–18 kB | at the start, for the minimap |
 | Land-use classes, 2048² | 0.08 MB | 0.06–0.11 MB | with the coarse terrain (on phones with every level) |
 | Land-use classes, 4096² | 0.22 MB | 0.15–0.29 MB | with the detailed terrain (desktop only) |
 | Greenness (NDVI) | 0.39 MB | 0.32–0.77 MB | with the terrain |
 | Tree points | 36 kB | 41–526 kB | with the detailed terrain |
 | Street furniture | 19 kB | 0.3–19 kB | with the detailed terrain |
-| Lamps, rails, ballast, bridges, platforms, hedge rows | under 5 kB each | under 5 kB each | with the detailed terrain |
+| Lamps, bridges, hedge rows | under 5 kB each | under 5 kB each | with the detailed terrain |
 | Paving and road-edge rasters | 2.18 MB | 0.28–2.76 MB | with the detailed terrain |
 | **Per tile, in full detail** | **≈ 6.4 MB** | **≈ 4.0–9.7 MB** | |
 | **Per tile, as distant backdrop** | ≈ 2.3 MB | ≈ 1.3–3.3 MB | |

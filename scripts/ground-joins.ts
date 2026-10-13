@@ -1,9 +1,11 @@
 /**
  * Where every part baked into the fine terrain meets the ground, measured
  * over the committed tiles (ADR 0035): the kerb stones, the walls, the
- * flights of steps and the fences, built from the committed sources on the
- * shaped native DGM exactly as prepare-data.ts builds them on the TIN (which
- * stays within FINE_TIN_MAX_ERROR of it), each reporting its joins
+ * flights of steps, the fences, the rails, the trams and the riverside
+ * (plan 074 part A), built from the committed sources on the shaped
+ * native DGM exactly as prepare-data.ts builds them on the TIN (which
+ * stays within FINE_TIN_MAX_ERROR of it) — the lines on the site's line
+ * levels when it is given them —, each reporting its joins
  * (lib/city/ground-join.ts), each join checked against that ground.
  *
  * ground-joins.test.ts holds the share of misses per part to a budget, so a
@@ -12,7 +14,7 @@
  * the unit tests instead of a look on a phone. Run directly for the table
  * and the worst places:
  *
- *   bun scripts/ground-joins.ts [tile …]
+ *   bun scripts/ground-joins.ts <site> [tile …] [--solo]
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -46,8 +48,14 @@ import { ownsPoint } from "../lib/city/tileset";
 import { wallGeometry } from "../lib/city/walls";
 import type { Site } from "../lib/city/site";
 import { REFERENCE_SITE, SITES, siteFromArgs } from "../sites";
+import { railParts } from "../lib/city/rail-mesh";
+import { riversideParts } from "../lib/city/riverside-mesh";
+import { tramParts } from "../lib/city/tram-mesh";
+import { triangulate } from "./bake-lines";
 import { FINE_TIN_MAX_ERROR } from "./bake-terrain-tin";
 import { readDgm, shapeDgm } from "./bake-tiles";
+import { lineFeatures } from "./line-sources";
+import { type SiteLevels, siteLineLevels } from "./line-levels";
 import {
   fenceLines,
   gatePoints,
@@ -67,6 +75,9 @@ export const JOIN_PARTS = [
   "doors",
   "shopfronts",
   "plinths",
+  "rails",
+  "tram",
+  "riverside",
 ] as const;
 export type JoinPart = (typeof JOIN_PARTS)[number];
 
@@ -78,7 +89,7 @@ interface Ground {
 }
 
 /** A tile's fine ground: its native DGM, shaped as the TIN is shaped. */
-async function tileGround(site: Site, tile: string): Promise<Ground> {
+export async function tileGround(site: Site, tile: string): Promise<Ground> {
   const src = dgmSourceFiles(site, tile);
   const tif = readFileSync(join(process.cwd(), src.tif));
   const tfw = readFileSync(join(process.cwd(), src.tfw), "utf8");
@@ -162,45 +173,105 @@ function smallBuildings(site: Site, tile: string): SmallBuildingFeature[] {
     : [];
 }
 
-/** The joins each part of one tile reports, on the site's ground. */
+/** A tile's line features and what the bake builds them with. */
+function lineContext(
+  site: Site,
+  tile: string,
+  heightAt: HeightAt,
+  levels: SiteLevels | undefined
+) {
+  const f = lineFeatures(site, tile, levels?.[tile]);
+  const cell = site.tiles.find((c) => tileIdOf(site, c) === tile);
+  const extent = cell ? tileExtentOf(cell) : undefined;
+  const ctx = { heightAt, offset: OFFSET, triangulate };
+  return { f, ctx, extent };
+}
+
+/** The joins each part of one tile reports, on the site's ground — only
+ *  the parts asked for are built. The rails, trams and riverside are built
+ *  as the bake builds them (scripts/bake-lines.ts), on their levels. */
 function tileJoins(
   site: Site,
   tile: string,
   bounds: TerrainBounds,
-  heightAt: HeightAt
-): Record<JoinPart, JoinPoint[]> {
-  const walls = wallLines(site, tile);
-  const gates = gatePoints(site, tile);
-  const cut = cutWallGates(walls, gates);
-  const surround = { groundAt: heightAt, walls: walls.map((w) => w.coords) };
-  return {
-    kerbs: kerbGeometry(kerbLines(site, tile), heightAt, OFFSET)?.joins ?? [],
-    walls:
-      wallGeometry(cut.walls, heightAt, OFFSET, { snapToStep: true })?.joins ??
-      [],
-    stairs: stairLines(site, tile).flatMap((stair) => {
-      const [x, y] = axisMiddle(stair.coords);
-      return ownsPoint(bounds, x, y)
-        ? (stairGeometry(stair, OFFSET, surround)?.joins ?? [])
-        : [];
-    }),
-    fences:
-      fenceGeometry(fenceLines(site, tile), gates, heightAt, OFFSET, cut.leaves)
+  heightAt: HeightAt,
+  levels: SiteLevels | undefined,
+  parts: readonly JoinPart[]
+): Partial<Record<JoinPart, JoinPoint[]>> {
+  const walls = () => wallLines(site, tile);
+  const gates = () => gatePoints(site, tile);
+  const cut = () => cutWallGates(walls(), gates());
+  const lines = () => lineContext(site, tile, heightAt, levels);
+  const build: Record<JoinPart, () => JoinPoint[]> = {
+    kerbs: () =>
+      kerbGeometry(kerbLines(site, tile), heightAt, OFFSET)?.joins ?? [],
+    walls: () =>
+      wallGeometry(cut().walls, heightAt, OFFSET, { snapToStep: true })
         ?.joins ?? [],
-    sheds: smallBuildings(site, tile).flatMap(structureJoins),
-    doors: doors(site, tile).flatMap(doorJoins),
-    shopfronts: shopfronts(site, tile).flatMap((w) =>
-      shopfrontWallJoins(w, doors(site, tile))
-    ),
-    plinths: plinths(site, tile).flatMap(plinthJoins),
+    stairs: () => {
+      const surround = {
+        groundAt: heightAt,
+        walls: walls().map((w) => w.coords),
+      };
+      return stairLines(site, tile).flatMap((stair) => {
+        const [x, y] = axisMiddle(stair.coords);
+        return ownsPoint(bounds, x, y)
+          ? (stairGeometry(stair, OFFSET, surround)?.joins ?? [])
+          : [];
+      });
+    },
+    fences: () =>
+      fenceGeometry(
+        fenceLines(site, tile),
+        gates(),
+        heightAt,
+        OFFSET,
+        cut().leaves
+      )?.joins ?? [],
+    sheds: () => smallBuildings(site, tile).flatMap(structureJoins),
+    doors: () => doors(site, tile).flatMap(doorJoins),
+    shopfronts: () =>
+      shopfronts(site, tile).flatMap((w) =>
+        shopfrontWallJoins(w, doors(site, tile))
+      ),
+    plinths: () => plinths(site, tile).flatMap(plinthJoins),
+    rails: () => {
+      const { f, ctx, extent } = lines();
+      return railParts(
+        {
+          rails: f.rails,
+          ballast: f.ballast,
+          platforms: f.platforms,
+          bridges: f.bridges,
+        },
+        {
+          ...ctx,
+          owns: extent ? (x, y) => ownsPoint(extent, x, y) : undefined,
+        }
+      ).joins;
+    },
+    tram: () => {
+      const { f, ctx } = lines();
+      return tramParts(f.trams, f.bridges, ctx).joins;
+    },
+    riverside: () => {
+      const { f, ctx } = lines();
+      return riversideParts(f.river, ctx).joins;
+    },
   };
+  return Object.fromEntries(parts.map((part) => [part, build[part]()]));
 }
 
-/** Every part's joins over `tiles` (default: the whole site), checked. */
+/** Every part's joins over `tiles` (default: the whole site), checked.
+ *  `levels`: the site's line levels (scripts/line-levels.ts), which the
+ *  bake draws the rails and trams on; without them each line piece is
+ *  solved alone. `parts`: the parts to measure (default: all). */
 export async function measureJoins(
   tiles?: string[],
-  site: Site = SITES[REFERENCE_SITE]
-): Promise<Record<JoinPart, JoinReport>> {
+  site: Site = SITES[REFERENCE_SITE],
+  levels?: SiteLevels,
+  parts: readonly JoinPart[] = JOIN_PARTS
+): Promise<Partial<Record<JoinPart, JoinReport>>> {
   tiles ??= tileIds(site);
   // the measured tiles and the ones touching them: a wall or a fence near
   // a seam stands on its neighbour's ground
@@ -219,18 +290,18 @@ export async function measureJoins(
   const heightAt: HeightAt = (x, y) =>
     grounds.find((g) => ownsPoint(g.bounds, x, y))?.heightAt(x, y) ?? null;
   const joins = Object.fromEntries(
-    JOIN_PARTS.map((part) => [part, [] as JoinPoint[]])
+    parts.map((part) => [part, [] as JoinPoint[]])
   ) as Record<JoinPart, JoinPoint[]>;
   for (const tile of tiles) {
     const bounds = grounds[all.indexOf(tile)].bounds;
-    const found = tileJoins(site, tile, bounds, heightAt);
-    for (const part of JOIN_PARTS) {
-      joins[part].push(...found[part]);
+    const found = tileJoins(site, tile, bounds, heightAt, levels, parts);
+    for (const part of parts) {
+      joins[part].push(...(found[part] ?? []));
     }
   }
   return Object.fromEntries(
-    JOIN_PARTS.map((part) => [part, checkJoins(joins[part], heightAt)])
-  ) as Record<JoinPart, JoinReport>;
+    parts.map((part) => [part, checkJoins(joins[part], heightAt)])
+  );
 }
 
 /** The share of a report's joins that miss. */
@@ -239,14 +310,21 @@ export function missShare(r: JoinReport): number {
 }
 
 if (import.meta.main) {
-  // bun scripts/ground-joins.ts <site> [tile…]
-  const { site, rest: tiles } = siteFromArgs(process.argv.slice(2));
+  // bun scripts/ground-joins.ts <site> [tile…] [--solo]
+  // (--solo: each line piece's levels solved alone, as the unit test does)
+  const { site, rest } = siteFromArgs(process.argv.slice(2));
+  const solo = rest.includes("--solo");
+  const tiles = rest.filter((arg) => arg !== "--solo");
   const reports = await measureJoins(
     tiles.length > 0 ? tiles : undefined,
-    site
+    site,
+    solo ? undefined : await siteLineLevels(site)
   );
   for (const part of JOIN_PARTS) {
     const r = reports[part];
+    if (!r) {
+      continue;
+    }
     const edges = r.misses.filter((m) => m.join.kind === "edge").length;
     const share = (missShare(r) * 100).toFixed(2);
     process.stdout.write(
