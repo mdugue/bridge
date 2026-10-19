@@ -347,10 +347,17 @@ def tree_outlines(
     return len(best)
 
 
-def describe(objects: dict, ids: list[str], polys: list, tree: shapely.STRtree, tile: Tile) -> None:
+def describe(
+    objects: dict,
+    ids: list[str],
+    polys: list,
+    tree: shapely.STRtree,
+    tile: Tile,
+    outlines: tuple[list, list, list, list],
+) -> None:
     """Name, address and storeys per object from the outline covering most
     of its footprint, and the address points on it (see the module doc)."""
-    geoms, names, others, _ = building_outlines(tile)
+    geoms, names, others, _ = outlines
     best: dict[int, tuple[float, int]] = {}
     for j, g in enumerate(geoms):
         g = shapely.make_valid(g)
@@ -510,8 +517,9 @@ def run(tile: Tile) -> None:
         flag(objects, city, ids[i], "shop")
     for i in covered_by(heritage_areas, polys, tree):
         flag(objects, city, ids[i], "heritage")
-    describe(objects, ids, polys, tree, tile)
-    outlined = tree_outlines(objects, city, ids, polys, building_outlines(tile))
+    buildings = building_outlines(tile)
+    describe(objects, ids, polys, tree, tile, buildings)
+    outlined = tree_outlines(objects, city, ids, polys, buildings)
     outlines = look_outlines(tile, VOTE_MARGIN)
     looks = apply_looks(objects, city, ids, polys, tree, outlines)
     context, differ = apply_contexts(objects, ids, polys, outlines)

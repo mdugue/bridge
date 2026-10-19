@@ -175,11 +175,27 @@ export function ensembleRoots(
     lead.set(r, at);
     return at;
   };
+  // each set's outline: a set holds one at most, so a tree OSM's outline
+  // misses never bridges two buildings OSM tells apart
+  const outlineOf = new Map<number, string>();
+  for (const t of trees) {
+    if (t.outline) {
+      outlineOf.set(t.root, t.outline);
+    }
+  }
   const join = (a: number, b: number) => {
     const ra = find(a);
     const rb = find(b);
-    if (ra !== rb) {
-      lead.set(Math.max(ra, rb), Math.min(ra, rb));
+    const oa = outlineOf.get(ra);
+    const ob = outlineOf.get(rb);
+    if (ra === rb || (oa && ob && oa !== ob)) {
+      return;
+    }
+    const [to, from] = ra < rb ? [ra, rb] : [rb, ra];
+    lead.set(from, to);
+    const outline = oa ?? ob;
+    if (outline) {
+      outlineOf.set(to, outline);
     }
   };
   const byOutline = new Map<string, number>();
@@ -206,10 +222,12 @@ export function ensembleRoots(
     for (let i = 0; i < named.length; i++) {
       for (let j = i + 1; j < named.length; j++) {
         const [a, b] = [named[i], named[j]];
-        const apart = a.outline && b.outline && a.outline !== b.outline;
+        const [oa, ob] = [find(a.root), find(b.root)].map((r) =>
+          outlineOf.get(r)
+        );
         if (
-          !apart &&
           find(a.root) !== find(b.root) &&
+          !(oa && ob && oa !== ob) &&
           footprintsTouch(a.rings, b.rings)
         ) {
           join(a.root, b.root);
@@ -223,12 +241,21 @@ export function ensembleRoots(
   return lead;
 }
 
+/** Where a relation's key starts: way ids run below it (1.4·10⁹ in 2026). */
+const RELATION_BASE = 2 ** 31;
+
 /**
- * An ensemble's key across the site (0: none): its OSM outline's key
- * hashed (FNV-1a) — tiles are baked apart, and a building across a tile
- * edge is two trees in two tiles that share their outline.
+ * An ensemble's key across the site (0: none) — tiles are baked apart, and
+ * a building across a tile edge is two trees in two tiles that share their
+ * outline. The outline's own OSM id: a way's as it is, a relation's above
+ * `RELATION_BASE`; an id out of that range is hashed (FNV-1a).
  */
 export function ensembleGroup(outline: string): number {
+  const match = /^([wr])(\d+)$/.exec(outline);
+  const id = match ? Number(match[2]) : Number.NaN;
+  if (match && id > 0 && id < RELATION_BASE) {
+    return match[1] === "w" ? id : RELATION_BASE + id;
+  }
   if (!outline) {
     return 0;
   }

@@ -247,13 +247,15 @@ export function ensureCityBvh(mesh: Mesh): void {
  * (the windows', a roof vertex flagged in it) under the names the clay
  * shader reads, the tile's clay material; its BVH comes when a ray needs
  * it (`ensureCityBvh`). `demolished` replays this session's demolitions of
- * the tile.
+ * the tile, `demolishedGroups` those of ensembles across a tile edge (a
+ * part demolished while this tile was not loaded).
  */
 export function dressCity(
   mesh: Mesh,
   tile: string,
   resources: StyleResources,
-  demolished: ReadonlySet<number>
+  demolished: ReadonlySet<number>,
+  demolishedGroups: ReadonlySet<number> = new Set()
 ): CityLayer {
   const geometry = mesh.geometry;
   const metadata = mesh.userData.structuralMetadata as StructuralMetadata;
@@ -300,10 +302,19 @@ export function dressCity(
       geometry.computeBoundsTree();
     }
   };
+  let dead = demolished.size;
   for (const i of demolished) {
     alive[i] = 0;
   }
-  if (demolished.size > 0) {
+  if (demolishedGroups.size > 0) {
+    for (let i = 0; i < count; i++) {
+      if (alive[i] === 1 && demolishedGroups.has(table.group[i])) {
+        alive[i] = 0;
+        dead++;
+      }
+    }
+  }
+  if (dead > 0) {
     rebuild();
   }
 

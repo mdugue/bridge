@@ -70,6 +70,7 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
     terrains: new Set<TerrainLayer>(),
     dressings: new Set<TileDressing>(),
     demolished: new Map<string, Set<number>>(),
+    demolishedGroups: new Set<number>(),
   };
   const plugin = new DressingPlugin(
     {
@@ -144,6 +145,7 @@ test("a tile that leaves while its compile runs is freed once the compile ends",
       terrains: new Set(),
       dressings: new Set(),
       demolished: new Map(),
+      demolishedGroups: new Set<number>(),
     }
   );
   const scene = new Object3D();
@@ -180,6 +182,7 @@ test("a tile that leaves lets go of the site's shared index at once, while its c
       terrains: new Set(),
       dressings: new Set(),
       demolished: new Map(),
+      demolishedGroups: new Set<number>(),
     }
   );
   const shared = new BufferAttribute(Uint32Array.from([0, 1, 2]), 1);
@@ -211,6 +214,7 @@ test("a city drops its normals' and places on the wall's CPU copies once its com
         terrains: new Set(),
         dressings: new Set(),
         demolished: new Map(),
+        demolishedGroups: new Set<number>(),
       }
     );
     const geometry = new BoxGeometry();
@@ -262,6 +266,7 @@ test("a compile the GPU had no room for is reported once, and drops nothing", as
         terrains: new Set(),
         dressings: new Set(),
         demolished: new Map(),
+        demolishedGroups: new Set<number>(),
       }
     );
     const mesh = new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial());
@@ -306,6 +311,7 @@ test("a dressing whose build throws is reported, an allocation failure as one, a
       terrains: new Set(),
       dressings: new Set(),
       demolished: new Map(),
+      demolishedGroups: new Set<number>(),
     });
     const scene = new Object3D();
     const terrain = {} as TerrainLayer;
@@ -349,6 +355,7 @@ test("a tile released while a compile still runs is never dressed after the wait
     terrains: new Set<TerrainLayer>(),
     dressings: new Set<TileDressing>(),
     demolished: new Map<string, Set<number>>(),
+    demolishedGroups: new Set<number>(),
   };
   const plugin = new DressingPlugin(
     {
@@ -414,6 +421,7 @@ function abortableLoad() {
       terrains: new Set(),
       dressings: new Set(),
       demolished: new Map(),
+      demolishedGroups: new Set<number>(),
     }
   );
   const scene = new Object3D();
@@ -526,6 +534,7 @@ test("a dressing whose tile leaves before its idle time never builds its ask set
       terrains: new Set<TerrainLayer>(),
       dressings: new Set<TileDressing>(),
       demolished: new Map<string, Set<number>>(),
+      demolishedGroups: new Set<number>(),
     };
     const plugin = new DressingPlugin(
       {

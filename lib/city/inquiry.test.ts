@@ -154,7 +154,12 @@ test("an ensemble answers as one building: the lead's facts, its Buildings count
   const tower = object({
     building: true,
     objectIndex: 9,
-    facts: facts({ name: "Residenzschloss", height: 60.9, area: 220 }),
+    facts: facts({
+      buildingId: "DESN_tower",
+      name: "Residenzschloss",
+      height: 60.9,
+      area: 220,
+    }),
   });
   const card = inquiryCard(
     {
@@ -166,7 +171,12 @@ test("an ensemble answers as one building: the lead's facts, its Buildings count
           building: true,
           lead: true,
           objectIndex: 2,
-          facts: facts({ name: "Residenzschloss", height: 100.3, area: 4890 }),
+          facts: facts({
+            buildingId: "DESN_main",
+            name: "Residenzschloss",
+            height: 100.3,
+            area: 4890,
+          }),
         }),
         object({ objectIndex: 3 }),
         tower,
@@ -194,7 +204,12 @@ test("a building a tile edge cuts in two: its tiles' leads, the highest top and 
   const west = object({
     building: true,
     lead: true,
-    facts: facts({ name: "WTC", height: 40, area: 3000 }),
+    facts: facts({
+      buildingId: "DESN_west",
+      name: "WTC",
+      height: 40,
+      area: 3000,
+    }),
   });
   const card = inquiryCard(
     {
@@ -207,7 +222,12 @@ test("a building a tile edge cuts in two: its tiles' leads, the highest top and 
           building: true,
           lead: true,
           // the same index, the other tile
-          facts: facts({ name: "WTC", height: 62, area: 1200 }),
+          facts: facts({
+            buildingId: "DESN_east",
+            name: "WTC",
+            height: 62,
+            area: 1200,
+          }),
         }),
       ],
     },
@@ -219,6 +239,25 @@ test("a building a tile edge cuts in two: its tiles' leads, the highest top and 
   expect(fact("Höhe")).toBe("62 m");
   expect(fact("Grundfläche")).toBe("4.200 m²");
   expect(fact("Gebäude")).toBe("2 im Stadtmodell");
+});
+
+test("a Building both tiles carry whole counts once", () => {
+  const twin = () =>
+    object({
+      building: true,
+      lead: true,
+      facts: facts({ buildingId: "DEBY_1", height: 30, area: 900 }),
+    });
+  const picked = twin();
+  const card = inquiryCard(
+    { kind: "building", tile: "t", picked, tree: [picked, twin()] },
+    null,
+    DRESDEN
+  );
+  const fact = (label: string) =>
+    card.facts.find((f) => f.label === label)?.value;
+  expect(fact("Grundfläche")).toBe("900 m²");
+  expect(fact("Gebäude")).toBeUndefined();
 });
 
 test("an ensemble names its first three addresses and counts the rest", () => {

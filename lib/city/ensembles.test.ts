@@ -74,6 +74,10 @@ test("trees under one OSM outline join wherever they stand; two outlines keep a 
     // two halls named alike, side by side, two outlines
     { root: 10, name: "Sporthalle", outline: "w1", rings: [square(0, 20)] },
     { root: 11, name: "Sporthalle", outline: "w2", rings: [square(10, 20)] },
+    // a hall OSM's outlines miss between two it tells apart: joins one
+    { root: 20, name: "Halle", outline: "w4", rings: [square(0, 60)] },
+    { root: 21, name: "Halle", outline: "", rings: [square(10, 60)] },
+    { root: 22, name: "Halle", outline: "w5", rings: [square(20, 60)] },
     // a wing OSM's outline misses, beside its named neighbour
     { root: 12, name: "Aldi", outline: "w3", rings: [square(0, 40)] },
     { root: 13, name: "Aldi", outline: "", rings: [square(10, 40)] },
@@ -85,6 +89,9 @@ test("trees under one OSM outline join wherever they stand; two outlines keep a 
     11: 11,
     12: 12,
     13: 12,
+    20: 20,
+    21: 20,
+    22: 22,
   });
 });
 
@@ -93,4 +100,7 @@ test("an ensemble's group is its outline's, never 0 for one", () => {
   expect(ensembleGroup("r5764")).toBe(ensembleGroup("r5764"));
   expect(ensembleGroup("r5764")).not.toBe(ensembleGroup("w5764"));
   expect(ensembleGroup("r5764")).toBeGreaterThan(0);
+  // the ids themselves: two outlines never share a key
+  expect(ensembleGroup("w888364452")).toBe(888364452);
+  expect(ensembleGroup("r5764")).toBe(2 ** 31 + 5764);
 });

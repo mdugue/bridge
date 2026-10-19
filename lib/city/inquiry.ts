@@ -205,13 +205,32 @@ function addressLine(addresses: readonly string[]): string {
  * (the union of the footprints, base to top: lib/city/object-facts.ts
  * `treeFacts`), else the highest part and the parts' sum.
  */
+/** Buildings by their `gml:id`, each once (one without an id stays). */
+function once(buildings: readonly InquiryObject[]): InquiryObject[] {
+  const seen = new Set<string>();
+  return buildings.filter((o) => {
+    const id = o.facts.buildingId;
+    if (!id) {
+      return true;
+    }
+    if (seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+}
+
 function mergedFacts(inquiry: BuildingInquiry) {
   const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
   const facts = all.map((o) => o.facts);
   const pick = inquiry.picked.facts;
   // the ensemble's leads, one a tile (a tile edge cuts a building in
-  // two), else the picked tree's Building
-  const leads = all.filter((o) => o.lead && o.building).map((o) => o.facts);
+  // two), else the picked tree's Building; a Building both tiles carry
+  // whole counts once
+  const leads = once(all.filter((o) => o.lead && o.building)).map(
+    (o) => o.facts
+  );
   const mine = all.find(
     (o) => o.building && o.facts.buildingId === pick.buildingId
   )?.facts;
@@ -238,7 +257,7 @@ function mergedFacts(inquiry: BuildingInquiry) {
     levels: levels.length > 0 ? Math.max(...levels) : NO_FACT,
     name: names[0] ?? "",
     parts: all.filter((o) => !o.building).length,
-    buildings: all.filter((o) => o.building).length,
+    buildings: once(all.filter((o) => o.building)).length,
     heritage: hasObjectFlag(flags, OBJECT_FLAG_HERITAGE),
     rebuilt: facts.some((f) => isMeasuredRoof(f.roofType)),
     shop: hasObjectFlag(flags, OBJECT_FLAG_SHOP),

@@ -107,7 +107,6 @@ import {
   type CityLayer,
   countBuildings,
   ensureCityBvh,
-  groupObjects,
   nearestCityHit,
   nearestWithoutBvh,
   pickCityObject,
@@ -2342,11 +2341,15 @@ async function bootApp(
       stream.demolished.set(layer.tile, kept);
     };
     keep(picked.layer);
-    // the rest of its ensemble in the tiles across an edge
+    // the rest of its ensemble in the tiles across an edge: those loaded
+    // now, and (the group kept) those that load later
     const group = picked.layer.table.group[picked.objectIndex];
+    if (group) {
+      stream.demolishedGroups.add(group);
+    }
     for (const layer of group ? stream.cities : []) {
-      const [first] = layer === picked.layer ? [] : groupObjects(layer, group);
-      if (first !== undefined && layer.demolish(first)) {
+      const first = layer.table.group.indexOf(group);
+      if (layer !== picked.layer && first >= 0 && layer.demolish(first)) {
         keep(layer);
       }
     }
