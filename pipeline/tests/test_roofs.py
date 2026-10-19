@@ -7,7 +7,7 @@ import rasterio
 from rasterio.transform import from_origin
 
 from bake.common import Tile
-from bake.roofs import form_holds, merge_regions, run
+from bake.roofs import _majority, _narrow, form_holds, merge_regions, run
 
 X0, Y0, SIZE = 400_000.0, 5_600_000.0, 200
 BASE = 110.0
@@ -173,10 +173,41 @@ def test_a_strip_narrower_than_a_part_joins_its_closest_neighbour():
     lab[:, 30:36], lab[:, 36:44], lab[:, 44:50], lab[:, 50:] = 4, 3, 5, 3
     kept, _ = merge_regions(lab, h, small_cells=5)
     assert kept.max() == 5
-    out, _ = merge_regions(lab, h, small_cells=5, narrow=True)
+    out, _ = merge_regions(lab, h, small_cells=5, thin=True, narrow=True)
     assert out[0, 11] == out[0, 0]
     assert out[0, 31] == out[0, 20]
     assert len({out[0, 0], out[0, 20], out[0, 46]}) == 3
+
+
+def test_a_part_6_m_wide_is_narrow_one_7_m_wide_is_not():
+    lab = np.zeros((20, 40), np.int64)
+    lab[:, :6], lab[:, 6:13], lab[:, 13:] = 1, 2, 3
+    assert _narrow(lab, 3).tolist() == [True, False, False]
+
+
+def test_a_steep_flank_a_cell_wide_joins_a_level_however_far():
+    # two levels 20 m apart, the scan's blurred flank between them in two
+    # 1 m bands, each a long strip far from both levels
+    h = np.zeros((30, 6))
+    h[:, 2], h[:, 3], h[:, 4:] = 7.0, 13.0, 20.0
+    lab = np.zeros(h.shape, np.int64)
+    lab[:, :2], lab[:, 2], lab[:, 3], lab[:, 4:] = 1, 2, 3, 4
+    out, _ = merge_regions(lab, h, small_cells=5, thin=True, narrow=True)
+    assert out.max() == 2
+
+
+def test_the_majority_straightens_a_border_and_keeps_the_outside():
+    # a diagonal border drawn cell by cell, the footprint's outside empty
+    rows, cols = np.indices((30, 30))
+    lab = np.where(cols > rows, 1, 2)
+    lab[:, :3] = 0
+    out = _majority(lab)
+    assert (out[:, :3] == 0).all()
+    assert set(np.unique(out[:, 3:])) == {1, 2}
+    # the border stays on the diagonal, within a cell
+    inside = out[:, 3:] > 0
+    assert np.abs((out == 1)[:, 3:].sum() - (lab == 1)[:, 3:].sum()) <= 30
+    assert inside.all()
 
 
 def _gable_dom():

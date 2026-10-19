@@ -86,7 +86,7 @@ MIN_PART_M2 = 20.0
 # A drawn part must hold a disk this wide; a narrower one joins the
 # neighbour closest in height (the flat model the decision is made on keeps
 # them all).
-NARROW_M = 8.0
+NARROW_M = 7.0
 NARROW_DZ = 3.0
 SIMPLIFY_M = 2.0
 OUTLINE_M = 2.0  # the radius over which a part's outline is smoothed (`_majority`)
@@ -296,6 +296,13 @@ def _union(parent: np.ndarray, a: int) -> int:
     return a
 
 
+def _thin(lab: np.ndarray, n: int) -> np.ndarray:
+    """Per region (index = label - 1), whether no cell of it has its whole
+    3 × 3 neighbourhood in it: a strip a cell or two wide."""
+    interior = (ndi.minimum_filter(lab, 3) == lab) & (ndi.maximum_filter(lab, 3) == lab)
+    return np.bincount(lab[interior & (lab > 0)], minlength=n + 1)[1:] == 0
+
+
 def _narrow(lab: np.ndarray, n: int) -> np.ndarray:
     """Per region (index = label - 1), whether it holds no disk NARROW_M
     across: a strip a few metres wide — a step's blurred flank, a parapet,
@@ -303,17 +310,17 @@ def _narrow(lab: np.ndarray, n: int) -> np.ndarray:
     its own, each stands as a box of its own height between its neighbours'
     walls (the "blocks" on the Hauptbahnhof, the Prager Spitze, the roofs
     around the Neumarkt)."""
-    edge = np.zeros(lab.shape, bool)
-    dx, dy = lab[:, :-1] != lab[:, 1:], lab[:-1, :] != lab[1:, :]
-    edge[:, :-1] |= dx
-    edge[:, 1:] |= dx
-    edge[:-1, :] |= dy
-    edge[1:, :] |= dy
-    # a region's border cells count as inside it: its widest disk is the
-    # farthest cell from its border, plus that border cell
-    depth = ndi.distance_transform_edt(~edge) + 1
+    cross = ndi.generate_binary_structure(2, 1)
+    # (the grid's edge is a border too)
+    border = (ndi.minimum_filter(lab, footprint=cross, mode="constant") != lab) | (
+        ndi.maximum_filter(lab, footprint=cross) != lab
+    )
+    # the widest disk: twice the farthest cell's distance from the region's
+    # border cells, plus the cell itself (a strip w cells wide: w, or w - 1
+    # for an even w, whose middle is two cells)
+    depth = ndi.distance_transform_edt(~border)
     widest = np.asarray(ndi.maximum(depth, lab, np.arange(1, n + 1)), np.float64)
-    return 2 * widest * RES < NARROW_M
+    return (2 * widest + 1) * RES < NARROW_M
 
 
 def merge_regions(
@@ -321,11 +328,14 @@ def merge_regions(
     h: np.ndarray,
     small_cells: int,
     faces: np.ndarray | None = None,
+    thin: bool = False,
     narrow: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Small regions (and with `narrow`, strips narrower than NARROW_M:
-    `_narrow`) into their closest-height neighbour, taking its kind, then
-    flat neighbours within MERGE_M of each other, the closest pair first.
+    """Small regions (with `thin`, also strips a cell or two wide: a
+    step's flank; with `narrow`, strips narrower than NARROW_M within
+    NARROW_DZ of a neighbour: `_narrow`) into their closest-height
+    neighbour, taking its kind, then flat neighbours within MERGE_M of each
+    other, the closest pair first.
     `faces[label]` marks the inclined regions (none when omitted); returns
     the labels and the faces of the merged regions."""
     if faces is None:
@@ -337,7 +347,9 @@ def merge_regions(
         med = _region_medians(lab, h, n)
         cells = np.bincount(lab.ravel(), minlength=n + 1)[1:]
         # a strip counts as small, whatever its length
-        size = np.where(_narrow(lab, n), 0, cells) if narrow else cells
+        strip = _thin(lab, n) if thin else np.zeros(n, bool)
+        wide = _narrow(lab, n) & ~strip if narrow else np.zeros(n, bool)
+        size = np.where(strip | wide, 0, cells)
         pairs = _adjacency(lab)
         parent = np.arange(n + 1)
         merged = False
@@ -350,9 +362,9 @@ def merge_regions(
             if not nb:
                 continue
             target = min(nb, key=lambda x: abs(med[x - 1] - med[r]))
-            # a strip of some size further than NARROW_DZ from every
-            # neighbour is a wing or a storey of its own, not a flank
-            if cells[r] >= small_cells and abs(med[target - 1] - med[r]) > NARROW_DZ:
+            # a narrow strip further than NARROW_DZ from every neighbour is
+            # a wing or a storey of its own, not a flank
+            if wide[r] and cells[r] >= small_cells and abs(med[target - 1] - med[r]) > NARROW_DZ:
                 continue
             ra, rb = _union(parent, lr), _union(parent, target)
             if ra != rb:
@@ -485,9 +497,11 @@ def measured_model(
     green: np.ndarray,
     small_cells: int,
     with_faces: bool = True,
+    narrow: bool = True,
 ) -> Model | None:
     """The roof over `own` cells: flat levels and (unless `with_faces` is
-    off, the flat model) the measured faces."""
+    off, the flat model) the measured faces; with them, unless `narrow` is
+    off, no part narrower than NARROW_M."""
     smooth = ndi.median_filter(np.nan_to_num(dom, nan=-1e4), size=3)
     known = roof & ~green & np.isfinite(dom)
     if known.sum() < small_cells:
@@ -506,7 +520,9 @@ def measured_model(
     lab[part > 0] = part[part > 0] + n
     faces = np.zeros(n + k + 1, bool)
     faces[n + 1 :] = True
-    lab, faces = merge_regions(lab, h, small_cells, faces, narrow=with_faces)
+    lab, faces = merge_regions(
+        lab, h, small_cells, faces, thin=with_faces, narrow=with_faces and narrow
+    )
     count = int(lab.max())
     level = _region_medians(lab, h, count)
     surface = _face_surface(h, lab, faces, face) if faces.any() else h
@@ -608,7 +624,10 @@ def _majority(lab: np.ndarray) -> np.ndarray:
         ids = np.unique(lab[inside])
         if len(ids) < 2:
             break
-        votes = np.stack([ndi.correlate((lab == i).astype(np.float64), disk) for i in ids])
+        # a cell's own label wins a tie
+        votes = np.stack(
+            [ndi.correlate((lab == i).astype(np.float64), disk) + 0.5 * (lab == i) for i in ids]
+        )
         lab = np.where(inside, ids[np.argmax(votes, axis=0)], 0).astype(lab.dtype)
     return lab
 
@@ -720,6 +739,12 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     model = measured_model(dom, own, inner, green, small)
     if model is None:
         return None
+    # the strips merged away may have stood a storey off their new level:
+    # where that makes the drawn roof miss more than a rebuild may, they stay
+    if miss_share(model.heights(), dom, judged & (model.lab > 0)) > KEEP_SHARE:
+        model = measured_model(dom, own, inner, green, small, narrow=False)
+        if model is None:
+            return None
     # the footprint's own outline, less what another roof covers
     if (covered & np.isfinite(roof)).any():
         mask = covered & np.isfinite(roof)

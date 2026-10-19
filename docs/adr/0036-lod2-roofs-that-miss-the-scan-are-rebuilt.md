@@ -132,7 +132,7 @@ a face** (Delatin traced every step edge with points — a face ends at a
 step instead); **planes per region** (a dome or a vault needs a plane per
 facet, and a region of 1 m bands is a ring, not a facet).
 
-## Update (2026-10-19): no part narrower than 8 m, outlines not on the grid
+## Update (2026-10-19): no part narrower than 7 m, outlines not on the grid
 
 The rebuilt roofs still read as heaps of blocks on the Hauptbahnhof, the
 Prager Spitze and the courtyard block An der Frauenkirche 5. Two causes,
@@ -143,10 +143,12 @@ shared by every rebuilt roof:
   boxes of their own: the parapet run round the Prager Spitze, the
   ledges between a vault's flank and its eaves along the station's long
   sides, the 116–122 m terraces down the courtyard's mansard, plant rooms.
-  Now **a part must hold a disk 8 m across** (`NARROW_M`, `_narrow`); a
+  Now **a part must hold a disk 7 m across** (`NARROW_M`, `_narrow`); a
   narrower one joins the neighbour closest in height — as long as that
   neighbour lies within 3 m (`NARROW_DZ`): a narrow wing a storey or more
-  off its neighbours is a wing, not a flank, and stays.
+  off its neighbours is a wing, not a flank, and stays (a strip a cell
+  or two wide, a steep step's blurred flank, joins whatever the height,
+  as before).
 - **Teeth.** The parts' borders were the cell edges of the 1 m grid,
   simplified at 1 m: a border running diagonally to the grid stayed a
   staircase of 1 m teeth, each a wall. Now the labels are smoothed by a
@@ -154,15 +156,17 @@ shared by every rebuilt roof:
   simplified at 2 m: a border runs as straight as the scan's edge.
 
 Whether a roof is rebuilt is decided as before, on the flat model, which
-keeps every strip; only what is drawn changes. The same 886 objects on
-Dresden's fifteen tiles become 2 203 parts instead of 2 956 (97 faces,
+keeps every strip; only what is drawn changes. Where the merged strips
+would make the drawn roof miss DOM1 on more than `KEEP_SHARE` of its
+cells (the most a rebuild may), it is drawn with them. The same 886 objects on
+Dresden's fifteen tiles become 2 171 parts instead of 2 956 (95 faces,
 94 before). The price is fit: on the two Altstadt tiles
 (`33410_5654`, `33410_5656`) the drawn roof now misses DOM1 by more
-than 2 m on 8–10 % of a rebuilt object's cells on average, 5–7 % before
+than 2 m on 8–9 % of a rebuilt object's cells on average, 5–7 % before
 (the strips merged were up to 3 m off their new level) — still a third of
 the share that decides a rebuild.
 
-Rejected: **merging every strip whatever the height** (8 m, no cap: the
+Rejected: **merging every strip whatever the height** (no cap: the
 misses rose to 13–20 %, at worst 86 % of an object's cells: narrow
 wings sank or rose to their neighbour's level); **a cap of 2 m** (the
 misses stayed at 6–7 %, but a sixth to a quarter more parts stayed than with 3 m).
