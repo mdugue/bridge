@@ -139,8 +139,12 @@ import {
 import { measuredRoofMesh, measuredRoofsById } from "./measured-roofs";
 import type { Column, MeshInput, PropertyTable } from "./tile-glb";
 
-/** RoofSurface index in the loader's fixed `defaultSemanticsColors` order. */
+/** WallSurface and RoofSurface in the loader's fixed `defaultSemanticsColors` order. */
+const WALL_SURFACE_TYPE = 1;
 const ROOF_SURFACE_TYPE = 2;
+/** A wall at most this tall (m) standing on its building's roof is the
+ *  roof's: a step between two roof levels, a parapet, a dormer's cheek. */
+const ROOF_STEP_M = 1.5;
 
 /** Trims JSON noise: colours to 3 decimals, metres to centimetres. */
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
@@ -209,6 +213,7 @@ function collectVertices(loaderScene: {
     });
   });
   const n = chunks.reduce((s, c) => s + c.objectid.length, 0);
+  const walls = new Uint8Array(n);
   const out = {
     positions: new Float32Array(n * 3),
     objectIds: new Float32Array(n),
@@ -225,12 +230,60 @@ function collectVertices(loaderScene: {
       out.objectIds[at + i] = c.objectid[i];
       const surface = c.surfacetype ? c.surfacetype[i] : -1;
       out.isRoof[at + i] = surface === ROOF_SURFACE_TYPE ? 1 : 0;
+      walls[at + i] = surface === WALL_SURFACE_TYPE ? 1 : 0;
       out.surfaces[(at + i) * 2] = c.geometryid?.[i] ?? -1;
       out.surfaces[(at + i) * 2 + 1] = c.boundaryid?.[i] ?? -1;
     }
     at += count;
   }
+  out.isRoof = withRoofSteps(out, walls);
   return out;
+}
+
+/**
+ * The roof flags with every short wall that stands on its building's roof
+ * flagged too: a step between roof levels, a parapet or a dormer's cheek
+ * is clad like the roof, and drawn as a wall, sunlit plaster with an
+ * eave stroke, it read from above as a white dash across the roof (the
+ * Altstadt's flat roofs). A wall is one surface (`surfaces`: geometry and
+ * boundary ids) at most ROOF_STEP_M tall whose foot is no lower than the
+ * building's lowest roof vertex; a set-back storey is taller and keeps
+ * its windows.
+ */
+export function withRoofSteps(
+  v: Pick<CityVertices, "positions" | "objectIds" | "isRoof" | "surfaces">,
+  walls: Uint8Array
+): Float32Array<ArrayBuffer> {
+  const isRoof = Float32Array.from(v.isRoof);
+  if (!v.surfaces) {
+    return isRoof;
+  }
+  const eave = new Map<number, number>();
+  const span = new Map<string, [number, number]>();
+  const key = (i: number) =>
+    `${v.objectIds[i]}:${v.surfaces?.[2 * i]}:${v.surfaces?.[2 * i + 1]}`;
+  for (let i = 0; i < isRoof.length; i++) {
+    const z = v.positions[3 * i + 2];
+    if (isRoof[i] === 1) {
+      eave.set(v.objectIds[i], Math.min(eave.get(v.objectIds[i]) ?? z, z));
+    } else if (walls[i] === 1) {
+      const s = span.get(key(i));
+      span.set(key(i), s ? [Math.min(s[0], z), Math.max(s[1], z)] : [z, z]);
+    }
+  }
+  for (let i = 0; i < isRoof.length; i++) {
+    const s = walls[i] === 1 ? span.get(key(i)) : undefined;
+    const low = eave.get(v.objectIds[i]);
+    if (
+      s &&
+      low !== undefined &&
+      s[1] - s[0] <= ROOF_STEP_M &&
+      s[0] >= low - 0.1
+    ) {
+      isRoof[i] = 1;
+    }
+  }
+  return isRoof;
 }
 
 /**

@@ -703,7 +703,9 @@ visual-variable codebook is in
   painted the Frauenkirche's dome slate grey, half the Altstadt's red roofs
   brown and the Taschenbergpalais' red mansard slopes the grey of its zinc
   top. A texel is in shadow when dim and blue (B > 1.3 R under luminance
-  110, or under 40); the flight's sun is the one whose shadows of the LoD2
+  110, or under 40), and a whole face is when the sun meets it at a
+  cosine under 0.17 (red tiles in skylight alone pass the blue test); the
+  flight's sun is the one whose shadows of the LoD2
   roofs over the DGM best match the image's near the roofs (Dresden: due
   south, 35–37°), and each sunlit texel is scaled by its face's slope to
   how a flat roof in that sun reads it (0.7–1.4), so a roof's faces turned
@@ -714,6 +716,15 @@ visual-variable codebook is in
   (`faces`, keyed by the loader's geometry and surface ids), carried in the
   roof vertex's free `_FACADE` slots — no vertex buffer more. A roof drawn
   as its measured parts (ADR 0036) keeps the building's colour.
+  A roof face is read where the image shows it: the DOP leans a roof off
+  its outline by its height times the strip's off-nadir angle (Dresden up
+  to 0.15 m per metre, a 30 m roof 4–5 m), so `dop_lean.py` fits that
+  lean on a 125 m grid from how well the tall roofs' expected shading
+  (bright to the sun, dark from it) matches the image, and each roof's
+  rings are shifted by it before they are read. A wall at most 1.5 m tall
+  standing on its building's roof (a step between roof levels, a parapet,
+  a dormer's cheek) is drawn as roof (`withRoofSteps`): as sunlit plaster
+  with an eave stroke it read from above as a white dash.
   **Discontinued** the same day: one colour for a roof's pitched (≥ 20°)
   and one for its low faces (`roofPitched`, a fifth texel band), the first
   answer to the mansards — the face colours cover it, and it still read

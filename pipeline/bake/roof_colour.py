@@ -31,11 +31,13 @@ from PIL import Image, ImageDraw, ImageFilter
 from rasterio.enums import Resampling
 
 from .common import Tile
+from .dop_lean import LEAN_MIN_HEIGHT, Sample, building_lean, fit_leans, lean_map, reach_px
 from .dop_light import (
     SUN_RES_M,
     estimate_sun,
     incidence_gain,
     light_ratio,
+    luminance,
     roof_surface_model,
     shadow_mask,
     sun_vector,
@@ -45,6 +47,9 @@ MIN_SAMPLES = 12
 # A face takes its own colour only when this share of it is in sun: in
 # shadow it is the building's (most roofs are one material).
 MIN_LIT_SHARE = 0.25
+# A face the sun meets at a lower cosine than this (about 10° above its
+# plane) is read as in shadow: it is lit by the sky alone.
+MIN_SUN_COS = 0.17
 # A face is written only when its colour differs from its building's by
 # this much in some channel (8-bit sRGB steps): the rest read the
 # building's from the mesh's table.
@@ -164,6 +169,14 @@ class Light:
     def gain(self, normal) -> float:
         return incidence_gain(normal, self.sun, self.ratio)
 
+    def faces_away(self, normal) -> bool:
+        """Whether a face lies in its own shadow, or so near it that the sun
+        only grazes it: its texels are skylight, however red tiles read in
+        it (the blue test misses those)."""
+        if self.sun is None:
+            return False
+        return sum(n * s for n, s in zip(normal, self.sun, strict=True)) < MIN_SUN_COS
+
 
 def face_colours(rgb, light: Light, faces, box):
     """One building's colour and its faces' own, from their sunlit texels
@@ -174,6 +187,8 @@ def face_colours(rgb, light: Light, faces, box):
     shade = light.shadow[r0:r1, c0:c1]
     lit_all, own = [], {}
     for key, ring, normal in faces:
+        if light.faces_away(normal):
+            continue
         mask = ring_mask([ring], box, 3)
         lit = mask & ~shade
         n_lit = int(lit.sum())
@@ -221,6 +236,53 @@ def read_light(tile: Tile, dop, rgb: np.ndarray, faces) -> Light:
     return Light(shadow, sun, ratio)
 
 
+def _vertex_ids(obj: dict):
+    def walk(b):
+        if isinstance(b, int):
+            yield b
+        else:
+            for item in b:
+                yield from walk(item)
+
+    for g in obj.get("geometry", []):
+        yield from walk(g.get("boundaries", []))
+
+
+def roof_leans(rgb: np.ndarray, light: Light, buildings, bounds, px: float):
+    """Each building's lean (dop_lean.py) and the tile's lean nodes, from
+    the tall buildings' roof shading; none without a sun to shade by.
+    `buildings`: {id: ([(key, ring in metres, normal)], base height)}."""
+    if light.sun is None:
+        return {}, []
+    xmin, _, _, ymax = bounds
+    h, w = rgb.shape[:2]
+    samples, centres = {}, {}
+    for oid, (faces, base) in buildings.items():
+        pts = [p for _, ring, _ in faces for p in ring]
+        centres[oid] = (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
+        height = max(p[2] for p in pts) - base
+        if height < LEAN_MIN_HEIGHT:
+            continue
+        reach = reach_px(height, px)
+        cols = [(p[0] - xmin) / px for p in pts]
+        rows = [(ymax - p[1]) / px for p in pts]
+        c0, r0 = max(0, int(min(cols)) - reach), max(0, int(min(rows)) - reach)
+        c1, r1 = min(w, int(max(cols)) + reach + 1), min(h, int(max(rows)) + reach + 1)
+        if c1 - c0 < 2 or r1 - r0 < 2:
+            continue
+        lum = luminance(rgb[r0:r1, c0:c1].astype(np.float32))
+        drawn = [
+            ([((x - xmin) / px - c0, (ymax - y) / px - r0) for x, y, _ in ring], normal)
+            for _, ring, normal in sorted(faces, key=lambda f: max(p[2] for p in f[1]))
+        ]
+        grid = lean_map(lum, drawn, light.sun, reach)
+        if grid is not None:
+            samples[oid] = Sample(*centres[oid], height, grid, reach, px)
+    nodes = fit_leans(list(samples.values()), bounds)
+    leans = {oid: building_lean(nodes, *centres[oid], samples.get(oid)) for oid in buildings}
+    return leans, nodes
+
+
 def run(tile: Tile, erode: int = 5) -> None:
     city_path = tile.cityjson
     if not (tile.raw_raster("dop").exists() and city_path.exists()):
@@ -249,19 +311,31 @@ def run(tile: Tile, erode: int = 5) -> None:
     size_x, size_y = tile.size
     px_w, px_h = size_x / w, size_y / h
 
-    def to_px(vi: int) -> tuple[float, float]:
-        x, y, _ = to_metres(vi)
-        return (x - xmin) / px_w, (ymax - y) / px_h
-
-    roofs, faces_out, sampled, skipped, in_sun = {}, {}, 0, 0, 0
+    buildings = {}
     for oid, obj in city["CityObjects"].items():
         faces = [
-            ((gi, si), [to_px(vi) for vi in ring], ring_normal(ring, to_metres))
+            ((gi, si), [to_metres(vi) for vi in ring], ring_normal(ring, to_metres))
             for gi, g in enumerate(obj.get("geometry", []))
             for si, ring in indexed_rings(g, "RoofSurface")
         ]
-        if not faces:
-            continue
+        if faces:
+            buildings[oid] = (faces, min(to_metres(vi)[2] for vi in _vertex_ids(obj)))
+    leans, nodes = roof_leans(rgb, light, buildings, tile.bounds, px_w)
+
+    roofs, faces_out, sampled, skipped, in_sun = {}, {}, 0, 0, 0
+    for oid, (metres, base) in buildings.items():
+        kx, ky = leans.get(oid, (0.0, 0.0))
+        faces = [
+            (
+                key,
+                [
+                    ((x + kx * (z - base) - xmin) / px_w, (ymax - y - ky * (z - base)) / px_h)
+                    for x, y, z in pts
+                ],
+                normal,
+            )
+            for key, pts, normal in metres
+        ]
         rings = [ring for _, ring, _ in faces]
         cols = [c for ring in rings for c, _ in ring]
         rows = [r for ring in rings for _, r in ring]
@@ -293,6 +367,8 @@ def run(tile: Tile, erode: int = 5) -> None:
             "faces_apart": sum(len(f) for f in faces_out.values()),
             "sun": None if light.sun is None else [round(c, 3) for c in light.sun],
             "light_ratio": None if light.ratio is None else round(light.ratio, 2),
+            # the roofs' lean off their outlines, metres per metre of height
+            "lean": [[round(x), round(y), round(k[0], 2), round(k[1], 2)] for x, y, k in nodes],
         },
         "roofs": roofs,
         # the faces whose own colour differs from their building's

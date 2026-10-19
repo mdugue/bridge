@@ -37,6 +37,7 @@ import {
   PANE_ROUGH,
   scanStructureId,
   vertexNormals,
+  withRoofSteps,
 } from "./bake-city-mesh";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
@@ -933,4 +934,35 @@ test("a roof face the orthophoto read apart carries its own colour", () => {
   expect(roofs).toBeGreaterThan(0);
   // the house's row keeps its building colour for every other face
   expect(baked.objects[2].roof).toEqual([0.2, 0.2, 0.2]);
+});
+
+test("a short wall standing on the roof is the roof's, a set-back storey is not", () => {
+  // three walls of one object, one triangle each, over a roof at 10 m
+  const tri = (z0: number, z1: number) => [0, 0, z0, 1, 0, z0, 0, 0, z1];
+  const positions = Float32Array.from([
+    0,
+    0,
+    10,
+    1,
+    0,
+    10,
+    0,
+    1,
+    10, // the roof
+    ...tri(10, 11), // a 1 m step on it
+    ...tri(10, 13), // a storey set back on it
+    ...tri(0, 1), // a 1 m wall on the ground
+  ]);
+  const isRoof = withRoofSteps(
+    {
+      isRoof: Float32Array.from([1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      objectIds: new Float32Array(12),
+      positions,
+      surfaces: Float32Array.from(
+        [0, 1, 2, 3].flatMap((s) => [0, s, 0, s, 0, s])
+      ),
+    },
+    Uint8Array.from([0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+  );
+  expect([...isRoof]).toEqual([1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]);
 });

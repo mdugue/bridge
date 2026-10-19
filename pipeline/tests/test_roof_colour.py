@@ -1,6 +1,7 @@
 import numpy as np
 
-from bake.roof_colour import median_colour, ring_slope
+from bake.dop_light import sun_vector
+from bake.roof_colour import Light, median_colour, ring_slope
 
 
 def _metres(points):
@@ -112,3 +113,13 @@ def test_run_reads_a_roof_in_sun_only(tmp_path):
     red = out["roofs"]["b"]
     assert red[0] > 3 * red[1] and red[0] > 0.4
     assert all(f[1] != 4 for f in out["faces"].get("b", []))
+
+
+def test_a_face_turned_from_the_sun_is_read_as_shadow():
+    light = Light(np.zeros((1, 1), bool))
+    light.sun = sun_vector(180, 35)
+    north = (0.0, 0.707, 0.707)  # a 45° slope facing north
+    south = (0.0, -0.707, 0.707)
+    assert light.faces_away(north)
+    assert not light.faces_away(south)
+    assert not Light(np.zeros((1, 1), bool)).faces_away(north)

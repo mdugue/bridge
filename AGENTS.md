@@ -376,7 +376,8 @@ config change.
   OSM names it: chimneys, towers, masts, missing buildings, a landmark's
   roof relief), `landmarks.py` (Wikidata's notable buildings matched to
   LoD2 objects; its fetch caches the SPARQL answer), `ndvi.py`, `roof_colour.py`
-  (+ `dop_light.py`: the flight's shadows and sun, so a roof is read in sun),
+  (+ `dop_light.py`: the flight's shadows and sun, so a roof is read in sun;
+  `dop_lean.py`: how far the image leans each roof off its outline),
   `roofs.py` (a LoD2 roof that misses DOM1 — the free-form roofs of
   complex buildings, the 3 m placeholders of new ones — rebuilt in the
   scan's form, flat levels and measured faces (pitched roofs, vaults,
