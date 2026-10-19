@@ -350,7 +350,12 @@ function clayColour(tint: V3, build: V4, h: F, wall: F, flags: F): V3 {
       1
     )
   );
-  col = col.mul(float(1).sub(line.mul(BANDS).mul(wall)));
+  // no storey lines on a facade of its own (flag 512): a palace's or a
+  // hall's storeys are not the height's 3.2 m
+  const ownFacade = mod(floor(floor(flags.add(0.5)).div(512)), 2);
+  col = col.mul(
+    float(1).sub(line.mul(BANDS).mul(wall).mul(float(1).sub(ownFacade)))
+  );
   const eave = float(1).sub(
     min(abs(h.sub(build.z)).div(max(fwidth(h).mul(2), 1e-4)), 1)
   );
