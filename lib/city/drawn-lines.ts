@@ -356,9 +356,25 @@ function storeyRow(
         value,
         method: "assumed",
         source: "viewer",
-        detail: "aus der Höhe geschätzt, je etwa 3,2 m",
+        ...unusedLevels(o, places),
       };
   }
+}
+
+/** Why a storey count OSM maps was not drawn: its storeys would be
+ *  lower or higher than a storey can be (`countsStoreys`). */
+function unusedLevels(
+  o: InquiryObject,
+  places: Places
+): Pick<DrawnRow, "detail" | "url"> {
+  if (o.facts.levels === NO_FACT || o.facts.levels < 1) {
+    return { detail: "aus der Höhe geschätzt" };
+  }
+  const each = metres(o.eaveH / o.facts.levels);
+  return {
+    detail: `aus der Höhe geschätzt: building:levels = ${whole.format(o.facts.levels)} ergäbe ${each} je Geschoss, außerhalb von 2,4 bis 5,5 m`,
+    url: places.osm,
+  };
 }
 
 function materialRow(

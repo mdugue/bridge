@@ -126,6 +126,14 @@ test("where nothing is mapped or measured, the card says the viewer assumed it",
   expect(r.Dachfarbe).toMatchObject({ method: "assumed", source: "viewer" });
 });
 
+test("a storey count OSM maps but too high to draw is named as the reason", () => {
+  const r = rows(
+    ask(object({ storey: "height" }, { eaveH: 19.2 }, { levels: 3 }))
+  );
+  expect(r.Geschosse).toMatchObject({ method: "assumed", source: "viewer" });
+  expect(r.Geschosse.detail).toContain("building:levels = 3 ergäbe 6,4 m");
+});
+
 test("windows measured in street photos are Mapillary's, with the photos there", () => {
   const r = rows(ask(object({ windows: "measured", storey: "photos" })));
   expect(r.Fenster).toMatchObject({ method: "detected", source: "mapillary" });
