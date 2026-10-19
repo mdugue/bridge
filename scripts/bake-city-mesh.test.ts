@@ -16,6 +16,7 @@ import type {
   ShopfrontWall,
   StructureFeature,
 } from "../lib/city/features";
+import { ensembleGroup } from "../lib/city/ensembles";
 import { paneTop, SHOPFRONT_SINK } from "../lib/city/shopfronts";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
 import {
@@ -773,12 +774,20 @@ test("joinEnsembles: touching trees of one name share the lowest root, its facts
     [101, 161],
     [102, 114],
   ];
-  joinEnsembles(objects, trees, (i) =>
-    i === 0
-      ? undefined
-      : { baseZ: z[i][0], topZ: z[i][1], footprints: objects[i].footprints }
+  const outlines: Record<number, string> = { 0: "r1", 2: "r1", 3: "w2" };
+  joinEnsembles(
+    objects,
+    trees,
+    (root) => outlines[root] ?? "",
+    (i) =>
+      i === 0
+        ? undefined
+        : { baseZ: z[i][0], topZ: z[i][1], footprints: objects[i].footprints }
   );
   expect(objects.map((o) => o.ensemble)).toEqual([0, 0, 0, 3]);
+  // the outline's key, the same in the tile across the edge
+  expect(objects[1].group).toBe(ensembleGroup("r1"));
+  expect(objects[3].group).toBe(ensembleGroup("w2"));
   expect(objects[0].facts?.height).toBe(61);
   expect(objects[0].facts?.area).toBeCloseTo(200, 0);
   // the tower keeps its own facts (its Kennung on the card)

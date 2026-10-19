@@ -57,6 +57,9 @@ export interface InquiryObject {
   facts: ObjectFacts;
   /** OBJECT_FLAG_* bits (shop, heritage) */
   flags: number;
+  /** the root of its tile's ensemble, which the bake gives that tile's
+   *  whole ensemble's height and ground (lib/city/ensembles.ts) */
+  lead?: boolean;
   objectIndex: number;
   /** OBJECT_SOURCE_* (LoD2 or the laser scan) */
   source: number;
@@ -67,12 +70,9 @@ export interface InquiryObject {
  *  are one building to a visitor (lib/city/ensembles.ts). */
 export interface BuildingInquiry {
   kind: "building";
-  /** the ensemble's root object, which the bake gives the whole
-   *  ensemble's height and ground (the picked tree's root when absent) */
-  lead?: number;
   picked: InquiryObject;
   /** every object of the picked object's building tree (its ensemble's
-   *  trees), the picked one too */
+   *  trees, in every tile it stands in), the picked one too */
   tree: InquiryObject[];
   tile: string;
 }
@@ -197,25 +197,32 @@ function mergedFacts(inquiry: BuildingInquiry) {
   const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
   const facts = all.map((o) => o.facts);
   const pick = inquiry.picked.facts;
-  const building = (
-    all.find((o) => o.objectIndex === inquiry.lead) ??
-    all.find((o) => o.building && o.facts.buildingId === pick.buildingId)
+  // the ensemble's leads, one a tile (a tile edge cuts a building in
+  // two), else the picked tree's Building
+  const leads = all.filter((o) => o.lead && o.building).map((o) => o.facts);
+  const mine = all.find(
+    (o) => o.building && o.facts.buildingId === pick.buildingId
   )?.facts;
+  const building = leads.length > 0 ? leads : mine ? [mine] : [];
   const names = distinct([pick.name, ...facts.map((f) => f.name)]);
   const heights = known(facts.map((f) => f.height));
   const areas = known(facts.map((f) => f.area));
   const levels = known(facts.map((f) => f.levels));
-  const own = (v: number | undefined) => (v !== undefined && v > 0 ? v : 0);
+  // the leads' own values: the highest, and their grounds summed (a tile
+  // edge does not cut a footprint twice)
+  const leadHeight = Math.max(0, ...known(building.map((f) => f.height)));
+  const leadArea = known(building.map((f) => f.area)).reduce(
+    (s, a) => s + a,
+    0
+  );
   const flags = all.reduce((sum, o) => sum | o.flags, 0);
   return {
     address: distinct([pick.addr, ...facts.map((f) => f.addr)]).join(" · "),
     created: pick.created || distinct(facts.map((f) => f.created))[0] || "",
     functionCode:
       pick.function || distinct(facts.map((f) => f.function))[0] || "",
-    height:
-      own(building?.height) ||
-      (heights.length > 0 ? Math.max(...heights) : NO_FACT),
-    area: own(building?.area) || areas.reduce((s, a) => s + a, 0),
+    height: leadHeight || (heights.length > 0 ? Math.max(...heights) : NO_FACT),
+    area: leadArea || areas.reduce((s, a) => s + a, 0),
     levels: levels.length > 0 ? Math.max(...levels) : NO_FACT,
     name: names[0] ?? "",
     parts: all.filter((o) => !o.building).length,

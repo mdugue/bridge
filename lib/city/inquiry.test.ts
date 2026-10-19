@@ -160,11 +160,11 @@ test("an ensemble answers as one building: the lead's facts, its Buildings count
     {
       kind: "building",
       tile: "t",
-      lead: 2,
       picked: tower,
       tree: [
         object({
           building: true,
+          lead: true,
           objectIndex: 2,
           facts: facts({ name: "Residenzschloss", height: 100.3, area: 4890 }),
         }),
@@ -188,6 +188,37 @@ test("an ensemble answers as one building: the lead's facts, its Buildings count
         l.text.startsWith("2 Gebäude des Stadtmodells")
     )
   ).toBe(true);
+});
+
+test("a building a tile edge cuts in two: its tiles' leads, the highest top and the grounds summed", () => {
+  const west = object({
+    building: true,
+    lead: true,
+    facts: facts({ name: "WTC", height: 40, area: 3000 }),
+  });
+  const card = inquiryCard(
+    {
+      kind: "building",
+      tile: "t",
+      picked: west,
+      tree: [
+        west,
+        object({
+          building: true,
+          lead: true,
+          // the same index, the other tile
+          facts: facts({ name: "WTC", height: 62, area: 1200 }),
+        }),
+      ],
+    },
+    null,
+    DRESDEN
+  );
+  const fact = (label: string) =>
+    card.facts.find((f) => f.label === label)?.value;
+  expect(fact("Höhe")).toBe("62 m");
+  expect(fact("Grundfläche")).toBe("4.200 m²");
+  expect(fact("Gebäude")).toBe("2 im Stadtmodell");
 });
 
 test("a shop matched to the footprint is marked detected, on its line and its fact", () => {

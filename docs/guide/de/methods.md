@@ -93,7 +93,7 @@ München in [Quellen nach Stadt](./sources-by-city.md) dort gelb.
 | Haustüren | OpenStreetMap, die Eingänge | `❝ übernommen` |
 | Laden oder Gastronomie im Erdgeschoss | OpenStreetMap, dem Gebäude zugeordnet | `◎ erkannt` |
 | Wahrzeichen | Wikidata, den Gebäudeteilen zugeordnet | `◎ erkannt` |
-| Mehrere Gebäude des Stadtmodells als ein Bau (das Residenzschloss mit dem Hausmannsturm) | OpenStreetMap, ein Name über aneinanderstoßenden Gebäuden | `◎ erkannt` |
+| Mehrere Gebäude des Stadtmodells als ein Bau (das Residenzschloss mit dem Hausmannsturm) | OpenStreetMap, ein benannter Gebäudeumriss über mehreren Gebäuden, auch über Kachelgrenzen | `◎ erkannt` |
 | Straßenbäume: Standort, Art, Maße | Baumkataster | `❝ übernommen` |
 | Bäume ohne Kataster: Standort | DOM1 oder Laserscan | `◎ erkannt` |
 | Bäume ohne Kataster: Höhe | DOM1 oder Laserscan | `= berechnet` |

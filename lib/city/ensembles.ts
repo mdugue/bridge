@@ -1,12 +1,13 @@
 /**
  * Ensembles: LoD2 Buildings that are one building to a visitor. The
  * cadastre splits what stands as one house wherever its parcels or its
- * survey do — Dresden's Residenzschloss is two Buildings, the main complex
- * (with the Hausmannsturm's spire as one of its parts) and the
- * Hausmannsturm's shaft — while OpenStreetMap maps it as one outline with
- * one name. Building trees that carry the same OSM name and touch are one
- * ensemble: asked, outlined and demolished together, the card's facts the
- * whole ensemble's. A name is required: unnamed terraces stay a house each.
+ * survey do — Dresden's Residenzschloss is three Buildings, among them the
+ * main complex (with the Hausmannsturm's spire as one of its parts) and the
+ * Hausmannsturm's shaft — while OpenStreetMap maps it as one named outline.
+ * Building trees under one named OSM outline, or carrying the same name
+ * and touching, are one ensemble: asked, outlined and demolished together,
+ * the card's facts the whole ensemble's — across tile edges too
+ * (`ensembleGroup`). Unnamed outlines and terraces stay a house each.
  * No THREE, no DOM.
  */
 
@@ -20,6 +21,9 @@ export const ENSEMBLE_TOUCH_M = 0.5;
 export interface EnsembleTree {
   /** the tree's OSM name ("" none) */
   name: string;
+  /** the key of the named OSM outline covering the tree ("" none;
+   *  pipeline/bake/osm_buildings.py `tree_outlines`) */
+  outline: string;
   /** the root's object index */
   root: number;
   /** every footprint ring of the tree (EPSG metres) */
@@ -151,8 +155,10 @@ export function footprintsTouch(
 
 /**
  * Each tree's ensemble: the lowest root index among the trees it is joined
- * to (itself when alone). Trees join when they carry the same name and
- * their footprints touch, transitively — a row of named wings is one.
+ * to (itself when alone). Trees join when they share an OSM outline, or
+ * when they carry the same name and their footprints touch — unless both
+ * have outlines and those differ (two buildings OSM tells apart, named
+ * alike). Transitively: a row of named wings is one.
  */
 export function ensembleRoots(
   trees: readonly EnsembleTree[]
@@ -169,8 +175,24 @@ export function ensembleRoots(
     lead.set(r, at);
     return at;
   };
+  const join = (a: number, b: number) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) {
+      lead.set(Math.max(ra, rb), Math.min(ra, rb));
+    }
+  };
+  const byOutline = new Map<string, number>();
   const byName = new Map<string, EnsembleTree[]>();
   for (const t of trees) {
+    if (t.outline) {
+      const first = byOutline.get(t.outline);
+      if (first === undefined) {
+        byOutline.set(t.outline, t.root);
+      } else {
+        join(first, t.root);
+      }
+    }
     if (t.name && t.rings.length > 0) {
       const named = byName.get(t.name);
       if (named) {
@@ -183,10 +205,14 @@ export function ensembleRoots(
   for (const named of byName.values()) {
     for (let i = 0; i < named.length; i++) {
       for (let j = i + 1; j < named.length; j++) {
-        const a = find(named[i].root);
-        const b = find(named[j].root);
-        if (a !== b && footprintsTouch(named[i].rings, named[j].rings)) {
-          lead.set(Math.max(a, b), Math.min(a, b));
+        const [a, b] = [named[i], named[j]];
+        const apart = a.outline && b.outline && a.outline !== b.outline;
+        if (
+          !apart &&
+          find(a.root) !== find(b.root) &&
+          footprintsTouch(a.rings, b.rings)
+        ) {
+          join(a.root, b.root);
         }
       }
     }
@@ -195,4 +221,21 @@ export function ensembleRoots(
     find(r);
   }
   return lead;
+}
+
+/**
+ * An ensemble's key across the site (0: none): its OSM outline's key
+ * hashed (FNV-1a) — tiles are baked apart, and a building across a tile
+ * edge is two trees in two tiles that share their outline.
+ */
+export function ensembleGroup(outline: string): number {
+  if (!outline) {
+    return 0;
+  }
+  let h = 0x811c9dc5;
+  for (let i = 0; i < outline.length; i++) {
+    h ^= outline.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h === 0 ? 1 : h;
 }

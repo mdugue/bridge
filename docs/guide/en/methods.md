@@ -89,7 +89,7 @@ index (r ≈ 0.7), which is why Munich is yellow there in
 | Front doors | OpenStreetMap, the entrances | `❝ taken` |
 | Shop or restaurant on the ground floor | OpenStreetMap, assigned to the building | `◎ detected` |
 | Landmarks | Wikidata, assigned to the building parts | `◎ detected` |
-| Several buildings of the city model as one (the Residenzschloss with the Hausmannsturm) | OpenStreetMap, one name over touching buildings | `◎ detected` |
+| Several buildings of the city model as one (the Residenzschloss with the Hausmannsturm) | OpenStreetMap, one named building outline over several buildings, across tile edges too | `◎ detected` |
 | Street trees: place, species, size | Street-tree register | `❝ taken` |
 | Trees without a register: place | DOM1 or laser scan | `◎ detected` |
 | Trees without a register: height | DOM1 or laser scan | `= computed` |

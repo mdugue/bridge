@@ -17,6 +17,9 @@ object table (like the DOP roof colours):
   footprint (else on the nearest within `SNAP_M`), grouped by street
   ("Hauptstraße 1, 3"). These stay on the object itself, never its root:
   one LoD2 Building often spans several houses with an address each.
+- `outline` (on a root only): the key of the named OSM building outline
+  covering at least half of the root's whole tree (`w<way>` or
+  `r<relation>`) — trees sharing one are asked as one building.
 - `material`, `colour`, `roof_colour` (plan 050): what an OSM building or
   building part covering at least half the footprint says its walls are
   made of (`building:material`, `building:facade:material`,
@@ -283,18 +286,71 @@ def levels_of(other_tags: str | None) -> int | None:
     return levels if 0 < levels < 200 else None
 
 
-def building_outlines(tile: Tile) -> tuple[list, list, list]:
-    """Every OSM building outline near the tile: geometries, names, tags."""
+def building_outlines(tile: Tile) -> tuple[list, list, list, list]:
+    """Every OSM building outline near the tile: geometries, names, tags and
+    keys (`w<way id>` or `r<relation id>`, the same in every tile)."""
     geoms, fields = read_osm(
-        tile, "multipolygons", "building IS NOT NULL", ["name", "other_tags"], margin=0.0005
+        tile,
+        "multipolygons",
+        "building IS NOT NULL",
+        ["name", "other_tags", "osm_id", "osm_way_id"],
+        margin=0.0005,
     )
-    return list(geoms), column(fields, "name", geoms), column(fields, "other_tags", geoms)
+    keys = [
+        f"w{way}" if way else f"r{rel}" if rel else ""
+        for rel, way in zip(
+            column(fields, "osm_id", geoms), column(fields, "osm_way_id", geoms), strict=True
+        )
+    ]
+    return (
+        list(geoms),
+        column(fields, "name", geoms),
+        column(fields, "other_tags", geoms),
+        keys,
+    )
+
+
+def tree_outlines(
+    objects: dict,
+    city: dict,
+    ids: list[str],
+    polys: list,
+    outlines: tuple[list, list, list, list],
+) -> int:
+    """Each building tree's named OSM outline: the one covering at least
+    half of the tree's footprint (the most), as `outline` on its root.
+    Trees that share one are one building to OSM — the viewer asks them
+    together (lib/city/ensembles.ts): the cadastre splits a house where OSM
+    does not (Dresden's Residenzschloss and its Hausmannsturm). Unnamed
+    outlines are left out: OSM often draws a whole block of houses as one
+    (up to 38 LoD2 Buildings under one in Dresden), each with its own
+    address."""
+    geoms, names, _, keys = outlines
+    named = [(g, k) for g, n, k in zip(geoms, names, keys, strict=True) if k and n]
+    by_root: dict[str, list] = {}
+    for oid, poly in zip(ids, polys, strict=True):
+        by_root.setdefault(root_of(city, oid), []).append(poly)
+    roots = list(by_root)
+    unions = [shapely.make_valid(shapely.union_all(by_root[r])) for r in roots]
+    tree = shapely.STRtree(unions)
+    best: dict[int, tuple[float, str]] = {}
+    for g, key in named:
+        g = shapely.make_valid(g)
+        for i in tree.query(g, predicate="intersects"):
+            i = int(i)
+            area = unions[i].area
+            cover = shapely.intersection(unions[i], g).area / area if area > 0 else 0.0
+            if cover >= MIN_COVER and cover > best.get(i, (0.0, ""))[0]:
+                best[i] = (cover, key)
+    for i, (_, key) in best.items():
+        objects.setdefault(roots[i], {})["outline"] = key
+    return len(best)
 
 
 def describe(objects: dict, ids: list[str], polys: list, tree: shapely.STRtree, tile: Tile) -> None:
     """Name, address and storeys per object from the outline covering most
     of its footprint, and the address points on it (see the module doc)."""
-    geoms, names, others = building_outlines(tile)
+    geoms, names, others, _ = building_outlines(tile)
     best: dict[int, tuple[float, int]] = {}
     for j, g in enumerate(geoms):
         g = shapely.make_valid(g)
@@ -455,6 +511,7 @@ def run(tile: Tile) -> None:
     for i in covered_by(heritage_areas, polys, tree):
         flag(objects, city, ids[i], "heritage")
     describe(objects, ids, polys, tree, tile)
+    outlined = tree_outlines(objects, city, ids, polys, building_outlines(tile))
     outlines = look_outlines(tile, VOTE_MARGIN)
     looks = apply_looks(objects, city, ids, polys, tree, outlines)
     context, differ = apply_contexts(objects, ids, polys, outlines)
@@ -476,6 +533,7 @@ def run(tile: Tile) -> None:
             "objects_named": counts["name"],
             "objects_addressed": counts["addr"],
             "objects_levels": counts["levels"],
+            "trees_outlined": outlined,
             "objects_look": looks,
             "objects_context": differ,
         },

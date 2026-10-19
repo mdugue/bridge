@@ -45,6 +45,9 @@ export interface OsmBuildingFacts {
   material?: WallMaterial;
   /** the outline's `name`, for the inquiry card */
   name?: string;
+  /** on a root: the key of the named outline covering its tree, which the
+   *  trees one building is split into share (lib/city/ensembles.ts) */
+  outline?: string;
   /** roof, `#rrggbb` (OSM `roof:colour`) */
   roof_colour?: string;
   shop?: number;
@@ -226,6 +229,8 @@ export interface CityObjectRow {
   /** the root of the ensemble the object's tree belongs to (its own root
    *  when alone; lib/city/ensembles.ts) */
   ensemble?: number;
+  /** the ensemble's key across the site (0: none; `ensembleGroup`) */
+  group?: number;
   /** identity and semantics, the table's fact columns (ADR 0042) */
   facts?: ObjectFacts;
   /** OBJECT_FLAG_* summed, from OSM (0 = none) */
@@ -284,6 +289,9 @@ export interface CityObjectTable {
    *  (lib/city/ensembles.ts), asked and demolished together */
   ensemble: Uint32Array;
   flags: Uint16Array;
+  /** the ensemble's key across the site, 0 for none: a building across a
+   *  tile edge is one ensemble per tile, the same group */
+  group: Uint32Array;
   glow: Uint8Array;
   roof: Float32Array;
   root: Uint32Array;
@@ -309,6 +317,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     eaveH: new Float32Array(count),
     ensemble: new Uint32Array(count),
     flags: new Uint16Array(count),
+    group: new Uint32Array(count),
     glow: new Uint8Array(count),
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
@@ -326,6 +335,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     table.building[i] = r.building ? 1 : 0;
     table.eaveH[i] = r.eaveH;
     table.ensemble[i] = r.ensemble ?? r.root;
+    table.group[i] = r.group ?? 0;
     table.flags[i] = r.flags;
     table.glow[i] = r.glow;
     table.roof.set(r.roof, i * 3);

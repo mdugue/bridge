@@ -104,8 +104,10 @@ import type { ModelCamera } from "./model-camera";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
 import {
+  type CityLayer,
   countBuildings,
   ensureCityBvh,
+  groupObjects,
   nearestCityHit,
   nearestWithoutBvh,
   pickCityObject,
@@ -1955,10 +1957,18 @@ async function bootApp(
       return null;
     }
     if ("building" in subject) {
-      const positions = buildingShape(
-        subject.building.layer,
-        subject.building.objects
+      // an ensemble a tile edge cuts in two: both tiles' triangles
+      const shapes = subject.building.map((p) =>
+        buildingShape(p.layer, p.objects)
       );
+      const positions = new Float32Array(
+        shapes.reduce((n, s) => n + s.length, 0)
+      );
+      let at = 0;
+      for (const s of shapes) {
+        positions.set(s, at);
+        at += s.length;
+      }
       return { positions, reach: 0 };
     }
     const { target, solids } = subject.thing;
@@ -2322,13 +2332,24 @@ async function bootApp(
     if (!picked?.layer.demolish(picked.objectIndex)) {
       return;
     }
-    const kept = stream.demolished.get(picked.layer.tile) ?? new Set();
-    picked.layer.alive.forEach((alive, i) => {
-      if (!alive) {
-        kept.add(i);
+    const keep = (layer: CityLayer) => {
+      const kept = stream.demolished.get(layer.tile) ?? new Set();
+      layer.alive.forEach((alive, i) => {
+        if (!alive) {
+          kept.add(i);
+        }
+      });
+      stream.demolished.set(layer.tile, kept);
+    };
+    keep(picked.layer);
+    // the rest of its ensemble in the tiles across an edge
+    const group = picked.layer.table.group[picked.objectIndex];
+    for (const layer of group ? stream.cities : []) {
+      const [first] = layer === picked.layer ? [] : groupObjects(layer, group);
+      if (first !== undefined && layer.demolish(first)) {
+        keep(layer);
       }
-    });
-    stream.demolished.set(picked.layer.tile, kept);
+    }
     flattened = null;
     invalidateShadows();
     scheduleStats();

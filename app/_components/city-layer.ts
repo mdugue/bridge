@@ -106,6 +106,7 @@ export function readObjectTable(
     eaveH: new Float32Array(count),
     ensemble: new Uint32Array(count),
     flags: new Uint16Array(count),
+    group: new Uint32Array(count),
     glow: new Uint8Array(count),
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
@@ -145,6 +146,7 @@ export function readObjectTable(
   // a tile baked before the ensembles: each tree is its own
   table.ensemble.set(table.root);
   scalar("ensemble", table.ensemble);
+  scalar("group", table.group);
   scalar("rough", table.rough);
   scalar("source", table.source);
   scalar("storeyH", table.storeyH);
@@ -552,7 +554,7 @@ export function cityObjectsAlong(
         continue;
       }
       const objectIndex = ids.getX(hit.face.a);
-      const key = `${layer.tile}:${layer.table.ensemble[objectIndex]}`;
+      const key = buildingKey(layer, objectIndex);
       if (!seen.has(key)) {
         seen.add(key);
         out.push({ distance: hit.distance, layer, objectIndex });
@@ -561,6 +563,32 @@ export function cityObjectsAlong(
     }
   }
   return out.sort((a, b) => a.distance - b.distance);
+}
+
+/**
+ * What a building is, across the site: its ensemble's group where it has
+ * one (a building a tile edge cuts in two is one), else its tile's
+ * ensemble — the key the probe's candidates and votes go by.
+ */
+export function buildingKey(layer: CityLayer, objectIndex: number): string {
+  const group = layer.table.group[objectIndex];
+  return group
+    ? `g${group}`
+    : `${layer.tile}:${layer.table.ensemble[objectIndex]}`;
+}
+
+/** The live objects of a layer that belong to a group (none for 0). */
+export function groupObjects(layer: CityLayer, group: number): Set<number> {
+  const out = new Set<number>();
+  if (group === 0) {
+    return out;
+  }
+  for (let i = 0; i < layer.table.count; i++) {
+    if (layer.table.group[i] === group && layer.alive[i] === 1) {
+      out.add(i);
+    }
+  }
+  return out;
 }
 
 export function countBuildings(layer: CityLayer): number {
