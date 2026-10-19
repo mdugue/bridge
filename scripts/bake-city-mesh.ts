@@ -42,6 +42,7 @@ import {
   markFlatRoofs,
   markGrounded,
   OBJECT_FLAG_FLAT_ROOF,
+  OBJECT_FLAG_OWN_FACADE,
   OBJECT_FLAG_GLASS,
   OBJECT_FLAG_LANDMARK,
   OBJECT_FLAG_METAL,
@@ -890,11 +891,19 @@ function windowExtra(
   };
 }
 
-/** The flags with OBJECT_FLAG_LANDMARK where the facade is its own. */
+/** The flags with OBJECT_FLAG_LANDMARK and OBJECT_FLAG_OWN_FACADE where
+ *  the facade is its own. */
 function facadeFlags(flags: number, own: boolean): number {
-  return own && !hasObjectFlag(flags, OBJECT_FLAG_LANDMARK)
-    ? flags + OBJECT_FLAG_LANDMARK
-    : flags;
+  if (!own) {
+    return flags;
+  }
+  const landmark = hasObjectFlag(flags, OBJECT_FLAG_LANDMARK)
+    ? 0
+    : OBJECT_FLAG_LANDMARK;
+  const facade = hasObjectFlag(flags, OBJECT_FLAG_OWN_FACADE)
+    ? 0
+    : OBJECT_FLAG_OWN_FACADE;
+  return flags + landmark + facade;
 }
 
 /** What the tile's mesh carries beyond LoD2: the scan's sheds, the
