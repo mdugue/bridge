@@ -63,11 +63,16 @@ export interface InquiryObject {
 }
 
 /** What the scene hands the card for a building: the picked object and
- *  its whole tree. */
+ *  its whole tree — or its ensemble's trees, where the survey's Buildings
+ *  are one building to a visitor (lib/city/ensembles.ts). */
 export interface BuildingInquiry {
   kind: "building";
+  /** the ensemble's root object, which the bake gives the whole
+   *  ensemble's height and ground (the picked tree's root when absent) */
+  lead?: number;
   picked: InquiryObject;
-  /** every object of the picked object's building tree, the picked one too */
+  /** every object of the picked object's building tree (its ensemble's
+   *  trees), the picked one too */
   tree: InquiryObject[];
   tile: string;
 }
@@ -192,7 +197,10 @@ function mergedFacts(inquiry: BuildingInquiry) {
   const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
   const facts = all.map((o) => o.facts);
   const pick = inquiry.picked.facts;
-  const building = all.find((o) => o.building)?.facts;
+  const building = (
+    all.find((o) => o.objectIndex === inquiry.lead) ??
+    all.find((o) => o.building)
+  )?.facts;
   const names = distinct([pick.name, ...facts.map((f) => f.name)]);
   const heights = known(facts.map((f) => f.height));
   const areas = known(facts.map((f) => f.area));
@@ -211,6 +219,7 @@ function mergedFacts(inquiry: BuildingInquiry) {
     levels: levels.length > 0 ? Math.max(...levels) : NO_FACT,
     name: names[0] ?? "",
     parts: all.filter((o) => !o.building).length,
+    buildings: all.filter((o) => o.building).length,
     heritage: hasObjectFlag(flags, OBJECT_FLAG_HERITAGE),
     rebuilt: facts.some((f) => isMeasuredRoof(f.roofType)),
     shop: hasObjectFlag(flags, OBJECT_FLAG_SHOP),
@@ -241,6 +250,11 @@ function cardFacts(
     ],
     ["Grundfläche", t.area > 0 ? squareMetres(t.area) : ""],
     ["Geschosse", known(t.levels) ? whole.format(t.levels) : ""],
+    [
+      "Gebäude",
+      t.buildings > 1 ? `${whole.format(t.buildings)} im Stadtmodell` : "",
+      "detected",
+    ],
     ["Gebäudeteile", t.parts > 1 ? whole.format(t.parts) : ""],
     ["Denkmal", t.heritage ? "Kulturdenkmal" : ""],
     // a shop point matched to the footprint (osm_buildings.py)
@@ -318,6 +332,19 @@ function buildingCard(
   if (fromOsm.length > 0) {
     sources.push(
       ...stated("taken", osmSource(provenance, fromOsm, "buildings"))
+    );
+  }
+  if (t.buildings > 1) {
+    // ensembles.ts: one OSM name over touching Buildings
+    sources.push(
+      ...stated(
+        "detected",
+        osmSource(
+          provenance,
+          [`${whole.format(t.buildings)} Gebäude des Stadtmodells als ein Bau`],
+          "buildings"
+        )
+      )
     );
   }
   if (t.shop) {

@@ -265,7 +265,7 @@ export function createInquiryProbe(deps: {
       ...buildings.map(({ distance, layer, objectIndex }) => ({
         distance,
         hit: { building: { layer, objectIndex } },
-        key: `${layer.tile}:${layer.table.root[objectIndex]}`,
+        key: `${layer.tile}:${layer.table.ensemble[objectIndex]}`,
       })),
       ...things.map((thing) => ({
         distance: thing.distance,
@@ -277,12 +277,16 @@ export function createInquiryProbe(deps: {
     return ground === null ? hits : hits.filter((h) => h.distance <= ground);
   };
 
-  /** A building's live tree: its objects and its inquiry (unmarked). */
+  /** A building's live ensemble (its tree, or the trees that are one
+   *  building): its objects and its inquiry (unmarked). */
   const building = (layer: CityLayer, objectIndex: number) => {
     const { table } = layer;
     const tree: number[] = [];
     for (let i = 0; i < table.count; i++) {
-      if (table.root[i] === table.root[objectIndex] && layer.alive[i] === 1) {
+      if (
+        table.ensemble[i] === table.ensemble[objectIndex] &&
+        layer.alive[i] === 1
+      ) {
         tree.push(i);
       }
     }
@@ -297,6 +301,7 @@ export function createInquiryProbe(deps: {
     const inquiry: Inquiry = {
       kind: "building",
       tile: layer.tile,
+      lead: table.ensemble[objectIndex],
       picked: object(objectIndex),
       tree: tree.map(object),
     };

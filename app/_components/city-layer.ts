@@ -104,6 +104,7 @@ export function readObjectTable(
     baseZ: new Float32Array(count),
     building: new Uint8Array(count),
     eaveH: new Float32Array(count),
+    ensemble: new Uint32Array(count),
     flags: new Uint16Array(count),
     glow: new Uint8Array(count),
     roof: new Float32Array(count * 3),
@@ -141,6 +142,9 @@ export function readObjectTable(
   scalar("flags", table.flags);
   scalar("glow", table.glow);
   scalar("root", table.root);
+  // a tile baked before the ensembles: each tree is its own
+  table.ensemble.set(table.root);
+  scalar("ensemble", table.ensemble);
   scalar("rough", table.rough);
   scalar("source", table.source);
   scalar("storeyH", table.storeyH);
@@ -312,7 +316,7 @@ export function dressCity(
       (objects.texture.image.data as Float32Array).byteLength,
     alive,
     demolish: (objectIndex) => {
-      const doomed = doomedObjects(table.root, objectIndex);
+      const doomed = doomedObjects(table.ensemble, objectIndex);
       if (doomed.size === 0) {
         return false;
       }
@@ -548,7 +552,7 @@ export function cityObjectsAlong(
         continue;
       }
       const objectIndex = ids.getX(hit.face.a);
-      const key = `${layer.tile}:${layer.table.root[objectIndex]}`;
+      const key = `${layer.tile}:${layer.table.ensemble[objectIndex]}`;
       if (!seen.has(key)) {
         seen.add(key);
         out.push({ distance: hit.distance, layer, objectIndex });

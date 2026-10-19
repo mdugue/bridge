@@ -150,6 +150,46 @@ test("the Building's own tree facts win over its parts' (the bake's union)", () 
   expect(fact("Höhe")).toBe("24,5 m");
 });
 
+test("an ensemble answers as one building: the lead's facts, its Buildings counted", () => {
+  const tower = object({
+    building: true,
+    objectIndex: 9,
+    facts: facts({ name: "Residenzschloss", height: 60.9, area: 220 }),
+  });
+  const card = inquiryCard(
+    {
+      kind: "building",
+      tile: "t",
+      lead: 2,
+      picked: tower,
+      tree: [
+        object({
+          building: true,
+          objectIndex: 2,
+          facts: facts({ name: "Residenzschloss", height: 100.3, area: 4890 }),
+        }),
+        object({ objectIndex: 3 }),
+        tower,
+      ],
+    },
+    null,
+    DRESDEN
+  );
+  const fact = (label: string) =>
+    card.facts.find((f) => f.label === label)?.value;
+  expect(card.title).toBe("Residenzschloss");
+  expect(fact("Höhe")).toBe("100,3 m");
+  expect(fact("Grundfläche")).toBe("4.890 m²");
+  expect(fact("Gebäude")).toBe("2 im Stadtmodell");
+  expect(
+    card.sources.some(
+      (l) =>
+        l.method === "detected" &&
+        l.text.startsWith("2 Gebäude des Stadtmodells")
+    )
+  ).toBe(true);
+});
+
 test("a shop matched to the footprint is marked detected, on its line and its fact", () => {
   const card = inquiryCard(
     {

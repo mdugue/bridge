@@ -58,6 +58,7 @@ import {
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
+import { ensembleRoots } from "../lib/city/ensembles";
 import {
   DOOR_SINK,
   DOOR_SURROUND,
@@ -686,10 +687,66 @@ export function bakeCityMesh(
     }
   }
 
+  joinEnsembles(objects, trees, (i) =>
+    minZ.has(i)
+      ? {
+          baseZ: minZ.get(i) ?? 0,
+          topZ: maxZ.get(i) ?? 0,
+          footprints: footprintsOf[i],
+        }
+      : undefined
+  );
+
   const baked: BakedCityMesh = { epsg, matrix, objects, offset, vertices: v };
   markFlatRoofs(objects, v);
   dressWalls(tile, baked, keys, hosts, onWalls, { facades, gaps, scan });
   return baked;
+}
+
+/**
+ * Building trees that are one building to a visitor (lib/city/ensembles.ts)
+ * share an `ensemble`, the lowest root among them, whose facts become the
+ * whole ensemble's: the union of its footprints, its lowest base to its
+ * highest top.
+ */
+function joinEnsembles(
+  objects: CityObjectRow[],
+  trees: ReadonlyMap<number, readonly number[]>,
+  extent: (
+    i: number
+  ) =>
+    | { baseZ: number; footprints: [number, number][][]; topZ: number }
+    | undefined
+): void {
+  const lead = ensembleRoots(
+    [...trees].map(([root, members]) => ({
+      root,
+      // the root's name, else its first named part's
+      name:
+        [root, ...members]
+          .map((i) => objects[i].facts?.name ?? "")
+          .find((name) => name !== "") ?? "",
+      rings: members.flatMap((i) => objects[i].footprints),
+    }))
+  );
+  const joined = new Map<number, number[]>();
+  for (const [root, members] of trees) {
+    const to = lead.get(root) ?? root;
+    for (const i of members) {
+      objects[i].ensemble = to;
+    }
+    joined.set(to, [...(joined.get(to) ?? []), ...members]);
+  }
+  for (const [to, members] of joined) {
+    const facts = objects[to].facts;
+    if (facts && members.some((i) => objects[i].root !== to)) {
+      objects[to].facts = treeFacts(
+        facts,
+        members.flatMap((i) => extent(i) ?? []),
+        false
+      );
+    }
+  }
 }
 
 export interface CityMesh {
@@ -745,6 +802,11 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
       roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
       root: { type: "SCALAR", componentType: "UINT32", values: t.root },
+      ensemble: {
+        type: "SCALAR",
+        componentType: "UINT32",
+        values: t.ensemble,
+      },
       rough: { type: "SCALAR", componentType: "FLOAT32", values: t.rough },
       source: { type: "SCALAR", componentType: "UINT8", values: t.source },
       storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },

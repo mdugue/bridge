@@ -223,6 +223,9 @@ export interface CityObjectRow {
   building: boolean;
   /** eave height above the base (m): lowest RoofSurface vertex, else the top */
   eaveH: number;
+  /** the root of the ensemble the object's tree belongs to (its own root
+   *  when alone; lib/city/ensembles.ts) */
+  ensemble?: number;
   /** identity and semantics, the table's fact columns (ADR 0042) */
   facts?: ObjectFacts;
   /** OBJECT_FLAG_* summed, from OSM (0 = none) */
@@ -277,6 +280,9 @@ export interface CityObjectTable {
   building: Uint8Array;
   count: number;
   eaveH: Float32Array;
+  /** the ensemble's root: Buildings that are one building to a visitor
+   *  (lib/city/ensembles.ts), asked and demolished together */
+  ensemble: Uint32Array;
   flags: Uint16Array;
   glow: Uint8Array;
   roof: Float32Array;
@@ -301,6 +307,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     baseZ: new Float32Array(count),
     building: new Uint8Array(count),
     eaveH: new Float32Array(count),
+    ensemble: new Uint32Array(count),
     flags: new Uint16Array(count),
     glow: new Uint8Array(count),
     roof: new Float32Array(count * 3),
@@ -318,6 +325,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     table.baseZ[i] = r.baseZ;
     table.building[i] = r.building ? 1 : 0;
     table.eaveH[i] = r.eaveH;
+    table.ensemble[i] = r.ensemble ?? r.root;
     table.flags[i] = r.flags;
     table.glow[i] = r.glow;
     table.roof.set(r.roof, i * 3);

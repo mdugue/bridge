@@ -959,13 +959,27 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   never handed to the root) → the `name`, `addr`, `levels` columns. Spawn
   tile: 2 363 of 4 404 objects addressed, 444 named, 2 470 with storeys
   (BBBike extract 2026-09-26). The card merges a building's parts.
+- **Ensembles** `◎ detected` (2026-10-19) — LoD2 Buildings whose trees
+  carry the same OSM name and whose footprints touch (≤ 0.5 m, or one
+  inside the other) are one building to a visitor: the cadastre splits
+  Dresden's Residenzschloss into the main complex (the Hausmannsturm's
+  spire one of its parts) and the tower's shaft, and OSM maps it as one
+  outline. `lib/city/ensembles.ts`, joined in `bake-city-mesh.ts` → the
+  `ensemble` column (the lowest root; its facts become the ensemble's:
+  the union of the footprints, lowest base to highest top). Asked,
+  outlined, listed in *Hier auch* and demolished as one; the card counts
+  its Buildings (*Gebäude: 2 im Stadtmodell*) and keeps the picked one's
+  `buildingId`. Dresden: 292 ensembles of 796 Buildings, out of 1 851
+  named ones (the name is a proxy for the OSM outline, which the bake
+  does not keep). An ensemble across a tile edge stays two (a tile's
+  tree is its own).
 - **Provenance manifest** `❝ taken` — `data/provenance.json` (hand-kept) →
   `provenance.json` next to the tileset (`lib/city/provenance.ts`, at build
   time): per source its label, credit and licence, per tile its edition
   (LoD2 split into the model year and its inputs' years). The card's
   source lines; fetched with the first question.
-- **The asked building** `≈ assumed` (no slider) — the picked object's building tree
-  (the set demolish takes) gets flag 32 in the packed object texture at
+- **The asked building** `≈ assumed` (no slider) — the picked object's building tree,
+  or its ensemble's trees (the set demolish takes), gets flag 32 in the packed object texture at
   runtime; the clay lifts it 40 % towards paper white, adds a faint
   paper light (brighter at night) and draws a pencil hatch: near, strokes
   on the building every 0.9 m (up the facade at 45°, across the roof;
