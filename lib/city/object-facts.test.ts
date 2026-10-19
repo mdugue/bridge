@@ -67,6 +67,8 @@ test("a Building answers for its tree: union ground, base to top", () => {
   const surveyed = treeFacts({ ...root, height: 38.5 }, tree, true);
   expect(surveyed.height).toBe(38.5);
   expect(surveyed.area).toBe(75);
+  // … unless the tree rises far above it: the survey measured a part
+  expect(treeFacts({ ...root, height: 25 }, tree, true).height).toBe(40);
 });
 
 test("dates lose their clock; anything else is no date", () => {
@@ -110,6 +112,7 @@ test("LoD2 facts: the survey's height, else the model's; rounded", () => {
     created: "2025-07-04",
     name: "Kreuzkirche",
     addr: "An der Kreuzkirche 6",
+    drawn: "",
     height: 5,
     roofPitch: 19.9,
     area: 50,
@@ -127,6 +130,7 @@ test("a scan structure knows its id, height and ground only", () => {
     created: "",
     name: "",
     addr: "",
+    drawn: "",
     height: 2.46,
     roofPitch: NO_FACT,
     area: 50,

@@ -35,6 +35,9 @@ export function isMeasuredRoof(code: string): boolean {
 export interface ObjectFacts {
   /** OSM `addr:street` + `addr:housenumber` ("" unknown) */
   addr: string;
+  /** how the bake drew it and from what, as lib/city/drawn-facts.ts
+   *  encodes it ("" unknown: a tile baked before the column) */
+  drawn: string;
   /** footprint area of this object's GroundSurfaces (m²), NO_FACT if none */
   area: number;
   /** the survey's production date of the object, YYYY-MM-DD ("" unknown) */
@@ -64,7 +67,12 @@ export interface ObjectFacts {
  * handful of dates — ENUM columns, a UINT16 per object), numbers.
  */
 export const FACT_STRING_COLUMNS = ["buildingId", "name", "addr"] as const;
-export const FACT_ENUM_COLUMNS = ["function", "roofType", "created"] as const;
+export const FACT_ENUM_COLUMNS = [
+  "function",
+  "roofType",
+  "created",
+  "drawn",
+] as const;
 export const FACT_NUMBER_COLUMNS = [
   "height",
   "roofPitch",
@@ -150,12 +158,19 @@ export function unionArea(
   return area;
 }
 
+/** How far the tree may rise above the survey's height before the survey
+ *  is taken to have measured only a part: the Frauenkirche's Building
+ *  says 41 m, its parts reach 94 m. A tree on a slope rises a little
+ *  above the survey's mean ground. */
+const SURVEY_SHORT = 1.25;
+
 /**
  * A Building's facts once its whole tree is known (the bake side): its
  * ground area is the union of every footprint in the tree — parts that
  * overlap or stand on one another count once — and, unless the survey
- * measured the Building itself (`surveyed`), its height runs from the
- * tree's lowest base to its highest top (a tower on a podium is the
+ * measured the Building itself (`surveyed`) and the tree stays near that
+ * height (`SURVEY_SHORT`), its height runs from the tree's lowest base to
+ * its highest top (a tower on a podium is the
  * tower's top above the podium's base, as `measuredHeight` is defined).
  */
 export function treeFacts(
@@ -177,7 +192,10 @@ export function treeFacts(
   return {
     ...root,
     area: area > 0 ? round(area, 10) : root.area,
-    height: surveyed || !(top > base) ? root.height : round(top - base, 100),
+    height:
+      !(top > base) || (surveyed && top - base <= root.height * SURVEY_SHORT)
+        ? root.height
+        : round(top - base, 100),
   };
 }
 
@@ -216,6 +234,7 @@ export function lod2Facts(input: {
     created: isoDate(own.creationDate ?? resolved.creationDate),
     name: text(osm?.name),
     addr: text(osm?.addr),
+    drawn: "",
     // 0 m is no height: a Building whose parts carry the geometry
     height: round(
       measured > 0 ? measured : positive(input.fallbackHeight),
@@ -241,6 +260,7 @@ export function scanFacts(input: {
     created: "",
     name: "",
     addr: "",
+    drawn: "",
     height: round(number(input.height), 100),
     roofPitch: NO_FACT,
     area: area > 0 ? round(area, 10) : NO_FACT,
@@ -312,6 +332,7 @@ export function readFacts(
     created: str("created"),
     name: str("name"),
     addr: str("addr"),
+    drawn: str("drawn"),
     height: num("height"),
     roofPitch: num("roofPitch"),
     area: num("area"),

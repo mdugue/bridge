@@ -6,11 +6,14 @@ import {
   partFacade,
   buildingTint,
   inheritedAttributes,
+  ownFacadeReason,
   roofColor,
+  roofColourSource,
   roofTint,
   roughJitter,
   mappedStoreyHeight,
   storeyHeight,
+  wallColourSource,
 } from "./building-tint";
 
 const inRange = (rgb: number[]) =>
@@ -222,4 +225,31 @@ test("palatialFacade: public buildings, not churches, stations or sports halls",
   expect(palatialFacade({ function: "31001_3091" })).toBe(false); // Bahnhof
   expect(palatialFacade({ function: "31001_2090" })).toBe(false);
   expect(palatialFacade({})).toBe(false);
+});
+
+test("the card is told where a wall's and a roof's colour come from", () => {
+  const housing = { function: "31001_9998" };
+  expect(wallColourSource(housing, "render", { colour: "#c8b89a" })).toBe(
+    "osm"
+  );
+  // a colour that is no colour falls through to the palette, as the tint
+  expect(wallColourSource(housing, "render", { colour: "red" })).toBe("use");
+  expect(wallColourSource(housing, "brick", { material: "glass" })).toBe(
+    "material"
+  );
+  expect(wallColourSource(housing, "brick")).toBe("brick");
+  // civic keeps its stone in a brick city
+  expect(wallColourSource({ function: "31001_3021" }, "brick")).toBe("use");
+  expect(roofColourSource("a", { a: [0.1, 0.1, 0.1] })).toBe("dop");
+  expect(roofColourSource("a", {}, { roof_colour: "#806040" })).toBe("osm");
+  expect(roofColourSource("a")).toBe("palette");
+});
+
+test("ownFacadeReason names the use, the hall or the listed public building", () => {
+  expect(ownFacadeReason({ function: "31001_3041" })).toBe("use");
+  expect(ownFacadeReason({ function: "31001_2000" }, 18, 2)).toBe("hall");
+  expect(ownFacadeReason({ function: "31001_3015" }, 30, 0, true)).toBe(
+    "listed"
+  );
+  expect(ownFacadeReason({ function: "31001_1000" }, 18, 6)).toBeNull();
 });
