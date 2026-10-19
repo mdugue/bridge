@@ -702,7 +702,7 @@ export interface CityMesh {
 /** The stream's vertex normals: a curve LoD2 drew as facets rounded off
  *  within one object's walls or roofs, corners kept crisp
  *  (lib/city/crease-normals.ts); a triangle shaded otherwise is left out. */
-function vertexNormals(v: CityVertices): Float32Array {
+export function vertexNormals(v: CityVertices): Float32Array {
   const groups = new Float64Array(v.objectIds.length);
   for (let i = 0; i < groups.length; i++) {
     groups[i] = 2 * v.objectIds[i] + (v.isRoof[i] === 1 ? 1 : 0);

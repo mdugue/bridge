@@ -33,6 +33,7 @@ import {
   liftToStreet,
   PANE_ROUGH,
   scanStructureId,
+  vertexNormals,
 } from "./bake-city-mesh";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
@@ -730,4 +731,74 @@ test("cityFrame is the frame the bake recenters a tile in, without the parse", (
   expect([...frame.matrix.elements]).toEqual([...baked.matrix.elements]);
   expect(frame.offset).toEqual(baked.offset);
   expect(frame.epsg).toBe(25833);
+});
+
+test("normals round a curve within one object's walls, never into its roof, another object or a measured face", () => {
+  // two wall facets 3 m wide turned 20° apart, sharing the edge at x = 0
+  const a = (20 * Math.PI) / 180;
+  const left = [-3 * Math.cos(a), 3 * Math.sin(a)];
+  const right = [3, 0];
+  const wall = (p: number[], q: number[]) => [
+    p[0],
+    p[1],
+    0,
+    q[0],
+    q[1],
+    0,
+    q[0],
+    q[1],
+    5,
+    p[0],
+    p[1],
+    0,
+    q[0],
+    q[1],
+    5,
+    p[0],
+    p[1],
+    5,
+  ];
+  const positions = Float32Array.from([
+    ...wall(left, [0, 0]),
+    ...wall([0, 0], right),
+  ]);
+  const at = (n: Float32Array, v: number) => [n[3 * v], n[3 * v + 1]];
+  const make = (ids: number[], roof: number[], normals?: number[]) =>
+    vertexNormals({
+      positions,
+      objectIds: Float32Array.from(ids),
+      isRoof: Float32Array.from(roof),
+      normals: normals ? Float32Array.from(normals) : undefined,
+    });
+  const one = Array.from({ length: 12 }, () => 0);
+  // vertex 1 (left facet, shared edge) and 6 (right facet, same point)
+  const rounded = make(one, one);
+  expect(at(rounded, 1)[0]).toBeCloseTo(at(rounded, 6)[0], 5);
+  expect(at(rounded, 1)[1]).toBeCloseTo(at(rounded, 6)[1], 5);
+  const flatLeft = (n: Float32Array) => {
+    expect(at(n, 1)[0]).toBeCloseTo(at(n, 0)[0], 5);
+    expect(at(n, 1)[1]).toBeCloseTo(at(n, 0)[1], 5);
+  };
+  // the right facet another object's, then a roof, then measured
+  flatLeft(
+    make(
+      [
+        ...Array.from({ length: 6 }, () => 0),
+        ...Array.from({ length: 6 }, () => 1),
+      ],
+      one
+    )
+  );
+  flatLeft(
+    make(one, [
+      ...Array.from({ length: 6 }, () => 0),
+      ...Array.from({ length: 6 }, () => 1),
+    ])
+  );
+  flatLeft(
+    make(one, one, [
+      ...Array.from({ length: 18 }, () => Number.NaN),
+      ...Array.from({ length: 6 }, () => [1, 0, 0]).flat(),
+    ])
+  );
 });

@@ -89,4 +89,51 @@ describe("creaseNormals", () => {
     expect(heading(n, 1)).toBeCloseTo(20, 1);
     expect(heading(n, 9)).toBeCloseTo(20, 1);
   });
+
+  test("keeps a plain wall's slight kink", () => {
+    // the same 20° turn on a ring of radius 50: facets 17 m wide
+    const p = ring(2, 40).map((c, i) => (i % 3 === 2 ? c : 5 * c));
+    const n = creaseNormals(p, new Float64Array(p.length / 3));
+    expect(heading(n, 1)).toBeCloseTo(10, 1);
+  });
+
+  test("keeps a low gable's ridge", () => {
+    // two roof planes pitched 12° to either side of a ridge along y
+    const s = Math.tan((12 * Math.PI) / 180) * 3;
+    const p = Float32Array.from([
+      -3,
+      0,
+      0,
+      0,
+      0,
+      s,
+      0,
+      4,
+      s,
+      0,
+      0,
+      s,
+      3,
+      0,
+      0,
+      3,
+      4,
+      0,
+    ]);
+    const n = creaseNormals(p, new Float64Array(6));
+    // vertex 1 (ridge, left plane) keeps the left plane's lean
+    expect(n[3]).toBeLessThan(-0.2);
+  });
+
+  test("takes −0 and +0 for one point", () => {
+    // the strip moved so the shared bottom corner lies on x = 0, signed apart
+    const ring2 = ring(2, 40);
+    const x0 = ring2[3];
+    const p = ring2.map((c, i) => (i % 3 === 0 ? c - x0 : c));
+    p[3] = 0;
+    p[18] = -0;
+    const n = creaseNormals(p, new Float64Array(p.length / 3));
+    expect(heading(n, 1)).toBeCloseTo(20, 1);
+    expect(heading(n, 6)).toBeCloseTo(20, 1);
+  });
 });

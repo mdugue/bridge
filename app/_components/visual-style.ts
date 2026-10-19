@@ -13,6 +13,7 @@ import {
   abs,
   attribute,
   cameraPosition,
+  cameraWorldMatrix,
   clamp,
   dot,
   float,
@@ -28,7 +29,7 @@ import {
   min,
   mix,
   mod,
-  modelWorldMatrix,
+  normalFlat,
   normalize,
   positionWorld,
   screenCoordinate,
@@ -243,7 +244,11 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   // do for a sliver that thin.
   const raw = attribute("normal", "vec3");
   const safe = select(dot(raw, raw).lessThan(1e-8), vec3(0, 1, 0), raw);
-  const wn = normalize(varying(modelWorldMatrix.mul(vec4(safe, 0)).xyz));
+  // The facet's own plane, from the view position's derivatives: the
+  // vertex normal rounds a curve's facets (lib/city/crease-normals.ts) and
+  // turns across each one, but the windows, the relief and the glow cells
+  // are laid on the facet itself (`_FACADE`), so their frame is the flat one.
+  const wn = normalize(cameraWorldMatrix.mul(vec4(normalFlat, 0)).xyz);
   const h = max(localH, 0);
   const wall = float(1).sub(smoothstep(0.5, 0.7, abs(wn.y)));
   const windows = clayWindows({
@@ -269,8 +274,13 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
         windows.normalMix
       )
     ),
-    receivedShadow: (shadow?: Node) =>
-      shadow ? (shadow as F).mul(windows.sun) : windows.sun,
+    // A facet turned from the sun is in its own shadow, whatever its
+    // rounded normal says: buildings cast with their back faces (sun-rig.ts),
+    // so its shadow-map depth is its own and the test would speckle it.
+    receivedShadow: (shadow?: Node) => {
+      const own = windows.sun.mul(smoothstep(-0.02, 0.06, dot(wn, d.uSun)));
+      return shadow ? (shadow as F).mul(own) : own;
+    },
     // Materialstreuung: nudge roughness per building so the matte sheen
     // varies house-to-house (clamped to stay matte, no shiny clay).
     roughness: facadeRoughness(
