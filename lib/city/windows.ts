@@ -372,6 +372,19 @@ export const TYPES: Record<
   },
 };
 
+/**
+ * The highest ground (or plinth top) over its base a ground floor's
+ * windows still clear (m): the lift's last class over the lowest sill,
+ * `WINDOW_ROWS.plinthGap` under it. Where the ground along a wall rises
+ * higher (a building on a slope, the Brühlsche Terrasse behind the
+ * Albertinum) that wall's ground floor has no windows, its others keep
+ * theirs (`facadeAttribute`'s shop sign).
+ */
+export const GROUND_REACH_M =
+  (WINDOW_LIFT.classes - 1) * WINDOW_LIFT.step +
+  Math.min(...Object.values(TYPES).map((t) => t.sill)) -
+  WINDOW_ROWS.plinthGap;
+
 /** A palace's storey where OSM counts none (m): the eave is split into
  *  whole storeys of about this. */
 export const PALACE_STOREY_M = 5.5;
