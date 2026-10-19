@@ -21,17 +21,21 @@ import {
 } from "three";
 import {
   buildingGlows,
-  ownFacade,
   partFacade,
   buildingTint,
   type FacadeMaterial,
   inheritedAttributes,
+  countsStoreys,
+  ownFacadeReason,
   type RoofColorLut,
+  type RoofColourSource,
   roofColor,
+  roofColourSource,
   roofTint,
   roughJitter,
   mappedStoreyHeight,
   storeyHeight,
+  wallColourSource,
 } from "../lib/city/building-tint";
 import {
   type CityObjectRow,
@@ -60,6 +64,7 @@ import {
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
 import { creaseNormals } from "../lib/city/crease-normals";
+import { type DrawnFacts, encodeDrawn } from "../lib/city/drawn-facts";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
 import { ensembleGroup, ensembleRoots } from "../lib/city/ensembles";
 import {
@@ -636,6 +641,7 @@ export function bakeCityMesh(
     const footprints = footprintsOf[index];
     hosts[index] = windowExtra(attrs, eaveH, osm);
     const monumental = hosts[index].monumental ?? false;
+    const context = look.context ?? facades;
     return {
       building: o.type === "Building",
       root,
@@ -648,8 +654,13 @@ export function bakeCityMesh(
       storeyH: cm(mappedStoreyHeight(eaveH, measured, osm?.levels)),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
-      tint: rgb(buildingTint(id, attrs, look.context ?? facades, look)),
+      tint: rgb(buildingTint(id, attrs, context, look)),
       roof: rgb(roofColor(id, attrs, roofLut, look)),
+      drawn: drawnOf(attrs, context, look, osm, {
+        eaveH,
+        own: hosts[index].why ?? null,
+        roof: roofColourSource(id, roofLut, look),
+      }),
       footprints,
       facts: lod2Facts({
         buildingId: keys[root],
@@ -676,6 +687,9 @@ export function bakeCityMesh(
     if (own && !hosts[i].monumental) {
       hosts[i].monumental = true;
       o.flags = facadeFlags(o.flags, true);
+      if (o.drawn) {
+        o.drawn = { ...o.drawn, own: "part" };
+      }
     }
   });
 
@@ -722,7 +736,40 @@ export function bakeCityMesh(
   const baked: BakedCityMesh = { epsg, matrix, objects, offset, vertices: v };
   markFlatRoofs(objects, v);
   dressWalls(tile, baked, keys, hosts, onWalls, { facades, gaps, scan });
+  for (const o of objects) {
+    if (o.facts) {
+      o.facts = { ...o.facts, drawn: encodeDrawn(o.drawn) };
+    }
+  }
   return baked;
+}
+
+/**
+ * How an object's walls, roof and storeys are drawn and from what (lib/
+ * city/drawn-facts.ts), as `buildingTint`, `roofColor` and
+ * `mappedStoreyHeight` decide; the windows join it in `assignWindows`.
+ */
+function drawnOf(
+  attrs: Record<string, unknown>,
+  context: FacadeMaterial,
+  look: ReturnType<typeof inheritedLook>,
+  osm: OsmBuildingFacts | undefined,
+  o: { eaveH: number; own: DrawnFacts["own"] | null; roof: RoofColourSource }
+): DrawnFacts {
+  const wall = wallColourSource(attrs, context, look);
+  const own = o.own;
+  return {
+    wall,
+    ...(look.colour ? { colour: look.colour } : {}),
+    ...(look.material ? { material: look.material } : {}),
+    ...(look.materialFrom ? { materialFrom: look.materialFrom } : {}),
+    ...(wall === "brick" ? { context } : {}),
+    roof: o.roof,
+    ...(look.roof_colour ? { roofColour: look.roof_colour } : {}),
+    storey: countsStoreys(o.eaveH, osm?.levels) ? "osm" : "height",
+    ...(own ? { own } : {}),
+    ...(osm?.wikidata ? { wikidata: osm.wikidata } : {}),
+  };
 }
 
 /**
@@ -969,10 +1016,17 @@ function windowExtra(
   eaveH: number,
   osm: OsmBuildingFacts | undefined
 ): WindowExtra {
+  const why = ownFacadeReason(
+    attrs,
+    eaveH,
+    osm?.levels,
+    (osm?.heritage ?? 0) > 0
+  );
   return {
     fn: typeof attrs.function === "string" ? attrs.function : undefined,
     levels: (osm?.levels ?? 0) >= 1,
-    monumental: ownFacade(attrs, eaveH, osm?.levels, (osm?.heritage ?? 0) > 0),
+    monumental: why !== null,
+    ...(why ? { why } : {}),
     storeys: osm?.levels,
   };
 }
@@ -1681,6 +1735,8 @@ export type WindowExtra = Pick<WindowHost, "fn" | "levels"> & {
   monumental?: boolean;
   /** the storeys OSM counts, its own or its building's */
   storeys?: number;
+  /** why its facade is its own (`ownFacadeReason`), for the card */
+  why?: "hall" | "listed" | "use";
 };
 
 /** A building's street level stands at most this far over the lowest
@@ -1787,9 +1843,18 @@ export function assignWindows(
     storeyH: o.storeyH,
   }));
   windowSpecs(hosts, walls, index).forEach((choice, i) => {
+    const o = objects[i];
     if (choice.spec.axis > 0) {
-      objects[i].windows = choice.spec;
-      objects[i].storeyH = cm(choice.storey);
+      o.windows = choice.spec;
+      o.storeyH = cm(choice.storey);
+    }
+    if (o.drawn) {
+      o.drawn = {
+        ...o.drawn,
+        windows: choice.from,
+        ...(choice.why ? { noWindows: choice.why } : {}),
+        ...(choice.storeyFromPhotos ? { storey: "photos" as const } : {}),
+      };
     }
   });
 }

@@ -1,3 +1,4 @@
+import { decodeDrawn } from "../lib/city/drawn-facts";
 import { expect, test } from "bun:test";
 import type { CityJsonDocument } from "../lib/city/types";
 import {
@@ -212,6 +213,38 @@ test("every object carries its identity and semantics as fact columns", () => {
   });
   expect(table?.height).toMatchObject({ componentType: "FLOAT32", noData: -1 });
   expect([...(table?.height.values ?? [])]).toEqual([9, 9, 12]);
+});
+
+test("every object records how it is drawn and from what, for the card", () => {
+  const baked = bakeCityMesh("t", fixture(), { house: [0.2, 0.2, 0.2] }, null, {
+    shop: { material: "glass", levels: 3, wikidata: "Q1" },
+    house: { colour: "#c8b89a", roof_colour: "#806040" },
+  });
+  const [, part, house] = baked.objects.map((o) =>
+    decodeDrawn(o.facts?.drawn ?? "")
+  );
+  // the part takes its Building's OSM look; glass walls carry no windows
+  expect(part).toMatchObject({
+    wall: "material",
+    material: "glass",
+    roof: "palette",
+    storey: "osm",
+    windows: "none",
+    noWindows: "facade",
+    wikidata: "Q1",
+  });
+  // the orthophoto's roof colour wins over OSM's
+  expect(house).toMatchObject({
+    wall: "osm",
+    colour: "#c8b89a",
+    roof: "dop",
+    roofColour: "#806040",
+    storey: "height",
+  });
+  // one ENUM column, read only when someone asks
+  expect(cityMesh(baked).input.table?.properties.drawn).toMatchObject({
+    type: "ENUM",
+  });
 });
 
 test("a part carries its root Building's flags as well as its own", () => {
@@ -816,6 +849,7 @@ test("joinEnsembles: touching trees of one name share the lowest root, its facts
   ];
   const facts = (name: string, height: number) => ({
     buildingId: `B${height}`,
+    drawn: "",
     function: "",
     roofType: "",
     created: "",

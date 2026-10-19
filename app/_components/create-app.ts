@@ -2019,6 +2019,7 @@ async function bootApp(
       width: renderer.domElement.clientWidth || 1,
       height: renderer.domElement.clientHeight || 1,
     }),
+    toSite: (p) => [p.x + offset.cx, offset.cy - p.z],
   });
   // A tree's card fetches what the register says about it (ADR 0042).
   const treeFactsUrl = (tile: string) => {

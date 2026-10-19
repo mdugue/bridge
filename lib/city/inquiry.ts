@@ -9,10 +9,12 @@
  */
 import { BUILDING_FUNCTION, ROOF_TYPE } from "./adv-codes";
 import {
+  type CityObjectTable,
   OBJECT_FLAG_HERITAGE,
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_SCAN,
   hasObjectFlag,
+  type Rgb,
 } from "./city-mesh";
 import {
   type CardCredits,
@@ -44,9 +46,41 @@ import {
   type ObjectFacts,
 } from "./object-facts";
 import { parseLod2Stand, type SiteProvenance } from "./provenance";
+import type { WindowSpec } from "./windows";
 
 export type { CardFact, InquiryCard } from "./card-lines";
 export { germanDates, metres, squareMetres } from "./card-lines";
+
+/** How an object is drawn: its row of the object table's style columns
+ *  (lib/city/city-mesh.ts). */
+export interface ObjectLook {
+  /** a warm glow at dusk (commerce, public: its use) */
+  glow: boolean;
+  /** roof colour (linear RGB) */
+  roof: Rgb;
+  /** the storey the bands and windows keep (m) */
+  storeyH: number;
+  /** wall colour (linear RGB) */
+  tint: Rgb;
+  windows: WindowSpec;
+}
+
+/** An object's look from its tile's table. */
+export function objectLook(table: CityObjectTable, i: number): ObjectLook {
+  const rgb = (a: Float32Array): Rgb => [a[i * 3], a[i * 3 + 1], a[i * 3 + 2]];
+  return {
+    glow: table.glow[i] === 1,
+    roof: rgb(table.roof),
+    storeyH: table.storeyH[i],
+    tint: rgb(table.tint),
+    windows: {
+      axis: table.winAxis[i],
+      h: table.winH[i],
+      style: table.winStyle[i],
+      w: table.winW[i],
+    },
+  };
+}
 
 /** One object of the asked building, as the scene read it. */
 export interface InquiryObject {
@@ -60,6 +94,8 @@ export interface InquiryObject {
   /** the root of its tile's ensemble, which the bake gives that tile's
    *  whole ensemble's height and ground (lib/city/ensembles.ts) */
   lead?: boolean;
+  /** how it is drawn (absent where the scene did not say) */
+  look?: ObjectLook;
   objectIndex: number;
   /** OBJECT_SOURCE_* (LoD2 or the laser scan) */
   source: number;
@@ -69,6 +105,8 @@ export interface InquiryObject {
  *  its whole tree — or its ensemble's trees, where the survey's Buildings
  *  are one building to a visitor (lib/city/ensembles.ts). */
 export interface BuildingInquiry {
+  /** where it was asked, in the site's CRS (easting, northing) */
+  at?: [number, number];
   kind: "building";
   picked: InquiryObject;
   /** every object of the picked object's building tree (its ensemble's

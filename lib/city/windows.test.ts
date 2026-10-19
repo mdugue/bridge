@@ -174,10 +174,18 @@ describe("windowSpecs", () => {
       host({ root: 2, eaveH: 2.8 }),
       host({ root: 3, lod2: false }),
     ];
-    for (const choice of windowSpecs(hosts, [measured("a")], index)) {
+    const choices = windowSpecs(hosts, [measured("a")], index);
+    for (const choice of choices) {
       expect(choice.from).toBe("none");
       expect(choice.spec.axis).toBe(0);
     }
+    // and says why, for the inquiry card
+    expect(choices.map((c) => c.why)).toEqual([
+      "facade",
+      "use",
+      "low",
+      "beyond",
+    ]);
   });
 
   test("the window keeps its lintel under the next storey line", () => {
@@ -194,12 +202,14 @@ describe("windowSpecs", () => {
     const wall = measured("a", model({ storey: 4.1 }));
     const [own] = windowSpecs([host({ eaveH: 16 })], [wall], index);
     expect(own.storey).toBeCloseTo(4, 9);
+    expect(own.storeyFromPhotos).toBe(true);
     const [osm] = windowSpecs(
       [host({ eaveH: 16, levels: true, storeyH: 3.2 })],
       [wall],
       index
     );
     expect(osm.storey).toBeCloseTo(3.2, 9);
+    expect(osm.storeyFromPhotos).toBeUndefined();
   });
 
   test("a shop's ground floor gets none", () => {

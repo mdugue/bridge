@@ -1,4 +1,5 @@
 import type { FacadeMaterial } from "./building-tint";
+import type { DrawnFacts } from "./drawn-facts";
 import type { FootprintPoly } from "./minimap";
 import type { ObjectFacts } from "./object-facts";
 import type { CityJsonDocument } from "./types";
@@ -43,6 +44,8 @@ export interface OsmBuildingFacts {
   /** `building:levels`, for the inquiry card and the storey bands */
   levels?: number;
   material?: WallMaterial;
+  /** the material is Wikidata's (a landmark's), where OSM names none */
+  materialFrom?: "wikidata";
   /** the outline's `name`, for the inquiry card */
   name?: string;
   /** on a root: the key of the named outline covering its tree, which the
@@ -51,6 +54,8 @@ export interface OsmBuildingFacts {
   /** roof, `#rrggbb` (OSM `roof:colour`) */
   roof_colour?: string;
   shop?: number;
+  /** the Wikidata item of the landmark it belongs to (landmarks.py) */
+  wikidata?: string;
 }
 
 /**
@@ -209,11 +214,16 @@ export function inheritedFlags(
 export function inheritedLook(
   own?: OsmBuildingFacts,
   root?: OsmBuildingFacts
-): Pick<OsmBuildingFacts, "colour" | "context" | "material" | "roof_colour"> {
+): Pick<
+  OsmBuildingFacts,
+  "colour" | "context" | "material" | "materialFrom" | "roof_colour"
+> {
   return {
     colour: own?.colour ?? root?.colour,
     context: own?.context ?? root?.context,
     material: own?.material ?? root?.material,
+    // where the material came from goes with the material
+    materialFrom: own?.material ? own.materialFrom : root?.materialFrom,
     roof_colour: own?.roof_colour ?? root?.roof_colour,
   };
 }
@@ -259,6 +269,10 @@ export interface CityObjectRow {
   /** the windows the clay draws on its walls (lib/city/windows.ts; none
    *  when absent) */
   windows?: WindowSpec;
+  /** how the bake drew it and from what (lib/city/drawn-facts.ts), for
+   *  the inquiry card: written into `facts.drawn` once the walls are
+   *  dressed */
+  drawn?: DrawnFacts;
 }
 
 /** An object of the LoD2 CityJSON (column `source`, the default). */
