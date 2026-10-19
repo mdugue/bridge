@@ -48,6 +48,9 @@ export interface OsmBuildingFacts {
   materialFrom?: "wikidata";
   /** the outline's `name`, for the inquiry card */
   name?: string;
+  /** on a root: the key of the named outline covering its tree, which the
+   *  trees one building is split into share (lib/city/ensembles.ts) */
+  outline?: string;
   /** roof, `#rrggbb` (OSM `roof:colour`) */
   roof_colour?: string;
   shop?: number;
@@ -87,6 +90,11 @@ export const OBJECT_FLAG_GROUNDED = 128;
  *  house's plinth and cornices) does not dress. The column is 16 bits wide
  *  from this flag on. */
 export const OBJECT_FLAG_FLAT_ROOF = 256;
+/** A facade that is its own (`ownFacade`, `partFacade` in
+ *  lib/city/building-tint.ts: a church, a palace, a hall, a listed public
+ *  building OSM counts no storeys of), not only a landmark's: its storeys
+ *  are not a storey house's, so the clay draws no storey lines on it. */
+export const OBJECT_FLAG_OWN_FACADE = 512;
 /** A roof triangle within this of level counts as flat (cos 10°). */
 const FLAT_NORMAL_Z = 0.985;
 /** An object whose roof is flat over this share of its area is flat-roofed:
@@ -233,6 +241,11 @@ export interface CityObjectRow {
   building: boolean;
   /** eave height above the base (m): lowest RoofSurface vertex, else the top */
   eaveH: number;
+  /** the root of the ensemble the object's tree belongs to (its own root
+   *  when alone; lib/city/ensembles.ts) */
+  ensemble?: number;
+  /** the ensemble's key across the site (0: none; `ensembleGroup`) */
+  group?: number;
   /** identity and semantics, the table's fact columns (ADR 0042) */
   facts?: ObjectFacts;
   /** OBJECT_FLAG_* summed, from OSM (0 = none) */
@@ -291,7 +304,13 @@ export interface CityObjectTable {
   building: Uint8Array;
   count: number;
   eaveH: Float32Array;
+  /** the ensemble's root: Buildings that are one building to a visitor
+   *  (lib/city/ensembles.ts), asked and demolished together */
+  ensemble: Uint32Array;
   flags: Uint16Array;
+  /** the ensemble's key across the site, 0 for none: a building across a
+   *  tile edge is one ensemble per tile, the same group */
+  group: Uint32Array;
   glow: Uint8Array;
   roof: Float32Array;
   root: Uint32Array;
@@ -315,7 +334,9 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     baseZ: new Float32Array(count),
     building: new Uint8Array(count),
     eaveH: new Float32Array(count),
+    ensemble: new Uint32Array(count),
     flags: new Uint16Array(count),
+    group: new Uint32Array(count),
     glow: new Uint8Array(count),
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
@@ -332,6 +353,8 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     table.baseZ[i] = r.baseZ;
     table.building[i] = r.building ? 1 : 0;
     table.eaveH[i] = r.eaveH;
+    table.ensemble[i] = r.ensemble ?? r.root;
+    table.group[i] = r.group ?? 0;
     table.flags[i] = r.flags;
     table.glow[i] = r.glow;
     table.roof.set(r.roof, i * 3);

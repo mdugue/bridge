@@ -13,7 +13,6 @@
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import {
-  BufferAttribute,
   BufferGeometry,
   type Matrix4,
   type Mesh,
@@ -46,6 +45,7 @@ import {
   markFlatRoofs,
   markGrounded,
   OBJECT_FLAG_FLAT_ROOF,
+  OBJECT_FLAG_OWN_FACADE,
   OBJECT_FLAG_GLASS,
   OBJECT_FLAG_LANDMARK,
   OBJECT_FLAG_METAL,
@@ -63,8 +63,10 @@ import {
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
+import { creaseNormals } from "../lib/city/crease-normals";
 import { type DrawnFacts, encodeDrawn } from "../lib/city/drawn-facts";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
+import { ensembleGroup, ensembleRoots } from "../lib/city/ensembles";
 import {
   DOOR_SINK,
   DOOR_SURROUND,
@@ -717,6 +719,20 @@ export function bakeCityMesh(
     }
   }
 
+  joinEnsembles(
+    objects,
+    trees,
+    (root) => osmLut?.[keys[root]]?.outline ?? "",
+    (i) =>
+      minZ.has(i)
+        ? {
+            baseZ: minZ.get(i) ?? 0,
+            topZ: maxZ.get(i) ?? 0,
+            footprints: footprintsOf[i],
+          }
+        : undefined
+  );
+
   const baked: BakedCityMesh = { epsg, matrix, objects, offset, vertices: v };
   markFlatRoofs(objects, v);
   dressWalls(tile, baked, keys, hosts, onWalls, { facades, gaps, scan });
@@ -756,6 +772,83 @@ function drawnOf(
   };
 }
 
+/**
+ * Building trees that are one building to a visitor (lib/city/ensembles.ts)
+ * share an `ensemble`, the lowest root among them, whose facts become the
+ * whole ensemble's: the union of its footprints, its lowest base to its
+ * highest top (one tree's surveyed height does not describe the others);
+ * its `group` the key of its OSM outline, so the trees a tile edge cuts it
+ * into are asked together.
+ */
+export function joinEnsembles(
+  objects: Pick<
+    CityObjectRow,
+    "ensemble" | "facts" | "footprints" | "group" | "root"
+  >[],
+  trees: ReadonlyMap<number, readonly number[]>,
+  outlineOf: (root: number) => string,
+  extent: (
+    i: number
+  ) =>
+    | { baseZ: number; footprints: [number, number][][]; topZ: number }
+    | undefined
+): void {
+  const named = [...trees].flatMap(([root, members]) => {
+    // the root's name, else its first named part's
+    const name =
+      [root, ...members]
+        .map((i) => objects[i].facts?.name ?? "")
+        .find((n) => n !== "") ?? "";
+    const outline = outlineOf(root);
+    return name || outline
+      ? [
+          {
+            root,
+            name,
+            outline,
+            rings: members.flatMap((i) => objects[i].footprints),
+          },
+        ]
+      : [];
+  });
+  const lead = ensembleRoots(named);
+  // the ensemble's outline: the first of its trees' (they share one, but
+  // for a tree joined by its name alone)
+  const outlines = new Map<number, string>();
+  for (const t of named) {
+    const to = lead.get(t.root) ?? t.root;
+    const had = outlines.get(to);
+    if (t.outline && !(had && had < t.outline)) {
+      outlines.set(to, t.outline);
+    }
+  }
+  const joined = new Map<number, number[]>();
+  for (const [root, members] of trees) {
+    const to = lead.get(root) ?? root;
+    const group = ensembleGroup(outlines.get(to) ?? "");
+    for (const i of members) {
+      objects[i].ensemble = to;
+      objects[i].group = group;
+    }
+    const all = joined.get(to);
+    if (all) {
+      all.push(...members);
+    } else {
+      joined.set(to, [...members]);
+    }
+  }
+  for (const [to, members] of joined) {
+    const facts = objects[to].facts;
+    if (facts && members.some((i) => objects[i].root !== to)) {
+      objects[to].facts = treeFacts(
+        facts,
+        members.flatMap((i) => extent(i) ?? []),
+        false
+      );
+    }
+  }
+}
+
 export interface CityMesh {
   /** per-object minimap footprints (EPSG) */
   footprints: [number, number][][][];
@@ -763,12 +856,18 @@ export interface CityMesh {
   maxElevation: number;
 }
 
-/** Flat vertex normals of a non-indexed stream, as three computes them. */
-function flatNormals(positions: Float32Array): Float32Array {
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new BufferAttribute(positions, 3));
-  geometry.computeVertexNormals();
-  return geometry.getAttribute("normal").array as Float32Array;
+/** The stream's vertex normals: a curve LoD2 drew as facets rounded off
+ *  within one object's walls or roofs, corners kept crisp
+ *  (lib/city/crease-normals.ts); a triangle shaded otherwise is left out. */
+export function vertexNormals(v: CityVertices): Float32Array {
+  const groups = new Float64Array(v.objectIds.length);
+  for (let i = 0; i < groups.length; i++) {
+    groups[i] = 2 * v.objectIds[i] + (v.isRoof[i] === 1 ? 1 : 0);
+  }
+  const shaded = v.normals;
+  return creaseNormals(v.positions, groups, {
+    skip: shaded ? (t) => !Number.isNaN(shaded[9 * t]) : undefined,
+  });
 }
 
 /** The flat normals with every vertex `shading` gives one (not NaN) — a
@@ -789,8 +888,8 @@ function withShading(
 }
 
 /**
- * The building mesh with its property table: flat normals from the
- * non-indexed stream, then welded (vertices of equal position, normal,
+ * The building mesh with its property table: normals from the
+ * non-indexed stream (flat, curves rounded), then welded (vertices of equal position, normal,
  * object and place on their wall, the roof flag in it, merge — never across
  * objects).
  */
@@ -809,6 +908,12 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
       roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
       root: { type: "SCALAR", componentType: "UINT32", values: t.root },
+      ensemble: {
+        type: "SCALAR",
+        componentType: "UINT32",
+        values: t.ensemble,
+      },
+      group: { type: "SCALAR", componentType: "UINT32", values: t.group },
       rough: { type: "SCALAR", componentType: "FLOAT32", values: t.rough },
       source: { type: "SCALAR", componentType: "UINT8", values: t.source },
       storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },
@@ -853,7 +958,7 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
     footprints: baked.objects.map((o) => o.footprints),
     input: {
       positions: v.positions,
-      normals: withShading(flatNormals(v.positions), v.normals),
+      normals: withShading(vertexNormals(v), v.normals),
       attributes: { _FEATURE_ID_0: v.objectIds },
       // the place on the wall, a roof vertex flagged in it (FACADE_ROOF)
       vectors: {
@@ -926,11 +1031,19 @@ function windowExtra(
   };
 }
 
-/** The flags with OBJECT_FLAG_LANDMARK where the facade is its own. */
+/** The flags with OBJECT_FLAG_LANDMARK and OBJECT_FLAG_OWN_FACADE where
+ *  the facade is its own. */
 function facadeFlags(flags: number, own: boolean): number {
-  return own && !hasObjectFlag(flags, OBJECT_FLAG_LANDMARK)
-    ? flags + OBJECT_FLAG_LANDMARK
-    : flags;
+  if (!own) {
+    return flags;
+  }
+  const landmark = hasObjectFlag(flags, OBJECT_FLAG_LANDMARK)
+    ? 0
+    : OBJECT_FLAG_LANDMARK;
+  const facade = hasObjectFlag(flags, OBJECT_FLAG_OWN_FACADE)
+    ? 0
+    : OBJECT_FLAG_OWN_FACADE;
+  return flags + landmark + facade;
 }
 
 /** What the tile's mesh carries beyond LoD2: the scan's sheds, the

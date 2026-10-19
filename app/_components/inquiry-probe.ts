@@ -7,7 +7,12 @@ import {
   objectLook,
   TOLERANCE_PX,
 } from "@/lib/city/inquiry";
-import { type CityLayer, cityObjectsAlong } from "./city-layer";
+import {
+  buildingKey,
+  type CityLayer,
+  cityObjectsAlong,
+  groupObjects,
+} from "./city-layer";
 import { setPickRay } from "./view-ray";
 
 /**
@@ -24,7 +29,8 @@ import { setPickRay } from "./view-ray";
  * candidates, and when nothing stands exactly under the point, the thing
  * most of them chose wins (the nearest on a tie). The mark (the clay's
  * pencil hatch, and the outline round the whole of it) is the whole
- * building tree, the same set demolish would take; a tree, monument or
+ * building's ensemble (lib/city/ensembles.ts) in every tile on screen it
+ * stands in, the same set demolish would take; a tree, monument or
  * bridge gets the outline alone. It stays until the next question or
  * `clear`; the hatch goes with its tile if the tile unloads. `preview`
  * moves the outline alone to another candidate for a moment. The HUD owns
@@ -61,7 +67,7 @@ const RING_HITS = 2;
 export interface PickSample<T> {
   distance: number;
   hit: T;
-  /** the thing it hit (a building tree: tile + root), for the vote */
+  /** the thing it hit (a building's ensemble: tile + its root), for the vote */
   key: string;
   /** a stand-in wider than what it stands for (a tree's crown) */
   porous?: boolean;
@@ -167,9 +173,16 @@ type ProbeHit =
     }
   | { thing: AskHit<FeatureInquiry> };
 
-/** What the outline goes around: a building's tree, or another thing. */
+/** A building's objects in one tile. */
+export interface BuildingPart {
+  layer: CityLayer;
+  objects: ReadonlySet<number>;
+}
+
+/** What the outline goes around: a building's ensemble (in every tile it
+ *  stands in), or another thing. */
 export type OutlineSubject =
-  | { building: { layer: CityLayer; objects: ReadonlySet<number> } }
+  | { building: BuildingPart[] }
   | { thing: AskHit<FeatureInquiry> };
 
 /** A thing's key for the vote: one per tree, monument, deck, counted
@@ -228,7 +241,7 @@ export function createInquiryProbe(deps: {
   /** a world point in the site's CRS (easting, northing) */
   toSite: (world: Vector3) => [number, number];
 }): InquiryProbe {
-  let marked: CityLayer | null = null;
+  let marked: CityLayer[] = [];
   // the last question's candidates, as the scene knows them
   let last: { hits: ProbeHit[]; selected: number } | null = null;
   const ray = new Raycaster();
@@ -236,10 +249,12 @@ export function createInquiryProbe(deps: {
   const unmark = () => {
     // A tile that unloaded took its texture with it: never touch it again.
     // One merely out of view keeps its texture, and its mark must go.
-    if (marked && deps.isLoaded(marked)) {
-      marked.mark(new Set());
+    for (const layer of marked) {
+      if (deps.isLoaded(layer)) {
+        layer.mark(new Set());
+      }
     }
-    marked = null;
+    marked = [];
   };
   const clear = () => {
     unmark();
@@ -281,7 +296,7 @@ export function createInquiryProbe(deps: {
             objectIndex,
           },
         },
-        key: `${layer.tile}:${layer.table.root[objectIndex]}`,
+        key: buildingKey(layer, objectIndex),
       })),
       ...things.map((thing) => ({
         distance: thing.distance,
@@ -293,33 +308,47 @@ export function createInquiryProbe(deps: {
     return ground === null ? hits : hits.filter((h) => h.distance <= ground);
   };
 
-  /** A building's live tree: its objects and its inquiry (unmarked);
-   *  `at` where it was asked (world). */
+  /** A building's live ensemble (its tree, or the trees that are one
+   *  building — in this tile and, by its group, in the others on screen):
+   *  its parts and its inquiry (unmarked); `at` where it was asked
+   *  (world). */
   const building = (layer: CityLayer, objectIndex: number, at?: Vector3) => {
     const { table } = layer;
-    const tree: number[] = [];
+    const own = new Set<number>();
     for (let i = 0; i < table.count; i++) {
-      if (table.root[i] === table.root[objectIndex] && layer.alive[i] === 1) {
-        tree.push(i);
+      if (
+        table.ensemble[i] === table.ensemble[objectIndex] &&
+        layer.alive[i] === 1
+      ) {
+        own.add(i);
       }
     }
-    const object = (i: number): InquiryObject => ({
+    const parts: BuildingPart[] = [{ layer, objects: own }];
+    const group = table.group[objectIndex];
+    for (const other of group ? deps.cities() : []) {
+      const objects = other === layer ? null : groupObjects(other, group);
+      if (objects && objects.size > 0) {
+        parts.push({ layer: other, objects });
+      }
+    }
+    const object = (from: CityLayer, i: number): InquiryObject => ({
       objectIndex: i,
-      building: table.building[i] === 1,
-      eaveH: table.eaveH[i],
-      flags: table.flags[i],
-      source: table.source[i],
-      facts: layer.facts(i),
-      look: objectLook(table, i),
+      building: from.table.building[i] === 1,
+      eaveH: from.table.eaveH[i],
+      flags: from.table.flags[i],
+      lead: from.table.ensemble[i] === i,
+      source: from.table.source[i],
+      facts: from.facts(i),
+      look: objectLook(from.table, i),
     });
     const inquiry: Inquiry = {
       kind: "building",
       tile: layer.tile,
-      picked: object(objectIndex),
-      tree: tree.map(object),
+      picked: object(layer, objectIndex),
+      tree: parts.flatMap((p) => [...p.objects].map((i) => object(p.layer, i))),
       ...(at ? { at: deps.toSite(at) } : {}),
     };
-    return { inquiry, objects: new Set(tree) };
+    return { inquiry, parts };
   };
 
   const describe = (hit: ProbeHit): Inquiry =>
@@ -333,22 +362,20 @@ export function createInquiryProbe(deps: {
     "thing" in hit
       ? { thing: hit.thing }
       : {
-          building: {
-            layer: hit.building.layer,
-            objects: building(hit.building.layer, hit.building.objectIndex)
-              .objects,
-          },
+          building: building(hit.building.layer, hit.building.objectIndex)
+            .parts,
         };
 
   /** Marks a hit: the hatch on a building's tree, the outline round it. */
   const mark = (hit: ProbeHit) => {
     unmark();
     if ("building" in hit) {
-      const { layer, objectIndex } = hit.building;
-      const { objects } = building(layer, objectIndex);
-      layer.mark(objects);
-      marked = layer;
-      deps.outline({ building: { layer, objects } });
+      const { parts } = building(hit.building.layer, hit.building.objectIndex);
+      for (const { layer, objects } of parts) {
+        layer.mark(objects);
+      }
+      marked = parts.map((p) => p.layer);
+      deps.outline({ building: parts });
     } else {
       deps.outline({ thing: hit.thing });
     }

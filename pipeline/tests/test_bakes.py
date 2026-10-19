@@ -901,9 +901,17 @@ def test_shops_on_the_ground_floor_and_listed_outlines_flag_the_lod2_objects(tmp
         "shop": {"shop": 1, "addr": "Prager Straße 3, 11"},
         "shop-bldg": {"shop": 1},  # the part's root
         "other": {"shop": 1},
-        # the outline covers all of it: listed, named, addressed, storeys
-        "old": {"heritage": 1, "name": "Altes Haus", "addr": "Am Markt 2", "levels": 3},
+        # the outline covers all of it: listed, named, addressed, storeys,
+        # and its key, which every tree under it shares (ensembles.ts)
+        "old": {
+            "heritage": 1,
+            "name": "Altes Haus",
+            "addr": "Am Markt 2",
+            "levels": 3,
+            "outline": "w9",
+        },
     }
+    assert doc["meta"]["trees_outlined"] == 1
     assert doc["meta"]["shop_points_placed"] == 2
     assert doc["meta"]["objects_addressed"] == 2
 
