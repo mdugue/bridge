@@ -32,7 +32,14 @@
   "openstreetmap": {
     "licence": "Open Database License (ODbL); credit: © OpenStreetMap contributors",
     "extract": "a stand-in: BBBike city extract Leipzig.osm.pbf (download.bbbike.org), because download.geofabrik.de was unreachable from the build container",
-    "usedFor": "walls, stairs, lamps, street furniture, fountains, paving, markings, trams, riverside, sport, shops and heritage"
+    "usedFor": "walls, stairs, lamps, street furniture, fountains, paving, markings, trams, riverside, sport, shops and heritage",
+    "bbbike": {
+      "products": {
+        "osmBuildings": {
+          "dataAsOf": "2026-10-17 (re-baked 2026-10-19 from the BBBike city extract Leipzig.osm.pbf, Last-Modified 2026-10-17: shops, heritage, looks, and now the names, addresses, storeys and named outlines per building tree, lib/city/ensembles.ts)"
+        }
+      }
+    }
   },
   "wikidata": {
     "licence": "CC0",

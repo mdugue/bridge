@@ -22,6 +22,7 @@ import {
 import {
   buildingGlows,
   ownFacade,
+  partFacade,
   buildingTint,
   type FacadeMaterial,
   inheritedAttributes,
@@ -40,6 +41,7 @@ import {
   markFlatRoofs,
   markGrounded,
   OBJECT_FLAG_FLAT_ROOF,
+  OBJECT_FLAG_OWN_FACADE,
   OBJECT_FLAG_GLASS,
   OBJECT_FLAG_LANDMARK,
   OBJECT_FLAG_METAL,
@@ -53,11 +55,13 @@ import {
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
   objectTable,
+  type OsmBuildingFacts,
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
 import { creaseNormals } from "../lib/city/crease-normals";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
+import { ensembleGroup, ensembleRoots } from "../lib/city/ensembles";
 import {
   DOOR_SINK,
   DOOR_SURROUND,
@@ -630,8 +634,8 @@ export function bakeCityMesh(
     const osm = inheritedOsm(osmLut?.[id], osmLut?.[keys[root]]);
     const eaveH = roofMin === undefined ? total : Math.max(roofMin - baseZ, 0);
     const footprints = footprintsOf[index];
-    const monumental = ownFacade(attrs, eaveH, osm?.levels);
-    hosts[index] = windowExtra(attrs, osm?.levels, monumental);
+    hosts[index] = windowExtra(attrs, eaveH, osm);
+    const monumental = hosts[index].monumental ?? false;
     return {
       building: o.type === "Building",
       root,
@@ -660,6 +664,21 @@ export function bakeCityMesh(
     };
   });
 
+  // a part of a building whose facade is its own shares it where OSM's
+  // storeys are the building's (a hall's raised roof)
+  objects.forEach((o, i) => {
+    const own = partFacade(
+      hosts[i].monumental ?? false,
+      i !== o.root && (hosts[o.root].monumental ?? false),
+      o.eaveH,
+      hosts[i].storeys
+    );
+    if (own && !hosts[i].monumental) {
+      hosts[i].monumental = true;
+      o.flags = facadeFlags(o.flags, true);
+    }
+  });
+
   // A Building with parts answers for its whole tree (the inquiry card
   // reads it): the union of the footprints, the tree's height.
   const trees = new Map<number, number[]>();
@@ -686,10 +705,101 @@ export function bakeCityMesh(
     }
   }
 
+  joinEnsembles(
+    objects,
+    trees,
+    (root) => osmLut?.[keys[root]]?.outline ?? "",
+    (i) =>
+      minZ.has(i)
+        ? {
+            baseZ: minZ.get(i) ?? 0,
+            topZ: maxZ.get(i) ?? 0,
+            footprints: footprintsOf[i],
+          }
+        : undefined
+  );
+
   const baked: BakedCityMesh = { epsg, matrix, objects, offset, vertices: v };
   markFlatRoofs(objects, v);
   dressWalls(tile, baked, keys, hosts, onWalls, { facades, gaps, scan });
   return baked;
+}
+
+/**
+ * Building trees that are one building to a visitor (lib/city/ensembles.ts)
+ * share an `ensemble`, the lowest root among them, whose facts become the
+ * whole ensemble's: the union of its footprints, its lowest base to its
+ * highest top (one tree's surveyed height does not describe the others);
+ * its `group` the key of its OSM outline, so the trees a tile edge cuts it
+ * into are asked together.
+ */
+export function joinEnsembles(
+  objects: Pick<
+    CityObjectRow,
+    "ensemble" | "facts" | "footprints" | "group" | "root"
+  >[],
+  trees: ReadonlyMap<number, readonly number[]>,
+  outlineOf: (root: number) => string,
+  extent: (
+    i: number
+  ) =>
+    | { baseZ: number; footprints: [number, number][][]; topZ: number }
+    | undefined
+): void {
+  const named = [...trees].flatMap(([root, members]) => {
+    // the root's name, else its first named part's
+    const name =
+      [root, ...members]
+        .map((i) => objects[i].facts?.name ?? "")
+        .find((n) => n !== "") ?? "";
+    const outline = outlineOf(root);
+    return name || outline
+      ? [
+          {
+            root,
+            name,
+            outline,
+            rings: members.flatMap((i) => objects[i].footprints),
+          },
+        ]
+      : [];
+  });
+  const lead = ensembleRoots(named);
+  // the ensemble's outline: the first of its trees' (they share one, but
+  // for a tree joined by its name alone)
+  const outlines = new Map<number, string>();
+  for (const t of named) {
+    const to = lead.get(t.root) ?? t.root;
+    const had = outlines.get(to);
+    if (t.outline && !(had && had < t.outline)) {
+      outlines.set(to, t.outline);
+    }
+  }
+  const joined = new Map<number, number[]>();
+  for (const [root, members] of trees) {
+    const to = lead.get(root) ?? root;
+    const group = ensembleGroup(outlines.get(to) ?? "");
+    for (const i of members) {
+      objects[i].ensemble = to;
+      objects[i].group = group;
+    }
+    const all = joined.get(to);
+    if (all) {
+      all.push(...members);
+    } else {
+      joined.set(to, [...members]);
+    }
+  }
+  for (const [to, members] of joined) {
+    const facts = objects[to].facts;
+    if (facts && members.some((i) => objects[i].root !== to)) {
+      objects[to].facts = treeFacts(
+        facts,
+        members.flatMap((i) => extent(i) ?? []),
+        false
+      );
+    }
+  }
 }
 
 export interface CityMesh {
@@ -751,6 +861,12 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
       roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
       root: { type: "SCALAR", componentType: "UINT32", values: t.root },
+      ensemble: {
+        type: "SCALAR",
+        componentType: "UINT32",
+        values: t.ensemble,
+      },
+      group: { type: "SCALAR", componentType: "UINT32", values: t.group },
       rough: { type: "SCALAR", componentType: "FLOAT32", values: t.rough },
       source: { type: "SCALAR", componentType: "UINT8", values: t.source },
       storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },
@@ -850,21 +966,30 @@ function dressWalls(
  *  whether OSM counts its storeys, a facade of its own. */
 function windowExtra(
   attrs: Record<string, unknown>,
-  levels: number | undefined,
-  monumental: boolean
+  eaveH: number,
+  osm: OsmBuildingFacts | undefined
 ): WindowExtra {
   return {
     fn: typeof attrs.function === "string" ? attrs.function : undefined,
-    levels: (levels ?? 0) >= 1,
-    monumental,
+    levels: (osm?.levels ?? 0) >= 1,
+    monumental: ownFacade(attrs, eaveH, osm?.levels, (osm?.heritage ?? 0) > 0),
+    storeys: osm?.levels,
   };
 }
 
-/** The flags with OBJECT_FLAG_LANDMARK where the facade is its own. */
+/** The flags with OBJECT_FLAG_LANDMARK and OBJECT_FLAG_OWN_FACADE where
+ *  the facade is its own. */
 function facadeFlags(flags: number, own: boolean): number {
-  return own && !hasObjectFlag(flags, OBJECT_FLAG_LANDMARK)
-    ? flags + OBJECT_FLAG_LANDMARK
-    : flags;
+  if (!own) {
+    return flags;
+  }
+  const landmark = hasObjectFlag(flags, OBJECT_FLAG_LANDMARK)
+    ? 0
+    : OBJECT_FLAG_LANDMARK;
+  const facade = hasObjectFlag(flags, OBJECT_FLAG_OWN_FACADE)
+    ? 0
+    : OBJECT_FLAG_OWN_FACADE;
+  return flags + landmark + facade;
 }
 
 /** What the tile's mesh carries beyond LoD2: the scan's sheds, the
@@ -1554,6 +1679,8 @@ export type WindowExtra = Pick<WindowHost, "fn" | "levels"> & {
   /** its facade its own (lib/city/building-tint.ts `ownFacade`: a
    *  church, a palace, a theatre, a hall) */
   monumental?: boolean;
+  /** the storeys OSM counts, its own or its building's */
+  storeys?: number;
 };
 
 /** A building's street level stands at most this far over the lowest
