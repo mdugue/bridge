@@ -137,8 +137,9 @@ def ring_mask(rings, box, erode: int) -> np.ndarray:
 
 
 def _upper_median(texels: np.ndarray) -> list[float]:
-    """The upper per-channel median, like the sorted-list median it replaced."""
-    return [round(float(c), 4) for c in np.sort(texels, axis=0)[len(texels) // 2]]
+    """The upper per-channel median, like the sorted-list median it replaced,
+    at most 1: a face's slope gain can scale a bright roof past white."""
+    return [round(min(1.0, float(c)), 4) for c in np.sort(texels, axis=0)[len(texels) // 2]]
 
 
 def median_colour(rgb, rings, box, erode: int):
@@ -210,7 +211,9 @@ def read_light(tile: Tile, dop, rgb: np.ndarray, faces) -> Light:
         dop.read((1, 2, 3), out_shape=(3, n[1], n[0]), resampling=Resampling.average), 0, -1
     )
     with rasterio.open(tile.dgm) as g:
-        dgm = g.read(1, out_shape=(n[1], n[0]), resampling=Resampling.average).astype(np.float32)
+        dgm = g.read(1, out_shape=(n[1], n[0]), resampling=Resampling.average, masked=True)
+    # a gap in the DGM would read as a pit the roofs cast shadows into
+    dgm = dgm.filled(np.ma.median(dgm) if dgm.count() else 0).astype(np.float32)
     dsm, roofs = roof_surface_model(
         dgm, faces, lambda x, y: ((x - xmin) / SUN_RES_M, (ymax - y) / SUN_RES_M)
     )

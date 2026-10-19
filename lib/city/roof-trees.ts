@@ -9,6 +9,7 @@
  * the scan structures' sheds (small-buildings.ts), so every site gets it
  * without a re-bake. No THREE, no DOM.
  */
+import { withoutTrafficStructures } from "./city-mesh";
 import type { PointGeometry } from "./features";
 import { buildingFootprintPolys } from "./minimap";
 import { segmentDistance2 } from "./small-buildings";
@@ -42,12 +43,16 @@ function vertexIds(nested: unknown, out: number[]): void {
   }
 }
 
-/** Each Building's and BuildingPart's footprint rings with its height. */
+/** Each Building's and BuildingPart's footprint rings with its height —
+ * not a bridge's or another traffic structure's, which a tree may well
+ * stand beside or under. */
 export function lod2Roofs(doc: CityJsonDocument): RoofFootprint[] {
   const [, , sz] = doc.transform?.scale ?? [1, 1, 1];
   const [, , tz] = doc.transform?.translate ?? [0, 0, 0];
   const out: RoofFootprint[] = [];
-  for (const [id, obj] of Object.entries(doc.CityObjects)) {
+  for (const [id, obj] of Object.entries(
+    withoutTrafficStructures(doc).CityObjects
+  )) {
     const ids: number[] = [];
     for (const g of obj.geometry ?? []) {
       vertexIds((g as { boundaries?: unknown }).boundaries, ids);

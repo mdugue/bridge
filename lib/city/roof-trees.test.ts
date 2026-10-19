@@ -45,6 +45,19 @@ test("lod2Roofs: a building's footprint and its height", () => {
   expect(roof.ring.length).toBeGreaterThanOrEqual(4);
 });
 
+test("lod2Roofs: a bridge's slab is no roof", () => {
+  const bridge: CityJsonDocument = {
+    ...hall,
+    CityObjects: {
+      deck: {
+        ...hall.CityObjects.hall,
+        attributes: { function: "53001_1800" },
+      },
+    },
+  };
+  expect(lod2Roofs(bridge)).toEqual([]);
+});
+
 test("treesOffRoofs: a tree in a courtyard stays", () => {
   const block: CityJsonDocument = {
     ...hall,
