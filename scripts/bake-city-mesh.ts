@@ -27,8 +27,8 @@ import {
   buildingTint,
   type FacadeMaterial,
   inheritedAttributes,
-  type RoofColorLut,
-  roofColor,
+  type RoofColours,
+  roofColors,
   roofTint,
   roughJitter,
   mappedStoreyHeight,
@@ -143,6 +143,19 @@ const rgb = (c: [number, number, number]): [number, number, number] => [
   r3(c[1]),
   r3(c[2]),
 ];
+
+/** An object's two roof colours as its row's columns (the pitched one
+ *  only where it differs: absent, the clay paints every face `roof`). */
+function roofColumns(c: {
+  low: [number, number, number];
+  pitched: [number, number, number];
+}): Pick<CityObjectRow, "roof" | "roofPitched"> {
+  const roof = rgb(c.low);
+  const pitched = rgb(c.pitched);
+  return pitched.every((v, i) => v === roof[i])
+    ? { roof }
+    : { roof, roofPitched: pitched };
+}
 
 /** What the bake lays on the LoD2 walls, each feature on its host. */
 export interface OnWalls {
@@ -556,7 +569,7 @@ export function cityFrame(tile: string, source: CityJsonDocument): CityFrame {
 export function bakeCityMesh(
   tile: string,
   source: CityJsonDocument,
-  roofLut: RoofColorLut | undefined,
+  roofColours: RoofColours | undefined,
   sharedMatrix: Matrix4 | null,
   osmLut?: OsmBuildingLut,
   scan?: readonly SmallBuildingFeature[],
@@ -647,7 +660,7 @@ export function bakeCityMesh(
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
       tint: rgb(buildingTint(id, attrs, look.context ?? facades, look)),
-      roof: rgb(roofColor(id, attrs, roofLut, look)),
+      ...roofColumns(roofColors(id, attrs, roofColours, look)),
       footprints,
       facts: lod2Facts({
         buildingId: keys[root],
@@ -761,6 +774,11 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       flags: { type: "SCALAR", componentType: "UINT16", values: t.flags },
       glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
       roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
+      roofPitched: {
+        type: "VEC3",
+        componentType: "FLOAT32",
+        values: t.roofPitched,
+      },
       root: { type: "SCALAR", componentType: "UINT32", values: t.root },
       rough: { type: "SCALAR", componentType: "FLOAT32", values: t.rough },
       source: { type: "SCALAR", componentType: "UINT8", values: t.source },

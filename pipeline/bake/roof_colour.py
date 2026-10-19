@@ -1,11 +1,17 @@
 """DOP + LoD2 → one roof colour per building: rasterise its RoofSurface
 rings, erode them inward (the orthophoto leans buildings over their
 facades), take the per-channel median of at least 12 texels, in linear RGB,
-keyed by CityObject id. The building bake folds it into the mesh."""
+keyed by CityObject id. The building bake folds it into the mesh.
+
+A roof with both pitched and low faces — a mansard's tiled slopes under
+its zinc top, a hipped wing round a flat terrace — gets each part's own
+median as well (`pitched`, `low`): one median over both painted the
+Taschenbergpalais' red slopes the grey of its top."""
 
 from __future__ import annotations
 
 import json
+import math
 
 import numpy as np
 import rasterio
@@ -14,6 +20,8 @@ from PIL import Image, ImageDraw, ImageFilter
 from .common import Tile
 
 MIN_SAMPLES = 12
+# A roof face this steep or steeper is pitched; flatter ones are low.
+PITCHED_DEG = 20.0
 
 
 def srgb_to_linear(c: float) -> float:
@@ -48,6 +56,39 @@ def surface_rings(geometry: dict, kind: str):
             yield surface[0]
 
 
+def ring_slope(ring, to_metres) -> float:
+    """A planar ring's slope from the horizontal, degrees (Newell's normal)."""
+    nx = ny = nz = 0.0
+    pts = [to_metres(vi) for vi in ring]
+    for i, (x0, y0, z0) in enumerate(pts):
+        x1, y1, z1 = pts[(i + 1) % len(pts)]
+        nx += (y0 - y1) * (z0 + z1)
+        ny += (z0 - z1) * (x0 + x1)
+        nz += (x0 - x1) * (y0 + y1)
+    length = math.sqrt(nx * nx + ny * ny + nz * nz)
+    return 90.0 if length == 0 else math.degrees(math.acos(min(1.0, abs(nz) / length)))
+
+
+def median_colour(rgb, rings, box, erode: int):
+    """The upper per-channel median (linear RGB) of the DOP under the
+    rings, eroded inward; None under MIN_SAMPLES texels."""
+    c0, r0, c1, r1 = box
+    mask = Image.new("L", (c1 - c0, r1 - r0), 0)
+    draw = ImageDraw.Draw(mask)
+    for ring in rings:
+        draw.polygon([(c - c0, r - r0) for c, r in ring], fill=255)
+    if erode >= 3 and mask.width > erode and mask.height > erode:
+        inset = mask.filter(ImageFilter.MinFilter(erode))
+        if inset.getbbox():  # keep the inset only if it didn't erase a thin roof
+            mask = inset
+    texels = rgb[r0:r1, c0:c1][np.asarray(mask) > 0]
+    if len(texels) < MIN_SAMPLES:
+        return None
+    # The upper median, like the sorted-list median it replaces.
+    med = np.sort(texels, axis=0)[len(texels) // 2]
+    return [round(srgb_to_linear(float(c)), 4) for c in med]
+
+
 def run(tile: Tile, erode: int = 5) -> None:
     city_path = tile.cityjson
     if not (tile.raw_raster("dop").exists() and city_path.exists()):
@@ -69,35 +110,39 @@ def run(tile: Tile, erode: int = 5) -> None:
         x, y = v[0] * scale[0] + translate[0], v[1] * scale[1] + translate[1]
         return (x - xmin) / px_w, (ymax - y) / px_h
 
-    roofs, sampled, skipped = {}, 0, 0
+    def to_metres(vi: int) -> tuple[float, float, float]:
+        v = verts[vi]
+        return tuple(v[k] * scale[k] + translate[k] for k in range(3))
+
+    roofs, pitched, low, sampled, skipped = {}, {}, {}, 0, 0
     for oid, obj in city["CityObjects"].items():
-        rings = [
-            [to_px(vi) for vi in ring] for g in obj.get("geometry", []) for ring in roof_rings(g)
-        ]
-        if not rings:
+        faces = [ring for g in obj.get("geometry", []) for ring in roof_rings(g)]
+        if not faces:
             continue
+        rings = [[to_px(vi) for vi in ring] for ring in faces]
         cols = [c for ring in rings for c, _ in ring]
         rows = [r for ring in rings for _, r in ring]
         c0, r0 = max(0, int(min(cols))), max(0, int(min(rows)))
         c1, r1 = min(w, int(max(cols)) + 1), min(h, int(max(rows)) + 1)
         if c1 - c0 < 2 or r1 - r0 < 2:
             continue
-        mask = Image.new("L", (c1 - c0, r1 - r0), 0)
-        draw = ImageDraw.Draw(mask)
-        for ring in rings:
-            draw.polygon([(c - c0, r - r0) for c, r in ring], fill=255)
-        if erode >= 3 and mask.width > erode and mask.height > erode:
-            inset = mask.filter(ImageFilter.MinFilter(erode))
-            if inset.getbbox():  # keep the inset only if it didn't erase a thin roof
-                mask = inset
-        texels = rgb[r0:r1, c0:c1][np.asarray(mask) > 0]
-        if len(texels) < MIN_SAMPLES:
+        box = (c0, r0, c1, r1)
+        whole = median_colour(rgb, rings, box, erode)
+        if whole is None:
             skipped += 1
             continue
-        # The upper median, like the sorted-list median it replaces.
-        med = np.sort(texels, axis=0)[len(texels) // 2]
-        roofs[oid] = [round(srgb_to_linear(float(c)), 4) for c in med]
+        roofs[oid] = whole
         sampled += 1
+        steep = [ring_slope(f, to_metres) >= PITCHED_DEG for f in faces]
+        if all(steep) or not any(steep):
+            continue
+        by_slope = list(zip(rings, steep, strict=True))
+        parts = [
+            median_colour(rgb, [r for r, s in by_slope if s == want], box, erode)
+            for want in (True, False)
+        ]
+        if parts[0] is not None and parts[1] is not None:
+            pitched[oid], low[oid] = parts
     out = {
         "meta": {
             "tile": tile.id,
@@ -106,8 +151,15 @@ def run(tile: Tile, erode: int = 5) -> None:
             "erode_px": erode,
             "buildings_sampled": sampled,
             "buildings_skipped": skipped,
+            "roofs_split": len(pitched),
         },
         "roofs": roofs,
+        # the two parts of a roof that has both, each its own median
+        "pitched": pitched,
+        "low": low,
     }
     tile.out("dop", f"roofcolor_{tile.id}.json").write_text(json.dumps(out))
-    print(f"{tile.id}: {sampled} roofs sampled, {skipped} skipped (too few texels)")
+    print(
+        f"{tile.id}: {sampled} roofs sampled, {skipped} skipped (too few texels), "
+        f"{len(pitched)} split into pitched and low"
+    )

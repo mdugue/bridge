@@ -678,6 +678,13 @@ visual-variable codebook is in
   available (`roofColor()` + the per-tile LUT, ~83 % coverage), else the
   synthesized palette (`surfacetype==RoofSurface` + `roofType` / `Dachneigung` →
   terracotta pitched / slate flat). Bake: `pipeline/bake/roof_colour.py`.
+  A roof with both pitched (≥ 20°) and low faces — a mansard's tiled slopes
+  under its zinc top, a hipped wing round a flat terrace — gets each part's
+  own DOP median (`pitched`, `low`; column `roofPitched`, texel band E), and
+  the clay picks one per fragment by the face's normal (`PITCHED_ROOF_DEG`).
+  One median over both had painted the Taschenbergpalais' red slopes the
+  grey of its top; 4 593 of Dresden's 49 280 sampled roofs are split
+  (2026-10-19).
 - **Roof vividness** `≈ assumed` (*Dachsättigung*) — raw DOP reads drab/hazy (audited: 38 %
   near-grey, mean R−B slightly negative). `ROOF_VIBRANCE` (**0.5**,
   *Dachsättigung*, fixed) applies a **hue-preserving chroma

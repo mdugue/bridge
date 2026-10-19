@@ -43,7 +43,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import type { FacadeMaterial, RoofColorLut } from "../lib/city/building-tint";
+import type { FacadeMaterial, RoofColours } from "../lib/city/building-tint";
 import type { OsmBuildingLut, WallMaterial } from "../lib/city/city-mesh";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import type {
@@ -685,8 +685,8 @@ function parseCity(tile: string): BakedCityMesh {
     fail(`missing source file ${src.city}${HINT}`);
   }
   const doc = readJson<CityJsonDocument>(at(src.city));
-  const roofLut = existsSync(at(src.roofColor))
-    ? readJson<{ roofs?: RoofColorLut }>(at(src.roofColor)).roofs
+  const roofColours = existsSync(at(src.roofColor))
+    ? readJson<RoofColours>(at(src.roofColor))
     : undefined;
   const osmDoc = existsSync(at(src.osmBuild))
     ? readJson<{ context?: FacadeMaterial; objects?: OsmBuildingLut }>(
@@ -725,7 +725,7 @@ function parseCity(tile: string): BakedCityMesh {
   return bakeCityMesh(
     tile,
     doc,
-    roofLut,
+    roofColours,
     tile === TILES[0] ? null : spawnFrame().matrix,
     osmLut,
     scan,

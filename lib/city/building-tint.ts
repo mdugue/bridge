@@ -401,6 +401,41 @@ export function roofColor(
 }
 
 /**
+ * The roof colour bake's file: every sampled roof's median (`roofs`) and,
+ * for a roof with both pitched and low faces (a mansard's tiled slopes
+ * under its zinc top), each part's own median (`pitched`, `low`).
+ */
+export interface RoofColours {
+  low?: RoofColorLut;
+  pitched?: RoofColorLut;
+  roofs?: RoofColorLut;
+}
+
+/**
+ * One object's roof colours, its low faces' and its pitched faces': each
+ * part's own where the orthophoto measured both, otherwise `roofColor`
+ * for both — one median over a mansard painted its red slopes the grey of
+ * its top.
+ */
+export function roofColors(
+  objectId: string,
+  attrs: Record<string, unknown> = {},
+  colours?: RoofColours,
+  look: OsmLook = {}
+): { low: TintRgb; pitched: TintRgb } {
+  const low = colours?.low?.[objectId];
+  const pitched = colours?.pitched?.[objectId];
+  if (low?.length === 3 && pitched?.length === 3) {
+    return {
+      low: [low[0], low[1], low[2]],
+      pitched: [pitched[0], pitched[1], pitched[2]],
+    };
+  }
+  const one = roofColor(objectId, attrs, colours?.roofs, look);
+  return { low: one, pitched: one };
+}
+
+/**
  * An object's attributes resolved through the root of its building tree: the
  * object's own value first, the root's as the fallback. In the Saxon LoD2 a
  * `BuildingPart` carries its geometry, heights and roof, but never the ALKIS

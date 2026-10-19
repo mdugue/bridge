@@ -6,6 +6,7 @@ import {
   buildingTint,
   inheritedAttributes,
   roofColor,
+  roofColors,
   roofTint,
   roughJitter,
   mappedStoreyHeight,
@@ -101,6 +102,36 @@ test("roofColor: uses the DOP LUT when present, else falls back to roofTint", ()
   expect(roofColor("x", { roofType: "1000" })).toEqual(
     roofTint("x", { roofType: "1000" })
   );
+});
+
+test("roofColors: a roof measured in two parts keeps each, any other one colour", () => {
+  const colours = {
+    roofs: { mansard: [0.4, 0.4, 0.4], hip: [0.5, 0.2, 0.1] } as Record<
+      string,
+      [number, number, number]
+    >,
+    pitched: { mansard: [0.5, 0.2, 0.1] } as Record<
+      string,
+      [number, number, number]
+    >,
+    low: { mansard: [0.3, 0.32, 0.33] } as Record<
+      string,
+      [number, number, number]
+    >,
+  };
+  expect(roofColors("mansard", {}, colours)).toEqual({
+    low: [0.3, 0.32, 0.33],
+    pitched: [0.5, 0.2, 0.1],
+  });
+  expect(roofColors("hip", {}, colours)).toEqual({
+    low: [0.5, 0.2, 0.1],
+    pitched: [0.5, 0.2, 0.1],
+  });
+  const none = roofColor("x", { roofType: "1000" });
+  expect(roofColors("x", { roofType: "1000" })).toEqual({
+    low: none,
+    pitched: none,
+  });
 });
 
 test("buildingGlows: commerce/public/special glow, housing does not", () => {

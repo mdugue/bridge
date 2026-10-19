@@ -233,6 +233,10 @@ export interface CityObjectRow {
   glow: 0 | 1;
   /** roof colour (linear RGB): DOP-sampled when available, else synthesized */
   roof: Rgb;
+  /** the pitched faces' roof colour where the orthophoto measured a roof's
+   *  pitched and low faces apart (`roof` then is the low faces'); absent,
+   *  `roof` for every face */
+  roofPitched?: Rgb;
   /** index of the root of this object's building tree (itself for a root) */
   root: number;
   /** signed roughness jitter [-1, 1] */
@@ -280,6 +284,8 @@ export interface CityObjectTable {
   flags: Uint16Array;
   glow: Uint8Array;
   roof: Float32Array;
+  /** the pitched roof faces' colour (`roof` where the row has none) */
+  roofPitched: Float32Array;
   root: Uint32Array;
   rough: Float32Array;
   source: Uint8Array;
@@ -304,6 +310,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     flags: new Uint16Array(count),
     glow: new Uint8Array(count),
     roof: new Float32Array(count * 3),
+    roofPitched: new Float32Array(count * 3),
     root: new Uint32Array(count),
     rough: new Float32Array(count),
     source: new Uint8Array(count),
@@ -321,6 +328,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     table.flags[i] = r.flags;
     table.glow[i] = r.glow;
     table.roof.set(r.roof, i * 3);
+    table.roofPitched.set(r.roofPitched ?? r.roof, i * 3);
     table.root[i] = r.root;
     table.rough[i] = r.rough;
     table.source[i] = r.source ?? OBJECT_SOURCE_LOD2;
@@ -334,11 +342,16 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
   return table;
 }
 
+/** A roof face at least this steep (degrees) is pitched: it takes the
+ *  object's `roofPitched` colour. The roof colour bake splits a roof at
+ *  the same angle (pipeline/bake/roof_colour.py `PITCHED_DEG`). */
+export const PITCHED_ROOF_DEG = 20;
+
 /** Objects per texel row of the packed table (a WebGL2-safe edge). */
 export const OBJECT_TEXTURE_WIDTH = 1024;
 /** RGBA texels per object: (tint, baseZ) (roof, eaveH) (storeyH, glow,
- *  rough, flags) (window axis, width, height, style). */
-export const OBJECT_TEXEL_BANDS = 4;
+ *  rough, flags) (window axis, width, height, style) (pitched roof, 0). */
+export const OBJECT_TEXEL_BANDS = 5;
 
 /** Rows of one band: the texture is `OBJECT_TEXTURE_WIDTH × bandRows·4`. */
 export function objectBandRows(count: number): number {
@@ -347,7 +360,7 @@ export function objectBandRows(count: number): number {
 
 /**
  * The table as RGBA float texels for the clay shader. Object `i` lives at
- * column `i % W`, row `floor(i / W)` of each of four bands stacked
+ * column `i % W`, row `floor(i / W)` of each of five bands stacked
  * vertically; the shader reads band `b` at row `+ b · bandRows`.
  */
 export function packObjectTexels(table: CityObjectTable): Float32Array {
@@ -369,6 +382,7 @@ export function packObjectTexels(table: CityObjectTable): Float32Array {
       [table.winAxis[i], table.winW[i], table.winH[i], table.winStyle[i]],
       3 * band + at
     );
+    out.set(table.roofPitched.subarray(i * 3, i * 3 + 3), 4 * band + at);
   }
   return out;
 }
