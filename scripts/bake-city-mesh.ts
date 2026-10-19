@@ -707,10 +707,10 @@ export function bakeCityMesh(
  * Building trees that are one building to a visitor (lib/city/ensembles.ts)
  * share an `ensemble`, the lowest root among them, whose facts become the
  * whole ensemble's: the union of its footprints, its lowest base to its
- * highest top.
+ * highest top (one tree's surveyed height does not describe the others).
  */
-function joinEnsembles(
-  objects: CityObjectRow[],
+export function joinEnsembles(
+  objects: Pick<CityObjectRow, "ensemble" | "facts" | "footprints" | "root">[],
   trees: ReadonlyMap<number, readonly number[]>,
   extent: (
     i: number
@@ -718,24 +718,29 @@ function joinEnsembles(
     | { baseZ: number; footprints: [number, number][][]; topZ: number }
     | undefined
 ): void {
-  const lead = ensembleRoots(
-    [...trees].map(([root, members]) => ({
-      root,
-      // the root's name, else its first named part's
-      name:
-        [root, ...members]
-          .map((i) => objects[i].facts?.name ?? "")
-          .find((name) => name !== "") ?? "",
-      rings: members.flatMap((i) => objects[i].footprints),
-    }))
-  );
+  const named = [...trees].flatMap(([root, members]) => {
+    // the root's name, else its first named part's
+    const name =
+      [root, ...members]
+        .map((i) => objects[i].facts?.name ?? "")
+        .find((n) => n !== "") ?? "";
+    return name
+      ? [{ root, name, rings: members.flatMap((i) => objects[i].footprints) }]
+      : [];
+  });
+  const lead = ensembleRoots(named);
   const joined = new Map<number, number[]>();
   for (const [root, members] of trees) {
     const to = lead.get(root) ?? root;
     for (const i of members) {
       objects[i].ensemble = to;
     }
-    joined.set(to, [...(joined.get(to) ?? []), ...members]);
+    const all = joined.get(to);
+    if (all) {
+      all.push(...members);
+    } else {
+      joined.set(to, [...members]);
+    }
   }
   for (const [to, members] of joined) {
     const facts = objects[to].facts;

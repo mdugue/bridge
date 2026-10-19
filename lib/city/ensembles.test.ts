@@ -13,6 +13,20 @@ test("footprints touch along a shared wall, across a hair's gap, or inside one a
   expect(footprintsTouch([square(0, 0)], [square(10.3, 0)])).toBe(true);
   expect(footprintsTouch([square(0, 0)], [square(3, 3, 2)])).toBe(true);
   expect(footprintsTouch([square(0, 0)], [square(12, 0)])).toBe(false);
+  // a plus: two long wings crossing, no vertex of one inside the other
+  const long: [number, number][] = [
+    [-10, 4],
+    [20, 4],
+    [20, 6],
+    [-10, 6],
+  ];
+  const tall: [number, number][] = [
+    [4, -10],
+    [6, -10],
+    [6, 20],
+    [4, 20],
+  ];
+  expect(footprintsTouch([long], [tall])).toBe(true);
 });
 
 test("named trees that touch join under their lowest root; others stay alone", () => {

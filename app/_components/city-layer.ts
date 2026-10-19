@@ -546,7 +546,7 @@ export function cityObjectsAlong(
     if (!(layer.hasBvh() && ids)) {
       continue;
     }
-    // A building tree is one tile's: its hits come in this tile's order.
+    // An ensemble is one tile's: its hits come in this tile's order.
     for (const hit of alongRaycaster.intersectObject(layer.mesh, false)) {
       if (!hit.face) {
         continue;

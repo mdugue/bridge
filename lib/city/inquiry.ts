@@ -199,7 +199,7 @@ function mergedFacts(inquiry: BuildingInquiry) {
   const pick = inquiry.picked.facts;
   const building = (
     all.find((o) => o.objectIndex === inquiry.lead) ??
-    all.find((o) => o.building)
+    all.find((o) => o.building && o.facts.buildingId === pick.buildingId)
   )?.facts;
   const names = distinct([pick.name, ...facts.map((f) => f.name)]);
   const heights = known(facts.map((f) => f.height));

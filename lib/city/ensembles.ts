@@ -86,6 +86,36 @@ function inside([px, py]: readonly [number, number], ring: Ring): boolean {
   return odd;
 }
 
+const side = (
+  [ax, ay]: readonly [number, number],
+  [bx, by]: readonly [number, number],
+  [px, py]: readonly [number, number]
+) => Math.sign((bx - ax) * (py - ay) - (by - ay) * (px - ax));
+
+/** Whether an edge of `a` crosses an edge of `b` (a plus-shaped overlap
+ *  has no vertex inside the other). */
+function crosses(a: readonly Ring[], b: readonly Ring[]): boolean {
+  for (const ra of a) {
+    for (let i = 0; i < ra.length; i++) {
+      const p = ra[i];
+      const q = ra[(i + 1) % ra.length];
+      for (const rb of b) {
+        for (let j = 0; j < rb.length; j++) {
+          const r = rb[j];
+          const s = rb[(j + 1) % rb.length];
+          if (
+            side(p, q, r) * side(p, q, s) < 0 &&
+            side(r, s, p) * side(r, s, q) < 0
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
 /** Whether a vertex of `a` lies within `gap` of `b`'s outline or inside it. */
 function reaches(a: readonly Ring[], b: readonly Ring[], gap: number): boolean {
   const gap2 = gap * gap;
@@ -115,7 +145,7 @@ export function footprintsTouch(
 ): boolean {
   return (
     boxesMeet(boxOf(a), boxOf(b), gap) &&
-    (reaches(a, b, gap) || reaches(b, a, gap))
+    (reaches(a, b, gap) || reaches(b, a, gap) || crosses(a, b))
   );
 }
 
@@ -142,7 +172,12 @@ export function ensembleRoots(
   const byName = new Map<string, EnsembleTree[]>();
   for (const t of trees) {
     if (t.name && t.rings.length > 0) {
-      byName.set(t.name, [...(byName.get(t.name) ?? []), t]);
+      const named = byName.get(t.name);
+      if (named) {
+        named.push(t);
+      } else {
+        byName.set(t.name, [t]);
+      }
     }
   }
   for (const named of byName.values()) {

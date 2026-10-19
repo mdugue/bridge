@@ -60,7 +60,7 @@ const RING_HITS = 2;
 export interface PickSample<T> {
   distance: number;
   hit: T;
-  /** the thing it hit (a building tree: tile + root), for the vote */
+  /** the thing it hit (a building's ensemble: tile + its root), for the vote */
   key: string;
   /** a stand-in wider than what it stands for (a tree's crown) */
   porous?: boolean;
