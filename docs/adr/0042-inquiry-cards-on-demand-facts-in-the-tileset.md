@@ -93,6 +93,14 @@ only where a source offers no CORS.
   gestuft (gemessen)"), no pitch, the rebuilt shape's height (the LoD2's
   `measuredHeight` can be a 3 m placeholder), and DOM1 as the roof's
   source line. 75 such objects on the spawn tile.
+- **What is drawn, and from what (2026-10-19).** A building's card lists
+  every value that decides how it is drawn — storeys, facade material and
+  colour, windows, plinth, doors, shopfronts, dormers, roof colour, dusk
+  light, landmark — each with its source, its badge and a link to the
+  place. The bake records its decisions in one more ENUM column, `drawn`
+  (`lib/city/drawn-facts.ts`), read with the object's style row only
+  when asked; the card never recomputes a value (another bake step may
+  change how it is derived), it quotes the row.
 - **Phase 4 (2026-10-01): trees, monuments, bridges.** The side-file
   pattern took the trees' facts: `treefacts_<tile>.json`, aligned with the
   trees file, named in the tileset's tile list (the artifact table's `ask`

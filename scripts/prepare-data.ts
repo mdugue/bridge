@@ -680,7 +680,11 @@ function withLandmarks(
       out[id] = {
         ...own,
         landmark: 1,
+        wikidata: lm.id,
         material: own?.material ?? (lm.material as WallMaterial | undefined),
+        ...(!own?.material && lm.material
+          ? { materialFrom: "wikidata" as const }
+          : {}),
       };
     }
   }

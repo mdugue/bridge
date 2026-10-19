@@ -126,6 +126,13 @@ test("doomedObjects takes the whole building tree", () => {
   expect(doomedObjects(root, 7).size).toBe(0);
 });
 
+test("doomedObjects over the ensembles takes every tree of one", () => {
+  const { ensemble } = objectTable(rows.map((r) => ({ ...r, ensemble: 0 })));
+  expect(doomedObjects(ensemble, 2).size).toBe(rows.length);
+  // a row without an ensemble is its tree's own
+  expect([...objectTable(rows).ensemble]).toEqual(rows.map((r) => r.root));
+});
+
 test("liveTriangles drops the triangles of dead objects", () => {
   // Two triangles of object 0, one of object 2 (vertex → feature id).
   const featureIds = [0, 0, 0, 0, 2, 2, 2];

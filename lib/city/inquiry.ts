@@ -9,10 +9,12 @@
  */
 import { BUILDING_FUNCTION, ROOF_TYPE } from "./adv-codes";
 import {
+  type CityObjectTable,
   OBJECT_FLAG_HERITAGE,
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_SCAN,
   hasObjectFlag,
+  type Rgb,
 } from "./city-mesh";
 import {
   type CardCredits,
@@ -44,9 +46,41 @@ import {
   type ObjectFacts,
 } from "./object-facts";
 import { parseLod2Stand, type SiteProvenance } from "./provenance";
+import type { WindowSpec } from "./windows";
 
 export type { CardFact, InquiryCard } from "./card-lines";
 export { germanDates, metres, squareMetres } from "./card-lines";
+
+/** How an object is drawn: its row of the object table's style columns
+ *  (lib/city/city-mesh.ts). */
+export interface ObjectLook {
+  /** a warm glow at dusk (commerce, public: its use) */
+  glow: boolean;
+  /** roof colour (linear RGB) */
+  roof: Rgb;
+  /** the storey the bands and windows keep (m) */
+  storeyH: number;
+  /** wall colour (linear RGB) */
+  tint: Rgb;
+  windows: WindowSpec;
+}
+
+/** An object's look from its tile's table. */
+export function objectLook(table: CityObjectTable, i: number): ObjectLook {
+  const rgb = (a: Float32Array): Rgb => [a[i * 3], a[i * 3 + 1], a[i * 3 + 2]];
+  return {
+    glow: table.glow[i] === 1,
+    roof: rgb(table.roof),
+    storeyH: table.storeyH[i],
+    tint: rgb(table.tint),
+    windows: {
+      axis: table.winAxis[i],
+      h: table.winH[i],
+      style: table.winStyle[i],
+      w: table.winW[i],
+    },
+  };
+}
 
 /** One object of the asked building, as the scene read it. */
 export interface InquiryObject {
@@ -57,17 +91,26 @@ export interface InquiryObject {
   facts: ObjectFacts;
   /** OBJECT_FLAG_* bits (shop, heritage) */
   flags: number;
+  /** the root of its tile's ensemble, which the bake gives that tile's
+   *  whole ensemble's height and ground (lib/city/ensembles.ts) */
+  lead?: boolean;
+  /** how it is drawn (absent where the scene did not say) */
+  look?: ObjectLook;
   objectIndex: number;
   /** OBJECT_SOURCE_* (LoD2 or the laser scan) */
   source: number;
 }
 
 /** What the scene hands the card for a building: the picked object and
- *  its whole tree. */
+ *  its whole tree — or its ensemble's trees, where the survey's Buildings
+ *  are one building to a visitor (lib/city/ensembles.ts). */
 export interface BuildingInquiry {
+  /** where it was asked, in the site's CRS (easting, northing) */
+  at?: [number, number];
   kind: "building";
   picked: InquiryObject;
-  /** every object of the picked object's building tree, the picked one too */
+  /** every object of the picked object's building tree (its ensemble's
+   *  trees, in every tile it stands in), the picked one too */
   tree: InquiryObject[];
   tile: string;
 }
@@ -182,35 +225,77 @@ function scanSource(
     .join(" · ");
 }
 
+/** The most addresses a card names: an ensemble (the World Trade Center)
+ *  has a dozen. */
+const MAX_ADDRESSES = 3;
+
+/** The address line: the picked object's first, then the others, the rest
+ *  counted. */
+function addressLine(addresses: readonly string[]): string {
+  const shown = addresses.slice(0, MAX_ADDRESSES).join(" · ");
+  const more = addresses.length - MAX_ADDRESSES;
+  return more > 0 ? `${shown} und ${whole.format(more)} weitere` : shown;
+}
+
 /**
  * The facts of a building tree, merged: the picked part's roof; height and
  * ground from the Building itself, which the bake gives its whole tree's
  * (the union of the footprints, base to top: lib/city/object-facts.ts
  * `treeFacts`), else the highest part and the parts' sum.
  */
+/** Buildings by their `gml:id`, each once (one without an id stays). */
+function once(buildings: readonly InquiryObject[]): InquiryObject[] {
+  const seen = new Set<string>();
+  return buildings.filter((o) => {
+    const id = o.facts.buildingId;
+    if (!id) {
+      return true;
+    }
+    if (seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+}
+
 function mergedFacts(inquiry: BuildingInquiry) {
   const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
   const facts = all.map((o) => o.facts);
   const pick = inquiry.picked.facts;
-  const building = all.find((o) => o.building)?.facts;
+  // the ensemble's leads, one a tile (a tile edge cuts a building in
+  // two), else the picked tree's Building; a Building both tiles carry
+  // whole counts once
+  const leads = once(all.filter((o) => o.lead && o.building)).map(
+    (o) => o.facts
+  );
+  const mine = all.find(
+    (o) => o.building && o.facts.buildingId === pick.buildingId
+  )?.facts;
+  const building = leads.length > 0 ? leads : mine ? [mine] : [];
   const names = distinct([pick.name, ...facts.map((f) => f.name)]);
   const heights = known(facts.map((f) => f.height));
   const areas = known(facts.map((f) => f.area));
   const levels = known(facts.map((f) => f.levels));
-  const own = (v: number | undefined) => (v !== undefined && v > 0 ? v : 0);
+  // the leads' own values: the highest, and their grounds summed (a tile
+  // edge does not cut a footprint twice)
+  const leadHeight = Math.max(0, ...known(building.map((f) => f.height)));
+  const leadArea = known(building.map((f) => f.area)).reduce(
+    (s, a) => s + a,
+    0
+  );
   const flags = all.reduce((sum, o) => sum | o.flags, 0);
   return {
-    address: distinct([pick.addr, ...facts.map((f) => f.addr)]).join(" · "),
+    address: addressLine(distinct([pick.addr, ...facts.map((f) => f.addr)])),
     created: pick.created || distinct(facts.map((f) => f.created))[0] || "",
     functionCode:
       pick.function || distinct(facts.map((f) => f.function))[0] || "",
-    height:
-      own(building?.height) ||
-      (heights.length > 0 ? Math.max(...heights) : NO_FACT),
-    area: own(building?.area) || areas.reduce((s, a) => s + a, 0),
+    height: leadHeight || (heights.length > 0 ? Math.max(...heights) : NO_FACT),
+    area: leadArea || areas.reduce((s, a) => s + a, 0),
     levels: levels.length > 0 ? Math.max(...levels) : NO_FACT,
     name: names[0] ?? "",
     parts: all.filter((o) => !o.building).length,
+    buildings: once(all.filter((o) => o.building)).length,
     heritage: hasObjectFlag(flags, OBJECT_FLAG_HERITAGE),
     rebuilt: facts.some((f) => isMeasuredRoof(f.roofType)),
     shop: hasObjectFlag(flags, OBJECT_FLAG_SHOP),
@@ -241,6 +326,11 @@ function cardFacts(
     ],
     ["Grundfläche", t.area > 0 ? squareMetres(t.area) : ""],
     ["Geschosse", known(t.levels) ? whole.format(t.levels) : ""],
+    [
+      "Gebäude",
+      t.buildings > 1 ? `${whole.format(t.buildings)} im Stadtmodell` : "",
+      "detected",
+    ],
     ["Gebäudeteile", t.parts > 1 ? whole.format(t.parts) : ""],
     ["Denkmal", t.heritage ? "Kulturdenkmal" : ""],
     // a shop point matched to the footprint (osm_buildings.py)
@@ -318,6 +408,19 @@ function buildingCard(
   if (fromOsm.length > 0) {
     sources.push(
       ...stated("taken", osmSource(provenance, fromOsm, "buildings"))
+    );
+  }
+  if (t.buildings > 1) {
+    // ensembles.ts: one OSM name over touching Buildings
+    sources.push(
+      ...stated(
+        "detected",
+        osmSource(
+          provenance,
+          [`${whole.format(t.buildings)} Gebäude des Stadtmodells als ein Bau`],
+          "buildings"
+        )
+      )
     );
   }
   if (t.shop) {
