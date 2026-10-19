@@ -252,7 +252,7 @@ export function createSunRig(
   worldBounds: Box3,
   latLng: { lat: number; lng: number },
   /** Shadow-map edge in texels (scene-profile.ts `shadowMapSizeFor`). 3072
-   * over the 110 m base frustum ≈ 0.07 m/texel: the soft Vogel-disk PCF (see
+   * over the 121 m base frustum ≈ 0.08 m/texel: the soft Vogel-disk PCF (see
    * shadow.radius) hides residual stepping, so 3072 looks like 4096 here
    * while costing ~44% less shadow fill. The `lite` e2e profile passes 512
    * and phones 2048 — under SwiftShader the depth pass is one of the few

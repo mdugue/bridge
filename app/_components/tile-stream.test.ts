@@ -8,7 +8,7 @@ import { createLookState } from "@/lib/city/look-state";
 import {
   BoxGeometry,
   BufferAttribute,
-  type Group,
+  Group,
   Mesh,
   MeshBasicNodeMaterial,
   Object3D,
@@ -17,14 +17,20 @@ import type { AskSet } from "@/lib/city/ask-solids";
 import type { TrafficFeature } from "@/lib/city/features";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import type { CityLayer } from "./city-layer";
+import type { TrafficBuilder } from "./data-layers-feature";
 import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
 import { markSceneShared } from "./three-utils";
+import { trafficAskSet } from "./traffic-ask";
+import { buildTraffic } from "./traffic-layer";
 import {
+  asksOf,
+  buildAsksWhenIdle,
   catchUp,
   DRESSING_PART_NAMES,
   DressingPlugin,
   dressingParts,
+  handOverWaitMs,
   PHONE_STREAM,
   paceStreaming,
   showDataLayers,
@@ -39,8 +45,8 @@ import type { VegetationControl } from "./vegetation-layer";
 test("a dressing that joins the stream late takes the season, night and look of now", () => {
   const calls: string[] = [];
   const vegetation = {
-    applyLook: (look: { shimmer: number }) =>
-      calls.push(`look ${look.shimmer}`),
+    applyLook: (look: { multiTuft: boolean }) =>
+      calls.push(`look ${look.multiTuft}`),
     setSeason: (day: number) => {
       calls.push(`season ${day}`);
       return true;
@@ -50,11 +56,11 @@ test("a dressing that joins the stream late takes the season, night and look of 
     setNightFactor: (night: number) => calls.push(`night ${night}`),
   } as unknown as LampControl;
   const look = createLookState();
-  look.set({ shimmer: 0.25 });
+  look.set({ multiTuft: false });
   // Built on 10 July by day; the scene moved on to a January night while
   // its compile was pending.
   catchUp({ vegetation, lamps }, { look, night: () => 1, season: () => 9 });
-  expect(calls).toEqual(["look 0.25", "season 9", "night 1"]);
+  expect(calls).toEqual(["look false", "season 9", "night 1"]);
 });
 
 test("the stream's dispose releases every dressed tile, quietly", () => {
@@ -420,7 +426,10 @@ function abortableLoad() {
   return { freed, plugin, scene };
 }
 
-const nextTask = () => new Promise((resolve) => setTimeout(resolve, 1));
+/** A task, long enough for the code under test's own next task: a traffic
+ *  slot sets its timer only after its builder's load has resolved, past
+ *  the microtasks of the call that showed it. */
+const nextTask = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 test("a load the renderer aborts after its compile is freed: it frees only the textures", async () => {
   const { freed, plugin, scene } = abortableLoad();
@@ -465,6 +474,114 @@ test("a phone streams fewer contents at once, on queues of its own", () => {
   desktop.dispose();
 });
 
+test("a hung dressing's ask sets come in idle time, into the same array; none for a dressing that left", () => {
+  const idle: (() => void)[] = [];
+  const later = (work: () => void) => {
+    idle.push(work);
+    return () => undefined;
+  };
+  const set = {
+    box: {},
+    nearest: () => null,
+  } as unknown as AskSet<FeatureInquiry>;
+  const dressing = (): TileDressing => {
+    const asks: AskSet<FeatureInquiry>[] = [];
+    return { tile: "t", asks, buildAsks: () => asks.push(set) };
+  };
+  const hung = dressing();
+  const asks = hung.asks;
+  buildAsksWhenIdle(hung, () => true, later);
+  expect(hung.asks).toEqual([]);
+  idle.shift()?.();
+  expect(hung.asks).toBe(asks);
+  expect(hung.asks).toEqual([set]);
+  // run once, and its features let go of
+  expect(hung.buildAsks).toBeUndefined();
+  const gone = dressing();
+  buildAsksWhenIdle(gone, () => false, later);
+  idle.shift()?.();
+  expect(gone.asks).toEqual([]);
+  // a dressing with nothing to build waits for nothing
+  buildAsksWhenIdle({ tile: "t" }, () => true, later);
+  expect(idle).toHaveLength(0);
+  // a question before the idle time builds them at once, and only once
+  const early = dressing();
+  buildAsksWhenIdle(early, () => true, later);
+  expect(asksOf(early)).toEqual([set]);
+  expect(asksOf(early)).toEqual([set]);
+  idle.shift()?.();
+  expect(early.asks).toEqual([set]);
+});
+
+test("a dressing whose tile leaves before its idle time never builds its ask sets", () => {
+  // the idle callback whenIdle (main-yield.ts) asks the browser for
+  const idle: (() => void)[] = [];
+  const host = globalThis as { requestIdleCallback?: unknown };
+  const had = "requestIdleCallback" in host;
+  const saved = host.requestIdleCallback;
+  host.requestIdleCallback = (work: () => void) => idle.push(work);
+  try {
+    const stream = {
+      cities: new Set<CityLayer>(),
+      terrains: new Set<TerrainLayer>(),
+      dressings: new Set<TileDressing>(),
+      demolished: new Map<string, Set<number>>(),
+    };
+    const plugin = new DressingPlugin(
+      {
+        dressingGate: new Promise<void>(() => undefined),
+        look: createLookState(),
+        night: () => 0,
+        season: () => 180,
+        onChange: () => undefined,
+      } as unknown as TileStreamContext,
+      stream
+    );
+    const scene = new Object3D();
+    const terrain = {
+      rasters: [],
+      dispose: () => undefined,
+    } as unknown as TerrainLayer;
+    const entry = { terrain };
+    plugin.dressed.set(scene, entry);
+    let built = 0;
+    const dressing: TileDressing = {
+      tile: "t",
+      asks: [],
+      buildAsks: () => {
+        built++;
+      },
+      furniture: new Group(),
+    };
+    // reason: the hang is private; the test hangs a built dressing without
+    // the terrain build a renderer would need
+    const inner = plugin as unknown as {
+      hangDressing: (scene: Object3D, entry: object, d: TileDressing) => void;
+    };
+    inner.hangDressing(scene, entry, dressing);
+    expect(idle).toHaveLength(1);
+    // the renderer unloads the tile before the page is idle
+    plugin.disposeTile({ engineData: { scene } });
+    idle.shift()?.();
+    expect(built).toBe(0);
+    expect(asksOf(dressing)).toEqual([]);
+    expect(built).toBe(0);
+  } finally {
+    if (had) {
+      host.requestIdleCallback = saved;
+    } else {
+      delete host.requestIdleCallback;
+    }
+  }
+});
+
+test("a phone's parse slot never waits on a dressing; a desktop's a little", () => {
+  expect(handOverWaitMs("mobile")).toBe(0);
+  expect(handOverWaitMs("desktop")).toBeGreaterThan(0);
+  // well under the compile's own bound and the old 10 s
+  expect(handOverWaitMs("desktop")).toBeLessThanOrEqual(3000);
+});
+
 test("a level waits for its dressing only where it takes over from its tile's other level", () => {
   const fine = { tileId: "33412_5656_2_sn", level: 0 as const };
   const coarse = {
@@ -488,11 +605,17 @@ test("a level waits for its dressing only where it takes over from its tile's ot
   expect(takesOver(fine, [{ ...coarse, level: 0 }])).toBe(false);
 });
 
+/** The data layers' traffic builder as the slot waits for it, there at
+ *  once. */
+const builder: TrafficBuilder = { build: buildTraffic, askSet: trafficAskSet };
+const loaded = () => Promise.resolve(builder);
+
 /** A tile's counted traffic as a slot: one two-way street, its dressing's
  *  ask list, and a host whose compiles the test holds and counts. */
 function trafficTile(
   opts: {
     gone?: () => boolean;
+    load?: () => Promise<TrafficBuilder | null>;
     turn?: TrafficHost["turn"];
   } = {}
 ) {
@@ -508,6 +631,7 @@ function trafficTile(
   };
   const asks: AskSet<FeatureInquiry>[] = [];
   const slot = trafficSlot({
+    load: opts.load ?? loaded,
     features: [street],
     bridges: [],
     ground: { offset: { cx: 0, cy: 0 }, heightAt: () => 110 },
@@ -701,4 +825,78 @@ test("a dressing freed before its traffic's turn builds nothing", async () => {
   await showing;
   expect(slot.group).toBeNull();
   expect(compiled).toHaveLength(0);
+});
+
+/** The builder on its way (the data layers starting): it arrives when the
+ *  test says. */
+function builderOnItsWay() {
+  let arrive = (): void => undefined;
+  const coming = new Promise<TrafficBuilder>((resolve) => {
+    arrive = () => resolve(builder);
+  });
+  return { arrive: () => arrive(), load: () => coming };
+}
+
+test("tiles hung before the builder arrives get their bodies when it does, and later tiles too", async () => {
+  const { arrive, load } = builderOnItsWay();
+  const early = trafficTile({ load });
+  early.slot.attach(early.host);
+  const showing = early.slot.show();
+  await nextTask();
+  // nothing built while the builder is on its way
+  expect(early.compiled).toHaveLength(0);
+  expect(early.slot.group).toBeNull();
+  arrive();
+  await nextTask();
+  expect(early.compiled).toHaveLength(1);
+  early.finish();
+  await showing;
+  expect(early.slot.group?.visible).toBe(true);
+  // a tile that lands once it has come builds at once
+  const late = trafficTile({ load });
+  late.slot.attach(late.host);
+  const lateShowing = late.slot.show();
+  await nextTask();
+  expect(late.compiled).toHaveLength(1);
+  late.finish();
+  await lateShowing;
+  expect(late.slot.group?.visible).toBe(true);
+});
+
+test("a builder that did not come builds nothing and is asked for on the next switch-on", async () => {
+  let fails = true;
+  // (the host's `failed` throws: a builder that did not come is no failed
+  // build of this tile, and must not be reported as one)
+  const { compiled, finish, host, slot } = trafficTile({
+    load: () => (fails ? Promise.reject(new Error("start")) : loaded()),
+  });
+  slot.attach(host);
+  await slot.show();
+  expect(compiled).toHaveLength(0);
+  expect(slot.group).toBeNull();
+  fails = false;
+  const again = slot.show();
+  await nextTask();
+  expect(compiled).toHaveLength(1);
+  finish();
+  await again;
+  expect(slot.group?.visible).toBe(true);
+});
+
+test("a layer switched off while its builder comes builds nothing until it is on again", async () => {
+  const { arrive, load } = builderOnItsWay();
+  const { compiled, finish, host, slot } = trafficTile({ load });
+  slot.attach(host);
+  const showing = slot.show();
+  slot.hide();
+  arrive();
+  await showing;
+  expect(compiled).toHaveLength(0);
+  expect(slot.group).toBeNull();
+  const again = slot.show();
+  await nextTask();
+  expect(compiled).toHaveLength(1);
+  finish();
+  await again;
+  expect(slot.group?.visible).toBe(true);
 });

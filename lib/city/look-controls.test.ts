@@ -3,13 +3,11 @@ import {
   LOOK_BY_KEY,
   LOOK_CONTROLS,
   LOOK_DEFAULTS,
-  maxValueOf,
+  RETIRED_SNAPSHOT_KEYS,
 } from "./look-controls";
 
-const GROUPS = new Set(["atmosphere", "buildings", "vegetation", "rendering"]);
-
-test("the table has 30 rows with unique keys, ids and snapshot keys", () => {
-  expect(LOOK_CONTROLS).toHaveLength(30);
+test("the table holds the one slider people use, Nebel", () => {
+  expect(LOOK_CONTROLS.map((def) => def.key)).toEqual(["fogAmount"]);
   for (const field of ["key", "id", "snapshotKey"] as const) {
     const values = LOOK_CONTROLS.map((def) => def[field]);
     expect(new Set(values).size).toBe(values.length);
@@ -19,10 +17,9 @@ test("the table has 30 rows with unique keys, ids and snapshot keys", () => {
 test("every row follows the naming conventions and boots inside its range", () => {
   for (const def of LOOK_CONTROLS) {
     expect(def.snapshotKey.endsWith("Pct")).toBe(true);
-    expect(GROUPS.has(def.group)).toBe(true);
     expect(LOOK_BY_KEY[def.key]).toBe(def);
     expect(def.initial).toBeGreaterThanOrEqual(0);
-    expect(def.initial).toBeLessThanOrEqual(maxValueOf(def));
+    expect(def.initial).toBeLessThanOrEqual(1);
     // The default is a whole percent, so the slider shows exactly it.
     expect(
       Math.abs(def.initial * 100 - Math.round(def.initial * 100))
@@ -31,7 +28,12 @@ test("every row follows the naming conventions and boots inside its range", () =
   }
 });
 
-test("maxValueOf is the slider maximum as a 0..1 value", () => {
-  expect(maxValueOf(LOOK_BY_KEY.fogAmount)).toBe(1);
-  expect(maxValueOf(LOOK_BY_KEY.transparency)).toBe(0.9);
+test("no row takes a retired snapshot key", () => {
+  // A pasted old snapshot would otherwise set the new control (ADR 0017).
+  expect(new Set(RETIRED_SNAPSHOT_KEYS).size).toBe(
+    RETIRED_SNAPSHOT_KEYS.length
+  );
+  for (const def of LOOK_CONTROLS) {
+    expect(RETIRED_SNAPSHOT_KEYS).not.toContain(def.snapshotKey);
+  }
 });

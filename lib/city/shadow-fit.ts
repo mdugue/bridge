@@ -6,7 +6,7 @@ import { clamp } from "./math";
  * that applies it).
  *
  * The frustum used to be a fixed 110 m half-size centred on the camera. At eye
- * level that is exactly right: fine texels, a soft PCF penumbra, and the
+ * level that is about right: fine texels, a soft PCF penumbra, and the
  * player always well inside it. In fly mode it is not — from 200 m up, a 110 m
  * box around the camera covers a patch of ground directly below that is barely
  * on screen, so everything the player is actually looking at falls outside the
@@ -25,10 +25,20 @@ import { clamp } from "./math";
  */
 
 /**
- * Frustum half-size at eye level, in metres. 110 m over a 3072² map is
- * ~0.07 m texels — small enough that the soft PCF radius hides the staircase.
+ * Frustum half-size at eye level (walking), in metres: 121 m over a 3072²
+ * map is ~0.08 m texels — small enough that the soft PCF radius hides the
+ * staircase. It is the 110 m the frustum had until 2026-10-11, widened by
+ * 10 % so the larger dead zone on foot (`WALK_DEAD_ZONE_M`) leaves the
+ * player as far from every edge as before.
  */
-export const SHADOW_BASE_RADIUS = 110;
+export const SHADOW_BASE_RADIUS = 121;
+
+/**
+ * The altitude ladder's anchor: above eye level the half-size takes the
+ * octaves of 110 m (220, 440, 880), as it did before the walker's frustum
+ * was widened.
+ */
+const OCTAVE_RADIUS = 110;
 
 /**
  * Largest half-size we grow to. 880 m over 3072² is ~0.57 m texels: coarse,
@@ -49,24 +59,38 @@ const RADIUS_PER_HEIGHT = 2.5;
  * before the radius actually changes. Octave steps are a factor 2 apart, so
  * 0.6 leaves a comfortable band on both sides of every boundary: hovering at
  * an altitude that sits exactly on one does not flap the frustum — and a flap
- * is a full depth-pass re-render.
+ * is a full depth-pass re-render. (The bottom step, 121 → 220 m, is a factor
+ * 1.8: climbing leaves 121 m at 73 m up, descending leaves 220 m at 58 m.)
  */
 const RADIUS_HYSTERESIS = 0.6;
 
 /**
- * Fraction of the *extra* radius (beyond the base) that the frustum centre is
- * pushed along the view direction. Zero at eye level, so walking behaves
- * exactly as it did — in particular, turning on the spot still never moves the
- * frustum. Airborne, it puts the shadowed area where the camera is looking
- * instead of directly underneath it.
+ * Fraction of the *extra* radius (beyond the 110 m anchor) that the frustum
+ * centre is pushed along the view direction above eye level. Zero at eye
+ * level, so turning on the spot never moves the frustum. Airborne, it puts
+ * the shadowed area where the camera is looking instead of directly
+ * underneath it.
  */
 const AHEAD_FRACTION = 0.5;
 
 /**
+ * Metres the frustum centre may drift on foot before the map is
+ * re-rendered. At eye level the centre is the camera's ground at the last
+ * re-render, so between two the camera is never nearer an edge than the
+ * half-size less this (across the sun's azimuth; along it the frustum's
+ * footprint on the ground is longer, by 1 / sin of the sun's elevation):
+ * 121 − 30 = 91 m, where the old 110 m half-size and its 19.8 m dead zone
+ * left 90.2 m. Walking straight, the map is redrawn every 30 m instead of
+ * every 19.8 — a third fewer depth passes for 10 % coarser texels.
+ */
+export const WALK_DEAD_ZONE_M = 30;
+
+/**
  * Fraction of the radius the frustum centre may drift before the map is
- * re-rendered. 0.18 reproduces the old fixed 20 m dead zone at the base
- * radius, and scales with it: the player stays ~80% of the half-size clear of
- * every edge, so nothing on screen falls out of the map between re-centres.
+ * re-rendered above eye level (in the air, and in Modell's parallel view,
+ * whose half-octave steps from 110 m never take the walker's 121 m): the
+ * camera stays ~80% of the half-size clear of every edge, so nothing on
+ * screen falls out of the map between re-centres.
  */
 export const FOLLOW_DEAD_ZONE_FRACTION = 0.18;
 
@@ -91,13 +115,11 @@ export function fitShadowRadius(
   if (Math.abs(Math.log2(wanted / currentRadius)) < RADIUS_HYSTERESIS) {
     return currentRadius;
   }
-  // Octave steps off the base: 110, 220, 440, 880.
-  const octave = Math.round(Math.log2(wanted / SHADOW_BASE_RADIUS));
-  return clamp(
-    SHADOW_BASE_RADIUS * 2 ** octave,
-    SHADOW_BASE_RADIUS,
-    SHADOW_MAX_RADIUS
-  );
+  // Eye level, else the octaves of the anchor: 220, 440, 880.
+  const octave = Math.round(Math.log2(wanted / OCTAVE_RADIUS));
+  return octave <= 0
+    ? SHADOW_BASE_RADIUS
+    : Math.min(OCTAVE_RADIUS * 2 ** octave, SHADOW_MAX_RADIUS);
 }
 
 /**
@@ -108,12 +130,17 @@ export function fitShadowRadius(
  * distance out — no pitch special-casing needed.
  */
 export function shadowFocusAhead(radius: number): number {
-  return (radius - SHADOW_BASE_RADIUS) * AHEAD_FRACTION;
+  return radius <= SHADOW_BASE_RADIUS
+    ? 0
+    : (radius - OCTAVE_RADIUS) * AHEAD_FRACTION;
 }
 
-/** Metres the frustum centre may drift at `radius` before a re-render. */
+/** Metres the frustum centre may drift at `radius` before a re-render: the
+ *  walker's `WALK_DEAD_ZONE_M` at eye level, else a fraction of it. */
 export function shadowDeadZone(radius: number): number {
-  return radius * FOLLOW_DEAD_ZONE_FRACTION;
+  return radius === SHADOW_BASE_RADIUS
+    ? WALK_DEAD_ZONE_M
+    : radius * FOLLOW_DEAD_ZONE_FRACTION;
 }
 
 /**
@@ -135,11 +162,17 @@ export const STREAM_ERROR_TARGET = 16;
  * crowns, which is the minimum terrain under them) still load for the
  * shadow: what the main camera refines is refined for the view, not for the
  * sun. A desktop has the memory for the fine level under the eye-level
- * frustum (110 m): at 128 px the coarse level's 23 px still refine it there
+ * frustum (121 m): at 128 px the coarse level's 21 px still refine it there
  * — a tile behind the player at a seam casts its own trees' shadows, and
  * the whole-site boot fetches the spawn tile's fine level as early as it
  * did — but no longer from the air, where the frustum grows (12 px and
  * less from 220 m on).
+ *
+ * A phone's 64 px is dormant since plan 071: its shadow camera streams no
+ * tiles at all (gpu-safety.ts `shadowTilesStream`; create-app.ts registers
+ * it with the stream and takes it off at the first `setSun`, before any
+ * update). It stays the resolution a phone would stream at, were that
+ * lifted.
  */
 export const SHADOW_STREAM_PX: Readonly<Record<"desktop" | "mobile", number>> =
   {

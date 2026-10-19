@@ -3,7 +3,8 @@ import { type Mesh, type MeshBasicNodeMaterial, Vector3 } from "three/webgpu";
 import type { TrafficFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { flowHeight } from "@/lib/city/traffic";
-import { buildTraffic, TRAFFIC_ATTRIBUTES } from "./traffic-layer";
+import { TRAFFIC_ATTRIBUTES } from "./traffic-flow";
+import { buildTraffic } from "./traffic-layer";
 
 const ctx: GroundContext = {
   offset: { cx: 0, cy: 0 },

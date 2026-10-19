@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { atmosphereAt, fogRangeFor, lerpHexColor } from "./atmosphere";
+import {
+  atmosphereAt,
+  fogRangeFor,
+  lerpHexColor,
+  PHONE_STREAM_FAR_M,
+  streamFarFor,
+} from "./atmosphere";
 
 test("lerpHexColor blends channel-wise and clamps t", () => {
   expect(lerpHexColor("#000000", "#ffffff", 0.5)).toBe("#808080");
@@ -48,4 +54,39 @@ test("fogRangeFor: more atmosphere pulls the fog closer, clamped to [0,1]", () =
   }
   expect(fogRangeFor(-5)).toEqual(clear);
   expect(fogRangeFor(5)).toEqual(dense);
+});
+
+test("streamFarFor: the fog's end plus a margin, never past the camera's far", () => {
+  const fogFar = fogRangeFor(0.2).far;
+  expect(streamFarFor(fogFar, 6000)).toBeGreaterThan(fogFar);
+  expect(streamFarFor(fogFar, 6000)).toBeLessThan(fogFar * 1.25);
+  // the clearest fog's end with its margin stays inside the camera
+  expect(streamFarFor(fogRangeFor(0).far, 4200)).toBe(4200);
+});
+
+test("streamFarFor: a phone's stream ends at the fine level's reach, inside a thicker fog's", () => {
+  const fogFar = fogRangeFor(0.2).far;
+  expect(streamFarFor(fogFar, 6000, "mobile")).toBe(PHONE_STREAM_FAR_M);
+  expect(streamFarFor(fogRangeFor(0).far, 6000, "mobile")).toBe(
+    PHONE_STREAM_FAR_M
+  );
+  // where the fog ends sooner, it is the fog's end that counts
+  const dense = fogRangeFor(0.6).far;
+  expect(streamFarFor(dense, 6000, "mobile")).toBe(
+    streamFarFor(dense, 6000, "desktop")
+  );
+  expect(streamFarFor(dense, 6000, "mobile")).toBeLessThan(PHONE_STREAM_FAR_M);
+  // a desktop streams as far as the fog
+  expect(streamFarFor(fogFar, 6000, "desktop")).toBeGreaterThan(fogFar);
+});
+
+test("streamFarFor: Modell's dolly zoom streams as far on a phone as on a desktop", () => {
+  // mid-dolly: the camera kilometres back, the fog opened past it
+  const opened = 20_000;
+  const cameraFar = 30_000;
+  const phone = streamFarFor(opened, cameraFar, "mobile", true);
+  expect(phone).toBe(streamFarFor(opened, cameraFar, "desktop", true));
+  expect(phone).toBe(22_000);
+  // walking or flying, the same fog would still be capped
+  expect(streamFarFor(opened, cameraFar, "mobile")).toBe(PHONE_STREAM_FAR_M);
 });

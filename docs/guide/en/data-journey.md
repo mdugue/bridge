@@ -192,7 +192,7 @@ as sent over the network):
 | Building footprints (minimap) | 48 kB | up to 75 kB | with the buildings |
 | Coarse terrain (512²) | 0.41 MB | 0.44–0.65 MB | the tile is in view |
 | Detailed terrain (a TIN, with its walls, stairs and kerb stones) | 1.61 MB | 1.31–3.56 MB | the camera comes close |
-| Land-use classes, 512² | 15 kB | 9–18 kB | at the start, for the minimap (the soundscape reuses it) |
+| Land-use classes, 512² | 15 kB | 9–18 kB | at the start, for the minimap |
 | Land-use classes, 2048² | 0.08 MB | 0.06–0.11 MB | with the coarse terrain (on phones with every level) |
 | Land-use classes, 4096² | 0.22 MB | 0.15–0.29 MB | with the detailed terrain (desktop only) |
 | Greenness (NDVI) | 0.39 MB | 0.32–0.77 MB | with the terrain |

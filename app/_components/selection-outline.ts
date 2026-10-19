@@ -52,7 +52,7 @@ import {
   outlineSpread,
 } from "@/lib/city/outline";
 import type { F, V4 } from "./shader-chunks";
-import { TRAFFIC_ATTRIBUTES, trafficPositionNode } from "./traffic-layer";
+import { TRAFFIC_ATTRIBUTES, trafficPositionNode } from "./traffic-flow";
 import type { ViewLens } from "./view-lens";
 
 /**

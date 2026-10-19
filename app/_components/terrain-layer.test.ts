@@ -32,11 +32,6 @@ import {
 import { isSceneShared } from "./three-utils";
 
 const ground = (): GroundUniforms => ({
-  groundDetail: uniform(1),
-  meadowNdvi: uniform(1),
-  urbanGreen: uniform(1),
-  skyView: uniform(1),
-  horizonShade: uniform(1),
   shadowReach: uniform(new Vector3()),
   sunDirection: uniform(new Vector3(0, 1, 0)),
 });
@@ -73,11 +68,12 @@ test("the baked light folds in only where the tile has its rasters", () => {
   expect(lit.aoNode).not.toBeNull();
 });
 
-test("a phone's coarse level reads no sports grounds, and builds as every tile without them", () => {
+test("only a desktop's fine level reads the sports grounds; the rest build as every tile without them", () => {
+  expect(readsSportGrounds(0, false)).toBe(true);
+  // no coarse level, and nothing on a phone
+  expect(readsSportGrounds(1, false)).toBe(false);
+  expect(readsSportGrounds(0, true)).toBe(false);
   expect(readsSportGrounds(1, true)).toBe(false);
-  // the fine level keeps them, and a desktop's coarse level too
-  expect(readsSportGrounds(0, true)).toBe(true);
-  expect(readsSportGrounds(1, false)).toBe(true);
   const look = ground();
   const sport = { raster: raster(RGBAFormat), table: raster(RGBAFormat) };
   const bare = createTerrainMaterial(splat({ ground: look }));

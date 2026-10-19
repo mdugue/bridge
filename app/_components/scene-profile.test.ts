@@ -46,8 +46,9 @@ test("the mobile tier shrinks the shadow map unless lite already did", () => {
   expect(shadowMapSizeFor("lite", "mobile")).toBe(512);
 });
 
-test("pixelRatioFor caps phones at 1.5, desktops at 2, lite at 0.5", () => {
-  expect(pixelRatioFor("full", "desktop", 3)).toBe(2);
+test("pixelRatioFor caps phones and desktops at 1.5, lite at 0.5", () => {
+  expect(pixelRatioFor("full", "desktop", 3)).toBe(1.5);
+  expect(pixelRatioFor("full", "desktop", 2)).toBe(1.5);
   expect(pixelRatioFor("full", "desktop", 1)).toBe(1);
   expect(pixelRatioFor("full", "mobile", 3)).toBe(1.5);
   expect(pixelRatioFor("full", "mobile", 1)).toBe(1);
@@ -92,9 +93,10 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
   expect(sceneBudgetFor("?gpu=webgpu", false).forceWebGL).toBe(false);
 });
 
-test("aoSamplesFor halves the GTAO samples only in the lite profile", () => {
-  expect(aoSamplesFor("full")).toBe(16);
-  expect(aoSamplesFor("lite")).toBe(8);
+test("aoSamplesFor halves the GTAO samples in the lite profile and on a phone", () => {
+  expect(aoSamplesFor("full", "desktop")).toBe(16);
+  expect(aoSamplesFor("full", "mobile")).toBe(8);
+  expect(aoSamplesFor("lite", "desktop")).toBe(8);
 });
 
 test("tileCacheBytesFor keeps less out-of-view content on a phone", () => {
@@ -122,12 +124,13 @@ test("tileCacheBytesFor can always unload the largest tile", () => {
 test("postProfileFor leaves the costly post work to the desktop", () => {
   const desktop = postProfileFor("desktop");
   const phone = postProfileFor("mobile");
-  // the desktop keeps the full picture: lens blur, SMAA, every style warm
+  // the desktop keeps the full picture: lens blur and SMAA; no tier warms
+  // the picture styles
   expect(desktop).toEqual({
     dof: true,
     antialias: "smaa",
-    warmStyles: "all",
-    warmPaper: true,
+    warmStyles: "outline-only",
+    warmPaper: false,
   });
   // a phone builds no lens blur, antialiases without targets of its own
   // and warms nothing but the outline
@@ -178,14 +181,18 @@ test("every safety level is a lighter page than the one before", () => {
       const before = tileCacheBytesFor(tier, (safety - 1) as 0);
       expect(lighter.max).toBeLessThan(before.max);
       expect(lighter.min).toBeLessThan(before.min);
-      expect(pixelRatioFor("full", tier, 3, safety)).toBeLessThan(
+      expect(pixelRatioFor("full", tier, 3, safety)).toBeLessThanOrEqual(
         pixelRatioFor("full", tier, 3, (safety - 1) as 0)
       );
       expect(shadowMapSizeFor("full", tier, safety)).toBeLessThanOrEqual(
         shadowMapSizeFor("full", tier, (safety - 1) as 0)
       );
     }
-    // the lightest page has a smaller shadow map than the first
+    // the lightest page has fewer pixels and a smaller shadow map than the
+    // first (a desktop's pixel ratio stops at 1)
+    expect(pixelRatioFor("full", tier, 3, 3)).toBeLessThan(
+      pixelRatioFor("full", tier, 3, 0)
+    );
     expect(shadowMapSizeFor("full", tier, 3)).toBeLessThan(
       shadowMapSizeFor("full", tier, 0)
     );

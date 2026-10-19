@@ -114,7 +114,7 @@ bun run bake dresden --step canopy  # one step, in the order `all` runs them:
                                     #   furniture, walls, stairs, surface,
                                     #   edges, markings, sport, tram,
                                     #   riverside, roofs, skyview,
-                                    #   soundmarks, lowveg, cultivated,
+                                    #   lowveg, cultivated,
                                     #   small-buildings, landmarks, structures,
                                     #   dormers
 bun run bake dresden --step lowveg --research   # also every hedge/shrub candidate
@@ -138,7 +138,7 @@ never from the tile name. The modules in `pipeline/bake/`:
 | `citygml.py` | streaming CityGML (AdV LoD2) → CityJSON, buildings owned by the tile holding their envelope centre (the fetch reads the neighbouring cells, so the rule never drops a building — Bavaria aside, see the adapters' row: Saxony files each building in exactly one 2 km file; the committed Leipzig, Grimma and Meißen CityJSON was fetched before the fetch read the neighbouring cells, so it can still lack buildings at the tile seams until the maintainer re-fetches those sites) |
 | `net.py` | downloads (`.part` until complete), single members of remote ZIPs by HTTP range |
 | `osm.py` | reads the site's `.osm.pbf` through GDAL's OSM driver, with a margin in degrees around the tile, reprojected to the tile's CRS; `in_tunnel` (a way in a tunnel or `location=underground`) and `below_ground` (that, or a negative `layer` / `level`) for what is drawn on the terrain |
-| `landcover.py`, `landcover_osm.py`, `rail.py`, `canopy.py`, `trees.py`, `ndvi.py`, `roof_colour.py`, `osm_buildings.py`, `lamps.py`, `monuments.py`, `furniture.py`, `mapillary.py`, `facades.py` (+ `facade_measure.py`, one panorama measured on one wall; `facade_traits.py`, its trait profiles), `shopfronts.py`, `windows.py`, `walls.py`, `stairs.py`, `surface.py`, `edges.py`, `markings.py`, `sport.py`, `tram.py`, `riverside.py`, `skyview.py`, `soundmarks.py`, `lowveg.py`, `cultivated.py`, `small_buildings.py`, `landmarks.py`, `structures.py`, `doors.py`, `plinths.py`, `dormers.py` | one step each, in the order of the step table (`STEPS`; the table below) |
+| `landcover.py`, `landcover_osm.py`, `rail.py`, `canopy.py`, `trees.py`, `ndvi.py`, `roof_colour.py`, `osm_buildings.py`, `lamps.py`, `monuments.py`, `furniture.py`, `mapillary.py`, `facades.py` (+ `facade_measure.py`, one panorama measured on one wall; `facade_traits.py`, its trait profiles), `shopfronts.py`, `windows.py`, `walls.py`, `stairs.py`, `surface.py`, `edges.py`, `markings.py`, `sport.py`, `tram.py`, `riverside.py`, `skyview.py`, `lowveg.py`, `cultivated.py`, `small_buildings.py`, `landmarks.py`, `structures.py`, `doors.py`, `plinths.py`, `dormers.py` | one step each, in the order of the step table (`STEPS`; the table below) |
 | `lsc.py` | the laser scan → the 0.5 m rasters `lowveg` and `small-buildings` read (laspy, PDAL's binning rules); `merge_laz` joins a provider's 1 km LAZ into the one scan per 2 km tile (x, y, z, intensity, returns, class), its classes mapped into the AdV scheme by the provider's table (`classes`); every scan's low-return intensities are normalised by its own ground median (see the laser scan under the fetch) |
 | `tree_archetypes.py` | the cadastre's (and OSM's) taxon → crown archetype, leaf type, foliage colour and the genus id of the season table (`GENERA`; pure Python; `scripts/eval/kataster-eval.py` reuses it) |
 | `cadastre.py` | the municipal tree registers a site can name (`Site.treeCadastre`), as data: each register's WFS query (feature types, output format, CRS) and its field mapping onto the bake's one tree record, plus the completeness check; Dresden, Hamburg, Leipzig and Berlin |
@@ -341,7 +341,7 @@ rasters; walls, bridges, monuments and stop shelters mask it), then
 `landmarks` and `structures` last (the relief is measured on the
 landmarks' objects only). Steps that
 read a neighbour's files (`markings`, `cultivated`, `tram`, `skyview`,
-`soundmarks`, `small-buildings`, `structures`) find the neighbours by their committed
+`small-buildings`, `structures`) find the neighbours by their committed
 DGM (`Tile.neighbours` in `common.py`); run them for every tile.
 
 | Step | Reads | Writes (`data/…`) | Notes |
@@ -380,14 +380,12 @@ DGM (`Tile.neighbours` in `common.py`); run them for every tile.
 | `riverside` | OSM `man_made=pier` (lines and areas), `man_made=groyne` lines, `route=ferry` lines; the class raster, the committed DGM1 | `dlm/riverside_<t>.geojson` (`k: pier` polygons with `deck`; `k: pontoon` polygons with `len` and `bank`; `k: groyne` and `k: ferry` lines, a ferry with the route's `name`) | A pier way is buffered by its `width` (1–30 m, else 3 m; flat ends). Floating: `floating=yes`, or more than 25 m of the pier over the water class. A pier's deck: the highest dry DGM sample on its outline (the landward end) + 0.4 m, the highest sample when it touches no dry ground. A pontoon is cut to its largest part on the water class (the class raster polygonised in a window around it) — its height is read at runtime from the ground the water sheet lies on; `bank`: the nearest dry point within 30 m of its outline, unless a fixed pier comes within 1 m. Ferry routes are cut at the tile edge and to their stretches over the water (2 m samples, ≥ 10 m). A pier or pontoon is written by the tile owning its representative point. No `.osm.pbf`: skipped with a note, the file already there stays |
 | `traffic` | `traffic/<t>.geojson` (the site's counted traffic, its source named by `Site.dataLayers.traffic`: `traffic_sources.py`) | `dlm/traffic_<t>.geojson` (LineStrings with `t` the vehicles per day, `f` / `b` along / against the line where counted, `hf` / `hb` their heavy-goods share 0..1, `y` the year counted, `m` man / loop / detector / estimate / census, `sp` 1 a total split evenly between the directions, `n` the street, `br` 1 on a street named "…brücke"; `attribution`) | A data layer, drawn only when switched on (`traffic-layer.ts`). Each section is cut to the tile (pieces under 2 m dropped, simplified 0.2 m); a direction counted −1/−2/0 is absent, a section with neither direction nor total dropped; the weakest method of the two directions names it; a heavy share over 1 (a typo or two) is clamped. Sorted by section id. 1 – 209 sections a tile, 2 082 in all (2026-10-01). **No raw file: skipped with a note, the file already there stays**; a tile without counted roads writes an empty collection |
 | `transit` (site-wide, last) | `data/_raw/gtfs/nv_free.zip`, shared by every site (cut once to the site's trams and cached beside it as `trams_<extent>.json`, ≈ 30 s: 2 GB of stop times streamed), every tile's `dlm/tram_<t>.geojson` tracks | `transit/trams.json` (`routes`, `patterns` — the path in decimetres, `at` the stops' distances along it, `bridge` vertex ranges on a deck —, `profiles` — arrival and departure per stop after the trip's start —, `days` — weekday / saturday / sunday: the date and `[profile, start second]` per trip, sorted; `attribution`) | Run once for the site, where it names trams (`bun run bake <site> --step transit`; `all` runs it after the tiles). GTFS route types 0 and 900–906 stopping within 500 m of the site. The days: per kind (Tuesday–Thursday, Saturday, Sunday) the date with the most tram trips in the next 21 days (a holiday's reduced service loses). Each leg between two stops on the site: of the track nodes within 60 m of each platform (12 nearest), the pair with the shortest way along the tracks plus 3 × their distances to the platforms — the track beside the platform wins; none shorter than 2.5 × the straight distance (≥ 50 m) → the leg is dropped and the trip runs on in pieces. A stop left from another track than the one arrived on is joined along the tracks (≤ 12 vertices). Path simplified 0.25 m, every stop's vertex and every bridge end kept; the stops' distances measured on the simplified path. 2026-10-01: 12 lines, 127 patterns, 264 profiles, 2 598 / 2 002 / 1 629 trips, every leg on the site placed. **No feed: skipped with a note, the file already there stays** |
-| `soundmarks` | OSM church outlines (`building=church\|cathedral\|chapel`, `amenity=place_of_worship` + `religion=christian`), bell towers (`man_made=tower` + `tower:type=bell_tower` as points or areas, `building=bell_tower`), all within ≈ 100 m of the tile; the committed CityJSON and DGM1 of the tile **and of every committed neighbour** | `dlm/soundmarks_<t>.geojson` (`k: bell` points at the tower's tip, with `h` = its height above the DGM, `size` large / medium / small, the church's `name`) | For the hidden soundscape (plan 035). OSM says which building is a church, the LoD2 where its tower stands: the tip is the highest LoD2 vertex inside the outline (1 m around it); a tip under 22 m above the ground carries no bell (a chapel, a ridge turret) and a church the LoD2 does not reach is left out. Size by height: large from 65 m, medium from 40 m. A place-of-worship outline over a church building is the same church (≥ 50 % overlap, the larger outline kept, the first name); a bell tower within 30 m of a church's tip is that church's. Written by the tile owning the tip; a tile without churches writes an empty collection. 20 towers over the fifteen tiles (7 empty); ≈ 20 s a tile (reading the CityJSON). No `.osm.pbf`: skipped with a note, the file already there stays |
 | `surface` | OSM `highway=*` lines (`surface`, `width`, `footway=sidewalk`, `sidewalk:*:surface`, `footway:surface`, `parking:{left,right,both}` + `:orientation`, `service=parking_aisle`) and `highway` / `area:highway` / `amenity=parking` / `amenity=parking_space` multipolygons | `dlm/surface_<t>.png` (8-bit greyscale 4096 × 2048 = two bytes per texel of a 2048² raster, interleaved: R = park · 64 + walk · 8 + road, G = the way direction, 1 + bearing mod 180° over 0–254, 0 = unknown; greyscale because the viewer decodes data PNGs itself, `lib/city/png-raster.ts`), `dlm/surface_<t>.json` (tile, CRS, bounds, size, encoding, the surface and parking ids, attribution) | Two materials per texel because an OSM road buffer (half-width per `highway` class, else `width`) reaches past the DLM's carriageway: the viewer reads `road` on class 7 and `walk` elsewhere. Roads burn least important first (a primary wins its junctions); walks burn parking and pedestrian areas, then the roads' sidewalk bands (kerb to +3 m on the tagged side), then the ways. Direction: the car parks' long axes first, then every way's segments — the road's reach with its pavement (an aisle's reach covers its bays, 5.5 m), then walkways, then the carriageways (a crossing does not turn the road). Parking: car parks on the ground (not underground, multi-storey, rooftop, garages) = 3 and asphalt when they carry no `surface`, the road half on each tagged side = 1 (parallel) or 2 (perpendicular/diagonal), then the aisles cleared. Surface values → ids in `SURFACE_OF`. No `.osm.pbf`: skipped with a note, the file already there stays |
 
 The OSM-derived files (`lamps`, `furniture`, `walls`, `stairs`, `bridge`, `platform`, `tram`, `riverside`, `lowveg`, `cultivated`, `structures`, the `markings` table) carry
 `"attribution": "© OpenStreetMap contributors (ODbL)"` as a foreign member;
 `monuments` carries both credits (`Quelle: GeoSN, dl-de/by-2-0; © OpenStreetMap
-contributors (ODbL)`), `soundmarks` the OSM credit and the GeoSN one for the
-tower heights, and the paving raster carries the OSM credit in its
+contributors (ODbL)`), and the paving raster carries the OSM credit in its
 legend JSON; `trees` carries the register's credit (`Site.treeCadastre.credit`,
 e.g. "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0") and "©
 OpenStreetMap contributors (ODbL)" (the OSM credit only when OSM trees were
@@ -449,9 +447,8 @@ environment.
 `bun run site --all` report; or only the ids it is given,
 `bun scripts/prepare-sites.ts leipzig unna`), runs
 `bun scripts/prepare-data.ts <site>` for each — one process per site,
-several side by side (largest site first; as many as the cores and the
-memory allow, a cold Dresden peaks at ~3 GB), each line prefixed with the
-site's id — then writes the index
+several side by side, each line prefixed with the site's id (see *Bakes
+side by side* below) — then writes the index
 **`public/data/sites.json`** (`{ version: 1, sites: [{ id, map, stats }] }`,
 `lib/city/site-index.ts`) — what the start page lists and what
 `app/[site]/page.tsx` prerenders from (`generateStaticParams`, through
@@ -468,11 +465,12 @@ tileset under `public/data/<site>/`
 
 1. **Side files.** Each tile's rasters and feature collections
    (`tileArtifacts` in `lib/city/tile.ts`) are published as committed,
-   plus two downsampled class rasters (NEAREST, single band,
+   plus three downsampled class rasters (NEAREST, single band,
    `scripts/downsample-raster.ts`, sharp): `landcover_<t>.r2048.png` for
-   phones and the coarse terrain, and `landcover_<t>.r512.png` for the
-   minimap (256² a tile) and the soundscape (512² a tile). Which files a
-   tile has, where the viewer finds each (`dressing`, `sound`) and which
+   a phone's fine terrain, `landcover_<t>.r1024.png` for the coarse
+   terrain on every tier, and `landcover_<t>.r512.png` for the
+   minimap (it paints 256² a tile). Which files a tile has, where the
+   viewer finds each (`dressing`, `coarse`, `ask`) and which
    carry the ODbL credit (`osm`, checked by `features.test.ts`) is one
    table, `tileArtifacts` in `lib/city/tile.ts`; the extras' types derive
    from it. Only class rasters are resized; no
@@ -507,9 +505,9 @@ budget"). Only L0 is
 are built when a fine terrain tile arrives and leave with it. The root's
 `extras` carry what the viewer needs before any content: the site id, the
 EPSG code, the recenter offset `(cx, cy)` and per tile its id, extent and
-minimap raster (the 512² one), and `sound`: the files the hidden
-soundscape fetches while (and only while) it plays — `soundmarks`, `tram`,
-`monuments`, `surface`, `svf` (the table's `sound` column, plan 035);
+minimap raster (the 512² one), and `ask`: the files only the inquiry
+card fetches, when something is asked (the table's `ask` column,
+ADR 0042);
 and `landmarks`: the site's twelve most notable (`siteLandmarks`: id,
 name, position, sitelinks, height — the taller of drawn and Wikidata's),
 which the HUD lists (plan 050); and `ground`: the site's 2nd and 90th
@@ -531,19 +529,25 @@ open in any glTF or 3D Tiles tool.
 | File | From | Via | Contents |
 |---|---|---|---|
 | `rail_<t>.geojson`, `tram_<t>.geojson` (published) | the committed files, every tile's DGM, rail, tram and bridge files | `scripts/line-levels.ts` (`siteLineLevels`), `lib/city/line-levels.ts`, `lib/city/levels.ts` | The committed lines, each with its runs off the ground (`lv`: first and last sample at the layer's spacing — rail 4 m, tram 2 m —, `d` deck / `s` span / `c` cut, the level at both ends) where it has any: the level decided along the whole line within its grade, with 450 m of context past each end of a tile's piece ([ADR 0041](./adr/0041-line-levels-along-the-whole-line.md)). Solved on the native DGM once per site, cached on all those files (≈ 18 s for Dresden) |
-| `terrain_<t>_l0.glb.gz`, `terrain_<t>_l1.glb.gz` | `data/<site>/dgm/…/dgm1_<t>.tif` (+ `.tfw` when there is no embedded georeferencing), `data/<site>/dlm/walls_<t>.geojson`, `data/<site>/dlm/stairs_<t>.geojson`, `data/<site>/dlm/terraces_<t>.geojson`, `data/<site>/dlm/kerbs_<t>.geojson` | `scripts/bake-tiles.ts` (`readDgm`, `tinTerrainMesh`, `terrainMesh`, `stairMesh`), `scripts/bake-terrain-tin.ts` | **L0** is an error-bounded TIN of the DGM read at its native 1 m ([ADR 0030](./adr/0030-terrain-tin-and-wall-snap.md)): the terraces lifted and the ground lowered under each flight of stairs ([ADR 0028](./adr/0028-osm-stairs-as-geometry-over-a-lowered-terrain.md), `lib/city/stairs.ts`; ±0.15 m deeper, the TIN's tolerance), the passages a line's level cuts through the fill under a drawn deck opened ([ADR 0041](./adr/0041-line-levels-along-the-whole-line.md), `lib/city/passages.ts`; from every tile's rail, tram and bridge files, so the key covers them), **no wall burn**, then Delatin refines until every grid point lies within ±0.15 m (`FINE_TIN_MAX_ERROR`): 0.30–0.49 M triangles, 1.6–2.0 MB gzipped per tile (the 1024² grid it replaced: 2 M, 2.15–2.45 MB), about 8 s per tile to bake. A 30 m skirt, baked normals, reordered for meshopt; `extras.tin` (`maxError`, `triangles`) tells the runtime to index the triangles for ground height (`lib/city/terrain-tin.ts` `TinIndex`). A DGM with NoData keeps the grid. **L1** is the DGM resampled bilinear to 512² (NoData = NaN), the OSM walls burned in as breaklines ([ADR 0014](./adr/0014-wall-to-terrain-breakline-conflation.md), `lib/city/terrain-conflate.ts`), the terraces and stairs as above, the grid plus a 30 m skirt; its first n·n vertices are the grid, row 0 = north, and the runtime samples ground height from them. L0 also carries a `stairs` node — the flights the tile owns as treads, risers and cheeks with 8-bit `COLOR_0` shades (`bake-tiles.ts` `stairMesh`) — and a `walls` node, the tile's wall ribbons standing on every tile's fine TIN, the earth-retaining ones snapped to the step it measures (`wallMesh`, `lib/city/walls.ts`, `lib/city/wall-snap.ts`), a `kerbs` node, the kerb stones on the tile's kerb lines (`kerbMesh`, `lib/city/kerbs.ts`), and a `fences` node, the fences (one quad per ≤ 2.5 m panel with `TEXCOORD_0` packing the pattern code and the distance along it, 16-bit) cut at their gates, a leaf or boom in each gap, the gates on freestanding walls cutting those ribbons too (`fenceMesh`, `lib/city/fences.ts`; 13.5–41 k triangles, 44–115 kB gzipped per tile), so L0's cache key covers every tile's terrain inputs ([ADR 0029](./adr/0029-static-dressing-baked-into-the-fine-terrain.md)). `extras`: `kind`, `tileId`, `level`, `n`, `bounds`, `minElevation`, the level's class raster (`landcover`: 4096² for L0, 2048² for L1), `landcoverLow`, `ndvi`, the sports grounds (`sport`, `sportTable`), and on L0 the paving and edge rasters (`surface`, `edges`) and the `dressing` file names |
-| `city_<t>.glb.gz` | `data/<site>/cityjson/lod2_<t>.city.json` + `data/<site>/dop/roofcolor_<t>.json` (optional) + `data/<site>/dlm/osmbuild_<t>.json` (optional) + `data/<site>/dlm/smallbuild_<t>.geojson` (optional; appended as boxes, `appendScanStructures`, `lib/city/small-buildings.ts`) + `data/<site>/dlm/roofs_<t>.geojson` (optional; the objects' LoD2 triangles replaced by the measured parts — flat prisms, faces as an error-bounded TIN of their surface shading with normals smoothed over it (creases > 30° kept; every other vertex of the mesh shades flat), `withMeasuredRoofs`, `scripts/measured-roofs.ts`) + `data/<site>/dlm/structures_<t>.geojson` (optional; columns lathed, buildings extruded, relief height fields as surfaces (`reliefMesh`; a relief without a `grid` builds nothing), `appendGapStructures`, `lib/city/structures.ts`) + `data/<site>/dlm/doors_<t>.geojson`, `plinths_<t>.geojson` and `dormers_<t>.geojson` (optional; doors on their host's wall, `appendDoors`, `lib/city/doors.ts`; plinths as a stone band on it, `appendPlinths`, `lib/city/plinths.ts`; dormers on their host's roof, one object per host, `appendDormers`, `lib/city/dormers.ts`) + `data/<site>/dlm/landmarks_<t>.json` (optional; folded into the OSM facts, `withLandmarks`) | `scripts/bake-city-mesh.ts` (runs `cityjson-threejs-loader` once) → `bake-tiles.ts` `cityMesh` → `tile-glb.ts` `writeMeshGlb` + `addPropertyTable` | One welded mesh per tile. `_FEATURE_ID_0` per vertex (`EXT_mesh_features`) into an `EXT_structural_metadata` property table, one row per object: `tint`, `roof` (DOP colour folded in), `baseZ`, `eaveH`, `storeyH`, `glow`, `rough`, `flags` (shop 1 + heritage 2 + glass 4 + metal 8 + landmark 16; a part takes its root's), `building`, `root` (the demolish tree), `source` (0 LoD2, 1 the laser scan's small structures, 2 the structures beyond LoD2 — a relief copies its host's row, root included; 3 a door; 4 a host's dormers; 5 a host's plinth); `tint` and `roof` take OSM's mapped colours in the clay's register (`building-tint.ts` `osmColourTint`); `_FACADE` (snorm16 vec4, `lib/city/windows.ts` `facadeAttribute`) gives each wall vertex its place on its wall for the windows and flags a roof vertex (−1 in its third, `FACADE_ROOF`). the fact columns (ADR 0042, `lib/city/object-facts.ts`): `buildingId`, `name`, `addr` (STRING), `function`, `roofType`, `created` (ENUM of the codes the tile uses, `NONE` = none), `height`, `roofPitch`, `area`, `levels` (FLOAT32, noData = default = −1). `extras`: `kind`, `tileId`, `footprints` (read from the CityJSON before the loader parses it — the loader rewrites a Solid's semantics in place) |
+| `terrain_<t>_l0.glb.gz`, `terrain_<t>_l1.glb.gz` | `data/<site>/dgm/…/dgm1_<t>.tif` (+ `.tfw` when there is no embedded georeferencing), `data/<site>/dlm/walls_<t>.geojson`, `data/<site>/dlm/stairs_<t>.geojson`, `data/<site>/dlm/terraces_<t>.geojson`, `data/<site>/dlm/kerbs_<t>.geojson` | `scripts/bake-tiles.ts` (`readDgm`, `tinTerrainMesh`, `terrainMesh`, `stairMesh`), `scripts/bake-terrain-tin.ts` | **L0** is an error-bounded TIN of the DGM read at its native 1 m ([ADR 0030](./adr/0030-terrain-tin-and-wall-snap.md)): the terraces lifted and the ground lowered under each flight of stairs ([ADR 0028](./adr/0028-osm-stairs-as-geometry-over-a-lowered-terrain.md), `lib/city/stairs.ts`; ±0.15 m deeper, the TIN's tolerance), the passages a line's level cuts through the fill under a drawn deck opened ([ADR 0041](./adr/0041-line-levels-along-the-whole-line.md), `lib/city/passages.ts`; from every tile's rail, tram and bridge files, so the key covers them), **no wall burn**, then Delatin refines until every grid point lies within ±0.15 m (`FINE_TIN_MAX_ERROR`): 0.30–0.49 M triangles, 1.6–2.0 MB gzipped per tile (the 1024² grid it replaced: 2 M, 2.15–2.45 MB), about 8 s per tile to bake. A 30 m skirt, baked normals, reordered for meshopt; `extras.tin` (`maxError`, `triangles`) tells the runtime to index the triangles for ground height (`lib/city/terrain-tin.ts` `TinIndex`). A DGM with NoData keeps the grid. **L1** is the DGM resampled bilinear to 512² (NoData = NaN), the OSM walls burned in as breaklines ([ADR 0014](./adr/0014-wall-to-terrain-breakline-conflation.md), `lib/city/terrain-conflate.ts`), the terraces and stairs as above, the grid plus a 30 m skirt; its first n·n vertices are the grid, row 0 = north, and the runtime samples ground height from them. L0 also carries a `stairs` node — the flights the tile owns as treads, risers and cheeks with 8-bit `COLOR_0` shades (`bake-tiles.ts` `stairMesh`) — and a `walls` node, the tile's wall ribbons standing on every tile's fine TIN, the earth-retaining ones snapped to the step it measures (`wallMesh`, `lib/city/walls.ts`, `lib/city/wall-snap.ts`), a `kerbs` node, the kerb stones on the tile's kerb lines (`kerbMesh`, `lib/city/kerbs.ts`), and a `fences` node, the fences (one quad per ≤ 2.5 m panel with `TEXCOORD_0` packing the pattern code and the distance along it, 16-bit) cut at their gates, a leaf or boom in each gap, the gates on freestanding walls cutting those ribbons too (`fenceMesh`, `lib/city/fences.ts`; 13.5–41 k triangles, 44–115 kB gzipped per tile), so L0's cache key covers every tile's terrain inputs ([ADR 0029](./adr/0029-static-dressing-baked-into-the-fine-terrain.md)). `extras`: `kind`, `tileId`, `level`, `n`, `bounds`, `minElevation`, the level's class raster (`landcover`: 4096² for L0, 1024² for L1), `landcoverLow` (a phone's: 2048² for L0, the same 1024² for L1), `ndvi`, the sports grounds (`sport`, `sportTable`), and on L0 the paving and edge rasters (`surface`, `edges`) and the `dressing` file names |
+| `city_<t>.glb.gz` | `data/<site>/cityjson/lod2_<t>.city.json` + `data/<site>/dop/roofcolor_<t>.json` (optional) + `data/<site>/dlm/osmbuild_<t>.json` (optional) + `data/<site>/dlm/smallbuild_<t>.geojson` (optional; appended as boxes, `appendScanStructures`, `lib/city/small-buildings.ts`) + `data/<site>/dlm/roofs_<t>.geojson` (optional; the objects' LoD2 triangles replaced by the measured parts — flat prisms, faces as an error-bounded TIN of their surface shading with normals smoothed over it (creases > 30° kept; every other vertex of the mesh shades flat), `withMeasuredRoofs`, `scripts/measured-roofs.ts`) + `data/<site>/dlm/structures_<t>.geojson` (optional; columns lathed, buildings extruded, relief height fields as surfaces (`reliefMesh`; a relief without a `grid` builds nothing), `appendGapStructures`, `lib/city/structures.ts`) + `data/<site>/dlm/doors_<t>.geojson`, `plinths_<t>.geojson` and `dormers_<t>.geojson` (optional; doors on their host's wall, `appendDoors`, `lib/city/doors.ts`; plinths as a stone band on it, `appendPlinths`, `lib/city/plinths.ts`; dormers on their host's roof, one object per host, `appendDormers`, `lib/city/dormers.ts`) + `data/<site>/dlm/landmarks_<t>.json` (optional; folded into the OSM facts, `withLandmarks`) | `scripts/bake-city-mesh.ts` (runs `cityjson-threejs-loader` once; then `cityMesh`) → `tile-glb.ts` `writeMeshGlb` + `addPropertyTable` | One welded mesh per tile. `_FEATURE_ID_0` per vertex (`EXT_mesh_features`) into an `EXT_structural_metadata` property table, one row per object: `tint`, `roof` (DOP colour folded in), `baseZ`, `eaveH`, `storeyH`, `glow`, `rough`, `flags` (shop 1 + heritage 2 + glass 4 + metal 8 + landmark 16; a part takes its root's), `building`, `root` (the demolish tree), `source` (0 LoD2, 1 the laser scan's small structures, 2 the structures beyond LoD2 — a relief copies its host's row, root included; 3 a door; 4 a host's dormers; 5 a host's plinth); `tint` and `roof` take OSM's mapped colours in the clay's register (`building-tint.ts` `osmColourTint`); `_FACADE` (snorm16 vec4, `lib/city/windows.ts` `facadeAttribute`) gives each wall vertex its place on its wall for the windows and flags a roof vertex (−1 in its third, `FACADE_ROOF`). the fact columns (ADR 0042, `lib/city/object-facts.ts`): `buildingId`, `name`, `addr` (STRING), `function`, `roofType`, `created` (ENUM of the codes the tile uses, `NONE` = none), `height`, `roofPitch`, `area`, `levels` (FLOAT32, noData = default = −1). `extras`: `kind`, `tileId`, `footprints` (read from the CityJSON before the loader parses it — the loader rewrites a Solid's semantics in place) |
 | `footprints_<t>.json` | the same parse | `cityMesh` | per-object 2D footprints for the minimap, `[object][polygon][vertex] = [x, y]` |
 
 Scene `extras` name the tile under **`tileId`, never `tile`**: the renderer
 writes `userData.tile` itself. Every tile is recentered on one offset: the
-spawn tile's CityJSON loader matrix, reused for the rest; the EPSG code
+spawn tile's CityJSON loader matrix (the centre of its vertices' bounding
+box, which `cityFrame` reads without parsing a building, so no bake parses
+the spawn tile twice), reused for the rest; the EPSG code
 comes from the CityJSON's `metadata.referenceSystem` (25832 or 25833).
 
-The client reads the property table through 3DTilesRendererJS's
-`GLTFExtensionsPlugin` (`metadata: true`, meshopt decoder) and packs it
-into a float texture the clay shader reads per object; demolish filters
-the index buffer. That half is in [rendering.md](./rendering.md).
+The client reads the property table with a GLTFLoader plugin of its own
+(`app/_components/gltf-content.ts`, the reader `lib/city/property-table.ts`,
+which answers as 3DTilesRendererJS's `PropertyTableAccessor` did; that
+library's metadata extension also reads property textures, through a
+classic WebGLRenderer that would ship all of three's WebGL with the viewer)
+and packs it into a float texture the clay shader reads per object;
+demolish filters the index buffer. That half is in
+[rendering.md](./rendering.md).
 
 ### The site's map picture
 
@@ -573,6 +577,67 @@ start page (`app/_components/city-grid.tsx`) offers *Empfohlen* — the
 reference site first, then by name — and one ordering per figure, each
 card showing the figure it is ranked by.
 
+### Bakes side by side
+
+A bake is single-threaded, so `prepare-sites.ts` runs several
+`prepare-data.ts` processes at once, within two limits
+(`scripts/warmers.ts` `bakeLimits`, logged first): as many as the cores
+(`os.availableParallelism()`), and their peaks together within 80 % of the
+memory — the machine's, or the container's limit where it sets a lower one
+(`process.constrainedMemory()`). By default every site is one process,
+counted at 3 GB (`SITE_PEAK`: a cold Dresden peaks at 4.3–5.7 GiB, the
+others near 1 GB), largest first: Vercel's 4-core, 8.6 GB builder bakes
+two sites at once, and a cold build of all seven takes 235 s there
+(2026-10-10), Dresden's single process the whole of it.
+`PREPARE_JOBS=<n>` sets the number of bakes at once,
+`PREPARE_MEMORY_GB=<gb>` the memory they share (as on a smaller machine:
+the bakes still keep to 80 % of it).
+
+**Warmers (`PREPARE_WARMERS=1`, off by default).** A site with more than four tiles (Dresden) is split further, one tile per
+process: `prepare-data.ts <site>` runs as **warmers**, which only fill the
+cache, before one plain run finds everything cached and publishes. A tile
+warmer counts as 3 GB (its buildings are the peak, Dresden's heaviest tile
+`33414_5654` 2.3–2.7 GB), every other bake as 1.6 GB (1.43 GB at most:
+München's, and the warmer that solves Dresden's line levels).
+
+0. `--if-cached`: the plain run, which publishes when every entry is
+   cached — a warm build runs no warmer — and stops at the first entry it
+   would bake (exit 3), when the warmers follow;
+1. `--warm-ground=<first tile>`, alone: the site-wide values every later
+   process reads — the frame, the line levels — and that tile's fine
+   ground;
+2. `--warm-ground=<tile>` for each other tile, side by side: its fine
+   ground (a cache entry of its own, below);
+3. `--warm=<tile>` for every tile, side by side: its side files, its
+   buildings and both terrain levels, the fine level's walls, kerbs,
+   stairs and fences on the cached grounds (a ground it has to build
+   itself logs `ground <tile>: built`, which step 2 leaves none to);
+4. the plain run: all cache hits; it publishes.
+
+Each step waits for the one before it. A warmer publishes nothing — no
+file under `public/data/`, no manifest, no prune — so it can never remove
+what another process wrote. One tile per warmer because a process's memory
+grows with every tile it bakes (all fifteen of Dresden's in one: 4.3 GiB),
+and a slot that frees late still finds a tile to take. The smaller sites go
+first, largest first: each is one process that cannot be split, and
+started late it would be the build's tail; the warmers fill every slot
+they leave. Anything new that is computed from every tile must be cached
+by step 1, or every warmer computes it again.
+
+They are off by default because they showed no gain where it counts. On
+Vercel's builder (4 cores, 8.6 GB) a cold build of all seven sites took
+322 s with them; main's took 232–235 s and the default schedule 387 s on
+the same branch — but the builders differed by about 1.4× in a step the
+warmers do not touch (Next's static pages: 7.5–8.7 s in main's builds,
+11.3–11.9 s in the branch's), so single builds there cannot settle a
+difference of that size (2026-10-10). What is structural: 8.6 GB lets two
+tile warmers run at once, the parallelism main already gets from baking two
+sites side by side, and the warmers' processes add ≈ 10 % CPU. On one box,
+alternating, the default schedule costs main's CPU (Grimma 28.6 and
+28.7 s, Hamburg 59.7 and 60.1 s of user time). They may pay on a machine
+with the cores and memory for four or more tile warmers at once; that has
+not been measured.
+
 ### Cache and publish
 
 **Cache.** Baked outputs are cached in `.cache/prepare-data/` (gitignored;
@@ -590,20 +655,40 @@ key — and only those. The walk cannot see a call `prepare-data.ts` makes
 itself: a module it calls for an artifact must be one of that artifact's
 entries or reachable from one, or a change to it leaves the cached artifact
 stale. Every key also carries `prepare-data.ts` itself, the site's own config,
-`sites/providers.ts`, `bun.lock` and `patches/` (the glTF tools' versions
-shape the output). Another site's config re-bakes nothing; a palette colour
-re-bakes only the map picture.
+`sites/providers.ts` and `patches/`, and — not the whole `bun.lock` — the
+lockfile's entries for the packages its modules import and everything those
+depend on (`lockedVersions`; the `@types/` packages left out: the glTF
+tools', three's, geotiff's, sharp's versions shape the output). Another
+site's config re-bakes nothing; a palette colour re-bakes only the map
+picture; a bump of a package only the viewer imports (React, Next.js,
+3DTilesRendererJS) re-bakes nothing, and a building module's change no
+terrain (`bake-tiles.ts` meshes the ground, `bake-city-mesh.ts` the
+buildings).
 A changed input, a changed bake or a renamed side file re-bakes; a checkout
 or a touch alone does not; anything else is a cache
 read. Every site shares the directory, and it keeps one entry per name: a
 tile's names are unique across sites, the site-wide ones (the frame, the
-map picture, the stats) carry the site's id. A cold run of the Dresden site
-(fifteen tiles) takes ≈ 2 min on four cores, and so does a cold run of all
-seven sites, side by side; a warm one ≈ 1 s. CI keeps the directory between runs (`actions/cache`
-in the e2e job): any earlier entry is a sound start, since every artifact is
-keyed by what it was baked from. Most of a cold run is decoding the DGM
-GeoTIFFs (LZW, twice per tile: once per terrain level), the fine level's TIN
-(delatin) and the glTF quantisation.
+map picture, the stats) carry the site's id. An entry is written whole
+(`scripts/bake-cache.ts`): to a part file, renamed into place, the name's
+stale keys dropped first — never the entry itself nor another process's
+part file — so processes baking side by side never read half an entry nor
+delete each other's. Each tile's **fine ground** is an entry of its own
+(`ground_<t>.bin`, `scripts/ground-pack.ts`: the TIN, or the shaped grid
+where the DGM has NoData, as its typed arrays), keyed on the tile's
+terrain inputs, its passages and the ground bake: every fine level's
+walls, kerbs, stairs and fences stand on every tile's fine ground, so a
+process reads the other tiles' grounds from the cache — each tile's
+heights only once a point asks — instead of refining their TINs again,
+and the fine level's mesh is rebuilt from the same entry (`tinMesh`,
+`gridMesh`; ≈ 6.7 MB a Dresden tile; the cache of all seven sites
+≈ 420 MB). A cold run of all seven sites takes 235 s on Vercel's
+builder (above); a warm one ≈ 3 s for Dresden, ≈ 10 s for all seven. CI
+keeps the directory between runs (`actions/cache` in the e2e job): any
+earlier entry is a sound start, since every artifact is keyed by what it
+was baked from. Most of a cold Dresden is its buildings (≈ 390 of its 540
+CPU seconds: the doors' rays, the footprints' union areas, glTF-Transform's
+weld and quantisation, the gzip), then the fine grounds (≈ 140, the line
+levels' ≈ 20 among them: Delatin and the DGMs' LZW).
 
 **Publish.** Each file is written to `public/data/<site>/` as
 `<stem>.<8 hex of sha1>.<ext>` (`.glb.gz` keeps both suffixes);
@@ -633,13 +718,13 @@ optional one is logged and the feature is off.
 | Contract | Module | Checked by |
 |---|---|---|
 | The site: tiles, CRS, grid, tile ids and extents | `lib/city/site.ts`, `sites/*.ts` | `tile.test.ts` pins Dresden's ids, spawn first |
-| Every side file of a tile, its `required` flag (land cover, its 2048² variant, veg rows) and its source | `lib/city/tile.ts` (`tileArtifacts`) | `tile.test.ts`; `prepare-data.ts` publishes exactly this list and names it in the glTF `extras` — add an artifact there and nowhere else |
+| Every side file of a tile, its `required` flag (land cover, its 2048², 1024² and 512² variants, veg rows) and its source | `lib/city/tile.ts` (`tileArtifacts`) | `tile.test.ts`; `prepare-data.ts` publishes exactly this list and names it in the glTF `extras` — add an artifact there and nowhere else |
 | The tileset tree and its `extras` | `lib/city/tileset.ts` (`buildTileset`, `parseTilesetExtras`) | `tileset.test.ts` |
 | glTF encoding: meshopt, quantisation, Y-up, the property table | `scripts/tile-glb.ts` | `tile-glb.test.ts` |
 | DGM → terrain grid, `.tfw` fallback | `scripts/bake-tiles.ts` | `bake-tiles.test.ts` (reads the committed spawn-tile DGM) |
 | The per-object table and its texture packing, demolish | `lib/city/city-mesh.ts` | `city-mesh.test.ts` |
 | Class ids ↔ palette | `lib/city/landcover.ts`, `pipeline/bake/landcover.py` | `landcover.test.ts` (every committed legend), `test_bakes.py` |
-| The 2048² and 512² class rasters keep exact ids | `scripts/downsample-raster.ts` | `downsample-raster.test.ts` |
+| The 2048², 1024² and 512² class rasters keep exact ids | `scripts/downsample-raster.ts` | `downsample-raster.test.ts` |
 | GeoJSON feature shapes per kind | `lib/city/features.ts` | `features.test.ts` reads **every committed file** of every tile: a bake that renames a property fails there, not as an empty layer |
 | Terrain TIN (the fine level) | `lib/city/terrain-tin.ts` (`tinFromMesher`, `buildTinGeometryData`, `TinIndex`), `TerrainExtras.tin` | `terrain-tin.test.ts`, `scripts/bake-terrain-tin.test.ts` (every grid point within the tolerance; the committed spawn DGM at its native 2000²) |
 | Optional-artifact fetch policy | `app/_components/fetch-optional.ts` | 404 / network / parse → `null`/`[]` (feature off); **abort always rethrows** so a torn-down instance stops building from partial data |
@@ -700,7 +785,7 @@ The whole Dresden site is ≈ 98.9 MB on the wire (≈ 95.6 MB for a phone),
 the spawn tile alone — the `lite` profile — ≈ 6.4 MB. A visit fetches
 less: streaming loads a tile's content only when it is in view, and a far
 tile stops at its coarse terrain (≈ 1.3–3.3 MB per tile: buildings,
-footprints, the coarse terrain with its 2048² raster and the NDVI).
+footprints, the coarse terrain with its 1024² raster and the NDVI).
 Before the tileset a desktop visit loaded the then four-tile site whole
 at boot, ≈ 10.6 MB; the growth is quantised meshes instead of a heightfield blob
 (≈ 1.4 + 1.5 + 0.4 MB of buildings and terrain per tile now vs

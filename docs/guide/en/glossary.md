@@ -235,7 +235,7 @@ objects meet the ground, computed from the depth buffer. The viewer uses
 one of them, *GTAO* (ground-truth ambient occlusion), at half resolution.
 
 **Depth of field (DoF)** — the photographic blur beyond the focus
-distance (the foreground stays sharp); here focused on the centre of the view by default. Not on phones.
+distance (the foreground stays sharp); here always focused on the centre of the view. Not on phones.
 
 **Post-processing** — effects applied to the finished image: contact
 shadows, depth of field, anti-aliasing (SMAA; on phones the lighter
@@ -250,8 +250,9 @@ things outside it are skipped.
 **BVH** — *bounding volume hierarchy*, a search tree over triangles that
 makes "what is under the pointer" and collision checks fast.
 
-**Pixel ratio (DPR)** — how many rendered pixels per screen pixel; lowered
-on phones to save fill-rate.
+**Pixel ratio (DPR)** — how many rendered pixels per screen pixel; at most
+1.5 here, on phones and on computers with a high-resolution screen alike,
+to save fill-rate.
 
 **SwiftShader** — a software renderer used by the headless test browser;
 it draws the scene on the CPU, slowly and without the real look.
@@ -323,8 +324,9 @@ changes whenever the content changes, so caches never serve stale data.
 **Lite profile** — `?scene=lite` (`/dresden?scene=lite`): the spawn tile only, tiny shadow map,
 half resolution; for automated tests only.
 
-**Snapshot** — the JSON text that captures camera, date/time and every
-slider, used to reproduce a view.
+**Snapshot** — the JSON text that captures camera, date/time, the
+picture style, the fog, the crown switch and the data layers, used to
+reproduce a view.
 
 **Scenic view / Aussichtspunkt** — one of the authored vantages the
 camera can glide to; one of them is the start view.

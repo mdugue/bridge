@@ -47,7 +47,11 @@ import type {
   VegRowFeature,
 } from "../../lib/city/features";
 import { directionOf } from "../../lib/city/pose";
-import { fitShadowRadius, shadowFocusAhead } from "../../lib/city/shadow-fit";
+import {
+  fitShadowRadius,
+  SHADOW_BASE_RADIUS,
+  shadowFocusAhead,
+} from "../../lib/city/shadow-fit";
 import { sampleHeightfield } from "../../lib/city/terrain-geometry";
 import {
   type DataManifest,
@@ -252,7 +256,7 @@ for (const file of shots) {
   // The shadow frustum: fitted half-size, centred on the ground under the
   // camera and pushed along the view (sun-rig.ts follow()).
   const ground = groundAt(epsg.x, epsg.y);
-  const radius = fitShadowRadius(pos.y - ground, 110);
+  const radius = fitShadowRadius(pos.y - ground, SHADOW_BASE_RADIUS);
   const ahead = shadowFocusAhead(radius);
   const focus = new Vector3(pos.x + d.x * ahead, ground, pos.z + d.z * ahead);
   const entry = {} as Record<Mode, { main: PassCost; shadow: PassCost }>;

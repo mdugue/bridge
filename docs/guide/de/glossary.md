@@ -251,7 +251,7 @@ abdunkeln. Der Viewer nutzt eines davon, *GTAO* (Ground-Truth Ambient
 Occlusion), in halber Auflösung.
 
 **Tiefenschärfe (DoF)** — die fotografische Unschärfe hinter der
-Fokusentfernung (der Vordergrund bleibt scharf); hier standardmäßig auf die Bildmitte fokussiert. Nicht
+Fokusentfernung (der Vordergrund bleibt scharf); hier immer auf die Bildmitte fokussiert. Nicht
 auf Telefonen.
 
 **Nachbearbeitung (Post-Processing)** — Effekte auf dem fertigen Bild:
@@ -268,7 +268,8 @@ Schattenkamera) sieht; alles außerhalb wird übersprungen.
 „was liegt unter dem Mauszeiger“ und Kollisionsprüfungen schnell macht.
 
 **Pixelverhältnis (DPR)** — wie viele gerenderte Pixel je Bildschirmpixel;
-auf Handys gesenkt, um Füllrate zu sparen.
+hier höchstens 1,5, auf Handys wie auf Rechnern mit hochauflösendem
+Bildschirm, um Füllrate zu sparen.
 
 **SwiftShader** — ein Software-Renderer, den der Test-Browser ohne
 Bildschirm nutzt; er zeichnet die Szene auf der CPU, langsam und ohne den
@@ -345,8 +346,9 @@ veraltete Daten liefern.
 **Lite-Profil** — `?scene=lite` (`/dresden?scene=lite`): nur die Startkachel, winzige
 Schattenkarte, halbe Auflösung; nur für automatische Tests.
 
-**Snapshot** — der JSON-Text, der Kamera, Datum/Uhrzeit und jeden Regler
-festhält, um eine Ansicht zu reproduzieren.
+**Snapshot** — der JSON-Text, der Kamera, Datum/Uhrzeit, den Bildstil,
+den Nebel, den Kronen-Schalter und die Datenebenen festhält, um eine
+Ansicht zu reproduzieren.
 
 **Aussichtspunkt** — einer der gestalteten Standpunkte, zu denen die
 Kamera gleiten kann; einer davon ist der Startblick.

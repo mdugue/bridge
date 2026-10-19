@@ -9,9 +9,8 @@ import {
   type Scene,
   type WebGPURenderer,
 } from "three/webgpu";
-import { dot, float, pmremTexture, reflect, uniform } from "three/tsl";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
-import type { F, Live, V3 } from "./shader-chunks";
+import { dot, float, pmremTexture, reflect } from "three/tsl";
+import type { F, V3 } from "./shader-chunks";
 import { viewDirection } from "./view-direction";
 
 /**
@@ -70,8 +69,9 @@ function createTarget(): RenderTarget {
 
 const target = createTarget();
 
-/** The `Spiegelung` row (0..1), one uniform every mirroring material reads. */
-export const reflectionStrength: Live = uniform(LOOK_DEFAULTS.reflections);
+/** Spiegelung's strength (0..1), one constant every mirroring material
+ *  reads: the full sky, fixed since its slider went (plan 073). */
+export const REFLECTIONS: F = float(1);
 
 /** GPU bytes the reflection holds: its map and the generator's ping-pong. */
 export const SKY_REFLECTION_BYTES = 2 * target.width * target.height * 8;
@@ -79,7 +79,7 @@ export const SKY_REFLECTION_BYTES = 2 * target.width * target.height * 8;
 /**
  * The sky seen in a mirror with world normal `n`, blurred by `roughness`
  * (0 sharp, 1 a wash of the whole hemisphere) — linear radiance, not yet
- * weighted by the row or a Fresnel term.
+ * weighted by `REFLECTIONS` or a Fresnel term.
  */
 export function skyReflection(n: V3, roughness: F | number): V3 {
   const incident = viewDirection();

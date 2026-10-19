@@ -45,8 +45,7 @@ The census scripts were throw-away; the counts below are their record.
 - **Wikidata**: bridges only (class, P2787, P2043).
 - **OSM**: see `data/provenance.json` → `openstreetmap` (walls, fences,
   stairs, lamps by position, furniture, surfaces, markings, sport, trams,
-  riverside, cultivated land, trees, shop/gastro and heritage on buildings,
-  church outlines for the bells).
+  riverside, cultivated land, trees, shop/gastro and heritage on buildings).
 
 ## Unused, by source
 
@@ -54,19 +53,19 @@ The census scripts were throw-away; the counts below are their record.
 
 | Information | In the site | Idea for the walker |
 |---|---|---|
-| Tram route relations with `colour` | 31 relations, 13 lines; 179 bus routes | a stop's lines; a passing tram (or only its sound) in the line colour |
+| Tram route relations with `colour` | 31 relations, 13 lines; 179 bus routes | a stop's lines; a passing tram in the line colour |
 | `building:colour` | 2 900 objects (1 385 buildings, 1 515 parts); 21–28 % of outlines in the centre, 0–6 % outside | the only **facade** colour source (the DOP sees roofs only): a pastelised tint where mapped, the hash elsewhere |
 | `building:material`, `roof:material` | 1 988 / 1 743 — sandstone 520, glass 336, brick 197; copper roofs 132, gold 10, green roofs 135 | sandstone darkening, a glass sheen, verdigris domes, gilded tips |
 | `tourism=artwork` | 383 (sculpture 150, statue 84, mural 44); `artist_name` 149, `wikidata` 161 | murals as a facade patch, sculptures beside the DLM monuments |
 | `memorial=stolperstein`, plaques, war memorials | 281 (all named), 60, 20 | small brass glints in the pavement; names only on demand |
 | `lit` on ways | 19 268 ways (yes 15 844, no 4 693) — far more than the 3 064 mapped lamps | at night lit streets keep a glow, unlit park paths fall dark |
 | Lamp shape: `lamp_mount`, `lamp_type`, `light:count`, `support` | 1 078 / 571 (9 gaslight) / 289 / 401 of 3 064 lamps | lamp silhouettes, double heads, warm gas lanterns |
-| `traffic_signals:sound=yes`, `vibration` | 615 / 1 014 | the crossings' ticking in the soundscape |
-| `opening_hours`, `outdoor_seating`, `cuisine` | 2 957 on shops and gastro / 540 yes / 675 | shop glow only while open; café tables in the warm months; a murmur there |
-| Small water: `waterway=stream/drain/weir/waterfall`, `natural=spring`, ponds | 121 / 30 / 4 / 2 / 11 / 31 | trickle and weir sounds; brooks below the class raster's reach |
+| `traffic_signals:sound=yes`, `vibration` | 615 / 1 014 | — (sound only; the soundscape was removed 2026-10-10) |
+| `opening_hours`, `outdoor_seating`, `cuisine` | 2 957 on shops and gastro / 540 yes / 675 | shop glow only while open; café tables in the warm months |
+| Small water: `waterway=stream/drain/weir/waterfall`, `natural=spring`, ponds | 121 / 30 / 4 / 2 / 11 / 31 | brooks below the class raster's reach |
 | Tree `denotation`, `natural=tree_row` | 2 900 (avenue 647, natural monument 15), 423 rows | avenue rhythm; landmark trees |
 | `landuse=flowerbed` | 185 | painted as meadow today; a seasonal flower speckle |
-| `place=suburb/quarter/neighbourhood/square`, admin levels 9 and 11 | 23 / 5 / 22 / 32; 63 / 101 | "you are in …" as a HUD line (not on the ground); a sound character per quarter |
+| `place=suburb/quarter/neighbourhood/square`, admin levels 9 and 11 | 23 / 5 / 22 / 32; 63 / 101 | "you are in …" as a HUD line (not on the ground) |
 | Razed/abandoned/disused railways | 782 / 371 / 283 | faint ghost tracks as a history layer |
 | `entrance=*` | 8 362 (main 4 070) | a door glow at dusk, where the shop wash has none |
 | Small `man_made`: flagpole, chimney, mast, crane, water well/tap, planter | 129, 56, 147, 15, 38 + 43, 52 | flags in the wind, cranes on the skyline, hand pumps |
@@ -100,13 +99,13 @@ No address member exists in the files.
 | `L1261` `name` (street/site) | 100 % | — (text) |
 | `L1544` / `L1545` solar potential, roof / facade faces | 11 775 roof faces, **`kulturdenkmal` on 100 %** (6 206 "ja"), `face_gmlid`, tilt, orientation, irradiation | **the official listed-building flag** — the ledger says the LfD list is reachable only as a WMS; this is a WFS with the flag on every roof face. `face_gmlid` may join to LoD2 directly (check) |
 | `L1512` buildings as noise barriers | 2 835 buildings, **`gesch_zahl` (storeys) on 100 %**, height, ALKIS `objekt_id` | real storey bands instead of `storeyHeight(measuredHeight)` |
-| `L1514` / `L1511` / `L1518` noise maps (road, tram) | 1 199 polygons, 50 to 75+ dB | the soundscape's city hum at its mapped loudness |
+| `L1514` / `L1511` / `L1518` noise maps (road, tram) | 1 199 polygons, 50 to 75+ dB | — (sound only; the soundscape was removed 2026-10-10) |
 | `L134` addresses | 1 601 points, street + number | the address when a building is picked |
 | `L1233` stops | 48 with their lines ("6, 8, 13") | real line numbers on the stop signs |
 | Flood extents 1845, 1890, 2002, 2013, 2024; modelled HQ levels; `L1001` flood marks | polygons; 5 marks | an Elbe high-water slider; small plaques at the marks |
 | `L34` Naturdenkmale, `L807` valuable trees | 4 + 7, named, crowns 25–32 m | landmark trees at their size |
 | `L1557` green roofs | 82 polygons | a green roof tint (cross-check OSM `roof:material`) |
-| `L137` Stadtteile, `L569` parks, `L568` playgrounds | 9 / 34 / 7 | quarter for a HUD line or the soundscape; park areas |
+| `L137` Stadtteile, `L569` parks, `L568` playgrounds | 9 / 34 / 7 | quarter for a HUD line; park areas |
 | `L1223` Stolpersteine | 73 | the official source for the OSM ones |
 | `L1805` biotope types | 114 lines (87 tree rows) | a second source for avenues |
 
@@ -124,7 +123,7 @@ Landeshauptstadt Dresden). The query needs `outputFormat` URL-encoded.
 | Destroyed buildings (318) | 74 dated 1945 — **points only, no footprints** |
 | Natural monuments / remarkable trees (60) | heritage 66 %, height on 4 |
 | Paintings depicting a site item | 111 (20 by Bellotto) |
-| Bells | **none** — no bell items, nothing under P527; `soundmarks.py` stays on OSM |
+| Bells | **none** — no bell items, nothing under P527 |
 
 1 208 items have a German Wikipedia article. Statements are CC0; the
 Commons images (P18) are not — per-file attribution. The endpoint answers
@@ -166,7 +165,7 @@ never on the ground — check that line with the maintainer first.
 | 3 | **Cheap bake wins in LoD2** | CityJSON | S | drop ClosureSurfaces; `QualitaetDacherkennung` gates the roof colour; chimneys/masts at `BauwerkHoehe` | open |
 | 4 | **Night from `lit`** | OSM | S–M | a whole network lit or dark at night, beyond the 3 064 lamp points; fits the dusk look | open |
 | 5 | **Facade colour and material** | OSM `building:colour`/`material`/`roof:material` | M | the one facade colour source; centre-dense, so blend with the hash; judge on a GPU (risk: "painted-by-numbers") | built (plan 050: `osmColourTint`) |
-| 6 | **Soundscape from measured data** | WFS noise maps, OSM acoustic signals, streams/weirs, `attraction=animal`, schools | M | plan 035 already listens to the scene; these make it measured | open |
+| 6 | **Soundscape from measured data** | WFS noise maps, OSM acoustic signals, streams/weirs, `attraction=animal`, schools | M | would have made plan 035's soundscape measured | withdrawn (2026-10-10: the soundscape was removed) |
 | 7 | **"What am I looking at" card** | LoD2 `name`, Wikidata (via OSM way id), WFS addresses, OSM artwork/`artist_name` | M | a knowledge layer on pick; needs a maintainer decision on text in the HUD | built (ADR 0042) |
 | 8 | **Tree age and landmark trees** | cadastre `jalter`, WFS `L34`/`L807`, OSM `denotation`, Wikidata | S | young trees staked; natural monuments at their size | open |
 | 9 | **Elbe high water** | WFS flood extents + marks | M | a slider flooding the Elbwiesen to 2002/2013/1845; the water layer exists | open |

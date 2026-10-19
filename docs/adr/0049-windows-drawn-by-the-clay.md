@@ -85,7 +85,14 @@ the ground floor's heads and the first floor's sills; a top floor's
 windows end under the Traufgesims, shorter if they must.
 
 **None where the facade is its own**: a church, a palace, a theatre, a
-museum or a hall (the ALKIS function, or storeys taller than 5.5 m), glass
+museum or a hall (the ALKIS function, or storeys taller than 5.5 m), a
+listed public building whose storeys OSM does not count (OSM `heritage`
+on an ALKIS `31001_3xxx`: the Ständehaus, the Kunstakademie, the Neues
+Rathaus — their storeys are 5–7 m, and the height's 3.2 m drew twice
+their rows; LoD2's `storeysAboveGround` is only the height over about
+3 m), a part of such a building whose OSM count is its building's (the
+Kulturpalast's raised roof, 3.6 m of wall under the hall's three
+storeys), glass
 or metal cladding, a garage, shed or plant, anything under 3.2 m of wall,
 a party wall, a shopfront's ground floor, and on the ground floor none
 within 0.6 m of a door's opening — its surround and a pier of wall
@@ -115,15 +122,16 @@ neighbours carry windows.
   smoothsteps), built once: the window graph, and the Schnitt's poché
   round the facade colour, are steps and mixes, never a TSL `select`,
   which three emits as if/else and builds again inside its arm (a first
-  cut ran the windows twice a pixel, a derivative in a branch). Its vertex buffers stay four of
-  WebGPU's eight, the roof flag riding in the wall coordinate's first
-  door slot (−1, `FACADE_ROOF`). Its varyings grow by two vec4 (the
-  rhythm, the wall coordinate), which brings the clay to WebGPU's limit:
-  with transparency on and the Ausschnitt's clip distances it passes
-  fifteen, all that WebGPU's default sixteen leave once `front_facing`
-  takes one. A new value
-  per building or per vertex rides in a varying the clay already passes;
-  one more and WebGPU drops the buildings without a word, while WebGL2
+  cut ran the windows twice a pixel, a derivative in a branch). Its
+  vertex buffers stay four of WebGPU's eight, the roof flag riding in
+  the wall coordinate's first door slot (−1, `FACADE_ROOF`). Its
+  varyings grow by two vec4 (the rhythm, the wall coordinate), to
+  fourteen: one short of the fifteen WebGPU's default sixteen leave
+  once `front_facing` takes one on the fragment side and the
+  Ausschnitt's clip distances one on the vertex side (the see-through
+  slider's hash took the fifteenth until it went). A new value per
+  building or per vertex rides in a varying the clay already passes;
+  past fifteen WebGPU drops the buildings without a word, while WebGL2
   still draws them.
 - The reveals look along the view: from the camera in perspective, and
   in Modell's parallel projection along one direction for the whole

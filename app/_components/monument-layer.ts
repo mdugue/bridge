@@ -87,11 +87,7 @@ import { ashlar, footprint } from "./bridge-surface";
 import { gdNoise } from "./ground-detail";
 import { Instances, instanceFloat, instancePosition } from "./instancing";
 import type { F, Live } from "./shader-chunks";
-import {
-  mirrorWeight,
-  reflectionStrength,
-  skyReflection,
-} from "./sky-reflection";
+import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
 
@@ -730,7 +726,7 @@ function waterMaterial(): MeshStandardNodeMaterial {
     .add(vec3(0.03, 0.04, 0.045).mul(ripA.mul(0.5).add(0.5)))
     .add(
       skyReflection(normalWorld, 0.15).mul(
-        mirrorWeight(normalWorld, 0.04).mul(reflectionStrength).mul(0.6)
+        mirrorWeight(normalWorld, 0.04).mul(REFLECTIONS).mul(0.6)
       )
     )
     .add(vec3(0.12, 0.17, 0.2).mul(fountainNight).mul(ripA.mul(0.2).add(0.8)));
@@ -773,8 +769,9 @@ function clayMaterial(): MeshStandardNodeMaterial {
     .sub(f.patina.mul(0.4))
     .sub(f.gilded.mul(0.62));
   // A metal's sheen is the sky it mirrors (Spiegelung, sky-reflection.ts):
-  // gold-tinted and strong on gilding, faint on a patina. Turned down, the
-  // row hands back to the old stand-in — the sky caught at a grazing angle.
+  // gold-tinted and strong on gilding, faint on a patina. Below full
+  // strength it hands back to the old stand-in — the sky caught at a
+  // grazing angle (REFLECTIONS is 1: none).
   const grazing = float(1)
     .sub(dot(normalWorld, viewDirection()).abs().clamp(0, 1))
     .pow(3);
@@ -792,9 +789,7 @@ function clayMaterial(): MeshStandardNodeMaterial {
           .mul(mirrorWeight(normalWorld, 0.04).mul(0.25))
       )
   );
-  m.emissiveNode = materialEmissive.add(
-    mix(standIn, mirrored, reflectionStrength)
-  );
+  m.emissiveNode = materialEmissive.add(mix(standIn, mirrored, REFLECTIONS));
   return m;
 }
 

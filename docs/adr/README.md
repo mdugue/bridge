@@ -19,14 +19,14 @@ each data → look transformation does and its status.
 | [0007](./0007-content-hashed-publishing-with-a-manifest.md) | Content-hashed data files with a `manifest.json` | accepted |
 | [0008](./0008-progressive-two-phase-boot.md) | Progressive two-phase boot: first frame from the primary tile, everything else streamed | accepted (second phase: 0024) |
 | [0009](./0009-shadow-recipe.md) | Shadow recipe: soft PCF, receive-only terrain, on-demand refresh with a dead zone, altitude-fitted frustum | accepted |
-| [0010](./0010-opaque-clay-buildings-only.md) | Buildings render as opaque clay only; no transmission, no outlines | accepted; outlines narrowed by 0034 |
-| [0011](./0011-motion-keyed-quality-regression.md) | Motion-keyed quality regression: DoF off while moving, SSAO never gated | accepted; phones build no DoF: 0047 |
+| [0010](./0010-opaque-clay-buildings-only.md) | Buildings render as opaque clay only; no transmission, no outlines | accepted; outlines narrowed by 0034; the see-through slider removed 2026-10-10 |
+| [0011](./0011-motion-keyed-quality-regression.md) | Motion-keyed quality regression: DoF off while moving, SSAO never gated | accepted; phones build no DoF: 0047; no DoF switch or manual focus since 2026-10-10 |
 | [0012](./0012-openstreetmap-for-what-official-data-lacks.md) | OpenStreetMap for what the official data lacks (walls, lamps, platforms, bridge structure), from a local extract where possible | accepted (always local: 0025) |
 | [0013](./0013-rail-layer-from-dissolved-areas-and-centreline-driven-decks.md) | Rail layer from dissolved ballast areas and centreline-driven decks, built once per block | accepted (per tile: 0024; decks measured: 0033) |
 | [0014](./0014-wall-to-terrain-breakline-conflation.md) | Burn OSM wall lines into the heightfield as breaklines | accepted (at bake time: 0024); the coarse level only since 0030 |
 | [0015](./0015-roof-colour-from-orthophotos-with-vibrance-lift.md) | Roof colour from orthophotos with a hue-preserving vibrance lift | accepted |
 | [0016](./0016-land-cover-rasters-downsampled-with-alpha-as-data.md) | Land-cover rasters downsampled to 2048² with the alpha channel treated as data | superseded by 0023 |
-| [0017](./0017-look-controls-table-and-snapshot-contract.md) | Look controls declared in one table; the Snapshot is a validated, versioned contract | accepted |
+| [0017](./0017-look-controls-table-and-snapshot-contract.md) | Look controls declared in one table; the Snapshot is a validated, versioned contract | accepted; amended 2026-10-10 (no `max`; removed controls' keys ignored) and 2026-10 (plan 073: only *Nebel* left; the look's strengths are constants in their owners; retired keys never reused) |
 | [0018](./0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md) | Headless tests run a lite profile and assert presence; visuals are judged on a real GPU | accepted |
 | [0019](./0019-oxlint-oxfmt-and-native-typescript.md) | oxlint + oxfmt and the native TypeScript 7 compiler; no ESLint, no biome | accepted |
 | [0020](./0020-fixed-light-pool-and-static-shadow-casters.md) | A fixed pool of real point lights; animated geometry never updates the shadow map | accepted |
@@ -59,6 +59,8 @@ each data → look transformation does and its status.
 | [0047](./0047-phone-memory-budget-in-true-bytes.md) | A phone's memory in true bytes: a post profile per tier (no DoF, FXAA, one-byte targets, a one-byte shadow colour target), fixed costs counted, the tile cache derived from the governor's soft line, buffers shared across tiles, CPU copies dropped after upload, the shadow camera streaming at a resolution of its own (64 px on a phone, 128 on a desktop) | accepted |
 | [0048](./0048-network-failures-are-retried.md) | A network failure is retried for a budget of the page's visible time, never decided at once; a tile that gave up is healed; the boot waits a minute of a usable page; the manifest never falls back to an unhashed name; nothing decided while the page leaves | accepted |
 | [0049](./0049-windows-drawn-by-the-clay.md) | Windows are drawn by the clay's fragment shader on every house (a recess, no geometry, no glass): their rhythm per building measured where street photos saw it, else a neighbour's, else its type's; per wall vertex its place along the wall; none on party walls, doors, shopfronts or a monumental facade | accepted |
+| [0050](./0050-a-building-tiles-bvh-when-a-ray-needs-it.md) | A building tile's BVH is built when a ray first reaches it (the collider, a pick, the probe; near the camera in idle time), not as it lands; no ray walks a tile without one | accepted; its worker alternative re-tried 2026-10-11 (plan 043: bundled, but +20.8 KB gz first load, ADR 0051) — open |
+| [0051](./0051-optional-features-start-on-first-use-in-the-scene-chunk.md) | Optional features (the data layers first) start on first use and hear the spine through its hooks (`feature-seam.ts`); their code ships in the scene's chunk while they import three.js — as an `import()` chunk the data layers grew the first load by 22.7 KB gz | accepted |
 
 ## Format
 

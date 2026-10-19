@@ -25,7 +25,7 @@ import {
   isAbortError,
 } from "./fetch-optional";
 import { buildDeckTable } from "./rail-layer";
-import { setTrafficClock } from "./traffic-layer";
+import { setTrafficClock } from "./traffic-flow";
 import {
   createTramCars,
   type TramCars,
@@ -78,8 +78,12 @@ export interface DataOverlayOptions {
   compile: (object: Object3D) => Promise<void>;
   epsg: number;
   ground: GroundContext;
-  /** the scene's instant at boot */
+  /** the scene's instant when the layers start (the HUD's sun and time) */
   initialDate: Date;
+  /** performance.now() when that instant was set — the clock has run on
+   *  since (the layers may start long after: on their first switch-on);
+   *  now when left out */
+  initialAtMs?: number;
   /** the counts as they arrive, for the HUD's list */
   onBikeCounts?: (counters: BikeCounter[]) => void;
   /** something a layer draws changed (the stats follow) */
@@ -354,7 +358,7 @@ export function createDataOverlays(opts: DataOverlayOptions): DataOverlays {
   // The scene's clock: set by the HUD's sun and time, running on in real
   // time from there — the trams and the traffic's hour both read it.
   let clockBase = opts.initialDate.getTime();
-  let clockSetAt = performance.now();
+  let clockSetAt = opts.initialAtMs ?? performance.now();
   const clock = (nowMs: number) => new Date(clockBase + (nowMs - clockSetAt));
   // A site without a feed has no bicycle layer: its switch is not shown,
   // and a snapshot that turns it on finds nothing to start.

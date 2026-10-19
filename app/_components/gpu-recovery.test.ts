@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import type { SafetyLevel } from "@/lib/city/gpu-safety";
 import {
+  keepPlaceForReload,
   peekRecoverySnapshot,
   recentlyRecovered,
   recoverFromGpuLoss,
   recoverOnRequest,
+  recoveryWasReset,
   takeRecoverySnapshot,
 } from "./gpu-recovery";
 import { raiseSafety, settleSafety } from "./gpu-safety";
@@ -140,6 +142,21 @@ test("Leichter weiter raises the level and keeps the place past every cap", () =
   recoverOnRequest('{"camera":2}', 2, pages.raise, store);
   expect(pages.next()).toBe(3);
   expect(takeRecoverySnapshot(store)).toBe('{"camera":2}');
+});
+
+test("a reset to full detail keeps the place for the reload, and is no recovery", () => {
+  const store = memoryStore();
+  keepPlaceForReload('{"camera":3}', store, { reset: true });
+  expect(recoveryWasReset(store)).toBe(true);
+  expect(recentlyRecovered(store, 0)).toBe(false);
+  expect(peekRecoverySnapshot(store)).toBe('{"camera":3}');
+  expect(takeRecoverySnapshot(store)).toBe('{"camera":3}');
+  expect(recoveryWasReset(store)).toBe(false);
+  // Leichter weiter after it is a lost GPU's again
+  keepPlaceForReload('{"camera":3}', store, { reset: true });
+  recoverOnRequest('{"camera":4}', 0, ladder().raise, store);
+  expect(recoveryWasReset(store)).toBe(false);
+  expect(takeRecoverySnapshot(store)).toBe('{"camera":4}');
 });
 
 test("without storage it gives up rather than reloading blind", () => {

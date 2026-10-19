@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { LOOK_DEFAULTS } from "./look-controls";
+import { DATA_LAYERS } from "./data-layers";
+import { LOOK_DEFAULTS, RETIRED_SNAPSHOT_KEYS } from "./look-controls";
 import {
   decodeLook,
   encodeSnapshot,
@@ -21,11 +22,6 @@ const valid: Snapshot = {
   date: "2026-06-21T12:00:00.000Z",
   look: {
     fogPct: 30,
-    heightFogPct: 40,
-    transparencyPct: 20,
-    dof: true,
-    focusMode: "manual",
-    focusDistanceM: 80,
     multiTuft: false,
     style: "comic",
   },
@@ -99,15 +95,97 @@ test("look percentages must be numbers", () => {
 });
 
 test("look flags are type- and enum-checked", () => {
-  expect(reason(withLook({ focusMode: "fixed" }))).toMatch(/look.focusMode/);
-  expect(reason(withLook({ dof: "yes" }))).toMatch(/look.dof/);
   expect(reason(withLook({ multiTuft: 1 }))).toMatch(/look.multiTuft/);
   expect(reason(withLook({ bikeLayer: "on" }))).toMatch(/look.bikeLayer/);
   expect(reason(withLook({ style: "ghost" }))).toMatch(/look.style/);
   expect(reason(withLook({ style: 2 }))).toMatch(/look.style/);
-  expect(reason(withLook({ focusDistanceM: 0.5 }))).toMatch(
-    /look.focusDistanceM/
+});
+
+// The controls the maintainer removed (2026-10-10): on the performance PR
+// the see-through buildings, the leaf flutter and its gust brightness, the
+// river mist's strength, the depth of field's switch and its focus; then
+// every slider but Nebel (plan 073). Snapshots copied before then — in PR
+// descriptions, in shots/ — carry their keys.
+const REMOVED_LOOK = {
+  transparencyPct: 40,
+  leafFlutterPct: 70,
+  leafBrightPct: 30,
+  waterMistPct: 0,
+  dof: false,
+  focusMode: "manual",
+  focusDistanceM: 80,
+  heightFogPct: 40,
+  gradingPct: 50,
+  tintPct: 25,
+  windowsPct: 0,
+  facadeReadingPct: 0,
+  duskGlowPct: 100,
+  shimmerPct: 45,
+  contactPct: 90,
+  reflectionPct: 0,
+  grainPct: 20,
+  inkPct: 100,
+};
+
+test("an old snapshot with removed controls still loads, and they are ignored", () => {
+  const r = parseSnapshot(
+    withLook({ ...REMOVED_LOOK, fogPct: 30, multiTuft: false })
   );
+  expect(r.ok).toBe(true);
+  if (!r.ok) {
+    return;
+  }
+  // Apply sets what is still a control, and nothing else.
+  expect(decodeLook(r.snapshot.look)).toEqual({
+    fogAmount: 0.3,
+    multiTuft: false,
+  });
+});
+
+test("a removed control's key is no longer checked", () => {
+  // Rejected while they were controls; now unknown keys like any other.
+  for (const look of [
+    { focusMode: "fixed" },
+    { dof: "yes" },
+    { focusDistanceM: 0.5 },
+    { transparencyPct: "20" },
+    { tintPct: "20" },
+    { inkPct: null },
+  ]) {
+    expect(parseSnapshot(withLook(look)).ok).toBe(true);
+  }
+});
+
+test("every retired key is read and ignored, and the camera applies as before", () => {
+  const retired = Object.fromEntries(
+    RETIRED_SNAPSHOT_KEYS.map((key) => [key, 40])
+  );
+  const r = parseSnapshot(withLook({ ...retired, fogPct: 30 }));
+  expect(r.ok).toBe(true);
+  if (!r.ok) {
+    return;
+  }
+  expect(r.snapshot.camera).toEqual(valid.camera);
+  expect(decodeLook(r.snapshot.look)).toEqual({ fogAmount: 0.3 });
+});
+
+test("Copy writes the controls there are, and no retired key", () => {
+  const snap = encodeSnapshot(
+    LOOK_DEFAULTS,
+    valid.camera,
+    new Date(valid.date)
+  );
+  expect(Object.keys(snap.look ?? {}).sort()).toEqual(
+    [
+      "fogPct",
+      "multiTuft",
+      "style",
+      ...DATA_LAYERS.map((d) => d.snapshotKey),
+    ].sort()
+  );
+  for (const key of RETIRED_SNAPSHOT_KEYS) {
+    expect(snap.look).not.toHaveProperty(key);
+  }
 });
 
 test("a snapshot without look is accepted", () => {
@@ -149,10 +227,6 @@ test("what Copy encodes, Apply decodes back — through the same parser", () => 
   const values = {
     ...LOOK_DEFAULTS,
     fogAmount: 0.35,
-    transparency: 0.9,
-    dof: false,
-    focusMode: "manual" as const,
-    focusDistanceM: 80,
     multiTuft: false,
     style: "sincity" as const,
     trafficLayer: true,
@@ -164,7 +238,6 @@ test("what Copy encodes, Apply decodes back — through the same parser", () => 
   expect(snap.v).toBe(1);
   expect(snap.date).toBe(valid.date);
   expect(snap.look?.fogPct).toBe(35);
-  expect(snap.look?.transparencyPct).toBe(90);
   expect(snap.look?.style).toBe("sincity");
   const parsed = parseSnapshot(JSON.stringify(snap));
   expect(parsed.ok).toBe(true);
@@ -192,9 +265,9 @@ test("snapshotInstant floors a hand-edited instant to the minute the slider show
 });
 
 test("decodeLook leaves absent keys out, so an older snapshot keeps the current values", () => {
-  expect(decodeLook({ fogPct: 30, dof: false })).toEqual({
+  expect(decodeLook({ fogPct: 30, multiTuft: false })).toEqual({
     fogAmount: 0.3,
-    dof: false,
+    multiTuft: false,
   });
   expect(decodeLook(undefined)).toEqual({});
 });

@@ -28,7 +28,15 @@ streaming the site and the animation loop, and returns a `CityWalkHandle`
 (the imperative API the React HUD calls) once the spawn tile's buildings and
 any of its terrain levels are on screen — the first frame. The fixed
 lamp-light pool and the fog floor are created before the first frame and
-retargeted/lowered as tiles land.
+retargeted/lowered as tiles land. The data layers are not wired into
+`bootApp` by hand: they start on their first switch-on (`lazyFeature`,
+`data-layers-feature.ts`) and hear the spine through its hooks
+(`feature-seam.ts`: frame, stream change, the look store, the scene's
+clock — a watched value a late starter reads first); a tile's traffic
+slot waits for their builder. The picture styles and Modell are still
+wired by hand. The data layers' code stays in the scene chunk: the first `import()` chunk that imports three.js costs the first
+load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
+data layers moved (ADR 0051) — measure before splitting one off.
 
 **The renderer** is three r186's `WebGPURenderer` — its WebGPU backend, or
 its WebGL2 backend where the browser has no WebGPU (`?gpu=webgl2` forces it:
@@ -52,9 +60,12 @@ camera while the sun is up, so casters outside the view stay loaded (by
 night it is taken off the stream: it draws no shadow) — at a resolution
 of its own (`SHADOW_STREAM_PX`, `lib/city/shadow-fit.ts`), not the map's:
 the renderer's error for an orthographic camera ignores distance, so at
-2048 px it refined the terrain under the whole frustum; at a phone's 64 px
-it loads a tile's buildings and coarse level, never its fine terrain, at a
-desktop's 128 px the fine level under the eye-level frustum only (ADR 0047). A dressing plugin builds
+2048 px it refined the terrain under the whole frustum; at a desktop's
+128 px it refines the fine level under the eye-level frustum only (ADR
+0047), and on a phone it streams nothing (`shadowTilesStream`, plan 071:
+the tiles it kept were tiles in use the memory governor cannot free).
+On a phone the view's own stream also ends at 2.2 km (`streamFarFor`;
+not through Modell's dolly zooms, which back the camera kilometres away). A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
 heavy part (vegetation incl. the street-tree cadastre and the OSM hedges,
 lamps, rails on the fine terrain level; its walls
@@ -76,7 +87,10 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   (`lib/city/city-mesh.ts`). Demolish = drop the object's building tree from
   the index buffer and rebuild the tile's BVH (you can't hide one building
   in a batched mesh). Picking/collision use `three-mesh-bvh` on every loaded
-  tile. No CityJSON reaches the browser.
+  tile — its BVH built when a ray first reaches the tile's box
+  (`ensureCityBvh`; within 400 m of the camera in idle time), never a ray
+  walking a tile without one (three-mesh-bvh's brute-force fallback). No
+  CityJSON reaches the browser.
 - `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF mesh
   gets the land-cover material and hangs the water and mist sheets. The
   fine level is a TIN of the native 1 m DGM1 (±0.15 m,
@@ -124,7 +138,8 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   vignette, paper grain — built per tier (`postProfileFor`, ADR 0047): a
   phone builds no DoF, antialiases with FXAA inside the last pass
   (`fxaa.ts`: a perceptual luma over the linear frame), draws `BeforeAA`
-  only while a style is on and warms only the outline's programs; the AO
+  only while a style is on; no tier warms more than the outline's programs
+  (a picture style builds on its first frame); the AO
   smoothing and the outline's mask and blur are one-byte targets, the
   outline drawn only while something is asked. The picture styles (Comic, Film noir, Sin City,
   Papier; `lib/city/render-style.ts`) are one node, `stylize-effect.ts`
@@ -141,8 +156,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   pixel ratio 0.5 hides the stroke widths, so judge them at ≥ 1.
 - `visual-style.ts` — the one building style: opaque archviz clay + facade
   detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
-  glow) as a `MeshStandardNodeMaterial`, hash-dithered transparency
-  (`alphaHash`). The old ghost/standard styles are gone.
+  glow) as a `MeshStandardNodeMaterial`, always opaque (the see-through
+  slider and its `alphaHash` build are gone too). The old ghost/standard
+  styles are gone.
 - The map's own marks: the ferry wakes of `riverside-layer.ts` (landing
   stages, groynes, ferries), faded in with height by `map-overlay.ts`. No
   text anywhere in the scene or HUD (plan 032's street names were removed;
@@ -223,11 +239,6 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   Modell's scale; anything else on the fine level vanishes there at
   once. A two-finger twist turns the ground with the fingers
   (`twistedTurn`).
-- Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
-  AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
-  `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),
-  `lib/city/soundscape.ts` (the mix) and `lib/city/sound-entry.ts` (the
-  boot-side half).
 - `minimap.tsx`, `city-walk.tsx` (HUD), `poc-debug.ts` (`window.__poc`).
 
 Constants live in the layer files and are the source of truth; values quoted
@@ -242,8 +253,11 @@ A look term is a TSL node in a slot of a node material
 `opacityNode`, `aoNode` (indirect light only), `receivedShadowNode` (the
 shadow a fragment receives), `maskNode` (discard — the shadow pass honours
 it), `castShadowPositionNode` (what the shadow pass draws instead of
-`positionNode`). A slider is a `uniform()` node every tile's materials
-share; writing its `.value` retunes live, no rebuild. A shared `Vector3`
+`positionNode`). A fixed look strength is a constant node named after
+its term, beside it in its owner (`TINT`, `WINDOWS`, `GROUND_DETAIL`, …;
+plan 073); a slider (only *Nebel* is left) or anything else that moves
+is a `uniform()` node every tile's materials share; writing its
+`.value` retunes live, no rebuild. A shared `Vector3`
 passed to `uniform(v)` stays a live reference. Module-level uniform nodes
 that a setter writes (`fountainTime`, `lampNight`, `mapAltitude`) are
 fine. Inside `If`/branches read textures with an explicit `.level(0)` or
@@ -303,7 +317,7 @@ and therefore what keeps builds out of frames:
   not load leaves its term out of the terrain's colour node, so that tile
   builds apart; that is fine, but do not branch a graph on per-tile
   *values* — put them in uniforms. Toggling a graph-level flag
-  (`alphaHash`, a new slot) needs `material.needsUpdate = true`.
+  (`side`, `alphaHash`, a new slot) needs `material.needsUpdate = true`.
 - **Fog is `scene.fogNode`** (`height-fog.ts` `installSceneFog`): every
   material gets it; `material.fog = false` opts out (the river mist, the
   splat pass). Never fog a material by hand.
@@ -386,8 +400,8 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | terrain `castShadow` | **false** | a casting terrain self-shadows into triangle/staircase acne at grazing sun; ground only receives |
 | shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 (phones 2048; smaller at a raised safety level, ADR 0046) | soft radius lets 3072 look like 4096 at ~44% less fill |
 | the map's colour target | one red byte (`OneByteShadowNode`, set as `sun.shadow.shadowNode`) | three's shadow pass draws into a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
-| frustum half-size (`lib/city/shadow-fit.ts`) | 110 m at eye level, growing to 880 m with altitude | camera-following, texel-snapped; small = fine texels, but a fixed 110 m leaves a fly-over entirely unshadowed |
-| `shadow.autoUpdate` | false | re-render only when the frustum centre leaves a dead zone (18% of the half-size — 20 m at the base, as before), when the half-size re-fits, when the sun moves, or when a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
+| frustum half-size (`lib/city/shadow-fit.ts`) | 121 m at eye level, growing in octaves of 110 m to 880 m with altitude | camera-following, texel-snapped; small = fine texels, but a fixed 110 m leaves a fly-over entirely unshadowed |
+| `shadow.autoUpdate` | false | re-render only when the frustum centre leaves a dead zone (30 m on foot — 110 m and 19.8 m until 2026-10-11, the walker as far from every edge now, 91 m; 18% of the half-size above eye level and in Modell), when the half-size re-fits, when the sun moves, or when a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
 
 ### The frustum fit (`lib/city/shadow-fit.ts`)
 
@@ -399,12 +413,13 @@ flying" bug; `shots/` before/after at that snapshot show it plainly.) The rig
 therefore re-fits per frame, from two pure functions:
 
 - `fitShadowRadius(heightAboveGround, current)` — half-size = 2.5 × altitude,
-  clamped to [110, 880] m and **quantized to octaves with hysteresis** (0.6 in
-  log2), so hovering on a step boundary cannot flap the frustum. A flap is a
-  full depth-pass re-render, which is the whole cost here.
+  clamped to [121, 880] m and **quantized with hysteresis** (0.6 in log2) to
+  the walker's 121 m or an octave of 110 m (220, 440, 880), so hovering on a
+  step boundary cannot flap the frustum. A flap is a full depth-pass
+  re-render, which is the whole cost here.
 - `shadowFocusAhead(radius)` — how far along the camera's world direction to
-  push the centre: half of the radius *above the base*, so it is **zero at eye
-  level** (walking, and turning on the spot, behave exactly as before). Feed it
+  push the centre: above eye level half of the radius above 110 m, and **zero
+  at eye level** (turning on the spot never moves the frustum). Feed it
   the raw `dir.x`/`dir.z`, not a renormalized horizontal: the cos(pitch) factor
   collapses the offset when looking straight down, which is what you want.
 
@@ -497,7 +512,7 @@ Rotating patterns by the bearing about the far data origin made every bend
 a shower of arcs — don't. Both rasters are greyscale PNGs 2×/4× wide with
 the bytes interleaved, so the viewer's own decoder (`lib/city/png-raster.ts`)
 reads them exactly. *Bodendetail* and *Stadtgrün* (urban green painted as
-meadow) are the sliders. The contour ink guards `fwidth == 0`.
+meadow) are their fixed strengths (`GROUND_DETAIL`, `URBAN_GREEN`). The contour ink guards `fwidth == 0`.
 
 **Sports grounds** (`sport-ground.ts` `sportGround`, same node, after the ground
 detail): `pipeline/bake/sport.py` writes a table of grounds (frame,
@@ -567,8 +582,10 @@ not sky.
 - Trees = `Instances` sets (trunk + crown), hedges = `Instances` boxes, all
   on scene-wide materials (`sceneCrowns`, `sceneMaterial`). Crown =
   `IcosahedronGeometry(r, 2)` (180 tris) with lobes and radial normals. Three
-  tiers per 250 m chunk, planned over the whole site each frame
-  (`lib/city/vegetation-lod.ts`, applied by `updateVegetationLod`): the
+  tiers per 250 m chunk, planned over the whole site on the 10 Hz pose
+  tick (`lib/city/vegetation-lod.ts`, applied by `createVegetationLod`,
+  whose arrays are kept between passes; `createLodSchedule` runs it in the
+  frame the tiles in view or the crown switch change, or the eye jumps): the
   **rich multi-tuft crown** (~1 440 tris) near the camera (in 220 m / out
   300 m) but only within a **site-wide budget of 2 500 trees**, nearest
   chunks first — forest tiles (one tree per 7 m, up to ~1 300 per chunk)
@@ -709,8 +726,8 @@ phone does not build it at all — its targets were the cost there, not its
 passes). **AO is
 not**: the contact shadows blinked on every footstep, so GTAO instead runs
 permanently at half resolution (`resolutionScale = 0.5`, normals
-reconstructed from depth, radius 6 m, occlusion raised to the contact
-slider's exponent) — about what the skip saved, paid every frame. Its sample
+reconstructed from depth, radius 2 m, occlusion raised to
+`AO_EXPONENT`, 1.5) — about what the skip saved, paid every frame. Its sample
 count (`aoSamplesFor`: 16, lite 8) rebuilds the pass's material, so it is a
 construction-time setting. DoF is dropped by switching between **two
 prebuilt `RenderPipeline`s** (with and without `DepthOfFieldNode`, both
@@ -729,8 +746,8 @@ the WebGL2 backend on par in steady state but stalling while it compiles
 
 ## QA: self-verify on a real GPU
 
-The in-app **Snapshot** panel serializes camera + sun time + look sliders to
-JSON; `__poc.handle.getCameraState()` / `applyCameraState()` replay it. To eyeball a
+The in-app **Snapshot** panel serializes camera + sun time + the look's
+controls (*Nebel*, the crown switch, the style, the data layers) to JSON; `__poc.handle.getCameraState()` / `applyCameraState()` replay it. To eyeball a
 change yourself:
 
 ```bash
@@ -757,8 +774,7 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
   "camera": { "mode": "fly", "pos": {"x":0,"y":0,"z":0}, "epsg": {"x":0,"y":0},
               "headingDeg": 0, "pitchDeg": 0, "fov": 55 },
   "date": "2026-06-15T08:30:00.000Z",
-  "look": { "transparencyPct":0,"fogPct":35,"gradingPct":50,
-            "contactPct":50,"grainPct":25,"dof":true } }
+  "look": { "fogPct":35,"multiTuft":true,"style":"pastel" } }
 ```
 
 ### The `lite` scene profile (headless e2e only)
@@ -772,7 +788,7 @@ render scale, AO samples), all resolved once in `city-walk-client.tsx`
 |---|---|---|---|
 | tileset streamed | `tileset.json` (every site tile) | **`tileset-spawn.json`** (spawn tile only) | 3/4 of the geometry AND 3/4 of the boot (measured on the old block loader: 14 s → 4.4 s, 74 MB → 18 MB) |
 | shadow map size (`shadowMapSizeFor`) | 3072 | **512** | the depth pass is per-frame fill that does *not* shrink with the canvas |
-| `pixelRatio` | dpr≤2 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
+| `pixelRatio` | dpr≤1.5 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
 | GTAO samples (`aoSamplesFor`) | 16 | **8** | half the AO samples; keyed on the profile, not `navigator.webdriver` (Playwright sets that in the `--headed` shot harness too, which must show the product's AO) |
 
 Everything a spec asserts on — loaders, layer construction, every node
@@ -815,7 +831,7 @@ bun run bake dresden 33412_5656_2_sn   # one tile, all steps
 bun run bake dresden --step canopy     # one step (STEPS in pipeline/bake/__main__.py, in this order):
                                        #   landcover islands rail canopy trees ndvi roof-colour
                                        #   osm-buildings lamps monuments furniture walls stairs surface edges
-                                       #   markings sport tram riverside traffic roofs skyview soundmarks
+                                       #   markings sport tram riverside traffic roofs skyview
                                        #   lowveg cultivated small-buildings
                                        #   landmarks structures
                                        # `transit` runs once for the site after every tile (SITE_STEPS)
@@ -841,8 +857,7 @@ intensities are normalised against its own ground (`lsc.rasterise`).
 The later modules, one step each: `osm_buildings.py` (shops, heritage,
 material and colours per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
 `riverside.py`, `skyview.py` (DGM + LoD2, the rebuilt roofs of `roofs.py`
-in place of theirs),
-`soundmarks.py` (bell towers), `small_buildings.py` (plan 034),
+in place of theirs), `small_buildings.py` (plan 034),
 `landmarks.py` and `structures.py` (plan 050; landmarks first, the relief
 is measured on their objects). **Seams:**
 a step whose result must agree on both sides of a tile edge reads the

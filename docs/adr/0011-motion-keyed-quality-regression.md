@@ -1,7 +1,10 @@
 # ADR 0011: Motion-keyed quality regression — DoF off while moving, SSAO never gated
 
 - **Status:** accepted (amended 2026-09-22); phones build no DoF since
-  [ADR 0047](./0047-phone-memory-budget-in-true-bytes.md)
+  [ADR 0047](./0047-phone-memory-budget-in-true-bytes.md); since
+  2026-10-10 DoF has no switch and no manual focus (the maintainer chose
+  fewer settings), so `dofWanted` is gone — `regressed`, the picture
+  style's gate and Modell are the layers the pipeline choice combines
 - **Date:** 2026-09 (plan 007), amended 2026-09-22 (SSAO)
 
 ## Context

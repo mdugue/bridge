@@ -86,13 +86,13 @@ raised (`SAFETY_DECAY_MS`; a clock set back gains nothing). `?safety=N`
 
 | Level | 0 | 1 | 2 | 3 |
 |---|---|---|---|---|
-| pixel-ratio cap, phone · desktop | 1.5 · 2 | 1.25 · 1.5 | 1.0 · 1.25 | 0.85 · 1.0 |
+| pixel-ratio cap, phone · desktop (a desktop's 2 · 1.5 · 1.25 · 1.0 until plan 071) | 1.5 · 1.5 | 1.25 · 1.25 | 1.0 · 1.0 | 0.85 · 1.0 |
 | shadow map, phone · desktop | 2048² · 3072² | 2048² · 2048² | 1024² · 2048² | 1024² · 1024² |
 | tile cache, phone (min–max, MiB) | 168–336 | 148–296 | 136–272 | 96–232 |
 | tile cache, desktop (min–max, GB) | 1.2–1.6 | 1.0–1.4 | 0.8–1.2 | 0.6–1.0 |
 | governor lines (× 0.9 per level; phone soft / hard, MiB) | 480 / 560 | 432 / 504 | 389 / 454 | 350 / 408 |
 | governor floor, phone · desktop | 0 · 0 | 1 · 0 | 2 · 1 | 3 · 2 |
-| the sun's shadow camera streams tiles | yes | yes | no | no |
+| the sun's shadow camera streams tiles (a phone's never, since plan 071) | yes | yes | no | no |
 | a recovered page puts back the picture style and Modell | yes | yes | no | no |
 
 The governor starts at its floor — already for the stream's first update —
@@ -136,8 +136,12 @@ update — **looking straight down** onto that tile (the pitch clamped to
 its limit) — and the first frame waits for that tile, or for any shown
 tile once the renderer is idle without it. A pose that looks at the sky,
 or out past the site's edge, from the air sees no tile: nothing would be
-requested, and by night or from level 2 no shadow camera streams one, so
-the boot would wait for ever, every reload of the tab replaying it. The
+requested, and by night, on a phone or from level 2 no shadow camera
+streams one, so the boot would wait for ever, every reload of the tab replaying it.
+For the same reason it stands no higher above the tile's top than half
+the boot's stream reach (`bootingPose`; a phone's ends at 2.2 km since
+plan 071): from higher the tile lies past the stream camera's far
+plane. The
 player's own aim goes back once the tile has landed, and the HUD applies
 the whole camera after the first frame. A page lost before its first
 frame keeps the snapshot it booted with for the next load (it has no
@@ -233,6 +237,54 @@ or its own after a reclaim.
   the builds again, on a device already short of memory. The ladder
   applies at boot, where everything is built once; inside the page the
   memory governor stays the knob.
+
+## Update (2026-10-12): the level is shown, and can be reset
+
+The ladder was invisible: a visitor whose page came back plainer could not
+tell why, nor that it would last days. The sidebar's *Erweitert* now has
+a **Qualität** section (`app/_components/quality-panel.tsx`): the level the
+page runs at, what it sets on this device (the pixel ratio, the shadow
+map, the tile cache's bound — read from `scene-profile.ts`'s tables, not
+restated), what the next page boots at and when the stored level falls by
+itself (`safetyStanding`).
+
+**Volle Qualität** puts the stored level back to 0 (`clearedSafety`: the
+counted crash and the raising page kept, so a record already counted is
+not counted again) and, on a page that runs lighter, reloads where the
+player stands. A level is the budget a page is built with, so the way
+back is a new page, never a step inside one (the last alternative above
+still holds). The reload keeps the place through the recovery's session
+record (`keepPlaceForReload`, marked `reset`): no reload time is added,
+so the next page is no recovery (`recentlyRecovered`), and its trail
+notes a *quality reset* rather than a lost GPU. A reset that cannot be
+stored does not reload; a page pinned by `?safety=N` offers none.
+
+**The reload tears the whole app down first** (`disposeForReload`, since
+2026-10-13). The first version released the GPU as the failure card's
+reload does (`releaseGpu`: three's renderer, then the device, within
+300 ms), and on an iPhone both reset reloads died at once: one at 225 MB
+held and 129 MB on the CPU, one before its first heartbeat — while a fresh
+page at full detail (a private tab) ran at 465 + 245 MB (Sentry
+CITY-WALK-2, 2026-10-13). The new page boots in the old one's process,
+and the old page's GPU memory was still counted: three's `dispose` destroys
+no buffer or texture, only the device, and WebKit frees what a destroyed
+device held once the old document is collected. So the reset's reload now
+runs the app's own teardown (every tile, buffer and texture destroyed by
+three one by one; the stream's shared rasters a task later, while three
+still listens), then the renderer and its device, and reloads once the
+device reports itself lost, within 2 s. Headless (lite) the renderer held
+246 MB before it and 12 MB, in 1×1 placeholders and lookup tables, when
+the device went; the trail notes both (`teardown`, `teardown done`). The
+recovery's reloads keep `releaseGpu`: on a GPU that failed, a destroy can
+throw for an attribute whose upload never landed. The one after a frame
+that threw on a GPU that still answers (a bug, reloaded at the same level)
+has the reset's shape — a live GPU, the same process, no lighter page —
+and may want the same teardown; not changed here.
+
+This is the half of the deferred quality menu that needs no new rung: the
+visitor can go back up, not choose a level. If the device runs out again,
+the ladder climbs again. A page recovered at a raised level says so once
+in the HUD, and the failure card names the section.
 
 ## References
 

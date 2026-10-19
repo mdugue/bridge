@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  clearedSafety,
   decayedSafety,
   FAILURE_TRIES,
   frameLoss,
@@ -11,6 +12,7 @@ import {
   restoresLook,
   SAFETY_DECAY_MS,
   safetyOverride,
+  safetyStanding,
   shadowTilesStream,
   startTileOf,
   type StoredSafety,
@@ -100,6 +102,55 @@ test("a page that died after raising the level itself raises nothing more", () =
   });
   // another page that died is a crash of its own
   expect(boot(stored, 10, "B").level).toBe(3);
+});
+
+test("a reset puts the device back to full detail and keeps what was counted", () => {
+  const stored: StoredSafety = {
+    level: 2,
+    raisedAt: 0,
+    crash: "A",
+    raisedBy: "B",
+  };
+  const cleared = clearedSafety(stored);
+  expect(cleared).toEqual({ level: 0, raisedAt: 0, crash: "A", raisedBy: "B" });
+  // the next page boots at full detail, and the counted crash stays counted
+  expect(boot(cleared, 10, "A").level).toBe(0);
+  // the death of the page that raised it itself raises nothing either
+  expect(boot(cleared, 10, "B").level).toBe(0);
+  // a new crash raises it again, from 0
+  expect(boot(cleared, 10, "C").level).toBe(1);
+});
+
+test("the sidebar's standing: the page's level, the next page's, and when it falls", () => {
+  const stored: StoredSafety = { level: 2, raisedAt: 1000 };
+  expect(safetyStanding(2, stored, null, 1000 + DAY)).toEqual({
+    level: 2,
+    pinned: false,
+    next: 2,
+    fallsAt: 1000 + SAFETY_DECAY_MS,
+  });
+  // one step later it falls to 1, and on at the next step
+  expect(safetyStanding(2, stored, null, 1000 + SAFETY_DECAY_MS)).toEqual({
+    level: 2,
+    pinned: false,
+    next: 1,
+    fallsAt: 1000 + 2 * SAFETY_DECAY_MS,
+  });
+  // at 0 nothing falls: nothing stored, worn off, or reset
+  expect(safetyStanding(0, null, null, 0).fallsAt).toBeNull();
+  expect(safetyStanding(0, stored, null, 30 * DAY).fallsAt).toBeNull();
+  expect(safetyStanding(2, clearedSafety(stored), null, 2000)).toEqual({
+    level: 2,
+    pinned: false,
+    next: 0,
+    fallsAt: null,
+  });
+  // a clock set back counts no time passed
+  expect(safetyStanding(2, stored, null, 0).fallsAt).toBe(
+    1000 + SAFETY_DECAY_MS
+  );
+  // ?safety=N pins the page, whatever is stored
+  expect(safetyStanding(3, stored, 3, 2000).pinned).toBe(true);
 });
 
 test("?safety=N sets one page's level and stores nothing", () => {
@@ -198,10 +249,13 @@ test("a frame that throws on a GPU that still answers is a bug, not a loss", () 
   expect(probed).toBe(false);
 });
 
-test("from level 2 the shadow camera streams nothing and the look starts plain", () => {
-  expect([0, 1, 2, 3].map((l) => shadowTilesStream(l as 0))).toEqual([
-    true,
-    true,
+test("the shadow camera streams nothing on a phone, nor from level 2; the look starts plain from level 2", () => {
+  expect([0, 1, 2, 3].map((l) => shadowTilesStream(l as 0, "desktop"))).toEqual(
+    [true, true, false, false]
+  );
+  expect([0, 1, 2, 3].map((l) => shadowTilesStream(l as 0, "mobile"))).toEqual([
+    false,
+    false,
     false,
     false,
   ]);
