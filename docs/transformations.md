@@ -826,8 +826,22 @@ visual-variable codebook is in
   stands. Dresden: 10 514 on fifteen tiles, 862 on the spawn tile.
 - **Eave line** `= computed` (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
   (geometry-derived; the attribute is ~4 %).
-- **Dusk glow** `❝ taken` `≈ assumed` (*Abendlicht*) — warm emissive on commerce/public/special
-  (`function`), gated by the sun rig's `nightFactor`.
+- **Night light on facades** `❝ taken` `≈ assumed` (*Abendlicht*) — after dark
+  (the sun rig's `nightFactor`) a commerce/public/special building
+  (`function`) is lit from in front, never glowing itself: soft cones of
+  warm light from the wall's foot every 6 m, about half of them on, gone
+  by a storey and a half (*Lichtkegel*, `GROUND_LIGHT`); a landmark or
+  monumental building among them (Wikidata flag 16, own facade 512) wide
+  floodlight cones every 8 m up to its eave over a faint wash
+  (*Anstrahlung*, `FLOODLIGHT`). *Streiflicht* drops to a tenth at night
+  (`NIGHT_RIM`). `visual-style.ts` `nightLight`.
+- **Dusk glow (whole walls)** 🗃️ discontinued 2026-10-19 — a warm emissive
+  wash over every wall of a commerce/public/special building (0.25 at full
+  night) plus the full-strength rim: the centre glowed beige from afar and
+  every grazing roof shone pale, "Gebäude viel zu hell" (the maintainer).
+  Replaced by the light on the facades above; compared at six night views
+  against dimming the wash (still a lit block) and floodlighting every
+  listed building (too many, too flat).
 - **Attributes through the building tree** `❝ taken` — the Saxon LoD2 puts the
   geometry of 7 950 Buildings (fifteen tiles; 7 866 have none of their
   own — 2 391 / 2 327 on the four first) on 24 143 `BuildingPart`s (7 239), and the parts carry no `function`: only the
@@ -848,8 +862,9 @@ visual-variable codebook is in
   ≥ 50 %. The bit rides in the property table's `flags` column (band 2's
   free float); the clay shader lays a warm wash under the first storey line
   (soft top edge, walls only, a ≈3.5 m hash along the facade so a long
-  front is not one strip) at the dusk glow's strength (`DUSK_GLOW`) ×
-  `nightFactor`. No window
+  front is not one strip) at 0.14 of the dusk glow's strength (`SHOP_LIGHT`) ×
+  `nightFactor` (0.4 until 2026-10-19), a shopfront's pane lit
+  from inside (`PANE_LIGHT`). No window
   structure (the grid is a recorded veto, 🗃️ below). 1 555 of 1 855 ground-
   floor points placed (per-tile sums); 264–323 objects with a shop per
   tile, 1 188 in all, matched directly — a part also carries its root
@@ -1954,8 +1969,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   the pixel's footprint along the wall and up; where a window is under
   6 pixels wide the drawing fades into the facade's mean tone (the wall
   darker by 0.6 × the openings' share of a storey) and under 2.5 pixels
-  only that tone is left, so a far street does not shimmer. At night 40 %
-  of the windows glow warm (a hash per window, on *Abendlicht* × night).
+  only that tone is left, so a far street does not shimmer. At night 25 %
+  of the windows glow warm, at 0.6 of *Abendlicht* (a hash per window,
+  `NIGHT_WINDOWS`; 40 % at full until 2026-10-19).
   *Fenster* at full strength (`WINDOWS`, fixed). **Drawn on Dresden's
   spawn tile** (2026-10-09): windows on 308 buildings measured, 1 223 by
   a neighbour, 1 638 by type; of the window-carrying wall area 70 % has

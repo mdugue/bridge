@@ -143,8 +143,9 @@ palette, the paper grain and vignette, the shape of tree crowns, the wall
 tint per building, brick or plaster where nothing is mapped, the ripples on
 the water, the stones and slabs of the paving patterns, the piers under
 bridges, the windows of the houses no photo measured (a measured
-neighbour's rhythm or the house type's), the warm windows at dusk (the
-*presence* of a shop or public building is real; its lit windows are not).
+neighbour's rhythm or the house type's), the warm windows and the light on the
+facades after dark (the *presence* of a shop, a public building or a
+landmark is real; its lit windows and floodlights are not).
 
 **Not in the data at all:** where exactly each window sits on its wall
 (the rows are centred on it), the smaller street furniture
