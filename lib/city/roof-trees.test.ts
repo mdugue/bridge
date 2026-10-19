@@ -45,6 +45,46 @@ test("lod2Roofs: a building's footprint and its height", () => {
   expect(roof.ring.length).toBeGreaterThanOrEqual(4);
 });
 
+test("treesOffRoofs: a tree in a courtyard stays", () => {
+  const block: CityJsonDocument = {
+    ...hall,
+    CityObjects: {
+      block: {
+        geometry: [
+          {
+            boundaries: [
+              [
+                [0, 1, 2, 3],
+                [8, 9, 10, 11],
+              ],
+              [[4, 5, 6, 7]],
+            ],
+            semantics: {
+              surfaces: [{ type: "GroundSurface" }, { type: "RoofSurface" }],
+              values: [0, 1],
+            },
+            type: "MultiSurface",
+          },
+        ],
+        type: "Building",
+      },
+    },
+    // a 10 m courtyard in the middle of the hall
+    vertices: [
+      ...hall.vertices,
+      [5, 5, 100],
+      [15, 5, 100],
+      [15, 15, 100],
+      [5, 15, 100],
+    ],
+  };
+  const kept = treesOffRoofs(
+    [point(10, 10, 12), point(2.5, 2.5, 15)],
+    lod2Roofs(block)
+  );
+  expect(kept.map((t) => t.properties?.h)).toEqual([12]);
+});
+
 test("treesOffRoofs: a roof's own height goes, a tree over it or beside it stays", () => {
   const trees = [
     point(10, 10, 15.4), // the roof itself

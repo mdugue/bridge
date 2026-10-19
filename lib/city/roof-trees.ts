@@ -25,6 +25,8 @@ export const ROOF_REACH_M = 2;
  *  lowest vertex. */
 export interface RoofFootprint {
   height: number;
+  /** its courtyards: a point in one is outside the building */
+  holes?: [number, number][][];
   ring: [number, number][];
 }
 
@@ -64,7 +66,7 @@ export function lod2Roofs(doc: CityJsonDocument): RoofFootprint[] {
       ...doc,
       CityObjects: { [id]: obj },
     })) {
-      out.push({ height: hi - lo, ring: poly.pts });
+      out.push({ height: hi - lo, holes: poly.holes, ring: poly.pts });
     }
   }
   return out;
@@ -82,24 +84,32 @@ function inside(ring: readonly [number, number][], x: number, y: number) {
   return hit;
 }
 
-/** Whether (x, y) lies inside the ring, at least `inset` from its edge. */
-function wellInside(
+function nearEdge(
   ring: readonly [number, number][],
   x: number,
   y: number,
   inset: number
 ): boolean {
-  if (!inside(ring, x, y)) {
-    return false;
-  }
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [ax, ay] = ring[j];
     const [bx, by] = ring[i];
     if (segmentDistance2(x, y, ax, ay, bx, by) < inset * inset) {
-      return false;
+      return true;
     }
   }
-  return true;
+  return false;
+}
+
+/** Whether (x, y) lies inside the footprint (not in a courtyard), at least
+ *  `inset` from every edge. */
+function wellInside(roof: RoofFootprint, x: number, y: number, inset: number) {
+  const holes = roof.holes ?? [];
+  return (
+    inside(roof.ring, x, y) &&
+    !holes.some((h) => inside(h, x, y)) &&
+    !nearEdge(roof.ring, x, y, inset) &&
+    !holes.some((h) => nearEdge(h, x, y, inset))
+  );
 }
 
 /** The canopy points that are not a LoD2 roof (see the module comment). */
@@ -136,8 +146,7 @@ export function treesOffRoofs<
     const bucket = cells.get(`${Math.floor(x / CELL)},${Math.floor(y / CELL)}`);
     return !bucket?.some(
       (roof) =>
-        h <= roof.height + ROOF_REACH_M &&
-        wellInside(roof.ring, x, y, ROOF_INSET_M)
+        h <= roof.height + ROOF_REACH_M && wellInside(roof, x, y, ROOF_INSET_M)
     );
   });
 }
