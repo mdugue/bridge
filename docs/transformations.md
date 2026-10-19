@@ -694,7 +694,10 @@ visual-variable codebook is in
   else `storeyHeight(measuredHeight)`, whole ~3.2 m storeys
   (`storeysAboveGround` is only ~4 % populated). Spawn tile: 2 172 objects
   on mapped storeys (median 3.67 m, p10 3.06, p90 4.79), 298 back on the
-  estimate.
+  estimate. None on a facade of its own (flag 512: a church, a palace, a
+  hall, a listed public building OSM counts no storeys of, and the parts
+  that share it): the 3.2 m estimate drew six lines on the Kulturpalast's
+  hall and ten on the Ständehaus, whose storeys are 5–7 m.
 - **Gliederung** `≈ assumed` (plinth, cornices, shop zone) — painted in the clay
   shader from heights the object table already carries, no new data: a
   0.6 m stone plinth (the ledges at the first storey line and under the
@@ -702,8 +705,12 @@ visual-variable codebook is in
   a mapped shop the ground floor a shade darker as its recessed shop
   front. Walls only, not on a door, and not on a facade that is its own
   (flag 16: a Wikidata landmark, a monumental ALKIS use — church,
-  theatre, palace, museum … — or OSM storeys taller than 5.5 m, a hall;
-  `ownFacade`), which gets no drawn door either, and not under a flat
+  theatre, palace, museum … —, OSM storeys taller than 5.5 m, a hall,
+  or a listed public building, OSM `heritage` on an ALKIS `31001_3xxx`,
+  whose storeys OSM does not count: a court's or an academy's storeys
+  are 5–7 m, and the height's 3.2 m drew twice its rows of windows; a
+  part shares its building's where OSM's count does not fit it, the
+  Kulturpalast's raised roof; `ownFacade`, `partFacade`), which gets no drawn door either, and not under a flat
   roof (flag 256: three quarters of the LoD2 roof area level — post-war
   slabs and modern blocks have no town house's cornices); the ground floor's three only on a part
   standing on the ground (flag 128: within 3 m of its tree's lowest base,
