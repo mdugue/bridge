@@ -681,9 +681,11 @@ visual-variable codebook is in
   A roof with both pitched (≥ 20°) and low faces — a mansard's tiled slopes
   under its zinc top, a hipped wing round a flat terrace — gets each part's
   own DOP median (`pitched`, `low`; column `roofPitched`, texel band E), and
-  the clay picks one per fragment by the face's normal (`PITCHED_ROOF_DEG`).
+  the clay picks one per vertex by its normal (`PITCHED_ROOF_DEG`); a roof
+  with a face within 3° of 20° (8-bit normals) or drawn as its measured
+  parts (ADR 0036) keeps one colour.
   One median over both had painted the Taschenbergpalais' red slopes the
-  grey of its top; 4 593 of Dresden's 49 280 sampled roofs are split
+  grey of its top; 3 247 of Dresden's 49 280 sampled roofs are split
   (2026-10-19).
 - **Roof vividness** `≈ assumed` (*Dachsättigung*) — raw DOP reads drab/hazy (audited: 38 %
   near-grey, mean R−B slightly negative). `ROOF_VIBRANCE` (**0.5**,

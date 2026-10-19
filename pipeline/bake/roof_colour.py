@@ -6,7 +6,8 @@ keyed by CityObject id. The building bake folds it into the mesh.
 A roof with both pitched and low faces — a mansard's tiled slopes under
 its zinc top, a hipped wing round a flat terrace — gets each part's own
 median as well (`pitched`, `low`): one median over both painted the
-Taschenbergpalais' red slopes the grey of its top."""
+Taschenbergpalais' red slopes the grey of its top. A roof with a face
+within SPLIT_MARGIN_DEG of the boundary keeps one colour."""
 
 from __future__ import annotations
 
@@ -22,6 +23,10 @@ from .common import Tile
 MIN_SAMPLES = 12
 # A roof face this steep or steeper is pitched; flatter ones are low.
 PITCHED_DEG = 20.0
+# No split when a face lies this close to PITCHED_DEG: the glTF's 8-bit
+# normals move a face's slope by about 1.3°, so the clay could pick the
+# other part's colour for it.
+SPLIT_MARGIN_DEG = 3.0
 
 
 def srgb_to_linear(c: float) -> float:
@@ -66,7 +71,7 @@ def ring_slope(ring, to_metres) -> float:
         ny += (z0 - z1) * (x0 + x1)
         nz += (x0 - x1) * (y0 + y1)
     length = math.sqrt(nx * nx + ny * ny + nz * nz)
-    return 90.0 if length == 0 else math.degrees(math.acos(min(1.0, abs(nz) / length)))
+    return 0.0 if length == 0 else math.degrees(math.acos(min(1.0, abs(nz) / length)))
 
 
 def median_colour(rgb, rings, box, erode: int):
@@ -133,8 +138,11 @@ def run(tile: Tile, erode: int = 5) -> None:
             continue
         roofs[oid] = whole
         sampled += 1
-        steep = [ring_slope(f, to_metres) >= PITCHED_DEG for f in faces]
+        slopes = [ring_slope(f, to_metres) for f in faces]
+        steep = [s >= PITCHED_DEG for s in slopes]
         if all(steep) or not any(steep):
+            continue
+        if any(abs(s - PITCHED_DEG) < SPLIT_MARGIN_DEG for s in slopes):
             continue
         by_slope = list(zip(rings, steep, strict=True))
         parts = [

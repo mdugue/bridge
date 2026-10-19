@@ -1,1 +1,1 @@
-{"meta": {"tile": "33416_5658_2_sn", "source": "DOP", "space": "linear-rgb", "erode_px": 5, "buildings_sampled": 1, "buildings_skipped": 0, "roofs_split": 1}, "roofs": {"DESNATP13q0001Cf": [0.0529, 0.0685, 0.0742]}, "pitched": {"DESNATP13q0001Cf": [0.0497, 0.0578, 0.0666]}, "low": {"DESNATP13q0001Cf": [0.0545, 0.0823, 0.0802]}}
+{"meta": {"tile": "33416_5658_2_sn", "source": "DOP", "space": "linear-rgb", "erode_px": 5, "buildings_sampled": 1, "buildings_skipped": 0, "roofs_split": 0}, "roofs": {"DESNATP13q0001Cf": [0.0529, 0.0685, 0.0742]}, "pitched": {}, "low": {}}

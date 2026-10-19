@@ -661,7 +661,16 @@ export function bakeCityMesh(
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
       tint: rgb(buildingTint(id, attrs, look.context ?? facades, look)),
-      ...roofColumns(roofColors(id, attrs, roofColours, look)),
+      // a roof drawn as its measured parts keeps one colour: the split
+      // was read from LoD2 faces it no longer draws
+      ...roofColumns(
+        roofColors(
+          id,
+          attrs,
+          rebuilt.has(id) ? { roofs: roofColours?.roofs } : roofColours,
+          look
+        )
+      ),
       footprints,
       facts: lod2Facts({
         buildingId: keys[root],
