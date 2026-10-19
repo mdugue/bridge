@@ -13,7 +13,6 @@
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import {
-  BufferAttribute,
   BufferGeometry,
   type Matrix4,
   type Mesh,
@@ -60,6 +59,7 @@ import {
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
+import { creaseNormals } from "../lib/city/crease-normals";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
 import { ensembleGroup, ensembleRoots } from "../lib/city/ensembles";
 import {
@@ -809,12 +809,18 @@ export interface CityMesh {
   maxElevation: number;
 }
 
-/** Flat vertex normals of a non-indexed stream, as three computes them. */
-function flatNormals(positions: Float32Array): Float32Array {
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new BufferAttribute(positions, 3));
-  geometry.computeVertexNormals();
-  return geometry.getAttribute("normal").array as Float32Array;
+/** The stream's vertex normals: a curve LoD2 drew as facets rounded off
+ *  within one object's walls or roofs, corners kept crisp
+ *  (lib/city/crease-normals.ts); a triangle shaded otherwise is left out. */
+export function vertexNormals(v: CityVertices): Float32Array {
+  const groups = new Float64Array(v.objectIds.length);
+  for (let i = 0; i < groups.length; i++) {
+    groups[i] = 2 * v.objectIds[i] + (v.isRoof[i] === 1 ? 1 : 0);
+  }
+  const shaded = v.normals;
+  return creaseNormals(v.positions, groups, {
+    skip: shaded ? (t) => !Number.isNaN(shaded[9 * t]) : undefined,
+  });
 }
 
 /** The flat normals with every vertex `shading` gives one (not NaN) — a
@@ -835,8 +841,8 @@ function withShading(
 }
 
 /**
- * The building mesh with its property table: flat normals from the
- * non-indexed stream, then welded (vertices of equal position, normal,
+ * The building mesh with its property table: normals from the
+ * non-indexed stream (flat, curves rounded), then welded (vertices of equal position, normal,
  * object and place on their wall, the roof flag in it, merge — never across
  * objects).
  */
@@ -905,7 +911,7 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
     footprints: baked.objects.map((o) => o.footprints),
     input: {
       positions: v.positions,
-      normals: withShading(flatNormals(v.positions), v.normals),
+      normals: withShading(vertexNormals(v), v.normals),
       attributes: { _FEATURE_ID_0: v.objectIds },
       // the place on the wall, a roof vertex flagged in it (FACADE_ROOF)
       vectors: {
