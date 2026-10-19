@@ -31,18 +31,21 @@ is wrong. So, per LoD2 object with a roof:
    the rest, cut into `STEP_M`
    height bands, each band's connected pieces a region (a step's flank, a
    few metres wide however steep, is no face: it stays the step between two
-   levels). Regions under `MIN_PART_M2` join the neighbour closest in
-   height, then flat neighbours closer than `MERGE_M` merge (the closest
-   pair first, medians kept current) — a flat roof stays one level, a
-   storey step stays a step, a face stays one face;
+   levels). Regions under `MIN_PART_M2`, and those holding no disk
+   `NARROW_M` across within `NARROW_DZ` of a neighbour (a flank, a parapet
+   run, a plant room: drawn alone, each a box), join the neighbour closest
+   in height, then flat neighbours closer than `MERGE_M` merge (the
+   closest pair first, medians kept current) — a flat roof stays one
+   level, a storey step stays a step, a face stays one face;
 4. it replaces the LoD2 roof only when the flat model of the same cells
    (no faces: every region at its median, the decision ADR 0036 was made
    with) misses DOM1 on at most half as many cells and at most
    `KEEP_SHARE` of them: the tile keeps the LoD2 where the scan disagrees
    for its own reasons (a building site, a crane). What is drawn is the
    model with its faces, which fits the scan better still;
-5. the regions are polygonised, simplified as one coverage (shared edges
-   stay shared) and clipped to the LoD2 footprint.
+5. the regions are polygonised from their labels smoothed by a majority
+   (a border diagonal to the grid is no staircase), simplified as one
+   coverage (shared edges stay shared) and clipped to the LoD2 footprint.
 
 Each part is written as its polygon with the object's `id` and `z`, the
 roof's absolute height (a face's: its median); a face also carries its
@@ -80,7 +83,14 @@ KEEP_SHARE = 0.3
 STEP_M = 1.0
 MERGE_M = 1.5
 MIN_PART_M2 = 20.0
-SIMPLIFY_M = 1.0
+# A drawn part must hold a disk this wide; a narrower one joins the
+# neighbour closest in height (the flat model the decision is made on keeps
+# them all).
+NARROW_M = 8.0
+NARROW_DZ = 3.0
+SIMPLIFY_M = 2.0
+OUTLINE_M = 2.0  # the radius over which a part's outline is smoothed (`_majority`)
+MAJORITY_PASSES = 2
 GREEN = 0.3  # NDVI over this: a crown over the roof, not the roof
 MIN_POLY_M2 = 4.0
 COVERED_M = 0.5  # another roof this much higher covers the cell
@@ -286,11 +296,24 @@ def _union(parent: np.ndarray, a: int) -> int:
     return a
 
 
-def _thin(lab: np.ndarray, n: int) -> np.ndarray:
-    """Per region (index = label - 1), whether no cell of it has its whole
-    3 × 3 neighbourhood in it: a strip a cell or two wide."""
-    interior = (ndi.minimum_filter(lab, 3) == lab) & (ndi.maximum_filter(lab, 3) == lab)
-    return np.bincount(lab[interior & (lab > 0)], minlength=n + 1)[1:] == 0
+def _narrow(lab: np.ndarray, n: int) -> np.ndarray:
+    """Per region (index = label - 1), whether it holds no disk NARROW_M
+    across: a strip a few metres wide — a step's blurred flank, a parapet,
+    the gutter between two vaults, a dormer's row, a plant room. Drawn on
+    its own, each stands as a box of its own height between its neighbours'
+    walls (the "blocks" on the Hauptbahnhof, the Prager Spitze, the roofs
+    around the Neumarkt)."""
+    edge = np.zeros(lab.shape, bool)
+    dx, dy = lab[:, :-1] != lab[:, 1:], lab[:-1, :] != lab[1:, :]
+    edge[:, :-1] |= dx
+    edge[:, 1:] |= dx
+    edge[:-1, :] |= dy
+    edge[1:, :] |= dy
+    # a region's border cells count as inside it: its widest disk is the
+    # farthest cell from its border, plus that border cell
+    depth = ndi.distance_transform_edt(~edge) + 1
+    widest = np.asarray(ndi.maximum(depth, lab, np.arange(1, n + 1)), np.float64)
+    return 2 * widest * RES < NARROW_M
 
 
 def merge_regions(
@@ -298,14 +321,13 @@ def merge_regions(
     h: np.ndarray,
     small_cells: int,
     faces: np.ndarray | None = None,
-    thin: bool = False,
+    narrow: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Small regions (and with `thin`, strips a cell or two wide: a step's
-    flank between a face and its neighbour) into their closest-height
-    neighbour, taking its kind, then flat neighbours within MERGE_M of each
-    other, the closest pair first. `faces[label]` marks the inclined
-    regions (none when omitted); returns the labels and the faces of the
-    merged regions."""
+    """Small regions (and with `narrow`, strips narrower than NARROW_M:
+    `_narrow`) into their closest-height neighbour, taking its kind, then
+    flat neighbours within MERGE_M of each other, the closest pair first.
+    `faces[label]` marks the inclined regions (none when omitted); returns
+    the labels and the faces of the merged regions."""
     if faces is None:
         faces = np.zeros(int(lab.max()) + 1, bool)
     for _ in range(256):
@@ -313,10 +335,9 @@ def merge_regions(
         if n <= 1:
             break
         med = _region_medians(lab, h, n)
-        size = np.bincount(lab.ravel(), minlength=n + 1)[1:]
-        if thin:
-            # a strip counts as small, whatever its length
-            size = np.where(_thin(lab, n), 0, size)
+        cells = np.bincount(lab.ravel(), minlength=n + 1)[1:]
+        # a strip counts as small, whatever its length
+        size = np.where(_narrow(lab, n), 0, cells) if narrow else cells
         pairs = _adjacency(lab)
         parent = np.arange(n + 1)
         merged = False
@@ -329,6 +350,10 @@ def merge_regions(
             if not nb:
                 continue
             target = min(nb, key=lambda x: abs(med[x - 1] - med[r]))
+            # a strip of some size further than NARROW_DZ from every
+            # neighbour is a wing or a storey of its own, not a flank
+            if cells[r] >= small_cells and abs(med[target - 1] - med[r]) > NARROW_DZ:
+                continue
             ra, rb = _union(parent, lr), _union(parent, target)
             if ra != rb:
                 parent[ra] = rb
@@ -481,7 +506,7 @@ def measured_model(
     lab[part > 0] = part[part > 0] + n
     faces = np.zeros(n + k + 1, bool)
     faces[n + 1 :] = True
-    lab, faces = merge_regions(lab, h, small_cells, faces, thin=with_faces)
+    lab, faces = merge_regions(lab, h, small_cells, faces, narrow=with_faces)
     count = int(lab.max())
     level = _region_medians(lab, h, count)
     surface = _face_surface(h, lab, faces, face) if faces.any() else h
@@ -570,6 +595,24 @@ class Part:
     surface: dict | None = None
 
 
+def _majority(lab: np.ndarray) -> np.ndarray:
+    """Each labelled cell takes the label most cells within OUTLINE_M of it
+    carry (MAJORITY_PASSES times): a border between two parts runs as the
+    scan's edge does, not along the grid's rows and columns — a diagonal
+    one drawn cell by cell is a staircase of 1 m teeth, which no
+    simplification below the stair's own size straightens."""
+    r = int(OUTLINE_M / RES)
+    disk = (np.hypot(*np.mgrid[-r : r + 1, -r : r + 1]) <= r).astype(np.float64)
+    inside = lab > 0
+    for _ in range(MAJORITY_PASSES):
+        ids = np.unique(lab[inside])
+        if len(ids) < 2:
+            break
+        votes = np.stack([ndi.correlate((lab == i).astype(np.float64), disk) for i in ids])
+        lab = np.where(inside, ids[np.argmax(votes, axis=0)], 0).astype(lab.dtype)
+    return lab
+
+
 def region_polygons(
     lab: np.ndarray, heights: np.ndarray, grid: Grid, footprint
 ) -> list[tuple[shapely.Geometry, float, int]]:
@@ -578,7 +621,7 @@ def region_polygons(
     # every footprint point under a region: the labels grown outward a cell
     grown = fill_nearest(lab, lab > 0)
     near = ndi.binary_dilation(lab > 0, iterations=2)
-    grown = np.where(near, grown, 0).astype(np.int32)
+    grown = _majority(np.where(near, grown, 0).astype(np.int32))
     polys, ids = [], []
     for geom, value in rfeatures.shapes(grown, mask=grown > 0, transform=grid.transform):
         polys.append(shapely.geometry.shape(geom))

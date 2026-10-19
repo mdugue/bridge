@@ -159,6 +159,26 @@ def test_a_face_stays_a_face_a_flat_neighbour_its_level():
     assert merged[out[0, 0]] and merged[out[0, 15]] and not merged[out[0, 25]]
 
 
+def test_a_strip_narrower_than_a_part_joins_its_closest_neighbour():
+    # two broad levels 6 m apart; between them a 3 m strip (a step's
+    # flank) 2 m above the lower, and on the upper a 6 m strip 1.5 m higher
+    # still (a parapet's run) and a 6 m wing 5 m lower (a storey of its own)
+    h = np.zeros((20, 60))
+    h[:, 10:13] = 2.0
+    h[:, 13:] = 6.0
+    h[:, 30:36] = 7.5
+    h[:, 44:50] = 1.0
+    lab = np.zeros(h.shape, np.int64)
+    lab[:, :10], lab[:, 10:13], lab[:, 13:30] = 1, 2, 3
+    lab[:, 30:36], lab[:, 36:44], lab[:, 44:50], lab[:, 50:] = 4, 3, 5, 3
+    kept, _ = merge_regions(lab, h, small_cells=5)
+    assert kept.max() == 5
+    out, _ = merge_regions(lab, h, small_cells=5, narrow=True)
+    assert out[0, 11] == out[0, 0]
+    assert out[0, 31] == out[0, 20]
+    assert len({out[0, 0], out[0, 20], out[0, 46]}) == 3
+
+
 def _gable_dom():
     """The scan: over the tent's footprint (x 20..60) a gable, eaves at
     10 m, its ridge 5 m higher along x = 40; the flat roof at 10 m."""
