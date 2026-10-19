@@ -212,11 +212,14 @@ test("partFacade: a part shares its building's own facade unless OSM's storeys f
   expect(partFacade(true, false, 12, 4)).toBe(true);
 });
 
-test("palatialFacade: public buildings, not churches or halls of worship", () => {
+test("palatialFacade: public buildings, not churches, stations or sports halls", () => {
   expect(palatialFacade({ function: "31001_3031" })).toBe(true); // Schloss
   expect(palatialFacade({ function: "31001_3034" })).toBe(true); // Museum
   expect(palatialFacade({ function: "31001_3011" })).toBe(true); // Parlament
   expect(palatialFacade({ function: "31001_3041" })).toBe(false); // Kirche
+  expect(palatialFacade({ function: "31001_3032" })).toBe(true); // Theater
+  expect(palatialFacade({ function: "31001_3211" })).toBe(false); // Sporthalle
+  expect(palatialFacade({ function: "31001_3091" })).toBe(false); // Bahnhof
   expect(palatialFacade({ function: "31001_2090" })).toBe(false);
   expect(palatialFacade({})).toBe(false);
 });
