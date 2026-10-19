@@ -1140,7 +1140,14 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   0.5 m of one of the tile's small structures is dropped: DOM1 reads a
   shed's roof as a 3–4 m tree (859 canopy points stood in 636 sheds, 807
   within 1 m of the shed's own height). Not in the canopy bake: it runs
-  before the structures are found.
+  before the structures are found. Likewise a point more than 1 m inside a
+  LoD2 footprint and at most 2 m taller than that building is its roof
+  (`treesOffRoofs`, `lib/city/roof-trees.ts`): where the Basis-DLM still
+  files a since-built hall's ground as park, DOM1 over its roof made a
+  grove on it (2 172 points over Dresden's 15 tiles, most on the halls
+  west of the Yenidze; 2026-10-19). A taller point is a tree over a shed
+  or garage and stays. At build time, so every site has it without a
+  re-bake.
 - **NDVI crown colour** `= computed` — per-tree DOP greenness (`ndvi_<tile>.png`, sampled on
   the CPU at placement) shifts the crown dry pale-sage → lush deep green.
   `pipeline/bake/ndvi.py` → `vegetation-layer.ts` `crownColor`; falls back to

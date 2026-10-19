@@ -69,6 +69,11 @@ import type { Passage } from "../lib/city/passages";
 import type { LevelLine } from "../lib/city/levels";
 import { tileExtentOf } from "../lib/city/site";
 import { packPoints, pointOf } from "../lib/city/point-pack";
+import {
+  lod2Roofs,
+  type RoofFootprint,
+  treesOffRoofs,
+} from "../lib/city/roof-trees";
 import { treesOffStructures } from "../lib/city/small-buildings";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import {
@@ -472,15 +477,30 @@ async function publishColonies(
   names.cultivatedLow = publish(lowFile, low);
 }
 
+/** Each tile's LoD2 roofs, read once for its canopy and scan crowns. */
+const tileRoofs = new Map<string, RoofFootprint[]>();
+function roofsOf(tile: string): RoofFootprint[] {
+  let roofs = tileRoofs.get(tile);
+  if (!roofs) {
+    const city = at(cityMeshSourceFiles(SITE, tile).city);
+    roofs = existsSync(city) ? lod2Roofs(readJson<CityJsonDocument>(city)) : [];
+    tileRoofs.set(tile, roofs);
+  }
+  return roofs;
+}
+
 /**
  * The canopy (DOM1) or the laser-scan crowns without the points that stand
  * in or within 0.5 m of one of the tile's scan structures: DOM1 reads a
  * shed's roof as a 3–4 m tree (lib/city/small-buildings.ts). Here, not in
- * the canopy bake, because the structures are baked after the canopy.
+ * the canopy bake, because the structures are baked after the canopy. Nor
+ * the points that are a LoD2 roof (lib/city/roof-trees.ts): a hall on what
+ * the Basis-DLM still files as park.
  */
 async function publishCanopy(tile: string, file: string): Promise<string> {
   const src = at(sideFileSource(SITE, file));
   const sheds = at(cityMeshSourceFiles(SITE, tile).smallBuild);
+  const city = at(cityMeshSourceFiles(SITE, tile).city);
   // Packed, not GeoJSON (lib/city/point-pack.ts): the browser parsed up to
   // 9.5 MB of it in one task. Relative to the tile's south-west corner, and
   // pre-gzipped like the glTF (static hosts do not compress binary types).
@@ -489,10 +509,11 @@ async function publishCanopy(tile: string, file: string): Promise<string> {
   const stride = file.startsWith("canopyx_") ? 4 : 3;
   const bake = [
     "lib/city/point-pack.ts",
+    "lib/city/roof-trees.ts",
     "lib/city/small-buildings.ts",
     "lib/city/site.ts",
   ];
-  const bytes = await cached(packed, cacheKey([src, sheds], bake), () => {
+  const bytes = await cached(packed, cacheKey([src, sheds, city], bake), () => {
     const trees =
       readJson<FeatureCollection<CanopyFeature>>(src).features ?? [];
     let features = trees;
@@ -502,6 +523,13 @@ async function publishCanopy(tile: string, file: string): Promise<string> {
       features = treesOffStructures(trees, structures);
       log(
         `${file}: ${trees.length - features.length} points in a scan structure dropped`
+      );
+    }
+    const offSheds = features.length;
+    features = treesOffRoofs(features, roofsOf(tile));
+    if (features.length < offSheds) {
+      log(
+        `${file}: ${offSheds - features.length} points on a LoD2 roof dropped`
       );
     }
     return gz(packPoints(features.map(pointOf), [minX, minY], stride));
@@ -1075,6 +1103,9 @@ async function publishCrowns(tile: string): Promise<string | undefined> {
     cultivated: side("cultivated"),
     monuments: side("monuments"),
     ndvi: side("ndvi"),
+    city: existsSync(at(cityMeshSourceFiles(SITE, tile).city))
+      ? at(cityMeshSourceFiles(SITE, tile).city)
+      : undefined,
     sheds: existsSync(at(cityMeshSourceFiles(SITE, tile).smallBuild))
       ? at(cityMeshSourceFiles(SITE, tile).smallBuild)
       : undefined,

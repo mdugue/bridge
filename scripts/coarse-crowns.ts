@@ -31,8 +31,14 @@ import {
   maxWindowSampler,
   type RasterSampler,
 } from "../lib/city/raster-sampler";
+import {
+  lod2Roofs,
+  type RoofFootprint,
+  treesOffRoofs,
+} from "../lib/city/roof-trees";
 import { treesOffStructures } from "../lib/city/small-buildings";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
+import type { CityJsonDocument } from "../lib/city/types";
 import { inventoryCovers, inventoryTrees } from "../lib/city/tree-inventory";
 import {
   canopyPlacements,
@@ -50,6 +56,8 @@ export interface CrownSources {
   ndvi?: string;
   /** the scan's sheds: canopy points in them were dropped at publish */
   sheds?: string;
+  /** the LoD2 CityJSON: canopy points on its roofs were dropped too */
+  city?: string;
   trees?: string;
   vegrows?: string;
 }
@@ -65,13 +73,14 @@ function features<T>(path: string | undefined): T[] {
 }
 
 /**
- * The canopy points as the browser reads them: the sheds' points dropped
- * and the rest packed against the tile's corner (prepare-data.ts
+ * The canopy points as the browser reads them: the sheds' and the roofs'
+ * points dropped and the rest packed against the tile's corner (prepare-data.ts
  * `publishCanopy`), then unpacked — each coordinate the same float.
  */
 function packedCanopy(
   path: string | undefined,
   sheds: SmallBuildingFeature[],
+  roofs: RoofFootprint[],
   origin: [number, number],
   stride: 3 | 4
 ): CanopyFeature[] {
@@ -79,7 +88,8 @@ function packedCanopy(
   if (raw.length === 0) {
     return [];
   }
-  const kept = sheds.length > 0 ? treesOffStructures(raw, sheds) : raw;
+  const offSheds = sheds.length > 0 ? treesOffStructures(raw, sheds) : raw;
+  const kept = roofs.length > 0 ? treesOffRoofs(offSheds, roofs) : offSheds;
   const points: PackedPoint[] = kept.map(pointOf);
   // a fresh array over its own buffer
   const packed = packPoints(points, origin, stride).buffer as ArrayBuffer;
@@ -112,6 +122,12 @@ export async function bakeCoarseCrowns(
   }
 ): Promise<Uint8Array> {
   const sheds = features<SmallBuildingFeature>(sources.sheds);
+  const roofs =
+    sources.city && existsSync(sources.city)
+      ? lod2Roofs(
+          JSON.parse(readFileSync(sources.city, "utf8")) as CityJsonDocument
+        )
+      : [];
   const register = [
     ...features<TreeFeature>(sources.trees),
     ...orchardTrees(features<CultivatedFeature>(sources.cultivated)),
@@ -122,8 +138,8 @@ export async function bakeCoarseCrowns(
   const ctx = { heightAt: ground.heightAt, offset: ground.offset };
   const canopy = offMonuments(
     [
-      ...packedCanopy(sources.canopy, sheds, ground.origin, 3),
-      ...packedCanopy(sources.canopyx, sheds, ground.origin, 4),
+      ...packedCanopy(sources.canopy, sheds, roofs, ground.origin, 3),
+      ...packedCanopy(sources.canopyx, sheds, roofs, ground.origin, 4),
     ],
     features<MonumentFeature>(sources.monuments)
   );

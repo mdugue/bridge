@@ -112,7 +112,7 @@ export const STRUCTURE_TREE_CLEAR_M = 0.5;
 const CELL = 16;
 
 /** Squared distance from p to the segment a–b. */
-function segmentDistance2(
+export function segmentDistance2(
   px: number,
   py: number,
   ax: number,
