@@ -674,6 +674,18 @@ visual-variable codebook is in
   brick around them).
   Replaces the per-site `Site.facades` switch (🗃️ below). Not yet judged
   on a real GPU.
+- **Rounded walls and roofs** `= computed` (2026-10-19) — LoD2 draws a
+  curved wall or roof as flat facets a few metres wide (the Kathedrale's
+  apses turn 10–20° a facet, the Frauenkirche's drum 20°, the domes of
+  the Frauenkirche, the Yenidze and the Kunstakademie); shaded flat, each facet caught its own share of the sun
+  and the curve read as light and dark stripes. The bake now gives every
+  triangle corner the angle-weighted mean of the faces meeting at its
+  point within 30° of its own (`lib/city/crease-normals.ts`, the same
+  crease the measured roofs use, ADR 0036), per object, walls apart from
+  roofs; a measured face keeps its own normals. Corners of 45° and more
+  (an octagonal tower, a house, the eave) stay sharp. Only the shading
+  changes: the windows and bands keep their places on each facet.
+  `bake-city-mesh.ts` `vertexNormals`.
 - **Roof colour** `= computed` `≈ assumed` (*Dachfarbe*) — real **DOP-sampled** colour per building when
   available (`roofColor()` + the per-tile LUT, ~83 % coverage), else the
   synthesized palette (`surfacetype==RoofSurface` + `roofType` / `Dachneigung` →
