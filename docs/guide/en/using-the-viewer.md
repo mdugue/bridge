@@ -255,6 +255,19 @@ so. Esc, × or a swipe down closes the card and removes the hatch; the
 next question asks the next building. Nothing is estimated: a building without mapped
 storeys simply has no storey line.
 
+Under **Daten** ("data", folded at the end of the card) the card says how
+the viewer draws the building, value by value: storeys, the facade's
+material and base colour, the windows, plinth and cornices, front doors,
+shopfronts, dormers, the roof colour, the light at dusk and whether it is
+a landmark. Each value names its source (say *Material Glas —
+OpenStreetMap · building:material*), carries the badge of how the viewer
+came by it, and links, where it can, to the place: the OpenStreetMap
+objects there, the street photos on Mapillary, the Wikidata item. Here
+estimates and assumptions do appear, marked as such (*≈ angenommen*,
+assumed): storeys estimated from the height, say, or windows after the
+house's type where no photo measured them. For a building of several
+parts it describes the part you clicked.
+
 Trees, monuments and fountains, and bridges answer the same way.
 Whatever you asked is framed by a soft pink line on a pale fringe —
 along its outline as you see it now, the same width on screen near or

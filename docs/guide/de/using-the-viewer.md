@@ -271,6 +271,19 @@ nächsten Gebäude.
 Geschätzt wird nichts: Ein Gebäude ohne erfasste Geschosse hat einfach
 keine Geschosszeile.
 
+Unter **Daten** (eingeklappt am Ende der Karte) steht, wie der Viewer das
+Gebäude zeichnet, Wert für Wert: Geschosse, Material und Grundton der
+Fassade, die Fenster, Sockel und Gesimse, Haustüren, Schaufenster,
+Gauben, die Dachfarbe, das Abendlicht und ob es ein Wahrzeichen ist. Jeder
+Wert nennt seine Quelle (etwa *Material Glas — OpenStreetMap ·
+building:material*), trägt das Abzeichen, wie der Viewer zu ihm kam, und
+verlinkt, wo es geht, auf die Stelle: die OpenStreetMap-Objekte dort, die
+Straßenfotos bei Mapillary, den Wikidata-Eintrag. Hier stehen auch
+Geschätztes und Angenommenes, ausdrücklich als solches markiert (*≈
+angenommen*): etwa Geschosse, die aus der Höhe geschätzt sind, oder
+Fenster nach dem Typ des Hauses, wo keine Fotos sie gemessen haben. Bei
+einem Gebäude aus mehreren Teilen gilt das für den angeklickten Teil.
+
 Bäume, Denkmale und Brunnen und Brücken antworten genauso. Was du
 gefragt hast, umrahmt eine weiche pinke Linie auf einem hellen Saum —
 entlang seines Umrisses, so wie du ihn gerade siehst, gleich breit auf

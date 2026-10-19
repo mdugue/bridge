@@ -961,6 +961,10 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       // the provenance manifest arrives with the first card: the edition
       await expect(card).toContainText(/Modell \d{4}/);
       await expect(card.getByTestId("inquiry-data")).toContainText("Im Viewer");
+      // and how it is drawn, value by value, each with its source
+      await expect(card.getByTestId("inquiry-drawn").first()).toContainText(
+        "Geschosse"
+      );
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
       // I asks under the pointer, not at the centre: find a spot off the

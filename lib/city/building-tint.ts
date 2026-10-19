@@ -234,6 +234,42 @@ function readNumber(v: unknown): number | undefined {
 }
 
 /**
+ * Where a building's wall colour comes from, as `buildingTint` decides it
+ * (the inquiry card names it, lib/city/drawn-facts.ts): OSM's
+ * `building:colour`, else a palette — the mapped `building:material`'s,
+ * the neighbourhood's brick, or its use's.
+ */
+export type WallColourSource = "osm" | "material" | "brick" | "use";
+
+/** The palette a wall draws from where OSM maps no colour, and why. */
+function wallFamily(
+  attrs: Record<string, unknown>,
+  facades: FacadeMaterial,
+  look: OsmLook
+): { family: FamilyKey; from: Exclude<WallColourSource, "osm"> } {
+  const use = familyOf(readString(attrs.function));
+  const material = look.material ? MATERIAL_FAMILY[look.material] : undefined;
+  if (material) {
+    return { family: material, from: "material" };
+  }
+  return facades === "brick" && use !== "cool"
+    ? { family: "brick", from: "brick" }
+    : { family: use, from: "use" };
+}
+
+/** Where `buildingTint` takes a building's wall colour from. */
+export function wallColourSource(
+  attrs: Record<string, unknown> = {},
+  facades: FacadeMaterial = "render",
+  look: OsmLook = {}
+): WallColourSource {
+  if (look.colour && osmColourTint("", look.colour)) {
+    return "osm";
+  }
+  return wallFamily(attrs, facades, look).from;
+}
+
+/**
  * Stable linear-RGB tint for one building. `objectId` seeds the hash (so the
  * same building always gets the same colour across reloads/demolish), `attrs`
  * is the CityJSON `attributes` bag (`function`, `measuredHeight`), `facades`
@@ -251,15 +287,7 @@ export function buildingTint(
       return own;
     }
   }
-  const use = familyOf(readString(attrs.function));
-  const family =
-    FAMILIES[
-      look.material
-        ? MATERIAL_FAMILY[look.material]
-        : facades === "brick" && use !== "cool"
-          ? "brick"
-          : use
-    ];
+  const family = FAMILIES[wallFamily(attrs, facades, look).family];
   const pick =
     family[
       Math.min(family.length - 1, Math.floor(hash01(objectId) * family.length))
@@ -383,6 +411,24 @@ export type RoofColorLut = Record<string, TintRgb>;
  * a roof too small to sample, a demolished/edited building) degrades to
  * `roofTint` so the look never breaks. See docs/transformations.md.
  */
+/** Where a roof's colour comes from, as `roofColor` decides it: the
+ *  orthophoto, OSM's `roof:colour`, or the palette by its form. */
+export type RoofColourSource = "dop" | "osm" | "palette";
+
+/** Where `roofColor` takes a roof's colour from. */
+export function roofColourSource(
+  objectId: string,
+  lut?: RoofColorLut,
+  look: OsmLook = {}
+): RoofColourSource {
+  if (lut?.[objectId]?.length === 3) {
+    return "dop";
+  }
+  return look.roof_colour && osmColourTint("", look.roof_colour)
+    ? "osm"
+    : "palette";
+}
+
 export function roofColor(
   objectId: string,
   attrs: Record<string, unknown> = {},
@@ -468,14 +514,28 @@ export function ownFacade(
   levels = 0,
   heritage = false
 ): boolean {
+  return ownFacadeReason(attrs, eaveH, levels, heritage) !== null;
+}
+
+/** Why a facade is its own (`ownFacade`): its monumental use, the storeys
+ *  OSM counts being a hall's, or a listed public building's storeys OSM
+ *  does not count; null where it is a storey house's. */
+export function ownFacadeReason(
+  attrs: Record<string, unknown> = {},
+  eaveH = 0,
+  levels = 0,
+  heritage = false
+): "hall" | "listed" | "use" | null {
   const fn = readString(attrs.function);
   if (fn && MONUMENTAL.has(fn)) {
-    return true;
+    return "use";
   }
   if (levels > 0) {
-    return eaveH / levels > HALL_STOREY_M;
+    return eaveH / levels > HALL_STOREY_M ? "hall" : null;
   }
-  return heritage && (fn?.startsWith(PUBLIC_FUNCTION) ?? false);
+  return heritage && (fn?.startsWith(PUBLIC_FUNCTION) ?? false)
+    ? "listed"
+    : null;
 }
 
 /**

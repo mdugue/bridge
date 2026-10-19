@@ -955,6 +955,27 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   so every Solid lost its GroundSurface — on the spawn tile 2 012 of 2 041
   BuildingParts had no minimap footprint (and would have had no area);
   the footprints are now read before the loader runs.
+- **How a building is drawn, and from what** `❝ taken` — the bake's own
+  decisions behind the walls, roof, storeys and windows, which the style
+  columns carry only as their outcome: where the wall colour came from
+  (OSM `building:colour`, else the palette of OSM's `building:material`,
+  the neighbourhood's brick, or the use's), the mapped material (or
+  Wikidata's for a landmark), where the roof colour came from (DOP, OSM
+  `roof:colour`, palette), where the storey came from (OSM
+  `building:levels`, the street photos, the estimate from the height),
+  where the window rhythm came from (its own walls, another part, a
+  neighbour, its type) or why there are none (a facade of its own and
+  why — its use or a hall's storeys —, glass or metal, a low wall, a use
+  without windows, no window fitting the storey), and the landmark's
+  Wikidata item → one ENUM column `drawn` of the same table, a short
+  `key=value;…` text (`lib/city/drawn-facts.ts`, `drawnOf` and
+  `assignWindows` in `scripts/bake-city-mesh.ts`). The card's *Daten*
+  section reads it with the object's style row and lists every drawn
+  value with its source, its badge and a link to the place (OSM's objects
+  there, Mapillary's photos there, the Wikidata item:
+  `lib/city/drawn-lines.ts`, plan 052) — the values as the bake wrote
+  them, never recomputed. Added 2026-10-19 so a strange rendering can be
+  traced to its source from the card.
 - **Names, addresses and storeys** `❝ taken` `◎ detected` — OSM building outlines (`name`,
   `addr:street` + `addr:housenumber`, `building:levels`) covering ≥ 50 %
   of a LoD2 footprint (the one covering most), else the `addr:housenumber`

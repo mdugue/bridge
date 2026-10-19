@@ -19,7 +19,10 @@ import {
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
+  OBJECT_SOURCE_SHOPFRONT,
 } from "./city-mesh";
+import { type DrawnFacts, decodeDrawn } from "./drawn-facts";
+import { FACADE_UNIT } from "./facade-reading";
 import { germanDates } from "./card-lines";
 import type { BuildingInquiry, Inquiry } from "./inquiry";
 import type {
@@ -38,6 +41,9 @@ import {
 } from "./provenance";
 import type { Method, Stated } from "./methods";
 import type { Provider } from "./site";
+
+export { DRAWN_SOURCE_NAME, drawnGroups } from "./drawn-lines";
+export type { DrawnGroup, DrawnRow } from "./drawn-lines";
 
 /** One dataset behind the asked thing. */
 export interface LineageEntry {
@@ -286,11 +292,24 @@ function buildingLineage(
     { osm: "buildings" }
   );
   // landmarks.py: Wikidata's item matched to the LoD2 objects it covers
+  const drawn = all.map((o) => decodeDrawn(o.facts.drawn));
   l.source(
     "wikidata",
-    [has(OBJECT_FLAG_LANDMARK) && "eines der Wahrzeichen der Stadt"],
+    [
+      drawn.some((d) => d.wikidata) ||
+      (has(OBJECT_FLAG_LANDMARK) && drawn.every((d) => !d.own))
+        ? "eines der Wahrzeichen der Stadt"
+        : "",
+    ],
     "detected"
   );
+  l.other({
+    source: "Mapillary",
+    used: photoUses(all, drawn),
+    stand: "",
+    credit: "Mapillary, CC BY-SA 4.0",
+    url: MAPILLARY_URL,
+  });
   // roof_colour.py: the median of the roof's texels
   l.source(
     "dop",
@@ -311,6 +330,42 @@ function buildingLineage(
     lod2 && "Geschossbänder und Fassadenstruktur",
     ["Licht und Schatten zur Uhrzeit der Szene", "computed"],
   ]);
+}
+
+/** What the street photos gave a building (pipeline/bake/windows.py,
+ *  facade_traits.py, shopfronts.py): its windows' rhythm, its storey,
+ *  its shopfronts, its facade's reading. */
+function photoUses(
+  all: readonly BuildingInquiry["picked"][],
+  drawn: readonly DrawnFacts[]
+): Stated[] {
+  const uses: Stated[] = [];
+  const windows = new Set(drawn.map((d) => d.windows));
+  if (windows.has("measured") || windows.has("tree")) {
+    uses.push({
+      text: "Fensterrhythmus, an seinen Wänden",
+      method: "detected",
+    });
+  }
+  if (windows.has("near")) {
+    uses.push({
+      text: "Fensterrhythmus eines Nachbarhauses",
+      method: "assumed",
+    });
+  }
+  if (drawn.some((d) => d.storey === "photos")) {
+    uses.push({ text: "Geschosshöhe", method: "detected" });
+  }
+  if (all.some((o) => o.source === OBJECT_SOURCE_SHOPFRONT)) {
+    uses.push({ text: "Schaufenster", method: "detected" });
+  }
+  if (all.some((o) => o.flags >= FACADE_UNIT)) {
+    uses.push({
+      text: "wie gegliedert und dunkel die Fassade ist",
+      method: "detected",
+    });
+  }
+  return uses;
 }
 
 /** A LoD2 building's own lines: the model, and the surface model where

@@ -36,6 +36,7 @@ const DRESDEN: CardCredits = {
 
 const facts = (over: Partial<ObjectFacts> = {}): ObjectFacts => ({
   buildingId: "DESNATPU1000HJx5",
+  drawn: "",
   function: "31001_9998",
   roofType: "",
   created: "",

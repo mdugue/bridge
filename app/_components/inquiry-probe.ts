@@ -1,9 +1,10 @@
-import { type Camera, Raycaster, Vector2 } from "three/webgpu";
+import { type Camera, Raycaster, Vector2, Vector3 } from "three/webgpu";
 import { type AskHit, type AskSet, hitsInSets } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import {
   type Inquiry,
   type InquiryObject,
+  objectLook,
   TOLERANCE_PX,
 } from "@/lib/city/inquiry";
 import { type CityLayer, cityObjectsAlong } from "./city-layer";
@@ -156,7 +157,14 @@ export function ringOffsets(
 
 /** What a ray met: a building's object, or another askable thing. */
 type ProbeHit =
-  | { building: { layer: CityLayer; objectIndex: number } }
+  | {
+      building: {
+        /** where the ray met it (world) */
+        at: Vector3;
+        layer: CityLayer;
+        objectIndex: number;
+      };
+    }
   | { thing: AskHit<FeatureInquiry> };
 
 /** What the outline goes around: a building's tree, or another thing. */
@@ -217,6 +225,8 @@ export function createInquiryProbe(deps: {
   things: () => Iterable<AskSet<FeatureInquiry>>;
   /** the canvas size in CSS px, for the tolerance rings */
   viewport: () => { height: number; width: number };
+  /** a world point in the site's CRS (easting, northing) */
+  toSite: (world: Vector3) => [number, number];
 }): InquiryProbe {
   let marked: CityLayer | null = null;
   // the last question's candidates, as the scene knows them
@@ -264,7 +274,13 @@ export function createInquiryProbe(deps: {
     const hits: PickSample<ProbeHit>[] = [
       ...buildings.map(({ distance, layer, objectIndex }) => ({
         distance,
-        hit: { building: { layer, objectIndex } },
+        hit: {
+          building: {
+            at: ray.ray.at(distance, new Vector3()),
+            layer,
+            objectIndex,
+          },
+        },
         key: `${layer.tile}:${layer.table.root[objectIndex]}`,
       })),
       ...things.map((thing) => ({
@@ -277,8 +293,9 @@ export function createInquiryProbe(deps: {
     return ground === null ? hits : hits.filter((h) => h.distance <= ground);
   };
 
-  /** A building's live tree: its objects and its inquiry (unmarked). */
-  const building = (layer: CityLayer, objectIndex: number) => {
+  /** A building's live tree: its objects and its inquiry (unmarked);
+   *  `at` where it was asked (world). */
+  const building = (layer: CityLayer, objectIndex: number, at?: Vector3) => {
     const { table } = layer;
     const tree: number[] = [];
     for (let i = 0; i < table.count; i++) {
@@ -293,12 +310,14 @@ export function createInquiryProbe(deps: {
       flags: table.flags[i],
       source: table.source[i],
       facts: layer.facts(i),
+      look: objectLook(table, i),
     });
     const inquiry: Inquiry = {
       kind: "building",
       tile: layer.tile,
       picked: object(objectIndex),
       tree: tree.map(object),
+      ...(at ? { at: deps.toSite(at) } : {}),
     };
     return { inquiry, objects: new Set(tree) };
   };
@@ -306,7 +325,8 @@ export function createInquiryProbe(deps: {
   const describe = (hit: ProbeHit): Inquiry =>
     "thing" in hit
       ? hit.thing.target
-      : building(hit.building.layer, hit.building.objectIndex).inquiry;
+      : building(hit.building.layer, hit.building.objectIndex, hit.building.at)
+          .inquiry;
 
   /** The outline's subject for a hit (a building's whole live tree). */
   const subject = (hit: ProbeHit): OutlineSubject =>

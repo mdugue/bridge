@@ -35,6 +35,9 @@ export function isMeasuredRoof(code: string): boolean {
 export interface ObjectFacts {
   /** OSM `addr:street` + `addr:housenumber` ("" unknown) */
   addr: string;
+  /** how the bake drew it and from what, as lib/city/drawn-facts.ts
+   *  encodes it ("" unknown: a tile baked before the column) */
+  drawn: string;
   /** footprint area of this object's GroundSurfaces (m²), NO_FACT if none */
   area: number;
   /** the survey's production date of the object, YYYY-MM-DD ("" unknown) */
@@ -64,7 +67,12 @@ export interface ObjectFacts {
  * handful of dates — ENUM columns, a UINT16 per object), numbers.
  */
 export const FACT_STRING_COLUMNS = ["buildingId", "name", "addr"] as const;
-export const FACT_ENUM_COLUMNS = ["function", "roofType", "created"] as const;
+export const FACT_ENUM_COLUMNS = [
+  "function",
+  "roofType",
+  "created",
+  "drawn",
+] as const;
 export const FACT_NUMBER_COLUMNS = [
   "height",
   "roofPitch",
@@ -216,6 +224,7 @@ export function lod2Facts(input: {
     created: isoDate(own.creationDate ?? resolved.creationDate),
     name: text(osm?.name),
     addr: text(osm?.addr),
+    drawn: "",
     // 0 m is no height: a Building whose parts carry the geometry
     height: round(
       measured > 0 ? measured : positive(input.fallbackHeight),
@@ -241,6 +250,7 @@ export function scanFacts(input: {
     created: "",
     name: "",
     addr: "",
+    drawn: "",
     height: round(number(input.height), 100),
     roofPitch: NO_FACT,
     area: area > 0 ? round(area, 10) : NO_FACT,
@@ -312,6 +322,7 @@ export function readFacts(
     created: str("created"),
     name: str("name"),
     addr: str("addr"),
+    drawn: str("drawn"),
     height: num("height"),
     roofPitch: num("roofPitch"),
     area: num("area"),
