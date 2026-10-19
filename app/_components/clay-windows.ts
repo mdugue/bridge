@@ -469,6 +469,11 @@ function arris(g: Grid, wn: V3, px: Px) {
   };
 }
 
+/** The share of windows lit at night, and a lit one's light (× the dusk
+ *  light and the night): a quarter, softly — two in five at full light
+ *  made every street a wall of lamps. */
+const NIGHT_WINDOWS = { lit: 0.25, light: 0.6 } as const;
+
 /**
  * The windows on the clay (lib/city/windows.ts gives each building's
  * rhythm and each wall vertex its place along the wall): per storey a row
@@ -483,13 +488,9 @@ function arris(g: Grid, wn: V3, px: Px) {
  * pixels wide the drawing hands over to the facade's mean tone (the
  * openings' share of a storey, darker), so a far street never shimmers.
  * At night a quarter of the windows is lit, warm (`glow`, at the dusk
- * light's strength; far off the facade's mean of them, `NIGHT_WINDOWS`). Branch-free: fwidth needs uniform control flow.
+ * light's strength; far off the facade's mean of them, `NIGHT_WINDOWS`).
+ * Branch-free: fwidth needs uniform control flow.
  */
-/** The share of windows lit at night, and a lit one's light (× the dusk
- *  light and the night): a quarter, softly — two in five at full light
- *  made every street a wall of lamps. */
-const NIGHT_WINDOWS = { lit: 0.25, light: 0.6 } as const;
-
 export function clayWindows(i: WindowInputs): ClayWindows {
   const g = grid(i);
   const px: Px = {
