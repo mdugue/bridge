@@ -16,6 +16,7 @@ import type {
   ShopfrontWall,
   StructureFeature,
 } from "../lib/city/features";
+import { ensembleGroup } from "../lib/city/ensembles";
 import { paneTop, SHOPFRONT_SINK } from "../lib/city/shopfronts";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
 import {
@@ -30,6 +31,7 @@ import {
   bakeCityMesh,
   cityFrame,
   cityMesh,
+  joinEnsembles,
   liftToStreet,
   PANE_ROUGH,
   scanStructureId,
@@ -730,4 +732,64 @@ test("cityFrame is the frame the bake recenters a tile in, without the parse", (
   expect([...frame.matrix.elements]).toEqual([...baked.matrix.elements]);
   expect(frame.offset).toEqual(baked.offset);
   expect(frame.epsg).toBe(25833);
+});
+
+test("joinEnsembles: touching trees of one name share the lowest root, its facts the whole's", () => {
+  const sq = (x: number): [number, number][][] => [
+    [
+      [x, 0],
+      [x + 10, 0],
+      [x + 10, 10],
+      [x, 10],
+    ],
+  ];
+  const facts = (name: string, height: number) => ({
+    buildingId: `B${height}`,
+    function: "",
+    roofType: "",
+    created: "",
+    name,
+    addr: "",
+    height,
+    roofPitch: -1,
+    area: 100,
+    levels: -1,
+  });
+  // 0: the complex (a Building drawn by its part 1), 2: the tower beside
+  // it, 3: an unnamed house touching the tower
+  const objects: Parameters<typeof joinEnsembles>[0] = [
+    { root: 0, footprints: [], facts: facts("Schloss", 30) },
+    { root: 0, footprints: sq(0), facts: facts("Schloss", 30) },
+    { root: 2, footprints: sq(10), facts: facts("Schloss", 60) },
+    { root: 3, footprints: sq(20), facts: facts("", 12) },
+  ];
+  const trees = new Map([
+    [0, [0, 1]],
+    [2, [2]],
+    [3, [3]],
+  ]);
+  const z = [
+    [0, 0],
+    [100, 130],
+    [101, 161],
+    [102, 114],
+  ];
+  const outlines: Record<number, string> = { 0: "r1", 2: "r1", 3: "w2" };
+  joinEnsembles(
+    objects,
+    trees,
+    (root) => outlines[root] ?? "",
+    (i) =>
+      i === 0
+        ? undefined
+        : { baseZ: z[i][0], topZ: z[i][1], footprints: objects[i].footprints }
+  );
+  expect(objects.map((o) => o.ensemble)).toEqual([0, 0, 0, 3]);
+  // the outline's key, the same in the tile across the edge
+  expect(objects[1].group).toBe(ensembleGroup("r1"));
+  expect(objects[3].group).toBe(ensembleGroup("w2"));
+  expect(objects[0].facts?.height).toBe(61);
+  expect(objects[0].facts?.area).toBeCloseTo(200, 0);
+  // the tower keeps its own facts (its Kennung on the card)
+  expect(objects[2].facts?.height).toBe(60);
 });

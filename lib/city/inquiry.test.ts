@@ -150,6 +150,131 @@ test("the Building's own tree facts win over its parts' (the bake's union)", () 
   expect(fact("Höhe")).toBe("24,5 m");
 });
 
+test("an ensemble answers as one building: the lead's facts, its Buildings counted", () => {
+  const tower = object({
+    building: true,
+    objectIndex: 9,
+    facts: facts({
+      buildingId: "DESN_tower",
+      name: "Residenzschloss",
+      height: 60.9,
+      area: 220,
+    }),
+  });
+  const card = inquiryCard(
+    {
+      kind: "building",
+      tile: "t",
+      picked: tower,
+      tree: [
+        object({
+          building: true,
+          lead: true,
+          objectIndex: 2,
+          facts: facts({
+            buildingId: "DESN_main",
+            name: "Residenzschloss",
+            height: 100.3,
+            area: 4890,
+          }),
+        }),
+        object({ objectIndex: 3 }),
+        tower,
+      ],
+    },
+    null,
+    DRESDEN
+  );
+  const fact = (label: string) =>
+    card.facts.find((f) => f.label === label)?.value;
+  expect(card.title).toBe("Residenzschloss");
+  expect(fact("Höhe")).toBe("100,3 m");
+  expect(fact("Grundfläche")).toBe("4.890 m²");
+  expect(fact("Gebäude")).toBe("2 im Stadtmodell");
+  expect(
+    card.sources.some(
+      (l) =>
+        l.method === "detected" &&
+        l.text.startsWith("2 Gebäude des Stadtmodells")
+    )
+  ).toBe(true);
+});
+
+test("a building a tile edge cuts in two: its tiles' leads, the highest top and the grounds summed", () => {
+  const west = object({
+    building: true,
+    lead: true,
+    facts: facts({
+      buildingId: "DESN_west",
+      name: "WTC",
+      height: 40,
+      area: 3000,
+    }),
+  });
+  const card = inquiryCard(
+    {
+      kind: "building",
+      tile: "t",
+      picked: west,
+      tree: [
+        west,
+        object({
+          building: true,
+          lead: true,
+          // the same index, the other tile
+          facts: facts({
+            buildingId: "DESN_east",
+            name: "WTC",
+            height: 62,
+            area: 1200,
+          }),
+        }),
+      ],
+    },
+    null,
+    DRESDEN
+  );
+  const fact = (label: string) =>
+    card.facts.find((f) => f.label === label)?.value;
+  expect(fact("Höhe")).toBe("62 m");
+  expect(fact("Grundfläche")).toBe("4.200 m²");
+  expect(fact("Gebäude")).toBe("2 im Stadtmodell");
+});
+
+test("a Building both tiles carry whole counts once", () => {
+  const twin = () =>
+    object({
+      building: true,
+      lead: true,
+      facts: facts({ buildingId: "DEBY_1", height: 30, area: 900 }),
+    });
+  const picked = twin();
+  const card = inquiryCard(
+    { kind: "building", tile: "t", picked, tree: [picked, twin()] },
+    null,
+    DRESDEN
+  );
+  const fact = (label: string) =>
+    card.facts.find((f) => f.label === label)?.value;
+  expect(fact("Grundfläche")).toBe("900 m²");
+  expect(fact("Gebäude")).toBeUndefined();
+});
+
+test("an ensemble names its first three addresses and counts the rest", () => {
+  const at = (addr: string) => object({ facts: facts({ addr }) });
+  const card = inquiryCard(
+    {
+      kind: "building",
+      tile: "t",
+      picked: at("Ammonstraße 72"),
+      tree: ["A 1", "B 2", "C 3", "D 4"].map(at),
+    },
+    null,
+    DRESDEN
+  );
+  expect(card.address).toBe("Ammonstraße 72 · A 1 · B 2 und 2 weitere");
+});
+
 test("a shop matched to the footprint is marked detected, on its line and its fact", () => {
   const card = inquiryCard(
     {

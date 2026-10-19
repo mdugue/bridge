@@ -966,13 +966,39 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   never handed to the root) → the `name`, `addr`, `levels` columns. Spawn
   tile: 2 363 of 4 404 objects addressed, 444 named, 2 470 with storeys
   (BBBike extract 2026-09-26). The card merges a building's parts.
+- **Ensembles** `◎ detected` (2026-10-19) — LoD2 Buildings that are one
+  building to a visitor: the cadastre splits Dresden's Residenzschloss
+  into three (the main complex, the Hausmannsturm's spire one of its
+  parts, and the tower's shaft among them), and OSM maps it as one named
+  outline. `osm_buildings.py` `tree_outlines` writes on each root the key
+  of the *named* OSM building outline covering at least half of its whole
+  tree (`outline`, `w<way>` / `r<relation>`); `lib/city/ensembles.ts`
+  joins trees sharing it, and, for a wing the outline misses, trees of
+  the same name whose footprints touch (≤ 0.5 m, overlap or crossing) —
+  never two trees whose outlines differ (two halls named alike). Joined
+  in `bake-city-mesh.ts` → the `ensemble` column (the tile's lowest root,
+  its facts the tile's whole ensemble's: the union of the footprints,
+  lowest base to highest top) and `group` (the outline's key hashed,
+  FNV-1a: the same in every tile, so a building a tile edge cuts in two
+  is asked, outlined and demolished in both tiles on screen; the card
+  takes the highest of the tiles' tops and sums their grounds). Asked,
+  outlined, listed in *Hier auch* and demolished as one; the card counts
+  its Buildings (*Gebäude: 3 im Stadtmodell*) and keeps the picked one's
+  `buildingId`. Unnamed outlines are left out: OSM often draws a whole
+  block as one (up to 38 LoD2 Buildings under one in Dresden, each house
+  with its own address). Dresden, extract of 2026-10-17: 262 named
+  outlines over 732 trees, 4 of them across a tile edge (the World Trade
+  Center among them); the name rule alone had made 292 groups, 14 of
+  them not one outline. A first cut joined by name and touch only (no
+  outline, not across tiles); the outline replaced it on the
+  maintainer's ask.
 - **Provenance manifest** `❝ taken` — `data/provenance.json` (hand-kept) →
   `provenance.json` next to the tileset (`lib/city/provenance.ts`, at build
   time): per source its label, credit and licence, per tile its edition
   (LoD2 split into the model year and its inputs' years). The card's
   source lines; fetched with the first question.
-- **The asked building** `≈ assumed` (no slider) — the picked object's building tree
-  (the set demolish takes) gets flag 32 in the packed object texture at
+- **The asked building** `≈ assumed` (no slider) — the picked object's building tree,
+  or its ensemble's trees (the set demolish takes), gets flag 32 in the packed object texture at
   runtime; the clay lifts it 40 % towards paper white, adds a faint
   paper light (brighter at night) and draws a pencil hatch: near, strokes
   on the building every 0.9 m (up the facade at 45°, across the roof;

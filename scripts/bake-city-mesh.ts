@@ -61,6 +61,7 @@ import {
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
+import { ensembleGroup, ensembleRoots } from "../lib/city/ensembles";
 import {
   DOOR_SINK,
   DOOR_SURROUND,
@@ -704,10 +705,101 @@ export function bakeCityMesh(
     }
   }
 
+  joinEnsembles(
+    objects,
+    trees,
+    (root) => osmLut?.[keys[root]]?.outline ?? "",
+    (i) =>
+      minZ.has(i)
+        ? {
+            baseZ: minZ.get(i) ?? 0,
+            topZ: maxZ.get(i) ?? 0,
+            footprints: footprintsOf[i],
+          }
+        : undefined
+  );
+
   const baked: BakedCityMesh = { epsg, matrix, objects, offset, vertices: v };
   markFlatRoofs(objects, v);
   dressWalls(tile, baked, keys, hosts, onWalls, { facades, gaps, scan });
   return baked;
+}
+
+/**
+ * Building trees that are one building to a visitor (lib/city/ensembles.ts)
+ * share an `ensemble`, the lowest root among them, whose facts become the
+ * whole ensemble's: the union of its footprints, its lowest base to its
+ * highest top (one tree's surveyed height does not describe the others);
+ * its `group` the key of its OSM outline, so the trees a tile edge cuts it
+ * into are asked together.
+ */
+export function joinEnsembles(
+  objects: Pick<
+    CityObjectRow,
+    "ensemble" | "facts" | "footprints" | "group" | "root"
+  >[],
+  trees: ReadonlyMap<number, readonly number[]>,
+  outlineOf: (root: number) => string,
+  extent: (
+    i: number
+  ) =>
+    | { baseZ: number; footprints: [number, number][][]; topZ: number }
+    | undefined
+): void {
+  const named = [...trees].flatMap(([root, members]) => {
+    // the root's name, else its first named part's
+    const name =
+      [root, ...members]
+        .map((i) => objects[i].facts?.name ?? "")
+        .find((n) => n !== "") ?? "";
+    const outline = outlineOf(root);
+    return name || outline
+      ? [
+          {
+            root,
+            name,
+            outline,
+            rings: members.flatMap((i) => objects[i].footprints),
+          },
+        ]
+      : [];
+  });
+  const lead = ensembleRoots(named);
+  // the ensemble's outline: the first of its trees' (they share one, but
+  // for a tree joined by its name alone)
+  const outlines = new Map<number, string>();
+  for (const t of named) {
+    const to = lead.get(t.root) ?? t.root;
+    const had = outlines.get(to);
+    if (t.outline && !(had && had < t.outline)) {
+      outlines.set(to, t.outline);
+    }
+  }
+  const joined = new Map<number, number[]>();
+  for (const [root, members] of trees) {
+    const to = lead.get(root) ?? root;
+    const group = ensembleGroup(outlines.get(to) ?? "");
+    for (const i of members) {
+      objects[i].ensemble = to;
+      objects[i].group = group;
+    }
+    const all = joined.get(to);
+    if (all) {
+      all.push(...members);
+    } else {
+      joined.set(to, [...members]);
+    }
+  }
+  for (const [to, members] of joined) {
+    const facts = objects[to].facts;
+    if (facts && members.some((i) => objects[i].root !== to)) {
+      objects[to].facts = treeFacts(
+        facts,
+        members.flatMap((i) => extent(i) ?? []),
+        false
+      );
+    }
+  }
 }
 
 export interface CityMesh {
@@ -763,6 +855,12 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
       roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
       root: { type: "SCALAR", componentType: "UINT32", values: t.root },
+      ensemble: {
+        type: "SCALAR",
+        componentType: "UINT32",
+        values: t.ensemble,
+      },
+      group: { type: "SCALAR", componentType: "UINT32", values: t.group },
       rough: { type: "SCALAR", componentType: "FLOAT32", values: t.rough },
       source: { type: "SCALAR", componentType: "UINT8", values: t.source },
       storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },
