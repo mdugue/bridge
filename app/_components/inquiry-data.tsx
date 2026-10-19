@@ -142,6 +142,11 @@ export function InquiryData({
         )}
         {entries && drawn.length > 0 && (
           <>
+            {inquiry.kind === "building" && inquiry.tree.length > 1 && (
+              <p className="-mt-1 mb-1.5 text-[10px] text-muted-foreground">
+                für den angeklickten Gebäudeteil
+              </p>
+            )}
             {drawn.map((g) => (
               <DrawnGroupRows
                 group={g}
