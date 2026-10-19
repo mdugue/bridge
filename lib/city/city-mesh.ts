@@ -206,11 +206,16 @@ export function inheritedFlags(
 export function inheritedLook(
   own?: OsmBuildingFacts,
   root?: OsmBuildingFacts
-): Pick<OsmBuildingFacts, "colour" | "context" | "material" | "roof_colour"> {
+): Pick<
+  OsmBuildingFacts,
+  "colour" | "context" | "material" | "materialFrom" | "roof_colour"
+> {
   return {
     colour: own?.colour ?? root?.colour,
     context: own?.context ?? root?.context,
     material: own?.material ?? root?.material,
+    // where the material came from goes with the material
+    materialFrom: own?.material ? own.materialFrom : root?.materialFrom,
     roof_colour: own?.roof_colour ?? root?.roof_colour,
   };
 }

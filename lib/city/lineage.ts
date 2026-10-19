@@ -296,8 +296,9 @@ function buildingLineage(
   l.source(
     "wikidata",
     [
+      // a tile baked before the drawn facts has only the flag to go by
       drawn.some((d) => d.wikidata) ||
-      (has(OBJECT_FLAG_LANDMARK) && drawn.every((d) => !d.own))
+      (has(OBJECT_FLAG_LANDMARK) && all.every((o) => !o.facts.drawn))
         ? "eines der Wahrzeichen der Stadt"
         : "",
     ],

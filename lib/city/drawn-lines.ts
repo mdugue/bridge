@@ -187,7 +187,8 @@ class Rows {
 export function drawnGroups(b: BuildingInquiry, epsg?: number): DrawnGroup[] {
   const o = describedObject(b);
   const look = o.look;
-  if (!look) {
+  // a scan's building or a gap filler has no LoD2 row to read
+  if (!look || o.source !== OBJECT_SOURCE_LOD2) {
     return [];
   }
   const d = decodeDrawn(o.facts.drawn);
@@ -260,6 +261,20 @@ export function drawnGroups(b: BuildingInquiry, epsg?: number): DrawnGroup[] {
         }
       : null
   );
+  rows.row({
+    label: "Himmelslicht",
+    value: "Horizont und offener Himmel",
+    method: "computed",
+    source: "dgm",
+    detail: "mit dem Stadtmodell berechnet",
+  });
+  rows.row({
+    label: "Licht, Schatten",
+    value: "zur Uhrzeit der Szene",
+    method: "computed",
+    source: "viewer",
+    detail: "Sonnenstand am Ort",
+  });
   return rows.done();
 }
 
@@ -479,6 +494,34 @@ function windowsRow(
   }
 }
 
+/** Why a landmark without a reason of its own keeps its facade: Wikidata
+ *  named it, or (a tile baked before the drawn facts) only the flag says
+ *  so. */
+function landmarkWhy(
+  o: InquiryObject,
+  d: DrawnFacts
+): Pick<DrawnRow, "detail" | "method" | "source" | "url"> {
+  if (d.wikidata) {
+    return {
+      method: "detected",
+      source: "wikidata",
+      detail: "Wahrzeichen: eigene Fassade",
+      url: `https://www.wikidata.org/wiki/${d.wikidata}`,
+    };
+  }
+  return o.facts.drawn
+    ? {
+        method: "assumed",
+        source: "viewer",
+        detail: "Wahrzeichen: eigene Fassade",
+      }
+    : {
+        method: "taken",
+        source: "lod2",
+        detail: "eigene Fassade",
+      };
+}
+
 /** Why a facade is its own (no windows, no town house's dressing). */
 function ownFacadeWhy(
   o: InquiryObject,
@@ -486,15 +529,16 @@ function ownFacadeWhy(
   places: Places
 ): Pick<DrawnRow, "detail" | "method" | "source" | "url"> {
   const use = functionWords(o.facts.function);
-  if (
-    d.own === "use" ||
-    (!d.own && hasObjectFlag(o.flags, OBJECT_FLAG_LANDMARK))
-  )
+  if (d.own === "use") {
     return {
       method: "taken",
       source: "lod2",
       detail: `eigene Fassade: ${use || "monumentale Nutzung"}`,
     };
+  }
+  if (!d.own && hasObjectFlag(o.flags, OBJECT_FLAG_LANDMARK)) {
+    return landmarkWhy(o, d);
+  }
   if (d.own === "listed") {
     return {
       method: "assumed",
@@ -614,7 +658,7 @@ function plinthRow(
   if (!hasObjectFlag(o.flags, OBJECT_FLAG_GROUNDED)) {
     return null;
   }
-  if (d.own || hasObjectFlag(o.flags, OBJECT_FLAG_LANDMARK)) {
+  if (d.own) {
     return {
       label: "Sockel, Gesimse",
       value: "keine",
@@ -622,6 +666,9 @@ function plinthRow(
       source: "lod2",
       detail: "eigene Fassade",
     };
+  }
+  if (hasObjectFlag(o.flags, OBJECT_FLAG_LANDMARK)) {
+    return { label: "Sockel, Gesimse", value: "keine", ...landmarkWhy(o, d) };
   }
   if (hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF)) {
     return {

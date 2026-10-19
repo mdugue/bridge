@@ -6,6 +6,7 @@ import {
   OBJECT_SOURCE_DOOR,
   OBJECT_SOURCE_LOD2,
   OBJECT_SOURCE_PLINTH,
+  OBJECT_SOURCE_SCAN,
 } from "./city-mesh";
 import { type DrawnFacts, encodeDrawn } from "./drawn-facts";
 import { cssColour, type DrawnRow, drawnGroups } from "./drawn-lines";
@@ -196,6 +197,28 @@ test("a door asked describes the house it opens, and the house's parts", () => {
 
 test("a tile baked before the look reached the card shows no drawn values", () => {
   expect(drawnGroups(ask(object({}, { look: undefined })), 25_833)).toEqual([]);
+});
+
+test("a landmark Wikidata named keeps its facade on Wikidata's word", () => {
+  const r = rows(
+    ask(
+      object(
+        { windows: "none", noWindows: "facade", wikidata: "Q1" },
+        {
+          flags: OBJECT_FLAG_GROUNDED + OBJECT_FLAG_LANDMARK,
+          look: look({ windows: { axis: 0, w: 0, h: 0, style: 0 } }),
+        }
+      )
+    )
+  );
+  expect(r.Fenster).toMatchObject({ source: "wikidata", method: "detected" });
+  expect(r["Sockel, Gesimse"]).toMatchObject({ source: "wikidata" });
+});
+
+test("a scan's building has no LoD2 row, so no drawn values", () => {
+  expect(
+    drawnGroups(ask(object({}, { source: OBJECT_SOURCE_SCAN })), 25_833)
+  ).toEqual([]);
 });
 
 test("colours are written as the screen's hex", () => {

@@ -403,14 +403,6 @@ export function roofTint(
  */
 export type RoofColorLut = Record<string, TintRgb>;
 
-/**
- * Roof colour for one building: the real DOP-sampled colour when the LUT has it,
- * then OSM's `roof:colour` in the clay's register, otherwise the synthesized
- * terracotta/slate palette. This is the source
- * preference baked into one place — present LUT entry wins, missing one (no DOP,
- * a roof too small to sample, a demolished/edited building) degrades to
- * `roofTint` so the look never breaks. See docs/transformations.md.
- */
 /** Where a roof's colour comes from, as `roofColor` decides it: the
  *  orthophoto, OSM's `roof:colour`, or the palette by its form. */
 export type RoofColourSource = "dop" | "osm" | "palette";
@@ -429,6 +421,14 @@ export function roofColourSource(
     : "palette";
 }
 
+/**
+ * Roof colour for one building: the real DOP-sampled colour when the LUT has it,
+ * then OSM's `roof:colour` in the clay's register, otherwise the synthesized
+ * terracotta/slate palette. This is the source
+ * preference baked into one place — present LUT entry wins, missing one (no DOP,
+ * a roof too small to sample, a demolished/edited building) degrades to
+ * `roofTint` so the look never breaks. See docs/transformations.md.
+ */
 export function roofColor(
   objectId: string,
   attrs: Record<string, unknown> = {},
@@ -436,14 +436,23 @@ export function roofColor(
   look: OsmLook = {}
 ): TintRgb {
   const sampled = lut?.[objectId];
-  if (sampled?.length === 3) {
-    return [sampled[0], sampled[1], sampled[2]];
+  switch (roofColourSource(objectId, lut, look)) {
+    case "dop":
+      return sampled
+        ? [sampled[0], sampled[1], sampled[2]]
+        : roofTint(objectId, attrs);
+    case "osm":
+      // no measured colour: what OSM says, in the clay's register
+      return (
+        osmColourTint(
+          `${objectId}#roof`,
+          look.roof_colour ?? "",
+          ROOF_LIGHTNESS
+        ) ?? roofTint(objectId, attrs)
+      );
+    case "palette":
+      return roofTint(objectId, attrs);
   }
-  // no measured colour: what OSM says, in the clay's register
-  const mapped = look.roof_colour
-    ? osmColourTint(`${objectId}#roof`, look.roof_colour, ROOF_LIGHTNESS)
-    : null;
-  return mapped ?? roofTint(objectId, attrs);
 }
 
 /**

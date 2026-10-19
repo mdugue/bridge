@@ -22,7 +22,6 @@ import {
 } from "three";
 import {
   buildingGlows,
-  ownFacade,
   partFacade,
   buildingTint,
   type FacadeMaterial,
@@ -657,6 +656,7 @@ export function bakeCityMesh(
       roof: rgb(roofColor(id, attrs, roofLut, look)),
       drawn: drawnOf(attrs, context, look, osm, {
         eaveH,
+        own: hosts[index].why ?? null,
         roof: roofColourSource(id, roofLut, look),
       }),
       footprints,
@@ -738,20 +738,15 @@ function drawnOf(
   context: FacadeMaterial,
   look: ReturnType<typeof inheritedLook>,
   osm: OsmBuildingFacts | undefined,
-  o: { eaveH: number; roof: RoofColourSource }
+  o: { eaveH: number; own: DrawnFacts["own"] | null; roof: RoofColourSource }
 ): DrawnFacts {
   const wall = wallColourSource(attrs, context, look);
-  const own = ownFacadeReason(
-    attrs,
-    o.eaveH,
-    osm?.levels,
-    (osm?.heritage ?? 0) > 0
-  );
+  const own = o.own;
   return {
     wall,
     ...(look.colour ? { colour: look.colour } : {}),
     ...(look.material ? { material: look.material } : {}),
-    ...(osm?.materialFrom ? { materialFrom: osm.materialFrom } : {}),
+    ...(look.materialFrom ? { materialFrom: look.materialFrom } : {}),
     ...(wall === "brick" ? { context } : {}),
     roof: o.roof,
     ...(look.roof_colour ? { roofColour: look.roof_colour } : {}),
@@ -916,10 +911,17 @@ function windowExtra(
   eaveH: number,
   osm: OsmBuildingFacts | undefined
 ): WindowExtra {
+  const why = ownFacadeReason(
+    attrs,
+    eaveH,
+    osm?.levels,
+    (osm?.heritage ?? 0) > 0
+  );
   return {
     fn: typeof attrs.function === "string" ? attrs.function : undefined,
     levels: (osm?.levels ?? 0) >= 1,
-    monumental: ownFacade(attrs, eaveH, osm?.levels, (osm?.heritage ?? 0) > 0),
+    monumental: why !== null,
+    ...(why ? { why } : {}),
     storeys: osm?.levels,
   };
 }
@@ -1620,6 +1622,8 @@ export type WindowExtra = Pick<WindowHost, "fn" | "levels"> & {
   monumental?: boolean;
   /** the storeys OSM counts, its own or its building's */
   storeys?: number;
+  /** why its facade is its own (`ownFacadeReason`), for the card */
+  why?: "hall" | "listed" | "use";
 };
 
 /** A building's street level stands at most this far over the lowest
