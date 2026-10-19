@@ -67,6 +67,8 @@ test("a Building answers for its tree: union ground, base to top", () => {
   const surveyed = treeFacts({ ...root, height: 38.5 }, tree, true);
   expect(surveyed.height).toBe(38.5);
   expect(surveyed.area).toBe(75);
+  // … unless the tree rises far above it: the survey measured a part
+  expect(treeFacts({ ...root, height: 25 }, tree, true).height).toBe(40);
 });
 
 test("dates lose their clock; anything else is no date", () => {

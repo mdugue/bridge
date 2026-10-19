@@ -158,12 +158,19 @@ export function unionArea(
   return area;
 }
 
+/** How far the tree may rise above the survey's height before the survey
+ *  is taken to have measured only a part: the Frauenkirche's Building
+ *  says 41 m, its parts reach 94 m. A tree on a slope rises a little
+ *  above the survey's mean ground. */
+const SURVEY_SHORT = 1.25;
+
 /**
  * A Building's facts once its whole tree is known (the bake side): its
  * ground area is the union of every footprint in the tree — parts that
  * overlap or stand on one another count once — and, unless the survey
- * measured the Building itself (`surveyed`), its height runs from the
- * tree's lowest base to its highest top (a tower on a podium is the
+ * measured the Building itself (`surveyed`) and the tree stays near that
+ * height (`SURVEY_SHORT`), its height runs from the tree's lowest base to
+ * its highest top (a tower on a podium is the
  * tower's top above the podium's base, as `measuredHeight` is defined).
  */
 export function treeFacts(
@@ -185,7 +192,10 @@ export function treeFacts(
   return {
     ...root,
     area: area > 0 ? round(area, 10) : root.area,
-    height: surveyed || !(top > base) ? root.height : round(top - base, 100),
+    height:
+      !(top > base) || (surveyed && top - base <= root.height * SURVEY_SHORT)
+        ? root.height
+        : round(top - base, 100),
   };
 }
 

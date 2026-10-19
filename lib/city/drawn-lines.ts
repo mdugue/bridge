@@ -198,7 +198,7 @@ export function drawnGroups(b: BuildingInquiry, epsg?: number): DrawnGroup[] {
   const rows = new Rows();
 
   rows.group("Form");
-  rows.row(heightRow(o));
+  rows.row(heightRow(o, all.length > 1));
   rows.row({
     label: "Traufe",
     value: metres(o.eaveH),
@@ -278,13 +278,15 @@ export function drawnGroups(b: BuildingInquiry, epsg?: number): DrawnGroup[] {
   return rows.done();
 }
 
-function heightRow(o: InquiryObject): DrawnRow | null {
+/** The described object's own height: a part's runs from its own foot
+ *  (the Frauenkirche's lantern stands 40 m up), so it says so. */
+function heightRow(o: InquiryObject, part: boolean): DrawnRow | null {
   if (o.facts.height === NO_FACT) {
     return null;
   }
   const rebuilt = isMeasuredRoof(o.facts.roofType);
   return {
-    label: "Höhe",
+    label: part ? "Höhe des Teils" : "Höhe",
     value: metres(o.facts.height),
     method: rebuilt ? "detected" : "taken",
     source: rebuilt ? "dom" : "lod2",
