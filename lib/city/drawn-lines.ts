@@ -324,6 +324,14 @@ function storeyRow(
   if (!(look.storeyH > 0 && o.eaveH > 0)) {
     return null;
   }
+  // an own facade draws no storey lines (#170)
+  if (d.own) {
+    return {
+      label: "Geschosse",
+      value: "keine Geschosslinien",
+      ...ownFacadeWhy(o, d, places),
+    };
+  }
   const n = Math.max(1, Math.round(o.eaveH / look.storeyH));
   const value = `${whole.format(n)} × ${metres(look.storeyH)}`;
   const from =

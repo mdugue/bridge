@@ -162,6 +162,7 @@ test("a church draws no windows and no town house's plinth, because of its use",
     detail: "eigene Fassade: Kirche",
   });
   expect(r["Sockel, Gesimse"]).toMatchObject({ value: "keine" });
+  expect(r.Geschosse).toMatchObject({ value: "keine Geschosslinien" });
   expect(r.Wahrzeichen).toMatchObject({
     value: "Q2516",
     url: "https://www.wikidata.org/wiki/Q2516",
