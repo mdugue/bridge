@@ -221,6 +221,21 @@ test("a building a tile edge cuts in two: its tiles' leads, the highest top and 
   expect(fact("Gebäude")).toBe("2 im Stadtmodell");
 });
 
+test("an ensemble names its first three addresses and counts the rest", () => {
+  const at = (addr: string) => object({ facts: facts({ addr }) });
+  const card = inquiryCard(
+    {
+      kind: "building",
+      tile: "t",
+      picked: at("Ammonstraße 72"),
+      tree: ["A 1", "B 2", "C 3", "D 4"].map(at),
+    },
+    null,
+    DRESDEN
+  );
+  expect(card.address).toBe("Ammonstraße 72 · A 1 · B 2 und 2 weitere");
+});
+
 test("a shop matched to the footprint is marked detected, on its line and its fact", () => {
   const card = inquiryCard(
     {

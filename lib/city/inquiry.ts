@@ -187,6 +187,18 @@ function scanSource(
     .join(" · ");
 }
 
+/** The most addresses a card names: an ensemble (the World Trade Center)
+ *  has a dozen. */
+const MAX_ADDRESSES = 3;
+
+/** The address line: the picked object's first, then the others, the rest
+ *  counted. */
+function addressLine(addresses: readonly string[]): string {
+  const shown = addresses.slice(0, MAX_ADDRESSES).join(" · ");
+  const more = addresses.length - MAX_ADDRESSES;
+  return more > 0 ? `${shown} und ${whole.format(more)} weitere` : shown;
+}
+
 /**
  * The facts of a building tree, merged: the picked part's roof; height and
  * ground from the Building itself, which the bake gives its whole tree's
@@ -217,7 +229,7 @@ function mergedFacts(inquiry: BuildingInquiry) {
   );
   const flags = all.reduce((sum, o) => sum | o.flags, 0);
   return {
-    address: distinct([pick.addr, ...facts.map((f) => f.addr)]).join(" · "),
+    address: addressLine(distinct([pick.addr, ...facts.map((f) => f.addr)])),
     created: pick.created || distinct(facts.map((f) => f.created))[0] || "",
     functionCode:
       pick.function || distinct(facts.map((f) => f.function))[0] || "",
