@@ -52,8 +52,8 @@ Karte anklicken oder einen Snapshot anwenden: Das Laden beginnt dann
 dort neu (der Ladebildschirm nennt ihn als *Start*), und du kommst gleich
 dort an statt am üblichen Startpunkt mit anschließender Reise. Sonne,
 Uhrzeit und Look lassen sich ebenfalls schon einstellen; Modell, die
-Werkzeuge, *Sicht merken*, der Klang und das Speichern eines Bildes
-warten, bis die Szene steht.
+Werkzeuge, *Sicht merken* und das Speichern eines Bildes warten, bis
+die Szene steht.
 
 ## Bewegen
 
@@ -390,10 +390,12 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   Blatt — eine Zeile je Tag, eine Spalte je Uhrzeit — mit der Legende
   darunter (im Modell mit Maßstabsleiste und Nordpfeil). Die Uhrzeiten
   sind die Ortszeit deines Geräts.
-- **Darstellung** — ganz oben der **Bildstil**, darunter Regler in vier
-  aufklappbaren Gruppen. Jeder Regler ist eine Prozentzahl; die
-  Voreinstellungen sind der abgestimmte Look. *Zurücksetzen* stellt die
-  Regler zurück und lässt den Bildstil, wie er ist.
+- **Darstellung** — ganz oben der **Bildstil**, darunter der eine
+  verbliebene Regler, *Nebel* (der Entfernungsdunst, eine Prozentzahl),
+  und der Schalter *Multi-Tuft-Kronen (nah)* (reiche Mehrbüschel-Kronen
+  nahe der Kamera; aus = die einfache Krone überall). *Zurücksetzen*
+  stellt beide auf ihren Startwert zurück und lässt den Bildstil, wie er
+  ist. Der übrige Look ist fest (unten).
 
 Der Bildstil zeichnet dieselbe Stadt auf eine andere Art; er lässt sich
 jederzeit wechseln, per Klick oder mit `V`. Der Browser merkt sich den
@@ -411,16 +413,18 @@ zuletzt gewählten Stil für den nächsten Besuch:
 
 In den grafischen Stilen *Comic*, *Sin City*, *Strich* und *Schwarzplan*
 ruht die Tiefenschärfe (ein unscharfer Hintergrund unter scharfen Linien
-wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
+wirkt wie ein Fehler).
 
-| Gruppe | Regler | Was er tut |
+Der Look selbst ist fest: der abgestimmte Look, für jeden Besucher und in
+jedem Snapshot derselbe — ihn zu ändern ist eine Änderung am Code, keine
+Einstellung. Das sind die Anteile, die er zeichnet, unter den Namen, die
+Code und Wissensbasis für sie verwenden:
+
+| Gruppe | Anteil | Was er zeichnet |
 |---|---|---|
-| Atmosphäre | *Nebel* | Entfernungsdunst |
-| | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
-| | *Flussnebel* | treibende Nebelschicht über dem Wasser |
+| Atmosphäre | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
 | | *Tiefenfärbung* | warm nah, kühl fern: eine tiefenabhängige Farbgebung |
-| Gebäude | *Transparenz* | durch Gebäude hindurchsehen (gerastert), bis 90 % |
-| | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
+| Gebäude | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
 | | *Höhenlinien* | zarte Geschossbänder, aus der gemessenen Höhe abgeleitet |
 | | *Streiflicht* | Kantenlicht an sonnenabgewandten Kanten |
 | | *Farbvariation* | Wandton je Gebäude aus Nutzung und Höhe |
@@ -429,7 +433,7 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
 | | *Gliederung* | was ein Haus auf Augenhöhe zeigt, gemalt: eine dunklere Ladenzone, wo ein Laden erfasst ist. Sockel, Gesims über dem Erdgeschoss und Traufgesims sind modelliert, laufen von Haus zu Haus durch und sind immer da |
 | | *Fenster* | Fensterreihen an jedem Haus, in die Wand gezeichnet: eine Öffnung, in die man hineinsieht, die Laibungen im Putz der Wand, der Grund dunkler und kühler, eine schmale Sohlbank mit ihrem Schatten — kein Glas, keine Scheiben, keine Sprossen. Achsweite und Größe, wo Straßenfotos das Haus vermessen haben (Dresden), sonst die des nächsten gemessenen Hauses derselben Art, sonst die seines Typs; eine Reihe je Geschoss, die Fenster so hoch, wie das Geschoss es zulässt, die des Erdgeschosses über dem Sockel, die des obersten unter dem Traufgesims; das Erdgeschoss eines Bürgerhauses etwas erhöht, seine Fenster mit Faschen. Keine an Brandwänden, neben Türen, über Ladenfronten, an Kirchen, Schlössern und Hallen. Aus der Ferne gehen sie im Ton der Fassade auf |
-| | *Fassadenbild* | was Straßenfotos (Mapillary) über eine Fassade sagen, abstrahiert: ein feines Relief, wo sie unruhig ist, ein Gesims an jedem Geschoss einer unruhigen Gründerzeitfront, ein etwas dunklerer oder hellerer Ton, ein Ladensockel, wo ein Ladenschild hängt; nur in Dresden, wo Rundumfotos die Fassade zeigen |
+| | *Fassadenbild* | was Straßenfotos (Mapillary) über eine Fassade sagen, abstrahiert: ein feines Relief, wo sie unruhig ist, ein Gesims an jedem Geschoss einer unruhigen Gründerzeitfront, ein etwas dunklerer oder hellerer Ton, ein Ladensockel, wo ein Ladenschild hängt; wo Rundumfotos die Fassade zeigen (in jeder Stadt außer Unna, das keine hat) |
 | | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
@@ -437,22 +441,23 @@ wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
 | | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |
 | | *Blattdurchscheinen* | Durchleuchtung naher, großer Kronen (schattenabhängig) |
-| | *Blattflimmern* | Böen drehen Blätter auf sonnigen Kronen auf die helle Unterseite |
-| | *Windhelligkeit* | Kronen hellen auf, wenn sie sich in eine Böe neigen |
-| | *Multi-Tuft-Kronen (nah)* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
 | | *Spiegelung* | der Himmel spiegelt sich in Glasfassaden, Vergoldungen und im Wasser; nur der Himmel, nicht die Häuser gegenüber |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
-| | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf die Bildmitte, *Manuell* auf eine feste Entfernung; auf Telefonen nicht angeboten |
 
-Solange sich die Kamera bewegt, ist die Tiefenschärfe-Unschärfe
+Zwei weitere Effekte gehören zum festen Look. Der Nebel über dem Fluss
+treibt erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der
+Ferne.
+Die fotografische Tiefenschärfe macht nur unscharf, was hinter dem Fokus
+liegt (der Vordergrund bleibt scharf), und scharf ist immer, was in der
+Bildmitte liegt. Solange sich die Kamera bewegt, ist die Unschärfe
 abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
-zurück, sobald du stehst. Telefone bieten den Schalter gar nicht an: Die
-Unschärfe braucht mehr Grafikspeicher, als ein Telefon für einen Hauch
-erübrigen kann, den ein kleiner Bildschirm kaum zeigt.
+zurück, sobald du stehst. Telefone zeichnen ohne sie: Die Unschärfe
+braucht mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen
+kann, den ein kleiner Bildschirm kaum zeigt.
 
 ### Erweitert
 
@@ -461,12 +466,21 @@ erübrigen kann, den ein kleiner Bildschirm kaum zeigt.
   lässt sich nicht rückgängig machen. *Bild speichern* speichert die
   Ansicht als PNG mit ihren Quellen (siehe [Modell](#modell-die-stadt-als-planzeichnung)). *Immersiver Modus* fängt den
   Mauszeiger für ein Ego-Perspektive-Gefühl ein; `Esc` verlässt ihn.
-- **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und Uhrzeit,
-  den Bildstil und jeden Regler als kleinen JSON-Text; einen solchen Text in das Feld
+- **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und
+  Uhrzeit, den Bildstil, den *Nebel*, den Kronen-Schalter und die
+  Datenebenen als kleinen JSON-Text; einen solchen Text in das Feld
   einfügen und *Anwenden* drücken stellt ihn wieder her. So wird eine
   bestimmte Ansicht geteilt oder für einen Screenshot reproduziert. Ein
-  fehlerhafter Snapshot wird mit einer Meldung abgelehnt, statt die Szene
-  zu zerstören.
+  Snapshot von vor dem festen Look lädt weiter; die Regler, die er nennt,
+  werden übergangen. Ein fehlerhafter Snapshot wird mit einer Meldung
+  abgelehnt, statt die Szene zu zerstören.
+- **Qualität** — die Stufe, auf der der Viewer auf deinem Gerät zeichnet
+  (*Volle Qualität* oder *Sparstufe 1 bis 3*, siehe
+  [Wenn es abstürzt](#wenn-es-abstürzt)), was sie hier bedeutet
+  (Auflösung, Schattenkarte, Speicher für die Kacheln) und wann sie von
+  selbst sinkt. *Volle Qualität* setzt sie zurück und lädt die Stadt mit
+  allen Details neu, dort, wo du gerade bist; fällt die Grafik danach
+  wieder aus, geht es wieder eine Stufe leichter weiter.
 - **Statistik** — Anzahl der Gebäude und Geländepunkte, die gerade im
   Blick sind, geschätzter Grafikspeicher und die Bildrate.
 
@@ -485,8 +499,9 @@ der erst beim Klick etwas von Ko-fi lädt.
 - Goldene Stunde (Sonne wenige Grad über dem Horizont) und blaue Stunde
   (wenige Grad darunter) geben die reichsten Farben; probiere 07:00 oder
   20:00 im Sommer.
-- Auf einem Laptop ohne eigene Grafikkarte senke *Kontaktschatten* und
-  schalte *Tiefenschärfe* aus, um mehr Bilder pro Sekunde zu bekommen.
+- Auf einem Laptop ohne eigene Grafikkarte bringt ein kleineres
+  Browserfenster mehr Bilder pro Sekunde: Die Szene kostet mit jedem
+  Pixel, das sie zeichnet.
 - `?scene=lite` hinter der Adresse der Stadt (`/dresden?scene=lite`)
   streamt nur die Startkachel, mit groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
   die Szene aussehen soll.
@@ -509,7 +524,9 @@ und kehrt nach ein paar Tagen von selbst zu vollen Details zurück, alle
 drei Tage um eine Stufe. Fällt die Grafik auf der leichtesten Stufe
 wieder aus, sagt eine Karte *Die Grafik ist ausgefallen* und bietet
 *Leichter weiter* (eine Stufe leichter, zurück, wo du standest) und *Neu
-laden* an. Auch einer Seite, die eine Weile im Hintergrund lag, kann ein
+laden* an. Welche Stufe gerade gilt, steht in der Seitenleiste unter
+*Erweitert › Qualität*; dort geht es auch sofort zurück zu vollen
+Details. Auch einer Seite, die eine Weile im Hintergrund lag, kann ein
 Telefon die Grafik nehmen; dann lädt der Viewer einfach auf derselben
 Stufe neu.
 
@@ -538,14 +555,3 @@ Seitenleiste) schaltet die Berichte für deinen Browser sofort aus. Dort
 steht auch, wer die Seite betreibt, wo die Berichte liegen und wie lange.
 Ist kein Fehlerdienst eingerichtet, bietet die Karte das Protokoll
 stattdessen zum Kopieren an.
-
-## Kleinigkeiten
-
-- **Lauschen.** Drücke **L** (oder schalte auf dem Telefon ganz unten in
-  *Erweitert* *Klang (experimentell)* ein), und die Stadt klingt leise:
-  Wind, die Elbe, Vögel am Tag und Grillen in Sommernächten, Schritte, die
-  das Pflaster unter den Füßen kennen — und wenn du die Uhr über eine
-  volle Stunde schiebst, schlagen die Kirchen in der Nähe sie, jede ein
-  wenig später, je weiter sie entfernt steht, so wie der Schall reist. Bei
-  jedem Laden der Seite ist er aus, in einem Hintergrund-Tab verstummt er,
-  und der kleine Lautsprecher oben links schaltet ihn wieder aus.

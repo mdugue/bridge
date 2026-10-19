@@ -10,7 +10,7 @@
  *    where two image sequences saw it;
  *  - dark: how much of it is clearly darker than the render, 1–3;
  *  - shop: a shop sign at the wall or an open ground floor (the clay
- *    joins it to OSM's shops, OBJECT_FLAG_SHOP, on its own slider).
+ *    joins it to OSM's shops, OBJECT_FLAG_SHOP, at its own strength).
  * 0 is "not seen" (two thirds of the street fronts, nearly every
  * courtyard). The readings ride in the object table's flags column, above
  * the OSM flags: `FACADE_UNIT` × (busy + 4 × dark + 16 × shop).

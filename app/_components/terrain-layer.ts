@@ -87,7 +87,11 @@ import {
   groundNormal,
   urbanGreen,
 } from "./ground-detail";
-import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
+import {
+  type LandcoverSplat,
+  paintLandcoverSplat,
+  splatScaleFor,
+} from "./landcover-splat";
 import { PAPER_HEX, paperGroundOn } from "./paper-scene";
 import {
   dropDataOnUpload,
@@ -99,7 +103,6 @@ import { roadMarkings } from "./road-markings";
 import {
   dataXY,
   type F,
-  type Live,
   rasterUv,
   type Tex,
   type V2,
@@ -145,6 +148,9 @@ export interface TerrainLayer {
   dispose: () => void;
   /** bilinear elevation lookup at projected (not recentered) coordinates */
   heightAt: (x: number, y: number) => number | null;
+  /** what that lookup keeps on the page's process (bytes): a grid's
+   *  elevations, a TIN's vertices and bucket index */
+  heightBytes: number;
   level: 0 | 1;
   mesh: Mesh;
   /** whether the ground is a TIN (its height index reads the mesh's index:
@@ -176,8 +182,8 @@ export interface TerrainOptions {
   fogColor: UniformNode<"color", Color>;
   /** phones sample the ≤ 2048² class raster */
   lowRasters: boolean;
-  /** the ground's look rows and the sun (uniform nodes, shared by every
-   *  tile) */
+  /** the ground's light: the shadow frustum and the sun (uniform nodes,
+   *  shared by every tile) */
   ground: GroundUniforms;
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
@@ -202,20 +208,13 @@ export interface TerrainOptions {
 }
 
 /**
- * The terrain's look rows and the sun: uniform nodes shared by every tile's
- * material, so a slider retunes them live (a uniform write, no rebuild).
+ * What the sun rig keeps for the terrain: uniform nodes shared by every
+ * tile's material (a uniform write, no rebuild). The ground's look
+ * strengths are constants of their terms (`GROUND_DETAIL`, `URBAN_GREEN`
+ * in ground-detail.ts, `MEADOW_NDVI` below, `SKY_VIEW`, `HORIZON_SHADE`
+ * in sky-light.ts).
  */
 export interface GroundUniforms {
-  /** kerbs, lawn edges and paving patterns (ground-detail.ts) */
-  groundDetail: Live;
-  /** the meadow's DOP greenness tint */
-  meadowNdvi: Live;
-  /** meadow colour on green built-up ground (courtyards, parks) */
-  urbanGreen: Live;
-  /** the sky-view factor's hold on the ambient light (sky-light.ts) */
-  skyView: Live;
-  /** the far horizon's cut of the sun (sky-light.ts) */
-  horizonShade: Live;
   /** the shadow frustum's centre (data frame x, y) and half-size (z), kept
    *  by the sun rig: where the horizon's near band takes over (sky-light.ts) */
   shadowReach: UniformNode<"vec3", Vector3>;
@@ -423,9 +422,10 @@ export interface SplatRasters {
 }
 
 /**
- * Loads a class raster and paints its colour splat: what a tile's two
- * terrain levels share (tile-stream.ts; on a phone both name the 2048²
- * raster). Null when the raster is missing or undecodable.
+ * Loads a class raster and paints its colour splat, held by file
+ * (tile-stream.ts `splats`): the coarse level reads its own 1024² one on
+ * every tier, the fine level the 4096² one, or the 2048² on a phone. Null
+ * when the raster is missing or undecodable.
  */
 export async function loadSplatRasters(
   url: string,
@@ -438,14 +438,20 @@ export async function loadSplatRasters(
   }
   const { texture, width, height } = raster;
   // every level that wanted it gone while it decoded: no splat painted (a
-  // mipmapped RGBA target of the raster's size) for nobody
+  // mipmapped RGBA target, half the raster's size at 4096²) for nobody
   if (signal?.aborted) {
     texture.dispose();
     signal.throwIfAborted();
   }
   return {
     ...raster,
-    painted: paintLandcoverSplat(renderer, texture, width, height),
+    painted: paintLandcoverSplat(
+      renderer,
+      texture,
+      width,
+      height,
+      splatScaleFor(width)
+    ),
   };
 }
 
@@ -651,7 +657,7 @@ export interface SplatLayer {
   /** the palette-painted colours (RGB) + water coverage (A); LINEAR +
    *  mipmapped for soft transitions (landcover-splat.ts) */
   colorTexture: Texture;
-  /** the look rows and the sun (shared uniform nodes) */
+  /** the shadow reach and the sun (shared uniform nodes) */
   ground: GroundUniforms;
   /** DOP NDVI raster (LINEAR) for the meadow and urban-green tints */
   ndviTexture?: Texture;
@@ -697,8 +703,8 @@ export function splatUv(splat: SplatLayer): V2 {
 
 /**
  * What a terrain variant's shared graph reads (material-slots.ts): the
- * tile's rasters and corner as slots, the look's rows as they are (every
- * tile shares those anyway). A tile's own values are `splatSlots`.
+ * tile's rasters and corner as slots, the shared uniforms as they are
+ * (every tile shares those anyway). A tile's own values are `splatSlots`.
  */
 interface SplatNodes {
   size: [number, number];
@@ -838,6 +844,12 @@ function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
 }
 
 /**
+ * Wiesenfärbung's strength: a middling tint reads without looking like a
+ * heat map — fixed at what its slider stood at (plan 073).
+ */
+const MEADOW_NDVI = float(0.6);
+
+/**
  * Meadow NDVI tint (Wiesenfärbung): on class-1 farmland/meadow only, shift
  * the pastel sage toward lush deep-green where the DOP greenness is high
  * and a drier yellow-tan where it's low — large-area colour variation the
@@ -849,7 +861,7 @@ function meadowNdvi(
   inp: GroundInputs,
   col: GroundColour,
   ndvi: Tex,
-  strength: Live
+  strength: F
 ): void {
   // Read from a coarser mip (a bias of 2.5): the 2 m raster carries every
   // path, tree shadow and bare patch, which painted the meadows in dark
@@ -931,8 +943,6 @@ function splatColour(splat: SplatNodes): V3 {
       classTexture: splat.classTexture,
       fw: max(fwidth(xy.x), fwidth(xy.y)).toVar(),
       cls: floor(texture(splat.classTexture, uv).r.mul(255).add(0.5)).toVar(),
-      groundDetail: splat.ground.groundDetail,
-      urbanGreen: splat.ground.urbanGreen,
       sunDirection: splat.ground.sunDirection,
       meadowColor: vec3(MEADOW_LINEAR[0], MEADOW_LINEAR[1], MEADOW_LINEAR[2]),
       roadColor: vec3(ROAD_LINEAR[0], ROAD_LINEAR[1], ROAD_LINEAR[2]),
@@ -951,7 +961,7 @@ function splatColour(splat: SplatNodes): V3 {
       roadMarkings(inp, col, g, splat.markings);
     }
     if (splat.ndvi) {
-      meadowNdvi(inp, col, splat.ndvi, splat.ground.meadowNdvi);
+      meadowNdvi(inp, col, splat.ndvi, MEADOW_NDVI);
     }
     const baseCol = paperGround(col, texture(splat.colorTexture, uv).a);
     grassDetail.assign(col.detail);
@@ -1149,6 +1159,12 @@ function gridElevations(mesh: Mesh, n: number, toData: Matrix4): Float32Array {
   return out;
 }
 
+/** A level's ground height, and the bytes its lookup keeps on the CPU. */
+interface HeightLookup {
+  heightAt: (x: number, y: number) => number | null;
+  bytes: number;
+}
+
 /**
  * Ground height over a TIN (`extras.tin`, the fine level): its surface
  * triangles indexed in the projected frame (lib/city/terrain-tin.ts
@@ -1160,11 +1176,11 @@ function tinHeightAt(
   bounds: TerrainBounds,
   toData: Matrix4,
   offset: { cx: number; cy: number }
-): (x: number, y: number) => number | null {
+): HeightLookup {
   const position = mesh.geometry.getAttribute("position");
   const index = mesh.geometry.getIndex();
   if (!index) {
-    return () => null;
+    return { heightAt: () => null, bytes: 0 };
   }
   const xy = new Float64Array(position.count * 2);
   const z = new Float32Array(position.count);
@@ -1183,7 +1199,7 @@ function tinHeightAt(
     // triangles have no area in plan and the lookup never picks one.
     triangles: index.array,
   });
-  return (x, y) => tin.heightAt(x, y);
+  return { heightAt: (x, y) => tin.heightAt(x, y), bytes: tin.bytes };
 }
 
 /** A mesh's positions as the numbers they are stored as (quantised, maybe
@@ -1381,12 +1397,14 @@ interface TerrainRasters {
 }
 
 /**
- * The level's rasters, one after another on purpose: several 4096² rasters
- * decoding at once is a peak mobile Safari kills the tab for (and across
- * the levels the tile renderer parses at once, each raster decodes and
- * uploads in its turn: raster-upload.ts). Those a tile's two levels share
- * (tile-stream.ts) are held, not owned; on an abort everything taken so far
- * is let go again — on the GPU already, so let go means freed there too.
+ * The level's rasters. They are all asked for at once — each is a round
+ * trip of its own, and a fine level names up to ten — while their decodes
+ * and uploads still take turns site-wide (raster-upload.ts): several 4096²
+ * rasters decoding at once is a peak mobile Safari kills the tab for, a
+ * few compressed files waiting for their turn are not. Those a tile's two
+ * levels share (tile-stream.ts) are held, not owned; on an abort or a
+ * failure everything taken is let go again — on the GPU already, so let
+ * go means freed there too.
  */
 async function loadTerrainRasters(
   extras: TerrainExtras,
@@ -1414,14 +1432,16 @@ async function loadTerrainRasters(
   };
   try {
     const classFile = opts.lowRasters ? extras.landcoverLow : extras.landcover;
-    const rasters = await hold(
-      opts.splats,
-      classFile ? opts.fileUrl(classFile) : undefined
-    );
+    const [rasters, detail] = await settledAll([
+      hold(opts.splats, classFile ? opts.fileUrl(classFile) : undefined),
+      loadDetailRasters(extras, opts, hold, owned),
+    ]);
     opts.signal?.throwIfAborted();
-    const detail = rasters
-      ? await loadDetailRasters(extras, opts, hold, owned)
-      : NO_DETAIL;
+    if (!rasters) {
+      // no class raster to paint the detail over: the flat sage ground
+      free();
+      return { rasters, detail: NO_DETAIL, free };
+    }
     return { rasters, detail, free };
   } catch (err) {
     free();
@@ -1430,21 +1450,54 @@ async function loadTerrainRasters(
 }
 
 /**
- * Whether a terrain level reads its tile's sports grounds: both levels on a
- * desktop, the fine one only on a phone. Their index raster is a 2048²
- * RGBA, 16 MB on the GPU for each coarse tile in view (14 of Dresden's 15
- * tiles have grounds); beyond the fine level's reach a pitch shows its
- * land-cover class, its lines a pixel or less there anyway. The coarse
- * level then builds the variant without the slot, which every tile
- * without grounds shares.
+ * Every promise settled, then their values — or the first rejection, once
+ * none is still running: what the others brought is in `owned` / `holds`
+ * by then, so the caller's `free` lets go of all of it.
  */
-export function readsSportGrounds(level: 0 | 1, lowRasters: boolean): boolean {
-  return !(lowRasters && level === 1);
+async function settledAll<T extends readonly unknown[]>(promises: {
+  [K in keyof T]: Promise<T[K]>;
+}): Promise<T> {
+  const results = await Promise.allSettled(promises);
+  const failed = results.find((r) => r.status === "rejected");
+  if (failed) {
+    throw failed.reason;
+  }
+  // reason: every result is fulfilled here, in the tuple's order
+  return results.map(
+    (r) => (r as PromiseFulfilledResult<unknown>).value
+  ) as unknown as T;
 }
 
-/** The optional rasters over the class raster, one after another (see
+/**
+ * Whether a terrain level reads its tile's sports grounds: the fine level
+ * on a desktop only. The index raster is a 2048² RGBA — 16 MiB on the GPU
+ * for a PNG of a few dozen kB (14 of Dresden's 15 tiles have grounds) —
+ * and the lines it places are a pixel or less beyond the fine level's
+ * reach. A phone draws its pitches in their land-cover class, without
+ * lines (the goals and nets come from the table, sport-fixtures.ts): 16
+ * MiB a fine tile against a 336 MiB cache. Without the slot a level builds
+ * the variant every tile without grounds shares.
+ */
+export function readsSportGrounds(level: 0 | 1, lowRasters: boolean): boolean {
+  return level === 0 && !lowRasters;
+}
+
+/** A raster the level owns, taken into `owned` as soon as it lands. */
+function owning<T extends Texture>(
+  owned: Texture[],
+  load: Promise<T | null> | null
+): Promise<T | null> {
+  return (load ?? Promise.resolve(null)).then((texture) => {
+    if (texture) {
+      owned.push(texture);
+    }
+    return texture;
+  });
+}
+
+/** The optional rasters over the class raster, all asked for at once (see
  *  loadTerrainRasters); each absent one is null. The level's own go into
- *  `owned`. */
+ *  `owned` as they land. */
 async function loadDetailRasters(
   extras: TerrainExtras,
   opts: TerrainOptions,
@@ -1452,64 +1505,66 @@ async function loadDetailRasters(
   owned: Texture[]
 ): Promise<DetailRasters> {
   const url = (file?: string) => (file ? opts.fileUrl(file) : undefined);
-  const own = <T extends Texture>(texture: T | null): T | null => {
-    if (texture) {
-      owned.push(texture);
-    }
-    return texture;
-  };
-  const ndviTexture = await hold(opts.ndvis, url(extras.ndvi));
-  opts.signal?.throwIfAborted();
+  const { renderer, signal } = opts;
   // The paving patterns are close-range: the build names the raster on the
   // fine level only.
   const surface = url(extras.surface);
-  const surfaceTexture = own(
-    surface
-      ? await loadSurfaceTexture(surface, opts.renderer, opts.signal)
-      : null
-  );
   const edges = url(extras.edges);
-  const edgesTexture = own(
-    edges ? await loadEdgesTexture(edges, opts.renderer, opts.signal) : null
-  );
   const sportRaster = readsSportGrounds(extras.level, opts.lowRasters)
     ? url(extras.sport)
     : undefined;
   const sportTable = url(extras.sportTable);
-  const sport = await hold(
-    opts.sports,
-    sportRaster && sportTable ? sportKey(sportRaster, sportTable) : undefined
-  );
-  opts.signal?.throwIfAborted();
   // Road markings: close-range paint, the fine level only; phones read the
   // 1024² twin (the same table).
   const markingsRaster = url(
     (opts.lowRasters ? extras.markingsLow : undefined) ?? extras.markings
   );
   const markingsTable = url(extras.markingsTable);
-  const markings =
-    markingsRaster && markingsTable
-      ? await loadMarkings(
-          markingsRaster,
-          markingsTable,
-          opts.renderer,
-          opts.signal
-        )
-      : null;
-  own(markings?.raster ?? null);
-  own(markings?.table ?? null);
   // Allotment colonies: the fine level only, phones the half-resolution
   // twin of the same crop.
   const colonies = url(
     (opts.lowRasters ? extras.cultivatedLow : undefined) ?? extras.cultivated
   );
-  const colonyTexture = own(
-    colonies
-      ? await loadColonyTexture(colonies, opts.renderer, opts.signal)
-      : null
-  );
-  const horizon = await hold(opts.horizon, url(extras.horizon));
-  const svf = await hold(opts.skyView, url(extras.svf));
+  const markingsLoad =
+    markingsRaster && markingsTable
+      ? loadMarkings(markingsRaster, markingsTable, renderer, signal).then(
+          (markings) => {
+            if (markings) {
+              owned.push(markings.raster, markings.table);
+            }
+            return markings;
+          }
+        )
+      : Promise.resolve(null);
+  const [
+    ndviTexture,
+    surfaceTexture,
+    edgesTexture,
+    sport,
+    markings,
+    colonyTexture,
+    horizon,
+    svf,
+  ] = await settledAll([
+    hold(opts.ndvis, url(extras.ndvi)),
+    owning(
+      owned,
+      surface ? loadSurfaceTexture(surface, renderer, signal) : null
+    ),
+    owning(owned, edges ? loadEdgesTexture(edges, renderer, signal) : null),
+    hold(
+      opts.sports,
+      sportRaster && sportTable ? sportKey(sportRaster, sportTable) : undefined
+    ),
+    markingsLoad,
+    owning(
+      owned,
+      colonies ? loadColonyTexture(colonies, renderer, signal) : null
+    ),
+    hold(opts.horizon, url(extras.horizon)),
+    hold(opts.skyView, url(extras.svf)),
+  ]);
+  signal?.throwIfAborted();
   return {
     ndviTexture,
     surfaceTexture,
@@ -1556,8 +1611,6 @@ function groundLightOf(splat: SplatLayer): GroundLight | undefined {
     horizon: splat.horizonTexture,
     origin: [minX - splat.offset.cx, maxY - splat.offset.cy],
     size: splatSize(splat),
-    skyView: ground.skyView,
-    horizonShade: ground.horizonShade,
     shadowReach: ground.shadowReach,
     sunDirection: ground.sunDirection,
   };
@@ -1621,9 +1674,12 @@ export async function dressTerrain(
     mesh.geometry.setIndex(grids.index(n, index));
   }
   const elevations = extras.tin ? null : gridElevations(mesh, n, toData);
-  const heightAt = elevations
-    ? (x: number, y: number) =>
-        sampleHeightfield({ elevations, n, bounds }, x, y)
+  const { heightAt, bytes: heightBytes } = elevations
+    ? {
+        heightAt: (x: number, y: number) =>
+          sampleHeightfield({ elevations, n, bounds }, x, y),
+        bytes: elevations.byteLength,
+      }
     : tinHeightAt(mesh, bounds, toData, opts.offset);
 
   const { rasters, detail, free } = await loadTerrainRasters(extras, opts);
@@ -1680,6 +1736,7 @@ export async function dressTerrain(
     minElevation: extras.minElevation,
     water,
     heightAt,
+    heightBytes,
     dispose: () => {
       // Shares the tile's positions; only its own index (and normals) go —
       // not the site's (GridShare), which other tiles draw with.

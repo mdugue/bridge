@@ -211,11 +211,13 @@ export interface Site {
   /** the city's street-tree register, where it publishes one openly */
   treeCadastre?: TreeCadastre;
   /**
-   * Whether the site adds the street lamps and litter bins OSM lacks from
-   * Mapillary's detected objects (pipeline/bake/mapillary.py; CC BY-SA, so
-   * its credit joins the footer).
+   * What the site takes from Mapillary's street photos (CC BY-SA 4.0, so its
+   * credit joins the footer): always the facade readings and shop windows
+   * measured in its panoramas (pipeline/bake/facades.py, shopfronts.py);
+   * with `objects`, also the street lamps and litter bins OSM lacks from its
+   * detected objects (pipeline/bake/mapillary.py).
    */
-  mapillary?: boolean;
+  mapillary?: { objects: boolean };
   /**
    * The id of the viewpoint the player starts at. It must lie on the first
    * tile: that one is always streamed (the lite profile streams it alone)
@@ -344,9 +346,22 @@ export const TIMETABLE_CREDIT =
   "Straßenbahn-Fahrplan: DELFI e.V. via gtfs.de, CC BY 4.0";
 
 /** The credit of Mapillary's lamps and bins and the shopfronts measured in
- *  its street photos (`Site.mapillary`). */
+ *  its street photos (`Site.mapillary` with `objects`). */
 export const MAPILLARY_CREDIT =
   "Lampen, Mülleimer, Schaufenster: Mapillary, CC BY-SA 4.0";
+/** The credit where only the panoramas are measured (no lamps and bins). */
+export const MAPILLARY_SHOPFRONT_CREDIT =
+  "Fassaden, Schaufenster: Mapillary, CC BY-SA 4.0";
+
+/** The site's Mapillary credit line, when it takes anything from it. */
+export function mapillaryCredit(site: Site): string[] {
+  if (!site.mapillary) {
+    return [];
+  }
+  return [
+    site.mapillary.objects ? MAPILLARY_CREDIT : MAPILLARY_SHOPFRONT_CREDIT,
+  ];
+}
 
 /** The credits of the site's registers and data layers, each a
  *  "what: holder, licence" line. */
@@ -354,7 +369,7 @@ function dataCredits(site: Site): string[] {
   const layers = site.dataLayers;
   return [
     ...(site.treeCadastre ? [site.treeCadastre.credit] : []),
-    ...(site.mapillary ? [MAPILLARY_CREDIT] : []),
+    ...mapillaryCredit(site),
     ...(layers?.traffic ? [layers.traffic.credit, TRAFFIC_HOURS_CREDIT] : []),
     ...(layers?.bikes ? [layers.bikes.credit] : []),
     ...(layers?.trams ? [TIMETABLE_CREDIT] : []),
@@ -373,7 +388,7 @@ export function siteAttribution(site: Site): string[] {
     site.provider.credit,
     osmCredit(site),
     ...(site.treeCadastre ? [treeCredit(site.treeCadastre)] : []),
-    ...(site.mapillary ? [MAPILLARY_CREDIT] : []),
+    ...mapillaryCredit(site),
     ...(data.length > 0 ? [data.join(" · ")] : []),
   ];
 }

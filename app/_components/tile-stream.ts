@@ -1,6 +1,5 @@
 import { DownloadPriorityQueue, PriorityQueue } from "3d-tiles-renderer/core";
 import { TilesRenderer } from "3d-tiles-renderer/three";
-import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
   type BufferGeometry,
   type Camera,
@@ -56,6 +55,7 @@ import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { mapillaryParts } from "@/lib/city/mapillary";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { type CityLayer, dressCity } from "./city-layer";
+import { GltfContentPlugin } from "./gltf-content";
 import type { FacadeReadings } from "@/lib/city/facade-reading";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import type { CrownWarmup } from "./crown-season";
@@ -100,9 +100,13 @@ import type { DeviceTier } from "./scene-profile";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
+import { streamTimings } from "./stream-timing";
+import { whenIdle } from "./main-yield";
+import { bvhBytesUnder } from "./collision";
 import {
   type AnyAttribute,
   compileRepresentatives,
+  cpuArrayBytes,
   detachSceneShared,
   disposeGeometry,
   disposeObject3D,
@@ -110,8 +114,8 @@ import {
   estimateGeometryBytes,
   sceneSharedBytes,
 } from "./three-utils";
-import { buildTraffic, type TrafficDetail } from "./traffic-layer";
-import { trafficAskSet } from "./traffic-ask";
+import type { TrafficBuilder } from "./data-layers-feature";
+import type { TrafficDetail } from "./traffic-layer";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
@@ -138,6 +142,11 @@ export interface TileDressing {
   /** the trees, monuments and bridge decks the inquiry probe can ask
    *  (lib/city/ask-items.ts; plan 052 phase 4): data, nothing drawn */
   asks?: AskSet<FeatureInquiry>[];
+  /** fills `asks` (the same array) — in idle time once the dressing hangs
+   *  (`DressingPlugin.hangDressing`), not on its critical path: a card
+   *  nobody may open placed every canopy tree a second time inside the
+   *  dressing's build. Gone once it has run. */
+  buildAsks?: () => void;
   furniture?: Group;
   lamps?: LampControl;
   /** OSM hedges (low-vegetation-layer.ts): static, no per-frame work */
@@ -252,6 +261,13 @@ export interface TileStreamContext {
   /** a dressing whose build threw (not an abort, not an allocation
    *  failure — those go to `onAllocationFailure`): the tile stays bare */
   onDressingFailed?: (error: unknown, tile: string) => void;
+  /**
+   * A content's CPU copies went once its compile had uploaded them
+   * (`dropContentCopies`): what the tiles keep on the page's process
+   * changed, without a change of the stream when the compile outlasted
+   * its wait and the tile showed first (`cpuBytesOf` is counted again).
+   */
+  onCopiesDropped?: () => void;
   renderer: WebGPURenderer;
   styleResources: StyleResources;
   sunDirection: Vector3;
@@ -260,6 +276,14 @@ export interface TileStreamContext {
   /** a site tile's exact extent (the tileset's root extras) */
   tileBounds: (tileId: string) => TerrainBounds | undefined;
   tilesetUrl: string;
+  /**
+   * The traffic bodies' builder, from the data layers' feature
+   * (data-layers-feature.ts), which starts on the first switch-on: the
+   * slots wait on it, so the stream does not depend on the layer's code.
+   * Null once the scene is gone; rejects when the feature could not
+   * start (the next switch-on asks again).
+   */
+  trafficBuilder: () => Promise<TrafficBuilder | null>;
 }
 
 export interface TileStream {
@@ -417,7 +441,7 @@ export const DRESSING_PARTS = {
 } as const satisfies Record<
   // every field but the id and the askables (data): a new part cannot be
   // left out
-  Exclude<keyof TileDressing, "asks" | "tile">,
+  Exclude<keyof TileDressing, "asks" | "buildAsks" | "tile">,
   (d: TileDressing) => Object3D | undefined
 >;
 
@@ -431,11 +455,109 @@ export function dressingParts(d: TileDressing): Object3D[] {
   return DRESSING_PART_NAMES.flatMap((name) => DRESSING_PARTS[name](d) ?? []);
 }
 
+/**
+ * What the loaded tiles keep on the page's process, by what keeps it
+ * (bytes) — beside what three counts on the GPU, which is all the memory
+ * governor and the tile cache's weighing see. An iPhone's page died at the
+ * boot with three's count at 257 MB: the process ran out first. The typed
+ * arrays only (`cpuArrayBytes`, `bvhBytesUnder`): not the meshopt
+ * workers' heaps, the loaders' transient copies or plain JS objects (the
+ * ask sets), which nothing can weigh from here.
+ */
+export interface CpuBytes {
+  /** the buildings' positions, index and feature ids, which picks, the
+   *  BVH, demolish and the selection outline read */
+  city: number;
+  /** the buildings' BVHs (city-layer.ts builds them as rays need them) */
+  bvh: number;
+  /** the buildings' object tables and the textures packed from them */
+  tables: number;
+  /** the terrain levels' kept arrays (a TIN's index, the water's) */
+  terrain: number;
+  /** their height lookups: a TIN's vertices and buckets, a grid's heights */
+  heights: number;
+  /** the dressings' geometry and instance arrays, and the BVHs of what
+   *  was asked (bridge decks, traffic bodies) */
+  dressing: number;
+  total: number;
+}
+
+/** The loaded tiles' CPU arrays (`CpuBytes`), each buffer once. */
+export function cpuBytesOf(
+  stream: Pick<TileStream, "cities" | "dressings" | "terrains">
+): CpuBytes {
+  const seen = new Set<ArrayBufferLike>();
+  const arrays = (roots: (Object3D | undefined)[]) =>
+    roots.reduce(
+      (sum, root) => sum + (root ? cpuArrayBytes(root, seen) : 0),
+      0
+    );
+  const out: CpuBytes = {
+    city: 0,
+    bvh: 0,
+    tables: 0,
+    terrain: 0,
+    heights: 0,
+    dressing: 0,
+    total: 0,
+  };
+  for (const city of stream.cities) {
+    out.city += arrays([city.mesh]);
+    out.bvh += bvhBytesUnder(city.mesh);
+    out.tables += city.tableBytes;
+  }
+  for (const t of stream.terrains) {
+    // the level's own meshes, not the dressing hung beside them
+    out.terrain += arrays([
+      t.mesh,
+      t.water?.mesh,
+      t.water?.mistMesh,
+      t.stairs,
+      t.walls,
+      t.kerbs,
+      t.fences,
+    ]);
+    out.heights += t.heightBytes;
+  }
+  for (const d of stream.dressings) {
+    const parts = dressingParts(d);
+    out.dressing += arrays(parts);
+    for (const part of parts) {
+      out.dressing += bvhBytesUnder(part);
+    }
+  }
+  out.total =
+    out.city + out.bvh + out.tables + out.terrain + out.heights + out.dressing;
+  return out;
+}
+
 /** How long a tile may wait on its compile before it shows regardless. */
 const COMPILE_WAIT_MS = 3000;
-/** How long a level may wait on its dressing while the tile's other level
- *  stands in for it (DressingPlugin.handsOver) before it shows regardless. */
-const HAND_OVER_WAIT_MS = 10_000;
+/**
+ * Meshopt decode workers per tier. Each worker's WebAssembly heap grows to
+ * the largest buffer it has decoded (a dense building tile's 75 MB) and
+ * never shrinks, so every worker is a heap of that size on the page's
+ * process for good: a phone, which the page's process memory ends (an
+ * iPhone's crashes come with three's GPU count at 257 MB), keeps one — its
+ * two parse slots queue their decodes, a fraction of each parse — and a
+ * desktop two.
+ */
+export const MESHOPT_WORKERS: Readonly<Record<DeviceTier, number>> = {
+  desktop: 2,
+  mobile: 1,
+};
+/**
+ * How long a level may wait on its dressing while the tile's other level
+ * stands in for it (DressingPlugin.handsOver): the wait holds one of the
+ * renderer's parse slots (processTileModel runs inside the parse job), and
+ * dressings build one at a time. A phone has two slots: it shows the level
+ * bare and dresses it after (the trees appear a moment later); a desktop
+ * waits a little, so most hand-overs still swap the trees in one frame.
+ * (It was 10 s on every tier: a phone's stream stood still behind it.)
+ */
+export function handOverWaitMs(tier: DeviceTier): number {
+  return tier === "mobile" ? 0 : 1500;
+}
 
 function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
   return Promise.race([
@@ -444,7 +566,7 @@ function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
   ]);
 }
 
-function withinCompileWait(done: Promise<unknown>): Promise<void> {
+export function withinCompileWait(done: Promise<unknown>): Promise<void> {
   return withinWait(done, COMPILE_WAIT_MS);
 }
 
@@ -484,6 +606,10 @@ export function showDataLayers(
 /** Frees a dressing; a part that throws does not keep the others (what
  *  was thrown is returned). */
 function disposeDressing(d: TileDressing): unknown[] {
+  // its ask sets, if still pending, are never built: their idle callback
+  // may come after the tile has left (the entry it checks keeps the
+  // dressing), over a terrain already disposed
+  d.buildAsks = undefined;
   const errors: unknown[] = [];
   for (const own of [d.lamps, d.monuments, d.sport]) {
     try {
@@ -501,6 +627,51 @@ function disposeDressing(d: TileDressing): unknown[] {
     errors.push(...disposeObject3D(part));
   }
   return errors;
+}
+
+/** How long a hung dressing's ask sets wait for an idle main thread. */
+const ASKS_IDLE_MS = 2000;
+
+/**
+ * Builds a dressing's pending ask sets (`TileDressing.buildAsks`) now, at
+ * most once: into its `asks`, whose identity the traffic's sets rely on;
+ * the closure goes, and with it the features it held.
+ */
+function buildAsksNow(dressing: TileDressing): void {
+  const build = dressing.buildAsks;
+  dressing.buildAsks = undefined;
+  build?.();
+}
+
+/**
+ * Builds a hung dressing's ask sets once the main thread is idle — if the
+ * dressing still hangs on its tile then (`stillHung`). A question that
+ * comes first builds them at once (`asksOf`): a busy page's idle time can
+ * be long in coming, and its callback's timeout late (timers wait behind
+ * three's compile steps there — plan 069's Findings).
+ */
+export function buildAsksWhenIdle(
+  dressing: TileDressing,
+  stillHung: () => boolean,
+  idle: typeof whenIdle = whenIdle
+): void {
+  if (!dressing.buildAsks) {
+    return;
+  }
+  idle(() => {
+    if (stillHung()) {
+      buildAsksNow(dressing);
+    } else {
+      dressing.buildAsks = undefined;
+    }
+  }, ASKS_IDLE_MS);
+}
+
+/** What the probe can ask of a dressing: its ask sets, the pending ones
+ *  built first (a question before its idle time). */
+export function asksOf(dressing: TileDressing): AskSet<FeatureInquiry>[] {
+  buildAsksNow(dressing);
+  return dressing.asks ?? [];
 }
 
 /** The site tile a content root is of (its extras), for the trail. */
@@ -623,6 +794,9 @@ const nextTask = () =>
 /** What a tile's traffic bodies are built from (traffic-layer.ts
  *  `buildTraffic`), and where the probe's ask set goes once they are. */
 export interface TrafficSource {
+  /** the builder: the data layers' feature, started on the first show
+   *  (`TileStreamContext.trafficBuilder`) */
+  load: () => Promise<TrafficBuilder | null>;
   features: TrafficFeature[];
   bridges: BridgeFeature[];
   ground: GroundContext;
@@ -637,12 +811,14 @@ export interface TrafficSource {
 
 /**
  * A tile's counted traffic, its bodies built on demand (`TrafficSlot`):
- * the first `show` once the dressing hangs builds them in the host's turn
- * (a switch-on builds every loaded tile's bodies one after another, like
- * the dressings), hangs them hidden on the tile, compiles them, and only
- * then shows them, weighs them into the tile and adds their ask set. A
- * tile that leaves meanwhile gets nothing hung (its release frees what
- * was).
+ * the first `show` once the dressing hangs waits for the builder (the
+ * data layers' feature, started once for the scene — a tile that landed
+ * before the first switch-on and one landing after wait on the same
+ * start), then builds them in the host's turn (a switch-on builds every
+ * loaded tile's bodies one after another, like the dressings), hangs them
+ * hidden on the tile, compiles them, and only then shows them, weighs
+ * them into the tile and adds their ask set. A tile that leaves
+ * meanwhile gets nothing hung (its release frees what was).
  */
 export function trafficSlot(src: TrafficSource): TrafficSlot {
   let host: TrafficHost | null = null;
@@ -656,13 +832,13 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
   const gone = (h: TrafficHost) => disposed || h.gone();
   /** The bodies built, hung hidden and their compile started — in the
    *  host's turn, which waits on the compile as a dressing's does. */
-  const start = (h: TrafficHost) =>
+  const start = (h: TrafficHost, builder: TrafficBuilder) =>
     h.turn(async () => {
       await nextTask();
       if (gone(h)) {
         return null;
       }
-      const group = buildTraffic(
+      const group = builder.build(
         src.features,
         src.bridges,
         src.ground,
@@ -670,7 +846,7 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
         src.bounds
       );
       // asked as built, before it hangs (traffic-ask.ts)
-      const asks = trafficAskSet(group, src.features, src.tile);
+      const asks = builder.askSet(group, src.features, src.tile);
       group.visible = false;
       h.root.add(group);
       slot.group = group;
@@ -687,8 +863,24 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
       // (an object: a promise returned bare would be awaited whole)
       return { asks, compiled, group };
     });
+  /** The builder, before the turn: waiting for it must not hold the
+   *  dressings' chain. One that did not come is no failed build of this
+   *  tile (the spine says so once): the next show asks again; nor is one
+   *  that came after the layer went off again — built on the next show. */
+  const builderNow = async (): Promise<TrafficBuilder | null> => {
+    const builder = await src.load().catch(() => null);
+    if (builder && wanted) {
+      return builder;
+    }
+    building = null;
+    return null;
+  };
   const build = async (h: TrafficHost): Promise<void> => {
-    const started = await start(h);
+    const builder = await builderNow();
+    if (!builder || gone(h)) {
+      return;
+    }
+    const started = await start(h, builder);
     if (!started || gone(h)) {
       return;
     }
@@ -825,6 +1017,7 @@ async function buildCoarseDressing(
   const flows =
     traffic.length > 0
       ? trafficSlot({
+          load: ctx.trafficBuilder,
           features: traffic,
           bridges,
           ground: { offset, heightAt: terrain.heightAt },
@@ -1031,7 +1224,9 @@ async function buildDressing(
     river.length > 0 ? buildRiverside(river, ground) : undefined;
   // What the probe can ask, sized as drawn: the trees on the tile's own
   // ground (as the inventory stands them), decks only where this tile
-  // draws them.
+  // draws them — built once the dressing hangs, in idle time (`buildAsks`,
+  // hangDressing), into the array the traffic's sets join too. Until then
+  // a click on the tile's trees finds nothing to ask.
   const askCtx = {
     ...ground,
     tile,
@@ -1040,35 +1235,49 @@ async function buildDressing(
       ? (x: number, y: number) => ownsPoint(extent, x, y)
       : undefined,
   };
-  const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
-  await nextTask();
-  const asks = [
-    ...treeSets(trees, askCtx),
-    ...askSets(monumentItems(monuments, askCtx)),
-    ...(bridgeSet ? [bridgeSet] : []),
-    // every other tree, the hedges, lamps, furniture, stops and landings
-    ...moreSets(
-      {
-        canopy: ownCanopy,
-        scan: ownScan,
-        rows,
-        hedges,
-        lamps: ownLamps,
-        furniture,
-        trams,
-        river,
+  const asks: AskSet<FeatureInquiry>[] = [];
+  const buildAsks = () => {
+    const sets = streamTimings.timedSync(
+      "dressing:asks",
+      () => {
+        const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
+        return [
+          ...treeSets(trees, askCtx),
+          ...askSets(monumentItems(monuments, askCtx)),
+          ...(bridgeSet ? [bridgeSet] : []),
+          // every other tree, the hedges, lamps, furniture, stops and
+          // landings
+          ...moreSets(
+            {
+              canopy: ownCanopy,
+              scan: ownScan,
+              rows,
+              hedges,
+              lamps: ownLamps,
+              furniture,
+              trams,
+              river,
+            },
+            { offset: ctx.offset, heightAt: terrain.heightAt, tile },
+            keepTree
+          ),
+        ];
       },
-      { offset: ctx.offset, heightAt: terrain.heightAt, tile },
-      keepTree
-    ),
-  ];
+      tile
+    );
+    for (const set of sets) {
+      asks.push(set);
+    }
+  };
   // Sections are cut at the tile edge by the bake; a bridge street rides
   // the decks of this tile's bridge file (which names a seam deck in both).
   // The counted sections are asked on their bodies, while the layer shows;
-  // the bodies come with the first switch-on.
+  // the bodies (and their builder, the data layers' feature) come with
+  // the first switch-on.
   const trafficFlows =
     traffic.length > 0
       ? trafficSlot({
+          load: ctx.trafficBuilder,
           features: traffic,
           bridges,
           ground,
@@ -1080,6 +1289,7 @@ async function buildDressing(
       : undefined;
   return {
     asks,
+    buildAsks,
     tile,
     tram,
     riverside,
@@ -1161,10 +1371,12 @@ export class DressingPlugin {
     (url, signal) => loadHorizonTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
-  /** the class rasters (and their painted splats), NDVI and sports grounds
-   *  a tile's two terrain levels share — on a phone both levels name the
-   *  same class and NDVI files, ~30 MB of GPU memory per tile loaded twice
-   *  (the sports grounds only the fine level reads there) */
+  /** the class rasters (and their painted splats), NDVI and sports grounds,
+   *  held by file: what a tile's two terrain levels name alike is loaded
+   *  once — the NDVI on every tier; the class raster no longer, since the
+   *  coarse level reads its own 1024² one (lib/city/tile.ts
+   *  COARSE_RASTER_PX); the sports grounds only a desktop's fine level
+   *  reads */
   readonly splats: SharedRasters<SplatRasters> = createSharedRasters(
     (url, signal) => loadSplatRasters(url, this.ctx.renderer, signal),
     freeSplatRasters
@@ -1311,27 +1523,34 @@ export class DressingPlugin {
       return;
     }
     this.sceneOf.set(tile, scene);
+    // (A city's own dressing in this task: its compile is counted on the
+    // tile before anything can unload it.)
     let dressed: Promise<void> | undefined;
     if (extras.kind === "city") {
-      this.dressCity(scene, mesh, extras);
+      streamTimings.timedSync(
+        "tile:city",
+        () => this.dressCity(scene, mesh, extras),
+        extras.tileId
+      );
     } else if (extras.kind === "terrain") {
-      ({ dressed } = await this.dressTerrain(scene, mesh, extras));
+      ({ dressed } = await streamTimings.timed(
+        "tile:rasters",
+        () => this.dressTerrain(scene, mesh, extras),
+        extras.tileId
+      ));
     }
     // The renderer shows the tile once this resolves: its programs are
     // ready by then instead of compiling inside a frame. (A tile that left
     // meanwhile is not compiled: that would upload what nothing shows.)
     if (!this.released.has(scene)) {
-      await withinCompileWait(this.compileContent(scene));
+      await streamTimings.timed(
+        "tile:compile",
+        () => withinCompileWait(this.compileContent(scene)),
+        extras.tileId
+      );
     }
-    // ...and, where it takes over from the tile's other level, its
-    // dressing with it (handsOver).
-    if (
-      dressed &&
-      extras.kind === "terrain" &&
-      !this.released.has(scene) &&
-      this.handsOver(extras)
-    ) {
-      await withinWait(dressed, HAND_OVER_WAIT_MS);
+    if (dressed && extras.kind === "terrain") {
+      await this.waitHandOver(scene, extras, dressed);
     }
     // Disposed while it was being dressed: the renderer drops an aborted
     // load without ever recording the scene, so nothing else frees it. The
@@ -1357,6 +1576,25 @@ export class DressingPlugin {
       this.released.add(scene);
       this.release(scene);
     }, 0);
+  }
+
+  /** ...and, where a level takes over from its tile's other level, its
+   *  dressing with it (handsOver) — for as long as a parse slot may wait
+   *  on this tier (`handOverWaitMs`; a phone's not at all). */
+  private async waitHandOver(
+    scene: Object3D,
+    extras: TerrainExtras,
+    dressed: Promise<void>
+  ): Promise<void> {
+    const wait = handOverWaitMs(this.ctx.tier);
+    if (wait === 0 || this.released.has(scene) || !this.handsOver(extras)) {
+      return;
+    }
+    await streamTimings.timed(
+      "tile:handover-wait",
+      () => withinWait(dressed, wait),
+      extras.tileId
+    );
   }
 
   private dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras): void {
@@ -1449,7 +1687,6 @@ export class DressingPlugin {
       either.release();
       this.loadAborts.delete(scene);
     }
-    terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls, kerbs and fences: only their
     // materials here, lit by the tile's baked light as the ground is.
     const stairs = meshNamed(scene, "stairs");
@@ -1573,6 +1810,7 @@ export class DressingPlugin {
     });
     // a tile that leaves stops waiting for it at once (disposeTile)
     this.builtOf.set(scene, built);
+    const queuedAt = streamTimings.now();
     this.chain = this.chain
       .then(() => this.ctx.dressingGate)
       .then(async () => {
@@ -1580,13 +1818,13 @@ export class DressingPlugin {
         if (!entry || this.disposed) {
           return; // the tile (or the stream) left before its turn
         }
+        streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
         entry.aborter = new AbortController();
-        const dressing = await buildDressing(
-          terrain,
-          extras,
-          this.ctx,
-          this.url,
-          entry.aborter.signal
+        const signal = entry.aborter.signal;
+        const dressing = await streamTimings.timed(
+          "dressing:build",
+          () => buildDressing(terrain, extras, this.ctx, this.url, signal),
+          extras.tileId
         );
         entry.aborter = undefined;
         const parts = dressingParts(dressing);
@@ -1610,7 +1848,11 @@ export class DressingPlugin {
             outcome = ended;
           })
           .catch(() => undefined);
-        await withinCompileWait(compiled);
+        await streamTimings.timed(
+          "dressing:compile",
+          () => withinCompileWait(compiled),
+          extras.tileId
+        );
         built();
         // Not before the renderer has recorded the tile's own content (see
         // `loaded`): the dressing's materials are the scene's.
@@ -1686,6 +1928,10 @@ export class DressingPlugin {
     this.weighDressing(entry, dressing);
     this.tiles?.recalculateBytesUsed();
     this.stream.dressings.add(dressing);
+    buildAsksWhenIdle(
+      dressing,
+      () => !this.disposed && entry.dressing === dressing
+    );
     // The traffic's bodies hang here once its layer is switched on.
     dressing.traffic?.attach({
       root: scene,
@@ -1852,6 +2098,7 @@ export class DressingPlugin {
         ? cityCpuDroppable(entry.city)
         : [];
     dropCpuCopies(scene, drop);
+    this.ctx.onCopiesDropped?.();
   }
 
   /** Frees everything dressed onto one content root — once its compiles
@@ -2001,9 +2248,12 @@ export function createTileStream(
   paceStreaming(tiles, ctx.tier);
   setRasterTier(ctx.tier);
   tiles.registerPlugin(new ContentFetchPlugin());
-  tiles.registerPlugin(
-    new GLTFExtensionsPlugin({ metadata: true, meshoptDecoder: MeshoptDecoder })
-  );
+  // The decoder's own workers: without them a tile's meshopt buffers (75 MB
+  // decoded for a dense building tile) decode on the main thread, inside
+  // the parse that lands it. Idempotent: a remount keeps the same workers.
+  // oxlint-disable-next-line react-hooks/rules-of-hooks -- the decoder's method, no React hook
+  MeshoptDecoder.useWorkers(MESHOPT_WORKERS[ctx.tier]);
+  tiles.registerPlugin(new GltfContentPlugin(MeshoptDecoder));
   // Out-of-view tiles that are still active stay drawn (shadows, turning on
   // the spot); three's own frustum culling keeps them out of the main pass.
   tiles.displayActiveTiles = true;

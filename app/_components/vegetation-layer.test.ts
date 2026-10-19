@@ -17,8 +17,8 @@ import {
   buildTrunkGeo,
   buildVegetation,
   sceneCrowns,
+  createVegetationLod,
   TRUNK_H,
-  updateVegetationLod,
   type VegetationContext,
 } from "./vegetation-layer";
 
@@ -85,15 +85,34 @@ test("the control accepts the look and reports a crown tier change", () => {
   const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
   expect(() => built.applyLook(LOOK_DEFAULTS)).not.toThrow();
   // Born on the mid crown; the camera standing next to it switches to rich.
-  expect(updateVegetationLod([built], new Vector3(5, 100, 0))).toBe(true);
+  const lod = createVegetationLod();
+  expect(lod([built], new Vector3(5, 100, 0))).toBe(true);
   expect(built.chunks[0].tier).toBe("rich");
-  expect(updateVegetationLod([built], new Vector3(5, 100, 0))).toBe(false);
+  expect(lod([built], new Vector3(5, 100, 0))).toBe(false);
   built.setTime(1);
+});
+
+test("a pass after a tile left plans the tiles still there, from their own tiers", () => {
+  // Two tiles 2 km apart, the camera at the first: its chunk rich, the
+  // other's far.
+  const near = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
+  const far = buildVegetation({ rows: [], canopy: [canopy(2_005, 12)] }, ctx);
+  const lod = createVegetationLod();
+  expect(lod([near, far], new Vector3(5, 100, 0))).toBe(true);
+  expect([near.chunks[0].tier, far.chunks[0].tier]).toEqual(["rich", "far"]);
+  // The first tile leaves; between the far tier's in and out distances of
+  // the second, it keeps the far tier it has (the state reused for it is
+  // its own, not the rich one the first chunk left in that slot).
+  expect(lod([far], new Vector3(2_005 + 600, 100, 0))).toBe(false);
+  expect(far.chunks[0].tier).toBe("far");
+  // Walking up to it, it goes rich.
+  expect(lod([far], new Vector3(2_005, 100, 0))).toBe(true);
+  expect(far.chunks[0].tier).toBe("rich");
 });
 
 test("far away a chunk draws the far crown and no trunks", () => {
   const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
-  expect(updateVegetationLod([built], new Vector3(5_000, 100, 0))).toBe(true);
+  expect(createVegetationLod()([built], new Vector3(5_000, 100, 0))).toBe(true);
   const [chunk] = built.chunks;
   expect(chunk.tier).toBe("far");
   expect([chunk.far.visible, chunk.mid.visible, chunk.rich.visible]).toEqual([
@@ -177,12 +196,9 @@ test("every tile wears the scene's crown and trunk materials; the warm-up carrie
   expect(leafy.userData.shared).toBe(true);
   // the sun uniform holds the rig's vector by reference
   expect(uniforms.sunDirection.value).toBe(sun);
-  // the look and the clock write the shared uniforms
-  a.applyLook({ ...LOOK_DEFAULTS, shimmer: 0.42 });
-  expect(uniforms.shimmer.value).toBe(0.42);
+  // the clock writes the shared uniform
   b.setTime(12.5);
   expect(uniforms.time.value).toBe(12.5);
-  a.applyLook(LOOK_DEFAULTS);
   const warm = buildCrownWarmup();
   expect(warm.main.map((m) => m.material)).toEqual([bare, leafy]);
   expect(warm.main[0].geometry.getAttribute("normal")).toBeDefined();

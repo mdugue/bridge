@@ -239,3 +239,29 @@ def test_without_measurements_the_file_is_empty(tmp_path):
     facades.run(tile)
     doc = json.loads((tmp_path / "data" / "dlm" / "facades_t.json").read_text())
     assert doc == {"attribution": "Mapillary, CC BY-SA 4.0", "buildings": {}}
+
+
+def test_a_cell_the_api_keeps_failing_on_is_asked_for_in_quarters(monkeypatch):
+    to_wgs = Transformer.from_crs(25833, 4326, always_xy=True)
+    asked = []
+
+    def get(url, **_):
+        asked.append(url)
+        if len(asked) == 1:
+            raise facades.Transient("HTTPError: HTTP Error 500")
+        return json.dumps({"data": [{"id": str(len(asked))}]}).encode()
+
+    monkeypatch.setattr(facades, "_get", get)
+    data = facades._search("images", {"fields": "id"}, (X0, Y0, X0 + 200, Y0 + 200), to_wgs)
+    assert [d["id"] for d in data] == ["2", "3", "4", "5"]
+
+
+def test_a_quarter_that_still_fails_at_the_deepest_split_raises(monkeypatch):
+    to_wgs = Transformer.from_crs(25833, 4326, always_xy=True)
+
+    def get(url, **_):
+        raise facades.Transient("HTTPError: HTTP Error 500")
+
+    monkeypatch.setattr(facades, "_get", get)
+    with pytest.raises(facades.Transient):
+        facades._search("images", {"fields": "id"}, (X0, Y0, X0 + 200, Y0 + 200), to_wgs)

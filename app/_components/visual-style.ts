@@ -48,11 +48,6 @@ import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
 import { SELECTION_ACCENT } from "@/lib/city/outline";
 import { FACADE_ROOF } from "@/lib/city/windows";
 import {
-  type ClayLookKey,
-  LOOK_DEFAULTS,
-  type LookValues,
-} from "@/lib/city/look-controls";
-import {
   dataPosition,
   type F,
   type Live,
@@ -68,12 +63,13 @@ import {
   slotUniform,
 } from "./material-slots";
 import { clayWindows } from "./clay-windows";
-import { claySkySlots, createClaySky, openSkySlots } from "./sky-light";
 import {
-  mirrorWeight,
-  reflectionStrength,
-  skyReflection,
-} from "./sky-reflection";
+  claySkySlots,
+  createClaySky,
+  openSkySlots,
+  SKY_VIEW,
+} from "./sky-light";
+import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
 
 /** A building tile's object table (lib/city/city-mesh.ts). */
 interface ObjectTable {
@@ -103,36 +99,51 @@ interface ClayGraph {
  * re-rendered the whole scene into a transmission buffer every frame).
  */
 
-/** The clay's facade uniforms, shared by every tile (write `.value`). */
+/** The clay's live uniforms, shared by every tile (the sun rig writes them). */
 export interface ClayDetailUniforms {
-  uAO: Live;
-  /** Gliederung: plinth, ground-floor and eave cornices, shop zones */
-  uArticulation: Live;
-  uFacadeReading: Live;
-  uBands: Live;
-  /** dusk interior glow strength (commercial/public) */
-  uDuskGlow: Live;
-  /** eave cornice-stroke strength */
-  uEave: Live;
   /** night factor 0..1, driven by the sun rig (gates the dusk glow) */
   uNight: Live;
-  uRim: Live;
-  /** roof colour mix strength */
-  uRoofTint: Live;
-  /** roof vividness (Dachsättigung): hue-preserving chroma boost on DOP colour */
-  uRoofVibrance: Live;
-  /** per-building roughness jitter strength */
-  uRough: Live;
-  /** the sky view's hold on the facades' ambient light (Himmelslicht; the
-   *  terrain's node, a scene row) */
-  uSkyView: Live;
   /** world, surface → sun (the sun rig's vector, shared by reference):
    *  the windows' own shadows */
   uSun: UniformNode<"vec3", Vector3>;
-  uTint: Live;
-  /** the windows (Fenster, clay-windows.ts) */
-  uWindows: Live;
 }
+
+// --- the fixed look ----------------------------------------------------------
+// Each facade term's strength, fixed at what its slider stood at by default
+// before the sliders went (plan 073, ADR 0017): tuning one is an edit here,
+// judged by snapshots of place and time.
+
+/** Farbvariation: the clay colour each building takes from its use and
+ *  height, mixed into the base — a middling mix breaks the uniform massing
+ *  and stays painterly. The shopfronts' baked colours assume it
+ *  (scripts/bake-city-mesh.ts `WALL_TINT_SHOWN`): tune both together. */
+const TINT = float(0.6);
+/** Dachfarbe: terracotta or slate per roof, from its form and pitch —
+ *  roofs carry more colour than walls, the strongest readability cue. */
+const ROOF_TINT = float(0.7);
+/** Dachsättigung: the roof colours' chroma lifted without moving their hue
+ *  — copper green, terracotta and slate alike (0 = the raw aerial). */
+const ROOF_VIBRANCE = float(0.5);
+/** Boden-Verlauf: the walls darkened over their lowest ~5 m. */
+const GROUND_SHADE = float(0.34);
+/** Höhenlinien: the storey lines. */
+const BANDS = float(0.18);
+/** Streiflicht: the Fresnel rim. */
+const RIM = float(0.6);
+/** Traufkante: the soft stroke where wall meets roof. */
+const EAVE = float(0.35);
+/** Gliederung: the painted plinth and shop zone (plinth and cornices
+ *  above the ground floor are modelled). */
+const ARTICULATION = float(0.8);
+/** Fenster: the window rows on every facade (clay-windows.ts). */
+const WINDOWS = float(1);
+/** Fassadenbild: what street photos say about a facade — fine relief
+ *  where it is busy, a darker tone, a shop's ground floor. */
+const FACADE_READING = float(1);
+/** Abendlicht: warm light in public buildings and shop fronts at dusk. */
+const DUSK_GLOW = float(0.5);
+/** Materialstreuung: the matte sheen's spread from house to house. */
+const ROUGHNESS = float(0.12);
 
 /**
  * What every tile's clay material shares: the facade uniforms and the
@@ -140,12 +151,10 @@ export interface ClayDetailUniforms {
  * material (it binds that tile's object table).
  */
 export interface StyleResources {
-  /** the clay's facade uniforms (Boden-Verlauf, Streiflicht, …) */
+  /** the clay's live uniforms (the night, the sun) */
   clayDetail: ClayDetailUniforms;
-  /** every live clay material, for the look (transparency) fan-out */
+  /** every live clay material, for the Schnitt's fan-out (setClaySection) */
   materials: Set<MeshStandardNodeMaterial>;
-  /** the current transparency, applied to materials created later too */
-  transparency: number;
   /** Modell's Schnitt is shown: the clay is drawn from both sides */
   section: boolean;
 }
@@ -164,30 +173,32 @@ const POCHE = vec3(0.025, 0.024, 0.027);
  * building's OWN base (its row of the object table, lib/city/city-mesh.ts —
  * read per vertex with `textureLoad` by the `featureId` attribute) so it
  * works despite buildings standing on terrain at different elevations:
- *  - Farbvariation (uTint): blends each building's own muted clay-family colour
+ *  - Farbvariation (TINT): blends each building's own muted clay-family colour
  *    into the flat base so a dense block stops reading as one uniform mass.
  *    Applied FIRST so the shading below (ground-darken, contour lines)
  *    modulates the tinted colour. A zero tint reads as "no tint" rather than
  *    darkening the building to black.
- *  - Boden-Verlauf (uAO): a soft darkening over the lowest ~5 m (ambient-occlusion
- *    surrogate that gives the massing physical contact with the ground).
- *  - Höhenlinien (uBands): thin, crisp horizontal contour strokes every storey
+ *  - Boden-Verlauf (GROUND_SHADE): a soft darkening over the lowest ~5 m
+ *    (ambient-occlusion surrogate that gives the massing physical contact
+ *    with the ground).
+ *  - Höhenlinien (BANDS): thin, crisp horizontal contour strokes every storey
  *    (~3 m), drawn with fwidth for constant on-screen width — the SAME hand-drawn
  *    contour-line language as the terrain, so facades read height/scale without a
  *    heavy "banded" look. Walls only.
- *  - Streiflicht (uRim): a Fresnel rim that separates silhouettes from like-
+ *  - Streiflicht (RIM): a Fresnel rim that separates silhouettes from like-
  *    coloured neighbours. Strength is squared-Fresnel + a healthy multiplier
  *    because there is no bloom.
- *  - Traufkante (uEave): one soft cornice stroke at the wall/roof boundary.
- *  - Materialstreuung (uRough): the matte sheen varies house to house.
- *  - Dachsättigung (uRoofVibrance): the real roof colour lifted into a
+ *  - Traufkante (EAVE): one soft cornice stroke at the wall/roof boundary.
+ *  - Materialstreuung (ROUGHNESS): the matte sheen varies house to house.
+ *  - Dachsättigung (ROOF_VIBRANCE): the real roof colour lifted into a
  *    confident watercolour register without choosing a target hue.
  *  - Himmelslicht: the courtyard's ground floor gets less of the sky
- *    (sky-light.ts `createClaySky`, the aoNode).
- *  - Abendlicht (uDuskGlow × uNight): a warm interior glow at dusk on
+ *    (sky-light.ts `createClaySky`, the aoNode, at `SKY_VIEW`).
+ *  - Abendlicht (DUSK_GLOW × uNight): a warm interior glow at dusk on
  *    commercial and public buildings, walls only.
- * Heights come from world space (world Y is elevation). The uniforms are
- * shared nodes, so a slider retunes every tile live.
+ * Heights come from world space (world Y is elevation). The strengths are
+ * the fixed look's constants above; the night and the sun are shared
+ * uniform nodes the sun rig writes.
  */
 function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   // The tile's object table and its row count are slots: every tile's
@@ -240,10 +251,10 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     facade: varying(facade),
     h,
     seed: rough,
-    shop: shopOf(d, flags),
+    shop: shopOf(flags),
     spec,
     storey: build.y,
-    strength: d.uWindows,
+    strength: WINDOWS,
     sun: d.uSun,
     wall,
     wn,
@@ -263,7 +274,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     // Materialstreuung: nudge roughness per building so the matte sheen
     // varies house-to-house (clamped to stay matte, no shiny clay).
     roughness: facadeRoughness(
-      clamp(float(1).add(d.uRough.mul(rough)), 0.55, 1),
+      clamp(float(1).add(ROUGHNESS.mul(rough)), 0.55, 1),
       facadeMaterial(flags, wall),
       shopPane(flags),
       rough
@@ -275,8 +286,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
         windows
           .colour(
             facadeReading(
-              d,
-              clayColour(d, tint, build, h, wall, flags),
+              clayColour(tint, build, h, wall, flags),
               build,
               h,
               plaster,
@@ -293,9 +303,9 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     ),
     // Himmelslicht: the courtyard's ground floor gets less of the sky;
     // a window's recess and the wall under its sill less still.
-    ao: createClaySky().ao(h, build.z, d.uSkyView).mul(windows.ao),
+    ao: createClaySky().ao(h, build.z, SKY_VIEW).mul(windows.ao),
     emissive: clayGlow(d, build, h, wall, flags, wn).add(
-      windows.glow.mul(d.uDuskGlow).mul(d.uNight)
+      windows.glow.mul(DUSK_GLOW).mul(d.uNight)
     ),
   };
 }
@@ -312,32 +322,27 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
  * own storey height (fwidth-constant width) and the eave stroke, walls
  * only; then Denkmal.
  */
-function clayColour(
-  d: ClayDetailUniforms,
-  tint: V3,
-  build: V4,
-  h: F,
-  wall: F,
-  flags: F
-): V3 {
+function clayColour(tint: V3, build: V4, h: F, wall: F, flags: F): V3 {
   const isRoof = step(0.5, build.x);
   // a door wears its own colour (OBJECT_FLAG_OWN_COLOUR, 64) at full strength
   const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
-  const tintMix = max(mix(d.uTint, d.uRoofTint, isRoof), own);
+  const tintMix = max(mix(TINT, ROOF_TINT, isRoof), own);
   const roofL = dot(tint, vec3(0.299, 0.587, 0.114));
   const roofC = tint.sub(roofL);
   const dull = float(1).sub(smoothstep(0.04, 0.3, length(roofC)));
-  const vib = d.uRoofVibrance.mul(dull);
+  const vib = ROOF_VIBRANCE.mul(dull);
   const roofCol = vec3(roofL)
     .add(roofC.mul(float(1).add(vib.mul(2.4))))
-    .add(vec3(0.018, 0.004, -0.014).mul(d.uRoofVibrance).mul(dull));
+    .add(vec3(0.018, 0.004, -0.014).mul(ROOF_VIBRANCE).mul(dull));
   const clayCol = mix(tint, clamp(roofCol, 0, 1), isRoof);
   let col: V3 = select(
     dot(tint, tint).greaterThan(1e-4),
     mix(materialColor.rgb, clayCol, tintMix),
     materialColor.rgb
   );
-  col = col.mul(mix(float(1).sub(d.uAO.mul(0.55)), 1, smoothstep(0, 5, h)));
+  col = col.mul(
+    mix(float(1).sub(GROUND_SHADE.mul(0.55)), 1, smoothstep(0, 5, h))
+  );
   const storeys = h.div(max(build.y, 0.5));
   const line = float(1).sub(
     min(
@@ -345,7 +350,12 @@ function clayColour(
       1
     )
   );
-  col = col.mul(float(1).sub(line.mul(d.uBands).mul(wall)));
+  // no storey lines on a facade of its own (flag 512): a palace's or a
+  // hall's storeys are not the height's 3.2 m
+  const ownFacade = mod(floor(floor(flags.add(0.5)).div(512)), 2);
+  col = col.mul(
+    float(1).sub(line.mul(BANDS).mul(wall).mul(float(1).sub(ownFacade)))
+  );
   const eave = float(1).sub(
     min(abs(h.sub(build.z)).div(max(fwidth(h).mul(2), 1e-4)), 1)
   );
@@ -353,11 +363,11 @@ function clayColour(
   // shadow falls there instead
   const pane = shopPane(flags);
   col = col.mul(
-    float(1).sub(eave.mul(d.uEave).mul(wall).mul(0.6).mul(float(1).sub(pane)))
+    float(1).sub(eave.mul(EAVE).mul(wall).mul(0.6).mul(float(1).sub(pane)))
   );
   col = col.mul(mix(1, paneShade(h, build.z), pane));
-  col = articulation(d, col, build, h, wall, flags);
-  return osmColour(d, col, build, h, wall, flags).mul(ownTopShade(flags, wall));
+  col = articulation(col, build, h, wall, flags);
+  return osmColour(col, build, h, wall, flags).mul(ownTopShade(flags, wall));
 }
 
 /** A door's or a shopfront's faces that look up (sills, heads, ledge and
@@ -392,7 +402,7 @@ function ledge(h: F, top: F, size: number, drop: number, strength: F): F {
 }
 
 /**
- * Gliederung (uArticulation): what a house shows at eye level before its
+ * Gliederung (ARTICULATION): what a house shows at eye level before its
  * windows, from the heights the table already carries — walls only, never
  * on a part with its own colour (a door, flag 64) or on a facade that is
  * its own (a landmark, a church, a theatre, a hall: flag 16,
@@ -411,17 +421,10 @@ function ledge(h: F, top: F, size: number, drop: number, strength: F): F {
  * Not sun-dependent: the ledges' light and shadow are painted, like the
  * storey lines.
  */
-function articulation(
-  d: ClayDetailUniforms,
-  col: V3,
-  build: V4,
-  h: F,
-  wall: F,
-  flags: F
-): V3 {
+function articulation(col: V3, build: V4, h: F, wall: F, flags: F): V3 {
   const f = floor(flags.add(0.5));
   const own = mod(floor(f.div(64)), 2);
-  const shop = shopOf(d, flags);
+  const shop = shopOf(flags);
   const grounded = mod(floor(f.div(128)), 2);
   // a landmark's or a church's facade is its own (flag 16): no town
   // house's plinth and cornices on it
@@ -431,7 +434,7 @@ function articulation(
     max(own, mod(floor(f.div(16)), 2)),
     mod(floor(f.div(256)), 2)
   );
-  const on = d.uArticulation.mul(wall).mul(float(1).sub(plain));
+  const on = ARTICULATION.mul(wall).mul(float(1).sub(plain));
   // the ground floor's parts on a part standing on the ground only
   const low = on.mul(grounded);
   const storey = max(build.y, 2.4);
@@ -479,11 +482,11 @@ function readingOf(flags: F): { busy: F; dark: F; shop: F } {
 }
 
 /** A shop on the ground floor: OSM's (flag 1), or a shop sign the street
- *  photos saw (on the Fassadenbild slider). */
-function shopOf(d: ClayDetailUniforms, flags: F): F {
+ *  photos saw (on Fassadenbild's strength). */
+function shopOf(flags: F): F {
   return max(
     mod(floor(flags.add(0.5)), 2),
-    readingOf(flags).shop.mul(d.uFacadeReading)
+    readingOf(flags).shop.mul(FACADE_READING)
   );
 }
 
@@ -494,7 +497,7 @@ function wallPlane(wn: V3, h: F): V2 {
 }
 
 /**
- * Fassadenbild (uFacadeReading): what street photos say about a facade
+ * Fassadenbild (FACADE_READING): what street photos say about a facade
  * (lib/city/facade-reading.ts), painted onto the clay as Gliederung's
  * ledges are — walls only, never on a part with its own colour (64), a
  * landmark's facade (16) or glass and metal (4, 8: the photos cannot tell
@@ -510,13 +513,12 @@ function wallPlane(wn: V3, h: F): V2 {
  *    never a colour error.
  *  - Geschossgesimse: a busy facade under a pitched roof (the Gründerzeit
  *    front) carries a ledge at every storey line up to the eave, not only
- *    the first (on Gliederung's slider too).
+ *    the first (on Gliederung's strength too).
  *  - Ladensockel: a shop sign at the wall or an open ground floor joins
  *    OSM's shops (`shopOf`), so Gliederung's Ladenzone and the dusk's
  *    shop light take it as they are.
  */
 function facadeReading(
-  d: ClayDetailUniforms,
   col: V3,
   build: V4,
   h: F,
@@ -530,7 +532,7 @@ function facadeReading(
     max(mod(floor(f.div(64)), 2), mod(floor(f.div(16)), 2)),
     max(mod(floor(f.div(4)), 2), mod(floor(f.div(8)), 2))
   );
-  const on = d.uFacadeReading.mul(wall).mul(float(1).sub(plain));
+  const on = FACADE_READING.mul(wall).mul(float(1).sub(plain));
   const eave = build.z;
   // Unruhe: mid 0.5, busy 1 — a relief lit from above: the slope of a
   // fine, flat-lying noise up the wall, so its edges catch light on top and
@@ -574,7 +576,7 @@ function facadeReading(
     .mul(pitched)
     .mul(step(1.5, k))
     .mul(step(top, eave.sub(0.8)))
-    .mul(d.uArticulation);
+    .mul(ARTICULATION);
   return out.mul(ledge(h, top, 0.2, 0.35, on.mul(busyFront)));
 }
 
@@ -591,9 +593,9 @@ function facadeMaterial(flags: F, wall: F): { glass: F; metal: F } {
 /**
  * Spiegelung on a facade (sky-reflection.ts): how much of the sky a glass
  * wall (flag 4) mirrors, from a tenth face on to all of it at a grazing
- * view, and a metal one (flag 8) a third as much — weighted by the row,
- * so at 0 the facade is the clay it was. The clay's own colour gives way
- * by part of it (clayGraph), as a pane's would.
+ * view, and a metal one (flag 8) a third as much — weighted by its
+ * strength (REFLECTIONS), at 0 the clay it was. The clay's own colour
+ * gives way by part of it (clayGraph), as a pane's would.
  */
 function facadeMirror(flags: F, wall: F, wn: V3): F {
   const m = facadeMaterial(flags, wall);
@@ -601,7 +603,7 @@ function facadeMirror(flags: F, wall: F, wn: V3): F {
   const glass = m.glass.mul(float(1).sub(shopPane(flags)));
   return mirrorWeight(wn, 0.1)
     .mul(glass.add(m.metal.mul(0.35)))
-    .mul(reflectionStrength);
+    .mul(REFLECTIONS);
 }
 
 /** Glass and metal cladding read a little smoother than the clay; a shop
@@ -627,35 +629,29 @@ function shopPane(flags: F): F {
 /**
  * What OSM knows about a building (the `flags` float of its third texel,
  * lib/city/city-mesh.ts: shop 1, heritage 2, glass 4, metal 8), layered onto the clay's
- * colour and glow on the same sliders — it adds none:
+ * colour and glow at the same strengths — it adds none:
  *  - Ladenlicht: a warm wash on a shop's ground floor at dusk, under the
- *    first storey line with a soft top edge, walls only, on the dusk-glow
- *    slider × nightFactor. A low-frequency hash along the facade (≈3.5 m
- *    cells) keeps a long front from reading as one strip. No window
- *    structure: the procedural window grid is a recorded veto.
+ *    first storey line with a soft top edge, walls only, at the dusk
+ *    glow's strength × nightFactor. A low-frequency hash along the facade
+ *    (≈3.5 m cells) keeps a long front from reading as one strip. No
+ *    window structure: the procedural window grid is a recorded veto.
  *  - Denkmal: a barely-there warm lift of a listed facade (on the
- *    Farbvariation slider) and a finer second cornice line under the eave
- *    (on the Traufkante slider).
+ *    Farbvariation's strength) and a finer second cornice line under the
+ *    eave (at Traufkante's).
  *  - Glas (flag 4): a glass facade (OSM `building:material=glass`) keeps
  *    its clay but turns a little cooler and smoother, and its grazing
- *    angle catches a pale sky sheen (on the Streiflicht slider, dimmed at
- *    night). No panes, no mullions — the window-grid veto holds.
+ *    angle catches a pale sky sheen (at Streiflicht's strength, dimmed at
+ *    night, and only below full Spiegelung). No panes, no mullions — the
+ *    window-grid veto holds.
  *  - Metall (flag 8): metal cladding, cooler and a little smoother, no
  *    sheen.
  * Strengths are conservative defaults, not yet judged on a real GPU.
  */
-function osmColour(
-  d: ClayDetailUniforms,
-  col: V3,
-  build: V4,
-  h: F,
-  wall: F,
-  flags: F
-): V3 {
+function osmColour(col: V3, build: V4, h: F, wall: F, flags: F): V3 {
   const f = floor(flags.add(0.5));
   const listed = mod(floor(f.div(2)), 2);
   const lifted = col.mul(
-    vec3(1).add(vec3(0.035, 0.012, -0.012).mul(listed.mul(d.uTint).mul(wall)))
+    vec3(1).add(vec3(0.035, 0.012, -0.012).mul(listed.mul(TINT).mul(wall)))
   );
   const cornice = float(1).sub(
     min(abs(h.sub(build.z.sub(0.45))).div(max(fwidth(h), 1e-4)), 1)
@@ -669,12 +665,7 @@ function osmColour(
   return lifted
     .mul(
       float(1).sub(
-        cornice
-          .mul(listed)
-          .mul(step(2, build.z))
-          .mul(d.uEave)
-          .mul(wall)
-          .mul(0.35)
+        cornice.mul(listed).mul(step(2, build.z)).mul(EAVE).mul(wall).mul(0.35)
       )
     )
     .mul(cool);
@@ -706,10 +697,10 @@ function clayGlow(
   // there) lit them into a dotted white line along every frame
   const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
   const rimOn = clayOnly.mul(float(1).sub(own.mul(float(1).sub(wall))));
-  const rim = vec3(1, 0.95, 0.8).mul(fres.mul(fres).mul(d.uRim).mul(rimOn));
-  const dusk = build.w.mul(d.uDuskGlow).mul(d.uNight);
+  const rim = vec3(1, 0.95, 0.8).mul(fres.mul(fres).mul(RIM).mul(rimOn));
+  const dusk = build.w.mul(DUSK_GLOW).mul(d.uNight);
   const glow = vec3(1, 0.82, 0.5).mul(dusk.mul(wall).mul(0.5));
-  const shop = shopOf(d, flags);
+  const shop = shopOf(flags);
   const floorBand = float(1).sub(smoothstep(0.7, 1, h.div(max(build.y, 0.5))));
   const along = normalize(vec2(wn.z.negate(), wn.x).add(1e-5));
   const seg = dot(positionWorld.xz, along).div(3.5);
@@ -721,16 +712,17 @@ function clayGlow(
     .mul(floorBand)
     .mul(wall)
     .mul(lit)
-    .mul(d.uDuskGlow)
+    .mul(DUSK_GLOW)
     .mul(d.uNight);
   // Glas: the grazing angle catches a pale sky sheen, dimmed at night —
-  // the stand-in for the reflection, drawn only as Spiegelung is turned down
+  // the stand-in for the reflection below full Spiegelung (REFLECTIONS is
+  // 1, so none is drawn)
   const sheen = facadeMaterial(flags, wall)
     .glass.mul(fres.mul(fres).mul(fres))
-    .mul(d.uRim)
+    .mul(RIM)
     .mul(clayOnly)
     .mul(float(1).sub(d.uNight.mul(0.7)))
-    .mul(float(1).sub(reflectionStrength));
+    .mul(float(1).sub(REFLECTIONS));
   // The asked building's light, in the accent's pale: faint by day, a
   // glow after dark.
   const askedLight = vec3(...SELECTION_ACCENT.halo).mul(
@@ -816,40 +808,21 @@ function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
 
 /**
  * The shared clay state, created once per app instance. `night` is the
- * sun rig's night factor (0 = day, 1 = night) gating the dusk glow;
- * `skyView` the terrain's Himmelslicht row — both shared nodes.
+ * sun rig's night factor (0 = day, 1 = night) gating the dusk glow, `sun`
+ * its vector — both shared nodes.
  */
 export function createStyleResources(
   night: Live,
-  skyView: Live,
   sun: UniformNode<"vec3", Vector3> = uniform(new Vector3(0, 1, 0))
 ): StyleResources {
-  // Booted at the table defaults; applyCityLook retunes them live.
   return {
-    clayDetail: {
-      uAO: uniform(LOOK_DEFAULTS.groundShade),
-      uArticulation: uniform(LOOK_DEFAULTS.articulation),
-      uFacadeReading: uniform(LOOK_DEFAULTS.facadeReading),
-      uBands: uniform(LOOK_DEFAULTS.bands),
-      uDuskGlow: uniform(LOOK_DEFAULTS.duskGlow),
-      uEave: uniform(LOOK_DEFAULTS.eave),
-      uNight: night,
-      uRim: uniform(LOOK_DEFAULTS.rim),
-      uRoofTint: uniform(LOOK_DEFAULTS.roofTint),
-      uRoofVibrance: uniform(LOOK_DEFAULTS.roofVibrance),
-      uRough: uniform(LOOK_DEFAULTS.roughness),
-      uSkyView: skyView,
-      uSun: sun,
-      uTint: uniform(LOOK_DEFAULTS.tint),
-      uWindows: uniform(LOOK_DEFAULTS.windows),
-    },
+    clayDetail: { uNight: night, uSun: sun },
     materials: new Set(),
-    transparency: LOOK_DEFAULTS.transparency,
     section: false,
   };
 }
 
-/** The clay graph per app (keyed by its facade uniforms). */
+/** The clay graph per app (keyed by its live uniforms). */
 const clayGraphs = new WeakMap<ClayDetailUniforms, ClayGraph>();
 
 /**
@@ -887,7 +860,7 @@ export function createClayMaterial(
   clay.name = "clay";
   // the figure of a figure-ground plan (the Schwarzplan, paper-scene.ts)
   clay.userData.figure = true;
-  applyTransparency(clay, resources.transparency, resources.section);
+  applySides(clay, resources.section);
   resources.materials.add(clay);
   clay.addEventListener("dispose", () => resources.materials.delete(clay));
   return clay;
@@ -909,35 +882,15 @@ export function setClaySkyView(
 }
 
 /**
- * Building transparency, 0 (solid) .. 1 (fully see-through).
- *
- * Hash-dithered (`alphaHash`): stochastic coverage composited in the OPAQUE
- * pass with full depth testing, so buildings behind buildings, backsides and
- * roofs all occlude correctly — the batched mesh makes sorted alpha blending
- * impossible.
- *
- * NOTE on needsUpdate: the alpha-hash test is part of the built node graph.
- * Crossing the on/off boundary without flagging needsUpdate leaves the stale
- * build running until something else happens to force a rebuild.
+ * The clay's sides: the front only, or both while a Schnitt shows its
+ * poché. The side is part of the built node graph, so a switch flags
+ * needsUpdate — the two builds of the one graph (material-slots.ts).
  */
-function applyTransparency(
-  clay: MeshStandardNodeMaterial,
-  t: number,
-  section: boolean
-): void {
-  const wasHashed = clay.alphaHash;
+function applySides(clay: MeshStandardNodeMaterial, section: boolean): void {
   const wasSide = clay.side;
-  clay.opacity = 1 - t;
-  clay.alphaHash = t > 0;
-  clay.transparent = false;
   clay.side = section ? DoubleSide : FrontSide;
-  // The builds of the one graph (material-slots.ts): solid or hashed, and
-  // two-sided while a Schnitt shows its poché.
-  setGraph(
-    clay,
-    `clay|${clay.alphaHash ? "hashed" : "solid"}${section ? "|double" : ""}`
-  );
-  if (clay.alphaHash !== wasHashed || clay.side !== wasSide) {
+  setGraph(clay, section ? "clay|double" : "clay");
+  if (clay.side !== wasSide) {
     clay.needsUpdate = true;
   }
 }
@@ -954,56 +907,6 @@ export function setClaySection(resources: StyleResources, on: boolean): void {
   resources.section = on;
   clayPoche.value = on ? 1 : 0;
   for (const clay of resources.materials) {
-    applyTransparency(clay, resources.transparency, on);
+    applySides(clay, on);
   }
-}
-
-export function setCityTransparency(
-  resources: StyleResources,
-  transparency: number
-): void {
-  resources.transparency = Math.min(Math.max(transparency, 0), 1);
-  for (const clay of resources.materials) {
-    applyTransparency(clay, resources.transparency, resources.section);
-  }
-}
-
-/**
- * The clay uniform each building row drives. Transparency is the material's
- * opacity (setCityTransparency), not a uniform. A Record over the row keys,
- * so a row added to the table cannot go unapplied.
- */
-const CLAY_UNIFORM_FOR: Record<
-  Exclude<ClayLookKey, "transparency">,
-  keyof Omit<ClayDetailUniforms, "uNight" | "uSun">
-> = {
-  articulation: "uArticulation",
-  facadeReading: "uFacadeReading",
-  bands: "uBands",
-  duskGlow: "uDuskGlow",
-  eave: "uEave",
-  groundShade: "uAO",
-  rim: "uRim",
-  roofTint: "uRoofTint",
-  roofVibrance: "uRoofVibrance",
-  roughness: "uRough",
-  tint: "uTint",
-  windows: "uWindows",
-};
-
-/**
- * Pushes the building rows of the look into the clay: the facade detail
- * uniforms (shared nodes, no rebuild) and the transparency.
- */
-export function applyCityLook(
-  resources: StyleResources,
-  look: LookValues
-): void {
-  for (const [key, uniform] of Object.entries(CLAY_UNIFORM_FOR) as [
-    keyof typeof CLAY_UNIFORM_FOR,
-    keyof Omit<ClayDetailUniforms, "uNight" | "uSun">,
-  ][]) {
-    resources.clayDetail[uniform].value = look[key];
-  }
-  setCityTransparency(resources, look.transparency);
 }

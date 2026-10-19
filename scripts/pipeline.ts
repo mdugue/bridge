@@ -18,8 +18,7 @@
  *                                     lamps, monuments, furniture, walls,
  *                                     stairs, surface, edges, markings,
  *                                     sport, tram, riverside, traffic,
- *                                     skyview,
- *                                     soundmarks, lowveg, cultivated,
+ *                                     skyview, lowveg, cultivated,
  *                                     small-buildings)
  *   bun run bake <site> --step lowveg --research   also every hedge/shrub
  *                                     candidate, under the raw folder
@@ -55,7 +54,8 @@ export function siteSpec(site: Site) {
     treeCadastre: site.treeCadastre ?? null,
     traffic: site.dataLayers?.traffic?.source ?? null,
     trams: site.dataLayers?.trams !== undefined,
-    mapillary: site.mapillary === true,
+    mapillary: site.mapillary !== undefined,
+    mapillaryObjects: site.mapillary?.objects === true,
     raw: providerRawDir(site),
     data: siteDataDir(site),
     osm: osmExtractUrl(site),

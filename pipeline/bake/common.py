@@ -89,8 +89,11 @@ class Tile:
     tree_cadastre: TreeCadastre | None = None
     # the site's traffic-count source (traffic_sources.py), or None
     traffic: str | None = None
-    # whether the site adds Mapillary's lamps and bins (mapillary.py)
+    # whether the site measures Mapillary's panoramas: the facade readings
+    # and shopfronts (facades.py, shopfronts.py)
     mapillary: bool = False
+    # whether it also adds Mapillary's lamps and bins (mapillary.py)
+    mapillary_objects: bool = False
 
     @property
     def size(self) -> tuple[float, float]:

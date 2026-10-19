@@ -19,6 +19,7 @@ export const GRIMMA: Site = {
         "Straßenverkehrszählung 2021: Freistaat Sachsen, LASuV, dl-de/by-2-0",
     },
   },
+  mapillary: { objects: false },
   spawn: "muldeufer",
   tiles: [
     { e: 340, n: 5678 },

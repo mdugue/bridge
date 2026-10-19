@@ -17,16 +17,16 @@
  *
  * Orthogonal to the profile is the **device tier**: a phone (coarse pointer,
  * no hover) shares one memory pool between CPU and GPU and Safari kills the
- * tab well under 1.5 GB, so it gets a 2048² shadow map, a 1.5 pixel-ratio
- * cap, the 2048² land-cover rasters and a smaller cache for tiles out of
- * view (`tileCacheBytesFor`). Same world, same shaders — only fill,
+ * tab well under 1.5 GB, so it gets a 2048² shadow map, a pixel-ratio cap
+ * that falls lower down the safety ladder, the 2048² land-cover rasters
+ * and a smaller cache for tiles out of view (`tileCacheBytesFor`). Same world, same shaders — only fill,
  * shadow texels and texture memory shrink; AO quality follows the profile,
  * not the tier.
  *
  * Orthogonal to both is the device's **safety level** (0–3,
  * lib/city/gpu-safety.ts): how often it has lately run out of GPU memory.
- * Each level lowers the pixel-ratio cap, the shadow map and the tile cache
- * a step; level 0 is the page as it always was.
+ * Each level lowers the tile cache a step, and the pixel-ratio cap and the
+ * shadow map where they have a step left; level 0 is the tier's own budget.
  *
  * All three are read from the page ONCE (`currentSceneBudget`, in
  * city-walk-client.tsx) and handed down as a `SceneBudget`: the renderer, the
@@ -150,14 +150,20 @@ export function shadowMapSizeFor(
   }
   // A phone's shadow map is a quarter of the desktop's texels and a quarter
   // of the per-frame depth fill; the soft PCF radius hides the coarser
-  // texel over the 110 m frustum. The map is a depth texture and a one-byte
+  // texel over the 121 m frustum. The map is a depth texture and a one-byte
   // colour target (`shadowMapBytesFor`): 20 MiB at 2048², 5 MiB at 1024².
   return SHADOW_MAP_SIZE[tier][safety];
 }
 
-/** The pixel-ratio cap per safety level (0–3), per tier. */
+/**
+ * The pixel-ratio cap per safety level (0–3), per tier. A desktop stops at
+ * 1.5: a 13″ retina laptop at 2 drew 5.2 megapixels through the whole post
+ * stack (GTAO, DoF, SMAA and their targets) a frame, and 1.5 is 56 % of it,
+ * with SMAA over the edges. Its last level stays at 1, a desktop panel's
+ * own pixel.
+ */
 const PIXEL_RATIO_CAP: Record<DeviceTier, readonly number[]> = {
-  desktop: [2, 1.5, 1.25, 1],
+  desktop: [1.5, 1.25, 1, 1],
   mobile: [1.5, 1.25, 1, 0.85],
 };
 
@@ -165,9 +171,10 @@ const PIXEL_RATIO_CAP: Record<DeviceTier, readonly number[]> = {
  * Render pixel ratio for a profile + tier at a safety level. `lite`
  * renders at half linear resolution (a quarter of the pixels) and lets the
  * browser upscale — the only honest way to cut fill-rate in the headless
- * suite, where every pixel is shaded on the CPU. A phone is capped at 1.5
- * (its 3x panel would otherwise push the post stack's screen buffers past
- * what fits), and lower per safety level: the phone's screen targets
+ * suite, where every pixel is shaded on the CPU. Both tiers are capped at
+ * 1.5 (a phone's 3x panel would otherwise push the post stack's screen
+ * buffers past what fits, a retina desktop's 2x doubles its fill), and
+ * lower per safety level: the phone's screen targets
  * (`postProfileFor`) cost up to ~24 bytes per drawn pixel, 18 MiB at 1.5
  * on a 402×874 iPhone, 8 at 1.0 — and every pass's fill falls with them.
  */
@@ -193,8 +200,10 @@ const GB = 1024 * MB;
  * terrain holds (tile-stream.ts `calculateBytesUsed`, the shared ones in
  * shares: whole once the coarse level has gone) and its dressing's
  * geometry (≲ 20 MB, the trees' instances most of it), with headroom. On
- * the desktop the rasters are the 4096² class raster and the splat painted
- * from it and the 8192-wide surface, sports and markings rasters (~160 MB).
+ * the desktop the rasters are the 4096² class raster and the 2048² splat
+ * painted from it (landcover-splat.ts `splatScaleFor`; 4096² until
+ * 2026-10-10, 64 MiB more) and the 8192-wide surface, sports and markings
+ * rasters (~100 MB; the bound stays what it was, conservative now).
  * On a phone they are 75.7 MiB: the 2048² class raster, its splat with its
  * mips, NDVI, sky view, horizon and sports grounds (45.7, shared with the
  * coarse level), and the level's own surface, edges, markings and
@@ -285,14 +294,16 @@ export function tileCacheBytesFor(
 }
 
 /**
- * GTAO samples for a profile: headless SwiftShader cannot afford the
- * product's sample count. Keyed on the profile, not `navigator.webdriver` —
- * Playwright sets that flag in the `--headed` shot harness too, which must
- * render the product's AO. A construction-time setting: a change of the
- * count rebuilds the pass's material.
+ * GTAO samples for a profile and tier: headless SwiftShader cannot afford
+ * the product's sample count, and on a phone half of it is what the 5×5
+ * smoothing pass leaves visible anyway (post-stack.ts `aoSmoothed`) — the
+ * rest was fill rate a hot phone throttles for. Keyed on the profile, not
+ * `navigator.webdriver` — Playwright sets that flag in the `--headed` shot
+ * harness too, which must render the product's AO. A construction-time
+ * setting: a change of the count rebuilds the pass's material.
  */
-export function aoSamplesFor(profile: SceneProfile): number {
-  return profile === "lite" ? 8 : 16;
+export function aoSamplesFor(profile: SceneProfile, tier: DeviceTier): number {
+  return profile === "lite" || tier === "mobile" ? 8 : 16;
 }
 
 /**
@@ -306,8 +317,8 @@ export interface PostProfile {
    * Whether depth of field exists at all. Its pass holds six targets and
    * a full-resolution copy of its input (23 MB at an iPhone's 603×1311
    * drawing buffer) from the first frame, standing still or not — for a
-   * lens hint a six-inch screen barely shows. Off: the HUD hides its switch,
-   * the look keeps its value.
+   * lens hint a six-inch screen barely shows. Off: a phone draws without
+   * it (there is no switch for it anywhere).
    */
   dof: boolean;
   /**
@@ -333,7 +344,14 @@ export interface PostProfile {
   warmPaper: boolean;
 }
 
-/** The post profile of a device tier (see `PostProfile`). */
+/**
+ * The post profile of a device tier (see `PostProfile`). No tier warms the
+ * picture styles any more: on a desktop the idle warm-up built both styled
+ * pipelines, every style's crowns and lamp cones and Papier's and the
+ * figure ground's programs for the whole scene — and from then on every
+ * tile that landed compiled those too, for the session, for styles most
+ * visits never pick. A style now builds on its first frame (a hitch once).
+ */
 export function postProfileFor(tier: DeviceTier): PostProfile {
   return tier === "mobile"
     ? {
@@ -342,7 +360,12 @@ export function postProfileFor(tier: DeviceTier): PostProfile {
         warmStyles: "outline-only",
         warmPaper: false,
       }
-    : { dof: true, antialias: "smaa", warmStyles: "all", warmPaper: true };
+    : {
+        dof: true,
+        antialias: "smaa",
+        warmStyles: "outline-only",
+        warmPaper: false,
+      };
 }
 
 /**

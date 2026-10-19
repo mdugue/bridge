@@ -57,6 +57,7 @@ def parse(text: str) -> Spec:
             cadastre,
             doc.get("traffic"),
             bool(doc.get("mapillary")),
+            bool(doc.get("mapillaryObjects")),
         )
         for t in doc["tiles"]
     ]

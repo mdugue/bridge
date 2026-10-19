@@ -37,6 +37,7 @@ import {
   floorMod,
   gdNoise,
   loadTexel,
+  GROUND_DETAIL,
   type GroundColour,
   type GroundFields,
   type GroundInputs,
@@ -63,7 +64,7 @@ import {
  *
  * The lines are box-filtered over the pixel footprint (`spLine`): a 6 cm
  * line a hundred metres off is a faint, steady hairline, never a shimmer.
- * The textures (mown stripes, grain) scale with `groundDetail`; the colour
+ * The textures (mown stripes, grain) scale with `GROUND_DETAIL`; the colour
  * and the lines are the data and stay. Line dimensions are the standard
  * ones (FIFA, ITF, FIBA, FIVB), scaled down to fit a smaller ground.
  */
@@ -346,7 +347,7 @@ function surfacePaint(
   surf: I,
   inside: F
 ): void {
-  const tex = inp.groundDetail;
+  const tex = GROUND_DETAIL;
   If(and(surf.greaterThan(0), inside.greaterThan(0)), () => {
     const c = surfaceColour(surf).toVar();
     const grain = gdNoise(inp.xy.mul(2.3))

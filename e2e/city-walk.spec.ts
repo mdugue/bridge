@@ -83,31 +83,6 @@ function expectNoErrors(log: ErrorLog): void {
   log.console.length = 0;
 }
 
-/**
- * Counts every AudioContext the page creates (an init script, before any of
- * the page's own code): the soundscape must not create one before the
- * visitor asks for sound (plan 035).
- */
-function countAudioContexts(): void {
-  const w = window as unknown as { __audioContexts: number };
-  w.__audioContexts = 0;
-  const Native = window.AudioContext;
-  if (!Native) {
-    return;
-  }
-  window.AudioContext = class extends Native {
-    constructor(options?: AudioContextOptions) {
-      super(options);
-      w.__audioContexts++;
-    }
-  };
-}
-
-const audioContexts = (page: Page) =>
-  page.evaluate(
-    () => (window as unknown as { __audioContexts?: number }).__audioContexts
-  );
-
 /** Resolves once the viewer has rendered `count` more frames. */
 async function waitForFrames(page: Page, count: number): Promise<void> {
   const start = await page.evaluate(() => window.__poc?.frames ?? 0);
@@ -355,7 +330,6 @@ function bootDesktopViewer(): void {
     const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
     page = await context.newPage();
     errors = watchErrors(page);
-    await page.addInitScript(countAudioContexts);
     await page.goto(LITE);
     webgl = await hasWebGl(page);
     // On CI the SwiftShader flags above must yield WebGL; a silent skip
@@ -712,9 +686,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
 
   test("the sidebar tabs reach every group of controls", async () => {
     // The controls are no longer one long list: Erkunden holds the map and
-    // the places, Szene the sun and the look groups (each collapsed), and
-    // Erweitert the tools and counters. A slider is only two taps away, and
-    // this is what proves the three panels are actually wired.
+    // the places, Szene the sun, the picture style and the fog, and
+    // Erweitert the tools, the quality and the counters. A slider is only
+    // two taps away, and this is what proves the three panels are actually
+    // wired.
     await withFramesHeld(page, async () => {
       await openSidebar(page);
       const places = page.getByRole("region", { name: "Orte" });
@@ -735,47 +710,22 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
 
       await page.getByRole("tab", { name: "Szene" }).click();
       await expect(page.getByText("Sonne & Zeit")).toBeVisible();
-      // Look sliders live one collapsed group down, and stay collapsed until
-      // asked for — that is the point of the restructure.
-      await expect(page.getByText("Boden-Verlauf")).toHaveCount(0);
-      await page.getByRole("button", { name: /^Gebäude/ }).click();
-      await expect(page.getByText("Boden-Verlauf")).toBeVisible({
-        timeout: slow(30_000),
-      });
+      // The look is fixed: under the picture style only the fog's slider
+      // and the crowns' switch are left, in plain view.
+      await expect(page.locator("#atmosphere")).toBeVisible();
+      await expect(page.locator("#tree-multituft")).toBeVisible();
 
       await page.getByRole("tab", { name: "Erweitert" }).click();
       await expect(page.getByText("Statistik")).toBeVisible();
-    });
-    expectNoErrors(errors);
-  });
-
-  test("the hidden soundscape stays silent until L", async () => {
-    // Plan 035: no AudioContext, no glyph, until an explicit toggle.
-    expect(await audioContexts(page)).toBe(0);
-    const glyph = page.getByTestId("sound-glyph");
-    await expect(glyph).toHaveCount(0);
-    await page.keyboard.press("KeyL");
-    await expect(glyph).toBeVisible({ timeout: slow(10_000) });
-    expect(await audioContexts(page)).toBe(1);
-    // The engine arrives by dynamic import and samples the pose stream;
-    // a few frames let it run without spending many.
-    await waitForFrames(page, 3);
-    // The switch lives in the Erweitert tab: opened here, not inherited
-    // from the test before (this one runs alone with -g soundscape).
-    await withFramesHeld(page, async () => {
-      await openSidebar(page);
-      await page.getByRole("tab", { name: "Erweitert" }).click();
+      // The device's safety level, in words: nothing ever ran out here.
+      const quality = page.getByRole("region", { name: "Qualität" });
       await expect(
-        page.getByRole("switch", { name: "Klang (experimentell)" })
-      ).toBeChecked();
-      // A click on the glyph turns it off; the one context is kept.
-      await glyph.click();
-      await expect(glyph).toHaveCount(0);
+        quality.getByText("Volle Qualität", { exact: true })
+      ).toBeVisible();
       await expect(
-        page.getByRole("switch", { name: "Klang (experimentell)" })
-      ).not.toBeChecked();
+        quality.getByRole("button", { name: "Volle Qualität" })
+      ).toHaveCount(0);
     });
-    expect(await audioContexts(page)).toBe(1);
     expectNoErrors(errors);
   });
 
@@ -1207,61 +1157,30 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
    * The style/post controls, each bound to real rendered frames: a shader that
    * only fails once its program is compiled and drawn cannot hide behind a
    * fixed sleep. This is the expensive half of the suite — every step that
-   * crosses a compile boundary (a style swap, the alpha-hash threshold, a
-   * shader-chunk define) costs two software-rendered frames — so steps that
-   * only move uniforms are batched together rather than spent one per frame.
+   * crosses a compile boundary (a style swap, a shader-chunk define) costs
+   * two software-rendered frames — so steps that only move uniforms are
+   * batched together rather than spent one per frame.
    */
   test("post and shader controls survive real frames", async () => {
-    const CONTROL_STEPS = 12;
+    const CONTROL_STEPS = 8;
     for (let i = 0; i < CONTROL_STEPS; i++) {
       await page.evaluate((index) => {
         // Driven through the look store the sliders write to — one set() per
         // step is one batch of uniform writes.
         const look = window.__poc?.look;
         const steps: Array<() => void> = [
-          () => look?.set({ dof: false }),
-          // Post-stack uniforms compile nothing, so they share two steps: one
-          // at full strength, one back down.
-          () =>
-            look?.set({
-              dof: true,
-              fogAmount: 1,
-              grading: 1,
-              contact: 1,
-              grain: 1,
-            }),
-          () =>
-            look?.set({
-              fogAmount: 0.35,
-              grading: 0.5,
-              contact: 0.5,
-              grain: 0.25,
-            }),
-          // Clay's alpha-hash program compiles when transparency crosses 0, in
-          // both directions — each crossing must reach a rendered frame. (0.8
-          // used to get a step of its own; it crosses nothing 0.5 hasn't.)
-          () => look?.set({ transparency: 0.5 }),
-          () => look?.set({ transparency: 0 }),
-          // Shader paths the aesthetic work added — the terrain's NDVI meadow
-          // tint, the height-fog chunk patch, the water mist sheet, and the
-          // crown shaders (multi-tuft swaps the instanced LOD meshes). They
-          // compile independent programs, but one frame compiles them all.
-          () =>
-            look?.set({
-              heightFog: 1,
-              meadowNdvi: 1,
-              waterMist: 1,
-              shimmer: 1,
-              translucency: 1,
-              leafFlutter: 1,
-              leafBright: 1,
-              multiTuft: true,
-            }),
+          // What is left of the look: the fog (a uniform, it compiles
+          // nothing) at full strength and back down, and the crowns' switch
+          // (off swaps the near multi-tuft crowns for the cheap ones, on
+          // brings them back). The look's other strengths are constants,
+          // compiled with the boot.
+          () => look?.set({ fogAmount: 1, multiTuft: false }),
+          () => look?.set({ fogAmount: 0.35, multiTuft: true }),
           // The picture styles: the first non-default style compiles the
           // stylize pass (one program for all of them), the next only moves
           // its uniforms and the grain's film switch; pastel switches the
           // pass off again. DoF is on here, so the style's gate runs too.
-          () => look?.set({ style: "comic", ink: 1 }),
+          () => look?.set({ style: "comic" }),
           () => look?.set({ style: "sincity" }),
           // Papier swaps every surface for one paper material for the frame
           // — its own programs (instanced, vertex-coloured, plain).
@@ -1270,7 +1189,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
           // draws the buildings with its own black and hides the rest.
           () => look?.set({ style: "line" }),
           () => look?.set({ style: "figure" }),
-          () => look?.set({ style: "pastel", ink: 0.7 }),
+          () => look?.set({ style: "pastel" }),
         ];
         steps[index]?.();
       }, i);
@@ -1289,7 +1208,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       shadows: window.__poc?.shadowRenders ?? 0,
     }));
     await page.keyboard.down("KeyW");
-    // 8 walking frames move at most 8 × 0.45 m = 3.6 m — inside the 20 m
+    // 8 walking frames move at most 8 × 0.45 m = 3.6 m — inside the 30 m
     // follow dead zone, so the shadow map must not be redrawn on the way.
     await waitForFrames(page, 8);
     expect(await page.evaluate(() => window.__poc?.regressed)).toBe(true);
@@ -1534,9 +1453,14 @@ test.describe("whole site streamed", () => {
     // the spawn view reaches (five of the fifteen) with its terrain,
     // buildings and dressings — ~180 000 tree instances — all shaded on the
     // CPU. Measured at ~55 s to `ready` on a four-core machine at
-    // SITE_VIEWPORT (about 45 frames at 1.2 s each; ~155 s at 800×600); a
-    // shared runner is about half as fast.
-    test.setTimeout(slow(180_000));
+    // SITE_VIEWPORT (2026-09-26: about 45 frames at 1.2 s each; ~155 s at
+    // 800×600). On CI the runner decides more than the scene does: on
+    // 2026-10-09 this test passed in 169–415 s over six runs, and the tree
+    // that passed in 169 s on its pull request (#142) ran out of the 450 s
+    // it had then on main, seven dressings built and one pending. So the
+    // budget is set by the slowest runner seen, with room to spare: a red
+    // job for a slow machine teaches nothing, while a real hang still fails.
+    test.setTimeout(slow(270_000));
     const context = await browser.newContext({ viewport: SITE_VIEWPORT });
     const page = await context.newPage();
     const errors = watchErrors(page);
@@ -1552,7 +1476,7 @@ test.describe("whole site streamed", () => {
         () => window.__poc?.ready === true,
         undefined,
         {
-          timeout: slow(150_000),
+          timeout: slow(240_000),
         }
       );
       const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);

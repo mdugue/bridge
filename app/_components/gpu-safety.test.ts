@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 import { createTrail, type Trail } from "@/lib/city/crash-trail";
 import { SAFETY_DECAY_MS } from "@/lib/city/gpu-safety";
-import { raiseSafety, settleAfterAsking, settleSafety } from "./gpu-safety";
+import {
+  currentSafetyStanding,
+  raiseSafety,
+  resetSafety,
+  settleAfterAsking,
+  settleSafety,
+} from "./gpu-safety";
 
 function memoryStore() {
   const map = new Map<string, string>();
@@ -96,4 +102,42 @@ test("a browser that cannot store keeps nothing: a crash lightens only the page 
   expect(settleSafety("", broken, null, 0)).toBe(0);
   expect(raiseSafety(0, { store: broken, now: 0 })).toBe(false);
   expect(raiseSafety(0, { store: null, now: 0 })).toBe(false);
+});
+
+test("the sidebar's reset brings the next page back to full detail, the counted crash kept", () => {
+  const store = memoryStore();
+  expect(settleSafety("", store, "crashed", 0)).toBe(1);
+  raiseSafety(1, { store, now: 10 });
+  expect(currentSafetyStanding(2, { search: "", store, now: 20 })).toEqual({
+    level: 2,
+    pinned: false,
+    next: 2,
+    fallsAt: 10 + SAFETY_DECAY_MS,
+  });
+  expect(resetSafety({ store })).toBe(true);
+  expect(currentSafetyStanding(2, { search: "", store, now: 30 }).next).toBe(0);
+  // the same crashed record, seen again, raises nothing
+  expect(settleSafety("", store, "crashed", 40)).toBe(0);
+  // nothing stored: nothing to reset
+  expect(resetSafety({ store: memoryStore() })).toBe(true);
+  // the address pins the page; the stored level is still what the next shows
+  expect(
+    currentSafetyStanding(3, { search: "?safety=3", store, now: 50 })
+  ).toMatchObject({ level: 3, pinned: true, next: 0 });
+});
+
+test("a reset that cannot be stored says so: a reload would be no finer", () => {
+  const store = memoryStore();
+  raiseSafety(0, { store, now: 0 });
+  const full = {
+    getItem: store.getItem,
+    setItem: () => {
+      throw new DOMException(
+        "The quota has been exceeded.",
+        "QuotaExceededError"
+      );
+    },
+  };
+  expect(resetSafety({ store: full })).toBe(false);
+  expect(settleSafety("", store, null, 10)).toBe(1);
 });

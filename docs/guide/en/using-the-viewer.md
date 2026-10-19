@@ -49,8 +49,8 @@ the city loads you can already pick a place, click a spot on the map or
 apply a snapshot: the load starts over at that place (the loading screen
 names it as *Start*), so you arrive there instead of at the usual start
 and then travel. The sun, the time and the look can be set too; Modell,
-the tools, *Sicht merken* (remember this view), the sound and saving a
-picture wait until the scene is up.
+the tools, *Sicht merken* (remember this view) and saving a picture
+wait until the scene is up.
 
 ## Moving around
 
@@ -365,10 +365,12 @@ The button in the corner opens a panel with three tabs.
   current view at all twelve instants and saves them as one sheet — a row
   per date, a column per hour — with the legend under it (in Modell with
   scale bar and north arrow). The hours are your device's local time.
-- **Darstellung** ("look") — the **Bildstil** (picture style) on top, then
-  sliders in four collapsible groups. Every slider is a percentage; the
-  defaults are the tuned look. *Zurücksetzen* ("reset") returns the
-  sliders and leaves the picture style as it is.
+- **Darstellung** ("look") — the **Bildstil** (picture style) on top,
+  then the one slider left, *Nebel* (the distance haze, a percentage),
+  and the *Multi-Tuft-Kronen (nah)* switch (rich multi-tuft crowns near
+  the camera; off = the cheap crown everywhere). *Zurücksetzen* ("reset")
+  returns both to their start values and leaves the picture style as it
+  is. The rest of the look is fixed (below).
 
 A picture style draws the same city another way; switch it at any time,
 with a click or with `V`. The browser remembers the last style for your
@@ -386,16 +388,18 @@ next visit:
 
 In the graphic styles *Comic*, *Sin City*, *Strich* and *Schwarzplan* the
 depth of field rests (a blurred background under crisp lines reads as a
-mistake); the switch stays as you set it.
+mistake).
 
-| Group | Slider | What it does |
+The look itself is fixed: the tuned look, the same for every visitor and
+in every snapshot — changing it is a change to the code, not a setting.
+These are the terms it draws, under the German names the code and the
+knowledge base use for them:
+
+| Group | Term | What it draws |
 |---|---|---|
-| Atmosphäre | *Nebel* | distance haze |
-| | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height and sets in some way off, so what stands right in front of you stays clear |
-| | *Flussnebel* | drifting mist sheet over the water |
+| Atmosphäre | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height and sets in some way off, so what stands right in front of you stays clear |
 | | *Tiefenfärbung* | warm near, cool far: a depth-based colour grade |
-| Gebäude | *Transparenz* | see through buildings (dithered), up to 90 % |
-| | *Boden-Verlauf* | darkening of walls towards the ground |
+| Gebäude | *Boden-Verlauf* | darkening of walls towards the ground |
 | | *Höhenlinien* | faint storey bands, spaced from the measured height |
 | | *Streiflicht* | rim light on edges facing away from the sun |
 | | *Farbvariation* | per-building wall tint from function and height |
@@ -404,7 +408,7 @@ mistake); the switch stays as you set it.
 | | *Traufkante* | a soft line where wall meets roof |
 | | *Gliederung* | what a house shows at eye level, painted: a darker shop zone where a shop is mapped. The plinth, the ledge over the ground floor and the eave cornice are modelled, run on from house to house and are always there |
 | | *Fenster* | rows of windows on every house, drawn into the wall: an opening you look into, its reveals in the wall's plaster, its back darker and cooler, a slim sill with its shadow — no glass, no panes, no mullions. Spacing and size where street photos measured the house (Dresden), else the nearest measured house's of the same kind, else its type's; one row per storey, the windows as tall as the storey allows, the ground floor's above the plinth, the top floor's under the eave cornice; a town house's ground floor a little raised, its windows with a surround. None on party walls, beside doors, over shop fronts, on churches, palaces and halls. From a distance they fade into the facade's tone |
-| | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs; Dresden only, where panoramas show the front |
+| | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs; where panoramas show the front (every city but Unna, which has none) |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
@@ -412,21 +416,21 @@ mistake); the switch stays as you set it.
 | | *Wiesenfärbung* | tints meadows lush-to-dry from the infrared aerial photo |
 | | *Gegenlicht-Schimmer* | backlight shimmer on crowns between you and the sun |
 | | *Blattdurchscheinen* | translucency of nearby, large crowns (shadow-dependent) |
-| | *Blattflimmern* | gusts flip leaves to their pale underside on sunlit crowns |
-| | *Windhelligkeit* | crowns brighten as they lean into a gust |
-| | *Multi-Tuft-Kronen (nah)* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
 | | *Spiegelung* | the sky mirrored in glass facades, gilding and water; the sky only, not the buildings across the street |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
-| | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the centre of the view, *Manuell* on a fixed distance; not offered on phones |
 
-While the camera moves, the depth-of-field blur is switched off (the eye
-cannot resolve it in motion) and comes back when you stop. Phones do not
-offer the switch at all: the blur needs more graphics memory than a phone
-can spare for a hint a small screen barely shows.
+Two more effects belong to the fixed look. The mist over the river
+drifts over the water from about 120 m ahead, denser only far off. The photographic
+depth of field blurs only what lies behind the focus (the foreground stays
+sharp), and the focus is always what lies at the centre of the view. While
+the camera moves, the blur is switched off (the eye cannot resolve it in
+motion) and comes back when you stop. Phones draw without it: the blur
+needs more graphics memory than a phone can spare for a hint a small
+screen barely shows.
 
 ### Erweitert ("Advanced")
 
@@ -436,10 +440,19 @@ can spare for a hint a small screen barely shows.
   (see [Modell](#modell-the-city-as-a-planner-draws-it)). *Immersiver Modus* locks the mouse pointer
   for a first-person feel; `Esc` leaves it.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
-  the picture style and every slider as a small JSON text; paste such a text into the box and
-  press *Anwenden* to restore it. This is how a specific view is shared or
-  reproduced for a screenshot. A malformed snapshot is rejected with a
+  the picture style, *Nebel*, the crown switch and the data layers as a
+  small JSON text; paste such a text into the box and press *Anwenden* to
+  restore it. This is how a specific view is shared or reproduced for a
+  screenshot. A snapshot from before the look was fixed still loads; the
+  sliders it names are ignored. A malformed snapshot is rejected with a
   message instead of breaking the scene.
+- **Qualität** ("quality") — the step the viewer draws at on your device
+  (*Volle Qualität*, full quality, or *Sparstufe* 1 to 3, a lighter step;
+  see [When it crashes](#when-it-crashes)), what it means here
+  (resolution, shadow map, memory for the tiles) and when it falls by
+  itself. *Volle Qualität* resets it and reloads the city with every
+  detail, where you stand; if the graphics fail again after that, the
+  viewer goes on a step lighter again.
 - **Statistik** — number of buildings and terrain points currently in
   view, estimated graphics memory and the frame rate.
 
@@ -457,8 +470,9 @@ until it is clicked.
   also how the maintainers check it.
 - Golden hour (sun a few degrees above the horizon) and blue hour (a few
   degrees below) give the richest colours; try 07:00 or 20:00 in summer.
-- On a laptop without a discrete graphics card, lower *Kontaktschatten*
-  and switch off *Tiefenschärfe* for a higher frame rate.
+- On a laptop without a discrete graphics card, a smaller browser window
+  gives a higher frame rate: the scene's cost grows with the pixels it
+  draws.
 - `?scene=lite` after the city's address (`/dresden?scene=lite`) streams
   only the start tile, with coarse shadows. It exists for automated tests
   and is not how the scene is meant to look.
@@ -480,7 +494,9 @@ by itself after a few days, one step every three days. If the graphics
 fail again at the lightest step, a card says *Die Grafik ist
 ausgefallen* ("the graphics failed") and offers *Leichter weiter* ("go on
 lighter": a step lighter, back where you stood) and *Neu laden*
-("reload"). A phone may also take the graphics away from a page that sat
+("reload"). Which step is in force is shown in the sidebar under
+*Erweitert › Qualität*, which also goes straight back to full detail. A
+phone may also take the graphics away from a page that sat
 in the background for a while; then the viewer simply reloads at the same
 step.
 
@@ -510,14 +526,3 @@ foot of every page and of the sidebar) turns the reports off for your
 browser at once. That page also says who runs the site, where the reports
 are kept and for how long. Without the tracker set up, the card offers the
 record to copy instead.
-
-## Small things
-
-- **Listen.** Press **L** (or, on a phone, turn on *Klang (experimentell)*
-  at the very bottom of *Erweitert*) and the city makes a quiet sound: wind,
-  the Elbe, birds by day and crickets on summer nights, footsteps that
-  know the paving underfoot — and when you move the clock past a full
-  hour, the nearby churches strike it, each a little later the further
-  away it stands, as sound travels. It is off every time the page loads,
-  goes quiet in a background tab, and the small speaker in the top left
-  corner turns it off again.

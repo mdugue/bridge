@@ -24,9 +24,9 @@ the working recipe; the dead ends are as valuable as the result.
 | `shadow.bias` | small negative | residual cleanup |
 | terrain `castShadow` | **false** | a casting heightfield self-shadows into staircase acne at grazing sun |
 | map size | 3072² desktop, 2048² mobile, 512² lite | soft radius lets 3072 look like 4096 at ~44 % less fill |
-| frustum half-size | 110 m at eye level → 880 m with altitude, in octaves with hysteresis (`lib/city/shadow-fit.ts`) | a fixed 110 m box under a camera 200 m up covers ground barely on screen; the whole view rendered unshadowed in fly mode |
+| frustum half-size | 121 m at eye level (110 m until 2026-10-11) → 880 m with altitude, in octaves of 110 m with hysteresis (`lib/city/shadow-fit.ts`) | a fixed 110 m box under a camera 200 m up covers ground barely on screen; the whole view rendered unshadowed in fly mode |
 | frustum centre | on the **ground** under the camera, pushed ahead by half the radius above the base | zero offset at eye level, so walking and turning behave exactly as before |
-| `shadow.autoUpdate` | **false** | re-render only when the centre leaves a dead zone (18 % of the half-size = 20 m at the base), the size re-fits, the sun moves or a caster changes via `invalidateShadows()` |
+| `shadow.autoUpdate` | **false** | re-render only when the centre leaves a dead zone (30 m on foot, 18 % of the half-size above eye level; 19.8 m on foot until 2026-10-11), the size re-fits, the sun moves or a caster changes via `invalidateShadows()` |
 
 ## Consequences
 
@@ -68,6 +68,23 @@ pass's pipelines for newly landed casters still build in the frame that
 first draws them (`compileAsync` primes the main pass only). The far
 field's shapes are still a CSM job; `CSMShadowNode` is now in reach, as its
 own decision.
+
+## Update (2026-10-11): a wider dead zone on foot
+
+Walking redrew the map every ~20 m (the 19.8 m dead zone at the 110 m
+half-size). On foot the dead zone is now 30 m and the half-size 121 m;
+above eye level and in Modell nothing changed (the octaves of 110 m, 18 %
+dead zones — Modell's half-octave steps from 110 m never take 121). The
+geometry: at eye level the frustum is re-centred on the camera's ground
+and held until the camera has drifted the dead zone, so between two
+redraws the camera is never nearer an edge than the half-size less the
+dead zone — 121 − 30 = 91 m against 90.2 before: the shadows end no
+nearer in front of the walker. The price is 10 % coarser texels; the
+redraws over a straight 500 m fall from 26 to 17. This is not the dead
+end below ("a bigger frustum at eye level"): that one bought reach with
+texels; this one keeps the reach and spends 10 % of texel on fewer depth
+passes. The dead zone stays under ¼ of the half-size (plan 009). Judge
+it on a GPU: SwiftShader's shadows say nothing about an edge.
 
 ## References
 

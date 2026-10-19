@@ -15,11 +15,14 @@
  * second sign (`raisedBy`). Each level is a lighter page: a lower
  * pixel-ratio cap, a smaller shadow map and tile cache (scene-profile.ts),
  * lower memory lines and a governor that starts — and stays — further
- * down (memory-governor.ts), no shadow-camera streaming from level 2, and
+ * down (memory-governor.ts), no shadow-camera streaming from level 2 (on
+ * a phone none at any level, `shadowTilesStream`), and
  * a recovered page that puts back the place and the time but neither the
  * picture style nor Modell from level 2. A level comes back down by
- * itself, one per three days since it was last raised; `?safety=N` sets
- * it for one page (QA) and stores nothing. A frame that throws on a GPU
+ * itself, one per three days since it was last raised, and the sidebar's
+ * *Qualität* shows it and puts it back to 0 on request (a new page where
+ * the player stood); `?safety=N` sets it for one page (QA) and stores
+ * nothing. A frame that throws on a GPU
  * that still answers is a bug, not a sign (`frameLoss`).
  *
  * Also here: the caps on the automatic recovery (one reload per level,
@@ -138,6 +141,50 @@ export function raisedSafety(
   return raised;
 }
 
+/**
+ * The record after the player put the device back to full detail (the
+ * sidebar's *Qualität*, quality-panel.tsx): level 0, with the counted crash
+ * and the raising page kept — a record already counted stays counted, and
+ * the death of a page that raised the level itself raises nothing on the
+ * next load. The decay has nothing left to take.
+ */
+export function clearedSafety(stored: StoredSafety): StoredSafety {
+  return { ...stored, level: 0 };
+}
+
+/** Where a device stands on the ladder, as the sidebar shows it. */
+export interface SafetyStanding {
+  /** the level this page runs at */
+  level: SafetyLevel;
+  /** set for this page by the address (`?safety=N`): nothing stored applies */
+  pinned: boolean;
+  /** the level the next page boots at, as stored now */
+  next: SafetyLevel;
+  /** when the stored level falls by one by itself (ms), null at 0 */
+  fallsAt: number | null;
+}
+
+/**
+ * Where a page at `level` stands: what the next page boots at (another tab
+ * may have raised it meanwhile, or the decay lowered it) and when that
+ * falls by a level. Pure.
+ */
+export function safetyStanding(
+  level: SafetyLevel,
+  stored: StoredSafety | null,
+  override: SafetyLevel | null,
+  now: number
+): SafetyStanding {
+  const next = decayedSafety(stored, now);
+  const fallsAt =
+    stored && next > 0
+      ? stored.raisedAt +
+        (Math.floor(Math.max(0, now - stored.raisedAt) / SAFETY_DECAY_MS) + 1) *
+          SAFETY_DECAY_MS
+      : null;
+  return { level, pinned: override !== null, next, fallsAt };
+}
+
 /** `?safety=N` (0–3) for one page (QA), or null. Pure. */
 export function safetyOverride(search: string): SafetyLevel | null {
   const raw = new URLSearchParams(search).get("safety");
@@ -186,12 +233,19 @@ export function resolveSafety(inputs: SafetyInputs): {
 }
 
 /**
- * Whether the sun's shadow camera streams tiles at a level. From level 2 it
- * never does: it keeps the fine terrain loaded under its whole frustum,
- * tiles in use that no step of the memory governor can free.
+ * Whether the sun's shadow camera streams tiles at a level, on a tier. On a
+ * phone it never does, and on a desktop not from level 2: the tiles it
+ * keeps loaded are tiles in use, which no step of the memory governor can
+ * free, and on a phone the casters that matter stand on the tile the player
+ * is on — loaded for the view anyway. The price: at a tile seam with the
+ * sun behind the player, the neighbour's buildings cast no shadow into the
+ * view until the view itself loads that tile.
  */
-export function shadowTilesStream(level: SafetyLevel): boolean {
-  return level < 2;
+export function shadowTilesStream(
+  level: SafetyLevel,
+  tier: "desktop" | "mobile"
+): boolean {
+  return tier === "desktop" && level < 2;
 }
 
 /**

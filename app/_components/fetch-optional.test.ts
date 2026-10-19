@@ -193,3 +193,43 @@ test("an abort ends the wait at once, the work behind it going on for whoever el
     untilAborted(Promise.reject(failure), fresh.signal)
   ).rejects.toBe(failure);
 });
+
+test("an attempt that goes silent is cut and asked for again", async () => {
+  Math.random = () => 0;
+  let calls = 0;
+  // the first request never answers until its signal fires, as a fetch
+  // over a connection gone quiet
+  globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    calls++;
+    if (calls > 1) {
+      return Promise.resolve(new Response(new Uint8Array([7, 8])));
+    }
+    return new Promise<Response>((_, reject) => {
+      init?.signal?.addEventListener("abort", () =>
+        reject(new DOMException("The operation was aborted.", "AbortError"))
+      );
+    });
+  }) as unknown as typeof fetch;
+  const got = await fetchBytes("/x", { budgetMs: 5000, stallMs: 30 });
+  expect(got.ok).toBe(true);
+  expect([...got.bytes]).toEqual([7, 8]);
+  expect(calls).toBe(2);
+});
+
+test("the caller's abort is an abort, not a stall", async () => {
+  globalThis.fetch = ((_url: string, init?: RequestInit) =>
+    new Promise<Response>((_, reject) => {
+      init?.signal?.addEventListener("abort", () =>
+        reject(new DOMException("The operation was aborted.", "AbortError"))
+      );
+    })) as unknown as typeof fetch;
+  const aborter = new AbortController();
+  const got = fetchBytes("/x", {
+    budgetMs: 5000,
+    stallMs: 10_000,
+    signal: aborter.signal,
+  });
+  aborter.abort();
+  // oxlint-disable-next-line typescript/await-thenable
+  await expect(got).rejects.toMatchObject({ name: "AbortError" });
+});

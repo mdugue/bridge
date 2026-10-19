@@ -1,15 +1,20 @@
 import {
+  Box3,
   BufferAttribute,
   type Camera,
   DataTexture,
   FloatType,
+  type Intersection,
+  type Matrix4,
   type Mesh,
   NearestFilter,
-  type Object3D,
+  type Ray,
   RGBAFormat,
   Raycaster,
   Vector2,
 } from "three/webgpu";
+import { rayEntry } from "./collision";
+import { streamTimings } from "./stream-timing";
 import { setPickRay } from "./view-ray";
 import {
   type CityObjectTable,
@@ -23,6 +28,7 @@ import {
   packObjectTexels,
 } from "@/lib/city/city-mesh";
 import { type ObjectFacts, readFacts } from "@/lib/city/object-facts";
+import type { StructuralMetadata } from "@/lib/city/property-table";
 import {
   applyFacadeReadings,
   type FacadeReadings,
@@ -31,8 +37,8 @@ import { textureBytes, trackTexture } from "./three-utils";
 import { createClayMaterial, type StyleResources } from "./visual-style";
 
 /**
- * One tile's buildings: the streamed glTF mesh (scripts/bake-tiles.ts), its
- * per-object table (EXT_structural_metadata, read by 3DTilesRendererJS) as a
+ * One tile's buildings: the streamed glTF mesh (scripts/bake-city-mesh.ts), its
+ * per-object table (EXT_structural_metadata, read by gltf-content.ts) as a
  * float texture the clay shader reads per vertex, and the demolish state.
  * Demolish filters the index buffer — no re-parse, no vertex copies.
  */
@@ -47,30 +53,36 @@ export interface CityLayer {
   facadeReadings: (readings: FacadeReadings) => void;
   /** what the twin knows about one object (read from the table on demand) */
   facts: (objectIndex: number) => ObjectFacts;
+  /** whether the tile's BVH is built (`ensureCityBvh`) */
+  hasBvh: () => boolean;
+  /** builds the tile's BVH unless it has one (a long task: ≈75 ms for a
+   *  dense tile on a desktop, several times that on a phone) */
+  ensureBvh: () => void;
   /** marks the objects someone asks about (the clay's pencil hatch); an
    *  empty set clears the mark */
   mark: (objects: ReadonlySet<number>) => void;
   mesh: Mesh;
   table: CityObjectTable;
+  /** what the table's columns and the texture packed from them keep on the
+   *  page's process (bytes): the mark writes into the texture's data */
+  tableBytes: number;
   tile: string;
+}
+
+/** The bytes of an object's typed-array members. */
+function typedBytes(record: object): number {
+  let bytes = 0;
+  for (const value of Object.values(record)) {
+    if (ArrayBuffer.isView(value)) {
+      bytes += value.byteLength;
+    }
+  }
+  return bytes;
 }
 
 /** Marker the collision helpers look for on city meshes. */
 export interface CityMesh extends Mesh {
   isCityObjectMesh?: boolean;
-}
-
-/** One property table as 3DTilesRendererJS exposes it. */
-interface PropertyTableLike {
-  count: number;
-  getPropertyValue: (name: string, id: number) => unknown;
-  /** the class's properties (a column the tile lacks is absent here) */
-  properties: Record<string, unknown>;
-}
-
-/** The glTF's EXT_structural_metadata as 3DTilesRendererJS exposes it. */
-interface StructuralMetadataLike {
-  tableAccessors: PropertyTableLike[];
 }
 
 const xyz = (v: unknown): number[] => {
@@ -84,7 +96,7 @@ const xyz = (v: unknown): number[] => {
  * string of every object, which only the inquiry card ever needs.
  */
 export function readObjectTable(
-  metadata: StructuralMetadataLike,
+  metadata: StructuralMetadata,
   count: number
 ): CityObjectTable {
   const table: CityObjectTable = {
@@ -145,7 +157,7 @@ export function readObjectTable(
 /** One object's facts from the tile's table (ADR 0042); a tile baked before
  *  the fact columns answers with unknowns and its feature index. */
 function readObjectFacts(
-  metadata: StructuralMetadataLike,
+  metadata: StructuralMetadata,
   objectIndex: number
 ): ObjectFacts {
   const accessor = metadata.tableAccessors[0];
@@ -202,9 +214,34 @@ function objectTexture(table: CityObjectTable): {
 }
 
 /**
+ * Builds a building tile's BVH unless it has one — when a ray first needs
+ * it, not as the tile lands. The build held a dense tile's parse on the
+ * main thread (≈75 ms on a desktop, several times that on a phone) and
+ * allocated six floats per triangle beside the node buffers it keeps (≈50
+ * MB for two million triangles) while the boot's other contents were still
+ * parsing; a tile that stays far away needs none (the collider, the picks
+ * and the autofocus pass over it, or build it as their ray reaches it:
+ * collision.ts, `nearestCityHit`, `cityObjectsAlong`; `nearestWithoutBvh`
+ * finds the ones near the camera, built in idle time — create-app.ts).
+ * three-mesh-bvh sorts the index in place and does not mark it for upload:
+ * the GPU keeps the order it was given, the same triangles.
+ */
+export function ensureCityBvh(mesh: Mesh): void {
+  if (!mesh.geometry.boundsTree) {
+    streamTimings.timedSync(
+      "tile:bvh",
+      () => mesh.geometry.computeBoundsTree(),
+      mesh.name
+    );
+  }
+}
+
+/**
  * Dresses a streamed city mesh: the glTF feature id and place on the wall
  * (the windows', a roof vertex flagged in it) under the names the clay
- * shader reads, the tile's clay material, a BVH for collision and picks. `demolished` replays this session's demolitions of the tile.
+ * shader reads, the tile's clay material; its BVH comes when a ray needs
+ * it (`ensureCityBvh`). `demolished` replays this session's demolitions of
+ * the tile.
  */
 export function dressCity(
   mesh: Mesh,
@@ -213,7 +250,7 @@ export function dressCity(
   demolished: ReadonlySet<number>
 ): CityLayer {
   const geometry = mesh.geometry;
-  const metadata = mesh.userData.structuralMetadata as StructuralMetadataLike;
+  const metadata = mesh.userData.structuralMetadata as StructuralMetadata;
   const count = metadata.tableAccessors[0]?.count ?? 0;
   for (const [from, to] of [
     ["_feature_id_0", "featureId"],
@@ -242,23 +279,26 @@ export function dressCity(
     if (!index) {
       return;
     }
+    const had = Boolean(geometry.boundsTree);
     geometry.setIndex(
       new BufferAttribute(
         liveTriangles(index.array, featureIds.array, (i) => alive[i] === 1),
         1
       )
     );
+    // A BVH is built over its index: a new index needs a new one — now
+    // where there was one (a demolish picks through it), else when a ray
+    // needs it.
     geometry.disposeBoundsTree();
-    // BVHs make per-frame collision rays (and demolish picks) cheap.
-    geometry.computeBoundsTree();
+    if (had) {
+      geometry.computeBoundsTree();
+    }
   };
   for (const i of demolished) {
     alive[i] = 0;
   }
   if (demolished.size > 0) {
     rebuild();
-  } else {
-    geometry.computeBoundsTree();
   }
 
   // the asked objects, kept for the facade readings' repack
@@ -267,6 +307,9 @@ export function dressCity(
     tile,
     mesh,
     table,
+    tableBytes:
+      typedBytes(table) +
+      (objects.texture.image.data as Float32Array).byteLength,
     alive,
     demolish: (objectIndex) => {
       const doomed = doomedObjects(table.root, objectIndex);
@@ -299,6 +342,8 @@ export function dressCity(
       }
     },
     facts: (objectIndex) => readObjectFacts(metadata, objectIndex),
+    hasBvh: () => Boolean(geometry.boundsTree),
+    ensureBvh: () => ensureCityBvh(mesh),
     mark: (next) => {
       marked = next;
       if (markObjects(objects.texture, table, marked)) {
@@ -307,6 +352,109 @@ export function dressCity(
     },
   };
   return layer;
+}
+
+/** A mesh's world box, kept while its matrix stays. */
+const boxes = new WeakMap<Mesh, { box: Box3; matrix: Matrix4 }>();
+
+function worldBox(mesh: Mesh): Box3 {
+  let kept = boxes.get(mesh);
+  if (!kept?.matrix.equals(mesh.matrixWorld)) {
+    const geometry = mesh.geometry;
+    if (!geometry.boundingBox) {
+      geometry.computeBoundingBox();
+    }
+    kept = {
+      box: (geometry.boundingBox ?? new Box3())
+        .clone()
+        .applyMatrix4(mesh.matrixWorld),
+      matrix: mesh.matrixWorld.clone(),
+    };
+    boxes.set(mesh, kept);
+  }
+  return kept.box;
+}
+
+/** The layers whose box `ray` enters within `far`, nearest entry first
+ *  (0 from inside a box: `rayEntry`). */
+function layersOnRay(
+  ray: Ray,
+  far: number,
+  layers: readonly CityLayer[]
+): { enter: number; layer: CityLayer }[] {
+  const out: { enter: number; layer: CityLayer }[] = [];
+  for (const layer of layers) {
+    const enter = rayEntry(ray, worldBox(layer.mesh));
+    if (enter !== null && enter <= far) {
+      out.push({ enter, layer });
+    }
+  }
+  return out.sort((a, b) => a.enter - b.enter);
+}
+
+/**
+ * The nearest building surface along `raycaster`'s ray (within its `far`),
+ * the tiles taken nearest box first until none ahead can hold a nearer
+ * one. A tile without a BVH is built first where `build` (a pick, a double
+ * tap: once, at a user's word) and passed over otherwise (the autofocus) —
+ * never walked triangle by triangle, which three-mesh-bvh's raycast falls
+ * back to on a mesh without one.
+ */
+export function nearestCityHit(
+  raycaster: Raycaster,
+  layers: readonly CityLayer[],
+  build: boolean
+): { hit: Intersection; layer: CityLayer } | null {
+  let best: { hit: Intersection; layer: CityLayer } | null = null;
+  for (const { enter, layer } of layersOnRay(
+    raycaster.ray,
+    raycaster.far,
+    layers
+  )) {
+    if (best && enter > best.hit.distance) {
+      break;
+    }
+    if (build) {
+      layer.ensureBvh();
+    }
+    if (!layer.hasBvh()) {
+      continue;
+    }
+    const hit = raycaster.intersectObject(layer.mesh, false)[0];
+    if (hit && (!best || hit.distance < best.hit.distance)) {
+      best = { hit, layer };
+    }
+  }
+  return best;
+}
+
+/**
+ * The building tile nearest world (x, z) without a BVH, within `reach` m
+ * of its box (in plan; 0 inside it), or null: the one create-app.ts builds
+ * next in idle time, so a walk into a neighbouring tile finds it ready.
+ */
+export function nearestWithoutBvh(
+  layers: readonly CityLayer[],
+  x: number,
+  z: number,
+  reach: number
+): CityLayer | null {
+  let best: CityLayer | null = null;
+  let bestDistance = reach;
+  for (const layer of layers) {
+    if (layer.hasBvh()) {
+      continue;
+    }
+    const { min, max } = worldBox(layer.mesh);
+    const dx = Math.max(min.x - x, 0, x - max.x);
+    const dz = Math.max(min.z - z, 0, z - max.z);
+    const distance = Math.hypot(dx, dz);
+    if (distance <= bestDistance) {
+      best = layer;
+      bestDistance = distance;
+    }
+  }
+  return best;
 }
 
 // Hoisted: picks happen on a key press or a click, but there's no reason to
@@ -320,8 +468,9 @@ const pickAt = new Vector2();
 /**
  * Raycasts over `layers` through a screen point (normalized device
  * coordinates; the screen centre, the crosshair, by default): the nearest
- * object hit and how far along the ray. `raycaster` is left set to the ray,
- * so a caller can test the ground along it.
+ * object hit and how far along the ray, the tiles it reaches built as it
+ * does (`nearestCityHit`). `raycaster` is left set to the ray, so a caller
+ * can test the ground along it.
  */
 export function pickCityObject(
   camera: Camera,
@@ -339,13 +488,12 @@ export function pickCityObject(
     ndc ? pickAt.set(ndc.x, ndc.y) : SCREEN_CENTER,
     camera
   );
-  const meshes: Object3D[] = layers.map((l) => l.mesh);
-  const hit = pickRaycaster.intersectObjects(meshes, false)[0];
-  const face = hit?.face;
-  const layer = layers.find((l) => l.mesh === hit?.object);
-  if (!(face && layer)) {
+  const found = nearestCityHit(pickRaycaster, layers, true);
+  const face = found?.hit.face;
+  if (!(found && face)) {
     return null;
   }
+  const { hit, layer } = found;
   const ids = layer.mesh.geometry.getAttribute("featureId");
   return ids
     ? {
@@ -360,37 +508,55 @@ export function pickCityObject(
 const alongRaycaster = new Raycaster();
 
 /**
- * Every building tree a pick ray passes through, nearest first, one hit
- * per tree (its nearest face): what stands behind the first, for the
- * probe's candidates.
+ * Every building tree a pick ray passes through within `far` (the ground,
+ * where the probe has it; the ray's own reach otherwise), nearest first,
+ * one hit per tree (its nearest face): what stands behind the first, for
+ * the probe's candidates. A tile without a BVH is built when its box
+ * begins before the first hit (it may hold a nearer one), and passed over
+ * behind it: what stands behind the first counts only where it is cheap.
  */
 export function cityObjectsAlong(
   camera: Camera,
   layers: readonly CityLayer[],
-  ndc?: { x: number; y: number }
+  ndc?: { x: number; y: number },
+  far?: number
 ): { distance: number; layer: CityLayer; objectIndex: number }[] {
-  alongRaycaster.far = setPickRay(
+  const reach = setPickRay(
     alongRaycaster,
     ndc ? pickAt.set(ndc.x, ndc.y) : SCREEN_CENTER,
     camera
   );
-  const meshes: Object3D[] = layers.map((l) => l.mesh);
+  alongRaycaster.far = Math.min(reach, far ?? reach);
   const out: { distance: number; layer: CityLayer; objectIndex: number }[] = [];
   const seen = new Set<string>();
-  for (const hit of alongRaycaster.intersectObjects(meshes, false)) {
-    const layer = layers.find((l) => l.mesh === hit.object);
-    const ids = layer?.mesh.geometry.getAttribute("featureId");
-    if (!(layer && ids && hit.face)) {
+  let first = Number.POSITIVE_INFINITY;
+  for (const { enter, layer } of layersOnRay(
+    alongRaycaster.ray,
+    alongRaycaster.far,
+    layers
+  )) {
+    if (enter <= first) {
+      layer.ensureBvh();
+    }
+    const ids = layer.mesh.geometry.getAttribute("featureId");
+    if (!(layer.hasBvh() && ids)) {
       continue;
     }
-    const objectIndex = ids.getX(hit.face.a);
-    const key = `${layer.tile}:${layer.table.root[objectIndex]}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      out.push({ distance: hit.distance, layer, objectIndex });
+    // A building tree is one tile's: its hits come in this tile's order.
+    for (const hit of alongRaycaster.intersectObject(layer.mesh, false)) {
+      if (!hit.face) {
+        continue;
+      }
+      const objectIndex = ids.getX(hit.face.a);
+      const key = `${layer.tile}:${layer.table.root[objectIndex]}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push({ distance: hit.distance, layer, objectIndex });
+        first = Math.min(first, hit.distance);
+      }
     }
   }
-  return out;
+  return out.sort((a, b) => a.distance - b.distance);
 }
 
 export function countBuildings(layer: CityLayer): number {

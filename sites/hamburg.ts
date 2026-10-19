@@ -29,6 +29,7 @@ export const HAMBURG: Site = {
     credit:
       "Straßenbaumkataster: Freie und Hansestadt Hamburg (BUKEA), dl-de/by-2-0",
   },
+  mapillary: { objects: false },
   spawn: "jungfernstieg",
   tiles: [
     { e: 564, n: 5934 },

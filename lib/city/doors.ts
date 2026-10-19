@@ -96,6 +96,16 @@ export function wallShiftAlong(
   }
   const t = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
   const n: V3 = [t[1], -t[0], 0];
+  // a hit within ALONG_MAX_M of the line lies in the stretch's box
+  const near = trianglesNear(
+    [
+      [a[0] - offset.cx, a[1] - offset.cy],
+      [b[0] - offset.cx, b[1] - offset.cy],
+    ],
+    [Math.min(z0, z1), Math.max(z0, z1)],
+    positions,
+    triangles
+  );
   const read: [number, number][] = [];
   for (const f of ALONG) {
     let shift = Number.NEGATIVE_INFINITY;
@@ -105,7 +115,7 @@ export function wallShiftAlong(
         a[1] - offset.cy + t[1] * len * f + n[1] * DOOR_WALL_REACH,
         z,
       ];
-      for (const tri of triangles) {
+      for (const tri of near) {
         const hit = rayHit(o, n, positions, tri);
         const s = hit === undefined ? Number.NaN : DOOR_WALL_REACH - hit;
         if (Math.abs(s) <= ALONG_MAX_M) {
@@ -292,6 +302,9 @@ function roofAt(
 ): number | undefined {
   let best: { z: number; at: number } | undefined;
   for (const t of roofs) {
+    if (!overXY(p, positions, t)) {
+      continue;
+    }
     const v = (i: number): V3 => [
       positions[3 * (t + i)],
       positions[3 * (t + i) + 1],
@@ -316,6 +329,24 @@ function roofAt(
     }
   }
   return best?.at;
+}
+
+/** Whether `p` lies in the box of the triangle at `t` seen from above,
+ *  edges included: the only triangles `roofAt` can find it in. */
+function overXY(
+  p: readonly number[],
+  positions: ArrayLike<number>,
+  t: number
+): boolean {
+  const [x0, y0] = [positions[3 * t], positions[3 * t + 1]];
+  const [x1, y1] = [positions[3 * t + 3], positions[3 * t + 4]];
+  const [x2, y2] = [positions[3 * t + 6], positions[3 * t + 7]];
+  return !(
+    p[0] < Math.min(x0, x1, x2) ||
+    p[0] > Math.max(x0, x1, x2) ||
+    p[1] < Math.min(y0, y1, y2) ||
+    p[1] > Math.max(y0, y1, y2)
+  );
 }
 
 /** The least-squares line through (f, s) read at f = 0 and 1; one point:

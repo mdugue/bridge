@@ -50,6 +50,12 @@ export interface TrailBeat {
   triangles: number;
   /** the JS heap, MB (Chromium only) */
   heapMB?: number;
+  /**
+   * The typed arrays the loaded tiles keep on the page's process, MB
+   * (tile-stream.ts `CpuBytes`): what a phone runs out of while three's
+   * GPU count is still low — optional: older records lack it.
+   */
+  cpuMB?: number;
   /** loaded building tiles and built dressings */
   cities: number;
   dressings: number;
@@ -102,6 +108,8 @@ export interface TrailStats {
   maxGpuMB: number;
   maxHeldMB: number;
   maxHeapMB?: number;
+  /** the most the tiles kept on the CPU (TrailBeat.cpuMB); optional */
+  maxCpuMB?: number;
 }
 
 /**
@@ -348,6 +356,9 @@ export function pushBeat(trail: Trail, beat: TrailBeat): void {
   if (beat.heapMB !== undefined) {
     stats.maxHeapMB = Math.max(stats.maxHeapMB ?? 0, beat.heapMB);
   }
+  if (beat.cpuMB !== undefined) {
+    stats.maxCpuMB = Math.max(stats.maxCpuMB ?? 0, beat.cpuMB);
+  }
   if (beat.frames === 0 || beat.stopped || trail.state === "hidden") {
     return;
   }
@@ -471,13 +482,15 @@ export function formatBeat(b: TrailBeat): string {
     .join("  ");
 }
 
-/** The scene's estimate (and its rasters), three's count, the JS heap. */
+/** The scene's estimate (and its rasters), three's count, the JS heap and
+ *  the tiles' CPU arrays. */
 function memoryPart(b: TrailBeat): string {
   const raster = b.rasterMB === undefined ? "" : ` rast ${round(b.rasterMB)}MB`;
   const held =
     b.heldMB === undefined ? "" : ` held ${round(b.heldMB)}MB ${b.held ?? ""}`;
   const heap = b.heapMB === undefined ? "" : ` heap ${round(b.heapMB)}MB`;
-  return `gpu ${round(b.gpuMB)}MB${raster}${held.trimEnd()}${heap}`;
+  const cpu = b.cpuMB === undefined ? "" : ` cpu ${round(b.cpuMB)}MB`;
+  return `gpu ${round(b.gpuMB)}MB${raster}${held.trimEnd()}${heap}${cpu}`;
 }
 
 /** Building tiles / dressings, and the terrain levels: fine / coarse. */
@@ -529,9 +542,11 @@ export function formatStats(stats: TrailStats): string {
     .join(" ");
   const heap =
     stats.maxHeapMB === undefined ? "" : ` heap ${round(stats.maxHeapMB)}MB`;
+  const cpu =
+    stats.maxCpuMB === undefined ? "" : ` cpu ${round(stats.maxCpuMB)}MB`;
   return (
     `${stats.beats} beats, mean ${round(stats.fpsSum / stats.beats)}fps (${buckets})` +
-    `  max held ${round(stats.maxHeldMB)}MB gpu ${round(stats.maxGpuMB)}MB${heap}`
+    `  max held ${round(stats.maxHeldMB)}MB gpu ${round(stats.maxGpuMB)}MB${heap}${cpu}`
   );
 }
 

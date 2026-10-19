@@ -14,11 +14,7 @@ import { familyLook, TRUNK_BASE } from "@/lib/city/tree-family";
 import { ageLook } from "@/lib/city/tree-age";
 import { buildTreeStakes } from "./tree-stakes";
 import { buildTreePlan } from "./tree-plan";
-import {
-  LOOK_DEFAULTS,
-  type VegetationLookKey,
-} from "@/lib/city/look-controls";
-import type { Live } from "./shader-chunks";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
   CROWN_SHAPES,
   type CrownShape,
@@ -61,8 +57,8 @@ import {
  *
  * It reuses everything the canopy trees are made of — the lobed crown and the
  * multi-tuft rich crown, the scene's crown materials (sway, shimmer,
- * translucency, flutter; the same builds as the canopy's), the trunk, the
- * 250 m chunks and the distance LOD swap — and adds
+ * translucency, gust brightening; the same builds as the canopy's), the
+ * trunk, the 250 m chunks and the distance LOD swap — and adds
  * only what a per-instance scale cannot express: two reshaped variants of
  * the SAME two crown geometries (a flame for fastigiate cultivars, a
  * curtained dome for weeping trees) and a tiered lathe cone for conifers,
@@ -524,12 +520,6 @@ export function buildTreeInventory(
   // The scene's crown materials and uniforms, as the canopy's (sceneCrowns).
   const crownMats = sceneCrowns(ctx.sunDirection);
   const u = crownMats.uniforms;
-  const rowUniform: Record<VegetationLookKey, Live> = {
-    leafBright: u.leafBright,
-    leafFlutter: u.leafFlutter,
-    shimmer: u.shimmer,
-    translucency: u.translucency,
-  };
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   const counts = { broad: 0, spindle: 0, cone: 0, weep: 0 };
 
@@ -580,9 +570,6 @@ export function buildTreeInventory(
       chunks: [],
       multiTuft: () => multiTuft,
       applyLook: (look) => {
-        for (const key of Object.keys(rowUniform) as VegetationLookKey[]) {
-          rowUniform[key].value = look[key];
-        }
         multiTuft = look.multiTuft;
       },
       setTime: (seconds) => {

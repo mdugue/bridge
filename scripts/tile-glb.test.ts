@@ -1,5 +1,17 @@
 import { expect, test } from "bun:test";
-import { ENUM_NONE, enumColumn, writeMeshGlb } from "./tile-glb";
+import { StructuralMetadata as LibraryMetadata } from "3d-tiles-renderer/three/plugins";
+import { Vector3 } from "three";
+import {
+  propertyTableViews,
+  readStructuralMetadata,
+  type StructuralMetadataJson,
+} from "../lib/city/property-table";
+import {
+  ENUM_NONE,
+  enumColumn,
+  type PropertyTable,
+  writeMeshGlb,
+} from "./tile-glb";
 
 /** The JSON chunk of a glb. */
 function gltfJson(glb: Uint8Array): Record<string, unknown> {
@@ -263,4 +275,82 @@ test("enum columns reach the schema as ENUM with NONE as noData", async () => {
     ENUM_NONE,
     "3100",
   ]);
+});
+
+test("the viewer reads back every column the bake writes, as 3DTilesRendererJS's reader did", async () => {
+  const properties: PropertyTable["properties"] = {
+    baseZ: {
+      type: "SCALAR",
+      componentType: "FLOAT32",
+      values: new Float32Array([100.5, 101]),
+    },
+    height: {
+      type: "SCALAR",
+      componentType: "FLOAT32",
+      values: new Float32Array([18.5, -1]),
+      noData: -1,
+    },
+    building: {
+      type: "SCALAR",
+      componentType: "UINT8",
+      values: Uint8Array.from([1, 0]),
+    },
+    flags: {
+      type: "SCALAR",
+      componentType: "UINT16",
+      values: Uint16Array.from([3, 0]),
+    },
+    root: {
+      type: "SCALAR",
+      componentType: "UINT32",
+      values: Uint32Array.from([0, 0]),
+    },
+    tint: {
+      type: "VEC3",
+      componentType: "FLOAT32",
+      values: new Float32Array([0.5, 0.25, 0.75, 1, 1, 1]),
+    },
+    addr: { type: "STRING", values: ["Schloßstraße 1", ""] },
+    roofType: { type: "ENUM", values: ["", "3100"] },
+  };
+  const glb = await writeMeshGlb({
+    name: "city",
+    positions,
+    normals,
+    attributes: { _FEATURE_ID_0: new Float32Array([0, 0, 0, 1, 1, 1]) },
+    extras: { kind: "city", tileId: "t" },
+    table: { className: "building", count: 2, properties },
+  });
+  const json = gltfJson(glb) as {
+    bufferViews: { byteLength: number; byteOffset?: number }[];
+    extensions: { EXT_structural_metadata: StructuralMetadataJson };
+  };
+  const ext = json.extensions.EXT_structural_metadata;
+  const bin = gltfBin(glb);
+  // the buffer views as GLTFLoader hands them over: a copy each
+  const views: ArrayBuffer[] = [];
+  for (const i of propertyTableViews(ext)) {
+    const { byteOffset = 0, byteLength } = json.bufferViews[i];
+    views[i] = bin.slice(byteOffset, byteOffset + byteLength).buffer;
+  }
+  const [table] = readStructuralMetadata(ext, (i) => views[i]).tableAccessors;
+  const theirs = new LibraryMetadata(ext, [], views).getPropertyTableData(
+    [0, 0],
+    [0, 1],
+    []
+  ) as unknown as Record<string, unknown>[];
+  const flat = (v: unknown) => (v instanceof Vector3 ? v.toArray() : v);
+  for (const [name, column] of Object.entries(properties)) {
+    const written =
+      column.type === "VEC3"
+        ? [[...column.values.subarray(0, 3)], [...column.values.subarray(3)]]
+        : [...column.values];
+    for (const id of [0, 1]) {
+      expect(table.getPropertyValue(name, id)).toEqual(written[id]);
+      expect(flat(theirs[id][name])).toEqual(written[id]);
+    }
+  }
+  expect(Object.keys(table.properties).toSorted()).toEqual(
+    Object.keys(theirs[0]).toSorted()
+  );
 });

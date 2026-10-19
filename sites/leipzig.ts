@@ -20,6 +20,7 @@ export const LEIPZIG: Site = {
     credit:
       "Baumkataster: Stadt Leipzig, Amt für Stadtgrün und Gewässer, dl-de/by-2-0",
   },
+  mapillary: { objects: false },
   spawn: "markt",
   tiles: [
     { e: 316, n: 5690 },

@@ -20,8 +20,10 @@ import {
   createClaySky,
   type GroundLight,
   groundLitMaterial,
+  HORIZON_SHADE,
   openSkySlots,
   openSkyTexture,
+  SKY_VIEW,
 } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import { dressWalls } from "./wall-layer";
@@ -32,8 +34,6 @@ function groundLight(parts: { horizon: boolean; svf: boolean }): GroundLight {
     horizon: parts.horizon ? new DataArrayTexture() : undefined,
     origin: [10, 20],
     size: [1000, 1000],
-    skyView: uniform(1),
-    horizonShade: uniform(1),
     shadowReach: uniform(new Vector3()),
     sunDirection: uniform(new Vector3(0, 1, 0)),
   };
@@ -63,14 +63,14 @@ function received(material: MeshStandardNodeMaterial, shadow: Node): Node {
   return fn(shadow);
 }
 
-test("the sky view scales the ambient through aoNode, by the shared row", () => {
+test("the sky view scales the ambient through aoNode, at its fixed strength", () => {
   const light = groundLight({ horizon: false, svf: true });
   const material = groundLitMaterial("test", { roughness: 1 }, light, true);
   expect(material).toBeInstanceOf(MeshStandardNodeMaterial);
   expect(material.aoNode).not.toBeNull();
   const ao = reachable(material.aoNode as Node);
-  // the row by reference: the slider reaches it without a rebuild
-  expect(ao.has(light.skyView)).toBe(true);
+  // Himmelslicht's strength, one constant for every tile
+  expect(ao.has(SKY_VIEW)).toBe(true);
   // the tile's raster goes in by slot, not into the shared graph
   expect(texturesOf(material.aoNode as Node)).not.toContain(light.svf);
   expect(slotsOf(material).lightSvf).toBe(light.svf);
@@ -114,8 +114,8 @@ test("the far horizon joins the sun's shadow by min, never a product", () => {
   const out = result.node ?? result;
   expect(out.method).toBe("min");
   expect(out.aNode).toBe(shadow);
-  // the horizon row by reference
-  expect(reachable(out).has(light.horizonShade)).toBe(true);
+  // Ferne Schatten's strength, one constant for every tile
+  expect(reachable(out).has(HORIZON_SHADE)).toBe(true);
   expect(material.aoNode).toBeNull();
 });
 

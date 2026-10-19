@@ -31,9 +31,8 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
-import { reflectionStrength, skyReflection } from "./sky-reflection";
+import { REFLECTIONS, skyReflection } from "./sky-reflection";
 import { type SplatLayer, splatUv } from "./terrain-layer";
 
 /** Animated water surface, masked to the land-cover "water" class (id 8). */
@@ -41,8 +40,6 @@ export interface WaterLayer {
   mesh: Mesh;
   /** drifting river-haze sheet (added to the Z-up `world`, like the water) */
   mistMesh: Mesh;
-  /** 0..1 — river-mist (Flussnebel) strength */
-  setMist: (strength: number) => void;
   /** Advance the ripple, glitter and mist animation (elapsed seconds). The
    *  sky tint is the fog's colour node itself: nothing to copy per frame. */
   update: (seconds: number) => void;
@@ -115,6 +112,15 @@ function mistCoverage(splat: SplatLayer, uv: V2, size: [number, number]): F {
     .add(tap(0, -oy).mul(0.15));
 }
 
+/** m from the eye where the river mist begins, and where it is full. */
+const MIST_NEAR_M = 120;
+const MIST_FULL_M = 1200;
+/** The sheet's opacity at full distance — 60 % of 0.4, where the
+ *  *Flussnebel* slider stood by default before it went — and how far its
+ *  colour goes from the sky's tint towards white. */
+const MIST_OPACITY = 0.24;
+const MIST_WHITE = 0.3;
+
 /**
  * Drifting river haze as a SINGLE masked sheet sharing the Z-up terrain
  * geometry (the right tool — thousands of particles over a river is not).
@@ -128,8 +134,7 @@ function createWaterMist(
   splat: SplatLayer,
   size: [number, number],
   skyTint: UniformNode<"color", Color>
-): { mesh: Mesh; setMist: (strength: number) => void } {
-  const strength = uniform(LOOK_DEFAULTS.waterMist);
+): Mesh {
   const material = new MeshBasicNodeMaterial({
     transparent: true,
     depthWrite: false,
@@ -158,32 +163,28 @@ function createWaterMist(
   const banks = smoothstep(0.15, 0.85, mistFbm(q));
   const wisps = mistFbm(r.add(banks.mul(1.7)));
   const steam = mix(0.25, 1, banks).mul(mix(0.7, 1.15, wisps));
-  // A sheet has an outline where it meets the eye up close: thin it out in
-  // the first tens of metres so it reads as air, not as a plane.
-  const nearFade = smoothstep(8, 90, distance(cameraPosition, positionWorld));
-  const alpha = wcov.mul(steam).mul(nearFade).mul(strength).mul(0.62);
+  // A sheet has an outline where it meets the eye up close: thin it out
+  // over the first kilometre so it gathers with distance, as air does. It
+  // used to be full from 90 m, and the river in the lower half of the
+  // start view lay under a pale, drifting band that read as a smear on the
+  // screen, not as mist out on the water.
+  const nearFade = smoothstep(
+    MIST_NEAR_M,
+    MIST_FULL_M,
+    distance(cameraPosition, positionWorld)
+  );
+  const alpha = wcov.mul(steam).mul(nearFade).mul(MIST_OPACITY);
   material.maskNode = cov.greaterThan(0.01).and(alpha.greaterThan(0.002));
-  // Near-white warm haze (brighter than the sky tint) so it clearly reads
-  // as mist over the pale water rather than blending into it.
-  material.colorNode = mix(skyTint.rgb, vec3(1, 1, 1), 0.6);
+  // A haze a little brighter than the sky's tint, so it reads as mist over
+  // the water; near-white, it turned the far river into a white band.
+  material.colorNode = mix(skyTint.rgb, vec3(1, 1, 1), MIST_WHITE);
   material.opacityNode = alpha;
   const mesh = new Mesh(geometry, material);
   mesh.name = "water-mist";
   mesh.renderOrder = 3; // after the water sheet (2)
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  mesh.visible = LOOK_DEFAULTS.waterMist > 0.001;
-  return {
-    mesh,
-    setMist: (s) => {
-      const v = Math.min(Math.max(s, 0), 1);
-      strength.value = v;
-      // Drop the sheet from the render submission entirely when off
-      // (mirrors the lamp-glow visibility gate — keep additive overdraw
-      // fading to 0).
-      mesh.visible = v > 0.001;
-    },
-  };
+  return mesh;
 }
 
 // --- the water sheet -----------------------------------------------------------------
@@ -209,13 +210,9 @@ function waterColour(
   );
   const fresnel = pow(float(1).sub(clamp(view.y, 0, 1)), 4);
   // Spiegelung (sky-reflection.ts): the sky the level sheet mirrors, its
-  // gradient and the glow around the sun; turned down, the fog's flat
-  // colour it stood in for.
-  const sky = mix(
-    skyTint.rgb,
-    skyReflection(vec3(0, 1, 0), 0.3),
-    reflectionStrength
-  );
+  // gradient and the glow around the sun; below full strength, the fog's
+  // flat colour it stood in for (REFLECTIONS is 1: none).
+  const sky = mix(skyTint.rgb, skyReflection(vec3(0, 1, 0), 0.3), REFLECTIONS);
   return mix(toned, sky, fresnel.mul(FRESNEL));
 }
 
@@ -295,12 +292,11 @@ export function createWaterLayer(
 
   // River mist: a second masked sheet on the SAME (shared) geometry, on the
   // same clock and sky tint.
-  const mist = createWaterMist(geometry, splat, size, skyTint);
+  const mistMesh = createWaterMist(geometry, splat, size, skyTint);
 
   return {
     mesh,
-    mistMesh: mist.mesh,
-    setMist: mist.setMist,
+    mistMesh,
     update: (seconds) => {
       waterTime.value = seconds;
     },

@@ -120,8 +120,10 @@ jobs:
     # one worker at a time (see playwright.config.ts). A shared runner is
     # about half the speed of a developer machine, so leave headroom: a tight
     # budget cancels the job mid-run and reports nothing at all, which is
-    # worse than a slow job.
-    timeout-minutes: 20
+    # worse than a slow job. So the job outlasts the whole-site spec's own
+    # budget (13.5 min on CI, so that even its timeout reports) after a cold
+    # build (5m45s in run 37947097945, 2026-10-09) and the setup around it.
+    timeout-minutes: 25
     strategy:
       # One shard failing must not cancel the other's report.
       fail-fast: false

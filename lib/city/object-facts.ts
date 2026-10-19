@@ -6,8 +6,9 @@
  * height, the date the surveyor produced it, and what OpenStreetMap adds
  * (name, address, storeys). The bake writes these as columns of the
  * building glTF's EXT_structural_metadata table next to the style columns
- * (`scripts/bake-tiles.ts`); the viewer reads them one object at a time,
- * only when someone asks (`app/_components/city-layer.ts`) — ADR 0042.
+ * (`scripts/bake-city-mesh.ts` `cityMesh`); the viewer reads them one
+ * object at a time, only when someone asks (`app/_components/city-layer.ts`)
+ * — ADR 0042.
  * No THREE, no DOM.
  */
 import type { OsmBuildingFacts } from "./city-mesh";

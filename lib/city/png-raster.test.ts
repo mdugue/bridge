@@ -109,21 +109,6 @@ describe("decodeGreyPng", () => {
     expect(Array.from(out.data)).toEqual(Array.from(px));
   });
 
-  test("keeps one column in `every` while it unfilters, the rest never kept", async () => {
-    const width = 4 * 9;
-    const height = 300; // past a yield slice
-    const px = new Uint8Array(width * height);
-    for (let i = 0; i < px.length; i++) {
-      px[i] = (i * 31 + (i >> 5)) & 255;
-    }
-    const png = encode(width, height, px, (y) => y % 5);
-    const out = await decodeGreyPng(png, 4);
-    expect(out.width).toBe(9);
-    expect(out.height).toBe(height);
-    const want = Array.from(px.filter((_, i) => i % 4 === 0));
-    expect(Array.from(out.data)).toEqual(want);
-  });
-
   test("a stream that ends early is refused", async () => {
     const png = encode(8, 8, new Uint8Array(64), () => 0);
     // an IHDR that claims more rows than the stream holds

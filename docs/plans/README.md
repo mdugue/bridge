@@ -66,7 +66,7 @@ history. Decisions that came out of plans are written up as
 | 032 | Street names: map lettering in fly mode, a caption on foot | REJECTED — built 2026-09-25, removed 2026-09-26 by the maintainer's decision after seeing it | [completed.md](./completed.md#032--street-names-lettering-and-the-on-foot-caption--rejected-removed-2026-09-26) |
 | 033 | Sky-view factor and baked horizon map: city-scale ambient light and far-field shadows | DONE (2026-09-25) — plates and tuning in plan 019; horizon on facades folded into ledger 📋 #7 (CSM) | [completed.md](./completed.md#033--sky-view-factor-and-baked-horizon-shading--done-2026-09-25-plates-and-tuning-open-on-a-gpu--plan-019) |
 | 034 | Small structures from DOM − LoD2 (kiosks, sheds, carports), gated on a measurement | DONE (2026-09-26) — look in plan 019 | [completed.md](./completed.md#034--small-structures-from-dom--lod2--done-2026-09-26-look-unjudged-on-a-gpu--plan-019) |
-| 035 | A hidden, opt-in soundscape synthesised from the scene's data | DONE (2026-09-26) — unheard: the listening pass rides along with plan 019's phone session | [completed.md](./completed.md#035--a-hidden-soundscape--done-2026-09-26-unheard-the-listening-pass-is-a-maintainer-action) |
+| 035 | A hidden, opt-in soundscape synthesised from the scene's data | REJECTED — built 2026-09-26, never heard; removed 2026-10-10 by the maintainer's decision, to cut code and maintenance (the listening pass withdrawn) | [completed.md](./completed.md#035--a-hidden-soundscape--rejected-removed-2026-10-10) |
 | 036 | What the data streams carry that we do not use (OSM, LoD2, the city's WFS, Wikidata, GeoSN, DLM): a measured survey and a ranking | **REFERENCE** — moved to [docs/data-streams.md](../data-streams.md) on 2026-10-01 (a survey, not a plan); pick an item into its own plan | [data-streams.md](../data-streams.md) |
 | 037 | The commands agents run work (`bun run build`/`test`, E2E_DEV over HTTPS), the skill's phone cache numbers, "1024²" → TIN, guide viewpoints and sizes, codebook pointers, Dependabot/CI paths, lockfile header; a test pins the guide to the HUD | DONE (2026-10-03) — `bunfig.toml` keeps a bare `bun test` out of e2e; coverage gaps listed in CI; a docs link test besides the guide test | [completed.md](./completed.md#037--the-commands-agents-run-and-docs-that-say-what-the-code-does--done-2026-10-03) |
 | 038 | Runtime spine: the shadow camera follows by night (no pinned tile), "loaded" without a spawn dressing nobody builds, no GPU-recovery loop and the crash it hid, no stuck key after a ⌘ chord, a jump ends live mode | DONE (2026-10-03) — step 2's decision moved into the pure boot machine; the GPU failure has its own HUD path | [completed.md](./completed.md#038--five-runtime-fixes-in-the-viewers-spine--done-2026-10-03) |
@@ -74,7 +74,7 @@ history. Decisions that came out of plans are written up as
 | 040 | Bakes: step-major `bun run bake`, seam stair flights kept, atomic ingest + timeouts + https check, atomic `prepare-data` writes, the `/wissen` hero as tall as the site | **TODO** — P1/P2; the stairs then need a re-bake (maintainer); **drifted** (2026-10-06 audit): its step bodies cite `scripts/bake.ts`, `ingest_sn.py`, `test_ingest.py` (gone — `scripts/pipeline.ts`, `fetch.py` + `providers/`, `test_fetch.py`), the runner takes one JSON spec, step 3 is partly done (`net.py` timeouts, `.part` writes), step 5 appears done (`bake-wissen-hero.ts` `cell * rows`); refresh before executing and fold in the bake runner's order test — see the plan's amendment | [040-bake-pipeline-fixes.md](./040-bake-pipeline-fixes.md) |
 | 041 | Test net: raster shares and the aborted-load free, the collider through a real BVH, census for stairs/sport/kerbs, eye height vs the DGM, pens per style, three's real geometry key | DONE (2026-10-03) — raster shares in their own module; tree rows left allowed empty (Grimma, Munich) | [completed.md](./completed.md#041--tests-where-the-regressions-are--done-2026-10-03) |
 | 042 | Main thread while streaming: stats coalesced, footprints only when they change (no minimap repaint per tile event), footprints after the handover, the viewer chunk fetched with the manifest | DONE (2026-10-03) — the first frame and "loaded" flush the coalesced stats | [completed.md](./completed.md#042--less-main-thread-churn-while-tiles-stream--done-2026-10-03) |
-| 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **BLOCKED** (2026-10-03) — gate passed (BVH median 75 ms a tile), the worker built and tested, but Next 16.3.7's Turbopack emits `new Worker(new URL(…))` as a raw asset; three options in the plan's findings | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
+| 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **BLOCKED** (2026-10-03, re-tried 2026-10-11) — gate passed (BVH median 75 ms a tile), the worker built and tested; the first attempt read Turbopack's leftover `media/*.worker.ts` asset as the worker, but Next 16.3.7's Turbopack **does** bundle it (re-tried for the spawn tile alone, branch `claude/spawn-bvh-worker`). Stopped at the chunk instead: three's core and three-mesh-bvh shared with the worker leave the scene's scope (ADR 0051), +20.8 KB gz on the first load (904 985 → 925 796), and mobile-emulated the first frame came later, not earlier (the lite boot has nothing to overlap once its ground has landed; the worker's build ran 3× slower beside SwiftShader's frames). Five options for the maintainer in the plan's findings | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
 | 044 | The canopy points as a packed binary instead of a 9.5 MB GeoJSON parsed in one task | DONE (2026-10-03) — 96 ms of JSON.parse → ≈ 13 ms to unpack on the biggest tile; published pre-gzipped (`.pts.gz`) | [completed.md](./completed.md#044--the-canopy-points-packed-not-geojson--done-2026-10-03) |
 | 045 | One source for the raster decoders (the stale `surfaceHeading`) and the Python class ids; one OSM number parser; the byte scales pinned across languages | **TODO** — P3; before plan 017 phase 4 | [045-one-source-for-decoders-and-class-ids.md](./045-one-source-for-decoders-and-class-ids.md) |
 | 046 | Moves only: `rail-layer.ts` into mesh kit / deck table / bridge, telemetry and picking out of `bootApp`, a home for the TSL helpers, the terrain↔water cycle, the dead-code sweep | **TODO** — P3; after 039, 041–043; **drifted** (2026-10-06 audit): the deck table moved to `lib/city/decks.ts` on the day 046 was planned, `rail-layer.ts` is 2 485 lines with the span-deck code (ADR 0041) and two more importers (`traffic-layer.ts`, `data-overlays.ts`), `bootApp` doubled to ≈ 2 050 lines (plans 060/066 take its GPU-loss slice); refresh its drift block before executing — see the plan's amendment | [046-split-the-god-modules-and-sweep.md](./046-split-the-god-modules-and-sweep.md) |
@@ -99,7 +99,14 @@ history. Decisions that came out of plans are written up as
 | 065 | The reference docs say what the code does: the skill's per-provider frame and complete bake list (`traffic`, `transit`), README's CRS and "nothing persisted", ADR 0001's storage list (`gpu-safety`), ADR 0003/0015 references, the ledger's and survey's built rows, `report-choice` under `app/_components/`, `?at`/`safety` among the URL reads; optionally a backtick-path check in `links.test.ts` | **DONE (2026-10-07)** — steps 1–6 as planned (058 had already added `#at=lat,lng` to AGENTS.md's knobs; ledger #15 marks only its built part ✅, the rest of the row stays 📋; the survey got a Status column); optional step 7 not built: its check also fails on paths that open plans (043, 045, 046, 048, 066) propose to create — its STOP condition | [065-docs-say-what-the-code-does.md](./065-docs-say-what-the-code-does.md) |
 | 066 | The page's GPU-loss, memory-emergency and resume decisions as one pure machine (`lib/city/page-lifecycle.ts`, signals → effects, like `boot-phases.ts`) with the incident sequences of the 2026-10-06 fixes as its tests; `create-app.ts` keeps a binder | DONE (2026-10-07) — steps 1–5; deviations: `gpuAnswers`/`gpuFailure` are lazy thunks (the probe asked only where the closures asked it), an initial `hiddenAt` option for a page that starts hidden, `onGpuLost` is now asked inside `dispatch` (before the stop's effects run; trail-note order unchanged), 15 tests not 10; `create-app.ts` shrank by 45 lines (3 024 → 2 979), not ≥ 80 (the binder keeps the effect map and the hooks' comments); e2e `@desktop-render\|@phone` 9 passed locally | [066-page-lifecycle-as-a-pure-machine.md](./066-page-lifecycle-as-a-pure-machine.md) |
 | 067 | The data layers and the twin: a tram timetable that failed to load can be tried again (`loading` never reset), Dresden's counts judged in Europe/Berlin (today the viewer's zone: all grey in Tokyo, a dead counter lit in New York), orchard trees askable, the card credits the site's own provider and register (not GeoSN/Dresden on Hamburg), a malformed feed element left out instead of thrown, polling only in view | DONE (2026-10-07) — all six steps; deviations: the tram failure is `TramCarsStatus.failed` shown by `TramStatusLine` in `data-layers-panel.tsx` (a two-line edit, not `city-walk.tsx`); orchard trees are marked `s: "orchard"` (`cultivated.ts`, `features.ts` type, a flag bit in `ask-items.ts`, tests in `cultivated`/`ask-items`); the zone is a feed fact (`BikeFeedReader.zone`); credits via `cardCredits(site)` in `card-lines.ts`, `GEOSN_CREDIT` deleted; the bike card still formats the count time in the visitor's zone (`inquiry-traffic.ts`, out of scope); e2e `@desktop-hud` not run here (Playwright's chromium 1243 missing in the container) | [067-data-layers-and-the-twin-small-fixes.md](./067-data-layers-and-the-twin-small-fixes.md) |
-| 068 | Window axes measured in open street photos (Panoramax, Mapillary) as fine vertical lines — the one case the window-grid veto allows | **SUPERSEDED (2026-10-09)** by ADR 0049: the photos' rhythm (spacing, size, grid, ornament) draws windows on every house (PR #143); the axes' positions stay blocked on poses (spike 2026-10-07: Panoramax ±30 m, Mapillary's drives 0.6 m apart) | [068-window-axes-from-photos.md](./068-window-axes-from-photos.md) |
+| 068 | The tile stream loads only what the fog lets you see: a stream camera whose far plane ends at the fog (`streamFarFor`), the camera keeps 6 km for the sky | DONE (2026-10-10) — steps 1–4, 6; step 5 (the boot's own fog) not built; no saving at Dresden's south-west spawn view (the site's edge is inside the reach), the gain is across the city and from the air | [completed.md](./completed.md#068--the-tile-stream-loads-only-what-the-fog-lets-you-see--done-2026-10-10) |
+| 069 | Find what holds the load at 52 %, then take it off the tile path: local timing marks, an honest 52 %, a per-tier hand-over wait, meshopt workers, ask sets in idle time, a lazy BVH | **PARTIAL** (2026-10-10) — steps 1, 3–7 built (5 on the performance PR with a bounded scene compile, deduplicated stage reports, concurrent raster fetches, a stall guard, one change pass per task, WebKit's `scheduler.yield`; then one meshopt worker on a phone, the tiles' CPU arrays counted (`cpuMB`), step 7 ungated by the iPhone crash reports — the BVH when a ray needs it); step 2's device rows open: measured locally, mobile-emulated (the plan's Findings) | [069-streaming-without-stalls.md](./069-streaming-without-stalls.md) |
+| 070 | Each tile holds a fraction of the raster memory: a 1024² coarse class raster, the sports raster on a desktop's fine level only, optionally a half-resolution desktop splat | **PARTIAL** (2026-10-10) — steps 1–4 built (step 4, the desktop's fine splat at 2048², judged on SwiftShader plates: nothing blockier, −64 MiB a fine tile; one real-GPU glance at the PR's snapshots left); step 5's GPU and phone measurements open | [070-raster-diet.md](./070-raster-diet.md) |
+| 071 | A phone renders a lean scene, a desktop a lighter one | **PARTIAL** (2026-10-10) — phone GTAO at 8 samples (not 0), a phone rich-crown budget of 800 (not *Multi-Tuft* off), no autofocus ray without a lens blur; step 4.2 (no desktop DoF) REJECTED by the maintainer; steps 3 (no shadow-camera tiles on a phone), 4.1 (desktop DPR ≤ 1.5), 5 (a phone streams to 2.2 km) and 7 built in a second pass; step 6 measured headless only — frame rates, an iPhone's memory and real-GPU plates open | [071-tier-budgets-lean-phone-lighter-desktop.md](./071-tier-budgets-lean-phone-lighter-desktop.md) |
+| 072 | A cold build bakes a site's tiles on every core | **PARTIAL** (2026-10-10) — built (steps 1, 3–6; step 2 gated out); on Vercel's 4-core, 8.6 GB builder the warmers showed no gain (322 s cold; main 232–235 s; the builders varied ≈ 1.4× in an untouched step), two tile warmers fit at once — main's parallelism already —, so they are opt-in (`PREPARE_WARMERS=1`) and the default is one process per site again, at main's CPU (local A/B); kept: atomic cache entries, each tile's fine ground as its own entry, the timing lines; manifests identical to main's | [072-parallel-site-bake.md](./072-parallel-site-bake.md) |
+| 073 | The look is fixed; the sidebar keeps only the controls people use | **DONE** (2026-10-10) — the default table: *Nebel* the one slider left, the multi-tuft switch kept, the other 25 fixed at their defaults as named constants in their owners (four keep an internal uniform a style or Modell writes); old snapshots load, their keys retired for good (`RETIRED_SNAPSHOT_KEYS`); ADR 0017 amended; ~3 kB gzip; the two edited e2e specs pass; not done: GPU plates (none in the container), the rest of the e2e (CI) | [073-freeze-the-look-table.md](./073-freeze-the-look-table.md) |
+| 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **PARTIAL** (2026-10-10) — part D built: the HUD's scene-status store (`lib/city/slice-store.ts`, `app/_components/scene-status.ts`), each widget reading its own slice, `create-app.ts` unchanged; over a lite boot, 30 frames standing and 30 in Modell `CityWalk` committed 4 times instead of 75 and `SceneSidebar` 4 instead of 75; part B: the seam built (`feature-seam.ts`: the spine's hooks, `lazyFeature`; the data layers start on their first switch-on, the traffic slot waits for its builder), the `import()` measured and **stopped** — the data layers as a chunk of their own made the first-load JS 22.7 KB gz larger for 10.1 KB moved (three.js lost its scope hoisting with the scene), so their code ships with the scene, and the styles and Modell were not started (the Findings); parts A and C open (each opens with a spike) | [074-architecture-deepening.md](./074-architecture-deepening.md) |
+| 075 | Window axes measured in open street photos (Panoramax, Mapillary) as fine vertical lines — the one case the window-grid veto allows | **SUPERSEDED (2026-10-09)** by ADR 0049: the photos' rhythm (spacing, size, grid, ornament) draws windows on every house (PR #143); the axes' positions stay blocked on poses (spike 2026-10-07: Panoramax ±30 m, Mapillary's drives 0.6 m apart) | [075-window-axes-from-photos.md](./075-window-axes-from-photos.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -116,8 +123,9 @@ S/M/L.
 
 0. **Plans 037–048 (2026-10-01 audit) — before the items below.** Done
    2026-10-03 (picked for the phones: crashes and slowness): 037, 038,
-   041, 042, 044; 043 is BLOCKED on bundling a worker (its findings name
-   the options). Left, in order: 040 → 039 → 045 → 046 (moves only, after
+   041, 042, 044; 043 is BLOCKED — not on bundling a worker, as first
+   thought, but on what the worker's three costs the scene's chunk (its
+   2026-10-11 findings name the options). Left, in order: 040 → 039 → 045 → 046 (moves only, after
    039, which edits the same files). The spikes 047 and
    048 can go any time after 038. Plan 019 (item 1) stays the one that
    needs a GPU; 039 step 4 and 048 part B add to its checklist. Plan 022
@@ -133,6 +141,15 @@ S/M/L.
    they run (their rows and amendments say what moved); 039's step 3 is
    moot. The non-interactive run picked these twelve by leverage from the
    vetted findings below; the rest is the 2026-10-06 backlog.
+   **Plans 068–074 (2026-10-10 performance audit) — order:** 069 steps
+   1–2 first (the timing marks, measured on a desktop and an iPhone: they
+   decide 069's gated steps and 074 part A) → 071 step 6 and 070 step 5
+   on a real GPU and an iPhone (071's 3, 4.1, 5 and 070's 4 are built)
+   → 072 → 074 B (built as far as it pays: the seam, no lazy chunk —
+   see its row) → 074 A. (073 is built: the maintainer let the
+   default table stand.) Authorize the Sentry connector before measuring: the
+   per-device frame-rate and memory summaries already arrive there (ADR
+   0043).
 
 1. **Plan 019 (M, GPU) — the one GPU checklist.** Everything since the 3D
    Tiles switch was verified headless only. Since 2026-10-01 every "look
@@ -192,9 +209,13 @@ S/M/L.
     target, one drawable per material and attribute layout). Open: the
     shadow pass's pipelines for new casters still build in-frame, and the
     WebGL2 backend compiles synchronously (ADR 0027).
-13. **Bundle: `proj4` for one conversion (S).** A 40-line UTM inverse for
-    zones 32/33 replaces it (`lib/city/crs.ts`). Size unmeasured.
-    (`GLTFLoader` is load-bearing now: every tile is glTF.)
+13. ~~**Bundle: `proj4` for one conversion (S).**~~ Done 2026-10-10:
+    `lib/city/crs.ts` sums Krüger's series to n⁶ (forward, inverse and the
+    convergence), held to proj4 over every site's tiles by its test;
+    proj4 is a devDependency (that test, the e2e). The chunk the HUD and
+    the scene both wait on went from 178 965 to 51 263 bytes (60 686 to
+    20 058 gzip -9). (`GLTFLoader` is load-bearing now: every tile is
+    glTF.)
 14. **Split the `create-app.ts` closure (L; 1 598 lines at `a28de75`).**
     Partly done 2026-09-26: the ground (`lib/city/ground.ts`) and the
     second boot phase (`lib/city/boot-phases.ts`) left the closure.
@@ -254,8 +275,8 @@ S/M/L.
     unifying the winding changes baked geometry — needs its own earcut
     (`lib/city` forbids `three`) and a headed shot comparison.
 22. **One terrain raster loader driven by the artifact table (M).** The
-    artifact table (`lib/city/tile.ts`) now names the dressing, sound and
-    OSM files, but the terrain's rasters still go their own way:
+    artifact table (`lib/city/tile.ts`) now names the dressing, coarse,
+    ask and OSM files, but the terrain's rasters still go their own way:
     `prepare-data.ts` spells their names into the terrain extras by hand,
     and `terrain-layer.ts` has one loader per raster (splat, NDVI, paving,
     edges, sports grounds, colonies, markings) plus the detail-raster
@@ -289,6 +310,169 @@ S/M/L.
     [data-streams survey](../data-streams.md)) instead of the OSM heritage
     join; tram tracks have no ground-join test (ADR 0035: a runtime part is
     tested with `checkJoins`).
+
+### 2026-10-10 audit (performance and stability, against `85a41b7`)
+
+Asked by the maintainer: *the load sometimes freezes at 52 %, movement is
+jerky, phones crash often, the build takes very long — which sidebar
+parameters cost performance and bundle size, which effects have cheaper
+alternatives, can the architecture be slimmed?* Six parallel auditors
+(`improve`, standard; `improve-codebase-architecture`; the HUD's
+parameters; the boot to 52 %; frame time and phone memory; bundle and
+build), their top claims re-opened in the code, and a baseline measured
+before any change: a cold build of the seven sites 419 s (Dresden's 15
+tiles 414 s, serial, on one of four cores) + `next build` 61 s; the
+viewer's boot payload 811 KB gz (scene chunk 578 KB, a dead classic
+`WebGLRenderer` with every GLSL chunk in it, proj4 in a shared chunk);
+headless (SwiftShader, full profile, 400×300) the first frame at 58 s,
+*loaded* at 501 s, *Umgebung* done at 456 s — right after the sixth of
+eight dressings — and 1.26 GB held on the GPU, 750 MB of it textures.
+
+**The maintainer's decisions:** the soundscape removed; the picture
+styles, Modell and the data layers stay but must not weigh on the
+initial load ("lazy?"); *Transparenz* and *Blattflimmern* removed;
+*Tiefenschärfe* and *Flussnebel* stay but are not parametrisable. The
+~20 cosmetic sliders went unanswered at first — they cost the GPU
+nothing (a uniform multiplier; baking a constant emits the same
+instruction), only code and UI — then the maintainer said to continue
+without asking: plan 073 fixed them with its default table, *Nebel*
+the one slider left.
+
+**Built on the performance PR (branch `claude/perf-optimizations`):**
+plan 068; plan 069 step 5 and the items listed in its row; plan 070
+steps 1–3; plan 071's phone half as listed in its row; no tier warms the
+picture styles any more (a desktop compiled Papier's programs for every
+landing tile, for the session); the four look decisions; the soundscape's
+removal (≈ 3 600 lines, its bake and 32 data files); the property tables
+read by `gltf-content.ts` (the WebGL renderer gone), the date picker on
+demand, proj4 replaced by `lib/city/crs.ts`'s own transverse Mercator —
+the boot payload 811 → 657 KB gz; on the build side Shiki loading seven
+grammars (the 104 docs pages 13.3 → 6.3 s to render), the spawn tile
+parsed once, typed-array plinths, cache keys on the bakes' own packages.
+
+**Vetted, not planned (backlog, S unless noted):**
+
+- ~~**The parse slot waits on the dressing chain**~~ — built (plan 069
+  step 4): `handOverWaitMs`, 0 on a phone, 1.5 s on a desktop.
+- **Timers starve on a saturated main thread** (plan 069's Findings, M):
+  in the local mobile-emulated runs a 1 s `setTimeout` fired up to 206 s
+  late, on `main` too — every `withinWait` bound (the 3 s compile wait,
+  the hand-over wait), the veil's 600 ms timer and `whenIdle` with it.
+  three's compile steps yield through Chromium's native
+  `scheduler.yield`, whose continuations run ahead of timers. A bound
+  that must hold needs a clock the frames check (`performance.now()`
+  against a deadline in the loop), not a timer. Measure on a device
+  first: SwiftShader's 1–26 s frames saturate the thread as a phone may
+  not.
+- **The tiles' CPU arrays are not weighed** (plan 069; S once measured):
+  `cpuBytesOf` counts them (`cpuMB` in the trail, `max_cpu_mb` in the
+  reports) but neither the tile cache nor the memory governor reads it;
+  their lines were derived against three's GPU count. Bring it in once
+  the reports show `cpuMB` on the iPhones that die.
+- **Shadow-pass pipelines compile in the frame** that first draws a new
+  caster (`compileAsync` covers the main pass only) — a hitch per new
+  kind of tree, lamp or furniture (M–L, needs a public-API spike).
+  *Spiked 2026-10-11: not on public API — left as it is.* three r186
+  keeps the shadow pass out of every compile, three ways over: (1)
+  `compileAsync` sets `_isPreCompiling`, and `ShadowNode.updateBefore`
+  returns on it (ShadowNode.js:796) — no compile draws the map, so
+  none makes its render objects; (2) the map is drawn by
+  `renderer.render(scene, shadow.camera)` (ShadowNode.js:654) from inside
+  the main pass's first lit draw, so at call depth 1, while
+  `compileAsync` always takes the depth-0 context (Renderer.js:933 against
+  `_renderScene`'s 1733; `RenderContexts.get` keys by depth, the
+  context's id is in the material key, RenderObject.js:854, and the node
+  build is cached by that key, NodeManager.js:151); (3) each caster's
+  shadow nodes come from the private `_getShadowNodes` (Renderer.js:3498)
+  and sit on the light's shadow material only around the draw
+  (3757–3809) — `compileAsync` only queues there and makes the render
+  object after the restore (1061–1068), and node keys go by identity
+  (`customCacheKey` is the node's id, Node.js:470–474), so no stand-in can
+  match. The public detours — a one-off pass nested at depth 1 into a
+  target with the map's attachments, or an override material that
+  catches the swap — rest on that undocumented keying and ordering, and a
+  real draw builds synchronously anyway (NodeManager.js:198+): they move
+  the hitch, they do not take it off the main thread. The way out is
+  upstream (three's `compileAsync` building the shadow pass itself).
+  Measured headless (`getRenderInfo().framedBuilds`: three's public
+  `debug.onNodeBuilderCreated`, counted while a frame draws), over a lite
+  boot of Dresden's spawn tile: 16 shadow-pass node builds inside frames,
+  all in frames that redrew the shadow map — 1, then 3, then **12 in the
+  one frame** where the tile's dressing landed (the frame `ready` flips);
+  none in the 51 walking and standing frames after. The other 25
+  in-frame builds all fell in the first 34 frames (the post pipelines
+  build on their first render; not split further). On WebGL2 (the headless
+  backend) a program also links synchronously in the frame, so the count
+  transfers, SwiftShader's times do not; on WebGPU the node builds are
+  the main-thread half either way.
+- ~~**The vegetation LOD runs every frame**~~ — built (2026-10-11): on
+  the 10 Hz pose tick, and in the frame the tiles in view or the crown
+  switch change or the eye jumps 25 m (`createLodSchedule`, no timer);
+  its arrays and plan states kept between passes. A pass over 1 024
+  chunks 260 → 40 µs in Bun, and 60 → 10 passes a second at 60 fps
+  (SwiftShader's ~1 fps frames are each a tick apart: it shows neither).
+- ~~**The crash trail's heartbeat walks the scene**~~ — built
+  (2026-10-11): its two walks (`gpu`'s geometry, `cpu`) counted again
+  only once what they count changed (`createRecount`); over the streamed
+  site (lite, eight dressings, SwiftShader) the walk a beat skips is
+  13.7 ms (median of 17 beats, 23 ms the most), what a beat still takes
+  0.7 ms, none of the 17 recounted. The write stays: one JSON value
+  under one key (nothing to append to), bounded by its rings, 8 KB in
+  0.05 ms.
+- ~~**The inquiry's ask sets are built eagerly**~~ — built (plan 069
+  step 6): in idle time once the dressing hangs; `canopySets` still places
+  every canopy tree a second time there.
+- ~~**A desktop at DPR 2 runs SMAA's three full-resolution passes** plus a
+  copy of the frame; skipping the copy (SMAA on the scene target, the AO
+  multiplied after, as the FXAA path does) saves a full-resolution pass.~~
+  Built 2026-10-11 (spiked first): the copy was on both paths — standing,
+  the DoF pipeline's quad copied the lens blur's own composite target into
+  `BeforeAA`; walking, `lit` was drawn there — and both went without a
+  second SMAA and without switching any pass's output target. SMAA's
+  input is a texture binding the frame switches (`Antialiasing.read`):
+  the composite where the blur leaves it (its passes run for a one-pixel
+  draw into a 1×1 target), or the scene target with the contact shadows
+  multiplied in after SMAA (walking, as FXAA does). Modell keeps drawing
+  into `BeforeAA` first, so its sheets are unchanged; a standing frame is
+  pixel for pixel what it was. *Whether a binding switch is the "input
+  target switch" this entry ruled out*: it builds nothing — 0 node builds
+  inside frames over two walk/stand rounds (51 frames), counted with
+  `getRenderInfo().framedBuilds` — and keeps every render context
+  (they key by the target drawn into). Passes a frame (`frameCalls`, lite,
+  headless): standing 18 → 18, one of them now one pixel; walking 8 → 7;
+  Modell 8 → 8, its pipeline warmed into the 1×1 target (entering it
+  built nothing in the frame — the pixel's context is `BeforeAA`'s).
+  `BeforeAA` (8 B a pixel: 36 MiB at 1920×1080 × 1.5) is held only in
+  Modell or a picture style. Fill-rate and memory are not measurable on
+  SwiftShader; the saving is one full-resolution read and write a frame.
+- ~~**Three real point lights** sit in every lit build even by day~~ —
+  built (2026-10-11): a phone builds one (`LAMP_LIGHTS`, a tier constant
+  fixed before the first frame), faded through zero where it hands over
+  to the next head; the desktop keeps three.
+- ~~**A shadow redraw every ~20 m** while walking~~ — built
+  (2026-10-11): on foot a 30 m dead zone and a 121 m half-size (was
+  19.8 m and 110 m), the walker as far from every edge as before (91 m,
+  was 90.2), 17 redraws over a straight 500 m instead of 26, texels 10 %
+  coarser; the air and Modell unchanged.
+- **The minimap's 512² class raster** has one reader left that paints
+  256² a tile (a re-bake and a look).
+- **A tile's fine level re-bakes when any tile's terrain inputs change**
+  (plan 072's maintenance note, M): its key covers every tile's DGM,
+  walls, stairs, terraces and kerbs (ADR 0029), though its walls, kerbs,
+  stairs and fences ask only the grounds near them — since plan 072 the
+  site ground reads a tile's heights only once a point asks, so the bake
+  could record which tiles it read and key on those alone (1–9, not 15).
+- **A tile warmer is admitted with Dresden's heaviest tile's peak**
+  (plan 072, `TILE_PEAK` 3 GB): on an 8 GB builder two run at once,
+  though ten of the fifteen tiles peak under 2 GB. An estimate from the
+  tile's CityJSON size (≈ 0.6 GB + 0.17 GB per MB on Dresden's) would
+  let three run beside a heavy one — measure it on another city before
+  trusting it.
+
+**Measured, not built:** WebKit's missing `scheduler.yield` is shimmed
+(`main-yield.ts`) but unmeasured on an iPhone — in Chromium with the API
+removed the lite boot was not slower; plan 069 step 2 should time it on
+the device.
 
 ### 2026-10-06 audit (`improve deep`, against `4b0310a`)
 
@@ -529,7 +713,8 @@ noted), then what was refuted or judged not worth doing.
 - *The joystick's `setThumb` state at pointer-move rate*, *`nextTask`'s
   nested timers*, *the beat's 2 s traverse*, *per-pass `updateMatrixWorld`*,
   *the date popover's calendar in the viewer chunk* — small or
-  unmeasured; profile first.
+  unmeasured; profile first. (The calendar: 56 KB, 17 KB gzip; it loads
+  with its popover since 2026-10-10.)
 - *The serial `@desktop-hud` group's failure cascade* — the trade-off
   AGENTS.md prescribes; split only if flakes appear. *"Exported for
   tests" seams* (`buildBallast`, `vineInstances`, `model-view.ts:760`) —
@@ -568,7 +753,9 @@ S each unless noted):
   `PointLight`s are shaded by every lit fragment by day (intensity 0);
   `WebGLRenderer`/GLSL may ride into the viewer chunk through
   3d-tiles-renderer's metadata `TextureReadUtility` (plain `three`
-  import) — check with a bundle analyser.
+  import) — check with a bundle analyser. (It did, ~380 KB of the scene
+  chunk; gone 2026-10-10: the viewer reads the property tables itself,
+  `app/_components/gltf-content.ts`.)
 - **Small robustness:** only `postStack.render` is guarded in the frame
   loop (a throw before it freezes silently while the crash trail writes
   on every error); the stream's `dispose()` during an in-flight compile
@@ -576,7 +763,8 @@ S each unless noted):
   style-dressing siblings dispose a shared geometry's buffers on every
   tile release (re-uploaded by the next frame — churn, not a bug);
   vegetation LOD re-plans and allocates every frame though only camera
-  movement can change it.
+  movement can change it (built 2026-10-11: on the pose tick, see the
+  2026-10-10 audit).
 - **Docs:** the crash trail is in the guide (*When it crashes*) and ADR
   0001's amendment since ADR 0043 (2026-10-03); `cityjson-threejs-loader` 0.4.0 is unmaintained
   (last release 2023) — on a three bump, a cold `prepare-data` is its
@@ -690,7 +878,10 @@ the port (2026-09-26) made of it:
    shadow texels and rasters on phones; a selectable `medium` tuple (DPR 1,
    2048² shadows, AO/DoF off) for weak desktops needs real-device looks.
    Since 2026-10-06 the safety ladder's levels (ADR 0046) are such tuples:
-   a menu would set the level `?safety=N` sets for QA.
+   a menu would set the level `?safety=N` sets for QA. Since 2026-10-12
+   the sidebar's *Erweitert › Qualität* shows the level, what it sets and
+   when it falls, and goes back to full detail (`quality-panel.tsx`); what
+   is left is choosing a lighter level by hand.
 6. ~~**A provenance manifest per tile (S).**~~ Now plan 017 phase A step 3
    (the ingest adapter writes `data/<site>/<tile>.provenance.json` from the
    values its checked downloads already know). `bun run fetch <site>
@@ -717,9 +908,11 @@ the port (2026-09-26) made of it:
    named attributes). The cheaper interim is done (efae831: the builders
    run in separate tasks, `tile-stream.ts` `nextTask`); what is left is the
    worker itself. Plan 044 took the canopy's parse off (packed points,
-   2026-10-03); plan 043 (the city BVH) found that Turbopack does not
-   bundle a module worker — the same wall this option meets, so its
-   findings' options apply here too.
+   2026-10-03); plan 043 (the city BVH) found on 2026-10-11 that
+   Turbopack does bundle a module worker, but that one importing three
+   takes three's core out of the scene chunk's scope (ADR 0051: +20.8 KB
+   gz on the first load for three's core and three-mesh-bvh) — the cost
+   this option meets too, so those findings' options apply here.
 9. **A bilingual HUD (M).** The page is `lang="de"` since 2026-09-26: the
    HUD, the spoken feedback and the `/wissen` landing are German, while
    the guide comes in both languages. About sixty HUD strings, picked by
@@ -984,3 +1177,12 @@ prompt-injection content only (none found).
   refuted ones recorded above; 039 step 3 marked moot (ADR 0041), 040 and
   046 marked drifted with amendments. Baseline green (2 082 unit tests,
   359 pipeline tests).
+- **2026-10-10 run** (against `85a41b7`): a performance and stability
+  audit on the maintainer's report (a load stuck at 52 %, jerky movement,
+  phones crashing, a slow build): `improve` (standard) and
+  `improve-codebase-architecture` in parallel with four focused auditors,
+  a measured baseline (build timing, chunk sizes, headless boot timelines
+  and CPU profiles), and the maintainer's decisions on the features and
+  the HUD's settings. Plans 068–074 written; 068, most of 070 and parts of
+  069, 071 and 073 built on the same PR; see the "2026-10-10 audit"
+  section.

@@ -22,12 +22,12 @@ demand and would be forced every frame by anything that moves and casts.
   false`, `polygonOffset`), all scaled by one `nightFactor =
   smoothstep(2°, −6°)` of sun altitude. Lamps never cast shadows (the
   crown shimmer hard-codes `directionalLightShadows[0]`).
-- **Animation and shadows:** wind sway, leaf flutter, cloud drift and
-  water motion run in the main pass only; the depth/shadow materials carry
-  none of it. The cast shadow of a swaying crown does not follow the sway,
-  and clouds cast no shadows — accepted, because forcing
-  `shadow.needsUpdate` per frame would re-render the 3072² map over tens
-  of thousands of trees and destroy the on-demand win.
+- **Animation and shadows:** wind sway, cloud drift and water motion (and
+  the leaf flutter, until 2026-10-10) run in the main pass only; the
+  depth/shadow materials carry none of it. The cast shadow of a swaying
+  crown does not follow the sway, and clouds cast no shadows — accepted,
+  because forcing `shadow.needsUpdate` per frame would re-render the 3072²
+  map over tens of thousands of trees and destroy the on-demand win.
 - More generally, look features are driven by by-reference `{ value }`
   uniforms, never by `#define`s or light counts that change at runtime.
 
@@ -63,6 +63,20 @@ scene has no tone mapping (it never had: the old composer rendered to a
 target, so the renderer's ACES setting was inert), so additive terms no
 longer fight ACES. Clustered lighting is available on `WebGPURenderer`,
 still its own decision.
+
+## Update (2026-10-11): a phone lights one
+
+The pool's size is a per-tier constant (`LAMP_LIGHTS` in `lamp-layer.ts`),
+chosen from the page's budget before the first frame and never changed
+after: three on a desktop, as before, **one on a phone** — every lit
+fragment shades each light, by day too, at intensity 0. The selection is
+the nearest N heads. Three hand over at the third-nearest head, which the
+distance falloff has mostly dimmed; a lone light hands over at the
+nearest, on the bisector between two lamps (~15 m from each at street
+spacing, where the falloff is still ~1), so on a phone it fades through
+zero over a 6 m band of the next head's lead instead of jumping from one
+lamp to the next at full strength: a dip between two lamps, which keep
+their halos and pools. The desktop's three are unchanged.
 
 ## References
 

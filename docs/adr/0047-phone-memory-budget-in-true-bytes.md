@@ -46,8 +46,8 @@ drawing buffer, 790 533 px):
 ## Decision
 
 **A post profile per device tier** (`postProfileFor` in
-`scene-profile.ts`). A phone builds no depth of field (the HUD hides its
-switch, the look keeps its value), antialiases with FXAA inside the last
+`scene-profile.ts`). A phone builds no depth of field (since 2026-10-10
+no device has a switch for it), antialiases with FXAA inside the last
 pass (`fxaa.ts`: three's FXAANode ported with a perceptual luma, √ of the
 linear luma, over the linear frame, and explicit level-0 samples), draws
 into `BeforeAA` only while a picture style is on (freed on the first
@@ -150,7 +150,8 @@ level under the eye-level frustum, where the coarse level's 23 px still
 refine it (a neighbour behind the player casts its own trees' shadows,
 and the whole-site boot asks for the spawn tile's fine level as early as
 it did), but no longer under the wide frustums from the air (11.6 px and
-less from 220 m on).
+less from 220 m on). *Since plan 071 a phone's shadow camera streams no
+tiles at all (`shadowTilesStream`): the 64 px is dormant.*
 
 **A failed allocation costs a dressing, not the page.** A compile the GPU
 had no room for (`lib/city/gpu-allocation.ts`: the `createAttribute`

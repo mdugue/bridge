@@ -110,26 +110,43 @@ config change.
 - `app/_components/` — the viewer, grouped:
   - spine: `create-app.ts` (scene/loop/handle), `tile-stream.ts` (the
     3DTilesRendererJS setup: the retrying, inflating content fetch, the
-    glTF-metadata plugin and the dressing plugin that builds and disposes
-    everything a tile carries; a phone's paced queues),
+    glTF loader (`gltf-content.ts`: meshopt and the property tables, read
+    by `lib/city/property-table.ts` — not the library's metadata plugin,
+    which ships a classic WebGLRenderer) and the dressing plugin that
+    builds and disposes everything a tile carries; a phone's paced queues),
     `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount,
     given the site id; which tileset to stream), `site-context.tsx`
     (`SiteProvider`/`useSite`: the site the HUD describes),
-    `poc-debug.ts` (the `window.__poc` test/QA hook), `scene-profile.ts`
+    `scene-status.ts` (what the scene reports to the HUD — the stages,
+    the stats and frame rate, the site, the mode, Modell's view, the data
+    layers, the inquiry, the pose — as one store of slices that each
+    widget reads its own of with `useSceneStatus`, so a report re-renders
+    what shows it, not the HUD; `sceneReports` turns it into the scene's
+    callbacks; the store itself is `lib/city/slice-store.ts`; plan 074),
+    `poc-debug.ts` (the `window.__poc` test/QA hook), `stream-timing.ts`
+    (`?trace=1`: the boot's and the stream's spans by category, local
+    only), `scene-profile.ts`
     (`?scene=lite`, `?gpu=webgl2`; the budget per tier and safety level —
     pixel ratio, shadow map, tile cache, `postProfileFor` and
     `shadowMapBytesFor`), `gpu-support.ts` (the WebGPU-or-WebGL2
     preflight), `gpu-safety.ts` (the device's safety level in local
-    storage, `gpu-safety`: `pageSafety`, `raiseSafety` — ADR 0046),
+    storage, `gpu-safety`: `pageSafety`, `raiseSafety`, `resetSafety` —
+    ADR 0046; `quality-panel.tsx`, the sidebar's *Qualität*, shows it and
+    goes back to full detail — a reload after the whole app is torn down
+    and its device gone, `disposeForReload`: the new page boots in the old
+    one's process),
     `gpu-recovery.ts` (a lost GPU: one reload per safety level, the
     renderer released first, back at the player's pose; a GPU reclaimed in
     the background, or a frame that threw on a GPU still working — a bug —,
-    reloads at the same level), `gpu-failure-card.tsx` (the
+    reloads at the same level; `keepPlaceForReload`, the place kept for
+    *Leichter weiter* and *Qualität*'s reload), `gpu-failure-card.tsx` (the
     card past the caps: *Leichter weiter*, *Neu laden*), `instancing.ts`
     (`Instances`: instanced sets that share one node build),
     `fetch-optional.ts` (the one fetch/abort policy: `fetchBytes` retries a
-    network failure for a budget of the page's visible time, offline or
-    not, ADR 0048), `net-gate.ts` (the page's view of the network:
+    network failure — and an attempt that went 30 s without a byte — for a
+    budget of the page's visible time, offline or not, ADR 0048),
+    `main-yield.ts` (WebKit's missing `scheduler.yield`, so three's async
+    compiles do not wait a frame per step), `net-gate.ts` (the page's view of the network:
     visible, online, the budgets' clock, `pageLeaving` from pagehide),
     `tile-retry.ts` (tiles that gave up on the network asked for again;
     the boot waits for them), `boot-error.tsx` (the boot's
@@ -163,7 +180,8 @@ config change.
     `coarse-crowns-layer.ts`, the coarse terrain level's trees — a
     third of them, wider —, and `low-vegetation-layer.ts`, the OSM
     hedges), `city-layer.ts` (dresses a
-    building tile: clay material, object table, BVH, demolish),
+    building tile: clay material, object table, demolish; its BVH built
+    when a ray first needs it, `ensureCityBvh`),
     `clay-windows.ts` (every house's windows, drawn by the clay's
     fragment pass as recesses — no geometry, no glass; ADR 0049),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
@@ -194,7 +212,16 @@ config change.
     columns — the feed per site in `lib/city/bike-feeds.ts` —, and
     `tram-cars.ts`, the trams by timetable with their light trails; which
     layers a site has is its `dataLayers`), `glass.ts` (their refracting glass: one copy of the frame,
-    not `transmission`),
+    not `transmission`) — all started on the first switch-on of any layer
+    as one feature, `data-layers-feature.ts`, behind the spine's feature
+    seam (`feature-seam.ts`: the hooks a feature registers on — frame,
+    stream change, the look store, the scene's clock — and
+    `lazyFeature`; the tiles' traffic slot waits for its builder through
+    `TileStreamContext.trafficBuilder`); their code ships with the scene
+    (as an `import()` chunk it grew the first-load JS: three.js lost its
+    scope hoisting — ADR 0051); `traffic-flow.ts` (what the asked
+    section's outline reads of the flows without the layer: the hour's
+    uniforms, the position node, the flow mesh),
     `shader-chunks.ts` (the shared TSL pieces: data-frame positions from
     world space, raster uv, node types)
   - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view
@@ -209,8 +236,10 @@ config change.
     render-time white material), `style-dressing.ts` (a style's own crowns
     and noir's lamp cones, shown for its frames), `style-memory.ts`
     (the last style, kept in local storage), `visual-style.ts`
-    (the look table with its defaults is `lib/city/look-controls.ts`; the
-    store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
+    (the look table is `lib/city/look-controls.ts` — *Nebel* alone, the
+    look's other strengths are named constants beside their terms, plan
+    073; the store the HUD owns and the scene subscribes to is
+    `lib/city/look-state.ts`)
   - input/camera: `camera-pose.ts` (the one owner of where the player
     stands and looks, walk/fly and the scenic glides; every input cancels a
     glide; the camera is never below the ground or inside a building —
@@ -256,16 +285,14 @@ config change.
     numbers); a tree's facts are its tile's
     `treefacts` file, fetched with the question (the artifact table's `ask`
     column, `lib/city/tile.ts`)
-  - sound: `soundscape-toggle.tsx` (the hidden soundscape's switch — the L
-    key; no AudioContext before it) and `soundscape/` (`engine.ts`,
-    `hearing.ts`, `voices.ts`: loaded by dynamic import on the first
-    toggle, driven from the 10 Hz pose tick, all synthesized)
 - `lib/brand.ts` — `SUPPORT_URL`, the Ko-fi link in the HUD footer
   (`scene-sidebar.tsx`): a plain link, never Ko-fi's widget, so nothing
   loads from there until it is clicked
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
-  policy, the look table + store, the Snapshot codec, `gpu-safety.ts`
+  policy, the look table + store, the Snapshot codec, `slice-store.ts`
+  (a store of named slices: per-slice equality, one notify per burst on
+  a schedule — the HUD's scene status), `gpu-safety.ts`
   (the safety ladder: levels, raise and decay, the recovery's caps, a
   recovered page's start tile — ADR 0046), `gpu-allocation.ts` (which
   errors are a GPU allocation that failed), `page-lifecycle.ts` (the
@@ -275,7 +302,7 @@ config change.
   `task-gate.ts` (a concurrency gate: the rasters' turns),
   `ground.ts` (the
   site's ground: terrain heights, the floor, rays — one owner for the pose,
-  focus, shadow fit and soundscape), `ground-join.ts` (how a part meets
+  focus and shadow fit), `ground-join.ts` (how a part meets
   the ground: foot depths, edges, the join contract — ADR 0035),
   `boot-phases.ts` (the load after the
   first frame as a pure state machine), `terrain-tin.ts`
@@ -298,8 +325,7 @@ config change.
   `source-matrix.ts` (the *Sources by city* table: per site and drawn
   layer, the source and how good it is — ADR 0039), `markings.ts`,
   `cultivated.ts`, `tram.ts` and `skyview.ts` (the pure halves
-  of those layers), `soundscape.ts` and `sound-entry.ts` (the soundscape's
-  mix and its boot-side half), `site.ts` (the
+  of those layers), `site.ts` (the
   site type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
   extras), `landcover.ts` (the classes and the one palette), `sport.ts`
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
@@ -360,7 +386,7 @@ config change.
   `skyview.py`, `osm_buildings.py` (shops, heritage, material and
   colours per LoD2 object; the walls' `context`, brick or plaster as the
   neighbourhood is mapped),
-  `tram.py`, `riverside.py`, `soundmarks.py` (the bell towers),
+  `tram.py`, `riverside.py`,
   `traffic.py` (the counted traffic; its sources per site in
   `traffic_sources.py`), `transit.py` (the trams' timetable, once for the
   site), `osm.py`);
@@ -369,19 +395,24 @@ config change.
   Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0037
 - `scripts/` — the build step: `prepare-sites.ts` runs `prepare-data.ts
   <site>` for every site whose data is ready (or only the ids it is given),
-  writes the index `public/data/sites.json` and prunes the folders of sites
-  no longer built; `prepare-data.ts` bakes one site's committed
+  side by side within the cores and the memory (`warmers.ts`; one process
+  per site; `PREPARE_WARMERS=1` bakes a site with more than four tiles one
+  tile per process — no gain measured on Vercel's 4-core builder, so off
+  by default; `PREPARE_JOBS`, `PREPARE_MEMORY_GB` override), writes the index
+  `public/data/sites.json`
+  and prunes the folders of sites no longer built; `prepare-data.ts` bakes
+  one site's committed
   artifacts into `public/data/<site>/` as a **3D Tiles tileset** (`tileset.json`,
   `tileset-spawn.json`) with glTF content under content-hashed names +
   `manifest.json` — per tile the buildings (`bake-city-mesh.ts` runs the
-  CityJSON loader, `bake-tiles.ts` turns it into glTF with a per-object
-  property table) and the terrain at two levels (fine: an error-bounded TIN
-  of the native DGM, `bake-terrain-tin.ts`, the walls snapped to its
+  CityJSON loader and, `cityMesh`, turns it into glTF with a per-object
+  property table) and the terrain at two levels (`bake-tiles.ts`; fine: an
+  error-bounded TIN of the native DGM, `bake-terrain-tin.ts`, the walls snapped to its
   measured steps; coarse: the DGM resampled to 512², the wall breaklines
   burned in), written by `tile-glb.ts` (meshopt, quantised,
   `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
   `pipeline.ts` (fetch/bake runner), `site-report.ts` (`bun run site`),
-  `downsample-raster.ts` (the 2048² and 512² class rasters),
+  `downsample-raster.ts` (the 2048², 1024² and 512² class rasters),
   `coarse-crowns.ts` (a tile's coarse crowns from its tree files),
   `bake-wissen-hero.ts`
   (the site's land-cover map, `site-map.webp`),
@@ -536,8 +567,9 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   added before a new bake step (or a step run on some tiles only) ships
   quietly poorer. After merging a new step, or adding a tile, bake it on
   every tile the test names; a step that finds nothing writes an empty file.
-- `prepare-data.ts` downsamples the class raster to 2048² (phones, the
-  coarse terrain) and 512² (the minimap, the soundscape) with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
+- `prepare-data.ts` downsamples the class raster to 2048² (a phone's fine
+  terrain), 1024² (the coarse terrain, every tier) and 512² (the minimap)
+  with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
   through an image resize any more (sharp premultiplies alpha — that once
   painted the ground black). Nor through the browser's image decoder: the
   class and NDVI PNGs are inflated byte-exact by `lib/city/png-raster.ts`
@@ -545,12 +577,17 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
   `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
   with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (on Vercel
-  `.next/cache/prepare-data`, the folder its build cache keeps; cold run
-  ≈ 6 min for fifteen tiles, warm ≈ 1 s; CI restores it between runs): the key covers the inputs'
+  `.next/cache/prepare-data`, the folder its build cache keeps; a cold run
+  of all seven sites 235 s on Vercel's 4-core, 8.6 GB builder, warm ≈ 3 s
+  for Dresden; CI restores it between runs; entries are written whole,
+  `bake-cache.ts`, and each tile's fine ground is one of them,
+  `ground-pack.ts`): the key covers the inputs'
   contents, `COMMON_SOURCES` (`prepare-data.ts` itself, the site's own
-  config, `sites/providers.ts`, `bun.lock`, `patches/`) and every module
-  reachable from the artifact's bake entries (`scripts/bake-sources.ts`
-  walks the imports). Those entries **are listed by hand** in
+  config, `sites/providers.ts`, `patches/`), every module reachable from
+  the artifact's bake entries (`scripts/bake-sources.ts` walks the
+  imports) and what `bun.lock` resolved for the packages those modules
+  import, with their dependencies (`lockedVersions` — not the whole
+  lockfile, so a viewer-only bump re-bakes nothing). Those entries **are listed by hand** in
   `prepare-data.ts` (`GROUND_BAKE`, each `bake` array, the `entries` passed
   to `cacheKey`): a module it calls for an artifact must be one of them or
   imported from one, or that artifact's cache goes stale. Another site's
@@ -564,7 +601,9 @@ call (ADR 0037). No Git-LFS. Derived per-tile artifacts
 of three's internals (no prototype patches, no private `_` members): a look
 term is a TSL node (`colorNode`, `normalNode`, `emissiveNode`, `aoNode`,
 `receivedShadowNode`, `maskNode`, `positionNode`, `castShadowPositionNode`),
-a slider is a shared uniform node's `.value` (no rebuild), fog is
+a fixed look strength is a constant node named after its term (`TINT`,
+`WINDOWS`, … — ADR 0017), a slider (only *Nebel* is left) or anything
+else that moves is a shared uniform node's `.value` (no rebuild), fog is
 `scene.fogNode` (`height-fog.ts`; never per material — opt out with
 `material.fog = false`). Import from `three/webgpu` (the core re-exported with
 the node materials), `three/tsl` and `three/addons`, never plain `three` in
@@ -586,8 +625,12 @@ main thread) out of the frames:
   pipeline would never match what `compileAsync` prepared.
 - **Tiles and dressings compile before they show** (`PostStack.compile`, one
   drawable per material and attribute layout). The shadow pass's pipelines
-  for new casters still compile in the frame that first draws them, and the
-  WebGL2 backend compiles synchronously — measure before adding machinery.
+  for new casters still compile in the frame that first draws them — there
+  is no public way to build them ahead (`compileAsync` skips the shadow
+  map, which is drawn one call depth below it; spiked 2026-10-11,
+  docs/plans/README.md) — and the WebGL2 backend compiles synchronously —
+  measure before adding machinery (`getRenderInfo().framedBuilds` counts
+  the builds a frame makes, the shadow pass's apart).
 - **A `ClippingGroup` switch rebuilds everything under it.** three keeps
   one render object per drawable for both sides and keys its build by the
   clipping, freeing the side a switch leaves; a compile that does not walk
@@ -601,8 +644,8 @@ main thread) out of the frames:
   three asks for no more), and every non-interleaved attribute is one —
   `position` and `normal` included. A ninth makes the pipeline invalid and
   the mesh simply does not draw, while WebGL2 (sixteen, the headless e2e's
-  backend) draws it: pack scalars into vec4s (`traffic-layer.ts`
-  `TRAFFIC_ATTRIBUTES`, its test holds the count).
+  backend) draws it: pack scalars into vec4s (`traffic-flow.ts`
+  `TRAFFIC_ATTRIBUTES`; `traffic-layer.test.ts` holds the count).
 
 **Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
 5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈
@@ -621,16 +664,20 @@ it here. Past the frustum the ground's shadows come from a baked horizon map (tw
 bands, ADR 0031); their *shapes* there (and on facades) remain a job for
 Cascaded Shadow Maps.
 
-**The shadow frustum is not fixed** (`lib/city/shadow-fit.ts`). A 110 m
+**The shadow frustum is not fixed** (`lib/city/shadow-fit.ts`). A 121 m
 half-size is right at eye level and wrong in fly mode: from 200 m up it covers
 a patch of ground directly below the camera that is barely on screen, so the
 whole view renders unshadowed. The half-size therefore grows with altitude, in
-octaves (110 → 880 m) with hysteresis, and the frustum is centred **on the
-ground**, pushed along the camera's world direction by a fraction of the extra
-radius. At eye level the offset is zero and the behaviour is byte-for-byte the
-old one — in particular turning on the spot still never moves the frustum.
-Per-render cost is unchanged (same map size, same PCF); only the caster set
-grows. This is the cheap 90% of CSM, not a replacement for it.
+octaves of 110 m (220 → 880 m) with hysteresis, and the frustum is centred **on
+the ground**, pushed along the camera's world direction by a fraction of the
+extra radius. At eye level the offset is zero — turning on the spot never
+moves the frustum — and it re-centres only after the camera has drifted
+30 m (`WALK_DEAD_ZONE_M`; 18 % of the half-size above eye level and in
+Modell). That is the 110 m / 19.8 m it was until 2026-10-11, widened so the
+camera stays as far from every edge (91 m, was 90.2) with a third fewer
+redraws while walking, for texels 10 % coarser. Per-render cost is unchanged
+(same map size, same PCF); only the caster set grows. This is the cheap 90%
+of CSM, not a replacement for it.
 
 **Contact shadows (GTAO) are smoothed and never motion-gated.** GTAO
 leaves its 5×5 rotation noise to a denoiser: drawn raw it speckled every
@@ -648,10 +695,15 @@ rebuild hitch. DoF (desktop only: a phone does not build it, ADR 0047) is
 still dropped while moving — motion has already destroyed the bokeh — by
 switching between two prebuilt pipelines, never by
 swapping one pipeline's output node (that re-translates the whole graph).
+SMAA is the other way round: one SMAA, its input a texture binding the
+frame switches (`Antialiasing.read` in `post-stack.ts` — a bind group, not
+a build) between the lens blur's composite, the scene target (the contact
+shadows multiplied in after it) and `BeforeAA` — never a second SMAA
+(three more full-resolution targets), and nothing copies the frame for it.
 
 **Buildings are already batched.** Each tile's buildings are ONE glTF mesh
-(`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time,
-`scripts/bake-tiles.ts` writes it with a per-vertex feature id,
+(`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time
+and, `cityMesh`, writes it with a per-vertex feature id,
 `EXT_mesh_features`), so draw calls are already low and **BatchedMesh would
 not help** (and would break feature-id picking/demolish). Per-building data
 (tint, heights, roof colour, glow, roughness, the demolish tree) is **one row
@@ -705,12 +757,26 @@ detach it first. A lost GPU reloads a safety level lighter, where the
 player stood (`gpu-recovery.ts`, ADR 0046).
 The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
-triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
-renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
+triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`).
+**A building tile's BVH is built when a ray first needs it** (ADR 0050,
+`ensureCityBvh`), so a ray against the buildings goes through
+`nearestCityHit`, `cityObjectsAlong` or the collider, which ask only the
+tiles whose box the ray enters and build (or skip) a missing BVH — a
+plain `intersectObject(city.mesh)` on a tile without one is
+three-mesh-bvh's brute-force fallback over two million triangles. The glTF extras key is **`tileId`**: the
+renderer writes `userData.tile` itself and would overwrite ours. The
+walk/fly camera does not stream itself: the renderer streams for its twin
+whose far plane ends where the fog does, on a phone at 2.2 km at the
+latest — not through Modell's dolly zooms, which back it kilometres away
+(`streamFarFor`, `lib/city/atmosphere.ts`; synced each frame
+before the update) — past the
+fog's end a tile shows nothing, and the camera's 6 km far plane loaded the
+site's every building tile in that direction as fog colour; register a new
+streaming need against that twin, not the camera. The sun's shadow camera is a second
 streaming camera while the sun is up, so tiles that cast into the view stay
-loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`)
-— at 128 px on a desktop and 64 on a phone (`SHADOW_STREAM_PX`), not the
-map's resolution: an orthographic camera's error ignores distance, and at
+loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`;
+on a phone never, `shadowTilesStream`) — at 128 px on a desktop
+(`SHADOW_STREAM_PX`), not the map's resolution: an orthographic camera's error ignores distance, and at
 2048 px it refined the terrain under its whole frustum;
 `displayActiveTiles` keeps loaded tiles drawn while turning.
 
@@ -721,7 +787,7 @@ off-screen chunks frustum-cull out of both the main and shadow pass. After
 is off-screen.
 
 **Buildings render in exactly one style: the opaque "clay"** (`visual-style.ts`
-— archviz clay plus the facade-detail shader, with hash-dithered transparency).
+— archviz clay plus the facade-detail shader).
 The earlier "ghost" (`MeshPhysicalMaterial.transmission`) and "standard" (the
 loader's raw LoD colours) styles were removed. Keep transmission out of the
 scene: it re-renders everything into a buffer each frame (~2× cost). The
@@ -741,12 +807,15 @@ is the ground: the terrain material (`userData.paperOwn`) opts out of the
 override and draws Papier's paper, paint and water itself under the
 shared `paperGroundOn` uniform node. Give a new style a row in
 `lib/city/render-style.ts` and a mode in that node — never a branch in a
-scene material. `PostStack.warmStyles` prepares them all once the scene
-is idle: the styled pipelines build one per frame (a pipeline builds its
-graph and its SMAA passes on its first render), and the dressing and the
-scene's own objects are compiled under the Papier swap with
-`compileAsync` (not on phones: `postProfileFor` warms only the outline
-there — the extra pipelines cost an iPhone tab its memory) — no stand-ins: the override takes each source material's
+scene material. No tier warms the styles any more (`postProfileFor`
+warms only the outline: on a phone the extra pipelines cost an iPhone tab
+its memory, and on a desktop every landing tile compiled Papier's
+programs for the session); a style builds on its first frame. Where a
+profile asks for `"all"`, `PostStack.warmStyles` prepares them all once
+the scene is idle: the styled pipelines build one per frame (a pipeline
+builds its graph and its SMAA passes on its first render), and the
+dressing and the scene's own objects are compiled under the Papier swap
+with `compileAsync` — no stand-ins: the override takes each source material's
 position node, so only the real objects match what a frame builds. The
 node's only branch is on the mode (a uniform); per pixel it selects, so
 derivatives and texture reads stay in uniform control flow (WGSL), and
@@ -763,7 +832,9 @@ kerbs and fences are baked into the fine terrain glTF and arrive with it)
 (the streaming pill). After the gate a terrain level that replaces its
 tile's other level on screen waits for its dressing before it counts as
 loaded, so the renderer keeps the old level (and its trees) drawn until
-the new one is complete (`DressingPlugin.handsOver`); the dressing is
+the new one is complete (`DressingPlugin.handsOver`) — on a desktop, for
+up to 1.5 s; a phone does not wait (`handOverWaitMs`: the wait holds a
+parse slot, and a phone has two), its trees arrive a moment later; the dressing is
 compiled off the scene and hung on the content root at the renderer's
 `load-model`, after it has recorded the content's materials.
 `onLoaded` flips it to `ready` once the
@@ -822,20 +893,28 @@ bridge or a misplaced layer is invisible looking straight down.
 
 **A PR that changes what the viewer shows carries JSON snapshots** in its
 description — views the reviewer pastes into the preview's Snapshot panel,
-before and after as a look-key pair where the change has a slider. The
+before and after as a look-key pair where the change has a control (only
+*Nebel*, the crown switch, the style and the data layers have one); a
+change to the fixed look is a code change, judged by the same snapshots
+of place and time on the preview against production. The
 **`pr-snapshots` skill** (`.claude/skills/pr-snapshots/`) says how;
 screenshots are optional there.
 
 URL knobs: `?scene=lite` (the CI profile, below), `?gpu=webgl2` (the
 WebGL2 backend where WebGPU exists), `?safety=N` (0–3: the page at that
 safety level, nothing stored — ADR 0046), `?trail=1` (the crash trail's
-card always), `#at=lat,lng` (the off-site dialog's hand-off to another
+card always), `?trace=1` (the boot's and the stream's timings —
+`stream-timing.ts`, plan 069: each `tile:*`, `dressing:*` and `boot:*`
+span on the browser's *Timings* track with its tile id, the long tasks
+counted, and a `console.table` of the categories once loaded and 20 s
+later; never in the trail or the reports), `#at=lat,lng` (the off-site dialog's hand-off to another
 city's page: placed there after the first frame, then dropped — a
 fragment, so it never reaches the server or the crash trail).
 
 There is a **snapshot system**: the in-app Snapshot panel copies the full
-camera pose + sun time + look sliders as JSON; `__poc.handle.getCameraState()`
-/ `applyCameraState()` replay it and `__poc.look.set()` drives the sliders. To check a visual change on a **real GPU**, drop
+camera pose + sun time + the look's controls as JSON (an old snapshot's
+retired keys are ignored); `__poc.handle.getCameraState()`
+/ `applyCameraState()` replay it and `__poc.look.set()` drives the controls. To check a visual change on a **real GPU**, drop
 a snapshot JSON into `shots/` and run:
 
 ```bash

@@ -6,7 +6,7 @@ import type { WindowSpec } from "./windows";
 
 /**
  * The buildings' per-object table. The bake (scripts/bake-city-mesh.ts)
- * produces one row per CityJSON object; scripts/bake-tiles.ts writes the rows
+ * produces one row per CityJSON object and writes the rows (`cityMesh`)
  * into the building glTF as an EXT_structural_metadata property table (one
  * column per field), with every vertex carrying its object's index as
  * EXT_mesh_features `_FEATURE_ID_0`. The runtime packs the columns into one
@@ -82,6 +82,11 @@ export const OBJECT_FLAG_GROUNDED = 128;
  *  house's plinth and cornices) does not dress. The column is 16 bits wide
  *  from this flag on. */
 export const OBJECT_FLAG_FLAT_ROOF = 256;
+/** A facade that is its own (`ownFacade`, `partFacade` in
+ *  lib/city/building-tint.ts: a church, a palace, a hall, a listed public
+ *  building OSM counts no storeys of), not only a landmark's: its storeys
+ *  are not a storey house's, so the clay draws no storey lines on it. */
+export const OBJECT_FLAG_OWN_FACADE = 512;
 /** A roof triangle within this of level counts as flat (cos 10°). */
 const FLAT_NORMAL_Z = 0.985;
 /** An object whose roof is flat over this share of its area is flat-roofed:

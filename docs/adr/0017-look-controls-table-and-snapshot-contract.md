@@ -1,6 +1,23 @@
 # ADR 0017: Look controls declared in one table; the Snapshot is a validated, versioned contract
 
-- **Status:** accepted
+- **Status:** accepted; amended 2026-10-10: a row has no `max` any more
+  (only the removed *Transparenz* had one); `focusMode`/`focusDistanceM`
+  are no longer checked (depth of field lost its switch and its manual
+  focus); and a removed control's key — `transparencyPct`,
+  `leafFlutterPct`, `leafBrightPct`, `waterMistPct`, `dof`, `focusMode`,
+  `focusDistanceM` — is an unknown key: kept, ignored on Apply, never an
+  error; amended again 2026-10 (plan 073): the table holds only the
+  controls people use — *Nebel*, beside the multi-tuft switch, the picture
+  style and the data layers. The other 25 sliders are gone: the
+  maintainer did not need the look tunable ("we don't need many of the
+  settings anyway"), and each cost a table row, a store value, a
+  snapshot key, a writer in its owner and a guide line in two languages
+  while saving the GPU nothing (a uniform multiplier).
+  Their terms stay, fixed at the sliders' defaults as named constants
+  beside them in their owners (`TINT`, `WINDOWS`, `GROUND_DETAIL`,
+  `SKY_VIEW`, `AO_EXPONENT`, …), so the default picture is unchanged.
+  Their `snapshotKey`s are read and ignored, and never reused
+  (`RETIRED_SNAPSHOT_KEYS`, which a test holds the table to)
 - **Date:** 2026-09-21 (plan 012)
 
 ## Context
@@ -36,9 +53,16 @@ reporting success.
 
 - Adding a slider is one table row plus its owner's `apply` entry; a row
   without an owner is a type error, never a silent no-op.
+- Tuning the fixed look (since plan 073) is an edit of a named constant
+  in the term's owner, reviewed with snapshots of place and time — not a
+  look-key pair, which only the remaining controls have. A snapshot does
+  not carry the fixed strengths: it shows them as the build it is pasted
+  into has them.
 - `snapshotKey` values are the persisted format: **never rename one**
   (old snapshots would silently lose that slider); add a key and keep the
-  old one readable.
+  old one readable. A removed control's key is retired for good
+  (`RETIRED_SNAPSHOT_KEYS`): an old snapshot would set a new control that
+  took it.
 - The `__poc` setter names, slider DOM ids and labels are the e2e
   contract.
 - The HUD's boot effect must never list the look state as a dependency —
