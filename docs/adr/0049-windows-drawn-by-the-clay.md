@@ -95,6 +95,19 @@ a party wall, a shopfront's ground floor, beside a door. A Wikidata
 landmark's flag alone does not keep them off: most are town houses whose
 neighbours carry windows.
 
+A palace is the exception to the monumental gate (2026-10-19, Manuel: the
+Zwinger, Albertinum, Japanisches Palais, Residenzschloss and the
+Landtag's old building stood without a window, densely windowed in
+reality). A facade of its own on a public use outside worship (ALKIS
+`31001_3xxx` but 3038–3048: a Schloss, museum, parliament, court,
+school, academy — `palatialFacade`) carries windows of their own type
+`palace`: storeys from OSM's count where it gives 2.4–7.5 m, else the
+eave split into storeys of about 5.5 m (`palaceStorey`), windows up to
+3 m tall on a 3.6 m axis with a Fasche, and only its own walls'
+measured rhythm, never a town house's nearby. A part that shares its
+building's facade (the Kulturpalast's raised roof) stays blank, and so
+do churches, halls and the Kulturpalast (2090, not public).
+
 ## Consequences
 
 - Every house that should have windows has them (on the spawn tile: 308

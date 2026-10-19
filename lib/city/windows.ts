@@ -272,7 +272,13 @@ export function unpackStyle(style: number): WindowStyle {
 // --- the rhythm ---------------------------------------------------------------
 
 /** A building's type, as its windows go (`windowType`). */
-export type WindowType = "block" | "house" | "low" | "storey" | "tall";
+export type WindowType =
+  | "block"
+  | "house"
+  | "low"
+  | "palace"
+  | "storey"
+  | "tall";
 
 /**
  * Each type's windows (m): the axes' spacing, a window's width and height,
@@ -351,7 +357,42 @@ export const TYPES: Record<
   },
   // flat roof, lower: a pavilion, a shop, a school wing
   low: { axis: 3, w: 1.4, head: 0.45, hMax: 1.6, depth: 0.09, sill: 0.85 },
+  // a facade of its own that is a palace's (`WindowHost.palace`): a
+  // Schloss, a museum, a parliament, a court — storeys of 5–7 m, tall
+  // windows wide apart, deep reveals with a Fasche
+  palace: {
+    axis: 3.6,
+    w: 1.45,
+    head: 0.9,
+    hMax: 3,
+    depth: 0.21,
+    sill: 0.9,
+    frame: true,
+    raised: true,
+  },
 };
+
+/** A palace's storey where OSM counts none (m): the eave is split into
+ *  whole storeys of about this. */
+export const PALACE_STOREY_M = 5.5;
+/** OSM's count gives a palace a storey of at most this (m); past it the
+ *  count is a part's, and `PALACE_STOREY_M` stands. */
+const PALACE_STOREY_MAX_M = 7.5;
+
+/**
+ * A palace's storey (m): its walls up to the eave over OSM's count where
+ * that gives 2.4–7.5 m, else the eave split into whole storeys of about
+ * `PALACE_STOREY_M`.
+ */
+export function palaceStorey(eaveH: number, storeys?: number): number {
+  if (storeys !== undefined && storeys >= 1) {
+    const s = eaveH / storeys;
+    if (s >= 2.4 && s <= PALACE_STOREY_MAX_M) {
+      return s;
+    }
+  }
+  return eaveH / Math.max(1, Math.round(eaveH / PALACE_STOREY_M));
+}
 
 /** A pitched-roof storey this tall is a town house's (m). */
 const TALL_STOREY_M = 3.3;
@@ -411,6 +452,9 @@ export interface WindowHost {
   lod2: boolean;
   /** the facade is its own (16), glass (4) or metal (8): no windows */
   ownFacade: boolean;
+  /** … and that own facade is a palace's (lib/city/building-tint.ts
+   *  `palatialFacade`): windows of type `palace` after all */
+  palace?: boolean;
   /** how high its plinth stands over its base (m), where one is drawn:
    *  its ground floor's windows keep over it */
   plinth?: number;
@@ -419,6 +463,8 @@ export interface WindowHost {
   /** a shop on its ground floor (OSM) */
   shop: boolean;
   storeyH: number;
+  /** the storeys OSM counts (a palace's storey reads them) */
+  storeys?: number;
 }
 
 /** Where a building's rhythm came from. */
@@ -573,7 +619,12 @@ export function groundLift(
 
 /** Whether a host carries windows at all. */
 function carries(h: WindowHost): boolean {
-  return h.lod2 && !h.ownFacade && h.eaveH >= MIN_EAVE_M && !windowless(h.fn);
+  return (
+    h.lod2 &&
+    (!h.ownFacade || (h.palace ?? false)) &&
+    h.eaveH >= MIN_EAVE_M &&
+    !windowless(h.fn)
+  );
 }
 
 /** Where a host's rhythm comes from, best first (see the module). */
@@ -614,15 +665,12 @@ export function windowSpecs(
       return { from: "none", spec: NO_WINDOWS, storey: host.storeyH };
     }
     const mine = own.get(i);
-    const { from, m } = rhythmOf(host, mine, byRoot.get(host.root), donors);
-    // the photos' storey only on the building itself, and only where OSM
-    // counts none
-    const storey = windowStorey(
-      host.eaveH,
-      host.storeyH,
-      mine && !host.levels ? mine.storey : undefined
-    );
-    const kind = windowType(host.flat, host.eaveH, storey);
+    // a palace takes its own walls' rhythm or its type's, never a town
+    // house's nearby
+    const { from, m } = host.palace
+      ? { from: mine ? ("measured" as const) : ("type" as const), m: mine }
+      : rhythmOf(host, mine, byRoot.get(host.root), donors);
+    const { storey, kind } = storeyAndType(host, mine);
     const style = styleOf(host, kind, m, from);
     const type = TYPES[kind];
     const spec = fitted(
@@ -637,6 +685,24 @@ export function windowSpecs(
     }
     return { from: spec.axis > 0 ? from : "none", spec, storey };
   });
+}
+
+/** A host's storey and type: a palace's (`palaceStorey`), else the storey
+ *  snapped to the eave — the photos' only on the building itself, and only
+ *  where OSM counts none — and the type its roof and storey give. */
+function storeyAndType(
+  host: WindowHost,
+  mine: FacadeModel | undefined
+): { kind: WindowType; storey: number } {
+  if (host.palace) {
+    return { kind: "palace", storey: palaceStorey(host.eaveH, host.storeys) };
+  }
+  const storey = windowStorey(
+    host.eaveH,
+    host.storeyH,
+    mine && !host.levels ? mine.storey : undefined
+  );
+  return { kind: windowType(host.flat, host.eaveH, storey), storey };
 }
 
 /** A host's window style: its type's reveal and sill, the photos' grid,

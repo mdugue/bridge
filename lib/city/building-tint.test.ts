@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   buildingGlows,
   ownFacade,
+  palatialFacade,
   partFacade,
   buildingTint,
   inheritedAttributes,
@@ -209,4 +210,13 @@ test("partFacade: a part shares its building's own facade unless OSM's storeys f
   expect(partFacade(false, true, 12, 4)).toBe(false);
   expect(partFacade(false, false, 3.6, 3)).toBe(false);
   expect(partFacade(true, false, 12, 4)).toBe(true);
+});
+
+test("palatialFacade: public buildings, not churches or halls of worship", () => {
+  expect(palatialFacade({ function: "31001_3031" })).toBe(true); // Schloss
+  expect(palatialFacade({ function: "31001_3034" })).toBe(true); // Museum
+  expect(palatialFacade({ function: "31001_3011" })).toBe(true); // Parlament
+  expect(palatialFacade({ function: "31001_3041" })).toBe(false); // Kirche
+  expect(palatialFacade({ function: "31001_2090" })).toBe(false);
+  expect(palatialFacade({})).toBe(false);
 });

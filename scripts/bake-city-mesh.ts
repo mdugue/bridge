@@ -23,6 +23,7 @@ import {
 import {
   buildingGlows,
   ownFacade,
+  palatialFacade,
   partFacade,
   buildingTint,
   type FacadeMaterial,
@@ -674,6 +675,8 @@ export function bakeCityMesh(
     );
     if (own && !hosts[i].monumental) {
       hosts[i].monumental = true;
+      // a hall's raised roof: no palace's windows on it either
+      hosts[i].palace = false;
       o.flags = facadeFlags(o.flags, true);
     }
   });
@@ -869,6 +872,7 @@ function windowExtra(
     fn: typeof attrs.function === "string" ? attrs.function : undefined,
     levels: (osm?.levels ?? 0) >= 1,
     monumental: ownFacade(attrs, eaveH, osm?.levels, (osm?.heritage ?? 0) > 0),
+    palace: palatialFacade(attrs),
     storeys: osm?.levels,
   };
 }
@@ -1575,6 +1579,8 @@ export type WindowExtra = Pick<WindowHost, "fn" | "levels"> & {
   /** its facade its own (lib/city/building-tint.ts `ownFacade`: a
    *  church, a palace, a theatre, a hall) */
   monumental?: boolean;
+  /** its facade, if its own, a palace's (`palatialFacade`) */
+  palace?: boolean;
   /** the storeys OSM counts, its own or its building's */
   storeys?: number;
 };
@@ -1677,10 +1683,17 @@ export function assignWindows(
     lod2: (o.source ?? OBJECT_SOURCE_LOD2) === OBJECT_SOURCE_LOD2,
     ownFacade:
       (extra[i]?.monumental ?? false) || (o.flags & NO_WINDOW_FLAGS) !== 0,
+    // a palace's own facade carries a palace's windows, unless it is
+    // glass, metal or its own colour
+    palace:
+      (extra[i]?.monumental ?? false) &&
+      (extra[i]?.palace ?? false) &&
+      (o.flags & NO_WINDOW_FLAGS) === 0,
     plinth: tops.get(i),
     root: o.root,
     shop: hasObjectFlag(o.flags, OBJECT_FLAG_SHOP),
     storeyH: o.storeyH,
+    storeys: extra[i]?.storeys,
   }));
   windowSpecs(hosts, walls, index).forEach((choice, i) => {
     if (choice.spec.axis > 0) {

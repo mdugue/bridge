@@ -6,7 +6,9 @@ import {
   facadeAttribute,
   groundLift,
   NO_DOOR,
+  PALACE_STOREY_M,
   packStyle,
+  palaceStorey,
   TOWARD_TYPE,
   TYPES,
   unpackStyle,
@@ -488,5 +490,44 @@ describe("facadeAttribute", () => {
     expect(f[3]).toBe(Math.round(32_767 * NO_DOOR));
     // the east wall stands over a shopfront
     expect(metres(f[4 * 6 + 1])).toBeCloseTo(-10, 1);
+  });
+});
+
+describe("palaces", () => {
+  const index = new Map([["a", 0]]);
+
+  test("a palace's storey: OSM's count where it is a storey, else ~5.5 m", () => {
+    expect(palaceStorey(18, 3)).toBeCloseTo(6, 9);
+    expect(palaceStorey(18, 1)).toBeCloseTo(18 / 3, 9); // 18 m: not a storey
+    expect(palaceStorey(16.5)).toBeCloseTo(PALACE_STOREY_M, 9);
+    expect(palaceStorey(4)).toBeCloseTo(4, 9);
+  });
+
+  test("an own facade carries windows only as a palace, of its type", () => {
+    const [blank, palace] = windowSpecs(
+      [
+        host({ ownFacade: true, eaveH: 18 }),
+        host({ ownFacade: true, eaveH: 18, palace: true, storeys: 3 }),
+      ],
+      [],
+      index
+    );
+    expect(blank.from).toBe("none");
+    expect(palace.from).toBe("type");
+    expect(palace.storey).toBeCloseTo(6, 9);
+    expect(palace.spec.h).toBeGreaterThan(2.5);
+    expect(palace.spec.axis).toBeCloseTo(TYPES.palace.axis, 1);
+  });
+
+  test("a palace never borrows a town house's rhythm nearby", () => {
+    const [, palace] = windowSpecs(
+      [
+        host({ centre: [10, 0] }),
+        host({ eaveH: 18, ownFacade: true, palace: true, root: 1 }),
+      ],
+      [measured("a")],
+      index
+    );
+    expect(palace.from).toBe("type");
   });
 });
