@@ -1,6 +1,6 @@
 import numpy as np
 
-from bake.roof_colour import PITCHED_DEG, median_colour, ring_slope
+from bake.roof_colour import median_colour, ring_slope
 
 
 def _metres(points):
@@ -15,7 +15,7 @@ def test_ring_slope_flat_and_pitched():
     assert abs(ring_slope(range(4), _metres(slope)) - 45) < 1e-6
     # a mansard's lower slope reads as pitched, its top as low
     mansard = [(0, 0, 10), (4, 0, 10), (4, 2, 16), (0, 2, 16)]
-    assert ring_slope(range(4), _metres(mansard)) >= PITCHED_DEG
+    assert ring_slope(range(4), _metres(mansard)) > 60
 
 
 def test_median_colour_reads_only_its_rings():
@@ -52,7 +52,7 @@ def _mansard(top_z: float):
     return eave + top, geometry
 
 
-def _run(tmp_path, top_z: float):
+def _run(tmp_path, top_z: float, shade_left: bool = False):
     import json
 
     import rasterio
@@ -64,6 +64,8 @@ def _run(tmp_path, top_z: float):
     tile = Tile("t", (0.0, 0.0, 20.0, 20.0), 25833, tmp_path / "raw", tmp_path / "data")
     rgb = np.zeros((3, 100, 100), np.uint8)
     rgb[:, 10:90, 10:90] = np.array([200, 60, 50])[:, None, None]  # red slopes
+    if shade_left:
+        rgb[:, 10:90, 10:30] = np.array([30, 40, 70])[:, None, None]  # a slope in shadow
     rgb[:, 30:70, 30:70] = np.array([190, 195, 195])[:, None, None]  # grey top
     dop = tile.raw_raster("dop")
     dop.parent.mkdir(parents=True)
@@ -91,17 +93,22 @@ def _run(tmp_path, top_z: float):
     return json.loads(tile.out("dop", "roofcolor_t.json").read_text())
 
 
-def test_run_splits_a_mansard(tmp_path):
+def test_run_gives_a_face_its_own_colour(tmp_path):
     out = _run(tmp_path, top_z=20.0)  # slopes 63°, top flat
-    assert out["meta"]["roofs_split"] == 1
-    red, grey = out["pitched"]["b"], out["low"]["b"]
+    red = out["roofs"]["b"]
     assert red[0] > 3 * red[1]
-    assert abs(grey[0] - grey[1]) < 0.05
-    assert "b" in out["roofs"]
+    # the grey top differs from the red building: written apart, as the
+    # loader's geometry 0, surface 0
+    (face,) = out["faces"]["b"]
+    assert face[:2] == [0, 0]
+    assert abs(face[2] - face[3]) < 0.05 and face[2] > 0.4
+    assert out["meta"]["faces_apart"] == 1
 
 
-def test_run_keeps_one_colour_near_the_boundary(tmp_path):
-    # slopes rise 1.45 m over 4 m: 19.9°, too close to call
-    out = _run(tmp_path, top_z=13.45)
-    assert out["meta"]["roofs_split"] == 0
-    assert out["pitched"] == {} and "b" in out["roofs"]
+def test_run_reads_a_roof_in_sun_only(tmp_path):
+    # the west slope lies in shadow: the building stays red, not brown,
+    # and the slope takes the building's colour (none of its own)
+    out = _run(tmp_path, top_z=20.0, shade_left=True)
+    red = out["roofs"]["b"]
+    assert red[0] > 3 * red[1] and red[0] > 0.4
+    assert all(f[1] != 4 for f in out["faces"].get("b", []))

@@ -696,15 +696,28 @@ visual-variable codebook is in
   available (`roofColor()` + the per-tile LUT, ~83 % coverage), else the
   synthesized palette (`surfacetype==RoofSurface` + `roofType` / `Dachneigung` →
   terracotta pitched / slate flat). Bake: `pipeline/bake/roof_colour.py`.
-  A roof with both pitched (≥ 20°) and low faces — a mansard's tiled slopes
-  under its zinc top, a hipped wing round a flat terrace — gets each part's
-  own DOP median (`pitched`, `low`; column `roofPitched`, texel band E), and
-  the clay picks one per vertex by its normal (`PITCHED_ROOF_DEG`); a roof
-  with a face within 3° of 20° (8-bit normals) or drawn as its measured
-  parts (ADR 0036) keeps one colour.
-  One median over both had painted the Taschenbergpalais' red slopes the
-  grey of its top; 3 247 of Dresden's 49 280 sampled roofs are split
-  (2026-10-19).
+  The colour is read from the orthophoto's **sunlit texels only**, face by
+  face (`pipeline/bake/dop_light.py`, 2026-10-19): the DOP is flown in sun,
+  and a face turned from it or shaded by a neighbour reads three to five
+  times darker and bluer than its tiles — one median over a whole roof had
+  painted the Frauenkirche's dome slate grey, half the Altstadt's red roofs
+  brown and the Taschenbergpalais' red mansard slopes the grey of its zinc
+  top. A texel is in shadow when dim and blue (B > 1.3 R under luminance
+  110, or under 40); the flight's sun is the one whose shadows of the LoD2
+  roofs over the DGM best match the image's near the roofs (Dresden: due
+  south, 35–37°), and each sunlit texel is scaled by its face's slope to
+  how a flat roof in that sun reads it (0.7–1.4), so a roof's faces turned
+  to and from the sun come out alike. A building's colour is its faces'
+  sunlit texels together (the old median where fewer than 12 are lit); a
+  face with ≥ 12 sunlit texels and a quarter of it in sun takes its own
+  where it differs from the building's by more than 6 sRGB steps
+  (`faces`, keyed by the loader's geometry and surface ids), carried in the
+  roof vertex's free `_FACADE` slots — no vertex buffer more. A roof drawn
+  as its measured parts (ADR 0036) keeps the building's colour.
+  **Discontinued** the same day: one colour for a roof's pitched (≥ 20°)
+  and one for its low faces (`roofPitched`, a fifth texel band), the first
+  answer to the mansards — the face colours cover it, and it still read
+  the shaded slopes dark.
 - **Roof vividness** `≈ assumed` (*Dachsättigung*) — raw DOP reads drab/hazy (audited: 38 %
   near-grey, mean R−B slightly negative). `ROOF_VIBRANCE` (**0.5**,
   *Dachsättigung*, fixed) applies a **hue-preserving chroma

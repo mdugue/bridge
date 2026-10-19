@@ -456,38 +456,15 @@ export function roofColor(
 }
 
 /**
- * The roof colour bake's file: every sampled roof's median (`roofs`) and,
- * for a roof with both pitched and low faces (a mansard's tiled slopes
- * under its zinc top), each part's own median (`pitched`, `low`).
+ * The roof colour bake's file (pipeline/bake/roof_colour.py): every
+ * sampled building's colour (`roofs`) and the roof faces whose own colour
+ * differs from it (`faces`: per object `[geometry, surface, r, g, b]`, the
+ * loader's `geometryid` and `boundaryid`), all linear RGB read from the
+ * orthophoto's sunlit texels.
  */
 export interface RoofColours {
-  low?: RoofColorLut;
-  pitched?: RoofColorLut;
+  faces?: Record<string, readonly (readonly number[])[]>;
   roofs?: RoofColorLut;
-}
-
-/**
- * One object's roof colours, its low faces' and its pitched faces': each
- * part's own where the orthophoto measured both, otherwise `roofColor`
- * for both — one median over a mansard painted its red slopes the grey of
- * its top.
- */
-export function roofColors(
-  objectId: string,
-  attrs: Record<string, unknown> = {},
-  colours?: RoofColours,
-  look: OsmLook = {}
-): { low: TintRgb; pitched: TintRgb } {
-  const low = colours?.low?.[objectId];
-  const pitched = colours?.pitched?.[objectId];
-  if (low?.length === 3 && pitched?.length === 3) {
-    return {
-      low: [low[0], low[1], low[2]],
-      pitched: [pitched[0], pitched[1], pitched[2]],
-    };
-  }
-  const one = roofColor(objectId, attrs, colours?.roofs, look);
-  return { low: one, pitched: one };
 }
 
 /**

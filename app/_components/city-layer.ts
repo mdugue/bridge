@@ -109,7 +109,6 @@ export function readObjectTable(
     group: new Uint32Array(count),
     glow: new Uint8Array(count),
     roof: new Float32Array(count * 3),
-    roofPitched: new Float32Array(count * 3),
     root: new Uint32Array(count),
     rough: new Float32Array(count),
     source: new Uint8Array(count),
@@ -157,12 +156,6 @@ export function readObjectTable(
   scalar("winStyle", table.winStyle);
   scalar("winW", table.winW);
   vec3("roof", table.roof);
-  // a tile baked before the split paints its pitched faces `roof` too
-  if (accessor && "roofPitched" in accessor.properties) {
-    vec3("roofPitched", table.roofPitched);
-  } else {
-    table.roofPitched.set(table.roof);
-  }
   vec3("tint", table.tint);
   return table;
 }

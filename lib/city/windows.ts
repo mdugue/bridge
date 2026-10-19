@@ -809,6 +809,9 @@ export interface FacadeMesh {
   isRoof: ArrayLike<number>;
   objectIds: ArrayLike<number>;
   positions: ArrayLike<number>;
+  /** a roof vertex's own face colour (linear RGB, 3 a vertex; NaN: its
+   *  object's), for the stream's first vertices */
+  roofRgb?: ArrayLike<number>;
 }
 
 /** A triangle's horizontal unit normal and plane offset, or undefined
@@ -1024,6 +1027,26 @@ const snorm = (m: number) =>
 const NO_DOOR_SNORM = Math.round(NO_DOOR * 32_767);
 const ROOF_SNORM = Math.round(FACADE_ROOF * 32_767);
 
+/** A roof vertex's wall slots (x, y and the second door, w) hold its
+ *  face's own colour, linear RGB a unit each; (0, 0, ·, 0) where it takes
+ *  its object's. No window reads a roof vertex's slots (the clay masks
+ *  them), so the colour costs no vertex buffer. */
+function roofColourAt(
+  out: Int16Array,
+  v: number,
+  rgb: ArrayLike<number> | undefined
+): void {
+  const r = rgb?.[3 * v];
+  if (rgb === undefined || r === undefined || Number.isNaN(r)) {
+    return;
+  }
+  const unit = (c: number) => Math.round(Math.min(Math.max(c, 0), 1) * 32_767);
+  // never all zero: that reads as "the object's"
+  out[4 * v] = Math.max(1, unit(r));
+  out[4 * v + 1] = unit(rgb[3 * v + 1]);
+  out[4 * v + 3] = unit(rgb[3 * v + 2]);
+}
+
 /** Lays the doors and shopfronts onto their objects' walls. */
 function placeOnWalls(
   walls: readonly Wall[],
@@ -1061,8 +1084,9 @@ function placeOnWalls(
  * place along the wall from the wall's middle, the wall's length (negative
  * where a shopfront stands on it; 0 on a party wall), and up to two doors'
  * places along it from the middle, the nearest first (`NO_DOOR` for none);
- * every roof vertex (0, 0, FACADE_ROOF, NO_DOOR), every other vertex (0, 0,
- * NO_DOOR, NO_DOOR). `doors` and `shops` in the mesh's data frame.
+ * every roof vertex (r, g, FACADE_ROOF, b), its face's own colour where
+ * `mesh.roofRgb` has one and (0, 0, FACADE_ROOF, 0) where not; every other
+ * vertex (0, 0, NO_DOOR, NO_DOOR). `doors` and `shops` in the mesh's data frame.
  */
 export function facadeAttribute(
   mesh: FacadeMesh,
@@ -1073,8 +1097,13 @@ export function facadeAttribute(
   const count = mesh.objectIds.length;
   const out = new Int16Array(4 * count);
   for (let v = 0; v < count; v++) {
-    out[4 * v + 2] = mesh.isRoof[v] === 1 ? ROOF_SNORM : NO_DOOR_SNORM;
-    out[4 * v + 3] = NO_DOOR_SNORM;
+    if (mesh.isRoof[v] === 1) {
+      out[4 * v + 2] = ROOF_SNORM;
+      roofColourAt(out, v, mesh.roofRgb);
+    } else {
+      out[4 * v + 2] = NO_DOOR_SNORM;
+      out[4 * v + 3] = NO_DOOR_SNORM;
+    }
   }
   const walls = wallsOf(mesh, drawn);
   markParty(walls);

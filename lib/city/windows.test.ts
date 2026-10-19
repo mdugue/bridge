@@ -477,12 +477,40 @@ describe("facadeAttribute", () => {
     for (const drawn of [true, false]) {
       const f = facadeAttribute(mesh, () => drawn);
       expect(f[4 * 24 + 2]).toBe(Math.round(32_767 * FACADE_ROOF));
-      expect(f[4 * 24 + 3]).toBe(Math.round(32_767 * NO_DOOR));
+      // no colour of its own: the object's
+      expect([f[4 * 24], f[4 * 24 + 1], f[4 * 24 + 3]]).toEqual([0, 0, 0]);
       // no wall vertex reads as one
       for (let v = 0; v < 24; v++) {
         expect(f[4 * v + 2]).toBe(Math.round(32_767 * NO_DOOR));
       }
     }
+  });
+
+  test("a roof vertex carries its face's own colour in its wall slots", () => {
+    const mesh = quads([
+      ...boxWalls(0, 0, 0, 14, 10, 12),
+      {
+        object: 0,
+        roof: true,
+        pts: [
+          [0, 0, 12],
+          [14, 0, 12],
+          [14, 10, 12],
+          [0, 10, 12],
+        ],
+      },
+    ]);
+    const roofRgb = new Float32Array(3 * 30).fill(Number.NaN);
+    roofRgb.set([0.5, 0.25, 0], 3 * 24);
+    const f = facadeAttribute({ ...mesh, roofRgb }, () => true);
+    expect(f[4 * 24] / 32_767).toBeCloseTo(0.5, 4);
+    expect(f[4 * 24 + 1] / 32_767).toBeCloseTo(0.25, 4);
+    expect(f[4 * 24 + 2]).toBe(Math.round(32_767 * FACADE_ROOF));
+    expect(f[4 * 24 + 3]).toBe(0);
+    // the next roof vertex has none: the object's
+    expect(f[4 * 25]).toBe(0);
+    // a wall vertex keeps its place on the wall
+    expect(f[2]).toBe(Math.round(32_767 * NO_DOOR));
   });
 
   test("a door's place on its wall, a shopfront's wall negative", () => {

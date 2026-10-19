@@ -24,14 +24,12 @@ import {
   partFacade,
   buildingTint,
   type FacadeMaterial,
-  type OsmLook,
-  type TintRgb,
   inheritedAttributes,
   countsStoreys,
   ownFacadeReason,
   type RoofColourSource,
   type RoofColours,
-  roofColors,
+  roofColor,
   roofColourSource,
   roofTint,
   roughJitter,
@@ -153,19 +151,6 @@ const rgb = (c: [number, number, number]): [number, number, number] => [
   r3(c[2]),
 ];
 
-/** An object's two roof colours as its row's columns (the pitched one
- *  only where it differs: absent, the clay paints every face `roof`). */
-function roofColumns(c: {
-  low: [number, number, number];
-  pitched: [number, number, number];
-}): Pick<CityObjectRow, "roof" | "roofPitched"> {
-  const roof = rgb(c.low);
-  const pitched = rgb(c.pitched);
-  return pitched.every((v, i) => v === roof[i])
-    ? { roof }
-    : { roof, roofPitched: pitched };
-}
-
 /** What the bake lays on the LoD2 walls, each feature on its host. */
 export interface OnWalls {
   doors?: readonly DoorFeature[];
@@ -189,6 +174,14 @@ export interface CityVertices {
   objectIds: Float32Array<ArrayBuffer>;
   /** recentered data-frame (Z-up) positions, 3 per vertex */
   positions: Float32Array<ArrayBuffer>;
+  /** per vertex its roof face's own colour (linear RGB, 3 a vertex; NaN:
+   *  the object's), read from the orthophoto face by face
+   *  (`faceRoofColours`). Only the LoD2 vertices at the stream's start
+   *  carry one: whatever is appended after them has none. */
+  roofRgb?: Float32Array<ArrayBuffer>;
+  /** per LoD2 vertex the loader's surface it lies on: its geometry's index
+   *  in the object and the surface's in the geometry (2 a vertex) */
+  surfaces?: Float32Array<ArrayBuffer>;
 }
 
 /** Concatenates the loader's chunk meshes into one vertex stream. */
@@ -199,6 +192,8 @@ function collectVertices(loaderScene: {
     objectid: ArrayLike<number>;
     position: ArrayLike<number>;
     surfacetype: ArrayLike<number> | undefined;
+    geometryid: ArrayLike<number> | undefined;
+    boundaryid: ArrayLike<number> | undefined;
   }[] = [];
   loaderScene.traverse((o) => {
     const geom = (o as Mesh).geometry as BufferGeometry | undefined;
@@ -209,6 +204,8 @@ function collectVertices(loaderScene: {
       position: geom.attributes.position.array,
       objectid: geom.attributes.objectid.array,
       surfacetype: geom.attributes.surfacetype?.array,
+      geometryid: geom.attributes.geometryid?.array,
+      boundaryid: geom.attributes.boundaryid?.array,
     });
   });
   const n = chunks.reduce((s, c) => s + c.objectid.length, 0);
@@ -216,6 +213,7 @@ function collectVertices(loaderScene: {
     positions: new Float32Array(n * 3),
     objectIds: new Float32Array(n),
     isRoof: new Float32Array(n),
+    surfaces: new Float32Array(n * 2).fill(-1),
   };
   let at = 0;
   for (const c of chunks) {
@@ -227,10 +225,50 @@ function collectVertices(loaderScene: {
       out.objectIds[at + i] = c.objectid[i];
       const surface = c.surfacetype ? c.surfacetype[i] : -1;
       out.isRoof[at + i] = surface === ROOF_SURFACE_TYPE ? 1 : 0;
+      out.surfaces[(at + i) * 2] = c.geometryid?.[i] ?? -1;
+      out.surfaces[(at + i) * 2 + 1] = c.boundaryid?.[i] ?? -1;
     }
     at += count;
   }
   return out;
+}
+
+/**
+ * The stream with each LoD2 roof vertex's own face colour (`roofRgb`)
+ * where the roof colour bake read the face apart from its building
+ * (`RoofColours.faces`, keyed by the loader's geometry and surface ids).
+ */
+export function withFaceRoofColours(
+  v: CityVertices,
+  keys: readonly string[],
+  faces: RoofColours["faces"]
+): CityVertices {
+  if (!(faces && v.surfaces)) {
+    return v;
+  }
+  const byObject = new Map<number, Map<string, readonly number[]>>();
+  keys.forEach((id, index) => {
+    const list = faces[id];
+    if (list?.length) {
+      byObject.set(
+        index,
+        new Map(list.map((f) => [`${f[0]}:${f[1]}`, f.slice(2, 5)]))
+      );
+    }
+  });
+  const count = v.objectIds.length;
+  const roofRgb = new Float32Array(3 * count).fill(Number.NaN);
+  for (let i = 0; i < count; i++) {
+    const own = byObject.get(v.objectIds[i]);
+    const c =
+      v.isRoof[i] === 1
+        ? own?.get(`${v.surfaces[2 * i]}:${v.surfaces[2 * i + 1]}`)
+        : undefined;
+    if (c?.length === 3) {
+      roofRgb.set(c, 3 * i);
+    }
+  }
+  return { ...v, roofRgb };
 }
 
 /** Climbs `parents` to the root of an object's building tree (cycle-guarded). */
@@ -315,6 +353,8 @@ export function appendScanStructures(
     objectIds: concat(v.objectIds, objectIds),
     isRoof: concat(v.isRoof, isRoof),
     ...flatNormalsAfter(v, positions.length),
+
+    ...lod2RoofColours(v),
   };
 }
 
@@ -394,6 +434,8 @@ export function appendGapStructures(
     objectIds: concat(v.objectIds, objectIds),
     isRoof: concat(v.isRoof, isRoof),
     ...flatNormalsAfter(v, positions.length),
+
+    ...lod2RoofColours(v),
   };
 }
 
@@ -439,6 +481,12 @@ function flatNormalsAfter(
   const normals = new Float32Array(v.normals.length + count).fill(Number.NaN);
   normals.set(v.normals);
   return { normals };
+}
+
+/** The LoD2 roof faces' own colours, carried on past what is appended
+ *  (they cover the stream's start only). */
+function lod2RoofColours(v: CityVertices): Pick<CityVertices, "roofRgb"> {
+  return v.roofRgb ? { roofRgb: v.roofRgb } : {};
 }
 
 /** The stream's normals run on with `appended` (NaN: flat), the stream's
@@ -500,6 +548,7 @@ export function withMeasuredRoofs(
   const objectIds: number[] = [];
   const isRoof: number[] = [];
   const normals: number[] = [];
+  const roofRgb: number[] = [];
   for (const i of keep) {
     positions.push(
       v.positions[i * 3],
@@ -509,6 +558,13 @@ export function withMeasuredRoofs(
     objectIds.push(v.objectIds[i]);
     isRoof.push(v.isRoof[i]);
     normals.push(Number.NaN, Number.NaN, Number.NaN);
+    if (v.roofRgb) {
+      roofRgb.push(
+        v.roofRgb[i * 3],
+        v.roofRgb[i * 3 + 1],
+        v.roofRgb[i * 3 + 2]
+      );
+    }
   }
   for (const [index, parts] of replaced) {
     const z = base.get(index);
@@ -526,6 +582,8 @@ export function withMeasuredRoofs(
     objectIds: Float32Array.from(objectIds),
     isRoof: Float32Array.from(isRoof),
     normals: Float32Array.from(normals),
+    // the rebuilt objects' parts, appended after, carry none
+    ...(v.roofRgb ? { roofRgb: Float32Array.from(roofRgb) } : {}),
   };
 }
 
@@ -561,23 +619,6 @@ export function cityFrame(tile: string, source: CityJsonDocument): CityFrame {
   const loader = new CityJSONLoader(new CityJSONParser());
   loader.load({ ...source, CityObjects: {} });
   return { epsg, matrix: loader.matrix, offset: recenterOffset(loader.matrix) };
-}
-
-/** An object's roof colours. A roof drawn as its measured parts keeps one
- *  colour: the split was read from LoD2 faces it no longer draws. */
-function objectRoofColours(
-  id: string,
-  attrs: Record<string, unknown>,
-  colours: RoofColours | undefined,
-  rebuilt: boolean,
-  look: OsmLook
-): { low: TintRgb; pitched: TintRgb } {
-  return roofColors(
-    id,
-    attrs,
-    rebuilt ? { roofs: colours?.roofs } : colours,
-    look
-  );
 }
 
 /**
@@ -626,7 +667,11 @@ export function bakeCityMesh(
   const matrix = loader.matrix;
   const offset = recenterOffset(matrix);
   const v = withMeasuredRoofs(
-    collectVertices(loader.scene),
+    withFaceRoofColours(
+      collectVertices(loader.scene),
+      keys,
+      roofColours?.faces
+    ),
     keys,
     offset,
     measured ?? []
@@ -652,6 +697,7 @@ export function bakeCityMesh(
   // what the windows read beyond the row: the function, OSM's storeys,
   // a facade of its own (a landmark's flag alone keeps its windows)
   const hosts: WindowExtra[] = [];
+  const roofLut = roofColours?.roofs;
   const objects: CityObjectRow[] = keys.map((id, index) => {
     const o = doc.CityObjects[id];
     const root = rootOf(doc, keys, index);
@@ -687,13 +733,11 @@ export function bakeCityMesh(
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
       tint: rgb(buildingTint(id, attrs, context, look)),
-      ...roofColumns(
-        objectRoofColours(id, attrs, roofColours, rebuilt.has(id), look)
-      ),
+      roof: rgb(roofColor(id, attrs, roofLut, look)),
       drawn: drawnOf(attrs, context, look, osm, {
         eaveH,
         own: hosts[index].why ?? null,
-        roof: roofColourSource(id, roofColours?.roofs, look),
+        roof: roofColourSource(id, roofLut, look),
       }),
       footprints,
       facts: lod2Facts({
@@ -941,11 +985,6 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       flags: { type: "SCALAR", componentType: "UINT16", values: t.flags },
       glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
       roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
-      roofPitched: {
-        type: "VEC3",
-        componentType: "FLOAT32",
-        values: t.roofPitched,
-      },
       root: { type: "SCALAR", componentType: "UINT32", values: t.root },
       ensemble: {
         type: "SCALAR",
@@ -1344,7 +1383,7 @@ function withParts(
     objectIds.fill(p.id, at, at + n);
     at += n;
   }
-  return { positions, objectIds, isRoof, normals };
+  return { positions, objectIds, isRoof, normals, ...lod2RoofColours(v) };
 }
 
 /** Neighbouring houses' Traufgesimse this close in height run as one. */
@@ -1493,6 +1532,8 @@ export function appendDoors(
       objectIds.map(() => 0)
     ),
     ...flatNormalsAfter(v, positions.length),
+
+    ...lod2RoofColours(v),
   };
 }
 
@@ -1660,6 +1701,8 @@ export function appendShopfronts(
       objectIds.map(() => 0)
     ),
     normals: shadedNormalsAfter(v, normals),
+
+    ...lod2RoofColours(v),
   };
   return drawn;
 }
@@ -1744,6 +1787,8 @@ export function appendDormers(
     objectIds: concat(v.objectIds, objectIds),
     isRoof: concat(v.isRoof, isRoof),
     ...flatNormalsAfter(v, positions.length),
+
+    ...lod2RoofColours(v),
   };
 }
 

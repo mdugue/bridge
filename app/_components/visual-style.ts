@@ -29,7 +29,6 @@ import {
   min,
   mix,
   mod,
-  modelWorldMatrix,
   normalFlat,
   normalize,
   positionWorld,
@@ -46,9 +45,9 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { OBJECT_TEXTURE_WIDTH, PITCHED_ROOF_DEG } from "@/lib/city/city-mesh";
+import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
 import { SELECTION_ACCENT } from "@/lib/city/outline";
-import { FACADE_ROOF } from "@/lib/city/windows";
+import { FACADE_ROOF, NO_DOOR } from "@/lib/city/windows";
 import {
   dataPosition,
   type F,
@@ -126,8 +125,6 @@ const ROOF_TINT = float(0.7);
 /** Dachsättigung: the roof colours' chroma lifted without moving their hue
  *  — copper green, terracotta and slate alike (0 = the raw aerial). */
 const ROOF_VIBRANCE = float(0.5);
-/** A roof face at least this steep is pitched: the cosine of its tilt. */
-const PITCHED_ROOF_COS = float(Math.cos((PITCHED_ROOF_DEG * Math.PI) / 180));
 /** Boden-Verlauf: the walls darkened over their lowest ~5 m. */
 const GROUND_SHADE = float(0.34);
 /** Höhenlinien: the storey lines. */
@@ -210,9 +207,9 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   const table = slotTexture("clayObjects", objects.texture);
   // reason: slotUniform types its node loosely; the row count is a float.
   const rows = slotUniform("clayRows", objects.rows) as unknown as F;
-  // --- per vertex: the object's texels (lib/city/city-mesh.ts
+  // --- per vertex: the object's three texels (lib/city/city-mesh.ts
   // packObjectTexels): A (tint rgb, baseZ), B (roof rgb, eaveH),
-  // C (storeyH, glow, rough, flags), D the windows, E (pitched roof rgb) ----
+  // C (storeyH, glow, rough, flags) ------------------------------------------
   const id = int(attribute("featureId", "float").add(0.5));
   const at = ivec2(id.mod(OBJECT_TEXTURE_WIDTH), id.div(OBJECT_TEXTURE_WIDTH));
   const band = (k: number) =>
@@ -230,20 +227,15 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   const facade = attribute("facade", "vec4");
   const roof = step(facade.z, float(FACADE_ROOF + 1e-3));
   const localH = varying(dataPosition().z.sub(a.w));
-  // A triangle that was degenerate when its flat normal was baked has a zero
-  // normal, and position quantisation can give it area again: it then
-  // rasterises with normalize(0) = NaN lighting — single black pixels on
-  // roofs that the DoF blur spread into black squares. Any unit vector will
-  // do for a sliver that thin.
-  const raw = attribute("normal", "vec3");
-  const safe = select(dot(raw, raw).lessThan(1e-8), vec3(0, 1, 0), raw);
-  // A roof face this steep takes the pitched roof colour (E): a mansard's
-  // tiled slopes and its zinc top were measured apart (roof_colour.py).
-  const up = abs(normalize(modelWorldMatrix.mul(vec4(safe, 0)).xyz).y);
   // A mix, not a select: three emits a select as if/else, and the texel
   // reads first built inside one arm would be assigned in that arm only —
   // every other varying here reads them too.
-  const roofRgb = mix(band(4).rgb, b.rgb, step(PITCHED_ROOF_COS, up));
+  // A roof vertex carries its face's own colour in its wall slots, where
+  // the orthophoto read the face apart from its building (roof_colour.py;
+  // zero: the building's).
+  const faceRgb = vec3(facade.x, facade.y, facade.w);
+  const ownFace = step(1e-5, faceRgb.x.add(faceRgb.y).add(faceRgb.z));
+  const roofRgb = mix(b.rgb, faceRgb, ownFace);
   const tint = varying(mix(a.rgb, roofRgb, step(0.5, roof)));
   const build = varying(vec4(roof, c.x, b.w, c.y));
   // Flat: it seeds the windows' hashes (clay-windows.ts), which magnify an
@@ -251,6 +243,13 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   // every pixel — a loose grid's openings frayed at their sides.
   const rough = varying(c.z).setInterpolation(InterpolationSamplingType.FLAT);
   const flags = varying(c.w);
+  // A triangle that was degenerate when its flat normal was baked has a zero
+  // normal, and position quantisation can give it area again: it then
+  // rasterises with normalize(0) = NaN lighting — single black pixels on
+  // roofs that the DoF blur spread into black squares. Any unit vector will
+  // do for a sliver that thin.
+  const raw = attribute("normal", "vec3");
+  const safe = select(dot(raw, raw).lessThan(1e-8), vec3(0, 1, 0), raw);
   // The facet's own plane, from the view position's derivatives: the
   // vertex normal rounds a curve's facets (lib/city/crease-normals.ts) and
   // turns across each one, but the windows, the relief and the glow cells
@@ -262,10 +261,15 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   const viewNormal = normalize(varying(transformNormalToView(safe)));
   const sn = normalize(cameraWorldMatrix.mul(vec4(viewNormal, 0)).xyz);
   const h = max(localH, 0);
-  const wall = float(1).sub(smoothstep(0.5, 0.7, abs(wn.y)));
+  // A steep roof face is no wall: a mansard's slopes took storey lines,
+  // the eave stroke and plaster relief by their normal alone.
+  const wall = float(1)
+    .sub(smoothstep(0.5, 0.7, abs(wn.y)))
+    .mul(float(1).sub(build.x));
   const windows = clayWindows({
     eave: build.z,
-    facade: varying(facade),
+    // the windows read no roof vertex's slots: they hold its colour
+    facade: varying(mix(facade, vec4(0, 0, FACADE_ROOF, NO_DOOR), roof)),
     h,
     seed: rough,
     shop: shopOf(flags),

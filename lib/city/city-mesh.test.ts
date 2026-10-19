@@ -53,7 +53,6 @@ const rows: CityObjectRow[] = [
     glow: 1,
     baseZ: 101,
     flags: 3,
-    roofPitched: [0.3, 0.3, 0.32],
     windows: { axis: 3.2, h: 1.7, style: 2_097_155, w: 1.15 },
   }),
   row({ root: 2, footprints: [square, square], tint: [0.1, 0.2, 0.3] }),
@@ -70,14 +69,14 @@ test("objectTable turns rows into typed columns", () => {
   );
 });
 
-test("packObjectTexels lays five bands over the object index", () => {
+test("packObjectTexels lays four bands over the object index", () => {
   const t = objectTable(rows);
   const bandRows = objectBandRows(t.count);
   expect(bandRows).toBe(1);
   expect(objectBandRows(OBJECT_TEXTURE_WIDTH + 1)).toBe(2);
   const texels = packObjectTexels(t);
   const band = OBJECT_TEXTURE_WIDTH * bandRows * 4;
-  expect(texels.length).toBe(band * 5);
+  expect(texels.length).toBe(band * 4);
   // object 1: (tint, baseZ) (roof, eaveH) (storeyH, glow, rough, 0)
   expect(texels[4 + 3]).toBe(101);
   expect(texels[band + 4 + 3]).toBe(9);
@@ -92,12 +91,6 @@ test("packObjectTexels lays five bands over the object index", () => {
   expect(texels[3 * band + 4 + 2]).toBeCloseTo(1.7, 6);
   expect(texels[3 * band + 4 + 3]).toBe(2_097_155);
   expect(texels[3 * band]).toBe(0);
-  // band 4: the pitched faces' roof colour, `roof` where a row has none
-  expect(texels[4 * band + 4]).toBeCloseTo(0.3, 6);
-  expect(texels[4 * band + 4 + 2]).toBeCloseTo(0.32, 6);
-  expect(Array.from(texels.subarray(4 * band, 4 * band + 3))).toEqual(
-    Array.from(t.roof.subarray(0, 3))
-  );
 });
 
 test("objectFlags sums the OSM facts as bits, hasObjectFlag reads them", () => {

@@ -781,7 +781,7 @@ function roofColourRow(
         ...base,
         method: "computed",
         source: "dop",
-        detail: "Median der Dachfläche im Luftbild",
+        detail: "Median der besonnten Pixel im Luftbild, je Dachfläche",
       };
     case "osm":
       return {

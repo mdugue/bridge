@@ -904,3 +904,33 @@ test("joinEnsembles: touching trees of one name share the lowest root, its facts
   // the tower keeps its own facts (its Kennung on the card)
   expect(objects[2].facts?.height).toBe(60);
 });
+
+test("a roof face the orthophoto read apart carries its own colour", () => {
+  const baked = bakeCityMesh(
+    "t",
+    fixture(),
+    {
+      roofs: { house: [0.2, 0.2, 0.2] },
+      // the house's roof: geometry 0, the Solid's second surface
+      faces: { house: [[0, 1, 0.5, 0.25, 0.125]] },
+    },
+    null
+  );
+  const v = baked.vertices;
+  const facade = cityMesh(baked).input.vectors?._FACADE?.array;
+  let roofs = 0;
+  for (let i = 0; i < v.objectIds.length; i++) {
+    const own = v.roofRgb?.slice(3 * i, 3 * i + 3);
+    if (v.objectIds[i] === 2 && v.isRoof[i] === 1) {
+      roofs++;
+      expect([...(own ?? [])]).toEqual([0.5, 0.25, 0.125]);
+      expect((facade?.[4 * i] ?? 0) / 32_767).toBeCloseTo(0.5, 4);
+      expect((facade?.[4 * i + 3] ?? 0) / 32_767).toBeCloseTo(0.125, 4);
+    } else if (i < (v.roofRgb?.length ?? 0) / 3) {
+      expect(Number.isNaN(own?.[0])).toBe(true);
+    }
+  }
+  expect(roofs).toBeGreaterThan(0);
+  // the house's row keeps its building colour for every other face
+  expect(baked.objects[2].roof).toEqual([0.2, 0.2, 0.2]);
+});
