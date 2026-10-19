@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   buildingGlows,
   ownFacade,
+  partFacade,
   buildingTint,
   inheritedAttributes,
   roofColor,
@@ -188,4 +189,24 @@ test("ownFacade: monumental uses and hall storeys, not town houses", () => {
   expect(ownFacade({ function: "31001_1000" }, 18, 6)).toBe(false);
   expect(ownFacade({ function: "31001_2000" }, 18, 2)).toBe(true); // a hall
   expect(ownFacade({ function: "31001_2000" }, 18)).toBe(false); // no levels
+});
+
+test("ownFacade: a listed public building whose storeys OSM does not count", () => {
+  const court = { function: "31001_3015" }; // Gericht: the Ständehaus
+  expect(ownFacade(court, 30, 0, true)).toBe(true);
+  expect(ownFacade(court, 30)).toBe(false); // not listed
+  // counted storeys a storey house's keep its windows
+  expect(ownFacade(court, 16, 4, true)).toBe(false);
+  // a listed house is a house
+  expect(ownFacade({ function: "31001_1000" }, 18, 0, true)).toBe(false);
+});
+
+test("partFacade: a part shares its building's own facade unless OSM's storeys fit it", () => {
+  // the Kulturpalast's raised roof: 3.6 m of wall, the hall's 3 storeys
+  expect(partFacade(false, true, 3.6, 3)).toBe(true);
+  expect(partFacade(false, true, 3.6)).toBe(true);
+  // an annex whose own count fits
+  expect(partFacade(false, true, 12, 4)).toBe(false);
+  expect(partFacade(false, false, 3.6, 3)).toBe(false);
+  expect(partFacade(true, false, 12, 4)).toBe(true);
 });

@@ -445,24 +445,53 @@ const MONUMENTAL = new Set([
 ]);
 /** A storey taller than this (m) is a hall's, not a storey house's. */
 const HALL_STOREY_M = 5.5;
+/** ALKIS's public buildings (`31001_3xxx`: offices, courts, academies,
+ *  schools, barracks, hospitals). */
+const PUBLIC_FUNCTION = "31001_3";
 
 /**
  * Whether a building's facade is its own rather than a storey house's:
- * a monumental use (`MONUMENTAL`, the Building's ALKIS function), or
- * storeys OSM counts that are taller than `HALL_STOREY_M` (a hall, a
- * nave). Such a facade gets no painted plinth or cornices and no drawn
- * doors — they are a town house's, and a church in them looks dressed up.
+ * a monumental use (`MONUMENTAL`, the Building's ALKIS function), storeys
+ * OSM counts that are taller than `HALL_STOREY_M` (a hall, a nave), or a
+ * listed public building (OSM `heritage`, ALKIS `31001_3xxx`) whose
+ * storeys OSM does not count: its storeys are a palace's, 5–7 m, and the
+ * 3.2 m a storey the height alone gives drew twice its rows of windows
+ * (the Ständehaus ten, the Kunstakademie seven). LoD2's own
+ * `storeysAboveGround` is no count: it is the height over about 3 m.
+ * Such a facade gets no painted plinth or cornices, no drawn doors and no
+ * windows — they are a town house's, and a church in them looks dressed
+ * up; once OSM counts its storeys, a listed school or office keeps them.
  */
 export function ownFacade(
   attrs: Record<string, unknown> = {},
   eaveH = 0,
-  levels = 0
+  levels = 0,
+  heritage = false
 ): boolean {
   const fn = readString(attrs.function);
   if (fn && MONUMENTAL.has(fn)) {
     return true;
   }
-  return levels > 0 && eaveH / levels > HALL_STOREY_M;
+  if (levels > 0) {
+    return eaveH / levels > HALL_STOREY_M;
+  }
+  return heritage && (fn?.startsWith(PUBLIC_FUNCTION) ?? false);
+}
+
+/**
+ * Whether a building part's facade is its own: its own reading
+ * (`ownFacade`), or its building's where OSM's storeys do not fit the
+ * part (`countsStoreys`) — the count is then the building's, inherited.
+ * The Kulturpalast's raised roof (3.6 m of wall under the three storeys
+ * of the hall it stands on) drew windows of its own.
+ */
+export function partFacade(
+  own: boolean,
+  building: boolean,
+  eaveH: number,
+  levels?: number
+): boolean {
+  return own || (building && !countsStoreys(eaveH, levels));
 }
 
 /**
@@ -513,13 +542,22 @@ export function mappedStoreyHeight(
   measuredMeters: number | undefined,
   levels: number | undefined
 ): number {
-  if (levels !== undefined && levels >= 1) {
-    const storey = eaveMeters / levels;
-    if (storey >= MAPPED_STOREY.min && storey <= MAPPED_STOREY.max) {
-      return storey;
-    }
+  return countsStoreys(eaveMeters, levels) && levels
+    ? eaveMeters / levels
+    : storeyHeight(measuredMeters);
+}
+
+/** Whether OSM's `levels` give walls of `eaveMeters` a plausible storey
+ *  (`MAPPED_STOREY`). */
+export function countsStoreys(
+  eaveMeters: number,
+  levels: number | undefined
+): boolean {
+  if (levels === undefined || levels < 1) {
+    return false;
   }
-  return storeyHeight(measuredMeters);
+  const storey = eaveMeters / levels;
+  return storey >= MAPPED_STOREY.min && storey <= MAPPED_STOREY.max;
 }
 
 /** Signed per-building roughness jitter in [-1,1] (decorrelated hash). */

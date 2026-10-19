@@ -23,6 +23,7 @@ import {
 import {
   buildingGlows,
   ownFacade,
+  partFacade,
   buildingTint,
   type FacadeMaterial,
   inheritedAttributes,
@@ -54,6 +55,7 @@ import {
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
   objectTable,
+  type OsmBuildingFacts,
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
@@ -630,8 +632,8 @@ export function bakeCityMesh(
     const osm = inheritedOsm(osmLut?.[id], osmLut?.[keys[root]]);
     const eaveH = roofMin === undefined ? total : Math.max(roofMin - baseZ, 0);
     const footprints = footprintsOf[index];
-    const monumental = ownFacade(attrs, eaveH, osm?.levels);
-    hosts[index] = windowExtra(attrs, osm?.levels, monumental);
+    hosts[index] = windowExtra(attrs, eaveH, osm);
+    const monumental = hosts[index].monumental ?? false;
     return {
       building: o.type === "Building",
       root,
@@ -658,6 +660,21 @@ export function bakeCityMesh(
         shaped: rebuilt.get(id)?.some((f) => f.properties?.surface) ?? false,
       }),
     };
+  });
+
+  // a part of a building whose facade is its own shares it where OSM's
+  // storeys are the building's (a hall's raised roof)
+  objects.forEach((o, i) => {
+    const own = partFacade(
+      hosts[i].monumental ?? false,
+      i !== o.root && (hosts[o.root].monumental ?? false),
+      o.eaveH,
+      hosts[i].storeys
+    );
+    if (own && !hosts[i].monumental) {
+      hosts[i].monumental = true;
+      o.flags = facadeFlags(o.flags, true);
+    }
   });
 
   // A Building with parts answers for its whole tree (the inquiry card
@@ -844,13 +861,14 @@ function dressWalls(
  *  whether OSM counts its storeys, a facade of its own. */
 function windowExtra(
   attrs: Record<string, unknown>,
-  levels: number | undefined,
-  monumental: boolean
+  eaveH: number,
+  osm: OsmBuildingFacts | undefined
 ): WindowExtra {
   return {
     fn: typeof attrs.function === "string" ? attrs.function : undefined,
-    levels: (levels ?? 0) >= 1,
-    monumental,
+    levels: (osm?.levels ?? 0) >= 1,
+    monumental: ownFacade(attrs, eaveH, osm?.levels, (osm?.heritage ?? 0) > 0),
+    storeys: osm?.levels,
   };
 }
 
@@ -1548,6 +1566,8 @@ export type WindowExtra = Pick<WindowHost, "fn" | "levels"> & {
   /** its facade its own (lib/city/building-tint.ts `ownFacade`: a
    *  church, a palace, a theatre, a hall) */
   monumental?: boolean;
+  /** the storeys OSM counts, its own or its building's */
+  storeys?: number;
 };
 
 /** A building's street level stands at most this far over the lowest
