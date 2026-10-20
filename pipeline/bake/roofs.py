@@ -26,23 +26,27 @@ is wrong. So, per LoD2 object with a roof:
 3. the scan over its cells, 3 × 3-median filtered, crowns and the edge row
    filled from the nearest roof cell, is split into its **faces** — where
    it rises by more than `SLOPE` over a patch at least `FACE_M` (10 m)
-   across, a ridge or valley between two slopes included
-   (`inclined_cells`): a hall's vault, a large pitched roof, a dome — and
+   across, or by more than `STEEP` over one `STEEP_FACE_M` (5 m) across,
+   a ridge or valley between two slopes included (`inclined_cells`): a
+   hall's vault, a pitched roof, a mansard's flank, a dome — and
    the rest, cut into `STEP_M`
    height bands, each band's connected pieces a region (a step's flank, a
-   few metres wide however steep, is no face: it stays the step between two
-   levels). Regions under `MIN_PART_M2` join the neighbour closest in
-   height, then flat neighbours closer than `MERGE_M` merge (the closest
-   pair first, medians kept current) — a flat roof stays one level, a
-   storey step stays a step, a face stays one face;
+   cell or two wide however steep, is no face: it stays the step between two
+   levels). Regions under `MIN_PART_M2`, and those holding no disk
+   `NARROW_M` across within `NARROW_DZ` of a neighbour (a flank, a parapet
+   run, a plant room: drawn alone, each a box), join the neighbour closest
+   in height, then flat neighbours closer than `MERGE_M` merge (the
+   closest pair first, medians kept current) — a flat roof stays one
+   level, a storey step stays a step, a face stays one face;
 4. it replaces the LoD2 roof only when the flat model of the same cells
    (no faces: every region at its median, the decision ADR 0036 was made
    with) misses DOM1 on at most half as many cells and at most
    `KEEP_SHARE` of them: the tile keeps the LoD2 where the scan disagrees
    for its own reasons (a building site, a crane). What is drawn is the
    model with its faces, which fits the scan better still;
-5. the regions are polygonised, simplified as one coverage (shared edges
-   stay shared) and clipped to the LoD2 footprint.
+5. the regions are polygonised from their labels smoothed by a majority
+   (a border diagonal to the grid is no staircase), simplified as one
+   coverage (shared edges stay shared) and clipped to the LoD2 footprint.
 
 Each part is written as its polygon with the object's `id` and `z`, the
 roof's absolute height (a face's: its median); a face also carries its
@@ -80,7 +84,14 @@ KEEP_SHARE = 0.3
 STEP_M = 1.0
 MERGE_M = 1.5
 MIN_PART_M2 = 20.0
-SIMPLIFY_M = 1.0
+# A drawn part must hold a disk this wide; a narrower one joins the
+# neighbour closest in height (the flat model the decision is made on keeps
+# them all).
+NARROW_M = 7.0
+NARROW_DZ = 3.0
+SIMPLIFY_M = 2.0
+OUTLINE_M = 2.0  # the radius over which a part's outline is smoothed (`_majority`)
+MAJORITY_PASSES = 2
 GREEN = 0.3  # NDVI over this: a crown over the roof, not the roof
 MIN_POLY_M2 = 4.0
 COVERED_M = 0.5  # another roof this much higher covers the cell
@@ -88,10 +99,16 @@ GROUND_M = 2.0  # a part lower than this over the base is open ground
 OPEN_SHARE = 0.15
 MARGIN_M = 250.0  # an object reaching further past its tile is left as it is
 SLOPE = 0.15  # m per m (≈ 8.5°): a roof cell rising faster than this is inclined
-# A face must hold a disk this wide. Narrower, it is a step's flank, a
-# dormer, or a slope the scan's metre of blur at each edge would round into
+# A face must hold a disk this wide. Narrower, a gentle slope is a step's
+# flank, a dormer, or a slope the scan's metre of blur at each edge would round into
 # a blanket (the Westin Bellevue's slab), where its few levels read better.
 FACE_M = 10.0
+# A steeper slope is a face from a narrower patch: a mansard's or a hipped
+# roof's flank, 30–50° and a few metres wide, read as a flight of 1 m
+# terraces (the Schauspielhaus). Blur at a slab's edge is a step
+# (`step_cells`), never this steep over a patch this wide.
+STEEP = 0.5  # m per m (≈ 27°)
+STEEP_FACE_M = 5.0
 STEP_EDGE_M = 2.0  # two neighbouring cells further apart than this: a step, not a face
 SURFACE_SMOOTH = 1.0  # σ (cells) of a face's edge-preserving blur
 SURFACE_STEP_M = 1.0  # σ of the height difference it still mixes
@@ -293,19 +310,41 @@ def _thin(lab: np.ndarray, n: int) -> np.ndarray:
     return np.bincount(lab[interior & (lab > 0)], minlength=n + 1)[1:] == 0
 
 
+def _narrow(lab: np.ndarray, n: int) -> np.ndarray:
+    """Per region (index = label - 1), whether it holds no disk NARROW_M
+    across: a strip a few metres wide — a step's blurred flank, a parapet,
+    the gutter between two vaults, a dormer's row, a plant room. Drawn on
+    its own, each stands as a box of its own height between its neighbours'
+    walls (the "blocks" on the Hauptbahnhof, the Prager Spitze, the roofs
+    around the Neumarkt)."""
+    cross = ndi.generate_binary_structure(2, 1)
+    # (the grid's edge is a border too)
+    border = (ndi.minimum_filter(lab, footprint=cross, mode="constant") != lab) | (
+        ndi.maximum_filter(lab, footprint=cross) != lab
+    )
+    # the widest disk: twice the farthest cell's distance from the region's
+    # border cells, plus the cell itself (a strip w cells wide: w, or w - 1
+    # for an even w, whose middle is two cells)
+    depth = ndi.distance_transform_edt(~border)
+    widest = np.asarray(ndi.maximum(depth, lab, np.arange(1, n + 1)), np.float64)
+    return (2 * widest + 1) * RES < NARROW_M
+
+
 def merge_regions(
     lab: np.ndarray,
     h: np.ndarray,
     small_cells: int,
     faces: np.ndarray | None = None,
     thin: bool = False,
+    narrow: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Small regions (and with `thin`, strips a cell or two wide: a step's
-    flank between a face and its neighbour) into their closest-height
+    """Small regions (with `thin`, also strips a cell or two wide: a
+    step's flank; with `narrow`, strips narrower than NARROW_M within
+    NARROW_DZ of a neighbour: `_narrow`) into their closest-height
     neighbour, taking its kind, then flat neighbours within MERGE_M of each
-    other, the closest pair first. `faces[label]` marks the inclined
-    regions (none when omitted); returns the labels and the faces of the
-    merged regions."""
+    other, the closest pair first.
+    `faces[label]` marks the inclined regions (none when omitted); returns
+    the labels and the faces of the merged regions."""
     if faces is None:
         faces = np.zeros(int(lab.max()) + 1, bool)
     for _ in range(256):
@@ -313,13 +352,20 @@ def merge_regions(
         if n <= 1:
             break
         med = _region_medians(lab, h, n)
-        size = np.bincount(lab.ravel(), minlength=n + 1)[1:]
-        if thin:
-            # a strip counts as small, whatever its length
-            size = np.where(_thin(lab, n), 0, size)
+        cells = np.bincount(lab.ravel(), minlength=n + 1)[1:]
+        # a strip counts as small, whatever its length
+        strip = _thin(lab, n) if thin else np.zeros(n, bool)
+        # a face is never narrow: a steep one holds STEEP_FACE_M, less than
+        # NARROW_M, and stays the slope it measures
+        wide = _narrow(lab, n) & ~strip & ~faces[1:] if narrow else np.zeros(n, bool)
+        size = np.where(strip | wide, 0, cells)
         pairs = _adjacency(lab)
         parent = np.arange(n + 1)
         merged = False
+        # a narrow strip merges once a round, into a region not merging
+        # itself: the NARROW_DZ cap holds against the medians it was
+        # measured with, never along a chain
+        touched: set[int] = set()
         # 1. the small ones
         for r in np.argsort(size):
             if size[r] >= small_cells:
@@ -329,6 +375,13 @@ def merge_regions(
             if not nb:
                 continue
             target = min(nb, key=lambda x: abs(med[x - 1] - med[r]))
+            # a narrow strip further than NARROW_DZ from every neighbour is
+            # a wing or a storey of its own, not a flank
+            capped = wide[r] and cells[r] >= small_cells
+            if capped and (abs(med[target - 1] - med[r]) > NARROW_DZ or {lr, target} & touched):
+                continue
+            if capped:
+                touched.update((lr, target))
             ra, rb = _union(parent, lr), _union(parent, target)
             if ra != rb:
                 parent[ra] = rb
@@ -372,21 +425,27 @@ def step_cells(h: np.ndarray) -> np.ndarray:
     return out
 
 
+def _disk(width_m: float) -> np.ndarray:
+    r = width_m / RES / 2
+    k = int(np.floor(r))
+    return np.hypot(*np.mgrid[-k : k + 1, -k : k + 1]) <= r
+
+
 def inclined_cells(h: np.ndarray, own: np.ndarray) -> np.ndarray:
     """The cells on a roof face: steeper than SLOPE over a patch FACE_M
-    across, and the ridge or valley between two such slopes, but never a
-    step's edge (`step_cells`): a face ends at a step, which stays a wall. A
-    step's flank is as steep but only a cell or two wide, a dormer or a
-    chimney small: neither holds the patch."""
+    across or than STEEP over one STEEP_FACE_M across, and the ridge or
+    valley between two such slopes, but never a step's edge (`step_cells`):
+    a face ends at a step, which stays a wall. A step's flank is as steep
+    but only a cell or two wide, a dormer or a chimney small: neither holds
+    the patch."""
     gx = ndi.sobel(h, axis=1) / (8 * RES)
     gy = ndi.sobel(h, axis=0) / (8 * RES)
     step = step_cells(h)
-    steep = own & ~step & (np.hypot(gx, gy) > SLOPE)
-    # a disk FACE_M across: a face must hold one, whichever way it points
-    r = FACE_M / RES / 2
-    k = int(np.floor(r))
-    disk = np.hypot(*np.mgrid[-k : k + 1, -k : k + 1]) <= r
-    faces = ndi.binary_opening(steep, structure=disk)
+    rise = np.hypot(gx, gy)
+    # a disk FACE_M across: a face must hold one, whichever way it points;
+    # a steep one, a disk STEEP_FACE_M across
+    faces = ndi.binary_opening(own & ~step & (rise > SLOPE), structure=_disk(FACE_M))
+    faces |= ndi.binary_opening(own & ~step & (rise > STEEP), structure=_disk(STEEP_FACE_M))
     # where a slope turns (a ridge, a valley, a dome's crown) it is flat for
     # a cell or two
     faces = ndi.binary_closing(faces, structure=np.ones((3, 3), bool))
@@ -460,9 +519,11 @@ def measured_model(
     green: np.ndarray,
     small_cells: int,
     with_faces: bool = True,
+    narrow: bool = True,
 ) -> Model | None:
     """The roof over `own` cells: flat levels and (unless `with_faces` is
-    off, the flat model) the measured faces."""
+    off, the flat model) the measured faces; with them, unless `narrow` is
+    off, no part narrower than NARROW_M."""
     smooth = ndi.median_filter(np.nan_to_num(dom, nan=-1e4), size=3)
     known = roof & ~green & np.isfinite(dom)
     if known.sum() < small_cells:
@@ -481,7 +542,9 @@ def measured_model(
     lab[part > 0] = part[part > 0] + n
     faces = np.zeros(n + k + 1, bool)
     faces[n + 1 :] = True
-    lab, faces = merge_regions(lab, h, small_cells, faces, thin=with_faces)
+    lab, faces = merge_regions(
+        lab, h, small_cells, faces, thin=with_faces, narrow=with_faces and narrow
+    )
     count = int(lab.max())
     level = _region_medians(lab, h, count)
     surface = _face_surface(h, lab, faces, face) if faces.any() else h
@@ -570,6 +633,31 @@ class Part:
     surface: dict | None = None
 
 
+def _majority(lab: np.ndarray) -> np.ndarray:
+    """Each labelled cell takes the label most cells within OUTLINE_M of it
+    carry (MAJORITY_PASSES times): a border between two parts runs as the
+    scan's edge does, not along the grid's rows and columns — a diagonal
+    one drawn cell by cell is a staircase of 1 m teeth, which no
+    simplification below the stair's own size straightens."""
+    r = int(OUTLINE_M / RES)
+    disk = (np.hypot(*np.mgrid[-r : r + 1, -r : r + 1]) <= r).astype(np.float64)
+    inside = lab > 0
+    for _ in range(MAJORITY_PASSES):
+        ids = np.unique(lab[inside])
+        if len(ids) < 2:
+            break
+        # a cell's own label wins a tie
+        votes = np.stack(
+            [ndi.correlate((lab == i).astype(np.float64), disk) + 0.5 * (lab == i) for i in ids]
+        )
+        voted = np.where(inside, ids[np.argmax(votes, axis=0)], 0).astype(lab.dtype)
+        # a part the vote would wipe out keeps its cells: every region of
+        # the model is drawn
+        lost = np.setdiff1d(ids, np.unique(voted[inside]))
+        lab = np.where(np.isin(lab, lost), lab, voted)
+    return lab
+
+
 def region_polygons(
     lab: np.ndarray, heights: np.ndarray, grid: Grid, footprint
 ) -> list[tuple[shapely.Geometry, float, int]]:
@@ -578,7 +666,7 @@ def region_polygons(
     # every footprint point under a region: the labels grown outward a cell
     grown = fill_nearest(lab, lab > 0)
     near = ndi.binary_dilation(lab > 0, iterations=2)
-    grown = np.where(near, grown, 0).astype(np.int32)
+    grown = _majority(np.where(near, grown, 0).astype(np.int32))
     polys, ids = [], []
     for geom, value in rfeatures.shapes(grown, mask=grown > 0, transform=grid.transform):
         polys.append(shapely.geometry.shape(geom))
@@ -677,6 +765,12 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     model = measured_model(dom, own, inner, green, small)
     if model is None:
         return None
+    # the strips merged away may have stood a storey off their new level:
+    # where that makes the drawn roof miss more than a rebuild may, they stay
+    if miss_share(model.heights(), dom, judged & (model.lab > 0)) > KEEP_SHARE:
+        model = measured_model(dom, own, inner, green, small, narrow=False)
+        if model is None:
+            return None
     # the footprint's own outline, less what another roof covers
     if (covered & np.isfinite(roof)).any():
         mask = covered & np.isfinite(roof)
