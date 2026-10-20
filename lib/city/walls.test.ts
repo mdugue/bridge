@@ -180,4 +180,19 @@ test("a city wall that holds the earth ends at its shelf and stands where the gr
   for (const top of columnTops(g?.positions ?? [])) {
     expect(top).toBeCloseTo(108, 1);
   }
+  // Only a snapped column's cap runs back to the shelf the wall holds (the
+  // ramp tops out at y = 1.5); standing free, the cap spans the wall's
+  // 1 m body, which on the step stood 1.5 m onto the low side.
+  const pos = g?.positions ?? [];
+  const capBack = (from: number, to: number) => {
+    let north = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < pos.length; i += 3) {
+      if (pos[i] >= from && pos[i] <= to && Math.abs(pos[i + 1] - 108) < 0.01) {
+        north = Math.max(north, -pos[i + 2]);
+      }
+    }
+    return north;
+  };
+  expect(capBack(0, 7.5)).toBeGreaterThanOrEqual(1.5);
+  expect(capBack(12.5, 20)).toBeLessThan(1);
 });
