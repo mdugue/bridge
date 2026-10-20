@@ -53,12 +53,16 @@ export function sunDirectionWorld(date: Date, lat: number, lng: number): Vec3 {
 }
 
 /**
- * Sunrise, sunset and the rest for the civil day `day` falls on, in the
- * zone `day` is read in. Without the zone's offset suncalc takes the solar
- * day nearest the instant, and a day picked as local midnight east of
- * Greenwich lies nearer the previous day's noon: the times were the day
- * before's (suncalc 2.1 added the offset).
+ * Sunrise, sunset and the rest for the calendar day `day` names (its
+ * year, month and date as the browser reads them), at the city: that day
+ * in the city's mean solar time, its offset from the longitude. Without an
+ * offset suncalc takes the solar day nearest the instant, and a day picked
+ * as local midnight lies nearer the previous day's noon east of Greenwich
+ * — the times were the day before's (suncalc 2.1 added the offset). The
+ * browser's own zone would not do either: from UTC+13 the city's previous
+ * day is still the nearer one.
  */
 export function sunTimesOn(day: Date, lat: number, lng: number): SunTimes {
-  return getTimes(day, lat, lng, 0, -day.getTimezoneOffset());
+  const noon = Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 12);
+  return getTimes(new Date(noon), lat, lng, 0, Math.round((lng / 15) * 60));
 }
