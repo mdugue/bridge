@@ -230,6 +230,14 @@ test.each(cases)(
         expect(kind).toBe("bollard");
         expect(f.properties.h).toBeGreaterThan(0);
       }
+      // a piece on a bridge stands on its deck: a point, and nothing that
+      // would stand in the lanes or hang on a facade
+      const deck = f.properties?.deck;
+      if (deck !== undefined) {
+        expect(Number.isFinite(deck)).toBe(true);
+        expect(g.type).toBe("Point");
+        expect(["signal", "hydrantsign", "wallclock"]).not.toContain(kind);
+      }
     }
   }
 );

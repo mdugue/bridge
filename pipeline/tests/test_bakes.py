@@ -1545,7 +1545,7 @@ def test_a_monument_without_an_osm_material_takes_wikidatas():
 
 def test_a_lamp_on_a_bridge_stands_on_its_deck():
     from bake.bridge import Axis
-    from bake.lamps import Decks
+    from bake.furniture import Decks
 
     deck = shapely.box(0, -5, 40, 5)  # a road deck along x, its top 10 → 12 m
     line = [10.0 + 0.1 * i for i in range(21)]  # every 2 m along the axis

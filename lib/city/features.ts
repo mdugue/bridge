@@ -230,6 +230,9 @@ export interface FurnitureFeature {
   properties: {
     a?: number;
     back?: boolean;
+    /** on a bridge: the top of its road or path deck there (m), which the
+     *  piece stands on instead of the ground */
+    deck?: number;
     h?: number;
     k: FurnitureKind;
     l?: number;

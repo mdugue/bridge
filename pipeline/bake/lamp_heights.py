@@ -20,7 +20,8 @@ RING_M around it stands clear (median under CLEAR_M): no tree, roof or bus
 over it. A lamp's street is the nearest OSM highway within STREET_M, by its
 name (else the way) and its class. Hung lamps keep their wire's height; the lamps of `lamps.py` and
 Mapillary's (`mapillary.py`) are measured together and both files
-rewritten (`h`, and `hs`: "street" or "class").
+rewritten (`h`, and `hs`: "street" or "class"). A lamp on a bridge
+(`deck`, lamps.py) is read over its deck's top, not the ground below.
 
 Where the scan rarely shows a post (Grimma: six readings on one street),
 the lamps keep 5 m."""
@@ -64,7 +65,7 @@ KINDS = {
 
 
 class Surface:
-    """The tile's nDOM (DOM1 − DGM1) and its transform."""
+    """The tile's nDOM (DOM1 − DGM1), its DGM1 and its transform."""
 
     def __init__(self, tile: Tile) -> None:
         with rasterio.open(tile.raw_raster("dom1")) as dom:
@@ -72,7 +73,8 @@ class Surface:
             self.transform = dom.transform
         with rasterio.open(tile.dgm) as dgm:
             ground = dgm.read(1, out_shape=top.shape, resampling=Resampling.bilinear)
-        self.ndom = top - ground.astype(np.float64)
+        self.ground = ground.astype(np.float64)
+        self.ndom = top - self.ground
         self.res = abs(self.transform.a)
         r = int(np.ceil(RING_M[1] / self.res))
         yy, xx = np.mgrid[-r : r + 1, -r : r + 1] * self.res
@@ -80,13 +82,17 @@ class Surface:
         self.r, self.near, self.disk = r, d <= PEAK_M, d <= ALONE_M
         self.ring = (d >= RING_M[0]) & (d <= RING_M[1])
 
-    def peak(self, x: float, y: float) -> float | None:
-        """The post's height at (x, y), or None where it does not show."""
+    def peak(self, x: float, y: float, deck: float | None = None) -> float | None:
+        """The post's height at (x, y) over the ground, or over the top of
+        the bridge deck it stands on (`deck`, m: the ground below is the
+        river or the street the bridge spans) — None where it does not show."""
         c, r = (int(v) for v in ~self.transform * (x, y))
         n = self.r
         if not (n <= r < self.ndom.shape[0] - n and n <= c < self.ndom.shape[1] - n):
             return None
         w = self.ndom[r - n : r + n + 1, c - n : c + n + 1]
+        if deck is not None:
+            w = w + self.ground[r - n : r + n + 1, c - n : c + n + 1] - deck
         top = float(np.nanmax(np.where(self.near, w, np.nan)))
         if not MIN_M <= top <= MAX_M or not np.nanmedian(w[self.ring]) < CLEAR_M:
             return None
@@ -121,14 +127,15 @@ class Streets:
 
 
 def heights(
-    points: list[tuple[float, float]], surface: Surface, streets: Streets
+    points: list[tuple[float, float, float | None]], surface: Surface, streets: Streets
 ) -> list[tuple[float, str] | None]:
     """Each point's post height and how it was found ("street", "class"),
-    or None where neither has enough readings."""
-    where = [streets.of(x, y) for x, y in points]
+    or None where neither has enough readings. A point is (x, y, the top of
+    the deck it stands on or None)."""
+    where = [streets.of(x, y) for x, y, _ in points]
     by_street, by_kind = defaultdict(list), defaultdict(list)
-    for (x, y), at in zip(points, where, strict=True):
-        h = surface.peak(x, y) if at else None
+    for (x, y, deck), at in zip(points, where, strict=True):
+        h = surface.peak(x, y, deck) if at else None
         if h is not None:
             by_street[at].append(h)
             by_kind[at[1]].append(h)
@@ -168,7 +175,9 @@ def run(tile: Tile) -> None:
         print(f"{tile.id}: no DOM1 — the lamps keep {LAMP_H:g} m")
         return
     posts = [f for _, doc, m in docs for f in _posts(doc, m)]
-    points = [tuple(f["geometry"]["coordinates"][:2]) for f in posts]
+    points = [
+        (*f["geometry"]["coordinates"][:2], (f["properties"] or {}).get("deck")) for f in posts
+    ]
     found = heights(points, Surface(tile), Streets(tile))
     counts: dict[str, int] = defaultdict(int)
     for f, h in zip(posts, found, strict=True):

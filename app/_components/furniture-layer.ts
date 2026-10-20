@@ -933,7 +933,9 @@ export function buildFurniture(
   const areas = furnitureAreas(features);
   const byModel = new Map<FurnitureModel, Stood[]>();
   for (const piece of furniturePieces(features)) {
-    const ground = ctx.heightAt(piece.x, piece.y);
+    // on a bridge, its deck's top: the ground there is the river or the road
+    // the bridge spans
+    const ground = piece.deck ?? ctx.heightAt(piece.x, piece.y);
     if (ground === null) {
       continue; // off the tile / NoData
     }

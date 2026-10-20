@@ -15,9 +15,16 @@ What the tags carry is kept, nothing else is invented: a bench's backrest
 (`backrest=no` → `back: false`), a bicycle stand's capacity (two bikes to a
 hoop, `n` hoops in a row). Wall loops are left out (they hang on a facade),
 and so is anything indoors, underground, on the railway or water (the class
-raster) or on a bridge deck (the terrain under it is the river). Each tile
-writes only what it owns (west/south edges in, lib/city/tileset.ts
-`ownsPoint`), so an object on a seam stands once.
+raster) or under a bridge deck (the terrain there is the river or the road
+the bridge spans). Each tile writes only what it owns (west/south edges in,
+lib/city/tileset.ts `ownsPoint`), so an object on a seam stands once.
+
+A point object on a bridge stands on its deck (`deck`: the deck's top there,
+m, which the viewer stands it on), by the lamps' rule (`Decks`): a drawn
+road or path deck holds it and its nearest highway within ON_BRIDGE_M is a
+bridge, or the ground below is water or railway. It stands where it is
+mapped, but for what would stand in the lanes there (`OFF_DECK`). Before,
+all of them were dropped.
 
 What stands in the carriageway on the map moves to the kerb: a traffic
 signal mapped on the road (its stop line) stands at the kerb on the right
@@ -48,10 +55,13 @@ import re
 
 import numpy as np
 import shapely
+import shapely.geometry
 
+from .bridge import STEP, Axis
 from .common import (
     OSM_ATTRIBUTION,
     Tile,
+    column,
     feature,
     geometry_json,
     owns,
@@ -61,6 +71,8 @@ from .common import (
 from .osm import has_extract, read_osm, read_ways, tag
 
 BLOCKED = (5, 8)  # railway, water
+DECK_KINDS = ("road", "path")  # what stands on a bridge stands on these, never a rail deck
+ON_BRIDGE_M = 15.0  # a piece's way: the nearest highway within this
 # A way further than this (m) does not turn an object towards it.
 FACE_M = 25.0
 # Closer than this (m) an object stands on the way: it faces across it.
@@ -103,6 +115,11 @@ STREETS = (
 KERBSIDE = {"bench", "bike", "bin", "column", "picnic", "postbox", "shelter", "stop", "water"}
 # Kinds without a front: they get no bearing.
 ROUND = {"bollard", "bin", "column", "hydrant"}
+# Never on a bridge deck: a signal (mapped at its stop line) and a hydrant's
+# sign (on its lid) stand in the carriageway where OSM has them, and the
+# kerb they move to is the class raster's, on a bridge the ground's below;
+# a wall clock hangs on a facade, which no deck has.
+OFF_DECK = {"signal", "hydrantsign", "wallclock"}
 HYDRANT = {"pillar": "hydrant", "underground": "hydrantsign"}
 CLOCK = {"pole": "clock", "wall": "wallclock", "wall_mounted": "wallclock"}
 # OSM `playground=*` → the equipment model the viewer stands (others dropped).
@@ -233,12 +250,79 @@ def bench_on_way(line: shapely.LineString, ways, lines) -> tuple[shapely.Point, 
     return mid, right, min(max(line.length, BENCH_M[0]), BENCH_M[1])
 
 
+class Decks:
+    """The drawn road and path decks of every tile (a deck is drawn by the
+    tile that owns its centre, so one over a seam may be a neighbour's), and
+    the bridge ways, so a lamp or a bench on a bridge stands on its deck."""
+
+    def __init__(
+        self,
+        decks: list[tuple[shapely.Geometry, Axis, list[float]]],
+        ways: list[tuple[shapely.Geometry, bool]],
+    ) -> None:
+        self.decks = decks
+        self.tree = shapely.STRtree([d for d, _, _ in decks]) if decks else None
+        self.ways = shapely.STRtree([g for g, _ in ways]) if ways else None
+        self.bridge = np.array([b for _, b in ways], dtype=bool)
+
+    @classmethod
+    def of(cls, tile: Tile) -> Decks:
+        decks = []
+        for tid, _ in tile.neighbours():
+            path = tile.data / "dlm" / f"bridge_{tid}.geojson"
+            if not path.exists():
+                continue
+            for f in json.loads(path.read_text())["features"]:
+                p = f.get("properties") or {}
+                if p.get("kind") in DECK_KINDS and p.get("axis") and len(p.get("line") or []) >= 2:
+                    deck = shapely.geometry.shape(f["geometry"])
+                    decks.append((deck, Axis(p["axis"]), p["line"]))
+        geoms, fields = read_ways(tile, "highway IS NOT NULL", ["highway", "other_tags"])
+        tags = column(fields, "other_tags", geoms)
+        ways = [
+            (g, (tag(t, "bridge") or "no") != "no")
+            for g, t in zip(geoms, tags, strict=True)
+            if g is not None
+        ]
+        return cls(decks, ways)
+
+    def top(self, p: shapely.Point) -> float | None:
+        """The deck's top at p (m, the viewer's `deckAt` over the deck's
+        `line`), or None off every road and path deck."""
+        if self.tree is None:
+            return None
+        for i in self.tree.query(p, predicate="within"):
+            _, axis, line = self.decks[int(i)]
+            s, _ = axis.project(p.x, p.y)
+            t = min(max(s / STEP, 0.0), len(line) - 1)
+            k = min(int(t), len(line) - 2)
+            return line[k] + (line[k + 1] - line[k]) * (t - k)
+        return None
+
+    def on_bridge_way(self, p: shapely.Point) -> bool:
+        """Whether p's nearest highway within ON_BRIDGE_M is a bridge."""
+        if self.ways is None:
+            return False
+        near = self.ways.query_nearest(p, max_distance=ON_BRIDGE_M)
+        return len(near) > 0 and bool(self.bridge[int(near[0])])
+
+    def deck_under(self, p: shapely.Point, cls: int | None) -> float | None:
+        """The top of the deck p stands on, or None: on the ground (`cls`,
+        the class raster's there)."""
+        top = self.top(p)
+        if top is None:
+            return None
+        return top if cls in BLOCKED or self.on_bridge_way(p) else None
+
+
 class Gate:
     """Where nothing is stood: off the tile's own ground, on the railway or
-    water, on a bridge deck."""
+    water, on a bridge deck — but on a road or path deck, which `deck`
+    finds when the gate is given the `decks`."""
 
-    def __init__(self, tile: Tile) -> None:
+    def __init__(self, tile: Tile, decks: Decks | None = None) -> None:
         self.bounds = tile.bounds
+        self.on_decks = decks
         cls = tile.classes()
         if cls is None:
             raise FileNotFoundError(f"{tile.id}: no class raster — bake landcover first")
@@ -255,6 +339,13 @@ class Gate:
     def cls_at(self, x: float, y: float) -> int | None:
         """The class under a point, None off the tile's raster."""
         return value_at(self.cls, self.bounds, x, y)
+
+    def deck(self, p: shapely.Point) -> float | None:
+        """The top of the road or path deck p stands on, if the tile owns p
+        (`Decks.deck_under`); None on the ground."""
+        if self.on_decks is None or not owns(self.bounds, p.x, p.y):
+            return None
+        return self.on_decks.deck_under(p, self.cls_at(p.x, p.y))
 
     def on_road(self, p: shapely.Point) -> bool:
         return self.cls_at(p.x, p.y) == ROAD
@@ -381,10 +472,35 @@ def _placed(
         if kerb is None:
             return None
         return kerb, None if k in ROUND else facing(kerb, ways, lines)
+    return _as_mapped(k, g, other, ways, lines)
+
+
+def _as_mapped(
+    k: str, g: shapely.Point, other: str | None, ways, lines
+) -> tuple[shapely.Point, float | None]:
+    """Where it is mapped, facing its `direction` (a bench) or the nearest way."""
     if k in ROUND:
         return g, None
     a = direction(tag(other, "direction")) if k == "bench" else None
     return g, a if a is not None else facing(g, ways, lines)
+
+
+def _stood(
+    k: str, g: shapely.Point, other: str | None, gate: Gate, ways, lines, streets, facades
+) -> tuple[shapely.Point, float | None, float | None] | None:
+    """Where a point object stands, the bearing it faces and the top of the
+    bridge deck it stands on (None: the ground). On a deck it stands where
+    it is mapped (no kerb to move to: the class raster's are the ground's
+    below), but what that would leave in the lanes is left out (`OFF_DECK`)."""
+    deck = gate.deck(g)
+    if deck is not None:
+        return None if k in OFF_DECK else (*_as_mapped(k, g, other, ways, lines), deck)
+    if not gate.open(g):
+        return None
+    placed = _placed(k, g, other, gate, ways, lines, streets, facades)
+    if placed is None or not gate.open(placed[0]):
+        return None
+    return (*placed, None)
 
 
 def _props(k: str, other: str | None) -> dict:
@@ -413,12 +529,12 @@ def _points(tile: Tile, gate: Gate, ways, lines, streets) -> list[dict]:
     facades = Facades(tile) if "wallclock" in kinds else None
     out, shelters, stops = [], [], []
     for g, k, other in zip(geoms, kinds, fields["other_tags"], strict=True):
-        if k is None or hidden(other) or not gate.open(g):
+        if k is None or hidden(other):
             continue
-        placed = _placed(k, g, other, gate, ways, lines, streets, facades)
-        if placed is None or not gate.open(placed[0]):
+        stood = _stood(k, g, other, gate, ways, lines, streets, facades)
+        if stood is None:
             continue
-        at, a = placed
+        at, a, deck = stood
         if k == "shelter":
             if any(at.distance(s) < SHELTER_DEDUP_M for s in shelters):
                 continue
@@ -426,6 +542,8 @@ def _points(tile: Tile, gate: Gate, ways, lines, streets) -> list[dict]:
         props = _props(k, other)
         if a is not None:
             props["a"] = round(a)
+        if deck is not None:
+            props["deck"] = round(deck, 2)
         feature_ = _point_feature(at, props)
         (stops if k == "stop" else out).append(feature_)
     # A stop sign only where no shelter stands (the shelter carries the sign).
@@ -443,11 +561,14 @@ def _bench_ways(tile: Tile, gate: Gate, ways, lines) -> list[dict]:
         if g.geom_type != "LineString" or tag(other, "amenity") != "bench" or hidden(other):
             continue
         mid, a, length = bench_on_way(g, ways, lines)
-        if not gate.open(mid):
+        deck = gate.deck(mid)
+        if deck is None and not gate.open(mid):
             continue
         props: dict = {"k": "bench", "a": round(a), "l": round(length, 1)}
         if tag(other, "backrest") == "no":
             props["back"] = False
+        if deck is not None:
+            props["deck"] = round(deck, 2)
         out.append(_point_feature(mid, props))
     return out
 
@@ -535,7 +656,7 @@ def run(tile: Tile) -> None:
         [h in STREETS for h, k in zip(fields["highway"], keep, strict=True) if k], dtype=bool
     )
     ways = shapely.STRtree(lines)
-    gate = Gate(tile)
+    gate = Gate(tile, Decks.of(tile))
     features = (
         _points(tile, gate, ways, lines, streets)
         + _bench_ways(tile, gate, ways, lines)

@@ -87,3 +87,38 @@ def test_too_few_readings_on_a_street_borrow_its_kind_s(tmp_path, monkeypatch):
     monkeypatch.setattr(lamp_heights, "KIND_MIN", 4)
     lamp_heights.run(tile)
     assert _heights(tile)[:5] == [(10.0, "class")] * 5
+
+
+def test_a_lamp_on_a_bridge_is_read_over_its_deck(tmp_path, monkeypatch):
+    """Three lamps on a footbridge's deck 6 m over the ground (y = 100), the
+    DOM showing the deck and their 4.5 m posts on it: read over the ground
+    the deck around them is not clear, read over the deck they are 4.5 m."""
+    nodes = {1: (0, 100, ""), 2: (200, 100, "")}
+    ways = way(1, [1, 2], {"highway": "footway", "bridge": "yes", "name": "Steg"})
+    tile = osm_tile(tmp_path, monkeypatch, nodes, ways)
+    dom = np.full((SIZE, SIZE), 100.0)
+    dom[SIZE - 108 : SIZE - 92, :] = 106.0  # the deck
+    for x in (40, 100, 160):
+        dom[SIZE - 102, x] = 110.5
+    path = tile.raw_raster("dom1")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        width=SIZE,
+        height=SIZE,
+        count=1,
+        dtype="float32",
+        crs="EPSG:25833",
+        transform=tile.transform(SIZE),
+    ) as dst:
+        dst.write(dom.astype("float32"), 1)
+    features = _lamps((40, 100, 160), 102)
+    for f in features:
+        f["properties"]["deck"] = 106.0
+    tile.out("dlm", "lamps_t.geojson").write_text(
+        json.dumps({"type": "FeatureCollection", "features": features})
+    )
+    lamp_heights.run(tile)
+    assert _heights(tile) == [(4.5, "street")] * 3

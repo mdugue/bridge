@@ -1872,8 +1872,17 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   ending in it: Dresden 36 (the Budapester Straße's and the Löbtauer
   Brücke's over the tracks), Grimma 11 (the Pöppelmannbrücke), Meißen 1
   (Schloßbrücke). A lamp under a rail deck, or beside a street the bridge
-  spans, lights that street and stays on the ground. Benches on bridges
-  (Dresden 7) are still dropped.
+  spans, lights that street and stays on the ground. Its post height is
+  read in DOM1 over the deck's top, not over the ground below (over the
+  river the deck around it was never clear, so no bridge lamp gave a
+  reading). **Street furniture on bridges** `= computed` (2026-10-20) —
+  by the same rule a bench, bin, bollard, bicycle stand or shelter stands
+  on the deck where it is mapped; before, everything on a deck was
+  dropped. A signal, a hydrant's sign or a wall clock there is still left
+  out: the kerb they move to is the class raster's, the ground's under the
+  bridge. Hamburg gains 28 pieces (12 benches, 7 bins, 6 stands: the
+  Busanbrücke, the Brooktorkaibrücke, the Kehrwiedersteg), Meißen 4
+  (the Johannesbrücke's benches), Dresden 2, Grimma and München 1.
   **Lamps hung across the street** `= computed` (2026-10-08) — OSM maps the
   old town's catenary lamps (Äußere Neustadt: Alaunstraße, …) in the
   carriageway, where they stood as posts in the traffic. A lamp hangs when
@@ -2247,8 +2256,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   nearest kerb (2026-10-08: Alaunstraße's stands stood in the lane); in a
   square, a pedestrian zone or on a platform — the road class covers those
   too — it stays where it is mapped. Dropped:
-  indoors, underground, classes 5 and 8, bridge decks (the terrain under
-  them is the river). A bollard keeps its tagged `height` and a metal
+  indoors, underground, classes 5 and 8, under a bridge deck (the terrain
+  there is the river or the road it spans); on a bridge's road or path deck
+  a piece stands on the deck (2026-10-20, below). A bollard keeps its tagged `height` and a metal
   `material` (the Stallhof's 1.46 m bronze columns of 1591 are mapped as
   bollards). `pipeline/bake/furniture.py`; the viewer instances one small,
   **abstracted** model per kind — softened blocks, capsules and single tube

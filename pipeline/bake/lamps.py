@@ -24,27 +24,24 @@ signals do (furniture.py `Gate`); off the road it stands where it is.
 
 A lamp on a bridge stands on its deck (`deck`: the deck's top there, m,
 which the viewer stands the post on). It is on the bridge when a drawn road
-or path deck holds it (`Decks`, every tile's bridge file) and either its
-nearest highway within ON_BRIDGE_M is a bridge (`bridge=*`) or the ground
-below is water or railway. Before, those over water or a railway were
-dropped and those over a meadow or a street stood under the deck on the
-ground: Dresden's 36 (the Budapester Straße's and the Löbtauer Brücke's
+or path deck holds it (furniture.py `Decks`, every tile's bridge file) and
+either its nearest highway within ON_BRIDGE_M is a bridge (`bridge=*`) or
+the ground below is water or railway. Before, those over water or a railway
+were dropped and those over a meadow or a street stood under the deck on
+the ground: Dresden's 36 (the Budapester Straße's and the Löbtauer Brücke's
 over the tracks), Grimma's 11 (the Pöppelmannbrücke's, a footbridge's over
 the Mulde). Under a rail deck, or beside a street the bridge spans, a lamp
 lights the ground below and stays there."""
 
 from __future__ import annotations
 
-import json
 import math
 
 import numpy as np
 import shapely
-import shapely.geometry
 
-from .bridge import STEP, Axis
-from .common import OSM_ATTRIBUTION, Tile, column, feature, owns, write_geojson
-from .furniture import BLOCKED, STREETS, Gate, way_bearing
+from .common import OSM_ATTRIBUTION, Tile, feature, owns, write_geojson
+from .furniture import BLOCKED, STREETS, Decks, Gate, way_bearing
 from .osm import has_extract, read_osm, read_ways, tag
 
 LAMP_H = 5.0  # a post's head (the viewer's lamp-layer.ts LAMP_H)
@@ -55,8 +52,6 @@ UNTAGGED_REACH_M = 12.0  # ... when facades close both sides within this
 TAGGED_REACH_M = 20.0  # a tagged hung lamp's wire reaches a facade this far
 CORRIDOR_M = 2.5  # a facade counts within this either side of the wire's line
 MAST_M = 6.0  # a mast with no kerb found stands this far out
-DECK_KINDS = ("road", "path")  # a lamp stands on these decks, never on a rail one
-ON_BRIDGE_M = 15.0  # a lamp's way: the nearest highway within this
 
 
 def hung_tag(other: str | None) -> bool | None:
@@ -162,71 +157,6 @@ def place(
     return p, {"h": round(lamp_height, 1)}
 
 
-class Decks:
-    """The drawn road and path decks of every tile (a deck is drawn by the
-    tile that owns its centre, so one over a seam may be a neighbour's), and
-    the bridge ways, so a lamp on a bridge stands on its deck."""
-
-    def __init__(
-        self,
-        decks: list[tuple[shapely.Geometry, Axis, list[float]]],
-        ways: list[tuple[shapely.Geometry, bool]],
-    ) -> None:
-        self.decks = decks
-        self.tree = shapely.STRtree([d for d, _, _ in decks]) if decks else None
-        self.ways = shapely.STRtree([g for g, _ in ways]) if ways else None
-        self.bridge = np.array([b for _, b in ways], dtype=bool)
-
-    @classmethod
-    def of(cls, tile: Tile) -> Decks:
-        decks = []
-        for tid, _ in tile.neighbours():
-            path = tile.data / "dlm" / f"bridge_{tid}.geojson"
-            if not path.exists():
-                continue
-            for f in json.loads(path.read_text())["features"]:
-                p = f.get("properties") or {}
-                if p.get("kind") in DECK_KINDS and p.get("axis") and len(p.get("line") or []) >= 2:
-                    deck = shapely.geometry.shape(f["geometry"])
-                    decks.append((deck, Axis(p["axis"]), p["line"]))
-        geoms, fields = read_ways(tile, "highway IS NOT NULL", ["highway", "other_tags"])
-        tags = column(fields, "other_tags", geoms)
-        ways = [
-            (g, (tag(t, "bridge") or "no") != "no")
-            for g, t in zip(geoms, tags, strict=True)
-            if g is not None
-        ]
-        return cls(decks, ways)
-
-    def top(self, p: shapely.Point) -> float | None:
-        """The deck's top at p (m, the viewer's `deckAt` over the deck's
-        `line`), or None off every road and path deck."""
-        if self.tree is None:
-            return None
-        for i in self.tree.query(p, predicate="within"):
-            _, axis, line = self.decks[int(i)]
-            s, _ = axis.project(p.x, p.y)
-            t = min(max(s / STEP, 0.0), len(line) - 1)
-            k = min(int(t), len(line) - 2)
-            return line[k] + (line[k + 1] - line[k]) * (t - k)
-        return None
-
-    def on_bridge_way(self, p: shapely.Point) -> bool:
-        """Whether p's nearest highway within ON_BRIDGE_M is a bridge."""
-        if self.ways is None:
-            return False
-        near = self.ways.query_nearest(p, max_distance=ON_BRIDGE_M)
-        return len(near) > 0 and bool(self.bridge[int(near[0])])
-
-    def deck_under(self, p: shapely.Point, cls: int | None) -> float | None:
-        """The top of the deck p stands on, or None: on the ground (`cls`,
-        the class raster's there)."""
-        top = self.top(p)
-        if top is None:
-            return None
-        return top if cls in BLOCKED or self.on_bridge_way(p) else None
-
-
 def standable(p: shapely.Point, gate: Gate) -> bool:
     """The tile's own, and not on the railway or water (a lamp on a bridge
     deck stands over the river's class, and is left to the bridge)."""
@@ -250,13 +180,12 @@ def run(tile: Tile, lamp_height: float = LAMP_H) -> None:
     geoms, fields = read_osm(
         tile, "points", "highway = 'street_lamp'", ["highway", "other_tags"], margin=0.0005
     )
-    gate = Gate(tile)
+    gate = Gate(tile, Decks.of(tile))
     ways, lines = streets(tile)
     facades = Facades(tile)
-    decks = Decks.of(tile)
     features, hung, on_decks = [], 0, 0
     for g, other in zip(geoms, fields["other_tags"], strict=True):
-        deck = decks.deck_under(g, gate.cls_at(g.x, g.y)) if owns(gate.bounds, g.x, g.y) else None
+        deck = gate.deck(g)
         if deck is not None:
             on_decks += 1
             props = {"h": round(lamp_height, 1), "deck": round(deck, 2)}
