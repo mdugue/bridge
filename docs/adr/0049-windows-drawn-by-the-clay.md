@@ -84,7 +84,12 @@ ground rises past what the lift reaches (2.2 m over the base,
 `GROUND_REACH_M`), or higher than leaves them four fifths of their width
 tall, loses its own ground floor, marked like a shopfront's, and the
 building's other walls keep theirs (`overGround`); where even the lowest
-ground would leave them that short, that ground floor has none.
+ground would leave them that short, that ground floor has none. Such a
+wall carries the ground's height in front in its first door slot (it has
+no ground-floor windows to keep off doors), and no window row starts
+under it: where the ground rises by more than a storey, as along the
+Kunstakademie's terrace front (2026-10-20), the first floor's windows go
+too.
 A town house's a little higher still
 (a Hochparterre); the Gurtgesims sits on the first storey line, between
 the ground floor's heads and the first floor's sills; a top floor's

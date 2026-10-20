@@ -1917,7 +1917,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   the building's other walls keep theirs. Dresden, 2026-10-20: wall feet
   whose ground-floor windows the fine ground covered 11 925 → 42 (of
   ~610 000), objects lifting their ground floor 20 760 → 22 066, those
-  without one unchanged at 6 258. **The storeys
+  without one unchanged at 6 258. Such a wall keeps the ground's height
+  in front (`_FACADE`'s first door slot) and draws no row under it, so
+  where the ground rises more than a storey the upper floors' windows go
+  too (the Kunstakademie on the terrace; 582 wall feet on its tile). **The storeys
   count from the street** (`liftToStreet`): a LoD2 base is the lowest
   ground round the whole footprint — a courtyard's, a light well's, a
   cellar ramp's — and lay a median 0.3 m under the street on the spawn

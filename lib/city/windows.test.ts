@@ -348,6 +348,14 @@ describe("the layout", () => {
     expect(windowRows(spec, 3.5, 12.3).at(-1)![0]).toBeCloseTo(7.9, 9);
   });
 
+  test("no row under the ground in front of a shopfront's wall", () => {
+    // 5 m of ground (a terrace) in front: the ground floor and the first
+    // floor's sill at 4.4 m lie under it
+    const rows = windowRows(spec, 3.5, 15, false, 5);
+    expect(rows[0][0]).toBeCloseTo(7 + 0.9, 9);
+    expect(rows[0][0]).toBeGreaterThanOrEqual(5 + WINDOW_ROWS.plinthGap);
+  });
+
   test("a lifted ground floor keeps its head", () => {
     const lifted = { ...spec, style: packStyle({ sill: 0.9, lift: 0.45 }) };
     const [ground, first] = windowRows(lifted, 3.5, 15);
@@ -518,6 +526,21 @@ describe("facadeAttribute", () => {
     expect(f[3]).toBe(Math.round(32_767 * NO_DOOR));
     // the east wall stands over a shopfront
     expect(metres(f[4 * 6 + 1])).toBeCloseTo(-10, 1);
+  });
+
+  test("a wall the ground rises past its reach: signed, its ground kept", () => {
+    const mesh = quads(boxWalls(0, 0, 0, 14, 10, 12));
+    // 4.5 m of ground in front of the east wall (triangles 2 and 3), 1 m
+    // in front of the others; the windows clear 2 m
+    const at = Array.from({ length: 8 }, (_, t) =>
+      t === 2 || t === 3 ? 4.5 : 1
+    );
+    const f = facadeAttribute(mesh, () => true, [], [], { at, reach: () => 2 });
+    expect(metres(f[4 * 6 + 1])).toBeCloseTo(-10, 1);
+    expect(metres(f[4 * 6 + 2])).toBeCloseTo(4.5, 1);
+    // the south wall keeps its ground floor and its door slot
+    expect(metres(f[1])).toBeCloseTo(14, 1);
+    expect(f[2]).toBe(Math.round(32_767 * NO_DOOR));
   });
 });
 

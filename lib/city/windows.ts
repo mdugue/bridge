@@ -837,14 +837,16 @@ export function windowAxes(length: number, spec: WindowSpec): number[] {
  * `eaveH − WINDOW_ROWS.eaveClear` (a top floor's windows a little shorter
  * where they must be, none where less than `min` is left); the ground
  * floor's only where `ground` is (no shop, no shopfront on the wall) and
- * where it fits under the first storey line. The shader's rows
- * (clay-windows.ts).
+ * where it fits under the first storey line; none that starts less than
+ * `WINDOW_ROWS.plinthGap` over `buried` (the ground in front of a
+ * shopfront's wall). The shader's rows (clay-windows.ts).
  */
 export function windowRows(
   spec: WindowSpec,
   storeyH: number,
   eaveH: number,
-  ground = true
+  ground = true,
+  buried = Number.NEGATIVE_INFINITY
 ): [number, number][] {
   if (spec.axis <= 0) {
     return [];
@@ -856,7 +858,10 @@ export function windowRows(
   const out: [number, number][] = [];
   const row = (z0: number, z1: number) => {
     const head = Math.min(z1, top);
-    if (head - z0 >= WINDOW_ROWS.min - 1e-9) {
+    if (
+      head - z0 >= WINDOW_ROWS.min - 1e-9 &&
+      z0 >= buried + WINDOW_ROWS.plinthGap - 1e-9
+    ) {
       out.push([z0, head]);
     }
   };
@@ -906,6 +911,9 @@ interface Wall {
   /** extent along `t = (n.y, −n.x)` and up */
   s0: number;
   s1: number;
+  /** how high the ground in front of it rises over its object's base (m),
+   *  where it is known */
+  ground: number;
   shop: boolean;
   tris: number[];
   z0: number;
@@ -923,6 +931,9 @@ export interface FacadeDoor {
 export interface FacadeShop {
   a: [number, number];
   b: [number, number];
+  /** how high the ground (or plinth) along it stands over the object's
+   *  base (m): where it buries the ground floor */
+  ground?: number;
   n: [number, number];
   object: number;
 }
@@ -1043,6 +1054,7 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
         tris: [],
         doors: [],
         party: 0,
+        ground: Number.NEGATIVE_INFINITY,
         shop: false,
       };
       groups.set(root, w);
@@ -1229,6 +1241,7 @@ function placeOnWalls(
     ];
     for (const { w } of wallsAt(byObject, shop.object, mid, shop.n)) {
       w.shop = true;
+      w.ground = Math.max(w.ground, shop.ground ?? Number.NEGATIVE_INFINITY);
     }
   }
 }
@@ -1238,7 +1251,10 @@ function placeOnWalls(
  * a unit): per wall vertex of an object `drawn` says carries windows its
  * place along the wall from the wall's middle, the wall's length (negative
  * where a shopfront stands on it; 0 on a party wall), and up to two doors'
- * places along it from the middle, the nearest first (`NO_DOOR` for none);
+ * places along it from the middle, the nearest first (`NO_DOOR` for none;
+ * on a shopfront's wall, which has no ground-floor windows to keep off
+ * them, the first slot is the ground's height over the base instead,
+ * which the upper floors' windows clear too — 0 where it is not known);
  * every roof vertex (0, 0, FACADE_ROOF, NO_DOOR), every other vertex (0, 0,
  * NO_DOOR, NO_DOOR). `doors` and `shops` in the mesh's data frame. A wall
  * the ground in front of rises past its object's `reach` somewhere
@@ -1263,8 +1279,13 @@ export function facadeAttribute(
   placeOnWalls(walls, doors, shops);
   if (rises) {
     for (const w of walls) {
-      const reach = rises.reach(w.object);
-      w.shop ||= w.tris.some((t) => rises.at[t / 3] > reach);
+      for (const t of w.tris) {
+        const rise = rises.at[t / 3];
+        if (rise > w.ground) {
+          w.ground = rise;
+        }
+      }
+      w.shop ||= w.ground > rises.reach(w.object);
     }
   }
   const p = mesh.positions;
@@ -1275,7 +1296,13 @@ export function facadeAttribute(
       .map((s) => s - c)
       .sort((a, b) => Math.abs(a) - Math.abs(b));
     const lengthSnorm = snorm(w.shop ? -length : length);
-    const door0 = d0 === undefined ? NO_DOOR_SNORM : snorm(d0);
+    // a shopfront's wall has no ground-floor windows to keep off its doors:
+    // its first slot holds the ground in front, which every window clears
+    const door0 = w.shop
+      ? snorm(Math.max(w.ground, 0))
+      : d0 === undefined
+        ? NO_DOOR_SNORM
+        : snorm(d0);
     const door1 = d1 === undefined ? NO_DOOR_SNORM : snorm(d1);
     for (const t of w.tris) {
       for (let k = 0; k < 3; k++) {
