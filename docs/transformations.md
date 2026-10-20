@@ -1312,10 +1312,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   (2026-10-20, `pipeline/bake/ways.py`, `verge_mask`): no tree stands on a
   carriageway (the DLM's road centrelines at their surveyed width, the
   buffers the class raster burns; without a DLM OSM's roads at the class
-  raster's widths) or a track bed (the baked rails, 2.5 m either side plus
-  2.25 m per further track, and every OSM track above ground — sidings,
-  yards, trams in their own bed — 2.5 m either side), each grown by
-  0.5 m. Beyond them the road and railway land the DLM files to its fences
+  raster's widths) or a track bed (the baked rails by their track count
+  and every OSM track above ground — sidings, yards, trams in their own
+  bed — one track each, at the drawn ballast's widths: 4.5 m, 4 m more
+  per further track), each grown by 0.5 m. Beyond them the road and railway land the DLM files to its fences
   is planted from the crowns DOM1 shows there — rough, 3–45 m, off every
   LoD2 outline, a blob of at least 15 m² after a 3 × 3 opening — with or
   without a scan, and not gated on the DOP's green: Saxony's is flown
