@@ -621,8 +621,8 @@ visual-variable codebook is in
   `coverage_simplify` 2 m, clipped to the footprint,
   parts under 2 m dropped → `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **886 objects on Dresden's fifteen tiles, 2 171
-  parts, 95 of them faces** (2 956 before the strips merged; 0–129
+  provider's credit). **886 objects on Dresden's fifteen tiles, 2 145
+  parts, 130 of them faces** (2 956 before the strips merged; 0–129
   objects a tile, the Altstadt most; the objects of the flat-only bake
   less the five whose form holds); the step
   runs on every site.
