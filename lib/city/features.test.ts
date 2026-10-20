@@ -247,6 +247,11 @@ test.each(cases)("%s: lamps are points", (_, a) => {
     } else {
       expect(f.properties?.masts).toBeUndefined();
     }
+    const deck = f.properties?.deck;
+    if (deck !== undefined) {
+      expect(Number.isFinite(deck)).toBe(true);
+      expect(wire).toBeUndefined();
+    }
   }
 });
 

@@ -1863,6 +1863,17 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   Elbe or the track bed (the rail corridor is now its own layer). Built per
   fine terrain tile; the three real lights (a phone's one, 2026-10-11) go
   to the nearest heads of the visible tiles.
+  **Lamps on bridges** `= computed` (2026-10-20) — a lamp a drawn road or
+  path deck holds stands on the deck (`deck`: the deck's top there, from
+  its `line` along its `axis`, the viewer's `deckAt`) when its nearest
+  highway within 15 m is a bridge or the ground below is water or railway.
+  Before, the gate dropped those over water or a railway and stood those
+  over a meadow or a street on the ground under the deck, their 5 m posts
+  ending in it: Dresden 36 (the Budapester Straße's and the Löbtauer
+  Brücke's over the tracks), Grimma 11 (the Pöppelmannbrücke), Meißen 1
+  (Schloßbrücke). A lamp under a rail deck, or beside a street the bridge
+  spans, lights that street and stays on the ground. Benches on bridges
+  (Dresden 7) are still dropped.
   **Lamps hung across the street** `= computed` (2026-10-08) — OSM maps the
   old town's catenary lamps (Äußere Neustadt: Alaunstraße, …) in the
   carriageway, where they stood as posts in the traffic. A lamp hangs when

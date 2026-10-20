@@ -145,13 +145,16 @@ export type LowVegSource = "osm" | "osm+lsc";
  *  lamp_heights.py), else 5 m. A lamp hung across the street carries its
  *  `wire` (the two ends, EPSG; the head at the point, `h` m over the
  *  ground) and `masts` where an end is a mast at the kerb, not a facade.
- *  The source (`src`): "mly" for Mapillary's, lib/city/mapillary.ts. */
+ *  A lamp on a bridge carries its deck's top there (`deck`, m), which its
+ *  post stands on. The source (`src`): "mly" for Mapillary's,
+ *  lib/city/mapillary.ts. */
 /** How a lamp post's height was found (pipeline/bake/lamp_heights.py). */
 export type LampHeightSource = "street" | "class";
 
 export interface LampFeature {
   geometry: PointGeometry;
   properties: {
+    deck?: number;
     h?: number;
     hs?: LampHeightSource;
     masts?: [boolean, boolean];

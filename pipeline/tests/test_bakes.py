@@ -1541,3 +1541,23 @@ def test_a_monument_without_an_osm_material_takes_wikidatas():
         (None, None),
         (None, None),
     ]
+
+
+def test_a_lamp_on_a_bridge_stands_on_its_deck():
+    from bake.bridge import Axis
+    from bake.lamps import Decks
+
+    deck = shapely.box(0, -5, 40, 5)  # a road deck along x, its top 10 → 12 m
+    line = [10.0 + 0.1 * i for i in range(21)]  # every 2 m along the axis
+    street = shapely.LineString([(0, 0), (40, 0)])
+    under = shapely.LineString([(20, -30), (20, 30)])  # a street under it
+    decks = Decks([(deck, Axis([[0, 0], [40, 0]]), line)], [(street, True), (under, False)])
+    assert decks.top(shapely.Point(10, 3)) == pytest.approx(10.5)
+    assert decks.top(shapely.Point(50, 0)) is None
+    # beside the bridge's own way, over a meadow: on the deck
+    assert decks.deck_under(shapely.Point(10, 3), 1) == pytest.approx(10.5)
+    # beside the street it spans: on that street, under the deck
+    assert decks.deck_under(shapely.Point(20.5, 4.0), 7) is None
+    # over water it can only stand on the deck
+    assert decks.deck_under(shapely.Point(20.5, 4.0), 8) == pytest.approx(11.025)
+    assert Decks([], []).deck_under(shapely.Point(10, 3), 8) is None

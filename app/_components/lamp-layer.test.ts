@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Vector3 } from "three/webgpu";
-import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
+import { buildLamps, createLampLights, LAMP_LIGHTS } from "./lamp-layer";
 
 /** A lamp head 5 m up at (x, z), the camera's eye 1.7 m up. */
 const head = (x: number, z = 0) => new Vector3(x, 5, z);
@@ -65,4 +65,22 @@ test("a phone's one light hands over between two lamps through darkness", () => 
   // a few metres off the bisector it is lit as before
   pool.updateNearest(eye(8));
   expect(light.intensity).toBe(full);
+});
+
+test("a lamp on a bridge stands on its deck, not on the ground below", () => {
+  const ctx = { heightAt: () => 100, offset: { cx: 0, cy: 0 } };
+  const lamps = buildLamps(
+    [
+      {
+        geometry: { type: "Point", coordinates: [10, 20] },
+        properties: { h: 5 },
+      },
+      {
+        geometry: { type: "Point", coordinates: [30, 20] },
+        properties: { deck: 112.5, h: 5 },
+      },
+    ],
+    ctx
+  );
+  expect(lamps.headPositions.map((p) => p.y)).toEqual([105, 117.5]);
 });

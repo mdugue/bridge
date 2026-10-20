@@ -311,6 +311,18 @@ function liftedPt(
   return { x, y: ground + lift, z };
 }
 
+/** A lamp's foot: on its bridge's deck (`deck`, the deck's top in m —
+ *  pipeline/bake/lamps.py) or on the ground; null off the tile. */
+function footOf(f: LampFeature, ctx: GroundContext): Pt | null {
+  const deck = f.properties?.deck;
+  if (deck === undefined) {
+    return liftedPt(f.geometry.coordinates, 0, ctx);
+  }
+  const [ex, ey] = f.geometry.coordinates;
+  const { x, z } = epsgToWorld(ex, ey, ctx.offset);
+  return { x, y: deck, z };
+}
+
 /** A hung lamp's wire, from each end (a facade or a mast, higher) down to
  *  the top of its head, and the masts it needs. */
 function hangWire(
@@ -349,7 +361,7 @@ function lampPlaces(features: LampFeature[], ctx: GroundContext): LampPlaces {
     if (f.geometry?.type !== "Point") {
       continue;
     }
-    const ground = liftedPt(f.geometry.coordinates, 0, ctx);
+    const ground = footOf(f, ctx);
     if (!ground) {
       continue; // off-tile / NoData
     }
