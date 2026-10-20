@@ -1,7 +1,7 @@
 # ADR 0036: A LoD2 roof that misses the surface model is rebuilt from it as stepped flat blocks
 
 - **Status:** accepted; what is drawn in the LoD2's place follows the scan's form since the update below
-- **Date:** 2026-10 (amended 2026-10-03: measured faces; 2026-10-19: no strips, no teeth)
+- **Date:** 2026-10 (amended 2026-10-03: measured faces; 2026-10-19: no strips, no teeth; 2026-10-20: steep flanks)
 
 ## Context
 
@@ -170,6 +170,23 @@ Rejected: **merging every strip whatever the height** (no cap: the
 misses rose to 13–20 %, at worst 86 % of an object's cells: narrow
 wings sank or rose to their neighbour's level); **a cap of 2 m** (the
 misses stayed at 6–7 %, but a sixth to a quarter more parts stayed than with 3 m).
+
+### Steep flanks are faces from 5 m (2026-10-20)
+
+The Schauspielhaus still read as stacked terraces, white streaks from
+above: its roofs are hipped and mansard flanks of 30–50° but only 3–6 m
+wide, too narrow for a face, so the bands stood as levels a storey apart
+with a sunlit wall between each pair. **A slope steeper than 0.5 m per
+metre (27°, `STEEP`) is a face from a patch 5 m across**
+(`STEEP_FACE_M`); a gentler one still needs 10 m. The blankets that
+ruled out 5 m faces came from gentle slopes — the scan's blur at a slab's
+edge rises steeper than that only where it is a step (more than 2 m from
+one cell to the next, `step_cells`), which a face never crosses. On the
+two Altstadt tiles 9–18 % more cells are drawn as faces, the drawn roof fits
+the scan as well or better (misses 7.7–8.9 % of a rebuilt object's cells,
+8.1–8.9 % without), and the cells drawn as a face on flat scan stay at
+1–2 % of all face cells. Faces from 4 m: more ragged rings round
+courtyards for little more.
 
 ## Alternatives
 

@@ -600,7 +600,11 @@ visual-variable codebook is in
   the same scan split into its *faces* first — cells rising > 0.15 m per
   metre (8.5°) over a patch ≥ 10 m across (a disk-shaped opening: narrower,
   the scan's metre of blur at each edge rounds a slope into a blanket — the
-  Westin Bellevue's slab did at 5 m — where its few levels read better), the 1–2
+  Westin Bellevue's slab did at 5 m — where its few levels read better), or
+  > 0.5 m per metre (27°) over a patch ≥ 5 m across (since 2026-10-20: a
+  mansard's or a hipped roof's flank, which as levels read as a flight of
+  1 m terraces — the Schauspielhaus; a slab edge's blur is a step, never
+  this steep over 5 m), the 1–2
   cells of a ridge or valley closed in, never a cell beside a step of
   > 2 m between neighbours (`inclined_cells`, `step_cells`) — and the
   rest banded and merged as above; faces never merge by height, and a

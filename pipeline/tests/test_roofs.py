@@ -7,7 +7,7 @@ import rasterio
 from rasterio.transform import from_origin
 
 from bake.common import Tile
-from bake.roofs import _majority, _narrow, form_holds, merge_regions, run
+from bake.roofs import _majority, _narrow, form_holds, inclined_cells, merge_regions, run
 
 X0, Y0, SIZE = 400_000.0, 5_600_000.0, 200
 BASE = 110.0
@@ -183,6 +183,20 @@ def test_a_part_6_m_wide_is_narrow_one_7_m_wide_is_not():
     lab = np.zeros((20, 40), np.int64)
     lab[:, :6], lab[:, 6:13], lab[:, 13:] = 1, 2, 3
     assert _narrow(lab, 3).tolist() == [True, False, False]
+
+
+def test_a_steep_flank_6_m_wide_is_a_face_a_gentle_or_narrow_one_not():
+    # a flat roof, then a flank rising across x over a band of the given
+    # width at the given pitch, then flat again at the flank's top
+    def flank(width: int, pitch: float) -> np.ndarray:
+        h = np.zeros((30, 30))
+        x = np.arange(30) - 10
+        h[:] = np.clip(x, 0, width) * pitch
+        return inclined_cells(h, np.ones(h.shape, bool))[:, 10 : 10 + width].any()
+
+    assert flank(6, 0.7)  # a mansard's flank, 35°
+    assert not flank(6, 0.3)  # gentle: a face only from 10 m
+    assert not flank(3, 0.7)  # a step's flank
 
 
 def test_a_steep_flank_a_cell_wide_joins_a_level_however_far():

@@ -26,11 +26,12 @@ is wrong. So, per LoD2 object with a roof:
 3. the scan over its cells, 3 × 3-median filtered, crowns and the edge row
    filled from the nearest roof cell, is split into its **faces** — where
    it rises by more than `SLOPE` over a patch at least `FACE_M` (10 m)
-   across, a ridge or valley between two slopes included
-   (`inclined_cells`): a hall's vault, a large pitched roof, a dome — and
+   across, or by more than `STEEP` over one `STEEP_FACE_M` (5 m) across,
+   a ridge or valley between two slopes included (`inclined_cells`): a
+   hall's vault, a pitched roof, a mansard's flank, a dome — and
    the rest, cut into `STEP_M`
    height bands, each band's connected pieces a region (a step's flank, a
-   few metres wide however steep, is no face: it stays the step between two
+   cell or two wide however steep, is no face: it stays the step between two
    levels). Regions under `MIN_PART_M2`, and those holding no disk
    `NARROW_M` across within `NARROW_DZ` of a neighbour (a flank, a parapet
    run, a plant room: drawn alone, each a box), join the neighbour closest
@@ -98,10 +99,16 @@ GROUND_M = 2.0  # a part lower than this over the base is open ground
 OPEN_SHARE = 0.15
 MARGIN_M = 250.0  # an object reaching further past its tile is left as it is
 SLOPE = 0.15  # m per m (≈ 8.5°): a roof cell rising faster than this is inclined
-# A face must hold a disk this wide. Narrower, it is a step's flank, a
-# dormer, or a slope the scan's metre of blur at each edge would round into
+# A face must hold a disk this wide. Narrower, a gentle slope is a step's
+# flank, a dormer, or a slope the scan's metre of blur at each edge would round into
 # a blanket (the Westin Bellevue's slab), where its few levels read better.
 FACE_M = 10.0
+# A steeper slope is a face from a narrower patch: a mansard's or a hipped
+# roof's flank, 30–50° and a few metres wide, read as a flight of 1 m
+# terraces (the Schauspielhaus). Blur at a slab's edge is a step
+# (`step_cells`), never this steep over a patch this wide.
+STEEP = 0.5  # m per m (≈ 27°)
+STEEP_FACE_M = 5.0
 STEP_EDGE_M = 2.0  # two neighbouring cells further apart than this: a step, not a face
 SURFACE_SMOOTH = 1.0  # σ (cells) of a face's edge-preserving blur
 SURFACE_STEP_M = 1.0  # σ of the height difference it still mixes
@@ -409,21 +416,27 @@ def step_cells(h: np.ndarray) -> np.ndarray:
     return out
 
 
+def _disk(width_m: float) -> np.ndarray:
+    r = width_m / RES / 2
+    k = int(np.floor(r))
+    return np.hypot(*np.mgrid[-k : k + 1, -k : k + 1]) <= r
+
+
 def inclined_cells(h: np.ndarray, own: np.ndarray) -> np.ndarray:
     """The cells on a roof face: steeper than SLOPE over a patch FACE_M
-    across, and the ridge or valley between two such slopes, but never a
-    step's edge (`step_cells`): a face ends at a step, which stays a wall. A
-    step's flank is as steep but only a cell or two wide, a dormer or a
-    chimney small: neither holds the patch."""
+    across or than STEEP over one STEEP_FACE_M across, and the ridge or
+    valley between two such slopes, but never a step's edge (`step_cells`):
+    a face ends at a step, which stays a wall. A step's flank is as steep
+    but only a cell or two wide, a dormer or a chimney small: neither holds
+    the patch."""
     gx = ndi.sobel(h, axis=1) / (8 * RES)
     gy = ndi.sobel(h, axis=0) / (8 * RES)
     step = step_cells(h)
-    steep = own & ~step & (np.hypot(gx, gy) > SLOPE)
-    # a disk FACE_M across: a face must hold one, whichever way it points
-    r = FACE_M / RES / 2
-    k = int(np.floor(r))
-    disk = np.hypot(*np.mgrid[-k : k + 1, -k : k + 1]) <= r
-    faces = ndi.binary_opening(steep, structure=disk)
+    rise = np.hypot(gx, gy)
+    # a disk FACE_M across: a face must hold one, whichever way it points;
+    # a steep one, a disk STEEP_FACE_M across
+    faces = ndi.binary_opening(own & ~step & (rise > SLOPE), structure=_disk(FACE_M))
+    faces |= ndi.binary_opening(own & ~step & (rise > STEEP), structure=_disk(STEEP_FACE_M))
     # where a slope turns (a ridge, a valley, a dome's crown) it is flat for
     # a cell or two
     faces = ndi.binary_closing(faces, structure=np.ones((3, 3), bool))
