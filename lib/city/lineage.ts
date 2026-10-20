@@ -580,6 +580,10 @@ function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
       } else {
         l.source("osm", [read], "taken", { osm: "trees" });
       }
+      if (m.kind === "lamp" && m.heightFrom) {
+        // lamp_heights.py: the street's (or its kind's) median post height
+        l.source("dom", ["Höhe der Masten an der Straße"], "computed");
+      }
       l.source("dgm", ["der Boden"], "taken");
       l.viewer([drawn]);
     }
