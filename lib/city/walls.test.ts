@@ -37,6 +37,28 @@ test("a wall on a step stands from the low shelf to the high one", () => {
   expect(Math.min(...ys)).toBeCloseTo(99.6, 5); // the low shelf, 0.4 m dip
 });
 
+test("a freestanding wall on level ground rises its height above it, on its line", () => {
+  // A 1.5 m garden wall along y = 0: the high-shelf rule ended it at the
+  // ground; it stands from the ground up, 0.4 m thick around its OSM line.
+  const wall: WallRibbon = { ...line(1.5), kind: "wall" };
+  const pos = wallGeometry([wall], flat, offset)?.positions ?? [];
+  const ys = pos.filter((_, i) => i % 3 === 1);
+  expect(Math.max(...ys)).toBeCloseTo(101.5, 5);
+  expect(Math.min(...ys)).toBeLessThan(100);
+  const zs = pos.filter((_, i) => i % 3 === 2);
+  expect(Math.min(...zs)).toBeCloseTo(-0.2, 5); // both faces, either side
+  expect(Math.max(...zs)).toBeCloseTo(0.2, 5);
+});
+
+test("a freestanding wall on a step taller than itself ends at the high shelf", () => {
+  const step = (_x: number, y: number) => (y > 0 ? 108 : 100);
+  const wall: WallRibbon = { ...line(1.5), kind: "wall" };
+  const ys = (wallGeometry([wall], step, offset)?.positions ?? []).filter(
+    (_, i) => i % 3 === 1
+  );
+  expect(Math.max(...ys)).toBe(108);
+});
+
 test("a snapped wall's cap runs back to where the ground reaches its level", () => {
   // A retaining wall along y = 0, the high shelf north: a ramp from 100 m
   // to 108 m between y = −0.5 and y = 1.5 (the DGM's blur), except around
@@ -72,4 +94,37 @@ test("a snapped wall's cap runs back to where the ground reaches its level", () 
   expect(capBack(5)).toBeGreaterThanOrEqual(3.5);
   expect(capBack(-15)).toBeGreaterThanOrEqual(1.5);
   expect(capBack(-15)).toBeLessThan(3);
+});
+
+test("a snapped wall's cap faces up whichever side its high shelf is on", () => {
+  // The same retaining wall twice, its high shelf north and then south of
+  // the line: the walls draw both sides, so a cap wound downwards is shaded
+  // from below.
+  for (const north of [true, false]) {
+    const ramp = (_x: number, y: number) => {
+      const t = Math.min(Math.max((y + 0.5) / 2, 0), 1);
+      return 100 + 8 * (north ? t : 1 - t);
+    };
+    const wall: WallRibbon = {
+      coords: [
+        [0, 0],
+        [20, 0],
+      ],
+      h: 8,
+      kind: "retaining_wall",
+    };
+    const g = wallGeometry([wall], ramp, offset, { snapToStep: true });
+    const pos = g?.positions ?? [];
+    const nrm = g?.normals ?? [];
+    let caps = 0;
+    for (let t = 0; t < pos.length; t += 9) {
+      if (nrm[t + 1] < 0.99) {
+        continue; // a face, not the cap
+      }
+      caps++;
+      const [ax, , az, bx, , bz, cx, , cz] = pos.slice(t, t + 9);
+      expect((bz - az) * (cx - ax) - (bx - ax) * (cz - az)).toBeGreaterThan(0);
+    }
+    expect(caps).toBeGreaterThan(0);
+  }
 });

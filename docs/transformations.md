@@ -2778,6 +2778,26 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   the ground reaches its level —
   "Terrain TIN" above), any other wall stands on the OSM line nudged
   slightly onto the low side; `wall-layer.ts` only gives it its material.
+  **A freestanding wall rises its height above the ground** (2026-10-20,
+  kinds `wall` and `city_wall`, `FREESTANDING_M` in `lib/city/walls.ts`):
+  its top at least its tagged (or default) height above the low side, so on
+  level ground it stands from the ground up instead of ending at it, with a
+  body — a cap over its thickness (0.4 m, a city wall 1 m) and a back face
+  to the ground — straddling its OSM line there and moving the usual 1.5 m
+  onto the low side as the step across it grows to 1 m. *(The high-shelf
+  rule alone buried every freestanding wall on level ground, its top at
+  the ground: in Dresden 32 km of the 61 km of `barrier=wall`, of which
+  DOM1 shows four in five standing a metre and more; in Leipzig and Munich
+  half of them too, in Hamburg a quarter. A retaining wall still ends at
+  its high shelf.)*
+  **The coping cap faces up whichever side its high shelf is on**
+  (2026-10-20, `pushCap`): the walls draw both sides, and three shades a
+  triangle seen from behind with its normal turned over, so a cap wound
+  downwards came out black from above. *(OSM draws a retaining wall with
+  its high side to the left; where a way runs the other way, or the
+  measured step lies the other way, the cap was wound against its normal:
+  628 cap triangles on Meißen's tile, 5.8 % of its wall area, as the black
+  band along the Burgberg's west wall; 99 on Dresden's spawn tile.)*
   Until then the browser built the ribbons from the GeoJSON over whichever
   terrains were loaded. **Why OSM:** no elevation product has the wall as a
   *vertical face* (a 2.5D surface cannot), and it's not a CityJSON building,

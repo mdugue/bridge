@@ -64,6 +64,25 @@ const OFFSET_M = 1.5; // stand the wall this far onto the low side (m)
 const MIN_H = 1.2; // skip kerb-height garden walls (m)
 const MAX_H = 14; // clamp tall tags (m)
 
+/**
+ * Kinds that stand on the ground, not only in front of a step, and how thick
+ * they are (m; OSM rarely tags it — a garden or park wall is a brick or two
+ * thick, a city wall a metre). Their tagged height is measured from their
+ * foot, so they rise that far above the low side whatever the step: on
+ * level ground the high-shelf rule buried them, top at the ground (in
+ * Dresden 32 km of walls, four in five of which DOM1 shows standing a metre
+ * and more). An earth-retaining wall still ends at its high shelf.
+ */
+const FREESTANDING_M: Readonly<Record<string, number>> = {
+  wall: 0.4,
+  city_wall: 1,
+};
+
+/** The step across the line (m) from which a freestanding wall stands the
+ *  full OFFSET_M onto its low side, like a retaining one; on level ground it
+ *  stands on its OSM line, and between the two in proportion. */
+const STEP_FULL_M = 1;
+
 /** A densified wall vertex with its world XZ and the base/top elevations;
  *  a snapped column also carries where its coping cap ends (`bx`, `bz`). */
 interface WallCol {
@@ -84,14 +103,18 @@ interface WallCol {
 
 type HeightAt = (x: number, y: number) => number | null;
 
-/** Base/top elevation for one wall vertex: top = the high side, base dropped
- *  to the low side or the tagged height, whichever is lower (clamped). */
+/** Base/top elevation for one wall vertex: top = the high side (for a
+ *  freestanding kind at least its tagged height above the low side), base
+ *  dropped to the low side or the tagged height, whichever is lower
+ *  (clamped). A freestanding wall has a body: a cap back over its thickness,
+ *  toward the high side, where `grounded` drops its back face. */
 function columnAt(
   e: Point2,
   p: Point2,
   h: number,
   heightAt: HeightAt,
-  offset: RecenterOffset
+  offset: RecenterOffset,
+  kind: string | undefined
 ): WallCol | null {
   const [ex, ey] = e;
   const [px, py] = p;
@@ -101,18 +124,30 @@ function columnAt(
   }
   const gP = heightAt(ex + px * PERP_M, ey + py * PERP_M) ?? g;
   const gN = heightAt(ex - px * PERP_M, ey - py * PERP_M) ?? g;
-  const top = Math.max(g, gP, gN); // the high shelf (a real conflated step)
+  const high = Math.max(g, gP, gN); // the high shelf (a real conflated step)
   const lowShelf = Math.min(gP, gN); // the low shelf on the far/river side
-  // Stand the wall just onto the low side so its face skins the terrain step.
-  const towardP = gP <= gN;
-  const sx = ex + (towardP ? px : -px) * OFFSET_M;
-  const sy = ey + (towardP ? py : -py) * OFFSET_M;
+  const thick = kind === undefined ? undefined : FREESTANDING_M[kind];
+  const top = thick === undefined ? high : Math.max(high, lowShelf + h);
+  // Stand the wall just onto the low side so its face skins the terrain
+  // step; a freestanding one on level ground straddles its line.
+  const s = gP <= gN ? 1 : -1;
+  const at =
+    thick === undefined
+      ? OFFSET_M
+      : thick / 2 +
+        (OFFSET_M - thick / 2) * Math.min(1, (high - lowShelf) / STEP_FULL_M);
+  const faceE: Point2 = [ex + s * px * at, ey + s * py * at];
   // base = the low shelf, dropped further to span the OSM height when the
   // step is shallower than the tag; clamped to MAX_H + a small dip below
   // ground.
   const base = Math.max(top - MAX_H, Math.min(lowShelf, top - h)) - SINK.wall;
-  const w = epsgToWorld(sx, sy, offset);
-  return { face: [sx, sy], wx: w.x, wz: w.z, base, top };
+  const w = epsgToWorld(faceE[0], faceE[1], offset);
+  if (thick === undefined) {
+    return { face: faceE, wx: w.x, wz: w.z, base, top };
+  }
+  const back: Point2 = [faceE[0] - s * px * thick, faceE[1] - s * py * thick];
+  const b = epsgToWorld(back[0], back[1], offset);
+  return { face: faceE, back, wx: w.x, wz: w.z, bx: b.x, bz: b.z, base, top };
 }
 
 /** How far behind the face the coping cap may reach to find the high
@@ -207,36 +242,29 @@ function snappedColumn(
 }
 
 /** The coping cap between two snapped columns: a flat strip at the top from
- *  the face back to the crest, hiding the ramp the face stands in front of. */
+ *  the face back to the crest, hiding the ramp the face stands in front of.
+ *  Wound to face up whichever side of the line the high shelf is on: the
+ *  walls draw both sides, and three shades a triangle seen from its back
+ *  with its normal turned over — a cap wound the other way came out black
+ *  from above (Meißen's Burgberg, where OSM draws the walls with the high
+ *  side to the right: 5.8 % of the tile's wall area). */
 function pushCap(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
   if (a.bx === undefined && b.bx === undefined) {
     return;
   }
-  const abx = a.bx ?? a.wx;
-  const abz = a.bz ?? a.wz;
-  const bbx = b.bx ?? b.wx;
-  const bbz = b.bz ?? b.wz;
-  pos.push(
-    a.wx,
-    a.top,
-    a.wz,
-    b.wx,
-    b.top,
-    b.wz,
-    bbx,
-    b.top,
-    bbz,
-    a.wx,
-    a.top,
-    a.wz,
-    bbx,
-    b.top,
-    bbz,
-    abx,
-    a.top,
-    abz
-  );
-  for (let i = 0; i < 6; i++) {
+  const ab: [number, number] = [a.bx ?? a.wx, a.bz ?? a.wz];
+  const bb: [number, number] = [b.bx ?? b.wx, b.bz ?? b.wz];
+  const quad: [number, number, number][] = [
+    [a.wx, a.top, a.wz],
+    [b.wx, b.top, b.wz],
+    [bb[0], b.top, bb[1]],
+    [ab[0], a.top, ab[1]],
+  ];
+  // the up component of (b.face − a.face) × (b.back − a.face)
+  const up = (b.wz - a.wz) * (bb[0] - a.wx) - (b.wx - a.wx) * (bb[1] - a.wz);
+  const order = up >= 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2];
+  for (const k of order) {
+    pos.push(...quad[k]);
     nrm.push(0, 1, 0);
   }
 }
@@ -290,7 +318,8 @@ function pushQuad(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
   const nl = Math.hypot(nx, nz) || 1;
   nx /= nl;
   nz /= nl;
-  // a.base, b.base, b.top, a.top → two tris (double-sided, winding is free)
+  // a.base, b.base, b.top, a.top → two tris, wound to agree with the normal
+  // (both sides are drawn, and a side seen from behind is shaded turned over)
   pos.push(
     a.wx,
     a.base,
@@ -368,7 +397,7 @@ function columnsOf(
     // must still break the ribbon (columnAt's rule), not get a filled column.
     return step && end !== null && heightAt(p[0], p[1]) !== null
       ? snappedColumn(p, perps[i], h, step, offset, end)
-      : columnAt(p, perps[i], h, heightAt, offset);
+      : columnAt(p, perps[i], h, heightAt, offset, wall.kind);
   });
   return cols.map((c, i) =>
     c ? grounded(c, cols[i - 1], cols[i + 1], heightAt) : c
