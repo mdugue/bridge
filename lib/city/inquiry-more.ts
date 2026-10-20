@@ -61,7 +61,8 @@ export interface HedgeInquiry {
 /** A street lamp (OSM, or Mapillary's: `src`). */
 export interface LampInquiry {
   /** the post's height (m) where DOM1 measured it, and how: its street's
-   *  median, or its kind of street's (pipeline/bake/lamp_heights.py) */
+   *  median, or its kind of street's (pipeline/bake/lamp_heights.py); a
+   *  wall lantern's assumed head height (pipeline/bake/lamps.py WALL_H) */
   height?: number;
   heightFrom?: LampHeightSource;
   /** hung on a wire across the street (pipeline/bake/lamps.py) */
@@ -249,7 +250,7 @@ function wallLampCard(
     address: "",
     facts: factLines([
       ["Aufhängung", "an der Fassade"],
-      ["Höhe", "3,5 m, angenommen", "assumed"],
+      ["Höhe", l.height ? `${metres(l.height)}, angenommen` : "", "assumed"],
     ]),
     id: positionKey(l.position),
     idLabel: "Lage",

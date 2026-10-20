@@ -195,7 +195,7 @@ test("a bench faces where OSM or the nearest way says", () => {
 
 test("a lantern on a facade says where it hangs and that its height is assumed", () => {
   const card = lampCard(
-    { kind: "lamp", tile: "t", position: at, wall: true },
+    { kind: "lamp", tile: "t", position: at, wall: true, height: 3.5 },
     null,
     DRESDEN
   );

@@ -357,7 +357,7 @@ export function pointItems(
       tile: ctx.tile,
       position: [at[0], at[1]],
       ...(f.properties?.wire ? { hung: true } : {}),
-      ...(f.properties?.wall ? { wall: true } : {}),
+      ...(f.properties?.wall ? { wall: true, height: postHeight(f) } : {}),
       ...(f.properties?.src ? { src: f.properties.src } : {}),
       ...(!f.properties?.wire && f.properties?.hs
         ? { height: postHeight(f), heightFrom: f.properties.hs }
