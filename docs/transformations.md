@@ -2671,7 +2671,18 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   the deck's two farthest-apart corners, one deck width apart and at the
   lowest deck height: on a long deck they stood metres beside it, on a
   curved one off it entirely, with water showing between wall and deck.)* The structure comes from Wikidata when it knows the bridge, else
-  from the nearest OSM `man_made=bridge` `bridge:structure` (≤60 m).
+  from the nearest OSM `man_made=bridge` `bridge:structure` (≤60 m), else
+  from the OSM ways on the deck (half their length on it): their
+  `bridge:structure`, else **an arch when one was built before 1850**
+  (`start_date`; 2026-10-20, `rail.bridge_way`) — iron came after, and a
+  bridge that old is masonry, so a measured superstructure is not looked
+  for. *(Meißen's Schloßbrücke, 1221, a stone arch over the castle's moat,
+  was a flat slab: neither Wikidata nor an OSM outline knows it, and its
+  way says only its date.)* A deck the Basis-DLM leaves unnamed takes the
+  name of its OSM ways — their `bridge:name`, else a `name` that names a
+  bridge (…brücke, …steg, …viadukt; a way on a bridge is as often named
+  for its street) — and with it a Wikidata match by name: on Meißen's tile
+  6 of its 11 unnamed decks.
 - **Station platforms** `❝ taken` — OSM `railway=platform` (ODbL) → triangulated flat slabs
   (`ShapeUtils.triangulateShape`), per-vertex terrain-clamped. The OSM half of the
   blend (Basis-DLM has no platform geometry); absent/empty when the site has

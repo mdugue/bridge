@@ -11,16 +11,20 @@
   the tile and its neighbours (a deck across a seam comes out the same in
   both tiles' files); `kind` from the rail/road/path networks under the
   centreline; `structure` from the nearest OSM `man_made=bridge` within
-  60 m, or Wikidata; the DOM1 superstructure, the fairway clearance and the
-  main span (bridge.py);
+  60 m, else the OSM bridge ways on the deck (their `bridge:structure`, or
+  an arch for one built before 1850), or Wikidata; a deck the DLM leaves
+  unnamed takes the name of its OSM bridge ways; the DOM1 superstructure,
+  the fairway clearance and the main span (bridge.py);
 - platforms: OSM `railway=platform`.
 """
 
 from __future__ import annotations
 
 import math
+import re
 from collections import defaultdict
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import rasterio
@@ -514,6 +518,73 @@ def osm_structures(tile: Tile) -> list[tuple[float, float, str, str | None]]:
     return out
 
 
+# A bridge's own name says it is one: the ways on a bridge are as often named
+# for their street (the Budapester Straße over the Hauptbahnhof's tracks).
+BRIDGE_NAME = re.compile(r"(brücke|bruecke|steg|viadukt|bridge)$", re.IGNORECASE)
+# Built before this year and of no known structure, a bridge is masonry: an
+# arch (Meißen's Schloßbrücke, 1221; iron came after it, prestressed
+# concrete a century later).
+MASONRY_BEFORE = 1850
+
+
+class BridgeWay(NamedTuple):
+    line: shapely.Geometry
+    name: str | None  # the bridge's own name
+    structure: str  # `bridge:structure`, or "arch" by its year
+    dated: bool  # the structure is the year's guess, not a tag
+    wikidata: str | None
+
+
+class BridgeWays:
+    """OSM's ways on a bridge, looked up by the deck they run on."""
+
+    def __init__(self, ways: list[BridgeWay]) -> None:
+        self.ways = ways
+        self.tree = shapely.STRtree([w.line for w in ways]) if ways else None
+
+    def on(self, outline: shapely.Polygon) -> list[BridgeWay]:
+        """The ways that run on a deck: half their length within 1 m of it."""
+        if self.tree is None:
+            return []
+        grown = shapely.buffer(outline, 1.0)
+        found = (self.ways[i] for i in self.tree.query(grown))
+        return [
+            w
+            for w in found
+            if w.line.length > 0
+            and w.line.intersection(grown).length >= LINE_ON_FOOTPRINT * w.line.length
+        ]
+
+
+def bridge_way(line: shapely.Geometry, name: str | None, other: str | None) -> BridgeWay | None:
+    """What an OSM way on a bridge says of it: its own name (`bridge:name`,
+    else a `name` that names a bridge), its structure (`bridge:structure`,
+    else an arch for a `start_date` before MASONRY_BEFORE) or its Wikidata
+    item. Nothing: None."""
+    if line is None or line.is_empty or tag(other, "bridge") in (None, "no"):
+        return None
+    own = tag(other, "bridge:name") or (name if name and BRIDGE_NAME.search(name.strip()) else None)
+    structure, dated = tag(other, "bridge:structure") or "", False
+    year = re.search(r"\d{4}", tag(other, "start_date") or "")
+    if not structure and year and int(year.group(0)) < MASONRY_BEFORE:
+        structure, dated = "arch", True
+    qid = tag(other, "wikidata")
+    return BridgeWay(line, own, structure, dated, qid) if own or structure or qid else None
+
+
+def osm_bridge_ways(tile: Tile) -> BridgeWays:
+    """The tile's OSM ways on a bridge that say something of it
+    (`bridge_way`). No extract: none."""
+    if tile.osm_extract() is None:
+        return BridgeWays([])
+    geoms, fields = read_osm(
+        tile, "lines", "other_tags LIKE '%\"bridge\"=>%'", ["name", "other_tags"]
+    )
+    names, others = column(fields, "name", geoms), column(fields, "other_tags", geoms)
+    found = (bridge_way(*way) for way in zip(geoms, names, others, strict=True))
+    return BridgeWays([w for w in found if w is not None])
+
+
 def near(structures, cx: float, cy: float, reach: float = 60.0):
     """The OSM outlines around a deck centroid, nearest first."""
     hits = [(math.hypot(ox - cx, oy - cy), st, qid) for ox, oy, st, qid in structures]
@@ -521,10 +592,11 @@ def near(structures, cx: float, cy: float, reach: float = 60.0):
 
 
 def bridge_properties(
-    ground, ring, name, kind, structures, marks, known, centre=None
+    ground, ring, name, kind, structures, marks, known, centre=None, ways=None
 ) -> dict | None:
     """Everything the viewer draws a deck from (see bridge.py). `centre` is
-    the DLM bridge line the deck was built from, if any."""
+    the DLM bridge line the deck was built from, if any; `ways` OSM's
+    bridge ways (`osm_bridge_ways`)."""
     axis = deck_axis(ring, centre)
     line = deck_line(ground, ring, axis, kind)
     if line is None:
@@ -532,7 +604,13 @@ def bridge_properties(
     cx = sum(x for x, _ in ring) / len(ring)
     cy = sum(y for _, y in ring) / len(ring)
     around = near(structures, cx, cy)
-    structure = next((st for _, st, _ in around if st), "")
+    outline = shapely.Polygon(ring)
+    on = ways.on(outline) if ways is not None else []
+    tagged = next((st for _, st, _ in around if st), "") or next(
+        (w.structure for w in on if w.structure and not w.dated), ""
+    )
+    structure = tagged or next((w.structure for w in on if w.dated), "")
+    name = name or next((w.name for w in on if w.name), None)
     props: dict = {
         "name": name,
         "kind": kind,
@@ -544,8 +622,7 @@ def bridge_properties(
     stations = [i * STEP for i in range(int(length // STEP) + 1)]
     props["line"] = [round(line(s / length), 2) if length > 0 else 0.0 for s in stations]
     props.update(fairway(ground, ring, line, marks, axis))
-    outline = shapely.Polygon(ring)
-    qids = [qid for _, _, qid in around if qid]
+    qids = [qid for _, _, qid in around if qid] + [w.wikidata for w in on if w.wikidata]
     qids += [m[3] for m in marks if m[3] and outline.distance(shapely.Point(m[0], m[1])) < 30]
     wd = wikidata_for(ring, name, qids, known)
     if wd:
@@ -554,8 +631,10 @@ def bridge_properties(
         if wd.get("mainSpan"):
             props["span"] = wd["mainSpan"]
     # Only a bridge of a kind that stands above its deck keeps what DOM1 saw
-    # there: over a beam bridge it is catenary, trains or trees.
-    if any(kind in props["structure"] for kind in STANDING):
+    # there: over a beam bridge it is catenary, trains or trees. An arch of
+    # the year's guess is masonry, its vaults under the deck.
+    guessed = not tagged and props["structure"] == structure
+    if not guessed and any(kind in props["structure"] for kind in STANDING):
         ribs = superstructure(ground, ring, line, axis)
         if ribs:
             props["ribs"] = ribs
@@ -579,7 +658,7 @@ def footprint_of(line, polys) -> int:
     return best
 
 
-def bridges(tile: Tile, structures, marks, known) -> list[dict]:
+def bridges(tile: Tile, structures, marks, known, ways=None) -> list[dict]:
     """The decks of the Basis-DLM's bridges (`ver06`, BWF 1800)."""
     line_geoms, line_fields = read_layer(
         tile.dlm / "ver06_l.shp", tile.bounds, where="BWF='1800'", columns=["BWF", "NAM"]
@@ -589,11 +668,11 @@ def bridges(tile: Tile, structures, marks, known) -> list[dict]:
         (g, name or None, None)
         for g, name in zip(line_geoms, column(line_fields, "NAM", line_geoms), strict=True)
     ]
-    return decks(Ground(tile), lines, list(poly_geoms), structures, marks, known)
+    return decks(Ground(tile), lines, list(poly_geoms), structures, marks, known, ways=ways)
 
 
 def decks(
-    ground: Ground, lines: list, poly_geoms: list, structures, marks, known, merge=False
+    ground: Ground, lines: list, poly_geoms: list, structures, marks, known, merge=False, ways=None
 ) -> list[dict]:
     """Decks from bridge centrelines `(geometry, name, kind or None)` and
     footprints: a line runs on the footprint it lies on, else is buffered by
@@ -614,7 +693,7 @@ def decks(
     features = []
 
     def emit(ring, name, kind, centre=None):
-        props = bridge_properties(ground, ring, name, kind, structures, marks, known, centre)
+        props = bridge_properties(ground, ring, name, kind, structures, marks, known, centre, ways)
         if props is None:
             return
         features.append(
@@ -768,7 +847,9 @@ def run(tile: Tile) -> None:
     marks = fairway_marks(tile) if has_osm else []
     write_geojson(
         tile.out("dlm", f"bridge_{tile.id}.geojson"),
-        bridges(tile, structures, marks, load_wikidata(tile)),
+        bridges(
+            tile, structures, marks, load_wikidata(tile), osm_bridge_ways(tile) if has_osm else None
+        ),
         tile.epsg,
         OSM_ATTRIBUTION,
     )
@@ -799,6 +880,7 @@ def run_osm(tile: Tile) -> None:
         fairway_marks(tile),
         load_wikidata(tile),
         merge=True,
+        ways=osm_bridge_ways(tile),
     )
     write_geojson(tile.out("dlm", f"bridge_{tile.id}.geojson"), found, tile.epsg, OSM_ATTRIBUTION)
     write_platforms(tile, True)
