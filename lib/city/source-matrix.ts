@@ -222,9 +222,21 @@ const ROWS: Row[] = [
   },
   {
     label: {
-      en: "Sheds, extra trees, hedge heights",
-      de: "Schuppen, weitere Bäume, Heckenhöhen",
+      en: "Trees in gardens and courtyards",
+      de: "Bäume in Gärten und Höfen",
     },
+    cell: (s) => {
+      const { lsc, dom, dop } = s.provider.products;
+      const gap = SCAN_GAPS[s.provider.id] ?? "scanNotRead";
+      if (lsc) {
+        return best({ en: "laser scan", de: "Laserscan" });
+      }
+      // canopy.py's green_mask: the DOP's green on DOM1's rough crowns
+      return dom && dop ? substitute("DOP + DOM1", gap) : none(gap);
+    },
+  },
+  {
+    label: { en: "Sheds, hedge heights", de: "Schuppen, Heckenhöhen" },
     cell: (s) =>
       s.provider.products.lsc
         ? best({ en: "laser scan", de: "Laserscan" })

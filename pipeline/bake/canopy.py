@@ -7,7 +7,12 @@ a bridge lands on a park bank, its steel — the Blaues Wunder's pylons — is
 as tall in the nDOM as a crown, and would have become one. Nor on a
 building's roof (`roof_mask`): the DLM files a stadium, a fair's halls or a
 park's glasshouses as sports or park ground, and over them the nDOM is the
-roof's height."""
+roof's height.
+
+Without a laser scan (Hamburg, Berlin) no step finds the trees outside that
+mask — a courtyard's, a garden's, a street tree the cadastre lacks — so
+there the canopy also takes the texels the orthophoto shows green and the
+surface model rough, where no building stands (`green_mask`)."""
 
 from __future__ import annotations
 
@@ -18,9 +23,11 @@ import rasterio
 import shapely
 import shapely.geometry
 from rasterio.features import rasterize
+from scipy.ndimage import uniform_filter
 
-from . import landcover_osm
+from . import landcover_osm, ndvi
 from .common import Tile, feature, read_layer, write_geojson
+from .lowveg import lod2_rings
 from .osm import read_osm
 
 MIN_H, MAX_H = 3.0, 45.0
@@ -38,6 +45,14 @@ ROOF_REACH_M = 2.0
 # upper quartile, so a stadium's pitch or a hall's skylight wells inside
 # one outline do not pull it down to the ground.
 ROOF_QUANTILE = 0.75
+# Outside the vegetation mask, without a laser scan: a crown is green in the
+# orthophoto (NDVI, 0..255) and rough in the surface model — the spread of a
+# 3 × 3 window above ROUGH_M on more than half of the 5 × 5 around it — and
+# stands clear of every LoD2 outline grown by FOOTPRINT_REACH_M. A roof, a
+# lorry, a ship or a crane is grey or smooth.
+GREEN = 77  # NDVI 0.3
+ROUGH_M = 0.5
+FOOTPRINT_REACH_M = 1.0
 
 
 def vegetation_mask(tile: Tile, px: int) -> np.ndarray:
@@ -113,6 +128,31 @@ def roof_mask(tile: Tile, ndom: np.ndarray) -> np.ndarray:
     return inside & (ndom <= roof[labels] + ROOF_REACH_M)
 
 
+def green_mask(tile: Tile, dom: np.ndarray, ndom: np.ndarray) -> np.ndarray:
+    """The crowns outside the vegetation mask where no laser scan finds them
+    (`products.lsc` false): green in the DOP, rough in DOM1, off every LoD2
+    outline. A provider with a scan, or no DOP: nothing."""
+    h, w = ndom.shape
+    if tile.products.lsc or not tile.raw_raster("dop").exists():
+        return np.zeros((h, w), dtype=bool)
+    with rasterio.open(tile.raw_raster("dop")) as dop:
+        bands = dop.count
+    if bands < 3:
+        return np.zeros((h, w), dtype=bool)
+    green = (ndvi.ndvi_raster(tile, w) if bands >= 4 else ndvi.rgb_raster(tile, w)) >= GREEN
+    mean = uniform_filter(dom, 3)
+    spread = np.sqrt(np.maximum(uniform_filter(dom * dom, 3) - mean * mean, 0.0))
+    rough = uniform_filter((spread > ROUGH_M).astype(np.float32), 5) > 0.5
+    outlines = [
+        shapely.Polygon(ring[:, :2]).buffer(FOOTPRINT_REACH_M) for ring in lod2_rings(tile.cityjson)
+    ]
+    built = np.zeros((h, w), dtype=np.uint8)
+    outlines = [g for g in outlines if g.is_valid and not g.is_empty]
+    if outlines:
+        rasterize(((g, 1) for g in outlines), out=built, transform=tile.transform(w))
+    return green & rough & (built == 0)
+
+
 def class_raster_at(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
     """The baked class raster, nearest-sampled onto `shape`."""
     cls = tile.classes()
@@ -131,10 +171,12 @@ def blocked_mask(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
 
 
 def canopy_points(tile: Tile, cell: int) -> list[dict]:
-    with rasterio.open(tile.raw_raster("dom1")) as dom, rasterio.open(tile.dgm) as dgm:
-        ndom = dom.read(1).astype(np.float64) - dgm.read(1).astype(np.float64)
+    with rasterio.open(tile.raw_raster("dom1")) as src, rasterio.open(tile.dgm) as dgm:
+        dom = src.read(1).astype(np.float64)
+        ndom = dom - dgm.read(1).astype(np.float64)
     h, w = ndom.shape
-    ok = (vegetation_mask(tile, w) == 1) & ~blocked_mask(tile, ndom.shape)
+    ok = (vegetation_mask(tile, w) == 1) | green_mask(tile, dom, ndom)
+    ok &= ~blocked_mask(tile, ndom.shape)
     ok &= bridge_mask(tile, w) == 0
     ok &= ~roof_mask(tile, ndom)
     ok &= (ndom > MIN_H) & (ndom < MAX_H)

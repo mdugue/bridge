@@ -1199,6 +1199,19 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   roofs became rows of trees: Dresden's stadium, the Leipzig and Dresden
   fair halls, Planten un Blomen's glasshouses in Hamburg, a tennis club's
   halls in Unna. 0.7–1.6 % of the canopy points, per city.)*
+  **Without a laser scan** (Hamburg, Berlin; 2026-10-20, `green_mask`) the
+  canopy also takes the texels outside the vegetation mask that the DOP
+  shows green (NDVI ≥ 0.3, the GLI where the DOP has no infrared) and DOM1
+  rough (a 3 × 3 spread above 0.5 m on most of the 5 × 5 around), off every
+  LoD2 outline grown by 1 m — the same gates as the rest of the canopy
+  after it. A Land with a scan leaves those trees to `lowveg` (`canopyx`,
+  below), whose crowns the scan measures. *(Hamburg had no tree in its
+  courtyards and gardens: no scan step finds them there, and OSM maps a
+  park, not a back garden. Its crown cover against DOM1's rough tall
+  vegetation off the buildings went from 0.68 to 0.99 — 0.61 to 0.96 in the
+  built-up class — at the same precision (0.67 → 0.66), 19 600 → 46 900
+  canopy trees; the summer DOP's crowns are green, and its harbour's cranes,
+  piles and scrap are grey.)*
   `pipeline/bake/canopy.py`. At build time
   (`scripts/prepare-data.ts`, `treesOffStructures` in
   `lib/city/small-buildings.ts`) a canopy or laser-scan point in or within
