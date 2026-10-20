@@ -1189,7 +1189,16 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   class raster, and off everything within 10 m of a DLM bridge (a bridge's
   steel on a park bank is as tall as a crown: the Blaues Wunder's pylons came
   out as two trees; without a DLM the decks the rail step baked from OSM,
-  `bridge_<tile>.geojson` — so `rail` runs before `canopy`).
+  `bridge_<tile>.geojson` — so `rail` runs before `canopy`). **And off a
+  building's roof** (2026-10-20, `roof_mask`): inside an OSM building
+  outline (shrunk by 1 m, its courtyards out) a texel no more than 2 m
+  above the outline's roof — the upper quartile of its nDOM, so a stadium's
+  pitch or a hall's skylight wells do not pull it down — is that roof, not
+  a crown. *(The DLM files a stadium's stands, a fair's halls and a park's
+  glasshouses as sports or park ground; LoD2 lacks some of them, and their
+  roofs became rows of trees: Dresden's stadium, the Leipzig and Dresden
+  fair halls, Planten un Blomen's glasshouses in Hamburg, a tennis club's
+  halls in Unna. 0.7–1.6 % of the canopy points, per city.)*
   `pipeline/bake/canopy.py`. At build time
   (`scripts/prepare-data.ts`, `treesOffStructures` in
   `lib/city/small-buildings.ts`) a canopy or laser-scan point in or within

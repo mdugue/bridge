@@ -4,7 +4,10 @@ tallest canopy texel between 3 and 45 m, only inside forest, copse or park
 raster — the gate that stopped trees growing through bridge decks), and
 never on or beside a bridge (the DLM's decks, grown by BRIDGE_REACH): where
 a bridge lands on a park bank, its steel — the Blaues Wunder's pylons — is
-as tall in the nDOM as a crown, and would have become one."""
+as tall in the nDOM as a crown, and would have become one. Nor on a
+building's roof (`roof_mask`): the DLM files a stadium, a fair's halls or a
+park's glasshouses as sports or park ground, and over them the nDOM is the
+roof's height."""
 
 from __future__ import annotations
 
@@ -18,6 +21,7 @@ from rasterio.features import rasterize
 
 from . import landcover_osm
 from .common import Tile, feature, read_layer, write_geojson
+from .osm import read_osm
 
 MIN_H, MAX_H = 3.0, 45.0
 BLOCKED = (5, 6, 7, 8)  # railway, path, road, water
@@ -25,6 +29,15 @@ WOODED = (2, 3)  # forest, copse
 PARK = "OBJART_TXT='AX_SportFreizeitUndErholungsflaeche'"
 BRIDGE = "BWF='1800'"
 BRIDGE_REACH = 10.0  # no tree this close to a bridge's centreline or deck (m)
+# A canopy texel this far inside a building's outline, and at most
+# ROOF_REACH_M above its roof, is that roof (m): a crown beside a wall may
+# peak over its eave, and a tree standing over a low shed rises above it.
+ROOF_INSET_M = 1.0
+ROOF_REACH_M = 2.0
+# The roof's height: this share of the outline's nDOM lies below it — the
+# upper quartile, so a stadium's pitch or a hall's skylight wells inside
+# one outline do not pull it down to the ground.
+ROOF_QUANTILE = 0.75
 
 
 def vegetation_mask(tile: Tile, px: int) -> np.ndarray:
@@ -66,6 +79,40 @@ def bridge_mask(tile: Tile, px: int) -> np.ndarray:
     return mask
 
 
+def roof_mask(tile: Tile, ndom: np.ndarray) -> np.ndarray:
+    """The texels of `ndom` (DOM1 − DGM1 over the tile, north row first)
+    that are a building's roof: inside an OSM building outline, shrunk by
+    ROOF_INSET_M, and no more than ROOF_REACH_M above the outline's roof
+    height (its ROOF_QUANTILE of the nDOM). A courtyard (the outline's
+    hole) is outside. No extract: nothing is a roof."""
+    h, w = ndom.shape
+    if tile.osm_extract() is None:
+        return np.zeros((h, w), dtype=bool)
+    geoms, fields = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"])
+    inner = [
+        g.buffer(-ROOF_INSET_M)
+        for g, b in zip(geoms, fields.get("building", [None] * len(geoms)), strict=True)
+        if g is not None and b != "no"
+    ]
+    inner = [g for g in inner if not g.is_empty]
+    if not inner:
+        return np.zeros((h, w), dtype=bool)
+    labels = np.zeros((h, w), dtype=np.int32)
+    rasterize(((g, i + 1) for i, g in enumerate(inner)), out=labels, transform=tile.transform(w))
+    inside = labels > 0
+    lab, val = labels[inside], ndom[inside]
+    order = np.lexsort((val, lab))
+    lab, val = lab[order], val[order]
+    first = np.searchsorted(lab, np.arange(len(inner) + 1), side="left")
+    last = np.searchsorted(lab, np.arange(len(inner) + 1), side="right")
+    roof = np.full(len(inner) + 1, -np.inf)
+    count = last - first
+    has = count > 0
+    pick = first[has] + np.floor(ROOF_QUANTILE * (count[has] - 1)).astype(int)
+    roof[has] = val[pick]
+    return inside & (ndom <= roof[labels] + ROOF_REACH_M)
+
+
 def class_raster_at(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
     """The baked class raster, nearest-sampled onto `shape`."""
     cls = tile.classes()
@@ -89,6 +136,7 @@ def canopy_points(tile: Tile, cell: int) -> list[dict]:
     h, w = ndom.shape
     ok = (vegetation_mask(tile, w) == 1) & ~blocked_mask(tile, ndom.shape)
     ok &= bridge_mask(tile, w) == 0
+    ok &= ~roof_mask(tile, ndom)
     ok &= (ndom > MIN_H) & (ndom < MAX_H)
     heights = np.where(ok, ndom, -1.0)
     xmin, _, _, ymax = tile.bounds
