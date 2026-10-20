@@ -157,8 +157,8 @@ function minutesOfDay(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
 }
 
-/** True for a real instant — suncalc returns an Invalid Date at the poles
- *  and on days the sun never rises or sets. */
+/** True for a real instant — suncalc returns null (an Invalid Date before
+ *  2.1) on days the sun never rises or sets. */
 function isRealDate(date: Date | null | undefined): date is Date {
   return date instanceof Date && !Number.isNaN(date.getTime());
 }
