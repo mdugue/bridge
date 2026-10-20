@@ -355,11 +355,17 @@ def merge_regions(
         cells = np.bincount(lab.ravel(), minlength=n + 1)[1:]
         # a strip counts as small, whatever its length
         strip = _thin(lab, n) if thin else np.zeros(n, bool)
-        wide = _narrow(lab, n) & ~strip if narrow else np.zeros(n, bool)
+        # a face is never narrow: a steep one holds STEEP_FACE_M, less than
+        # NARROW_M, and stays the slope it measures
+        wide = _narrow(lab, n) & ~strip & ~faces[1:] if narrow else np.zeros(n, bool)
         size = np.where(strip | wide, 0, cells)
         pairs = _adjacency(lab)
         parent = np.arange(n + 1)
         merged = False
+        # a narrow strip merges once a round, into a region not merging
+        # itself: the NARROW_DZ cap holds against the medians it was
+        # measured with, never along a chain
+        touched: set[int] = set()
         # 1. the small ones
         for r in np.argsort(size):
             if size[r] >= small_cells:
@@ -371,8 +377,11 @@ def merge_regions(
             target = min(nb, key=lambda x: abs(med[x - 1] - med[r]))
             # a narrow strip further than NARROW_DZ from every neighbour is
             # a wing or a storey of its own, not a flank
-            if wide[r] and cells[r] >= small_cells and abs(med[target - 1] - med[r]) > NARROW_DZ:
+            capped = wide[r] and cells[r] >= small_cells
+            if capped and (abs(med[target - 1] - med[r]) > NARROW_DZ or {lr, target} & touched):
                 continue
+            if capped:
+                touched.update((lr, target))
             ra, rb = _union(parent, lr), _union(parent, target)
             if ra != rb:
                 parent[ra] = rb
@@ -641,7 +650,11 @@ def _majority(lab: np.ndarray) -> np.ndarray:
         votes = np.stack(
             [ndi.correlate((lab == i).astype(np.float64), disk) + 0.5 * (lab == i) for i in ids]
         )
-        lab = np.where(inside, ids[np.argmax(votes, axis=0)], 0).astype(lab.dtype)
+        voted = np.where(inside, ids[np.argmax(votes, axis=0)], 0).astype(lab.dtype)
+        # a part the vote would wipe out keeps its cells: every region of
+        # the model is drawn
+        lost = np.setdiff1d(ids, np.unique(voted[inside]))
+        lab = np.where(np.isin(lab, lost), lab, voted)
     return lab
 
 

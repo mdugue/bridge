@@ -211,17 +211,50 @@ def test_a_steep_flank_a_cell_wide_joins_a_level_however_far():
 
 
 def test_the_majority_straightens_a_border_and_keeps_the_outside():
-    # a diagonal border drawn cell by cell, the footprint's outside empty
-    rows, cols = np.indices((30, 30))
-    lab = np.where(cols > rows, 1, 2)
+    # a border down column 15, jagged by a cell either way every other row
+    # (the scan's teeth), the footprint's outside empty
+    lab = np.full((30, 30), 2)
+    for r in range(30):
+        lab[r, : 15 + (r % 2) * 2 - 1] = 1
     lab[:, :3] = 0
     out = _majority(lab)
     assert (out[:, :3] == 0).all()
-    assert set(np.unique(out[:, 3:])) == {1, 2}
-    # the border stays on the diagonal, within a cell
-    inside = out[:, 3:] > 0
-    assert np.abs((out == 1)[:, 3:].sum() - (lab == 1)[:, 3:].sum()) <= 30
-    assert inside.all()
+    assert (out[:, 3:] > 0).all()
+    # the teeth are gone: every row (away from the ends) breaks in the same
+    # column
+    breaks = {int(np.argmax(row[3:] == 2)) for row in out[3:-3]}
+    assert len(breaks) == 1
+
+
+def test_the_majority_wipes_out_no_part():
+    # a part a cell wide inside a broad one: the vote would take it
+    lab = np.ones((20, 20), np.int64)
+    lab[5:15, 10] = 2
+    assert 2 in _majority(lab)
+
+
+def test_a_steep_face_narrower_than_a_part_stays_a_face():
+    # a flat level at 10 m, a face 5 cells wide rising to 13 m, a level at 13 m
+    h = np.zeros((30, 20))
+    h[:, :8] = 10.0
+    h[:, 8:13] = 10.0 + 0.6 * (np.arange(8, 13) - 7)
+    h[:, 13:] = 13.0
+    lab = np.zeros(h.shape, np.int64)
+    lab[:, :8], lab[:, 8:13], lab[:, 13:] = 1, 2, 3
+    faces = np.array([False, False, True, False])
+    out, kept = merge_regions(lab, h, small_cells=5, faces=faces, thin=True, narrow=True)
+    assert out.max() == 3 and kept.sum() == 1
+
+
+def test_narrow_strips_do_not_chain_past_the_cap():
+    # strips at 10 m and 12.5 m (each 2.5 m from the next), a level at 15 m:
+    # the 10 m strip may join the 12.5 m one, never end on the 15 m level
+    h = np.zeros((30, 24))
+    h[:, :4], h[:, 4:8], h[:, 8:] = 10.0, 12.5, 15.0
+    lab = np.zeros(h.shape, np.int64)
+    lab[:, :4], lab[:, 4:8], lab[:, 8:] = 1, 2, 3
+    out, _ = merge_regions(lab, h, small_cells=5, thin=True, narrow=True)
+    assert out[0, 0] != out[0, 20]
 
 
 def _gable_dom():
