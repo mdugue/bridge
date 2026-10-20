@@ -245,7 +245,10 @@ def dlm_tunnels(tile: Tile) -> shapely.Geometry | None:
     line itself says it is underground: subways and S-Bahn trunk lines are
     in the rail layer (Munich's Marienplatz, Leipzig's City-Tunnel), road
     tunnels in the road axes (Dresden's Bramschstraße, Meißen's
-    Schottenbergtunnel)."""
+    Schottenbergtunnel). An "Unterführung" is covered as well — by fill, a
+    building or a track field (Munich's Paul-Heyse-Unterführung): none of
+    the Basis-DLM's tunnels in the six sites that have one lies under a drawn
+    bridge deck (2026-10-20)."""
     areas = []
     for layer in ("ver06_l", "ver06_f"):
         path = tile.dlm / f"{layer}.shp"

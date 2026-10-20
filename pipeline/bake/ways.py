@@ -14,7 +14,8 @@ left out; Dresden 1.6 % and 3.9 %.
   (`landcover_osm.road_buffers`);
 - track beds: the baked rails (`rail_<tile>.geojson`, the DLM's or OSM's,
   with their track count) and every OSM track above ground — sidings, the
-  yards' fans, trams in their own bed — one track bed wide each.
+  yards' fans, trams in their own bed — one track bed wide each, at the
+  width the drawn ballast has (`rail_osm.bed`).
 
 Every way grows by MARGIN_M: a crown's peak stands that far clear of the
 kerb or the ballast's edge at least."""
@@ -26,12 +27,10 @@ import json
 import shapely
 import shapely.geometry
 
-from . import landcover, landcover_osm
+from . import landcover, landcover_osm, rail_osm
 from .common import Tile, column
 from .osm import below_ground, has_extract, read_osm
 
-TRACK_HALF_M = 2.5  # one track's bed, half its width (m)
-TRACK_STEP_M = 2.25  # each further track beside it: half the 4.5 m spacing
 OSM_TRACKS = ("rail", "light_rail", "narrow_gauge", "subway", "tram", "funicular")
 MARGIN_M = 0.5
 
@@ -43,13 +42,13 @@ def track_beds(tile: Tile) -> list[shapely.Geometry]:
         for f in json.loads(baked.read_text())["features"]:
             tracks = int((f["properties"] or {}).get("tracks") or 1)
             line = shapely.geometry.shape(f["geometry"])
-            out.append(shapely.buffer(line, TRACK_HALF_M + TRACK_STEP_M * (tracks - 1)))
+            out.append(rail_osm.bed(line, tracks))
     if has_extract(tile, "the track beds"):
         kinds = ", ".join(f"'{k}'" for k in OSM_TRACKS)
         geoms, fields = read_osm(tile, "lines", f"railway IN ({kinds})", ["other_tags"])
         for g, other in zip(geoms, column(fields, "other_tags", geoms), strict=True):
             if g is not None and not g.is_empty and not below_ground(other):
-                out.append(shapely.buffer(g, TRACK_HALF_M))
+                out.append(rail_osm.bed(g, 1))
     return out
 
 

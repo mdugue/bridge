@@ -171,15 +171,17 @@ def rough_mask(dom: np.ndarray) -> np.ndarray:
 
 
 def built_mask(tile: Tile, px: int) -> np.ndarray:
-    """Every LoD2 outline, grown by FOOTPRINT_REACH_M."""
-    outlines = [
-        shapely.Polygon(ring[:, :2]).buffer(FOOTPRINT_REACH_M) for ring in lod2_rings(tile.cityjson)
-    ]
+    """Every LoD2 outline, grown by FOOTPRINT_REACH_M: grown on the grid (a
+    distance transform), not each ring buffered — 55 000 rings on Dresden's
+    spawn tile took 9 s to buffer."""
+    outlines = [shapely.Polygon(ring[:, :2]) for ring in lod2_rings(tile.cityjson)]
     built = np.zeros((px, px), dtype=np.uint8)
     outlines = [g for g in outlines if g.is_valid and not g.is_empty]
-    if outlines:
-        rasterize(((g, 1) for g in outlines), out=built, transform=tile.transform(px))
-    return built == 1
+    if not outlines:
+        return built == 1
+    rasterize(((g, 1) for g in outlines), out=built, transform=tile.transform(px))
+    texel = (tile.bounds[2] - tile.bounds[0]) / px
+    return ndi.distance_transform_edt(built == 0) <= FOOTPRINT_REACH_M / texel
 
 
 def green_mask(tile: Tile, rough: np.ndarray, built: np.ndarray) -> np.ndarray:
