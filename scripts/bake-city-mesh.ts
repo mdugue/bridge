@@ -569,8 +569,9 @@ function concat(
  * its LoD2 triangles dropped, its prisms appended under the same object id
  * (so its table row, picking and demolish stay), standing on the lowest
  * vertex of its LoD2 shell, a part's roof in its own colour where the roof
- * colour bake read it apart (`RoofColours.parts`). A part id the tile does
- * not hold is ignored.
+ * colour bake read it apart (`RoofColours.parts`, kept only where the
+ * part's level matches the one read). A part id the tile does not hold is
+ * ignored.
  */
 export function withMeasuredRoofs(
   v: CityVertices,
@@ -631,8 +632,14 @@ export function withMeasuredRoofs(
     isRoof.push(...mesh.isRoof);
     objectIds.push(...mesh.isRoof.map(() => index));
     normals.push(...mesh.normals);
+    // a colour read for another roofs file's part (its level differs) is
+    // not this part's
     const own = new Map(
-      (colours?.parts?.[keys[index]] ?? []).map((p) => [p[0], p.slice(1, 4)])
+      (colours?.parts?.[keys[index]] ?? [])
+        .filter(
+          (p) => Math.abs(p[1] - (parts[p[0]]?.properties?.z ?? NaN)) < 0.01
+        )
+        .map((p) => [p[0], p.slice(2, 5)])
     );
     mesh.parts.forEach((part, k) => {
       const c = mesh.isRoof[k] === 1 ? own.get(part) : undefined;

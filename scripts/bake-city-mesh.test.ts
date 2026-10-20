@@ -996,7 +996,14 @@ test("a rebuilt roof's parts carry their own colour, its walls none", () => {
     ["a"],
     { cx: 0, cy: 0 },
     [part(0, 110), part(4, 106)],
-    { parts: { a: [[1, 0.5, 0.25, 0.125]] } }
+    {
+      parts: {
+        a: [
+          [1, 106, 0.5, 0.25, 0.125],
+          [0, 99, 0.9, 0.9, 0.9],
+        ],
+      },
+    }
   );
   const rgb = out.roofRgb ?? new Float32Array();
   expect(rgb).toHaveLength(out.positions.length);
@@ -1008,7 +1015,8 @@ test("a rebuilt roof's parts carry their own colour, its walls none", () => {
       expect(c).toEqual([0.5, 0.25, 0.125]);
       red++;
     } else {
-      // the first part's roof and every wall: the object's colour
+      // the first part's roof (its colour read at another level) and every
+      // wall: the object's colour
       expect(c.every(Number.isNaN)).toBe(true);
     }
   }

@@ -27,8 +27,8 @@ together; the old median over all texels where too few are lit), and
 surface, r, g, b]` — the geometry's index in the object and the surface's
 in its flattened boundaries, the ids cityjson-threejs-loader writes
 (`geometryid`, `boundaryid`) — and `parts`, a rebuilt roof's parts that
-differ, as `[part, r, g, b]`, the part's index among the object's in the
-roofs file."""
+differ, as `[part, z, r, g, b]`, the part's index among the object's in
+the roofs file and its level `z`."""
 
 from __future__ import annotations
 
@@ -543,7 +543,9 @@ def run(tile: Tile, erode: int = 5) -> None:
         in_sun += lit is not None
         apart = [[*key, *c] for key, c in own.items() if _differs(c, whole)]
         if apart and parts:
-            parts_out[oid] = [a[1:] for a in apart]  # without the "p"
+            # the part's index and its level, which the build checks the
+            # roofs file against (a re-baked roofs file renumbers its parts)
+            parts_out[oid] = [[a[1], round(parts[a[1]].rings[0][0][2], 2), *a[2:]] for a in apart]
         elif apart:
             faces_out[oid] = apart
     out = {
@@ -567,8 +569,8 @@ def run(tile: Tile, erode: int = 5) -> None:
         # the faces whose own colour differs from their building's
         "faces": faces_out,
         # the rebuilt roofs' parts (roofs.py) whose own colour differs from
-        # their building's, as `[part, r, g, b]`: the part's index among
-        # the building's in the roofs file
+        # their building's, as `[part, z, r, g, b]`: the part's index among
+        # the building's in the roofs file and its level
         "parts": parts_out,
     }
     tile.out("dop", f"roofcolor_{tile.id}.json").write_text(json.dumps(out))

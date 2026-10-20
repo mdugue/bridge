@@ -156,7 +156,8 @@ def test_a_rebuilt_roof_is_read_part_by_part(tmp_path):
     out = _run(tmp_path, top_z=20.0, rgb=rgb)
     assert out["meta"]["rebuilt"] == 1
     assert "b" not in out["faces"]
-    parts = {p[0]: p[1:] for p in out["parts"]["b"]}
+    parts = {p[0]: p[2:] for p in out["parts"]["b"]}
+    assert all(p[1] == 14.0 for p in out["parts"]["b"])
     # the halves together are neither colour: each is written apart
     west, east = parts[0], parts[1]
     assert west[0] > 3 * west[1]
