@@ -1916,21 +1916,23 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   plinth's top — its highest piece, so a plinth stepping up a slope
   lifts them —, and over the ground in front of every wall, read in the
   tile's fine terrain 0.5 m out of the wall every 2 m along it, also of
-  a wall standing on a step of its building (`wallRises`; 2026-10-19/20, Manuel: the windows sank into the
-  Brühlsche Terrasse — the plinth pieces alone reach only open street
-  runs of buildings from 5 m, so the Kunstakademie's terrace walls had
-  no ground under them). The lift is a class of
-  0.05 m up to 1.55 m; a wall whose ground rises past its reach (at
-  most 2.2 m over the base, `GROUND_REACH_M`, and no higher than leaves
-  the ground floor's windows at least 0.8 of their width tall,
-  `overGround`) loses its own ground floor, signed like a shopfront's,
-  the building's other walls keep theirs. Dresden, 2026-10-20: wall feet
-  whose ground-floor windows the fine ground covered 11 925 → 42 (of
-  ~610 000), objects lifting their ground floor 20 760 → 22 066, those
-  without one unchanged at 6 258. Such a wall keeps the ground's height
-  in front (`_FACADE`'s first door slot) and draws no row under it, so
-  where the ground rises more than a storey the upper floors' windows go
-  too (the Kunstakademie on the terrace; 582 wall feet on its tile). **The storeys
+  a wall standing on a step of its building, not where the ground lies
+  more than 1 m under the wall (a wall over a lower roof) (`wallRises`;
+  2026-10-19/20, Manuel: the windows sank into the Brühlsche Terrasse —
+  the plinth pieces alone reach only open street runs of buildings from
+  5 m, so the Kunstakademie's terrace walls had no ground under them).
+  The plinth pieces' tops are levels like the ground's, not a floor for
+  every wall. The lift is a class of 0.05 m up to 1.55 m; a wall whose
+  ground or plinth rises past its reach (at most 2.2 m over the base,
+  `GROUND_REACH_M`, and no higher than leaves the ground floor's windows
+  at least 0.8 of their width tall, `overGround`; a shop's: its first
+  floor's) loses its own ground floor, signed like a shopfront's, the
+  building's other walls keep theirs. Such a wall keeps that height
+  (`_FACADE`'s first door slot) and draws no row under it, so where the
+  ground rises more than a storey the upper floors' windows go too (the
+  Kunstakademie on the terrace). Dresden, 2026-10-20: wall feet whose
+  windows the fine ground covered 11 925 → 0 (of ~610 000), objects
+  without a ground floor 6 258 → 3 590 (the rest are shops). **The storeys
   count from the street** (`liftToStreet`): a LoD2 base is the lowest
   ground round the whole footprint — a courtyard's, a light well's, a
   cellar ramp's — and lay a median 0.3 m under the street on the spawn
