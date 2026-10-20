@@ -17,7 +17,8 @@ Lizenzen) beschreibt [Woher die Daten kommen](./data-sources.md).
 | Brückendecks | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟡 OSM + DOM1 ¹ | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟡 OSM + DOM1 ¹ |
 | Straßenbäume (Art, Krone) | 🟢 Baumkataster | ⚪ — ² | 🟡 Baumkataster ³ | 🟢 Baumkataster | ⚪ — ² | ⚪ — ² | ⚪ — ² | 🟢 Baumkataster |
 | Baumreihen, Hecken | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
-| Schuppen, weitere Bäume, Heckenhöhen | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁴ | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁵ |
+| Bäume in Gärten und Höfen | 🟢 Laserscan | 🟢 Laserscan | 🟡 DOP + DOM1 ⁴ | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟡 DOP + DOM1 ⁵ |
+| Schuppen, Heckenhöhen | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁴ | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁵ |
 | Vegetationsfarbe (Vitalität) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟡 DOP RGB (GLI) ⁶ | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) |
 | Schaufenster, Fassadenbild | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | ⚪ — ⁷ | ⚪ — ⁸ |
 | Denkmäler, Brunnen | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
@@ -25,7 +26,7 @@ Lizenzen) beschreibt [Woher die Daten kommen](./data-sources.md).
 | Datenebene: Kfz-Verkehr | 🟢 Zählungen der Stadt | 🟡 Straßenverkehrszählung ⁹ | 🟢 Zählungen der Stadt (Hauptstraßen) | ⚪ — ¹⁰ | 🟡 Straßenverkehrszählung ⁹ | ⚪ — ¹⁰ | 🟡 Straßenverkehrszählung ⁹ | 🟢 Zählungen der Stadt |
 | Datenebene: Radverkehr live | 🟢 Zählstellen der Stadt | ⚪ — ¹¹ | 🟢 Zählstellen der Stadt | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ |
 | Datenebene: Straßenbahnen (Fahrplan) | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM |
-| 🟢 aus der besten Quelle | **20** / 22 | **16** / 22 | **12** / 22 | **18** / 22 | **16** / 22 | **16** / 22 | **15** / 22 | **12** / 22 |
+| 🟢 aus der besten Quelle | **21** / 23 | **17** / 23 | **12** / 23 | **19** / 23 | **17** / 23 | **17** / 23 | **16** / 23 | **12** / 23 |
 
 ## Legende
 

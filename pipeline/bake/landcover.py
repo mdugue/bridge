@@ -55,7 +55,7 @@ ROAD_HALF_WIDTH = {"1301": 10.0, "1303": 5.0, "1305": 4.0, "1306": 3.0, "1307": 
 DEFAULT_ROAD_HALF_WIDTH = 2.5
 
 
-def _road_buffers(tile: Tile) -> list[shapely.Geometry]:
+def road_buffers(tile: Tile) -> list[shapely.Geometry]:
     """The road axes buffered by their width, without their stretches in a
     tunnel: a road there is under the ground the tile shows (a hillside over
     Meißen's Schottenbergtunnel, the square over Dresden's Wiener Platz),
@@ -91,7 +91,7 @@ def burn_order(tile: Tile) -> list[tuple[int, list[shapely.Geometry]]]:
         (5, _areas(tile, "ver03_f")),  # railway area
         (6, _lines(tile, "ver02_l", 1.0)),  # paths
         (7, _areas(tile, "ver01_f")),  # road area
-        (7, _road_buffers(tile)),  # road centrelines, buffered
+        (7, road_buffers(tile)),  # road centrelines, buffered
         (8, _areas(tile, "gew02_f")),  # water area (alt)
         (8, _areas(tile, "gew01_f")),  # water area
         (8, _lines(tile, "gew01_l", 1.0)),  # streams, buffered

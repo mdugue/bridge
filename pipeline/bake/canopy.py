@@ -1,10 +1,28 @@
 """DOM1 − DGM1 → tree canopy points. One tree per `cell` metres at the
 tallest canopy texel between 3 and 45 m, only inside forest, copse or park
-(rasterised from the DLM), never on rail, path, road or water (the class
-raster — the gate that stopped trees growing through bridge decks), and
-never on or beside a bridge (the DLM's decks, grown by BRIDGE_REACH): where
+(rasterised from the DLM), never on a path or water (the class raster),
+nor on a carriageway or a track bed (`ways.traffic`), and never on or beside
+a bridge (the DLM's decks, grown by BRIDGE_REACH): where
 a bridge lands on a park bank, its steel — the Blaues Wunder's pylons — is
-as tall in the nDOM as a crown, and would have become one."""
+as tall in the nDOM as a crown, and would have become one. Nor on a
+building's roof (`roof_mask`): the DLM files a stadium, a fair's halls or a
+park's glasshouses as sports or park ground, and over them the nDOM is the
+roof's height.
+
+Without a laser scan (Hamburg, Berlin) no step finds the trees outside that
+mask — a courtyard's, a garden's, a street tree the cadastre lacks — so
+there the canopy also takes the texels the orthophoto shows green and the
+surface model rough, where no building stands (`green_mask`).
+
+Nor does any step plant the trees of the transport land beyond the traffic
+— the station forecourts, the embankments, the verges, the junction islands
+the DLM files as road or railway: there the canopy takes the crowns the
+surface model shows, with or without a scan (`verge_mask`).
+
+A crown in a needle forest is an evergreen (`l: "e"`), as is one in a mixed
+forest that reads green in a leaf-off flight, where the broadleaves are bare
+(`leaf_types`): the Dresdner Heide's pines drew as broadleaves, coloured in
+autumn and bare in winter."""
 
 from __future__ import annotations
 
@@ -14,17 +32,61 @@ import numpy as np
 import rasterio
 import shapely
 import shapely.geometry
+from PIL import Image
 from rasterio.features import rasterize
+from scipy import ndimage as ndi
+from scipy.ndimage import uniform_filter
 
-from . import landcover_osm
-from .common import Tile, feature, read_layer, write_geojson
+from . import landcover_osm, ways
+from .common import Tile, column, feature, read_layer, write_geojson
+from .lowveg import lod2_rings
+from .osm import read_osm, tag
 
 MIN_H, MAX_H = 3.0, 45.0
-BLOCKED = (5, 6, 7, 8)  # railway, path, road, water
+BLOCKED = (6, 8)  # path, water
+TRANSPORT = (5, 7)  # railway, road: the DLM's parcels, to their fences
 WOODED = (2, 3)  # forest, copse
 PARK = "OBJART_TXT='AX_SportFreizeitUndErholungsflaeche'"
 BRIDGE = "BWF='1800'"
 BRIDGE_REACH = 10.0  # no tree this close to a bridge's centreline or deck (m)
+# A canopy texel this far inside a building's outline, and at most
+# ROOF_REACH_M above its roof, is that roof (m): a crown beside a wall may
+# peak over its eave, and a tree standing over a low shed rises above it.
+ROOF_INSET_M = 1.0
+ROOF_REACH_M = 2.0
+# The roof's height: this share of the outline's nDOM lies below it — the
+# upper quartile, so a stadium's pitch or a hall's skylight wells inside
+# one outline do not pull it down to the ground.
+ROOF_QUANTILE = 0.75
+# Outside the vegetation mask, without a laser scan: a crown is green in the
+# orthophoto (the baked index, 0..255 on Dresden's scale) and rough in the
+# surface model — the spread of a 3 × 3 window above ROUGH_M on more than
+# half of the 5 × 5 around it — and stands clear of every LoD2 outline grown
+# by FOOTPRINT_REACH_M. A roof, a lorry, a ship or a crane is grey or smooth.
+GREEN = 77  # NDVI 0.3
+ROUGH_M = 0.5
+FOOTPRINT_REACH_M = 1.0
+# On transport land beyond the traffic a crown is a rough blob in DOM1 of
+# this many m² after a 3 × 3 opening (a mast, a gantry, a fence are thinner).
+# Not the orthophoto's green: Saxony's is flown leaf-off, where 1–4 % of a
+# crown's texels are green (Leipzig; Unna's summer flight 19 %).
+VERGE_MIN_M2 = 15
+# The forest's kind: the Basis-DLM's AX_Wald `VEG`, without a DLM OSM's
+# `leaf_type` on a forest or wood.
+BROADLEAF, NEEDLE, MIXED = 1100, 1200, 1300
+OSM_LEAF = {"broadleaved": BROADLEAF, "needleleaved": NEEDLE, "mixed": MIXED}
+FORESTS = "landuse = 'forest' OR natural = 'wood'"
+# In a mixed forest a crown is an evergreen where a leaf-off flight shows it
+# this green (the baked index, 0..1 on Dresden's scale, its 3 × 3 maximum
+# at ~2 m): Dresden's needle and broadleaf stands part best there (the
+# Heide's four tiles: 42 000 and 14 000 crowns, medians 0.39 and 0.16).
+CONIFER_NDVI = 0.35
+# A flight is leaf-off where the crowns of the tile's broadleaf forest read
+# less green than this — less than a mown lawn (0.33 on that scale; Dresden
+# 0.16–0.20, Meißen 0.25, but Unna's summer flight 0.5) —, told from at
+# least LEAF_OFF_MIN of them. Else a mixed forest stays broadleaf.
+LEAF_OFF_NDVI = 0.30
+LEAF_OFF_MIN = 200
 
 
 def vegetation_mask(tile: Tile, px: int) -> np.ndarray:
@@ -66,6 +128,103 @@ def bridge_mask(tile: Tile, px: int) -> np.ndarray:
     return mask
 
 
+def roof_mask(tile: Tile, ndom: np.ndarray) -> np.ndarray:
+    """The texels of `ndom` (DOM1 − DGM1 over the tile, north row first)
+    that are a building's roof: inside an OSM building outline, shrunk by
+    ROOF_INSET_M, and no more than ROOF_REACH_M above the outline's roof
+    height (its ROOF_QUANTILE of the nDOM). A courtyard (the outline's
+    hole) is outside. No extract: nothing is a roof."""
+    h, w = ndom.shape
+    if tile.osm_extract() is None:
+        return np.zeros((h, w), dtype=bool)
+    geoms, fields = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"])
+    inner = [
+        g.buffer(-ROOF_INSET_M)
+        for g, b in zip(geoms, fields.get("building", [None] * len(geoms)), strict=True)
+        if g is not None and b != "no"
+    ]
+    inner = [g for g in inner if not g.is_empty]
+    if not inner:
+        return np.zeros((h, w), dtype=bool)
+    labels = np.zeros((h, w), dtype=np.int32)
+    rasterize(((g, i + 1) for i, g in enumerate(inner)), out=labels, transform=tile.transform(w))
+    inside = labels > 0
+    lab, val = labels[inside], ndom[inside]
+    order = np.lexsort((val, lab))
+    lab, val = lab[order], val[order]
+    first = np.searchsorted(lab, np.arange(len(inner) + 1), side="left")
+    last = np.searchsorted(lab, np.arange(len(inner) + 1), side="right")
+    roof = np.full(len(inner) + 1, -np.inf)
+    count = last - first
+    has = count > 0
+    pick = first[has] + np.floor(ROOF_QUANTILE * (count[has] - 1)).astype(int)
+    roof[has] = val[pick]
+    return inside & (ndom <= roof[labels] + ROOF_REACH_M)
+
+
+def rough_mask(dom: np.ndarray) -> np.ndarray:
+    """A crown's texture in the surface model: the spread of a 3 × 3 window
+    above ROUGH_M on more than half of the 5 × 5 around it."""
+    mean = uniform_filter(dom, 3)
+    spread = np.sqrt(np.maximum(uniform_filter(dom * dom, 3) - mean * mean, 0.0))
+    return uniform_filter((spread > ROUGH_M).astype(np.float32), 5) > 0.5
+
+
+def built_mask(tile: Tile, px: int) -> np.ndarray:
+    """Every LoD2 outline, grown by FOOTPRINT_REACH_M."""
+    outlines = [
+        shapely.Polygon(ring[:, :2]).buffer(FOOTPRINT_REACH_M) for ring in lod2_rings(tile.cityjson)
+    ]
+    built = np.zeros((px, px), dtype=np.uint8)
+    outlines = [g for g in outlines if g.is_valid and not g.is_empty]
+    if outlines:
+        rasterize(((g, 1) for g in outlines), out=built, transform=tile.transform(px))
+    return built == 1
+
+
+def green_mask(tile: Tile, rough: np.ndarray, built: np.ndarray) -> np.ndarray:
+    """The crowns outside the vegetation mask where no laser scan finds them
+    (`products.lsc` false): green in the baked vegetation index (`ndvi.py`,
+    on Dresden's scale whatever the flight), rough in DOM1, off every LoD2
+    outline. A provider with a scan, or no index: nothing."""
+    png = tile.out("dlm", f"ndvi_{tile.id}.png")
+    if tile.products.lsc or not png.exists():
+        return np.zeros(rough.shape, dtype=bool)
+    green = raster_at(np.asarray(Image.open(png).convert("L")), rough.shape) >= GREEN
+    return green & rough & ~built
+
+
+def verge_mask(
+    cls: np.ndarray, ndom: np.ndarray, rough: np.ndarray, built: np.ndarray, traffic: np.ndarray
+) -> np.ndarray:
+    """The crowns on transport land beyond the traffic: rough, 3–45 m, off
+    every LoD2 outline, in blobs of VERGE_MIN_M2 after a 3 × 3 opening (1 m
+    texels)."""
+    crown = np.isin(cls, TRANSPORT) & ~traffic & rough & ~built
+    crown &= (ndom > MIN_H) & (ndom < MAX_H)
+    crown = ndi.binary_opening(crown, np.ones((3, 3), bool))
+    labels, n = ndi.label(crown)
+    big = np.bincount(labels.ravel(), minlength=n + 1) >= VERGE_MIN_M2
+    big[0] = False
+    return big[labels]
+
+
+def traffic_mask(tile: Tile, px: int) -> np.ndarray:
+    """The carriageways and track beds (`ways.traffic`) on the tile's grid."""
+    mask = np.zeros((px, px), dtype=np.uint8)
+    geoms = ways.traffic(tile)
+    if geoms:
+        rasterize(((g, 1) for g in geoms), out=mask, transform=tile.transform(px))
+    return mask == 1
+
+
+def raster_at(raster: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """A baked raster over the tile, nearest-sampled onto `shape`."""
+    rows = np.minimum((np.arange(shape[0]) * raster.shape[0]) // shape[0], raster.shape[0] - 1)
+    cols = np.minimum((np.arange(shape[1]) * raster.shape[1]) // shape[1], raster.shape[1] - 1)
+    return raster[np.ix_(rows, cols)]
+
+
 def class_raster_at(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
     """The baked class raster, nearest-sampled onto `shape`."""
     cls = tile.classes()
@@ -73,26 +232,78 @@ def class_raster_at(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
         raise FileNotFoundError(
             f"{tile.id}: the canopy is gated on the class raster; bake landcover first"
         )
-    rows = np.minimum((np.arange(shape[0]) * cls.shape[0]) // shape[0], cls.shape[0] - 1)
-    cols = np.minimum((np.arange(shape[1]) * cls.shape[1]) // shape[1], cls.shape[1] - 1)
-    return cls[np.ix_(rows, cols)]
+    return raster_at(cls, shape)
 
 
-def blocked_mask(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
-    """The class raster's blocked classes, nearest-sampled onto `shape`."""
-    return np.isin(class_raster_at(tile, shape), BLOCKED)
+def stands(tile: Tile, px: int) -> np.ndarray:
+    """The forest's kind under every texel (BROADLEAF, NEEDLE, MIXED; 0
+    elsewhere or untold): the DLM's forests, without a DLM OSM's."""
+    if tile.products.dlm:
+        geoms, fields = read_layer(tile.dlm / "veg02_f.shp", tile.bounds, columns=["VEG"])
+        kinds = [
+            int(v) if v in ("1100", "1200", "1300") else 0 for v in column(fields, "VEG", geoms)
+        ]
+    elif tile.osm_extract() is not None:
+        geoms, fields = read_osm(tile, "multipolygons", FORESTS, ["other_tags"])
+        kinds = [
+            OSM_LEAF.get(tag(t, "leaf_type") or "", 0) for t in column(fields, "other_tags", geoms)
+        ]
+    else:
+        geoms, kinds = [], []
+    out = np.zeros((px, px), dtype=np.uint16)
+    shapes = [(g, k) for g, k in zip(geoms, kinds, strict=True) if g is not None and k]
+    if shapes:
+        rasterize(shapes, out=out, transform=tile.transform(px))
+    return out
+
+
+def crown_green(tile: Tile) -> np.ndarray | None:
+    """The baked index (0..1), its 3 × 3 maximum — a crown's greenest texel
+    at ~2 m; None without it."""
+    png = tile.out("dlm", f"ndvi_{tile.id}.png")
+    if not png.exists():
+        return None
+    return ndi.maximum_filter(np.asarray(Image.open(png).convert("L")), 3) / 255.0
+
+
+def leaf_types(
+    tile: Tile, rows: np.ndarray, cols: np.ndarray, shape: tuple[int, int]
+) -> list[dict]:
+    """For each crown at (rows, cols) of the 1 m grid, its leaf properties:
+    `l: "e"` for an evergreen — a needle forest's, or with `ls: "dop"` a
+    mixed forest's that a leaf-off flight shows green —, none for a
+    broadleaf."""
+    kind = stands(tile, shape[1])[rows, cols]
+    out = [{"l": "e"} if k == NEEDLE else {} for k in kind]
+    green = crown_green(tile)
+    mixed = kind == MIXED
+    if green is None or not mixed.any():
+        return out
+    k = green.shape[0]
+    g = green[(rows * k) // shape[0], (cols * k) // shape[1]]
+    broad = g[kind == BROADLEAF]
+    if len(broad) < LEAF_OFF_MIN or float(np.median(broad)) >= LEAF_OFF_NDVI:
+        return out
+    for i in np.flatnonzero(mixed & (g >= CONIFER_NDVI)):
+        out[i] = {"l": "e", "ls": "dop"}
+    return out
 
 
 def canopy_points(tile: Tile, cell: int) -> list[dict]:
-    with rasterio.open(tile.raw_raster("dom1")) as dom, rasterio.open(tile.dgm) as dgm:
-        ndom = dom.read(1).astype(np.float64) - dgm.read(1).astype(np.float64)
+    with rasterio.open(tile.raw_raster("dom1")) as src, rasterio.open(tile.dgm) as dgm:
+        dom = src.read(1).astype(np.float64)
+        ndom = dom - dgm.read(1).astype(np.float64)
     h, w = ndom.shape
-    ok = (vegetation_mask(tile, w) == 1) & ~blocked_mask(tile, ndom.shape)
+    cls = class_raster_at(tile, ndom.shape)
+    rough, built, traffic = rough_mask(dom), built_mask(tile, w), traffic_mask(tile, w)
+    ok = (vegetation_mask(tile, w) == 1) | green_mask(tile, rough, built)
+    ok |= verge_mask(cls, ndom, rough, built, traffic)
+    ok &= ~np.isin(cls, BLOCKED) & ~traffic
     ok &= bridge_mask(tile, w) == 0
+    ok &= ~roof_mask(tile, ndom)
     ok &= (ndom > MIN_H) & (ndom < MAX_H)
     heights = np.where(ok, ndom, -1.0)
-    xmin, _, _, ymax = tile.bounds
-    features = []
+    peaks = []
     for r0 in range(0, h, cell):
         for c0 in range(0, w, cell):
             block = heights[r0 : r0 + cell, c0 : c0 + cell]
@@ -102,15 +313,19 @@ def canopy_points(tile: Tile, cell: int) -> list[dict]:
             if best < 0:
                 continue
             r, c = divmod(i, block.shape[1])
-            x = xmin + c0 + c + 0.5
-            y = ymax - (r0 + r) - 0.5
-            features.append(
-                feature(
-                    {"type": "Point", "coordinates": [round(x, 1), round(y, 1)]},
-                    {"h": round(float(best), 1)},
-                )
-            )
-    return features
+            peaks.append((r0 + r, c0 + c, float(best)))
+    if not peaks:
+        return []
+    rows, cols, tops = (np.array(v) for v in zip(*peaks, strict=True))
+    leaves = leaf_types(tile, rows.astype(int), cols.astype(int), (h, w))
+    xmin, _, _, ymax = tile.bounds
+    return [
+        feature(
+            {"type": "Point", "coordinates": [round(xmin + c + 0.5, 1), round(ymax - r - 0.5, 1)]},
+            {"h": round(float(top), 1), **leaf},
+        )
+        for r, c, top, leaf in zip(rows, cols, tops, leaves, strict=True)
+    ]
 
 
 def run(tile: Tile, cell: int = 7) -> None:
@@ -119,4 +334,5 @@ def run(tile: Tile, cell: int = 7) -> None:
         return
     features = canopy_points(tile, cell)
     write_geojson(tile.out("dlm", f"canopy_{tile.id}.geojson"), features, tile.epsg)
-    print(f"{tile.id}: {len(features)} canopy trees")
+    evergreen = sum(1 for f in features if f["properties"].get("l") == "e")
+    print(f"{tile.id}: {len(features)} canopy trees, {evergreen} of them evergreen")

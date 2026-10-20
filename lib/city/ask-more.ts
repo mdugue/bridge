@@ -169,10 +169,12 @@ export function canopySets(
         p,
         source,
         height: f.properties?.h,
+        leaf: leafOf(f),
       }))
     );
   const trees: {
     height?: number;
+    leaf?: CanopyInquiry["evergreen"];
     p: Placement;
     source: CanopyInquiry["source"];
   }[] = [
@@ -187,23 +189,46 @@ export function canopySets(
   const position = new Float64Array(trees.length * 2);
   const height = new Float32Array(trees.length);
   const source = new Uint8Array(trees.length);
+  // 0 a broadleaf (or not known), else 1 + its index in LEAVES
+  const leaf = new Uint8Array(trees.length);
   trees.forEach((t, i) => {
     position.set(epsgOf(t.p, ctx.offset), i * 2);
     height[i] = t.height && Number.isFinite(t.height) ? t.height : 0;
     source[i] = sources.indexOf(t.source);
+    leaf[i] = t.leaf ? LEAVES.indexOf(t.leaf) + 1 : 0;
   });
   return packedCylinderSets(
     trees.length,
     (i) => packedCanopy(trees[i].p),
-    (i) => canopyInquiry(position, height, sources[source[i]], i, ctx.tile)
+    (i) =>
+      canopyInquiry(
+        position,
+        height,
+        sources[source[i]],
+        leaf[i] > 0 ? LEAVES[leaf[i] - 1] : undefined,
+        i,
+        ctx.tile
+      )
   );
 }
+
+const LEAVES = ["forest", "photo"] as const;
+
+/** What told a crown is an evergreen (canopy.py): the forest's kind, or
+ *  the leaf-off orthophoto. */
+const leafOf = (f: CanopyFeature): CanopyInquiry["evergreen"] =>
+  f.properties?.l === "e"
+    ? f.properties.ls === "dop"
+      ? "photo"
+      : "forest"
+    : undefined;
 
 /** The canopy tree at index `i` as an inquiry. */
 function canopyInquiry(
   position: Float64Array,
   height: Float32Array,
   source: CanopyInquiry["source"],
+  evergreen: CanopyInquiry["evergreen"],
   i: number,
   tile: string
 ): FeatureInquiry {
@@ -213,6 +238,7 @@ function canopyInquiry(
     position: [position[i * 2], position[i * 2 + 1]],
     source,
     ...(height[i] > 0 ? { height: height[i] } : {}),
+    ...(evergreen ? { evergreen } : {}),
   };
 }
 

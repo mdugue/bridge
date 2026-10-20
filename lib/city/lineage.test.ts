@@ -204,6 +204,23 @@ test("a tree the surface model measured names the model, not a register", () => 
   ]);
 });
 
+test("an evergreen names what told it: the forest or the leaf-off photo", () => {
+  const crown = {
+    kind: "canopy" as const,
+    tile: "t",
+    position: [0, 0] as [number, number],
+    source: "dom" as const,
+  };
+  const forest = lineage({ ...crown, evergreen: "forest" }, provenance, saxony);
+  expect(sources(forest)).toContain("Basis-DLM");
+  const photo = lineage({ ...crown, evergreen: "photo" }, provenance, saxony);
+  expect(sources(photo)).not.toContain("Basis-DLM");
+  const dop = photo.find((e) => e.source === "Digitales Orthophoto");
+  expect(dop && said(dop)).toContain(
+    "dass er immergrün ist: grün im laubfreien Luftbild"
+  );
+});
+
 test("an orchard's tree names OSM's orchard, not the city's register", () => {
   const entries = lineage(
     {

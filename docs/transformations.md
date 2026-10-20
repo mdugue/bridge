@@ -1253,11 +1253,55 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   (`CROWN_TO_HEIGHT`, `lib/city/tree-placement.ts`: the median of Dresden's
   50 123 surveyed trees with height and crown, the same in every 5 m class;
   until 2026-10-07 the generic crown was scaled uniformly by `h / 5.8`,
-  0.88 × h wide and 1.1 × h tall, so a park point stood under ~5 crowns), **gated off road/bridge/water** via the DLM
-  class raster, and off everything within 10 m of a DLM bridge (a bridge's
+  0.88 × h wide and 1.1 × h tall, so a park point stood under ~5 crowns), **gated off paths and water** via the DLM
+  class raster, **off the carriageways and track beds** (`ways.traffic`, below), and off everything within 10 m of a DLM bridge (a bridge's
   steel on a park bank is as tall as a crown: the Blaues Wunder's pylons came
   out as two trees; without a DLM the decks the rail step baked from OSM,
-  `bridge_<tile>.geojson` — so `rail` runs before `canopy`).
+  `bridge_<tile>.geojson` — so `rail` runs before `canopy`). **And off a
+  building's roof** (2026-10-20, `roof_mask`): inside an OSM building
+  outline (shrunk by 1 m, its courtyards out) a texel no more than 2 m
+  above the outline's roof — the upper quartile of its nDOM, so a stadium's
+  pitch or a hall's skylight wells do not pull it down — is that roof, not
+  a crown. *(The DLM files a stadium's stands, a fair's halls and a park's
+  glasshouses as sports or park ground; LoD2 lacks some of them, and their
+  roofs became rows of trees: Dresden's stadium, the Leipzig and Dresden
+  fair halls, Planten un Blomen's glasshouses in Hamburg, a tennis club's
+  halls in Unna. 0.7–1.6 % of the canopy points, per city.)*
+  **Without a laser scan** (Hamburg, Berlin; 2026-10-20, `green_mask`) the
+  canopy also takes the texels outside the vegetation mask that the DOP
+  shows green (NDVI ≥ 0.3, the GLI where the DOP has no infrared) and DOM1
+  rough (a 3 × 3 spread above 0.5 m on most of the 5 × 5 around), off every
+  LoD2 outline grown by 1 m — the same gates as the rest of the canopy
+  after it. A Land with a scan leaves those trees to `lowveg` (`canopyx`,
+  below), whose crowns the scan measures. *(Hamburg had no tree in its
+  courtyards and gardens: no scan step finds them there, and OSM maps a
+  park, not a back garden. Its crown cover against DOM1's rough tall
+  vegetation off the buildings went from 0.68 to 0.99 — 0.61 to 0.96 in the
+  built-up class — at the same precision (0.67 → 0.66), 19 600 → 46 900
+  canopy trees; the summer DOP's crowns are green, and its harbour's cranes,
+  piles and scrap are grey.)*
+  **On transport land the veto is the traffic, not the parcel**
+  (2026-10-20, `pipeline/bake/ways.py`, `verge_mask`): no tree stands on a
+  carriageway (the DLM's road centrelines at their surveyed width, the
+  buffers the class raster burns; without a DLM OSM's roads at the class
+  raster's widths) or a track bed (the baked rails, 2.5 m either side plus
+  2.25 m per further track, and every OSM track above ground — sidings,
+  yards, trams in their own bed — 2.5 m either side), each grown by
+  0.5 m. Beyond them the road and railway land the DLM files to its fences
+  is planted from the crowns DOM1 shows there — rough, 3–45 m, off every
+  LoD2 outline, a blob of at least 15 m² after a 3 × 3 opening — with or
+  without a scan, and not gated on the DOP's green: Saxony's is flown
+  leaf-off, where 1–4 % of a crown's texels read green (Leipzig), against
+  19 % in Unna's summer flight. *(The class gate vetoed the parcel: the
+  station forecourts, embankments, verges, junction islands and the strips
+  of wood beside a road the DLM files as road or railway, with their
+  trees — on Leipzig's tiles 5.2 % of the crown cover DOM1 shows, 6.9 % of
+  what the model left out; Dresden 1.6 % and 3.9 %. Leipzig gains
+  5 373 canopy trees (+11 %), Unna 840; on Unna's tile with a scan every
+  added point on rail and road land is tall vegetation to the scan
+  (multi-echo ≥ 0.5 within 1.5 m). Left: a rail yard's gravel heaps are
+  as rough as a crown in DOM1 and leafless trees no greener than they in
+  Saxony's DOP, so a few heaps in Leipzig's freight yards became trees.)*
   `pipeline/bake/canopy.py`. At build time
   (`scripts/prepare-data.ts`, `treesOffStructures` in
   `lib/city/small-buildings.ts`) a canopy or laser-scan point in or within
@@ -1296,6 +1340,53 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   as it reads the NDVI. It tells green from grey well and vigour less
   well — a stand-in, marked 🟡 in the *Sources by city* page. München's
   four tiles have it. A DOP with fewer than three bands still skips.
+- **One vegetation-index scale for every flight** `= computed`
+  (2026-10-20) — the orthophotos are not calibrated reflectances: each
+  flight's bands carry their own gain and offset, so the same asphalt read
+  NDVI −0.30 in Dresden, −0.37 in Meißen, −0.15 in Leipzig, −0.07 in
+  Hamburg and +0.02 in Unna, and the same mown lawn 0.33, 0.41, 0.12, 0.14
+  and 0.22 (Munich's GLI: 0.20 and 0.43). Every threshold downstream (the lawn edges'
+  and the urban green's 0.3, the hedge cue's 0.12, the canopy's courtyard
+  crowns, the sheds' and the rebuilt roofs' green veto, the tram's lawn
+  bed, the crown colour and the meadow tint) was tuned on Dresden's: on
+  Leipzig's flight 1–4 % of the OSM lawns passed the urban green's 0.3
+  (Dresden's 18–82 % a tile), so its courtyards drew grey; on Munich's GLI the
+  asphalt read 0.19 and passed the hedge cue. `ndvi.py` now maps the raw
+  index by one line per site onto Dresden's scale: the medians on the
+  site's carriageways (`ways.carriageways`) and its mown lawns (OSM grass,
+  meadow, village green, park, garden), both where DOM1 stands within
+  0.5 m of the ground, pooled over the site's tiles, go to Dresden's own
+  (−0.298, 0.332), so Dresden's raster stays as it was and a threshold
+  means the same green in every city. Two materials every city shows and
+  that hardly change between flights, asphalt and a mown lawn, and per
+  site rather than per tile: Dresden's lawns alone range 0.14–0.46 a tile
+  under one flight (the Großer Garten against the Heide), which a
+  per-tile scale would have turned into seams. A site with too few of
+  either keeps the raw index. The step now runs before the canopy, which
+  reads its raster.
+- **Evergreen canopy crowns** `≈ detected` (2026-10-20) — a canopy crown
+  has no species, so every one followed the generic deciduous year and
+  the Dresdner Heide's pines stood bare from November to April. Two
+  sources tell a conifer without a register. The Basis-DLM's forest kind
+  (`veg02_f` `VEG`: 1100 broadleaf, 1200 needle, 1300 mixed; without a
+  DLM OSM's `leaf_type` on a wood or forest): a crown in a needle forest
+  is an evergreen (`l: "e"`). And in a mixed forest the orthophoto, where
+  it was flown leaf-off: on Dresden's March flight the crowns of the
+  Heide's needle stands read NDVI 0.39 (median, 3 × 3 max at the peak)
+  and its broadleaf stands' 0.16 — a cut at 0.354 parts them best
+  (Youden's J 0.40) — so a mixed forest's crown at 0.35 or more on the
+  calibrated index is one too (`l: "e"`, `ls: "dop"`), but only where
+  the site's broadleaf crowns read below 0.30 (at least 200 of them):
+  under leaves a summer flight shows every crown green. 44 % of the
+  Heide's mixed-forest crowns pass. Baked: Dresden 91 076 of its 303 113
+  canopy crowns (the Heide's two northern tiles 63 % and 60 %), Grimma
+  807, Meißen 129, Unna 68; none on Leipzig's, Hamburg's and München's
+  tiles. The DOM's form (a cone's peak over
+  its shoulders) does not part them (J 0.17) and is not used. An
+  evergreen crown keeps its leaves and colour all year (no season
+  jitter) on both terrain levels (`lib/city/coarse-crowns.ts` byte 10),
+  and the card says *Nadelbaum, immergrün* with the source that told it.
+  *Not yet:* a conifer's form — the crown keeps its broadleaf shape.
 - **Crown shaping** `≈ assumed` — radial crown normals (free), organic trunk, base darkening;
   the mid crown is a detail-2 icosphere (180 tris) with lobes;
   **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),
@@ -1678,7 +1769,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     3 226 shrubs. **Shipped: the 116 OSM hedges** (4.3 km; 54 / 94 / 45 on
     the OSM-only neighbours).
   - *Trees outside the mask* (`canopyx`): crown peaks of the multi-echo (≥ 0.5)
-    > 3 m canopy, ≥ 3 m apart, more than 5 m from any current canopy point —
+    > 3 m canopy, ≥ 3 m apart, more than 5 m from any current canopy point,
+    off paths, water, carriageways and track beds (`ways.traffic`; until
+    2026-10-20 off the whole road and railway class, see *Canopy fill*) —
     8 006 peaks (96 % built-up class; 57 % more than 15 m from the DLM road
     area, 1 969 of them enclosed by buildings on ≥ 6 of 8 rays = courtyards;
     16 % street-side). **Deduplicated against the cadastre in the bake**: the
@@ -1689,6 +1782,16 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     peaks) since the re-bake of 2026-09-25 with the current bridges and the
     land cover with the OSM squares carved in, where more trees may stand. (Taking the scan height where the cadastre has none is not
     done: the cadastre bake imputes missing heights and does not mark them.)
+    Each peak's crown radius `r` is its watershed share of the crown mass
+    (`crown_radii`, from every peak and every canopy and cadastre tree, so a
+    neighbour's share stays its own), as a disc of the same area, 1–12 m.
+    *(Until 2026-10-20 the distance to the mass's edge at the peak: lone
+    scan crowns came out a third of the area DOM1 shows them, against half
+    for lone cadastre trees with a surveyed crown — Dresden, Leipzig; in
+    Unna the median radius went from 1.8 to 3.5 m, and the circles over the
+    orthophoto now cover the crowns they stand in. Saxony's scan trees keep
+    the old radii until GeoSN's laser-scan share answers again: on
+    2026-10-20 it answered 404 for every tile.)*
     Rendered as ordinary canopy trees.
   - *Rendering* (`low-vegetation-layer.ts`, separate from the tree layer):
     hedges are chains of superellipsoid "clay" blocks (288 tris, ≤ 2.5 m
@@ -3106,8 +3209,12 @@ research that produced them):
    per-tree position/height/crown; bake to per-tile GeoJSON. *(First step ✅
    above: `canopyx` crown peaks with `h` + `r`, outside the canopy mask only,
    thinned against the cadastre; since 2026-10-07 the renderer sizes such a
-   crown from its `r`, 2r within 0.4–0.75 × h — the radius is the distance
-   to the crown mass's edge at the peak, so a group's would be too wide.)*
+   crown from its `r`, 2r within 0.4–0.75 × h. Since 2026-10-20 `r` is the
+   crown's share of the scan's crown mass — the watershed of the smoothed
+   heights from every scan peak and every canopy and cadastre tree — as a
+   disc of the same area; before, it was the distance to the mass's edge at
+   the peak, which read a lone crown from a peak off its centre and a
+   group's at its narrowest.)*
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
    low-sun shadows clip the 110 m frustum). *Amended 2026-09-25:* the baked
    horizon (✅ above, [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md))

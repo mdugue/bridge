@@ -17,7 +17,8 @@ described in [Where the data comes from](./data-sources.md).
 | Bridge decks | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟡 OSM + DOM1 ¹ | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟡 OSM + DOM1 ¹ |
 | Street trees (species, crown) | 🟢 tree register | ⚪ — ² | 🟡 tree register ³ | 🟢 tree register | ⚪ — ² | ⚪ — ² | ⚪ — ² | 🟢 tree register |
 | Tree rows, hedges | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
-| Sheds, extra trees, hedge heights | 🟢 laser scan | 🟢 laser scan | ⚪ — ⁴ | 🟢 laser scan | 🟢 laser scan | 🟢 laser scan | 🟢 laser scan | ⚪ — ⁵ |
+| Trees in gardens and courtyards | 🟢 laser scan | 🟢 laser scan | 🟡 DOP + DOM1 ⁴ | 🟢 laser scan | 🟢 laser scan | 🟢 laser scan | 🟢 laser scan | 🟡 DOP + DOM1 ⁵ |
+| Sheds, hedge heights | 🟢 laser scan | 🟢 laser scan | ⚪ — ⁴ | 🟢 laser scan | 🟢 laser scan | 🟢 laser scan | 🟢 laser scan | ⚪ — ⁵ |
 | Vegetation colour (vigour) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟡 DOP RGB (GLI) ⁶ | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) |
 | Shop windows, facade readings | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | ⚪ — ⁷ | ⚪ — ⁸ |
 | Monuments, fountains | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
@@ -25,7 +26,7 @@ described in [Where the data comes from](./data-sources.md).
 | Data layer: motor traffic | 🟢 city counts | 🟡 road census ⁹ | 🟢 city counts (main roads) | ⚪ — ¹⁰ | 🟡 road census ⁹ | ⚪ — ¹⁰ | 🟡 road census ⁹ | 🟢 city counts |
 | Data layer: cycling, live | 🟢 city counters | ⚪ — ¹¹ | 🟢 city counters | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ |
 | Data layer: trams by timetable | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM |
-| 🟢 from the best source | **20** / 22 | **16** / 22 | **12** / 22 | **18** / 22 | **16** / 22 | **16** / 22 | **15** / 22 | **12** / 22 |
+| 🟢 from the best source | **21** / 23 | **17** / 23 | **12** / 23 | **19** / 23 | **17** / 23 | **17** / 23 | **16** / 23 | **12** / 23 |
 
 ## Legend
 

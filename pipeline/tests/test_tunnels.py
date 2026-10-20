@@ -42,7 +42,7 @@ def test_a_dlm_road_axis_is_not_painted_where_a_tunnel_runs_along_it(tmp_path):
         [_line((50, 100), (150, 100)), _line((20, 80), (20, 120))],
         {"BWF": ["1870", "1800"]},
     )
-    painted = shapely.union_all(landcover._road_buffers(tile))
+    painted = shapely.union_all(landcover.road_buffers(tile))
     assert painted.contains(shapely.Point(X0 + 25, Y0 + 102))
     assert painted.contains(shapely.Point(X0 + 175, Y0 + 98))
     assert not painted.intersects(shapely.Point(X0 + 100, Y0 + 100).buffer(4))
@@ -54,7 +54,7 @@ def test_a_road_only_crossing_over_a_tunnel_keeps_its_crossing(tmp_path):
         tile.dlm / "ver01_l.shp", [_line((100, 0), (100, 200))], {"BRF": ["-9998"], "WDM": ["1307"]}
     )
     _shapefile(tile.dlm / "ver06_l.shp", [_line((0, 100), (200, 100))], {"BWF": ["1870"]})
-    painted = shapely.union_all(landcover._road_buffers(tile))
+    painted = shapely.union_all(landcover.road_buffers(tile))
     assert painted.contains(shapely.Point(X0 + 100, Y0 + 100))
 
 

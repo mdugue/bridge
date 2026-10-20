@@ -609,7 +609,10 @@ function canopyLineage(l: Lineage, c: CanopyInquiry, site: LineageSite): void {
   );
   l.source(
     "dlm",
-    [c.source === "row" && "die Baumreihe, auf der er steht"],
+    [
+      c.source === "row" && "die Baumreihe, auf der er steht",
+      c.evergreen === "forest" && "dass er immergrün ist: ein Nadelwald",
+    ],
     "taken",
     { standIn: "trees" }
   );
@@ -619,6 +622,10 @@ function canopyLineage(l: Lineage, c: CanopyInquiry, site: LineageSite): void {
     [
       site.provider.products.dop !== null &&
         "Laubfarbe aus dem Vegetationsindex",
+      c.evergreen === "photo" && [
+        "dass er immergrün ist: grün im laubfreien Luftbild",
+        "detected",
+      ],
     ],
     "computed"
   );

@@ -95,6 +95,7 @@ describe("the file", () => {
       ndvi: 0.42,
     },
     { kind: "canopy", x: -0.125, z: 1999.75, rot: 0, s: 0.5 },
+    { kind: "canopy", x: 5, z: 6, rot: 1, s: 2, evergreen: true },
     {
       kind: "register",
       x: Math.fround(10.1),
@@ -125,6 +126,7 @@ describe("the file", () => {
       if (c.kind === "canopy" && b?.kind === "canopy") {
         expect(b.s).toBeCloseTo(c.s, 3);
         expect(b.w).toBeCloseTo(c.w ?? c.s, 3);
+        expect(b.evergreen).toBe(c.evergreen);
       }
       if (c.kind === "register" && b?.kind === "register") {
         expect(b.colour).toBe(c.colour);

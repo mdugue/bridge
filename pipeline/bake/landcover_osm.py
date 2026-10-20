@@ -75,6 +75,28 @@ def _width(other_tags: str | None) -> float | None:
     return float(num.group()) if num else None
 
 
+def _road_half(highway: str, width: float | None) -> float:
+    return width / 2 if width else ROAD_HALF_WIDTH[highway]
+
+
+def road_buffers(tile: Tile) -> list[shapely.Geometry]:
+    """The roads the class raster burns as road (7): each carriageway on
+    the ground (`read_ways`) at its `width`, else at its class's
+    half-width."""
+    kinds = ", ".join(f"'{k}'" for k in ROAD_HALF_WIDTH)
+    geoms, fields = read_ways(tile, f"highway IN ({kinds})", ["highway", "other_tags"])
+    return [
+        shapely.buffer(g, _road_half(h, _width(other)))
+        for g, h, other in zip(
+            geoms,
+            column(fields, "highway", geoms),
+            column(fields, "other_tags", geoms),
+            strict=True,
+        )
+        if g is not None and h in ROAD_HALF_WIDTH
+    ]
+
+
 def _area_class(values: dict[str, str | None]) -> int | None:
     for cls in (8, 5, 4, 3, 2, 1):  # the most specific first
         for key, wanted in AREAS[cls].items():
@@ -116,9 +138,7 @@ def burn_order(tile: Tile) -> tuple[list[tuple[int, list[shapely.Geometry]]], li
         elif highway[i] in PATHS:
             by_class[6].append(shapely.buffer(g, width / 2 if width else 1.0))
         elif highway[i] in ROAD_HALF_WIDTH:
-            by_class[7].append(
-                shapely.buffer(g, width / 2 if width else ROAD_HALF_WIDTH[highway[i]])
-            )
+            by_class[7].append(shapely.buffer(g, _road_half(highway[i], width)))
         elif waterway[i] in WATERWAY_HALF_WIDTH:
             half = width / 2 if width else WATERWAY_HALF_WIDTH[waterway[i]]
             by_class[8].append(shapely.buffer(g, half))

@@ -1325,6 +1325,25 @@ def test_scan_trees_a_cadastre_tree_claims_are_dropped(tmp_path):
     assert [f["geometry"]["coordinates"][0] for f in kept] == [7.0]
 
 
+def test_a_scan_crown_is_as_wide_as_its_share_of_the_crown_mass():
+    from bake.lowveg import RES, crown_radii
+
+    # 0.5 m cells: a lone crown of radius 4 m whose peak sits off its
+    # centre, and a pair of 3 m crowns that touch, the second one a canopy
+    # tree's (an `other`): the lone one is 4 m wide wherever its peak is,
+    # and each of the pair keeps its own half
+    yy, xx = np.mgrid[0:80, 0:80] * RES
+    lone = np.hypot(xx - 10, yy - 10) <= 4
+    pair = (np.hypot(xx - 10, yy - 30) <= 3) | (np.hypot(xx - 16, yy - 30) <= 3)
+    mass = lone | pair
+    chm = np.where(mass, 10.0, 0.0) - np.hypot(xx - 11, yy - 9.5) * 0.01
+    chm[pair] -= np.minimum(np.hypot(xx - 10, yy - 30), np.hypot(xx - 16, yy - 30))[pair]
+    peaks = np.array([[int(9.5 / RES), int(11 / RES)], [int(30 / RES), int(10 / RES)]])
+    radii = crown_radii(chm, mass, peaks, [(int(30 / RES), int(16 / RES))])
+    assert abs(radii[0] - 4.0) < 0.2
+    assert abs(radii[1] - 3.0) < 0.3
+
+
 def test_a_closed_hedge_way_stays_a_line_of_hedge():
     from bake.lowveg import hedge_rings
 
