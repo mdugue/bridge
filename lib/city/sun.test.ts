@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import { getTimes } from "suncalc";
-import { enuToWorld, sunDirectionEnu, sunDirectionWorld } from "./sun";
+import {
+  enuToWorld,
+  sunDirectionEnu,
+  sunDirectionWorld,
+  sunTimesOn,
+} from "./sun";
 
 // Dresden city center.
 const LAT = 51.05;
@@ -71,4 +76,20 @@ test("at midwinter solar noon the sun is due south but low", () => {
   // Still due south: North=-Z, so z > 0, and no east-west component.
   expect(dir.z).toBeGreaterThan(0);
   expect(Math.abs(dir.x)).toBeLessThan(0.02);
+});
+
+test("sunTimesOn gives the picked civil day's sunrise, not the day before's", () => {
+  const zone = process.env.TZ;
+  process.env.TZ = "Europe/Berlin";
+  try {
+    // Local midnight in Dresden is 23:00 UTC the day before — nearer the
+    // previous day's solar noon than this one's.
+    const day = new Date(2026, 2, 21);
+    const { sunrise, sunset } = sunTimesOn(day, LAT, LNG);
+    expect(sunrise?.toISOString().slice(0, 10)).toBe("2026-03-21");
+    expect(sunset?.toISOString().slice(0, 10)).toBe("2026-03-21");
+  } finally {
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  }
 });

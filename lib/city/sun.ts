@@ -1,4 +1,4 @@
-import { getPosition } from "suncalc";
+import { getPosition, getTimes, type SunTimes } from "suncalc";
 import { DEG2RAD } from "./pose";
 
 /**
@@ -50,4 +50,15 @@ export function enuToWorld(enu: Enu): Vec3 {
  */
 export function sunDirectionWorld(date: Date, lat: number, lng: number): Vec3 {
   return enuToWorld(sunDirectionEnu(date, lat, lng));
+}
+
+/**
+ * Sunrise, sunset and the rest for the civil day `day` falls on, in the
+ * zone `day` is read in. Without the zone's offset suncalc takes the solar
+ * day nearest the instant, and a day picked as local midnight east of
+ * Greenwich lies nearer the previous day's noon: the times were the day
+ * before's (suncalc 2.1 added the offset).
+ */
+export function sunTimesOn(day: Date, lat: number, lng: number): SunTimes {
+  return getTimes(day, lat, lng, 0, -day.getTimezoneOffset());
 }

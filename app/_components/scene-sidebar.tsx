@@ -32,7 +32,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { getTimes } from "suncalc";
 import { Button } from "@/components/ui/button";
 import { SUPPORT_URL } from "@/lib/brand";
 import {
@@ -77,6 +76,7 @@ import {
   type RenderStyle,
 } from "@/lib/city/render-style";
 import type { PlayerPose } from "@/lib/city/pose";
+import { sunTimesOn } from "@/lib/city/sun";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { cn } from "cn";
 import type { CityWalkHandle } from "./create-app";
@@ -584,7 +584,7 @@ function SunControls({
       window.removeEventListener("touchcancel", cancel);
     };
   }, [dragging, day, updateSun]);
-  const times = latLng ? getTimes(day, latLng.lat, latLng.lng) : null;
+  const times = latLng ? sunTimesOn(day, latLng.lat, latLng.lng) : null;
   const sunrise = times?.sunrise;
   const sunset = times?.sunset;
   // The track is the day itself: night at both ends, the warm band anchored to
