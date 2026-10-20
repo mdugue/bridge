@@ -1265,6 +1265,30 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   as it reads the NDVI. It tells green from grey well and vigour less
   well — a stand-in, marked 🟡 in the *Sources by city* page. München's
   four tiles have it. A DOP with fewer than three bands still skips.
+- **One vegetation-index scale for every flight** `= computed`
+  (2026-10-20) — the orthophotos are not calibrated reflectances: each
+  flight's bands carry their own gain and offset, so the same asphalt read
+  NDVI −0.30 in Dresden, −0.37 in Meißen, −0.15 in Leipzig, −0.07 in
+  Hamburg and +0.02 in Unna, and the same mown lawn 0.33, 0.41, 0.12, 0.14
+  and 0.22 (Munich's GLI: 0.20 and 0.43). Every threshold downstream (the lawn edges'
+  and the urban green's 0.3, the hedge cue's 0.12, the canopy's courtyard
+  crowns, the sheds' and the rebuilt roofs' green veto, the tram's lawn
+  bed, the crown colour and the meadow tint) was tuned on Dresden's: on
+  Leipzig's flight 1–4 % of the OSM lawns passed the urban green's 0.3
+  (Dresden's 18–82 % a tile), so its courtyards drew grey; on Munich's GLI the
+  asphalt read 0.19 and passed the hedge cue. `ndvi.py` now maps the raw
+  index by one line per site onto Dresden's scale: the medians on the
+  site's carriageways (`ways.carriageways`) and its mown lawns (OSM grass,
+  meadow, village green, park, garden), both where DOM1 stands within
+  0.5 m of the ground, pooled over the site's tiles, go to Dresden's own
+  (−0.298, 0.332), so Dresden's raster stays as it was and a threshold
+  means the same green in every city. Two materials every city shows and
+  that hardly change between flights, asphalt and a mown lawn, and per
+  site rather than per tile: Dresden's lawns alone range 0.14–0.46 a tile
+  under one flight (the Großer Garten against the Heide), which a
+  per-tile scale would have turned into seams. A site with too few of
+  either keeps the raw index. The step now runs before the canopy, which
+  reads its raster.
 - **Crown shaping** `≈ assumed` — radial crown normals (free), organic trunk, base darkening;
   the mid crown is a detail-2 icosphere (180 tris) with lobes;
   **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),

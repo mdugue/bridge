@@ -27,11 +27,12 @@ import numpy as np
 import rasterio
 import shapely
 import shapely.geometry
+from PIL import Image
 from rasterio.features import rasterize
 from scipy import ndimage as ndi
 from scipy.ndimage import uniform_filter
 
-from . import landcover_osm, ndvi, ways
+from . import landcover_osm, ways
 from .common import Tile, feature, read_layer, write_geojson
 from .lowveg import lod2_rings
 from .osm import read_osm
@@ -53,10 +54,10 @@ ROOF_REACH_M = 2.0
 # one outline do not pull it down to the ground.
 ROOF_QUANTILE = 0.75
 # Outside the vegetation mask, without a laser scan: a crown is green in the
-# orthophoto (NDVI, 0..255) and rough in the surface model — the spread of a
-# 3 × 3 window above ROUGH_M on more than half of the 5 × 5 around it — and
-# stands clear of every LoD2 outline grown by FOOTPRINT_REACH_M. A roof, a
-# lorry, a ship or a crane is grey or smooth.
+# orthophoto (the baked index, 0..255 on Dresden's scale) and rough in the
+# surface model — the spread of a 3 × 3 window above ROUGH_M on more than
+# half of the 5 × 5 around it — and stands clear of every LoD2 outline grown
+# by FOOTPRINT_REACH_M. A roof, a lorry, a ship or a crane is grey or smooth.
 GREEN = 77  # NDVI 0.3
 ROUGH_M = 0.5
 FOOTPRINT_REACH_M = 1.0
@@ -162,16 +163,13 @@ def built_mask(tile: Tile, px: int) -> np.ndarray:
 
 def green_mask(tile: Tile, rough: np.ndarray, built: np.ndarray) -> np.ndarray:
     """The crowns outside the vegetation mask where no laser scan finds them
-    (`products.lsc` false): green in the DOP, rough in DOM1, off every LoD2
-    outline. A provider with a scan, or no DOP: nothing."""
-    h, w = rough.shape
-    if tile.products.lsc or not tile.raw_raster("dop").exists():
-        return np.zeros((h, w), dtype=bool)
-    with rasterio.open(tile.raw_raster("dop")) as dop:
-        bands = dop.count
-    if bands < 3:
-        return np.zeros((h, w), dtype=bool)
-    green = (ndvi.ndvi_raster(tile, w) if bands >= 4 else ndvi.rgb_raster(tile, w)) >= GREEN
+    (`products.lsc` false): green in the baked vegetation index (`ndvi.py`,
+    on Dresden's scale whatever the flight), rough in DOM1, off every LoD2
+    outline. A provider with a scan, or no index: nothing."""
+    png = tile.out("dlm", f"ndvi_{tile.id}.png")
+    if tile.products.lsc or not png.exists():
+        return np.zeros(rough.shape, dtype=bool)
+    green = raster_at(np.asarray(Image.open(png).convert("L")), rough.shape) >= GREEN
     return green & rough & ~built
 
 
@@ -199,6 +197,13 @@ def traffic_mask(tile: Tile, px: int) -> np.ndarray:
     return mask == 1
 
 
+def raster_at(raster: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """A baked raster over the tile, nearest-sampled onto `shape`."""
+    rows = np.minimum((np.arange(shape[0]) * raster.shape[0]) // shape[0], raster.shape[0] - 1)
+    cols = np.minimum((np.arange(shape[1]) * raster.shape[1]) // shape[1], raster.shape[1] - 1)
+    return raster[np.ix_(rows, cols)]
+
+
 def class_raster_at(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
     """The baked class raster, nearest-sampled onto `shape`."""
     cls = tile.classes()
@@ -206,9 +211,7 @@ def class_raster_at(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
         raise FileNotFoundError(
             f"{tile.id}: the canopy is gated on the class raster; bake landcover first"
         )
-    rows = np.minimum((np.arange(shape[0]) * cls.shape[0]) // shape[0], cls.shape[0] - 1)
-    cols = np.minimum((np.arange(shape[1]) * cls.shape[1]) // shape[1], cls.shape[1] - 1)
-    return cls[np.ix_(rows, cols)]
+    return raster_at(cls, shape)
 
 
 def canopy_points(tile: Tile, cell: int) -> list[dict]:

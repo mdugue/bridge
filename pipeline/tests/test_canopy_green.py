@@ -10,6 +10,7 @@ import json
 import numpy as np
 import rasterio
 
+from bake import ndvi
 from bake.canopy import built_mask, green_mask, rough_mask
 from bake.common import Products, Tile
 from tests.synthetic import SIZE, X0, Y0
@@ -60,6 +61,7 @@ def _tile(tmp_path, lsc: bool = False) -> tuple[Tile, np.ndarray]:
     for patch in (crown, lawn, roof):
         red[patch], nir[patch] = 40, 200
     _raster(tile, tile.raw_raster("dop"), np.stack([red, red, red, nir]))
+    ndvi.run(tile, px=SIZE)  # no OSM extract: the raw scale
     # the building under the green roof, one LoD2 ring over its outline
     tile.cityjson.parent.mkdir(parents=True, exist_ok=True)
     ring = [
@@ -103,5 +105,5 @@ def test_a_provider_with_a_laser_scan_leaves_it_to_the_scan(tmp_path):
     tile, dom = _tile(tmp_path, lsc=True)
     assert not _green(tile, dom).any()
     plain = dataclasses.replace(tile, products=Products(dom=True, dop="rgbi", dlm=False))
-    tile.raw_raster("dop").unlink()
-    assert not _green(plain, dom).any()  # nor without an orthophoto
+    tile.out("dlm", "ndvi_t.png").unlink()
+    assert not _green(plain, dom).any()  # nor without a vegetation index

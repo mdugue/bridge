@@ -53,9 +53,11 @@ STEPS = {
     # OSM's, rail_osm.py), the furniture (it keeps benches off the decks),
     # the tram, lowveg and small-buildings (masks).
     "rail": rail.run,
+    # Before the canopy (its courtyard crowns are green in it), on one scale
+    # for the whole site (its anchors pooled over the site's tiles).
+    "ndvi": ndvi.run,
     "canopy": canopy.run,
     "trees": trees.run,
-    "ndvi": ndvi.run,
     "roof-colour": roof_colour.run,
     "osm-buildings": osm_buildings.run,
     # OSM entrances on the LoD2 walls (scripts/bake-city-mesh.ts draws them).
@@ -176,6 +178,9 @@ def main() -> None:
         for step in steps:
             if step == "lowveg":
                 lowveg.run(tile, research=args.research)
+                continue
+            if step == "ndvi":
+                ndvi.run(tile, spec.tiles)
                 continue
             STEPS[step](tile)
     if args.step == "all" and not args.tile:
