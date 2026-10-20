@@ -1185,8 +1185,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   (`CROWN_TO_HEIGHT`, `lib/city/tree-placement.ts`: the median of Dresden's
   50 123 surveyed trees with height and crown, the same in every 5 m class;
   until 2026-10-07 the generic crown was scaled uniformly by `h / 5.8`,
-  0.88 × h wide and 1.1 × h tall, so a park point stood under ~5 crowns), **gated off road/bridge/water** via the DLM
-  class raster, and off everything within 10 m of a DLM bridge (a bridge's
+  0.88 × h wide and 1.1 × h tall, so a park point stood under ~5 crowns), **gated off paths and water** via the DLM
+  class raster, **off the carriageways and track beds** (`ways.traffic`, below), and off everything within 10 m of a DLM bridge (a bridge's
   steel on a park bank is as tall as a crown: the Blaues Wunder's pylons came
   out as two trees; without a DLM the decks the rail step baked from OSM,
   `bridge_<tile>.geojson` — so `rail` runs before `canopy`). **And off a
@@ -1212,6 +1212,28 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   built-up class — at the same precision (0.67 → 0.66), 19 600 → 46 900
   canopy trees; the summer DOP's crowns are green, and its harbour's cranes,
   piles and scrap are grey.)*
+  **On transport land the veto is the traffic, not the parcel**
+  (2026-10-20, `pipeline/bake/ways.py`, `verge_mask`): no tree stands on a
+  carriageway (the DLM's road centrelines at their surveyed width, the
+  buffers the class raster burns; without a DLM OSM's roads at the class
+  raster's widths) or a track bed (the baked rails, 2.5 m either side plus
+  2.25 m per further track, and every OSM track above ground — sidings,
+  yards, trams in their own bed — 2.5 m either side), each grown by
+  0.5 m. Beyond them the road and railway land the DLM files to its fences
+  is planted from the crowns DOM1 shows there — rough, 3–45 m, off every
+  LoD2 outline, a blob of at least 15 m² after a 3 × 3 opening — with or
+  without a scan, and not gated on the DOP's green: Saxony's is flown
+  leaf-off, where 1–4 % of a crown's texels read green (Leipzig), against
+  19 % in Unna's summer flight. *(The class gate vetoed the parcel: the
+  station forecourts, embankments, verges, junction islands and the strips
+  of wood beside a road the DLM files as road or railway, with their
+  trees — on Leipzig's tiles 5.2 % of the crown cover DOM1 shows, 6.9 % of
+  what the model left out; Dresden 1.6 % and 3.9 %. Leipzig gains
+  5 373 canopy trees (+11 %), Unna 840; on Unna's tile with a scan every
+  added point on rail and road land is tall vegetation to the scan
+  (multi-echo ≥ 0.5 within 1.5 m). Left: a rail yard's gravel heaps are
+  as rough as a crown in DOM1 and leafless trees no greener than they in
+  Saxony's DOP, so a few heaps in Leipzig's freight yards became trees.)*
   `pipeline/bake/canopy.py`. At build time
   (`scripts/prepare-data.ts`, `treesOffStructures` in
   `lib/city/small-buildings.ts`) a canopy or laser-scan point in or within
@@ -1625,7 +1647,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     3 226 shrubs. **Shipped: the 116 OSM hedges** (4.3 km; 54 / 94 / 45 on
     the OSM-only neighbours).
   - *Trees outside the mask* (`canopyx`): crown peaks of the multi-echo (≥ 0.5)
-    > 3 m canopy, ≥ 3 m apart, more than 5 m from any current canopy point —
+    > 3 m canopy, ≥ 3 m apart, more than 5 m from any current canopy point,
+    off paths, water, carriageways and track beds (`ways.traffic`; until
+    2026-10-20 off the whole road and railway class, see *Canopy fill*) —
     8 006 peaks (96 % built-up class; 57 % more than 15 m from the DLM road
     area, 1 969 of them enclosed by buildings on ≥ 6 of 8 rays = courtyards;
     16 % street-side). **Deduplicated against the cadastre in the bake**: the

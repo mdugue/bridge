@@ -10,7 +10,7 @@ import json
 import numpy as np
 import rasterio
 
-from bake.canopy import green_mask
+from bake.canopy import built_mask, green_mask, rough_mask
 from bake.common import Products, Tile
 from tests.synthetic import SIZE, X0, Y0
 
@@ -31,7 +31,7 @@ def _raster(tile: Tile, path, bands: np.ndarray) -> None:
         dst.write(bands)
 
 
-def _tile(tmp_path, lsc: bool = False) -> tuple[Tile, np.ndarray, np.ndarray]:
+def _tile(tmp_path, lsc: bool = False) -> tuple[Tile, np.ndarray]:
     """A 200 m tile, row 0 = north: a crown, a lawn, a green roof on a
     building and a grey yard of rough clutter."""
     tile = Tile(
@@ -83,12 +83,16 @@ def _tile(tmp_path, lsc: bool = False) -> tuple[Tile, np.ndarray, np.ndarray]:
             }
         )
     )
-    return tile, dom, dom - 100.0
+    return tile, dom
+
+
+def _green(tile: Tile, dom: np.ndarray) -> np.ndarray:
+    return green_mask(tile, rough_mask(dom), built_mask(tile, SIZE))
 
 
 def test_a_green_rough_crown_off_any_building_is_canopy(tmp_path):
-    tile, dom, ndom = _tile(tmp_path)
-    mask = green_mask(tile, dom, ndom)
+    tile, dom = _tile(tmp_path)
+    mask = _green(tile, dom)
     assert mask[SIZE - 30, 30]  # the crown
     assert not mask[SIZE - 30, 70]  # the lawn: green, but smooth
     assert not mask[SIZE - 70, 30]  # the green roof: on a building
@@ -96,8 +100,8 @@ def test_a_green_rough_crown_off_any_building_is_canopy(tmp_path):
 
 
 def test_a_provider_with_a_laser_scan_leaves_it_to_the_scan(tmp_path):
-    tile, dom, ndom = _tile(tmp_path, lsc=True)
-    assert not green_mask(tile, dom, ndom).any()
+    tile, dom = _tile(tmp_path, lsc=True)
+    assert not _green(tile, dom).any()
     plain = dataclasses.replace(tile, products=Products(dom=True, dop="rgbi", dlm=False))
     tile.raw_raster("dop").unlink()
-    assert not green_mask(plain, dom, ndom).any()  # nor without an orthophoto
+    assert not _green(plain, dom).any()  # nor without an orthophoto

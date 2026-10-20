@@ -1,8 +1,8 @@
 """DOM1 − DGM1 → tree canopy points. One tree per `cell` metres at the
 tallest canopy texel between 3 and 45 m, only inside forest, copse or park
-(rasterised from the DLM), never on rail, path, road or water (the class
-raster — the gate that stopped trees growing through bridge decks), and
-never on or beside a bridge (the DLM's decks, grown by BRIDGE_REACH): where
+(rasterised from the DLM), never on a path or water (the class raster),
+nor on a carriageway or a track bed (`ways.traffic`), and never on or beside
+a bridge (the DLM's decks, grown by BRIDGE_REACH): where
 a bridge lands on a park bank, its steel — the Blaues Wunder's pylons — is
 as tall in the nDOM as a crown, and would have become one. Nor on a
 building's roof (`roof_mask`): the DLM files a stadium, a fair's halls or a
@@ -12,7 +12,12 @@ roof's height.
 Without a laser scan (Hamburg, Berlin) no step finds the trees outside that
 mask — a courtyard's, a garden's, a street tree the cadastre lacks — so
 there the canopy also takes the texels the orthophoto shows green and the
-surface model rough, where no building stands (`green_mask`)."""
+surface model rough, where no building stands (`green_mask`).
+
+Nor does any step plant the trees of the transport land beyond the traffic
+— the station forecourts, the embankments, the verges, the junction islands
+the DLM files as road or railway: there the canopy takes the crowns the
+surface model shows, with or without a scan (`verge_mask`)."""
 
 from __future__ import annotations
 
@@ -23,15 +28,17 @@ import rasterio
 import shapely
 import shapely.geometry
 from rasterio.features import rasterize
+from scipy import ndimage as ndi
 from scipy.ndimage import uniform_filter
 
-from . import landcover_osm, ndvi
+from . import landcover_osm, ndvi, ways
 from .common import Tile, feature, read_layer, write_geojson
 from .lowveg import lod2_rings
 from .osm import read_osm
 
 MIN_H, MAX_H = 3.0, 45.0
-BLOCKED = (5, 6, 7, 8)  # railway, path, road, water
+BLOCKED = (6, 8)  # path, water
+TRANSPORT = (5, 7)  # railway, road: the DLM's parcels, to their fences
 WOODED = (2, 3)  # forest, copse
 PARK = "OBJART_TXT='AX_SportFreizeitUndErholungsflaeche'"
 BRIDGE = "BWF='1800'"
@@ -53,6 +60,11 @@ ROOF_QUANTILE = 0.75
 GREEN = 77  # NDVI 0.3
 ROUGH_M = 0.5
 FOOTPRINT_REACH_M = 1.0
+# On transport land beyond the traffic a crown is a rough blob in DOM1 of
+# this many m² after a 3 × 3 opening (a mast, a gantry, a fence are thinner).
+# Not the orthophoto's green: Saxony's is flown leaf-off, where 1–4 % of a
+# crown's texels are green (Leipzig; Unna's summer flight 19 %).
+VERGE_MIN_M2 = 15
 
 
 def vegetation_mask(tile: Tile, px: int) -> np.ndarray:
@@ -128,11 +140,31 @@ def roof_mask(tile: Tile, ndom: np.ndarray) -> np.ndarray:
     return inside & (ndom <= roof[labels] + ROOF_REACH_M)
 
 
-def green_mask(tile: Tile, dom: np.ndarray, ndom: np.ndarray) -> np.ndarray:
+def rough_mask(dom: np.ndarray) -> np.ndarray:
+    """A crown's texture in the surface model: the spread of a 3 × 3 window
+    above ROUGH_M on more than half of the 5 × 5 around it."""
+    mean = uniform_filter(dom, 3)
+    spread = np.sqrt(np.maximum(uniform_filter(dom * dom, 3) - mean * mean, 0.0))
+    return uniform_filter((spread > ROUGH_M).astype(np.float32), 5) > 0.5
+
+
+def built_mask(tile: Tile, px: int) -> np.ndarray:
+    """Every LoD2 outline, grown by FOOTPRINT_REACH_M."""
+    outlines = [
+        shapely.Polygon(ring[:, :2]).buffer(FOOTPRINT_REACH_M) for ring in lod2_rings(tile.cityjson)
+    ]
+    built = np.zeros((px, px), dtype=np.uint8)
+    outlines = [g for g in outlines if g.is_valid and not g.is_empty]
+    if outlines:
+        rasterize(((g, 1) for g in outlines), out=built, transform=tile.transform(px))
+    return built == 1
+
+
+def green_mask(tile: Tile, rough: np.ndarray, built: np.ndarray) -> np.ndarray:
     """The crowns outside the vegetation mask where no laser scan finds them
     (`products.lsc` false): green in the DOP, rough in DOM1, off every LoD2
     outline. A provider with a scan, or no DOP: nothing."""
-    h, w = ndom.shape
+    h, w = rough.shape
     if tile.products.lsc or not tile.raw_raster("dop").exists():
         return np.zeros((h, w), dtype=bool)
     with rasterio.open(tile.raw_raster("dop")) as dop:
@@ -140,17 +172,31 @@ def green_mask(tile: Tile, dom: np.ndarray, ndom: np.ndarray) -> np.ndarray:
     if bands < 3:
         return np.zeros((h, w), dtype=bool)
     green = (ndvi.ndvi_raster(tile, w) if bands >= 4 else ndvi.rgb_raster(tile, w)) >= GREEN
-    mean = uniform_filter(dom, 3)
-    spread = np.sqrt(np.maximum(uniform_filter(dom * dom, 3) - mean * mean, 0.0))
-    rough = uniform_filter((spread > ROUGH_M).astype(np.float32), 5) > 0.5
-    outlines = [
-        shapely.Polygon(ring[:, :2]).buffer(FOOTPRINT_REACH_M) for ring in lod2_rings(tile.cityjson)
-    ]
-    built = np.zeros((h, w), dtype=np.uint8)
-    outlines = [g for g in outlines if g.is_valid and not g.is_empty]
-    if outlines:
-        rasterize(((g, 1) for g in outlines), out=built, transform=tile.transform(w))
-    return green & rough & (built == 0)
+    return green & rough & ~built
+
+
+def verge_mask(
+    cls: np.ndarray, ndom: np.ndarray, rough: np.ndarray, built: np.ndarray, traffic: np.ndarray
+) -> np.ndarray:
+    """The crowns on transport land beyond the traffic: rough, 3–45 m, off
+    every LoD2 outline, in blobs of VERGE_MIN_M2 after a 3 × 3 opening (1 m
+    texels)."""
+    crown = np.isin(cls, TRANSPORT) & ~traffic & rough & ~built
+    crown &= (ndom > MIN_H) & (ndom < MAX_H)
+    crown = ndi.binary_opening(crown, np.ones((3, 3), bool))
+    labels, n = ndi.label(crown)
+    big = np.bincount(labels.ravel(), minlength=n + 1) >= VERGE_MIN_M2
+    big[0] = False
+    return big[labels]
+
+
+def traffic_mask(tile: Tile, px: int) -> np.ndarray:
+    """The carriageways and track beds (`ways.traffic`) on the tile's grid."""
+    mask = np.zeros((px, px), dtype=np.uint8)
+    geoms = ways.traffic(tile)
+    if geoms:
+        rasterize(((g, 1) for g in geoms), out=mask, transform=tile.transform(px))
+    return mask == 1
 
 
 def class_raster_at(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
@@ -165,18 +211,16 @@ def class_raster_at(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
     return cls[np.ix_(rows, cols)]
 
 
-def blocked_mask(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
-    """The class raster's blocked classes, nearest-sampled onto `shape`."""
-    return np.isin(class_raster_at(tile, shape), BLOCKED)
-
-
 def canopy_points(tile: Tile, cell: int) -> list[dict]:
     with rasterio.open(tile.raw_raster("dom1")) as src, rasterio.open(tile.dgm) as dgm:
         dom = src.read(1).astype(np.float64)
         ndom = dom - dgm.read(1).astype(np.float64)
     h, w = ndom.shape
-    ok = (vegetation_mask(tile, w) == 1) | green_mask(tile, dom, ndom)
-    ok &= ~blocked_mask(tile, ndom.shape)
+    cls = class_raster_at(tile, ndom.shape)
+    rough, built, traffic = rough_mask(dom), built_mask(tile, w), traffic_mask(tile, w)
+    ok = (vegetation_mask(tile, w) == 1) | green_mask(tile, rough, built)
+    ok |= verge_mask(cls, ndom, rough, built, traffic)
+    ok &= ~np.isin(cls, BLOCKED) & ~traffic
     ok &= bridge_mask(tile, w) == 0
     ok &= ~roof_mask(tile, ndom)
     ok &= (ndom > MIN_H) & (ndom < MAX_H)

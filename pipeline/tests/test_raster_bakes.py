@@ -101,12 +101,12 @@ def test_lamps_without_a_class_raster_write_nothing(tmp_path, monkeypatch):
 
 def test_the_canopy_plants_the_tallest_texel_off_the_blocked_classes(tmp_path, monkeypatch):
     cls = np.full((SIZE, SIZE), MEADOW, np.uint8)
-    cls[:, 100:] = ROAD
+    cls[:, 100:] = WATER
     tile = osm_tile(tmp_path, monkeypatch, {}, classes=cls, dgm=100.0)
     dom = np.full((SIZE, SIZE), 100.0)
     dom[50, 50] = 112.0  # a 12 m crown on the meadow
     dom[50, 51] = 110.0  # its shoulder, in the same 7 m cell
-    dom[50, 150] = 115.0  # a lamp post over the road: blocked
+    dom[50, 150] = 115.0  # a mooring post in the river: blocked
     dom[20, 20] = 160.0  # 60 m: above MAX_H, a mast, not a tree
     _raster(tile, "dom1", [dom], "float32")
     # The DLM's forest/park mask everywhere (no shapefiles in the fixture).

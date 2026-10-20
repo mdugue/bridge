@@ -52,6 +52,7 @@ from shapely.ops import linemerge, unary_union
 from skimage.feature import peak_local_max
 from skimage.morphology import skeletonize
 
+from . import ways
 from .common import OSM_ATTRIBUTION, Tile, column, write_geojson
 from .lsc import rasterise
 from .osm import has_extract, read_osm, tag
@@ -93,7 +94,8 @@ CANOPY_ECHO_T = 0.5  # tall vegetation is multi-echo (median 1.0 vs 0.0 on roofs
 CANOPY_PEAK_PX = 6  # crown peaks ≥ 3 m apart
 CANOPY_DEDUP_M = 5.0  # a peak this close to a current canopy point is covered
 BLOCKED_CLASSES = (5, 8)  # railway, water — never low vegetation
-TREE_BLOCKED_CLASSES = (5, 6, 7, 8)  # as canopy.py: no tree on these
+TREE_BLOCKED_CLASSES = (6, 8)  # as canopy.py: no tree on a path or water,
+# nor on a carriageway or a track bed (`inputs["traffic"]`)
 
 
 def disk(r_px):
@@ -490,6 +492,7 @@ def canopy_extra(inputs, canopy_path):
     keep = np.zeros(n + 1, bool)
     keep[1:] = area >= 16  # ≥ 4 m² of crown
     tall = keep[lab] & ~bld & ~inputs["bridge"] & ~np.isin(cls, TREE_BLOCKED_CLASSES)
+    tall &= ~inputs["traffic"]
     chm = ndi.gaussian_filter(np.where(tall, ndom, 0), 1.5)
     pk = peak_local_max(
         chm,
@@ -615,6 +618,9 @@ def load_inputs(tile: Tile, grid: Grid) -> dict:
     inputs["bridge"] = grid.burn([shape(f["geometry"]) for f in bridges])
     der = lsc_rasters(tile)
     inputs["has_lsc"] = der is not None
+    inputs["traffic"] = (
+        grid.burn(ways.traffic(tile)) if der is not None else np.zeros((grid.n, grid.n), bool)
+    )
     if der is None:
         return inputs
     ground = read_band(der / "dtm_050.tif", "idw")
