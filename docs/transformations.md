@@ -830,11 +830,17 @@ visual-variable codebook is in
   (the sun rig's `nightFactor`) a commerce/public/special building
   (`function`) is lit from in front, never glowing itself: soft cones of
   warm light from the wall's foot every 6 m, about half of them on, gone
-  by a storey and a half (*Lichtkegel*, `GROUND_LIGHT`); a landmark or
-  monumental building among them (Wikidata flag 16, own facade 512) wide
-  floodlight cones every 8 m up to its eave over a faint wash
-  (*Anstrahlung*, `FLOODLIGHT`). *Streiflicht* drops to a tenth at night
-  (`NIGHT_RIM`). `visual-style.ts` `nightLight`.
+  by a storey and a half (*Lichtkegel*, `GROUND_LIGHT`); three in five of
+  the landmarks and monumental buildings (flag 16), whole buildings at
+  once and whatever their use, floodlit (*Anstrahlung*, `FLOODLIGHT`,
+  `isFloodlit` in lib/city/city-mesh.ts): cones every 7 m
+  up to the eave over a faint wash, seven in ten on, each a little off
+  its slot and of its own strength — every one of them, evenly, was "schick
+  aber übertrieben" (the maintainer, 2026-10-20). A shop's band (*Ladenlicht*)
+  lights two cells in three and none on a landmark: on the Zwinger and the
+  terrace parts of the Kunstakademie it lit the low walls all round.
+  *Streiflicht* drops to a tenth at night (`NIGHT_RIM`). `visual-style.ts`
+  `nightLight`.
 - **Dusk glow (whole walls)** 🗃️ discontinued 2026-10-19 — a warm emissive
   wash over every wall of a commerce/public/special building (0.25 at full
   night) plus the full-strength rim: the centre glowed beige from afar and
@@ -2098,8 +2104,11 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   a point fountain is a 2.2 m round basin. The canopy loses the "trees" its
   own bake planted on a measured monument (`onRelief`). The fountains move
   gently — each bell breathes on its own phase, droplets run down its
-  curtain, light shimmers across the water — and by night the water glows
-  and a fountain's sculpture is lit warm from its basin (`setFountainTime`,
+  curtain, light shimmers across the water — and by night the water keeps
+  a faint glow from below and the jets a faint warm white, and a
+  fountain's sculpture is lit softly from its basin (until 2026-10-20 a
+  glow and jets bright enough to outshine the lit streets, "viel zu hell",
+  the maintainer) (`setFountainTime`,
   `setFountainNight`, one shared clock and night factor). Merged/instanced,
   eight draw calls per tile at most. Not walk-blocking (collision is
   buildings only).
