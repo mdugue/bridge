@@ -16,6 +16,7 @@ from . import (
     facades,
     fetch,
     furniture,
+    lamp_heights,
     lamps,
     landcover,
     landmarks,
@@ -69,6 +70,9 @@ STEPS = {
     # After the lamps and the furniture: Mapillary's lamps and bins where
     # OSM has none.
     "mapillary": mapillary.run,
+    # After the lamps and Mapillary's: their posts' heights, measured in
+    # DOM1 street by street.
+    "lamp-heights": lamp_heights.run,
     # What Mapillary's panoramas say about the facades (measured by the
     # fetch): three readings per building for the clay.
     "facades": facades.run,

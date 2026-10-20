@@ -1862,6 +1862,27 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   carriageway hang by the untagged rule too (Dresden: 142, most of them in
   the Äußere Neustadt, re-baked 2026-10-08).
 
+- **Lamp post heights, street by street** `= computed` (2026-10-20) — every
+  post stood 5 m tall, from a pedestrian lane to a six-lane road. The
+  surface model shows the posts where the scan caught them: at a lamp clear
+  of trees and facades the highest DOM1 − DGM1 texel within a metre is its
+  head. Leipzig's primary roads' lamps read 10 m (quartiles 7.6–12.6 m), its
+  residential streets' and footpaths' 5 m; Dresden's Ostra-Allee 8.3 m, the
+  Sarrasanistraße 3.4 m; Mapillary's photos of a few of them agree (8–12 m
+  masts with arms on Leipzig's and Hamburg's main roads). One lamp is a
+  poor reading — the scan misses a thin post as often as it hits it (a
+  quarter of Leipzig's read under a metre), a van or a branch reads as one,
+  and the readings along one street spread by 1.6–1.8 m (interquartile) —
+  but a street's lamps are alike, and the streets differ by more (3.4 to
+  10 m). So `lamp_heights.py` gives every post on a street with three
+  readings their median, a post on another its kind of street's on the tile
+  (main, mid, residential, walk; ten readings), else the 5 m it had (`h`,
+  `hs`); a reading must stand alone (a crown over a lamp is tall over
+  metres: Hamburg's footpath lamps read 7.4 m without that rule, 6.8 m with
+  it) over clear ground. The viewer draws one post set per height and a
+  taller post's light pool wider (`lamp-layer.ts`); the card says the
+  height and how it was found. *Not yet:* the arms (Ausleger) of the tall
+  masts — a head sits on top of every post.
 - **Street lamps and litter bins OSM lacks, from Mapillary** `◎ detected` — Mapillary's
   detected objects ("map features": `object--street-light`,
   `object--trash-can`, each one triangulated across the street photos that

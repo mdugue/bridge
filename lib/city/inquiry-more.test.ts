@@ -102,16 +102,48 @@ test("a tree row or hedge credits the site's own source, not GeoSN", () => {
 });
 
 test("a lamp's post is assumed, and the card says so", () => {
-  const card = lampCard({ kind: "lamp", tile: "t", position: at }, null);
+  const card = lampCard(
+    { kind: "lamp", tile: "t", position: at },
+    null,
+    DRESDEN
+  );
   expect(card.facts).toEqual([
     { label: "Mast", value: "5 m, angenommen", method: "assumed" },
   ]);
 });
 
+test("a lamp whose street the surface model measured says so", () => {
+  const lamp = { kind: "lamp" as const, tile: "t", position: at };
+  const street = lampCard(
+    { ...lamp, height: 9.5, heightFrom: "street" },
+    null,
+    DRESDEN
+  );
+  expect(street.facts).toEqual([
+    {
+      label: "Mast",
+      value: "9,5 m, wie an den Laternen der Straße gemessen",
+      method: "computed",
+    },
+  ]);
+  expect(lines(street.sources).at(-1)).toContain(
+    "Digitales Oberflächenmodell DOM1"
+  );
+  const kind = lampCard(
+    { ...lamp, height: 6, heightFrom: "class" },
+    null,
+    DRESDEN
+  );
+  expect(kind.facts[0].value).toBe(
+    "6 m, wie an den Laternen dieser Art Straße gemessen"
+  );
+});
+
 test("a lamp hung across the street has no post, and says how it hangs", () => {
   const card = lampCard(
     { kind: "lamp", tile: "t", position: at, hung: true },
-    null
+    null,
+    DRESDEN
   );
   expect(card.title).toBe("Hängeleuchte");
   expect(card.facts.map((f) => f.label)).toEqual(["Aufhängung", "Höhe"]);
@@ -120,7 +152,8 @@ test("a lamp hung across the street has no post, and says how it hangs", () => {
 test("a lamp or bin Mapillary detected names Mapillary, not OSM", () => {
   const lamp = lampCard(
     { kind: "lamp", tile: "t", position: at, src: "mly" },
-    null
+    null,
+    DRESDEN
   );
   expect(lamp.sources[0]?.text).toStartWith("Laterne: Mapillary");
   expect(lamp.sources[0]?.text).toContain("CC BY-SA 4.0");
@@ -134,7 +167,11 @@ test("a lamp or bin Mapillary detected names Mapillary, not OSM", () => {
     null
   );
   expect(bin.sources[0]?.text).toStartWith("Papierkorb: Mapillary");
-  const osmLamp = lampCard({ kind: "lamp", tile: "t", position: at }, null);
+  const osmLamp = lampCard(
+    { kind: "lamp", tile: "t", position: at },
+    null,
+    DRESDEN
+  );
   expect(osmLamp.sources[0]?.text).toContain("OpenStreetMap");
 });
 

@@ -139,15 +139,21 @@ export interface LowVegFeature {
 
 export type LowVegSource = "osm" | "osm+lsc";
 
-/** OSM street lamps (pipeline/bake/lamps.py, ODbL); the post height is a
- *  lamp-layer constant. A lamp hung across the street carries its `wire`
- *  (the two ends, EPSG; the head at the point, `h` m over the ground) and
- *  `masts` where an end is a mast at the kerb, not a facade. The source
- *  (`src`): "mly" for Mapillary's, lib/city/mapillary.ts. */
+/** OSM street lamps (pipeline/bake/lamps.py, ODbL). A post's `h` is its
+ *  height (m), measured in DOM1 as its street's median (`hs: "street"`) or
+ *  its kind of street's on the tile (`"class"`; pipeline/bake/
+ *  lamp_heights.py), else 5 m. A lamp hung across the street carries its
+ *  `wire` (the two ends, EPSG; the head at the point, `h` m over the
+ *  ground) and `masts` where an end is a mast at the kerb, not a facade.
+ *  The source (`src`): "mly" for Mapillary's, lib/city/mapillary.ts. */
+/** How a lamp post's height was found (pipeline/bake/lamp_heights.py). */
+export type LampHeightSource = "street" | "class";
+
 export interface LampFeature {
   geometry: PointGeometry;
   properties: {
     h?: number;
+    hs?: LampHeightSource;
     masts?: [boolean, boolean];
     src?: "mly";
     wire?: [Point2, Point2];
@@ -161,6 +167,7 @@ export interface MapillaryFeature {
   geometry: PointGeometry;
   properties: {
     h?: number;
+    hs?: LampHeightSource;
     k: "bin" | "lamp";
     masts?: [boolean, boolean];
     wire?: [Point2, Point2];

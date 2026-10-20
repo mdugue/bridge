@@ -23,6 +23,7 @@ import {
 import type {
   FurnitureFeature,
   FurnitureKind,
+  LampHeightSource,
   LowVegSource,
   RiversideFeature,
 } from "./features";
@@ -59,6 +60,10 @@ export interface HedgeInquiry {
 
 /** A street lamp (OSM, or Mapillary's: `src`). */
 export interface LampInquiry {
+  /** the post's height (m) where DOM1 measured it, and how: its street's
+   *  median, or its kind of street's (pipeline/bake/lamp_heights.py) */
+  height?: number;
+  heightFrom?: LampHeightSource;
   /** hung on a wire across the street (pipeline/bake/lamps.py) */
   hung?: boolean;
   kind: "lamp";
@@ -234,8 +239,14 @@ export function hedgeCard(
 /** A street lamp. */
 export function lampCard(
   l: LampInquiry,
-  provenance: SiteProvenance | null
+  provenance: SiteProvenance | null,
+  credits: CardCredits
 ): InquiryCard {
+  const measured = !l.hung && l.height !== undefined && l.heightFrom;
+  const along = {
+    street: "wie an den Laternen der Straße gemessen",
+    class: "wie an den Laternen dieser Art Straße gemessen",
+  };
   return {
     kicker: "Straßenbeleuchtung",
     title: l.hung ? "Hängeleuchte" : "Straßenlaterne",
@@ -246,11 +257,30 @@ export function lampCard(
             ["Aufhängung", "Querseil über der Straße", "computed"],
             ["Höhe", "7 m, angenommen", "assumed"],
           ]
-        : [["Mast", "5 m, angenommen", "assumed"]]
+        : measured
+          ? [
+              [
+                "Mast",
+                `${metres(l.height ?? 0)}, ${along[measured]}`,
+                "computed",
+              ],
+            ]
+          : [["Mast", "5 m, angenommen", "assumed"]]
     ),
     id: positionKey(l.position),
     idLabel: "Lage",
-    sources: pointSource("Laterne", l.src === "mly", provenance),
+    sources: [
+      ...pointSource("Laterne", l.src === "mly", provenance),
+      ...(measured
+        ? stated(
+            "computed",
+            sourceLine(provenance, "dom", ["Höhe der Masten"], {
+              label: DOM_LABEL,
+              credit: credits.provider,
+            })
+          )
+        : []),
+    ],
   };
 }
 
@@ -385,7 +415,7 @@ export function moreCard(
     case "hedge":
       return hedgeCard(inquiry, provenance, credits);
     case "lamp":
-      return lampCard(inquiry, provenance);
+      return lampCard(inquiry, provenance, credits);
     case "furniture":
       return furnitureCard(inquiry, provenance);
     case "stop":
