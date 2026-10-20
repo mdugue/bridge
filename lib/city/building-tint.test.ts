@@ -2,13 +2,17 @@ import { expect, test } from "bun:test";
 import {
   buildingGlows,
   ownFacade,
+  partFacade,
   buildingTint,
   inheritedAttributes,
+  ownFacadeReason,
   roofColor,
+  roofColourSource,
   roofTint,
   roughJitter,
   mappedStoreyHeight,
   storeyHeight,
+  wallColourSource,
 } from "./building-tint";
 
 const inRange = (rgb: number[]) =>
@@ -188,4 +192,51 @@ test("ownFacade: monumental uses and hall storeys, not town houses", () => {
   expect(ownFacade({ function: "31001_1000" }, 18, 6)).toBe(false);
   expect(ownFacade({ function: "31001_2000" }, 18, 2)).toBe(true); // a hall
   expect(ownFacade({ function: "31001_2000" }, 18)).toBe(false); // no levels
+});
+
+test("ownFacade: a listed public building whose storeys OSM does not count", () => {
+  const court = { function: "31001_3015" }; // Gericht: the Ständehaus
+  expect(ownFacade(court, 30, 0, true)).toBe(true);
+  expect(ownFacade(court, 30)).toBe(false); // not listed
+  // counted storeys a storey house's keep its windows
+  expect(ownFacade(court, 16, 4, true)).toBe(false);
+  // a listed house is a house
+  expect(ownFacade({ function: "31001_1000" }, 18, 0, true)).toBe(false);
+});
+
+test("partFacade: a part shares its building's own facade unless OSM's storeys fit it", () => {
+  // the Kulturpalast's raised roof: 3.6 m of wall, the hall's 3 storeys
+  expect(partFacade(false, true, 3.6, 3)).toBe(true);
+  expect(partFacade(false, true, 3.6)).toBe(true);
+  // an annex whose own count fits
+  expect(partFacade(false, true, 12, 4)).toBe(false);
+  expect(partFacade(false, false, 3.6, 3)).toBe(false);
+  expect(partFacade(true, false, 12, 4)).toBe(true);
+});
+
+test("the card is told where a wall's and a roof's colour come from", () => {
+  const housing = { function: "31001_9998" };
+  expect(wallColourSource(housing, "render", { colour: "#c8b89a" })).toBe(
+    "osm"
+  );
+  // a colour that is no colour falls through to the palette, as the tint
+  expect(wallColourSource(housing, "render", { colour: "red" })).toBe("use");
+  expect(wallColourSource(housing, "brick", { material: "glass" })).toBe(
+    "material"
+  );
+  expect(wallColourSource(housing, "brick")).toBe("brick");
+  // civic keeps its stone in a brick city
+  expect(wallColourSource({ function: "31001_3021" }, "brick")).toBe("use");
+  expect(roofColourSource("a", { a: [0.1, 0.1, 0.1] })).toBe("dop");
+  expect(roofColourSource("a", {}, { roof_colour: "#806040" })).toBe("osm");
+  expect(roofColourSource("a")).toBe("palette");
+});
+
+test("ownFacadeReason names the use, the hall or the listed public building", () => {
+  expect(ownFacadeReason({ function: "31001_3041" })).toBe("use");
+  expect(ownFacadeReason({ function: "31001_2000" }, 18, 2)).toBe("hall");
+  expect(ownFacadeReason({ function: "31001_3015" }, 30, 0, true)).toBe(
+    "listed"
+  );
+  expect(ownFacadeReason({ function: "31001_1000" }, 18, 6)).toBeNull();
 });

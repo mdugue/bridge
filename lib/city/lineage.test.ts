@@ -54,6 +54,7 @@ const saxony: LineageSite = {
 
 const facts = (over: Partial<ObjectFacts> = {}): ObjectFacts => ({
   buildingId: "DESNATPU1000HJx5",
+  drawn: "",
   function: "",
   roofType: "",
   created: "",

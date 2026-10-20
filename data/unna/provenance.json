@@ -30,7 +30,8 @@
   "openstreetmap": {
     "licence": "Open Database License (ODbL); credit: © OpenStreetMap contributors",
     "extract": "a stand-in: the Arnsberg region extract from download.openstreetmap.fr, because download.geofabrik.de was unreachable from the build container",
-    "usedFor": "walls, stairs, lamps, street furniture, fountains, paving, markings, trams, riverside, sport, shops and heritage"
+    "usedFor": "walls, stairs, lamps, street furniture, fountains, paving, markings, trams, riverside, sport, shops and heritage",
+    "buildings": "the building flags, names, addresses, storeys and named outlines (pipeline/bake/osm_buildings.py) re-baked 2026-10-19 from download.openstreetmap.fr's arnsberg-latest.osm.pbf, Last-Modified 2026-10-19"
   },
   "wikidata": {
     "licence": "CC0",

@@ -234,6 +234,42 @@ function readNumber(v: unknown): number | undefined {
 }
 
 /**
+ * Where a building's wall colour comes from, as `buildingTint` decides it
+ * (the inquiry card names it, lib/city/drawn-facts.ts): OSM's
+ * `building:colour`, else a palette — the mapped `building:material`'s,
+ * the neighbourhood's brick, or its use's.
+ */
+export type WallColourSource = "osm" | "material" | "brick" | "use";
+
+/** The palette a wall draws from where OSM maps no colour, and why. */
+function wallFamily(
+  attrs: Record<string, unknown>,
+  facades: FacadeMaterial,
+  look: OsmLook
+): { family: FamilyKey; from: Exclude<WallColourSource, "osm"> } {
+  const use = familyOf(readString(attrs.function));
+  const material = look.material ? MATERIAL_FAMILY[look.material] : undefined;
+  if (material) {
+    return { family: material, from: "material" };
+  }
+  return facades === "brick" && use !== "cool"
+    ? { family: "brick", from: "brick" }
+    : { family: use, from: "use" };
+}
+
+/** Where `buildingTint` takes a building's wall colour from. */
+export function wallColourSource(
+  attrs: Record<string, unknown> = {},
+  facades: FacadeMaterial = "render",
+  look: OsmLook = {}
+): WallColourSource {
+  if (look.colour && osmColourTint("", look.colour)) {
+    return "osm";
+  }
+  return wallFamily(attrs, facades, look).from;
+}
+
+/**
  * Stable linear-RGB tint for one building. `objectId` seeds the hash (so the
  * same building always gets the same colour across reloads/demolish), `attrs`
  * is the CityJSON `attributes` bag (`function`, `measuredHeight`), `facades`
@@ -251,15 +287,7 @@ export function buildingTint(
       return own;
     }
   }
-  const use = familyOf(readString(attrs.function));
-  const family =
-    FAMILIES[
-      look.material
-        ? MATERIAL_FAMILY[look.material]
-        : facades === "brick" && use !== "cool"
-          ? "brick"
-          : use
-    ];
+  const family = FAMILIES[wallFamily(attrs, facades, look).family];
   const pick =
     family[
       Math.min(family.length - 1, Math.floor(hash01(objectId) * family.length))
@@ -375,6 +403,24 @@ export function roofTint(
  */
 export type RoofColorLut = Record<string, TintRgb>;
 
+/** Where a roof's colour comes from, as `roofColor` decides it: the
+ *  orthophoto, OSM's `roof:colour`, or the palette by its form. */
+export type RoofColourSource = "dop" | "osm" | "palette";
+
+/** Where `roofColor` takes a roof's colour from. */
+export function roofColourSource(
+  objectId: string,
+  lut?: RoofColorLut,
+  look: OsmLook = {}
+): RoofColourSource {
+  if (lut?.[objectId]?.length === 3) {
+    return "dop";
+  }
+  return look.roof_colour && osmColourTint("", look.roof_colour)
+    ? "osm"
+    : "palette";
+}
+
 /**
  * Roof colour for one building: the real DOP-sampled colour when the LUT has it,
  * then OSM's `roof:colour` in the clay's register, otherwise the synthesized
@@ -390,14 +436,23 @@ export function roofColor(
   look: OsmLook = {}
 ): TintRgb {
   const sampled = lut?.[objectId];
-  if (sampled?.length === 3) {
-    return [sampled[0], sampled[1], sampled[2]];
+  switch (roofColourSource(objectId, lut, look)) {
+    case "dop":
+      return sampled
+        ? [sampled[0], sampled[1], sampled[2]]
+        : roofTint(objectId, attrs);
+    case "osm":
+      // no measured colour: what OSM says, in the clay's register
+      return (
+        osmColourTint(
+          `${objectId}#roof`,
+          look.roof_colour ?? "",
+          ROOF_LIGHTNESS
+        ) ?? roofTint(objectId, attrs)
+      );
+    case "palette":
+      return roofTint(objectId, attrs);
   }
-  // no measured colour: what OSM says, in the clay's register
-  const mapped = look.roof_colour
-    ? osmColourTint(`${objectId}#roof`, look.roof_colour, ROOF_LIGHTNESS)
-    : null;
-  return mapped ?? roofTint(objectId, attrs);
 }
 
 /**
@@ -445,24 +500,67 @@ const MONUMENTAL = new Set([
 ]);
 /** A storey taller than this (m) is a hall's, not a storey house's. */
 const HALL_STOREY_M = 5.5;
+/** ALKIS's public buildings (`31001_3xxx`: offices, courts, academies,
+ *  schools, barracks, hospitals). */
+const PUBLIC_FUNCTION = "31001_3";
 
 /**
  * Whether a building's facade is its own rather than a storey house's:
- * a monumental use (`MONUMENTAL`, the Building's ALKIS function), or
- * storeys OSM counts that are taller than `HALL_STOREY_M` (a hall, a
- * nave). Such a facade gets no painted plinth or cornices and no drawn
- * doors — they are a town house's, and a church in them looks dressed up.
+ * a monumental use (`MONUMENTAL`, the Building's ALKIS function), storeys
+ * OSM counts that are taller than `HALL_STOREY_M` (a hall, a nave), or a
+ * listed public building (OSM `heritage`, ALKIS `31001_3xxx`) whose
+ * storeys OSM does not count: its storeys are a palace's, 5–7 m, and the
+ * 3.2 m a storey the height alone gives drew twice its rows of windows
+ * (the Ständehaus ten, the Kunstakademie seven). LoD2's own
+ * `storeysAboveGround` is no count: it is the height over about 3 m.
+ * Such a facade gets no painted plinth or cornices, no drawn doors and no
+ * windows — they are a town house's, and a church in them looks dressed
+ * up; once OSM counts its storeys, a listed school or office keeps them.
  */
 export function ownFacade(
   attrs: Record<string, unknown> = {},
   eaveH = 0,
-  levels = 0
+  levels = 0,
+  heritage = false
 ): boolean {
+  return ownFacadeReason(attrs, eaveH, levels, heritage) !== null;
+}
+
+/** Why a facade is its own (`ownFacade`): its monumental use, the storeys
+ *  OSM counts being a hall's, or a listed public building's storeys OSM
+ *  does not count; null where it is a storey house's. */
+export function ownFacadeReason(
+  attrs: Record<string, unknown> = {},
+  eaveH = 0,
+  levels = 0,
+  heritage = false
+): "hall" | "listed" | "use" | null {
   const fn = readString(attrs.function);
   if (fn && MONUMENTAL.has(fn)) {
-    return true;
+    return "use";
   }
-  return levels > 0 && eaveH / levels > HALL_STOREY_M;
+  if (levels > 0) {
+    return eaveH / levels > HALL_STOREY_M ? "hall" : null;
+  }
+  return heritage && (fn?.startsWith(PUBLIC_FUNCTION) ?? false)
+    ? "listed"
+    : null;
+}
+
+/**
+ * Whether a building part's facade is its own: its own reading
+ * (`ownFacade`), or its building's where OSM's storeys do not fit the
+ * part (`countsStoreys`) — the count is then the building's, inherited.
+ * The Kulturpalast's raised roof (3.6 m of wall under the three storeys
+ * of the hall it stands on) drew windows of its own.
+ */
+export function partFacade(
+  own: boolean,
+  building: boolean,
+  eaveH: number,
+  levels?: number
+): boolean {
+  return own || (building && !countsStoreys(eaveH, levels));
 }
 
 /**
@@ -513,13 +611,22 @@ export function mappedStoreyHeight(
   measuredMeters: number | undefined,
   levels: number | undefined
 ): number {
-  if (levels !== undefined && levels >= 1) {
-    const storey = eaveMeters / levels;
-    if (storey >= MAPPED_STOREY.min && storey <= MAPPED_STOREY.max) {
-      return storey;
-    }
+  return countsStoreys(eaveMeters, levels) && levels
+    ? eaveMeters / levels
+    : storeyHeight(measuredMeters);
+}
+
+/** Whether OSM's `levels` give walls of `eaveMeters` a plausible storey
+ *  (`MAPPED_STOREY`). */
+export function countsStoreys(
+  eaveMeters: number,
+  levels: number | undefined
+): boolean {
+  if (levels === undefined || levels < 1) {
+    return false;
   }
-  return storeyHeight(measuredMeters);
+  const storey = eaveMeters / levels;
+  return storey >= MAPPED_STOREY.min && storey <= MAPPED_STOREY.max;
 }
 
 /** Signed per-building roughness jitter in [-1,1] (decorrelated hash). */

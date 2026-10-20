@@ -271,7 +271,9 @@ config change.
     or `I` under the pointer asks, and the pencil-hatch mark) and
     `inquiry-card.tsx` (the card — the only place the scene's facts become
     text); the
-    facts are `lib/city/object-facts.ts` (bake and read), the card's lines
+    facts are `lib/city/object-facts.ts` (bake and read; Buildings one named OSM
+    outline joins are asked as one, across tile edges too,
+    `lib/city/ensembles.ts`), the card's lines
     `lib/city/inquiry.ts` (buildings) and `inquiry-features.ts` (trees,
     monuments, bridges; shared lines in `card-lines.ts`), the sources
     `lib/city/provenance.ts`, the AdV code lists `lib/city/adv-codes.ts`;

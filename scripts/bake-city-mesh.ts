@@ -13,7 +13,6 @@
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import {
-  BufferAttribute,
   BufferGeometry,
   type Matrix4,
   type Mesh,
@@ -22,16 +21,21 @@ import {
 } from "three";
 import {
   buildingGlows,
-  ownFacade,
+  partFacade,
   buildingTint,
   type FacadeMaterial,
   inheritedAttributes,
+  countsStoreys,
+  ownFacadeReason,
   type RoofColorLut,
+  type RoofColourSource,
   roofColor,
+  roofColourSource,
   roofTint,
   roughJitter,
   mappedStoreyHeight,
   storeyHeight,
+  wallColourSource,
 } from "../lib/city/building-tint";
 import {
   type CityObjectRow,
@@ -41,6 +45,7 @@ import {
   markFlatRoofs,
   markGrounded,
   OBJECT_FLAG_FLAT_ROOF,
+  OBJECT_FLAG_OWN_FACADE,
   OBJECT_FLAG_GLASS,
   OBJECT_FLAG_LANDMARK,
   OBJECT_FLAG_METAL,
@@ -54,10 +59,14 @@ import {
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
   objectTable,
+  type OsmBuildingFacts,
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
+import { creaseNormals } from "../lib/city/crease-normals";
+import { type DrawnFacts, encodeDrawn } from "../lib/city/drawn-facts";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
+import { ensembleGroup, ensembleRoots } from "../lib/city/ensembles";
 import {
   DOOR_SINK,
   DOOR_SURROUND,
@@ -630,8 +639,9 @@ export function bakeCityMesh(
     const osm = inheritedOsm(osmLut?.[id], osmLut?.[keys[root]]);
     const eaveH = roofMin === undefined ? total : Math.max(roofMin - baseZ, 0);
     const footprints = footprintsOf[index];
-    const monumental = ownFacade(attrs, eaveH, osm?.levels);
-    hosts[index] = windowExtra(attrs, osm?.levels, monumental);
+    hosts[index] = windowExtra(attrs, eaveH, osm);
+    const monumental = hosts[index].monumental ?? false;
+    const context = look.context ?? facades;
     return {
       building: o.type === "Building",
       root,
@@ -644,8 +654,13 @@ export function bakeCityMesh(
       storeyH: cm(mappedStoreyHeight(eaveH, measured, osm?.levels)),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
-      tint: rgb(buildingTint(id, attrs, look.context ?? facades, look)),
+      tint: rgb(buildingTint(id, attrs, context, look)),
       roof: rgb(roofColor(id, attrs, roofLut, look)),
+      drawn: drawnOf(attrs, context, look, osm, {
+        eaveH,
+        own: hosts[index].why ?? null,
+        roof: roofColourSource(id, roofLut, look),
+      }),
       footprints,
       facts: lod2Facts({
         buildingId: keys[root],
@@ -658,6 +673,24 @@ export function bakeCityMesh(
         shaped: rebuilt.get(id)?.some((f) => f.properties?.surface) ?? false,
       }),
     };
+  });
+
+  // a part of a building whose facade is its own shares it where OSM's
+  // storeys are the building's (a hall's raised roof)
+  objects.forEach((o, i) => {
+    const own = partFacade(
+      hosts[i].monumental ?? false,
+      i !== o.root && (hosts[o.root].monumental ?? false),
+      o.eaveH,
+      hosts[i].storeys
+    );
+    if (own && !hosts[i].monumental) {
+      hosts[i].monumental = true;
+      o.flags = facadeFlags(o.flags, true);
+      if (o.drawn) {
+        o.drawn = { ...o.drawn, own: "part" };
+      }
+    }
   });
 
   // A Building with parts answers for its whole tree (the inquiry card
@@ -686,10 +719,134 @@ export function bakeCityMesh(
     }
   }
 
+  joinEnsembles(
+    objects,
+    trees,
+    (root) => osmLut?.[keys[root]]?.outline ?? "",
+    (i) =>
+      minZ.has(i)
+        ? {
+            baseZ: minZ.get(i) ?? 0,
+            topZ: maxZ.get(i) ?? 0,
+            footprints: footprintsOf[i],
+          }
+        : undefined
+  );
+
   const baked: BakedCityMesh = { epsg, matrix, objects, offset, vertices: v };
   markFlatRoofs(objects, v);
   dressWalls(tile, baked, keys, hosts, onWalls, { facades, gaps, scan });
+  for (const o of objects) {
+    if (o.facts) {
+      o.facts = { ...o.facts, drawn: encodeDrawn(o.drawn) };
+    }
+  }
   return baked;
+}
+
+/**
+ * How an object's walls, roof and storeys are drawn and from what (lib/
+ * city/drawn-facts.ts), as `buildingTint`, `roofColor` and
+ * `mappedStoreyHeight` decide; the windows join it in `assignWindows`.
+ */
+function drawnOf(
+  attrs: Record<string, unknown>,
+  context: FacadeMaterial,
+  look: ReturnType<typeof inheritedLook>,
+  osm: OsmBuildingFacts | undefined,
+  o: { eaveH: number; own: DrawnFacts["own"] | null; roof: RoofColourSource }
+): DrawnFacts {
+  const wall = wallColourSource(attrs, context, look);
+  const own = o.own;
+  return {
+    wall,
+    ...(look.colour ? { colour: look.colour } : {}),
+    ...(look.material ? { material: look.material } : {}),
+    ...(look.materialFrom ? { materialFrom: look.materialFrom } : {}),
+    ...(wall === "brick" ? { context } : {}),
+    roof: o.roof,
+    ...(look.roof_colour ? { roofColour: look.roof_colour } : {}),
+    storey: countsStoreys(o.eaveH, osm?.levels) ? "osm" : "height",
+    ...(own ? { own } : {}),
+    ...(osm?.wikidata ? { wikidata: osm.wikidata } : {}),
+  };
+}
+
+/**
+ * Building trees that are one building to a visitor (lib/city/ensembles.ts)
+ * share an `ensemble`, the lowest root among them, whose facts become the
+ * whole ensemble's: the union of its footprints, its lowest base to its
+ * highest top (one tree's surveyed height does not describe the others);
+ * its `group` the key of its OSM outline, so the trees a tile edge cuts it
+ * into are asked together.
+ */
+export function joinEnsembles(
+  objects: Pick<
+    CityObjectRow,
+    "ensemble" | "facts" | "footprints" | "group" | "root"
+  >[],
+  trees: ReadonlyMap<number, readonly number[]>,
+  outlineOf: (root: number) => string,
+  extent: (
+    i: number
+  ) =>
+    | { baseZ: number; footprints: [number, number][][]; topZ: number }
+    | undefined
+): void {
+  const named = [...trees].flatMap(([root, members]) => {
+    // the root's name, else its first named part's
+    const name =
+      [root, ...members]
+        .map((i) => objects[i].facts?.name ?? "")
+        .find((n) => n !== "") ?? "";
+    const outline = outlineOf(root);
+    return name || outline
+      ? [
+          {
+            root,
+            name,
+            outline,
+            rings: members.flatMap((i) => objects[i].footprints),
+          },
+        ]
+      : [];
+  });
+  const lead = ensembleRoots(named);
+  // the ensemble's outline: the first of its trees' (they share one, but
+  // for a tree joined by its name alone)
+  const outlines = new Map<number, string>();
+  for (const t of named) {
+    const to = lead.get(t.root) ?? t.root;
+    const had = outlines.get(to);
+    if (t.outline && !(had && had < t.outline)) {
+      outlines.set(to, t.outline);
+    }
+  }
+  const joined = new Map<number, number[]>();
+  for (const [root, members] of trees) {
+    const to = lead.get(root) ?? root;
+    const group = ensembleGroup(outlines.get(to) ?? "");
+    for (const i of members) {
+      objects[i].ensemble = to;
+      objects[i].group = group;
+    }
+    const all = joined.get(to);
+    if (all) {
+      all.push(...members);
+    } else {
+      joined.set(to, [...members]);
+    }
+  }
+  for (const [to, members] of joined) {
+    const facts = objects[to].facts;
+    if (facts && members.some((i) => objects[i].root !== to)) {
+      objects[to].facts = treeFacts(
+        facts,
+        members.flatMap((i) => extent(i) ?? []),
+        false
+      );
+    }
+  }
 }
 
 export interface CityMesh {
@@ -699,12 +856,18 @@ export interface CityMesh {
   maxElevation: number;
 }
 
-/** Flat vertex normals of a non-indexed stream, as three computes them. */
-function flatNormals(positions: Float32Array): Float32Array {
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new BufferAttribute(positions, 3));
-  geometry.computeVertexNormals();
-  return geometry.getAttribute("normal").array as Float32Array;
+/** The stream's vertex normals: a curve LoD2 drew as facets rounded off
+ *  within one object's walls or roofs, corners kept crisp
+ *  (lib/city/crease-normals.ts); a triangle shaded otherwise is left out. */
+export function vertexNormals(v: CityVertices): Float32Array {
+  const groups = new Float64Array(v.objectIds.length);
+  for (let i = 0; i < groups.length; i++) {
+    groups[i] = 2 * v.objectIds[i] + (v.isRoof[i] === 1 ? 1 : 0);
+  }
+  const shaded = v.normals;
+  return creaseNormals(v.positions, groups, {
+    skip: shaded ? (t) => !Number.isNaN(shaded[9 * t]) : undefined,
+  });
 }
 
 /** The flat normals with every vertex `shading` gives one (not NaN) — a
@@ -725,8 +888,8 @@ function withShading(
 }
 
 /**
- * The building mesh with its property table: flat normals from the
- * non-indexed stream, then welded (vertices of equal position, normal,
+ * The building mesh with its property table: normals from the
+ * non-indexed stream (flat, curves rounded), then welded (vertices of equal position, normal,
  * object and place on their wall, the roof flag in it, merge — never across
  * objects).
  */
@@ -745,6 +908,12 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
       roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
       root: { type: "SCALAR", componentType: "UINT32", values: t.root },
+      ensemble: {
+        type: "SCALAR",
+        componentType: "UINT32",
+        values: t.ensemble,
+      },
+      group: { type: "SCALAR", componentType: "UINT32", values: t.group },
       rough: { type: "SCALAR", componentType: "FLOAT32", values: t.rough },
       source: { type: "SCALAR", componentType: "UINT8", values: t.source },
       storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },
@@ -789,7 +958,7 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
     footprints: baked.objects.map((o) => o.footprints),
     input: {
       positions: v.positions,
-      normals: withShading(flatNormals(v.positions), v.normals),
+      normals: withShading(vertexNormals(v), v.normals),
       attributes: { _FEATURE_ID_0: v.objectIds },
       // the place on the wall, a roof vertex flagged in it (FACADE_ROOF)
       vectors: {
@@ -844,21 +1013,37 @@ function dressWalls(
  *  whether OSM counts its storeys, a facade of its own. */
 function windowExtra(
   attrs: Record<string, unknown>,
-  levels: number | undefined,
-  monumental: boolean
+  eaveH: number,
+  osm: OsmBuildingFacts | undefined
 ): WindowExtra {
+  const why = ownFacadeReason(
+    attrs,
+    eaveH,
+    osm?.levels,
+    (osm?.heritage ?? 0) > 0
+  );
   return {
     fn: typeof attrs.function === "string" ? attrs.function : undefined,
-    levels: (levels ?? 0) >= 1,
-    monumental,
+    levels: (osm?.levels ?? 0) >= 1,
+    monumental: why !== null,
+    ...(why ? { why } : {}),
+    storeys: osm?.levels,
   };
 }
 
-/** The flags with OBJECT_FLAG_LANDMARK where the facade is its own. */
+/** The flags with OBJECT_FLAG_LANDMARK and OBJECT_FLAG_OWN_FACADE where
+ *  the facade is its own. */
 function facadeFlags(flags: number, own: boolean): number {
-  return own && !hasObjectFlag(flags, OBJECT_FLAG_LANDMARK)
-    ? flags + OBJECT_FLAG_LANDMARK
-    : flags;
+  if (!own) {
+    return flags;
+  }
+  const landmark = hasObjectFlag(flags, OBJECT_FLAG_LANDMARK)
+    ? 0
+    : OBJECT_FLAG_LANDMARK;
+  const facade = hasObjectFlag(flags, OBJECT_FLAG_OWN_FACADE)
+    ? 0
+    : OBJECT_FLAG_OWN_FACADE;
+  return flags + landmark + facade;
 }
 
 /** What the tile's mesh carries beyond LoD2: the scan's sheds, the
@@ -1548,6 +1733,10 @@ export type WindowExtra = Pick<WindowHost, "fn" | "levels"> & {
   /** its facade its own (lib/city/building-tint.ts `ownFacade`: a
    *  church, a palace, a theatre, a hall) */
   monumental?: boolean;
+  /** the storeys OSM counts, its own or its building's */
+  storeys?: number;
+  /** why its facade is its own (`ownFacadeReason`), for the card */
+  why?: "hall" | "listed" | "use";
 };
 
 /** A building's street level stands at most this far over the lowest
@@ -1654,9 +1843,18 @@ export function assignWindows(
     storeyH: o.storeyH,
   }));
   windowSpecs(hosts, walls, index).forEach((choice, i) => {
+    const o = objects[i];
     if (choice.spec.axis > 0) {
-      objects[i].windows = choice.spec;
-      objects[i].storeyH = cm(choice.storey);
+      o.windows = choice.spec;
+      o.storeyH = cm(choice.storey);
+    }
+    if (o.drawn) {
+      o.drawn = {
+        ...o.drawn,
+        windows: choice.from,
+        ...(choice.why ? { noWindows: choice.why } : {}),
+        ...(choice.storeyFromPhotos ? { storey: "photos" as const } : {}),
+      };
     }
   });
 }
