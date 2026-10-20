@@ -192,3 +192,17 @@ test("a bench faces where OSM or the nearest way says", () => {
     value: "nach Südwesten",
   });
 });
+
+test("a lantern on a facade says where it hangs and that its height is assumed", () => {
+  const card = lampCard(
+    { kind: "lamp", tile: "t", position: at, wall: true },
+    null,
+    DRESDEN
+  );
+  expect(card.title).toBe("Wandleuchte");
+  expect(card.facts).toEqual([
+    { label: "Aufhängung", value: "an der Fassade" },
+    { label: "Höhe", value: "3,5 m, angenommen", method: "assumed" },
+  ]);
+  expect(card.sources[0]?.text).toContain("OpenStreetMap");
+});

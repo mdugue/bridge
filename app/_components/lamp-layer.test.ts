@@ -84,3 +84,21 @@ test("a lamp on a bridge stands on its deck, not on the ground below", () => {
   );
   expect(lamps.headPositions.map((p) => p.y)).toEqual([105, 117.5]);
 });
+
+test("a lantern on a wall hangs on its bracket, without a post", () => {
+  const ctx = { heightAt: () => 100, offset: { cx: 0, cy: 0 } };
+  const lamps = buildLamps(
+    [
+      {
+        geometry: { type: "Point", coordinates: [10, 20.5] },
+        properties: { h: 3.5, wall: [10, 20] },
+      },
+    ],
+    ctx
+  );
+  expect(lamps.headPositions.map((p) => p.y)).toEqual([103.5]);
+  const names = lamps.group.children.map((c) => c.name);
+  expect(names).not.toContain("lamp-posts");
+  expect(names).toContain("lamp-heads");
+  expect(names).toContain("lamp-wires");
+});

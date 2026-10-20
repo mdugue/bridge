@@ -122,3 +122,19 @@ def test_a_lamp_on_a_bridge_is_read_over_its_deck(tmp_path, monkeypatch):
     )
     lamp_heights.run(tile)
     assert _heights(tile) == [(4.5, "street")] * 3
+
+
+def test_a_lamp_on_a_facade_keeps_its_height(tmp_path, monkeypatch):
+    """Over a wall lantern DOM1 reads the facade's eave, not a post."""
+    tile = _tile(tmp_path, monkeypatch)
+    path = tile.out("dlm", "lamps_t.geojson")
+    doc = json.loads(path.read_text())
+    wall = {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [X0 + 60, Y0 + 152]},
+        "properties": {"h": 3.5, "wall": [X0 + 60, Y0 + 152.5]},
+    }
+    doc["features"].append(wall)
+    path.write_text(json.dumps(doc))
+    lamp_heights.run(tile)
+    assert _heights(tile)[-1] == (3.5, None)

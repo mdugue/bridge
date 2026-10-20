@@ -57,6 +57,8 @@ const MIN_CROWN_R = 0.8;
  *  head (HUNG_H). */
 const LAMP = { over: 0.4, r: 0.45 };
 const HUNG_LAMP = { y0: 6.4, y1: 7.5, r: 0.6 };
+/** A wall lantern is picked from this far under its head (m). */
+const WALL_LAMP = { below: 0.7 };
 /** The tram stop's sign, picked a little wider than drawn. */
 const STOP = { h: 2.8, r: 0.5 };
 /** How far apart a hedge's picks stand along it (m). */
@@ -105,9 +107,11 @@ function standing(
   [ex, ey]: readonly [number, number],
   r: number,
   h: number,
-  ctx: MoreContext
+  ctx: MoreContext,
+  deck?: number
 ): AskSolid | null {
-  const y = ctx.heightAt(ex, ey);
+  // on a bridge, its deck's top (pipeline/bake/furniture.py `Decks`)
+  const y = deck ?? ctx.heightAt(ex, ey);
   if (y === null) {
     return null;
   }
@@ -127,6 +131,41 @@ function hanging(
   const { x, z } = epsgToWorld(ex, ey, ctx.offset);
   const { y0, y1, r } = HUNG_LAMP;
   return { cylinder: { x, z, y0: y + y0, y1: y + y1, r } };
+}
+
+/** A wall lantern's head, `h` m over the ground at EPSG (x, y): no post. */
+function onWall(
+  [ex, ey]: readonly [number, number],
+  h: number,
+  ctx: MoreContext
+): AskSolid | null {
+  const y = ctx.heightAt(ex, ey);
+  if (y === null) {
+    return null;
+  }
+  const { x, z } = epsgToWorld(ex, ey, ctx.offset);
+  return {
+    cylinder: {
+      x,
+      z,
+      y0: y + h - WALL_LAMP.below,
+      y1: y + h + LAMP.over,
+      r: LAMP.r,
+    },
+  };
+}
+
+/** A lamp's pick: its head on the wire or bracket, or its post. */
+function lampSolid(f: LampFeature, ctx: MoreContext): AskSolid | null {
+  const at = f.geometry.coordinates;
+  const p = f.properties;
+  if (p?.wire) {
+    return hanging(at, ctx);
+  }
+  if (p?.wall) {
+    return onWall(at, postHeight(f), ctx);
+  }
+  return standing(at, LAMP.r, postHeight(f) + LAMP.over, ctx, p?.deck);
 }
 
 /** A placed canopy tree as a packed trunk and crown. */
@@ -313,21 +352,17 @@ export function pointItems(
   };
   for (const f of lamps) {
     const at = f.geometry.coordinates;
-    add(
-      f.properties?.wire
-        ? hanging(at, ctx)
-        : standing(at, LAMP.r, postHeight(f) + LAMP.over, ctx),
-      {
-        kind: "lamp",
-        tile: ctx.tile,
-        position: [at[0], at[1]],
-        ...(f.properties?.wire ? { hung: true } : {}),
-        ...(f.properties?.src ? { src: f.properties.src } : {}),
-        ...(!f.properties?.wire && f.properties?.hs
-          ? { height: postHeight(f), heightFrom: f.properties.hs }
-          : {}),
-      }
-    );
+    add(lampSolid(f, ctx), {
+      kind: "lamp",
+      tile: ctx.tile,
+      position: [at[0], at[1]],
+      ...(f.properties?.wire ? { hung: true } : {}),
+      ...(f.properties?.wall ? { wall: true } : {}),
+      ...(f.properties?.src ? { src: f.properties.src } : {}),
+      ...(!f.properties?.wire && f.properties?.hs
+        ? { height: postHeight(f), heightFrom: f.properties.hs }
+        : {}),
+    });
   }
   for (const f of furniture) {
     const p = f.properties;
@@ -358,7 +393,7 @@ function furnitureItem(
   const [r, h] = FURNITURE_SOLID[p.k] ?? [0.6, 1];
   if (f.geometry.type === "Point") {
     const at = f.geometry.coordinates;
-    const solid = standing(at, r, h, ctx);
+    const solid = standing(at, r, h, ctx, p.deck);
     return solid
       ? [
           {

@@ -70,6 +70,8 @@ export interface LampInquiry {
   position: [number, number];
   src?: "mly";
   tile: string;
+  /** on its bracket out of a facade, where OSM puts it on a wall */
+  wall?: boolean;
 }
 
 /** A piece of street furniture or a playground (OSM). */
@@ -236,12 +238,34 @@ export function hedgeCard(
   };
 }
 
+/** A lantern on a facade: OSM says where it hangs, its height is assumed. */
+function wallLampCard(
+  l: LampInquiry,
+  provenance: SiteProvenance | null
+): InquiryCard {
+  return {
+    kicker: "Straßenbeleuchtung",
+    title: "Wandleuchte",
+    address: "",
+    facts: factLines([
+      ["Aufhängung", "an der Fassade"],
+      ["Höhe", "3,5 m, angenommen", "assumed"],
+    ]),
+    id: positionKey(l.position),
+    idLabel: "Lage",
+    sources: pointSource("Laterne", l.src === "mly", provenance),
+  };
+}
+
 /** A street lamp. */
 export function lampCard(
   l: LampInquiry,
   provenance: SiteProvenance | null,
   credits: CardCredits
 ): InquiryCard {
+  if (l.wall) {
+    return wallLampCard(l, provenance);
+  }
   const measured = !l.hung && l.height !== undefined && l.heightFrom;
   const along = {
     street: "wie an den Laternen der Straße gemessen",

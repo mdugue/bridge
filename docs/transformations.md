@@ -1883,6 +1883,18 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   bridge. Hamburg gains 28 pieces (12 benches, 7 bins, 6 stands: the
   Busanbrücke, the Brooktorkaibrücke, the Kehrwiedersteg), Meißen 4
   (the Johannesbrücke's benches), Dresden 2, Grimma and München 1.
+  **Lamps on a wall** `= computed` (2026-10-20) — a lamp OSM tags
+  `support=wall_mounted` or `lamp_mount=wall` (and not on a wire) hangs on
+  the facade when an OSM outline lies within 1.5 m of it: its head 3.5 m up
+  and 0.5 m out of the facade on the side no building covers, on a short
+  bracket from the wall (`wall`: its foot), with no post. The 3.5 m is the
+  Mapillary photo at Meißen's Burgkeller, lanterns on brackets at about the
+  first floor. Before, they stood as 5 m posts in the facade line, and
+  `lamp-heights` read the eave above them as a post. Meißen hangs 16 of its
+  24 wall lamps (the other 8 stand more than 1.5 m from an outline, along
+  the Domplatz's terrace walls, and stay posts), Dresden 5; no other city
+  tags one where a facade stands. München's lamps on wires were already
+  hung (71 across its streets).
   **Lamps hung across the street** `= computed` (2026-10-08) — OSM maps the
   old town's catenary lamps (Äußere Neustadt: Alaunstraße, …) in the
   carriageway, where they stood as posts in the traffic. A lamp hangs when

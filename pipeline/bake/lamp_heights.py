@@ -155,11 +155,12 @@ def _step(values: list[float]) -> float:
 
 
 def _posts(doc: dict, mapillary: bool) -> list[dict]:
-    """The file's lamps that stand on a post (not hung)."""
+    """The file's lamps that stand on a post (not hung, not on a facade)."""
     return [
         f
         for f in doc["features"]
         if not (f["properties"] or {}).get("wire")
+        and not (f["properties"] or {}).get("wall")
         and (not mapillary or (f["properties"] or {}).get("k") == "lamp")
     ]
 

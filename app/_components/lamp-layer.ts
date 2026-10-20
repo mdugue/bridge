@@ -34,6 +34,9 @@ const LAMP_H = LAMP_POST_H;
 const HUNG_H = 7;
 const WIRE_END_LIFT = 0.6;
 const WIRE_HALF = 0.008;
+/** A wall lantern's bracket: thicker than a wire, rising to the facade. */
+const BRACKET_HALF = 0.025;
+const BRACKET_RISE = 0.25;
 /** The lamp wires in the posts' dark metal, so the head reads as hung. */
 const LAMP_WIRE_INK = { color: 0x3a_3a_40, opacity: 0.9 };
 /** A mast at the kerb holding a wire end where no facade stands. */
@@ -294,6 +297,8 @@ interface LampPlaces {
   pools: Pool[];
   /** the posts by their height (m) */
   posts: Map<number, Place[]>;
+  /** the wall lanterns by their height (m): heads on a bracket, no post */
+  walls: Map<number, Place[]>;
   wires: Wires;
 }
 
@@ -348,6 +353,57 @@ function hangWire(
   });
 }
 
+/** A wall lantern's bracket, from its facade (`wall`, a little higher) out
+ *  to the top of its head. */
+function bracket(
+  f: LampFeature,
+  head: Pt,
+  ctx: GroundContext,
+  out: LampPlaces
+): void {
+  const wall = f.properties?.wall;
+  if (!wall) {
+    return;
+  }
+  const { x, z } = epsgToWorld(wall[0], wall[1], ctx.offset);
+  const top = { x: head.x, y: head.y + 0.15, z: head.z };
+  addWire(out.wires, [{ x, y: head.y + BRACKET_RISE, z }, top], BRACKET_HALF);
+}
+
+function byHeight(sets: Map<number, Place[]>, h: number, at: Place): void {
+  const set = sets.get(h);
+  if (set) {
+    set.push(at);
+  } else {
+    sets.set(h, [at]);
+  }
+}
+
+function placeLamp(f: LampFeature, ctx: GroundContext, out: LampPlaces): void {
+  const ground = footOf(f, ctx);
+  if (!ground) {
+    return; // off-tile / NoData
+  }
+  const hung = Boolean(f.properties?.wire);
+  const onWall = !hung && f.properties?.wall !== undefined;
+  const h = hung ? HUNG_H : postHeight(f);
+  if (hung) {
+    out.hung.push(ground);
+  } else {
+    byHeight(onWall ? out.walls : out.posts, h, ground);
+  }
+  // a taller post lights a wider pool; a hung lamp's is the one it had
+  const s = hung ? 1 : Math.min(Math.max(h / LAMP_H, 0.8), 2);
+  out.pools.push({ ...ground, s });
+  out.heads.push(new Vector3(ground.x, ground.y + h, ground.z));
+  const head = { x: ground.x, y: ground.y + h, z: ground.z };
+  if (hung) {
+    hangWire(f, head, ctx, out);
+  } else if (onWall) {
+    bracket(f, head, ctx, out);
+  }
+}
+
 function lampPlaces(features: LampFeature[], ctx: GroundContext): LampPlaces {
   const out: LampPlaces = {
     heads: [],
@@ -355,34 +411,12 @@ function lampPlaces(features: LampFeature[], ctx: GroundContext): LampPlaces {
     masts: [],
     pools: [],
     posts: new Map(),
+    walls: new Map(),
     wires: wires(),
   };
   for (const f of features) {
-    if (f.geometry?.type !== "Point") {
-      continue;
-    }
-    const ground = footOf(f, ctx);
-    if (!ground) {
-      continue; // off-tile / NoData
-    }
-    const hung = Boolean(f.properties?.wire);
-    const h = hung ? HUNG_H : postHeight(f);
-    if (hung) {
-      out.hung.push(ground);
-    } else {
-      const set = out.posts.get(h);
-      if (set) {
-        set.push(ground);
-      } else {
-        out.posts.set(h, [ground]);
-      }
-    }
-    // a taller post lights a wider pool; a hung lamp's is the one it had
-    const s = hung ? 1 : Math.min(Math.max(h / LAMP_H, 0.8), 2);
-    out.pools.push({ ...ground, s });
-    out.heads.push(new Vector3(ground.x, ground.y + h, ground.z));
-    if (hung) {
-      hangWire(f, { x: ground.x, y: ground.y + h, z: ground.z }, ctx, out);
+    if (f.geometry?.type === "Point") {
+      placeLamp(f, ctx, out);
     }
   }
   return out;
@@ -398,8 +432,9 @@ function taggedHeads(places: Place[], height: number): Instances {
 
 /**
  * Builds one tile's OSM street lamps into stylized geometry on the Y-up scene:
- * a post with its head, or — a lamp hung across the street — a head on a
- * wire between the facades (or masts at the kerb). Mostly fake — emissive
+ * a post with its head, a lantern on its bracket out of a facade, or — a
+ * lamp hung across the street — a head on a wire between the facades (or
+ * masts at the kerb). Mostly fake — emissive
  * heads, additive glow sprites and ground light-pool decals — driven by a
  * single `nightFactor`; the real lighting comes from a small shared
  * {@link createLampLights} pool. An empty feature list yields an empty group.
@@ -428,6 +463,9 @@ export function buildLamps(
 
   for (const [height, posts] of places.posts) {
     group.add(buildPosts(posts, height), taggedHeads(posts, height));
+  }
+  for (const [height, lanterns] of places.walls) {
+    group.add(taggedHeads(lanterns, height));
   }
   if (places.hung.length > 0) {
     group.add(taggedHeads(places.hung, HUNG_H));

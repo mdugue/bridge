@@ -52,6 +52,10 @@ UNTAGGED_REACH_M = 12.0  # ... when facades close both sides within this
 TAGGED_REACH_M = 20.0  # a tagged hung lamp's wire reaches a facade this far
 CORRIDOR_M = 2.5  # a facade counts within this either side of the wire's line
 MAST_M = 6.0  # a mast with no kerb found stands this far out
+WALL = {"wall", "wall_mounted"}  # `support` / `lamp_mount` values of a lamp on a facade
+WALL_H = 3.5  # a wall lantern's head over the street (Meißen's Domplatz: at the first floor)
+WALL_REACH_M = 1.5  # its facade within this of the node (OSM maps most on the outline)
+WALL_OUT_M = 0.5  # its head stands this far out of the facade, on its bracket
 
 
 def hung_tag(other: str | None) -> bool | None:
@@ -63,13 +67,46 @@ def hung_tag(other: str | None) -> bool | None:
     return False if any(values) else None
 
 
+def wall_tag(other: str | None) -> bool:
+    """Whether the tags put the lamp on a wall (and not on a wire)."""
+    values = [tag(other, "support"), tag(other, "lamp_mount")]
+    return any(v in WALL for v in values) and not any(v in HUNG for v in values)
+
+
 class Facades:
-    """The OSM building outlines a lamp's wire is fixed to."""
+    """The OSM building outlines a lamp's wire or bracket is fixed to."""
 
     def __init__(self, tile: Tile) -> None:
         geoms, _ = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"])
-        self.walls = [g.boundary for g in geoms if g.geom_type in ("Polygon", "MultiPolygon")]
+        self.buildings = [g for g in geoms if g.geom_type in ("Polygon", "MultiPolygon")]
+        self.walls = [g.boundary for g in self.buildings]
         self.tree = shapely.STRtree(self.walls) if self.walls else None
+        self.inside = shapely.STRtree(self.buildings) if self.buildings else None
+
+    def bracket(self, p: shapely.Point) -> tuple[list[float], shapely.Point] | None:
+        """A wall lantern's facade point (the nearest outline within
+        WALL_REACH_M) and its head, WALL_OUT_M out of it on the side no
+        building covers; None without a facade there."""
+        if self.tree is None or self.inside is None:
+            return None
+        hit = self.tree.query_nearest(p, max_distance=WALL_REACH_M)
+        if len(hit) == 0:
+            return None
+        wall = self.walls[int(hit[0])]
+        if wall.geom_type == "MultiLineString":
+            wall = min(wall.geoms, key=p.distance)
+        s = wall.project(p)
+        q = wall.interpolate(s)
+        a, b = wall.interpolate(max(s - 0.5, 0.0)), wall.interpolate(min(s + 0.5, wall.length))
+        tx, ty = b.x - a.x, b.y - a.y
+        n = math.hypot(tx, ty)
+        if n == 0:
+            return None
+        for nx, ny in ((ty / n, -tx / n), (-ty / n, tx / n)):
+            head = shapely.Point(q.x + nx * WALL_OUT_M, q.y + ny * WALL_OUT_M)
+            if len(self.inside.query(head, predicate="within")) == 0:
+                return [round(q.x, 2), round(q.y, 2)], head
+        return None
 
     def across(self, p: shapely.Point, deg: float, reach: float) -> float | None:
         """How far from p, towards the bearing, the nearest facade stands
@@ -149,6 +186,9 @@ def place(
         props = hang(p, bool(tagged), ways, lines, facades, gate)
         if props is not None:
             return p, props
+    bracket = facades.bracket(p) if wall_tag(other) else None
+    if bracket is not None:
+        return bracket[1], {"h": WALL_H, "wall": bracket[0]}
     if on_road:
         kerb = gate.nearest_kerb(p)
         if kerb is None:
@@ -183,7 +223,7 @@ def run(tile: Tile, lamp_height: float = LAMP_H) -> None:
     gate = Gate(tile, Decks.of(tile))
     ways, lines = streets(tile)
     facades = Facades(tile)
-    features, hung, on_decks = [], 0, 0
+    features, hung, on_walls, on_decks = [], 0, 0, 0
     for g, other in zip(geoms, fields["other_tags"], strict=True):
         deck = gate.deck(g)
         if deck is not None:
@@ -200,10 +240,12 @@ def run(tile: Tile, lamp_height: float = LAMP_H) -> None:
             continue
         at, props = placed
         hung += "wire" in props
+        on_walls += "wall" in props
         features.append(
             feature({"type": "Point", "coordinates": [round(at.x, 1), round(at.y, 1)]}, props)
         )
     write_geojson(tile.out("dlm", f"lamps_{tile.id}.geojson"), features, tile.epsg, OSM_ATTRIBUTION)
     print(
-        f"{tile.id}: {len(features)} lamps ({hung} hung across the street, {on_decks} on bridges)"
+        f"{tile.id}: {len(features)} lamps ({hung} hung across the street, {on_walls} on a"
+        f" facade, {on_decks} on bridges)"
     )

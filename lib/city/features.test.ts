@@ -260,6 +260,13 @@ test.each(cases)("%s: lamps are points", (_, a) => {
       expect(Number.isFinite(deck)).toBe(true);
       expect(wire).toBeUndefined();
     }
+    // a lantern on a facade: its bracket's foot, and neither wire nor deck
+    const wall = f.properties?.wall;
+    if (wall !== undefined) {
+      expect(isPoint2(wall)).toBe(true);
+      expect(wire).toBeUndefined();
+      expect(deck).toBeUndefined();
+    }
   }
 });
 

@@ -153,3 +153,46 @@ test("a landing stage on the river answers with its kind", () => {
   );
   expect(hits.some((h) => h.target.kind === "landing")).toBe(true);
 });
+
+test("a lamp or a bench on a bridge is asked on its deck, a wall lantern at its head", () => {
+  const pt = (x: number, y: number) => ({
+    type: "Point" as const,
+    coordinates: [x, y] as [number, number],
+  });
+  const own = moreSets(
+    {
+      canopy: [],
+      scan: [],
+      rows: [],
+      hedges: [],
+      river: [],
+      trams: [],
+      lamps: [
+        { geometry: pt(412010, 5656020), properties: { h: 5, deck: 125 } },
+        {
+          geometry: pt(412030, 5656020),
+          properties: { h: 3.5, wall: [412030, 5656020.5] },
+        },
+      ],
+      furniture: [
+        {
+          geometry: pt(412050, 5656020),
+          properties: { k: "bench", deck: 125 },
+        },
+      ],
+    },
+    ctx
+  );
+  // a ray along the street at height y (m), from the west
+  const along = (y: number, x: number) => {
+    const w = epsgToWorld(x - 5, 5656020, offset);
+    return nearestInSets({ x: w.x, y, z: w.z }, { x: 1, y: 0, z: 0 }, own, 10)
+      ?.target.kind;
+  };
+  expect(along(127, 412010)).toBe("lamp"); // the post on the deck
+  expect(along(112, 412010)).toBeUndefined(); // nothing on the ground below
+  expect(along(113.4, 412030)).toBe("lamp"); // the lantern's head
+  expect(along(111, 412030)).toBeUndefined(); // no post under it
+  expect(along(125.5, 412050)).toBe("furniture");
+  expect(along(110.5, 412050)).toBeUndefined();
+});
