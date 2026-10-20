@@ -242,36 +242,29 @@ function snappedColumn(
 }
 
 /** The coping cap between two snapped columns: a flat strip at the top from
- *  the face back to the crest, hiding the ramp the face stands in front of. */
+ *  the face back to the crest, hiding the ramp the face stands in front of.
+ *  Wound to face up whichever side of the line the high shelf is on: the
+ *  walls draw both sides, and three shades a triangle seen from its back
+ *  with its normal turned over — a cap wound the other way came out black
+ *  from above (Meißen's Burgberg, where OSM draws the walls with the high
+ *  side to the right: 5.8 % of the tile's wall area). */
 function pushCap(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
   if (a.bx === undefined && b.bx === undefined) {
     return;
   }
-  const abx = a.bx ?? a.wx;
-  const abz = a.bz ?? a.wz;
-  const bbx = b.bx ?? b.wx;
-  const bbz = b.bz ?? b.wz;
-  pos.push(
-    a.wx,
-    a.top,
-    a.wz,
-    b.wx,
-    b.top,
-    b.wz,
-    bbx,
-    b.top,
-    bbz,
-    a.wx,
-    a.top,
-    a.wz,
-    bbx,
-    b.top,
-    bbz,
-    abx,
-    a.top,
-    abz
-  );
-  for (let i = 0; i < 6; i++) {
+  const ab: [number, number] = [a.bx ?? a.wx, a.bz ?? a.wz];
+  const bb: [number, number] = [b.bx ?? b.wx, b.bz ?? b.wz];
+  const quad: [number, number, number][] = [
+    [a.wx, a.top, a.wz],
+    [b.wx, b.top, b.wz],
+    [bb[0], b.top, bb[1]],
+    [ab[0], a.top, ab[1]],
+  ];
+  // the up component of (b.face − a.face) × (b.back − a.face)
+  const up = (b.wz - a.wz) * (bb[0] - a.wx) - (b.wx - a.wx) * (bb[1] - a.wz);
+  const order = up >= 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2];
+  for (const k of order) {
+    pos.push(...quad[k]);
     nrm.push(0, 1, 0);
   }
 }
@@ -325,7 +318,8 @@ function pushQuad(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
   const nl = Math.hypot(nx, nz) || 1;
   nx /= nl;
   nz /= nl;
-  // a.base, b.base, b.top, a.top → two tris (double-sided, winding is free)
+  // a.base, b.base, b.top, a.top → two tris, wound to agree with the normal
+  // (both sides are drawn, and a side seen from behind is shaded turned over)
   pos.push(
     a.wx,
     a.base,

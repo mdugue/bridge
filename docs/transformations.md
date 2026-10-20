@@ -2532,6 +2532,14 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   DOM1 shows four in five standing a metre and more; in Leipzig and Munich
   half of them too, in Hamburg a quarter. A retaining wall still ends at
   its high shelf.)*
+  **The coping cap faces up whichever side its high shelf is on**
+  (2026-10-20, `pushCap`): the walls draw both sides, and three shades a
+  triangle seen from behind with its normal turned over, so a cap wound
+  downwards came out black from above. *(OSM draws a retaining wall with
+  its high side to the left; where a way runs the other way, or the
+  measured step lies the other way, the cap was wound against its normal:
+  628 cap triangles on Meißen's tile, 5.8 % of its wall area, as the black
+  band along the Burgberg's west wall; 99 on Dresden's spawn tile.)*
   Until then the browser built the ribbons from the GeoJSON over whichever
   terrains were loaded. **Why OSM:** no elevation product has the wall as a
   *vertical face* (a 2.5D surface cannot), and it's not a CityJSON building,
