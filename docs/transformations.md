@@ -241,9 +241,10 @@ visual-variable codebook is in
   (`sport_<tile>.json`, one row each: centre, long axis, size, surface,
   line scheme, shape) and a 2048² index raster (`sport_<tile>.png`, four
   bytes per texel: the row on top, a second row reaching it, the exact
-  outline bit). The surface is the `surface` tag, else the sport's usual
-  one (football grass, tennis clay, basketball hard court, athletics
-  tartan, beach volleyball sand); the lines are the sport's (the first of a
+  outline bit). The surface is the `surface` tag, else the one the
+  orthophoto shows (2026-10-20, below), else the sport's usual one
+  (football grass, tennis clay, basketball hard court, athletics tartan,
+  beach volleyball sand); the lines are the sport's (the first of a
   `;` list): football, tennis, basketball, volleyball, a handball / multi-
   sport court, running lanes, a chess board. The shape is the minimum
   rotated rectangle (area ≥ 85 % of it), a capsule band for an oval track
@@ -257,7 +258,30 @@ visual-variable codebook is in
   surfaces (`lib/city/sport.ts`), mown stripes on grass, fine grain, and
   the standard line dimensions (FIFA, ITF, FIBA, FIVB) scaled down to fit
   a smaller ground; lines box-filtered over the pixel footprint (a 12 cm
-  line is a steady hairline from afar); blue tape on sand. On the fine
+  line is a steady hairline from afar); blue tape on sand.
+  An untagged surface is read off the orthophoto (`photo_surface`): the
+  football default had drawn every untagged pitch as grass, and in
+  Dresden one of the twelve is — four are artificial turf, six the red
+  rubber of a small all-weather pitch, one cinder. The photo is taken to
+  Dresden's colour balance (`dop_balance.py`) and read on the outline
+  shrunk by 2 m, in its sunlit texels, when at least half of them are in
+  sun and no more than a quarter stands 2 m over the ground (crowns,
+  roofs): a calibrated NDVI ≥ 0.2 is grass; then in linear RGB a b/g over
+  1 (not red) a blue or teal coated hard court, an r/g ≤ 0.9 artificial
+  turf (green but not growing), an r/g ≥ 1.4 tartan when its b/g is
+  ≥ 0.8 (pink-red) and otherwise clay on a tennis court or cinder,
+  anything else earth below a b/g of 0.88 (clay on a tennis court, else
+  cinder) or a hard court. A running track is not read (its band is
+  narrow, and its mapped area often holds the infield: the first pass
+  read football grass into tracks), and a sand ground — a riding arena,
+  beach volleyball — only turns grass (sand reads as earth or a pale hard
+  court). A flight without infrared (Bavaria's GLI) cannot tell turf from grass, so
+  a green ground keeps its default there. On the tagged grounds of the
+  cities with infrared the NDVI tells grass from turf on 63 of 69 (five
+  tagged grass show nothing growing — converted since, perhaps); a tagged
+  surface is never changed (the photo is one day's). A pitch of no known
+  sport, drawn only with a tagged surface until then, is drawn with the
+  photo's too (no lines). On the fine
   level the dressing stands **goals**, **basketball posts** and **nets**
   (`sport-fixtures.ts`, `sportFixtures`): pale-clay bars, the nets a
   lavender-grey veil in the street furniture's palette and matte material, one merged mesh each per tile, in the tile that owns

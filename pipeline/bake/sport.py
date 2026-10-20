@@ -36,6 +36,20 @@ four times as wide (R0 G0 B0 A0 R1 …, read by lib/city/png-raster.ts):
     B = 255 inside an exact outline    (the free shapes' edge)
     A = 0
 
+A ground whose surface OSM does not tag takes the one the orthophoto
+shows, where it can be read (`photo_surface`), not its sport's default
+(not a running track: its band is narrow, and its area often holds the
+infield; a sand ground only turns grass):
+in Dresden one untagged football pitch in twelve is grass — four are
+artificial turf (green, but not growing: the infrared says so), six the
+red rubber of a small all-weather pitch, one cinder. The photo is taken to
+Dresden's colour balance first (dop_balance.py) and read on the outline
+shrunk by INSET_M, in its sunlit texels, unless trees or shade cover it;
+the vegetation index is the calibrated one (ndvi.py). A flight without
+infrared (Bavaria: its index is the visible GLI) cannot tell turf from
+grass, so a green ground keeps its default there. A tagged surface is
+never changed: the photo is a day's, the tag the mapper's word.
+
 The shader takes the rows of the texels around a fragment and decides inside
 or out from each row's analytic shape, so a court's edge is exact, not the
 raster's metre staircase. The second row is what keeps that true where the
@@ -47,11 +61,17 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Callable, Sequence
 
 import numpy as np
+import rasterio
 import shapely
-from rasterio.features import rasterize
+from PIL import Image
+from rasterio.enums import Resampling
+from rasterio.features import geometry_mask, rasterize
+from rasterio.windows import from_bounds
 
+from . import dop_balance
 from .common import OSM_ATTRIBUTION, Tile, column, save_grey_png
 from .osm import has_extract, read_osm, tag
 
@@ -142,6 +162,22 @@ SPORTS = {
 FOOTBALL, COURT, LANES = 1, 5, 6
 SMALL_FOOTBALL_M = 50.0  # a sealed football pitch shorter than this is a Bolzplatz
 
+# An untagged surface read off the orthophoto (`photo_surface`):
+INSET_M = 2.0  # the outline shrunk by this (its lines, kerbs and fences out)
+MIN_PHOTO_M2 = 150.0  # an inset outline smaller than this is not read
+MIN_SUNLIT = 0.5  # the share of its texels that must be in sun
+MAX_COVER = 0.25  # the share that may stand over COVER_M (crowns, roofs)
+COVER_M = 2.0
+GRASS_NDVI = 0.2  # calibrated index at or above: grass grows there
+BLUE_BG = 1.0  # linear b/g above, not red: a blue or teal coated court, hard
+GREEN_RG = 0.9  # linear r/g at or below: green — turf where nothing grows
+RED_RG = 1.4  # at or above: red or orange
+TARTAN_BG = 0.8  # a red's b/g at or above: tartan (pink-red); below: orange
+CINDER_BG = 0.88  # a grey's b/g below this: earth or cinder; else hard
+# A texel in shade: dim and blue, or dark (sRGB luminance; the roof
+# colours' rule)
+SHADE_BLUE, SHADE_DIM, SHADE_DARK = 1.3, 110.0, 40.0
+
 RECT_FILL = 0.85  # area / minimum rotated rectangle at or above this is a rectangle
 STADIUM_MIN_RADIUS = 15.0  # m: a narrower track bending is a sprint strip, not an oval
 TRACK_LANE_BAND = 7.32  # six 1.22 m lanes: an untagged track line's width
@@ -163,18 +199,109 @@ def first_sport(value: str | None) -> str | None:
     return value.split(";")[0].strip().lower() or None
 
 
-def classify(leisure: str, sport: str | None, surface: str | None) -> tuple[int, int] | None:
+def classify(
+    leisure: str, sport: str | None, surface: str | None, seen: int | None = None
+) -> tuple[int, int] | None:
     """(surface id, marking id) of a ground, or None when nothing would show:
-    a pitch of an unknown sport only with a tagged surface."""
+    a pitch of an unknown sport only with a tagged surface. `seen` is the
+    surface the photo shows, which an untagged ground takes."""
     tagged = surface_id(surface)
     first = first_sport(sport)
     if leisure == "track":
-        return (tagged or 3, LANES)
+        return (tagged or seen or 3, LANES)
     lines, default = SPORTS.get(first or "", (0, 0))
-    ground = tagged or default
+    ground = tagged or seen or default
     if not ground and not lines:
         return None
     return ground, lines
+
+
+def photo_surface(rgb, ndvi: float, infrared: bool, sport: str | None) -> int | None:
+    """The surface id a ground's photo shows: `rgb` its sunlit texels'
+    median (linear, balanced), `ndvi` the calibrated index's median,
+    `infrared` whether the flight has the band. None where it cannot tell,
+    and on a sand ground (a riding arena, beach volleyball) anything but
+    grass: sand reads as earth or as a pale hard court."""
+    r, g, b = (float(c) for c in rgb)
+    if g <= 0:
+        return None
+    rg, bg = r / g, b / g
+    if infrared and ndvi >= GRASS_NDVI:
+        return SURFACE_OF["grass"]
+    if SPORTS.get(sport or "", (0, 0))[1] == SURFACE_OF["sand"]:
+        return None
+    if bg > BLUE_BG and rg < RED_RG:
+        return SURFACE_OF["asphalt"]
+    if rg <= GREEN_RG:
+        return SURFACE_OF["artificial_turf"] if infrared else None
+    if rg >= RED_RG:
+        if bg >= TARTAN_BG:
+            return SURFACE_OF["tartan"]
+        return SURFACE_OF["clay"] if sport == "tennis" else SURFACE_OF["compacted"]
+    if bg < CINDER_BG:  # earth: a tennis court of it is clay
+        return SURFACE_OF["clay"] if sport == "tennis" else SURFACE_OF["compacted"]
+    return SURFACE_OF["asphalt"]
+
+
+def in_shade(rgb8: np.ndarray) -> np.ndarray:
+    """The texels (…, 3) of an 8-bit photo in shade."""
+    c = rgb8.astype(np.float32)
+    lum = c[..., 0] * 0.2126 + c[..., 1] * 0.7152 + c[..., 2] * 0.0722
+    return ((c[..., 2] > SHADE_BLUE * c[..., 0]) & (lum < SHADE_DIM)) | (lum < SHADE_DARK)
+
+
+class Photo:
+    """The tile's orthophoto (balanced to Dresden's), its calibrated index
+    and the surface model, read ground by ground."""
+
+    def __init__(self, tile: Tile, site: Sequence[Tile]) -> None:
+        self.tile = tile
+        self.lut = dop_balance.table(dop_balance.gains(site or [tile]))
+        self.infrared = tile.products.dop == "rgbi"
+        path = tile.out("dlm", f"ndvi_{tile.id}.png")
+        self.ndvi = np.asarray(Image.open(path).convert("L")) / 255.0 if path.exists() else None
+
+    def surface(self, g: shapely.Geometry, sport: str | None) -> int | None:
+        inset = shapely.buffer(g, -INSET_M)
+        if inset.is_empty or inset.area < MIN_PHOTO_M2 or self.ndvi is None:
+            return None
+        with rasterio.open(self.tile.raw_raster("dop")) as dop:
+            window = from_bounds(*inset.bounds, dop.transform).round_offsets().round_lengths()
+            rgb = dop.read((1, 2, 3), window=window, boundless=True)
+            inside = ~geometry_mask([inset], rgb.shape[1:], dop.window_transform(window))
+        rgb = dop_balance.balanced(np.moveaxis(rgb, 0, -1), self.lut)
+        sunlit = inside & ~in_shade(rgb)
+        if inside.sum() == 0 or sunlit.sum() < MIN_SUNLIT * inside.sum():
+            return None
+        if self._covered(inset):
+            return None
+        px = self.ndvi.shape[0]
+        index = self.ndvi[~geometry_mask([inset], self.ndvi.shape, self.tile.transform(px))]
+        if len(index) == 0:
+            return None
+        colour = np.median(dop_balance.linear(rgb[sunlit].astype(np.float32)), axis=0)
+        return photo_surface(colour, float(np.median(index)), self.infrared, sport)
+
+    def _covered(self, inset: shapely.Geometry) -> bool:
+        """Whether crowns or roofs stand over too much of it (DOM1 − DGM1)."""
+        dom = self.tile.raw_raster("dom1")
+        if not dom.exists():
+            return False
+        with rasterio.open(dom) as top:
+            window = from_bounds(*inset.bounds, top.transform).round_offsets().round_lengths()
+            surface = top.read(1, window=window, boundless=True).astype(np.float32)
+            inside = ~geometry_mask([inset], surface.shape, top.window_transform(window))
+            bounds = top.window_bounds(window)
+        with rasterio.open(self.tile.dgm) as dgm:
+            ground = dgm.read(
+                1,
+                window=from_bounds(*bounds, dgm.transform),
+                out_shape=surface.shape,
+                boundless=True,
+                resampling=Resampling.bilinear,
+            ).astype(np.float32)
+        high = (surface - ground)[inside] > COVER_M
+        return bool(inside.any()) and float(high.mean()) > MAX_COVER
 
 
 def rectangle(g: shapely.Geometry) -> tuple[float, float, float, float, float]:
@@ -235,7 +362,14 @@ def outdoors(other_tags: str | None) -> bool:
 
 
 def grounds(
-    tile: Tile, areas, leisures, sports, area_tags, lines, line_tags
+    tile: Tile,
+    areas,
+    leisures,
+    sports,
+    area_tags,
+    lines,
+    line_tags,
+    photo: Callable[[shapely.Geometry, str | None], int | None] | None = None,
 ) -> list[tuple[shapely.Geometry, int, int, int, list[float]]]:
     """(outline, surface, marking, shape, frame) for every ground touching
     the tile, in burn order: tracks, then the pitches largest first, so a
@@ -247,7 +381,11 @@ def grounds(
     def add(g, leisure, sport, tags):
         if g is None or g.is_empty or not g.intersects(box) or not outdoors(tags):
             return
-        kind = classify(leisure, sport, tag(tags, "surface"))
+        seen = None
+        # not a track: its band is narrow, its area often maps the infield
+        if photo is not None and leisure != "track" and not surface_id(tag(tags, "surface")):
+            seen = photo(g, first_sport(sport))
+        kind = classify(leisure, sport, tag(tags, "surface"), seen)
         if kind is None:
             return
         surface, marking = kind
@@ -312,9 +450,13 @@ def table_json(table: dict, rows: list[list]) -> str:
     return f'{head},\n  "grounds": {grounds}\n}}\n'
 
 
-def run(tile: Tile, px: int = 2048) -> None:
+def run(tile: Tile, site: Sequence[Tile] = (), px: int = 2048) -> None:
+    """Writes the tile's sports grounds; an untagged surface is read off
+    the orthophoto, balanced by the cast of `site` (the site's tiles; the
+    tile alone when empty), where the tile has one."""
     if not has_extract(tile, "the sports grounds"):
         return
+    photo = Photo(tile, site).surface if tile.raw_raster("dop").exists() else None
     areas, afields = read_osm(
         tile,
         "multipolygons",
@@ -332,6 +474,7 @@ def run(tile: Tile, px: int = 2048) -> None:
         column(afields, "other_tags", areas),
         lines,
         column(lfields, "other_tags", lines),
+        photo,
     )
     raster = index_raster([g for g, *_ in found], tile, px)
     save_grey_png(tile.out("dlm", f"sport_{tile.id}.png"), raster.reshape(px, 4 * px))

@@ -85,6 +85,7 @@ STEPS = {
     "edges": edges.run,
     # After surface and edges (reads the class raster only).
     "markings": markings.run,
+    # After the NDVI: an untagged surface is read off the orthophoto.
     "sport": sport.run,
     # After land cover, NDVI and the furniture (the stop signs skip a stop
     # that already has a shelter).
@@ -181,6 +182,9 @@ def main() -> None:
                 continue
             if step == "ndvi":
                 ndvi.run(tile, spec.tiles)
+                continue
+            if step == "sport":
+                sport.run(tile, spec.tiles)
                 continue
             STEPS[step](tile)
     if args.step == "all" and not args.tile:
