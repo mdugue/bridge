@@ -692,8 +692,9 @@ export function bakeCityMesh(
     );
     if (own && !hosts[i].monumental) {
       hosts[i].monumental = true;
-      // a hall's raised roof: no palace's windows on it either
-      hosts[i].palace = false;
+      // a hall's raised roof has no windows; a palace's wing keeps its
+      // building's (its storey is the palace's, `palaceStorey`)
+      hosts[i].palace = hosts[o.root].palace ?? false;
       o.flags = facadeFlags(o.flags, true);
       if (o.drawn) {
         o.drawn = { ...o.drawn, own: "part" };
@@ -1022,11 +1023,13 @@ function dressWalls(
       delete o.windows;
     }
   }
+  const reachOf = (i: number) => reach[i] ?? GROUND_REACH_M;
   baked.vertices.facade = facadeOf(
     baked,
     keys,
     onWalls,
-    rises && { at: rises, reach: (i) => reach[i] ?? GROUND_REACH_M }
+    reachOf,
+    rises && { at: rises, reach: reachOf }
   );
 }
 
@@ -1875,25 +1878,21 @@ function groundOf(ground: WallGround | undefined): Map<number, number[]> {
   return out;
 }
 
-/** How high each object's plinth stands over its base (m): the highest
- *  piece (`groundTops`) the ground-floor windows can clear
- *  (`GROUND_REACH_M`) — they keep above it. */
-function plinthTops(
+/** How high each object's plinth pieces stand over its base (m), each
+ *  piece's top (`groundTops`): levels its ground-floor windows keep over
+ *  where they can, like the ground in front of its walls. */
+function plinthLevels(
   objects: readonly CityObjectRow[],
   plinths: readonly PlinthFeature[],
   index: ReadonlyMap<string, number>
-): Map<number, number> {
-  const tops = new Map<number, number>();
+): Map<number, number[]> {
+  const tops = new Map<number, number[]>();
   for (const f of plinths) {
     const p = f.properties;
     const i = p ? index.get(p.of) : undefined;
     const host = i === undefined ? undefined : objects[i];
-    // past the windows' reach that wall has no ground floor (`facadeOf`)
-    const reached = (host && p ? groundTops(host, p) : []).filter(
-      (top) => top <= GROUND_REACH_M
-    );
-    if (i !== undefined && reached.length > 0) {
-      tops.set(i, Math.max(tops.get(i) ?? -Infinity, ...reached));
+    if (i !== undefined && host && p) {
+      tops.set(i, [...(tops.get(i) ?? []), ...groundTops(host, p)]);
     }
   }
   return tops;
@@ -1904,7 +1903,8 @@ function plinthTops(
  * on its walls, on another part of its building, on the nearest building
  * of its kind, or its type's) and the storey they keep, snapped to its
  * eave — written into its row (`windows`, `storeyH`); its ground floor's
- * over its plinth and the ground in front of its walls (`ground`). Returns
+ * over its plinth pieces and the ground in front of its walls (`ground`),
+ * as high as they still leave it one (`overGround`). Returns
  * each object's reach (`WindowChoice.reach`: a wall the ground rises
  * higher in front of loses its ground floor).
  */
@@ -1917,14 +1917,14 @@ export function assignWindows(
   ground?: WallGround
 ): number[] {
   const index = new Map(keys.map((id, i) => [id, i]));
-  const tops = plinthTops(objects, plinths, index);
+  const tops = plinthLevels(objects, plinths, index);
   const fronts = groundOf(ground);
   const hosts: WindowHost[] = objects.map((o, i) => ({
     centre: footprintCentre(o.footprints),
     eaveH: o.eaveH,
     flat: hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF),
     fn: extra[i]?.fn,
-    ground: fronts.get(i),
+    ground: [...(fronts.get(i) ?? []), ...(tops.get(i) ?? [])],
     levels: extra[i]?.levels ?? false,
     lod2: (o.source ?? OBJECT_SOURCE_LOD2) === OBJECT_SOURCE_LOD2,
     ownFacade:
@@ -1935,7 +1935,6 @@ export function assignWindows(
       (extra[i]?.monumental ?? false) &&
       (extra[i]?.palace ?? false) &&
       (o.flags & NO_WINDOW_FLAGS) === 0,
-    plinth: tops.get(i),
     root: o.root,
     shop: hasObjectFlag(o.flags, OBJECT_FLAG_SHOP),
     storeyH: o.storeyH,
@@ -1974,6 +1973,7 @@ function facadeOf(
     plinths?: readonly PlinthFeature[];
     shopfronts?: readonly ShopfrontWall[];
   },
+  reach: (object: number) => number,
   rises?: Parameters<typeof facadeAttribute>[4]
 ): Int16Array<ArrayBuffer> {
   const { cx, cy } = baked.offset;
@@ -2010,19 +2010,20 @@ function facadeOf(
     baked.vertices,
     (i) => (baked.objects[i]?.windows?.axis ?? 0) > 0,
     doors,
-    [...shops, ...buriedWalls(baked, index, onWalls.plinths ?? [])],
+    [...shops, ...buriedWalls(baked, index, onWalls.plinths ?? [], reach)],
     rises
   );
 }
 
-/** The walls whose ground rises past the ground floor's reach
- *  (`groundTops` over `GROUND_REACH_M`): marked as a shopfront's, they keep
- *  their upper floors' windows and lose the ground floor's. Either way
- *  round, as a piece's line does not say which side is out. */
+/** The walls whose plinth or ground rises past their object's reach
+ *  (`groundTops` over `WindowChoice.reach`): marked as a shopfront's with
+ *  that height, they lose the windows under it. Either way round, as a
+ *  piece's line does not say which side is out. */
 function buriedWalls(
   baked: Pick<BakedCityMesh, "objects" | "offset">,
   index: ReadonlyMap<string, number>,
-  plinths: readonly PlinthFeature[]
+  plinths: readonly PlinthFeature[],
+  reach: (object: number) => number
 ): FacadeShop[] {
   const { cx, cy } = baked.offset;
   return plinths.flatMap((f) => {
@@ -2038,11 +2039,12 @@ function buriedWalls(
       const a = line[0];
       const b = line[line.length - 1];
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      if (!(top > GROUND_REACH_M) || len === 0) {
+      if (!(top > reach(object)) || len === 0) {
         return [];
       }
       const n: [number, number] = [(b[1] - a[1]) / len, -(b[0] - a[0]) / len];
       const at = {
+        ground: top,
         object,
         a: [a[0] - cx, a[1] - cy] as [number, number],
         b: [b[0] - cx, b[1] - cy] as [number, number],

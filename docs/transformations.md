@@ -1934,9 +1934,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   window. **None** on a facade of its own (a church or hall — ALKIS
   function or OSM storeys over 5.5 m —, not a Wikidata landmark's flag
   alone: most are town houses) except a palace's: a public use (ALKIS
-  `31001_3010`–`3075` but the churches' 3038–3048 — a Schloss, museum,
-  theatre, parliament, court, school, hospital; no station, no sports
-  hall; `palatialFacade`) gets the type **palace**
+  `31001_3010`–`3072` but the churches' 3038–3048 — a Schloss, museum,
+  theatre, parliament, court, school, hospital; no barracks, bunker or
+  prison, no station, no sports hall; `palatialFacade`) gets the type **palace**
   (3.6 m axis, 1.45 m wide, up to 3 m tall, a Fasche, 21 cm reveals) on
   storeys of OSM's count where it gives 2.4–7.5 m, else the eave split
   into ~5.5 m storeys (`palaceStorey`), and only its own walls' measured

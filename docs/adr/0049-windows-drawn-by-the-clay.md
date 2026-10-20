@@ -113,7 +113,7 @@ neighbours carry windows.
 A palace is the exception to the monumental gate (2026-10-19, Manuel: the
 Zwinger, Albertinum, Japanisches Palais, Residenzschloss and the
 Landtag's old building stood without a window, densely windowed in
-reality). A facade of its own on a public use (ALKIS `31001_3010`–`3075`
+reality). A facade of its own on a public use (ALKIS `31001_3010`–`3072`
 but the churches' 3038–3048: a Schloss, museum, theatre, parliament,
 court, school, academy, hospital — no station, no sports hall;
 `palatialFacade`) carries windows of their own type

@@ -280,14 +280,18 @@ describe("windowSpecs", () => {
       1.2 + WINDOW_ROWS.plinthGap - 1e-9
     );
     expect(s.noGround).toBe(false);
-    // a plinth too high for the classes: no ground-floor windows
-    expect(unpackStyle(high.spec.style).noGround).toBe(true);
-    // ...nor where the lift would leave them wider than tall
-    const q = unpackStyle(squat.spec.style);
-    expect(squat.spec.h - q.lift).toBeLessThan(
-      WINDOW_ROWS.squat * squat.spec.w
-    );
-    expect(q.noGround).toBe(true);
+    // a plinth too high for the classes, or one the lift would leave the
+    // windows wider than tall over: the ground floor stays unlifted, its
+    // reach under the plinth (the plinth's walls lose theirs, the bake)
+    for (const [c, plinth] of [
+      [high, 2.6],
+      [squat, 1.6],
+    ] as const) {
+      const q = unpackStyle(c.spec.style);
+      expect(q.noGround).toBe(false);
+      expect(q.lift).toBe(0);
+      expect(c.reach).toBeLessThan(plinth);
+    }
     // a town house's Hochparterre
     expect(unpackStyle(raised.spec.style).lift).toBeCloseTo(
       WINDOW_ROWS.raise,
@@ -586,6 +590,15 @@ describe("wallRises", () => {
     );
     expect(Array.from(rises.slice(0, 4))).toEqual([7, 7, 7, 7]);
     expect(Number.isNaN(rises[4])).toBe(true);
+    // level ground: the wall on the step stands over a lower roof, its
+    // reading does not count
+    const flat = wallRises(
+      mesh,
+      () => 0,
+      () => 0
+    );
+    expect(Array.from(flat.slice(0, 2))).toEqual([0, 0]);
+    expect(Number.isNaN(flat[2])).toBe(true);
   });
 });
 

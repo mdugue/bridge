@@ -547,10 +547,11 @@ export function ownFacadeReason(
     : null;
 }
 
-/** ALKIS's public buildings a palace's windows fit (`31001_3010`–`3075`:
- *  administration, education, culture, health, security) — not a station,
+/** ALKIS's public buildings a palace's windows fit (`31001_3010`–`3072`:
+ *  administration, education, culture, health, police and fire service) —
+ *  not a barracks, a bunker or a prison (3073–3075), a station,
  *  a cemetery's or a sports hall (3080 on), whose walls are a hall's. */
-const PALACE = { from: "31001_3010", to: "31001_3075" } as const;
+const PALACE = { from: "31001_3010", to: "31001_3072" } as const;
 /** … but its religious buildings and fortresses (`31001_3038`–`3048`):
  *  a nave's, a tower's or a bastion's facade has no rows of windows. */
 const NO_PALACE = { from: "31001_3038", to: "31001_3048" } as const;

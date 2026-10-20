@@ -774,8 +774,15 @@ test("windows: a wall the ground rises past loses its ground floor alone", () =>
       signs.add(Math.sign(length));
     }
   }
-  // the south wall signed as a shopfront's, the others not
+  // the south wall signed as a shopfront's, the others not, with the
+  // ground's height (3 m) its windows keep over
   expect([...signs].sort((a, b) => a - b)).toEqual([-1, 1]);
+  for (let v = 0; v < vertices.objectIds.length; v++) {
+    const f = vertices.facade;
+    if (f && vertices.objectIds[v] === house && f[4 * v + 1] < 0) {
+      expect((f[4 * v + 2] / 32_767) * FACADE_SCALE_M).toBeCloseTo(3, 1);
+    }
+  }
 });
 
 test("windows: the ground floor's clear the fine ground, wall by wall", () => {

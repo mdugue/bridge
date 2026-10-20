@@ -473,7 +473,7 @@ export interface WindowHost {
    *  highest they can (`WindowChoice.reach`) */
   ground?: readonly number[];
   /** how high its plinth stands over its base (m), where one is drawn:
-   *  its ground floor's windows keep over it */
+   *  one more level its ground floor's windows keep over, like `ground` */
   plinth?: number;
   /** the root of its building tree */
   root: number;
@@ -708,7 +708,7 @@ export function windowSpecs(
       ? { from: mine ? ("measured" as const) : ("type" as const), m: mine }
       : rhythmOf(host, mine, byRoot.get(host.root), donors);
     const { storey, kind, photos } = storeyAndType(host, mine);
-    const { reach, spec } = overGround(host, (plinth) => {
+    const { reach, spec } = overGround(host, storey, (plinth) => {
       const style = styleOf({ ...host, plinth }, kind, m, from);
       const type = TYPES[kind];
       const fit = fitted(
@@ -735,27 +735,31 @@ export function windowSpecs(
 
 /**
  * A host's windows (`fit`, given what its ground floor's must clear) over
- * the highest ground in front of its walls (`WindowHost.ground`) that still
- * leaves it a ground floor, and that ground (`reach`): a wall the ground
- * rises higher in front of loses its own ground floor, the others keep
- * theirs — one steep wall no longer takes every wall's.
+ * the highest ground or plinth in front of its walls (`WindowHost.ground`,
+ * `plinth`) that still leaves it a ground floor, and the height its
+ * lowest windows clear (`reach`): a wall the ground or a plinth rises
+ * higher in front of loses its own ground floor, the others keep theirs —
+ * one steep wall no longer takes every wall's. Without a ground floor (a
+ * shop's, or none left) the reach is the first floor's.
  */
 function overGround(
   host: WindowHost,
+  storey: number,
   fit: (plinth: number | undefined) => WindowSpec
 ): { reach: number; spec: WindowSpec } {
   const reachOf = (spec: WindowSpec) => {
     const s = unpackStyle(spec.style);
-    return s.noGround
-      ? Number.NEGATIVE_INFINITY
-      : s.sill + s.lift - WINDOW_ROWS.plinthGap;
+    const sill = s.noGround
+      ? Math.max(storey, WINDOW_ROWS.firstLine) + s.sill
+      : s.sill + s.lift;
+    return sill - WINDOW_ROWS.plinthGap;
   };
-  const plinth = host.plinth ?? Number.NEGATIVE_INFINITY;
-  // the ground's levels over the plinth, highest first, to the lift's step
+  // the levels the ground floor might clear, highest first, to the lift's
+  // step
   const levels = [
     ...new Set(
-      (host.ground ?? [])
-        .filter((g) => g > plinth && g <= GROUND_REACH_M)
+      [...(host.ground ?? []), host.plinth ?? Number.NEGATIVE_INFINITY]
+        .filter((g) => g > 0 && g <= GROUND_REACH_M)
         .map((g) => Math.ceil(g / WINDOW_LIFT.step - 1e-6) * WINDOW_LIFT.step)
     ),
   ].sort((a, b) => b - a);
@@ -765,7 +769,7 @@ function overGround(
       return { reach: reachOf(spec), spec };
     }
   }
-  const spec = fit(host.plinth);
+  const spec = fit(undefined);
   return { reach: reachOf(spec), spec };
 }
 
@@ -1158,6 +1162,10 @@ function wallsAt(
 const FRONT_M = 0.5;
 /** The ground along a wall's foot is read this often (m). */
 const FOOT_STEP_M = 2;
+/** The ground counts in front of a wall triangle where it reaches up to at
+ *  most this far under the triangle's lowest vertex (m): further down it
+ *  lies under a lower roof of the building, not against the wall. */
+const REACH_M = 1;
 
 /**
  * How far the ground in front of each wall triangle rises over its
@@ -1167,8 +1175,9 @@ const FOOT_STEP_M = 2;
  * stretch, and the highest reading counts: the windows sink wherever it
  * passes them. Every wall triangle is read, not only those at its
  * object's foot: a wall standing on a step of its building (the
- * Kunstakademie's wing on the terrace) meets the ground higher up, and
- * one over a lower roof reads the ground under it, which buries nothing.
+ * Kunstakademie's wing on the terrace) meets the ground higher up; a
+ * reading more than `REACH_M` under the triangle is the ground under a
+ * lower roof and does not count.
  * `groundAt` in the mesh's frame.
  */
 export function wallRises(
@@ -1181,6 +1190,7 @@ export function wallRises(
   for (let t = 0; t + 2 < mesh.objectIds.length; t += 3) {
     const base = baseOf(mesh.objectIds[t]);
     const plane = mesh.isRoof[t] === 1 ? undefined : wallPlane(p, t);
+    const z0 = Math.min(p[3 * t + 2], p[3 * t + 5], p[3 * t + 8]);
     if (base === undefined || !plane) {
       continue;
     }
@@ -1198,7 +1208,8 @@ export function wallRises(
         n[0] * (d + FRONT_M) + n[1] * at,
         n[1] * (d + FRONT_M) - n[0] * at
       );
-      if (g !== null && !(g - base <= rise)) {
+      // a reading under the wall's foot is the ground under a lower roof
+      if (g !== null && g >= z0 - REACH_M && !(g - base <= rise)) {
         rise = g - base;
       }
     }
