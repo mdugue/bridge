@@ -68,7 +68,7 @@ import {
 import type { Passage } from "../lib/city/passages";
 import type { LevelLine } from "../lib/city/levels";
 import { tileExtentOf } from "../lib/city/site";
-import { packPoints, pointOf } from "../lib/city/point-pack";
+import { canopyStride, packPoints, pointOf } from "../lib/city/point-pack";
 import {
   lod2Roofs,
   type RoofFootprint,
@@ -506,7 +506,6 @@ async function publishCanopy(tile: string, file: string): Promise<string> {
   // pre-gzipped like the glTF (static hosts do not compress binary types).
   const packed = file.replace(/\.geojson$/u, ".pts.gz");
   const [minX, minY] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
-  const stride = file.startsWith("canopyx_") ? 4 : 3;
   const bake = [
     "lib/city/point-pack.ts",
     "lib/city/roof-trees.ts",
@@ -532,7 +531,9 @@ async function publishCanopy(tile: string, file: string): Promise<string> {
         `${file}: ${offSheds - features.length} points on a LoD2 roof dropped`
       );
     }
-    return gz(packPoints(features.map(pointOf), [minX, minY], stride));
+    const points = features.map(pointOf);
+    const stride = canopyStride(points, file.startsWith("canopyx_"));
+    return gz(packPoints(points, [minX, minY], stride));
   });
   return publish(packed, bytes);
 }

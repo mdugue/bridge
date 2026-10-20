@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
-import type { CanopyExtraFeature } from "./features";
-import { packPoints, pointFeatures, pointOf, unpackPoints } from "./point-pack";
+import type { CanopyExtraFeature, CanopyFeature } from "./features";
+import {
+  canopyStride,
+  packPoints,
+  pointFeatures,
+  pointOf,
+  unpackPoints,
+} from "./point-pack";
 
 const ORIGIN: [number, number] = [412_000, 5_656_000];
 
@@ -94,4 +100,52 @@ test("a committed canopy comes back as the features it was, within a millimetre"
     );
   });
   expect(worst).toBeLessThan(1e-3);
+});
+
+test("an evergreen crown keeps what told it, through the pack", () => {
+  const features: CanopyFeature[] = [
+    {
+      geometry: { type: "Point", coordinates: [412_100, 5_656_100] },
+      properties: { h: 21, l: "e" },
+    },
+    {
+      geometry: { type: "Point", coordinates: [412_110, 5_656_110] },
+      properties: { h: 18, l: "e", ls: "dop" },
+    },
+    {
+      geometry: { type: "Point", coordinates: [412_120, 5_656_120] },
+      properties: { h: 15 },
+    },
+  ];
+  const points = features.map(pointOf);
+  expect(canopyStride(points, false)).toBe(5);
+  const unpacked = unpackPoints(toBuffer(packPoints(points, ORIGIN, 5)));
+  const back = unpacked ? pointFeatures(unpacked) : [];
+  expect(back.map((f) => f.properties)).toEqual([
+    { h: 21, l: "e" },
+    { h: 18, l: "e", ls: "dop" },
+    { h: 15 },
+  ]);
+});
+
+test("a canopy without an evergreen packs as before", () => {
+  const points = [{ x: 412_001, y: 5_656_001, h: 5 }];
+  expect(canopyStride(points, false)).toBe(3);
+  expect(canopyStride(points, true)).toBe(4);
+});
+
+test("the Heide's committed evergreens reach the browser", async () => {
+  const path = `${import.meta.dir}/../../data/dresden/dlm/canopy_33416_5658_2_sn.geojson`;
+  const doc = (await Bun.file(path).json()) as { features: CanopyFeature[] };
+  const points = doc.features.map(pointOf);
+  const unpacked = unpackPoints(
+    toBuffer(
+      packPoints(points, [416_000, 5_658_000], canopyStride(points, false))
+    )
+  );
+  const back = unpacked ? pointFeatures(unpacked) : [];
+  const evergreen = (fs: readonly CanopyFeature[]) =>
+    fs.filter((f) => f.properties?.l === "e").length;
+  expect(evergreen(doc.features)).toBeGreaterThan(1000);
+  expect(evergreen(back)).toBe(evergreen(doc.features));
 });

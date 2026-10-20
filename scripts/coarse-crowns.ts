@@ -22,6 +22,7 @@ import type { RecenterOffset } from "../lib/city/ground-clamp";
 import { decodeGreyPng } from "../lib/city/png-raster";
 import {
   type PackedPoint,
+  canopyStride,
   packPoints,
   pointFeatures,
   pointOf,
@@ -82,7 +83,7 @@ function packedCanopy(
   sheds: SmallBuildingFeature[],
   roofs: RoofFootprint[],
   origin: [number, number],
-  stride: 3 | 4
+  radii: boolean
 ): CanopyFeature[] {
   const raw = features<CanopyFeature>(path);
   if (raw.length === 0) {
@@ -92,7 +93,8 @@ function packedCanopy(
   const kept = roofs.length > 0 ? treesOffRoofs(offSheds, roofs) : offSheds;
   const points: PackedPoint[] = kept.map(pointOf);
   // a fresh array over its own buffer
-  const packed = packPoints(points, origin, stride).buffer as ArrayBuffer;
+  const packed = packPoints(points, origin, canopyStride(points, radii))
+    .buffer as ArrayBuffer;
   const unpacked = unpackPoints(packed);
   return unpacked ? pointFeatures(unpacked) : [];
 }
@@ -138,8 +140,8 @@ export async function bakeCoarseCrowns(
   const ctx = { heightAt: ground.heightAt, offset: ground.offset };
   const canopy = offMonuments(
     [
-      ...packedCanopy(sources.canopy, sheds, roofs, ground.origin, 3),
-      ...packedCanopy(sources.canopyx, sheds, roofs, ground.origin, 4),
+      ...packedCanopy(sources.canopy, sheds, roofs, ground.origin, false),
+      ...packedCanopy(sources.canopyx, sheds, roofs, ground.origin, true),
     ],
     features<MonumentFeature>(sources.monuments)
   );
