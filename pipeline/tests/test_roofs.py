@@ -7,7 +7,7 @@ import rasterio
 from rasterio.transform import from_origin
 
 from bake.common import Tile
-from bake.roofs import form_holds, merge_regions, run
+from bake.roofs import _majority, _narrow, form_holds, inclined_cells, merge_regions, run
 
 X0, Y0, SIZE = 400_000.0, 5_600_000.0, 200
 BASE = 110.0
@@ -157,6 +157,104 @@ def test_a_face_stays_a_face_a_flat_neighbour_its_level():
     # the two face pieces do not merge by height, nor the flat one into them
     assert out.max() == 3
     assert merged[out[0, 0]] and merged[out[0, 15]] and not merged[out[0, 25]]
+
+
+def test_a_strip_narrower_than_a_part_joins_its_closest_neighbour():
+    # two broad levels 6 m apart; between them a 3 m strip (a step's
+    # flank) 2 m above the lower, and on the upper a 6 m strip 1.5 m higher
+    # still (a parapet's run) and a 6 m wing 5 m lower (a storey of its own)
+    h = np.zeros((20, 60))
+    h[:, 10:13] = 2.0
+    h[:, 13:] = 6.0
+    h[:, 30:36] = 7.5
+    h[:, 44:50] = 1.0
+    lab = np.zeros(h.shape, np.int64)
+    lab[:, :10], lab[:, 10:13], lab[:, 13:30] = 1, 2, 3
+    lab[:, 30:36], lab[:, 36:44], lab[:, 44:50], lab[:, 50:] = 4, 3, 5, 3
+    kept, _ = merge_regions(lab, h, small_cells=5)
+    assert kept.max() == 5
+    out, _ = merge_regions(lab, h, small_cells=5, thin=True, narrow=True)
+    assert out[0, 11] == out[0, 0]
+    assert out[0, 31] == out[0, 20]
+    assert len({out[0, 0], out[0, 20], out[0, 46]}) == 3
+
+
+def test_a_part_6_m_wide_is_narrow_one_7_m_wide_is_not():
+    lab = np.zeros((20, 40), np.int64)
+    lab[:, :6], lab[:, 6:13], lab[:, 13:] = 1, 2, 3
+    assert _narrow(lab, 3).tolist() == [True, False, False]
+
+
+def test_a_steep_flank_6_m_wide_is_a_face_a_gentle_or_narrow_one_not():
+    # a flat roof, then a flank rising across x over a band of the given
+    # width at the given pitch, then flat again at the flank's top
+    def flank(width: int, pitch: float) -> np.ndarray:
+        h = np.zeros((30, 30))
+        x = np.arange(30) - 10
+        h[:] = np.clip(x, 0, width) * pitch
+        return inclined_cells(h, np.ones(h.shape, bool))[:, 10 : 10 + width].any()
+
+    assert flank(6, 0.7)  # a mansard's flank, 35°
+    assert not flank(6, 0.3)  # gentle: a face only from 10 m
+    assert not flank(3, 0.7)  # a step's flank
+
+
+def test_a_steep_flank_a_cell_wide_joins_a_level_however_far():
+    # two levels 20 m apart, the scan's blurred flank between them in two
+    # 1 m bands, each a long strip far from both levels
+    h = np.zeros((30, 6))
+    h[:, 2], h[:, 3], h[:, 4:] = 7.0, 13.0, 20.0
+    lab = np.zeros(h.shape, np.int64)
+    lab[:, :2], lab[:, 2], lab[:, 3], lab[:, 4:] = 1, 2, 3, 4
+    out, _ = merge_regions(lab, h, small_cells=5, thin=True, narrow=True)
+    assert out.max() == 2
+
+
+def test_the_majority_straightens_a_border_and_keeps_the_outside():
+    # a border down column 15, jagged by a cell either way every other row
+    # (the scan's teeth), the footprint's outside empty
+    lab = np.full((30, 30), 2)
+    for r in range(30):
+        lab[r, : 15 + (r % 2) * 2 - 1] = 1
+    lab[:, :3] = 0
+    out = _majority(lab)
+    assert (out[:, :3] == 0).all()
+    assert (out[:, 3:] > 0).all()
+    # the teeth are gone: every row (away from the ends) breaks in the same
+    # column
+    breaks = {int(np.argmax(row[3:] == 2)) for row in out[3:-3]}
+    assert len(breaks) == 1
+
+
+def test_the_majority_wipes_out_no_part():
+    # a part a cell wide inside a broad one: the vote would take it
+    lab = np.ones((20, 20), np.int64)
+    lab[5:15, 10] = 2
+    assert 2 in _majority(lab)
+
+
+def test_a_steep_face_narrower_than_a_part_stays_a_face():
+    # a flat level at 10 m, a face 5 cells wide rising to 13 m, a level at 13 m
+    h = np.zeros((30, 20))
+    h[:, :8] = 10.0
+    h[:, 8:13] = 10.0 + 0.6 * (np.arange(8, 13) - 7)
+    h[:, 13:] = 13.0
+    lab = np.zeros(h.shape, np.int64)
+    lab[:, :8], lab[:, 8:13], lab[:, 13:] = 1, 2, 3
+    faces = np.array([False, False, True, False])
+    out, kept = merge_regions(lab, h, small_cells=5, faces=faces, thin=True, narrow=True)
+    assert out.max() == 3 and kept.sum() == 1
+
+
+def test_narrow_strips_do_not_chain_past_the_cap():
+    # strips at 10 m and 12.5 m (each 2.5 m from the next), a level at 15 m:
+    # the 10 m strip may join the 12.5 m one, never end on the 15 m level
+    h = np.zeros((30, 24))
+    h[:, :4], h[:, 4:8], h[:, 8:] = 10.0, 12.5, 15.0
+    lab = np.zeros(h.shape, np.int64)
+    lab[:, :4], lab[:, 4:8], lab[:, 8:] = 1, 2, 3
+    out, _ = merge_regions(lab, h, small_cells=5, thin=True, narrow=True)
+    assert out[0, 0] != out[0, 20]
 
 
 def _gable_dom():
