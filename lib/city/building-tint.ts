@@ -459,11 +459,13 @@ export function roofColor(
  * The roof colour bake's file (pipeline/bake/roof_colour.py): every
  * sampled building's colour (`roofs`) and the roof faces whose own colour
  * differs from it (`faces`: per object `[geometry, surface, r, g, b]`, the
- * loader's `geometryid` and `boundaryid`), all linear RGB read from the
- * orthophoto's sunlit texels.
+ * loader's `geometryid` and `boundaryid`; `parts`: per object rebuilt from
+ * DOM1 `[part, r, g, b]`, the part's index among the object's in its roofs
+ * file), all linear RGB read from the orthophoto's sunlit texels.
  */
 export interface RoofColours {
   faces?: Record<string, readonly (readonly number[])[]>;
+  parts?: Record<string, readonly (readonly number[])[]>;
   roofs?: RoofColorLut;
 }
 

@@ -37,6 +37,7 @@ import {
   PANE_ROUGH,
   scanStructureId,
   vertexNormals,
+  withMeasuredRoofs,
   withRoofSteps,
 } from "./bake-city-mesh";
 
@@ -965,4 +966,51 @@ test("a short wall standing on the roof is the roof's, a set-back storey is not"
     Uint8Array.from([0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1])
   );
   expect([...isRoof]).toEqual([1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]);
+});
+
+test("a rebuilt roof's parts carry their own colour, its walls none", () => {
+  // one LoD2 object (a 2 m cube) rebuilt as two flat parts
+  const v = {
+    positions: Float32Array.from([0, 0, 100, 2, 0, 100, 0, 2, 102]),
+    objectIds: Float32Array.from([0, 0, 0]),
+    isRoof: Float32Array.from([0, 0, 1]),
+  };
+  const part = (x: number, z: number) => ({
+    type: "Feature" as const,
+    geometry: {
+      type: "Polygon" as const,
+      coordinates: [
+        [
+          [x, 0],
+          [x + 4, 0],
+          [x + 4, 4],
+          [x, 4],
+          [x, 0],
+        ] as [number, number][],
+      ],
+    },
+    properties: { id: "a", z },
+  });
+  const out = withMeasuredRoofs(
+    v,
+    ["a"],
+    { cx: 0, cy: 0 },
+    [part(0, 110), part(4, 106)],
+    { parts: { a: [[1, 0.5, 0.25, 0.125]] } }
+  );
+  const rgb = out.roofRgb ?? new Float32Array();
+  expect(rgb).toHaveLength(out.positions.length);
+  let red = 0;
+  for (let i = 0; i < out.isRoof.length; i++) {
+    const c = Array.from(rgb.subarray(3 * i, 3 * i + 3));
+    const z = out.positions[3 * i + 2];
+    if (out.isRoof[i] === 1 && z === 106) {
+      expect(c).toEqual([0.5, 0.25, 0.125]);
+      red++;
+    } else {
+      // the first part's roof and every wall: the object's colour
+      expect(c.every(Number.isNaN)).toBe(true);
+    }
+  }
+  expect(red).toBe(6);
 });

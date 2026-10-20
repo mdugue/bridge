@@ -53,7 +53,7 @@ def _mansard(top_z: float):
     return eave + top, geometry
 
 
-def _run(tmp_path, top_z: float, shade_left: bool = False):
+def _run(tmp_path, top_z: float, shade_left: bool = False, rgb=None):
     import json
 
     import rasterio
@@ -63,11 +63,12 @@ def _run(tmp_path, top_z: float, shade_left: bool = False):
     from bake.common import Tile
 
     tile = Tile("t", (0.0, 0.0, 20.0, 20.0), 25833, tmp_path / "raw", tmp_path / "data")
-    rgb = np.zeros((3, 100, 100), np.uint8)
-    rgb[:, 10:90, 10:90] = np.array([200, 60, 50])[:, None, None]  # red slopes
-    if shade_left:
-        rgb[:, 10:90, 10:30] = np.array([30, 40, 70])[:, None, None]  # a slope in shadow
-    rgb[:, 30:70, 30:70] = np.array([190, 195, 195])[:, None, None]  # grey top
+    if rgb is None:
+        rgb = np.zeros((3, 100, 100), np.uint8)
+        rgb[:, 10:90, 10:90] = np.array([200, 60, 50])[:, None, None]  # red slopes
+        if shade_left:
+            rgb[:, 10:90, 10:30] = np.array([30, 40, 70])[:, None, None]  # a slope in shadow
+        rgb[:, 30:70, 30:70] = np.array([190, 195, 195])[:, None, None]  # grey top
     dop = tile.raw_raster("dop")
     dop.parent.mkdir(parents=True)
     with rasterio.open(
@@ -123,3 +124,67 @@ def test_a_face_turned_from_the_sun_is_read_as_shadow():
     assert light.faces_away(north)
     assert not light.faces_away(south)
     assert not Light(np.zeros((1, 1), bool)).faces_away(north)
+
+
+def _rebuilt(tile):
+    """Two rebuilt parts over the mansard's west and east halves."""
+    import json
+
+    def part(x0, x1):
+        ring = [[x0, 2], [x1, 2], [x1, 18], [x0, 18], [x0, 2]]
+        return {
+            "type": "Feature",
+            "properties": {"id": "b", "z": 14.0},
+            "geometry": {"type": "Polygon", "coordinates": [ring]},
+        }
+
+    path = tile.out("dlm", "roofs_t.geojson")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"features": [part(2, 10), part(10, 18)]}))
+
+
+def test_a_rebuilt_roof_is_read_part_by_part(tmp_path):
+    # red west of x = 10 m, grey east of it: the LoD2 mansard's faces would
+    # mix them, the rebuilt halves read each its own
+    from bake.common import Tile
+
+    tile = Tile("t", (0.0, 0.0, 20.0, 20.0), 25833, tmp_path / "raw", tmp_path / "data")
+    _rebuilt(tile)
+    rgb = np.zeros((3, 100, 100), np.uint8)
+    rgb[:, :, :50] = np.array([200, 60, 50])[:, None, None]
+    rgb[:, :, 50:] = np.array([190, 195, 195])[:, None, None]
+    out = _run(tmp_path, top_z=20.0, rgb=rgb)
+    assert out["meta"]["rebuilt"] == 1
+    assert "b" not in out["faces"]
+    parts = {p[0]: p[1:] for p in out["parts"]["b"]}
+    # the halves together are neither colour: each is written apart
+    west, east = parts[0], parts[1]
+    assert west[0] > 3 * west[1]
+    assert abs(east[0] - east[1]) < 0.05 and east[0] > 0.4
+
+
+def test_a_face_is_read_only_where_the_surface_model_shows_the_roof():
+    from bake.roof_colour import Frame, on_the_roof
+
+    dgm = np.full((20, 20), 100.0, np.float32)
+    dom = dgm.copy()
+    dom[:, :10] = 118.0  # the roof stands west of x = 10 m, 18 m up
+    frame = Frame(0.0, 20.0, 0.2, (100, 100), dom, dgm)
+    x = np.array([5.0, 15.0])
+    y = np.array([10.0, 10.0])
+    # a face 18 m up: on the roof in the west, the square in the east
+    assert on_the_roof(frame, x, y, 118.0).tolist() == [True, False]
+    # a face 3 m up is not tested (the scan cannot tell a shed from a car)
+    assert on_the_roof(frame, x, y, 103.0).tolist() == [True, True]
+    # nor anywhere without the models
+    assert on_the_roof(Frame(0.0, 20.0, 0.2, (100, 100)), x, y, 118.0).all()
+
+
+def test_gains_agree_with_the_single_gain():
+    light = Light(np.zeros((1, 1), bool), (180, 35), 7.5)
+    normals = np.array([(0.0, 0.0, 1.0), (0.0, -0.6, 0.8), (0.0, 0.707, 0.707), (0.5, 0.0, 0.866)])
+    gains = light.gains(normals)
+    assert gains[2] == 0  # turned from the sun
+    for n, g in zip(normals, gains, strict=True):
+        if g:
+            assert abs(g - light.gain(tuple(n))) < 1e-9

@@ -180,8 +180,9 @@ export interface CityVertices {
   positions: Float32Array<ArrayBuffer>;
   /** per vertex its roof face's own colour (linear RGB, 3 a vertex; NaN:
    *  the object's), read from the orthophoto face by face
-   *  (`faceRoofColours`). Only the LoD2 vertices at the stream's start
-   *  carry one: whatever is appended after them has none. */
+   *  (`withFaceRoofColours`), and the rebuilt roofs' parts
+   *  (`withMeasuredRoofs`). Only the vertices at the stream's start carry
+   *  one: whatever is appended after them has none. */
   roofRgb?: Float32Array<ArrayBuffer>;
   /** per LoD2 vertex the loader's surface it lies on: its geometry's index
    *  in the object and the surface's in the geometry (2 a vertex) */
@@ -567,13 +568,16 @@ function concat(
  * The vertex stream with every object that has measured parts rebuilt:
  * its LoD2 triangles dropped, its prisms appended under the same object id
  * (so its table row, picking and demolish stay), standing on the lowest
- * vertex of its LoD2 shell. A part id the tile does not hold is ignored.
+ * vertex of its LoD2 shell, a part's roof in its own colour where the roof
+ * colour bake read it apart (`RoofColours.parts`). A part id the tile does
+ * not hold is ignored.
  */
 export function withMeasuredRoofs(
   v: CityVertices,
   keys: readonly string[],
   offset: { cx: number; cy: number },
-  features: readonly MeasuredRoofFeature[]
+  features: readonly MeasuredRoofFeature[],
+  colours?: RoofColours
 ): CityVertices {
   const byId = measuredRoofsById(features);
   const replaced = new Map<number, MeasuredRoofFeature[]>();
@@ -611,13 +615,11 @@ export function withMeasuredRoofs(
     objectIds.push(v.objectIds[i]);
     isRoof.push(v.isRoof[i]);
     normals.push(Number.NaN, Number.NaN, Number.NaN);
-    if (v.roofRgb) {
-      roofRgb.push(
-        v.roofRgb[i * 3],
-        v.roofRgb[i * 3 + 1],
-        v.roofRgb[i * 3 + 2]
-      );
-    }
+    roofRgb.push(
+      v.roofRgb?.[i * 3] ?? Number.NaN,
+      v.roofRgb?.[i * 3 + 1] ?? Number.NaN,
+      v.roofRgb?.[i * 3 + 2] ?? Number.NaN
+    );
   }
   for (const [index, parts] of replaced) {
     const z = base.get(index);
@@ -629,16 +631,25 @@ export function withMeasuredRoofs(
     isRoof.push(...mesh.isRoof);
     objectIds.push(...mesh.isRoof.map(() => index));
     normals.push(...mesh.normals);
+    const own = new Map(
+      (colours?.parts?.[keys[index]] ?? []).map((p) => [p[0], p.slice(1, 4)])
+    );
+    mesh.parts.forEach((part, k) => {
+      const c = mesh.isRoof[k] === 1 ? own.get(part) : undefined;
+      roofRgb.push(...(c?.length === 3 ? c : FLAT_RGB));
+    });
   }
   return {
     positions: Float32Array.from(positions),
     objectIds: Float32Array.from(objectIds),
     isRoof: Float32Array.from(isRoof),
     normals: Float32Array.from(normals),
-    // the rebuilt objects' parts, appended after, carry none
-    ...(v.roofRgb ? { roofRgb: Float32Array.from(roofRgb) } : {}),
+    roofRgb: Float32Array.from(roofRgb),
   };
 }
+
+/** No roof colour of its own: the object's. */
+const FLAT_RGB = [Number.NaN, Number.NaN, Number.NaN];
 
 /** A tile's CRS, from its CityJSON's metadata; anything but ETRS89/UTM
  *  fails. */
@@ -727,7 +738,8 @@ export function bakeCityMesh(
     ),
     keys,
     offset,
-    measured ?? []
+    measured ?? [],
+    roofColours
   );
 
   // Per-object vertex scans: base (lowest Z), top and lowest ROOF vertex.

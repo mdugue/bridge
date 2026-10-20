@@ -14,11 +14,11 @@
  *                                     a tile)
  *   bun run bake <site> --step canopy one step, in the order `all` runs them
  *                                     (landcover, islands, canopy, trees,
- *                                     ndvi, roof-colour, osm-buildings, rail,
+ *                                     ndvi, osm-buildings, rail,
  *                                     lamps, monuments, furniture, walls,
  *                                     stairs, surface, edges, markings,
  *                                     sport, tram, riverside, traffic,
- *                                     skyview, lowveg, cultivated,
+ *                                     roofs, roof-colour, skyview, lowveg, cultivated,
  *                                     small-buildings)
  *   bun run bake <site> --step lowveg --research   also every hedge/shrub
  *                                     candidate, under the raw folder

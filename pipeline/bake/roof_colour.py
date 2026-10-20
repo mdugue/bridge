@@ -13,26 +13,40 @@ per building: rasterise the RoofSurface rings, erode them inward (the
 orthophoto leans buildings over their facades), take the per-channel
 median of at least 12 sunlit texels, in linear RGB.
 
+A roof roofs.py rebuilt from DOM1 is read part by part instead of by its
+LoD2 faces: the build draws the parts in its place, and LoD2 often lays
+one flat lid over a whole block (the Neumarkt's quarters: red tiles, zinc
+and courtyards under one face; the Schauspielhaus' three faces). Where the
+fetch has the surface model, a face higher than ROOF_TEST_M is read only
+where DOM1 shows its roof, so a street, forecourt or courtyard inside its
+outline drops out.
+
 The file: `roofs`, every building's colour (its faces' sunlit texels
 together; the old median over all texels where too few are lit), and
 `faces`, the faces whose own colour differs from it, as `[geometry,
 surface, r, g, b]` — the geometry's index in the object and the surface's
 in its flattened boundaries, the ids cityjson-threejs-loader writes
-(`geometryid`, `boundaryid`)."""
+(`geometryid`, `boundaryid`) — and `parts`, a rebuilt roof's parts that
+differ, as `[part, r, g, b]`, the part's index among the object's in the
+roofs file."""
 
 from __future__ import annotations
 
 import json
 import math
+from dataclasses import dataclass
 
 import numpy as np
 import rasterio
 from PIL import Image, ImageDraw, ImageFilter
 from rasterio.enums import Resampling
+from scipy.ndimage import uniform_filter
 
 from .common import Tile
 from .dop_lean import LEAN_MIN_HEIGHT, Sample, building_lean, fit_leans, lean_map, reach_px
 from .dop_light import (
+    GAIN_MAX,
+    GAIN_MIN,
     SUN_RES_M,
     estimate_sun,
     incidence_gain,
@@ -54,6 +68,9 @@ MIN_SUN_COS = 0.17
 # this much in some channel (8-bit sRGB steps): the rest read the
 # building's from the mesh's table.
 FACE_STEP = 6
+# A face this high over the ground (m) is read only where the surface
+# model shows the roof (`on_the_roof`).
+ROOF_TEST_M = 4.0
 
 
 def srgb_to_linear(c: float) -> float:
@@ -169,6 +186,21 @@ class Light:
     def gain(self, normal) -> float:
         return incidence_gain(normal, self.sun, self.ratio)
 
+    def gains(self, normals: np.ndarray) -> np.ndarray:
+        """`gain` for each of `normals` (n × 3), 0 where it `faces_away`."""
+        if self.sun is None:
+            return np.ones(len(normals))
+        cos = normals @ np.asarray(self.sun)
+        sun_z, ratio = self.sun[2], self.ratio
+        if ratio is None or sun_z <= 0:
+            gain = np.ones(len(normals))
+        else:
+            # incidence_gain, for many normals at once
+            direct = (ratio - 1) / sun_z
+            gain = (direct * sun_z + 1) / (direct * np.maximum(cos, 0.0) + 1)
+            gain = np.clip(gain, GAIN_MIN, GAIN_MAX)
+        return np.where(cos < MIN_SUN_COS, 0.0, gain)
+
     def faces_away(self, normal) -> bool:
         """Whether a face lies in its own shadow, or so near it that the sun
         only grazes it: its texels are skylight, however red tiles read in
@@ -178,26 +210,165 @@ class Light:
         return sum(n * s for n, s in zip(normal, self.sun, strict=True)) < MIN_SUN_COS
 
 
-def face_colours(rgb, light: Light, faces, box):
-    """One building's colour and its faces' own, from their sunlit texels
-    scaled by each face's slope (`Light.gain`). `faces` are (key, ring in
-    texels, normal); returns (colour or None, {key: colour})."""
+@dataclass
+class Face:
+    """One roof face to read: `key` as the file writes it (a LoD2 face's
+    geometry and surface index, a rebuilt part's ("p", index)), its outline
+    in metres (x, y, z), the outer ring then its courtyards, and its upward
+    unit normal. A rebuilt part's level is no face (it holds a block's
+    pitched roofs as much as its flat ones): its texels take their normals
+    from the surface model where the fetch has it, else from the part's
+    measured surface (`surface`), else they are flat."""
+
+    key: tuple
+    rings: list
+    normal: tuple[float, float, float]
+    surface: dict | None = None
+    part: bool = False
+
+
+@dataclass
+class Frame:
+    """The tile's image and its 1 m surface and terrain models (when the
+    fetch has them), with one building's lean and base: a roof point at
+    height z shows `lean` × (z − base) off its place."""
+
+    xmin: float
+    ymax: float
+    px: float
+    size: tuple[int, int]
+    dom: np.ndarray | None = None
+    dgm: np.ndarray | None = None
+    lean: tuple[float, float] = (0.0, 0.0)
+    base: float = 0.0
+    slope: tuple[np.ndarray, np.ndarray] | None = None
+
+    def __post_init__(self):
+        if self.dom is not None:
+            # dz/dx and dz/dy of the surface model over 3 m (a texel's own
+            # metre is noise: tiles, gutters, a chimney)
+            smooth = uniform_filter(self.dom, 3)
+            south, east = np.gradient(smooth)
+            self.slope = (east, -south)
+
+    def texel(self, x: float, y: float, z: float) -> tuple[float, float]:
+        kx, ky = self.lean
+        return (
+            (x + kx * (z - self.base) - self.xmin) / self.px,
+            (self.ymax - y - ky * (z - self.base)) / self.px,
+        )
+
+    def place(self, rows: np.ndarray, cols: np.ndarray, z: float):
+        """Where texel centres show a point at height z: its (x, y)."""
+        kx, ky = self.lean
+        x = self.xmin + (cols + 0.5) * self.px - kx * (z - self.base)
+        y = self.ymax - (rows + 0.5) * self.px + ky * (z - self.base)
+        return x, y
+
+    def box(self, faces) -> tuple[int, int, int, int] | None:
+        pts = [self.texel(*p) for f in faces for ring in f.rings for p in ring]
+        w, h = self.size
+        c0, r0 = max(0, int(min(c for c, _ in pts))), max(0, int(min(r for _, r in pts)))
+        c1, r1 = min(w, int(max(c for c, _ in pts)) + 1), min(h, int(max(r for _, r in pts)) + 1)
+        return None if c1 - c0 < 2 or r1 - r0 < 2 else (c0, r0, c1, r1)
+
+
+def _cells(model: np.ndarray, frame: Frame, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    rows = np.clip((frame.ymax - y).astype(int), 0, model.shape[0] - 1)
+    cols = np.clip((x - frame.xmin).astype(int), 0, model.shape[1] - 1)
+    return model[rows, cols]
+
+
+def on_the_roof(frame: Frame, x: np.ndarray, y: np.ndarray, z: float) -> np.ndarray:
+    """Which points the surface model shows the roof at: at least half way
+    up from the ground to the face. Where a LoD2 outline or a lean reaches
+    past the roof, the image shows the street, a forecourt or a courtyard
+    there (the Schauspielhaus' hull covers part of its square). A roof
+    under ROOF_TEST_M over the ground is not tested (a shed, a garage: the
+    scan cannot tell it from a car)."""
+    if frame.dom is None or frame.dgm is None:
+        return np.ones(len(x), bool)
+    ground = _cells(frame.dgm, frame, x, y)
+    top = _cells(frame.dom, frame, x, y)
+    return (z - ground < ROOF_TEST_M) | (top >= (z + ground) / 2)
+
+
+def part_normals(frame: Frame, face: Face, z: float, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """A rebuilt part's upward unit normal at each point: the surface
+    model's, else its measured surface's, else up."""
+    if frame.slope is not None:
+        n = np.stack(
+            [
+                -_cells(frame.slope[0], frame, x, y),
+                -_cells(frame.slope[1], frame, x, y),
+                np.ones(len(x)),
+            ],
+            axis=1,
+        )
+        return n / np.linalg.norm(n, axis=1, keepdims=True)
+    if face.surface is not None:
+        return _surface_normals(face.surface, z, x, y)
+    return np.tile(np.array([0.0, 0.0, 1.0]), (len(x), 1))
+
+
+def _surface_normals(surface: dict, z: float, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """The measured surface's upward unit normal under each point (its grid's
+    central differences)."""
+    res, cols, rows = surface["res"], surface["cols"], surface["rows"]
+    grid = z + np.asarray(surface["dz"], np.float32).reshape(rows, cols) / 100
+    dzdy, dzdx = np.gradient(grid, res)  # rows run south: dz/dy is -dzdy
+    c = np.clip(((x - surface["x"]) / res).astype(int), 0, cols - 1)
+    r = np.clip(((surface["y"] - y) / res).astype(int), 0, rows - 1)
+    n = np.stack([-dzdx[r, c], dzdy[r, c], np.ones(len(x), np.float32)], axis=1)
+    return n / np.linalg.norm(n, axis=1, keepdims=True)
+
+
+def _face_mask(frame: Frame, face: Face, box) -> np.ndarray:
     c0, r0, c1, r1 = box
-    crop = rgb[r0:r1, c0:c1]
-    shade = light.shadow[r0:r1, c0:c1]
+    mask = Image.new("L", (c1 - c0, r1 - r0), 0)
+    draw = ImageDraw.Draw(mask)
+    for i, ring in enumerate(face.rings):
+        pts = [frame.texel(*p) for p in ring]
+        draw.polygon([(c - c0, r - r0) for c, r in pts], fill=0 if i else 255)
+    if mask.width > 3 and mask.height > 3:
+        inset = mask.filter(ImageFilter.MinFilter(3))
+        if inset.getbbox():
+            mask = inset
+    return np.asarray(mask) > 0
+
+
+def face_texels(rgb, light: Light, frame: Frame, face: Face, box):
+    """A face's sunlit texels on its roof (linear RGB, scaled by
+    `Light.gain`) and how many texels it covers."""
+    c0, r0, c1, r1 = box
+    mask = _face_mask(frame, face, box)
+    lit = mask & ~light.shadow[r0:r1, c0:c1]
+    rows, cols = np.nonzero(lit)
+    z = float(np.mean([p[2] for p in face.rings[0]]))
+    x, y = frame.place(rows + r0, cols + c0, z)
+    keep = on_the_roof(frame, x, y, z)
+    texels = _LINEAR[rgb[r0:r1, c0:c1][lit]]
+    if not face.part:
+        if light.faces_away(face.normal):
+            return np.zeros((0, 3), np.float32), int(mask.sum())
+        return texels[keep] * light.gain(face.normal), int(mask.sum())
+    gains = light.gains(part_normals(frame, face, z, x, y))
+    keep &= gains > 0
+    return texels[keep] * gains[keep, None].astype(np.float32), int(mask.sum())
+
+
+def face_colours(rgb, light: Light, frame: Frame, faces, box):
+    """One building's colour and its faces' own, from their sunlit texels
+    on the roof scaled by each face's slope (`Light.gain`); returns (colour
+    or None, {key: colour})."""
     lit_all, own = [], {}
-    for key, ring, normal in faces:
-        if light.faces_away(normal):
+    for face in faces:
+        texels, covered = face_texels(rgb, light, frame, face, box)
+        if len(texels) == 0:
             continue
-        mask = ring_mask([ring], box, 3)
-        lit = mask & ~shade
-        n_lit = int(lit.sum())
-        if n_lit == 0:
-            continue
-        texels = _LINEAR[crop[lit]] * light.gain(normal)
         lit_all.append(texels)
-        if n_lit >= MIN_SAMPLES and n_lit >= MIN_LIT_SHARE * mask.sum():
-            own[key] = _upper_median(texels)
+        if len(texels) >= MIN_SAMPLES and len(texels) >= MIN_LIT_SHARE * covered:
+            own[face.key] = _upper_median(texels)
     joined = np.concatenate(lit_all) if lit_all else np.zeros((0, 3))
     return (_upper_median(joined) if len(joined) >= MIN_SAMPLES else None), own
 
@@ -283,6 +454,36 @@ def roof_leans(rgb: np.ndarray, light: Light, buildings, bounds, px: float):
     return leans, nodes
 
 
+def rebuilt_parts(tile: Tile) -> dict[str, list[Face]]:
+    """The roofs roofs.py rebuilt from DOM1, as faces by LoD2 object id, in
+    the file's order (the build draws them in place of the LoD2 roof): one
+    LoD2 face often spans a whole block of roofs, red tiles, zinc and
+    courtyards, where the rebuilt parts follow the scan's."""
+    path = tile.out("dlm", f"roofs_{tile.id}.geojson")
+    if not path.exists():
+        return {}
+    out: dict[str, list[Face]] = {}
+    for f in json.loads(path.read_text()).get("features", []):
+        props = f.get("properties") or {}
+        geom = f.get("geometry") or {}
+        if geom.get("type") != "Polygon" or "id" not in props:
+            continue
+        parts = out.setdefault(props["id"], [])
+        z = props["z"]
+        rings = [[(x, y, z) for x, y in ring] for ring in geom["coordinates"]]
+        parts.append(Face(("p", len(parts)), rings, (0.0, 0.0, 1.0), props.get("surface"), True))
+    return out
+
+
+def surface_models(tile: Tile) -> tuple[np.ndarray | None, np.ndarray | None]:
+    """The tile's 1 m surface and terrain models, where both are there."""
+    dom = tile.raw_raster("dom1")
+    if not (dom.exists() and tile.dgm.exists()):
+        return None, None
+    with rasterio.open(dom) as a, rasterio.open(tile.dgm) as b:
+        return a.read(1).astype(np.float32), b.read(1).astype(np.float32)
+
+
 def run(tile: Tile, erode: int = 5) -> None:
     city_path = tile.cityjson
     if not (tile.raw_raster("dop").exists() and city_path.exists()):
@@ -308,8 +509,7 @@ def run(tile: Tile, erode: int = 5) -> None:
         light = read_light(tile, dop, rgb, every_face)
     h, w = rgb.shape[:2]
     xmin, _, _, ymax = tile.bounds
-    size_x, size_y = tile.size
-    px_w, px_h = size_x / w, size_y / h
+    px_w = tile.size[0] / w
 
     buildings = {}
     for oid, obj in city["CityObjects"].items():
@@ -322,29 +522,18 @@ def run(tile: Tile, erode: int = 5) -> None:
             buildings[oid] = (faces, min(to_metres(vi)[2] for vi in _vertex_ids(obj)))
     leans, nodes = roof_leans(rgb, light, buildings, tile.bounds, px_w)
 
-    roofs, faces_out, sampled, skipped, in_sun = {}, {}, 0, 0, 0
+    rebuilt = rebuilt_parts(tile)
+    frame = Frame(xmin, ymax, px_w, (w, h), *surface_models(tile))
+    roofs, faces_out, parts_out, sampled, skipped, in_sun = {}, {}, {}, 0, 0, 0
     for oid, (metres, base) in buildings.items():
-        kx, ky = leans.get(oid, (0.0, 0.0))
-        faces = [
-            (
-                key,
-                [
-                    ((x + kx * (z - base) - xmin) / px_w, (ymax - y - ky * (z - base)) / px_h)
-                    for x, y, z in pts
-                ],
-                normal,
-            )
-            for key, pts, normal in metres
-        ]
-        rings = [ring for _, ring, _ in faces]
-        cols = [c for ring in rings for c, _ in ring]
-        rows = [r for ring in rings for _, r in ring]
-        c0, r0 = max(0, int(min(cols))), max(0, int(min(rows)))
-        c1, r1 = min(w, int(max(cols)) + 1), min(h, int(max(rows)) + 1)
-        if c1 - c0 < 2 or r1 - r0 < 2:
+        frame.lean, frame.base = leans.get(oid, (0.0, 0.0)), base
+        parts = rebuilt.get(oid)
+        faces = parts or [Face(key, [ring], normal) for key, ring, normal in metres]
+        box = frame.box(faces)
+        if box is None:
             continue
-        box = (c0, r0, c1, r1)
-        lit, own = face_colours(rgb, light, faces, box)
+        lit, own = face_colours(rgb, light, frame, faces, box)
+        rings = [[frame.texel(*p) for p in f.rings[0]] for f in faces]
         whole = lit or median_colour(rgb, rings, box, erode)
         if whole is None:
             skipped += 1
@@ -353,7 +542,9 @@ def run(tile: Tile, erode: int = 5) -> None:
         sampled += 1
         in_sun += lit is not None
         apart = [[*key, *c] for key, c in own.items() if _differs(c, whole)]
-        if apart:
+        if apart and parts:
+            parts_out[oid] = [a[1:] for a in apart]  # without the "p"
+        elif apart:
             faces_out[oid] = apart
     out = {
         "meta": {
@@ -365,6 +556,8 @@ def run(tile: Tile, erode: int = 5) -> None:
             "buildings_skipped": skipped,
             "buildings_in_sun": in_sun,
             "faces_apart": sum(len(f) for f in faces_out.values()),
+            "parts_apart": sum(len(p) for p in parts_out.values()),
+            "rebuilt": len(rebuilt),
             "sun": None if light.sun is None else [round(c, 3) for c in light.sun],
             "light_ratio": None if light.ratio is None else round(light.ratio, 2),
             # the roofs' lean off their outlines, metres per metre of height
@@ -373,6 +566,10 @@ def run(tile: Tile, erode: int = 5) -> None:
         "roofs": roofs,
         # the faces whose own colour differs from their building's
         "faces": faces_out,
+        # the rebuilt roofs' parts (roofs.py) whose own colour differs from
+        # their building's, as `[part, r, g, b]`: the part's index among
+        # the building's in the roofs file
+        "parts": parts_out,
     }
     tile.out("dop", f"roofcolor_{tile.id}.json").write_text(json.dumps(out))
     print(

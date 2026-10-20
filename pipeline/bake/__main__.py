@@ -56,7 +56,6 @@ STEPS = {
     "canopy": canopy.run,
     "trees": trees.run,
     "ndvi": ndvi.run,
-    "roof-colour": roof_colour.run,
     "osm-buildings": osm_buildings.run,
     # OSM entrances on the LoD2 walls (scripts/bake-city-mesh.ts draws them).
     "doors": doors.run,
@@ -93,6 +92,8 @@ STEPS = {
     # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
     # miss DOM1, rebuilt in its form (scripts/bake-city-mesh.ts).
     "roofs": roofs.run,
+    # After roofs: a rebuilt roof's parts are read each in its own colour.
+    "roof-colour": roof_colour.run,
     # Committed inputs only (DGM + LoD2 + the rebuilt roofs): the sky-view
     # factor and far horizon.
     "skyview": skyview.run,

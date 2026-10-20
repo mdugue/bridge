@@ -715,7 +715,15 @@ visual-variable codebook is in
   where it differs from the building's by more than 6 sRGB steps
   (`faces`, keyed by the loader's geometry and surface ids), carried in the
   roof vertex's free `_FACADE` slots — no vertex buffer more. A roof drawn
-  as its measured parts (ADR 0036) keeps the building's colour.
+  as its measured parts (ADR 0036) is read part by part instead of by its
+  LoD2 faces (`parts`, keyed by the part's index in the roofs file; the
+  `roof-colour` step runs after `roofs`): LoD2 often lays one flat lid
+  over a whole block of red tiles, zinc and courtyards (the Neumarkt's
+  quarters, the Schauspielhaus), and one colour for all of it read as
+  beige or brown. Where the fetch has DOM1, a face more than 4 m over the
+  ground is read only where the surface model shows its roof (at least
+  half way up from the ground to the face), so a street, forecourt or
+  courtyard inside its outline drops out.
   A roof face is read where the image shows it: the DOP leans a roof off
   its outline by its height times the strip's off-nadir angle (Dresden up
   to 0.15 m per metre, a 30 m roof 4–5 m), so `dop_lean.py` fits that
