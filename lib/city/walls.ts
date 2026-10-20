@@ -78,6 +78,26 @@ const FREESTANDING_M: Readonly<Record<string, number>> = {
   city_wall: 1,
 };
 
+/** How far above its measured step (m, the median over the wall) a wall
+ *  of a freestanding kind that also holds earth (a city wall) must rise by
+ *  its tag to stand free rather than end at its shelf. */
+const STANDS_ABOVE_M = 0.5;
+
+/** Whether the wall's tagged height `h` takes it STANDS_ABOVE_M over the
+ *  high shelves of the steps it was snapped to (no step: it stands). */
+function standsAboveStep(
+  steps: readonly (StepSnap | null)[],
+  h: number
+): boolean {
+  const over = steps
+    .filter((s): s is StepSnap => s !== null)
+    .map((s) => s.lo + h - s.hi)
+    .sort((a, b) => a - b);
+  return (
+    over.length === 0 || over[Math.floor(over.length / 2)] > STANDS_ABOVE_M
+  );
+}
+
 /** The step across the line (m) from which a freestanding wall stands the
  *  full OFFSET_M onto its low side, like a retaining one; on level ground it
  *  stands on its OSM line, and between the two in proportion. */
@@ -376,13 +396,25 @@ function columnsOf(
     return [-(b[1] - a[1]) / tl, (b[0] - a[0]) / tl];
   });
   const snap = opts.snapToStep === true && RETAINING_KINDS.has(wall.kind ?? "");
-  const steps = snap
+  let steps = snap
     ? smoothSnaps(
         pts.map((p, i) =>
           snapToStep(heightAt, p[0], p[1], perps[i][0], perps[i][1])
         )
       )
     : [];
+  // A city wall is either kind, and one rule holds the whole wall: one
+  // standing well above the step it measures is freestanding on every
+  // column — snapped, its columns on a step ended at the shelf beside
+  // ones standing the tag (a sawtooth). One that holds the earth snaps,
+  // and where it finds no step still stands its height (never buried).
+  if (
+    snap &&
+    (wall.kind ?? "") in FREESTANDING_M &&
+    standsAboveStep(steps, h)
+  ) {
+    steps = [];
+  }
   const ends = smoothCapEnds(
     pts.map((p, i) => {
       const step = steps[i];

@@ -128,3 +128,56 @@ test("a snapped wall's cap faces up whichever side its high shelf is on", () => 
     expect(caps).toBeGreaterThan(0);
   }
 });
+
+/** The highest point of each column of a wall along y = 0 (by world x). */
+function columnTops(positions: readonly number[]): number[] {
+  const tops = new Map<number, number>();
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = Math.round(positions[i] * 10) / 10;
+    tops.set(
+      x,
+      Math.max(tops.get(x) ?? Number.NEGATIVE_INFINITY, positions[i + 1])
+    );
+  }
+  return [...tops.values()];
+}
+
+test("a city wall standing well above its step stands its height on every column", () => {
+  // A 9 m city wall along y = 0 with a 2 m step under its first half and
+  // level ground under the rest: snapped, the first half ended at its 2 m
+  // shelf while the rest stood 9 m — a sawtooth along the wall.
+  const ground = (x: number, y: number) =>
+    x < 10 ? 100 + 2 * Math.min(Math.max((y + 0.5) / 2, 0), 1) : 100;
+  const wall: WallRibbon = {
+    coords: [
+      [0, 0],
+      [20, 0],
+    ],
+    h: 9,
+    kind: "city_wall",
+  };
+  const g = wallGeometry([wall], ground, offset, { snapToStep: true });
+  for (const top of columnTops(g?.positions ?? [])) {
+    expect(top).toBeCloseTo(109, 1);
+  }
+});
+
+test("a city wall that holds the earth ends at its shelf and stands where the ground is level", () => {
+  // The same wall 8 m high in front of an 8 m step under its first half:
+  // it holds that earth, so it ends at its shelf there, and on the level
+  // ground beyond it still stands its 8 m — not buried at the ground.
+  const ground = (x: number, y: number) =>
+    x < 10 ? 100 + 8 * Math.min(Math.max((y + 0.5) / 2, 0), 1) : 100;
+  const wall: WallRibbon = {
+    coords: [
+      [0, 0],
+      [20, 0],
+    ],
+    h: 8,
+    kind: "city_wall",
+  };
+  const g = wallGeometry([wall], ground, offset, { snapToStep: true });
+  for (const top of columnTops(g?.positions ?? [])) {
+    expect(top).toBeCloseTo(108, 1);
+  }
+});
