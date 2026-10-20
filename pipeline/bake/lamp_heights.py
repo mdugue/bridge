@@ -38,7 +38,7 @@ from rasterio.enums import Resampling
 
 from .common import Tile, column
 from .lamps import LAMP_H
-from .osm import has_extract, read_osm
+from .osm import has_extract, read_ways
 
 PEAK_M = 1.0  # the post's head within this of the lamp's point
 ALONE_M, ALONE_M2 = 2.0, 5.0  # within this, at most this much over half its height (m, m²)
@@ -97,10 +97,12 @@ class Surface:
 
 
 class Streets:
-    """The OSM highways a lamp lights, by name (else the way) and class."""
+    """The OSM highways a lamp lights, by name (else the way) and class: the
+    ways on the ground (`read_ways`), so a lamp on the square over a road
+    tunnel is not the tunnel's."""
 
     def __init__(self, tile: Tile) -> None:
-        geoms, fields = read_osm(tile, "lines", "highway IS NOT NULL", ["highway", "name"])
+        geoms, fields = read_ways(tile, "highway IS NOT NULL", ["highway", "name"])
         kinds, names = column(fields, "highway", geoms), column(fields, "name", geoms)
         self.ways = [
             (g, f"{name or i}", KINDS[kind])

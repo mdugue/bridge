@@ -358,9 +358,16 @@ function lampPlaces(features: LampFeature[], ctx: GroundContext): LampPlaces {
     if (hung) {
       out.hung.push(ground);
     } else {
-      out.posts.set(h, [...(out.posts.get(h) ?? []), ground]);
+      const set = out.posts.get(h);
+      if (set) {
+        set.push(ground);
+      } else {
+        out.posts.set(h, [ground]);
+      }
     }
-    out.pools.push({ ...ground, s: Math.min(Math.max(h / LAMP_H, 0.8), 2) });
+    // a taller post lights a wider pool; a hung lamp's is the one it had
+    const s = hung ? 1 : Math.min(Math.max(h / LAMP_H, 0.8), 2);
+    out.pools.push({ ...ground, s });
     out.heads.push(new Vector3(ground.x, ground.y + h, ground.z));
     if (hung) {
       hangWire(f, { x: ground.x, y: ground.y + h, z: ground.z }, ctx, out);
