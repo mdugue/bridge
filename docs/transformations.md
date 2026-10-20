@@ -2321,8 +2321,25 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   it** (every copy still lifts that tile's rails). **Closed from below**
   (the soffit: a deck seen from under it was hollow). **Flush parapet
   walls** (no floating cap) along the sides — not where a frame stands on
-  the edge: the frame is the railing. **Kind** (rail/road/path) from rasterising the networks +
-  sampling the *centreline*. *(Tried ver06_f-only — it dropped the road/path
+  the edge: the frame is the railing. **Kind** (rail/road/path) from **the
+  network that runs on the deck** (2026-10-20, `Ground.classify`,
+  `Ground.carried` in `rail.py`): of the DLM's rail (heavy rail, its
+  trams aside — Bavaria files them as standard-gauge railways), road and
+  path lines within 8 m (paths 5 m) of the axis, the one with the most
+  metres following it within 30° (`along`), rail before road before path
+  on a tie; a footprint no centreline runs on carries the network whose
+  lines leave it onto ground within 2 m of the deck's top, 4 m past its
+  edge, and its axis follows that network's longest line across it.
+  Where nothing runs along or leaves at deck height, the networks under
+  its points decide, rail first. *(Counted point by point, the tracks
+  under a road or footbridge made it a rail deck — Leipzig's
+  Bennigsenbrücke, Munich's Reichenbach- and Maximiliansbrücke with their
+  trams —, and a footprint's long axis ran along the road under a wide
+  railway bridge, so the rule by direction alone turned Dresden's
+  Weißeritz rail bridges into road decks. Against OSM's bridge ways, six
+  cities: 215 of 241 decks right before, 229 of 239 after; what is left
+  is road against path — a 3 m service way the DLM files as a path.)*
+  *(Tried ver06_f-only — it dropped the road/path
   bridges, which lack area polygons; the DGM ramp alone — it put the
   Waldschlößchenbrücke 3 m low and rail decks up to 6 m high; per-tile
   ground — seam bridges drawn twice at two heights; see 🗃️.)*

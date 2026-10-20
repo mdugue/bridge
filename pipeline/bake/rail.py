@@ -217,12 +217,66 @@ def mosaic(paths: list[Path], bounds: tuple[float, float, float, float]):
 NODATA = -9999.0
 # how far either side of a network's centreline a deck point counts as on it (m)
 NETWORK_REACH = {"rail": 8.0, "road": 8.0, "path": 5.0}
+# A network line runs on a deck when it follows the deck's axis within this
+# angle (deg). A railway or road under the deck crosses it, and adds nothing.
+ALONG_DEG = 30.0
+# A footprint no bridge line runs on carries the network whose lines leave it
+# at the deck's height: the ground EXIT_M past the outline, where a line
+# leaves it, lies within CARRIED_M of the deck's top (an abutment, a ramp); a
+# road or railway passing under it leaves at its own level, a clearance below.
+EXIT_M = 4.0
+CARRIED_M = 2.0
+
+
+def dlm_networks(tile: Tile, bounds) -> dict[str, list]:
+    """The Basis-DLM's rail (heavy rail only: a line the DLM files as a tram
+    alone runs on a road bridge — Munich's Maximiliansbrücke), road and
+    path centrelines within `bounds`."""
+    rail, fields = read_layer(
+        tile.dlm / "ver03_l.shp", bounds, where="SPW='1000'", columns=["SPW", "BKT"]
+    )
+    return {
+        "rail": [
+            g
+            for g, bkt in zip(rail, column(fields, "BKT", rail), strict=True)
+            if not set(str(bkt).split("#")) <= TRAM_BKT
+        ],
+        "road": list(read_layer(tile.dlm / "ver01_l.shp", bounds)[0]),
+        "path": list(read_layer(tile.dlm / "ver02_l.shp", bounds)[0]),
+    }
+
+
+def _bearing(a, b) -> float:
+    return math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])) % 180.0
+
+
+def along(lines, tree, axis: shapely.LineString, reach: float) -> float:
+    """How many metres of `lines` lie within `reach` of `axis` and follow it:
+    each segment within ALONG_DEG of the axis segment nearest to it."""
+    if tree is None:
+        return 0.0
+    zone = axis.buffer(reach)
+    pts = list(axis.coords)
+    spans = [shapely.LineString([a, b]) for a, b in zip(pts, pts[1:], strict=False)]
+    total = 0.0
+    for i in tree.query(zone, predicate="intersects"):
+        for part in shapely.get_parts(lines[i].intersection(zone)):
+            if part.geom_type != "LineString":
+                continue
+            cs = list(part.coords)
+            for a, b in zip(cs, cs[1:], strict=False):
+                mid = shapely.Point((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+                j = min(range(len(spans)), key=lambda k: spans[k].distance(mid))
+                d = abs(_bearing(a, b) - _bearing(pts[j], pts[j + 1]))
+                if min(d, 180.0 - d) < ALONG_DEG:
+                    total += math.dist(a[:2], b[:2])
+    return total
 
 
 class Ground:
     """DGM1 and DOM1 around the tile — its own and its neighbours', so a deck
     across a seam gets the same heights from either tile — on a 1 m grid,
-    and the network masks."""
+    and the rail, road and path networks a deck's kind is read from."""
 
     def __init__(self, tile: Tile, networks: dict[str, list] | None = None):
         xmin, ymin, xmax, ymax = tile.bounds
@@ -237,13 +291,13 @@ class Ground:
             if dom is not None and dom.shape == self.dgm.shape and dom_transform == self.transform:
                 self.dom = dom
         if networks is None:  # the Basis-DLM's networks
-            networks = {
-                "rail": read_layer(tile.dlm / "ver03_l.shp", self.bounds, where="SPW='1000'")[0],
-                "road": read_layer(tile.dlm / "ver01_l.shp", self.bounds)[0],
-                "path": read_layer(tile.dlm / "ver02_l.shp", self.bounds)[0],
-            }
+            networks = dlm_networks(tile, self.bounds)
+        self.networks = {kind: list(networks.get(kind, [])) for kind in ("rail", "road", "path")}
+        self.trees = {
+            kind: shapely.STRtree(lines) if lines else None for kind, lines in self.networks.items()
+        }
         self.masks = {
-            kind: self._mask(networks.get(kind, []), NETWORK_REACH[kind])
+            kind: self._mask(self.networks[kind], NETWORK_REACH[kind])
             for kind in ("rail", "road", "path")
         }
 
@@ -298,7 +352,85 @@ class Ground:
             return g
         return max(g, min(s, g + 25.0))  # cap DOM spikes (trees/wires on the bank)
 
-    def classify(self, pts) -> str:
+    def classify(self, axis) -> str:
+        """The deck's kind from what runs along its `axis` (≥ 2 points): the
+        network with the longest stretch within its reach that follows the
+        axis (`along`), rail before road before path on a tie. A railway or
+        road the deck crosses meets the axis at an angle and adds nothing:
+        counted point by point, the tracks under a footbridge (Leipzig's
+        Bennigsenbrücke) or a road bridge made it a rail deck. Where nothing
+        runs along it, a network merely under its points decides
+        (`classify_points`)."""
+        if len(axis) >= 2:
+            line = shapely.LineString(axis)
+            runs = {
+                kind: along(self.networks[kind], self.trees[kind], line, NETWORK_REACH[kind])
+                for kind in ("rail", "road", "path")
+            }
+            if max(runs.values()) > 0:
+                return max(("rail", "road", "path"), key=lambda k: runs[k])
+        return self.classify_points(midpoints(axis))
+
+    def carried(self, ring) -> tuple[str, list] | None:
+        """For a footprint no bridge line runs on: the kind of network it
+        carries (the most metres of lines leaving it at the deck's height,
+        rail before road before path on a tie) and that kind's longest line
+        across it, which the deck's axis then follows. None without DOM1 or
+        where no line leaves it at the deck's height. The footprint's long
+        axis is no guide: a railway bridge of many tracks over a road is
+        wider than long, and the road under it runs along that axis (the
+        bridges over Dresden's Weißeritz)."""
+        if self.dom is None:
+            return None
+        poly = shapely.make_valid(shapely.Polygon(ring))
+        x0, y0, x1, y1 = poly.bounds
+        xs, ys = np.meshgrid(np.arange(x0 + 0.5, x1, 1.0), np.arange(y0 + 0.5, y1, 1.0))
+        inside = shapely.contains_xy(poly, xs, ys)
+        tops = self.sample(self.dom, xs[inside], ys[inside])
+        tops = tops[~np.isnan(tops)]
+        if len(tops) == 0:
+            return None
+        top = float(np.median(tops))
+        metres = {"rail": 0.0, "road": 0.0, "path": 0.0}
+        longest: dict[str, shapely.LineString] = {}
+        for kind in metres:
+            tree = self.trees[kind]
+            if tree is None:
+                continue
+            for i in tree.query(poly, predicate="intersects"):
+                for part in shapely.get_parts(self.networks[kind][i].intersection(poly)):
+                    if part.geom_type != "LineString" or part.length < 2.0:
+                        continue
+                    if self._leaves_at(part, poly, top):
+                        metres[kind] += part.length
+                        if kind not in longest or part.length > longest[kind].length:
+                            longest[kind] = part
+        kind = max(metres, key=lambda k: metres[k])
+        if metres[kind] == 0.0:
+            return None
+        return kind, [(x, y) for x, y, *_ in longest[kind].coords]
+
+    def _leaves_at(self, part, poly, top: float) -> bool:
+        """Whether a line across a footprint leaves it, at either end, onto
+        ground within CARRIED_M of the deck's `top`."""
+        cs = list(part.coords)
+        edge = poly.exterior if isinstance(poly, shapely.Polygon) else poly.boundary
+        for end, prev in ((cs[0], cs[1]), (cs[-1], cs[-2])):
+            if edge.distance(shapely.Point(end)) > 0.5:
+                continue  # the line ends on the deck
+            d = math.dist(end[:2], prev[:2])
+            if d == 0:
+                continue
+            x = end[0] + (end[0] - prev[0]) / d * EXIT_M
+            y = end[1] + (end[1] - prev[1]) / d * EXIT_M
+            if poly.contains(shapely.Point(x, y)):
+                continue
+            g = self.robust(self.dgm, x, y, 1)
+            if g is not None and abs(top - g) <= CARRIED_M:
+                return True
+        return False
+
+    def classify_points(self, pts) -> str:
         counts = {"rail": 0, "road": 0, "path": 0}
         for x, y in pts:
             c, r = self.px(x, y)
@@ -502,7 +634,7 @@ def decks(
             coords = [(x, y) for x, y, *_ in part.coords]
             if len(coords) < 2:
                 continue
-            kind = given or ground.classify(midpoints(coords))
+            kind = given or ground.classify(coords)
             best = footprint_of(part, polys)
             if best >= 0:
                 polys[best][3] = True
@@ -517,7 +649,11 @@ def decks(
         emit(ring, name, kind, centre)
     for p in polys:
         if not p[3]:
-            emit(p[0], None, ground.classify(p[0] + [(p[1], p[2])]))
+            found = ground.carried(p[0])
+            if found is None:
+                emit(p[0], None, ground.classify(deck_axis(p[0]).pts))
+            else:
+                emit(p[0], None, *found)
     return features
 
 
