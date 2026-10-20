@@ -437,6 +437,7 @@ Code und Wissensbasis für sie verwenden:
 |---|---|---|
 | Atmosphäre | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
 | | *Tiefenfärbung* | warm nah, kühl fern: eine tiefenabhängige Farbgebung |
+| | *Laterne* | nach Einbruch der Dunkelheit trägst du zu Fuß ein kleines warmes Licht, das Boden, Bänke und Hauswände ein paar Meter um dich aufhellt; am Rechner wirft es Schatten, am Handy nicht; aus der Luft und im Modell erlischt es |
 | Gebäude | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
 | | *Höhenlinien* | zarte Geschossbänder, aus der gemessenen Höhe abgeleitet |
 | | *Streiflicht* | Kantenlicht an sonnenabgewandten Kanten |

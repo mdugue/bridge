@@ -68,6 +68,7 @@ import {
   slotUniform,
 } from "./material-slots";
 import { clayWindows } from "./clay-windows";
+import { nightShadowFree } from "./lantern";
 import {
   claySkySlots,
   createClaySky,
@@ -301,7 +302,12 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     // rounded normal says: buildings cast with their back faces (sun-rig.ts),
     // so its shadow-map depth is its own and the test would speckle it.
     receivedShadow: (shadow?: Node) => {
-      const own = windows.sun.mul(smoothstep(-0.02, 0.06, dot(wn, d.uSun)));
+      // the sun's own, which after dark gives way for the lantern's light
+      // (three hands this every casting light's term; lantern.ts)
+      const own = max(
+        windows.sun.mul(smoothstep(-0.02, 0.06, dot(wn, d.uSun))),
+        nightShadowFree
+      );
       return shadow ? (shadow as F).mul(own) : own;
     },
     // Materialstreuung: nudge roughness per building so the matte sheen

@@ -412,6 +412,7 @@ knowledge base use for them:
 |---|---|---|
 | Atmosphäre | *Talnebel* | extra haze pooling in the low ground along the river; reads the real terrain height and sets in some way off, so what stands right in front of you stays clear |
 | | *Tiefenfärbung* | warm near, cool far: a depth-based colour grade |
+| | *Laterne* | after dark you carry a small warm light on foot that brightens the ground, benches and house fronts a few metres around you; on a computer it casts shadows, on a phone it does not; from the air and in Modell it goes out |
 | Gebäude | *Boden-Verlauf* | darkening of walls towards the ground |
 | | *Höhenlinien* | faint storey bands, spaced from the measured height |
 | | *Streiflicht* | rim light on edges facing away from the sun |
