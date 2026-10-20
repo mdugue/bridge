@@ -181,8 +181,11 @@ def main() -> None:
         run_site_step(spec, args.step)
         return
     steps = list(STEPS) if args.step == "all" else [args.step]
-    for tile in tiles:
-        for step in steps:
+    # Step by step over the tiles, not tile by tile: ndvi, roof-colour and
+    # sport read every tile of the site (its class rasters, the anchors of
+    # its one flight), which the steps before them must have baked first.
+    for step in steps:
+        for tile in tiles:
             if step == "lowveg":
                 lowveg.run(tile, research=args.research)
                 continue
