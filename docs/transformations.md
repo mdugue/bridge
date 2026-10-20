@@ -196,7 +196,15 @@ visual-variable codebook is in
   diagonal instead of following the 0.5 m staircase → `edges_<tile>.png`
   (2048², two bytes per texel). From the road's 0-isoline it also writes
   the **kerb lines** (`kerbs_<tile>.geojson`, road on the left) where the
-  far side is ground (not water or railway). The terrain bake stands a
+  far side is ground (not water or railway) and the road is not one out of
+  town: none where the nearest OSM carriageway (within 20 m) is a motorway
+  or its link, lies in a speed zone tagged `DE:rural`/`DE:motorway`, or
+  posts 70 km/h or more without an urban zone (`edges.out_of_town`). Every
+  road edge had one; Mapillary at 13 such kerbs on three sites (2026-10-20)
+  showed an edge line, a verge and reflector posts at 12, the 13th a
+  junction's island (Unna). It takes 2–6 km of stone off a site, 5 % of
+  Grimma's; the painted band and its sun shadow (below) still run along
+  those edges, for the shader does not know the kerb lines. The terrain bake stands a
   **kerb stone** on them in the fine terrain glTF (`lib/city/kerbs.ts`,
   12 cm above the road, 24 cm wide, face toward the road, its top falling
   to the pavement's level where the stone ends (a verge or bank below the

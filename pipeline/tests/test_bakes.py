@@ -732,6 +732,35 @@ def test_kerb_lines_follow_the_road_edge_with_the_road_on_their_left(tmp_path):
     assert len(kerb_lines(tile, edge_field(cls, 7, 1.0, 64), cls)) == 1
 
 
+def test_a_road_out_of_town_has_no_kerb(tmp_path):
+    from bake.common import Tile
+    from bake.edges import Roads, edge_field, kerb_lines, out_of_town
+
+    assert out_of_town("motorway_link", None)
+    assert out_of_town("secondary", '"source:maxspeed"=>"DE:rural"')
+    assert out_of_town("secondary", '"maxspeed"=>"70"')
+    assert not out_of_town("primary", '"maxspeed"=>"70","zone:traffic"=>"DE:urban"')
+    assert not out_of_town("residential", '"maxspeed"=>"30"')
+    assert not out_of_town("tertiary", '"maxspeed"=>"walk"')
+
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    cls = np.full((64, 64), 1, dtype=np.uint8)
+    cls[20:30, :] = 7  # an east-west road through fields, y 34–44 m
+    field = edge_field(cls, 7, 1.0, 64)
+    axis = shapely.LineString([(0, 39), (64, 39)])
+    town = Roads([axis], [False])
+    assert len(kerb_lines(tile, field, cls, town)) == 2
+    assert kerb_lines(tile, field, cls, Roads([axis], [True])) == []
+    # A town street joining it: its kerbs are the street's, not the road's.
+    street = shapely.LineString([(32, 0), (32, 34)])
+    roads = Roads([shapely.LineString([(0, 39), (24, 39)]), street], [True, False])
+    assert roads.rural_at(np.array([[2.0, 34.0], [33.0, 10.0], [200.0, 200.0]])).tolist() == [
+        True,
+        False,
+        False,
+    ]
+
+
 def test_osm_islands_carve_only_road_texels_lawn_over_walk(tmp_path, monkeypatch):
     from bake import landcover
     from bake.common import Tile

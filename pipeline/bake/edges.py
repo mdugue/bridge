@@ -20,17 +20,19 @@ Two bytes per texel, interleaved in an 8-bit greyscale PNG twice as wide
 so 5 cm steps over ±6.35 m, clamped. Keep `EDGE_SCALE` in step with the
 viewer (`EDGE_SCALE` in lib/city/landcover.ts). Needs only the committed
 class raster (plus the NDVI and paving rasters, the baked rails and the OSM
-tracks when present), so it runs without the raw DLM; it runs after `surface`
-and `rail`.
+tracks and roads when present), so it runs without the raw DLM; it runs after
+`surface` and `rail`.
 
 It also writes the kerb lines (`kerbs_<tile>.geojson`): the smoothed road
-edge where the far side is ground, the carriageway on each line's left. The
-terrain bake stands a kerb stone on them (lib/city/kerbs.ts).
+edge where the far side is ground, the carriageway on each line's left, and
+the road is not one out of town (`out_of_town`). The terrain bake stands a
+kerb stone on them (lib/city/kerbs.ts).
 """
 
 from __future__ import annotations
 
 import json
+import re
 
 import numpy as np
 import shapely
@@ -38,7 +40,8 @@ from PIL import Image
 from rasterio.features import rasterize
 
 from . import ways
-from .common import Tile, feature, geometry_json, save_grey_png, write_geojson
+from .common import Tile, column, feature, geometry_json, save_grey_png, write_geojson
+from .osm import has_extract, read_ways, tag
 
 ROAD = 7
 MEADOW = 1
@@ -56,6 +59,19 @@ KERB_SIMPLIFY_M = 0.15
 KERB_MIN_M = 3.0
 EDGE_SCALE = 20.0  # bytes per metre
 REACH_M = 6.5  # how far out the distance is measured
+# Out of town no kerb lines the carriageway: an edge line, a verge and
+# reflector posts. Mapillary at 13 kerbs along such roads on three sites
+# (2026-10-20): 12 without a kerb, the one with a junction's island. OSM
+# marks the road (`out_of_town`); a kerb's road is the carriageway nearest
+# it within WAY_REACH_M (a motorway's edge lies up to ~15 m off its axis).
+CARRIAGEWAYS = (
+    "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
+    "secondary", "secondary_link", "tertiary", "tertiary_link", "unclassified",
+    "residential", "living_street", "service", "road",
+)  # fmt: skip
+SPEED_ZONE_TAGS = ("maxspeed:type", "source:maxspeed", "zone:traffic", "zone:maxspeed")
+RURAL_KMH = 70  # a posted limit from this up, with no zone tag: out of town
+WAY_REACH_M = 20.0
 
 
 def distance_px(mask: np.ndarray, reach: int) -> np.ndarray:
@@ -203,9 +219,60 @@ def contour_segments(field: np.ndarray) -> np.ndarray:
     return np.concatenate(out) if out else np.empty((0, 2, 2))
 
 
-def kerb_lines(tile: Tile, road_m: np.ndarray, cls_small: np.ndarray) -> list[shapely.LineString]:
+def out_of_town(highway: str | None, other_tags: str | None) -> bool:
+    """A road out of town: a motorway or its link, a speed zone tagged rural
+    or motorway (`DE:rural`, `DE:motorway`), or — no zone tagged — a posted
+    limit of RURAL_KMH or more."""
+    if highway in ("motorway", "motorway_link"):
+        return True
+    zones = " ".join(filter(None, (tag(other_tags, k) for k in SPEED_ZONE_TAGS))).lower()
+    if "rural" in zones or "motorway" in zones:
+        return True
+    if "urban" in zones:
+        return False
+    speed = tag(other_tags, "maxspeed")
+    return bool(speed and re.fullmatch(r"\d+", speed) and int(speed) >= RURAL_KMH)
+
+
+class Roads:
+    """The OSM carriageways near the tile and which of them run out of town."""
+
+    def __init__(self, lines: list[shapely.Geometry], rural: list[bool]) -> None:
+        self.tree = shapely.STRtree(lines) if lines else None
+        self.rural = np.asarray(rural, dtype=bool)
+
+    @classmethod
+    def of(cls, tile: Tile) -> Roads:
+        if not has_extract(tile, "the out-of-town roads (every road edge keeps its kerb)"):
+            return cls([], [])
+        geoms, fields = read_ways(tile, "highway IS NOT NULL", ["highway", "other_tags"])
+        kinds, tags = column(fields, "highway", geoms), column(fields, "other_tags", geoms)
+        roads = [
+            (g, out_of_town(k, t))
+            for g, k, t in zip(geoms, kinds, tags, strict=True)
+            if g is not None and k in CARRIAGEWAYS
+        ]
+        return cls([g for g, _ in roads], [r for _, r in roads])
+
+    def rural_at(self, points: np.ndarray) -> np.ndarray:
+        """Per EPSG point: whether its nearest carriageway, within
+        WAY_REACH_M, runs out of town."""
+        out = np.zeros(len(points), dtype=bool)
+        if self.tree is None or len(points) == 0:
+            return out
+        at, way = self.tree.query_nearest(
+            shapely.points(points), max_distance=WAY_REACH_M, all_matches=False
+        )
+        out[at] = self.rural[way]
+        return out
+
+
+def kerb_lines(
+    tile: Tile, road_m: np.ndarray, cls_small: np.ndarray, roads: Roads | None = None
+) -> list[shapely.LineString]:
     """The kerb: the smoothed road edge, where the far side is ground (not
-    water or railway), as EPSG lines with the road on their left."""
+    water or railway) and the road is not out of town, as EPSG lines with
+    the road on their left."""
     px = road_m.shape[0]
     segs = contour_segments(road_m)
     if len(segs) == 0:
@@ -222,6 +289,10 @@ def kerb_lines(tile: Tile, road_m: np.ndarray, cls_small: np.ndarray) -> list[sh
     res = (xmax - xmin) / px
     # Texel (col, row) → EPSG: the field's samples sit at texel centres.
     epsg = np.stack([xmin + (segs[..., 0] + 0.5) * res, ymax - (segs[..., 1] + 0.5) * res], axis=-1)
+    if roads is not None:
+        epsg = epsg[~roads.rural_at(epsg.mean(axis=1))]
+    if len(epsg) == 0:
+        return []
     merged = shapely.line_merge(shapely.multilinestrings(list(epsg)))
     lines = []
     for line in shapely.get_parts(merged):
@@ -274,7 +345,7 @@ def run(tile: Tile, px: int = 2048) -> None:
     }
     tile.out("dlm", f"edges_{tile.id}.json").write_text(json.dumps(legend, indent=2) + "\n")
     k = cls.shape[0] // px
-    kerbs = kerb_lines(tile, road_m, cls[::k, ::k])
+    kerbs = kerb_lines(tile, road_m, cls[::k, ::k], Roads.of(tile))
     write_geojson(
         tile.out("dlm", f"kerbs_{tile.id}.geojson"),
         [feature(geometry_json(line)) for line in kerbs],
