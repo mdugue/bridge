@@ -625,15 +625,18 @@ def bridge_properties(
     qids = [qid for _, _, qid in around if qid] + [w.wikidata for w in on if w.wikidata]
     qids += [m[3] for m in marks if m[3] and outline.distance(shapely.Point(m[0], m[1])) < 30]
     wd = wikidata_for(ring, name, qids, known)
+    known_structure = tagged
     if wd:
         props["wikidata"] = wd["id"]
+        known_structure = structure_of(wd["types"]) or tagged
         props["structure"] = structure_of(wd["types"]) or structure
         if wd.get("mainSpan"):
             props["span"] = wd["mainSpan"]
     # Only a bridge of a kind that stands above its deck keeps what DOM1 saw
     # there: over a beam bridge it is catenary, trains or trees. An arch of
-    # the year's guess is masonry, its vaults under the deck.
-    guessed = not tagged and props["structure"] == structure
+    # the year's guess (no tag, no Wikidata class) is masonry, its vaults
+    # under the deck.
+    guessed = not known_structure
     if not guessed and any(kind in props["structure"] for kind in STANDING):
         ribs = superstructure(ground, ring, line, axis)
         if ribs:

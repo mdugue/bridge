@@ -37,3 +37,23 @@ def test_a_way_runs_on_a_deck_when_half_of_it_lies_on_it():
     deck = shapely.box(-2, -3, 32, 3)
     assert [w.name for w in BridgeWays([on, beside]).on(deck)] == ["Schloßbrücke"]
     assert BridgeWays([]).on(deck) == []
+
+
+def test_a_dated_arch_gets_no_ribs_unless_wikidata_or_a_tag_names_its_structure(monkeypatch):
+    from bake import rail
+
+    monkeypatch.setattr(rail, "deck_line", lambda *_: lambda t: 10.0)
+    monkeypatch.setattr(rail, "deck_profile", lambda *_: [10.0] * 5)
+    monkeypatch.setattr(rail, "fairway", lambda *_: {})
+    monkeypatch.setattr(rail, "superstructure", lambda *_: [{"rib": 1}])
+    ring = [(-2.0, -3.0), (32.0, -3.0), (32.0, 3.0), (-2.0, 3.0), (-2.0, -3.0)]
+    dated = BridgeWays([bridge_way(LINE, "Alte Brücke", '"bridge"=>"yes","start_date"=>"1800"')])
+
+    def props(wikidata):
+        monkeypatch.setattr(rail, "wikidata_for", lambda *_: wikidata)
+        return rail.bridge_properties(None, ring, None, "road", [], [], {}, ways=dated)
+
+    guess = props(None)
+    assert (guess["structure"], guess["name"], "ribs" in guess) == ("arch", "Alte Brücke", False)
+    known = props({"id": "Q1", "types": ["Steinbrücke"]})  # Wikidata: a stone bridge
+    assert (known["structure"], "ribs" in known) == ("arch", True)

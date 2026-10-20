@@ -62,14 +62,15 @@ REACH_M = 6.5  # how far out the distance is measured
 # Out of town no kerb lines the carriageway: an edge line, a verge and
 # reflector posts. Mapillary at 13 kerbs along such roads on three sites
 # (2026-10-20): 12 without a kerb, the one with a junction's island. OSM
-# marks the road (`out_of_town`); a kerb's road is the carriageway nearest
-# it within WAY_REACH_M (a motorway's edge lies up to ~15 m off its axis).
+# marks the road (`out_of_town`); a kerb's road is the carriageway on the
+# ground nearest it within WAY_REACH_M (a motorway's edge lies up to ~15 m
+# off its axis) — not one on a bridge over it.
 CARRIAGEWAYS = (
     "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
     "secondary", "secondary_link", "tertiary", "tertiary_link", "unclassified",
     "residential", "living_street", "service", "road",
 )  # fmt: skip
-SPEED_ZONE_TAGS = ("maxspeed:type", "source:maxspeed", "zone:traffic", "zone:maxspeed")
+SPEED_ZONE_TAGS = ("maxspeed", "maxspeed:type", "source:maxspeed", "zone:traffic", "zone:maxspeed")
 RURAL_KMH = 70  # a posted limit from this up, with no zone tag: out of town
 WAY_REACH_M = 20.0
 
@@ -221,8 +222,8 @@ def contour_segments(field: np.ndarray) -> np.ndarray:
 
 def out_of_town(highway: str | None, other_tags: str | None) -> bool:
     """A road out of town: a motorway or its link, a speed zone tagged rural
-    or motorway (`DE:rural`, `DE:motorway`), or — no zone tagged — a posted
-    limit of RURAL_KMH or more."""
+    or motorway (`DE:rural`, `DE:motorway`, in `maxspeed` itself too), or —
+    no zone tagged — a posted limit of RURAL_KMH or more."""
     if highway in ("motorway", "motorway_link"):
         return True
     zones = " ".join(filter(None, (tag(other_tags, k) for k in SPEED_ZONE_TAGS))).lower()
@@ -234,8 +235,15 @@ def out_of_town(highway: str | None, other_tags: str | None) -> bool:
     return bool(speed and re.fullmatch(r"\d+", speed) and int(speed) >= RURAL_KMH)
 
 
+def on_ground(highway: str | None, other_tags: str | None) -> bool:
+    """A carriageway a kerb on the ground may border: not one on a bridge."""
+    return highway in CARRIAGEWAYS and (tag(other_tags, "bridge") or "no") == "no"
+
+
 class Roads:
-    """The OSM carriageways near the tile and which of them run out of town."""
+    """The OSM carriageways on the ground near the tile (no bridge: a kerb is
+    on the ground, and a motorway bridge over a street is not its road) and
+    which of them run out of town."""
 
     def __init__(self, lines: list[shapely.Geometry], rural: list[bool]) -> None:
         self.tree = shapely.STRtree(lines) if lines else None
@@ -250,7 +258,7 @@ class Roads:
         roads = [
             (g, out_of_town(k, t))
             for g, k, t in zip(geoms, kinds, tags, strict=True)
-            if g is not None and k in CARRIAGEWAYS
+            if g is not None and on_ground(k, t)
         ]
         return cls([g for g, _ in roads], [r for _, r in roads])
 

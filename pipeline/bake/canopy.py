@@ -171,17 +171,20 @@ def rough_mask(dom: np.ndarray) -> np.ndarray:
 
 
 def built_mask(tile: Tile, px: int) -> np.ndarray:
-    """Every LoD2 outline, grown by FOOTPRINT_REACH_M: grown on the grid (a
-    distance transform), not each ring buffered — 55 000 rings on Dresden's
-    spawn tile took 9 s to buffer."""
-    outlines = [shapely.Polygon(ring[:, :2]) for ring in lod2_rings(tile.cityjson)]
+    """Every LoD2 outline, grown by FOOTPRINT_REACH_M: the rings buffered in
+    one vectorised call (55 000 on Dresden's spawn tile in 0.7 s; one by one
+    they took 9 s). Grown on the grid instead, by a distance transform from
+    the texel centres inside, the mask came out 1.7 % smaller there and a
+    ring too small to hold a texel centre vanished."""
+    rings = [shapely.Polygon(ring[:, :2]) for ring in lod2_rings(tile.cityjson)]
     built = np.zeros((px, px), dtype=np.uint8)
-    outlines = [g for g in outlines if g.is_valid and not g.is_empty]
-    if not outlines:
+    if not rings:
         return built == 1
-    rasterize(((g, 1) for g in outlines), out=built, transform=tile.transform(px))
-    texel = (tile.bounds[2] - tile.bounds[0]) / px
-    return ndi.distance_transform_edt(built == 0) <= FOOTPRINT_REACH_M / texel
+    grown = shapely.buffer(np.array(rings, dtype=object), FOOTPRINT_REACH_M)
+    grown = grown[~shapely.is_empty(grown) & shapely.is_valid(grown)]
+    if len(grown):
+        rasterize(((g, 1) for g in grown), out=built, transform=tile.transform(px))
+    return built == 1
 
 
 def green_mask(tile: Tile, rough: np.ndarray, built: np.ndarray) -> np.ndarray:

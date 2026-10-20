@@ -734,7 +734,7 @@ def test_kerb_lines_follow_the_road_edge_with_the_road_on_their_left(tmp_path):
 
 def test_a_road_out_of_town_has_no_kerb(tmp_path):
     from bake.common import Tile
-    from bake.edges import Roads, edge_field, kerb_lines, out_of_town
+    from bake.edges import Roads, edge_field, kerb_lines, on_ground, out_of_town
 
     assert out_of_town("motorway_link", None)
     assert out_of_town("secondary", '"source:maxspeed"=>"DE:rural"')
@@ -742,6 +742,12 @@ def test_a_road_out_of_town_has_no_kerb(tmp_path):
     assert not out_of_town("primary", '"maxspeed"=>"70","zone:traffic"=>"DE:urban"')
     assert not out_of_town("residential", '"maxspeed"=>"30"')
     assert not out_of_town("tertiary", '"maxspeed"=>"walk"')
+    assert out_of_town("secondary", '"maxspeed"=>"DE:rural"')
+    assert not out_of_town("primary", '"maxspeed"=>"DE:urban"')
+    # A motorway bridge over a town street is not the street's road.
+    assert not on_ground("motorway", '"bridge"=>"yes"')
+    assert on_ground("residential", '"bridge"=>"no"')
+    assert not on_ground("footway", None)
 
     tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
     cls = np.full((64, 64), 1, dtype=np.uint8)
