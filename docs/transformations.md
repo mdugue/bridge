@@ -1303,7 +1303,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   calibrated index is one too (`l: "e"`, `ls: "dop"`), but only where
   the site's broadleaf crowns read below 0.30 (at least 200 of them):
   under leaves a summer flight shows every crown green. 44 % of the
-  Heide's mixed-forest crowns pass. The DOM's form (a cone's peak over
+  Heide's mixed-forest crowns pass. Baked: Dresden 91 076 of its 303 113
+  canopy crowns (the Heide's two northern tiles 63 % and 60 %), Grimma
+  807, Meißen 129, Unna 68; none on Leipzig's, Hamburg's and München's
+  tiles. The DOM's form (a cone's peak over
   its shoulders) does not part them (J 0.17) and is not used. An
   evergreen crown keeps its leaves and colour all year (no season
   jitter) on both terrain levels (`lib/city/coarse-crowns.ts` byte 10),
