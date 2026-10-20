@@ -338,7 +338,11 @@ visual-variable codebook is in
   the DOP NDVI (upsampled, blurred) passes 0.3 on classes 0 and 4 and OSM
   does not call the ground paved, `edges.py` counts it as meadow; the
   shader paints it exactly as meadow — its colour, mottle, NDVI tint and
-  lawn edge. The first cut blended toward the meadow colour at 0.85 ×
+  lawn edge. The railway class (5) too, off every track bed
+  (`ways.track_beds` + 0.5 m; 2026-10-20): the DLM's parcel holds the
+  embankments and verges, which the ballast grey painted grey — off the
+  traffic, the calibrated index passes 0.3 on 5 % of it in Dresden, 8 % in
+  Leipzig, 23 % in Hamburg and 29 % in Unna. The first cut blended toward the meadow colour at 0.85 ×
   slider and read as barely there. *Stadtgrün* at full strength
   (`URBAN_GREEN`, fixed).
   `ground-detail.ts` `urbanGreen`.
@@ -2283,10 +2287,24 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   0.27 km² of ballast. Before, the layer was DLM-only and Hamburg, a city
   of bridges, had none. Marked 🟡 (OSM + DOM1) in *Sources by city*.
   Not yet judged on a real GPU.
-- **Ballast yards** `❝ taken` — Basis-DLM `ver03_f` (railway AREA, `OBJART=42010`),
+- **Ballast yards** `❝ taken` `= computed` — Basis-DLM `ver03_f` (railway AREA, `OBJART=42010`),
   **dissolved** with shapely `union_all(make_valid())` in the bake and clipped
   to the tile (~5 non-overlapping parts) → **one merged surface**, so dozens of
-  yard tracks can't z-fight. **Draped on the ground** (2026-10-01, ADR 0041,
+  yard tracks can't z-fight. **Only where a track's bed lies on it**
+  (2026-10-20): the parcel reaches the railway's fences and holds its
+  depots, their yards' tarmac and parking, the embankments' grass and the
+  station forecourts — on the orthophotos half of Dresden's (49 %), two
+  thirds of Leipzig's and three quarters of Meißen's and Grimma's lay off
+  every track, all of it drawn as raised gravel (Leipzig's bus depot east
+  of the Hauptbahnhof, Dresden's Wiener Platz). So the parcel is cut to the
+  beds of the baked rails (by their track count) and of OSM's every track
+  above ground and off a bridge (which maps a yard's sidings the DLM
+  bundles), at `rail_osm.py`'s bed widths (4.5 m, 4 m more per further
+  track), and gaps up to 4 m between two beds closed (a yard's tracks lie
+  4.5–6 m apart; open, each would stand as its own strip with its own
+  fascia). Ballast then: Dresden 165 → 80 ha, Leipzig 76 → 27, Munich
+  31 → 14, Unna 8.5 → 4.6, Meißen 2.0 → 0.5. A track neither the DLM nor
+  OSM maps loses its ballast; outside the parcel no bed is drawn. **Draped on the ground** (2026-10-01, ADR 0041,
   `addDrapedArea`): the outline and its holes triangulated, each triangle split
   in four while the ground at its edge midpoints and centre strays from its
   plane by > 1 m (and always above 48 m), down to 6 m, every corner on the

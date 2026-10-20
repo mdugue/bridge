@@ -450,7 +450,7 @@ Code und Wissensbasis für sie verwenden:
 | | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
-| | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet wie Wiese, aus dem Infrarot-Luftbild |
+| | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet und die grünen Bahnböschungen wie Wiese, aus dem Infrarot-Luftbild |
 | | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
 | | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |
 | | *Blattdurchscheinen* | Durchleuchtung naher, großer Kronen (schattenabhängig) |

@@ -1,7 +1,8 @@
 """Basis-DLM (+ DOM1/DGM1, + OSM) → the rail layer's four inputs (ADR 0013):
 
-- ballast yards: `ver03_f` (OBJART 42010) dissolved into one non-overlapping
-  surface and clipped to the tile;
+- ballast: the railway land `ver03_f` (OBJART 42010) where a track's bed
+  lies on it (the baked rails by their count, and OSM's every track above
+  ground off a bridge), one non-overlapping surface clipped to the tile;
 - rails: heavy-rail `ver03_l` (SPW 1000) with `tracks` and `electrified`,
   fragments merged by shared endpoints (1 m snap);
 - bridge decks, driven by every `ver06_l` centreline (BWF 1800): snapped to a
@@ -24,6 +25,7 @@ from pathlib import Path
 import numpy as np
 import rasterio
 import shapely
+import shapely.geometry
 from rasterio.features import rasterize
 from rasterio.merge import merge
 
@@ -46,24 +48,43 @@ from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, read_
 from .osm import below_ground, has_extract, read_osm, tag
 
 WIDTH = {"rail": 9.0, "road": 11.0, "path": 3.5, "other": 8.0}
+YARD_GAP_M = 4.0  # the ballast closes a gap this narrow between two beds
 CAMBER = 0.012
 
 
 # --- ballast and rails ---------------------------------------------------------
 
 
-def ballast(tile: Tile) -> list[dict]:
+def ballast(tile: Tile, lines: list[dict], yards: bool = True) -> list[dict]:
+    """The railway land where a track's bed lies on it. The DLM's parcel
+    reaches the fences: it holds the depots and their yards' tarmac, the
+    embankments' grass, the station forecourts — on Leipzig's four tiles
+    two thirds of it lay off every track, and all of it was drawn as raised
+    ballast. So the parcel is cut to the beds of `lines` (the baked rails,
+    `rails`, by their track count) and of OSM's tracks above ground and off
+    bridges, which map a yard's every siding (`rail_osm.osm_beds`; `yards`
+    false without an extract)."""
     geoms, _ = read_layer(tile.dlm / "ver03_f.shp", tile.bounds, where="OBJART='42010'")
     if len(geoms) == 0:
         return []
-    merged = shapely.intersection(
-        shapely.union_all(shapely.make_valid(geoms)), shapely.box(*tile.bounds)
-    )
-    return [
-        feature(geometry_json(part))
-        for part in shapely.get_parts(merged)
-        if isinstance(part, shapely.Polygon) and not part.is_empty
+    beds = [
+        rail_osm.bed(shapely.geometry.shape(f["geometry"]), f["properties"]["tracks"])
+        for f in lines
     ]
+    if yards:
+        beds += rail_osm.osm_beds(tile)
+    if not beds:
+        return []
+    parcel = shapely.union_all(shapely.make_valid(geoms))
+    # a yard's tracks 4.5–6 m apart: the strips between their beds closed,
+    # or each would stand as its own raised strip with its own fascia
+    closed = shapely.buffer(
+        shapely.buffer(shapely.union_all(beds), YARD_GAP_M / 2, join_style="mitre"),
+        -YARD_GAP_M / 2,
+        join_style="mitre",
+    )
+    on_beds = shapely.intersection(parcel, shapely.simplify(closed, 0.1))
+    return rail_osm.polygons(shapely.intersection(on_beds, shapely.box(*tile.bounds)))
 
 
 def _key(p) -> tuple[int, int]:
@@ -620,8 +641,15 @@ def run(tile: Tile) -> None:
         return
     if not tile.has_dlm("the rail layer (tracks, ballast, bridges, platforms)"):
         return
-    write_geojson(tile.out("dlm", f"railarea_{tile.id}.geojson"), ballast(tile), tile.epsg)
-    write_geojson(tile.out("dlm", f"rail_{tile.id}.geojson"), rails(tile), tile.epsg)
+    lines = rails(tile)
+    yards = has_extract(tile, "the yards' tracks under the ballast")
+    write_geojson(
+        tile.out("dlm", f"railarea_{tile.id}.geojson"),
+        ballast(tile, lines, yards),
+        tile.epsg,
+        f"{tile.credit}; tracks: {OSM_ATTRIBUTION}" if yards else None,
+    )
+    write_geojson(tile.out("dlm", f"rail_{tile.id}.geojson"), lines, tile.epsg)
     has_osm = has_extract(tile, "bridge structure and platforms")
     structures = osm_structures(tile) if has_osm else []
     marks = fairway_marks(tile) if has_osm else []

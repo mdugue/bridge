@@ -19,8 +19,9 @@ Two bytes per texel, interleaved in an 8-bit greyscale PNG twice as wide
 
 so 5 cm steps over ±6.35 m, clamped. Keep `EDGE_SCALE` in step with the
 viewer (`EDGE_SCALE` in lib/city/landcover.ts). Needs only the committed
-class raster (plus the NDVI and paving rasters when present), so it runs
-without the raw DLM; it runs after `surface`.
+class raster (plus the NDVI and paving rasters, the baked rails and the OSM
+tracks when present), so it runs without the raw DLM; it runs after `surface`
+and `rail`.
 
 It also writes the kerb lines (`kerbs_<tile>.geojson`): the smoothed road
 edge where the far side is ground, the carriageway on each line's left. The
@@ -34,16 +35,21 @@ import json
 import numpy as np
 import shapely
 from PIL import Image
+from rasterio.features import rasterize
 
+from . import ways
 from .common import Tile, feature, geometry_json, save_grey_png, write_geojson
 
 ROAD = 7
 MEADOW = 1
 BUILTUP = 4
+RAILWAY = 5
 NO_KERB = (5, 8)  # railway, water: a carriageway edge there is no kerb
 # Urban green: built-up or unclassified ground whose DOP NDVI says green —
-# courtyards, front gardens, parks inside the settlement. Counted as meadow
-# here, so it gets the meadow's edges; the shader paints it as meadow.
+# courtyards, front gardens, parks inside the settlement — and railway land
+# off the tracks (`ways.track_beds`: the DLM's parcel reaches the fences and
+# holds the embankments' and the verges' grass). Counted as meadow here, so
+# it gets the meadow's edges; the shader paints it as meadow.
 GREEN_NDVI = 0.3
 SEALED = (1, 2, 3, 4)  # OSM walk surfaces that are paved: never green
 KERB_SIMPLIFY_M = 0.15
@@ -111,9 +117,22 @@ def edge_field(cls: np.ndarray, class_id: int, res: float, out_px: int) -> np.nd
     return sd.reshape(out_px, k, out_px, k).mean(axis=(1, 3))
 
 
+def off_tracks(tile: Tile, cls: np.ndarray) -> np.ndarray:
+    """The railway texels clear of every track bed (`ways.track_beds`, grown
+    by `ways.MARGIN_M`)."""
+    rail = cls == RAILWAY
+    beds = [shapely.buffer(g, ways.MARGIN_M) for g in ways.track_beds(tile)]
+    if rail.any() and beds:
+        on = np.zeros(cls.shape, dtype=np.uint8)
+        rasterize(((g, 1) for g in beds), out=on, transform=tile.transform(cls.shape[0]))
+        rail &= on == 0
+    return rail
+
+
 def urban_green(tile: Tile, cls: np.ndarray) -> np.ndarray:
-    """The built-up/background texels the NDVI calls green and OSM does not
-    call paved (the NDVI and paving rasters are optional)."""
+    """The built-up/background texels and the railway land off the tracks
+    that the NDVI calls green and OSM does not call paved (the NDVI and
+    paving rasters are optional)."""
     n = cls.shape[0]
     green = np.zeros(cls.shape, dtype=bool)
     ndvi_png = tile.out("dlm", f"ndvi_{tile.id}.png")
@@ -122,7 +141,8 @@ def urban_green(tile: Tile, cls: np.ndarray) -> np.ndarray:
     ndvi = np.asarray(Image.open(ndvi_png).convert("L"), dtype=np.float64) / 255.0
     # Upsampled and blurred: the ~2 m raster as a soft field, not a speckle.
     ndvi = box_blur(np.kron(ndvi, np.ones((n // ndvi.shape[0], n // ndvi.shape[1]))), passes=2)
-    green = (ndvi > GREEN_NDVI) & np.isin(cls, (0, BUILTUP))
+    ground = np.isin(cls, (0, BUILTUP)) | off_tracks(tile, cls)
+    green = (ndvi > GREEN_NDVI) & ground
     surface_png = tile.out("dlm", f"surface_{tile.id}.png")
     if surface_png.exists():
         grey = np.asarray(Image.open(surface_png).convert("L"))
