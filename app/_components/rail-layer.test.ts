@@ -552,6 +552,48 @@ test("a deck's top is laid out by its frame; its stone is dressed", () => {
   }
 });
 
+test("a deck's slab and parapets follow its measured line, not chords between its corners", () => {
+  // a 200 m deck cambered 3 m over its span, with only its four corners:
+  // the triangulation's faces join the abutments, so the middle of the
+  // span was drawn at the corners' 120 m
+  const line = Array.from(
+    { length: 101 },
+    (_, i) => 120 + 3 * Math.sin((Math.PI * i) / 100)
+  );
+  const lineAt = (x: number) => 120 + 3 * Math.sin((Math.PI * x) / 200);
+  const [top, stone] = buildRail({ ...empty, bridges: [deck({ line })] }, ctx)
+    .children as Mesh[];
+  const pos = top.geometry.getAttribute("position");
+  const nrm = top.geometry.getAttribute("normal");
+  let tops = 0;
+  let soffits = 0;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    if (x < 0.01 || x > 199.99 || Math.abs(nrm.getY(i)) < 0.99) {
+      continue; // an approach beyond the ends, or the fascia
+    }
+    const up = nrm.getY(i) > 0;
+    expect(pos.getY(i)).toBeCloseTo(lineAt(x) - (up ? 0 : 1.1), 1);
+    if (up) {
+      tops++;
+    } else {
+      soffits++;
+    }
+  }
+  expect(tops).toBeGreaterThan(0);
+  expect(soffits).toBeGreaterThan(0);
+  // the parapet's top along the side, mid-span too
+  const sp = stone.geometry.getAttribute("position");
+  let parapet = 0;
+  for (let i = 0; i < sp.count; i++) {
+    const x = sp.getX(i);
+    if (Math.abs(x - 100) < 3 && Math.abs(Math.abs(sp.getZ(i)) - 6) < 0.01) {
+      parapet = Math.max(parapet, sp.getY(i));
+    }
+  }
+  expect(parapet).toBeCloseTo(lineAt(100) + 0.85, 1);
+});
+
 test("a curved deck's frame holds inside every triangle, not only at its corners", () => {
   // a 12 m deck along an arc of 400 m radius, 300 m long, its axis and
   // outline sampled every 30 m as the bake's are (a few vertices, long

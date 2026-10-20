@@ -535,6 +535,7 @@ function deckOf(
   f: BridgeFeature,
   offset: { cx: number; cy: number }
 ): {
+  line: { x: number; y: number; z: number }[] | null;
   ring: Ring2;
   topY: number[];
   props: ReturnType<typeof bridgeProps>;
@@ -557,8 +558,8 @@ export function buildDeckTable(
     const d = deckOf(f, ctx.offset);
     return d ? [{ f, ...d }] : [];
   });
-  for (const { ring, topY, props } of parsed) {
-    decks.push(deckPoly(ring.pts, topY, props.kind));
+  for (const { ring, topY, props, line } of parsed) {
+    decks.push(deckPoly(ring.pts, topY, props.kind, line));
   }
   const heightAt = ctx.heightAt;
   if (!heightAt) {
@@ -1113,45 +1114,126 @@ interface BridgeMeshes {
   tops: Record<string, Mesh3>;
 }
 
+/** A deck slab laid on its measured line: the vertices before `end` are
+ *  the slab's (not its approaches'), its top at `top` there and its
+ *  underside `depth` under it. */
+interface SlabLine {
+  depth: number;
+  end: number;
+  top: (x: number, z: number) => number;
+}
+
 /**
  * Splits the upward faces of `acc` from vertex `first` on — the deck's top
  * and its approaches — at their longest edge until no edge is longer than
  * `step` m. The triangulation of a curved deck joins vertices far apart
  * along its arc (191 m on the Marienbrücke), and the frame, exact at each
- * vertex, interpolates truly only over a short reach of a curved axis. A
- * face is planar, so its pieces are too; the sides and the underside stay
- * as they were.
+ * vertex, interpolates truly only over a short reach of a curved axis.
+ * Given the `slab`, its top and underside are split alike and every vertex
+ * the split adds is set on the measured line at its station: the
+ * triangulation's long faces joined an abutment to the middle of the span
+ * and cut under the line's camber, 4.4 m on the Waldschlößchenbrücke.
+ * Elsewhere a face is planar, so its pieces are too; the sides stay as
+ * they were (the slab's ring is split short, `onLine`).
  */
-function splitDeckTop(acc: Mesh3, first: number, step: number): void {
+function splitDeckTop(
+  acc: Mesh3,
+  first: number,
+  step: number,
+  slab?: SlabLine
+): void {
   const pos = acc.pos.splice(first * 3);
   const nrm = acc.nrm.splice(first * 3);
-  const limit = step * step;
-  const d2 = (a: number[], b: number[]) =>
-    (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
-  const mid = (a: number[], b: number[]) => a.map((v, k) => (v + b[k]) / 2);
   for (let t = 0; t < pos.length; t += 9) {
     const n = nrm.slice(t, t + 3);
     const corners = [0, 1, 2].map((k) => pos.slice(t + k * 3, t + k * 3 + 3));
-    const stack = [corners];
-    while (stack.length > 0) {
-      const tri = stack.pop() as number[][];
-      const lens = [d2(tri[0], tri[1]), d2(tri[1], tri[2]), d2(tri[2], tri[0])];
-      const longest = lens.indexOf(Math.max(...lens));
-      if (n[1] < 0.5 || lens[longest] <= limit) {
-        for (const c of tri) {
-          acc.pos.push(c[0], c[1], c[2]);
-          acc.nrm.push(n[0], n[1], n[2]);
-        }
-        continue;
+    const onSlab =
+      slab !== undefined && first + t / 3 < slab.end && Math.abs(n[1]) >= 0.5;
+    const lift =
+      slab && onSlab
+        ? (m: number[]) => {
+            m[1] = slab.top(m[0], m[2]) - (n[1] < 0 ? slab.depth : 0);
+          }
+        : null;
+    splitFace(acc, corners, n, n[1] >= 0.5 || onSlab ? step : 0, lift);
+  }
+}
+
+/** One face into `acc`, split at its longest edge while that is longer
+ *  than `step` (0: as it is), each new corner moved by `lift`. */
+function splitFace(
+  acc: Mesh3,
+  corners: number[][],
+  n: number[],
+  step: number,
+  lift: ((m: number[]) => void) | null
+): void {
+  const limit = step * step;
+  const d2 = (a: number[], b: number[]) =>
+    (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+  const stack = [corners];
+  while (stack.length > 0) {
+    const tri = stack.pop() as number[][];
+    const lens = [d2(tri[0], tri[1]), d2(tri[1], tri[2]), d2(tri[2], tri[0])];
+    const longest = lens.indexOf(Math.max(...lens));
+    if (step === 0 || lens[longest] <= limit) {
+      for (const c of tri) {
+        acc.pos.push(c[0], c[1], c[2]);
+        acc.nrm.push(n[0], n[1], n[2]);
       }
-      // the winding stays: each half keeps the corners' order
-      const a = tri[longest];
-      const b = tri[(longest + 1) % 3];
-      const c = tri[(longest + 2) % 3];
-      const m = mid(a, b);
-      stack.push([a, m, c], [m, b, c]);
+      continue;
+    }
+    // the winding stays: each half keeps the corners' order
+    const a = tri[longest];
+    const b = tri[(longest + 1) % 3];
+    const c = tri[(longest + 2) % 3];
+    const m = a.map((v, k) => (v + b[k]) / 2);
+    lift?.(m);
+    stack.push([a, m, c], [m, b, c]);
+  }
+}
+
+/** A deck ring's edges are split into pieces at most this long (m): under
+ *  the top's DECK_FRAME_STEP, so `splitDeckTop` never splits a side the
+ *  fascia does not share. */
+const DECK_RING_STEP = 0.8 * DECK_FRAME_STEP;
+
+/**
+ * The deck's outline with a vertex every DECK_RING_STEP along each edge,
+ * each new one on the measured line at its station, and the frame with
+ * every vertex's station. The bake gives a deck a few vertices (14 on the
+ * Waldschlößchenbrücke's 660 m), each on the line, and between them the
+ * fascia, the parapets and the spandrels ran straight under its camber.
+ */
+function onLine(
+  ring: Ring2,
+  topY: number[],
+  frame: BridgeFrame
+): { frame: BridgeFrame; ring: Ring2; topY: number[] } {
+  const pts: Ring2["pts"] = [];
+  const ys: number[] = [];
+  const ringS: number[] = [];
+  const n = ring.pts.length;
+  for (let i = 0; i < n; i++) {
+    const a = ring.pts[i];
+    const b = ring.pts[(i + 1) % n];
+    const pieces = Math.max(
+      1,
+      Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / DECK_RING_STEP)
+    );
+    pts.push(a);
+    ys.push(topY[i]);
+    ringS.push(frame.ringS[i]);
+    for (let k = 1; k < pieces; k++) {
+      const x = a.x + ((b.x - a.x) * k) / pieces;
+      const z = a.z + ((b.z - a.z) * k) / pieces;
+      const { s } = frame.project(x, z);
+      pts.push({ x, z });
+      ys.push(frame.deckAt(s));
+      ringS.push(s);
     }
   }
+  return { frame: { ...frame, ringS }, ring: { ...ring, pts }, topY: ys };
 }
 
 /**
@@ -1187,24 +1269,35 @@ function addDeckFrame(
   }
 }
 
-/** Draws one bridge: deck, parapets, whatever carries it and stands on it. */
-function drawBridge(
+/** A bridge's deck: its slab on the measured line (`onLine`), the
+ *  approaches, the frame attributes and the parapets. Returns where it was
+ *  laid, the frame null on an older file without an axis. */
+function drawDeck(
   f: BridgeFeature,
-  ring: Ring2,
-  topY: number[],
+  baked: Ring2,
+  bakedY: number[],
   out: BridgeMeshes,
   ctx: RailContext
-): void {
-  const { kind, structure, depth } = bridgeProps(f);
+): { frame: BridgeFrame | null; ring: Ring2; topY: number[] } {
+  const { kind, depth } = bridgeProps(f);
   const top = out.tops[kind] ?? out.tops.other;
-  const frame = bridgeFrame(f, ctx);
+  const measured = bridgeFrame(f, ctx);
+  const laid = measured ? onLine(baked, bakedY, measured) : null;
+  const frame = laid?.frame ?? null;
+  const ring = laid?.ring ?? baked;
+  const topY = laid?.topY ?? bakedY;
   const first = top.pos.length / 3;
   addFootprint(top, ring, topY, depth, true);
+  const slabEnd = top.pos.length / 3;
   for (const a of approaches(ring, topY, kind, frame?.ringS, ctx, out.decks)) {
     addApproach(top, out.stone, a, DECK_DEPTH);
   }
   if (frame) {
-    splitDeckTop(top, first, DECK_FRAME_STEP);
+    splitDeckTop(top, first, DECK_FRAME_STEP, {
+      depth,
+      end: slabEnd,
+      top: (x, z) => frame.deckAt(frame.project(x, z).s),
+    });
   }
   addDeckFrame(top, first, frame);
   // where a frame stands on the deck's edge it is the railing: a parapet
@@ -1212,6 +1305,19 @@ function drawBridge(
   if (!drawsFrames(f.properties ?? {})) {
     addParapetWalls(out.stone, ring, topY, frame?.ringS);
   }
+  return { frame, ring, topY };
+}
+
+/** Draws one bridge: deck, parapets, whatever carries it and stands on it. */
+function drawBridge(
+  f: BridgeFeature,
+  baked: Ring2,
+  bakedY: number[],
+  out: BridgeMeshes,
+  ctx: RailContext
+): void {
+  const { structure, depth } = bridgeProps(f);
+  const { frame, ring, topY } = drawDeck(f, baked, bakedY, out, ctx);
   if (!frame) {
     // an older file: no axis, no measurements
     addPiers(out.stone, ring, topY, ctx, depth);

@@ -7,6 +7,7 @@
  *
  * Coordinates are the Y-up world frame's (x, z) (lib/city/ground-clamp.ts).
  */
+import { axisFrame, BRIDGE_STEP } from "./bridge";
 import type { BridgeFeature } from "./features";
 import { epsgToWorld } from "./ground-clamp";
 
@@ -58,7 +59,8 @@ export interface DeckPoly {
   maxZ: number;
   minX: number;
   minZ: number;
-  /** (t along the long axis, deck top) per ring vertex, sorted by t */
+  /** (t along the long axis, deck top) per point of the measured deck
+   *  line (per ring vertex in an older file), sorted by t */
   profile: { t: number; y: number }[];
   /** an approach ramp from a deck end down to the ground, not a deck */
   ramp?: boolean;
@@ -182,11 +184,18 @@ export function deckLift(
   return decksAt(decks, x, z, kinds, which)[0] ?? null;
 }
 
-/** One deck's lift entry from its world ring and per-vertex deck tops. */
+/**
+ * One deck's lift entry from its world ring and per-vertex deck tops, its
+ * profile from the measured `line` when given (`deckLine`): the deck is
+ * drawn on it (rail-layer.ts `onLine`), and the ring's few vertices chord
+ * it — 2.4 m under the Güterumgehungsbahn's deck in Hamburg, where the
+ * rails rode below the drawn deck.
+ */
 export function deckPoly(
   pts: { x: number; z: number }[],
   topY: number[],
-  kind: string
+  kind: string,
+  line?: readonly { x: number; y: number; z: number }[] | null
 ): DeckPoly {
   const { a, b } = longAxis(pts);
   const ax = b.x - a.x;
@@ -196,14 +205,19 @@ export function deckPoly(
   let minZ = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
   let maxZ = Number.NEGATIVE_INFINITY;
-  const profile = pts.map((p, i) => {
+  const along = (p: { x: number; z: number }) =>
+    l2 > 0 ? ((p.x - a.x) * ax + (p.z - a.z) * az) / l2 : 0;
+  const ringProfile = pts.map((p, i) => {
     minX = Math.min(minX, p.x);
     minZ = Math.min(minZ, p.z);
     maxX = Math.max(maxX, p.x);
     maxZ = Math.max(maxZ, p.z);
-    const t = l2 > 0 ? ((p.x - a.x) * ax + (p.z - a.z) * az) / l2 : 0;
-    return { t, y: topY[i] };
+    return { t: along(p), y: topY[i] };
   });
+  const profile =
+    line && line.length >= 2
+      ? line.map((p) => ({ t: along(p), y: p.y }))
+      : ringProfile;
   profile.sort((p, q) => p.t - q.t);
   return { a, ax, az, kind, minX, minZ, maxX, maxZ, profile, ring: pts };
 }
@@ -234,12 +248,17 @@ export function longAxis(pts: { x: number; z: number }[]): {
   };
 }
 
-/** A bridge feature's deck: its world ring and per-vertex tops, or null
- *  when it has none (no polygon, or fewer tops than vertices). */
+/** A bridge feature's deck: its world ring and per-vertex tops, and its
+ *  measured line (`deckLine`), or null when it has none (no polygon, or
+ *  fewer tops than vertices). */
 export function deckRing(
   f: BridgeFeature,
   offset: { cx: number; cy: number }
-): { ring: Ring2; topY: number[] } | null {
+): {
+  line: { x: number; y: number; z: number }[] | null;
+  ring: Ring2;
+  topY: number[];
+} | null {
   if (f.geometry?.type !== "Polygon" || !f.geometry.coordinates[0]) {
     return null;
   }
@@ -248,7 +267,30 @@ export function deckRing(
   if (ring.pts.length < 3 || deck.length < ring.pts.length) {
     return null;
   }
-  return { ring, topY: deck.slice(0, ring.pts.length) };
+  return {
+    line: deckLine(f, offset),
+    ring,
+    topY: deck.slice(0, ring.pts.length),
+  };
+}
+
+/** A bridge's measured deck line as world points, one per BRIDGE_STEP
+ *  along its axis with the deck's top there, or null for a file without
+ *  an axis or a line. */
+export function deckLine(
+  f: BridgeFeature,
+  offset: { cx: number; cy: number }
+): { x: number; y: number; z: number }[] | null {
+  const line = f.properties?.line;
+  const axis = f.properties?.axis ? axisFrame(f.properties.axis) : null;
+  if (!(axis && line && line.length >= 2)) {
+    return null;
+  }
+  return line.map((y, i) => {
+    const [ex, ey] = axis.at(Math.min(i * BRIDGE_STEP, axis.length), 0);
+    const w = epsgToWorld(ex, ey, offset);
+    return { x: w.x, y, z: w.z };
+  });
 }
 
 /** The lift entries of the baked decks themselves (no approach ramps). */
@@ -259,7 +301,7 @@ export function bridgeDecks(
   return features.flatMap((f) => {
     const d = deckRing(f, offset);
     return d
-      ? [deckPoly(d.ring.pts, d.topY, f.properties?.kind ?? "other")]
+      ? [deckPoly(d.ring.pts, d.topY, f.properties?.kind ?? "other", d.line)]
       : [];
   });
 }

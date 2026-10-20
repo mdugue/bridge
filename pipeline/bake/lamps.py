@@ -26,7 +26,8 @@ A lamp on a bridge stands on its deck (`deck`: the deck's top there, m,
 which the viewer stands the post on). It is on the bridge when a drawn road
 or path deck holds it (furniture.py `Decks`, every tile's bridge file) and
 either its nearest highway within ON_BRIDGE_M is a bridge (`bridge=*`) or
-the ground below is water or railway. Before, those over water or a railway
+the ground below is water or railway; one mapped in a street's lanes there
+stands at the deck's edge. Before, those over water or a railway
 were dropped and those over a meadow or a street stood under the deck on
 the ground: Dresden's 36 (the Budapester Straße's and the Löbtauer Brücke's
 over the tracks), Grimma's 11 (the Pöppelmannbrücke's, a footbridge's over
@@ -225,12 +226,13 @@ def run(tile: Tile, lamp_height: float = LAMP_H) -> None:
     facades = Facades(tile)
     features, hung, on_walls, on_decks = [], 0, 0, 0
     for g, other in zip(geoms, fields["other_tags"], strict=True):
-        deck = gate.deck(g)
-        if deck is not None:
+        on = gate.on_deck(g, kerbside=True)
+        if on is not None:
+            at, deck = on
             on_decks += 1
             props = {"h": round(lamp_height, 1), "deck": round(deck, 2)}
             features.append(
-                feature({"type": "Point", "coordinates": [round(g.x, 1), round(g.y, 1)]}, props)
+                feature({"type": "Point", "coordinates": [round(at.x, 1), round(at.y, 1)]}, props)
             )
             continue
         if not standable(g, gate):

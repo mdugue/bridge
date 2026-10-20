@@ -1561,3 +1561,23 @@ def test_a_lamp_on_a_bridge_stands_on_its_deck():
     # over water it can only stand on the deck
     assert decks.deck_under(shapely.Point(20.5, 4.0), 8) == pytest.approx(11.025)
     assert Decks([], []).deck_under(shapely.Point(10, 3), 8) is None
+
+
+def test_a_piece_in_a_bridge_s_lanes_stands_at_its_deck_s_edge():
+    from bake.bridge import Axis
+    from bake.furniture import Decks
+
+    deck = shapely.box(0, -5, 40, 5)
+    street = shapely.LineString([(0, 0), (40, 0)])
+    decks = Decks([(deck, Axis([[0, 0], [40, 0]]), [10.0] * 21)], [(street, True)], [street])
+    # mapped on the lane: to the nearer edge, 0.4 m in
+    moved = decks.kerbside(shapely.Point(10, 1))
+    assert (moved.x, moved.y) == pytest.approx((10, 4.6))
+    # near the deck's end: still across the axis, never onto the abutment
+    moved = decks.kerbside(shapely.Point(1, -1))
+    assert (moved.x, moved.y) == pytest.approx((1, -4.6))
+    # on the pavement it stays
+    assert decks.kerbside(shapely.Point(10, 3)).equals(shapely.Point(10, 3))
+    # beside a footway's line (no street) too
+    path = Decks([(deck, Axis([[0, 0], [40, 0]]), [10.0] * 21)], [(street, True)])
+    assert path.kerbside(shapely.Point(10, 1)).equals(shapely.Point(10, 1))

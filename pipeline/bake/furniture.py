@@ -73,6 +73,9 @@ from .osm import has_extract, read_osm, read_ways, tag
 BLOCKED = (5, 8)  # railway, water
 DECK_KINDS = ("road", "path")  # what stands on a bridge stands on these, never a rail deck
 ON_BRIDGE_M = 15.0  # a piece's way: the nearest highway within this
+LANES_M = 2.0  # on a deck, a lamp or kerbside piece this near a street's line is in its lanes
+DECK_EDGE_IN_M = 0.4  # ... and stands at the deck's edge, this far in from it
+SIDE_REACH_M = 60.0  # ... its side looked for at most this far across the axis (m)
 # A way further than this (m) does not turn an object towards it.
 FACE_M = 25.0
 # Closer than this (m) an object stands on the way: it faces across it.
@@ -259,11 +262,13 @@ class Decks:
         self,
         decks: list[tuple[shapely.Geometry, Axis, list[float]]],
         ways: list[tuple[shapely.Geometry, bool]],
+        streets: list[shapely.Geometry] | None = None,
     ) -> None:
         self.decks = decks
         self.tree = shapely.STRtree([d for d, _, _ in decks]) if decks else None
         self.ways = shapely.STRtree([g for g, _ in ways]) if ways else None
         self.bridge = np.array([b for _, b in ways], dtype=bool)
+        self.streets = shapely.STRtree(streets) if streets else None
 
     @classmethod
     def of(cls, tile: Tile) -> Decks:
@@ -278,13 +283,14 @@ class Decks:
                     deck = shapely.geometry.shape(f["geometry"])
                     decks.append((deck, Axis(p["axis"]), p["line"]))
         geoms, fields = read_ways(tile, "highway IS NOT NULL", ["highway", "other_tags"])
-        tags = column(fields, "other_tags", geoms)
+        kinds, tags = column(fields, "highway", geoms), column(fields, "other_tags", geoms)
         ways = [
             (g, (tag(t, "bridge") or "no") != "no")
             for g, t in zip(geoms, tags, strict=True)
             if g is not None
         ]
-        return cls(decks, ways)
+        streets = [g for g, k in zip(geoms, kinds, strict=True) if g is not None and k in STREETS]
+        return cls(decks, ways, streets)
 
     def top(self, p: shapely.Point) -> float | None:
         """The deck's top at p (m, the viewer's `deckAt` over the deck's
@@ -306,6 +312,28 @@ class Decks:
         near = self.ways.query_nearest(p, max_distance=ON_BRIDGE_M)
         return len(near) > 0 and bool(self.bridge[int(near[0])])
 
+    def kerbside(self, p: shapely.Point) -> shapely.Point:
+        """p, or — within LANES_M of a street's line, in its lanes — its
+        deck's nearer side, DECK_EDGE_IN_M in from it, straight across the
+        axis (never towards an end: that is the abutment, still the lanes).
+        On the ground such a piece moves to the class raster's kerb; on a
+        bridge that is the ground's below (the Schloßbrücke's lamp in
+        Meißen, mapped on its lane)."""
+        if self.tree is None or self.streets is None:
+            return p
+        if len(self.streets.query_nearest(p, max_distance=LANES_M)) == 0:
+            return p
+        for i in self.tree.query(p, predicate="within"):
+            deck, axis, _ = self.decks[int(i)]
+            s, off = axis.project(p.x, p.y)
+            sides = [(_side(deck, axis, s, off, +1), +1), (_side(deck, axis, s, off, -1), -1)]
+            edge, sign = min(sides, key=lambda e: abs(e[0] - off))
+            if abs(edge - off) <= DECK_EDGE_IN_M:
+                return p
+            x, y = axis.points(s, edge - sign * DECK_EDGE_IN_M)
+            return shapely.Point(float(x), float(y))
+        return p
+
     def deck_under(self, p: shapely.Point, cls: int | None) -> float | None:
         """The top of the deck p stands on, or None: on the ground (`cls`,
         the class raster's there)."""
@@ -313,6 +341,18 @@ class Decks:
         if top is None:
             return None
         return top if cls in BLOCKED or self.on_bridge_way(p) else None
+
+
+def _side(deck: shapely.Geometry, axis: Axis, s: float, off: float, sign: int) -> float:
+    """The offset where the deck ends across its axis at station s, going
+    from `off` towards `sign`: its outline's nearest crossing."""
+    sx, sy = axis.points(s, off)
+    start = shapely.Point(float(sx), float(sy))
+    x, y = axis.points(s, off + sign * SIDE_REACH_M)
+    hits = shapely.LineString([start, (float(x), float(y))]).intersection(deck.boundary)
+    if hits.is_empty:
+        return off + sign * SIDE_REACH_M
+    return off + sign * start.distance(hits)
 
 
 class Gate:
@@ -346,6 +386,16 @@ class Gate:
         if self.on_decks is None or not owns(self.bounds, p.x, p.y):
             return None
         return self.on_decks.deck_under(p, self.cls_at(p.x, p.y))
+
+    def on_deck(self, p: shapely.Point, kerbside: bool) -> tuple[shapely.Point, float] | None:
+        """Where on its deck p stands and the deck's top there — out of the
+        lanes to the deck's edge when `kerbside` (`Decks.kerbside`) — or
+        None on the ground."""
+        if self.deck(p) is None or self.on_decks is None:
+            return None
+        at = self.on_decks.kerbside(p) if kerbside else p
+        top = self.on_decks.top(at)
+        return None if top is None else (at, top)
 
     def on_road(self, p: shapely.Point) -> bool:
         return self.cls_at(p.x, p.y) == ROAD
@@ -490,11 +540,13 @@ def _stood(
 ) -> tuple[shapely.Point, float | None, float | None] | None:
     """Where a point object stands, the bearing it faces and the top of the
     bridge deck it stands on (None: the ground). On a deck it stands where
-    it is mapped (no kerb to move to: the class raster's are the ground's
-    below), but what that would leave in the lanes is left out (`OFF_DECK`)."""
-    deck = gate.deck(g)
-    if deck is not None:
-        return None if k in OFF_DECK else (*_as_mapped(k, g, other, ways, lines), deck)
+    it is mapped, a kerbside piece mapped in a street's lanes at the deck's
+    edge (the class raster's kerbs are the ground's below), and what would
+    stand in the lanes there is left out (`OFF_DECK`)."""
+    on = gate.on_deck(g, k in KERBSIDE)
+    if on is not None:
+        at, deck = on
+        return None if k in OFF_DECK else (*_as_mapped(k, at, other, ways, lines), deck)
     if not gate.open(g):
         return None
     placed = _placed(k, g, other, gate, ways, lines, streets, facades)

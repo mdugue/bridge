@@ -1870,16 +1870,24 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   Before, the gate dropped those over water or a railway and stood those
   over a meadow or a street on the ground under the deck, their 5 m posts
   ending in it: Dresden 36 (the Budapester Straße's and the Löbtauer
-  Brücke's over the tracks), Grimma 11 (the Pöppelmannbrücke), Meißen 1
-  (Schloßbrücke). A lamp under a rail deck, or beside a street the bridge
+  Brücke's over the tracks), Hamburg 32 (the Kennedybrücke's over the
+  Alster, the Reesendamm's, the Altmannbrücke's), Grimma 11 (the
+  Pöppelmannbrücke), München 8 (the Boschbrücke), Meißen 1 (Schloßbrücke).
+  One mapped within 2 m of a street's line on the deck — in its lanes —
+  stands at the deck's nearer side, 0.4 m in, straight across its axis:
+  on the ground such a lamp moves to the class raster's kerb, which on a
+  bridge is the ground's under it (Meißen's Schloßbrücke lamp, mapped on
+  its lane). A lamp under a rail deck, or beside a street the bridge
   spans, lights that street and stays on the ground. Its post height is
   read in DOM1 over the deck's top, not over the ground below (over the
   river the deck around it was never clear, so no bridge lamp gave a
   reading). **Street furniture on bridges** `= computed` (2026-10-20) —
   by the same rule a bench, bin, bollard, bicycle stand or shelter stands
   on the deck where it is mapped; before, everything on a deck was
-  dropped. A signal, a hydrant's sign or a wall clock there is still left
-  out: the kerb they move to is the class raster's, the ground's under the
+  dropped; one in the lanes (a bench, bin, stand, shelter, post box,
+  column, picnic table or drinking fountain) moves to the deck's side as
+  the lamps do (Meißen's Schloßbrücke bin). A signal, a hydrant's sign or
+  a wall clock there is still left out: the kerb they move to is the class raster's, the ground's under the
   bridge. Hamburg gains 28 pieces (12 benches, 7 bins, 6 stands: the
   Busanbrücke, the Brooktorkaibrücke, the Kehrwiedersteg), Meißen 4
   (the Johannesbrücke's benches), Dresden 2, Grimma and München 1.
@@ -2635,6 +2643,28 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   bridges, which lack area polygons; the DGM ramp alone — it put the
   Waldschlößchenbrücke 3 m low and rail decks up to 6 m high; per-tile
   ground — seam bridges drawn twice at two heights; see 🗃️.)*
+  **The deck on its measured line** `= computed` (2026-10-20,
+  `rail-layer.ts` `onLine`, `splitDeckTop`; `lib/city/decks.ts`
+  `deckLine`): the bake writes the deck's top every 2 m along its axis
+  (`line`), but the viewer drew it from the ring's few corners — a long
+  outline has four to a dozen — as flat triangles between them, which cut
+  a chord under the camber, and a ring vertex took its own height. So the
+  ring's edges are now divided into pieces of at most 4.8 m, each new
+  corner at the line's height at its station; the top and the soffit,
+  split into triangles of at most 6 m, take the line's height at every
+  vertex; the parapets, the approaches and the masonry run along the same
+  corners. The lift table that stands rails, trams, lamps and benches on
+  a deck read its profile from the ring's corners too: it now reads the
+  `line`. Before, the drawn top missed the measured one by up to 4.39 m
+  (the Waldschlößchenbrücke, mid-span), 3.08 m (the Albertbrücke), 2.47 m
+  (the Waltherstraßenbrücke), 1.63 m (Meißen's Elbtalbrücke), 1.55 m
+  (Hamburg's Nordkanalbrücke), 1.38 m (Munich's Reichenbachbrücke),
+  1.25 m (Leipzig's Hermann-Liebmann-Brücke) — 64 of the six cities' 491
+  road and path decks by more than 0.25 m, so a lamp or bench set on the
+  measured top floated over the drawn one or stood in it —, and the lift
+  table by up to 2.38 m (Hamburg's Güterumgehungsbahn) and 1.14 m
+  (Dresden's Hafenbrücke). Now every drawn deck lies within 2 cm of its
+  line (Hamburg's within 8 cm), the lift table within 7 cm.
   **Approaches** (*Rampen*, 2026-09-30): the deck's ends are measured in
   DOM1, the terrain is the bare-earth DGM, which runs on under an approach
   as the ground it was built on — every deck end stood as a slab edge a
