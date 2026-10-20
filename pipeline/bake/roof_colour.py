@@ -13,6 +13,11 @@ per building: rasterise the RoofSurface rings, erode them inward (the
 orthophoto leans buildings over their facades), take the per-channel
 median of at least 12 sunlit texels, in linear RGB.
 
+The photo is first taken to Dresden's colour balance (dop_balance.py):
+a flight's cast — Leipzig's cyan, München's yellow — read off its sunlit
+carriageways is scaled out of every texel, so a grey roof is grey in every
+city and the shadows are found in the balanced photo.
+
 A roof roofs.py rebuilt from DOM1 is read part by part instead of by its
 LoD2 faces: the build draws the parts in its place, and LoD2 often lays
 one flat lid over a whole block (the Neumarkt's quarters: red tiles, zinc
@@ -34,6 +39,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -42,6 +48,7 @@ from PIL import Image, ImageDraw, ImageFilter
 from rasterio.enums import Resampling
 from scipy.ndimage import uniform_filter
 
+from . import dop_balance
 from .common import Tile
 from .dop_lean import LEAN_MIN_HEIGHT, Sample, building_lean, fit_leans, lean_map, reach_px
 from .dop_light import (
@@ -380,15 +387,17 @@ def _differs(a, b) -> bool:
     )
 
 
-def read_light(tile: Tile, dop, rgb: np.ndarray, faces) -> Light:
+def read_light(tile: Tile, dop, rgb: np.ndarray, faces, lut: np.ndarray) -> Light:
     """The tile's shadows, and the flight's sun from them where the DGM is
-    there to cast the roofs' shadows on (dop_light.estimate_sun)."""
+    there to cast the roofs' shadows on (dop_light.estimate_sun); `rgb` is
+    balanced, and the coarser reads of `dop` are put through `lut`."""
     shadow = shadow_mask(rgb)
     xmin, ymin, xmax, ymax = tile.bounds
     metre = (int(round((xmax - xmin) / 1.0)), int(round((ymax - ymin) / 1.0)))
     small = np.moveaxis(
         dop.read((1, 2, 3), out_shape=(3, metre[1], metre[0]), resampling=Resampling.average), 0, -1
     )
+    small = dop_balance.balanced(small, lut)
     ratio = light_ratio(small, shadow_mask(small))
     if not tile.dgm.exists():
         return Light(shadow, None, ratio)
@@ -396,6 +405,7 @@ def read_light(tile: Tile, dop, rgb: np.ndarray, faces) -> Light:
     coarse = np.moveaxis(
         dop.read((1, 2, 3), out_shape=(3, n[1], n[0]), resampling=Resampling.average), 0, -1
     )
+    coarse = dop_balance.balanced(coarse, lut)
     with rasterio.open(tile.dgm) as g:
         dgm = g.read(1, out_shape=(n[1], n[0]), resampling=Resampling.average, masked=True)
     # a gap in the DGM would read as a pit the roofs cast shadows into
@@ -484,7 +494,9 @@ def surface_models(tile: Tile) -> tuple[np.ndarray | None, np.ndarray | None]:
         return a.read(1).astype(np.float32), b.read(1).astype(np.float32)
 
 
-def run(tile: Tile, erode: int = 5) -> None:
+def run(tile: Tile, site: Sequence[Tile] = (), erode: int = 5) -> None:
+    """Writes `roofcolor_<tile>.json`, the photo balanced by the cast of
+    `site` (the site's tiles; the tile alone when empty)."""
     city_path = tile.cityjson
     if not (tile.raw_raster("dop").exists() and city_path.exists()):
         print(f"{tile.id}: no DOP or CityJSON — skipping roof colours (palette fallback)")
@@ -498,15 +510,17 @@ def run(tile: Tile, erode: int = 5) -> None:
         v = verts[vi]
         return tuple(v[k] * scale[k] + translate[k] for k in range(3))
 
+    balance = dop_balance.gains(site or [tile])
+    lut = dop_balance.table(balance)
     with rasterio.open(tile.raw_raster("dop")) as dop:
-        rgb = np.moveaxis(dop.read((1, 2, 3)), 0, -1)
+        rgb = dop_balance.balanced(np.moveaxis(dop.read((1, 2, 3)), 0, -1), lut)
         every_face = [
             [to_metres(vi) for vi in ring]
             for obj in city["CityObjects"].values()
             for g in obj.get("geometry", [])
             for ring in roof_rings(g)
         ]
-        light = read_light(tile, dop, rgb, every_face)
+        light = read_light(tile, dop, rgb, every_face, lut)
     h, w = rgb.shape[:2]
     xmin, _, _, ymax = tile.bounds
     px_w = tile.size[0] / w
@@ -562,6 +576,9 @@ def run(tile: Tile, erode: int = 5) -> None:
             "rebuilt": len(rebuilt),
             "sun": None if light.sun is None else [round(c, 3) for c in light.sun],
             "light_ratio": None if light.ratio is None else round(light.ratio, 2),
+            # the per-channel factors (linear RGB) that took the flight's
+            # cast out (dop_balance.py)
+            "balance": [round(float(k), 3) for k in balance],
             # the roofs' lean off their outlines, metres per metre of height
             "lean": [[round(x), round(y), round(k[0], 2), round(k[1], 2)] for x, y, k in nodes],
         },

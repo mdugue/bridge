@@ -189,3 +189,33 @@ def test_gains_agree_with_the_single_gain():
     for n, g in zip(normals, gains, strict=True):
         if g:
             assert abs(g - light.gain(tuple(n))) < 1e-9
+
+
+def test_a_flight_s_cast_is_taken_out_of_its_roofs(tmp_path, monkeypatch):
+    # the photo under a cyan cast, its carriageways (round the building)
+    # telling it: the grey top comes out in Dresden's grey
+    from PIL import Image
+
+    from bake import dop_balance
+    from bake.common import Tile
+
+    def srgb8(linear):
+        c = np.clip(np.asarray(linear, float), 0, 1)
+        return np.round(255 * np.where(c <= 0.0031308, c * 12.92, 1.055 * c ** (1 / 2.4) - 0.055))
+
+    cyan = np.array([0.79, 1.0, 1.15])
+    rgb = np.zeros((3, 100, 100), np.uint8)
+    rgb[:] = srgb8(0.3 * cyan)[:, None, None]  # the road round it
+    rgb[:, 10:90, 10:90] = srgb8(np.array([0.55, 0.05, 0.03]) * cyan)[:, None, None]
+    rgb[:, 30:70, 30:70] = srgb8(0.5 * cyan)[:, None, None]  # the grey top
+    cls = np.full((100, 100), dop_balance.ROAD, np.uint8)
+    cls[10:90, 10:90] = 0
+    tile = Tile("t", (0.0, 0.0, 20.0, 20.0), 25833, tmp_path / "raw", tmp_path / "data")
+    Image.fromarray(cls).save(tile.out("dlm", "landcover_t.png"))
+    monkeypatch.setattr(dop_balance, "MIN_TEXELS", 100)
+    out = _run(tmp_path, top_z=20.0, rgb=rgb)
+    (face,) = out["faces"]["b"]
+    r, g, b = face[2:]
+    assert abs(r / g - dop_balance.REF_ROAD[0]) < 0.03
+    assert abs(b / g - dop_balance.REF_ROAD[2]) < 0.03
+    assert out["meta"]["balance"][0] > 1.15 > 0.85 > out["meta"]["balance"][2]

@@ -733,6 +733,21 @@ visual-variable codebook is in
   standing on its building's roof (a step between roof levels, a parapet,
   a dormer's cheek) is drawn as roof (`withRoofSteps`): as sunlit plaster
   with an eave stroke it read from above as a white dash.
+  Every flight's photo is first taken to Dresden's colour balance
+  (`pipeline/bake/dop_balance.py`, 2026-10-20): each flight has its own
+  cast, and every colour read off it carried it — Leipzig's photo is cyan
+  (its sunlit carriageways read r/g 0.79, b/g 1.15 in linear RGB,
+  Dresden's 0.95 and 0.94), so its grey roofs came out blue-green, and
+  München's is yellow (b/g 0.82); Hamburg, Unna, Meißen and Grimma lie
+  within 8 %. The cast is the flight's, not the asphalt's: the photo's
+  grey pixels (its sunlit texels within 12 % of grey) give it to 3 %.
+  The site's sunlit carriageways (the class raster's roads, the brighter
+  half of their texels, pooled over its tiles) are scaled to Dresden's
+  chromaticity per channel in linear RGB, their brightness kept (the
+  exposure stays the flight's), and the whole photo goes through the same
+  factors before its shadows are found (a blue cast reads as shade).
+  Leipzig's factors are (1.24, 1.01, 0.83), München's (0.93, 0.98, 1.12),
+  Dresden's 1 within half a percent; the file's `meta.balance` keeps them.
   **Discontinued** the same day: one colour for a roof's pitched (≥ 20°)
   and one for its low faces (`roofPitched`, a fifth texel band), the first
   answer to the mansards — the face colours cover it, and it still read

@@ -92,7 +92,8 @@ STEPS = {
     # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
     # miss DOM1, rebuilt in its form (scripts/bake-city-mesh.ts).
     "roofs": roofs.run,
-    # After roofs: a rebuilt roof's parts are read each in its own colour.
+    # After roofs: a rebuilt roof's parts are read each in its own colour;
+    # after landcover: the site's carriageways give its flight's cast.
     "roof-colour": roof_colour.run,
     # Committed inputs only (DGM + LoD2 + the rebuilt roofs): the sky-view
     # factor and far horizon.
@@ -177,6 +178,9 @@ def main() -> None:
         for step in steps:
             if step == "lowveg":
                 lowveg.run(tile, research=args.research)
+                continue
+            if step == "roof-colour":
+                roof_colour.run(tile, spec.tiles)
                 continue
             STEPS[step](tile)
     if args.step == "all" and not args.tile:
