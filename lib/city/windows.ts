@@ -468,6 +468,10 @@ export interface WindowHost {
   /** … and that own facade is a palace's (lib/city/building-tint.ts
    *  `palatialFacade`): windows of type `palace` after all */
   palace?: boolean;
+  /** how high the ground in front of its walls rises over its base (m),
+   *  each reading (`wallRises`): its ground floor's windows keep over the
+   *  highest they can (`WindowChoice.reach`) */
+  ground?: readonly number[];
   /** how high its plinth stands over its base (m), where one is drawn:
    *  its ground floor's windows keep over it */
   plinth?: number;
@@ -498,6 +502,10 @@ export interface WindowChoice {
   storeyFromPhotos?: boolean;
   /** why there are none (`from` "none") */
   why?: NoWindows;
+  /** the highest ground over its base its ground floor's windows clear
+   *  (m): a wall the ground rises higher in front of has none
+   *  (`facadeAttribute`'s `rises`) */
+  reach?: number;
 }
 
 /** A measured building lends its rhythm this far (m, centre to centre). */
@@ -700,25 +708,65 @@ export function windowSpecs(
       ? { from: mine ? ("measured" as const) : ("type" as const), m: mine }
       : rhythmOf(host, mine, byRoot.get(host.root), donors);
     const { storey, kind, photos } = storeyAndType(host, mine);
-    const style = styleOf(host, kind, m, from);
-    const type = TYPES[kind];
-    const spec = fitted(
-      m ?? { axis: type.axis, w: type.w },
-      kind,
-      style,
-      storey
-    );
-    // a ground floor whose lifted windows would lie wider than tall: none
-    if (spec.axis > 0 && !style.noGround && squat(spec, style.lift)) {
-      spec.style = packStyle({ ...style, noGround: true });
-    }
+    const { reach, spec } = overGround(host, (plinth) => {
+      const style = styleOf({ ...host, plinth }, kind, m, from);
+      const type = TYPES[kind];
+      const fit = fitted(
+        m ?? { axis: type.axis, w: type.w },
+        kind,
+        style,
+        storey
+      );
+      // a ground floor whose lifted windows would lie wider than tall: none
+      if (fit.axis > 0 && !style.noGround && squat(fit, style.lift)) {
+        fit.style = packStyle({ ...style, noGround: true });
+      }
+      return fit;
+    });
     if (spec.axis <= 0) {
       return { from: "none", spec, storey, why: "small" };
     }
+    const choice = { from, reach, spec, storey };
     return photos === undefined || storey === host.storeyH
-      ? { from, spec, storey }
-      : { from, spec, storey, storeyFromPhotos: true };
+      ? choice
+      : { ...choice, storeyFromPhotos: true };
   });
+}
+
+/**
+ * A host's windows (`fit`, given what its ground floor's must clear) over
+ * the highest ground in front of its walls (`WindowHost.ground`) that still
+ * leaves it a ground floor, and that ground (`reach`): a wall the ground
+ * rises higher in front of loses its own ground floor, the others keep
+ * theirs — one steep wall no longer takes every wall's.
+ */
+function overGround(
+  host: WindowHost,
+  fit: (plinth: number | undefined) => WindowSpec
+): { reach: number; spec: WindowSpec } {
+  const reachOf = (spec: WindowSpec) => {
+    const s = unpackStyle(spec.style);
+    return s.noGround
+      ? Number.NEGATIVE_INFINITY
+      : s.sill + s.lift - WINDOW_ROWS.plinthGap;
+  };
+  const plinth = host.plinth ?? Number.NEGATIVE_INFINITY;
+  // the ground's levels over the plinth, highest first, to the lift's step
+  const levels = [
+    ...new Set(
+      (host.ground ?? [])
+        .filter((g) => g > plinth && g <= GROUND_REACH_M)
+        .map((g) => Math.ceil(g / WINDOW_LIFT.step - 1e-6) * WINDOW_LIFT.step)
+    ),
+  ].sort((a, b) => b - a);
+  for (const level of levels) {
+    const spec = fit(level);
+    if (spec.axis <= 0 || !unpackStyle(spec.style).noGround) {
+      return { reach: reachOf(spec), spec };
+    }
+  }
+  const spec = fit(host.plinth);
+  return { reach: reachOf(spec), spec };
 }
 
 /** A host's storey and type: a palace's (`palaceStorey`), else the storey
@@ -1093,6 +1141,61 @@ function wallsAt(
   });
 }
 
+/** How far out of its wall the ground in front of it is read (m): clear of
+ *  the TIN's breakline at the wall's foot. */
+const FRONT_M = 0.5;
+/** The ground along a wall's foot is read this often (m). */
+const FOOT_STEP_M = 2;
+/** A wall triangle reaches down to its object's foot when its lowest
+ *  vertex lies at most this far over its base (m): the upper walls of a
+ *  setback stand on a roof, not on the ground. */
+const FOOT_M = 1;
+
+/**
+ * How far the ground in front of each wall triangle rises over its
+ * object's base (m), indexed by its first vertex over 3; NaN where it is
+ * no wall at its object's foot or `groundAt` knows no ground there. The
+ * ground is read `FRONT_M` out of the wall, every `FOOT_STEP_M` along the
+ * triangle's stretch, and the highest reading counts: the ground-floor
+ * windows sink wherever it passes them. `groundAt` in the mesh's frame.
+ */
+export function wallRises(
+  mesh: FacadeMesh,
+  baseOf: (object: number) => number | undefined,
+  groundAt: (x: number, y: number) => number | null
+): Float32Array {
+  const p = mesh.positions;
+  const out = new Float32Array(mesh.objectIds.length / 3).fill(Number.NaN);
+  for (let t = 0; t + 2 < mesh.objectIds.length; t += 3) {
+    const base = baseOf(mesh.objectIds[t]);
+    const plane = mesh.isRoof[t] === 1 ? undefined : wallPlane(p, t);
+    const z0 = Math.min(p[3 * t + 2], p[3 * t + 5], p[3 * t + 8]);
+    if (base === undefined || !plane || z0 > base + FOOT_M) {
+      continue;
+    }
+    const { n, d } = plane;
+    const s = [0, 1, 2].map(
+      (k) => p[3 * (t + k)] * n[1] - p[3 * (t + k) + 1] * n[0]
+    );
+    const s0 = Math.min(...s);
+    const s1 = Math.max(...s);
+    const steps = Math.max(1, Math.ceil((s1 - s0) / FOOT_STEP_M));
+    let rise = Number.NaN;
+    for (let k = 0; k <= steps; k++) {
+      const at = s0 + ((s1 - s0) * k) / steps;
+      const g = groundAt(
+        n[0] * (d + FRONT_M) + n[1] * at,
+        n[1] * (d + FRONT_M) - n[0] * at
+      );
+      if (g !== null && !(g - base <= rise)) {
+        rise = g - base;
+      }
+    }
+    out[t / 3] = rise;
+  }
+  return out;
+}
+
 /** Metres to the attribute's snorm16 (`FACADE_SCALE_M` a unit). */
 const snorm = (m: number) =>
   Math.round(Math.min(Math.max(m / FACADE_SCALE_M, -1), 1) * 32_767);
@@ -1137,13 +1240,17 @@ function placeOnWalls(
  * where a shopfront stands on it; 0 on a party wall), and up to two doors'
  * places along it from the middle, the nearest first (`NO_DOOR` for none);
  * every roof vertex (0, 0, FACADE_ROOF, NO_DOOR), every other vertex (0, 0,
- * NO_DOOR, NO_DOOR). `doors` and `shops` in the mesh's data frame.
+ * NO_DOOR, NO_DOOR). `doors` and `shops` in the mesh's data frame. A wall
+ * the ground in front of rises past its object's `reach` somewhere
+ * (`rises.at`, from `wallRises`; `WindowChoice.reach`) is signed as a
+ * shopfront's: it loses its ground floor.
  */
 export function facadeAttribute(
   mesh: FacadeMesh,
   drawn: (object: number) => boolean,
   doors: readonly FacadeDoor[] = [],
-  shops: readonly FacadeShop[] = []
+  shops: readonly FacadeShop[] = [],
+  rises?: { at: ArrayLike<number>; reach: (object: number) => number }
 ): Int16Array<ArrayBuffer> {
   const count = mesh.objectIds.length;
   const out = new Int16Array(4 * count);
@@ -1154,6 +1261,12 @@ export function facadeAttribute(
   const walls = wallsOf(mesh, drawn);
   markParty(walls);
   placeOnWalls(walls, doors, shops);
+  if (rises) {
+    for (const w of walls) {
+      const reach = rises.reach(w.object);
+      w.shop ||= w.tris.some((t) => rises.at[t / 3] > reach);
+    }
+  }
   const p = mesh.positions;
   for (const w of walls) {
     const c = (w.s0 + w.s1) / 2;

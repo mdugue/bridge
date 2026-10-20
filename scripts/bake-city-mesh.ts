@@ -135,6 +135,7 @@ import {
   type FacadeShop,
   facadeAttribute,
   GROUND_REACH_M,
+  wallRises,
   type WindowHost,
   type WindowWall,
   windowSpecs,
@@ -158,6 +159,8 @@ const rgb = (c: [number, number, number]): [number, number, number] => [
 export interface OnWalls {
   doors?: readonly DoorFeature[];
   dormers?: readonly DormerFeature[];
+  /** the fine ground's height (EPSG), which the ground-floor windows clear */
+  groundAt?: (x: number, y: number) => number | null;
   plinths?: readonly PlinthFeature[];
   shopfronts?: readonly ShopfrontWall[];
   windows?: readonly WindowWall[];
@@ -1001,7 +1004,15 @@ function dressWalls(
   const plinths = onWalls.plinths ?? [];
   // the storeys count from the street, where the plinths say where it is
   liftToStreet(baked.objects, keys, plinths);
-  assignWindows(baked.objects, keys, hosts, onWalls.windows ?? [], plinths);
+  const rises = groundRises(baked, onWalls.groundAt);
+  const reach = assignWindows(
+    baked.objects,
+    keys,
+    hosts,
+    onWalls.windows ?? [],
+    plinths,
+    rises && { objectIds: baked.vertices.objectIds, rises }
+  );
   appendBeyondLod2(tile, baked, keys, { ...onWalls, ...extra });
   markGrounded(baked.objects);
   // the parts laid on the walls copied their host's row: windows are the
@@ -1011,7 +1022,35 @@ function dressWalls(
       delete o.windows;
     }
   }
-  baked.vertices.facade = facadeOf(baked, keys, onWalls);
+  baked.vertices.facade = facadeOf(
+    baked,
+    keys,
+    onWalls,
+    rises && { at: rises, reach: (i) => reach[i] ?? GROUND_REACH_M }
+  );
+}
+
+/** How far the ground in front of each LoD2 wall triangle rises over its
+ *  object's base (lib/city/windows.ts `wallRises`), where the fine ground
+ *  is known. */
+function groundRises(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  groundAt: OnWalls["groundAt"]
+): Float32Array | undefined {
+  if (!groundAt) {
+    return undefined;
+  }
+  const { cx, cy } = baked.offset;
+  return wallRises(
+    baked.vertices,
+    (i) => {
+      const o = baked.objects[i];
+      return o && (o.source ?? OBJECT_SOURCE_LOD2) === OBJECT_SOURCE_LOD2
+        ? o.baseZ
+        : undefined;
+    },
+    (x, y) => groundAt(x + cx, y + cy)
+  );
 }
 
 /** What the windows read of an object beyond its row: its function,
@@ -1811,6 +1850,31 @@ function groundTops(
   return (carriesPlinth(host, p.g) ? p.top : p.g).map((z) => z - host.baseZ);
 }
 
+/** How far the ground in front of each wall triangle rises over its
+ *  object's base (`wallRises`), and each triangle's object. */
+interface WallGround {
+  objectIds: ArrayLike<number>;
+  rises: Float32Array;
+}
+
+/** Each object's readings of the ground in front of its walls. */
+function groundOf(ground: WallGround | undefined): Map<number, number[]> {
+  const out = new Map<number, number[]>();
+  ground?.rises.forEach((rise, k) => {
+    if (Number.isNaN(rise)) {
+      return;
+    }
+    const i = ground.objectIds[3 * k];
+    const list = out.get(i);
+    if (list) {
+      list.push(rise);
+    } else {
+      out.set(i, [rise]);
+    }
+  });
+  return out;
+}
+
 /** How high each object's plinth stands over its base (m): the highest
  *  piece (`groundTops`) the ground-floor windows can clear
  *  (`GROUND_REACH_M`) — they keep above it. */
@@ -1840,22 +1904,27 @@ function plinthTops(
  * on its walls, on another part of its building, on the nearest building
  * of its kind, or its type's) and the storey they keep, snapped to its
  * eave — written into its row (`windows`, `storeyH`); its ground floor's
- * over its plinth.
+ * over its plinth and the ground in front of its walls (`ground`). Returns
+ * each object's reach (`WindowChoice.reach`: a wall the ground rises
+ * higher in front of loses its ground floor).
  */
 export function assignWindows(
   objects: CityObjectRow[],
   keys: readonly string[],
   extra: readonly WindowExtra[],
   walls: readonly WindowWall[],
-  plinths: readonly PlinthFeature[] = []
-): void {
+  plinths: readonly PlinthFeature[] = [],
+  ground?: WallGround
+): number[] {
   const index = new Map(keys.map((id, i) => [id, i]));
   const tops = plinthTops(objects, plinths, index);
+  const fronts = groundOf(ground);
   const hosts: WindowHost[] = objects.map((o, i) => ({
     centre: footprintCentre(o.footprints),
     eaveH: o.eaveH,
     flat: hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF),
     fn: extra[i]?.fn,
+    ground: fronts.get(i),
     levels: extra[i]?.levels ?? false,
     lod2: (o.source ?? OBJECT_SOURCE_LOD2) === OBJECT_SOURCE_LOD2,
     ownFacade:
@@ -1872,8 +1941,10 @@ export function assignWindows(
     storeyH: o.storeyH,
     storeys: extra[i]?.storeys,
   }));
+  const reach: number[] = [];
   windowSpecs(hosts, walls, index).forEach((choice, i) => {
     const o = objects[i];
+    reach[i] = choice.reach ?? GROUND_REACH_M;
     if (choice.spec.axis > 0) {
       o.windows = choice.spec;
       o.storeyH = cm(choice.storey);
@@ -1887,6 +1958,7 @@ export function assignWindows(
       };
     }
   });
+  return reach;
 }
 
 /**
@@ -1901,7 +1973,8 @@ function facadeOf(
     doors?: readonly DoorFeature[];
     plinths?: readonly PlinthFeature[];
     shopfronts?: readonly ShopfrontWall[];
-  }
+  },
+  rises?: Parameters<typeof facadeAttribute>[4]
 ): Int16Array<ArrayBuffer> {
   const { cx, cy } = baked.offset;
   const index = new Map(keys.map((id, i) => [id, i]));
@@ -1937,7 +2010,8 @@ function facadeOf(
     baked.vertices,
     (i) => (baked.objects[i]?.windows?.axis ?? 0) > 0,
     doors,
-    [...shops, ...buriedWalls(baked, index, onWalls.plinths ?? [])]
+    [...shops, ...buriedWalls(baked, index, onWalls.plinths ?? [])],
+    rises
   );
 }
 

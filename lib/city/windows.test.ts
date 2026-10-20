@@ -245,6 +245,24 @@ describe("windowSpecs", () => {
     }
   });
 
+  test("a wall the ground rises too high in front of loses its ground floor alone", () => {
+    // 1.6 m in front of one wall would leave the windows squat (above),
+    // 1.2 m in front of another not
+    const [c] = windowSpecs(
+      [host({ eaveH: 9, storeyH: 3, ground: [0.3, 1.2, 1.6] })],
+      [],
+      index
+    );
+    const s = unpackStyle(c.spec.style);
+    expect(s.noGround).toBe(false);
+    expect(c.reach).toBeGreaterThanOrEqual(1.2);
+    expect(c.reach).toBeLessThan(1.6);
+    expect(s.sill + s.lift - WINDOW_ROWS.plinthGap).toBeCloseTo(
+      c.reach ?? 0,
+      9
+    );
+  });
+
   test("the ground floor's windows keep over the plinth", () => {
     const [low, high, raised, squat] = windowSpecs(
       [

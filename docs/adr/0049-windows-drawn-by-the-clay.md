@@ -74,13 +74,17 @@ street: a LoD2 base is the lowest ground round the whole footprint (a
 courtyard's, a ramp's), so a building's base moves up to the street its
 plinths stand on, and the storey lines, the Gurtgesims and the windows
 start from the pavement. The ground floor's windows open over the
-plinth's highest top, or the ground's where no plinth is drawn (a palace,
-a landmark, a flat-roofed block — 2026-10-19: they sank into the
-Brühlsche Terrasse); a plinth stepping up a slope lifts them. A wall whose
+plinth's highest top and over the ground in front of every wall, read in
+the tile's fine terrain half a metre out of the wall every 2 m along its
+foot (`wallRises`; 2026-10-19 and 2026-10-20: they sank into the
+Brühlsche Terrasse — first where no plinth is drawn, then on the walls
+the plinth pieces never reach, which cover only open street runs of
+buildings from 5 m); a plinth stepping up a slope lifts them. A wall whose
 ground rises past what the lift reaches (2.2 m over the base,
-`GROUND_REACH_M`) loses its own ground floor, marked like a shopfront's,
-and the building's other walls keep theirs; where the lift would leave
-them lower than four fifths of their width, that ground floor has none.
+`GROUND_REACH_M`), or higher than leaves them four fifths of their width
+tall, loses its own ground floor, marked like a shopfront's, and the
+building's other walls keep theirs (`overGround`); where even the lowest
+ground would leave them that short, that ground floor has none.
 A town house's a little higher still
 (a Hochparterre); the Gurtgesims sits on the first storey line, between
 the ground floor's heads and the first floor's sills; a top floor's

@@ -778,6 +778,40 @@ test("windows: a wall the ground rises past loses its ground floor alone", () =>
   expect([...signs].sort((a, b) => a - b)).toEqual([-1, 1]);
 });
 
+test("windows: the ground floor's clear the fine ground, wall by wall", () => {
+  // no plinth pieces at all: the ground in front of the south wall 3 m
+  // over the base, 1 m in front of the others
+  const doc = fixture();
+  const { objects, vertices } = bakeCityMesh(
+    "t",
+    doc,
+    undefined,
+    null,
+    undefined,
+    undefined,
+    "render",
+    undefined,
+    undefined,
+    { groundAt: (_x, y) => (y < 5_656_000 ? 103 : 101) }
+  );
+  const house = Object.keys(doc.CityObjects).indexOf("house");
+  const s = unpackStyle(objects[house].windows?.style ?? 0);
+  // the others keep their ground floor, lifted over the 1 m
+  expect(s.noGround).toBe(false);
+  expect(s.sill + s.lift).toBeGreaterThanOrEqual(
+    1 + WINDOW_ROWS.plinthGap - 1e-9
+  );
+  const signs = new Set<number>();
+  for (let v = 0; v < vertices.objectIds.length; v++) {
+    const length = vertices.facade?.[4 * v + 1] ?? 0;
+    if (vertices.objectIds[v] === house && length !== 0) {
+      signs.add(Math.sign(length));
+    }
+  }
+  // the south wall loses its ground floor alone
+  expect([...signs].sort((a, b) => a - b)).toEqual([-1, 1]);
+});
+
 test("a building's base moves up to the street its plinths stand on", () => {
   const doc = fixture();
   const keys = Object.keys(doc.CityObjects);

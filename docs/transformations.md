@@ -1904,15 +1904,20 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   (its windows 0.45 m higher, their heads where the upper floors' are),
   and every ground floor's windows open at least 0.2 m over its
   plinth's top — its highest piece, so a plinth stepping up a slope
-  lifts them —, or over the ground along its walls where no plinth is
-  drawn (a palace, a landmark, a flat-roofed block; 2026-10-19, Manuel:
-  the windows sank into the Brühlsche Terrasse). The lift is a class of
-  0.05 m up to 1.55 m; a wall whose ground rises past its reach (2.2 m
-  over the base, `GROUND_REACH_M`) loses its own ground floor, signed
-  like a shopfront's, the building's other walls keep theirs (Dresden:
-  2 143 objects lift their ground floor, 725 lose it); a ground floor
-  the lift leaves lower than 0.8 of its windows' width has none
-  (`groundLift`). **The storeys
+  lifts them —, and over the ground in front of every wall, read in the
+  tile's fine terrain 0.5 m out of the wall every 2 m along its foot
+  (`wallRises`; 2026-10-19/20, Manuel: the windows sank into the
+  Brühlsche Terrasse — the plinth pieces alone reach only open street
+  runs of buildings from 5 m, so the Kunstakademie's terrace walls had
+  no ground under them). The lift is a class of
+  0.05 m up to 1.55 m; a wall whose ground rises past its reach (at
+  most 2.2 m over the base, `GROUND_REACH_M`, and no higher than leaves
+  the ground floor's windows at least 0.8 of their width tall,
+  `overGround`) loses its own ground floor, signed like a shopfront's,
+  the building's other walls keep theirs. Dresden, 2026-10-20: wall feet
+  whose ground-floor windows the fine ground covered 11 925 → 42 (of
+  ~610 000), objects lifting their ground floor 20 760 → 22 066, those
+  without one unchanged at 6 258. **The storeys
   count from the street** (`liftToStreet`): a LoD2 base is the lowest
   ground round the whole footprint — a courtyard's, a light well's, a
   cellar ramp's — and lay a median 0.3 m under the street on the spawn
