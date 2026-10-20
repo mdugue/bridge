@@ -73,7 +73,8 @@ test("a surface-model crown answers with its measured height", () => {
   expect(asked?.kind).toBe("canopy");
   if (asked?.kind === "canopy") {
     expect(asked.source).toBe("dom");
-    expect(asked.height).toBe(f.properties?.h);
+    // kept packed as a float32
+    expect(asked.height).toBeCloseTo(f.properties?.h ?? Number.NaN, 5);
   }
 });
 
