@@ -425,7 +425,7 @@ knowledge base use for them:
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
-| | *Stadtgrün* | paints green courtyards, front gardens and parks inside built-up areas like meadow, from the infrared aerial photo |
+| | *Stadtgrün* | paints green courtyards, front gardens and parks inside built-up areas, and the railway's green embankments, like meadow, from the infrared aerial photo |
 | | *Wiesenfärbung* | tints meadows lush-to-dry from the infrared aerial photo |
 | | *Gegenlicht-Schimmer* | backlight shimmer on crowns between you and the sun |
 | | *Blattdurchscheinen* | translucency of nearby, large crowns (shadow-dependent) |

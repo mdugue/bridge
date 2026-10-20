@@ -96,21 +96,33 @@ def rails(tile: Tile) -> list[dict]:
     return features
 
 
-def ballast(tile: Tile) -> list[dict]:
-    """The rails' beds on the ground, one non-overlapping surface."""
-    beds = [
-        shapely.buffer(g, (BED_ONE + BED_MORE * (tracks_of(other) - 1)) / 2, cap_style="flat")
-        for g, other in rail_ways(tile)
-        if not is_bridge(other)
-    ]
-    if not beds:
-        return []
-    area = shapely.intersection(shapely.union_all(beds), shapely.box(*tile.bounds))
+def bed(line: shapely.Geometry, tracks: int) -> shapely.Geometry:
+    """A line's ballast bed: BED_ONE wide for one track, BED_MORE more for
+    each further one."""
+    return shapely.buffer(line, (BED_ONE + BED_MORE * (tracks - 1)) / 2, cap_style="flat")
+
+
+def osm_beds(tile: Tile) -> list[shapely.Geometry]:
+    """The beds of the rails above ground and off bridges (OSM maps a
+    yard's every track)."""
+    return [bed(g, tracks_of(other)) for g, other in rail_ways(tile) if not is_bridge(other)]
+
+
+def polygons(area: shapely.Geometry) -> list[dict]:
+    """An area's polygons of a square metre or more, as features."""
     return [
         feature(shapely.geometry.mapping(p))
         for p in shapely.get_parts(area)
         if isinstance(p, shapely.Polygon) and p.area >= 1.0
     ]
+
+
+def ballast(tile: Tile) -> list[dict]:
+    """The rails' beds on the ground, one non-overlapping surface."""
+    beds = osm_beds(tile)
+    if not beds:
+        return []
+    return polygons(shapely.intersection(shapely.union_all(beds), shapely.box(*tile.bounds)))
 
 
 def width_of(other: str | None, kind: str) -> float | None:

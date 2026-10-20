@@ -33,6 +33,7 @@ import {
 } from "three/tsl";
 import {
   BUILTUP_CLASS,
+  RAILWAY_CLASS,
   MEADOW_CLASS,
   PATH_CLASS,
   ROAD_CLASS,
@@ -522,7 +523,9 @@ export function groundFields(
  * front gardens, parks inside the settlement — painted exactly as meadow
  * (its colour, mottle, NDVI tint and lawn edge). With the baked edges the
  * mask is theirs (edges.py counts NDVI-green, unsealed built-up ground as
- * meadow); without, the NDVI decides here. Returns its weight (`ugW`).
+ * meadow, and the green railway land off the tracks: the embankments and
+ * verges the DLM's parcel holds); without, the NDVI decides here, on
+ * built-up ground alone. Returns its weight (`ugW`).
  */
 export function urbanGreen(
   inp: GroundInputs,
@@ -534,7 +537,8 @@ export function urbanGreen(
   const built = select(or(cls.equal(BUILTUP_CLASS), cls.equal(0)), 1, 0);
   let mask: F = float(0);
   if (g.hasEdge) {
-    mask = smoothstep(-0.15, 0.15, g.dl).mul(built);
+    const ground = select(cls.equal(RAILWAY_CLASS), 1, built);
+    mask = smoothstep(-0.15, 0.15, g.dl).mul(ground);
   } else if (ndvi) {
     const paved = and(
       g.walkKind.greaterThan(0),
