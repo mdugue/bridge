@@ -34,6 +34,9 @@ import type { SiteProvenance } from "./provenance";
 export interface CanopyInquiry {
   /** the crown's measured diameter (m; the laser scan's) */
   crown?: number;
+  /** an evergreen, and what told it: the forest's kind (a needle forest)
+   *  or the leaf-off orthophoto (green in a mixed forest) */
+  evergreen?: "forest" | "photo";
   /** the measured height (m; DOM1 − DGM1 or the laser scan) */
   height?: number;
   kind: "canopy";
@@ -98,8 +101,9 @@ export type MoreInquiry =
 
 const DOM_LABEL = "Digitales Oberflächenmodell DOM1";
 
-/** A vegetation row's source: the Basis-DLM's, or where the provider has
- *  none (Hamburg, Berlin: landcover_osm.py) OSM's hedges and tree rows. */
+/** A vegetation row's or a forest's source: the Basis-DLM's, or where the
+ *  provider has none (Hamburg, Berlin: landcover_osm.py) OSM's hedges, tree
+ *  rows and woods. */
 function rowSource(
   what: string,
   provenance: SiteProvenance | null,
@@ -137,8 +141,19 @@ export function canopyCard(
   const facts = factLines([
     ["Höhe", t.height ? `${metres(t.height)}, gemessen` : ""],
     ["Krone", t.crown ? `Ø ${metres(t.crown)}, gemessen` : ""],
+    ["Laub", t.evergreen ? "Nadelbaum, immergrün" : ""],
     ["Art", "nicht bekannt"],
   ]);
+  const leaf = {
+    forest: rowSource("Nadelwald", provenance, credits),
+    photo: stated(
+      "detected",
+      sourceLine(provenance, "dop", ["grün im laubfreien Luftbild"], {
+        label: "Digitales Orthophoto",
+        credit: credits.provider,
+      })
+    ),
+  };
   // a line carries the least certain of what it gives: the place of a
   // crown is detected (canopy.py, lowveg.py), its height then computed
   const sources = {
@@ -170,7 +185,7 @@ export function canopyCard(
     facts,
     id: positionKey(t.position),
     idLabel: "Lage",
-    sources: sources[t.source],
+    sources: [...sources[t.source], ...(t.evergreen ? leaf[t.evergreen] : [])],
   };
 }
 

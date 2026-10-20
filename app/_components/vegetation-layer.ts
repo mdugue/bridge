@@ -206,12 +206,16 @@ export interface VegetationChunk {
 }
 
 /** A canopy or row tree's season: the generic deciduous curve, offset by
- *  a stable hash of its position. */
-export function genericSeasonKey(x: number, z: number): CrownSeasonKey {
+ *  a stable hash of its position — or, an evergreen's, none. */
+export function genericSeasonKey(
+  x: number,
+  z: number,
+  evergreen = false
+): CrownSeasonKey {
   return {
     genus: 0,
-    evergreen: false,
-    jitter: seasonJitter(hash(x * 0.53 + z * 0.29 + 7.1)),
+    evergreen,
+    jitter: evergreen ? 0 : seasonJitter(hash(x * 0.53 + z * 0.29 + 7.1)),
   };
 }
 
@@ -967,7 +971,7 @@ function buildTreeCell(
   rich.userData.styleCrown = "rich";
   // Same order as the slots: the placements, then the precomputed crowns.
   const keys = [
-    ...trees.map((p) => genericSeasonKey(p.x, p.z)),
+    ...trees.map((p) => genericSeasonKey(p.x, p.z, p.evergreen)),
     ...crowned.map((e) => e.crown?.season ?? genericSeasonKey(e.x, e.z)),
   ];
   const farSlots = [

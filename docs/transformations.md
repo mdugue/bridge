@@ -1289,6 +1289,26 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   per-tile scale would have turned into seams. A site with too few of
   either keeps the raw index. The step now runs before the canopy, which
   reads its raster.
+- **Evergreen canopy crowns** `≈ detected` (2026-10-20) — a canopy crown
+  has no species, so every one followed the generic deciduous year and
+  the Dresdner Heide's pines stood bare from November to April. Two
+  sources tell a conifer without a register. The Basis-DLM's forest kind
+  (`veg02_f` `VEG`: 1100 broadleaf, 1200 needle, 1300 mixed; without a
+  DLM OSM's `leaf_type` on a wood or forest): a crown in a needle forest
+  is an evergreen (`l: "e"`). And in a mixed forest the orthophoto, where
+  it was flown leaf-off: on Dresden's March flight the crowns of the
+  Heide's needle stands read NDVI 0.39 (median, 3 × 3 max at the peak)
+  and its broadleaf stands' 0.16 — a cut at 0.354 parts them best
+  (Youden's J 0.40) — so a mixed forest's crown at 0.35 or more on the
+  calibrated index is one too (`l: "e"`, `ls: "dop"`), but only where
+  the site's broadleaf crowns read below 0.30 (at least 200 of them):
+  under leaves a summer flight shows every crown green. 44 % of the
+  Heide's mixed-forest crowns pass. The DOM's form (a cone's peak over
+  its shoulders) does not part them (J 0.17) and is not used. An
+  evergreen crown keeps its leaves and colour all year (no season
+  jitter) on both terrain levels (`lib/city/coarse-crowns.ts` byte 10),
+  and the card says *Nadelbaum, immergrün* with the source that told it.
+  *Not yet:* a conifer's form — the crown keeps its broadleaf shape.
 - **Crown shaping** `≈ assumed` — radial crown normals (free), organic trunk, base darkening;
   the mid crown is a detail-2 icosphere (180 tris) with lobes;
   **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),

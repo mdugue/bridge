@@ -35,6 +35,37 @@ test("a tree without a register says what was measured, and no species", () => {
   expect(card.address).toBe("Eine Krone, im Oberflächenmodell erkannt");
 });
 
+test("an evergreen says what told it: the forest's kind or the photo", () => {
+  const crown = { kind: "canopy" as const, tile: "t", position: at };
+  const forest = canopyCard(
+    { ...crown, source: "dom", evergreen: "forest" },
+    null,
+    DRESDEN
+  );
+  expect(forest.facts).toContainEqual({
+    label: "Laub",
+    value: "Nadelbaum, immergrün",
+  });
+  expect(lines(forest.sources).at(-1)).toContain("Basis-DLM");
+  // without a Basis-DLM the wood's leaf type is OSM's
+  const hamburg = canopyCard(
+    { ...crown, source: "dom", evergreen: "forest" },
+    null,
+    HAMBURG
+  );
+  expect(lines(hamburg.sources).at(-1)).toContain("OpenStreetMap");
+  const photo = canopyCard(
+    { ...crown, source: "dom", evergreen: "photo" },
+    null,
+    DRESDEN
+  );
+  expect(photo.sources.at(-1)?.text).toContain("Digitales Orthophoto");
+  expect(photo.sources.at(-1)?.method).toBe("detected");
+  const broadleaf = canopyCard({ ...crown, source: "dom" }, null, DRESDEN);
+  expect(broadleaf.facts.map((f) => f.label)).not.toContain("Laub");
+  expect(broadleaf.sources).toHaveLength(1);
+});
+
 test("a hedge's height is measured only where the laser scan said so", () => {
   const hedge = { kind: "hedge" as const, tile: "t", position: at, length: 42 };
   const scanned = hedgeCard(

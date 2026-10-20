@@ -70,6 +70,8 @@ export function crownSpread(width: number): number {
  * jitter.
  */
 export interface Placement {
+  /** an evergreen (the canopy's `l: "e"`): its crown never turns */
+  evergreen?: boolean;
   /** DOP NDVI 0..1 at this point (lush↔dry crown colour); undefined = no raster */
   ndvi?: number;
   rot: number;
@@ -174,7 +176,7 @@ export function canopyCrownWidth(
  *  as the scan measured. */
 export function canopyPlacements(
   features: (CanopyFeature & {
-    properties: { h: number; r?: number } | null;
+    properties: { h: number; l?: "e"; r?: number } | null;
   })[],
   ctx: PlacementContext,
   ndviAt?: RasterSampler,
@@ -217,6 +219,7 @@ export function canopyPlacements(
       s,
       w: crownSpread(width),
       ndvi: ndviAt?.(ex, ey),
+      ...(f.properties?.l === "e" ? { evergreen: true } : {}),
     });
   }
   return out;

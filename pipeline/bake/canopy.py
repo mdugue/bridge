@@ -17,7 +17,12 @@ surface model rough, where no building stands (`green_mask`).
 Nor does any step plant the trees of the transport land beyond the traffic
 — the station forecourts, the embankments, the verges, the junction islands
 the DLM files as road or railway: there the canopy takes the crowns the
-surface model shows, with or without a scan (`verge_mask`)."""
+surface model shows, with or without a scan (`verge_mask`).
+
+A crown in a needle forest is an evergreen (`l: "e"`), as is one in a mixed
+forest that reads green in a leaf-off flight, where the broadleaves are bare
+(`leaf_types`): the Dresdner Heide's pines drew as broadleaves, coloured in
+autumn and bare in winter."""
 
 from __future__ import annotations
 
@@ -33,9 +38,9 @@ from scipy import ndimage as ndi
 from scipy.ndimage import uniform_filter
 
 from . import landcover_osm, ways
-from .common import Tile, feature, read_layer, write_geojson
+from .common import Tile, column, feature, read_layer, write_geojson
 from .lowveg import lod2_rings
-from .osm import read_osm
+from .osm import read_osm, tag
 
 MIN_H, MAX_H = 3.0, 45.0
 BLOCKED = (6, 8)  # path, water
@@ -66,6 +71,22 @@ FOOTPRINT_REACH_M = 1.0
 # Not the orthophoto's green: Saxony's is flown leaf-off, where 1–4 % of a
 # crown's texels are green (Leipzig; Unna's summer flight 19 %).
 VERGE_MIN_M2 = 15
+# The forest's kind: the Basis-DLM's AX_Wald `VEG`, without a DLM OSM's
+# `leaf_type` on a forest or wood.
+BROADLEAF, NEEDLE, MIXED = 1100, 1200, 1300
+OSM_LEAF = {"broadleaved": BROADLEAF, "needleleaved": NEEDLE, "mixed": MIXED}
+FORESTS = "landuse = 'forest' OR natural = 'wood'"
+# In a mixed forest a crown is an evergreen where a leaf-off flight shows it
+# this green (the baked index, 0..1 on Dresden's scale, its 3 × 3 maximum
+# at ~2 m): Dresden's needle and broadleaf stands part best there (the
+# Heide's four tiles: 42 000 and 14 000 crowns, medians 0.39 and 0.16).
+CONIFER_NDVI = 0.35
+# A flight is leaf-off where the crowns of the tile's broadleaf forest read
+# less green than this — less than a mown lawn (0.33 on that scale; Dresden
+# 0.16–0.20, Meißen 0.25, but Unna's summer flight 0.5) —, told from at
+# least LEAF_OFF_MIN of them. Else a mixed forest stays broadleaf.
+LEAF_OFF_NDVI = 0.30
+LEAF_OFF_MIN = 200
 
 
 def vegetation_mask(tile: Tile, px: int) -> np.ndarray:
@@ -214,6 +235,60 @@ def class_raster_at(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
     return raster_at(cls, shape)
 
 
+def stands(tile: Tile, px: int) -> np.ndarray:
+    """The forest's kind under every texel (BROADLEAF, NEEDLE, MIXED; 0
+    elsewhere or untold): the DLM's forests, without a DLM OSM's."""
+    if tile.products.dlm:
+        geoms, fields = read_layer(tile.dlm / "veg02_f.shp", tile.bounds, columns=["VEG"])
+        kinds = [
+            int(v) if v in ("1100", "1200", "1300") else 0 for v in column(fields, "VEG", geoms)
+        ]
+    elif tile.osm_extract() is not None:
+        geoms, fields = read_osm(tile, "multipolygons", FORESTS, ["other_tags"])
+        kinds = [
+            OSM_LEAF.get(tag(t, "leaf_type") or "", 0) for t in column(fields, "other_tags", geoms)
+        ]
+    else:
+        geoms, kinds = [], []
+    out = np.zeros((px, px), dtype=np.uint16)
+    shapes = [(g, k) for g, k in zip(geoms, kinds, strict=True) if g is not None and k]
+    if shapes:
+        rasterize(shapes, out=out, transform=tile.transform(px))
+    return out
+
+
+def crown_green(tile: Tile) -> np.ndarray | None:
+    """The baked index (0..1), its 3 × 3 maximum — a crown's greenest texel
+    at ~2 m; None without it."""
+    png = tile.out("dlm", f"ndvi_{tile.id}.png")
+    if not png.exists():
+        return None
+    return ndi.maximum_filter(np.asarray(Image.open(png).convert("L")), 3) / 255.0
+
+
+def leaf_types(
+    tile: Tile, rows: np.ndarray, cols: np.ndarray, shape: tuple[int, int]
+) -> list[dict]:
+    """For each crown at (rows, cols) of the 1 m grid, its leaf properties:
+    `l: "e"` for an evergreen — a needle forest's, or with `ls: "dop"` a
+    mixed forest's that a leaf-off flight shows green —, none for a
+    broadleaf."""
+    kind = stands(tile, shape[1])[rows, cols]
+    out = [{"l": "e"} if k == NEEDLE else {} for k in kind]
+    green = crown_green(tile)
+    mixed = kind == MIXED
+    if green is None or not mixed.any():
+        return out
+    k = green.shape[0]
+    g = green[(rows * k) // shape[0], (cols * k) // shape[1]]
+    broad = g[kind == BROADLEAF]
+    if len(broad) < LEAF_OFF_MIN or float(np.median(broad)) >= LEAF_OFF_NDVI:
+        return out
+    for i in np.flatnonzero(mixed & (g >= CONIFER_NDVI)):
+        out[i] = {"l": "e", "ls": "dop"}
+    return out
+
+
 def canopy_points(tile: Tile, cell: int) -> list[dict]:
     with rasterio.open(tile.raw_raster("dom1")) as src, rasterio.open(tile.dgm) as dgm:
         dom = src.read(1).astype(np.float64)
@@ -228,8 +303,7 @@ def canopy_points(tile: Tile, cell: int) -> list[dict]:
     ok &= ~roof_mask(tile, ndom)
     ok &= (ndom > MIN_H) & (ndom < MAX_H)
     heights = np.where(ok, ndom, -1.0)
-    xmin, _, _, ymax = tile.bounds
-    features = []
+    peaks = []
     for r0 in range(0, h, cell):
         for c0 in range(0, w, cell):
             block = heights[r0 : r0 + cell, c0 : c0 + cell]
@@ -239,15 +313,19 @@ def canopy_points(tile: Tile, cell: int) -> list[dict]:
             if best < 0:
                 continue
             r, c = divmod(i, block.shape[1])
-            x = xmin + c0 + c + 0.5
-            y = ymax - (r0 + r) - 0.5
-            features.append(
-                feature(
-                    {"type": "Point", "coordinates": [round(x, 1), round(y, 1)]},
-                    {"h": round(float(best), 1)},
-                )
-            )
-    return features
+            peaks.append((r0 + r, c0 + c, float(best)))
+    if not peaks:
+        return []
+    rows, cols, tops = (np.array(v) for v in zip(*peaks, strict=True))
+    leaves = leaf_types(tile, rows.astype(int), cols.astype(int), (h, w))
+    xmin, _, _, ymax = tile.bounds
+    return [
+        feature(
+            {"type": "Point", "coordinates": [round(xmin + c + 0.5, 1), round(ymax - r - 0.5, 1)]},
+            {"h": round(float(top), 1), **leaf},
+        )
+        for r, c, top, leaf in zip(rows, cols, tops, leaves, strict=True)
+    ]
 
 
 def run(tile: Tile, cell: int = 7) -> None:
@@ -256,4 +334,5 @@ def run(tile: Tile, cell: int = 7) -> None:
         return
     features = canopy_points(tile, cell)
     write_geojson(tile.out("dlm", f"canopy_{tile.id}.geojson"), features, tile.epsg)
-    print(f"{tile.id}: {len(features)} canopy trees")
+    evergreen = sum(1 for f in features if f["properties"].get("l") == "e")
+    print(f"{tile.id}: {len(features)} canopy trees, {evergreen} of them evergreen")

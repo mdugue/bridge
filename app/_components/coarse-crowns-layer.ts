@@ -79,7 +79,7 @@ function paintCrown(c: CoarseCrown, ground: number, col: Color): void {
 
 function seasonKey(c: CoarseCrown): CrownSeasonKey {
   if (c.kind === "canopy") {
-    return genericSeasonKey(c.x, c.z);
+    return genericSeasonKey(c.x, c.z, c.evergreen);
   }
   return {
     genus: c.genus,

@@ -48,10 +48,13 @@ export interface VegRowFeature {
   properties: { kind: "hedge" | "treerow" } | null;
 }
 
-/** DOM1-derived canopy points with the measured tree height (pipeline/bake/canopy.py). */
+/** DOM1-derived canopy points with the measured tree height
+ *  (pipeline/bake/canopy.py); `l: "e"` an evergreen — a needle forest's, or
+ *  with `ls: "dop"` a mixed forest's crown a leaf-off flight shows green —,
+ *  absent a broadleaf. */
 export interface CanopyFeature {
   geometry: PointGeometry;
-  properties: { h: number } | null;
+  properties: { h: number; l?: "e"; ls?: "dop" } | null;
 }
 
 /**

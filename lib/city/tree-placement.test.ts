@@ -29,6 +29,16 @@ describe("canopy placements", () => {
     expect(width / height).toBeLessThan(CROWN_TO_HEIGHT * 1.1 * 1.1);
   });
 
+  test("an evergreen crown is marked, a broadleaf one is not", () => {
+    const needle: CanopyFeature = {
+      geometry: { type: "Point", coordinates: [10, 20] },
+      properties: { h: 20, l: "e" },
+    };
+    const [conifer, broadleaf] = canopyPlacements([needle, point(20)], ctx);
+    expect(conifer.evergreen).toBe(true);
+    expect(broadleaf.evergreen).toBeUndefined();
+  });
+
   test("a laser-scan crown takes its measured radius, within bounds", () => {
     expect(canopyCrownWidth(20, 5, 0.5)).toBeCloseTo(10);
     // a 1 m radius on a 20 m tree is the peak's knob, not its crown
