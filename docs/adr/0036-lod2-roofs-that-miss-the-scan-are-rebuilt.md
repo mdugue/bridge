@@ -183,10 +183,11 @@ ruled out 5 m faces came from gentle slopes — the scan's blur at a slab's
 edge rises steeper than that only where it is a step (more than 2 m from
 one cell to the next, `step_cells`), which a face never crosses. On the
 two Altstadt tiles 9–18 % more cells are drawn as faces, the drawn roof fits
-the scan as well or better (misses 7.7–8.9 % of a rebuilt object's cells,
+the scan as well or better (misses 7.4–9.0 % of a rebuilt object's cells,
 8.1–8.9 % without), and the cells drawn as a face on flat scan stay at
-1–2 % of all face cells. Dresden's 886 objects become 2 145 parts, 130
-of them faces (95 before). Faces from 4 m: more ragged rings round
+1–2 % of all face cells. Dresden's 886 objects become 2 227 parts, 221
+of them faces (95 before; a steep face narrower than `NARROW_M` is never
+merged away as a strip). Faces from 4 m: more ragged rings round
 courtyards for little more.
 
 ## Alternatives
