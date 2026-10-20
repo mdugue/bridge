@@ -52,8 +52,10 @@ export const GENERIC_CROWN_W = 5.1;
  */
 export const CROWN_TO_HEIGHT = 0.58;
 /** A laser-scan crown's width from its measured radius, within these
- *  shares of its height (the radius is the distance to the crown mass's
- *  edge at the peak: of a lone tree its crown, of a group the group's). */
+ *  shares of its height (the radius is the crown's watershed share of the
+ *  scan's crown mass as a disc, `crown_radii` in pipeline/bake/lowveg.py;
+ *  the upper bound keeps a mass the watershed could not split, given to
+ *  one peak, from drawing one crown over a whole group). */
 const SCAN_CROWN_TO_HEIGHT: [number, number] = [0.4, 0.75];
 
 /** The horizontal scale that draws the generic crown `width` m across. */

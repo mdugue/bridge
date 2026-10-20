@@ -51,6 +51,7 @@ from shapely.geometry import LineString, MultiLineString, Point, Polygon, box, m
 from shapely.ops import linemerge, unary_union
 from skimage.feature import peak_local_max
 from skimage.morphology import skeletonize
+from skimage.segmentation import watershed
 
 from . import ways
 from .common import OSM_ATTRIBUTION, Tile, column, write_geojson
@@ -93,6 +94,7 @@ OSM_DEFAULT_W = 1.0
 CANOPY_ECHO_T = 0.5  # tall vegetation is multi-echo (median 1.0 vs 0.0 on roofs)
 CANOPY_PEAK_PX = 6  # crown peaks ≥ 3 m apart
 CANOPY_DEDUP_M = 5.0  # a peak this close to a current canopy point is covered
+CROWN_MIN_R, CROWN_MAX_R = 1.0, 12.0  # a scan crown's radius, clamped (m)
 BLOCKED_CLASSES = (5, 8)  # railway, water — never low vegetation
 TREE_BLOCKED_CLASSES = (6, 8)  # as canopy.py: no tree on a path or water,
 # nor on a carriageway or a track bed (`inputs["traffic"]`)
@@ -481,8 +483,36 @@ def cadastre_filter(extra, trees_path):
     return kept, len(extra) - len(kept)
 
 
-def canopy_extra(inputs, canopy_path):
-    """LSC crown peaks (>3 m, multi-echo) the current canopy leaves out."""
+def crown_radii(chm, mass, peaks, others) -> np.ndarray:
+    """Each peak's crown radius (m): its share of the crown `mass` — the
+    watershed of the smoothed heights `chm` from every peak and from every
+    other tree point (`others`, grid rows and columns: the canopy's and the
+    cadastre's, whose shares are theirs) — as a disc of the same area."""
+    markers = np.zeros(chm.shape, np.int32)
+    n = len(peaks)
+    if n:
+        markers[peaks[:, 0], peaks[:, 1]] = np.arange(1, n + 1)
+    for i, (r, c) in enumerate(others):
+        if 0 <= r < chm.shape[0] and 0 <= c < chm.shape[1] and markers[r, c] == 0:
+            markers[r, c] = n + 1 + i
+    seg = watershed(-chm, markers, mask=mass)
+    area = np.bincount(seg.ravel(), minlength=n + 1)[1 : n + 1] * RES * RES
+    return np.sqrt(area / np.pi)
+
+
+def _points(path) -> np.ndarray:
+    if not path or not Path(path).exists():
+        return np.zeros((0, 2))
+    feats = [f for f in json.loads(Path(path).read_text())["features"] if f.get("geometry")]
+    return np.array([f["geometry"]["coordinates"][:2] for f in feats]).reshape(-1, 2)
+
+
+def canopy_extra(inputs, canopy_path, trees_path=None):
+    """LSC crown peaks (>3 m, multi-echo) the current canopy leaves out,
+    each with its crown's radius (`crown_radii`). The distance to the crown
+    mass's edge at the peak, used before, read a lone crown from a peak off
+    its centre and a group's at its narrowest: lone scan crowns came out a
+    third of the area DOM1 shows them (Dresden, Leipzig)."""
     grid, ndom, cls = inputs["grid"], inputs["ndom"], inputs["cls"]
     bld = ndi.binary_dilation(inputs["bld"], disk(2))
     tall = (ndom > TALL) & (ndom < 45) & (inputs["echo"] >= CANOPY_ECHO_T)
@@ -501,17 +531,16 @@ def canopy_extra(inputs, canopy_path):
         labels=tall.astype(np.uint8),
         exclude_border=False,
     )
-    # crown radius: distance to the crown edge at the peak, capped
-    edge = ndi.distance_transform_edt(tall) * RES
-    cur = (
-        json.loads(Path(canopy_path).read_text())["features"]
-        if canopy_path and Path(canopy_path).exists()
-        else []
-    )
-    cxy = np.array([f["geometry"]["coordinates"] for f in cur]) if cur else np.zeros((0, 2))
+    cxy = _points(canopy_path)
+    others = [
+        grid.rc(x, y)
+        for x, y in np.vstack([cxy, _points(trees_path)])
+        if grid.xmin <= x < grid.xmax and grid.ymin < y <= grid.ymax
+    ]
+    radii = crown_radii(chm, tall, pk.reshape(-1, 2), others)
     tree = cKDTree(cxy) if len(cxy) else None
     out = []
-    for r, c in pk:
+    for (r, c), radius in zip(pk, radii, strict=True):
         x, y = grid.xy(r, c)
         if tree is not None and tree.query([x, y])[0] <= CANOPY_DEDUP_M:
             continue
@@ -520,7 +549,7 @@ def canopy_extra(inputs, canopy_path):
                 "type": "Feature",
                 "properties": {
                     "h": round(float(ndom[r, c]), 1),
-                    "r": round(float(min(max(edge[r, c], 1.0), 8.0)), 1),
+                    "r": round(float(min(max(radius, CROWN_MIN_R), CROWN_MAX_R)), 1),
                 },
                 "geometry": {"type": "Point", "coordinates": [round(x, 1), round(y, 1)]},
             }
@@ -756,7 +785,9 @@ def run(tile: Tile, research: bool = False) -> None:
     if not inputs["has_lsc"]:
         return
     dlm = tile.data / "dlm"
-    extra, peaks = canopy_extra(inputs, dlm / f"canopy_{tile.id}.geojson")
+    extra, peaks = canopy_extra(
+        inputs, dlm / f"canopy_{tile.id}.geojson", dlm / f"trees_{tile.id}.geojson"
+    )
     extra, dropped = cadastre_filter(extra, dlm / f"trees_{tile.id}.geojson")
     write_geojson(tile.out("dlm", f"canopyx_{tile.id}.geojson"), extra, tile.epsg, lsc_credit(tile))
     print(

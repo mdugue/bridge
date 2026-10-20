@@ -1660,6 +1660,16 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     peaks) since the re-bake of 2026-09-25 with the current bridges and the
     land cover with the OSM squares carved in, where more trees may stand. (Taking the scan height where the cadastre has none is not
     done: the cadastre bake imputes missing heights and does not mark them.)
+    Each peak's crown radius `r` is its watershed share of the crown mass
+    (`crown_radii`, from every peak and every canopy and cadastre tree, so a
+    neighbour's share stays its own), as a disc of the same area, 1–12 m.
+    *(Until 2026-10-20 the distance to the mass's edge at the peak: lone
+    scan crowns came out a third of the area DOM1 shows them, against half
+    for lone cadastre trees with a surveyed crown — Dresden, Leipzig; in
+    Unna the median radius went from 1.8 to 3.5 m, and the circles over the
+    orthophoto now cover the crowns they stand in. Saxony's scan trees keep
+    the old radii until GeoSN's laser-scan share answers again: on
+    2026-10-20 it answered 404 for every tile.)*
     Rendered as ordinary canopy trees.
   - *Rendering* (`low-vegetation-layer.ts`, separate from the tree layer):
     hedges are chains of superellipsoid "clay" blocks (288 tris, ≤ 2.5 m
@@ -3077,8 +3087,12 @@ research that produced them):
    per-tree position/height/crown; bake to per-tile GeoJSON. *(First step ✅
    above: `canopyx` crown peaks with `h` + `r`, outside the canopy mask only,
    thinned against the cadastre; since 2026-10-07 the renderer sizes such a
-   crown from its `r`, 2r within 0.4–0.75 × h — the radius is the distance
-   to the crown mass's edge at the peak, so a group's would be too wide.)*
+   crown from its `r`, 2r within 0.4–0.75 × h. Since 2026-10-20 `r` is the
+   crown's share of the scan's crown mass — the watershed of the smoothed
+   heights from every scan peak and every canopy and cadastre tree — as a
+   disc of the same area; before, it was the distance to the mass's edge at
+   the peak, which read a lone crown from a peak off its centre and a
+   group's at its narrowest.)*
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
    low-sun shadows clip the 110 m frustum). *Amended 2026-09-25:* the baked
    horizon (✅ above, [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md))
