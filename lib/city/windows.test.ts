@@ -4,6 +4,7 @@ import {
   FACADE_SCALE_M,
   type FacadeModel,
   facadeAttribute,
+  wallRises,
   groundLift,
   NO_DOOR,
   PALACE_STOREY_M,
@@ -541,6 +542,50 @@ describe("facadeAttribute", () => {
     // the south wall keeps its ground floor and its door slot
     expect(metres(f[1])).toBeCloseTo(14, 1);
     expect(f[2]).toBe(Math.round(32_767 * NO_DOOR));
+  });
+});
+
+describe("wallRises", () => {
+  test("the ground in front of a wall, also of one standing on a step", () => {
+    // a south wall from the base and one standing 6 m up, both facing a
+    // terrace 7 m over the base; a roof reads nothing
+    const mesh = quads([
+      {
+        object: 0,
+        pts: [
+          [0, 0, 0],
+          [10, 0, 0],
+          [10, 0, 5],
+          [0, 0, 5],
+        ],
+      },
+      {
+        object: 1,
+        pts: [
+          [20, 0, 6],
+          [30, 0, 6],
+          [30, 0, 12],
+          [20, 0, 12],
+        ],
+      },
+      {
+        object: 1,
+        roof: true,
+        pts: [
+          [20, 0, 12],
+          [30, 0, 12],
+          [30, 10, 12],
+          [20, 10, 12],
+        ],
+      },
+    ]);
+    const rises = wallRises(
+      mesh,
+      () => 0,
+      (_x, y) => (y < 0 ? 7 : 0)
+    );
+    expect(Array.from(rises.slice(0, 4))).toEqual([7, 7, 7, 7]);
+    expect(Number.isNaN(rises[4])).toBe(true);
   });
 });
 

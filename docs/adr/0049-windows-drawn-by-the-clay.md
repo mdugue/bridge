@@ -75,8 +75,9 @@ courtyard's, a ramp's), so a building's base moves up to the street its
 plinths stand on, and the storey lines, the Gurtgesims and the windows
 start from the pavement. The ground floor's windows open over the
 plinth's highest top and over the ground in front of every wall, read in
-the tile's fine terrain half a metre out of the wall every 2 m along its
-foot (`wallRises`; 2026-10-19 and 2026-10-20: they sank into the
+the tile's fine terrain half a metre out of the wall every 2 m along it
+— also out of a wall standing on a step of its building, which meets the
+ground higher up — (`wallRises`; 2026-10-19 and 2026-10-20: they sank into the
 Brühlsche Terrasse — first where no plinth is drawn, then on the walls
 the plinth pieces never reach, which cover only open street runs of
 buildings from 5 m); a plinth stepping up a slope lifts them. A wall whose

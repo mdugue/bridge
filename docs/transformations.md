@@ -1905,8 +1905,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   and every ground floor's windows open at least 0.2 m over its
   plinth's top — its highest piece, so a plinth stepping up a slope
   lifts them —, and over the ground in front of every wall, read in the
-  tile's fine terrain 0.5 m out of the wall every 2 m along its foot
-  (`wallRises`; 2026-10-19/20, Manuel: the windows sank into the
+  tile's fine terrain 0.5 m out of the wall every 2 m along it, also of
+  a wall standing on a step of its building (`wallRises`; 2026-10-19/20, Manuel: the windows sank into the
   Brühlsche Terrasse — the plinth pieces alone reach only open street
   runs of buildings from 5 m, so the Kunstakademie's terrace walls had
   no ground under them). The lift is a class of

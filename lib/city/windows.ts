@@ -1158,18 +1158,18 @@ function wallsAt(
 const FRONT_M = 0.5;
 /** The ground along a wall's foot is read this often (m). */
 const FOOT_STEP_M = 2;
-/** A wall triangle reaches down to its object's foot when its lowest
- *  vertex lies at most this far over its base (m): the upper walls of a
- *  setback stand on a roof, not on the ground. */
-const FOOT_M = 1;
 
 /**
  * How far the ground in front of each wall triangle rises over its
  * object's base (m), indexed by its first vertex over 3; NaN where it is
- * no wall at its object's foot or `groundAt` knows no ground there. The
- * ground is read `FRONT_M` out of the wall, every `FOOT_STEP_M` along the
- * triangle's stretch, and the highest reading counts: the ground-floor
- * windows sink wherever it passes them. `groundAt` in the mesh's frame.
+ * no wall or `groundAt` knows no ground there. The ground is read
+ * `FRONT_M` out of the wall, every `FOOT_STEP_M` along the triangle's
+ * stretch, and the highest reading counts: the windows sink wherever it
+ * passes them. Every wall triangle is read, not only those at its
+ * object's foot: a wall standing on a step of its building (the
+ * Kunstakademie's wing on the terrace) meets the ground higher up, and
+ * one over a lower roof reads the ground under it, which buries nothing.
+ * `groundAt` in the mesh's frame.
  */
 export function wallRises(
   mesh: FacadeMesh,
@@ -1181,8 +1181,7 @@ export function wallRises(
   for (let t = 0; t + 2 < mesh.objectIds.length; t += 3) {
     const base = baseOf(mesh.objectIds[t]);
     const plane = mesh.isRoof[t] === 1 ? undefined : wallPlane(p, t);
-    const z0 = Math.min(p[3 * t + 2], p[3 * t + 5], p[3 * t + 8]);
-    if (base === undefined || !plane || z0 > base + FOOT_M) {
+    if (base === undefined || !plane) {
       continue;
     }
     const { n, d } = plane;
