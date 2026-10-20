@@ -16,13 +16,16 @@ import {
   attribute,
   float,
   fract,
+  materialColor,
   materialOpacity,
+  mix,
   smoothstep,
 } from "three/tsl";
 import type { RiversideFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
 import { Instances, instancePosition } from "./instancing";
+import { lampNight } from "./lamp-layer";
 import { mapFadeNode } from "./map-overlay";
 import {
   addFootprint,
@@ -83,6 +86,10 @@ const HUT_ROOF = 0xa9_b0_bb;
 const GROYNE_STONE = 0xb7_b0_a4;
 const RAILING = 0xbd_be_c7;
 const WAKE = 0xf2_f6_f7;
+/** What the wake keeps of its white after dark: it is unlit ink, and at
+ *  full white it drew the ferry routes as bright lines on the night
+ *  river. */
+const WAKE_NIGHT = float(0.12);
 
 interface Parts {
   deck: Mesh3;
@@ -384,7 +391,8 @@ function addGroyne(parts: Parts, coords: Point2[], ctx: GroundContext): void {
  * pulled in front of the water sheet. Its alpha is a dash every
  * `FERRY_DASH_M` along the route (the `wakeAlong` arc length, soft at the
  * dash's trailing end) at a faint 0.55, times the map fade — nothing on
- * foot, full from the air.
+ * foot, full from the air. After dark it dims with the lamps' night
+ * (`WAKE_NIGHT`).
  */
 function wakeMaterial(): MeshBasicNodeMaterial {
   return sceneMaterial("riverside-wake", () => {
@@ -401,6 +409,7 @@ function wakeMaterial(): MeshBasicNodeMaterial {
       smoothstep(0.5, 0.56, fract(along.div(FERRY_DASH_M)))
     );
     m.opacityNode = materialOpacity.mul(0.55).mul(dash).mul(mapFadeNode());
+    m.colorNode = materialColor.mul(mix(float(1), WAKE_NIGHT, lampNight));
     return m;
   });
 }
