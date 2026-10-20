@@ -12,7 +12,7 @@ import numpy as np
 import shapely
 from pyproj import Transformer
 
-from .common import Tile, read_layer
+from .common import Tile, column, read_layer
 
 
 def _to_tile(tile: Tile):
@@ -51,6 +51,26 @@ def read_osm(
         geoms, lambda xy: np.column_stack(project.transform(xy[:, 0], xy[:, 1]))
     )
     return geoms, fields
+
+
+def read_ways(
+    tile: Tile, where: str, columns: list[str], margin: float = 0.001
+) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    """The OSM `lines` near the tile that run on the ground it shows: a way
+    in a tunnel (`in_tunnel`, a culvert too) is left out. Every bake that
+    paints a way on the terrain, or lets one steer what it draws (a kerb, a
+    paving row's heading, a bench's facing), reads its ways here: a road in
+    a tunnel painted the square or hillside above it (Hamburg's
+    Wallringtunnel, Dresden's Wiener Platz)."""
+    wanted = columns if "other_tags" in columns else [*columns, "other_tags"]
+    geoms, fields = read_osm(tile, "lines", where, wanted, margin)
+    keep = np.array([not in_tunnel(t) for t in column(fields, "other_tags", geoms)], dtype=bool)
+    if keep.all():
+        kept = fields
+    else:
+        geoms = geoms[keep]
+        kept = {k: v[keep] for k, v in fields.items()}
+    return geoms, {k: v for k, v in kept.items() if k in columns}
 
 
 def tag(other_tags: str | None, key: str) -> str | None:

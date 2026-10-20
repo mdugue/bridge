@@ -55,7 +55,7 @@ import shapely
 from rasterio.features import rasterize
 
 from .common import OSM_ATTRIBUTION, Tile, column, save_grey_png
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, read_osm, read_ways, tag
 
 # id → key; 0 = unknown (the shader keeps the class default).
 SURFACES = {
@@ -460,7 +460,7 @@ def interleave(*planes: np.ndarray) -> np.ndarray:
 def run(tile: Tile, px: int = 2048) -> None:
     if not has_extract(tile, "the paving raster"):
         return
-    lines, lfields = read_osm(tile, "lines", "highway IS NOT NULL", ["highway", "other_tags"])
+    lines, lfields = read_ways(tile, "highway IS NOT NULL", ["highway", "other_tags"])
     areas, afields = read_osm(
         tile,
         "multipolygons",

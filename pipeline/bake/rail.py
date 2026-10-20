@@ -42,7 +42,17 @@ from .bridge import (
     superstructure,
     wikidata_for,
 )
-from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, read_layer, write_geojson
+from .common import (
+    OSM_ATTRIBUTION,
+    Tile,
+    above_ground,
+    column,
+    dlm_tunnels,
+    feature,
+    geometry_json,
+    read_layer,
+    write_geojson,
+)
 from .osm import below_ground, has_extract, read_osm, tag
 
 WIDTH = {"rail": 9.0, "road": 11.0, "path": 3.5, "other": 8.0}
@@ -107,42 +117,9 @@ def merge_lines(lines: list[list[tuple[float, float]]]) -> list[list[tuple[float
     return out
 
 
-# A rail stretch under a tunnel for longer than this is cut out; a shorter
-# overlap is a surface track crossing one (m).
-TUNNEL_OVERLAP_M = 15.0
-# The Basis-DLM draws a tunnel on its rail's own axis: only a rail this
-# close to one runs through it. A wider reach took the surface tracks of
-# Munich's Hauptbahnhof, which run straight over the S-Bahn trunk line (m).
-TUNNEL_HALF_M = 2.0
 # Basis-DLM Bahnkategorie: trams (Straßenbahn) are the tram layer's, from
 # OSM — some Länder file them with the standard gauge (Munich).
 TRAM_BKT = {"1201"}
-
-
-def tunnels(tile: Tile) -> shapely.Geometry | None:
-    """Where the rails run underground: the Basis-DLM's tunnels (`ver06`
-    BWF 1870, "Tunnel, Unterführung"), as one area. Subways and S-Bahn trunk
-    lines are in the rail layer with nothing on the line itself to say they
-    are underground (Munich's Marienplatz, Leipzig's City-Tunnel)."""
-    areas = []
-    for layer in ("ver06_l", "ver06_f"):
-        path = tile.dlm / f"{layer}.shp"
-        if path.exists():
-            geoms, _ = read_layer(path, tile.bounds, where="BWF='1870'")
-            areas += [g.buffer(TUNNEL_HALF_M) for g in geoms if g is not None]
-    return shapely.union_all(areas) if areas else None
-
-
-def above_ground(line: shapely.Geometry, under: shapely.Geometry | None) -> list:
-    """The parts of a rail line not in a tunnel. Only a long overlap is cut:
-    a surface track that crosses over a tunnel keeps its crossing."""
-    if under is None or not line.intersects(under):
-        return [line]
-    inside = [p for p in shapely.get_parts(line.intersection(under)) if p.length > TUNNEL_OVERLAP_M]
-    if not inside:
-        return [line]
-    cut = line.difference(shapely.union_all([p.buffer(0.05) for p in inside]))
-    return [p for p in shapely.get_parts(cut) if p.length > 1.0]
 
 
 def rails(tile: Tile) -> list[dict]:
@@ -152,7 +129,7 @@ def rails(tile: Tile) -> list[dict]:
         where="SPW='1000'",
         columns=["SPW", "GLS", "ELK", "BKT"],
     )
-    under = tunnels(tile)
+    under = dlm_tunnels(tile)
     groups: dict[tuple[int, int], list] = defaultdict(list)
     for g, gls, elk, bkt in zip(
         geoms,

@@ -8,7 +8,8 @@ square's pedestrian island or lawn, OSM carves it back out
 The client paints the classes with the palette in lib/city/landcover.ts; this
 bake writes ids only. Classes burn lowest priority first, so water (8) wins
 over everything. Roads are centrelines buffered by their surveyed width
-`BRF`, else by a width per road class `WDM`.
+`BRF`, else by a width per road class `WDM`, and not where they run through
+a tunnel.
 """
 
 from __future__ import annotations
@@ -24,8 +25,10 @@ from . import landcover_osm
 from .common import (
     OSM_ATTRIBUTION,
     Tile,
+    above_ground,
     column,
     dlm_complete,
+    dlm_tunnels,
     feature,
     geometry_json,
     read_layer,
@@ -53,14 +56,20 @@ DEFAULT_ROAD_HALF_WIDTH = 2.5
 
 
 def _road_buffers(tile: Tile) -> list[shapely.Geometry]:
+    """The road axes buffered by their width, without their stretches in a
+    tunnel: a road there is under the ground the tile shows (a hillside over
+    Meißen's Schottenbergtunnel, the square over Dresden's Wiener Platz),
+    and painted, it grew a kerb along both sides."""
     geoms, fields = read_layer(tile.dlm / "ver01_l.shp", tile.bounds, columns=["BRF", "WDM"])
+    under = dlm_tunnels(tile)
     out = []
     for g, brf, wdm in zip(
         geoms, column(fields, "BRF", geoms), column(fields, "WDM", geoms), strict=True
     ):
         width = float(brf) if brf not in (None, "") else 0.0
         half = width / 2 if width > 0 else ROAD_HALF_WIDTH.get(str(wdm), DEFAULT_ROAD_HALF_WIDTH)
-        out.append(shapely.buffer(g, half))
+        for part in (p for line in shapely.get_parts(g) for p in above_ground(line, under)):
+            out.append(shapely.buffer(part, half))
     return out
 
 
