@@ -30,7 +30,7 @@ import shapely
 
 from .common import OSM_ATTRIBUTION, Tile, feature, owns, write_geojson
 from .furniture import BLOCKED, STREETS, Gate, way_bearing
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, read_osm, read_ways, tag
 
 LAMP_H = 5.0  # a post's head (the viewer's lamp-layer.ts LAMP_H)
 HUNG_H = 7.0  # a hung lamp's head over the street
@@ -153,7 +153,7 @@ def standable(p: shapely.Point, gate: Gate) -> bool:
 
 def streets(tile: Tile) -> tuple[shapely.STRtree, np.ndarray]:
     where = "highway IN (" + ", ".join(f"'{s}'" for s in STREETS) + ")"
-    geoms, _ = read_osm(tile, "lines", where, ["highway"], margin=0.001)
+    geoms, _ = read_ways(tile, where, ["highway"], margin=0.001)
     lines = np.array([g for g in geoms if g.geom_type == "LineString"], dtype=object)
     return shapely.STRtree(lines), lines
 

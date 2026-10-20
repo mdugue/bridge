@@ -19,7 +19,7 @@ import numpy as np
 import shapely
 
 from .common import Tile, column, feature, geometry_json
-from .osm import read_osm, tag
+from .osm import read_osm, read_ways, tag
 
 AREAS = {
     1: {
@@ -104,7 +104,7 @@ def burn_order(tile: Tile) -> tuple[list[tuple[int, list[shapely.Geometry]]], li
         "highway IS NOT NULL OR waterway IS NOT NULL OR railway IS NOT NULL OR "
         "barrier = 'hedge' OR other_tags LIKE '%tree_row%'"
     )
-    geoms, fields = read_osm(tile, "lines", where, LINE_COLUMNS)
+    geoms, fields = read_ways(tile, where, LINE_COLUMNS)
     highway, waterway, railway, barrier, other = (column(fields, c, geoms) for c in LINE_COLUMNS)
     for i, g in enumerate(geoms):
         if g is None:

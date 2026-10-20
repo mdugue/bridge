@@ -83,7 +83,7 @@ from rasterio.features import rasterize
 from scipy import ndimage as ndi
 
 from .common import OSM_ATTRIBUTION, Tile, column, overlaps, owns, save_grey_png
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, read_osm, read_ways, tag
 
 # id → key; keep in step with `MARKING_KINDS` in lib/city/markings.ts.
 KINDS = {0: "none", 1: "zebra", 2: "furt", 3: "stop"}
@@ -738,7 +738,7 @@ def run(tile: Tile, px: int = 2048) -> None:
     points, pf = read_osm(
         tile, "points", "highway IN ('crossing', 'traffic_signals')", ["highway", "other_tags"]
     )
-    lines, lf = read_osm(tile, "lines", "highway IS NOT NULL", ["highway", "other_tags"], 0.003)
+    lines, lf = read_ways(tile, "highway IS NOT NULL", ["highway", "other_tags"], 0.003)
     low = px // 2
     wide = wide_mask(tile, raster)
     rows, fields, counts = build(tile, raster, (px, low), points, pf, lines, lf, wide)

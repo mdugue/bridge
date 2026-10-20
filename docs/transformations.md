@@ -170,6 +170,18 @@ visual-variable codebook is in
   inside it), buffered highways, waterways and rail. On Leipzig's centre
   tile 71 % of texels agree with the DLM raster — water 95 %, settlement
   78 %, roads 55 % ([ADR 0037](./adr/0037-sites-providers-and-per-site-data.md)).
+  **Nothing in a tunnel is burned** (2026-10-20): a DLM road axis loses
+  its stretch along a DLM tunnel (`ver06` `BWF=1870`, the rail layer's
+  rule: > 15 m within 2 m, `common.above_ground`), and every OSM way a
+  terrain bake reads (`osm.read_ways`: the OSM land cover, paving, road
+  markings, lamps, furniture, allotments) skips `tunnel=*` and
+  `location=underground` — a culvert too. Before, the road of a tunnel was
+  painted on the ground above it, with a kerb along both sides: measured
+  against OSM's tunnels, Dresden painted 36 % of its tunnels' 2.2 ha off
+  the surface roads as road with 2.1 km of kerb (Tunnel Bramschstraße,
+  Wiener Platz), Meißen 0.8 ha over the Schottenbergtunnel's hillside
+  (336 m of kerb), Hamburg 57 % of its tunnels (Wallring-, Deichtortunnel),
+  Munich 30 % (Altstadtringtunnel, Paul-Heyse-Unterführung).
 - **Meadow NDVI tint** `= computed` (*Wiesenfärbung*) — on class-1 farmland/meadow only, the
   DOP greenness (`ndvi_<tile>.png`, LINEAR-filtered to low-pass the ~2 m raster)
   shifts the pastel sage lush deep-green↔dry hay. In the terrain's colour node

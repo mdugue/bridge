@@ -58,7 +58,7 @@ from .common import (
     value_at,
     write_geojson,
 )
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, read_osm, read_ways, tag
 
 BLOCKED = (5, 8)  # railway, water
 # A way further than this (m) does not turn an object towards it.
@@ -528,7 +528,7 @@ def _equipment(tile: Tile, gate: Gate) -> list[dict]:
 def run(tile: Tile) -> None:
     if not has_extract(tile, "the street furniture"):
         return
-    geoms, fields = read_osm(tile, "lines", "highway IS NOT NULL", ["highway"], margin=0.001)
+    geoms, fields = read_ways(tile, "highway IS NOT NULL", ["highway"], margin=0.001)
     keep = [g.geom_type == "LineString" for g in geoms]
     lines = np.array([g for g, k in zip(geoms, keep, strict=True) if k], dtype=object)
     streets = np.array(

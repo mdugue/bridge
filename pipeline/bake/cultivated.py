@@ -67,7 +67,7 @@ from .common import (
     save_grey_png,
     write_geojson,
 )
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, read_osm, read_ways, tag
 from .skyview import Field, dgm_field
 
 ORCHARD_SPACING_M = 8.0
@@ -351,7 +351,7 @@ def run(tile: Tile, px: int = 2048) -> None:
         for p, t in zip(points, column(pf, "other_tags", points), strict=True)
         if tag(t, "natural") == "tree"
     ]
-    lines, lf = read_osm(tile, "lines", "highway IS NOT NULL", ["highway"])
+    lines, lf = read_ways(tile, "highway IS NOT NULL", ["highway"])
     paths = [
         shapely.buffer(g, PATH_HALF_WIDTH[h], cap_style="flat")
         for g, h in zip(lines, column(lf, "highway", lines), strict=True)
