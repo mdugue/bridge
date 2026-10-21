@@ -1,6 +1,7 @@
 import { Color, DoubleSide, type Mesh } from "three/webgpu";
 import {
   cameraViewMatrix,
+  float,
   floor,
   mix,
   positionView,
@@ -12,6 +13,7 @@ import {
 } from "three/tsl";
 import { FENCE_CODE, FENCE_UV_CODES } from "@/lib/city/fences";
 import type { F, V3 } from "./shader-chunks";
+import { lampNight } from "./lamp-layer";
 import { type GroundLight, groundLitMaterial } from "./sky-light";
 
 /*
@@ -34,7 +36,9 @@ const TOP = 0xe6_e4_da;
 const FAR = 0xe0_da_cc;
 const FAR_START_M = 40;
 const FAR_END_M = 160;
-/** A touch of self-light, so the band never reads as a dark sheet. */
+/** A touch of self-light, so the band never reads as a dark sheet — by
+ *  day: after dark it goes with the daylight (× 1 − the lamps' night), or
+ *  every railing along a quay drew a pale line through the dark. */
 const LIFT = 0.08;
 
 /** A tone as a vec3 (`Color` converts the sRGB hex to linear, as the
@@ -89,7 +93,7 @@ function fenceNodes() {
       normal: cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz.normalize(),
       // Lifts the band a touch toward its tone (see LIFT; the material
       // colour is white, so the tone is the diffuse colour).
-      emissive: colour.mul(LIFT),
+      emissive: colour.mul(LIFT).mul(float(1).sub(lampNight)),
     };
   }
   return shared;
