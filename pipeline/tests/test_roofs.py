@@ -7,7 +7,20 @@ import rasterio
 from rasterio.transform import from_origin
 
 from bake.common import Tile
-from bake.roofs import _majority, _narrow, form_holds, inclined_cells, merge_regions, run
+from bake.roofs import (
+    LEVEL_MISS_SHARE,
+    LEVEL_SHARE,
+    MISS_SHARE,
+    _majority,
+    _narrow,
+    form_holds,
+    inclined_cells,
+    level_share,
+    merge_regions,
+    miss_share,
+    pitch_holds,
+    run,
+)
 
 X0, Y0, SIZE = 400_000.0, 5_600_000.0, 200
 BASE = 110.0
@@ -300,3 +313,38 @@ def test_a_form_the_scan_follows_is_kept_a_wrong_one_or_a_placeholder_not():
     assert not form_holds(np.full_like(gable, BASE + 3), np.full_like(gable, BASE + 19))
     # the same gable 9 m higher: another building on the footprint
     assert not form_holds(gable, gable + 9)
+
+
+def test_a_low_hip_over_a_level_roof_misses_on_the_level_a_gable_off_a_storey_on_its_slope():
+    yy, xx = np.mgrid[0:40, 0:40] + 0.5
+    judged = np.zeros((40, 40), bool)
+    judged[1:-1, 1:-1] = True
+    # a low hipped roof (10 m eaves, 6 m up to its peak) over a store whose
+    # roof is level at 10.5 m: it misses on a third, in the band
+    hip = BASE + 10 + (20 - np.maximum(np.abs(xx - 20), np.abs(yy - 20))) * 0.3
+    store = np.full((40, 40), BASE + 10.5)
+    assert LEVEL_MISS_SHARE < miss_share(hip, store, judged) <= MISS_SHARE
+    assert level_share(hip, store, judged) >= LEVEL_SHARE
+    assert not pitch_holds(hip, store, judged, judged)
+    # a gable the scan shows a storey higher misses on its slopes: kept
+    gable = BASE + 10 + (20 - np.abs(xx - 20)) * 0.4
+    assert level_share(gable, gable + 3, judged) < 0.1
+    # a gentle LoD2 gable over the scan's steeper one: the pitch holds, and
+    # the LoD2 stays though a flat annex beside it misses
+    assert pitch_holds(BASE + 10 + (20 - np.abs(xx - 20)) * 0.2, gable, judged, judged)
+    assert not pitch_holds(np.full((40, 40), BASE + 10.0), gable, judged, judged)
+
+
+def test_a_halls_monitor_roofs_stay_strips_where_merging_them_would_miss(tmp_path):
+    # the flat roof's footprint (40 × 40 m at 10 m) carries two monitor
+    # roofs, 4 m wide and 2.5 m higher: narrow, they would merge into the
+    # roof beside them, which then misses them as the LoD2 did
+    dom = _dom()
+    rows = slice(SIZE - 60, SIZE - 20)
+    for c in (110, 126):
+        dom[rows, c : c + 4] = BASE + 12.5
+    tile = _tile(tmp_path, dom)
+    run(tile)
+    doc = json.loads((tile.data / "dlm" / "roofs_t.geojson").read_text())
+    parts = [f["properties"]["z"] for f in doc["features"] if f["properties"]["id"] == "flat"]
+    assert sorted(parts) == [BASE + 10] * 3 + [BASE + 12.5] * 2
