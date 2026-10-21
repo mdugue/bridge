@@ -294,6 +294,9 @@ export interface TileStream {
   dressingSettled: (tileId: string) => boolean;
   /** demolished object indices per tile, kept across unload/reload */
   demolished: Map<string, Set<number>>;
+  /** the site-wide groups (`CityObjectTable.group`) of demolished
+   *  ensembles: their parts in a tile loaded later go too */
+  demolishedGroups: Set<number>;
   dispose: () => void;
   dressings: Set<TileDressing>;
   group: Group;
@@ -1409,7 +1412,7 @@ export class DressingPlugin {
     private readonly ctx: TileStreamContext,
     private readonly stream: Pick<
       TileStream,
-      "cities" | "demolished" | "dressings" | "terrains"
+      "cities" | "demolished" | "demolishedGroups" | "dressings" | "terrains"
     >
   ) {
     // The warm-up runs beside the dressings, not ahead of them: its compile
@@ -1603,7 +1606,8 @@ export class DressingPlugin {
       mesh,
       extras.tileId,
       this.ctx.styleResources,
-      demolished
+      demolished,
+      this.stream.demolishedGroups
     );
     this.stream.cities.add(city);
     const entry: Dressed = { city };
@@ -2299,6 +2303,7 @@ export function createTileStream(
     terrains: new Set(),
     dressings: new Set(),
     demolished: new Map(),
+    demolishedGroups: new Set(),
     pendingDressings: () => 0,
     dressingSettled: () => false,
     visibleTerrains: memo(() =>

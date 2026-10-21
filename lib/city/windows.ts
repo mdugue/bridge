@@ -451,11 +451,21 @@ export interface WindowHost {
 /** Where a building's rhythm came from. */
 export type WindowSource = "measured" | "near" | "none" | "tree" | "type";
 
+/** Why a building draws no windows: not a LoD2 wall, a facade of its
+ *  own (or glass, metal, its own colour), under `MIN_EAVE_M` of wall, a
+ *  use without windows (`WINDOWLESS`), or no window fits its storey. */
+export type NoWindows = "beyond" | "facade" | "low" | "small" | "use";
+
 /** One building's windows and storey (`windowSpecs`). */
 export interface WindowChoice {
   from: WindowSource;
   spec: WindowSpec;
   storey: number;
+  /** the storey is the one the photos measured (else `storeyH`'s,
+   *  snapped to the eave) */
+  storeyFromPhotos?: boolean;
+  /** why there are none (`from` "none") */
+  why?: NoWindows;
 }
 
 /** A measured building lends its rhythm this far (m, centre to centre). */
@@ -598,9 +608,18 @@ export function groundLift(
   return k < WINDOW_LIFT.classes ? k * WINDOW_LIFT.step : undefined;
 }
 
-/** Whether a host carries windows at all. */
-function carries(h: WindowHost): boolean {
-  return h.lod2 && !h.ownFacade && h.eaveH >= MIN_EAVE_M && !windowless(h.fn);
+/** Why a host carries no windows at all, or null where it may. */
+function barred(h: WindowHost): NoWindows | null {
+  if (!h.lod2) {
+    return "beyond";
+  }
+  if (h.ownFacade) {
+    return "facade";
+  }
+  if (h.eaveH < MIN_EAVE_M) {
+    return "low";
+  }
+  return windowless(h.fn) ? "use" : null;
 }
 
 /** Where a host's rhythm comes from, best first (see the module). */
@@ -637,18 +656,16 @@ export function windowSpecs(
   }
   const donors = [...own].map(([i, m]) => ({ host: hosts[i], m }));
   return hosts.map((host, i): WindowChoice => {
-    if (!carries(host)) {
-      return { from: "none", spec: NO_WINDOWS, storey: host.storeyH };
+    const why = barred(host);
+    if (why) {
+      return { from: "none", spec: NO_WINDOWS, storey: host.storeyH, why };
     }
     const mine = own.get(i);
     const { from, m } = rhythmOf(host, mine, byRoot.get(host.root), donors);
     // the photos' storey only on the building itself, and only where OSM
     // counts none
-    const storey = windowStorey(
-      host.eaveH,
-      host.storeyH,
-      mine && !host.levels ? mine.storey : undefined
-    );
+    const photos = mine && !host.levels ? mine.storey : undefined;
+    const storey = windowStorey(host.eaveH, host.storeyH, photos);
     const kind = windowType(host.flat, host.eaveH, storey);
     const style = styleOf(host, kind, m, from);
     const type = TYPES[kind];
@@ -662,7 +679,12 @@ export function windowSpecs(
     if (spec.axis > 0 && !style.noGround && squat(spec, style.lift)) {
       spec.style = packStyle({ ...style, noGround: true });
     }
-    return { from: spec.axis > 0 ? from : "none", spec, storey };
+    if (spec.axis <= 0) {
+      return { from: "none", spec, storey, why: "small" };
+    }
+    return photos === undefined || storey === host.storeyH
+      ? { from, spec, storey }
+      : { from, spec, storey, storeyFromPhotos: true };
   });
 }
 

@@ -12,6 +12,7 @@ import {
 import {
   abs,
   attribute,
+  cameraWorldMatrix,
   clamp,
   dot,
   float,
@@ -27,7 +28,7 @@ import {
   min,
   mix,
   mod,
-  modelWorldMatrix,
+  normalFlat,
   normalize,
   positionWorld,
   screenCoordinate,
@@ -243,7 +244,16 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   // do for a sliver that thin.
   const raw = attribute("normal", "vec3");
   const safe = select(dot(raw, raw).lessThan(1e-8), vec3(0, 1, 0), raw);
-  const wn = normalize(varying(modelWorldMatrix.mul(vec4(safe, 0)).xyz));
+  // The facet's own plane, from the view position's derivatives: the
+  // vertex normal rounds a curve's facets (lib/city/crease-normals.ts) and
+  // turns across each one, but the windows, the relief and the glow cells
+  // are laid on the facet itself (`_FACADE`), so their frame is the flat one.
+  const wn = normalize(cameraWorldMatrix.mul(vec4(normalFlat, 0)).xyz);
+  // … while what turns with the view (the rim, a pane's mirror) follows the
+  // rounded surface: on the flat frame a dome's facets each took their own
+  // rim and the curve read as a grid of tones again
+  const viewNormal = normalize(varying(transformNormalToView(safe)));
+  const sn = normalize(cameraWorldMatrix.mul(vec4(viewNormal, 0)).xyz);
   const h = max(localH, 0);
   const wall = float(1).sub(smoothstep(0.5, 0.7, abs(wn.y)));
   // along the view, in Modell's parallel projection too
@@ -265,15 +275,14 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   // the wall's own looks (relief, tone, ledges) stay off the openings
   const plaster = wall.mul(float(1).sub(windows.opening));
   return {
-    normal: normalize(
-      mix(
-        normalize(varying(transformNormalToView(safe))),
-        windows.normal,
-        windows.normalMix
-      )
-    ),
-    receivedShadow: (shadow?: Node) =>
-      shadow ? (shadow as F).mul(windows.sun) : windows.sun,
+    normal: normalize(mix(viewNormal, windows.normal, windows.normalMix)),
+    // A facet turned from the sun is in its own shadow, whatever its
+    // rounded normal says: buildings cast with their back faces (sun-rig.ts),
+    // so its shadow-map depth is its own and the test would speckle it.
+    receivedShadow: (shadow?: Node) => {
+      const own = windows.sun.mul(smoothstep(-0.02, 0.06, dot(wn, d.uSun)));
+      return shadow ? (shadow as F).mul(own) : own;
+    },
     // Materialstreuung: nudge roughness per building so the matte sheen
     // varies house-to-house (clamped to stay matte, no shiny clay).
     roughness: facadeRoughness(
@@ -299,7 +308,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
               wn
             )
           )
-          .mul(float(1).sub(facadeMirror(flags, wall, wn).mul(0.6))),
+          .mul(float(1).sub(facadeMirror(flags, wall, sn).mul(0.6))),
         h,
         wall,
         flags,
@@ -311,7 +320,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     // Himmelslicht: the courtyard's ground floor gets less of the sky;
     // a window's recess and the wall under its sill less still.
     ao: createClaySky().ao(h, build.z, SKY_VIEW).mul(windows.ao),
-    emissive: clayGlow(d, build, h, wall, flags, wn).add(
+    emissive: clayGlow(d, build, h, wall, flags, wn, sn).add(
       windows.glow.mul(DUSK_GLOW).mul(d.uNight)
     ),
   };
@@ -604,11 +613,11 @@ function facadeMaterial(flags: F, wall: F): { glass: F; metal: F } {
  * strength (REFLECTIONS), at 0 the clay it was. The clay's own colour
  * gives way by part of it (clayGraph), as a pane's would.
  */
-function facadeMirror(flags: F, wall: F, wn: V3): F {
+function facadeMirror(flags: F, wall: F, normal: V3): F {
   const m = facadeMaterial(flags, wall);
   // a shop window's pane keeps its own calm sky (paneSky), never a mirror
   const glass = m.glass.mul(float(1).sub(shopPane(flags)));
-  return mirrorWeight(wn, 0.1)
+  return mirrorWeight(normal, 0.1)
     .mul(glass.add(m.metal.mul(0.35)))
     .mul(REFLECTIONS);
 }
@@ -684,7 +693,9 @@ function osmColour(col: V3, build: V4, h: F, wall: F, flags: F): V3 {
  * walls only, × night) and Ladenlicht (a shop's ground floor under the
  * first storey line with a soft top edge, broken along the facade by a
  * low-frequency hash in ≈ 3.5 m cells). A shop window's pane takes its
- * own sky (`paneSky`) in place of the rim and the glass sheen.
+ * own sky (`paneSky`) in place of the rim and the glass sheen. The rim and
+ * the mirror follow the rounded normal `sn`, the shop's cells the facet's
+ * flat frame `wn`.
  */
 function clayGlow(
   d: ClayDetailUniforms,
@@ -692,10 +703,11 @@ function clayGlow(
   h: F,
   wall: F,
   flags: F,
-  wn: V3
+  wn: V3,
+  sn: V3
 ): V3 {
   const view = viewDirection().negate();
-  const fres = float(1).sub(clamp(dot(view, wn), 0, 1));
+  const fres = float(1).sub(clamp(dot(view, sn), 0, 1));
   // a shop window has its own grazing light (paneSky), not the clay's rim
   const pane = shopPane(flags);
   const clayOnly = float(1).sub(pane);
@@ -739,7 +751,7 @@ function clayGlow(
     .add(glow)
     .add(vec3(1, 0.78, 0.45).mul(shopGlow.mul(0.4)))
     .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)))
-    .add(skyReflection(wn, 0.22).mul(facadeMirror(flags, wall, wn)))
+    .add(skyReflection(sn, 0.22).mul(facadeMirror(flags, wall, sn)))
     .add(paneSky(d, h, fres).mul(paneShade(h, build.z)).mul(pane))
     .add(askedLight);
 }

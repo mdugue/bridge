@@ -1241,7 +1241,7 @@ function InquiryPanel({
           {card}
         </>
       ) : (
-        <div className="pointer-events-none absolute inset-y-4 left-4 z-20 flex w-[min(22rem,calc(100%-2rem))] flex-col items-stretch gap-2">
+        <div className="pointer-events-none absolute inset-y-4 left-4 z-20 flex w-[min(22rem,calc(100%-2rem))] lg:w-[min(28rem,calc(100%-2rem))] 2xl:w-[32rem] flex-col items-stretch gap-2">
           {card}
           {strip}
         </div>

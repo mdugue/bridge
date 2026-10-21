@@ -1,3 +1,4 @@
+import { decodeDrawn } from "../lib/city/drawn-facts";
 import { expect, test } from "bun:test";
 import type { CityJsonDocument } from "../lib/city/types";
 import {
@@ -16,6 +17,7 @@ import type {
   ShopfrontWall,
   StructureFeature,
 } from "../lib/city/features";
+import { ensembleGroup } from "../lib/city/ensembles";
 import { paneTop, SHOPFRONT_SINK } from "../lib/city/shopfronts";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
 import {
@@ -30,9 +32,11 @@ import {
   bakeCityMesh,
   cityFrame,
   cityMesh,
+  joinEnsembles,
   liftToStreet,
   PANE_ROUGH,
   scanStructureId,
+  vertexNormals,
 } from "./bake-city-mesh";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
@@ -209,6 +213,38 @@ test("every object carries its identity and semantics as fact columns", () => {
   });
   expect(table?.height).toMatchObject({ componentType: "FLOAT32", noData: -1 });
   expect([...(table?.height.values ?? [])]).toEqual([9, 9, 12]);
+});
+
+test("every object records how it is drawn and from what, for the card", () => {
+  const baked = bakeCityMesh("t", fixture(), { house: [0.2, 0.2, 0.2] }, null, {
+    shop: { material: "glass", levels: 3, wikidata: "Q1" },
+    house: { colour: "#c8b89a", roof_colour: "#806040" },
+  });
+  const [, part, house] = baked.objects.map((o) =>
+    decodeDrawn(o.facts?.drawn ?? "")
+  );
+  // the part takes its Building's OSM look; glass walls carry no windows
+  expect(part).toMatchObject({
+    wall: "material",
+    material: "glass",
+    roof: "palette",
+    storey: "osm",
+    windows: "none",
+    noWindows: "facade",
+    wikidata: "Q1",
+  });
+  // the orthophoto's roof colour wins over OSM's
+  expect(house).toMatchObject({
+    wall: "osm",
+    colour: "#c8b89a",
+    roof: "dop",
+    roofColour: "#806040",
+    storey: "height",
+  });
+  // one ENUM column, read only when someone asks
+  expect(cityMesh(baked).input.table?.properties.drawn).toMatchObject({
+    type: "ENUM",
+  });
 });
 
 test("a part carries its root Building's flags as well as its own", () => {
@@ -732,4 +768,135 @@ test("cityFrame is the frame the bake recenters a tile in, without the parse", (
   expect([...frame.matrix.elements]).toEqual([...baked.matrix.elements]);
   expect(frame.offset).toEqual(baked.offset);
   expect(frame.epsg).toBe(25833);
+});
+
+test("normals round a curve within one object's walls, never into its roof, another object or a measured face", () => {
+  // two wall facets 3 m wide turned 20° apart, sharing the edge at x = 0
+  const a = (20 * Math.PI) / 180;
+  const left = [-3 * Math.cos(a), 3 * Math.sin(a)];
+  const right = [3, 0];
+  const wall = (p: number[], q: number[]) => [
+    p[0],
+    p[1],
+    0,
+    q[0],
+    q[1],
+    0,
+    q[0],
+    q[1],
+    5,
+    p[0],
+    p[1],
+    0,
+    q[0],
+    q[1],
+    5,
+    p[0],
+    p[1],
+    5,
+  ];
+  const positions = Float32Array.from([
+    ...wall(left, [0, 0]),
+    ...wall([0, 0], right),
+  ]);
+  const at = (n: Float32Array, v: number) => [n[3 * v], n[3 * v + 1]];
+  const make = (ids: number[], roof: number[], normals?: number[]) =>
+    vertexNormals({
+      positions,
+      objectIds: Float32Array.from(ids),
+      isRoof: Float32Array.from(roof),
+      normals: normals ? Float32Array.from(normals) : undefined,
+    });
+  const one = Array.from({ length: 12 }, () => 0);
+  // vertex 1 (left facet, shared edge) and 6 (right facet, same point)
+  const rounded = make(one, one);
+  expect(at(rounded, 1)[0]).toBeCloseTo(at(rounded, 6)[0], 5);
+  expect(at(rounded, 1)[1]).toBeCloseTo(at(rounded, 6)[1], 5);
+  const flatLeft = (n: Float32Array) => {
+    expect(at(n, 1)[0]).toBeCloseTo(at(n, 0)[0], 5);
+    expect(at(n, 1)[1]).toBeCloseTo(at(n, 0)[1], 5);
+  };
+  // the right facet another object's, then a roof, then measured
+  flatLeft(
+    make(
+      [
+        ...Array.from({ length: 6 }, () => 0),
+        ...Array.from({ length: 6 }, () => 1),
+      ],
+      one
+    )
+  );
+  flatLeft(
+    make(one, [
+      ...Array.from({ length: 6 }, () => 0),
+      ...Array.from({ length: 6 }, () => 1),
+    ])
+  );
+  flatLeft(
+    make(one, one, [
+      ...Array.from({ length: 18 }, () => Number.NaN),
+      ...Array.from({ length: 6 }, () => [1, 0, 0]).flat(),
+    ])
+  );
+});
+
+test("joinEnsembles: touching trees of one name share the lowest root, its facts the whole's", () => {
+  const sq = (x: number): [number, number][][] => [
+    [
+      [x, 0],
+      [x + 10, 0],
+      [x + 10, 10],
+      [x, 10],
+    ],
+  ];
+  const facts = (name: string, height: number) => ({
+    buildingId: `B${height}`,
+    drawn: "",
+    function: "",
+    roofType: "",
+    created: "",
+    name,
+    addr: "",
+    height,
+    roofPitch: -1,
+    area: 100,
+    levels: -1,
+  });
+  // 0: the complex (a Building drawn by its part 1), 2: the tower beside
+  // it, 3: an unnamed house touching the tower
+  const objects: Parameters<typeof joinEnsembles>[0] = [
+    { root: 0, footprints: [], facts: facts("Schloss", 30) },
+    { root: 0, footprints: sq(0), facts: facts("Schloss", 30) },
+    { root: 2, footprints: sq(10), facts: facts("Schloss", 60) },
+    { root: 3, footprints: sq(20), facts: facts("", 12) },
+  ];
+  const trees = new Map([
+    [0, [0, 1]],
+    [2, [2]],
+    [3, [3]],
+  ]);
+  const z = [
+    [0, 0],
+    [100, 130],
+    [101, 161],
+    [102, 114],
+  ];
+  const outlines: Record<number, string> = { 0: "r1", 2: "r1", 3: "w2" };
+  joinEnsembles(
+    objects,
+    trees,
+    (root) => outlines[root] ?? "",
+    (i) =>
+      i === 0
+        ? undefined
+        : { baseZ: z[i][0], topZ: z[i][1], footprints: objects[i].footprints }
+  );
+  expect(objects.map((o) => o.ensemble)).toEqual([0, 0, 0, 3]);
+  // the outline's key, the same in the tile across the edge
+  expect(objects[1].group).toBe(ensembleGroup("r1"));
+  expect(objects[3].group).toBe(ensembleGroup("w2"));
+  expect(objects[0].facts?.height).toBe(61);
+  expect(objects[0].facts?.area).toBeCloseTo(200, 0);
+  // the tower keeps its own facts (its Kennung on the card)
+  expect(objects[2].facts?.height).toBe(60);
 });

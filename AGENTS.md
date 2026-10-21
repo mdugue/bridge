@@ -272,7 +272,9 @@ config change.
     or `I` under the pointer asks, and the pencil-hatch mark) and
     `inquiry-card.tsx` (the card — the only place the scene's facts become
     text); the
-    facts are `lib/city/object-facts.ts` (bake and read), the card's lines
+    facts are `lib/city/object-facts.ts` (bake and read; Buildings one named OSM
+    outline joins are asked as one, across tile edges too,
+    `lib/city/ensembles.ts`), the card's lines
     `lib/city/inquiry.ts` (buildings) and `inquiry-features.ts` (trees,
     monuments, bridges; shared lines in `card-lines.ts`), the sources
     `lib/city/provenance.ts`, the AdV code lists `lib/city/adv-codes.ts`;
@@ -647,9 +649,9 @@ main thread) out of the frames:
   the mesh simply does not draw, while WebGL2 (sixteen, the headless e2e's
   backend) draws it: pack scalars into vec4s (`traffic-flow.ts`
   `TRAFFIC_ATTRIBUTES`; `traffic-layer.test.ts` holds the count).
-- **The clay is one varying short of WebGPU's limit**: of sixteen
+- **The clay is two varyings short of WebGPU's limit**: of sixteen
   inter-stage variables, `front_facing` takes one (and the Ausschnitt's
-  clip distances one on the vertex side), and the clay passes fourteen
+  clip distances one on the vertex side), and the clay passes thirteen
   of the other fifteen. A new value per building or per vertex rides in
   a varying it already passes; past fifteen the buildings vanish on
   WebGPU while WebGL2 still draws them (ADR 0049).

@@ -125,14 +125,15 @@ neighbours carry windows.
   cut ran the windows twice a pixel, a derivative in a branch). Its
   vertex buffers stay four of WebGPU's eight, the roof flag riding in
   the wall coordinate's first door slot (−1, `FACADE_ROOF`). Its
-  varyings grow by two vec4 (the rhythm, the wall coordinate), to
-  fourteen: one short of the fifteen WebGPU's default sixteen leave
-  once `front_facing` takes one on the fragment side and the
-  Ausschnitt's clip distances one on the vertex side (the see-through
-  slider's hash took the fifteenth until it went). A new value per
-  building or per vertex rides in a varying the clay already passes;
-  past fifteen WebGPU drops the buildings without a word, while WebGL2
-  still draws them.
+  varyings grew by two vec4 (the rhythm, the wall coordinate), to
+  fourteen, and are thirteen since the facet's flat frame comes from
+  the view position's derivatives (`normalFlat`, for the curved walls):
+  two short of the fifteen WebGPU's default sixteen leave once
+  `front_facing` takes one on the fragment side and the Ausschnitt's
+  clip distances one on the vertex side (the see-through slider's hash
+  took one more until it went). A new value per building or per vertex
+  rides in a varying the clay already passes; past fifteen WebGPU drops
+  the buildings without a word, while WebGL2 still draws them.
 - The reveals look along the view: from the camera in perspective, and
   in Modell's parallel projection along one direction for the whole
   frame, sheared off the camera's forward in a Militärperspektive

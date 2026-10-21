@@ -31,7 +31,14 @@
   "openstreetmap": {
     "licence": "Open Database License (ODbL); credit: © OpenStreetMap contributors",
     "extract": "data/_raw/hh/osm/hamburg-latest.osm.pbf (Geofabrik extract), retrieved 2026-09-24",
-    "usedFor": "land cover (no open Basis-DLM) and every OSM layer"
+    "usedFor": "land cover (no open Basis-DLM) and every OSM layer",
+    "bbbike": {
+      "products": {
+        "osmBuildings": {
+          "dataAsOf": "2026-10-17 (re-baked 2026-10-19 from the BBBike city extract Hamburg.osm.pbf, Last-Modified 2026-10-17: shops, heritage, looks, and now the names, addresses, storeys and named outlines per building tree, lib/city/ensembles.ts)"
+        }
+      }
+    }
   },
   "wikidata": {
     "licence": "CC0",

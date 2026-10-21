@@ -44,7 +44,11 @@ function tile(
   const layer = {
     tile: name,
     mesh,
-    table: { root: new Uint32Array([0]) },
+    table: {
+      ensemble: new Uint32Array([0]),
+      group: new Uint32Array([0]),
+      root: new Uint32Array([0]),
+    },
     builds: 0,
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => {

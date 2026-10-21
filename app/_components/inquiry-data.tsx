@@ -8,7 +8,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { Inquiry } from "@/lib/city/inquiry";
-import type { LineageEntry } from "@/lib/city/lineage";
+import type { DrawnGroup, DrawnRow, LineageEntry } from "@/lib/city/lineage";
 import type { Stated } from "@/lib/city/methods";
 import type { SiteProvenance } from "@/lib/city/provenance";
 import { MethodBadge, MethodLegend } from "./method-badge";
@@ -97,6 +97,14 @@ export function InquiryData({
     () => mod?.lineage(inquiry, provenance, site) ?? null,
     [mod, inquiry, provenance, site]
   );
+  // a building's drawn values, each with its source (lib/city/drawn-lines.ts)
+  const drawn = useMemo(
+    () =>
+      mod && inquiry.kind === "building"
+        ? mod.drawnGroups(inquiry, site.provider.epsg)
+        : [],
+    [mod, inquiry, site]
+  );
   return (
     <Collapsible
       className="mt-3 border-t border-border pt-2"
@@ -129,14 +137,37 @@ export function InquiryData({
           </>
         )}
         <SectionHead>Darstellung</SectionHead>
-        {entries ? (
+        {!entries && (
+          <p className="text-[11px] text-muted-foreground">lädt …</p>
+        )}
+        {entries && drawn.length > 0 && (
+          <>
+            {inquiry.kind === "building" && inquiry.tree.length > 1 && (
+              <p className="-mt-1 mb-1.5 text-[10px] text-muted-foreground">
+                für den angeklickten Gebäudeteil
+              </p>
+            )}
+            {drawn.map((g) => (
+              <DrawnGroupRows
+                group={g}
+                key={g.title}
+                names={mod?.DRAWN_SOURCE_NAME}
+              />
+            ))}
+            <SectionHead>Quellen</SectionHead>
+            <ol className="space-y-1.5">
+              {entries.map((e, i) => (
+                <LineageRow brief entry={e} key={`${i}:${e.source}`} />
+              ))}
+            </ol>
+          </>
+        )}
+        {entries && drawn.length === 0 && (
           <ol className="space-y-2.5">
             {entries.map((e, i) => (
               <LineageRow entry={e} key={`${i}:${e.source}`} />
             ))}
           </ol>
-        ) : (
-          <p className="text-[11px] text-muted-foreground">lädt …</p>
         )}
         <details className="group/legend mt-3 border-t border-border pt-2">
           <summary className="cursor-pointer list-none text-[10.5px] text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
@@ -169,7 +200,80 @@ function SectionHead({ children }: { children: string }) {
   );
 }
 
-function LineageRow({ entry }: { entry: LineageEntry }) {
+/**
+ * One group of a building's drawn values: per row its label and value
+ * (a colour as a swatch), the badge of how the viewer came by it, and
+ * under them the source, what of it, and a link to where the source
+ * shows this building.
+ */
+function DrawnGroupRows({
+  group,
+  names,
+}: {
+  group: DrawnGroup;
+  names?: Record<DrawnRow["source"], string>;
+}) {
+  return (
+    <div className="mt-2 first:mt-0" data-testid="inquiry-drawn">
+      <p className="mb-0.5 text-[10.5px] font-medium text-foreground">
+        {group.title}
+      </p>
+      <dl className="space-y-1">
+        {group.rows.map((r) => (
+          <div className="text-[11px] leading-snug" key={r.label}>
+            <div className="flex items-start gap-2">
+              <dt className="w-[5.5rem] shrink-0 text-muted-foreground">
+                {r.label}
+              </dt>
+              <dd className="flex min-w-0 flex-1 items-start gap-1.5 text-foreground">
+                {r.swatch && (
+                  <span
+                    aria-hidden
+                    className="mt-0.5 size-3 shrink-0 rounded-sm border border-black/10"
+                    style={{ background: r.swatch }}
+                  />
+                )}
+                <span className="min-w-0 flex-1 break-words">{r.value}</span>
+              </dd>
+              <MethodBadge className="mt-px" method={r.method} />
+            </div>
+            <p className="pl-[6rem] text-[10px] text-muted-foreground">
+              <DrawnSourceLink name={names?.[r.source] ?? ""} row={r} />
+            </p>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function DrawnSourceLink({ name, row }: { name: string; row: DrawnRow }) {
+  const text = row.detail ? `${name} · ${row.detail}` : name;
+  if (!row.url) {
+    return text;
+  }
+  return (
+    <a
+      className="inline-flex items-baseline gap-1 decoration-dotted underline-offset-2 hover:text-foreground hover:underline"
+      href={row.url}
+      rel="noreferrer"
+      target="_blank"
+    >
+      {text}
+      <ExternalLinkIcon className="size-2.5 shrink-0 self-center opacity-60" />
+    </a>
+  );
+}
+
+function LineageRow({
+  brief = false,
+  entry,
+}: {
+  /** the dataset, its edition and credit only: the drawn values above
+   *  say what came from it */
+  brief?: boolean;
+  entry: LineageEntry;
+}) {
   const meta = [entry.stand ? `Stand ${entry.stand}` : "", entry.credit]
     .filter(Boolean)
     .join(" · ");
@@ -192,17 +296,19 @@ function LineageRow({ entry }: { entry: LineageEntry }) {
           )}
         </span>
       </div>
-      <ul className="mt-0.5 space-y-0.5 text-foreground/80">
-        {entry.used.map((u) => (
-          <li className="flex items-start gap-1.5" key={u.text}>
-            <span aria-hidden className="text-muted-foreground">
-              –
-            </span>
-            <span className="min-w-0 flex-1">{u.text}</span>
-            <MethodBadge className="mt-px" method={u.method} />
-          </li>
-        ))}
-      </ul>
+      {!brief && (
+        <ul className="mt-0.5 space-y-0.5 text-foreground/80">
+          {entry.used.map((u) => (
+            <li className="flex items-start gap-1.5" key={u.text}>
+              <span aria-hidden className="text-muted-foreground">
+                –
+              </span>
+              <span className="min-w-0 flex-1">{u.text}</span>
+              <MethodBadge className="mt-px" method={u.method} />
+            </li>
+          ))}
+        </ul>
+      )}
       {meta && (
         <p className="mt-0.5 text-[10px] text-muted-foreground">{meta}</p>
       )}
