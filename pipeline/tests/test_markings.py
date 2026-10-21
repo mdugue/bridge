@@ -251,6 +251,18 @@ def test_two_nodes_of_one_crossing_at_an_angle_keep_the_zebra_width():
     assert merged[3] == pytest.approx(8.0)
 
 
+def test_one_node_read_with_two_tangents_is_one_crossing():
+    # Munich: a furt node two ways pass through, read 0.15 m apart and 32°
+    # apart in axis — farther than two nodes on a curve, yet one crossing
+    a = [1000.0, 1000.0, UP, 1.75, 1.5, FURT]
+    b = [1000.1, 1000.1, UP + math.radians(32), 1.75, 1.5, FURT]
+    (merged,) = merge_rows([a, b])
+    assert merged[2] == UP and merged[4] == pytest.approx(1.5)
+    assert merged[3] > 1.75  # across the road it covers both
+    # the same tangents a junction's width apart stay two arms
+    assert len(merge_rows([a, [1007.0, 1004.0, UP + math.radians(32), 1.75, 1.5, FURT]])) == 2
+
+
 def test_the_crossings_of_two_carriageways_in_line_stay_two_rows():
     # A dual carriageway, a 3 m median between: each crossing is 12 m across
     # and they touch, but one row would paint 27 m across the median too.

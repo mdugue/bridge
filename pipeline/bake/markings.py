@@ -39,7 +39,9 @@ indexes `KINDS` (keep them in step with lib/city/markings.ts).
   one row per texel, so the second would clip the first's paint. Rows of
   the same family (crossings, stop lines) whose axes agree within
   `MERGE_ANGLE_DEG` and whose outlines come within 2 · `CORE_M` of each
-  other become one row covering both across the road, in the frame and
+  other — or whose centres lie within `CORE_M`, whatever their axes: one
+  node read twice, each way through it giving its own tangent — become
+  one row covering both across the road, in the frame and
   kind of the preferred one (a zebra over a furt, else the larger); along
   the road the union too when they are parallel, else the preferred one's
   width — unless the row would reach further across than one carriageway
@@ -522,6 +524,8 @@ def merge_pair(a, b) -> list[float]:
 def _mergeable(a, b) -> bool:
     if _family(a[5]) != _family(b[5]):
         return False
+    if math.dist(a[:2], b[:2]) < CORE_M:
+        return True  # one crossing read twice, whatever its tangents
     if _axis_gap_deg(a, b) > MERGE_ANGLE_DEG:
         return False
     return rotated_rect(a).distance(rotated_rect(b)) < 2 * CORE_M
