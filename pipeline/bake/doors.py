@@ -26,7 +26,7 @@ import numpy as np
 import rasterio
 import shapely
 
-from .common import OSM_ATTRIBUTION, Tile, column, feature, owns, write_geojson
+from .common import OSM_ATTRIBUTION, Sampler, Tile, column, feature, owns, write_geojson
 from .osm import has_extract, read_osm, tag
 from .osm_buildings import footprints
 
@@ -158,7 +158,8 @@ def run(tile: Tile) -> None:
     geoms, fields = read_osm(tile, "points", WHERE, ["other_tags"], margin=0.0005)
     placed: list[tuple[float, float, dict]] = []
     dropped = 0
-    with rasterio.open(tile.dgm) as dgm:
+    with rasterio.open(tile.dgm) as ds:
+        dgm = Sampler(ds)
         for g, other in zip(geoms, column(fields, "other_tags", geoms), strict=True):
             door = place(g, other, ids, polys, tree, heights, dgm)
             if door is None or not owns(tile.bounds, door[0], door[1]):

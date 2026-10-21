@@ -89,16 +89,15 @@ def box_blur(a: np.ndarray, passes: int = 3) -> np.ndarray:
     """Three 3×3 box passes ≈ a Gaussian of about one texel: the staircase
     of the class raster smoothed out of the distance's isolines."""
     out = a.astype(np.float64)
+    h, w = out.shape
     for _ in range(passes):
         p = np.pad(out, 1, mode="edge")
-        out = (
-            sum(
-                p[dy : dy + out.shape[0], dx : dx + out.shape[1]]
-                for dy in range(3)
-                for dx in range(3)
-            )
-            / 9.0
-        )
+        # the nine taps summed in place, in the order (and so to the bit)
+        # of a plain sum of the shifted views
+        np.copyto(out, p[:h, :w])
+        for dy, dx in [(dy, dx) for dy in range(3) for dx in range(3)][1:]:
+            out += p[dy : dy + h, dx : dx + w]
+        out /= 9.0
     return out
 
 

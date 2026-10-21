@@ -33,7 +33,7 @@ import numpy as np
 import rasterio
 import shapely
 
-from .common import Tile, feature, write_geojson
+from .common import Sampler, Tile, feature, write_geojson
 from .doors import object_heights
 from .osm_buildings import footprints
 
@@ -219,7 +219,8 @@ def run(tile: Tile) -> None:
     # the tallest first: where two objects share a facade line the main
     # body carries the plinth, not a part standing in it
     order = sorted(range(len(ids)), key=lambda i: -heights.get(ids[i], 0.0))
-    with rasterio.open(tile.dgm) as dgm:
+    with rasterio.open(tile.dgm) as ds:
+        dgm = Sampler(ds)
         for i in order:
             oid, poly = ids[i], polys[i]
             # a garage, a shed, a kiosk: no town house's plinth
