@@ -1079,7 +1079,7 @@ visual-variable codebook is in
   top, a gutter strip — reads no colour of its own and takes the
   building's. *(Three to four in a hundred faces read apart were such
   slivers, coloured by the street or the neighbour's roof beside them.)*
-  Faces read apart: Dresden 38 730 → X, Leipzig 10 741 → 9 157, Hamburg
+  Faces read apart: Dresden 38 730 → 33 818, Leipzig 10 741 → 9 157, Hamburg
   8 302 → 7 805, München 45 120 → X, Unna 7 749 → 7 067, Grimma
   4 183 → 4 013, Meißen 5 847 → 5 365. A roof drawn
   as its measured parts (ADR 0036) is read part by part instead of by its
