@@ -35,7 +35,8 @@ export interface WallRibbon {
   coords: Point2[];
   /** tagged, measured or fallback height (m; pipeline/bake/walls.py) */
   h: number;
-  /** the OSM kind (retaining_wall, city_wall, embankment, wall, …) */
+  /** the OSM kind (retaining_wall, city_wall, embankment, wall, …), or
+   *  `quay`: measured where the water meets the land (walls.py `quays`) */
   kind?: string;
   /** what it is made of (its tone, `WALL_TONES`); none: a cliff, an
    *  embankment */

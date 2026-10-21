@@ -567,7 +567,8 @@ export interface MeasuredRoofFeature {
  *  the terrain), the height in metres (tagged, else measured in the surface
  *  model, else the kind's fallback) and, for a wall, retaining or city
  *  wall, its material (tagged, else the site's majority; lib/city/walls.ts
- *  `WALL_TONES`). */
+ *  `WALL_TONES`). A `quay` is no OSM line: measured where the water meets
+ *  the land in the DGM (walls.py `quays`), its height the measured rise. */
 export interface WallFeature {
   geometry: LineGeometry;
   properties: { h: number; kind: string; mat?: string } | null;

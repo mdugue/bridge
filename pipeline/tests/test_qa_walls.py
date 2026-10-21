@@ -384,6 +384,9 @@ def test_a_quay_is_measured_where_the_water_meets_a_wall_not_a_bank(tmp_path, mo
         f["properties"] for f in _features(tile, "walls") if f["properties"]["kind"] == "quay"
     ]
     assert quay == {"kind": "quay", "h": 4.0, "mat": "concrete"}
+    # measured in the provider's DGM: its credit beside OSM's
+    doc = json.loads((tile.data / "dlm" / "walls_t.geojson").read_text())
+    assert doc["attribution"].endswith("quays: Quelle: GeoSN, dl-de/by-2-0")
 
 
 def test_a_lawn_bank_or_a_mapped_retaining_wall_is_no_measured_quay(tmp_path, monkeypatch):
@@ -394,3 +397,21 @@ def test_a_lawn_bank_or_a_mapped_retaining_wall_is_no_measured_quay(tmp_path, mo
     (tile.data / "dlm" / "ndvi_t.png").unlink()
     mapped = shapely.LineString([(X0, Y0 + 101), (X0 + 90, Y0 + 101)])
     assert walls.quays(tile, [mapped]) == []
+
+
+def test_a_wall_that_draws_the_step_or_a_flight_of_steps_takes_the_quay(tmp_path, monkeypatch):
+    tile = _harbour(tmp_path, monkeypatch)
+    edge = shapely.LineString([(X0, Y0 + 101), (X0 + 90, Y0 + 101)])
+    # a wall mapped on the edge as tall as the step faces the water itself
+    assert walls.quays(tile, [], [(edge, 4.0)]) == []
+    # a parapet on the quay's top does not
+    assert len(walls.quays(tile, [], [(edge, 1.0)])) == 1
+    # a wall that holds the earth snaps to the steepest metre within its
+    # reach: 6 m inland it draws the same step
+    inland = shapely.LineString([(X0, Y0 + 106), (X0 + 90, Y0 + 106)])
+    assert walls.quays(tile, [inland]) == []
+    # a flight of steps down to the water keeps its foot open
+    steps = shapely.LineString([(X0 + 45, Y0 + 110), (X0 + 45, Y0 + 99)])
+    found = walls.quays(tile, [], [], [steps])
+    assert len(found) == 2
+    assert all(shapely.distance(line, steps) >= walls.QUAY_STAIR_M - 0.5 for line, _ in found)

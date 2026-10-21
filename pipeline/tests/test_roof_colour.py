@@ -152,6 +152,25 @@ def test_a_face_too_narrow_for_its_inset_reads_nothing(tmp_path):
     assert "b" not in out["faces"]
 
 
+def test_a_face_along_the_buildings_edge_is_eroded_there_too(tmp_path):
+    # a 0.8 m coping on the building's east edge, grey but for its outer
+    # 0.2 m (the facade's red below the eave): the edge of the building's
+    # box is the face's edge as well, so its core lies inside, and it is
+    # too narrow for one
+    vertices = [(2, 2, 12), (16, 2, 12), (16, 18, 12), (2, 18, 12)]
+    vertices += [(16, 2, 13), (16.8, 2, 13), (16.8, 18, 13), (16, 18, 13)]
+    geometry = {
+        "type": "MultiSurface",
+        "boundaries": [[[0, 1, 2, 3]], [[4, 5, 6, 7]]],
+        "semantics": {"surfaces": [{"type": "RoofSurface"}], "values": [0, 0]},
+    }
+    rgb = np.zeros((3, 100, 100), np.uint8)
+    rgb[:, :, :83] = np.array([190, 195, 195])[:, None, None]
+    rgb[:, :, 83:] = np.array([200, 60, 50])[:, None, None]
+    out = _run(tmp_path, top_z=0.0, rgb=rgb, roof=(vertices, geometry))
+    assert "b" not in out["faces"]
+
+
 def test_run_reads_a_roof_in_sun_only(tmp_path):
     # the west slope lies in shadow: the building stays red, not brown,
     # and the slope takes the building's colour (none of its own)

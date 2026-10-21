@@ -809,7 +809,9 @@ visual-variable codebook is in
   a measured level with no face of its own that stands more than 6 m over
   the building's height, where fewer than 40 % of the surface model's
   cells lie within 1.5 m of its top, is a mast, a crane or a floodlight,
-  and ends at the building's height. *(The Rickmer Rickmers' masts stood
+  and stands on what the model shows under it (the median of the cells
+  below its top: a roof, or at the building's height the ground). *(The
+  Rickmer Rickmers' masts stood
   as 25 m towers on its hull, Dock I's cranes 11 m over the dock,
   Leipzig's Paralympische Sporthalle a floodlight 50 m up.)* Nine levels
   on the seven sites.
@@ -1079,7 +1081,10 @@ visual-variable codebook is in
   top, a gutter strip — reads no colour of its own and takes the
   building's. *(Three to four in a hundred faces read apart were such
   slivers, coloured by the street or the neighbour's roof beside them.)*
-  Faces read apart: Dresden 38 730 → 33 818, Leipzig 10 741 → 9 157, Hamburg
+  The face is drawn with an empty margin, so one along the building's edge
+  is eroded there too (the filter repeats an image's edge, and the eave
+  and the coping kept their outer texels). Faces read apart, both changes
+  together: Dresden 38 730 → 33 818, Leipzig 10 741 → 9 157, Hamburg
   8 302 → 7 805, München 45 120 → 42 821, Unna 7 749 → 7 067, Grimma
   4 183 → 4 013, Meißen 5 847 → 5 365. A roof drawn
   as its measured parts (ADR 0036) is read part by part instead of by its
@@ -3847,14 +3852,22 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   1 m (a revetment's 1:1.5 or a dike's 1:2 does not), three quarters of
   the climb to 6.5 m is done by then (a wall, not a slope's foot) and the
   NDVI there is under 0.2 (a grass bank is no wall). A majority over five
-  stations, runs of 8 m or more, none within 3 m of a mapped wall that
-  holds the earth; the height is the median rise, the material the site's
-  majority. The terrain bake treats a quay as a retaining wall: it snaps
+  stations, runs of 8 m or more; then a mapped line takes the stations it
+  draws or keeps open, so no window bridges it: a wall that holds the
+  earth within 7 m (its snap reaches 6 m for the steepest metre, the same
+  step), a freestanding wall within 3 m that rises 70 % of the station's
+  climb (it faces the water itself; a parapet on the quay's top does not)
+  and a flight of steps within 2 m (its foot stays open). The height is
+  the median rise, the material the site's majority, the walls file's
+  credit the provider's beside OSM's. The terrain bake treats a quay as a retaining wall: it snaps
   to the measured step, its face at the ramp's foot in the water, its
   coping on the quay. Measured on the committed tiles: 11.5 km on
   Hamburg's harbour tile, 2.9 km in Dresden's Alberthafen and along the
   Weißeritz, a few hundred metres on Leipzig's, Meißen's, Grimma's and
-  Munich's rivers. *(OSM maps few quays — `man_made=quay` on 5 km of
+  Munich's rivers. *(A first bake left the mapped walls on Hamburg's quay
+  edges standing — 1.75 km of `barrier=wall` measured down to the water
+  — and drew a quay a metre from each, and a quay across the foot of
+  three flights of steps.)* *(OSM maps few quays — `man_made=quay` on 5 km of
   Hamburg's harbour, three lines in Dresden — and the DGM rounds every
   quay into a 1–2 m ramp: the water class reached up it, and with the
   shore rule the ramp read as sand whose TIN triangles hung down the face

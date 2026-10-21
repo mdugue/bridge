@@ -371,6 +371,9 @@ def _surface_normals(surface: dict, z: float, x: np.ndarray, y: np.ndarray) -> n
     return n / np.linalg.norm(n, axis=1, keepdims=True)
 
 
+CORE_PAD = 2  # the core's inset (MinFilter(5)), in texels
+
+
 def _face_mask(frame: Frame, face: Face, box) -> tuple[np.ndarray, np.ndarray]:
     """The face's texels in `box` a texel in from its drawn edge (all of
     them where that erases them), and its core two texels in: what a colour
@@ -379,21 +382,30 @@ def _face_mask(frame: Frame, face: Face, box) -> tuple[np.ndarray, np.ndarray]:
     its own (3–4 % of the faces read apart were such slivers, read from
     their edge alone: a parapet's coping, a ridge strip)."""
     c0, r0, c1, r1 = box
-    drawn = Image.new("L", (c1 - c0, r1 - r0), 0)
+    w, h = c1 - c0, r1 - r0
+    # drawn with a margin of CORE_PAD empty texels: the filters repeat the
+    # image's edge, and a face along the building's box would keep the
+    # texels there (its eave, its coping) uneroded
+    pad = CORE_PAD
+    drawn = Image.new("L", (w + 2 * pad, h + 2 * pad), 0)
     draw = ImageDraw.Draw(drawn)
     for i, ring in enumerate(face.rings):
         pts = [frame.texel(*p) for p in ring]
-        draw.polygon([(c - c0, r - r0) for c, r in pts], fill=0 if i else 255)
-    mask = drawn
-    if drawn.width > 3 and drawn.height > 3:
-        inset = drawn.filter(ImageFilter.MinFilter(3))
-        if inset.getbbox():
+        draw.polygon([(c - c0 + pad, r - r0 + pad) for c, r in pts], fill=0 if i else 255)
+
+    def inner(img: Image.Image) -> np.ndarray:
+        return np.asarray(img)[pad : pad + h, pad : pad + w] > 0
+
+    mask = inner(drawn)
+    if w > 3 and h > 3:
+        inset = inner(drawn.filter(ImageFilter.MinFilter(3)))
+        if inset.any():
             mask = inset
-    if drawn.width > 5 and drawn.height > 5:
-        core = np.asarray(drawn.filter(ImageFilter.MinFilter(5))) > 0
+    if w > 5 and h > 5:
+        core = inner(drawn.filter(ImageFilter.MinFilter(5)))
     else:
-        core = np.zeros((drawn.height, drawn.width), bool)
-    return np.asarray(mask) > 0, core
+        core = np.zeros((h, w), bool)
+    return mask, core
 
 
 @dataclass

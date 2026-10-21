@@ -454,8 +454,8 @@ def shaped_roof(
     the module's 2.), or None where it shows one level only or the shape
     misses it: the parts as roofs.py writes a rebuilt roof's, each its
     outline's `coordinates`, its roof's `z` and a face's `surface`. A flat
-    part the model shows as a lattice (`lattice`) stands at `top_at`, the
-    building's height."""
+    part the model shows as a lattice (`lattice`) stands on what the model
+    shows under it, at `top_at` (the building's height) at the least."""
     rows, cols = win
     f = s.field
     grid = roofs.Grid(
@@ -482,8 +482,10 @@ def shaped_roof(
     for poly, top, rid in roofs.region_polygons(model.lab, model.level, grid, geom):
         if top < z + roofs.GROUND_M:
             continue
-        if not model.faces[rid] and top > top_at + MAST_RISE_M and lattice(s, win, poly, top):
-            top = top_at
+        if not model.faces[rid] and top > top_at + MAST_RISE_M:
+            under = lattice(s, win, poly, top)
+            if under is not None:  # on what the model shows under it, a roof or the ground
+                top = max(top_at, min(under, top))
         top = round(top, 2)
         part = {"coordinates": geometry_json(poly)["coordinates"], "z": top}
         if model.faces[rid]:
@@ -494,12 +496,19 @@ def shaped_roof(
     return parts
 
 
-def lattice(s: Surfaces, win: tuple[slice, slice], poly: shapely.Geometry, top: float) -> bool:
-    """Whether the surface model fills `poly` at `top` (within SOLID_M) on
-    less than SOLID_SHARE of its measured cells: a mast, not a roof."""
+def lattice(
+    s: Surfaces, win: tuple[slice, slice], poly: shapely.Geometry, top: float
+) -> float | None:
+    """Where the surface model fills `poly` at `top` (within SOLID_M) on less
+    than SOLID_SHARE of its measured cells (a mast, not a roof): the median
+    of the cells below it, what the mast stands on (-inf where none is);
+    None where the model fills it (a roof)."""
     dom = s.dom[win][s.mask(poly, win)]
     dom = dom[np.isfinite(dom)]
-    return len(dom) > 0 and float(np.mean(np.abs(dom - top) <= SOLID_M)) < SOLID_SHARE
+    if len(dom) == 0 or float(np.mean(np.abs(dom - top) <= SOLID_M)) >= SOLID_SHARE:
+        return None
+    below = dom[dom < top - SOLID_M]
+    return float(np.median(below)) if len(below) else -np.inf
 
 
 def open_roof(s: Surfaces, geom: shapely.Geometry, kind: str, name: str | None) -> dict | None:

@@ -183,16 +183,22 @@ def _wing_and_hall():
     return dom, geom, inside, (slice(0, rows), slice(0, cols))
 
 
-def test_a_lattice_over_a_roof_stands_at_the_buildings_height(monkeypatch):
+def test_a_lattice_over_a_roof_stands_on_what_lies_under_it(monkeypatch):
     # the wing 7 m over the building's height: a mast's rigging where the
     # model shows a lattice, a roof where it fills it
     dom, geom, inside, win = _wing_and_hall()
-    monkeypatch.setattr(structures, "lattice", lambda *_: True)
-    parts = structures.shaped_roof(_surfaces(dom), geom, win, inside, 100.0, 103.0)
-    assert any(abs(p["z"] - 103) < 0.01 for p in parts if "surface" not in p)
-    monkeypatch.setattr(structures, "lattice", lambda *_: False)
-    parts = structures.shaped_roof(_surfaces(dom), geom, win, inside, 100.0, 103.0)
-    assert any(abs(p["z"] - 110) < 0.5 for p in parts if "surface" not in p)
+
+    def flats(under):
+        monkeypatch.setattr(structures, "lattice", lambda *_: under)
+        parts = structures.shaped_roof(_surfaces(dom), geom, win, inside, 100.0, 103.0)
+        return [p["z"] for p in parts if "surface" not in p]
+
+    # on a roof the model shows under the rigging; on the ground (or
+    # nothing) at the building's height
+    assert any(abs(z - 106) < 0.01 for z in flats(106.0))
+    assert any(abs(z - 103) < 0.01 for z in flats(101.0))
+    assert any(abs(z - 103) < 0.01 for z in flats(-np.inf))
+    assert any(abs(z - 110) < 0.5 for z in flats(None))
 
 
 def test_a_lattice_is_a_surface_the_model_fills_sparsely():
@@ -201,6 +207,6 @@ def test_a_lattice_is_a_surface_the_model_fills_sparsely():
     win = (slice(0, 20), slice(0, 20))
     s = _surfaces(dom)
     dom[9:15:3, 5:11] = 135.0  # every third row of a 6 m square: rigging
-    assert structures.lattice(s, win, geom, 135.0)
+    assert structures.lattice(s, win, geom, 135.0) == 108.0  # on the roof under it
     dom[9:15, 5:11] = 135.0  # the whole square: a plant room, a tower
-    assert not structures.lattice(s, win, geom, 135.0)
+    assert structures.lattice(s, win, geom, 135.0) is None
