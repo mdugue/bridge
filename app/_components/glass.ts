@@ -1,15 +1,15 @@
 import { FramebufferTexture, HalfFloatType, LinearFilter } from "three/webgpu";
 import {
   abs,
+  cameraWorldMatrix,
   clamp,
   dot,
   float,
   mix,
   normalView,
   positionView,
-  positionViewDirection,
   pow,
-  reflectVector,
+  reflect,
   screenUV,
   smoothstep,
   uniform,
@@ -19,6 +19,7 @@ import {
 } from "three/tsl";
 import { mapFadeNode } from "./map-overlay";
 import type { F, Live, V3 } from "./shader-chunks";
+import { eyeDirectionView } from "./view-direction";
 
 /**
  * The data layers' glass (ADR 0040): bodies that tint and bend what lies
@@ -79,7 +80,7 @@ export interface GlassOptions {
 
 /** How much of the glass a ray grazes: 0 face on, 1 at the silhouette. */
 export function glassGrazing(): F {
-  const facing = abs(dot(normalView, positionViewDirection));
+  const facing = abs(dot(normalView, eyeDirectionView()));
   return float(1).sub(facing).clamp(0, 1);
 }
 
@@ -127,8 +128,10 @@ export function glassColour(opts: GlassOptions): V3 {
   const rim = mix(opts.tint, vec3(1), 0.55).mul(fresnel.mul(opts.rim ?? 0.55));
   // The sky in it: what the surface mirrors, brighter where it faces up
   // and where the eye grazes it — the sheen that makes glass read as glass.
-  const sky = reflectVector.y
-    .clamp(0, 1)
+  const mirrored = reflect(eyeDirectionView().negate(), normalView);
+  const sky = mirrored
+    .transformDirection(cameraWorldMatrix)
+    .y.clamp(0, 1)
     .pow(2)
     .mul(fresnel.mul(0.55).add(0.08));
   return tinted.add(rim).add(vec3(0.95, 0.97, 1).mul(sky));

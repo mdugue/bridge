@@ -40,9 +40,13 @@ finds its window cell from two inputs the building bake writes
   sill's height as classes);
 - **per wall vertex, where it stands on its wall** — the `_FACADE`
   attribute (snorm16 vec4): metres along the wall from its middle, the
-  wall's length (negative over a shopfront, 0 on a party wall), and up to
-  two of OSM's doors along it. A wall is one plane of one object's
-  triangles; a party wall is one another wall stands against back to back.
+  wall's length (negative where the ground floor has no windows: over a
+  shopfront, or with more doors than the two it holds; 0 on a party
+  wall), and up to two of OSM's doors along it, each its place and width
+  in one code (on a wall without ground-floor windows the first slot
+  holds the ground's height in front instead, below). A wall is one plane
+  of one object's triangles; a party wall is one another wall stands
+  against back to back.
 
 The opening is a **recess the eye looks into** (parallax against its box:
 the back, a side or the head or sill reveal, each with its own normal), the
@@ -106,7 +110,9 @@ their rows; LoD2's `storeysAboveGround` is only the height over about
 Kulturpalast's raised roof, 3.6 m of wall under the hall's three
 storeys), glass
 or metal cladding, a garage, shed or plant, anything under 3.2 m of wall,
-a party wall, a shopfront's ground floor, beside a door. A Wikidata
+a party wall, a shopfront's ground floor, and on the ground floor none
+within 0.6 m of a door's opening — its surround and a pier of wall
+between. A Wikidata
 landmark's flag alone does not keep them off: most are town houses whose
 neighbours carry windows.
 
@@ -144,10 +150,26 @@ public).
   Windows follow each building's own rhythm and its storeys, keep off
   party walls, doors and shopfronts, and stop under the eave.
 - The clay's fragment cost grows on walls (a parallax step, a few
-  smoothsteps); its varyings grow by two vec4 (the rhythm, the wall
-  coordinate); its vertex buffers stay four of WebGPU's eight, the roof
-  flag riding in the wall coordinate's first door slot (−1,
-  `FACADE_ROOF`).
+  smoothsteps), built once: the window graph, and the Schnitt's poché
+  round the facade colour, are steps and mixes, never a TSL `select`,
+  which three emits as if/else and builds again inside its arm (a first
+  cut ran the windows twice a pixel, a derivative in a branch). Its
+  vertex buffers stay four of WebGPU's eight, the roof flag riding in
+  the wall coordinate's first door slot (−1, `FACADE_ROOF`). Its
+  varyings grew by two vec4 (the rhythm, the wall coordinate), to
+  fourteen, and are thirteen since the facet's flat frame comes from
+  the view position's derivatives (`normalFlat`, for the curved walls):
+  two short of the fifteen WebGPU's default sixteen leave once
+  `front_facing` takes one on the fragment side and the Ausschnitt's
+  clip distances one on the vertex side (the see-through slider's hash
+  took one more until it went). A new value per building or per vertex
+  rides in a varying the clay already passes; past fifteen WebGPU drops
+  the buildings without a word, while WebGL2 still draws them.
+- The reveals look along the view: from the camera in perspective, and
+  in Modell's parallel projection along one direction for the whole
+  frame, sheared off the camera's forward in a Militärperspektive
+  (`viewDirection()`, `view-direction.ts`, set each frame with the post's
+  lens; the clay's rim and mirrors read the same).
 - A window's place along the wall is not measured (two drives' poses
   differ by ~0.6 m): the axes are centred on each wall. A house the
   photos measured gets its spacing and width, drawn towards its type's;

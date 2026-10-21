@@ -19,13 +19,13 @@ import {
   normalize,
   normalView,
   positionGeometry,
-  positionView,
   pow,
 } from "three/tsl";
 import type { CrownStyle } from "@/lib/city/render-style";
 import { Instances, instancePosition, isInstances } from "./instancing";
 import { lampNight } from "./lamp-layer";
 import { buildStyleCrownGeo } from "./vegetation-layer";
+import { eyeDirectionView } from "./view-direction";
 
 /**
  * The picture styles' scene dressing (lib/city/render-style.ts): geometry a
@@ -86,9 +86,7 @@ function coneMaterial(height: number): MeshBasicNodeMaterial {
   material.userData.shared = true;
   material.fog = false;
   material.positionNode = instancePosition();
-  const facing = abs(
-    dot(normalize(normalView), normalize(positionView.negate()))
-  );
+  const facing = abs(dot(normalize(normalView), eyeDirectionView()));
   const along = clamp(positionGeometry.y.div(height - 0.15), 0, 1);
   const core = pow(facing, 1.6);
   const fall = mix(0.12, 1, pow(along, 1.4));

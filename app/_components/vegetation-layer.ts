@@ -91,6 +91,7 @@ import {
 } from "./instancing";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
+import { viewDirection } from "./view-direction";
 import { TRUNK_BASE } from "@/lib/city/tree-family";
 
 export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
@@ -653,7 +654,7 @@ function crownLight(
   const sun = u.sunDirection;
   const shimVis = clamp(sun.y.mul(5), 0, 1);
   const daylight = clamp(sun.y, 0, 1);
-  const view = normalize(cameraPosition.sub(positionWorld));
+  const view = viewDirection().negate();
   const back = clamp(dot(view, sun.negate()), 0, 1);
   const far = distance(cameraPosition, positionWorld);
   const shimmer = SHIMMER.mul(pow(back, 3.6))
