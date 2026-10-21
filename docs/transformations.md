@@ -908,6 +908,18 @@ visual-variable codebook is in
   (Pearson r ≥ 0.85), it misses on ≤ 20 % once shifted by its median
   offset, and that offset is under the form's own height; the
   Frauenkirche's modelled dome (r 0.90, 5.6 m under the scan) is kept so.
+  **Missing on > 20 %, up to 40 %** (since 2026-10-21, `level_share`,
+  `pitch_holds`): a candidate only where the scan rises < 0.15 m per metre
+  under ≥ 60 % of the missed cells (a step's edge aside) and the LoD2's
+  pitch is not confirmed — the LoD2 rising > 0.15 m/m on ≥ half the cells
+  and the scan on ≥ half of those keeps it. The 40 % had left the low
+  hipped roofs the 2025 edition models over Leipzig's department stores
+  (a quarter of the roof off, along the ridges, over a level roof: 5 667
+  m² on `DESNATPU1000Bk2M`) and many flat roofs a storey off on part of
+  them (Hamburg's); the pitch test keeps a row house's gable or a barrel
+  vault whose flanks are too narrow for faces, which a rebuild would have
+  drawn flat for an annex the LoD2 left out (checked against the DOP on
+  Hamburg's and Dresden's largest and a random draw).
   **The decision** is made on the
   flat model: DOM1 3 × 3-median filtered over the footprint, cut into 1 m
   bands, pieces < 20 m² into the neighbour closest in height, neighbours
@@ -929,7 +941,11 @@ visual-variable codebook is in
   part that holds no disk 7 m across (a step's flank, a parapet run, a
   plant room) joins the neighbour closest in height when that lies within
   3 m (since 2026-10-19; a cell or two wide before — the strips stood as
-  boxes).
+  boxes), unless that makes the drawn roof miss on more than half the
+  LoD2's share or 30 % (since 2026-10-21; 30 % alone before): a hall's
+  monitor roofs, 5 m strips 3 m over the rest, had merged into blocks
+  that missed as much as the LoD2 (5 of the 109 rebuilt objects on
+  33408_5654, one of them worse than its LoD2) — they stay strips.
   A face's surface is the scan on its face cells (pieces it took in filled
   from them), smoothed twice by an edge-preserving Gaussian (σ 1 cell, 1 m
   height σ); written as a 1 m grid in cm from the part's `z` (its median),
@@ -939,11 +955,12 @@ visual-variable codebook is in
   `coverage_simplify` 2 m, clipped to the footprint,
   parts under 2 m dropped → `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **886 objects on Dresden's fifteen tiles, 2 227
-  parts, 221 of them faces** (2 956 before the strips merged; 0–129
-  objects a tile, the Altstadt most; the objects of the flat-only bake
-  less the five whose form holds); the step
-  runs on every site.
+  provider's credit). **1 081 objects on Dresden's fifteen tiles, 2 752
+  parts, 222 of them faces** (2026-10-21; 886 objects, 2 227 parts before
+  the band below 40 %; 2 956 parts before the strips merged; the
+  Altstadt most); the step runs on every site — Hamburg 587 objects (365
+  before the band), Leipzig 357 (269), Unna 61 (43), Meißen 56 (46),
+  Grimma 17 (13), München 121 (120).
   `bakeCityMesh` (`withMeasuredRoofs`, `scripts/measured-roofs.ts`) drops
   the object's LoD2 triangles and stands each part from the object's
   lowest LoD2 vertex — a flat part as a prism, a face as an error-bounded
@@ -3861,10 +3878,11 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   the median rise, the material the site's majority, the walls file's
   credit the provider's beside OSM's. The terrain bake treats a quay as a retaining wall: it snaps
   to the measured step, its face at the ramp's foot in the water, its
-  coping on the quay. Measured on the committed tiles: 11.5 km on
-  Hamburg's harbour tile, 2.9 km in Dresden's Alberthafen and along the
-  Weißeritz, a few hundred metres on Leipzig's, Meißen's, Grimma's and
-  Munich's rivers. *(A first bake left the mapped walls on Hamburg's quay
+  coping on the quay. Measured on the committed tiles (2026-10-21, with
+  the vetoes): 22.1 km on Hamburg's four tiles (11.2 km on the
+  Landungsbrücken's, 10.0 km on the Speicherstadt's), 3.5 km in Dresden's
+  Alberthafen and along the Weißeritz, 100–200 m each on Leipzig's,
+  Meißen's, Grimma's and Munich's rivers, a few metres in Unna. *(A first bake left the mapped walls on Hamburg's quay
   edges standing — 1.75 km of `barrier=wall` measured down to the water
   — and drew a quay a metre from each, and a quay across the foot of
   three flights of steps.)* *(OSM maps few quays — `man_made=quay` on 5 km of

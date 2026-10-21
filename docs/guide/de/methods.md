@@ -50,7 +50,10 @@ zur Regel passt.
   Schatten des Luftbilds zählt nur ein sauberer Quader.
 - **Dächer, Schornsteine, Türme, Gauben:** Wo das Oberflächenmodell mehr als
   2 m vom Dach des Gebäudemodells abweicht, auf mindestens 40 % der
-  Dachfläche, baut der Viewer das Dach aus der Messung neu. Eine Höhe über
+  Dachfläche, baut der Viewer das Dach aus der Messung neu — schon bei einem
+  Fünftel, wo die Oberfläche dort eben ist und das Dach des Modells sich
+  neigt, wo die Oberfläche es nicht tut (ein flaches Walmdach, das über ein
+  Kaufhaus mit Flachdach gezeichnet ist). Eine Höhe über
   dem Gebäudemodell wird nur ein Schornstein oder Turm, wo OpenStreetMap ihn
   nennt.
 - **Brückentragwerk:** Was entlang der Brückenachse mindestens 3 m über dem

@@ -46,7 +46,10 @@ reproducible, but they can be wrong where the world does not fit the rule.
   house. In the aerial photo's shadow only a clean box counts.
 - **Roofs, chimneys, towers, dormers:** where the surface model misses the
   building model's roof by more than 2 m on at least 40 % of the roof, the
-  viewer rebuilds the roof from the measurement. A height above the building
+  viewer rebuilds the roof from the measurement — on a fifth of it already
+  where the surface is level there and the model's roof slopes where the
+  surface does not (a low hipped roof drawn over a flat department store).
+  A height above the building
   model becomes a chimney or tower only where OpenStreetMap names one.
 - **Bridge superstructure:** what stands at least 3 m above the deck along
   the bridge's axis, for at least 25 m, becomes an arch or a truss.
