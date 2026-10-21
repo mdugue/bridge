@@ -712,7 +712,10 @@ function spawnFrame(): CityFrame {
   return spawn;
 }
 
-function parseCity(tile: string): BakedCityMesh {
+function parseCity(
+  tile: string,
+  groundAt?: (x: number, y: number) => number | null
+): BakedCityMesh {
   const src = cityMeshSourceFiles(SITE, tile);
   if (!existsSync(at(src.city))) {
     fail(`missing source file ${src.city}${HINT}`);
@@ -765,7 +768,7 @@ function parseCity(tile: string): BakedCityMesh {
     osmDoc?.context ?? "render",
     gaps,
     measured,
-    { doors, dormers, plinths, shopfronts, windows }
+    { doors, dormers, groundAt, plinths, shopfronts, windows }
   );
 }
 
@@ -800,7 +803,10 @@ async function bakeCity(
   tile: string
 ): Promise<{ file: string; footprints: string; maxZ: number }> {
   const src = cityMeshSourceFiles(SITE, tile);
+  // the ground-floor windows clear the tile's fine ground
+  const ground = await groundFile(tile);
   const inputs = [
+    ground,
     at(src.city),
     at(src.roofColor),
     at(src.osmBuild),
@@ -818,11 +824,14 @@ async function bakeCity(
     "scripts/bake-city-mesh.ts",
     "scripts/tile-glb.ts",
     "scripts/measured-roofs.ts",
+    // the ground's heights
+    "scripts/bake-tiles.ts",
+    "scripts/ground-pack.ts",
   ];
   const key = cacheKey(inputs, bake, offset);
   let mesh: ReturnType<typeof cityMesh> | null = null;
   const built = () => {
-    mesh ??= cityMesh(parseCity(tile));
+    mesh ??= cityMesh(parseCity(tile, heightOver(tile, ground)));
     return mesh;
   };
   const footprintsFile = `footprints_${tile}.json`;

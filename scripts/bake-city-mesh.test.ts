@@ -709,6 +709,124 @@ test("windows: the ground floor's keep over the house's plinth", () => {
   expect(unpackStyle(bare[2].windows?.style ?? 0).lift).toBe(0);
 });
 
+test("windows: without a plinth the ground floor's keep over the ground", () => {
+  const doc = fixture();
+  const { objects } = bakeCityMesh("t", doc, undefined, null);
+  const house = objects[2];
+  // a flat roof draws no plinth; the ground rises 1.0 m along one wall
+  house.flags |= OBJECT_FLAG_FLAT_ROOF;
+  const ground: PlinthFeature = {
+    geometry: {
+      type: "MultiLineString",
+      coordinates: [
+        [
+          [412_040, 5_656_000],
+          [412_050, 5_656_000],
+        ],
+      ],
+    },
+    properties: {
+      of: "house",
+      g: [house.baseZ + 1],
+      top: [house.baseZ + 1.6],
+    },
+  };
+  assignWindows(objects, Object.keys(doc.CityObjects), [], [], [ground]);
+  const s = unpackStyle(house.windows?.style ?? 0);
+  expect(s.noGround).toBe(false);
+  expect(s.sill + s.lift).toBeGreaterThanOrEqual(
+    1 + WINDOW_ROWS.plinthGap - 1e-9
+  );
+  expect(s.sill + s.lift).toBeLessThan(1.6 + WINDOW_ROWS.plinthGap);
+});
+
+test("windows: a wall the ground rises past loses its ground floor alone", () => {
+  // the flat-roofed house (no plinth drawn), its south wall 3 m deep in
+  // the ground
+  const plinths: PlinthFeature[] = [
+    {
+      geometry: {
+        type: "MultiLineString",
+        coordinates: [
+          [
+            [412_040, 5_656_000],
+            [412_050, 5_656_000],
+          ],
+        ],
+      },
+      properties: { of: "house", g: [103], top: [103.6] },
+    },
+  ];
+  const doc = fixture();
+  const { objects, vertices } = bakeCityMesh(
+    "t",
+    doc,
+    undefined,
+    null,
+    undefined,
+    undefined,
+    "render",
+    undefined,
+    undefined,
+    { plinths }
+  );
+  const house = Object.keys(doc.CityObjects).indexOf("house");
+  // the other walls keep their ground floor, unlifted
+  const s = unpackStyle(objects[house].windows?.style ?? 0);
+  expect(s.noGround).toBe(false);
+  expect(s.lift).toBe(0);
+  const signs = new Set<number>();
+  for (let v = 0; v < vertices.objectIds.length; v++) {
+    const length = vertices.facade?.[4 * v + 1] ?? 0;
+    if (vertices.objectIds[v] === house && length !== 0) {
+      signs.add(Math.sign(length));
+    }
+  }
+  // the south wall signed as a shopfront's, the others not, with the
+  // ground's height (3 m) its windows keep over
+  expect([...signs].sort((a, b) => a - b)).toEqual([-1, 1]);
+  for (let v = 0; v < vertices.objectIds.length; v++) {
+    const f = vertices.facade;
+    if (f && vertices.objectIds[v] === house && f[4 * v + 1] < 0) {
+      expect((f[4 * v + 2] / 32_767) * FACADE_SCALE_M).toBeCloseTo(3, 1);
+    }
+  }
+});
+
+test("windows: the ground floor's clear the fine ground, wall by wall", () => {
+  // no plinth pieces at all: the ground in front of the south wall 3 m
+  // over the base, 1 m in front of the others
+  const doc = fixture();
+  const { objects, vertices } = bakeCityMesh(
+    "t",
+    doc,
+    undefined,
+    null,
+    undefined,
+    undefined,
+    "render",
+    undefined,
+    undefined,
+    { groundAt: (_x, y) => (y < 5_656_000 ? 103 : 101) }
+  );
+  const house = Object.keys(doc.CityObjects).indexOf("house");
+  const s = unpackStyle(objects[house].windows?.style ?? 0);
+  // the others keep their ground floor, lifted over the 1 m
+  expect(s.noGround).toBe(false);
+  expect(s.sill + s.lift).toBeGreaterThanOrEqual(
+    1 + WINDOW_ROWS.plinthGap - 1e-9
+  );
+  const signs = new Set<number>();
+  for (let v = 0; v < vertices.objectIds.length; v++) {
+    const length = vertices.facade?.[4 * v + 1] ?? 0;
+    if (vertices.objectIds[v] === house && length !== 0) {
+      signs.add(Math.sign(length));
+    }
+  }
+  // the south wall loses its ground floor alone
+  expect([...signs].sort((a, b) => a - b)).toEqual([-1, 1]);
+});
+
 test("a building's base moves up to the street its plinths stand on", () => {
   const doc = fixture();
   const keys = Object.keys(doc.CityObjects);
