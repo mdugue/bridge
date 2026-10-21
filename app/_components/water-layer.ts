@@ -31,6 +31,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
+import { lampNight } from "./lamp-layer";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
 import { REFLECTIONS, skyReflection } from "./sky-reflection";
 import { type SplatLayer, splatUv } from "./terrain-layer";
@@ -121,6 +122,10 @@ const MIST_FULL_M = 1200;
  *  colour goes from the sky's tint towards white. */
 const MIST_OPACITY = 0.24;
 const MIST_WHITE = 0.3;
+/** …and after dark (with the lamps' night): the mist is unlit, so 30 %
+ *  white drew the far river as a pale band across the night city, brighter
+ *  the farther off; at night it keeps barely more than the sky's tint. */
+const MIST_WHITE_NIGHT = 0.03;
 
 /**
  * Drifting river haze as a SINGLE masked sheet sharing the Z-up terrain
@@ -178,7 +183,11 @@ function createWaterMist(
   material.maskNode = cov.greaterThan(0.01).and(alpha.greaterThan(0.002));
   // A haze a little brighter than the sky's tint, so it reads as mist over
   // the water; near-white, it turned the far river into a white band.
-  material.colorNode = mix(skyTint.rgb, vec3(1, 1, 1), MIST_WHITE);
+  material.colorNode = mix(
+    skyTint.rgb,
+    vec3(1, 1, 1),
+    mix(float(MIST_WHITE), float(MIST_WHITE_NIGHT), lampNight)
+  );
   material.opacityNode = alpha;
   const mesh = new Mesh(geometry, material);
   mesh.name = "water-mist";

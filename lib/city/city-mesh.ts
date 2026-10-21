@@ -95,6 +95,14 @@ export const OBJECT_FLAG_FLAT_ROOF = 256;
  *  building OSM counts no storeys of), not only a landmark's: its storeys
  *  are not a storey house's, so the clay draws no storey lines on it. */
 export const OBJECT_FLAG_OWN_FACADE = 512;
+/** A landmark the city floodlights after dark: set in the packed texture
+ *  at runtime only, never baked — above the facade readings' bits
+ *  (lib/city/facade-reading.ts `FACADE_UNIT`), so not in the 16-bit
+ *  column but beside it (`shaderFlags`). */
+export const OBJECT_FLAG_FLOODLIT = 32_768;
+/** The share of landmarks floodlit after dark: a city lights a few of its
+ *  showpieces, not every one (the clay's *Anstrahlung*). */
+export const FLOODLIT_SHARE = 0.6;
 /** A roof triangle within this of level counts as flat (cos 10°). */
 const FLAT_NORMAL_Z = 0.985;
 /** An object whose roof is flat over this share of its area is flat-roofed:
@@ -234,6 +242,39 @@ export function inheritedLook(
     materialFrom: own?.material ? own.materialFrom : root?.materialFrom,
     roof_colour: own?.roof_colour ?? root?.roof_colour,
   };
+}
+
+/**
+ * Whether object `i`, a landmark, is one of those floodlit: decided for its
+ * whole building at once — the named outline's OSM id where it has one
+ * (`group`, the same across tiles), else its ensemble's root — so a
+ * palace's wings and tower are lit together or not at all.
+ */
+export function isFloodlit(
+  table: Pick<CityObjectTable, "ensemble" | "flags" | "group" | "rough">,
+  i: number
+): boolean {
+  if (!hasObjectFlag(table.flags[i], OBJECT_FLAG_LANDMARK)) {
+    return false;
+  }
+  const group = table.group[i];
+  const seed = group > 0 ? group : table.rough[table.ensemble[i]] * 1000;
+  const h = Math.sin(seed * 12.9898 + 78.233) * 43_758.5453;
+  return h - Math.floor(h) < FLOODLIT_SHARE;
+}
+
+/** The flags column as the clay reads it: the table's flags with the
+ *  runtime-only bits, floodlit and asked. */
+export function shaderFlags(
+  table: Pick<CityObjectTable, "ensemble" | "flags" | "group" | "rough">,
+  i: number,
+  asked = false
+): number {
+  return (
+    table.flags[i] +
+    (isFloodlit(table, i) ? OBJECT_FLAG_FLOODLIT : 0) +
+    (asked ? OBJECT_FLAG_ASKED : 0)
+  );
 }
 
 /** Whether `flags` carries `bit` (one of the OBJECT_FLAG_* powers of two). */
@@ -407,7 +448,7 @@ export function packObjectTexels(table: CityObjectTable): Float32Array {
       band + at
     );
     out.set(
-      [table.storeyH[i], table.glow[i], table.rough[i], table.flags[i]],
+      [table.storeyH[i], table.glow[i], table.rough[i], shaderFlags(table, i)],
       2 * band + at
     );
     out.set(

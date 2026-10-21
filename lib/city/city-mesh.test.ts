@@ -16,7 +16,12 @@ import {
   OBJECT_TEXTURE_WIDTH,
   objectBandRows,
   inheritedFlags,
+  isFloodlit,
+  OBJECT_FLAG_ASKED,
+  OBJECT_FLAG_FLOODLIT,
+  OBJECT_FLAG_LANDMARK,
   objectFlags,
+  shaderFlags,
   objectTable,
   packObjectTexels,
   withoutTrafficStructures,
@@ -91,6 +96,35 @@ test("packObjectTexels lays four bands over the object index", () => {
   expect(texels[3 * band + 4 + 2]).toBeCloseTo(1.7, 6);
   expect(texels[3 * band + 4 + 3]).toBe(2_097_155);
   expect(texels[3 * band]).toBe(0);
+});
+
+test("a city floodlights some of its landmarks, each building whole", () => {
+  // two parts of each of 200 landmark outlines, then a plain building
+  const n = 401;
+  const t = {
+    ensemble: new Uint32Array(n),
+    flags: new Uint16Array(n).fill(OBJECT_FLAG_LANDMARK),
+    group: new Uint32Array(n),
+    rough: new Float32Array(n),
+  };
+  for (let i = 0; i < 400; i++) {
+    t.group[i] = 1_000_003 + Math.floor(i / 2) * 7919;
+  }
+  t.flags[400] = OBJECT_FLAG_SHOP;
+  let lit = 0;
+  for (let i = 0; i < 400; i += 2) {
+    expect(isFloodlit(t, i + 1)).toBe(isFloodlit(t, i));
+    lit += isFloodlit(t, i) ? 1 : 0;
+  }
+  expect(lit / 200).toBeGreaterThan(0.45);
+  expect(lit / 200).toBeLessThan(0.75);
+  expect(isFloodlit(t, 400)).toBe(false);
+  // the runtime bits ride beside the column, above the readings' bits
+  const one = [...Array(400).keys()].find((i) => isFloodlit(t, i)) ?? 0;
+  expect(shaderFlags(t, one, true)).toBe(
+    OBJECT_FLAG_LANDMARK + OBJECT_FLAG_FLOODLIT + OBJECT_FLAG_ASKED
+  );
+  expect(shaderFlags(t, 400)).toBe(OBJECT_FLAG_SHOP);
 });
 
 test("objectFlags sums the OSM facts as bits, hasObjectFlag reads them", () => {

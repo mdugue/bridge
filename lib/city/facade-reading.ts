@@ -23,8 +23,11 @@ export interface FacadeReadings {
   buildings: Record<string, FacadeReading | undefined>;
 }
 
-/** The flags column's unit for the readings (the bits above the OSM ones). */
-export const FACADE_UNIT = 512;
+/** The flags column's unit for the readings: the bits above the baked
+ *  ones, OBJECT_FLAG_OWN_FACADE (512) the highest of them — the readings
+ *  once started at 512 and wrote over it. With the readings' 31 at most
+ *  the column still fits its 16 bits. */
+export const FACADE_UNIT = 1024;
 
 const grade = (v: number) => Math.max(0, Math.min(3, Math.round(v)));
 

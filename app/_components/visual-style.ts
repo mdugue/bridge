@@ -44,7 +44,11 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
+import {
+  OBJECT_FLAG_FLOODLIT,
+  OBJECT_TEXTURE_WIDTH,
+} from "@/lib/city/city-mesh";
+import { FACADE_UNIT } from "@/lib/city/facade-reading";
 import { SELECTION_ACCENT } from "@/lib/city/outline";
 import { FACADE_ROOF } from "@/lib/city/windows";
 import {
@@ -63,6 +67,7 @@ import {
   slotUniform,
 } from "./material-slots";
 import { clayWindows } from "./clay-windows";
+import { nightShadowFree } from "./lantern";
 import {
   claySkySlots,
   createClaySky,
@@ -141,8 +146,26 @@ const WINDOWS = float(1);
 /** Fassadenbild: what street photos say about a facade — fine relief
  *  where it is busy, a darker tone, a shop's ground floor. */
 const FACADE_READING = float(1);
-/** Abendlicht: warm light in public buildings and shop fronts at dusk. */
+/** Abendlicht: the lit windows' strength after dark (clay-windows.ts),
+ *  and the shops' (`SHOP_LIGHT`). */
 const DUSK_GLOW = float(0.5);
+/** Streiflicht's share left at night: a rim is the sky's light on a
+ *  grazing wall, and the night sky has none to give. */
+const NIGHT_RIM = float(0.1);
+/** Lichtkegel: the light at a commercial or public wall's foot after dark
+ *  (`nightLight`) — light on the wall from in front, never the wall
+ *  glowing. */
+const GROUND_LIGHT = float(0.15);
+/** Anstrahlung: the floodlights after dark on the landmarks a city
+ *  lights (OBJECT_FLAG_FLOODLIT, `FLOODLIT_SHARE` of them, whole
+ *  buildings at once — lib/city/city-mesh.ts `isFloodlit`), and the share
+ *  of the lamps along a lit wall that are on (`FLOOD_ON`): unevenly. */
+const FLOODLIGHT = float(0.12);
+const FLOOD_ON = float(0.7);
+/** Ladenlicht: a shop's lit ground floor, × Abendlicht. */
+const SHOP_LIGHT = float(0.14);
+/** A shop window's pane lit from inside after dark. */
+const PANE_LIGHT = float(0.22);
 /** Materialstreuung: the matte sheen's spread from house to house. */
 const ROUGHNESS = float(0.12);
 
@@ -195,8 +218,10 @@ const POCHE = vec3(0.025, 0.024, 0.027);
  *    confident watercolour register without choosing a target hue.
  *  - Himmelslicht: the courtyard's ground floor gets less of the sky
  *    (sky-light.ts `createClaySky`, the aoNode, at `SKY_VIEW`).
- *  - Abendlicht (DUSK_GLOW × uNight): a warm interior glow at dusk on
- *    commercial and public buildings, walls only.
+ *  - after dark (× uNight): light on the walls from in front of them —
+ *    cones at a commercial or public wall's foot, floodlights on a
+ *    landmark, a shop's ground floor — and the lit windows (`nightLight`,
+ *    clay-windows.ts); the walls themselves never glow.
  * Heights come from world space (world Y is elevation). The strengths are
  * the fixed look's constants above; the night and the sun are shared
  * uniform nodes the sun rig writes.
@@ -280,7 +305,12 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     // rounded normal says: buildings cast with their back faces (sun-rig.ts),
     // so its shadow-map depth is its own and the test would speckle it.
     receivedShadow: (shadow?: Node) => {
-      const own = windows.sun.mul(smoothstep(-0.02, 0.06, dot(wn, d.uSun)));
+      // the sun's own, which after dark gives way for the lantern's light
+      // (three hands this every casting light's term; lantern.ts)
+      const own = max(
+        windows.sun.mul(smoothstep(-0.02, 0.06, dot(wn, d.uSun))),
+        nightShadowFree
+      );
       return shadow ? (shadow as F).mul(own) : own;
     },
     // Materialstreuung: nudge roughness per building so the matte sheen
@@ -489,7 +519,8 @@ function valueNoise(p: V2): F {
 /** A building's facade readings from its flags (lib/city/facade-reading.ts:
  *  FACADE_UNIT × (busy + 4 × dark), each graded 0 unseen, 1–3). */
 function readingOf(flags: F): { busy: F; dark: F; shop: F } {
-  const code = floor(floor(flags.add(0.5)).div(512));
+  // the readings' 5 bits; the runtime's floodlit bit sits above them
+  const code = mod(floor(floor(flags.add(0.5)).div(FACADE_UNIT)), 32);
   return {
     busy: mod(code, 4),
     dark: mod(floor(code.div(4)), 4),
@@ -646,11 +677,7 @@ function shopPane(flags: F): F {
  * What OSM knows about a building (the `flags` float of its third texel,
  * lib/city/city-mesh.ts: shop 1, heritage 2, glass 4, metal 8), layered onto the clay's
  * colour and glow at the same strengths — it adds none:
- *  - Ladenlicht: a warm wash on a shop's ground floor at dusk, under the
- *    first storey line with a soft top edge, walls only, at the dusk
- *    glow's strength × nightFactor. A low-frequency hash along the facade
- *    (≈3.5 m cells) keeps a long front from reading as one strip. No
- *    window structure: the procedural window grid is a recorded veto.
+ *  - Ladenlicht: drawn after dark by `nightLight`, not here.
  *  - Denkmal: a barely-there warm lift of a listed facade (on the
  *    Farbvariation's strength) and a finer second cornice line under the
  *    eave (at Traufkante's).
@@ -688,13 +715,11 @@ function osmColour(col: V3, build: V4, h: F, wall: F, flags: F): V3 {
 }
 
 /**
- * What the clay emits: Streiflicht (a squared Fresnel rim, warm; on glass a
- * pale sky sheen as well), Abendlicht (build.w = 1: commercial/public,
- * walls only, × night) and Ladenlicht (a shop's ground floor under the
- * first storey line with a soft top edge, broken along the facade by a
- * low-frequency hash in ≈ 3.5 m cells). A shop window's pane takes its
- * own sky (`paneSky`) in place of the rim and the glass sheen. The rim and
- * the mirror follow the rounded normal `sn`, the shop's cells the facet's
+ * What the clay emits: Streiflicht (a squared Fresnel rim, warm, a tenth
+ * of it at night; on glass a pale sky sheen as well) and the night's light
+ * on the walls (`nightLight`). A shop window's pane takes its own sky
+ * (`paneSky`) in place of the rim and the glass sheen. The rim and the
+ * mirror follow the rounded normal `sn`, the night's light the facet's
  * flat frame `wn`.
  */
 function clayGlow(
@@ -716,23 +741,15 @@ function clayGlow(
   // there) lit them into a dotted white line along every frame
   const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
   const rimOn = clayOnly.mul(float(1).sub(own.mul(float(1).sub(wall))));
-  const rim = vec3(1, 0.95, 0.8).mul(fres.mul(fres).mul(RIM).mul(rimOn));
-  const dusk = build.w.mul(DUSK_GLOW).mul(d.uNight);
-  const glow = vec3(1, 0.82, 0.5).mul(dusk.mul(wall).mul(0.5));
-  const shop = shopOf(flags);
-  const floorBand = float(1).sub(smoothstep(0.7, 1, h.div(max(build.y, 0.5))));
-  const along = normalize(vec2(wn.z.negate(), wn.x).add(1e-5));
-  const seg = dot(positionWorld.xz, along).div(3.5);
-  const cell = floor(seg);
-  const n0 = fract(sin(cell.mul(12.9898)).mul(43_758.5453));
-  const n1 = fract(sin(cell.add(1).mul(12.9898)).mul(43_758.5453));
-  const lit = mix(0.45, 1, mix(n0, n1, smoothstep(0, 1, fract(seg))));
-  const shopGlow = shop
-    .mul(floorBand)
-    .mul(wall)
-    .mul(lit)
-    .mul(DUSK_GLOW)
-    .mul(d.uNight);
+  // Streiflicht stands in for the sky's light on a grazing wall: at night
+  // there is none, and a full rim lit every grazing roof and wall pale
+  const rim = vec3(1, 0.95, 0.8).mul(
+    fres
+      .mul(fres)
+      .mul(RIM)
+      .mul(rimOn)
+      .mul(float(1).sub(d.uNight.mul(float(1).sub(NIGHT_RIM))))
+  );
   // Glas: the grazing angle catches a pale sky sheen, dimmed at night —
   // the stand-in for the reflection below full Spiegelung (REFLECTIONS is
   // 1, so none is drawn)
@@ -748,12 +765,119 @@ function clayGlow(
     askedFlag(flags).mul(d.uNight.mul(0.08).add(0.06))
   );
   return rim
-    .add(glow)
-    .add(vec3(1, 0.78, 0.45).mul(shopGlow.mul(0.4)))
+    .add(nightLight(d, build, h, wall, flags, wn))
     .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)))
     .add(skyReflection(sn, 0.22).mul(facadeMirror(flags, wall, sn)))
     .add(paneSky(d, h, fres).mul(paneShade(h, build.z)).mul(pane))
     .add(askedLight);
+}
+
+/** A hash of a light's cell along the wall, 0…1 (`k` picks the stream). */
+function cellHash(c: F, k: number): F {
+  return fract(sin(c.mul(12.9898).add(k)).mul(43_758.5453));
+}
+
+/** A shop front's 3.5 m cell after dark: about two in three lit, each at
+ *  its own strength — a row of shops is never one lit band. */
+function shopCell(c: F): F {
+  return step(0.35, cellHash(c, 4.1)).mul(mix(0.5, 1, cellHash(c, 0)));
+}
+
+/**
+ * The buildings' light after dark: never the walls themselves, but light
+ * on them from somewhere in front, as a street is lit at night.
+ *  - Lichtkegel (GROUND_LIGHT): a commercial or public building
+ *    (build.w = 1) is lit from sources at its foot — a soft cone every
+ *    6 m along the wall, about half of them on, each gone by a storey and
+ *    a half — the shop windows', the entrances' and the forecourts' light.
+ *  - Anstrahlung (FLOODLIGHT): a landmark the city floodlights (flag
+ *    32768, OBJECT_FLAG_FLOODLIT: three in five of them, whole buildings
+ *    at once), whatever its use, gets uneven cones every 7 m up to the
+ *    eave over a faint wash instead.
+ *  - Ladenlicht: a shop's ground floor (`shopOf`) keeps a low warm band
+ *    under the first storey line in 3.5 m cells, about two in three lit
+ *    (`shopCell`), a shop window's pane a light of its own. Not on a
+ *    landmark: a palace's café does not light its walls all round.
+ * Housing gets none of it: its light is its windows (clay-windows.ts).
+ * Every term × night, walls only, all in the facet's flat frame `wn`.
+ */
+function nightLight(
+  d: ClayDetailUniforms,
+  build: V4,
+  h: F,
+  wall: F,
+  flags: F,
+  wn: V3
+): V3 {
+  const pane = shopPane(flags);
+  const clayOnly = float(1).sub(pane);
+  const along = wallPlane(wn, h).x;
+  const seg = along.div(3.5);
+  const cell = floor(seg);
+  const lit = mix(
+    shopCell(cell),
+    shopCell(cell.add(1)),
+    smoothstep(0, 1, fract(seg))
+  );
+  const floorBand = float(1).sub(smoothstep(0.7, 1, h.div(max(build.y, 0.5))));
+  const f = floor(flags.add(0.5));
+  const landmark = mod(floor(f.div(16)), 2);
+  const floodlit = mod(floor(f.div(OBJECT_FLAG_FLOODLIT)), 2);
+  const shop = shopOf(flags)
+    .mul(float(1).sub(landmark))
+    .mul(floorBand)
+    .mul(lit);
+  const lights = wall.mul(clayOnly);
+  const cones = groundCones(h, along).mul(build.w).mul(float(1).sub(floodlit));
+  const flood = floodCones(h, along, build.z).mul(floodlit);
+  return vec3(1, 0.8, 0.56)
+    .mul(cones.mul(GROUND_LIGHT))
+    .add(vec3(1, 0.88, 0.7).mul(flood.mul(FLOODLIGHT)))
+    .add(vec3(1, 0.78, 0.45).mul(shop.mul(DUSK_GLOW).mul(SHOP_LIGHT)))
+    .mul(lights)
+    .add(vec3(1, 0.8, 0.55).mul(pane.mul(wall).mul(lit).mul(PANE_LIGHT)))
+    .mul(d.uNight);
+}
+
+/** Light from small sources at a wall's foot, 6 m apart and about half of
+ *  them on: each a soft cone widening upwards, gone by a storey and a
+ *  half. `along`: metres along the wall. */
+function groundCones(h: F, along: F): F {
+  const spacing = 6;
+  const seg = along.div(spacing);
+  const c = floor(seg);
+  const on = step(0.45, cellHash(c, 1.7));
+  const k = mix(0.6, 1, cellHash(c, 5.3));
+  const u = abs(fract(seg).sub(0.5)).mul(spacing);
+  const w = h.mul(0.5).add(0.8);
+  const soft = float(1).sub(smoothstep(0, w, u));
+  const lateral = soft.mul(soft);
+  const rise = smoothstep(0, 0.6, h);
+  const fall = float(1).div(float(1).add(h.div(2.2).mul(h.div(2.2))));
+  return lateral.mul(rise).mul(fall).mul(on).mul(k);
+}
+
+/** Floodlights at a landmark's foot, 7 m apart and about `FLOOD_ON` of
+ *  them on, each a little off its slot and of its own strength: cones up
+ *  to the eave over a faint wash, a fifth as bright at the top as at the
+ *  foot. */
+function floodCones(h: F, along: F, eave: F): F {
+  const spacing = 7;
+  const seg = along.div(spacing);
+  const c = floor(seg);
+  const on = step(float(1).sub(FLOOD_ON), cellHash(c, 3.9));
+  const k = mix(0.4, 1, cellHash(c, 2.1));
+  const shift = cellHash(c, 6.7).sub(0.5).mul(0.4);
+  const u = abs(fract(seg).sub(0.5).sub(shift)).mul(spacing);
+  const w = h.mul(0.3).add(1);
+  const soft = float(1).sub(smoothstep(0, w, u));
+  const lateral = soft.mul(soft).mul(on).mul(0.9).add(0.06);
+  const top = max(eave, 4);
+  const fall = float(1).sub(smoothstep(0, top.mul(1.1), h).mul(0.8));
+  return lateral
+    .mul(fall)
+    .mul(k)
+    .mul(smoothstep(0, 0.6, h));
 }
 
 /** The soft shadow the surround's head throws onto a shop window's glass:
