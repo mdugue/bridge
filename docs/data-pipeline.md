@@ -124,6 +124,9 @@ bun run bake dresden --step lowveg --research   # also every hedge/shrub candida
 bun run bake dresden --jobs 3      # each step's tiles three at a time (one
                                     #   process each; a step waits for the
                                     #   one before on every tile)
+bun run bake dresden --force        # every step again, even one whose code
+                                    #   and inputs did not change (see "What
+                                    #   a re-bake runs" below)
 bun run test:pipeline               # pytest + ruff check + ruff format --check
 ```
 
@@ -143,7 +146,9 @@ never from the tile name. The modules in `pipeline/bake/`:
 | `rasters.py` | mosaics a provider's rasters over a tile at 1 m / 20 cm; the DGM compact (DEFLATE, float predictor, centimetres). A height mosaic whose 1–99 % spread is under 0.5 m (`MIN_HEIGHT_RANGE_M`) is refused as broken: Hamburg's DGM was once committed as 0 m everywhere (a mosaic that kept the float-min NoData), and every house floated 5–10 m above it; `test_committed.py` holds every committed DGM tile to a spread of ≥ 2 m |
 | `citygml.py` | streaming CityGML (AdV LoD2) → CityJSON, buildings owned by the tile holding their envelope centre (the fetch reads the neighbouring cells, so the rule never drops a building — Bavaria aside, see the adapters' row: Saxony files each building in exactly one 2 km file; the committed Leipzig, Grimma and Meißen CityJSON was fetched before the fetch read the neighbouring cells, so it can still lack buildings at the tile seams until the maintainer re-fetches those sites) |
 | `net.py` | downloads (`.part` until complete), single members of remote ZIPs by HTTP range |
-| `osm.py` | reads the site's `.osm.pbf` through GDAL's OSM driver, with a margin in degrees around the tile, reprojected to the tile's CRS; `in_tunnel` (a way in a tunnel or `location=underground`) and `below_ground` (that, or a negative `layer` / `level`) for what is drawn on the terrain; `read_ways`, the `lines` with every way in a tunnel left out, which each bake that paints a way on the terrain or lets one steer what it draws reads |
+| `osm.py` | reads the site's `.osm.pbf` (through its index, `osm_index.py`), with a margin in degrees around the tile, reprojected to the tile's CRS; `in_tunnel` (a way in a tunnel or `location=underground`) and `below_ground` (that, or a negative `layer` / `level`) for what is drawn on the terrain; `read_ways`, the `lines` with every way in a tunnel left out, which each bake that paints a way on the terrain or lets one steer what it draws reads |
+| `osm_index.py` | the extract read once into FlatGeobuf files beside it (`<extract>.index/`), so a tile's bbox read takes hundredths of a second instead of a parse of the whole extract; it gives the OSM driver's own answer, features, fields and order, the driver's relation rule included (see "Reading the OSM extract" below) |
+| `step_cache.py` | what each step read and wrote on each tile, so the next `bake` skips a step whose code and files did not change (see "What a re-bake runs" below) |
 | `landcover.py`, `landcover_osm.py`, `rail.py`, `canopy.py`, `trees.py`, `ndvi.py`, `roof_colour.py`, `osm_buildings.py`, `lamps.py`, `monuments.py`, `furniture.py`, `mapillary.py`, `facades.py` (+ `facade_measure.py`, one panorama measured on one wall; `facade_traits.py`, its trait profiles), `shopfronts.py`, `windows.py`, `walls.py`, `stairs.py`, `surface.py`, `edges.py`, `markings.py`, `sport.py`, `tram.py`, `riverside.py`, `skyview.py`, `lowveg.py`, `cultivated.py`, `small_buildings.py`, `landmarks.py`, `structures.py`, `doors.py`, `plinths.py`, `dormers.py` | one step each, in the order of the step table (`STEPS`; the table below) |
 | `lsc.py` | the laser scan → the 0.5 m rasters `lowveg` and `small-buildings` read (laspy, PDAL's binning rules); `merge_laz` joins a provider's 1 km LAZ into the one scan per 2 km tile (x, y, z, intensity, returns, class), its classes mapped into the AdV scheme by the provider's table (`classes`); every scan's low-return intensities are normalised by its own ground median (see the laser scan under the fetch) |
 | `tree_archetypes.py` | the cadastre's (and OSM's) taxon → crown archetype, leaf type, foliage colour and the genus id of the season table (`GENERA`; pure Python; `scripts/eval/kataster-eval.py` reuses it) |
@@ -175,6 +180,13 @@ data/_raw/<provider>/        shared by every site of the provider
                              DOP metadata), for the roof colour's sun
   dlm/*.shp                  Basis-DLM, AdV Shape profile — the 16 layers read
   osm/<extract>.osm.pbf      the site's Geofabrik extract
+  osm/<extract>.osm.pbf.index/   its index (osm_index.py), rebuilt when the
+                             extract, GDAL or the index code changes
+  dop/<tile>.roads.npz       the sunlit carriageway texels dop_balance.py
+                             reads off the DOP (keyed by the DOP, the class
+                             raster and dop_balance.py)
+  .bake-cache/<site>/<step>/<tile>.json   what the step read and wrote on the
+                             tile (step_cache.py)
   trees/<tile>.geojson       the site's street-tree cadastre, when it names one
                              (+ .meta.json: the request, the date, the count)
   traffic/<tile>.geojson     the site's counted traffic per road section, when
@@ -350,6 +362,70 @@ Geofabrik is unreachable the fetch says so and carries on; put the
 extract at the path it names. The *committed* Dresden lamp, platform and
 bridge-structure data still comes from the old Overpass bakes; the next
 re-bake moves it (see [Provenance](#provenance)).
+
+### Reading the OSM extract
+
+GDAL's OSM driver has no index: every read parses the whole extract,
+whatever its bbox and filter (1.5–5 s for a city's BBBike extract, three to
+four times that for Unna's Regierungsbezirk), and a tile's steps read it 10
+to 24 times each. `osm_index.py` reads the extract once (about 35 s for
+Dresden's) into FlatGeobuf files beside it, which GDAL reads by bbox
+through their R-tree, with `where` evaluated by the same OGR SQL engine (an
+SQLite store such as a GeoPackage would compare `=` case-sensitively where
+OGR SQL does not). `points`, `lines`, `multilinestrings` and
+`other_relations` are one file each. `multipolygons` needs the driver's
+relation rule kept: a tagged relation the filter turns down is never built,
+so its closed outer ways stay standalone areas (a building way that is also
+the outline of a site's multipolygon comes back under `building IS NOT
+NULL`, not under a filter the site passes). The index keeps the whole
+layer, every area way no tag-less relation absorbs, and which relation
+absorbs each of the others, and applies the rule per read. With
+`BAKE_OSM_CHECK=1` every read is made from the extract too and must match.
+
+### What a re-bake runs
+
+Each step's run on a tile records what it read (Python's own opens through
+an audit hook, GDAL's through `rasterio.open` and `pyogrio.raw.read`, a
+shapefile with its sidecars), what it looked for (`os.stat`,
+`os.path.exists`), which folders it listed and what it wrote, with content
+hashes, in `data/_raw/<provider>/.bake-cache/<site>/<step>/<tile>.json`.
+The next `bake` skips that step on that tile when the step's code (its
+module and every bake module it imports, and `uv.lock`), the spec, every
+file it read or looked for and every file it wrote are as recorded. A
+change to one step's code, or to one input, re-runs that step and the steps
+that read what it wrote; everything else is a check of file sizes and
+times (a file's hash is taken again only when its size or time moved).
+A step that reads the clock (the cadastre's young trees are young by the
+year) carries the year in its key.
+
+Some steps rewrite what an earlier one wrote: `islands` the land cover's
+class raster, `lamp-heights` the lamps' and Mapillary's points. So the
+file on disk is the last writer's, and a step is judged against what a
+full run would see (`Ledger` in `step_cache.py`): before step k a file
+holds what its last writer before k wrote, as that writer's manifest
+records it, and a step's recorded output must lead, through the later
+writers' recorded runs (each read what the one before it wrote), to what
+is on disk. The land cover then skips while the islands' raster is what
+the islands made of its own, and the islands skip when the land cover did. A
+step that runs while a file it read holds a later writer's output (the
+islands with new code, the land cover not) has that file's earlier
+writers run first, so it never reads its own output in their place. All
+tiles of a step are judged before any of them runs.
+
+A site-wide measurement a step keeps for the process (the NDVI's
+anchors, the flight's colour cast, a roof's sun reading, the city's bin
+colour) is a `step_cache.memo`: what making it read is added to the
+manifest of every tile that takes it from memory, at the state it was
+read in — the colour cast a `bake all` measures in the land cover, before
+it rewrites the class rasters, leaves `sport` and `roof-colour` to run
+again on the next bake, measured anew. The roads' texels kept beside the
+DOP are no step's file (`step_cache.quiet`); the DOP and the class raster
+they come from are. `--force` runs every step and records it;
+`BAKE_CACHE=0` runs every step and records nothing.
+
+With `--jobs N` those measurements are made once in the parent before the
+workers fork (`warm` in `__main__.py`), so the workers share them instead of
+each making its own.
 
 ### The steps
 

@@ -60,7 +60,7 @@ from pyproj import Transformer
 from rasterio.enums import Resampling
 from scipy.ndimage import uniform_filter
 
-from . import dop_balance
+from . import dop_balance, step_cache
 from .common import Tile
 from .dop_lean import LEAN_MIN_HEIGHT, Sample, building_lean, fit_leans, lean_map, reach_px
 from .dop_light import (
@@ -570,9 +570,7 @@ def sun_reading(tile: Tile, lut: np.ndarray, dop=None, faces=None) -> SunReading
     not sure reads its flight's other tiles); None without the DGM to cast
     the roofs' shadows on, the orthophoto or the LoD2."""
     key = (tile.raw, tile.id)
-    if key not in _READINGS:
-        _READINGS[key] = _read_sun(tile, lut, dop, faces)
-    return _READINGS[key]
+    return step_cache.memo(_READINGS, key, lambda: _read_sun(tile, lut, dop, faces))
 
 
 def _read_sun(tile: Tile, lut: np.ndarray, dop, faces) -> SunReading | None:

@@ -20,12 +20,16 @@ it too (a blue cast reads as shade)."""
 
 from __future__ import annotations
 
+import hashlib
+import os
 from collections.abc import Sequence
+from pathlib import Path
 
 import numpy as np
 import rasterio
 from rasterio.enums import Resampling
 
+from . import step_cache
 from .common import Tile
 
 ROAD = 7  # the class raster's road (landcover.py CLASSES)
@@ -45,11 +49,55 @@ def linear(srgb: np.ndarray) -> np.ndarray:
 
 def road_texels(tile: Tile) -> np.ndarray | None:
     """The tile's sunlit carriageway texels (linear RGB, n × 3, at most
-    KEEP), or None without a DOP or a class raster; once per process."""
-    key = (tile.raw_raster("dop"), tile.id)
-    if key not in _ROADS:
-        _ROADS[key] = _measure(tile)
-    return _ROADS[key]
+    KEEP), or None without a DOP or a class raster; once per process, and
+    kept beside the DOP for the next (roof-colour, sport and water each
+    read every tile of the site, and reading a DOP down to the class
+    raster's grid takes seconds)."""
+    return step_cache.memo(_ROADS, (tile.raw_raster("dop"), tile.id), lambda: _cached(tile))
+
+
+# The code that measures, so a change to it measures again.
+CODE = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+
+
+def _cache_key(tile: Tile) -> str | None:
+    """What the measurement reads: the DOP (its size and time — it is
+    hundreds of MB) and the class raster (its bytes). The DOP counts as
+    read for the step cache: what the kept texels stand for."""
+    dop = tile.raw_raster("dop")
+    png = tile.data / "dlm" / f"landcover_{tile.id}.png"
+    if not dop.exists() or not png.exists():
+        return None
+    step_cache.note_read(dop)
+    st = dop.stat()
+    digest = hashlib.sha256(png.read_bytes()).hexdigest()
+    return f"{CODE}:{KEEP}:{st.st_size}:{st.st_mtime_ns}:{digest}"
+
+
+def _cached(tile: Tile) -> np.ndarray | None:
+    key = _cache_key(tile)
+    if key is None:
+        return _measure(tile)
+    path = tile.raw_raster("dop").with_suffix(".roads.npz")
+    # the kept texels are no step's input or output: the DOP and the class
+    # raster they come from are
+    try:
+        with step_cache.quiet(), np.load(path) as kept:
+            if str(kept["key"]) == key:
+                return kept["texels"] if kept["found"] else None
+    except (OSError, KeyError, ValueError):
+        pass
+    texels = _measure(tile)
+    with step_cache.quiet():
+        part = path.with_name(f"{path.stem}.{os.getpid()}.part.npz")
+        np.savez(
+            part,
+            key=key,
+            found=texels is not None,
+            texels=texels if texels is not None else np.zeros((0, 3), np.float32),
+        )
+        part.replace(path)
+    return texels
 
 
 def _measure(tile: Tile) -> np.ndarray | None:

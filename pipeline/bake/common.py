@@ -13,7 +13,7 @@ import rasterio
 import shapely
 import shapely.ops
 from PIL import Image
-from rasterio.transform import from_bounds
+from rasterio.transform import from_bounds, rowcol
 
 OSM_ATTRIBUTION = "© OpenStreetMap contributors (ODbL)"
 
@@ -390,3 +390,24 @@ def label_line(
             out.append((piece, labels[i]))
         i = j + 1
     return out
+
+
+class Sampler:
+    """`dataset.sample(xy)` from its bands read once: rasterio reads a 1×1
+    window per point, which for a step's hundred thousand points costs more
+    than the step. Same rows and columns (`rowcol`, floor), same values, the
+    same fill (the nodata value, else 0) for a point off the raster."""
+
+    def __init__(self, dataset) -> None:
+        self.transform = dataset.transform
+        self.bands = dataset.read()
+        self.fill = np.full(dataset.count, dataset.nodata or 0, dtype=dataset.dtypes[0])
+
+    def sample(self, xy):
+        xy = list(xy)
+        if not xy:
+            return
+        rows, cols = rowcol(self.transform, *zip(*xy, strict=True))
+        _, h, w = self.bands.shape
+        for r, c in zip(rows, cols, strict=True):
+            yield self.bands[:, r, c] if 0 <= r < h and 0 <= c < w else self.fill

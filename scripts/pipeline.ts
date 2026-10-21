@@ -25,6 +25,10 @@
  *   bun run bake <site> --jobs 3      each step's tiles three at a time,
  *                                     one process each (a step still waits
  *                                     for the one before on every tile)
+ *   bun run bake <site> --force       run every step again, even one whose
+ *                                     code and inputs did not change (a
+ *                                     step is otherwise skipped then:
+ *                                     pipeline/bake/step_cache.py)
  *
  * The steps run in dependency order: land cover first (the canopy, the
  * tree cadastre, lamps and street furniture are gated on it); the bridges
@@ -72,7 +76,7 @@ export function siteSpec(site: Site) {
 /** The options each command takes (`--step` and `--jobs` need a value). */
 const OPTIONS = {
   fetch: ["--lsc"],
-  bake: ["--step", "--research", "--jobs"],
+  bake: ["--step", "--research", "--jobs", "--force"],
 } as const;
 const VALUED = new Set(["--step", "--jobs"]);
 
@@ -127,7 +131,9 @@ if (import.meta.main) {
       ...(step >= 0 ? ["--step", args[step + 1] ?? ""] : []),
       ...(jobs >= 0 ? ["--jobs", args[jobs + 1] ?? ""] : []),
       ...(tiles.length > 0 ? ["--tile", ...tiles] : []),
-      ...args.filter((a) => a === "--lsc" || a === "--research"),
+      ...args.filter(
+        (a) => a === "--lsc" || a === "--research" || a === "--force"
+      ),
     ],
     { stdio: "inherit", env: { ...process.env, PYTHONPATH: "pipeline" } }
   );

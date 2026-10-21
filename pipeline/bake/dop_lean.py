@@ -79,16 +79,41 @@ def lean_map(lum: np.ndarray, faces, sun, reach: int) -> np.ndarray | None:
     ev = (ev - ev.mean()) / ev.std()
     n = reach // MAP_STEP * 2 + 1
     out = np.full((n, n), np.nan, np.float32)
-    for i, dy in enumerate(range(-reach, reach + 1, MAP_STEP)):
-        for j, dx in enumerate(range(-reach, reach + 1, MAP_STEP)):
-            r, c = rows + dy, cols + dx
-            ok = (r >= 0) & (r < h) & (c >= 0) & (c < w)
-            if ok.sum() < LEAN_MIN_TEXELS:
-                continue
-            seen = lum[r[ok], c[ok]]
-            if seen.std() > 0:
-                out[i, j] = float(np.mean(ev[ok] * (seen - seen.mean()) / seen.std()))
+    shifts = np.arange(-reach, reach + 1, MAP_STEP)
+    # The shifts that keep every sample inside the crop (all of them but
+    # by the tile's edge) are scored a row of shifts at a time: one gather
+    # and row-wise reductions, the same float32 sums as one shift's.
+    inside_c = (cols.min() + shifts >= 0) & (cols.max() + shifts < w)
+    flat = np.ascontiguousarray(lum).ravel()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        for i, dy in enumerate(shifts):
+            r = rows + dy
+            if r.min() >= 0 and r.max() < h and inside_c.any():
+                js = np.nonzero(inside_c)[0]
+                seen = np.take(flat, (r * w + cols)[None, :] + shifts[js, None])
+                # np.std's own steps, its deviations kept for the score
+                dev = seen - seen.mean(axis=1, keepdims=True)
+                sd = np.sqrt(np.mean(np.square(dev), axis=1, keepdims=True))
+                score = np.mean(ev * dev / sd, axis=1)
+                good = sd[:, 0] > 0
+                out[i, js[good]] = score[good]
+                rest = np.nonzero(~inside_c)[0]
+            else:
+                rest = range(n)
+            for j in rest:
+                _score(out, i, j, lum, rows + dy, cols + shifts[j], ev)
     return out
+
+
+def _score(out, i, j, lum, r, c, ev) -> None:
+    """One shift whose samples leave the crop: those inside are scored."""
+    h, w = lum.shape
+    ok = (r >= 0) & (r < h) & (c >= 0) & (c < w)
+    if ok.sum() < LEAN_MIN_TEXELS:
+        return
+    seen = lum[r[ok], c[ok]]
+    if seen.std() > 0:
+        out[i, j] = float(np.mean(ev[ok] * (seen - seen.mean()) / seen.std()))
 
 
 class Sample:

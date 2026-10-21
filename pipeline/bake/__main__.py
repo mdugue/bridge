@@ -7,13 +7,18 @@ site spec (bake/spec.py) written from the TypeScript site config."""
 from __future__ import annotations
 
 import argparse
+import datetime
+import hashlib
 import multiprocessing
+import os
 from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
 
 from . import (
     canopy,
     cultivated,
     doors,
+    dop_balance,
     dormers,
     edges,
     facades,
@@ -39,6 +44,7 @@ from . import (
     small_buildings,
     sport,
     stairs,
+    step_cache,
     structures,
     surface,
     traffic,
@@ -174,21 +180,110 @@ def run_tile(step: str, tile, site_tiles, research: bool = False) -> None:
         STEPS[step](tile)
 
 
-def run_step(step: str, tiles, site_tiles, jobs: int, research: bool = False) -> None:
-    """A step over the tiles, `jobs` tiles at a time. Each tile writes only
-    its own files and reads only what earlier steps wrote, so the tiles of
-    one step run side by side; the next step starts once all are done."""
-    if jobs <= 1 or len(tiles) <= 1:
-        for tile in tiles:
-            run_tile(step, tile, site_tiles, research)
+def step_key(step: str, research: bool, spec_hash: str) -> dict:
+    """What a step's recorded run is valid for besides its files: its code
+    (its module and every bake module it reaches, the locked packages), the
+    site spec, the flags — and the year, for a step that reads the date."""
+    module = STEPS[step].__module__
+    key = {
+        "step": step,
+        "code": step_cache.code_hash(module),
+        "spec": spec_hash,
+        "research": bool(research),
+    }
+    if step_cache.dated(module):
+        key["year"] = datetime.date.today().year
+    return key
+
+
+def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) -> None:
+    """The step on the tile, its run recorded (step_cache.py) — or, with the
+    cache off, its old record dropped."""
+    manifest = step_cache.manifest_path(spec.raw, spec.site, step, tile.id)
+    if not save:
+        Path(manifest).unlink(missing_ok=True)
+        run_tile(step, tile, spec.tiles, research)
         return
-    # fork: the workers share the parent's loaded modules, and no dataset
-    # is open between two steps
-    context = multiprocessing.get_context("fork")
-    with ProcessPoolExecutor(min(jobs, len(tiles)), mp_context=context) as pool:
-        runs = [pool.submit(run_tile, step, t, site_tiles, research) for t in tiles]
-        for done in runs:
-            done.result()
+    with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
+        run_tile(step, tile, spec.tiles, research)
+    step_cache.save(manifest, key, rec)
+
+
+def warm(spec, step: str) -> None:
+    """The site-wide measurements every tile of `step` reads, made once
+    before the workers fork (each would make its own otherwise): the NDVI's
+    anchors, the flight's colour cast, the city's bin colour, a leaf-off
+    flight. They are `step_cache.memo`s, so each tile's manifest still
+    lists the files they came from."""
+    first = spec.tiles[0]
+    if step == "ndvi":
+        for t in spec.tiles:
+            if t.raw_raster("dop").exists():
+                ndvi.tile_anchors(t)
+    elif step in ("roof-colour", "sport"):
+        dop_balance.gains(spec.tiles)
+    elif step == "furniture":
+        furniture.site_bin_tone(first)
+    elif step == "monuments":
+        monuments.winter_flight(first)
+
+
+class Bake:
+    """The bake's run settings and the site's recorded runs."""
+
+    def __init__(self, spec, jobs: int, research: bool, spec_hash: str, mode: str) -> None:
+        self.spec, self.jobs, self.research = spec, jobs, research
+        self.spec_hash = spec_hash
+        # "cache": skip what is unchanged; "force": run all, record it;
+        # "off": run all, record nothing
+        self.mode = mode
+        self.ledger = step_cache.Ledger(spec.raw, spec.site, list(STEPS))
+        self.tiles = {t.id: t for t in spec.tiles}
+
+    def _run(self, step: str, tiles) -> None:
+        key = step_key(step, self.research, self.spec_hash)
+        args = (self.research, key, self.mode != "off")
+        if self.jobs <= 1 or len(tiles) <= 1:
+            for tile in tiles:
+                recorded_tile(self.spec, step, tile, *args)
+                self.ledger.done(step, tile.id)
+            return
+        warm(self.spec, step)
+        # fork: the workers share the parent's loaded modules (and what
+        # `warm` measured), and no dataset is open between two steps
+        context = multiprocessing.get_context("fork")
+        with ProcessPoolExecutor(min(self.jobs, len(tiles)), mp_context=context) as pool:
+            runs = [pool.submit(recorded_tile, self.spec, step, t, *args) for t in tiles]
+            for done in runs:
+                done.result()
+        for tile in tiles:
+            self.ledger.done(step, tile.id)
+
+    def step(self, step: str, tiles) -> None:
+        """A step over the tiles, `jobs` tiles at a time. Each tile writes
+        only its own files and reads only what earlier steps wrote, so the
+        tiles of one step run side by side; the next step starts once all
+        are done. Every tile is judged before any runs: a step's tiles read
+        each other's files as the step found them."""
+        if self.mode != "cache":
+            self._run(step, tiles)
+            return
+        key = step_key(step, self.research, self.spec_hash)
+        todo = []
+        for tile in tiles:
+            if self.ledger.unchanged(step, tile.id, key):
+                print(f"{tile.id}: {step} unchanged — skipped (--force runs it)")
+            else:
+                todo.append(tile)
+        again = sorted(
+            {r for t in todo for r in self.ledger.restore(step, t.id)},
+            key=lambda r: self.ledger.order[r[0]],
+        )
+        for s, tid in again:
+            print(f"{tid}: {s} runs again — {step} reads its output, which a later step replaced")
+            self._run(s, [self.tiles[tid]])
+        if todo:
+            self._run(step, todo)
 
 
 def main() -> None:
@@ -213,6 +308,11 @@ def main() -> None:
         action="store_true",
         help="lowveg: also write every candidate (scan-only hedges, shrubs) under the raw folder",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="bake: run every step, even one whose inputs and code are unchanged",
+    )
     args = parser.parse_args()
     spec = parse(args.spec)
     unknown = set(args.tile) - {t.id for t in spec.tiles}
@@ -226,11 +326,15 @@ def main() -> None:
         run_site_step(spec, args.step)
         return
     steps = list(STEPS) if args.step == "all" else [args.step]
+    mode = "off" if os.environ.get("BAKE_CACHE") == "0" else "force" if args.force else "cache"
+    bake = Bake(
+        spec, args.jobs, args.research, hashlib.sha256(args.spec.encode()).hexdigest(), mode
+    )
     # Step by step over the tiles, not tile by tile: ndvi, roof-colour and
     # sport read every tile of the site (its class rasters, the anchors of
     # its one flight), which the steps before them must have baked first.
     for step in steps:
-        run_step(step, tiles, spec.tiles, args.jobs, args.research)
+        bake.step(step, tiles)
     if args.step == "all" and not args.tile:
         for step in SITE_STEPS:
             run_site_step(spec, step)

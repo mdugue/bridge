@@ -63,6 +63,8 @@ bun run fetch <site>  # download the site's data through its provider's
                    # [tile…] [--lsc]
 bun run bake <site>   # offline bakes (pipeline/, Python via uv): raw → derived
                    # data/<site>/{dlm,dop} [tile…] [--step X] [--jobs N]
+                   # (a step whose code and files are unchanged is skipped;
+                   # --force runs it)
 bun run test:pipeline   # pytest + ruff for pipeline/
 bun scripts/ground-joins.ts <site> [tile…]   # where the baked parts miss the ground (ADR 0035)
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
@@ -394,7 +396,10 @@ config change.
   `tram.py`, `riverside.py`,
   `traffic.py` (the counted traffic; its sources per site in
   `traffic_sources.py`), `transit.py` (the trams' timetable, once for the
-  site), `osm.py`);
+  site), `osm.py` (+ `osm_index.py`: the extract read once into an
+  indexed FlatGeobuf copy beside it, the driver's own answer per read);
+  `step_cache.py` (a step whose code and files are unchanged is skipped;
+  `Ledger` judges a file a later step rewrites);
   tests in `pipeline/tests/`. Run by
   `bun run fetch <site>` / `bun run bake <site>` (`scripts/pipeline.ts`, which hands
   Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0037

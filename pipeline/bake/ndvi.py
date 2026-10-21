@@ -39,7 +39,7 @@ import rasterio
 from rasterio.enums import Resampling
 from rasterio.features import rasterize
 
-from . import ways
+from . import step_cache, ways
 from .common import Tile, save_grey_png
 from .osm import read_osm
 
@@ -124,9 +124,7 @@ def tile_anchors(tile: Tile, px: int = 1024) -> Anchors | None:
     """The tile's raw index on its low carriageways and its low lawns (None
     without a DOP of three bands or an OSM extract); once per process."""
     key = (tile.raw_raster("dop"), tile.osm, px)
-    if key not in _ANCHORS:
-        _ANCHORS[key] = _measure(tile, px)
-    return _ANCHORS[key]
+    return step_cache.memo(_ANCHORS, key, lambda: _measure(tile, px))
 
 
 def _measure(tile: Tile, px: int) -> Anchors | None:

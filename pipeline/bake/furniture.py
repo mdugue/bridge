@@ -87,7 +87,6 @@ from __future__ import annotations
 
 import colorsys
 import dataclasses
-import functools
 import json
 import math
 import re
@@ -100,6 +99,7 @@ from PIL import Image
 from rasterio.windows import from_bounds as window_from_bounds
 from scipy import ndimage as ndi
 
+from . import step_cache
 from .bridge import STEP, Axis
 from .common import (
     OSM_ATTRIBUTION,
@@ -1016,10 +1016,15 @@ def site_bin_tone(tile: Tile) -> str | None:
     ymin = min(b[1] for _, b in tiles)
     xmax = max(b[2] for _, b in tiles)
     ymax = max(b[3] for _, b in tiles)
-    return _site_bin_tone(dataclasses.replace(tile, bounds=(xmin, ymin, xmax, ymax)))
+    site = dataclasses.replace(tile, bounds=(xmin, ymin, xmax, ymax))
+    # one per extract and site, whichever of its tiles asks
+    key = (tile.data, tile.osm, site.bounds)
+    return step_cache.memo(_BIN_TONES, key, lambda: _site_bin_tone(site))
 
 
-@functools.cache
+_BIN_TONES: dict = {}
+
+
 def _site_bin_tone(site: Tile) -> str | None:
     _, fields = read_osm(site, "points", BIN_WHERE, ["other_tags"], margin=0.0)
     tones = [bin_tone(tag(o, "colour")) for o in fields["other_tags"] if tag(o, "colour")]

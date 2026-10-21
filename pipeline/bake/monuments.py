@@ -95,7 +95,6 @@ once."""
 
 from __future__ import annotations
 
-import functools
 import json
 import math
 import re
@@ -112,6 +111,7 @@ from rasterio.features import rasterize
 from rasterio.transform import from_origin
 from scipy import ndimage as ndi
 
+from . import step_cache
 from .common import (
     OSM_ATTRIBUTION,
     Tile,
@@ -1070,10 +1070,13 @@ def winter_flight(tile: Tile) -> bool:
     on every tile of the site) read bare on the calibrated index — the
     median of their greenest texel at ~2 m below WINTER_NDVI, from
     WINTER_MIN crowns at least."""
-    return _winter(tile.data, tuple(tile.neighbours()))
+    key = (tile.data, tuple(tile.neighbours()))
+    return step_cache.memo(_WINTER, key, lambda: _winter(*key))
 
 
-@functools.cache
+_WINTER: dict = {}
+
+
 def _winter(data: Path, tiles: tuple) -> bool:
     values = []
     for tid, (xmin, _, xmax, ymax) in tiles:
