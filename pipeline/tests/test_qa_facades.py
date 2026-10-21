@@ -121,7 +121,11 @@ def _surfaces(dom: np.ndarray, ground: float = 100.0):
     rows, cols = dom.shape
     field = SimpleNamespace(xmin=0.0, ymax=float(rows), res=1.0)
     return SimpleNamespace(
-        field=field, dom=dom, above=dom - ground, green=np.zeros(dom.shape, bool)
+        field=field,
+        dom=dom,
+        above=dom - ground,
+        green=np.zeros(dom.shape, bool),
+        mask=lambda geom, win: _inside(dom.shape, geom)[win],
     )
 
 
@@ -143,7 +147,7 @@ def test_a_missing_buildings_roof_takes_the_shape_the_surface_model_shows():
     inside = _inside((rows, cols), geom)
     dom[inside] = np.broadcast_to(roof, (rows, cols))[inside]
     win = (slice(0, rows), slice(0, cols))
-    parts = structures.shaped_roof(_surfaces(dom), geom, win, inside, 100.0)
+    parts = structures.shaped_roof(_surfaces(dom), geom, win, inside, 100.0, 110.0)
     assert parts is not None
     assert len(parts) >= 2
     flat = [p for p in parts if "surface" not in p]
@@ -164,4 +168,39 @@ def test_a_level_roof_stays_the_flat_box():
     inside = _inside((rows, cols), geom)
     dom[inside] = 112.0
     win = (slice(0, rows), slice(0, cols))
-    assert structures.shaped_roof(_surfaces(dom), geom, win, inside, 100.0) is None
+    assert structures.shaped_roof(_surfaces(dom), geom, win, inside, 100.0, 112.0) is None
+
+
+def _wing_and_hall():
+    """The first test's building: a flat wing at 110, a pitched hall."""
+    rows, cols = 34, 50
+    geom = shapely.box(5, 5, 45, 29)
+    dom = np.full((rows, cols), 100.0)
+    x = np.arange(cols) + 0.5
+    roof = np.where(x < 19, 110.0, 108.0 + 0.4 * (x - 19))
+    inside = _inside((rows, cols), geom)
+    dom[inside] = np.broadcast_to(roof, (rows, cols))[inside]
+    return dom, geom, inside, (slice(0, rows), slice(0, cols))
+
+
+def test_a_lattice_over_a_roof_stands_at_the_buildings_height(monkeypatch):
+    # the wing 7 m over the building's height: a mast's rigging where the
+    # model shows a lattice, a roof where it fills it
+    dom, geom, inside, win = _wing_and_hall()
+    monkeypatch.setattr(structures, "lattice", lambda *_: True)
+    parts = structures.shaped_roof(_surfaces(dom), geom, win, inside, 100.0, 103.0)
+    assert any(abs(p["z"] - 103) < 0.01 for p in parts if "surface" not in p)
+    monkeypatch.setattr(structures, "lattice", lambda *_: False)
+    parts = structures.shaped_roof(_surfaces(dom), geom, win, inside, 100.0, 103.0)
+    assert any(abs(p["z"] - 110) < 0.5 for p in parts if "surface" not in p)
+
+
+def test_a_lattice_is_a_surface_the_model_fills_sparsely():
+    dom = np.full((20, 20), 108.0)
+    geom = shapely.box(5, 5, 11, 11)
+    win = (slice(0, 20), slice(0, 20))
+    s = _surfaces(dom)
+    dom[9:15:3, 5:11] = 135.0  # every third row of a 6 m square: rigging
+    assert structures.lattice(s, win, geom, 135.0)
+    dom[9:15, 5:11] = 135.0  # the whole square: a plant room, a tower
+    assert not structures.lattice(s, win, geom, 135.0)

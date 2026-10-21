@@ -164,6 +164,16 @@ MIN_COVER = 0.95
 MIN_GAIN = 1.5 * LEVEL_M
 # An outline this much inside buildings already taken is their block.
 MAX_OVERLAP = 0.5
+# A shaped roof's flat part rising this far over its building (m) whose
+# polygon the surface model fills at its level (within SOLID_M) on less
+# than SOLID_SHARE of its measured cells is a lattice — a mast and its
+# rigging, a crane, a floodlight's pole —, not a roof: it stands at the
+# building's height (2026-10-21: the Rickmer Rickmers' masts stood as
+# 25 m towers on its deck, a sports hall's floodlight 50 m over Leipzig's
+# Paralympische Sporthalle).
+MAST_RISE_M = 6.0
+SOLID_M = 1.5
+SOLID_SHARE = 0.4
 # Roofs on posts: what OSM maps as one, the least area (m²), the share of
 # it the surface model must cover this high (m) over the ground, how level
 # it must be (the spread of its middle half, m), and how high it may stand
@@ -424,7 +434,7 @@ def building(
     if src:
         props["src"] = src
     elif base == 0:
-        parts = shaped_roof(s, geom, win, inside, z)
+        parts = shaped_roof(s, geom, win, inside, z, z + h)
         if parts:
             props["parts"] = parts
     if name:
@@ -433,12 +443,19 @@ def building(
 
 
 def shaped_roof(
-    s: Surfaces, geom: shapely.Geometry, win: tuple[slice, slice], inside: np.ndarray, z: float
+    s: Surfaces,
+    geom: shapely.Geometry,
+    win: tuple[slice, slice],
+    inside: np.ndarray,
+    z: float,
+    top_at: float,
 ) -> list[dict] | None:
     """A missing building's roof in the shape the surface model shows (see
     the module's 2.), or None where it shows one level only or the shape
     misses it: the parts as roofs.py writes a rebuilt roof's, each its
-    outline's `coordinates`, its roof's `z` and a face's `surface`."""
+    outline's `coordinates`, its roof's `z` and a face's `surface`. A flat
+    part the model shows as a lattice (`lattice`) stands at `top_at`, the
+    building's height."""
     rows, cols = win
     f = s.field
     grid = roofs.Grid(
@@ -465,6 +482,8 @@ def shaped_roof(
     for poly, top, rid in roofs.region_polygons(model.lab, model.level, grid, geom):
         if top < z + roofs.GROUND_M:
             continue
+        if not model.faces[rid] and top > top_at + MAST_RISE_M and lattice(s, win, poly, top):
+            top = top_at
         top = round(top, 2)
         part = {"coordinates": geometry_json(poly)["coordinates"], "z": top}
         if model.faces[rid]:
@@ -473,6 +492,14 @@ def shaped_roof(
     if len(parts) < 2 and not any("surface" in p for p in parts):
         return None
     return parts
+
+
+def lattice(s: Surfaces, win: tuple[slice, slice], poly: shapely.Geometry, top: float) -> bool:
+    """Whether the surface model fills `poly` at `top` (within SOLID_M) on
+    less than SOLID_SHARE of its measured cells: a mast, not a roof."""
+    dom = s.dom[win][s.mask(poly, win)]
+    dom = dom[np.isfinite(dom)]
+    return len(dom) > 0 and float(np.mean(np.abs(dom - top) <= SOLID_M)) < SOLID_SHARE
 
 
 def open_roof(s: Surfaces, geom: shapely.Geometry, kind: str, name: str | None) -> dict | None:
