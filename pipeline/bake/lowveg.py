@@ -485,6 +485,24 @@ def cadastre_filter(extra, trees_path):
     return kept, len(extra) - len(kept)
 
 
+def rethin_scan_trees(tile: Tile) -> int | None:
+    """The committed scan trees (`canopyx`) thinned against the tile's
+    current trees file, as `cadastre_filter` thins them when lowveg bakes.
+    A tile whose laser scan is not on disk cannot re-bake its scan trees,
+    but the trees step can place a register or OSM tree where one stands
+    (Dresden 2026-10-21: 5 of 5 734 on one tile): that scan tree goes, the
+    rest stay as they are. How many went; None without a `canopyx` file."""
+    dlm = tile.data / "dlm"
+    path = dlm / f"canopyx_{tile.id}.geojson"
+    if not path.exists():
+        return None
+    doc = json.loads(path.read_text())
+    kept, dropped = cadastre_filter(doc["features"], dlm / f"trees_{tile.id}.geojson")
+    if dropped:
+        write_geojson(tile.out("dlm", path.name), kept, tile.epsg, doc.get("attribution"))
+    return dropped
+
+
 def crown_radii(chm, mass, peaks, others) -> np.ndarray:
     """Each peak's crown radius (m): its share of the crown `mass` — the
     watershed of the smoothed heights `chm` from every peak and from every

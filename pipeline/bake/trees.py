@@ -93,7 +93,7 @@ import numpy as np
 import rasterio
 from scipy.spatial import cKDTree
 
-from . import allometry, crown_form
+from . import allometry, crown_form, lowveg
 from . import tree_archetypes as ta
 from .cadastre import Fields, Register, register_of
 from .canopy import BARE, bridge_mask, crown_green, roof_mask
@@ -949,6 +949,11 @@ def run(tile: Tile) -> None:
             separators=(",", ":"),
         )
     )
+    # a scan tree the new trees claim goes now: lowveg, which thins them,
+    # cannot re-bake a tile whose scan is not on disk
+    rethinned = lowveg.rethin_scan_trees(tile)
+    if rethinned:
+        print(f"{tile.id}: {rethinned} scan trees dropped where a tree now stands")
     unknown = sum(not t["known"] or not ta.is_genus(t["genus"]) for t in trees)
     c = census
     print(
