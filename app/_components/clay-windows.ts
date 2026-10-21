@@ -210,7 +210,8 @@ function doorClear(slot: F, centre: F, half: F): F {
 
 /** The window grid at the fragment: its column (`columns`) and its storey
  *  row — the ground floor's from the base, each upper one's from its
- *  storey line, none past the eave's clearance; the ground floor's only
+ *  storey line, none past the eave's clearance nor under the ground in
+ *  front of a wall without ground-floor windows; the ground floor's only
  *  where no shop, shopfront or door stands. */
 function grid(i: WindowInputs): Grid {
   const s = i.facade.x.mul(FACADE_SCALE_M);
@@ -253,7 +254,15 @@ function grid(i: WindowInputs): Grid {
     .mul(doorClear(i.facade.z, c.centre, half))
     .mul(doorClear(i.facade.w, c.centre, half))
     .mul(step(sill.add(tall), first.sub(WINDOW_ROWS.lintel)));
+  // on a wall without ground-floor windows the ground in front (its first
+  // door slot): no window under it
+  const buried = mix(
+    float(-1e3),
+    i.facade.z.mul(FACADE_SCALE_M),
+    float(1).sub(step(-0.01, signed))
+  );
   const rows = step(0.5, c.n)
+    .mul(step(buried.add(WINDOW_ROWS.plinthGap), line.add(sill).add(lift)))
     .mul(step(WINDOW_ROWS.min, height))
     .mul(step(0.05, i.spec.x))
     .mul(step(0.5, length))

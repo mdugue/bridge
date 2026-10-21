@@ -3,6 +3,7 @@ import {
   OBJECT_FLAG_GLASS,
   OBJECT_FLAG_GROUNDED,
   OBJECT_FLAG_LANDMARK,
+  OBJECT_FLAG_OWN_FACADE,
   OBJECT_SOURCE_DOOR,
   OBJECT_SOURCE_LOD2,
   OBJECT_SOURCE_PLINTH,
@@ -184,6 +185,25 @@ test("a listed public building without a storey count is said to be one", () => 
   );
   expect(r.Fenster).toMatchObject({ value: "keine", method: "assumed" });
   expect(r.Fenster.detail).toContain("Baudenkmal");
+});
+
+test("a palace's windows are said to be its type's", () => {
+  const r = rows(
+    ask(
+      object(
+        { own: "use", windows: "type" },
+        {
+          flags:
+            OBJECT_FLAG_GROUNDED +
+            OBJECT_FLAG_LANDMARK +
+            OBJECT_FLAG_OWN_FACADE,
+        },
+        { function: "31001_3031" }
+      )
+    )
+  );
+  expect(r.Fenster).toMatchObject({ method: "assumed", source: "viewer" });
+  expect(r.Fenster.detail).toContain("Schloss");
 });
 
 test("a door asked describes the house it opens, and the house's parts", () => {

@@ -10,10 +10,13 @@ import {
   FACADE_SCALE_M,
   type FacadeModel,
   facadeAttribute,
+  wallRises,
   groundLift,
   NO_DOOR,
+  PALACE_STOREY_M,
   slotDoor,
   packStyle,
+  palaceStorey,
   TOWARD_TYPE,
   TYPES,
   unpackStyle,
@@ -250,6 +253,24 @@ describe("windowSpecs", () => {
     }
   });
 
+  test("a wall the ground rises too high in front of loses its ground floor alone", () => {
+    // 1.6 m in front of one wall would leave the windows squat (above),
+    // 1.2 m in front of another not
+    const [c] = windowSpecs(
+      [host({ eaveH: 9, storeyH: 3, ground: [0.3, 1.2, 1.6] })],
+      [],
+      index
+    );
+    const s = unpackStyle(c.spec.style);
+    expect(s.noGround).toBe(false);
+    expect(c.reach).toBeGreaterThanOrEqual(1.2);
+    expect(c.reach).toBeLessThan(1.6);
+    expect(s.sill + s.lift - WINDOW_ROWS.plinthGap).toBeCloseTo(
+      c.reach ?? 0,
+      9
+    );
+  });
+
   test("the ground floor's windows keep over the plinth", () => {
     const [low, high, raised, squat] = windowSpecs(
       [
@@ -266,14 +287,18 @@ describe("windowSpecs", () => {
       1.2 + WINDOW_ROWS.plinthGap - 1e-9
     );
     expect(s.noGround).toBe(false);
-    // a plinth too high for the classes: no ground-floor windows
-    expect(unpackStyle(high.spec.style).noGround).toBe(true);
-    // ...nor where the lift would leave them wider than tall
-    const q = unpackStyle(squat.spec.style);
-    expect(squat.spec.h - q.lift).toBeLessThan(
-      WINDOW_ROWS.squat * squat.spec.w
-    );
-    expect(q.noGround).toBe(true);
+    // a plinth too high for the classes, or one the lift would leave the
+    // windows wider than tall over: the ground floor stays unlifted, its
+    // reach under the plinth (the plinth's walls lose theirs, the bake)
+    for (const [c, plinth] of [
+      [high, 2.6],
+      [squat, 1.6],
+    ] as const) {
+      const q = unpackStyle(c.spec.style);
+      expect(q.noGround).toBe(false);
+      expect(q.lift).toBe(0);
+      expect(c.reach).toBeLessThan(plinth);
+    }
     // a town house's Hochparterre
     expect(unpackStyle(raised.spec.style).lift).toBeCloseTo(
       WINDOW_ROWS.raise,
@@ -333,6 +358,14 @@ describe("the layout", () => {
     expect(clipped[1]).toBeCloseTo(13.3 - WINDOW_ROWS.eaveClear, 9);
     // too little left: none
     expect(windowRows(spec, 3.5, 12.3).at(-1)![0]).toBeCloseTo(7.9, 9);
+  });
+
+  test("no row under the ground in front of a shopfront's wall", () => {
+    // 5 m of ground (a terrace) in front: the ground floor and the first
+    // floor's sill at 4.4 m lie under it
+    const rows = windowRows(spec, 3.5, 15, false, 5);
+    expect(rows[0][0]).toBeCloseTo(7 + 0.9, 9);
+    expect(rows[0][0]).toBeGreaterThanOrEqual(5 + WINDOW_ROWS.plinthGap);
   });
 
   test("a lifted ground floor keeps its head", () => {
@@ -528,9 +561,24 @@ describe("facadeAttribute", () => {
       door(11),
     ]);
     expect(metres(three[1])).toBeCloseTo(-14, 1);
-    // the two nearest the middle are kept
-    expect(slotDoor(three[2])?.at).toBeCloseTo(0, 9);
+    // its first slot holds the ground in front (not known here: 0), as on
+    // a shopfront's wall; the second the next door to the middle
+    expect(metres(three[2])).toBeCloseTo(0, 9);
     expect(Math.abs(slotDoor(three[3])?.at ?? 0)).toBeCloseTo(4, 9);
+  });
+  test("a wall the ground rises past its reach: signed, its ground kept", () => {
+    const mesh = quads(boxWalls(0, 0, 0, 14, 10, 12));
+    // 4.5 m of ground in front of the east wall (triangles 2 and 3), 1 m
+    // in front of the others; the windows clear 2 m
+    const at = Array.from({ length: 8 }, (_, t) =>
+      t === 2 || t === 3 ? 4.5 : 1
+    );
+    const f = facadeAttribute(mesh, () => true, [], [], { at, reach: () => 2 });
+    expect(metres(f[4 * 6 + 1])).toBeCloseTo(-10, 1);
+    expect(metres(f[4 * 6 + 2])).toBeCloseTo(4.5, 1);
+    // the south wall keeps its ground floor and its door slot
+    expect(metres(f[1])).toBeCloseTo(14, 1);
+    expect(f[2]).toBe(Math.round(32_767 * NO_DOOR));
   });
 });
 
@@ -609,5 +657,97 @@ describe("the door slots", () => {
         }
       }
     }
+  });
+});
+
+describe("wallRises", () => {
+  test("the ground in front of a wall, also of one standing on a step", () => {
+    // a south wall from the base and one standing 6 m up, both facing a
+    // terrace 7 m over the base; a roof reads nothing
+    const mesh = quads([
+      {
+        object: 0,
+        pts: [
+          [0, 0, 0],
+          [10, 0, 0],
+          [10, 0, 5],
+          [0, 0, 5],
+        ],
+      },
+      {
+        object: 1,
+        pts: [
+          [20, 0, 6],
+          [30, 0, 6],
+          [30, 0, 12],
+          [20, 0, 12],
+        ],
+      },
+      {
+        object: 1,
+        roof: true,
+        pts: [
+          [20, 0, 12],
+          [30, 0, 12],
+          [30, 10, 12],
+          [20, 10, 12],
+        ],
+      },
+    ]);
+    const rises = wallRises(
+      mesh,
+      () => 0,
+      (_x, y) => (y < 0 ? 7 : 0)
+    );
+    expect(Array.from(rises.slice(0, 4))).toEqual([7, 7, 7, 7]);
+    expect(Number.isNaN(rises[4])).toBe(true);
+    // level ground: the wall on the step stands over a lower roof, its
+    // reading does not count
+    const flat = wallRises(
+      mesh,
+      () => 0,
+      () => 0
+    );
+    expect(Array.from(flat.slice(0, 2))).toEqual([0, 0]);
+    expect(Number.isNaN(flat[2])).toBe(true);
+  });
+});
+
+describe("palaces", () => {
+  const index = new Map([["a", 0]]);
+
+  test("a palace's storey: OSM's count where it is a storey, else ~5.5 m", () => {
+    expect(palaceStorey(18, 3)).toBeCloseTo(6, 9);
+    expect(palaceStorey(18, 1)).toBeCloseTo(18 / 3, 9); // 18 m: not a storey
+    expect(palaceStorey(16.5)).toBeCloseTo(PALACE_STOREY_M, 9);
+    expect(palaceStorey(4)).toBeCloseTo(4, 9);
+  });
+
+  test("an own facade carries windows only as a palace, of its type", () => {
+    const [blank, palace] = windowSpecs(
+      [
+        host({ ownFacade: true, eaveH: 18 }),
+        host({ ownFacade: true, eaveH: 18, palace: true, storeys: 3 }),
+      ],
+      [],
+      index
+    );
+    expect(blank.from).toBe("none");
+    expect(palace.from).toBe("type");
+    expect(palace.storey).toBeCloseTo(6, 9);
+    expect(palace.spec.h).toBeGreaterThan(2.5);
+    expect(palace.spec.axis).toBeCloseTo(TYPES.palace.axis, 1);
+  });
+
+  test("a palace never borrows a town house's rhythm nearby", () => {
+    const [, palace] = windowSpecs(
+      [
+        host({ centre: [10, 0] }),
+        host({ eaveH: 18, ownFacade: true, palace: true, root: 1 }),
+      ],
+      [measured("a")],
+      index
+    );
+    expect(palace.from).toBe("type");
   });
 });

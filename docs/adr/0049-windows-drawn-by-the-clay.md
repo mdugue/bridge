@@ -43,7 +43,8 @@ finds its window cell from two inputs the building bake writes
   wall's length (negative where the ground floor has no windows: over a
   shopfront, or with more doors than the two it holds; 0 on a party
   wall), and up to two of OSM's doors along it, each its place and width
-  in one code. A wall is one plane
+  in one code (on a wall without ground-floor windows the first slot
+  holds the ground's height in front instead, below). A wall is one plane
   of one object's triangles; a party wall is one another wall stands
   against back to back.
 
@@ -77,9 +78,24 @@ street: a LoD2 base is the lowest ground round the whole footprint (a
 courtyard's, a ramp's), so a building's base moves up to the street its
 plinths stand on, and the storey lines, the Gurtgesims and the windows
 start from the pavement. The ground floor's windows open over the
-plinth's highest top (a plinth stepping up a slope lifts them; where that
-would take more than 1.5 m, or leave them lower than four fifths of their
-width, that ground floor has none), a town house's a little higher still
+plinth's highest top and over the ground in front of every wall, read in
+the tile's fine terrain half a metre out of the wall every 2 m along it
+— also out of a wall standing on a step of its building, which meets the
+ground higher up — (`wallRises`; 2026-10-19 and 2026-10-20: they sank into the
+Brühlsche Terrasse — first where no plinth is drawn, then on the walls
+the plinth pieces never reach, which cover only open street runs of
+buildings from 5 m); a plinth stepping up a slope lifts them. A wall whose
+ground rises past what the lift reaches (2.2 m over the base,
+`GROUND_REACH_M`), or higher than leaves them four fifths of their width
+tall, loses its own ground floor, marked like a shopfront's, and the
+building's other walls keep theirs (`overGround`); where even the lowest
+ground would leave them that short, that ground floor has none. Such a
+wall carries the ground's height in front in its first door slot (it has
+no ground-floor windows to keep off doors), and no window row starts
+under it: where the ground rises by more than a storey, as along the
+Kunstakademie's terrace front (2026-10-20), the first floor's windows go
+too.
+A town house's a little higher still
 (a Hochparterre); the Gurtgesims sits on the first storey line, between
 the ground floor's heads and the first floor's sills; a top floor's
 windows end under the Traufgesims, shorter if they must.
@@ -99,6 +115,21 @@ within 0.6 m of a door's opening — its surround and a pier of wall
 between. A Wikidata
 landmark's flag alone does not keep them off: most are town houses whose
 neighbours carry windows.
+
+A palace is the exception to the monumental gate (2026-10-19, Manuel: the
+Zwinger, Albertinum, Japanisches Palais, Residenzschloss and the
+Landtag's old building stood without a window, densely windowed in
+reality). A facade of its own on a public use (ALKIS `31001_3010`–`3072`
+but the churches' 3038–3048: a Schloss, museum, theatre, parliament,
+court, school, academy, hospital — no station, no sports hall;
+`palatialFacade`) carries windows of their own type
+`palace`: storeys from OSM's count where it gives 2.4–7.5 m, else the
+eave split into storeys of about 5.5 m (`palaceStorey`), windows up to
+3 m tall on a 3.6 m axis with a Fasche, and only its own walls'
+measured rhythm, never a town house's nearby. A part that shares its
+building's facade (the Kulturpalast's raised roof) stays blank, and so
+do churches, stations, sports halls and the Kulturpalast (2090, not
+public).
 
 ## Consequences
 

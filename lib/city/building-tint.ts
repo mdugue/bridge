@@ -547,6 +547,34 @@ export function ownFacadeReason(
     : null;
 }
 
+/** ALKIS's public buildings a palace's windows fit (`31001_3010`–`3072`:
+ *  administration, education, culture, health, police and fire service) —
+ *  not a barracks, a bunker or a prison (3073–3075), a station,
+ *  a cemetery's or a sports hall (3080 on), whose walls are a hall's. */
+const PALACE = { from: "31001_3010", to: "31001_3072" } as const;
+/** … but its religious buildings and fortresses (`31001_3038`–`3048`):
+ *  a nave's, a tower's or a bastion's facade has no rows of windows. */
+const NO_PALACE = { from: "31001_3038", to: "31001_3048" } as const;
+
+/**
+ * Whether a facade of its own (`ownFacade`) is a palace's: a public
+ * building (`PALACE`) that is not a church, a chapel, a synagogue or a
+ * fortress — a Schloss, a museum, a parliament, a court, an academy, a
+ * theatre, a hospital; not a station or a sports hall. Its windows are drawn as a palace's
+ * (lib/city/windows.ts, type `palace`): tall storeys, tall windows; the
+ * originals are densely windowed (the Zwinger's galleries, the
+ * Albertinum, the Japanisches Palais).
+ */
+export function palatialFacade(attrs: Record<string, unknown> = {}): boolean {
+  const fn = readString(attrs.function);
+  return (
+    fn !== undefined &&
+    fn >= PALACE.from &&
+    fn <= PALACE.to &&
+    (fn < NO_PALACE.from || fn > NO_PALACE.to)
+  );
+}
+
 /**
  * Whether a building part's facade is its own: its own reading
  * (`ownFacade`), or its building's where OSM's storeys do not fit the
