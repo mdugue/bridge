@@ -276,42 +276,101 @@ function collectVertices(loaderScene: {
  * Altstadt's flat roofs). A wall is one surface (`surfaces`: geometry and
  * boundary ids) at most ROOF_STEP_M tall whose foot is no lower than the
  * building's lowest roof vertex; a set-back storey is taller and keeps
- * its windows.
+ * its windows. A gable is not: a triangle (one top corner) standing on a
+ * level foot at the eave, where a dataset keeps the gable apart from the
+ * wall under it (on a shallow roof 1.5 m or less: Meißen's tile 362 of
+ * them at least 5 m wide, Dresden's spawn tile 173).
  */
 export function withRoofSteps(
   v: Pick<CityVertices, "positions" | "objectIds" | "isRoof" | "surfaces">,
   walls: Uint8Array
 ): Float32Array<ArrayBuffer> {
   const isRoof = Float32Array.from(v.isRoof);
-  if (!v.surfaces) {
+  const ids = v.surfaces;
+  if (!ids) {
     return isRoof;
   }
-  const eave = new Map<number, number>();
-  const span = new Map<string, [number, number]>();
+  const p = v.positions;
+  // one number per surface (object, geometry, boundary; −1 is none, so
+  // each id + 1): objects below 2¹⁹, geometries 2¹⁰, boundaries 2²⁴
   const key = (i: number) =>
-    `${v.objectIds[i]}:${v.surfaces?.[2 * i]}:${v.surfaces?.[2 * i + 1]}`;
+    (v.objectIds[i] * 1024 + ids[2 * i] + 1) * 16_777_216 + ids[2 * i + 1] + 1;
+  const eave = new Map<number, number>();
+  const shape = new Map<number, WallShape>();
   for (let i = 0; i < isRoof.length; i++) {
-    const z = v.positions[3 * i + 2];
+    const z = p[3 * i + 2];
     if (isRoof[i] === 1) {
       eave.set(v.objectIds[i], Math.min(eave.get(v.objectIds[i]) ?? z, z));
     } else if (walls[i] === 1) {
-      const s = span.get(key(i));
-      span.set(key(i), s ? [Math.min(s[0], z), Math.max(s[1], z)] : [z, z]);
+      const s = shape.get(key(i));
+      if (s) {
+        s.lo = Math.min(s.lo, z);
+        s.hi = Math.max(s.hi, z);
+      } else {
+        shape.set(key(i), { lo: z, hi: z, top: null, foot: null });
+      }
     }
   }
   for (let i = 0; i < isRoof.length; i++) {
-    const s = walls[i] === 1 ? span.get(key(i)) : undefined;
+    const s = walls[i] === 1 ? shape.get(key(i)) : undefined;
+    if (s) {
+      const z = p[3 * i + 2];
+      if (z > s.hi - CORNER_M) {
+        s.top = corners(s.top, p[3 * i], p[3 * i + 1]);
+      }
+      if (z < s.lo + CORNER_M) {
+        s.foot = corners(s.foot, p[3 * i], p[3 * i + 1]);
+      }
+    }
+  }
+  for (let i = 0; i < isRoof.length; i++) {
+    const s = walls[i] === 1 ? shape.get(key(i)) : undefined;
     const low = eave.get(v.objectIds[i]);
     if (
       s &&
       low !== undefined &&
-      s[1] - s[0] <= ROOF_STEP_M &&
-      s[0] >= low - 0.1
+      s.hi - s.lo <= ROOF_STEP_M &&
+      s.lo >= low - 0.1 &&
+      !isGable(s, low)
     ) {
       isRoof[i] = 1;
     }
   }
   return isRoof;
+}
+
+/** How close two corners (m) are one corner, and two heights one level. */
+const CORNER_M = 0.05;
+
+/** A wall surface's height span and its distinct corners at the top and
+ *  at the foot (the first one's x, y and whether another stands apart). */
+interface WallShape {
+  lo: number;
+  hi: number;
+  top: Corners | null;
+  foot: Corners | null;
+}
+type Corners = { x: number; y: number; more: boolean };
+
+function corners(c: Corners | null, x: number, y: number): Corners {
+  if (!c) {
+    return { x, y, more: false };
+  }
+  if (!c.more && Math.hypot(x - c.x, y - c.y) > CORNER_M) {
+    c.more = true;
+  }
+  return c;
+}
+
+/** One top corner over a level foot of two at the building's eave. */
+function isGable(s: WallShape, eave: number): boolean {
+  return (
+    s.top !== null &&
+    !s.top.more &&
+    s.foot !== null &&
+    s.foot.more &&
+    Math.abs(s.lo - eave) < CORNER_M
+  );
 }
 
 /**

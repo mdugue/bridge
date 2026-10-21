@@ -138,3 +138,15 @@ test("a car's sections: about 7.5 m each, stretched to the length", () => {
   expect(n).toBe(5);
   expect(n * 7.2 * stretch + (n - 1) * 0.3).toBeCloseTo(36, 6);
 });
+
+test("the livery's parts carry their tints before any car runs", () => {
+  // a material compiled now must already read them: three does not
+  // rebuild it when the first car adds the attribute
+  const cars = createTramCars(TT, [], ctx);
+  for (const s of sets(cars)) {
+    const tinted = ["body", "skirt", "top"].some((p) =>
+      s.name.endsWith(`-${p}`)
+    );
+    expect(s.geometry.hasAttribute("iColor")).toBe(tinted);
+  }
+});

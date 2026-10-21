@@ -858,19 +858,10 @@ const MEADOW_NDVI = float(0.6);
  * and a drier yellow-tan where it's low — large-area colour variation the
  * flat splat can't give. The NDVI is LINEAR-filtered so the ~2 m raster
  * reads smooth, and a tiny `step` gates out zero/nodata texels (keep the
- * base sage, don't grey out).
+ * base sage, don't grey out). `g` is that NDVI from a coarser mip, read
+ * once for the meadows and the crops (`arableGround`).
  */
-function meadowNdvi(
-  inp: GroundInputs,
-  col: GroundColour,
-  ndvi: Tex,
-  strength: F
-): void {
-  // Read from a coarser mip (a bias of 2.5): the 2 m raster carries every
-  // path, tree shadow and bare patch, which painted the meadows in dark
-  // flecks. Averaged over ~10 m it is what it should be — broad lush and
-  // dry drifts.
-  const g = texture(ndvi, inp.uv).bias(float(2.5)).r.toVar();
+function meadowNdvi(col: GroundColour, g: F, strength: F): void {
   const t = smoothstep(0.1, 0.6, g);
   const c = col.baseCol;
   const tint = mix(
@@ -918,15 +909,14 @@ function arableGround(
   inp: GroundInputs,
   col: GroundColour,
   g: GroundFields,
-  ndvi?: Tex
+  v?: F
 ): void {
   const arable = float(1)
     .sub(step(0.5, abs(inp.cls.sub(ARABLE_CLASS))))
     .toVar();
   const c = col.baseCol;
   const crop = float(0).toVar();
-  if (ndvi) {
-    const v = texture(ndvi, inp.uv).bias(float(2.5)).r;
+  if (v) {
     crop.assign(smoothstep(0.12, 0.42, v).mul(step(0.012, v)));
     c.assign(mix(c, c.mul(CROP_GAIN), crop.mul(CROP).mul(arable)));
   }
@@ -1033,10 +1023,18 @@ function splatColour(splat: SplatNodes): V3 {
     if (splat.markings) {
       roadMarkings(inp, col, g, splat.markings);
     }
-    if (splat.ndvi) {
-      meadowNdvi(inp, col, splat.ndvi, MEADOW_NDVI);
+    // the NDVI from a coarser mip (a bias of 2.5), read once for the
+    // meadows and the crops: the 2 m raster carries every path, tree
+    // shadow and bare patch, which painted the meadows in dark flecks;
+    // averaged over ~10 m it is what it should be — broad lush and dry
+    // drifts
+    const coarseNdvi = splat.ndvi
+      ? texture(splat.ndvi, inp.uv).bias(float(2.5)).r.toVar()
+      : undefined;
+    if (coarseNdvi) {
+      meadowNdvi(col, coarseNdvi, MEADOW_NDVI);
     }
-    arableGround(inp, col, g, splat.ndvi);
+    arableGround(inp, col, g, coarseNdvi);
     const baseCol = paperGround(col, texture(splat.colorTexture, uv).a);
     grassDetail.assign(col.detail);
     groundTilt.assign(g.tilt);

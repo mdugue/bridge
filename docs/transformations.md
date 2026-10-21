@@ -1076,7 +1076,11 @@ visual-variable codebook is in
   rings are shifted by it before they are read. A wall at most 1.5 m tall
   standing on its building's roof (a step between roof levels, a parapet,
   a dormer's cheek) is drawn as roof (`withRoofSteps`): as sunlit plaster
-  with an eave stroke it read from above as a white dash.
+  with an eave stroke it read from above as a white dash. A gable is not
+  (a triangle, one top corner over a level foot at the eave, where the
+  dataset keeps it apart from the wall under it): on a shallow roof the
+  rule had coloured 362 gables of 5 m and wider as roof on Meißen's tile,
+  173 on Dresden's spawn tile.
   Every flight's photo is first taken to Dresden's colour balance
   (`pipeline/bake/dop_balance.py`, 2026-10-20): each flight has its own
   cast, and every colour read off it carried it — Leipzig's photo is cyan

@@ -1065,34 +1065,53 @@ test("a roof face the orthophoto read apart carries its own colour", () => {
 });
 
 test("a short wall standing on the roof is the roof's, a set-back storey is not", () => {
-  // three walls of one object, one triangle each, over a roof at 10 m
-  const tri = (z0: number, z1: number) => [0, 0, z0, 1, 0, z0, 0, 0, z1];
+  // walls of one object over a roof at 10 m, each one surface
+  const quad = (z0: number, z1: number) => [
+    0,
+    0,
+    z0,
+    4,
+    0,
+    z0,
+    4,
+    0,
+    z1,
+    0,
+    0,
+    z0,
+    4,
+    0,
+    z1,
+    0,
+    0,
+    z1,
+  ];
+  const roof = [0, 0, 10, 1, 0, 10, 0, 1, 10];
+  const gable = [0, 0, 10, 6, 0, 10, 3, 0, 11.2]; // a shallow one, at the eave
   const positions = Float32Array.from([
-    0,
-    0,
-    10,
-    1,
-    0,
-    10,
-    0,
-    1,
-    10, // the roof
-    ...tri(10, 11), // a 1 m step on it
-    ...tri(10, 13), // a storey set back on it
-    ...tri(0, 1), // a 1 m wall on the ground
+    ...roof,
+    ...quad(10, 11), // a 1 m step on it
+    ...quad(10, 13), // a storey set back on it
+    ...quad(0, 1), // a 1 m wall on the ground
+    ...gable,
   ]);
+  // each vertex's surface: the roof's three, then the walls'
+  const surface = [3, 6, 6, 6, 3].flatMap((n, s) =>
+    Array.from({ length: n }, () => s)
+  );
   const isRoof = withRoofSteps(
     {
-      isRoof: Float32Array.from([1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      objectIds: new Float32Array(12),
+      isRoof: Float32Array.from(surface, (s) => (s === 0 ? 1 : 0)),
+      objectIds: new Float32Array(surface.length),
       positions,
-      surfaces: Float32Array.from(
-        [0, 1, 2, 3].flatMap((s) => [0, s, 0, s, 0, s])
-      ),
+      surfaces: Float32Array.from(surface.flatMap((s) => [0, s])),
     },
-    Uint8Array.from([0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+    Uint8Array.from(surface, (s) => (s === 0 ? 0 : 1))
   );
-  expect([...isRoof]).toEqual([1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]);
+  const flags = [...isRoof];
+  expect(flags.slice(0, 9)).toEqual(Array.from({ length: 9 }, () => 1)); // roof, step
+  // the set-back storey, the wall on the ground and the gable stay walls
+  expect(flags.slice(9)).toEqual(Array.from({ length: 15 }, () => 0));
 });
 
 test("a rebuilt roof's parts carry their own colour, its walls none", () => {

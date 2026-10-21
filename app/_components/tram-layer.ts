@@ -105,6 +105,10 @@ export const LAWN_PAIR_M = 4.5;
 /** What a shared lawn's inner edge stops short of the midpoint (m): the
  *  two strips meet without overlapping (no z-fight where they would). */
 const LAWN_SEAM_M = 0.01;
+/** How square across a run its neighbour must lie to share its lawn (the
+ *  cosine to its normal): the run's own next piece, end to end at a way's
+ *  split or a level change, lies along it. */
+const LAWN_ACROSS = 0.8;
 /** half-widths (m) of the drawn wires */
 const WIRE_HALF = { contact: 0.006, span: 0.005, hanger: 0.004, arm: 0.03 };
 const MAST_COLOR = 0xb7_bc_b4; // pale green-grey
@@ -328,8 +332,11 @@ export function lawnHalves(runs: TrackRun[]): LawnHalves[] {
       if (!q || q.d < 0.5) {
         return;
       }
-      const half = Math.max(q.d / 2 - LAWN_SEAM_M, 0);
       const side = (q.x - p.x) * n[i][0] + (q.z - p.z) * n[i][1];
+      if (Math.abs(side) < LAWN_ACROSS * q.d) {
+        return;
+      }
+      const half = Math.max(q.d / 2 - LAWN_SEAM_M, 0);
       if (side >= 0) {
         out.left[i] = half;
         out.sharedLeft[i] = true;

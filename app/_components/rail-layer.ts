@@ -2646,7 +2646,8 @@ interface DrawnLine {
   gauge: number;
   /** each sample's level; null where the line breaks or is buried */
   levels: (Level | null)[];
-  /** the mapped catenary masts ([station, offset to the left], m) */
+  /** the mapped catenary masts ([station, offset to the right], m: the
+   *  scene's lateral, see `mastsAcross`) */
   masts: readonly (readonly [number, number])[];
   /** a contact line over it (`electrified` 1) */
   overhead: boolean;
@@ -2659,7 +2660,16 @@ interface DrawnLine {
   world: XZ[];
 }
 
-/** Each track's offset to the left of its line's centre (m). */
+/** The file's mast offsets lie to the map's left of the line
+ *  (rail_osm.py `masts`); a lateral here is along (−tz, tx), the map's
+ *  right, the scene's z being −north. */
+function mastsAcross(
+  m: readonly (readonly [number, number])[]
+): (readonly [number, number])[] {
+  return m.map(([s, o]) => [s, -o] as const);
+}
+
+/** Each track's lateral from its line's centre (m, along (−tz, tx)). */
 function trackOffsets(tracks: number): number[] {
   return Array.from(
     { length: tracks },
@@ -2724,7 +2734,7 @@ function drawnLines(
       dense,
       gauge: p.g ?? GAUGE,
       levels,
-      masts: p.m ?? [],
+      masts: mastsAcross(p.m ?? []),
       overhead: p.electrified === 1,
       paved: p.paved === 1,
       buried,

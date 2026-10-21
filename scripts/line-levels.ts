@@ -221,7 +221,8 @@ const PASSAGE_UNDER_DECK = 0.3;
  * (`deckPassages`), each deck once.
  */
 export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
-  const decks = siteDecks(site);
+  const bridges = siteBridges(site);
+  const decks = bridgeDecks(bridges, OFFSET);
   const { pieces, of } = sitePieces(site);
   const out: Passage[] = [];
   pieces.forEach((piece, k) => {
@@ -266,7 +267,7 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
   // a rim is on the ground: its level is the line's own there
   // and the decks' own: the streets and paths the DGM closes under them,
   // the bridges it still holds (`under`, pipeline/bake/bridge.py)
-  return [...out.map((p) => fillRims(p)), ...deckPassages(siteBridges(site))];
+  return [...out.map((p) => fillRims(p)), ...deckPassages(bridges)];
 }
 
 /** A passage's rims (outside the cut) at their neighbours' level. */

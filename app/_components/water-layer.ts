@@ -36,9 +36,9 @@ import {
   positionLocal,
   positionWorld,
   pow,
-  select,
   sin,
   smoothstep,
+  step,
   texture,
   uniform,
   uniformArray,
@@ -316,15 +316,17 @@ function foamAt(xy: V2, f: FoamUniforms): F {
           info.x.mul(FOAM_REACH[1]).add(FOAM_REACH[0]),
           FOAM_REACH[2]
         );
-        const flows = dot(down, down).greaterThan(0.25);
-        const along = select(
-          flows,
+        // 1 on a weir's line (a flow direction), 0 on a shore's: a mix,
+        // not a select, in a per-pixel graph
+        const flows = step(0.25, dot(down, down));
+        const along = mix(
+          float(1),
           float(1)
             .sub(smoothstep(0, reach, s))
             .mul(float(1).sub(smoothstep(0, FOAM_CREST_M, s.negate()))),
-          float(1)
+          flows
         );
-        const width = select(flows, float(FOAM_SIDE_M), reach);
+        const width = mix(reach, float(FOAM_SIDE_M), flows);
         const across = float(1).sub(smoothstep(width.mul(0.3), width, side));
         most.assign(max(most, along.mul(across)));
       }

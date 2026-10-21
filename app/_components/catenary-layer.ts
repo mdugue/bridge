@@ -10,6 +10,7 @@ import {
   type SectionMember,
   sectionPlan,
   staggerAt,
+  staggerSides,
   type Support,
   supportStations,
   SYSTEM_HEIGHT_M,
@@ -59,7 +60,8 @@ export interface CatenaryRun {
   deck: (number | null)[];
   /** each point's station along its line (m) */
   d: number[];
-  /** the masts OSM maps on this run: [station, offset to the left] (m) */
+  /** the masts OSM maps on this run: [station, lateral from the run] (m,
+   *  along (−tz, tx), the map's right) */
   mapped: readonly (readonly [number, number])[];
   /** the soffit of a bridge over each point, null where none */
   over: (number | null)[];
@@ -283,6 +285,7 @@ function addRunWires(
   supports: readonly Support[]
 ): void {
   const stations = wireStations(supports);
+  const sides = staggerSides(supports);
   const first = run.d[0];
   const last = run.d.at(-1) ?? first;
   const at = new Set<number>();
@@ -300,7 +303,7 @@ function addRunWires(
   const messenger: Pt[] = [];
   for (const s of ss) {
     const p = pointAt(run, s);
-    const o = stagger(stations, s);
+    const o = staggerAt(stations, sides, s);
     const h = underBridge(
       p.y + CONTACT_WIRE_M,
       p.y + CONTACT_WIRE_M + SYSTEM_HEIGHT_M - messengerDrop(stations, s),
@@ -328,11 +331,6 @@ function nearOverpass(run: CatenaryRun, s: number): boolean {
   return run.d.some(
     (d, i) => run.over[i] !== null && Math.abs(d - s) <= OVERPASS_CLEAR_M
   );
-}
-
-/** The contact wire's zig-zag at a station; none without a support. */
-function stagger(stations: readonly number[], s: number): number {
-  return stations.length > 0 ? staggerAt(stations, s) : 0;
 }
 
 /**

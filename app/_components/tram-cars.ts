@@ -321,7 +321,7 @@ export function createTramCars(
   ];
   // One matrix per section, shared by every part: the body owns it.
   const sets: Instances[] = [];
-  parts.forEach(({ geo, color, name }) => {
+  parts.forEach(({ geo, color, name, tint: tinted }) => {
     const set = new Instances(
       geo,
       partMaterial(color),
@@ -334,6 +334,11 @@ export function createTramCars(
     // The cars span the site and move every frame: never culled as a set.
     set.frustumCulled = false;
     set.drawCount = 0;
+    if (tinted) {
+      // its tints from the start: a set compiled while no car runs builds
+      // its material with them, and three would not rebuild it for them
+      set.setColorAt(0, new Color(1, 1, 1));
+    }
     group.add(set);
     sets.push(set);
   });

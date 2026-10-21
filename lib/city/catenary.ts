@@ -191,15 +191,51 @@ export function messengerDrop(stations: readonly number[], d: number): number {
   return sag * 4 * at.t * (1 - at.t);
 }
 
-/** The contact wire's offset across the track at station `d` (m, to the
- *  left): ±STAGGER_M at alternate supports, straight between them. */
-export function staggerAt(stations: readonly number[], d: number): number {
+/**
+ * Which side the contact wire is pulled to at each wire station
+ * (`wireStations`, ±1): at a grid support by its grid line's parity, so
+ * two tiles drawing one line agree at their seam; at a mapped mast the
+ * other side from the support before it (after it, at the run's start);
+ * at a virtual end station the other side from its neighbour.
+ */
+export function staggerSides(supports: readonly Support[]): number[] {
+  const side = supports.map((p): number => {
+    if (p.key === null) {
+      return 0;
+    }
+    return Number(p.key.slice(2)) % 2 === 0 ? 1 : -1;
+  });
+  for (let i = 1; i < side.length; i++) {
+    if (side[i] === 0) {
+      side[i] = -side[i - 1];
+    }
+  }
+  for (let i = side.length - 1; i >= 0; i--) {
+    if (side[i] === 0) {
+      side[i] = i + 1 < side.length ? -side[i + 1] : 1;
+    }
+  }
+  if (side.length === 0) {
+    return [];
+  }
+  return [-side[0], ...side, -(side.at(-1) ?? 1)];
+}
+
+/** The contact wire's offset across the track at station `d` (m, along
+ *  the run's lateral): STAGGER_M to each station's side (`staggerSides`),
+ *  straight between them. */
+export function staggerAt(
+  stations: readonly number[],
+  sides: readonly number[],
+  d: number
+): number {
   const at = spanAt(stations, d);
   if (!at) {
     return 0;
   }
-  const from = at.i % 2 === 0 ? STAGGER_M : -STAGGER_M;
-  return from + -2 * from * at.t;
+  const a = sides[at.i - 1] ?? 0;
+  const b = sides[at.i] ?? 0;
+  return STAGGER_M * (a + (b - a) * at.t);
 }
 
 /** One track's support on a grid line, as the cross-sections see it. */

@@ -780,6 +780,35 @@ test("a paved track has no sleepers", () => {
   expect(built.children.map((c) => c.name)).not.toContain("rail-sleepers");
 });
 
+test("a mapped catenary mast stands on the side of the track it is mapped on", () => {
+  // the track runs east; OSM maps its mast 3.5 m to its left (north)
+  const track: RailFeature = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [400, 0],
+      ],
+    },
+    properties: { electrified: 1, tracks: 1, m: [[200, 3.5]] },
+  };
+  const built = buildRail(
+    { rails: [track], bridges: [], ballast: [], platforms: [] },
+    ctx
+  );
+  const masts = built.children.find((c) => c.name === "rail-catenary-masts");
+  const pos = (masts as Mesh).geometry.getAttribute("position");
+  let near = 0;
+  for (let i = 0; i < pos.count; i++) {
+    if (Math.abs(pos.getX(i) - 200) < 1 && pos.getY(i) < 102) {
+      // north is −z in the scene
+      expect(pos.getZ(i)).toBeLessThan(-2);
+      near++;
+    }
+  }
+  expect(near).toBeGreaterThan(0);
+});
+
 test("no catenary support stands under a bridge over the track", () => {
   // a road bridge 8 m over the track across x 190–210
   const road: BridgeFeature = {
