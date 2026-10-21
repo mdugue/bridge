@@ -549,7 +549,8 @@ class SunReading:
         return self.fit is not None and self.fit.contrast >= MIN_SUN_CONTRAST
 
 
-_READINGS: dict[tuple, SunReading | None] = {}
+# a `step_cache.memo` store: per tile its SunReading, and what reading it read
+_READINGS: dict[tuple, tuple] = {}
 
 
 def roof_faces(city: dict) -> list[list[tuple[float, float, float]]]:
@@ -570,7 +571,18 @@ def sun_reading(tile: Tile, lut: np.ndarray, dop=None, faces=None) -> SunReading
     not sure reads its flight's other tiles); None without the DGM to cast
     the roofs' shadows on, the orthophoto or the LoD2."""
     key = (tile.raw, tile.id)
-    return step_cache.memo(_READINGS, key, lambda: _read_sun(tile, lut, dop, faces))
+
+    def make() -> SunReading | None:
+        # an orthophoto or roofs handed in were opened by the caller, not
+        # here: the reading depends on them all the same, for every peer
+        # tile that pools it
+        if dop is not None:
+            step_cache.note_read(tile.raw_raster("dop"))
+        if faces is not None:
+            step_cache.note_read(tile.cityjson)
+        return _read_sun(tile, lut, dop, faces)
+
+    return step_cache.memo(_READINGS, key, make)
 
 
 def _read_sun(tile: Tile, lut: np.ndarray, dop, faces) -> SunReading | None:

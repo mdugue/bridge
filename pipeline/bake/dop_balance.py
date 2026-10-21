@@ -38,7 +38,8 @@ ROAD = 7  # the class raster's road (landcover.py CLASSES)
 REF_ROAD = (0.950, 1.0, 0.938)
 MIN_TEXELS = 5000  # pooled road texels the site needs
 KEEP = 50_000  # texels a tile contributes
-_ROADS: dict[tuple, np.ndarray | None] = {}
+# a `step_cache.memo` store: per tile its road texels, and what reading them read
+_ROADS: dict[tuple, tuple] = {}
 
 
 def linear(srgb: np.ndarray) -> np.ndarray:

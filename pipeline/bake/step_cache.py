@@ -557,3 +557,16 @@ class Ledger:
                         found.add(w)
                         todo.append((w[1], w[2]))
         return [(s, t) for _, s, t in sorted(found)]
+
+    def after(self, restored: list[tuple[str, str]], step: str) -> list[tuple[str, str]]:
+        """The later writers to run again once `step` is done, in order:
+        those after it of the files the `restored` runs write, which a
+        restore put back to an earlier writer's output (`lamp-heights` after
+        a restored `lamps`) — a bake of `step` alone would leave them so."""
+        k = self.order[step]
+        found: set[tuple[int, str, str]] = set()
+        for s0, t0 in restored:
+            m = self.runs.get((s0, t0))
+            for p in m["outputs"] if m else ():
+                found |= {w for w in self.writers.get(p, ()) if w[0] > k}
+        return [(s, t) for _, s, t in sorted(found)]

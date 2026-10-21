@@ -65,7 +65,8 @@ class Anchors:
     lawn: np.ndarray
 
 
-_ANCHORS: dict[tuple[Path, Path | None, int], Anchors | None] = {}
+# a `step_cache.memo` store: per tile its Anchors, and what measuring them read
+_ANCHORS: dict[tuple[Path, Path | None, int], tuple] = {}
 
 
 def gli_raster(red: np.ndarray, green: np.ndarray, blue: np.ndarray) -> np.ndarray:

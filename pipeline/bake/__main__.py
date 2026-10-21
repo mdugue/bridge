@@ -279,11 +279,17 @@ class Bake:
             {r for t in todo for r in self.ledger.restore(step, t.id)},
             key=lambda r: self.ledger.order[r[0]],
         )
+        then = self.ledger.after(again, step)
         for s, tid in again:
             print(f"{tid}: {s} runs again — {step} reads its output, which a later step replaced")
             self._run(s, [self.tiles[tid]])
         if todo:
             self._run(step, todo)
+        # what the restores put back is then rewritten as before (a lamp's
+        # height), judged as any step: unchanged inputs skip it
+        for s, tid in then:
+            print(f"{tid}: {s} runs again — a restore before {step} put back its input")
+            self.step(s, [self.tiles[tid]])
 
 
 def main() -> None:

@@ -283,3 +283,30 @@ def test_a_flight_s_cast_is_taken_out_of_its_roofs(tmp_path, monkeypatch):
     assert abs(r / g - dop_balance.REF_ROAD[0]) < 0.03
     assert abs(b / g - dop_balance.REF_ROAD[2]) < 0.03
     assert out["meta"]["balance"][0] > 1.15 > 0.85 > out["meta"]["balance"][2]
+
+
+def test_a_pooled_sun_reading_records_the_orthophoto_and_roofs_it_was_read_from(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from bake import roof_colour, step_cache
+
+    (tmp_path / "dop.tif").write_bytes(b"dop")
+    (tmp_path / "t.city.json").write_text("{}")
+    tile = SimpleNamespace(
+        raw=tmp_path,
+        id="t",
+        raw_raster=lambda kind: tmp_path / f"{kind}.tif",
+        cityjson=tmp_path / "t.city.json",
+    )
+    monkeypatch.setattr(roof_colour, "_READINGS", {})
+    monkeypatch.setattr(roof_colour, "_read_sun", lambda *a: None)
+    lut = np.arange(256)
+    # the tile's own step hands in what it opened; a peer's then pools it
+    with step_cache.recording([str(tmp_path)]) as own:
+        roof_colour.sun_reading(tile, lut, dop=object(), faces=[])
+    with step_cache.recording([str(tmp_path)]) as peer:
+        roof_colour.sun_reading(tile, lut)
+    wanted = {str(tmp_path / "dop.tif"), str(tmp_path / "t.city.json")}
+    assert wanted <= set(own.reads) and wanted <= set(peer.reads)
