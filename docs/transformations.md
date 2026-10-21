@@ -809,12 +809,14 @@ visual-variable codebook is in
   a measured level with no face of its own that stands more than 6 m over
   the building's height, where fewer than 40 % of the surface model's
   cells lie within 1.5 m of its top, is a mast, a crane or a floodlight,
-  and stands on what the model shows under it (the median of the cells
-  below its top: a roof, or at the building's height the ground). *(The
-  Rickmer Rickmers' masts stood
-  as 25 m towers on its hull, Dock I's cranes 11 m over the dock,
-  Leipzig's Paralympische Sporthalle a floodlight 50 m up.)* Nine levels
-  on the seven sites.
+  and stands on the highest level below its top that 40 % of the cells
+  lie within 1.5 m of (`solid_level`: a roof), or at the building's height
+  where none does. *(The Rickmer Rickmers' masts stood as 25 m towers on
+  its hull, Dock I's cranes 11 m over the dock, Leipzig's Paralympische
+  Sporthalle a floodlight 50 m up. The median of the cells below the top,
+  tried the same day, stood the ship's masts as 24 m blocks again: its
+  rigging reads at every height from the deck up.)* Nine levels on the
+  seven sites.
 - **Roofs on posts** `◎ detected` `❝ taken` `= computed` (2026-10-21) —
   a platform roof, a fuel station's canopy, a carport, a bus shelter: a
   roof with nothing under it but its posts. `structures.py` takes an OSM

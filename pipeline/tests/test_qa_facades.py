@@ -210,3 +210,20 @@ def test_a_lattice_is_a_surface_the_model_fills_sparsely():
     assert structures.lattice(s, win, geom, 135.0) == 108.0  # on the roof under it
     dom[9:15, 5:11] = 135.0  # the whole square: a plant room, a tower
     assert structures.lattice(s, win, geom, 135.0) is None
+
+
+def test_rigging_at_every_height_stands_on_no_level_of_its_own():
+    # a ship's masts: the model reads its rigging from the deck to the
+    # mast tops, no level held by as many cells as a roof — it stands at
+    # the building's height, not at the cells' median
+    dom = np.full((20, 20), np.nan)
+    geom = shapely.box(4, 4, 16, 16)
+    win = (slice(0, 20), slice(0, 20))
+    rng = np.random.default_rng(3)
+    dom[4:16, 4:16] = rng.uniform(9.0, 33.0, (12, 12))
+    dom[4:16:4, 4:16] = 34.0  # the yards at the top, sparse
+    s = _surfaces(dom)
+    assert structures.lattice(s, win, geom, 34.0) == -np.inf
+    # a deck the model shows on half its cells holds it
+    dom[4:16:2, 4:16] = 9.0
+    assert abs(structures.lattice(_surfaces(dom), win, geom, 34.0) - 9.0) < 0.01

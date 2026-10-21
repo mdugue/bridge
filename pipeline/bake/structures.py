@@ -167,9 +167,10 @@ MAX_OVERLAP = 0.5
 # A shaped roof's flat part rising this far over its building (m) whose
 # polygon the surface model fills at its level (within SOLID_M) on less
 # than SOLID_SHARE of its measured cells is a lattice — a mast and its
-# rigging, a crane, a floodlight's pole —, not a roof: it stands at the
-# building's height (2026-10-21: the Rickmer Rickmers' masts stood as
-# 25 m towers on its deck, a sports hall's floodlight 50 m over Leipzig's
+# rigging, a crane, a floodlight's pole —, not a roof: it stands on the
+# highest level below it the model fills as solidly, the building's height
+# at the least (2026-10-21: the Rickmer Rickmers' masts stood as 25 m
+# towers on its deck, a sports hall's floodlight 50 m over Leipzig's
 # Paralympische Sporthalle).
 MAST_RISE_M = 6.0
 SOLID_M = 1.5
@@ -500,15 +501,33 @@ def lattice(
     s: Surfaces, win: tuple[slice, slice], poly: shapely.Geometry, top: float
 ) -> float | None:
     """Where the surface model fills `poly` at `top` (within SOLID_M) on less
-    than SOLID_SHARE of its measured cells (a mast, not a roof): the median
-    of the cells below it, what the mast stands on (-inf where none is);
-    None where the model fills it (a roof)."""
+    than SOLID_SHARE of its measured cells (a mast, not a roof): what the
+    mast stands on, the highest level below it the model fills as solidly
+    (`solid_level`; -inf where none is); None where the model fills it (a
+    roof)."""
     dom = s.dom[win][s.mask(poly, win)]
     dom = dom[np.isfinite(dom)]
     if len(dom) == 0 or float(np.mean(np.abs(dom - top) <= SOLID_M)) >= SOLID_SHARE:
         return None
-    below = dom[dom < top - SOLID_M]
-    return float(np.median(below)) if len(below) else -np.inf
+    return solid_level(dom, top - SOLID_M)
+
+
+def solid_level(dom: np.ndarray, under: float) -> float:
+    """The highest level below `under` that at least SOLID_SHARE of `dom`'s
+    cells lie within SOLID_M of (the median of those cells), -inf where
+    none does. Not the cells' median: a ship's rigging reads at every
+    height between its deck and its mast tops, and their median stood
+    the Rickmer Rickmers' masts as 24 m blocks."""
+    cells = np.sort(dom)
+    below = cells[cells < under]
+    need = SOLID_SHARE * len(cells)
+    lo = np.searchsorted(cells, below - SOLID_M, side="left")
+    hi = np.searchsorted(cells, below + SOLID_M, side="right")
+    held = np.nonzero(hi - lo >= need)[0]
+    if len(held) == 0:
+        return -np.inf
+    at = below[held[-1]]
+    return float(np.median(cells[(cells >= at - SOLID_M) & (cells <= at + SOLID_M)]))
 
 
 def open_roof(s: Surfaces, geom: shapely.Geometry, kind: str, name: str | None) -> dict | None:
