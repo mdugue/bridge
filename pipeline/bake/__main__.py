@@ -1,4 +1,5 @@
-"""`python -m bake {fetch,bake} --spec JSON [--step S] [--tile ID ...]`.
+"""`python -m bake {fetch,bake} --spec JSON [--step S] [--tile ID ...]
+[--jobs N]`.
 
 `bun run fetch` / `bun run bake` (scripts/pipeline.ts) call this with the
 site spec (bake/spec.py) written from the TypeScript site config."""
@@ -6,6 +7,8 @@ site spec (bake/spec.py) written from the TypeScript site config."""
 from __future__ import annotations
 
 import argparse
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 
 from . import (
     canopy,
@@ -156,6 +159,38 @@ def run_site_step(spec, step: str) -> None:
         transit.run_site(spec.raw, spec.data, site_extent(spec), spec.epsg)
 
 
+def run_tile(step: str, tile, site_tiles, research: bool = False) -> None:
+    """One step on one tile; ndvi, roof-colour and sport read the site's
+    every tile besides."""
+    if step == "lowveg":
+        lowveg.run(tile, research=research)
+    elif step == "ndvi":
+        ndvi.run(tile, site_tiles)
+    elif step == "roof-colour":
+        roof_colour.run(tile, site_tiles)
+    elif step == "sport":
+        sport.run(tile, site_tiles)
+    else:
+        STEPS[step](tile)
+
+
+def run_step(step: str, tiles, site_tiles, jobs: int, research: bool = False) -> None:
+    """A step over the tiles, `jobs` tiles at a time. Each tile writes only
+    its own files and reads only what earlier steps wrote, so the tiles of
+    one step run side by side; the next step starts once all are done."""
+    if jobs <= 1 or len(tiles) <= 1:
+        for tile in tiles:
+            run_tile(step, tile, site_tiles, research)
+        return
+    # fork: the workers share the parent's loaded modules, and no dataset
+    # is open between two steps
+    context = multiprocessing.get_context("fork")
+    with ProcessPoolExecutor(min(jobs, len(tiles)), mp_context=context) as pool:
+        runs = [pool.submit(run_tile, step, t, site_tiles, research) for t in tiles]
+        for done in runs:
+            done.result()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="bake")
     parser.add_argument("command", choices=["fetch", "bake"])
@@ -166,6 +201,12 @@ def main() -> None:
         "--lsc",
         action="store_true",
         help="fetch: also the laser scan where the provider publishes one (≈380 MB a tile)",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="bake: this many tiles of a step side by side (one process each)",
     )
     parser.add_argument(
         "--research",
@@ -189,20 +230,7 @@ def main() -> None:
     # sport read every tile of the site (its class rasters, the anchors of
     # its one flight), which the steps before them must have baked first.
     for step in steps:
-        for tile in tiles:
-            if step == "lowveg":
-                lowveg.run(tile, research=args.research)
-                continue
-            if step == "ndvi":
-                ndvi.run(tile, spec.tiles)
-                continue
-            if step == "roof-colour":
-                roof_colour.run(tile, spec.tiles)
-                continue
-            if step == "sport":
-                sport.run(tile, spec.tiles)
-                continue
-            STEPS[step](tile)
+        run_step(step, tiles, spec.tiles, args.jobs, args.research)
     if args.step == "all" and not args.tile:
         for step in SITE_STEPS:
             run_site_step(spec, step)

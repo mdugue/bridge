@@ -121,6 +121,9 @@ bun run bake dresden --step canopy  # one step, in the order `all` runs them
                                     #   landmarks, structures, roof-colour,
                                     #   dormers
 bun run bake dresden --step lowveg --research   # also every hedge/shrub candidate
+bun run bake dresden --jobs 3      # each step's tiles three at a time (one
+                                    #   process each; a step waits for the
+                                    #   one before on every tile)
 bun run test:pipeline               # pytest + ruff check + ruff format --check
 ```
 

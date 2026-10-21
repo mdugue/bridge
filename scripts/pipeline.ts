@@ -22,6 +22,9 @@
  *                                     small-buildings, skyview)
  *   bun run bake <site> --step lowveg --research   also every hedge/shrub
  *                                     candidate, under the raw folder
+ *   bun run bake <site> --jobs 3      each step's tiles three at a time,
+ *                                     one process each (a step still waits
+ *                                     for the one before on every tile)
  *
  * The steps run in dependency order: land cover first (the canopy, the
  * tree cadastre, lamps and street furniture are gated on it); the bridges
@@ -66,11 +69,12 @@ export function siteSpec(site: Site) {
   };
 }
 
-/** The options each command takes (`--step` needs a value). */
+/** The options each command takes (`--step` and `--jobs` need a value). */
 const OPTIONS = {
   fetch: ["--lsc"],
-  bake: ["--step", "--research"],
+  bake: ["--step", "--research", "--jobs"],
 } as const;
+const VALUED = new Set(["--step", "--jobs"]);
 
 /** The options `args` gives that `command` does not take. */
 export function unknownOptions(
@@ -98,13 +102,14 @@ if (import.meta.main) {
   }
   const { site, rest: args } = parsed;
   const step = args.indexOf("--step");
+  const jobs = args.indexOf("--jobs");
   const bad = unknownOptions(command, args);
   if (bad.length > 0) {
     process.stderr.write(`${command}: unknown option ${bad.join(" ")}\n`);
     process.exit(2);
   }
   const tiles = args.filter(
-    (a, i) => !a.startsWith("--") && (step < 0 || i !== step + 1)
+    (a, i) => !a.startsWith("--") && !VALUED.has(args[i - 1] ?? "")
   );
   process.stdout.write(`${command}: ${site.id} (${site.provider.name})\n`);
   const run = spawnSync(
@@ -120,6 +125,7 @@ if (import.meta.main) {
       "--spec",
       JSON.stringify(siteSpec(site)),
       ...(step >= 0 ? ["--step", args[step + 1] ?? ""] : []),
+      ...(jobs >= 0 ? ["--jobs", args[jobs + 1] ?? ""] : []),
       ...(tiles.length > 0 ? ["--tile", ...tiles] : []),
       ...args.filter((a) => a === "--lsc" || a === "--research"),
     ],
