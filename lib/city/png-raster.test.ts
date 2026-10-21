@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { SITES } from "../../sites";
 import { DRESDEN } from "../../sites/dresden";
+import { LANDCOVER_CLASSES } from "./landcover";
 import { decodeGreyPng } from "./png-raster";
 import { siteDataDir } from "./tile";
 
@@ -137,6 +138,7 @@ describe("decodeGreyPng", () => {
       .map((site) => join(import.meta.dir, "../..", siteDataDir(site), "dlm"))
       .filter((dir) => existsSync(dir));
     expect(dirs.length).toBeGreaterThan(0);
+    const maxId = Math.max(...LANDCOVER_CLASSES.map((c) => c.id));
     for (const dir of dirs) {
       const file = readdirSync(dir).find((f) => /^landcover_.*\.png$/.test(f));
       if (!file) {
@@ -146,7 +148,7 @@ describe("decodeGreyPng", () => {
         new Uint8Array(readFileSync(join(dir, file)))
       );
       expect(out.data.length).toBe(out.width * out.height);
-      expect(out.data.every((v) => v <= 8)).toBe(true);
+      expect(out.data.every((v) => v <= maxId)).toBe(true);
     }
   });
 

@@ -890,7 +890,11 @@ test.each(cases)(
     }
     const facts = JSON.parse(readFileSync(path, "utf8")) as TreeFactsFile;
     expect(facts.count).toBe(trees.length);
-    expect(facts.attribution).toContain("Landeshauptstadt Dresden");
+    // the trees file's credits: the city's register, or OSM without one
+    const { attribution } = JSON.parse(readFileSync(a.trees.path, "utf8")) as {
+      attribution: string;
+    };
+    expect(facts.attribution).toBe(attribution);
     const within = (column: number[], table: unknown[]) => {
       expect(column).toHaveLength(trees.length);
       for (const i of column) {
