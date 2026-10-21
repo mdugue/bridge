@@ -1,4 +1,4 @@
-import { getPosition } from "suncalc";
+import { getPosition, getTimes, type SunTimes } from "suncalc";
 import { DEG2RAD } from "./pose";
 
 /**
@@ -50,4 +50,19 @@ export function enuToWorld(enu: Enu): Vec3 {
  */
 export function sunDirectionWorld(date: Date, lat: number, lng: number): Vec3 {
   return enuToWorld(sunDirectionEnu(date, lat, lng));
+}
+
+/**
+ * Sunrise, sunset and the rest for the calendar day `day` names (its
+ * year, month and date as the browser reads them), at the city: that day
+ * in the city's mean solar time, its offset from the longitude. Without an
+ * offset suncalc takes the solar day nearest the instant, and a day picked
+ * as local midnight lies nearer the previous day's noon east of Greenwich
+ * — the times were the day before's (suncalc 2.1 added the offset). The
+ * browser's own zone would not do either: from UTC+13 the city's previous
+ * day is still the nearer one.
+ */
+export function sunTimesOn(day: Date, lat: number, lng: number): SunTimes {
+  const noon = Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 12);
+  return getTimes(new Date(noon), lat, lng, 0, Math.round((lng / 15) * 60));
 }
