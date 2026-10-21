@@ -18,7 +18,12 @@
     "5": "railway",
     "6": "path",
     "7": "road",
-    "8": "water"
+    "8": "water",
+    "9": "arable"
   },
-  "attribution": "Bayerische Vermessungsverwaltung \u2013 www.geodaten.bayern.de, CC BY 4.0; islands: \u00a9 OpenStreetMap contributors (ODbL)"
+  "attribution": "Bayerische Vermessungsverwaltung \u2013 www.geodaten.bayern.de, CC BY 4.0; islands: \u00a9 OpenStreetMap contributors (ODbL)",
+  "water": {
+    "bodies": [],
+    "foam": []
+  }
 }

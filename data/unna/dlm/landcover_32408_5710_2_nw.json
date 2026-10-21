@@ -18,7 +18,75 @@
     "5": "railway",
     "6": "path",
     "7": "road",
-    "8": "water"
+    "8": "water",
+    "9": "arable"
   },
-  "attribution": "Geobasis NRW, dl-de/zero-2-0; islands: \u00a9 OpenStreetMap contributors (ODbL)"
+  "attribution": "Geobasis NRW, dl-de/zero-2-0; islands: \u00a9 OpenStreetMap contributors (ODbL)",
+  "water": {
+    "bodies": [
+      {
+        "level": 72.0,
+        "range": [
+          71.98,
+          73.55
+        ],
+        "m2": 218,
+        "at": [
+          409930.5,
+          5711681.5
+        ]
+      },
+      {
+        "level": 78.4,
+        "range": [
+          76.66,
+          79.2
+        ],
+        "m2": 499,
+        "at": [
+          409917.5,
+          5711050.5
+        ],
+        "edges": {
+          "e": [
+            [
+              854,
+              857,
+              76.49
+            ]
+          ]
+        }
+      },
+      {
+        "level": 82.1,
+        "range": [
+          81.93,
+          82.77
+        ],
+        "m2": 133,
+        "at": [
+          409812.5,
+          5710932.5
+        ]
+      },
+      {
+        "level": 82.55,
+        "range": [
+          82.5,
+          83.62
+        ],
+        "m2": 117,
+        "at": [
+          409782.5,
+          5710864.5
+        ]
+      }
+    ],
+    "shore": {
+      "meadowM2": 0,
+      "sandM2": 0,
+      "bankM2": 0
+    },
+    "foam": []
+  }
 }

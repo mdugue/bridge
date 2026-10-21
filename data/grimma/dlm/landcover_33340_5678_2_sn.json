@@ -18,7 +18,188 @@
     "5": "railway",
     "6": "path",
     "7": "road",
-    "8": "water"
+    "8": "water",
+    "9": "arable"
   },
-  "attribution": "Quelle: GeoSN, dl-de/by-2-0; islands: \u00a9 OpenStreetMap contributors (ODbL)"
+  "attribution": "Quelle: GeoSN, dl-de/by-2-0; islands: \u00a9 OpenStreetMap contributors (ODbL)",
+  "water": {
+    "bodies": [
+      {
+        "level": 160.05,
+        "range": [
+          159.71,
+          162.82
+        ],
+        "m2": 391,
+        "at": [
+          340648.5,
+          5679948.5
+        ],
+        "edges": {
+          "n": [
+            [
+              567,
+              570,
+              163.09
+            ]
+          ]
+        }
+      },
+      {
+        "level": 144.15,
+        "range": [
+          143.92,
+          148.46
+        ],
+        "m2": 525,
+        "at": [
+          340858.5,
+          5679427.5
+        ]
+      },
+      {
+        "level": 123.85,
+        "range": [
+          123.63,
+          124.17
+        ],
+        "m2": 122421,
+        "at": [
+          341763.5,
+          5678718.5
+        ],
+        "lab": [
+          27.62,
+          -2.13,
+          -11.76
+        ],
+        "core": 108111,
+        "edges": {
+          "s": [
+            [
+              1399,
+              1505,
+              124.17
+            ]
+          ],
+          "e": [
+            [
+              491,
+              585,
+              123.63
+            ]
+          ]
+        }
+      },
+      {
+        "level": 143.25,
+        "range": [
+          142.24,
+          143.8
+        ],
+        "m2": 187,
+        "at": [
+          340856.5,
+          5679249.5
+        ]
+      },
+      {
+        "level": 136.4,
+        "range": [
+          136.0,
+          141.23
+        ],
+        "m2": 558,
+        "at": [
+          340993.5,
+          5679125.5
+        ]
+      },
+      {
+        "level": 127.5,
+        "range": [
+          127.5,
+          127.76
+        ],
+        "m2": 640,
+        "at": [
+          341732.5,
+          5679040.5
+        ],
+        "lab": [
+          31.65,
+          -3.81,
+          -10.72
+        ],
+        "core": 244
+      },
+      {
+        "level": 129.8,
+        "range": [
+          129.81,
+          130.4
+        ],
+        "m2": 4276,
+        "at": [
+          341058.5,
+          5678061.5
+        ],
+        "lab": [
+          34.43,
+          -7.51,
+          -7.78
+        ],
+        "core": 2760,
+        "edges": {
+          "s": [
+            [
+              1070,
+              1093,
+              129.81
+            ]
+          ]
+        }
+      },
+      {
+        "level": 136.2,
+        "range": [
+          132.74,
+          152.13
+        ],
+        "m2": 464,
+        "at": [
+          341702.5,
+          5678112.5
+        ]
+      },
+      {
+        "level": 128.35,
+        "range": [
+          128.33,
+          128.4
+        ],
+        "m2": 711,
+        "at": [
+          341105.5,
+          5678047.5
+        ],
+        "lab": [
+          40.03,
+          -6.69,
+          -6.11
+        ],
+        "core": 355
+      }
+    ],
+    "shore": {
+      "meadowM2": 73,
+      "sandM2": 1229,
+      "bankM2": 688
+    },
+    "foam": [],
+    "tint": {
+      "n": 64,
+      "cells": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcGBgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwYGBgYGAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBgYGBgYGBgYDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcGBgYGBgYGBgYGBgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwYGBgYGBgYGBgYGBgYGAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBgYGBgYGBgYGBgYGBgYGBgYDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBgYGBgYGBgYGBgYGBgYGBgYGBgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcGBgYGBgYGBgYGBgYGBgYGBgYGBgYGAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcGBgYGBgYGBgYGBgYGBgYGBgYGBgYGAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwkJAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwkJCQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwkJCQkDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwkJCQkJAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwkJCQkJCQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcJCQkJCQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHCQkJCQkDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwkJCQkJAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHCQkJCQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw=="
+    }
+  }
 }

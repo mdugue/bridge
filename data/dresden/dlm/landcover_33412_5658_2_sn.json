@@ -18,7 +18,60 @@
     "5": "railway",
     "6": "path",
     "7": "road",
-    "8": "water"
+    "8": "water",
+    "9": "arable"
   },
-  "attribution": "Quelle: GeoSN, dl-de/by-2-0; islands: \u00a9 OpenStreetMap contributors (ODbL)"
+  "attribution": "Quelle: GeoSN, dl-de/by-2-0; islands: \u00a9 OpenStreetMap contributors (ODbL)",
+  "water": {
+    "bodies": [
+      {
+        "level": 114.3,
+        "range": [
+          111.3,
+          117.03
+        ],
+        "m2": 3675,
+        "at": [
+          413337.5,
+          5659128.5
+        ],
+        "edges": {
+          "e": [
+            [
+              411,
+              413,
+              117.03
+            ]
+          ]
+        }
+      },
+      {
+        "level": 110.0,
+        "range": [
+          109.74,
+          110.59
+        ],
+        "m2": 859,
+        "at": [
+          413236.5,
+          5658201.5
+        ],
+        "edges": {
+          "s": [
+            [
+              1243,
+              1245,
+              109.62
+            ]
+          ]
+        }
+      }
+    ],
+    "shore": {
+      "meadowM2": 0,
+      "sandM2": 0,
+      "bankM2": 0
+    },
+    "foam": []
+  }
 }

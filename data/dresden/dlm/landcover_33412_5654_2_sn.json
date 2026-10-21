@@ -18,7 +18,246 @@
     "5": "railway",
     "6": "path",
     "7": "road",
-    "8": "water"
+    "8": "water",
+    "9": "arable"
   },
-  "attribution": "Quelle: GeoSN, dl-de/by-2-0; islands: \u00a9 OpenStreetMap contributors (ODbL)"
+  "attribution": "Quelle: GeoSN, dl-de/by-2-0; islands: \u00a9 OpenStreetMap contributors (ODbL)",
+  "water": {
+    "bodies": [
+      {
+        "level": 114.1,
+        "range": [
+          114.09,
+          114.19
+        ],
+        "m2": 3649,
+        "at": [
+          412687.5,
+          5655507.5
+        ],
+        "lab": [
+          20.16,
+          -3.79,
+          -10.65
+        ],
+        "core": 1705
+      },
+      {
+        "level": 112.8,
+        "range": [
+          112.65,
+          112.84
+        ],
+        "m2": 9050,
+        "at": [
+          413865.5,
+          5654780.5
+        ],
+        "lab": [
+          22.41,
+          -7.11,
+          -5.86
+        ],
+        "core": 6294
+      },
+      {
+        "level": 112.85,
+        "range": [
+          112.75,
+          114.41
+        ],
+        "m2": 113,
+        "at": [
+          412031.5,
+          5655008.5
+        ]
+      },
+      {
+        "level": 112.95,
+        "range": [
+          112.66,
+          113.5
+        ],
+        "m2": 132,
+        "at": [
+          412060.5,
+          5654982.5
+        ]
+      },
+      {
+        "level": 115.15,
+        "range": [
+          114.6,
+          116.05
+        ],
+        "m2": 1054,
+        "at": [
+          412443.5,
+          5654885.5
+        ]
+      },
+      {
+        "level": 112.95,
+        "range": [
+          112.57,
+          113.36
+        ],
+        "m2": 203,
+        "at": [
+          412121.5,
+          5654936.5
+        ]
+      },
+      {
+        "level": 114.25,
+        "range": [
+          114.12,
+          114.85
+        ],
+        "m2": 312,
+        "at": [
+          412266.5,
+          5654912.5
+        ]
+      },
+      {
+        "level": 113.35,
+        "range": [
+          113.14,
+          113.83
+        ],
+        "m2": 212,
+        "at": [
+          412324.5,
+          5654887.5
+        ]
+      },
+      {
+        "level": 113.25,
+        "range": [
+          113.07,
+          113.7
+        ],
+        "m2": 111,
+        "at": [
+          412218.5,
+          5654870.5
+        ]
+      },
+      {
+        "level": 113.5,
+        "range": [
+          113.44,
+          113.77
+        ],
+        "m2": 840,
+        "at": [
+          412509.5,
+          5654811.5
+        ]
+      },
+      {
+        "level": 113.5,
+        "range": [
+          113.48,
+          114.11
+        ],
+        "m2": 2138,
+        "at": [
+          412664.5,
+          5654676.5
+        ],
+        "lab": [
+          23.09,
+          -2.61,
+          -11.52
+        ],
+        "core": 427
+      },
+      {
+        "level": 113.25,
+        "range": [
+          113.26,
+          113.31
+        ],
+        "m2": 10729,
+        "at": [
+          413441.5,
+          5654678.5
+        ],
+        "lab": [
+          23.98,
+          -8.39,
+          -5.51
+        ],
+        "core": 8763
+      },
+      {
+        "level": 115.85,
+        "range": [
+          115.41,
+          116.37
+        ],
+        "m2": 707,
+        "at": [
+          412934.5,
+          5654550.5
+        ]
+      },
+      {
+        "level": 112.8,
+        "range": [
+          112.78,
+          113.73
+        ],
+        "m2": 782,
+        "at": [
+          413606.5,
+          5654467.5
+        ]
+      },
+      {
+        "level": 114.55,
+        "range": [
+          114.53,
+          114.6
+        ],
+        "m2": 26978,
+        "at": [
+          413440.5,
+          5654264.5
+        ],
+        "lab": [
+          21.22,
+          -5.8,
+          -8.35
+        ],
+        "core": 20537
+      }
+    ],
+    "shore": {
+      "meadowM2": 948,
+      "sandM2": 580,
+      "bankM2": 819
+    },
+    "foam": [
+      {
+        "line": [
+          [
+            412394.8,
+            5654896.8
+          ],
+          [
+            412392.5,
+            5654890.2
+          ]
+        ],
+        "drop": 0.8
+      }
+    ],
+    "tint": {
+      "n": 64,
+      "cells": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgICAgICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgICAgICAgICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEMDAICAgICAgICAgICAgICAgICAgICAgICAgICAgILCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLDAwMAgICAgICAgICAgICAgICAgICAgICAgICAgICCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwwMDAwMAgICAgICAgICAgICAgICAgICAgICAgICAgsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwwMDAwMDAwMAgICAgICAgICAgICAgICAgICAgICAgILCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsMDAwMDAwMDAwMAgICAgICAgICAgICAgICAgICAgICCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLDAwMDAwMDAwMDAwMAgICAgICAgICAgICAgICAgICAgsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwwMDAwMDAwMDAwMDAwMAgICAgICAgICAgICAgICAgILCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsMDAwMDAwMDAwMDAwMDAwCAgICAgICAgICAgICAgICCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLDAwMDAwMDAwMDAwMDAwMDAICAgICAgICAgICAgICAgsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwwMDAwMDAwMDAwMDAwMDAwMAgICAgICAgICAgICAgILCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsMDAwMDAwMDAwMDAwMDAwMDAwCAgICAgICAgICAgICCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLDAwMDAwMDAwMDAwMDAwMDAwMAgICAgICAgICAgICAgsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwwMDAwMDAwMDAwMDAwMDAwMDAICAgICAgICAgICAgILCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwwMDAwMDAwMDAwMDAwMDAwMDAwCAgICAgICAgICAgICCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsPDAwMDAwMDAwMDAwMDAwMDAwMAgICAgICAgICAgICAgsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsPDw8MDAwMDAwMDAwMDAwMDAwMDAwCAgICAgICAgICAgILCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsPDw8PDwwMDAwMDAwMDAwMDAwMDAwMAgICAgICAgICAgICCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsPDw8PDw8PDwwMDAwMDAwMDAwMDAwMDAICAgICAgICAgICAgsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsPDw8PDw8PDw8PDAwMDAwMDAwMDAwMDAwCAgICAgICAgICAgILCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLDw8PDw8PDw8PDw8PDAwMDAwMDAwMDAwMDAICAgICAgICAgICCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLDw8PDw8PDw8PDw8PDw8MDAwMDAwMDAwMDAwCAgICAgICAgICAgsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLDw8PDw8PDw8PDw8PDw8PDw8PDwwMDAwMDAwMAgICAgICAgICAgILCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PAgICAgICAgICCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8CAgICAgICAgsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsPDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDwICAgICAgILCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsPDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDwICAgICCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsPDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PAgICAgsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8CAgILCwsLCwsLCwsLCwsLCwsLCwsLCwsLDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8CCwsLCwsLCwsLCwsLCwsLCwsLCwsLDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDwsLCwsLCwsLCwsLCwsLCwsLCwsLDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8LCwsLCwsLCwsLCwsLCwsLCwsLCw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PCwsLCwsLCwsLCwsLCwsLCwsLCw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDwsLCwsLCwsLCwsLCwsLCwsLCw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8LCwsLCwsLCwsLCwsLCwsLCwsPDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PCwsLCwsLCwsLCwsLCwsLCwsPDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw=="
+    }
+  }
 }
