@@ -29,6 +29,7 @@ import math
 
 import numpy as np
 from PIL import Image, ImageDraw
+from scipy import fft
 
 # The lean searched, metres of shift per metre of height, and its step.
 LEAN_MAX = 0.35
@@ -39,6 +40,9 @@ LEAN_MIN_TEXELS = 200
 # A map's shifts step this many texels; a map reads at most this many.
 MAP_STEP = 2
 MAP_SAMPLES = 4000
+# A shift whose samples vary less than this (luminance², 0…255) shows
+# nothing to match.
+VAR_MIN = 1e-6
 # The grid's spacing, how far a node gathers buildings, how many it needs,
 # and how far a building looks for nodes (m).
 CELL_M = 125.0
@@ -56,13 +60,13 @@ def reach_px(height: float, px: float) -> int:
     return s + s % 2
 
 
-def lean_map(lum: np.ndarray, faces, sun, reach: int) -> np.ndarray | None:
-    """Correlation of a building's expected roof shading with `lum` (a crop
-    with `reach` texels of margin round the roof) for every shift
-    (dy, dx) in -reach…reach by MAP_STEP, as a square array (NaN where
-    nothing was read). `faces`: (ring in crop texels, unit normal east-
-    north-up). None when the roof shows no shading to match (flat, small)."""
-    h, w = lum.shape
+def shading_samples(shape, faces, sun):
+    """The texels (rows, cols) of a crop of `shape` a roof's expected
+    shading is matched at, at most about MAP_SAMPLES of them, and that
+    shading there, normalised; None when the roof shows no shading to match
+    (flat, small). `faces`: (ring in crop texels, unit normal east-north-
+    up)."""
+    h, w = shape
     expected = Image.new("F", (w, h), -1.0)
     draw = ImageDraw.Draw(expected)
     for ring, normal in faces:
@@ -76,44 +80,48 @@ def lean_map(lum: np.ndarray, faces, sun, reach: int) -> np.ndarray | None:
     rows, cols, ev = rows[pick], cols[pick], e[rows, cols][pick]
     if ev.std() < 0.05:
         return None
-    ev = (ev - ev.mean()) / ev.std()
-    n = reach // MAP_STEP * 2 + 1
-    out = np.full((n, n), np.nan, np.float32)
-    shifts = np.arange(-reach, reach + 1, MAP_STEP)
-    # The shifts that keep every sample inside the crop (all of them but
-    # by the tile's edge) are scored a row of shifts at a time: one gather
-    # and row-wise reductions, the same float32 sums as one shift's.
-    inside_c = (cols.min() + shifts >= 0) & (cols.max() + shifts < w)
-    flat = np.ascontiguousarray(lum).ravel()
-    with np.errstate(divide="ignore", invalid="ignore"):
-        for i, dy in enumerate(shifts):
-            r = rows + dy
-            if r.min() >= 0 and r.max() < h and inside_c.any():
-                js = np.nonzero(inside_c)[0]
-                seen = np.take(flat, (r * w + cols)[None, :] + shifts[js, None])
-                # np.std's own steps, its deviations kept for the score
-                dev = seen - seen.mean(axis=1, keepdims=True)
-                sd = np.sqrt(np.mean(np.square(dev), axis=1, keepdims=True))
-                score = np.mean(ev * dev / sd, axis=1)
-                good = sd[:, 0] > 0
-                out[i, js[good]] = score[good]
-                rest = np.nonzero(~inside_c)[0]
-            else:
-                rest = range(n)
-            for j in rest:
-                _score(out, i, j, lum, rows + dy, cols + shifts[j], ev)
-    return out
+    return rows, cols, (ev - ev.mean()) / ev.std()
 
 
-def _score(out, i, j, lum, r, c, ev) -> None:
-    """One shift whose samples leave the crop: those inside are scored."""
+def lean_map(lum: np.ndarray, faces, sun, reach: int) -> np.ndarray | None:
+    """Correlation of a building's expected roof shading with `lum` (a crop
+    with `reach` texels of margin round the roof) for every shift
+    (dy, dx) in -reach…reach by MAP_STEP, as a square array (NaN where
+    nothing was read). `faces`: (ring in crop texels, unit normal east-
+    north-up). None when the roof shows no shading to match (flat, small)."""
+    picked = shading_samples(lum.shape, faces, sun)
+    if picked is None:
+        return None
+    rows, cols, ev = picked
     h, w = lum.shape
-    ok = (r >= 0) & (r < h) & (c >= 0) & (c < w)
-    if ok.sum() < LEAN_MIN_TEXELS:
-        return
-    seen = lum[r[ok], c[ok]]
-    if seen.std() > 0:
-        out[i, j] = float(np.mean(ev[ok] * (seen - seen.mean()) / seen.std()))
+    # A shift's score is the mean over the samples it keeps inside the crop
+    # of ev · (seen − mean) / std, which is (Σ ev·L − mean · Σ ev) / (n · std)
+    # with mean and std from Σ L and Σ L² over those n samples: five sums
+    # over the samples for every shift, each a correlation of the crop with
+    # the samples placed in it, all shifts at once by FFT. Padded by the
+    # reach, no shift wraps round. In float64, they agree with the direct
+    # float32 sums to 2e-6 (dop_lean's test).
+    size = (fft.next_fast_len(h + reach, real=True), fft.next_fast_len(w + reach, real=True))
+    placed = np.zeros((2, h, w))
+    placed[0, rows, cols] = ev
+    placed[1, rows, cols] = 1.0
+    crop = lum.astype(np.float64)
+    seen = fft.rfft2(np.stack([crop, np.ones_like(crop), crop * crop]), s=size)
+    by = np.conj(fft.rfft2(placed, s=size))
+    pairs = ((0, 0), (0, 1), (1, 0), (1, 1), (1, 2))
+    sums = fft.irfft2(np.stack([by[k] * seen[f] for k, f in pairs]), s=size)
+    shifts = np.arange(-reach, reach + 1, MAP_STEP)
+    at = np.ix_(shifts % size[0], shifts % size[1])
+    ev_l, ev_n, l1, n, l2 = (s[at] for s in sums)
+    n = np.rint(n)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        mean = l1 / n
+        var = l2 / n - mean * mean
+        score = (ev_l - mean * ev_n) / (n * np.sqrt(np.maximum(var, 0.0)))
+    # too few samples inside the crop, or a crop that shows no shading
+    # (a uniform patch's variance is rounding, of the order of 1e-11)
+    read = (n >= LEAN_MIN_TEXELS) & (var > VAR_MIN)
+    return np.where(read, score, np.nan).astype(np.float32)
 
 
 class Sample:

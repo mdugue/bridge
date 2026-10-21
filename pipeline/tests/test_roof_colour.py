@@ -310,3 +310,124 @@ def test_a_pooled_sun_reading_records_the_orthophoto_and_roofs_it_was_read_from(
         roof_colour.sun_reading(tile, lut)
     wanted = {str(tmp_path / "dop.tif"), str(tmp_path / "t.city.json")}
     assert wanted <= set(own.reads) and wanted <= set(peer.reads)
+
+
+def _whole_box_mask(frame, face, box):
+    """The face mask as it was drawn before 2026-10-21: the whole box, two
+    PIL MinFilters."""
+    from PIL import Image, ImageDraw, ImageFilter
+
+    c0, r0, c1, r1 = box
+    w, h, pad = c1 - c0, r1 - r0, 2
+    drawn = Image.new("L", (w + 2 * pad, h + 2 * pad), 0)
+    draw = ImageDraw.Draw(drawn)
+    for i, ring in enumerate(face.rings):
+        pts = [frame.texel(*p) for p in ring]
+        draw.polygon([(c - c0 + pad, r - r0 + pad) for c, r in pts], fill=0 if i else 255)
+
+    def inner(img):
+        return np.asarray(img)[pad : pad + h, pad : pad + w] > 0
+
+    mask = inner(drawn)
+    if w > 3 and h > 3:
+        inset = inner(drawn.filter(ImageFilter.MinFilter(3)))
+        if inset.any():
+            mask = inset
+    core = np.zeros((h, w), bool)
+    if w > 5 and h > 5:
+        core = inner(drawn.filter(ImageFilter.MinFilter(5)))
+    return mask, core
+
+
+def test_a_face_drawn_in_its_own_window_masks_as_in_the_whole_box():
+    from bake.roof_colour import Face, Frame, _face_mask
+
+    rng = np.random.default_rng(7)
+    frame = Frame(xmin=0.0, ymax=100.0, px=0.2, size=(500, 500), lean=(0.03, -0.02), base=100.0)
+    for _ in range(400):
+        # a face of 3–8 corners, some past the box, some with a courtyard
+        cx, cy, r = rng.uniform(5, 95), rng.uniform(5, 95), rng.uniform(0.3, 12)
+        angles = np.sort(rng.uniform(0, 2 * np.pi, rng.integers(3, 9)))
+        z = rng.uniform(100, 140)
+        ring = [(cx + r * np.cos(a), cy + r * np.sin(a), z) for a in angles]
+        rings = [ring]
+        if rng.random() < 0.2:
+            rings.append([(cx + 0.3 * r * np.cos(a), cy + 0.3 * r * np.sin(a), z) for a in angles])
+        texels = np.array([frame.texel(*p) for p in ring])
+        lo = texels.min(axis=0) + rng.uniform(-8, 8, 2)
+        hi = texels.max(axis=0) + rng.uniform(-8, 8, 2)
+        c0, r0 = int(np.floor(lo[0])), int(np.floor(lo[1]))
+        c1, r1 = max(c0 + 1, int(np.ceil(hi[0]))), max(r0 + 1, int(np.ceil(hi[1])))
+        face = Face(key=("t", 0), rings=rings, normal=(0.0, 0.0, 1.0))
+        box = (c0, r0, c1, r1)
+        new, old = _face_mask(frame, face, box), _whole_box_mask(frame, face, box)
+        assert np.array_equal(new[0], old[0]) and np.array_equal(new[1], old[1])
+
+
+# Faces of Grimma's 33340_5678 (texels in their tile, box) whose edge PIL
+# drew a texel apart when the polygon was moved into a window of its own.
+MOVED_EDGES = [
+    (
+        (6775, 814, 6826, 858),
+        [
+            (6816.492600000056, 857.1884500021978),
+            (6825.391399999789, 826.3845500014528),
+            (6806.3292000000365, 819.1636500007822),
+            (6797.379200000141, 849.9886500009685),
+        ],
+    ),
+    (
+        (4578, 4379, 4682, 4505),
+        [
+            (4653.999450000119, 4409.71555),
+            (4681.80560000008, 4430.279399999404),
+            (4662.755600000091, 4379.474400002496),
+        ],
+    ),
+    (
+        (7309, 8568, 7367, 8651),
+        [
+            (7345.754400000151, 8650.241600000334),
+            (7366.379400000151, 8577.491600001265),
+            (7346.547950000095, 8573.982550002496),
+            (7326.182949999929, 8645.812549999777),
+        ],
+    ),
+]
+
+
+def test_a_face_masks_with_its_edges_where_the_whole_box_draws_them():
+    from bake.roof_colour import Face, Frame, _face_mask
+
+    frame = Frame(xmin=0.0, ymax=0.0, px=1.0, size=(10000, 10000), lean=(0.0, 0.0), base=0.0)
+    for box, texels in MOVED_EDGES:
+        face = Face(key=("t", 0), rings=[[(c, -r, 0.0) for c, r in texels]], normal=(0.0, 0.0, 1.0))
+        assert [frame.texel(*p) for p in face.rings[0]] == texels
+        new, old = _face_mask(frame, face, box), _whole_box_mask(frame, face, box)
+        assert np.array_equal(new[0], old[0]) and np.array_equal(new[1], old[1])
+
+
+def test_the_sun_readings_a_step_takes_are_made_before_its_workers_fork(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from bake import dop_balance, roof_colour
+    from bake.dop_light import SunFit
+
+    site = [SimpleNamespace(raw=tmp_path, id=i) for i in "abc"]
+    days = ["2024-04-07"]
+    monkeypatch.setattr(roof_colour, "_READINGS", {})
+    monkeypatch.setattr(dop_balance, "gains", lambda tiles: np.ones(3))
+    monkeypatch.setattr(roof_colour, "flight_days", lambda raw, tid: days)
+
+    def read(tile, lut, dop, faces):
+        # tile a's shadows fix its sun, b's do not
+        contrast = 5.0 if tile.id == "a" else 1.0
+        return roof_colour.SunReading(days, (13.7, 51.0), SunFit(180.0, 40.0, 0.5, contrast), {})
+
+    monkeypatch.setattr(roof_colour, "_read_sun", read)
+    roof_colour.site_readings(site[:1], site, jobs=2)
+    assert set(roof_colour._READINGS) == {(tmp_path, "a")}
+    # a tile that pools its flight's takes the others' readings too
+    roof_colour.site_readings(site[1:2], site, jobs=2)
+    assert set(roof_colour._READINGS) == {(tmp_path, i) for i in "abc"}
+    assert roof_colour._READINGS[(tmp_path, "c")][0].fit.contrast == 1.0

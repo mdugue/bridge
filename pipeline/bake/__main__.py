@@ -209,18 +209,22 @@ def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) 
     step_cache.save(manifest, key, rec)
 
 
-def warm(spec, step: str) -> None:
+def warm(spec, step: str, tiles, jobs: int) -> None:
     """The site-wide measurements every tile of `step` reads, made once
     before the workers fork (each would make its own otherwise): the NDVI's
-    anchors, the flight's colour cast, the city's bin colour, a leaf-off
-    flight. They are `step_cache.memo`s, so each tile's manifest still
-    lists the files they came from."""
+    anchors, the flight's colour cast, the roofs' sun readings (`jobs` at a
+    time), the city's bin colour, a leaf-off flight. They are
+    `step_cache.memo`s, so each tile's manifest still lists the files they
+    came from."""
     first = spec.tiles[0]
     if step == "ndvi":
         for t in spec.tiles:
             if t.raw_raster("dop").exists():
                 ndvi.tile_anchors(t)
-    elif step in ("roof-colour", "sport"):
+    elif step == "roof-colour":
+        dop_balance.gains(spec.tiles)
+        roof_colour.site_readings(tiles, spec.tiles, jobs)
+    elif step == "sport":
         dop_balance.gains(spec.tiles)
     elif step == "furniture":
         furniture.site_bin_tone(first)
@@ -248,7 +252,7 @@ class Bake:
                 recorded_tile(self.spec, step, tile, *args)
                 self.ledger.done(step, tile.id)
             return
-        warm(self.spec, step)
+        warm(self.spec, step, tiles, self.jobs)
         # fork: the workers share the parent's loaded modules (and what
         # `warm` measured), and no dataset is open between two steps
         context = multiprocessing.get_context("fork")

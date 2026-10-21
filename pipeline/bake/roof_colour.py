@@ -50,7 +50,9 @@ from __future__ import annotations
 
 import json
 import math
+import multiprocessing
 from collections.abc import Sequence
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 
 import numpy as np
@@ -58,7 +60,7 @@ import rasterio
 from PIL import Image, ImageDraw, ImageFilter
 from pyproj import Transformer
 from rasterio.enums import Resampling
-from scipy.ndimage import uniform_filter
+from scipy.ndimage import binary_erosion, uniform_filter
 
 from . import dop_balance, step_cache
 from .common import Tile
@@ -383,28 +385,54 @@ def _face_mask(frame: Frame, face: Face, box) -> tuple[np.ndarray, np.ndarray]:
     their edge alone: a parapet's coping, a ridge strip)."""
     c0, r0, c1, r1 = box
     w, h = c1 - c0, r1 - r0
-    # drawn with a margin of CORE_PAD empty texels: the filters repeat the
-    # image's edge, and a face along the building's box would keep the
-    # texels there (its eave, its coping) uneroded
+    # drawn with a margin of CORE_PAD empty texels round the box: a face
+    # along the building's box is eroded there too (its eave, its coping)
     pad = CORE_PAD
+    rings = [
+        [(c - c0 + pad, r - r0 + pad) for c, r in (frame.texel(*p) for p in ring)]
+        for ring in face.rings
+    ]
     drawn = Image.new("L", (w + 2 * pad, h + 2 * pad), 0)
     draw = ImageDraw.Draw(drawn)
-    for i, ring in enumerate(face.rings):
-        pts = [frame.texel(*p) for p in ring]
-        draw.polygon([(c - c0 + pad, r - r0 + pad) for c, r in pts], fill=0 if i else 255)
+    for i, ring in enumerate(rings):
+        draw.polygon(ring, fill=0 if i else 255)
+    # only the face's own window of that image is eroded, CORE_PAD + 1
+    # texels round its outer ring: nothing else is drawn there, and an
+    # eroded texel reads no farther (a face is a few hundred texels of a
+    # building's box; the whole box was filtered for each). It is drawn
+    # where it was, in the whole image: PIL rasterises an edge a texel
+    # differently when its polygon is moved.
+    xs = [x for x, _ in rings[0]]
+    ys = [y for _, y in rings[0]]
+    x0 = max(0, math.floor(min(xs)) - 1 - pad)
+    y0 = max(0, math.floor(min(ys)) - 1 - pad)
+    x1 = min(w + 2 * pad, math.ceil(max(xs)) + 2 + pad)
+    y1 = min(h + 2 * pad, math.ceil(max(ys)) + 2 + pad)
+    mask, core = np.zeros((h, w), bool), np.zeros((h, w), bool)
+    # where the window lies in the box (the image less its margin)
+    a0, b0 = max(x0, pad), max(y0, pad)
+    a1, b1 = min(x1, pad + w), min(y1, pad + h)
+    if a1 <= a0 or b1 <= b0:
+        return mask, core
+    window = np.asarray(drawn)[y0:y1, x0:x1] > 0
+    out = (slice(b0 - pad, b1 - pad), slice(a0 - pad, a1 - pad))
+    held = (slice(b0 - y0, b1 - y0), slice(a0 - x0, a1 - x0))
 
-    def inner(img: Image.Image) -> np.ndarray:
-        return np.asarray(img)[pad : pad + h, pad : pad + w] > 0
+    def eroded(k: int) -> np.ndarray:
+        # MinFilter(k), which carries the image's edge on past it (the
+        # window's own edges are empty, carried on as empty)
+        r = k // 2
+        grown = np.pad(window, r, mode="edge")
+        return binary_erosion(grown, np.ones((k, k), bool))[r:-r, r:-r][held]
 
-    mask = inner(drawn)
+    mask[out] = window[held]
     if w > 3 and h > 3:
-        inset = inner(drawn.filter(ImageFilter.MinFilter(3)))
+        inset = eroded(3)
         if inset.any():
-            mask = inset
+            mask = np.zeros((h, w), bool)
+            mask[out] = inset
     if w > 5 and h > 5:
-        core = inner(drawn.filter(ImageFilter.MinFilter(5)))
-    else:
-        core = np.zeros((h, w), bool)
+        core[out] = eroded(2 * CORE_PAD + 1)
     return mask, core
 
 
@@ -583,6 +611,42 @@ def sun_reading(tile: Tile, lut: np.ndarray, dop=None, faces=None) -> SunReading
         return _read_sun(tile, lut, dop, faces)
 
     return step_cache.memo(_READINGS, key, make)
+
+
+def site_readings(tiles: Sequence[Tile], site: Sequence[Tile], jobs: int) -> None:
+    """The sun readings `tiles` take (their own, and their flight's where
+    theirs is not sure, `flight_sun`), made `jobs` at a time into the
+    process's store before the step's workers fork: each worker made the
+    flight's again for every tile it pooled (each of Dresden's three that
+    pool read the other fourteen tiles)."""
+    lut = dop_balance.table(dop_balance.gains(site))
+    _read_all(tiles, lut, jobs)
+    days = {}
+    for t in tiles:
+        own = _READINGS[(t.raw, t.id)][0]
+        if own is not None and not own.sure and own.days:
+            days[t.id] = own.days
+    peers = [
+        p
+        for p in site
+        if any(p.id != tid and flight_days(p.raw, p.id) == d for tid, d in days.items())
+    ]
+    _read_all(peers, lut, jobs)
+
+
+def _read_all(tiles: Sequence[Tile], lut: np.ndarray, jobs: int) -> None:
+    todo = [t for t in tiles if (t.raw, t.id) not in _READINGS]
+    if not todo:
+        return
+    context = multiprocessing.get_context("fork")
+    with ProcessPoolExecutor(min(jobs, len(todo)), mp_context=context) as pool:
+        for t, entry in zip(todo, pool.map(_reading, todo, [lut] * len(todo)), strict=True):
+            _READINGS[(t.raw, t.id)] = entry
+
+
+def _reading(tile: Tile, lut: np.ndarray) -> tuple:
+    sun_reading(tile, lut)
+    return _READINGS[(tile.raw, tile.id)]
 
 
 def _read_sun(tile: Tile, lut: np.ndarray, dop, faces) -> SunReading | None:

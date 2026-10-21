@@ -1,7 +1,15 @@
 import numpy as np
 from PIL import Image, ImageDraw
 
-from bake.dop_lean import MAP_STEP, Sample, building_lean, fit_leans, lean_map
+from bake.dop_lean import (
+    LEAN_MIN_TEXELS,
+    MAP_STEP,
+    Sample,
+    building_lean,
+    fit_leans,
+    lean_map,
+    shading_samples,
+)
 from bake.dop_light import sun_vector
 
 SUN = sun_vector(180, 35)
@@ -32,6 +40,51 @@ def test_lean_map_skips_a_roof_without_shading():
     lum, faces = gable()
     flat = [(ring, (0.0, 0.0, 1.0)) for ring, _ in faces]
     assert lean_map(lum, flat, SUN, reach=10) is None
+
+
+def direct_map(lum, faces, sun, reach):
+    """The map shift by shift in float32, as lean_map summed it before the
+    FFT: the mean of ev · (seen − mean) / std over the samples inside."""
+    picked = shading_samples(lum.shape, faces, sun)
+    if picked is None:
+        return None
+    rows, cols, ev = picked
+    h, w = lum.shape
+    shifts = np.arange(-reach, reach + 1, MAP_STEP)
+    out = np.full((len(shifts), len(shifts)), np.nan, np.float32)
+    for i, dy in enumerate(shifts):
+        for j, dx in enumerate(shifts):
+            r, c = rows + dy, cols + dx
+            ok = (r >= 0) & (r < h) & (c >= 0) & (c < w)
+            if ok.sum() < LEAN_MIN_TEXELS:
+                continue
+            seen = lum[r[ok], c[ok]]
+            if seen.std() > 0:
+                out[i, j] = np.mean(ev[ok] * (seen - seen.mean()) / seen.std())
+    return out
+
+
+def test_the_maps_correlation_by_fft_is_the_direct_sum():
+    rng = np.random.default_rng(7)
+    for _ in range(40):
+        h, w = rng.integers(40, 140, 2)
+        reach = int(rng.integers(2, 12)) * 2
+        lum = rng.uniform(0, 255, (h, w)).astype(np.float32)
+        # a uniform patch: the shifts that read only it show nothing
+        lum[: h // 3, : w // 3] = 120.0
+        faces = []
+        for _ in range(int(rng.integers(1, 4))):
+            x0, y0 = rng.uniform(-10, w - 10), rng.uniform(-10, h - 10)
+            sx, sy = rng.uniform(15, 50, 2)
+            ring = [(x0, y0), (x0 + sx, y0), (x0 + sx, y0 + sy), (x0, y0 + sy)]
+            normal = rng.normal(size=3)
+            faces.append((ring, tuple(normal / np.linalg.norm(normal))))
+        a, b = lean_map(lum, faces, SUN, reach), direct_map(lum, faces, SUN, reach)
+        assert (a is None) == (b is None)
+        if a is None:
+            continue
+        assert np.array_equal(np.isnan(a), np.isnan(b))
+        assert np.nanmax(np.abs(a - b), initial=0.0) < 1e-5
 
 
 def test_the_lean_is_the_one_every_building_near_agrees_on():

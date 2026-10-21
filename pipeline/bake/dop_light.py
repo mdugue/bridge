@@ -138,16 +138,23 @@ def cast_shadow(dsm: np.ndarray, az: float, el: float, res: float) -> np.ndarray
     east, north = math.sin(math.radians(az)), math.cos(math.radians(az))
     rise = math.tan(math.radians(el)) * res
     out = np.zeros(dsm.shape, bool)
+    over = dsm + 0.5
+    # the surface ahead as it was compared, in single precision
+    surface = dsm.astype(np.float32, copy=False)
+    stepped = set()
     for s in range(1, int(SUN_REACH_M / res)):
         dc, dr = round(east * s), round(-north * s)
         if abs(dc) >= w or abs(dr) >= h:
             break
-        # the surface s steps towards the sun, over each texel
-        ahead = np.full(dsm.shape, -1e4, np.float32)
-        ahead[max(0, -dr) : h - max(0, dr), max(0, -dc) : w - max(0, dc)] = dsm[
-            max(0, dr) : h - max(0, -dr), max(0, dc) : w - max(0, -dc)
-        ]
-        out |= ahead - s * rise > dsm + 0.5
+        # a farther step onto a texel already looked at rises higher: it
+        # shades only where the nearer one did
+        if (dc, dr) in stepped:
+            continue
+        stepped.add((dc, dr))
+        # the surface s steps towards the sun, over each texel it lies over
+        at = (slice(max(0, -dr), h - max(0, dr)), slice(max(0, -dc), w - max(0, dc)))
+        ahead = (slice(max(0, dr), h - max(0, -dr)), slice(max(0, dc), w - max(0, -dc)))
+        out[at] |= surface[ahead] - s * rise > over[at]
     return out
 
 
