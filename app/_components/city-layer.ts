@@ -19,7 +19,7 @@ import { setPickRay } from "./view-ray";
 import {
   type CityObjectTable,
   countBuildings as countLiveBuildings,
-  OBJECT_FLAG_ASKED,
+  shaderFlags,
   doomedObjects,
   liveTriangles,
   OBJECT_TEXEL_BANDS,
@@ -189,7 +189,7 @@ function markObjects(
   const band = OBJECT_TEXTURE_WIDTH * objectBandRows(table.count) * 4;
   let changed = false;
   for (let i = 0; i < table.count; i++) {
-    const want = table.flags[i] + (marked.has(i) ? OBJECT_FLAG_ASKED : 0);
+    const want = shaderFlags(table, i, marked.has(i));
     const at = 2 * band + i * 4 + 3;
     if (data[at] !== want) {
       data[at] = want;

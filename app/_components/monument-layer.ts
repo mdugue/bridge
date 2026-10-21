@@ -640,6 +640,14 @@ function merged(
  */
 const fountainTime: Live = uniform(0);
 const fountainNight: Live = uniform(0);
+/** What a fountain keeps of its light after dark, beside walls only the
+ *  street lamps reach: the jets' warm white (they are unlit, so their
+ *  colour is their whole brightness), the water's glow from below and
+ *  its shimmer's share, and the sculpture's uplight at the water. */
+const NIGHT_JET = float(0.2);
+const NIGHT_WATER = float(0.025);
+const NIGHT_SHIMMER = float(0.2);
+const NIGHT_UPLIGHT = float(0.2);
 
 /** The frame clock (s) the jets and the water shimmer run on. */
 export function setFountainTime(elapsed: number): void {
@@ -668,7 +676,8 @@ const jetPhase = Fn((builder) => {
  * phase, from its position — the local y scaled before the instance
  * transform) and droplets run down the curtain as soft streaks in its
  * alpha (a swirl round the lathe's u, streaks down its v). By night the
- * water catches the light: the spray tints toward a warm white.
+ * spray dims to a faint warm white, the little light it catches
+ * (`NIGHT_JET`).
  */
 function sprayMaterial(): MeshBasicNodeMaterial {
   const m = new MeshBasicNodeMaterial({
@@ -693,7 +702,7 @@ function sprayMaterial(): MeshBasicNodeMaterial {
   );
   m.opacityNode = materialOpacity.mul(bellAlpha(bell.y)).mul(streaks);
   m.colorNode = vec4(
-    mix(materialColor.rgb, vec3(1, 0.93, 0.8).mul(1.5), fountainNight.mul(0.5)),
+    mix(materialColor.rgb, vec3(1, 0.93, 0.8).mul(NIGHT_JET), fountainNight),
     1
   );
   return m;
@@ -702,8 +711,9 @@ function sprayMaterial(): MeshBasicNodeMaterial {
 /**
  * The water: a slow shimmer of light across the surface (three crossing
  * swells in world x/z, none aligned with another, so no stripes read,
- * tilting the view-space normal and brightening the emissive), and a soft
- * glow from below once the lamps are on.
+ * tilting the view-space normal and brightening the emissive), and by
+ * night a faint glow from below in place of most of the shimmer
+ * (`NIGHT_WATER`, `NIGHT_SHIMMER`).
  */
 function waterMaterial(): MeshStandardNodeMaterial {
   const m = new MeshStandardNodeMaterial({
@@ -722,14 +732,19 @@ function waterMaterial(): MeshStandardNodeMaterial {
   m.normalNode = normalize(
     normalView.add(vec3(ripA.mul(0.06), ripB.mul(0.06), 0))
   );
+  const shimmer = mix(float(1), NIGHT_SHIMMER, fountainNight);
   m.emissiveNode = materialEmissive
-    .add(vec3(0.03, 0.04, 0.045).mul(ripA.mul(0.5).add(0.5)))
+    .add(vec3(0.03, 0.04, 0.045).mul(ripA.mul(0.5).add(0.5)).mul(shimmer))
     .add(
       skyReflection(normalWorld, 0.15).mul(
         mirrorWeight(normalWorld, 0.04).mul(REFLECTIONS).mul(0.6)
       )
     )
-    .add(vec3(0.12, 0.17, 0.2).mul(fountainNight).mul(ripA.mul(0.2).add(0.8)));
+    .add(
+      vec3(0.6, 0.8, 1)
+        .mul(fountainNight.mul(NIGHT_WATER))
+        .mul(ripA.mul(0.2).add(0.8))
+    );
   return m;
 }
 
@@ -868,14 +883,15 @@ function verdigrisSpots(): F {
  * A fountain's sculpture, lit from its basin by night: warm at the water,
  * fading up the form (a real fountain's floodlights, abstracted) — the
  * uplight is strongest where it rises from the water and gone 2.5 m above
- * it (`aLift`, each vertex's height over the basin's water).
+ * it (`aLift`, each vertex's height over the basin's water), and soft
+ * (`NIGHT_UPLIGHT`).
  */
 function litClayMaterial(): MeshStandardNodeMaterial {
   const m = clayMaterial();
   const lift = attribute("aLift", "float");
   m.emissiveNode = materialEmissive.add(
     vec3(1, 0.82, 0.6)
-      .mul(0.55)
+      .mul(NIGHT_UPLIGHT)
       .mul(fountainNight)
       .mul(float(1).sub(smoothstep(0, 2.5, lift)))
   );

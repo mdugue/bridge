@@ -437,6 +437,7 @@ Code und Wissensbasis für sie verwenden:
 |---|---|---|
 | Atmosphäre | *Talnebel* | zusätzlicher Dunst, der sich im tiefen Gelände am Fluss sammelt; liest die echte Geländehöhe und setzt erst in einigem Abstand ein, was direkt vor einem steht, bleibt klar |
 | | *Tiefenfärbung* | warm nah, kühl fern: eine tiefenabhängige Farbgebung |
+| | *Laterne* | nach Einbruch der Dunkelheit trägst du zu Fuß ein kleines warmes Licht, das Boden, Bänke und Hauswände ein paar Meter um dich aufhellt; am Rechner wirft es Schatten, am Handy nicht; aus der Luft und im Modell erlischt es |
 | Gebäude | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
 | | *Höhenlinien* | zarte Geschossbänder, aus der gemessenen Höhe abgeleitet |
 | | *Streiflicht* | Kantenlicht an sonnenabgewandten Kanten |
@@ -447,7 +448,7 @@ Code und Wissensbasis für sie verwenden:
 | | *Gliederung* | was ein Haus auf Augenhöhe zeigt, gemalt: eine dunklere Ladenzone, wo ein Laden erfasst ist. Sockel, Gesims über dem Erdgeschoss und Traufgesims sind modelliert, laufen von Haus zu Haus durch und sind immer da |
 | | *Fenster* | Fensterreihen an jedem Haus, in die Wand gezeichnet: eine Öffnung, in die man hineinsieht, die Laibungen im Putz der Wand, der Grund dunkler und kühler, eine schmale Sohlbank mit ihrem Schatten — kein Glas, keine Scheiben, keine Sprossen. Achsweite und Größe, wo Straßenfotos das Haus vermessen haben (Dresden), sonst die des nächsten gemessenen Hauses derselben Art, sonst die seines Typs; eine Reihe je Geschoss, die Fenster so hoch, wie das Geschoss es zulässt, die des Erdgeschosses über dem Sockel, die des obersten unter dem Traufgesims; das Erdgeschoss eines Bürgerhauses etwas erhöht, seine Fenster mit Faschen. Keine an Brandwänden, neben Türen, über Ladenfronten, an Kirchen, Schlössern und Hallen. Aus der Ferne gehen sie im Ton der Fassade auf |
 | | *Fassadenbild* | was Straßenfotos (Mapillary) über eine Fassade sagen, abstrahiert: ein feines Relief, wo sie unruhig ist, ein Gesims an jedem Geschoss einer unruhigen Gründerzeitfront, ein etwas dunklerer oder hellerer Ton, ein Ladensockel, wo ein Ladenschild hängt; wo Rundumfotos die Fassade zeigen (in jeder Stadt außer Unna, das keine hat) |
-| | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
+| | *Abendlicht* | nach Einbruch der Dunkelheit: ein Viertel der Fenster leuchtet warm, Läden und öffentliche Bauten werden von Lichtkegeln am Fuß der Fassade angestrahlt, manche Wahrzeichen von ungleichmäßigem Flutlicht bis zur Traufe — die Wände selbst leuchten nie |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
 | | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet und die grünen Bahnböschungen wie Wiese, aus dem Infrarot-Luftbild |

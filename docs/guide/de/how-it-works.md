@@ -150,8 +150,9 @@ Wandton je Gebäude, Backstein oder Putz, wo nichts eingetragen ist, die
 Wellen auf dem Wasser, die Steine und Platten der Belagsmuster, die Pfeiler
 unter Brücken, die Fenster der Häuser, die kein Foto vermessen hat (der
 Rhythmus eines gemessenen Nachbarn oder der des Haustyps), die warmen
-Fenster in der Dämmerung (dass es ein Laden oder öffentliches Gebäude
-*ist*, stimmt; seine leuchtenden Fenster sind erfunden).
+Fenster und das Licht an den Fassaden nach Einbruch der Dunkelheit (dass
+es ein Laden, ein öffentliches Gebäude oder ein Wahrzeichen *ist*, stimmt;
+seine leuchtenden Fenster und sein Flutlicht sind erfunden).
 
 **Gar nicht in den Daten:** wo genau jedes Fenster auf seiner Wand sitzt
 (die Reihen stehen mittig darauf), die kleineren Stadtmöbel (Pflanzkübel;
