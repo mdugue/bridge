@@ -51,6 +51,7 @@ import {
   NEAR_MAX_DEG,
 } from "@/lib/city/skyview";
 import { isAbortError } from "./fetch-optional";
+import { nightShadowFree } from "./lantern";
 import {
   type Slots,
   setGraph,
@@ -275,10 +276,16 @@ function lightGraph(
     graph.ao = mix(1, texture(slotTexture("lightSvf", svf), uv).r, SKY_VIEW);
   }
   if (horizon) {
-    const lit = mix(
-      1,
-      hzSunVisible(light, slotTexture("lightHorizon", horizon), uv),
-      HORIZON_SHADE
+    // After dark the sun draws nothing, and three hands this the shadow
+    // term of every casting light — the walker's lantern too (lantern.ts):
+    // the sun's horizon then gives way, or it would black out the lantern.
+    const lit = max(
+      mix(
+        1,
+        hzSunVisible(light, slotTexture("lightHorizon", horizon), uv),
+        HORIZON_SHADE
+      ),
+      nightShadowFree
     );
     // three's ShadowNode calls this with the light's shadow term (the
     // filtered shadow map, 1 outside its frustum) and multiplies the light

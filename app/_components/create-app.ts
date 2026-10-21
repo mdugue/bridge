@@ -136,6 +136,7 @@ import { pageLeaving } from "./net-gate";
 import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
+import { createLantern, invalidateLanternShadow } from "./lantern";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
@@ -1263,6 +1264,12 @@ async function bootApp(
   // The horizon's near band hands over to the shadow map inside the frustum.
   ground.shadowReach.value = sunRig.shadowReach;
 
+  // The walker's lantern (lantern.ts): one more light, built before the
+  // first render as the lamps' pool below is; carried with the camera after
+  // dark.
+  const lantern = createLantern(budget.tier);
+  scene.add(lantern.light);
+  cleanups.push(() => lantern.dispose());
   /**
    * Forces one shadow-map re-render. The map is otherwise only redrawn when the
    * sun or the frustum moves, so **every new scene object and every material
@@ -1273,6 +1280,7 @@ async function bootApp(
    */
   const invalidateShadows = () => {
     sunRig.invalidateShadow();
+    invalidateLanternShadow(lantern);
   };
 
   // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk; clayNight
@@ -1606,6 +1614,7 @@ async function bootApp(
       d.lamps?.setNightFactor(state.nightFactor);
     }
     lampLights.setNightFactor(state.nightFactor);
+    lantern.setNight(state.nightFactor);
     setFountainNight(state.nightFactor);
     setFurnitureNight(state.nightFactor);
     setClockTime(date);
@@ -2623,6 +2632,11 @@ async function bootApp(
       setMapAltitude(camera.position.y - ground);
       // Repoint the shared real lamp lights at the nearest heads.
       lampLights.updateNearest(camera.position);
+      lantern.follow(
+        camera.position,
+        shadowViewDir,
+        camera.position.y - ground
+      );
       stepVegetation(elapsed, camera.position, tick);
       return null;
     }
@@ -2639,6 +2653,7 @@ async function bootApp(
     eye.set(pivot.x, pivot.y + equivalent, pivot.z);
     setMapAltitude(equivalent);
     lampLights.updateNearest(eye);
+    lantern.off();
     stepVegetation(elapsed, eye, tick);
     return equivalent;
   };

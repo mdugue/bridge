@@ -469,6 +469,11 @@ function arris(g: Grid, wn: V3, px: Px) {
   };
 }
 
+/** The share of windows lit at night, and a lit one's light (× the dusk
+ *  light and the night): a quarter, softly — two in five at full light
+ *  made every street a wall of lamps. */
+const NIGHT_WINDOWS = { lit: 0.25, light: 0.6 } as const;
+
 /**
  * The windows on the clay (lib/city/windows.ts gives each building's
  * rhythm and each wall vertex its place along the wall): per storey a row
@@ -482,8 +487,9 @@ function arris(g: Grid, wn: V3, px: Px) {
  * Every edge is anti-aliased by its pixel footprint; once a window is a few
  * pixels wide the drawing hands over to the facade's mean tone (the
  * openings' share of a storey, darker), so a far street never shimmers.
- * At night a share of the windows is lit, warm (`glow`, at the dusk light's
- * strength). Branch-free: fwidth needs uniform control flow.
+ * At night a quarter of the windows is lit, warm (`glow`, at the dusk
+ * light's strength; far off the facade's mean of them, `NIGHT_WINDOWS`).
+ * Branch-free: fwidth needs uniform control flow.
  */
 export function clayWindows(i: WindowInputs): ClayWindows {
   const g = grid(i);
@@ -503,7 +509,10 @@ export function clayWindows(i: WindowInputs): ClayWindows {
   const p = parts(g, i, px);
   const round = arris(g, i.wn, px);
   const rounded = round.weight.mul(near).mul(float(1).sub(opening));
-  const lit = step(0.6, hash(g.j.add(g.k.mul(17.31)), i.seed.add(3.7)));
+  const lit = step(
+    1 - NIGHT_WINDOWS.lit,
+    hash(g.j.add(g.k.mul(17.31)), i.seed.add(3.7))
+  );
   const glowNear = opening.mul(r.back).mul(lit);
   const glowFar = float(1)
     .sub(detail)
@@ -511,7 +520,7 @@ export function clayWindows(i: WindowInputs): ClayWindows {
     .mul(i.wall)
     .mul(g.band)
     .mul(g.coverage)
-    .mul(0.4);
+    .mul(NIGHT_WINDOWS.lit);
   const farTone = float(1).sub(
     g.coverage
       .mul(WINDOW_TONE.far)
@@ -529,7 +538,9 @@ export function clayWindows(i: WindowInputs): ClayWindows {
     sun: mix(1, r.lit.mul(mix(1, WINDOW_TONE.backSun, r.back)), opening).mul(
       float(1).sub(p.shadow.mul(near))
     ),
-    glow: vec3(1, 0.78, 0.48).mul(glowNear.add(glowFar)),
+    glow: vec3(1, 0.78, 0.48).mul(
+      glowNear.add(glowFar).mul(NIGHT_WINDOWS.light)
+    ),
     colour: (col: V3) => {
       const face = col.mul(
         float(1)
