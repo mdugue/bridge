@@ -264,9 +264,12 @@ OpenStreetMap · building:material*), carries the badge of how the viewer
 came by it, and links, where it can, to the place: the OpenStreetMap
 objects there, the street photos on Mapillary, the Wikidata item. Here
 estimates and assumptions do appear, marked as such (*≈ angenommen*,
-assumed): storeys estimated from the height, say, or windows after the
-house's type where no photo measured them. For a building of several
-parts it describes the part you clicked.
+assumed): storeys estimated from the height, say, or counted from the
+eave in the storey height of the mapped houses nearby (*Geschosse: von
+der Traufe gezählt, in der Geschosshöhe der kartierten Nachbarhäuser*,
+source OpenStreetMap), or windows after the house's type where no photo
+measured them. For a building of several parts it describes the part you
+clicked.
 
 Trees, monuments and fountains, and bridges answer the same way.
 Whatever you asked is framed by a soft pink line on a pale fringe —
@@ -357,8 +360,9 @@ The button in the corner opens a panel with three tabs.
     the switch the list of counters with their numbers, a click flies
     there;
   - *Straßenbahnen (Fahrplan)* ("trams, by timetable"): every one of the city's trams
-    where the timetable has it at the time set, trailing light — the clock runs on from
-    there; below the switch, how many are out.
+    where the timetable has it at the time set, each in its operator's colours and
+    length, trailing light — the clock runs on from there; below the switch, how
+    many are out.
 
   From the air the flows, columns and trails widen and thicken so they
   stay legible.

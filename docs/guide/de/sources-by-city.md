@@ -12,21 +12,21 @@ Lizenzen) beschreibt [Woher die Daten kommen](./data-sources.md).
 | Was gezeichnet wird | Dresden | Grimma | Hamburg | Leipzig | Meißen | München | Unna | Berlin (konfiguriert, noch nicht gebaut) |
 |---|---|---|---|---|---|---|---|---|
 | *Land* | *Sachsen* | *Sachsen* | *Hamburg* | *Sachsen* | *Sachsen* | *Bayern* | *Nordrhein-Westfalen* | *Berlin* |
-| Flächen (Straße, Wasser, Wiese …) | 🟢 Basis-DLM | 🟢 Basis-DLM | 🟡 OSM ¹ | 🟢 Basis-DLM | 🟢 Basis-DLM | 🟢 Basis-DLM | 🟢 Basis-DLM | 🟡 OSM ¹ |
+| Flächen (Straße, Wasser, Wiese …) | 🟢 OSM + Basis-DLM | 🟢 OSM + Basis-DLM | 🟢 OSM | 🟢 OSM + Basis-DLM | 🟢 OSM + Basis-DLM | 🟢 OSM + Basis-DLM | 🟢 OSM + Basis-DLM | 🟢 OSM |
 | Bahngleise | 🟢 Basis-DLM | 🟢 Basis-DLM | 🟡 OSM ¹ | 🟢 Basis-DLM | 🟢 Basis-DLM | 🟢 Basis-DLM | 🟢 Basis-DLM | 🟡 OSM ¹ |
 | Brückendecks | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟡 OSM + DOM1 ¹ | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟢 Basis-DLM + DOM1 | 🟡 OSM + DOM1 ¹ |
-| Straßenbäume (Art, Krone) | 🟢 Baumkataster | ⚪ — ² | 🟡 Baumkataster ³ | 🟢 Baumkataster | ⚪ — ² | ⚪ — ² | ⚪ — ² | 🟢 Baumkataster |
+| Straßenbäume (Art, Krone) | 🟢 Baumkataster | 🟡 OSM + DOM1 ² | 🟡 Baumkataster ³ | 🟢 Baumkataster | 🟡 OSM + DOM1 ² | 🟡 OSM + DOM1 ² | 🟡 OSM + DOM1 ² | 🟢 Baumkataster |
 | Baumreihen, Hecken | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
 | Bäume in Gärten und Höfen | 🟢 Laserscan | 🟢 Laserscan | 🟡 DOP + DOM1 ⁴ | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟡 DOP + DOM1 ⁵ |
-| Schuppen, Heckenhöhen | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁴ | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁵ |
+| Schuppen, Heckenhöhen | 🟢 Laserscan | 🟢 Laserscan | 🟡 DOM1 (Heckenhöhen) ⁴ | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟡 DOM1 (Heckenhöhen) ⁵ |
 | Vegetationsfarbe (Vitalität) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟡 DOP RGB (GLI) ⁶ | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) |
 | Schaufenster, Fassadenbild | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | 🟢 Mapillary | ⚪ — ⁷ | ⚪ — ⁸ |
 | Denkmäler, Brunnen | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
-| Stadtmobiliar, Lampen, Treppen, Mauern, Zäune, Markierungen, Beläge, Sportplätze, Straßenbahn, Anleger | 🔵 OSM + Mapillary | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM | 🔵 OSM |
+| Stadtmobiliar, Lampen, Treppen, Mauern, Zäune, Markierungen, Beläge, Sportplätze, Straßenbahn, Anleger | 🔵 OSM + Mapillary | 🔵 OSM + Mapillary | 🔵 OSM | 🔵 OSM | 🔵 OSM + Mapillary | 🔵 OSM | 🔵 OSM + Mapillary | 🔵 OSM |
 | Datenebene: Kfz-Verkehr | 🟢 Zählungen der Stadt | 🟡 Straßenverkehrszählung ⁹ | 🟢 Zählungen der Stadt (Hauptstraßen) | ⚪ — ¹⁰ | 🟡 Straßenverkehrszählung ⁹ | ⚪ — ¹⁰ | 🟡 Straßenverkehrszählung ⁹ | 🟢 Zählungen der Stadt |
 | Datenebene: Radverkehr live | 🟢 Zählstellen der Stadt | ⚪ — ¹¹ | 🟢 Zählstellen der Stadt | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ | ⚪ — ¹¹ |
 | Datenebene: Straßenbahnen (Fahrplan) | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹² | 🟢 GTFS (DELFI) + OSM |
-| 🟢 aus der besten Quelle | **21** / 23 | **17** / 23 | **12** / 23 | **19** / 23 | **17** / 23 | **17** / 23 | **16** / 23 | **12** / 23 |
+| 🟢 aus der besten Quelle | **21** / 23 | **17** / 23 | **13** / 23 | **19** / 23 | **17** / 23 | **17** / 23 | **16** / 23 | **13** / 23 |
 
 ## Legende
 
@@ -38,8 +38,8 @@ Lizenzen) beschreibt [Woher die Daten kommen](./data-sources.md).
 ## Warum nicht die beste Quelle
 
 1. Das Land veröffentlicht kein offenes Basis-DLM (das amtliche Landschaftsmodell), also springt OpenStreetMap ein.
-2. Die Stadt veröffentlicht kein offenes Baumkataster; ihre Straßenbäume kommen nur aus dem Kronendach und dem Laserscan.
-3. Das Kataster kennt keine Baumhöhen: Die Höhe eines Baums kommt aus dem Oberflächenmodell an seinem Standort, sonst aus seiner Krone.
+2. Die Stadt veröffentlicht kein offenes Baumkataster; ihre Bäume kommen aus dem Kronendach, dem Laserscan und den in OSM kartierten Bäumen (Art aus OSM, Höhe aus dem Oberflächenmodell).
+3. Das Kataster kennt keine Baumhöhen: Die Höhe eines Baums kommt aus Gattung und Stammdurchmesser (an den Katastern Dresdens und Leipzigs angepasst); das Oberflächenmodell hebt nur eine deutlich zu niedrige Höhe an und streicht einen Baum, den es nicht zeigt.
 4. Das Land veröffentlicht keinen offenen klassifizierten Laserscan (Hamburg lehnt das mit Verweis auf den Datenschutz ab).
 5. Die Pipeline liest den Laserscan dieses Landes noch nicht (kein Adapter dafür).
 6. Das offene Luftbild hat keinen Infrarotkanal: Der Vegetationsindex wird aus seinen sichtbaren Farben berechnet (Green Leaf Index) — er unterscheidet Grün von Grau gut, die Vitalität weniger gut.
@@ -64,7 +64,7 @@ dafür:
 - **Fassadenmaterial**: 🔵 OSM + Nachbarschaft
 - **Türme, Schornsteine, fehlende Gebäude**: 🟢 DOM1 + OSM
 - **Wahrzeichen**: 🟢 Wikidata + OSM
-- **Himmelslicht, Fernschatten**: 🟢 DGM1 + LoD2
+- **Himmelslicht, Fernschatten**: 🟢 DGM1 + LoD2 + Copernicus GLO-30
 
 *Diese Seite wird aus den Standort- und Anbieter-Konfigurationen erzeugt
 (`bun run docs:matrix`, `lib/city/source-matrix.ts`) und sagt deshalb

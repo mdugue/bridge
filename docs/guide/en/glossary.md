@@ -71,6 +71,12 @@ series (DTK10, DTK25, DTK50, DTK100 for the scales 1:10 000 to 1:100 000),
 available as raster tiles from the same portal; not used yet (a candidate
 for a cartographic minimap).
 
+**DWD** — *Deutscher Wetterdienst*, Germany's national weather service. Its
+volunteer observers record every year when the plants around them leaf
+out, flower, turn and drop their leaves (*phenology*); the viewer shifts
+each city's year of the trees by what they recorded around it.
+[The providers](./data-sources.md#the-providers).
+
 **Deterministic / inferred** — how the viewer comes by a statement.
 Deterministic (`❝ taken`, `= computed`): from the source or by a fixed
 formula, the same data give the same result. Inferred (`◎ detected`,
@@ -99,12 +105,18 @@ for download, rebuilt daily; the project reads the Saxony extract.
 **GeoSN** — *Landesamt für Geobasisinformation Sachsen*, Saxony's state
 survey office and the provider of all official datasets used here.
 
+**GLO-30** — the *Copernicus DEM* at 30 m: a surface model of the whole
+world, made by DLR and Airbus Defence and Space from radar satellites. The
+viewer reads it only for the land beyond a city's tiles: the hills on the
+far horizon and the rim of the valley.
+[The providers](./data-sources.md#the-providers).
+
 **Ground resolution / GSD** — the size of one pixel on the ground (*ground
 sampling distance*): 20 cm for the DOP, 1 m for the height models.
 
 **Land-cover class** — the land-use category of a pixel in the baked class
 raster: background, farmland/meadow, forest, copse, built-up, railway,
-path, road, water (ids 0–8). The file holds only these numbers; the
+path, road, water, arable (ids 0–9). The file holds only these numbers; the
 browser paints each class in its pastel colour (see *Splatmap*).
 
 **LiDAR / laser scanning** — *light detection and ranging*: measuring

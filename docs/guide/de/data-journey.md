@@ -82,7 +82,7 @@ flowchart LR
   WALL["walls<br/>Mauerlinien"]
   MON["monuments<br/>Brunnen · Denkmäler · Steine"]
   STAIR["stairs<br/>Treppenläufe"]
-  RAIL["rail<br/>Gleise · Schotter · Brücken · Bahnsteige"]
+  RAIL["rail<br/>Gleise · Oberleitungsmasten · Schotter · Brücken · Bahnsteige"]
 ```
 
 Jeder Schritt beschreibt, was er in den Rohdaten „sieht“ und wie er
@@ -112,9 +112,9 @@ enthält je Kachel:
 | | `walls_<Kachel>.geojson` | Mauerlinien mit Art und Höhe, dazu die Zäune und Geländer (mit Bauart) und die Tore darauf | 130–290 kB |
 | | `stairs_<Kachel>.geojson` | Treppenläufe: Achse, Breite, Stufenzahl, Höhe an Fuß und Kopf | wenige kB |
 | | `terraces_<Kachel>.geojson` | erhöhte Flächen, die dem Geländemodell fehlen (die Brühlsche Terrasse), mit ihrer Höhe | wenige kB |
-| | `rail_<Kachel>.geojson`, `railarea_<Kachel>.geojson` | Gleislinien mit Gleiszahl; verschmolzene Schotterflächen | wenige kB |
+| | `rail_<Kachel>.geojson`, `railarea_<Kachel>.geojson` | Gleislinien, eine je Gleis, mit Spurweite, Elektrifizierung und den Oberleitungsmasten daneben; verschmolzene Schotterflächen | wenige kB |
 | | `bridge_<Kachel>.geojson` | Brückendeck-Umrisse mit Höhe je Ecke, Art und Tragwerk | wenige kB |
-| | `platform_<Kachel>.geojson` | Bahnsteige | wenige kB |
+| | `platform_<Kachel>.geojson` | Bahnsteige mit ihrer Höhe | wenige kB |
 | | `osmbuild_<Kachel>.json` | je Gebäude: Laden oder Café im Erdgeschoss, Baudenkmal | 15–40 kB |
 | `data/dresden/dop/` | `roofcolor_<Kachel>.json` | eine Farbe je Gebäude, aus dem Luftbild abgetastet | 0,2 MB |
 
@@ -134,7 +134,7 @@ Insgesamt trägt das Repository etwa 400 MB Daten für die fünfzehn Kacheln.
 | Denkmäler und Brunnen | Basis-DLM (Namen, Lage) + OpenStreetMap (Becken) | die GeoJSON-Dateien | — | wie eingecheckt |
 | Lampen, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
 | Mauern, Zäune, Treppen, Terrassen | OpenStreetMap + DGM1 | die GeoJSON-Dateien | ins detaillierte Geländenetz eingebaut: der Boden an und unter ihnen geformt, Mauern, Zäune und Stufen Teil des Netzes | im Geländenetz |
-| Gleise, Schotter, Brücken | Basis-DLM (+ DOM1/DGM1 für Höhen) | die GeoJSON-Dateien | — | wie eingecheckt |
+| Gleise, Schotter, Brücken | OpenStreetMap + Basis-DLM (+ DOM1/DGM1 für Höhen und Breiten) | die GeoJSON-Dateien | — | wie eingecheckt |
 
 ### Station 5 — der Build-Schritt (`scripts/prepare-data.ts`)
 

@@ -281,8 +281,10 @@ verlinkt, wo es geht, auf die Stelle: die OpenStreetMap-Objekte dort, die
 Straßenfotos bei Mapillary, den Wikidata-Eintrag. Hier stehen auch
 Geschätztes und Angenommenes, ausdrücklich als solches markiert (*≈
 angenommen*): etwa Geschosse, die aus der Höhe geschätzt sind, oder
-Fenster nach dem Typ des Hauses, wo keine Fotos sie gemessen haben. Bei
-einem Gebäude aus mehreren Teilen gilt das für den angeklickten Teil.
+*Geschosse: von der Traufe gezählt, in der Geschosshöhe der kartierten
+Nachbarhäuser* (Quelle OpenStreetMap), oder Fenster nach dem Typ des
+Hauses, wo keine Fotos sie gemessen haben. Bei einem Gebäude aus mehreren
+Teilen gilt das für den angeklickten Teil.
 
 Bäume, Denkmale und Brunnen und Brücken antworten genauso. Was du
 gefragt hast, umrahmt eine weiche pinke Linie auf einem hellen Saum —
@@ -379,8 +381,9 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
     wie die Räder der letzten Stunde je Richtung; darunter die Liste der
     Zählstellen mit ihren Zahlen, ein Klick fliegt hin;
   - *Straßenbahnen (Fahrplan)*: jede Straßenbahn der Stadt, wie der Fahrplan sie zur
-    eingestellten Zeit fahren lässt, mit einer Lichtspur dahinter — die
-    Zeit läuft von dort an weiter;
+    eingestellten Zeit fahren lässt, jede in den Farben und der Länge ihres
+    Betreibers, mit einer Lichtspur dahinter — die Zeit läuft von dort an
+    weiter;
     darunter, wie viele gerade unterwegs sind.
 
   Aus der Luft werden Ströme, Säulen und Spuren breiter und satter, damit

@@ -46,7 +46,8 @@ zur Regel passt.
   deshalb sind Brücken ausgenommen.
 - **Kleinbauten:** Was im Laserscan 2–6,5 m hoch steht, außerhalb des
   3D-Gebäudemodells, und je Lichtimpuls nur ein Echo zurückwirft (Laub teilt
-  den Impuls, ein Dach nicht), wird ein Schuppen oder eine Laube.
+  den Impuls, ein Dach nicht), wird ein Schuppen oder eine Laube. Im
+  Schatten des Luftbilds zählt nur ein sauberer Quader.
 - **Dächer, Schornsteine, Türme, Gauben:** Wo das Oberflächenmodell mehr als
   2 m vom Dach des Gebäudemodells abweicht, auf mindestens 40 % der
   Dachfläche, baut der Viewer das Dach aus der Messung neu. Eine Höhe über
@@ -57,9 +58,9 @@ zur Regel passt.
 - **Zuordnungen:** Ein Laden aus OpenStreetMap gehört zu dem Gebäude, in
   dessen Umriss sein Punkt liegt, sonst zum nächsten in wenigen Metern; ein
   Wahrzeichen aus Wikidata zu den Gebäudeteilen, die sein Umriss deckt.
-- **Fremde Erkennung:** Laternen und Papierkörbe, die Mapillary in
-  Straßenfotos gefunden hat, sind dort von Mapillarys eigener Bilderkennung
-  erkannt worden — trainierte Netze, deren Treffer der Viewer übernimmt.
+- **Fremde Erkennung:** Laternen, die Mapillary in Straßenfotos gefunden
+  hat, sind dort von Mapillarys eigener Bilderkennung erkannt worden —
+  trainierte Netze, deren Treffer der Viewer übernimmt.
 
 ## Wie sicher ist eine Erkennung?
 
@@ -67,10 +68,11 @@ Wo eine Regel gegen eine unabhängige Quelle geprüft wurde, steht das
 Ergebnis beim Datensatz in [Woher die Daten kommen](./data-sources.md). Zwei
 Beispiele, die zeigen, was mit den Zahlen passiert: Hecken und Sträucher,
 die nur der Laserscan findet, waren zu etwa einem Drittel Ränder von
-Baumkronen, deshalb zeigt der Viewer sie nicht. Und Münchens Luftbilder
-haben keinen Infrarotkanal; das Grün aus den sichtbaren Farben stimmt mit
-dem echten Vegetationsindex nur mäßig überein (r ≈ 0,7), deshalb steht
-München in [Quellen nach Stadt](./sources-by-city.md) dort gelb.
+Baumkronen, deshalb zeigt der Viewer von ihnen nur die langen, schmalen,
+grünen abseits von Bäumen. Und Münchens Luftbilder haben keinen
+Infrarotkanal; das Grün aus den sichtbaren Farben stimmt mit dem echten
+Vegetationsindex nur mäßig überein (r ≈ 0,7), deshalb steht München in
+[Quellen nach Stadt](./sources-by-city.md) dort gelb.
 
 ## Alles im Überblick
 
@@ -79,12 +81,14 @@ München in [Quellen nach Stadt](./sources-by-city.md) dort gelb.
 | Geländehöhen | Geländemodell DGM1 | `❝ übernommen` |
 | Das Gelände als Dreiecksnetz, auf 15 cm genau | Geländemodell DGM1 | `= berechnet` |
 | Mauern und Treppenstufen, im Gelände geschärft | DGM1 und OpenStreetMap | `◎ erkannt` |
+| Mauerhöhen, wo keine eingetragen ist | DOM1 | `= berechnet` |
 | Was eine Fläche ist (Straße, Wasser, Wiese …) | Basis-DLM (Hamburg, Berlin: OpenStreetMap) | `❝ übernommen` |
 | Die Farbe je Fläche | eine Palette des Viewers | `≈ angenommen` |
 | Grün von Wiesen und Laub | Luftbild, Infrarot (München: sichtbare Farben) | `= berechnet` |
 | Grundriss, Höhe und Dachform der Gebäude | 3D-Gebäudemodell LoD2 | `❝ übernommen` |
 | Dächer, wo das Modell sie verfehlt | Oberflächenmodell DOM1 | `◎ erkannt` |
 | Schornsteine, Türme, jüngere Gebäude, Gauben | DOM1, bestätigt durch OpenStreetMap | `◎ erkannt` |
+| Bahnsteigdächer, Carports, Unterstände | DOM1, bestätigt durch OpenStreetMap | `◎ erkannt` |
 | Schuppen und Lauben | Laserscan | `◎ erkannt` |
 | Dachfarbe | Luftbild | `= berechnet` |
 | Fassadenfarbe und Material, wo eingetragen | OpenStreetMap | `❝ übernommen` |
@@ -98,8 +102,8 @@ München in [Quellen nach Stadt](./sources-by-city.md) dort gelb.
 | Bäume ohne Kataster: Standort | DOM1 oder Laserscan | `◎ erkannt` |
 | Bäume ohne Kataster: Höhe | DOM1 oder Laserscan | `= berechnet` |
 | Kronenform, Austrieb, Herbstfarbe | der Viewer, je Gattung | `≈ angenommen` |
-| Hecken: Verlauf | Basis-DLM oder OpenStreetMap | `❝ übernommen` |
-| Hecken: Höhe | Laserscan (ohne Scan: Vorgabe) | `= berechnet` `≈ angenommen` |
+| Hecken: Verlauf | Basis-DLM, OpenStreetMap oder Laserscan | `❝ übernommen` `◎ erkannt` |
+| Hecken: Höhe | Laserscan (ohne Scan: das Oberflächenmodell DOM1; eine Hecke, die es nicht sieht, entfällt; sonst Vorgabe) | `= berechnet` `≈ angenommen` |
 | Brücken: Umriss und Art | Basis-DLM (Hamburg, Berlin: OpenStreetMap) | `❝ übernommen` |
 | Brücken: Höhe der Fahrbahn | DOM1 | `= berechnet` |
 | Brücken: Bogen oder Fachwerk über dem Deck | DOM1 | `◎ erkannt` |
@@ -107,16 +111,23 @@ München in [Quellen nach Stadt](./sources-by-city.md) dort gelb.
 | Gleise und ihr Verlauf | Basis-DLM oder OpenStreetMap | `❝ übernommen` |
 | Auf welcher Ebene ein Gleis liegt (Boden, Deck, Einschnitt) | aus Gelände und Decks entlang der ganzen Linie | `◎ erkannt` |
 | Lampen, Bänke, Stadtmöbel: Standort | OpenStreetMap | `❝ übernommen` |
-| Lampen und Papierkörbe aus Straßenfotos | Mapillary | `◎ erkannt` |
+| Lampen aus Straßenfotos | Mapillary | `◎ erkannt` |
 | Ihre Form; wohin eine Bank ohne Angabe blickt | der Viewer | `≈ angenommen` |
+| Lampen: Masthöhe; wohin der Ausleger eines hohen Masts reicht | DOM1, je Straße; OpenStreetMap, zur nächsten Fahrbahn | `= berechnet` `≈ angenommen` |
 | Denkmäler: Standort und Name | Basis-DLM, OpenStreetMap | `❝ übernommen` |
 | Denkmäler: Form, wo gemessen | DOM1 | `= berechnet` |
+| Spielgeräte, wo keine eingetragen sind | DOM1 | `◎ erkannt` |
 | Sportplätze: Umriss, Sportart, Belag | OpenStreetMap | `❝ übernommen` |
 | Ihre Linien | Standardmaße der Sportart | `≈ angenommen` |
-| Parzellen in Kleingärten, Bäume in Obstwiesen ohne Eintrag | der Viewer | `≈ angenommen` |
+| Bäume in Obstwiesen: Standort und Höhe | DOM1 | `◎ erkannt` `= berechnet` |
+| Parzellen in Kleingärten; Bäume in Obstwiesen ohne DOM1 und ohne Eintrag | der Viewer | `≈ angenommen` |
 | Gewässerumriss | Basis-DLM | `❝ übernommen` |
+| Wasserstand, einer je Gewässer | DGM1 | `= berechnet` |
+| Wasserfarbe | DOP | `= berechnet` |
+| Strände und Bänke im Wasser | DGM1 + DOP | `◎ erkannt` |
+| Gischt an Wehren | OpenStreetMap, DGM1 | `❝ übernommen` `≈ angenommen` |
 | Wellen, Nebel, Dunst, Papierkorn | der Viewer | `≈ angenommen` |
-| Himmelslicht und Horizont | Gelände und Gebäudemodell | `= berechnet` |
+| Himmelslicht und Horizont | Gelände und Gebäudemodell; jenseits der Kacheln Copernicus GLO-30 | `= berechnet` |
 | Sonnenstand und Schatten zur Uhrzeit | der Viewer | `= berechnet` |
 | Datenebene Kfz-Verkehr: Tageswerte | Verkehrszählungen | `❝ übernommen` |
 | Datenebene Kfz-Verkehr: Wert zur Uhrzeit | typischer Tagesgang | `≈ angenommen` |

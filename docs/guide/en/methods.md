@@ -43,7 +43,7 @@ reproducible, but they can be wrong where the world does not fit the rule.
 - **Small buildings:** what stands 2–6.5 m high in the laser scan, outside
   the 3D building model, and sends back a single echo per light pulse
   (foliage splits a pulse, a roof does not) becomes a shed or a garden
-  house.
+  house. In the aerial photo's shadow only a clean box counts.
 - **Roofs, chimneys, towers, dormers:** where the surface model misses the
   building model's roof by more than 2 m on at least 40 % of the roof, the
   viewer rebuilds the roof from the measurement. A height above the building
@@ -53,20 +53,20 @@ reproducible, but they can be wrong where the world does not fit the rule.
 - **Assignments:** a shop from OpenStreetMap belongs to the building whose
   footprint holds its point, else to the nearest within a few metres; a
   landmark from Wikidata to the building parts its outline covers.
-- **Someone else's recognition:** lamps and litter bins Mapillary found in
-  street photos were detected there by Mapillary's own image recognition —
-  trained networks whose hits the viewer takes over.
+- **Someone else's recognition:** lamps Mapillary found in street photos
+  were detected there by Mapillary's own image recognition — trained
+  networks whose hits the viewer takes over.
 
 ## How sure is a detection?
 
 Where a rule was checked against an independent source, the result stands
 with the dataset in [Where the data comes from](./data-sources.md). Two
 examples of what the numbers do: about a third of the hedges and shrubs
-only the laser scan finds were the rims of tree crowns, so the viewer does
-not show them. And Munich's aerial photos have no infrared band; the green
-from the visible colours agrees only moderately with the real vegetation
-index (r ≈ 0.7), which is why Munich is yellow there in
-[Sources by city](./sources-by-city.md).
+only the laser scan finds were the rims of tree crowns, so of them the
+viewer shows only the long, slim, green ones clear of trees. And Munich's
+aerial photos have no infrared band; the green from the visible colours
+agrees only moderately with the real vegetation index (r ≈ 0.7), which is
+why Munich is yellow there in [Sources by city](./sources-by-city.md).
 
 ## Everything at a glance
 
@@ -75,12 +75,14 @@ index (r ≈ 0.7), which is why Munich is yellow there in
 | Ground heights | Terrain model DGM1 | `❝ taken` |
 | The ground as a triangle mesh, to 15 cm | Terrain model DGM1 | `= computed` |
 | Walls and steps, sharpened in the ground | DGM1 and OpenStreetMap | `◎ detected` |
+| Wall heights where none is mapped | DOM1 | `= computed` |
 | What an area is (road, water, meadow …) | Basis-DLM (Hamburg, Berlin: OpenStreetMap) | `❝ taken` |
 | The colour per area | a palette of the viewer's | `≈ assumed` |
 | Green of meadows and foliage | aerial photo, infrared (Munich: visible colours) | `= computed` |
 | Footprint, height and roof shape of buildings | 3D building model LoD2 | `❝ taken` |
 | Roofs where the model misses them | Surface model DOM1 | `◎ detected` |
 | Chimneys, towers, newer buildings, dormers | DOM1, confirmed by OpenStreetMap | `◎ detected` |
+| Platform roofs, carports, shelters | DOM1, confirmed by OpenStreetMap | `◎ detected` |
 | Sheds and garden houses | Laser scan | `◎ detected` |
 | Roof colour | Aerial photo | `= computed` |
 | Facade colour and material, where mapped | OpenStreetMap | `❝ taken` |
@@ -94,8 +96,8 @@ index (r ≈ 0.7), which is why Munich is yellow there in
 | Trees without a register: place | DOM1 or laser scan | `◎ detected` |
 | Trees without a register: height | DOM1 or laser scan | `= computed` |
 | Crown shape, leaf-out, autumn colour | the viewer, per genus | `≈ assumed` |
-| Hedges: course | Basis-DLM or OpenStreetMap | `❝ taken` |
-| Hedges: height | Laser scan (without one: a default) | `= computed` `≈ assumed` |
+| Hedges: course | Basis-DLM, OpenStreetMap or the laser scan | `❝ taken` `◎ detected` |
+| Hedges: height | Laser scan (without one: the surface model DOM1; a hedge it cannot see is left out; else a default) | `= computed` `≈ assumed` |
 | Bridges: outline and kind | Basis-DLM (Hamburg, Berlin: OpenStreetMap) | `❝ taken` |
 | Bridges: height of the roadway | DOM1 | `= computed` |
 | Bridges: arch or truss above the deck | DOM1 | `◎ detected` |
@@ -103,16 +105,23 @@ index (r ≈ 0.7), which is why Munich is yellow there in
 | Tracks and their course | Basis-DLM or OpenStreetMap | `❝ taken` |
 | Which level a track runs on (ground, deck, cut) | from ground and decks along the whole line | `◎ detected` |
 | Lamps, benches, street furniture: place | OpenStreetMap | `❝ taken` |
-| Lamps and bins from street photos | Mapillary | `◎ detected` |
+| Lamps from street photos | Mapillary | `◎ detected` |
 | Their form; where a bench without a direction faces | the viewer | `≈ assumed` |
+| Lamps: post height; which way a tall mast's arm reaches | DOM1, per street; OpenStreetMap, towards the nearest carriageway | `= computed` `≈ assumed` |
 | Monuments: place and name | Basis-DLM, OpenStreetMap | `❝ taken` |
 | Monuments: form, where measured | DOM1 | `= computed` |
+| Playground pieces where none is mapped | DOM1 | `◎ detected` |
 | Sports grounds: outline, sport, surface | OpenStreetMap | `❝ taken` |
 | Their lines | the sport's standard dimensions | `≈ assumed` |
-| Allotment plots, orchard trees without an entry | the viewer | `≈ assumed` |
+| Orchard trees: place and height | DOM1 | `◎ detected` `= computed` |
+| Allotment plots; orchard trees without DOM1 or an entry | the viewer | `≈ assumed` |
 | Water outline | Basis-DLM | `❝ taken` |
+| Water level, one per water body | DGM1 | `= computed` |
+| Water colour | DOP | `= computed` |
+| Beaches and bars inside the water | DGM1 + DOP | `◎ detected` |
+| Foam at weirs | OpenStreetMap, DGM1 | `❝ taken` `≈ assumed` |
 | Waves, fog, haze, paper grain | the viewer | `≈ assumed` |
-| Sky light and horizon | Terrain and building model | `= computed` |
+| Sky light and horizon | Terrain and building model; beyond the site Copernicus GLO-30 | `= computed` |
 | Sun position and shadows at the scene's time | the viewer | `= computed` |
 | Data layer motor traffic: daily counts | Traffic counts | `❝ taken` |
 | Data layer motor traffic: value at the hour | the typical day | `≈ assumed` |

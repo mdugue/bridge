@@ -77,7 +77,7 @@ flowchart LR
   WALL["walls<br/>wall lines"]
   MON["monuments<br/>fountains · statues · stones"]
   STAIR["stairs<br/>flights of steps"]
-  RAIL["rail<br/>tracks · ballast · bridges · platforms"]
+  RAIL["rail<br/>tracks · overhead-line masts · ballast · bridges · platforms"]
 ```
 
 Each step says what it "sees" in the raw data and how it simplifies it.
@@ -106,9 +106,9 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 | | `walls_<tile>.geojson` | wall lines with kind and height, then the fences and railings (with their kind) and the gates on them | 130–290 kB |
 | | `stairs_<tile>.geojson` | flights of steps: axis, width, step count, the heights at foot and head | a few kB |
 | | `terraces_<tile>.geojson` | raised areas the terrain model lacks (the Brühlsche Terrasse) with their level | a few kB |
-| | `rail_<tile>.geojson`, `railarea_<tile>.geojson` | track lines with track count; dissolved ballast areas | a few kB |
+| | `rail_<tile>.geojson`, `railarea_<tile>.geojson` | track lines, one per track, with gauge, electrification and the overhead-line masts beside them; dissolved ballast areas | a few kB |
 | | `bridge_<tile>.geojson` | bridge deck outlines with a height per corner, kind and structure | a few kB |
-| | `platform_<tile>.geojson` | station platforms | a few kB |
+| | `platform_<tile>.geojson` | station platforms with their height | a few kB |
 | | `osmbuild_<tile>.json` | per building: a shop or café on the ground floor, listed | 15–40 kB |
 | `data/dresden/dop/` | `roofcolor_<tile>.json` | one colour per building, sampled from the aerial photo | 0.2 MB |
 
@@ -128,7 +128,7 @@ In total the repository carries about 400 MB of data for the fifteen tiles.
 | Monuments and fountains | Basis-DLM (names, positions) + OpenStreetMap (basins) | the GeoJSON files | — | as committed |
 | Lamps, platforms, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
 | Walls, fences, stairs, terraces | OpenStreetMap + DGM1 | the GeoJSON files | built into the detailed terrain mesh: the ground shaped along and under them, the walls, fences and steps as part of the mesh | inside the terrain mesh |
-| Rails, ballast, bridges | Basis-DLM (+ DOM1/DGM1 for heights) | the GeoJSON files | — | as committed |
+| Rails, ballast, bridges | OpenStreetMap + Basis-DLM (+ DOM1/DGM1 for heights and widths) | the GeoJSON files | — | as committed |
 
 ### Station 5 — the build step (`scripts/prepare-data.ts`)
 
