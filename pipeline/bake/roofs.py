@@ -288,27 +288,27 @@ def scan_surface(dom: np.ndarray, known: np.ndarray) -> np.ndarray:
 
 
 def _rise(h: np.ndarray) -> np.ndarray:
-    return np.hypot(ndi.sobel(h, axis=1), ndi.sobel(h, axis=0)) / (8 * RES)
+    """Per cell, how many metres the surface rises per metre (Sobel)."""
+    return np.hypot(ndi.sobel(h, axis=1) / (8 * RES), ndi.sobel(h, axis=0) / (8 * RES))
 
 
-def level_share(roof: np.ndarray, dom: np.ndarray, judged: np.ndarray) -> float:
+def level_share(roof: np.ndarray, dom: np.ndarray, h: np.ndarray, judged: np.ndarray) -> float:
     """Of the judged cells where a LoD2 roof misses DOM1 by more than
-    MISS_M, a step's edge aside, the share on which the scan
-    (`scan_surface`) rises less than SLOPE: where the LoD2 models a pitch,
+    MISS_M, a step's edge aside, the share on which the scan (`h`, its
+    `scan_surface`) rises less than SLOPE: where the LoD2 models a pitch,
     or a level, over a level roof."""
-    h = scan_surface(dom, judged)
     missed = judged & (np.abs(roof - dom) > MISS_M) & ~step_cells(h)
     n = missed.sum()
     return float((missed & (_rise(h) <= SLOPE)).sum() / n) if n else 0.0
 
 
-def pitch_holds(roof: np.ndarray, dom: np.ndarray, own: np.ndarray, judged: np.ndarray) -> bool:
-    """Whether the scan confirms a LoD2 roof's pitch: the LoD2 rises more
-    than SLOPE on at least PITCH_SHARE of the judged cells (either's steps
-    aside), and the scan on at least PITCH_SHARE of those. A narrow gable,
-    a barrel vault: where the scan's faces are too narrow to be drawn as
-    faces, a rebuild would flatten what the LoD2 has right."""
-    h = scan_surface(dom, judged)
+def pitch_holds(roof: np.ndarray, h: np.ndarray, own: np.ndarray, judged: np.ndarray) -> bool:
+    """Whether the scan (`h`, its `scan_surface`) confirms a LoD2 roof's
+    pitch: the LoD2 rises more than SLOPE on at least PITCH_SHARE of the
+    judged cells (either's steps aside), and the scan on at least
+    PITCH_SHARE of those. A narrow gable, a barrel vault: where the scan's
+    faces are too narrow to be drawn as faces, a rebuild would flatten what
+    the LoD2 has right."""
     lod2 = fill_nearest(np.nan_to_num(roof), own)
     pitched = judged & ~step_cells(h) & ~step_cells(lod2) & (_rise(lod2) > SLOPE)
     n = pitched.sum()
@@ -488,10 +488,8 @@ def inclined_cells(h: np.ndarray, own: np.ndarray) -> np.ndarray:
     a face ends at a step, which stays a wall. A step's flank is as steep
     but only a cell or two wide, a dormer or a chimney small: neither holds
     the patch."""
-    gx = ndi.sobel(h, axis=1) / (8 * RES)
-    gy = ndi.sobel(h, axis=0) / (8 * RES)
     step = step_cells(h)
-    rise = np.hypot(gx, gy)
+    rise = _rise(h)
     # a disk FACE_M across: a face must hold one, whichever way it points;
     # a steep one, a disk STEEP_FACE_M across
     faces = ndi.binary_opening(own & ~step & (rise > SLOPE), structure=_disk(FACE_M))
@@ -800,10 +798,10 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     miss_lod2 = miss_share(roof, dom, judged)
     if miss_lod2 <= LEVEL_MISS_SHARE or form_holds(roof[judged], dom[judged]):
         return None
-    if miss_lod2 <= MISS_SHARE and (
-        level_share(roof, dom, judged) < LEVEL_SHARE or pitch_holds(roof, dom, own, judged)
-    ):
-        return None
+    if miss_lod2 <= MISS_SHARE:
+        h = scan_surface(dom, judged)
+        if level_share(roof, dom, h, judged) < LEVEL_SHARE or pitch_holds(roof, h, own, judged):
+            return None
     # the scan sees open ground over much of it: the footprint is out of date
     # (a block torn down since), not just the roof
     if float((dom[judged] < obj.base + GROUND_M).mean()) > OPEN_SHARE:
@@ -818,15 +816,21 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     model = measured_model(dom, own, inner, green, small)
     if model is None:
         return None
+
     # the strips merged away may have stood a storey off their new level:
     # where that makes the drawn roof miss more than the flat model may (a
     # hall's monitor roofs, 5 m strips 3 m over the rest, merged into blocks
     # that miss as much as the LoD2 did), they stay
-    drawn = miss_share(model.heights(), dom, judged & (model.lab > 0))
-    if drawn > KEEP_SHARE or drawn > miss_lod2 / 2:
+    def misses(m: Model) -> bool:
+        drawn = miss_share(m.heights(), dom, judged & (m.lab > 0))
+        return drawn > KEEP_SHARE or drawn > miss_lod2 / 2
+
+    if misses(model):
         model = measured_model(dom, own, inner, green, small, narrow=False)
-        if model is None:
-            return None
+        # the faces' own merges may still miss more: then the flat model,
+        # which met the bar, is drawn (a LoD2 off on 88 % stays no better)
+        if model is None or misses(model):
+            model = flat
     # the footprint's own outline, less what another roof covers
     if (covered & np.isfinite(roof)).any():
         mask = covered & np.isfinite(roof)

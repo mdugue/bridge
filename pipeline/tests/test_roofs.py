@@ -324,11 +324,11 @@ def test_a_low_hip_over_a_level_roof_misses_on_the_level_a_gable_off_a_storey_on
     hip = BASE + 10 + (20 - np.maximum(np.abs(xx - 20), np.abs(yy - 20))) * 0.3
     store = np.full((40, 40), BASE + 10.5)
     assert LEVEL_MISS_SHARE < miss_share(hip, store, judged) <= MISS_SHARE
-    assert level_share(hip, store, judged) >= LEVEL_SHARE
+    assert level_share(hip, store, store, judged) >= LEVEL_SHARE
     assert not pitch_holds(hip, store, judged, judged)
     # a gable the scan shows a storey higher misses on its slopes: kept
     gable = BASE + 10 + (20 - np.abs(xx - 20)) * 0.4
-    assert level_share(gable, gable + 3, judged) < 0.1
+    assert level_share(gable, gable + 3, gable + 3, judged) < 0.1
     # a gentle LoD2 gable over the scan's steeper one: the pitch holds, and
     # the LoD2 stays though a flat annex beside it misses
     assert pitch_holds(BASE + 10 + (20 - np.abs(xx - 20)) * 0.2, gable, judged, judged)
@@ -337,12 +337,13 @@ def test_a_low_hip_over_a_level_roof_misses_on_the_level_a_gable_off_a_storey_on
 
 def test_a_halls_monitor_roofs_stay_strips_where_merging_them_would_miss(tmp_path):
     # the flat roof's footprint (40 × 40 m at 10 m) carries two monitor
-    # roofs, 4 m wide and 2.5 m higher: narrow, they would merge into the
-    # roof beside them, which then misses them as the LoD2 did
+    # roofs, 5 m wide and 2.5 m higher (a quarter of the roof): narrow, they
+    # would merge into the roof beside them, which then misses them as the
+    # LoD2 did
     dom = _dom()
     rows = slice(SIZE - 60, SIZE - 20)
-    for c in (110, 126):
-        dom[rows, c : c + 4] = BASE + 12.5
+    for c in (109, 126):
+        dom[rows, c : c + 5] = BASE + 12.5
     tile = _tile(tmp_path, dom)
     run(tile)
     doc = json.loads((tile.data / "dlm" / "roofs_t.geojson").read_text())
