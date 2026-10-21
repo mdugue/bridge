@@ -19,6 +19,11 @@ Nor does any step plant the trees of the transport land beyond the traffic
 the DLM files as road or railway: there the canopy takes the crowns the
 surface model shows, with or without a scan (`verge_mask`).
 
+On transport land a crown is rough but never a plane that the orthophoto
+shows bare (`bare_planes`): a freight yard's gravel and ballast heaps —
+rough to `rough_mask` for their slope alone — had grown a wood of 22
+crowns.
+
 A crown in a needle forest is an evergreen (`l: "e"`), as is one in a mixed
 forest that reads green in a leaf-off flight, where the broadleaves are bare
 (`leaf_types`): the Dresdner Heide's pines drew as broadleaves, coloured in
@@ -71,6 +76,19 @@ FOOTPRINT_REACH_M = 1.0
 # Not the orthophoto's green: Saxony's is flown leaf-off, where 1–4 % of a
 # crown's texels are green (Leipzig; Unna's summer flight 19 %).
 VERGE_MIN_M2 = 15
+# On transport land, a texel that is a plane in DOM1 and bare in the
+# orthophoto is no crown: the residual of its 3 × 3 window about the
+# least-squares plane is at most PLANE_M on more than half of the 5 × 5
+# around it, and the crown green (`crown_green`) is below BARE. A gravel or
+# ballast heap's flank is such a plane however steep (residual 0.05–0.15 m
+# on Leipzig's freight-yard heaps, which `rough_mask` passed for their
+# slope alone), and so is a platform's or a shed's roof. Bare: asphalt,
+# gravel, sand and roofs read 0.0–0.05 on that scale, a mown lawn 0.33.
+# Not in the forests and parks: there the DLM says the crowns are trees,
+# and a leaf-off crown can read as bare and as smooth (Dresden's DOM1
+# under bare limes; München's visible-band index under green ones).
+PLANE_M = 0.25
+BARE = 0.1
 # The forest's kind: the Basis-DLM's AX_Wald `VEG`, without a DLM OSM's
 # `leaf_type` on a forest or wood.
 BROADLEAF, NEEDLE, MIXED = 1100, 1200, 1300
@@ -170,6 +188,28 @@ def rough_mask(dom: np.ndarray) -> np.ndarray:
     return uniform_filter((spread > ROUGH_M).astype(np.float32), 5) > 0.5
 
 
+def plane_residual(dom: np.ndarray) -> np.ndarray:
+    """The RMS residual (m) of each texel's 3 × 3 window about its
+    least-squares plane: the spread `rough_mask` measures, less what a tilt
+    explains (on the window's x, y in −1..1, var(x) = 2/3)."""
+    mean = uniform_filter(dom, 3)
+    var = uniform_filter(dom * dom, 3) - mean * mean
+    kx = np.tile([-1.0, 0.0, 1.0], (3, 1)) / 9.0
+    cov_x, cov_y = ndi.correlate(dom, kx), ndi.correlate(dom, kx.T)
+    return np.sqrt(np.maximum(var - (cov_x * cov_x + cov_y * cov_y) * 1.5, 0.0))
+
+
+def bare_planes(dom: np.ndarray, green: np.ndarray | None) -> np.ndarray:
+    """The texels no crown on transport land stands on: a plane in DOM1
+    (residual at most PLANE_M on more than half of the 5 × 5 around) and
+    bare in the crown green (`crown_green`, any grid) — nothing without the
+    index."""
+    if green is None:
+        return np.zeros(dom.shape, dtype=bool)
+    plane = uniform_filter((plane_residual(dom) > PLANE_M).astype(np.float32), 5) <= 0.5
+    return plane & (raster_at(green, dom.shape) < BARE)
+
+
 def built_mask(tile: Tile, px: int) -> np.ndarray:
     """Every LoD2 outline, grown by FOOTPRINT_REACH_M: the rings buffered in
     one vectorised call (55 000 on Dresden's spawn tile in 0.7 s; one by one
@@ -202,9 +242,9 @@ def green_mask(tile: Tile, rough: np.ndarray, built: np.ndarray) -> np.ndarray:
 def verge_mask(
     cls: np.ndarray, ndom: np.ndarray, rough: np.ndarray, built: np.ndarray, traffic: np.ndarray
 ) -> np.ndarray:
-    """The crowns on transport land beyond the traffic: rough, 3–45 m, off
-    every LoD2 outline, in blobs of VERGE_MIN_M2 after a 3 × 3 opening (1 m
-    texels)."""
+    """The crowns on transport land beyond the traffic: rough (and no bare
+    plane, `bare_planes`: the caller's `rough`), 3–45 m, off every LoD2
+    outline, in blobs of VERGE_MIN_M2 after a 3 × 3 opening (1 m texels)."""
     crown = np.isin(cls, TRANSPORT) & ~traffic & rough & ~built
     crown &= (ndom > MIN_H) & (ndom < MAX_H)
     crown = ndi.binary_opening(crown, np.ones((3, 3), bool))
@@ -302,7 +342,9 @@ def canopy_points(tile: Tile, cell: int) -> list[dict]:
     cls = class_raster_at(tile, ndom.shape)
     rough, built, traffic = rough_mask(dom), built_mask(tile, w), traffic_mask(tile, w)
     ok = (vegetation_mask(tile, w) == 1) | green_mask(tile, rough, built)
-    ok |= verge_mask(cls, ndom, rough, built, traffic)
+    # on transport land a crown is rough, and a bare plane is no crown
+    crown = rough & ~bare_planes(dom, crown_green(tile))
+    ok |= verge_mask(cls, ndom, crown, built, traffic)
     ok &= ~np.isin(cls, BLOCKED) & ~traffic
     ok &= bridge_mask(tile, w) == 0
     ok &= ~roof_mask(tile, ndom)

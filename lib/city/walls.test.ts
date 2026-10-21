@@ -196,3 +196,30 @@ test("a city wall that holds the earth ends at its shelf and stands where the gr
   expect(capBack(0, 7.5)).toBeGreaterThanOrEqual(1.5);
   expect(capBack(12.5, 20)).toBeLessThan(1);
 });
+
+test("a wall whose scan finds two terraces stands at each, not across them", () => {
+  // A retaining wall along y = 0 between two terrace steps the DGM blurs
+  // into 1 m ramps: at y = −4 (the taller for x < 7) and at y = +4 (the
+  // taller beyond). Its columns snap to one step or the other; joined, they
+  // stood a block 10 m deep over the terrace between (Meißen's Burgberg).
+  const ramp = (y: number, at: number, rise: number) =>
+    Math.min(Math.max(y - at + 0.5, 0), 1) * rise;
+  const ground = (x: number, y: number) =>
+    100 + ramp(y, -4, x < 7 ? 6 : 4) + ramp(y, 4, x < 7 ? 4 : 6);
+  const wall: WallRibbon = {
+    coords: [
+      [0, 0],
+      [15, 0],
+    ],
+    h: 3,
+    kind: "retaining_wall",
+  };
+  const g = wallGeometry([wall], ground, offset, { snapToStep: true });
+  const pos = g?.positions ?? [];
+  expect(pos.length).toBeGreaterThan(0);
+  for (let t = 0; t < pos.length; t += 9) {
+    const zs = [pos[t + 2], pos[t + 5], pos[t + 8]];
+    // no triangle reaches across the terrace (world z = −north)
+    expect(Math.max(...zs) - Math.min(...zs)).toBeLessThan(3);
+  }
+});

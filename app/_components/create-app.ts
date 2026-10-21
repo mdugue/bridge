@@ -2006,7 +2006,12 @@ async function bootApp(
     // a stand-in: the scene's surface anywhere inside it is the thing; the
     // counters' columns are glass, which writes no depth
     return {
-      positions: solidShape(solids, target.kind === "tree" && target.conifer),
+      // a conifer outlined as its cone: a register's, or a canopy evergreen
+      positions: solidShape(
+        solids,
+        (target.kind === "tree" && target.conifer) ||
+          (target.kind === "canopy" && target.evergreen !== undefined)
+      ),
       reach:
         target.kind === "bikes"
           ? Number.POSITIVE_INFINITY

@@ -116,6 +116,8 @@ interface WallCol {
   face: Point2;
   bx?: number;
   bz?: number;
+  /** a snapped column's run (`stepRuns`): the ribbon breaks between two */
+  run?: number;
   top: number;
   wx: number;
   wz: number;
@@ -216,17 +218,41 @@ function faceOf(step: StepSnap): number {
  *  as a steady line rather than a sawtooth. */
 const CAP_SMOOTH = 2;
 
-/** The farthest cap end (toward the high side) within CAP_SMOOTH columns
- *  that agree on the side. */
+/** Caps whose tops differ by more than this (m) hold different shelves. */
+const SAME_LEVEL_M = 1;
+
+/**
+ * The runs of a wall's snapped columns that hold one shelf: consecutive
+ * columns on the same side whose caps lie within SAME_LEVEL_M of each other
+ * (a gap or a jump starts the next run). Where the scan finds one terrace's
+ * step along part of a wall and the next terrace's along the rest, the two
+ * runs stand apart: a cap's end carried across them ran a lower cap back
+ * over the whole terrace between, and the quad joining them stood a
+ * diagonal block across it (Meißen's Burgberg).
+ */
+function stepRuns(steps: readonly (StepSnap | null)[]): number[] {
+  const runs: number[] = [];
+  steps.forEach((s, i) => {
+    const prev = steps[i - 1];
+    const same =
+      s && prev && s.up === prev.up && Math.abs(s.hi - prev.hi) <= SAME_LEVEL_M;
+    runs.push(i === 0 ? 0 : runs[i - 1] + (same ? 0 : 1));
+  });
+  return runs;
+}
+
+/** The farthest cap end (toward the high side) within CAP_SMOOTH columns of
+ *  the same run (`stepRuns`). */
 function smoothCapEnds(
   ends: (number | null)[],
-  steps: (StepSnap | null)[]
+  steps: (StepSnap | null)[],
+  runs: readonly number[]
 ): (number | null)[] {
   return farthestNear(
     ends,
     CAP_SMOOTH,
     (i) => (steps[i]?.up ?? 1) as 1 | -1,
-    (i) => steps[i]?.up
+    (i) => runs[i]
   );
 }
 
@@ -415,12 +441,14 @@ function columnsOf(
   ) {
     steps = [];
   }
+  const runs = stepRuns(steps);
   const ends = smoothCapEnds(
     pts.map((p, i) => {
       const step = steps[i];
       return step ? capEnd(heightAt, p, perps[i], step, faceOf(step)) : null;
     }),
-    steps
+    steps,
+    runs
   );
   const cols = pts.map((p, i) => {
     const step = steps[i];
@@ -428,7 +456,7 @@ function columnsOf(
     // smoothSnaps fills gaps from the neighbours; a vertex off every tile
     // must still break the ribbon (columnAt's rule), not get a filled column.
     return step && end !== null && heightAt(p[0], p[1]) !== null
-      ? snappedColumn(p, perps[i], h, step, offset, end)
+      ? { ...snappedColumn(p, perps[i], h, step, offset, end), run: runs[i] }
       : columnAt(p, perps[i], h, heightAt, offset, wall.kind);
   });
   return cols.map((c, i) =>
@@ -486,8 +514,8 @@ export function wallGeometry(
     for (let i = 0; i < cols.length - 1; i++) {
       const c0 = cols[i];
       const c1 = cols[i + 1];
-      if (!(c0 && c1)) {
-        continue;
+      if (!(c0 && c1) || (c0.run ?? c1.run) !== (c1.run ?? c0.run)) {
+        continue; // off the ground, or two runs at different steps
       }
       if (c0.top - c0.base < MIN_H && c1.top - c1.base < MIN_H) {
         continue;

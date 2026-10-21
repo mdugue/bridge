@@ -1,7 +1,24 @@
-import { Color, Group, Matrix4, Quaternion, Vector3 } from "three/webgpu";
-import { type CoarseCrown, COARSE_TREE_WIDEN } from "@/lib/city/coarse-crowns";
+import {
+  type BufferGeometry,
+  Color,
+  Group,
+  Matrix4,
+  Quaternion,
+  Vector3,
+} from "three/webgpu";
+import {
+  type CoarseCrown,
+  coarseConifer,
+  COARSE_TREE_WIDEN,
+} from "@/lib/city/coarse-crowns";
 import type { RecenterOffset } from "@/lib/city/ground-clamp";
 import { bucketByCell, hash } from "@/lib/city/tree-placement";
+import {
+  boxOf,
+  buildConeGeo,
+  COARSE_CONE_PROFILE,
+  CONE_SEGMENTS,
+} from "./conifer-crown";
 import type { CrownSeasonKey, SeasonalCrowns } from "./crown-season";
 import { seasonCrowns } from "./crown-season";
 import { Instances } from "./instancing";
@@ -11,6 +28,7 @@ import {
   buildCrownGeo,
   crownColor,
   genericSeasonKey,
+  padCrownSphere,
   sceneCrowns,
   type VegetationControl,
 } from "./vegetation-layer";
@@ -22,8 +40,9 @@ import {
  * level's dressing and shown with it — whenever the tile renderer shows
  * the coarse level, in the distance on foot and in the air, in Modell
  * wherever the fine level is not loaded — so no scale and no device is
- * left without trees. One set per vegetation chunk, on the scene's crown
- * materials (sceneCrowns): the wind and the look reach them as every
+ * left without trees. One set per vegetation chunk and form — the lobed
+ * crown, and the cone for its conifers (`coarseConifer`) —, on the scene's
+ * crown materials (sceneCrowns): the wind and the look reach them as every
  * other crown, and they need no build of their own.
  */
 export interface CoarseCrownContext {
@@ -57,7 +76,16 @@ function paintCrown(c: CoarseCrown, ground: number, col: Color): void {
   if (c.kind === "canopy") {
     crownColor(
       col,
-      { x: c.x, y: ground, z: c.z, rot: c.rot, s: c.s, w: c.w, ndvi: c.ndvi },
+      {
+        x: c.x,
+        y: ground,
+        z: c.z,
+        rot: c.rot,
+        s: c.s,
+        w: c.w,
+        ndvi: c.ndvi,
+        ...(c.evergreen ? { evergreen: true } : {}),
+      },
       v
     );
     return;
@@ -88,6 +116,20 @@ function seasonKey(c: CoarseCrown): CrownSeasonKey {
   };
 }
 
+/**
+ * The coarse level's cone: one skirt, inside the box of the lobed crown
+ * the fine level fits its trees to (buildCrownGeo at its full detail), so
+ * a coarse conifer stands where and as its fine cone does.
+ */
+function coarseCone(): BufferGeometry {
+  const fine = buildCrownGeo();
+  const box = boxOf(fine);
+  fine.dispose();
+  return padCrownSphere(
+    buildConeGeo(box, CONE_SEGMENTS.coarse, COARSE_CONE_PROFILE)
+  );
+}
+
 /** A coarse tile's crowns as a vegetation control (no tiers to pick: the
  *  coarse level is far, or small, wherever it shows). */
 export function buildCoarseCrowns(
@@ -98,9 +140,14 @@ export function buildCoarseCrowns(
   group.name = "coarse-crowns";
   const mats = sceneCrowns(ctx.sunDirection);
   // The far tier's lobed crown one subdivision coarser — a few pixels
-  // across wherever the coarse level shows. The tile's own: freeing a set
-  // frees the geometry it views.
+  // across wherever the coarse level shows —, and the conifers' cone of one
+  // skirt; each the tile's own: freeing a set frees the geometry it views.
   const geo = buildCrownGeo(0);
+  let cone: BufferGeometry | null = null;
+  const coneGeo = (): BufferGeometry => {
+    cone ??= coarseCone();
+    return cone;
+  };
   const { cx, cy } = ctx.offset;
   const standing = crowns.flatMap((c) => {
     const ground = ctx.heightAt(c.x + cx, cy - c.z);
@@ -109,11 +156,26 @@ export function buildCoarseCrowns(
   const seasons: SeasonalCrowns[] = [];
   const m = new Matrix4();
   const col = new Color();
-  for (const cell of bucketByCell(standing)) {
-    const set = new Instances(geo, mats.leafy, cell.length);
+  const cells = bucketByCell(standing).flatMap((cell) => {
+    const conifers = cell.filter(coarseConifer);
+    const broad = cell.filter((c) => !coarseConifer(c));
+    return [
+      ...(broad.length > 0 ? [{ list: broad, conifer: false }] : []),
+      ...(conifers.length > 0 ? [{ list: conifers, conifer: true }] : []),
+    ];
+  });
+  for (const { list: cell, conifer } of cells) {
+    const set = new Instances(
+      conifer ? coneGeo() : geo,
+      mats.leafy,
+      cell.length
+    );
     set.castShadow = true;
     set.receiveShadow = true;
-    set.userData.styleCrown = "far";
+    // a cone keeps its form in a styled frame, as on the fine level
+    if (!conifer) {
+      set.userData.styleCrown = "far";
+    }
     cell.forEach((c, i) => {
       set.setMatrixAt(i, crownMatrix(c, c.ground, m));
       paintCrown(c, c.ground, col);

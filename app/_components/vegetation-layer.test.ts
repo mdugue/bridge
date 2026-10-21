@@ -12,6 +12,7 @@ import { TRUNK_ROWS, trunkRadiusAt } from "@/lib/city/tree-inventory";
 import { BASE_TREE_H, GENERIC_CROWN_W } from "@/lib/city/tree-placement";
 import { isInstances } from "./instancing";
 import {
+  buildConeTiers,
   buildCrownGeo,
   buildCrownWarmup,
   buildTrunkGeo,
@@ -241,4 +242,72 @@ describe("the generic crown's measures", () => {
     const width = (box?.max.x ?? 0) - (box?.min.x ?? 0);
     expect(Math.abs(width - GENERIC_CROWN_W)).toBeLessThan(0.3);
   });
+});
+
+test("a canopy evergreen stands as a cone of its own, in leaf all year", () => {
+  const pine: CanopyFeature = {
+    geometry: { type: "Point", coordinates: [8, 0] },
+    properties: { h: 18, l: "e" },
+  };
+  const built = buildVegetation(
+    { rows: [], canopy: [canopy(5, 12), pine] },
+    ctx
+  );
+  // one chunk per form in the same 250 m cell, each with its one tree
+  expect(built.chunks).toHaveLength(2);
+  const [broad, conifer] = [...built.chunks].sort(
+    (a, b) =>
+      Number(a.mid.userData.styleCrown === undefined) -
+      Number(b.mid.userData.styleCrown === undefined)
+  );
+  // the cone: its own geometry, the crown's attributes and no index (one
+  // node build with the lobed crown's), the scene's crown material
+  for (const tier of ["far", "mid", "rich"] as const) {
+    const cone = conifer[tier].geometry;
+    expect(cone).not.toBe(broad[tier].geometry);
+    expect(cone.index).toBeNull();
+    expect(broad[tier].geometry.index).toBeNull();
+    expect(Object.keys(cone.attributes).sort()).toEqual(
+      Object.keys(broad[tier].geometry.attributes).sort()
+    );
+    expect(conifer[tier].material).toBe(broad[tier].material);
+    // a picture style's crowns swap the broadleaves, never the cone
+    expect(conifer[tier].userData.styleCrown).toBeUndefined();
+    expect(broad[tier].userData.styleCrown).toBe(tier);
+  }
+  // January: the broadleaf bares, the evergreen keeps the leafy material
+  expect(built.setSeason(9)).toBe(true);
+  const { bare } = sceneCrowns();
+  expect(broad.mid.material).toBe(bare);
+  expect(conifer.mid.material).not.toBe(bare);
+});
+
+test("the cone stands in the lobed crown's box, as tall and as wide", () => {
+  const lobed = buildCrownGeo();
+  lobed.computeBoundingBox();
+  const cones = buildConeTiers({
+    far: buildCrownGeo(1),
+    mid: lobed,
+    rich: lobed,
+    trunk: buildTrunkGeo(),
+  });
+  const box = lobed.boundingBox;
+  for (const tier of ["far", "mid", "rich"] as const) {
+    const g = cones[tier];
+    g.computeBoundingBox();
+    const b = g.boundingBox;
+    expect(b?.max.y).toBeCloseTo(box?.max.y ?? 0, 5);
+    expect(b?.min.y).toBeCloseTo(box?.min.y ?? 0, 5);
+    // the widest skirt, give or take its wobble
+    const w = Math.max(
+      (b?.max.x ?? 0) - (b?.min.x ?? 0),
+      (b?.max.z ?? 0) - (b?.min.z ?? 0)
+    );
+    const lw = Math.max(
+      (box?.max.x ?? 0) - (box?.min.x ?? 0),
+      (box?.max.z ?? 0) - (box?.min.z ?? 0)
+    );
+    expect(w / lw).toBeGreaterThan(0.9);
+    expect(w / lw).toBeLessThan(1.15);
+  }
 });

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Color, Matrix4, type Object3D, Vector3 } from "three/webgpu";
 import {
   COARSE_TREE_WIDEN,
+  type CoarseCrown,
   coarseCrowns,
   packCrowns,
   unpackCrowns,
@@ -107,4 +108,24 @@ test("a coarse crown stands where its fine tree does, as tall and wider", () => 
     expect(c.g).toBeCloseTo(twin.c.g, 2);
     expect(c.b).toBeCloseTo(twin.c.b, 2);
   }
+});
+
+test("a coarse conifer stands on its own cone, as its fine tree does", () => {
+  const crowns: CoarseCrown[] = [
+    { kind: "canopy", x: 10, z: 10, rot: 0, s: 2 },
+    { kind: "canopy", x: 14, z: 10, rot: 0, s: 3, evergreen: true },
+  ];
+  const all = sets(buildCoarseCrowns(crowns, ctx).group);
+  expect(all).toHaveLength(2);
+  const cone = all.find((s) => s.userData.styleCrown === undefined);
+  const lobed = all.find((s) => s.userData.styleCrown === "far");
+  expect(cone?.drawCount).toBe(1);
+  expect(lobed?.drawCount).toBe(1);
+  // one node build with the lobed crown's: the same attributes, no index,
+  // the same material
+  expect(cone?.geometry.index).toBeNull();
+  expect(Object.keys(cone?.geometry.attributes ?? {}).sort()).toEqual(
+    Object.keys(lobed?.geometry.attributes ?? {}).sort()
+  );
+  expect(cone?.material).toBe(lobed?.material);
 });

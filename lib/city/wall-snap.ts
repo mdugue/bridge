@@ -170,8 +170,17 @@ function outerFoot(feet: number[], up: number): number {
   return s[Math.floor(s.length * 0.2)];
 }
 
+/** Snaps whose crests lie this close (m, across the line) found the same
+ *  step. On a terraced slope the scan finds the next terrace's step from
+ *  some vertices of a wall and its own from others; a median over both
+ *  stood one block from the lower terrace's foot to the upper one's crest
+ *  (Meißen's Burgberg: faces up to 15 m tall and caps 15 m deep on walls
+ *  tagged 3 m, read from above as boulders on the vineyard). */
+const SAME_STEP_M = 1.5;
+
 /** The snaps within `radius` of `i` that agree with the window's majority
- *  high side, or null when fewer than half the window snapped at all. */
+ *  high side and found the same step as most of them (`sameStep`), or null
+ *  when fewer than half the window snapped at all. */
 function agreeingNeighbours(
   snaps: (StepSnap | null)[],
   i: number,
@@ -192,15 +201,32 @@ function agreeingNeighbours(
   const ups = near.reduce((sum, s) => sum + s.up, 0);
   const up = ups >= 0 ? 1 : -1;
   const agree = near.filter((s) => s.up === up);
-  return agree.length * 2 > near.length ? agree : null;
+  return agree.length * 2 > near.length ? sameStep(agree, snaps[i]) : null;
+}
+
+/** The largest group of `agree` whose crests lie within SAME_STEP_M of one
+ *  of them — the vertex's `own` snap's group when no other is larger. */
+function sameStep(agree: StepSnap[], own: StepSnap | null): StepSnap[] {
+  const members = (c: StepSnap) =>
+    agree.filter((s) => Math.abs(s.crest - c.crest) <= SAME_STEP_M);
+  let best = own && agree.includes(own) ? members(own) : [];
+  for (const c of agree) {
+    const m = members(c);
+    if (m.length > best.length) {
+      best = m;
+    }
+  }
+  return best;
 }
 
 /**
  * Running medians of the per-vertex snaps along one wall (`radius` vertices
- * either side). A vertex whose neighbourhood mostly failed to snap, or
- * disagrees on which side is high, gets null (the caller's fallback); a gap
- * inside a well-snapped run is filled from its neighbours, so the ribbon
- * does not hop back to the OSM line for one vertex.
+ * either side), over the neighbours that found the same step (never a
+ * median of two terraces' steps). A vertex whose neighbourhood mostly
+ * failed to snap, or disagrees on which side is high, gets null (the
+ * caller's fallback); a gap inside a well-snapped run is filled from its
+ * neighbours, so the ribbon does not hop back to the OSM line for one
+ * vertex.
  */
 export function smoothSnaps(
   snaps: (StepSnap | null)[],

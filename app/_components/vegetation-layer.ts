@@ -82,6 +82,7 @@ import {
   RICH_IN_M,
   RICH_OUT_M,
 } from "@/lib/city/vegetation-lod";
+import { boxOf, buildConeGeo, CONE_SEGMENTS } from "./conifer-crown";
 import { fetchOptionalBinary } from "./fetch-optional";
 import {
   Instances,
@@ -287,25 +288,42 @@ export function padCrownSphere(g: BufferGeometry): BufferGeometry {
 const HEDGE_H = 1.3;
 const HEDGE_W = 0.9;
 
-/** One chunk's trees: the uniform-scale placements plus the precomputed ones. */
+/** One chunk's trees: the uniform-scale placements plus the precomputed
+ *  ones. A chunk's conifers (the canopy's evergreens) are a cell of their
+ *  own, on the cone (`conifer`). */
 interface TreeCell {
+  conifer: boolean;
   extras: TreeInstance[];
   trees: Placement[];
 }
 
+/**
+ * A canopy or row tree drawn as a conifer: the canopy's evergreens. The
+ * bake marks a crown evergreen in a needle forest, or green in a mixed
+ * forest on a leaf-off flight (pipeline/bake/canopy.py `leaf_types`), and
+ * only crowns in forests: there an evergreen tree is a pine, a spruce or a
+ * fir — Central Europe's evergreen broadleaves (holly, box, cherry laurel)
+ * are shrubs below the canopy's 3 m. A larch, the deciduous conifer, stays
+ * a broadleaf in a mixed forest (it reads bare on a leaf-off flight) and an
+ * evergreen in a needle forest: the data tells no larch apart.
+ */
+export function isConifer(p: Placement): boolean {
+  return p.evergreen === true;
+}
+
 function bucketTrees(trees: Placement[], extras: TreeInstance[]): TreeCell[] {
   const cells = new Map<string, TreeCell>();
-  const cellAt = (x: number, z: number): TreeCell => {
-    const key = cellKey(x, z);
+  const cellAt = (x: number, z: number, conifer = false): TreeCell => {
+    const key = `${cellKey(x, z)}${conifer ? ":c" : ""}`;
     let cell = cells.get(key);
     if (!cell) {
-      cell = { trees: [], extras: [] };
+      cell = { conifer, trees: [], extras: [] };
       cells.set(key, cell);
     }
     return cell;
   };
   for (const p of trees) {
-    cellAt(p.x, p.z).trees.push(p);
+    cellAt(p.x, p.z, isConifer(p)).trees.push(p);
   }
   for (const e of extras) {
     cellAt(e.x, e.z).extras.push(e);
@@ -801,6 +819,10 @@ export function buildTrunkMaterial(): MeshStandardNodeMaterial {
  * park reads richer than a stressed street tree.
  */
 export function crownColor(col: Color, p: Placement, v: number): void {
+  if (p.evergreen) {
+    evergreenColor(col, v);
+    return;
+  }
   if (p.ndvi === undefined) {
     col.setHSL(0.26 + v * 0.05, 0.27, 0.62 + v * 0.12);
     return;
@@ -815,6 +837,15 @@ export function crownColor(col: Color, p: Placement, v: number): void {
     0.14 + 0.26 * t, // pale sage → richer green
     0.68 - 0.16 * t + v * 0.1 // light → deeper
   );
+}
+
+/**
+ * An evergreen's crown colour, all year: a deeper blue-green than any
+ * broadleaf, the register's and the canopy's conifers alike (the NDVI of a
+ * needle crown says nothing a broadleaf's lush↔dry remap could use).
+ */
+export function evergreenColor(col: Color, v: number): void {
+  col.setHSL(0.38 + v * 0.03, 0.24, 0.44 + v * 0.06);
 }
 
 /** Deterministic per-tree crown variation (hash jitter + optional NDVI);
@@ -841,7 +872,7 @@ function paintCrowns(
 }
 
 /** The shared crown and trunk geometries of every chunk. */
-interface TreeGeos {
+export interface TreeGeos {
   far: BufferGeometry;
   mid: BufferGeometry;
   rich: BufferGeometry;
@@ -965,10 +996,13 @@ function buildTreeCell(
   rich.visible = false;
   far.visible = false;
   // Which crown each set is, for the picture styles' crowns
-  // (style-dressing.ts) — a tag, the layer itself knows no style.
-  far.userData.styleCrown = "far";
-  mid.userData.styleCrown = "mid";
-  rich.userData.styleCrown = "rich";
+  // (style-dressing.ts) — a tag, the layer itself knows no style. A cone
+  // keeps its own form in a styled frame, as the register's do.
+  if (!cell.conifer) {
+    far.userData.styleCrown = "far";
+    mid.userData.styleCrown = "mid";
+    rich.userData.styleCrown = "rich";
+  }
   // Same order as the slots: the placements, then the precomputed crowns.
   const keys = [
     ...trees.map((p) => genericSeasonKey(p.x, p.z, p.evergreen)),
@@ -1031,6 +1065,23 @@ export function buildCrownWarmup(): CrownWarmup {
   return crownWarmup(buildCrownGeo(), sceneCrowns());
 }
 
+/**
+ * The conifer's three tiers (conifer-crown.ts), each inside the box of the
+ * lobed crown the canopy draws at scale 1 — so a placement's matrix stands
+ * a cone where it would stand a broadleaf crown, as tall and as wide —
+ * and the broadleaf's trunk. Their cull spheres are grown like the lobed
+ * crowns' (`padCrownSphere`): the material reshapes every crown.
+ */
+export function buildConeTiers(broad: TreeGeos): TreeGeos {
+  const box = boxOf(broad.mid);
+  return {
+    far: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.far)),
+    mid: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.mid)),
+    rich: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.rich)),
+    trunk: broad.trunk,
+  };
+}
+
 function buildTrees(
   trees: Placement[],
   extras: TreeInstance[],
@@ -1049,13 +1100,24 @@ function buildTrees(
     rich: buildCrownGeoRich(),
     trunk: buildTrunkGeo(),
   };
+  // the conifers' cones, only for a tile that has any
+  let cones: TreeGeos | null = null;
+  const coneGeos = (): TreeGeos => {
+    cones ??= buildConeTiers(geos);
+    return cones;
+  };
   const trunkMat = buildTrunkMaterial();
 
   const meshes: Instances[] = [];
   const chunks: VegetationChunk[] = [];
   const seasons: SeasonalCrowns[] = [];
   for (const cell of bucketTrees(trees, extras)) {
-    const built = buildTreeCell(cell, geos, trunkMat, crownMats);
+    const built = buildTreeCell(
+      cell,
+      cell.conifer ? coneGeos() : geos,
+      trunkMat,
+      crownMats
+    );
     meshes.push(...built.meshes);
     if (built.chunk) {
       chunks.push(built.chunk);

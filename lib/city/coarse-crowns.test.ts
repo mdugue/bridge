@@ -3,6 +3,7 @@ import {
   COARSE_TREE_SHARE,
   COARSE_TREE_WIDEN,
   type CoarseCrown,
+  coarseConifer,
   coarseCrowns,
   drawnCoarse,
   packCrowns,
@@ -76,10 +77,39 @@ describe("which trees the coarse level draws", () => {
     expect(crowns[0]).toMatchObject({
       kind: "register",
       colour: "golden",
+      cone: true,
       genus: 4,
       jitter: -2.5,
       ext: { crownBase: 3, crownTop: 12, crownWidth: 8 },
     });
+  });
+
+  test("a conifer stays one at a distance: a canopy evergreen, a register cone", () => {
+    expect(coarseConifer({ kind: "canopy", x: 0, z: 0, rot: 0, s: 1 })).toBe(
+      false
+    );
+    expect(
+      coarseConifer({
+        kind: "canopy",
+        x: 0,
+        z: 0,
+        rot: 0,
+        s: 1,
+        evergreen: true,
+      })
+    ).toBe(true);
+    const register = {
+      kind: "register" as const,
+      x: 0,
+      z: 0,
+      rot: 0,
+      colour: "evergreen" as const,
+      ext: { crownBase: 2, crownTop: 12, crownWidth: 5 },
+      genus: 0,
+      jitter: 0,
+    };
+    expect(coarseConifer(register)).toBe(false);
+    expect(coarseConifer({ ...register, cone: true })).toBe(true);
   });
 });
 
@@ -107,6 +137,17 @@ describe("the file", () => {
       jitter: 3.4,
       ndvi: 0.1,
     },
+    {
+      kind: "register",
+      x: 3,
+      z: 4,
+      rot: 1,
+      colour: "evergreen",
+      cone: true,
+      ext: { crownBase: 1.5, crownTop: 21, crownWidth: 7 },
+      genus: 12,
+      jitter: 0,
+    },
   ];
 
   test("keeps the positions exact and the rest to its units", () => {
@@ -130,6 +171,7 @@ describe("the file", () => {
       }
       if (c.kind === "register" && b?.kind === "register") {
         expect(b.colour).toBe(c.colour);
+        expect(b.cone).toBe(c.cone);
         expect(b.genus).toBe(c.genus);
         expect(b.jitter).toBeCloseTo(c.jitter, 1);
         expect(b.ext.crownBase).toBeCloseTo(c.ext.crownBase, 2);

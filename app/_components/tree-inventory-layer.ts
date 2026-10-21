@@ -3,10 +3,8 @@ import {
   type BufferGeometry,
   Color,
   Group,
-  LatheGeometry,
   Matrix4,
   Quaternion,
-  Vector2,
   Vector3,
 } from "three/webgpu";
 import type { TreeFeature } from "@/lib/city/features";
@@ -30,6 +28,7 @@ import {
   type SeasonalCrowns,
   seasonCrowns,
 } from "./crown-season";
+import { buildConeGeo, CONE_SEGMENTS } from "./conifer-crown";
 import { Instances } from "./instancing";
 import {
   applySeasons,
@@ -39,6 +38,7 @@ import {
   bucketByCell,
   type CellLod,
   crownColor,
+  evergreenColor,
   hash,
   sceneCrowns,
   swapCrownLod,
@@ -61,8 +61,9 @@ import {
  * trunk, the 250 m chunks and the distance LOD swap — and adds
  * only what a per-instance scale cannot express: two reshaped variants of
  * the SAME two crown geometries (a flame for fastigiate cultivars, a
- * curtained dome for weeping trees) and a tiered lathe cone for conifers,
- * all inside the broadleaf crown's local box. Proportions ride on
+ * curtained dome for weeping trees) and the tiered lathe cone for conifers
+ * (conifer-crown.ts, the canopy's evergreens wear the same), all inside the
+ * broadleaf crown's local box. Proportions ride on
  * a non-uniform instance scale (width = crown diameter, depth = height minus
  * the clear stem), so round, oval and small ornamentals share one mesh.
  *
@@ -90,26 +91,6 @@ const flame: SilhouetteMap = (dy) => {
   return { r: r * (1.08 - 0.55 * smoothstep(0.3, 1, y)), y };
 };
 
-/**
- * Conifer profile (unit radius, unit height), bottom centre to apex: three
- * tiers, each hem flaring out below the tier above — the stacked-skirt
- * silhouette of a children's-book fir. A reshaped lobed sphere cannot hold
- * the hems (too few vertex rings), so the cone is a lathe of its own.
- */
-const CONE_PROFILE: [number, number][] = [
-  [0, 0],
-  [0.9, 0.05],
-  [1, 0.1],
-  [0.82, 0.22],
-  [0.6, 0.4],
-  [0.76, 0.36],
-  [0.58, 0.52],
-  [0.42, 0.66],
-  [0.54, 0.62],
-  [0.3, 0.84],
-  [0, 1],
-];
-
 /** Weeping: a dome on top, a folded curtain hanging almost to the ground,
  *  and a hollow underside tucked up inside it. */
 const weep: SilhouetteMap = (dy, phi) => {
@@ -134,10 +115,9 @@ const SILHOUETTES: Record<ReshapedShape, SilhouetteMap> = {
   weep,
 };
 /** Height (0..1) of the centre the reshaped crown's radial normals point
- *  away from (a cone's is low, so its flanks face up and out). */
-const NORMAL_CENTRE: Record<ReshapedShape | "cone", number> = {
+ *  away from. */
+const NORMAL_CENTRE: Record<ReshapedShape, number> = {
   spindle: 0.4,
-  cone: 0.25,
   weep: 0.5,
 };
 /** How much of the source crown's lobe relief survives the reshape. */
@@ -220,54 +200,17 @@ function fitted(geo: BufferGeometry): FittedGeo {
 
 type ShapeGeos = Record<CrownShape, { cheap: FittedGeo; rich: FittedGeo }>;
 
-/**
- * The tiered conifer as a lathe inside the broadleaf crown's local box (so
- * the material's sway, which reads local Y, bends it the same way). A low
- * azimuthal wobble keeps it from reading as a paper cone; the rich LOD only
- * adds segments and a second wobble octave.
- */
-function buildConeGeo(like: FittedGeo, segments: number): BufferGeometry {
-  const halfW = like.width / 2;
-  const pts = CONE_PROFILE.map(([r, y]) => new Vector2(r, y));
-  const g = new LatheGeometry(pts, segments);
-  const pos = g.attributes.position;
-  const nrm = g.attributes.normal;
-  const v = new Vector3();
-  const centre = new Vector3(
-    0,
-    like.minY + NORMAL_CENTRE.cone * like.height,
-    0
-  );
-  const rich = segments > 16;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const y = pos.getY(i);
-    const z = pos.getZ(i);
-    const phi = Math.atan2(z, x);
-    let k = 1 + 0.07 * Math.sin(5 * phi + y * 9);
-    if (rich) {
-      k += 0.035 * Math.sin(11 * phi - y * 17);
-    }
-    pos.setXYZ(i, x * k * halfW, like.minY + y * like.height, z * k * halfW);
-  }
-  for (let i = 0; i < pos.count; i++) {
-    v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).sub(centre).normalize();
-    nrm.setXYZ(i, v.x, v.y, v.z);
-  }
-  pos.needsUpdate = true;
-  nrm.needsUpdate = true;
-  return g;
-}
-
 function buildShapeGeos(): ShapeGeos {
   const cheap = buildCrownGeo();
   const rich = buildCrownGeoRich();
   const broad = { cheap: fitted(cheap), rich: fitted(rich) };
   const out = {
     broad,
+    // the conifer-crown.ts cone in the broadleaf crown's box, as the
+    // canopy's evergreens draw it
     cone: {
-      cheap: fitted(buildConeGeo(broad.cheap, 10)),
-      rich: fitted(buildConeGeo(broad.cheap, 24)),
+      cheap: fitted(buildConeGeo(broad.cheap, CONE_SEGMENTS.mid)),
+      rich: fitted(buildConeGeo(broad.cheap, CONE_SEGMENTS.rich)),
     },
   } as ShapeGeos;
   for (const shape of ["spindle", "weep"] as const) {
@@ -444,7 +387,7 @@ function plainInventoryColor(
   } else if (t.colour === 2) {
     col.setHSL(0.15 + v * 0.02, 0.4, 0.66 + v * 0.05); // golden
   } else if (t.leaf === "e") {
-    col.setHSL(0.38 + v * 0.03, 0.24, 0.44 + v * 0.06); // evergreen blue-green
+    evergreenColor(col, v);
   } else {
     crownColor(
       col,
