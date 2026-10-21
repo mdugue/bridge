@@ -19,7 +19,7 @@ export const MEISSEN: Site = {
         "Straßenverkehrszählung 2021: Freistaat Sachsen, LASuV, dl-de/by-2-0",
     },
   },
-  mapillary: { objects: false },
+  mapillary: { objects: true },
   spawn: "elbufer",
   tiles: [{ e: 392, n: 5668 }],
   fallbackLatLng: { lat: 51.16, lng: 13.47 },

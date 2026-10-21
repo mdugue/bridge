@@ -43,6 +43,10 @@ export interface LevelSample {
   /** what the source says here, over the line's own `prefer` (a chain
    *  joined from ways with and without a bridge tag) */
   prefer?: "deck" | "ground";
+  /** the source puts the line below the ground's level here (OSM `layer`
+   *  < 0 on a way no tunnel tag covers): a lid over it is one the line
+   *  cuts under (`coverCuts`) */
+  below?: boolean;
 }
 
 export type LevelMode = "ground" | "deck" | "span" | "cut";
@@ -89,6 +93,17 @@ export const LEVEL_SPAN_M = 400;
 /** The longest fill a line cuts through (m): the ground under a deck the
  *  DGM filled in from its embankment. */
 export const LEVEL_CUT_M = 120;
+/** The longest lid a line below ground cuts under (m): a station's or a
+ *  square's cover over tracks in a trench OSM puts on a negative `layer`
+ *  without a tunnel tag (832 m of Hamburg's rails lay on such lids). */
+export const LEVEL_COVER_M = 800;
+/** The grade a lid is read against (rise over run): a trench's floor runs
+ *  near level, and at a line's own grade a lid 5 m over it is a climb of
+ *  125 m — every lid longer than that read as a ramp the line could take. */
+const COVER_GRADE = 0.005;
+/** A trapped run is a lid when this share of it lies below the ground's
+ *  level (`below`). */
+const COVER_SHARE = 0.5;
 /** Slack on the grade (m per step): the TIN's error, a line a metre off
  *  its embankment's crown. */
 const SLACK_M = 0.35;
@@ -303,8 +318,42 @@ export function bridgeJumps(
         joinRims(out, samples, from + ra, from + rb, mode);
       }
     }
+    coverCuts(out, samples, idx, d);
   }
   return out;
+}
+
+/**
+ * Cuts under the lids over a line below ground: in a run of known levels
+ * (`idx`, at distances `d`), a stretch that lies a jump above what the
+ * line reaches from either side at COVER_GRADE within LEVEL_COVER_M, most
+ * of it `below` — the DGM's lid over a trench, a street over the tracks —
+ * becomes a straight cut between its rims. Elsewhere the fills a line cuts
+ * through are LEVEL_CUT_M at most, read at its own grade (`bridgeJumps`).
+ */
+function coverCuts(
+  out: (Level | null)[],
+  samples: readonly LevelSample[],
+  idx: readonly number[],
+  d: readonly number[]
+): void {
+  if (!idx.some((i) => samples[i].below)) {
+    return;
+  }
+  const y = idx.map((i) => (out[i] as Level).y);
+  for (const [a, b] of trappedRuns(y, d, COVER_GRADE, LEVEL_COVER_M, -1)) {
+    let below = 0;
+    for (let k = a; k <= b; k++) {
+      below += samples[idx[k]].below ? 1 : 0;
+    }
+    if (below < COVER_SHARE * (b - a + 1)) {
+      continue;
+    }
+    const [ra, rb] = rims(y, d, [a, b], COVER_GRADE, -1, LEVEL_COVER_M);
+    if (ra >= 0 && rb < y.length) {
+      joinRims(out, samples, idx[ra], idx[rb], "cut");
+    }
+  }
 }
 
 /** The runs of consecutive known levels: [first, last] index pairs. */

@@ -34,9 +34,10 @@ import {
   type LinePiece,
   pieceSamples,
   RIDES,
+  railPrefer,
   solvePieces,
 } from "../lib/city/line-levels";
-import { type Passage, passageHalf } from "../lib/city/passages";
+import { deckPassages, type Passage, passageHalf } from "../lib/city/passages";
 import type { Site } from "../lib/city/site";
 import { sampleHeightfield } from "../lib/city/terrain-geometry";
 import { dgmSourceFiles, sideFileSource, tileIds } from "../lib/city/tile";
@@ -100,7 +101,12 @@ function sitePieces(site: Site): { pieces: LinePiece[]; of: PieceOf[] } {
     features<RailFeature>(lineFile(site, LINE_FILES.rail, tile)).forEach(
       (f, index) => {
         if (f.geometry?.type === "LineString") {
-          pieces.push({ coords: f.geometry.coordinates, line: "rail" });
+          pieces.push({
+            coords: f.geometry.coordinates,
+            line: "rail",
+            prefer: railPrefer(f),
+            below: (f.properties?.layer ?? 0) < 0,
+          });
           of.push({
             tile,
             line: "rail",
@@ -129,6 +135,12 @@ function sitePieces(site: Site): { pieces: LinePiece[]; of: PieceOf[] } {
 /** The site's decks: every tile's bridges, each deck once (a deck across
  *  a seam is in both tiles' files). */
 function siteDecks(site: Site): DeckPoly[] {
+  return bridgeDecks(siteBridges(site), OFFSET);
+}
+
+/** Every deck of the site once (a deck across a seam is in both tiles'
+ *  files). */
+function siteBridges(site: Site): BridgeFeature[] {
   const seen = new Set<string>();
   const all: BridgeFeature[] = [];
   for (const tile of tileIds(site)) {
@@ -140,7 +152,7 @@ function siteDecks(site: Site): DeckPoly[] {
       }
     }
   }
-  return bridgeDecks(all, OFFSET);
+  return all;
 }
 
 /** The site's ground: every tile's native DGM. */
@@ -205,7 +217,8 @@ const PASSAGE_UNDER_DECK = 0.3;
  * The passages the site's lines open under its decks (lib/city/passages.ts):
  * every cut (`LevelRun` "c") that lies under a drawn deck, with its rims,
  * at the cut's level. A line near a seam is in both tiles' files: its
- * passage is opened once per copy, the same.
+ * passage is opened once per copy, the same. Then the decks' own passages
+ * (`deckPassages`), each deck once.
  */
 export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
   const decks = siteDecks(site);
@@ -251,7 +264,9 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
     }
   });
   // a rim is on the ground: its level is the line's own there
-  return out.map((p) => fillRims(p));
+  // and the decks' own: the streets and paths the DGM closes under them,
+  // the bridges it still holds (`under`, pipeline/bake/bridge.py)
+  return [...out.map((p) => fillRims(p)), ...deckPassages(siteBridges(site))];
 }
 
 /** A passage's rims (outside the cut) at their neighbours' level. */

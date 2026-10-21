@@ -268,6 +268,25 @@ export function scanFacts(input: {
   };
 }
 
+/** The facts of a building or a roof on posts LoD2 lacks, from OSM's
+ *  outline and the surface model's height or OSM's (pipeline/bake/
+ *  structures.py; `drawn` says which): its key, OSM's name, its height and
+ *  footprint area. */
+export function gapFacts(input: {
+  footprint: readonly [number, number][];
+  /** an AdV code it answers to (a roof on posts: an Überdachung) */
+  function?: string;
+  height: number | undefined;
+  id: string;
+  name?: string;
+}): ObjectFacts {
+  return {
+    ...scanFacts(input),
+    function: input.function ?? "",
+    name: input.name ?? "",
+  };
+}
+
 /** A part's OSM facts: its own, the root Building's where it has none. */
 export function inheritedOsm(
   own?: OsmBuildingFacts,

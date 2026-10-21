@@ -181,6 +181,7 @@ test.each(cases)(
       "shelter",
       "column",
       "signal",
+      "pedsignal",
       "hydrant",
       "hydrantsign",
       "clock",
@@ -230,13 +231,28 @@ test.each(cases)(
         expect(kind).toBe("bollard");
         expect(f.properties.h).toBeGreaterThan(0);
       }
+      // a mast arm hangs a signal; a colour is a bin's; the surface model
+      // measures only a playground's pieces
+      if (f.properties?.arm !== undefined) {
+        expect(kind).toBe("signal");
+      }
+      if (f.properties?.c !== undefined) {
+        expect(kind).toBe("bin");
+        expect(["blue", "green", "orange", "red", "yellow"]).toContain(
+          f.properties.c
+        );
+      }
+      if (f.properties?.src === "dom") {
+        expect(["climb", "swing"]).toContain(kind);
+      }
       // a piece on a bridge stands on its deck: a point, and nothing that
-      // would stand in the lanes or hang on a facade
+      // hangs on a facade (a signal or a hydrant sign there stands at its
+      // carriageway's kerb, furniture.py `ON_DECK_KERB`)
       const deck = f.properties?.deck;
       if (deck !== undefined) {
         expect(Number.isFinite(deck)).toBe(true);
         expect(g.type).toBe("Point");
-        expect(["signal", "hydrantsign", "wallclock"]).not.toContain(kind);
+        expect(kind).not.toBe("wallclock");
       }
     }
   }
@@ -260,15 +276,31 @@ test.each(cases)("%s: lamps are points", (_, a) => {
       expect(Number.isFinite(deck)).toBe(true);
       expect(wire).toBeUndefined();
     }
-    // a lantern on a facade: its bracket's foot, and neither wire nor deck
+    // a lantern on a facade or a wall: its bracket's foot, and neither wire
+    // nor deck
     const wall = f.properties?.wall;
     if (wall !== undefined) {
       expect(isPoint2(wall)).toBe(true);
       expect(wire).toBeUndefined();
       expect(deck).toBeUndefined();
     }
+    if (f.properties?.on !== undefined) {
+      expect(f.properties.on).toBe("wall");
+      expect(wall).toBeDefined();
+    }
+    // a post's arm: a compass bearing, never on a wire or a wall
+    expectArm(f.properties?.arm, wire === undefined && wall === undefined);
   }
 });
+
+/** A lamp's `arm`: absent, or a bearing on a post that may hold one. */
+function expectArm(arm: number | undefined, post: boolean): void {
+  if (arm === undefined) {
+    return;
+  }
+  expect(post).toBe(true);
+  expect(Number.isInteger(arm) && arm >= 0 && arm < 360).toBe(true);
+}
 
 test.each(cases)("%s: Mapillary's objects are lamp and bin points", (_, a) => {
   for (const f of load<MapillaryFeature>(a.mly)) {
@@ -279,6 +311,10 @@ test.each(cases)("%s: Mapillary's objects are lamp and bin points", (_, a) => {
       expect(f.properties.k).toBe("lamp");
       expect(f.properties.wire.every(isPoint2)).toBe(true);
     }
+    expectArm(
+      f.properties?.arm,
+      f.properties?.k === "lamp" && !f.properties.wire
+    );
   }
 });
 
@@ -436,7 +472,7 @@ test.each(tiles)(
 );
 
 test.each(tiles)(
-  "%s: structures beyond LoD2 are columns (points), buildings (outlines) or relief height fields of a measured height",
+  "%s: structures beyond LoD2 are columns (points), buildings or roofs (outlines) or relief height fields of a measured height",
   (tile, site) => {
     const src = cityMeshSourceFiles(site, tile).structures;
     for (const f of loadSource<StructureFeature>(src)) {
@@ -451,10 +487,22 @@ test.each(tiles)(
         const g = p.grid;
         expect(g?.z.length).toBe((g?.rows ?? 0) * (g?.cols ?? 0));
       }
-      if (p?.kind === "building" || p?.kind === "relief") {
+      if (
+        p?.kind === "building" ||
+        p?.kind === "relief" ||
+        p?.kind === "roof"
+      ) {
         expect(f.geometry.type).toBe("Polygon");
         if (f.geometry.type === "Polygon") {
           expect(isRing(f.geometry.coordinates[0])).toBe(true);
+        }
+        // a shaped roof: its parts' outlines and roofs over the ground
+        for (const part of p.parts ?? []) {
+          expect(part.coordinates.every(isRing)).toBe(true);
+          expect(part.z).toBeGreaterThan(p.z);
+          expect(part.surface?.dz.length ?? 0).toBe(
+            (part.surface?.cols ?? 0) * (part.surface?.rows ?? 0)
+          );
         }
       } else {
         expect(f.geometry.type).toBe("Point");
@@ -568,6 +616,33 @@ test.each(
   expect(metres).toBe(0);
 });
 
+/** What carries a deck and passes under it (photo QA V15, V17, V13, B10):
+ *  stations within its axis, passages with a level at every point. */
+function checkBelowDeck(p: NonNullable<BridgeFeature["properties"]>): void {
+  const length = axisFrame(p.axis ?? [])?.length ?? 0;
+  const station = (s: number) => {
+    expect(s).toBeGreaterThanOrEqual(0);
+    expect(s).toBeLessThanOrEqual(length + 1);
+  };
+  for (const [from, to] of p.water ?? []) {
+    station(from);
+    station(to);
+    expect(to).toBeGreaterThanOrEqual(from);
+  }
+  for (const s of p.piers ?? []) {
+    station(s);
+  }
+  if (p.spans !== undefined) {
+    expect(Number.isInteger(p.spans) && p.spans >= 1).toBe(true);
+  }
+  for (const u of p.under ?? []) {
+    expect(u.c.length).toBeGreaterThanOrEqual(2);
+    expect(u.y).toHaveLength(u.c.length);
+    expect(u.y.every((y) => Number.isFinite(y))).toBe(true);
+    expect(u.h).toBeGreaterThan(0);
+  }
+}
+
 test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
   for (const f of load<RailFeature>(a.rail)) {
     expect(f.geometry.type).toBe("LineString");
@@ -575,6 +650,12 @@ test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
     const tracks = f.properties?.tracks;
     if (tracks !== undefined) {
       expect(Number.isFinite(tracks) && tracks >= 1).toBe(true);
+    }
+    // overhead, third rail or none; a mapped mast's station on the line
+    expect([undefined, 0, 1, 2]).toContain(f.properties?.electrified);
+    expect([undefined, 0, 1]).toContain(f.properties?.bridge);
+    for (const [s, offset] of f.properties?.m ?? []) {
+      expect(s >= 0 && Number.isFinite(offset)).toBe(true);
     }
   }
   for (const f of load<BridgeFeature>(a.bridge)) {
@@ -609,6 +690,7 @@ test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
       expect(p.fairway).toBeGreaterThanOrEqual(0);
       expect(p.fairway).toBeLessThanOrEqual(1);
     }
+    checkBelowDeck(p ?? {});
   }
   for (const kind of ["railarea", "platform"] as const) {
     for (const f of load<AreaFeature>(a[kind])) {
@@ -652,12 +734,27 @@ test.each(cases)(
         expect(kind).not.toBe("fountain");
         expect([
           "bust",
+          "column",
           "obelisk",
           "sculpture",
           "statue",
           "stele",
           "stone",
         ]).toContain(form);
+      }
+      // measured in the open, or under a winter housing: never with a relief
+      const hm = f.properties?.hm;
+      if (hm !== undefined) {
+        expect(hm).toBeGreaterThan(0);
+        expect(f.properties?.relief).toBeUndefined();
+      }
+      if (f.properties?.cover !== undefined) {
+        expect(f.properties.relief).toBeUndefined();
+      }
+      const facing = f.properties?.a;
+      if (facing !== undefined) {
+        expect(facing).toBeGreaterThanOrEqual(0);
+        expect(facing).toBeLessThanOrEqual(360);
       }
       const wikidata = f.properties?.wikidata;
       if (wikidata !== undefined) {
@@ -699,8 +796,8 @@ test.each(cases)(
   (_, a) => {
     for (const f of load<LowVegFeature>(a.lowveg)) {
       const p = f.properties;
-      // Only what renders is shipped: no laser-scan-only hedges, no shrubs.
-      expect(["osm", "osm+lsc"]).toContain(p?.src ?? "");
+      // Only what renders is shipped: hedges, no shrubs.
+      expect(["osm", "osm+lsc", "osm+dom", "lsc"]).toContain(p?.src ?? "");
       expect(p?.kind).toBe("hedge");
       expect(f.geometry.type).toBe("LineString");
       expect(isLine(f.geometry.coordinates)).toBe(true);
@@ -734,9 +831,17 @@ test.each(cases)(
         expect(type).toBe("Point");
         expect(Number.isFinite(f.properties?.h)).toBe(true);
         expect(Number.isFinite(f.properties?.d)).toBe(true);
-        expect(["grid", "osm"]).toContain(f.properties?.src ?? "");
+        expect(["dom", "grid", "osm"]).toContain(f.properties?.src ?? "");
       } else if (k === "row") {
         expect(type).toBe("LineString");
+      } else if (k === "vineyard" && f.properties?.dir !== undefined) {
+        expect(["Polygon", "MultiPolygon"]).toContain(type);
+        expect(f.properties.dir).toBeGreaterThanOrEqual(0);
+        expect(f.properties.dir).toBeLessThanOrEqual(180);
+        expect(f.properties.gap).toBeGreaterThan(1);
+        expect(["axis", "contour", "dop", "fall"]).toContain(
+          f.properties.src ?? ""
+        );
       } else {
         expect(["Polygon", "MultiPolygon"]).toContain(type);
       }
@@ -829,10 +934,16 @@ test.each(cases)(
     for (const f of load<TramFeature>(a.tram)) {
       const p = f.properties;
       const g = f.geometry;
-      expect(["arm", "mast", "rosette", "span", "stop", "track"]).toContain(
-        p?.k ?? ""
-      );
-      if (p?.k === "mast" || p?.k === "stop") {
+      expect([
+        "arm",
+        "mast",
+        "pole",
+        "rosette",
+        "span",
+        "stop",
+        "track",
+      ]).toContain(p?.k ?? "");
+      if (p?.k === "mast" || p?.k === "pole" || p?.k === "stop") {
         expect(g.type).toBe("Point");
         expect(isPoint2(g.coordinates)).toBe(true);
         continue;
@@ -878,6 +989,10 @@ test.each(cases)(
       }
       if (p?.k === "pontoon") {
         expect(p.len).toBeGreaterThan(0);
+        if (p.fb !== undefined) {
+          expect(p.fb).toBeGreaterThanOrEqual(0.4);
+          expect(p.fb).toBeLessThanOrEqual(1.5);
+        }
         if (p.bank) {
           expect(isPoint2(p.bank)).toBe(true);
         }

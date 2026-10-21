@@ -99,18 +99,17 @@ STEPS = {
     # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
     # miss DOM1, rebuilt in its form (scripts/bake-city-mesh.ts).
     "roofs": roofs.run,
-    # After roofs: a rebuilt roof's parts are read each in its own colour;
-    # after landcover: the site's carriageways give its flight's cast.
-    "roof-colour": roof_colour.run,
-    # Committed inputs only (DGM + LoD2 + the rebuilt roofs): the sky-view
-    # factor and far horizon.
-    "skyview": skyview.run,
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,
     # After lowveg: an orchard tree gives way to a measured one (the canopy,
     # the laser-scan crowns, the cadastre).
     "cultivated": cultivated.run,
+    # After the tree bakes (the canopy, the cadastre, lowveg's scan crowns:
+    # the sky view's half-transparent crowns): committed inputs (DGM + LoD2
+    # + the rebuilt roofs + the crowns) and the cached GLO-30 beyond the
+    # site — the sky-view factor, the far horizon and the valley's rim.
+    "skyview": skyview.run,
     # After lowveg (the same laser-scan rasters, made on first use), walls,
     # rail (bridges), monuments and furniture (stop shelters): the small
     # structures LoD2 lacks, appended to the city mesh at build time.
@@ -122,6 +121,11 @@ STEPS = {
     # OSM — the chimneys, towers and masts LoD2 leaves out, the buildings it
     # does not carry yet, and a landmark's roof form it flattens (plan 050).
     "structures": structures.run,
+    # After roofs (a rebuilt roof's parts are read each in its own colour),
+    # small-buildings and structures (the scan's sheds and the buildings
+    # LoD2 lacks are read too); after landcover: the site's carriageways
+    # give its flight's cast.
+    "roof-colour": roof_colour.run,
     # After roofs (the rebuilt ones are measured already) and the tree bakes
     # (a crown over a roof is no dormer): the dormers DOM1 shows on the
     # pitched LoD2 roofs.

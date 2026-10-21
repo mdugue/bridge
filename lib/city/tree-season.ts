@@ -12,7 +12,10 @@
  * trees in a lowland city climate, in the phases the Deutscher Wetterdienst's
  * phenology uses (Blattentfaltung, Blattverfärbung, Blattfall) — an
  * illustrator's calendar, not a model fitted to observations; the autumn
- * hues are the scene's pastel register, not photographs.
+ * hues are the scene's pastel register, not photographs. Where DWD's
+ * observers around Dresden disagreed by weeks the date follows them (the
+ * birch). Another city's year is Dresden's shifted by its climate
+ * (SITE_SEASON, `climateDay`).
  */
 
 /**
@@ -221,11 +224,13 @@ export const PHENOLOGY: Readonly<Record<TreeGenus, Phenology>> = {
     fall: [290, 314],
     hue: YELLOW,
   },
-  // golden and early
+  // golden; it turns and drops when the beech does: DWD's reporters
+  // around Dresden saw it colour on day 284 and lose half its leaves on 304
+  // (2010–2023) — the table had it 16 and 20 days early
   Betula: {
     leafOut: [100, 118],
-    colour: [268, 290],
-    fall: [284, 308],
+    colour: [284, 306],
+    fall: [300, 324],
     hue: GOLDEN,
   },
   Malus: {
@@ -364,6 +369,81 @@ export const PHENOLOGY: Readonly<Record<TreeGenus, Phenology>> = {
     hue: RUST,
   },
 };
+
+/** A city's climate against Dresden's, the table's: how many days later (+)
+ *  or earlier (−) its spring (leaf-out and flowering) and its autumn
+ *  (colouring and leaf fall) come. */
+export interface SeasonShift {
+  autumn: number;
+  spring: number;
+}
+
+/**
+ * Per site id (sites/index.ts; tree-season.test.ts holds every site to an
+ * entry): the median, over the species DWD observes, of the difference
+ * between the city's and Dresden's median day of each phase — spring the
+ * leaf-out and flowering (phases 4, 5), autumn the colouring and leaf fall
+ * (31, 32) — from the Deutscher Wetterdienst's annual phenology reporters
+ * (opendata.dwd.de climate_environment/CDC/observations_germany/phenology/
+ * annual_reporters/wild, 2010–2023; dl-de/by-2-0, "Quelle: Deutscher
+ * Wetterdienst") within 30 km of the city and 150 m of its height:
+ * twelve trees and shrubs, 39–71 stations a city. Rounded half up; the
+ * colouring alone came later still in Hamburg (+10) and München (+4) —
+ * one autumn shift splits it with the leaf fall (+1, +2).
+ */
+export const SITE_SEASON: Readonly<Record<string, SeasonShift>> = {
+  berlin: { spring: 0, autumn: -3 },
+  dresden: { spring: 0, autumn: 0 },
+  grimma: { spring: 0, autumn: -1 },
+  hamburg: { spring: 3, autumn: 5 },
+  leipzig: { spring: -1, autumn: 1 },
+  meissen: { spring: 1, autumn: 1 },
+  muenchen: { spring: 2, autumn: 4 },
+  unna: { spring: -6, autumn: 1 },
+};
+
+/** The site's shift (none for an id the table lacks: Dresden's year). */
+export function seasonShiftFor(site: string): SeasonShift {
+  return SITE_SEASON[site] ?? { spring: 0, autumn: 0 };
+}
+
+// The shift's knots (0-based days): the spring one holds from March to
+// June, the autumn one from August through November; between them it
+// runs over linearly — in July, and through the bare winter.
+const SPRING_FROM = 59;
+const SPRING_TO = 181;
+const AUTUMN_FROM = 212;
+const AUTUMN_TO = 334;
+
+/**
+ * The day of Dresden's year (the table's) that looks like `day` in a city
+ * of `shift`: its spring `shift.spring` days later is Dresden's spring
+ * now, and so its autumn. Monotone (between its knots the shift changes
+ * by under a day in three), so the trees still run through the year in
+ * order.
+ */
+export function climateDay(day: number, shift: SeasonShift): number {
+  const d = ((day % YEAR) + YEAR) % YEAR;
+  const { spring, autumn } = shift;
+  let s: number;
+  if (d < SPRING_FROM) {
+    // the winter half past New Year
+    const t = (d + YEAR - AUTUMN_TO) / (SPRING_FROM + YEAR - AUTUMN_TO);
+    s = autumn + (spring - autumn) * t;
+  } else if (d <= SPRING_TO) {
+    s = spring;
+  } else if (d < AUTUMN_FROM) {
+    s =
+      spring +
+      ((autumn - spring) * (d - SPRING_TO)) / (AUTUMN_FROM - SPRING_TO);
+  } else if (d <= AUTUMN_TO) {
+    s = autumn;
+  } else {
+    const t = (d - AUTUMN_TO) / (SPRING_FROM + YEAR - AUTUMN_TO);
+    s = autumn + (spring - autumn) * t;
+  }
+  return (((d - s) % YEAR) + YEAR) % YEAR;
+}
 
 /** How far a crown is in leaf (1 full, 0 bare) and turned (0 summer green,
  *  1 the full autumn hue). */

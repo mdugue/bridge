@@ -142,8 +142,8 @@ def test_a_bench_on_a_bridge_stands_on_its_deck(tmp_path, monkeypatch):
     """A footbridge north over a river (y 90..110), its deck 104 → 106 m:
     a bench on it over the water or beside its way over the bank stands on
     the deck; one under the deck by the path along the bank is left out, as
-    before, and so is a signal in its lane; one on the meadow stands on the
-    ground."""
+    before; a signal on its path stands on the deck too (it was left out);
+    one on the meadow stands on the ground."""
     from bake import furniture
 
     cls = np.zeros((200, 200), np.uint8)
@@ -158,7 +158,7 @@ def test_a_bench_on_a_bridge_stands_on_its_deck(tmp_path, monkeypatch):
         12: (102, 81, tags(amenity="bench")),  # under it, by the bank's path
         13: (50, 100, tags(amenity="bench")),  # in the river
         14: (60, 70, tags(amenity="bench")),  # on the meadow
-        15: (100, 96, tags(highway="traffic_signals")),  # in its lane: left out
+        15: (100, 96, tags(highway="traffic_signals")),  # on its path, on the deck
     }
     ways = way(1, [1, 2], {"highway": "footway", "bridge": "yes"}) + way(
         2, [3, 4], {"highway": "footway"}
@@ -182,4 +182,6 @@ def test_a_bench_on_a_bridge_stands_on_its_deck(tmp_path, monkeypatch):
         for f in _by_kind(tile)["bench"]
     }
     assert benches == {(101.0, 100.0): 105.0, (99.0, 84.0): 104.2, (60.0, 70.0): None}
-    assert "signal" not in _by_kind(tile)
+    [signal] = _by_kind(tile)["signal"]
+    assert local(signal["geometry"]["coordinates"]) == (100.0, 96.0)
+    assert signal["properties"]["deck"] == 104.8

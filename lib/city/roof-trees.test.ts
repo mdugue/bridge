@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { CanopyFeature } from "./features";
-import { lod2Roofs, treesOffRoofs } from "./roof-trees";
+import type { CanopyFeature, StructureFeature } from "./features";
+import { gapRoofs, lod2Roofs, treesOffRoofs } from "./roof-trees";
 import type { CityJsonDocument } from "./types";
 
 const point = (x: number, y: number, h: number): CanopyFeature => ({
@@ -108,4 +108,46 @@ test("treesOffRoofs: a roof's own height goes, a tree over it or beside it stays
   ];
   const kept = treesOffRoofs(trees, lod2Roofs(hall));
   expect(kept.map((t) => t.properties?.h)).toEqual([24, 12, 12]);
+});
+
+test("gapRoofs: a building LoD2 lacks is a roof; one newer than the flight keeps no crown", () => {
+  const square = (x0: number): StructureFeature["geometry"] => ({
+    type: "Polygon",
+    coordinates: [
+      [
+        [x0, 0],
+        [x0 + 20, 0],
+        [x0 + 20, 20],
+        [x0, 20],
+        [x0, 0],
+      ],
+    ],
+  });
+  const gaps: StructureFeature[] = [
+    { geometry: square(0), properties: { h: 12, kind: "building", z: 100 } },
+    // built since the flight: its lot's old crowns
+    {
+      geometry: square(100),
+      properties: { h: 16, kind: "building", src: "osm", z: 100 },
+    },
+    { geometry: square(200), properties: { h: 5.8, kind: "roof", z: 100 } },
+    // a column is no footprint
+    {
+      geometry: { type: "Point", coordinates: [300, 10] },
+      properties: { h: 40, kind: "chimney", z: 100 },
+    },
+  ];
+  const roofs = gapRoofs(gaps);
+  expect(roofs).toHaveLength(3);
+  const kept = treesOffRoofs(
+    [
+      point(10, 10, 12), // the measured building's roof
+      point(10, 10, 20), // a tree over it
+      point(110, 10, 25), // a crown on the lot before it was built
+      point(210, 10, 6), // a platform roof read as a crown
+      point(310, 10, 9), // beside the chimney
+    ],
+    roofs
+  );
+  expect(kept.map((t) => t.geometry.coordinates[0])).toEqual([10, 310]);
 });

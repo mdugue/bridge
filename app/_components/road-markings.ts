@@ -27,13 +27,17 @@ import {
   markingKindId,
 } from "@/lib/city/markings";
 import type { F, Tex, V2, V3 } from "./shader-chunks";
+
+type I = Node<"int">;
 import {
+  gdBand,
   gdNoise,
   GROUND_DETAIL,
   type GroundColour,
   type GroundFields,
   type GroundInputs,
   loadTexel,
+  parkingBandOf,
   texelAt,
   texelSize,
 } from "./ground-detail";
@@ -46,13 +50,20 @@ import { spLine } from "./sport-ground";
  *
  * - **Crossings and stop lines** come from a table of rotated rectangles
  *   (axis across the road); the index raster names the rows whose outline,
- *   grown by 1 m, reaches a texel. A zebra is 0.5 m bars across the whole
- *   crossing, a *Furt* (a signalled crossing) two broken 12 cm lines along
- *   its edges, a stop line one 0.5 m bar.
- * - **Cycle lanes**: a broken 25 cm line 1.85 m from the kerb (the baked
- *   kerb distance), on the side of the way the raster's bit says.
- * - **Centre lines**: 12 cm dashes (3 m in 8.25 m) where the baked signed
- *   distance to the carriageway's middle crosses zero.
+ *   grown by 1 m, reaches a texel. A zebra (only where OSM says zebra) is
+ *   0.5 m bars across the whole crossing, a *Furt* (a signalled crossing,
+ *   or one OSM says has lines) two broken 12 cm lines along its edges, a
+ *   stop line one 0.5 m bar.
+ * - **Cycle lanes**: on the side of the way the raster's bit says, a
+ *   Radfahrstreifen's solid 25 cm line 1.85 m from the kerb (the baked kerb
+ *   distance) or a Schutzstreifen's 12 cm dashes at 1.5 m (2.25 m where
+ *   tagged wide), past a parking lane on that side; red between the kerb
+ *   (or the parking) and the line where OSM says red. A red cycle track
+ *   mapped on its own is red where the raster's red bit is.
+ * - **Centre lines**: 12 cm dashes (3 m in 8.25 m), or a solid line where
+ *   overtaking is forbidden, where the baked signed distance to the
+ *   carriageway's middle crosses zero; with four lanes or more dashed lane
+ *   lines halfway to each kerb too. None on a tram's tracks (the bake).
  *
  * Every line is box-filtered over the pixel footprint (`rmLine`,
  * `rmStripes` — the exact coverage, so a zebra far off averages to a pale
@@ -116,14 +127,79 @@ function rmRow(table: Tex, row: F, local: V2, w: F): F {
   );
 }
 
-/** Cycle and centre lines along the carriageway (the baked kerb distance). */
+/** A linear red for cycle surfaces (OSM `surface:colour=red`), muted to
+ *  the palette: a brick red, not a signal red. */
+const CYCLE_RED = vec3(0.42, 0.16, 0.13);
+
+/** 1 where any of the four texels' G byte has the bit, bilinear. */
+function bitCoverage(t: V3[], f: V2, bit: number): F {
+  const on = (k: number): F =>
+    select(int(t[k].y).bitAnd(bit).notEqual(0), 1, 0);
+  return mix(mix(on(0), on(1), f.x), mix(on(2), on(3), f.x), f.y);
+}
+
+/**
+ * The cycle lane on this texel's side: its line at its kind's distance
+ * from the kerb, past a parking lane on that side (`cycleLineFromKerb`),
+ * solid for a Radfahrstreifen, dashed for a Schutzstreifen; and where its
+ * surface is red, the lane between the kerb (or the parking) and the line.
+ * Returns the red's weight.
+ */
+function cycleLane(g: GroundFields, bits: I, along: F, w: F, paint: F): F {
+  const solid = bits.bitAnd(LANE_BITS.cycleSolid).notEqual(0);
+  const from = select(
+    bits.bitAnd(LANE_BITS.cycleWide).notEqual(0),
+    P.cycleWideFromKerb,
+    select(solid, P.cycleFromKerb, P.cycleAdvisoryFromKerb)
+  );
+  const band = parkingBandOf(g);
+  const shift = select(band.street, max(band.to, 0), 0).toVar();
+  const at = from.add(shift).toVar();
+  const half = select(solid, P.cycleHalfWidth, P.cycleAdvisoryHalfWidth);
+  const line = rmLine(g.dr.sub(at), half, w);
+  const dash = select(
+    solid,
+    float(1),
+    rmStripes(along, P.cyclePeriod / 2, P.cyclePeriod, w)
+  );
+  paint.assign(max(paint, line.mul(dash)));
+  const red = select(bits.bitAnd(LANE_BITS.red).notEqual(0), 1, 0);
+  return gdBand(g.dr, shift, at, w).mul(red);
+}
+
+/**
+ * The centre line where the baked signed distance to the carriageway's
+ * middle crosses zero — dashed, or solid where overtaking is forbidden —
+ * and with four lanes or more the dashed lane lines halfway to each kerb
+ * (where |s| equals the kerb distance).
+ */
+function centreLines(t: V3[], f: V2, all: I, along: F, w: F, dr: F): F {
+  const s = mix(mix(t[0].z, t[1].z, f.x), mix(t[2].z, t[3].z, f.x), f.y)
+    .sub(128)
+    .div(MARKING_OFFSET_SCALE)
+    .toVar();
+  const dashes = rmStripes(along, P.centreDash, P.centrePeriod, w).toVar();
+  const solid = all.bitAnd(LANE_BITS.centreSolid).notEqual(0);
+  const middle = rmLine(s, P.centreHalfWidth, w).mul(
+    select(solid, float(1), dashes)
+  );
+  // |s| − dr changes by 2 per metre across the road: halved, in metres
+  const lanes = rmLine(abs(s).sub(dr).mul(0.5), P.centreHalfWidth, w)
+    .mul(dashes)
+    .mul(select(all.bitAnd(LANE_BITS.laneLines).notEqual(0), 1, 0));
+  return max(middle, lanes);
+}
+
+/** Cycle and centre lines along the carriageway (the baked kerb distance);
+ *  on a cycle lane `red` becomes its red fill's weight. */
 function laneLines(
   inp: GroundInputs,
   g: GroundFields,
   t: V3[],
   f: V2,
   w: F,
-  paint: F
+  paint: F,
+  red: F
 ): void {
   If(g.dr.greaterThan(0), () => {
     // along the street: the paving raster's frame, else the bearing's
@@ -134,28 +210,17 @@ function laneLines(
       select(f.y.lessThan(0.5), t[0], t[2]),
       select(f.y.lessThan(0.5), t[1], t[3])
     );
-    const bits = int(nearest.y);
+    const bits = int(nearest.y).toVar();
     If(bits.bitAnd(LANE_BITS.cycle).notEqual(0), () => {
-      const line = rmLine(g.dr.sub(P.cycleFromKerb), P.cycleHalfWidth, w);
-      paint.assign(
-        max(
-          paint,
-          line.mul(rmStripes(along, P.cyclePeriod / 2, P.cyclePeriod, w))
-        )
-      );
+      red.assign(cycleLane(g, bits, along, w, paint));
     });
     const all = int(t[0].y)
       .bitAnd(int(t[1].y))
       .bitAnd(int(t[2].y))
-      .bitAnd(int(t[3].y));
+      .bitAnd(int(t[3].y))
+      .toVar();
     If(all.bitAnd(LANE_BITS.centre).notEqual(0), () => {
-      const s = mix(mix(t[0].z, t[1].z, f.x), mix(t[2].z, t[3].z, f.x), f.y)
-        .sub(128)
-        .div(MARKING_OFFSET_SCALE);
-      const line = rmLine(s, P.centreHalfWidth, w);
-      paint.assign(
-        max(paint, line.mul(rmStripes(along, P.centreDash, P.centrePeriod, w)))
-      );
+      paint.assign(max(paint, centreLines(t, f, all, along, w, g.dr)));
     });
   });
 }
@@ -190,8 +255,11 @@ export function roadMarkings(
         paint.assign(max(paint, rmRow(markings.table, t[k].x, g.local, w)));
       });
     }
+    // a red cycle surface: a lane's fill on the carriageway, else (a
+    // track mapped on its own, a cycle crossing) the texels' coverage
+    const red = bitCoverage(t, f, LANE_BITS.red).toVar();
     if (g.hasEdge) {
-      laneLines(inp, g, t, f, w, paint);
+      laneLines(inp, g, t, f, w, paint, red);
     }
     // on the carriageway only (a crossing a little off the DLM road stops
     // at the kerb), worn, and gone before it could crawl in the distance
@@ -205,6 +273,9 @@ export function roadMarkings(
       .mul(fade)
       .mul(on)
       .toVar();
+    col.baseCol.assign(
+      mix(col.baseCol, CYCLE_RED, red.mul(fade).mul(on).mul(0.8))
+    );
     col.baseCol.assign(
       mix(col.baseCol, max(col.baseCol, vec3(0.88, 0.87, 0.83)), mark)
     );

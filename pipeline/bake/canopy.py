@@ -27,7 +27,25 @@ crowns.
 A crown in a needle forest is an evergreen (`l: "e"`), as is one in a mixed
 forest that reads green in a leaf-off flight, where the broadleaves are bare
 (`leaf_types`): the Dresdner Heide's pines drew as broadleaves, coloured in
-autumn and bare in winter."""
+autumn and bare in winter. An evergreen whose top the surface model shows
+flat is a pine's (`pine: 1`, crown_form.py); the others are the cones of
+spruces and firs.
+
+The tree rows' trees (the land-cover step's `vegrows`, the DLM's veg04 or
+OSM's tree rows) are the canopy's too (`row: 1`, `row_trees`): one at each
+crown peak the surface model shows along the row — at least ROW_SPACING_M
+apart, over MIN_H, stood on the row's line, as tall as measured —, none
+within ROW_CLEAR_M of a canopy point or a laser-scan crown (`canopyx`),
+which is that tree already. The viewer plants a row on its 9 m grid only on
+a tile without a canopy (no DOM1). On the grid a Dresden row tree stood
+every 9 m where DOM1 shows one every 10 m (7.5–14), 35 % of them beside a
+canopy or scan crown (Unna 61 %) and a fifth to three quarters over no tree
+at all (nDOM under 3 m).
+
+A tree whose crown reaches over a carriageway (`ways.carriageways`: its
+trunk within CLEAR_SHARE of its height of one) carries `c: 1`: its crown
+starts high enough to clear the traffic (lib/city/tree-placement.ts
+`crownBase`)."""
 
 from __future__ import annotations
 
@@ -41,9 +59,11 @@ from PIL import Image
 from rasterio.features import rasterize
 from scipy import ndimage as ndi
 from scipy.ndimage import uniform_filter
+from scipy.spatial import cKDTree
+from skimage.feature import peak_local_max
 
-from . import landcover_osm, ways
-from .common import Tile, column, feature, read_layer, write_geojson
+from . import crown_form, landcover_osm, ways
+from .common import Tile, column, crs_member, feature, read_layer
 from .lowveg import lod2_rings
 from .osm import read_osm, tag
 
@@ -105,6 +125,20 @@ CONIFER_NDVI = 0.35
 # least LEAF_OFF_MIN of them. Else a mixed forest stays broadleaf.
 LEAF_OFF_NDVI = 0.30
 LEAF_OFF_MIN = 200
+# A tree row's trees (`row_trees`): a crown peak of the nDOM smoothed by
+# ROW_SIGMA_M within ROW_REACH_M of the row's line is one, stood on the line
+# (the row's geometry is where the trunks stand; a crown leans off it);
+# peaks closer than ROW_SPACING_M along the rows are one crown; one within
+# ROW_CLEAR_M of a canopy point or a scan crown is that crown.
+ROW_REACH_M = 3.0
+ROW_SIGMA_M = 1.0
+ROW_SPACING_M = 3.0
+ROW_CLEAR_M = 4.5
+# A crown reaches over a carriageway when its trunk stands within this share
+# of its height of one: half the drawn crown's width (CROWN_TO_HEIGHT, 0.58,
+# lib/city/tree-placement.ts) and the kerb's margin.
+CLEAR_SHARE = 0.29
+CLEAR_MARGIN_M = 0.5
 
 
 def vegetation_mask(tile: Tile, px: int) -> np.ndarray:
@@ -334,22 +368,130 @@ def leaf_types(
     return out
 
 
-def canopy_points(tile: Tile, cell: int) -> list[dict]:
-    with rasterio.open(tile.raw_raster("dom1")) as src, rasterio.open(tile.dgm) as dgm:
-        dom = src.read(1).astype(np.float64)
-        ndom = dom - dgm.read(1).astype(np.float64)
+def row_lines(tile: Tile) -> list[shapely.LineString]:
+    """The tile's tree rows (the land-cover step's `vegrows`, its hedges
+    left out); none before that step has run."""
+    path = tile.out("dlm", f"vegrows_{tile.id}.geojson")
+    if not path.exists():
+        return []
+    out = []
+    for f in json.loads(path.read_text())["features"]:
+        if (f.get("properties") or {}).get("kind") != "treerow" or not f.get("geometry"):
+            continue
+        g = shapely.geometry.shape(f["geometry"])
+        out.extend(p for p in shapely.get_parts(g) if p.geom_type == "LineString" and p.length > 0)
+    return out
+
+
+def thinned(xy: np.ndarray, tops: np.ndarray, spacing: float) -> np.ndarray:
+    """The indices of the points kept, tallest first, none within `spacing`
+    of a taller one kept."""
+    order = np.argsort(-tops, kind="stable")
+    tree = cKDTree(xy) if len(xy) else None
+    gone = np.zeros(len(xy), bool)
+    keep = []
+    for i in order:
+        if gone[i]:
+            continue
+        keep.append(i)
+        if tree is not None:
+            gone[tree.query_ball_point(xy[i], spacing - 1e-6)] = True
+    return np.array(sorted(keep), dtype=int)
+
+
+def row_trees(
+    tile: Tile, ndom: np.ndarray, eligible: np.ndarray, taken: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """The tree rows' trees (see the module docstring): their positions
+    (n × 2, EPSG) and measured heights, and how many rows there were. A
+    crown peak is a local maximum of the `eligible` nDOM smoothed by
+    ROW_SIGMA_M (1 m texels) within ROW_REACH_M of a row, its height the
+    unsmoothed 3 × 3 maximum; `taken` (m × 2) are the canopy's and the
+    scan's crowns, which stand in for a peak within ROW_CLEAR_M."""
+    lines = row_lines(tile)
+    none = (np.zeros((0, 2)), np.zeros(0), len(lines))
+    if not lines:
+        return none
     h, w = ndom.shape
-    cls = class_raster_at(tile, ndom.shape)
-    rough, built, traffic = rough_mask(dom), built_mask(tile, w), traffic_mask(tile, w)
-    ok = (vegetation_mask(tile, w) == 1) | green_mask(tile, rough, built)
-    # on transport land a crown is rough, and a bare plane is no crown
-    crown = rough & ~bare_planes(dom, crown_green(tile))
-    ok |= verge_mask(cls, ndom, crown, built, traffic)
-    ok &= ~np.isin(cls, BLOCKED) & ~traffic
-    ok &= bridge_mask(tile, w) == 0
-    ok &= ~roof_mask(tile, ndom)
-    ok &= (ndom > MIN_H) & (ndom < MAX_H)
-    heights = np.where(ok, ndom, -1.0)
+    near = rasterize(
+        ((shapely.buffer(ln, ROW_REACH_M), 1) for ln in lines),
+        out_shape=(h, w),
+        transform=tile.transform(w),
+        dtype=np.uint8,
+    )
+    crown = np.where(eligible, ndom, 0.0)
+    chm = ndi.gaussian_filter(crown, ROW_SIGMA_M)
+    pk = peak_local_max(
+        chm,
+        min_distance=2,
+        threshold_abs=MIN_H / 2,
+        labels=(eligible & (near == 1)).astype(np.uint8),
+        exclude_border=False,
+    ).reshape(-1, 2)
+    tops = ndi.maximum_filter(crown, 3)[pk[:, 0], pk[:, 1]] if len(pk) else np.zeros(0)
+    pk, tops = pk[tops > MIN_H], tops[tops > MIN_H]
+    if not len(pk):
+        return none
+    xmin, _, _, ymax = tile.bounds
+    peaks = shapely.points(xmin + pk[:, 1] + 0.5, ymax - pk[:, 0] - 0.5)
+    which, line = shapely.STRtree(lines).query_nearest(peaks, max_distance=ROW_REACH_M)
+    # one line per peak (a tie between two lines takes the first)
+    which, first = np.unique(which, return_index=True)
+    line = line[first]
+    on = shapely.line_interpolate_point(
+        np.array(lines, dtype=object)[line],
+        shapely.line_locate_point(np.array(lines, dtype=object)[line], peaks[which]),
+    )
+    xy, tops = shapely.get_coordinates(on), tops[which]
+    keep = thinned(xy, tops, ROW_SPACING_M)
+    xy, tops = xy[keep], tops[keep]
+    if len(taken) and len(xy):
+        d, _ = cKDTree(taken).query(xy)
+        xy, tops = xy[d > ROW_CLEAR_M], tops[d > ROW_CLEAR_M]
+    return xy, tops, len(lines)
+
+
+def carriageway_mask(tile: Tile, px: int) -> np.ndarray:
+    """The carriageways (`ways.carriageways`, without the traffic's margin)
+    on the tile's grid."""
+    mask = np.zeros((px, px), dtype=np.uint8)
+    geoms = [g for g in ways.carriageways(tile) if g is not None and not g.is_empty]
+    if geoms:
+        rasterize(((g, 1) for g in geoms), out=mask, transform=tile.transform(px))
+    return mask == 1
+
+
+def over_carriageway(
+    tile: Tile, rows: np.ndarray, cols: np.ndarray, tops: np.ndarray, px: int
+) -> np.ndarray:
+    """Which trees at (rows, cols) of the 1 m grid, `tops` m tall, reach
+    over a carriageway: one stands within CLEAR_SHARE of its height (and
+    CLEAR_MARGIN_M) of their trunk."""
+    lanes = carriageway_mask(tile, px)
+    if not lanes.any() or not len(rows):
+        return np.zeros(len(rows), bool)
+    dist = ndi.distance_transform_edt(~lanes) * (tile.bounds[2] - tile.bounds[0]) / px
+    return dist[rows, cols] <= CLEAR_SHARE * tops + CLEAR_MARGIN_M
+
+
+def scan_crowns(tile: Tile) -> np.ndarray:
+    """The laser scan's crowns outside the canopy mask (`canopyx`, the
+    lowveg step's), n × 2; none before that step has run."""
+    path = tile.out("dlm", f"canopyx_{tile.id}.geojson")
+    if not path.exists():
+        return np.zeros((0, 2))
+    pts = [
+        f["geometry"]["coordinates"][:2]
+        for f in json.loads(path.read_text())["features"]
+        if f.get("geometry")
+    ]
+    return np.asarray(pts, np.float64).reshape(-1, 2)
+
+
+def grid_peaks(heights: np.ndarray, cell: int) -> list[tuple[int, int, float]]:
+    """The tallest texel of every `cell` × `cell` block with one (heights
+    below 0 are none): (row, col, height)."""
+    h, w = heights.shape
     peaks = []
     for r0 in range(0, h, cell):
         for c0 in range(0, w, cell):
@@ -361,25 +503,77 @@ def canopy_points(tile: Tile, cell: int) -> list[dict]:
                 continue
             r, c = divmod(i, block.shape[1])
             peaks.append((r0 + r, c0 + c, float(best)))
-    if not peaks:
-        return []
-    rows, cols, tops = (np.array(v) for v in zip(*peaks, strict=True))
-    leaves = leaf_types(tile, rows.astype(int), cols.astype(int), (h, w))
+    return peaks
+
+
+def canopy_points(tile: Tile, cell: int) -> tuple[list[dict], dict]:
+    """The canopy's trees and the tree rows' (`row: 1`) as features, and
+    what the rows came to (`{"lines", "trees"}`)."""
+    with rasterio.open(tile.raw_raster("dom1")) as src, rasterio.open(tile.dgm) as dgm:
+        dom = src.read(1).astype(np.float64)
+        ndom = dom - dgm.read(1).astype(np.float64)
+    h, w = ndom.shape
+    cls = class_raster_at(tile, ndom.shape)
+    rough, built, traffic = rough_mask(dom), built_mask(tile, w), traffic_mask(tile, w)
+    # anywhere: no bridge, no roof, 3–45 m
+    tree = (bridge_mask(tile, w) == 0) & ~roof_mask(tile, ndom) & (ndom > MIN_H) & (ndom < MAX_H)
+    ok = (vegetation_mask(tile, w) == 1) | green_mask(tile, rough, built)
+    # on transport land a crown is rough, and a bare plane is no crown
+    crown = rough & ~bare_planes(dom, crown_green(tile))
+    ok |= verge_mask(cls, ndom, crown, built, traffic)
+    ok &= ~np.isin(cls, BLOCKED) & ~traffic & tree
+    peaks = grid_peaks(np.where(ok, ndom, -1.0), cell)
     xmin, _, _, ymax = tile.bounds
-    return [
+    grid = np.array([(xmin + c + 0.5, ymax - r - 0.5) for r, c, _ in peaks]).reshape(-1, 2)
+    # A row's crown peak stands off every LoD2 outline and off the traffic
+    # (a van in a parking lane); a mast or a post is none (crowns at least
+    # 2 m across). Not off the bare planes: a leaf-off street lime reads
+    # bare and smooth.
+    eligible = ndi.binary_opening(tree & ~built & ~traffic, np.ones((2, 2), bool))
+    rxy, rtops, n_lines = row_trees(tile, ndom, eligible, np.vstack([grid, scan_crowns(tile)]))
+    rr = np.clip((ymax - rxy[:, 1]).astype(int), 0, h - 1)
+    rc = np.clip((rxy[:, 0] - xmin).astype(int), 0, w - 1)
+    rows = np.concatenate([np.array([p[0] for p in peaks], int), rr])
+    cols = np.concatenate([np.array([p[1] for p in peaks], int), rc])
+    tops = np.concatenate([np.array([p[2] for p in peaks]), rtops])
+    xy = np.vstack([grid, rxy])
+    if not len(xy):
+        return [], {"lines": n_lines, "trees": 0}
+    leaves = crown_form.mark_pines(leaf_types(tile, rows, cols, (h, w)), ndom, rows, cols, tops)
+    clear = over_carriageway(tile, rows, cols, tops, w)
+    row = np.arange(len(xy)) >= len(grid)
+    features = [
         feature(
-            {"type": "Point", "coordinates": [round(xmin + c + 0.5, 1), round(ymax - r - 0.5, 1)]},
-            {"h": round(float(top), 1), **leaf},
+            {"type": "Point", "coordinates": [round(float(x), 1), round(float(y), 1)]},
+            {
+                "h": round(float(top), 1),
+                **leaf,
+                **({"row": 1} if is_row else {}),
+                **({"c": 1} if over else {}),
+            },
         )
-        for r, c, top, leaf in zip(rows, cols, tops, leaves, strict=True)
+        for (x, y), top, leaf, is_row, over in zip(xy, tops, leaves, row, clear, strict=True)
     ]
+    return features, {"lines": n_lines, "trees": int(row.sum())}
+
+
+def write_canopy(tile: Tile, features: list[dict], rows: dict) -> None:
+    """The canopy file: a FeatureCollection with the named-CRS member and
+    `rows` — that the tree rows' trees are in it (`canopy_points`)."""
+    doc = {"type": "FeatureCollection", "crs": crs_member(tile.epsg), "rows": rows}
+    doc["features"] = features
+    tile.out("dlm", f"canopy_{tile.id}.geojson").write_text(json.dumps(doc))
 
 
 def run(tile: Tile, cell: int = 7) -> None:
     if not tile.raw_raster("dom1").exists():
         print(f"{tile.id}: no surface model — skipping the canopy (trees from rows only)")
         return
-    features = canopy_points(tile, cell)
-    write_geojson(tile.out("dlm", f"canopy_{tile.id}.geojson"), features, tile.epsg)
+    features, rows = canopy_points(tile, cell)
+    write_canopy(tile, features, rows)
     evergreen = sum(1 for f in features if f["properties"].get("l") == "e")
-    print(f"{tile.id}: {len(features)} canopy trees, {evergreen} of them evergreen")
+    over = sum(1 for f in features if f["properties"].get("c"))
+    print(
+        f"{tile.id}: {len(features)} canopy trees, {evergreen} of them evergreen,"
+        f" {rows['trees']} on {rows['lines']} tree rows, {over} over a carriageway"
+    )

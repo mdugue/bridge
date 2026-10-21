@@ -14,13 +14,19 @@ from pathlib import Path
 import laspy
 
 from ..common import DLM_MEMBERS, Tile
-from ..fetch import Ctx, cells
+from ..fetch import Ctx, cells, german_dates
 from ..lsc import merge_laz
-from ..net import download, remote_zip_members
+from ..net import download, fetch_text, remote_zip_members
 
 CLOUD = "https://download1.bayernwolke.de/a"
 LASER = "https://geodaten.bayern.de/odd_data/laser"
 DLM = "https://geodaten.bayern.de/odd/m/2/basisdlm/bkg_shape/bkg_shape_712.zip"
+# The DOP20's flight blocks with their day (`ua`), through the DOP WMS.
+DOP_INFO = (
+    "https://geoservices.bayern.de/od/wms/dop/v1/dop20?SERVICE=WMS&VERSION=1.3.0"
+    "&REQUEST=GetFeatureInfo&LAYERS=by_dop20_info&QUERY_LAYERS=by_dop20_info&CRS=EPSG:25832"
+    "&WIDTH=11&HEIGHT=11&I=5&J=5&INFO_FORMAT=text/plain&STYLES=&BBOX={x0},{y0},{x1},{y1}"
+)
 
 
 def _files(ctx: Ctx, tile: Tile, km: int, url: str) -> list[Path]:
@@ -41,6 +47,17 @@ def dom(ctx: Ctx, tile: Tile) -> list[Path]:
 
 def dop(ctx: Ctx, tile: Tile) -> list[Path]:
     return _files(ctx, tile, 1, CLOUD + "/dop20/data/32{e}_{n}.tif")
+
+
+def flight(ctx: Ctx, tile: Tile) -> list[str]:
+    """The days the tile's 1 km DOP files were flown: their flight block's
+    `ua` (the day of the images)."""
+    days: list[str] = []
+    for e, n in cells(tile, 1):
+        x, y = e * 1000 + 500, n * 1000 + 500
+        info = fetch_text(DOP_INFO.format(x0=x - 5, y0=y - 5, x1=x + 5, y1=y + 5))
+        days += german_dates(info.partition(" ua ")[2][:20])
+    return sorted(set(days))
 
 
 def lod2(ctx: Ctx, tile: Tile) -> list[Path]:

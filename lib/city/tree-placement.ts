@@ -43,6 +43,24 @@ export const HEDGE_SPACING = 1.1;
 export const BASE_TREE_H = 6.4;
 /** The generic crown's width at scale 1 (m). */
 export const GENERIC_CROWN_W = 5.1;
+/** The generic crown's lowest point at scale 1 (vegetation-layer.ts
+ *  `buildCrownGeo`): drawn by its scale alone, every crown started at 0.28
+ *  of its height. */
+export const GENERIC_CROWN_FOOT = 1.77;
+/**
+ * The crown's lower edge over the tree's height: clamp(0.15 + 0.012 · H,
+ * CROWN_BASE_SHARE) — the laser scans' street trees of 6–20 m start their
+ * crown at 0.31–0.35 of their height, those of 20–25 m at 0.39–0.50, a
+ * forest's of 20 m and more at 0.40–0.67 and a small tree off the street
+ * at 0.22–0.30.
+ */
+const CROWN_BASE_SLOPE = 0.012;
+const CROWN_BASE_AT_0 = 0.15;
+const CROWN_BASE_SHARE: [number, number] = [0.22, 0.6];
+/** A crown over a carriageway starts at least this high (m) — the traffic
+ *  passes under it (the canopy's `c: 1`, pipeline/bake/canopy.py) —, but
+ *  never above the clamp's top share of a small tree's height. */
+export const CARRIAGEWAY_CLEARANCE_M = 3;
 /**
  * Crown width over tree height where nothing measured the crown: the median
  * of Dresden's surveyed street trees (50 123 with height and crown measured,
@@ -64,16 +82,40 @@ export function crownSpread(width: number): number {
 }
 
 /**
+ * Where a tree `height` m tall starts its crown (m over the ground):
+ * CROWN_BASE_AT_0 + CROWN_BASE_SLOPE · H of its height, within
+ * CROWN_BASE_SHARE, and over a carriageway (`overRoad`) at least
+ * CARRIAGEWAY_CLEARANCE_M — up to the share's top.
+ */
+export function crownBase(height: number, overRoad = false): number {
+  const [lo, hi] = CROWN_BASE_SHARE;
+  const share = Math.min(
+    Math.max(CROWN_BASE_AT_0 + CROWN_BASE_SLOPE * height, lo),
+    hi
+  );
+  const base = share * height;
+  return overRoad
+    ? Math.max(base, Math.min(CARRIAGEWAY_CLEARANCE_M, hi * height))
+    : base;
+}
+
+/**
  * One tree or hedge segment in the Y-up scene frame. `x` and `z` are the
  * float32 the instance matrix will hold (Math.fround), so the coarse
  * level's file carries them exactly and its crowns hash the same colour
  * jitter.
  */
 export interface Placement {
+  /** where the crown starts (m over the ground, `crownBase`); absent = the
+   *  generic crown drawn by its scale (a hedge) */
+  base?: number;
   /** an evergreen (the canopy's `l: "e"`): its crown never turns */
   evergreen?: boolean;
   /** DOP NDVI 0..1 at this point (lush↔dry crown colour); undefined = no raster */
   ndvi?: number;
+  /** an evergreen whose crown is a pine's (the canopy's `pine: 1`), not a
+   *  cone (vegetation-layer.ts `canopyForm`) */
+  pine?: boolean;
   rot: number;
   /** the vertical scale (height / BASE_TREE_H) */
   s: number;
@@ -102,10 +144,25 @@ function worldOf(
 }
 
 /**
+ * The rows the layer plants: every hedge, and the tree rows only where no
+ * surface model `measured` the tile (it has no canopy). With one the canopy
+ * bake stood each row's trees at its crown peaks (`row: 1`,
+ * pipeline/bake/canopy.py `row_trees`), and the 9 m grid would plant them
+ * twice — a third of them beside a measured crown, many over no tree at
+ * all.
+ */
+export function plantedRows(
+  rows: VegRowFeature[],
+  measured: boolean
+): VegRowFeature[] {
+  return measured ? rows.filter((f) => f.properties?.kind === "hedge") : rows;
+}
+
+/**
  * The ATKIS veg04 rows resampled and dropped onto the ground (EPSG ->
- * world): a tree every TREE_SPACING m, a hedge segment every HEDGE_SPACING.
- * A row tree an inventory tree stands on is left out (`keepTree`); hedges
- * never are.
+ * world): a tree every TREE_SPACING m, a hedge segment every HEDGE_SPACING
+ * (`plantedRows` says which rows). A row tree an inventory tree stands on
+ * is left out (`keepTree`); hedges never are.
  */
 export function rowPlacements(
   features: VegRowFeature[],
@@ -144,7 +201,10 @@ export function rowPlacements(
         s,
         ...(isHedge
           ? {}
-          : { w: crownSpread(s * BASE_TREE_H * CROWN_TO_HEIGHT) }),
+          : {
+              w: crownSpread(s * BASE_TREE_H * CROWN_TO_HEIGHT),
+              base: crownBase(s * BASE_TREE_H),
+            }),
         ndvi: ndviAt?.(ex, ey),
       };
       (isHedge ? hedges : trees).push(place);
@@ -173,10 +233,11 @@ export function canopyCrownWidth(
 
 /** Canopy points (DOM1-derived, and the laser scan's with a crown radius)
  *  → tree placements as tall as measured, CROWN_TO_HEIGHT wide or as wide
- *  as the scan measured. */
+ *  as the scan measured, their crowns starting at `crownBase` (clear of
+ *  the traffic over a carriageway, `c`). */
 export function canopyPlacements(
   features: (CanopyFeature & {
-    properties: { h: number; l?: "e"; r?: number } | null;
+    properties: { c?: 1; h: number; l?: "e"; r?: number } | null;
   })[],
   ctx: PlacementContext,
   ndviAt?: RasterSampler,
@@ -218,8 +279,14 @@ export function canopyPlacements(
       rot: hash(seed * 1.7) * Math.PI,
       s,
       w: crownSpread(width),
+      base: crownBase(s * BASE_TREE_H, f.properties?.c === 1),
       ndvi: ndviAt?.(ex, ey),
-      ...(f.properties?.l === "e" ? { evergreen: true } : {}),
+      ...(f.properties?.l === "e"
+        ? {
+            evergreen: true,
+            ...(f.properties.pine === 1 ? { pine: true } : {}),
+          }
+        : {}),
     });
   }
   return out;

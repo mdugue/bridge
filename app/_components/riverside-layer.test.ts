@@ -64,10 +64,38 @@ test("a pontoon floats on the drawn water, with a hut and a gangway", () => {
   };
   const group = buildRiverside([pontoon], ctx);
   const [hull, deck] = byName(group, "riverside-pontoon");
-  expect(topY(hull)).toBeCloseTo(104.35, 4);
-  expect(topY(deck)).toBeCloseTo(104.5, 4);
+  // no measured freeboard: the bake's fallback, 0.9 m
+  expect(topY(hull)).toBeCloseTo(104.75, 4);
+  expect(topY(deck)).toBeCloseTo(104.9, 4);
   expect(byName(group, "riverside-hut")).toHaveLength(2); // walls + roof
   expect(byName(group, "riverside-gangway")).toHaveLength(1);
+});
+
+test("a pontoon stands its measured freeboard over the water, its hull under it", () => {
+  const pontoon: RiversideFeature = {
+    geometry: { type: "Polygon", coordinates: rect(0, -30, 4, -10) },
+    properties: { k: "pontoon", len: 20, fb: 1.3 },
+  };
+  const [hull, deck] = byName(
+    buildRiverside([pontoon], ctx),
+    "riverside-pontoon"
+  );
+  expect(topY(deck)).toBeCloseTo(105.3, 4);
+  expect(topY(hull)).toBeCloseTo(105.15, 4);
+  hull.geometry.computeBoundingBox();
+  expect(hull.geometry.boundingBox?.min.y).toBeCloseTo(103.7, 4); // its draft
+});
+
+test("a finger pier floats with its pontoon: no hut, no gangway", () => {
+  const finger: RiversideFeature = {
+    geometry: { type: "Polygon", coordinates: rect(4, -22, 20, -20) },
+    properties: { k: "pontoon", len: 16, fb: 0.7, finger: 1, bank: [12, 1] },
+  };
+  const group = buildRiverside([finger], ctx);
+  const [, deck] = byName(group, "riverside-pontoon");
+  expect(topY(deck)).toBeCloseTo(104.7, 4);
+  expect(byName(group, "riverside-hut")).toHaveLength(0);
+  expect(byName(group, "riverside-gangway")).toHaveLength(0);
 });
 
 test("a ferry line is a faint wake that never casts; a groyne a stone ridge", () => {
@@ -103,7 +131,29 @@ test("a ferry line is a faint wake that never casts; a groyne a stone ridge", ()
   expect(wake.geometry.hasAttribute("wakeAlong")).toBe(true);
   expect(topY(wake)).toBeCloseTo(104.06, 4);
   const [ridge] = byName(group, "riverside-groyne");
-  expect(topY(ridge)).toBeCloseTo(108.5, 4);
+  expect(topY(ridge)).toBeCloseTo(108.12, 4); // its crest on the DGM
+});
+
+test("a groyne's flanks run down under the water beside it", () => {
+  const groyne: RiversideFeature = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, -2],
+        [0, -40],
+      ],
+    },
+    properties: { k: "groyne", w: 103.6 },
+  };
+  // the stones stand 0.8 m over the river in the DGM
+  const stones: GroundContext = {
+    ...ctx,
+    heightAt: (x, y) => (Math.abs(x) < 0.5 ? 104.8 : ctx.heightAt(x, y)),
+  };
+  const [ridge] = byName(buildRiverside([groyne], stones), "riverside-groyne");
+  ridge.geometry.computeBoundingBox();
+  expect(ridge.geometry.boundingBox?.max.y).toBeCloseTo(104.92, 4);
+  expect(ridge.geometry.boundingBox?.min.y).toBeCloseTo(103.3, 4);
 });
 
 test("a ferry line past the loaded ground keeps no vertex at sea level", () => {

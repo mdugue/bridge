@@ -26,6 +26,9 @@ test("the street's signs and fixtures each build an instanced model", () => {
       at({ k: "wallclock", a: 180 }, 30),
       at({ k: "water", a: 0 }, 35),
       at({ k: "stop", a: 0 }, 40),
+      at({ k: "signal", a: 90, arm: true }, 45),
+      at({ k: "pedsignal", a: 0 }, 50),
+      at({ k: "bin", c: "red" }, 55),
     ],
     ctx
   );
@@ -39,6 +42,9 @@ test("the street's signs and fixtures each build an instanced model", () => {
       "furniture-hydrant",
       "furniture-hydrantSign",
       "furniture-signal",
+      "furniture-signalArm",
+      "furniture-pedSignal",
+      "furniture-binRed",
       "furniture-stop",
       "furniture-wallClock",
       "furniture-wallClock-hands",

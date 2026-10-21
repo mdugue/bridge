@@ -12,6 +12,9 @@ import {
   roofTint,
   roughJitter,
   mappedStoreyHeight,
+  brickWalls,
+  isStructure,
+  neighbourStorey,
   storeyHeight,
   wallColourSource,
 } from "./building-tint";
@@ -107,11 +110,14 @@ test("roofColor: uses the DOP LUT when present, else falls back to roofTint", ()
   );
 });
 
-test("buildingGlows: commerce/public/special glow, housing does not", () => {
+test("buildingGlows: commerce and public buildings glow, housing and structures do not", () => {
   expect(buildingGlows({ function: "31001_2000" })).toBe(true); // commerce
   expect(buildingGlows({ function: "31001_3021" })).toBe(true); // public
-  expect(buildingGlows({ function: "53001_1800" })).toBe(true); // special
   expect(buildingGlows({ function: "31001_9998" })).toBe(false); // housing
+  // no building: a tank, a canopy, a tower has no entrance to light
+  expect(buildingGlows({ function: "51003_1000" })).toBe(false); // tank
+  expect(buildingGlows({ function: "51009_1610" })).toBe(false); // canopy
+  expect(buildingGlows({ function: "53001_1800" })).toBe(false);
   expect(buildingGlows({})).toBe(false);
 });
 
@@ -162,6 +168,36 @@ test("mappedStoreyHeight: OSM's storeys up to the eave, else the estimate", () =
   expect(mappedStoreyHeight(6, 9, 0)).toBe(storeyHeight(9));
 });
 
+test("neighbourStorey: the eave in whole storeys of about the neighbours' (G21)", () => {
+  // a Gründerzeit block, 18.5 m to the eave, among 3.7 m storeys: 5 of
+  // them, where 3.2 m storeys made 6
+  expect(Math.round(18.5 / neighbourStorey(18.5, 3.7))).toBe(5);
+  expect(Math.round(18.5 / storeyHeight(18.5))).toBe(6);
+  // held to 2.5–4.5 m
+  expect(neighbourStorey(3, 2.4)).toBe(3);
+  expect(neighbourStorey(4.8, 4.6)).toBe(4.5);
+  expect(neighbourStorey(4.8, 3)).toBe(2.5);
+  expect(neighbourStorey(2.6, 3)).toBe(2.6);
+});
+
+test("mappedStoreyHeight: OSM's count first, then the neighbours', then the height's", () => {
+  expect(mappedStoreyHeight(17, 22, 4, 3.7)).toBe(4.25);
+  expect(mappedStoreyHeight(18.5, 22, undefined, 3.7)).toBeCloseTo(3.7, 9);
+  // no neighbours, or walls too low to count: the old estimate
+  expect(mappedStoreyHeight(18.5, 22, undefined, 0)).toBe(storeyHeight(22));
+  expect(mappedStoreyHeight(2, 2.4, undefined, 3.7)).toBe(storeyHeight(2.4));
+});
+
+test("structures and brick walls (G17, G12)", () => {
+  expect(isStructure("51003_1000")).toBe(true);
+  expect(isStructure("31001_1000")).toBe(false);
+  expect(isStructure(undefined)).toBe(false);
+  expect(brickWalls({ function: "31001_1000" }, "brick")).toBe(true);
+  expect(brickWalls({ function: "31001_1000" }, "render")).toBe(false);
+  // a tank in a brick quarter keeps its stone
+  expect(brickWalls({ function: "51003_1000" }, "brick")).toBe(false);
+});
+
 test("roughJitter: deterministic, in [-1,1]", () => {
   expect(roughJitter("x")).toBe(roughJitter("x"));
   for (const id of ["a", "b", "kurz", "DESNATPU1000HJx5"]) {
@@ -171,7 +207,7 @@ test("roughJitter: deterministic, in [-1,1]", () => {
   }
 });
 
-test("a brick city paints housing and commerce in brick, civic keeps its stone", () => {
+test("a brick city paints its buildings in brick, structures keep their stone", () => {
   const redness = ([r, , b]: [number, number, number]) => r - b;
   let brick = 0;
   for (let i = 0; i < 200; i++) {
@@ -182,8 +218,13 @@ test("a brick city paints housing and commerce in brick, civic keeps its stone",
   }
   // four of the five brick swatches are brick red, one pale render
   expect(brick).toBeGreaterThan(120);
+  // a school in a brick quarter is brick (Hamburg's), a tank is not
   const civic = { function: "31001_3021" };
-  expect(buildingTint("c", civic, "brick")).toEqual(buildingTint("c", civic));
+  expect(buildingTint("c", civic, "brick")).toEqual(
+    buildingTint("c", { function: "31001_9998" }, "brick")
+  );
+  const tank = { function: "51003_1000" };
+  expect(buildingTint("t", tank, "brick")).toEqual(buildingTint("t", tank));
   expect(buildingTint("h", {}, "render")).toEqual(buildingTint("h", {}));
 });
 
@@ -238,8 +279,9 @@ test("the card is told where a wall's and a roof's colour come from", () => {
     "material"
   );
   expect(wallColourSource(housing, "brick")).toBe("brick");
-  // civic keeps its stone in a brick city
-  expect(wallColourSource({ function: "31001_3021" }, "brick")).toBe("use");
+  // civic follows its brick quarter; a structure keeps its stone
+  expect(wallColourSource({ function: "31001_3021" }, "brick")).toBe("brick");
+  expect(wallColourSource({ function: "51003_1000" }, "brick")).toBe("use");
   expect(roofColourSource("a", { a: [0.1, 0.1, 0.1] })).toBe("dop");
   expect(roofColourSource("a", {}, { roof_colour: "#806040" })).toBe("osm");
   expect(roofColourSource("a")).toBe("palette");

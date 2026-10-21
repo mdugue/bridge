@@ -6,9 +6,11 @@
  */
 import type { CultivatedFeature, TreeFeature } from "./features";
 import { TREE_ARCHETYPES } from "./tree-inventory";
+import { TREE_GENERA } from "./tree-season";
 
-/** The colony raster's G byte: 0 none, else 1 + the colony's (or a mapped
- *  parcel's) long axis over 0–180° in 0..126. */
+/** The colony raster's G byte: 0 none, else 1 + the plots' axis over
+ *  0–180° in 0..126: the way the colony's mapped paths mostly run, its
+ *  long axis where too few are mapped, a mapped parcel's own long axis. */
 export const COLONY_AXIS_STEPS = 126;
 /** R: 128 + this many bytes per metre of the signed distance to the garden
  *  land's edge (positive inside), 1..255; 0 farther outside. */
@@ -27,8 +29,9 @@ export function colonyAxis(code: number): number | null {
 
 /**
  * The garden texture's measures (the shader's constants). Plots are the
- * cells of a jittered Voronoi in the colony's axis frame, ≈12 m along its
- * long axis by 17 m across (≈200 m², a *Kleingarten* parcel), their borders
+ * cells of a jittered Voronoi in the colony's axis frame, ≈15 m along its
+ * paths by 24 m deep (≈360 m², a *Kleingarten* parcel: Dresden's measure
+ * ≈15 × 22–25 m in the orthophoto), their borders
  * meandering (a domain warp of `warp` m) and drawn as thin soft paths; a plot is a lawn in one of a
  * few soft greens, some with warm vegetable beds, some with flower dots.
  * `strength` is the texture's mix at full *Bodendetail*; no colony in the
@@ -41,8 +44,8 @@ export const COLONY_GARDEN = {
   flowerSpacing: 1.5,
   jitter: 0.55,
   pathHalfWidth: 0.28,
-  plotAcross: 17,
-  plotAlong: 12,
+  plotAcross: 24,
+  plotAlong: 15,
   strength: 0.85,
   warp: 2.2,
 } as const;
@@ -63,20 +66,33 @@ export function colonyCropUv(
   return [x / n, y / n, w / n, h / n];
 }
 
-/** The orchard trees as the tree layer's cadastre features (the "small"
- *  archetype: a round crown on a ≈1.3 m stem), deciduous, marked
- *  `s: "orchard"` (the card names them). */
+/** The orchard trees as the tree layer's cadastre features, marked
+ *  `s: "orchard"` (the card names them; `m: 1` where DOM1 measured them):
+ *  the "small" archetype (a round
+ *  crown on a ≈1.3 m stem), deciduous, of the orchard's genus where its
+ *  `trees=*` names one (`gn`, so an apple orchard blossoms as apples do);
+ *  a Christmas-tree plantation's (`l: "e"`) evergreen cones. */
 export function orchardTrees(features: CultivatedFeature[]): TreeFeature[] {
   const small = TREE_ARCHETYPES.indexOf("small");
+  const conifer = TREE_ARCHETYPES.indexOf("conifer");
   const out: TreeFeature[] = [];
   for (const f of features) {
     if (f.properties?.k !== "tree" || f.geometry?.type !== "Point") {
       continue;
     }
-    const { h, d } = f.properties;
+    const { h, d, g, l, src } = f.properties;
+    const gn = TREE_GENERA.indexOf(g as (typeof TREE_GENERA)[number]);
     out.push({
       geometry: f.geometry,
-      properties: { a: small, h: h ?? 4.5, d: d ?? 4, l: "d", s: "orchard" },
+      properties: {
+        a: l === "e" ? conifer : small,
+        h: h ?? 4.5,
+        d: d ?? 4,
+        l: l === "e" ? "e" : "d",
+        s: "orchard",
+        ...(src === "dom" ? { m: 1 as const } : {}),
+        ...(gn > 0 ? { gn } : {}),
+      },
     });
   }
   return out;

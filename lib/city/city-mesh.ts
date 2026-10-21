@@ -54,6 +54,11 @@ export interface OsmBuildingFacts {
   /** roof, `#rrggbb` (OSM `roof:colour`) */
   roof_colour?: string;
   shop?: number;
+  /** where OSM counts none of its own storeys: the storey (m) of the
+   *  mapped buildings around it of its roof form and about its eave, else
+   *  the tile's (osm_buildings.py `storey`) — its storeys are counted from
+   *  its eave with it (lib/city/building-tint.ts `neighbourStorey`) */
+  storey?: number;
   /** the Wikidata item of the landmark it belongs to (landmarks.py) */
   wikidata?: string;
 }
@@ -293,7 +298,8 @@ export interface CityObjectRow {
   flags: number;
   /** GroundSurface footprints (EPSG), for the minimap */
   footprints: [number, number][][];
-  /** 1 = warm dusk glow (commerce/public/special), 0 = housing */
+  /** 1 = lit at its foot after dark (commerce, public), 0 = housing and
+   *  structures (`buildingGlows`) */
   glow: 0 | 1;
   /** roof colour (linear RGB): DOP-sampled when available, else synthesized */
   roof: Rgb;
@@ -307,6 +313,10 @@ export interface CityObjectRow {
   storeyH: number;
   /** wall colour (linear RGB) */
   tint: Rgb;
+  /** a flat-roofed town house (lib/city/windows.ts `flatTownHouse`): the
+   *  bake dresses it with a town house's plinth and cornices, not as a
+   *  block (scripts/bake-city-mesh.ts `markTownHouses`); not in the table */
+  townHouse?: boolean;
   /** the windows the clay draws on its walls (lib/city/windows.ts; none
    *  when absent) */
   windows?: WindowSpec;

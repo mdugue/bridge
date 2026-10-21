@@ -76,9 +76,9 @@ const REASONS: Record<Lang, Record<Reason, string>> = {
     scanNotRead:
       "The pipeline does not read this Land's laser scan yet (no adapter for it).",
     noCadastre:
-      "The city publishes no open street-tree register; its street trees come from the canopy and the laser scan only.",
+      "The city publishes no open street-tree register; its trees come from the canopy, the laser scan and the trees mapped in OSM (species from OSM, height from the surface model).",
     noHeight:
-      "The register has no tree heights: each tree's height is taken from the surface model where it stands, else from its crown.",
+      "The register has no tree heights: each tree's height comes from its genus and trunk diameter (fitted on Dresden's and Leipzig's registers); the surface model only raises a height it clearly exceeds and drops a tree it shows gone.",
     noDom:
       "The Land publishes no open surface model: no measured heights above the ground.",
     censusOnly:
@@ -103,9 +103,9 @@ const REASONS: Record<Lang, Record<Reason, string>> = {
     scanNotRead:
       "Die Pipeline liest den Laserscan dieses Landes noch nicht (kein Adapter dafür).",
     noCadastre:
-      "Die Stadt veröffentlicht kein offenes Baumkataster; ihre Straßenbäume kommen nur aus dem Kronendach und dem Laserscan.",
+      "Die Stadt veröffentlicht kein offenes Baumkataster; ihre Bäume kommen aus dem Kronendach, dem Laserscan und den in OSM kartierten Bäumen (Art aus OSM, Höhe aus dem Oberflächenmodell).",
     noHeight:
-      "Das Kataster kennt keine Baumhöhen: Die Höhe eines Baums kommt aus dem Oberflächenmodell an seinem Standort, sonst aus seiner Krone.",
+      "Das Kataster kennt keine Baumhöhen: Die Höhe eines Baums kommt aus Gattung und Stammdurchmesser (an den Katastern Dresdens und Leipzigs angepasst); das Oberflächenmodell hebt nur eine deutlich zu niedrige Höhe an und streicht einen Baum, den es nicht zeigt.",
     noDom:
       "Das Land veröffentlicht kein offenes Oberflächenmodell: keine gemessenen Höhen über dem Boden.",
     censusOnly:
@@ -148,9 +148,6 @@ const none = (reason: Reason): Cell => ({
 /** Lands without a laser scan: not published openly, or not read yet. */
 const SCAN_GAPS: Partial<Record<string, Reason>> = { hh: "noLsc" };
 
-/** Sites whose street photos give no shop windows (checked 2026-10-09). */
-const PANORAMA_GAPS: Partial<Record<string, Reason>> = { unna: "noPanoramas" };
-
 /** Registers whose records lack something the viewer then derives. */
 const CADASTRE_GAPS: Partial<Record<string, Reason>> = { hamburg: "noHeight" };
 
@@ -169,7 +166,7 @@ const ROWS: Row[] = [
       de: "Flächen (Straße, Wasser, Wiese …)",
     },
     cell: (s) =>
-      s.provider.products.dlm ? best("Basis-DLM") : substitute("OSM", "noDlm"),
+      s.provider.products.dlm ? best("OSM + Basis-DLM") : best("OSM"),
   },
   {
     label: { en: "Railway tracks", de: "Bahngleise" },
@@ -206,7 +203,11 @@ const ROWS: Row[] = [
     cell: (s) => {
       const id = s.treeCadastre?.id;
       if (!id) {
-        return none("noCadastre");
+        // the trees mapped in OSM, as tall as the surface model measures
+        return substitute(
+          s.provider.products.dom ? "OSM + DOM1" : "OSM",
+          "noCadastre"
+        );
       }
       const gap = CADASTRE_GAPS[id];
       const source = { en: "tree register", de: "Baumkataster" };
@@ -237,10 +238,20 @@ const ROWS: Row[] = [
   },
   {
     label: { en: "Sheds, hedge heights", de: "Schuppen, Heckenhöhen" },
-    cell: (s) =>
-      s.provider.products.lsc
-        ? best({ en: "laser scan", de: "Laserscan" })
-        : none(SCAN_GAPS[s.provider.id] ?? "scanNotRead"),
+    cell: (s) => {
+      const { lsc, dom } = s.provider.products;
+      const gap = SCAN_GAPS[s.provider.id] ?? "scanNotRead";
+      if (lsc) {
+        return best({ en: "laser scan", de: "Laserscan" });
+      }
+      // without a scan the hedges take the surface model's height (no sheds)
+      return dom
+        ? substitute(
+            { en: "DOM1 (hedge heights)", de: "DOM1 (Heckenhöhen)" },
+            gap
+          )
+        : none(gap);
+    },
   },
   {
     label: {
@@ -271,10 +282,14 @@ const ROWS: Row[] = [
       de: "Schaufenster, Fassadenbild",
     },
     // measured in the site's panoramas (Site.mapillary)
-    cell: (s) =>
-      s.mapillary
-        ? best("Mapillary")
-        : none(PANORAMA_GAPS[s.id] ?? "panoramasNotRead"),
+    // (`panoramas: false`: none on the site's tiles, checked 2026-10-09
+    // and again 2026-10-21, though its lamps are read from Mapillary)
+    cell: (s) => {
+      if (s.mapillary?.panoramas === false) {
+        return none("noPanoramas");
+      }
+      return s.mapillary ? best("Mapillary") : none("panoramasNotRead");
+    },
   },
   {
     label: {
@@ -302,7 +317,7 @@ const ROWS: Row[] = [
       en: "Street furniture, lamps, stairs, walls, fences, markings, paving, sports grounds, trams, landing stages",
       de: "Stadtmobiliar, Lampen, Treppen, Mauern, Zäune, Markierungen, Beläge, Sportplätze, Straßenbahn, Anleger",
     },
-    // Mapillary fills in the lamps and bins OSM lacks (Site.mapillary.objects)
+    // Mapillary fills in the lamps OSM lacks (Site.mapillary.objects)
     cell: (s) => (s.mapillary?.objects ? osm(both("OSM + Mapillary")) : osm()),
   },
   {
@@ -353,7 +368,7 @@ const ROWS: Row[] = [
       en: "Sky light, far shadows",
       de: "Himmelslicht, Fernschatten",
     },
-    cell: () => best("DGM1 + LoD2"),
+    cell: () => best("DGM1 + LoD2 + Copernicus GLO-30"),
   },
 ];
 

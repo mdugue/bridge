@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { type WallRibbon, wallGeometry } from "./walls";
+import {
+  linearTone,
+  MASONRY,
+  masonryOf,
+  WALL_TONES,
+  type WallRibbon,
+  wallColors,
+  wallGeometry,
+} from "./walls";
 
 const offset = { cx: 0, cy: 0 };
 const flat = () => 100;
@@ -21,7 +29,9 @@ test("a wall becomes one ribbon: a quad (two triangles) per densified segment", 
 
 test("kerb-height walls and empty inputs build nothing", () => {
   expect(wallGeometry([], flat, offset)).toBeNull();
-  expect(wallGeometry([line(0.5)], flat, offset)).toBeNull();
+  expect(wallGeometry([line(0.25)], flat, offset)).toBeNull();
+  // a low garden wall the surface model measured still stands
+  expect(wallGeometry([line(0.5)], flat, offset)).not.toBeNull();
 });
 
 test("a wall off the ground is skipped, not thrown", () => {
@@ -222,4 +232,38 @@ test("a wall whose scan finds two terraces stands at each, not across them", () 
     // no triangle reaches across the terrace (world z = −north)
     expect(Math.max(...zs) - Math.min(...zs)).toBeLessThan(3);
   }
+});
+
+test("each wall's vertices carry its masonry's tone; none is stone", () => {
+  const brick: WallRibbon = { ...line(3), mat: "brick" };
+  const plain: WallRibbon = {
+    coords: [
+      [0, 20],
+      [10, 20],
+    ],
+    h: 3,
+  };
+  const g = wallGeometry([brick, plain], flat, offset);
+  expect(g).not.toBeNull();
+  const tones = g?.tones ?? [];
+  expect(tones.length * 3).toBe(g?.positions.length ?? -1);
+  // the brick ribbon first (24 vertices), then the plain one
+  expect(new Set(tones.slice(0, 24))).toEqual(
+    new Set([MASONRY.indexOf("brick")])
+  );
+  expect(new Set(tones.slice(24))).toEqual(new Set([MASONRY.indexOf("stone")]));
+  const colors = wallColors(tones);
+  expect(colors.length).toBe(tones.length * 3);
+  const [r, gr, b] = linearTone(WALL_TONES.brick);
+  expect(colors[0]).toBeCloseTo(r, 6);
+  expect(colors[1]).toBeCloseTo(gr, 6);
+  expect(colors[2]).toBeCloseTo(b, 6);
+  // linear: sRGB 0xc9 is ≈ 0.58 linear, not 0.79
+  expect(linearTone(0xc9_c9_c9)[0]).toBeCloseTo(0.584, 2);
+});
+
+test("a material the viewer does not know is no material", () => {
+  expect(masonryOf("brick")).toBe("brick");
+  expect(masonryOf("marble")).toBeUndefined();
+  expect(masonryOf(3)).toBeUndefined();
 });

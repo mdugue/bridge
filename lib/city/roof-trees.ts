@@ -1,16 +1,17 @@
 /**
- * Canopy points that are a LoD2 building's roof. DOM1 − DGM1 over a roof
- * is the roof's height, and where the Basis-DLM still files the ground as
- * park (halls built since, west of the Yenidze) the canopy bake planted a
- * grove on it. A point well inside a footprint and no taller than
- * the building (plus ROOF_REACH_M) is its roof; a taller one is a tree
- * over a shed or garage, and stays. Dropped at build time
+ * Canopy points that are a building's roof: LoD2's, or one LoD2 lacks
+ * (`gapRoofs`). DOM1 − DGM1 over a roof is the roof's height, and where
+ * the Basis-DLM still files the ground as park (halls built since, west of
+ * the Yenidze) the canopy bake planted a grove on it. A point well inside
+ * a footprint and no taller than the building (plus ROOF_REACH_M) is its
+ * roof; a taller one is a tree over a shed or garage, and stays. Dropped
+ * at build time
  * (scripts/prepare-data.ts `publishCanopy`, scripts/coarse-crowns.ts) like
  * the scan structures' sheds (small-buildings.ts), so every site gets it
  * without a re-bake. No THREE, no DOM.
  */
 import { withoutTrafficStructures } from "./city-mesh";
-import type { PointGeometry } from "./features";
+import type { PointGeometry, StructureFeature } from "./features";
 import { buildingFootprintPolys } from "./minimap";
 import { segmentDistance2 } from "./small-buildings";
 import type { CityJsonDocument } from "./types";
@@ -72,6 +73,38 @@ export function lod2Roofs(doc: CityJsonDocument): RoofFootprint[] {
       CityObjects: { [id]: obj },
     })) {
       out.push({ height: hi - lo, holes: poly.holes, ring: poly.pts });
+    }
+  }
+  return out;
+}
+
+/**
+ * The buildings and roofs on posts LoD2 lacks (pipeline/bake/structures.py)
+ * as footprints: a point no taller than one is its roof, as on LoD2's. A
+ * building at OSM's height (`src: "osm"`) was not standing yet when the
+ * surface model was flown, so every crown in it is from before it (the
+ * lot it was built on): none stays.
+ */
+export function gapRoofs(
+  structures: readonly StructureFeature[]
+): RoofFootprint[] {
+  const out: RoofFootprint[] = [];
+  for (const f of structures) {
+    const p = f.properties;
+    if (
+      !p ||
+      (p.kind !== "building" && p.kind !== "roof") ||
+      f.geometry.type !== "Polygon"
+    ) {
+      continue;
+    }
+    const [ring, ...holes] = f.geometry.coordinates;
+    if (ring && ring.length >= 4) {
+      out.push({
+        height: p.src === "osm" ? Number.POSITIVE_INFINITY : p.h,
+        holes,
+        ring,
+      });
     }
   }
   return out;

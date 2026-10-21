@@ -18,6 +18,10 @@ export const UNNA: Site = {
       credit: "Verkehrswerte: Straßen.NRW, dl-de/by-2-0",
     },
   },
+  // Mapillary has no panoramas here, only flat photos (2026-10-21: none on
+  // either tile): the facade fetch finds none and its steps write empty
+  // files, but the lamps it detects in the flat photos are taken.
+  mapillary: { objects: true, panoramas: false },
   osm: "europe/germany/nordrhein-westfalen/arnsberg-regbez",
   spawn: "kirchplatz",
   tiles: [

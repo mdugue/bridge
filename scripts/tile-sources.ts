@@ -14,7 +14,7 @@ import type {
   WallFileFeature,
 } from "../lib/city/features";
 import type { FenceLine, FenceType, GatePoint } from "../lib/city/fences";
-import type { Point2 } from "../lib/city/polyline";
+import type { KerbLine } from "../lib/city/kerbs";
 import {
   type StairLine,
   stairLineOf,
@@ -24,28 +24,41 @@ import {
 import type { WallLine } from "../lib/city/terrain-conflate";
 import {
   kerbSourceFile,
+  sideFileSource,
   stairSourceFile,
   terraceSourceFile,
   wallSourceFile,
 } from "../lib/city/tile";
-import type { WallRibbon } from "../lib/city/walls";
+import type { WaterMember } from "../lib/city/water-bodies";
+import { type Masonry, masonryOf, type WallRibbon } from "../lib/city/walls";
 import type { Site } from "../lib/city/site";
 
 const at = (path: string) => join(process.cwd(), path);
 const readJson = <T>(path: string): T =>
   JSON.parse(readFileSync(path, "utf8")) as T;
 
-/** The tile's kerb lines (the smoothed DLM road edge), for the kerb stones
- *  the fine level carries. */
-export function kerbLines(site: Site, tile: string): Point2[][] {
+/** The tile's kerb lines (the smoothed DLM road edge) and where they are
+ *  lowered, for the kerb stones the fine level carries. */
+export function kerbLines(site: Site, tile: string): KerbLine[] {
   const path = at(kerbSourceFile(site, tile));
   if (!existsSync(path)) {
     return [];
   }
   const { features } = readJson<{ features: KerbFeature[] }>(path);
-  return features.flatMap((f) =>
-    f.geometry?.type === "LineString" ? [f.geometry.coordinates] : []
-  );
+  return features.flatMap((f) => {
+    if (f.geometry?.type !== "LineString") {
+      return [];
+    }
+    const low = (f.properties?.low ?? []).filter(
+      (d) => d.length === 3 && d.every(Number.isFinite) && d[1] > d[0]
+    );
+    return [
+      {
+        coords: f.geometry.coordinates,
+        ...(low.length > 0 ? { low } : {}),
+      },
+    ];
+  });
 }
 
 /** Everything the tile's walls file carries: walls, fences, gates. */
@@ -67,10 +80,17 @@ export function wallLines(site: Site, tile: string): (WallLine & WallRibbon)[] {
             coords: f.geometry.coordinates,
             kind: f.properties?.kind ?? "wall",
             h: (f.properties as { h?: number } | null)?.h ?? 2,
+            ...wallMaterial(f),
           },
         ]
       : []
   );
+}
+
+/** A wall feature's material (`mat`), where it names one. */
+function wallMaterial(f: WallFileFeature): { mat?: Masonry } {
+  const mat = masonryOf((f.properties as { mat?: unknown } | null)?.mat);
+  return mat ? { mat } : {};
 }
 
 const FENCE_TYPES = new Set<FenceType>(["mesh", "picket", "rail", "railing"]);
@@ -120,6 +140,22 @@ export function stairLines(site: Site, tile: string): StairLine[] {
   }
   const { features } = readJson<{ features: StairFeature[] }>(path);
   return features.flatMap((f) => stairLineOf(f) ?? []);
+}
+
+/** The tile's land-cover legend (pipeline/bake/landcover.py): a terrain
+ *  bake input for its water — never served. */
+export function landcoverLegendFile(site: Site, tile: string): string {
+  return sideFileSource(site, `landcover_${tile}.json`);
+}
+
+/** The water's bodies the land-cover bake wrote into the tile's legend
+ *  (lib/city/water-bodies.ts), or null where its legend has none yet. */
+export function waterMember(site: Site, tile: string): WaterMember | null {
+  const path = at(landcoverLegendFile(site, tile));
+  if (!existsSync(path)) {
+    return null;
+  }
+  return readJson<{ water?: WaterMember }>(path).water ?? null;
 }
 
 /** The raised areas the terrain bake lifts to their level. */

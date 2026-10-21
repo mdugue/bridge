@@ -78,6 +78,8 @@ const classColour = (key: string): V3 => {
 const PAVEMENT = classColour("builtup");
 /** Road paint (road-markings.ts). */
 const PAINT: V3 = linear([226, 223, 214]);
+/** The ballast a rail deck's track bed is (rail-layer.ts COLORS.ballast). */
+const BALLAST: V3 = linear([154, 143, 133]);
 
 /** The pixel's footprint in metres. */
 export const footprint = (): F => {
@@ -234,12 +236,16 @@ function pathTop(base: V3, l: Layout, aa: F): V3 {
 /** A rail bridge: the track bed with a walkway along each side. */
 function railTop(base: V3, l: Layout, aa: F): V3 {
   const near = float(1).sub(smoothstep(0.12, 0.5, aa));
-  const walkway = float(1).sub(smoothstep(0.8 - 0.05, 0.8 + 0.05, l.edge));
-  const ballast = gdNoise(positionWorld.xz.mul(4.1))
+  // the ballast runs on across the deck between walkways a metre wide
+  // (the photos of every rail bridge on the sites): the track bed in the
+  // ballast's colour and grain, the sleepers on it the rail layer's
+  // (track-bed.ts) — a truss's open floor theirs too
+  const walkway = float(1).sub(smoothstep(1.0 - 0.05, 1.0 + 0.05, l.edge));
+  const grain = gdNoise(positionWorld.xz.mul(4.1))
     .sub(0.5)
     .mul(0.12)
     .mul(float(1).sub(smoothstep(0.03, 0.12, aa)));
-  const bed = base.mul(ballast.add(0.97));
+  const bed = BALLAST.mul(grain.add(0.97));
   return mix(bed, PAVEMENT.mul(0.92), walkway.mul(near.mul(0.5).add(0.5)));
 }
 

@@ -159,8 +159,13 @@ SPORTS = {
     "boules": (0, 7),
     "chess": (7, 6),
 }
-FOOTBALL, COURT, LANES = 1, 5, 6
+FOOTBALL, TENNIS, COURT, LANES = 1, 2, 5, 6
 SMALL_FOOTBALL_M = 50.0  # a sealed football pitch shorter than this is a Bolzplatz
+# A tennis ground larger than this (m²) is a block of courts mapped as one:
+# round(area / COURT_M2) of them, each its own row — its lines and its net.
+COURTS_MIN_M2 = 1000.0
+COURT_M2 = 650.0
+COURT_ASPECT = 2.0  # a court with its run-out, long side to short
 
 # An untagged surface read off the orthophoto (`photo_surface`):
 INSET_M = 2.0  # the outline shrunk by this (its lines, kerbs and fences out)
@@ -399,12 +404,52 @@ def grounds(
             add(track_area(g, tags), "track", tag(tags, "sport"), tags)
     found.sort(key=lambda f: (f[0], f[1]))
     out = []
-    for _, _, g, surface, marking in found:
-        shape, params = frame(g, marking)
-        if marking == FOOTBALL and surface in (3, 6, 7) and params[3] * 2 < SMALL_FOOTBALL_M:
-            marking = COURT
-        out.append((g, surface, marking, shape, params))
+    for _, _, whole, surface, marking in found:
+        for g in courts(whole, marking):
+            shape, params = frame(g, marking)
+            kind = marking
+            if kind == FOOTBALL and surface in (3, 6, 7) and params[3] * 2 < SMALL_FOOTBALL_M:
+                kind = COURT
+            out.append((g, surface, kind, shape, params))
     return out[:255]
+
+
+def courts(g: shapely.Geometry, marking: int) -> list[shapely.Geometry]:
+    """A tennis ground over COURTS_MIN_M2 as the round(area / COURT_M2)
+    courts it holds — its rectangle cut into the grid whose cells come
+    nearest a court's COURT_ASPECT (one row where two grids do), each cell
+    within the outline —, any other ground as itself."""
+    if marking != TENNIS or g.area <= COURTS_MIN_M2:
+        return [g]
+    n = round(g.area / COURT_M2)
+    if n < 2:
+        return [g]
+    cx, cy, angle, hl, hw = rectangle(g)
+
+    def misfit(a: int) -> float:
+        long, short = sorted((2 * hl / a, 2 * hw / (n // a)), reverse=True)
+        return abs(math.log(long / max(short, 1e-6) / COURT_ASPECT))
+
+    # a tie (four courts in a row or two by two) goes to the one row
+    a = min(
+        (a for a in range(1, n + 1) if n % a == 0),
+        key=lambda a: (round(misfit(a), 2), min(a, n // a)),
+    )
+    b = n // a
+    c, s = math.cos(angle), math.sin(angle)
+    cells = []
+    for i in range(a):
+        for j in range(b):
+            u0, u1 = -hl + 2 * hl * i / a, -hl + 2 * hl * (i + 1) / a
+            v0, v1 = -hw + 2 * hw * j / b, -hw + 2 * hw * (j + 1) / b
+            ring = [
+                (cx + u * c - v * s, cy + u * s + v * c)
+                for u, v in ((u0, v0), (u1, v0), (u1, v1), (u0, v1))
+            ]
+            cell = shapely.Polygon(ring).intersection(g)
+            if cell.geom_type == "Polygon" and cell.area >= 0.5 * g.area / n:
+                cells.append(cell)
+    return cells or [g]
 
 
 def index_raster(outlines: list[shapely.Geometry], tile: Tile, px: int) -> np.ndarray:

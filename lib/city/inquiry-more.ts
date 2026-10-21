@@ -33,6 +33,8 @@ import type { SiteProvenance } from "./provenance";
 /** A tree the scene draws that no register names: a crown the surface
  *  model (DOM1) or the laser scan measured, or a tree of a Basis-DLM row. */
 export interface CanopyInquiry {
+  /** drawn as the cone (an evergreen that is not a pine): outlined as one */
+  cone?: boolean;
   /** the crown's measured diameter (m; the laser scan's) */
   crown?: number;
   /** an evergreen, and what told it: the forest's kind (a needle forest)
@@ -60,6 +62,9 @@ export interface HedgeInquiry {
 
 /** A street lamp (OSM, or Mapillary's: `src`). */
 export interface LampInquiry {
+  /** a tall mast's head on an arm over the carriageway
+   *  (pipeline/bake/lamp_heights.py `arm_of`) */
+  arm?: boolean;
   /** the post's height (m) where DOM1 measured it, and how: its street's
    *  median, or its kind of street's (pipeline/bake/lamp_heights.py); a
    *  wall lantern's assumed head height (pipeline/bake/lamps.py WALL_H) */
@@ -71,8 +76,9 @@ export interface LampInquiry {
   position: [number, number];
   src?: "mly";
   tile: string;
-  /** on its bracket out of a facade, where OSM puts it on a wall */
-  wall?: boolean;
+  /** on its bracket, where OSM puts it on a wall: out of a building's
+   *  facade, or — no building near — out of a mapped wall */
+  wall?: "facade" | "wall";
 }
 
 /** A piece of street furniture or a playground (OSM). */
@@ -197,13 +203,56 @@ export function canopyCard(
   };
 }
 
+/** Which survey measured a hedge's height, by its source: the laser scan
+ *  or the surface model DOM1 (lowveg.py); none for the others. */
+const HEDGE_MEASURED: Partial<Record<HedgeInquiry["source"], "dom" | "lsc">> = {
+  "osm+lsc": "lsc",
+  "osm+dom": "dom",
+  lsc: "lsc",
+};
+
+/** A hedge's source lines: the Basis-DLM's row, the laser scan's own
+ *  find, or OSM's line with the survey that measured its height. */
+function hedgeSources(
+  h: HedgeInquiry,
+  provenance: SiteProvenance | null,
+  credits: CardCredits
+): Stated[] {
+  if (h.source === "dlm") {
+    return rowSource("Hecke", provenance, credits);
+  }
+  const scan = { label: "Laserscan", credit: credits.provider };
+  if (h.source === "lsc") {
+    return stated(
+      "detected",
+      sourceLine(provenance, "lsc", ["Verlauf und Höhe der Hecke"], scan)
+    );
+  }
+  const by = HEDGE_MEASURED[h.source];
+  const dom = { label: DOM_LABEL, credit: credits.provider };
+  return [
+    ...stated("taken", osmSource(provenance, ["Hecke"], "trees")),
+    ...stated(
+      "computed",
+      by
+        ? sourceLine(
+            provenance,
+            by,
+            ["Höhe gemessen"],
+            by === "lsc" ? scan : dom
+          )
+        : ""
+    ),
+  ];
+}
+
 /** A hedge. */
 export function hedgeCard(
   h: HedgeInquiry,
   provenance: SiteProvenance | null,
   credits: CardCredits
 ): InquiryCard {
-  const measured = h.source === "osm+lsc";
+  const measured = HEDGE_MEASURED[h.source] !== undefined;
   const facts = factLines([
     [
       "Höhe",
@@ -213,21 +262,7 @@ export function hedgeCard(
     ["Breite", h.width ? metres(h.width) : ""],
     ["Länge", h.length > 0 ? metres(h.length) : ""],
   ]);
-  const sources =
-    h.source === "dlm"
-      ? rowSource("Hecke", provenance, credits)
-      : [
-          ...stated("taken", osmSource(provenance, ["Hecke"], "trees")),
-          ...stated(
-            "computed",
-            measured
-              ? sourceLine(provenance, "lsc", ["Höhe gemessen"], {
-                  label: "Laserscan",
-                  credit: credits.provider,
-                })
-              : ""
-          ),
-        ];
+  const sources = hedgeSources(h, provenance, credits);
   return {
     kicker: "Hecke",
     title: "Hecke",
@@ -249,7 +284,7 @@ function wallLampCard(
     title: "Wandleuchte",
     address: "",
     facts: factLines([
-      ["Aufhängung", "an der Fassade"],
+      ["Aufhängung", l.wall === "wall" ? "an der Mauer" : "an der Fassade"],
       ["Höhe", l.height ? `${metres(l.height)}, angenommen` : "", "assumed"],
     ]),
     id: positionKey(l.position),
@@ -282,15 +317,16 @@ export function lampCard(
             ["Aufhängung", "Querseil über der Straße", "computed"],
             ["Höhe", "7 m, angenommen", "assumed"],
           ]
-        : measured
-          ? [
-              [
-                "Mast",
-                `${metres(l.height ?? 0)}, ${along[measured]}`,
-                "computed",
-              ],
-            ]
-          : [["Mast", "5 m, angenommen", "assumed"]]
+        : [
+            measured
+              ? [
+                  "Mast",
+                  `${metres(l.height ?? 0)}, ${along[measured]}`,
+                  "computed",
+                ]
+              : ["Mast", "5 m, angenommen", "assumed"],
+            ["Ausleger", l.arm ? "zur Fahrbahn, angenommen" : "", "assumed"],
+          ]
     ),
     id: positionKey(l.position),
     idLabel: "Lage",
@@ -319,6 +355,7 @@ const FURNITURE: Record<FurnitureKind, [string, string]> = {
   column: ["Litfaßsäule", "Stadtmobiliar"],
   hydrant: ["Hydrant", "Feuerwehr"],
   hydrantsign: ["Hydrantenschild", "Feuerwehr"],
+  pedsignal: ["Fußgängerampel", "Verkehr"],
   picnic: ["Picknicktisch", "Stadtmobiliar"],
   postbox: ["Briefkasten", "Post"],
   shelter: ["Wartehäuschen", "Haltestelle"],
@@ -374,6 +411,7 @@ export function furnitureCard(
     ["Höhe", p.h ? metres(p.h) : ""],
     ["Material", p.metal ? "Metall" : ""],
     ["Beleuchtet", p.lit ? "ja" : ""],
+    ["Ausleger", p.arm ? "über die Fahrbahn" : ""],
     ["Ausrichtung", p.k === "bench" || p.k === "shelter" ? facing(p.a) : ""],
   ]);
   return {
@@ -383,7 +421,17 @@ export function furnitureCard(
     facts,
     id: positionKey(f.position),
     idLabel: "Lage",
-    sources: pointSource(title, p.src === "mly", provenance),
+    // a playground's piece OSM does not map: found in the surface model
+    sources:
+      p.src === "dom"
+        ? stated(
+            "computed",
+            sourceLine(provenance, "dom", ["Lage und Höhe gemessen"], {
+              label: DOM_LABEL,
+              credit: "",
+            })
+          )
+        : pointSource(title, p.src === "mly", provenance),
   };
 }
 

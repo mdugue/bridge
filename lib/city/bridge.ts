@@ -263,22 +263,25 @@ export function archSpringing(
   return { from: spring(-1), to: spring(1) };
 }
 
-/** Distance between beam-bridge piers (m). */
+/** Distance between beam-bridge piers at most (m). */
 export const PIER_SPACING = 26;
+/** A beam bridge this short spans its gap without a pier (m). */
+const FREE_SPAN = 40;
 /** Half the width kept clear around a fairway mark without a known span (m). */
 const FAIRWAY_HALF = 20;
 
 /**
- * Stations of a beam bridge's piers: every ~PIER_SPACING between the
- * abutments, except inside the navigation opening — centred on the
- * fairway mark (`fairway`, 0..1 along the axis), as wide as the bridge's
- * main span when Wikidata knows it.
+ * Stations of a beam bridge's piers: no more than PIER_SPACING apart
+ * between the abutments (none on a deck up to FREE_SPAN long), except
+ * inside the navigation opening — centred on the fairway mark (`fairway`,
+ * 0..1 along the axis), as wide as the bridge's main span when Wikidata
+ * knows it.
  */
 export function pierStations(
   length: number,
   opts: { fairway?: number | null; span?: number | null } = {}
 ): number[] {
-  const n = Math.floor(length / PIER_SPACING);
+  const n = length <= FREE_SPAN ? 1 : Math.ceil(length / PIER_SPACING);
   const out: number[] = [];
   const centre =
     opts.fairway === null || opts.fairway === undefined
@@ -303,6 +306,174 @@ export function pierStations(
     out.sort((p, q) => p - q);
   }
   return out;
+}
+
+// --- what carries a deck, and how deep it is (photo QA V16, V17) -------------
+
+/** How a bridge carries its deck: on arches, hung from or framed by
+ *  steel above it (a truss, cables), or on beams between piers. */
+export type DeckCarrier = "arch" | "beam" | "frame";
+
+/** The carrier an OSM `bridge:structure` value names (an unknown one is a
+ *  beam: most bridges are). */
+export function deckCarrier(structure: string | null | undefined): DeckCarrier {
+  const s = structure ?? "";
+  if (s.includes("arch") || s.includes("humpback")) {
+    return "arch";
+  }
+  return /truss|suspension|cable-stayed|cantilever/.test(s) ? "frame" : "beam";
+}
+
+/** A beam is about a twentieth of its span deep... */
+const BEAM_SLENDERNESS = 20;
+/** ...within these (m): a footbridge's slab, a river span's box girder. */
+const BEAM_DEPTH_M: readonly [number, number] = [0.8, 2.5];
+/** An arch bridge's deck over its crown (m). */
+const ARCH_DECK_M = 1;
+/** The deck a truss or cables carry (m): their floor, not a girder. */
+const FRAME_DECK_M = 1.2;
+
+/**
+ * The structural depth of a deck (m), top to soffit, by what carries it:
+ * a beam span/BEAM_SLENDERNESS deep within BEAM_DEPTH_M (`span` the main
+ * span, else the typical distance between its supports), an arch's deck
+ * ARCH_DECK_M, a truss's or cables' floor FRAME_DECK_M. The fairway's
+ * clearance (`bound`, the bake's `depth`) only caps it: taken as the
+ * depth, against the river's mean high water rather than the water the
+ * scan saw, it hung 5 m girders under the Meißen bridges and the U3's
+ * steel viaduct.
+ */
+export function deckDepth(
+  carrier: DeckCarrier,
+  span: number,
+  bound?: number | null
+): number {
+  const [low, high] = BEAM_DEPTH_M;
+  const depth =
+    carrier === "arch"
+      ? ARCH_DECK_M
+      : carrier === "frame"
+        ? FRAME_DECK_M
+        : Math.min(Math.max(span / BEAM_SLENDERNESS, low), high);
+  return bound !== null && bound !== undefined && bound > 0
+    ? Math.min(depth, bound)
+    : depth;
+}
+
+/** A support under a beam deck: a pier on the axis, or a pair of columns
+ *  at the deck's edges (an elevated railway's frame). */
+export interface DeckSupport {
+  /** a pair of columns under the deck's edges, not one pier on the axis */
+  edge: boolean;
+  s: number;
+}
+
+/** A rail deck this long is a viaduct on columns (m)... */
+const VIADUCT_MIN_M = 100;
+/** ...a pair of them at most this far apart (m): two bays make one span
+ *  over water, within PIER_SPACING. */
+export const VIADUCT_BAY_M = 13;
+
+/**
+ * Where a beam deck stands (stations from the first abutment). A railway
+ * beam deck (`structure`, `deckCarrier`) longer than VIADUCT_MIN_M is a
+ * viaduct: paired columns under its edges every VIADUCT_BAY_M or less
+ * (Hamburg's U3 runs on them every 10–15 m), over the water (`water`, the
+ * bake's stretches) a pier on the axis at every other station, so no span
+ * exceeds PIER_SPACING, and a fairway it crosses kept open between two
+ * piers (`fairwayOpening`). Any other deck stands on piers on its axis
+ * (`pierStations`).
+ */
+export function beamSupports(
+  length: number,
+  opts: {
+    fairway?: number | null;
+    kind?: string | null;
+    span?: number | null;
+    structure?: string | null;
+    water?: readonly (readonly [number, number])[] | null;
+  } = {}
+): DeckSupport[] {
+  const viaduct =
+    opts.kind === "rail" &&
+    deckCarrier(opts.structure) === "beam" &&
+    length > VIADUCT_MIN_M;
+  if (!viaduct) {
+    return pierStations(length, opts).map((s) => ({ s, edge: false }));
+  }
+  const n = Math.ceil(length / VIADUCT_BAY_M);
+  const wet = (s: number) =>
+    (opts.water ?? []).some(([a, b]) => s >= a && s <= b);
+  const opening = fairwayOpening(length, opts);
+  const out: DeckSupport[] = [];
+  for (let k = 1; k < n; k++) {
+    const s = (k * length) / n;
+    if (
+      opening &&
+      s > opening.from - VIADUCT_BAY_M / 2 &&
+      s < opening.to + VIADUCT_BAY_M / 2
+    ) {
+      continue;
+    }
+    if (!wet(s)) {
+      out.push({ s, edge: true });
+    } else if (k % 2 === 0) {
+      out.push({ s, edge: false });
+    }
+  }
+  for (const s of opening ? [opening.from, opening.to] : []) {
+    if (s > VIADUCT_BAY_M / 2 && s < length - VIADUCT_BAY_M / 2) {
+      out.push({ s, edge: false });
+    }
+  }
+  return out.sort((p, q) => p.s - q.s);
+}
+
+/** The navigation opening around the fairway mark (stations): the main
+ *  span wide when Wikidata knows it, else 2 × FAIRWAY_HALF; null without
+ *  a mark. */
+function fairwayOpening(
+  length: number,
+  opts: { fairway?: number | null; span?: number | null }
+): { from: number; to: number } | null {
+  if (opts.fairway === null || opts.fairway === undefined) {
+    return null;
+  }
+  const centre = opts.fairway * length;
+  const half = opts.span ? opts.span / 2 : FAIRWAY_HALF;
+  return { from: centre - half, to: centre + half };
+}
+
+/** The span a beam deck's depth is reckoned from (m): its main span where
+ *  Wikidata knows it, else the median gap between its supports and
+ *  abutments. */
+export function beamSpan(
+  length: number,
+  supports: readonly DeckSupport[],
+  mainSpan?: number | null
+): number {
+  if (mainSpan && mainSpan > 0) {
+    return Math.min(mainSpan, length);
+  }
+  const at = [0, ...supports.map((p) => p.s), length];
+  const gaps = at.slice(1).map((s, i) => s - at[i]);
+  return median(gaps);
+}
+
+/** The parapet a deck's edges carry: a masonry bridge's ashlar wall, or
+ *  an open steel railing — posts, a top rail, a low kerb — on every other
+ *  (photo QA V18: the beam, truss and cable bridges' railings are open). */
+export type ParapetStyle = "ashlar" | "railing";
+
+/** The parapet of a bridge of this structure; `steelArch` when its arch
+ *  was measured above the deck (a steel arch, not masonry). */
+export function parapetStyle(
+  structure: string | null | undefined,
+  steelArch = false
+): ParapetStyle {
+  const masonry =
+    deckCarrier(structure) === "arch" || (structure ?? "").includes("stone");
+  return masonry && !steelArch ? "ashlar" : "railing";
 }
 
 /** A rib stands this far inside the deck's edge (m): half a chord, so its
@@ -513,12 +684,24 @@ function median(values: number[]): number {
   return sorted[Math.floor(sorted.length / 2)];
 }
 
-/** Target span of a masonry arch, pier to pier (m). */
+/** Target span of a masonry arch without a measured or known one, pier to
+ *  pier (m). */
 export const ARCH_SPAN = 26;
-/** Half a masonry pier's thickness along the axis (m). */
-export const MASONRY_PIER_HALF = 1.6;
-/** An arch opens only where its crown clears its springing by this much
- *  (m); a lower bay (the banks) is the deck on its own. */
+/** A masonry pier is about a seventh of its arches' span thick (the
+ *  Augustusbrücke's 7 m between 43 m arches)... */
+const PIER_SLENDERNESS = 7;
+/** ...within these (m). */
+const MASONRY_PIER_M: readonly [number, number] = [1.5, 7];
+/** A segmental arch rises a fifth of its span (the Elbe bridges' flat
+ *  stone arches; the half ellipse rose to the deck from the water). */
+const ARCH_RISE = 1 / 5;
+/** The arch's crown stands this far under the deck's soffit (m): the
+ *  ring's own thickness shows. */
+const CROWN_UNDER_M = 0.2;
+/** An arch springs at least this far above the ground (water) under it (m). */
+const SPRING_CLEAR_M = 0.5;
+/** An arch opens only where it rises this much over its springing (m); a
+ *  lower bay (the banks) is the deck on its own. */
 const ARCH_MIN_RISE = 2;
 
 /** One masonry arch: its stations, springing and crown heights. */
@@ -529,63 +712,169 @@ export interface MasonrySpan {
   to: number;
 }
 
-/** A masonry pier: its station, the ground under it and its top (the
- *  springing of the arches either side). */
+/** A masonry pier: its station, half its thickness along the axis, the
+ *  ground under it and its top (the springing of the arches either side). */
 export interface MasonryPier {
   ground: number;
+  half: number;
   s: number;
   top: number;
 }
 
+/** What is known of a masonry bridge's arches: DOM1's piers (stations,
+ *  the bake's bastions), Wikidata's number of spans and main span, the
+ *  fairway mark (0..1) a main span is centred on. */
+export interface MasonryKnown {
+  fairway?: number | null;
+  piers?: readonly number[] | null;
+  span?: number | null;
+  spans?: number | null;
+}
+
+/** `count` equal bays over [a, b]: their inner boundaries. */
+function equalBays(a: number, b: number, count: number): number[] {
+  const out: number[] = [];
+  for (let k = 1; k < count; k++) {
+    out.push(a + ((b - a) * k) / count);
+  }
+  return out;
+}
+
+/** The main span `main` centred on `centre` (kept inside the deck), the
+ *  rest either side in `others` bays shared by their lengths. */
+function aroundMain(
+  length: number,
+  main: number,
+  centre: number,
+  others: number | null
+): number[] {
+  const c = Math.min(Math.max(centre, main / 2), length - main / 2);
+  const a = c - main / 2;
+  const b = c + main / 2;
+  const side = (part: number) =>
+    others === null
+      ? Math.max(1, Math.round(part / ARCH_SPAN))
+      : Math.round((others * part) / Math.max(a + length - b, 1e-6));
+  const left = a > 1 ? side(a) : 0;
+  const right =
+    others === null ? (length - b > 1 ? side(length - b) : 0) : others - left;
+  // a side without arches of its own is the abutment: still a bay, which
+  // opens only if it clears the ground
+  return [
+    ...(a > 1 ? [...equalBays(0, a, Math.max(left, 1)), a] : []),
+    ...(length - b > 1 ? [b, ...equalBays(b, length, Math.max(right, 1))] : []),
+  ].filter((s) => s > 1 && s < length - 1);
+}
+
+/** No masonry arch here spans more than this (m; the Luitpoldbrücke's
+ *  62.4 m is the widest)... */
+const MASONRY_SPAN_MAX_M = 70;
+/** ...nor more than this over a known main span. */
+const MAIN_SPAN_SLACK = 1.2;
+
+/**
+ * The bay boundaries of a masonry bridge, 0 and `length` included: DOM1's
+ * piers where the bake found them and no bay they leave is wider than an
+ * arch can be (MASONRY_SPAN_MAX_M, or the known main span and a fifth: a
+ * pier DOM1 missed left the Reichenbachbrücke one 161 m bay); else
+ * Wikidata's spans — the main span centred on the fairway (or the
+ * middle), the others sharing the rest — or equal bays of about ARCH_SPAN.
+ */
+export function masonryBays(
+  length: number,
+  known: MasonryKnown = {}
+): number[] {
+  const piers = (known.piers ?? [])
+    .filter((s) => s > 0 && s < length)
+    .sort((p, q) => p - q);
+  const widest =
+    known.span && known.span > 0
+      ? known.span * MAIN_SPAN_SLACK
+      : MASONRY_SPAN_MAX_M;
+  const measured = [0, ...piers, length];
+  if (
+    piers.length > 0 &&
+    measured.every((s, k) => k === 0 || s - measured[k - 1] <= widest)
+  ) {
+    return measured;
+  }
+  const count = known.spans && known.spans >= 1 ? known.spans : null;
+  const main =
+    known.span && known.span > 0 && known.span < length ? known.span : null;
+  const centre = (known.fairway ?? 0.5) * length;
+  if (main !== null) {
+    return [
+      0,
+      ...aroundMain(length, main, centre, count === null ? null : count - 1),
+      length,
+    ];
+  }
+  const n = count ?? Math.min(Math.max(Math.round(length / ARCH_SPAN), 1), 16);
+  return [0, ...equalBays(0, length, n), length];
+}
+
+/** Half a masonry pier's thickness between bays `left` and `right` long:
+ *  a seventh of the wider within MASONRY_PIER_M, a quarter of the narrower
+ *  at most. */
+function pierHalf(left: number, right: number): number {
+  const [low, high] = MASONRY_PIER_M;
+  const thick = Math.min(
+    Math.max(Math.max(left, right) / PIER_SLENDERNESS, low),
+    high
+  );
+  return Math.min(thick, Math.min(left, right) / 2) / 2;
+}
+
 /**
  * The arches and piers of a masonry bridge (structure `arch` without a
- * measured steel arch). The axis is cut into equal bays of about
- * ARCH_SPAN; a bay whose deck clears its ground gets an arch between the
- * piers' faces, springing a quarter of the clearance above the higher
- * ground (at least 1.2 m) and rising to just under the deck. A pier stands
- * at every bay boundary with an arch on either side, from the ground to
- * its arches' springing. `groundAt(s)` is the terrain on the axis (the
- * water over the river), `underAt(s)` the deck's underside.
+ * measured steel arch). Its bays (`masonryBays`) are bounded by piers
+ * about a seventh of their span thick; a bay whose deck clears its ground
+ * gets a segmental arch between the piers' faces, rising a fifth of its
+ * span to just under the deck and springing no lower than SPRING_CLEAR_M
+ * over the higher ground at its ends (flatter where the deck is low). A
+ * pier stands at every bay boundary with an arch on either side, from the
+ * ground to its arches' springing. `groundAt(s)` is the terrain on the
+ * axis (the water over the river), `underAt(s)` the deck's underside.
  */
 export function masonryArches(
   length: number,
   groundAt: (s: number) => number | null,
-  underAt: (s: number) => number
+  underAt: (s: number) => number,
+  known: MasonryKnown = {}
 ): { piers: MasonryPier[]; spans: MasonrySpan[] } {
-  const n = Math.min(Math.max(Math.round(length / ARCH_SPAN), 1), 16);
-  const bay = (k: number) => (k * length) / n;
+  const bays = masonryBays(length, known);
+  const n = bays.length - 1;
+  const halves = bays.map((s, k) =>
+    k === 0 || k === n ? 0 : pierHalf(s - bays[k - 1], bays[k + 1] - s)
+  );
   const spans: (MasonrySpan | null)[] = [];
   for (let k = 0; k < n; k++) {
-    const g0 = groundAt(bay(k));
-    const g1 = groundAt(bay(k + 1));
-    const under = underAt((bay(k) + bay(k + 1)) / 2);
+    const g0 = groundAt(bays[k]);
+    const g1 = groundAt(bays[k + 1]);
     if (g0 === null || g1 === null) {
       spans.push(null);
       continue;
     }
-    const ground = Math.max(g0, g1);
-    const spring = ground + Math.max(1.2, (under - ground) / 4);
-    const crown = under - 0.6;
+    const from = bays[k] + halves[k];
+    const to = bays[k + 1] - halves[k + 1];
+    const crown = underAt((from + to) / 2) - CROWN_UNDER_M;
+    const spring = Math.max(
+      crown - (to - from) * ARCH_RISE,
+      Math.max(g0, g1) + SPRING_CLEAR_M
+    );
     spans.push(
-      crown - spring >= ARCH_MIN_RISE
-        ? {
-            from: bay(k) + (k > 0 ? MASONRY_PIER_HALF : 0),
-            to: bay(k + 1) - (k < n - 1 ? MASONRY_PIER_HALF : 0),
-            spring,
-            crown,
-          }
-        : null
+      crown - spring >= ARCH_MIN_RISE ? { from, to, spring, crown } : null
     );
   }
   const piers: MasonryPier[] = [];
   for (let k = 1; k < n; k++) {
-    const ground = groundAt(bay(k));
+    const ground = groundAt(bays[k]);
     const sides = [spans[k - 1], spans[k]].filter(
       (sp): sp is MasonrySpan => sp !== null
     );
     if (ground !== null && sides.length > 0) {
       const top = Math.max(...sides.map((sp) => sp.spring));
-      piers.push({ s: bay(k), ground, top });
+      piers.push({ s: bays[k], half: halves[k], ground, top });
     }
   }
   return {
@@ -594,17 +883,20 @@ export function masonryArches(
   };
 }
 
-/** The underside of an arch at station `s` (a half ellipse from springing
- *  to crown), or null outside it. */
+/** The underside of an arch at station `s` — a circular segment from
+ *  springing to crown (a semicircle at most) — or null outside it. */
 export function intradosAt(span: MasonrySpan, s: number): number | null {
   if (s < span.from || s > span.to) {
     return null;
   }
   const half = (span.to - span.from) / 2;
-  const u = (s - span.from - half) / half;
-  return (
-    span.spring + (span.crown - span.spring) * Math.sqrt(Math.max(0, 1 - u * u))
-  );
+  const rise = Math.min(span.crown - span.spring, half);
+  if (half <= 0 || rise <= 0) {
+    return span.spring;
+  }
+  const radius = (half * half + rise * rise) / (2 * rise);
+  const u = s - span.from - half;
+  return span.crown - radius + Math.sqrt(Math.max(0, radius * radius - u * u));
 }
 
 /** A deck end this close above the ground meets it already (m). */

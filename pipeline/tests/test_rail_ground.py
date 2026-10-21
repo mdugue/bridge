@@ -67,7 +67,10 @@ def _at(area: shapely.Geometry, x: float, y: float) -> bool:
 def test_the_ballast_lies_on_the_tracks_beds_within_the_railway_land(tmp_path, monkeypatch):
     tile = _tile(tmp_path, monkeypatch)
     area = shapely.union_all(
-        [shapely.geometry.shape(f["geometry"]) for f in rail.ballast(tile, rail.rails(tile))]
+        [
+            shapely.geometry.shape(f["geometry"])
+            for f in rail.ballast(tile, rail.rails(tile, osm=True))
+        ]
     )
     assert _at(area, 100, 50)  # the DLM's track
     assert _at(area, 100, 35)  # OSM's siding

@@ -178,7 +178,8 @@ const ARTIFACTS = {
   sport: { file: named("sport", "png") },
   sportTable: { file: named("sport", "json"), osm: true },
   // Optional: the sky-view factor and the far horizon
-  // (pipeline/bake/skyview.py, from the committed DGM + LoD2): the
+  // (pipeline/bake/skyview.py, from the committed DGM + LoD2, the drawn
+  // crowns half-transparent, Copernicus GLO-30 beyond the site): the
   // ambient light the city lets through and the long shadows past the
   // shadow map. Without them the light is as before.
   svf: { file: named("svf", "png") },

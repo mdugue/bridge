@@ -6,22 +6,26 @@ import {
 } from "three/webgpu";
 
 /**
- * The conifer's crown: a tiered lathe cone, the one form every needle tree
- * of the scene takes — the register's conifers (tree-inventory-layer.ts),
- * the canopy's evergreens (vegetation-layer.ts: a crown in a needle forest,
- * or green in a mixed forest on a leaf-off flight; in a Central European
- * forest that is a pine, a spruce, a fir) and both at the coarse level
- * (coarse-crowns-layer.ts). Each is built inside the box of the broadleaf
- * crown it replaces, so the same instance matrix places either and the
- * crown material's sway (which reads the geometry's own Y) bends both
- * alike.
+ * The needle trees' crowns, the two forms a scale cannot make of the lobed
+ * broadleaf crown: the conifer's tiered lathe cone (a spruce, a fir, a
+ * thuja, a false cypress, a larch, a Douglas fir) and the pine's high,
+ * flat-topped crown (`buildPineGeo`) — for the register's needle trees by
+ * their genus (tree-inventory-layer.ts), for the canopy's evergreens by
+ * the form the surface model shows (vegetation-layer.ts: the bake's `pine`,
+ * a crown whose top stays flat a fifth of its height out; in a Central
+ * European forest a pine as often as a spruce or a fir) and for both at
+ * the coarse level (coarse-crowns-layer.ts). (A yew's bush is the lobed
+ * crown itself, down on the ground.) Each is built inside the box of the
+ * broadleaf crown it replaces, so the same instance matrix places either
+ * and the crown material's sway (which reads the geometry's own Y) bends
+ * both alike.
  *
  * Non-indexed, with the broadleaf crown's attributes (position, normal,
  * uv): three keys a node build by the geometry's attributes and by whether
- * it has an index, so a cone set shares the crown's one build, in the scene
- * and in the shadow pass, and the compile's representative of the crown
- * sets (three-utils.ts `compileRepresentatives`, keyed by the attribute
- * names alone) prepares the cone's program too.
+ * it has an index, so a cone or pine set shares the crown's one build, in
+ * the scene and in the shadow pass, and the compile's representative of
+ * the crown sets (three-utils.ts `compileRepresentatives`, keyed by the
+ * attribute names alone) prepares their programs too.
  */
 
 /** The broadleaf crown's local box a cone is built into (geometry units). */
@@ -130,4 +134,101 @@ export function boxOf(geo: BufferGeometry): CrownBox {
     minY: box.min.y,
     width: Math.max(box.max.x - box.min.x, box.max.z - box.min.z),
   };
+}
+
+// --- reshaped crowns ------------------------------------------------------------
+
+/** Unit-space silhouette: a direction on the unit sphere (its height `dy`
+ *  in [-1, 1] and azimuth `phi`) → horizontal radius and height in [0, 1]. */
+export type SilhouetteMap = (
+  dy: number,
+  phi: number
+) => { r: number; y: number };
+
+/** How much of the source crown's lobe relief survives the reshape. */
+const RELIEF = 0.8;
+
+/**
+ * Reshapes one of the vegetation layer's crown geometries into another
+ * silhouette inside the SAME bounding box, keeping its lobes as relief: each
+ * vertex's direction from the crown centre (in the box's ellipsoid space)
+ * picks its place on the new silhouette, its distance the bump on top. The
+ * local height range is kept on purpose — the crown material's wind sway
+ * reads the geometry's own Y, so a reshaped crown bends exactly like the
+ * original. A clone: the attributes and the (absent) index are the
+ * source's.
+ */
+export function reshapeCrown(
+  source: BufferGeometry,
+  map: SilhouetteMap,
+  normalCentre: number
+): BufferGeometry {
+  const g = source.clone();
+  g.computeBoundingBox();
+  const box = g.boundingBox;
+  if (!box) {
+    return g;
+  }
+  const minY = box.min.y;
+  const height = box.max.y - box.min.y;
+  const halfH = height / 2;
+  const halfW = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2;
+  const cy = minY + halfH;
+  const pos = g.attributes.position;
+  const nrm = g.attributes.normal;
+  const v = new Vector3();
+  const centre = new Vector3(0, minY + normalCentre * height, 0);
+  for (let i = 0; i < pos.count; i++) {
+    v.set(pos.getX(i) / halfW, (pos.getY(i) - cy) / halfH, pos.getZ(i) / halfW);
+    const len = Math.max(v.length(), 1e-6);
+    const dy = v.y / len;
+    const phi = Math.atan2(v.z, v.x);
+    const { r, y } = map(dy, phi);
+    const k = 1 + (len - 1) * RELIEF;
+    pos.setXYZ(
+      i,
+      Math.cos(phi) * r * k * halfW,
+      minY + y * height,
+      Math.sin(phi) * r * k * halfW
+    );
+  }
+  for (let i = 0; i < pos.count; i++) {
+    v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).sub(centre).normalize();
+    nrm.setXYZ(i, v.x, v.y, v.z);
+  }
+  pos.needsUpdate = true;
+  nrm.needsUpdate = true;
+  g.computeBoundingSphere();
+  return g;
+}
+
+/** The pine crown's widest ring (0..1 of its depth, from below) and its
+ *  superellipse exponents: the top flat, the underside an ellipse's. */
+const PINE_WAIST = 0.5;
+const PINE_TOP = 4;
+const PINE_UNDER = 2.2;
+/** Height (0..1) of the centre the pine crown's normals point away from. */
+const PINE_NORMAL_CENTRE = 0.4;
+
+/**
+ * The pine's crown: a flat-topped cushion, widest at its middle, its top
+ * a superellipse's (near flat, its rim rounded), its underside rounder — a
+ * Scots pine's or a black pine's crown high on its bare stem. The stem's
+ * length is the matrix's (tree-inventory.ts PINE_CROWN_BASE), not the
+ * geometry's.
+ */
+export const pineSilhouette: SilhouetteMap = (dy) => {
+  const n = dy >= 0 ? PINE_TOP : PINE_UNDER;
+  const r = Math.max(0, 1 - dy * dy) ** (1 / n);
+  const s = Math.abs(dy) ** (2 / n);
+  return {
+    r,
+    y: dy >= 0 ? PINE_WAIST + (1 - PINE_WAIST) * s : PINE_WAIST * (1 - s),
+  };
+};
+
+/** A lobed crown geometry reshaped into the pine's crown, in its own box
+ *  (`reshapeCrown`). */
+export function buildPineGeo(source: BufferGeometry): BufferGeometry {
+  return reshapeCrown(source, pineSilhouette, PINE_NORMAL_CENTRE);
 }

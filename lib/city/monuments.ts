@@ -8,14 +8,21 @@
 import { SINK } from "./ground-join";
 import type {
   FountainStyle,
+  MonumentFeature,
   MonumentForm,
   MonumentKind,
   ReliefGrid,
 } from "./features";
+import { yawOfBearing } from "./furniture";
 import type { Point2 } from "./polyline";
 
 /** A fountain without an outline (a DLM point, an OSM node): its basin radius (m). */
 export const POINT_BASIN_R = 2.2;
+/** A point fountain this small (m, its radius `r`: a drinking fountain, a
+ *  stone block) stands waist-high, its jet a small spout. */
+const SMALL_BASIN_R = 1;
+const SMALL_RIM_H = 0.8;
+const SMALL_JET = 0.3;
 /** Rim height above the highest ground under the basin (m), per style. */
 const RIM_H: Record<FountainStyle, number> = {
   basin: 0.35,
@@ -41,10 +48,23 @@ export interface BasinLevels {
   water: number;
 }
 
-/** The basin's levels from the ground under its outline (m, world Y). */
+/** A point fountain's basin radius (m): its baked `r` (a drinking
+ *  fountain, a stone block), else the default basin's. */
+export function pointBasinRadius(r: number | undefined): number {
+  return r !== undefined && r > 0 ? r : POINT_BASIN_R;
+}
+
+/** Whether a point basin of this radius is a small one (`SMALL_BASIN_R`). */
+export function smallBasin(r: number): boolean {
+  return r < SMALL_BASIN_R;
+}
+
+/** The basin's levels from the ground under its outline (m, world Y); a
+ *  small one (`smallBasin`) stands waist-high. */
 export function basinLevels(
   ground: readonly number[],
-  style: FountainStyle
+  style: FountainStyle,
+  small = false
 ): BasinLevels | null {
   const valid = ground.filter((h) => Number.isFinite(h));
   if (valid.length === 0) {
@@ -56,20 +76,40 @@ export function basinLevels(
     const water = high + SPLASH_LIFT;
     return { base: low - FOOTING, rim: water, water };
   }
-  const rim = high + RIM_H[style];
+  const rim = high + (small ? SMALL_RIM_H : RIM_H[style]);
   return { base: low - FOOTING, rim, water: rim - FREEBOARD };
 }
 
-/** A jet's height (m): larger basins throw higher, pools stay still. */
-export function jetHeight(areaM2: number, style: FountainStyle): number {
+/** A jet's height (m): larger basins throw higher, pools stay still, a
+ *  small basin's spout is a hand's height. */
+export function jetHeight(
+  areaM2: number,
+  style: FountainStyle,
+  small = false
+): number {
   if (style === "pool") {
     return 0;
   }
   if (style === "splash") {
     return SPLASH_JET;
   }
+  if (small) {
+    return SMALL_JET;
+  }
   const h = 0.3 * Math.sqrt(Math.max(areaM2, 0));
   return Math.min(Math.max(h, JET_MIN), JET_MAX);
+}
+
+/** The days of the year (1-based) the fountains run: mid-April to the end of
+ *  October, as a city turns its fountains on after the frosts and drains
+ *  them before the first. */
+const FOUNTAIN_SEASON: readonly [number, number] = [105, 304];
+
+/** Whether the fountains' jets run on this date (the scene's local day). */
+export function fountainsRun(date: Date): boolean {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const day = Math.floor((date.getTime() - start.getTime()) / 86_400_000) + 1;
+  return day >= FOUNTAIN_SEASON[0] && day <= FOUNTAIN_SEASON[1];
 }
 
 /** Shoelace area (m²) of a ring (closed or not). */
@@ -156,9 +196,9 @@ export const MARKER_SHAPE: Record<
   column: { width: 0.5, depth: 0.5, height: 4.5 },
 };
 
-/** The three clay solids a marker is built of: a rounded pillar (a capsule
- *  stretched), a rounded block and a tapering four-sided needle. */
-export type MarkerSolid = "block" | "needle" | "pillar";
+/** The clay solids a marker is built of: a rounded pillar (a capsule
+ *  stretched), a block, a tapering four-sided needle and a round shaft. */
+export type MarkerSolid = "block" | "needle" | "pillar" | "shaft";
 
 /** One solid of a marker: its size (m) and how far above the ground its
  *  foot stands (`lift`, m). */
@@ -176,7 +216,8 @@ export interface MarkerPiece {
  * size such monuments have, never a figure: a statue is a body-sized
  * pillar on its pedestal, a bust a head-sized one on a slender plinth, a
  * free sculpture a broad mass without one, a stele an upright slab, a
- * memorial stone a low rounded block, an obelisk a needle on its base.
+ * memorial stone a low rounded block, an obelisk a needle on its base, a
+ * column a round shaft on its pedestal under a capital slab.
  */
 const FORM_PIECES: Record<MonumentForm, readonly MarkerPiece[]> = {
   statue: [
@@ -194,15 +235,30 @@ const FORM_PIECES: Record<MonumentForm, readonly MarkerPiece[]> = {
     { solid: "block", width: 1.5, depth: 1.5, height: 0.7, lift: 0 },
     { solid: "needle", width: 0.85, depth: 0.85, height: 5.3, lift: 0.7 },
   ],
+  column: [
+    { solid: "block", width: 2.4, depth: 2.4, height: 1.8, lift: 0 },
+    { solid: "shaft", width: 0.9, depth: 0.9, height: 8.6, lift: 1.8 },
+    { solid: "block", width: 1.3, depth: 1.3, height: 0.6, lift: 10.4 },
+  ],
 };
 
 /** A tagged height scales a form by at most this much either way. */
 const HEIGHT_SCALE: readonly [number, number] = [0.4, 3];
+/** How tall a column or an obelisk may stand (m) — the most a slim shaft
+ *  the bake measures (monuments.py `FORM_RANGE`): the Friedensengel's
+ *  36.6 m, the Karolinenplatz's obelisk tagged 29 m. Taller than
+ *  HEIGHT_SCALE allows, it grows in height alone: its girth stays at
+ *  HEIGHT_SCALE's most. */
+const SLENDER_MAX_M: Partial<Record<MonumentForm, number>> = {
+  column: 40,
+  obelisk: 35,
+};
 
 /**
  * The solids of a monument's marker: its form's, scaled to a tagged
- * height (whole, so a 13 m obelisk is a broad one too), else the plain
- * marker of its kind.
+ * height (whole, so a 13 m obelisk is a broad one too; a column or an
+ * obelisk beyond HEIGHT_SCALE in height alone), else the plain marker of
+ * its kind.
  */
 export function markerPieces(
   kind: Exclude<MonumentKind, "fountain">,
@@ -217,14 +273,19 @@ export function markerPieces(
     },
   ];
   const top = Math.max(...pieces.map((p) => p.lift + p.height));
+  const slender = form ? SLENDER_MAX_M[form] : undefined;
+  const most = slender
+    ? Math.max(slender / top, HEIGHT_SCALE[1])
+    : HEIGHT_SCALE[1];
   const k =
     height && height > 0
-      ? Math.min(Math.max(height / top, HEIGHT_SCALE[0]), HEIGHT_SCALE[1])
+      ? Math.min(Math.max(height / top, HEIGHT_SCALE[0]), most)
       : 1;
+  const girth = Math.min(k, HEIGHT_SCALE[1]);
   return pieces.map((p) => ({
     solid: p.solid,
-    width: p.width * k,
-    depth: p.depth * k,
+    width: p.width * girth,
+    depth: p.depth * girth,
     height: p.height * k,
     lift: p.lift * k,
   }));
@@ -649,7 +710,7 @@ export function measuredMarker(
   const top = Math.max(...cells.map((c) => c.h));
   const axis = principalAxis(cells);
   const whole = extent(cells, axis);
-  const slender = form === "obelisk" || form === "stele";
+  const slender = form === "obelisk" || form === "stele" || form === "column";
   if (!slender && top >= COMPOSED_MIN_H && cells.length >= COMPOSED_MIN_CELLS) {
     const c = composed(cells, axis, top);
     if (c) {
@@ -679,6 +740,43 @@ export function measuredMarker(
       },
     ],
   };
+}
+
+/**
+ * A monument's solids where it stands: its measured relief composed
+ * (`measuredMarker`), else the marker of its form or kind at its point —
+ * at its tagged height, else the height measured in the open (`hm`) —,
+ * facing the bearing the bake gave it (`a`: its square's centre or its
+ * nearest way), else turned by a stable hash.
+ */
+export function monumentMarker(
+  props: MonumentFeature["properties"],
+  kind: Exclude<MonumentKind, "fountain">,
+  [x, y]: Point2
+): MeasuredMarker {
+  const measured = props?.relief
+    ? measuredMarker(props.relief, kind, props.form)
+    : null;
+  if (measured) {
+    return measured;
+  }
+  const a = props?.a;
+  return {
+    centre: [x, y],
+    yaw:
+      typeof a === "number" && Number.isFinite(a)
+        ? yawOfBearing(a)
+        : yawOf(x, y),
+    pieces: markerPieces(kind, props?.form, props?.height ?? props?.hm).map(
+      (p) => ({ ...p, along: 0 })
+    ),
+  };
+}
+
+/** The sculpture a fountain's figure stands as where a winter housing hid
+ *  it from the surface model (`cover`): the free sculpture's marker. */
+export function coveredFigure(): MarkerPiece[] {
+  return markerPieces("statue", "sculpture");
 }
 
 /**

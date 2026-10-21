@@ -22,6 +22,14 @@ Any other lamp in the carriageway (a post the class raster's road covers,
 or mapped on the way) moves to the nearest kerb, as the street furniture's
 signals do (furniture.py `Gate`); off the road it stands where it is.
 
+A lamp OSM puts on a wall (`support`/`lamp_mount` = `wall`) hangs on its
+bracket (`wall`: the bracket's foot; the point is its head) out of the
+nearest building outline within WALL_REACH_M, else out of a mapped wall
+there (`on: "wall"`, `Walls`): on a retaining wall's face, the low side the
+DGM shows, as high as the wall allows; a wall lower than WALL_TOP_M, a
+garden wall, holds none and the lamp stands on its post. Meißen's lamps on
+the terrace walls by the Burgberg's steps stood as posts in the wall.
+
 A lamp on a bridge stands on its deck (`deck`: the deck's top there, m,
 which the viewer stands the post on). It is on the bridge when a drawn road
 or path deck holds it (furniture.py `Decks`, every tile's bridge file) and
@@ -39,11 +47,15 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import rasterio
 import shapely
 
-from .common import OSM_ATTRIBUTION, Tile, feature, owns, write_geojson
-from .furniture import BLOCKED, STREETS, Decks, Gate, way_bearing
+from .common import OSM_ATTRIBUTION, Tile, column, feature, owns, write_geojson
+from .furniture import BLOCKED, STREETS, Decks, Gate, facing, way_bearing
 from .osm import has_extract, read_osm, read_ways, tag
+from .walls import DEFAULT_H as WALL_DEFAULT_H
+from .walls import height as wall_height
+from .walls import lines_of
 
 LAMP_H = 5.0  # a post's head (the viewer's lamp-layer.ts LAMP_H)
 HUNG_H = 7.0  # a hung lamp's head over the street
@@ -57,6 +69,22 @@ WALL = {"wall", "wall_mounted"}  # `support` / `lamp_mount` values of a lamp on 
 WALL_H = 3.5  # a wall lantern's head over the street (Meißen's Domplatz: at the first floor)
 WALL_REACH_M = 1.5  # its facade within this of the node (OSM maps most on the outline)
 WALL_OUT_M = 0.5  # its head stands this far out of the facade, on its bracket
+# A wall lantern with no facade near hangs on a mapped wall (`Walls`).
+WALL_WHERE = "barrier IN ('retaining_wall','city_wall','wall')"
+SIDE_M = (2.0, 3.0, 4.0)  # the ground either side of the wall, read this far out
+STEP_M = 0.5  # a wall whose sides differ this much retains a step: hung on its face below
+WALL_TOP_M = 3.0  # a wall lower than this over the side it hangs on holds no lantern
+WALL_CLEAR_M = 0.5  # the head this far under the wall's crown (its bracket rises to it)
+
+
+def post(lamp_height: float, other: str | None) -> dict:
+    """A post's properties: its height and, where OSM calls its mast bent
+    (`lamp_mount=bent_mast`, the arched mast over the street), `bent` — its
+    arm reaches out whatever its height (lamp_heights.py `arm_of`)."""
+    props: dict = {"h": round(lamp_height, 1)}
+    if tag(other, "lamp_mount") == "bent_mast":
+        props["bent"] = True
+    return props
 
 
 def hung_tag(other: str | None) -> bool | None:
@@ -140,6 +168,106 @@ class Facades:
         return best
 
 
+class Walls:
+    """The mapped walls (`barrier` = wall, retaining_wall, city_wall) a wall
+    lantern hangs on where no building outline is near — the terrace walls
+    along the Burgberg's steps in Meißen. Read on the first lantern that
+    needs them; the DGM with them, to tell a wall's sides apart."""
+
+    def __init__(self, tile: Tile) -> None:
+        self.tile = tile
+        self.lines: list[shapely.Geometry] | None = None
+        self.tops: list[float] = []
+        self.tree: shapely.STRtree | None = None
+
+    def _load(self) -> None:
+        self.lines = []
+        for layer in ("lines", "multipolygons"):
+            geoms, fields = read_osm(self.tile, layer, WALL_WHERE, ["barrier", "other_tags"])
+            kinds, tags = column(fields, "barrier", geoms), column(fields, "other_tags", geoms)
+            for g, kind, other in zip(geoms, kinds, tags, strict=True):
+                if g is None:
+                    continue
+                top = wall_height(other) or WALL_DEFAULT_H.get(kind or "", 1.5)
+                for line in lines_of(g):
+                    self.lines.append(line)
+                    self.tops.append(top)
+        self.tree = shapely.STRtree(self.lines) if self.lines else None
+        with rasterio.open(self.tile.dgm) as src:
+            self.ground, self.transform = src.read(1), src.transform
+
+    def ground_at(self, x: float, y: float) -> float | None:
+        c, r = (int(v) for v in ~self.transform * (x, y))
+        if 0 <= r < self.ground.shape[0] and 0 <= c < self.ground.shape[1]:
+            return float(self.ground[r, c])
+        return None
+
+    def sides(self, q: shapely.Point, nx: float, ny: float) -> tuple[list[float], list[float]]:
+        """The ground read SIDE_M out on the wall's left (+n) and right."""
+        out: tuple[list[float], list[float]] = ([], [])
+        for d in SIDE_M:
+            for side, sign in zip(out, (1, -1), strict=True):
+                z = self.ground_at(q.x + sign * nx * d, q.y + sign * ny * d)
+                if z is not None:
+                    side.append(z)
+        return out
+
+    def bracket(
+        self, p: shapely.Point, ways, lines
+    ) -> tuple[list[float], shapely.Point, float] | None:
+        """A wall lantern's foot on the nearest wall within WALL_REACH_M,
+        its head WALL_OUT_M out of it and the head's height over the ground
+        below it — or None: no wall near, or one too low to hold it.
+
+        The side it hangs on: a wall that retains a step (its sides' ground
+        STEP_M apart, read in the DGM) shows its face to the low side, and
+        the lantern hangs there, as high as the step allows (the Burgberg's
+        are 4–9 m); a freestanding wall (its tagged height, else the kind's
+        default — 1.5 m for a garden wall, which holds none) hangs it on
+        the side of the nearest street, else of the mapped point."""
+        if self.lines is None:
+            self._load()
+        if self.tree is None:
+            return None
+        hit = self.tree.query_nearest(p, max_distance=WALL_REACH_M)
+        if len(hit) == 0:
+            return None
+        line, top = self.lines[int(hit[0])], self.tops[int(hit[0])]
+        s = line.project(p)
+        q = line.interpolate(s)
+        a, b = line.interpolate(max(s - 0.5, 0.0)), line.interpolate(min(s + 0.5, line.length))
+        n = math.hypot(b.x - a.x, b.y - a.y)
+        if n == 0:
+            return None
+        nx, ny = -(b.y - a.y) / n, (b.x - a.x) / n  # to the line's left
+        left, right = self.sides(q, nx, ny)
+        sign = None
+        if left and right and abs(np.mean(left) - np.mean(right)) >= STEP_M:
+            high, low = (left, right) if np.mean(left) > np.mean(right) else (right, left)
+            sign = 1 if low is left else -1
+            top = max(high) - min(low)
+        else:
+            sign = _towards(q, nx, ny, p, ways, lines)
+        if sign is None or top < WALL_TOP_M:
+            return None
+        head = shapely.Point(q.x + sign * nx * WALL_OUT_M, q.y + sign * ny * WALL_OUT_M)
+        h = min(WALL_H, math.floor((top - WALL_CLEAR_M) * 2) / 2)
+        return [round(q.x, 2), round(q.y, 2)], head, h
+
+
+def _towards(q: shapely.Point, nx: float, ny: float, p: shapely.Point, ways, lines) -> int | None:
+    """Which side of a freestanding wall (+1: its left, the normal n) faces
+    the nearest street, else the side the lamp is mapped on, else None."""
+    deg = facing(q, ways, lines)
+    if deg is not None:
+        dx, dy = math.sin(math.radians(deg)), math.cos(math.radians(deg))
+        return 1 if dx * nx + dy * ny > 0 else -1
+    off = (p.x - q.x) * nx + (p.y - q.y) * ny
+    if abs(off) < 0.1:
+        return None
+    return 1 if off > 0 else -1
+
+
 def _end(
     p: shapely.Point, deg: float, reach: float, facades: Facades, gate: Gate
 ) -> tuple[list[float], bool]:
@@ -179,6 +307,7 @@ def place(
     facades: Facades,
     gate: Gate,
     lamp_height: float = LAMP_H,
+    walls: Walls | None = None,
 ) -> tuple[shapely.Point, dict] | None:
     """Where a lamp stands (or hangs) and its properties, or None (dropped)."""
     tagged = hung_tag(other)
@@ -187,15 +316,33 @@ def place(
         props = hang(p, bool(tagged), ways, lines, facades, gate)
         if props is not None:
             return p, props
-    bracket = facades.bracket(p) if wall_tag(other) else None
-    if bracket is not None:
-        return bracket[1], {"h": WALL_H, "wall": bracket[0]}
+    on_wall = _on_wall(p, other, ways, lines, facades, walls)
+    if on_wall is not None:
+        return on_wall
     if on_road:
         kerb = gate.nearest_kerb(p)
         if kerb is None:
             return None
         p = kerb
-    return p, {"h": round(lamp_height, 1)}
+    return p, post(lamp_height, other)
+
+
+def _on_wall(
+    p: shapely.Point, other: str | None, ways, lines, facades: Facades, walls: Walls | None
+) -> tuple[shapely.Point, dict] | None:
+    """A lamp OSM puts on a wall: its head on a bracket out of the nearest
+    facade, else out of a mapped wall (`on: "wall"`); None for any other
+    lamp, or with neither near (it stands on a post)."""
+    if not wall_tag(other):
+        return None
+    bracket = facades.bracket(p)
+    if bracket is not None:
+        return bracket[1], {"h": WALL_H, "wall": bracket[0]}
+    hung = walls.bracket(p, ways, lines) if walls is not None else None
+    if hung is None:
+        return None
+    foot, head, h = hung
+    return head, {"h": h, "wall": foot, "on": "wall"}
 
 
 def standable(p: shapely.Point, gate: Gate) -> bool:
@@ -224,20 +371,21 @@ def run(tile: Tile, lamp_height: float = LAMP_H) -> None:
     gate = Gate(tile, Decks.of(tile))
     ways, lines = streets(tile)
     facades = Facades(tile)
+    walls = Walls(tile)
     features, hung, on_walls, on_decks = [], 0, 0, 0
     for g, other in zip(geoms, fields["other_tags"], strict=True):
         on = gate.on_deck(g, kerbside=True)
         if on is not None:
             at, deck = on
             on_decks += 1
-            props = {"h": round(lamp_height, 1), "deck": round(deck, 2)}
+            props = {**post(lamp_height, other), "deck": round(deck, 2)}
             features.append(
                 feature({"type": "Point", "coordinates": [round(at.x, 1), round(at.y, 1)]}, props)
             )
             continue
         if not standable(g, gate):
             continue
-        placed = place(g, other, ways, lines, facades, gate, lamp_height)
+        placed = place(g, other, ways, lines, facades, gate, lamp_height, walls)
         if placed is None or not standable(placed[0], gate):
             continue
         at, props = placed
@@ -247,7 +395,8 @@ def run(tile: Tile, lamp_height: float = LAMP_H) -> None:
             feature({"type": "Point", "coordinates": [round(at.x, 1), round(at.y, 1)]}, props)
         )
     write_geojson(tile.out("dlm", f"lamps_{tile.id}.geojson"), features, tile.epsg, OSM_ATTRIBUTION)
+    walled = sum((f["properties"] or {}).get("on") == "wall" for f in features)
     print(
         f"{tile.id}: {len(features)} lamps ({hung} hung across the street, {on_walls} on a"
-        f" facade, {on_decks} on bridges)"
+        f" facade or wall — {walled} of them on a wall —, {on_decks} on bridges)"
     )

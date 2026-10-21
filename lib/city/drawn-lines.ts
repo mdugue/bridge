@@ -362,6 +362,16 @@ function storeyRow(
         detail: "Geschosshöhe in Straßenfotos gemessen",
         url: places.photos,
       };
+    case "neighbours":
+      return {
+        label: "Geschosse",
+        value,
+        method: "assumed",
+        source: "osm",
+        detail:
+          "von der Traufe gezählt, in der Geschosshöhe der kartierten Nachbarhäuser",
+        url: places.osm,
+      };
     case "height":
       return {
         label: "Geschosse",

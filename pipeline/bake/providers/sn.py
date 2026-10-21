@@ -11,7 +11,9 @@ share id and file-name template of every product
 from __future__ import annotations
 
 import json
+import re
 import shutil
+import urllib.parse
 import zipfile
 from functools import cache
 from pathlib import Path
@@ -26,6 +28,14 @@ CLOUD = "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files"
 # page lists no share for statewide products).
 BASIS_DLM = f"{CLOUD}/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip"
 TILE_KM = 2
+# The download-link service (docs/data-pipeline.md#provenance): one feature
+# per 2 km tile and product, its `Stand` the DOP's flight day(s); layer 17
+# is DOP_RGBI.
+LINKS = (
+    "https://geodienste.sachsen.de/ags-relay/ArcGISServer/guest/arcgis/rest/services/"
+    "geosn/rest_geosn_downloadlinks/MapServer"
+)
+DOP_LAYER = 17
 
 
 @cache
@@ -79,6 +89,30 @@ def dom(ctx: Ctx, tile: Tile) -> list[Path]:
 
 def dop(ctx: Ctx, tile: Tile) -> list[Path]:
     return _files(ctx, tile, "DOP_RGBI", r"\.tif$")
+
+
+def flight(ctx: Ctx, tile: Tile) -> list[str]:
+    """The days the tile's DOP was flown: the link service's `Stand` of
+    each of its cells (an ISO date, or several)."""
+    days: set[str] = set()
+    for e, n in own_cells(tile, TILE_KM):
+        x, y = e * 1000 + TILE_KM * 500, n * 1000 + TILE_KM * 500
+        box = {"xmin": x - 5, "ymin": y - 5, "xmax": x + 5, "ymax": y + 5}
+        query = urllib.parse.urlencode(
+            {
+                "geometry": json.dumps({**box, "spatialReference": {"wkid": ctx.epsg}}),
+                "geometryType": "esriGeometryEnvelope",
+                "inSR": ctx.epsg,
+                "spatialRel": "esriSpatialRelIntersects",
+                "outFields": "Kachel,Stand",
+                "returnGeometry": "false",
+                "f": "json",
+            }
+        )
+        doc = json.loads(fetch_text(f"{LINKS}/{DOP_LAYER}/query?{query}"))
+        for f in doc.get("features", []):
+            days |= set(re.findall(r"\d{4}-\d{2}-\d{2}", f["attributes"].get("Stand") or ""))
+    return sorted(days)
 
 
 def lod2(ctx: Ctx, tile: Tile) -> list[Path]:

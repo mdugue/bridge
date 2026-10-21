@@ -49,8 +49,7 @@ def test_estimate_sun_finds_the_sun_its_shadows_were_cast_by():
     shadow = cast_shadow(dsm, 160, 40, 2.0) & ~roofs
     sun = estimate_sun(shadow, dsm, roofs)
     assert sun is not None
-    az, el = sun
-    assert abs(az - 160) <= 4 and abs(el - 40) <= 3
+    assert abs(sun.az - 160) <= 4 and abs(sun.el - 40) <= 3
 
 
 def test_estimate_sun_gives_up_without_shadows():

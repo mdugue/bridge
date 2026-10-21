@@ -47,6 +47,15 @@ A wall no panorama shows as a shopfront gets nothing: an OSM shop node
 says there is a shop, not where its windows are, and a guessed bay read as
 a door (the first bake drew one there; dropped).
 
+A bay a way runs through or under is no shop window (`without_passages`):
+an OSM way tagged `tunnel=building_passage` (a passage through the ground
+floor, a gateway into the courtyard) or `covered=arcade` (a walk under the
+upper floors) that crosses the bay's stretch of the wall, from
+`PASSAGE_IN_M` behind it to `PASSAGE_OUT_M` before it, takes the bay out:
+the panoramas see the dark opening as glass at knee and eye height
+(Leipzig's Passagen, München's arcades). The wall itself stays a
+shopfront's (its ground floor gets no house windows).
+
 Over a shopfront the surface model may show a canopy (`canopy`): the
 GDR shop pavilions of the Hauptstraße carry their flat roof 3–4 m out over
 the pavement on columns. Per metre along the wall, nDOM = DOM1 − DGM1 is
@@ -70,7 +79,11 @@ edge, a → b the direction s runs), s in metres from a; `n` its outward
 normal; `z` the lowest DGM ground in front of a and of b; a canopy's `d`
 its depth out of the wall and `h` its top above the ground in front. Its
 own file, credited to Mapillary and the provider: their licences do not
-mix with the OSM tables."""
+mix with the OSM tables.
+
+Where the tile's panorama readings are not cached (they stay where the
+fetch ran: `bun run fetch` measures them), the committed file is kept and
+only the passages are taken out of it, rather than emptied."""
 
 from __future__ import annotations
 
@@ -86,6 +99,7 @@ import shapely
 from .common import Tile
 from .facade_measure import BIN_M, GF_BAND, ROW_M
 from .facades import ATTRIBUTION, SIGN_M, _signs, measured_path, walls
+from .osm import read_osm
 from .osm_buildings import root_of
 
 MAX_SHIFT_M = 1.5
@@ -114,6 +128,14 @@ CANOPY_MIN_M = 4.0
 CLOSED_M = 1.5  # a run of wall this long that two images agree on stays wall
 FACING_COS = 0.98  # walls of one object this parallel face the same way
 FRONT_M = (0.5, 1.5)  # the ground in front of a wall is sampled this far out
+# A passage or arcade way this far behind a bay's stretch of wall (an
+# arcade's depth, a passage's mouth) or before it (OSM's offset) crosses it.
+PASSAGE_IN_M = 4.0
+PASSAGE_OUT_M = 1.0
+PASSAGE_WHERE = (
+    'other_tags LIKE \'%"tunnel"=>"building_passage"%\' '
+    'OR other_tags LIKE \'%"covered"=>"arcade"%\''
+)
 
 # --- one wall (pure) --------------------------------------------------------
 
@@ -576,6 +598,50 @@ def shopfronts(
     return dict(sorted(out.items())), stats
 
 
+def bay_band(w: dict, s0: float, s1: float) -> shapely.Geometry:
+    """A bay's stretch of wall `w` ({a, b, L, n}) from s0 to s1, from
+    PASSAGE_IN_M behind the wall to PASSAGE_OUT_M before it."""
+    (ax, ay), (bx, by), (nx, ny) = w["a"], w["b"], w["n"]
+    tx, ty = (bx - ax) / w["L"], (by - ay) / w["L"]
+    ends = [(ax + tx * s, ay + ty * s) for s in (s0, s1)]
+    (x0, y0), (x1, y1) = ends
+    i, o = PASSAGE_IN_M, PASSAGE_OUT_M
+    return shapely.Polygon(
+        [
+            (x0 - nx * i, y0 - ny * i),
+            (x1 - nx * i, y1 - ny * i),
+            (x1 + nx * o, y1 + ny * o),
+            (x0 + nx * o, y0 + ny * o),
+        ]
+    )
+
+
+def without_passages(buildings: dict, ways) -> int:
+    """Takes every bay a passage or arcade way crosses (`bay_band`) out of
+    the shopfront walls, in place; how many it took."""
+    if len(ways) == 0:
+        return 0
+    tree = shapely.STRtree(ways)
+    taken = 0
+    for entries in buildings.values():
+        for w in entries:
+            kept = [
+                b for b in w.get("bays", []) if not len(tree.query(bay_band(w, *b), "intersects"))
+            ]
+            taken += len(w.get("bays", [])) - len(kept)
+            w["bays"] = kept
+    return taken
+
+
+def passage_ways(tile: Tile) -> np.ndarray:
+    """The OSM ways through a ground floor or under an arcade near the
+    tile; none without an extract."""
+    if tile.osm_extract() is None:
+        return np.array([], dtype=object)
+    geoms, _ = read_osm(tile, "lines", PASSAGE_WHERE, ["other_tags"])
+    return geoms
+
+
 def write(path: Path, buildings: dict, credit: str = "") -> None:
     doc = {
         "attribution": "; ".join(c for c in (ATTRIBUTION, credit) if c),
@@ -603,9 +669,24 @@ class _Raster:
         return z if np.isfinite(z) and z > -1000 else None
 
 
+def refilter(tile: Tile, out: Path) -> None:
+    """The committed file with the passages taken out (`without_passages`),
+    where the tile's panorama readings are not cached here."""
+    doc = json.loads(out.read_text())
+    taken = without_passages(doc.get("buildings", {}), passage_ways(tile))
+    out.write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True))
+    print(
+        f"{tile.id}: no panorama readings here — the committed shopfronts kept,"
+        f" {taken} bays a passage or arcade crosses taken out"
+    )
+
+
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"shopfronts_{tile.id}.json")
     path = measured_path(tile)
+    if tile.mapillary and not path.exists() and out.exists():
+        refilter(tile, out)
+        return
     city = json.loads(tile.cityjson.read_text())
     by_wall = _records(path) if tile.mapillary and path.exists() else {}
     signs = _signs(tile) if tile.mapillary else np.zeros((0, 2))
@@ -622,9 +703,11 @@ def run(tile: Tile) -> None:
     elif by_wall:
         print(f"{tile.id}: no DOM1 — the shopfronts without canopies")
     buildings, stats = shopfronts(city, by_wall, signs, ground, ndom)
+    taken = without_passages(buildings, passage_ways(tile)) if buildings else 0
     write(out, buildings, tile.credit if stats["canopy"] else "")
     print(
         f"{tile.id}: {stats['photo']} shopfront walls from photos ({stats['row']} glazed rows,"
         f" {stats['canopy']} under a canopy), {stats['continued']} more under a canopy that"
-        f" continues one ({len(buildings)} buildings; {stats['walls_seen']} walls seen)"
+        f" continues one ({len(buildings)} buildings; {stats['walls_seen']} walls seen);"
+        f" {taken} bays a passage or arcade crosses taken out"
     )

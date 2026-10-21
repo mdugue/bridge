@@ -23,18 +23,23 @@ import {
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { RAIL_TOP_M, RAIL_TOP_ON_DECK_M } from "@/lib/city/tram";
 import {
+  carLength,
   dayKindOf,
   type MeasuredPattern,
   measurePattern,
   pointAlong,
   previousDayKind,
+  routeOperator,
   runningTrams,
   secondsOfDay,
   type TramDayKind,
+  TRAM_LIVERIES,
   TRAM_TINTS,
+  type TramLivery,
+  type TramOperator,
   type TramTimetable,
 } from "@/lib/city/tram-timetable";
-import { Instances, instancePosition } from "./instancing";
+import { Instances, instancePosition, instanceTint } from "./instancing";
 import { mapWidenNode } from "./map-overlay";
 import { type DeckPoly, deckLift } from "@/lib/city/decks";
 import type { F, V3 } from "./shader-chunks";
@@ -47,7 +52,11 @@ import { sceneMaterial } from "./three-utils";
  *
  * Every scheduled tram of the scene's kind of day is drawn where the
  * timetable has it at the scene's clock, which runs on in real time from
- * the instant the HUD set: a car of four sections, each following the
+ * the instant the HUD set: a car in its operator's livery and of a length
+ * its fleet runs (the timetable's agency, `TRAM_LIVERIES`: Dresden's
+ * yellow 30, 41 and 45 m cars, Leipzig's silver-grey with a yellow band
+ * and a blue skirt, Munich's blue — drawn per trip by the fleet's mix),
+ * of sections about 7.5 m long, each following the
  * path on its own (so the car bends through a curve), standing at its
  * stops and easing out of and into them. A section rides the rail top
  * over the ground (the street bed's, lib/city/tram.ts) — on a bridge the
@@ -56,18 +65,21 @@ import { sceneMaterial } from "./three-utils";
  * and a moving caster would redraw the sun's shadow map in every one of
  * them. From the air they widen across with the traffic flows (`mapWidenNode`).
  *
- * One set per part (body, window band, roof) over one shared matrix
- * buffer: three draw calls for every tram on the site. Site-wide, owned by
- * data-overlays.ts.
+ * One set per part (body, skirt, window band, roof band, roof) over one
+ * shared matrix buffer, the livery's colours per instance: five draw
+ * calls for every tram on the site. Site-wide, owned by data-overlays.ts.
  */
 
-/** One section's length (m) and the gap between two; four make the
- *  DVB's 30 m cars (NGT D8DD). */
+/** A section's drawn length (m; the matrix stretches it to the car's),
+ *  the length a section stands for, and the gap between two: a 30 m car is
+ *  four sections, a 45 m one six. */
 const SECTION_M = 7.2;
+const SECTION_EVERY_M = 7.5;
 const SECTION_GAP_M = 0.3;
-const SECTIONS = 4;
-const CAR_M = SECTIONS * SECTION_M + (SECTIONS - 1) * SECTION_GAP_M;
 const CAR_WIDTH = 2.3;
+/** The skirt's and the roof band's heights (m). */
+const SKIRT_M = 0.45;
+const TOP_BAND_M = 0.3;
 /** The floor over the rail top, and the body's height above it (m). */
 const FLOOR_M = 0.35;
 const BODY_M = 2.9;
@@ -87,18 +99,24 @@ const TRAIL = TRAM_TINTS.trail;
 /** At most this many trams trail (≈ the site's busiest minute × 2). */
 const TRAIL_CAPACITY = 256;
 
-const BODY = TRAM_TINTS.car; // the DVB's yellow, softened
 const BAND = 0x5a_63_70; // the windows
 const ROOF = 0xdc_d8_d0;
+const OPERATORS = Object.keys(TRAM_LIVERIES) as TramOperator[];
 
 const xyOf = (p: { x: number; y: number }): [number, number] => [p.x, p.y];
 
-function partMaterial(color: number): MeshStandardNodeMaterial {
-  return sceneMaterial(`tram-car:${color.toString(16)}`, () => {
+/** A part's material: of one colour, or (`null`) the instance's tint —
+ *  the livery's parts, coloured per car. */
+function partMaterial(color: number | null): MeshStandardNodeMaterial {
+  const key = color === null ? "livery" : color.toString(16);
+  return sceneMaterial(`tram-car:${key}`, () => {
     const m = new MeshStandardNodeMaterial({
-      color: new Color(color),
+      color: new Color(color ?? 0xff_ff_ff),
       roughness: 0.55,
     });
+    if (color === null) {
+      m.colorNode = instanceTint();
+    }
     m.positionNode = instancePosition(
       vec3(
         positionLocal.x.mul(mapWidenNode()),
@@ -108,6 +126,16 @@ function partMaterial(color: number): MeshStandardNodeMaterial {
     );
     return m;
   });
+}
+
+/** A car of `length` m: how many sections, and the stretch of each
+ *  section's drawn length to its own. */
+export function carSections(length: number): {
+  n: number;
+  stretch: number;
+} {
+  const n = Math.max(2, Math.round(length / SECTION_EVERY_M));
+  return { n, stretch: (length - (n - 1) * SECTION_GAP_M) / n / SECTION_M };
 }
 
 /** A box in the section's frame: x across, y up from the rail top, z
@@ -249,27 +277,58 @@ export function createTramCars(
   const patterns: MeasuredPattern[] = timetable.patterns.map(measurePattern);
   const group = new Group();
   group.name = "tram-cars";
-  const parts = [
-    { geo: part(CAR_WIDTH, BODY_M, SECTION_M, FLOOR_M), color: BODY },
+  // the livery's parts take their colour per car (`tint`), the rest are
+  // every car's alike
+  const parts: {
+    color: number | null;
+    geo: BufferGeometry;
+    name: string;
+    tint?: keyof Omit<TramLivery, "lengths">;
+  }[] = [
+    {
+      geo: part(CAR_WIDTH, BODY_M, SECTION_M, FLOOR_M),
+      color: null,
+      name: "body",
+      tint: "body",
+    },
     {
       geo: part(CAR_WIDTH + 0.04, 0.95, SECTION_M - 0.8, FLOOR_M + 1.15),
       color: BAND,
+      name: "band",
     },
     {
       geo: part(CAR_WIDTH - 0.5, 0.3, SECTION_M - 1.6, FLOOR_M + BODY_M),
       color: ROOF,
+      name: "roof",
+    },
+    {
+      geo: part(CAR_WIDTH + 0.02, SKIRT_M, SECTION_M + 0.02, FLOOR_M - 0.01),
+      color: null,
+      name: "skirt",
+      tint: "skirt",
+    },
+    {
+      geo: part(
+        CAR_WIDTH + 0.02,
+        TOP_BAND_M,
+        SECTION_M + 0.02,
+        FLOOR_M + BODY_M - TOP_BAND_M - 0.05
+      ),
+      color: null,
+      name: "top",
+      tint: "top",
     },
   ];
-  // One matrix per section, shared by the three parts: the body owns it.
+  // One matrix per section, shared by every part: the body owns it.
   const sets: Instances[] = [];
-  parts.forEach(({ geo, color }, i) => {
+  parts.forEach(({ geo, color, name }) => {
     const set = new Instances(
       geo,
       partMaterial(color),
       CAPACITY,
       sets[0]?.instanceMatrix
     );
-    set.name = `tram-car-${["body", "band", "roof"][i]}`;
+    set.name = `tram-car-${name}`;
     set.castShadow = false;
     set.receiveShadow = true;
     // The cars span the site and move every frame: never culled as a set.
@@ -279,6 +338,23 @@ export function createTramCars(
     sets.push(set);
   });
   const [body] = sets;
+  // which operator's colours each slot holds (-1: none yet)
+  const slotOperator = new Int8Array(CAPACITY).fill(-1);
+  const tint = new Color();
+  const paint = (slot: number, operator: TramOperator): boolean => {
+    const k = OPERATORS.indexOf(operator);
+    if (slotOperator[slot] === k) {
+      return false;
+    }
+    slotOperator[slot] = k;
+    const livery = TRAM_LIVERIES[operator];
+    parts.forEach((p, i) => {
+      if (p.tint) {
+        sets[i].setColorAt(slot, tint.setHex(livery[p.tint]));
+      }
+    });
+    return true;
+  };
   const trails = createTrails();
   group.add(trails.mesh);
   const m = new Matrix4();
@@ -308,18 +384,23 @@ export function createTramCars(
       secondsOfDay(at)
     );
     let n = 0;
+    let repainted = false;
     trails.begin();
     for (const tram of running) {
       const p = patterns[tram.pattern];
+      const operator = routeOperator(timetable, tram.routeIndex);
+      const carM = carLength(TRAM_LIVERIES[operator], tram.seed);
+      const { n: sections, stretch } = carSections(carM);
+      const sectionM = SECTION_M * stretch;
       // At its first stop the whole car stands on the path.
-      const head = Math.max(tram.head, CAR_M);
+      const head = Math.max(tram.head, carM);
       if (ctx.heightAt(...xyOf(pointAlong(p, head))) !== null) {
-        trails.add(p, head - CAR_M, railTop, ctx.offset);
+        trails.add(p, head - carM, railTop, ctx.offset);
       }
-      for (let k = 0; k < SECTIONS && n < CAPACITY; k++) {
-        const front = head - k * (SECTION_M + SECTION_GAP_M);
+      for (let k = 0; k < sections && n < CAPACITY; k++) {
+        const front = head - k * (sectionM + SECTION_GAP_M);
         const a = pointAlong(p, front);
-        const b = pointAlong(p, front - SECTION_M);
+        const b = pointAlong(p, front - sectionM);
         const ya = railTop(a.x, a.y, a.onBridge);
         const yb = railTop(b.x, b.y, b.onBridge);
         if (ya === null || yb === null) {
@@ -334,17 +415,21 @@ export function createTramCars(
         zAxis.normalize();
         xAxis.set(0, 1, 0).cross(zAxis).normalize();
         yAxis.copy(zAxis).cross(xAxis);
-        m.makeBasis(xAxis, yAxis, zAxis).setPosition(
+        m.makeBasis(xAxis, yAxis, zAxis.multiplyScalar(stretch)).setPosition(
           (wa.x + wb.x) / 2,
           (ya + yb) / 2,
           (wa.z + wb.z) / 2
         );
         body.setMatrixAt(n, m);
+        repainted = paint(n, operator) || repainted;
         n++;
       }
     }
     for (const set of sets) {
       set.drawCount = n;
+      if (repainted && set.instanceTints) {
+        set.instanceTints.needsUpdate = true;
+      }
     }
     body.instanceMatrix.needsUpdate = true;
     trails.end();

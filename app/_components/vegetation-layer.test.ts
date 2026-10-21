@@ -8,12 +8,22 @@ import {
 } from "three/webgpu";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
-import { TRUNK_ROWS, trunkRadiusAt } from "@/lib/city/tree-inventory";
-import { BASE_TREE_H, GENERIC_CROWN_W } from "@/lib/city/tree-placement";
+import {
+  PINE_CROWN_BASE,
+  TRUNK_ROWS,
+  trunkRadiusAt,
+} from "@/lib/city/tree-inventory";
+import {
+  BASE_TREE_H,
+  crownBase,
+  GENERIC_CROWN_FOOT,
+  GENERIC_CROWN_W,
+} from "@/lib/city/tree-placement";
 import { isInstances } from "./instancing";
 import {
   buildConeTiers,
   buildCrownGeo,
+  buildPineTiers,
   buildCrownWarmup,
   buildTrunkGeo,
   buildVegetation,
@@ -241,6 +251,49 @@ describe("the generic crown's measures", () => {
     expect(box?.max.y).toBeCloseTo(BASE_TREE_H, 0);
     const width = (box?.max.x ?? 0) - (box?.min.x ?? 0);
     expect(Math.abs(width - GENERIC_CROWN_W)).toBeLessThan(0.3);
+    expect(box?.min.y).toBeCloseTo(GENERIC_CROWN_FOOT, 1);
+  });
+});
+
+describe("a tree's crown base", () => {
+  test("its crown spans its base to its top; its trunk stands on the ground", () => {
+    const built = buildVegetation({ rows: [], canopy: [canopy(5, 24)] }, ctx);
+    const [chunk] = built.chunks;
+    const m = new Matrix4();
+    chunk.mid.getMatrixAt(0, m);
+    const top = new Vector3(0, BASE_TREE_H, 0).applyMatrix4(m).y - 100;
+    const foot = new Vector3(0, GENERIC_CROWN_FOOT, 0).applyMatrix4(m).y - 100;
+    // the measured 24 m within the 10 % jitter, its crown from 0.438 of it
+    expect(top).toBeGreaterThan(21);
+    expect(top).toBeLessThan(27);
+    expect(foot).toBeCloseTo(crownBase(top), 3);
+    // the trunk rides the crown's matrix, its foot lowered by the drop
+    expect(chunk.trunks.instanceMatrix).toBe(chunk.mid.instanceMatrix);
+    const drop = chunk.trunks.geometry.getAttribute("iDrop")?.getX(0) ?? 0;
+    expect(new Vector3(0, -drop, 0).applyMatrix4(m).y).toBeCloseTo(100, 3);
+    // … and its top still reaches into the crown
+    const trunkTop = new Vector3(0, TRUNK_H, 0).applyMatrix4(m).y - 100;
+    expect(trunkTop).toBeGreaterThan(foot);
+    expect(trunkTop).toBeLessThan(foot + 0.2 * (top - foot));
+    // the trunks' cull sphere still holds the foot on the ground
+    const sphere = chunk.trunks.geometry.boundingSphere;
+    expect((sphere?.center.y ?? 0) - (sphere?.radius ?? 0)).toBeLessThan(100);
+  });
+
+  test("a hedge keeps the old frame: no lift, no drop", () => {
+    const built = buildVegetation(
+      { rows: [row("hedge", 10)], canopy: [] },
+      ctx
+    );
+    const feet: number[] = [];
+    built.group.traverse((o) => {
+      if (isInstances(o)) {
+        feet.push(o.getMatrixAt(0, new Matrix4()).elements[13]);
+        expect(o.geometry.getAttribute("iDrop")).toBeUndefined();
+      }
+    });
+    expect(feet.length).toBeGreaterThan(0);
+    expect(feet.every((y) => y === 100)).toBe(true);
   });
 });
 
@@ -280,6 +333,79 @@ test("a canopy evergreen stands as a cone of its own, in leaf all year", () => {
   const { bare } = sceneCrowns();
   expect(broad.mid.material).toBe(bare);
   expect(conifer.mid.material).not.toBe(bare);
+});
+
+test("a canopy pine wears the pine's crown, high on its stem, a chunk of its own", () => {
+  const at = (x: number, pine: boolean): CanopyFeature => ({
+    geometry: { type: "Point", coordinates: [x, 0] },
+    properties: { h: 20, l: "e", ...(pine ? { pine: 1 as const } : {}) },
+  });
+  const built = buildVegetation(
+    { rows: [], canopy: [at(5, false), at(9, true)] },
+    ctx
+  );
+  // a cone and a pine in the same 250 m cell: a chunk per form
+  expect(built.chunks).toHaveLength(2);
+  const foot = (c: (typeof built.chunks)[number]) => {
+    const m = new Matrix4();
+    c.mid.getMatrixAt(0, m);
+    return {
+      foot: new Vector3(0, GENERIC_CROWN_FOOT, 0).applyMatrix4(m).y - 100,
+      top: new Vector3(0, BASE_TREE_H, 0).applyMatrix4(m).y - 100,
+      drop: c.trunks.geometry.getAttribute("iDrop")?.getX(0) ?? 0,
+      m,
+    };
+  };
+  const [cone, pine] = [...built.chunks]
+    .map(foot)
+    .sort((a, b) => a.foot / a.top - b.foot / b.top);
+  // the pine's crown from PINE_CROWN_BASE of its height, the cone's lower
+  expect(pine.foot / pine.top).toBeCloseTo(PINE_CROWN_BASE, 3);
+  expect(cone.foot / cone.top).toBeLessThan(PINE_CROWN_BASE);
+  // its trunk still stands on the ground
+  expect(new Vector3(0, -pine.drop, 0).applyMatrix4(pine.m).y).toBeCloseTo(
+    100,
+    3
+  );
+  // the pine's own geometry: the crown's attributes, no index, no style's
+  // crown, the leafy material all year
+  const pineChunk = built.chunks.find((c) => {
+    const m = new Matrix4();
+    c.mid.getMatrixAt(0, m);
+    return m.elements[12] === pine.m.elements[12];
+  });
+  const coneChunk = built.chunks.find((c) => c !== pineChunk);
+  for (const tier of ["far", "mid", "rich"] as const) {
+    const g = pineChunk?.[tier].geometry;
+    expect(g).not.toBe(coneChunk?.[tier].geometry);
+    expect(g?.index).toBeNull();
+    expect(Object.keys(g?.attributes ?? {}).sort()).toEqual(
+      Object.keys(coneChunk?.[tier].geometry.attributes ?? {}).sort()
+    );
+    expect(pineChunk?.[tier].userData.styleCrown).toBeUndefined();
+  }
+  built.setSeason(9);
+  expect(pineChunk?.mid.material).not.toBe(sceneCrowns().bare);
+});
+
+test("the pine tiers stand in the lobed tiers' boxes", () => {
+  const broad = {
+    far: buildCrownGeo(1),
+    mid: buildCrownGeo(),
+    rich: buildCrownGeo(),
+    trunk: buildTrunkGeo(),
+  };
+  const pines = buildPineTiers(broad);
+  expect(pines.trunk).toBe(broad.trunk);
+  for (const tier of ["far", "mid", "rich"] as const) {
+    broad[tier].computeBoundingBox();
+    pines[tier].computeBoundingBox();
+    const [a, b] = [broad[tier].boundingBox, pines[tier].boundingBox];
+    expect(b?.max.y).toBeCloseTo(a?.max.y ?? 0, 1);
+    expect(b?.min.y).toBeCloseTo(a?.min.y ?? 0, 1);
+    expect(b?.max.y ?? 0).toBeLessThanOrEqual((a?.max.y ?? 0) + 1e-6);
+    expect(b?.min.y ?? 0).toBeGreaterThanOrEqual((a?.min.y ?? 0) - 1e-6);
+  }
 });
 
 test("the cone stands in the lobed crown's box, as tall and as wide", () => {

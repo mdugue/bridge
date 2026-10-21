@@ -2,8 +2,10 @@
  * The dormers DOM1 shows on the pitched LoD2 roofs (pipeline/bake/
  * dormers.py) as geometry the building bake appends to the tile's mesh
  * (scripts/bake-city-mesh.ts): per dormer a front wall facing down the
- * slope, two cheeks and a flat roof at the measured top, reaching back
- * until the main roof rises to meet it. No window in the front (the
+ * slope, two cheeks and a roof reaching back until the main roof rises to
+ * meet it — flat at the measured top, or for a shed dormer (`tf`, its
+ * measured fall) falling from that top line down to its front, at least
+ * `MIN_FRONT` over the main roof there. No window in the front (the
  * window-grid veto); the clay's own look. Pure, no THREE.
  */
 import type { DormerFeature } from "./features";
@@ -14,6 +16,11 @@ export const DORMER_SINK = 0.25;
 export const DORMER_EAVE = 0.15;
 /** How far the dormer's roof runs on into the main roof behind it. */
 const BACK_TUCK = 0.3;
+/** How high its front wall stands at least over the main roof there. */
+export const MIN_FRONT = 0.6;
+/** How much shallower than the main roof a shed dormer's roof stays at
+ *  least (degrees): the two must meet behind its front. */
+const SHED_SHALLOWER = 1;
 
 export interface DormerMesh {
   /** 1 on the dormer's roof, 0 on its walls, per vertex */
@@ -29,8 +36,10 @@ type V3 = [number, number, number];
  * A dormer's triangles (mesh frame: x = epsgX − cx, y = epsgY − cy, z up),
  * counter-clockwise from outside. Frame: a across the slope, b down it, c
  * up (absolute). The main roof there is z − tan(slope)·b; the front stands
- * at b = d/2, the roof at the measured top runs back to where the main
- * roof reaches it.
+ * at b = d/2, the roof runs back from it to where the main roof reaches
+ * the measured top — level, or a shed dormer's falling `tf` towards the
+ * front (the same back line: the bake writes a shed's top where its roof
+ * meets the main roof).
  */
 export function dormerMesh(
   f: DormerFeature,
@@ -41,11 +50,19 @@ export function dormerMesh(
   if (!p) {
     return out;
   }
-  const tan = Math.tan((Math.max(p.slope, 15) * Math.PI) / 180);
+  const slope = Math.max(p.slope, 15);
+  const tan = Math.tan((slope * Math.PI) / 180);
   const bf = p.d / 2;
   const zf = p.z - tan * bf;
-  const top = Math.max(p.top, zf + 0.6);
+  const top = Math.max(p.top, zf + MIN_FRONT);
   const bb = (p.z - top) / tan;
+  // a shed dormer's roof at its front, and how it falls per metre
+  const fall = Math.min(Math.max(p.tf ?? 0, 0), slope - SHED_SHALLOWER);
+  const front = Math.max(
+    top - Math.tan((fall * Math.PI) / 180) * (bf - bb),
+    zf + MIN_FRONT
+  );
+  const pitch = (top - front) / (bf - bb);
   const half = p.w / 2;
   const low = zf - DORMER_SINK;
   out.base = low;
@@ -69,21 +86,24 @@ export function dormerMesh(
   quad(
     0,
     at(-half, bf, low),
-    at(-half, bf, top),
-    at(half, bf, top),
+    at(-half, bf, front),
+    at(half, bf, front),
     at(half, bf, low)
   );
   // cheeks (+a, −a): from the front's foot up to the roof line behind
-  tri(0, at(half, bf, low), at(half, bf, top), at(half, bb, top));
-  tri(0, at(-half, bf, low), at(-half, bb, top), at(-half, bf, top));
-  // its roof (+c), a little over the front and cheeks
+  tri(0, at(half, bf, low), at(half, bf, front), at(half, bb, top));
+  tri(0, at(-half, bf, low), at(-half, bb, top), at(-half, bf, front));
+  // its roof (+c), a little over the front and cheeks, on into the main
+  // roof behind
   const e = DORMER_EAVE;
+  const back = top + pitch * BACK_TUCK;
+  const eave = front - pitch * e;
   quad(
     1,
-    at(-half - e, bb - BACK_TUCK, top),
-    at(half + e, bb - BACK_TUCK, top),
-    at(half + e, bf + e, top),
-    at(-half - e, bf + e, top)
+    at(-half - e, bb - BACK_TUCK, back),
+    at(half + e, bb - BACK_TUCK, back),
+    at(half + e, bf + e, eave),
+    at(-half - e, bf + e, eave)
   );
   return out;
 }

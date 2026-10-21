@@ -31,6 +31,9 @@ type Props<F extends { properties: unknown }> = NonNullable<F["properties"]>;
 export interface TreeInquiry {
   /** conifer by its archetype (no species known: the kind of tree) */
   conifer: boolean;
+  /** drawn as the cone (its archetype's crown, tree-inventory.ts
+   *  ARCHETYPE_SHAPE): outlined as one — a pine or a yew is not */
+  cone?: boolean;
   /** the genus the bake keyed its season on ("" none) */
   genus: string;
   /** the tile's facts file (ADR 0042), fetched with the question */
@@ -43,6 +46,8 @@ export interface TreeInquiry {
   /** an orchard tree (OSM's orchards, lib/city/cultivated.ts): no row of
    *  the facts file, no register */
   orchard?: boolean;
+  /** an orchard tree DOM1 measured: its height and crown are facts */
+  measured?: boolean;
   /** where it stands (the site's CRS) */
   position: [number, number];
   tile: string;
@@ -150,20 +155,45 @@ function treeLines(t: TreeInquiry, f: TreeFacts, title: string): CardFact[] {
   ]);
 }
 
-/** An orchard tree's card: where it stands, from OSM's orchard (its size
- *  is the orchard's default, no fact). */
+/** An orchard tree's card: the orchard from OSM; where DOM1 measured the
+ *  tree (a crown peak, cultivated.py) its height and crown, else no fact
+ *  (its size is the orchard's default). */
 function orchardCard(
   t: TreeInquiry,
-  provenance: SiteProvenance | null
+  provenance: SiteProvenance | null,
+  credits: CardCredits
 ): InquiryCard {
+  const measured = t.measured === true;
   return {
     kicker: "Obstbaum",
     title: firstText(t.genus, "Obstbaum"),
     address: "",
-    facts: [],
+    facts: measured
+      ? factLines([
+          ["Höhe", metres(t.height)],
+          ["Krone", `Ø ${metres(t.crown)}`],
+        ])
+      : [],
     id: positionKey(t.position),
     idLabel: "Lage",
-    sources: stated("taken", osmSource(provenance, ["Obstwiese"], "trees")),
+    sources: [
+      ...stated("taken", osmSource(provenance, ["Obstwiese"], "trees")),
+      ...(measured
+        ? stated(
+            "detected",
+            sourceLine(
+              provenance,
+              "dom",
+              ["Standort, Höhe und Krone gemessen"],
+              {
+                label: "Digitales Oberflächenmodell DOM1",
+                credit: credits.provider,
+              },
+              ""
+            )
+          )
+        : []),
+    ],
   };
 }
 
@@ -175,7 +205,7 @@ export function treeCard(
   credits: CardCredits
 ): InquiryCard {
   if (t.orchard) {
-    return orchardCard(t, provenance);
+    return orchardCard(t, provenance, credits);
   }
   const f = facts ?? NO_TREE_FACTS;
   const title = firstText(
@@ -225,6 +255,7 @@ const MONUMENT_FORM: Record<string, string> = {
   stele: "Stele",
   stone: "Gedenkstein",
   obelisk: "Obelisk",
+  column: "Säule",
 };
 
 const FOUNTAIN_STYLE: Record<string, string> = {
@@ -274,6 +305,33 @@ function monumentOsmWhat(
   return what.length > 0 ? what : ["Lage"];
 }
 
+/** The line of the surface a monument's height was measured in: the
+ *  laser scan where it saw the monument (`hs`), else DOM1. */
+function measuredSource(
+  p: Props<MonumentFeature>,
+  provenance: SiteProvenance | null,
+  credits: CardCredits
+): string {
+  return p.hs === "lsc"
+    ? sourceLine(
+        provenance,
+        "lsc",
+        ["Höhe gemessen"],
+        { label: "Laserscan", credit: credits.provider },
+        ""
+      )
+    : sourceLine(
+        provenance,
+        "dom",
+        ["Höhe gemessen"],
+        {
+          label: "Digitales Oberflächenmodell DOM1",
+          credit: credits.provider,
+        },
+        ""
+      );
+}
+
 /** The monument's or fountain's card. */
 export function monumentCard(
   m: MonumentInquiry,
@@ -283,9 +341,13 @@ export function monumentCard(
   const p = m.properties;
   const kicker =
     MONUMENT_FORM[p.form ?? ""] ?? MONUMENT_KIND[p.kind] ?? "Denkmal";
-  const height = reliefHeight(p);
-  const tagged = height ? undefined : p.height;
-  const facts = monumentFacts(p, height ?? tagged ?? null);
+  // its measured form's top, else a tagged height, else the height
+  // measured in the open around its point (`hm`)
+  const relief = reliefHeight(p);
+  const tagged = relief ? undefined : p.height;
+  const height = relief ?? tagged ?? p.hm ?? null;
+  const measured = height !== null && tagged === undefined;
+  const facts = monumentFacts(p, height);
   const fromDlm = p.source === "dlm" || p.source === "dlm+osm";
   const fromOsm = p.source === "osm" || p.source === "dlm+osm";
   const osmWhat = monumentOsmWhat(p, fromDlm, tagged !== undefined);
@@ -308,18 +370,7 @@ export function monumentCard(
     ),
     ...stated(
       "computed",
-      height
-        ? sourceLine(
-            provenance,
-            "dom",
-            ["Höhe gemessen"],
-            {
-              label: "Digitales Oberflächenmodell DOM1",
-              credit: credits.provider,
-            },
-            ""
-          )
-        : ""
+      measured ? measuredSource(p, provenance, credits) : ""
     ),
   ];
   return {

@@ -18,14 +18,17 @@ import {
   raiseTerraces,
   stairColors,
   type StairLine,
+  stairRails,
   type StairSurround,
   stairGeometry,
   type Terrace,
 } from "../lib/city/stairs";
 import { carvePassages, type Passage } from "../lib/city/passages";
+import { raiseWater, type WaterLift } from "../lib/city/water-bodies";
 import { ownsPoint } from "../lib/city/tileset";
 import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
 import {
+  wallColors,
   type WallOptions,
   type WallRibbon,
   wallGeometry,
@@ -35,8 +38,7 @@ import {
   fenceGeometry,
   type GatePoint,
 } from "../lib/city/fences";
-import { kerbGeometry } from "../lib/city/kerbs";
-import type { Point2 } from "../lib/city/polyline";
+import { kerbGeometry, type KerbLine } from "../lib/city/kerbs";
 import {
   buildTerrainGeometryData,
   sampleHeightfield,
@@ -188,13 +190,16 @@ export interface TerrainFeatures {
   passages?: Passage[];
   stairs?: StairLine[];
   terraces?: Terrace[];
+  /** the water fills lifted to their body's level (lib/city/water-bodies.ts) */
+  water?: WaterLift | null;
 }
 
 /**
- * The DGM shaped in four passes: the walls burned in as steps
+ * The DGM shaped in five passes: the walls burned in as steps
  * (lib/city/terrain-conflate.ts; the grid only — a TIN keeps the measured
  * ramps and the wall ribbons snap to them), the raised areas the DGM lacks
- * lifted to their level, the ground under each flight of stairs lowered
+ * lifted to their level, the water's lower fills lifted to their body's
+ * level (lib/city/water-bodies.ts), the ground under each flight of stairs lowered
  * below its treads (lib/city/stairs.ts), `stairMargin` deeper for a mesh
  * that only approximates the grid, and the passages under the decks opened
  * (lib/city/passages.ts).
@@ -206,13 +211,16 @@ export function shapeDgm(
   opts: { burnWalls: boolean; stairMargin: number }
 ): Float32Array {
   const { n, bounds } = dgm;
-  const { passages = [], stairs = [], terraces = [] } = features;
+  const { passages = [], stairs = [], terraces = [], water } = features;
   let elevations: Float32Array = dgm.elevations;
   if (opts.burnWalls && walls.length > 0) {
     elevations = conflateWalls({ elevations, n, bounds, walls });
   }
   if (terraces.length > 0) {
     elevations = raiseTerraces({ elevations, n, bounds, terraces });
+  }
+  if (water) {
+    elevations = raiseWater({ elevations, n, bounds, lift: water });
   }
   if (stairs.length > 0) {
     const lines = walls.map((w) => w.coords);
@@ -400,12 +408,11 @@ function worldToData(xyz: number[]): Float32Array<ArrayBuffer> {
 }
 
 /**
- * The flights of stairs this tile owns (the tile owning a flight's middle
- * stands it; a flight across a seam is burned into both terrains) as one
- * mesh: treads, risers and cheeks with their stone shades as vertex colours
+ * The flights of stairs this tile owns (`ownedStairs`) as one mesh: treads,
+ * risers and cheeks in their material's shades as vertex colours
  * (lib/city/stairs.ts). With the `surround` (the final fine ground of every
- * tile and the walls), a side cut into a bank becomes a Wange. Null when the
- * tile owns none.
+ * tile and the walls), a walled side cut into a bank becomes a Wange. Null
+ * when the tile owns none.
  */
 export function stairMesh(
   stairs: StairLine[],
@@ -415,16 +422,13 @@ export function stairMesh(
 ): Omit<MeshInput, "children" | "extras" | "table" | "weld"> | null {
   const positions: number[] = [];
   const normals: number[] = [];
-  const kinds: number[] = [];
-  for (const stair of stairs) {
-    const [x, y] = axisMiddle(stair.coords);
-    const data = ownsPoint(bounds, x, y)
-      ? stairGeometry(stair, offset, surround)
-      : null;
+  const colors: number[] = [];
+  for (const stair of ownedStairs(stairs, bounds)) {
+    const data = stairGeometry(stair, offset, surround);
     if (data) {
       positions.push(...data.positions);
       normals.push(...data.normals);
-      kinds.push(...data.kinds);
+      colors.push(...stairColors(data.kinds, stair.mat));
     }
   }
   if (positions.length === 0) {
@@ -434,15 +438,38 @@ export function stairMesh(
     name: "stairs",
     positions: worldToData(positions),
     normals: worldToData(normals),
-    colors: stairColors(kinds),
+    colors: new Float32Array(colors),
   };
+}
+
+/** The flights a tile stands: those whose axis's middle it owns (a flight
+ *  across a seam is burned into both tiles' terrain). */
+export function ownedStairs(
+  stairs: readonly StairLine[],
+  bounds: TerrainBounds
+): StairLine[] {
+  return stairs.filter((stair) => {
+    const [x, y] = axisMiddle(stair.coords);
+    return ownsPoint(bounds, x, y);
+  });
+}
+
+/** The handrails of the flights a tile stands (lib/city/stairs.ts
+ *  `stairRails`), as fence lines for its fence mesh. */
+export function stairRailLines(
+  stairs: readonly StairLine[],
+  bounds: TerrainBounds
+): FenceLine[] {
+  return ownedStairs(stairs, bounds).flatMap(stairRails);
 }
 
 /**
  * The tile's walls as one ribbon mesh, standing on `heightAt` — the final
  * fine ground of every tile of the site, so a wall near a seam reads its
  * neighbour's; on TIN ground (`snapToStep`) an earth-retaining wall snaps to
- * the measured step. Null when no wall stands.
+ * the measured step. Each wall's material tone rides as its vertex colours
+ * (COLOR_0, a third vertex buffer beside position and normal). Null when no
+ * wall stands.
  */
 export function wallMesh(
   walls: WallRibbon[],
@@ -456,6 +483,7 @@ export function wallMesh(
         name: "walls",
         positions: worldToData(data.positions),
         normals: worldToData(data.normals),
+        colors: wallColors(data.tones),
       }
     : null;
 }
@@ -487,10 +515,10 @@ export function fenceMesh(
 
 /**
  * The tile's kerb stones as one mesh, standing on `heightAt` — the final
- * shaped ground (lib/city/kerbs.ts).
+ * shaped ground (lib/city/kerbs.ts), lowered where the bake says.
  */
 export function kerbMesh(
-  lines: Point2[][],
+  lines: readonly KerbLine[],
   heightAt: (x: number, y: number) => number | null,
   offset: { cx: number; cy: number }
 ): Omit<MeshInput, "children" | "extras" | "table" | "weld"> | null {

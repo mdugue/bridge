@@ -25,11 +25,17 @@ The raw feed (`data/_raw/gtfs/nv_free.zip`, ≈290 MB, all of Germany's
 local transport, shared by every site; `bun run fetch` downloads it for a
 site with trams) is filtered once to the site's trams and cached beside it
 (`trams_<site extent>.json`): streaming its 2 GB of stop times takes a few
-minutes. Every operator's trams are the same here: route type 0 (and the
-extended 900–906), whoever runs them.
+minutes. A tram is route type 0 (and the extended 900–906), whoever runs
+it; each line keeps the feed's `agency_name` (Dresden's trams come as the
+Verkehrsverbund Oberelbe's, Munich's as Stadtwerke München's, Leipzig's as
+LVB's), from which the viewer picks the cars' livery and length
+(lib/city/tram-timetable.ts `liveryOf`).
 
 Output `data/<site>/transit/trams.json` (lib/city/features.ts `TramTimetable`):
   routes     the line names ("1", "2", …)
+  agencies   the operators' names as the feed gives them (`agency_name`)
+  routeAgency  per line, the index into `agencies` of who runs it (the
+             agency of most of the line's GTFS routes)
   patterns   one per sequence of stops: `route` (index), `coords` the path
              (projected, decimetres), `at` the distance along it of each
              stop (m), `bridge` [from, to] vertex ranges on a bridge deck
@@ -110,11 +116,16 @@ def site_trams(zip_path: Path, bounds, epsg: int) -> dict:
     xmin, ymin, xmax, ymax = bounds
     margin = 500.0
     with zipfile.ZipFile(zip_path) as z:
-        routes = {
-            r["route_id"]: r["route_short_name"]
-            for r in _rows(z, "routes.txt")
-            if r["route_type"] in TRAM_TYPES
+        agency_names = {
+            a.get("agency_id", ""): a.get("agency_name", "") for a in _rows(z, "agency.txt")
         }
+        # a feed of one agency may leave a route's agency_id empty (GTFS)
+        only = next(iter(agency_names.values())) if len(agency_names) == 1 else ""
+        routes, agencies = {}, {}
+        for r in _rows(z, "routes.txt"):
+            if r["route_type"] in TRAM_TYPES:
+                routes[r["route_id"]] = r["route_short_name"]
+                agencies[r["route_id"]] = agency_names.get(r.get("agency_id", ""), only)
         stops = {}
         for s in _rows(z, "stops.txt"):
             try:
@@ -160,8 +171,10 @@ def site_trams(zip_path: Path, bounds, epsg: int) -> dict:
         for c in _rows(z, "calendar_dates.txt"):
             if c["service_id"] in services:
                 exceptions[c["service_id"]][c["date"]] = c["exception_type"]
+    used = {t["route"] for t in kept.values()}
     return {
-        "routes": {rid: routes[rid] for rid in {t["route"] for t in kept.values()}},
+        "routes": {rid: routes[rid] for rid in used},
+        "agencies": {rid: agencies[rid] for rid in used},
         "stops": stops,
         "trips": {tid: {**t, "times": sorted(times[tid])} for tid, t in sorted(kept.items())},
         "calendar": calendar,
@@ -204,9 +217,11 @@ def cached_site_trams(folder: Path, bounds, epsg: int) -> dict | None:
     cache = folder / f"trams_{key}.json"
     if cache.exists() and cache.stat().st_mtime >= zip_path.stat().st_mtime:
         try:
-            return json.loads(cache.read_text())
+            cached = json.loads(cache.read_text())
         except ValueError:
-            pass  # unreadable (an older, interrupted write): derived again
+            cached = None  # unreadable (an older, interrupted write): derived again
+        if cached is not None and "agencies" in cached:
+            return cached  # (a cut from before the agencies is derived again)
     feed = site_trams(zip_path, bounds, epsg)
     part = cache.with_name(cache.name + ".part")
     part.write_text(json.dumps(feed))
@@ -452,9 +467,22 @@ def pattern_geometry(run: list, tracks: Tracks) -> tuple[list, list[float], list
     return coords, at, ranges
 
 
+def route_agencies(feed: dict, route_names: list[str]) -> tuple[list[str], list[int]]:
+    """Who runs each line: the agencies' names (sorted) and, per line name,
+    the index of the agency of most of its GTFS routes (two operators may
+    share a line's name in one feed; the earlier name wins a tie)."""
+    by_name: dict[str, defaultdict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for rid, name in feed["routes"].items():
+        by_name[name][feed.get("agencies", {}).get(rid, "")] += 1
+    runs = {name: min(c, key=lambda a: (-c[a], a)) for name, c in by_name.items()}
+    names = sorted(set(runs.values()))
+    return names, [names.index(runs[r]) for r in route_names]
+
+
 def build_timetable(feed: dict, tracks: Tracks, days: dict[str, datetime.date]) -> dict:
     route_names = sorted(set(feed["routes"].values()), key=lambda r: (len(r), r))
     route_index = {name: i for i, name in enumerate(route_names)}
+    agencies, route_agency = route_agencies(feed, route_names)
     patterns: list[dict] = []
     pattern_of: dict[tuple, int] = {}
     profiles: list[dict] = []
@@ -488,6 +516,8 @@ def build_timetable(feed: dict, tracks: Tracks, days: dict[str, datetime.date]) 
                 trips_by_day[kind].append([profile_of[pkey], start])
     return {
         "routes": route_names,
+        "agencies": agencies,
+        "routeAgency": route_agency,
         "patterns": patterns,
         "profiles": profiles,
         "days": {
@@ -520,5 +550,6 @@ def run_site(raw: Path, data: Path, bounds, epsg: int, today: datetime.date | No
     counts = {k: len(v["trips"]) for k, v in doc["days"].items()}
     print(
         f"timetable trams: {len(doc['routes'])} lines, {len(doc['patterns'])} patterns, "
-        f"{len(doc['profiles'])} running-time profiles, trips per day {counts}"
+        f"{len(doc['profiles'])} running-time profiles, trips per day {counts}, "
+        f"run by {doc['agencies']}"
     )

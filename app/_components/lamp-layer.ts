@@ -17,7 +17,14 @@ import {
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { color, float, mix, select, uniform, uv, vec3, vec4 } from "three/tsl";
 import type { LampFeature } from "@/lib/city/features";
-import { LAMP_POST_H, postHeight } from "@/lib/city/lamps";
+import { yawOfBearing } from "@/lib/city/furniture";
+import {
+  ARM_DROP,
+  armOffset,
+  armReach,
+  LAMP_POST_H,
+  postHeight,
+} from "@/lib/city/lamps";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
 import type { Pt } from "./rail-layer";
@@ -92,6 +99,11 @@ interface Pool extends Place {
   s: number;
 }
 
+/** A mast's arm: its post's foot, turned to the bearing it reaches to. */
+interface ArmPlace extends Place {
+  yaw: number;
+}
+
 /** Per-tile lamp visuals (posts + heads + glow + ground pools) on the Y-up scene. */
 export interface LampControl {
   /** Nothing of the tile's own to free: the meshes go with the scene and
@@ -145,14 +157,20 @@ function glowAlpha(): F {
 function placeInstances(
   geo: BufferGeometry,
   material: Material,
-  places: readonly (Place & { s?: number })[],
+  places: readonly (Place & { s?: number; yaw?: number })[],
   scale = 1
 ): Instances {
   const mesh = new Instances(geo, material, places.length);
   const m = new Matrix4();
+  const turn = new Matrix4();
   for (let i = 0; i < places.length; i++) {
     const s = scale * (places[i].s ?? 1);
-    m.makeScale(s, s, s).setPosition(places[i].x, places[i].y, places[i].z);
+    m.makeScale(s, s, s);
+    const yaw = places[i].yaw;
+    if (yaw !== undefined) {
+      m.premultiply(turn.makeRotationY(yaw));
+    }
+    m.setPosition(places[i].x, places[i].y, places[i].z);
     mesh.setMatrixAt(i, m);
   }
   mesh.instanceMatrix.needsUpdate = true;
@@ -182,6 +200,42 @@ function buildPosts(places: Place[], height: number): Instances {
   const geo = mergeGeometries([pole, housing]) ?? pole;
   const mesh = placeInstances(geo, postMaterial(), places);
   mesh.name = "lamp-posts";
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+/** A tall mast's pole, up to where its arm leaves it (`buildArms`): the
+ *  posts' material, a little stouter. */
+function buildPoles(places: Place[], height: number): Instances {
+  const h = height - ARM_DROP + 0.1;
+  const pole = new CylinderGeometry(0.07, 0.12, h, 6);
+  pole.translate(0, h / 2, 0);
+  const mesh = placeInstances(pole, postMaterial(), places);
+  mesh.name = "lamp-poles";
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+/** A mast's arm, out of its pole `ARM_DROP` under the head and rising to it
+ *  over local +Z (`armReach`), the luminaire's flat cap over the head; each
+ *  turned to its bearing. */
+function buildArms(places: ArmPlace[], height: number): Instances {
+  const reach = armReach(height);
+  const tube = new CylinderGeometry(
+    0.035,
+    0.05,
+    Math.hypot(reach, ARM_DROP),
+    5
+  );
+  tube.rotateX(Math.atan2(reach, ARM_DROP)); // its +Y along the arm
+  tube.translate(0, height - ARM_DROP / 2, reach / 2);
+  const cap = new BoxGeometry(0.34, 0.08, 0.5);
+  cap.translate(0, height + 0.19, reach);
+  const geo = mergeGeometries([tube, cap]) ?? tube;
+  const mesh = placeInstances(geo, postMaterial(), places);
+  mesh.name = "lamp-arms";
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
@@ -289,15 +343,20 @@ function buildDecals(places: Pool[]): Instances {
 
 /** A tile's lamps sorted by how they are held. */
 interface LampPlaces {
+  /** the tall masts' arms by their height (m) */
+  arms: Map<number, ArmPlace[]>;
   /** every head, posts' and hung lamps', for the halos and the real lights */
   heads: Vector3[];
   hung: Place[];
   masts: Place[];
-  /** every lamp's ground, for the light pools */
+  /** the tall masts' poles by their height (m): their heads are on arms */
+  poles: Map<number, Place[]>;
+  /** the ground under every head, for the light pools */
   pools: Pool[];
-  /** the posts by their height (m) */
+  /** the posts with their head on top, by their height (m) */
   posts: Map<number, Place[]>;
-  /** the wall lanterns by their height (m): heads on a bracket, no post */
+  /** the heads with no post under them by their height (m): the wall
+   *  lanterns on their brackets, the heads at the masts' arm ends */
   walls: Map<number, Place[]>;
   wires: Wires;
 }
@@ -370,7 +429,11 @@ function bracket(
   addWire(out.wires, [{ x, y: head.y + BRACKET_RISE, z }, top], BRACKET_HALF);
 }
 
-function byHeight(sets: Map<number, Place[]>, h: number, at: Place): void {
+function byHeight<T extends Place>(
+  sets: Map<number, T[]>,
+  h: number,
+  at: T
+): void {
   const set = sets.get(h);
   if (set) {
     set.push(at);
@@ -379,10 +442,44 @@ function byHeight(sets: Map<number, Place[]>, h: number, at: Place): void {
   }
 }
 
+/** A light pool's scale under a head `h` m up: a taller post lights a wider
+ *  pool. */
+const poolScale = (h: number) => Math.min(Math.max(h / LAMP_H, 0.8), 2);
+
+/**
+ * A tall mast: its pole at its foot, its arm to its bearing (`arm`), the
+ * head at the arm's end `h` m over the foot, and the light pool on the
+ * ground (or the deck) under that head.
+ */
+function placeMast(
+  f: LampFeature,
+  [dx, dy]: [number, number],
+  foot: Pt,
+  ctx: GroundContext,
+  out: LampPlaces
+): void {
+  const h = postHeight(f);
+  byHeight(out.poles, h, foot);
+  byHeight(out.arms, h, { ...foot, yaw: yawOfBearing(f.properties?.arm ?? 0) });
+  // north is world −Z
+  const end = { x: foot.x + dx, y: foot.y, z: foot.z - dy };
+  byHeight(out.walls, h, end);
+  out.heads.push(new Vector3(end.x, end.y + h, end.z));
+  // on a bridge, its deck; else the ground under the head
+  const [ex, ey] = f.geometry.coordinates;
+  const below = f.properties?.deck ?? ctx.heightAt(ex + dx, ey + dy) ?? foot.y;
+  out.pools.push({ ...end, y: below, s: poolScale(h) });
+}
+
 function placeLamp(f: LampFeature, ctx: GroundContext, out: LampPlaces): void {
   const ground = footOf(f, ctx);
   if (!ground) {
     return; // off-tile / NoData
+  }
+  const arm = armOffset(f);
+  if (arm) {
+    placeMast(f, arm, ground, ctx, out);
+    return;
   }
   const hung = Boolean(f.properties?.wire);
   const onWall = !hung && f.properties?.wall !== undefined;
@@ -393,7 +490,7 @@ function placeLamp(f: LampFeature, ctx: GroundContext, out: LampPlaces): void {
     byHeight(onWall ? out.walls : out.posts, h, ground);
   }
   // a taller post lights a wider pool; a hung lamp's is the one it had
-  const s = hung ? 1 : Math.min(Math.max(h / LAMP_H, 0.8), 2);
+  const s = hung ? 1 : poolScale(h);
   out.pools.push({ ...ground, s });
   out.heads.push(new Vector3(ground.x, ground.y + h, ground.z));
   const head = { x: ground.x, y: ground.y + h, z: ground.z };
@@ -406,9 +503,11 @@ function placeLamp(f: LampFeature, ctx: GroundContext, out: LampPlaces): void {
 
 function lampPlaces(features: LampFeature[], ctx: GroundContext): LampPlaces {
   const out: LampPlaces = {
+    arms: new Map(),
     heads: [],
     hung: [],
     masts: [],
+    poles: new Map(),
     pools: [],
     posts: new Map(),
     walls: new Map(),
@@ -432,7 +531,8 @@ function taggedHeads(places: Place[], height: number): Instances {
 
 /**
  * Builds one tile's OSM street lamps into stylized geometry on the Y-up scene:
- * a post with its head, a lantern on its bracket out of a facade, or — a
+ * a post with its head, a tall mast with its head on an arm over the
+ * carriageway, a lantern on its bracket out of a facade or a wall, or — a
  * lamp hung across the street — a head on a wire between the facades (or
  * masts at the kerb). Mostly fake — emissive
  * heads, additive glow sprites and ground light-pool decals — driven by a
@@ -463,6 +563,12 @@ export function buildLamps(
 
   for (const [height, posts] of places.posts) {
     group.add(buildPosts(posts, height), taggedHeads(posts, height));
+  }
+  for (const [height, poles] of places.poles) {
+    group.add(buildPoles(poles, height));
+  }
+  for (const [height, arms] of places.arms) {
+    group.add(buildArms(arms, height));
   }
   for (const [height, lanterns] of places.walls) {
     group.add(taggedHeads(lanterns, height));

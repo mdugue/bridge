@@ -6,9 +6,12 @@ import {
   buildingMesh,
   columnMesh,
   reliefMesh,
+  roofMesh,
   STRUCTURE_SINK,
   structureFootprint,
+  structureShape,
 } from "./structures";
+import { ROOF_DEPTH } from "./open-roofs";
 
 const triangulate = (data: number[], holes: number[]): number[] => {
   const pts: Vector2[] = [];
@@ -101,6 +104,68 @@ test("a missing building is its outline extruded, holes cut out", () => {
   const m = buildingMesh(square, { cx: 0, cy: 0 }, triangulate);
   expect(volume(m)).toBeCloseTo((400 - 100) * (12 + STRUCTURE_SINK), 3);
   expect(structureFootprint(square)).toHaveLength(4);
+  // a raised part (a bridge between two buildings) from its floor up
+  const bridge: StructureFeature = {
+    ...square,
+    properties: { base: 7, h: 12, kind: "building", z: 50 },
+  };
+  const b = buildingMesh(bridge, { cx: 0, cy: 0 }, triangulate);
+  expect(volume(b)).toBeCloseTo((400 - 100) * (12 - 7), 3);
+  const zs = b.positions.filter((_, i) => i % 3 === 2);
+  expect(Math.min(...zs)).toBe(57);
+});
+
+test("a roof on posts is a slab under its measured top, posts down to the ground", () => {
+  // Unna's platform roofs: 80 × 8 m, 5.8 m over the platform
+  const roof: StructureFeature = {
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [1000, 2000],
+          [1080, 2000],
+          [1080, 2008],
+          [1000, 2008],
+          [1000, 2000],
+        ],
+      ],
+    },
+    properties: { kind: "roof", z: 100, h: 5.8 },
+  };
+  const offset = { cx: 1000, cy: 2000 };
+  const m = roofMesh(roof, offset, triangulate);
+  expect(structureShape(roof, offset, triangulate).positions).toEqual(
+    m.positions
+  );
+  const top = 105.8;
+  const under = top - ROOF_DEPTH.max;
+  const slab: StructureMesh = { isRoof: [], positions: [] };
+  const posts: StructureMesh = { isRoof: [], positions: [] };
+  for (let i = 0; i < m.positions.length; i += 9) {
+    const tri = m.positions.slice(i, i + 9);
+    const z = [tri[2], tri[5], tri[8]];
+    (Math.min(...z) >= under - 1e-9 ? slab : posts).positions.push(...tri);
+  }
+  // a closed slab of the roof's depth over its outline
+  expect(volume(slab)).toBeCloseTo(640 * ROOF_DEPTH.max, 3);
+  const zs = m.positions.filter((_, i) => i % 3 === 2);
+  expect(Math.max(...zs)).toBeCloseTo(top, 9);
+  // a row of ten posts down its middle, feet in the ground
+  expect(posts.positions.length / 9).toBe(10 * 8);
+  const postZ = posts.positions.filter((_, i) => i % 3 === 2);
+  expect(Math.min(...postZ)).toBeCloseTo(100 - STRUCTURE_SINK, 9);
+  expect(Math.max(...postZ)).toBeCloseTo(under, 9);
+  const postY = posts.positions.filter((_, i) => i % 3 === 1);
+  expect(Math.min(...postY)).toBeGreaterThan(3.8);
+  expect(Math.max(...postY)).toBeLessThan(4.2);
+  // only the slab's top is roof
+  const roofTris = m.isRoof.filter((r, i) => i % 3 === 0 && r === 1).length;
+  expect(roofTris).toBeGreaterThan(0);
+  for (let i = 0; i < m.isRoof.length; i += 3) {
+    if (m.isRoof[i] === 1) {
+      expect(m.positions[3 * i + 2]).toBeCloseTo(top, 9);
+    }
+  }
 });
 
 test("a feature of the wrong shape builds nothing", () => {

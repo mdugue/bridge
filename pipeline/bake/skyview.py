@@ -8,25 +8,44 @@ Height field: the DGM1 with every non-vertical LoD2 surface burned on top
 (max over its triangles, the plane of each surface evaluated per cell) —
 where a LoD2 roof misses DOM1 and roofs.py rebuilt it, the rebuilt parts
 instead (flat, or on their measured surface), as the city mesh draws them
-(ADR 0036).
-Trees are left out on purpose — they cast real shadows and have their own
-shading — and so is DOM1 itself (it reaches the field only through the
-committed rebuilt roofs): the bake is reproducible from the repository.
-Committed neighbour tiles fill the margin; beyond the site the ground is
-open, at the mean height of the tile's edge.
+(ADR 0036). DOM1 itself is left out (it reaches the field only through the
+committed rebuilt roofs): the bake is reproducible from the repository and
+the raw cache of the far terrain.
+
+Trees: the sky view takes the crowns the viewer draws (canopy, laser scan,
+cadastre, the DLM's rows — their committed files, as wide as
+lib/city/tree-placement.ts draws them) as a partial occluder, letting
+CROWN_TRANSMISSION of the sky they cover through: an avenue under its
+crowns saw 0.73–0.94 of the sky without them, 0.01–0.03 with them solid.
+The horizon leaves them out — they cast real shadows inside the frustum,
+and a horizon angle cannot hold half a crown.
+
+Beyond the site: committed neighbour tiles fill the margin; past them the
+land is Copernicus GLO-30 (glo30.py), lightly smoothed and moved onto the
+DGM1's heights by the median of their difference over the open ground both
+cover. The far band also reads it out to TERRAIN_FAR_M (10 km): the hills
+1.5–10 km round Meißen stand 1.5° high at the median, though above the
+nearer slopes on a tenth of its point-azimuths only, by 0.3°. Without the
+cached window the site's own edge runs on level outward (`extend_edges`)
+— never one mean for the whole edge, which set a wall up to 25° too high
+near the low side of a sloping site (6.1 % of Meißen's point-azimuths over
+3° too high, 3.2 % of Unna's, 2.8 % of Grimma's; level edges 0.2 %, 0, 0).
 
 Outputs:
   data/<site>/dlm/svf_<tile>.png      1024² (≈2 m), 8-bit: 255 · svf, where
                                svf = 1 − mean over 16 azimuths of sin² h and
-                               h is the horizon within 150 m (isotropic sky).
+                               h is the horizon within 150 m (isotropic sky;
+                               a crown counts 1 − CROWN_TRANSMISSION of the
+                               sky it covers above the solid horizon).
                                Texels under a roof (their ground sees almost
                                no sky) take the nearest open texel's value, so
                                LINEAR filtering and the mipmaps never pull a
                                dark band out of the footprints onto the
                                street
   data/<site>/dlm/horizon_<tile>.png  256² (≈8 m) × 16 azimuths × two bands: the
-                               horizon angle of occluders 80–1 500 m away
-                               (the far band, 0–45° in 8 bits) and 8–80 m
+                               horizon angle of occluders 80 m–10 km away
+                               (the far band, 0–45° in 8 bits; past 1 500 m
+                               the far terrain alone) and 8–80 m
                                away (the near band, 0–90° in 8 bits). Eight
                                RGBA planes stacked north-to-south in one
                                greyscale PNG four times as wide (R0 G0 B0 A0
@@ -37,8 +56,14 @@ Outputs:
                                (lib/city/png-raster.ts). Footprint texels
                                take the nearest open texel's angles, as the
                                sky view's do
-  data/<site>/dlm/horizon_<tile>.json the legend (azimuths, bands, angle scales) —
-                               lib/city/skyview.ts keeps the same constants
+  data/<site>/dlm/horizon_<tile>.json the legend (azimuths, bands, angle scales,
+                               the far terrain's source and offset) and,
+                               with the far terrain, the valley around the
+                               tile's low ground: its height (`valley.floorM`)
+                               and the rim per azimuth (`valley.rimM`,
+                               glo30.rims) — the valley haze's depth
+                               (lib/city/valley-fog.ts, via prepare-data.ts)
+                               — lib/city/skyview.ts keeps the same constants
 The observer is the bare ground (DGM): the rasters shade the terrain and,
 sampled just outside a wall, its facade.
 
@@ -71,6 +96,7 @@ from rasterio.transform import from_origin
 from rasterio.warp import reproject
 from scipy.ndimage import distance_transform_edt
 
+from . import glo30
 from .common import Tile, overlaps, save_grey_png
 from .lowveg import lod2_rings
 
@@ -85,9 +111,27 @@ NEAR_MAX_DEG = 90.0  # beside a wall the near horizon is steep
 FOOTPRINT_MIN_M = 2.0  # a roof this far above the ground: under a building
 AZIMUTHS = 16  # clockwise from north, 22.5° apart
 WALL_NZ = 0.05  # |n_z| below this: a vertical wall, nothing to burn
+# The far band past HORIZON_FAR_M: the far terrain alone, out to here (m),
+# on cells TERRAIN_CELLS horizon cells wide (≈ 31 m, GLO-30's own).
+TERRAIN_FAR_M = glo30.REACH_M
+TERRAIN_CELLS = 4
+# The share of the sky a crown it covers lets through: the year's middle
+# between a leafed crown's ≈ 0.15 and a bare one's ≈ 0.65.
+CROWN_TRANSMISSION = 0.5
+# The crowns' widths as lib/city/tree-placement.ts draws them: a canopy
+# point CROWN_TO_HEIGHT of its height, a laser-scan crown twice its radius
+# within SCAN_CROWN_TO_HEIGHT of its height, a register tree its measured
+# diameter; a DLM row a tree every ROW_TREE_SPACING_M, ROW_TREE_H tall
+# (BASE_TREE_H × the mean of its 0.8–1.4 scale).
+CROWN_TO_HEIGHT = 0.58
+SCAN_CROWN_TO_HEIGHT = (0.4, 0.75)
+ROW_TREE_SPACING_M = 9.0
+ROW_TREE_H = 7.0
+MIN_CROWN_M = 1.0  # a crown narrower than this (m) is left out
 
 
-# Derived from the provider's DGM1 and LoD2 alone.
+# Derived from the provider's DGM1 and LoD2, the committed crowns, and
+# beyond the site Copernicus GLO-30.
 
 
 def azimuths(count: int = AZIMUTHS) -> np.ndarray:
@@ -286,24 +330,71 @@ class Roofs:
         return out
 
 
-def edge_mean(dgm: np.ndarray, margin: int) -> float:
-    """The mean height of the tile's own edge (its outermost ring of cells
-    inside the margin) — the open ground assumed beyond the site."""
-    inner = dgm[margin : dgm.shape[0] - margin, margin : dgm.shape[1] - margin]
-    ring = np.concatenate([inner[0], inner[-1], inner[:, 0], inner[:, -1]])
-    ring = ring[np.isfinite(ring)]
-    if len(ring):
-        return float(ring.mean())
-    return float(np.nanmean(dgm)) if np.isfinite(dgm).any() else 0.0
+def extend_edges(heights: np.ndarray) -> np.ndarray:
+    """Every unmeasured (NaN) cell takes the nearest measured cell's height:
+    the ground runs on level from the site's own edge, so nothing beyond it
+    stands higher than the edge it continues. (One mean for the whole edge
+    stood a wall up to 25° too high over the low side of a sloping site.)"""
+    missing = ~np.isfinite(heights)
+    if not missing.any():
+        return heights.astype(np.float32)
+    if missing.all():
+        return np.zeros_like(heights, np.float32)
+    _, (rows, cols) = distance_transform_edt(missing, return_indices=True)
+    return heights[rows, cols].astype(np.float32)
+
+
+class FarTerrain:
+    """The land beyond the site (Copernicus GLO-30, glo30.py), moved onto
+    the DGM1's heights by the median of their difference over the open
+    ground both cover — measured once per tile, on the first field asked."""
+
+    def __init__(self, path: Path, epsg: int):
+        self.path = path
+        self.epsg = epsg
+        self.offset: float | None = None
+
+    @classmethod
+    def of(cls, tile: Tile) -> FarTerrain | None:
+        """The site's cached window, or None (the fetch has not read it)."""
+        path = glo30.site_path(tile.raw, tile.data.name)
+        return cls(path, tile.epsg) if path.exists() else None
+
+    def on(self, field: Field, ground: np.ndarray, roof: np.ndarray) -> np.ndarray:
+        """The far terrain over `field` (NaN where it has none); `ground`
+        and `roof` (the DGM and the burned roofs on the same field) align it
+        on first use."""
+        bounds = (field.xmin, field.ymin, field.xmax, field.ymax)
+        far = glo30.far_terrain(self.path, self.epsg, bounds, field.res)
+        if far is None:
+            return np.full(field.shape, np.nan, np.float32)
+        if self.offset is None:
+            open_ground = np.isfinite(ground) & ~(np.fmax(roof, ground) - ground > glo30.OPEN_M)
+            self.offset = glo30.align(far, ground, open_ground)
+        return (far - self.offset).astype(np.float32)
+
+    def plain(self, bounds: tuple[float, float, float, float], res: float) -> np.ndarray:
+        """The aligned far terrain alone, averaged onto a coarse grid (the
+        far band's ring); call after `on` has aligned it."""
+        far = glo30.far_terrain(self.path, self.epsg, bounds, res, Resampling.average)
+        assert far is not None
+        return (far - (self.offset or 0.0)).astype(np.float32)
 
 
 def fields(
-    tile: Tile, px: int, reach_m: float, roofs: Roofs, pool: int = 1
+    tile: Tile,
+    px: int,
+    reach_m: float,
+    roofs: Roofs,
+    pool: int = 1,
+    far: FarTerrain | None = None,
 ) -> tuple[np.ndarray, np.ndarray, int]:
     """The ground (observer) and the surface (occluder) over the tile plus a
     margin of `reach_m`, at the tile's `px` grid; returns them and the
     margin in cells. With `pool` > 1 the roofs are burned `pool` times
-    finer and max-pooled, so a thin spire still occludes."""
+    finer and max-pooled, so a thin spire still occludes. Beyond the
+    committed tiles the far terrain stands in (`far`), and where neither
+    reaches the site's edge runs on (`extend_edges`)."""
     xmin, ymin, xmax, ymax = tile.bounds
     res = (xmax - xmin) / px
     margin = int(math.ceil(reach_m / res)) + 1
@@ -317,10 +408,100 @@ def fields(
         roof = np.fmax.reduce(
             np.fmax.reduce(roof.reshape(n, pool, n, pool), axis=3), axis=1
         ).astype(np.float32)
-    fill = edge_mean(ground, margin)
-    ground = np.where(np.isfinite(ground), ground, fill).astype(np.float32)
+    if far is not None:
+        terrain = far.on(Field(bounds, res), ground, roof)
+        ground = np.where(np.isfinite(ground), ground, terrain)
+    ground = extend_edges(ground)
     surface = np.fmax(ground, roof)
     return ground, surface, margin
+
+
+# --- the crowns ---------------------------------------------------------------
+
+
+def _points(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    return [
+        f
+        for f in json.loads(path.read_text()).get("features", [])
+        if (f.get("geometry") or {}).get("type") == "Point"
+    ]
+
+
+def tile_crowns(data: Path, tid: str) -> np.ndarray:
+    """A tile's crowns as (n, 4): x, y, height above the ground, width (m),
+    from its committed tree files as the viewer draws them."""
+    out: list[tuple[float, float, float, float]] = []
+    dlm = data / "dlm"
+    for f in _points(dlm / f"canopy_{tid}.geojson"):
+        h = float((f.get("properties") or {}).get("h") or 0.0)
+        x, y = f["geometry"]["coordinates"][:2]
+        out.append((x, y, h, h * CROWN_TO_HEIGHT))
+    lo, hi = SCAN_CROWN_TO_HEIGHT
+    for f in _points(dlm / f"canopyx_{tid}.geojson"):
+        p = f.get("properties") or {}
+        h, r = float(p.get("h") or 0.0), float(p.get("r") or 0.0)
+        x, y = f["geometry"]["coordinates"][:2]
+        out.append((x, y, h, min(max(2 * r, lo * h), hi * h) if r > 0 else h * CROWN_TO_HEIGHT))
+    for f in _points(dlm / f"trees_{tid}.geojson"):
+        p = f.get("properties") or {}
+        h = float(p.get("h") or 0.0)
+        d = float(p.get("d") or 0.0)
+        x, y = f["geometry"]["coordinates"][:2]
+        out.append((x, y, h, d if d > 0 else h * CROWN_TO_HEIGHT))
+    rows = dlm / f"vegrows_{tid}.geojson"
+    if rows.exists():
+        for f in json.loads(rows.read_text()).get("features", []):
+            p, g = f.get("properties") or {}, f.get("geometry") or {}
+            if p.get("kind") == "hedge" or g.get("type") != "LineString":
+                continue
+            line = shapely.LineString(g["coordinates"])
+            steps = np.arange(ROW_TREE_SPACING_M / 2, line.length, ROW_TREE_SPACING_M)
+            for pt in shapely.line_interpolate_point(line, steps):
+                out.append((pt.x, pt.y, ROW_TREE_H, ROW_TREE_H * CROWN_TO_HEIGHT))
+    a = np.asarray(out, np.float64).reshape(-1, 4)
+    return a[(a[:, 2] > 0) & (a[:, 3] >= MIN_CROWN_M)]
+
+
+def burn_crowns(field: Field, crowns: np.ndarray, ground: np.ndarray) -> np.ndarray:
+    """Each crown's top over the cells its disc covers (the ground at its
+    foot plus its height; NaN where no crown)."""
+    out = np.full(field.shape, -np.inf, np.float64)
+    if len(crowns):
+        col = (crowns[:, 0] - field.xmin) / field.res
+        row = (field.ymax - crowns[:, 1]) / field.res
+        r_cells = crowns[:, 3] / 2 / field.res
+        inside = (col >= 0) & (col < field.cols) & (row >= 0) & (row < field.rows)
+        top = np.full(len(crowns), np.nan)
+        top[inside] = ground[row[inside].astype(int), col[inside].astype(int)] + crowns[inside, 2]
+        span = int(np.ceil(r_cells.max())) if len(r_cells) else 0
+        for dr in range(-span, span + 1):
+            for dc in range(-span, span + 1):
+                cr = np.floor(row).astype(np.int64) + dr
+                cc = np.floor(col).astype(np.int64) + dc
+                # the cell centre within the disc
+                hit = np.hypot(cr + 0.5 - row, cc + 0.5 - col) <= r_cells
+                hit &= (cr >= 0) & (cr < field.rows) & (cc >= 0) & (cc < field.cols)
+                hit &= np.isfinite(top)
+                np.maximum.at(out, (cr[hit], cc[hit]), top[hit])
+    out[~np.isfinite(out)] = np.nan
+    return out.astype(np.float32)
+
+
+def crown_field(tile: Tile, px: int, reach_m: float, ground: np.ndarray, sources) -> np.ndarray:
+    """The crowns of every committed tile the field (`fields`' grid) touches,
+    as heights over it (NaN where none)."""
+    xmin, ymin, xmax, ymax = tile.bounds
+    res = (xmax - xmin) / px
+    margin = int(math.ceil(reach_m / res)) + 1
+    field = Field(
+        (xmin - margin * res, ymin - margin * res, xmax + margin * res, ymax + margin * res), res
+    )
+    bounds = (field.xmin, field.ymin, field.xmax, field.ymax)
+    parts = [tile_crowns(tile.data, tid) for tid, b in sources if overlaps(b, bounds)]
+    crowns = np.concatenate(parts) if parts else np.zeros((0, 4))
+    return burn_crowns(field, crowns, ground)
 
 
 # --- the horizon ------------------------------------------------------------
@@ -364,12 +545,27 @@ def horizon_tan(
     return best
 
 
-def sky_view(ground, surface, margin, res, reach_m=SVF_REACH_M, count=AZIMUTHS) -> np.ndarray:
-    """1 − mean over the azimuths of sin² h (h the horizon within reach)."""
+def sky_view(
+    ground,
+    surface,
+    margin,
+    res,
+    reach_m=SVF_REACH_M,
+    count=AZIMUTHS,
+    crowns=None,
+    transmission=CROWN_TRANSMISSION,
+) -> np.ndarray:
+    """1 − mean over the azimuths of sin² h (h the horizon within reach).
+    With `crowns` (their tops over the same grid, NaN where none) the sky
+    they hide above the solid horizon counts 1 − `transmission` of itself."""
     acc = None
+    over = None if crowns is None else np.fmax(surface, crowns)
     for az in azimuths(count):
         t = horizon_tan(ground, surface, margin, res, az, res, reach_m)
         sin2 = t * t / (1.0 + t * t)
+        if over is not None:
+            tc = horizon_tan(ground, over, margin, res, az, res, reach_m)
+            sin2 = sin2 + (1.0 - transmission) * (tc * tc / (1.0 + tc * tc) - sin2)
         acc = sin2 if acc is None else acc + sin2
     return 1.0 - acc / count
 
@@ -392,6 +588,35 @@ def far_horizon(
 ) -> np.ndarray:
     """The far band: occluders 80–1 500 m away, 0–45°."""
     return band_horizon(ground, surface, margin, res, near_m, far_m, HORIZON_MAX_DEG, count)
+
+
+def ring_horizon(
+    obs: np.ndarray,
+    terrain: np.ndarray,
+    margin: int,
+    res: float,
+    cells: int,
+    near_m: float = HORIZON_FAR_M,
+    far_m: float = TERRAIN_FAR_M,
+    count: int = AZIMUTHS,
+) -> np.ndarray:
+    """The far terrain's horizon (degrees, 0–HORIZON_MAX_DEG) per azimuth
+    near_m–far_m away, seen from each observer of `obs` (the tile's own
+    ground, `res` m cells): `terrain` is a coarse grid of `cells` × `res` m
+    cells over the tile plus `margin` of them, each coarse step's occluder
+    shared by the `cells` × `cells` observers under it (≤ 12 m off at
+    1.5 km, a hundredth of a degree)."""
+    n = obs.shape[0] // cells
+    step = res * cells
+    out = []
+    for az in azimuths(count):
+        best = np.zeros(obs.shape, np.float32)
+        for dr, dc, length in ray_offsets(az, near_m / step, min(far_m / step, margin)):
+            occ = terrain[margin + dr : margin + dr + n, margin + dc : margin + dc + n]
+            occ = np.repeat(np.repeat(occ, cells, axis=0), cells, axis=1)
+            np.maximum(best, (occ - obs) / np.float32(length * step), out=best)
+        out.append(np.degrees(np.arctan(best)))
+    return np.stack(out).clip(0.0, HORIZON_MAX_DEG)
 
 
 def near_horizon(
@@ -434,8 +659,17 @@ def pack_bands(far: np.ndarray, near: np.ndarray) -> np.ndarray:
     return np.concatenate([pack_horizon(far, HORIZON_MAX_DEG), pack_horizon(near, NEAR_MAX_DEG)])
 
 
-def legend(credit: str, count: int = AZIMUTHS) -> dict:
-    return {
+def legend(
+    credit: str,
+    count: int = AZIMUTHS,
+    offset: float | None = None,
+    rim: dict | None = None,
+) -> dict:
+    """The horizon's legend; `offset` is the far terrain's alignment (m)
+    where GLO-30 stood in beyond the site, `rim` the valley's rim
+    (glo30.rims)."""
+    terrain = offset is not None
+    doc = {
         "azimuthsDeg": [float(a) for a in azimuths(count)],
         "layout": "plane p (stacked north-to-south), channel c = azimuth 4 (p mod 4) + c; "
         "planes 0-3 the far band, 4-7 the near band",
@@ -446,6 +680,7 @@ def legend(credit: str, count: int = AZIMUTHS) -> dict:
                 "planes": [0, 4],
                 "nearM": HORIZON_NEAR_M,
                 "farM": HORIZON_FAR_M,
+                **({"terrainFarM": TERRAIN_FAR_M} if terrain else {}),
                 "degPerUnit": HORIZON_MAX_DEG / 255.0,
             },
             {
@@ -457,9 +692,33 @@ def legend(credit: str, count: int = AZIMUTHS) -> dict:
             },
         ],
         "footprints": "cells under a roof carry the nearest open cell's angles",
-        "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees)",
-        "attribution": f"{credit} (DGM1, LoD2)",
+        "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees); "
+        "the sky view's crowns let half the sky through",
+        "beyond": (
+            f"Copernicus GLO-30, smoothed, {-offset:+.2f} m onto the DGM1; the far band "
+            f"past {HORIZON_FAR_M:.0f} m from it alone, to {TERRAIN_FAR_M:.0f} m"
+            if terrain
+            else "the site's edge, run on level"
+        ),
+        "attribution": f"{credit} (DGM1, LoD2)" + (f"; {glo30.CREDIT}" if terrain else ""),
     }
+    if rim is not None:
+        doc["valley"] = {"reachM": glo30.RIM_REACH_M, **rim}
+    return doc
+
+
+def terrain_horizon(
+    tile: Tile, ground: np.ndarray, margin: int, res: float, far: FarTerrain
+) -> np.ndarray:
+    """The far band's ring: the far terrain's horizon HORIZON_FAR_M to
+    TERRAIN_FAR_M away, from the tile's ground (`fields`' horizon grid)."""
+    step = res * TERRAIN_CELLS
+    ring = int(math.ceil(TERRAIN_FAR_M / step)) + 1
+    xmin, ymin, xmax, ymax = tile.bounds
+    bounds = (xmin - ring * step, ymin - ring * step, xmax + ring * step, ymax + ring * step)
+    terrain = extend_edges(far.plain(bounds, step))
+    obs = ground[margin : ground.shape[0] - margin, margin : ground.shape[1] - margin]
+    return ring_horizon(obs, terrain, ring, res, TERRAIN_CELLS)
 
 
 def save_png(path: Path, grey: np.ndarray) -> None:
@@ -472,25 +731,39 @@ def run(tile: Tile) -> None:
         print(f"{tile.id}: no DGM at {tile.dgm} — skipping the sky view")
         return
     roofs = Roofs(tile, tile.neighbours())
+    far_terrain = FarTerrain.of(tile)
     xmin, _, xmax, _ = tile.bounds
 
     res = (xmax - xmin) / SVF_PX
-    ground, surface, margin = fields(tile, SVF_PX, SVF_REACH_M, roofs)
+    ground, surface, margin = fields(tile, SVF_PX, SVF_REACH_M, roofs, far=far_terrain)
+    crowns = crown_field(tile, SVF_PX, SVF_REACH_M, ground, roofs.sources)
     under = footprint(ground, surface, margin)
-    svf = fill_footprints(sky_view(ground, surface, margin, res), under)
+    svf = fill_footprints(sky_view(ground, surface, margin, res, crowns=crowns), under)
     svf_png = tile.out("dlm", f"svf_{tile.id}.png")
     save_png(svf_png, np.round(svf * 255.0).clip(0, 255).astype(np.uint8))
     t1 = time.perf_counter()
 
     res = (xmax - xmin) / HORIZON_PX
-    ground, surface, margin = fields(tile, HORIZON_PX, HORIZON_FAR_M, roofs, pool=4)
+    ground, surface, margin = fields(
+        tile, HORIZON_PX, HORIZON_FAR_M, roofs, pool=4, far=far_terrain
+    )
     covered = footprint(ground, surface, margin)
-    far = fill_footprints(far_horizon(ground, surface, margin, res), covered)
+    far = far_horizon(ground, surface, margin, res)
+    rim = None
+    if far_terrain is not None:
+        far = np.maximum(far, terrain_horizon(tile, ground, margin, res, far_terrain))
+        floor = glo30.tile_floor(tile.dgm, tile.bounds)
+        if floor is not None:
+            rim = glo30.rims(
+                far_terrain.path, tile.epsg, floor, far_terrain.offset or 0.0, azimuths()
+            )
+    far = fill_footprints(far, covered)
     near = fill_footprints(near_horizon(ground, surface, margin, res), covered)
     png = tile.out("dlm", f"horizon_{tile.id}.png")
     save_png(png, pack_bands(far, near))
+    offset = None if far_terrain is None else (far_terrain.offset or 0.0)
     tile.out("dlm", f"horizon_{tile.id}.json").write_text(
-        json.dumps(legend(tile.credit), indent=2) + "\n"
+        json.dumps(legend(tile.credit, offset=offset, rim=rim), indent=2) + "\n"
     )
     t2 = time.perf_counter()
     print(

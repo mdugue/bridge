@@ -108,7 +108,12 @@ def test_masts_pair_across_the_tracks_or_carry_an_arm(tmp_path, monkeypatch):
     masts = sorted(local(f["geometry"]["coordinates"]) for f in _by_kind(doc, "mast"))
     # the mast west of the tile is its neighbour's; the far one is the railway's
     assert masts == [(50.0, 144.0), (100.0, 88.0), (100.0, 112.0)]
-    [span] = _by_kind(doc, "span")
+    mast_at = set(masts)
+    [span] = [
+        f
+        for f in _by_kind(doc, "span")
+        if all(local(c) in mast_at for c in f["geometry"]["coordinates"])
+    ]
     assert sorted(local(c) for c in span["geometry"]["coordinates"]) == [
         (100.0, 88.0),
         (100.0, 112.0),
@@ -126,16 +131,19 @@ def test_rosette_spans_hang_between_facades_where_no_mast_is_near(tmp_path, monk
     tram.run(tile)
     doc = read(tile, "tram")
     rosettes = _by_kind(doc, "rosette")
+    # the supports stand on the 30 m grid (x = 180 here; at x = 150 the ray
+    # runs along the block's west wall and finds no facade to the north)
     xs = sorted(local(f["geometry"]["coordinates"][0])[0] for f in rosettes)
-    assert xs == [165.0, 195.0]
+    assert xs == [180.0]
     for f in rosettes:
         ys = sorted(local(c)[1] for c in f["geometry"]["coordinates"])
         assert ys == [92.0, 108.0]  # the facades either side
-    # the street track's wire is held at the span and the rosettes
+    # the street track's wire is held at the mast span, the pole-to-facade
+    # span and the rosette
     [street] = [f for f in _by_kind(doc, "track") if f["properties"]["bed"] == "street"]
-    assert street["properties"]["s"] == [100.0, 165.0, 195.0]
+    assert street["properties"]["s"] == [100.0, 150.0, 180.0]
     [lawn] = [f for f in _by_kind(doc, "track") if f["properties"]["bed"] == "grass"]
-    assert lawn["properties"]["s"] == [30.0]
+    assert lawn["properties"]["s"] == [30.0, 130.0, 160.0]
 
 
 def test_without_facades_no_rosette_is_invented(tmp_path, monkeypatch):

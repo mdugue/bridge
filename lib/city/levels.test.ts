@@ -148,3 +148,20 @@ test("the runs a build bakes give the layer back every level off the ground", ()
     }
   });
 });
+
+test("a line the source puts below the ground cuts under a long lid", () => {
+  // a trench 300 m long, the DGM's lid over it 6 m up (Hamburg's S-Bahn
+  // under the streets by Hammerbrook): too long a hump for the cut at the
+  // line's grade
+  const lid = (d: number) => (d >= 200 && d <= 500 ? 116 : 110);
+  const samples = line(700, lid);
+  const plain = lineLevels(samples, RAIL);
+  expect(modeAt(plain, samples, 352)?.mode).not.toBe("cut");
+  const below = samples.map((s) => ({
+    ...s,
+    below: s.d >= 180 && s.d <= 520,
+  }));
+  const levels = lineLevels(below, RAIL);
+  expect(modeAt(levels, below, 352)).toEqual({ mode: "cut", y: 110 });
+  expect(modeAt(levels, below, 100)?.mode).toBe("ground");
+});

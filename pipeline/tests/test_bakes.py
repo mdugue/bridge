@@ -54,8 +54,9 @@ def test_coordinates_round_to_centimetres_and_drop_z():
 
 def test_the_class_ids_are_the_client_palette_order():
     # lib/city/landcover.ts keys its palette by these ids and names.
-    assert list(CLASSES) == list(range(9))
+    assert list(CLASSES) == list(range(10))
     assert CLASSES[8] == "water"
+    assert CLASSES[9] == "arable"
 
 
 def test_rail_without_a_dlm_leaves_committed_files_alone(tmp_path):
@@ -321,7 +322,8 @@ def test_fences_follow_the_walls_and_gates_on_a_line_come_last(tmp_path, monkeyp
     doc = _read(tile, "walls")
     assert doc["attribution"].startswith("©")
     wall, fence, gate_on_fence, gate_on_wall = doc["features"]
-    assert wall["properties"] == {"kind": "wall", "h": 1.5}
+    # no material tagged on the site: concrete (walls.DEFAULT_MATERIAL)
+    assert wall["properties"] == {"kind": "wall", "h": 1.5, "mat": "concrete"}
     assert fence["properties"] == {"kind": "fence", "type": "mesh", "h": 1.2}
     assert gate_on_fence["properties"] == {"kind": "gate", "w": 1.2, "on": "fence"}
     x, y = gate_on_fence["geometry"]["coordinates"]
@@ -613,7 +615,7 @@ def test_the_major_road_wins_a_junction_and_walks_pack_above_roads(tmp_path):
 
 def test_a_street_frame_carries_its_bearing_and_the_distance_along_it(tmp_path):
     from bake.common import Tile
-    from bake.surface import ALONG_PERIOD, direction_frames, heading_code
+    from bake.surface import ALONG_BITS, ALONG_PERIOD, direction_frames, heading_code
 
     assert list(heading_code(np.radians([0.0, 90.0, 180.0, 359.9]))) == [1, 65, 128, 1]
     tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
@@ -629,7 +631,7 @@ def test_a_street_frame_carries_its_bearing_and_the_distance_along_it(tmp_path):
         # tile's north-west corner) projected on the decoded bearing.
         b = (heading[row, col] - 1) / 254.0 * 2.0 * np.pi
         x, y = col + 0.5, -(row + 0.5)
-        offset = along[row, col] / 65536.0 * ALONG_PERIOD
+        offset = along[row, col] / float(1 << ALONG_BITS) * ALONG_PERIOD
         return (offset + x * np.cos(b) + y * np.sin(b)) % ALONG_PERIOD
 
     assert heading[31, 10] == 1  # east
@@ -638,7 +640,7 @@ def test_a_street_frame_carries_its_bearing_and_the_distance_along_it(tmp_path):
     assert abs(metres(31, 10) - 10.5) < 0.01  # the texel centre, 10.5 m along
     # Round the bend: the northbound leg starts 40 m along the street.
     assert abs(metres(64 - 51, 40) - (40 + 18.5)) < 1.0
-    assert heading[5, 50] == 0  # nothing mapped
+    assert heading[5, 60] == 0  # nothing mapped (20 m from the street)
 
 
 def test_street_parking_marks_the_tagged_side_and_its_orientation():
@@ -1230,7 +1232,7 @@ def test_leipzigs_register_skips_felled_trees_and_stands_and_prefers_the_diamete
     }
     pine, unknown = parse_trees(raw, (0.0, 0.0, 10.0, 10.0), REGISTERS["leipzig"].fields)
     assert (pine["h"], pine["d"], pine["t"]) == (8, 5, 27)
-    assert pine["archetype"] == 3 and pine["leaf"] == "e"
+    assert pine["archetype"] == 6 and pine["leaf"] == "e"  # a pine's crown, no cone
     assert not unknown["known"] and unknown["t"] == pytest.approx(10.0, abs=0.01)
 
 
@@ -1380,7 +1382,7 @@ def test_a_scan_crown_is_as_wide_as_its_share_of_the_crown_mass():
 
 
 def test_a_closed_hedge_way_stays_a_line_of_hedge():
-    from bake.lowveg import hedge_rings
+    from bake.hedges import hedge_rings
 
     square = shapely.Polygon([(0, 0), (4, 0), (4, 4), (0, 4)])
     rings = hedge_rings(square)

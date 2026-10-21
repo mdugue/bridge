@@ -20,7 +20,10 @@ non-ground returns were part of a multi-echo pulse. In the leaf-off flight
    (> 0.6), that rectangle is ≥ 2 m wide, the DOP's NDVI over it stays
    ≤ 0.25 (a clipped evergreen hedge is flat and single-echo too) and it is
    no sliver along the LoD2 (aspect ≥ 3 with ≥ 20 % of its rim on the mask:
-   a roof edge or a misfit footprint);
+   a roof edge or a misfit footprint); one in shadow in the orthophoto (the
+   median luminance over it under 45 of 255) must be a cleaner box — a
+   residual under 0.2 m and a fill over 0.75 —, as a crown's or a
+   hedge's dark underside reads as level and single-echo too;
 4. not what the scan saw only that day or what another layer draws: blobs
    inside OSM pedestrian areas and squares (the Christmas markets were up —
    the Striezelmarkt opened on 27 Nov 2024, the Altmarkt alone held 101
@@ -57,11 +60,13 @@ from pathlib import Path
 import numpy as np
 import rasterio
 import shapely
+from rasterio.enums import Resampling
 from rasterio.windows import Window
 from scipy import ndimage as ndi
 from shapely.geometry import shape
 
 from .common import Tile, column, feature, geometry_json, overlaps, owns, write_geojson
+from .dop_light import luminance
 from .lowveg import Grid, building_mask, dgm_on, disk, lsc_rasters
 from .osm import has_extract, read_osm, tag
 
@@ -75,6 +80,13 @@ PLANE_STD = 0.35  # m, the top's residual about its plane
 MAX_TILT = 35.0  # degrees
 PENT_TILT = 8.0  # degrees: steeper is a pent roof
 COMPACT = 0.6  # area / minimum rotated rectangle
+# A blob whose orthophoto is this dark (the median Rec. 709 luminance over
+# it, 8-bit) lies in shadow, where a crown, a hedge or a pergola reads as a
+# level single-echo top as well: it needs a cleaner plane and a fuller
+# rectangle to be a shed.
+SHADE_LUM = 45.0
+SHADE_PLANE_STD = 0.2  # m
+SHADE_COMPACT = 0.75
 GREEN = 0.25  # median NDVI above this: a clipped evergreen hedge, not a roof
 MIN_WIDTH = 2.0  # m
 # A long strip along a LoD2 outline is its roof edge or a misfit, not a shed.
@@ -102,6 +114,7 @@ class Rasters:
     masked: np.ndarray  # LoD2 (already grown), walls, bridges: never a candidate
     dgm: np.ndarray | None = None  # the DGM1 (absolute m), for the corners
     covered: np.ndarray | None = None  # where a tile's scan was read (None: all)
+    lum: np.ndarray | None = None  # the orthophoto's luminance, 8-bit (NaN: none)
 
 
 @dataclass
@@ -176,6 +189,16 @@ def ground_under(r: Rasters, grid: Grid, rect: shapely.Geometry) -> np.ndarray:
     return out[np.isfinite(out)]
 
 
+def in_shadow(r: Rasters, sl, m: np.ndarray) -> bool:
+    """Whether the orthophoto shows the blob in shadow (`SHADE_LUM`); not
+    where it has no orthophoto."""
+    if r.lum is None:
+        return False
+    lum = r.lum[sl][m]
+    lum = lum[np.isfinite(lum)]
+    return bool(len(lum)) and float(np.median(lum)) < SHADE_LUM
+
+
 def measure(r: Rasters, grid: Grid, lab: np.ndarray, sl, i: int) -> Structure | None:
     """One blob → a structure, or None when it fails the shape rules."""
     m = lab[sl] == i
@@ -193,11 +216,12 @@ def measure(r: Rasters, grid: Grid, lab: np.ndarray, sl, i: int) -> Structure | 
         return None
     a, b, c, mx, my, std = fit_plane(xs[ok], ys[ok], top[ok])
     tilt = math.degrees(math.atan(math.hypot(b, c)))
-    if std >= PLANE_STD or tilt > MAX_TILT:
+    shaded = in_shadow(r, sl, m)
+    if std >= (SHADE_PLANE_STD if shaded else PLANE_STD) or tilt > MAX_TILT:
         return None
     rect = shapely.MultiPoint(np.c_[xs, ys]).buffer(RES / 2, cap_style="square")
     rect = rect.minimum_rotated_rectangle
-    if area / rect.area <= COMPACT:
+    if area / rect.area <= (SHADE_COMPACT if shaded else COMPACT):
         return None
     ring = [(float(x), float(y)) for x, y in rect.exterior.coords]
     sides = sorted(math.dist(ring[k], ring[k + 1]) for k in range(2))
@@ -357,6 +381,18 @@ def read_window(path: Path, desc: str | None, own) -> np.ndarray:
     return a
 
 
+def dop_luminance(t: Tile) -> np.ndarray | None:
+    """The tile's orthophoto as Rec. 709 luminance (8-bit scale) on its own
+    0.5 m grid, averaged; None without one."""
+    path = t.raw_raster("dop")
+    if not path.exists():
+        return None
+    w, h = (int(round(s / RES)) for s in t.size)
+    with rasterio.open(path) as ds:
+        rgb = ds.read((1, 2, 3), out_shape=(3, h, w), resampling=Resampling.average)
+    return luminance(np.moveaxis(rgb, 0, -1).astype(np.float32))
+
+
 def load_rasters(tile: Tile, grid: Grid) -> Rasters:
     """The inputs over `grid` (the tile and its margin), from every tile
     with a scan that the grid reaches into."""
@@ -367,6 +403,7 @@ def load_rasters(tile: Tile, grid: Grid) -> Rasters:
     me = np.zeros((n, n), np.float32)
     cls = np.zeros((n, n), np.uint8)
     ndvi = np.zeros((n, n), np.float32)
+    lum = np.full((n, n), np.nan, np.float32)
     covered = np.zeros((n, n), bool)
     tiles = area_tiles(tile, grid)
     for t in tiles:
@@ -386,6 +423,8 @@ def load_rasters(tile: Tile, grid: Grid) -> Rasters:
         cls[at] = tgrid.resample_png(dlm / f"landcover_{t.id}.png", nearest=True)[own]
         if (dlm / f"ndvi_{t.id}.png").exists():
             ndvi[at] = tgrid.resample_png(dlm / f"ndvi_{t.id}.png", nearest=False)[own]
+        if (bright := dop_luminance(t)) is not None:
+            lum[at] = bright[own]
         covered[at] = True
     return Rasters(
         dsm=dsm,
@@ -396,6 +435,7 @@ def load_rasters(tile: Tile, grid: Grid) -> Rasters:
         masked=layer_mask(tiles, grid),
         dgm=dgm,
         covered=covered,
+        lum=lum,
     )
 
 

@@ -7,6 +7,7 @@ import {
   footprintRadius,
   MIN_FOOTPRINT_R,
   overtops,
+  PINE_CROWN_BASE,
   TREE_ARCHETYPES,
   TRUNK_FOOT_R,
   TRUNK_ROWS,
@@ -62,6 +63,35 @@ test("archetype ids follow the bake's order and fall back to round", () => {
   expect(ARCHETYPE_SHAPE.oval).toBe("broad");
   expect(ARCHETYPE_SHAPE.small).toBe("broad");
   expect(ARCHETYPE_SHAPE.columnar).toBe("spindle");
+});
+
+test("the needle trees: a cone, a pine's high crown, a yew's bush", () => {
+  // appended after the six the files had: an old file reads as before
+  expect(TREE_ARCHETYPES.slice(0, 6)).toEqual([
+    "round",
+    "oval",
+    "columnar",
+    "conifer",
+    "weeping",
+    "small",
+  ]);
+  expect(archetypeOf(6)).toBe("pine");
+  expect(archetypeOf(7)).toBe("bush");
+  expect(ARCHETYPE_SHAPE.conifer).toBe("cone");
+  expect(ARCHETYPE_SHAPE.pine).toBe("pine");
+  expect(ARCHETYPE_SHAPE.bush).toBe("broad");
+  const spruce = treeExtents(20, 8, "conifer");
+  const pine = treeExtents(20, 9, "pine");
+  const yew = treeExtents(6, 5, "bush");
+  // a pine's crown starts past half its height, a spruce's near the ground
+  expect(pine.crownBase).toBeCloseTo(PINE_CROWN_BASE * 20);
+  expect(pine.crownBase).toBeGreaterThan(10);
+  expect(spruce.crownBase).toBeLessThan(2);
+  expect(pine.trunkTop).toBeGreaterThan(pine.crownBase);
+  expect(pine.trunkTop).toBeLessThan(pine.crownTop);
+  // a yew is its crown, from the ground up
+  expect(yew.crownBase).toBeLessThan(0.5);
+  expect(yew.crownTop - yew.crownBase).toBeGreaterThan(5.5);
 });
 
 test("extents: the crown spans clear stem to the top, the trunk reaches into it", () => {

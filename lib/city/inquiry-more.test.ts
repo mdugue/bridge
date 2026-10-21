@@ -83,6 +83,22 @@ test("a hedge's height is measured only where the laser scan said so", () => {
   expect(tagged.facts[0].value).toBe("2 m");
 });
 
+test("a hedge DOM1 measured, and one the scan found itself, say where from", () => {
+  const hedge = { kind: "hedge" as const, tile: "t", position: at, length: 12 };
+  const dom = hedgeCard(
+    { ...hedge, source: "osm+dom", height: 2 },
+    null,
+    DRESDEN
+  );
+  expect(dom.facts[0].value).toBe("2 m, gemessen");
+  expect(lines(dom.sources)).toHaveLength(2);
+  expect(lines(dom.sources).join(" ")).toContain("Oberflächenmodell");
+  const scan = hedgeCard({ ...hedge, source: "lsc", height: 2 }, null, DRESDEN);
+  expect(scan.facts[0].value).toBe("2 m, gemessen");
+  expect(lines(scan.sources)).toHaveLength(1);
+  expect(lines(scan.sources)[0]).toContain("Laserscan");
+});
+
 test("a tree row or hedge credits the site's own source, not GeoSN", () => {
   const row = { kind: "canopy" as const, tile: "t", position: at };
   const dresden = canopyCard({ ...row, source: "row" }, null, DRESDEN);
@@ -195,7 +211,7 @@ test("a bench faces where OSM or the nearest way says", () => {
 
 test("a lantern on a facade says where it hangs and that its height is assumed", () => {
   const card = lampCard(
-    { kind: "lamp", tile: "t", position: at, wall: true, height: 3.5 },
+    { kind: "lamp", tile: "t", position: at, wall: "facade", height: 3.5 },
     null,
     DRESDEN
   );
@@ -205,4 +221,31 @@ test("a lantern on a facade says where it hangs and that its height is assumed",
     { label: "Höhe", value: "3,5 m, angenommen", method: "assumed" },
   ]);
   expect(card.sources[0]?.text).toContain("OpenStreetMap");
+  // with no building near, on a mapped wall
+  const onWall = lampCard(
+    { kind: "lamp", tile: "t", position: at, wall: "wall", height: 2.5 },
+    null,
+    DRESDEN
+  );
+  expect(onWall.facts[0]).toEqual({
+    label: "Aufhängung",
+    value: "an der Mauer",
+  });
+});
+
+test("a tall mast's card names its arm, and says it is assumed", () => {
+  const lamp = { kind: "lamp" as const, tile: "t", position: at };
+  const one = lampCard(
+    { ...lamp, height: 9.5, heightFrom: "street", arm: true },
+    null,
+    DRESDEN
+  );
+  expect(one.facts).toContainEqual({
+    label: "Ausleger",
+    value: "zur Fahrbahn, angenommen",
+    method: "assumed",
+  });
+  // a post with its head on top has no arm line
+  const post = lampCard({ ...lamp }, null, DRESDEN);
+  expect(post.facts.some((f) => f.label === "Ausleger")).toBe(false);
 });

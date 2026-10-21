@@ -14,6 +14,8 @@
  * shelf. On a grid that ground was conflated to step at the OSM line; on the
  * fine level's TIN nothing was burned in, so an earth-retaining wall snaps to
  * the step the terrain measures instead (`snapToStep`, lib/city/wall-snap.ts).
+ * Each wall is toned by its material (`WALL_TONES`, the mesh's vertex
+ * colours).
  */
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { type Point2, subdividePolyline } from "./polyline";
@@ -31,10 +33,66 @@ import { type StepSnap, smoothSnaps, snapToStep } from "./wall-snap";
 export interface WallRibbon {
   /** EPSG coordinates (NOT recentered) */
   coords: Point2[];
-  /** tagged or default height (m) */
+  /** tagged, measured or fallback height (m; pipeline/bake/walls.py) */
   h: number;
   /** the OSM kind (retaining_wall, city_wall, embankment, wall, …) */
   kind?: string;
+  /** what it is made of (its tone, `WALL_TONES`); none: a cliff, an
+   *  embankment */
+  mat?: Masonry;
+}
+
+/** What a wall or a flight of steps is made of, as the bakes name it
+ *  (pipeline/bake/walls.py `MATERIALS`, stairs.py `STAIR_MATERIALS`): an
+ *  OSM tag, else the site's majority of its tagged ones. */
+export const MASONRY = ["concrete", "brick", "stone", "metal", "wood"] as const;
+export type Masonry = (typeof MASONRY)[number];
+
+/** The bake's material name as a `Masonry`, or undefined for anything else
+ *  (an old file, a typo). */
+export function masonryOf(value: unknown): Masonry | undefined {
+  return MASONRY.find((m) => m === value);
+}
+
+/**
+ * A wall's tone (sRGB) by its material (PR #173, B6): every wall was one
+ * warm sandstone, right for Dresden's terraces and Meißen's syenite rubble,
+ * wrong for Hamburg's concrete flood walls and Leipzig's and München's
+ * brick. Muted like the clay: concrete a pale grey a shade under the
+ * built-up ground, brick the clay's dusty brick register (lib/city/
+ * building-tint.ts), metal (sheet piling, steel noise barriers) a dark
+ * grey, wood a weathered timber. A wall without a material (a cliff, an
+ * embankment) keeps the sandstone.
+ */
+export const WALL_TONES: Readonly<Record<Masonry, number>> = {
+  stone: 0xc9_bd_a4,
+  concrete: 0xc6_c4_bd,
+  brick: 0xb8_92_7e,
+  metal: 0x8e_90_92,
+  wood: 0xa8_90_74,
+};
+
+/** sRGB hex → linear RGB, as the mesh's COLOR_0 carries it. */
+export function linearTone(hex: number): [number, number, number] {
+  const lin = (c: number) =>
+    c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  return [16, 8, 0].map((shift) => lin(((hex >> shift) & 0xff) / 255)) as [
+    number,
+    number,
+    number,
+  ];
+}
+
+/** Linear RGB per vertex for a wall mesh's `tones` (its COLOR_0). */
+export function wallColors(
+  tones: readonly number[]
+): Float32Array<ArrayBuffer> {
+  const linear = MASONRY.map((m) => linearTone(WALL_TONES[m]));
+  const out = new Float32Array(tones.length * 3);
+  for (const [i, t] of tones.entries()) {
+    out.set(linear[t] ?? linear[MASONRY.indexOf("stone")], i * 3);
+  }
+  return out;
 }
 
 export interface WallOptions {
@@ -61,7 +119,12 @@ const PERP_M = 9; // perpendicular probe distance to find the low/high side (m)
 // the wall no longer has to escape a smooth ramp — it just nudges a touch onto
 // the low side to skin the step's face instead of z-fighting it.
 const OFFSET_M = 1.5; // stand the wall this far onto the low side (m)
-const MIN_H = 1.2; // skip kerb-height garden walls (m)
+// Kerb-height walls (under 0.3 m: the kerb's business) are skipped; a low
+// garden wall the surface model measured (walls.py, 0.3–0.8 m) stands. A
+// column shorter than MIN_H top to foot (its 0.4 m foot under the ground,
+// SINK.wall) is a kerb-height wall where its step left it.
+const KERB_WALL_M = 0.3;
+const MIN_H = 0.7;
 const MAX_H = 14; // clamp tall tags (m)
 
 /**
@@ -399,6 +462,8 @@ export interface WallGeometryData {
   normals: number[];
   /** world-frame (Y-up, recentered) positions, xyz per vertex, triangles */
   positions: number[];
+  /** per vertex, its wall's material (an index into `MASONRY`) */
+  tones: number[];
 }
 
 /**
@@ -505,11 +570,13 @@ export function wallGeometry(
   const positions: number[] = [];
   const normals: number[] = [];
   const joins: JoinPoint[] = [];
+  const tones: number[] = [];
   for (const wall of walls) {
-    if (wall.coords.length < 2) {
+    if (wall.coords.length < 2 || wall.h < KERB_WALL_M) {
       continue;
     }
     const cols = columnsOf(wall, heightAt, offset, opts);
+    const first = positions.length / 3;
 
     for (let i = 0; i < cols.length - 1; i++) {
       const c0 = cols[i];
@@ -525,6 +592,10 @@ export function wallGeometry(
       pushBack(positions, normals, c0, c1);
       joins.push(...wallJoins(c0, c1));
     }
+    const tone = MASONRY.indexOf(wall.mat ?? "stone");
+    for (let v = first; v < positions.length / 3; v++) {
+      tones.push(tone);
+    }
   }
-  return positions.length > 0 ? { positions, normals, joins } : null;
+  return positions.length > 0 ? { positions, normals, joins, tones } : null;
 }

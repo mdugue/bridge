@@ -13,7 +13,11 @@ import { canopyPlacements } from "@/lib/city/tree-placement";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import { type Instances, isInstances } from "./instancing";
 import { buildTreeInventory } from "./tree-inventory-layer";
-import { buildVegetation, type VegetationContext } from "./vegetation-layer";
+import {
+  buildCrownGeo,
+  buildVegetation,
+  type VegetationContext,
+} from "./vegetation-layer";
 
 const ctx: VegetationContext = {
   offset: { cx: 411_000.37, cy: 5_657_000.81 },
@@ -128,4 +132,42 @@ test("a coarse conifer stands on its own cone, as its fine tree does", () => {
     Object.keys(lobed?.geometry.attributes ?? {}).sort()
   );
   expect(cone?.material).toBe(lobed?.material);
+});
+
+test("a coarse pine stands on the pine's crown, high on its stem, as its fine tree", () => {
+  const pines: CanopyFeature[] = Array.from({ length: 60 }, (_, i) => ({
+    geometry: {
+      type: "Point",
+      coordinates: [
+        411_100 + (i % 10) * 9.3,
+        5_656_900 + Math.floor(i / 10) * 8.7,
+      ],
+    },
+    properties: { h: 16 + (i % 5), l: "e", pine: 1 },
+  }));
+  const fine = buildVegetation({ rows: [], canopy: pines }, ctx);
+  const all = drawn(fine.chunks.map((c) => c.mid));
+  const crowns = coarseCrowns(canopyPlacements(pines, ctx), []);
+  const file = unpackCrowns(packCrowns(crowns).buffer as ArrayBuffer) ?? [];
+  const built = sets(buildCoarseCrowns(file, ctx).group);
+  // only the pine's form: no cone, no lobed crown
+  expect(built.every((s) => s.userData.styleCrown === undefined)).toBe(true);
+  const lobed = buildCrownGeo(0);
+  for (const set of built) {
+    expect(set.geometry.index).toBeNull();
+    expect(set.geometry.attributes.position.count).toBe(
+      lobed.attributes.position.count
+    );
+  }
+  const coarse = drawn(built);
+  expect(coarse.size).toBeGreaterThan(0);
+  for (const [key, { m }] of coarse) {
+    const twin = all.get(key);
+    expect(twin).toBeDefined();
+    if (twin) {
+      // the crown's frame as the fine level's: its lift and its depth
+      expect(column(m, 1)).toBeCloseTo(column(twin.m, 1), 2);
+      expect(m.elements[13]).toBeCloseTo(twin.m.elements[13], 2);
+    }
+  }
 });

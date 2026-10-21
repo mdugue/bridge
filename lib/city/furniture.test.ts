@@ -148,3 +148,22 @@ test("the street's signs and fixtures stand as their own models", () => {
     expect(p.scaleY).toBe(1);
   }
 });
+
+test("the QA's signals and bins: a mast arm, a crossing's signal, a bin's colour", () => {
+  const pieces = furniturePieces([
+    at({ k: "signal", a: 270, arm: true }),
+    at({ k: "pedsignal", a: 0 }),
+    at({ k: "bin", c: "red" }),
+    at({ k: "bin" }),
+  ]);
+  expect(pieces.map((p) => p.model)).toEqual([
+    "signalArm",
+    "pedSignal",
+    "binRed",
+    "bin",
+  ]);
+  // the crossing's head looks across, at the far kerb (north here)
+  const [e, n] = front(pieces[1].yaw);
+  expect(e).toBeCloseTo(0);
+  expect(n).toBeCloseTo(1);
+});

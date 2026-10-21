@@ -26,8 +26,9 @@ from bake.markings import (
 
 
 def test_crossing_paint_follows_the_markings_then_the_crossing_type():
-    assert crossing_kind('"crossing"=>"marked"') == ZEBRA
-    assert crossing_kind('"crossing"=>"uncontrolled"') == ZEBRA
+    # marked or uncontrolled alone says nothing about the paint (QA B24)
+    assert crossing_kind('"crossing"=>"marked"') == 0
+    assert crossing_kind('"crossing"=>"uncontrolled"') == 0
     assert crossing_kind('"crossing"=>"unmarked","crossing_ref"=>"zebra"') == ZEBRA
     assert crossing_kind('"crossing"=>"traffic_signals"') == FURT
     assert crossing_kind('"crossing"=>"uncontrolled","crossing:markings"=>"dashes"') == FURT
@@ -78,7 +79,7 @@ def _street(tmp_path, monkeypatch, way_tags: str, extra_nodes: str = ""):
     back = Transformer.from_crs(25833, 4326, always_xy=True)
     pts = [(10, 100), (190, 100), (100, 100), (150, 100)]
     tags = {
-        3: '<tag k="highway" v="crossing"/><tag k="crossing" v="marked"/>',
+        3: '<tag k="highway" v="crossing"/><tag k="crossing:markings" v="zebra"/>',
         4: '<tag k="highway" v="traffic_signals"/><tag k="traffic_signals:direction" v="forward"/>',
     }
     nodes = "".join(
@@ -187,7 +188,7 @@ def _seam_tiles(tmp_path, monkeypatch):
         tiles[tid] = tile
     back = Transformer.from_crs(25833, 4326, always_xy=True)
     pts = [(199, -100), (199, 300), (199, 100)]
-    tags = {3: '<tag k="highway" v="crossing"/><tag k="crossing" v="marked"/>'}
+    tags = {3: '<tag k="highway" v="crossing"/><tag k="crossing:markings" v="zebra"/>'}
     nodes = "".join(
         f'<node id="{i + 1}" lat="{lat:.9f}" lon="{lon:.9f}" version="1">'
         f"{tags.get(i + 1, '')}</node>"
@@ -343,3 +344,20 @@ def test_the_committed_rasters_lose_no_paint(table):
         lost = paint_lost(rows, q[..., 0] + 256 * q[..., 3], tile)
         ok = _dropped_ok(px, full)
         assert [i for i, (_, d) in enumerate(lost) if d > ok] == [], name
+
+
+def test_a_lowered_kerb_stretch_takes_no_kerb_band():
+    import shapely
+
+    from bake.markings import full_height
+
+    line = shapely.LineString([(0, 0), (100, 0)])
+    parts = full_height(line, [[40.0, 43.0, 0.03], [10.0, 12.0, 0.0], [41.0, 45.0, 0.03]])
+    assert [(round(p.bounds[0], 6), round(p.bounds[2], 6)) for p in parts] == [
+        (0, 10),
+        (12, 40),
+        (45, 100),
+    ]
+    assert full_height(line, []) == [line]
+    # a stretch to the line's end leaves nothing past it
+    assert [round(p.length, 6) for p in full_height(line, [[0.0, 100.0, 0.0]])] == []

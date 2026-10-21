@@ -49,6 +49,7 @@ import {
   step,
   texture,
   uniform,
+  vec2,
   vec3,
   vec4,
 } from "three/tsl";
@@ -57,6 +58,7 @@ import {
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
 import {
+  ARABLE_CLASS,
   LANDCOVER_CLASSES,
   MEADOW_CLASS,
   ROAD_CLASS,
@@ -81,6 +83,7 @@ import {
 } from "./fetch-optional";
 import {
   type GroundColour,
+  type GroundFields,
   type GroundInputs,
   groundDetail,
   groundFields,
@@ -879,6 +882,70 @@ function meadowNdvi(
 }
 
 /**
+ * The arable land's crop: where the DOP's greenness says something grows,
+ * the loam turns toward a young crop's green (a gain on the splat's colour,
+ * so the class border keeps its blend), fixed at CROP of the way: bare
+ * soil and stubble stay loam, a green crop turns green — in Grimma's and
+ * Unna's flights about 40 % of the arable land reads as crop. The gain
+ * is the crop's sRGB [178, 198, 146] over the palette's loam [204, 186,
+ * 154], linear.
+ */
+const CROP = float(0.85);
+const LOAM_LINEAR = LANDCOVER_CLASSES[ARABLE_CLASS].srgb.map(srgbToLinear);
+const CROP_GAIN = vec3(
+  ...([178, 198, 146].map((v, i) => srgbToLinear(v) / LOAM_LINEAR[i]) as [
+    number,
+    number,
+    number,
+  ])
+);
+
+/**
+ * Furrows: a faint ±FURROWS value ripple every FURROW_M across the field's
+ * long axis (the paving raster's frame there, surface.py `field_frames`),
+ * half as strong under a crop, gone before the ripple is a pixel's size.
+ */
+const FURROWS = float(0.05);
+const FURROW_M = 0.75;
+
+/**
+ * Arable land (class 9; landcover.py ARABLE_VEG, OSM farmland): the crop's
+ * green by the NDVI, read as the meadow's from a coarser mip, and the
+ * furrows along the field. Selects, no branch: the NDVI's biased read
+ * must stay in uniform control flow.
+ */
+function arableGround(
+  inp: GroundInputs,
+  col: GroundColour,
+  g: GroundFields,
+  ndvi?: Tex
+): void {
+  const arable = float(1)
+    .sub(step(0.5, abs(inp.cls.sub(ARABLE_CLASS))))
+    .toVar();
+  const c = col.baseCol;
+  const crop = float(0).toVar();
+  if (ndvi) {
+    const v = texture(ndvi, inp.uv).bias(float(2.5)).r;
+    crop.assign(smoothstep(0.12, 0.42, v).mul(step(0.012, v)));
+    c.assign(mix(c, c.mul(CROP_GAIN), crop.mul(CROP).mul(arable)));
+  }
+  const across = dot(g.local, vec2(sin(g.head).negate(), cos(g.head))).toVar();
+  const fade = float(1).sub(smoothstep(0.12, 0.35, fwidth(across)));
+  const ripple = sin(across.mul((2 * Math.PI) / FURROW_M));
+  const framed = select(g.hasFrame, float(1), float(0));
+  c.mulAssign(
+    ripple
+      .mul(FURROWS)
+      .mul(float(1).sub(crop.mul(0.5)))
+      .mul(fade)
+      .mul(framed)
+      .mul(arable)
+      .add(1)
+  );
+}
+
+/**
  * Sketch contour lines (2 m minor / 10 m major) on the data-frame elevation,
  * one pixel wide via fwidth. Each set fades out once its lines crowd closer
  * than a few pixels: past that a 1 px line per contour is no longer a line
@@ -928,9 +995,10 @@ const INK = vec3(0.3, 0.33, 0.38);
  * The colour node over the class raster: the palette splat, then — term by
  * term in the order they compose — the meadow mottle, the ground fields,
  * urban green, the ground detail, the allotment gardens, the sports
- * grounds, the road markings, the NDVI tint, and the gated contour ink on
- * top. The optional rasters that did not load leave their term out (a
- * different variant, built apart; `terrainGraph`).
+ * grounds, the road markings, the NDVI tint, the arable land's crop and
+ * furrows, and the gated contour ink on top. The optional rasters that did
+ * not load leave their term out (a different variant, built apart;
+ * `terrainGraph`).
  */
 function splatColour(splat: SplatNodes): V3 {
   return Fn(() => {
@@ -948,7 +1016,12 @@ function splatColour(splat: SplatNodes): V3 {
       roadColor: vec3(ROAD_LINEAR[0], ROAD_LINEAR[1], ROAD_LINEAR[2]),
     };
     const col = grassMottle(inp, splat.colorTexture);
-    const g = groundFields(inp, splat.surface, splat.edges);
+    const g = groundFields(
+      inp,
+      splat.surface,
+      splat.edges,
+      splat.markings?.raster
+    );
     const ugW = urbanGreen(inp, col, g, splat.ndvi);
     groundDetail(inp, col, g, ugW);
     if (splat.colonies) {
@@ -963,6 +1036,7 @@ function splatColour(splat: SplatNodes): V3 {
     if (splat.ndvi) {
       meadowNdvi(inp, col, splat.ndvi, MEADOW_NDVI);
     }
+    arableGround(inp, col, g, splat.ndvi);
     const baseCol = paperGround(col, texture(splat.colorTexture, uv).a);
     grassDetail.assign(col.detail);
     groundTilt.assign(g.tilt);
@@ -1628,7 +1702,7 @@ function groundLightOf(splat: SplatLayer): GroundLight | undefined {
  * - the water's own index (its positions are the ground's); not its
  *   normals, which its material never reads, so a later material might;
  * - the stairs', walls' and kerbs' positions, normals and index, the
- *   stairs' vertex colours (they draw with them);
+ *   stairs' and walls' vertex colours (they draw with them);
  * - the fences' positions, band uv and index; not their normals (the band
  *   is lit as the ground, by a normal of its own).
  */
@@ -1647,7 +1721,7 @@ export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
     layer.tin ? null : ground.getIndex(),
     layer.water?.mesh.geometry.getIndex(),
     ...of(layer.stairs, ["position", "normal", "color"]),
-    ...of(layer.walls, ["position", "normal"]),
+    ...of(layer.walls, ["position", "normal", "color"]),
     ...of(layer.kerbs, ["position", "normal"]),
     ...of(layer.fences, ["position", "uv"]),
   ].filter((a): a is AnyAttribute => a !== null && a !== undefined);
@@ -1713,7 +1787,7 @@ export async function dressTerrain(
     grids && ((own, position) => grids.water(n, own, position))
   );
   const water = splat
-    ? createWaterLayer(waterGeometry, splat, opts.fogColor)
+    ? createWaterLayer(waterGeometry, splat, opts.fogColor, extras.water)
     : undefined;
   if (water) {
     for (const sheet of [water.mesh, water.mistMesh]) {
@@ -1726,7 +1800,9 @@ export async function dressTerrain(
 
   return {
     mesh,
-    rasters: splat ? splatRasters(splat) : [],
+    rasters: splat
+      ? [...splatRasters(splat), ...(water ? [water.tint] : [])]
+      : [],
     light: splat ? groundLightOf(splat) : undefined,
     tile: extras.tileId,
     level: extras.level,
@@ -1742,6 +1818,7 @@ export async function dressTerrain(
       // not the site's (GridShare), which other tiles draw with.
       detachShared(mesh.geometry);
       disposeGeometry(waterGeometry);
+      water?.dispose();
       free();
     },
   };

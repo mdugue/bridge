@@ -28,6 +28,7 @@ export const LANDCOVER_CLASSES: readonly LandcoverClass[] = [
   { id: 6, key: "path", srgb: [224, 205, 168] }, // pale warm sand
   { id: 7, key: "road", srgb: [200, 200, 206] }, // soft grey-lavender
   { id: 8, key: "water", srgb: [164, 192, 209] }, // dusty blue
+  { id: 9, key: "arable", srgb: [204, 186, 154] }, // pale loam
 ];
 
 export const WATER_CLASS = 8;
@@ -36,6 +37,10 @@ export const BUILTUP_CLASS = 4;
 export const RAILWAY_CLASS = 5;
 export const PATH_CLASS = 6;
 export const ROAD_CLASS = 7;
+/** Ploughed land (Basis-DLM Ackerland, OSM `landuse=farmland`): loam, a
+ *  crop's green where the NDVI says it grows (terrain-layer.ts). Burned
+ *  after meadow, before forest — it keeps a meadow's place in the order. */
+export const ARABLE_CLASS = 9;
 
 /**
  * The paving materials of the OSM surface raster (pipeline/bake/surface.py
@@ -91,6 +96,75 @@ export type ParkingKind = (typeof PARKING_KINDS)[number];
 /** A parking kind's id (its index), for the shader's constants. */
 export function parkingId(kind: ParkingKind): number {
   return PARKING_KINDS.indexOf(kind);
+}
+
+/**
+ * Where a street's bays lie across its kerb (pipeline/bake/surface.py
+ * `PLACES`, the A byte's bits 5–6): on the carriageway, straddling the
+ * kerb by a metre (`half_on_kerb`), or on the pavement (`on_kerb`).
+ */
+export const PARKING_PLACES = [
+  "carriageway",
+  "half-on-kerb",
+  "on-kerb",
+] as const;
+export type ParkingPlace = (typeof PARKING_PLACES)[number];
+
+export function parkingPlaceId(place: ParkingPlace): number {
+  return PARKING_PLACES.indexOf(place);
+}
+
+/** A parking lane's depth across the street (m): parallel bays, or
+ *  perpendicular and diagonal ones. */
+export const PARKING_DEPTH = { parallel: 2, angled: 5 } as const;
+
+/**
+ * The bays' band across the kerb, `[from, to]` in metres from it (+ toward
+ * the road, as the baked kerb distance): from the kerb onto the
+ * carriageway, a metre over the kerb, or a bay's depth onto the pavement;
+ * null for a texel without street parking.
+ */
+export function parkingBand(
+  kind: number,
+  place: number
+): [number, number] | null {
+  if (
+    kind !== parkingId("street-parallel") &&
+    kind !== parkingId("street-perpendicular")
+  ) {
+    return null;
+  }
+  const depth =
+    kind === parkingId("street-parallel")
+      ? PARKING_DEPTH.parallel
+      : PARKING_DEPTH.angled;
+  const from =
+    place === parkingPlaceId("on-kerb")
+      ? -depth
+      : place === parkingPlaceId("half-on-kerb")
+        ? -1
+        : 0;
+  return [from, from + depth];
+}
+
+/**
+ * Bits of the along-street offset (B + the A byte's low five bits) — the
+ * rest of A is the parking place and whether the bays are painted
+ * (pipeline/bake/surface.py `ALONG_BITS`, `pack_along`).
+ */
+export const SURFACE_ALONG_BITS = 13;
+
+/** What the paving raster's A byte packs besides the offset. */
+export function unpackSurfaceHigh(byte: number): {
+  alongHigh: number;
+  painted: boolean;
+  place: number;
+} {
+  return {
+    alongHigh: byte & 31,
+    place: (byte >> 5) & 3,
+    painted: byte >> 7 === 1,
+  };
 }
 
 /**

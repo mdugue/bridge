@@ -21,7 +21,8 @@ export const HORIZON_BANDS = 2;
 export const HORIZON_TEXTURE_LAYERS = HORIZON_LAYERS * HORIZON_BANDS;
 /** The far band's horizon angle (°) of the byte 255. */
 export const HORIZON_MAX_DEG = 45;
-/** The far band: occluders 80–1 500 m away (m). */
+/** The far band: occluders 80–1 500 m away (m) in the 8 m field; the
+ *  bake maxes a 1.5–10 km ring of Copernicus GLO-30 into the same band. */
 export const HORIZON_NEAR_M = 80;
 export const HORIZON_FAR_M = 1500;
 /** The near band: occluders 8–80 m away, 0–90° (beside a wall the skyline

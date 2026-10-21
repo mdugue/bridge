@@ -15,6 +15,7 @@ import type {
   FeatureCollection,
   MonumentFeature,
   SmallBuildingFeature,
+  StructureFeature,
   TreeFeature,
   VegRowFeature,
 } from "../lib/city/features";
@@ -33,6 +34,7 @@ import {
   type RasterSampler,
 } from "../lib/city/raster-sampler";
 import {
+  gapRoofs,
   lod2Roofs,
   type RoofFootprint,
   treesOffRoofs,
@@ -44,6 +46,7 @@ import { inventoryCovers, inventoryTrees } from "../lib/city/tree-inventory";
 import {
   canopyPlacements,
   offMonuments,
+  plantedRows,
   rowPlacements,
 } from "../lib/city/tree-placement";
 
@@ -59,8 +62,20 @@ export interface CrownSources {
   sheds?: string;
   /** the LoD2 CityJSON: canopy points on its roofs were dropped too */
   city?: string;
+  /** the buildings and roofs on posts LoD2 lacks: on theirs as well */
+  structures?: string;
   trees?: string;
   vegrows?: string;
+}
+
+/** Whether a canopy file holds its tile's tree rows' trees (canopy.py's
+ *  `rows` member; the browser reads it from the pack's ROWS_MEASURED). */
+function rowsMeasured(path: string | undefined): boolean {
+  if (!(path && existsSync(path))) {
+    return false;
+  }
+  const doc = JSON.parse(readFileSync(path, "utf8")) as { rows?: unknown };
+  return doc.rows !== undefined;
 }
 
 function features<T>(path: string | undefined): T[] {
@@ -124,12 +139,14 @@ export async function bakeCoarseCrowns(
   }
 ): Promise<Uint8Array> {
   const sheds = features<SmallBuildingFeature>(sources.sheds);
-  const roofs =
-    sources.city && existsSync(sources.city)
+  const roofs = [
+    ...(sources.city && existsSync(sources.city)
       ? lod2Roofs(
           JSON.parse(readFileSync(sources.city, "utf8")) as CityJsonDocument
         )
-      : [];
+      : []),
+    ...gapRoofs(features<StructureFeature>(sources.structures)),
+  ];
   const register = [
     ...features<TreeFeature>(sources.trees),
     ...orchardTrees(features<CultivatedFeature>(sources.cultivated)),
@@ -146,7 +163,12 @@ export async function bakeCoarseCrowns(
     features<MonumentFeature>(sources.monuments)
   );
   const rows = rowPlacements(
-    features<VegRowFeature>(sources.vegrows),
+    // as the browser plants them: with a canopy that holds the rows' trees,
+    // the hedges alone
+    plantedRows(
+      features<VegRowFeature>(sources.vegrows),
+      rowsMeasured(sources.canopy)
+    ),
     ctx,
     ndviAt,
     keepTree

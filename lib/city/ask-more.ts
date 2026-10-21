@@ -25,11 +25,12 @@ import type {
   VegRowFeature,
 } from "./features";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
-import { postHeight } from "./lamps";
+import { armOffset, postHeight } from "./lamps";
 import type { FeatureInquiry } from "./inquiry-features";
 import type { CanopyInquiry } from "./inquiry-more";
 import { ringCentre } from "./monuments";
 import { samplePolyline } from "./polyline";
+import { pineBase } from "./tree-inventory";
 import {
   BASE_TREE_H,
   canopyPlacements,
@@ -74,6 +75,7 @@ const FURNITURE_SOLID: Record<FurnitureKind, [number, number]> = {
   column: [0.8, 3.2],
   hydrant: [0.35, 1],
   hydrantsign: [0.3, 1.5],
+  pedsignal: [0.35, 2.7],
   picnic: [1.2, 1],
   postbox: [0.45, 1.5],
   shelter: [2, 2.7],
@@ -155,25 +157,54 @@ function onWall(
   };
 }
 
-/** A lamp's pick: its head on the wire or bracket, or its post. */
-function lampSolid(f: LampFeature, ctx: MoreContext): AskSolid | null {
+/** A tall mast's head at its arm's end, `h` m over its foot (`y`). */
+function armHead(f: LampFeature, y: number, ctx: MoreContext): AskSolid[] {
+  const arm = armOffset(f);
+  if (!arm) {
+    return [];
+  }
+  const [ex, ey] = f.geometry.coordinates;
+  const h = postHeight(f);
+  const { x, z } = epsgToWorld(ex + arm[0], ey + arm[1], ctx.offset);
+  const { below } = WALL_LAMP;
+  const { over, r } = LAMP;
+  return [{ cylinder: { x, z, y0: y + h - below, y1: y + h + over, r } }];
+}
+
+/** A lamp's picks: its head on the wire or bracket, or its post — and a
+ *  tall mast's head on its arm. */
+function lampSolids(f: LampFeature, ctx: MoreContext): AskSolid[] {
   const at = f.geometry.coordinates;
   const p = f.properties;
   if (p?.wire) {
-    return hanging(at, ctx);
+    return [hanging(at, ctx)].filter((s) => s !== null);
   }
   if (p?.wall) {
-    return onWall(at, postHeight(f), ctx);
+    return [onWall(at, postHeight(f), ctx)].filter((s) => s !== null);
   }
-  return standing(at, LAMP.r, postHeight(f) + LAMP.over, ctx, p?.deck);
+  const post = standing(at, LAMP.r, postHeight(f) + LAMP.over, ctx, p?.deck);
+  if (!post || !("cylinder" in post)) {
+    return [];
+  }
+  return [post, ...armHead(f, post.cylinder.y0 + 0.2, ctx)];
 }
 
-/** A placed canopy tree as a packed trunk and crown. */
+/** Whether the layer draws a canopy tree as the cone: an evergreen that is
+ *  not a pine (vegetation-layer.ts `canopyForm`). */
+const canopyCone = (p: Placement): boolean =>
+  p.evergreen === true && p.pine !== true;
+
+/** A placed canopy tree as a packed trunk and crown, the crown from where
+ *  the layer starts it (`Placement.base`, `crownBase`; a pine's high on its
+ *  stem, `pineBase`). */
 const packedCanopy = (p: Placement): PackedTree => [
   p.x,
   p.z,
   p.y,
-  p.y + CANOPY.base * p.s,
+  p.y +
+    (p.evergreen === true && p.pine === true
+      ? pineBase(p)
+      : (p.base ?? CANOPY.base * p.s)),
   p.y + CANOPY.top * p.s,
   Math.max(CANOPY.r * p.s, MIN_CROWN_R),
 ];
@@ -230,30 +261,28 @@ export function canopySets(
   const position = new Float64Array(trees.length * 2);
   const height = new Float32Array(trees.length);
   const source = new Uint8Array(trees.length);
-  // 0 a broadleaf (or not known), else 1 + its index in LEAVES
+  // 0 a broadleaf (or not known), else 1 + its index in LEAVES; + CONE
+  // for one drawn as the cone
   const leaf = new Uint8Array(trees.length);
   trees.forEach((t, i) => {
     position.set(epsgOf(t.p, ctx.offset), i * 2);
     height[i] = t.height && Number.isFinite(t.height) ? t.height : 0;
     source[i] = sources.indexOf(t.source);
-    leaf[i] = t.leaf ? LEAVES.indexOf(t.leaf) + 1 : 0;
+    leaf[i] =
+      (t.leaf ? LEAVES.indexOf(t.leaf) + 1 : 0) |
+      (canopyCone(t.p) ? LEAF_CONE : 0);
   });
   return packedCylinderSets(
     trees.length,
     (i) => packedCanopy(trees[i].p),
     (i) =>
-      canopyInquiry(
-        position,
-        height,
-        sources[source[i]],
-        leaf[i] > 0 ? LEAVES[leaf[i] - 1] : undefined,
-        i,
-        ctx.tile
-      )
+      canopyInquiry(position, height, sources[source[i]], leaf[i], i, ctx.tile)
   );
 }
 
 const LEAVES = ["forest", "photo"] as const;
+/** The leaf byte's bit for a crown drawn as the cone (`canopyCone`). */
+const LEAF_CONE = 0x80;
 
 /** What told a crown is an evergreen (canopy.py): the forest's kind, or
  *  the leaf-off orthophoto. */
@@ -264,15 +293,16 @@ const leafOf = (f: CanopyFeature): CanopyInquiry["evergreen"] =>
       : "forest"
     : undefined;
 
-/** The canopy tree at index `i` as an inquiry. */
+/** The canopy tree at index `i` as an inquiry (`leaf`: its leaf byte). */
 function canopyInquiry(
   position: Float64Array,
   height: Float32Array,
   source: CanopyInquiry["source"],
-  evergreen: CanopyInquiry["evergreen"],
+  leaf: number,
   i: number,
   tile: string
 ): FeatureInquiry {
+  const evergreen = LEAVES[(leaf & ~LEAF_CONE) - 1];
   return {
     kind: "canopy",
     tile,
@@ -280,6 +310,7 @@ function canopyInquiry(
     source,
     ...(height[i] > 0 ? { height: height[i] } : {}),
     ...(evergreen ? { evergreen } : {}),
+    ...((leaf & LEAF_CONE) === 0 ? {} : { cone: true }),
   };
 }
 
@@ -337,6 +368,27 @@ export function hedgeItems(
   return out;
 }
 
+/** What a lamp's card says of it. */
+function lampInquiry(f: LampFeature, tile: string): FeatureInquiry {
+  const at = f.geometry.coordinates;
+  const p = f.properties;
+  return {
+    kind: "lamp",
+    tile,
+    position: [at[0], at[1]],
+    ...(p?.wire ? { hung: true } : {}),
+    ...(p?.wall
+      ? {
+          wall: p.on === "wall" ? ("wall" as const) : ("facade" as const),
+          height: postHeight(f),
+        }
+      : {}),
+    ...(p?.src ? { src: p.src } : {}),
+    ...(!p?.wire && p?.hs ? { height: postHeight(f), heightFrom: p.hs } : {}),
+    ...(armOffset(f) ? { arm: true } : {}),
+  };
+}
+
 /** The point things: lamps, furniture (and playgrounds), tram stops. */
 export function pointItems(
   lamps: readonly LampFeature[],
@@ -351,17 +403,13 @@ export function pointItems(
     }
   };
   for (const f of lamps) {
-    const at = f.geometry.coordinates;
-    add(lampSolid(f, ctx), {
-      kind: "lamp",
-      tile: ctx.tile,
-      position: [at[0], at[1]],
-      ...(f.properties?.wire ? { hung: true } : {}),
-      ...(f.properties?.wall ? { wall: true, height: postHeight(f) } : {}),
-      ...(f.properties?.src ? { src: f.properties.src } : {}),
-      ...(!f.properties?.wire && f.properties?.hs
-        ? { height: postHeight(f), heightFrom: f.properties.hs }
-        : {}),
+    const solids = lampSolids(f, ctx);
+    if (solids.length === 0) {
+      continue;
+    }
+    out.push({
+      solids,
+      target: lampInquiry(f, ctx.tile),
     });
   }
   for (const f of furniture) {
@@ -390,7 +438,9 @@ function furnitureItem(
   p: NonNullable<FurnitureFeature["properties"]>,
   ctx: MoreContext
 ): AskItem<FeatureInquiry>[] {
-  const [r, h] = FURNITURE_SOLID[p.k] ?? [0.6, 1];
+  const [r, base] = FURNITURE_SOLID[p.k] ?? [0.6, 1];
+  // a signal on a mast arm: its mast (furniture-layer.ts `signalArm`)
+  const h = p.arm ? 6.2 : base;
   if (f.geometry.type === "Point") {
     const at = f.geometry.coordinates;
     const solid = standing(at, r, h, ctx, p.deck);
@@ -454,7 +504,9 @@ export function landingItems(
           prism: {
             ring: ringXz(ring, ctx.offset),
             y0: deck - 1.5,
-            y1: deck + 1.2,
+            // a pontoon floats its freeboard over the water (riverside.py
+            // `fb`, up to 1.5 m): the box reaches over its deck too
+            y1: deck + (p.k === "pontoon" ? (p.fb ?? 0.9) : 0) + 1.2,
           },
         },
       ],

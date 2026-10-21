@@ -41,6 +41,19 @@ geometry of its own, so the whole building shows what one part carries.
   Ruhr town's terraces come out in brick and HafenCity or a Saxon old town
   in plaster, without a per-site switch.
 
+- `storey` (per object OSM counts no storeys of — no `levels`, or levels
+  that give it a storey outside `STOREY_RANGE`): the storey height of its
+  neighbours, the median of eave ÷ `building:levels` over the mapped LoD2
+  objects within `NEAR_STOREY_M` that share its roof form (flat or
+  pitched, as the build's `markFlatRoofs` reads it) and whose eave is
+  within `NEAR_EAVE` of its own, at least `NEAR_STOREY_MIN` of them (itself
+  never one); else the tile's median of its roof form (`TILE_STOREY_MIN`
+  mapped objects at least). The build counts its storeys from its eave
+  with it (lib/city/building-tint.ts `neighbourStorey`): a Gründerzeit
+  quarter's storeys are 3.7 m, a Plattenbau estate's 2.8 m, and the whole
+  height split into 3.2 m storeys matched OSM's count on 34 % of Leipzig's
+  mapped buildings, this on 65 %.
+
 OSM's construction dates are too sparse to use (plan 027 phase 3,
 rejected): the file carries no era."""
 
@@ -51,6 +64,7 @@ import re
 
 import numpy as np
 import shapely
+from scipy.spatial import cKDTree
 
 from .common import OSM_ATTRIBUTION, Tile, column
 from .osm import has_extract, read_osm, tag
@@ -501,6 +515,137 @@ def apply_contexts(objects: dict, ids, polys, outlines) -> tuple[str, int]:
     return default, differ
 
 
+# The storey of a building OSM counts none of, from its mapped neighbours.
+NEAR_STOREY_M = 200.0  # how far its neighbours are looked for (m)
+NEAR_STOREY_MIN = 3  # how many it takes
+NEAR_EAVE = (3.0, 0.35)  # a neighbour's eave this close to its own (m, or share)
+STOREY_RANGE = (2.4, 5.5)  # a storey OSM's count may give (the build's MAPPED_STOREY)
+TILE_STOREY_MIN = 10  # mapped objects the tile's own median takes
+FLAT_COS = 0.985  # a roof facet this close to level is flat (cos 10°) …
+FLAT_SHARE = 0.75  # … and a roof this much of whose area is (the build's markFlatRoofs)
+
+
+def _lod2(geometries: list) -> list:
+    return [g for g in geometries if str(g.get("lod")) == "2"] or geometries[-1:]
+
+
+def _all_indices(boundaries) -> list[int]:
+    out: list[int] = []
+    stack = [boundaries]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, int):
+            out.append(x)
+        else:
+            stack.extend(x)
+    return out
+
+
+def _flat_roof(rings: list[np.ndarray]) -> bool:
+    """Whether most of a roof's area lies level (`FLAT_SHARE` of it within
+    10°), its rings' Newell normals."""
+    flat = total = 0.0
+    for p in rings:
+        q = np.roll(p, -1, axis=0)
+        n = np.array(
+            [
+                ((p[:, 1] - q[:, 1]) * (p[:, 2] + q[:, 2])).sum(),
+                ((p[:, 2] - q[:, 2]) * (p[:, 0] + q[:, 0])).sum(),
+                ((p[:, 0] - q[:, 0]) * (p[:, 1] + q[:, 1])).sum(),
+            ]
+        )
+        area = float(np.linalg.norm(n))
+        total += area
+        if area > 0 and abs(n[2]) / area >= FLAT_COS:
+            flat += area
+    return total > 0 and flat >= FLAT_SHARE * total
+
+
+def eaves(city: dict) -> dict[str, tuple[float, bool]]:
+    """Each object's eave over its base (its lowest roof vertex over its
+    lowest vertex, the build's `eaveH`; its whole height without a roof) and
+    whether its roof is flat, for the objects with geometry."""
+    scale = city.get("transform", {}).get("scale", [1, 1, 1])
+    translate = city.get("transform", {}).get("translate", [0, 0, 0])
+    v = np.asarray(city["vertices"], dtype=float) * scale + translate
+    out = {}
+    for oid, obj in city["CityObjects"].items():
+        geoms = _lod2(obj.get("geometry", []))
+        idx = [i for g in geoms for i in _all_indices(g.get("boundaries", []))]
+        if not idx:
+            continue
+        z = v[idx, 2]
+        rings = [v[r] for g in geoms for r in surface_rings(g, "RoofSurface") if len(r) >= 3]
+        low = min((float(r[:, 2].min()) for r in rings), default=float(z.max()))
+        out[oid] = (low - float(z.min()), _flat_roof(rings))
+    return out
+
+
+def counted(eave: float, levels: int | None) -> bool:
+    """Whether OSM's count gives walls of `eave` a storey in `STOREY_RANGE`."""
+    return bool(levels) and STOREY_RANGE[0] <= eave / levels <= STOREY_RANGE[1]
+
+
+def neighbour_storeys(
+    eave: np.ndarray, flat: np.ndarray, xy: np.ndarray, storey: np.ndarray
+) -> np.ndarray:
+    """Per object, the median storey (`storey`, NaN where OSM counts none)
+    of the mapped objects within `NEAR_STOREY_M` of its roof form and about
+    its eave (`NEAR_EAVE`), itself left out; where fewer than
+    `NEAR_STOREY_MIN` are, the median of the tile's of its roof form and
+    about its eave, NaN where the tile maps too few of them
+    (`TILE_STOREY_MIN`). The fallback keeps to the eave too: over every
+    flat roof, Grimma's tile's median was a one-storey hall's 4.7 m, which
+    split its 12 m blocks into three town-house storeys."""
+    mapped = np.isfinite(storey)
+    out = np.full(len(eave), np.nan)
+    if not mapped.any():
+        return out
+    at = np.flatnonzero(mapped)
+    tree = cKDTree(xy[at])
+    for i, near in enumerate(tree.query_ball_point(xy, NEAR_STOREY_M)):
+        band = max(NEAR_EAVE[0], NEAR_EAVE[1] * eave[i])
+        j = at[np.asarray(near, dtype=int)]
+        j = j[(j != i) & (flat[j] == flat[i])]
+        j = j[np.abs(eave[j] - eave[i]) <= band]
+        if len(j) >= NEAR_STOREY_MIN:
+            out[i] = float(np.median(storey[j]))
+            continue
+        k = at[(at != i) & (flat[at] == flat[i]) & (np.abs(eave[at] - eave[i]) <= band)]
+        if len(k) >= TILE_STOREY_MIN:
+            out[i] = float(np.median(storey[k]))
+    return out
+
+
+def apply_storeys(objects: dict, city: dict, ids: list[str], polys: list) -> int:
+    """`storey` on every object OSM counts no storeys of (its own `levels`,
+    else its root's, as the build inherits them): its neighbours'
+    (`neighbour_storeys`). Returns how many got one."""
+    heights = eaves(city)
+    rows = [(oid, poly) for oid, poly in zip(ids, polys, strict=True) if oid in heights]
+    if not rows:
+        return 0
+    eave = np.array([heights[oid][0] for oid, _ in rows])
+    flat = np.array([heights[oid][1] for oid, _ in rows])
+    xy = np.array([p.representative_point().coords[0] for _, p in rows]).reshape(-1, 2)
+
+    def levels(oid: str) -> int | None:
+        own = objects.get(oid, {}).get("levels")
+        return own if own is not None else objects.get(root_of(city, oid), {}).get("levels")
+
+    lv = [levels(oid) for oid, _ in rows]
+    storey = np.array(
+        [e / n if counted(e, n) else np.nan for e, n in zip(eave, lv, strict=True)], dtype=float
+    )
+    near = neighbour_storeys(eave, flat, xy, storey)
+    given = 0
+    for k, (oid, _) in enumerate(rows):
+        if np.isnan(storey[k]) and np.isfinite(near[k]):
+            objects.setdefault(oid, {})["storey"] = round(float(near[k]), 2)
+            given += 1
+    return given
+
+
 def run(tile: Tile) -> None:
     city_path = tile.data / "cityjson" / f"lod2_{tile.id}.city.json"
     if not city_path.exists() or not has_extract(tile, "the OSM building flags"):
@@ -523,6 +668,7 @@ def run(tile: Tile) -> None:
     outlines = look_outlines(tile, VOTE_MARGIN)
     looks = apply_looks(objects, city, ids, polys, tree, outlines)
     context, differ = apply_contexts(objects, ids, polys, outlines)
+    storeys = apply_storeys(objects, city, ids, polys)
     counts = {
         key: sum(1 for oid in ids if objects.get(oid, {}).get(key))
         for key in ("shop", "heritage", "name", "addr", "levels")
@@ -544,6 +690,7 @@ def run(tile: Tile) -> None:
             "trees_outlined": outlined,
             "objects_look": looks,
             "objects_context": differ,
+            "objects_storey": storeys,
         },
         "objects": dict(sorted(objects.items())),
     }
@@ -553,5 +700,6 @@ def run(tile: Tile) -> None:
         f"({placed} of {len(points)} points placed), {counts['heritage']} listed, "
         f"{counts['addr']} addressed, {counts['name']} named, {counts['levels']} with storeys, "
         f"{looks} with a material or colour, walls {context} "
-        f"({differ} objects with their neighbourhood's own)"
+        f"({differ} objects with their neighbourhood's own), "
+        f"{storeys} with their neighbours' storey"
     )

@@ -11,6 +11,11 @@ import type { Point2 } from "./polyline";
 export type FurnitureModel =
   | "bench"
   | "bin"
+  | "binBlue"
+  | "binGreen"
+  | "binOrange"
+  | "binRed"
+  | "binYellow"
   | "bollard"
   | "climb"
   | "clock"
@@ -19,6 +24,7 @@ export type FurnitureModel =
   | "hoop"
   | "hydrant"
   | "hydrantSign"
+  | "pedSignal"
   | "picnic"
   | "playhouse"
   | "post"
@@ -28,6 +34,7 @@ export type FurnitureModel =
   | "seesaw"
   | "shelter"
   | "signal"
+  | "signalArm"
   | "slide"
   | "springy"
   | "stop"
@@ -41,6 +48,11 @@ export const FURNITURE_MODELS: readonly FurnitureModel[] = [
   "stool",
   "picnic",
   "bin",
+  "binRed",
+  "binGreen",
+  "binBlue",
+  "binOrange",
+  "binYellow",
   "hoop",
   "bollard",
   "post",
@@ -50,6 +62,8 @@ export const FURNITURE_MODELS: readonly FurnitureModel[] = [
   "column",
   "columnLit",
   "signal",
+  "signalArm",
+  "pedSignal",
   "hydrant",
   "hydrantSign",
   "clock",
@@ -129,18 +143,37 @@ function hoops(x: number, y: number, deg: number, n: number): FurniturePiece[] {
   return pieces;
 }
 
-/** The model each kind stands as (a bench by its backrest). */
+/** A bin in its colour (`c`), else the model's grey. */
+const BIN_MODEL: Record<
+  NonNullable<NonNullable<FurnitureFeature["properties"]>["c"]>,
+  FurnitureModel
+> = {
+  blue: "binBlue",
+  green: "binGreen",
+  orange: "binOrange",
+  red: "binRed",
+  yellow: "binYellow",
+};
+
+function binModel(f: FurnitureFeature): FurnitureModel {
+  const c = f.properties?.c;
+  return c && Object.hasOwn(BIN_MODEL, c) ? BIN_MODEL[c] : "bin";
+}
+
+/** The model each kind stands as (a bench by its backrest, a bin by its
+ *  colour, a signal on a mast arm where it hangs over three lanes). */
 const MODEL_OF: Record<string, (f: FurnitureFeature) => FurnitureModel> = {
   bench: benchModel,
   bike: () => "hoop",
-  bin: () => "bin",
+  bin: binModel,
   bollard: (f) => (f.properties?.metal ? "post" : "bollard"),
   picnic: () => "picnic",
   postbox: () => "postbox",
   shelter: () => "shelter",
   stop: () => "stop",
   column: (f) => (f.properties?.lit ? "columnLit" : "column"),
-  signal: () => "signal",
+  signal: (f) => (f.properties?.arm ? "signalArm" : "signal"),
+  pedsignal: () => "pedSignal",
   hydrant: () => "hydrant",
   hydrantsign: () => "hydrantSign",
   clock: () => "clock",

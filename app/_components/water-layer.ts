@@ -1,10 +1,18 @@
 import {
   type BufferGeometry,
+  ClampToEdgeWrapping,
   type Color,
+  DataTexture,
+  LinearFilter,
   Mesh,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
+  RGBAFormat,
+  SRGBColorSpace,
+  type UniformArrayNode,
   type UniformNode,
+  UnsignedByteType,
+  Vector4,
 } from "three/webgpu";
 import {
   cameraPosition,
@@ -12,25 +20,38 @@ import {
   clamp,
   distance,
   dot,
+  Fn,
   float,
   floor,
   fract,
-  materialColor,
+  int,
+  length,
+  Loop,
   materialOpacity,
+  max,
+  min,
   mix,
   modelWorldMatrixInverse,
   normalize,
   positionLocal,
   positionWorld,
   pow,
+  select,
   sin,
   smoothstep,
   texture,
   uniform,
+  uniformArray,
   vec2,
   vec3,
   vec4,
 } from "three/tsl";
+import {
+  FOAM_LINES,
+  fromBase64,
+  WATER_SHEET,
+  type WaterLook,
+} from "@/lib/city/water-bodies";
 import { lampNight } from "./lamp-layer";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
 import { REFLECTIONS, skyReflection } from "./sky-reflection";
@@ -41,6 +62,11 @@ export interface WaterLayer {
   mesh: Mesh;
   /** drifting river-haze sheet (added to the Z-up `world`, like the water) */
   mistMesh: Mesh;
+  /** the tint grid's texture (`tintTexture`): the tile's own, freed by
+   *  `dispose`, weighed with its rasters */
+  tint: DataTexture;
+  /** Frees what the sheets own beyond the content (the tint texture). */
+  dispose: () => void;
   /** Advance the ripple, glitter and mist animation (elapsed seconds). The
    *  sky tint is the fog's colour node itself: nothing to copy per frame. */
   update: (seconds: number) => void;
@@ -198,9 +224,122 @@ function createWaterMist(
 
 // --- the water sheet -----------------------------------------------------------------
 
-/** The sheet's diffuse colour: the depth tone by distance from the bank,
- *  then the Fresnel sky — mirrored, or the fog's tint. */
+/**
+ * The tile's tint grid as a texture over it (LINEAR, sRGB, row 0 = north
+ * like the splat): each cell its body's colour, the sheet's own where none
+ * (lib/city/water-bodies.ts). A tile without one gets a 1×1 of the sheet's
+ * colour, so every tile builds the same shader.
+ */
+export function tintTexture(look: WaterLook | undefined): DataTexture {
+  const tint = look?.tint;
+  const n = tint?.n ?? 1;
+  const cells = tint ? fromBase64(tint.cells) : new Uint8Array(1);
+  const data = new Uint8Array(n * n * 4);
+  for (let i = 0; i < n * n; i++) {
+    const k = cells[i] ?? 0;
+    const rgb = k > 0 ? (tint?.colours[k - 1] ?? WATER_SHEET) : WATER_SHEET;
+    data.set([(rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, 255], i * 4);
+  }
+  const texture = new DataTexture(data, n, n, RGBAFormat, UnsignedByteType);
+  texture.colorSpace = SRGBColorSpace;
+  texture.flipY = false;
+  texture.magFilter = LinearFilter;
+  texture.minFilter = LinearFilter;
+  texture.generateMipmaps = false;
+  texture.wrapS = ClampToEdgeWrapping;
+  texture.wrapT = ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/** A tile's foam lines as uniforms: the segments (data frame x0, y0, x1,
+ *  y1) and per line its drop and downstream direction, FOAM_LINES each. */
+interface FoamUniforms {
+  count: UniformNode<"int", number>;
+  info: UniformArrayNode<"vec4">;
+  lines: UniformArrayNode<"vec4">;
+}
+
+function foamUniforms(look: WaterLook | undefined): FoamUniforms {
+  const foam = look?.foam ?? [];
+  const row = (i: number, at: number) =>
+    foam[i]
+      ? new Vector4(
+          foam[i][at],
+          foam[i][at + 1],
+          foam[i][at + 2],
+          foam[i][at + 3] ?? 0
+        )
+      : new Vector4();
+  const rows = (at: number) =>
+    Array.from({ length: FOAM_LINES }, (_, i) => row(i, at));
+  return {
+    count: uniform(Math.min(foam.length, FOAM_LINES), "int"),
+    lines: uniformArray(rows(0), "vec4" as const),
+    info: uniformArray(rows(4), "vec4" as const),
+  };
+}
+
+/** m of foam downstream of a fall: a base, more per metre of drop, at most
+ *  the last; upstream it is the crest's width, and past a line's end it
+ *  thins out over a metre. A line without a direction foams both ways. */
+const FOAM_REACH = [2, 3, 12] as const;
+const FOAM_CREST_M = 0.8;
+const FOAM_SIDE_M = 1;
+const FOAM_COLOUR = vec3(0.93, 0.95, 0.96);
+/** How far the foam whitens the sheet, and how opaque it makes it. */
+const FOAM = 0.8;
+const FOAM_OPACITY = 0.97;
+
+/** The foam at data-frame `xy` (0..1): the strongest of the tile's lines'
+ *  bands (water.py `foam`: weirs, cascades), churned by a drifting noise. */
+function foamAt(xy: V2, f: FoamUniforms): F {
+  const band = Fn(() => {
+    const most = float(0).toVar();
+    Loop(
+      { start: int(0), end: f.count, type: "int", condition: "<" },
+      ({ i }) => {
+        const seg = f.lines.element(i);
+        const info = f.info.element(i);
+        const ab = seg.zw.sub(seg.xy);
+        const t = clamp(
+          dot(xy.sub(seg.xy), ab).div(max(dot(ab, ab), 1e-4)),
+          0,
+          1
+        );
+        const d = xy.sub(seg.xy.add(ab.mul(t)));
+        const down = info.yz;
+        const s = dot(d, down); // + downstream
+        const side = length(d.sub(down.mul(s)));
+        const reach = min(
+          info.x.mul(FOAM_REACH[1]).add(FOAM_REACH[0]),
+          FOAM_REACH[2]
+        );
+        const flows = dot(down, down).greaterThan(0.25);
+        const along = select(
+          flows,
+          float(1)
+            .sub(smoothstep(0, reach, s))
+            .mul(float(1).sub(smoothstep(0, FOAM_CREST_M, s.negate()))),
+          float(1)
+        );
+        const width = select(flows, float(FOAM_SIDE_M), reach);
+        const across = float(1).sub(smoothstep(width.mul(0.3), width, side));
+        most.assign(max(most, along.mul(across)));
+      }
+    );
+    return most;
+  })();
+  const t = waterTime;
+  const churn = mistNoise(xy.mul(0.9).add(vec2(t.mul(0.7), t.mul(-0.5))));
+  return smoothstep(0.15, 0.6, band.mul(mix(0.55, 1.15, churn)));
+}
+
+/** The sheet's diffuse colour: its body's tint (`base`), the depth tone by
+ *  distance from the bank, then the Fresnel sky — mirrored, or the fog's
+ *  tint. */
 function waterColour(
+  base: V3,
   splat: SplatLayer,
   uv: V2,
   view: V3,
@@ -214,7 +353,7 @@ function waterColour(
     1,
     texture(splat.colorTexture, uv).bias(float(6)).a
   );
-  const toned = materialColor.rgb.mul(
+  const toned = base.mul(
     mix(vec3(1.1, 1.08, 1.04), vec3(0.86, 0.92, 0.98), deep)
   );
   const fresnel = pow(float(1).sub(clamp(view.y, 0, 1)), 4);
@@ -243,13 +382,19 @@ function waterColour(
  * (landcover-splat.ts), a soft coverage field sampled LINEAR + mipmapped +
  * anisotropic, so the shoreline is hardware anti-aliased.
  *
+ * Each body takes its own colour (`look`'s tint grid: the Isar's green,
+ * the Hamburg Elbe's ochre, the palette's blue where the water reads it),
+ * and where the water falls — a weir, a cascade — a band of foam churns
+ * downstream of the line (`foamAt`).
+ *
  * Geometry is SHARED with the terrain mesh — do not dispose it here. Both
  * sheets sit beside the terrain mesh with its transform.
  */
 export function createWaterLayer(
   geometry: BufferGeometry,
   splat: SplatLayer,
-  skyTint: UniformNode<"color", Color>
+  skyTint: UniformNode<"color", Color>,
+  look?: WaterLook
 ): WaterLayer {
   const sun = splat.ground.sunDirection;
   const [minX, minY, maxX, maxY] = splat.bounds;
@@ -271,9 +416,15 @@ export function createWaterLayer(
   // A widened, feathered band dissolves the bank instead of stair-stepping.
   const wcov = smoothstep(0.28, 0.72, texture(splat.colorTexture, uv).a);
   material.maskNode = wcov.greaterThan(0.001);
-  material.opacityNode = materialOpacity.mul(wcov);
+  const tint = tintTexture(look);
+  const foam = foamAt(xy, foamUniforms(look)).toVar();
+  material.opacityNode = mix(materialOpacity, FOAM_OPACITY, foam).mul(wcov);
   const view = normalize(cameraPosition.sub(positionWorld));
-  material.colorNode = waterColour(splat, uv, view, skyTint);
+  material.colorNode = mix(
+    waterColour(texture(tint, uv).rgb, splat, uv, view, skyTint),
+    FOAM_COLOUR,
+    foam.mul(FOAM)
+  );
 
   // Stylized ripples on the shading normal (view space, as the slot takes
   // it). The sheet shares the terrain's grid, whose normals carry the DGM's
@@ -306,6 +457,8 @@ export function createWaterLayer(
   return {
     mesh,
     mistMesh,
+    tint,
+    dispose: () => tint.dispose(),
     update: (seconds) => {
       waterTime.value = seconds;
     },

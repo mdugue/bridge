@@ -14,7 +14,7 @@ test("the committed sources-by-city pages are what the configs say", () => {
 });
 
 test("a Land without an open DLM is drawn from OSM, marked as a stand-in", () => {
-  const [row] = sourceMatrix([SITES.hamburg, SITES.dresden]).slice(2, 3);
+  const [row] = sourceMatrix([SITES.hamburg, SITES.dresden]).slice(3, 4);
   expect(row[0]).toMatchObject({ quality: "substitute", reason: "noDlm" });
   expect(row[1].quality).toBe("best");
 });

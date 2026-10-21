@@ -22,13 +22,13 @@ import { axisFrame, BRIDGE_STEP } from "./bridge";
 import type { BridgeFeature, MonumentFeature, TreeFeature } from "./features";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import type { FeatureInquiry } from "./inquiry-features";
+import { monumentMarker, pointBasinRadius, ringCentre } from "./monuments";
 import {
-  markerPieces,
-  measuredMarker,
-  POINT_BASIN_R,
-  ringCentre,
-} from "./monuments";
-import { archetypeOf, treeExtents } from "./tree-inventory";
+  ARCHETYPE_SHAPE,
+  archetypeOf,
+  type TreeArchetype,
+  treeExtents,
+} from "./tree-inventory";
 import { TREE_GENERA } from "./tree-season";
 
 type HeightAt = (x: number, y: number) => number | null;
@@ -60,10 +60,19 @@ const TREE_STRIDE = 6;
 /** The cell a packed tree set covers (m). */
 const TREE_CELL = 64;
 
+/** The needle trees' archetypes (tree-inventory.ts): the cone's, a pine's
+ *  and a yew's — each a "Nadelbaum" on the card. */
+const NEEDLE_ARCHETYPES: ReadonlySet<TreeArchetype> = new Set([
+  "conifer",
+  "pine",
+  "bush",
+]);
+
 /** What a tile knows of its trees beyond their solids, by feature index. */
 interface TreeTable {
   crown: Float32Array;
-  /** bit 1 OSM, bit 2 conifer, bit 4 orchard */
+  /** bit 1 OSM, bit 2 conifer (NEEDLE_ARCHETYPES), bit 4 orchard, bit 8
+   *  measured (an orchard tree DOM1 measured), bit 16 drawn as the cone */
   flags: Uint8Array;
   genus: Uint8Array;
   height: Float32Array;
@@ -83,6 +92,8 @@ function treeInquiry(t: TreeTable, i: number, tile: string): FeatureInquiry {
     osm: (t.flags[i] & 1) === 1,
     conifer: (t.flags[i] & 2) === 2,
     ...((t.flags[i] & 4) === 4 ? { orchard: true } : {}),
+    ...((t.flags[i] & 8) === 8 ? { measured: true } : {}),
+    ...((t.flags[i] & 16) === 16 ? { cone: true } : {}),
     genus: TREE_GENERA[t.genus[i]] ?? "",
     height: t.height[i],
     crown: t.crown[i],
@@ -207,8 +218,10 @@ export function treeSets(
       table.genus[i] = p.gn ?? 0;
       table.flags[i] =
         (p.s === "osm" ? 1 : 0) |
-        (archetype === "conifer" ? 2 : 0) |
-        (p.s === "orchard" ? 4 : 0);
+        (NEEDLE_ARCHETYPES.has(archetype) ? 2 : 0) |
+        (p.s === "orchard" ? 4 : 0) |
+        (p.m === 1 ? 8 : 0) |
+        (ARCHETYPE_SHAPE[archetype] === "cone" ? 16 : 0);
       return [
         x,
         z,
@@ -305,30 +318,22 @@ function monumentSolid(
       },
     };
   }
-  const measured =
-    p.kind !== "fountain" && p.relief
-      ? measuredMarker(p.relief, p.kind, p.form)
-      : null;
-  const pieces =
-    p.kind === "fountain"
-      ? null
-      : (measured?.pieces ??
-        markerPieces(p.kind, p.form, p.height).map((s) => ({
-          ...s,
-          along: 0,
-        })));
+  // the solids the layer draws (monument-layer.ts): the same marker
+  const marker =
+    p.kind === "fountain" ? null : monumentMarker(p, p.kind, [ex, ey]);
+  const pieces = marker?.pieces ?? null;
   const r = pieces
     ? Math.max(
         ...pieces.map(
           (s) => Math.hypot(s.width, s.depth) / 2 + Math.abs(s.along)
         )
       ) + 0.3
-    : POINT_BASIN_R;
+    : pointBasinRadius(p.r);
   const height = Math.max(
     top,
     pieces ? Math.max(...pieces.map((s) => s.lift + s.height)) : BASIN_RIM
   );
-  const [cx, cy] = measured?.centre ?? [ex, ey];
+  const [cx, cy] = marker?.centre ?? [ex, ey];
   const { x, z } = epsgToWorld(cx, cy, ctx.offset);
   return {
     position: [ex, ey],

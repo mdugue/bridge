@@ -143,6 +143,28 @@ test("an orchard tree says it is one, from OSM's orchard, with no register line"
   expect(lines(card.sources).join()).not.toContain("Stadtbaumkataster");
 });
 
+test("an orchard tree DOM1 measured gives its height and crown, measured", () => {
+  const card = treeCard(
+    {
+      ...linde,
+      index: 2,
+      osm: false,
+      orchard: true,
+      measured: true,
+      genus: "Malus",
+      height: 6.2,
+      crown: 5.3,
+    },
+    treeFactsAt(file, 2),
+    provenance,
+    DRESDEN
+  );
+  expect(card.title).toBe("Malus");
+  expect(card.facts.map((f) => f.label)).toEqual(["Höhe", "Krone"]);
+  expect(card.sources.at(-1)?.method).toBe("detected");
+  expect(card.sources.at(-1)?.text).toContain("Höhe und Krone gemessen");
+});
+
 test("without the manifest the register and the surveys are the site's own", () => {
   expect(DRESDEN.register).toBe("Landeshauptstadt Dresden, dl-de/by-2-0");
   const hamburg: CardCredits = {
@@ -323,4 +345,54 @@ test("a monument whose material only Wikidata names quotes it for that", () => {
     "Material: Wikidata · Stand 26.09.2026 · CC0",
     "Höhe gemessen: Digitales Oberflächenmodell DOM1 · Quelle: GeoSN, dl-de/by-2-0",
   ]);
+});
+
+test("a column measured in the laser scan, a stele measured in the open", () => {
+  const column = monumentCard(
+    {
+      kind: "monument",
+      tile: "t",
+      position: [412000, 5656000],
+      properties: {
+        kind: "column",
+        name: "Nikolaisäule",
+        source: "osm",
+        form: "column",
+        hs: "lsc",
+        relief: { west: 0, north: 0, cols: 2, rows: 1, dm: [154, 60] },
+      },
+    },
+    provenance,
+    DRESDEN
+  );
+  expect(column.kicker).toBe("Säule");
+  expect(column.facts).toEqual([{ label: "Höhe", value: "15,4 m" }]);
+  expect(lines(column.sources).at(-1)).toMatch(/^Höhe gemessen: Laserscan/u);
+  const stele = monumentCard(
+    {
+      kind: "monument",
+      tile: "t",
+      position: [412000, 5656000],
+      properties: { kind: "statue", source: "osm", form: "stele", hm: 2.4 },
+    },
+    provenance,
+    DRESDEN
+  );
+  expect(stele.facts).toEqual([{ label: "Höhe", value: "2,4 m" }]);
+  expect(lines(stele.sources).at(-1)).toMatch(
+    /^Höhe gemessen: Digitales Oberflächenmodell DOM1/u
+  );
+  // a tagged height is OSM's, not a measurement
+  const tagged = monumentCard(
+    {
+      kind: "monument",
+      tile: "t",
+      position: [412000, 5656000],
+      properties: { kind: "statue", source: "osm", height: 3, hm: 2.4 },
+    },
+    provenance,
+    DRESDEN
+  );
+  expect(tagged.facts).toEqual([{ label: "Höhe", value: "3 m" }]);
+  expect(lines(tagged.sources).join()).not.toContain("gemessen");
 });

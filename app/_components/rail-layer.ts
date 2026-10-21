@@ -22,20 +22,25 @@ import {
   axisFrame,
   BRIDGE_STEP,
   type BridgeRib,
+  beamSpan,
+  beamSupports,
+  type DeckSupport,
+  deckCarrier,
+  deckDepth,
   intradosAt,
-  MASONRY_PIER_HALF,
   masonryArches,
   type MasonryPier,
   type MasonrySpan,
   type Parabola,
   PIER_SPACING,
-  pierStations,
+  parapetStyle,
   placeRibs,
   ribPeaks,
   ribProfile,
   ribRuns,
 } from "@/lib/city/bridge";
 import {
+  bridgeDecks,
   type DeckPoly,
   deckPoly,
   decksAt,
@@ -57,10 +62,29 @@ import {
   modeRuns,
   runLevelAt,
 } from "@/lib/city/levels";
-import { DECK_REACH_M, RIDES } from "@/lib/city/line-levels";
+import { OVERPASS_DEPTH_M, OVERPASS_M } from "@/lib/city/catenary";
+import { DECK_REACH_M, RIDES, railPrefer } from "@/lib/city/line-levels";
+import {
+  platformTops,
+  TrackIndex,
+  type TrackSample,
+} from "@/lib/city/platform-level";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
 import { type DeckKind, deckMaterial, stoneMaterial } from "./bridge-surface";
+import {
+  addCatenary,
+  type CatenaryRun,
+  catenaryParts,
+  catenaryWires,
+} from "./catenary-layer";
 import { sceneMaterial } from "./three-utils";
+import {
+  addSleepers,
+  SLEEPER_TOP,
+  type SleeperRibbons,
+  sleeperMesh,
+  sleeperRibbons,
+} from "./track-bed";
 
 /**
  * Railway + bridge layer. The railway corridor and bridges used to exist only as
@@ -72,13 +96,21 @@ import { sceneMaterial } from "./three-utils";
  *  - Ballast yards: ONE merged surface from the DISSOLVED Basis-DLM ver03_f area
  *    polygons (no per-line overlap → no z-fight). The recoloured class-5 splat
  *    sits underneath, so any sub-pixel gap reads as ballast, not a seam.
- *  - Rails: Basis-DLM ver03_l centrelines (heavy rail), built per fine terrain
+ *  - Rails: OSM's every track one by one, and the Basis-DLM ver03_l
+ *    centrelines (heavy rail) OSM has none beside, built per fine terrain
  *    tile on the cross-tile heightAt (every loaded terrain) and split at NoData
- *    gaps, so tracks follow the ground across tile seams.
+ *    gaps, so tracks follow the ground across tile seams; their heads 0.17 m
+ *    over the level their line runs on (the DGM holds the ballast's surface;
+ *    on a rail deck the ballast runs on across it), flush in the paving; the
+ *    sleepers under them (track-bed.ts); a buried stretch (cut under a lid)
+ *    not drawn.
  *  - Bridges: ONE clean slab volume per Basis-DLM ver06_f deck polygon (top +
  *    continuous fascia), flush parapet walls (no floating cap), piers dropped even
  *    over the river. Rails ride the deck directly (no ballast stacked on top).
- *  - Platforms: OSM railway=platform polygons (ODbL).
+ *  - Platforms: OSM railway=platform polygons (ODbL), on the level of the
+ *    track beside them (lib/city/platform-level.ts).
+ *  - Catenary: over the contact lines, masts and portals with their wires
+ *    (catenary-layer.ts, lib/city/catenary.ts).
  *
  * All geometry is hand-wound to match its supplied normal (see pushTri), so every
  * material is FrontSide. Authored in Y-up world coords → added to `scene`.
@@ -127,19 +159,34 @@ export interface RailFeatures {
 }
 
 const SAMPLE_M = LEVEL_STEP.rail; // densify polylines to this spacing (m)
-const BALLAST_RAISE = 0.18; // ballast crown above ground (m)
+// The DGM already holds the ballast's surface: the ground at a track and
+// 5 m beside it differ by nothing. Drawn 0.18 m over it with the rail head
+// 0.16 m above that, the heads stood 0.17 m too high; 0.08 m over a deck's
+// measured top, 0.09 m too low.
+const BALLAST_RAISE = 0.03; // ballast surface above the DGM: off the ground's own (m)
 const BALLAST_DROP = 0.45; // ballast shoulder depth at the edge (m)
-const RAIL_RAISE = BALLAST_RAISE + 0.16; // rail head above ground on terrain (m)
-const RAIL_DECK_RAISE = 0.08; // rail head above a bridge deck (no ballast) (m)
+const RAIL_RAISE = 0.17; // rail head above the ballast's surface, a rail deck's top too (m)
+const RAIL_PAVED_RAISE = 0.02; // rail head above the paving it is set in (m)
+const BED_HALF_M = 2.25; // half a one-track ballast bed (rail_osm.py BED_ONE) (m)
 const RAIL_WEB = 0.11; // rail vertical web depth so it reads obliquely (m)
 const GAUGE = 1.435; // standard-gauge rail spacing (m)
 const TRACK_PITCH = 4.0; // spacing between parallel track centres (m)
 const RAIL_HALF = 0.075; // half-width of a drawn rail (m)
-const DECK_DEPTH = 1.1; // bridge-deck slab thickness (m)
-const PARAPET_H = 0.85; // bridge parapet wall height (m)
+const DECK_DEPTH = 1.1; // a line's own span deck's slab thickness (m)
+const PARAPET_H = 0.85; // a masonry bridge's ashlar parapet height (m)
+// every other bridge's railing is open steel: posts and a top rail on a
+// low kerb (photo QA V18: the walls read as stone bridges everywhere)
+const RAILING_H = 1.1; // the railing's top above the deck (m)
+const RAILING_KERB_H = 0.2; // the kerb it stands on: height (m)...
+const RAILING_KERB_W = 0.3; // ...and width (m)
+const RAILING_IN = 0.15; // posts and rail stand this far in from the deck's edge (m)
+const RAILING_BAR_HALF = 0.04; // half-section of a post and of the top rail (m)
+const RAILING_POST_EVERY = 2.5; // a railing post every this many metres (m)
 const PIER_MIN_GAP = 2.5; // only pier where the deck clears the ground by this (m)
 const PIER_HALF = 0.65; // pier column half-width (m)
-const PLATFORM_H = 0.55; // station platform height above ground (m)
+const VIADUCT_COLUMN_HALF = 0.3; // half-section of a viaduct's edge column (m)
+const VIADUCT_COLUMN_IN = 0.6; // its centre this far in from the deck's edge (m)
+const VIADUCT_CAP_HALF = 0.35; // half-section of the crossbeam between a pair (m)
 // The steel is abstracted like the buildings are: a truss is an open frame
 // (its measured top as one calm chord, a few posts, no diagonals), an arch
 // one band with a few hangers, a cable-stayed pylon a handful of stays.
@@ -170,6 +217,7 @@ export const COLORS = {
   deckRail: 0xb2_a9_a0, // the railway class
   platform: 0xcf_c9_bd, // pale platform concrete
   steel: 0xd9_dd_e0, // painted steel: the palest slate of the clay family
+  mast: 0xa9_ad_a6, // galvanised steel: the catenary's masts and portals
 };
 
 /** Accumulates a non-indexed triangle soup (positions + per-vertex normals). */
@@ -454,6 +502,70 @@ function addParapetWalls(
       [pts[i].x - nx * 0.18, yi + PARAPET_H, pts[i].z - nz * 0.18],
       [0, 1, 0]
     );
+  }
+}
+
+/**
+ * An open steel railing along the deck's sides (not across its ends): a
+ * low kerb flush with the fascia, a post every RAILING_POST_EVERY on it
+ * and a top rail RAILING_H over the deck — the beam, truss and cable
+ * bridges' railing, which an ashlar wall drew as a stone bridge.
+ */
+function addRailing(
+  acc: Mesh3,
+  ring: Ring2,
+  topY: number[],
+  ringS?: number[]
+): void {
+  const { pts } = ring;
+  const across = endEdges(ring, ringS);
+  const winding = ringWinding(pts);
+  const bar = RAILING_BAR_HALF;
+  let since = RAILING_POST_EVERY; // metres since the last post
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    if (across[i]) {
+      since = RAILING_POST_EVERY; // a post where the next side begins
+      continue;
+    }
+    const [ox, oz] = outward(pts, i, winding);
+    const len = Math.hypot(ox, oz) || 1;
+    const nx = ox / len;
+    const nz = oz / len;
+    const at = (t: number, inset: number, lift: number): P3 => [
+      pts[i].x + (pts[j].x - pts[i].x) * t - nx * inset,
+      topY[i] + (topY[j] - topY[i]) * t + lift,
+      pts[i].z + (pts[j].z - pts[i].z) * t - nz * inset,
+    ];
+    const kh = RAILING_KERB_H;
+    const kw = RAILING_KERB_W;
+    quad(acc, at(0, 0, 0), at(1, 0, 0), at(1, 0, kh), at(0, 0, kh), [
+      nx,
+      0,
+      nz,
+    ]);
+    quad(
+      acc,
+      at(0, 0, kh),
+      at(1, 0, kh),
+      at(1, kw, kh),
+      at(0, kw, kh),
+      [0, 1, 0]
+    );
+    quad(acc, at(0, kw, 0), at(1, kw, 0), at(1, kw, kh), at(0, kw, kh), [
+      -nx,
+      0,
+      -nz,
+    ]);
+    const top = RAILING_H - bar;
+    addStrut(acc, at(0, RAILING_IN, top), at(1, RAILING_IN, top), bar);
+    const edge = Math.hypot(pts[j].x - pts[i].x, pts[j].z - pts[i].z);
+    let d = RAILING_POST_EVERY - since;
+    for (; d <= edge; d += RAILING_POST_EVERY) {
+      const t = edge > 0 ? Math.max(d, 0) / edge : 0;
+      addStrut(acc, at(t, RAILING_IN, kh), at(t, RAILING_IN, top), bar);
+    }
+    since = edge - (d - RAILING_POST_EVERY);
   }
 }
 
@@ -889,26 +1001,6 @@ function sideNormal(
   return [nx * sign, 0, nz * sign];
 }
 
-/** Per-vertex top elevations for a ring, clamped to terrain (+raise), with a
- *  median fallback so a vertex off the loaded block doesn't collapse the slab. */
-function clampRing(
-  ring: Ring2,
-  raise: number,
-  ctx: RailContext
-): number[] | null {
-  const ys: (number | null)[] = ring.pts.map((p) => {
-    const e = worldToEpsg(p, ctx.offset);
-    const g = ctx.heightAt(e.x, e.y);
-    return g === null ? null : g + raise;
-  });
-  const valid = ys.filter((y): y is number => y !== null).sort((a, b) => a - b);
-  if (valid.length === 0) {
-    return null;
-  }
-  const median = valid[Math.floor(valid.length / 2)];
-  return ys.map((y) => y ?? median);
-}
-
 function worldToEpsg(
   p: { x: number; z: number },
   offset: { cx: number; cy: number }
@@ -1065,13 +1157,11 @@ type BridgeProps = NonNullable<BridgeFeature["properties"]>;
 /** A bridge feature's properties with defaults (`properties` may be null). */
 function bridgeProps(f: BridgeFeature): {
   deck: number[];
-  depth: number;
   kind: NonNullable<BridgeProps["kind"]>;
   structure: string;
 } {
   return {
     deck: f.properties?.deck ?? [],
-    depth: f.properties?.depth ?? DECK_DEPTH,
     kind: f.properties?.kind ?? "other",
     structure: f.properties?.structure ?? "",
   };
@@ -1269,17 +1359,18 @@ function addDeckFrame(
   }
 }
 
-/** A bridge's deck: its slab on the measured line (`onLine`), the
- *  approaches, the frame attributes and the parapets. Returns where it was
- *  laid, the frame null on an older file without an axis. */
+/** A bridge's deck: its slab `depth` deep on the measured line
+ *  (`onLine`), the approaches and the frame attributes. Returns where it
+ *  was laid, the frame null on an older file without an axis. */
 function drawDeck(
   f: BridgeFeature,
   baked: Ring2,
   bakedY: number[],
   out: BridgeMeshes,
-  ctx: RailContext
+  ctx: RailContext,
+  depth: number
 ): { frame: BridgeFrame | null; ring: Ring2; topY: number[] } {
-  const { kind, depth } = bridgeProps(f);
+  const { kind } = bridgeProps(f);
   const top = out.tops[kind] ?? out.tops.other;
   const measured = bridgeFrame(f, ctx);
   const laid = measured ? onLine(baked, bakedY, measured) : null;
@@ -1290,7 +1381,7 @@ function drawDeck(
   addFootprint(top, ring, topY, depth, true);
   const slabEnd = top.pos.length / 3;
   for (const a of approaches(ring, topY, kind, frame?.ringS, ctx, out.decks)) {
-    addApproach(top, out.stone, a, DECK_DEPTH);
+    addApproach(top, out.stone, a, depth);
   }
   if (frame) {
     splitDeckTop(top, first, DECK_FRAME_STEP, {
@@ -1300,12 +1391,53 @@ function drawDeck(
     });
   }
   addDeckFrame(top, first, frame);
-  // where a frame stands on the deck's edge it is the railing: a parapet
-  // beside it read as a second strip along the roadway
-  if (!drawsFrames(f.properties ?? {})) {
-    addParapetWalls(out.stone, ring, topY, frame?.ringS);
-  }
   return { frame, ring, topY };
+}
+
+/**
+ * What carries a deck and how deep its slab is (photo QA V16, V17): a beam
+ * deck's supports (`beamSupports`: piers on the axis, a railway viaduct's
+ * paired columns) and the depth its structure gives it (`deckDepth`, the
+ * baked fairway depth only a cap). An older file without an axis: no
+ * supports, a depth for the usual pier spacing.
+ */
+function deckPlan(p: BridgeProps): { depth: number; supports: DeckSupport[] } {
+  const length = p.axis ? (axisFrame(p.axis)?.length ?? 0) : 0;
+  const supports =
+    length > 0
+      ? beamSupports(length, {
+          fairway: p.fairway,
+          kind: p.kind,
+          span: p.span,
+          structure: p.structure,
+          water: p.water,
+        })
+      : [];
+  const span = length > 0 ? beamSpan(length, supports, p.span) : PIER_SPACING;
+  return {
+    depth: deckDepth(deckCarrier(p.structure), span, p.depth),
+    supports,
+  };
+}
+
+/** The deck's parapet (photo QA V18): a masonry bridge's ashlar wall, an
+ *  open steel railing on every other — none where a frame stands on the
+ *  deck's edge (it is the railing: a parapet beside it read as a second
+ *  strip along the roadway). */
+function addParapet(
+  out: BridgeMeshes,
+  p: BridgeProps,
+  deck: { ring: Ring2; ringS?: number[]; topY: number[] },
+  steelArch: boolean
+): void {
+  if (drawsFrames(p)) {
+    return;
+  }
+  if (parapetStyle(p.structure, steelArch) === "ashlar") {
+    addParapetWalls(out.stone, deck.ring, deck.topY, deck.ringS);
+  } else {
+    addRailing(out.steel, deck.ring, deck.topY, deck.ringS);
+  }
 }
 
 /** Draws one bridge: deck, parapets, whatever carries it and stands on it. */
@@ -1316,31 +1448,37 @@ function drawBridge(
   out: BridgeMeshes,
   ctx: RailContext
 ): void {
-  const { structure, depth } = bridgeProps(f);
-  const { frame, ring, topY } = drawDeck(f, baked, bakedY, out, ctx);
+  const p = f.properties ?? {};
+  const { depth, supports } = deckPlan(p);
+  const { frame, ring, topY } = drawDeck(f, baked, bakedY, out, ctx, depth);
   if (!frame) {
     // an older file: no axis, no measurements
+    addParapet(out, p, { ring, topY }, false);
     addPiers(out.stone, ring, topY, ctx, depth);
     return;
   }
-  const carried = addSuperstructure(out, frame, f.properties ?? {}, depth);
+  const carried = addSuperstructure(out, frame, p, depth);
+  const deck = { ring, topY, ringS: frame.ringS };
+  addParapet(out, p, deck, carried.arches.length > 0);
   if (carried.pylons) {
     return;
   }
   if (
     carried.arches.length === 0 &&
-    structure.includes("arch") &&
-    addMasonry(out.stone, frame, { ring, topY, depth })
+    deckCarrier(p.structure) === "arch" &&
+    addMasonry(out.stone, frame, { ...deck, depth }, p)
   ) {
     return;
   }
-  const p = f.properties ?? {};
-  const piers = pierStations(frame.length, {
-    fairway: p.fairway,
-    span: p.span,
-  }).filter((s) => carried.arches.every(([from, to]) => s < from || s > to));
-  for (const s of piers) {
-    addPierAt(out.stone, frame, s, 0, depth, PIER_HALF);
+  for (const { s, edge } of supports) {
+    if (carried.arches.some(([from, to]) => s >= from && s <= to)) {
+      continue;
+    }
+    if (edge) {
+      addColumnPair(out.stone, frame, s, depth);
+    } else {
+      addPierAt(out.stone, frame, s, 0, depth, PIER_HALF);
+    }
   }
 }
 
@@ -1395,12 +1533,14 @@ function buildBridges(
     material: stoneMaterial(COLORS.deckStone),
   });
   if (stoneMesh) {
+    stoneMesh.name = "bridge-stone";
     meshes.push(stoneMesh);
   }
   const steelMesh = meshFrom(out.steel, COLORS.steel, {
     cast: true,
   });
   if (steelMesh) {
+    steelMesh.name = "bridge-steel";
     meshes.push(steelMesh);
   }
   return meshes;
@@ -1870,6 +2010,39 @@ function addPierAt(
   addColumn(acc, w.x, w.z, ground, under, half);
 }
 
+/** A railway viaduct's frame at a station: a column under each deck edge,
+ *  from the ground up to the soffit, and the crossbeam they carry under
+ *  it (the U3's steel viaduct; a pier on the axis drew a road bridge). */
+function addColumnPair(
+  acc: Mesh3,
+  frame: BridgeFrame,
+  s: number,
+  depth: number
+): void {
+  const under = frame.deckAt(s) - depth;
+  const { left, right } = frame.edgesAt(s);
+  if (left - right < 2 * (VIADUCT_COLUMN_IN + VIADUCT_COLUMN_HALF)) {
+    addPierAt(acc, frame, s, 0, depth, PIER_HALF);
+    return;
+  }
+  const sides = [left - VIADUCT_COLUMN_IN, right + VIADUCT_COLUMN_IN];
+  let standing = 0;
+  for (const offset of sides) {
+    const ground = frame.groundAt(s, offset);
+    if (ground !== null && under - ground >= PIER_MIN_GAP) {
+      const w = frame.at(s, offset);
+      addColumn(acc, w.x, w.z, ground, under, VIADUCT_COLUMN_HALF);
+      standing++;
+    }
+  }
+  if (standing === 2) {
+    const y = under - VIADUCT_CAP_HALF;
+    const a = point(frame, s, sides[0] + VIADUCT_COLUMN_HALF, y);
+    const b = point(frame, s, sides[1] - VIADUCT_COLUMN_HALF, y);
+    addStrut(acc, a, b, VIADUCT_CAP_HALF);
+  }
+}
+
 /** Drops box piers from the deck underside to terrain along the deck's long axis,
  *  placed even over the river by interpolating ground between the abutments. */
 function addPiers(
@@ -1924,7 +2097,8 @@ const WALL_STEP = 1;
 
 /**
  * A masonry arch bridge (structure `arch` without a measured steel arch):
- * arches between piers of real thickness (`masonryArches`). The deck's own
+ * arches between piers of real thickness (`masonryArches`: DOM1's piers,
+ * else Wikidata's spans, `known`). The deck's own
  * side edges are carried down as spandrel walls — to the arch under them,
  * to the pier top over a pier — each a vault across the deck underneath,
  * so the bridge is closed from below and from the side. The walls hang
@@ -1935,12 +2109,19 @@ const WALL_STEP = 1;
 function addMasonry(
   acc: Mesh3,
   frame: BridgeFrame,
-  deck: { ring: Ring2; topY: number[]; depth: number }
+  deck: { ring: Ring2; topY: number[]; depth: number },
+  known: BridgeProps
 ): boolean {
   const { spans, piers } = masonryArches(
     frame.length,
     (s) => frame.groundAt(s, 0),
-    (s) => frame.deckAt(s) - deck.depth
+    (s) => frame.deckAt(s) - deck.depth,
+    {
+      fairway: known.fairway,
+      piers: known.piers,
+      span: known.span,
+      spans: known.spans,
+    }
   );
   if (spans.length === 0) {
     return false;
@@ -1952,7 +2133,7 @@ function addMasonry(
     if (span) {
       return intradosAt(span, s);
     }
-    const pier = piers.find((p) => Math.abs(s - p.s) <= MASONRY_PIER_HALF);
+    const pier = piers.find((p) => Math.abs(s - p.s) <= p.half);
     return pier ? pier.top : null;
   };
   for (let i = 0; i < ring.pts.length; i++) {
@@ -2060,24 +2241,24 @@ function addVault(acc: Mesh3, frame: BridgeFrame, span: MasonrySpan): void {
   }
 }
 
-/** A pier across the whole deck: a box MASONRY_PIER_HALF either side of
- *  its station, from the ground up to its arches' springing. */
+/** A pier across the whole deck: a box `half` either side of its station,
+ *  from the ground up to its arches' springing. */
 function addMasonryPier(
   acc: Mesh3,
   frame: BridgeFrame,
   pier: MasonryPier
 ): void {
-  const { s, ground, top } = pier;
+  const { s, ground, half, top } = pier;
   const { left, right } = frame.edgesAt(s);
   if (top - ground < 0.3 || left - right < 1) {
     return;
   }
   const corner = (ds: number, off: number) => frame.at(s + ds, off);
   const c = [
-    corner(-MASONRY_PIER_HALF, right),
-    corner(MASONRY_PIER_HALF, right),
-    corner(MASONRY_PIER_HALF, left),
-    corner(-MASONRY_PIER_HALF, left),
+    corner(-half, right),
+    corner(half, right),
+    corner(half, left),
+    corner(-half, left),
   ];
   const cx = (c[0].x + c[2].x) / 2;
   const cz = (c[0].z + c[2].z) / 2;
@@ -2275,16 +2456,18 @@ function polygonsOf(
  * One merged ballast surface from the dissolved railway-area polygons
  * (Polygon or MultiPolygon — a yard dissolved into several parts), draped
  * on the ground (`addDrapedArea`) and left out on the rail decks, where
- * the tracks ride the deck. Exported for tests.
+ * the tracks ride the deck, and where `buried` (a track the line levels
+ * cut under a lid: its bed is not on the lid's top). Exported for tests.
  */
 export function buildBallast(
   features: AreaFeature[],
   ctx: RailContext,
-  decks: DeckPoly[] = []
+  decks: DeckPoly[] = [],
+  buried: (x: number, z: number) => boolean = () => false
 ): Mesh | null {
   const acc = mesh3();
-  const onDeck = (x: number, z: number) =>
-    decksAt(decks, x, z, RIDES.rail, "decks").length > 0;
+  const skip = (x: number, z: number) =>
+    decksAt(decks, x, z, RIDES.rail, "decks").length > 0 || buried(x, z);
   for (const f of features) {
     for (const rings of polygonsOf(f.geometry)) {
       addDrapedArea(
@@ -2293,7 +2476,7 @@ export function buildBallast(
         BALLAST_RAISE,
         BALLAST_DROP,
         ctx,
-        onDeck
+        skip
       );
     }
   }
@@ -2312,10 +2495,11 @@ const APPROACH_RIDE_M = 1.5;
 /**
  * The level of every sample of a line (lib/city/levels.ts): the build
  * step's runs (`lv`, scripts/line-levels.ts) where the feature has them,
- * else solved over this piece alone. On the ground a sample still rides
- * an approach ramp close above it; on a deck it rides the deck top
- * nearest the run's line. Null where the ground is unknown and no level
- * holds it (the line breaks there).
+ * else solved over this piece alone (with what its source says: `prefer`,
+ * `below`). On the ground a sample still rides an approach ramp close
+ * above it; on a deck it rides the deck top nearest the run's line. Null
+ * where the ground is unknown and no level holds it (the line breaks
+ * there).
  */
 export function lineLevelsAt(
   pts: readonly Point2[],
@@ -2323,7 +2507,8 @@ export function lineLevelsAt(
   runs: readonly LevelRun[] | undefined,
   ctx: GroundContext,
   decks: DeckPoly[],
-  prefer?: "deck" | "ground"
+  prefer?: "deck" | "ground",
+  below?: boolean
 ): (Level | null)[] {
   const d: number[] = [];
   const ground: (number | null)[] = [];
@@ -2343,7 +2528,12 @@ export function lineLevelsAt(
   const solved = runs
     ? pts.map((_, i) => runLevelAt(runs, d, i))
     : lineLevels(
-        pts.map((_, i) => ({ d: d[i], ground: ground[i], decks: under[i] })),
+        pts.map((_, i) => ({
+          d: d[i],
+          ground: ground[i],
+          decks: under[i],
+          below,
+        })),
         { grade: LEVEL_GRADE[line], prefer }
       ).map((l) => (l?.mode === "ground" ? null : l));
   return solved.map((level, i) => {
@@ -2438,114 +2628,446 @@ export function spanRuns<P>(
   );
 }
 
-/** Steel rails: one pair per track, on the level their line runs on
- *  (`lineLevelsAt`): the ground, a rail deck, a span (with its deck). */
-function buildRails(
+/** A cut this far under the ground there (m) is buried: the line runs
+ *  under a lid (lib/city/levels.ts `coverCuts`) — not drawn, no ballast
+ *  on the lid, no catenary over it. A cut under a deck is the passage
+ *  the terrain opens, and shows. */
+const BURIED_M = 0.5;
+
+/** A rail line as the layer draws it, its levels solved once for the
+ *  rails, the sleepers, the ballast's gaps, the platforms and the
+ *  catenary. */
+interface DrawnLine {
+  /** distance along the line per sample (m) */
+  d: number[];
+  /** the samples (EPSG) */
+  dense: Point2[];
+  /** the gauge (m) */
+  gauge: number;
+  /** each sample's level; null where the line breaks or is buried */
+  levels: (Level | null)[];
+  /** the mapped catenary masts ([station, offset to the left], m) */
+  masts: readonly (readonly [number, number])[];
+  /** a contact line over it (`electrified` 1) */
+  overhead: boolean;
+  /** set in the paving: no ballast, no sleepers, the rail head flush */
+  paved: boolean;
+  /** the samples where the line runs buried (world x, z) */
+  buried: XZ[];
+  tracks: number;
+  /** the samples in the world frame (y unset) */
+  world: XZ[];
+}
+
+/** Each track's offset to the left of its line's centre (m). */
+function trackOffsets(tracks: number): number[] {
+  return Array.from(
+    { length: tracks },
+    (_, k) => (k - (tracks - 1) / 2) * TRACK_PITCH
+  );
+}
+
+/** The rail head over the level a track runs on (m): the DGM holds the
+ *  ballast's surface, and a rail deck's measured top the ballast run on
+ *  across it; a track set in the paving shows its head flush with it. */
+function railRaise(paved: boolean): number {
+  return paved ? RAIL_PAVED_RAISE : RAIL_RAISE;
+}
+
+/** Every line's samples and levels; a buried sample's level is null. */
+function drawnLines(
   features: RailFeature[],
   ctx: RailContext,
-  decks: DeckPoly[],
-  spans: { stone: Mesh3; top: Mesh3 }
-): Mesh | null {
-  const acc = mesh3();
+  decks: DeckPoly[]
+): DrawnLine[] {
+  const out: DrawnLine[] = [];
   for (const f of features) {
     if (f.geometry?.type !== "LineString") {
       continue;
     }
-    const tracks = Math.min(Math.max(f.properties?.tracks ?? 1, 1), 3);
+    const p = f.properties ?? {};
     const dense = subdividePolyline(f.geometry.coordinates, SAMPLE_M);
-    const levels = lineLevelsAt(dense, "rail", f.properties?.lv, ctx, decks);
-    const drawn = dense.map(([ex, ey], i): Pt | null => {
-      const level = levels[i];
-      if (!level) {
-        return null;
-      }
+    const levels = lineLevelsAt(
+      dense,
+      "rail",
+      p.lv,
+      ctx,
+      decks,
+      railPrefer(f),
+      (p.layer ?? 0) < 0
+    );
+    const d: number[] = [];
+    const world: XZ[] = [];
+    const buried: XZ[] = [];
+    dense.forEach(([ex, ey], i) => {
+      d.push(
+        i === 0
+          ? 0
+          : d[i - 1] + Math.hypot(ex - dense[i - 1][0], ey - dense[i - 1][1])
+      );
       const w = epsgToWorld(ex, ey, ctx.offset);
-      const raise = level.mode === "deck" ? RAIL_DECK_RAISE : RAIL_RAISE;
-      return { x: w.x, y: level.y + raise, z: w.z };
+      world.push({ x: w.x, z: w.z });
+      const level = levels[i];
+      const g = ctx.heightAt(ex, ey);
+      if (
+        level?.mode === "cut" &&
+        g !== null &&
+        g - level.y > BURIED_M &&
+        decksAt(decks, w.x, w.z, undefined, "all", DECK_REACH_M).length === 0
+      ) {
+        buried.push(world[i]);
+        levels[i] = null;
+      }
     });
-    // Split into runs of points with a level (never bridge a NoData gap).
-    let run: Pt[] = [];
-    const flush = () => {
-      if (run.length >= 2) {
-        for (let tk = 0; tk < tracks; tk++) {
-          const center = (tk - (tracks - 1) / 2) * TRACK_PITCH;
-          addRail(acc, run, center + GAUGE / 2);
-          addRail(acc, run, center - GAUGE / 2);
-        }
-      }
-      run = [];
-    };
-    for (const p of drawn) {
-      if (p) {
-        run.push(p);
-      } else {
-        flush();
-      }
-    }
-    flush();
-    const half = ((tracks - 1) / 2) * TRACK_PITCH + GAUGE / 2 + SPAN_SHOULDER_M;
-    for (const span of spanRuns(levels, drawn)) {
-      // a line near a seam is in both tiles' files: the span's owner
-      // draws its deck
-      const pts = span.filter((p): p is Pt => p !== null);
-      const centre = pts[Math.floor(pts.length / 2)];
-      const e = centre
-        ? worldToEpsg({ x: centre.x, z: centre.z }, ctx.offset)
-        : null;
-      if (e && (!ctx.owns || ctx.owns(e.x, e.y))) {
-        addSpanDeck(
-          spans.top,
-          spans.stone,
-          pts.map((p) => ({ ...p, y: p.y - RAIL_RAISE + BALLAST_RAISE })),
-          half,
-          ctx
-        );
-      }
+    out.push({
+      d,
+      dense,
+      gauge: p.g ?? GAUGE,
+      levels,
+      masts: p.m ?? [],
+      overhead: p.electrified === 1,
+      paved: p.paved === 1,
+      buried,
+      tracks: Math.min(Math.max(p.tracks ?? 1, 1), 3),
+      world,
+    });
+  }
+  return out;
+}
+
+/** Whether a point lies on the bed of a buried stretch (the bed's half
+ *  width and a little more). */
+function buriedTest(
+  lines: readonly DrawnLine[]
+): (x: number, z: number) => boolean {
+  const pts: { half: number; x: number; z: number }[] = [];
+  for (const l of lines) {
+    const half = BED_HALF_M + ((l.tracks - 1) * TRACK_PITCH) / 2;
+    for (const p of l.buried) {
+      pts.push({ half, x: p.x, z: p.z });
     }
   }
-  return meshFrom(acc, COLORS.rail, {
+  if (pts.length === 0) {
+    return () => false;
+  }
+  const cell = 16;
+  const grid = new Map<string, typeof pts>();
+  for (const p of pts) {
+    const k = `${Math.floor(p.x / cell)}:${Math.floor(p.z / cell)}`;
+    const list = grid.get(k);
+    if (list) {
+      list.push(p);
+    } else {
+      grid.set(k, [p]);
+    }
+  }
+  return (x, z) => {
+    const cx = Math.floor(x / cell);
+    const cz = Math.floor(z / cell);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        for (const p of grid.get(`${cx + dx}:${cz + dz}`) ?? []) {
+          // a sample every 4 m: within its half-step along, the bed across
+          if (
+            Math.hypot(p.x - x, p.z - z) <= Math.hypot(p.half, SAMPLE_M / 2)
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  };
+}
+
+/** The runs of consecutive indices where `has` holds: [first, last]. */
+function runsWhere(n: number, has: (i: number) => boolean): [number, number][] {
+  const out: [number, number][] = [];
+  let first = -1;
+  for (let i = 0; i <= n; i++) {
+    if (i < n && has(i)) {
+      if (first < 0) {
+        first = i;
+      }
+    } else if (first >= 0) {
+      if (i - 1 > first) {
+        out.push([first, i - 1]);
+      }
+      first = -1;
+    }
+  }
+  return out;
+}
+
+/** A rail deck the sleepers lie open on (a truss: no ballast bed). */
+function openDecks(features: BridgeFeature[], ctx: RailContext): DeckPoly[] {
+  return bridgeDecks(
+    features.filter(
+      (f) =>
+        f.properties?.kind === "rail" &&
+        (f.properties.structure ?? "").includes("truss")
+    ),
+    ctx.offset
+  );
+}
+
+/** What the rails are built into. */
+interface RailMeshes {
+  catenary: CatenaryRun[];
+  rail: Mesh3;
+  sleepers: SleeperRibbons;
+  spans: { stone: Mesh3; top: Mesh3 };
+  /** every drawn sample, for the platforms beside the tracks */
+  tracks: TrackSample[];
+}
+
+/** One line's rails, sleepers, span decks, platform samples and catenary
+ *  runs into `out`. */
+function addLine(
+  out: RailMeshes,
+  line: DrawnLine,
+  ctx: RailContext,
+  decks: { all: DeckPoly[]; open: DeckPoly[] }
+): void {
+  const { open } = decks;
+  const raise = railRaise(line.paved);
+  const head = line.levels.map((level, i): Pt | null =>
+    level
+      ? { x: line.world[i].x, y: level.y + raise, z: line.world[i].z }
+      : null
+  );
+  const offsets = trackOffsets(line.tracks);
+  for (const [a, b] of runsWhere(head.length, (i) => head[i] !== null)) {
+    const run = head.slice(a, b + 1) as Pt[];
+    const d = line.d.slice(a, b + 1);
+    const opens = run.map(
+      (p, k) =>
+        line.levels[a + k]?.mode === "deck" &&
+        decksAt(open, p.x, p.z, undefined, "decks").length > 0
+    );
+    const bed = run.map((p) => ({ ...p, y: p.y - raise + SLEEPER_TOP }));
+    for (const lateral of offsets) {
+      addRail(out.rail, run, lateral + line.gauge / 2);
+      addRail(out.rail, run, lateral - line.gauge / 2);
+      if (!line.paved) {
+        addSleepers(out.sleepers, bed, d, lateral, opens);
+      }
+    }
+    if (line.overhead) {
+      out.catenary.push(...catenaryRuns(line, [a, b], run, offsets, decks.all));
+    }
+  }
+  line.levels.forEach((level, i) => {
+    if (level) {
+      out.tracks.push({
+        raised: level.mode === "deck" || level.mode === "span",
+        x: line.world[i].x,
+        y: level.y,
+        z: line.world[i].z,
+      });
+    }
+  });
+  const half =
+    ((line.tracks - 1) / 2) * TRACK_PITCH + line.gauge / 2 + SPAN_SHOULDER_M;
+  for (const span of spanRuns(line.levels, head)) {
+    // a line near a seam is in both tiles' files: the span's owner
+    // draws its deck
+    const pts = span.filter((p): p is Pt => p !== null);
+    const centre = pts[Math.floor(pts.length / 2)];
+    const e = centre
+      ? worldToEpsg({ x: centre.x, z: centre.z }, ctx.offset)
+      : null;
+    if (e && (!ctx.owns || ctx.owns(e.x, e.y))) {
+      addSpanDeck(
+        out.spans.top,
+        out.spans.stone,
+        pts.map((p) => ({ ...p, y: p.y - raise + BALLAST_RAISE })),
+        half,
+        ctx
+      );
+    }
+  }
+}
+
+/** The catenary runs of one stretch [a, b] of a line, one per track: the
+ *  rail heads offset to each track, the structure a mast there stands on,
+ *  the soffit of a bridge over it (a deck OVERPASS_M over the rail head,
+ *  OVERPASS_DEPTH_M deep), the mapped masts on the track nearest each. */
+function catenaryRuns(
+  line: DrawnLine,
+  [a, b]: [number, number],
+  run: Pt[],
+  offsets: number[],
+  decks: DeckPoly[]
+): CatenaryRun[] {
+  const tan = tangentsXZ(run);
+  const deck = line.levels
+    .slice(a, b + 1)
+    .map((l) => (l && l.mode !== "ground" && l.mode !== "cut" ? l.y : null));
+  const over = run.map((p) => {
+    const tops = decksAt(decks, p.x, p.z, undefined, "decks").filter(
+      (y) => y > p.y + OVERPASS_M
+    );
+    return tops.length > 0 ? Math.min(...tops) - OVERPASS_DEPTH_M : null;
+  });
+  const d = line.d.slice(a, b + 1);
+  return offsets.map((lateral) => ({
+    d,
+    deck,
+    over,
+    mapped: line.masts
+      .filter(
+        ([, o]) =>
+          offsets.reduce((best, x) =>
+            Math.abs(o - x) < Math.abs(o - best) ? x : best
+          ) === lateral
+      )
+      .map(([s, o]) => [s, o - lateral] as const),
+    pts: run.map((p, i) => ({
+      x: p.x - tan[i].y * lateral,
+      y: p.y,
+      z: p.z + tan[i].x * lateral,
+    })),
+  }));
+}
+
+/** Steel rails: one pair per track, on the level their line runs on
+ *  (`lineLevelsAt`): the ground, a rail deck, a span (with its deck);
+ *  the sleepers under them; the catenary over the contact lines. */
+function buildRails(
+  lines: readonly DrawnLine[],
+  ctx: RailContext,
+  decks: { all: DeckPoly[]; open: DeckPoly[] },
+  out: RailMeshes
+): Mesh[] {
+  for (const line of lines) {
+    addLine(out, line, ctx, decks);
+  }
+  const meshes: Mesh[] = [];
+  const rails = meshFrom(out.rail, COLORS.rail, {
     cast: false,
     offsetUnits: -1,
     roughness: 0.5,
   });
+  if (rails) {
+    meshes.push(rails);
+  }
+  const sleepers = sleeperMesh(out.sleepers);
+  if (sleepers) {
+    meshes.push(sleepers);
+  }
+  return meshes;
 }
 
-/** Station platforms: flat slabs raised above ground (polygons + line ribbons). */
+/** A few samples of the ground inside a ring (world), a grid of at most
+ *  ~64 points. */
+function groundInside(ring: Ring2, ctx: RailContext): number[] {
+  let minX = Number.POSITIVE_INFINITY;
+  let minZ = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxZ = Number.NEGATIVE_INFINITY;
+  for (const p of ring.pts) {
+    minX = Math.min(minX, p.x);
+    minZ = Math.min(minZ, p.z);
+    maxX = Math.max(maxX, p.x);
+    maxZ = Math.max(maxZ, p.z);
+  }
+  const step = Math.max(2, Math.max(maxX - minX, maxZ - minZ) / 8);
+  const out: number[] = [];
+  for (let x = minX + step / 2; x < maxX; x += step) {
+    for (let z = minZ + step / 2; z < maxZ; z += step) {
+      if (pointInRing(ring.pts, x, z)) {
+        const e = worldToEpsg({ x, z }, ctx.offset);
+        const g = ctx.heightAt(e.x, e.y);
+        if (g !== null) {
+          out.push(g);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** A platform's height above the rail top (m) and the trains it serves,
+ *  from the bake (pipeline/bake/rail.py `platforms`). */
+function platformOf(f: AreaFeature): { h?: number; kind?: string } {
+  const h = f.properties?.h;
+  const k = f.properties?.k;
+  return {
+    h: typeof h === "number" ? h : undefined,
+    kind: typeof k === "string" ? k : undefined,
+  };
+}
+
+/**
+ * Station platforms on the level of the track beside them, their height
+ * over its rail head (lib/city/platform-level.ts): slabs from the polygons,
+ * a slim ribbon for a platform OSM maps as a line.
+ */
 function buildPlatforms(
   features: AreaFeature[],
-  ctx: RailContext
+  ctx: RailContext,
+  index: TrackIndex
 ): Mesh | null {
   const acc = mesh3();
   for (const f of features) {
     const g = f.geometry;
+    const kind = platformOf(f);
     if (g?.type === "Polygon" || g?.type === "MultiPolygon") {
       for (const outer of outerRings(g)) {
         const ring = ringToWorld(outer, ctx.offset);
-        const topY = clampRing(ring, PLATFORM_H, ctx);
-        if (topY) {
-          addFootprint(acc, ring, topY, PLATFORM_H);
+        const placed = platformTops(
+          {
+            ...kind,
+            ground: ring.pts.map((p) => {
+              const e = worldToEpsg(p, ctx.offset);
+              return ctx.heightAt(e.x, e.y);
+            }),
+            inside: groundInside(ring, ctx),
+            ring: ring.pts,
+          },
+          index,
+          RAIL_RAISE
+        );
+        if (placed) {
+          addFootprint(acc, ring, placed.top, placed.depth);
         }
       }
     } else if (g?.type === "LineString") {
       const run: Pt[] = [];
       for (const [ex, ey] of subdividePolyline(g.coordinates, SAMPLE_M)) {
         const ground = ctx.heightAt(ex, ey);
-        if (ground !== null) {
-          const w = epsgToWorld(ex, ey, ctx.offset);
-          run.push({ x: w.x, y: ground + PLATFORM_H, z: w.z });
+        const w = epsgToWorld(ex, ey, ctx.offset);
+        const placed =
+          ground === null
+            ? null
+            : platformTops(
+                { ...kind, ground: [ground], inside: [], ring: [w] },
+                index,
+                RAIL_RAISE
+              );
+        if (placed) {
+          run.push({ x: w.x, y: placed.top[0], z: w.z });
         }
       }
       addRail(acc, run, 0); // a thin slab ribbon for line-mapped platforms
     }
   }
-  return meshFrom(acc, COLORS.platform, { cast: true });
+  const mesh = meshFrom(acc, COLORS.platform, { cast: true });
+  if (mesh) {
+    mesh.name = "rail-platforms";
+  }
+  return mesh;
 }
 
 /**
  * Builds the WHOLE tile block's rails, bridges, ballast and platforms (one
  * call, cross-tile heightAt) as stylized geometry on the Y-up scene. Bridges
- * build first so the rails can ride their decks. Empty inputs yield an empty
- * group; the group is freed with the scene (disposeObject3D).
+ * build first so the rails can ride their decks; the rails' levels next,
+ * so the ballast leaves out where a track runs buried and the platforms
+ * stand on their track's level; the catenary over the contact lines last.
+ * Empty inputs yield an empty group; the group is freed with the scene
+ * (disposeObject3D).
  */
 export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   const group = new Group();
@@ -2561,31 +3083,61 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   if (bridgeMeshes.length > 0) {
     group.add(...bridgeMeshes);
   }
-  const ballast = buildBallast(features.ballast, ctx, decks);
+  const lines = drawnLines(features.rails, ctx, decks);
+  const out: RailMeshes = {
+    catenary: [],
+    rail: mesh3(),
+    sleepers: sleeperRibbons(),
+    spans: { top: mesh3(), stone: mesh3() },
+    tracks: [],
+  };
+  const rails = buildRails(
+    lines,
+    ctx,
+    { all: decks, open: openDecks(features.bridges, ctx) },
+    out
+  );
+  // the rails first (a test reads them as the group's first child when no
+  // bridge is drawn), then the ballast under them
+  if (rails.length > 0) {
+    group.add(...rails);
+  }
+  const ballast = buildBallast(features.ballast, ctx, decks, buriedTest(lines));
   if (ballast) {
     group.add(ballast);
   }
-  const spans = { top: mesh3(), stone: mesh3() };
-  const rails = buildRails(features.rails, ctx, decks, spans);
-  if (rails) {
-    group.add(rails);
-  }
-  const spanTop = meshFrom(spans.top, COLORS.deckRail, {
+  const spanTop = meshFrom(out.spans.top, COLORS.deckRail, {
     cast: true,
     material: deckMaterial("rail", COLORS.deckRail),
   });
-  const spanStone = meshFrom(spans.stone, COLORS.deckStone, {
+  const spanStone = meshFrom(out.spans.stone, COLORS.deckStone, {
     cast: true,
     material: stoneMaterial(COLORS.deckStone),
   });
-  for (const m of [spanTop, spanStone]) {
+  const platforms = buildPlatforms(
+    features.platforms,
+    ctx,
+    new TrackIndex(out.tracks)
+  );
+  const catenary = catenaryParts(mesh3());
+  addCatenary(catenary, out.catenary, ctx);
+  const masts = meshFrom(catenary.steel, COLORS.mast, {
+    cast: true,
+    roughness: 0.7,
+  });
+  if (masts) {
+    masts.name = "rail-catenary-masts";
+  }
+  for (const m of [
+    spanTop,
+    spanStone,
+    platforms,
+    masts,
+    catenaryWires(catenary),
+  ]) {
     if (m) {
       group.add(m);
     }
-  }
-  const platforms = buildPlatforms(features.platforms, ctx);
-  if (platforms) {
-    group.add(platforms);
   }
   return group;
 }

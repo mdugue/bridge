@@ -43,6 +43,7 @@ import {
   meshFrom,
   mesh3,
   type Pt,
+  quad,
   spanRuns,
 } from "./rail-layer";
 import { sceneMaterial } from "./three-utils";
@@ -56,7 +57,10 @@ import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
  *   rail layer's profile, in a soft lavender-grey a shade under the road's.
  *   In the street the rail heads flush with the road (no sleepers, no
  *   groove: fewer, calmer lines); on a lawn (*Rasengleis*) the rails a hand
- *   higher over a meadow strip; on ballast a ballast strip.
+ *   higher over a meadow strip — one lawn for a double track whose tracks
+ *   lie at most 4.5 m apart, each strip's inner edge running to the
+ *   midpoint between them (`lawnHalves`), not two strips with a seam of
+ *   road between; on ballast a ballast strip.
  *   A track the OSM way puts on a bridge rides the deck (the rail layer's
  *   lift table, every deck kind).
  * - Overhead line: one contact wire per track 5.6 m over the rail top,
@@ -69,7 +73,8 @@ import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
  *   under two-thirds opacity, like a pencil line on the watercolour, not
  *   ink. Wires never cast (the shadow map stays as it was); only the masts
  *   do.
- * - Masts: a pale green-grey pole each, instanced (`Instances`).
+ * - Masts: a pale green-grey pole each, instanced (`Instances`) — the
+ *   mapped masts and the poles the bake placed where none is mapped.
  * - Stops: the bus stop's "H" sign (furniture-layer.ts, plan 030) on the
  *   platform of each tram stop the bake found one for.
  *
@@ -94,6 +99,12 @@ const BED_WEB: Record<TramBed, number> = {
 };
 /** bed strip top under the rail top (m) */
 const BED_BELOW_RAIL = 0.1;
+/** Two lawn tracks at most this far apart (m, axis to axis) share one
+ *  lawn: a double track's *Rasengleis* (Dresden's are 2.9–3.6 m). */
+export const LAWN_PAIR_M = 4.5;
+/** What a shared lawn's inner edge stops short of the midpoint (m): the
+ *  two strips meet without overlapping (no z-fight where they would). */
+const LAWN_SEAM_M = 0.01;
 /** half-widths (m) of the drawn wires */
 const WIRE_HALF = { contact: 0.006, span: 0.005, hanger: 0.004, arm: 0.03 };
 const MAST_COLOR = 0xb7_bc_b4; // pale green-grey
@@ -209,11 +220,177 @@ interface TrackMeshes {
   streetRail: Mesh3;
 }
 
+/** The half-widths of a lawn strip along a run: `left` and `right` of its
+ *  direction, each BED_HALF.grass unless another lawn track lies within
+ *  LAWN_PAIR_M on that side, where it reaches the midpoint (`shared`). */
+export interface LawnHalves {
+  left: number[];
+  right: number[];
+  sharedLeft: boolean[];
+  sharedRight: boolean[];
+}
+
+/** The left-hand unit normal (x, z) of a run at each point. */
+function leftNormals(pts: Pt[]): [number, number][] {
+  return pts.map((_, i) => {
+    const a = pts[Math.max(0, i - 1)];
+    const b = pts[Math.min(pts.length - 1, i + 1)];
+    const tx = b.x - a.x;
+    const tz = b.z - a.z;
+    const t = Math.hypot(tx, tz) || 1;
+    return [-tz / t, tx / t];
+  });
+}
+
+/** A grid of the other lawn runs' segments, to find the nearest. */
+type SegmentGrid = Map<string, [Pt, Pt, number][]>;
+
+const CELL_M = LAWN_PAIR_M;
+const cellKey = (x: number, z: number) =>
+  `${Math.floor(x / CELL_M)},${Math.floor(z / CELL_M)}`;
+
+function segmentGrid(runs: TrackRun[]): SegmentGrid {
+  const grid: SegmentGrid = new Map();
+  runs.forEach((run, r) => {
+    for (let i = 1; i < run.pts.length; i++) {
+      const a = run.pts[i - 1];
+      const b = run.pts[i];
+      const keys = new Set([cellKey(a.x, a.z), cellKey(b.x, b.z)]);
+      for (const key of keys) {
+        const list = grid.get(key) ?? [];
+        list.push([a, b, r]);
+        grid.set(key, list);
+      }
+    }
+  });
+  return grid;
+}
+
+/** The nearest point (x, z) of another run's segment within LAWN_PAIR_M of
+ *  p, and its distance; null where none is. */
+function nearestOther(
+  grid: SegmentGrid,
+  p: Pt,
+  self: number
+): { d: number; x: number; z: number } | null {
+  let best: { d: number; x: number; z: number } | null = null;
+  const cx = Math.floor(p.x / CELL_M);
+  const cz = Math.floor(p.z / CELL_M);
+  for (let i = -1; i <= 1; i++) {
+    for (let j = -1; j <= 1; j++) {
+      for (const [a, b, r] of grid.get(`${cx + i},${cz + j}`) ?? []) {
+        if (r === self) {
+          continue;
+        }
+        const ux = b.x - a.x;
+        const uz = b.z - a.z;
+        const len2 = ux * ux + uz * uz;
+        const t =
+          len2 > 0
+            ? Math.min(
+                Math.max(((p.x - a.x) * ux + (p.z - a.z) * uz) / len2, 0),
+                1
+              )
+            : 0;
+        const x = a.x + ux * t;
+        const z = a.z + uz * t;
+        const d = Math.hypot(p.x - x, p.z - z);
+        if (d <= LAWN_PAIR_M && (best === null || d < best.d)) {
+          best = { d, x, z };
+        }
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Each lawn run's strip halves: a double track's two strips share the lawn
+ * between them, each inner edge at the midpoint (QA V23: two strips 1.3 m
+ * either side of tracks 3–4.5 m apart left a band of road between them).
+ */
+export function lawnHalves(runs: TrackRun[]): LawnHalves[] {
+  const grid = segmentGrid(runs);
+  return runs.map((run, r) => {
+    const n = leftNormals(run.pts);
+    const out: LawnHalves = {
+      left: [],
+      right: [],
+      sharedLeft: [],
+      sharedRight: [],
+    };
+    run.pts.forEach((p, i) => {
+      out.left.push(BED_HALF.grass);
+      out.right.push(BED_HALF.grass);
+      out.sharedLeft.push(false);
+      out.sharedRight.push(false);
+      const q = nearestOther(grid, p, r);
+      if (!q || q.d < 0.5) {
+        return;
+      }
+      const half = Math.max(q.d / 2 - LAWN_SEAM_M, 0);
+      const side = (q.x - p.x) * n[i][0] + (q.z - p.z) * n[i][1];
+      if (side >= 0) {
+        out.left[i] = half;
+        out.sharedLeft[i] = true;
+      } else {
+        out.right[i] = half;
+        out.sharedRight[i] = true;
+      }
+    });
+    return out;
+  });
+}
+
+/** A lawn strip with its own half-widths per point: the top, and a web
+ *  down each side that is not shared with a neighbour's strip. */
+function addLawn(acc: Mesh3, pts: Pt[], halves: LawnHalves): void {
+  const n = leftNormals(pts);
+  const web = BED_WEB.grass;
+  const edge = (i: number, sign: number): [number, number, number] => {
+    const w = sign > 0 ? halves.left[i] : halves.right[i];
+    return [
+      pts[i].x + n[i][0] * w * sign,
+      pts[i].y,
+      pts[i].z + n[i][1] * w * sign,
+    ];
+  };
+  for (let i = 0; i < pts.length - 1; i++) {
+    const l0 = edge(i, 1);
+    const l1 = edge(i + 1, 1);
+    const r0 = edge(i, -1);
+    const r1 = edge(i + 1, -1);
+    quad(acc, l0, r0, r1, l1, [0, 1, 0]);
+    const out: [number, number, number] = [n[i][0], 0, n[i][1]];
+    if (!(halves.sharedLeft[i] && halves.sharedLeft[i + 1])) {
+      quad(
+        acc,
+        l0,
+        l1,
+        [l1[0], l1[1] - web, l1[2]],
+        [l0[0], l0[1] - web, l0[2]],
+        out
+      );
+    }
+    if (!(halves.sharedRight[i] && halves.sharedRight[i + 1])) {
+      quad(
+        acc,
+        r0,
+        r1,
+        [r1[0], r1[1] - web, r1[2]],
+        [r0[0], r0[1] - web, r0[2]],
+        [-out[0], 0, -out[2]]
+      );
+    }
+  }
+}
+
 function addTrack(
   acc: TrackMeshes,
   run: TrackRun,
   bed: TramBed,
-  gauge = TRAM_GAUGE
+  gauge = TRAM_GAUGE,
+  lawn?: LawnHalves
 ): void {
   const half = gauge / 2;
   if (bed === "street") {
@@ -231,6 +408,10 @@ function addTrack(
   addRail(acc.rail, run.pts, half);
   addRail(acc.rail, run.pts, -half);
   const strip = run.pts.map((p) => ({ ...p, y: p.y - BED_BELOW_RAIL }));
+  if (bed === "grass" && lawn) {
+    addLawn(acc.grass, strip, lawn);
+    return;
+  }
   addRibbon(
     bed === "grass" ? acc.grass : acc.ballast,
     strip,
@@ -435,17 +616,29 @@ function buildTracks(
   // a track's piece is its tile's alone (the bake cuts them at the edge):
   // its spans' decks need no owner
   const spans = { top: mesh3(), stone: mesh3() };
+  const laid: { bed: TramBed; f: TramFeature; runs: TrackRun[] }[] = [];
   for (const f of tracks) {
     if (f.geometry.type !== "LineString") {
       continue;
     }
     const bed = f.properties?.bed ?? "street";
     const onBridge = f.properties?.bridge === 1;
-    const coords = f.geometry.coordinates;
-    const runs = trackRuns(f, coords, bed, decks, ctx, spans);
-    for (const run of runs) {
-      addTrack(acc, run, onBridge ? "street" : bed, f.properties?.g);
+    const runs = trackRuns(f, f.geometry.coordinates, bed, decks, ctx, spans);
+    laid.push({ f, bed: onBridge ? "street" : bed, runs });
+  }
+  // the lawn tracks' strips, a double track's two sharing the lawn
+  const lawnRuns = laid.flatMap((t) => (t.bed === "grass" ? t.runs : []));
+  const halves = new Map(
+    lawnHalves(lawnRuns).map((h, i) => [lawnRuns[i], h] as const)
+  );
+  for (const { f, bed, runs } of laid) {
+    if (f.geometry.type !== "LineString") {
+      continue;
     }
+    for (const run of runs) {
+      addTrack(acc, run, bed, f.properties?.g, halves.get(run));
+    }
+    const coords = f.geometry.coordinates;
     let length = 0;
     for (let i = 1; i < coords.length; i++) {
       length += Math.hypot(
@@ -542,7 +735,7 @@ export function buildTram(
   }
   parts.push(
     buildMasts(
-      byKind("mast").flatMap((f) =>
+      [...byKind("mast"), ...byKind("pole")].flatMap((f) =>
         f.geometry.type === "Point" ? [f.geometry.coordinates] : []
       ),
       ctx

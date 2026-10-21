@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
 import {
   OBJECT_FLAG_SHOP,
+  OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_LOD2,
   OBJECT_SOURCE_SCAN,
 } from "./city-mesh";
+import { encodeDrawn } from "./drawn-facts";
 import {
   functionLabel,
   germanDates,
@@ -455,4 +457,57 @@ test("a shed from the laser scan is marked as not in the official model", () => 
   expect(card.sources[0]?.text).toBe(
     "Laserscan · Befliegung 30.11.2024 · nicht im amtlichen Stadtmodell · Quelle: GeoSN, dl-de/by-2-0"
   );
+});
+
+test("a building LoD2 lacks says where its outline and height come from", () => {
+  const gap = (drawn: string) =>
+    object({
+      building: true,
+      source: OBJECT_SOURCE_GAP,
+      facts: facts({
+        buildingId: "gap:t:1:2",
+        drawn,
+        function: "",
+        height: 51.2,
+        area: 900,
+      }),
+    });
+  const card = (o: InquiryObject) =>
+    inquiryCard(
+      { kind: "building", tile: "t", picked: o, tree: [o] },
+      provenance,
+      DRESDEN
+    );
+  // measured: the surface model's height, OSM's outline
+  const measured = lines(card(gap("")).sources);
+  expect(measured).toHaveLength(2);
+  expect(measured[0]).toBe(
+    "Höhe: DOM1 · nicht im amtlichen Stadtmodell · Quelle: GeoSN, dl-de/by-2-0"
+  );
+  expect(measured[1]).toStartWith("Umriss: OpenStreetMap");
+  // newer than the flight: both from OSM, and the flight said to predate it
+  const newer = lines(card(gap(encodeDrawn({ height: "osm" }))).sources);
+  expect(newer).toHaveLength(2);
+  expect(newer[0]).toBe(
+    "DOM1 · beflogen, bevor das Gebäude stand · Quelle: GeoSN, dl-de/by-2-0"
+  );
+  expect(newer[1]).toStartWith("Umriss, Höhe: OpenStreetMap");
+});
+
+test("a roof on posts LoD2 lacks is named by ALKIS's word for one", () => {
+  const roof = object({
+    source: OBJECT_SOURCE_GAP,
+    facts: facts({
+      buildingId: "gap:t:3:4",
+      function: "51009_1610",
+      height: 5.8,
+      area: 640,
+    }),
+  });
+  const card = inquiryCard(
+    { kind: "building", tile: "t", picked: roof, tree: [roof] },
+    provenance,
+    DRESDEN
+  );
+  expect(card.title).toBe("Überdachung");
 });

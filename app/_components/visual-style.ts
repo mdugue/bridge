@@ -51,7 +51,7 @@ import {
 } from "@/lib/city/city-mesh";
 import { FACADE_UNIT } from "@/lib/city/facade-reading";
 import { SELECTION_ACCENT } from "@/lib/city/outline";
-import { FACADE_ROOF, NO_DOOR } from "@/lib/city/windows";
+import { FACADE_ROOF, NO_DOOR, WALL_EAVE } from "@/lib/city/windows";
 import {
   dataPosition,
   type F,
@@ -130,6 +130,14 @@ const ROOF_TINT = float(0.7);
 /** Dachsättigung: the roof colours' chroma lifted without moving their hue
  *  — copper green, terracotta and slate alike (0 = the raw aerial). */
 const ROOF_VIBRANCE = float(0.5);
+/** Dachwärme: from how warm a roof's own colour reads — red over blue
+ *  against its lightness, a zinc, concrete or bitumen grey at or under
+ *  0.1, terracotta about 2 — to where it is warm: below, the roof mixes
+ *  toward the clay's lightness as grey and takes no warm nudge, so a cool
+ *  grey stays cool (it turned warm in a fifth to half of each city's grey
+ *  roofs); above, it keeps the clay's warm hue as before. */
+const ROOF_WARM_FROM = 0.1;
+const ROOF_WARM_TO = 0.4;
 /** Boden-Verlauf: the walls darkened over their lowest ~5 m. */
 const GROUND_SHADE = float(0.34);
 /** Höhenlinien: the storey lines. */
@@ -216,6 +224,8 @@ const POCHE = vec3(0.025, 0.024, 0.027);
  *  - Materialstreuung (ROUGHNESS): the matte sheen varies house to house.
  *  - Dachsättigung (ROOF_VIBRANCE): the real roof colour lifted into a
  *    confident watercolour register without choosing a target hue.
+ *  - Dachwärme (ROOF_WARM_FROM…TO): a grey roof mixes toward the clay's
+ *    lightness, not its warm hue — zinc, concrete and bitumen stay cool.
  *  - Himmelslicht: the courtyard's ground floor gets less of the sky
  *    (sky-light.ts `createClaySky`, the aoNode, at `SKY_VIEW`).
  *  - after dark (× uNight): light on the walls from in front of them —
@@ -262,7 +272,12 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   const ownFace = step(1e-5, faceRgb.x.add(faceRgb.y).add(faceRgb.z));
   const roofRgb = mix(b.rgb, faceRgb, ownFace);
   const tint = varying(mix(a.rgb, roofRgb, step(0.5, roof)));
-  const build = varying(vec4(roof, c.x, b.w, c.y));
+  // A wall's own eave rides in its second door slot where no door needs
+  // it (WALL_EAVE): a front over its object's lowest roof keeps its top
+  // row of windows, its eave stroke and its cornice line under its own.
+  const build = varying(
+    vec4(roof, c.x, b.w.add(wallEaveUp(facade, roof)), c.y)
+  );
   // Flat: it seeds the windows' hashes (clay-windows.ts), which magnify an
   // interpolated float's last-bit drift into a different window position
   // every pixel — a loose grid's openings frayed at their sides.
@@ -360,14 +375,27 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   };
 }
 
+/** How far a wall vertex's own eave lies over its object's (m), from the
+ *  code in its second door slot (lib/city/windows.ts `WALL_EAVE`,
+ *  `slotWallEave`); 0 on a door's code, `NO_DOOR` and every roof vertex
+ *  (whose slots hold its colour). */
+function wallEaveUp(facade: V4, roof: F): F {
+  const code = floor(facade.w.mul(32_767).add(0.5));
+  const own = step(WALL_EAVE.code0 - 0.5, code)
+    .mul(step(code, WALL_EAVE.top + 0.5))
+    .mul(float(1).sub(roof));
+  return code.sub(WALL_EAVE.code0).mul(WALL_EAVE.step).mul(own);
+}
+
 /**
  * The clay's colour: Farbvariation first (so the shading below modulates
  * it) — roof faces (build.x = 1) carry the roof colour at the roof mix
  * strength, walls the wall colour, and a zero tint (no colour known) keeps
- * the base rather than mixing toward black; Dachsättigung, a hue-preserving
- * chroma boost around the grey axis (dull, hazy roofs lifted most, vivid
- * ones barely, so nothing blows out) plus a tiny warm nudge on the
- * muddy-grey roofs only (the audited cool haze cast), roofs only;
+ * the base rather than mixing toward black — a roof that is not warm
+ * (Dachwärme) toward the clay's lightness as grey, not its warm hue;
+ * Dachsättigung, a hue-preserving chroma boost around the grey axis (dull,
+ * hazy roofs lifted most, vivid ones barely, so nothing blows out) plus a
+ * tiny warm nudge on the muddy, warm roofs only, roofs only;
  * Boden-Verlauf over the lowest ~5 m; the storey lines at the building's
  * own storey height (fwidth-constant width) and the eave stroke, walls
  * only; then Denkmal.
@@ -377,17 +405,31 @@ function clayColour(tint: V3, build: V4, h: F, wall: F, flags: F): V3 {
   // a door wears its own colour (OBJECT_FLAG_OWN_COLOUR, 64) at full strength
   const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
   const tintMix = max(mix(TINT, ROOF_TINT, isRoof), own);
-  const roofL = dot(tint, vec3(0.299, 0.587, 0.114));
+  const luma = vec3(0.299, 0.587, 0.114);
+  const roofL = dot(tint, luma);
   const roofC = tint.sub(roofL);
   const dull = float(1).sub(smoothstep(0.04, 0.3, length(roofC)));
   const vib = ROOF_VIBRANCE.mul(dull);
+  const warm = smoothstep(
+    ROOF_WARM_FROM,
+    ROOF_WARM_TO,
+    tint.x.sub(tint.z).div(max(roofL, 0.02))
+  );
   const roofCol = vec3(roofL)
     .add(roofC.mul(float(1).add(vib.mul(2.4))))
-    .add(vec3(0.018, 0.004, -0.014).mul(ROOF_VIBRANCE).mul(dull));
+    .add(vec3(0.018, 0.004, -0.014).mul(ROOF_VIBRANCE).mul(dull).mul(warm));
   const clayCol = mix(tint, clamp(roofCol, 0, 1), isRoof);
+  // what the colour mixes toward: the clay, a roof that is not warm the
+  // clay's lightness as grey
+  const clayGrey = vec3(dot(materialColor.rgb, luma));
+  const base = mix(
+    materialColor.rgb,
+    mix(clayGrey, materialColor.rgb, warm),
+    isRoof
+  );
   let col: V3 = select(
     dot(tint, tint).greaterThan(1e-4),
-    mix(materialColor.rgb, clayCol, tintMix),
+    mix(base, clayCol, tintMix),
     materialColor.rgb
   );
   col = col.mul(

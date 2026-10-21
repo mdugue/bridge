@@ -28,7 +28,13 @@ import {
   type SeasonalCrowns,
   seasonCrowns,
 } from "./crown-season";
-import { buildConeGeo, CONE_SEGMENTS } from "./conifer-crown";
+import {
+  buildConeGeo,
+  buildPineGeo,
+  CONE_SEGMENTS,
+  reshapeCrown,
+  type SilhouetteMap,
+} from "./conifer-crown";
 import { Instances } from "./instancing";
 import {
   applySeasons,
@@ -61,23 +67,22 @@ import {
  * trunk, the 250 m chunks and the distance LOD swap — and adds
  * only what a per-instance scale cannot express: two reshaped variants of
  * the SAME two crown geometries (a flame for fastigiate cultivars, a
- * curtained dome for weeping trees) and the tiered lathe cone for conifers
- * (conifer-crown.ts, the canopy's evergreens wear the same), all inside the
- * broadleaf crown's local box. Proportions ride on
+ * curtained dome for weeping trees) and the needle trees' two forms
+ * (conifer-crown.ts, the canopy's evergreens wear the same): the tiered
+ * lathe cone for a spruce, a fir, a thuja, and a pine's flat-topped crown,
+ * all inside the broadleaf crown's local box. Proportions ride on
  * a non-uniform instance scale (width = crown diameter, depth = height minus
- * the clear stem), so round, oval and small ornamentals share one mesh.
+ * the clear stem), so round, oval and small ornamentals — and a yew's bush,
+ * the lobed crown down to the ground — share one mesh.
  *
  * Cost: the trunks and the broadleaf crowns (≈93 % of the trees) are not
  * meshes of this layer at all — they are handed to the canopy
  * (`instances`, vegetation-layer.ts TreeInstance) and ride in its chunk
- * meshes, so they cost instances, not draw calls. Only the three reshaped
+ * meshes, so they cost instances, not draw calls. Only the four reshaped
  * silhouettes get sets here: per 250 m chunk one per shape present (flame
- * often, cone and dome rarely), each doubled by the invisible other LOD.
+ * often, cone, pine and dome rarely), each doubled by the invisible other
+ * LOD.
  */
-
-/** Unit-space silhouette: a direction on the unit sphere (its height `dy`
- *  in [-1, 1] and azimuth `phi`) → horizontal radius and height in [0, 1]. */
-type SilhouetteMap = (dy: number, phi: number) => { r: number; y: number };
 
 const smoothstep = (a: number, b: number, x: number): number => {
   const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
@@ -120,62 +125,6 @@ const NORMAL_CENTRE: Record<ReshapedShape, number> = {
   spindle: 0.4,
   weep: 0.5,
 };
-/** How much of the source crown's lobe relief survives the reshape. */
-const RELIEF = 0.8;
-
-/**
- * Reshapes one of the vegetation layer's crown geometries into another
- * silhouette inside the SAME bounding box, keeping its lobes as relief: each
- * vertex's direction from the crown centre (in the box's ellipsoid space)
- * picks its place on the new silhouette, its distance the bump on top. The
- * local height range is kept on purpose — the crown material's wind sway
- * reads the geometry's own Y, so a reshaped crown bends exactly like the
- * original.
- */
-function reshapeCrown(
-  source: BufferGeometry,
-  map: SilhouetteMap,
-  normalCentre: number
-): BufferGeometry {
-  const g = source.clone();
-  g.computeBoundingBox();
-  const box = g.boundingBox;
-  if (!box) {
-    return g;
-  }
-  const minY = box.min.y;
-  const height = box.max.y - box.min.y;
-  const halfH = height / 2;
-  const halfW = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2;
-  const cy = minY + halfH;
-  const pos = g.attributes.position;
-  const nrm = g.attributes.normal;
-  const v = new Vector3();
-  const centre = new Vector3(0, minY + normalCentre * height, 0);
-  for (let i = 0; i < pos.count; i++) {
-    v.set(pos.getX(i) / halfW, (pos.getY(i) - cy) / halfH, pos.getZ(i) / halfW);
-    const len = Math.max(v.length(), 1e-6);
-    const dy = v.y / len;
-    const phi = Math.atan2(v.z, v.x);
-    const { r, y } = map(dy, phi);
-    const k = 1 + (len - 1) * RELIEF;
-    pos.setXYZ(
-      i,
-      Math.cos(phi) * r * k * halfW,
-      minY + y * height,
-      Math.sin(phi) * r * k * halfW
-    );
-  }
-  for (let i = 0; i < pos.count; i++) {
-    v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).sub(centre).normalize();
-    nrm.setXYZ(i, v.x, v.y, v.z);
-  }
-  pos.needsUpdate = true;
-  nrm.needsUpdate = true;
-  g.computeBoundingSphere();
-  return g;
-}
-
 /** A crown geometry plus the local box the instance scale is fitted to. */
 interface FittedGeo {
   geo: BufferGeometry;
@@ -206,11 +155,16 @@ function buildShapeGeos(): ShapeGeos {
   const broad = { cheap: fitted(cheap), rich: fitted(rich) };
   const out = {
     broad,
-    // the conifer-crown.ts cone in the broadleaf crown's box, as the
-    // canopy's evergreens draw it
+    // the conifer-crown.ts cone in the broadleaf crown's box, and the
+    // pine's crown reshaped from the broadleaf's own, as the canopy's
+    // evergreens draw them
     cone: {
       cheap: fitted(buildConeGeo(broad.cheap, CONE_SEGMENTS.mid)),
       rich: fitted(buildConeGeo(broad.cheap, CONE_SEGMENTS.rich)),
+    },
+    pine: {
+      cheap: fitted(buildPineGeo(cheap)),
+      rich: fitted(buildPineGeo(rich)),
     },
   } as ShapeGeos;
   for (const shape of ["spindle", "weep"] as const) {
@@ -435,7 +389,8 @@ function crownPair(
 }
 
 export interface TreeInventory {
-  /** the reshaped silhouettes (flame, cone, dome) — this layer's own sets */
+  /** the reshaped silhouettes (flame, cone, pine, dome) — this layer's own
+   *  sets */
   control: VegetationControl;
   /** per-tile census of what was built, for the cost report */
   counts: Record<CrownShape, number>;
@@ -464,7 +419,10 @@ export function buildTreeInventory(
   const crownMats = sceneCrowns(ctx.sunDirection);
   const u = crownMats.uniforms;
   let multiTuft = LOOK_DEFAULTS.multiTuft;
-  const counts = { broad: 0, spindle: 0, cone: 0, weep: 0 };
+  const counts = Object.fromEntries(CROWN_SHAPES.map((k) => [k, 0])) as Record<
+    CrownShape,
+    number
+  >;
 
   // A tree in DLM forest/copse vetoes nothing (inventoryCovers).
   const covers = inventoryCovers(features);

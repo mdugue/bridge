@@ -20,11 +20,21 @@ sources count both directions together; their total is split evenly
      so each tile draws its own piece and nothing twice);
   2. keeps a direction only where its count is positive, and the section
      only where at least one is (or the undirected total is);
-  3. flags a section whose street is a bridge (its name ends in "brücke"):
-     the viewer lifts it onto the deck there, and nowhere else — a road
-     passing under a railway bridge stays on the ground;
+  3. flags a section that runs over a bridge: at least DECK_MIN_M of it
+     inside a road deck (rail.py's `bridge_<tile>.geojson`, this tile's and
+     its neighbours'), within DECK_ANGLE_DEG of the deck's axis there. The
+     viewer lifts it onto the deck there, and nowhere else — a road passing
+     under a bridge crosses its deck, and stays on the ground. Only a tile
+     without a bridge file falls back to the street's name ("…brücke"):
+     the name had flagged none of Hamburg's 33 sections on a deck (its
+     sources name no streets) and missed 25 of Dresden's, while flagging 14
+     that no deck carries (a street named after a bridge it leads to);
   4. writes the counts as they are: no smoothing, no gap filling between
      counted sections (a street without a count draws nothing).
+
+Where the fetch's cache of the counts is gone, a re-bake takes the bridge
+flag of the committed sections anew from the decks (`reflag`) and leaves
+their counts as they are.
 
 Output `data/<site>/dlm/traffic_<tile>.geojson`, LineStrings with
   f vehicles per day along the line (absent = not counted), b against it,
@@ -39,7 +49,9 @@ Output `data/<site>/dlm/traffic_<tile>.geojson`, LineStrings with
 from __future__ import annotations
 
 import json
+import math
 import re
+from pathlib import Path
 
 import shapely
 
@@ -50,6 +62,10 @@ METHODS = {"MAN": "man", "PZS": "loop", "TEU": "detector", "HW": "estimate"}
 BRIDGE = re.compile(r"brücke$", re.IGNORECASE)
 MIN_PIECE_M = 2.0  # a clipped sliver shorter than this is dropped
 SIMPLIFY_M = 0.2  # the WFS lines carry millimetre noise
+# A section on this much of a road deck (m), running within DECK_ANGLE_DEG
+# of the deck's axis, rides the bridge (step 3).
+DECK_MIN_M = 10.0
+DECK_ANGLE_DEG = 30.0
 
 
 def _count(value) -> int | None:
@@ -112,10 +128,79 @@ def _pieces(geom: shapely.Geometry) -> list[shapely.LineString]:
     return []
 
 
-def clip_sections(raw: dict, bounds, props_of=None, key: str | None = "sta_id") -> list[dict]:
+Deck = tuple[shapely.Geometry, shapely.LineString]
+
+
+def road_decks(paths, bounds) -> list[Deck]:
+    """The road decks (outline, axis) of the bridge files that exist,
+    those that reach into `bounds`."""
+    box = shapely.box(*bounds)
+    out: list[Deck] = []
+    for path in paths:
+        for f in json.loads(path.read_text()).get("features", []):
+            p = f.get("properties") or {}
+            axis = p.get("axis")
+            if p.get("kind") != "road" or not f.get("geometry") or not axis or len(axis) < 2:
+                continue
+            poly = shapely.geometry.shape(f["geometry"])
+            if poly.intersects(box):
+                out.append((poly, shapely.LineString(axis)))
+    return out
+
+
+def _axis_direction(axis: shapely.LineString, x: float, y: float) -> tuple[float, float]:
+    """The axis's unit direction at the point of it nearest (x, y)."""
+    s = axis.project(shapely.Point(x, y))
+    a = axis.interpolate(max(s - 1.0, 0.0))
+    b = axis.interpolate(min(s + 1.0, axis.length))
+    dx, dy = b.x - a.x, b.y - a.y
+    n = math.hypot(dx, dy) or 1.0
+    return dx / n, dy / n
+
+
+def on_deck(line: shapely.LineString, decks: list[Deck]) -> bool:
+    """Whether DECK_MIN_M of the line lies inside one road deck, each piece
+    of it within DECK_ANGLE_DEG of the deck's axis there."""
+    cos_max = math.cos(math.radians(DECK_ANGLE_DEG))
+    for poly, axis in decks:
+        along = 0.0
+        for piece in _pieces(shapely.intersection(line, poly)):
+            xy = list(piece.coords)
+            for (x0, y0), (x1, y1) in zip(xy, xy[1:], strict=False):
+                seg = math.hypot(x1 - x0, y1 - y0)
+                if seg == 0:
+                    continue
+                ax, ay = _axis_direction(axis, (x0 + x1) / 2, (y0 + y1) / 2)
+                if abs((x1 - x0) * ax + (y1 - y0) * ay) / seg >= cos_max:
+                    along += seg
+        if along >= DECK_MIN_M:
+            return True
+    return False
+
+
+def bridge_flag(props: dict, piece: shapely.LineString, decks: list[Deck] | None) -> dict:
+    """The piece's properties with `br` from the decks it runs on (step 3);
+    without decks, as the source's mapping named it."""
+    if decks is None:
+        return props
+    out = {k: v for k, v in props.items() if k != "br"}
+    if on_deck(piece, decks):
+        out["br"] = 1
+    return out
+
+
+def clip_sections(
+    raw: dict,
+    bounds,
+    props_of=None,
+    key: str | None = "sta_id",
+    decks: list[Deck] | None = None,
+) -> list[dict]:
     """The tile's pieces of every counted section, read through the
     source's mapping (`props_of`; default Dresden's `section_props`) and
-    sorted by its key and position (a re-bake diffs by what changed)."""
+    sorted by its key and position (a re-bake diffs by what changed).
+    With `decks` (the tile's road decks) a piece is on a bridge where it
+    runs on one; without, where its street is named one."""
     box = shapely.box(*bounds)
     rows = []
     for f in raw.get("features", []):
@@ -136,10 +221,45 @@ def clip_sections(raw: dict, bounds, props_of=None, key: str | None = "sta_id") 
             piece = piece.simplify(SIMPLIFY_M)
             x0, y0 = piece.coords[0]
             rows.append(
-                (str(q.get(key) or "") if key else "", round(x0, 1), round(y0, 1), piece, props)
+                (
+                    str(q.get(key) or "") if key else "",
+                    round(x0, 1),
+                    round(y0, 1),
+                    piece,
+                    bridge_flag(props, piece, decks),
+                )
             )
     rows.sort(key=lambda r: r[:3])
     return [feature(geometry_json(r[3]), dict(r[4])) for r in rows]
+
+
+def tile_decks(tile: Tile) -> list[Deck] | None:
+    """The road decks reaching into the tile, from its bridge file and its
+    neighbours'; None where the tile has no bridge file (rail.py not run):
+    the sections then keep the name's flag."""
+    own = tile.data / "dlm" / f"bridge_{tile.id}.geojson"
+    if not own.exists():
+        return None
+    files = {own, *(tile.data / "dlm" / f"bridge_{tid}.geojson" for tid, _ in tile.neighbours())}
+    return road_decks(sorted(f for f in files if f.exists()), tile.bounds)
+
+
+def reflag(path: Path, decks: list[Deck]) -> list[dict]:
+    """A committed traffic file's sections, their bridge flag taken anew
+    from the decks (the counts as they were): what a re-bake can do where
+    the fetch's cache of the counts is gone."""
+    doc = json.loads(path.read_text())
+    for f in doc.get("features", []):
+        line = shapely.geometry.shape(f["geometry"])
+        f["properties"] = bridge_flag(f.get("properties") or {}, line, decks)
+    path.write_text(json.dumps(doc))
+    return doc.get("features", [])
+
+
+def _report(tile: Tile, features: list[dict], decks: list[Deck] | None, what: str) -> None:
+    bridges = sum(1 for f in features if f["properties"].get("br"))
+    rule = "by name (no bridge file)" if decks is None else f"on {len(decks)} road decks"
+    print(f"{tile.id}: {len(features)} {what}, {bridges} on a bridge ({rule})")
 
 
 def run(tile: Tile) -> None:
@@ -150,12 +270,18 @@ def run(tile: Tile) -> None:
         print(f"{tile.id}: the site names no traffic counts — skipping the traffic layer")
         return
     path = raw_path(tile)
+    decks = tile_decks(tile)
+    out = tile.data / "dlm" / f"traffic_{tile.id}.geojson"
     if not path.exists():
+        if decks is not None and out.exists():
+            _report(tile, reflag(out, decks), decks, "committed sections re-flagged")
+            return
         print(f"{tile.id}: no traffic counts at {path} — skipping the traffic layer")
         return
-    features = clip_sections(json.loads(path.read_text()), tile.bounds, source.props, source.key)
+    features = clip_sections(
+        json.loads(path.read_text()), tile.bounds, source.props, source.key, decks
+    )
     # A tile without a counted road still gets its file, empty (lib/city/
     # tile-data.test.ts holds every tile to the same set of files).
-    out = tile.out("dlm", f"traffic_{tile.id}.geojson")
-    write_geojson(out, features, tile.epsg, source.attribution)
-    print(f"{tile.id}: {len(features)} counted road sections")
+    write_geojson(tile.out("dlm", out.name), features, tile.epsg, source.attribution)
+    _report(tile, features, decks, "counted road sections")

@@ -8,7 +8,12 @@ median over a whole roof painted the Frauenkirche's dome slate grey, half
 the Altstadt's red roofs brown and a mansard's red slopes the grey of its
 zinc top. Each sunlit texel is scaled by its face's slope to how a flat
 roof in the same sun reads it (the sun is found from the image's shadows),
-so a roof's faces turned to and from the sun come out alike. Per face and
+so a roof's faces turned to and from the sun come out alike. The sun is
+searched along the flight day's solar path (the fetch reads the day off
+the provider's metadata, dop_light.flight_days); a tile whose shadows
+cannot fix it (dop_light.MIN_SUN_CONTRAST) takes the sun its flight's
+other tiles agree on, and an overcast flight (dop_light.OVERCAST_RATIO,
+Meißen's) gets no slope correction at all. Per face and
 per building: rasterise the RoofSurface rings, erode them inward (the
 orthophoto leans buildings over their facades), take the per-channel
 median of at least 12 sunlit texels, in linear RGB.
@@ -33,7 +38,13 @@ surface, r, g, b]` — the geometry's index in the object and the surface's
 in its flattened boundaries, the ids cityjson-threejs-loader writes
 (`geometryid`, `boundaryid`) — and `parts`, a rebuilt roof's parts that
 differ, as `[part, z, r, g, b]`, the part's index among the object's in
-the roofs file and its level `z`."""
+the roofs file and its level `z`; and `scan` and `gaps`, the roofs the
+build appends to LoD2's — the laser scan's sheds (`smallbuild_<tile>`) and
+the buildings and roofs on posts the surface model shows beyond it
+(`structures_<tile>`) — each read like a face at its measured top (a pent
+shed's by its corners) from its sunlit texels alone, as `[index, z, r, g,
+b]`, the feature's index in its file and its `z`. Before, every shed and
+missing building got the palette's slate (Dresden's 6 625 sheds)."""
 
 from __future__ import annotations
 
@@ -45,6 +56,7 @@ from dataclasses import dataclass
 import numpy as np
 import rasterio
 from PIL import Image, ImageDraw, ImageFilter
+from pyproj import Transformer
 from rasterio.enums import Resampling
 from scipy.ndimage import uniform_filter
 
@@ -54,13 +66,20 @@ from .dop_lean import LEAN_MIN_HEIGHT, Sample, building_lean, fit_leans, lean_ma
 from .dop_light import (
     GAIN_MAX,
     GAIN_MIN,
+    MIN_SUN_CONTRAST,
+    OVERCAST_RATIO,
     SUN_RES_M,
+    SunFit,
     estimate_sun,
+    flight_days,
     incidence_gain,
     light_ratio,
     luminance,
+    pooled_sun,
     roof_surface_model,
     shadow_mask,
+    solar_path,
+    solar_position,
     sun_vector,
 )
 
@@ -183,19 +202,41 @@ def median_colour(rgb, rings, box, erode: int):
 
 class Light:
     """The flight's light over one tile: which texels are in shadow, and
-    the sun with its share of the light, when they could be read."""
+    the sun with its share of the light, when they could be read. Under an
+    overcast sky (`ratio` under OVERCAST_RATIO) the light is as good as
+    diffuse: no face is scaled by its slope, none lies in its own shadow
+    (the sun still guides the lean fit, dop_lean.py). `lean_sun`: the sun
+    the lean fit shades the roofs by where `sun` is None — the tile's own
+    fit, too unsure to scale a face by: the lean asks only which side of
+    a tall roof reads the brighter, and its nodes are what the buildings
+    around agree on (Meißen's strips lean 0.04–0.19 m/m under its 1.98
+    fit, smooth across each strip)."""
 
-    def __init__(self, shadow: np.ndarray, sun=None, ratio: float | None = None):
+    def __init__(
+        self,
+        shadow: np.ndarray,
+        sun=None,
+        ratio: float | None = None,
+        source: str | None = None,
+        lean_sun=None,
+    ):
         self.shadow = shadow
         self.sun = sun_vector(*sun) if sun else None
+        self.lean_sun = self.sun or (sun_vector(*lean_sun) if lean_sun else None)
         self.ratio = ratio
+        # where the sun came from: the tile's own shadows, its flight's
+        # ("pooled"), or None
+        self.source = source if sun else None
+        self.overcast = ratio is not None and ratio < OVERCAST_RATIO
 
     def gain(self, normal) -> float:
+        if self.overcast:
+            return 1.0
         return incidence_gain(normal, self.sun, self.ratio)
 
     def gains(self, normals: np.ndarray) -> np.ndarray:
         """`gain` for each of `normals` (n × 3), 0 where it `faces_away`."""
-        if self.sun is None:
+        if self.sun is None or self.overcast:
             return np.ones(len(normals))
         cos = normals @ np.asarray(self.sun)
         sun_z, ratio = self.sun[2], self.ratio
@@ -212,7 +253,7 @@ class Light:
         """Whether a face lies in its own shadow, or so near it that the sun
         only grazes it: its texels are skylight, however red tiles read in
         it (the blue test misses those)."""
-        if self.sun is None:
+        if self.sun is None or self.overcast:
             return False
         return sum(n * s for n, s in zip(normal, self.sun, strict=True)) < MIN_SUN_COS
 
@@ -387,9 +428,10 @@ def _differs(a, b) -> bool:
     )
 
 
-def read_light(tile: Tile, dop, rgb: np.ndarray, faces, lut: np.ndarray) -> Light:
-    """The tile's shadows, and the flight's sun from them where the DGM is
-    there to cast the roofs' shadows on (dop_light.estimate_sun); `rgb` is
+def read_light(
+    tile: Tile, dop, rgb: np.ndarray, faces, lut: np.ndarray, site: Sequence[Tile] = ()
+) -> Light:
+    """The tile's shadows, and the flight's sun (`flight_sun`); `rgb` is
     balanced, and the coarser reads of `dop` are put through `lut`."""
     shadow = shadow_mask(rgb)
     xmin, ymin, xmax, ymax = tile.bounds
@@ -399,8 +441,68 @@ def read_light(tile: Tile, dop, rgb: np.ndarray, faces, lut: np.ndarray) -> Ligh
     )
     small = dop_balance.balanced(small, lut)
     ratio = light_ratio(small, shadow_mask(small))
+    sun, source = flight_sun(tile, site, lut, dop, faces)
+    own = sun_reading(tile, lut, dop, faces)
+    guess = (own.fit.az, own.fit.el) if own is not None and own.fit is not None else None
+    return Light(shadow, sun, ratio, source, lean_sun=guess)
+
+
+@dataclass
+class SunReading:
+    """A tile's shadows read for the flight's sun: the days it was flown
+    (the fetch's, dop_light.flight_days), where it lies (lon, lat), its own
+    fit, and its agreement every PATH_STEP minutes of those days' path
+    (dop_light.pooled_sun)."""
+
+    days: list
+    lonlat: tuple[float, float]
+    fit: SunFit | None
+    counts: dict | None
+
+    @property
+    def sure(self) -> bool:
+        return self.fit is not None and self.fit.contrast >= MIN_SUN_CONTRAST
+
+
+_READINGS: dict[tuple, SunReading | None] = {}
+
+
+def roof_faces(city: dict) -> list[list[tuple[float, float, float]]]:
+    """Every RoofSurface ring of the CityJSON, in metres."""
+    scale = city.get("transform", {}).get("scale", [1, 1, 1])
+    translate = city.get("transform", {}).get("translate", [0, 0, 0])
+    verts = city["vertices"]
+    return [
+        [tuple(verts[vi][k] * scale[k] + translate[k] for k in range(3)) for vi in ring]
+        for obj in city["CityObjects"].values()
+        for g in obj.get("geometry", [])
+        for ring in roof_rings(g)
+    ]
+
+
+def sun_reading(tile: Tile, lut: np.ndarray, dop=None, faces=None) -> SunReading | None:
+    """The tile's `SunReading`, once per process (a tile whose own fit is
+    not sure reads its flight's other tiles); None without the DGM to cast
+    the roofs' shadows on, the orthophoto or the LoD2."""
+    key = (tile.raw, tile.id)
+    if key not in _READINGS:
+        _READINGS[key] = _read_sun(tile, lut, dop, faces)
+    return _READINGS[key]
+
+
+def _read_sun(tile: Tile, lut: np.ndarray, dop, faces) -> SunReading | None:
     if not tile.dgm.exists():
-        return Light(shadow, None, ratio)
+        return None
+    if faces is None:
+        if not tile.cityjson.exists():
+            return None
+        faces = roof_faces(json.loads(tile.cityjson.read_text()))
+    if dop is None:
+        if not tile.raw_raster("dop").exists():
+            return None
+        with rasterio.open(tile.raw_raster("dop")) as opened:
+            return _read_sun(tile, lut, opened, faces)
+    xmin, ymin, xmax, ymax = tile.bounds
     n = (int((xmax - xmin) / SUN_RES_M), int((ymax - ymin) / SUN_RES_M))
     coarse = np.moveaxis(
         dop.read((1, 2, 3), out_shape=(3, n[1], n[0]), resampling=Resampling.average), 0, -1
@@ -413,8 +515,38 @@ def read_light(tile: Tile, dop, rgb: np.ndarray, faces, lut: np.ndarray) -> Ligh
     dsm, roofs = roof_surface_model(
         dgm, faces, lambda x, y: ((x - xmin) / SUN_RES_M, (ymax - y) / SUN_RES_M)
     )
-    sun = estimate_sun(shadow_mask(coarse), dsm, roofs)
-    return Light(shadow, sun, ratio)
+    lonlat = Transformer.from_crs(tile.epsg, 4326, always_xy=True).transform(
+        (xmin + xmax) / 2, (ymin + ymax) / 2
+    )
+    days = flight_days(tile.raw, tile.id)
+    path = solar_path(days, *lonlat) if days else None
+    counts: dict | None = {} if path else None
+    fit = estimate_sun(shadow_mask(coarse), dsm, roofs, path=path, counts=counts)
+    return SunReading(days, lonlat, fit, counts)
+
+
+def flight_sun(
+    tile: Tile, site: Sequence[Tile], lut: np.ndarray, dop=None, faces=None
+) -> tuple[tuple[float, float] | None, str | None]:
+    """The sun (azimuth, elevation) the tile's roofs are read in, and where
+    it came from: its own shadows' fit where it is sure (`own`), else the
+    sun its flight's tiles — the site's flown on the same days, with sure
+    fits of their own — agree on at once (`pooled`, at the tile's own
+    place), else none (no slope correction: a guessed sun scaled faces
+    wrongly, and dropped lit ones as turned from it)."""
+    own = sun_reading(tile, lut, dop, faces)
+    if own is None:
+        return None, None
+    if own.sure:
+        return (own.fit.az, own.fit.el), "own"
+    if not own.days:
+        return None, None
+    peers = [t for t in site if t.id != tile.id and flight_days(t.raw, t.id) == own.days]
+    readings = [own, *(sun_reading(t, lut) for t in peers)]
+    when = pooled_sun([r.counts for r in readings if r and r.sure and r.counts])
+    if when is None:
+        return None, None
+    return solar_position(when, *own.lonlat), "pooled"
 
 
 def _vertex_ids(obj: dict):
@@ -431,9 +563,10 @@ def _vertex_ids(obj: dict):
 
 def roof_leans(rgb: np.ndarray, light: Light, buildings, bounds, px: float):
     """Each building's lean (dop_lean.py) and the tile's lean nodes, from
-    the tall buildings' roof shading; none without a sun to shade by.
-    `buildings`: {id: ([(key, ring in metres, normal)], base height)}."""
-    if light.sun is None:
+    the tall buildings' roof shading; none without a sun to shade by
+    (`Light.lean_sun`). `buildings`: {id: ([(key, ring in metres,
+    normal)], base height)}."""
+    if light.lean_sun is None:
         return {}, []
     xmin, _, _, ymax = bounds
     h, w = rgb.shape[:2]
@@ -456,7 +589,7 @@ def roof_leans(rgb: np.ndarray, light: Light, buildings, bounds, px: float):
             ([((x - xmin) / px - c0, (ymax - y) / px - r0) for x, y, _ in ring], normal)
             for _, ring, normal in sorted(faces, key=lambda f: max(p[2] for p in f[1]))
         ]
-        grid = lean_map(lum, drawn, light.sun, reach)
+        grid = lean_map(lum, drawn, light.lean_sun, reach)
         if grid is not None:
             samples[oid] = Sample(*centres[oid], height, grid, reach, px)
     nodes = fit_leans(list(samples.values()), bounds)
@@ -482,6 +615,86 @@ def rebuilt_parts(tile: Tile) -> dict[str, list[Face]]:
         z = props["z"]
         rings = [[(x, y, z) for x, y in ring] for ring in geom["coordinates"]]
         parts.append(Face(("p", len(parts)), rings, (0.0, 0.0, 1.0), props.get("surface"), True))
+    return out
+
+
+# The roofs the build appends to LoD2's that are read too: the laser scan's
+# sheds (small_buildings.py) and the buildings and roofs on posts the
+# surface model shows beyond LoD2 (structures.py); a column's head takes its
+# wall's tint and a relief its landmark's roof, so neither is read.
+APPENDED = {"scan": "smallbuild", "gaps": "structures"}
+APPENDED_KINDS = ("building", "roof")
+
+
+def _polygons(geometry: dict) -> list[list]:
+    """A Polygon's or MultiPolygon's polygons, each its rings of (x, y)."""
+    if geometry.get("type") == "Polygon":
+        return [geometry["coordinates"]]
+    if geometry.get("type") == "MultiPolygon":
+        return list(geometry["coordinates"])
+    return []
+
+
+def appended_face(props: dict, geometry: dict) -> tuple[list[Face], float] | None:
+    """One appended roof as faces to read, and its foot (the lean's base):
+    its outline at its top (`z` + `h`, a pent shed's corners at `z` +
+    `hc`, its normal from them), or None where it has no outline."""
+    polys = _polygons(geometry)
+    if not polys or "z" not in props or "h" not in props:
+        return None
+    z, top = props["z"], props["z"] + props["h"]
+    corners = props.get("hc") or []
+    faces = []
+    for rings in polys:
+        outline = [[(x, y, top) for x, y, *_ in ring] for ring in rings]
+        normal = (0.0, 0.0, 1.0)
+        if len(corners) >= 3:
+            # the corners in the ring's order, its closing point the first
+            outline[0] = [
+                (x, y, z + corners[k % len(corners)]) for k, (x, y, _) in enumerate(outline[0])
+            ]
+            normal = ring_normal(range(len(outline[0])), outline[0].__getitem__)
+        faces.append(Face(("a", 0), outline, normal))
+    return faces, z
+
+
+def appended_roofs(tile: Tile) -> dict[str, list[tuple[int, float, list[Face], float]]]:
+    """Per kind (`APPENDED`) the appended roofs to read: (the feature's index
+    in its file, its `z` — the build checks both —, its faces, its foot)."""
+    out: dict[str, list] = {}
+    for key, name in APPENDED.items():
+        path = tile.data / "dlm" / f"{name}_{tile.id}.geojson"
+        out[key] = []
+        if not path.exists():
+            continue
+        for i, f in enumerate(json.loads(path.read_text()).get("features", [])):
+            props = f.get("properties") or {}
+            if key == "gaps" and props.get("kind") not in APPENDED_KINDS:
+                continue
+            read = appended_face(props, f.get("geometry") or {})
+            if read is not None:
+                out[key].append((i, props["z"], *read))
+    return out
+
+
+def appended_colours(rgb, light: Light, frame: Frame, nodes, roofs) -> list[list[float]]:
+    """The appended roofs' colours, `[index, z, r, g, b]`, from their sunlit
+    texels alone (`face_colours`): a shed in a crown's or a house's shadow
+    reads the crown or the shade, so it keeps the palette's roof. Each is
+    shifted by the lean of the nearest node (they are too low or too few
+    to fit their own)."""
+    out = []
+    for index, z, faces, base in roofs:
+        ring = faces[0].rings[0]
+        cx = sum(p[0] for p in ring) / len(ring)
+        cy = sum(p[1] for p in ring) / len(ring)
+        frame.lean, frame.base = building_lean(nodes, cx, cy, None), base
+        box = frame.box(faces)
+        if box is None:
+            continue
+        lit, _ = face_colours(rgb, light, frame, faces, box)
+        if lit is not None:
+            out.append([index, z, *lit])
     return out
 
 
@@ -514,13 +727,7 @@ def run(tile: Tile, site: Sequence[Tile] = (), erode: int = 5) -> None:
     lut = dop_balance.table(balance)
     with rasterio.open(tile.raw_raster("dop")) as dop:
         rgb = dop_balance.balanced(np.moveaxis(dop.read((1, 2, 3)), 0, -1), lut)
-        every_face = [
-            [to_metres(vi) for vi in ring]
-            for obj in city["CityObjects"].values()
-            for g in obj.get("geometry", [])
-            for ring in roof_rings(g)
-        ]
-        light = read_light(tile, dop, rgb, every_face, lut)
+        light = read_light(tile, dop, rgb, roof_faces(city), lut, site)
     h, w = rgb.shape[:2]
     xmin, _, _, ymax = tile.bounds
     px_w = tile.size[0] / w
@@ -562,6 +769,10 @@ def run(tile: Tile, site: Sequence[Tile] = (), erode: int = 5) -> None:
             parts_out[oid] = [[a[1], round(parts[a[1]].rings[0][0][2], 2), *a[2:]] for a in apart]
         elif apart:
             faces_out[oid] = apart
+    appended = {
+        key: appended_colours(rgb, light, frame, nodes, roofs)
+        for key, roofs in appended_roofs(tile).items()
+    }
     out = {
         "meta": {
             "tile": tile.id,
@@ -574,8 +785,22 @@ def run(tile: Tile, site: Sequence[Tile] = (), erode: int = 5) -> None:
             "faces_apart": sum(len(f) for f in faces_out.values()),
             "parts_apart": sum(len(p) for p in parts_out.values()),
             "rebuilt": len(rebuilt),
+            # the appended roofs read (`scan`, `gaps`)
+            "scan_sampled": len(appended["scan"]),
+            "gaps_sampled": len(appended["gaps"]),
             "sun": None if light.sun is None else [round(c, 3) for c in light.sun],
+            # the unsure fit the lean was found by, where no sun is sure
+            "lean_sun": (
+                None
+                if light.sun is not None or light.lean_sun is None
+                else [round(c, 3) for c in light.lean_sun]
+            ),
+            # the days the photo was flown (the fetch's), and where the sun
+            # came from: the tile's own shadows, its flight's ("pooled")
+            "flight": [d.isoformat() for d in flight_days(tile.raw, tile.id)],
+            "sun_from": light.source,
             "light_ratio": None if light.ratio is None else round(light.ratio, 2),
+            "overcast": light.overcast,
             # the per-channel factors (linear RGB) that took the flight's
             # cast out (dop_balance.py)
             "balance": [round(float(k), 3) for k in balance],
@@ -589,10 +814,18 @@ def run(tile: Tile, site: Sequence[Tile] = (), erode: int = 5) -> None:
         # their building's, as `[part, z, r, g, b]`: the part's index among
         # the building's in the roofs file and its level
         "parts": parts_out,
+        # the roofs the build appends, read alike: the laser scan's sheds
+        # (`smallbuild_<tile>`) and the structures beyond LoD2 that are a
+        # building or a roof on posts (`structures_<tile>`), as `[index, z,
+        # r, g, b]` — the feature's index in its file and its `z`, which the
+        # build checks (a re-baked file renumbers them)
+        "scan": appended["scan"],
+        "gaps": appended["gaps"],
     }
     tile.out("dop", f"roofcolor_{tile.id}.json").write_text(json.dumps(out))
     print(
         f"{tile.id}: {sampled} roofs sampled ({in_sun} from sunlit texels), {skipped} skipped, "
-        f"{out['meta']['faces_apart']} faces apart; sun {out['meta']['sun']}, "
+        f"{out['meta']['faces_apart']} faces apart, {len(appended['scan'])} sheds and "
+        f"{len(appended['gaps'])} structures read; sun {out['meta']['sun']}, "
         f"light ratio {out['meta']['light_ratio']}"
     )

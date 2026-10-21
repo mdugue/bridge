@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
-import { type Object3D, Vector3 } from "three/webgpu";
+import { Matrix4, type Object3D, Vector3 } from "three/webgpu";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import { PINE_CROWN_BASE } from "@/lib/city/tree-inventory";
+import { buildPineGeo, pineSilhouette } from "./conifer-crown";
 import { isInstances } from "./instancing";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
+  buildCrownGeo,
   buildVegetation,
   sceneCrowns,
   type VegetationContext,
@@ -29,7 +32,8 @@ const ctx: VegetationContext = {
 
 const tree = (x: number, a: number, h = 12, d = 8): TreeFeature => ({
   geometry: { type: "Point", coordinates: [x, 0] },
-  properties: { a, d, h, l: a === 3 ? "e" : "d" },
+  // the needle trees' archetypes evergreen (conifer, pine, bush)
+  properties: { a, d, h, l: [3, 6, 7].includes(a) ? "e" : "d" },
 });
 
 const canopy = (x: number): CanopyFeature => ({
@@ -51,7 +55,13 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
     ],
     ctx
   );
-  expect(inv.counts).toEqual({ broad: 3, spindle: 1, cone: 1, weep: 1 });
+  expect(inv.counts).toEqual({
+    broad: 3,
+    spindle: 1,
+    cone: 1,
+    weep: 1,
+    pine: 0,
+  });
   const plan = inv.control.group.children.filter(
     (c) => c.userData.treePart === "plan"
   );
@@ -80,6 +90,64 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
   const merged = census(veg.group);
   expect(merged.meshes).toBe(4);
   expect(merged.instances).toBe(1 + 6 + (1 + 3) * 3);
+});
+
+test("a pine's crown is its own set, high on its stem; a yew's bush joins the canopy", () => {
+  const inv = buildTreeInventory(
+    [tree(0, 6, 20, 9), tree(10, 7, 6, 5), tree(20, 3)],
+    ctx
+  );
+  expect(inv.counts.pine).toBe(1);
+  expect(inv.counts.broad).toBe(1);
+  const part = (name: string) =>
+    inv.control.group.children.filter((c) => c.userData.treePart === name);
+  const pines = part("pine");
+  expect(pines).toHaveLength(2); // the cheap and the rich tier
+  const [cone] = part("cone");
+  for (const set of pines) {
+    if (!(isInstances(set) && isInstances(cone))) {
+      throw new Error("a crown set is Instances");
+    }
+    // the cone's attributes (the broadleaf crown's) and no index: the
+    // crown's one build
+    expect(Object.keys(set.geometry.attributes).sort()).toEqual(
+      Object.keys(cone.geometry.attributes).sort()
+    );
+    expect(set.geometry.index).toBeNull();
+    // the crown from PINE_CROWN_BASE of its 20 m up to its top
+    const m = new Matrix4();
+    set.getMatrixAt(0, m);
+    set.geometry.computeBoundingBox();
+    const box = set.geometry.boundingBox?.clone().applyMatrix4(m);
+    expect(box?.min.y).toBeCloseTo(100 + PINE_CROWN_BASE * 20, 0);
+    expect(box?.max.y).toBeCloseTo(120, 0);
+  }
+  // the pine's trunk rides the canopy, its crown does not; the yew's both
+  expect(inv.instances[0].crown).toBeUndefined();
+  expect(inv.instances[1].crown).toBeDefined();
+  // an evergreen: never bare
+  inv.control.setSeason(9);
+  expect(
+    pines.every((c) => isInstances(c) && c.material !== sceneCrowns().bare)
+  ).toBe(true);
+});
+
+test("the pine's silhouette: flat on top, widest at its middle, in its box", () => {
+  const top = pineSilhouette(0.9, 0);
+  const sphereTop = (1 + 0.9) / 2;
+  // a fifth of the way down from the top a sphere has narrowed far more
+  expect(top.y).toBeGreaterThan(sphereTop);
+  expect(top.r).toBeGreaterThan(Math.sqrt(1 - 0.81));
+  expect(pineSilhouette(0, 0)).toEqual({ r: 1, y: 0.5 });
+  expect(pineSilhouette(1, 0).y).toBeCloseTo(1);
+  expect(pineSilhouette(-1, 0).y).toBeCloseTo(0);
+  const pine = buildPineGeo(buildCrownGeo());
+  const lobed = buildCrownGeo();
+  pine.computeBoundingBox();
+  lobed.computeBoundingBox();
+  // within the lobed crown's box (a lobe's bump is kept as relief)
+  expect(pine.boundingBox?.min.y).toBeCloseTo(lobed.boundingBox?.min.y ?? 0, 1);
+  expect(pine.boundingBox?.max.y).toBeCloseTo(lobed.boundingBox?.max.y ?? 0, 1);
 });
 
 test("crowns stand on the ground, never NaN (a NaN matrix culls the chunk)", () => {

@@ -15,6 +15,11 @@
  * level across stood a second step on the pavement side: the smoothed DGM
  * lies a few centimetres above the road there, not at the kerb's top, and
  * every kerb showed an edge toward the pavement as well as the road.
+ *
+ * Where the bake lowers it (`KerbLine.low`, pipeline/bake/kerb_drops.py: at
+ * a crossing, a lowered or flush kerb node, a driveway) the stone stands
+ * its drop's height over the road — 3 cm, or flush — and ramps back to the
+ * full height over RAMP_M either side.
  */
 import {
   followGround,
@@ -30,10 +35,79 @@ type HeightAt = (x: number, y: number) => number | null;
 
 export const KERB_HEIGHT = 0.12; // m above the road
 export const KERB_WIDTH = 0.24; // m, face to back
+/** How far a lowered stretch's ends ramp back to KERB_HEIGHT (m). */
+export const RAMP_M = 0.5;
+
 const SAMPLE_M = 2.5; // densify to this spacing (m) so the foot follows the ground
 const PROBE_M = 0.4; // read the ground this far out on either side (m)
 const SINK_M = SINK.kerb; // the foot reaches this far below the ground
 const LIFT_M = 0.01; // the back's top this far above the pavement (m): no z-fight
+
+/** A stretch where the kerb is lowered: from and to (m along its line) and
+ *  the stone's height there over the road (m). */
+export type KerbDrop = readonly [number, number, number];
+
+/** A kerb line (EPSG, the carriageway on its left) and where it is
+ *  lowered. */
+export interface KerbLine {
+  coords: Point2[];
+  low?: readonly KerbDrop[];
+}
+
+/** The stone's height over the road `s` metres along its line: its drops'
+ *  lowest, ramped over RAMP_M to KERB_HEIGHT outside each. */
+export function kerbHeightAt(s: number, low: readonly KerbDrop[]): number {
+  let h = KERB_HEIGHT;
+  for (const [s0, s1, dh] of low) {
+    const out = s < s0 ? s0 - s : s > s1 ? s - s1 : 0;
+    if (out < RAMP_M) {
+      h = Math.min(h, dh + ((KERB_HEIGHT - dh) * out) / RAMP_M);
+    }
+  }
+  return h;
+}
+
+/** A line's points with a vertex added at every drop's and ramp's ends
+ *  (so the profile bends there), then densified to SAMPLE_M. */
+function profilePoints(line: Point2[], low: readonly KerbDrop[]): Point2[] {
+  if (low.length === 0) {
+    return subdividePolyline(line, SAMPLE_M);
+  }
+  const marks = low
+    .flatMap(([s0, s1]) => [s0 - RAMP_M, s0, s1, s1 + RAMP_M])
+    .toSorted((a, b) => a - b);
+  const pts: Point2[] = [line[0]];
+  let s = 0;
+  let m = 0;
+  for (let i = 1; i < line.length; i++) {
+    const [x0, y0] = line[i - 1];
+    const [x1, y1] = line[i];
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    while (m < marks.length && marks[m] <= s) {
+      m++;
+    }
+    while (m < marks.length && marks[m] < s + len) {
+      const t = (marks[m] - s) / len;
+      pts.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]);
+      m++;
+    }
+    pts.push(line[i]);
+    s += len;
+  }
+  return subdividePolyline(pts, SAMPLE_M);
+}
+
+/** Each point's distance along the polyline (m). */
+function alongOf(pts: Point2[]): number[] {
+  const out = [0];
+  for (let i = 1; i < pts.length; i++) {
+    out.push(
+      out[i - 1] +
+        Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
+    );
+  }
+  return out;
+}
 
 export interface KerbGeometryData {
   /** where the stones meet the ground (ADR 0035): both feet, and the back
@@ -63,7 +137,8 @@ function kerbCol(
   p: Point2,
   toRoad: Point2,
   heightAt: HeightAt,
-  offset: RecenterOffset
+  offset: RecenterOffset,
+  kerbH = KERB_HEIGHT
 ): KerbCol | null {
   const [x, y] = p;
   const [rx, ry] = toRoad;
@@ -79,7 +154,7 @@ function kerbCol(
   const face = epsgToWorld(x, y, offset);
   const back = epsgToWorld(bx, by, offset);
   const n = epsgToWorld(x + rx, y + ry, offset);
-  const top = Math.max(road + KERB_HEIGHT, walk + LIFT_M);
+  const top = Math.max(road + kerbH, walk + LIFT_M);
   return {
     at: { face: [x, y], back: [bx, by] },
     face,
@@ -172,24 +247,39 @@ function towardRoad(pts: Point2[]): Point2[] {
 }
 
 /**
- * Every kerb line as a stone band on the ground. Lines are EPSG, not
- * recentered, the carriageway on their left. Null when nothing stands.
+ * Every kerb line as a stone band on the ground, lowered along its drops.
+ * Lines are EPSG, not recentered, the carriageway on their left (a bare
+ * point list is a line without drops). Null when nothing stands.
  */
 export function kerbGeometry(
-  lines: Point2[][],
+  lines: readonly (KerbLine | Point2[])[],
   heightAt: HeightAt,
   offset: RecenterOffset
 ): KerbGeometryData | null {
   const positions: number[] = [];
   const normals: number[] = [];
   const joins: JoinPoint[] = [];
-  for (const line of lines) {
+  for (const entry of lines) {
+    const { coords: line, low = [] } = Array.isArray(entry)
+      ? { coords: entry }
+      : entry;
     if (line.length < 2) {
       continue;
     }
-    const pts = followGround(subdividePolyline(line, SAMPLE_M), heightAt);
+    const pts = followGround(profilePoints(line, low), heightAt);
+    // followGround only adds points on the segments: their distance along
+    // the line is the polyline's own
+    const along = low.length > 0 ? alongOf(pts) : [];
     const dirs = towardRoad(pts);
-    const cols = pts.map((p, i) => kerbCol(p, dirs[i], heightAt, offset));
+    const cols = pts.map((p, i) =>
+      kerbCol(
+        p,
+        dirs[i],
+        heightAt,
+        offset,
+        low.length > 0 ? kerbHeightAt(along[i], low) : KERB_HEIGHT
+      )
+    );
     for (let i = 0; i < cols.length - 1; i++) {
       const a = cols[i];
       const b = cols[i + 1];

@@ -18,8 +18,8 @@
  *                                     lamps, monuments, furniture, walls,
  *                                     stairs, surface, edges, markings,
  *                                     sport, tram, riverside, traffic,
- *                                     roofs, roof-colour, skyview, lowveg, cultivated,
- *                                     small-buildings)
+ *                                     roofs, roof-colour, lowveg, cultivated,
+ *                                     small-buildings, skyview)
  *   bun run bake <site> --step lowveg --research   also every hedge/shrub
  *                                     candidate, under the raw folder
  *
@@ -27,7 +27,7 @@
  * tree cadastre, lamps and street furniture are gated on it); the bridges
  * (rail) before the furniture and trams; the hedges and scan trees late
  * (thinned against the canopy and the cadastre), then the orchards and the
- * small structures. Several steps read the neighbours' files across a seam,
+ * small structures, and the sky view last (it reads every tree file). Several steps read the neighbours' files across a seam,
  * so run a step for every tile. The site config (sites/) becomes one JSON
  * spec (pipeline/bake/spec.py), so Python never re-derives tiles, extents
  * or products. Then `bun dev` / `bun run build` turn every ready
