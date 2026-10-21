@@ -56,6 +56,7 @@ import { lampNight } from "./lamp-layer";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
 import { REFLECTIONS, skyReflection } from "./sky-reflection";
 import { type SplatLayer, splatUv } from "./terrain-layer";
+import { viewDirection } from "./view-direction";
 
 /** Animated water surface, masked to the land-cover "water" class (id 8). */
 export interface WaterLayer {
@@ -419,7 +420,7 @@ export function createWaterLayer(
   const tint = tintTexture(look);
   const foam = foamAt(xy, foamUniforms(look)).toVar();
   material.opacityNode = mix(materialOpacity, FOAM_OPACITY, foam).mul(wcov);
-  const view = normalize(cameraPosition.sub(positionWorld));
+  const view = viewDirection().negate();
   material.colorNode = mix(
     waterColour(texture(tint, uv).rgb, splat, uv, view, skyTint),
     FOAM_COLOUR,

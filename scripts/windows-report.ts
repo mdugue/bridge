@@ -3,8 +3,9 @@
  * <site> [tile…]`): per tile the buildings with windows by where their
  * rhythm comes from (their own measured walls, another part of the
  * building, the nearest measured building, their type), and the share of
- * the window-carrying wall area that is a party wall (blank) or stands
- * over a shopfront; over all tiles the medians of the measured rhythms by
+ * the window-carrying wall area that is a party wall (blank) or has no
+ * ground-floor windows (over a shopfront, or with more doors than the
+ * attribute holds); over all tiles the medians of the measured rhythms by
  * building type, the numbers `TYPES` keeps (lib/city/windows.ts). No
  * output files.
  */
@@ -47,11 +48,12 @@ const median = (xs: number[]) => {
 };
 
 /** Wall area (m²) of a baked tile's window-carrying objects: with windows,
- *  blank (a party wall), over a shopfront. */
+ *  blank (a party wall), without a ground-floor row (a negative length:
+ *  over a shopfront, or more than two doors). */
 function wallAreas(baked: ReturnType<typeof bakeCityMesh>) {
   const v = baked.vertices;
   const f = v.facade;
-  const area = { windows: 0, party: 0, shop: 0 };
+  const area = { windows: 0, party: 0, noGround: 0 };
   if (!f) {
     return area;
   }
@@ -76,7 +78,7 @@ function wallAreas(baked: ReturnType<typeof bakeCityMesh>) {
     if (length === 0) {
       area.party += a;
     } else if (length < 0) {
-      area.shop += a;
+      area.noGround += a;
     } else {
       area.windows += a;
     }
@@ -141,12 +143,12 @@ for (const tile of tiles) {
     }
   }
   const area = wallAreas(baked);
-  const total = area.windows + area.party + area.shop || 1;
+  const total = area.windows + area.party + area.noGround || 1;
   const pct = (x: number) => `${Math.round((100 * x) / total)} %`;
   process.stdout.write(
     `${tile}: windows on ${counts.measured} measured, ${counts.near} by a neighbour, ` +
       `${counts.type} by type, none on ${counts.none}; wall area ${Math.round(total)} m²: ` +
-      `${pct(area.windows)} windows, ${pct(area.party)} party walls, ${pct(area.shop)} over shops ` +
+      `${pct(area.windows)} windows, ${pct(area.party)} party walls, ${pct(area.noGround)} without ground-floor windows (shopfronts, 3+ doors) ` +
       `(bake ${seconds.toFixed(1)} s)\n`
   );
   const index = new Map(

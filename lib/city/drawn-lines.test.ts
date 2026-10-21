@@ -210,6 +210,29 @@ test("a palace's windows are said to be its type's", () => {
   );
   expect(r.Fenster).toMatchObject({ method: "assumed", source: "viewer" });
   expect(r.Fenster.detail).toContain("Schloss");
+  expect(r.Fenster.detail).toContain("5,5");
+});
+
+test("a palace's window storeys name OSM's count where they take it", () => {
+  const palace = (levels: number) =>
+    rows(
+      ask(
+        object(
+          { own: "use", windows: "type" },
+          {
+            eaveH: 18,
+            flags:
+              OBJECT_FLAG_GROUNDED +
+              OBJECT_FLAG_LANDMARK +
+              OBJECT_FLAG_OWN_FACADE,
+          },
+          { function: "31001_3031", levels }
+        )
+      )
+    ).Fenster;
+  expect(palace(4).detail).toContain("building:levels = 4");
+  // 18 m over 2 storeys is 9 m, past a palace's: the eave is split instead
+  expect(palace(2).detail).toContain("5,5");
 });
 
 test("a door asked describes the house it opens, and the house's parts", () => {

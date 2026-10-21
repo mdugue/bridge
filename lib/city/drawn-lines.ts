@@ -42,7 +42,13 @@ import {
 import type { Method } from "./methods";
 import { isMeasuredRoof, NO_FACT } from "./object-facts";
 import type { SourceKey } from "./provenance";
-import { unpackStyle, type WindowType, windowType } from "./windows";
+import {
+  PALACE_STOREY_M,
+  palaceStorey,
+  unpackStyle,
+  type WindowType,
+  windowType,
+} from "./windows";
 
 /** Where a drawn value came from: a dataset of the manifest, the street
  *  photos, or the viewer itself. */
@@ -665,13 +671,19 @@ function windowsFrom(
     case "none":
     case "type": {
       // a facade of its own carries windows only as a palace's
-      const type = hasObjectFlag(o.flags, OBJECT_FLAG_OWN_FACADE)
-        ? "palace"
-        : windowType(
-            hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF),
-            o.eaveH,
-            look.storeyH
-          );
+      if (hasObjectFlag(o.flags, OBJECT_FLAG_OWN_FACADE)) {
+        return {
+          ...base,
+          method: "assumed",
+          source: "viewer",
+          ...palaceStoreys(o, places),
+        };
+      }
+      const type = windowType(
+        hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF),
+        o.eaveH,
+        look.storeyH
+      );
       return {
         ...base,
         method: "assumed",
@@ -680,6 +692,28 @@ function windowsFrom(
       };
     }
   }
+}
+
+/** Where a palace's window storeys come from (`palaceStorey`): OSM's
+ *  count where it gives a palace's storey, else the eave split into
+ *  storeys of about `PALACE_STOREY_M`. */
+function palaceStoreys(
+  o: InquiryObject,
+  places: Places
+): Pick<DrawnRow, "detail" | "url"> {
+  const what = `nichts gemessen: wie ein ${TYPE.palace}`;
+  const levels = o.facts.levels;
+  const counted = levels !== NO_FACT && levels >= 1;
+  const storey = palaceStorey(o.eaveH, counted ? levels : undefined);
+  if (counted && Math.abs(storey * levels - o.eaveH) < 0.01) {
+    return {
+      detail: `${what}, Geschosse aus building:levels = ${whole.format(levels)}`,
+      url: places.osm,
+    };
+  }
+  return {
+    detail: `${what}, Geschosse von etwa ${metres(PALACE_STOREY_M)} unter der Traufe angenommen`,
+  };
 }
 
 function plinthRow(

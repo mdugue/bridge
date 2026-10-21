@@ -12,7 +12,6 @@ import {
 import {
   abs,
   attribute,
-  cameraPosition,
   cameraWorldMatrix,
   clamp,
   dot,
@@ -76,6 +75,7 @@ import {
   SKY_VIEW,
 } from "./sky-light";
 import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
+import { viewDirection } from "./view-direction";
 
 /** A building tile's object table (lib/city/city-mesh.ts). */
 interface ObjectTable {
@@ -306,6 +306,8 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   const wall = float(1)
     .sub(smoothstep(0.5, 0.7, abs(wn.y)))
     .mul(float(1).sub(build.x));
+  // along the view, in Modell's parallel projection too
+  const view = viewDirection();
   const windows = clayWindows({
     eave: build.z,
     // the windows read no roof vertex's slots: they hold its colour
@@ -317,6 +319,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     storey: build.y,
     strength: WINDOWS,
     sun: d.uSun,
+    view,
     wall,
     wn,
   });
@@ -344,9 +347,11 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
       shopPane(flags),
       rough
     ),
-    colour: select(
-      clayPoche.greaterThan(0.5).and(frontFacing.not()),
-      POCHE,
+    // A mix, not a select: three emits a select as if/else, and the facade
+    // drawn inside its arm — the windows first among it — would be built
+    // twice (the normal, light and glow read it outside), its derivatives in
+    // a branch.
+    colour: mix(
       askedColour(
         windows
           .colour(
@@ -364,7 +369,9 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
         wall,
         flags,
         wn
-      )
+      ),
+      POCHE,
+      step(0.5, clayPoche).mul(float(1).sub(float(frontFacing)))
     ),
     // Himmelslicht: the courtyard's ground floor gets less of the sky;
     // a window's recess and the wall under its sill less still.
@@ -777,7 +784,7 @@ function clayGlow(
   wn: V3,
   sn: V3
 ): V3 {
-  const view = normalize(cameraPosition.sub(positionWorld));
+  const view = viewDirection().negate();
   const fres = float(1).sub(clamp(dot(view, sn), 0, 1));
   // a shop window has its own grazing light (paneSky), not the clay's rim
   const pane = shopPane(flags);

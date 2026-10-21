@@ -27,13 +27,14 @@
  *
  * **Where** is four numbers per wall vertex (`facadeAttribute`, the glTF's
  * `_FACADE`): metres along the wall from its middle, the wall's length
- * (negative over a shopfront: no window on its ground floor), and where up
- * to two of OSM's doors stand along it (no ground-floor window there) —
- * the second slot, where it holds no door, the wall's own eave
- * (`WALL_EAVE`): a front rising to a higher roof than its object's lowest
- * keeps its windows up to its own. A wall is one plane of one object's
- * triangles, edge-connected; a party wall — one another wall stands
- * against, back to back — gets none, but a low house's above its
+ * (negative where its ground floor has no window: over a shopfront, or
+ * with more doors than the two below), and where up to two of OSM's doors
+ * stand along it and how wide they are (no ground-floor window within
+ * `DOOR_GAP_M` of one) — the second slot, where it holds no door, the
+ * wall's own eave (`WALL_EAVE`): a front rising to a higher roof than its
+ * object's lowest keeps its windows up to its own. A wall is one plane of
+ * one object's triangles, edge-connected; a party wall — one another wall
+ * stands against, back to back — gets none, but a low house's above its
  * neighbour's top (`PARTY_LOW_EAVE_M`).
  *
  * Positions along the wall are not measured (two drives' poses differ by
@@ -169,19 +170,44 @@ export const WINDOW_ROWS = {
 /** A loose grid shifts each axis by up to this share of the spacing. */
 export const LOOSE_JITTER = 0.08;
 
-/** A door keeps the ground-floor window off this far from its axis (m):
- *  half a wide door and a pier. */
-export const DOOR_CLEAR_M = 1.1;
+/** A ground-floor window keeps this much wall between its opening and a
+ *  door's (m): the door's surround (lib/city/doors.ts `DOOR_SURROUND`,
+ *  0.14), the window's sill, Fasche or Verdachung (up to 0.21) and a pier
+ *  of plain wall between. */
+export const DOOR_GAP_M = 0.6;
 
-/** The `_FACADE` attribute's metres per unit: along the wall, its length
- *  and the doors (snorm16: 1.6 cm a step, ±512 m). */
+/** The `_FACADE` attribute's metres per unit along the wall and for its
+ *  length (snorm16: 1.6 cm a step, ±512 m). */
 export const FACADE_SCALE_M = 512;
-/** `_FACADE`'s door slot when no door stands on the wall (+512 m). */
+/** `_FACADE`'s door slot when no door stands on the wall (its code
+ *  32 767). */
 export const NO_DOOR = 1;
-/** `_FACADE`'s first door slot on a roof vertex (−512 m): the clay's roof
- *  flag rides there, a vertex buffer less (no door stands half a kilometre
- *  from its wall's middle). */
+/** `_FACADE`'s first door slot on a roof vertex (its code −32 767): the
+ *  clay's roof flag rides there, a vertex buffer less (a door's code never
+ *  comes near, `DOOR_SLOT`). */
 export const FACADE_ROOF = -1;
+
+/**
+ * A door slot of `_FACADE` (its third and fourth number) holds the snorm16
+ * code `place · widths + class`: the door's place along the wall from the
+ * wall's middle in `step` m, held to ±`reach` m (so no code comes near
+ * ±32 767, the roof's flag and no door), and its width class, the door's
+ * width rounded up to a class (`doorClassWidth`): from `w0` in `wStep` m
+ * for `fine` classes, then in `wideStep` m — 0.6–2 m in 0.2 m, then 3, 4,
+ * 5 and 6 m, the widest the doors bake takes (pipeline/bake/doors.py).
+ */
+export const DOOR_SLOT = {
+  fine: 7,
+  reach: 270,
+  step: 0.1,
+  w0: 0.6,
+  wideStep: 1,
+  widths: 12,
+  wStep: 0.2,
+} as const;
+/** The codes from here on either side are no door (`NO_DOOR`,
+ *  `FACADE_ROOF`). */
+export const DOOR_NONE_CODE = 32_767;
 
 /**
  * A wall's own eave, in `_FACADE`'s second door slot (its fourth number)
@@ -189,10 +215,11 @@ export const FACADE_ROOF = -1;
  * ground-floor windows, whose doors keep none off: the snorm16 code
  * `code0 + k`, the wall's eave `k · step` m over its object's (k 1–354, so
  * up to 35.4 m); `NO_DOOR` (32 767) is the object's eave. The codes lie
- * past every door's — a door's place is at most 506 m from its wall's
- * middle at `FACADE_SCALE_M` (and 270 m in the width-coded door slots,
- * whose codes end at 32 411) — so a door test that reads one finds a door
- * half a kilometre off. The clay lifts its eave there (visual-style.ts):
+ * past every door's — a door slot's codes end at 32 411 (`DOOR_SLOT`:
+ * ±270 m in 0.1 m steps, 12 width classes) — so a door test that reads
+ * one finds a door 270 m off, which keeps no window off. Keep `code0` above
+ * `reach / step · widths + widths − 1` if the doors' reach or classes
+ * change. The clay lifts its eave there (visual-style.ts):
  * the top row of windows, the eave's stroke and the Denkmal's line follow
  * the wall's own roof edge.
  */
@@ -937,8 +964,55 @@ export function windowAxes(length: number, spec: WindowSpec): number[] {
   if (spec.axis <= 0 || room < 0) {
     return [];
   }
-  const n = Math.floor(room / spec.axis + 1e-9) + 1;
+  const n = Math.floor(room / spec.axis + 1e-4) + 1;
   return Array.from({ length: n }, (_, k) => (k - (n - 1) / 2) * spec.axis);
+}
+
+/** The width (m) of a door slot's width class (`DOOR_SLOT`). */
+export function doorClassWidth(c: number): number {
+  const { fine, w0, wideStep, wStep } = DOOR_SLOT;
+  return w0 + wStep * Math.min(c, fine) + wideStep * Math.max(c - fine, 0);
+}
+
+/** A door's code in a `_FACADE` door slot (`DOOR_SLOT`): `at` m along the
+ *  wall from its middle, `w` m wide. */
+export function doorSlot(at: number, w: number): number {
+  const { fine, reach, step, w0, wideStep, widths, wStep } = DOOR_SLOT;
+  const place = Math.round(Math.min(Math.max(at, -reach), reach) / step);
+  const top = w0 + fine * wStep;
+  const width =
+    w <= top + 1e-6
+      ? Math.max(Math.ceil((w - w0) / wStep - 1e-6), 0)
+      : Math.min(fine + Math.ceil((w - top) / wideStep - 1e-6), widths - 1);
+  return place * widths + width;
+}
+
+/** The door a `_FACADE` door slot holds, as the shader reads it: its place
+ *  along the wall from the middle and its width (m); none for `NO_DOOR`
+ *  and the roof's flag. */
+export function slotDoor(code: number): { at: number; w: number } | undefined {
+  if (Math.abs(code) >= DOOR_NONE_CODE) {
+    return undefined;
+  }
+  const { step, widths } = DOOR_SLOT;
+  const place = Math.floor((code + 0.5) / widths);
+  return { at: place * step, w: doorClassWidth(code - place * widths) };
+}
+
+/** Whether a ground-floor window `w` wide on the axis `axis` (m along the
+ *  wall from its middle) keeps `DOOR_GAP_M` of wall from the opening of a
+ *  door as a slot holds it — and half a place step more, as far as the
+ *  door's rounded place may lie off its own. The shader's test
+ *  (clay-windows.ts). */
+export function clearOfDoor(
+  axis: number,
+  w: number,
+  door: { at: number; w: number }
+): boolean {
+  return (
+    Math.abs(axis - door.at) >=
+    door.w / 2 + DOOR_GAP_M + DOOR_SLOT.step / 2 + w / 2
+  );
 }
 
 /**
@@ -949,8 +1023,8 @@ export function windowAxes(length: number, spec: WindowSpec): number[] {
  * where they must be, none where less than `min` is left); the ground
  * floor's only where `ground` is (no shop, no shopfront on the wall) and
  * where it fits under the first storey line; none that starts less than
- * `WINDOW_ROWS.plinthGap` over `buried` (the ground in front of a
- * shopfront's wall). The shader's rows (clay-windows.ts).
+ * `WINDOW_ROWS.plinthGap` over `buried` (the ground in front of a wall
+ * without ground-floor windows). The shader's rows (clay-windows.ts).
  */
 export function windowRows(
   spec: WindowSpec,
@@ -1022,7 +1096,8 @@ const ON_WALL_SLACK_M = 0.3;
 interface Wall {
   /** the plane's offset along `n` (m) */
   d: number;
-  doors: number[];
+  /** the doors on it: where along it (as `s0`, `s1`) and how wide (m) */
+  doors: { s: number; w: number }[];
   /** horizontal unit normal, out of the building (data frame) */
   n: [number, number];
   object: number;
@@ -1046,11 +1121,13 @@ interface Wall {
   z1: number;
 }
 
-/** A door on an object's wall (data frame), its outward normal. */
+/** A door on an object's wall (data frame), its outward normal and its
+ *  width (m). */
 export interface FacadeDoor {
   at: [number, number];
   n: [number, number];
   object: number;
+  w: number;
 }
 
 /** A shopfront on an object's wall (data frame), its outward normal. */
@@ -1422,7 +1499,7 @@ function placeOnWalls(
   }
   for (const door of doors) {
     for (const { s, w } of wallsAt(byObject, door.object, door.at, door.n)) {
-      w.doors.push(s);
+      w.doors.push({ s, w: door.w });
     }
   }
   for (const shop of shops) {
@@ -1450,22 +1527,22 @@ export interface FacadeHeights {
  * The `_FACADE` attribute (4 × snorm16 per vertex, `FACADE_SCALE_M` metres
  * a unit): per wall vertex of an object `drawn` says carries windows its
  * place along the wall from the wall's middle, the wall's length (negative
- * where its ground floor has none — a shopfront stands on it, the ground
- * rises past its windows, or it is a low house's party wall that stands
- * free above its neighbour; 0 on any other party wall), and up to two
- * doors' places along it from the middle, the nearest first (`NO_DOOR` for
- * none; on a wall without ground-floor windows, which has none to keep off
- * them, the first slot is instead the height over the base its windows
- * clear — the ground in front, the neighbour's top — 0 where it is not
- * known); in the second slot, wherever no door needs it, the wall's own
- * eave (`WALL_EAVE`, `heights`), on the walls of every LoD2 object, with
- * windows or not; every roof vertex (r, g, FACADE_ROOF, b), its face's own
- * colour where `mesh.roofRgb` has one and (0, 0, FACADE_ROOF, 0) where
- * not; every other vertex (0, 0, NO_DOOR, NO_DOOR). `doors` and `shops` in
- * the mesh's data frame. A wall the ground in front of rises past its
- * object's `reach` somewhere (`rises.at`, from `wallRises`;
- * `WindowChoice.reach`) is signed as a shopfront's: it loses its ground
- * floor.
+ * where its ground floor has none — a shopfront stands on it, more doors
+ * than the two slots hold, the ground rises past its windows, or it is a
+ * low house's party wall that stands free above its neighbour; 0 on any
+ * other party wall), and its doors, the nearest the middle first
+ * (`doorSlot`, `NO_DOOR` for none; on a wall without ground-floor windows,
+ * which has none to keep off them, the first slot is instead the height
+ * over the base its windows clear — the ground in front, the neighbour's
+ * top — 0 where it is not known); in the second slot, wherever no door
+ * needs it, the wall's own eave (`WALL_EAVE`, `heights`), on the walls of
+ * every LoD2 object, with windows or not; every roof vertex (r, g,
+ * FACADE_ROOF, b), its face's own colour where `mesh.roofRgb` has one and
+ * (0, 0, FACADE_ROOF, 0) where not; every other vertex (0, 0, NO_DOOR,
+ * NO_DOOR). `doors` and `shops` in the mesh's data frame. A wall the ground
+ * in front of rises past its object's `reach` somewhere (`rises.at`, from
+ * `wallRises`; `WindowChoice.reach`) is signed as a shopfront's: it loses
+ * its ground floor.
  */
 export function facadeAttribute(
   mesh: FacadeMesh,
@@ -1541,20 +1618,21 @@ function wallSlots(
   const party = w.party > PARTY_SHARE && above === undefined;
   const length = party ? 0 : w.s1 - w.s0;
   const [d0, d1] = w.doors
-    .map((s) => s - c)
-    .sort((a, b) => Math.abs(a) - Math.abs(b));
+    .map((d) => ({ at: d.s - c, w: d.w }))
+    .sort((a, b) => Math.abs(a.at) - Math.abs(b.at));
+  const noGround = w.shop || w.doors.length > 2;
   return {
     c,
-    length: snorm(w.shop ? -length : length),
+    length: snorm(noGround ? -length : length),
     // a wall without ground-floor windows has none to keep off its doors:
     // its first slot holds the height its windows clear
-    door0: w.shop
+    door0: noGround
       ? snorm(Math.max(w.ground, 0))
       : d0 === undefined
         ? NO_DOOR_SNORM
-        : snorm(d0),
+        : doorSlot(d0.at, d0.w),
     // … and its second, like a wall's with at most one door, its eave
-    door1: w.shop || d1 === undefined ? eave : snorm(d1),
+    door1: noGround || d1 === undefined ? eave : doorSlot(d1.at, d1.w),
   };
 }
 
