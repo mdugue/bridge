@@ -70,7 +70,7 @@ flowchart LR
     TCAR["Data layer: trams by timetable<br/>cars at the scene's clock"]
     BRG["Bridges<br/>deck · truss · pylons · arch"]
     PLT["Station platforms"]
-    WAL["Retaining walls"]
+    WAL["Retaining walls &amp; quays"]
     FEN["Fences, railings &amp; gates"]
     STR["Stairs"]
     SPT["Sports grounds<br/>pitches · courts · tracks · goals"]
@@ -193,6 +193,7 @@ flowchart LR
   SUN -. "the scene's clock" .-> TCAR
   OSM ==>|"barrier=retaining_wall/city_wall · natural=cliff + height · material"| WAL
   DGM -. "snap to the measured step (fine TIN)" .-> WAL
+  DGM -. "quays measured where the water meets the land" .-> WAL
   DOM -. "an untagged wall's height (crowns left out by the NDVI)" .-> WAL
   WAL -. "breakline burned into the coarse grid at build" .-> TER
   OSM ==>|"barrier=fence/handrail + fence_type · gates on a line"| FEN
@@ -261,7 +262,7 @@ flowchart LR
 | **Elbe landing stages** | OSM `man_made=pier` (fixed or `floating`), `man_made=groyne`, `route=ferry` | DLM water class (a pontoon and a ferry line cut to the water) · DOM1 (a pier's deck as measured; a pontoon's freeboard; a pier or pontoon drawn only where DOM1 shows it) · DGM1 (a pier's deck from the bank without DOM1; a pontoon floats on the terrain the water sheet lies on; a groyne only where it stands over the water) | `riverside-layer.ts`, `map-overlay.ts` (the ferry lines show from the air only); baked by `pipeline/bake/riverside.py` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints); without a DLM OSM's `bridge` ways on roads, paths and railways (+ `man_made=bridge` outlines), one bridge's ways merged per `layer` | DGM1 (abutment ramp, piers, the water under the fairway) · DOM1 (the roadway's height and the deck's width; the superstructure — truss, pylons, steel arch — as ribs; a masonry bridge's piers) · OSM `bridge:structure` and the fairway's clearance (deck depth, a pier-free fairway) · Wikidata (class, main span, number of spans) · the structure (deck depth; stone parapets on a masonry bridge, open steel railings on the others; a long rail viaduct on paired columns) — *LoD2's bridge slabs are left out of the buildings*; drawn on both terrain levels (the coarse one without rails); the deck laid out by its axis (footways, kerbs, carriageway, centre dashes), the stone as ashlar | `rail-layer.ts`, `bridge-surface.ts`, `lib/city/bridge.ts`; baked by `pipeline/bake/rail.py` + `bridge.py` (+ `rail_osm.py`) |
 | **Station platforms** | OSM `railway=platform` (Geofabrik extract; none below ground — tunnel, `location=underground`, negative `layer`/`level`), `height` | the level of the nearest drawn track (its rail head + the edge height of the trains it serves, `lib/city/platform-level.ts`) · DGM1 (never under the ground) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
-| **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` + `height` and `material` (Geofabrik extract); an untagged wall's height measured in DOM1 (or the laser scan's 0.5 m surface), crowns left out by the NDVI, else its class's default; the material else the site's majority | DGM1 (ribbon snapped to the measured step of the fine TIN, its medians over the vertices at the same step, one run per terrace; the coarse grid is conflated to a step instead) — *no DGM/DOM/LiDAR product has the wall as a vertical face* | `lib/city/walls.ts` + `lib/city/wall-snap.ts` (at build, into the fine terrain glTF), `lib/city/terrain-conflate.ts` (coarse grid), `wall-layer.ts` (material); baked by `pipeline/bake/walls.py` |
+| **Retaining walls & quays** | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` + `height` and `material` (Geofabrik extract); an untagged wall's height measured in DOM1 (or the laser scan's 0.5 m surface), crowns left out by the NDVI, else its class's default; the material else the site's majority. Quays measured in DGM1 along the class raster's water outline (the land 1.5 m over the water within 2.5 m, steep, no lawn), away from a mapped retaining wall | DGM1 (ribbon snapped to the measured step of the fine TIN, its medians over the vertices at the same step, one run per terrace; the coarse grid is conflated to a step instead) — *no DGM/DOM/LiDAR product has the wall as a vertical face* | `lib/city/walls.ts` + `lib/city/wall-snap.ts` (at build, into the fine terrain glTF), `lib/city/terrain-conflate.ts` (coarse grid), `wall-layer.ts` (material); baked by `pipeline/bake/walls.py` |
 | **Fences, railings & gates** | OSM `barrier=fence/handrail` + `fence_type` + `height` (untagged: 2 m by a railway, pitch, school or industrial site, else 1.2 m); the flights' handrails; `barrier=gate/lift_gate/swing_gate/cycle_barrier` points on a wall or fence line (BBBike extract) | DGM1 (stands on the fine TIN, never reshapes it) · gates cut their fence or freestanding wall | `lib/city/fences.ts` (at build, into the fine terrain glTF), `fence-layer.ts` (one low band in a muted tone, no shadow cast); baked by `pipeline/bake/walls.py` |
 | **Stairs** | OSM `highway=steps` + `width` · `step_count` · `surface` (the tone) · `handrail` (else an `area:highway=steps` outline; else the gap between the OSM walls either side; else 1.5 m, 2.5 m in a pedestrian area); a *Wange* only beside a mapped wall or building | DGM1 (landing heights; the terrain lowered under the flight) — *the DGM smooths steps into a bank*; OSM `layer` ≥ 1 areas the DGM lacks (the Brühlsche Terrasse), lifted to the flight's tagged top | `lib/city/stairs.ts` (burn + step geometry, both at build, into the fine terrain glTF), `stair-layer.ts` (material); baked by `pipeline/bake/stairs.py` |
 | **Minimap** | tile bounds (tileset `extras`) + the 512² class raster in the palette + CityJSON footprints (`footprints_<tile>.json`) | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*`, `lib/city/landcover.ts` |
@@ -433,7 +434,9 @@ flowchart LR
   bMLY ==> dMLY
   iOSM ==> bWALL ==> dWALL
   iDOM -. "an untagged wall's height" .-> bWALL
-  dNDVI -. "crowns left out" .-> bWALL
+  dNDVI -. "crowns left out · no quay on a lawn" .-> bWALL
+  iDGM -. "quays at the water's edge" .-> bWALL
+  dCLS -. "the water's outline" .-> bWALL
   iOSM ==> bSTR ==> dSTR
   iDGM -. "landings" .-> bSTR
   iOSM ==>|"every track · catenary masts"| bRAIL

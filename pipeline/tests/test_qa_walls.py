@@ -1,4 +1,5 @@
-"""The ground check's walls, stairs, fences and kerbs (B5–B9, B14): a wall's
+"""The ground check's walls, stairs, fences and kerbs (B5–B9, B14) and the
+measured quays: a wall's
 height measured over its low side, the walls' and flights' materials, the
 untagged flight's width, the sides a Wange may stand on, the flights'
 handrails, the tall fences, and the lowered kerbs."""
@@ -11,6 +12,7 @@ from collections import Counter
 import numpy as np
 import rasterio
 import shapely
+from PIL import Image
 from synthetic import SIZE, X0, Y0, osm_tile
 
 from bake import kerb_drops, stairs, walls
@@ -344,3 +346,51 @@ def test_drops_merge_clip_and_yield_to_a_raised_kerb():
     assert kerb_drops.half_width('"width"=>"6 m"') == 3.0
     assert kerb_drops.half_width(None) == kerb_drops.CROSSING_HALF_M
     assert kerb_drops.half_width('"width"=>"40"') == kerb_drops.DRIVEWAY_W
+
+
+# --- quays: measured where the water meets the land ---------------------------
+
+
+def _harbour(tmp_path, monkeypatch, ways: str = "", nodes=None):
+    """Water south of y = 100; to its north a 4 m quay from x = 0 to 90 (the
+    DGM's 1–2 m ramp) and a 1:2 bank from x = 90 on."""
+    classes = np.zeros((SIZE, SIZE), np.uint8)
+    classes[100:, :] = 8
+    tile = osm_tile(tmp_path, monkeypatch, nodes or {}, ways, classes=classes)
+    z = np.zeros((SIZE, SIZE), np.float32)
+    z[:98, :90] = 4.0
+    z[98, :90], z[99, :90] = 2.7, 1.3
+    for r in range(92, 100):  # rows 92–99: 0.5 m a row
+        z[r, 90:] = (100 - r) * 0.5
+    z[:92, 90:] = 4.0
+    with rasterio.open(tile.dgm, "r+") as dst:
+        dst.write(z, 1)
+    return tile
+
+
+def test_a_quay_is_measured_where_the_water_meets_a_wall_not_a_bank(tmp_path, monkeypatch):
+    tile = _harbour(tmp_path, monkeypatch)
+    found = walls.quays(tile, [])
+    assert len(found) == 1
+    [(line, h)] = found
+    xs, ys = (shapely.get_coordinates(line) - (X0, Y0)).T
+    # the wall's run along the water, its ends inside the quay's 0–90 m
+    assert xs.min() < 10 and 80 < xs.max() < 92
+    assert np.all(np.abs(ys - 100) < 2)
+    assert h == 4.0
+    # and it is drawn as a wall the terrain bake snaps to its step
+    walls.run(tile)
+    [quay] = [
+        f["properties"] for f in _features(tile, "walls") if f["properties"]["kind"] == "quay"
+    ]
+    assert quay == {"kind": "quay", "h": 4.0, "mat": "concrete"}
+
+
+def test_a_lawn_bank_or_a_mapped_retaining_wall_is_no_measured_quay(tmp_path, monkeypatch):
+    tile = _harbour(tmp_path, monkeypatch)
+    lawn = np.full((SIZE, SIZE), int(0.33 * 255), np.uint8)
+    Image.fromarray(lawn).save(tile.out("dlm", "ndvi_t.png"))
+    assert walls.quays(tile, []) == []
+    (tile.data / "dlm" / "ndvi_t.png").unlink()
+    mapped = shapely.LineString([(X0, Y0 + 101), (X0 + 90, Y0 + 101)])
+    assert walls.quays(tile, [mapped]) == []

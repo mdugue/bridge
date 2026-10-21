@@ -548,7 +548,9 @@ visual-variable codebook is in
   local level (20th percentile per 5 m block, median over 45 m) become
   meadow where the DOP is green (NDVI ≥ 0.15, GLI ≥ 0.05), the
   neighbouring built, rail or road class within 3 m, else sand (class 6).
-  Streams under 8 m wide are left alone. Dry area before → after: Dresden
+  Streams under 8 m wide are left alone. On a quay the dry band is the
+  DGM's ramp up the wall: the measured quay stands over it (*Walls*
+  below). Dry area before → after: Dresden
   33412_5656 12 140 → 468 m²; München 18 824 → 2 423 m²; Meißen
   7 415 → 1 009 m². *Tint* `= computed`: each body's open water (≥ 5 m
   from its bank) is read in the cast-corrected DOP as a Lab median and
@@ -803,7 +805,14 @@ visual-variable codebook is in
   cells (`roofs.KEEP_SHARE`); the build draws them as a measured roof
   (`shapedGap`, `measuredRoofMesh`), else the flat box stands. Shaped:
   Leipzig 17, Dresden 13, Meißen 9, Unna 4, Hamburg 3, Grimma 3,
-  München 2.
+  München 2. **A lattice is no roof** (2026-10-21, `structures.lattice`):
+  a measured level with no face of its own that stands more than 6 m over
+  the building's height, where fewer than 40 % of the surface model's
+  cells lie within 1.5 m of its top, is a mast, a crane or a floodlight,
+  and ends at the building's height. *(The Rickmer Rickmers' masts stood
+  as 25 m towers on its hull, Dock I's cranes 11 m over the dock,
+  Leipzig's Paralympische Sporthalle a floodlight 50 m up.)* Nine levels
+  on the seven sites.
 - **Roofs on posts** `◎ detected` `❝ taken` `= computed` (2026-10-21) —
   a platform roof, a fuel station's canopy, a carport, a bus shelter: a
   roof with nothing under it but its posts. `structures.py` takes an OSM
@@ -1058,7 +1067,21 @@ visual-variable codebook is in
   face with ≥ 12 sunlit texels and a quarter of it in sun takes its own
   where it differs from the building's by more than 6 sRGB steps
   (`faces`, keyed by the loader's geometry and surface ids), carried in the
-  roof vertex's free `_FACADE` slots — no vertex buffer more. A roof drawn
+  roof vertex's free `_FACADE` slots — no vertex buffer more.
+  **One flat roof is one roof** (2026-10-21, `_planes`): faces whose
+  normals agree within 0.05 and whose planes lie within 0.3 m, touching at
+  a corner, are read together and take one colour; a rebuilt part stays
+  its own. *(LoD2 splits many a flat roof into pieces, and each piece read
+  alone took the colour of what stood on it: Leipzig's department stores
+  read from above as pyramids of three shades.)* **A face's own colour is
+  read from its core** (2026-10-21, `_face_mask`): its texels two in from
+  its drawn edge, so a face too narrow to have one — a coping, a parapet's
+  top, a gutter strip — reads no colour of its own and takes the
+  building's. *(Three to four in a hundred faces read apart were such
+  slivers, coloured by the street or the neighbour's roof beside them.)*
+  Faces read apart: Dresden 38 730 → X, Leipzig 10 741 → 9 157, Hamburg
+  8 302 → 7 805, München 45 120 → X, Unna 7 749 → 7 067, Grimma
+  4 183 → 4 013, Meißen 5 847 → 5 365. A roof drawn
   as its measured parts (ADR 0036) is read part by part instead of by its
   LoD2 faces (`parts`, keyed by the part's index in the roofs file; the
   `roof-colour` step runs after `roofs`): LoD2 often lays one flat lid
@@ -3815,6 +3838,27 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   measured step lies the other way, the cap was wound against its normal:
   628 cap triangles on Meißen's tile, 5.8 % of its wall area, as the black
   band along the Burgberg's west wall; 99 on Dresden's spawn tile.)*
+  **Quays are measured where the water meets the land** `⚙ derived`
+  (2026-10-21, PR #173, `walls.py` `quays`, kind `quay`): every metre along
+  the water's outline in the class raster (the dry shore re-classed
+  first, "Water" below) the DGM is read 0.5–6.5 m onto the land over the
+  water's level 1.5–3.5 m out on it; a station is a quay where the land
+  stands 1.5 m over the water within 2.5 m, its steepest metre climbs
+  1 m (a revetment's 1:1.5 or a dike's 1:2 does not), three quarters of
+  the climb to 6.5 m is done by then (a wall, not a slope's foot) and the
+  NDVI there is under 0.2 (a grass bank is no wall). A majority over five
+  stations, runs of 8 m or more, none within 3 m of a mapped wall that
+  holds the earth; the height is the median rise, the material the site's
+  majority. The terrain bake treats a quay as a retaining wall: it snaps
+  to the measured step, its face at the ramp's foot in the water, its
+  coping on the quay. Measured on the committed tiles: 11.5 km on
+  Hamburg's harbour tile, 2.9 km in Dresden's Alberthafen and along the
+  Weißeritz, a few hundred metres on Leipzig's, Meißen's, Grimma's and
+  Munich's rivers. *(OSM maps few quays — `man_made=quay` on 5 km of
+  Hamburg's harbour, three lines in Dresden — and the DGM rounds every
+  quay into a 1–2 m ramp: the water class reached up it, and with the
+  shore rule the ramp read as sand whose TIN triangles hung down the face
+  in folds, the saw-teeth along the Landungsbrücken.)*
   Until then the browser built the ribbons from the GeoJSON over whichever
   terrains were loaded. **Why OSM:** no elevation product has the wall as a
   *vertical face* (a 2.5D surface cannot), and it's not a CityJSON building,

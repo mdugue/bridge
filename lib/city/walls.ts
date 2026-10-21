@@ -105,8 +105,15 @@ export interface WallOptions {
   snapToStep?: boolean;
 }
 
-/** OSM kinds that hold back earth (the ones the conflation also reshapes). */
-const RETAINING_KINDS = new Set(["retaining_wall", "city_wall", "embankment"]);
+/** OSM kinds that hold back earth (the ones the conflation also reshapes),
+ *  and the quays the bake measures at the water's edge (walls.py
+ *  `quays`). */
+const RETAINING_KINDS = new Set([
+  "retaining_wall",
+  "city_wall",
+  "embankment",
+  "quay",
+]);
 
 /** How far in front of the measured ramp foot the snapped face stands (m):
  *  the ramp's foot wanders between the 1 m grid points the TIN kept, and a

@@ -207,6 +207,37 @@ test("a city wall that holds the earth ends at its shelf and stands where the gr
   expect(capBack(12.5, 20)).toBeLessThan(1);
 });
 
+test("a measured quay snaps to its step like a retaining wall", () => {
+  // The water's edge along y = 0, the quay's 4 m rounded into a 1.5 m ramp
+  // north of it: the bake's `quay` stands its face at the ramp's foot and
+  // its coping on the quay, as a retaining wall does.
+  const ground = (_x: number, y: number) =>
+    100 + 4 * Math.min(Math.max(y / 1.5, 0), 1);
+  const at = (kind: string) =>
+    wallGeometry(
+      [
+        {
+          coords: [
+            [0, 0],
+            [20, 0],
+          ],
+          h: 4,
+          kind,
+        },
+      ],
+      ground,
+      offset,
+      { snapToStep: true }
+    )?.positions;
+  const quay = at("quay");
+  expect(quay?.length ?? 0).toBeGreaterThan(0);
+  expect(quay).toEqual(at("retaining_wall"));
+  // its top is the quay's, its foot in the water
+  const ys = (quay ?? []).filter((_, i) => i % 3 === 1);
+  expect(Math.max(...ys)).toBeCloseTo(104, 1);
+  expect(Math.min(...ys)).toBeLessThan(100);
+});
+
 test("a wall whose scan finds two terraces stands at each, not across them", () => {
   // A retaining wall along y = 0 between two terrace steps the DGM blurs
   // into 1 m ramps: at y = −4 (the taller for x < 7) and at y = +4 (the

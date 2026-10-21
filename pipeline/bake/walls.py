@@ -35,12 +35,14 @@ import rasterio
 import shapely
 import shapely.geometry
 from PIL import Image
-from rasterio.features import rasterize
+from rasterio.features import rasterize, shapes
 from rasterio.merge import merge
 from rasterio.transform import from_origin
+from shapely.geometry.polygon import orient
 
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, owns, write_geojson
 from .osm import below_ground, has_extract, read_osm, tag
+from .water import WATER, grid_classes
 
 CLIFF = 'other_tags LIKE \'%"natural"=>"cliff"%\''
 WHERE = f"barrier IN ('retaining_wall','city_wall','wall') OR man_made = 'embankment' OR {CLIFF}"
@@ -469,8 +471,9 @@ def fallback_height(kind: str, cls: str, measured: dict[str, list[float]]) -> fl
     return DEFAULT_H["wall"] if kind == "city_wall" else DEFAULT_H.get(kind, 2.0)
 
 
-def _walls(tile: Tile, box: shapely.Geometry) -> tuple[list[dict], list, str]:
-    """The wall features, every wall line near the tile (for the gates) and
+def _walls(tile: Tile, box: shapely.Geometry) -> tuple[list[dict], list, list, str]:
+    """The wall features, every wall line near the tile (for the gates),
+    those of them that hold the earth (`HOLDING_KINDS`, for the quays) and
     a note on how their heights were found."""
     rows = []
     for layer in ("lines", "multipolygons"):
@@ -496,7 +499,7 @@ def _walls(tile: Tile, box: shapely.Geometry) -> tuple[list[dict], list, str]:
             if h is not None:
                 measured.setdefault(cls, []).append(h)
         found.append(h)
-    features, near = [], []
+    features, near, holding = [], [], []
     stats: Counter = Counter()
     for (g, kind, other), h in zip(rows, found, strict=True):
         source = "tag" if height(other) is not None else ("measured" if h is not None else "kind")
@@ -508,11 +511,13 @@ def _walls(tile: Tile, box: shapely.Geometry) -> tuple[list[dict], list, str]:
             historic = wall_class(kind, other) == "city_wall"
             props["mat"] = material_of(other) or ("stone" if historic else common)
         near.extend(lines_of(g))
+        if kind in HOLDING_KINDS:
+            holding.extend(lines_of(g))
         for line in clipped_lines(g, box):
             stats[source] += 1
             features.append(feature(geometry_json(shapely.LineString(line.coords)), props))
     note = ", ".join(f"{n} {k}" for k, n in sorted(stats.items()))
-    return features, near, f"{note}; measured in {model.source}" if model else note
+    return features, near, holding, f"{note}; measured in {model.source}" if model else note
 
 
 def tall_guards(tile: Tile) -> tuple[shapely.Geometry | None, shapely.Geometry | None]:
@@ -645,11 +650,179 @@ def on_written_lines(features: list[dict]) -> list[dict]:
     return out
 
 
+# --- quays (PR #173) ----------------------------------------------------------------
+# The DGM rounds a quay wall into a 1–2 m ramp like any wall, and OSM maps
+# few of them (`man_made=quay` on 5 of Hamburg's harbour kilometres, three
+# lines in Dresden): the water class reached up the ramp, and with the shore
+# rule (water.py) the ramp read as a sand bank whose triangles hung down
+# the face in folds — the Landungsbrücken, the Speicherstadt, the Elbe's
+# and the Isar's walls. So a quay is measured where the water meets the
+# land: every QUAY_STATION_M along the water's outline (the class raster's,
+# the dry shore already taken out), the ground QUAY_LAND_M onto the land
+# over the water's level QUAY_WATER_M out on it. A station is a quay where
+# the land stands QUAY_MIN_M over the water within the first QUAY_RISE_M,
+# its steepest metre climbs QUAY_STEEP_M (a revetment's 1:1.5 or a dike's
+# 1:2 does not), QUAY_SHELF_SHARE of the climb to QUAY_LAND_M[-1] is done
+# by then (a wall, not the foot of a slope) and the land there is no lawn
+# (the NDVI under QUAY_GREEN: a grass bank is no wall). The decisions are
+# smoothed by a majority over QUAY_WINDOW stations; a run of QUAY_MIN_RUN_M
+# or more, away from a mapped wall (QUAY_CLEAR_M), is a `quay` line on the
+# water's edge, its height the median rise. The terrain bake snaps it to
+# the measured step (lib/city/wall-snap.ts) like a retaining wall.
+QUAY_STATION_M = 1.0
+QUAY_SIMPLIFY_M = 0.7  # the outline's 1 m staircase straightened first
+QUAY_WATER_M = (-1.5, -2.5, -3.5)
+QUAY_LAND_M = (0.5, 1.5, 2.5, 3.5, 4.5, 6.5)
+QUAY_RISE_M = 2.5
+QUAY_MIN_M = 1.5
+QUAY_STEEP_M = 1.0
+QUAY_SHELF_SHARE = 0.75
+QUAY_GREEN = 0.2  # NDVI on Dresden's scale (a mown lawn reads 0.33)
+QUAY_WINDOW = 5
+QUAY_MIN_RUN_M = 8.0
+QUAY_CLEAR_M = 3.0
+HOLDING_KINDS = ("retaining_wall", "city_wall", "embankment", "cliff", "quay")
+
+
+def water_outlines(tile: Tile) -> tuple[list[shapely.LineString], Grid] | None:
+    """The water's outline as rings with the land on their right, and the
+    DGM; None without a class raster or water."""
+    png = tile.data / "dlm" / f"landcover_{tile.id}.png"
+    if not png.exists() or not tile.dgm.exists():
+        return None
+    with rasterio.open(tile.dgm) as ds:
+        z = ds.read(1).astype(np.float32)
+        if ds.nodata is not None:
+            z[z == ds.nodata] = np.nan
+        transform = ds.transform
+    n = z.shape[0]
+    raster = np.asarray(Image.open(png))
+    water = (grid_classes(raster, n) == WATER) & np.isfinite(z)
+    if not water.any():
+        return None
+    rings = []
+    for geom, _ in shapes(water.astype(np.uint8), mask=water, transform=transform):
+        poly = orient(shapely.geometry.shape(geom), 1.0)
+        poly = poly.simplify(QUAY_SIMPLIFY_M)
+        if poly.is_empty or not isinstance(poly, shapely.Polygon):
+            continue
+        rings.append(shapely.LineString(poly.exterior.coords))
+        rings.extend(shapely.LineString(r.coords) for r in poly.interiors)
+    x0, y1 = transform.c, transform.f
+    return rings, Grid(z, x0, y1, transform.a)
+
+
+def quay_stations(
+    ring: shapely.LineString, ground: Grid, green: Grid | None
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Each station along `ring`: its point, whether it is a quay (before
+    smoothing) and its rise over the water (NaN off the ground)."""
+    length = ring.length
+    at = np.arange(QUAY_STATION_M / 2, length, QUAY_STATION_M)
+    p = shapely.get_coordinates(shapely.line_interpolate_point(ring, at))
+    a = shapely.get_coordinates(shapely.line_interpolate_point(ring, np.maximum(at - 1.0, 0)))
+    b = shapely.get_coordinates(shapely.line_interpolate_point(ring, np.minimum(at + 1.0, length)))
+    d = b - a
+    d /= np.maximum(np.hypot(d[:, 0], d[:, 1]), 1e-9)[:, None]
+    nx, ny = d[:, 1], -d[:, 0]  # the right of travel: the land
+
+    def read(grid: Grid, off: float) -> np.ndarray:
+        return grid.at(p[:, 0] + nx * off, p[:, 1] + ny * off)
+
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # a station off the ground
+        level = np.nanmedian(np.stack([read(ground, o) for o in QUAY_WATER_M]), axis=0)
+        land = np.stack([read(ground, o) for o in QUAY_LAND_M])
+        near = np.array(QUAY_LAND_M) <= QUAY_RISE_M
+        rise = np.nanmax(land[near], axis=0) - level
+        # the profile from the water's nearest reading up the first metres
+        off = np.array([QUAY_WATER_M[0], *QUAY_LAND_M])
+        prof = np.vstack([level[None], land])
+        last = int(np.searchsorted(off, QUAY_RISE_M + 1.0, side="right"))
+        steep = np.nanmax(np.diff(prof[:last], axis=0) / np.diff(off[:last])[:, None], axis=0)
+        climb = land[-1] - level
+        shelf = rise >= QUAY_SHELF_SHARE * climb
+        quay = (rise >= QUAY_MIN_M) & (steep >= QUAY_STEEP_M) & shelf
+        if green is not None:
+            lawn = np.nanmedian(np.stack([read(green, o) for o in QUAY_LAND_M[:3]]), axis=0)
+            quay &= ~(lawn >= QUAY_GREEN)
+    return p, quay & np.isfinite(rise), rise
+
+
+def majority_runs(flags: np.ndarray, window: int, closed: bool) -> np.ndarray:
+    """`flags` by a majority over `window` stations (wrapping round a closed
+    ring)."""
+    k = np.ones(window)
+    if closed and len(flags) > window:
+        pad = window // 2
+        padded = np.concatenate([flags[-pad:], flags, flags[:pad]]).astype(float)
+        return np.convolve(padded, k, "valid") * 2 > window
+    return np.convolve(flags.astype(float), k, "same") * 2 > window
+
+
+def quays(tile: Tile, mapped: list[shapely.Geometry]) -> list[tuple[shapely.LineString, float]]:
+    """The tile's measured quays (see above) as lines on the water's edge
+    with their height, none within QUAY_CLEAR_M of a `mapped` wall that
+    holds the earth (`HOLDING_KINDS`: it draws the step already; a parapet
+    on the quay's top does not)."""
+    found = water_outlines(tile)
+    if found is None:
+        return []
+    rings, ground = found
+    png = tile.data / "dlm" / f"ndvi_{tile.id}.png"
+    green = None
+    if png.exists():
+        g = np.asarray(Image.open(png).convert("L"), dtype=np.float32) / 255.0
+        x0, _, x1, y1 = tile.bounds
+        green = Grid(g, x0, y1, (x1 - x0) / g.shape[1])
+    clear = shapely.STRtree(mapped) if mapped else None
+    box = shapely.box(*tile.bounds)
+    out = []
+    for ring in rings:
+        if ring.length < QUAY_MIN_RUN_M:
+            continue
+        p, quay, rise = quay_stations(ring, ground, green)
+        if clear is not None and len(p):
+            pts = shapely.points(p)
+            near = clear.query(pts, predicate="dwithin", distance=QUAY_CLEAR_M)[0]
+            quay[np.unique(near)] = False
+        keep = majority_runs(quay, QUAY_WINDOW, ring.is_closed) & np.isfinite(rise)
+        for run in _runs(keep, ring.is_closed):
+            if len(run) * QUAY_STATION_M < QUAY_MIN_RUN_M:
+                continue
+            line = shapely.LineString(p[run]).simplify(0.3)
+            if line.length < QUAY_MIN_RUN_M or not line.intersects(box):
+                continue
+            out.append((line, float(np.nanmedian(rise[run]))))
+    return out
+
+
+def _runs(flags: np.ndarray, closed: bool) -> list[np.ndarray]:
+    """The index runs where `flags` holds, one run across a closed ring's
+    start joined."""
+    idx = np.flatnonzero(flags)
+    if len(idx) == 0:
+        return []
+    breaks = np.flatnonzero(np.diff(idx) > 1)
+    runs = np.split(idx, breaks + 1)
+    if closed and len(runs) > 1 and runs[0][0] == 0 and runs[-1][-1] == len(flags) - 1:
+        runs = [np.concatenate([runs[-1], runs[0]]), *runs[1:-1]]
+    return runs
+
+
 def run(tile: Tile) -> None:
     if not has_extract(tile, "the walls"):
         return
     box = shapely.box(*tile.bounds)
-    walls, wall_lines, heights = _walls(tile, box)
+    walls, wall_lines, holding, heights = _walls(tile, box)
+    found = quays(tile, holding)
+    if found:
+        mat = site_material(tile)
+        walls += [
+            feature(geometry_json(line), {"kind": "quay", "h": round(h, 1), "mat": mat})
+            for line, h in found
+        ]
+        heights += f"; {len(found)} measured quays"
     fences, fence_lines, tall = _fences(tile, box)
     points, fields = read_osm(tile, "points", GATE_WHERE, ["barrier", "other_tags"])
     gates = gates_on(points, fields, wall_lines, fence_lines, tile.bounds)
