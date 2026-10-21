@@ -408,17 +408,65 @@ def face_texels(rgb, light: Light, frame: Frame, face: Face, box):
 def face_colours(rgb, light: Light, frame: Frame, faces, box):
     """One building's colour and its faces' own, from their sunlit texels
     on the roof scaled by each face's slope (`Light.gain`); returns (colour
-    or None, {key: colour})."""
-    lit_all, own = [], {}
+    or None, {key: colour}). Touching faces of one plane (`_planes`) are
+    read as one: a flat roof the dataset splits into pieces is one roof,
+    and each piece read alone took the colour of what stands on it
+    (Leipzig's department stores read as pyramids of three shades)."""
+    lit_all, read = [], []
     for face in faces:
         texels, covered = face_texels(rgb, light, frame, face, box)
-        if len(texels) == 0:
-            continue
-        lit_all.append(texels)
+        read.append((texels, covered))
+        if len(texels):
+            lit_all.append(texels)
+    own = {}
+    for group in _planes(faces):
+        parts = [read[i][0] for i in group if len(read[i][0])]
+        texels = np.concatenate(parts) if parts else np.zeros((0, 3))
+        covered = sum(read[i][1] for i in group)
         if len(texels) >= MIN_SAMPLES and len(texels) >= MIN_LIT_SHARE * covered:
-            own[face.key] = _upper_median(texels)
+            colour = _upper_median(texels)
+            for i in group:
+                own[faces[i].key] = colour
     joined = np.concatenate(lit_all) if lit_all else np.zeros((0, 3))
     return (_upper_median(joined) if len(joined) >= MIN_SAMPLES else None), own
+
+
+# Two faces lie in one plane when their normals differ by less than
+# PLANE_NORMAL (per component) and their planes by less than PLANE_M; they
+# touch when a corner of one lies within TOUCH_M of a corner of the other.
+PLANE_NORMAL = 0.05
+PLANE_M = 0.3
+TOUCH_M = 0.05
+
+
+def _planes(faces) -> list[list[int]]:
+    """The faces grouped into touching pieces of one plane, by index; a
+    rebuilt part stands alone."""
+    root = list(range(len(faces)))
+
+    def find(i):
+        while root[i] != i:
+            root[i] = root[root[i]]
+            i = root[i]
+        return i
+
+    lod2 = [i for i, f in enumerate(faces) if not f.part]
+    corners = [np.array([p for ring in faces[i].rings for p in ring], float) for i in lod2]
+    normals = np.array([faces[i].normal for i in lod2], float).reshape(-1, 3)
+    offsets = np.array([np.dot(n, c[0]) for n, c in zip(normals, corners, strict=True)])
+    coplanar = (np.abs(normals[:, None] - normals[None]).max(axis=2) < PLANE_NORMAL) & (
+        np.abs(offsets[:, None] - offsets[None]) < PLANE_M
+    )
+    for a, b in zip(*np.nonzero(np.triu(coplanar, 1)), strict=True):
+        if find(lod2[a]) == find(lod2[b]):
+            continue
+        gaps = np.abs(corners[a][:, None, :] - corners[b][None, :, :]).max(axis=2)
+        if gaps.min() < TOUCH_M:
+            root[find(lod2[b])] = find(lod2[a])
+    groups: dict[int, list[int]] = {}
+    for i in range(len(faces)):
+        groups.setdefault(find(i), []).append(i)
+    return list(groups.values())
 
 
 def _differs(a, b) -> bool:

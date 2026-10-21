@@ -53,7 +53,7 @@ def _mansard(top_z: float):
     return eave + top, geometry
 
 
-def _run(tmp_path, top_z: float, shade_left: bool = False, rgb=None):
+def _run(tmp_path, top_z: float, shade_left: bool = False, rgb=None, roof=None):
     import json
 
     import rasterio
@@ -83,7 +83,7 @@ def _run(tmp_path, top_z: float, shade_left: bool = False, rgb=None):
         transform=from_origin(0, 20, 0.2, 0.2),
     ) as out:
         out.write(rgb)
-    vertices, geometry = _mansard(top_z)
+    vertices, geometry = roof or _mansard(top_z)
     city = {
         "type": "CityJSON",
         "vertices": vertices,
@@ -105,6 +105,32 @@ def test_run_gives_a_face_its_own_colour(tmp_path):
     assert face[:2] == [0, 0]
     assert abs(face[2] - face[3]) < 0.05 and face[2] > 0.4
     assert out["meta"]["faces_apart"] == 1
+
+
+def _split_flat():
+    """A flat roof at 12 m in two touching halves (x 2–10 and 10–16) and a
+    third piece in the same plane that touches neither (x 17–19)."""
+    vertices = [(x, y, 12) for x in (2, 10, 16) for y in (2, 18)]
+    vertices += [(17, 2, 12), (19, 2, 12), (19, 18, 12), (17, 18, 12)]
+    faces = [[[0, 2, 3, 1]], [[2, 4, 5, 3]], [[6, 7, 8, 9]]]
+    geometry = {
+        "type": "MultiSurface",
+        "boundaries": faces,
+        "semantics": {"surfaces": [{"type": "RoofSurface"}], "values": [0] * 3},
+    }
+    return vertices, geometry
+
+
+def test_the_pieces_of_one_flat_roof_are_one_roof(tmp_path):
+    # red under the west half, grey under the east: read alone each half
+    # took its own shade; read as one roof neither is written apart, while
+    # the grey piece that touches neither keeps its own
+    rgb = np.zeros((3, 100, 100), np.uint8)
+    rgb[:, :, :50] = np.array([200, 60, 50])[:, None, None]
+    rgb[:, :, 50:] = np.array([190, 195, 195])[:, None, None]
+    out = _run(tmp_path, top_z=0.0, rgb=rgb, roof=_split_flat())
+    apart = {tuple(f[:2]) for f in out["faces"]["b"]}
+    assert apart == {(0, 2)}
 
 
 def test_run_reads_a_roof_in_sun_only(tmp_path):
