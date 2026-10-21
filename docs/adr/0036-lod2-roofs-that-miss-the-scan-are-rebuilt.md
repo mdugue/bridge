@@ -211,9 +211,11 @@ its narrow parts makes it miss more than half the LoD2's share (or
 `KEEP_SHARE`, as before), they stay apart. A hall's monitor roofs, 5 m
 strips 3 m over the rest, had merged into blocks that missed as much as
 the LoD2 — 5 of the 109 rebuilt objects on `33408_5654`, one worse than
-its LoD2.
+its LoD2. Where the faces then still miss more, the flat model, which met
+the bar, is drawn (13 objects over five cities; a LoD2 in München off on
+88 % would otherwise have stayed).
 
-Rebuilt objects: Dresden 887 → 1 081 (2 752 parts, 222 faces), Hamburg
+Rebuilt objects: Dresden 887 → 1 081 (2 755 parts, 222 faces), Hamburg
 365 → 587, Leipzig 269 → 357, Unna 43 → 61, Meißen 46 → 56, Grimma
 13 → 17, München 120 → 121. Checked against the DOP on the largest new
 ones of Hamburg, Leipzig and Dresden and a random draw in Hamburg.

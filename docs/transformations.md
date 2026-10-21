@@ -945,7 +945,10 @@ visual-variable codebook is in
   LoD2's share or 30 % (since 2026-10-21; 30 % alone before): a hall's
   monitor roofs, 5 m strips 3 m over the rest, had merged into blocks
   that missed as much as the LoD2 (5 of the 109 rebuilt objects on
-  33408_5654, one of them worse than its LoD2) — they stay strips.
+  33408_5654, one of them worse than its LoD2) — they stay strips;
+  where the faces then still miss more, the flat model the decision was
+  taken on is drawn (13 objects over five cities, one in München whose
+  LoD2 missed on 88 %).
   A face's surface is the scan on its face cells (pieces it took in filled
   from them), smoothed twice by an edge-preserving Gaussian (σ 1 cell, 1 m
   height σ); written as a 1 m grid in cm from the part's `z` (its median),
@@ -955,7 +958,7 @@ visual-variable codebook is in
   `coverage_simplify` 2 m, clipped to the footprint,
   parts under 2 m dropped → `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **1 081 objects on Dresden's fifteen tiles, 2 752
+  provider's credit). **1 081 objects on Dresden's fifteen tiles, 2 755
   parts, 222 of them faces** (2026-10-21; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
