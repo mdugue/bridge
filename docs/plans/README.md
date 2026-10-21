@@ -738,8 +738,9 @@ S each unless noted):
   `npx -y …@latest`; `web-design-guidelines` WebFetches its rules from a
   `main` branch); the session hook installs Bun with `curl | bash`
   (`.claude/hooks/session-start.sh:36`, version pinned, no checksum);
-  `pipeline/pyproject.toml` pins `pillow==11.3.0` (18 HIGH OSV advisories,
-  fixed in 12.x; reached only by offline bakes on self-made rasters). No
+  `pipeline/pyproject.toml` pinned `pillow==11.3.0` (18 HIGH OSV advisories,
+  fixed in 12.x; reached only by offline bakes on self-made rasters —
+  done 2026-10-20: Pillow 13.0, pip-audit clean). No
   secrets in the tree or history; no prompt-injection content found.
 - **Latent: DGM NoData blended by the resample.** `scripts/bake-tiles.ts`
   `readDgm` resamples bilinear before testing for NoData, so a hole would

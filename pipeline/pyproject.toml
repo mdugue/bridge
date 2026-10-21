@@ -5,19 +5,19 @@ description = "The offline geodata bakes: provider downloads -> the per-tile art
 requires-python = ">=3.12,<3.14"
 dependencies = [
   "laspy[lazrs]==2.7.0",
-  "numpy==2.3.3",
-  "pillow==11.3.0",
-  "pyogrio==0.11.1",
-  "pyproj==3.7.2",
-  "rasterio==1.4.3",
+  "numpy==2.5.4",
+  "pillow==13.0.0",
+  "pyogrio==0.13.0",
+  "pyproj==3.8.0",
+  "rasterio==1.5.2",
   "scikit-image==0.26.0",
   "scipy==1.18.1",
-  "shapely==2.1.2",
+  "shapely==2.2.0",
   "zipfile-deflate64==0.2.0",
 ]
 
 [dependency-groups]
-dev = ["pytest==8.4.2", "ruff==0.16.8"]
+dev = ["pytest==9.1.1", "ruff==0.17.1"]
 
 [tool.uv]
 package = false
