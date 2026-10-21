@@ -197,9 +197,11 @@ visual-variable codebook is in
   parking; 1.5–12 m a side. Mean error against `BRF`: 0.98 / 1.58 /
   2.34 m in Grimma / Meißen / Unna, against 1.64 / 1.72 / 2.96 m for the
   class default (on Dresden's main roads with `BRF` it would be worse,
-  2.15 against 1.67 — they keep their `BRF`). Road land per tile:
-  Dresden 35.3 → 46.5 ha (+32 %, to be checked on a render), Leipzig
-  +16 %, München +10 %, Unna +8, Meißen +6, Grimma +4.
+  2.15 against 1.67 — they keep their `BRF`). Road land against main,
+  measured on the re-baked tiles with this change's other road rules
+  (tunnels, below): Dresden 415.6 → 518.7 ha over 15 tiles (+25 %),
+  Leipzig +23 %, München +15 %, Grimma +13 %, Unna +9 %, Meißen +5 %;
+  Hamburg −5 % (its land cover is OSM's, no DLM widths: only the tunnels).
   **Arable** `❝ taken` `= computed` (class 9, 2026-10-21): the
   Basis-DLM's arable land (`veg01` `VEG` 1010/1011/1013, `arable_areas`)
   and OSM `farmland` are no longer meadow; painted a pale loam
@@ -208,8 +210,8 @@ visual-variable codebook is in
   crop), faint 0.75 m furrows along the field's long axis (the paving
   raster's bearing on arable land, `surface.py` `field_frames`;
   `terrain-layer.ts` `arableGround`). It counts as lawn for the kerbs and
-  as green in the site's statistics. Grimma 217 ha, Unna 131 ha, Meißen
-  1.5 ha.
+  as green in the site's statistics. Grimma 215 ha, Unna 129 ha, Meißen
+  1.5 ha (measured on the re-baked class rasters).
   **Nothing in a tunnel is burned** (2026-10-20): a DLM road axis loses
   its stretch along a DLM tunnel (`ver06` `BWF=1870`, the rail layer's
   rule: > 15 m within 2 m, `common.above_ground`), and every OSM way a
@@ -2545,10 +2547,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   Unna), 31 were real, 7 wrong, 7 unclear; the gate kept all 31 real
   lamps and dropped 5 of the 7 wrong ones; two or more images says
   nothing (98–100 % have that many). Precision after the gate: Grimma
-  ~75 %, Meißen ~57 % before the tunnel rule, Unna ~83 %. Lamps: Grimma
-  933 (928 on 33340_5678, where OSM maps 66), Meißen 125 (OSM 696), Unna
-  133; Dresden's count follows
-  its re-bake with the new cache (6 726 lamps on fifteen tiles before).
+  ~75 %, Meißen ~57 % before the tunnel rule, Unna ~83 %. Lamps after
+  the re-bake of 2026-10-21: Dresden 5 439 on fifteen tiles (6 792
+  before the gate), Grimma 949 (944 on 33340_5678, where OSM maps 66),
+  Meißen 122 (OSM 696), Unna 133.
   Stood by the lamp layer like OSM's; the card names Mapillary. Its own
   file (`dlm/mly_<t>.geojson`), never merged into the OSM files: ODbL and
   CC BY-SA do not mix in one database. `pipeline/bake/mapillary.py` (the
