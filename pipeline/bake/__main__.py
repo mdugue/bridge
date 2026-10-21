@@ -6,6 +6,10 @@ site spec (bake/spec.py) written from the TypeScript site config."""
 from __future__ import annotations
 
 import argparse
+import datetime
+import hashlib
+import os
+from pathlib import Path
 
 from . import (
     canopy,
@@ -35,6 +39,7 @@ from . import (
     small_buildings,
     sport,
     stairs,
+    step_cache,
     structures,
     surface,
     traffic,
@@ -143,6 +148,83 @@ def run_site_step(spec, step: str) -> None:
         transit.run_site(spec.raw, spec.data, site_extent(spec), spec.epsg)
 
 
+def run_tile(step: str, tile, research: bool = False) -> None:
+    if step == "lowveg":
+        lowveg.run(tile, research=research)
+    else:
+        STEPS[step](tile)
+
+
+def step_key(step: str, research: bool, spec_hash: str) -> dict:
+    """What a step's recorded run is valid for besides its files: its code
+    (its module and every bake module it reaches, the locked packages), the
+    site spec, the flags — and the year, for a step that reads the date."""
+    module = STEPS[step].__module__
+    key = {
+        "step": step,
+        "code": step_cache.code_hash(module),
+        "spec": spec_hash,
+        "research": bool(research),
+    }
+    if step_cache.dated(module):
+        key["year"] = datetime.date.today().year
+    return key
+
+
+def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) -> None:
+    """The step on the tile, its run recorded (step_cache.py) — or, with the
+    cache off, its old record dropped."""
+    manifest = step_cache.manifest_path(spec.raw, spec.site, step, tile.id)
+    if not save:
+        Path(manifest).unlink(missing_ok=True)
+        run_tile(step, tile, research)
+        return
+    with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
+        run_tile(step, tile, research)
+    step_cache.save(manifest, key, rec)
+
+
+class Bake:
+    """The bake's run settings and the site's recorded runs."""
+
+    def __init__(self, spec, research: bool, spec_hash: str, mode: str) -> None:
+        self.spec, self.research, self.spec_hash = spec, research, spec_hash
+        # "cache": skip what is unchanged; "force": run all, record it;
+        # "off": run all, record nothing
+        self.mode = mode
+        self.ledger = step_cache.Ledger(spec.raw, spec.site, list(STEPS))
+        self.tiles = {t.id: t for t in spec.tiles}
+
+    def _run(self, step: str, tiles) -> None:
+        key = step_key(step, self.research, self.spec_hash)
+        for tile in tiles:
+            recorded_tile(self.spec, step, tile, self.research, key, self.mode != "off")
+            self.ledger.done(step, tile.id)
+
+    def step(self, step: str, tiles) -> None:
+        """A step over the tiles. Every tile is judged before any runs: a
+        step's tiles read each other's files as the step found them."""
+        if self.mode != "cache":
+            self._run(step, tiles)
+            return
+        key = step_key(step, self.research, self.spec_hash)
+        todo = []
+        for tile in tiles:
+            if self.ledger.unchanged(step, tile.id, key):
+                print(f"{tile.id}: {step} unchanged — skipped (--force runs it)")
+            else:
+                todo.append(tile)
+        again = sorted(
+            {r for t in todo for r in self.ledger.restore(step, t.id)},
+            key=lambda r: self.ledger.order[r[0]],
+        )
+        for s, tid in again:
+            print(f"{tid}: {s} runs again — {step} reads its output, which a later step replaced")
+            self._run(s, [self.tiles[tid]])
+        if todo:
+            self._run(step, todo)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="bake")
     parser.add_argument("command", choices=["fetch", "bake"])
@@ -159,6 +241,11 @@ def main() -> None:
         action="store_true",
         help="lowveg: also write every candidate (scan-only hedges, shrubs) under the raw folder",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="bake: run every step, even one whose inputs and code are unchanged",
+    )
     args = parser.parse_args()
     spec = parse(args.spec)
     unknown = set(args.tile) - {t.id for t in spec.tiles}
@@ -172,12 +259,12 @@ def main() -> None:
         run_site_step(spec, args.step)
         return
     steps = list(STEPS) if args.step == "all" else [args.step]
-    for tile in tiles:
-        for step in steps:
-            if step == "lowveg":
-                lowveg.run(tile, research=args.research)
-                continue
-            STEPS[step](tile)
+    mode = "off" if os.environ.get("BAKE_CACHE") == "0" else "force" if args.force else "cache"
+    bake = Bake(spec, args.research, hashlib.sha256(args.spec.encode()).hexdigest(), mode)
+    # Step by step over the tiles, not tile by tile: the step cache judges
+    # each step against what the steps before it left on every tile.
+    for step in steps:
+        bake.step(step, tiles)
     if args.step == "all" and not args.tile:
         for step in SITE_STEPS:
             run_site_step(spec, step)

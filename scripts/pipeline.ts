@@ -22,6 +22,10 @@
  *                                     small-buildings)
  *   bun run bake <site> --step lowveg --research   also every hedge/shrub
  *                                     candidate, under the raw folder
+ *   bun run bake <site> --force       run every step again, even one whose
+ *                                     code and inputs did not change (a
+ *                                     step is otherwise skipped then:
+ *                                     pipeline/bake/step_cache.py)
  *
  * The steps run in dependency order: land cover first (the canopy, the
  * tree cadastre, lamps and street furniture are gated on it); the bridges
@@ -69,7 +73,7 @@ export function siteSpec(site: Site) {
 /** The options each command takes (`--step` needs a value). */
 const OPTIONS = {
   fetch: ["--lsc"],
-  bake: ["--step", "--research"],
+  bake: ["--step", "--research", "--force"],
 } as const;
 
 /** The options `args` gives that `command` does not take. */
@@ -121,7 +125,9 @@ if (import.meta.main) {
       JSON.stringify(siteSpec(site)),
       ...(step >= 0 ? ["--step", args[step + 1] ?? ""] : []),
       ...(tiles.length > 0 ? ["--tile", ...tiles] : []),
-      ...args.filter((a) => a === "--lsc" || a === "--research"),
+      ...args.filter(
+        (a) => a === "--lsc" || a === "--research" || a === "--force"
+      ),
     ],
     { stdio: "inherit", env: { ...process.env, PYTHONPATH: "pipeline" } }
   );

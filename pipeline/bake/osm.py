@@ -5,14 +5,17 @@ closed lines in `lines`; both are read."""
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
 import numpy as np
+import pyogrio
 import shapely
 from pyproj import Transformer
 
-from .common import Tile, read_layer
+from . import osm_index
+from .common import Tile
 
 
 def _to_tile(tile: Tile):
@@ -43,14 +46,39 @@ def read_osm(
     pbf = tile.osm_extract()
     if pbf is None:
         raise SystemExit(f"no OSM extract at {tile.osm} — run `bun run fetch`")
-    geoms, fields = read_layer(
-        Path(pbf), wgs84_bbox(tile, margin), where=where, columns=columns, layer=layer
-    )
+    geoms, fields = read_extract(Path(pbf), layer, wgs84_bbox(tile, margin), where, columns)
     project = _to_tile(tile)
     geoms = shapely.transform(
         geoms, lambda xy: np.column_stack(project.transform(xy[:, 0], xy[:, 1]))
     )
     return geoms, fields
+
+
+def read_extract(
+    pbf: Path, layer: str, bbox: tuple[float, float, float, float], where: str, columns: list[str]
+) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    """`common.read_layer` of the extract, through its index (osm_index.py).
+    With `BAKE_OSM_CHECK=1` every read is also made from the extract itself
+    and must give the same features, fields and order."""
+    wkb, names, fields = osm_index.read(pbf, layer, bbox, where, columns)
+    if os.environ.get("BAKE_OSM_CHECK") == "1":
+        meta, _, want, want_fields = pyogrio.raw.read(
+            pbf, layer=layer, bbox=bbox, where=where, columns=columns
+        )
+        want = want if want is not None else np.array([], dtype=object)
+        same = (
+            list(meta["fields"]) == names
+            and len(want) == len(wkb)
+            and all(a == b for a, b in zip(want, wkb, strict=True))
+            and all(
+                a.dtype == b.dtype and np.array_equal(a, b)
+                for a, b in zip(want_fields, fields, strict=True)
+            )
+        )
+        if not same:
+            raise AssertionError(f"OSM index differs: {layer} {bbox} {where!r} {columns}")
+    geoms = shapely.from_wkb(wkb) if len(wkb) else np.array([], dtype=object)
+    return geoms, dict(zip(names, fields, strict=True))
 
 
 def tag(other_tags: str | None, key: str) -> str | None:

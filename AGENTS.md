@@ -63,6 +63,8 @@ bun run fetch <site>  # download the site's data through its provider's
                    # [tile…] [--lsc]
 bun run bake <site>   # offline bakes (pipeline/, Python via uv): raw → derived
                    # data/<site>/{dlm,dop} [tile…] [--step X]
+                   # (a step whose code and files are unchanged is skipped;
+                   # --force runs it)
 bun run test:pipeline   # pytest + ruff for pipeline/
 bun scripts/ground-joins.ts <site> [tile…]   # where the baked parts miss the ground (ADR 0035)
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
