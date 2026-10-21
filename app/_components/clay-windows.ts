@@ -186,8 +186,9 @@ function columns(i: WindowInputs, s: F, length: F) {
 
 /** The window grid at the fragment: its column (`columns`) and its storey
  *  row — the ground floor's from the base, each upper one's from its
- *  storey line, none past the eave's clearance; the ground floor's only
- *  where no shop, shopfront or door stands. */
+ *  storey line, none past the eave's clearance nor under the ground in
+ *  front of a shopfront's wall; the ground floor's only where no shop,
+ *  shopfront or door stands. */
 function grid(i: WindowInputs): Grid {
   const s = i.facade.x.mul(FACADE_SCALE_M);
   const signed = i.facade.y.mul(FACADE_SCALE_M);
@@ -236,7 +237,15 @@ function grid(i: WindowInputs): Grid {
     .mul(door(i.facade.z))
     .mul(door(i.facade.w))
     .mul(step(sill.add(tall), first.sub(WINDOW_ROWS.lintel)));
+  // on a shopfront's wall the ground in front (its first door slot): no
+  // window under it
+  const buried = select(
+    signed.lessThan(-0.01),
+    i.facade.z.mul(FACADE_SCALE_M),
+    float(-1e3)
+  );
   const rows = step(0.5, c.n)
+    .mul(step(buried.add(WINDOW_ROWS.plinthGap), line.add(sill).add(lift)))
     .mul(step(WINDOW_ROWS.min, height))
     .mul(step(0.05, i.spec.x))
     .mul(step(0.5, length))

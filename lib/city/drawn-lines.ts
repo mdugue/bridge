@@ -21,6 +21,7 @@ import {
   OBJECT_FLAG_LANDMARK,
   OBJECT_FLAG_METAL,
   OBJECT_FLAG_OWN_COLOUR,
+  OBJECT_FLAG_OWN_FACADE,
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_DOOR,
   OBJECT_SOURCE_DORMER,
@@ -98,6 +99,7 @@ const TYPE: Record<WindowType, string> = {
   house: "kleines Haus",
   block: "Block mit Flachdach",
   low: "Flachbau",
+  palace: "Schloss, Museum oder Amtsgebäude",
 };
 
 const decimal = new Intl.NumberFormat("de-DE", {
@@ -652,11 +654,14 @@ function windowsFrom(
       };
     case "none":
     case "type": {
-      const type = windowType(
-        hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF),
-        o.eaveH,
-        look.storeyH
-      );
+      // a facade of its own carries windows only as a palace's
+      const type = hasObjectFlag(o.flags, OBJECT_FLAG_OWN_FACADE)
+        ? "palace"
+        : windowType(
+            hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF),
+            o.eaveH,
+            look.storeyH
+          );
       return {
         ...base,
         method: "assumed",
