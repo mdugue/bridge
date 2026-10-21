@@ -371,58 +371,83 @@ def _surface_normals(surface: dict, z: float, x: np.ndarray, y: np.ndarray) -> n
     return n / np.linalg.norm(n, axis=1, keepdims=True)
 
 
-def _face_mask(frame: Frame, face: Face, box) -> np.ndarray:
+def _face_mask(frame: Frame, face: Face, box) -> tuple[np.ndarray, np.ndarray]:
+    """The face's texels in `box` a texel in from its drawn edge (all of
+    them where that erases them), and its core two texels in: what a colour
+    of its own is read from. At the edge the image may show the eave, the
+    facade or the ground, and a face too narrow for a core reads none of
+    its own (3–4 % of the faces read apart were such slivers, read from
+    their edge alone: a parapet's coping, a ridge strip)."""
     c0, r0, c1, r1 = box
-    mask = Image.new("L", (c1 - c0, r1 - r0), 0)
-    draw = ImageDraw.Draw(mask)
+    drawn = Image.new("L", (c1 - c0, r1 - r0), 0)
+    draw = ImageDraw.Draw(drawn)
     for i, ring in enumerate(face.rings):
         pts = [frame.texel(*p) for p in ring]
         draw.polygon([(c - c0, r - r0) for c, r in pts], fill=0 if i else 255)
-    if mask.width > 3 and mask.height > 3:
-        inset = mask.filter(ImageFilter.MinFilter(3))
+    mask = drawn
+    if drawn.width > 3 and drawn.height > 3:
+        inset = drawn.filter(ImageFilter.MinFilter(3))
         if inset.getbbox():
             mask = inset
-    return np.asarray(mask) > 0
+    if drawn.width > 5 and drawn.height > 5:
+        core = np.asarray(drawn.filter(ImageFilter.MinFilter(5))) > 0
+    else:
+        core = np.zeros((drawn.height, drawn.width), bool)
+    return np.asarray(mask) > 0, core
 
 
-def face_texels(rgb, light: Light, frame: Frame, face: Face, box):
-    """A face's sunlit texels on its roof (linear RGB, scaled by
-    `Light.gain`) and how many texels it covers."""
+@dataclass
+class FaceRead:
+    """A face's sunlit texels on its roof (linear RGB, scaled by its
+    slope's gain), how many texels it covers, which of the texels lie in
+    its core (`_face_mask`) and how many its core covers."""
+
+    texels: np.ndarray
+    covered: int
+    core: np.ndarray
+    core_covered: int
+
+
+def face_texels(rgb, light: Light, frame: Frame, face: Face, box) -> FaceRead:
+    """A face's read (`FaceRead`), its texels scaled by `Light.gain`."""
     c0, r0, c1, r1 = box
-    mask = _face_mask(frame, face, box)
+    mask, core = _face_mask(frame, face, box)
     lit = mask & ~light.shadow[r0:r1, c0:c1]
     rows, cols = np.nonzero(lit)
     z = float(np.mean([p[2] for p in face.rings[0]]))
     x, y = frame.place(rows + r0, cols + c0, z)
     keep = on_the_roof(frame, x, y, z)
     texels = _LINEAR[rgb[r0:r1, c0:c1][lit]]
+    in_core = core[rows, cols]
+    covered, core_covered = int(mask.sum()), int(core.sum())
     if not face.part:
         if light.faces_away(face.normal):
-            return np.zeros((0, 3), np.float32), int(mask.sum())
-        return texels[keep] * light.gain(face.normal), int(mask.sum())
+            return FaceRead(np.zeros((0, 3), np.float32), covered, np.zeros(0, bool), core_covered)
+        return FaceRead(
+            texels[keep] * light.gain(face.normal), covered, in_core[keep], core_covered
+        )
     gains = light.gains(part_normals(frame, face, z, x, y))
     keep &= gains > 0
-    return texels[keep] * gains[keep, None].astype(np.float32), int(mask.sum())
+    return FaceRead(
+        texels[keep] * gains[keep, None].astype(np.float32), covered, in_core[keep], core_covered
+    )
 
 
 def face_colours(rgb, light: Light, frame: Frame, faces, box):
     """One building's colour and its faces' own, from their sunlit texels
     on the roof scaled by each face's slope (`Light.gain`); returns (colour
-    or None, {key: colour}). Touching faces of one plane (`_planes`) are
-    read as one: a flat roof the dataset splits into pieces is one roof,
-    and each piece read alone took the colour of what stands on it
-    (Leipzig's department stores read as pyramids of three shades)."""
-    lit_all, read = [], []
-    for face in faces:
-        texels, covered = face_texels(rgb, light, frame, face, box)
-        read.append((texels, covered))
-        if len(texels):
-            lit_all.append(texels)
+    or None, {key: colour}). A face's own colour is read from its core
+    alone. Touching faces of one plane (`_planes`) are read as one: a flat
+    roof the dataset splits into pieces is one roof, and each piece read
+    alone took the colour of what stands on it (Leipzig's department
+    stores read as pyramids of three shades)."""
+    reads = [face_texels(rgb, light, frame, face, box) for face in faces]
+    lit_all = [r.texels for r in reads if len(r.texels)]
     own = {}
     for group in _planes(faces):
-        parts = [read[i][0] for i in group if len(read[i][0])]
+        parts = [reads[i].texels[reads[i].core] for i in group]
         texels = np.concatenate(parts) if parts else np.zeros((0, 3))
-        covered = sum(read[i][1] for i in group)
+        covered = sum(reads[i].core_covered for i in group)
         if len(texels) >= MIN_SAMPLES and len(texels) >= MIN_LIT_SHARE * covered:
             colour = _upper_median(texels)
             for i in group:

@@ -133,6 +133,25 @@ def test_the_pieces_of_one_flat_roof_are_one_roof(tmp_path):
     assert apart == {(0, 2)}
 
 
+def test_a_face_too_narrow_for_its_inset_reads_nothing(tmp_path):
+    # a 0.4 m coping beside a flat roof, over red: every texel of it is
+    # its edge, so it takes the building's grey, not a colour of its own
+    vertices = [(2, 2, 12), (16, 2, 12), (16, 18, 12), (2, 18, 12)]
+    vertices += [(16, 2, 13), (16.4, 2, 13), (16.4, 18, 13), (16, 18, 13)]
+    geometry = {
+        "type": "MultiSurface",
+        "boundaries": [[[0, 1, 2, 3]], [[4, 5, 6, 7]]],
+        "semantics": {"surfaces": [{"type": "RoofSurface"}], "values": [0, 0]},
+    }
+    rgb = np.zeros((3, 100, 100), np.uint8)
+    rgb[:, :, :80] = np.array([190, 195, 195])[:, None, None]
+    rgb[:, :, 80:] = np.array([200, 60, 50])[:, None, None]
+    out = _run(tmp_path, top_z=0.0, rgb=rgb, roof=(vertices, geometry))
+    grey = out["roofs"]["b"]
+    assert abs(grey[0] - grey[1]) < 0.05
+    assert "b" not in out["faces"]
+
+
 def test_run_reads_a_roof_in_sun_only(tmp_path):
     # the west slope lies in shadow: the building stays red, not brown,
     # and the slope takes the building's colour (none of its own)
