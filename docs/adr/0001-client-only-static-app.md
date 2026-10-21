@@ -65,6 +65,18 @@ device's GPU safety level
 session storage the view a GPU recovery returns to. The privacy page,
 `/datenschutz`, lists the same.
 
+## Amendment (2026-10-20): the build holds the pages static
+
+Since Next.js 16.4 the root layout exports `ensureStatic = "navigation"`
+(`app/layout.tsx`): every page, and every client navigation to it, must
+be produced by the prerender, and `next build` fails when one reads
+request-time data (`cookies()`, `headers()`, server-side `searchParams`,
+`connection()`, an uncached fetch). The stateless proxy the 2026-09-27
+amendment allows would be a route handler or a rewrite, which this does
+not touch; a page that genuinely needs a request-time render sets
+`ensureStatic = false` in its own segment, and that is a decision for
+this ADR, not a fix for a red build.
+
 ## Alternatives
 
 - **A tile server / API** for on-demand data: rejected — the world is four

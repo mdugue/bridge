@@ -4,6 +4,11 @@ import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "cn";
 
+// Every page is prerendered at build time and the site has no server of its
+// own (the data are static files): the build fails if a page ever needs a
+// request-time render (ADR 0001).
+export const ensureStatic = "navigation";
+
 const spaceGroteskHeading = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-heading",

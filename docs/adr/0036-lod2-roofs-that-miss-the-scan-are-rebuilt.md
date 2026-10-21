@@ -1,7 +1,7 @@
 # ADR 0036: A LoD2 roof that misses the surface model is rebuilt from it as stepped flat blocks
 
 - **Status:** accepted; what is drawn in the LoD2's place follows the scan's form since the update below
-- **Date:** 2026-10 (amended 2026-10-03: measured faces)
+- **Date:** 2026-10 (amended 2026-10-03: measured faces; 2026-10-19: no strips, no teeth; 2026-10-20: steep flanks)
 
 ## Context
 
@@ -131,6 +131,64 @@ triangles** (the slivers multiplied the pieces fourfold); **steps inside
 a face** (Delatin traced every step edge with points — a face ends at a
 step instead); **planes per region** (a dome or a vault needs a plane per
 facet, and a region of 1 m bands is a ring, not a facet).
+
+## Update (2026-10-19): no part narrower than 7 m, outlines not on the grid
+
+The rebuilt roofs still read as heaps of blocks on the Hauptbahnhof, the
+Prager Spitze and the courtyard block An der Frauenkirche 5. Two causes,
+shared by every rebuilt roof:
+
+- **Strips.** A part only had to cover 20 m² and be wider than a cell or
+  two, so the scan's 1 m bands left strips a few metres wide standing as
+  boxes of their own: the parapet run round the Prager Spitze, the
+  ledges between a vault's flank and its eaves along the station's long
+  sides, the 116–122 m terraces down the courtyard's mansard, plant rooms.
+  Now **a part must hold a disk 7 m across** (`NARROW_M`, `_narrow`); a
+  narrower one joins the neighbour closest in height — as long as that
+  neighbour lies within 3 m (`NARROW_DZ`): a narrow wing a storey or more
+  off its neighbours is a wing, not a flank, and stays (a strip a cell
+  or two wide, a steep step's blurred flank, joins whatever the height,
+  as before).
+- **Teeth.** The parts' borders were the cell edges of the 1 m grid,
+  simplified at 1 m: a border running diagonally to the grid stayed a
+  staircase of 1 m teeth, each a wall. Now the labels are smoothed by a
+  majority over a 2 m disk, twice (`_majority`), and the coverage is
+  simplified at 2 m: a border runs as straight as the scan's edge.
+
+Whether a roof is rebuilt is decided as before, on the flat model, which
+keeps every strip; only what is drawn changes. Where the merged strips
+would make the drawn roof miss DOM1 on more than `KEEP_SHARE` of its
+cells (the most a rebuild may), it is drawn with them. The same 886 objects on
+Dresden's fifteen tiles become 2 171 parts instead of 2 956 (95 faces,
+94 before). The price is fit: on the two Altstadt tiles
+(`33410_5654`, `33410_5656`) the drawn roof now misses DOM1 by more
+than 2 m on 8–9 % of a rebuilt object's cells on average, 5–7 % before
+(the strips merged were up to 3 m off their new level) — still a third of
+the share that decides a rebuild.
+
+Rejected: **merging every strip whatever the height** (no cap: the
+misses rose to 13–20 %, at worst 86 % of an object's cells: narrow
+wings sank or rose to their neighbour's level); **a cap of 2 m** (the
+misses stayed at 6–7 %, but a sixth to a quarter more parts stayed than with 3 m).
+
+### Steep flanks are faces from 5 m (2026-10-20)
+
+The Schauspielhaus still read as stacked terraces, white streaks from
+above: its roofs are hipped and mansard flanks of 30–50° but only 3–6 m
+wide, too narrow for a face, so the bands stood as levels a storey apart
+with a sunlit wall between each pair. **A slope steeper than 0.5 m per
+metre (27°, `STEEP`) is a face from a patch 5 m across**
+(`STEEP_FACE_M`); a gentler one still needs 10 m. The blankets that
+ruled out 5 m faces came from gentle slopes — the scan's blur at a slab's
+edge rises steeper than that only where it is a step (more than 2 m from
+one cell to the next, `step_cells`), which a face never crosses. On the
+two Altstadt tiles 9–18 % more cells are drawn as faces, the drawn roof fits
+the scan as well or better (misses 7.4–9.0 % of a rebuilt object's cells,
+8.1–8.9 % without), and the cells drawn as a face on flat scan stay at
+1–2 % of all face cells. Dresden's 886 objects become 2 227 parts, 221
+of them faces (95 before; a steep face narrower than `NARROW_M` is never
+merged away as a strip). Faces from 4 m: more ragged rings round
+courtyards for little more.
 
 ## Alternatives
 

@@ -23,6 +23,11 @@ const nextConfig: NextConfig = {
   // ~340 MB, past a host's function size limit (Vercel: 250 MB).
   outputFileTracingExcludes: { "/**": ["public/data/*/**/*"] },
   reactCompiler: true,
+  experimental: {
+    // The React Compiler's Rust port, run natively inside Turbopack in place
+    // of the Babel plugin's pass through Node.
+    turbopackRustReactCompiler: true,
+  },
   reactStrictMode: true,
   // Everything under /data/<site>/ is published under a content-hashed name
   // by scripts/prepare-data.ts, so it can be cached forever; each site's
