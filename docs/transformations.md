@@ -3515,8 +3515,11 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   (`line`), but the viewer drew it from the ring's few corners — a long
   outline has four to a dozen — as flat triangles between them, which cut
   a chord under the camber, and a ring vertex took its own height. So the
-  ring's edges are now divided into pieces of at most 4.8 m, each new
-  corner at the line's height at its station; the top and the soffit,
+  ring's edges are now divided into pieces of at most 4.8 m, every
+  corner at the line's height at its station (the bake's own corner
+  heights lie up to 12 cm off it, 3 cm at the 95th percentile over the
+  seven cities' 1 240 corners: kept, the fascia met the slab's top with
+  a step there; since 2026-10-22); the top and the soffit,
   split into triangles of at most 6 m, take the line's height at every
   vertex; the parapets, the approaches and the masonry run along the same
   corners. The lift table that stands rails, trams, lamps and benches on

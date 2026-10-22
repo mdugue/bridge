@@ -1290,14 +1290,16 @@ const DECK_RING_STEP = 0.8 * DECK_FRAME_STEP;
 
 /**
  * The deck's outline with a vertex every DECK_RING_STEP along each edge,
- * each new one on the measured line at its station, and the frame with
- * every vertex's station. The bake gives a deck a few vertices (14 on the
- * Waldschlößchenbrücke's 660 m), each on the line, and between them the
- * fascia, the parapets and the spandrels ran straight under its camber.
+ * every one on the measured line at its station, and the frame with every
+ * vertex's station. The bake gives a deck a few vertices (14 on the
+ * Waldschlößchenbrücke's 660 m), and between them the fascia, the parapets
+ * and the spandrels ran straight under its camber. Its corners' own
+ * heights (`deck`) lie within 12 cm of the line; read off the line too,
+ * the fascia's and the parapets' top meets the top the slab is laid on
+ * there (`splitDeckTop`, at the line) without a step.
  */
 function onLine(
   ring: Ring2,
-  topY: number[],
   frame: BridgeFrame
 ): { frame: BridgeFrame; ring: Ring2; topY: number[] } {
   const pts: Ring2["pts"] = [];
@@ -1312,7 +1314,7 @@ function onLine(
       Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / DECK_RING_STEP)
     );
     pts.push(a);
-    ys.push(topY[i]);
+    ys.push(frame.deckAt(frame.ringS[i]));
     ringS.push(frame.ringS[i]);
     for (let k = 1; k < pieces; k++) {
       const x = a.x + ((b.x - a.x) * k) / pieces;
@@ -1373,7 +1375,7 @@ function drawDeck(
   const { kind } = bridgeProps(f);
   const top = out.tops[kind] ?? out.tops.other;
   const measured = bridgeFrame(f, ctx);
-  const laid = measured ? onLine(baked, bakedY, measured) : null;
+  const laid = measured ? onLine(baked, measured) : null;
   const frame = laid?.frame ?? null;
   const ring = laid?.ring ?? baked;
   const topY = laid?.topY ?? bakedY;

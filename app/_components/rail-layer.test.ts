@@ -666,6 +666,27 @@ test("a deck's slab and parapets follow its measured line, not chords between it
   expect(railing).toBeCloseTo(lineAt(100) + 1.1, 1);
 });
 
+test("a deck's corners stand on its measured line, not at their own baked height", () => {
+  // the bake's corner heights 0.1 m over the line: the fascia's top there
+  // met the slab's top, laid on the line, with a step
+  const line = Array.from({ length: 101 }, () => 120);
+  const bridge = deck({ deck: [120.1, 120.1, 120.1, 120.1, 120.1], line });
+  const top = buildRail({ ...empty, bridges: [bridge] }, ctx)
+    .children[0] as Mesh;
+  const pos = top.geometry.getAttribute("position");
+  let worst = 0;
+  let seen = 0;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    if (x > -0.01 && x < 200.01 && pos.getY(i) > 119.5) {
+      worst = Math.max(worst, Math.abs(pos.getY(i) - 120));
+      seen++;
+    }
+  }
+  expect(seen).toBeGreaterThan(0);
+  expect(worst).toBeLessThan(1e-3);
+});
+
 test("a curved deck's frame holds inside every triangle, not only at its corners", () => {
   // a 12 m deck along an arc of 400 m radius, 300 m long, its axis and
   // outline sampled every 30 m as the bake's are (a few vertices, long
