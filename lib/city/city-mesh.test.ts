@@ -263,3 +263,18 @@ test("markFlatRoofs: a roof mostly level is flat, a pitched one not", () => {
   });
   expect(objects.map((o) => o.flags)).toEqual([OBJECT_FLAG_FLAT_ROOF, 0, 128]);
 });
+
+test("markFlatRoofs: a step between roof levels clad as roof leaves it flat", () => {
+  const objects = [{ flags: 0 }];
+  // a level roof triangle and an upright one as large (a step's wall the
+  // bake flags as roof): half the roof-flagged area, yet a flat roof
+  const positions = [
+    0, 0, 10, 4, 0, 10, 0, 4, 10, 0, 0, 10, 4, 0, 10, 0, 0, 14,
+  ];
+  markFlatRoofs(objects, {
+    positions,
+    objectIds: [0, 0, 0, 0, 0, 0],
+    isRoof: [1, 1, 1, 1, 1, 1],
+  });
+  expect(objects[0].flags).toBe(OBJECT_FLAG_FLAT_ROOF);
+});

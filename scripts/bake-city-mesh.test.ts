@@ -45,6 +45,7 @@ import {
   scanStructureId,
   vertexNormals,
   withMeasuredRoofs,
+  withOpenRoofs,
   withRoofSteps,
 } from "./bake-city-mesh";
 
@@ -1112,6 +1113,28 @@ test("a short wall standing on the roof is the roof's, a set-back storey is not"
   expect(flags.slice(0, 9)).toEqual(Array.from({ length: 9 }, () => 1)); // roof, step
   // the set-back storey, the wall on the ground and the gable stay walls
   expect(flags.slice(9)).toEqual(Array.from({ length: 15 }, () => 0));
+});
+
+test("a roof on posts without an outline stays a block", () => {
+  // one object: a wall from the ground to 4 m and its roof at 4 m
+  const v = {
+    positions: Float32Array.from([
+      0, 0, 0, 4, 0, 0, 4, 0, 4, 0, 0, 4, 1, 0, 4, 0, 1, 4,
+    ]),
+    objectIds: new Float32Array(6),
+    isRoof: Float32Array.from([0, 0, 0, 1, 1, 1]),
+  };
+  const offset = { cx: 0, cy: 0 };
+  expect(withOpenRoofs(v, new Set([0]), [[]], offset)).toBe(v);
+  // with its outline the wall is cut under the slab and the posts stand
+  const ring: [number, number][] = [
+    [0, 0],
+    [4, 0],
+    [4, 4],
+    [0, 4],
+  ];
+  const opened = withOpenRoofs(v, new Set([0]), [[ring]], offset);
+  expect(opened.positions.length).toBeGreaterThan(v.positions.length);
 });
 
 test("a rebuilt roof's parts carry their own colour, its walls none", () => {

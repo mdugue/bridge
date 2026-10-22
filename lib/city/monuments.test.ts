@@ -326,4 +326,12 @@ describe("the QA's monument corrections", () => {
     expect(fountainsRun(new Date(2026, 9, 30))).toBe(true);
     expect(fountainsRun(new Date(2026, 10, 15))).toBe(false);
   });
+
+  test("a leap year and the small hours keep the season's ends", () => {
+    expect(fountainsRun(new Date(2028, 3, 14))).toBe(false);
+    expect(fountainsRun(new Date(2028, 3, 15))).toBe(true);
+    expect(fountainsRun(new Date(2028, 9, 31, 23, 30))).toBe(true);
+    expect(fountainsRun(new Date(2026, 3, 15, 0, 30))).toBe(true);
+    expect(fountainsRun(new Date(2026, 10, 1))).toBe(false);
+  });
 });

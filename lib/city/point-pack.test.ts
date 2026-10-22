@@ -178,6 +178,27 @@ test("a crown over a carriageway keeps its flag, an evergreen's leaves beside it
   ]);
 });
 
+test("a scan crown with a radius keeps its evergreen leaves through the pack", () => {
+  const features: CanopyExtraFeature[] = [
+    {
+      geometry: { type: "Point", coordinates: [412_100, 5_656_100] },
+      properties: { h: 14, l: "e", r: 2.5 },
+    },
+    {
+      geometry: { type: "Point", coordinates: [412_110, 5_656_110] },
+      properties: { h: 11, r: 3 },
+    },
+  ];
+  const points = features.map(pointOf);
+  expect(canopyStride(points, true)).toBe(5);
+  const unpacked = unpackPoints(toBuffer(packPoints(points, ORIGIN, 5)));
+  const back = unpacked ? pointFeatures(unpacked) : [];
+  expect(back.map((f) => f.properties)).toEqual([
+    { h: 14, l: "e", r: 2.5 },
+    { h: 11, r: 3 },
+  ]);
+});
+
 test("the header tells whether the canopy holds the tree rows' trees", () => {
   const points = [{ x: ORIGIN[0] + 1, y: ORIGIN[1] + 2, h: 12 }];
   const unpack = (bytes: Uint8Array) =>

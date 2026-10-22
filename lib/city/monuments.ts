@@ -100,16 +100,17 @@ export function jetHeight(
   return Math.min(Math.max(h, JET_MIN), JET_MAX);
 }
 
-/** The days of the year (1-based) the fountains run: mid-April to the end of
- *  October, as a city turns its fountains on after the frosts and drains
- *  them before the first. */
-const FOUNTAIN_SEASON: readonly [number, number] = [105, 304];
+/** The first and the last day the fountains run (month 1–12, day): mid-April
+ *  to the end of October, as a city turns its fountains on after the frosts
+ *  and drains them before the first. */
+const FOUNTAIN_SEASON = { from: [4, 15], to: [10, 31] } as const;
 
-/** Whether the fountains' jets run on this date (the scene's local day). */
+/** Whether the fountains' jets run on this date (the scene's local day): by
+ *  its month and day, so a leap year or a clock change moves no end. */
 export function fountainsRun(date: Date): boolean {
-  const start = new Date(date.getFullYear(), 0, 1);
-  const day = Math.floor((date.getTime() - start.getTime()) / 86_400_000) + 1;
-  return day >= FOUNTAIN_SEASON[0] && day <= FOUNTAIN_SEASON[1];
+  const day = (date.getMonth() + 1) * 100 + date.getDate();
+  const { from, to } = FOUNTAIN_SEASON;
+  return day >= from[0] * 100 + from[1] && day <= to[0] * 100 + to[1];
 }
 
 /** Shoelace area (m²) of a ring (closed or not). */

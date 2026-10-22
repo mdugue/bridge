@@ -943,8 +943,9 @@ function objectLevels(
  * it (`roofPosts`) — a platform under one shows, a fuel station's pumps
  * stand under it. Its row stays (picking, demolish, its facts), and so
  * does its base: the posts reach it. One whose roof stands under
- * `MIN_CLEAR_M` over its base stays a block. `footprints`: each object's
- * outlines (EPSG), recentered by `offset`.
+ * `MIN_CLEAR_M` over its base stays a block, and so does one without an
+ * outline (cut, it would stand open, its underside laid nowhere).
+ * `footprints`: each object's outlines (EPSG), recentered by `offset`.
  */
 export function withOpenRoofs(
   v: CityVertices,
@@ -956,6 +957,9 @@ export function withOpenRoofs(
   const cut = new Map<number, number>();
   for (const [o, l] of levels) {
     const rings = footprints[o] ?? [];
+    if (rings.length === 0) {
+      continue; // no outline to lay its underside on: it stays a block
+    }
     const area = rings.reduce((a, r) => a + Math.abs(ringArea(r)), 0);
     const under = l.roof - roofDepth(area);
     if (Number.isFinite(under) && under - l.base >= MIN_CLEAR_M) {

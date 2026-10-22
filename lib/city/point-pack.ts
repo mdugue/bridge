@@ -190,7 +190,7 @@ export function canopyStride(
 function flaggedProperties(
   h: number,
   flags: number
-): CanopyFeature["properties"] {
+): NonNullable<CanopyFeature["properties"]> {
   const leaf = flags % OVER_ROAD;
   const evergreen = leaf === LEAF.evergreen || leaf === LEAF.evergreenPhoto;
   return {
@@ -205,8 +205,8 @@ function flaggedProperties(
 /**
  * The packed points back as the features the vegetation reads (`{ h }`,
  * `{ h, r }` at stride 4, and an evergreen's `l`/`ls`/`pine` and a crown
- * over a carriageway's `c` at stride 5), so every consumer of the canopy
- * stays as it was.
+ * over a carriageway's `c` at stride 5, beside its `r` too), so every
+ * consumer of the canopy stays as it was.
  */
 export function pointFeatures(
   points: UnpackedPoints
@@ -229,7 +229,10 @@ export function pointFeatures(
     if (Number.isNaN(h)) {
       out.push({ geometry, properties: null });
     } else if (!Number.isNaN(r)) {
-      const extra: CanopyExtraFeature = { geometry, properties: { h, r } };
+      const extra: CanopyExtraFeature = {
+        geometry,
+        properties: { ...flaggedProperties(h, flags), r },
+      };
       out.push(extra);
     } else {
       out.push({ geometry, properties: flaggedProperties(h, flags) });

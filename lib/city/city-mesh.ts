@@ -110,6 +110,10 @@ export const OBJECT_FLAG_FLOODLIT = 32_768;
 export const FLOODLIT_SHARE = 0.6;
 /** A roof triangle within this of level counts as flat (cos 10°). */
 const FLAT_NORMAL_Z = 0.985;
+/** A roof triangle within this of upright is a step's wall the bake clad
+ *  as roof (scripts/bake-city-mesh.ts `withRoofSteps`; cos 85°): no part
+ *  of the roof's area. */
+const STEP_NORMAL_Z = 0.087;
 /** An object whose roof is flat over this share of its area is flat-roofed:
  *  LoD2 calls many post-war slabs a mixed form (`roofType` 5000) for a
  *  stair tower or a pavilion's lean-to, so the type alone misses them. */
@@ -118,7 +122,9 @@ export const FLAT_ROOF_SHARE = 0.75;
 /**
  * Sets OBJECT_FLAG_FLAT_ROOF on every object whose roof triangles
  * (`isRoof`, non-indexed, three vertices each) lie flat over
- * `FLAT_ROOF_SHARE` of their area. In place.
+ * `FLAT_ROOF_SHARE` of their area. The upright ones are the steps and
+ * parapets clad as roof, not the roof's area: counted, a flat roof's
+ * steps between its levels took it under the share. In place.
  */
 export function markFlatRoofs(
   objects: readonly Pick<CityObjectRow, "flags">[],
@@ -147,9 +153,10 @@ export function markFlatRoofs(
     const nz = ux * wy - uy * wx;
     const area = Math.hypot(nx, ny, nz);
     const o = mesh.objectIds[v];
-    if (area > 0 && o < objects.length) {
+    const up = area > 0 ? Math.abs(nz) / area : 0;
+    if (up >= STEP_NORMAL_Z && o < objects.length) {
       all[o] += area;
-      if (Math.abs(nz) / area >= FLAT_NORMAL_Z) {
+      if (up >= FLAT_NORMAL_Z) {
         flat[o] += area;
       }
     }

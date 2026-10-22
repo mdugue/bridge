@@ -132,7 +132,7 @@ export interface TreeFeature {
  *  already thinned against the street-tree cadastre: a canopy point plus
  *  the crown radius, so it drops into the tree layer. */
 export interface CanopyExtraFeature extends CanopyFeature {
-  properties: { h: number; r: number } | null;
+  properties: (NonNullable<CanopyFeature["properties"]> & { r: number }) | null;
 }
 
 /**
@@ -155,6 +155,9 @@ export interface LowVegFeature {
 
 export type LowVegSource = "osm" | "osm+lsc" | "osm+dom" | "lsc";
 
+/** How a lamp post's height was found (pipeline/bake/lamp_heights.py). */
+export type LampHeightSource = "street" | "class";
+
 /** OSM street lamps (pipeline/bake/lamps.py, ODbL). A post's `h` is its
  *  height (m), measured in DOM1 as its street's median (`hs: "street"`) or
  *  its kind of street's on the tile (`"class"`; pipeline/bake/
@@ -169,9 +172,6 @@ export type LowVegSource = "osm" | "osm+lsc" | "osm+dom" | "lsc";
  *  on an arm over the carriageway: `arm`, the arm's compass bearing
  *  (degrees; pipeline/bake/lamp_heights.py `arm_of`). The source (`src`): "mly" for
  *  Mapillary's, lib/city/mapillary.ts. */
-/** How a lamp post's height was found (pipeline/bake/lamp_heights.py). */
-export type LampHeightSource = "street" | "class";
-
 export interface LampFeature {
   geometry: PointGeometry;
   properties: {

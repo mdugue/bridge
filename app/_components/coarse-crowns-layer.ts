@@ -21,6 +21,7 @@ import {
   buildPineGeo,
   COARSE_CONE_PROFILE,
   CONE_SEGMENTS,
+  type CrownBox,
 } from "./conifer-crown";
 import type { CrownSeasonKey, SeasonalCrowns } from "./crown-season";
 import { seasonCrowns } from "./crown-season";
@@ -125,17 +126,23 @@ function seasonKey(c: CoarseCrown): CrownSeasonKey {
   };
 }
 
+/** The box of the lobed crown at its full detail: measured once for the
+ *  page, not built and freed again on every coarse tile with a conifer. */
+let fineCrownBox: CrownBox | null = null;
+
 /**
  * The coarse level's cone: one skirt, inside the box of the lobed crown
  * the fine level fits its trees to (buildCrownGeo at its full detail), so
  * a coarse conifer stands where and as its fine cone does.
  */
 function coarseCone(): BufferGeometry {
-  const fine = buildCrownGeo();
-  const box = boxOf(fine);
-  fine.dispose();
+  if (!fineCrownBox) {
+    const fine = buildCrownGeo();
+    fineCrownBox = boxOf(fine);
+    fine.dispose();
+  }
   return padCrownSphere(
-    buildConeGeo(box, CONE_SEGMENTS.coarse, COARSE_CONE_PROFILE)
+    buildConeGeo(fineCrownBox, CONE_SEGMENTS.coarse, COARSE_CONE_PROFILE)
   );
 }
 
