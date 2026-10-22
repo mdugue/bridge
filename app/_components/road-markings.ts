@@ -26,9 +26,7 @@ import {
   MARKING_PATTERN as P,
   markingKindId,
 } from "@/lib/city/markings";
-import type { F, Tex, V2, V3 } from "./shader-chunks";
-
-type I = Node<"int">;
+import type { F, I, Tex, V2, V3 } from "./shader-chunks";
 import {
   gdBand,
   gdNoise,

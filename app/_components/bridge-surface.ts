@@ -233,8 +233,9 @@ function pathTop(base: V3, l: Layout, aa: F): V3 {
   return mix(sand, PAVEMENT.mul(1.02), kerb.mul(0.7));
 }
 
-/** A rail bridge: the track bed with a walkway along each side. */
-function railTop(base: V3, l: Layout, aa: F): V3 {
+/** A rail bridge: the track bed with a walkway along each side (the
+ *  ballast's own colour, not the deck's). */
+function railTop(_base: V3, l: Layout, aa: F): V3 {
   const near = float(1).sub(smoothstep(0.12, 0.5, aa));
   // the ballast runs on across the deck between walkways a metre wide
   // (the photos of every rail bridge on the sites): the track bed in the

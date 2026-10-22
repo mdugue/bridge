@@ -13,13 +13,17 @@
  *                                     provider's adapter reads one (≈380 MB
  *                                     a tile)
  *   bun run bake <site> --step canopy one step, in the order `all` runs them
- *                                     (landcover, islands, canopy, trees,
- *                                     ndvi, osm-buildings, rail,
- *                                     lamps, monuments, furniture, walls,
- *                                     stairs, surface, edges, markings,
- *                                     sport, tram, riverside, traffic,
- *                                     roofs, roof-colour, lowveg, cultivated,
- *                                     small-buildings, skyview)
+ *                                     (landcover, islands, rail, ndvi,
+ *                                     canopy, trees, osm-buildings, doors,
+ *                                     plinths, lamps, monuments, furniture,
+ *                                     mapillary, lamp-heights, facades,
+ *                                     shopfronts, windows, walls, stairs,
+ *                                     surface, edges, markings, sport, tram,
+ *                                     riverside, traffic, roofs, lowveg,
+ *                                     cultivated, skyview, small-buildings,
+ *                                     landmarks, structures, roof-colour,
+ *                                     dormers; then, once for the site,
+ *                                     transit)
  *   bun run bake <site> --step lowveg --research   also every hedge/shrub
  *                                     candidate, under the raw folder
  *   bun run bake <site> --jobs 3      each step's tiles three at a time,
@@ -30,12 +34,15 @@
  *                                     step is otherwise skipped then:
  *                                     pipeline/bake/step_cache.py)
  *
- * The steps run in dependency order: land cover first (the canopy, the
+ * The steps run in dependency order (pipeline/bake/__main__.py `STEPS`
+ * says why each stands where it does): land cover first (the canopy, the
  * tree cadastre, lamps and street furniture are gated on it); the bridges
- * (rail) before the furniture and trams; the hedges and scan trees late
- * (thinned against the canopy and the cadastre), then the orchards and the
- * small structures, and the sky view last (it reads every tree file). Several steps read the neighbours' files across a seam,
- * so run a step for every tile. The site config (sites/) becomes one JSON
+ * (rail) before the canopy, the furniture and the trams; the hedges and
+ * scan trees late (thinned against the canopy and the cadastre), then the
+ * orchards and the sky view (it reads every tree file); the small
+ * buildings, landmarks and structures, then the roof colours (they read
+ * every roof those steps add) and the dormers. Several steps read the
+ * neighbours' files across a seam, so run a step for every tile. The site config (sites/) becomes one JSON
  * spec (pipeline/bake/spec.py), so Python never re-derives tiles, extents
  * or products. Then `bun dev` / `bun run build` turn every ready
  * data/<site>/ into its tileset (prepare-sites.ts → prepare-data.ts).

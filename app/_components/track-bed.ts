@@ -74,8 +74,10 @@ export function sleeperRibbons(): SleeperRibbons {
 
 /**
  * The sleepers along a run of a track's points (`pts`, at its level + the
- * SLEEPER_TOP; stations `d`), `lateral` m to the left of them, `open` per
- * point on a truss's open floor.
+ * SLEEPER_TOP; stations `d`), `lateral` m off them along the normal
+ * (−dz, dx) — the track's right as the map shows it, as rail-layer.ts
+ * `addRibbon` offsets its rails —, `open` per point on a truss's open
+ * floor.
  */
 export function addSleepers(
   acc: SleeperRibbons,
@@ -102,7 +104,8 @@ export function addSleepers(
     const r0 = edge(i, -1);
     const l1 = edge(i + 1, 1);
     const r1 = edge(i + 1, -1);
-    // two triangles facing up: l0 r0 r1, l0 r1 l1 (wound for +y)
+    // two triangles facing up: l0 r1 r0, l0 l1 r1 (counter-clockwise
+    // seen from above, +y)
     for (const [p, k] of [
       [l0, i],
       [r1, i + 1],

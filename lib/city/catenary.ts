@@ -310,8 +310,9 @@ function away(a: XZ, b: XZ): XZ | null {
   return l > 1e-6 ? { x: (a.x - b.x) / l, z: (a.z - b.z) / l } : null;
 }
 
-/** The left of a member's track (the side its mast stands on alone). */
-function left(m: SectionMember): XZ {
+/** The right of a member's track as the map shows it, north up (world z
+ *  runs south): the side its mast stands on alone. */
+function right(m: SectionMember): XZ {
   return { x: -m.tz, z: m.tx };
 }
 
@@ -319,14 +320,14 @@ function left(m: SectionMember): XZ {
  * The supports a cross-section stands (`crossSections`): three tracks or
  * more under a portal, its masts MAST_OFFSET_M beyond the outer ones and
  * its beam PORTAL_CLEAR_M over the highest messenger; one or two tracks
- * each on a mast of its own on its outer side (a track alone: its left),
+ * each on a mast of its own on its outer side (a track alone: its right),
  * its head MAST_HEAD_M over its messenger.
  */
 export function sectionPlan(group: readonly SectionMember[]): SectionPlan {
   const support = (m: SectionMember) => m.h + SYSTEM_HEIGHT_M;
   const first = group[0];
   const last = group.at(-1) ?? first;
-  const out = away(first, last) ?? left(first);
+  const out = away(first, last) ?? right(first);
   const at = (m: SectionMember, dir: XZ, top: number): MastPlan => ({
     x: m.x + dir.x * MAST_OFFSET_M,
     z: m.z + dir.z * MAST_OFFSET_M,

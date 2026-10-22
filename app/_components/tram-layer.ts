@@ -623,29 +623,31 @@ function buildTracks(
   // a track's piece is its tile's alone (the bake cuts them at the edge):
   // its spans' decks need no owner
   const spans = { top: mesh3(), stone: mesh3() };
-  const laid: { bed: TramBed; f: TramFeature; runs: TrackRun[] }[] = [];
+  const laid: {
+    bed: TramBed;
+    coords: Point2[];
+    f: TramFeature;
+    runs: TrackRun[];
+  }[] = [];
   for (const f of tracks) {
     if (f.geometry.type !== "LineString") {
       continue;
     }
+    const coords = f.geometry.coordinates;
     const bed = f.properties?.bed ?? "street";
     const onBridge = f.properties?.bridge === 1;
-    const runs = trackRuns(f, f.geometry.coordinates, bed, decks, ctx, spans);
-    laid.push({ f, bed: onBridge ? "street" : bed, runs });
+    const runs = trackRuns(f, coords, bed, decks, ctx, spans);
+    laid.push({ bed: onBridge ? "street" : bed, coords, f, runs });
   }
   // the lawn tracks' strips, a double track's two sharing the lawn
   const lawnRuns = laid.flatMap((t) => (t.bed === "grass" ? t.runs : []));
   const halves = new Map(
     lawnHalves(lawnRuns).map((h, i) => [lawnRuns[i], h] as const)
   );
-  for (const { f, bed, runs } of laid) {
-    if (f.geometry.type !== "LineString") {
-      continue;
-    }
+  for (const { bed, coords, f, runs } of laid) {
     for (const run of runs) {
       addTrack(acc, run, bed, f.properties?.g, halves.get(run));
     }
-    const coords = f.geometry.coordinates;
     let length = 0;
     for (let i = 1; i < coords.length; i++) {
       length += Math.hypot(

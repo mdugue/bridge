@@ -49,7 +49,7 @@ import {
 } from "@/lib/city/landcover";
 import { KERB_HEIGHT } from "@/lib/city/kerbs";
 import { LANE_BITS } from "@/lib/city/markings";
-import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
+import type { F, I, Tex, V2, V3, V4 } from "./shader-chunks";
 
 /**
  * Ground detail in the terrain's colour node, next to the meadow mottle
@@ -100,7 +100,6 @@ import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
  * branch would otherwise be assigned there only.
  */
 
-type I = Node<"int">;
 type I2 = Node<"ivec2">;
 type B = Node<"bool">;
 
