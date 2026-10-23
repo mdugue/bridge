@@ -11,8 +11,9 @@
 #      which exists from 1.4, and the first `bun install` may rewrite
 #      `bun.lock` to the older lockfile format.
 #   2. node_modules exists. Bun can auto-install into its global cache, so
-#      some scripts run without it and `tsc` does not, which reads as
-#      "TypeScript is broken" rather than "nothing is installed".
+#      some scripts run without it and `tsc` (`next build`, `typecheck:tsc`)
+#      does not, which reads as "TypeScript is broken" rather than "nothing
+#      is installed".
 #
 # Ported from the sibling repo mdugue/alpen, which reads a floor from
 # `engines.bun`; here the pin is exact, so the pinned version is installed

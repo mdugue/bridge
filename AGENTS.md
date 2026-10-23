@@ -53,6 +53,7 @@ bun run verify     # lint + typecheck + unit tests — the pre-push gate
 bun lint           # oxlint (rules, type-aware via tsgolint) + oxfmt --check
 bun typecheck      # bun check (Bun's checker, tsc's errors in a seventh of
                    # the time; `next build` still type-checks with tsc 7)
+bun run typecheck:tsc  # tsc --noEmit, the reference CI runs beside it
 bun run test       # unit tests in lib/, app/_components/ and scripts/, one
                    # worker per core (--parallel; each file in a fresh global)
                    # (a bare `bun test` is Bun's runner: it loads e2e/ too)
@@ -1035,8 +1036,9 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   type-checks with it; `bun typecheck` runs `bun check`, Bun's port of the
   same checker (all cores, no incremental cache: 0.5 s where `tsc --noEmit`
   took 3.8 s cold, measured 2026-10-23 on four cores, with the same errors on
-  a probe file of thirteen kinds). Where the two ever disagree, tsc in
-  `next build` is the gate; `tsconfig.json`'s `incremental` cache once kept
+  a probe file of thirteen kinds). tsc stays the gate: `next build` and
+  CI's Typecheck job (`bun run typecheck:tsc` beside `bun typecheck`) run
+  it, ADR 0019; `tsconfig.json`'s `incremental` cache once kept
   reporting an error a dependency update had removed — delete
   `tsconfig.tsbuildinfo` when tsc disagrees with `bun check`. Note what TS 7's
   npm package *is*: a per-platform native binary plus a `tsc` launcher. It ships
