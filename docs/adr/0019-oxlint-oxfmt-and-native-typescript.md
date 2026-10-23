@@ -56,6 +56,18 @@ oxlint preset is as opinionated.
 - **Adopting ultracite's oxlint preset:** same refactor, and JSON configs
   cannot `extends` its `.mjs` presets; rejected.
 
+## Amendment (2026-10-23): `bun check` for the fast check
+
+`bun typecheck` runs `bun check` (Bun 1.4.4), Bun's port of the same
+checker: 0.5 s where `tsc --noEmit` took 3.8 s cold on four cores, with
+identical output on a probe file of thirteen error kinds, and no
+incremental cache to go stale (tsc's `tsconfig.tsbuildinfo` once kept an
+error a dependency update had removed). It is a second implementation, so
+the one-compiler guarantee is kept where it gates: `next build` still
+type-checks with tsc 7, and CI's Typecheck job runs `bun typecheck` and
+`bun run typecheck:tsc` (tsc) both — green only where they agree. A
+disagreement is a Bun bug to report; tsc is the reference.
+
 ## References
 
 - plan 013; AGENTS.md "Commands", "Conventions"; `.oxlintrc.json`,
