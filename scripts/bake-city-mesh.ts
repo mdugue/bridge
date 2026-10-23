@@ -3135,25 +3135,25 @@ function withCuts(
   const { positions, objectIds, normals, facade } = out;
   const noDoor = Math.round(NO_DOOR * 32_767);
   let at = 0;
-  // vertex `i` of the old stream, as it was, to `at`
-  const copy = (i: number) => {
-    copyVertex(v, i, out, at);
-    at++;
+  // the old stream's vertices from `run` up to `end`, as they were, to
+  // `at`: the uncut triangles go over in runs, not vertex by vertex (a
+  // tile's millions of vertices were as many subarrays for the collector)
+  let run = 0;
+  const flush = (end: number) => {
+    copyVertices(v, run, end - run, out, at);
+    at += end - run;
   };
-  for (let t = 0; t + 2 < count; t += 3) {
-    const xyz = pieces.get(t);
-    if (!xyz) {
-      copy(t);
-      copy(t + 1);
-      copy(t + 2);
-      continue;
-    }
+  for (const t of [...pieces.keys()].sort((a, b) => a - b)) {
+    flush(t);
+    run = t + 3;
+    const xyz = pieces.get(t) ?? [];
     const bary = barycentric(v.positions, t);
     for (let k = 0; k + 2 < xyz.length; k += 3) {
       const w = bary(xyz[k], xyz[k + 1], xyz[k + 2]);
-      copy(t);
-      at--;
-      positions.set(xyz.slice(k, k + 3), 3 * at);
+      copyVertices(v, t, 1, out, at);
+      positions[3 * at] = xyz[k];
+      positions[3 * at + 1] = xyz[k + 1];
+      positions[3 * at + 2] = xyz[k + 2];
       if (normals && v.normals) {
         normals.set(blend(v.normals, 3, t, w, true), 3 * at);
       }
@@ -3163,16 +3163,18 @@ function withCuts(
       at++;
     }
   }
+  flush(count);
   for (const part of parts) {
-    for (let k = 0; k + 2 < part.positions.length; k += 3) {
-      positions.set(part.positions.slice(k, k + 3), 3 * at);
-      objectIds[at] = part.id;
-      if (facade) {
-        facade[4 * at + 2] = noDoor;
-        facade[4 * at + 3] = noDoor;
+    const n = part.positions.length / 3;
+    positions.set(part.positions, 3 * at);
+    objectIds.fill(part.id, at, at + n);
+    if (facade) {
+      for (let i = at; i < at + n; i++) {
+        facade[4 * i + 2] = noDoor;
+        facade[4 * i + 3] = noDoor;
       }
-      at++;
     }
+    at += n;
   }
   return out;
 }
@@ -3195,27 +3197,34 @@ function emptyStream(v: CityVertices, total: number): CityVertices {
   };
 }
 
-/** Vertex `i` of `from`, every attribute, to vertex `at` of `to`. */
-function copyVertex(
+/** `n` vertices of `from` from vertex `i`, every attribute, to vertex `at`
+ *  of `to`. */
+function copyVertices(
   from: CityVertices,
   i: number,
+  n: number,
   to: CityVertices,
   at: number
 ): void {
-  to.positions.set(from.positions.subarray(3 * i, 3 * i + 3), 3 * at);
-  to.objectIds[at] = from.objectIds[i];
-  to.isRoof[at] = from.isRoof[i];
-  if (to.normals && from.normals) {
-    to.normals.set(from.normals.subarray(3 * i, 3 * i + 3), 3 * at);
+  if (n <= 0) {
+    return;
   }
-  if (to.roofRgb && from.roofRgb && 3 * i + 2 < from.roofRgb.length) {
-    to.roofRgb.set(from.roofRgb.subarray(3 * i, 3 * i + 3), 3 * at);
+  to.positions.set(from.positions.subarray(3 * i, 3 * (i + n)), 3 * at);
+  to.objectIds.set(from.objectIds.subarray(i, i + n), at);
+  to.isRoof.set(from.isRoof.subarray(i, i + n), at);
+  if (to.normals && from.normals) {
+    to.normals.set(from.normals.subarray(3 * i, 3 * (i + n)), 3 * at);
+  }
+  // only the stream's first vertices carry a roof colour
+  const rgbEnd = Math.min(3 * (i + n), from.roofRgb?.length ?? 0);
+  if (to.roofRgb && from.roofRgb && rgbEnd > 3 * i) {
+    to.roofRgb.set(from.roofRgb.subarray(3 * i, rgbEnd), 3 * at);
   }
   if (to.surfaces && from.surfaces) {
-    to.surfaces.set(from.surfaces.subarray(2 * i, 2 * i + 2), 2 * at);
+    to.surfaces.set(from.surfaces.subarray(2 * i, 2 * (i + n)), 2 * at);
   }
   if (to.facade && from.facade) {
-    to.facade.set(from.facade.subarray(4 * i, 4 * i + 4), 4 * at);
+    to.facade.set(from.facade.subarray(4 * i, 4 * (i + n)), 4 * at);
   }
 }
 
