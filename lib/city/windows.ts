@@ -13,12 +13,15 @@
  *    agree at Spearman ρ ≥ 0.6),
  *  - another part of the same building that was measured,
  *  - the nearest measured building of its kind (`NEAR_M`, the same roof
- *    form, an eave of about its height): a block's houses share their era,
- *  - its type (`TYPES`): a tall or a low storey under a pitched roof, a
- *    small house, a flat-roofed block or a low flat-roofed building.
+ *    form, an eave of about its height): the house next door shares its
+ *    era,
+ *  - its type (`TYPES`): a tall or a low storey under a pitched roof (or a
+ *    flat-roofed town house, `flatTownHouse`), a small house, a
+ *    flat-roofed block or a low flat-roofed building.
  * None on a building whose facade is its own (a landmark, a church, a
  * hall: flag 16), on glass or metal cladding, on a garage, a shed, a
- * warehouse or a plant (`WINDOWLESS`), or on anything under 3.2 m of wall.
+ * warehouse or a plant, on any structure that is no building (a tank, a
+ * crane, a chimney: `windowless`), or on anything under 3.2 m of wall.
  * The storey height snaps to the eave (`windowStorey`), so the top row
  * sits under the Traufgesims on every house.
  *
@@ -27,13 +30,19 @@
  * (negative where its ground floor has no window: over a shopfront, or
  * with more doors than the two below), and where up to two of OSM's doors
  * stand along it and how wide they are (no ground-floor window within
- * `DOOR_GAP_M` of one). A wall is one plane of one object's
- * triangles, edge-connected; a party wall — one another wall stands
- * against, back to back — gets none.
+ * `DOOR_GAP_M` of one) — the second slot, where it holds no door, the
+ * wall's own eave (`WALL_EAVE`): a front rising to a higher roof than its
+ * object's lowest keeps its windows up to its own. A wall is one plane of
+ * one object's triangles, edge-connected; a party wall — one another wall
+ * stands against, back to back — gets none, but a low house's above its
+ * neighbour's top (`PARTY_LOW_EAVE_M`).
  *
  * Positions along the wall are not measured (two drives' poses differ by
  * ~0.6 m), the rhythm is: the axes are centred on each wall. Pure, no DOM.
  */
+
+import { isStructure } from "./building-tint";
+import { OPEN_ROOF_FUNCTIONS } from "./open-roofs";
 
 /** What windows.py models on a wall (metres). */
 export interface FacadeModel {
@@ -200,14 +209,51 @@ export const DOOR_SLOT = {
  *  `FACADE_ROOF`). */
 export const DOOR_NONE_CODE = 32_767;
 
+/**
+ * A wall's own eave, in `_FACADE`'s second door slot (its fourth number)
+ * wherever that holds no door — a wall with at most one, or one without
+ * ground-floor windows, whose doors keep none off: the snorm16 code
+ * `code0 + k`, the wall's eave `k · step` m over its object's (k 1–354, so
+ * up to 35.4 m); `NO_DOOR` (32 767) is the object's eave. The codes lie
+ * past every door's — a door slot's codes end at 32 411 (`DOOR_SLOT`:
+ * ±270 m in 0.1 m steps, 12 width classes) — so a door test that reads
+ * one finds a door 270 m off, which keeps no window off. Keep `code0` above
+ * `reach / step · widths + widths − 1` if the doors' reach or classes
+ * change. The clay lifts its eave there (visual-style.ts):
+ * the top row of windows, the eave's stroke and the Denkmal's line follow
+ * the wall's own roof edge.
+ */
+export const WALL_EAVE = { code0: 32_412, step: 0.1, top: 32_766 } as const;
+
+/** A wall's eave `up` m over its object's as its door slot's code
+ *  (`WALL_EAVE`), the object's (`NO_DOOR`) under half a step. */
+export function wallEaveSlot(up: number): number {
+  const k = Math.min(
+    Math.round(up / WALL_EAVE.step),
+    WALL_EAVE.top - WALL_EAVE.code0
+  );
+  return k >= 1 ? WALL_EAVE.code0 + k : Math.round(NO_DOOR * 32_767);
+}
+
+/** How far a door slot's code lifts its wall's eave over its object's
+ *  (m): 0 for a door, `NO_DOOR` and the roof's flag. The clay's decoding. */
+export function slotWallEave(code: number): number {
+  return code >= WALL_EAVE.code0 && code <= WALL_EAVE.top
+    ? (code - WALL_EAVE.code0) * WALL_EAVE.step
+    : 0;
+}
+
 /** Walls of at least this height carry windows (m, the object's eave). */
 const MIN_EAVE_M = 3.2;
 
 /** The building functions (ALKIS, `31001_…` prefixes) that have no
  *  windows to speak of: garden houses, kiosks, petrol stations and car
  *  washes, warehouses, shelters and vehicle halls, garages and parking,
- *  plants and utility buildings, barns, sheds, stables, greenhouses. */
+ *  plants and utility buildings, barns, sheds, stables, greenhouses — and
+ *  the roofs on posts (`51009_1610` Überdachung, `51009_1611` Carport),
+ *  whose walls the build cuts to a fascia (lib/city/open-roofs.ts). */
 const WINDOWLESS = [
+  ...OPEN_ROOF_FUNCTIONS,
   "31001_1313",
   "31001_2055",
   "31001_213",
@@ -226,9 +272,17 @@ const WINDOWLESS = [
   "31001_274",
 ] as const;
 
-/** Whether a building function has no windows (`WINDOWLESS`). */
+/** Whether a building function has no windows: a use in `WINDOWLESS`, or
+ *  a structure that is no building in ALKIS's terms (lib/city/
+ *  building-tint.ts `isStructure`: every function outside `31001` — tanks
+ *  and silos, cranes, chimneys, masts, canopies; 169 of Hamburg's 422
+ *  tanks, 22 of its 25 cranes and 22 of Leipzig's chimneys drew rows of
+ *  windows). */
 export function windowless(fn: string | undefined): boolean {
-  return fn !== undefined && WINDOWLESS.some((p) => fn.startsWith(p));
+  return (
+    fn !== undefined &&
+    (isStructure(fn) || WINDOWLESS.some((p) => fn.startsWith(p)))
+  );
 }
 
 // --- the style --------------------------------------------------------------
@@ -435,18 +489,23 @@ export function palaceStorey(eaveH: number, storeys?: number): number {
 }
 
 /** A pitched-roof storey this tall is a town house's (m). */
-const TALL_STOREY_M = 3.3;
+export const TALL_STOREY_M = 3.3;
 /** At most this much wall is a house (m, the eave). */
 const HOUSE_EAVE_M = 6.5;
 /** A flat-roofed building from this eave is a block (m). */
 const BLOCK_EAVE_M = 7;
 
-/** A building's type from its roof, eave and storey. */
+/** A building's type from its roof, eave and storey; a flat-roofed town
+ *  house (`town`, `flatTownHouse`) is one under a pitched roof. */
 export function windowType(
   flat: boolean,
   eaveH: number,
-  storeyH: number
+  storeyH: number,
+  town = false
 ): WindowType {
+  if (flat && town) {
+    return "tall";
+  }
   if (flat) {
     return eaveH >= BLOCK_EAVE_M ? "block" : "low";
   }
@@ -454,6 +513,41 @@ export function windowType(
     return "house";
   }
   return storeyH >= TALL_STOREY_M ? "tall" : "storey";
+}
+
+/** A flat-roofed house's storey from this height is a town house's (m),
+ *  not a post-war slab's: 69 % of Leipzig's and Hamburg's flat-roofed
+ *  houses with an eave from 9 m have storeys this tall (OSM's counts) —
+ *  the Gründerzeit corner whose roof LoD2 draws flat. */
+export const FLAT_TOWN_STOREY_M = 3.4;
+/** … from this eave (m), three storeys: a lower flat-roofed house is an
+ *  annex or a bungalow, its one storey as tall as the neighbours' (412
+ *  "town houses" on Meißen's tile without it, four in five under 9 m). */
+export const FLAT_TOWN_EAVE_M = 9;
+
+/**
+ * Whether a flat-roofed building is a town house all the same: housing
+ * (ALKIS `31001` but no commerce `2xxx` or public `3xxx` use, or none
+ * known) from `FLAT_TOWN_EAVE_M` of wall whose storeys are a town house's
+ * (`FLAT_TOWN_STOREY_M`: OSM's count, or the neighbours' storey,
+ * lib/city/building-tint.ts `mappedStoreyHeight`) or that is listed (OSM
+ * `heritage`). It is drawn as one — the windows of type `tall`, the plinth
+ * and cornices — not as a block.
+ */
+export function flatTownHouse(h: {
+  eaveH: number;
+  fn?: string;
+  listed: boolean;
+  storeyH: number;
+}): boolean {
+  const [major, minor = ""] = (h.fn ?? "31001_1000").split("_");
+  const housing =
+    major === "31001" && !minor.startsWith("2") && !minor.startsWith("3");
+  return (
+    housing &&
+    h.eaveH >= FLAT_TOWN_EAVE_M &&
+    (h.listed || h.storeyH >= FLAT_TOWN_STOREY_M)
+  );
 }
 
 /**
@@ -509,6 +603,11 @@ export interface WindowHost {
   storeyH: number;
   /** the storeys OSM counts (a palace's storey reads them) */
   storeys?: number;
+  /** a flat-roofed town house (`flatTownHouse`): windows of type `tall` */
+  town?: boolean;
+  /** brick walls (lib/city/building-tint.ts `brickWalls`): no type's
+   *  Fasche — a plastered surround is a rendered front's */
+  brick?: boolean;
 }
 
 /** Where a building's rhythm came from. */
@@ -535,8 +634,10 @@ export interface WindowChoice {
   reach?: number;
 }
 
-/** A measured building lends its rhythm this far (m, centre to centre). */
-export const NEAR_M = 150;
+/** A measured building lends its rhythm this far (m, centre to centre):
+ *  the house next door or across the street, not the block's — at 150 m
+ *  a 1900 front lent its rhythm to a 1960 one round the corner. */
+export const NEAR_M = 30;
 /** … to a building whose eave differs from its own by at most this
  *  (m, or this share of it). */
 const NEAR_EAVE = { m: 4, share: 0.35 } as const;
@@ -812,11 +913,16 @@ function storeyAndType(
   }
   const photos = mine && !host.levels ? mine.storey : undefined;
   const storey = windowStorey(host.eaveH, host.storeyH, photos);
-  return { kind: windowType(host.flat, host.eaveH, storey), photos, storey };
+  return {
+    kind: windowType(host.flat, host.eaveH, storey, host.town ?? false),
+    photos,
+    storey,
+  };
 }
 
 /** A host's window style: its type's reveal and sill, the photos' grid,
- *  Fasche and ornament where they saw them, its ground floor's lift over
+ *  Fasche and ornament where they saw them — the type's Fasche on a
+ *  rendered front only, never on brick —, its ground floor's lift over
  *  the plinth (no ground floor over a shop or past the lift's classes). */
 function styleOf(
   host: WindowHost,
@@ -831,7 +937,8 @@ function styleOf(
     sill: type.sill,
     loose: m ? m.grid === "loose" : (type.loose ?? false),
     lintel: m?.orn ?? false,
-    frame: (m?.frame ?? false) || (type.frame ?? false),
+    frame:
+      (m?.frame ?? false) || ((type.frame ?? false) && !(host.brick ?? false)),
     noGround: host.shop || lift === undefined,
     lift: lift ?? 0,
     measured: from === "measured" || from === "tree",
@@ -970,6 +1077,15 @@ const UPRIGHT = 0.1;
 const PARTY_COS = -0.985;
 const PARTY_PLANE_M = 0.5;
 const PARTY_SHARE = 0.25;
+/** A party wall of a house with at most this much wall (m, its eave over
+ *  its base) is a facade again above its neighbour's top, where one more
+ *  row of windows fits (`PARTY_CLEAR_M`): the upper floor of a house beside
+ *  a lower one. A taller house's stays blank — the Brandwand of a block
+ *  standing over its lower neighbour. */
+export const PARTY_LOW_EAVE_M = 9;
+const PARTY_CLEAR_M = 2;
+/** A wall's end: its vertices this close to its extent's end (m). */
+const WALL_END_M = 0.05;
 /** A door or shopfront is on a wall: normals this close (cos), the wall's
  *  plane this close (m), along it with this slack (m). */
 const ON_WALL_COS = 0.9;
@@ -987,6 +1103,8 @@ interface Wall {
   object: number;
   /** the share of it another wall covers, back to back */
   party: number;
+  /** the highest top (absolute m) of the walls covering it back to back */
+  cover: number;
   /** extent along `t = (n.y, −n.x)` and up */
   s0: number;
   s1: number;
@@ -994,6 +1112,10 @@ interface Wall {
    *  where it is known */
   ground: number;
   shop: boolean;
+  /** its eave (absolute m): the lower of its two ends' tops — a gable
+   *  wall's eave corners, a wall under a roof sloping along it its lower
+   *  end (`wallTop`) */
+  top: number;
   tris: number[];
   z0: number;
   z1: number;
@@ -1024,6 +1146,9 @@ export interface FacadeMesh {
   isRoof: ArrayLike<number>;
   objectIds: ArrayLike<number>;
   positions: ArrayLike<number>;
+  /** a roof vertex's own face colour (linear RGB, 3 a vertex; NaN: its
+   *  object's), for the stream's first vertices */
+  roofRgb?: ArrayLike<number>;
 }
 
 /** A triangle's horizontal unit normal and plane offset, or undefined
@@ -1135,8 +1260,10 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
         tris: [],
         doors: [],
         party: 0,
+        cover: Number.NEGATIVE_INFINITY,
         ground: Number.NEGATIVE_INFINITY,
         shop: false,
+        top: Number.NEGATIVE_INFINITY,
       };
       groups.set(root, w);
     }
@@ -1150,7 +1277,36 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
       w.z1 = Math.max(w.z1, p[i + 2]);
     }
   });
-  return [...groups.values()];
+  const walls = [...groups.values()];
+  for (const w of walls) {
+    w.top = wallTop(w, p);
+  }
+  return walls;
+}
+
+/**
+ * A wall's eave (absolute m): the lower of its two ends' tops. A gable
+ * wall's ends are its eave corners, a wall under a roof that slopes along
+ * it ends low on one side; a wall that rises to a higher roof of its
+ * object (a front block over its rear wing, one LoD2 object in Hamburg and
+ * München) has its own, above the object's lowest roof point.
+ */
+function wallTop(w: Wall, p: ArrayLike<number>): number {
+  let top0 = Number.NEGATIVE_INFINITY;
+  let top1 = Number.NEGATIVE_INFINITY;
+  for (const t of w.tris) {
+    for (let c = 0; c < 3; c++) {
+      const i = 3 * (t + c);
+      const s = p[i] * w.n[1] - p[i + 1] * w.n[0];
+      if (s <= w.s0 + WALL_END_M) {
+        top0 = Math.max(top0, p[i + 2]);
+      }
+      if (s >= w.s1 - WALL_END_M) {
+        top1 = Math.max(top1, p[i + 2]);
+      }
+    }
+  }
+  return Math.min(top0, top1);
 }
 
 /** A point on a wall's line at `s` along it. */
@@ -1185,7 +1341,8 @@ function coveredBy(w: Wall, o: Wall): number {
   return along > 0 && up > 0 ? along * up : 0;
 }
 
-/** Marks each wall's share another covers, back to back (`party`). */
+/** Marks each wall's share another covers, back to back (`party`), and the
+ *  highest top among those that do (`cover`). */
 function markParty(walls: readonly Wall[]): void {
   const cells = walls.map(cellsOf);
   const grid = new Map<string, number[]>();
@@ -1206,7 +1363,11 @@ function markParty(walls: readonly Wall[]): void {
       for (const j of grid.get(c) ?? []) {
         if (!seen.has(j)) {
           seen.add(j);
-          covered += coveredBy(w, walls[j]);
+          const by = coveredBy(w, walls[j]);
+          covered += by;
+          if (by > 0) {
+            w.cover = Math.max(w.cover, walls[j].z1);
+          }
         }
       }
     }
@@ -1301,6 +1462,26 @@ const snorm = (m: number) =>
 const NO_DOOR_SNORM = Math.round(NO_DOOR * 32_767);
 const ROOF_SNORM = Math.round(FACADE_ROOF * 32_767);
 
+/** A roof vertex's wall slots (x, y and the second door, w) hold its
+ *  face's own colour, linear RGB a unit each; (0, 0, ·, 0) where it takes
+ *  its object's. No window reads a roof vertex's slots (the clay masks
+ *  them), so the colour costs no vertex buffer. */
+function roofColourAt(
+  out: Int16Array,
+  v: number,
+  rgb: ArrayLike<number> | undefined
+): void {
+  const r = rgb?.[3 * v];
+  if (rgb === undefined || r === undefined || Number.isNaN(r)) {
+    return;
+  }
+  const unit = (c: number) => Math.round(Math.min(Math.max(c, 0), 1) * 32_767);
+  // never all zero: that reads as "the object's"
+  out[4 * v] = Math.max(1, unit(r));
+  out[4 * v + 1] = unit(rgb[3 * v + 1]);
+  out[4 * v + 3] = unit(rgb[3 * v + 2]);
+}
+
 /** Lays the doors and shopfronts onto their objects' walls. */
 function placeOnWalls(
   walls: readonly Wall[],
@@ -1333,40 +1514,63 @@ function placeOnWalls(
   }
 }
 
+/** What `facadeAttribute` reads of the objects' heights. */
+export interface FacadeHeights {
+  /** a LoD2 object's base and eave (absolute m; undefined for anything
+   *  else): its walls then carry their own eave (`WALL_EAVE`), and a low
+   *  house's party wall its windows over the neighbour's top
+   *  (`PARTY_LOW_EAVE_M`) */
+  of: (object: number) => { base: number; eave: number } | undefined;
+}
+
 /**
- * The `_FACADE` attribute (4 × snorm16 per vertex): per wall vertex of an
- * object `drawn` says carries windows its place along the wall from the
- * wall's middle and the wall's length (`FACADE_SCALE_M` metres a unit; the
- * length negative where the ground floor has no windows — a shopfront
- * stands on it, or more doors than the two slots hold —, 0 on a party
- * wall), and its doors, the nearest the middle first (`doorSlot`, `NO_DOOR`
- * for none; on a wall without ground-floor windows, which has none to keep
- * off them, the first slot is the ground's height over the base instead,
- * which the upper floors' windows clear too — 0 where it is not known);
- * every roof vertex (0, 0, FACADE_ROOF, NO_DOOR), every other vertex (0, 0,
- * NO_DOOR, NO_DOOR). `doors` and `shops` in the mesh's data frame. A wall
- * the ground in front of rises past its object's `reach` somewhere
- * (`rises.at`, from `wallRises`; `WindowChoice.reach`) is signed as a
- * shopfront's: it loses its ground floor.
+ * The `_FACADE` attribute (4 × snorm16 per vertex, `FACADE_SCALE_M` metres
+ * a unit): per wall vertex of an object `drawn` says carries windows its
+ * place along the wall from the wall's middle, the wall's length (negative
+ * where its ground floor has none — a shopfront stands on it, more doors
+ * than the two slots hold, the ground rises past its windows, or it is a
+ * low house's party wall that stands free above its neighbour; 0 on any
+ * other party wall), and its doors, the nearest the middle first
+ * (`doorSlot`, `NO_DOOR` for none; on a wall without ground-floor windows,
+ * which has none to keep off them, the first slot is instead the height
+ * over the base its windows clear — the ground in front, the neighbour's
+ * top — 0 where it is not known); in the second slot, wherever no door
+ * needs it, the wall's own eave (`WALL_EAVE`, `heights`), on the walls of
+ * every LoD2 object, with windows or not; every roof vertex (r, g,
+ * FACADE_ROOF, b), its face's own colour where `mesh.roofRgb` has one and
+ * (0, 0, FACADE_ROOF, 0) where not; every other vertex (0, 0, NO_DOOR,
+ * NO_DOOR). `doors` and `shops` in the mesh's data frame. A wall the ground
+ * in front of rises past its object's `reach` somewhere (`rises.at`, from
+ * `wallRises`; `WindowChoice.reach`) is signed as a shopfront's: it loses
+ * its ground floor.
  */
 export function facadeAttribute(
   mesh: FacadeMesh,
   drawn: (object: number) => boolean,
   doors: readonly FacadeDoor[] = [],
   shops: readonly FacadeShop[] = [],
-  rises?: { at: ArrayLike<number>; reach: (object: number) => number }
+  rises?: { at: ArrayLike<number>; reach: (object: number) => number },
+  heights?: FacadeHeights
 ): Int16Array<ArrayBuffer> {
   const count = mesh.objectIds.length;
   const out = new Int16Array(4 * count);
   for (let v = 0; v < count; v++) {
-    out[4 * v + 2] = mesh.isRoof[v] === 1 ? ROOF_SNORM : NO_DOOR_SNORM;
-    out[4 * v + 3] = NO_DOOR_SNORM;
+    if (mesh.isRoof[v] === 1) {
+      out[4 * v + 2] = ROOF_SNORM;
+      roofColourAt(out, v, mesh.roofRgb);
+    } else {
+      out[4 * v + 2] = NO_DOOR_SNORM;
+      out[4 * v + 3] = NO_DOOR_SNORM;
+    }
   }
-  const walls = wallsOf(mesh, drawn);
-  markParty(walls);
-  placeOnWalls(walls, doors, shops);
+  const heightOf = heights?.of ?? (() => undefined);
+  const walls = wallsOf(mesh, (o) => drawn(o) || heightOf(o) !== undefined);
+  // party walls, doors and shopfronts among the walls that carry windows
+  const windowed = walls.filter((w) => drawn(w.object));
+  markParty(windowed);
+  placeOnWalls(windowed, doors, shops);
   if (rises) {
-    for (const w of walls) {
+    for (const w of windowed) {
       for (const t of w.tris) {
         const rise = rises.at[t / 3];
         if (rise > w.ground) {
@@ -1378,31 +1582,75 @@ export function facadeAttribute(
   }
   const p = mesh.positions;
   for (const w of walls) {
-    const c = (w.s0 + w.s1) / 2;
-    const length = w.party > PARTY_SHARE ? 0 : w.s1 - w.s0;
-    const [d0, d1] = w.doors
-      .map((d) => ({ at: d.s - c, w: d.w }))
-      .sort((a, b) => Math.abs(a.at) - Math.abs(b.at));
-    const noGround = w.shop || w.doors.length > 2;
-    const lengthSnorm = snorm(noGround ? -length : length);
-    // a wall without ground-floor windows has none to keep off its doors:
-    // its first slot holds the ground in front, which every window clears
-    const door0 = noGround
-      ? snorm(Math.max(w.ground, 0))
-      : d0 === undefined
-        ? NO_DOOR_SNORM
-        : doorSlot(d0.at, d0.w);
-    const door1 = d1 === undefined ? NO_DOOR_SNORM : doorSlot(d1.at, d1.w);
+    const h = heightOf(w.object);
+    const eave = h ? wallEaveSlot(w.top - h.eave) : NO_DOOR_SNORM;
+    const slots = drawn(w.object)
+      ? wallSlots(w, eave, h)
+      : { c: Number.NaN, length: 0, door0: NO_DOOR_SNORM, door1: eave };
     for (const t of w.tris) {
       for (let k = 0; k < 3; k++) {
         const i = t + k;
         const s = p[3 * i] * w.n[1] - p[3 * i + 1] * w.n[0];
-        out[4 * i] = snorm(s - c);
-        out[4 * i + 1] = lengthSnorm;
-        out[4 * i + 2] = door0;
-        out[4 * i + 3] = door1;
+        out[4 * i] = Number.isNaN(slots.c) ? 0 : snorm(s - slots.c);
+        out[4 * i + 1] = slots.length;
+        out[4 * i + 2] = slots.door0;
+        out[4 * i + 3] = slots.door1;
       }
     }
   }
   return out;
+}
+
+/** A windowed wall's middle and its `_FACADE` slots (see
+ *  `facadeAttribute`); `eave` its own eave's code (`wallEaveSlot`). */
+function wallSlots(
+  w: Wall,
+  eave: number,
+  h: { base: number; eave: number } | undefined
+): { c: number; length: number; door0: number; door1: number } {
+  const c = (w.s0 + w.s1) / 2;
+  const above = partyAbove(w, h);
+  if (above !== undefined) {
+    // a facade above its neighbour: no window under the neighbour's top
+    w.shop = true;
+    w.ground = Math.max(w.ground, above);
+  }
+  const party = w.party > PARTY_SHARE && above === undefined;
+  const length = party ? 0 : w.s1 - w.s0;
+  const [d0, d1] = w.doors
+    .map((d) => ({ at: d.s - c, w: d.w }))
+    .sort((a, b) => Math.abs(a.at) - Math.abs(b.at));
+  const noGround = w.shop || w.doors.length > 2;
+  return {
+    c,
+    length: snorm(noGround ? -length : length),
+    // a wall without ground-floor windows has none to keep off its doors:
+    // its first slot holds the height its windows clear
+    door0: noGround
+      ? snorm(Math.max(w.ground, 0))
+      : d0 === undefined
+        ? NO_DOOR_SNORM
+        : doorSlot(d0.at, d0.w),
+    // … and its second, like a wall's with at most one door, its eave
+    door1: noGround || d1 === undefined ? eave : doorSlot(d1.at, d1.w),
+  };
+}
+
+/** Where a low house's party wall is a facade again (m over its base):
+ *  above the highest top of the walls against it, where one more row of
+ *  windows fits under its own eave (`PARTY_LOW_EAVE_M`, `PARTY_CLEAR_M`);
+ *  undefined on any other wall. */
+function partyAbove(
+  w: Wall,
+  h: { base: number; eave: number } | undefined
+): number | undefined {
+  if (
+    !h ||
+    w.party <= PARTY_SHARE ||
+    h.eave - h.base > PARTY_LOW_EAVE_M ||
+    Math.max(w.top, h.eave) - w.cover < PARTY_CLEAR_M
+  ) {
+    return undefined;
+  }
+  return w.cover - h.base;
 }

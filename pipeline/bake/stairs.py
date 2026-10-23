@@ -7,9 +7,17 @@ The landing heights are read from the DGM a metre beyond each end of the way
 (the landings, not the smoothed slope between them). The width comes from
 the `width` tag, else from an `area:highway=steps` outline over the way,
 else from the OSM walls either side when the slope fills the gap between
-them (the axis is then centred between the walls), else a default; the step
-count from `step_count` when it gives a plausible riser, else from the
+them (the axis is then centred between the walls), else a default — a
+public flight's in a pedestrian area, a garden's or a path's elsewhere; the
+step count from `step_count` when it gives a plausible riser, else from the
 height difference.
+
+Each flight also says what stands along its sides (`walled`: an OSM wall or
+building beside the left and the right edge, which the viewer's Wange
+needs), where its handrails run (`rail`, from the `handrail*` tags, on a
+side no mapped fence or handrail runs along already) and what it is made
+of (`mat`, from `surface`, else the site's majority; lib/city/stairs.ts
+`STAIR_TONES`).
 
 Where the DGM lacks the structure a flight climbs — the Brühlsche Terrasse
 is a platform over casemates, so the bare-earth model runs flat under it —
@@ -20,7 +28,9 @@ level, and the build lifts the terrain inside it (lib/city/stairs.ts)."""
 
 from __future__ import annotations
 
+import dataclasses
 import re
+from collections import Counter
 
 import numpy as np
 import rasterio
@@ -28,12 +38,51 @@ import shapely
 
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, write_geojson
 from .osm import has_extract, read_osm, tag
+from .walls import FENCE_WHERE, MATERIALS, lines_of, majority, site_extent
 
 WHERE = "highway = 'steps'"
 AREA_WHERE = 'other_tags LIKE \'%"area:highway"=>"steps"%\''
 WALL_WHERE = "barrier IN ('retaining_wall','city_wall','wall')"
 RAISED_WHERE = 'other_tags LIKE \'%"layer"=>"%\''
-DEFAULT_W = 2.5  # m, a public flight without a width tag
+# A flight without a width tag (PR #173, B7): 2.5 m was a public flight's,
+# and most untagged flights are a garden's, a path's or a slope's, 1–1.5 m
+# in the street photos. A flight in a pedestrian area (`highway=pedestrian`
+# as an area, or any `area:highway` outline) is a public one.
+DEFAULT_W = 1.5  # m
+PUBLIC_W = 2.5  # m
+PUBLIC_WHERE = (
+    'other_tags LIKE \'%"highway"=>"pedestrian"%\' OR other_tags LIKE \'%"area:highway"=>%\''
+)
+PUBLIC_NEAR_M = 1.0  # the flight's middle this close to a pedestrian area lies in it
+# What stands along a flight's side (PR #173, B8): an OSM wall or a
+# building within SIDE_NEAR_M of the side's edge at two of its three
+# quarter points. Only there does the viewer build a Wange; elsewhere the
+# bank beside the steps stays ground (a grass bank, Meißen's Burgberg).
+SIDE_NEAR_M = 1.0
+SIDE_AT = (0.25, 0.5, 0.75)
+BUILDING_WHERE = "building IS NOT NULL"
+# What a flight is made of (PR #173, B6): its `surface` (or `material`),
+# else the site's majority of its tagged flights (`walls.majority`). Paving
+# stones on steps are concrete pavers; unpaved steps are timber risers.
+STAIR_MATERIALS = {
+    **MATERIALS,
+    "concrete:plates": "concrete",
+    "concrete:lanes": "concrete",
+    "paving_stones": "concrete",
+    "asphalt": "concrete",
+    "sett": "stone",
+    "cobblestone": "stone",
+    "unhewn_cobblestone": "stone",
+    "metal_grid": "metal",
+    "dirt": "wood",
+    "ground": "wood",
+    "earth": "wood",
+    "compacted": "wood",
+    "gravel": "wood",
+    "fine_gravel": "wood",
+    "pebblestone": "wood",
+    "grass": "wood",
+}
 MIN_W, MAX_W = 0.8, 30.0
 RISER = 0.16  # m, the riser a count is derived with
 MIN_RISER, MAX_RISER = 0.08, 0.25  # a tagged count outside this is a typo
@@ -209,6 +258,99 @@ def lifted(coords, z0: float, z1: float, other_tags: str | None, raised: list):
     return coords, bottom, bottom + rise, area
 
 
+@dataclasses.dataclass
+class Context:
+    """What a flight's sides, width and material are read against: the
+    pedestrian areas (`PUBLIC_WHERE`), the walls and buildings beside it, the
+    mapped fences and handrails, and the site's majority material."""
+
+    public: list = dataclasses.field(default_factory=list)
+    sides: shapely.STRtree | None = None
+    fences: shapely.STRtree | None = None
+    mat: str = "concrete"
+
+
+def default_width(axis: shapely.LineString, context: Context | None) -> float:
+    """An untagged flight's width: PUBLIC_W in a pedestrian area, else
+    DEFAULT_W."""
+    if context is not None and context.public:
+        middle = axis.interpolate(0.5, normalized=True)
+        if any(shapely.distance(a, middle) <= PUBLIC_NEAR_M for a in context.public):
+            return PUBLIC_W
+    return DEFAULT_W
+
+
+def side_points(axis: shapely.LineString, half: float, side: float) -> list:
+    """The edge points `half` metres left (+1) or right (−1) of the axis at
+    its quarter points (SIDE_AT)."""
+    out = []
+    for t in SIDE_AT:
+        s = t * axis.length
+        a = axis.interpolate(max(s - 0.5, 0.0))
+        b = axis.interpolate(min(s + 0.5, axis.length))
+        d = float(np.hypot(b.x - a.x, b.y - a.y)) or 1.0
+        p = axis.interpolate(s)
+        out.append(
+            shapely.Point(p.x - (b.y - a.y) / d * half * side, p.y + (b.x - a.x) / d * half * side)
+        )
+    return out
+
+
+def beside(axis: shapely.LineString, half: float, tree: shapely.STRtree | None) -> list[bool]:
+    """Per side (left, right of the climb): whether a line of `tree` runs
+    within SIDE_NEAR_M of its edge at two of its quarter points."""
+    if tree is None:
+        return [False, False]
+    out = []
+    for side in (1.0, -1.0):
+        pts = side_points(axis, half, side)
+        hits = sum(len(tree.query_nearest(p, max_distance=SIDE_NEAR_M)) > 0 for p in pts)
+        out.append(hits >= 2)
+    return out
+
+
+def rail_sides(other_tags: str | None) -> tuple[bool, bool]:
+    """The handrails the tags give, (left, right) of the way as drawn:
+    `handrail=yes` (both, double) on both sides unless a side says no, and
+    `handrail:left` / `handrail:right`."""
+    both = (tag(other_tags, "handrail") or "") in ("yes", "both", "double")
+
+    def side(key: str) -> bool:
+        value = tag(other_tags, key)
+        return value == "yes" or (both and value != "no")
+
+    return side("handrail:left"), side("handrail:right")
+
+
+def stair_material(other_tags: str | None) -> str | None:
+    """A flight's material from its `surface` (or `material`): the first
+    known of a list, None when untagged or unknown."""
+    for key in ("surface", "material"):
+        for value in (tag(other_tags, key) or "").lower().split(";"):
+            if value.strip() in STAIR_MATERIALS:
+                return STAIR_MATERIALS[value.strip()]
+    return None
+
+
+def sides_of(
+    axis: shapely.LineString, width: float, other_tags: str | None, flipped: bool, context
+) -> dict:
+    """The flight's `walled`, `rail` (where any) and `mat` properties: the
+    handrail tags' sides turned with the axis when it runs against the way
+    (`flipped`), less a side a mapped fence or handrail runs along."""
+    half = width / 2
+    walled = beside(axis, half, context.sides if context else None)
+    left, right = rail_sides(other_tags)
+    rail = [right, left] if flipped else [left, right]
+    fenced = beside(axis, half, context.fences if context else None)
+    rail = [r and not f for r, f in zip(rail, fenced, strict=True)]
+    props: dict = {"walled": walled}
+    if any(rail):
+        props["rail"] = rail
+    props["mat"] = stair_material(other_tags) or (context.mat if context else "concrete")
+    return props
+
+
 def flight(
     line: shapely.LineString,
     other_tags: str | None,
@@ -216,10 +358,12 @@ def flight(
     dgm: Dgm,
     walls: list | None = None,
     raised: list | None = None,
+    context: Context | None = None,
 ) -> dict | None:
     coords = [tuple(c[:2]) for c in line.coords]
     if len(coords) < 2 or line.length < MIN_LEN:
         return None
+    drawn = coords[0]
     z0 = landing(dgm, coords[0], coords[1])
     z1 = landing(dgm, coords[-1], coords[-2])
     if z0 is None or z1 is None:
@@ -233,6 +377,7 @@ def flight(
     elif z0 > z1:  # bottom → top, whatever way the mapper drew it
         coords.reverse()
         z0, z1 = z1, z0
+    flipped = coords[0] != drawn
     rise = z1 - z0
     axis = shapely.LineString(coords)
     width = tagged_width(axis, other_tags, areas)
@@ -240,10 +385,12 @@ def flight(
         fitted = wall_to_wall(axis, walls, dgm, rise)
         if fitted:
             axis, width = fitted
+    width = width or default_width(axis, context)
     props = {
-        "w": round(width or DEFAULT_W, 2),
+        "w": round(width, 2),
         "n": step_count(rise, other_tags),
         "z": [round(z0, 2), round(z1, 2)],
+        **sides_of(axis, width, other_tags, flipped, context),
     }
     out = feature(geometry_json(axis), props)
     if terrace is not None:
@@ -326,6 +473,56 @@ def terrace_features(lifted_flights: list[dict]) -> list[dict]:
     return [feature(geometry_json(platform(a)), {"z": round(z, 2)}) for a, z in levels.values()]
 
 
+def is_public(other_tags: str | None) -> bool:
+    """A pedestrian area's tags (`PUBLIC_WHERE`)."""
+    return tag(other_tags, "highway") == "pedestrian" or tag(other_tags, "area:highway") is not None
+
+
+def as_area(g: shapely.Geometry) -> shapely.Geometry | None:
+    """An area, or a closed line (an `area:highway` outline without an area
+    key) as one; None for anything else."""
+    if isinstance(g, shapely.LineString) and g.is_ring:
+        g = shapely.Polygon(g.coords)
+    ok = isinstance(g, (shapely.Polygon, shapely.MultiPolygon)) and g.is_valid
+    return g if ok else None
+
+
+def site_stair_material(tile: Tile) -> str:
+    """The site's majority stair material (`walls.majority` over every flight
+    on the site's tiles whose surface says one)."""
+    geoms, fields = read_osm(site_extent(tile), "lines", WHERE, ["other_tags"])
+    found = Counter(m for m in map(stair_material, column(fields, "other_tags", geoms)) if m)
+    return majority(found)
+
+
+def context_of(tile: Tile, walls: list) -> Context:
+    """A tile's `Context`: its pedestrian areas, its walls and building
+    outlines, its fences and handrails, its site's material — the OSM read
+    once per layer."""
+    public, sides, fences = [], list(walls), []
+    for layer, extra in (("lines", []), ("multipolygons", ["building"])):
+        where = f"({FENCE_WHERE}) OR ({PUBLIC_WHERE})"
+        where += f" OR {BUILDING_WHERE}" if extra else ""
+        geoms, fields = read_osm(tile, layer, where, ["barrier", "other_tags", *extra])
+        barriers, tags = column(fields, "barrier", geoms), column(fields, "other_tags", geoms)
+        buildings = column(fields, "building", geoms)  # Nones on the lines
+        for g, barrier, other, building in zip(geoms, barriers, tags, buildings, strict=True):
+            if g is None:
+                continue
+            if barrier in ("fence", "handrail"):
+                fences += lines_of(g)
+            if building is not None:
+                sides += lines_of(g)
+            if is_public(other) and (area := as_area(g)) is not None:
+                public.append(area)
+    return Context(
+        public=public,
+        sides=shapely.STRtree(sides) if sides else None,
+        fences=shapely.STRtree(fences) if fences else None,
+        mat=site_stair_material(tile),
+    )
+
+
 def run(tile: Tile) -> None:
     if not has_extract(tile, "the stairs"):
         return
@@ -334,6 +531,7 @@ def run(tile: Tile) -> None:
     areas = outlines(tile)
     walls = wall_lines(tile)
     raised = raised_areas(tile)
+    context = context_of(tile, walls)
     geoms, fields = read_osm(tile, "lines", WHERE, ["highway", "other_tags"])
     features = []
     for g, other in zip(geoms, column(fields, "other_tags", geoms), strict=True):
@@ -343,7 +541,7 @@ def run(tile: Tile) -> None:
             continue
         for part in shapely.get_parts(g):
             if isinstance(part, shapely.LineString):
-                f = flight(part, other, areas, dgm, walls, raised)
+                f = flight(part, other, areas, dgm, walls, raised, context)
                 if f:
                     features.append(f)
     terraces = terrace_features([f for f in features if "terrace" in f])
@@ -355,4 +553,9 @@ def run(tile: Tile) -> None:
     write_geojson(
         tile.out("dlm", f"terraces_{tile.id}.geojson"), terraces, tile.epsg, OSM_ATTRIBUTION
     )
-    print(f"{tile.id}: {len(features)} stairs, {len(terraces)} terraces")
+    walled = sum(any(f["properties"]["walled"]) for f in features)
+    railed = sum("rail" in f["properties"] for f in features)
+    print(
+        f"{tile.id}: {len(features)} stairs ({walled} walled, {railed} with a handrail drawn; "
+        f"untagged ones {context.mat}), {len(terraces)} terraces"
+    )

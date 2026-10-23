@@ -1,10 +1,18 @@
 import {
   type BufferGeometry,
+  ClampToEdgeWrapping,
   type Color,
+  DataTexture,
+  LinearFilter,
   Mesh,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
+  RGBAFormat,
+  SRGBColorSpace,
+  type UniformArrayNode,
   type UniformNode,
+  UnsignedByteType,
+  Vector4,
 } from "three/webgpu";
 import {
   cameraPosition,
@@ -12,11 +20,16 @@ import {
   clamp,
   distance,
   dot,
+  Fn,
   float,
   floor,
   fract,
-  materialColor,
+  int,
+  length,
+  Loop,
   materialOpacity,
+  max,
+  min,
   mix,
   modelWorldMatrixInverse,
   normalize,
@@ -25,23 +38,37 @@ import {
   pow,
   sin,
   smoothstep,
+  step,
   texture,
   uniform,
+  uniformArray,
   vec2,
   vec3,
   vec4,
 } from "three/tsl";
+import {
+  FOAM_LINES,
+  fromBase64,
+  WATER_SHEET,
+  type WaterLook,
+} from "@/lib/city/water-bodies";
 import { lampNight } from "./lamp-layer";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
 import { REFLECTIONS, skyReflection } from "./sky-reflection";
 import { type SplatLayer, splatUv } from "./terrain-layer";
 import { viewDirection } from "./view-direction";
+import { RIVER_WAVES, waveNormal, waves } from "./water-waves";
 
 /** Animated water surface, masked to the land-cover "water" class (id 8). */
 export interface WaterLayer {
   mesh: Mesh;
   /** drifting river-haze sheet (added to the Z-up `world`, like the water) */
   mistMesh: Mesh;
+  /** the tint grid's texture (`tintTexture`): the tile's own, freed by
+   *  `dispose`, weighed with its rasters */
+  tint: DataTexture;
+  /** Frees what the sheets own beyond the content (the tint texture). */
+  dispose: () => void;
   /** Advance the ripple, glitter and mist animation (elapsed seconds). The
    *  sky tint is the fog's colour node itself: nothing to copy per frame. */
   update: (seconds: number) => void;
@@ -54,18 +81,9 @@ const waterTime = uniform(0);
 const FRESNEL = 0.4;
 /** The sun glitter's strength and colour (warm white). */
 const GLITTER = 0.7;
+/** How much steeper the glitter's facets are than the shading's. */
+const GLITTER_TILT = 2;
 const SUN_COLOUR = vec3(1, 0xf4 / 255, 0xe0 / 255);
-
-/** The crossing sine waves of the ripples at data-frame `xy`. */
-function ripples(xy: V2): { u: F; v: F } {
-  const t = waterTime;
-  return {
-    v: sin(xy.x.mul(0.35).add(t.mul(0.8))).add(
-      sin(xy.y.mul(0.27).sub(t.mul(0.6)))
-    ),
-    u: sin(xy.x.add(xy.y).mul(0.2).add(t.mul(0.5))),
-  };
-}
 
 // --- the river mist ------------------------------------------------------------------
 
@@ -199,12 +217,136 @@ function createWaterMist(
 
 // --- the water sheet -----------------------------------------------------------------
 
-/** The sheet's diffuse colour: the depth tone by distance from the bank,
- *  then the Fresnel sky — mirrored, or the fog's tint. */
+/**
+ * The tile's tint grid as a texture over it (LINEAR, sRGB, row 0 = north
+ * like the splat): each cell its body's colour, the sheet's own where none
+ * (lib/city/water-bodies.ts). A tile without one gets a 1×1 of the sheet's
+ * colour, so every tile builds the same shader.
+ */
+export function tintTexture(look: WaterLook | undefined): DataTexture {
+  const tint = look?.tint;
+  const n = tint?.n ?? 1;
+  const cells = tint ? fromBase64(tint.cells) : new Uint8Array(1);
+  const data = new Uint8Array(n * n * 4);
+  for (let i = 0; i < n * n; i++) {
+    const k = cells[i] ?? 0;
+    const rgb = k > 0 ? (tint?.colours[k - 1] ?? WATER_SHEET) : WATER_SHEET;
+    data.set([(rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, 255], i * 4);
+  }
+  const texture = new DataTexture(data, n, n, RGBAFormat, UnsignedByteType);
+  texture.colorSpace = SRGBColorSpace;
+  texture.flipY = false;
+  texture.magFilter = LinearFilter;
+  texture.minFilter = LinearFilter;
+  texture.generateMipmaps = false;
+  texture.wrapS = ClampToEdgeWrapping;
+  texture.wrapT = ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/** A tile's foam lines as uniforms: the segments (data frame x0, y0, x1,
+ *  y1) and per line its drop and downstream direction, FOAM_LINES each. */
+interface FoamUniforms {
+  count: UniformNode<"int", number>;
+  info: UniformArrayNode<"vec4">;
+  lines: UniformArrayNode<"vec4">;
+}
+
+function foamUniforms(look: WaterLook | undefined): FoamUniforms {
+  const foam = look?.foam ?? [];
+  const row = (i: number, at: number) =>
+    foam[i]
+      ? new Vector4(
+          foam[i][at],
+          foam[i][at + 1],
+          foam[i][at + 2],
+          foam[i][at + 3] ?? 0
+        )
+      : new Vector4();
+  const rows = (at: number) =>
+    Array.from({ length: FOAM_LINES }, (_, i) => row(i, at));
+  return {
+    count: uniform(Math.min(foam.length, FOAM_LINES), "int"),
+    lines: uniformArray(rows(0), "vec4" as const),
+    info: uniformArray(rows(4), "vec4" as const),
+  };
+}
+
+/** m of foam downstream of a fall: a base, more per metre of drop, at most
+ *  the last; upstream it is the crest's width, and past a line's end it
+ *  thins out over a metre. A line without a direction foams both ways. */
+const FOAM_REACH = [2, 3, 12] as const;
+const FOAM_CREST_M = 0.8;
+const FOAM_SIDE_M = 1;
+const FOAM_COLOUR = vec3(0.93, 0.95, 0.96);
+/** How far the foam whitens the sheet, and how opaque it makes it. */
+const FOAM = 0.8;
+const FOAM_OPACITY = 0.97;
+
+/** The foam at data-frame `xy` (0..1): the strongest of the tile's lines'
+ *  bands (water.py `foam`: weirs, cascades), churned by a drifting noise. */
+function foamAt(xy: V2, f: FoamUniforms): F {
+  const band = Fn(() => {
+    // The place, taken before the loop: three assigns a shared node where
+    // it is first built, and built first in the loop's body it is assigned
+    // only when the loop runs — on a tile without foam lines never, and
+    // the sheet's waves, which read the same node, lay flat there (the
+    // Elbe's hard edge at a tile seam, 2026-10-23).
+    const at = xy.toVar();
+    const most = float(0).toVar();
+    Loop(
+      { start: int(0), end: f.count, type: "int", condition: "<" },
+      ({ i }) => {
+        const seg = f.lines.element(i);
+        const info = f.info.element(i);
+        const ab = seg.zw.sub(seg.xy);
+        const t = clamp(
+          dot(at.sub(seg.xy), ab).div(max(dot(ab, ab), 1e-4)),
+          0,
+          1
+        );
+        const d = at.sub(seg.xy.add(ab.mul(t)));
+        const down = info.yz;
+        const s = dot(d, down); // + downstream
+        const side = length(d.sub(down.mul(s)));
+        const reach = min(
+          info.x.mul(FOAM_REACH[1]).add(FOAM_REACH[0]),
+          FOAM_REACH[2]
+        );
+        // 1 on a weir's line (a flow direction), 0 on a shore's: a mix,
+        // not a select, in a per-pixel graph
+        const flows = step(0.25, dot(down, down));
+        const along = mix(
+          float(1),
+          float(1)
+            .sub(smoothstep(0, reach, s))
+            .mul(float(1).sub(smoothstep(0, FOAM_CREST_M, s.negate()))),
+          flows
+        );
+        const width = mix(reach, float(FOAM_SIDE_M), flows);
+        const across = float(1).sub(smoothstep(width.mul(0.3), width, side));
+        most.assign(max(most, along.mul(across)));
+      }
+    );
+    return most;
+  })();
+  const t = waterTime;
+  const churn = mistNoise(xy.mul(0.9).add(vec2(t.mul(0.7), t.mul(-0.5))));
+  return smoothstep(0.15, 0.6, band.mul(mix(0.55, 1.15, churn)));
+}
+
+/** The sheet's diffuse colour: its body's tint (`base`), the depth tone by
+ *  distance from the bank, then the Fresnel sky — mirrored, or the fog's
+ *  tint — off the waves' normal `n` (Y-up world), so the sky's gradient
+ *  rides the ripples; sharper where the water lies calm (`gust` 0). */
 function waterColour(
+  base: V3,
   splat: SplatLayer,
   uv: V2,
   view: V3,
+  n: V3,
+  gust: F,
   skyTint: UniformNode<"color", Color>
 ): V3 {
   // Depth by distance from the bank, as on a drawn map: the coverage read
@@ -215,14 +357,18 @@ function waterColour(
     1,
     texture(splat.colorTexture, uv).bias(float(6)).a
   );
-  const toned = materialColor.rgb.mul(
+  const toned = base.mul(
     mix(vec3(1.1, 1.08, 1.04), vec3(0.86, 0.92, 0.98), deep)
   );
-  const fresnel = pow(float(1).sub(clamp(view.y, 0, 1)), 4);
-  // Spiegelung (sky-reflection.ts): the sky the level sheet mirrors, its
+  const fresnel = pow(float(1).sub(clamp(dot(view, n), 0, 1)), 4);
+  // Spiegelung (sky-reflection.ts): the sky the sheet mirrors, its
   // gradient and the glow around the sun; below full strength, the fog's
   // flat colour it stood in for (REFLECTIONS is 1: none).
-  const sky = mix(skyTint.rgb, skyReflection(vec3(0, 1, 0), 0.3), REFLECTIONS);
+  const sky = mix(
+    skyTint.rgb,
+    skyReflection(n, mix(0.18, 0.4, gust)),
+    REFLECTIONS
+  );
   return mix(toned, sky, fresnel.mul(FRESNEL));
 }
 
@@ -230,8 +376,8 @@ function waterColour(
  * A translucent water sheet that re-uses the terrain geometry (so it drapes
  * on the same heightfield) but discards every fragment whose land-cover
  * class is not water. A standard node material, so the scene's sun,
- * shadows and fog apply for free; a cheap sine-wave normal wobble gives
- * stylized movement.
+ * shadows and fog apply for free; the wind's wave field (water-waves.ts)
+ * tilts its normal, uneven under drifting gusts.
  *
  * On top of the base sheet it fakes poetic water at standard-material cost
  * (no transmission): a view-angle Fresnel sky tint (the fog's colour, which
@@ -244,13 +390,19 @@ function waterColour(
  * (landcover-splat.ts), a soft coverage field sampled LINEAR + mipmapped +
  * anisotropic, so the shoreline is hardware anti-aliased.
  *
+ * Each body takes its own colour (`look`'s tint grid: the Isar's green,
+ * the Hamburg Elbe's ochre, the palette's blue where the water reads it),
+ * and where the water falls — a weir, a cascade — a band of foam churns
+ * downstream of the line (`foamAt`).
+ *
  * Geometry is SHARED with the terrain mesh — do not dispose it here. Both
  * sheets sit beside the terrain mesh with its transform.
  */
 export function createWaterLayer(
   geometry: BufferGeometry,
   splat: SplatLayer,
-  skyTint: UniformNode<"color", Color>
+  skyTint: UniformNode<"color", Color>,
+  look?: WaterLook
 ): WaterLayer {
   const sun = splat.ground.sunDirection;
   const [minX, minY, maxX, maxY] = splat.bounds;
@@ -272,22 +424,30 @@ export function createWaterLayer(
   // A widened, feathered band dissolves the bank instead of stair-stepping.
   const wcov = smoothstep(0.28, 0.72, texture(splat.colorTexture, uv).a);
   material.maskNode = wcov.greaterThan(0.001);
-  material.opacityNode = materialOpacity.mul(wcov);
+  const tint = tintTexture(look);
+  const foam = foamAt(xy, foamUniforms(look)).toVar();
+  material.opacityNode = mix(materialOpacity, FOAM_OPACITY, foam).mul(wcov);
+  // The waves (water-waves.ts) on the shading normal (view space, as the
+  // slot takes it). The sheet shares the terrain's grid, whose normals
+  // carry the DGM's noisy river surface (and 8-bit quantisation): lit,
+  // that painted the Elbe in dark blotches. Water is level — the waves'
+  // normal stands on up, and depends on nothing but the place and the
+  // clock, so two tiles' sheets (and a tile's two levels) meet seamlessly.
+  const field = waves(xy, waterTime, RIVER_WAVES);
+  const n = waveNormal(field.slope).toVar();
+  material.normalNode = cameraViewMatrix.mul(vec4(n, 0)).xyz.normalize();
   const view = viewDirection().negate();
-  material.colorNode = waterColour(splat, uv, view, skyTint);
+  material.colorNode = mix(
+    waterColour(texture(tint, uv).rgb, splat, uv, view, n, field.gust, skyTint),
+    FOAM_COLOUR,
+    foam.mul(FOAM)
+  );
 
-  // Stylized ripples on the shading normal (view space, as the slot takes
-  // it). The sheet shares the terrain's grid, whose normals carry the DGM's
-  // noisy river surface (and 8-bit quantisation): lit, that painted the
-  // Elbe in dark blotches. Water is level — start from up.
-  const wave = ripples(xy);
-  const up = cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz.normalize();
-  material.normalNode = normalize(up.add(vec3(wave.v, wave.u, 0).mul(0.06)));
-
-  // Sun glitter: a tight specular lobe off a SEPARATE Y-up ripple normal, so
-  // it reads as a real highlight. Gated by the sun's height so it vanishes
-  // after sunset.
-  const glitterN = normalize(vec3(wave.v.mul(0.12), 1, wave.u.mul(0.12)));
+  // Sun glitter: a tight specular lobe off the waves' normal tilted
+  // further, so it reads as a real highlight, sparkling on the crests
+  // where a gust roughens the water. Gated by the sun's height so it
+  // vanishes after sunset.
+  const glitterN = waveNormal(field.slope, GLITTER_TILT);
   const half = normalize(view.add(sun));
   const spec = pow(clamp(dot(glitterN, half), 0, 1), 120);
   material.emissiveNode = SUN_COLOUR.mul(
@@ -307,6 +467,8 @@ export function createWaterLayer(
   return {
     mesh,
     mistMesh,
+    tint,
+    dispose: () => tint.dispose(),
     update: (seconds) => {
       waterTime.value = seconds;
     },

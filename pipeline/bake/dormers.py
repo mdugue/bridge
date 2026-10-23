@@ -22,7 +22,26 @@ height at the centre (`z`), the dormer's top (`top`, the 80th percentile
 of the measured surface over the blob) and the roof's slope (`slope`,
 degrees); `of` is the LoD2 object whose footprint holds it. Only the
 tile's own (the west and south edges in). A site without a surface model
-writes an empty file."""
+writes an empty file.
+
+A shed dormer (Schleppgaube) carries `tf`, its roof's fall in degrees:
+the surface model along the dormer's axis through its centre, from its
+back — on behind the blob while the surface stays `FALL_EXCESS_M` over
+the roof: a shed's back sinks into the roof below the blob's threshold —
+to `FALL_FRONT_M` behind its front edge (a cell over the front wall or a
+cheek reads the roof below and would tilt every dormer forward), over at
+least `FALL_MIN_SPAN_M`, fitted by a line (`roof_fall`). Where it
+falls the way the roof does by `SHED_MIN_FALL` or more and by at least
+`SHED_MARGIN` less than the roof (steeper is the roof itself, a LoD2
+face drawn too low), the dormer is a shed one: its `top` is then where
+its roof meets the main roof (its highest line) and the build lets the
+roof fall `tf` from there to its front (lib/city/dormers.ts). Every other
+dormer is drawn flat at `top`. Meißen's street photos show gabled and
+shed dormers where the bake drew every one flat; a gabled or hipped one
+fits a fall near 0 along its axis and stays flat. Measured (2026-10-21):
+8–25 % of a tile's dormers are shed ones (Meißen 16 %, München 21 %,
+Hamburg 9 %); about half of all dormers are too shallow along the slope
+to read a fall from 1 m cells and stay flat."""
 
 from __future__ import annotations
 
@@ -32,6 +51,7 @@ import math
 import numpy as np
 import shapely
 from scipy import ndimage as ndi
+from scipy.ndimage import map_coordinates
 
 from .common import Tile, feature, owns, write_geojson
 from .osm_buildings import footprints
@@ -54,6 +74,23 @@ MAX_TOP_M = 3.5
 TREE_CLEAR_M = 2.0
 # how far its top may reach over the object's highest roof cell (m)
 RIDGE_SLACK_M = 0.2
+# A dormer's roof is read along its axis every FALL_STEP_M, up to this far
+# behind its front edge (m: the 1 m cells by the front wall read the roof
+# below), over at least FALL_MIN_SPAN_M: a shallower one has no fall to
+# read and is drawn flat. A plane over the whole blob read 45 % of
+# Meißen's dormers as shed: its cells over the front wall and the cheeks
+# tilt every dormer forward.
+FALL_STEP_M = 0.5
+FALL_FRONT_M = 1.5
+FALL_MIN_SPAN_M = 1.0
+# ... and on behind it up to FALL_BACK_M while the surface stays this far
+# over the roof (m)
+FALL_BACK_M = 3.0
+FALL_EXCESS_M = 0.3
+# A shed dormer's roof falls the way the roof does by at least this much
+# (degrees) and at least SHED_MARGIN less than the roof.
+SHED_MIN_FALL = 8.0
+SHED_MARGIN = 8.0
 
 
 def roof_gradient(roof: np.ndarray, res: float) -> tuple[np.ndarray, np.ndarray]:
@@ -94,9 +131,11 @@ def find(tile: Tile, s: Surfaces, ids: list[str], polys: list[shapely.Geometry])
     tree_index = shapely.STRtree(shapely.points(trees)) if len(trees) else None
     out: list[dict] = []
     for i, sl in enumerate(ndi.find_objects(labels), 1):
-        d = dormer(s, sl, labels[sl] == i, excess, gx, gy, slope)
+        m = labels[sl] == i
+        d = dormer(s, sl, m, excess, gx, gy, slope)
         if d is None:
             continue
+        fall = roof_fall(s, sl, m, d, excess)
         x, y = d.pop("x"), d.pop("y")
         if not owns(tile.bounds, x, y):
             continue
@@ -107,11 +146,81 @@ def find(tile: Tile, s: Surfaces, ids: list[str], polys: list[shapely.Geometry])
         if not hits:
             continue
         of = min(hits, key=lambda k: polys[k].area)
-        if d["top"] > ridge(s, polys[of]) + RIDGE_SLACK_M:
+        highest = ridge(s, polys[of]) + RIDGE_SLACK_M
+        if d["top"] > highest:
             continue
+        shed = shed_top(d["z"], d["slope"], d["d"], fall)
+        if fall is not None and shed is not None and shed <= highest:
+            d |= {"top": round(shed, 2), "tf": round(fall[0], 1)}
         point = {"type": "Point", "coordinates": [round(x, 2), round(y, 2)]}
         out.append(feature(point, {"of": ids[of], **d}))
     return out
+
+
+def roof_fall(
+    s: Surfaces, sl, m: np.ndarray, d: dict, excess: np.ndarray | None = None
+) -> tuple[float, float] | None:
+    """A dormer's roof along its axis: its fall (degrees, positive where it
+    falls the way the main roof does) and its height at the centre — a
+    line fitted to the surface model every FALL_STEP_M along the axis
+    through the centre, where it runs over the blob, from its back to
+    FALL_FRONT_M behind its front edge; None over less than
+    FALL_MIN_SPAN_M (a shallow dormer: no fall to read). With the roof's
+    `excess` the line runs on behind the blob as long as the surface stays
+    FALL_EXCESS_M over the roof: a shed dormer's back rises out of the
+    blob (its excess shrinks to nothing where it meets the roof), a flat
+    one's top stays level there."""
+    f = s.field
+    rr, cc = np.nonzero(m)
+    xs = f.xmin + (sl[1].start + cc + 0.5) * f.res
+    ys = f.ymax - (sl[0].start + rr + 0.5) * f.res
+    ax, ay = d["ax"], d["ay"]
+    along = (xs - d["x"]) * ax + (ys - d["y"]) * ay
+    back = float(along.min()) - (FALL_BACK_M if excess is not None else 0.0)
+    front = float(along.max()) + f.res / 2
+    bs = np.arange(back, front - FALL_FRONT_M + 1e-9, FALL_STEP_M)
+    rows = (f.ymax - (d["y"] + bs * ay)) / f.res - 0.5
+    cols = (d["x"] + bs * ax - f.xmin) / f.res - 0.5
+    gr = np.clip(np.rint(rows).astype(int), 0, f.rows - 1)
+    gc = np.clip(np.rint(cols).astype(int), 0, f.cols - 1)
+    ri, ci = gr - sl[0].start, gc - sl[1].start
+    used = (ri >= 0) & (ri < m.shape[0]) & (ci >= 0) & (ci < m.shape[1])
+    used[used] = m[ri[used], ci[used]]
+    if not used.any():
+        return None
+    if excess is not None:
+        # behind the blob, back from its first sample while over the roof
+        for j in range(int(np.argmax(used)) - 1, -1, -1):
+            if not excess[gr[j], gc[j]] >= FALL_EXCESS_M:
+                break
+            used[j] = True
+    height = map_coordinates(s.dom, [rows, cols], order=1, mode="nearest")
+    ok = used & np.isfinite(height)
+    if ok.sum() < 3 or float(np.ptp(bs[ok])) < FALL_MIN_SPAN_M - 1e-9:
+        return None
+    k, at_centre = np.polyfit(bs[ok], height[ok], 1)
+    return math.degrees(math.atan(-k)), float(at_centre)
+
+
+def shed_top(z: float, slope: float, depth: float, fall) -> float | None:
+    """Where a shed dormer's roof meets the main roof — its top, the line
+    the build lets it fall from — given the main roof's height `z` at the
+    dormer's centre, its slope (degrees), the dormer's depth along it and
+    its roof's (fall, height at the centre) (`roof_fall`); None where it is
+    no shed dormer: a fall under SHED_MIN_FALL (flat, or gabled across
+    the axis) or within SHED_MARGIN of the roof's own, a roof that would
+    pass under the main roof before its front, or a run over MAX_SIDE_M."""
+    if fall is None:
+        return None
+    tf, at_centre = fall
+    if not SHED_MIN_FALL <= tf <= slope - SHED_MARGIN:
+        return None
+    tan_s, tan_f = math.tan(math.radians(slope)), math.tan(math.radians(tf))
+    # along the axis from the centre (down the slope positive)
+    back = (z - at_centre) / (tan_s - tan_f)
+    if not 0 < depth / 2 - back <= MAX_SIDE_M:
+        return None
+    return z - tan_s * back
 
 
 def ridge(s: Surfaces, poly: shapely.Geometry) -> float:

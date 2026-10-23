@@ -27,6 +27,7 @@ import {
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   attribute,
+  cameraViewMatrix,
   dot,
   float,
   Fn,
@@ -35,8 +36,6 @@ import {
   materialEmissive,
   materialOpacity,
   mix,
-  normalize,
-  normalView,
   normalWorld,
   normalWorldGeometry,
   positionLocal,
@@ -55,41 +54,41 @@ import {
 import type {
   FountainStyle,
   MonumentFeature,
-  MonumentKind,
   ReliefGrid,
 } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import {
   basinLevels,
+  coveredFigure,
   FINISH,
   type Finish,
   figureShare,
+  fountainsRun,
   jetHeight,
   jetPlaces,
   type MarkerPiece,
   type MarkerTones,
-  type MeasuredMarker,
   markerTones,
-  measuredMarker,
+  monumentMarker,
   partFinish,
   pedestalCourses,
   type MarkerSolid,
-  markerPieces,
   openRing,
-  POINT_BASIN_R,
+  pointBasinRadius,
   reliefSurface,
   ringArea,
   ringCentre,
-  yawOf,
+  smallBasin,
 } from "@/lib/city/monuments";
 import type { Point2 } from "@/lib/city/polyline";
 import { ashlar, footprint } from "./bridge-surface";
 import { gdNoise } from "./ground-detail";
 import { Instances, instanceFloat, instancePosition } from "./instancing";
-import type { F, Live } from "./shader-chunks";
+import { dataXY, type F, type Live } from "./shader-chunks";
 import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
+import { BASIN_WAVES, waveNormal, waves, waveTilt } from "./water-waves";
 
 /**
  * Fountains, statues, memorial stones and columns
@@ -105,18 +104,24 @@ import { viewDirection } from "./view-direction";
  *   form (`reliefSurface`; in DOM1 it is the winter housing);
  * - a monument nothing measured is an abstract marker in that clay, built
  *   of the parts its form has where OSM names it (a pedestal under a
- *   statue, a needle on an obelisk's base — `markerPieces`), never a figure;
- * - a basin is its OSM outline as a low clay rim around water, and a jet
- *   a translucent water bell rising from it.
+ *   statue, a needle on an obelisk's base, a shaft on a column's —
+ *   `markerPieces`), at the height measured in the open around it (`hm`),
+ *   facing its square or its way (`a`; `monumentMarker`), never a figure;
+ *   so is a figure a winter housing hid from the flight (`cover`);
+ * - a basin is its OSM outline as a low clay rim around water — a
+ *   drinking fountain's or a stone block's (`r`) waist-high —, and a jet a
+ *   translucent water bell rising from it.
  *
  * The fountains move, gently: every bell breathes on its own phase and
  * droplets run down its curtain, light shimmers across the water; by
- * night the water glows and a fountain's sculpture is lit from its basin
- * (one shared clock and night factor, `setFountainTime`/`setFountainNight`).
+ * night the water glows and a fountain's sculpture is lit from its basin;
+ * from November to mid-April the jets are off (one shared clock, night
+ * factor and season, `setFountainTime`/`setFountainNight`/
+ * `setFountainSeason`).
  *
  * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
  * the Y-up frame; rims, water and reliefs are merged, markers and jets
- * instanced: eight draw calls per tile at most. Its four materials carry
+ * instanced: nine draw calls per tile at most. Its four materials carry
  * nothing of a tile (the clock and the night are module uniforms), so every
  * tile wears the same ones (`sceneMaterial`). Non-fatal: missing/empty
  * inputs yield an empty group.
@@ -187,10 +192,16 @@ function withoutUv(make: () => BufferGeometry): () => BufferGeometry {
   return () => make().deleteAttribute("uv");
 }
 
+/** A column's round shaft 1 m wide and 1 m tall, standing on the origin. */
+function unitShaft(): BufferGeometry {
+  return new CylinderGeometry(0.5, 0.5, 1, 16).translate(0, 0.5, 0);
+}
+
 const UNIT_SOLID: Record<MarkerSolid, () => BufferGeometry> = {
   block: withoutUv(unitBlock),
   needle: withoutUv(unitNeedle),
   pillar: withoutUv(unitPillar),
+  shaft: withoutUv(unitShaft),
 };
 
 /**
@@ -276,6 +287,8 @@ interface Basin {
   centre: Point2;
   /** the rim polygon's outer ring (null: a round basin at `centre`) */
   outer: Point2[] | null;
+  /** a round basin's radius (m) */
+  r: number;
   /** the water's outline, when the rim has a hole */
   water: Point2[] | null;
 }
@@ -283,10 +296,12 @@ interface Basin {
 function basinOf(f: MonumentFeature): Basin | null {
   const g = f.geometry;
   if (g?.type === "Point") {
+    const r = pointBasinRadius(f.properties?.r);
     return {
-      area: Math.PI * POINT_BASIN_R ** 2,
+      area: Math.PI * r ** 2,
       centre: g.coordinates,
       outer: null,
+      r,
       water: null,
     };
   }
@@ -295,7 +310,14 @@ function basinOf(f: MonumentFeature): Basin | null {
   }
   const [outer, water] = g.coordinates;
   const centre = ringCentre(water ?? outer);
-  return { area: ringArea(outer), centre, outer, water: water ?? null };
+  const area = ringArea(outer);
+  return {
+    area,
+    centre,
+    outer,
+    r: Math.sqrt(area / Math.PI),
+    water: water ?? null,
+  };
 }
 
 /** The pad (the whole outline), the rim and the water of one basin, as
@@ -308,13 +330,11 @@ function basinShapes(
     const w = epsgToWorld(b.centre[0], b.centre[1], ctx.offset);
     const disc = (r: number) =>
       new Shape().absarc(w.x, -w.z, r, 0, Math.PI * 2, false);
-    const rim = disc(POINT_BASIN_R);
-    rim.holes.push(circle(POINT_BASIN_R - RIM_M, w.x, -w.z));
-    return {
-      pad: disc(POINT_BASIN_R),
-      rim,
-      water: disc(POINT_BASIN_R - RIM_M),
-    };
+    // a small basin's rim is a stone's edge, not a basin's wall
+    const inner = b.r - Math.min(RIM_M, 0.3 * b.r);
+    const rim = disc(b.r);
+    rim.holes.push(circle(inner, w.x, -w.z));
+    return { pad: disc(b.r), rim, water: disc(inner) };
   }
   const pad = new Shape(shapePoints(b.outer, ctx));
   const rim = new Shape(shapePoints(b.outer, ctx));
@@ -435,7 +455,8 @@ function addFountain(
     return;
   }
   const style: FountainStyle = f.properties?.style ?? "basin";
-  const levels = basinLevels(groundUnder(basin, ctx), style);
+  const small = basin.outer === null && smallBasin(basin.r);
+  const levels = basinLevels(groundUnder(basin, ctx), style, small);
   if (!levels) {
     return; // off the loaded terrain
   }
@@ -451,36 +472,72 @@ function addFountain(
       flat(shapes.water, solid ? levels.rim + 0.01 : levels.water)
     );
   }
+  const figure = addFountainFigure(f, basin.centre, levels.water, ctx, parts);
+  const h = jetHeight(basin.area, style, small);
+  if (h <= 0) {
+    return;
+  }
+  const onWater = basin.water ?? basin.outer;
+  // A sculpture takes the middle: the jets stand round it.
+  for (const place of jetPlaces(basin.centre, basin.area, figure, onWater)) {
+    const spread = figure ? 0.6 : 0.85;
+    parts.jets.push({
+      at: worldAt(place, levels.water, ctx),
+      scale: new Vector3(h * spread, h * spread, h * spread),
+      finish: FINISH.clay,
+      tone: null,
+      yaw: 0,
+    });
+  }
+}
+
+/** A fountain's sculpture, rising from its water: its measured relief,
+ *  else — where the winter housing hid it (`cover`) — the free
+ *  sculpture's marker. Whether one stands in the middle. */
+function addFountainFigure(
+  f: MonumentFeature,
+  centre: Point2,
+  water: number,
+  ctx: GroundContext,
+  parts: Parts
+): boolean {
   const relief = f.properties?.relief;
   if (relief) {
     const geo = reliefMesh(
       relief,
       ctx,
       markerTones(f.properties?.material),
-      levels.water - 0.3
+      water - 0.3
     );
     if (geo) {
-      parts.sculptures.push(withLift(geo, levels.water));
+      parts.sculptures.push(withLift(geo, water));
     }
+    return true;
   }
-  const h = jetHeight(basin.area, style);
-  if (h <= 0) {
-    return;
+  if (f.properties?.cover === true) {
+    addCoveredFigure(f, centre, water, ctx, parts);
+    return true;
   }
-  const onWater = basin.water ?? basin.outer;
-  // A sculpture takes the middle: the jets stand round it.
-  for (const place of jetPlaces(
-    basin.centre,
-    basin.area,
-    relief !== undefined,
-    onWater
-  )) {
-    const spread = relief ? 0.6 : 0.85;
-    parts.jets.push({
-      at: worldAt(place, levels.water, ctx),
-      scale: new Vector3(h * spread, h * spread, h * spread),
-      finish: FINISH.clay,
-      tone: null,
+  return false;
+}
+
+/** The covered figure's solids on the basin's floor, out of its water, in
+ *  the fountain's material (`coveredFigure`). */
+function addCoveredFigure(
+  f: MonumentFeature,
+  centre: Point2,
+  water: number,
+  ctx: GroundContext,
+  parts: Parts
+): void {
+  const tones = markerTones(f.properties?.material);
+  for (const p of coveredFigure()) {
+    const sink = 0.3;
+    parts.markers[p.solid].push({
+      at: worldAt(centre, water + p.lift - sink, ctx),
+      finish: partFinish(f.properties?.material, false),
+      scale: new Vector3(p.width, p.height + sink, p.depth),
+      tone: tones.figure,
       yaw: 0,
     });
   }
@@ -495,7 +552,7 @@ function addMonument(
   if (f.geometry?.type !== "Point" || !kind || kind === "fountain") {
     return;
   }
-  const marker = markerOf(f.properties, kind, f.geometry.coordinates);
+  const marker = monumentMarker(f.properties, kind, f.geometry.coordinates);
   const ground = ctx.heightAt(marker.centre[0], marker.centre[1]);
   if (ground === null) {
     return;
@@ -526,28 +583,6 @@ function addMonument(
       });
     }
   }
-}
-
-/** A monument's solids: its measured relief composed, else the marker of
- *  its form or kind at its point, turned by a stable hash. */
-function markerOf(
-  props: MonumentFeature["properties"],
-  kind: Exclude<MonumentKind, "fountain">,
-  [x, y]: Point2
-): MeasuredMarker {
-  const measured = props?.relief
-    ? measuredMarker(props.relief, kind, props.form)
-    : null;
-  return (
-    measured ?? {
-      centre: [x, y],
-      yaw: yawOf(x, y),
-      pieces: markerPieces(kind, props?.form, props?.height).map((p) => ({
-        ...p,
-        along: 0,
-      })),
-    }
-  );
 }
 
 /** The lowest ground under a piece's four corners (m, world Y). */
@@ -640,6 +675,9 @@ function merged(
  */
 const fountainTime: Live = uniform(0);
 const fountainNight: Live = uniform(0);
+/** 1 while the fountains run, 0 in the months they are drained
+ *  (`fountainsRun`): a uniform, so the season turns without a rebuild. */
+const fountainSeason: Live = uniform(1);
 /** What a fountain keeps of its light after dark, beside walls only the
  *  street lamps reach: the jets' warm white (they are unlit, so their
  *  colour is their whole brightness), the water's glow from below and
@@ -657,6 +695,11 @@ export function setFountainTime(elapsed: number): void {
 /** 0 by day → 1 at night: the basins light up softly with the lamps. */
 export function setFountainNight(t: number): void {
   fountainNight.value = Math.min(Math.max(t, 0), 1);
+}
+
+/** The scene's date: from November to mid-April the jets are off. */
+export function setFountainSeason(date: Date): void {
+  fountainSeason.value = fountainsRun(date) ? 1 : 0;
 }
 
 /** A jet's own phase (0..2π), hashed from its instance's position (the
@@ -677,7 +720,8 @@ const jetPhase = Fn((builder) => {
  * transform) and droplets run down the curtain as soft streaks in its
  * alpha (a swirl round the lathe's u, streaks down its v). By night the
  * spray dims to a faint warm white, the little light it catches
- * (`NIGHT_JET`).
+ * (`NIGHT_JET`). Out of season (`fountainSeason` 0) a bell collapses to
+ * its nozzle and is fully transparent.
  */
 function sprayMaterial(): MeshBasicNodeMaterial {
   const m = new MeshBasicNodeMaterial({
@@ -692,7 +736,11 @@ function sprayMaterial(): MeshBasicNodeMaterial {
     .add(sin(fountainTime.mul(1.1).add(phase)).mul(0.07))
     .add(sin(fountainTime.mul(2.7).add(phase.mul(1.7))).mul(0.03));
   m.positionNode = instancePosition(
-    vec3(positionLocal.x, positionLocal.y.mul(breath), positionLocal.z)
+    vec3(
+      positionLocal.x,
+      positionLocal.y.mul(breath).mul(fountainSeason),
+      positionLocal.z
+    )
   );
   const vPhase = varying(phase, "vJetPhase");
   const bell = uv();
@@ -700,7 +748,10 @@ function sprayMaterial(): MeshBasicNodeMaterial {
   const streaks = float(0.72).add(
     sin(bell.y.mul(38).sub(fountainTime.mul(5)).add(swirl)).mul(0.28)
   );
-  m.opacityNode = materialOpacity.mul(bellAlpha(bell.y)).mul(streaks);
+  m.opacityNode = materialOpacity
+    .mul(bellAlpha(bell.y))
+    .mul(streaks)
+    .mul(fountainSeason);
   m.colorNode = vec4(
     mix(materialColor.rgb, vec3(1, 0.93, 0.8).mul(NIGHT_JET), fountainNight),
     1
@@ -709,9 +760,9 @@ function sprayMaterial(): MeshBasicNodeMaterial {
 }
 
 /**
- * The water: a slow shimmer of light across the surface (three crossing
- * swells in world x/z, none aligned with another, so no stripes read,
- * tilting the view-space normal and brightening the emissive), and by
+ * The water: the wind's wave field at a basin's size (water-waves.ts
+ * `BASIN_WAVES`, the river's ripples smaller) tilting its normal, the sky
+ * mirrored off them and a slow shimmer of light where they tilt most; by
  * night a faint glow from below in place of most of the shimmer
  * (`NIGHT_WATER`, `NIGHT_SHIMMER`).
  */
@@ -722,28 +773,22 @@ function waterMaterial(): MeshStandardNodeMaterial {
     roughness: 0.12,
     metalness: 0,
   });
-  const p = positionWorld;
-  const t = fountainTime;
-  const ripA = sin(p.x.mul(2.3).add(p.z.mul(0.7)).add(t.mul(1.6)))
-    .add(sin(p.z.mul(2.9).sub(p.x.mul(1.1)).sub(t.mul(1.3))))
-    .add(sin(p.x.add(p.z).mul(4.1).add(t.mul(2.3))))
-    .div(3);
-  const ripB = sin(p.x.mul(3.7).sub(p.z.mul(1.9)).add(t.mul(2.1)));
-  m.normalNode = normalize(
-    normalView.add(vec3(ripA.mul(0.06), ripB.mul(0.06), 0))
-  );
+  const field = waves(dataXY(), fountainTime, BASIN_WAVES);
+  const n = waveNormal(field.slope).toVar();
+  m.normalNode = cameraViewMatrix.mul(vec4(n, 0)).xyz.normalize();
+  const tilt = waveTilt(field.slope).toVar();
   const shimmer = mix(float(1), NIGHT_SHIMMER, fountainNight);
   m.emissiveNode = materialEmissive
-    .add(vec3(0.03, 0.04, 0.045).mul(ripA.mul(0.5).add(0.5)).mul(shimmer))
+    .add(vec3(0.03, 0.04, 0.045).mul(tilt).mul(shimmer))
     .add(
-      skyReflection(normalWorld, 0.15).mul(
-        mirrorWeight(normalWorld, 0.04).mul(REFLECTIONS).mul(0.6)
+      skyReflection(n, 0.15).mul(
+        mirrorWeight(n, 0.04).mul(REFLECTIONS).mul(0.6)
       )
     )
     .add(
       vec3(0.6, 0.8, 1)
         .mul(fountainNight.mul(NIGHT_WATER))
-        .mul(ripA.mul(0.2).add(0.8))
+        .mul(tilt.mul(0.4).add(0.6))
     );
   return m;
 }
@@ -926,7 +971,7 @@ export function buildMonuments(
   group.name = "monuments";
   const parts: Parts = {
     jets: [],
-    markers: { block: [], needle: [], pillar: [] },
+    markers: { block: [], needle: [], pillar: [], shaft: [] },
     reliefs: [],
     sculptures: [],
     rims: [],

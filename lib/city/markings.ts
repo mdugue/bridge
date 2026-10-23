@@ -14,8 +14,26 @@ export function markingKindId(kind: MarkingKind): number {
   return MARKING_KINDS.indexOf(kind);
 }
 
-/** The raster's lane bits (G). */
-export const LANE_BITS = { cycle: 1, centre: 4 } as const;
+/**
+ * The raster's lane bits (G, the bake's `CYCLE` … `CYCLE_WIDE`). On road
+ * texels: a cycle lane along this side's kerb — its line solid (a
+ * Radfahrstreifen, else a Schutzstreifen's dashes), at 2.25 m from the kerb
+ * (`cycleWide`, a tagged width of 2.05 m or more) — and a centre-line road,
+ * its line solid, with dashed lane lines halfway to each kerb too (four
+ * lanes or more). On any texel: a kerb line near (the ground's kerb band is
+ * drawn only there, ground-detail.ts) and a red cycle surface (a red
+ * lane's fill, or a red cycle track mapped on its own).
+ */
+export const LANE_BITS = {
+  cycle: 1,
+  cycleSolid: 2,
+  centre: 4,
+  kerb: 8,
+  centreSolid: 16,
+  laneLines: 32,
+  red: 64,
+  cycleWide: 128,
+} as const;
 
 /** Bytes per metre of the raster's centre offset (B), as the edge raster. */
 export const MARKING_OFFSET_SCALE = 20;
@@ -27,9 +45,17 @@ export const MARKING_OFFSET_SCALE = 20;
  * crossing the pattern is the crossing's own.
  */
 export const MARKING_PATTERN = {
-  /** the cycle lane's broken line: its distance from the kerb (m) */
+  /**
+   * The cycle lane's line, its distance from the kerb (m) — or from a
+   * parking lane's outer edge on that side: a Radfahrstreifen's solid 25 cm
+   * line at 1.85 m, a Schutzstreifen's 12 cm dashes (1 m in 2) at 1.5 m,
+   * either at 2.25 m where tagged that wide.
+   */
   cycleFromKerb: 1.85,
+  cycleAdvisoryFromKerb: 1.5,
+  cycleWideFromKerb: 2.25,
   cycleHalfWidth: 0.125,
+  cycleAdvisoryHalfWidth: 0.06,
   cyclePeriod: 2.0625,
   centreDash: 3,
   centreHalfWidth: 0.06,
@@ -42,6 +68,26 @@ export const MARKING_PATTERN = {
   zebraBar: 0.5,
   zebraPeriod: 1,
 } as const;
+
+/**
+ * The cycle lane's line in metres from the kerb (the shader's `laneLines`):
+ * its kind's distance (`MARKING_PATTERN`), past the parking lane on that
+ * side where there is one — `parking` is the bays' band across the kerb
+ * (`parkingBand` in lib/city/landcover.ts), whose road-side edge the lane
+ * starts at.
+ */
+export function cycleLineFromKerb(
+  bits: number,
+  parking: readonly [number, number] | null
+): number {
+  let own: number = MARKING_PATTERN.cycleAdvisoryFromKerb;
+  if (bits & LANE_BITS.cycleWide) {
+    own = MARKING_PATTERN.cycleWideFromKerb;
+  } else if (bits & LANE_BITS.cycleSolid) {
+    own = MARKING_PATTERN.cycleFromKerb;
+  }
+  return own + Math.max(parking?.[1] ?? 0, 0);
+}
 
 /** One row: `[cx, cy, angle, halfLength, halfWidth, kind]` — the centre in
  *  metres from the tile's north-west corner (x east, y north), the axis

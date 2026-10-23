@@ -1,11 +1,14 @@
 import { expect, test } from "bun:test";
 import {
   OBJECT_FLAG_SHOP,
+  OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_LOD2,
   OBJECT_SOURCE_SCAN,
 } from "./city-mesh";
+import { encodeDrawn } from "./drawn-facts";
 import type { InquiryObject } from "./inquiry";
 import type { TreeInquiry } from "./inquiry-features";
+import type { LampInquiry } from "./inquiry-more";
 import { type LineageEntry, type LineageSite, lineage } from "./lineage";
 import { MEASURED_ROOF, NO_FACT, type ObjectFacts } from "./object-facts";
 import type { SiteProvenance } from "./provenance";
@@ -204,6 +207,23 @@ test("a tree the surface model measured names the model, not a register", () => 
   ]);
 });
 
+test("an evergreen names what told it: the forest or the leaf-off photo", () => {
+  const crown = {
+    kind: "canopy" as const,
+    tile: "t",
+    position: [0, 0] as [number, number],
+    source: "dom" as const,
+  };
+  const forest = lineage({ ...crown, evergreen: "forest" }, provenance, saxony);
+  expect(sources(forest)).toContain("Basis-DLM");
+  const photo = lineage({ ...crown, evergreen: "photo" }, provenance, saxony);
+  expect(sources(photo)).not.toContain("Basis-DLM");
+  const dop = photo.find((e) => e.source === "Digitales Orthophoto");
+  expect(dop && said(dop)).toContain(
+    "dass er immergrün ist: grün im laubfreien Luftbild"
+  );
+});
+
 test("an orchard's tree names OSM's orchard, not the city's register", () => {
   const entries = lineage(
     {
@@ -227,6 +247,33 @@ test("an orchard's tree names OSM's orchard, not the city's register", () => {
     "Im Viewer",
   ]);
   expect(entries[0].credit).toContain("ODbL");
+});
+
+test("an orchard's tree DOM1 measured names the surface model, not the orchard's default", () => {
+  const entries = lineage(
+    {
+      kind: "tree",
+      tile: "t",
+      index: 4,
+      position: [0, 0],
+      osm: false,
+      orchard: true,
+      measured: true,
+      conifer: false,
+      genus: "",
+      height: 6.2,
+      crown: 5.3,
+    },
+    provenance,
+    saxony
+  );
+  expect(sources(entries)).toEqual([
+    "OpenStreetMap",
+    "Digitales Oberflächenmodell DOM1",
+    "Digitales Geländemodell DGM1",
+    "Im Viewer",
+  ]);
+  expect(JSON.stringify(entries)).not.toContain("Vorgabe der Obstwiese");
 });
 
 test("without a Basis-DLM a bridge's deck and a tree row are OSM's, with its licence and link", () => {
@@ -284,4 +331,59 @@ test("without a Basis-DLM a bridge's deck and a tree row are OSM's, with its lic
     hamburg
   )[0];
   expect(deck.stand).toBe("01.08.2026");
+});
+
+test("a lamp says the wall it hangs on and the carriageway its arm reaches over", () => {
+  const used = (entries: LineageEntry[], source: string) =>
+    entries.find((e) => e.source === source)?.used.map((u) => u.text) ?? [];
+  const lamp: LampInquiry = { kind: "lamp", tile: "t", position: [0, 0] };
+  const onWall = lineage({ ...lamp, wall: "wall" }, provenance, saxony);
+  expect(used(onWall, "OpenStreetMap")).toEqual([
+    "Standort",
+    "die Mauer, an der die Leuchte hängt",
+  ]);
+  expect(used(onWall, "Digitales Geländemodell DGM1")).toContain(
+    "die Seite der Mauer, an der sie hängt: die tiefere"
+  );
+  const mast = lineage(
+    { ...lamp, arm: true, height: 9, heightFrom: "street" },
+    provenance,
+    saxony
+  );
+  expect(used(mast, "OpenStreetMap")).toEqual([
+    "Standort",
+    "die Fahrbahn, über die der Ausleger reicht",
+  ]);
+  // a lamp Mapillary found takes only its arm's carriageway from OSM
+  const seen = lineage({ ...lamp, arm: true, src: "mly" }, provenance, saxony);
+  expect(used(seen, "OpenStreetMap")).toEqual([
+    "die Fahrbahn, über die der Ausleger reicht",
+  ]);
+  expect(used(lineage(lamp, provenance, saxony), "OpenStreetMap")).toEqual([
+    "Standort",
+  ]);
+});
+
+test("a building LoD2 lacks: OSM's outline, and its height the surface model's or OSM's", () => {
+  const entry = (drawn: string, source: string) => {
+    const b = object({ source: OBJECT_SOURCE_GAP, facts: facts({ drawn }) });
+    const found = lineage(
+      { kind: "building", tile: "t", picked: b, tree: [b] },
+      provenance,
+      saxony
+    ).find((e) => e.source === source);
+    return found?.used ?? [];
+  };
+  // measured: the surface model computes its height
+  expect(entry("", "Digitales Oberflächenmodell DOM1")).toEqual([
+    { text: "seine Höhe über Gelände und Stadtmodell", method: "computed" },
+  ]);
+  // newer than the flight: OSM's height, the surface model says why
+  const newer = encodeDrawn({ height: "osm" });
+  expect(entry(newer, "Digitales Oberflächenmodell DOM1")).toEqual([
+    { text: "dass es beim Bildflug noch nicht stand", method: "detected" },
+  ]);
+  expect(entry(newer, "OpenStreetMap").map((u) => u.text)).toContain(
+    "seine Höhe: die kartierte oder die Geschosse"
+  );
 });

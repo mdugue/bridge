@@ -47,7 +47,7 @@ import { wallGeometry } from "../lib/city/walls";
 import type { Site } from "../lib/city/site";
 import { REFERENCE_SITE, SITES, siteFromArgs } from "../sites";
 import { FINE_TIN_MAX_ERROR } from "./bake-terrain-tin";
-import { readDgm, shapeDgm } from "./bake-tiles";
+import { readDgm, shapeDgm, stairRailLines } from "./bake-tiles";
 import {
   fenceLines,
   gatePoints,
@@ -55,7 +55,9 @@ import {
   stairLines,
   terraces,
   wallLines,
+  waterMember,
 } from "./tile-sources";
+import { decodeLift } from "../lib/city/water-bodies";
 
 /** The parts measured, by the name the report uses. */
 export const JOIN_PARTS = [
@@ -90,7 +92,11 @@ async function tileGround(site: Site, tile: string): Promise<Ground> {
   const elevations = shapeDgm(
     dgm,
     wallLines(site, tile),
-    { stairs: stairLines(site, tile), terraces: terraces(site, tile) },
+    {
+      stairs: stairLines(site, tile),
+      terraces: terraces(site, tile),
+      water: await decodeLift(waterMember(site, tile), dgm.bounds),
+    },
     { burnWalls: false, stairMargin: FINE_TIN_MAX_ERROR }
   );
   const field = { elevations, n: dgm.n, bounds: dgm.bounds };
@@ -184,9 +190,18 @@ function tileJoins(
         ? (stairGeometry(stair, OFFSET, surround)?.joins ?? [])
         : [];
     }),
+    // the flights' handrails with the fences, as prepare-data.ts builds them
     fences:
-      fenceGeometry(fenceLines(site, tile), gates, heightAt, OFFSET, cut.leaves)
-        ?.joins ?? [],
+      fenceGeometry(
+        [
+          ...fenceLines(site, tile),
+          ...stairRailLines(stairLines(site, tile), bounds),
+        ],
+        gates,
+        heightAt,
+        OFFSET,
+        cut.leaves
+      )?.joins ?? [],
     sheds: smallBuildings(site, tile).flatMap(structureJoins),
     doors: doors(site, tile).flatMap(doorJoins),
     shopfronts: shopfronts(site, tile).flatMap((w) =>

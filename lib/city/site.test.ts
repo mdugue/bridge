@@ -4,8 +4,11 @@ import { DRESDEN } from "../../sites/dresden";
 import { directionOf } from "./pose";
 import {
   landcoverCredit,
+  MAPILLARY_CREDIT,
   mapillaryCredit,
   osmExtractUrl,
+  GLO30_CREDIT,
+  PHENOLOGY_CREDIT,
   siteAttribution,
   siteCredit,
   overlook,
@@ -97,16 +100,16 @@ test("Dresden keeps its tile ids, credits and extract", () => {
     "Quelle: GeoSN, dl-de/by-2-0",
     "Lampen, Bänke, Ampeln, Hydranten, Uhren, Litfaßsäulen, Brunnen, Mauern, Zäune, Hecken, Treppen, Plätze, Beläge, Fahrbahnmarkierungen, Sportplätze, Kleingärten, Obstwiesen, Weinberge, Bahnsteige, Straßenbahn, Anlegestellen, Brücken, Läden, Baudenkmale und Kirchtürme © OpenStreetMap-Mitwirkende (ODbL)",
     "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0; weitere Bäume © OpenStreetMap-Mitwirkende (ODbL)",
-    "Lampen, Mülleimer, Schaufenster: Mapillary, CC BY-SA 4.0",
+    "Lampen, Schaufenster: Mapillary, CC BY-SA 4.0",
     "Verkehrsmengen: Landeshauptstadt Dresden, dl-de/by-2-0 · Tagesgang: Freie und Hansestadt Hamburg, dl-de/by-2-0 · Radzählstellen: Landeshauptstadt Dresden, dl-de/by-2-0 · Straßenbahn-Fahrplan: DELFI e.V. via gtfs.de, CC BY 4.0",
+    PHENOLOGY_CREDIT,
+    GLO30_CREDIT,
   ]);
-  // A site without a tree register credits two sources, the panoramas its
-  // shop windows were measured in (no lamps or bins from them), and its
-  // data layers' in one more line.
-  expect(siteAttribution(SITES.grimma)).toHaveLength(4);
-  expect(siteAttribution(SITES.grimma)[2]).toBe(
-    "Fassaden, Schaufenster: Mapillary, CC BY-SA 4.0"
-  );
+  // A site without a tree register credits two sources, Mapillary (its
+  // lamps and the panoramas its shop windows were measured in), its data
+  // layers' in one more line, the trees' year and the land beyond its tiles.
+  expect(siteAttribution(SITES.grimma)).toHaveLength(6);
+  expect(siteAttribution(SITES.grimma)[2]).toBe(MAPILLARY_CREDIT);
   expect(siteAttribution(SITES.grimma)[3]).toStartWith(
     "Straßenverkehrszählung 2021: Freistaat Sachsen"
   );
@@ -172,20 +175,28 @@ test("overlook refuses a vantage that does not look down", () => {
 
 test("the short credit names every licensor and licence once", () => {
   expect(siteCredit(SITES.dresden)).toBe(
-    "GeoSN, Landeshauptstadt Dresden, Freie und Hansestadt Hamburg (dl-de/by-2-0) · Mapillary (CC BY-SA 4.0) · DELFI e.V. via gtfs.de (CC BY 4.0) · © OpenStreetMap (ODbL)"
+    "GeoSN, Landeshauptstadt Dresden, Freie und Hansestadt Hamburg, Deutscher Wetterdienst (dl-de/by-2-0) · Mapillary (CC BY-SA 4.0) · DELFI e.V. via gtfs.de (CC BY 4.0) · Copernicus WorldDEM-30 (© DLR, Airbus DS) · © OpenStreetMap (ODbL)"
   );
   expect(siteCredit(SITES.unna)).toBe(
-    "Geobasis NRW (dl-de/zero-2-0) · Straßen.NRW, Freie und Hansestadt Hamburg (dl-de/by-2-0) · © OpenStreetMap (ODbL)"
+    "Geobasis NRW (dl-de/zero-2-0) · Mapillary (CC BY-SA 4.0) · Straßen.NRW, Freie und Hansestadt Hamburg, Deutscher Wetterdienst (dl-de/by-2-0) · Copernicus WorldDEM-30 (© DLR, Airbus DS) · © OpenStreetMap (ODbL)"
   );
   expect(siteCredit(SITES.hamburg)).toContain("LGV");
 });
 
 test("Mapillary is credited where its photos are measured, naming what it gave", () => {
   expect(mapillaryCredit(SITES.dresden)).toEqual([
-    "Lampen, Mülleimer, Schaufenster: Mapillary, CC BY-SA 4.0",
+    "Lampen, Schaufenster: Mapillary, CC BY-SA 4.0",
   ]);
   expect(mapillaryCredit(SITES.leipzig)).toEqual([
     "Fassaden, Schaufenster: Mapillary, CC BY-SA 4.0",
+  ]);
+  // the small cities' lamps (OSM maps few there; QA 2026-10-21, W18)
+  for (const id of ["grimma", "meissen"] as const) {
+    expect(mapillaryCredit(SITES[id])).toEqual([MAPILLARY_CREDIT]);
+  }
+  // Unna's tiles have no panoramas: its lamps alone
+  expect(mapillaryCredit(SITES.unna)).toEqual([
+    "Lampen: Mapillary, CC BY-SA 4.0",
   ]);
   expect(mapillaryCredit({ ...SITES.leipzig, mapillary: undefined })).toEqual(
     []

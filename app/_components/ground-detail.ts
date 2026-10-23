@@ -32,18 +32,24 @@ import {
   vec4,
 } from "three/tsl";
 import {
+  ARABLE_CLASS,
   BUILTUP_CLASS,
+  RAILWAY_CLASS,
   MEADOW_CLASS,
   PATH_CLASS,
   ROAD_CLASS,
   parkingId,
   EDGE_SCALE,
+  PARKING_DEPTH,
+  parkingPlaceId,
+  SURFACE_ALONG_BITS,
   SURFACE_ALONG_PERIOD,
   type SurfaceKind,
   surfaceId,
 } from "@/lib/city/landcover";
 import { KERB_HEIGHT } from "@/lib/city/kerbs";
-import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
+import { LANE_BITS } from "@/lib/city/markings";
+import type { F, I, Tex, V2, V3, V4 } from "./shader-chunks";
 
 /**
  * Ground detail in the terrain's colour node, next to the meadow mottle
@@ -56,8 +62,12 @@ import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
  *   the fragment, box-smoothed (valid within a texel of the edge). A pale
  *   stone band on the pavement side and a darker gutter on the road side —
  *   where the other side is ground a kerb borders. On the fine level a real
- *   kerb stone stands on the band (lib/city/kerbs.ts, kerb-layer.ts); the
- *   band carries the line into the coarse level.
+ *   kerb stone stands on the band (lib/city/kerbs.ts, kerb-layer.ts), and
+ *   the band is drawn only where one does: the road-markings raster marks
+ *   the texels round every baked kerb line (`LANE_BITS.kerb`), so out of
+ *   town, beside water or rails and over a tunnel there is neither stone
+ *   nor band (`kerbLines`). The band carries the line into the coarse
+ *   level.
  * - **Lawn edges.** The same distance for the meadow (urban green
  *   included): a darker lip and a normal kink where the grass stops.
  * - **Paving.** The OSM paving raster (pipeline/bake/surface.py; optional)
@@ -70,8 +80,10 @@ import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
  *   distance, and sealed ground off the road takes the road's grey.
  * - **Parking.** The same raster marks parking lanes beside the carriageway
  *   (parallel or perpendicular bays, laid out from the kerb along the
- *   street) and car parks (bay lines across their aisle, the aisles left
- *   clear). Painted lines, faded out by distance.
+ *   street: on the carriageway, over the kerb by a metre or on the
+ *   pavement) and car parks (bay lines across their aisle, the aisles left
+ *   clear). Painted lines only where OSM says the bays are painted, else a
+ *   faint tint; faded out by distance.
  * - **Urban green.** Green courtyards, front gardens and parks inside the
  *   DLM's built-up class are painted exactly as meadow.
  *
@@ -88,7 +100,6 @@ import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
  * branch would otherwise be assigned there only.
  */
 
-type I = Node<"int">;
 type I2 = Node<"ivec2">;
 type B = Node<"bool">;
 
@@ -158,6 +169,10 @@ export interface GroundFields {
   roadKind: I;
   walkKind: I;
   park: I;
+  /** where a street's bays lie across the kerb (`PARKING_PLACES`) and
+   *  whether they are painted (the paving raster's A byte) */
+  parkPlace: I;
+  parkPainted: B;
   /** the street bearing (rad from east) and whether the paving raster
    *  gives the street's frame here, with the distance along it */
   head: F;
@@ -254,11 +269,24 @@ export const gdBand = Fn(
 const classAt = (inp: GroundInputs, p: I2, size: I2): I =>
   int(byteOf(texelAt(inp.classTexture, p, size).r));
 
-/** ground a kerb borders: background, meadow, forest, copse, built-up, path */
+/** ground a kerb borders: background, meadow, forest, copse, built-up,
+ *  path, and the arable land (meadow until it was a class of its own) */
 const kerbable = (c: I): F =>
-  select(or(c.lessThanEqual(BUILTUP_CLASS), c.equal(PATH_CLASS)), 1, 0);
+  select(
+    or(
+      c.lessThanEqual(BUILTUP_CLASS),
+      or(c.equal(PATH_CLASS), c.equal(ARABLE_CLASS))
+    ),
+    1,
+    0
+  );
 
 const isClass = (c: I, k: number): F => select(c.equal(k), 1, 0);
+
+/** The ground with a lawn's edge: meadow, and the arable land as edges.py
+ *  counts it. */
+const isLawn = (c: I): F =>
+  select(or(c.equal(MEADOW_CLASS), c.equal(ARABLE_CLASS)), 1, 0);
 
 /** A data-frame horizontal direction in view space (world = data (x, z, −y)). */
 const toView = (d: V2): V3 =>
@@ -294,7 +322,7 @@ function gdSmooth(
     for (let x = 0; x < 4; x++) {
       const c = classAt(inp, i.add(ivec2(x - 1, y - 1)), size).toVar();
       road.push(isClass(c, ROAD_CLASS));
-      lawn.push(isClass(c, MEADOW_CLASS));
+      lawn.push(isLawn(c));
     }
   }
   const corner = (m: F[], k: number): F => {
@@ -391,6 +419,10 @@ function pavingFields(inp: GroundInputs, surface: Tex, g: GroundFields) {
   g.roadKind.assign(byte.bitAnd(7));
   g.walkKind.assign(byte.shiftRight(3).bitAnd(7));
   g.park.assign(byte.shiftRight(6));
+  // A: the offset's high bits, then the parking place and its paint
+  const high = int(byteOf(s.a)).toVar();
+  g.parkPlace.assign(high.shiftRight(5).bitAnd(3));
+  g.parkPainted.assign(high.shiftRight(7).equal(1));
   const gb = byteOf(s.g).toVar();
   If(gb.greaterThan(0.5), () => {
     g.hasFrame.assign(true);
@@ -401,14 +433,45 @@ function pavingFields(inp: GroundInputs, surface: Tex, g: GroundFields) {
         .mul(2 * Math.PI)
     );
     const offset = byteOf(s.b)
-      .add(byteOf(s.a).mul(256))
-      .div(65536)
+      .add(float(high.bitAnd(31)).mul(256))
+      .div(2 ** SURFACE_ALONG_BITS)
       .mul(ALONG_PERIOD);
     g.alongM.assign(
       floorMod(
         offset.add(dot(g.local, vec2(cos(g.head), sin(g.head)))),
         ALONG_PERIOD
       )
+    );
+  });
+}
+
+/**
+ * The kerb band only round a baked kerb line: the share of the four
+ * road-markings texels round the fragment that carry the kerb bit
+ * (pipeline/bake/markings.py `KERB`, set out to 2 m and a texel's diagonal
+ * from every line edges.py keeps), bilinear, so the band fades over a
+ * texel where a kerb ends. It replaces the classes' answer: edges.py drew
+ * its lines by the same rule (no kerb at water or railway) and also where
+ * both sides are road land — a carriageway beside a green verge, which
+ * edges.py counts as meadow. Read only near the camera, where the band
+ * shows.
+ */
+function kerbLines(inp: GroundInputs, g: GroundFields, raster: Tex): void {
+  If(inp.fw.lessThan(0.5), () => {
+    const size = texelSize(raster, inp.uv).toVar();
+    const p = inp.uv.mul(vec2(size)).sub(0.5).toVar();
+    const i = ivec2(floor(p)).toVar();
+    const f = p.sub(floor(p)).toVar();
+    const bit = (dx: number, dy: number): F =>
+      select(
+        int(byteOf(texelAt(raster, i.add(ivec2(dx, dy)), size).y))
+          .bitAnd(LANE_BITS.kerb)
+          .notEqual(0),
+        1,
+        0
+      );
+    g.kerbOk.assign(
+      mix(mix(bit(0, 0), bit(1, 0), f.x), mix(bit(0, 1), bit(1, 1), f.x), f.y)
     );
   });
 }
@@ -437,12 +500,14 @@ function pavingKind(g: GroundFields, cls: I): void {
 
 /**
  * The fields every later chunk reads: the road and lawn distances, the
- * paving kind and the street direction. After the meadow mottle.
+ * paving kind and the street direction. After the meadow mottle. `kerbs`
+ * is the road-markings raster (its kerb bits; with the baked edges only).
  */
 export function groundFields(
   inp: GroundInputs,
   surface?: Tex,
-  edges?: Tex
+  edges?: Tex,
+  kerbs?: Tex
 ): GroundFields {
   const size = texelSize(inp.classTexture, inp.uv).toVar();
   const texels = vec2(size).toVar();
@@ -461,11 +526,7 @@ export function groundFields(
     f,
     mpt
   ).toVar();
-  const lawn = gdField(
-    four((c) => isClass(c, MEADOW_CLASS)),
-    f,
-    mpt
-  ).toVar();
+  const lawn = gdField(four(isLawn), f, mpt).toVar();
   const g: GroundFields = {
     dr: float(-1e3).toVar(),
     dl: float(-1e3).toVar(),
@@ -476,6 +537,8 @@ export function groundFields(
     roadKind: int(0).toVar(),
     walkKind: int(0).toVar(),
     park: int(0).toVar(),
+    parkPlace: int(0).toVar(),
+    parkPainted: bool(false).toVar(),
     head: float(0).toVar(),
     hasFrame: bool(false).toVar(),
     alongM: float(0).toVar(),
@@ -497,6 +560,9 @@ export function groundFields(
     classDistances(inp, g, { i, f, mpt, road, lawn, size });
   }
   g.kerbOk = gdField(four(kerbable), f, mpt).x.toVar();
+  if (edges && kerbs) {
+    kerbLines(inp, g, kerbs);
+  }
   if (surface) {
     pavingFields(inp, surface, g);
   }
@@ -522,7 +588,11 @@ export function groundFields(
  * front gardens, parks inside the settlement — painted exactly as meadow
  * (its colour, mottle, NDVI tint and lawn edge). With the baked edges the
  * mask is theirs (edges.py counts NDVI-green, unsealed built-up ground as
- * meadow); without, the NDVI decides here. Returns its weight (`ugW`).
+ * meadow, the green railway land off the tracks and the road land clear
+ * of everything paved that is green, low ground or a wood: the
+ * embankments, verges, islands and wooded strips the DLM's parcels hold);
+ * without, the NDVI decides here, on built-up ground alone. Returns its
+ * weight (`ugW`).
  */
 export function urbanGreen(
   inp: GroundInputs,
@@ -534,7 +604,14 @@ export function urbanGreen(
   const built = select(or(cls.equal(BUILTUP_CLASS), cls.equal(0)), 1, 0);
   let mask: F = float(0);
   if (g.hasEdge) {
-    mask = smoothstep(-0.15, 0.15, g.dl).mul(built);
+    // edges.py's meadow also holds the green railway land off the tracks
+    // and the green road land past the carriageways (its verges).
+    const ground = select(
+      or(cls.equal(RAILWAY_CLASS), cls.equal(ROAD_CLASS)),
+      1,
+      built
+    );
+    mask = smoothstep(-0.15, 0.15, g.dl).mul(ground);
   } else if (ndvi) {
     const paved = and(
       g.walkKind.greaterThan(0),
@@ -718,7 +795,52 @@ function paving(
 /** A painted line's half-width (m). */
 const LINE = 0.07;
 
-/** Parking: bay lines laid out from the kerb, or across a car park. */
+/**
+ * A street's parking band across the kerb on this texel (`parkingBand` in
+ * lib/city/landcover.ts): `from`/`to` in metres from the kerb (+ toward the
+ * road) — on the carriageway, a metre over the kerb, or a bay's depth onto
+ * the pavement — and the bays' depth and length (vars).
+ */
+export function parkingBandOf(g: GroundFields): {
+  bay: F;
+  depth: F;
+  from: F;
+  street: B;
+  to: F;
+} {
+  const parallel = g.park.equal(parkingId("street-parallel"));
+  const street = or(
+    parallel,
+    g.park.equal(parkingId("street-perpendicular"))
+  ).toVar();
+  const depth = select(
+    parallel,
+    PARKING_DEPTH.parallel,
+    PARKING_DEPTH.angled
+  ).toVar();
+  const from = select(
+    g.parkPlace.equal(parkingPlaceId("on-kerb")),
+    depth.negate(),
+    select(g.parkPlace.equal(parkingPlaceId("half-on-kerb")), -1, 0)
+  ).toVar();
+  return {
+    bay: select(parallel, 5.5, 2.5).toVar(), // m along the street
+    depth,
+    from,
+    street,
+    to: from.add(depth).toVar(),
+  };
+}
+
+/**
+ * Parking: a street's parking lane laid out from the kerb, or bay lines
+ * across a car park. A street's bays lie on the carriageway, over the kerb
+ * by a metre or on the pavement (the paving raster's place); their lines —
+ * the dividers and the outer edge — are drawn only where OSM says they are
+ * painted, elsewhere the lane is a faint tint (QA B23: the orthophotos show
+ * almost no painted bays). A lot is painted unless OSM says not, or it is
+ * gravel or grass.
+ */
 function parking(
   inp: GroundInputs,
   col: GroundColour,
@@ -734,29 +856,32 @@ function parking(
       float(1).sub(smoothstep(g.w.negate().add(LINE), g.w.add(LINE), e))
     );
   };
-  const isLot = g.park.equal(parkingId("lot"));
+  const paintedLot = and(g.park.equal(parkingId("lot")), g.parkPainted);
   if (g.hasEdge) {
-    const street = or(
-      g.park.equal(parkingId("street-parallel")),
-      g.park.equal(parkingId("street-perpendicular"))
-    );
-    If(and(g.onRoad, street), () => {
-      const parallel = g.park.equal(parkingId("street-parallel"));
-      const depth = select(parallel, 2.0, 5.0).toVar(); // m from the kerb
-      const bay = select(parallel, 5.5, 2.5).toVar(); // m along the street
-      const lane = gdBand(g.dr, 0, depth, g.w).toVar();
-      const edge = gdBand(g.dr, depth.sub(LINE), depth.add(LINE), g.w);
-      const e = abs(fract(q.x.div(bay).add(0.5)).sub(0.5)).mul(bay);
+    const band = parkingBandOf(g);
+    If(band.street, () => {
+      const lane = gdBand(g.dr, band.from, band.to, g.w).toVar();
+      // the bays' outer line: on the road, or for bays on the pavement
+      // their far side
+      const outer = select(
+        g.parkPlace.equal(parkingPlaceId("on-kerb")),
+        band.from,
+        band.to
+      );
+      const edge = gdBand(g.dr, outer.sub(LINE), outer.add(LINE), g.w);
+      const e = abs(fract(q.x.div(band.bay).add(0.5)).sub(0.5)).mul(band.bay);
       const sep = float(1).sub(
         smoothstep(g.w.negate().add(LINE), g.w.add(LINE), e)
       );
-      paint.assign(max(edge, sep.mul(lane)));
+      If(g.parkPainted, () => {
+        paint.assign(max(edge, sep.mul(lane)));
+      });
       col.baseCol.mulAssign(
         float(1).sub(lane.mul(0.03).mul(g.mid).mul(GROUND_DETAIL))
       );
-    }).ElseIf(isLot, lot);
+    }).ElseIf(paintedLot, lot);
   } else {
-    If(isLot, lot);
+    If(paintedLot, lot);
   }
   const fade = float(1).sub(smoothstep(0.06, 0.25, inp.fw));
   const amount = paint.mul(fade).mul(GROUND_DETAIL).mul(0.8).toVar();

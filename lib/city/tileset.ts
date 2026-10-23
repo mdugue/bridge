@@ -25,6 +25,7 @@
 import type { Landmark } from "./landmarks";
 import type { TerrainBounds } from "./terrain-geometry";
 import type { AskKind, CoarseDressingKind, DressingKind } from "./tile";
+import type { WaterLook } from "./water-bodies";
 
 /**
  * Whether a tile owns the point: west and south edges in, east and north
@@ -129,6 +130,10 @@ export interface TerrainExtras {
   horizon?: string;
   /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
   tileId: string;
+  /** the water sheet's tint grid and foam lines (lib/city/water-bodies.ts;
+   *  foam on the fine level only) — absent where the tile's water keeps the
+   *  sheet's own colour and nothing falls */
+  water?: WaterLook;
 }
 
 export interface CityExtras {
@@ -170,9 +175,10 @@ export interface TilesetTileInfo {
 /** What the viewer needs before any content has loaded. */
 export interface TilesetExtras {
   epsg: number;
-  /** the site's ground: its 2nd and 90th height percentile (m), for the
-   *  valley haze's depth (lib/city/valley-fog.ts) */
-  ground?: [number, number];
+  /** the site's ground: its 2nd and 90th height percentile (m) and, where
+   *  the bake read the land around it, the valley's depth (m) — for the
+   *  valley haze (lib/city/valley-fog.ts `groundRelief`) */
+  ground?: [number, number] | [number, number, number];
   /** the site's most notable landmarks, for the HUD (lib/city/landmarks.ts) */
   landmarks?: Landmark[];
   /** recenter offset: data-frame x = epsgX − cx, y = epsgY − cy */

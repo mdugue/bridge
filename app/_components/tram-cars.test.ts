@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { Matrix4, Vector3 } from "three/webgpu";
+import { Color, Matrix4, Vector3 } from "three/webgpu";
 import type { GroundContext } from "@/lib/city/ground-clamp";
-import type { TramTimetable } from "@/lib/city/tram-timetable";
+import { TRAM_LIVERIES, type TramTimetable } from "@/lib/city/tram-timetable";
 import type { Instances } from "./instancing";
-import { createTramCars } from "./tram-cars";
+import { carSections, createTramCars } from "./tram-cars";
 
 const TT: TramTimetable = {
   routes: ["11"],
@@ -97,4 +97,56 @@ test("a running tram trails light along its track, fading behind it", () => {
   expect(fade.getX(0)).toBe(1);
   expect(fade.getX(2 * 23)).toBe(0);
   cars.dispose();
+});
+
+test("a car takes its operator's livery and a length its fleet runs", () => {
+  const leipzig: TramTimetable = {
+    ...TT,
+    agencies: ["LVB"],
+    routeAgency: [0],
+  };
+  const cars = createTramCars(leipzig, [], ctx);
+  cars.update(new Date(2026, 9, 1, 8, 1));
+  const byName = (name: string) =>
+    sets(cars).find((s) => s.name === `tram-car-${name}`) as Instances;
+  const body = byName("body");
+  // LVB's cars are 37.6 or 45 m: five or six sections
+  expect([5, 6]).toContain(body.drawCount);
+  const rgb = (set: Instances) =>
+    new Color().fromArray(set.instanceTints?.array ?? [], 0).getHex();
+  expect(rgb(body)).toBe(TRAM_LIVERIES.lvb.body);
+  expect(rgb(byName("top"))).toBe(TRAM_LIVERIES.lvb.top);
+  expect(rgb(byName("skirt"))).toBe(TRAM_LIVERIES.lvb.skirt);
+  // the window band and the roof are every car's alike
+  expect(byName("band").instanceTints).toBeNull();
+  // the sections are stretched to the car's length: front to back
+  const at = (i: number) =>
+    new Vector3().setFromMatrixPosition(
+      new Matrix4().fromArray(body.instanceMatrix.array, i * 16)
+    );
+  const n = body.drawCount;
+  const span = at(0).distanceTo(at(n - 1));
+  const { stretch } = carSections(n === 5 ? 37.6 : 45);
+  expect(span).toBeCloseTo((n - 1) * (7.2 * stretch + 0.3), 1);
+  cars.dispose();
+});
+
+test("a car's sections: about 7.5 m each, stretched to the length", () => {
+  expect(carSections(30).n).toBe(4);
+  expect(carSections(45).n).toBe(6);
+  const { n, stretch } = carSections(36);
+  expect(n).toBe(5);
+  expect(n * 7.2 * stretch + (n - 1) * 0.3).toBeCloseTo(36, 6);
+});
+
+test("the livery's parts carry their tints before any car runs", () => {
+  // a material compiled now must already read them: three does not
+  // rebuild it when the first car adds the attribute
+  const cars = createTramCars(TT, [], ctx);
+  for (const s of sets(cars)) {
+    const tinted = ["body", "skirt", "top"].some((p) =>
+      s.name.endsWith(`-${p}`)
+    );
+    expect(s.geometry.hasAttribute("iColor")).toBe(tinted);
+  }
 });

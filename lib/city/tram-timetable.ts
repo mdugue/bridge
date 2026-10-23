@@ -24,6 +24,135 @@ export const TRAM_TIMETABLE_FILE = "trams.json";
  *  the HUD's swatch shows the same). */
 export const TRAM_TINTS = { car: 0xf2_cf_5c, trail: 0xf6_d3_6b } as const;
 
+/**
+ * A tram operator's cars as the viewer draws them: the body, the band
+ * along the roof's edge and the skirt (sRGB, softened into the scene's
+ * pastel), and the car lengths of its fleet, each with its weight (how
+ * many cars of that length run). The window band and the roof are every
+ * operator's alike.
+ */
+export interface TramLivery {
+  body: number;
+  /** [length (m), how many of the fleet] */
+  lengths: readonly (readonly [number, number])[];
+  skirt: number;
+  top: number;
+}
+
+export type TramOperator = "bvg" | "dvb" | "lvb" | "mvg" | "neutral";
+
+/**
+ * The liveries, checked against street photos (Mapillary) and the fleet
+ * lists (the photo QA of PR #173, V26):
+ * - DVB (Dresden): yellow, the city's colours yellow and black — a black
+ *   window band (de.wikipedia "Straßenbahn Dresden": "in den Stadtfarben
+ *   Schwarz und Gelb"; Mapillary 1456680758584917, Albertplatz). Fleet:
+ *   NGT6DD 30.28 m ×49, NGT D8DD 30.04 m ×40, NGT8DD 41.02 m ×23,
+ *   NGT D12DD 45.09 m ×43, NGT DXDD 43.3 m ×33.
+ * - LVB (Leipzig): silver-grey, a yellow band along the roof, a blue skirt
+ *   and doors (Mapillary 1070506402407337, Augustusplatz, 2026-09). Fleet:
+ *   NGT10 Tramino XL 37.6 m ×61, NGT12 45 m ×33 (the older Tatra, NGT8 and
+ *   Leoliner sets, often coupled, are not told apart).
+ * - MVG (Munich): MVG blue, white along the roof (Mapillary
+ *   1213157856724103, Karlsplatz); the Avenio fleet's four-module cars are
+ *   36 m (en.wikipedia "Trams in Munich").
+ * - BVG (Berlin): yellow; Flexity Berlin 30.8 m and 40 m (urban-transport-
+ *   magazine.com) — not checked against a photo here.
+ * - Any other operator: a pale neutral car of 30 m.
+ */
+export const TRAM_LIVERIES: Record<TramOperator, TramLivery> = {
+  dvb: {
+    body: TRAM_TINTS.car,
+    top: TRAM_TINTS.car,
+    skirt: TRAM_TINTS.car,
+    lengths: [
+      [30, 89],
+      [41, 23],
+      [45, 76],
+    ],
+  },
+  lvb: {
+    body: 0xd6_d9_dc,
+    top: 0xf0_c6_4a,
+    skirt: 0x4d_70_ae,
+    lengths: [
+      [37.6, 61],
+      [45, 33],
+    ],
+  },
+  mvg: {
+    body: 0x5b_83_c6,
+    top: 0xee_f0_f2,
+    skirt: 0x5b_83_c6,
+    lengths: [[36, 1]],
+  },
+  bvg: {
+    body: 0xf2_d1_5a,
+    top: 0xf2_d1_5a,
+    skirt: 0xf2_d1_5a,
+    lengths: [
+      [30.8, 1],
+      [40, 1],
+    ],
+  },
+  neutral: {
+    body: 0xe6_e3_dc,
+    top: 0xe6_e3_dc,
+    skirt: 0xb9_bc_c2,
+    lengths: [[30, 1]],
+  },
+};
+
+/** Which operator's livery a GTFS agency name stands for. The feed names
+ *  the transport association for some (Dresden's trams come as the
+ *  Verkehrsverbund Oberelbe's: within the VVO only the DVB runs city
+ *  trams; Munich's as Stadtwerke München's, the MVG's parent). */
+export function operatorOf(agency: string | undefined): TramOperator {
+  const a = agency ?? "";
+  if (
+    /Dresdner Verkehrsbetriebe|\bDVB\b|Verkehrsverbund Oberelbe|\bVVO\b/i.test(
+      a
+    )
+  ) {
+    return "dvb";
+  }
+  if (/Leipziger Verkehrsbetriebe|\bLVB\b/i.test(a)) {
+    return "lvb";
+  }
+  if (
+    /Stadtwerke München|Münchner Verkehrsgesellschaft|\bMVG\b|\bSWM\b/i.test(a)
+  ) {
+    return "mvg";
+  }
+  if (/Berliner Verkehrsbetriebe|\bBVG\b/i.test(a)) {
+    return "bvg";
+  }
+  return "neutral";
+}
+
+/** A line's operator in a timetable (neutral where the file names none:
+ *  a timetable baked before the agencies were kept). */
+export function routeOperator(tt: TramTimetable, route: number): TramOperator {
+  const agency = tt.agencies?.[tt.routeAgency?.[route] ?? -1];
+  return operatorOf(agency);
+}
+
+/** One car's length (m) for a trip: drawn from the operator's fleet by
+ *  its weights, the same for the trip all day (`seed`, any integer). */
+export function carLength(livery: TramLivery, seed: number): number {
+  const total = livery.lengths.reduce((n, [, w]) => n + w, 0);
+  // a hash of the seed in [0, 1): neighbouring trips draw unalike
+  const h = Math.abs(Math.sin(seed * 12.9898 + 78.233) * 43_758.5453) % 1;
+  let at = h * total;
+  for (const [length, w] of livery.lengths) {
+    if (at < w) {
+      return length;
+    }
+    at -= w;
+  }
+  return livery.lengths[livery.lengths.length - 1]?.[0] ?? 30;
+}
+
 export type TramDayKind = "saturday" | "sunday" | "weekday";
 
 export interface TramPattern {
@@ -38,6 +167,8 @@ export interface TramPattern {
 }
 
 export interface TramTimetable {
+  /** the operators' names as the feed gives them (GTFS `agency_name`) */
+  agencies?: string[];
   attribution?: string;
   days: Partial<
     Record<TramDayKind, { date: string; trips: [number, number][] }>
@@ -46,6 +177,8 @@ export interface TramTimetable {
   /** the running times of a pattern: arrival, departure per stop, seconds
    *  after the trip's start */
   profiles: { pattern: number; t: number[] }[];
+  /** per line, the index into `agencies` of who runs it */
+  routeAgency?: number[];
   routes: string[];
 }
 
@@ -173,6 +306,11 @@ export interface RunningTram {
   pattern: number;
   /** the line ("11") */
   route: string;
+  /** the line's index into `routes` */
+  routeIndex: number;
+  /** the trip, as one integer (its profile and start): what its car's
+   *  length is drawn by */
+  seed: number;
 }
 
 /**
@@ -201,6 +339,8 @@ export function runningTrams(
           head,
           pattern: prof.pattern,
           route: tt.routes[pattern.route] ?? "",
+          routeIndex: pattern.route,
+          seed: profile * DAY_SECONDS * 2 + start,
         });
       }
     }

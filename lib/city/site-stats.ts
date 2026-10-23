@@ -37,7 +37,7 @@ export interface SiteStats {
 }
 
 /** The land-cover classes counted as green and as water (lib/city/landcover.ts). */
-export const GREEN_CLASSES = [1, 2, 3] as const;
+export const GREEN_CLASSES = [1, 2, 3, 9] as const;
 export const WATER_CLASS = 8;
 
 /** Shares of the green and the water classes in a class histogram. */

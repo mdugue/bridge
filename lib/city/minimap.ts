@@ -58,6 +58,8 @@ export function mapBridges(doc: unknown): MapBridge[] {
 /** A building footprint as a projected-EPSG polygon ring ([x, y] pairs). */
 export interface FootprintPoly {
   pts: [number, number][];
+  /** its inner rings (courtyards), where the GroundSurface has any */
+  holes?: [number, number][][];
 }
 
 /**
@@ -156,7 +158,8 @@ function ringToPoly(
 
 /**
  * Pulls every GroundSurface face out of one geometry (Solid or MultiSurface)
- * and returns its exterior ring as a projected polygon. Empty when the
+ * and returns its exterior ring as a projected polygon (with its inner
+ * rings as `holes`, where it has any). Empty when the
  * geometry carries no GroundSurface semantics.
  */
 function groundPolysFromGeometry(
@@ -190,7 +193,14 @@ function groundPolysFromGeometry(
       }
       const ring = face[0];
       if (ring?.length >= 3) {
-        polys.push({ pts: ringToPoly(ring, vertices, scale, translate) });
+        const holes = face
+          .slice(1)
+          .filter((h) => h.length >= 3)
+          .map((h) => ringToPoly(h, vertices, scale, translate));
+        polys.push({
+          pts: ringToPoly(ring, vertices, scale, translate),
+          ...(holes.length > 0 ? { holes } : {}),
+        });
       }
     });
   });

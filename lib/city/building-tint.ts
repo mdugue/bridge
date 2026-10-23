@@ -32,8 +32,11 @@ export type TintRgb = [number, number, number];
  * neighbourhood is mapped (pipeline/bake/osm_buildings.py `context`):
  * rendered plaster — the default, Dresden and most southern and central old
  * towns — or brick (Hamburg's Speicherstadt, the northern clinker quarters).
- * It swaps the palette of housing and commerce for a building without a
- * mapped material of its own; civic buildings keep their cool stone.
+ * It swaps the palette of housing, commerce and civic buildings for one
+ * without a mapped material of its own — a brick quarter's schools,
+ * offices and warehouses are brick too (Hamburg's: the Kaispeicher, the
+ * schools of the clinker quarters). Structures that are no building
+ * (non-`31001`: tanks, canopies, towers) keep their cool stone.
  */
 export type FacadeMaterial = "brick" | "render";
 
@@ -247,14 +250,21 @@ function wallFamily(
   facades: FacadeMaterial,
   look: OsmLook
 ): { family: FamilyKey; from: Exclude<WallColourSource, "osm"> } {
-  const use = familyOf(readString(attrs.function));
+  const fn = readString(attrs.function);
+  const use = familyOf(fn);
   const material = look.material ? MATERIAL_FAMILY[look.material] : undefined;
   if (material) {
     return { family: material, from: "material" };
   }
-  return facades === "brick" && use !== "cool"
+  return facades === "brick" && !isStructure(fn)
     ? { family: "brick", from: "brick" }
     : { family: use, from: "use" };
+}
+
+/** Whether an ALKIS function code is a structure that is no building
+ *  (a non-`31001` major: tanks, canopies, towers, chimneys). */
+export function isStructure(fn: string | undefined): boolean {
+  return fn !== undefined && fn.split("_")[0] !== "31001";
 }
 
 /** Where `buildingTint` takes a building's wall colour from. */
@@ -267,6 +277,17 @@ export function wallColourSource(
     return "osm";
   }
   return wallFamily(attrs, facades, look).from;
+}
+
+/** Whether a building's walls are brick, as `buildingTint` reads them (a
+ *  mapped brick, or a brick neighbourhood): a brick front has no plastered
+ *  Fasche round its windows (lib/city/windows.ts). */
+export function brickWalls(
+  attrs: Record<string, unknown> = {},
+  facades: FacadeMaterial = "render",
+  look: OsmLook = {}
+): boolean {
+  return wallFamily(attrs, facades, look).family === "brick";
 }
 
 /**
@@ -456,6 +477,27 @@ export function roofColor(
 }
 
 /**
+ * The roof colour bake's file (pipeline/bake/roof_colour.py): every
+ * sampled building's colour (`roofs`) and the roof faces whose own colour
+ * differs from it (`faces`: per object `[geometry, surface, r, g, b]`, the
+ * loader's `geometryid` and `boundaryid`; `parts`: per object rebuilt from
+ * DOM1 `[part, z, r, g, b]`, the part's index among the object's in its
+ * roofs file and its level) and the roofs the build appends to LoD2's
+ * (`scan`: the laser scan's sheds, `smallbuild_<tile>`; `gaps`: the
+ * buildings and roofs on posts beyond LoD2, `structures_<tile>`; each row
+ * `[index, z, r, g, b]`, the feature's index in its file and its `z`, which
+ * the build checks), all linear RGB read from the orthophoto's sunlit
+ * texels.
+ */
+export interface RoofColours {
+  faces?: Record<string, readonly (readonly number[])[]>;
+  gaps?: readonly (readonly number[])[];
+  parts?: Record<string, readonly (readonly number[])[]>;
+  roofs?: RoofColorLut;
+  scan?: readonly (readonly number[])[];
+}
+
+/**
  * An object's attributes resolved through the root of its building tree: the
  * object's own value first, the root's as the fallback. In the Saxon LoD2 a
  * `BuildingPart` carries its geometry, heights and roof, but never the ALKIS
@@ -592,9 +634,13 @@ export function partFacade(
 }
 
 /**
- * Whether a building earns a warm interior glow at dusk: commerce
- * (`31001_2xxx`), public (`31001_3xxx`) and special structures (non-`31001`).
- * Housing (`31001_9998`/`1xxx`) stays dark, so the lit centre reads as civic.
+ * Whether a building is lit at its foot after dark (the clay's Lichtkegel):
+ * commerce (`31001_2xxx`) and public buildings (`31001_3xxx`) — shop
+ * windows, entrances, forecourts. Housing (`31001_9998`/`1xxx`) stays dark,
+ * so the lit centre reads as civic, and so does every structure that is no
+ * building (non-`31001`: tanks, canopies, chimneys, cranes, pylons — they
+ * have no entrance to light; 22 % of Hamburg's lit objects were one). A
+ * landmark's floodlight is its own (OBJECT_FLAG_FLOODLIT), whatever its use.
  */
 export function buildingGlows(attrs: Record<string, unknown> = {}): boolean {
   const fn = readString(attrs.function);
@@ -603,7 +649,7 @@ export function buildingGlows(attrs: Record<string, unknown> = {}): boolean {
   }
   const [major, minor = ""] = fn.split("_");
   if (major !== "31001") {
-    return true;
+    return false;
   }
   return minor.startsWith("2") || minor.startsWith("3");
 }
@@ -631,17 +677,39 @@ const MAPPED_STOREY = { min: 2.4, max: 5.5 } as const;
  * counts (`building:levels`, the storeys below the roof): the walls up to
  * the eave divided by that count, so each band lies on a real floor — a
  * Gründerzeit block's 4 m storeys and a Plattenbau's 2.8 m ones differ.
- * Without a count, or where it gives an implausible storey, `storeyHeight`
- * of the measured height.
+ * Without a count, or where it gives an implausible storey, the walls up to
+ * the eave split into whole storeys of about its neighbours' (`near`,
+ * `neighbourStorey`); without those, `storeyHeight` of the measured height.
  */
 export function mappedStoreyHeight(
   eaveMeters: number,
   measuredMeters: number | undefined,
-  levels: number | undefined
+  levels: number | undefined,
+  near?: number
 ): number {
-  return countsStoreys(eaveMeters, levels) && levels
-    ? eaveMeters / levels
+  if (countsStoreys(eaveMeters, levels) && levels) {
+    return eaveMeters / levels;
+  }
+  return near !== undefined && near > 0 && eaveMeters >= 2.5
+    ? neighbourStorey(eaveMeters, near)
     : storeyHeight(measuredMeters);
+}
+
+/**
+ * The storey (m) of walls `eaveMeters` high whose neighbours' storeys are
+ * `near` (osm_buildings.py `storey`: the median of OSM's counts on the
+ * mapped buildings within 200 m of its roof form and about its eave, else
+ * the tile's): the eave split into whole storeys of about that, held to
+ * 2.5–4.5 m. Counted from the eave, not from the whole height in 3.2 m
+ * storeys: Leipzig's Gründerzeit storeys are 3.7 m, and the old estimate
+ * matched OSM's count on 34 % of its mapped buildings, this one on 65 %
+ * (Hamburg 36 → 49 %, München 49 → 63 %, Meißen 53 → 79 %, Grimma 56 →
+ * 84 %, Unna 84 → 92 %, Dresden 49 → 75 %; each building left out of its
+ * own neighbours).
+ */
+export function neighbourStorey(eaveMeters: number, near: number): number {
+  const n = Math.max(1, Math.round(eaveMeters / near));
+  return Math.min(Math.max(eaveMeters / n, 2.5), 4.5);
 }
 
 /** Whether OSM's `levels` give walls of `eaveMeters` a plausible storey

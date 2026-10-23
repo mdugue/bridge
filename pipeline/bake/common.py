@@ -230,6 +230,46 @@ def read_layer(
     return geoms, dict(zip(meta["fields"], fields, strict=True))
 
 
+# A line under a Basis-DLM tunnel for longer than this is cut out; a shorter
+# overlap is a surface line crossing one (m).
+TUNNEL_OVERLAP_M = 15.0
+# The Basis-DLM draws a tunnel on its rail's or road's own axis: only a line
+# this close to one runs through it. A wider reach took the surface tracks
+# of Munich's Hauptbahnhof, which run straight over the S-Bahn trunk line (m).
+TUNNEL_HALF_M = 2.0
+
+
+def dlm_tunnels(tile: Tile) -> shapely.Geometry | None:
+    """Where rails and roads run underground: the Basis-DLM's tunnels
+    (`ver06` BWF 1870, "Tunnel, Unterführung"), as one area. Nothing on the
+    line itself says it is underground: subways and S-Bahn trunk lines are
+    in the rail layer (Munich's Marienplatz, Leipzig's City-Tunnel), road
+    tunnels in the road axes (Dresden's Bramschstraße, Meißen's
+    Schottenbergtunnel). An "Unterführung" is covered as well — by fill, a
+    building or a track field (Munich's Paul-Heyse-Unterführung): none of
+    the Basis-DLM's tunnels in the six sites that have one lies under a drawn
+    bridge deck (2026-10-20)."""
+    areas = []
+    for layer in ("ver06_l", "ver06_f"):
+        path = tile.dlm / f"{layer}.shp"
+        if path.exists():
+            geoms, _ = read_layer(path, tile.bounds, where="BWF='1870'")
+            areas += [g.buffer(TUNNEL_HALF_M) for g in geoms if g is not None]
+    return shapely.union_all(areas) if areas else None
+
+
+def above_ground(line: shapely.Geometry, under: shapely.Geometry | None) -> list:
+    """The parts of a line not in a tunnel. Only a long overlap is cut: a
+    surface line that crosses over a tunnel keeps its crossing."""
+    if under is None or not line.intersects(under):
+        return [line]
+    inside = [p for p in shapely.get_parts(line.intersection(under)) if p.length > TUNNEL_OVERLAP_M]
+    if not inside:
+        return [line]
+    cut = line.difference(shapely.union_all([p.buffer(0.05) for p in inside]))
+    return [p for p in shapely.get_parts(cut) if p.length > 1.0]
+
+
 def column(fields: dict[str, np.ndarray], name: str, geoms: np.ndarray) -> list:
     """One attribute column, or Nones when the layer has no such field —
     never shorter than the geometries it is zipped with."""

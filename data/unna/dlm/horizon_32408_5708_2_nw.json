@@ -28,6 +28,7 @@
       ],
       "nearM": 80.0,
       "farM": 1500.0,
+      "terrainFarM": 10000.0,
       "degPerUnit": 0.17647058823529413
     },
     {
@@ -42,6 +43,33 @@
     }
   ],
   "footprints": "cells under a roof carry the nearest open cell's angles",
-  "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees)",
-  "attribution": "Geobasis NRW, dl-de/zero-2-0 (DGM1, LoD2)"
+  "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees); the sky view's crowns let half the sky through",
+  "beyond": "Copernicus GLO-30, smoothed, -1.86 m onto the DGM1; the far band past 1500 m from it alone, to 10000 m",
+  "attribution": "Geobasis NRW, dl-de/zero-2-0 (DGM1, LoD2); produced using Copernicus WorldDEM-30 \u00a9 DLR e.V. 2010-2014 and \u00a9 Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved",
+  "valley": {
+    "reachM": 5000.0,
+    "floorM": 103.2,
+    "at": [
+      409275.0,
+      5709985.0
+    ],
+    "rimM": [
+      85.8,
+      80.8,
+      87.7,
+      99.9,
+      140.4,
+      181.5,
+      195.7,
+      203.5,
+      194.9,
+      179.4,
+      140.4,
+      125.8,
+      112.0,
+      99.9,
+      87.3,
+      81.1
+    ]
+  }
 }

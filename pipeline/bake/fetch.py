@@ -9,11 +9,13 @@ already there, so a rerun only fetches what is missing:
     data/<site>/cityjson/lod2_<tile>.city.json          LoD2 as CityJSON
     data/_raw/<provider>/dom1/<tile>.tif                 surface model, 1 m
     data/_raw/<provider>/dop/<tile>.tif                  orthophoto, 20 cm
+    data/_raw/<provider>/dop/<tile>.flight.json          the days it was flown
     data/_raw/<provider>/dlm/*.shp                       Basis-DLM (AdV Shape)
     data/_raw/<provider>/osm/<extract>.osm.pbf           the OSM extract
     data/_raw/<provider>/trees/<tile>.geojson            the site's tree cadastre
     data/_raw/<provider>/traffic/<tile>.geojson          the site's traffic counts
     data/_raw/gtfs/nv_free.zip                           Germany's timetable (sites with trams)
+    data/_raw/glo30/<site>.tif                           Copernicus GLO-30 around it (glo30.py)
     data/_raw/<provider>/wikidata/bridges_<tile>.json    the bridges Wikidata knows
     data/_raw/<provider>/wikidata/landmarks_<tile>.json  its notable buildings and structures
     data/_raw/<provider>/wikidata/monuments_<tile>.json  the monuments it knows the material of
@@ -32,6 +34,8 @@ or the OSM extract — after it has tried everything else.
 from __future__ import annotations
 
 import importlib
+import json
+import re
 import shutil
 import urllib.error
 from collections.abc import Iterator
@@ -42,9 +46,20 @@ from typing import Protocol
 
 from rasterio.enums import Resampling
 
-from . import bridge, cadastre, facades, landmarks, mapillary, monuments, traffic_sources, transit
+from . import (
+    bridge,
+    cadastre,
+    facades,
+    glo30,
+    landmarks,
+    mapillary,
+    monuments,
+    traffic_sources,
+    transit,
+)
 from .citygml import write_cityjson
 from .common import Tile, dlm_complete
+from .dop_light import flight_file
 from .net import download
 from .rasters import write_tile_raster
 from .spec import Spec
@@ -81,6 +96,12 @@ class Adapter(Protocol):
     def dlm(self, ctx: Ctx) -> None:
         """Fill `ctx.raw / "dlm"` with the AdV Shape layers."""
 
+    def flight(self, ctx: Ctx, tile: Tile) -> list[str]:
+        """The days (ISO) the tile's orthophoto was flown, from the
+        provider's metadata (optional: an adapter without it leaves the
+        flight's sun to be searched over the whole sky, dop_light.py)."""
+        ...
+
 
 def cells(tile: Tile, km: int, margin: int = 0) -> Iterator[tuple[int, int]]:
     """South-west corners (km) of a provider's `km` grid covering the tile,
@@ -108,6 +129,22 @@ def not_published(err: OSError) -> bool:
     timeout, a cut connection, a failed check, a 5xx) raises, so `_step`
     reports the product as not fetched and the next run tries again."""
     return isinstance(err, urllib.error.HTTPError) and err.code in (404, 410)
+
+
+def german_dates(text: str) -> list[str]:
+    """Every `dd.mm.yyyy` in `text`, as ISO dates."""
+    return [f"{y}-{m}-{d}" for d, m, y in re.findall(r"\b(\d{2})\.(\d{2})\.(\d{4})\b", text)]
+
+
+def write_flight(dest: Path, days: list[str], provider: str) -> None:
+    """The flight days through a `.part` file; none raises, so the next run
+    asks again."""
+    if not days:
+        raise ValueError("the provider's metadata names no flight day")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_name(dest.name + ".part")
+    part.write_text(json.dumps({"days": sorted(set(days)), "provider": provider}))
+    part.replace(dest)
 
 
 def adapter(provider: str) -> Adapter:
@@ -212,6 +249,15 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> li
                     source.dop(ctx, tile), tile, dop, 0.2, Resampling.average, method="max"
                 ),
             )
+        if spec.products.dop and hasattr(source, "flight"):
+            # the day the orthophoto was flown: its sun's path (dop_light.py)
+            days = flight_file(spec.raw, tile.id)
+            _step(
+                "flight days",
+                tile,
+                days,
+                lambda: write_flight(days, source.flight(ctx, tile), spec.provider),
+            )
         if lsc and spec.products.lsc:
             laz = tile.raw / "lsc" / f"{tile.id}.laz"
             _step("laser scan", tile, laz, lambda: _place_laz(source.lsc(ctx, tile), laz))
@@ -269,6 +315,19 @@ def fetch_dlm(spec: Spec, source: Adapter) -> bool:
         return False
 
 
+def fetch_glo30(spec: Spec) -> bool:
+    """The land beyond the site (Copernicus GLO-30, glo30.py), for every
+    tile of the site whichever are fetched: optional — without it the sky
+    view extends the site's edge and the valley haze reads the site alone."""
+    try:
+        path = glo30.fetch(spec.raw, spec.site, [t.bounds for t in spec.tiles], spec.epsg)
+        print(f"{spec.site}: Copernicus GLO-30 → {path}")
+        return True
+    except Exception as err:  # noqa: BLE001 — optional: report, fetch the rest
+        print(f"{spec.site}: Copernicus GLO-30 not fetched ({type(err).__name__}: {err})")
+        return False
+
+
 def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
     spec.raw.mkdir(parents=True, exist_ok=True)
     source = adapter(spec.provider)
@@ -280,6 +339,7 @@ def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
     ]
     if spec.trams:
         transit.fetch_gtfs(transit.gtfs_dir(spec.raw))
+    fetch_glo30(spec)
     if lsc and not spec.products.lsc:
         print(f"--lsc: the {spec.provider} adapter reads no laser scan — skipped")
     failures = {tile.id: fetch_tile(spec, tile, source, lsc) for tile in tiles}

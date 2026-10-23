@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { Vector3 } from "three/webgpu";
-import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
+import { Matrix4, Vector3 } from "three/webgpu";
+import { Instances } from "./instancing";
+import { buildLamps, createLampLights, LAMP_LIGHTS } from "./lamp-layer";
 
 /** A lamp head 5 m up at (x, z), the camera's eye 1.7 m up. */
 const head = (x: number, z = 0) => new Vector3(x, 5, z);
@@ -65,4 +66,86 @@ test("a phone's one light hands over between two lamps through darkness", () => 
   // a few metres off the bisector it is lit as before
   pool.updateNearest(eye(8));
   expect(light.intensity).toBe(full);
+});
+
+test("a lamp on a bridge stands on its deck, not on the ground below", () => {
+  const ctx = { heightAt: () => 100, offset: { cx: 0, cy: 0 } };
+  const lamps = buildLamps(
+    [
+      {
+        geometry: { type: "Point", coordinates: [10, 20] },
+        properties: { h: 5 },
+      },
+      {
+        geometry: { type: "Point", coordinates: [30, 20] },
+        properties: { deck: 112.5, h: 5 },
+      },
+    ],
+    ctx
+  );
+  expect(lamps.headPositions.map((p) => p.y)).toEqual([105, 117.5]);
+});
+
+test("a lantern on a wall hangs on its bracket, without a post", () => {
+  const ctx = { heightAt: () => 100, offset: { cx: 0, cy: 0 } };
+  const lamps = buildLamps(
+    [
+      {
+        geometry: { type: "Point", coordinates: [10, 20.5] },
+        properties: { h: 3.5, wall: [10, 20] },
+      },
+    ],
+    ctx
+  );
+  expect(lamps.headPositions.map((p) => p.y)).toEqual([103.5]);
+  const names = lamps.group.children.map((c) => c.name);
+  expect(names).not.toContain("lamp-posts");
+  expect(names).toContain("lamp-heads");
+  expect(names).toContain("lamp-wires");
+});
+
+test("a tall mast holds its head on its arm, its light pool under it", () => {
+  const ctx = { heightAt: () => 100, offset: { cx: 0, cy: 0 } };
+  const lamps = buildLamps(
+    [
+      {
+        geometry: { type: "Point", coordinates: [10, 20] },
+        // 10 m: an arm of 2 m, reaching east
+        properties: { h: 10, arm: 90 },
+      },
+      {
+        geometry: { type: "Point", coordinates: [30, 20] },
+        // ... and one reaching north (world −Z)
+        properties: { h: 10, arm: 0 },
+      },
+      {
+        geometry: { type: "Point", coordinates: [40, 20] },
+        properties: { h: 5 },
+      },
+    ],
+    ctx
+  );
+  const heads = lamps.headPositions.map((p) => [p.x, p.y, p.z]);
+  expect(heads[0][0]).toBeCloseTo(12);
+  expect(heads[0][1]).toBe(110);
+  expect(heads[0][2]).toBeCloseTo(-20);
+  expect(heads[1][0]).toBeCloseTo(30);
+  expect(heads[1][2]).toBeCloseTo(-22);
+  expect(heads[2]).toEqual([40, 105, -20]);
+  const names = lamps.group.children.map((c) => c.name);
+  expect(names).toContain("lamp-poles");
+  expect(names).toContain("lamp-arms");
+  expect(names).toContain("lamp-posts"); // the short post, its head on top
+  // each arm's tip, out along local +Z, turned to its bearing, at its head
+  const arms = lamps.group.children.find((c) => c.name === "lamp-arms");
+  expect(arms).toBeInstanceOf(Instances);
+  const m = new Matrix4();
+  const tips = [0, 1].map((i) => {
+    (arms as Instances).getMatrixAt(i, m);
+    return new Vector3(0, 10, 2).applyMatrix4(m);
+  });
+  expect([tips[0].x, tips[0].y, tips[0].z].map((v) => +v.toFixed(3))).toEqual([
+    12, 110, -20,
+  ]);
+  expect([tips[1].x, tips[1].z].map((v) => +v.toFixed(3))).toEqual([30, -22]);
 });

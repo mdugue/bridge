@@ -20,6 +20,10 @@ def _street(tmp_path, monkeypatch):
         13: (190, 100, tags(highway="street_lamp")),
         14: (30, 100, tags(highway="street_lamp", support="suspended")),
         15: (120, 80, tags(highway="street_lamp")),
+        16: (60, 90, tags(highway="street_lamp", lamp_mount="wall")),
+        17: (80, 111, tags(highway="street_lamp", support="wall_mounted")),
+        18: (190, 80, tags(highway="street_lamp", lamp_mount="wall")),
+        19: (70, 100, tags(highway="street_lamp", support="wire", lamp_mount="wall")),
         20: (0, 80, ""),
         21: (170, 80, ""),
         22: (170, 90, ""),
@@ -88,3 +92,27 @@ def test_the_tags_that_hang_a_lamp():
     assert hung_tag('"support"=>"pole","lamp_mount"=>"straight_mast"') is False
     assert hung_tag('"ref"=>"12"') is None
     assert hung_tag(None) is None
+
+
+def test_a_lamp_on_a_wall_hangs_on_its_facade(tmp_path, monkeypatch):
+    lamps = _lamps(_street(tmp_path, monkeypatch))
+    # on the south houses' outline, and a metre into the north ones: the head
+    # half a metre out of the facade on the street side, its bracket's foot
+    # on the facade
+    south, north = lamps[(60.0, 90.5)], lamps[(80.0, 109.5)]
+    assert south["h"] == 3.5 and local(south["wall"]) == (60.0, 90.0)
+    assert local(north["wall"]) == (80.0, 110.0)
+    # no facade near it: a post where it is mapped
+    assert lamps[(190.0, 80.0)] == {"h": 5.0}
+    # on a wire fixed to the walls: hung across the street
+    assert "wire" in lamps[(70.0, 100.0)]
+
+
+def test_the_tags_that_put_a_lamp_on_a_wall():
+    from bake.lamps import wall_tag
+
+    assert wall_tag('"lamp_mount"=>"wall"') is True
+    assert wall_tag('"support"=>"wall_mounted"') is True
+    assert wall_tag('"support"=>"wire","lamp_mount"=>"wall"') is False  # hung
+    assert wall_tag('"support"=>"pole"') is False
+    assert wall_tag(None) is False

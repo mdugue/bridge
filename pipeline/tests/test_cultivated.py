@@ -13,10 +13,10 @@ from bake.cultivated import (
     axis_code,
     build,
     colony_raster,
-    contour_angle,
     grid_trees,
     long_axis,
     parcels_of,
+    slope_layout,
     vine_rows,
 )
 
@@ -70,30 +70,41 @@ def test_orchard_trees_stand_on_a_grid_along_the_long_axis():
     assert np.allclose(nearest, 8.0, atol=1e-6)
 
 
-def test_vine_rows_run_along_the_contour_1_8_m_apart(tmp_path):
-    # the slope rises to the north: rows run east–west
-    tile = _tile(tmp_path, slope_north=0.2)
+def test_vine_rows_run_along_a_steep_contour_vine_row_spacing_apart(tmp_path):
+    # the slope rises steeply to the north: rows run east–west
+    tile = _tile(tmp_path, slope_north=0.4)
     vineyard = shapely.box(411050, 5656050, 411110, 5656100)
-    angle = contour_angle(tile, vineyard)
-    assert abs(math.sin(angle)) < 1e-6
+    angle, src = slope_layout(tile, vineyard)
+    assert abs(math.sin(angle)) < 1e-6 and src == "contour"
     rows = vine_rows(vineyard, angle)
-    # offsets (k + ½)·1.8 m about the middle that fit in ±25 m
+    # offsets (k + ½)·2.3 m about the middle that fit in ±25 m
     assert len(rows) == 2 * round(25 / VINE_ROW_SPACING_M)
     ys = sorted(r.coords[0][1] for r in rows)
     assert np.allclose(np.diff(ys), VINE_ROW_SPACING_M)
     assert all(abs(r.length - 60) < 1e-6 for r in rows)
 
 
-def test_a_slope_to_the_east_turns_the_rows_north_south(tmp_path):
-    tile = _tile(tmp_path, slope_east=0.15)
-    angle = contour_angle(tile, shapely.box(411050, 5656050, 411110, 5656100))
-    assert abs(math.cos(angle)) < 1e-6
+def test_a_steep_slope_to_the_east_turns_the_rows_north_south(tmp_path):
+    tile = _tile(tmp_path, slope_east=0.3)
+    angle, src = slope_layout(tile, shapely.box(411050, 5656050, 411110, 5656100))
+    assert abs(math.cos(angle)) < 1e-6 and src == "contour"
+
+
+def test_on_a_gentle_slope_the_rows_run_down_the_fall_line(tmp_path):
+    # 15–20 %: Meißen's rows at 3–12 % run downhill, not along the contour
+    tile = _tile(tmp_path, slope_north=0.2)
+    angle, src = slope_layout(tile, shapely.box(411050, 5656050, 411110, 5656100))
+    assert abs(math.cos(angle)) < 1e-6 and src == "fall"
+    tile = _tile(tmp_path / "e", slope_east=0.15)
+    angle, src = slope_layout(tile, shapely.box(411050, 5656050, 411110, 5656100))
+    assert abs(math.sin(angle)) < 1e-6 and src == "fall"
 
 
 def test_a_flat_vineyard_runs_along_its_long_axis(tmp_path):
     tile = _tile(tmp_path)
     v = shapely.box(411050, 5656050, 411070, 5656150)  # long north–south
-    assert abs(math.cos(contour_angle(tile, v))) < 1e-6
+    angle, src = slope_layout(tile, v)
+    assert abs(math.cos(angle)) < 1e-6 and src == "axis"
 
 
 def test_a_vineyard_across_a_seam_gets_one_angle_on_both_tiles(tmp_path):
@@ -103,9 +114,9 @@ def test_a_vineyard_across_a_seam_gets_one_angle_on_both_tiles(tmp_path):
     west = _tile(tmp_path, slope_north=0.2)
     east = _tile(tmp_path, slope_east=0.4, slope_north=0.2, tid="u", dx=200)
     v = shapely.box(411150, 5656050, 411250, 5656100)
-    a, b = contour_angle(west, v), contour_angle(east, v)
-    assert a == pytest.approx(b, abs=1e-9)
-    # mean gradient (0.2, 0.2): the rows run along the diagonal (135°), not
+    (a, src), (b, _) = slope_layout(west, v), slope_layout(east, v)
+    assert a == pytest.approx(b, abs=1e-9) and src == "contour"
+    # mean gradient (0.2, 0.2), 28 %: the rows run along the diagonal (135°), not
     # 0° on the west tile and 117° on the east one
     assert math.degrees(a) == pytest.approx(135, abs=2)
 

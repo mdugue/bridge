@@ -47,14 +47,19 @@ import { sceneMaterial } from "./three-utils";
  * - Pier: a timber deck 0.3 m thick at the baked `deck` height, on piles
  *   every 4 m round its edge where it stands over the water, with a
  *   railing along the edges over the water.
- * - Pontoon: a soft slate hull and a pale deck floating 0.5 m over the drawn
- *   water — the water sheet lies on the terrain (water-layer.ts), so its
- *   level is the lowest ground under the hull (the DGM's river surface is
- *   flat), never a baked height; a ticket hut on one longer than 15 m; a
- *   gangway to the bank where no fixed pier reaches it. The paddle
- *   steamers themselves are not drawn: no dataset has them.
- * - Groyne: a low stone ridge along its line, crest 0.5 m over the ground
- *   (half under water where the river covers it).
+ * - Pontoon: a soft slate hull and a pale deck floating its baked
+ *   freeboard `fb` (DOM1's, 0.4–1.5 m; 0.9 m where the bake had none) over
+ *   the drawn water — the water sheet lies on the terrain (water-layer.ts),
+ *   so its level is the lowest ground under the hull (the DGM's river
+ *   surface is flat), never a baked height; a ticket hut on one longer
+ *   than 15 m; a gangway to the bank where no fixed pier reaches it. A
+ *   finger pier (`finger`) floats with its pontoon: deck and hull, no hut,
+ *   no gangway. The paddle steamers themselves are not drawn: no dataset
+ *   has them.
+ * - Groyne: a stone ridge along the stretch the DGM shows over the water
+ *   (the bake cut it there), its crest on the DGM — which holds the
+ *   groyne's stones — its flanks down under the water beside it (`w`,
+ *   else a metre below the crest).
  * - Ferry: a faint dashed wake along the route on the water — a map
  *   element, shown only from the air (map-overlay.ts), never casting.
  *
@@ -67,12 +72,18 @@ const PILE_EVERY_M = 4;
 const PILE_INSET = 0.35;
 const RAIL_H = 1.0;
 const POST_EVERY_M = 3;
-const PONTOON_FREEBOARD = 0.5;
-const HULL_TOP = 0.35;
+/** A pontoon's freeboard where the bake gave none (riverside.py's). */
+const PONTOON_FREEBOARD = 0.9;
+const PONTOON_SLAB = 0.15;
 const HULL_DRAFT = 0.3;
 const HUT_FROM_M = 15;
 const GANGWAY_HALF = 0.7;
-const GROYNE_CREST = 0.5;
+/** The crest over the DGM: just clear of the ground it is measured in. */
+const GROYNE_CREST = 0.12;
+/** How far below the water beside it the flanks run. */
+const GROYNE_TOE = 0.3;
+/** Where the bake read no water beside it: the flanks this far down. */
+const GROYNE_DROP = 1;
 const GROYNE_HALF = 2.5;
 const FERRY_HALF = 0.6;
 const FERRY_DASH_M = 14;
@@ -318,19 +329,24 @@ function addPontoon(
     return;
   }
   const ring = ringToWorld(coords, ctx.offset);
-  const deckY = water + PONTOON_FREEBOARD;
+  const freeboard = f.properties?.fb ?? PONTOON_FREEBOARD;
+  const deckY = water + freeboard;
+  const hullTop = deckY - PONTOON_SLAB;
   addFootprint(
     parts.hull,
     ring,
-    ring.pts.map(() => water + HULL_TOP),
-    HULL_TOP + HULL_DRAFT
+    ring.pts.map(() => hullTop),
+    hullTop - water + HULL_DRAFT
   );
   addFootprint(
     parts.pontoonDeck,
     ring,
     ring.pts.map(() => deckY),
-    PONTOON_FREEBOARD - HULL_TOP
+    PONTOON_SLAB
   );
+  if (f.properties?.finger) {
+    return; // a finger pier: its pontoon carries the hut and the gangway
+  }
   const dir = longDir(ring);
   if ((f.properties?.len ?? 0) > HUT_FROM_M) {
     addBox(parts.hut, centroid(ring), dir, [1.6, 1.1], [deckY, deckY + 2.3]);
@@ -348,15 +364,27 @@ function addPontoon(
   }
 }
 
-/** A low stone ridge along the groyne: crest over the ground, flanks
- *  running down into it. */
-function addGroyne(parts: Parts, coords: Point2[], ctx: GroundContext): void {
+/** A stone ridge along the groyne: its crest on the DGM (which measures
+ *  the stones), its flanks down to `GROYNE_TOE` under the water beside it
+ *  (`water`, the bake's `w`) — where the ground beside it is higher (the
+ *  bank end) they run under the terrain; without `water`, `GROYNE_DROP`
+ *  below the crest. */
+function addGroyne(
+  parts: Parts,
+  coords: Point2[],
+  water: number | undefined,
+  ctx: GroundContext
+): void {
   const pts: Pt[] = [];
+  const toes: number[] = [];
   for (const [ex, ey] of subdividePolyline(coords, 2)) {
     const g = ctx.heightAt(ex, ey);
     if (g !== null) {
       const w = epsgToWorld(ex, ey, ctx.offset);
-      pts.push({ x: w.x, y: g + GROYNE_CREST, z: w.z });
+      const crest = g + GROYNE_CREST;
+      pts.push({ x: w.x, y: crest, z: w.z });
+      const toe = (water ?? crest - GROYNE_DROP) - GROYNE_TOE;
+      toes.push(Math.min(toe, crest - GROYNE_CREST));
     }
   }
   for (let i = 0; i < pts.length - 1; i++) {
@@ -367,7 +395,7 @@ function addGroyne(parts: Parts, coords: Point2[], ctx: GroundContext): void {
     const t = Math.hypot(tx, tz) || 1;
     const nx = -tz / t;
     const nz = tx / t;
-    const drop = GROYNE_CREST * 2;
+    const drop = (a.y - toes[i] + b.y - toes[i + 1]) / 2;
     // the flank's normal: out and up in the ratio of its slope
     const up = GROYNE_HALF / Math.hypot(GROYNE_HALF, drop);
     const out = drop / Math.hypot(GROYNE_HALF, drop);
@@ -378,8 +406,8 @@ function addGroyne(parts: Parts, coords: Point2[], ctx: GroundContext): void {
         parts.groyne,
         [a.x, a.y, a.z],
         [b.x, b.y, b.z],
-        [b.x + ox, b.y - drop, b.z + oz],
-        [a.x + ox, a.y - drop, a.z + oz],
+        [b.x + ox, toes[i + 1], b.z + oz],
+        [a.x + ox, toes[i], a.z + oz],
         [nx * side * out, up, nz * side * out]
       );
     }
@@ -539,7 +567,7 @@ export function buildRiverside(
     } else if (k === "pontoon" && ring) {
       addPontoon(parts, f, ring, ctx);
     } else if (k === "groyne" && f.geometry.type === "LineString") {
-      addGroyne(parts, f.geometry.coordinates, ctx);
+      addGroyne(parts, f.geometry.coordinates, f.properties?.w, ctx);
     } else if (k === "ferry" && f.geometry.type === "LineString") {
       ferries.push(f.geometry.coordinates);
     }

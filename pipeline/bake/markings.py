@@ -15,13 +15,15 @@ road, the way a pedestrian walks (radians from east, counter-clockwise);
 the class raster), `halfWidth` half its extent along the road. `kind`
 indexes `KINDS` (keep them in step with lib/city/markings.ts).
 
-- A crossing (`highway=crossing` node) is painted when OSM says it is
-  marked: `crossing:markings` zebra → zebra, dashes/dots → furt, no/surface
-  → nothing; else `crossing_ref=zebra` → zebra; else `crossing` =
-  traffic_signals → furt (German signalled crossings are broken lines, not
-  a zebra), marked/uncontrolled/zebra → zebra, anything else nothing. Its
-  axis is the normal of the nearest carriageway way at the node; its extent
-  the contiguous DLM road texels (class 7) along that normal.
+- A crossing (`highway=crossing` node) is painted when OSM says how it is
+  marked (`crossing_kind`): a zebra only where OSM says zebra
+  (`crossing:markings` zebra or ladder, `crossing_ref=zebra`, the zebra's
+  sign `DE:350`), a furt where `crossing:markings` says lines, dashes, dots
+  or yes, or the crossing is signalled (German signalled crossings are
+  broken lines, not a zebra); `marked` or `uncontrolled` alone, or
+  `crossing:markings=no|surface`, paints nothing. Its axis is the normal of
+  the nearest carriageway way at the node; its extent the contiguous DLM
+  road texels (class 7) along that normal.
 - A stop line: 3 m before a `highway=traffic_signals` node whose
   `traffic_signals:direction` (or `direction`) is forward or backward, on
   the right half of the approach (right-hand traffic; the whole carriageway
@@ -37,7 +39,9 @@ indexes `KINDS` (keep them in step with lib/city/markings.ts).
   one row per texel, so the second would clip the first's paint. Rows of
   the same family (crossings, stop lines) whose axes agree within
   `MERGE_ANGLE_DEG` and whose outlines come within 2 · `CORE_M` of each
-  other become one row covering both across the road, in the frame and
+  other — or whose centres lie within `CORE_M`, whatever their axes: one
+  node read twice, each way through it giving its own tangent — become
+  one row covering both across the road, in the frame and
   kind of the preferred one (a zebra over a furt, else the larger); along
   the road the union too when they are parallel, else the preferred one's
   width — unless the row would reach further across than one carriageway
@@ -58,18 +62,40 @@ bytes per texel, interleaved in an 8-bit greyscale PNG four times as wide
             every point of its paint has a texel of its own among the four
             the shader reads (`paint_lost` checks it, the run logs it)
     G     = lane bits on road texels: 1 = a cycle lane runs along the kerb on
-            THIS side of the way, 4 = a centre line road
+            THIS side of the way (2 = its line is solid, 128 = it lies at
+            2.25 m), 4 = a centre line road (16 = solid, 32 = lane lines
+            too); and on any texel 8 = a kerb stands near (`KERB`, below),
+            64 = a red cycle surface (`RED`)
     B     = 128 + 20 · the signed distance (m) to the carriageway's middle
             (centre-line roads only; ±6.35 m)
 
 The side is resolved here, per texel (which side of the nearest way it lies
 on), because the paving raster's bearing is only known modulo 180°. Centre
-lines: two-way (no `oneway`) primary/secondary/tertiary/trunk/unclassified
-roads with `lanes` ≥ 2, not `lane_markings=no`, where the carriageway is at
-least 5.5 m wide, and not within 12 m of a junction node. The middle is
-where the distances to the kerbs on the way's two sides are equal. Cycle
-lanes: `cycleway:right|left|both=lane`, `cycleway=lane` (both sides of a
-two-way road, the right of a oneway).
+lines (`centre_bits`): two-way (no `oneway`) primary/secondary/tertiary/
+trunk/unclassified roads with `lanes` ≥ 2, not `lane_markings=no` nor a
+physical `divider`, where the carriageway is at least 5.5 m wide, not
+within 12 m of a junction node, and not within `TRAM_CLEAR_M` of a tram
+track (the tracks run on the axis there). The middle is where the
+distances to the kerbs on the way's two sides are equal. Solid where
+overtaking is forbidden or the `divider` is a solid line; with four lanes
+or more solid (the directions' Fahrstreifenbegrenzung), and dashed lane
+lines halfway to each kerb too. Cycle lanes
+(`cycle_sides`): `cycleway:right|left|both=lane`, `cycleway=lane` (both
+sides of a two-way road, the right of a oneway); a solid line for a
+Radfahrstreifen (`:lane=exclusive`), dashed for a Schutzstreifen, none for
+pictograms only; red where `:surface:colour=red`. The shader moves the
+line out past a parking lane on that side (the paving raster's). A
+cycleway mapped on its own with a red surface sets `RED` on its whole
+track.
+
+The kerb bit marks every texel whose centre lies within `KERB_REACH_M` (and
+a texel's diagonal) of a kerb line edges.py baked (`kerbs_<tile>.geojson`).
+The terrain shader draws its painted kerb band — the stone's top, the
+gutter and the kerb's shadow on the road — only where it is set
+(app/_components/ground-detail.ts), so the band follows the same rule as
+the stones: none along a road out of town, beside water or rails, or over
+a tunnel. Read from the class raster alone, the band ran on along every
+road edge beside ground, out of town too.
 """
 
 from __future__ import annotations
@@ -79,11 +105,13 @@ import math
 
 import numpy as np
 import shapely
+import shapely.geometry
+import shapely.ops
 from rasterio.features import rasterize
 from scipy import ndimage as ndi
 
 from .common import OSM_ATTRIBUTION, Tile, column, overlaps, owns, save_grey_png
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, read_osm, read_ways, tag
 
 # id → key; keep in step with `MARKING_KINDS` in lib/city/markings.ts.
 KINDS = {0: "none", 1: "zebra", 2: "furt", 3: "stop"}
@@ -128,6 +156,22 @@ PARALLEL_DEG = 10.0
 CROSSINGS = (ZEBRA, FURT)
 EDGE_SCALE = 20.0  # bytes per metre, as edges.py
 SIDE_REACH_M = 20.0  # texels farther from every way get no side
+# The G channel's bits; keep them in step with `LANE_BITS` in
+# lib/city/markings.ts. On road texels: a cycle lane along the kerb on this
+# side of the way (its line solid, its width 2.25 m), a centre-line road
+# (its line solid, dashed lane lines too); on any texel: a kerb near, a red
+# cycle surface.
+CYCLE, CYCLE_SOLID, CENTRE, CENTRE_SOLID, LANE_LINES = 1, 2, 4, 16, 32
+RED, CYCLE_WIDE = 64, 128
+WIDE_CYCLE_M = 2.05  # a tagged cycle-lane width from which its line moves out
+# No centre line within this of a tram track (a track on the road's axis:
+# Dresden's, Leipzig's and München's trams mostly run in the middle).
+TRAM_CLEAR_M = 2.0
+# The kerb bit: the band, its gutter and the kerb's shadow reach 1.5 m across
+# the kerb line, and the shader reads the four texels round a point, so a
+# texel carries it out to KERB_REACH_M plus its diagonal.
+KERB = 8
+KERB_REACH_M = 2.0
 # How far past the tile the rows are measured and a neighbour's node is
 # read: a row's centre lies within SNAP_M + MAX_CARRIAGEWAY_M / 2 + the
 # farthest sample (10 m) of its node, its paint half a carriageway past that.
@@ -140,24 +184,56 @@ def _base(highway: str | None) -> str | None:
     return highway.removesuffix("_link")
 
 
+# `crossing:markings` values (the OSM wiki's list; `;`-lists are read as a
+# set): the zebra's bars, the two lines of a *Furt* (solid, dashed, dotted),
+# and none. `yes` says marked without saying how: in Dresden's orthophoto
+# nearly all of them are two lines (over a tram track or a cycle track, or
+# a signalled Furt) and only a few a zebra, so it paints the two lines.
+ZEBRA_MARKINGS = {
+    "zebra",
+    "zebra:double",
+    "zebra:paired",
+    "zebra:bicolour",
+    "ladder",
+    "ladder:skewed",
+    "ladder:paired",
+}
+LINE_MARKINGS = {"lines", "lines:paired", "dashes", "dots", "yes"}
+NO_MARKINGS = {"no", "surface", "pictograms"}
+# Signalled crossings by their reference name (UK and elsewhere); German
+# ones carry `crossing=traffic_signals` or `crossing:signals=yes`.
+SIGNAL_REFS = {"pelican", "toucan", "puffin", "pegasus"}
+ZEBRA_SIGN = "DE:350"  # Zeichen 350, Fußgängerüberweg
+
+
 def crossing_kind(other_tags: str | None) -> int:
-    """The paint of a `highway=crossing` node (0: nothing)."""
-    markings = tag(other_tags, "crossing:markings")
-    if markings == "zebra":
-        return ZEBRA
-    if markings in ("dashes", "dots"):
-        return FURT
-    if markings in ("no", "surface"):
-        return 0
-    if tag(other_tags, "crossing_ref") == "zebra":
+    """The paint of a `highway=crossing` node (0: nothing). A zebra only
+    where OSM says zebra (`crossing:markings` zebra or ladder,
+    `crossing_ref=zebra`, the deprecated `crossing=zebra`, or the zebra's
+    sign `DE:350`); two lines where `crossing:markings` says lines, dashes,
+    dots or just yes; a signalled crossing two lines too (German signalled
+    crossings are a Furt of broken lines: 97 % of Dresden's and Leipzig's
+    that say so). `marked` or `uncontrolled` alone paints nothing: in the
+    orthophotos they are mostly unmarked, or cross a cycle track, and only
+    about 30 % of the zebras they drew were there."""
+    values = {v.strip() for v in (tag(other_tags, "crossing:markings") or "").split(";")} - {""}
+    if values & ZEBRA_MARKINGS:
         return ZEBRA
     crossing = tag(other_tags, "crossing")
-    signals = crossing == "traffic_signals" or tag(other_tags, "crossing:signals") == "yes"
-    if signals:
+    ref = tag(other_tags, "crossing_ref")
+    sign = tag(other_tags, "traffic_sign") or ""
+    if ref == "zebra" or crossing == "zebra" or ZEBRA_SIGN in sign:
+        return ZEBRA if not values & NO_MARKINGS else 0
+    if values & LINE_MARKINGS:
         return FURT
-    if crossing in ("marked", "uncontrolled", "zebra") or markings == "yes":
-        return ZEBRA
-    return 0
+    if values & NO_MARKINGS:
+        return 0
+    signals = (
+        crossing == "traffic_signals"
+        or tag(other_tags, "crossing:signals") == "yes"
+        or ref in SIGNAL_REFS
+    )
+    return FURT if signals else 0
 
 
 def signal_direction(other_tags: str | None) -> int:
@@ -178,16 +254,82 @@ def lane_count(other_tags: str | None) -> int:
 
 
 def has_centre_line(highway: str | None, other_tags: str | None) -> bool:
-    return (
+    return centre_bits(highway, other_tags) != 0
+
+
+# A `divider` that is a thing, not paint: no line between the directions.
+PHYSICAL_DIVIDERS = {"barrier", "kerb", "grass_verge", "planter", "median", "guard_rail", "rail"}
+SOLID_DIVIDERS = {"solid_line", "double_solid_line", "solid_line_dashed_line"}
+
+
+def centre_bits(highway: str | None, other_tags: str | None) -> int:
+    """The way's centre-line bits (G, 0 none): `CENTRE` on two-way
+    primary…unclassified roads with `lanes` ≥ 2 and not `lane_markings=no`
+    nor a physical `divider`; `CENTRE_SOLID` too where overtaking is
+    forbidden (`overtaking=no`, or both its directions) or the divider is a
+    solid line; `LANE_LINES` on a single carriageway of four lanes or more,
+    whose lanes are divided by dashed lines (drawn halfway between the
+    middle and each kerb) and whose directions by a solid one (the RMS's
+    Fahrstreifenbegrenzung; dashed only where `divider=dashed_line`)."""
+    if not (
         _base(highway) in CENTRE_ROADS
         and not is_oneway(other_tags)
         and lane_count(other_tags) >= 2
         and tag(other_tags, "lane_markings") != "no"
+        and tag(other_tags, "divider") not in PHYSICAL_DIVIDERS
+    ):
+        return 0
+    bits = CENTRE
+    no_pass = tag(other_tags, "overtaking") == "no" or all(
+        tag(other_tags, f"overtaking:{d}") == "no" for d in ("forward", "backward")
     )
+    divider = tag(other_tags, "divider")
+    if no_pass or divider in SOLID_DIVIDERS:
+        bits |= CENTRE_SOLID
+    if lane_count(other_tags) >= 4:
+        bits |= LANE_LINES | (CENTRE_SOLID if divider != "dashed_line" else 0)
+    return bits
 
 
-def cycle_sides(other_tags: str | None) -> tuple[bool, bool]:
-    """(a cycle lane on the way's right, on its left)."""
+def _cycle_tag(other_tags: str | None, side: str, key: str) -> str | None:
+    """`cycleway:<side>:<key>`, else `cycleway:both:<key>`, else
+    `cycleway:<key>`."""
+    for prefix in (f"cycleway:{side}", "cycleway:both", "cycleway"):
+        value = tag(other_tags, f"{prefix}:{key}")
+        if value is not None:
+            return value
+    return None
+
+
+def _width_m(value: str | None) -> float:
+    try:
+        return float((value or "0").split(";")[0].replace(",", ".").removesuffix("m").strip())
+    except ValueError:
+        return 0.0
+
+
+def cycle_lane_bits(other_tags: str | None, side: str) -> int:
+    """A painted cycle lane's bits on one side (`CYCLE`, 0 none): its line
+    solid for a *Radfahrstreifen* (`cycleway:<side>:lane=exclusive`),
+    dashed for a *Schutzstreifen* (advisory, or not said), none for a lane
+    with only pictograms; `CYCLE_WIDE` where its tagged width is 2.05 m or
+    more (the line at 2.25 m, not the kind's own 1.85 or 1.5 m); `RED`
+    where its surface is tagged red."""
+    lane = _cycle_tag(other_tags, side, "lane")
+    if lane == "pictogram":
+        return 0
+    bits = CYCLE | (CYCLE_SOLID if lane == "exclusive" else 0)
+    if _width_m(_cycle_tag(other_tags, side, "width")) >= WIDE_CYCLE_M:
+        bits |= CYCLE_WIDE
+    if _cycle_tag(other_tags, side, "surface:colour") == "red":
+        bits |= RED
+    return bits
+
+
+def cycle_sides(other_tags: str | None) -> tuple[int, int]:
+    """The cycle-lane bits (`cycle_lane_bits`) on the way's right and on its
+    left, 0 where none: `cycleway:right|left|both=lane`, or `cycleway=lane`
+    (both sides of a two-way road, the right of a oneway)."""
 
     def lane(key: str) -> bool:
         return tag(other_tags, key) == "lane"
@@ -196,7 +338,25 @@ def cycle_sides(other_tags: str | None) -> tuple[bool, bool]:
     plain = lane("cycleway")
     right = both or lane("cycleway:right") or plain
     left = both or lane("cycleway:left") or (plain and not is_oneway(other_tags))
-    return right, left
+    return (
+        cycle_lane_bits(other_tags, "right") if right else 0,
+        cycle_lane_bits(other_tags, "left") if left else 0,
+    )
+
+
+# Cycleways mapped on their own (and paths a bicycle may use) whose surface
+# is tagged red: the whole track is red (B21; the paving pattern itself is
+# not known from open data).
+RED_TRACK_HALF_M = 1.0
+
+
+def is_red_track(highway: str | None, other_tags: str | None) -> bool:
+    if highway not in ("cycleway", "path", "footway"):
+        return False
+    colour = tag(other_tags, "surface:colour") or tag(other_tags, "cycleway:surface:colour")
+    return colour == "red" and (
+        highway == "cycleway" or tag(other_tags, "bicycle") in ("designated", "yes")
+    )
 
 
 # --- geometry -------------------------------------------------------------
@@ -364,6 +524,8 @@ def merge_pair(a, b) -> list[float]:
 def _mergeable(a, b) -> bool:
     if _family(a[5]) != _family(b[5]):
         return False
+    if math.dist(a[:2], b[:2]) < CORE_M:
+        return True  # one crossing read twice, whatever its tangents
     if _axis_gap_deg(a, b) > MERGE_ANGLE_DEG:
         return False
     return rotated_rect(a).distance(rotated_rect(b)) < 2 * CORE_M
@@ -450,23 +612,45 @@ def nearest_way_fields(tile: Tile, px: int, ways):
     return np.where(near, way, -1), right, near
 
 
+def burn_mask(tile: Tile, px: int, lines, half: float) -> np.ndarray:
+    """Texels of a px² raster within `half` metres of any of the lines."""
+    shapes = [(shapely.buffer(g, half), 1) for g in lines if g is not None and not g.is_empty]
+    if not shapes:
+        return np.zeros((px, px), bool)
+    return rasterize(shapes, out_shape=(px, px), transform=tile.transform(px), dtype=np.uint8) > 0
+
+
 def lane_fields(
-    tile: Tile, px: int, road: np.ndarray, ways, highways, centre, cycle
+    tile: Tile,
+    px: int,
+    road: np.ndarray,
+    ways,
+    highways,
+    centre,
+    cycle,
+    trams=(),
+    red_tracks=(),
 ) -> tuple[np.ndarray, np.ndarray]:
     """(G lane bits, B centre offset byte), px² each. `road` is the class
-    raster's road mask at px²; `centre[i]` whether way i draws a centre
-    line; `cycle[i]` its (right, left) cycle lanes."""
+    raster's road mask at px²; `centre[i]` way i's centre-line bits
+    (`centre_bits`, 0 none); `cycle[i]` its (right, left) cycle-lane bits
+    (`cycle_sides`). No centre line within `TRAM_CLEAR_M` of a tram track
+    (`trams`); `RED` on every texel of a red cycle track (`red_tracks`)."""
     bits = np.zeros((px, px), np.uint8)
     offset = np.full((px, px), 128, np.uint8)
+    if len(red_tracks):
+        res = (tile.bounds[2] - tile.bounds[0]) / px
+        bits |= burn_mask(tile, px, red_tracks, RED_TRACK_HALF_M + res / 2).astype(np.uint8) * RED
     if not any(centre) and not any(any(c) for c in cycle):
         return bits, offset
     way, right, _ = nearest_way_fields(tile, px, ways)
     n = len(ways)
     w = np.where(way >= 0, way, n)  # n: no way
-    lane_r = np.array([c[0] for c in cycle] + [False])
-    lane_l = np.array([c[1] for c in cycle] + [False])
-    bits |= (road & np.where(right, lane_r[w], lane_l[w])).astype(np.uint8)
-    is_c = np.array(list(centre) + [False])[w]
+    lane_r = np.array([c[0] for c in cycle] + [0], np.uint8)
+    lane_l = np.array([c[1] for c in cycle] + [0], np.uint8)
+    bits |= np.where(road, np.where(right, lane_r[w], lane_l[w]), 0).astype(np.uint8)
+    centre_of = np.array(list(centre) + [0], np.uint8)[w]
+    is_c = centre_of != 0
     if not is_c.any():
         return bits, offset
     res = (tile.bounds[2] - tile.bounds[0]) / px
@@ -489,9 +673,60 @@ def lane_fields(
         )
         clear = burned == 0
     ok = road & is_c & clear & (width >= CENTRE_MIN_WIDTH_M) & (width <= MAX_CARRIAGEWAY_M)
-    bits |= ok.astype(np.uint8) << 2
+    if len(trams):
+        ok &= ~burn_mask(tile, px, trams, TRAM_CLEAR_M)
+    bits |= np.where(ok, centre_of, 0).astype(np.uint8)
     code = np.clip(np.round(128 + EDGE_SCALE * s), 1, 255).astype(np.uint8)
     return bits, np.where(ok, code, offset)
+
+
+def kerb_lines(tile: Tile) -> list[shapely.Geometry] | None:
+    """The tile's baked kerb lines (edges.py) where the kerb stands its full
+    height (`full_height`), or None before that step ran."""
+    path = tile.out("dlm", f"kerbs_{tile.id}.geojson")
+    if not path.exists():
+        return None
+    doc = json.loads(path.read_text())
+    return [
+        part
+        for f in doc["features"]
+        for part in full_height(
+            shapely.geometry.shape(f["geometry"]), (f.get("properties") or {}).get("low") or []
+        )
+    ]
+
+
+def full_height(line: shapely.Geometry, low: list[list[float]]) -> list[shapely.Geometry]:
+    """A kerb line less its lowered stretches (`low`: from, to in metres
+    along it, kerb_drops.py): at a crossing or a driveway the stone stands
+    3 cm or flush, so the ground there takes no kerb band and no kerb
+    shadow (ground-detail.ts). The ramps at a stretch's ends keep it."""
+    if not low or not isinstance(line, shapely.LineString):
+        return [line]
+    parts, at = [], 0.0
+    for a, b, *_ in sorted(low):
+        if a > at:
+            parts.append(shapely.ops.substring(line, at, a))
+        at = max(at, b)
+    if at < line.length:
+        parts.append(shapely.ops.substring(line, at, line.length))
+    return [p for p in parts if p.length > 0.05]
+
+
+def kerb_bits(tile: Tile, px: int, kerbs: list[shapely.Geometry]) -> np.ndarray:
+    """`KERB` on every texel of a px² raster whose centre lies within
+    KERB_REACH_M plus a texel's diagonal of a kerb line, else 0."""
+    out = np.zeros((px, px), np.uint8)
+    lines = [g for g in kerbs if g is not None and not g.is_empty]
+    if lines:
+        res = (tile.bounds[2] - tile.bounds[0]) / px
+        reach = KERB_REACH_M + res * math.sqrt(2)
+        rasterize(
+            ((shapely.buffer(g, reach), KERB) for g in lines),
+            out=out,
+            transform=tile.transform(px),
+        )
+    return out
 
 
 def road_mask(tile: Tile, px: int) -> ClassRaster | None:
@@ -659,11 +894,12 @@ def build(
     lines,
     ln_fields,
     wide: ClassRaster | None = None,
+    trams=(),
 ):
     """The rows (the tile's own, then a neighbour's that reach into it), the
     lane fields (bits, offset) at each raster size, and the counts (own rows
     only). Rows are measured on `wide` (the tile and its neighbours) when
-    given."""
+    given; `trams` are the tram tracks (no centre line on them)."""
     highways = column(ln_fields, "highway", lines)
     line_tags = column(ln_fields, "other_tags", lines)
     motor = [i for i, h in enumerate(highways) if _base(h) in MOTOR]
@@ -704,14 +940,15 @@ def build(
     counts["seam"] = len(seam)
     rows += seam
     motor_hw = [highways[i] for i in motor]
-    centre = [has_centre_line(h, t) for h, t in zip(motor_hw, tags, strict=True)]
+    centre = [centre_bits(h, t) for h, t in zip(motor_hw, tags, strict=True)]
     cycle = [cycle_sides(t) for t in tags]
+    red = [g for g, h, t in zip(lines, highways, line_tags, strict=True) if is_red_track(h, t)]
     fields = {}
     for px in sizes:
         # a texel is road where most of the class raster's texels under it are
         k = raster.n // px
         road = (raster.cls == ROAD).reshape(px, k, px, k).mean(axis=(1, 3)) >= 0.5
-        fields[px] = lane_fields(tile, px, road, ways, motor_hw, centre, cycle)
+        fields[px] = lane_fields(tile, px, road, ways, motor_hw, centre, cycle, trams, red)
     return rows, fields, counts
 
 
@@ -738,10 +975,16 @@ def run(tile: Tile, px: int = 2048) -> None:
     points, pf = read_osm(
         tile, "points", "highway IN ('crossing', 'traffic_signals')", ["highway", "other_tags"]
     )
-    lines, lf = read_osm(tile, "lines", "highway IS NOT NULL", ["highway", "other_tags"], 0.003)
+    lines, lf = read_ways(tile, "highway IS NOT NULL", ["highway", "other_tags"], 0.003)
+    trams, _ = read_ways(tile, "railway = 'tram'", ["railway"], 0.003)
     low = px // 2
     wide = wide_mask(tile, raster)
-    rows, fields, counts = build(tile, raster, (px, low), points, pf, lines, lf, wide)
+    rows, fields, counts = build(tile, raster, (px, low), points, pf, lines, lf, wide, trams)
+    kerbs = kerb_lines(tile)
+    if kerbs is None:
+        print(f"{tile.id}: no kerb lines yet (run `edges` first) — no kerb band on the ground")
+    for size, (bits, offset) in list(fields.items()):
+        fields[size] = (bits | kerb_bits(tile, size, kerbs or []), offset)
     placed = len(rows)
     rows = merge_rows(rows)
     report = []
@@ -764,7 +1007,10 @@ def run(tile: Tile, px: int = 2048) -> None:
             "layout": "8-bit greyscale, 4 * size wide: R0 G0 B0 A0 R1 ... per row; "
             "markings_low_<tile>.png the same at lowSize (phones)",
             "ra": "1 + the row of `markings` reaching the texel (R low, A high byte; 0 none)",
-            "g": "lane bits: 1 cycle lane along this side's kerb, 4 centre-line road",
+            "g": f"lane bits: {CYCLE} cycle lane along this side's kerb ({CYCLE_SOLID} its line "
+            f"solid, {CYCLE_WIDE} at 2.25 m), {CENTRE} centre-line road ({CENTRE_SOLID} solid, "
+            f"{LANE_LINES} lane lines too), {KERB} a kerb line within {KERB_REACH_M:g} m and a "
+            f"texel's diagonal, {RED} a red cycle surface",
             "b": f"128 + {EDGE_SCALE:g} * the signed distance (m) to the carriageway's middle",
             "markings": "[cx, cy, angle, halfLength, halfWidth, kind]: the centre in m from "
             "the tile's north-west corner (x east, y north), the axis across the road "
@@ -779,6 +1025,11 @@ def run(tile: Tile, px: int = 2048) -> None:
     print(
         f"{tile.id}: {len(rows)} markings {kinds} ({placed - len(rows)} merged), {counts}; "
         f"{'; '.join(report)}; "
-        f"cycle-lane texels {int((bits & 1).sum())}, "
-        f"centre-line texels {int((bits & 4).sum() // 4)}"
+        f"cycle-lane texels {int(np.count_nonzero(bits & CYCLE))} "
+        f"(solid {int(np.count_nonzero(bits & CYCLE_SOLID))}), "
+        f"centre-line texels {int(np.count_nonzero(bits & CENTRE))} "
+        f"(solid {int(np.count_nonzero(bits & CENTRE_SOLID))}, "
+        f"lane lines {int(np.count_nonzero(bits & LANE_LINES))}), "
+        f"red {int(np.count_nonzero(bits & RED))}, "
+        f"kerb texels {int(np.count_nonzero(bits & KERB))}"
     )

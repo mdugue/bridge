@@ -9,8 +9,10 @@ import {
   STAIR_RISER,
   STAIR_TREAD,
   type StairLine,
+  stairColors,
   stairGeometry,
   stairLineOf,
+  stairRails,
 } from "./stairs";
 import { sampleHeightfield } from "./terrain-geometry";
 
@@ -335,4 +337,74 @@ test("a malformed feature is not a flight", () => {
   expect(
     stairLineOf({ geometry: line, properties: { n: 25, w: 4, z: [100, 104] } })
   ).toEqual(FLIGHT);
+});
+
+test("only a side with a wall or building along it becomes a Wange", () => {
+  // the bank beside the flight 1 m above its treads, as above
+  const cut = (x: number, y: number) =>
+    Math.abs(x - 50) > 2 ? bank(y) + 1 : bank(y);
+  const banksOf = (walled: [boolean, boolean]) =>
+    stairGeometry(
+      { ...FLIGHT, walled },
+      { cx: 0, cy: 0 },
+      { groundAt: cut }
+    )?.kinds.filter((k) => k === STAIR_BANK).length ?? 0;
+  // open on both sides (Meißen's grass banks): plain cheeks, the bank
+  // stays ground
+  expect(banksOf([false, false])).toBe(0);
+  // a building along the left (west of a northward climb) only
+  expect(banksOf([true, false])).toBe(25 * 6);
+  expect(banksOf([true, true])).toBe(2 * 25 * 6);
+});
+
+test("a flight's handrails stand on its nosings, inside its railed edges", () => {
+  expect(stairRails(FLIGHT)).toEqual([]);
+  const rails = stairRails({ ...FLIGHT, rail: [true, false] });
+  expect(rails).toHaveLength(1);
+  const [rail] = rails;
+  expect(rail.type).toBe("rail");
+  // left of a northward climb is west: 2 m half width less the inset
+  for (const [x] of rail.coords) {
+    expect(x).toBeCloseTo(50 - (FLIGHT.w / 2 - 0.15), 6);
+  }
+  // its ground is the nosing line: a riser over the ramp, off the flight none
+  const rise = (FLIGHT.z[1] - FLIGHT.z[0]) / FLIGHT.n;
+  expect(rail.ground?.(48.15, 50)).toBeCloseTo(102 + rise, 6);
+  expect(rail.ground?.(40, 50)).toBeNull();
+});
+
+test("a flight's material, rails and walled sides are read from its feature", () => {
+  const line = { type: "LineString" as const, coordinates: FLIGHT.coords };
+  const props = { n: 25, w: 4, z: [100, 104] as [number, number] };
+  expect(
+    stairLineOf({
+      geometry: line,
+      properties: {
+        ...props,
+        mat: "brick",
+        rail: [true, false],
+        walled: [false, true],
+      },
+    })
+  ).toEqual({
+    ...FLIGHT,
+    mat: "brick",
+    rail: [true, false],
+    walled: [false, true],
+  });
+  // an unknown material or a malformed pair is left out
+  const odd = stairLineOf({
+    geometry: line,
+    properties: { ...props, mat: "marble", rail: [true] },
+  } as unknown as Parameters<typeof stairLineOf>[0]);
+  expect(odd).toEqual(FLIGHT);
+});
+
+test("a flight's tone follows its material, stone without one", () => {
+  const kinds = [STAIR_TREAD, STAIR_TREAD];
+  const stone = stairColors(kinds);
+  const concrete = stairColors(kinds, "concrete");
+  expect(stone.length).toBe(6);
+  expect(concrete[0]).not.toBeCloseTo(stone[0], 3);
+  expect(Array.from(stairColors(kinds, "stone"))).toEqual(Array.from(stone));
 });

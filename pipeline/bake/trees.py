@@ -17,35 +17,51 @@ only for a site that names a register); this step:
      tree lands in exactly one tile;
   2. maps the taxon to archetype / leaf type / foliage colour
      (tree_archetypes.py);
-  3. for a register that records no height (Hamburg's), measures it in the
-     surface model (DOM1 − DGM1, the highest texel within a quarter of the
-     crown diameter of the trunk, `measure_heights`) where the result fits
-     the recorded crown;
-  4. imputes a still missing height or crown diameter from this tile's own
-     trees: the genus median height and the archetype's median
-     crown-to-height ratio;
+  3. fills a height the register does not record (Hamburg's records none)
+     from the tree's genus and trunk (allometry.py: the curve fitted on
+     Dresden's and Leipzig's registers, shipped as tree_allometry.json),
+     else from its crown (the archetype's median crown-to-height ratio),
+     else the genus median — this tile's trees, else the table's. Not from
+     Hamburg's surface model: matched from a leaf-off flight, it reads the
+     street trees 10–40 % low;
+  4. reads the surface model (DOM1 − DGM1, off the roofs and the bridges)
+     at each trunk (`surface_check`): a register tree the model must see
+     (SEEN_H tall) where it shows nothing above ABSENT_H is gone — its
+     record outlived it — and is left out; a height the model exceeds by
+     max(STALE_M, STALE_SHARE) — the viewer's `overtops`, which keeps a
+     canopy crown that much taller as a second tree — is stale (a young
+     tree's record, a genus median) and becomes the model's, where that
+     fits the crown (`plausible_measure`). Else the viewer drew the tree
+     twice: of the canopy and laser-scan crowns inside a register tree's
+     footprint it kept 1 364 in Dresden as second trees, 609 in Leipzig and
+     1 288 in Hamburg, most of them the register tree's own; with the check
+     440, 278 and 227;
   5. flags (`f`) a tree standing in forest or copse (class 2/3 of the
      committed class raster): the viewer does not let such a tree veto the
      canopy trees around it — a park's measured canopy is denser than the
      municipal register (docs/transformations.md);
-  6. adds the OSM trees (the site's extract, ODbL) that stand more than
-     OSM_CLEARANCE from every cadastre tree of the cached answer (its margin
-     across the seams included) — courts, the Zwinger, Free-State and
-     private ground the municipal register skips. The cadastre wins: it is
-     measured. An OSM tree needs a taxon the bake reads (`species`/`taxon`/
-     `genus` naming a known genus; German names, lower-case genera and a few
-     unambiguous bare epithets mapped) or at least `leaf_type`; one with
-     neither is dropped (the DOM canopy covers unknown trees, and no species
-     is invented). A `leaf_type` that contradicts the taxon wins over it, and
-     `leaf_cycle` sets the leaf type. Its `height`/`diameter_crown`/
-     `circumference` tags are read when present, the gaps filled from the
-     cadastre's own statistics for the tile.
+  6. adds the OSM trees (the site's extract, ODbL) that stand clear of every
+     cadastre tree of the cached answer (its margin across the seams
+     included) by its crown's radius, at least OSM_CLEARANCE — courts, the
+     Zwinger, Free-State and private ground the municipal register skips.
+     The cadastre wins: it is measured. An OSM tree needs a taxon the bake
+     reads (`species`/`taxon`/`genus` naming a known genus; German names,
+     lower-case genera and a few unambiguous bare epithets mapped) or at
+     least `leaf_type`; one with neither is dropped (the DOM canopy covers
+     unknown trees, and no species is invented). A `leaf_type` that
+     contradicts the taxon wins over it, and `leaf_cycle` sets the leaf
+     type. Its `height`/`diameter_crown`/`circumference` tags are read when
+     present, the gaps filled as a register tree's (3.). A site without a
+     register (München, Unna, Grimma, Meißen) has its OSM trees alone, their
+     heights measured in the surface model (`measure_heights`): they veto
+     the canopy crowns at their place in the viewer as a register's do;
   7. drops a trunk diameter that cannot be the tree's (over T_MAX, or over
      T_PER_H cm per metre of its height) rather than clamping it.
 
 Output `data/<site>/dlm/trees_<tile>.geojson`, points with
   h tree height (m), d crown diameter (m), a archetype id (0 round, 1 oval,
-  2 columnar, 3 conifer, 4 weeping, 5 small), l leaf type ("e"/"d"),
+  2 columnar, 3 conifer — the cone —, 4 weeping, 5 small, 6 pine, 7 bush:
+  tree_archetypes.ARCHETYPES), l leaf type ("e"/"d"),
   c foliage colour (1 purple, 2 golden; absent = green), g 1 = globe
   cultivar, f 1 = in forest/copse, gn the genus (an index into the file's
   `genera` member, tree_archetypes.GENERA; absent = 0, other deciduous),
@@ -71,14 +87,16 @@ import datetime
 import json
 import re
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import rasterio
 from scipy.spatial import cKDTree
 
+from . import allometry, crown_form, lowveg
 from . import tree_archetypes as ta
-from .cadastre import Fields, register_of
+from .cadastre import Fields, Register, register_of
+from .canopy import BARE, bridge_mask, crown_green, roof_mask
 from .common import OSM_ATTRIBUTION, Tile, crs_member, feature, owns
 from .osm import has_extract, read_osm, tag
 
@@ -91,9 +109,40 @@ T_MAX = 400.0  # trunk diameter (cm) past which the register has a typo
 # (a 5 m tree 120 cm across): 99.8 % of the cadastre's measured pairs stay
 # under it, the rest are swapped or mistyped fields and pollarded stumps.
 T_PER_H = 15.0
-# An OSM tree this close to a cadastre tree is taken to be that tree (the
-# register is surveyed; OSM positions are often traced from imagery).
+# An OSM tree within a cadastre tree's crown radius, and never less than
+# this, is taken to be that tree (the register is surveyed; OSM positions are
+# often traced from imagery, a crown's middle rather than its trunk). With 3 m
+# alone ~700 Dresden, 670 Leipzig and 340 Hamburg trees stood twice, 3–6 m
+# from their register twin.
 OSM_CLEARANCE = 3.0
+CLEARANCE_CAP = 15.0  # m: D_MAX / 2, a crown radius past it is a typo
+# The surface model's say over a tree (`surface_check`). A register tree
+# this tall the model must see (a 25 cm trunk on the allometry; Saxony's
+# DOM1 misses 0.1–0.4 % of the recorded ones over 10 m) …
+SEEN_H = 8.0
+# … and where its highest texel by the trunk is under this, and the
+# orthophoto shows the ground bare there (the baked index's 3 × 3 maximum
+# under the canopy's BARE, canopy.py `crown_green`: asphalt, gravel, a
+# roof), nothing stands. The surface model alone does not tell: Hamburg's,
+# matched from a leaf-off flight, shows nothing at 4 % of its register's
+# trees with a 25 cm trunk, most of them green in its summer orthophoto
+# (of the trees it does show, 2–3 % read as bare as that). A leaf-off
+# flight's index (Saxony's) reads a lawn green and a bare crown bare; there
+# the surface model, accurate, decides wherever a trunk stands in the street.
+ABSENT_H = 2.0
+# A tree the register says was planted this few years ago may postdate the
+# flight (Hamburg's registers 2023–2025 plantings its 2022 flight never saw)
+# and is too thin for it anyway: never taken for gone.
+YOUNG_YEARS = 6
+# A height the model exceeds by max(STALE_M, STALE_SHARE of it) is stale:
+# the viewer's `overtops` (lib/city/tree-inventory.ts) keeps a canopy crown
+# that much taller as a tree of its own.
+STALE_M = 5.0
+STALE_SHARE = 0.3
+# … where the trunk on record allows it: a tree is at most this many times
+# the allometry's height for its trunk (99 % of Dresden's and Leipzig's
+# measured trees are; a 5 cm sapling read 9 m under a neighbour's crown).
+TRUNK_LIMIT = 1.9
 # The disc the surface model is searched in for a tree's top: a quarter of
 # its crown diameter, between 1 and 3 m (on Leipzig's measured trees the
 # best of r = 1 m, d/4, d/3 and d/2, max or 90th percentile).
@@ -404,22 +453,35 @@ def osm_tree(x: float, y: float, other_tags: str | None) -> dict | None:
 
 
 def cadastre_points(raw: dict, fields: Fields) -> np.ndarray:
-    """Every tree position in the cached WFS answer, (n, 2): the tile's own
-    and those in the margin across its seams, stumps and felled trees
-    included (an OSM tree on one is the tree the register lost)."""
-    points = [xy for f in raw.get("features", []) if (xy := position(f, fields)) is not None]
-    return np.array(points, dtype=float).reshape(-1, 2)
+    """Every tree in the cached WFS answer as (x, y, crown radius), (n, 3):
+    the tile's own and those in the margin across its seams, stumps and
+    felled trees included (an OSM tree on one is the tree the register
+    lost); the radius 0 where the register records no crown."""
+    points = []
+    for f in raw.get("features", []):
+        xy = position(f, fields)
+        if xy is None:
+            continue
+        d = _num((f.get("properties") or {}).get(fields.crown)) if fields.crown else None
+        points.append((*xy, min(d / 2, CLEARANCE_CAP) if d else 0.0))
+    return np.array(points, dtype=float).reshape(-1, 3)
 
 
 def complement(osm: list[dict], cadastre: np.ndarray) -> list[dict]:
     """The OSM trees no cadastre tree (`cadastre_points`: the margin's too, so
     a register tree just across a seam claims its OSM twin on this side)
-    stands within OSM_CLEARANCE of."""
+    stands within max(OSM_CLEARANCE, its crown radius) of."""
     if not osm or len(cadastre) == 0:
         return osm
-    index = cKDTree(cadastre)
-    dist, _ = index.query(np.array([(t["x"], t["y"]) for t in osm]))
-    return [t for t, d in zip(osm, dist, strict=True) if d > OSM_CLEARANCE]
+    index = cKDTree(cadastre[:, :2])
+    reach = max(OSM_CLEARANCE, float(cadastre[:, 2].max()))
+    near = index.query_ball_point(np.array([(t["x"], t["y"]) for t in osm]), reach)
+    kept = []
+    for t, hits in zip(osm, near, strict=True):
+        d = np.hypot(cadastre[hits, 0] - t["x"], cadastre[hits, 1] - t["y"])
+        if not np.any(d <= np.maximum(cadastre[hits, 2], OSM_CLEARANCE)):
+            kept.append(t)
+    return kept
 
 
 def read_osm_trees(tile: Tile) -> list[dict]:
@@ -438,7 +500,10 @@ def read_osm_trees(tile: Tile) -> list[dict]:
 @dataclass(frozen=True)
 class SizeStats:
     """What fills a missing height or crown: the genus median height (≥ 3
-    samples), the tile's median height, the archetype's crown/height ratio."""
+    samples), the tile's median height, the archetype's crown/height ratio
+    — this tile's own measured trees', the shipped allometry table's
+    (allometry.py: Dresden's and Leipzig's registers) where the tile has
+    none."""
 
     genus_h: dict[str, float]
     all_h: float
@@ -453,38 +518,62 @@ def size_stats(trees: list[dict]) -> SizeStats:
             by_genus.setdefault(t["genus"], []).append(t["h"])
         if t["h"] and t["d"]:
             ratio.setdefault(t["archetype"], []).append(t["d"] / t["h"])
+    table = allometry.table()
     return SizeStats(
-        genus_h={g: statistics.median(v) for g, v in by_genus.items() if len(v) >= 3},
+        genus_h={
+            **table["genus_h"],
+            **{g: statistics.median(v) for g, v in by_genus.items() if len(v) >= 3},
+        },
         all_h=statistics.median([t["h"] for t in trees if t["h"]] or [DEFAULT_H]),
-        arch_r={a: statistics.median(v) for a, v in ratio.items() if v},
+        arch_r={
+            **{int(a): r for a, r in table["crown_ratio"].items()},
+            **{a: statistics.median(v) for a, v in ratio.items() if v},
+        },
     )
+
+
+def _missing_height(t: dict, stats: SizeStats, r: float) -> float:
+    """A height for a tree that records none: the allometry's for its genus
+    and trunk (a median 1.8 m off on the other Saxon register), else its
+    crown over the archetype's ratio (2.0–2.3 m off), else the genus
+    median."""
+    if t.get("t") and t["t"] <= T_MAX:
+        return allometry.height(t["genus"], t["archetype"], t["t"])
+    if t["d"]:
+        return t["d"] / r
+    return stats.genus_h.get(t["genus"], stats.all_h)
 
 
 def impute(
     trees: list[dict], stats: SizeStats | None = None
 ) -> tuple[list[tuple[float, float]], int, int]:
-    """(height, crown diameter) per tree, the gaps filled from `stats` (by
-    default this tile's own measured trees) and clamped; plus how many of
-    each were imputed."""
+    """(height, crown diameter) per tree, the gaps filled (`_missing_height`;
+    the crown from the height by `stats`, by default this tile's own
+    measured trees) and clamped; plus how many of each were imputed."""
     stats = stats or size_stats(trees)
     out, imputed_h, imputed_d = [], 0, 0
     for t in trees:
         r = stats.arch_r.get(t["archetype"], DEFAULT_RATIO)
         h, d = t["h"], t["d"]
         if h is None:
-            h = d / r if d else stats.genus_h.get(t["genus"], stats.all_h)
+            h = _missing_height(t, stats, r)
             imputed_h += 1
         if d is None:
             d = h * r
             imputed_d += 1
-        h = min(max(h, H_MIN), H_MAX)
-        d = min(max(d, D_MIN), D_MAX, max(1.6 * h, 3.0))
-        out.append((h, d))
+        out.append(clamped(h, d))
     return out, imputed_h, imputed_d
 
 
-def _disc_max(ndom: np.ndarray, r: int, c: int, reach: int) -> float:
-    """The highest nDOM texel within `reach` texels of (r, c)."""
+def clamped(h: float, d: float) -> tuple[float, float]:
+    """A height and crown in the bake's ranges, the crown no wider than the
+    tree allows."""
+    h = min(max(h, H_MIN), H_MAX)
+    return h, min(max(d, D_MIN), D_MAX, max(1.6 * h, 3.0))
+
+
+def _disc(ndom: np.ndarray, r: int, c: int, reach: int) -> np.ndarray:
+    """The nDOM texels within `reach` texels of (r, c)."""
     n_r, n_c = ndom.shape
     r0, r1, c0, c1 = (
         max(r - reach, 0),
@@ -493,7 +582,14 @@ def _disc_max(ndom: np.ndarray, r: int, c: int, reach: int) -> float:
         min(c + reach + 1, n_c),
     )
     yy, xx = np.mgrid[r0 - r : r1 - r, c0 - c : c1 - c]
-    vals = ndom[r0:r1, c0:c1][yy**2 + xx**2 <= reach * reach]
+    return ndom[r0:r1, c0:c1][yy**2 + xx**2 <= reach * reach]
+
+
+def _disc_max(ndom: np.ndarray, r: int, c: int, reach: int) -> float:
+    """The highest nDOM texel within `reach` texels of (r, c), the masked
+    (NaN: a roof, a bridge) left out; 0 where none is left."""
+    vals = _disc(ndom, r, c, reach)
+    vals = vals[np.isfinite(vals)]
     return float(vals.max()) if vals.size else 0.0
 
 
@@ -513,31 +609,157 @@ def measure_heights(trees: list[dict], ndom: np.ndarray, bounds) -> int:
     (`plausible_measure`). For a register that records no height (Hamburg);
     on Leipzig's, which does, this reads 0.6 m low in the median, 1.5 m off
     — against 2.3 m for a height guessed from the crown. Returns how many."""
-    xmin, _, xmax, ymax = bounds
-    px = (xmax - xmin) / ndom.shape[1]
     measured = 0
     for t in trees:
         if t["h"] is not None:
             continue
-        reach_m = min(max((t["d"] or 0) * NDOM_REACH[0], NDOM_REACH[1]), NDOM_REACH[2])
-        r = min(int((ymax - t["y"]) / px), ndom.shape[0] - 1)
-        c = min(int((t["x"] - xmin) / px), ndom.shape[1] - 1)
-        h = _disc_max(ndom, r, c, max(1, round(reach_m / px)))
+        h, _ = trunk_top(ndom, bounds, t, t["d"])
         if plausible_measure(h, t["d"]):
             t["h"] = h
             measured += 1
     return measured
 
 
-def surface_heights(tile: Tile, trees: list[dict]) -> int:
-    """`measure_heights` over the tile's surface model; 0 without one."""
+def trunk_top(ndom: np.ndarray, bounds, t: dict, d: float | None) -> tuple[float, bool]:
+    """The surface model's highest texel within NDOM_REACH of a tree's trunk
+    (a quarter of its crown `d`, 1–3 m), and whether that disc is all in
+    view (no texel masked)."""
+    xmin, _, xmax, ymax = bounds
+    px = (xmax - xmin) / ndom.shape[1]
+    reach_m = min(max((d or 0) * NDOM_REACH[0], NDOM_REACH[1]), NDOM_REACH[2])
+    r = min(max(int((ymax - t["y"]) / px), 0), ndom.shape[0] - 1)
+    c = min(max(int((t["x"] - xmin) / px), 0), ndom.shape[1] - 1)
+    vals = _disc(ndom, r, c, max(1, round(reach_m / px)))
+    seen = vals[np.isfinite(vals)]
+    return (float(seen.max()) if seen.size else 0.0), seen.size == vals.size
+
+
+def _peak(ndom: np.ndarray, bounds, t: dict, d: float | None) -> tuple[int, int, float] | None:
+    """The row, column and height of the surface model's highest texel
+    within NDOM_REACH of the trunk; None where none is in view."""
+    xmin, _, xmax, ymax = bounds
+    px = (xmax - xmin) / ndom.shape[1]
+    reach = max(1, round(min(max((d or 0) * NDOM_REACH[0], NDOM_REACH[1]), NDOM_REACH[2]) / px))
+    r = min(max(int((ymax - t["y"]) / px), 0), ndom.shape[0] - 1)
+    c = min(max(int((t["x"] - xmin) / px), 0), ndom.shape[1] - 1)
+    r0, c0 = max(r - reach, 0), max(c - reach, 0)
+    win = ndom[r0 : r + reach + 1, c0 : c + reach + 1]
+    yy, xx = np.mgrid[r0 - r : r0 - r + win.shape[0], c0 - c : c0 - c + win.shape[1]]
+    vals = np.where((yy**2 + xx**2 <= reach * reach) & np.isfinite(win), win, -np.inf)
+    i = int(np.argmax(vals))
+    if not np.isfinite(vals.flat[i]):
+        return None
+    return r0 + i // win.shape[1], c0 + i % win.shape[1], float(vals.flat[i])
+
+
+def conifer_form(t: dict, ndom: np.ndarray, bounds, d: float) -> bool:
+    """A conifer of no known genus (an OSM tree tagged only needle-leaved)
+    takes the pine's crown where the surface model shows its top flat
+    (crown_form.py), as the canopy's evergreens do. True when it changed."""
+    if t["archetype"] != ta.CONIFER or ta.is_genus(t["genus"]):
+        return False
+    peak = _peak(ndom, bounds, t, d)
+    if peak is None or not crown_form.flat_topped(ndom, *peak):
+        return False
+    t["archetype"] = ta.PINE
+    return True
+
+
+@dataclass(frozen=True)
+class Surface:
+    """What the bake reads of a tile's flight: the nDOM (DOM1 − DGM1, north
+    row first) with what is no tree masked (NaN: a building's roof and a
+    bridge with its reach — canopy.py's `roof_mask` and `bridge_mask`, the
+    canopy's own rules), and the orthophoto's crown green (`crown_green`,
+    any grid; None without the index)."""
+
+    ndom: np.ndarray
+    green: np.ndarray | None = None
+
+    def bare_at(self, bounds, x: float, y: float) -> bool:
+        """Whether the orthophoto shows the ground bare at (x, y) (no index:
+        it does not tell, and the surface model alone decides)."""
+        if self.green is None:
+            return True
+        xmin, ymin, xmax, ymax = bounds
+        n_r, n_c = self.green.shape
+        r = min(max(int((ymax - y) / (ymax - ymin) * n_r), 0), n_r - 1)
+        c = min(max(int((x - xmin) / (xmax - xmin) * n_c), 0), n_c - 1)
+        return bool(self.green[r, c] < BARE)
+
+
+def surface_model(tile: Tile) -> Surface | None:
+    """The tile's `Surface`; None without a surface model."""
     dom = tile.raw_raster("dom1")
     if not dom.exists() or not tile.dgm.exists():
-        print(f"{tile.id}: no surface model — the register's heights come from the crowns")
-        return 0
+        print(f"{tile.id}: no surface model — every height from the register or the allometry")
+        return None
     with rasterio.open(dom) as d, rasterio.open(tile.dgm) as g:
         ndom = d.read(1).astype(np.float64) - g.read(1).astype(np.float64)
-    return measure_heights(trees, ndom, tile.bounds)
+    ndom[roof_mask(tile, ndom) | (bridge_mask(tile, ndom.shape[1]) == 1)] = np.nan
+    return Surface(ndom, crown_green(tile))
+
+
+@dataclass
+class SurfaceCheck:
+    """What `surface_check` did: the trees it left out as gone, the heights
+    it took from the surface model as stale."""
+
+    absent: int = 0
+    stale: int = 0
+    pines: int = 0
+
+
+def _fits_trunk(t: dict, h: float) -> bool:
+    """Whether a height can be the tree's by its trunk on record
+    (TRUNK_LIMIT; no trunk recorded: any)."""
+    if not t.get("t") or t["t"] > T_MAX:
+        return True
+    return h <= TRUNK_LIMIT * allometry.height(t["genus"], t["archetype"], t["t"])
+
+
+def _seen(t: dict, h: float) -> bool:
+    """Whether the surface model must show a tree: SEEN_H tall by its
+    register's height or its measured trunk (not a genus median), and not
+    planted in the last YOUNG_YEARS."""
+    if t.get("src") == "osm" or h < SEEN_H or (t["h"] is None and not t.get("t")):
+        return False
+    year = planting_year(t)
+    return year is None or year < datetime.date.today().year - YOUNG_YEARS
+
+
+def surface_check(
+    trees: list[dict],
+    sizes: list[tuple[float, float]],
+    surface: Surface,
+    bounds,
+    stats: SizeStats,
+) -> tuple[list[dict], list[tuple[float, float]], SurfaceCheck]:
+    """The trees and their sizes after the surface model's say (step 4 of
+    the module doc): a register tree it must see and does not (`_seen`,
+    under ABSENT_H by its trunk, the disc all in view, the orthophoto bare
+    there) is left out; a height
+    it exceeds by max(STALE_M, STALE_SHARE) becomes its, where that fits the
+    recorded crown and trunk (`plausible_measure`, `_fits_trunk`) — a crown
+    filled in from the height is filled in again; a conifer of no known
+    genus takes its form from it (`conifer_form`).
+    A height taken is measured (`t["h"]`, the facts' bit)."""
+    kept, kept_sizes, done = [], [], SurfaceCheck()
+    for t, (h, d) in zip(trees, sizes, strict=True):
+        top, in_view = trunk_top(surface.ndom, bounds, t, d)
+        if in_view and top < ABSENT_H and _seen(t, h) and surface.bare_at(bounds, t["x"], t["y"]):
+            done.absent += 1
+            continue
+        stale = top > h + max(STALE_M, STALE_SHARE * h)
+        if stale and plausible_measure(top, t["d"]) and _fits_trunk(t, top):
+            t["h"] = top
+            r = stats.arch_r.get(t["archetype"], DEFAULT_RATIO)
+            h, d = clamped(top, t["d"] or top * r)
+            done.stale += 1
+        done.pines += conifer_form(t, surface.ndom, bounds, d)
+        kept.append(t)
+        kept_sizes.append((h, d))
+    return kept, kept_sizes, done
 
 
 def woodland_at(cls: np.ndarray, bounds, x: float, y: float) -> bool:
@@ -629,57 +851,91 @@ def tree_facts(trees: list[dict], props: list[dict]) -> dict:
     }
 
 
-def _osm_complement(tile: Tile, cadastre: np.ndarray) -> list[dict]:
+def _osm_trees(tile: Tile, cadastre: np.ndarray | None) -> list[dict]:
+    """The site extract's trees the tile owns, without those a cadastre
+    tree stands on (`complement`); all of them where the site has no
+    register (`cadastre` None)."""
     if not has_extract(tile, "the OSM trees"):
         return []
     osm = read_osm_trees(tile)
+    if cadastre is None:
+        print(f"{tile.id}: {len(osm)} OSM trees (the site names no register)")
+        return osm
     kept = complement(osm, cadastre)
     print(
-        f"{tile.id}: {len(kept)} OSM trees added "
-        f"({len(osm) - len(kept)} within {OSM_CLEARANCE:g} m of a cadastre tree)"
+        f"{tile.id}: {len(kept)} OSM trees added ({len(osm) - len(kept)} within "
+        f"max({OSM_CLEARANCE:g} m, its crown radius) of a cadastre tree)"
     )
     return kept
 
 
-def run(tile: Tile) -> None:
-    register = register_of(tile)
-    if register is None:
-        print(f"{tile.id}: the site names no tree cadastre — skipping the inventory trees")
-        return
+def _register_trees(tile: Tile, register: Register) -> tuple[list[dict], np.ndarray] | None:
+    """The register's trees the tile owns and every tree of the cached
+    answer as `cadastre_points`; None without the cache."""
     raw_path = tile.raw / "trees" / f"{tile.id}.geojson"
     if not raw_path.exists():
-        print(f"{tile.id}: no tree cadastre at {raw_path} — skipping the inventory trees")
-        return
+        return None
     raw = json.loads(raw_path.read_text())
-    trees = parse_trees(raw, tile.bounds, register.fields)
-    # A tile the cadastre has no tree on (all forest) still gets its file,
-    # empty: "baked, nothing here" is not "never baked" (lib/city/tile-data.test.ts
-    # holds every tile to the same set of files). The OSM complement fills in
-    # sizes from the cadastre's own statistics, so it needs a cadastre tree.
-    features = []
-    facts = tree_facts([], [])
-    osm: list[dict] = []
-    measured = imputed_h = imputed_d = 0
-    if trees:
-        if register.fields.height is None:
-            measured = surface_heights(tile, trees)
-        stats = size_stats(trees)
-        sizes, imputed_h, imputed_d = impute(trees, stats)
-        osm = _osm_complement(tile, cadastre_points(raw, register.fields))
-        osm_sizes, _, _ = impute(osm, stats)
-        # Sorted by position, so a re-bake diffs by what changed, not by the
-        # order the WFS happened to answer in.
-        rows = sorted(
-            zip(trees + osm, sizes + osm_sizes, strict=True),
-            key=lambda r: (r[0]["x"], r[0]["y"]),
-        )
-        cls = tile.classes()
-        features = tree_features([r[0] for r in rows], [r[1] for r in rows], cls, tile.bounds)
-        facts = tree_facts([r[0] for r in rows], [f["properties"] for f in features])
-    credit = tile.tree_cadastre.credit
+    return parse_trees(raw, tile.bounds, register.fields), cadastre_points(raw, register.fields)
+
+
+@dataclass
+class Census:
+    """What one tile's bake did, for its log line."""
+
+    measured: int = 0
+    imputed_h: int = 0
+    imputed_d: int = 0
+    check: SurfaceCheck = field(default_factory=SurfaceCheck)
+    osm_check: SurfaceCheck = field(default_factory=SurfaceCheck)
+
+
+def sized_trees(
+    trees: list[dict], osm: list[dict], surface: Surface | None, bounds, census: Census
+) -> tuple[list[dict], list[tuple[float, float]]]:
+    """The register's and the OSM trees with their (height, crown), in one
+    list sorted by position (a re-bake diffs by what changed, not by the
+    order the WFS happened to answer in): the gaps filled (`impute`; without
+    a register the OSM trees' heights measured first), then checked against
+    the surface model (`surface_check`)."""
+    if not trees and surface is not None:
+        census.measured = measure_heights(osm, surface.ndom, bounds)
+    stats = size_stats(trees or osm)
+    sizes, census.imputed_h, census.imputed_d = impute(trees, stats)
+    osm_sizes, _, _ = impute(osm, stats)
+    if surface is not None:
+        trees, sizes, census.check = surface_check(trees, sizes, surface, bounds, stats)
+        osm, osm_sizes, census.osm_check = surface_check(osm, osm_sizes, surface, bounds, stats)
+    rows = sorted(
+        zip(trees + osm, sizes + osm_sizes, strict=True), key=lambda r: (r[0]["x"], r[0]["y"])
+    )
+    return [r[0] for r in rows], [r[1] for r in rows]
+
+
+def run(tile: Tile) -> None:
+    register = register_of(tile)
+    trees: list[dict] = []
+    cadastre = None
+    if register is not None:
+        found = _register_trees(tile, register)
+        if found is None:
+            print(f"{tile.id}: no tree cadastre cached — skipping the inventory trees")
+            return
+        trees, cadastre = found
+    # A tile without a tree (all forest) still gets its files, empty:
+    # "baked, nothing here" is not "never baked" (lib/city/tile-data.test.ts
+    # holds every tile to the same set of files).
+    osm = _osm_trees(tile, cadastre)
+    census = Census()
+    rows, sizes = sized_trees(trees, osm, surface_model(tile), tile.bounds, census)
+    features = tree_features(rows, sizes, tile.classes(), tile.bounds)
+    facts = tree_facts(rows, [f["properties"] for f in features])
+    credits = [tile.tree_cadastre.credit] if register is not None and tile.tree_cadastre else []
+    if register is None or any(t.get("src") == "osm" for t in rows):
+        credits.append(OSM_ATTRIBUTION)
     doc = {
         "type": "FeatureCollection",
-        "attribution": f"{credit}; {OSM_ATTRIBUTION}" if osm else credit,
+        "attribution": "; ".join(credits),
         "archetypes": ta.ARCHETYPES,
         "genera": ta.GENERA,
         "crs": crs_member(tile.epsg),
@@ -693,9 +949,16 @@ def run(tile: Tile) -> None:
             separators=(",", ":"),
         )
     )
+    # a scan tree the new trees claim goes now: lowveg, which thins them,
+    # cannot re-bake a tile whose scan is not on disk
+    rethinned = lowveg.rethin_scan_trees(tile)
+    if rethinned:
+        print(f"{tile.id}: {rethinned} scan trees dropped where a tree now stands")
     unknown = sum(not t["known"] or not ta.is_genus(t["genus"]) for t in trees)
+    c = census
     print(
-        f"{tile.id}: {len(trees)} cadastre trees "
-        f"({measured} heights measured in the surface model, {imputed_h} heights and "
-        f"{imputed_d} crown diameters imputed, {unknown} of no known genus), {len(osm)} OSM trees"
+        f"{tile.id}: {len(trees)} cadastre trees ({c.imputed_h} heights and {c.imputed_d} crown "
+        f"diameters filled in, {c.check.stale} stale heights taken from the surface model, "
+        f"{c.check.absent} gone from it, {unknown} of no known genus), {len(osm)} OSM trees "
+        f"({c.measured} heights measured, {c.osm_check.stale} raised to the surface model)"
     )

@@ -15,6 +15,7 @@ import type {
   FeatureCollection,
   MonumentFeature,
   SmallBuildingFeature,
+  StructureFeature,
   TreeFeature,
   VegRowFeature,
 } from "../lib/city/features";
@@ -22,6 +23,7 @@ import type { RecenterOffset } from "../lib/city/ground-clamp";
 import { decodeGreyPng } from "../lib/city/png-raster";
 import {
   type PackedPoint,
+  canopyStride,
   packPoints,
   pointFeatures,
   pointOf,
@@ -31,12 +33,20 @@ import {
   maxWindowSampler,
   type RasterSampler,
 } from "../lib/city/raster-sampler";
+import {
+  gapRoofs,
+  lod2Roofs,
+  type RoofFootprint,
+  treesOffRoofs,
+} from "../lib/city/roof-trees";
 import { treesOffStructures } from "../lib/city/small-buildings";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
+import type { CityJsonDocument } from "../lib/city/types";
 import { inventoryCovers, inventoryTrees } from "../lib/city/tree-inventory";
 import {
   canopyPlacements,
   offMonuments,
+  plantedRows,
   rowPlacements,
 } from "../lib/city/tree-placement";
 
@@ -50,8 +60,22 @@ export interface CrownSources {
   ndvi?: string;
   /** the scan's sheds: canopy points in them were dropped at publish */
   sheds?: string;
+  /** the LoD2 CityJSON: canopy points on its roofs were dropped too */
+  city?: string;
+  /** the buildings and roofs on posts LoD2 lacks: on theirs as well */
+  structures?: string;
   trees?: string;
   vegrows?: string;
+}
+
+/** Whether a canopy file holds its tile's tree rows' trees (canopy.py's
+ *  `rows` member; the browser reads it from the pack's ROWS_MEASURED). */
+function rowsMeasured(path: string | undefined): boolean {
+  if (!(path && existsSync(path))) {
+    return false;
+  }
+  const doc = JSON.parse(readFileSync(path, "utf8")) as { rows?: unknown };
+  return doc.rows !== undefined;
 }
 
 function features<T>(path: string | undefined): T[] {
@@ -65,24 +89,27 @@ function features<T>(path: string | undefined): T[] {
 }
 
 /**
- * The canopy points as the browser reads them: the sheds' points dropped
- * and the rest packed against the tile's corner (prepare-data.ts
+ * The canopy points as the browser reads them: the sheds' and the roofs'
+ * points dropped and the rest packed against the tile's corner (prepare-data.ts
  * `publishCanopy`), then unpacked — each coordinate the same float.
  */
 function packedCanopy(
   path: string | undefined,
   sheds: SmallBuildingFeature[],
+  roofs: RoofFootprint[],
   origin: [number, number],
-  stride: 3 | 4
+  radii: boolean
 ): CanopyFeature[] {
   const raw = features<CanopyFeature>(path);
   if (raw.length === 0) {
     return [];
   }
-  const kept = sheds.length > 0 ? treesOffStructures(raw, sheds) : raw;
+  const offSheds = sheds.length > 0 ? treesOffStructures(raw, sheds) : raw;
+  const kept = roofs.length > 0 ? treesOffRoofs(offSheds, roofs) : offSheds;
   const points: PackedPoint[] = kept.map(pointOf);
   // a fresh array over its own buffer
-  const packed = packPoints(points, origin, stride).buffer as ArrayBuffer;
+  const packed = packPoints(points, origin, canopyStride(points, radii))
+    .buffer as ArrayBuffer;
   const unpacked = unpackPoints(packed);
   return unpacked ? pointFeatures(unpacked) : [];
 }
@@ -112,6 +139,14 @@ export async function bakeCoarseCrowns(
   }
 ): Promise<Uint8Array> {
   const sheds = features<SmallBuildingFeature>(sources.sheds);
+  const roofs = [
+    ...(sources.city && existsSync(sources.city)
+      ? lod2Roofs(
+          JSON.parse(readFileSync(sources.city, "utf8")) as CityJsonDocument
+        )
+      : []),
+    ...gapRoofs(features<StructureFeature>(sources.structures)),
+  ];
   const register = [
     ...features<TreeFeature>(sources.trees),
     ...orchardTrees(features<CultivatedFeature>(sources.cultivated)),
@@ -122,13 +157,18 @@ export async function bakeCoarseCrowns(
   const ctx = { heightAt: ground.heightAt, offset: ground.offset };
   const canopy = offMonuments(
     [
-      ...packedCanopy(sources.canopy, sheds, ground.origin, 3),
-      ...packedCanopy(sources.canopyx, sheds, ground.origin, 4),
+      ...packedCanopy(sources.canopy, sheds, roofs, ground.origin, false),
+      ...packedCanopy(sources.canopyx, sheds, roofs, ground.origin, true),
     ],
     features<MonumentFeature>(sources.monuments)
   );
   const rows = rowPlacements(
-    features<VegRowFeature>(sources.vegrows),
+    // as the browser plants them: with a canopy that holds the rows' trees,
+    // the hedges alone
+    plantedRows(
+      features<VegRowFeature>(sources.vegrows),
+      rowsMeasured(sources.canopy)
+    ),
     ctx,
     ndviAt,
     keepTree

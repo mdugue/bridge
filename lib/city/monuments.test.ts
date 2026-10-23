@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { yawOfBearing } from "./furniture";
 import {
   basinLevels,
+  coveredFigure,
   FINISH,
   figureShare,
+  fountainsRun,
   insideRing,
   jetHeight,
   jetPlaces,
@@ -11,13 +14,17 @@ import {
   markerPieces,
   markerTones,
   measuredMarker,
+  monumentMarker,
   onRelief,
   openRing,
   partFinish,
   pedestalCourses,
+  POINT_BASIN_R,
+  pointBasinRadius,
   reliefSurface,
   ringArea,
   ringCentre,
+  smallBasin,
   yawOf,
 } from "./monuments";
 import type { Point2 } from "./polyline";
@@ -224,5 +231,107 @@ describe("pedestals and finishes", () => {
     expect(partFinish("Bronze, Granit", false)).toBe(FINISH.patina);
     expect(partFinish("Sandstein", false)).toBe(FINISH.worked);
     expect(partFinish(undefined, false)).toBe(FINISH.clay);
+  });
+});
+
+describe("the QA's monument corrections", () => {
+  const topOf = (pieces: { lift: number; height: number }[]) =>
+    Math.max(...pieces.map((p) => p.lift + p.height));
+
+  test("a column is a round shaft on its pedestal under a capital, at its height", () => {
+    const column = markerPieces("column", "column", 15.4);
+    expect(column.map((p) => p.solid)).toEqual(["block", "shaft", "block"]);
+    expect(topOf(column)).toBeCloseTo(15.4);
+    // the shaft stands on the pedestal, the capital on the shaft
+    expect(column[1].lift).toBeCloseTo(column[0].height);
+    expect(column[2].lift).toBeCloseTo(column[1].lift + column[1].height);
+  });
+
+  test("a measured slim shaft named a column keeps its measured top", () => {
+    const dm = [328, 300, 310, 120];
+    const m = measuredMarker(
+      { west: 0, north: 2, cols: 2, rows: 2, dm },
+      "column",
+      "column"
+    );
+    expect(topOf(m?.pieces ?? [])).toBeCloseTo(32.8);
+    expect(topOf(markerPieces("column", "column", 40))).toBeCloseTo(40);
+    // an obelisk at its tagged 29 m, no broader than one at three times its own
+    const tall = markerPieces("column", "obelisk", 29);
+    expect(topOf(tall)).toBeCloseTo(29);
+    expect(tall[1].width).toBeCloseTo(
+      markerPieces("column", "obelisk", 18)[1].width
+    );
+    // a statue stays within its scale
+    expect(topOf(markerPieces("statue", "statue", 29))).toBeCloseTo(3.5 * 3);
+  });
+
+  test("an unmeasured marker faces its bearing, at its tagged else its open height", () => {
+    const at: [number, number] = [411_000, 5_656_000];
+    const faced = monumentMarker(
+      { kind: "statue", form: "stele", a: 90 },
+      "statue",
+      at
+    );
+    expect(faced.yaw).toBeCloseTo(yawOfBearing(90));
+    // no bearing: the stable hash, as before
+    expect(monumentMarker({ kind: "statue" }, "statue", at).yaw).toBeCloseTo(
+      yawOf(...at)
+    );
+    const open = monumentMarker(
+      { kind: "statue", form: "statue", hm: 4.2 },
+      "statue",
+      at
+    );
+    expect(topOf(open.pieces)).toBeCloseTo(4.2);
+    const tagged = monumentMarker(
+      { kind: "statue", form: "statue", height: 6, hm: 4.2 },
+      "statue",
+      at
+    );
+    expect(topOf(tagged.pieces)).toBeCloseTo(6);
+    // a measured relief wins over both
+    const measured = monumentMarker(
+      {
+        kind: "statue",
+        a: 90,
+        hm: 4.2,
+        relief: { west: 0, north: 1, cols: 2, rows: 1, dm: [12, 25] },
+      },
+      "statue",
+      at
+    );
+    expect(topOf(measured.pieces)).toBeCloseTo(2.5);
+  });
+
+  test("a covered fountain figure is the free sculpture's marker", () => {
+    expect(coveredFigure()).toEqual(markerPieces("statue", "sculpture"));
+  });
+
+  test("a drinking fountain is a small, waist-high basin with a spout", () => {
+    expect(pointBasinRadius(undefined)).toBe(POINT_BASIN_R);
+    expect(pointBasinRadius(0.5)).toBe(0.5);
+    expect(smallBasin(pointBasinRadius(0.5))).toBe(true);
+    expect(smallBasin(POINT_BASIN_R)).toBe(false);
+    const small = basinLevels([100], "basin", true);
+    expect((small?.rim ?? 0) - 100).toBeCloseTo(0.8);
+    expect(jetHeight(Math.PI * 0.25, "basin", true)).toBeCloseTo(0.3);
+  });
+
+  test("the jets run from mid-April to the end of October", () => {
+    expect(fountainsRun(new Date(2026, 0, 15))).toBe(false);
+    expect(fountainsRun(new Date(2026, 3, 10))).toBe(false);
+    expect(fountainsRun(new Date(2026, 3, 20))).toBe(true);
+    expect(fountainsRun(new Date(2026, 6, 1))).toBe(true);
+    expect(fountainsRun(new Date(2026, 9, 30))).toBe(true);
+    expect(fountainsRun(new Date(2026, 10, 15))).toBe(false);
+  });
+
+  test("a leap year and the small hours keep the season's ends", () => {
+    expect(fountainsRun(new Date(2028, 3, 14))).toBe(false);
+    expect(fountainsRun(new Date(2028, 3, 15))).toBe(true);
+    expect(fountainsRun(new Date(2028, 9, 31, 23, 30))).toBe(true);
+    expect(fountainsRun(new Date(2026, 3, 15, 0, 30))).toBe(true);
+    expect(fountainsRun(new Date(2026, 10, 1))).toBe(false);
   });
 });

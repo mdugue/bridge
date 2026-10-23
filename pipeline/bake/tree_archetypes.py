@@ -14,11 +14,21 @@ crown geometry the viewer draws (both in lib/city/tree-inventory.ts).
 
   0 round     broad rounded crown (lime, maple, oak, plane, chestnut ...)
   1 oval      upright oval / narrow-conic (hornbeam, birch, sweetgum, 'Greenspire')
-  2 columnar  fastigiate cultivars ('Fastigiata', 'Italica', 'Columnare' ...)
-  3 conifer   conical conifers (incl. the leaf-off Larix/Metasequoia/Taxodium)
+  2 columnar  fastigiate cultivars ('Fastigiata', 'Italica', 'Columnare' ...),
+              a fastigiate yew or pine too
+  3 conifer   the cone: spruce, fir, Douglas fir, hemlock, thuja, false
+              cypress, cedar, larch and the leaf-off Metasequoia/Taxodium
   4 weeping   'Pendula', 'Tristis', weeping willows
   5 small     small ornamentals and globe cultivars (Prunus, Malus, Crataegus,
               Sorbus, 'Globosum' ...)
+  6 pine      a pine's crown: high, rounded and flat-topped on a long clear
+              stem (Pinus; not the cone a spruce is)
+  7 bush      a broad evergreen bush from the ground: yew (Taxus), mountain
+              pine, the spreading junipers, a dwarf conifer cultivar
+
+A conifer's form comes from its genus (`conifer_form`): the registers'
+conifers are half pines and yews (Dresden: 632 Scots pines, 461 yews and 156
+black pines of 2 094), and only the spruces, firs and their kin are cones.
 
 Leaf type: "e" evergreen (in leaf on the 2024-03-19 leaf-off DOP) or "d"
 deciduous (bare then). Deciduous conifers are "d".
@@ -29,15 +39,19 @@ Genus id: an index into GENERA, the viewer's phenology table
 
 import re
 
-ARCHETYPES = ["round", "oval", "columnar", "conifer", "weeping", "small"]
-ROUND, OVAL, COLUMNAR, CONIFER, WEEPING, SMALL = range(6)
+# Append only: an id, once baked, means that silhouette (the viewer's
+# lib/city/tree-inventory.ts TREE_ARCHETYPES holds the same list).
+ARCHETYPES = ["round", "oval", "columnar", "conifer", "weeping", "small", "pine", "bush"]
+ROUND, OVAL, COLUMNAR, CONIFER, WEEPING, SMALL, PINE, BUSH = range(8)
 
 EVERGREEN_CONIFERS = {
     "Abies",
     "Araucaria",
     "Calocedrus",
     "Cedrus",
+    "Cephalotaxus",
     "Chamaecyparis",
+    "Cryptomeria",
     "Cupressocyparis",
     "Cupressus",
     "Juniperus",
@@ -165,8 +179,10 @@ OVAL_DE = re.compile(r"schmalkronig|kegel", re.IGNORECASE)
 GLOBE_RE = re.compile(r"globos|umbraculifera|'nana'", re.IGNORECASE)
 GLOBE_DE = re.compile(r"kugel", re.IGNORECASE)
 # 'Pendula' only as a cultivar: Betula pendula is the upright silver birch.
+# 'Tristis' opens a cultivar name ("'Tristis Resistenta'") as often as it is
+# one: matched without its closing quote.
 WEEPING_RE = re.compile(
-    r"'pendula'|'tristis'|youngii|chrysocoma|dalecarlica|babylonica|sepulcralis",
+    r"'pendula'|'tristis|youngii|chrysocoma|dalecarlica|babylonica|sepulcralis",
     re.IGNORECASE,
 )
 WEEPING_DE = re.compile(r"trauer", re.IGNORECASE)
@@ -255,7 +271,6 @@ OTHER_GENERA = {
     "Carya",
     "Cercidiphyllum",
     "Cladrastis",
-    "Cryptomeria",
     "Davidia",
     "Elaeagnus",
     "Gymnocladus",
@@ -362,6 +377,55 @@ def foliage(botanical: str, german: str) -> int:
     return 0
 
 
+# The conifers whose crown is no cone (`conifer_form`): a pine's high
+# rounded crown, the bushes from the ground. The registers' pines: Dresden's
+# Scots pines 21 m tall, their crowns 0.47 of that across, black pines 15 m
+# and 0.50; yews 8 m and 0.82, mountain pines 4 m and 1.0 — and DOM1 shows a
+# pine's top flat where a spruce's falls away (crown_form.py).
+PINES = {"Pinus"}
+BUSH_GENERA = {"Taxus", "Cephalotaxus"}
+# Pines and junipers that grow as bushes, and the pines that are cones.
+BUSH_SPECIES = {
+    "Pinus mugo",
+    "Pinus pumila",
+    "Juniperus sabina",
+    "Juniperus horizontalis",
+    "Juniperus squamata",
+    "Juniperus procumbens",
+    "Juniperus conferta",
+    "Juniperus pfitzeriana",
+    "Juniperus media",
+}
+CONE_PINES = {"Pinus cembra", "Pinus peuce"}
+# A Pfitzer juniper is a cultivar of J. chinensis as often as a hybrid.
+BUSH_CULTIVARS = re.compile(r"pfitzer|repanda|tamariscifolia|nana|mops|gnom|pumil", re.IGNORECASE)
+DWARF_DE = re.compile(r"zwerg|kriech|kissen", re.IGNORECASE)
+
+
+def conifer_form(genus: str, binomial: str, botanical: str, german: str) -> int:
+    """A conifer's archetype: the pine's crown for Pinus, a bush for a yew,
+    a mountain pine, a spreading juniper or a dwarf cultivar, a column for a
+    fastigiate one of those, else the cone (spruce, fir, thuja, cypress,
+    larch …: a narrow cultivar of a cone is a narrower cone, its crown
+    diameter says so)."""
+    dwarf = (
+        _species_match(binomial, BUSH_SPECIES)
+        or bool(BUSH_CULTIVARS.search(botanical))
+        or bool(GLOBE_RE.search(botanical) or GLOBE_DE.search(german) or DWARF_DE.search(german))
+    )
+    if dwarf:
+        return BUSH
+    if genus in BUSH_GENERA:
+        form = BUSH
+    elif genus in PINES and not _species_match(binomial, CONE_PINES):
+        form = PINE
+    else:
+        return CONIFER
+    if COLUMNAR_RE.search(botanical) or COLUMNAR_DE.search(german):
+        return COLUMNAR
+    return form
+
+
 def _form_override(botanical: str, german: str, cultivar: str) -> int | None:
     """Archetype decided by a cultivar/form keyword, before the genus table."""
     if WEEPING_RE.search(botanical) or WEEPING_DE.search(german):
@@ -382,7 +446,7 @@ def classify(botanical: str, german: str = "") -> dict:
     known = genus not in UNKNOWN
     lt = leaf_type(genus, binomial) if known else "d"
     if known and is_conifer(genus):
-        arch = CONIFER
+        arch = conifer_form(genus, binomial, botanical, german)
     else:
         arch = _form_override(botanical, german, cultivar)
         if arch is None:
@@ -396,7 +460,8 @@ def classify(botanical: str, german: str = "") -> dict:
                 arch = OVAL
             else:
                 arch = ROUND
-    globe = bool(GLOBE_RE.search(botanical) or GLOBE_DE.search(german))
+    # a globe conifer is a bush from the ground, not a ball on a stem
+    globe = arch != BUSH and bool(GLOBE_RE.search(botanical) or GLOBE_DE.search(german))
     return {
         "genus": genus if known else "",
         "gn": genus_id(botanical) if known else 0,

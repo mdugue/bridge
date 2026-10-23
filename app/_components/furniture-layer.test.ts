@@ -26,6 +26,9 @@ test("the street's signs and fixtures each build an instanced model", () => {
       at({ k: "wallclock", a: 180 }, 30),
       at({ k: "water", a: 0 }, 35),
       at({ k: "stop", a: 0 }, 40),
+      at({ k: "signal", a: 90, arm: true }, 45),
+      at({ k: "pedsignal", a: 0 }, 50),
+      at({ k: "bin", c: "red" }, 55),
     ],
     ctx
   );
@@ -39,6 +42,9 @@ test("the street's signs and fixtures each build an instanced model", () => {
       "furniture-hydrant",
       "furniture-hydrantSign",
       "furniture-signal",
+      "furniture-signalArm",
+      "furniture-pedSignal",
+      "furniture-binRed",
       "furniture-stop",
       "furniture-wallClock",
       "furniture-wallClock-hands",
@@ -107,4 +113,22 @@ test("the clock hands move on the minute only", () => {
   expect(setClockTime(new Date(2026, 5, 15, 14, 31, 0))).toBe(true);
   // 2:31 and 14:31 read the same on a dial
   expect(setClockTime(new Date(2026, 5, 15, 2, 31, 0))).toBe(false);
+});
+
+test("a piece on a bridge stands on its deck, not on the ground below", () => {
+  const group = buildFurniture(
+    [
+      at({ k: "bench", a: 0 }),
+      at({ k: "bench", a: 0, deck: 112.5 }, 5),
+      at({ k: "bike", a: 0, n: 2, deck: 112.5 }, 10),
+    ],
+    ctx
+  );
+  const heights = (name: string) => {
+    const set = group.getObjectByName(name) as Instances;
+    const m = set.instanceMatrix.array;
+    return Array.from({ length: set.drawCount }, (_, i) => m[i * 16 + 13]);
+  };
+  expect(heights("furniture-bench")).toEqual([100, 112.5]);
+  expect(heights("furniture-hoop")).toEqual([112.5, 112.5]);
 });

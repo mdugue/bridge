@@ -54,8 +54,9 @@ def test_coordinates_round_to_centimetres_and_drop_z():
 
 def test_the_class_ids_are_the_client_palette_order():
     # lib/city/landcover.ts keys its palette by these ids and names.
-    assert list(CLASSES) == list(range(9))
+    assert list(CLASSES) == list(range(10))
     assert CLASSES[8] == "water"
+    assert CLASSES[9] == "arable"
 
 
 def test_rail_without_a_dlm_leaves_committed_files_alone(tmp_path):
@@ -321,7 +322,8 @@ def test_fences_follow_the_walls_and_gates_on_a_line_come_last(tmp_path, monkeyp
     doc = _read(tile, "walls")
     assert doc["attribution"].startswith("©")
     wall, fence, gate_on_fence, gate_on_wall = doc["features"]
-    assert wall["properties"] == {"kind": "wall", "h": 1.5}
+    # no material tagged on the site: concrete (walls.DEFAULT_MATERIAL)
+    assert wall["properties"] == {"kind": "wall", "h": 1.5, "mat": "concrete"}
     assert fence["properties"] == {"kind": "fence", "type": "mesh", "h": 1.2}
     assert gate_on_fence["properties"] == {"kind": "gate", "w": 1.2, "on": "fence"}
     x, y = gate_on_fence["geometry"]["coordinates"]
@@ -613,7 +615,7 @@ def test_the_major_road_wins_a_junction_and_walks_pack_above_roads(tmp_path):
 
 def test_a_street_frame_carries_its_bearing_and_the_distance_along_it(tmp_path):
     from bake.common import Tile
-    from bake.surface import ALONG_PERIOD, direction_frames, heading_code
+    from bake.surface import ALONG_BITS, ALONG_PERIOD, direction_frames, heading_code
 
     assert list(heading_code(np.radians([0.0, 90.0, 180.0, 359.9]))) == [1, 65, 128, 1]
     tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
@@ -629,7 +631,7 @@ def test_a_street_frame_carries_its_bearing_and_the_distance_along_it(tmp_path):
         # tile's north-west corner) projected on the decoded bearing.
         b = (heading[row, col] - 1) / 254.0 * 2.0 * np.pi
         x, y = col + 0.5, -(row + 0.5)
-        offset = along[row, col] / 65536.0 * ALONG_PERIOD
+        offset = along[row, col] / float(1 << ALONG_BITS) * ALONG_PERIOD
         return (offset + x * np.cos(b) + y * np.sin(b)) % ALONG_PERIOD
 
     assert heading[31, 10] == 1  # east
@@ -638,7 +640,7 @@ def test_a_street_frame_carries_its_bearing_and_the_distance_along_it(tmp_path):
     assert abs(metres(31, 10) - 10.5) < 0.01  # the texel centre, 10.5 m along
     # Round the bend: the northbound leg starts 40 m along the street.
     assert abs(metres(64 - 51, 40) - (40 + 18.5)) < 1.0
-    assert heading[5, 50] == 0  # nothing mapped
+    assert heading[5, 60] == 0  # nothing mapped (20 m from the street)
 
 
 def test_street_parking_marks_the_tagged_side_and_its_orientation():
@@ -730,6 +732,41 @@ def test_kerb_lines_follow_the_road_edge_with_the_road_on_their_left(tmp_path):
     # Water beside the road: no kerb on that side.
     cls[30:, :] = 8
     assert len(kerb_lines(tile, edge_field(cls, 7, 1.0, 64), cls)) == 1
+
+
+def test_a_road_out_of_town_has_no_kerb(tmp_path):
+    from bake.common import Tile
+    from bake.edges import Roads, edge_field, kerb_lines, on_ground, out_of_town
+
+    assert out_of_town("motorway_link", None)
+    assert out_of_town("secondary", '"source:maxspeed"=>"DE:rural"')
+    assert out_of_town("secondary", '"maxspeed"=>"70"')
+    assert not out_of_town("primary", '"maxspeed"=>"70","zone:traffic"=>"DE:urban"')
+    assert not out_of_town("residential", '"maxspeed"=>"30"')
+    assert not out_of_town("tertiary", '"maxspeed"=>"walk"')
+    assert out_of_town("secondary", '"maxspeed"=>"DE:rural"')
+    assert not out_of_town("primary", '"maxspeed"=>"DE:urban"')
+    # A motorway bridge over a town street is not the street's road.
+    assert not on_ground("motorway", '"bridge"=>"yes"')
+    assert on_ground("residential", '"bridge"=>"no"')
+    assert not on_ground("footway", None)
+
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    cls = np.full((64, 64), 1, dtype=np.uint8)
+    cls[20:30, :] = 7  # an east-west road through fields, y 34–44 m
+    field = edge_field(cls, 7, 1.0, 64)
+    axis = shapely.LineString([(0, 39), (64, 39)])
+    town = Roads([axis], [False])
+    assert len(kerb_lines(tile, field, cls, town)) == 2
+    assert kerb_lines(tile, field, cls, Roads([axis], [True])) == []
+    # A town street joining it: its kerbs are the street's, not the road's.
+    street = shapely.LineString([(32, 0), (32, 34)])
+    roads = Roads([shapely.LineString([(0, 39), (24, 39)]), street], [True, False])
+    assert roads.rural_at(np.array([[2.0, 34.0], [33.0, 10.0], [200.0, 200.0]])).tolist() == [
+        True,
+        False,
+        False,
+    ]
 
 
 def test_osm_islands_carve_only_road_texels_lawn_over_walk(tmp_path, monkeypatch):
@@ -1195,7 +1232,7 @@ def test_leipzigs_register_skips_felled_trees_and_stands_and_prefers_the_diamete
     }
     pine, unknown = parse_trees(raw, (0.0, 0.0, 10.0, 10.0), REGISTERS["leipzig"].fields)
     assert (pine["h"], pine["d"], pine["t"]) == (8, 5, 27)
-    assert pine["archetype"] == 3 and pine["leaf"] == "e"
+    assert pine["archetype"] == 6 and pine["leaf"] == "e"  # a pine's crown, no cone
     assert not unknown["known"] and unknown["t"] == pytest.approx(10.0, abs=0.01)
 
 
@@ -1325,8 +1362,27 @@ def test_scan_trees_a_cadastre_tree_claims_are_dropped(tmp_path):
     assert [f["geometry"]["coordinates"][0] for f in kept] == [7.0]
 
 
+def test_a_scan_crown_is_as_wide_as_its_share_of_the_crown_mass():
+    from bake.lowveg import RES, crown_radii
+
+    # 0.5 m cells: a lone crown of radius 4 m whose peak sits off its
+    # centre, and a pair of 3 m crowns that touch, the second one a canopy
+    # tree's (an `other`): the lone one is 4 m wide wherever its peak is,
+    # and each of the pair keeps its own half
+    yy, xx = np.mgrid[0:80, 0:80] * RES
+    lone = np.hypot(xx - 10, yy - 10) <= 4
+    pair = (np.hypot(xx - 10, yy - 30) <= 3) | (np.hypot(xx - 16, yy - 30) <= 3)
+    mass = lone | pair
+    chm = np.where(mass, 10.0, 0.0) - np.hypot(xx - 11, yy - 9.5) * 0.01
+    chm[pair] -= np.minimum(np.hypot(xx - 10, yy - 30), np.hypot(xx - 16, yy - 30))[pair]
+    peaks = np.array([[int(9.5 / RES), int(11 / RES)], [int(30 / RES), int(10 / RES)]])
+    radii = crown_radii(chm, mass, peaks, [(int(30 / RES), int(16 / RES))])
+    assert abs(radii[0] - 4.0) < 0.2
+    assert abs(radii[1] - 3.0) < 0.3
+
+
 def test_a_closed_hedge_way_stays_a_line_of_hedge():
-    from bake.lowveg import hedge_rings
+    from bake.hedges import hedge_rings
 
     square = shapely.Polygon([(0, 0), (4, 0), (4, 4), (0, 4)])
     rings = hedge_rings(square)
@@ -1487,3 +1543,43 @@ def test_a_monument_without_an_osm_material_takes_wikidatas():
         (None, None),
         (None, None),
     ]
+
+
+def test_a_lamp_on_a_bridge_stands_on_its_deck():
+    from bake.bridge import Axis
+    from bake.furniture import Decks
+
+    deck = shapely.box(0, -5, 40, 5)  # a road deck along x, its top 10 → 12 m
+    line = [10.0 + 0.1 * i for i in range(21)]  # every 2 m along the axis
+    street = shapely.LineString([(0, 0), (40, 0)])
+    under = shapely.LineString([(20, -30), (20, 30)])  # a street under it
+    decks = Decks([(deck, Axis([[0, 0], [40, 0]]), line)], [(street, True), (under, False)])
+    assert decks.top(shapely.Point(10, 3)) == pytest.approx(10.5)
+    assert decks.top(shapely.Point(50, 0)) is None
+    # beside the bridge's own way, over a meadow: on the deck
+    assert decks.deck_under(shapely.Point(10, 3), 1) == pytest.approx(10.5)
+    # beside the street it spans: on that street, under the deck
+    assert decks.deck_under(shapely.Point(20.5, 4.0), 7) is None
+    # over water it can only stand on the deck
+    assert decks.deck_under(shapely.Point(20.5, 4.0), 8) == pytest.approx(11.025)
+    assert Decks([], []).deck_under(shapely.Point(10, 3), 8) is None
+
+
+def test_a_piece_in_a_bridge_s_lanes_stands_at_its_deck_s_edge():
+    from bake.bridge import Axis
+    from bake.furniture import Decks
+
+    deck = shapely.box(0, -5, 40, 5)
+    street = shapely.LineString([(0, 0), (40, 0)])
+    decks = Decks([(deck, Axis([[0, 0], [40, 0]]), [10.0] * 21)], [(street, True)], [street])
+    # mapped on the lane: to the nearer edge, 0.4 m in
+    moved = decks.kerbside(shapely.Point(10, 1))
+    assert (moved.x, moved.y) == pytest.approx((10, 4.6))
+    # near the deck's end: still across the axis, never onto the abutment
+    moved = decks.kerbside(shapely.Point(1, -1))
+    assert (moved.x, moved.y) == pytest.approx((1, -4.6))
+    # on the pavement it stays
+    assert decks.kerbside(shapely.Point(10, 3)).equals(shapely.Point(10, 3))
+    # beside a footway's line (no street) too
+    path = Decks([(deck, Axis([[0, 0], [40, 0]]), [10.0] * 21)], [(street, True)])
+    assert path.kerbside(shapely.Point(10, 1)).equals(shapely.Point(10, 1))

@@ -270,10 +270,27 @@ function buildingLineage(
       "detected"
     );
   } else if (source === OBJECT_SOURCE_GAP) {
-    l.source("osm", ["was hier steht und sein Umriss"], "taken", {
-      osm: "buildings",
-    });
-    l.source("dom", ["seine Höhe über Gelände und Stadtmodell"], "computed");
+    // structures.py: OSM's height where the surface model was flown
+    // before the building stood
+    const osmHeight = decodeDrawn(b.picked.facts.drawn).height === "osm";
+    l.source(
+      "osm",
+      [
+        "was hier steht und sein Umriss",
+        osmHeight && "seine Höhe: die kartierte oder die Geschosse",
+      ],
+      "taken",
+      { osm: "buildings" }
+    );
+    l.source(
+      "dom",
+      [
+        osmHeight
+          ? "dass es beim Bildflug noch nicht stand"
+          : "seine Höhe über Gelände und Stadtmodell",
+      ],
+      osmHeight ? "detected" : "computed"
+    );
   } else {
     lod2Lineage(l, b, facts);
   }
@@ -397,22 +414,45 @@ function lod2Lineage(
   );
 }
 
-function treeLineage(l: Lineage, t: TreeInquiry, site: LineageSite): void {
-  if (t.orchard) {
-    // an orchard's tree: OSM's orchard, at the orchard's default size
+/** An orchard tree's lineage: OSM's orchard, and DOM1's crown peak where
+ *  it measured the tree (cultivated.py), else the orchard's default. */
+function orchardLineage(l: Lineage, t: TreeInquiry): void {
+  if (t.measured) {
+    // cultivated.py: a crown peak of DOM1 inside OSM's orchard
+    l.source("osm", ["die Obstwiese, in der er steht"], "taken", {
+      osm: "trees",
+    });
     l.source(
-      "osm",
-      ["die Obstwiese, in der er steht", "sein Standort, wo kartiert"],
-      "taken",
-      { osm: "trees" }
+      "dom",
+      ["sein Standort, seine Höhe und Krone: eine Kronenspitze"],
+      "detected"
     );
     l.source("dgm", ["der Boden, auf dem er steht"], "taken");
     l.viewer([
-      "sonst sein Standort, im Raster der Obstwiese gesetzt",
-      "Höhe und Krone: die Vorgabe der Obstwiese",
       "die Krone aus Grundformen",
       ["Wind und Licht zur Uhrzeit der Szene", "computed"],
     ]);
+    return;
+  }
+  // an orchard's tree: OSM's orchard, at the orchard's default size
+  l.source(
+    "osm",
+    ["die Obstwiese, in der er steht", "sein Standort, wo kartiert"],
+    "taken",
+    { osm: "trees" }
+  );
+  l.source("dgm", ["der Boden, auf dem er steht"], "taken");
+  l.viewer([
+    "sonst sein Standort, im Raster der Obstwiese gesetzt",
+    "Höhe und Krone: die Vorgabe der Obstwiese",
+    "die Krone aus Grundformen",
+    ["Wind und Licht zur Uhrzeit der Szene", "computed"],
+  ]);
+}
+
+function treeLineage(l: Lineage, t: TreeInquiry, site: LineageSite): void {
+  if (t.orchard) {
+    orchardLineage(l, t);
     return;
   }
   const drawn: Said = [
@@ -555,35 +595,81 @@ function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
       l.source("dlm", [m.source === "dlm" && "Verlauf"], "taken", {
         standIn: "trees",
       });
-      l.source("osm", [m.source !== "dlm" && "Verlauf"], "taken", {
-        osm: "trees",
-      });
+      l.source(
+        "osm",
+        [m.source !== "dlm" && m.source !== "lsc" && "Verlauf"],
+        "taken",
+        { osm: "trees" }
+      );
+      l.source("lsc", [m.source === "lsc" && "Verlauf und Höhe"], "detected");
       l.source("lsc", [m.source === "osm+lsc" && "Höhe"], "computed");
+      l.source("dom", [m.source === "osm+dom" && "Höhe"], "computed");
       l.source("dgm", ["der Boden"], "taken");
-      l.viewer([m.source !== "osm+lsc" && "Höhe und Breite"]);
+      l.viewer([
+        (m.source === "osm" || m.source === "dlm") && "Höhe und Breite",
+        m.source === "osm+dom" && "Breite",
+      ]);
       return;
     case "furniture":
     case "lamp":
     case "landing":
-    case "stop": {
-      const [read, drawn] = OSM_THINGS[m.kind];
-      if (fromMapillary(m)) {
-        l.other({
-          source: "Mapillary",
-          used: [
-            { text: "Standort und Art, in Straßenfotos", method: "detected" },
-          ],
-          stand: "",
-          credit: "Mapillary, CC BY-SA 4.0",
-          url: MAPILLARY_URL,
-        });
-      } else {
-        l.source("osm", [read], "taken", { osm: "trees" });
-      }
-      l.source("dgm", ["der Boden"], "taken");
-      l.viewer([drawn]);
-    }
+    case "stop":
+      osmThingLineage(l, m);
   }
+}
+
+/** A lamp's, a piece of furniture's, a landing's or a stop's lineage: OSM's
+ *  point (or Mapillary's), the post height of its street, its ground. */
+function osmThingLineage(
+  l: Lineage,
+  m: Extract<MoreInquiry, { kind: keyof typeof OSM_THINGS }>
+): void {
+  const [read, drawn] = OSM_THINGS[m.kind];
+  if (fromMapillary(m)) {
+    l.other({
+      source: "Mapillary",
+      used: [{ text: "Standort und Art, in Straßenfotos", method: "detected" }],
+      stand: "",
+      credit: "Mapillary, CC BY-SA 4.0",
+      url: MAPILLARY_URL,
+    });
+    l.source("osm", lampFromOsm(m), "taken", { osm: "trees" });
+  } else {
+    l.source("osm", [read, ...lampFromOsm(m)], "taken", { osm: "trees" });
+  }
+  if (m.kind === "lamp" && m.heightFrom) {
+    // lamp_heights.py: the street's (or its kind's) median post height
+    l.source("dom", ["Höhe der Masten an der Straße"], "computed");
+  }
+  l.source(
+    "dgm",
+    [
+      "der Boden",
+      m.kind === "lamp" &&
+        m.wall === "wall" && [
+          "die Seite der Mauer, an der sie hängt: die tiefere",
+          "computed",
+        ],
+    ],
+    "taken"
+  );
+  l.viewer([drawn]);
+}
+
+/** What a lamp's place took from OSM beyond its own point: the wall it
+ *  hangs on with no building near (pipeline/bake/lamps.py `on: "wall"`),
+ *  the carriageway a tall mast's arm reaches over (lamp_heights.py `arm`). */
+function lampFromOsm(m: MoreInquiry): Said {
+  if (m.kind !== "lamp") {
+    return [];
+  }
+  return [
+    m.wall === "wall" && "die Mauer, an der die Leuchte hängt",
+    m.arm === true && [
+      "die Fahrbahn, über die der Ausleger reicht",
+      "computed",
+    ],
+  ];
 }
 
 function canopyLineage(l: Lineage, c: CanopyInquiry, site: LineageSite): void {
@@ -609,7 +695,10 @@ function canopyLineage(l: Lineage, c: CanopyInquiry, site: LineageSite): void {
   );
   l.source(
     "dlm",
-    [c.source === "row" && "die Baumreihe, auf der er steht"],
+    [
+      c.source === "row" && "die Baumreihe, auf der er steht",
+      c.evergreen === "forest" && "dass er immergrün ist: ein Nadelwald",
+    ],
     "taken",
     { standIn: "trees" }
   );
@@ -619,6 +708,10 @@ function canopyLineage(l: Lineage, c: CanopyInquiry, site: LineageSite): void {
     [
       site.provider.products.dop !== null &&
         "Laubfarbe aus dem Vegetationsindex",
+      c.evergreen === "photo" && [
+        "dass er immergrün ist: grün im laubfreien Luftbild",
+        "detected",
+      ],
     ],
     "computed"
   );

@@ -5,12 +5,18 @@ import {
   archSpringing,
   axisFrame,
   BRIDGE_STEP,
+  beamSpan,
+  beamSupports,
+  deckCarrier,
+  deckDepth,
   intradosAt,
-  MASONRY_PIER_HALF,
   masonryArches,
+  masonryBays,
   fitParabola,
   PIER_SPACING,
+  parapetStyle,
   pierStations,
+  VIADUCT_BAY_M,
   placeRibs,
   ribPeaks,
   ribProfile,
@@ -82,6 +88,83 @@ test("pierStations keep the fairway clear", () => {
     expect(opened[i] - opened[i - 1]).toBeGreaterThan(PIER_SPACING / 2);
   }
   expect(pierStations(20)).toEqual([]);
+  // no span over PIER_SPACING; a short deck spans its gap alone
+  const piers = [0, ...pierStations(200), 200];
+  for (let i = 1; i < piers.length; i++) {
+    expect(piers[i] - piers[i - 1]).toBeLessThanOrEqual(PIER_SPACING);
+  }
+  expect(pierStations(38)).toEqual([]);
+});
+
+test("a deck is as deep as what carries it, the fairway only a cap", () => {
+  expect(deckCarrier("beam")).toBe("beam");
+  expect(deckCarrier("")).toBe("beam");
+  expect(deckCarrier(null)).toBe("beam");
+  expect(deckCarrier("arch;beam")).toBe("arch");
+  expect(deckCarrier("humpback")).toBe("arch");
+  expect(deckCarrier("suspension;cantilever")).toBe("frame");
+  expect(deckCarrier("truss")).toBe("frame");
+  expect(deckCarrier("cable-stayed")).toBe("frame");
+  // a beam a twentieth of its span, within 0.8–2.5 m
+  expect(deckDepth("beam", 26)).toBeCloseTo(1.3, 6);
+  expect(deckDepth("beam", 13)).toBe(0.8);
+  expect(deckDepth("beam", 120)).toBe(2.5);
+  expect(deckDepth("arch", 60)).toBe(1);
+  expect(deckDepth("frame", 120)).toBe(1.2);
+  // the clearance under a fairway caps it, never deepens it (the 5 m clamp
+  // the Meißen bridges hit)
+  expect(deckDepth("beam", 60, 1.1)).toBe(1.1);
+  expect(deckDepth("frame", 120, 5)).toBe(1.2);
+});
+
+test("a long rail deck over land stands on paired columns, over water on piers", () => {
+  // the U3's viaduct: 688 m on columns every 10–15 m
+  const viaduct = beamSupports(688, { kind: "rail" });
+  expect(viaduct.every((p) => p.edge)).toBe(true);
+  const at = [0, ...viaduct.map((p) => p.s), 688];
+  for (let i = 1; i < at.length; i++) {
+    expect(at[i] - at[i - 1]).toBeLessThanOrEqual(VIADUCT_BAY_M);
+    expect(at[i] - at[i - 1]).toBeGreaterThan(12);
+  }
+  expect(deckDepth("beam", beamSpan(688, viaduct))).toBe(0.8);
+  // a canal under it: piers on the axis, no span over PIER_SPACING
+  const crossing = beamSupports(300, { kind: "rail", water: [[100, 160]] });
+  const wet = crossing.filter((p) => p.s >= 100 && p.s <= 160);
+  expect(wet.length).toBeGreaterThan(0);
+  expect(wet.every((p) => !p.edge)).toBe(true);
+  const all = [0, ...crossing.map((p) => p.s), 300];
+  for (let i = 1; i < all.length; i++) {
+    expect(all[i] - all[i - 1]).toBeLessThanOrEqual(PIER_SPACING);
+  }
+  // a fairway it crosses stays open between two piers on the axis
+  const fairway = beamSupports(300, { kind: "rail", fairway: 0.5 });
+  // (40 m without a known main span)
+  expect(fairway.some((p) => p.s > 130 && p.s < 170)).toBe(false);
+  expect(fairway.filter((p) => !p.edge).map((p) => p.s)).toEqual([130, 170]);
+  expect(fairway.some((p) => p.edge)).toBe(true);
+  // a road deck, a short rail deck and a truss keep their piers
+  for (const supports of [
+    beamSupports(300, { kind: "road" }),
+    beamSupports(90, { kind: "rail" }),
+    beamSupports(300, { kind: "rail", structure: "truss" }),
+  ]) {
+    expect(supports.length).toBeGreaterThan(0);
+    expect(supports.every((p) => !p.edge)).toBe(true);
+  }
+  // a known main span sets the depth
+  expect(beamSpan(300, beamSupports(300, { kind: "road" }), 80)).toBe(80);
+  expect(beamSpan(30, [])).toBe(30);
+});
+
+test("a masonry bridge keeps its ashlar parapet, every other an open railing", () => {
+  expect(parapetStyle("arch")).toBe("ashlar");
+  expect(parapetStyle("humpback")).toBe("ashlar");
+  expect(parapetStyle("stone")).toBe("ashlar");
+  // a steel arch measured above the deck is no masonry
+  expect(parapetStyle("arch", true)).toBe("railing");
+  for (const s of ["beam", "truss", "suspension", "cable-stayed", "", null]) {
+    expect(parapetStyle(s)).toBe("railing");
+  }
 });
 
 test("the ribs of one arch share the tightest rib's curve", () => {
@@ -198,24 +281,67 @@ test("masonryArches: arches between real piers, not at the banks", () => {
   // 260 m: banks at 118 m for 40 m each end, the river at 100 m between
   const ground = (s: number) => (s < 40 || s > 220 ? 118 : 100);
   const { spans, piers } = masonryArches(260, ground, () => 118);
-  expect(spans.length).toBeGreaterThan(3);
+  // ten bays of 26 m, the four touching a bank too low for an arch
+  expect(spans).toHaveLength(6);
+  // piers a seventh of their bays thick
+  const half = 26 / 7 / 2;
+  // a segmental arch: a fifth of its clear span under the crown
+  const spring = 117.8 - (26 - 2 * half) / 5;
   for (const sp of spans) {
-    expect(sp.crown).toBe(117.4);
-    // a quarter of the clearance above the water: on a pier, not at it
-    expect(sp.spring).toBe(104.5);
+    expect(sp.crown).toBeCloseTo(117.8, 6);
+    expect(sp.spring).toBeCloseTo(spring, 6);
     expect(sp.from).toBeGreaterThanOrEqual(26);
   }
   // each pier stands between two arches, as thick as the gap they leave
+  expect(piers).toHaveLength(7);
   for (const pier of piers) {
-    expect(pier.top).toBe(104.5);
+    expect(pier.top).toBeCloseTo(spring, 6);
     expect(pier.ground).toBe(100);
+    expect(pier.half).toBeCloseTo(half, 6);
   }
   const [first, second] = spans;
-  expect(second.from - first.to).toBeCloseTo(2 * MASONRY_PIER_HALF, 6);
+  expect(second.from - first.to).toBeCloseTo(2 * half, 6);
   const mid = (first.from + first.to) / 2;
-  expect(intradosAt(first, mid)).toBeCloseTo(117.4, 6);
-  expect(intradosAt(first, first.from)).toBeCloseTo(104.5, 6);
+  expect(intradosAt(first, mid)).toBeCloseTo(117.8, 6);
+  expect(intradosAt(first, first.from)).toBeCloseTo(spring, 6);
+  // a circle's segment: at the quarter it has risen more than half way
+  const quarter = intradosAt(first, (first.from + mid) / 2) ?? 0;
+  expect(quarter - spring).toBeGreaterThan((117.8 - spring) * 0.7);
   expect(intradosAt(first, first.to + 1)).toBeNull();
+});
+
+test("masonryBays: DOM1's piers, else Wikidata's spans, else equal bays", () => {
+  // the bake's bastions stand as measured
+  expect(masonryBays(220, { piers: [100, 50, 160] })).toEqual([
+    0, 50, 100, 160, 220,
+  ]);
+  // ...unless one they leave is wider than an arch can be: a pier DOM1
+  // missed (the Reichenbachbrücke's one bastion, 9 m from its end)
+  expect(masonryBays(169, { piers: [160.5], span: 44 })).not.toContain(160.5);
+  expect(masonryBays(300, { piers: [100, 50] })).toHaveLength(13);
+  // the Luitpoldbrücke: one 62.4 m span, the rest is abutment
+  const one = masonryBays(80, { spans: 1, span: 62.4 });
+  expect(one).toHaveLength(4);
+  expect(one[2] - one[1]).toBeCloseTo(62.4, 6);
+  // a 44 m main span among three, centred on the fairway
+  const three = masonryBays(150, { spans: 3, span: 44, fairway: 0.5 });
+  expect(three).toHaveLength(4);
+  expect(three[1]).toBeCloseTo(53, 6);
+  expect(three[2]).toBeCloseTo(97, 6);
+  // only a count: that many equal bays; nothing: about ARCH_SPAN each
+  expect(masonryBays(150, { spans: 5 })).toHaveLength(6);
+  expect(masonryBays(260)).toHaveLength(11);
+  // the Augustusbrücke's 43 m arches get 6 m piers
+  const augustus = masonryArches(
+    258,
+    () => 103,
+    () => 111,
+    { piers: [43, 86, 129, 172, 215] }
+  );
+  for (const pier of augustus.piers) {
+    expect(2 * pier.half).toBeCloseTo(43 / 7, 6);
+  }
+  expect(augustus.spans).toHaveLength(6);
 });
 
 test("a deck end's approach lands where its ramp meets the ground", () => {

@@ -18,7 +18,7 @@ files) and where it asks whether a file is there (`os.stat`, behind
 `Path.exists` and friends). Only paths under the working directory and the
 site's data and raw folders count; the OSM index's files stand for the
 extract they are built from, which is read instead. A file one step
-writes and a later one rewrites (`islands`) is judged by
+writes and a later one rewrites (`islands`, `lamp-heights`) is judged by
 what a full run would have there at each step (`Ledger`)."""
 
 from __future__ import annotations
@@ -452,8 +452,8 @@ def save(path: Path, key: dict, rec: Recorder) -> None:
 class Ledger:
     """Every recorded run of a site's steps, and which ran in this bake.
 
-    A step may rewrite what an earlier one wrote (`islands` the land
-    cover's class raster), so the file on disk
+    Some steps rewrite what an earlier one wrote (`islands` the land
+    cover's class raster, `lamp-heights` the lamps'), so the file on disk
     is the last writer's, not the earlier step's. A run that skips what is
     unchanged is judged against what a full run would see: before step k a
     file holds what its last writer before k wrote (recorded in that
@@ -556,4 +556,17 @@ class Ledger:
                     if w[0] < k and w not in found:
                         found.add(w)
                         todo.append((w[1], w[2]))
+        return [(s, t) for _, s, t in sorted(found)]
+
+    def after(self, restored: list[tuple[str, str]], step: str) -> list[tuple[str, str]]:
+        """The later writers to run again once `step` is done, in order:
+        those after it of the files the `restored` runs write, which a
+        restore put back to an earlier writer's output (`lamp-heights` after
+        a restored `lamps`) — a bake of `step` alone would leave them so."""
+        k = self.order[step]
+        found: set[tuple[int, str, str]] = set()
+        for s0, t0 in restored:
+            m = self.runs.get((s0, t0))
+            for p in m["outputs"] if m else ():
+                found |= {w for w in self.writers.get(p, ()) if w[0] > k}
         return [(s, t) for _, s, t in sorted(found)]

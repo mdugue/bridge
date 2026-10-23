@@ -11,17 +11,22 @@ LoD2-DE Hamburg", "Luftbilder Hamburg DOP Zeitreihe belaubt"."""
 
 from __future__ import annotations
 
+import re
+import zipfile
 from pathlib import Path
 
 from ..common import Tile
-from ..fetch import Ctx, cells, own_cells
-from ..net import remote_zip_members
+from ..fetch import Ctx, cells, german_dates, own_cells
+from ..net import download, remote_zip_members
 
 OPEN = "https://www.daten-hamburg.de/opendata"
 DGM = f"{OPEN}/fernerkundung_hoehenmodelle/dgm/dgm1_hh_2022-04-30.zip"
 DOM = f"{OPEN}/Digitales_Hoehenmodell_bDOM/dom1_hh_2022-11-21.zip"
 LOD2 = f"{OPEN}/3d_stadtmodell_lod2/LoD2-DE_HH_2026-04-28.zip"
 DOP = f"{OPEN}/fernerkundung_luftbilder/dop_belaubt/DOP2024_belaubt_Hamburg_{{}}.zip"
+# The DOP editions' AdV metadata, one CSV per year: a row per 1 km tile,
+# its name then the day it was flown.
+DOP_META = f"{OPEN}/fernerkundung_luftbilder/dop_belaubt/DOP_belaubt_AdV-Metadaten_Hamburg.zip"
 DISTRICTS = (
     "Hamburg-Mitte",
     "Altona",
@@ -68,6 +73,23 @@ def dom(ctx: Ctx, tile: Tile) -> list[Path]:
 def dop(ctx: Ctx, tile: Tile) -> list[Path]:
     urls = [DOP.format(d) for d in DISTRICTS]
     return _members(ctx, tile, urls, r"dop20rgbi_32_{e}_{n}_1_hh_\d{{4}}(_\d)?\.tif$", "dop")
+
+
+def flight(ctx: Ctx, tile: Tile) -> list[str]:
+    """The days the tile's 1 km DOP files were flown, from the edition's
+    metadata CSV (the year in `DOP`)."""
+    year = re.search(r"DOP(\d{4})_", DOP)
+    archive = download(DOP_META, ctx.downloads / "dop_meta" / DOP_META.rsplit("/", 1)[-1])
+    with zipfile.ZipFile(archive) as z:
+        name = next(m for m in z.namelist() if year and f"DOP{year[1]}_" in m)
+        rows = z.read(name).decode("latin-1").splitlines()
+    wanted = {f"dop20rgbi_32_{e}_{n}_1_hh" for e, n in own_cells(tile, 1)}
+    days: list[str] = []
+    for row in rows:
+        cols = row.split(";")
+        if len(cols) > 1 and re.sub(r"_\d{4}(_\d)?$", "", cols[0]) in wanted:
+            days += german_dates(cols[1])
+    return sorted(set(days))
 
 
 def lod2(ctx: Ctx, tile: Tile) -> list[Path]:

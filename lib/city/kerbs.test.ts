@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { KERB_HEIGHT, KERB_WIDTH, kerbGeometry } from "./kerbs";
+import {
+  KERB_HEIGHT,
+  KERB_WIDTH,
+  kerbGeometry,
+  kerbHeightAt,
+  RAMP_M,
+} from "./kerbs";
 
 const offset = { cx: 0, cy: 0 };
 const flat = () => 100;
@@ -76,4 +82,58 @@ test("every triangle winds counter-clockwise about its normal", () => {
     const dot = cross[0] * n[t] + cross[1] * n[t + 1] + cross[2] * n[t + 2];
     expect(dot).toBeGreaterThan(0);
   }
+});
+
+test("a lowered stretch stands its drop over the road and ramps back", () => {
+  expect(kerbHeightAt(5, [])).toBe(KERB_HEIGHT);
+  const low = [[4, 6, 0.03]] as const;
+  expect(kerbHeightAt(5, low)).toBeCloseTo(0.03, 9);
+  expect(kerbHeightAt(4, low)).toBeCloseTo(0.03, 9);
+  // halfway up the ramp, then full beyond it
+  expect(kerbHeightAt(6 + RAMP_M / 2, low)).toBeCloseTo(
+    (0.03 + KERB_HEIGHT) / 2,
+    9
+  );
+  expect(kerbHeightAt(6 + RAMP_M, low)).toBeCloseTo(KERB_HEIGHT, 9);
+  expect(kerbHeightAt(1, low)).toBe(KERB_HEIGHT);
+  // overlapping drops: the lower holds
+  expect(kerbHeightAt(5, [...low, [4.5, 5.5, 0]])).toBe(0);
+});
+
+test("a kerb line's drops lower its face top there and nowhere else", () => {
+  const g = kerbGeometry([{ coords: east, low: [[4, 6, 0.03]] }], flat, offset);
+  const pos = g?.positions ?? [];
+  expect(pos.length).toBeGreaterThan(0);
+  for (let i = 0; i < pos.length; i += 3) {
+    const [x, y, z] = [pos[i], pos[i + 1], pos[i + 2]];
+    if (Math.abs(z) < 1e-6 && y > 100) {
+      // a face-top vertex (on the line): its stone's height there
+      const want =
+        x >= 4 - 1e-6 && x <= 6 + 1e-6
+          ? 0.03
+          : x <= 4 - RAMP_M || x >= 6 + RAMP_M
+            ? KERB_HEIGHT
+            : null;
+      if (want !== null) {
+        expect(y).toBeCloseTo(100 + want, 6);
+      }
+    }
+  }
+  // the stretch's ends are vertices: the profile bends there
+  const xs = new Set(
+    pos.filter((_, i) => i % 3 === 0).map((x) => x.toFixed(3))
+  );
+  for (const x of [3.5, 4, 6, 6.5]) {
+    expect(xs.has(x.toFixed(3))).toBe(true);
+  }
+  // a flush stretch on a pavement above the road still meets the pavement
+  const step = (_x: number, y: number) => (y < -0.1 ? 100.05 : 100);
+  const flush = kerbGeometry(
+    [{ coords: east, low: [[0, 10, 0]] }],
+    step,
+    offset
+  );
+  const ys = (flush?.positions ?? []).filter((_, i) => i % 3 === 1);
+  expect(Math.max(...ys)).toBeCloseTo(100.06, 6);
+  expect(flush?.joins.length).toBeGreaterThan(0);
 });

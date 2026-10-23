@@ -64,7 +64,7 @@ bun run fetch <site>  # download the site's data through its provider's
                    # and the build sources → data/<site>/{dgm,cityjson}
                    # [tile…] [--lsc]
 bun run bake <site>   # offline bakes (pipeline/, Python via uv): raw → derived
-                   # data/<site>/{dlm,dop} [tile…] [--step X]
+                   # data/<site>/{dlm,dop} [tile…] [--step X] [--jobs N]
                    # (a step whose code and files are unchanged is skipped;
                    # --force runs it)
 bun run test:pipeline   # pytest + ruff for pipeline/
@@ -380,12 +380,16 @@ config change.
   to the city mesh), `structures.py` (DOM1 − max(DGM, LoD2 roof) where
   OSM names it: chimneys, towers, masts, missing buildings, a landmark's
   roof relief), `landmarks.py` (Wikidata's notable buildings matched to
-  LoD2 objects; its fetch caches the SPARQL answer), `ndvi.py`, `roof_colour.py`,
+  LoD2 objects; its fetch caches the SPARQL answer), `ndvi.py`, `roof_colour.py`
+  (+ `dop_light.py`: the flight's shadows and sun, so a roof is read in sun;
+  `dop_lean.py`: how far the image leans each roof off its outline),
   `roofs.py` (a LoD2 roof that misses DOM1 — the free-form roofs of
   complex buildings, the 3 m placeholders of new ones — rebuilt in the
   scan's form, flat levels and measured faces (pitched roofs, vaults,
   domes), which the build puts in its place, `scripts/measured-roofs.ts`;
-  ADR 0036), `lamps.py`,
+  ADR 0036), `passages.py` (OSM's `tunnel=building_passage` ways through
+  the LoD2 footprints: the archways and drive-throughs the build cuts
+  open and lines, `lib/city/building-passages.ts`), `lamps.py`,
   `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`, `rail.py` +
   `bridge.py` (the deck and superstructure measured in the surface model,
   the fairway clearance, Wikidata) + `rail_osm.py` (rails, ballast and
@@ -668,6 +672,12 @@ main thread) out of the frames:
   non-uniform control flow (three turns WGSL's uniformity check off, so
   nothing says so). In a per-pixel graph use `mix`/`step` with safe
   denominators; a select whose arms are constants is harmless.
+- **A `Loop`'s body is a scope too.** A node shared with the rest of the
+  graph and first built inside the loop is assigned there, so only when
+  the loop runs: the water's foam loop (no foam line on the tile: no
+  iteration) left the waves' position at 0, and the Elbe lay flat on
+  every tile without a weir beside a rippling one. Take what a loop reads
+  of the fragment into a `toVar()` before it (`foamAt`, water-layer.ts).
 
 **Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
 5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈

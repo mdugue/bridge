@@ -55,6 +55,7 @@ const CONFLATE_KINDS = new Set([
   "city_wall",
   "embankment",
   "cliff",
+  "quay",
 ]);
 
 const PROBE_M = 11; // perpendicular reach to read each side's shelf level (m)

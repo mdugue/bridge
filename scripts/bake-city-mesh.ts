@@ -20,7 +20,9 @@ import {
   Vector2,
 } from "three";
 import {
+  brickWalls,
   buildingGlows,
+  isStructure,
   palatialFacade,
   partFacade,
   buildingTint,
@@ -28,8 +30,9 @@ import {
   inheritedAttributes,
   countsStoreys,
   ownFacadeReason,
-  type RoofColorLut,
   type RoofColourSource,
+  type RoofColours,
+  type TintRgb,
   roofColor,
   roofColourSource,
   roofTint,
@@ -48,6 +51,7 @@ import {
   OBJECT_FLAG_FLAT_ROOF,
   OBJECT_FLAG_OWN_FACADE,
   OBJECT_FLAG_GLASS,
+  OBJECT_FLAG_HERITAGE,
   OBJECT_FLAG_LANDMARK,
   OBJECT_FLAG_METAL,
   OBJECT_FLAG_OWN_COLOUR,
@@ -57,6 +61,7 @@ import {
   OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_LOD2,
+  OBJECT_SOURCE_PASSAGE,
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
   objectTable,
@@ -64,7 +69,17 @@ import {
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
+import {
+  cutOut,
+  type PassageAxis,
+  passageHeight,
+  passageLining,
+  passageRegions,
+  type Plane,
+  touches,
+} from "../lib/city/building-passages";
 import { creaseNormals } from "../lib/city/crease-normals";
+import { SINK } from "../lib/city/ground-join";
 import { type DrawnFacts, encodeDrawn } from "../lib/city/drawn-facts";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
 import { ensembleGroup, ensembleRoots } from "../lib/city/ensembles";
@@ -95,6 +110,8 @@ import type {
   DoorFeature,
   DormerFeature,
   MeasuredRoofFeature,
+  PassageFeature,
+  PassagePart,
   ShopfrontWall,
   PlinthFeature,
   SmallBuildingFeature,
@@ -115,6 +132,7 @@ import {
   factColumns,
   inheritedOsm,
   lod2Facts,
+  gapFacts,
   NO_FACT,
   scanFacts,
   treeFacts,
@@ -127,24 +145,48 @@ import {
 } from "../lib/city/small-buildings";
 import {
   STRUCTURE_SINK,
+  structureFoot,
   structureFootprint,
   structureShape,
 } from "../lib/city/structures";
+import {
+  clipAbove,
+  isOpenRoof,
+  MIN_CLEAR_M,
+  OPEN_ROOF_FUNCTIONS,
+  postsMesh,
+  roofDepth,
+  roofPosts,
+} from "../lib/city/open-roofs";
 import type { CityJsonDocument } from "../lib/city/types";
 import {
+  DOOR_SLOT,
+  doorClassWidth,
+  type FacadeDoor,
   type FacadeShop,
   facadeAttribute,
+  NO_DOOR,
+  flatTownHouse,
   GROUND_REACH_M,
+  TALL_STOREY_M,
   wallRises,
   type WindowHost,
   type WindowWall,
   windowSpecs,
 } from "../lib/city/windows";
-import { measuredRoofMesh, measuredRoofsById } from "./measured-roofs";
+import {
+  measuredRoofMesh,
+  measuredRoofsById,
+  type PrismMesh,
+} from "./measured-roofs";
 import type { Column, MeshInput, PropertyTable } from "./tile-glb";
 
-/** RoofSurface index in the loader's fixed `defaultSemanticsColors` order. */
+/** WallSurface and RoofSurface in the loader's fixed `defaultSemanticsColors` order. */
+const WALL_SURFACE_TYPE = 1;
 const ROOF_SURFACE_TYPE = 2;
+/** A wall at most this tall (m) standing on its building's roof is the
+ *  roof's: a step between two roof levels, a parapet, a dormer's cheek. */
+const ROOF_STEP_M = 1.5;
 
 /** Trims JSON noise: colours to 3 decimals, metres to centimetres. */
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
@@ -161,6 +203,9 @@ export interface OnWalls {
   dormers?: readonly DormerFeature[];
   /** the fine ground's height (EPSG), which the ground-floor windows clear */
   groundAt?: (x: number, y: number) => number | null;
+  /** OSM's passages through the buildings, cut open and lined
+   *  (`withPassages`) */
+  passages?: readonly PassageFeature[];
   plinths?: readonly PlinthFeature[];
   shopfronts?: readonly ShopfrontWall[];
   windows?: readonly WindowWall[];
@@ -180,6 +225,15 @@ export interface CityVertices {
   objectIds: Float32Array<ArrayBuffer>;
   /** recentered data-frame (Z-up) positions, 3 per vertex */
   positions: Float32Array<ArrayBuffer>;
+  /** per vertex its roof face's own colour (linear RGB, 3 a vertex; NaN:
+   *  the object's), read from the orthophoto face by face
+   *  (`withFaceRoofColours`), and the rebuilt roofs' parts
+   *  (`withMeasuredRoofs`). Only the vertices at the stream's start carry
+   *  one: whatever is appended after them has none. */
+  roofRgb?: Float32Array<ArrayBuffer>;
+  /** per LoD2 vertex the loader's surface it lies on: its geometry's index
+   *  in the object and the surface's in the geometry (2 a vertex) */
+  surfaces?: Float32Array<ArrayBuffer>;
 }
 
 /** Concatenates the loader's chunk meshes into one vertex stream. */
@@ -190,6 +244,8 @@ function collectVertices(loaderScene: {
     objectid: ArrayLike<number>;
     position: ArrayLike<number>;
     surfacetype: ArrayLike<number> | undefined;
+    geometryid: ArrayLike<number> | undefined;
+    boundaryid: ArrayLike<number> | undefined;
   }[] = [];
   loaderScene.traverse((o) => {
     const geom = (o as Mesh).geometry as BufferGeometry | undefined;
@@ -200,13 +256,17 @@ function collectVertices(loaderScene: {
       position: geom.attributes.position.array,
       objectid: geom.attributes.objectid.array,
       surfacetype: geom.attributes.surfacetype?.array,
+      geometryid: geom.attributes.geometryid?.array,
+      boundaryid: geom.attributes.boundaryid?.array,
     });
   });
   const n = chunks.reduce((s, c) => s + c.objectid.length, 0);
+  const walls = new Uint8Array(n);
   const out = {
     positions: new Float32Array(n * 3),
     objectIds: new Float32Array(n),
     isRoof: new Float32Array(n),
+    surfaces: new Float32Array(n * 2).fill(-1),
   };
   let at = 0;
   for (const c of chunks) {
@@ -218,10 +278,157 @@ function collectVertices(loaderScene: {
       out.objectIds[at + i] = c.objectid[i];
       const surface = c.surfacetype ? c.surfacetype[i] : -1;
       out.isRoof[at + i] = surface === ROOF_SURFACE_TYPE ? 1 : 0;
+      walls[at + i] = surface === WALL_SURFACE_TYPE ? 1 : 0;
+      out.surfaces[(at + i) * 2] = c.geometryid?.[i] ?? -1;
+      out.surfaces[(at + i) * 2 + 1] = c.boundaryid?.[i] ?? -1;
     }
     at += count;
   }
+  out.isRoof = withRoofSteps(out, walls);
   return out;
+}
+
+/**
+ * The roof flags with every short wall that stands on its building's roof
+ * flagged too: a step between roof levels, a parapet or a dormer's cheek
+ * is clad like the roof, and drawn as a wall, sunlit plaster with an
+ * eave stroke, it read from above as a white dash across the roof (the
+ * Altstadt's flat roofs). A wall is one surface (`surfaces`: geometry and
+ * boundary ids) at most ROOF_STEP_M tall whose foot is no lower than the
+ * building's lowest roof vertex; a set-back storey is taller and keeps
+ * its windows. A gable is not: a triangle (one top corner) standing on a
+ * level foot at the eave, where a dataset keeps the gable apart from the
+ * wall under it (on a shallow roof 1.5 m or less: Meißen's tile 362 of
+ * them at least 5 m wide, Dresden's spawn tile 173).
+ */
+export function withRoofSteps(
+  v: Pick<CityVertices, "positions" | "objectIds" | "isRoof" | "surfaces">,
+  walls: Uint8Array
+): Float32Array<ArrayBuffer> {
+  const isRoof = Float32Array.from(v.isRoof);
+  const ids = v.surfaces;
+  if (!ids) {
+    return isRoof;
+  }
+  const p = v.positions;
+  // one number per surface (object, geometry, boundary; −1 is none, so
+  // each id + 1): objects below 2¹⁹, geometries 2¹⁰, boundaries 2²⁴
+  const key = (i: number) =>
+    (v.objectIds[i] * 1024 + ids[2 * i] + 1) * 16_777_216 + ids[2 * i + 1] + 1;
+  const eave = new Map<number, number>();
+  const shape = new Map<number, WallShape>();
+  for (let i = 0; i < isRoof.length; i++) {
+    const z = p[3 * i + 2];
+    if (isRoof[i] === 1) {
+      eave.set(v.objectIds[i], Math.min(eave.get(v.objectIds[i]) ?? z, z));
+    } else if (walls[i] === 1) {
+      const s = shape.get(key(i));
+      if (s) {
+        s.lo = Math.min(s.lo, z);
+        s.hi = Math.max(s.hi, z);
+      } else {
+        shape.set(key(i), { lo: z, hi: z, top: null, foot: null });
+      }
+    }
+  }
+  for (let i = 0; i < isRoof.length; i++) {
+    const s = walls[i] === 1 ? shape.get(key(i)) : undefined;
+    if (s) {
+      const z = p[3 * i + 2];
+      if (z > s.hi - CORNER_M) {
+        s.top = corners(s.top, p[3 * i], p[3 * i + 1]);
+      }
+      if (z < s.lo + CORNER_M) {
+        s.foot = corners(s.foot, p[3 * i], p[3 * i + 1]);
+      }
+    }
+  }
+  for (let i = 0; i < isRoof.length; i++) {
+    const s = walls[i] === 1 ? shape.get(key(i)) : undefined;
+    const low = eave.get(v.objectIds[i]);
+    if (
+      s &&
+      low !== undefined &&
+      s.hi - s.lo <= ROOF_STEP_M &&
+      s.lo >= low - 0.1 &&
+      !isGable(s, low)
+    ) {
+      isRoof[i] = 1;
+    }
+  }
+  return isRoof;
+}
+
+/** How close two corners (m) are one corner, and two heights one level. */
+const CORNER_M = 0.05;
+
+/** A wall surface's height span and its distinct corners at the top and
+ *  at the foot (the first one's x, y and whether another stands apart). */
+interface WallShape {
+  lo: number;
+  hi: number;
+  top: Corners | null;
+  foot: Corners | null;
+}
+type Corners = { x: number; y: number; more: boolean };
+
+function corners(c: Corners | null, x: number, y: number): Corners {
+  if (!c) {
+    return { x, y, more: false };
+  }
+  if (!c.more && Math.hypot(x - c.x, y - c.y) > CORNER_M) {
+    c.more = true;
+  }
+  return c;
+}
+
+/** One top corner over a level foot of two at the building's eave. */
+function isGable(s: WallShape, eave: number): boolean {
+  return (
+    s.top !== null &&
+    !s.top.more &&
+    s.foot !== null &&
+    s.foot.more &&
+    Math.abs(s.lo - eave) < CORNER_M
+  );
+}
+
+/**
+ * The stream with each LoD2 roof vertex's own face colour (`roofRgb`)
+ * where the roof colour bake read the face apart from its building
+ * (`RoofColours.faces`, keyed by the loader's geometry and surface ids).
+ */
+export function withFaceRoofColours(
+  v: CityVertices,
+  keys: readonly string[],
+  faces: RoofColours["faces"]
+): CityVertices {
+  if (!(faces && v.surfaces)) {
+    return v;
+  }
+  const byObject = new Map<number, Map<string, readonly number[]>>();
+  keys.forEach((id, index) => {
+    const list = faces[id];
+    if (list?.length) {
+      byObject.set(
+        index,
+        new Map(list.map((f) => [`${f[0]}:${f[1]}`, f.slice(2, 5)]))
+      );
+    }
+  });
+  const count = v.objectIds.length;
+  const roofRgb = new Float32Array(3 * count).fill(Number.NaN);
+  for (let i = 0; i < count; i++) {
+    const own = byObject.get(v.objectIds[i]);
+    const c =
+      v.isRoof[i] === 1
+        ? own?.get(`${v.surfaces[2 * i]}:${v.surfaces[2 * i + 1]}`)
+        : undefined;
+    if (c?.length === 3) {
+      roofRgb.set(c, 3 * i);
+    }
+  }
+  return { ...v, roofRgb };
 }
 
 /** Climbs `parents` to the root of an object's building tree (cycle-guarded). */
@@ -254,8 +461,9 @@ export interface BakedCityMesh {
  * The laser scan's small structures (pipeline/bake/small_buildings.py)
  * appended to a parsed tile: one object each at `objects.length + j`, its
  * own root (demolish takes it alone), a Building (the HUD counts it), the
- * hashed wall tint, a calm slate roof (the flat-roof palette — no DOP colour
- * is sampled for them) and `source` 1. Its triangles carry its own id, so
+ * hashed wall tint, its roof's orthophoto colour where the roof colour bake
+ * read one in sun (`colours`, roofcolor's `scan`), else a calm slate (the
+ * flat-roof palette), and `source` 1. Its triangles carry its own id, so
  * the weld never merges across objects. The tint hashes its first corner
  * (rounded to the decimetre), not its index, so a changed LoD2 object count
  * leaves every shed its colour; no storey band (the stroke would fall 0.2 m
@@ -264,12 +472,14 @@ export interface BakedCityMesh {
 export function appendScanStructures(
   tile: string,
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
-  features: readonly SmallBuildingFeature[]
+  features: readonly SmallBuildingFeature[],
+  /** the roof colour bake's rows for the file (`RoofColours.scan`) */
+  colours?: readonly (readonly number[])[]
 ): void {
   const positions: number[] = [];
   const objectIds: number[] = [];
   const isRoof: number[] = [];
-  for (const f of features) {
+  for (const [i, f] of features.entries()) {
     const box = structureMesh(f, baked.offset);
     const corners = structureCorners(f);
     const z = f.properties?.z;
@@ -283,6 +493,7 @@ export function appendScanStructures(
     positions.push(...box.positions);
     isRoof.push(...box.isRoof);
     objectIds.push(...box.isRoof.map(() => index));
+    const read = appendedRoofColour(colours, i, z);
     baked.objects.push({
       building: true,
       root: index,
@@ -294,10 +505,11 @@ export function appendScanStructures(
       glow: 0,
       rough: r3(roughJitter(id)),
       tint: rgb(buildingTint(id)),
-      roof: rgb(roofTint(id, { roofType: "1000" })),
+      roof: rgb(read ?? roofTint(id, { roofType: "1000" })),
       source: OBJECT_SOURCE_SCAN,
       footprints: [footprint],
       facts: scanFacts({ id, footprint, height: f.properties?.h }),
+      drawn: { roof: read ? "dop" : "palette" },
     });
   }
   const v = baked.vertices;
@@ -306,6 +518,8 @@ export function appendScanStructures(
     objectIds: concat(v.objectIds, objectIds),
     isRoof: concat(v.isRoof, isRoof),
     ...flatNormalsAfter(v, positions.length),
+
+    ...lod2RoofColours(v),
   };
 }
 
@@ -316,7 +530,9 @@ export function appendScanStructures(
  * a house); a missing building is. Chimneys, towers and lighthouses take
  * the brick palette, masts and the rest the site's walls; a column's head
  * reads as roof, so the roof tint is the wall's own (no terracotta cap on a
- * chimney).
+ * chimney). A building whose roof the surface model shapes stands its
+ * parts as a measured roof's (`shapedGap`), its eave at the roof's lowest
+ * edge and a pitched roof's tiles where it has a face.
  */
 export function appendGapStructures(
   tile: string,
@@ -324,14 +540,18 @@ export function appendGapStructures(
   features: readonly StructureFeature[],
   facades: FacadeMaterial = "render",
   /** the LoD2 object ids by row, for a relief slab's host */
-  objectIndex: ReadonlyMap<string, number> = new Map()
+  objectIndex: ReadonlyMap<string, number> = new Map(),
+  /** the roof colour bake's rows for the file (`RoofColours.gaps`) */
+  colours?: readonly (readonly number[])[]
 ): void {
   const positions: number[] = [];
   const objectIds: number[] = [];
   const isRoof: number[] = [];
-  for (const f of features) {
+  const normals: number[] = [];
+  for (const [i, f] of features.entries()) {
     const p = f.properties;
-    const mesh = structureShape(f, baked.offset, triangulateXY);
+    const shaped = shapedGap(f, baked.offset);
+    const mesh = shaped ?? structureShape(f, baked.offset, triangulateXY);
     if (!p || mesh.positions.length === 0) {
       continue;
     }
@@ -344,6 +564,7 @@ export function appendGapStructures(
     positions.push(...mesh.positions);
     isRoof.push(...mesh.isRoof);
     objectIds.push(...mesh.isRoof.map(() => index));
+    normals.push(...(shaped?.normals ?? mesh.positions.map(() => Number.NaN)));
     if (host) {
       // a relief slab is part of its landmark: its look, its building tree
       // (demolish takes it along), no footprint of its own, no storey bands
@@ -358,33 +579,140 @@ export function appendGapStructures(
       });
       continue;
     }
-    const id = gapStructureId(tile, f);
-    const isBuilding = p.kind === "building";
-    const brick = ["chimney", "tower", "lighthouse"].includes(p.kind);
-    const tint = rgb(buildingTint(id, {}, brick ? "brick" : facades));
-    baked.objects.push({
-      building: isBuilding,
-      root: index,
-      baseZ: cm(p.z - STRUCTURE_SINK),
-      eaveH: cm(p.h + STRUCTURE_SINK),
-      flags: 0,
-      storeyH: cm(isBuilding ? storeyHeight(p.h) : p.h + STRUCTURE_SINK + 1),
-      glow: 0,
-      rough: r3(roughJitter(id)),
-      tint,
-      roof: isBuilding ? rgb(roofTint(id, { roofType: "1000" })) : tint,
-      source: OBJECT_SOURCE_GAP,
-      footprints: [
-        structureFootprint(f).map(([x, y]): [number, number] => [cm(x), cm(y)]),
-      ],
-    });
+    const read = appendedRoofColour(colours, i, p.z);
+    baked.objects.push(
+      gapRow(gapStructureId(tile, f), f, index, facades, shaped, read)
+    );
   }
   const v = baked.vertices;
   baked.vertices = {
     positions: concat(v.positions, positions),
     objectIds: concat(v.objectIds, objectIds),
     isRoof: concat(v.isRoof, isRoof),
-    ...flatNormalsAfter(v, positions.length),
+    // a shaped roof's faces shade smooth, the rest flat
+    ...(normals.some((n) => !Number.isNaN(n))
+      ? { normals: shadedNormalsAfter(v, normals) }
+      : flatNormalsAfter(v, positions.length)),
+
+    ...lod2RoofColours(v),
+  };
+}
+
+/** A gap structure's own object row (no relief: that is its host's), at
+ *  row `index`; `read` its roof's orthophoto colour, if the roof colour
+ *  bake read one. */
+function gapRow(
+  id: string,
+  f: StructureFeature,
+  index: number,
+  facades: FacadeMaterial,
+  shaped: ReturnType<typeof shapedGap>,
+  read: TintRgb | undefined
+): CityObjectRow {
+  const p: NonNullable<StructureFeature["properties"]> = f.properties ?? {
+    h: 0,
+    kind: "building",
+    z: 0,
+  };
+  const isBuilding = p.kind === "building";
+  // a roof on posts: a flat roof's palette, and no facade to dress
+  const onPosts = p.kind === "roof";
+  const brick = ["chimney", "tower", "lighthouse"].includes(p.kind);
+  const tint = rgb(buildingTint(id, {}, brick ? "brick" : facades));
+  const footprint = structureFootprint(f).map(([x, y]): [number, number] => [
+    cm(x),
+    cm(y),
+  ]);
+  const eave = shaped?.eave ?? p.h;
+  return {
+    building: isBuilding,
+    root: index,
+    // a raised part from its floor (a bridge between two buildings)
+    baseZ: cm(p.z + structureFoot(p)),
+    eaveH: cm(eave - structureFoot(p)),
+    flags: onPosts ? OBJECT_FLAG_FLAT_ROOF : 0,
+    storeyH: cm(isBuilding ? storeyHeight(eave) : p.h + STRUCTURE_SINK + 1),
+    glow: 0,
+    rough: r3(roughJitter(id)),
+    tint,
+    roof:
+      isBuilding || onPosts
+        ? rgb(
+            read ??
+              roofTint(id, { roofType: shaped?.pitched ? "3100" : "1000" })
+          )
+        : tint,
+    source: OBJECT_SOURCE_GAP,
+    footprints: [footprint],
+    ...(isBuilding || onPosts
+      ? {
+          facts: gapFacts({
+            id,
+            footprint,
+            height: p.h,
+            name: p.name,
+            // the card names it by ALKIS's word for one
+            function: onPosts ? OPEN_ROOF_FUNCTIONS[0] : undefined,
+          }),
+          drawn: {
+            // the height is OSM's where the surface model predates it
+            ...(p.src === "osm" ? { height: "osm" as const } : {}),
+            roof: read ? ("dop" as const) : ("palette" as const),
+          },
+        }
+      : {}),
+  };
+}
+
+/** An appended roof's orthophoto colour (pipeline/bake/roof_colour.py
+ *  `appended_colours`): the row of feature `i` in its file, where its `z`
+ *  is still the feature's (a row read before the feature changed is not
+ *  its colour); undefined where none was read. */
+export function appendedRoofColour(
+  rows: readonly (readonly number[])[] | undefined,
+  i: number,
+  z: number | undefined
+): TintRgb | undefined {
+  const row = rows?.find((r) => r[0] === i);
+  return row && z !== undefined && Math.abs(row[1] - z) < 0.005
+    ? [row[2], row[3], row[4]]
+    : undefined;
+}
+
+/**
+ * A missing building whose roof the surface model shapes (pipeline/bake/
+ * structures.py `shaped_roof`): its parts stood as a measured roof's
+ * (scripts/measured-roofs.ts) from below its lowest ground, with `eave`
+ * (m over that ground) at its lowest roof vertex and `pitched` where a
+ * part is a face; null where it has no parts (the flat box stands) or is
+ * raised off the ground.
+ */
+export function shapedGap(
+  f: StructureFeature,
+  offset: { cx: number; cy: number }
+): (PrismMesh & { eave: number; pitched: boolean }) | null {
+  const p = f.properties;
+  if (p?.kind !== "building" || !p.parts?.length || (p.base ?? 0) > 0) {
+    return null;
+  }
+  const parts: MeasuredRoofFeature[] = p.parts.map((part) => ({
+    geometry: { type: "Polygon", coordinates: part.coordinates },
+    properties: { id: "", surface: part.surface, z: part.z },
+  }));
+  const mesh = measuredRoofMesh(parts, p.z + structureFoot(p), offset);
+  let lowest = Number.POSITIVE_INFINITY;
+  mesh.isRoof.forEach((roof, i) => {
+    if (roof === 1) {
+      lowest = Math.min(lowest, mesh.positions[i * 3 + 2]);
+    }
+  });
+  if (!Number.isFinite(lowest)) {
+    return null;
+  }
+  return {
+    ...mesh,
+    eave: lowest - p.z,
+    pitched: p.parts.some((part) => part.surface !== undefined),
   };
 }
 
@@ -432,6 +760,12 @@ function flatNormalsAfter(
   return { normals };
 }
 
+/** The LoD2 roof faces' own colours, carried on past what is appended
+ *  (they cover the stream's start only). */
+function lod2RoofColours(v: CityVertices): Pick<CityVertices, "roofRgb"> {
+  return v.roofRgb ? { roofRgb: v.roofRgb } : {};
+}
+
 /** The stream's normals run on with `appended` (NaN: flat), the stream's
  *  own flat where it carries none. */
 function shadedNormalsAfter(
@@ -457,13 +791,17 @@ function concat(
  * The vertex stream with every object that has measured parts rebuilt:
  * its LoD2 triangles dropped, its prisms appended under the same object id
  * (so its table row, picking and demolish stay), standing on the lowest
- * vertex of its LoD2 shell. A part id the tile does not hold is ignored.
+ * vertex of its LoD2 shell, a part's roof in its own colour where the roof
+ * colour bake read it apart (`RoofColours.parts`, kept only where the
+ * part's level matches the one read). A part id the tile does not hold is
+ * ignored.
  */
 export function withMeasuredRoofs(
   v: CityVertices,
   keys: readonly string[],
   offset: { cx: number; cy: number },
-  features: readonly MeasuredRoofFeature[]
+  features: readonly MeasuredRoofFeature[],
+  colours?: RoofColours
 ): CityVertices {
   const byId = measuredRoofsById(features);
   const replaced = new Map<number, MeasuredRoofFeature[]>();
@@ -491,6 +829,7 @@ export function withMeasuredRoofs(
   const objectIds: number[] = [];
   const isRoof: number[] = [];
   const normals: number[] = [];
+  const roofRgb: number[] = [];
   for (const i of keep) {
     positions.push(
       v.positions[i * 3],
@@ -500,6 +839,11 @@ export function withMeasuredRoofs(
     objectIds.push(v.objectIds[i]);
     isRoof.push(v.isRoof[i]);
     normals.push(Number.NaN, Number.NaN, Number.NaN);
+    roofRgb.push(
+      v.roofRgb?.[i * 3] ?? Number.NaN,
+      v.roofRgb?.[i * 3 + 1] ?? Number.NaN,
+      v.roofRgb?.[i * 3 + 2] ?? Number.NaN
+    );
   }
   for (const [index, parts] of replaced) {
     const z = base.get(index);
@@ -511,12 +855,246 @@ export function withMeasuredRoofs(
     isRoof.push(...mesh.isRoof);
     objectIds.push(...mesh.isRoof.map(() => index));
     normals.push(...mesh.normals);
+    // a colour read for another roofs file's part (its level differs) is
+    // not this part's
+    const own = new Map(
+      (colours?.parts?.[keys[index]] ?? [])
+        .filter(
+          (p) => Math.abs(p[1] - (parts[p[0]]?.properties?.z ?? NaN)) < 0.01
+        )
+        .map((p) => [p[0], p.slice(2, 5)])
+    );
+    mesh.parts.forEach((part, k) => {
+      const c = mesh.isRoof[k] === 1 ? own.get(part) : undefined;
+      roofRgb.push(...(c?.length === 3 ? c : FLAT_RGB));
+    });
   }
   return {
     positions: Float32Array.from(positions),
     objectIds: Float32Array.from(objectIds),
     isRoof: Float32Array.from(isRoof),
     normals: Float32Array.from(normals),
+    roofRgb: Float32Array.from(roofRgb),
+  };
+}
+
+/** A roof on posts has no facade to dress: no storey lines, no plinth or
+ *  cornices on its posts (the flat roof's gate), no windows (WINDOWLESS). */
+function markOpenRoofs(
+  objects: CityObjectRow[],
+  open: ReadonlySet<number>
+): void {
+  for (const i of open) {
+    const o = objects[i];
+    o.storeyH = cm(o.eaveH + 1);
+    if (!hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF)) {
+      o.flags += OBJECT_FLAG_FLAT_ROOF;
+    }
+  }
+}
+
+/** No roof colour of its own: the object's. */
+const FLAT_RGB = [Number.NaN, Number.NaN, Number.NaN];
+
+/** The objects LoD2 draws as a block that are a roof on posts: their own
+ *  ALKIS function, or their Building's, an Überdachung or a Carport
+ *  (lib/city/open-roofs.ts `isOpenRoof`). */
+export function openRoofObjects(
+  doc: CityJsonDocument,
+  keys: string[]
+): Set<number> {
+  const out = new Set<number>();
+  keys.forEach((id, index) => {
+    const root = doc.CityObjects[keys[rootOf(doc, keys, index)]];
+    const attrs = inheritedAttributes(
+      doc.CityObjects[id].attributes ?? {},
+      root.attributes
+    );
+    if (isOpenRoof(attrs.function)) {
+      out.add(index);
+    }
+  });
+  return out;
+}
+
+/** A triangle's upward unit normal z (flat x, y, z triples). */
+function normalZ(t: readonly number[]): number {
+  const ux = t[3] - t[0];
+  const uy = t[4] - t[1];
+  const uz = t[5] - t[2];
+  const wx = t[6] - t[0];
+  const wy = t[7] - t[1];
+  const wz = t[8] - t[2];
+  const nx = uy * wz - uz * wy;
+  const ny = uz * wx - ux * wz;
+  const nz = ux * wy - uy * wx;
+  const len = Math.hypot(nx, ny, nz);
+  return len > 0 ? nz / len : 0;
+}
+
+/** Each object's lowest vertex and lowest roof vertex. */
+function objectLevels(
+  v: CityVertices,
+  of: ReadonlySet<number>
+): Map<number, { base: number; roof: number }> {
+  const out = new Map<number, { base: number; roof: number }>();
+  for (let i = 0; i < v.objectIds.length; i++) {
+    const o = v.objectIds[i];
+    if (!of.has(o)) {
+      continue;
+    }
+    const z = v.positions[i * 3 + 2];
+    const l = out.get(o) ?? { base: z, roof: Number.POSITIVE_INFINITY };
+    l.base = Math.min(l.base, z);
+    if (v.isRoof[i] === 1) {
+      l.roof = Math.min(l.roof, z);
+    }
+    out.set(o, l);
+  }
+  return out;
+}
+
+/**
+ * The vertex stream with every roof on posts LoD2 draws as a block
+ * (`openRoofObjects`) opened, as an OSM roof is drawn (lib/city/
+ * open-roofs.ts): its roof kept, its walls cut a slab's depth (`roofDepth`
+ * of its footprint) under its lowest roof vertex, its floor dropped and its
+ * footprint laid there facing down instead, and posts from its base up to
+ * it (`roofPosts`) — a platform under one shows, a fuel station's pumps
+ * stand under it. Its row stays (picking, demolish, its facts), and so
+ * does its base: the posts reach it. One whose roof stands under
+ * `MIN_CLEAR_M` over its base stays a block, and so does one without an
+ * outline (cut, it would stand open, its underside laid nowhere).
+ * `footprints`: each object's outlines (EPSG), recentered by `offset`.
+ */
+export function withOpenRoofs(
+  v: CityVertices,
+  open: ReadonlySet<number>,
+  footprints: readonly (readonly [number, number][])[][],
+  offset: { cx: number; cy: number }
+): CityVertices {
+  const levels = objectLevels(v, open);
+  const cut = new Map<number, number>();
+  for (const [o, l] of levels) {
+    const rings = footprints[o] ?? [];
+    if (rings.length === 0) {
+      continue; // no outline to lay its underside on: it stays a block
+    }
+    const area = rings.reduce((a, r) => a + Math.abs(ringArea(r)), 0);
+    const under = l.roof - roofDepth(area);
+    if (Number.isFinite(under) && under - l.base >= MIN_CLEAR_M) {
+      cut.set(o, under);
+    }
+  }
+  if (cut.size === 0) {
+    return v;
+  }
+  const out = streamBuilder(v);
+  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
+    const o = v.objectIds[t];
+    const under = cut.get(o);
+    if (under === undefined || v.isRoof[t] === 1) {
+      out.copy(t, 3);
+      continue;
+    }
+    const tri = Array.from(v.positions.subarray(t * 3, t * 3 + 9));
+    // the floor goes: the footprint is laid at the slab's underside
+    if (normalZ(tri) < -0.9) {
+      continue;
+    }
+    out.add(clipAbove(tri, under), o, 0, t);
+  }
+  for (const [o, under] of cut) {
+    const base = levels.get(o)?.base ?? under;
+    for (const ring of footprints[o] ?? []) {
+      const local = ring.map(([x, y]): [number, number] => [
+        x - offset.cx,
+        y - offset.cy,
+      ]);
+      out.add(undersideOf(local, under), o, 0);
+      out.add(postsMesh(roofPosts([local]), base, under).positions, o, 0);
+    }
+  }
+  return out.done();
+}
+
+/** A ring's signed area (counter-clockwise positive). */
+function ringArea(ring: readonly [number, number][]): number {
+  let a = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [x0, y0] = ring[i];
+    const [x1, y1] = ring[(i + 1) % ring.length];
+    a += x0 * y1 - x1 * y0;
+  }
+  return a / 2;
+}
+
+/** A footprint's triangles at height `z`, facing down. */
+function undersideOf(ring: readonly [number, number][], z: number): number[] {
+  const open =
+    ring.length > 1 &&
+    ring[0][0] === ring[ring.length - 1][0] &&
+    ring[0][1] === ring[ring.length - 1][1]
+      ? ring.slice(0, -1)
+      : ring;
+  const out: number[] = [];
+  const tris = triangulateXY(open.flat(), []);
+  for (let k = 0; k + 2 < tris.length; k += 3) {
+    const [a, b, c] = [open[tris[k]], open[tris[k + 1]], open[tris[k + 2]]];
+    const ccw = ringArea([a, b, c]) > 0;
+    // clockwise seen from above faces down
+    const [p, q] = ccw ? [c, b] : [b, c];
+    out.push(a[0], a[1], z, p[0], p[1], z, q[0], q[1], z);
+  }
+  return out;
+}
+
+/** Builds a vertex stream from an old one's vertices and new triangles. */
+function streamBuilder(v: CityVertices) {
+  const positions: number[] = [];
+  const objectIds: number[] = [];
+  const isRoof: number[] = [];
+  const normals: number[] = [];
+  const roofRgb: number[] = [];
+  const surfaces: number[] = [];
+  const at = (a: ArrayLike<number> | undefined, i: number, n: number) =>
+    Array.from({ length: n }, (_, k) => a?.[i * n + k] ?? Number.NaN);
+  return {
+    /** `count` vertices of the old stream from `i` on, as they were */
+    copy(i: number, count: number): void {
+      for (let k = i; k < i + count; k++) {
+        positions.push(...at(v.positions, k, 3));
+        objectIds.push(v.objectIds[k]);
+        isRoof.push(v.isRoof[k]);
+        normals.push(...at(v.normals, k, 3));
+        roofRgb.push(...at(v.roofRgb, k, 3));
+        surfaces.push(...(v.surfaces ? at(v.surfaces, k, 2) : [-1, -1]));
+      }
+    },
+    /** new triangles of object `o`, flat (on the surface of old vertex
+     *  `like`, where given) */
+    add(xyz: readonly number[], o: number, roof: number, like?: number): void {
+      const surface =
+        like !== undefined && v.surfaces ? at(v.surfaces, like, 2) : [-1, -1];
+      for (let k = 0; k + 2 < xyz.length; k += 3) {
+        positions.push(xyz[k], xyz[k + 1], xyz[k + 2]);
+        objectIds.push(o);
+        isRoof.push(roof);
+        normals.push(Number.NaN, Number.NaN, Number.NaN);
+        roofRgb.push(...FLAT_RGB);
+        surfaces.push(...surface);
+      }
+    },
+    done(): CityVertices {
+      return {
+        positions: Float32Array.from(positions),
+        objectIds: Float32Array.from(objectIds),
+        isRoof: Float32Array.from(isRoof),
+        ...(v.normals ? { normals: Float32Array.from(normals) } : {}),
+        ...(v.roofRgb ? { roofRgb: Float32Array.from(roofRgb) } : {}),
+        ...(v.surfaces ? { surfaces: Float32Array.from(surfaces) } : {}),
+      };
+    },
   };
 }
 
@@ -564,12 +1142,13 @@ export function cityFrame(tile: string, source: CityJsonDocument): CityFrame {
  * object's own neighbourhood overriding it.
  * `measured` are the roofs rebuilt from DOM1, when baked; `onWalls` OSM's
  * doors, the surface model's dormers and the shopfronts (street photos,
- * the surface model's canopies), each on its LoD2 host.
+ * the surface model's canopies), each on its LoD2 host, and OSM's
+ * passages through the buildings, opened last.
  */
 export function bakeCityMesh(
   tile: string,
   source: CityJsonDocument,
-  roofLut: RoofColorLut | undefined,
+  roofColours: RoofColours | undefined,
   sharedMatrix: Matrix4 | null,
   osmLut?: OsmBuildingLut,
   scan?: readonly SmallBuildingFeature[],
@@ -599,11 +1178,23 @@ export function bakeCityMesh(
   loader.load(doc);
   const matrix = loader.matrix;
   const offset = recenterOffset(matrix);
-  const v = withMeasuredRoofs(
-    collectVertices(loader.scene),
-    keys,
-    offset,
-    measured ?? []
+  // the roofs on posts LoD2 draws as blocks, opened (ALKIS Überdachung)
+  const open = openRoofObjects(doc, keys);
+  const v = withOpenRoofs(
+    withMeasuredRoofs(
+      withFaceRoofColours(
+        collectVertices(loader.scene),
+        keys,
+        roofColours?.faces
+      ),
+      keys,
+      offset,
+      measured ?? [],
+      roofColours
+    ),
+    open,
+    footprintsOf,
+    offset
   );
 
   // Per-object vertex scans: base (lowest Z), top and lowest ROOF vertex.
@@ -626,6 +1217,7 @@ export function bakeCityMesh(
   // what the windows read beyond the row: the function, OSM's storeys,
   // a facade of its own (a landmark's flag alone keeps its windows)
   const hosts: WindowExtra[] = [];
+  const roofLut = roofColours?.roofs;
   const objects: CityObjectRow[] = keys.map((id, index) => {
     const o = doc.CityObjects[id];
     const root = rootOf(doc, keys, index);
@@ -645,19 +1237,27 @@ export function bakeCityMesh(
     const osm = inheritedOsm(osmLut?.[id], osmLut?.[keys[root]]);
     const eaveH = roofMin === undefined ? total : Math.max(roofMin - baseZ, 0);
     const footprints = footprintsOf[index];
-    hosts[index] = windowExtra(attrs, eaveH, osm);
-    const monumental = hosts[index].monumental ?? false;
     const context = look.context ?? facades;
+    hosts[index] = {
+      ...windowExtra(attrs, eaveH, osm),
+      brick: brickWalls(attrs, context, look),
+    };
+    const monumental = hosts[index].monumental ?? false;
     return {
       building: o.type === "Building",
       root,
       baseZ: cm(baseZ),
       eaveH: cm(eaveH),
-      flags: facadeFlags(
-        inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
-        monumental
+      flags: structureFlags(
+        facadeFlags(
+          inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
+          monumental
+        ),
+        hosts[index].fn
       ),
-      storeyH: cm(mappedStoreyHeight(eaveH, measured, osm?.levels)),
+      storeyH: cm(
+        mappedStoreyHeight(eaveH, measured, osm?.levels, osm?.storey)
+      ),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
       tint: rgb(buildingTint(id, attrs, context, look)),
@@ -744,7 +1344,15 @@ export function bakeCityMesh(
 
   const baked: BakedCityMesh = { epsg, matrix, objects, offset, vertices: v };
   markFlatRoofs(objects, v);
-  dressWalls(tile, baked, keys, hosts, onWalls, { facades, gaps, scan });
+  markTownHouses(objects, hosts);
+  markOpenRoofs(objects, open);
+  const passages = dressWalls(tile, baked, keys, hosts, onWalls, {
+    facades,
+    gaps,
+    roofColours,
+    scan,
+  });
+  withPassages(baked, passages);
   for (const o of objects) {
     if (o.facts) {
       o.facts = { ...o.facts, drawn: encodeDrawn(o.drawn) };
@@ -775,7 +1383,11 @@ function drawnOf(
     ...(wall === "brick" ? { context } : {}),
     roof: o.roof,
     ...(look.roof_colour ? { roofColour: look.roof_colour } : {}),
-    storey: countsStoreys(o.eaveH, osm?.levels) ? "osm" : "height",
+    storey: countsStoreys(o.eaveH, osm?.levels)
+      ? "osm"
+      : (osm?.storey ?? 0) > 0 && o.eaveH >= 2.5
+        ? "neighbours"
+        : "height",
     ...(own ? { own } : {}),
     ...(osm?.wikidata ? { wikidata: osm.wikidata } : {}),
   };
@@ -988,32 +1600,50 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
  * other: the storeys counted from the street, then the windows (the
  * plinths' and shopfronts' heights read the storey they snap to the
  * eave), then the parts beyond LoD2, and last each wall vertex's place on
- * its wall.
+ * its wall. The passages OSM maps through the walls (`passagePlans`, as
+ * high as the storeys now say) keep the windows off their portals and
+ * OSM's doors out of their openings; they are returned, to be cut last
+ * (`withPassages`).
  */
 function dressWalls(
   tile: string,
   baked: BakedCityMesh,
   keys: readonly string[],
   hosts: readonly WindowExtra[],
-  onWalls: OnWalls,
+  all: OnWalls,
   extra: {
     facades: FacadeMaterial;
     gaps?: readonly StructureFeature[];
+    roofColours?: RoofColours;
     scan?: readonly SmallBuildingFeature[];
   }
-): void {
-  const plinths = onWalls.plinths ?? [];
+): PassagePlan[] {
+  // a tank, a crane or a canopy: no doorway, plinth or shop band on it
+  const onBuilt = onBuildings(all, keys, hosts);
+  const plinths = onBuilt.plinths ?? [];
   // the storeys count from the street, where the plinths say where it is
   const asBuilt = liftToStreet(baked.objects, keys, plinths);
-  const rises = groundRises(baked, onWalls.groundAt);
+  const rises = groundRises(baked, onBuilt.groundAt);
   const reach = assignWindows(
     baked.objects,
     keys,
     hosts,
-    onWalls.windows ?? [],
+    onBuilt.windows ?? [],
     plinths,
     rises && { objectIds: baked.vertices.objectIds, rises }
   );
+  const passages = passagePlans(
+    baked.objects,
+    keys,
+    onBuilt.passages ?? [],
+    baked.offset
+  );
+  const onWalls = {
+    ...onBuilt,
+    ...(onBuilt.doors && {
+      doors: outsidePassages(onBuilt.doors, passages, keys, baked),
+    }),
+  };
   appendBeyondLod2(tile, baked, keys, { ...onWalls, ...extra });
   // standing on the ground or on a roof: as LoD2 built them
   markGrounded(baked.objects, asBuilt);
@@ -1030,8 +1660,38 @@ function dressWalls(
     keys,
     onWalls,
     reachOf,
-    rises && { at: rises, reach: reachOf }
+    rises && { at: rises, reach: reachOf },
+    portalDoors(passages)
   );
+  return passages;
+}
+
+/** What stands on the walls of buildings alone: the doors, plinths and
+ *  shopfronts of a structure that is no building (lib/city/building-tint.ts
+ *  `isStructure`: a tank, a silo, a crane, a canopy) left out — OSM's
+ *  entrance on a petrol station's canopy, a shop sign the photos read on a
+ *  silo. */
+export function onBuildings(
+  onWalls: OnWalls,
+  keys: readonly string[],
+  hosts: readonly Pick<WindowExtra, "fn">[]
+): OnWalls {
+  const index = new Map(keys.map((id, i) => [id, i]));
+  const building = (of: string | undefined) => {
+    const i = of === undefined ? undefined : index.get(of);
+    return i === undefined || !isStructure(hosts[i]?.fn);
+  };
+  const { doors, plinths, shopfronts } = onWalls;
+  return {
+    ...onWalls,
+    ...(doors && { doors: doors.filter((f) => building(f.properties?.of)) }),
+    ...(plinths && {
+      plinths: plinths.filter((f) => building(f.properties?.of)),
+    }),
+    ...(shopfronts && {
+      shopfronts: shopfronts.filter((w) => building(w.oid)),
+    }),
+  };
 }
 
 /** How far the ground in front of each LoD2 wall triangle rises over its
@@ -1080,6 +1740,16 @@ function windowExtra(
   };
 }
 
+/** The flags of a structure that is no building (lib/city/building-tint.ts
+ *  `isStructure`: a tank, a crane, a canopy) without OSM's shop: no shop
+ *  zone and no shop's light on it — a kiosk mapped on a petrol station's
+ *  canopy is the station's. */
+function structureFlags(flags: number, fn: string | undefined): number {
+  return isStructure(fn) && hasObjectFlag(flags, OBJECT_FLAG_SHOP)
+    ? flags - OBJECT_FLAG_SHOP
+    : flags;
+}
+
 /** The flags with OBJECT_FLAG_LANDMARK and OBJECT_FLAG_OWN_FACADE where
  *  the facade is its own. */
 function facadeFlags(flags: number, own: boolean): number {
@@ -1109,15 +1779,23 @@ function appendBeyondLod2(
     plinths?: readonly PlinthFeature[];
     shopfronts?: readonly ShopfrontWall[];
     gaps?: readonly StructureFeature[];
+    roofColours?: RoofColours;
     scan?: readonly SmallBuildingFeature[];
   }
 ): void {
   if (extra.scan) {
-    appendScanStructures(tile, baked, extra.scan);
+    appendScanStructures(tile, baked, extra.scan, extra.roofColours?.scan);
   }
   const objectIndex = new Map(keys.map((id, i) => [id, i]));
   if (extra.gaps) {
-    appendGapStructures(tile, baked, extra.gaps, extra.facades, objectIndex);
+    appendGapStructures(
+      tile,
+      baked,
+      extra.gaps,
+      extra.facades,
+      objectIndex,
+      extra.roofColours?.gaps
+    );
   }
   if (extra.plinths) {
     appendPlinths(baked, extra.plinths, objectIndex);
@@ -1171,16 +1849,33 @@ const NO_PLINTH =
 const PLINTH_ON_GROUND_M = 1.5;
 
 /** Whether a plinth piece is drawn on its host: not on a facade of its
- *  own, glass, metal or a flat-roofed block (`NO_PLINTH`), not under 3 m
- *  of wall, not on a part standing on a roof. */
+ *  own, glass, metal or a flat-roofed block (`NO_PLINTH`) — a flat-roofed
+ *  town house carries one (`townHouse`) —, not under 3 m of wall, not on a
+ *  part standing on a roof. */
 function carriesPlinth(
-  host: Pick<CityObjectRow, "baseZ" | "eaveH" | "flags">,
+  host: Pick<CityObjectRow, "baseZ" | "eaveH" | "flags" | "townHouse">,
   ground: readonly number[]
 ): boolean {
+  const gate = host.townHouse ? NO_PLINTH & ~OBJECT_FLAG_FLAT_ROOF : NO_PLINTH;
   return (
-    (host.flags & NO_PLINTH) === 0 &&
+    (host.flags & gate) === 0 &&
     host.eaveH >= 3 &&
     host.baseZ <= Math.min(...ground) + PLINTH_ON_GROUND_M
+  );
+}
+
+/** Whether a plinth's host also carries a town house's cornices, the
+ *  Gurtgesims and the Traufgesims: a town house — storeys from
+ *  `TALL_STOREY_M`, listed, or a flat-roofed one (`townHouse`). A post-war
+ *  house keeps its plinth but has no cornices (München's, Unna's, the
+ *  suburbs'). */
+export function carriesCornices(
+  host: Pick<CityObjectRow, "flags" | "storeyH" | "townHouse">
+): boolean {
+  return (
+    (host.townHouse ?? false) ||
+    host.storeyH >= TALL_STOREY_M ||
+    hasObjectFlag(host.flags, OBJECT_FLAG_HERITAGE)
   );
 }
 
@@ -1189,12 +1884,14 @@ function carriesPlinth(
  * appended as part of the building they carry, like its doors: one object
  * per host in a stone shade of the host's tint, the host's building tree
  * (asking or demolishing it takes the building), no footprint, no storey
- * band or eave line on it, `source` 5. Only a town house carries one: a
- * host from 3 m of wall, standing on the street, not `NO_PLINTH`. Along
- * the same stretches the Gurtgesims over its ground floor
+ * band or eave line on it, `source` 5. Only a house carries one: a host
+ * from 3 m of wall, standing on the street, not `NO_PLINTH` (a flat-roofed
+ * town house is no block). Along the same stretches of a town house
+ * (`carriesCornices`) the Gurtgesims over its ground floor
  * (`corniceHeight`) and the Traufgesims under its eave where the roof runs
- * level along the wall (`eaveAlong`), each an object in a plaster shade a
- * touch paler than the wall. Each band runs on from house to house along
+ * level along the wall (`eaveAlong`: the wall's own roof edge, a front
+ * rising over its object's lowest roof included), each an object in a
+ * plaster shade a touch paler than the wall. Each band runs on from house to house along
  * a row (`joinStretches`): over the gaps LoD2's footprints leave between
  * them, at one level where theirs lie close.
  */
@@ -1261,6 +1958,9 @@ export function appendPlinths(
       continue;
     }
     bands.plinth.push(...plinthStretches(f, hostIndex));
+    if (!carriesCornices(host)) {
+      continue;
+    }
     const top = Math.max(...p.top);
     const z = corniceHeight(host, top);
     if (z !== undefined) {
@@ -1354,7 +2054,7 @@ function withParts(
     objectIds.fill(p.id, at, at + n);
     at += n;
   }
-  return { positions, objectIds, isRoof, normals };
+  return { positions, objectIds, isRoof, normals, ...lod2RoofColours(v) };
 }
 
 /** Neighbouring houses' Traufgesimse this close in height run as one. */
@@ -1503,6 +2203,8 @@ export function appendDoors(
       objectIds.map(() => 0)
     ),
     ...flatNormalsAfter(v, positions.length),
+
+    ...lod2RoofColours(v),
   };
 }
 
@@ -1670,6 +2372,8 @@ export function appendShopfronts(
       objectIds.map(() => 0)
     ),
     normals: shadedNormalsAfter(v, normals),
+
+    ...lod2RoofColours(v),
   };
   return drawn;
 }
@@ -1754,6 +2458,8 @@ export function appendDormers(
     objectIds: concat(v.objectIds, objectIds),
     isRoof: concat(v.isRoof, isRoof),
     ...flatNormalsAfter(v, positions.length),
+
+    ...lod2RoofColours(v),
   };
 }
 
@@ -1777,8 +2483,39 @@ function footprintCentre(
 const NO_WINDOW_FLAGS =
   OBJECT_FLAG_GLASS | OBJECT_FLAG_METAL | OBJECT_FLAG_OWN_COLOUR;
 
+/**
+ * Marks the flat-roofed town houses (lib/city/windows.ts `flatTownHouse`:
+ * housing from three storeys' eave whose storey — OSM's count, or its
+ * neighbours' — is a town house's, or that is listed) on their rows (`townHouse`) and for their
+ * windows (`town`): they carry a town house's plinth, cornices and windows,
+ * not a block's bare front. In place.
+ */
+export function markTownHouses(
+  objects: CityObjectRow[],
+  hosts: WindowExtra[]
+): void {
+  objects.forEach((o, i) => {
+    if (
+      hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF) &&
+      (o.source ?? OBJECT_SOURCE_LOD2) === OBJECT_SOURCE_LOD2 &&
+      flatTownHouse({
+        eaveH: o.eaveH,
+        fn: hosts[i]?.fn,
+        listed: hasObjectFlag(o.flags, OBJECT_FLAG_HERITAGE),
+        storeyH: o.storeyH,
+      })
+    ) {
+      o.townHouse = true;
+      hosts[i] = { ...hosts[i], town: true };
+    }
+  });
+}
+
 /** What the windows read of an object beyond its row. */
-export type WindowExtra = Pick<WindowHost, "fn" | "levels"> & {
+export type WindowExtra = Pick<
+  WindowHost,
+  "brick" | "fn" | "levels" | "town"
+> & {
   /** its facade its own (lib/city/building-tint.ts `ownFacade`: a
    *  church, a palace, a theatre, a hall) */
   monumental?: boolean;
@@ -1944,6 +2681,8 @@ export function assignWindows(
     shop: hasObjectFlag(o.flags, OBJECT_FLAG_SHOP),
     storeyH: o.storeyH,
     storeys: extra[i]?.storeys,
+    town: extra[i]?.town,
+    brick: extra[i]?.brick,
   }));
   const reach: number[] = [];
   windowSpecs(hosts, walls, index).forEach((choice, i) => {
@@ -1967,8 +2706,8 @@ export function assignWindows(
 
 /**
  * Where on its wall each vertex of a window-carrying object lies (lib/city/
- * windows.ts `facadeAttribute`), with OSM's doors and the shopfronts on
- * those walls.
+ * windows.ts `facadeAttribute`), with OSM's doors, the passages' portals
+ * and the shopfronts on those walls.
  */
 function facadeOf(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
@@ -1979,11 +2718,12 @@ function facadeOf(
     shopfronts?: readonly ShopfrontWall[];
   },
   reach: (object: number) => number,
-  rises?: Parameters<typeof facadeAttribute>[4]
+  rises?: Parameters<typeof facadeAttribute>[4],
+  portals: readonly FacadeDoor[] = []
 ): Int16Array<ArrayBuffer> {
   const { cx, cy } = baked.offset;
   const index = new Map(keys.map((id, i) => [id, i]));
-  const doors = (onWalls.doors ?? []).flatMap((f) => {
+  const osmDoors = (onWalls.doors ?? []).flatMap((f) => {
     const p = f.properties;
     const object = p ? index.get(p.of) : undefined;
     if (!p || object === undefined) {
@@ -2015,9 +2755,19 @@ function facadeOf(
   return facadeAttribute(
     baked.vertices,
     (i) => (baked.objects[i]?.windows?.axis ?? 0) > 0,
-    doors,
+    [...osmDoors, ...portals],
     [...shops, ...buriedWalls(baked, index, onWalls.plinths ?? [], reach)],
-    rises
+    rises,
+    // every LoD2 wall carries its own eave (a front over its object's
+    // lowest roof), with windows or not
+    {
+      of: (i) => {
+        const o = baked.objects[i];
+        return o && (o.source ?? OBJECT_SOURCE_LOD2) === OBJECT_SOURCE_LOD2
+          ? { base: o.baseZ, eave: o.baseZ + o.eaveH }
+          : undefined;
+      },
+    }
   );
 }
 
@@ -2061,4 +2811,460 @@ function buriedWalls(
       ];
     });
   });
+}
+
+// --- passages through the buildings ---------------------------------------
+
+/** A passage the bake opens (`passagePlans`), recentred: its axis and the
+ *  volume it takes, the LoD2 objects it runs through with their shares,
+ *  and the box (x0, y0, z0, x1, y1, z1) it can touch. */
+interface PassagePlan {
+  axis: PassageAxis;
+  box: readonly [number, number, number, number, number, number];
+  hosts: { object: number; part: PassagePart }[];
+  regions: Plane[][];
+}
+
+/** The widest door a `_FACADE` slot holds (m): a wider portal keeps the
+ *  windows off its middle that far, the rest of it is open wall anyway. */
+const PORTAL_W_MAX = doorClassWidth(DOOR_SLOT.widths - 1);
+/** An OSM door this close to a passage's opening (m past its half width)
+ *  stands in it: none is drawn there. */
+const PORTAL_DOOR_M = 0.3;
+
+/**
+ * The passages of the tile (pipeline/bake/passages.py) as the bake opens
+ * them: the LoD2 objects of this tile each runs through, its clear height
+ * from their eaves and storeys (lib/city/building-passages.ts
+ * `passageHeight`) — none where they stand too low — and its volume.
+ */
+export function passagePlans(
+  objects: readonly CityObjectRow[],
+  keys: readonly string[],
+  passages: readonly PassageFeature[],
+  offset: { cx: number; cy: number }
+): PassagePlan[] {
+  const index = new Map(keys.map((id, i) => [id, i]));
+  const local = (q: readonly number[]): [number, number] => [
+    q[0] - offset.cx,
+    q[1] - offset.cy,
+  ];
+  return passages.flatMap((f) => {
+    const p = f.properties;
+    if (!p || f.geometry.coordinates.length < 2) {
+      return [];
+    }
+    const hosts = Object.entries(p.of).flatMap(([id, part]) => {
+      const object = index.get(id);
+      const o = object === undefined ? undefined : objects[object];
+      if (
+        object === undefined ||
+        !o ||
+        (o.source ?? OBJECT_SOURCE_LOD2) !== OBJECT_SOURCE_LOD2
+      ) {
+        return [];
+      }
+      return [
+        {
+          object,
+          part: {
+            portals: part.portals.map(
+              ([x, y, nx, ny]): [number, number, number, number] => [
+                x - offset.cx,
+                y - offset.cy,
+                nx,
+                ny,
+              ]
+            ),
+            roof: part.roof.map((r) => r.map(local)),
+            sides: part.sides.map((r) => r.map(local)),
+          },
+        },
+      ];
+    });
+    const h = passageHeight(
+      p.kind,
+      p.h,
+      Math.max(...p.z),
+      hosts.map(({ object }) => ({
+        eaveZ: objects[object].baseZ + objects[object].eaveH,
+        storeyH: objects[object].storeyH,
+      }))
+    );
+    if (h === null) {
+      return [];
+    }
+    const axis: PassageAxis = {
+      axis: f.geometry.coordinates.map(local),
+      ground: p.z,
+      h,
+      w: p.w,
+    };
+    const xs = axis.axis.map((q) => q[0]);
+    const ys = axis.axis.map((q) => q[1]);
+    const box = [
+      Math.min(...xs) - p.w,
+      Math.min(...ys) - p.w,
+      Math.min(...p.z) - SINK.wall,
+      Math.max(...xs) + p.w,
+      Math.max(...ys) + p.w,
+      Math.max(...p.z) + h,
+    ] as const;
+    return [{ axis, box, hosts, regions: passageRegions(axis) }];
+  });
+}
+
+/** The passages' portals as doors on their walls (lib/city/windows.ts
+ *  `FacadeDoor`): the ground floor's windows keep off them. */
+function portalDoors(plans: readonly PassagePlan[]): FacadeDoor[] {
+  return plans.flatMap((plan) =>
+    plan.hosts.flatMap(({ object, part }) =>
+      part.portals.map(([x, y, nx, ny]) => ({
+        object,
+        at: [x, y] as [number, number],
+        n: [nx, ny] as [number, number],
+        w: Math.min(plan.axis.w, PORTAL_W_MAX),
+      }))
+    )
+  );
+}
+
+/** The distance (m) from plan point `q` to a polyline. */
+function toPolyline(
+  q: readonly [number, number],
+  line: readonly (readonly [number, number])[]
+): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (let k = 0; k + 1 < line.length; k++) {
+    const [a, b] = [line[k], line[k + 1]];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const l2 = dx * dx + dy * dy;
+    const t =
+      l2 > 0
+        ? Math.min(
+            Math.max(((q[0] - a[0]) * dx + (q[1] - a[1]) * dy) / l2, 0),
+            1
+          )
+        : 0;
+    best = Math.min(
+      best,
+      Math.hypot(q[0] - a[0] - t * dx, q[1] - a[1] - t * dy)
+    );
+  }
+  return best;
+}
+
+/** OSM's doors without those that stand in a passage's opening on their
+ *  own building (an entrance mapped where the passage meets the wall): the
+ *  opening is the way in. */
+function outsidePassages(
+  doors: readonly DoorFeature[],
+  plans: readonly PassagePlan[],
+  keys: readonly string[],
+  baked: Pick<BakedCityMesh, "objects" | "offset">
+): DoorFeature[] {
+  if (plans.length === 0) {
+    return [...doors];
+  }
+  const index = new Map(keys.map((id, i) => [id, i]));
+  const { cx, cy } = baked.offset;
+  return doors.filter((f) => {
+    const object = f.properties ? index.get(f.properties.of) : undefined;
+    const root = object === undefined ? undefined : baked.objects[object]?.root;
+    const [x, y] = f.geometry.coordinates;
+    return !plans.some(
+      (plan) =>
+        plan.hosts.some(({ object: h }) => baked.objects[h].root === root) &&
+        toPolyline([x - cx, y - cy], plan.axis.axis) <=
+          plan.axis.w / 2 + PORTAL_DOOR_M
+    );
+  });
+}
+
+/** Whether triangle `t` of the stream can reach into `box`. */
+function inBox(
+  p: ArrayLike<number>,
+  t: number,
+  box: PassagePlan["box"]
+): boolean {
+  for (let c = 0; c < 3; c++) {
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = Number.NEGATIVE_INFINITY;
+    for (let k = 0; k < 3; k++) {
+      const x = p[3 * (t + k) + c];
+      lo = Math.min(lo, x);
+      hi = Math.max(hi, x);
+    }
+    if (hi < box[c] || lo > box[c + 3]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Whether two boxes (x0, y0, z0, x1, y1, z1) overlap. */
+function boxesMeet(a: PassagePlan["box"], b: PassagePlan["box"]): boolean {
+  return [0, 1, 2].every((c) => a[c] <= b[c + 3] && b[c] <= a[c + 3]);
+}
+
+/** Triangles (flat x, y, z) cut to what lies outside the plans' volumes. */
+function outsideOf(
+  positions: readonly number[],
+  plans: readonly PassagePlan[]
+): number[] {
+  if (plans.length === 0) {
+    return [...positions];
+  }
+  const out: number[] = [];
+  for (let k = 0; k + 8 < positions.length; k += 9) {
+    const tri = positions.slice(k, k + 9);
+    const regions = plans.flatMap((plan) =>
+      plan.regions.filter((r) => touches(tri, r))
+    );
+    out.push(...(regions.length > 0 ? cutOut(tri, regions) : tri));
+  }
+  return out;
+}
+
+/**
+ * The passages cut open (lib/city/building-passages.ts): every triangle
+ * but a roof's of the building trees each runs through — the LoD2 walls
+ * and floor, and the plinths, doors and shopfronts laid on them — cut to
+ * what lies outside its volume, and per object its lining (walls along
+ * it, its ceiling) appended as a part of the object (`OBJECT_SOURCE_
+ * PASSAGE`: its own colour, the host's, no windows, no eave). Last of the
+ * bake: the windows and doors were placed on the whole walls, and a cut
+ * piece carries its triangle's place on its wall (`_FACADE`) and normal.
+ */
+export function withPassages(
+  baked: Pick<BakedCityMesh, "objects" | "vertices">,
+  plans: readonly PassagePlan[]
+): void {
+  if (plans.length === 0) {
+    return;
+  }
+  const { objects } = baked;
+  const v = baked.vertices;
+  const byRoot = new Map<number, PassagePlan[]>();
+  for (const plan of plans) {
+    for (const root of new Set(plan.hosts.map((h) => objects[h.object].root))) {
+      byRoot.set(root, [...(byRoot.get(root) ?? []), plan]);
+    }
+  }
+  const pieces = new Map<number, number[]>();
+  const p = v.positions;
+  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
+    const near =
+      v.isRoof[t] === 1
+        ? undefined
+        : byRoot.get(objects[v.objectIds[t]]?.root ?? -1);
+    if (!near) {
+      continue;
+    }
+    const tri = Array.from(p.subarray(3 * t, 3 * t + 9));
+    const regions = near.flatMap((plan) =>
+      inBox(p, t, plan.box) ? plan.regions.filter((r) => touches(tri, r)) : []
+    );
+    if (regions.length > 0) {
+      pieces.set(t, cutOut(tri, regions));
+    }
+  }
+  const linings: { id: number; positions: number[] }[] = [];
+  for (const plan of plans) {
+    // a passage crossing it, or beside it through one gateway: its lining
+    // keeps out of that one's opening
+    const crossing = plans.filter(
+      (other) => other !== plan && boxesMeet(other.box, plan.box)
+    );
+    for (const { object, part } of plan.hosts) {
+      const positions = outsideOf(
+        passageLining(plan.axis, part, triangulateXY),
+        crossing
+      );
+      if (positions.length === 0) {
+        continue;
+      }
+      let base = Number.POSITIVE_INFINITY;
+      let top = Number.NEGATIVE_INFINITY;
+      for (let i = 2; i < positions.length; i += 3) {
+        base = Math.min(base, positions[i]);
+        top = Math.max(top, positions[i]);
+      }
+      const host = { ...objects[object] };
+      delete host.windows;
+      const above = cm(top - base + 1);
+      linings.push({ id: objects.length, positions });
+      objects.push({
+        ...host,
+        building: false,
+        baseZ: cm(base),
+        // above its top: no eave stroke, no storey band in it
+        eaveH: above,
+        storeyH: above,
+        glow: 0,
+        // the host's plaster runs on in, none of its OSM looks
+        flags: OBJECT_FLAG_OWN_COLOUR,
+        source: OBJECT_SOURCE_PASSAGE,
+        footprints: [],
+      });
+    }
+  }
+  baked.vertices = withCuts(v, pieces, linings);
+}
+
+/** The stream with triangle `t`'s vertices replaced by `pieces.get(t)`
+ *  (flat x, y, z: its pieces, none, or itself cut), each new vertex
+ *  carrying its triangle's attributes — its normal and place on its wall
+ *  (`_FACADE`'s first number) interpolated, the rest the triangle's — and
+ *  `parts` appended (flat, no roof, no wall of the facade's). */
+function withCuts(
+  v: CityVertices,
+  pieces: ReadonlyMap<number, readonly number[]>,
+  parts: readonly { id: number; positions: readonly number[] }[]
+): CityVertices {
+  const count = v.objectIds.length;
+  let total = count;
+  for (const [, xyz] of pieces) {
+    total += xyz.length / 3 - 3;
+  }
+  for (const part of parts) {
+    total += part.positions.length / 3;
+  }
+  const out = emptyStream(v, total);
+  const { positions, objectIds, normals, facade } = out;
+  const noDoor = Math.round(NO_DOOR * 32_767);
+  let at = 0;
+  // the old stream's vertices from `run` up to `end`, as they were, to
+  // `at`: the uncut triangles go over in runs, not vertex by vertex (a
+  // tile's millions of vertices were as many subarrays for the collector)
+  let run = 0;
+  const flush = (end: number) => {
+    copyVertices(v, run, end - run, out, at);
+    at += end - run;
+  };
+  for (const t of [...pieces.keys()].sort((a, b) => a - b)) {
+    flush(t);
+    run = t + 3;
+    const xyz = pieces.get(t) ?? [];
+    const bary = barycentric(v.positions, t);
+    for (let k = 0; k + 2 < xyz.length; k += 3) {
+      const w = bary(xyz[k], xyz[k + 1], xyz[k + 2]);
+      copyVertices(v, t, 1, out, at);
+      positions[3 * at] = xyz[k];
+      positions[3 * at + 1] = xyz[k + 1];
+      positions[3 * at + 2] = xyz[k + 2];
+      if (normals && v.normals) {
+        normals.set(blend(v.normals, 3, t, w, true), 3 * at);
+      }
+      if (facade && v.facade) {
+        facade[4 * at] = Math.round(blend(v.facade, 4, t, w, false)[0]);
+      }
+      at++;
+    }
+  }
+  flush(count);
+  for (const part of parts) {
+    const n = part.positions.length / 3;
+    positions.set(part.positions, 3 * at);
+    objectIds.fill(part.id, at, at + n);
+    if (facade) {
+      for (let i = at; i < at + n; i++) {
+        facade[4 * i + 2] = noDoor;
+        facade[4 * i + 3] = noDoor;
+      }
+    }
+    at += n;
+  }
+  return out;
+}
+
+/** A stream of `total` vertices with `v`'s attributes, unset: no normal
+ *  (NaN), roof colour or surface. */
+function emptyStream(v: CityVertices, total: number): CityVertices {
+  return {
+    positions: new Float32Array(3 * total),
+    objectIds: new Float32Array(total),
+    isRoof: new Float32Array(total),
+    ...(v.normals && {
+      normals: new Float32Array(3 * total).fill(Number.NaN),
+    }),
+    ...(v.roofRgb && {
+      roofRgb: new Float32Array(3 * total).fill(Number.NaN),
+    }),
+    ...(v.surfaces && { surfaces: new Float32Array(2 * total).fill(-1) }),
+    ...(v.facade && { facade: new Int16Array(4 * total) }),
+  };
+}
+
+/** `n` vertices of `from` from vertex `i`, every attribute, to vertex `at`
+ *  of `to`. */
+function copyVertices(
+  from: CityVertices,
+  i: number,
+  n: number,
+  to: CityVertices,
+  at: number
+): void {
+  if (n <= 0) {
+    return;
+  }
+  to.positions.set(from.positions.subarray(3 * i, 3 * (i + n)), 3 * at);
+  to.objectIds.set(from.objectIds.subarray(i, i + n), at);
+  to.isRoof.set(from.isRoof.subarray(i, i + n), at);
+  if (to.normals && from.normals) {
+    to.normals.set(from.normals.subarray(3 * i, 3 * (i + n)), 3 * at);
+  }
+  // only the stream's first vertices carry a roof colour
+  const rgbEnd = Math.min(3 * (i + n), from.roofRgb?.length ?? 0);
+  if (to.roofRgb && from.roofRgb && rgbEnd > 3 * i) {
+    to.roofRgb.set(from.roofRgb.subarray(3 * i, rgbEnd), 3 * at);
+  }
+  if (to.surfaces && from.surfaces) {
+    to.surfaces.set(from.surfaces.subarray(2 * i, 2 * (i + n)), 2 * at);
+  }
+  if (to.facade && from.facade) {
+    to.facade.set(from.facade.subarray(4 * i, 4 * (i + n)), 4 * at);
+  }
+}
+
+/** Triangle `t`'s barycentric weights of a point in its plane. */
+function barycentric(
+  p: ArrayLike<number>,
+  t: number
+): (x: number, y: number, z: number) => [number, number, number] {
+  const a = [p[3 * t], p[3 * t + 1], p[3 * t + 2]];
+  const e1 = [p[3 * t + 3] - a[0], p[3 * t + 4] - a[1], p[3 * t + 5] - a[2]];
+  const e2 = [p[3 * t + 6] - a[0], p[3 * t + 7] - a[1], p[3 * t + 8] - a[2]];
+  const d11 = e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2];
+  const d12 = e1[0] * e2[0] + e1[1] * e2[1] + e1[2] * e2[2];
+  const d22 = e2[0] * e2[0] + e2[1] * e2[1] + e2[2] * e2[2];
+  const det = d11 * d22 - d12 * d12;
+  return (x, y, z) => {
+    const q = [x - a[0], y - a[1], z - a[2]];
+    const q1 = q[0] * e1[0] + q[1] * e1[1] + q[2] * e1[2];
+    const q2 = q[0] * e2[0] + q[1] * e2[1] + q[2] * e2[2];
+    const u = det > 0 ? (d22 * q1 - d12 * q2) / det : 0;
+    const w = det > 0 ? (d11 * q2 - d12 * q1) / det : 0;
+    return [1 - u - w, u, w];
+  };
+}
+
+/** Triangle `t`'s per-vertex attribute (`n` a vertex) at weights `w`;
+ *  `unit` normalises it, and leaves NaN where a vertex has none. */
+function blend(
+  a: ArrayLike<number>,
+  n: number,
+  t: number,
+  w: readonly [number, number, number],
+  unit: boolean
+): number[] {
+  const out = Array.from({ length: n }, (_, c) =>
+    w.reduce((s, wk, k) => s + wk * a[n * (t + k) + c], 0)
+  );
+  if (!unit) {
+    return out;
+  }
+  const len = Math.hypot(...out);
+  return len > 0 ? out.map((c) => c / len) : out.map(() => Number.NaN);
 }

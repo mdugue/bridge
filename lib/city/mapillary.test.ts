@@ -40,3 +40,15 @@ test("a lamp Mapillary saw hung across the street keeps its wire", () => {
     wire,
   });
 });
+
+test("a post Mapillary saw keeps the height its street measured", () => {
+  const post: MapillaryFeature = {
+    geometry: { type: "Point", coordinates: [1, 0] },
+    properties: { k: "lamp", h: 9.5, hs: "street" },
+  };
+  expect(mapillaryParts([post]).lamps[0]?.properties).toEqual({
+    src: "mly",
+    h: 9.5,
+    hs: "street",
+  });
+});

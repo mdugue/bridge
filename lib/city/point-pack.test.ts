@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
-import type { CanopyExtraFeature } from "./features";
-import { packPoints, pointFeatures, pointOf, unpackPoints } from "./point-pack";
+import type { CanopyExtraFeature, CanopyFeature } from "./features";
+import {
+  canopyStride,
+  packPoints,
+  pointFeatures,
+  pointOf,
+  ROWS_MEASURED,
+  unpackPoints,
+} from "./point-pack";
 
 const ORIGIN: [number, number] = [412_000, 5_656_000];
 
@@ -94,4 +101,137 @@ test("a committed canopy comes back as the features it was, within a millimetre"
     );
   });
   expect(worst).toBeLessThan(1e-3);
+});
+
+test("an evergreen crown keeps what told it, through the pack", () => {
+  const features: CanopyFeature[] = [
+    {
+      geometry: { type: "Point", coordinates: [412_100, 5_656_100] },
+      properties: { h: 21, l: "e" },
+    },
+    {
+      geometry: { type: "Point", coordinates: [412_110, 5_656_110] },
+      properties: { h: 18, l: "e", ls: "dop" },
+    },
+    {
+      geometry: { type: "Point", coordinates: [412_120, 5_656_120] },
+      properties: { h: 15 },
+    },
+  ];
+  const points = features.map(pointOf);
+  expect(canopyStride(points, false)).toBe(5);
+  const unpacked = unpackPoints(toBuffer(packPoints(points, ORIGIN, 5)));
+  const back = unpacked ? pointFeatures(unpacked) : [];
+  expect(back.map((f) => f.properties)).toEqual([
+    { h: 21, l: "e" },
+    { h: 18, l: "e", ls: "dop" },
+    { h: 15 },
+  ]);
+});
+
+test("a canopy without an evergreen packs as before", () => {
+  const points = [{ x: 412_001, y: 5_656_001, h: 5 }];
+  expect(canopyStride(points, false)).toBe(3);
+  expect(canopyStride(points, true)).toBe(4);
+});
+
+test("the Heide's committed evergreens reach the browser", async () => {
+  const path = `${import.meta.dir}/../../data/dresden/dlm/canopy_33416_5658_2_sn.geojson`;
+  const doc = (await Bun.file(path).json()) as { features: CanopyFeature[] };
+  const points = doc.features.map(pointOf);
+  const unpacked = unpackPoints(
+    toBuffer(
+      packPoints(points, [416_000, 5_658_000], canopyStride(points, false))
+    )
+  );
+  const back = unpacked ? pointFeatures(unpacked) : [];
+  const evergreen = (fs: readonly CanopyFeature[]) =>
+    fs.filter((f) => f.properties?.l === "e").length;
+  expect(evergreen(doc.features)).toBeGreaterThan(1000);
+  expect(evergreen(back)).toBe(evergreen(doc.features));
+});
+
+test("a crown over a carriageway keeps its flag, an evergreen's leaves beside it", () => {
+  const features: CanopyFeature[] = [
+    {
+      geometry: { type: "Point", coordinates: [412_100, 5_656_100] },
+      properties: { h: 9, c: 1 },
+    },
+    {
+      geometry: { type: "Point", coordinates: [412_110, 5_656_110] },
+      properties: { h: 18, l: "e", ls: "dop", c: 1 },
+    },
+    {
+      geometry: { type: "Point", coordinates: [412_120, 5_656_120] },
+      properties: { h: 15, row: 1 },
+    },
+  ];
+  const points = features.map(pointOf);
+  expect(canopyStride(points, false)).toBe(5);
+  const unpacked = unpackPoints(toBuffer(packPoints(points, ORIGIN, 5)));
+  const back = unpacked ? pointFeatures(unpacked) : [];
+  // `row` is the bake's own: the browser has no use for it
+  expect(back.map((f) => f.properties)).toEqual([
+    { h: 9, c: 1 },
+    { h: 18, l: "e", ls: "dop", c: 1 },
+    { h: 15 },
+  ]);
+});
+
+test("a scan crown with a radius keeps its evergreen leaves through the pack", () => {
+  const features: CanopyExtraFeature[] = [
+    {
+      geometry: { type: "Point", coordinates: [412_100, 5_656_100] },
+      properties: { h: 14, l: "e", r: 2.5 },
+    },
+    {
+      geometry: { type: "Point", coordinates: [412_110, 5_656_110] },
+      properties: { h: 11, r: 3 },
+    },
+  ];
+  const points = features.map(pointOf);
+  expect(canopyStride(points, true)).toBe(5);
+  const unpacked = unpackPoints(toBuffer(packPoints(points, ORIGIN, 5)));
+  const back = unpacked ? pointFeatures(unpacked) : [];
+  expect(back.map((f) => f.properties)).toEqual([
+    { h: 14, l: "e", r: 2.5 },
+    { h: 11, r: 3 },
+  ]);
+});
+
+test("the header tells whether the canopy holds the tree rows' trees", () => {
+  const points = [{ x: ORIGIN[0] + 1, y: ORIGIN[1] + 2, h: 12 }];
+  const unpack = (bytes: Uint8Array) =>
+    unpackPoints(bytes.buffer.slice(0) as ArrayBuffer);
+  expect(unpack(packPoints(points, ORIGIN, 3))?.flags).toBe(0);
+  expect(unpack(packPoints(points, ORIGIN, 3, ROWS_MEASURED))?.flags).toBe(
+    ROWS_MEASURED
+  );
+});
+
+test("an evergreen pine keeps its form through the pack; a broadleaf never is one", () => {
+  const at = (x: number, properties: CanopyFeature["properties"]) => ({
+    geometry: {
+      type: "Point" as const,
+      coordinates: [412_000 + x, 5_656_000] as [number, number],
+    },
+    properties,
+  });
+  const features: CanopyFeature[] = [
+    at(1, { h: 22, l: "e", pine: 1 }),
+    at(2, { h: 21, l: "e", ls: "dop", pine: 1, c: 1 }),
+    at(3, { h: 19, l: "e" }),
+    // a pine flag on no evergreen is not packed
+    at(4, { h: 12, pine: 1 }),
+  ];
+  const points = features.map(pointOf);
+  expect(canopyStride(points, false)).toBe(5);
+  const unpacked = unpackPoints(toBuffer(packPoints(points, ORIGIN, 5)));
+  const back = unpacked ? pointFeatures(unpacked) : [];
+  expect(back.map((f) => f.properties)).toEqual([
+    { h: 22, l: "e", pine: 1 },
+    { h: 21, l: "e", ls: "dop", c: 1, pine: 1 },
+    { h: 19, l: "e" },
+    { h: 12 },
+  ]);
 });

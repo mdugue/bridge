@@ -22,11 +22,16 @@
  *   as faces over level ground instead of over a ragged slope;
  * - `stairGeometry` builds the flight as solid blocks: a tread per step, a
  *   riser at each step's front and the two side cheeks, reaching below the
- *   bottom landing. Where the bank beside a flight stands above its treads
- *   (a flight cut into a slope), a side is a *Wange* instead: a block as
- *   wide as the burn reaches, topped at the bank's level — a stone coping
- *   along the steps, the rest in the pale ground tone — so the lowered
- *   ground beside the steps never shows as a ragged trench.
+ *   bottom landing, in its material's tone (`STAIR_TONES`). Where the bank
+ *   beside a flight stands above its treads (a flight cut into a slope) and
+ *   an OSM wall or building stands along that side (`walled`, the bake's),
+ *   the side is a *Wange* instead: a block as wide as the burn reaches,
+ *   topped at the bank's level — a stone coping along the steps, the rest
+ *   in the pale ground tone — so the lowered ground beside the steps never
+ *   shows as a ragged trench. Along an open side the bank stays ground (a
+ *   grass bank down to the steps; a 3 m block there stood a wall where
+ *   Meißen's photos show lawn), and a tagged handrail is drawn as a rail
+ *   (`stairRails`).
  *
  * Step k (0-based) spans [k, k+1]·L/n along the axis with its tread at
  * z0 + (k+1)·rise, so the last tread is the top landing and every tread
@@ -41,15 +46,25 @@ import {
   SINK,
 } from "./ground-join";
 import type { StairFeature, TerraceFeature } from "./features";
+import type { FenceLine } from "./fences";
 import type { RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
 import { isInvalidElevation, type TerrainBounds } from "./terrain-geometry";
+import { linearTone, type Masonry, masonryOf } from "./walls";
 
 export interface StairLine {
   /** axis, bottom → top, EPSG coordinates (NOT recentered) */
   coords: Point2[];
+  /** what it is made of (its tone, `STAIR_TONES`) */
+  mat?: Masonry;
   /** number of steps (risers) */
   n: number;
+  /** the handrails to draw, left and right of the climb (`stairRails`) */
+  rail?: [boolean, boolean];
+  /** whether an OSM wall or building stands along the left and the right
+   *  side: only there a side cut into its bank is a Wange (absent: an old
+   *  file, either side may be one) */
+  walled?: [boolean, boolean];
   /** bottom and top landing elevations (m) */
   z: [number, number];
   /** width (m) */
@@ -111,7 +126,22 @@ export function stairLineOf(f: StairFeature): StairLine | null {
   ) {
     return null;
   }
-  return { coords, n: Math.round(p.n), w: p.w, z: [p.z[0], p.z[1]] };
+  const pair = (v: unknown): [boolean, boolean] | undefined =>
+    Array.isArray(v) && v.length === 2
+      ? [v[0] === true, v[1] === true]
+      : undefined;
+  const mat = masonryOf(p.mat);
+  const rail = pair(p.rail);
+  const walled = pair(p.walled);
+  return {
+    coords,
+    n: Math.round(p.n),
+    w: p.w,
+    z: [p.z[0], p.z[1]],
+    ...(mat ? { mat } : {}),
+    ...(rail ? { rail } : {}),
+    ...(walled ? { walled } : {}),
+  };
 }
 
 /** The bake's terrace feature, or null when it is not one. */
@@ -444,6 +474,20 @@ export interface StairGeometryData {
 /** Warm sandstone (sRGB), a shade deeper than the pale ground around a
  *  flight so it never reads as a snow-covered bank. */
 export const STAIR_STONE = 0xc4_b0_90;
+/**
+ * A flight's tone by its material (PR #173, B6), each a shade deeper than
+ * the walls' (lib/city/walls.ts `WALL_TONES`) so the steps read against a
+ * wall of their own stuff: sandstone, concrete's pale grey (most of the
+ * mapped flights: concrete, concrete pavers), dusty brick, a steel stair's
+ * dark grey, timber risers (unpaved steps).
+ */
+export const STAIR_TONES: Readonly<Record<Masonry, number>> = {
+  stone: STAIR_STONE,
+  concrete: 0xbd_ba_b2,
+  brick: 0xb0_88_74,
+  metal: 0x88_8a_8d,
+  wood: 0xa3_8a_6c,
+};
 /** Risers clearly darker than the treads, cheeks between: every step edge
  *  reads, even under a flat, overcast light. */
 const STAIR_SHADE = [1, 0.62, 0.8];
@@ -451,18 +495,14 @@ const STAIR_SHADE = [1, 0.62, 0.8];
  *  (lib/city/landcover.ts), sRGB. */
 const BANK_GROUND = 0xe4_db_cb;
 
-function srgbToLinear(c: number): number {
-  return c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-}
-
-/** Linear RGB per vertex for a flight's `kinds` (the mesh's COLOR_0). */
-export function stairColors(kinds: number[]): Float32Array<ArrayBuffer> {
-  const stone = [16, 8, 0].map((shift) =>
-    srgbToLinear(((STAIR_STONE >> shift) & 0xff) / 255)
-  );
-  const bank = [16, 8, 0].map((shift) =>
-    srgbToLinear(((BANK_GROUND >> shift) & 0xff) / 255)
-  );
+/** Linear RGB per vertex for a flight's `kinds` (the mesh's COLOR_0), in
+ *  its material's tone (`STAIR_TONES`; untagged: sandstone). */
+export function stairColors(
+  kinds: number[],
+  mat?: Masonry
+): Float32Array<ArrayBuffer> {
+  const stone = linearTone(mat ? STAIR_TONES[mat] : STAIR_STONE);
+  const bank = linearTone(BANK_GROUND);
   const out = new Float32Array(kinds.length * 3);
   for (const [i, kind] of kinds.entries()) {
     const shade = STAIR_SHADE[kind] ?? 1;
@@ -800,6 +840,9 @@ export function stairGeometry(
     return g === null ? base : Math.min(base, g - SINK.stair);
   };
   const wangeSide = (a: Section, b: Section, h: number, sd: 1 | -1) => {
+    if (stair.walled && !stair.walled[sd === 1 ? 0 : 1]) {
+      return false; // no wall or building along it: the bank stays ground
+    }
     const ta = bankLevel(a, sd, half, h, surround, walls);
     const tb = bankLevel(b, sd, half, h, surround, walls);
     if (ta === null || tb === null) {
@@ -895,4 +938,55 @@ export function stairGeometry(
     );
   }
   return out.data;
+}
+
+/** How far inside the flight's edge a handrail runs (m). */
+const RAIL_INSET_M = 0.15;
+/** A handrail's height as a fence line (m): its band's top stands 0.9 m
+ *  over the nosings (lib/city/fences.ts `bandHeight`). */
+const RAIL_H = 1.2;
+
+/** The axis offset `d` metres to its left (negative: right), each vertex
+ *  along the mean of its segments' normals. */
+function offsetAxis(coords: Point2[], d: number): Point2[] {
+  return coords.map((p, i) => {
+    const a = coords[Math.max(0, i - 1)];
+    const b = coords[Math.min(coords.length - 1, i + 1)];
+    const [nx, ny] = segmentNormal(a, b);
+    return [p[0] + nx * d, p[1] + ny * d];
+  });
+}
+
+/**
+ * A flight's handrails (`rail`, from its `handrail` tags; pipeline/bake/
+ * stairs.py leaves out a side a mapped fence or handrail runs along) as
+ * fence lines of the `rail` type (lib/city/fences.ts): RAIL_INSET_M inside
+ * each railed edge, standing on the steps' nosing line (`ground`) — the
+ * ground under the flight is burned below its treads. Empty without one.
+ */
+export function stairRails(stair: StairLine): FenceLine[] {
+  const length = arcLengths(stair.coords).at(-1) ?? 0;
+  if (!(stair.rail && length > 0 && stair.n >= 1)) {
+    return [];
+  }
+  const rise = (stair.z[1] - stair.z[0]) / stair.n;
+  const ground = (x: number, y: number): number | null => {
+    const hit = nearestOnAxis(stair.coords, x, y);
+    return hit && hit.d <= stair.w / 2
+      ? rampAt(stair, hit.s, length) + rise
+      : null;
+  };
+  const half = Math.max(stair.w / 2 - RAIL_INSET_M, 0);
+  return ([1, -1] as const).flatMap((side, i) =>
+    stair.rail?.[i]
+      ? [
+          {
+            coords: offsetAxis(stair.coords, side * half),
+            ground,
+            h: RAIL_H,
+            type: "rail" as const,
+          },
+        ]
+      : []
+  );
 }

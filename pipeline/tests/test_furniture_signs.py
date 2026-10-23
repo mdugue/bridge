@@ -1,7 +1,9 @@
 """Plan 030: the street's signs and fixtures, placed on a synthetic street."""
 
+import json
+
 import numpy as np
-from synthetic import local, osm_tile, read, tags, way
+from synthetic import X0, Y0, local, osm_tile, read, tags, way
 
 
 def _street(tmp_path, monkeypatch):
@@ -134,3 +136,52 @@ def test_a_bicycle_stand_in_a_streets_lanes_moves_to_the_kerb(tmp_path, monkeypa
     assert x == 80.0 and 105.0 < y < 107.0  # the nearer, northern kerb
     [bench] = kinds["bench"]
     assert local(bench["geometry"]["coordinates"]) == (40.0, 158.0)
+
+
+def test_a_bench_on_a_bridge_stands_on_its_deck(tmp_path, monkeypatch):
+    """A footbridge north over a river (y 90..110), its deck 104 → 106 m:
+    a bench on it over the water or beside its way over the bank stands on
+    the deck; one under the deck by the path along the bank is left out, as
+    before; a signal on its path stands on the deck too (it was left out);
+    one on the meadow stands on the ground."""
+    from bake import furniture
+
+    cls = np.zeros((200, 200), np.uint8)
+    cls[90:110, :] = 8  # the river: 90 < y <= 110
+    nodes = {
+        1: (100, 80, ""),
+        2: (100, 120, ""),
+        3: (60, 82, ""),
+        4: (140, 82, ""),
+        10: (101, 100, tags(amenity="bench")),  # on the deck, over the water
+        11: (99, 84, tags(amenity="bench")),  # on the deck, over the bank
+        12: (102, 81, tags(amenity="bench")),  # under it, by the bank's path
+        13: (50, 100, tags(amenity="bench")),  # in the river
+        14: (60, 70, tags(amenity="bench")),  # on the meadow
+        15: (100, 96, tags(highway="traffic_signals")),  # on its path, on the deck
+    }
+    ways = way(1, [1, 2], {"highway": "footway", "bridge": "yes"}) + way(
+        2, [3, 4], {"highway": "footway"}
+    )
+    tile = osm_tile(tmp_path, monkeypatch, nodes, ways, classes=cls)
+    ring = [[X0 + x, Y0 + y] for x, y in ((98, 80), (104, 80), (104, 120), (98, 120), (98, 80))]
+    deck = {
+        "type": "Feature",
+        "geometry": {"type": "Polygon", "coordinates": [ring]},
+        "properties": {
+            "kind": "path",
+            "axis": [[X0 + 100, Y0 + 80], [X0 + 100, Y0 + 120]],
+            "line": [104.0 + 0.1 * i for i in range(21)],  # every 2 m
+        },
+    }
+    doc = {"type": "FeatureCollection", "features": [deck]}
+    (tile.data / "dlm" / "bridge_t.geojson").write_text(json.dumps(doc))
+    furniture.run(tile)
+    benches = {
+        local(f["geometry"]["coordinates"]): f["properties"].get("deck")
+        for f in _by_kind(tile)["bench"]
+    }
+    assert benches == {(101.0, 100.0): 105.0, (99.0, 84.0): 104.2, (60.0, 70.0): None}
+    [signal] = _by_kind(tile)["signal"]
+    assert local(signal["geometry"]["coordinates"]) == (100.0, 96.0)
+    assert signal["properties"]["deck"] == 104.8

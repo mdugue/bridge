@@ -214,10 +214,12 @@ export interface Site {
    * What the site takes from Mapillary's street photos (CC BY-SA 4.0, so its
    * credit joins the footer): always the facade readings and shop windows
    * measured in its panoramas (pipeline/bake/facades.py, shopfronts.py);
-   * with `objects`, also the street lamps and litter bins OSM lacks from its
-   * detected objects (pipeline/bake/mapillary.py).
+   * with `objects`, also the street lamps OSM lacks from its detected
+   * objects (pipeline/bake/mapillary.py). `panoramas: false` where
+   * Mapillary has none on the site's tiles (its facade steps then write
+   * empty files): neither the credit nor the sources table names them.
    */
-  mapillary?: { objects: boolean };
+  mapillary?: { objects: boolean; panoramas?: false };
   /**
    * The id of the viewpoint the player starts at. It must lie on the first
    * tile: that one is always streamed (the lite profile streams it alone)
@@ -335,7 +337,7 @@ export function siteCredit(site: Site): string {
   const parts = [...byLicence].map(([licence, holders]) =>
     licence ? `${holders.join(", ")} (${licence})` : holders.join(", ")
   );
-  return [...parts, "© OpenStreetMap (ODbL)"].join(" · ");
+  return [...parts, GLO30_SHORT_CREDIT, "© OpenStreetMap (ODbL)"].join(" · ");
 }
 
 /** The daily curve the traffic keeps its hours by (lib/city/
@@ -345,22 +347,40 @@ export const TRAFFIC_HOURS_CREDIT =
 export const TIMETABLE_CREDIT =
   "Straßenbahn-Fahrplan: DELFI e.V. via gtfs.de, CC BY 4.0";
 
-/** The credit of Mapillary's lamps and bins and the shopfronts measured in
+/** The credit of Mapillary's lamps and the shopfronts measured in
  *  its street photos (`Site.mapillary` with `objects`). */
-export const MAPILLARY_CREDIT =
-  "Lampen, Mülleimer, Schaufenster: Mapillary, CC BY-SA 4.0";
-/** The credit where only the panoramas are measured (no lamps and bins). */
+export const MAPILLARY_CREDIT = "Lampen, Schaufenster: Mapillary, CC BY-SA 4.0";
+/** The credit where the lamps are taken but no panorama is measured. */
+export const MAPILLARY_LAMP_CREDIT = "Lampen: Mapillary, CC BY-SA 4.0";
+/** The credit where only the panoramas are measured (no lamps). */
 export const MAPILLARY_SHOPFRONT_CREDIT =
   "Fassaden, Schaufenster: Mapillary, CC BY-SA 4.0";
+
+/** The land beyond every site's tiles (the far horizon and the valley
+ *  rim of the sky-view bake, `pipeline/bake/glo30.py`): the notice the
+ *  Copernicus DEM licence prescribes for modified data (Art. 6(b)), in its
+ *  own words; its liability sentence is in NOTICE and the guide. */
+export const GLO30_CREDIT =
+  "Gelände im Umland: produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved";
+/** The same in the footer's short credit. */
+export const GLO30_SHORT_CREDIT = "Copernicus WorldDEM-30 (© DLR, Airbus DS)";
+
+/** The trees' year (lib/city/tree-season.ts: the leaf-out, autumn and leaf
+ *  fall days, and each city's shift from Dresden's): read off the
+ *  Deutscher Wetterdienst's phenology reporters, on every site. */
+export const PHENOLOGY_CREDIT =
+  "Laubzeiten der Bäume: Deutscher Wetterdienst, dl-de/by-2-0";
 
 /** The site's Mapillary credit line, when it takes anything from it. */
 export function mapillaryCredit(site: Site): string[] {
   if (!site.mapillary) {
     return [];
   }
-  return [
-    site.mapillary.objects ? MAPILLARY_CREDIT : MAPILLARY_SHOPFRONT_CREDIT,
-  ];
+  const { objects, panoramas } = site.mapillary;
+  if (!objects) {
+    return [MAPILLARY_SHOPFRONT_CREDIT];
+  }
+  return [panoramas === false ? MAPILLARY_LAMP_CREDIT : MAPILLARY_CREDIT];
 }
 
 /** The credits of the site's registers and data layers, each a
@@ -373,6 +393,7 @@ function dataCredits(site: Site): string[] {
     ...(layers?.traffic ? [layers.traffic.credit, TRAFFIC_HOURS_CREDIT] : []),
     ...(layers?.bikes ? [layers.bikes.credit] : []),
     ...(layers?.trams ? [TIMETABLE_CREDIT] : []),
+    PHENOLOGY_CREDIT,
   ];
 }
 
@@ -390,6 +411,8 @@ export function siteAttribution(site: Site): string[] {
     ...(site.treeCadastre ? [treeCredit(site.treeCadastre)] : []),
     ...mapillaryCredit(site),
     ...(data.length > 0 ? [data.join(" · ")] : []),
+    PHENOLOGY_CREDIT,
+    GLO30_CREDIT,
   ];
 }
 

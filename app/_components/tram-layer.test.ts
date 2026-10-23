@@ -11,7 +11,7 @@ import { CONTACT_WIRE_M, RAIL_TOP_M } from "@/lib/city/tram";
 import type { Instances } from "./instancing";
 import { deckLift } from "@/lib/city/decks";
 import { buildDeckTable } from "./rail-layer";
-import { buildTram } from "./tram-layer";
+import { buildTram, lawnHalves } from "./tram-layer";
 
 const ctx: GroundContext = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
 
@@ -152,4 +152,136 @@ test("a tram stop stands the furniture layer's stop sign", () => {
   const [sign] = (stops?.children ?? []) as Instances[];
   expect(sign.name).toBe("furniture-stop");
   expect(sign.drawCount).toBe(1);
+});
+
+/** A lawn track along y = `y` (projected), 60 m long. */
+const lawnAt = (y: number): TramFeature => ({
+  geometry: {
+    type: "LineString",
+    coordinates: [
+      [0, y],
+      [60, y],
+    ],
+  },
+  properties: { k: "track", bed: "grass", s: [30] },
+});
+
+/** The lawn's extent across (world z = −y) and its area. */
+const lawnSpan = (group: ReturnType<typeof buildTram>) => {
+  const meshes = named(group, "tram-track");
+  // the rails' strips are 0.15 m wide; the lawn is the widest
+  const lawn = meshes
+    .map((m) => {
+      m.geometry.computeBoundingBox();
+      const b = m.geometry.boundingBox;
+      return { m, w: b ? b.max.z - b.min.z : 0, b };
+    })
+    .sort((a, b) => b.w - a.w)[0];
+  return lawn.b;
+};
+
+test("a double lawn track shares one lawn, its inner edges at the midpoint", () => {
+  // axes 3.4 m apart: each strip reaches 1.7 m inward, 1.3 m outward
+  const group = buildTram([lawnAt(0), lawnAt(3.4)], [], ctx);
+  const b = lawnSpan(group);
+  expect(b?.min.z).toBeCloseTo(-3.4 - 1.3, 3);
+  expect(b?.max.z).toBeCloseTo(1.3, 3);
+  const pos = named(group, "tram-track")
+    .map((m) => m.geometry.getAttribute("position"))
+    .find((p) => {
+      for (let i = 0; i < p.count; i++) {
+        if (Math.abs(p.getZ(i) + 1.7) < 0.02) {
+          return true;
+        }
+      }
+      return false;
+    });
+  // both strips reach the midpoint (z = −1.7), no road between them
+  expect(pos).toBeDefined();
+});
+
+test("a lawn track's next piece, end to end, is no neighbour", () => {
+  // one track split into two ways at x 30, its points every 2 m
+  const run = (x0: number) => ({
+    d: Array.from({ length: 16 }, (_, k) => k * 2),
+    pts: Array.from({ length: 16 }, (_, k) => ({
+      x: x0 + k * 2,
+      y: 100,
+      z: 0,
+    })),
+  });
+  for (const h of lawnHalves([run(0), run(32)])) {
+    expect(h.left.every((w) => w === 1.3)).toBe(true);
+    expect(h.right.every((w) => w === 1.3)).toBe(true);
+    expect(h.sharedLeft.concat(h.sharedRight).some(Boolean)).toBe(false);
+  }
+});
+
+test("lawn tracks further apart than 4.5 m keep their own strips", () => {
+  const [a, b] = lawnHalves([
+    {
+      d: [0, 60],
+      pts: [
+        { x: 0, y: 100, z: 0 },
+        { x: 60, y: 100, z: 0 },
+      ],
+    },
+    {
+      d: [0, 60],
+      pts: [
+        { x: 0, y: 100, z: -6 },
+        { x: 60, y: 100, z: -6 },
+      ],
+    },
+  ]);
+  expect(a.left).toEqual([1.3, 1.3]);
+  expect(a.right).toEqual([1.3, 1.3]);
+  expect(b.sharedLeft.concat(b.sharedRight)).toEqual([
+    false,
+    false,
+    false,
+    false,
+  ]);
+  const [c, d] = lawnHalves([
+    {
+      d: [0, 60],
+      pts: [
+        { x: 0, y: 100, z: 0 },
+        { x: 60, y: 100, z: 0 },
+      ],
+    },
+    {
+      d: [0, 60],
+      pts: [
+        { x: 60, y: 100, z: -4 },
+        { x: 0, y: 100, z: -4 },
+      ],
+    },
+  ]);
+  // the strips meet at z = −2 whichever way each runs (here each finds the
+  // other on its right, the side −n of the ribbons' normal (−tz, tx))
+  expect(c.right[0]).toBeCloseTo(1.99, 5);
+  expect(c.left[0]).toBe(1.3);
+  expect(c.sharedRight).toEqual([true, true]);
+  expect(d.right[0]).toBeCloseTo(1.99, 5);
+});
+
+test("a pole the bake placed stands like a mapped mast", () => {
+  const pole = (x: number, y: number): TramFeature => ({
+    geometry: { type: "Point", coordinates: [x, y] },
+    properties: { k: "pole" },
+  });
+  const group = buildTram(
+    [
+      track("street"),
+      pole(30, -8),
+      { ...pole(30, 8), properties: { k: "pole", lamp: 1 } },
+    ],
+    [],
+    ctx
+  );
+  const [masts] = group.children.filter(
+    (c) => c.name === "tram-masts"
+  ) as Instances[];
+  expect(masts.drawCount).toBe(2);
 });

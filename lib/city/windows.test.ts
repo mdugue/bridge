@@ -10,6 +10,11 @@ import {
   FACADE_SCALE_M,
   type FacadeModel,
   facadeAttribute,
+  flatTownHouse,
+  NEAR_M,
+  slotWallEave,
+  WALL_EAVE,
+  wallEaveSlot,
   wallRises,
   groundLift,
   NO_DOOR,
@@ -108,6 +113,22 @@ test("a building's type: roof, eave, storey", () => {
   expect(windowType(false, 5, 2.5)).toBe("house");
   expect(windowType(false, 16, 4)).toBe("tall");
   expect(windowType(false, 12, 3)).toBe("storey");
+  // a flat-roofed town house (G10): the tall type, not the block's
+  expect(windowType(true, 20, 3.6, true)).toBe("tall");
+});
+
+test("a flat-roofed town house: housing from 9 m, listed or storeys from 3.4 m", () => {
+  const house = { eaveH: 14, fn: "31001_1000", listed: false };
+  expect(flatTownHouse({ ...house, storeyH: 3.6 })).toBe(true);
+  expect(flatTownHouse({ eaveH: 12, listed: true, storeyH: 2.9 })).toBe(true);
+  expect(flatTownHouse({ ...house, storeyH: 3 })).toBe(false);
+  // a one-storey annex among tall storeys is no town house
+  expect(flatTownHouse({ ...house, eaveH: 3.6, storeyH: 3.6 })).toBe(false);
+  // an office block or a factory hall is no town house, however tall
+  expect(
+    flatTownHouse({ ...house, fn: "31001_2020", listed: true, storeyH: 4 })
+  ).toBe(false);
+  expect(flatTownHouse({ ...house, fn: "31001_3010", storeyH: 4 })).toBe(false);
 });
 
 test("the storey snaps to a whole number under the eave", () => {
@@ -124,6 +145,10 @@ test("garages, sheds and plants have no windows", () => {
   expect(windowless("31001_2723")).toBe(true);
   expect(windowless("31001_1000")).toBe(false);
   expect(windowless(undefined)).toBe(false);
+  // no structure has any: a tank, a silo, a crane, a chimney, a mast
+  for (const fn of ["51002_1201", "51003_1210", "51006_1400", "53001_1800"]) {
+    expect(windowless(fn)).toBe(true);
+  }
 });
 
 describe("windowSpecs", () => {
@@ -138,8 +163,8 @@ describe("windowSpecs", () => {
     const hosts = [
       host({ root: 0 }),
       host({ root: 0, centre: [5, 0] }),
-      host({ root: 2, centre: [60, 0] }),
-      host({ root: 3, centre: [400, 0] }),
+      host({ root: 2, centre: [NEAR_M - 5, 0] }),
+      host({ root: 3, centre: [NEAR_M + 30, 0] }),
     ];
     const [a, b, c, d] = windowSpecs(
       hosts,
@@ -164,6 +189,52 @@ describe("windowSpecs", () => {
     // beyond NEAR_M: the type's rhythm
     expect(d.from).toBe("type");
     expect(d.spec.axis).toBe(TYPES[windowType(false, 15, d.storey)].axis);
+  });
+
+  test("a neighbour lends its rhythm within NEAR_M only (G14)", () => {
+    // 60 m off: the next block's, once lent from 150 m, now the type's
+    const [, far] = windowSpecs(
+      [host(), host({ root: 1, centre: [60, 0] })],
+      [measured("a")],
+      index
+    );
+    expect(NEAR_M).toBe(30);
+    expect(far.from).toBe("type");
+  });
+
+  test("a frame only on rendered walls, never on brick (G12)", () => {
+    const [render, brick] = windowSpecs(
+      [
+        host({ eaveH: 16, storeyH: 4 }),
+        host({ root: 1, centre: [400, 0], eaveH: 16, storeyH: 4, brick: true }),
+      ],
+      [],
+      index
+    );
+    expect(TYPES.tall.frame).toBe(true);
+    expect(unpackStyle(render.spec.style).frame).toBe(true);
+    expect(unpackStyle(brick.spec.style).frame).toBe(false);
+  });
+
+  test("a flat-roofed town house takes the tall type (G10)", () => {
+    const [block, town] = windowSpecs(
+      [
+        host({ eaveH: 18, storeyH: 3.6, flat: true }),
+        host({
+          root: 1,
+          centre: [400, 0],
+          eaveH: 18,
+          storeyH: 3.6,
+          flat: true,
+          town: true,
+        }),
+      ],
+      [],
+      index
+    );
+    expect(block.spec.axis).toBe(TYPES.block.axis);
+    expect(town.spec.axis).toBe(TYPES.tall.axis);
+    expect(unpackStyle(town.spec.style).frame).toBe(true);
   });
 
   test("a neighbour lends only to its own roof form and about its eave", () => {
@@ -517,12 +588,40 @@ describe("facadeAttribute", () => {
     for (const drawn of [true, false]) {
       const f = facadeAttribute(mesh, () => drawn);
       expect(f[4 * 24 + 2]).toBe(Math.round(32_767 * FACADE_ROOF));
-      expect(f[4 * 24 + 3]).toBe(Math.round(32_767 * NO_DOOR));
+      // no colour of its own: the object's
+      expect([f[4 * 24], f[4 * 24 + 1], f[4 * 24 + 3]]).toEqual([0, 0, 0]);
       // no wall vertex reads as one
       for (let v = 0; v < 24; v++) {
         expect(f[4 * v + 2]).toBe(Math.round(32_767 * NO_DOOR));
       }
     }
+  });
+
+  test("a roof vertex carries its face's own colour in its wall slots", () => {
+    const mesh = quads([
+      ...boxWalls(0, 0, 0, 14, 10, 12),
+      {
+        object: 0,
+        roof: true,
+        pts: [
+          [0, 0, 12],
+          [14, 0, 12],
+          [14, 10, 12],
+          [0, 10, 12],
+        ],
+      },
+    ]);
+    const roofRgb = new Float32Array(3 * 30).fill(Number.NaN);
+    roofRgb.set([0.5, 0.25, 0], 3 * 24);
+    const f = facadeAttribute({ ...mesh, roofRgb }, () => true);
+    expect(f[4 * 24] / 32_767).toBeCloseTo(0.5, 4);
+    expect(f[4 * 24 + 1] / 32_767).toBeCloseTo(0.25, 4);
+    expect(f[4 * 24 + 2]).toBe(Math.round(32_767 * FACADE_ROOF));
+    expect(f[4 * 24 + 3]).toBe(0);
+    // the next roof vertex has none: the object's
+    expect(f[4 * 25]).toBe(0);
+    // a wall vertex keeps its place on the wall
+    expect(f[2]).toBe(Math.round(32_767 * NO_DOOR));
   });
 
   test("a door's place and width on its wall, a shopfront's wall negative", () => {
@@ -562,9 +661,11 @@ describe("facadeAttribute", () => {
     ]);
     expect(metres(three[1])).toBeCloseTo(-14, 1);
     // its first slot holds the ground in front (not known here: 0), as on
-    // a shopfront's wall; the second the next door to the middle
+    // a shopfront's wall; the second, with no window to keep off a door,
+    // the wall's own eave (the object's here: no door's code)
     expect(metres(three[2])).toBeCloseTo(0, 9);
-    expect(Math.abs(slotDoor(three[3])?.at ?? 0)).toBeCloseTo(4, 9);
+    expect(three[3]).toBe(Math.round(32_767 * NO_DOOR));
+    expect(slotDoor(three[3])).toBeUndefined();
   });
   test("a wall the ground rises past its reach: signed, its ground kept", () => {
     const mesh = quads(boxWalls(0, 0, 0, 14, 10, 12));
@@ -579,6 +680,84 @@ describe("facadeAttribute", () => {
     // the south wall keeps its ground floor and its door slot
     expect(metres(f[1])).toBeCloseTo(14, 1);
     expect(f[2]).toBe(Math.round(32_767 * NO_DOOR));
+  });
+});
+
+describe("a wall's own eave (G22)", () => {
+  test("codes over the doors' and under no door, a decimetre a step", () => {
+    expect(wallEaveSlot(0)).toBe(Math.round(32_767 * NO_DOOR));
+    expect(wallEaveSlot(0.04)).toBe(Math.round(32_767 * NO_DOOR));
+    expect(wallEaveSlot(6.2)).toBe(WALL_EAVE.code0 + 62);
+    expect(slotWallEave(wallEaveSlot(6.2))).toBeCloseTo(6.2, 9);
+    // capped below no door
+    expect(wallEaveSlot(999)).toBe(WALL_EAVE.top);
+    expect(WALL_EAVE.top).toBeLessThan(32_767);
+    // over every door code (#146's at 0.1 m: place·12 + width, ±270 m)
+    expect(WALL_EAVE.code0).toBeGreaterThan(2700 * 12 + 11);
+    // a door's code and no door read as no eave of its own
+    expect(slotWallEave(12_000)).toBe(0);
+    expect(slotWallEave(32_767)).toBe(0);
+  });
+
+  test("each wall carries its eave over the object's in its second slot", () => {
+    // a block 12 m high whose north half rises to 18 m: the wall to the
+    // north stands 6 m over the object's eave (its lowest roof)
+    const walls = boxWalls(0, 0, 0, 14, 10, 12);
+    walls[2] = {
+      object: 0,
+      pts: [
+        [14, 10, 0],
+        [0, 10, 0],
+        [0, 10, 18],
+        [14, 10, 18],
+      ],
+    };
+    const mesh = quads(walls);
+    const heights = { of: () => ({ base: 0, eave: 12 }) };
+    const f = facadeAttribute(mesh, () => true, [], [], undefined, heights);
+    // the south wall stands at the object's eave: none of its own
+    expect(f[3]).toBe(Math.round(32_767 * NO_DOOR));
+    // the north wall (vertices 12–17), 6 m over
+    expect(slotWallEave(f[4 * 12 + 3])).toBeCloseTo(6, 1);
+    // without heights, as before
+    const plain = facadeAttribute(mesh, () => true);
+    expect(plain[4 * 12 + 3]).toBe(Math.round(32_767 * NO_DOOR));
+  });
+
+  test("a low house's party wall is blank only up to its neighbour's top (G16)", () => {
+    // a 9 m house against a 4 m one: its wall above the neighbour is a
+    // facade again; against an 8 m one too little is left: blank
+    for (const [nb, open] of [
+      [4, true],
+      [8, false],
+    ] as const) {
+      const mesh = quads([
+        ...boxWalls(0, 0, 0, 10, 10, 9),
+        ...boxWalls(1, 10, 0, 20, 10, nb),
+      ]);
+      const heights = {
+        of: (o: number) => ({ base: 0, eave: o === 0 ? 9 : nb }),
+      };
+      const f = facadeAttribute(mesh, () => true, [], [], undefined, heights);
+      // object 0's east wall (x = 10)
+      const length = metres(f[4 * 6 + 1]);
+      if (open) {
+        // negative: no window under the height in its first door slot
+        expect(length).toBeCloseTo(-10, 1);
+        expect(metres(f[4 * 6 + 2])).toBeCloseTo(nb, 1);
+      } else {
+        expect(f[4 * 6 + 1]).toBe(0);
+      }
+    }
+    // a taller house's party wall stays blank, whatever is beside it
+    const mesh = quads([
+      ...boxWalls(0, 0, 0, 10, 10, 15),
+      ...boxWalls(1, 10, 0, 20, 10, 4),
+    ]);
+    const f = facadeAttribute(mesh, () => true, [], [], undefined, {
+      of: (o: number) => ({ base: 0, eave: o === 0 ? 15 : 4 }),
+    });
+    expect(f[4 * 6 + 1]).toBe(0);
   });
 });
 

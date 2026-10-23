@@ -1,12 +1,16 @@
 import { expect, test } from "bun:test";
+import { SITES } from "@/sites";
 import {
   bloomAt,
+  climateDay,
   dayOfYear,
   PHENOLOGY,
   phenologyOf,
   SEASON_JITTER_DAYS,
+  SITE_SEASON,
   seasonAt,
   seasonJitter,
+  seasonShiftFor,
   TREE_GENERA,
 } from "./tree-season";
 
@@ -137,4 +141,49 @@ test("flowering trees bloom in their span and nowhere else", () => {
   expect(bloomAt(span[0] + 2, cherry, 4)).toBeLessThan(
     bloomAt(span[0] + 2, cherry)
   );
+});
+
+test("every site has its climate's shift, and Dresden's is none", () => {
+  expect(Object.keys(SITE_SEASON).toSorted()).toEqual(
+    Object.keys(SITES).toSorted()
+  );
+  expect(SITE_SEASON.dresden).toEqual({ spring: 0, autumn: 0 });
+  for (const { spring, autumn } of Object.values(SITE_SEASON)) {
+    expect(Math.abs(spring)).toBeLessThanOrEqual(10);
+    expect(Math.abs(autumn)).toBeLessThanOrEqual(10);
+  }
+  expect(seasonShiftFor("atlantis")).toEqual({ spring: 0, autumn: 0 });
+});
+
+test("a city's day is Dresden's shifted by its spring and its autumn", () => {
+  const none = { spring: 0, autumn: 0 };
+  for (const d of [0, 59.5, 120, 200, 300, 364.9]) {
+    expect(climateDay(d, none)).toBeCloseTo(d, 9);
+  }
+  // Unna's spring comes six days early: its 10 April is Dresden's 16 April
+  const unna = SITE_SEASON.unna;
+  expect(climateDay(99, unna)).toBe(105);
+  // Hamburg colours five days late: its 15 October is Dresden's 10 October
+  expect(climateDay(287, SITE_SEASON.hamburg)).toBe(282);
+  // between the knots the shift runs over; the day never runs backwards
+  for (const shift of Object.values(SITE_SEASON)) {
+    let last = climateDay(0, shift);
+    for (let d = 0.5; d < 365; d += 0.5) {
+      const next = climateDay(d, shift);
+      const step = (((next - last) % 365) + 365) % 365;
+      expect(step).toBeGreaterThan(0.3);
+      expect(step).toBeLessThan(0.7);
+      last = next;
+    }
+  }
+});
+
+test("a birch turns and drops when DWD's reporters saw it around Dresden", () => {
+  const birch = TREE_GENERA.indexOf("Betula");
+  // half coloured and half bare about two weeks later than the table had it
+  expect(seasonAt(284, birch).autumn).toBeLessThan(0.05);
+  expect(seasonAt(296, birch).autumn).toBeGreaterThan(0.4);
+  expect(seasonAt(296, birch).leaf).toBe(1);
+  expect(seasonAt(312, birch).leaf).toBeCloseTo(0.5, 1);
+  expect(seasonAt(330, birch).leaf).toBe(0);
 });

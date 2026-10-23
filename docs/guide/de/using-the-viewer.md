@@ -273,16 +273,18 @@ keine Geschosszeile.
 
 Unter **Daten** (eingeklappt am Ende der Karte) steht, wie der Viewer das
 Gebäude zeichnet, Wert für Wert: Geschosse, Material und Grundton der
-Fassade, die Fenster, Sockel und Gesimse, Haustüren, Schaufenster,
-Gauben, die Dachfarbe, das Abendlicht und ob es ein Wahrzeichen ist. Jeder
+Fassade, die Fenster, Sockel und Gesimse, Haustüren, Durchgänge,
+Schaufenster, Gauben, die Dachfarbe, das Abendlicht und ob es ein Wahrzeichen ist. Jeder
 Wert nennt seine Quelle (etwa *Material Glas — OpenStreetMap ·
 building:material*), trägt das Abzeichen, wie der Viewer zu ihm kam, und
 verlinkt, wo es geht, auf die Stelle: die OpenStreetMap-Objekte dort, die
 Straßenfotos bei Mapillary, den Wikidata-Eintrag. Hier stehen auch
 Geschätztes und Angenommenes, ausdrücklich als solches markiert (*≈
 angenommen*): etwa Geschosse, die aus der Höhe geschätzt sind, oder
-Fenster nach dem Typ des Hauses, wo keine Fotos sie gemessen haben. Bei
-einem Gebäude aus mehreren Teilen gilt das für den angeklickten Teil.
+*Geschosse: von der Traufe gezählt, in der Geschosshöhe der kartierten
+Nachbarhäuser* (Quelle OpenStreetMap), oder Fenster nach dem Typ des
+Hauses, wo keine Fotos sie gemessen haben. Bei einem Gebäude aus mehreren
+Teilen gilt das für den angeklickten Teil.
 
 Bäume, Denkmale und Brunnen und Brücken antworten genauso. Was du
 gefragt hast, umrahmt eine weiche pinke Linie auf einem hellen Saum —
@@ -379,8 +381,9 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
     wie die Räder der letzten Stunde je Richtung; darunter die Liste der
     Zählstellen mit ihren Zahlen, ein Klick fliegt hin;
   - *Straßenbahnen (Fahrplan)*: jede Straßenbahn der Stadt, wie der Fahrplan sie zur
-    eingestellten Zeit fahren lässt, mit einer Lichtspur dahinter — die
-    Zeit läuft von dort an weiter;
+    eingestellten Zeit fahren lässt, jede in den Farben und der Länge ihres
+    Betreibers, mit einer Lichtspur dahinter — die Zeit läuft von dort an
+    weiter;
     darunter, wie viele gerade unterwegs sind.
 
   Aus der Luft werden Ströme, Säulen und Spuren breiter und satter, damit
@@ -451,7 +454,7 @@ Code und Wissensbasis für sie verwenden:
 | | *Abendlicht* | nach Einbruch der Dunkelheit: ein Viertel der Fenster leuchtet warm, Läden und öffentliche Bauten werden von Lichtkegeln am Fuß der Fassade angestrahlt, manche Wahrzeichen von ungleichmäßigem Flutlicht bis zur Traufe — die Wände selbst leuchten nie |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
-| | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet wie Wiese, aus dem Infrarot-Luftbild |
+| | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet und die grünen Bahnböschungen wie Wiese, aus dem Infrarot-Luftbild |
 | | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
 | | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |
 | | *Blattdurchscheinen* | Durchleuchtung naher, großer Kronen (schattenabhängig) |

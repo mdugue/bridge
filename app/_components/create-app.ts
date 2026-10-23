@@ -125,6 +125,7 @@ import { trafficMesh } from "./traffic-flow";
 import { createCityCollider } from "./collision";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
+import { climateDay, seasonShiftFor } from "@/lib/city/tree-season";
 import {
   fetchOptionalJson,
   fetchRequiredJson,
@@ -138,7 +139,11 @@ import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
 import { createLantern, invalidateLanternShadow } from "./lantern";
-import { setFountainNight, setFountainTime } from "./monument-layer";
+import {
+  setFountainNight,
+  setFountainSeason,
+  setFountainTime,
+} from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
 import type { TramCarsStatus } from "./tram-cars";
@@ -1341,8 +1346,12 @@ async function bootApp(
   let compileWith: PostStack["compile"] | null = null;
   // The trees follow the scene's calendar day (crown-season.ts): colour and
   // leaf cover are rewritten on a change of day, never per frame, and a
-  // crown that changed redraws the shadow map.
-  const seasonClock = createSeasonClock(opts.initialDate, (day) => {
+  // crown that changed redraws the shadow map. The day is the one of
+  // Dresden's year (the phenology table's) that looks like it in this
+  // city's climate (tree-season.ts SITE_SEASON).
+  const climate = seasonShiftFor(opts.site.id);
+  const seasonClock = createSeasonClock(opts.initialDate, (calendar) => {
+    const day = climateDay(calendar, climate);
     let changed = false;
     for (const d of stream.dressings) {
       changed = (d.vegetation?.setSeason(day) ?? false) || changed;
@@ -1428,7 +1437,7 @@ async function bootApp(
       cacheBytes: tileCacheBytesFor(budget.tier, budget.safety),
       ground,
       night: () => currentNight,
-      season: () => seasonClock.day(),
+      season: () => climateDay(seasonClock.day(), climate),
       offset,
       onChange: queueChange,
       renderer,
@@ -1617,6 +1626,7 @@ async function bootApp(
     lampLights.setNightFactor(state.nightFactor);
     lantern.setNight(state.nightFactor);
     setFountainNight(state.nightFactor);
+    setFountainSeason(date);
     setFurnitureNight(state.nightFactor);
     setClockTime(date);
     clayNight.value = state.nightFactor;
@@ -2007,7 +2017,12 @@ async function bootApp(
     // a stand-in: the scene's surface anywhere inside it is the thing; the
     // counters' columns are glass, which writes no depth
     return {
-      positions: solidShape(solids, target.kind === "tree" && target.conifer),
+      // a tree drawn as the cone outlined as one (not a pine or a yew)
+      positions: solidShape(
+        solids,
+        (target.kind === "tree" || target.kind === "canopy") &&
+          target.cone === true
+      ),
       reach:
         target.kind === "bikes"
           ? Number.POSITIVE_INFINITY

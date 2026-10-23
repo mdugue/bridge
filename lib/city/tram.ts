@@ -26,11 +26,14 @@ export const SPAN_CLEARANCE_M = 0.5;
 export const MAST_HEIGHT_M = 7.5;
 
 /** Rail top above the ground (m) by bed: grooved rail flush with the road,
- *  a lawn and ballast lift it. */
+ *  a lawn and ballast lift it. The DGM already holds a ballast bed's
+ *  surface (on Dresden's tram ballast it lies 0.07 m under the ground 5 m
+ *  out), so the rail head stands a rail and a sleeper's top over it, as
+ *  the main line's do (rail-layer.ts RAIL_RAISE). */
 export const RAIL_TOP_M: Record<TramBed, number> = {
   street: 0.02,
   grass: 0.15,
-  ballast: 0.25,
+  ballast: 0.17,
 };
 /** Rail top above a bridge deck (m): the decks are paved. */
 export const RAIL_TOP_ON_DECK_M = 0.02;

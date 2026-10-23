@@ -35,9 +35,17 @@ import type {
 import { orchardTrees, vineRows } from "@/lib/city/cultivated";
 import type { LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
-import { pointFeatures, unpackPoints } from "@/lib/city/point-pack";
+import {
+  pointFeatures,
+  ROWS_MEASURED,
+  unpackPoints,
+} from "@/lib/city/point-pack";
 import { type SportTable, sportFixtures } from "@/lib/city/sport";
-import { offMonuments, type TreeVeto } from "@/lib/city/tree-placement";
+import {
+  offMonuments,
+  plantedRows,
+  type TreeVeto,
+} from "@/lib/city/tree-placement";
 import { unpackCrowns } from "@/lib/city/coarse-crowns";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
@@ -1076,16 +1084,21 @@ async function buildDressing(
   };
   // The canopy points come packed (lib/city/point-pack.ts, prepare-data.ts):
   // no parse, the same features for the vegetation. Not a pack = off.
+  // whether the canopy holds the tree rows' trees (point-pack.ts)
+  let rowsMeasured = false;
   const getPoints = async (
     kind: "canopy" | "canopyx"
   ): Promise<CanopyExtraFeature[]> => {
     const file = d[kind];
     const buffer = file ? await fetchOptionalBinary(url(file), signal) : null;
     const points = buffer ? unpackPoints(buffer) : null;
+    if (kind === "canopy" && points) {
+      rowsMeasured = (points.flags & ROWS_MEASURED) !== 0;
+    }
     return points ? (pointFeatures(points) as CanopyExtraFeature[]) : [];
   };
   const {
-    rows,
+    rows: mappedRows,
     canopy,
     ndviAt,
     lamps: osmLamps,
@@ -1135,6 +1148,9 @@ async function buildDressing(
     river: get<RiversideFeature>("riverside"),
     traffic: get<TrafficFeature>("traffic"),
   });
+  // A canopy that holds its tile's tree rows' trees (DOM1's crown peaks
+  // along them) leaves only the hedges to be planted from the rows.
+  const rows = plantedRows(mappedRows, rowsMeasured);
   const fromMapillary = mapillaryParts(mly);
   const lamps = [...osmLamps, ...fromMapillary.lamps];
   const furniture = [...osmFurniture, ...fromMapillary.furniture];

@@ -73,8 +73,45 @@ test("a surface-model crown answers with its measured height", () => {
   expect(asked?.kind).toBe("canopy");
   if (asked?.kind === "canopy") {
     expect(asked.source).toBe("dom");
-    expect(asked.height).toBe(f.properties?.h);
+    // kept packed as a float32
+    expect(asked.height).toBeCloseTo(f.properties?.h ?? Number.NaN, 5);
   }
+});
+
+test("an evergreen crown is outlined as the cone, a pine's not, and the pine's crown starts high", () => {
+  const crown = (x: number, extra: Partial<CanopyFeature["properties"]>) =>
+    ({
+      geometry: { type: "Point", coordinates: [412_500 + x, 5_656_500] },
+      properties: { h: 18, ...extra },
+    }) as CanopyFeature;
+  const canopy = [
+    crown(0, {}),
+    crown(30, { l: "e" }),
+    crown(60, { l: "e", pine: 1 }),
+  ];
+  const own = moreSets({ ...features, canopy, scan: [], rows: [] }, ctx);
+  const asked = canopy.map((f) => {
+    const [x, y] = f.geometry.coordinates;
+    const w = epsgToWorld(x, y, offset);
+    return hitsInSets({ x: w.x, y: 200, z: w.z }, down, own, 1000).find(
+      (h) => h.target.kind === "canopy"
+    );
+  });
+  expect(
+    asked.map((h) => h?.target.kind === "canopy" && h.target.cone === true)
+  ).toEqual([false, true, false]);
+  // a level ray 8.2 m up meets the broadleaf's crown (from 6.6 m) at its
+  // rim, the pine (its crown from 0.55 H, 9.9 m) only at its stem
+  const across = [0, 60].map((dx) => {
+    const w = epsgToWorld(412_500 + dx - 20, 5_656_500, offset);
+    return hitsInSets(
+      { x: w.x, y: 110 + 8.2, z: w.z },
+      { x: 1, y: 0, z: 0 },
+      own,
+      25
+    ).find((h) => h.target.kind === "canopy")?.distance;
+  });
+  expect((across[1] ?? 0) - (across[0] ?? 0)).toBeGreaterThan(2);
 });
 
 test("a crown a register's tree stands on is left to the register", () => {
@@ -151,4 +188,80 @@ test("a landing stage on the river answers with its kind", () => {
     1000
   );
   expect(hits.some((h) => h.target.kind === "landing")).toBe(true);
+});
+
+test("a lamp or a bench on a bridge is asked on its deck, a wall lantern at its head", () => {
+  const pt = (x: number, y: number) => ({
+    type: "Point" as const,
+    coordinates: [x, y] as [number, number],
+  });
+  const own = moreSets(
+    {
+      canopy: [],
+      scan: [],
+      rows: [],
+      hedges: [],
+      river: [],
+      trams: [],
+      lamps: [
+        { geometry: pt(412010, 5656020), properties: { h: 5, deck: 125 } },
+        {
+          geometry: pt(412030, 5656020),
+          properties: { h: 3.5, wall: [412030, 5656020.5] },
+        },
+      ],
+      furniture: [
+        {
+          geometry: pt(412050, 5656020),
+          properties: { k: "bench", deck: 125 },
+        },
+      ],
+    },
+    ctx
+  );
+  // a ray along the street at height y (m), from the west
+  const along = (y: number, x: number) => {
+    const w = epsgToWorld(x - 5, 5656020, offset);
+    return nearestInSets({ x: w.x, y, z: w.z }, { x: 1, y: 0, z: 0 }, own, 10)
+      ?.target.kind;
+  };
+  expect(along(127, 412010)).toBe("lamp"); // the post on the deck
+  expect(along(112, 412010)).toBeUndefined(); // nothing on the ground below
+  expect(along(113.4, 412030)).toBe("lamp"); // the lantern's head
+  expect(along(111, 412030)).toBeUndefined(); // no post under it
+  expect(along(125.5, 412050)).toBe("furniture");
+  expect(along(110.5, 412050)).toBeUndefined();
+});
+
+test("a tall mast is asked at its post and at the head on its arm", () => {
+  const own = moreSets(
+    {
+      canopy: [],
+      scan: [],
+      rows: [],
+      hedges: [],
+      river: [],
+      trams: [],
+      lamps: [
+        {
+          geometry: { type: "Point", coordinates: [412070, 5656020] },
+          // 9 m, its arm reaching east (1.8 m)
+          properties: { h: 9, hs: "street", arm: 90 },
+        },
+      ],
+      furniture: [],
+    },
+    ctx
+  );
+  // a ray north at height y (m), x m east of the post
+  const north = (y: number, dx: number) => {
+    const w = epsgToWorld(412070 + dx, 5655990, offset);
+    return nearestInSets({ x: w.x, y, z: w.z }, { x: 0, y: 0, z: -1 }, own, 60)
+      ?.target;
+  };
+  const head = north(119, 1.8);
+  expect(head?.kind).toBe("lamp");
+  expect(head && "arm" in head ? head.arm : undefined).toBe(true);
+  expect(north(113, 1.8)).toBeUndefined(); // nothing under the arm
+  expect(north(113, 0)?.kind).toBe("lamp"); // the post
 });

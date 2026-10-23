@@ -3,7 +3,7 @@ import type { TreeFeature } from "./features";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { clamp } from "./math";
 import type { RasterSampler } from "./raster-sampler";
-import { hash } from "./tree-placement";
+import { BASE_TREE_H, hash, type Placement } from "./tree-placement";
 import { seasonJitter } from "./tree-season";
 /**
  * Pure placement math for individually surveyed trees — a tree inventory such
@@ -17,6 +17,10 @@ import { seasonJitter } from "./tree-season";
  * diameter already carry a tree's proportions (a 'Fastigiata' oak is recorded
  * 15 m tall and 4 m wide), so an archetype decides only what the scale cannot
  * — where the crown starts on the trunk, and which crown geometry draws it.
+ * The needle trees take three: the cone (spruce, fir, thuja, false cypress,
+ * larch, Douglas fir), the pine's high, flat-topped crown (`pine`) and the
+ * yew's broad bush, its crown down to the ground (`bush`). The ids are the
+ * files' and only ever appended.
  */
 
 export const TREE_ARCHETYPES = [
@@ -26,6 +30,8 @@ export const TREE_ARCHETYPES = [
   "conifer",
   "weeping",
   "small",
+  "pine",
+  "bush",
 ] as const;
 export type TreeArchetype = (typeof TREE_ARCHETYPES)[number];
 
@@ -36,9 +42,18 @@ export type TreeArchetype = (typeof TREE_ARCHETYPES)[number];
  * a geometry of their own — so a chunk costs at most one draw call per shape
  * present, not one per archetype.
  */
-export const CROWN_SHAPES = ["broad", "spindle", "cone", "weep"] as const;
+export const CROWN_SHAPES = [
+  "broad",
+  "spindle",
+  "cone",
+  "weep",
+  "pine",
+] as const;
 export type CrownShape = (typeof CROWN_SHAPES)[number];
 
+/** Which geometry draws each archetype's crown. A yew's bush is the lobed
+ *  crown down on the ground: its proportion (as wide as it is tall, or
+ *  wider) is the register's crown, which the scale carries. */
 export const ARCHETYPE_SHAPE: Record<TreeArchetype, CrownShape> = {
   round: "broad",
   oval: "broad",
@@ -46,10 +61,30 @@ export const ARCHETYPE_SHAPE: Record<TreeArchetype, CrownShape> = {
   conifer: "cone",
   weeping: "weep",
   small: "broad",
+  pine: "pine",
+  bush: "broad",
 };
 
+/**
+ * Where a pine's crown starts, over its height: a long bare stem under a
+ * high crown. The canopy's pines start theirs here too
+ * (vegetation-layer.ts, from the bake's `pine`), so a pine reads the same
+ * whichever source drew it.
+ */
+export const PINE_CROWN_BASE = 0.55;
+
+/**
+ * A canopy pine's crown base (m): PINE_CROWN_BASE of its height, as the
+ * register's pines start theirs — never lower than the placement's own
+ * (`crownBase`, clear of a carriageway). The fine level, the coarse level
+ * and the asked solid all start a canopy pine's crown here.
+ */
+export function pineBase(p: Pick<Placement, "base" | "s">): number {
+  return Math.max(p.base ?? 0, PINE_CROWN_BASE * p.s * BASE_TREE_H);
+}
+
 /** Fraction of the tree's height at which the crown starts (clear stem).
- *  Weeping: the hem of the hanging curtain. */
+ *  Weeping: the hem of the hanging curtain. A yew's bush: at the ground. */
 const CROWN_BASE: Record<TreeArchetype, number> = {
   round: 0.33,
   oval: 0.28,
@@ -57,6 +92,8 @@ const CROWN_BASE: Record<TreeArchetype, number> = {
   conifer: 0.08,
   weeping: 0.18,
   small: 0.3,
+  pine: PINE_CROWN_BASE,
+  bush: 0.04,
 };
 /** Globe cultivars ('Globosum', 'Umbraculifera') are a ball on a stem. */
 const GLOBE_CROWN_BASE = 0.45;
@@ -69,6 +106,8 @@ const TRUNK_INTO_CROWN: Record<TreeArchetype, number> = {
   conifer: 0.45,
   weeping: 0.7,
   small: 0.3,
+  pine: 0.3,
+  bush: 0.25,
 };
 
 /** Clamp for the bake's heights (m); the bake clamps too — this guards a

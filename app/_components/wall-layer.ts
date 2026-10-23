@@ -1,14 +1,14 @@
 import { DoubleSide, type Mesh } from "three/webgpu";
 import { type GroundLight, groundLitMaterial } from "./sky-light";
 
-const WALL_COLOR = 0xc9_bd_a4; // warm sandstone
-
 /**
  * Retaining / city walls from OSM, baked with the terrain: the fine terrain
  * glTF carries a `walls` node (lib/city/walls.ts, written by
  * scripts/bake-tiles.ts `wallMesh` against every tile's final ground, so a
  * wall near a seam stands on its neighbour's ground too). This only gives
- * it its material; it arrives and leaves with its tile, and the tile stream
+ * it its material, its tone the vertex colours the bake gave each wall by
+ * its masonry (lib/city/walls.ts `WALL_TONES`: OSM's material, else the
+ * site's most tagged one); it arrives and leaves with its tile, and the tile stream
  * frees it and its material with the tile's content. The far horizon cuts its sun as it
  * cuts the ground's (`light`, sky-light.ts); the sky view does not dim it:
  * the ground's raster at a wall's foot counts the wall itself, which would
@@ -18,7 +18,7 @@ const WALL_COLOR = 0xc9_bd_a4; // warm sandstone
 export function dressWalls(mesh: Mesh, light?: GroundLight): void {
   mesh.material = groundLitMaterial(
     "walls",
-    { color: WALL_COLOR, roughness: 0.95, metalness: 0, side: DoubleSide },
+    { vertexColors: true, roughness: 0.95, metalness: 0, side: DoubleSide },
     light,
     false
   );

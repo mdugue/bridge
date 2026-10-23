@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { DRESDEN } from "../../sites/dresden";
 import {
+  ARABLE_CLASS,
   BUILTUP_CLASS,
   EDGE_SCALE,
   LANDCOVER_CLASSES,
@@ -9,23 +10,29 @@ import {
   linearPalette,
   MEADOW_CLASS,
   PARKING_KINDS,
+  PARKING_PLACES,
   PATH_CLASS,
+  parkingBand,
   parkingId,
+  parkingPlaceId,
   ROAD_CLASS,
   SURFACE_ALONG_PERIOD,
   SURFACE_KINDS,
   srgbToLinear,
   surfaceHeading,
   surfaceId,
+  SURFACE_ALONG_BITS,
   unpackSurface,
+  unpackSurfaceHigh,
   WATER_CLASS,
 } from "./landcover";
 import { siteDataDir } from "./tile";
 
-test("class ids are the table index, 0..8", () => {
+test("class ids are the table index, 0..9", () => {
   expect(LANDCOVER_CLASSES.map((c) => c.id)).toEqual([
-    0, 1, 2, 3, 4, 5, 6, 7, 8,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
   ]);
+  expect(LANDCOVER_CLASSES[ARABLE_CLASS].key).toBe("arable");
   expect(LANDCOVER_CLASSES[WATER_CLASS].key).toBe("water");
   expect(LANDCOVER_CLASSES[MEADOW_CLASS].key).toBe("farmland");
   expect(LANDCOVER_CLASSES[BUILTUP_CLASS].key).toBe("builtup");
@@ -109,4 +116,34 @@ test("the linear palette is the sRGB table through the transfer curve", () => {
   const flat = linearPalette();
   expect(flat).toHaveLength(LANDCOVER_CLASSES.length * 3);
   expect(flat[WATER_CLASS * 3]).toBeCloseTo(srgbToLinear(164), 10);
+});
+
+test("a street's bays lie on, over or beside the kerb", () => {
+  const parallel = parkingId("street-parallel");
+  const angled = parkingId("street-perpendicular");
+  expect(parkingBand(parallel, parkingPlaceId("carriageway"))).toEqual([0, 2]);
+  expect(parkingBand(parallel, parkingPlaceId("half-on-kerb"))).toEqual([
+    -1, 1,
+  ]);
+  expect(parkingBand(angled, parkingPlaceId("on-kerb"))).toEqual([-5, 0]);
+  expect(parkingBand(parkingId("lot"), 0)).toBeNull();
+  expect(parkingBand(parkingId("none"), 0)).toBeNull();
+});
+
+test("the paving raster's A byte packs the offset, the place and the paint", () => {
+  // pipeline/bake/surface.py pack_along: 13 bits of offset, then the place
+  // (bits 5-6) and the paint (bit 7)
+  expect(SURFACE_ALONG_BITS).toBe(13);
+  expect(PARKING_PLACES).toHaveLength(3);
+  const byte = (1 << 7) | (parkingPlaceId("on-kerb") << 5) | 17;
+  expect(unpackSurfaceHigh(byte)).toEqual({
+    alongHigh: 17,
+    painted: true,
+    place: 2,
+  });
+  expect(unpackSurfaceHigh(0x1f)).toEqual({
+    alongHigh: 31,
+    painted: false,
+    place: 0,
+  });
 });

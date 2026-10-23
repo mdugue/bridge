@@ -31,7 +31,7 @@ import {
   sportShapeId,
   sportSurfaceId,
 } from "@/lib/city/sport";
-import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
+import type { F, I, Tex, V2, V3, V4 } from "./shader-chunks";
 import {
   byteOf,
   floorMod,
@@ -68,8 +68,6 @@ import {
  * and the lines are the data and stay. Line dimensions are the standard
  * ones (FIFA, ITF, FIBA, FIVB), scaled down to fit a smaller ground.
  */
-
-type I = Node<"int">;
 
 const MARK = {
   football: sportMarkingId("football"),

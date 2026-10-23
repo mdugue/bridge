@@ -40,6 +40,10 @@ export type FenceType = "mesh" | "picket" | "rail" | "railing";
 export interface FenceLine {
   /** EPSG coordinates (NOT recentered) */
   coords: Point2[];
+  /** what the line stands on where that is not the terrain: a flight's
+   *  handrail stands on its steps' nosing line (lib/city/stairs.ts
+   *  `stairRails`), not on the ground burned under them */
+  ground?: HeightAt;
   /** height (m) */
   h: number;
   type: FenceType;
@@ -75,8 +79,8 @@ const SAMPLE_M = 2.5; // the longest quad along a line (m)
 const SIMPLIFY_M = 0.1; // line vertices this close to the chord are dropped (m)
 const SINK_M = SINK.band; // bands reach this far into the ground
 const BAND_SCALE = 0.75; // a band stands at this share of the tagged height...
-const BAND_MIN_M = 0.4; // ...and between these (m)
-const BAND_MAX_M = 1.0;
+const BAND_MIN_M = 0.4; // ...and between these (m): a 2 m railway or pitch
+const BAND_MAX_M = 1.5; // fence stands taller than a 1.2 m garden one
 const RAIL_M = 0.15; // a handrail's band (m, at its top)
 const BOOM_M = 0.15; // a boom's band (m, at the leaf's top)
 const GATE_ON_M = 0.6; // a gate this close to a line cuts it (m)
@@ -604,7 +608,8 @@ export function fenceGeometry(
     const h = bandHeight(fence.h);
     const cut = cutGaps(fence.coords, fenceGates);
     for (const piece of cut.pieces) {
-      for (const run of runsOf(stationsOf(piece, heightAt, offset))) {
+      const ground = fence.ground ?? heightAt;
+      for (const run of runsOf(stationsOf(piece, ground, offset))) {
         buildRun(b, run, fence.type, h);
       }
     }

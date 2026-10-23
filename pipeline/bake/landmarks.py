@@ -6,13 +6,22 @@ matched to what the viewer draws of it
 
 - `bun run fetch` asks Wikidata once per tile (`fetch_wikidata`) and caches
   the answer under `data/_raw/<provider>/wikidata/landmarks_<tile>.json`:
-  id, German label, position, sitelinks, height (P2048), materials (P186)
-  and whether it is a building. The bake never goes to the network.
+  id, German label, position, sitelinks, height (P2048), materials (P186),
+  whether it is a building, and whether it still stands (`fetch_status`:
+  P576, the date it was dissolved or demolished, and P5816, its state of
+  conservation — asked apart, so a cache from before them is completed by
+  the next fetch). The bake never goes to the network.
 - The bake (`run`) finds the LoD2 objects that are the landmark: those an
   OSM outline tagged `wikidata=<id>` covers by half, else, for a building,
   the LoD2 building under its point (its root and every part), or the
-  nearest within `NEAR_M`. A landmark that matches nothing drawn — a
-  district, a street, a harbour — is left out. Written:
+  nearest within `NEAR_M` — within `NAMED_NEAR_M` where OSM names that
+  building alike (`same_name`). A building Wikidata knows as demolished
+  (`gone`) is the landmark only where an OSM outline is tagged with it:
+  Dresden's old town is full of churches, theatres and palaces that stood
+  where another building stands now (the Alte Reformierte Kirche under the
+  Neues Rathaus, the Gothic Frauenkirche under the new one, the Opernhaus
+  am Zwinger), and its point found that one. A landmark that matches
+  nothing drawn — a district, a street, a harbour — is left out. Written:
   `data/<site>/dlm/landmarks_<tile>.json`, ranked by sitelinks, owned by
   the tile under the landmark's point.
 
@@ -23,6 +32,7 @@ the HUD, which glides to them."""
 from __future__ import annotations
 
 import json
+import re
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -44,8 +54,22 @@ SPARQL = "https://query.wikidata.org/sparql"
 MIN_SITELINKS = 2
 NOTABLE_SHARE = 0.08
 MAX_PER_TILE = 40
-# How far from a building's point its LoD2 building is looked for (m).
-NEAR_M = 25.0
+# How far from a building's point its LoD2 building is looked for (m):
+# beside it (Wikidata's point in a courtyard or on the street in front),
+# and further where OSM names the building alike.
+NEAR_M = 10.0
+NAMED_NEAR_M = 25.0
+# P5816 (state of conservation): demolished or destroyed; and the states
+# of a building that stands although P576 dates its end (Dresden's
+# Frauenkirche, destroyed 1945, is "restored"; a war-damaged church
+# rebuilt carries P576 alone and is kept by its OSM outline).
+DEMOLISHED = "Q56556915"
+STANDING = {
+    "Q56557591",  # preserved
+    "Q75505084",  # restored
+    "Q106379705",  # damaged
+    "Q60539160",  # partially destroyed
+}
 QUERY = """
 SELECT ?i ?label ?coord ?links (SAMPLE(?h) AS ?height)
        (GROUP_CONCAT(DISTINCT ?mat; separator="|") AS ?materials)
@@ -108,11 +132,81 @@ def query_box(
     return rows
 
 
+STATUS_QUERY = """
+SELECT ?i (MIN(?end) AS ?dissolved) (GROUP_CONCAT(DISTINCT ?st; separator="|") AS ?states)
+WHERE {
+  VALUES ?i { %(ids)s }
+  OPTIONAL { ?i wdt:P576 ?end . }
+  OPTIONAL { ?i wdt:P5816 ?st . }
+} GROUP BY ?i
+"""
+STATUS_BATCH = 200
+
+
+def _ask(query: str) -> list[dict]:
+    req = urllib.request.Request(
+        SPARQL,
+        data=urllib.parse.urlencode({"query": query}).encode(),
+        headers={
+            "Accept": "application/sparql-results+json",
+            "User-Agent": "bridge-bake/0.1 (city walker; offline bake)",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=180) as res:
+        return json.load(res)["results"]["bindings"]
+
+
+def fetch_status(ids: list[str]) -> dict[str, dict]:
+    """Whether each item still stands, as Wikidata states it: `dissolved`
+    (P576, the earliest date, or None) and `states` (P5816's items)."""
+    out: dict[str, dict] = {}
+    for k in range(0, len(ids), STATUS_BATCH):
+        batch = ids[k : k + STATUS_BATCH]
+        for r in _ask(STATUS_QUERY % {"ids": " ".join(f"wd:{i}" for i in batch)}):
+            qid = r["i"]["value"].rsplit("/", 1)[-1]
+            end = r.get("dissolved", {}).get("value")
+            states = r.get("states", {}).get("value", "")
+            out[qid] = {
+                # a date, or a blank node where Wikidata knows only that it ended
+                "dissolved": (end[:10] if end[:4].isdigit() else "unknown") if end else None,
+                "states": sorted(s.rsplit("/", 1)[-1] for s in states.split("|") if s),
+            }
+    return out
+
+
+def _with_status(items: list[dict]) -> list[dict]:
+    status = fetch_status([i["id"] for i in items])
+    return [{**i, **status.get(i["id"], {"dissolved": None, "states": []})} for i in items]
+
+
+def _write(dest: Path, ranked: list[dict]) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    doc = {"source": "Wikidata (CC0)", "query": SPARQL, "landmarks": ranked}
+    # through a `.part` file: a run killed mid-write leaves no truncated
+    # cache that every later fetch would keep
+    part = dest.with_name(dest.name + ".part")
+    part.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    part.replace(dest)
+
+
+def complete_status(dest: Path) -> bool:
+    """Adds `fetch_status` to a cache fetched before it; True when it did."""
+    doc = json.loads(dest.read_text())
+    items = doc.get("landmarks", [])
+    if all("states" in i for i in items):
+        return False
+    _write(dest, _with_status(items))
+    return True
+
+
 def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int) -> None:
     """The landmarks Wikidata knows on a tile → `<raw>/wikidata/landmarks_<tile>.json`
-    (fetch time only; the bake reads the file, never the network)."""
+    (fetch time only; the bake reads the file, never the network). A cache
+    from before `fetch_status` gets it added."""
     dest = raw / "wikidata" / f"landmarks_{tile_id}.json"
     if dest.exists():
+        if complete_status(dest):
+            print(f"{tile_id}: Wikidata landmarks' state of conservation → {dest}")
         return
     back = Transformer.from_crs(epsg, 4326, always_xy=True)
     xmin, ymin, xmax, ymax = bounds
@@ -143,13 +237,12 @@ def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int) -> None:
             },
         )
     ranked = sorted(items.values(), key=lambda i: (-i["links"], i["id"]))
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    doc = {"source": "Wikidata (CC0)", "query": SPARQL, "landmarks": ranked}
-    # through a `.part` file: a run killed mid-write leaves no truncated
-    # cache that every later fetch would keep
-    part = dest.with_name(dest.name + ".part")
-    part.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
-    part.replace(dest)
+    try:
+        ranked = _with_status(ranked)
+    except (OSError, ValueError, KeyError) as err:
+        # written without: the next fetch completes it (complete_status)
+        print(f"{tile_id}: Wikidata landmarks' state of conservation not fetched ({err})")
+    _write(dest, ranked)
     print(f"{tile_id}: {len(ranked)} Wikidata landmarks → {dest}")
 
 
@@ -169,6 +262,41 @@ def load_wikidata(tile: Tile) -> list[dict]:
         x, y = to_tile.transform(item["lon"], item["lat"])
         out.append({**item, "x": x, "y": y})
     return out
+
+
+def gone(item: dict) -> bool | None:
+    """Whether Wikidata knows the item as demolished or destroyed: P5816
+    says so, or P576 dates its end and no state says it stands. None for a
+    cache fetched before the state was (`complete_status`)."""
+    if "states" not in item:
+        return None
+    states = set(item["states"])
+    if DEMOLISHED in states:
+        return True
+    return bool(item.get("dissolved")) and not states & STANDING
+
+
+# Words that name a kind of building, not this one: "Altes Rathaus" is not
+# the "Neues Rathaus", the "Reformierte Kirche" not every church.
+GENERIC_WORDS = {
+    "alte", "alter", "altes", "neue", "neuer", "neues", "ehemalige", "ehemaliges",
+    "kirche", "haus", "rathaus", "schloss", "palais", "theater", "synagoge",
+    "villa", "kaserne", "bahnhof", "brücke", "turm", "museum", "schule", "halle",
+    "kapelle", "dresden", "leipzig", "hamburg", "münchen", "meißen", "grimma",
+    "unna", "berlin",
+}  # fmt: skip
+
+
+def _words(name: str) -> set[str]:
+    bare = re.sub(r"\(.*?\)", " ", name.lower())
+    return {w for w in re.split(r"[\s\-–.,’'/]+", bare) if len(w) >= 4} - GENERIC_WORDS
+
+
+def same_name(label: str | None, name: str | None) -> bool:
+    """Whether OSM's name for a building names the landmark: they share a
+    word that is not a kind of building ("Lindenbrauerei" and
+    "Kulturzentrum Lindenbrauerei")."""
+    return bool(label and name and _words(label) & _words(name))
 
 
 def material_of(labels: list[str]) -> str | None:
@@ -197,23 +325,38 @@ def tagged_outlines(tile: Tile) -> dict[str, list[shapely.Geometry]]:
     return out
 
 
-def matched_objects(item, city, ids, polys, tree, outlines) -> list[str]:
-    """The LoD2 objects that are this landmark (their ids, sorted)."""
+def matched_objects(item, city, ids, polys, tree, outlines, names=None) -> list[str]:
+    """The LoD2 objects that are this landmark (their ids, sorted). `names`:
+    OSM's name per LoD2 object (osm_buildings.py), for a point
+    beside its building."""
     found: set[str] = set()
     for g in outlines.get(item["id"], []):
         found |= {ids[i] for i in covered_by([g], polys, tree)}
-    if not found and item["building"]:
+    if not found and item["building"] and not gone(item):
         point = shapely.Point(item["x"], item["y"])
         hits = list(tree.query(point, predicate="within"))
         if not hits:
-            # Wikidata's point often falls in a courtyard or on the street
-            # in front (the Lindenbrauerei's): the nearest building near it
-            near = tree.query_nearest(point, max_distance=NEAR_M)
-            hits = list(near[:1])
+            hits = _beside(item, point, city, ids, polys, tree, names or {})
         for i in hits:
             root = root_of(city, ids[int(i)])
             found |= {oid for oid in ids if root_of(city, oid) == root}
     return sorted(found)
+
+
+def _beside(item, point, city, ids, polys, tree, names) -> list[int]:
+    """Wikidata's point often falls in a courtyard or on the street in front
+    (the Lindenbrauerei's): the nearest building within NEAR_M, else the
+    nearest within NAMED_NEAR_M that OSM names alike (any object of its
+    building tree)."""
+    near = tree.query(point, predicate="dwithin", distance=NAMED_NEAR_M)
+    for d, i in sorted((shapely.distance(point, polys[int(i)]), int(i)) for i in near):
+        if d <= NEAR_M:
+            return [int(i)]
+        root = root_of(city, ids[int(i)])
+        tree_names = (names.get(o) for o in ids if root_of(city, o) == root)
+        if any(same_name(item["label"], n) for n in tree_names):
+            return [int(i)]
+    return []
 
 
 def object_heights(city: dict) -> dict[str, tuple[float, float]]:
@@ -239,6 +382,15 @@ def object_heights(city: dict) -> dict[str, tuple[float, float]]:
     return out
 
 
+def osm_names(tile: Tile) -> dict[str, str]:
+    """OSM's name per LoD2 object, as the osm-buildings step wrote it."""
+    path = tile.out("dlm", f"osmbuild_{tile.id}.json")
+    if not path.exists():
+        return {}
+    objects = json.loads(path.read_text()).get("objects", {})
+    return {oid: o["name"] for oid, o in objects.items() if o.get("name")}
+
+
 def notable_floor(items: list[dict]) -> float:
     """The sitelinks a landmark needs on its tile: `NOTABLE_SHARE` of the
     most notable one's, never below `MIN_SITELINKS`."""
@@ -259,12 +411,15 @@ def run(tile: Tile) -> None:
     tree = shapely.STRtree(polys)
     outlines = tagged_outlines(tile)
     heights = object_heights(city)
+    names = osm_names(tile)
+    if any(gone(i) is None for i in items):
+        print(f"{tile.id}: the Wikidata cache predates the buildings' state — run bun run fetch")
     landmarks = []
     floor = notable_floor(items)
     for item in items:
         if len(landmarks) >= MAX_PER_TILE or item["links"] < floor:
             break
-        objects = matched_objects(item, city, ids, polys, tree, outlines)
+        objects = matched_objects(item, city, ids, polys, tree, outlines, names)
         if not objects:
             continue
         entry = {

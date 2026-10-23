@@ -2,8 +2,10 @@
  * The structures the surface model shows beyond LoD2 (pipeline/bake/
  * structures.py) as closed meshes for the city mesh: a column (chimney,
  * tower, mast, …) as a lathed ring profile of its kind, a missing building
- * as its outline extruded to the measured height with a flat roof, a
- * landmark's roof relief as its measured height field. Flat
+ * as its outline extruded to the measured height with a flat roof, a roof
+ * on posts (a platform roof, a carport) as its outline's slab over its
+ * posts (lib/city/open-roofs.ts), a landmark's roof relief as its measured
+ * height field. Flat
  * non-indexed triangles wound counter-clockwise seen from outside, like the
  * scan's sheds (small-buildings.ts); the bake appends them to a tile's
  * buildings (scripts/bake-city-mesh.ts), so they wear the clay, cast
@@ -11,6 +13,7 @@
  * the roof's triangulation is passed in.
  */
 import type { HeightField, StructureFeature, StructureKind } from "./features";
+import { postsMesh, roofDepth, roofPosts } from "./open-roofs";
 import type { Point2 } from "./polyline";
 import type { StructureMesh } from "./small-buildings";
 
@@ -32,7 +35,7 @@ const times =
     k * (of === "r" ? r : rt);
 
 const PROFILES: Record<
-  Exclude<StructureKind, "building" | "relief">,
+  Exclude<StructureKind, "building" | "relief" | "roof">,
   Ring[]
 > = {
   // a tapering shaft under a slightly wider head band
@@ -95,6 +98,7 @@ export function columnMesh(
     !p ||
     p.kind === "building" ||
     p.kind === "relief" ||
+    p.kind === "roof" ||
     f.geometry.type !== "Point"
   ) {
     return out;
@@ -174,28 +178,35 @@ function openRing(ring: Point2[], ccw: boolean): Point2[] {
   return signedArea(open) > 0 === ccw ? open : open.reverse();
 }
 
-/** A missing building: its outline extruded from below its lowest ground to
- *  the measured height, a flat roof and a floor. */
-export function buildingMesh(
-  f: StructureFeature,
-  offset: { cx: number; cy: number },
-  triangulate: Triangulate
-): StructureMesh {
-  const out: StructureMesh = { isRoof: [], positions: [] };
-  const p = f.properties;
-  if (!p || f.geometry.type !== "Polygon") {
-    return out;
+/** A polygon feature's outline (counter-clockwise) and holes (clockwise),
+ *  null when it has no ring to draw. */
+function outlineOf(
+  f: StructureFeature
+): { contour: Point2[]; holes: Point2[][] } | null {
+  if (f.geometry.type !== "Polygon") {
+    return null;
   }
   const [outer, ...inner] = f.geometry.coordinates;
   if (!outer || outer.length < 4) {
-    return out;
+    return null;
   }
-  const contour = openRing(outer, true);
-  const holes = inner
-    .map((h) => openRing(h, false))
-    .filter((h) => h.length >= 3);
-  const base = p.z - STRUCTURE_SINK;
-  const top = p.z + p.h;
+  return {
+    contour: openRing(outer, true),
+    holes: inner.map((h) => openRing(h, false)).filter((h) => h.length >= 3),
+  };
+}
+
+/** An outline extruded from `base` to `top` (recentered by `offset`):
+ *  walls, a roof (`isRoof` 1) and a floor facing down. */
+function prismMesh(
+  outline: { contour: Point2[]; holes: Point2[][] },
+  base: number,
+  top: number,
+  offset: { cx: number; cy: number },
+  triangulate: Triangulate,
+  out: StructureMesh = { isRoof: [], positions: [] }
+): StructureMesh {
+  const { contour, holes } = outline;
   const at = ([x, y]: Point2, z: number) => [x - offset.cx, y - offset.cy, z];
   // walls: along a CCW outline (and a CW hole) the outside is on the right
   for (const ring of [contour, ...holes]) {
@@ -223,6 +234,59 @@ export function buildingMesh(
     push(out, 0, at(all[i], base), at(all[k], base), at(all[j], base));
   }
   return out;
+}
+
+/** Where a structure's mesh starts over its lowest ground `z` (m): a raised
+ *  building's floor (`base`), else under the ground by `STRUCTURE_SINK`. */
+export function structureFoot(p: { base?: number }): number {
+  return p.base !== undefined && p.base > 0 ? p.base : -STRUCTURE_SINK;
+}
+
+/** A missing building: its outline extruded from below its lowest ground
+ *  (or from a raised part's floor, `base`) to the measured height, a flat
+ *  roof and a floor. */
+export function buildingMesh(
+  f: StructureFeature,
+  offset: { cx: number; cy: number },
+  triangulate: Triangulate
+): StructureMesh {
+  const p = f.properties;
+  const outline = outlineOf(f);
+  if (!p || !outline) {
+    return { isRoof: [], positions: [] };
+  }
+  return prismMesh(
+    outline,
+    p.z + structureFoot(p),
+    p.z + p.h,
+    offset,
+    triangulate
+  );
+}
+
+/** A roof on posts (`kind: "roof"`): its outline as a slab `roofDepth` deep
+ *  under its measured top, a flat roof over a floor facing down, on posts
+ *  from below its lowest ground to the slab (`roofPosts`). */
+export function roofMesh(
+  f: StructureFeature,
+  offset: { cx: number; cy: number },
+  triangulate: Triangulate
+): StructureMesh {
+  const p = f.properties;
+  const outline = outlineOf(f);
+  if (!p || !outline) {
+    return { isRoof: [], positions: [] };
+  }
+  const area =
+    signedArea(outline.contour) +
+    outline.holes.reduce((a, h) => a + signedArea(h), 0);
+  const top = p.z + p.h;
+  const under = top - roofDepth(area);
+  const out = prismMesh(outline, under, top, offset, triangulate);
+  const posts = roofPosts([outline.contour, ...outline.holes]).map(
+    ([x, y]): Point2 => [x - offset.cx, y - offset.cy]
+  );
+  return postsMesh(posts, p.z - STRUCTURE_SINK, under, out);
 }
 
 /** The height at a grid corner: the mean of the patch cells around it
@@ -325,15 +389,19 @@ export function reliefMesh(
   return out;
 }
 
-/** The mesh of any kind: a relief's height field, an outline (a missing
- *  building) extruded, a column lathed. */
+/** The mesh of any kind: a relief's height field, a roof on its posts, an
+ *  outline (a missing building) extruded, a column lathed. */
 export function structureShape(
   f: StructureFeature,
   offset: { cx: number; cy: number },
   triangulate: Triangulate
 ): StructureMesh {
-  if (f.properties?.kind === "relief") {
+  const kind = f.properties?.kind;
+  if (kind === "relief") {
     return reliefMesh(f, offset);
+  }
+  if (kind === "roof") {
+    return roofMesh(f, offset, triangulate);
   }
   return f.geometry.type === "Polygon"
     ? buildingMesh(f, offset, triangulate)

@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { SITES } from "../../sites";
 import { SURFACE_ALONG_PERIOD } from "./landcover";
 import {
+  cycleLineFromKerb,
+  LANE_BITS,
   MARKING_KINDS,
   MARKING_PATTERN,
   type MarkingTable,
@@ -81,4 +83,32 @@ test("every along-street pattern divides the paving raster's period", () => {
     const k = SURFACE_ALONG_PERIOD / period;
     expect(Math.abs(k - Math.round(k))).toBeLessThan(1e-9);
   }
+});
+
+test("a cycle line sits at its kind's distance, past a parking lane", () => {
+  const advisory = LANE_BITS.cycle;
+  const exclusive = LANE_BITS.cycle | LANE_BITS.cycleSolid;
+  const wide = exclusive | LANE_BITS.cycleWide;
+  expect(cycleLineFromKerb(advisory, null)).toBe(1.5);
+  expect(cycleLineFromKerb(exclusive, null)).toBe(
+    MARKING_PATTERN.cycleFromKerb
+  );
+  expect(cycleLineFromKerb(wide, null)).toBe(2.25);
+  // parallel bays on the carriageway push it out by their depth, half on
+  // the kerb by a metre less, on the kerb not at all
+  expect(cycleLineFromKerb(advisory, [0, 2])).toBe(3.5);
+  expect(cycleLineFromKerb(advisory, [-1, 1])).toBe(2.5);
+  expect(cycleLineFromKerb(advisory, [-2, 0])).toBe(1.5);
+});
+
+test("the lane bits are one bit each and keep the kerb's", () => {
+  const bits = Object.values(LANE_BITS);
+  expect(new Set(bits).size).toBe(bits.length);
+  for (const b of bits) {
+    expect(b & (b - 1)).toBe(0);
+    expect(b).toBeLessThan(256);
+  }
+  expect(LANE_BITS.kerb).toBe(8);
+  expect(LANE_BITS.centre).toBe(4);
+  expect(LANE_BITS.cycle).toBe(1);
 });

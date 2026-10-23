@@ -5,6 +5,7 @@ import {
   CylinderGeometry,
   Group,
   IcosahedronGeometry,
+  InstancedBufferAttribute,
   type Material,
   Matrix4,
   MeshStandardNodeMaterial,
@@ -48,15 +49,18 @@ import {
 } from "@/lib/city/raster-sampler";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
+  pineBase,
   TRUNK_FOOT_R,
   TRUNK_ROWS,
   TRUNK_TOP_R,
   trunkFlare,
 } from "@/lib/city/tree-inventory";
 import {
+  BASE_TREE_H,
   bucketByCell,
   canopyPlacements,
   cellKey,
+  GENERIC_CROWN_FOOT,
   hash,
   type Placement,
   rowPlacements,
@@ -82,8 +86,15 @@ import {
   RICH_IN_M,
   RICH_OUT_M,
 } from "@/lib/city/vegetation-lod";
+import {
+  boxOf,
+  buildConeGeo,
+  buildPineGeo,
+  CONE_SEGMENTS,
+} from "./conifer-crown";
 import { fetchOptionalBinary } from "./fetch-optional";
 import {
+  instanceFloat,
   Instances,
   instanceMatrix,
   instancePosition,
@@ -207,12 +218,16 @@ export interface VegetationChunk {
 }
 
 /** A canopy or row tree's season: the generic deciduous curve, offset by
- *  a stable hash of its position. */
-export function genericSeasonKey(x: number, z: number): CrownSeasonKey {
+ *  a stable hash of its position — or, an evergreen's, none. */
+export function genericSeasonKey(
+  x: number,
+  z: number,
+  evergreen = false
+): CrownSeasonKey {
   return {
     genus: 0,
-    evergreen: false,
-    jitter: seasonJitter(hash(x * 0.53 + z * 0.29 + 7.1)),
+    evergreen,
+    jitter: evergreen ? 0 : seasonJitter(hash(x * 0.53 + z * 0.29 + 7.1)),
   };
 }
 
@@ -284,45 +299,145 @@ export function padCrownSphere(g: BufferGeometry): BufferGeometry {
 const HEDGE_H = 1.3;
 const HEDGE_W = 0.9;
 
-/** One chunk's trees: the uniform-scale placements plus the precomputed ones. */
+/** One chunk's trees: the uniform-scale placements plus the precomputed
+ *  ones. A chunk's needle trees (the canopy's evergreens) are a cell of
+ *  their own per form (`canopyForm`): the cone's, and the pine's. */
 interface TreeCell {
   extras: TreeInstance[];
+  form: CanopyForm;
   trees: Placement[];
+}
+
+/** The crown a canopy or row tree wears (`canopyForm`). */
+export type CanopyForm = "broad" | "cone" | "pine";
+
+/**
+ * A canopy or row tree's crown: the lobed broadleaf crown, or a needle
+ * tree's for the canopy's evergreens. The bake marks a crown evergreen in a
+ * needle forest, or green in a mixed forest on a leaf-off flight
+ * (pipeline/bake/canopy.py `leaf_types`), and only crowns in forests: there
+ * an evergreen tree is a pine, a spruce or a fir — Central Europe's
+ * evergreen broadleaves (holly, box, cherry laurel) are shrubs below the
+ * canopy's 3 m. Which of them the surface model tells: a crown still near
+ * its top a fifth of its height out is a pine's (`pine`, pipeline/bake/
+ * crown_form.py: 73 % of the registers' pines, 29 % of their cones), the
+ * rest are drawn as the cone. A larch, the deciduous conifer, stays a
+ * broadleaf in a mixed forest (it reads bare on a leaf-off flight) and an
+ * evergreen in a needle forest: the data tells no larch apart.
+ */
+export function canopyForm(p: Placement): CanopyForm {
+  if (p.evergreen !== true) {
+    return "broad";
+  }
+  return p.pine === true ? "pine" : "cone";
 }
 
 function bucketTrees(trees: Placement[], extras: TreeInstance[]): TreeCell[] {
   const cells = new Map<string, TreeCell>();
-  const cellAt = (x: number, z: number): TreeCell => {
-    const key = cellKey(x, z);
+  const cellAt = (x: number, z: number, form: CanopyForm): TreeCell => {
+    const key = `${cellKey(x, z)}${form === "broad" ? "" : `:${form}`}`;
     let cell = cells.get(key);
     if (!cell) {
-      cell = { trees: [], extras: [] };
+      cell = { form, trees: [], extras: [] };
       cells.set(key, cell);
     }
     return cell;
   };
   for (const p of trees) {
-    cellAt(p.x, p.z).trees.push(p);
+    const form = canopyForm(p);
+    // a pine's crown high on its stem (its matrices and its trunk's drop
+    // read the base, crownFrame)
+    cellAt(p.x, p.z, form).trees.push(
+      form === "pine" ? { ...p, base: pineBase(p) } : p
+    );
   }
   for (const e of extras) {
-    cellAt(e.x, e.z).extras.push(e);
+    cellAt(e.x, e.z, "broad").extras.push(e);
   }
   return [...cells.values()];
 }
 
+/**
+ * How a placement's matrix stands the generic crown between its crown base
+ * (`base`, lib/city/tree-placement.ts `crownBase`) and its top (s ·
+ * BASE_TREE_H): the vertical scale, and the lift (m) of the crown's frame
+ * off the ground. Without a base (a hedge) the scale is `s`, no lift — the
+ * crown starts where its geometry does, 0.28 of its height up.
+ */
+export function crownFrame(p: Placement): { lift: number; scale: number } {
+  if (p.base === undefined) {
+    return { lift: 0, scale: p.s };
+  }
+  const top = p.s * BASE_TREE_H;
+  const scale =
+    Math.max(top - p.base, 0.1) / (BASE_TREE_H - GENERIC_CROWN_FOOT);
+  return { lift: p.base - scale * GENERIC_CROWN_FOOT, scale };
+}
+
 /** Writes the placements' matrices from slot 0 on (`widen` stretches the
- *  crown sideways: the far tier's thinned forest). */
+ *  crown sideways: the far tier's thinned forest): the crown between its
+ *  base and its top (`crownFrame`). The trunks share them (`writeTrunkDrops`
+ *  puts their feet back on the ground). */
 function writePlacements(mesh: Instances, items: Placement[], widen = 1): void {
   const dummy = new Object3D();
   for (let i = 0; i < items.length; i++) {
     const p = items[i];
-    dummy.position.set(p.x, p.y, p.z);
+    const { lift, scale } = crownFrame(p);
+    dummy.position.set(p.x, p.y + lift, p.z);
     dummy.rotation.set(0, p.rot, 0);
     const w = (p.w ?? p.s) * widen;
-    dummy.scale.set(w, p.s, w);
+    dummy.scale.set(w, scale, w);
     dummy.updateMatrix();
     mesh.setMatrixAt(i, dummy.matrix);
   }
+}
+
+/** The trunk material's per-instance drop (`trunkDrop`). */
+const TRUNK_DROP = "iDrop";
+
+/**
+ * The trunks drawn on their crowns' matrices (`writePlacements`): each one's
+ * foot lowered by its crown's lift, in the matrix's units (`TRUNK_DROP`; the
+ * precomputed trees after `items` none), so it stands on the ground and
+ * still reaches into its crown. One float a tree, not a matrix: the forest's
+ * chunks keep one matrix buffer for the trunks and both near crowns (the
+ * attribute is the set's geometry's, freed with it). Returns the largest
+ * lift (m), which the set's cull sphere must grow by (`fitTrunks`).
+ */
+function writeTrunkDrops(trunks: Instances, items: Placement[]): number {
+  let reach = 0;
+  const drops = new Float32Array(trunks.capacity);
+  items.forEach((p, i) => {
+    const { lift, scale } = crownFrame(p);
+    drops[i] = lift / scale;
+    reach = Math.max(reach, Math.abs(lift));
+  });
+  if (reach > 0) {
+    trunks.geometry.setAttribute(
+      TRUNK_DROP,
+      new InstancedBufferAttribute(drops, 1)
+    );
+  }
+  return reach;
+}
+
+/** The trunks' cull sphere over their crowns' matrices, grown by `reach`
+ *  (m): a lowered foot lies that far below what the matrices place. */
+function fitTrunks(trunks: Instances, reach: number): void {
+  trunks.computeBoundingSphere();
+  if (trunks.geometry.boundingSphere) {
+    trunks.geometry.boundingSphere.radius += reach;
+  }
+}
+
+/** A trunk vertex (the geometry's, 0..TRUNK_H) with its foot lowered by the
+ *  instance's drop and its top where it was: the trunk spans the ground to
+ *  its crown on the crown's matrix (`writeTrunkDrops`; 0 off a crowned set,
+ *  the register's own trunks). */
+function trunkDrop(): V3 {
+  const p = positionGeometry;
+  const drop = instanceFloat(TRUNK_DROP);
+  return vec3(p.x, p.y.add(p.y.div(TRUNK_H).sub(1).mul(drop)), p.z);
 }
 
 /** Uploads the matrices and fits the cull sphere to the instances. */
@@ -781,7 +896,7 @@ export function buildTrunkMaterial(): MeshStandardNodeMaterial {
   return sceneMaterial("vegetation-trunk", () => {
     const m = new MeshStandardNodeMaterial({ color: TRUNK_BASE, roughness: 1 });
     m.name = "trunk";
-    m.positionNode = instancePosition();
+    m.positionNode = instancePosition(trunkDrop());
     const tg = clamp(varying(positionGeometry.y).div(TRUNK_H), 0, 1);
     // the register's bark per tree (TreeInstance.bark; white elsewhere)
     m.colorNode = materialColor
@@ -798,6 +913,10 @@ export function buildTrunkMaterial(): MeshStandardNodeMaterial {
  * park reads richer than a stressed street tree.
  */
 export function crownColor(col: Color, p: Placement, v: number): void {
+  if (p.evergreen) {
+    evergreenColor(col, v);
+    return;
+  }
   if (p.ndvi === undefined) {
     col.setHSL(0.26 + v * 0.05, 0.27, 0.62 + v * 0.12);
     return;
@@ -812,6 +931,15 @@ export function crownColor(col: Color, p: Placement, v: number): void {
     0.14 + 0.26 * t, // pale sage → richer green
     0.68 - 0.16 * t + v * 0.1 // light → deeper
   );
+}
+
+/**
+ * An evergreen's crown colour, all year: a deeper blue-green than any
+ * broadleaf, the register's and the canopy's conifers alike (the NDVI of a
+ * needle crown says nothing a broadleaf's lush↔dry remap could use).
+ */
+export function evergreenColor(col: Color, v: number): void {
+  col.setHSL(0.38 + v * 0.03, 0.24, 0.44 + v * 0.06);
 }
 
 /** Deterministic per-tree crown variation (hash jitter + optional NDVI);
@@ -838,7 +966,7 @@ function paintCrowns(
 }
 
 /** The shared crown and trunk geometries of every chunk. */
-interface TreeGeos {
+export interface TreeGeos {
   far: BufferGeometry;
   mid: BufferGeometry;
   rich: BufferGeometry;
@@ -936,7 +1064,7 @@ function buildTreeCell(
     rich.receiveShadow = true;
     rich.instanceTints = mid.instanceTints;
     // Each set fits its own geometry into the shared matrices.
-    trunks.computeBoundingSphere();
+    fitTrunks(trunks, writeTrunkDrops(trunks, trees));
     rich.computeBoundingSphere();
   } else {
     trunks = new Instances(geos.trunk, trunkMat, trees.length + extras.length);
@@ -944,7 +1072,8 @@ function buildTreeCell(
     writePlacements(trunks, trees);
     extras.forEach((e, i) => trunks.setMatrixAt(trees.length + i, e.trunk));
     paintBark(trunks, trees.length, extras);
-    finishInstances(trunks);
+    trunks.instanceMatrix.needsUpdate = true;
+    fitTrunks(trunks, writeTrunkDrops(trunks, trees));
   }
   trunks.castShadow = true;
   // The far tier: every other tree of a dense chunk, drawn wider (see
@@ -962,13 +1091,16 @@ function buildTreeCell(
   rich.visible = false;
   far.visible = false;
   // Which crown each set is, for the picture styles' crowns
-  // (style-dressing.ts) — a tag, the layer itself knows no style.
-  far.userData.styleCrown = "far";
-  mid.userData.styleCrown = "mid";
-  rich.userData.styleCrown = "rich";
+  // (style-dressing.ts) — a tag, the layer itself knows no style. A cone
+  // or a pine keeps its own form in a styled frame, as the register's do.
+  if (cell.form === "broad") {
+    far.userData.styleCrown = "far";
+    mid.userData.styleCrown = "mid";
+    rich.userData.styleCrown = "rich";
+  }
   // Same order as the slots: the placements, then the precomputed crowns.
   const keys = [
-    ...trees.map((p) => genericSeasonKey(p.x, p.z)),
+    ...trees.map((p) => genericSeasonKey(p.x, p.z, p.evergreen)),
     ...crowned.map((e) => e.crown?.season ?? genericSeasonKey(e.x, e.z)),
   ];
   const farSlots = [
@@ -1028,6 +1160,38 @@ export function buildCrownWarmup(): CrownWarmup {
   return crownWarmup(buildCrownGeo(), sceneCrowns());
 }
 
+/**
+ * The conifer's three tiers (conifer-crown.ts), each inside the box of the
+ * lobed crown the canopy draws at scale 1 — so a placement's matrix stands
+ * a cone where it would stand a broadleaf crown, as tall and as wide —
+ * and the broadleaf's trunk. Their cull spheres are grown like the lobed
+ * crowns' (`padCrownSphere`): the material reshapes every crown.
+ */
+export function buildConeTiers(broad: TreeGeos): TreeGeos {
+  const box = boxOf(broad.mid);
+  return {
+    far: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.far)),
+    mid: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.mid)),
+    rich: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.rich)),
+    trunk: broad.trunk,
+  };
+}
+
+/**
+ * The pine's three tiers (conifer-crown.ts `buildPineGeo`): each lobed
+ * tier reshaped into the pine's flat-topped crown in its own box, so the
+ * placement's matrix (its crown from `pineBase` to its top) fits either,
+ * and the broadleaf's trunk. Grown like the lobed crowns' cull spheres.
+ */
+export function buildPineTiers(broad: TreeGeos): TreeGeos {
+  return {
+    far: padCrownSphere(buildPineGeo(broad.far)),
+    mid: padCrownSphere(buildPineGeo(broad.mid)),
+    rich: padCrownSphere(buildPineGeo(broad.rich)),
+    trunk: broad.trunk,
+  };
+}
+
 function buildTrees(
   trees: Placement[],
   extras: TreeInstance[],
@@ -1046,13 +1210,19 @@ function buildTrees(
     rich: buildCrownGeoRich(),
     trunk: buildTrunkGeo(),
   };
+  // the needle trees' cones and pines, only for a tile that has any
+  const needles: Partial<Record<CanopyForm, TreeGeos>> = { broad: geos };
+  const geosOf = (form: CanopyForm): TreeGeos => {
+    needles[form] ??= (form === "pine" ? buildPineTiers : buildConeTiers)(geos);
+    return needles[form];
+  };
   const trunkMat = buildTrunkMaterial();
 
   const meshes: Instances[] = [];
   const chunks: VegetationChunk[] = [];
   const seasons: SeasonalCrowns[] = [];
   for (const cell of bucketTrees(trees, extras)) {
-    const built = buildTreeCell(cell, geos, trunkMat, crownMats);
+    const built = buildTreeCell(cell, geosOf(cell.form), trunkMat, crownMats);
     meshes.push(...built.meshes);
     if (built.chunk) {
       chunks.push(built.chunk);

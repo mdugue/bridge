@@ -116,7 +116,7 @@ test("null properties are tolerated", () => {
   expect(buildBallast([feature], ctx)).not.toBeNull();
 });
 
-test("buildRail: empty inputs yield an empty group, a track and a platform each a mesh", () => {
+test("buildRail: empty inputs yield an empty group, a track, its sleepers and a platform each a mesh", () => {
   const empty = buildRail(
     { rails: [], bridges: [], ballast: [], platforms: [] },
     ctx
@@ -138,7 +138,8 @@ test("buildRail: empty inputs yield an empty group, a track and a platform each 
     { rails: [track], bridges: [], ballast: [], platforms: [polygon] },
     ctx
   );
-  expect(built.children).toHaveLength(2);
+  expect(built.children.map((c) => c.name)).toContain("rail-sleepers");
+  expect(built.children).toHaveLength(3);
   for (const child of built.children) {
     expect(triangleCount(child as Mesh)).toBeGreaterThan(0);
   }
@@ -228,6 +229,11 @@ function deck(
 }
 
 const empty = { rails: [], ballast: [], platforms: [] };
+/** A bridge's stone: its fascia, ashlar parapets, piers and masonry. */
+const stoneOf = (bridge: BridgeFeature): Mesh =>
+  buildRail({ ...empty, bridges: [bridge] }, ctx).getObjectByName(
+    "bridge-stone"
+  ) as Mesh;
 const trianglesOf = (bridge: BridgeFeature, c: RailContext = ctx) =>
   buildRail({ ...empty, bridges: [bridge] }, c).children.reduce(
     (t, m) => t + triangleCount(m as Mesh),
@@ -266,9 +272,16 @@ test("a measured truss becomes an open frame with towers", () => {
   // the chord is the measured rib, smoothed: just under the 24 m peak
   expect(box.max.y).toBeGreaterThan(142);
   expect(box.max.y).toBeLessThan(144.5);
+  // a rib that rises nowhere draws nothing (and, like any rib, no railing)
+  const flat = rise.map(() => 0);
   expect(
     trianglesOf(deck({ structure: "suspension", ribs: [{ offset: 6, rise }] }))
-  ).toBeGreaterThan(plain);
+  ).toBeGreaterThan(
+    trianglesOf(
+      deck({ structure: "suspension", ribs: [{ offset: 6, rise: flat }] })
+    )
+  );
+  expect(plain).toBeGreaterThan(0);
 });
 
 test("an arch rib reaches down to its springing", () => {
@@ -298,45 +311,46 @@ test("a deck across a seam is drawn by its owner only", () => {
 });
 
 test("the fairway stays free of piers", () => {
-  const pierCount = (b: BridgeFeature) => {
-    const built = buildRail({ ...empty, bridges: [b] }, ctx);
-    const stone = built.children.at(-1) as Mesh;
-    return triangleCount(stone);
-  };
+  const pierCount = (b: BridgeFeature) => triangleCount(stoneOf(b));
   expect(pierCount(deck({ fairway: 0.5, span: 120 }))).toBeLessThan(
     pierCount(deck({}))
   );
 });
 
 test("no parapet wall runs across the roadway at the abutments", () => {
-  const built = buildRail({ ...empty, bridges: [deck({})] }, ctx);
-  const stone = built.children.at(-1) as Mesh;
-  const pos = stone.geometry.getAttribute("position");
+  for (const b of [deck({}), deck({ structure: "arch" })]) {
+    expect(acrossEnds(b)).toBe(0);
+  }
+});
+
+/** Vertices of a bridge's parapet or railing standing across its ends. */
+function acrossEnds(b: BridgeFeature): number {
+  const built = buildRail({ ...empty, bridges: [b] }, ctx);
   let across = 0;
-  for (let i = 0; i < pos.count; i++) {
-    // the deck runs along x from 0 to 200, 12 m wide: an end wall would
-    // stand at x = 0 or 200 across the middle of the road
-    const x = pos.getX(i);
-    const z = pos.getZ(i);
-    if (
-      (Math.abs(x) < 0.01 || Math.abs(x - 200) < 0.01) &&
-      Math.abs(z) < 4 &&
-      pos.getY(i) > 120
-    ) {
-      across++;
+  for (const name of ["bridge-stone", "bridge-steel"]) {
+    const mesh = built.getObjectByName(name) as Mesh | undefined;
+    const pos = mesh?.geometry.getAttribute("position");
+    for (let i = 0; pos && i < pos.count; i++) {
+      // the deck runs along x from 0 to 200, 12 m wide: an end wall would
+      // stand at x = 0 or 200 across the middle of the road
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      if (
+        (Math.abs(x) < 0.01 || Math.abs(x - 200) < 0.01) &&
+        Math.abs(z) < 4 &&
+        pos.getY(i) > 120
+      ) {
+        across++;
+      }
     }
   }
-  expect(across).toBe(0);
-});
+  return across;
+}
 
 test("a masonry bridge's walls hang from the deck's own edges", () => {
   // 200 m over a river at 100 m, deck 120 m, 12 m wide, the axis given
   // corner to corner the way the old bake wrote it would put walls off it
-  const built = buildRail(
-    { ...empty, bridges: [deck({ structure: "arch" })] },
-    ctx
-  );
-  const stone = built.children.at(-1) as Mesh;
+  const stone = stoneOf(deck({ structure: "arch" }));
   const pos = stone.geometry.getAttribute("position");
   let below = 0;
   for (let i = 0; i < pos.count; i++) {
@@ -371,7 +385,8 @@ test("a curved deck's sides all face out, the inner edge too", () => {
   };
   const built = buildRail({ ...empty, bridges: [bridge] }, ctx);
   let sides = 0;
-  for (const child of built.children) {
+  // (the railing's posts and rail face every way: they are not its sides)
+  for (const child of built.children.filter((c) => c.name !== "bridge-steel")) {
     const geo = (child as Mesh).geometry;
     const pos = geo.getAttribute("position");
     const nrm = geo.getAttribute("normal");
@@ -415,9 +430,9 @@ function vertices(b: BridgeFeature) {
 }
 
 test("a deck is closed from below, and so is an arch", () => {
-  // the deck's underside, 1.1 m under its top
+  // the deck's underside: a beam on piers 25 m apart is 1.25 m deep
   const soffit = vertices(deck({})).filter(
-    (v) => v.ny < -0.99 && Math.abs(v.y - 118.9) < 0.01
+    (v) => v.ny < -0.99 && Math.abs(v.y - 118.75) < 0.01
   );
   expect(soffit.length).toBeGreaterThan(0);
   // a masonry bridge's vaults face down between springing and crown
@@ -427,13 +442,70 @@ test("a deck is closed from below, and so is an arch", () => {
   expect(vault.length).toBeGreaterThan(0);
 });
 
+test("a railway viaduct stands on paired columns at its edges, a river on piers", () => {
+  // 200 m of rail deck over land, no fairway: columns under both edges
+  const columns = (b: BridgeFeature) =>
+    vertices(b).filter((v) => v.y < 110 && Math.abs(v.ny) < 0.1);
+  const viaduct = columns(deck({ kind: "rail" }));
+  expect(viaduct.length).toBeGreaterThan(0);
+  for (const v of viaduct) {
+    expect(Math.abs(Math.abs(v.z) - 5.4)).toBeLessThanOrEqual(0.31);
+  }
+  // a road deck keeps its piers on the axis
+  for (const v of columns(deck({}))) {
+    expect(Math.abs(v.z)).toBeLessThanOrEqual(0.66);
+  }
+  // over water the viaduct's piers stand on its axis too
+  const river = columns(deck({ kind: "rail", water: [[60, 140]] })).filter(
+    (v) => v.x > 62 && v.x < 138
+  );
+  expect(river.length).toBeGreaterThan(0);
+  for (const v of river) {
+    expect(Math.abs(v.z)).toBeLessThanOrEqual(0.66);
+  }
+  // a viaduct's girder is shallow; a baked fairway depth only caps one
+  const soffit = (b: BridgeFeature) =>
+    Math.max(
+      ...vertices(b)
+        .filter((v) => v.ny < -0.99 && v.y < 120)
+        .map((v) => v.y)
+    );
+  expect(soffit(deck({ kind: "rail" }))).toBeCloseTo(119.2, 4);
+  expect(soffit(deck({ fairway: 0.5, depth: 5 }))).toBeGreaterThan(118);
+  expect(soffit(deck({ depth: 0.9 }))).toBeCloseTo(119.1, 4);
+});
+
+test("a masonry bridge's piers stand where DOM1 saw them, a seventh of their span thick", () => {
+  const piers = [40, 80, 120, 160];
+  const stone = stoneOf(deck({ structure: "arch", piers }));
+  const pos = stone.geometry.getAttribute("position");
+  const xs = new Set<number>();
+  for (let i = 0; i < pos.count; i++) {
+    if (pos.getY(i) < 100.01) {
+      xs.add(Math.round(pos.getX(i) * 100) / 100);
+    }
+  }
+  // the piers' feet: 40 m arches between them, the piers 40/7 m thick
+  const half = 40 / 7 / 2;
+  expect([...xs].sort((a, b) => a - b)).toEqual(
+    piers
+      .flatMap((x) => [x - half, x + half])
+      .map((x) => Math.round(x * 100) / 100)
+  );
+});
+
 test("a frame on the deck's edge stands in for the parapet", () => {
   const rise = Array.from({ length: 101 }, (_, i) =>
     i > 20 && i < 80 ? 8 : 0
   );
-  const parapet = (b: BridgeFeature) =>
-    vertices(b).filter((v) => Math.abs(v.y - 120.85) < 0.01).length;
+  // a beam bridge's railing tops out 1.1 m over the deck, a masonry
+  // bridge's ashlar wall at 0.85 m
+  const parapet = (b: BridgeFeature, top = 121.1) =>
+    vertices(b).filter((v) => Math.abs(v.y - top) < 0.01).length;
   expect(parapet(deck({}))).toBeGreaterThan(0);
+  expect(parapet(deck({}), 120.85)).toBe(0);
+  expect(parapet(deck({ structure: "arch" }), 120.85)).toBeGreaterThan(0);
+  expect(parapet(deck({ structure: "arch" }))).toBe(0);
   const truss = deck({
     structure: "truss",
     ribs: [
@@ -552,6 +624,69 @@ test("a deck's top is laid out by its frame; its stone is dressed", () => {
   }
 });
 
+test("a deck's slab and parapets follow its measured line, not chords between its corners", () => {
+  // a 200 m deck cambered 3 m over its span, with only its four corners:
+  // the triangulation's faces join the abutments, so the middle of the
+  // span was drawn at the corners' 120 m
+  const line = Array.from(
+    { length: 101 },
+    (_, i) => 120 + 3 * Math.sin((Math.PI * i) / 100)
+  );
+  const lineAt = (x: number) => 120 + 3 * Math.sin((Math.PI * x) / 200);
+  const [top, , steel] = buildRail({ ...empty, bridges: [deck({ line })] }, ctx)
+    .children as Mesh[];
+  const pos = top.geometry.getAttribute("position");
+  const nrm = top.geometry.getAttribute("normal");
+  let tops = 0;
+  let soffits = 0;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    if (x < 0.01 || x > 199.99 || Math.abs(nrm.getY(i)) < 0.99) {
+      continue; // an approach beyond the ends, or the fascia
+    }
+    const up = nrm.getY(i) > 0;
+    expect(pos.getY(i)).toBeCloseTo(lineAt(x) - (up ? 0 : 1.25), 1);
+    if (up) {
+      tops++;
+    } else {
+      soffits++;
+    }
+  }
+  expect(tops).toBeGreaterThan(0);
+  expect(soffits).toBeGreaterThan(0);
+  // the railing's top along the side, mid-span too
+  const sp = steel.geometry.getAttribute("position");
+  let railing = 0;
+  for (let i = 0; i < sp.count; i++) {
+    const x = sp.getX(i);
+    if (Math.abs(x - 100) < 3 && Math.abs(Math.abs(sp.getZ(i)) - 5.85) < 0.05) {
+      railing = Math.max(railing, sp.getY(i));
+    }
+  }
+  expect(railing).toBeCloseTo(lineAt(100) + 1.1, 1);
+});
+
+test("a deck's corners stand on its measured line, not at their own baked height", () => {
+  // the bake's corner heights 0.1 m over the line: the fascia's top there
+  // met the slab's top, laid on the line, with a step
+  const line = Array.from({ length: 101 }, () => 120);
+  const bridge = deck({ deck: [120.1, 120.1, 120.1, 120.1, 120.1], line });
+  const top = buildRail({ ...empty, bridges: [bridge] }, ctx)
+    .children[0] as Mesh;
+  const pos = top.geometry.getAttribute("position");
+  let worst = 0;
+  let seen = 0;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    if (x > -0.01 && x < 200.01 && pos.getY(i) > 119.5) {
+      worst = Math.max(worst, Math.abs(pos.getY(i) - 120));
+      seen++;
+    }
+  }
+  expect(seen).toBeGreaterThan(0);
+  expect(worst).toBeLessThan(1e-3);
+});
+
 test("a curved deck's frame holds inside every triangle, not only at its corners", () => {
   // a 12 m deck along an arc of 400 m radius, 300 m long, its axis and
   // outline sampled every 30 m as the bake's are (a few vertices, long
@@ -599,4 +734,140 @@ test("a curved deck's frame holds inside every triangle, not only at its corners
     );
   }
   expect(worst).toBeLessThan(0.3);
+});
+
+test("a track with a contact line carries a catenary, one on a third rail none", () => {
+  const along = (electrified: number): RailFeature => ({
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [400, 0],
+      ],
+    },
+    properties: { electrified, tracks: 1 },
+  });
+  const names = (f: RailFeature) =>
+    buildRail(
+      { rails: [f], bridges: [], ballast: [], platforms: [] },
+      ctx
+    ).children.map((c) => c.name);
+  expect(names(along(1))).toContain("rail-catenary");
+  expect(names(along(1))).toContain("rail-catenary-masts");
+  expect(names(along(2))).not.toContain("rail-catenary");
+  expect(names(along(0))).not.toContain("rail-catenary-masts");
+});
+
+test("a track the source puts below a long lid is not drawn on it", () => {
+  // the DGM's lid 6 m over the trench for 300 m, the way mapped layer −1
+  const lid: RailContext = {
+    offset: { cx: 0, cy: 0 },
+    heightAt: (x) => (x >= 200 && x <= 500 ? 116 : 110),
+  };
+  const trench: RailFeature = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [700, 0],
+      ],
+    },
+    properties: { layer: -1, tracks: 1 },
+  };
+  const built = buildRail(
+    { rails: [trench], bridges: [], ballast: [], platforms: [] },
+    lid
+  );
+  const rails = built.children[0] as Mesh;
+  const box = new Box3().setFromObject(rails);
+  expect(box.max.y).toBeLessThan(113);
+});
+
+test("a paved track has no sleepers", () => {
+  const yard: RailFeature = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [40, 0],
+      ],
+    },
+    properties: { paved: 1, tracks: 1 },
+  };
+  const built = buildRail(
+    { rails: [yard], bridges: [], ballast: [], platforms: [] },
+    ctx
+  );
+  expect(built.children.map((c) => c.name)).not.toContain("rail-sleepers");
+});
+
+test("a mapped catenary mast stands on the side of the track it is mapped on", () => {
+  // the track runs east; OSM maps its mast 3.5 m to its left (north)
+  const track: RailFeature = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [400, 0],
+      ],
+    },
+    properties: { electrified: 1, tracks: 1, m: [[200, 3.5]] },
+  };
+  const built = buildRail(
+    { rails: [track], bridges: [], ballast: [], platforms: [] },
+    ctx
+  );
+  const masts = built.children.find((c) => c.name === "rail-catenary-masts");
+  const pos = (masts as Mesh).geometry.getAttribute("position");
+  let near = 0;
+  for (let i = 0; i < pos.count; i++) {
+    if (Math.abs(pos.getX(i) - 200) < 1 && pos.getY(i) < 102) {
+      // north is −z in the scene
+      expect(pos.getZ(i)).toBeLessThan(-2);
+      near++;
+    }
+  }
+  expect(near).toBeGreaterThan(0);
+});
+
+test("no catenary support stands under a bridge over the track", () => {
+  // a road bridge 8 m over the track across x 190–210
+  const road: BridgeFeature = {
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [190, -15],
+          [210, -15],
+          [210, 15],
+          [190, 15],
+          [190, -15],
+        ],
+      ],
+    },
+    properties: { deck: [108, 108, 108, 108, 108], kind: "road" },
+  };
+  const track: RailFeature = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [400, 0],
+      ],
+    },
+    properties: { electrified: 1, tracks: 1 },
+  };
+  const built = buildRail(
+    { rails: [track], bridges: [road], ballast: [], platforms: [] },
+    ctx
+  );
+  const masts = built.children.find((c) => c.name === "rail-catenary-masts");
+  const pos = (masts as Mesh).geometry.getAttribute("position");
+  for (let i = 0; i < pos.count; i++) {
+    // the grid's support at x 200 gives way (and its neighbours stay)
+    expect(Math.abs(pos.getX(i) - 200)).toBeGreaterThan(10);
+  }
+  const wires = built.children.find((c) => c.name === "rail-catenary");
+  const box = new Box3().setFromObject(wires as Mesh);
+  expect(box.max.y).toBeGreaterThan(106);
 });

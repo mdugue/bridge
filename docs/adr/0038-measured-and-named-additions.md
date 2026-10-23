@@ -114,6 +114,26 @@ the next city ([ADR 0037](./0037-sites-providers-and-per-site-data.md)).
   concrete), so the building wears one look. Mapping the part in OSM is
   the route, not a hand-drawn exception (plan 050's open items).
 
+## Update (2026-10-21)
+
+- **Where the surface model predates a building OSM maps** — a shell or
+  a pit where OSM maps its height — the mapped height stands, marked
+  `src: "osm"` (Hamburg's DOM1, flown 2022-11-21, saw the
+  Überseequartier as shells: The Lyte 21.6 m measured, 51.2 m mapped).
+  Guarded by OSM's date (not before 2010), a two-storey floor when the
+  model does not fill the outline, 1.5 storeys of shortfall when it
+  measured one, and the model covering the outline (≥ 95 %, so the
+  site's edge does not count as a gap in time). The name is still
+  required; the measurement is evidence of when the model was flown, not
+  of the shape.
+- **Roofs on posts follow point 1.** An OSM `building=roof`, `carport` or
+  `amenity=shelter` LoD2 lacks is drawn where DOM1 shows a level surface
+  over it, at most the kind's height, as a slab on posts
+  (`lib/city/open-roofs.ts`) — not a block down to the ground. LoD2's
+  own Überdachungen and carports (ALKIS `51009_1610`/`1611`), which it
+  models as solids, are opened the same way at build time: a geometry
+  change from an attribute the official model carries, no new shape.
+
 ## Alternatives
 
 - **Every gap from the surface model alone:** cranes, pylons and tree
@@ -141,7 +161,8 @@ the next city ([ADR 0037](./0037-sites-providers-and-per-site-data.md)).
   `lib/city/building-tint.ts` (`osmColourTint`, `MATERIAL_FAMILY`),
   `lib/city/city-mesh.ts` (`OBJECT_FLAG_GLASS`, `OBJECT_FLAG_METAL`,
   `OBJECT_FLAG_LANDMARK`, `OBJECT_SOURCE_GAP`, `inheritedLook`),
-  `scripts/bake-city-mesh.ts` (`appendGapStructures`),
+  `scripts/bake-city-mesh.ts` (`appendGapStructures`, `withOpenRoofs`),
+  `lib/city/open-roofs.ts`,
   `scripts/prepare-data.ts` (`withLandmarks`), `app/_components/
   visual-style.ts` (`osmColour`, `clayGlow`), `app/_components/scene-sidebar.tsx`.
 - [Plan 050](../plans/050-landmarks-and-gaps.md), [plan 034](../plans/completed.md#034--small-structures-from-dom--lod2--done-2026-09-26-look-unjudged-on-a-gpu--plan-019)

@@ -75,7 +75,9 @@ import { sceneMaterial } from "./three-utils";
  * advertising column (*Litfaßsäule*: a paper-pale drum with a few poster
  * fields in the palette — colour, no text — the four `lit=yes` ones glowing
  * softly at dusk), the traffic signal (a grey pole, a three-lamp head a shade deeper,
- * its glass unlit: there is no traffic to time), the hydrant (a red-ochre
+ * its glass unlit: there is no traffic to time — on a mast arm over a road
+ * of three lanes or more, and the pedestrian signal of a crossing, a
+ * slimmer post with a two-lamp head), the hydrant (a red-ochre
  * pillar; an underground one only its small sign plate on a post, drawn
  * 30 % under size so 450 of them do not read as a forest of signs), the
  * clock (a double face on a post, or a disc on its facade) whose hands
@@ -132,6 +134,11 @@ const CLOCK_FACE = 0xf3_ef_e6;
 const STOP_DISC = 0xea_dc_a8; // the stop sign's yellow, softened
 const STOP_RING = 0xb9_c9_a8; // its green, as a colour field (no letter)
 const INK = 0x86_8a_96; // clock hands: soft slate, not black
+/* The bins' colours (`c`: their own tag, else the city's), softened. */
+const BIN_RED = 0xd8_a4_98;
+const BIN_GREEN = 0xb9_c9_a8;
+const BIN_BLUE = 0xb7_c6_d6;
+const BIN_ORANGE = 0xe3_bc_9c;
 /** The underground hydrant's sign plate is drawn at this scale. */
 const HYDRANT_SIGN_SCALE = 0.7;
 /** Clock centres over the ground (m): a pole clock's, a wall clock's. */
@@ -467,14 +474,60 @@ function column(): BufferGeometry[] {
   ];
 }
 
+/** A signal's three-lamp head facing +Z, centred at (x, y). */
+function signalHead(x: number, y: number): BufferGeometry[] {
+  return [
+    block([0.32, 0.95, 0.22], [x, y, 0.13], SIGNAL_HEAD, 0.05),
+    ...[-0.29, 0, 0.29].map((dy) =>
+      disc(0.085, 0.04, [x, y + dy, 0.25], GLASS)
+    ),
+  ];
+}
+
 /** A traffic signal: a grey pole, the three-lamp head facing +Z. */
 function signal(): BufferGeometry[] {
+  return [pillar(0.06, 3.2, [0, 0], SLATE), ...signalHead(0, 2.72)];
+}
+
+/** A signal's mast arm over three lanes or more: how far it reaches over
+ *  the road and how high (m). */
+const ARM_REACH = 5;
+const ARM_Y = 5.8;
+
+/**
+ * A traffic signal on a mast arm (`arm`: a road of three lanes or more): a
+ * taller mast with the post's head at eye height, its arm reaching over
+ * the lanes and a second head hanging from its end. The road lies on its
+ * local −X: it stands at the kerb on the traffic's right, facing it.
+ */
+function signalArm(): BufferGeometry[] {
+  const arm = new CylinderGeometry(0.05, 0.07, ARM_REACH, 8);
+  arm.rotateZ(Math.PI / 2);
+  arm.translate(-ARM_REACH / 2, ARM_Y, 0);
   return [
-    pillar(0.06, 3.2, [0, 0], SLATE),
-    block([0.32, 0.95, 0.22], [0, 2.72, 0.13], SIGNAL_HEAD, 0.05),
-    ...[-0.29, 0, 0.29].map((dy) =>
-      disc(0.085, 0.04, [0, 2.72 + dy, 0.25], GLASS)
-    ),
+    pillar(0.08, ARM_Y + 0.15, [0, 0], SLATE),
+    tinted(arm, SLATE),
+    ...signalHead(0, 2.72),
+    ...signalHead(0.35 - ARM_REACH, ARM_Y - 0.6),
+  ];
+}
+
+/** A pedestrian signal: a 2.5 m post, its two-lamp head facing +Z (across
+ *  the road, at the far kerb), the request button towards its own kerb. */
+function pedSignal(): BufferGeometry[] {
+  return [
+    pillar(0.05, 2.5, [0, 0], SLATE),
+    block([0.28, 0.6, 0.2], [0, 2.05, 0.12], SIGNAL_HEAD, 0.04),
+    ...[-0.14, 0.14].map((dy) => disc(0.08, 0.04, [0, 2.05 + dy, 0.23], GLASS)),
+    block([0.12, 0.2, 0.08], [0, 1.05, -0.07], PAPER, 0.02),
+  ];
+}
+
+/** A litter bin: a soft drum in its colour with a darker lid. */
+function bin(hex: number): BufferGeometry[] {
+  return [
+    pillar(0.22, 0.86, [0, 0], hex),
+    block([0.4, 0.05, 0.4], [0, 0.86, 0], HONEY_DEEP, 0.02),
   ];
 }
 
@@ -566,11 +619,12 @@ const MODEL_PARTS: Record<FurnitureModel, () => BufferGeometry[]> = {
   bench: () => bench(true),
   stool: () => bench(false),
   picnic,
-  // A soft drum with a darker lid.
-  bin: () => [
-    pillar(0.22, 0.86, [0, 0], SLATE),
-    block([0.4, 0.05, 0.4], [0, 0.86, 0], HONEY_DEEP, 0.02),
-  ],
+  bin: () => bin(SLATE),
+  binRed: () => bin(BIN_RED),
+  binGreen: () => bin(BIN_GREEN),
+  binBlue: () => bin(BIN_BLUE),
+  binOrange: () => bin(BIN_ORANGE),
+  binYellow: () => bin(MUSTARD),
   hoop,
   bollard: () => [pillar(0.09, 0.9, [0, 0], STONE)],
   post: () => [pillar(0.09, 0.9, [0, 0], BRONZE)],
@@ -590,6 +644,8 @@ const MODEL_PARTS: Record<FurnitureModel, () => BufferGeometry[]> = {
   column,
   columnLit: column,
   signal,
+  signalArm,
+  pedSignal,
   hydrant,
   hydrantSign,
   clock: poleClock,
@@ -933,7 +989,9 @@ export function buildFurniture(
   const areas = furnitureAreas(features);
   const byModel = new Map<FurnitureModel, Stood[]>();
   for (const piece of furniturePieces(features)) {
-    const ground = ctx.heightAt(piece.x, piece.y);
+    // on a bridge, its deck's top: the ground there is the river or the road
+    // the bridge spans
+    const ground = piece.deck ?? ctx.heightAt(piece.x, piece.y);
     if (ground === null) {
       continue; // off the tile / NoData
     }

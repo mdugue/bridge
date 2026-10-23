@@ -190,6 +190,41 @@ of them faces (95 before; a steep face narrower than `NARROW_M` is never
 merged away as a strip). Faces from 4 m: more ragged rings round
 courtyards for little more.
 
+## Update (2026-10-21): a fifth off a level roof is enough; drawn strips held to the bar
+
+The photo QA (PR #173) found the low hipped roofs the 2025 edition models
+over Leipzig's department stores standing: a 4–6 m hip over a roof the
+scan measures flat misses on only a quarter to a third of it, along the
+ridges, under the 40 % `MISS_SHARE` (`DESNATPU1000Bk2M`, 5 667 m²: 31 %).
+**Missing on more than 20 % (`LEVEL_MISS_SHARE`) is now enough where the
+scan is level under at least 60 % of the missed cells** (`LEVEL_SHARE`,
+`level_share`: rising < `SLOPE`, a step's edge aside) — a pitch or a level
+the LoD2 draws over a level roof — **unless the scan confirms the LoD2's
+pitch** (`pitch_holds`: the LoD2 rises > `SLOPE` on at least half the
+judged cells and the scan on at least half of those). Without that test
+the band flattened a row house's gable and a barrel vault, both too narrow
+for faces, for the annex the LoD2 had left out beside them (Hamburg, 22 %
+and 20 % off). The decision on the flat model is unchanged.
+
+Second, **what is drawn is held to the decision's bar**: where merging
+its narrow parts makes it miss more than half the LoD2's share (or
+`KEEP_SHARE`, as before), they stay apart. A hall's monitor roofs, 5 m
+strips 3 m over the rest, had merged into blocks that missed as much as
+the LoD2 — 5 of the 109 rebuilt objects on `33408_5654`, one worse than
+its LoD2. Where the faces then still miss more, the flat model, which met
+the bar, is drawn (13 objects over five cities; a LoD2 in München off on
+88 % would otherwise have stayed).
+
+Rebuilt objects: Dresden 887 → 1 081 (2 755 parts, 222 faces), Hamburg
+365 → 587, Leipzig 269 → 357, Unna 43 → 61, Meißen 46 → 56, Grimma
+13 → 17, München 120 → 121. Checked against the DOP on the largest new
+ones of Hamburg, Leipzig and Dresden and a random draw in Hamburg.
+Rejected: **lowering `MISS_SHARE` to 20 %** (on Leipzig's tile it also
+rebuilt right gables and a museum's pitched wings, 22–30 % off where the
+scan slopes); **judging the sloping scan the drawn roof flattens** (a flat roof's
+1 m scan rises past `SLOPE` on a quarter of its cells at parapets and
+plant rooms, so it told the store from the gable no better).
+
 ## Alternatives
 
 - **Re-triangulate the non-planar polygons** (constrained Delaunay, a

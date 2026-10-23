@@ -13,6 +13,7 @@ import type { Node, UniformNode } from "three/webgpu";
  */
 
 export type F = Node<"float">;
+export type I = Node<"int">;
 export type V2 = Node<"vec2">;
 export type V3 = Node<"vec3">;
 export type V4 = Node<"vec4">;

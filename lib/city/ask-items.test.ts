@@ -66,6 +66,38 @@ test("an orchard tree appended to the file's is askable past its end, as an orch
     index: trees.length,
     orchard: true,
   });
+  expect(hit?.target).not.toHaveProperty("measured");
+  const measured = treeSets(
+    [...trees, { ...orchard, properties: { ...orchard.properties!, m: 1 } }],
+    ctx
+  );
+  const again = nearestInSets({ x: w.x, y: 200, z: w.z }, down, measured, 500);
+  expect(again?.target).toMatchObject({ orchard: true, measured: true });
+});
+
+test("a pine and a yew are needle trees on the card, as the cone's conifers are", () => {
+  const tree = (x: number, a: number): TreeFeature => ({
+    geometry: { type: "Point", coordinates: [412_000 + x, 5_656_000] },
+    properties: { a, h: 12, d: 6, l: a === 0 ? "d" : "e" },
+  });
+  // round, conifer, pine, bush (tree-inventory.ts TREE_ARCHETYPES)
+  const trees = [tree(0, 0), tree(40, 3), tree(80, 6), tree(120, 7)];
+  const sets = treeSets(trees, ctx);
+  const conifer = trees.map((t) => {
+    const [ex, ey] = t.geometry.coordinates;
+    const w = epsgToWorld(ex, ey, offset);
+    const hit = nearestInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500);
+    return (hit?.target as { conifer?: boolean } | undefined)?.conifer;
+  });
+  expect(conifer).toEqual([false, true, true, true]);
+  // only the cone's conifer is drawn, and outlined, as the cone
+  const cone = trees.map((t) => {
+    const [ex, ey] = t.geometry.coordinates;
+    const w = epsgToWorld(ex, ey, offset);
+    const hit = nearestInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500);
+    return (hit?.target as { cone?: boolean } | undefined)?.cone === true;
+  });
+  expect(cone).toEqual([false, true, false, false]);
 });
 
 test("a fountain basin and the monuments are askable where they stand", () => {

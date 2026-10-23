@@ -48,10 +48,24 @@ export interface VegRowFeature {
   properties: { kind: "hedge" | "treerow" } | null;
 }
 
-/** DOM1-derived canopy points with the measured tree height (pipeline/bake/canopy.py). */
+/** DOM1-derived canopy points with the measured tree height
+ *  (pipeline/bake/canopy.py); `l: "e"` an evergreen — a needle forest's, or
+ *  with `ls: "dop"` a mixed forest's crown a leaf-off flight shows green —,
+ *  absent a broadleaf; `pine: 1` an evergreen whose crown the surface
+ *  model shows flat-topped, a pine's (pipeline/bake/crown_form.py; the
+ *  rest are drawn as cones); `c: 1` a crown that reaches over a carriageway
+ *  (it starts clear of the traffic); `row: 1` a tree row's tree at its
+ *  crown peak (the bake's only: the packed points drop it). */
 export interface CanopyFeature {
   geometry: PointGeometry;
-  properties: { h: number } | null;
+  properties: {
+    c?: 1;
+    h: number;
+    l?: "e";
+    ls?: "dop";
+    pine?: 1;
+    row?: 1;
+  } | null;
 }
 
 /**
@@ -102,6 +116,9 @@ export interface TreeFeature {
     gn?: number;
     h: number;
     l: "d" | "e";
+    /** 1: an orchard tree DOM1 measured (cultivated.py `src: "dom"`), its
+     *  height and crown the surface model's (at runtime only) */
+    m?: 1;
     /** "osm": an OSM tree, not the register's; "orchard": an orchard
      *  tree (lib/city/cultivated.ts, at runtime only — no file has it) */
     s?: "orchard" | "osm";
@@ -115,14 +132,16 @@ export interface TreeFeature {
  *  already thinned against the street-tree cadastre: a canopy point plus
  *  the crown radius, so it drops into the tree layer. */
 export interface CanopyExtraFeature extends CanopyFeature {
-  properties: { h: number; r: number } | null;
+  properties: (NonNullable<CanopyFeature["properties"]> & { r: number }) | null;
 }
 
 /**
- * Hedges (pipeline/bake/lowveg.py): the OSM `barrier=hedge` lines with their
- * height and width in metres. `src` says where the height came from —
- * "osm+lsc" (the GeoSN laser scan measured it) or "osm" (the tag, or a
- * default).
+ * Hedges (pipeline/bake/lowveg.py): the OSM `barrier=hedge` lines and the
+ * laser scan's own hedges that pass its filters, with their height and
+ * width in metres. `src` says where the line and the height came from —
+ * "osm+lsc" (OSM's line, the laser scan measured it), "osm+dom" (OSM's
+ * line, measured in the surface model DOM1 where no scan is), "osm" (the
+ * tag, or a default) or "lsc" (line and height both the scan's).
  */
 export interface LowVegFeature {
   geometry: LineGeometry;
@@ -134,30 +153,51 @@ export interface LowVegFeature {
   } | null;
 }
 
-export type LowVegSource = "osm" | "osm+lsc";
+export type LowVegSource = "osm" | "osm+lsc" | "osm+dom" | "lsc";
 
-/** OSM street lamps (pipeline/bake/lamps.py, ODbL); the post height is a
- *  lamp-layer constant. A lamp hung across the street carries its `wire`
- *  (the two ends, EPSG; the head at the point, `h` m over the ground) and
- *  `masts` where an end is a mast at the kerb, not a facade. The source
- *  (`src`): "mly" for Mapillary's, lib/city/mapillary.ts. */
+/** How a lamp post's height was found (pipeline/bake/lamp_heights.py). */
+export type LampHeightSource = "street" | "class";
+
+/** OSM street lamps (pipeline/bake/lamps.py, ODbL). A post's `h` is its
+ *  height (m), measured in DOM1 as its street's median (`hs: "street"`) or
+ *  its kind of street's on the tile (`"class"`; pipeline/bake/
+ *  lamp_heights.py), else 5 m. A lamp hung across the street carries its
+ *  `wire` (the two ends, EPSG; the head at the point, `h` m over the
+ *  ground) and `masts` where an end is a mast at the kerb, not a facade.
+ *  A lamp on a bridge carries its deck's top there (`deck`, m), which its
+ *  post stands on. A lamp OSM puts on a wall hangs on its facade, or with
+ *  no building near on a mapped wall (`on: "wall"`): the point is its head,
+ *  `h` m over the ground, `wall` its bracket's foot (EPSG), and it has no
+ *  post. A tall post (or one OSM calls a bent mast, `bent`) holds its head
+ *  on an arm over the carriageway: `arm`, the arm's compass bearing
+ *  (degrees; pipeline/bake/lamp_heights.py `arm_of`). The source (`src`): "mly" for
+ *  Mapillary's, lib/city/mapillary.ts. */
 export interface LampFeature {
   geometry: PointGeometry;
   properties: {
+    arm?: number;
+    bent?: boolean;
+    deck?: number;
     h?: number;
+    hs?: LampHeightSource;
     masts?: [boolean, boolean];
+    on?: "wall";
     src?: "mly";
+    wall?: Point2;
     wire?: [Point2, Point2];
   } | null;
 }
 
 /** Street lamps and litter bins OSM lacks, detected by Mapillary
  *  (pipeline/bake/mapillary.py, CC BY-SA 4.0); a lamp hung across the
- *  street carries the OSM lamps' `wire`, `masts` and `h`. */
+ *  street carries the OSM lamps' `wire`, `masts` and `h`, a tall post their
+ *  `arm`. */
 export interface MapillaryFeature {
   geometry: PointGeometry;
   properties: {
+    arm?: number;
     h?: number;
+    hs?: LampHeightSource;
     k: "bin" | "lamp";
     masts?: [boolean, boolean];
     wire?: [Point2, Point2];
@@ -174,6 +214,7 @@ export type FurnitureKind =
   | "column"
   | "hydrant"
   | "hydrantsign"
+  | "pedsignal"
   | "picnic"
   | "postbox"
   | "shelter"
@@ -210,21 +251,35 @@ export type PlaygroundKind =
  * `hydrantsign`: the sign plate of an underground one), clocks (`clock` on
  * a pole, `wallclock` on a facade — the point on the wall, `a` out of it),
  * drinking fountains (`water`) and the "H" sign of a bus stop without a
- * shelter (`stop`).
+ * shelter (`stop`). The QA's corrections added the pedestrian signals of a
+ * signalled crossing (`pedsignal`, at each kerb, looking across), a car
+ * signal's mast arm over a road of three lanes or more (`arm`) and its
+ * far-side repeater (a second `signal`), a bin's colour (`c`) and the
+ * equipment the surface model shows in a playground OSM maps empty
+ * (`src: "dom"`).
  */
 export interface FurnitureFeature {
   geometry: PointGeometry | PolygonGeometry;
   properties: {
     a?: number;
+    /** a signal's head hangs on a mast arm over the lanes (≥ 3 lanes) */
+    arm?: boolean;
     back?: boolean;
+    /** a bin's colour, where not the model's grey: its own `colour` tag,
+     *  else the city's tagged majority */
+    c?: "blue" | "green" | "orange" | "red" | "yellow";
+    /** on a bridge: the top of its road or path deck there (m), which the
+     *  piece stands on instead of the ground */
+    deck?: number;
     h?: number;
     k: FurnitureKind;
     l?: number;
     lit?: boolean;
     metal?: boolean;
     n?: number;
-    /** "mly": Mapillary's, not OSM's (lib/city/mapillary.ts) */
-    src?: "mly";
+    /** "mly": Mapillary's, not OSM's (lib/city/mapillary.ts); "dom": a
+     *  playground's piece measured in DOM1 − DGM1, not mapped */
+    src?: "dom" | "mly";
   } | null;
 }
 
@@ -240,10 +295,14 @@ export type MonumentKind = "column" | "fountain" | "statue" | "stone";
 /**
  * What a monument is, by OSM's `memorial=*` / `artwork_type=*` (ODbL): a
  * figure on its pedestal, a bust, a free sculpture, a stele, a stone, an
- * obelisk. The DLM's code alone does not tell a statue from a stone.
+ * obelisk, a column — or, for a war memorial or a bare monument, what its
+ * measured height says (pipeline/bake/monuments.py `default_form`; a
+ * column where the surface shows a slim shaft). The DLM's code alone does
+ * not tell a statue from a stone.
  */
 export type MonumentForm =
   | "bust"
+  | "column"
   | "obelisk"
   | "sculpture"
   | "statue"
@@ -270,19 +329,34 @@ export interface ReliefGrid {
 export interface MonumentFeature {
   geometry: PointGeometry | PolygonGeometry;
   properties: {
+    /** the bearing a monument without a relief faces (degrees clockwise
+     *  from north): the centre of its square, else its nearest way */
+    a?: number;
     /** who made it (OSM `artist_name`) */
     artist?: string;
+    /** a winter housing stood over it when the surface was flown: no
+     *  relief, its form's default (a fountain's figure as a sculpture) */
+    cover?: boolean;
     /** a fountain with a DLM monument in it (its sculpture is measured) */
     figure?: boolean;
     /** what it is, from OSM (absent: nothing says) */
     form?: MonumentForm;
     /** its tagged height (m, OSM `height`) */
     height?: number;
+    /** its height measured in the open where no relief is (m, clamped to
+     *  its form's range) */
+    hm?: number;
+    /** "lsc": the laser scan measured its relief or `hm`, not DOM1 */
+    hs?: "lsc";
     kind: MonumentKind;
     /** what it is made of, in German ("Bronze, Granit"; OSM `material`,
      *  else Wikidata's — then `wikidata` is set) */
     material?: string;
     name?: string;
+    /** a point fountain's basin radius (m) where it is small: a drinking
+     *  fountain, a stone block (absent: lib/city/monuments.ts
+     *  POINT_BASIN_R) */
+    r?: number;
     /** the measured sculpture or monument (pipeline/bake/monuments.py) */
     relief?: ReliefGrid;
     source?: "dlm" | "dlm+osm" | "osm";
@@ -321,6 +395,37 @@ export interface DoorFeature {
     of: string;
     w: number;
     z: number;
+  } | null;
+}
+
+/** One LoD2 object's share of a passage (`PassageFeature`): its ceiling's
+ *  plan (outer rings), the walls along it (each walked with the passage on
+ *  its left) and its portals `[x, y, nx, ny]` (the wall's outward normal),
+ *  all EPSG. */
+export interface PassagePart {
+  portals: [number, number, number, number][];
+  roof: [number, number][][];
+  sides: [number, number][][];
+}
+
+/**
+ * A passage through LoD2 buildings (pipeline/bake/passages.py, ODbL; a
+ * city-mesh bake input, not served): OSM's `tunnel=building_passage` ways
+ * `osm` merged end to end, as the axis it runs on through the walls; its
+ * width `w` (from OSM's `width` or its `kind`, `wFrom`), OSM's clear height
+ * `h` (null: the build takes the ground storey's), the ground per vertex of
+ * the axis `z`, and what each LoD2 object it runs through holds of it.
+ */
+export interface PassageFeature {
+  geometry: LineGeometry;
+  properties: {
+    h: number | null;
+    kind: string;
+    of: Record<string, PassagePart>;
+    osm: number[];
+    w: number;
+    wFrom: "kind" | "width";
+    z: number[];
   } | null;
 }
 
@@ -378,7 +483,9 @@ export interface PlinthFeature {
  *  the roof's downslope direction (`ax`, `ay`), its width across and depth
  *  along the slope (`w`, `d`), the roof's height at the centre (`z`), its
  *  measured top (`top`), the roof's slope (degrees) and the LoD2 object it
- *  sits on (`of`). */
+ *  sits on (`of`). A shed dormer carries its roof's fall (`tf`, degrees,
+ *  down the slope); its `top` is then where that roof meets the main
+ *  roof, the line it falls from. */
 export interface DormerFeature {
   geometry: PointGeometry;
   properties: {
@@ -387,6 +494,7 @@ export interface DormerFeature {
     d: number;
     of: string;
     slope: number;
+    tf?: number;
     top: number;
     w: number;
     z: number;
@@ -396,16 +504,29 @@ export interface DormerFeature {
 /** What the surface model shows and LoD2 lacks, confirmed by OSM
  *  (pipeline/bake/structures.py, ODbL): a column (chimney, tower, mast,
  *  water tower, communications tower, lighthouse) as its axis point with
- *  foot radius `r` and top radius `rt`, or a whole building as its outline;
- *  `z` the lowest ground, `h` the measured height above it. */
+ *  foot radius `r` and top radius `rt`, or a whole building or a roof on
+ *  posts (`roof`: a platform roof, a carport) as its outline; `z` the
+ *  lowest ground, `h` the measured height above it. */
 export interface StructureFeature {
   geometry: PointGeometry | PolygonGeometry;
   properties: {
+    /** a building OSM lifts off the ground (a bridge between two, an
+     *  overhang): its floor, m over `z`; absent: on the ground */
+    base?: number;
     h: number;
     kind: StructureKind;
     name?: string;
+    /** a building's height from OSM (`height`, else `building:levels`),
+     *  where the surface model was flown before it stood (`osm`); absent:
+     *  measured */
+    src?: "osm";
     /** a relief: the LoD2 object it sits on (and whose look it wears) */
     of?: string;
+    /** a measured building's roof in the shape the surface model shows
+     *  (structures.py `shaped_roof`, as roofs.py rebuilds a LoD2 roof):
+     *  each part's outline, its roof at `z` metres (absolute) and a face's
+     *  `surface`; absent: the flat roof at `h` */
+    parts?: StructureRoofPart[];
     /** a relief's height field: heights (m) above `z` on a north-up grid
      *  from its north-west corner (x, y), row by row; -1 outside it */
     grid?: HeightField;
@@ -413,6 +534,14 @@ export interface StructureFeature {
     rt?: number;
     z: number;
   } | null;
+}
+
+/** One part of a missing building's shaped roof: a measured roof's part
+ *  (`MeasuredRoofFeature`) without the object id. */
+export interface StructureRoofPart {
+  coordinates: Point2[][];
+  surface?: MeasuredSurface;
+  z: number;
 }
 
 export interface HeightField {
@@ -436,6 +565,7 @@ export const STRUCTURE_KINDS = [
   "lighthouse",
   "building",
   "relief",
+  "roof",
 ] as const;
 export type StructureKind = (typeof STRUCTURE_KINDS)[number];
 
@@ -465,10 +595,14 @@ export interface MeasuredRoofFeature {
 
 /** OSM retaining/city walls and cliffs (pipeline/bake/walls.py, ODbL): the
  *  barrier/man_made kind or "cliff" (only retaining kinds and cliffs reshape
- *  the terrain) and the height in metres. */
+ *  the terrain), the height in metres (tagged, else measured in the surface
+ *  model, else the kind's fallback) and, for a wall, retaining or city
+ *  wall, its material (tagged, else the site's majority; lib/city/walls.ts
+ *  `WALL_TONES`). A `quay` is no OSM line: measured where the water meets
+ *  the land in the DGM (walls.py `quays`), its height the measured rise. */
 export interface WallFeature {
   geometry: LineGeometry;
-  properties: { h: number; kind: string } | null;
+  properties: { h: number; kind: string; mat?: string } | null;
 }
 
 /** OSM fences and railings, in the walls file after the walls (walls.py,
@@ -499,17 +633,30 @@ export interface GateFeature {
 export type WallFileFeature = FenceFeature | GateFeature | WallFeature;
 
 /** The kerb lines (pipeline/bake/edges.py, from the Basis-DLM road class):
- *  the smoothed carriageway edge, the road on each line's left. */
+ *  the smoothed carriageway edge, the road on each line's left, and where
+ *  it is lowered (`low`: [from, to, kerb height] in metres along the line —
+ *  at crossings, lowered or flush kerb nodes and driveways;
+ *  pipeline/bake/kerb_drops.py). */
 export interface KerbFeature {
   geometry: LineGeometry;
-  properties: Record<string, never> | null;
+  properties: { low?: [number, number, number][] } | null;
 }
 
 /** OSM `highway=steps` flights (pipeline/bake/stairs.py, ODbL): the axis runs
  *  bottom → top; width (m), step count and the two landing heights (m). */
 export interface StairFeature {
   geometry: LineGeometry;
-  properties: { n: number; w: number; z: [number, number] } | null;
+  properties: {
+    /** what it is made of (its surface, else the site's majority) */
+    mat?: string;
+    n: number;
+    /** handrails to draw, left and right of the climb */
+    rail?: [boolean, boolean];
+    w: number;
+    /** an OSM wall or building along the left and the right side */
+    walled?: [boolean, boolean];
+    z: [number, number];
+  } | null;
 }
 
 /** Raised OSM areas a flight climbs onto that the DGM lacks (the Brühlsche
@@ -524,18 +671,28 @@ export interface TerraceFeature {
  *  (*Rasengleis*), or ballast. */
 export type TramBed = "ballast" | "grass" | "street";
 
-/** The parts of the tram layer: a track, a catenary mast, the wires that
- *  hold the contact wire (a span between two masts, an arm from one, a span
- *  between two facades' rosettes) and a stop sign. */
-export type TramKind = "arm" | "mast" | "rosette" | "span" | "stop" | "track";
+/** The parts of the tram layer: a track, a catenary mast (mapped) or pole
+ *  (placed where none is mapped: at the street's edge, or between a double
+ *  track with a central strip), the wires that hold the contact wire (a
+ *  span between two masts or poles, an arm from one, a span between two
+ *  facades' rosettes) and a stop sign. */
+export type TramKind =
+  | "arm"
+  | "mast"
+  | "pole"
+  | "rosette"
+  | "span"
+  | "stop"
+  | "track";
 
 /**
  * OSM trams (pipeline/bake/tram.py, ODbL). A `track` is one track's
  * centreline, cut at the tile edge, with its `bed`, `bridge: 1` on a bridge,
  * the OSM `layer`, its gauge `g` (m) where OSM maps one, and `s`: the distances (m along the line) where a span or
- * arm holds its contact wire. A `mast` is a Point; `span`, `rosette` and
- * `arm` are two-point lines between their anchors (mast or facade; an arm
- * ends over its track) with `x`, the fractions along a span where it
+ * arm holds its contact wire. A `mast` and a `pole` are Points (`lamp: 1`
+ * on a pole that is a mapped street lamp's post); `span`, `rosette` and
+ * `arm` are two-point lines between their anchors (mast, pole or facade; an
+ * arm ends over its track) with `x`, the fractions along a span where it
  * crosses a track. A `stop` is a Point with the stop's `name` and the
  * bearing `a` its sign faces.
  */
@@ -548,6 +705,8 @@ export interface TramFeature {
     /** a track's gauge (m) */
     g?: number;
     k: TramKind;
+    /** a pole that is a mapped street lamp's post */
+    lamp?: number;
     layer?: number;
     /** a track's runs off the ground (lib/city/levels.ts), added by the
      *  build step (scripts/line-levels.ts), never committed */
@@ -563,21 +722,31 @@ export interface TramFeature {
 export type RiversideKind = "ferry" | "groyne" | "pier" | "pontoon";
 
 /**
- * OSM on the river (pipeline/bake/riverside.py, ODbL). A `pier` is its
- * deck outline with `deck`, the deck's height (m: the bank at its landward
- * end + 0.4); a `pontoon` its outline cut to the water, with `len` (m) and
- * `bank`, where its gangway meets the bank (absent when a fixed pier
- * reaches it) — its height is the drawn water's, read at runtime. A
- * `groyne` and a `ferry` (with the route's `name`) are lines.
+ * OSM on the river (pipeline/bake/riverside.py, ODbL), each only where the
+ * surface model shows it out of the water. A `pier` is its deck outline
+ * with `deck`, the deck's height (m: DOM1 over its part on the water, else
+ * the bank at its landward end + 0.4); a `pontoon` its outline cut to the
+ * water, with `len` (m), `fb` its freeboard (m over the water, from DOM1),
+ * `finger: 1` on a finger pier floating with its pontoon, and `bank`, where
+ * its gangway meets the bank (absent when a fixed pier reaches it) — its
+ * height is the drawn water's, read at runtime. A `groyne` (cut to where
+ * the DGM shows it, `w` the water beside it, m) and a `ferry` (with the
+ * route's `name`) are lines.
  */
 export interface RiversideFeature {
   geometry: LineGeometry | PolygonGeometry;
   properties: {
     bank?: Point2;
     deck?: number;
+    /** a pontoon's freeboard over the water (m) */
+    fb?: number;
+    /** a finger pier floating with its pontoon */
+    finger?: number;
     k: RiversideKind;
     len?: number;
     name?: string;
+    /** the water level beside a groyne (m) */
+    w?: number;
   } | null;
 }
 
@@ -613,14 +782,25 @@ export interface TrafficFeature {
   } | null;
 }
 
-/** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). `lv`
- *  is added by the build step (scripts/line-levels.ts), never committed:
- *  the line's runs off the ground (lib/city/levels.ts). */
+/** Railway tracks (pipeline/bake/rail.py, rail_osm.py): OSM's every track
+ *  one by one — with its way's `bridge` (0/1), `layer` (when not 0), `g`
+ *  the gauge (m, when not standard), `paved` 1 where set in the paving,
+ *  `m` the mapped catenary masts beside it ([station, offset to the left]
+ *  m) — and the Basis-DLM ver03_l centrelines OSM has no track beside
+ *  (`tracks` side by side, no `bridge`). `electrified`: 1 an overhead
+ *  contact line, 2 a third rail, 0 none. `lv` is added by the build step
+ *  (scripts/line-levels.ts), never committed: the line's runs off the
+ *  ground (lib/city/levels.ts). */
 export interface RailFeature {
   geometry: LineGeometry;
   properties: {
+    bridge?: number;
     electrified?: number;
+    g?: number;
+    layer?: number;
     lv?: LevelRun[];
+    m?: [number, number][];
+    paved?: number;
     tracks?: number;
   } | null;
 }
@@ -655,13 +835,28 @@ export interface BridgeFeature {
     wikidata?: string;
     /** its main span (m, Wikidata P2787) */
     span?: number;
+    /** its number of spans (Wikidata P1314) */
+    spans?: number;
+    /** a masonry bridge's piers where DOM1's deck bulges over them
+     *  (stations, m along the axis) */
+    piers?: number[];
+    /** the stretches of the axis over water ([from, to] stations, m) */
+    water?: [number, number][];
+    /** the ways under the deck the DGM closes, and the bridge the DGM
+     *  holds: passages the terrain opens (lib/city/passages.ts; EPSG
+     *  points `c`, the level `y` at each, half the width `h`) */
+    under?: { c: [number, number][]; h: number; y: number[] }[];
   } | null;
 }
 
 /**
  * Cultivated land (pipeline/bake/cultivated.py, ODbL): allotment colonies
- * and their mapped parcels, orchards with their trees (`h`, `d`; mapped or
- * on an 8 m grid), vineyards with their rows along the contour.
+ * and their mapped parcels, orchards with their trees (`h`, `d`: at DOM1's
+ * crown peaks as tall as measured, `src: "dom"`; without DOM1 mapped or on
+ * an 8 m grid; `g` the genus from the orchard's `trees=*`, `l: "e"` a
+ * Christmas-tree plantation's), vineyards with the way their rows run
+ * (`dir`, degrees from east; `gap`, m; `src` the orthophoto's rows, the
+ * fall line, the contour or the long axis) and the rows.
  */
 export interface CultivatedFeature {
   geometry:
@@ -672,9 +867,13 @@ export interface CultivatedFeature {
     | null;
   properties: {
     d?: number;
+    dir?: number;
+    g?: string;
+    gap?: number;
     h?: number;
     k: "colony" | "orchard" | "parcel" | "row" | "tree" | "vineyard";
-    src?: "grid" | "osm";
+    l?: "e";
+    src?: "axis" | "contour" | "dom" | "dop" | "fall" | "grid" | "osm";
   } | null;
 }
 

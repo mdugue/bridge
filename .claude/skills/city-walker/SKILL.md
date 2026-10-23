@@ -829,7 +829,7 @@ bun run fetch dresden                  # download what the site needs (its provi
 bun run bake dresden                   # every tile, every step
 bun run bake dresden 33412_5656_2_sn   # one tile, all steps
 bun run bake dresden --step canopy     # one step (STEPS in pipeline/bake/__main__.py, in this order):
-                                       #   landcover islands rail canopy trees ndvi roof-colour
+                                       #   landcover islands rail ndvi canopy trees roof-colour
                                        #   osm-buildings lamps monuments furniture walls stairs surface edges
                                        #   markings sport tram riverside traffic roofs skyview
                                        #   lowveg cultivated small-buildings
@@ -841,7 +841,10 @@ bun run test:pipeline                  # pytest + ruff
 Missing DOM1 or DOP skips the canopy, NDVI and roof-colour steps (the
 runtime falls back); rail decks fall back to the DGM ramp. An RGB-only DOP
 (Bavaria) gets the NDVI raster from the visible bands (GLI, `ndvi.py`
-`gli_raster`). Without a Basis-DLM (Hamburg, Berlin) `rail` reads OSM
+`gli_raster`). Every flight's index is mapped onto Dresden's scale (its
+carriageways and mown lawns as anchors, pooled over the site's tiles), so a
+green threshold tuned on Dresden holds in every city — never tune one per
+site. Without a Basis-DLM (Hamburg, Berlin) `rail` reads OSM
 (`rail_osm.py`: rails, ballast beds, bridge ways merged per bridge and
 level) — it runs before `canopy`, which keeps crowns off those decks.
 Stand-ins are marked per city in the generated

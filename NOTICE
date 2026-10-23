@@ -30,9 +30,23 @@ data and stays under the licence of its source:
 
   - GTFS timetable: DELFI e.V. via gtfs.de, CC BY 4.0.
 
-  - Mapillary's detected objects (Dresden's street lamps and litter bins
-    OpenStreetMap lacks, data/<site>/dlm/mly_*.geojson): Mapillary,
-    CC BY-SA 4.0. Kept in their own files, apart from the ODbL layers.
+  - Copernicus DEM GLO-30 (the land beyond each site, in the baked sky
+    view and horizon, data/<site>/dlm/svf_* and horizon_*): produced using
+    Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and
+    Space GmbH 2014-2018 provided under COPERNICUS by the European Union
+    and ESA; all rights reserved. The organisations in charge of the
+    Copernicus programme by law or by delegation do not incur any
+    liability for any use of the Copernicus WorldDEM-30.
+
+  - Mapillary's detected objects (the street lamps OpenStreetMap lacks in
+    Dresden, Grimma, Meißen and Unna, data/<site>/dlm/mly_*.geojson):
+    Mapillary, CC BY-SA 4.0. Kept in their own files, apart from the ODbL
+    layers.
+
+  - The Deutscher Wetterdienst's phenology reporters (the trees' leaf-out,
+    autumn and leaf-fall days and each city's shift from Dresden's, read
+    into lib/city/tree-season.ts): Quelle: Deutscher Wetterdienst,
+    dl-de/by-2-0.
 
 Every source with its licence and required credit is listed in
 docs/guide/en/data-sources.md, section "Licences and credits" (in German:

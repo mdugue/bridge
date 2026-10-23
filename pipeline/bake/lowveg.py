@@ -1,10 +1,12 @@
 """Hedges and the trees outside the canopy mask, from the provider's laser scan
 (LSC) + OpenStreetMap. The viewer draws the OSM hedges
-(low-vegetation-layer.ts) at the height the scan measures along them, and
-the extra trees join the canopy; the scan-only hedges and the shrubs this
-step also finds are NOT shipped (docs/transformations.md, "Low vegetation":
-~30 % crown-rim false positives, faceted "boulders" up close) — `research`
-writes every candidate for study.
+(low-vegetation-layer.ts) at the height the scan measures along them (DOM1's
+without a scan, hedges.py), the scan's own hedges that pass strict filters
+(hedges.py `scan_hedge_ok`), and the extra trees join the canopy; the other
+scan hedges and the shrubs this step also finds are NOT shipped
+(docs/transformations.md, "Low vegetation": ~30 % crown-rim false
+positives, faceted "boulders" up close) — `research` writes every candidate
+for study.
 
 Inputs, beyond the committed bakes it depends on (landcover, ndvi, walls,
 bridge, canopy, trees under data/<site>/dlm/, the CityJSON and the DGM):
@@ -22,8 +24,8 @@ Without the LAZ the tile falls back to OSM only: mapped hedges at their
 tagged (or a default) height, and no extra trees (docs/portability.md).
 
 Outputs:
-  data/<site>/dlm/lowveg_<tile>.geojson   the OSM hedge LineStrings {kind:"hedge",
-                                   h, w, src: "osm" | "osm+lsc"}
+  data/<site>/dlm/lowveg_<tile>.geojson   the hedge LineStrings {kind:"hedge", h, w,
+                                   src: "osm" | "osm+lsc" | "osm+dom" | "lsc"}
   data/<site>/dlm/canopyx_<tile>.geojson  LSC crown peaks > 3 m that the canopy
                                    (canopy_<tile>.geojson) does not cover and
                                    no cadastre tree (trees_<tile>.geojson)
@@ -40,7 +42,6 @@ from pathlib import Path
 
 import numpy as np
 import rasterio
-import shapely
 from rasterio.enums import Resampling
 from rasterio.features import rasterize
 from rasterio.transform import from_origin
@@ -51,7 +52,10 @@ from shapely.geometry import LineString, MultiLineString, Point, Polygon, box, m
 from shapely.ops import linemerge, unary_union
 from skimage.feature import peak_local_max
 from skimage.morphology import skeletonize
+from skimage.segmentation import watershed
 
+from . import hedges as mapped
+from . import ways
 from .common import OSM_ATTRIBUTION, Tile, column, write_geojson
 from .lsc import rasterise
 from .osm import has_extract, read_osm, tag
@@ -92,8 +96,10 @@ OSM_DEFAULT_W = 1.0
 CANOPY_ECHO_T = 0.5  # tall vegetation is multi-echo (median 1.0 vs 0.0 on roofs)
 CANOPY_PEAK_PX = 6  # crown peaks ≥ 3 m apart
 CANOPY_DEDUP_M = 5.0  # a peak this close to a current canopy point is covered
+CROWN_MIN_R, CROWN_MAX_R = 1.0, 12.0  # a scan crown's radius, clamped (m)
 BLOCKED_CLASSES = (5, 8)  # railway, water — never low vegetation
-TREE_BLOCKED_CLASSES = (5, 6, 7, 8)  # as canopy.py: no tree on these
+TREE_BLOCKED_CLASSES = (6, 8)  # as canopy.py: no tree on a path or water,
+# nor on a carriageway or a track bed (`inputs["traffic"]`)
 
 
 def disk(r_px):
@@ -479,8 +485,54 @@ def cadastre_filter(extra, trees_path):
     return kept, len(extra) - len(kept)
 
 
-def canopy_extra(inputs, canopy_path):
-    """LSC crown peaks (>3 m, multi-echo) the current canopy leaves out."""
+def rethin_scan_trees(tile: Tile) -> int | None:
+    """The committed scan trees (`canopyx`) thinned against the tile's
+    current trees file, as `cadastre_filter` thins them when lowveg bakes.
+    A tile whose laser scan is not on disk cannot re-bake its scan trees,
+    but the trees step can place a register or OSM tree where one stands
+    (Dresden 2026-10-21: 5 of 5 734 on one tile): that scan tree goes, the
+    rest stay as they are. How many went; None without a `canopyx` file."""
+    dlm = tile.data / "dlm"
+    path = dlm / f"canopyx_{tile.id}.geojson"
+    if not path.exists():
+        return None
+    doc = json.loads(path.read_text())
+    kept, dropped = cadastre_filter(doc["features"], dlm / f"trees_{tile.id}.geojson")
+    if dropped:
+        write_geojson(tile.out("dlm", path.name), kept, tile.epsg, doc.get("attribution"))
+    return dropped
+
+
+def crown_radii(chm, mass, peaks, others) -> np.ndarray:
+    """Each peak's crown radius (m): its share of the crown `mass` — the
+    watershed of the smoothed heights `chm` from every peak and from every
+    other tree point (`others`, grid rows and columns: the canopy's and the
+    cadastre's, whose shares are theirs) — as a disc of the same area."""
+    markers = np.zeros(chm.shape, np.int32)
+    n = len(peaks)
+    if n:
+        markers[peaks[:, 0], peaks[:, 1]] = np.arange(1, n + 1)
+    for i, (r, c) in enumerate(others):
+        if 0 <= r < chm.shape[0] and 0 <= c < chm.shape[1] and markers[r, c] == 0:
+            markers[r, c] = n + 1 + i
+    seg = watershed(-chm, markers, mask=mass)
+    area = np.bincount(seg.ravel(), minlength=n + 1)[1 : n + 1] * RES * RES
+    return np.sqrt(area / np.pi)
+
+
+def _points(path) -> np.ndarray:
+    if not path or not Path(path).exists():
+        return np.zeros((0, 2))
+    feats = [f for f in json.loads(Path(path).read_text())["features"] if f.get("geometry")]
+    return np.array([f["geometry"]["coordinates"][:2] for f in feats]).reshape(-1, 2)
+
+
+def canopy_extra(inputs, canopy_path, trees_path=None):
+    """LSC crown peaks (>3 m, multi-echo) the current canopy leaves out,
+    each with its crown's radius (`crown_radii`). The distance to the crown
+    mass's edge at the peak, used before, read a lone crown from a peak off
+    its centre and a group's at its narrowest: lone scan crowns came out a
+    third of the area DOM1 shows them (Dresden, Leipzig)."""
     grid, ndom, cls = inputs["grid"], inputs["ndom"], inputs["cls"]
     bld = ndi.binary_dilation(inputs["bld"], disk(2))
     tall = (ndom > TALL) & (ndom < 45) & (inputs["echo"] >= CANOPY_ECHO_T)
@@ -490,6 +542,7 @@ def canopy_extra(inputs, canopy_path):
     keep = np.zeros(n + 1, bool)
     keep[1:] = area >= 16  # ≥ 4 m² of crown
     tall = keep[lab] & ~bld & ~inputs["bridge"] & ~np.isin(cls, TREE_BLOCKED_CLASSES)
+    tall &= ~inputs["traffic"]
     chm = ndi.gaussian_filter(np.where(tall, ndom, 0), 1.5)
     pk = peak_local_max(
         chm,
@@ -498,17 +551,16 @@ def canopy_extra(inputs, canopy_path):
         labels=tall.astype(np.uint8),
         exclude_border=False,
     )
-    # crown radius: distance to the crown edge at the peak, capped
-    edge = ndi.distance_transform_edt(tall) * RES
-    cur = (
-        json.loads(Path(canopy_path).read_text())["features"]
-        if canopy_path and Path(canopy_path).exists()
-        else []
-    )
-    cxy = np.array([f["geometry"]["coordinates"] for f in cur]) if cur else np.zeros((0, 2))
+    cxy = _points(canopy_path)
+    others = [
+        grid.rc(x, y)
+        for x, y in np.vstack([cxy, _points(trees_path)])
+        if grid.xmin <= x < grid.xmax and grid.ymin < y <= grid.ymax
+    ]
+    radii = crown_radii(chm, tall, pk.reshape(-1, 2), others)
     tree = cKDTree(cxy) if len(cxy) else None
     out = []
-    for r, c in pk:
+    for (r, c), radius in zip(pk, radii, strict=True):
         x, y = grid.xy(r, c)
         if tree is not None and tree.query([x, y])[0] <= CANOPY_DEDUP_M:
             continue
@@ -517,7 +569,7 @@ def canopy_extra(inputs, canopy_path):
                 "type": "Feature",
                 "properties": {
                     "h": round(float(ndom[r, c]), 1),
-                    "r": round(float(min(max(edge[r, c], 1.0), 8.0)), 1),
+                    "r": round(float(min(max(radius, CROWN_MIN_R), CROWN_MAX_R)), 1),
                 },
                 "geometry": {"type": "Point", "coordinates": [round(x, 1), round(y, 1)]},
             }
@@ -552,29 +604,10 @@ def lsc_rasters(tile: Tile) -> Path | None:
     return der
 
 
-def hedge_rings(geom) -> list:
-    """A hedge mapped as a closed way, as the lines it is: every ring of the
-    polygon GDAL built from it (a hedge around a garden has no inside)."""
-    out = []
-    for part in shapely.get_parts(geom):
-        if isinstance(part, Polygon) and not part.is_empty:
-            out += [LineString(part.exterior.coords)]
-            out += [LineString(r.coords) for r in part.interiors]
-    return out
-
-
 def load_osm(tile: Tile):
     """(hedge lines, scrub polygons, shrub points) from the site's extract,
     each as (other_tags, geometry) in the tile's CRS."""
-    lines, fields = read_osm(tile, "lines", "barrier = 'hedge'", ["other_tags"], margin=0.0005)
-    hedges = list(zip(column(fields, "other_tags", lines), lines, strict=True))
-    # GDAL's OSM driver routes a CLOSED hedge way (a garden ring) into
-    # `multipolygons`; it is still a line of hedge, so take its rings.
-    rings, fields = read_osm(
-        tile, "multipolygons", "barrier = 'hedge'", ["other_tags"], margin=0.0005
-    )
-    for t, g in zip(column(fields, "other_tags", rings), rings, strict=True):
-        hedges += [(t, ring) for ring in hedge_rings(g)]
+    hedges = mapped.osm_hedge_lines(tile)  # a closed way's rings too
     areas, fields = read_osm(
         tile, "multipolygons", "natural IN ('scrub','shrubbery')", ["other_tags"], margin=0.0005
     )
@@ -603,6 +636,7 @@ def load_inputs(tile: Tile, grid: Grid) -> dict:
         if ndvi.exists()
         else np.zeros((grid.n, grid.n), np.float32)
     )
+    inputs["has_ndvi"] = ndvi.exists()
     inputs["bld"] = building_mask(grid, tile.data / "cityjson" / f"lod2_{tile.id}.city.json")
     # The walls file also carries fences and gates (walls.py): only walls mask.
     walls = [
@@ -615,6 +649,9 @@ def load_inputs(tile: Tile, grid: Grid) -> dict:
     inputs["bridge"] = grid.burn([shape(f["geometry"]) for f in bridges])
     der = lsc_rasters(tile)
     inputs["has_lsc"] = der is not None
+    inputs["traffic"] = (
+        grid.burn(ways.traffic(tile)) if der is not None else np.zeros((grid.n, grid.n), bool)
+    )
     if der is None:
         return inputs
     ground = read_band(der / "dtm_050.tif", "idw")
@@ -650,9 +687,10 @@ def lsc_candidates(inputs, scrub):
     return mask, lines, shrubs
 
 
-def osm_hedge_features(grid, hedges, support):
+def osm_hedge_features(grid, hedges, support, dom=None):
     """OSM hedges: geometry wins; the scan supplies the height where it sees
-    one."""
+    one, else DOM1 (`dom`, hedges.py `dom_height`) — which drops a hedge it
+    reads under ABSENT_M — else the tag, else OSM_DEFAULT_H."""
     feats, lines = [], []
     for other_tags, g in hedges:
         for part in _parts(g):
@@ -660,20 +698,46 @@ def osm_hedge_features(grid, hedges, support):
                 continue
             h = osm_hedge_height(grid, part, support)
             src = "osm+lsc" if h is not None else "osm"
+            seen = mapped.dom_height(part, dom) if h is None and dom is not None else None
+            if seen is not None and seen < mapped.ABSENT_M:
+                continue
+            if seen is not None:
+                h, src = float(np.clip(seen, *mapped.HEDGE_H)), "osm+dom"
             h = h if h is not None else (osm_height(other_tags) or OSM_DEFAULT_H)
             lines.append(part)
             feats.append(hedge_feature(part, h, OSM_DEFAULT_W, src))
     return feats, lines
 
 
-def lsc_hedge_features(lsc_lines, osm_lines):
-    """The scan's hedges that no OSM hedge already maps (research only)."""
+def lsc_hedge_features(lsc_lines, osm_lines, inputs=None):
+    """The scan's hedges that no mapped hedge (OSM's, the DLM's veg rows)
+    already draws, each marked `ship` where it passes hedges.py
+    `scan_hedge_ok` against the tile's crowns and NDVI (`inputs`)."""
     snap = unary_union([line.buffer(OSM_SNAP_M) for line in osm_lines]) if osm_lines else None
+    clear = None
+    if inputs is not None:
+        g = inputs["grid"]
+        clear = mapped.crown_clearance(inputs["ndom"], (g.xmin, g.ymin, g.xmax, g.ymax))
     feats = []
     for line, h, w in lsc_lines:
         rest = line.difference(snap) if snap is not None else line
-        feats += [hedge_feature(p, h, w, "lsc") for p in _parts(rest) if p.length >= 2.0]
+        for p in _parts(rest):
+            if p.length < 2.0:
+                continue
+            f = hedge_feature(p, h, w, "lsc")
+            if clear is not None:
+                f["properties"]["ship"] = mapped.scan_hedge_ok(p, w, clear, _ndvi_along(inputs, p))
+            feats.append(f)
     return feats
+
+
+def _ndvi_along(inputs, line):
+    """The NDVI every RES along a line, or None where the tile has none."""
+    if not inputs.get("has_ndvi"):
+        return None
+    pts = [line.interpolate(d) for d in np.arange(0, line.length + 1e-6, RES)]
+    r, c = inputs["grid"].rc([p.x for p in pts], [p.y for p in pts])
+    return inputs["ndvi"][r, c]
 
 
 def build(tile: Tile):
@@ -693,8 +757,10 @@ def build(tile: Tile):
     if inputs["has_lsc"]:
         mask, lsc_lines, lsc_shrubs = lsc_candidates(inputs, o_scrub)
     support = osm_support_rasters(inputs, mask) if inputs["has_lsc"] else None
-    feats, osm_lines = osm_hedge_features(grid, o_hedges, support)
-    feats += lsc_hedge_features(lsc_lines, osm_lines)
+    feats, osm_lines = osm_hedge_features(grid, o_hedges, support, mapped.DomHeights.read(tile))
+    rows = _features(tile.data / "dlm" / f"vegrows_{tile.id}.geojson")
+    dlm = [shape(f["geometry"]) for f in rows if f["properties"].get("kind") == "hedge"]
+    feats += lsc_hedge_features(lsc_lines, osm_lines + dlm, inputs if inputs["has_lsc"] else None)
     # Width for OSM hedges: the nearest scan hedge's, where one overlaps.
     for f in feats:
         if f["properties"]["src"] == "osm+lsc":
@@ -720,13 +786,19 @@ def build(tile: Tile):
 
 
 def shipped(feats: list[dict]) -> list[dict]:
-    """What the viewer draws: the OSM hedges only (their height from the scan
-    where it has one). The scan-only hedges and all shrubs stay out: ~30 %
-    of them are crown rims, and a shrub dome reads as a faceted boulder up
-    close (docs/transformations.md, "Low vegetation")."""
-    return [
-        f for f in feats if f["properties"]["kind"] == "hedge" and f["properties"]["src"] != "lsc"
-    ]
+    """What the viewer draws: the OSM hedges (their height from the scan or
+    DOM1 where either has one) and the scan's own hedges that pass its
+    filters (`ship`, hedges.py `scan_hedge_ok`). The other scan hedges and
+    all shrubs stay out: ~30 % of the scan's hedge pieces are crown rims, and
+    a shrub dome reads as a faceted boulder up close (docs/transformations.md,
+    "Low vegetation")."""
+    out = []
+    for f in feats:
+        props = f["properties"]
+        if props["kind"] != "hedge" or (props["src"] == "lsc" and not props.get("ship")):
+            continue
+        out.append({**f, "properties": {k: v for k, v in props.items() if k != "ship"}})
+    return out
 
 
 def lsc_credit(tile: Tile) -> str:
@@ -746,11 +818,14 @@ def run(tile: Tile, research: bool = False) -> None:
         print(f"{tile.id}: every candidate → {out}")
     hedges = shipped(feats)
     write_geojson(tile.out("dlm", f"lowveg_{tile.id}.geojson"), hedges, tile.epsg, attribution)
-    print(f"{tile.id}: {len(hedges)} OSM hedges shipped of {len(feats)} candidates")
+    scan = sum(f["properties"]["src"] == "lsc" for f in hedges)
+    print(f"{tile.id}: {len(hedges)} hedges shipped ({scan} the scan's) of {len(feats)} candidates")
     if not inputs["has_lsc"]:
         return
     dlm = tile.data / "dlm"
-    extra, peaks = canopy_extra(inputs, dlm / f"canopy_{tile.id}.geojson")
+    extra, peaks = canopy_extra(
+        inputs, dlm / f"canopy_{tile.id}.geojson", dlm / f"trees_{tile.id}.geojson"
+    )
     extra, dropped = cadastre_filter(extra, dlm / f"trees_{tile.id}.geojson")
     write_geojson(tile.out("dlm", f"canopyx_{tile.id}.geojson"), extra, tile.epsg, lsc_credit(tile))
     print(

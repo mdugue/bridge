@@ -188,6 +188,27 @@ def test_a_reader_of_a_rewritten_file_restores_it_first(tmp_path):
     assert not ledger.unchanged("b", TILE, {**KEY, "step": "b"})
 
 
+def test_the_rewriter_of_a_restored_file_runs_after_the_reader(tmp_path):
+    """A bake of `m` alone restores x to `a`'s output; `b` then rewrites it
+    again, or x would stay as `a` left it (lamps without their heights)."""
+    root, raw, steps = _chain(tmp_path)
+    ledger = _ledger(raw, ORDER)
+    again = ledger.restore("m", TILE)
+    assert ledger.after(again, "m") == [("b", TILE)]
+    assert ledger.after([], "m") == []
+    for s in ("a", "m"):
+        _record(raw, root, s, steps[s], {**KEY, "step": s})
+        ledger.done(s, TILE)
+    assert (root / "x.txt").read_text() == "1a"
+    assert not ledger.unchanged("b", TILE, {**KEY, "step": "b"})
+    _record(raw, root, "b", steps["b"], {**KEY, "step": "b"})
+    ledger.done("b", TILE)
+    assert (root / "x.txt").read_text() == "1ab"
+    # the next bake finds every step as it left it
+    nxt = _ledger(raw, ORDER)
+    assert all(nxt.unchanged(s, TILE, {**KEY, "step": s}) for s in ORDER)
+
+
 def test_a_memo_is_recorded_as_it_was_read(tmp_path):
     """A measurement kept from before its source was rewritten leaves the
     step that takes it to run again next time."""

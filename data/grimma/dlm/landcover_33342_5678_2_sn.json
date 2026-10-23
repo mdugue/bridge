@@ -18,7 +18,271 @@
     "5": "railway",
     "6": "path",
     "7": "road",
-    "8": "water"
+    "8": "water",
+    "9": "arable"
   },
-  "attribution": "Quelle: GeoSN, dl-de/by-2-0; islands: \u00a9 OpenStreetMap contributors (ODbL)"
+  "attribution": "Quelle: GeoSN, dl-de/by-2-0; islands: \u00a9 OpenStreetMap contributors (ODbL)",
+  "water": {
+    "bodies": [
+      {
+        "level": 134.05,
+        "range": [
+          134.05,
+          145.71
+        ],
+        "m2": 357,
+        "at": [
+          342034.5,
+          5679978.5
+        ],
+        "edges": {
+          "n": [
+            [
+              0,
+              1,
+              141.64
+            ]
+          ],
+          "w": [
+            [
+              0,
+              3,
+              141.64
+            ]
+          ]
+        }
+      },
+      {
+        "level": 123.45,
+        "range": [
+          123.38,
+          123.62
+        ],
+        "m2": 51102,
+        "at": [
+          342233.5,
+          5679679.5
+        ],
+        "lab": [
+          25.31,
+          -2.69,
+          -11.4
+        ],
+        "core": 44560,
+        "edges": {
+          "n": [
+            [
+              402,
+              514,
+              123.36
+            ]
+          ],
+          "w": [
+            [
+              489,
+              584,
+              123.63
+            ]
+          ]
+        }
+      },
+      {
+        "level": 122.8,
+        "range": [
+          122.8,
+          122.86
+        ],
+        "m2": 99789,
+        "at": [
+          343514.5,
+          5679453.5
+        ],
+        "lab": [
+          23.13,
+          -2.28,
+          -12.11
+        ],
+        "core": 88521,
+        "edges": {
+          "n": [
+            [
+              1710,
+              1800,
+              122.86
+            ]
+          ],
+          "e": [
+            [
+              670,
+              772,
+              122.81
+            ]
+          ]
+        }
+      },
+      {
+        "level": 123.6,
+        "range": [
+          123.54,
+          123.83
+        ],
+        "m2": 1585,
+        "at": [
+          342101.5,
+          5679380.5
+        ],
+        "lab": [
+          45.55,
+          -0.13,
+          -1.95
+        ],
+        "core": 861
+      },
+      {
+        "level": 123.65,
+        "range": [
+          123.46,
+          125.14
+        ],
+        "m2": 472,
+        "at": [
+          343509.5,
+          5679238.5
+        ]
+      },
+      {
+        "level": 135.65,
+        "range": [
+          131.5,
+          138.18
+        ],
+        "m2": 282,
+        "at": [
+          343243.5,
+          5679153.5
+        ]
+      },
+      {
+        "level": 127.9,
+        "range": [
+          126.87,
+          132.21
+        ],
+        "m2": 126,
+        "at": [
+          343985.5,
+          5679111.5
+        ],
+        "edges": {
+          "e": [
+            [
+              913,
+              916,
+              132.57
+            ]
+          ]
+        }
+      },
+      {
+        "level": 143.6,
+        "range": [
+          128.19,
+          156.13
+        ],
+        "m2": 663,
+        "at": [
+          343433.5,
+          5678989.5
+        ]
+      },
+      {
+        "level": 123.2,
+        "range": [
+          122.98,
+          123.51
+        ],
+        "m2": 677,
+        "at": [
+          343677.5,
+          5679120.5
+        ]
+      },
+      {
+        "level": 149.95,
+        "range": [
+          140.31,
+          163.58
+        ],
+        "m2": 1140,
+        "at": [
+          343014.5,
+          5679018.5
+        ]
+      },
+      {
+        "level": 135.45,
+        "range": [
+          127.88,
+          146.12
+        ],
+        "m2": 480,
+        "at": [
+          343645.5,
+          5678972.5
+        ]
+      },
+      {
+        "level": 149.15,
+        "range": [
+          149.13,
+          164.87
+        ],
+        "m2": 1298,
+        "at": [
+          343733.5,
+          5678860.5
+        ],
+        "lab": [
+          29.75,
+          -2.49,
+          -11.07
+        ],
+        "core": 429
+      },
+      {
+        "level": 166.8,
+        "range": [
+          155.66,
+          176.24
+        ],
+        "m2": 1204,
+        "at": [
+          343837.5,
+          5678668.5
+        ]
+      },
+      {
+        "level": 141.1,
+        "range": [
+          136.72,
+          150.92
+        ],
+        "m2": 935,
+        "at": [
+          342179.5,
+          5678599.5
+        ]
+      }
+    ],
+    "shore": {
+      "meadowM2": 119,
+      "sandM2": 1873,
+      "bankM2": 137
+    },
+    "foam": [],
+    "tint": {
+      "n": 64,
+      "cells": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwICAgICAgICAgICAgICAgICAgICAgICAgICAgICAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCAgICBAQEBAQCAgICAgICAgICAgICAgICAgICAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAgICBAQEBAQEBAQEAgICAgICAgICAgICAgICAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwICBAQEBAQEBAQEBAQEAgICAgICAgICAgICAgIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCBAQEBAQEBAQEBAQEBAQEBAICAgICAgICAgICAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBAQEBAQEBAQEBAQEBAQEBAQEBAICAgICAgICAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwQEBAQEBAQEBAQEBAQEBAQEBAQEBAICAgICAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAgICAgIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAgIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAMDAwMDAwMDAwMDAwMDAwMDAwMDAwMMDAwMDAwMDAwMDAwDAwMDBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQDAwMDAwMDAwMDAwMDAwMDDAwMDAwMDAwMDAwMDAwMDAwMDAwMAwQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAwMDAwMDAwMDAwMMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAMDAwMDAwwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQDAwwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwEBAQEBAQEBAQEBAQEBAQEBAQEBAQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBAQEBAQEBAQEBAQEBAQEBAQEBAQEDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwEBAQEBAQEBAQEBAQEBAQEBAQEBAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBAQEBAQEBAQEBAQEBAQEBAQEBAQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQEBAQEBAQEBAQEBAQEBAQEBAQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwEBAQEBAQEBAQEBAQEBAQEBAQEDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBAQEBAQEBAQEBAQEBAQEBAQEBAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQEBAQEBAQEBAQEBAQEBAQEBAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwEBAQEBAQEBAQEBAQEBAQEBAQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBAQEBAQEBAQEBAQEBAQEBAQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQEBAQEBAQEBAQEBAQEBAQEDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwEBAQEBAQEBAQEBAQEBAQEBAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBAQEBAQEBAQEBAQEBAQEBAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAQEBAQEBAQEBAQEBAQEBAQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwEBAQEBAQEBAQEBAQEBAQMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBAQEBAQEBAQEBAQEBAQEDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=="
+    }
+  }
 }

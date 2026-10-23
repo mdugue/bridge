@@ -336,6 +336,376 @@ def superstructure(ground, ring, deck_at, axis: Axis | None = None) -> list[dict
     return ribs
 
 
+# --- the deck's width (DOM1) ---------------------------------------------------------
+
+WIDTH_STEP = 2.0  # cross-sections along a line for its deck's width (m)
+WIDTH_REACH = 22.0  # ... reaching this far either side of it (m)
+DECK_SKIN = 1.2  # the deck's surface lies no lower than this under the deck line (m)
+EDGE_DROP = 3.0  # a deck's side is where the surface falls this far under it...
+EDGE_DROP_M = 2.5  # ...within this far past the last of the deck (m)
+WIDTH_MIN, WIDTH_MAX = 3.0, 40.0  # a measured deck's width, clamped (m)
+EDGES_SEEN = 0.3  # a side is measured when this share of its sections ends in a fall
+
+
+def section_edges(ground, axis: Axis, deck_at, stations, stop=None):
+    """The deck's sides as DOM1 sees them, per station along `axis`: out
+    from the axis, the run of surface no lower than DECK_SKIN under the deck
+    line (the roadway, its parapets, what stands on it), ended by a fall of
+    EDGE_DROP within EDGE_DROP_M — the bridge's side, the water or the
+    street below — or where `stop(xs, ys)` says another deck begins (a
+    bridge beside it, no gap between). (left, right) offsets ≥ 0, NaN where
+    a side's run never ends in a fall (the surface runs on at the deck's
+    height: an abutment, a tree's crown) or the axis is not on the deck."""
+    stations = np.asarray(stations, dtype=float)
+    nan = np.full(len(stations), np.nan)
+    if ground.dom is None or len(stations) == 0 or axis.length <= 0:
+        return nan, nan.copy()
+    level = np.array([deck_at(min(max(s / axis.length, 0.0), 1.0)) for s in stations])
+    cx, cy = axis.points(stations, 0.0)
+    on_deck = ground.sample(ground.dom, cx, cy) >= level - DECK_SKIN
+    offs = np.arange(ACROSS, WIDTH_REACH + EDGE_DROP_M + 1e-6, ACROSS)
+    reach, ahead = round(WIDTH_REACH / ACROSS), round(EDGE_DROP_M / ACROSS)
+    out = []
+    for sign in (1.0, -1.0):
+        xs, ys = axis.points(stations[:, None], sign * offs[None, :])
+        h = ground.sample(ground.dom, xs, ys)
+        blocked = stop(xs, ys) if stop is not None else np.zeros(h.shape, dtype=bool)
+        edges = nan.copy()
+        for i in np.flatnonzero(on_deck):
+            edges[i] = _side_edge(h[i], blocked[i], float(level[i]), reach, ahead)
+        out.append(edges)
+    return out[0], out[1]
+
+
+def _side_edge(h, blocked, level: float, reach: int, ahead: int) -> float:
+    """One side of one cross-section (samples ACROSS apart from the axis
+    out): the offset where the deck ends, or NaN (see `section_edges`)."""
+    skin, fall = level - DECK_SKIN, level - EDGE_DROP
+    for k in range(reach):
+        if blocked[k]:
+            return (k + 0.5) * ACROSS
+        if np.isnan(h[k]):
+            return math.nan
+        if h[k] < skin:
+            past = h[k : k + ahead + 1]
+            seen = past[~np.isnan(past)]
+            return (k + 0.5) * ACROSS if len(seen) and seen.min() <= fall else math.nan
+    return math.nan
+
+
+def measured_halves(ground, axis: Axis, deck_at, stop=None) -> tuple[float | None, float | None]:
+    """A bridge line's deck either side of it as DOM1 sees it (`section_edges`):
+    the median side over the middle half of the line, every WIDTH_STEP. A
+    side is None where fewer than EDGES_SEEN of its sections end in a fall:
+    a low deck over a brook, a deck in the trees."""
+    length = axis.length
+    if ground.dom is None or length <= 0:
+        return None, None
+    n = max(3, int(length / 2 / WIDTH_STEP) + 1)
+    left, right = section_edges(
+        ground, axis, deck_at, np.linspace(0.25 * length, 0.75 * length, n), stop
+    )
+    out: list[float | None] = []
+    for side in (left, right):
+        seen = side[~np.isnan(side)]
+        out.append(float(np.median(seen)) if len(seen) >= max(2.0, EDGES_SEEN * n) else None)
+    return out[0], out[1]
+
+
+def deck_halves(
+    measured: tuple[float | None, float | None], fallback: float
+) -> tuple[float, float]:
+    """The half-widths, left and right of its line, a deck is drawn with:
+    DOM1's where it saw both sides, the side it saw mirrored where it saw
+    one (a centreline lies near the middle), else `fallback`'s halves (the
+    mapped width, or the kind's); a measured total clamped to
+    WIDTH_MIN..WIDTH_MAX. The kind's width alone drew the Elbe bridges at
+    half their width (the Albertbrücke 11 m of its 22.5)."""
+    left, right = measured
+    if left is None and right is None:
+        return fallback / 2, fallback / 2
+    left = right if left is None else left
+    right = left if right is None else right
+    total = left + right
+    scale = min(max(total, WIDTH_MIN), WIDTH_MAX) / total if total > 0 else 1.0
+    return left * scale, right * scale
+
+
+# --- a masonry bridge's piers (DOM1) -----------------------------------------------
+
+BASTION_M = 1.5  # over a pier the deck widens at least this much (m)...
+BASTION_RUN_M = (3.0, 16.0)  # ...over this length (m)
+BASTION_BASE_M = 41  # the deck's own width: the median over this window (m)
+BASTION_END_M = 8.0  # a pier stands at least this far from an end (m)
+BASTION_GAP_M = 10.0  # two piers stand at least this far apart (m)
+
+
+def bastion_piers(ground, axis: Axis, deck_at, stop=None) -> list[float]:
+    """Stations of a masonry bridge's piers where DOM1 sees them: an old
+    stone bridge widens over each pier — the cutwater carried up as a
+    bastion, a pulpit on the parapet (the Augustusbrücke's) — so a run of
+    BASTION_RUN_M where the deck's width (`section_edges`, every metre)
+    stands BASTION_M over its running median is a pier, at the run's
+    middle. [] where DOM1 sees too little of the deck's sides."""
+    length = axis.length
+    if ground.dom is None or length < 2 * BASTION_END_M + BASTION_RUN_M[0]:
+        return []
+    stations = np.arange(0.0, length + 1e-6, 1.0)
+    left, right = section_edges(ground, axis, deck_at, stations, stop)
+    width = left + right
+    ok = ~np.isnan(width)
+    if ok.sum() < 0.6 * len(width):
+        return []
+    filled = np.interp(stations, stations[ok], width[ok])
+    excess = filled - rolling_median(filled, BASTION_BASE_M)
+    found = []
+    for s, e in runs(excess >= BASTION_M):
+        centre = float(stations[s:e].mean())
+        if (
+            BASTION_RUN_M[0] <= e - s <= BASTION_RUN_M[1]
+            and BASTION_END_M <= centre <= length - BASTION_END_M
+        ):
+            found.append((centre, float(excess[s:e].max())))
+    kept: list[float] = []
+    for centre, _ in sorted(found, key=lambda f: -f[1]):
+        if all(abs(centre - k) >= BASTION_GAP_M for k in kept):
+            kept.append(centre)
+    return sorted(round(k, 1) for k in kept)
+
+
+# --- what lies under a deck -----------------------------------------------------------
+
+WATER_CLASS = 8  # lib/city/landcover.ts WATER_CLASS
+WATER_RUN_M = 4.0  # a stretch over water is at least this long (m)
+
+
+class Wet:
+    """The class raster's water around a tile — its own and its neighbours',
+    loaded as a point first needs one — for the stretches of a deck over
+    water."""
+
+    def __init__(self, tile: Tile) -> None:
+        self.tile = tile
+        self.parts = [[bounds, tid, None] for tid, bounds in tile.neighbours()]
+
+    def __call__(self, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        xs, ys = np.asarray(xs, dtype=float), np.asarray(ys, dtype=float)
+        out = np.zeros(xs.shape, dtype=bool)
+        for part in self.parts:
+            (x0, y0, x1, y1), tid, wet = part
+            inside = (xs >= x0) & (xs < x1) & (ys >= y0) & (ys < y1)
+            if not inside.any():
+                continue
+            if wet is None:
+                classes = self.tile.classes(tid)
+                wet = part[2] = (
+                    classes == WATER_CLASS if classes is not None else np.zeros((1, 1), bool)
+                )
+            h, w = wet.shape
+            c = np.minimum(((xs[inside] - x0) / (x1 - x0) * w).astype(int), w - 1)
+            r = np.minimum(((y1 - ys[inside]) / (y1 - y0) * h).astype(int), h - 1)
+            out[inside] = wet[r, c]
+        return out
+
+
+def water_runs(wet_at, axis: Axis) -> list[list[float]]:
+    """The stretches of the axis over water, [from, to] stations (m): where
+    the viewer puts a river pier rather than a viaduct's columns."""
+    stations = np.arange(0.0, axis.length + 1e-6, 1.0)
+    if len(stations) < 2:
+        return []
+    xs, ys = axis.points(stations, 0.0)
+    wet = wet_at(xs, ys)
+    return [
+        [round(float(stations[s]), 1), round(float(stations[e - 1]), 1)]
+        for s, e in runs(wet)
+        if e - s >= WATER_RUN_M
+    ]
+
+
+# Under a deck no laser sees the ground: the DGM fills it — from the
+# embankments, or (some Länder's DGM, Hamburg's) with the bridge itself.
+# The terrain bake opens what the fill closes (lib/city/passages.ts).
+UNDER_CLEAR_M = 2.0  # a way this close under a deck's top is closed by the DGM (m)
+UNDER_OPEN_M = 0.5  # it is opened where the DGM stands this far over its level (m)
+UNDER_REACH_M = 30.0  # a closed way's level is read this far past the deck at most (m)
+UNDER_RIM = 3  # ... from the lowest of this many open samples either side
+UNDER_HEADROOM_M = 2.2  # an opened way has this much room under the deck at least (m)
+UNDER_GRADE = 0.12  # ... and climbs no steeper than this under it
+HUMP_M = 2.0  # the DGM holds a bridge where it stands this far over both sides (m)
+HUMP_SIDE_M = (2.0, 6.0)  # the sides are read this far past the deck's edges (m)
+HUMP_FLAT_M = 0.6  # ... and are level ground there (water, a street) within this (m)
+HUMP_STEP = 2.0  # stations of the hump test along the axis (m)
+HUMP_RUN = 4  # a hump is this many stations at least (a quay's ramp in the DGM is less)
+PASSAGE_SIMPLIFY_M = 0.3
+
+
+def way_passages(ground, outline, axis: Axis, deck_at, ways) -> list[dict]:
+    """The passages of the ways under a deck (`ways`: (line, half-width), the
+    OSM highways off any bridge): where the DGM closes one — under the
+    outline it lies within UNDER_CLEAR_M of the deck's top, the fill or the
+    bridge itself — its level runs straight across, between the lowest open
+    ground either side, and where the DGM stands UNDER_OPEN_M over that
+    level the passage is kept: {c: the way's points, y: its level there, h:
+    its half-width}. A way that ends under the deck (onto it), or one whose
+    level leaves no UNDER_HEADROOM_M under it or climbs steeper than
+    UNDER_GRADE (a path up the bank to the abutment) is not passed under."""
+    out = []
+    grown = outline.buffer(UNDER_REACH_M)
+    for line, half in ways:
+        for part in shapely.get_parts(shapely.intersection(line, grown)):
+            if part.geom_type == "LineString" and part.length >= 2.0:
+                out += _way_passage(ground, outline, axis, deck_at, part, half)
+    return out
+
+
+def _way_passage(ground, outline, axis: Axis, deck_at, part, half: float) -> list[dict]:
+    d = np.linspace(0.0, part.length, int(part.length) + 2)
+    pts = shapely.line_interpolate_point(part, d)
+    xs, ys = shapely.get_x(pts), shapely.get_y(pts)
+    inside = shapely.contains_xy(outline, xs, ys)
+    if not inside.any():
+        return []
+    g = ground.sample(ground.dgm, xs, ys)
+    top = np.full(len(d), np.nan)
+    for i in np.flatnonzero(inside):
+        top[i] = deck_at(min(max(axis.project(xs[i], ys[i])[0] / axis.length, 0.0), 1.0))
+    with np.errstate(invalid="ignore"):
+        closed = inside & (top - g < UNDER_CLEAR_M)
+    open_ = ~closed & ~np.isnan(g)
+    out = []
+    for s, e in runs(closed):
+        before = [i for i in range(s - 1, -1, -1) if open_[i]][:UNDER_RIM]
+        after = [i for i in range(e, len(d)) if open_[i]][:UNDER_RIM]
+        if s == 0 or e == len(d) or not before or not after:
+            continue  # the way ends under the deck, or nothing open beside it
+        i0, i1 = s - 1, e
+        ya, yb = float(g[before].min()), float(g[after].min())
+        level = ya + (yb - ya) * (d[i0 : i1 + 1] - d[i0]) / (d[i1] - d[i0])
+        headroom = np.nanmin(top[s:e] - level[1:-1])
+        if (
+            np.nanmax(g[i0 : i1 + 1] - level) < UNDER_OPEN_M
+            or headroom < UNDER_HEADROOM_M
+            or abs(yb - ya) > UNDER_GRADE * (d[i1] - d[i0])
+        ):
+            continue  # nothing closed, or no passage: the way climbs to the deck's end
+        run = shapely.LineString(np.column_stack([xs[i0 : i1 + 1], ys[i0 : i1 + 1]]))
+        kept = run.simplify(PASSAGE_SIMPLIFY_M)
+        coords, ys_out = [], []
+        for x, y in kept.coords:
+            t = run.project(shapely.Point(x, y)) / run.length
+            coords.append([round(x, 2), round(y, 2)])
+            ys_out.append(round(ya + (yb - ya) * t, 2))
+        out.append({"c": coords, "y": ys_out, "h": round(half, 2)})
+    return out
+
+
+def ring_edges(ring, axis: Axis):
+    """The ring's vertices on the axis: (station, offset) each, for
+    `edges_at`."""
+    return [axis.project(x, y) for x, y in ring]
+
+
+def edges_at(on_axis, s: float) -> tuple[float, float] | None:
+    """The outline's extreme offsets where it crosses station s (left,
+    right), linear along each ring edge; None where it does not."""
+    left, right = -math.inf, math.inf
+    for (sa, oa), (sb, ob) in zip(on_axis, on_axis[1:] + on_axis[:1], strict=True):
+        if (sa - s) * (sb - s) <= 0 and sa != sb:
+            off = oa + (ob - oa) * (s - sa) / (sb - sa)
+            left, right = max(left, off), min(right, off)
+    return (left, right) if math.isfinite(left) else None
+
+
+def hump_passages(ground, ring, axis: Axis, deck_at, wet_at=None) -> list[dict]:
+    """Where the DGM still holds the bridge (`_hump_at`: a hump of HUMP_M
+    over the level ground beside the deck, read HUMP_SIDE_M past its
+    edges), for every station of a stretch of HUMP_RUN or more: a passage
+    across the deck, edge to edge (a metre past each) and HUMP_STEP along
+    it, at the lower side's level — together the stretch opened as wide
+    as the deck and no wider, flat-ended where the sides rise (the quay
+    walls). A stretch at a deck's end is an abutment, not a hump, unless
+    it reaches the deck's middle: the DGM holds the whole bridge."""
+    length = axis.length
+    if length < 2 * HUMP_STEP:
+        return []
+    on_axis = ring_edges(ring, axis)
+    stations = np.arange(HUMP_STEP / 2, length, HUMP_STEP)
+    found = [_hump_at(ground, axis, deck_at, on_axis, float(s), wet_at) for s in stations]
+    humped = np.array([f is not None for f in found])
+    out = []
+    for s, e in runs(humped):
+        if e - s < HUMP_RUN or (
+            (s == 0 or e == len(stations)) and not stations[s] <= length / 2 <= stations[e - 1]
+        ):
+            continue
+        level = np.array([found[i][0] for i in range(s, e)])
+        level = rolling_median(level, 3) if len(level) >= 3 else level
+        for i, y in zip(range(s, e), level, strict=True):
+            left, right = found[i][1]
+            xs, ys = axis.points(np.full(2, stations[i]), np.array([left + 1.0, right - 1.0]))
+            out.append(
+                {
+                    "c": [
+                        [round(float(x), 2), round(float(v), 2)]
+                        for x, v in zip(xs, ys, strict=True)
+                    ],
+                    "y": [round(float(y), 2)] * 2,
+                    "h": HUMP_STEP / 2 + 0.05,
+                }
+            )
+    return out
+
+
+def _hump_at(
+    ground, axis: Axis, deck_at, on_axis, s: float, wet_at=None
+) -> tuple[float, tuple[float, float]] | None:
+    """(the level to open to, the deck's edges there) where the DGM holds
+    the bridge at station s, else None: the DGM under the deck stands
+    HUMP_M over level ground (flat within HUMP_FLAT_M) on both sides — a
+    street, a canal — or, where the class raster's water runs on under the
+    deck, over level water on one side (the other a landing stage the DGM
+    holds too: Hamburg's Hohe Brücke), and no higher than the deck. Water
+    on one side alone is the quay a deck's end or a promenade stands on."""
+    edges = edges_at(on_axis, s)
+    if edges is None or edges[0] - edges[1] < 1.0:
+        return None
+    left, right = edges
+    inner = np.arange(right + 0.5, left - 0.5 + 1e-6, 1.0)
+    xs, ys = axis.points(np.full(len(inner), s), inner)
+    g = ground.sample(ground.dgm, xs, ys)
+    if len(inner) == 0 or np.isnan(g).all():
+        return None
+    under = float(np.nanmedian(g))
+    if under > deck_at(min(max(s / axis.length, 0.0), 1.0)) + 1.0:
+        return None
+    probe = np.arange(HUMP_SIDE_M[0], HUMP_SIDE_M[1] + 1e-6, 1.0)
+    low, wet_low = [], []
+    for offs in (left + probe, right - probe):
+        xs, ys = axis.points(np.full(len(offs), s), offs)
+        h = ground.sample(ground.dgm, xs, ys)
+        if np.isnan(h).any() or h.max() - h.min() > HUMP_FLAT_M or under - h.max() < HUMP_M:
+            continue
+        low.append(float(np.median(h)))
+        if wet_at is not None and wet_at(xs, ys).all():
+            wet_low.append(low[-1])
+    if len(low) == 2:
+        return min(low), (left, right)
+    xs, ys = axis.points(np.full(len(inner), s), inner)
+    if wet_low and wet_at is not None and wet_at(xs, ys).any():
+        return wet_low[0], (left, right)
+    return None
+
+
+def under_deck(ground, ring, axis: Axis, deck_at, ways, wet_at=None) -> list[dict]:
+    """The passages under a deck (`way_passages`, `hump_passages`): what
+    the terrain bake opens (lib/city/passages.ts `deckPassages`)."""
+    outline = shapely.make_valid(shapely.Polygon(ring))
+    return way_passages(ground, outline, axis, deck_at, ways) + hump_passages(
+        ground, ring, axis, deck_at, wet_at
+    )
+
+
 # --- navigation clearance (OSM seamarks) -------------------------------------------
 
 
@@ -391,7 +761,7 @@ def fairway(ground, ring, deck_at, marks, axis: Axis | None = None) -> dict:
 SPARQL = "https://query.wikidata.org/sparql"
 QUERY = """
 SELECT ?b ?label ?coord (GROUP_CONCAT(DISTINCT ?typeLabel; separator="|") AS ?types)
-       (SAMPLE(?span) AS ?mainSpan) (SAMPLE(?len) AS ?length) WHERE {
+       (SAMPLE(?span) AS ?mainSpan) (SAMPLE(?len) AS ?length) (SAMPLE(?n) AS ?spans) WHERE {
   SERVICE wikibase:box {
     ?b wdt:P625 ?coord .
     bd:serviceParam wikibase:cornerSouthWest "Point(%(w)f %(s)f)"^^geo:wktLiteral .
@@ -400,7 +770,7 @@ SELECT ?b ?label ?coord (GROUP_CONCAT(DISTINCT ?typeLabel; separator="|") AS ?ty
   ?b wdt:P31/wdt:P279* wd:Q12280 .
   ?b wdt:P31 ?type . ?type rdfs:label ?typeLabel FILTER(lang(?typeLabel) = "de")
   ?b rdfs:label ?label FILTER(lang(?label) = "de")
-  OPTIONAL { ?b wdt:P2787 ?span } OPTIONAL { ?b wdt:P2043 ?len }
+  OPTIONAL { ?b wdt:P2787 ?span } OPTIONAL { ?b wdt:P2043 ?len } OPTIONAL { ?b wdt:P1314 ?n }
 } GROUP BY ?b ?label ?coord
 """
 
@@ -428,11 +798,26 @@ def structure_of(types: list[str]) -> str:
     return ";".join(out)
 
 
+# The cache's layout: 2 added the number of spans (P1314). A cache of an
+# older layout is fetched again; if that fails it stays as it is.
+WIKIDATA_VERSION = 2
+
+
+def cache_version(path: Path) -> int:
+    """The layout a Wikidata cache was written in (1 before it was recorded)."""
+    try:
+        return int(json.loads(path.read_text()).get("version", 1))
+    except (OSError, ValueError, AttributeError):
+        return 0
+
+
 def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int, margin: float = 500.0) -> None:
     """The bridges Wikidata knows around a tile → `<raw>/wikidata/bridges_<tile>.json`
-    (fetch time only, `bun run fetch`; the bake reads the file, never the network)."""
+    (fetch time only, `bun run fetch`; the bake reads the file, never the network):
+    each with its classes, main span (P2787), length (P2043) and number of
+    spans (P1314)."""
     dest = raw / "wikidata" / f"bridges_{tile_id}.json"
-    if dest.exists():
+    if dest.exists() and cache_version(dest) >= WIKIDATA_VERSION:
         return
     back = Transformer.from_crs(epsg, 4326, always_xy=True)
     xmin, ymin, xmax, ymax = bounds
@@ -464,18 +849,37 @@ def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int, margin: float = 5
                 "lon": lon,
                 "lat": lat,
                 "types": sorted(r["types"]["value"].split("|")),
-                "mainSpan": float(r["mainSpan"]["value"]) if "mainSpan" in r else None,
-                "length": float(r["length"]["value"]) if "length" in r else None,
+                "mainSpan": _number(r, "mainSpan"),
+                "length": _number(r, "length"),
+                "spans": _count(r, "spans"),
             }
         )
     dest.parent.mkdir(parents=True, exist_ok=True)
-    doc = {"source": "Wikidata (CC0)", "query": SPARQL, "bridges": bridges}
+    doc = {
+        "source": "Wikidata (CC0)",
+        "query": SPARQL,
+        "version": WIKIDATA_VERSION,
+        "bridges": bridges,
+    }
     # through a `.part` file: a run killed mid-write leaves no truncated
     # cache that every later fetch would keep
     part = dest.with_name(dest.name + ".part")
     part.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
     part.replace(dest)
     print(f"{tile_id}: {len(bridges)} Wikidata bridges → {dest}")
+
+
+def _number(row: dict, key: str) -> float | None:
+    try:
+        return float(row[key]["value"]) if key in row else None
+    except ValueError:
+        return None
+
+
+def _count(row: dict, key: str) -> int | None:
+    """A count (the spans): a whole number from 1 to 99, else unknown."""
+    n = _number(row, key)
+    return int(n) if n is not None and n == int(n) and 1 <= n < 100 else None
 
 
 def load_wikidata(tile: Tile) -> list[dict]:

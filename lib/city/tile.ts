@@ -57,7 +57,8 @@ export function cityJsonFile(tile: string): string {
  *  the roofs rebuilt from DOM1 + OSM's entrances on the walls + the
  *  dormers DOM1 shows on the pitched roofs + the shopfronts street photos
  *  show on the ground floors, with the canopies DOM1 shows over them +
- *  the facade traits they measure on the upper walls, the windows). */
+ *  the facade traits they measure on the upper walls, the windows + OSM's
+ *  passages through the buildings). */
 export function cityMeshSourceFiles(
   site: Site,
   tile: string
@@ -67,6 +68,7 @@ export function cityMeshSourceFiles(
   dormers: string;
   measuredRoofs: string;
   osmBuild: string;
+  passages: string;
   plinths: string;
   roofColor: string;
   landmarks: string;
@@ -81,6 +83,7 @@ export function cityMeshSourceFiles(
     doors: `${dir}/dlm/doors_${tile}.geojson`,
     dormers: `${dir}/dlm/dormers_${tile}.geojson`,
     osmBuild: `${dir}/dlm/osmbuild_${tile}.json`,
+    passages: `${dir}/dlm/passages_${tile}.geojson`,
     plinths: `${dir}/dlm/plinths_${tile}.geojson`,
     measuredRoofs: `${dir}/dlm/roofs_${tile}.geojson`,
     roofColor: `${dir}/dop/roofcolor_${tile}.json`,
@@ -178,7 +181,8 @@ const ARTIFACTS = {
   sport: { file: named("sport", "png") },
   sportTable: { file: named("sport", "json"), osm: true },
   // Optional: the sky-view factor and the far horizon
-  // (pipeline/bake/skyview.py, from the committed DGM + LoD2): the
+  // (pipeline/bake/skyview.py, from the committed DGM + LoD2, the drawn
+  // crowns half-transparent, Copernicus GLO-30 beyond the site): the
   // ambient light the city lets through and the long shadows past the
   // shadow map. Without them the light is as before.
   svf: { file: named("svf", "png") },

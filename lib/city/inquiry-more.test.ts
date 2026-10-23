@@ -35,6 +35,37 @@ test("a tree without a register says what was measured, and no species", () => {
   expect(card.address).toBe("Eine Krone, im Oberflächenmodell erkannt");
 });
 
+test("an evergreen says what told it: the forest's kind or the photo", () => {
+  const crown = { kind: "canopy" as const, tile: "t", position: at };
+  const forest = canopyCard(
+    { ...crown, source: "dom", evergreen: "forest" },
+    null,
+    DRESDEN
+  );
+  expect(forest.facts).toContainEqual({
+    label: "Laub",
+    value: "Nadelbaum, immergrün",
+  });
+  expect(lines(forest.sources).at(-1)).toContain("Basis-DLM");
+  // without a Basis-DLM the wood's leaf type is OSM's
+  const hamburg = canopyCard(
+    { ...crown, source: "dom", evergreen: "forest" },
+    null,
+    HAMBURG
+  );
+  expect(lines(hamburg.sources).at(-1)).toContain("OpenStreetMap");
+  const photo = canopyCard(
+    { ...crown, source: "dom", evergreen: "photo" },
+    null,
+    DRESDEN
+  );
+  expect(photo.sources.at(-1)?.text).toContain("Digitales Orthophoto");
+  expect(photo.sources.at(-1)?.method).toBe("detected");
+  const broadleaf = canopyCard({ ...crown, source: "dom" }, null, DRESDEN);
+  expect(broadleaf.facts.map((f) => f.label)).not.toContain("Laub");
+  expect(broadleaf.sources).toHaveLength(1);
+});
+
 test("a hedge's height is measured only where the laser scan said so", () => {
   const hedge = { kind: "hedge" as const, tile: "t", position: at, length: 42 };
   const scanned = hedgeCard(
@@ -50,6 +81,22 @@ test("a hedge's height is measured only where the laser scan said so", () => {
     DRESDEN
   );
   expect(tagged.facts[0].value).toBe("2 m");
+});
+
+test("a hedge DOM1 measured, and one the scan found itself, say where from", () => {
+  const hedge = { kind: "hedge" as const, tile: "t", position: at, length: 12 };
+  const dom = hedgeCard(
+    { ...hedge, source: "osm+dom", height: 2 },
+    null,
+    DRESDEN
+  );
+  expect(dom.facts[0].value).toBe("2 m, gemessen");
+  expect(lines(dom.sources)).toHaveLength(2);
+  expect(lines(dom.sources).join(" ")).toContain("Oberflächenmodell");
+  const scan = hedgeCard({ ...hedge, source: "lsc", height: 2 }, null, DRESDEN);
+  expect(scan.facts[0].value).toBe("2 m, gemessen");
+  expect(lines(scan.sources)).toHaveLength(1);
+  expect(lines(scan.sources)[0]).toContain("Laserscan");
 });
 
 test("a tree row or hedge credits the site's own source, not GeoSN", () => {
@@ -71,16 +118,48 @@ test("a tree row or hedge credits the site's own source, not GeoSN", () => {
 });
 
 test("a lamp's post is assumed, and the card says so", () => {
-  const card = lampCard({ kind: "lamp", tile: "t", position: at }, null);
+  const card = lampCard(
+    { kind: "lamp", tile: "t", position: at },
+    null,
+    DRESDEN
+  );
   expect(card.facts).toEqual([
     { label: "Mast", value: "5 m, angenommen", method: "assumed" },
   ]);
 });
 
+test("a lamp whose street the surface model measured says so", () => {
+  const lamp = { kind: "lamp" as const, tile: "t", position: at };
+  const street = lampCard(
+    { ...lamp, height: 9.5, heightFrom: "street" },
+    null,
+    DRESDEN
+  );
+  expect(street.facts).toEqual([
+    {
+      label: "Mast",
+      value: "9,5 m, wie an den Laternen der Straße gemessen",
+      method: "computed",
+    },
+  ]);
+  expect(lines(street.sources).at(-1)).toContain(
+    "Digitales Oberflächenmodell DOM1"
+  );
+  const kind = lampCard(
+    { ...lamp, height: 6, heightFrom: "class" },
+    null,
+    DRESDEN
+  );
+  expect(kind.facts[0].value).toBe(
+    "6 m, wie an den Laternen dieser Art Straße gemessen"
+  );
+});
+
 test("a lamp hung across the street has no post, and says how it hangs", () => {
   const card = lampCard(
     { kind: "lamp", tile: "t", position: at, hung: true },
-    null
+    null,
+    DRESDEN
   );
   expect(card.title).toBe("Hängeleuchte");
   expect(card.facts.map((f) => f.label)).toEqual(["Aufhängung", "Höhe"]);
@@ -89,7 +168,8 @@ test("a lamp hung across the street has no post, and says how it hangs", () => {
 test("a lamp or bin Mapillary detected names Mapillary, not OSM", () => {
   const lamp = lampCard(
     { kind: "lamp", tile: "t", position: at, src: "mly" },
-    null
+    null,
+    DRESDEN
   );
   expect(lamp.sources[0]?.text).toStartWith("Laterne: Mapillary");
   expect(lamp.sources[0]?.text).toContain("CC BY-SA 4.0");
@@ -103,7 +183,11 @@ test("a lamp or bin Mapillary detected names Mapillary, not OSM", () => {
     null
   );
   expect(bin.sources[0]?.text).toStartWith("Papierkorb: Mapillary");
-  const osmLamp = lampCard({ kind: "lamp", tile: "t", position: at }, null);
+  const osmLamp = lampCard(
+    { kind: "lamp", tile: "t", position: at },
+    null,
+    DRESDEN
+  );
   expect(osmLamp.sources[0]?.text).toContain("OpenStreetMap");
 });
 
@@ -123,4 +207,45 @@ test("a bench faces where OSM or the nearest way says", () => {
     label: "Ausrichtung",
     value: "nach Südwesten",
   });
+});
+
+test("a lantern on a facade says where it hangs and that its height is assumed", () => {
+  const card = lampCard(
+    { kind: "lamp", tile: "t", position: at, wall: "facade", height: 3.5 },
+    null,
+    DRESDEN
+  );
+  expect(card.title).toBe("Wandleuchte");
+  expect(card.facts).toEqual([
+    { label: "Aufhängung", value: "an der Fassade" },
+    { label: "Höhe", value: "3,5 m, angenommen", method: "assumed" },
+  ]);
+  expect(card.sources[0]?.text).toContain("OpenStreetMap");
+  // with no building near, on a mapped wall
+  const onWall = lampCard(
+    { kind: "lamp", tile: "t", position: at, wall: "wall", height: 2.5 },
+    null,
+    DRESDEN
+  );
+  expect(onWall.facts[0]).toEqual({
+    label: "Aufhängung",
+    value: "an der Mauer",
+  });
+});
+
+test("a tall mast's card names its arm, and says it is assumed", () => {
+  const lamp = { kind: "lamp" as const, tile: "t", position: at };
+  const one = lampCard(
+    { ...lamp, height: 9.5, heightFrom: "street", arm: true },
+    null,
+    DRESDEN
+  );
+  expect(one.facts).toContainEqual({
+    label: "Ausleger",
+    value: "zur Fahrbahn, angenommen",
+    method: "assumed",
+  });
+  // a post with its head on top has no arm line
+  const post = lampCard({ ...lamp }, null, DRESDEN);
+  expect(post.facts.some((f) => f.label === "Ausleger")).toBe(false);
 });

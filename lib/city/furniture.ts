@@ -11,6 +11,11 @@ import type { Point2 } from "./polyline";
 export type FurnitureModel =
   | "bench"
   | "bin"
+  | "binBlue"
+  | "binGreen"
+  | "binOrange"
+  | "binRed"
+  | "binYellow"
   | "bollard"
   | "climb"
   | "clock"
@@ -19,6 +24,7 @@ export type FurnitureModel =
   | "hoop"
   | "hydrant"
   | "hydrantSign"
+  | "pedSignal"
   | "picnic"
   | "playhouse"
   | "post"
@@ -28,6 +34,7 @@ export type FurnitureModel =
   | "seesaw"
   | "shelter"
   | "signal"
+  | "signalArm"
   | "slide"
   | "springy"
   | "stop"
@@ -41,6 +48,11 @@ export const FURNITURE_MODELS: readonly FurnitureModel[] = [
   "stool",
   "picnic",
   "bin",
+  "binRed",
+  "binGreen",
+  "binBlue",
+  "binOrange",
+  "binYellow",
   "hoop",
   "bollard",
   "post",
@@ -50,6 +62,8 @@ export const FURNITURE_MODELS: readonly FurnitureModel[] = [
   "column",
   "columnLit",
   "signal",
+  "signalArm",
+  "pedSignal",
   "hydrant",
   "hydrantSign",
   "clock",
@@ -75,6 +89,8 @@ export const HOOP_SPACING = 0.9;
 
 /** One model instance: projected position, yaw about world Y, length scale. */
 export interface FurniturePiece {
+  /** the top of the bridge deck it stands on (m), not the ground */
+  deck?: number;
   model: FurnitureModel;
   /** stretch along the model's local X (a bench's mapped length) */
   scaleX: number;
@@ -127,18 +143,37 @@ function hoops(x: number, y: number, deg: number, n: number): FurniturePiece[] {
   return pieces;
 }
 
-/** The model each kind stands as (a bench by its backrest). */
+/** A bin in its colour (`c`), else the model's grey. */
+const BIN_MODEL: Record<
+  NonNullable<NonNullable<FurnitureFeature["properties"]>["c"]>,
+  FurnitureModel
+> = {
+  blue: "binBlue",
+  green: "binGreen",
+  orange: "binOrange",
+  red: "binRed",
+  yellow: "binYellow",
+};
+
+function binModel(f: FurnitureFeature): FurnitureModel {
+  const c = f.properties?.c;
+  return c && Object.hasOwn(BIN_MODEL, c) ? BIN_MODEL[c] : "bin";
+}
+
+/** The model each kind stands as (a bench by its backrest, a bin by its
+ *  colour, a signal on a mast arm where it hangs over three lanes). */
 const MODEL_OF: Record<string, (f: FurnitureFeature) => FurnitureModel> = {
   bench: benchModel,
   bike: () => "hoop",
-  bin: () => "bin",
+  bin: binModel,
   bollard: (f) => (f.properties?.metal ? "post" : "bollard"),
   picnic: () => "picnic",
   postbox: () => "postbox",
   shelter: () => "shelter",
   stop: () => "stop",
   column: (f) => (f.properties?.lit ? "columnLit" : "column"),
-  signal: () => "signal",
+  signal: (f) => (f.properties?.arm ? "signalArm" : "signal"),
+  pedsignal: () => "pedSignal",
   hydrant: () => "hydrant",
   hydrantsign: () => "hydrantSign",
   clock: () => "clock",
@@ -159,6 +194,25 @@ function modelOf(f: FurnitureFeature): FurnitureModel | null {
   return kind && Object.hasOwn(MODEL_OF, kind) ? MODEL_OF[kind](f) : null;
 }
 
+/** A bench's stretch to its mapped length, a bollard's to its tagged height. */
+function scalesOf(
+  model: FurnitureModel,
+  f: FurnitureFeature
+): { scaleX: number; scaleY: number } {
+  const length = f.properties?.l;
+  const height = f.properties?.h;
+  return {
+    scaleX:
+      model === "bench" || model === "stool"
+        ? (length ?? BENCH_LENGTH) / BENCH_LENGTH
+        : 1,
+    scaleY:
+      (model === "bollard" || model === "post") && height
+        ? height / BOLLARD_HEIGHT
+        : 1,
+  };
+}
+
 /** Every piece the features stand as; unknown kinds and non-points are dropped. */
 export function furniturePieces(
   features: FurnitureFeature[]
@@ -172,26 +226,22 @@ export function furniturePieces(
     const [x, y] = f.geometry.coordinates;
     const a = f.properties?.a;
     const faced = typeof a === "number" && Number.isFinite(a);
+    const deck = f.properties?.deck;
+    const on = deck === undefined ? {} : { deck };
     if (model === "hoop") {
       const n = Math.max(1, Math.round(f.properties?.n ?? 1));
-      pieces.push(...hoops(x, y, faced ? a : 0, n));
+      pieces.push(
+        ...hoops(x, y, faced ? a : 0, n).map((p) => ({ ...p, ...on }))
+      );
       continue;
     }
-    const length = f.properties?.l;
-    const height = f.properties?.h;
     pieces.push({
+      ...on,
       model,
       x,
       y,
       yaw: faced ? yawOfBearing(a) : scatterYaw(x, y),
-      scaleX:
-        model === "bench" || model === "stool"
-          ? (length ?? BENCH_LENGTH) / BENCH_LENGTH
-          : 1,
-      scaleY:
-        (model === "bollard" || model === "post") && height
-          ? height / BOLLARD_HEIGHT
-          : 1,
+      ...scalesOf(model, f),
     });
   }
   return pieces;

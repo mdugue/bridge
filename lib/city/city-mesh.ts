@@ -54,6 +54,11 @@ export interface OsmBuildingFacts {
   /** roof, `#rrggbb` (OSM `roof:colour`) */
   roof_colour?: string;
   shop?: number;
+  /** where OSM counts none of its own storeys: the storey (m) of the
+   *  mapped buildings around it of its roof form and about its eave, else
+   *  the tile's (osm_buildings.py `storey`) — its storeys are counted from
+   *  its eave with it (lib/city/building-tint.ts `neighbourStorey`) */
+  storey?: number;
   /** the Wikidata item of the landmark it belongs to (landmarks.py) */
   wikidata?: string;
 }
@@ -105,6 +110,10 @@ export const OBJECT_FLAG_FLOODLIT = 32_768;
 export const FLOODLIT_SHARE = 0.6;
 /** A roof triangle within this of level counts as flat (cos 10°). */
 const FLAT_NORMAL_Z = 0.985;
+/** A roof triangle within this of upright is a step's wall the bake clad
+ *  as roof (scripts/bake-city-mesh.ts `withRoofSteps`; cos 85°): no part
+ *  of the roof's area. */
+const STEP_NORMAL_Z = 0.087;
 /** An object whose roof is flat over this share of its area is flat-roofed:
  *  LoD2 calls many post-war slabs a mixed form (`roofType` 5000) for a
  *  stair tower or a pavilion's lean-to, so the type alone misses them. */
@@ -113,7 +122,9 @@ export const FLAT_ROOF_SHARE = 0.75;
 /**
  * Sets OBJECT_FLAG_FLAT_ROOF on every object whose roof triangles
  * (`isRoof`, non-indexed, three vertices each) lie flat over
- * `FLAT_ROOF_SHARE` of their area. In place.
+ * `FLAT_ROOF_SHARE` of their area. The upright ones are the steps and
+ * parapets clad as roof, not the roof's area: counted, a flat roof's
+ * steps between its levels took it under the share. In place.
  */
 export function markFlatRoofs(
   objects: readonly Pick<CityObjectRow, "flags">[],
@@ -142,9 +153,10 @@ export function markFlatRoofs(
     const nz = ux * wy - uy * wx;
     const area = Math.hypot(nx, ny, nz);
     const o = mesh.objectIds[v];
-    if (area > 0 && o < objects.length) {
+    const up = area > 0 ? Math.abs(nz) / area : 0;
+    if (up >= STEP_NORMAL_Z && o < objects.length) {
       all[o] += area;
-      if (Math.abs(nz) / area >= FLAT_NORMAL_Z) {
+      if (up >= FLAT_NORMAL_Z) {
         flat[o] += area;
       }
     }
@@ -301,7 +313,8 @@ export interface CityObjectRow {
   flags: number;
   /** GroundSurface footprints (EPSG), for the minimap */
   footprints: [number, number][][];
-  /** 1 = warm dusk glow (commerce/public/special), 0 = housing */
+  /** 1 = lit at its foot after dark (commerce, public), 0 = housing and
+   *  structures (`buildingGlows`) */
   glow: 0 | 1;
   /** roof colour (linear RGB): DOP-sampled when available, else synthesized */
   roof: Rgb;
@@ -315,6 +328,10 @@ export interface CityObjectRow {
   storeyH: number;
   /** wall colour (linear RGB) */
   tint: Rgb;
+  /** a flat-roofed town house (lib/city/windows.ts `flatTownHouse`): the
+   *  bake dresses it with a town house's plinth and cornices, not as a
+   *  block (scripts/bake-city-mesh.ts `markTownHouses`); not in the table */
+  townHouse?: boolean;
   /** the windows the clay draws on its walls (lib/city/windows.ts; none
    *  when absent) */
   windows?: WindowSpec;
@@ -346,6 +363,10 @@ export const OBJECT_SOURCE_SHOPFRONT = 6;
 /** A plinth on a wall's street side, part of the building it carries
  *  (pipeline/bake/plinths.py, LoD2 + DGM1). */
 export const OBJECT_SOURCE_PLINTH = 5;
+/** A passage's lining — its walls and ceiling — part of the building it
+ *  runs through (pipeline/bake/passages.py, OSM's `tunnel=
+ *  building_passage`; lib/city/building-passages.ts). */
+export const OBJECT_SOURCE_PASSAGE = 7;
 
 /** The property table as typed columns — how the glTF carries it. */
 export interface CityObjectTable {

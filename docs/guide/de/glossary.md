@@ -77,6 +77,13 @@ DTK25, DTK50, DTK100 für die Maßstäbe 1:10 000 bis 1:100 000), als
 Rasterkacheln vom selben Portal verfügbar; noch nicht genutzt (Kandidat für
 eine kartographische Minikarte).
 
+**DWD** — *Deutscher Wetterdienst*, der nationale Wetterdienst. Seine
+ehrenamtlichen Beobachter verzeichnen jedes Jahr, wann die Pflanzen um sie
+herum austreiben, blühen, sich färben und ihr Laub abwerfen
+(*Phänologie*); der Viewer verschiebt das Jahr der Bäume jeder Stadt um
+das, was sie in ihrer Umgebung verzeichnet haben.
+[Die Anbieter](./data-sources.md#die-anbieter).
+
 **Deterministisch / erschlossen** — wie der Viewer zu einer Angabe kommt.
 Deterministisch (`❝ übernommen`, `= berechnet`): aus der Quelle oder mit
 einer festen Formel, gleiche Daten ergeben dasselbe. Erschlossen
@@ -107,12 +114,18 @@ Sachsen-Auszug.
 **GeoSN** — *Landesamt für Geobasisinformation Sachsen*, die
 Landesvermessung und Anbieter aller hier genutzten amtlichen Datensätze.
 
+**GLO-30** — das *Copernicus DEM* im 30-m-Raster: ein Oberflächenmodell
+der ganzen Welt, von DLR und Airbus Defence and Space aus Radarsatelliten
+erstellt. Der Viewer liest es nur für das Land jenseits der Kacheln einer
+Stadt: die Hügel am fernen Horizont und den Rand des Tals.
+[Die Anbieter](./data-sources.md#die-anbieter).
+
 **Bodenauflösung / GSD** — die Größe eines Pixels am Boden (*ground
 sampling distance*): 20 cm beim DOP, 1 m bei den Höhenmodellen.
 
 **Landnutzungsklasse** — die Nutzungskategorie eines Pixels im gebackenen
 Klassenraster: Hintergrund, Landwirtschaft/Wiese, Wald, Gehölz, Siedlung,
-Bahn, Weg, Straße, Wasser (Kennungen 0–8). Die Datei enthält nur diese
+Bahn, Weg, Straße, Wasser, Ackerland (Kennungen 0–9). Die Datei enthält nur diese
 Nummern; der Browser malt jede Klasse in ihrer Pastellfarbe (siehe
 *Splatmap*).
 

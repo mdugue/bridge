@@ -19,15 +19,21 @@
  *     float32 x, float32 z   the world (Y-up) position, the float the fine
  *                            level's instance matrix holds
  *     uint8  code            0 = a canopy or row tree; 1 + REGISTER_COLOURS
- *                            index = a register tree
+ *                            index = a register tree, + CONE_FLAG for one
+ *                            whose crown is the conifer's cone, + PINE_FLAG
+ *                            for one whose crown is a pine's
  *     uint8  ndvi            0..254 (NDVI × 254), 255 = none
- *     uint8  genus           TREE_GENERA index (register trees; 0 = other)
+ *     uint8  genus           TREE_GENERA index (register trees; 0 = other);
+ *                            a canopy tree: 1 = an evergreen (drawn as the
+ *                            cone), 2 = an evergreen pine (the pine's
+ *                            crown), 0 = neither
  *     int8   jitter          the register tree's season offset × 10 (days)
  *     uint16 rot             the turn about the vertical, 0..2π over 0..65535
  *     uint16 a, b, c         a canopy tree: its vertical and horizontal
- *                            scale × 4096, 0; a
- *                            register tree: its crown's base, top and width
- *                            in centimetres
+ *                            scale × 4096 and its crown's base in
+ *                            millimetres (0 = none: a hedge's crown, drawn
+ *                            by its scale); a register tree: its crown's
+ *                            base, top and width in centimetres
  */
 import type { InventoryTree, TreeExtents } from "./tree-inventory";
 import type { Placement } from "./tree-placement";
@@ -43,6 +49,13 @@ const HEADER_BYTES = 8;
 const RECORD_BYTES = 20;
 const SCALE_UNIT = 4096;
 const NO_NDVI = 255;
+/** The code byte's bits for a register tree drawn as a cone, and as a
+ *  pine. */
+const CONE_FLAG = 0x80;
+const PINE_FLAG = 0x40;
+/** The genus byte of a canopy tree: an evergreen, and an evergreen pine. */
+const CANOPY_EVERGREEN = 1;
+const CANOPY_PINE = 2;
 
 /** A PCG step on an unsigned 32-bit seed: [0, 1). */
 function pcg(seed: number): number {
@@ -89,19 +102,52 @@ export type CoarseCrown = {
 } & (
   | {
       kind: "canopy";
+      /** an evergreen (tree-placement.ts `Placement.evergreen`) */
+      evergreen?: boolean;
+      /** an evergreen whose crown is a pine's (`Placement.pine`) */
+      pine?: boolean;
       /** the tree's vertical scale (tree-placement.ts) */
       s: number;
       /** its horizontal scale (absent = `s`) */
       w?: number;
+      /** where its crown starts (m over the ground, `Placement.base`):
+       *  the fine level's crown frame (vegetation-layer.ts `crownFrame`) */
+      base?: number;
     }
   | {
       kind: "register";
       colour: RegisterColour;
+      /** its crown is the conifer's cone (tree-inventory.ts `shape`) */
+      cone?: boolean;
+      /** its crown is a pine's (tree-inventory.ts `shape`) */
+      pine?: boolean;
       ext: Pick<TreeExtents, "crownBase" | "crownTop" | "crownWidth">;
       genus: number;
       jitter: number;
     }
 );
+
+/** The crown a coarse tree wears: the lobed crown, the cone or a pine's. */
+export type CoarseForm = "broad" | "cone" | "pine";
+
+/**
+ * Which crown a coarse tree is drawn with: a canopy evergreen's cone or
+ * pine (vegetation-layer.ts `canopyForm`), a register tree's cone or pine
+ * (its `shape`), else the lobed crown — the fine level's forms, so a wood
+ * keeps its conifers and its pines at a distance.
+ */
+export function coarseForm(c: CoarseCrown): CoarseForm {
+  if (c.kind === "canopy") {
+    if (c.evergreen !== true) {
+      return "broad";
+    }
+    return c.pine === true ? "pine" : "cone";
+  }
+  if (c.cone === true) {
+    return "cone";
+  }
+  return c.pine === true ? "pine" : "broad";
+}
 
 /** A register tree's foliage class. */
 function registerColour(t: InventoryTree): RegisterColour {
@@ -133,6 +179,9 @@ export function coarseCrowns(
       s: p.s,
       w: p.w ?? p.s,
       ndvi: p.ndvi,
+      ...(p.base === undefined ? {} : { base: p.base }),
+      ...(p.evergreen ? { evergreen: true } : {}),
+      ...(p.evergreen && p.pine ? { pine: true } : {}),
     }));
   const registered = register
     .filter((t) => drawnCoarse(t.x, t.z))
@@ -150,11 +199,29 @@ export function coarseCrowns(
       genus: t.genus,
       jitter: t.jitter,
       ndvi: t.ndvi,
+      ...(t.shape === "cone" ? { cone: true } : {}),
+      ...(t.shape === "pine" ? { pine: true } : {}),
     }));
   return [...canopy, ...registered];
 }
 
 // --- the file -------------------------------------------------------------------
+
+/** A canopy crown's genus byte: an evergreen, an evergreen pine, or 0. */
+function canopyLeaf(c: CoarseCrown & { kind: "canopy" }): number {
+  if (!c.evergreen) {
+    return 0;
+  }
+  return c.pine ? CANOPY_PINE : CANOPY_EVERGREEN;
+}
+
+/** A canopy crown's leaves from its genus byte (`canopyLeaf`). */
+function canopyLeafOf(byte: number): { evergreen?: true; pine?: true } {
+  if (byte === CANOPY_PINE) {
+    return { evergreen: true, pine: true };
+  }
+  return byte === CANOPY_EVERGREEN ? { evergreen: true } : {};
+}
 
 const TAU = Math.PI * 2;
 const clampInt = (v: number, lo: number, hi: number) =>
@@ -180,12 +247,21 @@ export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
     view.setUint16(at + 12, clampInt(turn * 65_535, 0, 65_535), true);
     if (c.kind === "canopy") {
       view.setUint8(at + 8, 0);
+      view.setUint8(at + 10, canopyLeaf(c));
       view.setUint16(at + 14, clampInt(c.s * SCALE_UNIT, 0, 65_535), true);
       const w = (c.w ?? c.s) * SCALE_UNIT;
       view.setUint16(at + 16, clampInt(w, 0, 65_535), true);
+      const base =
+        c.base === undefined ? 0 : clampInt(c.base * 1000, 1, 65_535);
+      view.setUint16(at + 18, base, true);
       return;
     }
-    view.setUint8(at + 8, 1 + REGISTER_COLOURS.indexOf(c.colour));
+    view.setUint8(
+      at + 8,
+      (1 + REGISTER_COLOURS.indexOf(c.colour)) |
+        (c.cone ? CONE_FLAG : 0) |
+        (c.pine ? PINE_FLAG : 0)
+    );
     view.setUint8(at + 10, clampInt(c.genus, 0, 255));
     view.setInt8(at + 11, clampInt(c.jitter * 10, -127, 127));
     const cm = (m: number) => clampInt(m * 100, 0, 65_535);
@@ -223,14 +299,17 @@ export function unpackCrowns(buffer: ArrayBuffer): CoarseCrown[] | null {
       ...(ndviByte === NO_NDVI ? {} : { ndvi: ndviByte / 254 }),
     };
     const a = view.getUint16(at + 14, true);
-    const colour = REGISTER_COLOURS[code - 1];
+    const colour = REGISTER_COLOURS[(code & ~(CONE_FLAG | PINE_FLAG)) - 1];
     if (code === 0 || colour === undefined) {
       const w = view.getUint16(at + 16, true);
+      const crownBase = view.getUint16(at + 18, true);
       out.push({
         ...base,
         kind: "canopy",
         s: a / SCALE_UNIT,
         w: (w || a) / SCALE_UNIT,
+        ...(crownBase === 0 ? {} : { base: crownBase / 1000 }),
+        ...canopyLeafOf(view.getUint8(at + 10)),
       });
       continue;
     }
@@ -245,6 +324,8 @@ export function unpackCrowns(buffer: ArrayBuffer): CoarseCrown[] | null {
       },
       genus: view.getUint8(at + 10),
       jitter: view.getInt8(at + 11) / 10,
+      ...((code & CONE_FLAG) === 0 ? {} : { cone: true }),
+      ...((code & PINE_FLAG) === 0 ? {} : { pine: true }),
     });
   }
   return out;

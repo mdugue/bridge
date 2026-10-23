@@ -47,9 +47,12 @@ test("fenceU puts each code in the middle of its slot, and decodes back", () => 
   }
 });
 
-test("a band stands at three quarters of the tagged height, 0.4–1 m", () => {
+test("a band stands at three quarters of the tagged height, 0.4–1.5 m", () => {
   expect(bandHeight(1.2)).toBeCloseTo(0.9, 6);
-  expect(bandHeight(2)).toBe(1);
+  // a 2 m railway or pitch fence (walls.py TALL_FENCE_H) stands taller
+  // than a 1.2 m garden one
+  expect(bandHeight(2)).toBeCloseTo(1.5, 6);
+  expect(bandHeight(4)).toBe(1.5);
   expect(bandHeight(0.3)).toBe(0.4);
 });
 
@@ -328,4 +331,19 @@ test("a swing gate is a boom at the band's top", () => {
     .map((v) => swing.positions[v * 3 + 1]);
   expect(Math.min(...boomYs)).toBeCloseTo(100.75, 6);
   expect(Math.max(...boomYs)).toBeCloseTo(100.9, 6);
+});
+
+test("a fence line with a ground of its own stands on it, not on the terrain", () => {
+  // a handrail over a flight's nosings: 2 m above the terrain under it
+  const data = fenceGeometry(
+    [{ coords: line, ground: () => 102, h: 1.2, type: "rail" }],
+    [],
+    flat,
+    offset
+  );
+  const ys = (data?.positions ?? []).filter((_, i) => i % 3 === 1);
+  expect(ys.length).toBeGreaterThan(0);
+  expect(Math.max(...ys)).toBeCloseTo(102.9, 6);
+  // a rail is only its top band: no foot reaches the terrain below
+  expect(Math.min(...ys)).toBeGreaterThan(102);
 });

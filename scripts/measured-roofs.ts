@@ -44,6 +44,8 @@ export interface PrismMesh {
   /** per vertex, the normal a face's roof shades with (smoothed over the
    *  face); NaN where the triangle's own flat normal is meant */
   normals: number[];
+  /** per vertex, the index of its part in the parts given */
+  parts: number[];
   /** x, y, z per vertex */
   positions: number[];
 }
@@ -584,31 +586,38 @@ export function measuredRoofMesh(
   base: number,
   offset: { cx: number; cy: number }
 ): PrismMesh {
-  const out: PrismMesh = { isRoof: [], normals: [], positions: [] };
+  const out: PrismMesh = { isRoof: [], normals: [], parts: [], positions: [] };
   const push: Push = (roof, x, y, z, normal) => {
     out.positions.push(x - offset.cx, y - offset.cy, z);
     out.isRoof.push(roof);
     out.normals.push(...(normal ?? FLAT));
   };
-  for (const f of parts) {
-    const top = f.properties?.z;
-    const [outer, ...inner] = f.geometry.coordinates;
-    if (top === undefined || top <= base || outer === undefined) {
-      continue;
-    }
-    // Outside on the right of every edge: the outer ring counter-clockwise,
-    // the holes clockwise (seen from above).
-    const contour = openRing(outer, true);
-    if (contour.length < 3) {
-      continue;
-    }
-    const rings = [contour, ...inner.map((h) => openRing(h, false))];
-    const surface = f.properties?.surface;
-    if (surface) {
-      facePrism(rings, faceTin(surface, top), base, top, push);
-    } else {
-      flatPrism(rings, base, top, push);
-    }
+  for (const [index, f] of parts.entries()) {
+    const before = out.isRoof.length;
+    addPrism(f, base, push);
+    out.parts.push(...out.isRoof.slice(before).map(() => index));
   }
   return out;
+}
+
+/** One part's prism, from `base` up to its roof. */
+function addPrism(f: MeasuredRoofFeature, base: number, push: Push): void {
+  const top = f.properties?.z;
+  const [outer, ...inner] = f.geometry.coordinates;
+  if (top === undefined || top <= base || outer === undefined) {
+    return;
+  }
+  // Outside on the right of every edge: the outer ring counter-clockwise,
+  // the holes clockwise (seen from above).
+  const contour = openRing(outer, true);
+  if (contour.length < 3) {
+    return;
+  }
+  const rings = [contour, ...inner.map((h) => openRing(h, false))];
+  const surface = f.properties?.surface;
+  if (surface) {
+    facePrism(rings, faceTin(surface, top), base, top, push);
+  } else {
+    flatPrism(rings, base, top, push);
+  }
 }

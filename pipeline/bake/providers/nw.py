@@ -14,7 +14,7 @@ from functools import cache
 from pathlib import Path
 
 from ..common import DLM_MEMBERS, Tile
-from ..fetch import Ctx, cells, own_cells
+from ..fetch import Ctx, cells, german_dates, own_cells
 from ..lsc import merge_laz
 from ..net import download, fetch_text, remote_zip_members
 
@@ -42,6 +42,12 @@ PATTERNS = {
 # lsc.rasterise, against the scan's own ground.
 LSC_CLASSES = {2: 2, 26: 30, 1: 20, 20: 20, 17: 20}
 DLM = f"{BASE}/lm/akt/basis-dlm/basis-dlm_EPSG25832_Shape.zip"
+# The DOP's metadata per 1 km tile (`Bildflugdatum`), through the DOP WMS.
+DOP_INFO = (
+    "https://www.wms.nrw.de/geobasis/wms_nw_dop?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo"
+    "&LAYERS=nw_dop_utm_info&QUERY_LAYERS=nw_dop_utm_info&CRS=EPSG:25832&WIDTH=11&HEIGHT=11"
+    "&I=5&J=5&INFO_FORMAT=text/plain&STYLES=&BBOX={x0},{y0},{x1},{y1}"
+)
 
 
 @cache
@@ -82,6 +88,16 @@ def dom(ctx: Ctx, tile: Tile) -> list[Path]:
 
 def dop(ctx: Ctx, tile: Tile) -> list[Path]:
     return _files(ctx, tile, "dop")
+
+
+def flight(ctx: Ctx, tile: Tile) -> list[str]:
+    """The days the tile's 1 km DOP files were flown (`Bildflugdatum`)."""
+    days: list[str] = []
+    for e, n in own_cells(tile, 1):
+        x, y = e * 1000 + 500, n * 1000 + 500
+        info = fetch_text(DOP_INFO.format(x0=x - 5, y0=y - 5, x1=x + 5, y1=y + 5))
+        days += german_dates(info.partition("Bildflugdatum")[2][:20])
+    return sorted(set(days))
 
 
 def lod2(ctx: Ctx, tile: Tile) -> list[Path]:

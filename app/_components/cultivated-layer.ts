@@ -71,7 +71,7 @@ import { bucketByCell, hash } from "./vegetation-layer";
  *   LINEAR and faded over a metre with a slow wobble — a soft, organic
  *   edge, never the raster's staircase. Inside, everything is analytic in
  *   the data frame: plots are the cells of a jittered Voronoi in the
- *   colony's axis frame (≈12 × 17 m), their borders meandering and drawn
+ *   colony's axis frame (≈15 m along its paths × 24 m deep), their borders meandering and drawn
  *   as thin soft paths; each plot is a lawn in one of a few soft greens,
  *   a third with warm vegetable beds, some with sparse pastel flower dots,
  *   the rest with darker shrub mottles, and a faint hedge green inside the
@@ -80,7 +80,8 @@ import { bucketByCell, hash } from "./vegetation-layer";
  *   then to the colony's one calm tone, so nothing shimmers from the air.
  *   Scales with *Bodendetail*.
  * - **Orchards**: their trees join the street-tree cadastre as the "small"
- *   archetype (tile-stream.ts), so they ride in the tree layer's chunks.
+ *   archetype of their genus (a Christmas-tree plantation's as cones;
+ *   tile-stream.ts), so they ride in the tree layer's chunks.
  * - **Vineyards**: each row a chain of low boxes, 1.3 m tall and 0.5 m
  *   wide, in foliage green, chunked into 250 m cells like the hedges.
  */

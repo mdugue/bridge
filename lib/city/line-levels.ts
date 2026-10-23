@@ -16,6 +16,7 @@
  * very samples the layer takes (`subdividePolyline` at LEVEL_STEP).
  */
 import { type DeckPoly, decksAt } from "./decks";
+import type { RailFeature } from "./features";
 import { epsgToWorld } from "./ground-clamp";
 import {
   encodeRuns,
@@ -36,6 +37,9 @@ export interface LinePiece {
   line: LevelLine;
   /** what the source says of the piece (OSM's bridge tag) */
   prefer?: "deck" | "ground";
+  /** the source puts the piece below the ground's level (OSM's negative
+   *  `layer`, no tunnel): it cuts under a lid (lib/city/levels.ts) */
+  below?: boolean;
 }
 
 /** What a line's height is read from. */
@@ -44,6 +48,20 @@ export interface LevelGround {
   decks: DeckPoly[];
   heightAt: (x: number, y: number) => number | null;
   offset: { cx: number; cy: number };
+}
+
+/**
+ * What a rail's source says of it: OSM's tracks carry their way's `bridge`
+ * (a deck is the exception off a bridge, the ground on one — as the trams'
+ * ways do; 20 % of Hamburg's bridge rails lay on the ground under their
+ * own deck); the DLM's lines say nothing.
+ */
+export function railPrefer(f: RailFeature): "deck" | "ground" | undefined {
+  const bridge = f.properties?.bridge;
+  if (bridge === undefined) {
+    return undefined;
+  }
+  return bridge === 1 ? "deck" : "ground";
 }
 
 /** The decks a line may ride: the heavy rails only rail decks (a road
@@ -79,6 +97,7 @@ export function pieceSamples(piece: LinePiece): Point2[] {
 }
 
 interface Sampled {
+  below?: boolean;
   line: LevelLine;
   pts: Point2[];
   prefer?: "deck" | "ground";
@@ -231,6 +250,7 @@ export function solvePieces(
     line: p.line,
     pts: pieceSamples(p),
     prefer: p.prefer,
+    below: p.below,
   }));
   const index = new SampleIndex(sampled);
   return sampled.map((p, piece) => {
@@ -254,6 +274,7 @@ export function solvePieces(
           DECK_REACH_M
         ),
         prefer: sampled[c.piece].prefer,
+        below: sampled[c.piece].below,
       };
     });
     const levels = lineLevels(samples, { grade: LEVEL_GRADE[p.line] });

@@ -12,10 +12,12 @@ import {
   type CityObjectTable,
   OBJECT_FLAG_HERITAGE,
   OBJECT_FLAG_SHOP,
+  OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
   hasObjectFlag,
   type Rgb,
 } from "./city-mesh";
+import { decodeDrawn } from "./drawn-facts";
 import {
   type CardCredits,
   type CardFact,
@@ -225,6 +227,30 @@ function scanSource(
     .join(" · ");
 }
 
+/** The surface model's line for a building LoD2 lacks
+ *  (pipeline/bake/structures.py): its height measured there, or — where
+ *  OSM's height stands (`osmHeight`) — how we know the model predates it. */
+function gapSource(
+  provenance: SiteProvenance | null,
+  credits: CardCredits,
+  tile: string,
+  osmHeight: boolean
+): string {
+  const source = provenance?.sources.dom;
+  const stand = provenance?.tiles[tile]?.dom;
+  const label = source?.label ?? "Digitales Oberflächenmodell DOM1";
+  return [
+    osmHeight ? label : `Höhe: ${label}`,
+    stand ? `Befliegung ${germanDates(stand)}` : "",
+    osmHeight
+      ? "beflogen, bevor das Gebäude stand"
+      : "nicht im amtlichen Stadtmodell",
+    source?.credit ?? credits.provider,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /** The most addresses a card names: an ensemble (the World Trade Center)
  *  has a dozen. */
 const MAX_ADDRESSES = 3;
@@ -372,6 +398,37 @@ export function inquiryCard(
   }
 }
 
+/** Where a building's card says it came from first: the city model, the
+ *  laser scan (a small structure LoD2 lacks), or for a building LoD2 lacks
+ *  the surface model — its height measured there, or flown before it stood
+ *  where OSM's height stands (its OSM line names the height). */
+function buildingSources(
+  inquiry: BuildingInquiry,
+  provenance: SiteProvenance | null,
+  credits: CardCredits,
+  o: {
+    gap: boolean;
+    osmHeight: boolean;
+    scan: boolean;
+    t: { created: string; rebuilt: boolean };
+  }
+): Stated[] {
+  if (o.scan) {
+    // small_buildings.py: found where the scan stands above the ground
+    return stated("detected", scanSource(provenance, credits, inquiry.tile));
+  }
+  if (o.gap) {
+    return stated(
+      "detected",
+      gapSource(provenance, credits, inquiry.tile, o.osmHeight)
+    );
+  }
+  return stated(
+    "taken",
+    lod2Source(provenance, credits, inquiry.tile, o.t.created, o.t.rebuilt)
+  );
+}
+
 /** A building's card (LoD2, or a scan structure LoD2 lacks). */
 function buildingCard(
   inquiry: BuildingInquiry,
@@ -380,26 +437,31 @@ function buildingCard(
 ): InquiryCard {
   const pick = inquiry.picked;
   const scan = pick.source === OBJECT_SOURCE_SCAN;
+  // structures.py: OSM's outline LoD2 lacks, its height the surface
+  // model's, or OSM's where the model was flown before it stood
+  const gap = pick.source === OBJECT_SOURCE_GAP;
+  const osmHeight = gap && decodeDrawn(pick.facts.drawn).height === "osm";
   const t = mergedFacts(inquiry);
   const use = functionLabel(t.functionCode);
   const kind = scan ? "Kleinbau" : "Gebäude";
   const title = t.name || use || kind;
   const kicker = t.name && use ? use : kind;
 
-  const facts = cardFacts(t, pick, scan, use);
+  const facts = cardFacts(t, pick, scan || gap, use);
   const fromOsm = [
+    gap ? "Umriss" : "",
+    osmHeight ? "Höhe" : "",
     t.name ? "Name" : "",
     t.address ? "Adresse" : "",
     t.levels !== NO_FACT ? "Geschosse" : "",
     t.heritage ? "Denkmal" : "",
   ].filter(Boolean);
-  const sources: Stated[] = scan
-    ? // small_buildings.py: found where the scan stands above the ground
-      stated("detected", scanSource(provenance, credits, inquiry.tile))
-    : stated(
-        "taken",
-        lod2Source(provenance, credits, inquiry.tile, t.created, t.rebuilt)
-      );
+  const sources: Stated[] = buildingSources(inquiry, provenance, credits, {
+    gap,
+    osmHeight,
+    scan,
+    t,
+  });
   if (t.rebuilt) {
     sources.push(
       ...stated("detected", rebuiltSource(provenance, credits, inquiry.tile))

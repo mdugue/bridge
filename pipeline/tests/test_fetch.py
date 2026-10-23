@@ -174,7 +174,11 @@ def test_citygml_2_reads_like_1_and_an_empty_tile_is_refused(tmp_path):
     assert not (tmp_path / "x.json").exists()
 
 
-def test_a_site_without_a_tree_cadastre_skips_the_trees(tmp_path):
+def test_a_site_without_a_tree_cadastre_writes_its_osm_trees(tmp_path):
+    # No register: the OSM trees alone (none without an extract), but the
+    # tile still gets its files, so every tile carries the same kinds.
+    import json
+
     from bake import trees
     from bake.common import Tile
 
@@ -182,7 +186,10 @@ def test_a_site_without_a_tree_cadastre_skips_the_trees(tmp_path):
     (tmp_path / "raw" / "trees").mkdir(parents=True)
     (tmp_path / "raw" / "trees" / "t.geojson").write_text('{"features": []}')
     trees.run(tile)
-    assert not (tmp_path / "data" / "dlm").exists()
+    out = json.loads((tmp_path / "data" / "dlm" / "trees_t.geojson").read_text())
+    assert out["features"] == []
+    assert "OpenStreetMap" in out["attribution"]
+    assert (tmp_path / "data" / "dlm" / "treefacts_t.json").exists()
 
 
 def test_the_cadastre_query_carries_the_sites_crs():

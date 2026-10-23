@@ -2,8 +2,9 @@
 synthetic bank — the river south of y = 100."""
 
 import numpy as np
+import rasterio
 import shapely
-from synthetic import local, osm_tile, read, way
+from synthetic import SIZE, local, osm_tile, read, way
 
 
 def _bank(tmp_path, monkeypatch):
@@ -31,6 +32,15 @@ def _bank(tmp_path, monkeypatch):
         ]
     )
     return osm_tile(tmp_path, monkeypatch, nodes, ways, classes=cls)
+
+
+def raise_ground(tile, x: tuple[int, int], y: tuple[int, int], h: float) -> None:
+    """Lift the synthetic DGM to `h` over x0 ≤ x < x1, y0 ≤ y < y1 (metres
+    from the tile's south-west corner)."""
+    with rasterio.open(tile.dgm, "r+") as dst:
+        dgm = dst.read(1)
+        dgm[SIZE - y[1] : SIZE - y[0], x[0] : x[1]] = h
+        dst.write(dgm, 1)
 
 
 def _by_kind(doc, k):
@@ -62,9 +72,11 @@ def test_groynes_and_ferry_lines_come_through_cut_to_the_water(tmp_path, monkeyp
     from bake import riverside
 
     tile = _bank(tmp_path, monkeypatch)
+    raise_ground(tile, (178, 183), (80, 105), 100.8)  # the groyne's stones stand out
     riverside.run(tile)
     doc = read(tile, "riverside")
-    assert len(_by_kind(doc, "groyne")) == 1
+    [groyne] = _by_kind(doc, "groyne")
+    assert groyne["properties"]["w"] == 100.0  # the water beside it
     [ferry] = _by_kind(doc, "ferry")
     assert ferry["properties"]["name"] == "Johannstadt Fähre"
     ys = [local(c)[1] for c in ferry["geometry"]["coordinates"]]

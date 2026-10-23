@@ -13,26 +13,36 @@
  *                                     provider's adapter reads one (≈380 MB
  *                                     a tile)
  *   bun run bake <site> --step canopy one step, in the order `all` runs them
- *                                     (landcover, islands, canopy, trees,
- *                                     ndvi, roof-colour, osm-buildings, rail,
- *                                     lamps, monuments, furniture, walls,
+ *                                     (landcover, islands, rail, ndvi,
+ *                                     canopy, trees, osm-buildings, doors,
+ *                                     passages, plinths, lamps, monuments,
+ *                                     furniture, mapillary, lamp-heights,
+ *                                     facades, shopfronts, windows, walls,
  *                                     stairs, surface, edges, markings,
  *                                     sport, tram, riverside, traffic,
- *                                     skyview, lowveg, cultivated,
- *                                     small-buildings)
+ *                                     roofs, lowveg, cultivated, skyview,
+ *                                     small-buildings, landmarks,
+ *                                     structures, roof-colour, dormers;
+ *                                     then, once for the site, transit)
  *   bun run bake <site> --step lowveg --research   also every hedge/shrub
  *                                     candidate, under the raw folder
+ *   bun run bake <site> --jobs 3      each step's tiles three at a time,
+ *                                     one process each (a step still waits
+ *                                     for the one before on every tile)
  *   bun run bake <site> --force       run every step again, even one whose
  *                                     code and inputs did not change (a
  *                                     step is otherwise skipped then:
  *                                     pipeline/bake/step_cache.py)
  *
- * The steps run in dependency order: land cover first (the canopy, the
+ * The steps run in dependency order (pipeline/bake/__main__.py `STEPS`
+ * says why each stands where it does): land cover first (the canopy, the
  * tree cadastre, lamps and street furniture are gated on it); the bridges
- * (rail) before the furniture and trams; the hedges and scan trees late
- * (thinned against the canopy and the cadastre), then the orchards and the
- * small structures. Several steps read the neighbours' files across a seam,
- * so run a step for every tile. The site config (sites/) becomes one JSON
+ * (rail) before the canopy, the furniture and the trams; the hedges and
+ * scan trees late (thinned against the canopy and the cadastre), then the
+ * orchards and the sky view (it reads every tree file); the small
+ * buildings, landmarks and structures, then the roof colours (they read
+ * every roof those steps add) and the dormers. Several steps read the
+ * neighbours' files across a seam, so run a step for every tile. The site config (sites/) becomes one JSON
  * spec (pipeline/bake/spec.py), so Python never re-derives tiles, extents
  * or products. Then `bun dev` / `bun run build` turn every ready
  * data/<site>/ into its tileset (prepare-sites.ts → prepare-data.ts).
@@ -70,11 +80,12 @@ export function siteSpec(site: Site) {
   };
 }
 
-/** The options each command takes (`--step` needs a value). */
+/** The options each command takes (`--step` and `--jobs` need a value). */
 const OPTIONS = {
   fetch: ["--lsc"],
-  bake: ["--step", "--research", "--force"],
+  bake: ["--step", "--research", "--jobs", "--force"],
 } as const;
+const VALUED = new Set(["--step", "--jobs"]);
 
 /** The options `args` gives that `command` does not take. */
 export function unknownOptions(
@@ -102,13 +113,14 @@ if (import.meta.main) {
   }
   const { site, rest: args } = parsed;
   const step = args.indexOf("--step");
+  const jobs = args.indexOf("--jobs");
   const bad = unknownOptions(command, args);
   if (bad.length > 0) {
     process.stderr.write(`${command}: unknown option ${bad.join(" ")}\n`);
     process.exit(2);
   }
   const tiles = args.filter(
-    (a, i) => !a.startsWith("--") && (step < 0 || i !== step + 1)
+    (a, i) => !a.startsWith("--") && !VALUED.has(args[i - 1] ?? "")
   );
   process.stdout.write(`${command}: ${site.id} (${site.provider.name})\n`);
   const run = spawnSync(
@@ -124,6 +136,7 @@ if (import.meta.main) {
       "--spec",
       JSON.stringify(siteSpec(site)),
       ...(step >= 0 ? ["--step", args[step + 1] ?? ""] : []),
+      ...(jobs >= 0 ? ["--jobs", args[jobs + 1] ?? ""] : []),
       ...(tiles.length > 0 ? ["--tile", ...tiles] : []),
       ...args.filter(
         (a) => a === "--lsc" || a === "--research" || a === "--force"
