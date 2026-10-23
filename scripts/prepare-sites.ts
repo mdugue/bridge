@@ -63,11 +63,16 @@ function isReady(id: SiteId): boolean {
 
 /** prepare-data.ts for one site (a warmer with `args`, warmers.ts), each
  *  line it prints under the site's id (the bakes run side by side);
- *  resolves with its exit code. */
+ *  resolves with its exit code. It runs on this process's own Bun, not
+ *  whichever `bun` comes first on the PATH. */
 function prepare(id: SiteId, args: string[]): Promise<number | null> {
-  const child = spawn("bun", ["scripts/prepare-data.ts", id, ...args], {
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const child = spawn(
+    process.execPath,
+    ["scripts/prepare-data.ts", id, ...args],
+    {
+      stdio: ["ignore", "pipe", "pipe"],
+    }
+  );
   for (const [from, to] of [
     [child.stdout, process.stdout],
     [child.stderr, process.stderr],
@@ -192,7 +197,7 @@ const overrides = (
   .map((name) => `, ${name}=${process.env[name]}`)
   .join("");
 log(
-  `up to ${limits.jobs} bakes at once, ${(limits.memory / 1e9).toFixed(1)} GB of peaks between them (${availableParallelism()} cores, ${(machineMemory() / 1e9).toFixed(1)} GB${overrides})`
+  `up to ${limits.jobs} bakes at once, ${(limits.memory / 1e9).toFixed(1)} GB of peaks between them (${availableParallelism()} cores, ${(machineMemory() / 1e9).toFixed(1)} GB, Bun ${Bun.version}${overrides})`
 );
 
 mkdirSync(OUT_DIR, { recursive: true });

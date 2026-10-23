@@ -51,9 +51,11 @@ bun dev            # prepare-sites.ts (every ready site's geodata ->
 bun run build      # the same, then next build
 bun run verify     # lint + typecheck + unit tests — the pre-push gate
 bun lint           # oxlint (rules, type-aware via tsgolint) + oxfmt --check
-bun typecheck      # tsc --noEmit (TypeScript 7, the native compiler — the
-                   # same one `next build` type-checks with)
-bun run test       # unit tests in lib/, app/_components/ and scripts/
+bun typecheck      # bun check (Bun's checker, tsc's errors in a seventh of
+                   # the time; `next build` still type-checks with tsc 7)
+bun run typecheck:tsc  # tsc --noEmit, the reference CI runs beside it
+bun run test       # unit tests in lib/, app/_components/ and scripts/, one
+                   # worker per core (--parallel; each file in a fresh global)
                    # (a bare `bun test` is Bun's runner: it loads e2e/ too)
 bun run site <site>   # where the site stands, tile by tile (--all: every
                    # site, with its size on disk)
@@ -1027,7 +1029,11 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   together); caret for everything else. `suncalc` is
   pinned exactly too — its 2.0 was a units/azimuth-origin break, so a silent
   float would rotate the sun rather than fail. The Bun version comes from
-  `packageManager` in `package.json` (CI reads it via `bun-version-file`), and
+  `packageManager` in `package.json` (CI reads it via `bun-version-file`) —
+  except on Vercel, which installs and builds with its own Bun whatever the
+  pin (1.3.14 in October 2026; `prepare-sites` names it in the build log). A
+  cold Dresden bake was byte-identical and as fast on 1.3.14, 1.4.3 and 1.4.4
+  (2026-10-23), so the build does not pin it. And
   `.mcp.json` pins the two npm MCP servers (shadcn, next-devtools) to an
   exact version rather than `@latest` (Sentry's is hosted, a URL with no
   version). In Claude Code on the web,
@@ -1036,9 +1042,16 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   `bun install --frozen-lockfile`: `Bun.WebView` (`bun run docs:diagrams`)
   needs Bun ≥ 1.4, and an older Bun rewrites `bun.lock` on install. Bump the
   pin and the hook follows; it does nothing outside the web container.
-- **One TypeScript, and it is 7.x (the native compiler).** `bun typecheck` and
-  `next build` both run it; there is no second checker. Note what TS 7's npm
-  package *is*: a per-platform native binary plus a `tsc` launcher. It ships
+- **One TypeScript, and it is 7.x (the native compiler).** `next build`
+  type-checks with it; `bun typecheck` runs `bun check`, Bun's port of the
+  same checker (all cores, no incremental cache: 0.5 s where `tsc --noEmit`
+  took 3.8 s cold, measured 2026-10-23 on four cores, with the same errors on
+  a probe file of thirteen kinds). tsc stays the gate: `next build` and
+  CI's Typecheck job (`bun run typecheck:tsc` beside `bun typecheck`) run
+  it, ADR 0019; `tsconfig.json`'s `incremental` cache once kept
+  reporting an error a dependency update had removed — delete
+  `tsconfig.tsbuildinfo` when tsc disagrees with `bun check`. Note what TS 7's
+  npm package *is*: a per-platform native binary plus a `tsc` launcher. It ships
   **no `lib/typescript.js`**, so the classic JS compiler API is gone and any
   tool that consumes it (typescript-eslint, the old tsserver) cannot run on it.
   That is why ESLint is no longer here — see below. If you ever need that API
