@@ -27,6 +27,7 @@ import {
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   attribute,
+  cameraViewMatrix,
   dot,
   float,
   Fn,
@@ -35,8 +36,6 @@ import {
   materialEmissive,
   materialOpacity,
   mix,
-  normalize,
-  normalView,
   normalWorld,
   normalWorldGeometry,
   positionLocal,
@@ -85,10 +84,11 @@ import type { Point2 } from "@/lib/city/polyline";
 import { ashlar, footprint } from "./bridge-surface";
 import { gdNoise } from "./ground-detail";
 import { Instances, instanceFloat, instancePosition } from "./instancing";
-import type { F, Live } from "./shader-chunks";
+import { dataXY, type F, type Live } from "./shader-chunks";
 import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
+import { BASIN_WAVES, waveNormal, waves, waveTilt } from "./water-waves";
 
 /**
  * Fountains, statues, memorial stones and columns
@@ -760,9 +760,9 @@ function sprayMaterial(): MeshBasicNodeMaterial {
 }
 
 /**
- * The water: a slow shimmer of light across the surface (three crossing
- * swells in world x/z, none aligned with another, so no stripes read,
- * tilting the view-space normal and brightening the emissive), and by
+ * The water: the wind's wave field at a basin's size (water-waves.ts
+ * `BASIN_WAVES`, the river's ripples smaller) tilting its normal, the sky
+ * mirrored off them and a slow shimmer of light where they tilt most; by
  * night a faint glow from below in place of most of the shimmer
  * (`NIGHT_WATER`, `NIGHT_SHIMMER`).
  */
@@ -773,28 +773,22 @@ function waterMaterial(): MeshStandardNodeMaterial {
     roughness: 0.12,
     metalness: 0,
   });
-  const p = positionWorld;
-  const t = fountainTime;
-  const ripA = sin(p.x.mul(2.3).add(p.z.mul(0.7)).add(t.mul(1.6)))
-    .add(sin(p.z.mul(2.9).sub(p.x.mul(1.1)).sub(t.mul(1.3))))
-    .add(sin(p.x.add(p.z).mul(4.1).add(t.mul(2.3))))
-    .div(3);
-  const ripB = sin(p.x.mul(3.7).sub(p.z.mul(1.9)).add(t.mul(2.1)));
-  m.normalNode = normalize(
-    normalView.add(vec3(ripA.mul(0.06), ripB.mul(0.06), 0))
-  );
+  const field = waves(dataXY(), fountainTime, BASIN_WAVES);
+  const n = waveNormal(field.slope).toVar();
+  m.normalNode = cameraViewMatrix.mul(vec4(n, 0)).xyz.normalize();
+  const tilt = waveTilt(field.slope).toVar();
   const shimmer = mix(float(1), NIGHT_SHIMMER, fountainNight);
   m.emissiveNode = materialEmissive
-    .add(vec3(0.03, 0.04, 0.045).mul(ripA.mul(0.5).add(0.5)).mul(shimmer))
+    .add(vec3(0.03, 0.04, 0.045).mul(tilt).mul(shimmer))
     .add(
-      skyReflection(normalWorld, 0.15).mul(
-        mirrorWeight(normalWorld, 0.04).mul(REFLECTIONS).mul(0.6)
+      skyReflection(n, 0.15).mul(
+        mirrorWeight(n, 0.04).mul(REFLECTIONS).mul(0.6)
       )
     )
     .add(
       vec3(0.6, 0.8, 1)
         .mul(fountainNight.mul(NIGHT_WATER))
-        .mul(ripA.mul(0.2).add(0.8))
+        .mul(tilt.mul(0.4).add(0.6))
     );
   return m;
 }
