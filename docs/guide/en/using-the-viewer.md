@@ -258,7 +258,7 @@ storeys simply has no storey line.
 Under **Daten** ("data", folded at the end of the card) the card says how
 the viewer draws the building, value by value: storeys, the facade's
 material and base colour, the windows, plinth and cornices, front doors,
-shopfronts, dormers, the roof colour, the light at dusk and whether it is
+passages, shopfronts, dormers, the roof colour, the light at dusk and whether it is
 a landmark. Each value names its source (say *Material Glas —
 OpenStreetMap · building:material*), carries the badge of how the viewer
 came by it, and links, where it can, to the place: the OpenStreetMap

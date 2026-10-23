@@ -92,6 +92,8 @@ why Munich is yellow there in [Sources by city](./sources-by-city.md).
 | Brick or plaster where nothing is mapped | OpenStreetMap, the neighbourhood | `≈ assumed` |
 | Tint per building, storey bands | the viewer | `≈ assumed` |
 | Front doors | OpenStreetMap, the entrances | `❝ taken` |
+| Passages through buildings, their width | OpenStreetMap, the passages (`tunnel=building_passage`) | `❝ taken` |
+| A passage's height where none is mapped, its rectangular opening | the viewer, from the ground storey | `≈ assumed` |
 | Shop or restaurant on the ground floor | OpenStreetMap, assigned to the building | `◎ detected` |
 | Landmarks | Wikidata, assigned to the building parts | `◎ detected` |
 | Several buildings of the city model as one (the Residenzschloss with the Hausmannsturm) | OpenStreetMap, one named building outline over several buildings, across tile edges too | `◎ detected` |

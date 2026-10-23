@@ -529,10 +529,23 @@ visual-variable codebook is in
   (`URBAN_GREEN`, fixed).
   `ground-detail.ts` `urbanGreen`.
 - **Water** `❝ taken` `= computed` `≈ assumed` — the painted splat's alpha (water coverage, `smoothstep`ed
-  shoreline) + the terrain geometry + animated normal wobble (ripples,
-  mist); the water and mist sheets hang next to their terrain mesh and
-  leave with the tile. `water-layer.ts`. Missing class raster → no splat,
-  no water: the tile's ground falls back to the flat sage.
+  shoreline) + the terrain geometry + the wind's waves on a level normal
+  (+ the drifting mist); the water and mist sheets hang next to their
+  terrain mesh and leave with the tile. `water-layer.ts`. Missing class
+  raster → no splat, no water: the tile's ground falls back to the flat
+  sage.
+  *Waves* `≈ assumed` (since 2026-10-23, `water-waves.ts`): one wave
+  field for the river sheet and the fountains' basins, a function of the
+  place and the clock alone, so two tiles meet without an edge — five
+  octaves of gradient noise (8 m down to 0.7 m on the river, a 23 m swell
+  over them; 1.2 m and less in a basin), each on its own turned grid and
+  drifting its own way, their crests bent by a slower noise, the whole
+  under gusts 70 m across (5 m in a basin) that leave calm, mirroring
+  patches beside rough ones; each octave fades where its wavelength spans
+  fewer than a few pixels, so the far water neither shimmers nor turns
+  grey. The sky's reflection and the sun's glitter ride the same normal
+  (the glitter's tilted twice as far). It replaced crossing sine waves
+  (⛔ below).
   Since 2026-10-21 the land-cover bake also splits the water class into
   **bodies** (`pipeline/bake/water.py`, the legend's `water`): 4-connected
   1 m texels, cut only where OSM maps `waterway=weir|lock_gate|dam` across
@@ -1146,6 +1159,38 @@ visual-variable codebook is in
   factors before its shadows are found (a blue cast reads as shade).
   Leipzig's factors are (1.24, 1.01, 0.83), München's (0.93, 0.98, 1.12),
   Dresden's 1 within half a percent; the file's `meta.balance` keeps them.
+  **On to grey** (2026-10-23): Dresden's balance is its own flight's, and
+  that flight is about 5 % green (its sunlit roads r/g 0.95, b/g 0.94),
+  so every roof read in it carried a faint green. The roof colours now go on from
+  Dresden's balance to neutral grey roads (`dop_balance.neutral_gains`,
+  ≈ (1.013, 0.963, 1.026), the brightness kept) — every city's, as every
+  flight is first taken to Dresden's. The water's tint and the sports
+  grounds' surfaces keep Dresden's balance: their thresholds were
+  measured in it.
+  **A part raised on another leans with its building** (2026-10-23,
+  `bases`): the landmarks' modelled parts stand on each other — a dome on
+  its drum, a lantern on the dome (Dresden 190 parts, Leipzig 28; no other
+  city's LoD2 stacks them) — and the photo shows them as far off the
+  ground as their building. Leaned from their own lowest point instead,
+  the Frauenkirche's dome (41 m over the square, 0.13 m/m) was read 5 m
+  off its place, on its drum's shade and its lantern, and came out a
+  blue-green grey (sRGB 164, 173, 171; now 200, 201, 197, the sandstone's
+  light grey); the Yenidze's dark glass dome had read the white drum
+  round it. A part whose lowest point lies more than 2 m over its
+  building's foot (the lowest point of it and its parents) and over the
+  DGM1 under it is leaned from that foot, takes its building's lean and
+  measures none (a landmark's dozens of parts outvoted the houses round a
+  lean node). A part on the ground keeps its own foot, one on a slope too
+  (its foot metres over its building's lowest corner, but on the
+  terrain). And any part of a building (a CityJSON `BuildingPart`) not in
+  sun takes its building's roof, as a face in shadow does
+  (`parts_carried`): none of it lit, or under a quarter of its roof lit
+  and read the shadow test's blue there — skylight on a light roof, too
+  bright for the test's dimness: the Frauenkirche's corner towers stand in
+  the dome's shadow, read 26 of their 959 texels lit and came out sky blue
+  (sRGB 100, 150, 171), its lantern and the platform round it slate blue.
+  A dark reading stays (the Yenidze's glass dome, most of it dark enough
+  to count as shadow).
   **Discontinued** the same day: one colour for a roof's pitched (≥ 20°)
   and one for its low faces (`roofPitched`, a fifth texel band), the first
   answer to the mansards — the face colours cover it, and it still read
@@ -1303,6 +1348,52 @@ visual-variable codebook is in
   without a mapped entrance has none. Ground joins: `doors` in
   `JOIN_PARTS`, budget 1 % (the misses are sills at the top of mapped
   steps).
+- **Passages through buildings** (*Durchgänge*, 2026-10-23) `❝ taken`
+  `≈ assumed` — LoD2 draws every building as a closed shell from the
+  ground up, so a gateway into a courtyard, a city gate or the Zwinger's
+  passages to its pond were solid wall. Nothing measures one (the surface
+  model sees the roof over it; the street photos' poses miss by half a
+  metre, Plan 075), but OSM maps them: a way tagged
+  `tunnel=building_passage` where it runs through the building
+  (`pipeline/bake/passages.py`). Per way on the ground floor (a `level`
+  without a 0 or a `layer` above 0 is skipped; `layer=-1` stays) and
+  chains of them merged end to end, the stretches inside the tile's LoD2
+  footprints (joined across a gap under 2 m, each at least 1 m long, one
+  that meets no outline dropped), run on 0.6 m past either wall — but
+  where the way ends inside the buildings, more than 0.6 m from their
+  joint outline (a drive into a garage, a yard track into its shed), the
+  passage ends there and a wall across it shuts it: run on, it had opened
+  into the hollow LoD2 shell, and one saw through the building; its width
+  from `width` (1.5–12 m), else 3.5 m for a drive, 4.5 m for a track (a
+  `railway`, a single track's structure gauge; before, the tracks into
+  Dresden's and Hamburg's sheds ran into 2.5 m slots) and 2.5 m for a
+  walk; the lowest DGM1 sample within 1 m of each axis vertex as its
+  ground. Per LoD2 object the passage's strip reaches — a part of the
+  building beside the way as much as the one it runs through, for the
+  build cuts every tree the passage runs through and a part cut but not
+  lined stood open into its interior — the bake writes the ceiling's
+  plan, the walls along it (and across it at a shut end) and its portals
+  (`dlm/passages_<t>.geojson`). The
+  building bake (`bake-city-mesh.ts` `withPassages`, the geometry in
+  `lib/city/building-passages.ts`) gives it its clear height —
+  `maxheight:physical` or `maxheight` where plausible, else the larger of
+  3.8 m for a drive, 5 m for a track (a contact wire's lowest in a
+  structure) or 3 m for a walk and the ground storey less a 0.6 m
+  lintel (a palace's 5.5 m storey: 4.9 m), never closer than 1 m under
+  the lowest eave over it, none under 2.2 m —, cuts every triangle but a
+  roof's of the building trees it runs through to what lies outside its
+  volume (a prism per segment, mitred at a bend, from `SINK.wall` under
+  the ground to the clear height over it, so it falls with its ground: the
+  Zwinger's to its pond falls 4 m), and lines it with walls and a ceiling
+  in the host's own clay (`source` 7, flag 64, no windows, no eave);
+  where two passages cross or run side by side through one gateway, each
+  one's lining is cut out of the other's opening (it had stood across it,
+  and the collider blocked the way). The ground floor's windows keep off a portal as off a door (its width up to
+  6 m in the door slot), and no OSM door is drawn in an opening. The
+  openings are rectangles: no source gives an arch's form. Last of the
+  building bake, so a cut piece keeps its wall's place in `_FACADE`.
+  Dresden: 482 passages on fifteen tiles (106 on the Zwinger's), Leipzig
+  245, München 763, Hamburg 353, Meißen 10, Unna 12, Grimma none.
 - **Dormers** `◎ detected` — what DOM1 shows over a pitched LoD2 roof (25–62°) that
   LoD2 leaves out (`pipeline/bake/dormers.py`): the excess `DOM − roof`
   against its own 9 m median, blobs 0.7 m and more over it, 3–30 m² and
@@ -4600,6 +4691,7 @@ research that produced them):
 | **A whole-sky grid for the roof colour's sun** (the shadow fit's sun searched over every elevation and azimuth, until 2026-10-21) | Without the flight's clock the fit found suns the day never had: Dresden's 33416_5654 at 29° and Grimma's 33342 at 23° under a 38.5° and a 40° sun. | The sun is searched along the flight day's solar path now (✅ *Roof colour*); the grid (10°/5°, then 2°/1° round its best) remains only for a tile the fetch found no flight days for. |
 | **A two-colour roof split from the DOP** (a roof's two materials told apart in the orthophoto, measured 2026-10-21, not adopted) | 242 of the 281 splits found were light, not material: a roof's sunlit and shaded faces, not two coverings. | One colour per building is the property table's row; a real split would need a mask texture ([ADR 0038](./adr/0038-measured-and-named-additions.md)). |
 | **Missing buildings for outlines LoD2 covers in part** (OSM outlines LoD2 covers 20 % or more, measured 2026-10-21, not adopted) | Of the 163 candidates most were courtyards and trees, not a building LoD2 lacks. | The missing buildings keep the < 20 % rule (✅ *Structures beyond LoD2: missing buildings*). |
+| **Crossing sine ripples on the water** (three sines on the river sheet, three swells on a fountain's basin, until 2026-10-23) | Their interference repeats every few tens of metres and read as a tiled pattern ("zu repetitiv", the maintainer, 2026-10-23). And on the river they lay flat on every tile without a foam line: their position was first built inside the foam loop (water-layer.ts `foamAt`), which a tile without a weir never runs, so the Elbe broke at a tile seam into rippling and mirror-flat water. | The wind's wave field (✅ *Water*: waves), the foam loop's position taken before the loop. |
 | **Modell's trees thinned by scale** (2026-10-04 → 2026-10-05: every tree to 1 : 5 000, fewer to 1 : 9 000, a floor of 30 % beyond, the kept crowns widened by 1/√share — `treeShare`, `treeSpread`, the crown shader's `crownKept` folding the others onto their origin; the coarse level's crowns, the floor's selection, fetched only once Modell thinned. The version before it thinned to none at 1 : 9 000) | Two rules for one picture: the scale set the share, the tile renderer the level, and the two disagree. The coarse level shows wherever the fine one is not loaded, not only past 2.5 m/px — at 1 : 3 000 on a phone whose memory governor coarsens the stream, or while fine tiles load — and there the picture showed no tree at all, since its crowns came only once Modell thinned (maintainer, 2026-10-05: trees at large and at small scales, none at 1 : 3 000). The version before showed no tree in an overview of the city. | Each terrain level carries its own trees, whatever the mode or scale (✅ *The coarse level's trees*): the fine level all, the coarse one a fixed third. A generalization by scale, if it comes back, has to follow the level the renderer shows, not run as a second rule beside it. |
 | **Pedestrian counts** (for the traffic data layers, 2026-10-01) | No open measured source for the site: the only pedestrian counter, hystreet.com's laser count on the Prager Straße, is commercial (access on request); the city's "Fußgängerquerung St. Petersburger Straße" is a *bicycle* counter. A density modelled from stops, shops and census cells would be a model drawn as if measured. | Revisit with an open counter network (Telraam sensors in the site, if any, through its API with a key). |
 | **Live tram positions** (GTFS-RT, the TLMS radio telegrams) | gtfs.de's realtime feed is one protobuf for all of Germany, too heavy for a browser to poll; TLMS (`wss://socket.tlm.solutions`) is a volunteer service whose coverage and uptime the viewer cannot vouch for. | The timetable runs instead (✅ *Trams by timetable*); delays could come from the VVO's departure monitor (`webapi.vvo-online.de/dm`, answers any origin) per stop — 📋. |

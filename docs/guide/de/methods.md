@@ -98,6 +98,8 @@ Vegetationsindex nur mäßig überein (r ≈ 0,7), deshalb steht München in
 | Backstein oder Putz, wo nichts eingetragen ist | OpenStreetMap, die Nachbarschaft | `≈ angenommen` |
 | Tönung je Gebäude, Geschossbänder | der Viewer | `≈ angenommen` |
 | Haustüren | OpenStreetMap, die Eingänge | `❝ übernommen` |
+| Durchgänge durch Gebäude, ihre Breite | OpenStreetMap, die Durchgänge (`tunnel=building_passage`) | `❝ übernommen` |
+| Höhe eines Durchgangs, wo keine eingetragen ist, seine rechteckige Öffnung | der Viewer, aus dem Erdgeschoss | `≈ angenommen` |
 | Laden oder Gastronomie im Erdgeschoss | OpenStreetMap, dem Gebäude zugeordnet | `◎ erkannt` |
 | Wahrzeichen | Wikidata, den Gebäudeteilen zugeordnet | `◎ erkannt` |
 | Mehrere Gebäude des Stadtmodells als ein Bau (das Residenzschloss mit dem Hausmannsturm) | OpenStreetMap, ein benannter Gebäudeumriss über mehreren Gebäuden, auch über Kachelgrenzen | `◎ erkannt` |

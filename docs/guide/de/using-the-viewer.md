@@ -273,8 +273,8 @@ keine Geschosszeile.
 
 Unter **Daten** (eingeklappt am Ende der Karte) steht, wie der Viewer das
 Gebäude zeichnet, Wert für Wert: Geschosse, Material und Grundton der
-Fassade, die Fenster, Sockel und Gesimse, Haustüren, Schaufenster,
-Gauben, die Dachfarbe, das Abendlicht und ob es ein Wahrzeichen ist. Jeder
+Fassade, die Fenster, Sockel und Gesimse, Haustüren, Durchgänge,
+Schaufenster, Gauben, die Dachfarbe, das Abendlicht und ob es ein Wahrzeichen ist. Jeder
 Wert nennt seine Quelle (etwa *Material Glas — OpenStreetMap ·
 building:material*), trägt das Abzeichen, wie der Viewer zu ihm kam, und
 verlinkt, wo es geht, auf die Stelle: die OpenStreetMap-Objekte dort, die
