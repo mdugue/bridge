@@ -188,6 +188,8 @@ def test_a_roof_takes_the_median_orthophoto_colour_in_linear_rgb(tmp_path, monke
     out = json.loads((tile.data / "dop" / "roofcolor_t.json").read_text())
     assert set(out["roofs"]) == {"house"}
     red, green, blue = out["roofs"]["house"]
-    assert red == round(roof_colour.srgb_to_linear(200.0), 4)
-    assert green == blue == round(roof_colour.srgb_to_linear(30.0), 4)
+    kr, kg, kb = (float(k) for k in roof_colour._TO_GREY)  # taken on to grey
+    assert red == round(roof_colour.srgb_to_linear(200.0) * kr, 4)
+    assert green == round(roof_colour.srgb_to_linear(30.0) * kg, 4)
+    assert blue == round(roof_colour.srgb_to_linear(30.0) * kb, 4)
     assert out["meta"]["buildings_sampled"] == 1

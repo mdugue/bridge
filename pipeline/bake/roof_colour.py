@@ -20,8 +20,16 @@ median of at least 12 sunlit texels, in linear RGB.
 
 The photo is first taken to Dresden's colour balance (dop_balance.py):
 a flight's cast — Leipzig's cyan, München's yellow — read off its sunlit
-carriageways is scaled out of every texel, so a grey roof is grey in every
-city and the shadows are found in the balanced photo.
+carriageways is scaled out of every texel, so the shadows are found in the
+balanced photo; the colours written are then taken on to grey roads
+(`neutral_gains`: Dresden's own flight is 5 % green), so a grey roof is
+grey in every city.
+
+A part raised on another — a dome on its drum, a lantern on the dome —
+shows in the photo as far off the ground as its building: it is leaned
+from its building's foot and by its building's lean (`bases`). A part of
+a building not in sun — nowhere, or on under a quarter of its roof and
+read the sky's blue there — takes its building's roof, as a face does.
 
 A roof roofs.py rebuilt from DOM1 is read part by part instead of by its
 LoD2 faces: the build draws the parts in its place, and LoD2 often lays
@@ -70,6 +78,7 @@ from .dop_light import (
     GAIN_MIN,
     MIN_SUN_CONTRAST,
     OVERCAST_RATIO,
+    SHADOW_BLUE,
     SUN_RES_M,
     SunFit,
     estimate_sun,
@@ -186,10 +195,17 @@ def ring_mask(rings, box, erode: int) -> np.ndarray:
     return np.asarray(mask) > 0
 
 
+# Dresden's balance on to grey (dop_balance.neutral_gains): the photo stays
+# in Dresden's for the shadows and the sun, the colours written leave it.
+_TO_GREY = dop_balance.neutral_gains()
+
+
 def _upper_median(texels: np.ndarray) -> list[float]:
     """The upper per-channel median, like the sorted-list median it replaced,
-    at most 1: a face's slope gain can scale a bright roof past white."""
-    return [round(min(1.0, float(c)), 4) for c in np.sort(texels, axis=0)[len(texels) // 2]]
+    taken on to grey (`_TO_GREY`), at most 1: a face's slope gain can scale
+    a bright roof past white."""
+    median = np.sort(texels, axis=0)[len(texels) // 2] * _TO_GREY
+    return [round(min(1.0, float(c)), 4) for c in median]
 
 
 def median_colour(rgb, rings, box, erode: int):
@@ -473,14 +489,24 @@ def face_texels(rgb, light: Light, frame: Frame, face: Face, box) -> FaceRead:
     )
 
 
-def face_colours(rgb, light: Light, frame: Frame, faces, box):
+def skylight(colour) -> bool:
+    """Whether a colour (linear RGB) is the shadow test's blue (sRGB): the
+    sky's light, on a roof too bright for the test's dimness."""
+    r, _, b = (linear_to_srgb8(c) for c in colour)
+    return b > SHADOW_BLUE * max(r, 1.0)
+
+
+def face_colours(rgb, light: Light, frame: Frame, faces, box, share: float = 0.0):
     """One building's colour and its faces' own, from their sunlit texels
     on the roof scaled by each face's slope (`Light.gain`); returns (colour
-    or None, {key: colour}). A face's own colour is read from its core
-    alone. Touching faces of one plane (`_planes`) are read as one: a flat
-    roof the dataset splits into pieces is one roof, and each piece read
-    alone took the colour of what stands on it (Leipzig's department
-    stores read as pyramids of three shades)."""
+    or None, {key: colour}). The colour is None under MIN_SAMPLES sunlit
+    texels, or where it is `skylight` read from under `share` of the
+    texels its faces cover. A face's own colour is read from its core
+    alone. Touching faces of one plane
+    (`_planes`) are read as one: a flat roof the dataset splits into
+    pieces is one roof, and each piece read alone took the colour of what
+    stands on it (Leipzig's department stores read as pyramids of three
+    shades)."""
     reads = [face_texels(rgb, light, frame, face, box) for face in faces]
     lit_all = [r.texels for r in reads if len(r.texels)]
     own = {}
@@ -493,7 +519,10 @@ def face_colours(rgb, light: Light, frame: Frame, faces, box):
             for i in group:
                 own[faces[i].key] = colour
     joined = np.concatenate(lit_all) if lit_all else np.zeros((0, 3))
-    return (_upper_median(joined) if len(joined) >= MIN_SAMPLES else None), own
+    colour = _upper_median(joined) if len(joined) >= MIN_SAMPLES else None
+    if colour is not None and len(joined) < share * sum(r.covered for r in reads):
+        colour = None if skylight(colour) else colour
+    return colour, own
 
 
 # Two faces lie in one plane when their normals differ by less than
@@ -708,6 +737,46 @@ def flight_sun(
     return solar_position(when, *own.lonlat), "pooled"
 
 
+# A part whose lowest point lies this far (m) over its building's foot and
+# over the ground under it stands on another part.
+RAISED_M = 2.0
+
+
+def bases(city: dict, height, ground=None) -> dict[str, tuple[float, str | None]]:
+    """Each object's base, the height its lean is reckoned from, and for a
+    part raised on another the building it belongs to (the lowest of it and
+    its parents), else None: its own lowest point on the ground, its
+    building's foot when it stands on another part. A dome on its drum, a
+    lantern on the dome (the landmarks' modelled parts: Dresden's 190,
+    Leipzig's 28) show in the photo as far off the ground as their building
+    does: leaned from their own lowest point, the Frauenkirche's dome was
+    read 5 m off its place, on its drum's shade, and came out blue-green.
+    `height` maps a vertex index to its height in metres, `ground` (where
+    given) to the terrain's under it: a part on a slope, its foot metres
+    over its building's lowest corner, stands on the ground."""
+    objects = city["CityObjects"]
+    lows = {
+        oid: min((height(vi), vi) for vi in ids)
+        for oid, obj in objects.items()
+        if (ids := list(_vertex_ids(obj)))
+    }
+
+    def foot(oid: str, seen: frozenset) -> tuple[float, str]:
+        # the lowest point of the object and its parents, and whose it is
+        low = (lows[oid][0] if oid in lows else math.inf, oid)
+        for parent in objects[oid].get("parents", []):
+            if parent in objects and parent not in seen:
+                low = min(low, foot(parent, seen | {oid}))
+        return low
+
+    out = {}
+    for oid, (low, vi) in lows.items():
+        base, under = foot(oid, frozenset())
+        raised = low - base > RAISED_M and (ground is None or low - ground(vi) > RAISED_M)
+        out[oid] = (base, under) if raised else (low, None)
+    return out
+
+
 def _vertex_ids(obj: dict):
     def walk(b):
         if isinstance(b, int):
@@ -720,13 +789,35 @@ def _vertex_ids(obj: dict):
         yield from walk(g.get("boundaries", []))
 
 
-def roof_leans(rgb: np.ndarray, light: Light, buildings, bounds, px: float):
+def buildings_of(city: dict) -> dict[str, str]:
+    """Each building part's building: the object its parents lead up to."""
+    objects = city["CityObjects"]
+
+    def up(oid: str) -> str | None:
+        return next((p for p in objects[oid].get("parents", []) if p in objects), None)
+
+    out = {}
+    for oid in objects:
+        top, seen = oid, {oid}
+        while (parent := up(top)) is not None and parent not in seen:
+            top = parent
+            seen.add(top)
+        if top != oid:
+            out[oid] = top
+    return out
+
+
+def roof_leans(rgb: np.ndarray, light: Light, buildings, bounds, px: float, carriers=None):
     """Each building's lean (dop_lean.py) and the tile's lean nodes, from
     the tall buildings' roof shading; none without a sun to shade by
     (`Light.lean_sun`). `buildings`: {id: ([(key, ring in metres,
-    normal)], base height)}."""
+    normal)], base height)}. A part raised on another (`carriers`: {id: its
+    building, `bases`}) leans with its building and measures nothing: its
+    dome or spire matches its own building's shading, and a landmark's
+    dozens of parts outvoted the houses round a node."""
     if light.lean_sun is None:
         return {}, []
+    carriers = carriers or {}
     xmin, _, _, ymax = bounds
     h, w = rgb.shape[:2]
     samples, centres = {}, {}
@@ -734,7 +825,7 @@ def roof_leans(rgb: np.ndarray, light: Light, buildings, bounds, px: float):
         pts = [p for _, ring, _ in faces for p in ring]
         centres[oid] = (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
         height = max(p[2] for p in pts) - base
-        if height < LEAN_MIN_HEIGHT:
+        if height < LEAN_MIN_HEIGHT or oid in carriers:
             continue
         reach = reach_px(height, px)
         cols = [(p[0] - xmin) / px for p in pts]
@@ -753,6 +844,9 @@ def roof_leans(rgb: np.ndarray, light: Light, buildings, bounds, px: float):
             samples[oid] = Sample(*centres[oid], height, grid, reach, px)
     nodes = fit_leans(list(samples.values()), bounds)
     leans = {oid: building_lean(nodes, *centres[oid], samples.get(oid)) for oid in buildings}
+    for oid, under in carriers.items():
+        if oid in leans and under in leans:
+            leans[oid] = leans[under]
     return leans, nodes
 
 
@@ -891,7 +985,20 @@ def run(tile: Tile, site: Sequence[Tile] = (), erode: int = 5) -> None:
     xmin, _, _, ymax = tile.bounds
     px_w = tile.size[0] / w
 
-    buildings = {}
+    models = surface_models(tile)
+    dgm = models[1]
+
+    def ground(vi: int) -> float:
+        if dgm is None:
+            return -math.inf
+        x, y, _ = to_metres(vi)
+        row = min(max(int(ymax - y), 0), dgm.shape[0] - 1)
+        col = min(max(int(x - xmin), 0), dgm.shape[1] - 1)
+        return float(dgm[row, col])
+
+    buildings, carriers = {}, {}
+    base_of = bases(city, lambda vi: to_metres(vi)[2], ground)
+    home = buildings_of(city)
     for oid, obj in city["CityObjects"].items():
         faces = [
             ((gi, si), [to_metres(vi) for vi in ring], ring_normal(ring, to_metres))
@@ -899,12 +1006,16 @@ def run(tile: Tile, site: Sequence[Tile] = (), erode: int = 5) -> None:
             for si, ring in indexed_rings(g, "RoofSurface")
         ]
         if faces:
-            buildings[oid] = (faces, min(to_metres(vi)[2] for vi in _vertex_ids(obj)))
-    leans, nodes = roof_leans(rgb, light, buildings, tile.bounds, px_w)
+            base, under = base_of[oid]
+            buildings[oid] = (faces, base)
+            if under is not None:
+                carriers[oid] = under
+    leans, nodes = roof_leans(rgb, light, buildings, tile.bounds, px_w, carriers)
 
     rebuilt = rebuilt_parts(tile)
-    frame = Frame(xmin, ymax, px_w, (w, h), *surface_models(tile))
-    roofs, faces_out, parts_out, sampled, skipped, in_sun = {}, {}, {}, 0, 0, 0
+    frame = Frame(xmin, ymax, px_w, (w, h), *models)
+    roofs, faces_out, parts_out, in_sun = {}, {}, {}, 0
+    sunlit, skipped = set(), set()
     for oid, (metres, base) in buildings.items():
         frame.lean, frame.base = leans.get(oid, (0.0, 0.0)), base
         parts = rebuilt.get(oid)
@@ -912,15 +1023,22 @@ def run(tile: Tile, site: Sequence[Tile] = (), erode: int = 5) -> None:
         box = frame.box(faces)
         if box is None:
             continue
-        lit, own = face_colours(rgb, light, frame, faces, box)
+        # a part read blue from a sliver of sun reads skylight: a stone
+        # cupola's turned half, a tower in its church's shadow, is as bright
+        # a blue as a slate roof in sun (the Frauenkirche's corner towers:
+        # 26 texels of 959 lit, sRGB 100, 150, 171), and a part, like a
+        # face, is its building's then (`MIN_LIT_SHARE`)
+        share = MIN_LIT_SHARE if oid in home else 0.0
+        lit, own = face_colours(rgb, light, frame, faces, box, share)
         rings = [[frame.texel(*p) for p in f.rings[0]] for f in faces]
         whole = lit or median_colour(rgb, rings, box, erode)
         if whole is None:
-            skipped += 1
+            skipped.add(oid)
             continue
         roofs[oid] = whole
-        sampled += 1
-        in_sun += lit is not None
+        if lit is not None:
+            in_sun += 1
+            sunlit.add(oid)
         apart = [[*key, *c] for key, c in own.items() if _differs(c, whole)]
         if apart and parts:
             # the part's index and its level, which the build checks the
@@ -928,6 +1046,19 @@ def run(tile: Tile, site: Sequence[Tile] = (), erode: int = 5) -> None:
             parts_out[oid] = [[a[1], round(parts[a[1]].rings[0][0][2], 2), *a[2:]] for a in apart]
         elif apart:
             faces_out[oid] = apart
+    # A part of a building not in sun (a lantern in its own shade, a
+    # spire's faces turned from the sun, a cupola lit on a sliver) takes
+    # its building's roof, as a face in shadow does: its texels are
+    # skylight, and painted the Frauenkirche's lantern and corner towers
+    # slate blue.
+    carried = [
+        oid
+        for oid, building in home.items()
+        if oid in buildings and oid not in sunlit and building in sunlit
+    ]
+    for oid in carried:
+        roofs[oid] = roofs[home[oid]]
+    skipped -= set(carried)
     appended = {
         key: appended_colours(rgb, light, frame, nodes, roofs)
         for key, roofs in appended_roofs(tile).items()
@@ -938,9 +1069,11 @@ def run(tile: Tile, site: Sequence[Tile] = (), erode: int = 5) -> None:
             "source": "DOP",
             "space": "linear-rgb",
             "erode_px": erode,
-            "buildings_sampled": sampled,
-            "buildings_skipped": skipped,
+            "buildings_sampled": len(roofs),
+            "buildings_skipped": len(skipped),
             "buildings_in_sun": in_sun,
+            # the raised parts in shade that took the roof they stand on
+            "parts_carried": len(carried),
             "faces_apart": sum(len(f) for f in faces_out.values()),
             "parts_apart": sum(len(p) for p in parts_out.values()),
             "rebuilt": len(rebuilt),
@@ -983,7 +1116,8 @@ def run(tile: Tile, site: Sequence[Tile] = (), erode: int = 5) -> None:
     }
     tile.out("dop", f"roofcolor_{tile.id}.json").write_text(json.dumps(out))
     print(
-        f"{tile.id}: {sampled} roofs sampled ({in_sun} from sunlit texels), {skipped} skipped, "
+        f"{tile.id}: {len(roofs)} roofs sampled ({in_sun} from sunlit texels, {len(carried)} "
+        f"parts carried), {len(skipped)} skipped, "
         f"{out['meta']['faces_apart']} faces apart, {len(appended['scan'])} sheds and "
         f"{len(appended['gaps'])} structures read; sun {out['meta']['sun']}, "
         f"light ratio {out['meta']['light_ratio']}"

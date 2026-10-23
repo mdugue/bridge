@@ -182,7 +182,8 @@ def test_the_scans_sheds_and_the_missing_buildings_get_their_photos_colour(tmp_p
     roof_colour.run(tile, erode=3)
     out = json.loads(tile.out("dop", "roofcolor_t.json").read_text())
     (scan,) = out["scan"]
-    lin = [round(roof_colour.srgb_to_linear(c), 4) for c in (200.0, 60.0, 50.0)]
+    shed = zip((200.0, 60.0, 50.0), roof_colour._TO_GREY, strict=True)  # on to grey
+    lin = [round(roof_colour.srgb_to_linear(c) * float(k), 4) for c, k in shed]
     assert scan == [0, 100.0, *lin]
     # the mast and the relief are not read, the building is (its index kept)
     (gap,) = out["gaps"]

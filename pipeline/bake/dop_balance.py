@@ -141,6 +141,21 @@ def gains(tiles: Sequence[Tile]) -> np.ndarray:
     return (k * seen.sum() / (k * seen).sum()).astype(np.float32)
 
 
+def neutral_gains() -> np.ndarray:
+    """Per-channel factors (linear RGB) from Dresden's balance on to grey
+    carriageways, their brightness kept: Dresden's flight has a cast too
+    (its sunlit asphalt and the Neumarkt's sandstone paving 5 % greener
+    than red, 6 % than blue), which every flight balanced to it takes on.
+    The steps that compare colours with each other (the water's tint with
+    the sheet's, the pitches' surfaces) keep Dresden's balance, their
+    thresholds were read in it; a colour the viewer shows as the thing's
+    own (a roof) is taken on to grey — else every light roof is faintly
+    green."""
+    ref = np.asarray(REF_ROAD, np.float64)
+    k = 1.0 / ref
+    return (k * ref.sum() / (k * ref).sum()).astype(np.float32)
+
+
 def table(k: np.ndarray) -> np.ndarray:
     """The 8-bit sRGB → 8-bit sRGB lookup of each channel (3 × 256) that
     scales its linear value by `k`."""

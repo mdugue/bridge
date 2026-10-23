@@ -53,7 +53,7 @@ def _mansard(top_z: float):
     return eave + top, geometry
 
 
-def _run(tmp_path, top_z: float, shade_left: bool = False, rgb=None, roof=None):
+def _run(tmp_path, top_z: float, shade_left: bool = False, rgb=None, roof=None, city=None):
     import json
 
     import rasterio
@@ -83,12 +83,13 @@ def _run(tmp_path, top_z: float, shade_left: bool = False, rgb=None, roof=None):
         transform=from_origin(0, 20, 0.2, 0.2),
     ) as out:
         out.write(rgb)
-    vertices, geometry = roof or _mansard(top_z)
-    city = {
-        "type": "CityJSON",
-        "vertices": vertices,
-        "CityObjects": {"b": {"type": "Building", "geometry": [geometry]}},
-    }
+    if city is None:
+        vertices, geometry = roof or _mansard(top_z)
+        city = {
+            "type": "CityJSON",
+            "vertices": vertices,
+            "CityObjects": {"b": {"type": "Building", "geometry": [geometry]}},
+        }
     tile.cityjson.parent.mkdir(parents=True)
     tile.cityjson.write_text(json.dumps(city))
     roof_colour.run(tile, erode=3)
@@ -180,6 +181,103 @@ def test_run_reads_a_roof_in_sun_only(tmp_path):
     assert all(f[1] != 4 for f in out["faces"].get("b", []))
 
 
+def _stacked():
+    """A building with a flat roof at 12 m over the whole 2–18 m square,
+    its walls down to the ground at 0, and two parts: a lantern raised on
+    its roof (x, y 8–12 m, its top at 20 m) and a porch on the ground (its
+    walls from 1 m, the ground falling)."""
+    vertices = [(2, 2, 12), (18, 2, 12), (18, 18, 12), (2, 18, 12), (2, 2, 0), (18, 2, 0)]
+    vertices += [(8, 8, 20), (12, 8, 20), (12, 12, 20), (8, 12, 20), (8, 8, 12), (12, 8, 12)]
+    vertices += [(14, 14, 4), (17, 14, 4), (17, 17, 4), (14, 17, 4), (14, 14, 1), (17, 14, 1)]
+
+    def body(first: int) -> dict:
+        return {
+            "type": "MultiSurface",
+            "boundaries": [
+                [[first, first + 1, first + 2, first + 3]],
+                [[first, first + 1, first + 5, first + 4]],
+            ],
+            "semantics": {
+                "surfaces": [{"type": "RoofSurface"}, {"type": "WallSurface"}],
+                "values": [0, 1],
+            },
+        }
+
+    objects = {
+        "b": {"type": "Building", "geometry": [body(0)], "children": ["lantern", "porch"]},
+        "lantern": {"type": "BuildingPart", "parents": ["b"], "geometry": [body(6)]},
+        "porch": {"type": "BuildingPart", "parents": ["b"], "geometry": [body(12)]},
+    }
+    return {"type": "CityJSON", "vertices": vertices, "CityObjects": objects}
+
+
+def test_a_part_raised_on_another_stands_on_its_buildings_foot():
+    from bake.roof_colour import bases
+
+    city = _stacked()
+    out = bases(city, lambda vi: city["vertices"][vi][2])
+    # the lantern leans from the ground under its building, with it
+    assert out["lantern"] == (0, "b")
+    # a part on the ground keeps its own foot, as does the building
+    assert out["porch"] == (1, None)
+    assert out["b"] == (0, None)
+
+
+def test_a_part_on_a_slope_stands_on_the_ground():
+    from bake.roof_colour import bases
+
+    city = _stacked()
+    # the porch's foot 1 m over its building's, but on ground falling 3 m:
+    # read against the terrain under it, the lantern still stands on the roof
+    city["vertices"] = [(x, y, z + 3 if 14 <= x <= 17 else z) for x, y, z in city["vertices"]]
+    flat = bases(city, lambda vi: city["vertices"][vi][2])
+    assert flat["porch"] == (0, "b")
+    terrain = bases(
+        city,
+        lambda vi: city["vertices"][vi][2],
+        lambda vi: 3.5 if 14 <= city["vertices"][vi][0] <= 17 else 0.0,
+    )
+    assert terrain["porch"] == (4, None)
+    assert terrain["lantern"] == (0, "b")
+
+
+def test_a_raised_part_measures_no_lean_and_leans_with_its_building(monkeypatch):
+    from bake import roof_colour
+
+    measured = []
+
+    def fit(samples, bounds):
+        measured.extend(samples)
+        return [(10.0, 10.0, (0.0, 0.0))]
+
+    monkeypatch.setattr(roof_colour, "lean_map", lambda lum, drawn, sun, reach: np.zeros((3, 3)))
+    monkeypatch.setattr(roof_colour, "fit_leans", fit)
+    # each building's own lean, told apart by its place
+    monkeypatch.setattr(roof_colour, "building_lean", lambda nodes, x, y, sample: (x, y))
+
+    def square(x0, z0, z1):
+        ring = [(x0, 2, z1), (x0 + 6, 2, z1), (x0 + 6, 8, z1), (x0, 8, z1)]
+        return [((0, 0), ring, (0.0, 0.0, 1.0))], z0
+
+    buildings = {"b": square(2, 0, 30), "dome": square(10, 0, 45)}
+    light = Light(np.zeros((100, 100), bool), lean_sun=(180, 40))
+    rgb = np.zeros((100, 100, 3), np.uint8)
+    leans, _ = roof_colour.roof_leans(rgb, light, buildings, (0, 0, 20, 20), 0.2, {"dome": "b"})
+    assert [s.height for s in measured] == [30]
+    assert leans["dome"] == leans["b"] == (5.0, 5.0)
+
+
+def test_a_raised_part_in_shade_takes_its_buildings_roof(tmp_path):
+    # red tiles over the building; the lantern's roof all skylight (blue,
+    # dim): it takes its building's red, not the shade
+    rgb = np.zeros((3, 100, 100), np.uint8)
+    rgb[:] = np.array([200, 60, 50])[:, None, None]
+    rgb[:, 40:60, 40:60] = np.array([30, 40, 70])[:, None, None]
+    out = _run(tmp_path, top_z=0.0, rgb=rgb, city=_stacked())
+    assert out["roofs"]["lantern"] == out["roofs"]["b"]
+    assert out["meta"]["parts_carried"] == 1
+
+
 def test_a_face_turned_from_the_sun_is_read_as_shadow():
     light = Light(np.zeros((1, 1), bool))
     light.sun = sun_vector(180, 35)
@@ -257,7 +355,8 @@ def test_gains_agree_with_the_single_gain():
 
 def test_a_flight_s_cast_is_taken_out_of_its_roofs(tmp_path, monkeypatch):
     # the photo under a cyan cast, its carriageways (round the building)
-    # telling it: the grey top comes out in Dresden's grey
+    # telling it: the grey top comes out grey, Dresden's own cast taken out
+    # too
     from PIL import Image
 
     from bake import dop_balance
@@ -280,8 +379,8 @@ def test_a_flight_s_cast_is_taken_out_of_its_roofs(tmp_path, monkeypatch):
     out = _run(tmp_path, top_z=20.0, rgb=rgb)
     (face,) = out["faces"]["b"]
     r, g, b = face[2:]
-    assert abs(r / g - dop_balance.REF_ROAD[0]) < 0.03
-    assert abs(b / g - dop_balance.REF_ROAD[2]) < 0.03
+    assert abs(r / g - 1) < 0.03
+    assert abs(b / g - 1) < 0.03
     assert out["meta"]["balance"][0] > 1.15 > 0.85 > out["meta"]["balance"][2]
 
 
@@ -431,3 +530,37 @@ def test_the_sun_readings_a_step_takes_are_made_before_its_workers_fork(tmp_path
     roof_colour.site_readings(site[1:2], site, jobs=2)
     assert set(roof_colour._READINGS) == {(tmp_path, i) for i in "abc"}
     assert roof_colour._READINGS[(tmp_path, "c")][0].fit.contrast == 1.0
+
+
+def test_a_raised_part_lit_on_a_sliver_takes_its_buildings_roof(tmp_path):
+    # the lantern in its own shade but for a few bright, bluish texels — a
+    # stone cupola's turned side in skylight, too bright for the shadow test
+    rgb = np.zeros((3, 100, 100), np.uint8)
+    rgb[:] = np.array([200, 60, 50])[:, None, None]
+    rgb[:, 40:60, 40:60] = np.array([30, 40, 70])[:, None, None]
+    rgb[:, 48:51, 48:53] = np.array([100, 150, 171])[:, None, None]
+    out = _run(tmp_path, top_z=0.0, rgb=rgb, city=_stacked())
+    assert out["roofs"]["lantern"] == out["roofs"]["b"]
+    assert out["meta"]["parts_carried"] == 1
+
+
+def test_a_dark_part_lit_on_a_sliver_keeps_its_own(tmp_path):
+    # a dark glass dome: most of it dark enough for the shadow test, the
+    # rest its own grey — no skylight, so its own (the Yenidze's)
+    rgb = np.zeros((3, 100, 100), np.uint8)
+    rgb[:] = np.array([200, 60, 50])[:, None, None]
+    rgb[:, 40:60, 40:60] = np.array([20, 22, 26])[:, None, None]
+    rgb[:, 48:51, 48:53] = np.array([48, 53, 59])[:, None, None]
+    out = _run(tmp_path, top_z=0.0, rgb=rgb, city=_stacked())
+    assert out["roofs"]["lantern"] != out["roofs"]["b"]
+    assert max(out["roofs"]["lantern"]) < 0.06
+    assert out["meta"]["parts_carried"] == 0
+
+
+def test_a_part_on_the_ground_in_shade_takes_its_buildings_roof(tmp_path):
+    # the porch in its building's shadow, its roof all skylight
+    rgb = np.zeros((3, 100, 100), np.uint8)
+    rgb[:] = np.array([200, 60, 50])[:, None, None]
+    rgb[:, 15:30, 70:85] = np.array([30, 40, 70])[:, None, None]
+    out = _run(tmp_path, top_z=0.0, rgb=rgb, city=_stacked())
+    assert out["roofs"]["porch"] == out["roofs"]["b"]

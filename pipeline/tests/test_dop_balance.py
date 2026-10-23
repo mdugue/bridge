@@ -75,3 +75,10 @@ def test_the_table_scales_each_channel_in_linear_light():
     assert lut[2][255] == 255  # clipped, not wrapped
     rgb = np.full((2, 2, 3), 128, np.uint8)
     assert dop_balance.balanced(rgb, lut)[0, 0].tolist() == [128, lut[1][128], lut[2][128]]
+
+
+def test_dresden_s_balance_is_taken_on_to_grey_roads_its_brightness_kept():
+    road = np.asarray(dop_balance.REF_ROAD)
+    after = road * dop_balance.neutral_gains()
+    assert np.allclose(after / after[1], 1, atol=1e-3)
+    assert abs(after.sum() - road.sum()) < 1e-3
