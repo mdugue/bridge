@@ -52,6 +52,7 @@ import type {
   ShopfrontFile,
   PlinthFeature,
   DormerFeature,
+  PassageFeature,
   FeatureCollection,
   RailFeature,
   TramFeature,
@@ -781,6 +782,9 @@ function parseCity(
   const dormers = existsSync(at(src.dormers))
     ? readJson<FeatureCollection<DormerFeature>>(at(src.dormers)).features
     : undefined;
+  const passages = existsSync(at(src.passages))
+    ? readJson<FeatureCollection<PassageFeature>>(at(src.passages)).features
+    : undefined;
   const shopfronts = existsSync(at(src.shopfronts))
     ? Object.values(
         readJson<ShopfrontFile>(at(src.shopfronts)).buildings
@@ -799,7 +803,7 @@ function parseCity(
     osmDoc?.context ?? "render",
     gaps,
     measured,
-    { doors, dormers, groundAt, plinths, shopfronts, windows }
+    { doors, dormers, groundAt, passages, plinths, shopfronts, windows }
   );
 }
 
@@ -846,6 +850,7 @@ async function bakeCity(
     at(src.landmarks),
     at(src.measuredRoofs),
     at(src.doors),
+    at(src.passages),
     at(src.plinths),
     at(src.dormers),
     at(src.shopfronts),

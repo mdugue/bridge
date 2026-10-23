@@ -9,6 +9,7 @@ import type {
   CultivatedFeature,
   DoorFeature,
   ShopfrontFile,
+  PassageFeature,
   PlinthFeature,
   FeatureCollection,
   FurnitureFeature,
@@ -333,6 +334,40 @@ test.each(tiles)(
       expect(p?.h ?? 0).toBeGreaterThanOrEqual(1.8);
       expect(p?.h ?? 99).toBeLessThanOrEqual(5);
       expect(Number.isFinite(p?.z)).toBe(true);
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: passages are axes through walls, each object's share in plan",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).passages;
+    for (const f of loadSource<PassageFeature>(src)) {
+      expect(f.geometry.type).toBe("LineString");
+      expect(f.geometry.coordinates.length).toBeGreaterThanOrEqual(2);
+      expect(f.geometry.coordinates.every(isPoint2)).toBe(true);
+      const p = f.properties;
+      expect(p?.osm.length ?? 0).toBeGreaterThan(0);
+      expect(p?.z).toHaveLength(f.geometry.coordinates.length);
+      expect(p?.w ?? 0).toBeGreaterThanOrEqual(1.5);
+      expect(p?.w ?? 99).toBeLessThanOrEqual(12);
+      if (p?.h !== null) {
+        expect(p?.h ?? 0).toBeGreaterThanOrEqual(2);
+        expect(p?.h ?? 99).toBeLessThanOrEqual(10);
+      }
+      const parts = Object.values(p?.of ?? {});
+      expect(parts.length).toBeGreaterThan(0);
+      // a passage opens a wall somewhere
+      expect(parts.some((part) => part.portals.length > 0)).toBe(true);
+      for (const part of parts) {
+        expect(part.roof.length).toBeGreaterThan(0);
+        expect(part.roof.flat().every(isPoint2)).toBe(true);
+        expect(part.sides.flat().every(isPoint2)).toBe(true);
+        for (const [x, y, nx, ny] of part.portals) {
+          expect(isPoint2([x, y])).toBe(true);
+          expect(Math.hypot(nx, ny)).toBeCloseTo(1, 2);
+        }
+      }
     }
   }
 );
@@ -1020,6 +1055,7 @@ test.each(tiles)(
       terraceSourceFile(site, tile),
       cityMeshSourceFiles(site, tile).osmBuild,
       cityMeshSourceFiles(site, tile).doors,
+      cityMeshSourceFiles(site, tile).passages,
       sideFileSource(site, `surface_${tile}.json`),
     ];
     for (const file of files) {

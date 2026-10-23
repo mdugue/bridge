@@ -26,6 +26,7 @@ import {
   OBJECT_SOURCE_DOOR,
   OBJECT_SOURCE_DORMER,
   OBJECT_SOURCE_LOD2,
+  OBJECT_SOURCE_PASSAGE,
   OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_SHOPFRONT,
   type Rgb,
@@ -144,7 +145,7 @@ function placesAt(at: [number, number] | undefined, epsg?: number): Places {
 }
 
 /** The object whose look the card describes: the picked one if it is a
- *  LoD2 object, else (a door, a shopfront, a dormer, a plinth: they copy
+ *  LoD2 object, else (a door, a shopfront, a dormer, a plinth, a passage: they copy
  *  their host's row) the tree's LoD2 object that carries windows, or its
  *  first. */
 function describedObject(b: BuildingInquiry): InquiryObject {
@@ -229,6 +230,17 @@ export function drawnGroups(b: BuildingInquiry, epsg?: number): DrawnGroup[] {
       method: "taken",
       source: "osm",
       detail: "Eingänge (entrance=*)",
+      url: places.osm,
+    }
+  );
+  rows.row(
+    has(OBJECT_SOURCE_PASSAGE) && {
+      label: "Durchgänge",
+      value: "geöffnet",
+      method: "taken",
+      source: "osm",
+      detail:
+        "Durchgänge und Durchfahrten (tunnel=building_passage), lichte Höhe aus maxheight oder dem Erdgeschoss",
       url: places.osm,
     }
   );

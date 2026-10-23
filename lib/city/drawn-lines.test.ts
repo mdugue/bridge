@@ -5,6 +5,7 @@ import {
   OBJECT_FLAG_LANDMARK,
   OBJECT_FLAG_OWN_FACADE,
   OBJECT_SOURCE_DOOR,
+  OBJECT_SOURCE_PASSAGE,
   OBJECT_SOURCE_LOD2,
   OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_SCAN,
@@ -251,6 +252,15 @@ test("a door asked describes the house it opens, and the house's parts", () => {
   expect(r.Fenster.value).toStartWith("Achsen 2,7 m");
   expect(r.Haustüren).toMatchObject({ source: "osm" });
   expect(r["Sockel, Gesimse"]).toMatchObject({ value: "modelliert" });
+  expect(r.Durchgänge).toBeUndefined();
+  // a passage's lining asked describes the house it runs through
+  const passage = { ...door, objectIndex: 4, source: OBJECT_SOURCE_PASSAGE };
+  const through = rows(ask(passage, [house, passage]));
+  expect(through.Fenster.value).toStartWith("Achsen 2,7 m");
+  expect(through.Durchgänge).toMatchObject({
+    source: "osm",
+    value: "geöffnet",
+  });
 });
 
 test("a tile baked before the look reached the card shows no drawn values", () => {

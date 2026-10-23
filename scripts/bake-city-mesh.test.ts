@@ -7,14 +7,17 @@ import {
   OBJECT_FLAG_GLASS,
   OBJECT_FLAG_HERITAGE,
   OBJECT_FLAG_OWN_COLOUR,
+  OBJECT_SOURCE_DOOR,
   OBJECT_SOURCE_DORMER,
   OBJECT_SOURCE_GAP,
+  OBJECT_SOURCE_PASSAGE,
   OBJECT_SOURCE_SHOPFRONT,
   type OsmBuildingLut,
 } from "../lib/city/city-mesh";
 import type {
   DoorFeature,
   DormerFeature,
+  PassageFeature,
   PlinthFeature,
   ShopfrontWall,
   StructureFeature,
@@ -1482,4 +1485,208 @@ test("a shed's and a gap building's roof take the orthophoto's colour the roof c
   expect(decodeDrawn(building.facts?.drawn ?? "").roof).toBe("dop");
   expect(appendedRoofColour(undefined, 0, 100)).toBeUndefined();
   expect(appendedRoofColour(roofColours.scan, 0, undefined)).toBeUndefined();
+});
+
+test("a passage OSM maps through a house is cut open and lined", () => {
+  // a footway north through the 10 × 10 m house (x 40–50) at x 45
+  const xy = (x: number, y: number): [number, number] => [
+    412_000 + x,
+    5_656_000 + y,
+  ];
+  const passage: PassageFeature = {
+    geometry: { type: "LineString", coordinates: [xy(45, -0.6), xy(45, 10.6)] },
+    properties: {
+      h: null,
+      kind: "footway",
+      osm: [1],
+      w: 2.5,
+      wFrom: "kind",
+      z: [100, 100],
+      of: {
+        house: {
+          roof: [[xy(43.75, 0), xy(46.25, 0), xy(46.25, 10), xy(43.75, 10)]],
+          sides: [
+            [xy(46.25, 0), xy(46.25, 10)],
+            [xy(43.75, 10), xy(43.75, 0)],
+          ],
+          portals: [
+            [...xy(45, 0), 0, -1],
+            [...xy(45, 10), 0, 1],
+          ],
+        },
+      },
+    },
+  };
+  // an entrance mapped where the passage meets the wall
+  const door: DoorFeature = {
+    geometry: { type: "Point", coordinates: xy(45, 0) },
+    properties: {
+      h: 2.2,
+      kind: "main",
+      nx: 0,
+      ny: -1,
+      of: "house",
+      w: 1.2,
+      z: 100,
+    },
+  };
+  const plain = bakeCityMesh("t", fixture(), undefined, null);
+  const baked = bakeCityMesh(
+    "t",
+    fixture(),
+    undefined,
+    null,
+    undefined,
+    undefined,
+    "render",
+    undefined,
+    undefined,
+    { doors: [door], passages: [passage] }
+  );
+  const { cx, cy } = baked.offset;
+  const house = 2;
+  const lining = baked.objects.findIndex(
+    (o) => o.source === OBJECT_SOURCE_PASSAGE
+  );
+  expect(lining).toBeGreaterThan(house);
+  expect(baked.objects[lining].root).toBe(house);
+  expect(baked.objects[lining].windows).toBeUndefined();
+  // no door is drawn in the opening
+  expect(baked.objects.some((o) => o.source === OBJECT_SOURCE_DOOR)).toBe(
+    false
+  );
+  const v = baked.vertices;
+  const p = v.positions;
+  let walls = 0;
+  let lined = 0;
+  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
+    const o = v.objectIds[t];
+    const x = (p[3 * t] + p[3 * t + 3] + p[3 * t + 6]) / 3 + cx - 412_000;
+    const y = (p[3 * t + 1] + p[3 * t + 4] + p[3 * t + 7]) / 3 + cy - 5_656_000;
+    const z = (p[3 * t + 2] + p[3 * t + 5] + p[3 * t + 8]) / 3;
+    if (o === lining) {
+      lined++;
+      continue;
+    }
+    if (o !== house || v.isRoof[t] === 1) {
+      continue;
+    }
+    walls++;
+    // nothing of the house left in the opening (3 m up, as a footway)
+    expect(Math.abs(x - 45) < 1.25 && z < 103 && (y < 0.01 || y > 9.99)).toBe(
+      false
+    );
+  }
+  // the two front walls each cut into pieces around the opening
+  const plainWalls = plain.vertices.isRoof.filter((r) => r === 0).length;
+  expect(walls * 3).toBeGreaterThan(plainWalls);
+  // two walls along it, a quad each, and the ceiling
+  expect(lined).toBe(2 * 2 + 2);
+  // every cut piece keeps its wall's length in `_FACADE`
+  const facade = v.facade;
+  expect(facade).toBeDefined();
+  const lengths = new Set<number>();
+  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
+    const ys = [0, 1, 2].map((k) => p[3 * (t + k) + 1] + cy - 5_656_000);
+    if (
+      v.objectIds[t] === house &&
+      v.isRoof[t] === 0 &&
+      ys.every((y) => Math.abs(y) < 0.01)
+    ) {
+      for (let k = 0; k < 3; k++) {
+        lengths.add(facade?.[4 * (t + k) + 1] ?? 0);
+      }
+    }
+  }
+  expect([...lengths]).toHaveLength(1);
+});
+
+test("two passages crossing in a house keep their linings out of each other", () => {
+  const xy = (x: number, y: number): [number, number] => [
+    412_000 + x,
+    5_656_000 + y,
+  ];
+  // a footway north through the house (x 40–50) at x 45, one east at y 5
+  const through = (
+    id: number,
+    axis: [number, number][],
+    roof: [number, number][],
+    sides: [number, number][][],
+    portals: [number, number, number, number][]
+  ): PassageFeature => ({
+    geometry: { type: "LineString", coordinates: axis },
+    properties: {
+      h: null,
+      kind: "footway",
+      osm: [id],
+      w: 2.5,
+      wFrom: "kind",
+      z: [100, 100],
+      of: { house: { roof: [roof], sides, portals } },
+    },
+  });
+  const north = through(
+    1,
+    [xy(45, -0.6), xy(45, 10.6)],
+    [xy(43.75, 0), xy(46.25, 0), xy(46.25, 10), xy(43.75, 10)],
+    [
+      [xy(46.25, 0), xy(46.25, 10)],
+      [xy(43.75, 10), xy(43.75, 0)],
+    ],
+    [
+      [...xy(45, 0), 0, -1],
+      [...xy(45, 10), 0, 1],
+    ]
+  );
+  const east = through(
+    2,
+    [xy(39.4, 5), xy(50.6, 5)],
+    [xy(40, 3.75), xy(50, 3.75), xy(50, 6.25), xy(40, 6.25)],
+    [
+      [xy(40, 6.25), xy(50, 6.25)],
+      [xy(50, 3.75), xy(40, 3.75)],
+    ],
+    [
+      [...xy(40, 5), -1, 0],
+      [...xy(50, 5), 1, 0],
+    ]
+  );
+  const baked = bakeCityMesh(
+    "t",
+    fixture(),
+    undefined,
+    null,
+    undefined,
+    undefined,
+    "render",
+    undefined,
+    undefined,
+    { doors: [], passages: [north, east] }
+  );
+  const { cx, cy } = baked.offset;
+  const v = baked.vertices;
+  const p = v.positions;
+  let lined = 0;
+  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
+    if (baked.objects[v.objectIds[t]].source !== OBJECT_SOURCE_PASSAGE) {
+      continue;
+    }
+    lined++;
+    // no point of a lining stands in either opening, under its ceiling
+    for (let i = 0; i <= 10; i++) {
+      for (let j = 0; i + j <= 10; j++) {
+        const [a, b] = [i / 10, j / 10];
+        const at = (c: number) =>
+          p[3 * t + c] * (1 - a - b) +
+          p[3 * t + 3 + c] * a +
+          p[3 * t + 6 + c] * b;
+        const x = at(0) + cx - 412_000;
+        const y = at(1) + cy - 5_656_000;
+        const inNorth = Math.abs(x - 45) < 1.2 && y > 0.1 && y < 9.9;
+        const inEast = Math.abs(y - 5) < 1.2 && x > 40.1 && x < 49.9;
+        expect((inNorth || inEast) && at(2) < 102.9).toBe(false);
+      }
+    }
+  }
+  expect(lined).toBeGreaterThan(0);
 });

@@ -34,6 +34,7 @@ from . import (
     monuments,
     ndvi,
     osm_buildings,
+    passages,
     plinths,
     rail,
     riverside,
@@ -71,6 +72,8 @@ STEPS = {
     "osm-buildings": osm_buildings.run,
     # OSM entrances on the LoD2 walls (scripts/bake-city-mesh.ts draws them).
     "doors": doors.run,
+    # OSM's passages through the LoD2 buildings (the same bake cuts them).
+    "passages": passages.run,
     # The LoD2 walls' street side as plinth runs on the DGM (the same bake).
     "plinths": plinths.run,
     "lamps": lamps.run,

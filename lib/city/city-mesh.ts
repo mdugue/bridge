@@ -363,6 +363,10 @@ export const OBJECT_SOURCE_SHOPFRONT = 6;
 /** A plinth on a wall's street side, part of the building it carries
  *  (pipeline/bake/plinths.py, LoD2 + DGM1). */
 export const OBJECT_SOURCE_PLINTH = 5;
+/** A passage's lining — its walls and ceiling — part of the building it
+ *  runs through (pipeline/bake/passages.py, OSM's `tunnel=
+ *  building_passage`; lib/city/building-passages.ts). */
+export const OBJECT_SOURCE_PASSAGE = 7;
 
 /** The property table as typed columns — how the glTF carries it. */
 export interface CityObjectTable {

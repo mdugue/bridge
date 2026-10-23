@@ -398,6 +398,37 @@ export interface DoorFeature {
   } | null;
 }
 
+/** One LoD2 object's share of a passage (`PassageFeature`): its ceiling's
+ *  plan (outer rings), the walls along it (each walked with the passage on
+ *  its left) and its portals `[x, y, nx, ny]` (the wall's outward normal),
+ *  all EPSG. */
+export interface PassagePart {
+  portals: [number, number, number, number][];
+  roof: [number, number][][];
+  sides: [number, number][][];
+}
+
+/**
+ * A passage through LoD2 buildings (pipeline/bake/passages.py, ODbL; a
+ * city-mesh bake input, not served): OSM's `tunnel=building_passage` ways
+ * `osm` merged end to end, as the axis it runs on through the walls; its
+ * width `w` (from OSM's `width` or its `kind`, `wFrom`), OSM's clear height
+ * `h` (null: the build takes the ground storey's), the ground per vertex of
+ * the axis `z`, and what each LoD2 object it runs through holds of it.
+ */
+export interface PassageFeature {
+  geometry: LineGeometry;
+  properties: {
+    h: number | null;
+    kind: string;
+    of: Record<string, PassagePart>;
+    osm: number[];
+    w: number;
+    wFrom: "kind" | "width";
+    z: number[];
+  } | null;
+}
+
 /**
  * One wall's shopfront (pipeline/bake/shopfronts.py; Mapillary CC BY-SA 4.0,
  * the canopies from DOM1 under the provider's licence; a city-mesh bake

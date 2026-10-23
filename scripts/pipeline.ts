@@ -15,15 +15,15 @@
  *   bun run bake <site> --step canopy one step, in the order `all` runs them
  *                                     (landcover, islands, rail, ndvi,
  *                                     canopy, trees, osm-buildings, doors,
- *                                     plinths, lamps, monuments, furniture,
- *                                     mapillary, lamp-heights, facades,
- *                                     shopfronts, windows, walls, stairs,
- *                                     surface, edges, markings, sport, tram,
- *                                     riverside, traffic, roofs, lowveg,
- *                                     cultivated, skyview, small-buildings,
- *                                     landmarks, structures, roof-colour,
- *                                     dormers; then, once for the site,
- *                                     transit)
+ *                                     passages, plinths, lamps, monuments,
+ *                                     furniture, mapillary, lamp-heights,
+ *                                     facades, shopfronts, windows, walls,
+ *                                     stairs, surface, edges, markings,
+ *                                     sport, tram, riverside, traffic,
+ *                                     roofs, lowveg, cultivated, skyview,
+ *                                     small-buildings, landmarks,
+ *                                     structures, roof-colour, dormers;
+ *                                     then, once for the site, transit)
  *   bun run bake <site> --step lowveg --research   also every hedge/shrub
  *                                     candidate, under the raw folder
  *   bun run bake <site> --jobs 3      each step's tiles three at a time,

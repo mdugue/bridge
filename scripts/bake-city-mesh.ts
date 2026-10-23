@@ -61,6 +61,7 @@ import {
   OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_LOD2,
+  OBJECT_SOURCE_PASSAGE,
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
   objectTable,
@@ -68,7 +69,17 @@ import {
   type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
+import {
+  cutOut,
+  type PassageAxis,
+  passageHeight,
+  passageLining,
+  passageRegions,
+  type Plane,
+  touches,
+} from "../lib/city/building-passages";
 import { creaseNormals } from "../lib/city/crease-normals";
+import { SINK } from "../lib/city/ground-join";
 import { type DrawnFacts, encodeDrawn } from "../lib/city/drawn-facts";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
 import { ensembleGroup, ensembleRoots } from "../lib/city/ensembles";
@@ -99,6 +110,8 @@ import type {
   DoorFeature,
   DormerFeature,
   MeasuredRoofFeature,
+  PassageFeature,
+  PassagePart,
   ShopfrontWall,
   PlinthFeature,
   SmallBuildingFeature,
@@ -147,8 +160,12 @@ import {
 } from "../lib/city/open-roofs";
 import type { CityJsonDocument } from "../lib/city/types";
 import {
+  DOOR_SLOT,
+  doorClassWidth,
+  type FacadeDoor,
   type FacadeShop,
   facadeAttribute,
+  NO_DOOR,
   flatTownHouse,
   GROUND_REACH_M,
   TALL_STOREY_M,
@@ -186,6 +203,9 @@ export interface OnWalls {
   dormers?: readonly DormerFeature[];
   /** the fine ground's height (EPSG), which the ground-floor windows clear */
   groundAt?: (x: number, y: number) => number | null;
+  /** OSM's passages through the buildings, cut open and lined
+   *  (`withPassages`) */
+  passages?: readonly PassageFeature[];
   plinths?: readonly PlinthFeature[];
   shopfronts?: readonly ShopfrontWall[];
   windows?: readonly WindowWall[];
@@ -1122,7 +1142,8 @@ export function cityFrame(tile: string, source: CityJsonDocument): CityFrame {
  * object's own neighbourhood overriding it.
  * `measured` are the roofs rebuilt from DOM1, when baked; `onWalls` OSM's
  * doors, the surface model's dormers and the shopfronts (street photos,
- * the surface model's canopies), each on its LoD2 host.
+ * the surface model's canopies), each on its LoD2 host, and OSM's
+ * passages through the buildings, opened last.
  */
 export function bakeCityMesh(
   tile: string,
@@ -1325,12 +1346,13 @@ export function bakeCityMesh(
   markFlatRoofs(objects, v);
   markTownHouses(objects, hosts);
   markOpenRoofs(objects, open);
-  dressWalls(tile, baked, keys, hosts, onWalls, {
+  const passages = dressWalls(tile, baked, keys, hosts, onWalls, {
     facades,
     gaps,
     roofColours,
     scan,
   });
+  withPassages(baked, passages);
   for (const o of objects) {
     if (o.facts) {
       o.facts = { ...o.facts, drawn: encodeDrawn(o.drawn) };
@@ -1578,7 +1600,10 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
  * other: the storeys counted from the street, then the windows (the
  * plinths' and shopfronts' heights read the storey they snap to the
  * eave), then the parts beyond LoD2, and last each wall vertex's place on
- * its wall.
+ * its wall. The passages OSM maps through the walls (`passagePlans`, as
+ * high as the storeys now say) keep the windows off their portals and
+ * OSM's doors out of their openings; they are returned, to be cut last
+ * (`withPassages`).
  */
 function dressWalls(
   tile: string,
@@ -1592,21 +1617,33 @@ function dressWalls(
     roofColours?: RoofColours;
     scan?: readonly SmallBuildingFeature[];
   }
-): void {
+): PassagePlan[] {
   // a tank, a crane or a canopy: no doorway, plinth or shop band on it
-  const onWalls = onBuildings(all, keys, hosts);
-  const plinths = onWalls.plinths ?? [];
+  const onBuilt = onBuildings(all, keys, hosts);
+  const plinths = onBuilt.plinths ?? [];
   // the storeys count from the street, where the plinths say where it is
   const asBuilt = liftToStreet(baked.objects, keys, plinths);
-  const rises = groundRises(baked, onWalls.groundAt);
+  const rises = groundRises(baked, onBuilt.groundAt);
   const reach = assignWindows(
     baked.objects,
     keys,
     hosts,
-    onWalls.windows ?? [],
+    onBuilt.windows ?? [],
     plinths,
     rises && { objectIds: baked.vertices.objectIds, rises }
   );
+  const passages = passagePlans(
+    baked.objects,
+    keys,
+    onBuilt.passages ?? [],
+    baked.offset
+  );
+  const onWalls = {
+    ...onBuilt,
+    ...(onBuilt.doors && {
+      doors: outsidePassages(onBuilt.doors, passages, keys, baked),
+    }),
+  };
   appendBeyondLod2(tile, baked, keys, { ...onWalls, ...extra });
   // standing on the ground or on a roof: as LoD2 built them
   markGrounded(baked.objects, asBuilt);
@@ -1623,8 +1660,10 @@ function dressWalls(
     keys,
     onWalls,
     reachOf,
-    rises && { at: rises, reach: reachOf }
+    rises && { at: rises, reach: reachOf },
+    portalDoors(passages)
   );
+  return passages;
 }
 
 /** What stands on the walls of buildings alone: the doors, plinths and
@@ -2667,8 +2706,8 @@ export function assignWindows(
 
 /**
  * Where on its wall each vertex of a window-carrying object lies (lib/city/
- * windows.ts `facadeAttribute`), with OSM's doors and the shopfronts on
- * those walls.
+ * windows.ts `facadeAttribute`), with OSM's doors, the passages' portals
+ * and the shopfronts on those walls.
  */
 function facadeOf(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
@@ -2679,11 +2718,12 @@ function facadeOf(
     shopfronts?: readonly ShopfrontWall[];
   },
   reach: (object: number) => number,
-  rises?: Parameters<typeof facadeAttribute>[4]
+  rises?: Parameters<typeof facadeAttribute>[4],
+  portals: readonly FacadeDoor[] = []
 ): Int16Array<ArrayBuffer> {
   const { cx, cy } = baked.offset;
   const index = new Map(keys.map((id, i) => [id, i]));
-  const doors = (onWalls.doors ?? []).flatMap((f) => {
+  const osmDoors = (onWalls.doors ?? []).flatMap((f) => {
     const p = f.properties;
     const object = p ? index.get(p.of) : undefined;
     if (!p || object === undefined) {
@@ -2715,7 +2755,7 @@ function facadeOf(
   return facadeAttribute(
     baked.vertices,
     (i) => (baked.objects[i]?.windows?.axis ?? 0) > 0,
-    doors,
+    [...osmDoors, ...portals],
     [...shops, ...buriedWalls(baked, index, onWalls.plinths ?? [], reach)],
     rises,
     // every LoD2 wall carries its own eave (a front over its object's
@@ -2771,4 +2811,451 @@ function buriedWalls(
       ];
     });
   });
+}
+
+// --- passages through the buildings ---------------------------------------
+
+/** A passage the bake opens (`passagePlans`), recentred: its axis and the
+ *  volume it takes, the LoD2 objects it runs through with their shares,
+ *  and the box (x0, y0, z0, x1, y1, z1) it can touch. */
+interface PassagePlan {
+  axis: PassageAxis;
+  box: readonly [number, number, number, number, number, number];
+  hosts: { object: number; part: PassagePart }[];
+  regions: Plane[][];
+}
+
+/** The widest door a `_FACADE` slot holds (m): a wider portal keeps the
+ *  windows off its middle that far, the rest of it is open wall anyway. */
+const PORTAL_W_MAX = doorClassWidth(DOOR_SLOT.widths - 1);
+/** An OSM door this close to a passage's opening (m past its half width)
+ *  stands in it: none is drawn there. */
+const PORTAL_DOOR_M = 0.3;
+
+/**
+ * The passages of the tile (pipeline/bake/passages.py) as the bake opens
+ * them: the LoD2 objects of this tile each runs through, its clear height
+ * from their eaves and storeys (lib/city/building-passages.ts
+ * `passageHeight`) — none where they stand too low — and its volume.
+ */
+export function passagePlans(
+  objects: readonly CityObjectRow[],
+  keys: readonly string[],
+  passages: readonly PassageFeature[],
+  offset: { cx: number; cy: number }
+): PassagePlan[] {
+  const index = new Map(keys.map((id, i) => [id, i]));
+  const local = (q: readonly number[]): [number, number] => [
+    q[0] - offset.cx,
+    q[1] - offset.cy,
+  ];
+  return passages.flatMap((f) => {
+    const p = f.properties;
+    if (!p || f.geometry.coordinates.length < 2) {
+      return [];
+    }
+    const hosts = Object.entries(p.of).flatMap(([id, part]) => {
+      const object = index.get(id);
+      const o = object === undefined ? undefined : objects[object];
+      if (
+        object === undefined ||
+        !o ||
+        (o.source ?? OBJECT_SOURCE_LOD2) !== OBJECT_SOURCE_LOD2
+      ) {
+        return [];
+      }
+      return [
+        {
+          object,
+          part: {
+            portals: part.portals.map(
+              ([x, y, nx, ny]): [number, number, number, number] => [
+                x - offset.cx,
+                y - offset.cy,
+                nx,
+                ny,
+              ]
+            ),
+            roof: part.roof.map((r) => r.map(local)),
+            sides: part.sides.map((r) => r.map(local)),
+          },
+        },
+      ];
+    });
+    const h = passageHeight(
+      p.kind,
+      p.h,
+      Math.max(...p.z),
+      hosts.map(({ object }) => ({
+        eaveZ: objects[object].baseZ + objects[object].eaveH,
+        storeyH: objects[object].storeyH,
+      }))
+    );
+    if (h === null) {
+      return [];
+    }
+    const axis: PassageAxis = {
+      axis: f.geometry.coordinates.map(local),
+      ground: p.z,
+      h,
+      w: p.w,
+    };
+    const xs = axis.axis.map((q) => q[0]);
+    const ys = axis.axis.map((q) => q[1]);
+    const box = [
+      Math.min(...xs) - p.w,
+      Math.min(...ys) - p.w,
+      Math.min(...p.z) - SINK.wall,
+      Math.max(...xs) + p.w,
+      Math.max(...ys) + p.w,
+      Math.max(...p.z) + h,
+    ] as const;
+    return [{ axis, box, hosts, regions: passageRegions(axis) }];
+  });
+}
+
+/** The passages' portals as doors on their walls (lib/city/windows.ts
+ *  `FacadeDoor`): the ground floor's windows keep off them. */
+function portalDoors(plans: readonly PassagePlan[]): FacadeDoor[] {
+  return plans.flatMap((plan) =>
+    plan.hosts.flatMap(({ object, part }) =>
+      part.portals.map(([x, y, nx, ny]) => ({
+        object,
+        at: [x, y] as [number, number],
+        n: [nx, ny] as [number, number],
+        w: Math.min(plan.axis.w, PORTAL_W_MAX),
+      }))
+    )
+  );
+}
+
+/** The distance (m) from plan point `q` to a polyline. */
+function toPolyline(
+  q: readonly [number, number],
+  line: readonly (readonly [number, number])[]
+): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (let k = 0; k + 1 < line.length; k++) {
+    const [a, b] = [line[k], line[k + 1]];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const l2 = dx * dx + dy * dy;
+    const t =
+      l2 > 0
+        ? Math.min(
+            Math.max(((q[0] - a[0]) * dx + (q[1] - a[1]) * dy) / l2, 0),
+            1
+          )
+        : 0;
+    best = Math.min(
+      best,
+      Math.hypot(q[0] - a[0] - t * dx, q[1] - a[1] - t * dy)
+    );
+  }
+  return best;
+}
+
+/** OSM's doors without those that stand in a passage's opening on their
+ *  own building (an entrance mapped where the passage meets the wall): the
+ *  opening is the way in. */
+function outsidePassages(
+  doors: readonly DoorFeature[],
+  plans: readonly PassagePlan[],
+  keys: readonly string[],
+  baked: Pick<BakedCityMesh, "objects" | "offset">
+): DoorFeature[] {
+  if (plans.length === 0) {
+    return [...doors];
+  }
+  const index = new Map(keys.map((id, i) => [id, i]));
+  const { cx, cy } = baked.offset;
+  return doors.filter((f) => {
+    const object = f.properties ? index.get(f.properties.of) : undefined;
+    const root = object === undefined ? undefined : baked.objects[object]?.root;
+    const [x, y] = f.geometry.coordinates;
+    return !plans.some(
+      (plan) =>
+        plan.hosts.some(({ object: h }) => baked.objects[h].root === root) &&
+        toPolyline([x - cx, y - cy], plan.axis.axis) <=
+          plan.axis.w / 2 + PORTAL_DOOR_M
+    );
+  });
+}
+
+/** Whether triangle `t` of the stream can reach into `box`. */
+function inBox(
+  p: ArrayLike<number>,
+  t: number,
+  box: PassagePlan["box"]
+): boolean {
+  for (let c = 0; c < 3; c++) {
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = Number.NEGATIVE_INFINITY;
+    for (let k = 0; k < 3; k++) {
+      const x = p[3 * (t + k) + c];
+      lo = Math.min(lo, x);
+      hi = Math.max(hi, x);
+    }
+    if (hi < box[c] || lo > box[c + 3]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Whether two boxes (x0, y0, z0, x1, y1, z1) overlap. */
+function boxesMeet(a: PassagePlan["box"], b: PassagePlan["box"]): boolean {
+  return [0, 1, 2].every((c) => a[c] <= b[c + 3] && b[c] <= a[c + 3]);
+}
+
+/** Triangles (flat x, y, z) cut to what lies outside the plans' volumes. */
+function outsideOf(
+  positions: readonly number[],
+  plans: readonly PassagePlan[]
+): number[] {
+  if (plans.length === 0) {
+    return [...positions];
+  }
+  const out: number[] = [];
+  for (let k = 0; k + 8 < positions.length; k += 9) {
+    const tri = positions.slice(k, k + 9);
+    const regions = plans.flatMap((plan) =>
+      plan.regions.filter((r) => touches(tri, r))
+    );
+    out.push(...(regions.length > 0 ? cutOut(tri, regions) : tri));
+  }
+  return out;
+}
+
+/**
+ * The passages cut open (lib/city/building-passages.ts): every triangle
+ * but a roof's of the building trees each runs through — the LoD2 walls
+ * and floor, and the plinths, doors and shopfronts laid on them — cut to
+ * what lies outside its volume, and per object its lining (walls along
+ * it, its ceiling) appended as a part of the object (`OBJECT_SOURCE_
+ * PASSAGE`: its own colour, the host's, no windows, no eave). Last of the
+ * bake: the windows and doors were placed on the whole walls, and a cut
+ * piece carries its triangle's place on its wall (`_FACADE`) and normal.
+ */
+export function withPassages(
+  baked: Pick<BakedCityMesh, "objects" | "vertices">,
+  plans: readonly PassagePlan[]
+): void {
+  if (plans.length === 0) {
+    return;
+  }
+  const { objects } = baked;
+  const v = baked.vertices;
+  const byRoot = new Map<number, PassagePlan[]>();
+  for (const plan of plans) {
+    for (const root of new Set(plan.hosts.map((h) => objects[h.object].root))) {
+      byRoot.set(root, [...(byRoot.get(root) ?? []), plan]);
+    }
+  }
+  const pieces = new Map<number, number[]>();
+  const p = v.positions;
+  for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
+    const near =
+      v.isRoof[t] === 1
+        ? undefined
+        : byRoot.get(objects[v.objectIds[t]]?.root ?? -1);
+    if (!near) {
+      continue;
+    }
+    const tri = Array.from(p.subarray(3 * t, 3 * t + 9));
+    const regions = near.flatMap((plan) =>
+      inBox(p, t, plan.box) ? plan.regions.filter((r) => touches(tri, r)) : []
+    );
+    if (regions.length > 0) {
+      pieces.set(t, cutOut(tri, regions));
+    }
+  }
+  const linings: { id: number; positions: number[] }[] = [];
+  for (const plan of plans) {
+    // a passage crossing it, or beside it through one gateway: its lining
+    // keeps out of that one's opening
+    const crossing = plans.filter(
+      (other) => other !== plan && boxesMeet(other.box, plan.box)
+    );
+    for (const { object, part } of plan.hosts) {
+      const positions = outsideOf(
+        passageLining(plan.axis, part, triangulateXY),
+        crossing
+      );
+      if (positions.length === 0) {
+        continue;
+      }
+      let base = Number.POSITIVE_INFINITY;
+      let top = Number.NEGATIVE_INFINITY;
+      for (let i = 2; i < positions.length; i += 3) {
+        base = Math.min(base, positions[i]);
+        top = Math.max(top, positions[i]);
+      }
+      const host = { ...objects[object] };
+      delete host.windows;
+      const above = cm(top - base + 1);
+      linings.push({ id: objects.length, positions });
+      objects.push({
+        ...host,
+        building: false,
+        baseZ: cm(base),
+        // above its top: no eave stroke, no storey band in it
+        eaveH: above,
+        storeyH: above,
+        glow: 0,
+        // the host's plaster runs on in, none of its OSM looks
+        flags: OBJECT_FLAG_OWN_COLOUR,
+        source: OBJECT_SOURCE_PASSAGE,
+        footprints: [],
+      });
+    }
+  }
+  baked.vertices = withCuts(v, pieces, linings);
+}
+
+/** The stream with triangle `t`'s vertices replaced by `pieces.get(t)`
+ *  (flat x, y, z: its pieces, none, or itself cut), each new vertex
+ *  carrying its triangle's attributes — its normal and place on its wall
+ *  (`_FACADE`'s first number) interpolated, the rest the triangle's — and
+ *  `parts` appended (flat, no roof, no wall of the facade's). */
+function withCuts(
+  v: CityVertices,
+  pieces: ReadonlyMap<number, readonly number[]>,
+  parts: readonly { id: number; positions: readonly number[] }[]
+): CityVertices {
+  const count = v.objectIds.length;
+  let total = count;
+  for (const [, xyz] of pieces) {
+    total += xyz.length / 3 - 3;
+  }
+  for (const part of parts) {
+    total += part.positions.length / 3;
+  }
+  const out = emptyStream(v, total);
+  const { positions, objectIds, normals, facade } = out;
+  const noDoor = Math.round(NO_DOOR * 32_767);
+  let at = 0;
+  // vertex `i` of the old stream, as it was, to `at`
+  const copy = (i: number) => {
+    copyVertex(v, i, out, at);
+    at++;
+  };
+  for (let t = 0; t + 2 < count; t += 3) {
+    const xyz = pieces.get(t);
+    if (!xyz) {
+      copy(t);
+      copy(t + 1);
+      copy(t + 2);
+      continue;
+    }
+    const bary = barycentric(v.positions, t);
+    for (let k = 0; k + 2 < xyz.length; k += 3) {
+      const w = bary(xyz[k], xyz[k + 1], xyz[k + 2]);
+      copy(t);
+      at--;
+      positions.set(xyz.slice(k, k + 3), 3 * at);
+      if (normals && v.normals) {
+        normals.set(blend(v.normals, 3, t, w, true), 3 * at);
+      }
+      if (facade && v.facade) {
+        facade[4 * at] = Math.round(blend(v.facade, 4, t, w, false)[0]);
+      }
+      at++;
+    }
+  }
+  for (const part of parts) {
+    for (let k = 0; k + 2 < part.positions.length; k += 3) {
+      positions.set(part.positions.slice(k, k + 3), 3 * at);
+      objectIds[at] = part.id;
+      if (facade) {
+        facade[4 * at + 2] = noDoor;
+        facade[4 * at + 3] = noDoor;
+      }
+      at++;
+    }
+  }
+  return out;
+}
+
+/** A stream of `total` vertices with `v`'s attributes, unset: no normal
+ *  (NaN), roof colour or surface. */
+function emptyStream(v: CityVertices, total: number): CityVertices {
+  return {
+    positions: new Float32Array(3 * total),
+    objectIds: new Float32Array(total),
+    isRoof: new Float32Array(total),
+    ...(v.normals && {
+      normals: new Float32Array(3 * total).fill(Number.NaN),
+    }),
+    ...(v.roofRgb && {
+      roofRgb: new Float32Array(3 * total).fill(Number.NaN),
+    }),
+    ...(v.surfaces && { surfaces: new Float32Array(2 * total).fill(-1) }),
+    ...(v.facade && { facade: new Int16Array(4 * total) }),
+  };
+}
+
+/** Vertex `i` of `from`, every attribute, to vertex `at` of `to`. */
+function copyVertex(
+  from: CityVertices,
+  i: number,
+  to: CityVertices,
+  at: number
+): void {
+  to.positions.set(from.positions.subarray(3 * i, 3 * i + 3), 3 * at);
+  to.objectIds[at] = from.objectIds[i];
+  to.isRoof[at] = from.isRoof[i];
+  if (to.normals && from.normals) {
+    to.normals.set(from.normals.subarray(3 * i, 3 * i + 3), 3 * at);
+  }
+  if (to.roofRgb && from.roofRgb && 3 * i + 2 < from.roofRgb.length) {
+    to.roofRgb.set(from.roofRgb.subarray(3 * i, 3 * i + 3), 3 * at);
+  }
+  if (to.surfaces && from.surfaces) {
+    to.surfaces.set(from.surfaces.subarray(2 * i, 2 * i + 2), 2 * at);
+  }
+  if (to.facade && from.facade) {
+    to.facade.set(from.facade.subarray(4 * i, 4 * i + 4), 4 * at);
+  }
+}
+
+/** Triangle `t`'s barycentric weights of a point in its plane. */
+function barycentric(
+  p: ArrayLike<number>,
+  t: number
+): (x: number, y: number, z: number) => [number, number, number] {
+  const a = [p[3 * t], p[3 * t + 1], p[3 * t + 2]];
+  const e1 = [p[3 * t + 3] - a[0], p[3 * t + 4] - a[1], p[3 * t + 5] - a[2]];
+  const e2 = [p[3 * t + 6] - a[0], p[3 * t + 7] - a[1], p[3 * t + 8] - a[2]];
+  const d11 = e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2];
+  const d12 = e1[0] * e2[0] + e1[1] * e2[1] + e1[2] * e2[2];
+  const d22 = e2[0] * e2[0] + e2[1] * e2[1] + e2[2] * e2[2];
+  const det = d11 * d22 - d12 * d12;
+  return (x, y, z) => {
+    const q = [x - a[0], y - a[1], z - a[2]];
+    const q1 = q[0] * e1[0] + q[1] * e1[1] + q[2] * e1[2];
+    const q2 = q[0] * e2[0] + q[1] * e2[1] + q[2] * e2[2];
+    const u = det > 0 ? (d22 * q1 - d12 * q2) / det : 0;
+    const w = det > 0 ? (d11 * q2 - d12 * q1) / det : 0;
+    return [1 - u - w, u, w];
+  };
+}
+
+/** Triangle `t`'s per-vertex attribute (`n` a vertex) at weights `w`;
+ *  `unit` normalises it, and leaves NaN where a vertex has none. */
+function blend(
+  a: ArrayLike<number>,
+  n: number,
+  t: number,
+  w: readonly [number, number, number],
+  unit: boolean
+): number[] {
+  const out = Array.from({ length: n }, (_, c) =>
+    w.reduce((s, wk, k) => s + wk * a[n * (t + k) + c], 0)
+  );
+  if (!unit) {
+    return out;
+  }
+  const len = Math.hypot(...out);
+  return len > 0 ? out.map((c) => c / len) : out.map(() => Number.NaN);
 }
