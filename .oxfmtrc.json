@@ -16,7 +16,7 @@
     "**/*.md",
     "**/*.mdx",
     ".agents/**",
-    ".claude/**",
+    ".claude/skills/**",
     "data/**",
     "public/**",
     "aesthetic-sandbox.html",

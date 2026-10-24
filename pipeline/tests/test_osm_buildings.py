@@ -229,8 +229,13 @@ def test_only_ground_floor_levels_count_as_street_shops_and_entrances():
     assert on_ground_floor('"level"=>"-1;0"')
     assert on_ground_floor('"level"=>"0.0"')
     assert on_ground_floor('"level"=>"1, 0"')
-    assert on_ground_floor('"level"=>"EG"')  # unreadable: kept
+    assert on_ground_floor('"level"=>"EG"') and on_ground_floor('"level"=>"Erdgeschoß"')
+    assert on_ground_floor('"level"=>"-1-1"')  # a range through the ground floor
+    assert on_ground_floor('"level"=>"Hof"')  # unreadable: kept
     assert not on_ground_floor('"level"=>"1"')
     assert not on_ground_floor('"level"=>"-1"')
+    assert not on_ground_floor('"level"=>"1-3"')
+    for upper in ("OG", "1.OG", "2. OG", "DG", "UG", "KG"):
+        assert not on_ground_floor(f'"level"=>"{upper}"'), upper
     assert is_shop("bakery", None) and is_shop(None, "pub")
     assert not is_shop("no", None) and not is_shop(None, "bench")

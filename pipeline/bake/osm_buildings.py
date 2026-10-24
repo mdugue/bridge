@@ -153,18 +153,42 @@ SNAP_M = 3.0  # a point this close to a footprint's outline still marks it
 MIN_COVER = 0.5  # share of the LoD2 footprint an OSM outline must cover
 
 
-def on_ground_floor(other_tags: str | None) -> bool:
-    """Untagged, or a `level` list that holds the ground floor (0)."""
-    level = tag(other_tags, "level")
-    if level is None:
+_RANGE = re.compile(r"^(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)$")
+# German storey names as mapped: the ground floor, below it, above it
+_GROUND_NAMES = {"eg", "e", "0.og", "erdgeschoss", "erdgeschoß"}
+_BELOW = re.compile(r"^(\d+\.?\s*)?(ug|kg|tg)$")
+_ABOVE = re.compile(r"^(\d+\.?\s*)?(og|dg)$")
+
+
+def _level_part(part: str) -> bool | None:
+    """Whether one `level` value holds the ground floor; None unreadable."""
+    p = part.strip().lower()
+    try:
+        return float(p) == 0.0
+    except ValueError:
+        pass
+    if m := _RANGE.match(p):
+        return float(m.group(1)) <= 0.0 <= float(m.group(2))
+    if p in _GROUND_NAMES:
         return True
-    values = []
-    for part in re.split(r"[;,]", level):
-        try:
-            values.append(float(part.strip()))
-        except ValueError:
-            continue
-    return not values or 0.0 in values
+    if _BELOW.match(p) or _ABOVE.match(p):
+        return False
+    return None
+
+
+def level_holds_ground(level: str) -> bool | None:
+    """Whether a `level` list (`0;1`, `-1-0`, `EG`) holds the ground floor:
+    None where no part of it reads as a storey."""
+    parts = [_level_part(p) for p in re.split(r"[;,]", level)]
+    read = [p for p in parts if p is not None]
+    return any(read) if read else None
+
+
+def on_ground_floor(other_tags: str | None) -> bool:
+    """Untagged, or a `level` list that holds the ground floor (0); an
+    unreadable one is kept."""
+    level = tag(other_tags, "level")
+    return level is None or level_holds_ground(level) is not False
 
 
 def is_shop(shop: str | None, amenity: str | None) -> bool:

@@ -11,10 +11,13 @@
  * edits into every terrain key.
  */
 import { siteFromArgs } from "../sites";
+import { readDgmFile } from "./dgm-cache";
 import { measureJumps } from "./line-levels";
 
 const { site } = siteFromArgs(process.argv.slice(2));
-const r = await measureJumps(site);
+const r = await measureJumps(site, undefined, (tif, tfw) =>
+  readDgmFile(tif, tfw, "native")
+);
 process.stdout.write(
   `${site.id}: ${r.samples} samples; jumps ${r.before} before, ${r.after} after\n`
 );

@@ -23,6 +23,10 @@ const SOURCE_GLOBS = [
   "hooks/*.ts",
 ];
 
+/** Vendored by `shadcn add` (regenerated, never hand-edited): no test of
+ *  ours is meant to cover them. */
+const VENDORED = new Set(["hooks/use-mobile.ts"]);
+
 export interface Source {
   path: string;
   lines: number;
@@ -68,7 +72,7 @@ export function sources(root: string): Source[] {
   const out: Source[] = [];
   for (const pattern of SOURCE_GLOBS) {
     for (const path of new Bun.Glob(pattern).scanSync({ cwd: root })) {
-      if (!isTest(path)) {
+      if (!isTest(path) && !VENDORED.has(path)) {
         const text = readFileSync(join(root, path), "utf8");
         out.push({ path, lines: text.split("\n").length });
       }

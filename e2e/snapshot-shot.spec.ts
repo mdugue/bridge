@@ -107,8 +107,9 @@ for (const file of snapshotFiles()) {
       }
     });
 
-    // Let the shadow map re-render for the new pose and sun, and DoF and
-    // grading settle: counted in frames, not waited out on a clock (a slow
+    // Let the shadow map re-render for the new pose and sun, the motion
+    // regression lift (DoF is off for RECOVER_MS after the move) and grading
+    // settle: counted in frames, not waited out on a clock (a slow
     // GPU took longer than any fixed sleep). By night no shadow map is
     // drawn, so after `shadowless` frames the plate is taken without one.
     await page.waitForFunction(
@@ -117,6 +118,8 @@ for (const file of snapshotFiles()) {
         const drawn = (poc?.frames ?? 0) - frames;
         return (
           drawn >= settle &&
+          // the move regressed the post stack: DoF is back once it is still
+          !poc?.regressed &&
           ((poc?.shadowRenders ?? 0) > shadows || drawn >= shadowless)
         );
       },

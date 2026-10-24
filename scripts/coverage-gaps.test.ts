@@ -36,7 +36,7 @@ describe("coverage gaps", () => {
     expect(table).toContain("| `app/_components/create-app.ts` | 1600 |");
   });
 
-  test("the routes' helpers, the site configs and the hooks are sources too", () => {
+  test("the routes' helpers, the site configs and our hooks are sources too, shadcn's not", () => {
     const root = mkdtempSync(join(tmpdir(), "coverage-gaps-"));
     for (const path of [
       "app/_lib/built-sites.ts",
@@ -44,6 +44,7 @@ describe("coverage gaps", () => {
       "app/wissen/_lib/markdown.test.tsx",
       "sites/dresden.ts",
       "hooks/use-mobile.ts",
+      "hooks/use-coarse-pointer.ts",
       "components/ui/button.tsx",
     ]) {
       mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -56,7 +57,7 @@ describe("coverage gaps", () => {
     ).toEqual([
       "app/_lib/built-sites.ts",
       "app/wissen/_lib/markdown.tsx",
-      "hooks/use-mobile.ts",
+      "hooks/use-coarse-pointer.ts",
       "sites/dresden.ts",
     ]);
   });

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { REFERENCE_SITE, SITES } from "../sites";
+import { readDgmFile } from "./dgm-cache";
 import { measureJumps } from "./line-levels";
 
 /**
@@ -16,7 +17,9 @@ import { measureJumps } from "./line-levels";
 const BUDGET = 20;
 
 test("the reference site's lines are drawn without jumps beyond the budget", async () => {
-  const r = await measureJumps(SITES[REFERENCE_SITE]);
+  const r = await measureJumps(SITES[REFERENCE_SITE], undefined, (tif, tfw) =>
+    readDgmFile(tif, tfw, "native")
+  );
   expect(r.samples).toBeGreaterThan(0);
   expect(r.after).toBeLessThanOrEqual(BUDGET);
 }, 120_000);

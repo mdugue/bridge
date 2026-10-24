@@ -63,7 +63,7 @@ from shapely.ops import substring
 from .common import OSM_ATTRIBUTION, Sampler, Tile, column, feature, write_geojson
 from .doors import measure, snap
 from .osm import has_extract, read_osm, tag
-from .osm_buildings import footprints
+from .osm_buildings import footprints, level_holds_ground
 
 WHERE = 'other_tags LIKE \'%"tunnel"=>"building_passage"%\''
 # the highway kinds a vehicle drives through: a drive's width, else a walk's
@@ -99,10 +99,8 @@ def on_ground_floor(other_tags: str | None) -> bool:
     """Whether the way runs at street level: no `level` without a 0, no
     `layer` above 0 (a negative layer is the passage under its building)."""
     level = tag(other_tags, "level")
-    if level is not None:
-        parts = [p.strip() for p in level.replace(",", ";").split(";")]
-        if "0" not in parts:
-            return False
+    if level is not None and level_holds_ground(level) is not True:
+        return False  # an unreadable level is not cut through a building
     layer = (tag(other_tags, "layer") or "0").strip()
     try:
         return float(layer) <= 0

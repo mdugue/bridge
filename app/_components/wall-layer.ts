@@ -12,7 +12,7 @@ import { type GroundLight, groundLitMaterial } from "./sky-light";
  * frees it and its material with the tile's content. The far horizon cuts its sun as it
  * cuts the ground's (`light`, sky-light.ts); the sky view does not dim it:
  * the ground's raster at a wall's foot counts the wall itself, which would
- * darken every wall by half (the facades correct for that, `light.ao`;
+ * darken every wall by half (the facades correct for that, ClaySky's `ao`;
  * a wall is too low to be worth it).
  */
 export function dressWalls(mesh: Mesh, light?: GroundLight): void {
