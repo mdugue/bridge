@@ -31,7 +31,7 @@ flowchart TB
   WORLD --> TILES
   TILES --> CITY["buildings (refine ADD)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH once a ray needs it"]
   TILES --> TER["terrain, L1 512² grid → L0 TIN (REPLACE)<br/>glTF + 30 m skirt, lowered under stairs<br/>(walls burned into L1 only)<br/>palette-painted splat, receives shadows only"]
-  TER --> WAT["water + mist sheets<br/>terrain geometry masked by splat alpha"]
+  TER --> WAT["water + mist sheets<br/>terrain triangles near water, masked by splat alpha"]
   TER --> STAIR["L0: stairs node, baked with the ground<br/>treads, risers, cheeks per flight"]
   TER --> WALL["L0: walls node, baked on every tile's TIN<br/>ribbons toned by material, snapped to the measured step"]
   TER --> FENCE["L0: fences node, baked on every tile's TIN<br/>one low band per line, cut at the gates"]
@@ -713,11 +713,28 @@ stays their measure; the tile cache counts true bytes.
   read by a desktop's fine level only (`readsSportGrounds`): a phone draws
   its pitches in their land-cover green without lines, the goals and nets
   stay (14 of Dresden's 15 tiles have grounds). The coarse level is lean
-  besides: its grid index and the water index derived from it are one
-  copy for the site (`createGridShare`, kept only where a tile's numbers
-  equal the site's: −12 MiB per coarse tile after the first, on the GPU
-  and the CPU), and it carries only its coarse crowns, traffic and
-  bridges.
+  besides: its grid index is one copy for the site (`createGridShare`,
+  kept only where a tile's numbers equal the site's: −6 MiB per coarse
+  tile after the first, on the GPU and the CPU), and it carries only its
+  coarse crowns, traffic and bridges.
+- **The water sheets cover the water, not the tile**
+  (`lib/city/water-mask.ts`, terrain-layer.ts `waterSheetsOf`). The water
+  and mist sheets drape the terrain mesh and mask themselves to the water
+  class per fragment; until 2026-10-24 they draped the whole level, so
+  every ground pixel on screen was shaded twice more, blended, to be
+  thrown away by `discard` — and Dresden's tiles are at most 8 % water
+  (3.9 % on average). In the start view they were 4.0 M of the frame's
+  21.6 M triangles. The class raster's water cells (256² a tile, read
+  before its bytes go) now choose each sheet's triangles: the water's
+  within 100 m of water (its mips blur the bank far off), the mist's
+  within 600 m (it reads a mip five levels further down, whose texels are
+  256–512 m where the mist is full — cut nearer, its haze would end at
+  triangle edges); on the river's spawn tile 0.31 M → 0.09 M and 0.27 M
+  triangles, and a tile without water hangs no sheet. Each sheet is
+  bounded by its own triangles, so it is culled while the view looks
+  across the dry rest of its tile. Each sheet's index is the tile's own (the site's
+  shared water index is left only for a raster the browser decoded,
+  whose bytes cannot be read).
 - **The stream camera.** The tile renderer streams for a twin of the
   walk/fly camera whose far plane ends where the fog does — the larger of
   the fog applied now and the look's own, × 1.1

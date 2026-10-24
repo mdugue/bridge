@@ -531,7 +531,10 @@ visual-variable codebook is in
 - **Water** `❝ taken` `= computed` `≈ assumed` — the painted splat's alpha (water coverage, `smoothstep`ed
   shoreline) + the terrain geometry + the wind's waves on a level normal
   (+ the drifting mist); the water and mist sheets hang next to their
-  terrain mesh and leave with the tile. `water-layer.ts`. Missing class
+  terrain mesh and leave with the tile, each over only the triangles
+  within its reach of the class raster's water (100 m, the mist 600 m;
+  since 2026-10-24, `lib/city/water-mask.ts` — they draped the whole
+  tile before). `water-layer.ts`. Missing class
   raster → no splat, no water: the tile's ground falls back to the flat
   sage.
   *Waves* `≈ assumed` (since 2026-10-23, `water-waves.ts`): one wave

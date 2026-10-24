@@ -402,7 +402,10 @@ export function createWaterLayer(
   geometry: BufferGeometry,
   splat: SplatLayer,
   skyTint: UniformNode<"color", Color>,
-  look?: WaterLook
+  look?: WaterLook,
+  /** the mist's triangles (terrain-layer.ts `waterSheetsOf`: it reaches
+   *  farther from the water than the water's own) */
+  mistGeometry: BufferGeometry = geometry
 ): WaterLayer {
   const sun = splat.ground.sunDirection;
   const [minX, minY, maxX, maxY] = splat.bounds;
@@ -462,7 +465,7 @@ export function createWaterLayer(
 
   // River mist: a second masked sheet on the SAME (shared) geometry, on the
   // same clock and sky tint.
-  const mistMesh = createWaterMist(geometry, splat, size, skyTint);
+  const mistMesh = createWaterMist(mistGeometry, splat, size, skyTint);
 
   return {
     mesh,
