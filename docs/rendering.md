@@ -635,7 +635,7 @@ the safety levels 1, 2 and 3:
 | Shadow map | 3072² (2048², 2048², 1024²) | 2048² (2048², 1024², 1024²) | 512² |
 | Shadow camera streams at | 128 px, by day; from level 2 never | never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
-| Pixel ratio | ≤ 1.5 (1.25, 1.0, 1.0; ≤ 2 until 2026-10-10: a retina laptop's 5.2 MP of post stack, 1.5 is 56 % of it) | ≤ 1.5 (1.25, 1.0, 0.85) | 0.5 |
+| Pixel ratio | ≤ 1.5 (1.25, 1.0, 1.0; ≤ 2 until 2026-10-10: a retina laptop's 5.2 MP of post stack, 1.5 is 56 % of it), × 0.85 / 0.72 / 0.6 while the GPU misses 50 fps (`lib/city/resolution-scale.ts`) | ≤ 1.5 (1.25, 1.0, 0.85), × 0.85 / 0.72 while it misses 40 fps | 0.5, never scaled |
 | Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
 | Land-cover rasters | L0 4096², its splat 2048² (85 → 21 MiB with mips, since 2026-10-10), L1 1024² | L0 2048², L1 1024²; no sports raster | as the tier |
 | GTAO samples | 16 | 8 | 8 |
@@ -646,6 +646,25 @@ the safety levels 1, 2 and 3:
 | Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
 | Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 168–336 MiB (148–296, 136–272, 96–232) | as the tier |
 | Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 480 / 560 MB (a last one 10 s past 560); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
+
+**The resolution follows the frame rate** (`lib/city/resolution-scale.ts`,
+wired in `create-app.ts`). The scene is fill-bound, so a page whose GPU
+cannot hold the tier's floor (50 fps on a desktop, 40 on a phone) draws
+fewer pixels: after two one-second windows whose median frame is slower —
+and only while the main thread takes under 60 % of the interval, since
+fewer pixels do not speed up JavaScript — the pixel ratio drops a step
+(× 0.85, 0.72, 0.6; a phone stops at 0.72), and the browser scales the
+canvas up, the HUD staying sharp. A step that did not make the frames a
+tenth faster goes back and none is tried for 30 s (doubling to five
+minutes): that rate is capped by the browser — an iPhone's Low Power Mode
+— not drawn by the GPU. It steps back up only while the rate holds, never
+within 4 s of a step down, where the GPU's timestamp queries say for two
+windows that the finer step fits under 75 % of the floor; Safari has none,
+so there it tries a step up after 8 s of calm and waits twice as long each
+time it had to come back (up to two minutes). The window after a change is
+not judged. Each step resizes the post stack's targets, hence the windows;
+the trail notes every step (`resolution`), and *Bild speichern* draws at
+the tier's full resolution, the scale taken back after it.
 
 The fine level's reach is the tile renderer's formula: a tile refines when
 its 40 m error exceeds 16 px, at a distance of 40 m × H / (16 px × 2 tan

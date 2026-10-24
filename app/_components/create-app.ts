@@ -29,6 +29,10 @@ import {
 } from "@/lib/city/memory-governor";
 import type { FramePace } from "@/lib/city/frame-pace";
 import { createFrameTiming } from "@/lib/city/frame-timing";
+import {
+  createResolutionScale,
+  resolutionTargetsFor,
+} from "@/lib/city/resolution-scale";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import {
   type GpuLoss,
@@ -2952,6 +2956,15 @@ async function bootApp(
     ctx: CanvasRenderingContext2D;
     imagePxPerCssPx: number;
   } | null = null;
+  // The picture is saved at the tier's resolution, not at the one the
+  // frame rate took (rescale, below, takes it back after the export).
+  const basePixelRatio = renderer.getPixelRatio();
+  const fullResolution = () => {
+    if (renderer.getPixelRatio() !== basePixelRatio) {
+      renderer.setPixelRatio(basePixelRatio);
+      postStack.setSize();
+    }
+  };
   const beginCapture = (request: CaptureRequest) => {
     const view = activeCamera() as ModelCamera | PerspectiveCamera;
     const { width: w, height: h } = renderer.domElement;
@@ -2988,6 +3001,7 @@ async function bootApp(
   /** Before the render: the frustum slides over the larger picture. */
   const aimCaptureTile = () => {
     if (!capture && captureQueue.length > 0) {
+      fullResolution();
       beginCapture(captureQueue.shift() as CaptureRequest);
     }
     const c = capture;
@@ -3079,12 +3093,41 @@ async function bootApp(
         if (typeof ms === "number" && ms !== lastGpuMs) {
           lastGpuMs = ms;
           frameTiming.gpu(ms);
+          resolution?.gpu(ms);
         }
       })
       .catch(() => undefined)
       .finally(() => {
         gpuReading = false;
       });
+  };
+  // The render's resolution as the frame rate allows
+  // (lib/city/resolution-scale.ts): fewer pixels while a GPU-bound page
+  // cannot hold its tier's rate, the browser scaling the canvas up. Not in
+  // the lite profile (the tests' fixed half resolution).
+  const resolution =
+    budget.profile === "lite"
+      ? null
+      : createResolutionScale(resolutionTargetsFor(budget.tier));
+  const rescale = (now: number) => {
+    if (!resolution) {
+      return;
+    }
+    // an export's frames are not the scene's, and it draws at full
+    // resolution (fullResolution, above)
+    if (capture !== null || captureQueue.length > 0) {
+      resolution.reset();
+      return;
+    }
+    const changed = resolution.update(now);
+    const ratio = basePixelRatio * resolution.scale();
+    if (renderer.getPixelRatio() !== ratio) {
+      renderer.setPixelRatio(ratio);
+      postStack.setSize();
+    }
+    if (changed !== undefined) {
+      opts.trail?.note("resolution", String(changed));
+    }
   };
   let lastDrawnAt: number | undefined;
   /**
@@ -3099,11 +3142,12 @@ async function bootApp(
     renderEnd: number
   ) => {
     const held = lastDrawnAt === undefined || opts.pace?.heldBefore() === true;
-    frameTiming.frame(
-      renderEnd - cpuStart,
-      renderEnd - renderStart,
-      held ? undefined : time - (lastDrawnAt ?? time)
-    );
+    const interval = held ? undefined : time - (lastDrawnAt ?? time);
+    frameTiming.frame(renderEnd - cpuStart, renderEnd - renderStart, interval);
+    if (interval !== undefined) {
+      resolution?.frame(interval, renderEnd - cpuStart);
+    }
+    rescale(time);
     lastDrawnAt = time;
     readGpuTime(renderEnd);
   };
