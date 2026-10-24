@@ -9,10 +9,10 @@ import numpy as np
 import pytest
 import rasterio
 from PIL import Image
-from synthetic import SIZE, X0, Y0, neighbour, osm_tile, read, tags
 
 from bake import canopy, lamps, ndvi, roof_colour
 from bake.common import Tile, overlaps, pixel_of, value_at
+from tests.synthetic import SIZE, X0, Y0, neighbour, osm_tile, read, tags
 
 WATER, ROAD, MEADOW = 8, 7, 3
 

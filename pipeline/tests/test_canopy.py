@@ -1,15 +1,88 @@
-"""The vegetation's photo-QA rules (PR #173): on transport land a heap's
-smooth flank or a bare roof is no crown, however steep or high
-(`canopy.bare_planes`); in a forest or park the DLM's say-so stands."""
+"""The canopy bake (pipeline/bake/canopy.py): the trees DOM1 shows, the tree
+rows' trees at its crown peaks, and the planes that are no crown."""
 
-from __future__ import annotations
+import json
 
 import numpy as np
+import pytest
 import rasterio
+import shapely
 from PIL import Image
 
 from bake import canopy
-from tests.synthetic import SIZE, X0, Y0, osm_tile, read
+from bake.common import Tile
+from tests.synthetic import SIZE, X0, Y0, crowns, osm_tile, read, write_raster
+
+
+def _tile(tmp_path, slope_north: float = 0.0) -> Tile:
+    """A flat (or north-rising) 200 m tile with its DGM at 100 m."""
+    tile = Tile("t", (X0, Y0, X0 + SIZE, Y0 + SIZE), 25833, tmp_path / "raw", tmp_path / "data")
+    rows = np.arange(SIZE)[:, None] + 0.5
+    z = 100 + slope_north * (SIZE - rows) + np.zeros((1, SIZE))
+    write_raster(tile.dgm, z.astype("float32"))
+    return tile
+
+
+# ---- P7: the tree rows' trees -------------------------------------------
+
+
+def test_thinning_keeps_the_tallest_and_drops_its_neighbours():
+    xy = np.array([[0.0, 0.0], [2.0, 0.0], [5.0, 0.0], [6.5, 0.0]])
+    tops = np.array([8.0, 12.0, 9.0, 10.0])
+    # 12 m at 2 drops 0 (2 m off); 10 m at 6.5 drops 5 (1.5 m off)
+    assert canopy.thinned(xy, tops, 3.0).tolist() == [1, 3]
+
+
+def _rows(tile: Tile, line: list[tuple[float, float]]) -> None:
+    path = tile.out("dlm", f"vegrows_{tile.id}.geojson")
+    feats = [
+        {"type": "Feature", "properties": {"kind": kind}, "geometry": geom}
+        for kind, geom in (
+            ("treerow", {"type": "LineString", "coordinates": line}),
+            # a hedge is no tree row
+            (
+                "hedge",
+                {"type": "LineString", "coordinates": [[X0 + 10, Y0 + 40], [X0 + 190, Y0 + 40]]},
+            ),
+        )
+    ]
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": feats}))
+
+
+def test_a_rows_trees_stand_at_its_crown_peaks_as_tall_as_measured(tmp_path):
+    tile = _tile(tmp_path)
+    y = Y0 + 100
+    _rows(tile, [(X0 + 20, y), (X0 + 180, y)])
+    # crowns every 10 m, 1 m off the line, 8–16 m tall; one 9 m off it
+    # (another row's), one beside the canopy's crown, one on the hedge
+    spots = [(X0 + 30.5 + 10 * i, y + 1.5, 8.0 + i) for i in range(9)]
+    ndom = crowns([*spots, (X0 + 60.5, y + 9.5, 14.0), (X0 + 100.5, Y0 + 40.5, 10.0)])
+    taken = np.array([[X0 + 72.0, y + 2.0]])  # 2–3 m from the crown at x = 70
+    xy, tops, n = canopy.row_trees(tile, ndom, ndom > 0, taken)
+    assert n == 1
+    xs = sorted(float(x) for x in xy[:, 0])
+    assert xs == pytest.approx([X0 + 30.5 + 10 * i for i in range(9) if i != 4], abs=0.01)
+    assert np.allclose(xy[:, 1], y)  # on the line
+    assert sorted(tops.tolist()) == pytest.approx([8.0 + i for i in range(9) if i != 4], abs=0.6)
+
+
+def test_without_tree_rows_there_are_no_row_trees(tmp_path):
+    tile = _tile(tmp_path)
+    xy, tops, n = canopy.row_trees(tile, np.zeros((SIZE, SIZE)), np.ones((SIZE, SIZE), bool), [])
+    assert (len(xy), len(tops), n) == (0, 0, 0)
+
+
+def test_a_tree_by_a_carriageway_reaches_over_it(tmp_path, monkeypatch):
+    tile = _tile(tmp_path)
+    lane = shapely.box(X0 + 100, Y0, X0 + 106, Y0 + SIZE)
+    monkeypatch.setattr(canopy.ways, "carriageways", lambda _tile: [lane])
+    rows = np.array([100, 100, 100])
+    # 2.5 m, 6.5 m and 20 m from the lane's west edge (x = 100)
+    cols = np.array([97, 93, 80])
+    tops = np.array([10.0, 10.0, 30.0])
+    # reach: 0.29 · h + 0.5 → 3.4 m, 3.4 m, 9.2 m
+    assert canopy.over_carriageway(tile, rows, cols, tops, SIZE).tolist() == [True, False, False]
+
 
 RAILWAY, MEADOW = 5, 1
 

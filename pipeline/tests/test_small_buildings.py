@@ -1,11 +1,14 @@
 """The small-structure bake on a synthetic 100 m tile: a shed, a pent-roofed
-shed, a shrub, a van on the road, a clipped evergreen hedge block."""
+shed, a shrub, a van on the road, a clipped evergreen hedge block; a shed in
+shadow held to a cleaner box."""
 
 import numpy as np
 import rasterio
 import shapely
 from PIL import Image
+from rasterio.transform import from_origin
 
+from bake import small_buildings
 from bake.common import Tile
 from bake.lowveg import LSC_RASTERS, Grid
 from bake.small_buildings import (
@@ -231,3 +234,74 @@ def test_vehicle_sized_boxes_need_an_osm_building_to_stay():
     assert keep(van, None, None, outline)
     assert not keep(shed, outline, None, None)  # inside an excluded area
     assert not keep(shed, None, shapely.box(3, 1, 5, 2), None)  # a shelter is drawn there
+
+
+# --- G28: a shed in shadow -----------------------------------------------------------
+
+
+def shed_scene(lum: float, rough: float = 0.0, notch: bool = False):
+    """A 4 × 5 m shed 2.5 m tall, its top `rough` (± per cell), with a
+    notch out of its corner where `notch` (fill 0.7), under an orthophoto of
+    luminance `lum`."""
+    grid = Grid(X0, Y0, X0 + 100, Y0 + 100)
+    dsm = np.full((N, N), np.nan)
+    top = GROUND + 2.5 + rough * np.where(np.indices((8, 10)).sum(0) % 2, 1, -1)
+    dsm[20:28, 20:30] = top
+    if notch:
+        dsm[20:24, 20:26] = np.nan
+    r = small_buildings.Rasters(
+        dsm=dsm,
+        dtm=np.full((N, N), GROUND),
+        multiecho=np.zeros((N, N)),
+        cls=np.full((N, N), 4, np.uint8),
+        ndvi=np.zeros((N, N), np.float32),
+        masked=np.zeros((N, N), bool),
+        lum=np.full((N, N), lum, np.float32),
+    )
+    return r, grid
+
+
+def test_a_clean_shed_in_shadow_stays():
+    assert len(small_buildings.find_structures(*shed_scene(lum=30.0))) == 1
+
+
+def test_a_rough_top_in_shadow_is_no_shed_in_sun_it_is():
+    assert len(small_buildings.find_structures(*shed_scene(lum=120.0, rough=0.25))) == 1
+    assert small_buildings.find_structures(*shed_scene(lum=30.0, rough=0.25)) == []
+
+
+def test_a_ragged_outline_in_shadow_is_no_shed_in_sun_it_is():
+    assert len(small_buildings.find_structures(*shed_scene(lum=120.0, notch=True))) == 1
+    assert small_buildings.find_structures(*shed_scene(lum=30.0, notch=True)) == []
+
+
+def test_without_an_orthophoto_nothing_is_in_shadow():
+    r, grid = shed_scene(lum=30.0, rough=0.25)
+    r.lum = None
+    assert len(small_buildings.find_structures(r, grid)) == 1
+    r.lum = np.full_like(r.dsm, np.nan, dtype=np.float32)
+    assert len(small_buildings.find_structures(r, grid)) == 1
+
+
+def test_the_orthophotos_luminance_on_the_scans_grid(tmp_path):
+    tile = Tile("t", (X0, Y0, X0 + 100, Y0 + 100), 25833, tmp_path / "raw", tmp_path / "data")
+    assert small_buildings.dop_luminance(tile) is None
+    dop = tile.raw_raster("dop")
+    dop.parent.mkdir(parents=True)
+    rgb = np.zeros((3, 500, 500), np.uint8)
+    rgb[:, :250] = 200  # the north half bright
+    with rasterio.open(
+        dop,
+        "w",
+        driver="GTiff",
+        width=500,
+        height=500,
+        count=3,
+        dtype="uint8",
+        crs="EPSG:25833",
+        transform=from_origin(X0, Y0 + 100, 0.2, 0.2),
+    ) as out:
+        out.write(rgb)
+    lum = small_buildings.dop_luminance(tile)
+    assert lum.shape == (200, 200)
+    assert abs(float(lum[0, 0]) - 200) < 0.5 and float(lum[-1, -1]) == 0.0

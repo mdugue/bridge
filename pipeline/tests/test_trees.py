@@ -1,7 +1,7 @@
-"""The street-tree registers' QA fixes (PR #173): heights from the genus ×
-trunk allometry where a register records none, a stale height taken from
-the surface model, a tree it shows gone left out, OSM trees cleared by the
-register crown's radius, and the conifers' forms by genus."""
+"""The street trees (pipeline/bake/trees.py, allometry.py, tree_archetypes.py):
+heights from the genus × trunk allometry, the surface model's check of a
+register's heights, OSM trees cleared by the register's crowns, and the
+conifers' forms."""
 
 import re
 from pathlib import Path
@@ -110,12 +110,12 @@ def test_a_tile_without_measured_trees_falls_back_on_the_tables_ratios():
     assert stats.arch_r.get(99, DEFAULT_RATIO) == DEFAULT_RATIO
 
 
-# --- the surface model's say ------------------------------------------------------
-
-
 def _surface(fill=0.0, green=None):
     ndom = np.full((100, 100), fill)
     return ndom, Surface(ndom, green)
+
+
+# --- the surface model's say ------------------------------------------------------
 
 
 def test_a_stale_height_becomes_the_surface_models():
@@ -201,9 +201,6 @@ def test_an_osm_tree_under_a_register_crown_is_that_tree():
     assert [t["x"] for t in kept] == [7.0, 54.0]
 
 
-# --- the conifers' forms ---------------------------------------------------------------
-
-
 @pytest.mark.parametrize(
     ("botanical", "german", "form"),
     [
@@ -227,6 +224,9 @@ def test_an_osm_tree_under_a_register_crown_is_that_tree():
         ("Cryptomeria japonica", "", ta.CONIFER),
     ],
 )
+# --- the conifers' forms ---------------------------------------------------------------
+
+
 def test_a_conifers_form_is_its_genuss(botanical, german, form):
     c = ta.classify(botanical, german)
     assert c["archetype"] == form, ta.ARCHETYPES[c["archetype"]]
@@ -248,14 +248,14 @@ def test_a_tristis_cultivar_weeps_whatever_follows_its_name():
     assert ta.classify("Betula pendula")["archetype"] == ta.OVAL  # the upright birch
 
 
-# --- a conifer's form in the surface model ------------------------------------------
-
-
 def _crown(profile, top=20.0, size=41):
     """An nDOM with one crown in the middle: `profile(rho)` its surface."""
     yy, xx = np.mgrid[:size, :size]
     rho = np.hypot(yy - size // 2, xx - size // 2)
     return np.maximum(profile(rho, top), 0.0)
+
+
+# --- a conifer's form in the surface model ------------------------------------------
 
 
 def test_a_pines_top_is_flat_a_spruces_falls_away():

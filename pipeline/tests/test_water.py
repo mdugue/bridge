@@ -1,6 +1,5 @@
-"""The water bodies (water.py) and the hedges drawn once, at their measured
-height (hedges.py, lowveg.py, landcover_osm.py): units on synthetic grids,
-no raw data."""
+"""The water bodies (pipeline/bake/water.py): units on synthetic grids, no raw
+data."""
 
 import base64
 import io
@@ -9,7 +8,7 @@ import numpy as np
 import shapely
 from PIL import Image
 
-from bake import hedges, lowveg, water
+from bake import water
 from bake.water import Grid
 
 BOUNDS = (0.0, 0.0, 200.0, 200.0)
@@ -113,71 +112,41 @@ def test_a_drop_along_the_water_foams():
     assert lines[0]["down"][0] > 0.9  # downstream is east
 
 
-def test_a_dlm_hedge_osm_maps_too_is_left_to_osm():
-    rows = [
-        {
-            "properties": {"kind": "hedge"},
-            "geometry": shapely.geometry.mapping(shapely.LineString([(0, 0), (30, 0)])),
-        },
-        {
-            "properties": {"kind": "treerow"},
-            "geometry": shapely.geometry.mapping(shapely.LineString([(0, 1), (30, 1)])),
-        },
-    ]
-    osm = [shapely.LineString([(0, 1.0), (20, 1.0)])]  # the first 20 m, 1 m off
-    kept, removed = hedges.without_mapped(rows, osm)
-    kinds = [f["properties"]["kind"] for f in kept]
-    assert kinds == ["treerow", "hedge"] or kinds == ["hedge", "treerow"]
-    hedge = next(f for f in kept if f["properties"]["kind"] == "hedge")
-    assert shapely.geometry.shape(hedge["geometry"]).length < 10.5
-    assert 21 <= removed <= 23
-
-
-def dom_over(ndom: np.ndarray) -> hedges.DomHeights:
-    return hedges.DomHeights(ndom, (0.0, 0.0, float(ndom.shape[0]), float(ndom.shape[0])))
-
-
-def test_a_hedge_without_a_scan_takes_dom1s_height_or_goes():
-    ndom = np.zeros((40, 40), np.float32)
-    ndom[9:12, 5:35] = 1.7  # a hedge along y = 30
-    ndom[10, 20] = 9.0  # a tree over it
-    line = shapely.LineString([(5, 29.5), (35, 29.5)])
-    assert abs(hedges.dom_height(line, dom_over(ndom)) - 1.7) < 1e-6
-    gone = shapely.LineString([(5, 5.5), (35, 5.5)])
-    assert hedges.dom_height(gone, dom_over(ndom)) == 0.0
-    feats, _ = lowveg.osm_hedge_features(None, [(None, line), (None, gone)], None, dom_over(ndom))
-    assert [f["properties"]["src"] for f in feats] == ["osm+dom"]
-    assert feats[0]["properties"]["h"] == 1.7
-
-
-def test_a_scan_hedge_ships_only_long_slim_clear_of_crowns_and_green():
-    ndom = np.zeros((80, 80), np.float32)
-    ndom[0:10, 0:10] = 12.0  # a crown in the north-west corner
-    clear = hedges.crown_clearance(ndom, (0.0, 0.0, 80.0, 80.0))
-    open_line = shapely.LineString([(20, 40), (40, 40)])
-    green = np.full(40, 0.4)
-    assert hedges.scan_hedge_ok(open_line, 1.0, clear, green)
-    assert hedges.scan_hedge_ok(open_line, 1.0, clear, None)  # no NDVI raster
-    assert not hedges.scan_hedge_ok(open_line, 1.0, clear, np.full(40, 0.05))
-    assert not hedges.scan_hedge_ok(shapely.LineString([(20, 40), (24, 40)]), 1.0, clear, None)
-    assert not hedges.scan_hedge_ok(open_line, 6.0, clear, None)  # a bed, not a hedge
-    rim = shapely.LineString([(0, 69.5), (12, 69.5)])  # a metre off the crown
-    assert not hedges.scan_hedge_ok(rim, 1.0, clear, None)
-
-
-def test_the_scan_hedges_that_pass_ship_without_their_flag():
-    line = shapely.LineString([(0, 0), (8, 0)])
-    passed = lowveg.hedge_feature(line, 1.2, 0.8, "lsc")
-    passed["properties"]["ship"] = True
-    failed = lowveg.hedge_feature(line, 1.2, 0.8, "lsc")
-    failed["properties"]["ship"] = False
-    kept = lowveg.shipped([passed, failed, lowveg.hedge_feature(line, 1.5, 1.0, "osm+dom")])
-    assert [f["properties"]["src"] for f in kept] == ["lsc", "osm+dom"]
-    assert "ship" not in kept[0]["properties"]
-    assert passed["properties"]["ship"] is True  # the research file keeps it
-
-
 def test_a_bent_weir_foams_along_its_chord():
     bent = shapely.LineString([(0, 0), (5, 3), (10, 0.4)])
     entry = water.foam_entry(bent, 1.24, (0.0, -1.0))
     assert entry == {"line": [[0.0, 0.0], [10.0, 0.4]], "drop": 1.2, "down": [0.0, -1.0]}
+
+
+def test_a_surfaces_range_is_read_along_its_own_water_not_past_a_dyke():
+    z = np.full((12, 40), 9.0)
+    water_ = np.zeros(z.shape, bool)
+    water_[1:5] = True  # a channel at 1 m …
+    z[1:5] = 1.0
+    z[1:5, 20:] = 1.6  # … with a 0.6 m step half way
+    water_[6:10] = True  # past a dyke one row wide, a canal at 3 m
+    z[6:10] = 3.0
+    span = water.surface_range(z, water_, 3)
+    assert abs(span[2, 18] - 0.6) < 1e-9  # the step, within reach
+    assert (span[1:5, :15] == 0.0).all()  # far from it: its own flat water
+    assert (span[6:10] == 0.0).all()  # the canal never sees the channel
+    assert (span[~water_] == 0.0).all()
+
+
+def test_a_body_gets_a_row_of_its_level_range_area_and_edges_a_pond_none():
+    z, wet = harbour()
+    wet[10:15, 10:15] = True  # a pond of 25 m², under BODY_MIN_M2
+    labels, count = water.label_bodies(Grid(BOUNDS, 200), wet, [])
+    river, pond = labels[150, 0], labels[12, 12]
+    assert count == 2 and river != pond
+    surface = np.where(wet, 2.0, np.nan)
+    surface[160:] = 2.5  # a third of the river lies higher: the level is the mode
+    rows, index = water.body_rows(Grid(BOUNDS, 200), labels, count, surface, wet, {})
+    assert list(index) == [river] and index[river] == 0
+    [row] = rows
+    assert row["level"] == 2.0 and row["range"] == [2.0, 2.5]
+    assert row["m2"] == 200 * 100 + 60 * 60  # the river and the basin, 1 m cells
+    x, y = row["at"]
+    assert wet[int(200 - y), int(x)]  # a point in the body
+    assert row["edges"] == {"s": [[0, 200, 2.5]], "w": [[100, 200, 2.0]], "e": [[100, 200, 2.0]]}
+    assert "lab" not in row  # no colour measured

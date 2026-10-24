@@ -1,15 +1,19 @@
 """Units of the fetch step that need no network: the CityGML converter, the
-provider-grid helper, the XYZ gridding, the OSM class mapping and the spec."""
+provider-grid helper, the XYZ gridding, the OSM class mapping, the flight
+dates and the spec."""
 
 import json
+from datetime import date
 from pathlib import Path
 
 import numpy as np
 import pytest
 import rasterio
 
+from bake import fetch
 from bake.citygml import convert, write_cityjson
 from bake.common import Tile
+from bake.dop_light import flight_days, flight_file
 from bake.fetch import Ctx, cells
 from bake.landcover_osm import _area_class
 from bake.providers.be import xyz_to_tif
@@ -456,3 +460,11 @@ def test_a_failed_basis_dlm_or_osm_extract_fails_the_fetch_after_the_tiles(tmp_p
 def test_a_fetched_basis_dlm_and_osm_extract_pass(tmp_path, monkeypatch):
     tried, _ = _fetch_run(tmp_path, monkeypatch, "none", dlm=True)
     assert {"dlm", "osm"} <= set(tried)
+
+
+def test_flight_days_round_trip(tmp_path):
+    dest = flight_file(tmp_path, "t")
+    fetch.write_flight(dest, ["2025-04-04", "2025-03-28", "2025-04-04"], "sn")
+    assert flight_days(tmp_path, "t") == [date(2025, 3, 28), date(2025, 4, 4)]
+    assert flight_days(tmp_path, "missing") == []
+    assert fetch.german_dates("Bildflugdatum = '19.03.2025'") == ["2025-03-19"]

@@ -174,3 +174,42 @@ def test_the_file_is_written(tmp_path):
     assert doc["days"]["weekday"]["date"] == "2026-10-01"
     # the filtered feed is cached beside the raw one
     assert list(gtfs.glob("trams_*.json"))
+
+
+# --- V26: who runs each line --------------------------------------------------
+
+
+def test_the_feed_names_each_routes_agency(tmp_path):
+    feed = T.site_trams(_feed_zip(tmp_path / "f.zip"), _site(), EPSG)
+    assert feed["agencies"] == {"r11": "Verkehrsverbund Oberelbe"}
+
+
+def test_a_line_is_run_by_the_agency_of_most_of_its_routes():
+    feed = {
+        "routes": {"a": "1", "b": "1", "c": "1", "d": "2"},
+        "agencies": {"a": "LVB", "b": "LVB", "c": "Regiobus", "d": "Regiobus"},
+    }
+    names, index = T.route_agencies(feed, ["1", "2"])
+    assert names == ["LVB", "Regiobus"]
+    assert index == [0, 1]
+    # a cut from before the agencies: one unnamed operator
+    assert T.route_agencies({"routes": {"a": "1"}}, ["1"]) == ([""], [0])
+
+
+def test_the_timetable_carries_its_operators(tmp_path):
+    import datetime
+
+    feed = T.site_trams(_feed_zip(tmp_path / "f.zip"), _site(), EPSG)
+    doc = T.build_timetable(feed, _tracks(), {"weekday": datetime.date(2026, 10, 1)})
+    assert doc["agencies"] == ["Verkehrsverbund Oberelbe"]
+    assert doc["routeAgency"] == [0] * len(doc["routes"])
+
+
+def test_a_cached_cut_without_agencies_is_derived_again(tmp_path):
+    _feed_zip(tmp_path / "nv_free.zip")
+    key = "_".join(f"{v:.0f}" for v in _site())
+    stale = tmp_path / f"trams_{key}.json"
+    stale.write_text(json.dumps({"routes": {}, "trips": {}, "stops": {}}))
+    feed = T.cached_site_trams(tmp_path, _site(), EPSG)
+    assert feed is not None and feed["agencies"] == {"r11": "Verkehrsverbund Oberelbe"}
+    assert "agencies" in json.loads(stale.read_text())

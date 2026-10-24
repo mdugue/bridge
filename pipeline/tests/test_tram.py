@@ -1,5 +1,11 @@
+import json
+
 import numpy as np
-from synthetic import X0, Y0, local, neighbour, osm_tile, read, tags, way
+import pytest
+import shapely
+
+from bake import tram
+from tests.synthetic import SIZE, X0, Y0, local, neighbour, osm_tile, read, tags, way
 
 TRAM = {"railway": "tram", "gauge": "1450", "electrified": "contact_line"}
 MAST = tags(power="catenary_mast")
@@ -231,3 +237,139 @@ def test_a_shelter_across_the_seam_takes_the_stops_sign(tmp_path, monkeypatch):
     tram.run(tile)
     # the shelter 6 m away is the neighbour's: it stands for the stop still
     assert _by_kind(read(tile, "tram"), "stop") == []
+
+
+@pytest.mark.parametrize(
+    ("other", "keep"),
+    [
+        ('"public_transport"=>"platform","tram"=>"yes"', True),
+        ('"public_transport"=>"platform"', True),  # names no mode: may be the tram's
+        ('"public_transport"=>"platform","tram"=>"yes","bus"=>"yes"', True),
+        ('"public_transport"=>"platform","bus"=>"yes"', False),
+        ('"railway"=>"platform","train"=>"yes"', False),
+        ('"public_transport"=>"platform","subway"=>"yes"', False),
+        ('"public_transport"=>"platform","tram"=>"yes","level"=>"-1"', False),
+        ('"public_transport"=>"platform","layer"=>"-2"', False),
+        ('"public_transport"=>"platform","location"=>"underground"', False),
+        ('"public_transport"=>"platform","tunnel"=>"yes"', False),
+    ],
+)
+# --- V25: the platforms a tram stop's sign stands on --------------------------
+
+
+def test_only_a_trams_platform_at_street_level_takes_the_sign(other, keep):
+    assert tram.tram_platform(other) is keep
+
+
+def test_a_stop_over_an_underground_platform_signs_the_street_one(tmp_path, monkeypatch):
+    stop = tags(railway="tram_stop", name="Max-Weber-Platz")
+    nodes = {
+        1: (0, 100, ""),
+        2: (200, 100, ""),
+        3: (100, 100, stop),
+        4: (90, 99, ""),  # the U-Bahn's platform right under the stop
+        5: (110, 99, ""),
+        6: (90, 95, ""),  # the tram's, 5 m south
+        7: (110, 95, ""),
+        8: (40, 100, tags(railway="tram_stop", name="Bahnhof")),
+        9: (30, 98, ""),  # only the station's train platform beside it
+        10: (50, 98, ""),
+    }
+    ways = [
+        way(1, [1, 8, 3, 2], TRAM),
+        way(2, [4, 5], {"public_transport": "platform", "subway": "yes", "level": "-1"}),
+        way(3, [6, 7], {"public_transport": "platform", "tram": "yes"}),
+        way(4, [9, 10], {"railway": "platform", "train": "yes"}),
+    ]
+    tile = osm_tile(tmp_path, monkeypatch, nodes, "".join(ways))
+    tram.run(tile)
+    [sign] = _by_kind(read(tile, "tram"), "stop")
+    assert local(sign["geometry"]["coordinates"]) == (100.0, 95.0)
+
+
+# --- V24: side poles and centre poles where no mast serves --------------------
+
+
+def test_grid_stations_are_the_same_places_whichever_tile_clipped_the_line():
+    whole = shapely.LineString([(X0 - 50, Y0 + 100), (X0 + 250, Y0 + 100)])
+    part = shapely.LineString([(X0 + 45, Y0 + 100), (X0 + 200, Y0 + 100)])
+    xs = {round(whole.interpolate(s).x - X0, 3) for s in tram.grid_stations(whole)}
+    ys = {round(part.interpolate(s).x - X0, 3) for s in tram.grid_stations(part)}
+    assert ys == {x for x in xs if 45 <= x < 200}
+    assert sorted(ys) == [60.0, 90.0, 120.0, 150.0, 180.0]
+
+
+def _street(tmp_path, monkeypatch, ys=(100,), lamps=(), mast=None, road=(89, 111)):
+    """A road band (y from road[0] to road[1]) with a track along each of
+    `ys`, running past both tile edges; no buildings."""
+    cls = np.zeros((SIZE, SIZE), np.uint8)
+    cls[SIZE - road[1] : SIZE - road[0], :] = 7
+    nodes, ways = {}, []
+    for i, y in enumerate(ys):
+        nodes[10 * i + 1] = (-50, y, "")
+        nodes[10 * i + 2] = (250, y, "")
+        ways.append(way(i + 1, [10 * i + 1, 10 * i + 2], TRAM))
+    if mast is not None:
+        nodes[99] = (*mast, tags(power="catenary_mast"))
+    tile = osm_tile(tmp_path, monkeypatch, nodes, "".join(ways), classes=cls)
+    features = [
+        {
+            "type": "Feature",
+            "properties": {"k": "lamp"},
+            "geometry": {"type": "Point", "coordinates": [X0 + x, Y0 + y]},
+        }
+        for x, y in lamps
+    ]
+    doc = {"type": "FeatureCollection", "features": features}
+    (tile.data / "dlm" / "lamps_t.geojson").write_text(json.dumps(doc))
+    tram.run(tile)
+    return read(tile, "tram")
+
+
+def test_side_poles_stand_past_the_kerb_a_span_between_them(tmp_path, monkeypatch):
+    doc = _street(tmp_path, monkeypatch)
+    poles = sorted(local(f["geometry"]["coordinates"]) for f in _by_kind(doc, "pole"))
+    xs = sorted({x for x, _ in poles})
+    # the 30 m grid (x = 0 is the seam: the ground west of it is no baked tile's here)
+    assert xs == [30.0, 60.0, 90.0, 120.0, 150.0, 180.0]
+    for _, y in poles:
+        assert 110.0 <= y <= 112.0 or 88.0 <= y <= 89.5  # just past either kerb
+    spans = _by_kind(doc, "span")
+    assert len(spans) == len(xs)
+    for f in spans:
+        assert f["properties"]["x"] == [pytest.approx(0.5, abs=0.03)]
+    [track] = _by_kind(doc, "track")
+    assert track["properties"]["s"] == xs  # the wire is held at every one
+
+
+def test_a_street_lamp_beside_the_spot_is_the_pole(tmp_path, monkeypatch):
+    doc = _street(tmp_path, monkeypatch, lamps=[(61.5, 112.0), (95.0, 120.0)])
+    lamp_poles = [f for f in _by_kind(doc, "pole") if f["properties"].get("lamp")]
+    assert [local(f["geometry"]["coordinates"]) for f in lamp_poles] == [(61.5, 112.0)]
+
+
+def test_a_wide_central_strip_takes_a_centre_pole_a_narrow_one_side_poles(tmp_path, monkeypatch):
+    wide = _street(tmp_path / "wide", monkeypatch, ys=(97, 103))  # 6 m: a 3.35 m strip
+    poles = [local(f["geometry"]["coordinates"]) for f in _by_kind(wide, "pole")]
+    assert poles and {y for _, y in poles} == {100.0}
+    assert len(_by_kind(wide, "arm")) == 2 * len(poles)
+    assert _by_kind(wide, "span") == []
+    narrow = _street(tmp_path / "narrow", monkeypatch, ys=(98, 102))  # 4 m: 1.35 m
+    ys = {y for _, y in (local(f["geometry"]["coordinates"]) for f in _by_kind(narrow, "pole"))}
+    assert all(y > 105 or y < 95 for y in ys)
+    assert _by_kind(narrow, "arm") == []
+
+
+def test_no_pole_within_45_m_of_a_mapped_mast(tmp_path, monkeypatch):
+    doc = _street(tmp_path, monkeypatch, mast=(100, 112))
+    xs = {local(f["geometry"]["coordinates"])[0] for f in _by_kind(doc, "pole")}
+    assert xs and all(abs(x - 100) > 45 for x in xs)
+
+
+def test_no_pole_where_the_street_runs_off_the_baked_tiles():
+    class Off:
+        def cls(self, x, y):
+            return None if x > 10 else 7
+
+    assert tram._edge(Off(), shapely.Point(0, 0), 1.0, 0.0, 0.0) is None
+    assert tram._edge(Off(), shapely.Point(0, 0), -1.0, 0.0, 0.0) == tram.POLE_OPEN_M
