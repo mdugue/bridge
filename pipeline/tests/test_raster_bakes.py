@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 
 import numpy as np
+import pytest
 import rasterio
 from PIL import Image
 from synthetic import SIZE, X0, Y0, neighbour, osm_tile, read, tags
@@ -210,8 +211,9 @@ def test_a_roof_takes_the_median_orthophoto_colour_in_linear_rgb(tmp_path, monke
     out = json.loads((tile.data / "dop" / "roofcolor_t.json").read_text())
     assert set(out["roofs"]) == {"house"}
     red, green, blue = out["roofs"]["house"]
-    kr, kg, kb = (float(k) for k in roof_colour._TO_GREY)  # taken on to grey
-    assert red == round(roof_colour.srgb_to_linear(200.0) * kr, 4)
-    assert green == round(roof_colour.srgb_to_linear(30.0) * kg, 4)
-    assert blue == round(roof_colour.srgb_to_linear(30.0) * kb, 4)
+    # sRGB 200 and 30 in linear light (IEC 61966-2-1), taken on to grey
+    kr, kg, kb = (float(k) for k in roof_colour._TO_GREY)
+    assert red == pytest.approx(0.577580 * kr, abs=1e-4)
+    assert green == pytest.approx(0.012983 * kg, abs=1e-4)
+    assert blue == pytest.approx(0.012983 * kb, abs=1e-4)
     assert out["meta"]["buildings_sampled"] == 1

@@ -166,7 +166,9 @@ def test_an_orchards_trees_stand_where_dom1_shows_them(tmp_path):
     assert got == [(pytest.approx(x, abs=0.05), pytest.approx(h, abs=0.05)) for x, h in want]
     p = trees[0]["properties"]
     assert p["src"] == "dom" and p["g"] == "Malus" and "l" not in p
-    assert p["d"] == pytest.approx(min(max(0.85 * p["h"], 2.0), 9.0), abs=0.05)
+    # the crowns by the trees' heights: 3, 4, 7 and 8 m
+    widths = sorted(f["properties"]["d"] for f in trees)
+    assert widths == pytest.approx([2.55, 3.4, 5.95, 6.8], abs=0.05)
     assert parts["stats"]["orchardTrees"] == 4
 
 

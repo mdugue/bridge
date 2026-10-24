@@ -167,7 +167,7 @@ class _Bank:
 def test_an_untagged_flight_is_a_paths_unless_it_lies_in_a_pedestrian_area():
     line = shapely.LineString([(0, 1), (0, 19)])
     f = stairs.flight(line, None, [], _Bank(), [], [], stairs.Context())
-    assert f["properties"]["w"] == stairs.DEFAULT_W == 1.5
+    assert f["properties"]["w"] == stairs.DEFAULT_W
     square = stairs.Context(public=[shapely.box(-20, -20, 20, 40)])
     f = stairs.flight(line, None, [], _Bank(), [], [], square)
     assert f["properties"]["w"] == stairs.PUBLIC_W

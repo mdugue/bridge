@@ -3,6 +3,9 @@ trunk allometry where a register records none, a stale height taken from
 the surface model, a tree it shows gone left out, OSM trees cleared by the
 register crown's radius, and the conifers' forms by genus."""
 
+import re
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -230,9 +233,13 @@ def test_a_conifers_form_is_its_genuss(botanical, german, form):
     assert not c["globe"]  # a dwarf conifer is a bush from the ground
 
 
-def test_the_archetype_list_only_grows():
+def test_the_archetype_list_only_grows_and_is_the_clients():
+    # the committed tree files carry these indices: the list only grows, and
+    # lib/city/tree-inventory.ts reads them by the same list
     assert ta.ARCHETYPES[:6] == ["round", "oval", "columnar", "conifer", "weeping", "small"]
-    assert ta.ARCHETYPES[ta.PINE] == "pine" and ta.ARCHETYPES[ta.BUSH] == "bush"
+    ts = (Path(__file__).parents[2] / "lib" / "city" / "tree-inventory.ts").read_text()
+    block = ts.split("export const TREE_ARCHETYPES = [", 1)[1].split("]", 1)[0]
+    assert re.findall(r'"(\w+)"', block) == ta.ARCHETYPES
 
 
 def test_a_tristis_cultivar_weeps_whatever_follows_its_name():

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 import rasterio
 
 from bake.citygml import convert, write_cityjson
@@ -165,12 +166,8 @@ def test_citygml_2_reads_like_1_and_an_empty_tile_is_refused(tmp_path):
     )
     doc = convert([gml], (0.0, 0.0, 2000.0, 2000.0), 25833)
     assert list(doc["CityObjects"]) == ["B1", "P1"]
-    try:
+    with pytest.raises(ValueError):  # a tile without buildings is not written
         write_cityjson([gml], (5000.0, 5000.0, 7000.0, 7000.0), 25833, tmp_path / "x.json")
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("a tile without buildings must not be written")
     assert not (tmp_path / "x.json").exists()
 
 
@@ -192,13 +189,26 @@ def test_a_site_without_a_tree_cadastre_writes_its_osm_trees(tmp_path):
     assert (tmp_path / "data" / "dlm" / "treefacts_t.json").exists()
 
 
-def test_the_cadastre_query_carries_the_sites_crs():
-    from bake.cadastre import REGISTERS
+def test_a_register_in_another_crs_than_the_tile_is_not_asked(tmp_path, monkeypatch, capsys):
+    # its bounding box would be read in the wrong CRS: a note, no request
+    from bake import cadastre
+    from bake.common import Tile, TreeCadastre
 
-    q = REGISTERS["dresden"].query(
-        "cls:L1261", (0.0, 0.0, 2000.0, 2000.0), 25832, resultType="hits"
+    def no_request(*args):
+        raise AssertionError("the register was asked")
+
+    monkeypatch.setattr(cadastre, "_open", no_request)
+    tile = Tile(
+        "t",
+        (0.0, 0.0, 2000.0, 2000.0),
+        25832,
+        tmp_path / "raw",
+        tmp_path / "data",
+        tree_cadastre=TreeCadastre("dresden", ""),
     )
-    assert "EPSG%3A%3A25832" in q and "cls%3AL1261" in q and "resultType=hits" in q
+    cadastre.fetch(tile)
+    assert "EPSG:25833" in capsys.readouterr().out
+    assert not (tmp_path / "raw" / "trees").exists()
 
 
 def test_saxony_links_come_from_the_batch_pages_current_shares(tmp_path, monkeypatch):
@@ -403,7 +413,9 @@ def _fetch_run(tmp_path, monkeypatch, fail: str, dlm: bool = False):
     monkeypatch.setattr(fetch.bridge, "fetch_wikidata", broken_wikidata)
     monkeypatch.setattr(fetch.landmarks, "fetch_wikidata", lambda *a: extras.append("landmarks"))
     monkeypatch.setattr(fetch.monuments, "fetch_wikidata", lambda *a: extras.append("monuments"))
-    monkeypatch.setattr(fetch.glo30, "fetch", lambda *a: extras.append("glo30") or Path("glo30.tif"))
+    monkeypatch.setattr(
+        fetch.glo30, "fetch", lambda *a: extras.append("glo30") or Path("glo30.tif")
+    )
     fetch.run(spec, spec.tiles)
     return tried, extras
 

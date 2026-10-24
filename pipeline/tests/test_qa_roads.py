@@ -11,7 +11,6 @@ from PIL import Image
 
 from bake import landcover, landcover_osm, road_widths, surface
 from bake.common import Tile
-from tests.synthetic import SIZE, osm_tile, way
 from bake.markings import (
     CENTRE,
     CENTRE_SOLID,
@@ -30,6 +29,7 @@ from bake.markings import (
     is_red_track,
     run,
 )
+from tests.synthetic import SIZE, osm_tile, way
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -188,7 +188,7 @@ def test_the_a_byte_packs_the_offset_place_and_paint():
     assert high[0, 2] == 0x1F  # a cleared aisle: no place, no paint
     ts = (ROOT / "lib" / "city" / "landcover.ts").read_text()
     client = re.search(r"export const SURFACE_ALONG_BITS = (\d+)", ts)
-    assert client is not None and surface.ALONG_BITS == int(client.group(1))
+    assert client is not None and int(client.group(1)) == surface.ALONG_BITS
 
 
 # --- B22 sidewalk bands -----------------------------------------------------

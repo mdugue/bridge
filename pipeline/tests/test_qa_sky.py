@@ -151,8 +151,7 @@ def test_no_cached_window_no_far_terrain(tmp_path):
 def test_the_ring_sees_the_hills_past_the_near_field():
     # observers on a 0 m plain (8 × 8 cells of 10 m), a 100 m ridge 2 km east
     obs = np.zeros((8, 8), np.float32)
-    cells, res = 2, 10.0
-    step = res * cells
+    cells, res = 2, 10.0  # coarse cells of 20 m
     margin = 160  # coarse cells: 3.2 km
     terrain = np.zeros((4 + 2 * margin, 4 + 2 * margin), np.float32)
     terrain[:, margin + 2 + 100] = 100.0  # 2 km east of the tile's middle
@@ -163,7 +162,6 @@ def test_the_ring_sees_the_hills_past_the_near_field():
     # nearer than the ring's start: the near field's, not the ring's
     near = ring_horizon(obs, terrain, margin, res, cells, near_m=2500.0, far_m=3000.0)
     assert near[east].max() == 0.0
-    assert step == 20.0
 
 
 def test_the_legend_credits_glo30_and_carries_the_rim():

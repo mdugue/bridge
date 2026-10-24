@@ -66,9 +66,6 @@ ROWS = {
 }
 
 
-WIKIDATA_CACHES = [(landmarks, "landmarks"), (bridge, "bridges"), (monuments, "monuments")]
-
-
 @pytest.mark.parametrize("module,name", WIKIDATA_CACHES)
 def test_a_wikidata_cache_killed_mid_write_leaves_no_file_by_its_name(
     tmp_path, monkeypatch, module, name

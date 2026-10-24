@@ -59,7 +59,7 @@ def test_the_class_ids_are_the_client_palette_order():
 
     ts = (Path(__file__).parents[2] / "lib" / "city" / "landcover.ts").read_text()
     client = {int(i): key for i, key in re.findall(r'\{ id: (\d+), key: "(\w+)"', ts)}
-    assert CLASSES == client
+    assert client == CLASSES
 
 
 def test_rail_without_a_dlm_leaves_committed_files_alone(tmp_path):
@@ -1262,9 +1262,8 @@ def test_every_register_queries_each_of_its_feature_types_in_its_own_crs():
     for reg in REGISTERS.values():
         for type_name in reg.type_names:
             q = reg.query(type_name, (0.0, 0.0, 2000.0, 2000.0), reg.epsg, resultType="hits")
-            assert (
-                f"EPSG%3A%3A{reg.epsg}" in q and f"TypeNames={type_name.replace(':', '%3A')}" in q
-            )
+            assert f"EPSG%3A%3A{reg.epsg}" in q and "resultType=hits" in q
+            assert f"TypeNames={type_name.replace(':', '%3A')}" in q
 
 
 def test_the_registers_are_the_ones_the_site_type_names():

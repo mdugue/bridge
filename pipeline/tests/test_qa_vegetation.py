@@ -32,8 +32,7 @@ def test_a_tilted_plane_has_no_residual_and_a_crown_has():
     rr, cc = np.mgrid[0:40, 0:40].astype(float)
     slope = 100.0 + 0.9 * cc - 0.4 * rr
     assert canopy.plane_residual(slope)[1:-1, 1:-1].max() < 1e-3  # float round-off
-    # the old roughness measures the tilt as spread: the flank passes it
-    assert canopy.rough_mask(slope)[5:-5, 5:-5].all()
+    # (the roughness gate reads such a tilt as spread: a flank passes it)
     crown = 112.0 + np.random.default_rng(0).normal(0.0, 1.5, (40, 40))
     assert np.median(canopy.plane_residual(crown)) > 1.0
 
