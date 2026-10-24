@@ -14,7 +14,6 @@ import {
   safetyOverride,
   safetyStanding,
   shadowTilesStream,
-  startTileOf,
   type StoredSafety,
 } from "./gpu-safety";
 
@@ -265,20 +264,4 @@ test("the shadow camera streams nothing on a phone, nor from level 2; the look s
     false,
     false,
   ]);
-});
-
-test("a recovered page starts on the tile under its camera, off every tile at the spawn", () => {
-  const tiles = [
-    {
-      id: "spawn",
-      bounds: [0, 0, 2000, 2000] as [number, number, number, number],
-    },
-    {
-      id: "east",
-      bounds: [2000, 0, 4000, 2000] as [number, number, number, number],
-    },
-  ];
-  expect(startTileOf(tiles, { x: 3500, y: 100 })?.id).toBe("east");
-  expect(startTileOf(tiles, { x: 5000, y: 100 })).toBeUndefined();
-  expect(startTileOf(tiles, undefined)).toBeUndefined();
 });

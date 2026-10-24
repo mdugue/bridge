@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { moreSets } from "./ask-more";
-import { hitsInSets, nearestInSets } from "./ask-solids";
+import { hitsInSets } from "./ask-solids";
 import type {
   CanopyFeature,
   FeatureCollection,
@@ -63,7 +63,7 @@ const sets = moreSets(features, ctx);
 /** What a ray straight down at EPSG (x, y) meets first. */
 const askDown = (x: number, y: number): FeatureInquiry | undefined => {
   const w = epsgToWorld(x, y, offset);
-  return nearestInSets({ x: w.x, y: 200, z: w.z }, down, sets, 1000)?.target;
+  return hitsInSets({ x: w.x, y: 200, z: w.z }, down, sets, 1000)[0]?.target;
 };
 
 test("a surface-model crown answers with its measured height", () => {
@@ -119,15 +119,14 @@ test("a crown a register's tree stands on is left to the register", () => {
   const [x, y] = f.geometry.coordinates;
   const vetoed = moreSets(features, ctx, (vx, vy) => vx !== x || vy !== y);
   const w = epsgToWorld(x, y, offset);
-  const hits = hitsInSets({ x: w.x, y: 200, z: w.z }, down, vetoed, 1000);
-  expect(
-    hits.some(
-      (h) =>
-        h.target.kind === "canopy" &&
-        h.target.position[0] === Math.round(x * 10) / 10 &&
-        h.target.position[1] === Math.round(y * 10) / 10
-    )
-  ).toBe(false);
+  const thisCrown = (h: { target: FeatureInquiry }) =>
+    h.target.kind === "canopy" &&
+    h.target.position[0] === Math.round(x * 10) / 10 &&
+    h.target.position[1] === Math.round(y * 10) / 10;
+  const o = { x: w.x, y: 200, z: w.z };
+  // without the veto the same ray finds it, so the match itself holds
+  expect(hitsInSets(o, down, sets, 1000).some(thisCrown)).toBe(true);
+  expect(hitsInSets(o, down, vetoed, 1000).some(thisCrown)).toBe(false);
 });
 
 test("lamps, furniture and tram stops are each askable at their point", () => {
@@ -143,14 +142,16 @@ test("lamps, furniture and tram stops are each askable at their point", () => {
   const stop = features.trams.find(
     (f) => f.properties?.k === "stop" && f.properties.name
   );
-  if (stop?.geometry.type === "Point") {
-    const [sx, sy] = stop.geometry.coordinates;
-    const s = askDown(sx, sy);
-    expect(s?.kind).toBe("stop");
-    expect(s && inquiryCard(s, null, DRESDEN).title).toBe(
-      stop.properties?.name ?? ""
-    );
+  expect(stop?.geometry.type).toBe("Point");
+  if (stop?.geometry.type !== "Point") {
+    throw new Error("no named tram stop on the tile");
   }
+  const [sx, sy] = stop.geometry.coordinates;
+  const s = askDown(sx, sy);
+  expect(s?.kind).toBe("stop");
+  expect(s && inquiryCard(s, null, DRESDEN).title).toBe(
+    stop.properties?.name ?? ""
+  );
 });
 
 test("a hedge is one thing along its whole line", () => {
@@ -175,8 +176,9 @@ test("a landing stage on the river answers with its kind", () => {
       f.geometry.type === "Polygon" &&
       (f.properties?.k === "pier" || f.properties?.k === "pontoon")
   );
+  expect(pier).toBeDefined();
   if (pier?.geometry.type !== "Polygon") {
-    return;
+    throw new Error("no landing stage on the tile");
   }
   const ring = pier.geometry.coordinates[0];
   const x = ring.reduce((s, p) => s + p[0], 0) / ring.length;
@@ -222,7 +224,7 @@ test("a lamp or a bench on a bridge is asked on its deck, a wall lantern at its 
   // a ray along the street at height y (m), from the west
   const along = (y: number, x: number) => {
     const w = epsgToWorld(x - 5, 5656020, offset);
-    return nearestInSets({ x: w.x, y, z: w.z }, { x: 1, y: 0, z: 0 }, own, 10)
+    return hitsInSets({ x: w.x, y, z: w.z }, { x: 1, y: 0, z: 0 }, own, 10)[0]
       ?.target.kind;
   };
   expect(along(127, 412010)).toBe("lamp"); // the post on the deck
@@ -256,7 +258,7 @@ test("a tall mast is asked at its post and at the head on its arm", () => {
   // a ray north at height y (m), x m east of the post
   const north = (y: number, dx: number) => {
     const w = epsgToWorld(412070 + dx, 5655990, offset);
-    return nearestInSets({ x: w.x, y, z: w.z }, { x: 0, y: 0, z: -1 }, own, 60)
+    return hitsInSets({ x: w.x, y, z: w.z }, { x: 0, y: 0, z: -1 }, own, 60)[0]
       ?.target;
   };
   const head = north(119, 1.8);

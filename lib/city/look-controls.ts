@@ -108,12 +108,6 @@ export const RETIRED_SNAPSHOT_KEYS: readonly string[] = [
   "inkPct",
 ];
 
-export const LOOK_BY_KEY: Readonly<Record<LookKey, LookControlDef>> =
-  Object.fromEntries(LOOK_CONTROLS.map((def) => [def.key, def])) as Record<
-    LookKey,
-    LookControlDef
-  >;
-
 /** What the scene boots with: each row's `initial` plus the two flags,
  *  every data layer off. */
 export const LOOK_DEFAULTS: Readonly<LookValues> = Object.freeze<LookValues>({

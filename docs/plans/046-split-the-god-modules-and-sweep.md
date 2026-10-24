@@ -48,6 +48,9 @@
 > `section.ts` `insideCutOut`, `markings.ts` `stripeCoverage`, `minimap.ts`
 > `buildingFootprints`, `cultivated.ts` `colonyEdgeMetres`/`colonyAxis`,
 > `stairs.ts` `projectOntoAxis`): wire each in or drop export and test.
+> (`stripeCoverage`, `buildingFootprints` and the two colony decoders were
+> dropped in the 2026-10-24 test audit; the colony test now pins the byte
+> scales the shader reads against `cultivated.py`.)
 > (Settled 2026-10-24 for `pannedBy`, `projectOntoAxis` and the
 > skyview twins — dropped —, `shadowStreamError` and `insideCutOut` —
 > moved into their tests —, `screenOfPoint` — kept for QA: see

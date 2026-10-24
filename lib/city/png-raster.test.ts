@@ -132,9 +132,9 @@ describe("decodeGreyPng", () => {
     expect(String(err)).toContain("unsupported PNG");
   });
 
-  // Seven sites' 4096² rasters: 5.4 s on a loaded CI runner under coverage
-  // (2026-10-24), past bun's 5 s default.
-  test("decodes every baked site's class raster to valid class ids", async () => {
+  // One 4096² raster per site: the scan is an indexed loop, not `.every`
+  // with a callback per byte, which under coverage took most of the 5 s.
+  test("decodes one class raster per baked site to valid class ids", async () => {
     // Dresden's is committed; another site's is there once it is baked.
     const dirs = Object.values(SITES)
       .map((site) => join(import.meta.dir, "../..", siteDataDir(site), "dlm"))
@@ -143,22 +143,26 @@ describe("decodeGreyPng", () => {
     const maxId = Math.max(...LANDCOVER_CLASSES.map((c) => c.id));
     for (const dir of dirs) {
       const file = readdirSync(dir).find((f) => /^landcover_.*\.png$/.test(f));
-      if (!file) {
-        continue;
-      }
+      expect(file).toBeDefined();
       const out = await decodeGreyPng(
-        new Uint8Array(readFileSync(join(dir, file)))
+        new Uint8Array(readFileSync(join(dir, file ?? "")))
       );
       expect(out.data.length).toBe(out.width * out.height);
-      expect(out.data.every((v) => v <= maxId)).toBe(true);
+      let max = 0;
+      for (let i = 0; i < out.data.length; i++) {
+        if (out.data[i] > max) {
+          max = out.data[i];
+        }
+      }
+      expect(max).toBeLessThanOrEqual(maxId);
     }
-  }, 30_000);
+  });
 
   test("decodes the committed paving rasters as four bytes per texel", async () => {
     const dir = join(import.meta.dir, "../..", siteDataDir(DRESDEN), "dlm");
     const file = readdirSync(dir).find((f) => /^surface_.*\.png$/.test(f));
     if (!file) {
-      return;
+      throw new Error(`no committed surface raster in ${dir}`);
     }
     const { size } = JSON.parse(
       readFileSync(join(dir, file.replace(/\.png$/, ".json")), "utf8")

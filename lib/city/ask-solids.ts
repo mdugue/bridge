@@ -357,31 +357,6 @@ export function rayAabb(o: Xyz, d: Xyz, b: Aabb): number | null {
   return near;
 }
 
-/** The nearest item in the sets the ray meets within `far`. */
-export function nearestInSets<T>(
-  o: Xyz,
-  d: Xyz,
-  sets: Iterable<AskSet<T>>,
-  far: number
-): AskHit<T> | null {
-  // the reach shrinks to the nearest hit so far
-  const found: { hit: AskHit<T> | null; reach: number } = {
-    hit: null,
-    reach: far,
-  };
-  for (const set of sets) {
-    const enter = rayAabb(o, d, set.box);
-    if (enter !== null && enter <= found.reach) {
-      const hit = set.nearest(o, d, found.reach);
-      if (hit !== null) {
-        found.hit = hit;
-        found.reach = hit.distance;
-      }
-    }
-  }
-  return found.hit;
-}
-
 /**
  * Every hit in the sets the ray meets within `far`, nearest first: each
  * set's own `along`, or its nearest where it has none.

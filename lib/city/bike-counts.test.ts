@@ -1,5 +1,19 @@
-import { expect, test } from "bun:test";
-import {
+import { afterAll, expect, test } from "bun:test";
+
+// The city-clock tests below tell Dresden's clock from the runner's only
+// off Berlin's zone, so this file runs in one far from it. The zone is
+// set before the module loads (its formatters take the default zone when
+// they are made) and the runner's given back after.
+const runnerTz = process.env.TZ;
+process.env.TZ = "Asia/Tokyo";
+afterAll(() => {
+  if (runnerTz === undefined) {
+    delete process.env.TZ;
+  } else {
+    process.env.TZ = runnerTz;
+  }
+});
+const {
   acrossStreet,
   bikeColumnHeight,
   bikeCountsUrl,
@@ -8,7 +22,7 @@ import {
   parseBikeCounts,
   parseCountTime,
   towardOf,
-} from "./bike-counts";
+} = await import("./bike-counts");
 
 const SITE = [408_000, 5_654_000, 418_000, 5_660_000] as const;
 
@@ -114,7 +128,7 @@ test("the time is Dresden's wall clock, whatever the visitor's zone; anything el
 });
 
 test("a count's time is shown on the city's clock, whatever the visitor's zone", () => {
-  // run under any TZ but Berlin's (TZ=Asia/Tokyo) a local clock fails this
+  // under the file's TZ (Asia/Tokyo) a local clock says 14:00
   expect(countClock(parseCountTime("01.10.2026 07:00:00") as Date)).toBe(
     "07:00"
   );

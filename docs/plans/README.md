@@ -624,7 +624,9 @@ noted), then what was refuted or judged not worth doing.
   dead exports beyond 046's three (`pageUsable`, `activeDataLayers`,
   `HORIZON_BANDS`, `LANGS`) and exports referenced by their test only
   (`stripeCoverage`, `buildingFootprints`, `colonyEdgeMetres`/`colonyAxis`)
-  — wire in or drop (**dropped**, 2026-10-24, the test audit: `pannedBy`,
+  — wire in or drop (**dropped**, 2026-10-24, the test audit:
+  `stripeCoverage`, `buildingFootprints`, `colonyEdgeMetres`/`colonyAxis`
+  (the colony test pins the byte scales against `cultivated.py`), `pannedBy`,
   `projectOntoAxis`, and the CPU copies of shader code — `skyview.ts`'s
   `sunAngles`/`horizonBracket`/`horizonTexel`/`farSunVisibility`/
   `nearBandWeight`/`horizonSunVisibility`/`facadeSkyView`, `windows.ts`'s

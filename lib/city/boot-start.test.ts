@@ -42,6 +42,11 @@ test("a camera wins over a picked place, each only on a tile", () => {
   expect(startOf({ initialView: view(9000) }, tiles)).toEqual({
     spawn: tiles[0],
   });
+  // a camera off every tile gives way to a picked place on one
+  const lost = { ...camera, epsg: { x: 9000, y: 1000 } };
+  expect(
+    startOf({ initialCamera: lost, initialView: view(4500) }, tiles)
+  ).toEqual({ picked: view(4500), spawn: tiles[1] });
 });
 
 test("the spawn boots on its own vantage", () => {

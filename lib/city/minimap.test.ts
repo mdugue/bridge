@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import {
   buildingFootprintPolys,
-  buildingFootprints,
   epsgToMapPx,
   mapBridges,
   mapHeightPx,
@@ -48,30 +47,6 @@ test("the map keeps the site's aspect ratio, one scale for both axes", () => {
   const back = mapPxToEpsg(62.5, 37.5, site, 250);
   expect(back.x).toBeCloseTo(410_500);
   expect(back.y).toBeCloseTo(5_658_500);
-});
-
-test("buildingFootprints extracts Building extents and skips parts", () => {
-  const doc = {
-    type: "CityJSON",
-    version: "2.0",
-    vertices: [],
-    CityObjects: {
-      b1: {
-        type: "Building",
-        geographicalExtent: [412_100, 5_656_100, 110, 412_120, 5_656_130, 125],
-      },
-      part: {
-        type: "BuildingPart",
-        parents: ["b1"],
-        geographicalExtent: [412_100, 5_656_100, 110, 412_110, 5_656_115, 125],
-      },
-      noExtent: { type: "Building" },
-    },
-  } as unknown as CityJsonDocument;
-
-  expect(buildingFootprints(doc)).toEqual([
-    { minX: 412_100, minY: 5_656_100, maxX: 412_120, maxY: 5_656_130 },
-  ]);
 });
 
 test("buildingFootprintPolys uses child GroundSurface polys, not the parent bbox", () => {

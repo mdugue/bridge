@@ -22,12 +22,6 @@ import {
 const inRange = (rgb: number[]) =>
   rgb.every((c) => c >= 0 && c <= 1) && rgb.length === 3;
 
-test("tint is deterministic for the same id + attributes", () => {
-  const a = buildingTint("DESNATPU1000HJx5", { function: "31001_9998" });
-  const b = buildingTint("DESNATPU1000HJx5", { function: "31001_9998" });
-  expect(a).toEqual(b);
-});
-
 test("different ids generally get different tints (hash spread)", () => {
   const seen = new Set(
     Array.from({ length: 200 }, (_, i) =>

@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  LOOK_BY_KEY,
   LOOK_CONTROLS,
   LOOK_DEFAULTS,
   RETIRED_SNAPSHOT_KEYS,
@@ -17,7 +16,6 @@ test("the table holds the one slider people use, Nebel", () => {
 test("every row follows the naming conventions and boots inside its range", () => {
   for (const def of LOOK_CONTROLS) {
     expect(def.snapshotKey.endsWith("Pct")).toBe(true);
-    expect(LOOK_BY_KEY[def.key]).toBe(def);
     expect(def.initial).toBeGreaterThanOrEqual(0);
     expect(def.initial).toBeLessThanOrEqual(1);
     // The default is a whole percent, so the slider shows exactly it.

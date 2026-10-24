@@ -7,14 +7,6 @@
 import type { TerrainBounds } from "./terrain-geometry";
 import type { CityJsonDocument } from "./types";
 
-/** Axis-aligned footprint rectangle in projected EPSG coordinates. */
-export interface FootprintRect {
-  maxX: number;
-  maxY: number;
-  minX: number;
-  minY: number;
-}
-
 /** One site tile's layers on the minimap: the 512² class raster and the
  *  bridge decks drawn over it (published URLs). */
 export interface MapTile {
@@ -98,34 +90,6 @@ export function mapPxToEpsg(
   const [minX, , , maxY] = bounds;
   const k = pxPerMetre(bounds, widthPx);
   return { x: minX + px / k, y: maxY - py / k };
-}
-
-/**
- * Extracts one rectangle per Building from `geographicalExtent`
- * ([minx, miny, minz, maxx, maxy, maxz]). BuildingParts are skipped — their
- * parent Building's extent already covers them.
- */
-export function buildingFootprints(
-  cityData: CityJsonDocument
-): FootprintRect[] {
-  const rects: FootprintRect[] = [];
-  for (const obj of Object.values(cityData.CityObjects)) {
-    if (obj.type !== "Building") {
-      continue;
-    }
-    const extent = (obj as { geographicalExtent?: number[] })
-      .geographicalExtent;
-    if (!extent || extent.length < 6) {
-      continue;
-    }
-    rects.push({
-      minX: extent[0],
-      minY: extent[1],
-      maxX: extent[3],
-      maxY: extent[4],
-    });
-  }
-  return rects;
 }
 
 // --- true footprint polygons (from GroundSurface semantics) ----------------
