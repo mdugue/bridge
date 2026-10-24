@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { fromArrayBuffer } from "geotiff";
 import proj4 from "proj4";
+import type { LookValues } from "../lib/city/look-controls";
 import { EYE_HEIGHT } from "../lib/city/pose";
 import { tfwToBounds } from "../lib/city/tfw";
 
@@ -366,7 +367,7 @@ function bootDesktopViewer(): void {
 test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
   bootDesktopViewer();
 
-  test("renders buildings, terrain and shadows", async () => {
+  test("the renderer draws, with shadows, and every scene layer is built on the primary tile", async () => {
     // Renderer booted -> exactly one sized WebGL canvas (the minimap adds
     // 2D canvases of its own; three.js tags its canvas with data-engine).
     const canvas = page.locator("canvas[data-engine]");
@@ -374,24 +375,18 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     const box = await canvas.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThan(0);
     expect(box?.height ?? 0).toBeGreaterThan(0);
-
     const poc = await page.evaluate(() => ({
       firstFrame: window.__poc?.firstFrame,
-      stats: window.__poc?.stats,
+      shadows: window.__poc?.stats?.shadowsEnabled,
+      stats: window.__poc?.stats?.layerStats,
     }));
-    expect(poc.stats?.buildingCount ?? 0).toBeGreaterThan(0);
     // The first frame precedes "everything loaded"; both are set once ready.
     expect(poc.firstFrame).toBe(true);
-    expect(poc.stats?.terrainVertexCount ?? 0).toBeGreaterThan(0);
-    expect(poc.stats?.shadowsEnabled).toBe(true);
-    expectNoErrors(errors);
-  });
-
-  test("every scene layer is built on the primary tile", async () => {
+    expect(poc.shadows).toBe(true);
     // Counts come from what each loader actually put in the scene graph, so a
     // renamed GeoJSON property, a 404 or a thrown builder — all of which the
     // loaders swallow into an empty group — fails here instead of passing.
-    const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
+    const { stats } = poc;
     expect(stats).toBeDefined();
     if (!stats) {
       return;
@@ -866,38 +861,12 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
 test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
   bootDesktopViewer();
 
-  test("snapshot camera state round-trips", async () => {
-    // Applying a captured camera state must reproduce it (the basis for
-    // copy/paste QA of an exact view).
-    const roundTrip = await page.evaluate(() => {
-      const api = window.__poc?.handle;
-      if (!api) {
-        throw new Error("scene handle not published");
-      }
-      api.applyCameraState({
-        mode: "fly",
-        pos: { x: 25, y: 140, z: -60 },
-        epsg: { x: 0, y: 0 },
-        headingDeg: 42,
-        pitchDeg: -20,
-        fov: 55,
-      });
-      return api.getCameraState();
-    });
-    expect(roundTrip.mode).toBe("fly");
-    expect(roundTrip.pos.x).toBeCloseTo(25, 1);
-    expect(roundTrip.pos.y).toBeCloseTo(140, 1);
-    expect(roundTrip.pos.z).toBeCloseTo(-60, 1);
-    expect(roundTrip.headingDeg).toBeCloseTo(42, 0);
-    expect(roundTrip.pitchDeg).toBeCloseTo(-20, 0);
-    expect(roundTrip.fov).toBeCloseTo(55, 1);
-    expectNoErrors(errors);
-  });
-
   test("a snapshot applied mid-flight wins over the glide", async () => {
     // A scenic flight owns the camera for up to 3.8 s; a pose set from outside
     // (snapshot apply, minimap click, QA flyTo) must cancel it, or the next
-    // frame silently glides the camera away again.
+    // frame silently glides the camera away again. The pose's own contracts
+    // (the round trip, the cancel) are camera-pose.test.ts's; this one holds
+    // the handle's wiring of them over real frames.
     const target = {
       mode: "fly" as const,
       pos: { x: -40, y: 160, z: 30 },
@@ -1166,47 +1135,58 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
    * batched together rather than spent one per frame.
    */
   test("post and shader controls survive real frames", async () => {
-    const CONTROL_STEPS = 8;
-    for (let i = 0; i < CONTROL_STEPS; i++) {
-      await page.evaluate((index) => {
-        // Driven through the look store the sliders write to — one set() per
-        // step is one batch of uniform writes.
+    // Driven through the look store the sliders write to — one set() per
+    // step is one batch of uniform writes; each step's style is read back,
+    // so a dropped write cannot pass as a frame that drew without errors.
+    const steps: Array<{ set: Partial<LookValues>; style: string }> = [
+      // What is left of the look: the fog (a uniform, it compiles nothing)
+      // at full strength and back down, and the crowns' switch (off swaps
+      // the near multi-tuft crowns for the cheap ones, on brings them
+      // back). The look's other strengths are constants, compiled with the
+      // boot.
+      { set: { fogAmount: 1, multiTuft: false }, style: "pastel" },
+      { set: { fogAmount: 0.35, multiTuft: true }, style: "pastel" },
+      // The picture styles: the first non-default style compiles the
+      // stylize pass (one program for all of them), the next only moves its
+      // uniforms and the grain's film switch; pastel switches the pass off
+      // again. DoF is on here, so the style's gate runs too.
+      { set: { style: "comic" }, style: "comic" },
+      { set: { style: "sincity" }, style: "sincity" },
+      // Papier swaps every surface for one paper material for the frame —
+      // its own programs (instanced, vertex-coloured, plain).
+      { set: { style: "paper" }, style: "paper" },
+      // Strich wears Papier's card on its own ground; the Schwarzplan draws
+      // the buildings with its own black and hides the rest.
+      { set: { style: "line" }, style: "line" },
+      { set: { style: "figure" }, style: "figure" },
+      { set: { style: "pastel" }, style: "pastel" },
+    ];
+    for (const step of steps) {
+      const applied = await page.evaluate((values) => {
         const look = window.__poc?.look;
-        const steps: Array<() => void> = [
-          // What is left of the look: the fog (a uniform, it compiles
-          // nothing) at full strength and back down, and the crowns' switch
-          // (off swaps the near multi-tuft crowns for the cheap ones, on
-          // brings them back). The look's other strengths are constants,
-          // compiled with the boot.
-          () => look?.set({ fogAmount: 1, multiTuft: false }),
-          () => look?.set({ fogAmount: 0.35, multiTuft: true }),
-          // The picture styles: the first non-default style compiles the
-          // stylize pass (one program for all of them), the next only moves
-          // its uniforms and the grain's film switch; pastel switches the
-          // pass off again. DoF is on here, so the style's gate runs too.
-          () => look?.set({ style: "comic" }),
-          () => look?.set({ style: "sincity" }),
-          // Papier swaps every surface for one paper material for the frame
-          // — its own programs (instanced, vertex-coloured, plain).
-          () => look?.set({ style: "paper" }),
-          // Strich wears Papier's card on its own ground; the Schwarzplan
-          // draws the buildings with its own black and hides the rest.
-          () => look?.set({ style: "line" }),
-          () => look?.set({ style: "figure" }),
-          () => look?.set({ style: "pastel" }),
-        ];
-        steps[index]?.();
-      }, i);
+        if (!look) {
+          throw new Error("look store not published");
+        }
+        look.set(values);
+        const now = look.get();
+        return { style: now.style, fog: now.fogAmount, tufts: now.multiTuft };
+      }, step.set);
+      expect(applied.style).toBe(step.style);
+      if ("fogAmount" in step.set) {
+        expect(applied.fog).toBe(step.set.fogAmount);
+        expect(applied.tufts).toBe(step.set.multiTuft);
+      }
       await waitForFrames(page, 2);
       expectNoErrors(errors);
     }
   });
 
   test("quality regresses while moving and recovers when still", async () => {
-    // Motion-keyed regression (lib/city/regression.ts): AO + DoF are skipped
-    // while the camera moves. Asserted through __poc.regressed rather than
-    // pixels — the passes' visual delta is exactly what SwiftShader renders
-    // least like a GPU.
+    // Motion-keyed regression (lib/city/regression.ts): DoF is dropped while
+    // the camera moves (the contact shadows never are — they would blink on
+    // every step). Asserted through __poc.regressed rather than pixels — the
+    // pass's visual delta is exactly what SwiftShader renders least like a
+    // GPU.
     const before = await page.evaluate(() => ({
       frames: window.__poc?.frames ?? 0,
       shadows: window.__poc?.shadowRenders ?? 0,
@@ -1303,6 +1283,8 @@ test.describe("mobile", { tag: "@phone" }, () => {
       await expect(flyButton).toHaveAttribute("aria-pressed", "true");
       const toolbar = page.getByRole("toolbar", { name: "Werkzeuge" });
       const flyingBox = await toolbar.boundingBox();
+      // a hidden toolbar has no box, and two missing boxes compare equal
+      expect(flyingBox).not.toBeNull();
       await flyButton.tap();
       await expect(page.getByTestId("altitude-stick")).toHaveCount(0);
       // The stick sits above the toolbar, so the toolbar doesn't jump.

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  joinPath,
   langOf,
   REPO_URL,
   resolveHref,
@@ -100,8 +99,9 @@ describe("resolveHref", () => {
     }
   });
 
-  test("joinPath normalises like POSIX path.join", () => {
-    expect(joinPath("docs/guide/de", "../../x.md")).toBe("docs/x.md");
-    expect(joinPath("docs", "./a/./b/../c.md")).toBe("docs/a/c.md");
+  test("a path is normalised like POSIX path.join before it is looked up", () => {
+    expect(
+      resolveHref("docs/README.md", "./adr/./x/../README.md", pages)
+    ).toEqual({ kind: "page", href: "/wissen/dev/adr" });
   });
 });

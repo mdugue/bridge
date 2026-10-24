@@ -300,8 +300,9 @@ config change.
   policy, the look table + store, the Snapshot codec, `slice-store.ts`
   (a store of named slices: per-slice equality, one notify per burst on
   a schedule — the HUD's scene status), `gpu-safety.ts`
-  (the safety ladder: levels, raise and decay, the recovery's caps, a
-  recovered page's start tile — ADR 0046), `gpu-allocation.ts` (which
+  (the safety ladder: levels, raise and decay, the recovery's caps —
+  ADR 0046; a recovered page's start tile is `boot-start.ts`'s),
+  `gpu-allocation.ts` (which
   errors are a GPU allocation that failed), `page-lifecycle.ts` (the
   page's GPU-loss, memory-emergency and resume decisions as effects —
   ADR 0046), `frame-pace.ts` (the render loop's pace while the phone's
@@ -907,7 +908,10 @@ opens it under a drawn deck, `lib/city/passages.ts`) — and publishes it
 as `lv` in the rail and tram files. A new line layer takes its levels the
 same way (`lineLevelsAt` in `rail-layer.ts`); `scripts/line-levels.test.ts`
 holds the reference site's jumps to a budget, `bun scripts/line-levels-cli.ts
-<site>` prints them.
+<site>` prints them. Both budget checks read their DGMs through
+`scripts/dgm-cache.ts`, which keeps each decode under `.cache/dgm/` by the
+TIFF's bytes — on under `bun test` and with `DGM_CACHE=1`, off in the build
+(CI's unit job restores it: ten seconds of LZW decoding per run).
 
 **Modell reads the camera through a lens** (ADR 0044). A post pass never
 holds the real camera: it reads `view-lens.ts`'s stand-in (projection,
@@ -978,10 +982,13 @@ whole site with the shell and `/wissen`; the desktop HUD group
 (`@desktop-render`). Each desktop group boots its own page. The required
 status check "E2E (Playwright)" is the small job that reports them all. A new
 spec lands in the whole-site shard unless it carries one of those tags —
-keep the shards within about 1.5 minutes of each other (the rendering group
-shares one booted page, cannot be split by tag without a second boot, and
-so sets the floor for the longest shard; measured on CI, see the
-workflow's comment with its run and date).
+keep the shards within about 1.5 minutes of each other. They are not now:
+the whole-site shard is the longest by 2–5 minutes (426–485 s against
+184–338 s for the other two on the last three runs on main, October 2026),
+because the whole-site spec alone takes 169–415 s; a cheaper whole-site
+boot, not a re-tagging, is what would close that (the rendering group
+shares one booted page and cannot be split by tag without a second boot;
+the workflow's comment has the runs).
 
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
 [`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It streams

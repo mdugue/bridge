@@ -68,15 +68,17 @@ for (const file of snapshotFiles()) {
     // control needs no edit here.
     const lookPatch = decodeLook(snap.look);
     const instant = snapshotInstant(snap).toISOString();
-    await page.evaluate(
+    const before = await page.evaluate(
       ([camera, date, patch]) => {
         const poc = window.__poc;
         if (!(poc?.handle && poc.look)) {
           throw new Error("scene handle not published");
         }
+        const counts = { frames: poc.frames, shadows: poc.shadowRenders };
         poc.handle.applyCameraState(camera);
         poc.handle.setSun(new Date(date));
         poc.look.set(patch);
+        return counts;
       },
       [snap.camera, instant, lookPatch] as const
     );
@@ -105,8 +107,22 @@ for (const file of snapshotFiles()) {
       }
     });
 
-    // Let the throttled shadow map re-render and DoF/grading settle.
-    await page.waitForTimeout(1200);
+    // Let the shadow map re-render for the new pose and sun, and DoF and
+    // grading settle: counted in frames, not waited out on a clock (a slow
+    // GPU took longer than any fixed sleep). By night no shadow map is
+    // drawn, so after `shadowless` frames the plate is taken without one.
+    await page.waitForFunction(
+      ({ frames, shadows, settle, shadowless }) => {
+        const poc = window.__poc;
+        const drawn = (poc?.frames ?? 0) - frames;
+        return (
+          drawn >= settle &&
+          ((poc?.shadowRenders ?? 0) > shadows || drawn >= shadowless)
+        );
+      },
+      { ...before, settle: 3, shadowless: 30 },
+      { timeout: 120_000 }
+    );
 
     const canvas = page.locator("canvas[data-engine]");
     await expect(canvas).toBeVisible();

@@ -42,7 +42,7 @@ import type { Site } from "../lib/city/site";
 import { sampleHeightfield } from "../lib/city/terrain-geometry";
 import { dgmSourceFiles, sideFileSource, tileIds } from "../lib/city/tile";
 import { ownsPoint } from "../lib/city/tileset";
-import { readDgm } from "./bake-tiles";
+import { readDgmFile } from "./dgm-cache";
 
 const at = (path: string) => join(process.cwd(), path);
 
@@ -162,12 +162,7 @@ async function siteDgm(
   const grounds = await Promise.all(
     tileIds(site).map(async (tile) => {
       const src = dgmSourceFiles(site, tile);
-      const tif = readFileSync(at(src.tif));
-      const dgm = await readDgm(
-        tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength),
-        existsSync(at(src.tfw)) ? readFileSync(at(src.tfw), "utf8") : null,
-        "native"
-      );
+      const dgm = await readDgmFile(at(src.tif), at(src.tfw), "native");
       return { bounds: dgm.bounds, field: dgm };
     })
   );
