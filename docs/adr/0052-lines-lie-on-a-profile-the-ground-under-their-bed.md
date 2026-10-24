@@ -86,14 +86,27 @@ lies 0.1 m under it and the ballast's 0.45 m fascia hides the step.
 
 - Measured on the seven sites (drawn meshes against the fine TIN and the
   ballast, before → after): Dresden's sleepers under the ballast 14.3 % →
-  0.06 %, its rail heads 1.84 % → 0.01 %, its street tram rails in the
-  road (> 2 cm) 2.6 % → 0.2 %; Munich's sleepers under the ballast
-  16.5 % → 0.05 %; Leipzig, Meißen, Unna and Grimma alike. The numbers
-  per site are in the PR that made the change; `scripts/line-levels.test.ts`
-  holds the reference site's steps to its budget.
+  0.05 %, its rail heads under ballast or ground 1.84 % → 0.01 %, its
+  street tram rails in the road (> 2 cm) 2.6 % → 0.02 %; Munich's
+  sleepers under the ballast 16.5 % → 0.05 %; Hamburg's rails more than
+  0.3 m under the ground 0.55 % → 0.01 %, under the ballast 2.8 % →
+  0.17 %; Leipzig, Meißen, Unna and Grimma alike. Steps beyond the grade
+  by more than 0.3 m: none on any site (Dresden 100, Hamburg 69 with the
+  levels alone); `scripts/line-levels.test.ts` holds the reference site
+  to none.
+- What remains: a branch that leaves a switch on a ramp steeper than its
+  grade starts climbing before the switch (Hamburg's Hauptbahnhof south,
+  a metre over the main line for 30 m).
 - The line levels take twice as long (Dresden 12 → 23 s; cached per
   site). The fine ground re-bakes when a line's file or the profile
   changes (its cache key holds the beds reaching into the tile).
+- **Cuts.** A cut the ground lies at most 0.5 m over (`BURIED_M`) is a
+  trench: its bed only lowers the ground (`Bed.shallow`). Deeper, the line
+  runs under a lid and is not drawn — under a deck too, unless the bake
+  opens the cut as a passage (at least 30 % of it under a drawn deck,
+  `PASSAGE_UNDER_DECK`, the same rule for the bake and the layer): a
+  tunnel's ramp under a station's bridges (Hamburg's Hauptbahnhof north)
+  was drawn inside the ground.
 - A baked line no longer rides the approach ramps (`decksAt` "ramps"): its
   profile climbs to the deck itself, and the bed fills the approach.
 - What a profile cannot fit stays visible as earthwork: a line whose
