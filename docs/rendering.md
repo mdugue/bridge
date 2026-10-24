@@ -62,6 +62,21 @@ material shares one node build. Everything a tile adds —
 material, object texture, BVH, splat, water, dressing — is disposed with it
 (`disposeTile` in `tile-stream.ts`).
 
+**The ground draws after every other opaque thing.** three sorts the
+opaque by `renderOrder`, then front to back by each object's origin; a
+terrain tile's origin often sorted it before the buildings standing on it.
+The terrain takes `renderOrder` 1 (`TERRAIN_RENDER_ORDER`, terrain-layer.ts)
+so its fragment pass — the scene's dearest per pixel: the splat, kerbs,
+lawn edges, markings, sports lines — runs only where the buildings, crowns
+and walls left the ground uncovered; the early depth test rejects the rest
+before the shader runs (not under Modell's Ausschnitt, whose clipping is
+per fragment; an Apple GPU removes hidden fragments itself, the others do
+not). The price is the other way round: what a hill hides is now shaded
+before the hill covers it — in this valley city rarer than ground under
+houses and trees, and fogged far off. The transparent — the water and mist
+sheets among them — are a list of their own, drawn after every opaque
+thing whatever their `renderOrder`.
+
 `x = epsgX − cx`, `z = −(epsgY − cy)`, `y = elevation`, with `(cx, cy)` the
 recenter offset captured from the spawn tile's CityJSON at bake time, carried
 in the tileset's root `extras` (`lib/city/tileset.ts`) and shared by every

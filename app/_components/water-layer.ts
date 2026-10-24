@@ -459,7 +459,7 @@ export function createWaterLayer(
 
   const mesh = new Mesh(geometry, material);
   mesh.name = "water";
-  mesh.renderOrder = 2; // after the opaque terrain fill
+  mesh.renderOrder = 2; // among the transparent, which draw after the opaque
   mesh.castShadow = false;
   mesh.receiveShadow = true;
 

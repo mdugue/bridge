@@ -1708,6 +1708,11 @@ function splatRasters(splat: SplatLayer): Texture[] {
   return [...textures].filter((t): t is Texture => t !== undefined);
 }
 
+/** The terrain's draw order among the opaque (dressTerrain): after the
+ *  rest, at 0. (The transparent, the water sheets among them, are a list
+ *  of their own, drawn after every opaque thing whatever their order.) */
+const TERRAIN_RENDER_ORDER = 1;
+
 /** The splat's baked light as the fine level's kerbs, fences, stairs and
  *  walls bind it (the same textures and rows, by reference). */
 function groundLightOf(splat: SplatLayer): GroundLight | undefined {
@@ -1924,6 +1929,17 @@ export async function dressTerrain(
   // also lets the sun rig run a much smaller shadow bias (no contact light-leak).
   mesh.castShadow = false;
   mesh.receiveShadow = true;
+  // After every other opaque thing (they sort at 0, front to back): the
+  // ground's fragment pass — the splat, the kerbs' and lawns' edges, the
+  // markings, the sports lines — is the scene's dearest, and drawn last it
+  // shades only what the buildings, trees and walls left uncovered (the
+  // early depth test rejects the rest before the shader runs — not under
+  // Modell's Ausschnitt, whose clipping is per fragment). Its tile sorted
+  // by its origin before, often in front of the buildings it lies under.
+  // (An Apple GPU removes hidden fragments itself; every other one does
+  // not.) The price: what a hill hides is shaded before the hill covers
+  // it — rarer than ground under houses and trees, and fogged far off.
+  mesh.renderOrder = TERRAIN_RENDER_ORDER;
 
   // Water re-uses the terrain geometry, masked to the water class: siblings
   // of the mesh with its (dequantising) transform, so they come and go with
