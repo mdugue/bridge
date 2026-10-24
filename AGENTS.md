@@ -304,7 +304,9 @@ config change.
   recovered page's start tile — ADR 0046), `gpu-allocation.ts` (which
   errors are a GPU allocation that failed), `page-lifecycle.ts` (the
   page's GPU-loss, memory-emergency and resume decisions as effects —
-  ADR 0046), `fetch-retry.ts` (when a
+  ADR 0046), `frame-pace.ts` (the render loop's pace while the phone's
+  sidebar sheet covers the scene: 12 fps, none while it scrolls — set by
+  `app/_components/sidebar-pace.tsx`), `fetch-retry.ts` (when a
   failed fetch is tried again and for how long — ADR 0048),
   `task-gate.ts` (a concurrency gate: the rasters' turns),
   `ground.ts` (the

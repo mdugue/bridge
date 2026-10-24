@@ -1,5 +1,6 @@
 "use client";
 
+import { createFramePace } from "@/lib/city/frame-pace";
 import { arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site } from "@/lib/city/site";
@@ -82,6 +83,7 @@ import {
   TramStatusLine,
 } from "./data-layers-panel";
 import { SceneSidebar } from "./scene-sidebar";
+import { SidebarPace } from "./sidebar-pace";
 import {
   afterTask,
   createSceneStatus,
@@ -526,6 +528,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   const site = useSite();
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
+  // the render loop's pace behind the phone's sidebar (sidebar-pace.tsx):
+  // one for the page, every boot's loop asks it
+  const [pace] = useState(createFramePace);
   const applySceneTime = useCallback(
     (date: Date, preview?: boolean) => handleRef.current?.setSun(date, preview),
     []
@@ -776,6 +781,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           initialDate: timeNow(),
           signal: aborter.signal,
           trail,
+          pace,
           // Everything the scene only reports goes to the store, for the
           // widgets that show it (scene-status.ts) — while this boot is
           // the page's.
@@ -922,6 +928,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     sayHud,
     sceneStatus,
     pageTrail,
+    pace,
   ]);
 
   const copySnapshot = () => {
@@ -1049,6 +1056,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           )}
 
           <SettingsToggle />
+          <SidebarPace pace={pace} />
 
           {exportVeil && (
             <div

@@ -132,6 +132,8 @@ describe("decodeGreyPng", () => {
     expect(String(err)).toContain("unsupported PNG");
   });
 
+  // Seven sites' 4096² rasters: 5.4 s on a loaded CI runner under coverage
+  // (2026-10-24), past bun's 5 s default.
   test("decodes every baked site's class raster to valid class ids", async () => {
     // Dresden's is committed; another site's is there once it is baked.
     const dirs = Object.values(SITES)
@@ -150,7 +152,7 @@ describe("decodeGreyPng", () => {
       expect(out.data.length).toBe(out.width * out.height);
       expect(out.data.every((v) => v <= maxId)).toBe(true);
     }
-  });
+  }, 30_000);
 
   test("decodes the committed paving rasters as four bytes per texel", async () => {
     const dir = join(import.meta.dir, "../..", siteDataDir(DRESDEN), "dlm");
