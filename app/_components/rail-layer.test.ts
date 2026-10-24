@@ -353,13 +353,17 @@ test("a masonry bridge's walls hang from the deck's own edges", () => {
   const stone = stoneOf(deck({ structure: "arch" }));
   const pos = stone.geometry.getAttribute("position");
   let below = 0;
+  const outside: number[] = [];
   for (let i = 0; i < pos.count; i++) {
     // nothing stands outside the deck's width...
-    expect(Math.abs(pos.getZ(i))).toBeLessThanOrEqual(6.01);
+    if (Math.abs(pos.getZ(i)) > 6.01) {
+      outside.push(pos.getZ(i));
+    }
     if (pos.getY(i) < 110) {
       below++;
     }
   }
+  expect(outside).toEqual([]);
   // ...and the arches and piers reach down towards the water
   expect(below).toBeGreaterThan(0);
 });
@@ -385,6 +389,7 @@ test("a curved deck's sides all face out, the inner edge too", () => {
   };
   const built = buildRail({ ...empty, bridges: [bridge] }, ctx);
   let sides = 0;
+  const inward: { x: number; z: number }[] = [];
   // (the railing's posts and rail face every way: they are not its sides)
   for (const child of built.children.filter((c) => c.name !== "bridge-steel")) {
     const geo = (child as Mesh).geometry;
@@ -404,10 +409,13 @@ test("a curved deck's sides all face out, the inner edge too", () => {
       }
       sides++;
       // outer edge faces away from the centre, inner edge towards it
-      expect(Math.sign(radial)).toBe(r > 100 ? 1 : -1);
+      if (Math.sign(radial) !== (r > 100 ? 1 : -1)) {
+        inward.push({ x, z });
+      }
     }
   }
   expect(sides).toBeGreaterThan(0);
+  expect(inward).toEqual([]);
 });
 
 /** Every vertex of every mesh a bridge builds, with its normal. */
@@ -444,33 +452,29 @@ test("a deck is closed from below, and so is an arch", () => {
 
 test("a railway viaduct stands on paired columns at its edges, a river on piers", () => {
   // 200 m of rail deck over land, no fairway: columns under both edges
-  const columns = (b: BridgeFeature) =>
-    vertices(b).filter((v) => v.y < 110 && Math.abs(v.ny) < 0.1);
-  const viaduct = columns(deck({ kind: "rail" }));
+  type Vertex = ReturnType<typeof vertices>[number];
+  const columns = (vs: Vertex[]) =>
+    vs.filter((v) => v.y < 110 && Math.abs(v.ny) < 0.1);
+  const offAxis = (vs: Vertex[]) => vs.filter((v) => Math.abs(v.z) > 0.66);
+  const rail = vertices(deck({ kind: "rail" }));
+  const viaduct = columns(rail);
   expect(viaduct.length).toBeGreaterThan(0);
-  for (const v of viaduct) {
-    expect(Math.abs(Math.abs(v.z) - 5.4)).toBeLessThanOrEqual(0.31);
-  }
-  // a road deck keeps its piers on the axis
-  for (const v of columns(deck({}))) {
-    expect(Math.abs(v.z)).toBeLessThanOrEqual(0.66);
-  }
-  // over water the viaduct's piers stand on its axis too
-  const river = columns(deck({ kind: "rail", water: [[60, 140]] })).filter(
-    (v) => v.x > 62 && v.x < 138
+  expect(viaduct.filter((v) => Math.abs(Math.abs(v.z) - 5.4) > 0.31)).toEqual(
+    []
   );
+  // a road deck keeps its piers on the axis
+  expect(offAxis(columns(vertices(deck({}))))).toEqual([]);
+  // over water the viaduct's piers stand on its axis too
+  const river = columns(
+    vertices(deck({ kind: "rail", water: [[60, 140]] }))
+  ).filter((v) => v.x > 62 && v.x < 138);
   expect(river.length).toBeGreaterThan(0);
-  for (const v of river) {
-    expect(Math.abs(v.z)).toBeLessThanOrEqual(0.66);
-  }
+  expect(offAxis(river)).toEqual([]);
   // a viaduct's girder is shallow; a baked fairway depth only caps one
-  const soffit = (b: BridgeFeature) =>
-    Math.max(
-      ...vertices(b)
-        .filter((v) => v.ny < -0.99 && v.y < 120)
-        .map((v) => v.y)
-    );
-  expect(soffit(deck({ kind: "rail" }))).toBeCloseTo(119.2, 4);
+  const soffitOf = (vs: Vertex[]) =>
+    Math.max(...vs.filter((v) => v.ny < -0.99 && v.y < 120).map((v) => v.y));
+  const soffit = (b: BridgeFeature) => soffitOf(vertices(b));
+  expect(soffitOf(rail)).toBeCloseTo(119.2, 4);
   expect(soffit(deck({ fairway: 0.5, depth: 5 }))).toBeGreaterThan(118);
   expect(soffit(deck({ depth: 0.9 }))).toBeCloseTo(119.1, 4);
 });
@@ -500,12 +504,15 @@ test("a frame on the deck's edge stands in for the parapet", () => {
   );
   // a beam bridge's railing tops out 1.1 m over the deck, a masonry
   // bridge's ashlar wall at 0.85 m
-  const parapet = (b: BridgeFeature, top = 121.1) =>
-    vertices(b).filter((v) => Math.abs(v.y - top) < 0.01).length;
-  expect(parapet(deck({}))).toBeGreaterThan(0);
-  expect(parapet(deck({}), 120.85)).toBe(0);
-  expect(parapet(deck({ structure: "arch" }), 120.85)).toBeGreaterThan(0);
-  expect(parapet(deck({ structure: "arch" }))).toBe(0);
+  type Vertex = ReturnType<typeof vertices>[number];
+  const parapet = (vs: Vertex[], top = 121.1) =>
+    vs.filter((v) => Math.abs(v.y - top) < 0.01).length;
+  const beam = vertices(deck({}));
+  const arch = vertices(deck({ structure: "arch" }));
+  expect(parapet(beam)).toBeGreaterThan(0);
+  expect(parapet(beam, 120.85)).toBe(0);
+  expect(parapet(arch, 120.85)).toBeGreaterThan(0);
+  expect(parapet(arch)).toBe(0);
   const truss = deck({
     structure: "truss",
     ribs: [
@@ -513,11 +520,10 @@ test("a frame on the deck's edge stands in for the parapet", () => {
       { offset: -6, rise },
     ],
   });
-  expect(parapet(truss)).toBe(0);
+  const frames = vertices(truss);
+  expect(parapet(frames)).toBe(0);
   // and the frames stand on the deck, not beside it
-  for (const v of vertices(truss)) {
-    expect(Math.abs(v.z)).toBeLessThanOrEqual(6.01);
-  }
+  expect(frames.filter((v) => Math.abs(v.z) > 6.01)).toEqual([]);
 });
 
 test("no face of a bridge is left without a normal (it would shade black)", () => {
@@ -529,14 +535,19 @@ test("no face of a bridge is left without a normal (it would shade black)", () =
       [201, 0],
     ],
   });
+  const unlit: string[] = [];
+  let seen = 0;
   for (const child of buildRail({ ...empty, bridges: [b] }, ctx).children) {
     const nrm = (child as Mesh).geometry.getAttribute("normal");
+    seen += nrm.count;
     for (let i = 0; i < nrm.count; i++) {
-      expect(Math.hypot(nrm.getX(i), nrm.getY(i), nrm.getZ(i))).toBeGreaterThan(
-        0.5
-      );
+      if (Math.hypot(nrm.getX(i), nrm.getY(i), nrm.getZ(i)) <= 0.5) {
+        unlit.push(`${child.name}#${i}`);
+      }
     }
   }
+  expect(seen).toBeGreaterThan(0);
+  expect(unlit).toEqual([]);
 });
 
 test("a deck end above the ground gets an approach down to it", () => {
@@ -605,23 +616,35 @@ test("a deck's top is laid out by its frame; its stone is dressed", () => {
   const frame = top.geometry.getAttribute("aDeck");
   expect(frame.itemSize).toBe(4);
   expect(frame.count).toBe(pos.count);
+  const near = (a: number, b: number) => Math.abs(a - b) < 5e-7;
+  const misplaced: number[] = [];
   for (let i = 0; i < frame.count; i++) {
     // the station runs along the axis (x here), the offset across it
     // (left of the axis is north: −z), the edges are the outline's
-    expect(frame.getX(i)).toBeCloseTo(pos.getX(i), 6);
-    expect(frame.getY(i)).toBeCloseTo(-pos.getZ(i), 6);
-    expect(frame.getZ(i)).toBeCloseTo(6, 6);
-    expect(frame.getW(i)).toBeCloseTo(-6, 6);
+    if (
+      !near(frame.getX(i), pos.getX(i)) ||
+      !near(frame.getY(i), -pos.getZ(i)) ||
+      !near(frame.getZ(i), 6) ||
+      !near(frame.getW(i), -6)
+    ) {
+      misplaced.push(i);
+    }
   }
+  expect(misplaced).toEqual([]);
   // an older file without an axis keeps its colour: no frame to lay out
   const plain = buildRail(
     { ...empty, bridges: [deck({ axis: undefined, line: undefined })] },
     ctx
   ).children[0] as Mesh;
   const zeros = plain.geometry.getAttribute("aDeck");
+  expect(zeros.count).toBeGreaterThan(0);
+  const framed: number[] = [];
   for (let i = 0; i < zeros.count; i++) {
-    expect(zeros.getZ(i) - zeros.getW(i)).toBe(0);
+    if (zeros.getZ(i) - zeros.getW(i) !== 0) {
+      framed.push(i);
+    }
   }
+  expect(framed).toEqual([]);
 });
 
 test("a deck's slab and parapets follow its measured line, not chords between its corners", () => {
@@ -639,19 +662,24 @@ test("a deck's slab and parapets follow its measured line, not chords between it
   const nrm = top.geometry.getAttribute("normal");
   let tops = 0;
   let soffits = 0;
+  const offLine: { x: number; y: number }[] = [];
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     if (x < 0.01 || x > 199.99 || Math.abs(nrm.getY(i)) < 0.99) {
       continue; // an approach beyond the ends, or the fascia
     }
     const up = nrm.getY(i) > 0;
-    expect(pos.getY(i)).toBeCloseTo(lineAt(x) - (up ? 0 : 1.25), 1);
+    // (toBeCloseTo's one digit: within 0.05 m)
+    if (Math.abs(pos.getY(i) - (lineAt(x) - (up ? 0 : 1.25))) >= 0.05) {
+      offLine.push({ x, y: pos.getY(i) });
+    }
     if (up) {
       tops++;
     } else {
       soffits++;
     }
   }
+  expect(offLine).toEqual([]);
   expect(tops).toBeGreaterThan(0);
   expect(soffits).toBeGreaterThan(0);
   // the railing's top along the side, mid-span too
@@ -714,6 +742,7 @@ test("a curved deck's frame holds inside every triangle, not only at its corners
   const frame = top.geometry.getAttribute("aDeck");
   const frameAxis = axisFrame(axis);
   let worst = 0;
+  let longest = 0;
   for (let t = 0; t < pos.count; t += 3) {
     if (nrm.getY(t) < 0.9) {
       continue;
@@ -722,8 +751,7 @@ test("a curved deck's frame holds inside every triangle, not only at its corners
     for (let k = 0; k < 3; k++) {
       const [ax, az] = at(k);
       const [bx, bz] = at((k + 1) % 3);
-      // no edge of the top longer than the frame's step
-      expect(Math.hypot(bx - ax, bz - az)).toBeLessThanOrEqual(6.001);
+      longest = Math.max(longest, Math.hypot(bx - ax, bz - az));
     }
     const x = (pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2)) / 3;
     const z = (pos.getZ(t) + pos.getZ(t + 1) + pos.getZ(t + 2)) / 3;
@@ -733,6 +761,9 @@ test("a curved deck's frame holds inside every triangle, not only at its corners
       Math.abs(o - (frameAxis?.project(x, -z).offset ?? 0))
     );
   }
+  // no edge of the top longer than the frame's step
+  expect(longest).toBeGreaterThan(0);
+  expect(longest).toBeLessThanOrEqual(6.001);
   expect(worst).toBeLessThan(0.3);
 });
 
@@ -820,14 +851,18 @@ test("a mapped catenary mast stands on the side of the track it is mapped on", (
   const masts = built.children.find((c) => c.name === "rail-catenary-masts");
   const pos = (masts as Mesh).geometry.getAttribute("position");
   let near = 0;
+  const south: number[] = [];
   for (let i = 0; i < pos.count; i++) {
     if (Math.abs(pos.getX(i) - 200) < 1 && pos.getY(i) < 102) {
       // north is −z in the scene
-      expect(pos.getZ(i)).toBeLessThan(-2);
+      if (pos.getZ(i) >= -2) {
+        south.push(pos.getZ(i));
+      }
       near++;
     }
   }
   expect(near).toBeGreaterThan(0);
+  expect(south).toEqual([]);
 });
 
 test("no catenary support stands under a bridge over the track", () => {
@@ -863,10 +898,12 @@ test("no catenary support stands under a bridge over the track", () => {
   );
   const masts = built.children.find((c) => c.name === "rail-catenary-masts");
   const pos = (masts as Mesh).geometry.getAttribute("position");
-  for (let i = 0; i < pos.count; i++) {
-    // the grid's support at x 200 gives way (and its neighbours stay)
-    expect(Math.abs(pos.getX(i) - 200)).toBeGreaterThan(10);
-  }
+  // the grid's support at x 200 gives way, and its neighbours 50 m off
+  // on either side of the bridge stay
+  const xs = Array.from({ length: pos.count }, (_, i) => pos.getX(i));
+  expect(xs.filter((x) => Math.abs(x - 200) <= 10)).toEqual([]);
+  expect(xs.some((x) => Math.abs(x - 150) < 2)).toBe(true);
+  expect(xs.some((x) => Math.abs(x - 250) < 2)).toBe(true);
   const wires = built.children.find((c) => c.name === "rail-catenary");
   const box = new Box3().setFromObject(wires as Mesh);
   expect(box.max.y).toBeGreaterThan(106);

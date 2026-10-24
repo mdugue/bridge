@@ -1,6 +1,8 @@
 """Railway land is not all track: the DLM's parcel reaches the fences and
 holds depots, yards' tarmac and the embankments' grass. The ballast lies on
-the tracks' beds alone, and the parcel's green beyond them is lawn."""
+the tracks' beds alone, and the parcel's green beyond them is lawn. The
+DLM's lines are drawn only where OSM maps no track, and a platform stands as
+high as its trains ask (rail.py)."""
 
 from __future__ import annotations
 
@@ -13,21 +15,9 @@ import shapely.geometry
 from PIL import Image
 
 from bake import edges, rail
-from tests.synthetic import SIZE, X0, Y0, osm_tile, way
+from tests.synthetic import SIZE, X0, Y0, along, osm_tile, shapefile, straight, way
 
 RAILWAY, ROAD = 5, 7
-
-
-def _write(path, geoms, fields: dict[str, list[str]], kind: str) -> None:
-    pyogrio.raw.write(
-        path,
-        np.array([shapely.to_wkb(g) for g in geoms], dtype=object),
-        [np.array(v, dtype=object) for v in fields.values()],
-        fields=list(fields),
-        crs="EPSG:25833",
-        geometry_type=kind,
-        driver="ESRI Shapefile",
-    )
 
 
 def _tile(tmp_path, monkeypatch):
@@ -53,10 +43,10 @@ def _tile(tmp_path, monkeypatch):
     tile = osm_tile(tmp_path, monkeypatch, nodes, ways, classes=cls)
     tile.dlm.mkdir(parents=True, exist_ok=True)
     parcel = shapely.box(X0, Y0 + 20, X0 + SIZE, Y0 + 80)
-    _write(tile.dlm / "ver03_f.shp", [parcel], {"OBJART": ["42010"]}, "Polygon")
+    shapefile(tile.dlm / "ver03_f.shp", [parcel], {"OBJART": ["42010"]}, "Polygon")
     track = shapely.LineString([(X0, Y0 + 50), (X0 + SIZE, Y0 + 50)])
     fields = {"SPW": ["1000"], "GLS": ["1000"], "ELK": ["1000"], "BKT": ["1100"]}
-    _write(tile.dlm / "ver03_l.shp", [track], fields, "LineString")
+    shapefile(tile.dlm / "ver03_l.shp", [track], fields, "LineString")
     return tile
 
 
@@ -103,3 +93,54 @@ def test_green_railway_land_off_the_tracks_is_lawn(tmp_path, monkeypatch):
     assert not at(100, 50)  # the track bed
     assert not at(100, 35)  # the siding's bed
     assert not at(100, 170)  # the carriageway stays road
+
+
+def _write_dlm(tile, lines: list[shapely.LineString], elk: str = "1000") -> None:
+    tile.dlm.mkdir(parents=True, exist_ok=True)
+    n = len(lines)
+    pyogrio.raw.write(
+        tile.dlm / "ver03_l.shp",
+        np.array([shapely.to_wkb(g) for g in lines], dtype=object),
+        [np.array(v, dtype=object) for v in (["1000"] * n, ["1000"] * n, [elk] * n, ["1100"] * n)],
+        fields=["SPW", "GLS", "ELK", "BKT"],
+        crs="EPSG:25833",
+        geometry_type="LineString",
+        driver="ESRI Shapefile",
+    )
+
+
+def test_the_dlm_draws_only_where_osm_maps_no_track(tmp_path, monkeypatch):
+    # OSM's two tracks 2 m either side of the DLM's centreline at y 50, no
+    # OSM along the DLM's line at y 150; one OSM way untagged
+    nodes = {**straight(48, first=1), **straight(52, first=3)}
+    ways = way(1, [1, 2], {"railway": "rail"}) + way(
+        2, [3, 4], {"railway": "rail", "electrified": "no"}
+    )
+    tile = osm_tile(tmp_path, monkeypatch, nodes, ways)
+    _write_dlm(
+        tile,
+        [
+            shapely.LineString([(X0 - 10, Y0 + 50), (X0 + SIZE + 10, Y0 + 50)]),
+            shapely.LineString([(X0 - 10, Y0 + 150), (X0 + SIZE + 10, Y0 + 150)]),
+        ],
+    )
+    features = rail.rails(tile, osm=True)
+    assert not along(features, 50)  # OSM's tracks stand for it
+    assert len(along(features, 150)) == 1  # the DLM's line OSM lacks
+    assert along(features, 150)[0]["properties"]["electrified"] == 1
+    # the untagged way: overhead, as the DLM's line beside it says
+    assert along(features, 48)[0]["properties"]["electrified"] == 1
+    assert along(features, 52)[0]["properties"]["electrified"] == 0
+    # without the extract: the DLM's lines alone
+    assert len(rail.rails(tile)) == 2
+
+
+def test_a_platform_stands_as_high_as_its_trains_ask():
+    assert rail.mapped_height('"height"=>"0.76"') == 0.76
+    assert rail.mapped_height('"height"=>"96"') == 0.96  # centimetres
+    assert rail.mapped_height('"height"=>"200"') is None  # 2 m: implausible
+    assert rail.platform_kind('"subway"=>"yes"', "rail") == "subway"
+    assert rail.platform_kind('"tram"=>"yes"', None) == "tram"
+    assert rail.platform_kind(None, "light_rail") == "light_rail"
+    assert rail.platform_kind(None, None) == "rail"
+    assert rail.PLATFORM_HEIGHT["rail"] == 0.76

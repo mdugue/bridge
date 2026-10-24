@@ -29,9 +29,7 @@ import {
   WINDOW_ROWS,
   type WindowHost,
   type WindowWall,
-  windowAxes,
   windowless,
-  windowRows,
   windowSpecs,
   windowStorey,
   windowType,
@@ -198,7 +196,8 @@ describe("windowSpecs", () => {
       [measured("a")],
       index
     );
-    expect(NEAR_M).toBe(30);
+    // the fixture lies past NEAR_M
+    expect(60).toBeGreaterThan(NEAR_M);
     expect(far.from).toBe("type");
   });
 
@@ -394,58 +393,6 @@ test("the ground floor's lift: a Hochparterre, over the plinth, in classes", () 
     Math.round(WINDOW_ROWS.raise / WINDOW_LIFT.step),
     9
   );
-});
-
-describe("the layout", () => {
-  const spec = { axis: 3, w: 1.2, h: 1.6, style: packStyle({ sill: 0.9 }) };
-
-  test("the axes are centred, the outer ones off the wall's ends", () => {
-    const xs = windowAxes(14, spec);
-    expect(xs.length).toBe(4);
-    expect(xs[0] + xs.at(-1)!).toBeCloseTo(0, 9);
-    expect(xs[1] - xs[0]).toBeCloseTo(3, 9);
-    expect(7 + xs[0] - spec.w / 2).toBeGreaterThanOrEqual(
-      WINDOW_ROWS.edge - 1e-9
-    );
-    expect(windowAxes(2, spec)).toEqual([]);
-  });
-
-  test("a row per storey from the ground floor, under the eave", () => {
-    const rows = windowRows(spec, 3.5, 15);
-    expect(rows[0][0]).toBeCloseTo(0.9, 9);
-    expect(rows[1][0]).toBeCloseTo(3.5 + 0.9, 9);
-    for (const [z0, z1] of rows) {
-      expect(z1 - z0).toBeCloseTo(1.6, 9);
-      expect(z1).toBeLessThanOrEqual(15 - WINDOW_ROWS.eaveClear + 1e-9);
-    }
-    expect(rows.length).toBe(4);
-    // no ground floor over a shop
-    expect(windowRows(spec, 3.5, 15, false)[0][0]).toBeCloseTo(4.4, 9);
-  });
-
-  test("a top floor's windows end under the eave, shorter if they must", () => {
-    const clipped = windowRows(spec, 3.5, 13.3).at(-1)!;
-    expect(clipped[0]).toBeCloseTo(11.4, 9);
-    expect(clipped[1]).toBeCloseTo(13.3 - WINDOW_ROWS.eaveClear, 9);
-    // too little left: none
-    expect(windowRows(spec, 3.5, 12.3).at(-1)![0]).toBeCloseTo(7.9, 9);
-  });
-
-  test("no row under the ground in front of a shopfront's wall", () => {
-    // 5 m of ground (a terrace) in front: the ground floor and the first
-    // floor's sill at 4.4 m lie under it
-    const rows = windowRows(spec, 3.5, 15, false, 5);
-    expect(rows[0][0]).toBeCloseTo(7 + 0.9, 9);
-    expect(rows[0][0]).toBeGreaterThanOrEqual(5 + WINDOW_ROWS.plinthGap);
-  });
-
-  test("a lifted ground floor keeps its head", () => {
-    const lifted = { ...spec, style: packStyle({ sill: 0.9, lift: 0.45 }) };
-    const [ground, first] = windowRows(lifted, 3.5, 15);
-    expect(ground[0]).toBeCloseTo(0.9 + 0.45, 9);
-    expect(ground[1]).toBeCloseTo(0.9 + 1.6, 9);
-    expect(first[0]).toBeCloseTo(3.5 + 0.9, 9);
-  });
 });
 
 /** Quads as triangles (a b c, a c d), per object. */

@@ -48,6 +48,13 @@
 > `section.ts` `insideCutOut`, `markings.ts` `stripeCoverage`, `minimap.ts`
 > `buildingFootprints`, `cultivated.ts` `colonyEdgeMetres`/`colonyAxis`,
 > `stairs.ts` `projectOntoAxis`): wire each in or drop export and test.
+> (`stripeCoverage`, `buildingFootprints` and the two colony decoders were
+> dropped in the 2026-10-24 test audit; the colony test now pins the byte
+> scales the shader reads against `cultivated.py`.)
+> (Settled 2026-10-24 for `pannedBy`, `projectOntoAxis` and the
+> skyview twins — dropped —, `shadowStreamError` and `insideCutOut` —
+> moved into their tests —, `screenOfPoint` — kept for QA: see
+> README.md's entry.)
 > (5) Step 3's TSL helper home should also take the byte-identical
 > `hash21` of `post-stack.ts`/`stylize-effect.ts` and the identical
 > sin-dot hash + value noise of `water-layer.ts`/`vegetation-layer.ts`

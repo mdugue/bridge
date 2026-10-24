@@ -11,12 +11,21 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 
-/** The sources that should show up in the report (tests excluded). */
+/** The sources that should show up in the report (tests excluded): the
+ *  viewer, the pure core, the build step, the routes' own helpers, the
+ *  site configs and the React hooks. */
 const SOURCE_GLOBS = [
   "app/_components/**/*.{ts,tsx}",
+  "app/**/_lib/*.{ts,tsx}",
   "lib/**/*.ts",
   "scripts/*.ts",
+  "sites/*.ts",
+  "hooks/*.ts",
 ];
+
+/** Vendored by `shadcn add` (regenerated, never hand-edited): no test of
+ *  ours is meant to cover them. */
+const VENDORED = new Set(["hooks/use-mobile.ts"]);
 
 export interface Source {
   path: string;
@@ -58,11 +67,12 @@ function isTest(path: string): boolean {
   return /\.test\.tsx?$/.test(path);
 }
 
-function sources(root: string): Source[] {
+/** Every source under `root` the report should name, with its length. */
+export function sources(root: string): Source[] {
   const out: Source[] = [];
   for (const pattern of SOURCE_GLOBS) {
     for (const path of new Bun.Glob(pattern).scanSync({ cwd: root })) {
-      if (!isTest(path)) {
+      if (!isTest(path) && !VENDORED.has(path)) {
         const text = readFileSync(join(root, path), "utf8");
         out.push({ path, lines: text.split("\n").length });
       }

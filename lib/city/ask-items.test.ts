@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { bridgeItems, monumentItems, treeSets } from "./ask-items";
-import { nearestInSets, nearestItem } from "./ask-solids";
+import { hitsInSets, nearestItem } from "./ask-solids";
 import type {
   BridgeFeature,
   FeatureCollection,
@@ -40,7 +40,7 @@ test("every tree of the file is askable, by its index there", () => {
   const i = 1234;
   const [ex, ey] = trees[i].geometry.coordinates;
   const w = epsgToWorld(ex, ey, offset);
-  const hit = nearestInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500);
+  const hit = hitsInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500)[0];
   expect(hit?.target).toMatchObject({ kind: "tree", index: i, tile: TILE });
   // its solids come with it, for the outline
   expect(hit?.solids).toHaveLength(2);
@@ -60,7 +60,7 @@ test("an orchard tree appended to the file's is askable past its end, as an orch
   };
   const sets = treeSets([...trees, orchard], ctx);
   const w = epsgToWorld(at[0], at[1], offset);
-  const hit = nearestInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500);
+  const hit = hitsInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500)[0];
   expect(hit?.target).toMatchObject({
     kind: "tree",
     index: trees.length,
@@ -71,7 +71,7 @@ test("an orchard tree appended to the file's is askable past its end, as an orch
     [...trees, { ...orchard, properties: { ...orchard.properties!, m: 1 } }],
     ctx
   );
-  const again = nearestInSets({ x: w.x, y: 200, z: w.z }, down, measured, 500);
+  const again = hitsInSets({ x: w.x, y: 200, z: w.z }, down, measured, 500)[0];
   expect(again?.target).toMatchObject({ orchard: true, measured: true });
 });
 
@@ -86,7 +86,7 @@ test("a pine and a yew are needle trees on the card, as the cone's conifers are"
   const conifer = trees.map((t) => {
     const [ex, ey] = t.geometry.coordinates;
     const w = epsgToWorld(ex, ey, offset);
-    const hit = nearestInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500);
+    const hit = hitsInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500)[0];
     return (hit?.target as { conifer?: boolean } | undefined)?.conifer;
   });
   expect(conifer).toEqual([false, true, true, true]);
@@ -94,7 +94,7 @@ test("a pine and a yew are needle trees on the card, as the cone's conifers are"
   const cone = trees.map((t) => {
     const [ex, ey] = t.geometry.coordinates;
     const w = epsgToWorld(ex, ey, offset);
-    const hit = nearestInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500);
+    const hit = hitsInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500)[0];
     return (hit?.target as { cone?: boolean } | undefined)?.cone === true;
   });
   expect(cone).toEqual([false, true, false, false]);

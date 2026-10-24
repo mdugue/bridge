@@ -1,25 +1,20 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import { TinIndex, tinSurface } from "../lib/city/terrain-tin";
 import { dgmSourceFiles } from "../lib/city/tile";
 import { tinFromGrid } from "./bake-terrain-tin";
-import { readDgm, tinTerrainMesh } from "./bake-tiles";
+import { tinTerrainMesh } from "./bake-tiles";
+import { readDgmFile } from "./dgm-cache";
 import { DRESDEN } from "../sites/dresden";
 
 const SPAWN_TILE = "33412_5656_2_sn";
 
-function arrayBufferOf(buf: Buffer): ArrayBuffer {
-  return buf.buffer.slice(
-    buf.byteOffset,
-    buf.byteOffset + buf.byteLength
-  ) as ArrayBuffer;
-}
-
 // 65×65 cells of 1 m: a gentle slope with an 8 m retaining wall across it,
-// ramped over one cell — the shape the native DGM1 gives a wall.
+// ramped over one cell — the shape the native DGM1 gives a wall. Float32,
+// as the bake's DGM: a Float64Array here left Delatin's code compiled for
+// it, and the spawn tile's TIN below took four times as long.
 const N = 65;
-function wallGrid(): Float64Array {
-  const g = new Float64Array(N * N);
+function wallGrid(): Float32Array {
+  const g = new Float32Array(N * N);
   for (let row = 0; row < N; row++) {
     for (let col = 0; col < N; col++) {
       const wall = col < 30 ? 0 : col > 31 ? 8 : (col - 30) * 4;
@@ -51,21 +46,12 @@ test("a grid with holes is refused (that tile keeps the grid)", () => {
   const grid = wallGrid();
   grid[100] = Number.NaN;
   expect(() => tinFromGrid(grid, N, [0, 0, N, N], 0.1)).toThrow();
-  const dgm = {
-    bounds: [0, 0, N, N] as [number, number, number, number],
-    elevations: Float32Array.from(grid),
-    n: N,
-  };
-  expect(tinTerrainMesh(dgm, [], { cx: 0, cy: 0 }, {}, 0.1)).toBeNull();
+  // that the bake then keeps the grid: scripts/bake-tiles.test.ts
 });
 
 test("the fine level meshes the committed spawn DGM at its native resolution", async () => {
   const src = dgmSourceFiles(DRESDEN, SPAWN_TILE);
-  const dgm = await readDgm(
-    arrayBufferOf(readFileSync(src.tif)),
-    readFileSync(src.tfw, "utf8"),
-    "native"
-  );
+  const dgm = await readDgmFile(src.tif, src.tfw, "native");
   expect(dgm.n).toBe(2000);
   expect(dgm.bounds[2] - dgm.bounds[0]).toBe(2000);
   // A coarse tolerance keeps the test fast; the bake runs at 0.15 m.

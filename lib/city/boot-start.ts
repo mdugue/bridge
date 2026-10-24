@@ -5,7 +5,6 @@
  * the camera stands while the boot waits for that place's tile.
  */
 
-import { startTileOf } from "./gpu-safety";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import type { CameraState } from "./pose";
 import type { ViewpointGeometry } from "./site";
@@ -21,6 +20,23 @@ export interface BootStart<T extends Tile> {
   restored?: CameraState;
   /** the tile the boot waits for: theirs, or the spawn tile */
   spawn: T;
+}
+
+/**
+ * The tile whose extent holds an EPSG point (a recovered page's camera, a
+ * picked place), or undefined off every tile.
+ */
+function startTileOf<T extends Tile>(
+  tiles: readonly T[],
+  epsg: { x: number; y: number } | undefined
+): T | undefined {
+  if (!epsg) {
+    return undefined;
+  }
+  return tiles.find(
+    ({ bounds: [x0, y0, x1, y1] }) =>
+      epsg.x >= x0 && epsg.x <= x1 && epsg.y >= y0 && epsg.y <= y1
+  );
 }
 
 /**

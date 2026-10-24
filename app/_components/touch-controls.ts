@@ -93,17 +93,6 @@ const TAP_MAX_DURATION_MS = 350;
 /** A press held this long without moving past the slop is a long press. */
 export const LONG_PRESS_MS = 450;
 
-/** The timer the long press waits on; injected by the unit tests. */
-export interface PressTimer {
-  clear: (handle: unknown) => void;
-  set: (fn: () => void, ms: number) => unknown;
-}
-
-const WINDOW_TIMER: PressTimer = {
-  set: (fn, ms) => setTimeout(fn, ms),
-  clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-};
-
 interface PointerState {
   /** a right-button / Ctrl drag (`onAltDrag`), not a look */
   alt: boolean;
@@ -122,8 +111,7 @@ export interface TouchControls {
 
 export function attachTouchControls(
   element: HTMLElement,
-  callbacks: TouchControlsCallbacks,
-  timer: PressTimer = WINDOW_TIMER
+  callbacks: TouchControlsCallbacks
 ): TouchControls {
   const pointers = new Map<number, PointerState>();
   let pinchStartDistance = 0;
@@ -134,7 +122,7 @@ export function attachTouchControls(
   let altEndedAt = Number.NEGATIVE_INFINITY;
   let dragged = false;
   let lastTap: TapSample | null = null;
-  let pressTimer: unknown = null;
+  let pressTimer: ReturnType<typeof setTimeout> | null = null;
   // The release that ends a long press is not a tap.
   let longPressed = false;
 
@@ -148,7 +136,7 @@ export function attachTouchControls(
 
   const cancelPress = () => {
     if (pressTimer !== null) {
-      timer.clear(pressTimer);
+      clearTimeout(pressTimer);
       pressTimer = null;
     }
   };
@@ -158,7 +146,7 @@ export function attachTouchControls(
     if (!callbacks.onLongPress) {
       return;
     }
-    pressTimer = timer.set(() => {
+    pressTimer = setTimeout(() => {
       pressTimer = null;
       if (pointers.size === 1 && !dragged) {
         longPressed = true;

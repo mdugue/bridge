@@ -363,24 +363,3 @@ export function mayRecover(
       return level < MAX_SAFETY && recent.losses.length < MAX_SAFETY;
   }
 }
-
-// --- where a recovered page starts -------------------------------------------
-
-/**
- * The tile whose extent holds an EPSG point (a recovered page's camera),
- * or undefined off every tile — that page then boots at the spawn.
- */
-export function startTileOf<
-  T extends { bounds: readonly [number, number, number, number] },
->(
-  tiles: readonly T[],
-  epsg: { x: number; y: number } | undefined
-): T | undefined {
-  if (!epsg) {
-    return undefined;
-  }
-  return tiles.find(
-    ({ bounds: [x0, y0, x1, y1] }) =>
-      epsg.x >= x0 && epsg.x <= x1 && epsg.y >= y0 && epsg.y <= y1
-  );
-}

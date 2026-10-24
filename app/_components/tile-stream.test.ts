@@ -27,7 +27,6 @@ import {
   asksOf,
   buildAsksWhenIdle,
   catchUp,
-  DRESSING_PART_NAMES,
   DressingPlugin,
   dressingParts,
   handOverWaitMs,
@@ -105,12 +104,11 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
 });
 
 test("every part of a dressing is in the part table, so disposal and the census reach it", () => {
+  // (a TileDressing field left out of DRESSING_PARTS does not compile: the
+  // table `satisfies` a record of every field)
   const group = () => new Object3D();
   const control = () => ({ group: group() });
-  // One of each: a TileDressing field left out of DRESSING_PARTS would be
-  // neither disposed nor counted.
-  const full = {
-    tile: "t",
+  const parts = {
     vegetation: control(),
     lowVegetation: group(),
     lamps: control(),
@@ -122,10 +120,17 @@ test("every part of a dressing is in the part table, so disposal and the census 
     traffic: control(),
     sport: control(),
     vineyards: group(),
-  } as unknown as TileDressing;
-  const fields = Object.keys(full).filter((key) => key !== "tile");
-  expect([...DRESSING_PART_NAMES].sort() as string[]).toEqual(fields.sort());
-  expect(dressingParts(full)).toHaveLength(fields.length);
+  };
+  const full = { tile: "t", ...parts } as unknown as TileDressing;
+  // each name's accessor hands over that field's own scene part
+  const own = Object.values(parts).map((p) =>
+    p instanceof Object3D ? p.uuid : p.group.uuid
+  );
+  expect(
+    dressingParts(full)
+      .map((o) => o.uuid)
+      .sort()
+  ).toEqual(own.sort());
   expect(dressingParts({ tile: "t" })).toEqual([]);
 });
 
@@ -439,7 +444,7 @@ function abortableLoad() {
  *  the microtasks of the call that showed it. */
 const nextTask = () => new Promise((resolve) => setTimeout(resolve, 5));
 
-test("a load the renderer aborts after its compile is freed: it frees only the textures", async () => {
+test("a load the renderer aborts after its compile is freed by the plugin (the renderer frees only its textures)", async () => {
   const { freed, plugin, scene } = abortableLoad();
   const tile: { engineData?: { scene?: Object3D } } = {};
   await plugin.processTileModel(scene, tile);

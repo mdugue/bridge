@@ -3,6 +3,7 @@ import {
   dollyFrame,
   DOLLY_END_FOV_DEG,
   enteringView,
+  equivalentDistance,
   fitModelShadow,
   footprintCircle,
   headingDelta,
@@ -303,6 +304,13 @@ describe("in and out of the perspective view", () => {
     expect(view.turnDeg).toBe(45);
     const height = 2 * 100 * Math.tan((55 * DEG2RAD) / 2);
     expect(view.metresPerPixel).toBeCloseTo(height / 900, 9);
+  });
+
+  test("the parallel view's equivalent distance is the pose's distance to the pivot", () => {
+    // what the distance-keyed looks read in Modell: entering from 100 m
+    // at the reference 55° FOV, they look as they did
+    const view = enteringView(pose, pivot, "iso", 900);
+    expect(equivalentDistance(view.metresPerPixel, 900)).toBeCloseTo(100, 6);
   });
 
   test("the dolly zoom starts at the pose and ends looking at the pivot, the picture the view's", () => {

@@ -80,6 +80,7 @@
     "components/ui/**",
     "hooks/use-mobile.ts",
     ".agents/**",
+    ".claude/skills/**",
     "playwright-report/**",
     "test-results/**",
     "coverage/**",

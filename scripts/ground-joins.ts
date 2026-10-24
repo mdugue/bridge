@@ -47,7 +47,8 @@ import { wallGeometry } from "../lib/city/walls";
 import type { Site } from "../lib/city/site";
 import { REFERENCE_SITE, SITES, siteFromArgs } from "../sites";
 import { FINE_TIN_MAX_ERROR } from "./bake-terrain-tin";
-import { readDgm, shapeDgm, stairRailLines } from "./bake-tiles";
+import { shapeDgm, stairRailLines } from "./bake-tiles";
+import { readDgmFile } from "./dgm-cache";
 import {
   fenceLines,
   gatePoints,
@@ -82,11 +83,9 @@ interface Ground {
 /** A tile's fine ground: its native DGM, shaped as the TIN is shaped. */
 async function tileGround(site: Site, tile: string): Promise<Ground> {
   const src = dgmSourceFiles(site, tile);
-  const tif = readFileSync(join(process.cwd(), src.tif));
-  const tfw = readFileSync(join(process.cwd(), src.tfw), "utf8");
-  const dgm = await readDgm(
-    tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength),
-    tfw,
+  const dgm = await readDgmFile(
+    join(process.cwd(), src.tif),
+    join(process.cwd(), src.tfw),
     "native"
   );
   const elevations = shapeDgm(

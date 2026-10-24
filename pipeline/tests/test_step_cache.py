@@ -242,13 +242,33 @@ def test_quiet_files_are_not_recorded(tmp_path):
     assert not rec.reads and not rec.writes
 
 
-def test_code_hash_follows_imports():
+def test_code_hash_follows_imports(tmp_path, monkeypatch):
     """A step's hash covers the modules it imports, not every bake module."""
-    walls = step_cache.code_hash("bake.walls")
-    assert walls == step_cache.code_hash("bake.walls")
     seen = step_cache._closure("bake.walls")
     assert "bake.osm" in seen
     assert "bake.roof_colour" not in seen
+    real = step_cache._module_path
+
+    def edited(name):
+        # the module's source with one more line, as an edit would leave it
+        def path(module):
+            p = real(module)
+            if module != name or p is None:
+                return p
+            copy = tmp_path / f"{module}.py"
+            copy.write_bytes(p.read_bytes() + b"\n")
+            return copy
+
+        return path
+
+    def walls_hash(path):
+        monkeypatch.setattr(step_cache, "_CODE", {})
+        monkeypatch.setattr(step_cache, "_module_path", path)
+        return step_cache.code_hash("bake.walls")
+
+    walls = walls_hash(real)
+    assert walls_hash(edited("bake.osm")) != walls
+    assert walls_hash(edited("bake.roof_colour")) == walls
 
 
 def test_a_dated_step_is_known():

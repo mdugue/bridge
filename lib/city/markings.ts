@@ -120,20 +120,3 @@ export function packMarkingTable(table: MarkingTable): {
   }
   return { data, width };
 }
-
-/**
- * Coverage of stripes `[k·period, k·period + bar)` over the footprint
- * `[x − w, x + w]`, exactly (the shader's `rmStripes`): a pattern far off
- * averages to bar / period instead of shimmering.
- */
-export function stripeCoverage(
-  x: number,
-  bar: number,
-  period: number,
-  w: number
-): number {
-  const cumulative = (t: number) =>
-    Math.floor(t / period) * bar +
-    Math.min(t - Math.floor(t / period) * period, bar);
-  return (cumulative(x + w) - cumulative(x - w)) / (2 * w);
-}

@@ -23,15 +23,36 @@ test("atmosphereAt clamps to the day palette above the highest stop", () => {
 });
 
 test("atmosphereAt blends smoothly between stops", () => {
-  const dusk = atmosphereAt(-1.5); // between -4 and 1
-  const night = atmosphereAt(-18);
-  const day = atmosphereAt(60);
-  expect(dusk).not.toEqual(night);
-  expect(dusk).not.toEqual(day);
-  // Valid hex output.
-  expect(dusk.fog).toMatch(/^#[0-9a-f]{6}$/);
-  expect(dusk.hemiSky).toMatch(/^#[0-9a-f]{6}$/);
-  expect(dusk.hemiGround).toMatch(/^#[0-9a-f]{6}$/);
+  const rgb = (hex: string) =>
+    [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
+  const keys = ["fog", "hemiSky", "hemiGround"] as const;
+  // -1.5 lies between the blue-hour stop (-2) and the sunrise one (1)
+  const lo = atmosphereAt(-2);
+  const hi = atmosphereAt(1);
+  const dusk = atmosphereAt(-1.5);
+  for (const key of keys) {
+    expect(dusk[key]).toMatch(/^#[0-9a-f]{6}$/);
+    expect(dusk[key]).not.toBe(lo[key]);
+    expect(dusk[key]).not.toBe(hi[key]);
+    // each channel on its way from one stop's to the other's
+    for (const [i, v] of rgb(dusk[key]).entries()) {
+      const [a, b] = [rgb(lo[key])[i], rgb(hi[key])[i]];
+      expect(v).toBeGreaterThanOrEqual(Math.min(a, b));
+      expect(v).toBeLessThanOrEqual(Math.max(a, b));
+    }
+  }
+  // no jump at a stop: either side of it within a step of each channel
+  for (const at of [-4, -2, 1, 6, 12]) {
+    for (const key of keys) {
+      const [below, above] = [at - 1e-6, at + 1e-6].map((x) =>
+        rgb(atmosphereAt(x)[key])
+      );
+      for (const [i, v] of rgb(atmosphereAt(at)[key]).entries()) {
+        expect(Math.abs(below[i] - v)).toBeLessThanOrEqual(1);
+        expect(Math.abs(above[i] - v)).toBeLessThanOrEqual(1);
+      }
+    }
+  }
 });
 
 test("day fog is brighter than night fog", () => {

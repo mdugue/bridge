@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   COLONY_AXIS_STEPS,
+  COLONY_EDGE_SCALE,
   COLONY_GARDEN,
-  colonyAxis,
   colonyCropUv,
-  colonyEdgeMetres,
   orchardTrees,
   vineRows,
 } from "./cultivated";
@@ -12,14 +13,19 @@ import type { CultivatedFeature } from "./features";
 import { TREE_ARCHETYPES } from "./tree-inventory";
 import { TREE_GENERA } from "./tree-season";
 
-test("the colony bytes decode to the edge distance and the axis", () => {
-  expect(colonyEdgeMetres(0)).toBeNull();
-  expect(colonyEdgeMetres(128)).toBe(0);
-  expect(colonyEdgeMetres(178)).toBe(2.5);
-  expect(colonyEdgeMetres(98)).toBe(-1.5);
-  expect(colonyAxis(0)).toBeNull();
-  expect(colonyAxis(1)).toBe(0);
-  expect(colonyAxis(1 + COLONY_AXIS_STEPS / 2)).toBeCloseTo(Math.PI / 2, 9);
+test("the colony bytes' scales are the bake's", () => {
+  // the shader decodes the bytes with these constants
+  // (cultivated-layer.ts); the bake writes them (cultivated.py)
+  const python = readFileSync(
+    join(import.meta.dir, "../../pipeline/bake/cultivated.py"),
+    "utf8"
+  );
+  expect(Number(python.match(/^EDGE_SCALE = ([\d.]+)$/mu)?.[1])).toBe(
+    COLONY_EDGE_SCALE
+  );
+  const axis = python.match(/def axis_code[^]*?\* (\d+)\)\) % (\d+)/u);
+  expect(Number(axis?.[1])).toBe(COLONY_AXIS_STEPS);
+  expect(Number(axis?.[2])).toBe(COLONY_AXIS_STEPS + 1);
 });
 
 test("a cropped colony raster maps to its part of the tile", () => {
@@ -104,9 +110,7 @@ test("an orchard tree takes its orchard's genus; a Christmas tree is a cone", ()
   expect(unknown.properties?.gn).toBeUndefined();
 });
 
-test("a plot is a Kleingarten's ≈15 × 24 m", () => {
-  expect(COLONY_GARDEN.plotAlong).toBe(15);
-  expect(COLONY_GARDEN.plotAcross).toBe(24);
+test("a plot stays within a Kleingarten's 400 m² (BKleingG)", () => {
   expect(
     COLONY_GARDEN.plotAlong * COLONY_GARDEN.plotAcross
   ).toBeLessThanOrEqual(400);

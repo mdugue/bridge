@@ -2220,7 +2220,7 @@ const WALL_TINT_SHOWN = 0.6;
  *  glass) and of the sky (the clay's `paneSky`,
  *  app/_components/visual-style.ts). */
 const PANE_SLATE: [number, number, number] = [0.07, 0.09, 0.12];
-export const PANE_ROUGH = 0.2;
+const PANE_ROUGH = 0.2;
 /** A shopfront's surround and fascia: its wall as shown, a shade darker
  *  and a touch cooler — part of the wall, not a frame. */
 const SURROUND_COOL: [number, number, number] = [0.52, 0.55, 0.6];

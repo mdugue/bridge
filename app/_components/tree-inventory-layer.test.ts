@@ -3,11 +3,10 @@ import { Matrix4, type Object3D, Vector3 } from "three/webgpu";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { PINE_CROWN_BASE } from "@/lib/city/tree-inventory";
-import { buildPineGeo, pineSilhouette } from "./conifer-crown";
+import { pineSilhouette } from "./conifer-crown";
 import { isInstances } from "./instancing";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
-  buildCrownGeo,
   buildVegetation,
   sceneCrowns,
   type VegetationContext,
@@ -132,7 +131,9 @@ test("a pine's crown is its own set, high on its stem; a yew's bush joins the ca
   ).toBe(true);
 });
 
-test("the pine's silhouette: flat on top, widest at its middle, in its box", () => {
+// (that the pine stays in the lobed crown's box: vegetation-layer.test.ts,
+// "the pine tiers stand in the lobed tiers' boxes")
+test("the pine's silhouette: flat on top, widest at its middle", () => {
   const top = pineSilhouette(0.9, 0);
   const sphereTop = (1 + 0.9) / 2;
   // a fifth of the way down from the top a sphere has narrowed far more
@@ -141,13 +142,6 @@ test("the pine's silhouette: flat on top, widest at its middle, in its box", () 
   expect(pineSilhouette(0, 0)).toEqual({ r: 1, y: 0.5 });
   expect(pineSilhouette(1, 0).y).toBeCloseTo(1);
   expect(pineSilhouette(-1, 0).y).toBeCloseTo(0);
-  const pine = buildPineGeo(buildCrownGeo());
-  const lobed = buildCrownGeo();
-  pine.computeBoundingBox();
-  lobed.computeBoundingBox();
-  // within the lobed crown's box (a lobe's bump is kept as relief)
-  expect(pine.boundingBox?.min.y).toBeCloseTo(lobed.boundingBox?.min.y ?? 0, 1);
-  expect(pine.boundingBox?.max.y).toBeCloseTo(lobed.boundingBox?.max.y ?? 0, 1);
 });
 
 test("crowns stand on the ground, never NaN (a NaN matrix culls the chunk)", () => {

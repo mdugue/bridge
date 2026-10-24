@@ -97,7 +97,6 @@ test("trees under one OSM outline join wherever they stand; two outlines keep a 
 
 test("an ensemble's group is its outline's, never 0 for one", () => {
   expect(ensembleGroup("")).toBe(0);
-  expect(ensembleGroup("r5764")).toBe(ensembleGroup("r5764"));
   expect(ensembleGroup("r5764")).not.toBe(ensembleGroup("w5764"));
   expect(ensembleGroup("r5764")).toBeGreaterThan(0);
   // the ids themselves: two outlines never share a key

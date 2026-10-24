@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, jest, test } from "bun:test";
 import { deflateSync } from "node:zlib";
 import {
   LinearMipmapLinearFilter,
@@ -49,11 +49,27 @@ function greyPng(
 }
 
 const realFetch = globalThis.fetch;
-const realRandom = Math.random;
 afterEach(() => {
   globalThis.fetch = realFetch;
-  Math.random = realRandom;
+  jest.useRealTimers();
 });
+
+/** `promise` settled under Bun's fake timers: the clock moves on 50 ms at a
+ *  time, the microtasks between the steps drained, so a retry's backoff
+ *  waits on no real time. */
+async function settled<T>(promise: Promise<T>): Promise<T> {
+  let done = false;
+  const watched = promise.finally(() => {
+    done = true;
+  });
+  for (let waited = 0; !done && waited < 60_000; waited += 50) {
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve();
+    }
+    jest.advanceTimersByTime(50);
+  }
+  return watched;
+}
 
 function serve(png: Uint8Array<ArrayBuffer>): void {
   // reason: the loader reads only `ok` and the body of a Response
@@ -87,8 +103,7 @@ test("a raster is on the GPU, set up as it samples, when its load resolves — i
 });
 
 test("a raster whose download hit a blip is asked for again, not taken for absent", async () => {
-  // the shortest backoff (0.25 s), so the test waits for one real retry
-  Math.random = () => 0;
+  jest.useFakeTimers();
   const png = greyPng(2, 2, new Uint8Array(4).fill(90));
   let calls = 0;
   // reason: the loader reads only `ok` and the body of a Response
@@ -97,7 +112,9 @@ test("a raster whose download hit a blip is asked for again, not taken for absen
       ? Promise.reject(new TypeError("Load failed"))
       : Promise.resolve(new Response(png))) as unknown as typeof fetch;
   const seen: { mips: boolean; min: number }[] = [];
-  expect(await loadNdviTexture("ndvi.png", fakeRenderer(seen))).not.toBeNull();
+  expect(
+    await settled(loadNdviTexture("ndvi.png", fakeRenderer(seen)))
+  ).not.toBeNull();
   expect(calls).toBe(2);
 });
 

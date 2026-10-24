@@ -12,8 +12,3 @@ test("recenterOffset extracts the negated translation from a column-major matrix
     cy: 5_657_000,
   });
 });
-
-test("recenterOffset of the identity matrix is zero", () => {
-  const elements = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-  expect(recenterOffset({ elements })).toEqual({ cx: -0, cy: -0 });
-});

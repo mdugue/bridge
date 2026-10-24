@@ -13,6 +13,8 @@ def test_ground_floor():
     assert passages.on_ground_floor('"level"=>"0;1"')
     # the Zwinger's terrace walk through a pavilion, a ramp up a garage
     assert not passages.on_ground_floor('"level"=>"1"')
+    assert passages.on_ground_floor('"level"=>"0.0"')
+    assert not passages.on_ground_floor('"level"=>"Hof"')  # unreadable: not cut
     assert not passages.on_ground_floor('"layer"=>"1"')
 
 

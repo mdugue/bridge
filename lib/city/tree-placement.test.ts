@@ -105,6 +105,8 @@ describe("the rows the layer plants", () => {
       [line("treerow"), line("hedge")],
       ctx
     );
+    expect(trees.length).toBeGreaterThan(0);
+    expect(hedges.length).toBeGreaterThan(0);
     for (const t of trees) {
       expect(t.base).toBeCloseTo(crownBase(t.s * BASE_TREE_H));
     }

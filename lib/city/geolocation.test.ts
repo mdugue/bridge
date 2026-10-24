@@ -88,8 +88,9 @@ describe("placementOf", () => {
   });
 
   test("a grid bearing is a bearing along the projected grid", () => {
-    // Walk 1 km towards true bearing 45°; the grid bearing of that step must
-    // match what placementOf reports for a 45° compass reading.
+    // Step 0.01° north along the meridian (true bearing 0°); the grid
+    // bearing of that step must match what placementOf reports for a
+    // compass reading of 0° (the meridian convergence turns it).
     const p = placementOf(
       { ...inside, accuracy: 5, headingDeg: 0 },
       25_833,

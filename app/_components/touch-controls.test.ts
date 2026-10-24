@@ -1,9 +1,16 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 import {
   attachTouchControls,
-  type PressTimer,
+  LONG_PRESS_MS,
   type TouchControlsCallbacks,
 } from "./touch-controls";
+
+beforeEach(() => {
+  jest.useFakeTimers();
+});
+afterEach(() => {
+  jest.useRealTimers();
+});
 
 interface FiredPointer {
   clientX: number;
@@ -68,25 +75,10 @@ function harness() {
     },
     onLongPress: (x, y) => calls.longPress.push([x, y]),
   };
-  // The long press's timer, fired by hand: `elapse()` runs what is due.
-  let pending: (() => void) | null = null;
-  const timer: PressTimer = {
-    set: (fn) => {
-      pending = fn;
-      return fn;
-    },
-    clear: (handle) => {
-      if (pending === handle) {
-        pending = null;
-      }
-    },
-  };
-  const elapse = () => {
-    const fn = pending;
-    pending = null;
-    fn?.();
-  };
-  const { detach } = attachTouchControls(element, callbacks, timer);
+  // The long press waits on the page's clock, Bun's fake one here:
+  // `elapse(ms)` moves it on (by default by a whole long press).
+  const elapse = (ms = LONG_PRESS_MS) => jest.advanceTimersByTime(ms);
+  const { detach } = attachTouchControls(element, callbacks);
   const fire = (type: string, e: FiredPointer) =>
     handlers.get(type)?.({
       type,
@@ -397,7 +389,9 @@ test("a finger held still is a long press, and its release is no tap", () => {
   fire("pointerdown", { pointerId: 1, clientX: 100, clientY: 200 });
   // the browser's own long-press menu belongs to the gesture now
   expect(contextMenu()).toBe(true);
-  elapse();
+  elapse(LONG_PRESS_MS - 1);
+  expect(calls.longPress).toEqual([]);
+  elapse(1);
   expect(calls.longPress).toEqual([[-0.5, 0.5]]);
   fire("pointerup", {
     pointerId: 1,

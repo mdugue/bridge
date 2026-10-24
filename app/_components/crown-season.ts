@@ -447,13 +447,12 @@ export const SEASON_THROTTLE_MS = 150;
 /**
  * Keeps the scene's day of the year and runs `apply` when the calendar day
  * changes — never for a time-of-day change, never per frame, and at most
- * once per `throttleMs` while the day keeps changing (the last day wins, so
+ * once per `SEASON_THROTTLE_MS` while the day keeps changing (the last day wins, so
  * a run of clicks through the calendar ends on the day it stopped at).
  */
 export function createSeasonClock(
   initial: Date,
-  apply: (day: number) => void,
-  throttleMs = SEASON_THROTTLE_MS
+  apply: (day: number) => void
 ): SeasonClock {
   let day = Math.floor(dayOfYear(initial));
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -474,7 +473,7 @@ export function createSeasonClock(
       if (timer !== null) {
         return;
       }
-      const wait = last + throttleMs - performance.now();
+      const wait = last + SEASON_THROTTLE_MS - performance.now();
       if (wait <= 0) {
         flush();
       } else {

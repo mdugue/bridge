@@ -73,7 +73,12 @@ describe("setViewDirection", () => {
     expect(viewRay.value.z).toBeCloseTo(want.z, 6);
   });
 
-  test("a perspective camera, its place", () => {
+  test("a perspective camera switches the materials back to its own place", () => {
+    // from a parallel view, so the switch is the camera's doing
+    setViewDirection(
+      cameraFor(withPreset(BASE, "military"), WebGLCoordinateSystem)
+    );
+    expect(viewParallel.value).toBe(1);
     setViewDirection(new PerspectiveCamera());
     expect(viewParallel.value).toBe(0);
   });

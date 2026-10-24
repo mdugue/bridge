@@ -235,10 +235,3 @@ export function cutOutPlanes(
     plane(neg(ahead), cut.halfAhead),
   ];
 }
-
-/** Is a ground point inside the cut-out? */
-export function insideCutOut(cut: CutOut, p: GroundPoint): boolean {
-  return cutOutPlanes(cut).every(
-    (pl) => pl.normal.x * p.x + pl.normal.z * p.z + pl.constant >= -1e-6
-  );
-}

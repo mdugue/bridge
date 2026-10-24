@@ -46,7 +46,7 @@ direct light where the sun stands below it:
   horizon only the angle — and the terrain reads the far band alone. Over
   the frustum's last 20 % the near band fades in (no seam at the
   hand-over), and beyond the frustum the horizon is the higher of the two
-  bands (`lib/city/skyview.ts` `nearBandWeight`, `horizonSunVisibility`).
+  bands (`hzSunVisible` in `app/_components/sky-light.ts`).
 - A look row (*Ferne Schatten*) scales it; 0 is the picture before.
 
 The same bake writes the **sky-view factor** (≈2 m, occluders within

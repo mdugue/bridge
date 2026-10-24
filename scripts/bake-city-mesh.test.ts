@@ -44,7 +44,6 @@ import {
   shapedGap,
   joinEnsembles,
   liftToStreet,
-  PANE_ROUGH,
   scanStructureId,
   vertexNormals,
   withMeasuredRoofs,
@@ -585,7 +584,10 @@ test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
   }
   expect(pane.flags & OBJECT_FLAG_GLASS).toBe(OBJECT_FLAG_GLASS);
   expect(frame.flags & OBJECT_FLAG_GLASS).toBe(0);
-  expect(pane.rough).toBe(PANE_ROUGH);
+  // own-colour glass carries its roughness itself, not a jitter in
+  // [−1, 1] as every other row: smooth enough to hold a calm reflection
+  expect(pane.rough).toBeGreaterThan(0);
+  expect(pane.rough).toBeLessThanOrEqual(0.3);
   // muted glass, darker and cooler than its surround — not a black hole
   const lum = (c: readonly number[]) => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
   expect(lum(pane.tint)).toBeLessThan(0.6 * lum(frame.tint));

@@ -23,6 +23,7 @@ test("a platform stands its height over the rail head of the track beside it", (
     trackAt(110),
     0.17
   );
+  expect(got?.top.length ?? 0).toBeGreaterThan(0);
   for (const y of got?.top ?? []) {
     expect(y).toBeCloseTo(110 + 0.17 + 0.76);
   }

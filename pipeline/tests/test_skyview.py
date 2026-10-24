@@ -2,6 +2,7 @@
 
 import json
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -10,11 +11,14 @@ import rasterio
 from bake.common import Tile
 from bake.skyview import (
     AZIMUTHS,
+    CROWN_TO_HEIGHT,
     HORIZON_MAX_DEG,
     NEAR_MAX_DEG,
     Field,
     Roofs,
+    burn_crowns,
     burn_triangles,
+    extend_edges,
     far_horizon,
     fields,
     fill_footprints,
@@ -24,8 +28,10 @@ from bake.skyview import (
     near_horizon,
     pack_bands,
     pack_horizon,
+    ring_horizon,
     sky_view,
     surface_triangles,
+    tile_crowns,
 )
 
 
@@ -254,3 +260,85 @@ def test_a_rebuilt_face_burns_its_measured_surface(tmp_path):
     # the field's cell centres (x = col + 0.5) on the slope, 120 m at x = 0.5
     for col in (1, 5, 8):
         assert np.allclose(burned[1:-1, col], 120.0 + col, atol=1e-6)
+
+
+def test_extend_edges_keeps_what_is_measured():
+    a = np.array([[np.nan, 1.0, 2.0], [np.nan, 3.0, np.nan]], np.float32)
+    out = extend_edges(a)
+    assert out[0, 1] == 1.0 and out[1, 1] == 3.0
+    assert out[0, 0] == 1.0 and out[1, 0] == 3.0 and out[1, 2] in (2.0, 3.0)
+    assert np.all(extend_edges(np.full((2, 2), np.nan)) == 0.0)
+
+
+def test_the_ring_sees_the_hills_past_the_near_field():
+    # observers on a 0 m plain (8 × 8 cells of 10 m), a 100 m ridge 2 km east
+    obs = np.zeros((8, 8), np.float32)
+    cells, res = 2, 10.0  # coarse cells of 20 m
+    margin = 160  # coarse cells: 3.2 km
+    terrain = np.zeros((4 + 2 * margin, 4 + 2 * margin), np.float32)
+    terrain[:, margin + 2 + 100] = 100.0  # 2 km east of the tile's middle
+    angles = ring_horizon(obs, terrain, margin, res, cells, near_m=1500.0, far_m=3000.0)
+    east, west = 4, 12
+    assert angles[east].max() == pytest.approx(math.degrees(math.atan(100 / 2000)), abs=0.1)
+    assert angles[west].max() == 0.0
+    # nearer than the ring's start: the near field's, not the ring's
+    near = ring_horizon(obs, terrain, margin, res, cells, near_m=2500.0, far_m=3000.0)
+    assert near[east].max() == 0.0
+
+
+# --- the crowns -----------------------------------------------------------------
+
+
+def _points(path: Path, features: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": features}))
+
+
+def _pt(x, y, **props) -> dict:
+    return {
+        "type": "Feature",
+        "properties": props,
+        "geometry": {"type": "Point", "coordinates": [x, y]},
+    }
+
+
+def test_a_tile_s_crowns_are_as_wide_as_the_viewer_draws_them(tmp_path):
+    dlm = tmp_path / "dlm"
+    _points(dlm / "canopy_t.geojson", [_pt(0, 0, h=10.0)])
+    _points(dlm / "canopyx_t.geojson", [_pt(10, 0, h=20.0, r=1.0), _pt(20, 0, h=10.0, r=3.0)])
+    _points(dlm / "trees_t.geojson", [_pt(30, 0, h=12.0, d=7.5)])
+    rows = {
+        "type": "Feature",
+        "properties": {"kind": "treerow"},
+        "geometry": {"type": "LineString", "coordinates": [[0, 50], [27, 50]]},
+    }
+    hedge = {**rows, "properties": {"kind": "hedge"}}
+    _points(dlm / "vegrows_t.geojson", [rows, hedge])
+    crowns = tile_crowns(tmp_path, "t")
+    widths = {(round(c[0]), round(c[1])): c[3] for c in crowns}
+    assert widths[(0, 0)] == pytest.approx(10 * CROWN_TO_HEIGHT)
+    assert widths[(10, 0)] == pytest.approx(0.4 * 20)  # a narrow scan radius, clamped up
+    assert widths[(20, 0)] == pytest.approx(6.0)
+    assert widths[(30, 0)] == pytest.approx(7.5)
+    # a row tree every 9 m, the hedge none
+    assert sorted(round(c[0], 1) for c in crowns if c[1] == 50) == [4.5, 13.5, 22.5]
+
+
+def test_a_crown_lets_half_the_sky_it_covers_through(tmp_path):
+    res = 1.0
+    ground = np.zeros((81, 81), np.float32)
+    field = Field((0, 0, 81, 81), res)
+    crowns = burn_crowns(field, np.array([[40.5, 40.5, 12.0, 10.0]]), ground)
+    assert np.isfinite(crowns[40, 40]) and crowns[40, 40] == 12.0
+    assert np.isnan(crowns[40, 50])  # 10 m off: past its 5 m radius
+    margin = 30
+    open_sky = sky_view(ground, ground, margin, res, reach_m=30)
+    half = sky_view(ground, ground, margin, res, reach_m=30, crowns=crowns)
+    solid = sky_view(ground, ground, margin, res, reach_m=30, crowns=crowns, transmission=0.0)
+    c = 40 - margin
+    assert open_sky[c, c] == pytest.approx(1.0)
+    # under the crown the solid canopy hides nearly all; half of it lets half through
+    assert solid[c, c] < 0.1
+    assert half[c, c] == pytest.approx((1.0 + solid[c, c]) / 2, abs=1e-5)
+    # far from it, the sky is whole either way
+    assert half[0, 0] == pytest.approx(1.0, abs=0.02)

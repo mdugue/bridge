@@ -216,7 +216,6 @@ describe("the file", () => {
         expect(b.colour).toBe(c.colour);
         expect(b.cone).toBe(c.cone);
         expect(b.pine).toBe(c.pine);
-        expect(b.colour).toBe(c.colour);
         expect(b.genus).toBe(c.genus);
         expect(b.jitter).toBeCloseTo(c.jitter, 1);
         expect(b.ext.crownBase).toBeCloseTo(c.ext.crownBase, 2);

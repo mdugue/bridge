@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { DRESDEN } from "../../sites/dresden";
 import {
   ARABLE_CLASS,
@@ -28,6 +29,9 @@ import {
 } from "./landcover";
 import { siteDataDir } from "./tile";
 
+// the repo root, so the committed files are found from any cwd
+const ROOT = join(import.meta.dir, "../..");
+
 test("class ids are the table index, 0..9", () => {
   expect(LANDCOVER_CLASSES.map((c) => c.id)).toEqual([
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
@@ -41,7 +45,7 @@ test("class ids are the table index, 0..9", () => {
 });
 
 test("every committed surface legend names the same paving kinds", () => {
-  const dir = `${siteDataDir(DRESDEN)}/dlm`;
+  const dir = join(ROOT, siteDataDir(DRESDEN), "dlm");
   const legends = readdirSync(dir).filter(
     (f) => f.startsWith("surface_") && f.endsWith(".json")
   );
@@ -63,7 +67,7 @@ test("every committed surface legend names the same paving kinds", () => {
 });
 
 test("every committed edge legend has the viewer's scale", () => {
-  const dir = `${siteDataDir(DRESDEN)}/dlm`;
+  const dir = join(ROOT, siteDataDir(DRESDEN), "dlm");
   const legends = readdirSync(dir).filter(
     (f) => f.startsWith("edges_") && f.endsWith(".json")
   );
@@ -87,12 +91,15 @@ test("a surface texel unpacks into the road and the walk material", () => {
 
 test("every committed legend names the same classes", () => {
   // every site folder with baked data (data/_raw is the downloads)
-  const legends = readdirSync("data")
-    .filter((site) => !site.startsWith("_") && existsSync(`data/${site}/dlm`))
+  const data = join(ROOT, "data");
+  const legends = readdirSync(data)
+    .filter(
+      (site) => !site.startsWith("_") && existsSync(join(data, site, "dlm"))
+    )
     .flatMap((site) =>
-      readdirSync(`data/${site}/dlm`)
+      readdirSync(join(data, site, "dlm"))
         .filter((f) => f.startsWith("landcover_") && f.endsWith(".json"))
-        .map((f) => `data/${site}/dlm/${f}`)
+        .map((f) => join(data, site, "dlm", f))
     );
   expect(legends.length).toBeGreaterThan(0);
   for (const file of legends) {

@@ -1,13 +1,22 @@
-import { expect, test } from "bun:test";
-import {
-  bikeCard,
-  hourEstimate,
-  lineBearing,
-  towardCompass,
-  trafficCard,
-  type TrafficInquiry,
-} from "./inquiry-traffic";
+import { afterAll, expect, test } from "bun:test";
+import type { TrafficInquiry } from "./inquiry-traffic";
 import type { Stated } from "./methods";
+
+// The city-clock tests below tell Dresden's clock from the runner's only
+// off Berlin's zone, so this file runs in one far from it. The zone is
+// set before the module loads (its formatters take the default zone when
+// they are made) and the runner's given back after.
+const runnerTz = process.env.TZ;
+process.env.TZ = "Asia/Tokyo";
+afterAll(() => {
+  if (runnerTz === undefined) {
+    delete process.env.TZ;
+  } else {
+    process.env.TZ = runnerTz;
+  }
+});
+const { bikeCard, hourEstimate, lineBearing, towardCompass, trafficCard } =
+  await import("./inquiry-traffic");
 
 const lines = (sources: readonly Stated[]) => sources.map((l) => l.text);
 
@@ -131,7 +140,7 @@ test("a counter says its bicycles per direction and when they were counted", () 
 });
 
 test("a counter's time is the city's clock, whatever the visitor's zone", () => {
-  // 07:00 in Dresden (CEST); under TZ=Asia/Tokyo a local clock says 14:00
+  // 07:00 in Dresden (CEST); under the file's TZ a local clock says 14:00
   const measuredAt = new Date("2026-10-01T05:00:00Z");
   const card = bikeCard({
     kind: "bikes",

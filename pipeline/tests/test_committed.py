@@ -37,9 +37,10 @@ def _features(path: Path) -> list[dict]:
 @pytest.mark.parametrize("canopyx", _glob("canopyx_*.geojson"), ids=lambda p: _id(p, "canopyx"))
 def test_no_committed_scan_tree_stands_on_a_cadastre_or_osm_tree(canopyx):
     extra = _features(canopyx)
-    kept, dropped = cadastre_filter(
-        extra, canopyx.parent / f"trees_{_tile(canopyx, 'canopyx')}.geojson"
-    )
+    trees = canopyx.parent / f"trees_{_tile(canopyx, 'canopyx')}.geojson"
+    # cadastre_filter keeps everything without a trees file: no file, no proof
+    assert trees.exists(), f"{trees.name} is not committed"
+    kept, dropped = cadastre_filter(extra, trees)
     assert dropped == 0, f"re-bake lowveg: {dropped} of {len(extra)} scan trees are claimed"
 
 

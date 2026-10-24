@@ -67,6 +67,22 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
+      # The reference site's DGMs as decoded (scripts/dgm-cache.ts): the
+      # line-level and ground-join budgets read fifteen tiles, ten seconds of
+      # geotiff's LZW on one thread cold, under half a second warm (~86 MB
+      # compressed). Every entry is keyed by its TIFF's bytes, so any earlier
+      # cache is a sound start; the key is the DGM folder's git tree id (no
+      # hashing of 200 MB) and the reader's source, and only decides when a
+      # new entry is saved.
+      - name: Key the decoded-DGM cache
+        id: dgm-key
+        run: echo "tree=$(git rev-parse HEAD:data/dresden/dgm)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: .cache/dgm
+          key: dgm-${{ runner.os }}-${{ steps.dgm-key.outputs.tree }}-${{ hashFiles('scripts/dgm-cache.ts', 'bun.lock') }}
+          restore-keys: |
+            dgm-${{ runner.os }}-
       # Coverage as a report, not a gate: the lcov goes up as an artifact and
       # the job summary lists the sources no test imports (Bun's report only
       # names files some test loads).
@@ -106,15 +122,17 @@ jobs:
   # run side by side, by the tags in e2e/city-walk.spec.ts: SwiftShader is
   # CPU-bound, so a second Playwright worker on the same runner only halves
   # both pages' frame rates, while another runner takes its share off the
-  # wall clock. The shards are cut by measured time — the Playwright step of
-  # run 37496735478 (PR #99, 2026-10-06), with its per-test report: the
-  # whole site with the shell and /wissen 161 s, the desktop HUD group
-  # 132 s, the rendering group with the phone 315 s, of which the phone's
-  # one test (its own boot) took 61 s. So the phone runs beside the HUD:
-  # an estimate (not yet measured) of 161 / 193 / 254 s. The rendering
-  # group cannot be cut finer by tag without a second boot of its shared
-  # page. Each shard builds for itself:
-  # 21–24 s with the bake cache warm (that run), 2m23s–3m24s cold (run
+  # wall clock. The shards are cut by tag; the Playwright step (server start
+  # included) of the last three runs on main took, whole site with the shell
+  # and /wissen / desktop HUD with the phone / desktop rendering: 457 / 321 /
+  # 246 s (run 40131826252, 2026-10-24), 485 / 260 / 184 s (39971509670) and
+  # 426 / 338 / 255 s (39937443926, both 2026-10-23). The whole-site spec
+  # alone takes 169–415 s since it streams five dressed tiles (#142, #147),
+  # so its shard sets the floor; the rest of that shard takes seconds, and
+  # moving it by tag would barely help — a cheaper whole-site boot would.
+  # The rendering group cannot be cut finer by tag without a second boot of
+  # its shared page. Each shard builds for itself: 21–24 s with the bake
+  # cache warm (run 37496735478, 2026-10-06), 2m23s–3m24s cold (run
   # 37476256017 on main, 2026-10-06). The checkout varies more than any of
   # it (26 s to 12 min in that run), which is why it clones one commit.
   e2e:

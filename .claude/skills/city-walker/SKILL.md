@@ -841,7 +841,7 @@ bun run test:pipeline                  # pytest + ruff
 Missing DOM1 or DOP skips the canopy, NDVI and roof-colour steps (the
 runtime falls back); rail decks fall back to the DGM ramp. An RGB-only DOP
 (Bavaria) gets the NDVI raster from the visible bands (GLI, `ndvi.py`
-`gli_raster`). Every flight's index is mapped onto Dresden's scale (its
+`_gli`). Every flight's index is mapped onto Dresden's scale (its
 carriageways and mown lawns as anchors, pooled over the site's tiles), so a
 green threshold tuned on Dresden holds in every city — never tune one per
 site. Without a Basis-DLM (Hamburg, Berlin) `rail` reads OSM
