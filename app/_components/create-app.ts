@@ -28,6 +28,7 @@ import {
   type MemoryStep,
 } from "@/lib/city/memory-governor";
 import type { FramePace } from "@/lib/city/frame-pace";
+import { createFrameTiming } from "@/lib/city/frame-timing";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import {
   type GpuLoss,
@@ -221,6 +222,8 @@ const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
 /** How often the crash trail takes a heartbeat (crash-trail.ts). */
 const TRAIL_BEAT_MS = 2000;
+/** How often the GPU's frame time is read back (ms): a few per beat. */
+const GPU_TIME_READ_MS = 250;
 /** How long a memory emergency keeps the shadow camera from streaming. */
 const EMERGENCY_SHADOW_HOLD_MS = 120_000;
 /** Allocation failures closer together than this are one emergency. */
@@ -683,7 +686,9 @@ export interface CityWalkHandle {
  */
 async function createRenderer(
   container: HTMLElement,
-  budget: SceneBudget
+  budget: SceneBudget,
+  /** the heartbeat will take the GPU's frame times (a trail is kept) */
+  timed: boolean
 ): Promise<WebGPURenderer> {
   // No MSAA: the scene renders into the post stack's own target and SMAA
   // carries the AA (post-stack.ts); a multisampled canvas would only be
@@ -692,6 +697,10 @@ async function createRenderer(
     antialias: false,
     powerPreference: "high-performance",
     forceWebGL: budget.forceWebGL,
+    // The GPU's time per frame for the heartbeat (lib/city/frame-timing.ts):
+    // three asks for `timestamp-query` only where the adapter has it
+    // (Chromium; not Safari) and writes two timestamps per pass.
+    trackTimestamp: timed && !budget.forceWebGL,
   });
   try {
     await renderer.init();
@@ -701,6 +710,15 @@ async function createRenderer(
     // HUD's words rather than three's raw backend error (kept as `cause`).
     renderer.dispose().catch(() => undefined);
     throw new Error(NO_GPU_MESSAGE, { cause: error });
+  }
+  // Fallen back to WebGL2 (no adapter): its timer queries would wrap every
+  // pass for nothing — only the WebGPU backend's are read back.
+  const backend = renderer.backend as {
+    isWebGPUBackend?: boolean;
+    trackTimestamp?: boolean;
+  };
+  if (backend.isWebGPUBackend !== true) {
+    backend.trackTimestamp = false;
   }
   // The `lite` profile renders at half linear resolution (a quarter of the
   // pixels) and lets the browser upscale. The canvas fills the viewport and
@@ -991,7 +1009,11 @@ export async function createCityWalkApp(
   // before the first compile: WebKit's compiles otherwise wait a frame
   // per step (main-yield.ts)
   installMainYield();
-  const renderer = await createRenderer(opts.container, opts.budget);
+  const renderer = await createRenderer(
+    opts.container,
+    opts.budget,
+    opts.trail !== undefined
+  );
   if (opts.trail) {
     traceRenderer(renderer, opts.trail, opts.budget.safety);
   }
@@ -3028,6 +3050,63 @@ async function bootApp(
     });
   // One frame: the scene steps, streams and renders.
   const timeBootFrame = bootFrames(streamTimings);
+  // Where each frame's time goes, for the heartbeat (below).
+  const frameTiming = createFrameTiming();
+  // The GPU's time, read back from three's timestamp queries a few times a
+  // second (one readback at a time: a slow GPU's answer is waited for).
+  const timedBackend = renderer.backend as {
+    isWebGPUBackend?: boolean;
+    trackTimestamp?: boolean;
+  };
+  const timesGpu =
+    timedBackend.isWebGPUBackend === true &&
+    timedBackend.trackTimestamp === true;
+  let gpuReadDue = 0;
+  let gpuReading = false;
+  // three hands back its last value when nothing new resolved (the map
+  // busy, no pass since, a failed readback): the same number again is
+  // not a new frame's.
+  let lastGpuMs = Number.NaN;
+  const readGpuTime = (now: number) => {
+    if (!timesGpu || gpuReading || now < gpuReadDue) {
+      return;
+    }
+    gpuReading = true;
+    gpuReadDue = now + GPU_TIME_READ_MS;
+    renderer
+      .resolveTimestampsAsync("render")
+      .then((ms) => {
+        if (typeof ms === "number" && ms !== lastGpuMs) {
+          lastGpuMs = ms;
+          frameTiming.gpu(ms);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        gpuReading = false;
+      });
+  };
+  let lastDrawnAt: number | undefined;
+  /**
+   * A drawn frame's times: its callback from `cpuStart`, the render call,
+   * and the interval since the frame before — none across frames the pace
+   * or the e2e hold kept back (a held gap is no measure of the display).
+   */
+  const timeFrame = (
+    time: number,
+    cpuStart: number,
+    renderStart: number,
+    renderEnd: number
+  ) => {
+    const held = lastDrawnAt === undefined || opts.pace?.heldBefore() === true;
+    frameTiming.frame(
+      renderEnd - cpuStart,
+      renderEnd - renderStart,
+      held ? undefined : time - (lastDrawnAt ?? time)
+    );
+    lastDrawnAt = time;
+    readGpuTime(renderEnd);
+  };
   const frame = (time: number) => {
     const frameStart = streamTimings.now();
     timer.update(time);
@@ -3106,9 +3185,12 @@ async function bootApp(
     // The counters cover this frame's passes only (autoReset is off: the
     // loop's own reset also ran on held frames, which read back as zero).
     renderer.info.reset();
+    const renderStart = streamTimings.now();
     framedBuilds.draw(postStack.render);
+    const renderEnd = streamTimings.now();
     takeCaptureTile();
     frames++;
+    timeFrame(time, frameStart, renderStart, renderEnd);
     tickPocFrame(shadowRendered);
     timeBootFrame(frameStart, shadowRendered);
     shadowFrameSeen?.(shadowRendered);
@@ -3123,6 +3205,7 @@ async function bootApp(
     // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
     // the clamp in the frame keeps the skipped time from jumping the scene.
     if (pocFramesHeld()) {
+      lastDrawnAt = undefined;
       return;
     }
     // Held back while the phone's sidebar covers the scene, still while it
@@ -3145,6 +3228,7 @@ async function bootApp(
     // phone's real 7 fps.
     let beatFrames = 0;
     let beatAt = performance.now();
+    const beatSize = new Vector2();
     const beat = setInterval(() => {
       const heap = (
         performance as Performance & {
@@ -3155,6 +3239,8 @@ async function bootApp(
       const rate = ((frames - beatFrames) * 1000) / Math.max(now - beatAt, 1);
       beatFrames = frames;
       beatAt = now;
+      const timing = frameTiming.take();
+      const drawn = renderer.getDrawingBufferSize(beatSize);
       trail.beat({
         frames,
         fps: rate,
@@ -3176,6 +3262,13 @@ async function bootApp(
         mode: pose.getMode(),
         heightM: camera.position.y - groundUnderCamera(),
         stopped: lifecycle.stopped,
+        cpuMs: timing?.cpuMs,
+        cpuMaxMs: timing?.cpuMaxMs,
+        renderMs: timing?.renderMs,
+        timedFrames: timing?.frames,
+        gpuMs: timing?.gpuMs,
+        peakHz: timing?.peakHz,
+        drawMP: (drawn.x * drawn.y) / 1e6,
       });
     }, TRAIL_BEAT_MS);
     cleanups.push(() => clearInterval(beat));

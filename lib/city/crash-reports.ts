@@ -1,11 +1,15 @@
 import {
+  emptyTiming,
   FPS_BUCKETS,
   firstAt,
   formatBeat,
   resumedFor,
   round,
   type SummaryMark,
+  type TimingSums,
+  timingMeans,
   type Trail,
+  type TrailBeat,
   type TrailEvent,
   trailPhase,
 } from "./crash-trail";
@@ -483,6 +487,20 @@ function common(trail: Trail, ctx: ReportContext, t: number) {
 const roundOrNone = (value: number | undefined, digits: number) =>
   value === undefined ? undefined : round(value, digits);
 
+/**
+ * The last beat's frame times (lib/city/frame-timing.ts), if it had any —
+ * none for one the pace held down, as its frame rate.
+ */
+const lastTiming = (last: TrailBeat | undefined) =>
+  last?.paced
+    ? {}
+    : {
+        last_cpu_ms: roundOrNone(last?.cpuMs, 1),
+        last_gpu_ms: roundOrNone(last?.gpuMs, 1),
+        last_peak_hz: roundOrNone(last?.peakHz, 0),
+        last_draw_mp: roundOrNone(last?.drawMP, 2),
+      };
+
 /** The page's numbers, shown with every report. */
 function pageContext(trail: Trail) {
   const stats = trail.stats;
@@ -501,6 +519,7 @@ function pageContext(trail: Trail) {
     last_cpu_mb: roundOrNone(last?.cpuMB, 0),
     // (none behind the phone's sidebar: that rate is the pace's)
     last_fps: last?.paced ? undefined : roundOrNone(last?.fps, 1),
+    ...lastTiming(last),
     last_tiles: last ? `${last.cities}/${last.dressings}` : undefined,
     last_raster_mb: roundOrNone(last?.rasterMB, 0),
     last_cache_mb: roundOrNone(last?.cacheMB, 0),
@@ -615,6 +634,20 @@ function stretch(trail: Trail) {
     beats: (stats?.beats ?? 0) - (sent?.beats ?? 0),
     fpsSum: (stats?.fpsSum ?? 0) - (sent?.fpsSum ?? 0),
     fps: (stats?.fps ?? []).map((n, i) => n - (sent?.fps[i] ?? 0)),
+    timing: timingSince(stats?.timing, sent?.timing),
+  };
+}
+
+/** The frame times' sums since a mark (all of them without one). */
+function timingSince(now: TimingSums | undefined, then?: TimingSums) {
+  const a = now ?? emptyTiming();
+  const b = then ?? emptyTiming();
+  return {
+    frames: a.frames - b.frames,
+    cpuMs: a.cpuMs - b.cpuMs,
+    renderMs: a.renderMs - b.renderMs,
+    gpuBeats: a.gpuBeats - b.gpuBeats,
+    gpuMs: a.gpuMs - b.gpuMs,
   };
 }
 
@@ -635,6 +668,7 @@ export function summaryMark(trail: Trail): SummaryMark {
     beats: stats?.beats ?? 0,
     fpsSum: stats?.fpsSum ?? 0,
     fps: [...(stats?.fps ?? [])],
+    timing: stats?.timing ? { ...stats.timing } : undefined,
     count: (trail.report?.sent?.count ?? 0) + 1,
   };
 }
@@ -673,6 +707,13 @@ export function summaryReport(
       below += part.fps[i] ?? 0;
       measure(`fps_below_${bound}`, below / part.beats, "ratio");
     });
+    // Where the frames' time went (lib/city/frame-timing.ts): the main
+    // thread's frame and the render call in it, and the GPU where the
+    // browser has timestamp queries.
+    const t = timingMeans(part.timing);
+    measure("frame_cpu_ms", t.cpuMs, "millisecond");
+    measure("frame_render_ms", t.renderMs, "millisecond");
+    measure("frame_gpu_ms", t.gpuMs, "millisecond");
     measure("held_max", trail.stats?.maxHeldMB, "megabyte");
     measure("heap_max", trail.stats?.maxHeapMB, "megabyte");
     measure("cpu_max", trail.stats?.maxCpuMB, "megabyte");

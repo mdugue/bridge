@@ -90,6 +90,21 @@ export interface TrailBeat {
   heightM: number;
   /** the render had stopped (the failure card): a record, no frame rate */
   stopped?: boolean;
+  /**
+   * Where the beat's frames spent their time (lib/city/frame-timing.ts),
+   * ms: the frame callback on the main thread (mean, slowest), the render
+   * call inside it, the GPU (timestamp queries; Chromium's WebGPU only) —
+   * and the fastest rate the loop ran (Hz) and the pixels each frame drew
+   * (millions). Optional: older records and beats without a frame lack them.
+   */
+  cpuMs?: number;
+  cpuMaxMs?: number;
+  renderMs?: number;
+  /** the frames those means are over (they weigh the beat in the stats) */
+  timedFrames?: number;
+  gpuMs?: number;
+  peakHz?: number;
+  drawMP?: number;
 }
 
 /**
@@ -116,6 +131,21 @@ export interface TrailStats {
   maxHeapMB?: number;
   /** the most the tiles kept on the CPU (TrailBeat.cpuMB); optional */
   maxCpuMB?: number;
+  /** the frame times of the counted beats, summed (optional) */
+  timing?: TimingSums;
+}
+
+/**
+ * The counted beats' frame times summed, for a mean over any stretch
+ * (`timingMeans`): the main thread's per frame (each beat's mean weighed
+ * by its frames), the GPU's per beat that had one.
+ */
+export interface TimingSums {
+  frames: number;
+  cpuMs: number;
+  renderMs: number;
+  gpuBeats: number;
+  gpuMs: number;
 }
 
 /**
@@ -214,6 +244,8 @@ export interface SummaryMark {
   beats: number;
   fpsSum: number;
   fps: number[];
+  /** the frame times' sums then (optional: older records lack them) */
+  timing?: TimingSums;
   /** summaries sent so far */
   count: number;
 }
@@ -379,6 +411,38 @@ export function pushBeat(trail: Trail, beat: TrailBeat): void {
   stats.beats += 1;
   stats.fpsSum += fps;
   stats.fps[fpsBucket(fps)] += 1;
+  if (beat.cpuMs !== undefined && beat.renderMs !== undefined) {
+    const sums = (stats.timing ??= emptyTiming());
+    const n = beat.timedFrames ?? 1;
+    sums.frames += n;
+    sums.cpuMs += beat.cpuMs * n;
+    sums.renderMs += beat.renderMs * n;
+    if (beat.gpuMs !== undefined) {
+      sums.gpuBeats += 1;
+      sums.gpuMs += beat.gpuMs;
+    }
+  }
+}
+
+export function emptyTiming(): TimingSums {
+  return { frames: 0, cpuMs: 0, renderMs: 0, gpuBeats: 0, gpuMs: 0 };
+}
+
+/** The means of a stretch's frame times (ms), or none where it has none. */
+export function timingMeans(sums: TimingSums | undefined): {
+  cpuMs?: number;
+  renderMs?: number;
+  gpuMs?: number;
+} {
+  if (!sums) {
+    return {};
+  }
+  const per = (sum: number, n: number) => (n > 0 ? sum / n : undefined);
+  return {
+    cpuMs: per(sums.cpuMs, sums.frames),
+    renderMs: per(sums.renderMs, sums.frames),
+    gpuMs: per(sums.gpuMs, sums.gpuBeats),
+  };
 }
 
 /** When an event of `kind` first happened (s), or undefined. */
@@ -485,6 +549,7 @@ export function formatBeat(b: TrailBeat): string {
     `f${b.frames} ${round(b.fps)}fps${b.paced ? " paced" : ""}`,
     memoryPart(b),
     `${b.calls}dc ${round(b.triangles / 1000)}k▲`,
+    timingPart(b),
     tilesPart(b),
     cachePart(b),
     netPart(b),
@@ -492,6 +557,20 @@ export function formatBeat(b: TrailBeat): string {
   ]
     .filter((part) => part !== "")
     .join("  ");
+}
+
+/** The frame's main-thread and GPU time, the loop's peak rate, the pixels. */
+function timingPart(b: TrailBeat): string {
+  if (b.cpuMs === undefined) {
+    return "";
+  }
+  const gpu = b.gpuMs === undefined ? "" : ` gpu ${round(b.gpuMs, 1)}ms`;
+  const hz = b.peakHz === undefined ? "" : ` ${round(b.peakHz)}Hz`;
+  const mp = b.drawMP === undefined ? "" : ` ${round(b.drawMP, 2)}MP`;
+  return (
+    `cpu ${round(b.cpuMs, 1)}/${round(b.cpuMaxMs ?? b.cpuMs)}ms ` +
+    `render ${round(b.renderMs ?? 0, 1)}ms${gpu}${hz}${mp}`
+  );
 }
 
 /** The scene's estimate (and its rasters), three's count, the JS heap and
@@ -556,9 +635,15 @@ export function formatStats(stats: TrailStats): string {
     stats.maxHeapMB === undefined ? "" : ` heap ${round(stats.maxHeapMB)}MB`;
   const cpu =
     stats.maxCpuMB === undefined ? "" : ` cpu ${round(stats.maxCpuMB)}MB`;
+  const t = timingMeans(stats.timing);
+  const timing =
+    t.cpuMs === undefined
+      ? ""
+      : `  frame cpu ${round(t.cpuMs, 1)}ms render ${round(t.renderMs ?? 0, 1)}ms` +
+        (t.gpuMs === undefined ? "" : ` gpu ${round(t.gpuMs, 1)}ms`);
   return (
     `${stats.beats} beats, mean ${round(stats.fpsSum / stats.beats)}fps (${buckets})` +
-    `  max held ${round(stats.maxHeldMB)}MB gpu ${round(stats.maxGpuMB)}MB${heap}${cpu}`
+    `  max held ${round(stats.maxHeldMB)}MB gpu ${round(stats.maxGpuMB)}MB${heap}${cpu}${timing}`
   );
 }
 

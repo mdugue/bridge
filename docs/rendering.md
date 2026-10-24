@@ -848,7 +848,7 @@ crash card, every report's breadcrumbs and `crashTrail.current()` (in a
 cabled Web Inspector) print it as one line:
 
 ```text
-12.3s  f360 30fps  gpu 180MB rast 98MB held 512MB 5482a 274MB 120t 339MB 31rt 120p 300u  90dc 1200k▲  tiles 3/6 terr 2f/4c  cache 290MB 168-336  net 4d 2p 0f offline  pastel walk 2m
+12.3s  f360 30fps  gpu 180MB rast 98MB held 512MB 5482a 274MB 120t 339MB 31rt 120p 300u  90dc 1200k▲  cpu 9.1/32ms render 5.3ms gpu 14.2ms 120Hz 1.23MP  tiles 3/6 terr 2f/4c  cache 290MB 168-336  net 4d 2p 0f offline  pastel walk 2m
 ```
 
 - the seconds since the page started, frames drawn and the frame rate;
@@ -862,6 +862,17 @@ cabled Web Inspector) print it as one line:
   uniform buffers; `heap` only where the browser has `performance.memory`
   (never on Safari);
 - the last frame's draw calls and triangles;
+- where the beat's frames spent their time (`lib/city/frame-timing.ts`):
+  the frame callback on the main thread (mean / slowest), the render call
+  inside it (three encoding and submitting the passes), the GPU's time per
+  frame from timestamp queries (`trackTimestamp`; only where the adapter
+  offers `timestamp-query` — Chromium's WebGPU, not Safari, not WebGL2),
+  the fastest rate the loop ran (the 10th percentile of its frame
+  intervals: 120 on a ProMotion display that it keeps up with) and the
+  pixels drawn per frame (millions). A slow page with a short `cpu` and a
+  long `gpu` is fill-bound; one whose `cpu` fills the frame is held up by
+  its JavaScript. The page reports send the means as `frame_cpu_ms`,
+  `frame_render_ms` and `frame_gpu_ms`, and the last beat's as context;
 - `tiles`: the cities in view and the dressings built (every one,
   coarse and hidden ones too); `terr`: the terrain levels loaded with
   their rasters, fine and coarse;

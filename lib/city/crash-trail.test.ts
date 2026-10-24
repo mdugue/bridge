@@ -142,6 +142,20 @@ test("a beat is one line, its parts two spaces apart, older records' too", () =>
   );
   // Online, the line says nothing about it.
   expect(formatBeat({ ...full, online: true })).toContain("net 4d 2p 0f  ");
+  // Where the frames' time went, after the draw calls.
+  expect(
+    formatBeat({
+      ...beat(14),
+      cpuMs: 9.14,
+      cpuMaxMs: 31.6,
+      renderMs: 5.25,
+      gpuMs: 14.2,
+      peakHz: 119.6,
+      drawMP: 1.234,
+    })
+  ).toContain(
+    "90dc 1200k▲  cpu 9.1/32ms render 5.3ms gpu 14.2ms 120Hz 1.23MP  tiles"
+  );
   // A record from before these fields reads as it always did.
   expect(formatBeat(beat(14))).toBe(
     "14s  f420 30fps  gpu 180MB  90dc 1200k▲  tiles 3/2  pastel walk 2m"

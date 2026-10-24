@@ -443,6 +443,42 @@ test("the summary is a transaction over the page with its numbers", () => {
   });
 });
 
+test("the summary says where the frames' time went, for the stretch", () => {
+  const trail = page();
+  trail.report = {
+    sid: ID,
+    release: "bridge@abc",
+    environment: "production",
+    problems: 0,
+    ended: false,
+  };
+  trail.report.sent = summaryMark(trail);
+  // Two timed beats, one of them with a GPU time (Chromium's WebGPU),
+  // each weighed by its frames: (12·60 + 7·20) / 80, (8·60 + 3·20) / 80.
+  pushBeat(trail, {
+    ...beat(10, 30),
+    cpuMs: 12,
+    renderMs: 8,
+    gpuMs: 20,
+    timedFrames: 60,
+  });
+  pushBeat(trail, { ...beat(12, 30), cpuMs: 7, renderMs: 3, timedFrames: 20 });
+  expect(summaryReport(trail, ID, ctx).measurements).toMatchObject({
+    frame_cpu_ms: { value: 10.75, unit: "millisecond" },
+    frame_render_ms: { value: 6.75, unit: "millisecond" },
+    frame_gpu_ms: { value: 20, unit: "millisecond" },
+  });
+  // The next stretch counts only its own.
+  trail.report.sent = summaryMark(trail);
+  pushBeat(trail, { ...beat(14, 30), cpuMs: 4, renderMs: 2 });
+  const next = summaryReport(trail, ID, ctx).measurements as Record<
+    string,
+    unknown
+  >;
+  expect(next.frame_cpu_ms).toEqual({ value: 4, unit: "millisecond" });
+  expect(next.frame_gpu_ms).toBeUndefined();
+});
+
 const DSN = "https://k3y@o1.ingest.de.sentry.io/42";
 const SHA = "3b74f39d6894e26a36f2b11c18f242c961dc3b69";
 
