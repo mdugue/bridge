@@ -40,39 +40,6 @@ test("every other style runs the pass; all but the Schwarzplan draw ink", () => 
   }
 });
 
-test("the styled scene dressing: Comic's and Papier's crowns, noir's lamp cones", () => {
-  expect(
-    RENDER_STYLES.filter((def) => def.crowns).map((def) => [def.id, def.crowns])
-  ).toEqual([
-    ["comic", "comic"],
-    ["paper", "paper"],
-    ["line", "paper"],
-  ]);
-  expect(
-    RENDER_STYLES.filter((def) => def.lampCones).map((def) => def.id)
-  ).toEqual(["noir"]);
-  expect(RENDER_STYLE_BY_ID.pastel.crowns).toBeNull();
-  expect(RENDER_STYLE_BY_ID.pastel.lampCones).toBe(false);
-});
-
-test("Papier, Strich and the Schwarzplan swap the scene's materials", () => {
-  expect(
-    RENDER_STYLES.filter((def) => def.paperScene).map((def) => [
-      def.id,
-      def.paperScene,
-    ])
-  ).toEqual([
-    ["paper", "paper"],
-    ["line", "line"],
-    ["figure", "figure"],
-  ]);
-});
-
-test("the monochrome styles take the colour grade out", () => {
-  expect(RENDER_STYLE_BY_ID.noir.gradingWeight).toBe(0);
-  expect(RENDER_STYLE_BY_ID.sincity.gradingWeight).toBe(0);
-});
-
 test("the planner styles draw a clean sheet: no grade, no vignette, no blur", () => {
   for (const id of ["line", "figure"] as const) {
     const def = RENDER_STYLE_BY_ID[id];

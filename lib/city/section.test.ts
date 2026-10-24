@@ -4,11 +4,19 @@ import {
   cutOutCorners,
   cutOutFromView,
   cutOutPlanes,
+  type CutOut,
+  type GroundPoint,
   groundStrip,
-  insideCutOut,
   joinStrips,
   sectionLine,
 } from "./section";
+
+/** Is a ground point inside the cut-out? The planes' oracle. */
+function insideCutOut(cut: CutOut, p: GroundPoint): boolean {
+  return cutOutPlanes(cut).every(
+    (pl) => pl.normal.x * p.x + pl.normal.z * p.z + pl.constant >= -1e-6
+  );
+}
 
 const VIEWPORT = { width: 1000, height: 700 };
 

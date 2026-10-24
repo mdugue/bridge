@@ -622,11 +622,16 @@ noted), then what was refuted or judged not worth doing.
   the string case; a baked traffic file may change) and three identical
   pairs (`load_wikidata`, `surface_id`, `table_json`) — `common.py`;
   dead exports beyond 046's three (`pageUsable`, `activeDataLayers`,
-  `pannedBy`, `HORIZON_BANDS`, `LANGS`) and ten exports referenced by
-  their test only (`skyview.ts`'s `sunAngles`/`horizonBracket`/`horizonTexel`,
-  `shadowStreamError`, `screenOfPoint`, `insideCutOut`, `stripeCoverage`,
-  `buildingFootprints`, `colonyEdgeMetres`/`colonyAxis`, `projectOntoAxis`)
-  — wire in or drop; three clocks (`performance.now`, `Date.now`, the
+  `HORIZON_BANDS`, `LANGS`) and exports referenced by their test only
+  (`stripeCoverage`, `buildingFootprints`, `colonyEdgeMetres`/`colonyAxis`)
+  — wire in or drop (**dropped**, 2026-10-24, the test audit: `pannedBy`,
+  `projectOntoAxis`, and the CPU copies of shader code — `skyview.ts`'s
+  `sunAngles`/`horizonBracket`/`horizonTexel`/`farSunVisibility`/
+  `nearBandWeight`/`horizonSunVisibility`/`facadeSkyView`, `windows.ts`'s
+  `windowAxes`/`windowRows`: the shader is the only implementation, and a
+  CPU copy no caller uses cannot catch a shader regression; moved into
+  their tests as oracles: `shadowStreamError`, `insideCutOut`;
+  `screenOfPoint` stays, the documented QA projection); three clocks (`performance.now`, `Date.now`, the
   net-gate's visible clock) in the same files with no rule which a
   timeout uses — one `clocks` object in `net-gate.ts`; twelve `userData`
   tags as bare literals across 19 files — a typed `scene-tags.ts` when a

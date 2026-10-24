@@ -29,8 +29,7 @@ export function createRegressionState(): RegressionState {
 export function stepRegression(
   state: RegressionState,
   moved: boolean,
-  dtMs: number,
-  recoverMs: number = RECOVER_MS
+  dtMs: number
 ): boolean {
   if (moved) {
     state.regressed = true;
@@ -38,7 +37,7 @@ export function stepRegression(
     return true;
   }
   state.stillMs += Math.max(dtMs, 0);
-  if (state.stillMs >= recoverMs) {
+  if (state.stillMs >= RECOVER_MS) {
     state.regressed = false;
   }
   return state.regressed;

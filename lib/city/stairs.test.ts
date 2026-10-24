@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import {
   axisMiddle,
   burnStairs,
-  projectOntoAxis,
   raiseTerraces,
   STAIR_BANK,
   STAIR_BURN_M,
@@ -212,10 +211,7 @@ test("a terrace lifts the ground inside it and nowhere else", () => {
   expect(at(low, 20, 20)).toBe(at(el, 20, 20)); // never lowers
 });
 
-test("a point projects onto the axis only between its ends", () => {
-  expect(projectOntoAxis(FLIGHT.coords, 52, 45)).toEqual({ d: 2, s: 5 });
-  expect(projectOntoAxis(FLIGHT.coords, 50, 39)).toBeNull();
-  expect(projectOntoAxis(FLIGHT.coords, 50, 61)).toBeNull();
+test("a flight's axis middle", () => {
   expect(axisMiddle(FLIGHT.coords)).toEqual([50, 50]);
 });
 

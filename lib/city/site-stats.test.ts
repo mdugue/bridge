@@ -3,6 +3,7 @@ import {
   buildingHeights,
   footprintArea,
   landcoverShares,
+  orderingOf,
   orderSites,
   parseSiteStats,
   quantile,
@@ -103,4 +104,11 @@ test("a trace of water does not read as none", () => {
   const water = SITE_ORDERINGS.find((o) => o.id === "water");
   expect(water?.figure?.(stats({ waterShare: 0.002 }))).toBe("< 1 % Wasser");
   expect(water?.figure?.(stats({ waterShare: 0.249 }))).toBe("25 % Wasser");
+});
+
+test("an ordering is found by its id, an unknown id falls back to the first", () => {
+  for (const o of SITE_ORDERINGS) {
+    expect(orderingOf(o.id)).toBe(o);
+  }
+  expect(orderingOf("nope")).toBe(SITE_ORDERINGS[0]);
 });

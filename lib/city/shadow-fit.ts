@@ -144,12 +144,6 @@ export function shadowDeadZone(radius: number): number {
 }
 
 /**
- * 3DTilesRendererJS's error target (px), which the viewer keeps as its base
- * (the memory governor scales it up, never down).
- */
-export const STREAM_ERROR_TARGET = 16;
-
-/**
  * The resolution (px, square) the shadow camera streams tiles at: one
  * chosen for streaming, not the shadow map's. The tile renderer measures an
  * orthographic camera's error as a tile's geometric error over its pixel —
@@ -187,17 +181,4 @@ export function shadowStreamResolution(tier: "desktop" | "mobile"): {
 } {
   const px = SHADOW_STREAM_PX[tier];
   return { width: px, height: px };
-}
-
-/**
- * The screen-space error (px) the tile renderer gives a node of
- * `geometricError` (m) under the shadow camera at half-size `radius` (m),
- * streamed at `px`: its pixel is the frustum's width over the resolution.
- */
-export function shadowStreamError(
-  geometricError: number,
-  radius: number,
-  px: number
-): number {
-  return geometricError / ((2 * radius) / px);
 }

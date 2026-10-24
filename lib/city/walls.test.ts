@@ -167,7 +167,10 @@ test("a city wall standing well above its step stands its height on every column
     kind: "city_wall",
   };
   const g = wallGeometry([wall], ground, offset, { snapToStep: true });
-  for (const top of columnTops(g?.positions ?? [])) {
+  expect(g).not.toBeNull();
+  const tops = columnTops(g?.positions ?? []);
+  expect(tops.length).toBeGreaterThan(1);
+  for (const top of tops) {
     expect(top).toBeCloseTo(109, 1);
   }
 });
@@ -187,7 +190,10 @@ test("a city wall that holds the earth ends at its shelf and stands where the gr
     kind: "city_wall",
   };
   const g = wallGeometry([wall], ground, offset, { snapToStep: true });
-  for (const top of columnTops(g?.positions ?? [])) {
+  expect(g).not.toBeNull();
+  const tops = columnTops(g?.positions ?? []);
+  expect(tops.length).toBeGreaterThan(1);
+  for (const top of tops) {
     expect(top).toBeCloseTo(108, 1);
   }
   // Only a snapped column's cap runs back to the shelf the wall holds (the

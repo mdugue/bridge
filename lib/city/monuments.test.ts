@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { yawOfBearing } from "./furniture";
 import {
   basinLevels,
-  coveredFigure,
   FINISH,
   figureShare,
   fountainsRun,
@@ -86,9 +85,10 @@ test("a figure gets four jets round it, only those on the water", () => {
   expect(jetPlaces([0, 0], 80, true, strip)).toHaveLength(0);
 });
 
-test("a monument's yaw is stable and in range", () => {
+test("monuments a metre apart face different ways, each in range", () => {
   const a = yawOf(412_117.9, 5_657_577.5);
-  expect(a).toBe(yawOf(412_117.9, 5_657_577.5));
+  expect(yawOf(412_118.9, 5_657_577.5)).not.toBeCloseTo(a, 2);
+  expect(yawOf(412_117.9, 5_657_578.5)).not.toBeCloseTo(a, 2);
   expect(a).toBeGreaterThanOrEqual(0);
   expect(a).toBeLessThan(Math.PI * 2);
 });
@@ -302,10 +302,6 @@ describe("the QA's monument corrections", () => {
       at
     );
     expect(topOf(measured.pieces)).toBeCloseTo(2.5);
-  });
-
-  test("a covered fountain figure is the free sculpture's marker", () => {
-    expect(coveredFigure()).toEqual(markerPieces("statue", "sculpture"));
   });
 
   test("a drinking fountain is a small, waist-high basin with a spout", () => {
