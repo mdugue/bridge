@@ -91,6 +91,8 @@ export function tramBed(bed: TramBed): BedShape {
     case "ballast":
       return { half: 1.4, drop: BALLAST_DROP_M };
     case "street":
+    default:
+      // an unknown bed (a newer bake): the street's, the shallowest
       return { half: PAVED_HALF_M, drop: PAVED_DROP_M };
   }
 }
@@ -108,10 +110,6 @@ interface Hit {
   d: number;
   level: number;
 }
-
-/** Two beds under one cell this far apart in level (m) cross at two
- *  storeys: the lower one's is the ground. */
-const CROSSING_M = 1;
 
 /** The nearest point of a bed's centreline to (x, y), between its ends
  *  (flat ends: a bed reaches no point beyond them), and the level there. */
@@ -192,24 +190,36 @@ export function burnBeds(input: {
       continue;
     }
     let level = asks.level(idx, ground);
-    if (under && level > ground) {
-      // under a deck the ground is only ever lowered: a road under the
-      // bridge is never filled
-      const row = Math.floor(idx / n);
-      const col = idx - row * n;
-      if (under(minX + (col + 0.5) * dx, maxY - (row + 0.5) * dy)) {
-        continue;
-      }
+    // under a deck the ground is only ever lowered: a road under the
+    // bridge is never filled
+    const kept = level > ground && under?.(...cellCentre(idx, input)) === true;
+    if (kept) {
+      level = ground;
     }
-    // a line on a deck or over a gap: the ground under it never above
-    // its bed
+    // a line on a deck, over a gap or in a trench: the ground under it
+    // never above its bed
     level = Math.min(level, asks.lowers[idx]);
     out[idx] = level;
-    if (mask && (asks.lays(idx) || level < ground)) {
+    if (mask && ((asks.lays(idx) && !kept) || level < ground)) {
       mask[idx] = 1;
     }
   }
   return out;
+}
+
+/** A grid cell's centre (EPSG), row 0 = north. */
+function cellCentre(
+  idx: number,
+  grid: { bounds: readonly [number, number, number, number]; n: number }
+): [number, number] {
+  const [minX, minY, maxX, maxY] = grid.bounds;
+  const { n } = grid;
+  const row = Math.floor(idx / n);
+  const col = idx - row * n;
+  return [
+    minX + ((col + 0.5) * (maxX - minX)) / n,
+    maxY - ((row + 0.5) * (maxY - minY)) / n,
+  ];
 }
 
 /** The grid cells (first and last column and row) a bed's segment `i`
@@ -246,11 +256,9 @@ function opens(bed: Bed, hit: Hit, ground: number): boolean {
 class CellAsks {
   readonly touched: number[] = [];
   private readonly seen: Uint8Array;
-  // under a bed that lays the ground: the nearest one's distance and level,
-  // and the lowest
+  // under a bed that lays the ground: the nearest one's distance and level
   private readonly inD: Float32Array;
   private readonly inLevel: Float32Array;
-  private readonly inLowest: Float32Array;
   /** under a bed that only lowers it: the lowest */
   readonly lowers: Float32Array;
   // beside: the slopes' lower and upper bounds, and the nearest slope's
@@ -265,7 +273,6 @@ class CellAsks {
     this.seen = new Uint8Array(cells);
     this.inD = new Float32Array(cells).fill(inf);
     this.inLevel = new Float32Array(cells);
-    this.inLowest = new Float32Array(cells).fill(inf);
     this.lowers = new Float32Array(cells).fill(inf);
     this.lo = new Float32Array(cells).fill(-inf);
     this.hi = new Float32Array(cells).fill(inf);
@@ -286,7 +293,6 @@ class CellAsks {
         this.lowers[idx] = Math.min(this.lowers[idx], hit.level);
         return;
       }
-      this.inLowest[idx] = Math.min(this.inLowest[idx], hit.level);
       if (hit.d < this.inD[idx]) {
         this.inD[idx] = hit.d;
         this.inLevel[idx] = hit.level;
@@ -315,12 +321,10 @@ class CellAsks {
    *  lowering beds' cap). */
   level(idx: number, ground: number): number {
     if (this.lays(idx)) {
-      // where two beds cross a storey apart the lower line passes under
-      // the upper one's structure: its bed is the ground
-      const lowest = this.inLowest[idx];
-      return this.inLevel[idx] - lowest > CROSSING_M
-        ? lowest
-        : this.inLevel[idx];
+      // the nearest bed's: two lines crossing a storey apart are a span
+      // over the lower one (lib/city/line-levels.ts `spansOver`), whose
+      // bed only lowers
+      return this.inLevel[idx];
     }
     if (Number.isFinite(this.lowers[idx])) {
       return ground;
@@ -340,16 +344,17 @@ const CELL_M = 8;
 
 /**
  * The beds for point queries: the level of the bed nearest (x, y) within
- * `reach` of its centreline — the surface the rail layer lays its ballast
+ * its half and `margin` of its centreline — the surface the rail layer lays its ballast
  * on (the profile, not the ground the bake laid `drop` under it).
  */
 export class BedIndex {
   private cells = new Map<string, { bed: Bed; i: number }[]>();
   constructor(
     private readonly beds: readonly Bed[],
-    private readonly reach: number
+    private readonly margin: number
   ) {
     for (const bed of beds) {
+      const reach = bed.half + margin;
       for (let i = 0; i + 1 < bed.coords.length; i++) {
         const [ax, ay] = bed.coords[i];
         const [bx, by] = bed.coords[i + 1];
@@ -380,7 +385,7 @@ export class BedIndex {
     );
     for (const { bed, i } of list ?? []) {
       const hit = onSegment(bed, i, x, y);
-      if (hit && hit.d <= this.reach && (!best || hit.d < best.d)) {
+      if (hit && hit.d <= bed.half + this.margin && (!best || hit.d < best.d)) {
         best = hit;
         drop = bed.drop;
       }

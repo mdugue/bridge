@@ -3516,11 +3516,13 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   least-squares fit to its levels, a deck's top held — with 150 m of
   context either side (`lib/city/line-profile.ts`), published as `lz`. A
   line on the ground crossing another a storey (≥ 3 m) below it at ≥ 20°
-  is a *span* there (the DGM kept its bridge). The terrain bake lays the
+  is a *span* there (the DGM kept its bridge), and so is one standing
+  ≥ 2 m over its own ground beside a line as far below (a viaduct the DGM
+  lacks). The terrain bake lays the
   ground under every line's **bed** at its profile (ballast's width 0.1 m
   under it, a street track's 3 cm), the ground beside it graded at 1 : 1.5
-  for ≤ 4 m, the nearest bed winning, the lower of two crossing beds, never
-  a fill under a deck (`lib/city/track-beds.ts`, `shapeDgm`); the fine TIN
+  for ≤ 4 m, the nearest bed winning, a cut's only as a trench ≤ 0.5 m
+  deep, never a fill under a deck (`lib/city/track-beds.ts`, `shapeDgm`); the fine TIN
   holds 3 cm under a bed (0.15 m elsewhere). The yard's ballast is draped
   on the beds' profile to 2 cm. Measured over the seven sites in the PR;
   Dresden's sleepers under the ballast 14.3 % → 0.05 %, its rail heads

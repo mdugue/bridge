@@ -55,7 +55,12 @@ it — its profile ≥ 3 m over the other's within 5 m, at ≥ 20° — is a
 *span* there (`spansOver`, `CROSS_CLEAR_M`): the DGM kept the structure
 it crosses on (Hamburg's keeps its bridges), and the layer draws the span
 deck. Two lines side by side on terraces a storey apart run along each
-other and stay on the ground.
+other and stay on the ground. A line whose profile stands 2 m or more
+over its own ground with another line as far below it within 8 m
+(`RAISED_M`) is a span too: it climbs at its grade to a deck over a
+viaduct the DGM does not hold, and an embankment there would bury the
+line beside it. A lower line in a cut longer than 30 m runs in a tunnel:
+nothing over it is a span.
 
 **The bed.** The terrain bake lays the ground under every line's bed at
 its profile (`lib/city/track-beds.ts`, `shapeDgm`): under the bed — the
@@ -64,9 +69,8 @@ track — the ground is the profile less `drop` (0.1 m under ballast, 3 cm
 under a track in the paving); beside it the ground the bed leaves above
 or below is graded at 1 : 1.5, the slope an embankment and a cutting
 stand at, for at most 4 m (further out a wall or a quay stays). Under two
-beds the nearest wins — unless they lie more than a metre apart in
-height: then the lower, the line that passes under the other's
-structure; beside them every bed's slope bounds the ground.
+beds the nearest wins (a line crossing another a storey above it is a
+span, below); beside them every bed's slope bounds the ground.
 Under a deck the ground is only ever lowered — a road under a bridge is
 never filled — and a line on a deck or a span lays a bed that only lowers
 (Hamburg's DGM keeps its bridges: it held a footbridge's deck over the
@@ -89,8 +93,8 @@ lies 0.1 m under it and the ballast's 0.45 m fascia hides the step.
   0.05 %, its rail heads under ballast or ground 1.84 % → 0.01 %, its
   street tram rails in the road (> 2 cm) 2.6 % → 0.02 %; Munich's
   sleepers under the ballast 16.5 % → 0.05 %; Hamburg's rails more than
-  0.3 m under the ground 0.55 % → 0.01 %, under the ballast 2.8 % →
-  0.17 %; Leipzig, Meißen, Unna and Grimma alike. Steps beyond the grade
+  0.3 m under the ground 0.55 % → 0.02 %, under the ballast 2.8 % →
+  0.22 %; Leipzig, Meißen, Unna and Grimma alike. Steps beyond the grade
   by more than 0.3 m: none on any site (Dresden 100, Hamburg 69 with the
   levels alone); `scripts/line-levels.test.ts` holds the reference site
   to none.

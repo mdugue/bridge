@@ -251,11 +251,13 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
   const out: Passage[] = [];
   pieces.forEach((piece, k) => {
     const { tile, line, index, tracks } = of[k];
-    const runs = levels[tile]?.[line]?.[index]?.lv ?? [];
+    const solved = levels[tile]?.[line]?.[index];
+    const runs = solved?.lv ?? [];
     if (!runs.some((r) => r[2] === "c")) {
       return;
     }
     const pts = pieceSamples(piece);
+    const z = solved?.lz ? decodeProfile(solved.lz) : [];
     const d: number[] = [];
     pts.forEach((p, i) =>
       d.push(
@@ -284,7 +286,8 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
       out.push({
         coords: idx.map((i) => pts[i]),
         half: passageHalf(tracks),
-        y: idx.map((i) => runLevelAt(runs, d, i)?.y ?? Number.NaN),
+        // the track is drawn on its profile: the floor follows it
+        y: idx.map((i) => z[i] ?? runLevelAt(runs, d, i)?.y ?? Number.NaN),
       });
     }
   });

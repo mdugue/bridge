@@ -82,7 +82,7 @@ test("under two beds the nearest wins", () => {
 });
 
 test("the bed index answers the profile, not the ground under it", () => {
-  const index = new BedIndex([bed], 4);
+  const index = new BedIndex([bed], 2);
   expect(index.levelAt(50, 51)).toBeCloseTo(101, 6);
   expect(index.levelAt(50, 60)).toBeNull();
   expect(tramBed("street").drop).toBeLessThan(0.05);
@@ -98,21 +98,6 @@ test("a bed on a deck only lowers the ground: a bridge the DGM kept is cut", () 
   const cut = burnBeds({ elevations: kept, n, bounds, beds: [onDeck], mask });
   expect(cut[cell(50.5, 50.5)]).toBeCloseTo(100.9, 5);
   expect(mask[cell(50.5, 50.5)]).toBe(1);
-});
-
-test("where two beds cross a storey apart the lower one is the ground", () => {
-  const ground = new Float32Array(n * n).fill(100);
-  const over: Bed = {
-    ...bed,
-    coords: [
-      [50, 10],
-      [50, 90],
-    ],
-    z: [107, 107],
-  };
-  const out = burnBeds({ elevations: ground, n, bounds, beds: [bed, over] });
-  // at the crossing, nearer the upper line's centre: still the lower bed
-  expect(out[cell(50.5, 51.5)]).toBeCloseTo(100.9, 5);
 });
 
 test("a cut's bed opens a shallow trench, never a tunnel's lid", () => {

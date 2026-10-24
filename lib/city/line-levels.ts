@@ -99,6 +99,20 @@ const THROUGH_M = 1.5;
  * for a tram, more under a contact wire).
  */
 export const CROSS_CLEAR_M = 3;
+/**
+ * A line on the ground whose profile lies this far (m) over its own
+ * measured ground stands on an embankment or a viaduct; beside another
+ * line as far below it within RAISED_REACH_M (its bed and slope reach
+ * over the other's) it is a viaduct: the profile climbs at its grade to a
+ * deck the DGM does not hold, and an embankment there would bury the
+ * line beside it.
+ */
+const RAISED_M = 2;
+const RAISED_REACH_M = 8;
+/** A cut longer than this (m) is a tunnel's, not the fill a crossing
+ *  structure's ground leaves over a line (lib/city/levels.ts caps a cut
+ *  at LEVEL_CUT_M). */
+const CROSS_TUNNEL_M = 30;
 /** How near (m) a lower line passes under: its bed's half and a side. */
 const CROSS_REACH_M = 5;
 /** The least angle at which two lines cross (sine of 20°): a line beside
@@ -328,12 +342,45 @@ export function solvePieces(
     return {
       levels: levels.slice(own, end),
       profile: profile.slice(own - from, end - from),
+      ground: samples.slice(own, end).map((x) => x.ground),
     };
   });
   return solved.map((s, piece) => ({
     runs: encodeRuns(spansOver(index, solved, piece)),
     profile: s.profile,
   }));
+}
+
+/** What the first pass solved of a piece, per own sample. */
+interface Solved {
+  levels: (Level | null)[];
+  profile: (number | null)[];
+  /** the measured ground */
+  ground: (number | null)[];
+}
+
+/** Whether sample `i` lies in a cut longer than CROSS_TUNNEL_M. */
+function inTunnel(
+  levels: readonly (Level | null)[],
+  pts: readonly Point2[],
+  i: number
+): boolean {
+  if (levels[i]?.mode !== "cut") {
+    return false;
+  }
+  let a = i;
+  while (a > 0 && levels[a - 1]?.mode === "cut") {
+    a--;
+  }
+  let b = i;
+  while (b + 1 < levels.length && levels[b + 1]?.mode === "cut") {
+    b++;
+  }
+  let run = 0;
+  for (let k = a; k < b; k++) {
+    run += Math.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
+  }
+  return run > CROSS_TUNNEL_M;
 }
 
 /**
@@ -344,36 +391,67 @@ export function solvePieces(
  */
 function spansOver(
   index: SampleIndex,
-  solved: readonly { levels: (Level | null)[]; profile: (number | null)[] }[],
+  solved: readonly Solved[],
   piece: number
 ): (Level | null)[] {
-  const { levels, profile } = solved[piece];
+  const { levels, profile, ground } = solved[piece];
   const pts = index.pieces[piece].pts;
   return levels.map((level, k) => {
     const z = profile[k];
-    const dir = unit(
-      pts[Math.max(k - 1, 0)],
-      pts[Math.min(k + 1, pts.length - 1)]
-    );
-    if (level?.mode !== "ground" || z === null || !dir) {
+    const g = ground[k];
+    if (level?.mode !== "ground" || z === null) {
       return level;
     }
+    const raised = g !== null && z - g >= RAISED_M;
     const over = index
-      .near(pts[k][0], pts[k][1], CROSS_REACH_M, null, piece)
-      .some((s) => {
-        const below = solved[s.piece].profile[s.i];
-        if (below === null || z - below < CROSS_CLEAR_M) {
-          return false;
-        }
-        const other = index.pieces[s.piece].pts;
-        const t = unit(
-          other[Math.max(s.i - 1, 0)],
-          other[Math.min(s.i + 1, other.length - 1)]
-        );
-        return (
-          t !== null && Math.abs(dir[0] * t[1] - dir[1] * t[0]) >= CROSS_SIN
-        );
-      });
+      .near(
+        pts[k][0],
+        pts[k][1],
+        raised ? RAISED_REACH_M : CROSS_REACH_M,
+        null,
+        piece
+      )
+      .some((s) => passesOver(index, solved, { piece, i: k }, s, raised));
     return over ? { mode: "span", y: level.y } : level;
   });
+}
+
+/** Whether sample `at` (on the ground at its profile) passes over the
+ *  line at sample `s` on a structure: a storey over it, crossing; or
+ *  raised over its own ground beside it (`raised`), where an embankment
+ *  would bury it. */
+function passesOver(
+  index: SampleIndex,
+  solved: readonly Solved[],
+  at: { piece: number; i: number },
+  s: { piece: number; i: number },
+  raised: boolean
+): boolean {
+  const z = solved[at.piece].profile[at.i] ?? Number.NaN;
+  const below = solved[s.piece].profile[s.i];
+  // a long cut a storey down runs under a lid (a tunnel): nothing to span
+  if (
+    below === null ||
+    inTunnel(solved[s.piece].levels, index.pieces[s.piece].pts, s.i)
+  ) {
+    return false;
+  }
+  if (raised && z - below >= RAISED_M) {
+    return true;
+  }
+  if (z - below < CROSS_CLEAR_M) {
+    return false;
+  }
+  const dir = tangent(index.pieces[at.piece].pts, at.i);
+  const t = tangent(index.pieces[s.piece].pts, s.i);
+  return (
+    dir !== null &&
+    t !== null &&
+    Math.abs(dir[0] * t[1] - dir[1] * t[0]) >= CROSS_SIN
+  );
+}
+
+/** A piece's direction at sample `i`. */
+function tangent(pts: readonly Point2[], i: number): Point2 | null {
+  return unit(pts[Math.max(i - 1, 0)], pts[Math.min(i + 1, pts.length - 1)]);
 }

@@ -56,19 +56,23 @@ export function profileOptions(line: LevelLine): ProfileOptions {
   return { grade: LEVEL_GRADE[line], radius: PROFILE_RADIUS[line] };
 }
 
-/**
- * Solves a symmetric positive definite pentadiagonal system in place
- * (banded LDLᵀ): `diag`, `off1` (i, i+1) and `off2` (i, i+2), right-hand
- * side `b`. Returns x.
- */
-function solvePenta(
+/** A symmetric pentadiagonal matrix's banded Cholesky factor: L with
+ *  two subdiagonals (L[i][i] = l0[i], L[i][i-1] = l1[i], L[i][i-2] =
+ *  l2[i]). */
+interface PentaFactor {
+  l0: Float64Array;
+  l1: Float64Array;
+  l2: Float64Array;
+}
+
+/** Factors the matrix with diagonal `diag` and off-diagonals `off1`,
+ *  `off2` (once per set of weights: the solves reuse it). */
+function factorPenta(
   diag: Float64Array,
   off1: Float64Array,
-  off2: Float64Array,
-  b: Float64Array
-): Float64Array {
+  off2: Float64Array
+): PentaFactor {
   const n = diag.length;
-  // banded Cholesky: L with two subdiagonals
   const l0 = new Float64Array(n);
   const l1 = new Float64Array(n);
   const l2 = new Float64Array(n);
@@ -81,7 +85,14 @@ function solvePenta(
     const d = diag[i] - a1 * a1 - a2 * a2;
     l0[i] = Math.sqrt(Math.max(d, 1e-12));
   }
-  // forward: L y = b (L[i][i-1] = l1[i], L[i][i-2] = l2[i], L[i][i] = l0[i])
+  return { l0, l1, l2 };
+}
+
+/** Solves L Lᵀ x = b for a factor of `factorPenta`. */
+function solvePenta(f: PentaFactor, b: Float64Array): Float64Array {
+  const { l0, l1, l2 } = f;
+  const n = l0.length;
+  // forward: L y = b
   const y = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     let s = b[i];
@@ -201,6 +212,7 @@ function fitRun(
   const rhs = new Float64Array(n);
   for (let round = 0; round < ROUNDS; round++) {
     const { diag, off1, off2 } = normalBands(n, rows, w);
+    const factor = factorPenta(diag, off1, off2);
     for (let it = 0; it < ITERATIONS; it++) {
       // z: (W + ρAᵀA) z = W t + ρ Aᵀ (u − y)
       for (let i = 0; i < n; i++) {
@@ -217,7 +229,7 @@ function fitRun(
         rhs[i + 1] += rows.c1[i] * v;
         rhs[i + 2] += rows.c2[i] * v;
       }
-      z = solvePenta(diag, off1, off2, rhs);
+      z = solvePenta(factor, rhs);
       // u: the rows' values clamped to their bounds; y: the residual
       let worst = 0;
       for (let i = 0; i < ng; i++) {

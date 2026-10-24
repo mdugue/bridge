@@ -115,3 +115,83 @@ test("a line the DGM carries over another on its bridge crosses on a span", () =
   // never over it
   expect(solved[0].runs.some((r) => r[2] === "s")).toBe(false);
 });
+
+test("a line over a tunnel stays on the ground", () => {
+  // a tram on a street over a rail that runs 8 m down under a lid for
+  // 200 m (a city tunnel)
+  const rail: LinePiece = {
+    coords: [
+      [0, 0],
+      [500, 0],
+    ],
+    line: "rail",
+    below: true,
+  };
+  const tram: LinePiece = {
+    coords: [
+      [250, -300],
+      [250, 300],
+    ],
+    line: "tram",
+  };
+  const solved = solvePieces([rail, tram], {
+    decks: [],
+    heightAt: (x) => (Math.abs(x - 250) < 100 ? 118 : 110),
+    offset,
+  });
+  expect(solved[0].runs.some((r) => r[2] === "c")).toBe(true);
+  expect(solved[1].runs.some((r) => r[2] === "s")).toBe(false);
+});
+
+test("a ramp the DGM does not hold beside a lower line is a viaduct", () => {
+  // two tracks 6 m apart on ground at 110; one climbs at its grade to a
+  // deck at 120 from x = 450, its approach a viaduct the DGM shows
+  // nothing of
+  const deck: BridgeFeature = {
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [450, 3],
+          [600, 3],
+          [600, 9],
+          [450, 9],
+          [450, 3],
+        ],
+      ],
+    },
+    properties: { deck: [120, 120, 120, 120], kind: "rail" },
+  };
+  const low: LinePiece = {
+    coords: [
+      [0, 0],
+      [600, 0],
+    ],
+    line: "rail",
+  };
+  const ramp: LinePiece = {
+    coords: [
+      [0, 6],
+      [450, 6],
+    ],
+    line: "rail",
+  };
+  const onDeck: LinePiece = {
+    coords: [
+      [450, 6],
+      [600, 6],
+    ],
+    line: "rail",
+    prefer: "deck",
+  };
+  const solved = solvePieces([low, ramp, onDeck], {
+    decks: bridgeDecks([deck], offset),
+    heightAt: () => 110,
+    offset,
+  });
+  const pts = pieceSamples(ramp);
+  const d = pts.map((p) => p[0]);
+  const at = pts.findIndex((p) => p[0] >= 320);
+  expect(runLevelAt(solved[1].runs, d, at)?.mode).toBe("span");
+  expect(solved[0].runs.some((r) => r[2] === "s")).toBe(false);
+});

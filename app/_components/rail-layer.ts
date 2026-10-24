@@ -2301,12 +2301,15 @@ const DRAPE_TOLERANCE_M = 1;
 interface Drape {
   step: number;
   tolerance: number;
+  /** where the surface is smooth enough for `fine` instead (world x, z) */
+  fineAt?: (x: number, z: number) => boolean;
+  fine?: { step: number; tolerance: number };
 }
 const GROUND_DRAPE: Drape = { step: DRAPE_M, tolerance: DRAPE_TOLERANCE_M };
 /** On the beds the surface is the tracks' profiles — smooth, its only
  *  creases where two beds meet: draped to the centimetres the sleepers
  *  stand over it. */
-const BED_DRAPE: Drape = { step: 1, tolerance: 0.02 };
+const BED_DRAPE = { step: 1, tolerance: 0.02 };
 /** A triangle longer than this (m) is split whatever its probes say: four
  *  probes can miss a passage under a deck. */
 const DRAPE_PROBE_M = 48;
@@ -2372,7 +2375,15 @@ function addDrapedArea(
     x: (p.x + q.x) / 2,
     z: (p.z + q.z) / 2,
   });
-  const flat = (a: XZ, b: XZ, c: XZ): boolean => {
+  const centre = (a: XZ, b: XZ, c: XZ): XZ => ({
+    x: (a.x + b.x + c.x) / 3,
+    z: (a.z + b.z + c.z) / 3,
+  });
+  const limits = (a: XZ, b: XZ, c: XZ) => {
+    const m = centre(a, b, c);
+    return how.fine && how.fineAt?.(m.x, m.z) ? how.fine : how;
+  };
+  const flat = (a: XZ, b: XZ, c: XZ, tolerance: number): boolean => {
     const ya = yAt(a.x, a.z);
     const yb = yAt(b.x, b.z);
     const yc = yAt(c.x, c.z);
@@ -2385,14 +2396,11 @@ function addDrapedArea(
       [mid(a, b), (ya + yb) / 2],
       [mid(b, c), (yb + yc) / 2],
       [mid(c, a), (yc + ya) / 2],
-      [
-        { x: (a.x + b.x + c.x) / 3, z: (a.z + b.z + c.z) / 3 },
-        (ya + yb + yc) / 3,
-      ],
+      [centre(a, b, c), (ya + yb + yc) / 3],
     ];
     return probes.every(([p, plane]) => {
       const y = yAt(p.x, p.z);
-      return y === null || Math.abs(y - plane) <= how.tolerance;
+      return y === null || Math.abs(y - plane) <= tolerance;
     });
   };
   const emit = (a: XZ, b: XZ, c: XZ) => {
@@ -2412,7 +2420,11 @@ function addDrapedArea(
       Math.hypot(c.x - b.x, c.z - b.z),
       Math.hypot(a.x - c.x, a.z - c.z)
     );
-    if (longest <= how.step || (longest <= DRAPE_PROBE_M && flat(a, b, c))) {
+    const { step, tolerance } = limits(a, b, c);
+    if (
+      longest <= step ||
+      (longest <= DRAPE_PROBE_M && flat(a, b, c, tolerance))
+    ) {
       emit(a, b, c);
       return;
     }
@@ -2435,7 +2447,7 @@ function addDrapedArea(
   // the fascia along the outline and round the holes, facing out of the
   // area, its top on the ground every DRAPE_M
   for (const [k, raw] of [outer, ...holes].entries()) {
-    const ring = densified(raw, Math.min(how.step * 4, DRAPE_M));
+    const ring = densified(raw, Math.min((how.fine ?? how).step * 4, DRAPE_M));
     const winding = (ringWinding(ring) * (k === 0 ? 1 : -1)) as 1 | -1;
     for (let i = 0; i < ring.length; i++) {
       const p = ring[i];
@@ -2502,7 +2514,17 @@ export function buildBallast(
           beds.levelAt(x, y) ?? ctx.heightAt(x, y),
       }
     : ctx;
-  const drape = beds ? BED_DRAPE : GROUND_DRAPE;
+  // on the beds finely, off them as the ground
+  const drape: Drape = beds
+    ? {
+        ...GROUND_DRAPE,
+        fine: BED_DRAPE,
+        fineAt: (x, z) => {
+          const e = worldToEpsg({ x, z }, ctx.offset);
+          return beds.levelAt(e.x, e.y) !== null;
+        },
+      }
+    : GROUND_DRAPE;
   for (const f of features) {
     for (const rings of polygonsOf(f.geometry)) {
       addDrapedArea(
@@ -2528,6 +2550,15 @@ export function buildBallast(
  *  far above (a track under a deck's end). */
 const APPROACH_RIDE_M = 1.5;
 
+/** Whether a line's baked profile fits its `n` samples: the layer then
+ *  draws it on the profile (`lineLevelsAt`) and its ballast on its bed. */
+export function isProfiled(
+  baked: { lz?: (number | null)[] },
+  n: number
+): boolean {
+  return baked.lz?.length === n;
+}
+
 /**
  * The level of every sample of a line (lib/city/levels.ts). Where the
  * build step baked the line (scripts/line-levels.ts), its runs off the
@@ -2549,12 +2580,8 @@ export function lineLevelsAt(
   prefer?: "deck" | "ground",
   below?: boolean
 ): (Level | null)[] {
-  const profile =
-    baked?.lz && baked.lz.length === pts.length
-      ? decodeProfile(baked.lz)
-      : null;
-  if (profile) {
-    return profiledLevels(pts, baked?.lv ?? [], profile);
+  if (baked && isProfiled(baked, pts.length)) {
+    return profiledLevels(pts, baked.lv ?? [], decodeProfile(baked.lz ?? []));
   }
   const runs = baked?.lv;
   const d: number[] = [];
@@ -2831,7 +2858,7 @@ function drawnLines(
       masts: mastsAcross(p.m ?? []),
       overhead: p.electrified === 1,
       paved: p.paved === 1,
-      profiled: p.lz?.length === dense.length,
+      profiled: isProfiled(p, dense.length),
       buried,
       tracks: Math.min(Math.max(p.tracks ?? 1, 1), 3),
       world,
@@ -2840,10 +2867,10 @@ function drawnLines(
   return out;
 }
 
-/** How far from a track's centre its yard's ballast takes its bed's level
- *  (m): its bed and half the gap pipeline/bake/rail.py closes between two
- *  beds (YARD_GAP_M). */
-const BED_REACH_M = RAIL_BED_HALF_M + 2;
+/** How far past its bed's edge a yard's ballast takes the bed's level
+ *  (m): half the gap pipeline/bake/rail.py closes between two beds
+ *  (YARD_GAP_M). */
+const BED_MARGIN_M = 2;
 
 /**
  * The beds the baked lines lie on (lib/city/track-beds.ts): each stretch
@@ -2880,8 +2907,7 @@ function ballastBeds(lines: readonly DrawnLine[]): BedIndex | undefined {
   if (beds.length === 0) {
     return undefined;
   }
-  const widest = Math.max(...beds.map((b) => b.half));
-  return new BedIndex(beds, Math.max(BED_REACH_M, widest + 2));
+  return new BedIndex(beds, BED_MARGIN_M);
 }
 
 /** Whether a point lies on the bed of a buried stretch (the bed's half

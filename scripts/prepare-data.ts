@@ -596,22 +596,44 @@ const passages = sitePassages(SITE, lineLevels);
 const beds = siteBeds(SITE, lineLevels);
 const underDeck = underDecks(SITE);
 
-/** The beds that reach into a tile's extent (with their slopes). */
+/** The beds that reach into a tile's extent (with their slopes), once
+ *  per tile. */
+const tileBeds = new Map<string, Bed[]>();
 function bedsIn(tile: string): Bed[] {
-  const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
-  return beds.filter((b) => {
-    const r = b.half + BED_SIDE_M;
-    return b.coords.some(
-      ([x, y]) => x >= x0 - r && x <= x1 + r && y >= y0 - r && y <= y1 + r
-    );
-  });
+  let found = tileBeds.get(tile);
+  if (!found) {
+    const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+    found = beds.filter((b) => {
+      const r = b.half + BED_SIDE_M;
+      return b.coords.some(
+        ([x, y]) => x >= x0 - r && x <= x1 + r && y >= y0 - r && y <= y1 + r
+      );
+    });
+    tileBeds.set(tile, found);
+  }
+  return found;
+}
+
+/** A digest of what shapes a ground, for its cache keys (hashed once:
+ *  the site's beds run to megabytes). */
+function shapeDigest(shapes: unknown): string {
+  return createHash("sha256").update(JSON.stringify(shapes)).digest("hex");
 }
 
 /** What shapes a tile's ground besides its own files, for its cache keys:
  *  the passages and beds reaching into it. */
-function shapedBy(tile: string): [Passage[], Bed[]] {
-  return [passagesIn(tile), bedsIn(tile)];
+const tileShapes = new Map<string, string>();
+function shapedBy(tile: string): string {
+  let digest = tileShapes.get(tile);
+  if (digest === undefined) {
+    digest = shapeDigest([passagesIn(tile), bedsIn(tile)]);
+    tileShapes.set(tile, digest);
+  }
+  return digest;
 }
+
+/** What shapes every tile's ground: the fine level stands on all of it. */
+const siteShapes = shapeDigest([passages, beds]);
 
 /** The passages that reach into a tile's extent. */
 function passagesIn(tile: string): Passage[] {
@@ -1332,7 +1354,7 @@ async function bakeTerrain(
   // The passages come from every tile's lines and decks (line-levels.ts);
   // the fine level's walls, kerbs, stairs and fences stand on every tile's
   // fine ground, and so on every tile's passages.
-  const opened = level === 0 ? [passages, beds] : shapedBy(tile);
+  const opened = level === 0 ? siteShapes : shapedBy(tile);
   const bake = [
     ...GROUND_BAKE,
     "scripts/tile-glb.ts",
