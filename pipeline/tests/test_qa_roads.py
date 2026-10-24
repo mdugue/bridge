@@ -11,6 +11,7 @@ from PIL import Image
 
 from bake import landcover, landcover_osm, road_widths, surface
 from bake.common import Tile
+from tests.synthetic import SIZE, osm_tile, way
 from bake.markings import (
     CENTRE,
     CENTRE_SOLID,
@@ -185,7 +186,9 @@ def test_the_a_byte_packs_the_offset_place_and_paint():
     assert high[0, 0] == 0
     assert high[0, 1] == 0x1A | 2 << 5 | 0x80
     assert high[0, 2] == 0x1F  # a cleared aisle: no place, no paint
-    assert surface.ALONG_BITS == 13
+    ts = (ROOT / "lib" / "city" / "landcover.ts").read_text()
+    client = re.search(r"export const SURFACE_ALONG_BITS = (\d+)", ts)
+    assert client is not None and surface.ALONG_BITS == int(client.group(1))
 
 
 # --- B22 sidewalk bands -----------------------------------------------------
@@ -286,20 +289,37 @@ def test_allotments_and_cemeteries_are_meadow_farmland_arable():
     assert cls(landuse="cemetery") == 1
     assert cls(landuse="farmland") == 9
     assert cls(landuse="meadow") == 1
-    assert 9 in landcover_osm.BURN_ORDER
-    assert landcover_osm.BURN_ORDER.index(9) == landcover_osm.BURN_ORDER.index(1) + 1
+
+
+def test_a_field_lies_over_the_meadow_around_it_a_wood_over_the_field(tmp_path, monkeypatch):
+    # a meadow west, a field overlapping it east, and a wood inside the field
+    nodes = {
+        1: (10, 40, ""),
+        2: (120, 40, ""),
+        3: (120, 160, ""),
+        4: (10, 160, ""),
+        5: (80, 40, ""),
+        6: (190, 40, ""),
+        7: (190, 160, ""),
+        8: (80, 160, ""),
+        9: (150, 80, ""),
+        10: (180, 80, ""),
+        11: (180, 120, ""),
+        12: (150, 120, ""),
+    }
+    ways = (
+        way(1, [1, 2, 3, 4, 1], {"landuse": "meadow"})
+        + way(2, [5, 6, 7, 8, 5], {"landuse": "farmland"})
+        + way(3, [9, 10, 11, 12, 9], {"landuse": "forest"})
+    )
+    tile = osm_tile(tmp_path, monkeypatch, nodes, ways)
+    raster = landcover.class_raster(tile, SIZE, landcover_osm.burn_order(tile)[0])
+    assert raster[SIZE - 100, 40] == 1  # the meadow alone
+    assert raster[SIZE - 100, 100] == 9  # where the field overlaps it
+    assert raster[SIZE - 100, 165] == 2  # the wood inside the field
 
 
 # --- B19 the arable class ----------------------------------------------------
-
-
-def test_the_arable_class_is_in_both_tables():
-    assert landcover.CLASSES[9] == "arable"
-    assert landcover.ARABLE_VEG == ("1010", "1011", "1013")
-    ts = (ROOT / "lib" / "city" / "landcover.ts").read_text()
-    for cid, key in landcover.CLASSES.items():
-        assert re.search(rf'\{{ id: {cid}, key: "{key}"', ts), key
-    assert "export const ARABLE_CLASS = 9;" in ts
 
 
 def test_a_field_frame_runs_along_its_long_axis():

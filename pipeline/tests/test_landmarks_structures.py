@@ -262,18 +262,6 @@ def test_unmapped_walls_take_their_neighbourhoods_material():
     assert differ == 1
 
 
-def test_without_infrared_green_reads_as_vegetation_and_grey_does_not():
-    from bake.ndvi import gli_raster
-
-    red = np.array([[60.0, 120.0, 90.0]])
-    green = np.array([[110.0, 120.0, 95.0]])
-    blue = np.array([[50.0, 120.0, 85.0]])
-    lawn, road, dull = gli_raster(red, green, blue)[0] / 255.0
-    assert lawn > 0.3  # on the NDVI's "vegetated" side
-    assert road < 0.2
-    assert road < dull < lawn
-
-
 def test_a_dense_tile_keeps_its_second_rank_and_a_small_town_its_few():
     city = [{"links": n} for n in (120, 80, 40, 15, 9, 3)]
     assert landmarks.notable_floor(city) == 120 * landmarks.NOTABLE_SHARE

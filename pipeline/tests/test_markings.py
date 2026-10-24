@@ -147,8 +147,14 @@ def test_cycle_lanes_mark_their_side_and_the_centre_line_its_middle(tmp_path, mo
 def test_no_extract_leaves_the_files_alone(tmp_path, monkeypatch):
     tile = Tile("t", (0, 0, 200, 200), 25833, tmp_path / "raw", tmp_path / "data")
     monkeypatch.setattr(Tile, "osm_extract", lambda self: None)
+    out = tmp_path / "data" / "dlm"
+    out.mkdir(parents=True)
+    (out / "markings_t.json").write_text('{"features": [1]}')
+    (out / "markings_t.png").write_bytes(b"png")
     run(tile, px=200)
-    assert not (tmp_path / "data" / "dlm" / "markings_t.json").exists()
+    assert (out / "markings_t.json").read_text() == '{"features": [1]}'
+    assert (out / "markings_t.png").read_bytes() == b"png"
+    assert sorted(p.name for p in out.iterdir()) == ["markings_t.json", "markings_t.png"]
 
 
 def _seam_tiles(tmp_path, monkeypatch):

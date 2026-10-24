@@ -122,8 +122,13 @@ def test_the_canopy_plants_the_tallest_texel_off_the_blocked_classes(tmp_path, m
 
 def test_the_canopy_without_dom1_leaves_committed_files_alone(tmp_path, monkeypatch):
     tile = osm_tile(tmp_path, monkeypatch, {})
+    out = tile.data / "dlm"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "canopy_t.geojson").write_text('{"features": [1]}')
+    before = sorted(p.name for p in out.iterdir())
     canopy.run(tile)
-    assert not (tile.data / "dlm" / "canopy_t.geojson").exists()
+    assert (out / "canopy_t.geojson").read_text() == '{"features": [1]}'
+    assert sorted(p.name for p in out.iterdir()) == before
 
 
 # --- NDVI ----------------------------------------------------------------------
@@ -144,6 +149,23 @@ def test_ndvi_is_one_byte_of_vigour_clamped_at_zero(tmp_path, monkeypatch):
     expected = int((200 - 40) / (200 + 40 + 1) * 255)
     assert abs(int(data[5, 5]) - expected) <= 1
     assert int(data[5, 25]) == 0
+
+
+def test_without_infrared_green_reads_as_vegetation_and_grey_does_not(tmp_path, monkeypatch):
+    # a DOP of three bands (Bavaria's): the visible-band index stands in,
+    # on the NDVI's scale — a lawn, a grey road and a dull verge in thirds
+    tile = osm_tile(tmp_path, monkeypatch, {})
+    red, green, blue = (np.zeros((48, 48)) for _ in range(3))
+    for col, (r, g, b) in enumerate(((60, 110, 50), (120, 120, 120), (90, 95, 85))):
+        part = np.s_[:, col * 16 : col * 16 + 16]
+        red[part], green[part], blue[part] = r, g, b
+    _raster(tile, "dop", [red, green, blue], "uint8")
+    ndvi.run(tile, px=24)
+    data = np.asarray(Image.open(tile.data / "dlm" / "ndvi_t.png")) / 255.0
+    lawn, road, dull = data[12, 4], data[12, 12], data[12, 20]
+    assert lawn > 0.3  # on the NDVI's "vegetated" side
+    assert road < 0.2
+    assert road < dull < lawn
 
 
 # --- roof colours ----------------------------------------------------------------

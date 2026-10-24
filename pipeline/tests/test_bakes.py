@@ -53,10 +53,13 @@ def test_coordinates_round_to_centimetres_and_drop_z():
 
 
 def test_the_class_ids_are_the_client_palette_order():
-    # lib/city/landcover.ts keys its palette by these ids and names.
-    assert list(CLASSES) == list(range(10))
-    assert CLASSES[8] == "water"
-    assert CLASSES[9] == "arable"
+    # lib/city/landcover.ts keys its palette by these ids and names: a class
+    # renamed or moved on one side alone fails here, before a re-bake
+    from pathlib import Path
+
+    ts = (Path(__file__).parents[2] / "lib" / "city" / "landcover.ts").read_text()
+    client = {int(i): key for i, key in re.findall(r'\{ id: (\d+), key: "(\w+)"', ts)}
+    assert CLASSES == client
 
 
 def test_rail_without_a_dlm_leaves_committed_files_alone(tmp_path):
