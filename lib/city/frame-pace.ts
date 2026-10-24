@@ -30,6 +30,11 @@ export interface FramePace {
    * a frame rate measured over that span is the pace's, not the device's.
    */
   takePaced: () => boolean;
+  /**
+   * Whether the pace held back the frame(s) just before the last one it
+   * drew: that frame's time step is the pace's, not the device's.
+   */
+  heldBefore: () => boolean;
 }
 
 export function createFramePace(): FramePace {
@@ -37,6 +42,8 @@ export function createFramePace(): FramePace {
   let quietUntil = Number.NEGATIVE_INFINITY;
   let lastDrawn = Number.NEGATIVE_INFINITY;
   let paced = false;
+  let held = false;
+  let heldBefore = false;
   // A frame arrives a little before or after its slot (vsync jitter): half
   // a 60 Hz frame of slack keeps 12 fps from falling to every sixth frame.
   const interval = 1000 / COVERED_FPS - 8;
@@ -57,8 +64,11 @@ export function createFramePace(): FramePace {
         !covered || (now >= quietUntil && now - lastDrawn >= interval);
       if (draw) {
         lastDrawn = now;
+        heldBefore = held;
+        held = false;
       } else {
         paced = true;
+        held = true;
       }
       return draw;
     },
@@ -67,5 +77,6 @@ export function createFramePace(): FramePace {
       paced = false;
       return was;
     },
+    heldBefore: () => heldBefore,
   };
 }

@@ -3036,7 +3036,9 @@ async function bootApp(
     // The 10 Hz tick (the minimap's pose, the BVHs near, the focus, the
     // tree tiers): read here, as the trees step before it is spent.
     const poseTick = elapsed >= tickDue;
-    if (dt > 0) {
+    // (not over a gap the pace held: the HUD's readout, in the very sheet
+    // that paces the loop, would read the pace)
+    if (dt > 0 && opts.pace?.heldBefore() !== true) {
       fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
     }
     // Modell owns the frame while it is on (and through its dolly zooms);

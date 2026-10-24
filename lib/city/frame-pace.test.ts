@@ -54,4 +54,17 @@ describe("frame pace", () => {
     pace.setCovered(true);
     expect(pace.draws(1000)).toBe(true);
   });
+
+  test("a frame after held ones says so; the next one in a row does not", () => {
+    const pace = createFramePace();
+    pace.setCovered(true);
+    expect(pace.draws(0)).toBe(true);
+    expect(pace.heldBefore()).toBe(false);
+    expect(pace.draws(FRAME)).toBe(false);
+    expect(pace.draws(100)).toBe(true);
+    expect(pace.heldBefore()).toBe(true);
+    pace.setCovered(false);
+    expect(pace.draws(100 + FRAME)).toBe(true);
+    expect(pace.heldBefore()).toBe(false);
+  });
 });
