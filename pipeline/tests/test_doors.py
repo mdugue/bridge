@@ -1,16 +1,10 @@
-"""The door bake's pure parts: which entrances open on the ground floor,
-how wide and high a door is, and where it lands on its wall."""
+"""The door bake's pure parts: how wide and high a door is, and where it
+lands on its wall. Which entrances open on the ground floor is
+osm_buildings.on_ground_floor, tested with the shops it also gates."""
 
 import shapely
 
 from bake import doors
-
-
-def test_ground_floor():
-    assert doors.on_ground_floor(None)
-    assert doors.on_ground_floor('"level"=>"0"')
-    assert doors.on_ground_floor('"level"=>"-1;0"')
-    assert not doors.on_ground_floor('"level"=>"1"')
 
 
 def test_size_by_kind_and_tags():

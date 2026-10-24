@@ -28,7 +28,7 @@ import shapely
 
 from .common import OSM_ATTRIBUTION, Sampler, Tile, column, feature, owns, write_geojson
 from .osm import has_extract, read_osm, tag
-from .osm_buildings import footprints
+from .osm_buildings import footprints, on_ground_floor
 
 SNAP_M = 3.0
 # two entrances closer than this along one wall are one doorway
@@ -53,13 +53,6 @@ SIZES = {
 }
 DEFAULT_SIZE = (1.2, 2.5)
 SKIP = {"no", "entry_only", "emergency_ward_entrance"}
-
-
-def on_ground_floor(other_tags: str | None) -> bool:
-    level = tag(other_tags, "level")
-    if level is None:
-        return True
-    return "0" in [p.strip() for p in level.replace(",", ";").split(";")]
 
 
 def measure(other_tags: str | None, key: str, low: float, high: float) -> float | None:
