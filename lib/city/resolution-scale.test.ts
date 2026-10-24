@@ -157,3 +157,41 @@ describe("resolution scale", () => {
     }
   });
 });
+
+describe("resolution scale, still", () => {
+  /** windows of still-paced frames: only GPU times, no intervals */
+  function still(
+    rs: ResolutionScale,
+    start: number,
+    windows: number,
+    gpu?: number
+  ) {
+    const changes: number[] = [];
+    let now = start;
+    while (now < start + windows * WINDOW_MS) {
+      now += 33.3;
+      if (gpu !== undefined) {
+        rs.gpu(gpu * rs.scale() ** 2);
+      }
+      const scale = rs.update(now, true);
+      if (scale !== undefined) {
+        changes.push(scale);
+      }
+    }
+    return changes;
+  }
+
+  test("steps up where the GPU's time says it fits", () => {
+    const rs = createResolutionScale(DESKTOP);
+    const down = run(rs, 0, 4, { cpuMs: 6, gpuMs: 24, timed: true });
+    expect(rs.scale()).toBe(SCALE_STEPS[1]);
+    expect(still(rs, down.end, 8, 10)).toEqual([1]);
+  });
+
+  test("holds its step without the GPU's time", () => {
+    const rs = createResolutionScale(DESKTOP);
+    const down = run(rs, 0, 4, { cpuMs: 6, gpuMs: 24 });
+    expect(still(rs, down.end, 60)).toEqual([]);
+    expect(rs.scale()).toBe(SCALE_STEPS[1]);
+  });
+});

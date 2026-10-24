@@ -19,6 +19,8 @@
  *   none (Safari), a tentative step up after a calm stretch, which waits
  *   twice as long each time it had to come back down (up to two minutes)
  *   and is short again once a step up held.
+ * - A still scene (drawn at the still pace) steps up by the GPU's time
+ *   alone, and without it holds its step.
  * - The window after a change is not judged (its frames and GPU times are
  *   the old step's).
  *
@@ -74,9 +76,11 @@ export interface ResolutionScale {
   gpu: (ms: number) => void;
   /**
    * At `now` (ms): the new scale when the step changes, else undefined.
-   * Called every frame; it decides once per WINDOW_MS.
+   * Called every frame; it decides once per WINDOW_MS. `still`: the scene
+   * stands still at the still pace (lib/city/frame-pace.ts), whose frame
+   * rate is not the GPU's — then only the GPU's own time may step up.
    */
-  update: (now: number) => number | undefined;
+  update: (now: number, still?: boolean) => number | undefined;
   /** forget the window so far (frames that are not the scene's: an export) */
   reset: () => void;
   /** the scale now */
@@ -178,6 +182,16 @@ export function createResolutionScale(
     return change(step - 1);
   };
 
+  const decideStill = (now: number): number | undefined => {
+    slow = 0;
+    calmSince = undefined;
+    if (settling) {
+      settling = false;
+      return undefined;
+    }
+    return gpus.length > 0 ? stepUp(now, median(gpus)) : undefined;
+  };
+
   const decide = (now: number): number | undefined => {
     if (intervals.length < MIN_FRAMES) {
       slow = 0;
@@ -227,13 +241,13 @@ export function createResolutionScale(
         gpus.push(ms);
       }
     },
-    update: (now) => {
+    update: (now, still = false) => {
       windowStart ??= now;
       if (now - windowStart < WINDOW_MS) {
         return undefined;
       }
       windowStart = now;
-      const changed = decide(now);
+      const changed = still ? decideStill(now) : decide(now);
       clear();
       return changed;
     },

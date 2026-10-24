@@ -4,9 +4,11 @@ import {
   type Camera,
   Color,
   Group,
+  Matrix4,
   type Object3D,
   PCFShadowMap,
   PerspectiveCamera,
+  Quaternion,
   Raycaster,
   Scene,
   Timer,
@@ -27,7 +29,7 @@ import {
   memoryLimitsFor,
   type MemoryStep,
 } from "@/lib/city/memory-governor";
-import type { FramePace } from "@/lib/city/frame-pace";
+import { createStillness, type FramePace } from "@/lib/city/frame-pace";
 import { createFrameTiming } from "@/lib/city/frame-timing";
 import {
   createResolutionScale,
@@ -51,7 +53,7 @@ import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import type { LookKey, LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import type { BikeCounter } from "@/lib/city/bike-counts";
-import { activeDataLayers } from "@/lib/city/data-layers";
+import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import {
   nextRenderStyle,
   RENDER_STYLE_BY_ID,
@@ -425,9 +427,10 @@ export interface CityWalkOptions {
    */
   trail?: CrashTrail;
   /**
-   * The loop's pace while the HUD covers the scene (lib/city/frame-pace.ts):
-   * the HUD sets it, the loop asks it before every frame. Without one every
-   * frame draws.
+   * The loop's pace while the HUD covers the scene or the scene stands
+   * still (lib/city/frame-pace.ts): the HUD sets the one, the scene the
+   * other, the loop asks it before every frame. Without one every frame
+   * draws.
    */
   pace?: FramePace;
   /** Every layer has streamed in (the scene is complete). */
@@ -807,6 +810,47 @@ function framedBuildCounter(renderer: WebGPURenderer) {
  * device-lost and GPU-error callbacks through it (three's own handlers
  * still run: they log and stop the renderer).
  */
+/**
+ * Whether a camera moved since the last call (a different camera counts):
+ * its position, its turn and its projection (Modell's zoom).
+ *
+ * The comparisons need an epsilon, NOT `equals`: the walk-mode eye height
+ * approaches the ground exponentially (approachHeight), and live mode's
+ * follow, a glide's end and Modell's damping ease in the same way, so after
+ * a stop the camera keeps changing in the last few ulps for ~220 frames — an
+ * exact comparison would count it moving ~3.5 s past every stop. 1e-8 m² is
+ * 0.1 mm of travel, four orders below one frame of walking (0.15 m at
+ * 60 Hz); 1 - |dot| for two unit quaternions ~= theta^2 / 8, so 1e-9 is
+ * ~0.005° of turn — far below one pixel of mouse-look, far above numerical
+ * noise.
+ */
+function watchMotion(): (view: Camera) => boolean {
+  const MOVED_DIST_SQ = 1e-8;
+  const MOVED_QUAT_DOT = 1e-9;
+  const MOVED_PROJECTION = 1e-7;
+  let last: Camera | undefined;
+  const position = new Vector3();
+  const quaternion = new Quaternion();
+  const projection = new Matrix4();
+  return (view) => {
+    const changedProjection = view.projectionMatrix.elements.some(
+      (v, i) =>
+        Math.abs(v - projection.elements[i]) >
+        MOVED_PROJECTION * Math.max(1, Math.abs(v))
+    );
+    const moved =
+      view !== last ||
+      changedProjection ||
+      view.position.distanceToSquared(position) > MOVED_DIST_SQ ||
+      1 - Math.abs(view.quaternion.dot(quaternion)) > MOVED_QUAT_DOT;
+    last = view;
+    position.copy(view.position);
+    quaternion.copy(view.quaternion);
+    projection.copy(view.projectionMatrix);
+    return moved;
+  };
+}
+
 function traceRenderer(
   renderer: WebGPURenderer,
   trail: CrashTrail,
@@ -1504,6 +1548,8 @@ async function bootApp(
   // Between the renderer's tiles-load-start and tiles-load-end: registered
   // before the first update, so no transition is missed.
   let tilesIdle = false;
+  // everything in view loaded, nothing streaming (checkLoaded, below)
+  let sceneSettled = false;
   stream.tiles.addEventListener("tiles-load-start", () => {
     tilesIdle = false;
     queueChange();
@@ -1806,7 +1852,17 @@ async function bootApp(
   // pose tick, and in the next frame when the crown switch or the tiles in
   // view change.
   const crownTiers = createLodSchedule();
+  // The still pace (lib/city/frame-pace.ts): a scene that stands still
+  // draws fewer frames; a look change, like any input, wakes it.
+  const stillness = createStillness();
+  const wakeStill = () => {
+    stillness.wake(performance.now());
+    opts.pace?.setStill(false);
+  };
+  let dataLayersMove = false;
+  let sceneStill = false;
   const applyLook = (look: LookValues) => {
+    wakeStill();
     if (look.style !== lastStyle) {
       lastStyle = look.style;
       opts.trail?.note("style", look.style);
@@ -1828,7 +1884,12 @@ async function bootApp(
     }
     // the crown switch: the tiers in the next frame, not the next tick
     crownTiers.force();
-    wantDataLayers(activeDataLayers(look).length > 0);
+    const layersOn = activeDataLayers(look);
+    // the traffic flows and the trams move; the bicycle counters stand
+    dataLayersMove = siteDataLayers(opts.site.dataLayers).some(
+      (def) => def.key !== "bikeLayer" && look[def.key]
+    );
+    wantDataLayers(layersOn.length > 0);
   };
   applyLook(opts.look.get());
   cleanups.push(opts.look.subscribe(applyLook));
@@ -2493,6 +2554,7 @@ async function bootApp(
   );
 
   const resizeObserver = new ResizeObserver(() => {
+    wakeStill();
     camera.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -2578,28 +2640,13 @@ async function bootApp(
 
   // Motion-keyed quality regression. Derived from the CAMERA, not the input
   // layer: WASD, the joystick, pointer-lock mouse-look, touch look and the
-  // scenic flights all move it, and only two of those go through `movement`.
-  //
-  // Both comparisons need an epsilon, NOT `equals`: the walk-mode eye height
-  // approaches the ground exponentially (approachHeight), so after the player
-  // stops it keeps changing in the last few ulps for ~220 frames — an exact
-  // comparison would hold the regression ~3.5 s past every stop. 1e-8 m² is
-  // 0.1 mm of travel, four orders below one frame of walking (0.15 m at 60 Hz).
-  const MOVED_DIST_SQ = 1e-8;
-  // 1 - |dot| for two unit quaternions ~= theta^2 / 8, so 1e-9 is ~0.005° of
-  // turn — far below one pixel of mouse-look, far above numerical noise.
-  const MOVED_QUAT_DOT = 1e-9;
-  const lastPos = camera.position.clone();
-  const lastQuat = camera.quaternion.clone();
+  // scenic flights all move it, and only two of those go through `movement`
+  // (`watchMotion`, below the app: the epsilons).
+  const walkMoved = watchMotion();
   const regression = createRegressionState();
   let regressedNow = false;
   const updateRegression = (dt: number) => {
-    const moved =
-      camera.position.distanceToSquared(lastPos) > MOVED_DIST_SQ ||
-      1 - Math.abs(camera.quaternion.dot(lastQuat)) > MOVED_QUAT_DOT;
-    lastPos.copy(camera.position);
-    lastQuat.copy(camera.quaternion);
-    const regressed = stepRegression(regression, moved, dt * 1000);
+    const regressed = stepRegression(regression, walkMoved(camera), dt * 1000);
     postStack.setRegressed(regressed);
     if (regressed !== regressedNow) {
       regressedNow = regressed;
@@ -3119,7 +3166,7 @@ async function bootApp(
       resolution.reset();
       return;
     }
-    const changed = resolution.update(now);
+    const changed = resolution.update(now, sceneStill);
     const ratio = basePixelRatio * resolution.scale();
     if (renderer.getPixelRatio() !== ratio) {
       renderer.setPixelRatio(ratio);
@@ -3150,6 +3197,40 @@ async function bootApp(
     rescale(time);
     lastDrawnAt = time;
     readGpuTime(renderEnd);
+  };
+  // Input wakes a still scene for the very next frame (the pose steps only
+  // in drawn frames, the hover's outline follows the pointer).
+  // A pointer moving over the HUD is not the scene's (its hover outline
+  // reads the canvas alone).
+  const wakeEvents = ["pointerdown", "wheel", "keydown", "touchstart"] as const;
+  for (const type of wakeEvents) {
+    window.addEventListener(type, wakeStill, { capture: true, passive: true });
+  }
+  renderer.domElement.addEventListener("pointermove", wakeStill, {
+    passive: true,
+  });
+  cleanups.push(() => {
+    for (const type of wakeEvents) {
+      window.removeEventListener(type, wakeStill, { capture: true });
+    }
+    renderer.domElement.removeEventListener("pointermove", wakeStill);
+    // the pace outlives this app (the HUD's): the next starts awake
+    opts.pace?.setStill(false);
+  });
+  const viewMoved = watchMotion();
+  /**
+   * After a drawn frame: whether the scene stood still in it — the camera
+   * drawing it unmoved, everything loaded and nothing streaming, no data
+   * layer moving, no export.
+   */
+  const noteStill = (time: number, view: Camera, exporting: boolean) => {
+    if (!opts.pace) {
+      return;
+    }
+    const busy =
+      viewMoved(view) || exporting || !sceneSettled || dataLayersMove;
+    sceneStill = stillness.frame(time, busy);
+    opts.pace.setStill(sceneStill);
   };
   const frame = (time: number) => {
     const frameStart = streamTimings.now();
@@ -3235,6 +3316,7 @@ async function bootApp(
     takeCaptureTile();
     frames++;
     timeFrame(time, frameStart, renderStart, renderEnd);
+    noteStill(time, view, exporting);
     tickPocFrame(shadowRendered);
     timeBootFrame(frameStart, shadowRendered);
     shadowFrameSeen?.(shadowRendered);
@@ -3518,6 +3600,7 @@ async function bootApp(
       stage(id, fraction, skipped);
     }
     if (step.loaded) {
+      sceneSettled = true;
       flushStats();
       opts.trail?.note("loaded");
       worldPartial = false;
@@ -3527,6 +3610,7 @@ async function bootApp(
       traceLoaded();
     }
     if (step.busy !== undefined) {
+      sceneSettled = !step.busy;
       opts.onBusy?.(step.busy);
     }
   }
