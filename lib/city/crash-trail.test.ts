@@ -187,6 +187,17 @@ test("a beat in view without a new frame is 0 fps; one after the render stopped 
   expect(trail.beats).toHaveLength(3);
 });
 
+test("a beat the pace held down counts its memory, not its frame rate", () => {
+  const trail = createTrail(setup);
+  pushBeat(trail, beat(2, 30));
+  // the sidebar over the scene on a phone: 12 fps, or none while it scrolls
+  pushBeat(trail, { ...beat(3, 12), paced: true, gpuMB: 250 });
+  pushBeat(trail, { ...beat(3, 0), t: 4, paced: true });
+  expect(trail.stats?.beats).toBe(1);
+  expect(trail.stats?.fpsSum).toBe(30);
+  expect(trail.stats?.maxGpuMB).toBe(250);
+});
+
 test("the boot's milestones outlive the event ring", () => {
   const trail = createTrail(setup);
   pushEvent(trail, { t: 3.5, kind: "first frame" });

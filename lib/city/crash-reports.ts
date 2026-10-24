@@ -499,7 +499,8 @@ function pageContext(trail: Trail) {
     max_cpu_mb: roundOrNone(stats?.maxCpuMB, 0),
     last_held_mb: roundOrNone(last?.heldMB, 0),
     last_cpu_mb: roundOrNone(last?.cpuMB, 0),
-    last_fps: roundOrNone(last?.fps, 1),
+    // (none behind the phone's sidebar: that rate is the pace's)
+    last_fps: last?.paced ? undefined : roundOrNone(last?.fps, 1),
     last_tiles: last ? `${last.cities}/${last.dressings}` : undefined,
     last_raster_mb: roundOrNone(last?.rasterMB, 0),
     last_cache_mb: roundOrNone(last?.cacheMB, 0),

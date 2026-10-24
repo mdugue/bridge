@@ -27,6 +27,7 @@ import {
   memoryLimitsFor,
   type MemoryStep,
 } from "@/lib/city/memory-governor";
+import type { FramePace } from "@/lib/city/frame-pace";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import {
   type GpuLoss,
@@ -416,6 +417,12 @@ export interface CityWalkOptions {
    * seconds, so a page the browser kills leaves a trace.
    */
   trail?: CrashTrail;
+  /**
+   * The loop's pace while the HUD covers the scene (lib/city/frame-pace.ts):
+   * the HUD sets it, the loop asks it before every frame. Without one every
+   * frame draws.
+   */
+  pace?: FramePace;
   /** Every layer has streamed in (the scene is complete). */
   onLoaded?: () => void;
   /**
@@ -3116,6 +3123,11 @@ async function bootApp(
     if (pocFramesHeld()) {
       return;
     }
+    // Held back while the phone's sidebar covers the scene, still while it
+    // scrolls (lib/city/frame-pace.ts); the same clamp covers the gap.
+    if (opts.pace && !opts.pace.draws(time)) {
+      return;
+    }
     try {
       frame(time);
     } catch (error) {
@@ -3144,6 +3156,8 @@ async function bootApp(
       trail.beat({
         frames,
         fps: rate,
+        // a rate the pace held down is not the device's
+        paced: opts.pace?.takePaced() === true ? true : undefined,
         gpuMB: gpuBytes() / 1_048_576,
         rasterMB: trackedTextureBytes() / 1_048_576,
         heldMB: renderer.info.memory.total / 1_048_576,

@@ -222,3 +222,13 @@
     animation: none !important;
   }
 }
+
+/* The phone's sidebar is a sheet over the scene (components/ui/sheet.tsx,
+   vendored: its backdrop blurs what lies under it). Under it lies the live
+   canvas, so the compositor blurred the whole screen anew every frame — in
+   the process that draws the sheet's scrolling. The backdrop is 80 % black
+   anyway: no blur (unlayered, so it wins over the utility). */
+[data-slot="sheet-overlay"] {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
