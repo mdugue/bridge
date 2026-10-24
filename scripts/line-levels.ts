@@ -37,7 +37,21 @@ import {
   railPrefer,
   solvePieces,
 } from "../lib/city/line-levels";
-import { deckPassages, type Passage, passageHalf } from "../lib/city/passages";
+import { decodeProfile, encodeProfile } from "../lib/city/line-profile";
+import {
+  BURIED_M,
+  type Bed,
+  type BedShape,
+  railBed,
+  tramBed,
+} from "../lib/city/track-beds";
+import {
+  deckPassages,
+  PASSAGE_UNDER_DECK,
+  type Passage,
+  passageHalf,
+} from "../lib/city/passages";
+import type { Point2 } from "../lib/city/polyline";
 import type { Site } from "../lib/city/site";
 import { sampleHeightfield } from "../lib/city/terrain-geometry";
 import { dgmSourceFiles, sideFileSource, tileIds } from "../lib/city/tile";
@@ -81,6 +95,8 @@ export function levelInputs(site: Site): string[] {
 
 /** A piece's tile, file and feature index. */
 interface PieceOf {
+  /** the bed it is laid on (lib/city/track-beds.ts) */
+  bed: BedShape;
   index: number;
   line: LevelLine;
   tile: string;
@@ -112,6 +128,7 @@ function sitePieces(site: Site): { pieces: LinePiece[]; of: PieceOf[] } {
             line: "rail",
             index,
             tracks: f.properties?.tracks ?? 1,
+            bed: railBed(f),
           });
         }
       }
@@ -124,7 +141,13 @@ function sitePieces(site: Site): { pieces: LinePiece[]; of: PieceOf[] } {
             line: "tram",
             prefer: f.properties?.bridge === 1 ? "deck" : "ground",
           });
-          of.push({ tile, line: "tram", index, tracks: 1 });
+          of.push({
+            tile,
+            line: "tram",
+            index,
+            tracks: 1,
+            bed: tramBed(f.properties?.bed ?? "street"),
+          });
         }
       }
     );
@@ -178,11 +201,17 @@ async function siteDgm(
   };
 }
 
-/** tile → line → feature index → its runs off the ground (only lines
- *  that have any). */
+/** What a line's feature publishes: its runs off the ground (`lv`, only
+ *  where it has any) and its profile (`lz`, lib/city/line-profile.ts). */
+export interface LineLevels {
+  lv?: LevelRun[];
+  lz: (number | null)[];
+}
+
+/** tile → line → feature index → what the line publishes. */
 export type SiteLevels = Record<
   string,
-  Partial<Record<LevelLine, Record<number, LevelRun[]>>>
+  Partial<Record<LevelLine, Record<number, LineLevels>>>
 >;
 
 /** The levels of every line of the site, solved on its DGM. */
@@ -197,21 +226,16 @@ export async function siteLineLevels(
     offset: OFFSET,
   };
   const out: SiteLevels = {};
-  solvePieces(pieces, ground).forEach((runs, k) => {
-    if (runs.length === 0) {
-      return;
-    }
+  solvePieces(pieces, ground).forEach(({ runs, profile }, k) => {
     const { tile, line, index } = of[k];
     const byLine = (out[tile] ??= {});
-    (byLine[line] ??= {})[index] = runs;
+    (byLine[line] ??= {})[index] = {
+      ...(runs.length > 0 ? { lv: runs } : {}),
+      lz: encodeProfile(profile),
+    };
   });
   return out;
 }
-
-/** A cut opens a passage when at least this share of it lies under a
- *  drawn deck (any kind): the fill under a bridge, not a tunnel or a
- *  station's cover. */
-const PASSAGE_UNDER_DECK = 0.3;
 
 /**
  * The passages the site's lines open under its decks (lib/city/passages.ts):
@@ -227,7 +251,7 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
   const out: Passage[] = [];
   pieces.forEach((piece, k) => {
     const { tile, line, index, tracks } = of[k];
-    const runs = levels[tile]?.[line]?.[index] ?? [];
+    const runs = levels[tile]?.[line]?.[index]?.lv ?? [];
     if (!runs.some((r) => r[2] === "c")) {
       return;
     }
@@ -270,6 +294,118 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
   return [...out.map((p) => fillRims(p)), ...deckPassages(bridges)];
 }
 
+/**
+ * The beds the site's lines lie on (lib/city/track-beds.ts): every stretch
+ * of a line on the ground at its profile, every stretch on a deck or over
+ * a span as a bed that only lowers the ground, and every cut as a trench
+ * where the ground lies at most BURIED_M over it (deeper it is a tunnel's
+ * or a passage's). A line near a seam is in both tiles' files: both copies' beds
+ * are burned, the same within millimetres (the profile is fitted over the
+ * same context).
+ */
+export function siteBeds(site: Site, levels: SiteLevels): Bed[] {
+  const { pieces, of } = sitePieces(site);
+  const out: Bed[] = [];
+  pieces.forEach((piece, k) => {
+    const { tile, line, index, bed } = of[k];
+    const solved = levels[tile]?.[line]?.[index];
+    if (!solved) {
+      return;
+    }
+    const runs = solved.lv ?? [];
+    const z = decodeProfile(solved.lz);
+    const pts = pieceSamples(piece);
+    const d: number[] = [];
+    pts.forEach((p, i) =>
+      d.push(
+        i === 0
+          ? 0
+          : d[i - 1] + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1])
+      )
+    );
+    type Kind = "lay" | "lower" | "cut";
+    let run: { coords: Point2[]; z: number[]; kind: Kind } = {
+      coords: [],
+      z: [],
+      kind: "lay",
+    };
+    const flush = (kind: Kind) => {
+      if (run.coords.length >= 2) {
+        out.push({
+          ...bed,
+          coords: run.coords,
+          z: run.z,
+          ...(run.kind === "lower" ? { lowerOnly: true } : {}),
+          ...(run.kind === "cut" ? { shallow: BURIED_M } : {}),
+        });
+      }
+      run = { coords: [], z: [], kind };
+    };
+    pts.forEach((p, i) => {
+      const zi = z[i];
+      if (zi === null || zi === undefined) {
+        flush("lay");
+        return;
+      }
+      const mode = runLevelAt(runs, d, i)?.mode ?? "ground";
+      const kind: Kind =
+        mode === "ground" ? "lay" : mode === "cut" ? "cut" : "lower";
+      if (kind !== run.kind) {
+        // the two runs share the sample where they meet
+        const last = run.coords.at(-1);
+        const lastZ = run.z.at(-1);
+        flush(kind);
+        if (last && lastZ !== undefined) {
+          run.coords.push(last);
+          run.z.push(lastZ);
+        }
+      }
+      run.coords.push(p);
+      run.z.push(zi);
+    });
+    flush("lay");
+  });
+  return out;
+}
+
+/** The deck cell (m) of `underDecks`' index. */
+const DECK_CELL_M = 32;
+
+/** Whether a point (EPSG) lies on any of the site's decks: the ground
+ *  there is the passage's, never a bed's. */
+export function underDecks(site: Site): (x: number, y: number) => boolean {
+  const decks = siteDecks(site);
+  const cells = new Map<string, DeckPoly[]>();
+  for (const d of decks) {
+    for (
+      let c = Math.floor(d.minX / DECK_CELL_M);
+      c <= Math.floor(d.maxX / DECK_CELL_M);
+      c++
+    ) {
+      for (
+        let r = Math.floor(d.minZ / DECK_CELL_M);
+        r <= Math.floor(d.maxZ / DECK_CELL_M);
+        r++
+      ) {
+        const key = `${c}:${r}`;
+        const list = cells.get(key);
+        if (list) {
+          list.push(d);
+        } else {
+          cells.set(key, [d]);
+        }
+      }
+    }
+  }
+  return (x, y) => {
+    const w = epsgToWorld(x, y, OFFSET);
+    const list = cells.get(
+      `${Math.floor(w.x / DECK_CELL_M)}:${Math.floor(w.z / DECK_CELL_M)}`
+    );
+    return !!list && decksAt(list, w.x, w.z, undefined, "decks").length > 0;
+  };
+}
+
 /** A passage's rims (outside the cut) at their neighbours' level. */
 function fillRims(p: Passage): Passage {
   const y = [...p.y];
@@ -283,8 +419,8 @@ function fillRims(p: Passage): Passage {
   return { ...p, y };
 }
 
-/** The height a layer draws a sample at: its run's, the deck nearest it,
- *  or the ground (the layers' rule, on the DGM). */
+/** The height a layer draws a sample at without a profile: its run's,
+ *  the deck nearest it, or the ground (the layers' rule, on the DGM). */
 function drawnAt(
   run: ReturnType<typeof runLevelAt>,
   ground: number | null,
@@ -314,7 +450,8 @@ export interface JumpReport {
 /** Counts the jumps of every line of the site, drawn with `levels`. */
 export async function measureJumps(
   site: Site,
-  levels?: SiteLevels
+  levels?: SiteLevels,
+  minStep = LEVEL_JUMP_M
 ): Promise<JumpReport> {
   const heightAt = await siteDgm(site);
   const solved = levels ?? (await siteLineLevels(site, heightAt));
@@ -323,7 +460,9 @@ export async function measureJumps(
   const report: JumpReport = { before: 0, after: 0, samples: 0, worst: [] };
   pieces.forEach((piece, k) => {
     const { tile, line, index } = of[k];
-    const runs = solved[tile]?.[line]?.[index] ?? [];
+    const baked = solved[tile]?.[line]?.[index];
+    const runs = baked?.lv ?? [];
+    const profile = baked ? decodeProfile(baked.lz) : null;
     const pts = pieceSamples(piece);
     const d: number[] = [];
     let run = 0;
@@ -338,7 +477,11 @@ export async function measureJumps(
       const under = decksAt(decks, w.x, w.z, RIDES[line], "all", DECK_REACH_M);
       const g = heightAt(p[0], p[1]);
       old.push(under[0] ?? g);
-      now.push(drawnAt(runLevelAt(runs, d, i), g, under));
+      now.push(
+        profile && profile.length === pts.length
+          ? profile[i]
+          : drawnAt(runLevelAt(runs, d, i), g, under)
+      );
     });
     report.samples += pts.length;
     const jump = (ys: (number | null)[], i: number) => {
@@ -348,7 +491,7 @@ export async function measureJumps(
         return 0;
       }
       const by = Math.abs(b - a) - LEVEL_GRADE[line] * (d[i] - d[i - 1]) - 0.35;
-      return by >= LEVEL_JUMP_M ? by : 0;
+      return by >= minStep ? by : 0;
     };
     for (let i = 1; i < pts.length; i++) {
       if (jump(old, i) > 0) {

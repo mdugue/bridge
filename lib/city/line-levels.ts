@@ -12,8 +12,9 @@
  * is solved with its context: past each end, the line that runs on through
  * that end in another piece (any tile's, a switch's straightest branch),
  * followed for LEVEL_CONTEXT_M. Only the piece's own samples are kept — as
- * its runs off the ground (`LevelRun`, the feature's `lv`), indexed by the
- * very samples the layer takes (`subdividePolyline` at LEVEL_STEP).
+ * its runs off the ground (`LevelRun`, the feature's `lv`) and its profile
+ * (lib/city/line-profile.ts, the feature's `lz`), indexed by the very
+ * samples the layer takes (`subdividePolyline` at LEVEL_STEP).
  */
 import { type DeckPoly, decksAt } from "./decks";
 import type { RailFeature } from "./features";
@@ -24,11 +25,13 @@ import {
   LEVEL_GRADE,
   LEVEL_SPAN_M,
   LEVEL_STEP,
+  type Level,
   type LevelLine,
   type LevelRun,
   type LevelSample,
   lineLevels,
 } from "./levels";
+import { lineProfile, profileOptions } from "./line-profile";
 import { type Point2, subdividePolyline } from "./polyline";
 
 /** One piece of a line as a tile's file has it. */
@@ -82,8 +85,25 @@ export const DECK_REACH_M = 2;
 /** How far past a piece's end its context runs (m): a gap or a fill that
  *  reaches past the end is seen whole. */
 export const LEVEL_CONTEXT_M = Math.max(LEVEL_SPAN_M, LEVEL_CUT_M) + 50;
+/** How far past a piece's end its profile is fitted (m): a vertical curve
+ *  reaches a few dozen metres; a fit this far out agrees with the
+ *  neighbouring piece's over their shared stretch. */
+export const PROFILE_CONTEXT_M = 150;
 /** A line runs on through an end within this distance (m)… */
 const THROUGH_M = 1.5;
+/**
+ * A line on the ground this far (m) over another line within
+ * CROSS_REACH_M of it crosses it on a structure: the DGM kept the bridge
+ * (Hamburg's does) and the line took it for the ground. Its least is a
+ * storey less than the clearance a track needs under a structure (4.5 m
+ * for a tram, more under a contact wire).
+ */
+export const CROSS_CLEAR_M = 3;
+/** How near (m) a lower line passes under: its bed's half and a side. */
+const CROSS_REACH_M = 5;
+/** The least angle at which two lines cross (sine of 20°): a line beside
+ *  another on a terrace a storey up runs along it. */
+const CROSS_SIN = 0.34;
 /** …in a direction this close to the end's own (cosine). */
 const THROUGH_COS = 0.9;
 /** Hops from piece to piece while gathering one end's context. */
@@ -122,8 +142,9 @@ class SampleIndex {
   private key(x: number, y: number): string {
     return `${Math.floor(x / CELL_M)}:${Math.floor(y / CELL_M)}`;
   }
-  /** Samples of `line` within `r` of (x, y) on pieces other than `not`. */
-  near(x: number, y: number, r: number, line: LevelLine, not: number) {
+  /** Samples of `line` (any line: null) within `r` of (x, y) on pieces
+   *  other than `not`. */
+  near(x: number, y: number, r: number, line: LevelLine | null, not: number) {
     const out: { piece: number; i: number }[] = [];
     const cx = Math.floor(x / CELL_M);
     const cy = Math.floor(y / CELL_M);
@@ -134,7 +155,7 @@ class SampleIndex {
           const pt = p.pts[s.i];
           if (
             s.piece !== not &&
-            p.line === line &&
+            (line === null || p.line === line) &&
             Math.hypot(pt[0] - x, pt[1] - y) <= r
           ) {
             out.push(s);
@@ -238,14 +259,24 @@ function withContext(
   };
 }
 
+/** What the build step solves for one piece: its runs off the ground and
+ *  its profile, per own sample (`encodeProfile` writes it). */
+export interface PieceLevels {
+  runs: LevelRun[];
+  /** the profile (m) of every own sample, null where the line breaks */
+  profile: (number | null)[];
+}
+
 /**
- * The runs off the ground (`LevelRun`) of every piece, in the pieces'
- * order: each piece's samples, with its context, solved as one line.
+ * The runs off the ground (`LevelRun`) and the profile of every piece, in
+ * the pieces' order: each piece's samples, with its context, solved as one
+ * line — the levels over LEVEL_CONTEXT_M either side, the profile over
+ * PROFILE_CONTEXT_M.
  */
 export function solvePieces(
   pieces: readonly LinePiece[],
   ground: LevelGround
-): LevelRun[][] {
+): PieceLevels[] {
   const sampled: Sampled[] = pieces.map((p) => ({
     line: p.line,
     pts: pieceSamples(p),
@@ -253,14 +284,16 @@ export function solvePieces(
     below: p.below,
   }));
   const index = new SampleIndex(sampled);
-  return sampled.map((p, piece) => {
+  const solved = sampled.map((p, piece) => {
     const { pts, own } = withContext(index, piece);
     let d = 0;
+    const dist: number[] = [];
     const samples: LevelSample[] = pts.map((c, k) => {
       if (k > 0) {
         const q = pts[k - 1].pt;
         d += Math.hypot(c.pt[0] - q[0], c.pt[1] - q[1]);
       }
+      dist.push(d);
       const w = epsgToWorld(c.pt[0], c.pt[1], ground.offset);
       return {
         d,
@@ -278,6 +311,69 @@ export function solvePieces(
       };
     });
     const levels = lineLevels(samples, { grade: LEVEL_GRADE[p.line] });
-    return encodeRuns(levels.slice(own, own + p.pts.length));
+    const end = own + p.pts.length;
+    let from = own;
+    while (from > 0 && dist[own] - dist[from - 1] <= PROFILE_CONTEXT_M) {
+      from--;
+    }
+    let to = end;
+    while (to < pts.length && dist[to] - dist[end - 1] <= PROFILE_CONTEXT_M) {
+      to++;
+    }
+    const profile = lineProfile(
+      levels.slice(from, to),
+      dist.slice(from, to),
+      profileOptions(p.line)
+    );
+    return {
+      levels: levels.slice(own, end),
+      profile: profile.slice(own - from, end - from),
+    };
+  });
+  return solved.map((s, piece) => ({
+    runs: encodeRuns(spansOver(index, solved, piece)),
+    profile: s.profile,
+  }));
+}
+
+/**
+ * A piece's levels with every sample on the ground that crosses over
+ * another line a storey below it (CROSS_CLEAR_M, both lines' profiles) a
+ * span: it crosses on a structure the layer draws, and its bed does not
+ * fill the ground over the line below (scripts/line-levels.ts `siteBeds`).
+ */
+function spansOver(
+  index: SampleIndex,
+  solved: readonly { levels: (Level | null)[]; profile: (number | null)[] }[],
+  piece: number
+): (Level | null)[] {
+  const { levels, profile } = solved[piece];
+  const pts = index.pieces[piece].pts;
+  return levels.map((level, k) => {
+    const z = profile[k];
+    const dir = unit(
+      pts[Math.max(k - 1, 0)],
+      pts[Math.min(k + 1, pts.length - 1)]
+    );
+    if (level?.mode !== "ground" || z === null || !dir) {
+      return level;
+    }
+    const over = index
+      .near(pts[k][0], pts[k][1], CROSS_REACH_M, null, piece)
+      .some((s) => {
+        const below = solved[s.piece].profile[s.i];
+        if (below === null || z - below < CROSS_CLEAR_M) {
+          return false;
+        }
+        const other = index.pieces[s.piece].pts;
+        const t = unit(
+          other[Math.max(s.i - 1, 0)],
+          other[Math.min(s.i + 1, other.length - 1)]
+        );
+        return (
+          t !== null && Math.abs(dir[0] * t[1] - dir[1] * t[0]) >= CROSS_SIN
+        );
+      });
+    return over ? { mode: "span", y: level.y } : level;
   });
 }

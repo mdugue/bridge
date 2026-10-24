@@ -67,6 +67,12 @@ export function deckPassages(
   );
 }
 
+/** A cut opens a passage when at least this share of it lies under a
+ *  drawn deck (any kind): the fill under a bridge, not a tunnel or a
+ *  station's cover. The build opens it (scripts/line-levels.ts
+ *  `sitePassages`), the rail layer draws the track through it. */
+export const PASSAGE_UNDER_DECK = 0.3;
+
 /** The passage floor lies this far under the line's level (m): the TIN's
  *  error, so no triangle closes it again. */
 export const PASSAGE_FLOOR_M = 0.15;

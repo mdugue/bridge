@@ -24,6 +24,7 @@ import {
   type Terrace,
 } from "../lib/city/stairs";
 import { carvePassages, type Passage } from "../lib/city/passages";
+import { BED_TIN_ERROR, type Bed, burnBeds } from "../lib/city/track-beds";
 import { raiseWater, type WaterLift } from "../lib/city/water-bodies";
 import { ownsPoint } from "../lib/city/tileset";
 import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
@@ -185,6 +186,10 @@ export interface TerrainMesh {
 
 /** What the terrain bake shapes the DGM with besides the walls. */
 export interface TerrainFeatures {
+  /** the beds the lines lie on (lib/city/track-beds.ts) */
+  beds?: Bed[];
+  /** whether a point lies on a deck: no bed is burned under one */
+  underDeck?: (x: number, y: number) => boolean;
   /** the passages a line opens through the fill under a deck
    *  (lib/city/passages.ts) */
   passages?: Passage[];
@@ -195,23 +200,32 @@ export interface TerrainFeatures {
 }
 
 /**
- * The DGM shaped in five passes: the walls burned in as steps
+ * The DGM shaped in six passes: the walls burned in as steps
  * (lib/city/terrain-conflate.ts; the grid only — a TIN keeps the measured
  * ramps and the wall ribbons snap to them), the raised areas the DGM lacks
  * lifted to their level, the water's lower fills lifted to their body's
  * level (lib/city/water-bodies.ts), the ground under each flight of stairs lowered
  * below its treads (lib/city/stairs.ts), `stairMargin` deeper for a mesh
- * that only approximates the grid, and the passages under the decks opened
- * (lib/city/passages.ts).
+ * that only approximates the grid, the lines' beds laid at their profile
+ * with their slopes beside them (lib/city/track-beds.ts; `bedMask`, when
+ * given, marks the cells under a bed) and the passages under the decks
+ * opened (lib/city/passages.ts).
  */
 export function shapeDgm(
   dgm: Dgm,
   walls: WallLine[],
   features: TerrainFeatures,
-  opts: { burnWalls: boolean; stairMargin: number }
+  opts: { burnWalls: boolean; stairMargin: number; bedMask?: Uint8Array }
 ): Float32Array {
   const { n, bounds } = dgm;
-  const { passages = [], stairs = [], terraces = [], water } = features;
+  const {
+    beds = [],
+    passages = [],
+    stairs = [],
+    terraces = [],
+    underDeck,
+    water,
+  } = features;
   let elevations: Float32Array = dgm.elevations;
   if (opts.burnWalls && walls.length > 0) {
     elevations = conflateWalls({ elevations, n, bounds, walls });
@@ -231,6 +245,16 @@ export function shapeDgm(
       stairs,
       walls: lines,
       margin: opts.stairMargin,
+    });
+  }
+  if (beds.length > 0) {
+    elevations = burnBeds({
+      elevations,
+      n,
+      bounds,
+      beds,
+      under: underDeck,
+      mask: opts.bedMask,
     });
   }
   if (passages.length > 0) {
@@ -346,16 +370,23 @@ export function fineTin(
   features: TerrainFeatures,
   maxError: number
 ): TerrainTin | null {
+  const bedMask = new Uint8Array(dgm.n * dgm.n);
   const elevations = shapeDgm(dgm, walls, features, {
     burnWalls: false,
     stairMargin: maxError,
+    bedMask,
   });
   // Only NoData falls back to the grid; any other failure of the TIN is a
   // bug and fails the build (tinFromGrid keeps its own check as a guard).
   if (elevations.some((z) => !Number.isFinite(z))) {
     return null;
   }
-  return tinFromGrid(elevations, dgm.n, dgm.bounds, maxError);
+  // under a bed the TIN keeps closer to the burned ground: the rails stand
+  // centimetres over it
+  const scale = Float32Array.from(bedMask, (m) =>
+    m ? maxError / BED_TIN_ERROR : 1
+  );
+  return tinFromGrid(elevations, dgm.n, dgm.bounds, maxError, scale);
 }
 
 /** A TIN (`fineTin`, refined to `maxError`) as `tinTerrainMesh`'s mesh: what

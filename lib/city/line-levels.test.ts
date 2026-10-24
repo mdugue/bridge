@@ -16,7 +16,7 @@ function levelsOf(pieces: LinePiece[], k: number, decks: BridgeFeature[]) {
     decks: bridgeDecks(decks, offset),
     heightAt,
     offset,
-  })[k];
+  })[k].runs;
   const pts = pieceSamples(pieces[k]);
   const d = pts.map((p) => p[0] - pts[0][0]);
   return pts.map((p, i) => ({ x: p[0], level: runLevelAt(runs, d, i) }));
@@ -75,4 +75,43 @@ test("a track along a deck's edge rides it where it strays past the outline", ()
   };
   const at = levelsOf([tram], 0, [deck]).find((s) => s.x === 240);
   expect(at?.level?.mode).toBe("deck");
+});
+
+test("a line the DGM carries over another on its bridge crosses on a span", () => {
+  // a tram on an embankment that crosses a rail at x = 250: the DGM keeps
+  // the embankment over the rail, as Hamburg's keeps its bridges
+  const crossing = (x: number, y: number) => {
+    if (Math.abs(x - 250) > 4) {
+      return 110;
+    }
+    return Math.max(110, 116 - Math.max(Math.abs(y) - 60, 0) * 0.04);
+  };
+  const rail: LinePiece = {
+    coords: [
+      [0, 0],
+      [500, 0],
+    ],
+    line: "rail",
+  };
+  const tram: LinePiece = {
+    coords: [
+      [250, -300],
+      [250, 300],
+    ],
+    line: "tram",
+  };
+  const solved = solvePieces([rail, tram], {
+    decks: [],
+    heightAt: crossing,
+    offset,
+  });
+  const pts = pieceSamples(tram);
+  const d = pts.map((p) => p[1] - pts[0][1]);
+  const at = pts.findIndex((p) => p[1] === 0);
+  expect(runLevelAt(solved[1].runs, d, at)?.mode).toBe("span");
+  // away from the rail it is on the ground
+  expect(runLevelAt(solved[1].runs, d, at + 20)).toBeNull();
+  // the rail below passes under it (a cut through the kept embankment),
+  // never over it
+  expect(solved[0].runs.some((r) => r[2] === "s")).toBe(false);
 });

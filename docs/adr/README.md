@@ -61,6 +61,7 @@ each data → look transformation does and its status.
 | [0049](./0049-windows-drawn-by-the-clay.md) | Windows are drawn by the clay's fragment shader on every house (a recess, no geometry, no glass): their rhythm per building measured where street photos saw it, else a neighbour's, else its type's; per wall vertex its place along the wall; none on party walls, doors, shopfronts or a monumental facade | accepted |
 | [0050](./0050-a-building-tiles-bvh-when-a-ray-needs-it.md) | A building tile's BVH is built when a ray first reaches it (the collider, a pick, the probe; near the camera in idle time), not as it lands; no ray walks a tile without one | accepted; its worker alternative re-tried 2026-10-11 (plan 043: bundled, but +20.8 KB gz first load, ADR 0051) — open |
 | [0051](./0051-optional-features-start-on-first-use-in-the-scene-chunk.md) | Optional features (the data layers first) start on first use and hear the spine through its hooks (`feature-seam.ts`); their code ships in the scene's chunk while they import three.js — as an `import()` chunk the data layers grew the first load by 22.7 KB gz | accepted |
+| [0052](./0052-lines-lie-on-a-profile-the-ground-under-their-bed.md) | A rail or tram line lies on a profile within its grade and vertical-curve radius (rail 2 000 m, tram 500 m), fitted by the build step; the terrain bake lays the ground under its bed at that profile, the sides at 1 : 1.5, and the ballast drapes on the bed | accepted |
 
 ## Format
 

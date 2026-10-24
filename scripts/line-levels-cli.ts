@@ -14,7 +14,11 @@ import { siteFromArgs } from "../sites";
 import { measureJumps } from "./line-levels";
 
 const { site } = siteFromArgs(process.argv.slice(2));
-const r = await measureJumps(site);
+const r = await measureJumps(
+  site,
+  undefined,
+  process.argv[3] ? Number(process.argv[3]) : undefined
+);
 process.stdout.write(
   `${site.id}: ${r.samples} samples; jumps ${r.before} before, ${r.after} after\n`
 );

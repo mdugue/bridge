@@ -344,6 +344,10 @@ config change.
   `line-levels.ts` (which level a rail or tram line runs on — ground,
   deck, span, cut — decided along the whole line within its grade, solved
   by the build with each piece's context across tiles; ADR 0041),
+  `line-profile.ts` (each line's profile within its grade and vertical
+  curve, the `lz` the build publishes) + `track-beds.ts` (the ground the
+  terrain bake lays under a line's bed, the beds the ballast drapes on;
+  ADR 0052),
   `passages.ts` (a cut under a deck opened in the terrain), `tile.ts` (each
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`
@@ -902,7 +906,10 @@ each line's level along its whole run within its grade — the ground, a
 deck, a *span* over the gap the DGM leaves beside a bridge (the layer
 draws its deck), a *cut* through the fill under one (the terrain bake
 opens it under a drawn deck, `lib/city/passages.ts`) — and publishes it
-as `lv` in the rail and tram files. A new line layer takes its levels the
+as `lv` in the rail and tram files, with each line's profile within its
+grade and vertical curve as `lz` (ADR 0052: the layers draw a baked line
+on it, and the terrain bake lays the ground under its bed — `shapeDgm`,
+the fine TIN to 3 cm there). A new line layer takes its levels the
 same way (`lineLevelsAt` in `rail-layer.ts`); `scripts/line-levels.test.ts`
 holds the reference site's jumps to a budget, `bun scripts/line-levels-cli.ts
 <site>` prints them.
@@ -1023,7 +1030,8 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 - TypeScript strict. No `any` without a `// reason:` comment.
 - Version pins: exact for the three.js stack (`three`, `@types/three`,
   `three-mesh-bvh`, `cityjson-threejs-loader`, `3d-tiles-renderer`) and the glTF build tools (`@gltf-transform/*`,
-  `meshoptimizer`), the
+  `meshoptimizer`; `delatin` too — `ScaledDelatin` copies its private
+  `_findCandidate`, ADR 0052), the
   framework trio and the lint/format tools (`oxlint`, `oxlint-tsgolint`,
   `oxfmt` — oxlint declares a `>=` peer range on tsgolint, so bump them
   together); caret for everything else. `suncalc` is

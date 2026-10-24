@@ -67,6 +67,7 @@ import {
   siteProvenance,
 } from "../lib/city/provenance";
 import type { Passage } from "../lib/city/passages";
+import { BED_SIDE_M, type Bed } from "../lib/city/track-beds";
 import type { LevelLine } from "../lib/city/levels";
 import { tileExtentOf } from "../lib/city/site";
 import {
@@ -180,8 +181,10 @@ import {
 import {
   levelInputs,
   type SiteLevels,
+  siteBeds,
   siteLineLevels,
   sitePassages,
+  underDecks,
 } from "./line-levels";
 import { writeMeshGlb } from "./tile-glb";
 import {
@@ -588,6 +591,28 @@ log(`line levels: ${since(levelsStarted)} ms`);
  *  touches. */
 const passages = sitePassages(SITE, lineLevels);
 
+/** The beds the lines lie on (lib/city/track-beds.ts): the terrain bake
+ *  lays the ground under each at its profile, off the decks. */
+const beds = siteBeds(SITE, lineLevels);
+const underDeck = underDecks(SITE);
+
+/** The beds that reach into a tile's extent (with their slopes). */
+function bedsIn(tile: string): Bed[] {
+  const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+  return beds.filter((b) => {
+    const r = b.half + BED_SIDE_M;
+    return b.coords.some(
+      ([x, y]) => x >= x0 - r && x <= x1 + r && y >= y0 - r && y <= y1 + r
+    );
+  });
+}
+
+/** What shapes a tile's ground besides its own files, for its cache keys:
+ *  the passages and beds reaching into it. */
+function shapedBy(tile: string): [Passage[], Bed[]] {
+  return [passagesIn(tile), bedsIn(tile)];
+}
+
 /** The passages that reach into a tile's extent. */
 function passagesIn(tile: string): Passage[] {
   const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
@@ -604,18 +629,19 @@ function passagesIn(tile: string): Passage[] {
 
 /**
  * A tile's rail or tram file with each line's runs off the ground (`lv`,
- * lib/city/levels.ts), so the layer draws it on the level its whole run
- * says rather than deciding per sample.
+ * lib/city/levels.ts) and its profile (`lz`, lib/city/line-profile.ts), so
+ * the layer draws it on the level its whole run says, within the grade and
+ * vertical curve a track keeps, rather than on the ground sample by sample.
  */
 function publishLevels(tile: string, line: LevelLine, file: string): string {
   const src = at(sideFileSource(SITE, file));
-  const runs = lineLevels[tile]?.[line] ?? {};
-  if (Object.keys(runs).length === 0) {
+  const solved = lineLevels[tile]?.[line] ?? {};
+  if (Object.keys(solved).length === 0) {
     return publish(file, readFileSync(src));
   }
   const doc = readJson<FeatureCollection<RailFeature | TramFeature>>(src);
   const features = (doc.features ?? []).map((f, i) =>
-    runs[i] ? { ...f, properties: { ...f.properties, lv: runs[i] } } : f
+    solved[i] ? { ...f, properties: { ...f.properties, ...solved[i] } } : f
   );
   return publish(file, utf8({ ...doc, features }));
 }
@@ -981,6 +1007,8 @@ function waterExtras(
 /** What a tile's ground is shaped with besides its walls. */
 async function groundFeatures(tile: string): Promise<TerrainFeatures> {
   return {
+    beds: bedsIn(tile),
+    underDeck,
     passages: passagesIn(tile),
     stairs: stairLines(SITE, tile),
     terraces: terraces(SITE, tile),
@@ -1022,7 +1050,7 @@ function groundFile(tile: string): Promise<string> {
   if (!file) {
     file = cachedFile(
       `ground_${tile}.bin`,
-      cacheKey(terrainInputs(tile), GROUND_BAKE, offset, passagesIn(tile)),
+      cacheKey(terrainInputs(tile), GROUND_BAKE, offset, shapedBy(tile)),
       async () => {
         const t0 = performance.now();
         const packed = packGround(await bakeFineGround(tile));
@@ -1236,7 +1264,7 @@ async function publishCrowns(tile: string): Promise<string | undefined> {
       inputs,
       ["scripts/coarse-crowns.ts", ...GROUND_BAKE],
       offset,
-      passagesIn(tile)
+      shapedBy(tile)
     ),
     async () => {
       const fine = await shapedTerrain(tile, 0);
@@ -1304,7 +1332,7 @@ async function bakeTerrain(
   // The passages come from every tile's lines and decks (line-levels.ts);
   // the fine level's walls, kerbs, stairs and fences stand on every tile's
   // fine ground, and so on every tile's passages.
-  const opened = level === 0 ? passages : passagesIn(tile);
+  const opened = level === 0 ? [passages, beds] : shapedBy(tile);
   const bake = [
     ...GROUND_BAKE,
     "scripts/tile-glb.ts",

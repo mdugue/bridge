@@ -151,7 +151,7 @@ function trackRuns(
   const levels = lineLevelsAt(
     dense,
     "tram",
-    f.properties?.lv,
+    f.properties ?? undefined,
     ctx,
     decks,
     onBridge ? "deck" : "ground"

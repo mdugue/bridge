@@ -18,5 +18,22 @@ declare module "delatin" {
     heightAt(x: number, y: number): number;
     refine(): void;
     run(maxError?: number): void;
+    /** the grid's width (internal; scripts/bake-terrain-tin.ts
+     *  `ScaledDelatin` reads it) */
+    width: number;
+    /** each triangle's worst point, x and y (internal: `ScaledDelatin`) */
+    _candidates: number[];
+    /** rasterizes a triangle for its worst point and queues it (internal:
+     *  `ScaledDelatin` overrides it) */
+    _findCandidate(
+      p0x: number,
+      p0y: number,
+      p1x: number,
+      p1y: number,
+      p2x: number,
+      p2y: number,
+      t: number
+    ): void;
+    _queuePush(t: number, error: number): void;
   }
 }
