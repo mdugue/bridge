@@ -152,7 +152,11 @@ import {
   setFountainSeason,
   setFountainTime,
 } from "./monument-layer";
-import { setClockTime, setFurnitureNight } from "./furniture-layer";
+import {
+  setClockTime,
+  setFurnitureNight,
+  showFurnitureNear,
+} from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
 import type { TramCarsStatus } from "./tram-cars";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
@@ -2701,6 +2705,16 @@ async function bootApp(
     }
     if (vegetationLod(vegetationControls, eye, richTrees)) {
       lodChanged = true;
+    }
+    // the street furniture's cells near the eye (furniture-layer.ts)
+    // (none hidden in Modell: its views and exports draw one scale)
+    const furnitureEye = modelRig.owns() ? null : eye;
+    for (const d of shown) {
+      for (const part of [d.furniture, d.tram]) {
+        if (part && showFurnitureNear(part, furnitureEye)) {
+          lodChanged = true;
+        }
+      }
     }
     if (lodChanged) {
       invalidateShadows();

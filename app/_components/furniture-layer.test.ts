@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
 import type { MeshStandardNodeMaterial } from "three/webgpu";
 import type { FurnitureFeature } from "@/lib/city/features";
-import { buildFurniture, setClockTime } from "./furniture-layer";
+import { Vector3 } from "three/webgpu";
+import {
+  buildFurniture,
+  setClockTime,
+  showFurnitureNear,
+} from "./furniture-layer";
 import { type Instances, isInstances } from "./instancing";
 
 const ctx = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
@@ -131,4 +136,56 @@ test("a piece on a bridge stands on its deck, not on the ground below", () => {
   };
   expect(heights("furniture-bench")).toEqual([100, 112.5]);
   expect(heights("furniture-hoop")).toEqual([112.5, 112.5]);
+});
+
+test("a model's pieces are one set per cell, and far cells are hidden", () => {
+  // two benches 1.2 km apart: two cells (ctx's ground is the data frame,
+  // EPSG x → scene x)
+  const group = buildFurniture(
+    [at({ k: "bench" }, 10), at({ k: "bench" }, 1210)],
+    ctx
+  );
+  const benches = group.children.filter(
+    (c) => c.userData.furnitureCell !== undefined
+  );
+  expect(benches.length).toBe(2);
+  group.updateMatrixWorld(true);
+  expect(showFurnitureNear(group, new Vector3(10, 101, 0))).toBe(true);
+  expect(benches.map((b) => b.visible)).toEqual([true, false]);
+  // nothing changed: no shadow redraw
+  expect(showFurnitureNear(group, new Vector3(10, 101, 0))).toBe(false);
+  expect(showFurnitureNear(group, new Vector3(1210, 101, 0))).toBe(true);
+  expect(benches.map((b) => b.visible)).toEqual([false, true]);
+  // Modell: every cell
+  showFurnitureNear(group, null);
+  expect(benches.map((b) => b.visible)).toEqual([true, true]);
+});
+
+test("a cell on the line does not flip with every step", () => {
+  const group = buildFurniture([at({ k: "bench" }, 0)], ctx);
+  group.updateMatrixWorld(true);
+  const bench = group.children[0];
+  // 380 m off: hidden while it was out, kept while it was in
+  showFurnitureNear(group, new Vector3(1000, 100, 0));
+  expect(bench.visible).toBe(false);
+  showFurnitureNear(group, new Vector3(383, 100, 0));
+  expect(bench.visible).toBe(false);
+  showFurnitureNear(group, new Vector3(300, 100, 0));
+  expect(bench.visible).toBe(true);
+  showFurnitureNear(group, new Vector3(383, 100, 0));
+  expect(bench.visible).toBe(true);
+});
+
+test("a clock's hands go with its cell", () => {
+  const group = buildFurniture(
+    [at({ k: "clock", a: 0 }, 0), at({ k: "clock", a: 0 }, 1200)],
+    ctx
+  );
+  group.updateMatrixWorld(true);
+  showFurnitureNear(group, new Vector3(0, 101, 0));
+  const shown = group.children.filter((c) => c.visible).map((c) => c.name);
+  expect(shown.toSorted()).toEqual([
+    "furniture-clock",
+    "furniture-clock-hands",
+  ]);
 });
