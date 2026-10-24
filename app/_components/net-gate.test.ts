@@ -24,6 +24,10 @@ function fakePage() {
       document.visibilityState = shown ? "visible" : "hidden";
       document.dispatchEvent(new Event("visibilitychange"));
     },
+    hide: () => window.dispatchEvent(new Event("pagehide")),
+    /** a pageshow: `persisted` when the page comes back from the bfcache */
+    show: (persisted: boolean) =>
+      window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted })),
   };
 }
 
@@ -75,4 +79,38 @@ test("a retry waits for a usable page: at once when it is, on 'online', and ever
   p.online(true);
   await Promise.resolve();
   expect(woken).toBe(2);
+});
+
+test("a page is leaving from pagehide until the bfcache gives it back", () => {
+  const p = fakePage();
+  const gate = createNetGate(p.page);
+  expect(gate.leaving()).toBe(false);
+  p.hide();
+  expect(gate.leaving()).toBe(true);
+  // a pageshow that is no return from the bfcache changes nothing
+  p.show(false);
+  expect(gate.leaving()).toBe(true);
+  p.show(true);
+  expect(gate.leaving()).toBe(false);
+});
+
+test("an aborted wait rejects at once and leaves no probe behind", async () => {
+  const p = fakePage();
+  const gate = createNetGate(p.page);
+  // aborted before it is asked: at once, even on a usable page
+  const before = new AbortController();
+  before.abort();
+  // oxlint-disable-next-line typescript/await-thenable
+  await expect(gate.whenUsable(before.signal)).rejects.toMatchObject({
+    name: "AbortError",
+  });
+  p.online(false);
+  const aborter = new AbortController();
+  const waiting = gate.whenUsable(aborter.signal);
+  expect(jest.getTimerCount()).toBe(1); // the offline probe
+  aborter.abort();
+  // oxlint-disable-next-line typescript/await-thenable
+  await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+  // its probe is cleared (an armed one would re-arm every 15 s for good)
+  expect(jest.getTimerCount()).toBe(0);
 });

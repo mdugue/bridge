@@ -166,11 +166,10 @@ function hzAngle(horizon: Tex, uv: V2, k: F, base: number, maxDeg: number): F {
 }
 
 /**
- * How much of the sun clears the skyline (1 = all), before its strength
- * (lib/city/skyview.ts horizonSunVisibility): the far band always; the
- * near band by its weight, 0 inside the shadow frustum and 1 beyond it
- * (lib/city/skyview.ts nearBandWeight) — skipped where it is 0, which is
- * most of what is on screen.
+ * How much of the sun clears the skyline (1 = all), before its strength:
+ * the far band always; the near band by its weight, 0 inside the shadow
+ * frustum and 1 beyond it — skipped where it is 0, which is most of what
+ * is on screen.
  */
 function hzSunVisible(light: GroundLight, horizon: Tex, uv: V2): F {
   const sun = light.sunDirection;
@@ -363,8 +362,7 @@ export interface ClaySky {
    * eaves: unchanged. `localH` is the fragment's height above the
    * building's ground, `eaveH` the eave height, `skyView` its strength
    * (`SKY_VIEW`);
-   * `normal` the world geometric normal. lib/city/skyview.ts
-   * `facadeSkyView` is the same curve.
+   * `normal` the world geometric normal.
    */
   ao: (localH: F, eaveH: F, skyView: F, normal?: V3) => F;
 }

@@ -210,7 +210,9 @@ test("a lawn track's next piece, end to end, is no neighbour", () => {
       z: 0,
     })),
   });
-  for (const h of lawnHalves([run(0), run(32)])) {
+  const halves = lawnHalves([run(0), run(32)]);
+  expect(halves).toHaveLength(2);
+  for (const h of halves) {
     expect(h.left.every((w) => w === 1.3)).toBe(true);
     expect(h.right.every((w) => w === 1.3)).toBe(true);
     expect(h.sharedLeft.concat(h.sharedRight).some(Boolean)).toBe(false);

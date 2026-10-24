@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, jest, test } from "bun:test";
 import {
   Box3,
   Color,
@@ -245,7 +245,11 @@ test("nightFactor ramps across civil dusk", () => {
 test("the palette's fog colour lands in the scene fog's uniform", () => {
   const { sunRig, fogColor } = rig();
   sunRig.update(new Date("2026-06-21T10:00:00Z"));
-  expect(fogColor.value.getHex()).not.toBe(0);
+  const noon = fogColor.value.getHex();
+  expect(noon).not.toBe(0);
+  // It follows the palette through the day, not only its first colour.
+  sunRig.update(new Date("2026-06-21T19:30:00Z"));
+  expect(fogColor.value.getHex()).not.toBe(noon);
 });
 
 // three keys every material's build by the lights it draws with: a sun that
@@ -289,18 +293,25 @@ for (const [when, date] of [
 
 // A drag through the day turns the sun at every frame; the map, the
 // heaviest pass, follows ten times a second and at once when it ends.
-test("a drag's steps redraw the shadow map at most every 100 ms", async () => {
-  const { sunRig, sun } = rig();
-  sunRig.update(new Date("2026-06-21T12:00:00+02:00"));
-  expect(sunRig.shadowPending()).toBe(true);
-  sun.shadow.needsUpdate = false; // three drew it
-  sunRig.update(new Date("2026-06-21T12:05:00+02:00"), true);
-  expect(sunRig.shadowPending()).toBe(false);
-  await new Promise((resolve) => setTimeout(resolve, 130));
-  expect(sunRig.shadowPending()).toBe(true);
-  sun.shadow.needsUpdate = false;
-  sunRig.update(new Date("2026-06-21T12:10:00+02:00"), true);
-  sunRig.update(new Date("2026-06-21T12:15:00+02:00"));
-  expect(sunRig.shadowPending()).toBe(true);
-  sunRig.dispose();
+test("a drag's steps redraw the shadow map at most every 100 ms", () => {
+  jest.useFakeTimers();
+  try {
+    const { sunRig, sun } = rig();
+    sunRig.update(new Date("2026-06-21T12:00:00+02:00"));
+    expect(sunRig.shadowPending()).toBe(true);
+    sun.shadow.needsUpdate = false; // three drew it
+    sunRig.update(new Date("2026-06-21T12:05:00+02:00"), true);
+    expect(sunRig.shadowPending()).toBe(false);
+    jest.advanceTimersByTime(99);
+    expect(sunRig.shadowPending()).toBe(false);
+    jest.advanceTimersByTime(1);
+    expect(sunRig.shadowPending()).toBe(true);
+    sun.shadow.needsUpdate = false;
+    sunRig.update(new Date("2026-06-21T12:10:00+02:00"), true);
+    sunRig.update(new Date("2026-06-21T12:15:00+02:00"));
+    expect(sunRig.shadowPending()).toBe(true);
+    sunRig.dispose();
+  } finally {
+    jest.useRealTimers();
+  }
 });

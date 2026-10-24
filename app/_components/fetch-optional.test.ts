@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, jest, test } from "bun:test";
 import { isNetworkFailure } from "@/lib/city/fetch-retry";
 import {
   eitherSignal,
@@ -8,6 +8,7 @@ import {
   fetchOptionalBinary,
   fetchOptionalJson,
   fetchRequiredJson,
+  STALL_MS,
   untilAborted,
 } from "./fetch-optional";
 
@@ -33,7 +34,27 @@ const json = (doc: unknown) => new Response(JSON.stringify(doc));
 afterEach(() => {
   globalThis.fetch = realFetch;
   Math.random = realRandom;
+  jest.useRealTimers();
 });
+
+/**
+ * `promise` settled under Bun's fake timers: the clock moves on by `stepMs`
+ * at a time, with the microtasks between the steps drained, until it has
+ * settled — the retries' backoff and the stall guard wait on no real time.
+ */
+async function settled<T>(promise: Promise<T>, stepMs = 50): Promise<T> {
+  let done = false;
+  const watched = promise.finally(() => {
+    done = true;
+  });
+  for (let waited = 0; !done && waited < 120_000; waited += stepMs) {
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve();
+    }
+    jest.advanceTimersByTime(stepMs);
+  }
+  return watched;
+}
 
 test("ok JSON is returned parsed", async () => {
   stubFetch(() => json({ a: 1 }));
@@ -52,12 +73,13 @@ test("a body that is not JSON means feature off", async () => {
 });
 
 test("a network failure is not the answer: the file is asked for again", async () => {
-  // the shortest backoff (0.25 s), so the test waits for one real retry
-  Math.random = () => 0;
+  jest.useFakeTimers();
   const stub = stubFetch((_, call) =>
     call === 1 ? Promise.reject(new TypeError("Load failed")) : json({ a: 2 })
   );
-  expect(await fetchOptionalJson<{ a: number }>("/x")).toEqual({ a: 2 });
+  expect(await settled(fetchOptionalJson<{ a: number }>("/x"))).toEqual({
+    a: 2,
+  });
   expect(stub.calls()).toBe(2);
 });
 
@@ -195,7 +217,7 @@ test("an abort ends the wait at once, the work behind it going on for whoever el
 });
 
 test("an attempt that goes silent is cut and asked for again", async () => {
-  Math.random = () => 0;
+  jest.useFakeTimers();
   let calls = 0;
   // the first request never answers until its signal fires, as a fetch
   // over a connection gone quiet
@@ -210,7 +232,7 @@ test("an attempt that goes silent is cut and asked for again", async () => {
       );
     });
   }) as unknown as typeof fetch;
-  const got = await fetchBytes("/x", { budgetMs: 5000, stallMs: 30 });
+  const got = await settled(fetchBytes("/x", { budgetMs: 2 * STALL_MS }), 1000);
   expect(got.ok).toBe(true);
   expect([...got.bytes]).toEqual([7, 8]);
   expect(calls).toBe(2);
@@ -226,7 +248,6 @@ test("the caller's abort is an abort, not a stall", async () => {
   const aborter = new AbortController();
   const got = fetchBytes("/x", {
     budgetMs: 5000,
-    stallMs: 10_000,
     signal: aborter.signal,
   });
   aborter.abort();

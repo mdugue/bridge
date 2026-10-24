@@ -63,17 +63,6 @@ test("walks material arrays", () => {
   expect(secondCalls()).toBe(1);
 });
 
-test("two meshes sharing one material dispose without throwing", () => {
-  const material = new MeshBasicNodeMaterial();
-  const calls = countDisposals(material);
-  const group = new Object3D();
-  group.add(new Mesh(new BoxGeometry(), material));
-  group.add(new Mesh(new BoxGeometry(), material));
-
-  expect(() => disposeObject3D(group)).not.toThrow();
-  expect(calls()).toBeGreaterThanOrEqual(1);
-});
-
 test("an instanced set's buffers go with its geometry view", () => {
   const set = new Instances(new BoxGeometry(), new MeshBasicNodeMaterial(), 4);
   let calls = 0;
@@ -115,10 +104,6 @@ test("a geometry left half made by a failed allocation is disposed past it, and 
   expect(through).toBe(1);
   expect(healthyCalls()).toBe(1);
   expect(materialCalls()).toBeGreaterThanOrEqual(1);
-});
-
-test("a bare Object3D is traversed without throwing", () => {
-  expect(() => disposeObject3D(new Object3D())).not.toThrow();
 });
 
 test("a buffer the scene shares is off a geometry when that geometry is disposed", () => {

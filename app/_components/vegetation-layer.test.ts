@@ -328,11 +328,16 @@ test("a canopy evergreen stands as a cone of its own, in leaf all year", () => {
     expect(conifer[tier].userData.styleCrown).toBeUndefined();
     expect(broad[tier].userData.styleCrown).toBe(tier);
   }
-  // January: the broadleaf bares, the evergreen keeps the leafy material
+  // July is the leafy summer it was built in: nothing to write
+  expect(built.setSeason(190)).toBe(false);
+  // January: the broadleaf bares in every tier, the evergreen keeps the
+  // leafy material
   expect(built.setSeason(9)).toBe(true);
   const { bare } = sceneCrowns();
-  expect(broad.mid.material).toBe(bare);
-  expect(conifer.mid.material).not.toBe(bare);
+  for (const tier of ["far", "mid", "rich"] as const) {
+    expect(broad[tier].material).toBe(bare);
+    expect(conifer[tier].material).not.toBe(bare);
+  }
 });
 
 test("a canopy pine wears the pine's crown, high on its stem, a chunk of its own", () => {
