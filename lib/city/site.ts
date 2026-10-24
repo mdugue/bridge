@@ -307,37 +307,14 @@ function shortName(provider: Provider): string {
   return m[1].length <= 20 ? m[1] : m[2];
 }
 
-/** A source's credit line ("Stadtbäume: Landeshauptstadt Dresden,
- *  dl-de/by-2-0") as its holder and licence. */
-function registerHolder(credit: string): [string, string] {
-  const body = credit.replace(/^[^:]*:\s*/, "");
-  const cut = body.lastIndexOf(", ");
-  return cut < 0 ? [body, ""] : [body.slice(0, cut), body.slice(cut + 2)];
-}
-
 /**
- * The short credit the HUD footer always shows (its full lines,
- * `siteAttribution`, fold behind it): every licensor and licence named
- * once — "GeoSN, Landeshauptstadt Dresden (dl-de/by-2-0) · © OpenStreetMap
- * (ODbL)".
+ * The one line the HUD footer always shows: OpenStreetMap, whose map
+ * display wants its credit in sight, and the Land's survey, "u. a." for
+ * the rest — every source with its licence folds out below it
+ * (`siteAttribution`). One line, so the footer stays two rows high.
  */
-export function siteCredit(site: Site): string {
-  const byLicence = new Map<string, string[]>();
-  const add = (holder: string, licence: string) => {
-    const holders = byLicence.get(licence) ?? [];
-    if (!holders.includes(holder)) {
-      holders.push(holder);
-    }
-    byLicence.set(licence, holders);
-  };
-  add(shortName(site.provider), site.provider.licence);
-  for (const credit of dataCredits(site)) {
-    add(...registerHolder(credit));
-  }
-  const parts = [...byLicence].map(([licence, holders]) =>
-    licence ? `${holders.join(", ")} (${licence})` : holders.join(", ")
-  );
-  return [...parts, GLO30_SHORT_CREDIT, "© OpenStreetMap (ODbL)"].join(" · ");
+export function siteShortCredit(site: Site): string {
+  return `© OpenStreetMap · ${shortName(site.provider)} u. a.`;
 }
 
 /** The daily curve the traffic keeps its hours by (lib/city/
@@ -362,8 +339,6 @@ export const MAPILLARY_SHOPFRONT_CREDIT =
  *  own words; its liability sentence is in NOTICE and the guide. */
 export const GLO30_CREDIT =
   "Gelände im Umland: produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved";
-/** The same in the footer's short credit. */
-export const GLO30_SHORT_CREDIT = "Copernicus WorldDEM-30 (© DLR, Airbus DS)";
 
 /** The trees' year (lib/city/tree-season.ts: the leaf-out, autumn and leaf
  *  fall days, and each city's shift from Dresden's): read off the
@@ -381,20 +356,6 @@ export function mapillaryCredit(site: Site): string[] {
     return [MAPILLARY_SHOPFRONT_CREDIT];
   }
   return [panoramas === false ? MAPILLARY_LAMP_CREDIT : MAPILLARY_CREDIT];
-}
-
-/** The credits of the site's registers and data layers, each a
- *  "what: holder, licence" line. */
-function dataCredits(site: Site): string[] {
-  const layers = site.dataLayers;
-  return [
-    ...(site.treeCadastre ? [site.treeCadastre.credit] : []),
-    ...mapillaryCredit(site),
-    ...(layers?.traffic ? [layers.traffic.credit, TRAFFIC_HOURS_CREDIT] : []),
-    ...(layers?.bikes ? [layers.bikes.credit] : []),
-    ...(layers?.trams ? [TIMETABLE_CREDIT] : []),
-    PHENOLOGY_CREDIT,
-  ];
 }
 
 /** The credit lines the HUD footer shows (the sources' licence terms). */

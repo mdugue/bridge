@@ -94,7 +94,7 @@ import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
 import {
   siteAttribution,
-  siteCredit,
+  siteShortCredit,
   type ViewpointGeometry,
 } from "@/lib/city/site";
 import { useSite } from "./site-context";
@@ -1085,10 +1085,10 @@ export function SceneSidebar(props: SceneSidebarProps) {
 }
 
 /**
- * The footer folds its licence lines away: they ran to six lines and took
- * that much from the tabs above. The short credit stays visible (every
- * licensor and licence named once), the full lines and the way to /wissen
- * open on demand, above the row so the trigger does not move.
+ * The footer, two rows high: the one-line credit (OpenStreetMap and the
+ * Land's survey) folds every source with its licence out above itself, so
+ * the trigger does not move; below it the way to Impressum, Datenschutz and
+ * /wissen — in a new tab, so the walk stays — and the one call to action.
  */
 function SourcesFooter() {
   const site = useSite();
@@ -1100,39 +1100,33 @@ function SourcesFooter() {
             <li key={line}>{line}</li>
           ))}
         </ul>
-        <Link
-          className="mb-2 inline-block underline underline-offset-2 hover:text-foreground"
-          href="/wissen"
-        >
-          Wissen: Datenquellen und wie die Stadt entsteht
-        </Link>
       </CollapsibleContent>
-      <div className="flex items-center gap-3">
-        <CollapsibleTrigger className="group/sources flex min-w-0 flex-1 items-center gap-1 text-left hover:text-foreground">
-          <span className="min-w-0 flex-1">
-            {/* a licence id like "(dl-de/by-2-0)" breaks only before it */}
-            {siteCredit(site)
-              .split(/(\([^)]*\))/)
-              .map((part, i) =>
-                i % 2 === 1 ? (
-                  <span className="whitespace-nowrap" key={part}>
-                    {part}
-                  </span>
-                ) : (
-                  part
-                )
-              )}
-          </span>
-          <span className="sr-only">Quellen und Lizenzen</span>
-          <ChevronDownIcon
-            aria-hidden
-            className="size-3 shrink-0 rotate-180 opacity-50 transition-transform group-aria-expanded/sources:rotate-0"
-          />
-        </CollapsibleTrigger>
+      <CollapsibleTrigger className="group/sources flex w-full min-w-0 items-center gap-1 text-left hover:text-foreground">
+        <span className="min-w-0 truncate">{siteShortCredit(site)}</span>
+        <span className="sr-only">– alle Quellen und Lizenzen</span>
+        <ChevronDownIcon
+          aria-hidden
+          className="size-3 shrink-0 rotate-180 opacity-50 transition-transform group-aria-expanded/sources:rotate-0"
+        />
+      </CollapsibleTrigger>
+      {/* Too narrow for the button's word (a phone's sheet), it keeps its
+          icon; its aria-label still says what it is. */}
+      <div className="@container mt-1.5 flex items-center gap-3">
+        <LegalLinks newTab>
+          <Link
+            className="underline underline-offset-2 hover:text-foreground"
+            href="/wissen"
+            rel="noopener"
+            target="_blank"
+          >
+            Wissen
+          </Link>
+        </LegalLinks>
         {/* The one call to action in the footer, so it is a button, not a
             second muted link. A plain link to Ko-fi, not its widget:
             nothing loads from there until it is clicked. */}
         <Button
+          className="ml-auto"
           nativeButton={false}
           render={
             <a
@@ -1147,10 +1141,9 @@ function SourcesFooter() {
           variant="outline"
         >
           <CoffeeIcon aria-hidden data-icon="inline-start" />
-          Unterstützen
+          <span className="@max-[17rem]:sr-only">Unterstützen</span>
         </Button>
       </div>
-      <LegalLinks className="pt-1.5" newTab />
     </Collapsible>
   );
 }

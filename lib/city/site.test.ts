@@ -10,7 +10,7 @@ import {
   GLO30_CREDIT,
   PHENOLOGY_CREDIT,
   siteAttribution,
-  siteCredit,
+  siteShortCredit,
   overlook,
   siteTitle,
   spawnViewpoint,
@@ -173,14 +173,11 @@ test("overlook refuses a vantage that does not look down", () => {
   ).toThrow();
 });
 
-test("the short credit names every licensor and licence once", () => {
-  expect(siteCredit(SITES.dresden)).toBe(
-    "GeoSN, Landeshauptstadt Dresden, Freie und Hansestadt Hamburg, Deutscher Wetterdienst (dl-de/by-2-0) · Mapillary (CC BY-SA 4.0) · DELFI e.V. via gtfs.de (CC BY 4.0) · Copernicus WorldDEM-30 (© DLR, Airbus DS) · © OpenStreetMap (ODbL)"
+test("the footer's one line names OSM and the Land's survey", () => {
+  expect(siteShortCredit(SITES.dresden)).toBe("© OpenStreetMap · GeoSN u. a.");
+  expect(siteShortCredit(SITES.unna)).toBe(
+    "© OpenStreetMap · Geobasis NRW u. a."
   );
-  expect(siteCredit(SITES.unna)).toBe(
-    "Geobasis NRW (dl-de/zero-2-0) · Mapillary (CC BY-SA 4.0) · Straßen.NRW, Freie und Hansestadt Hamburg, Deutscher Wetterdienst (dl-de/by-2-0) · Copernicus WorldDEM-30 (© DLR, Airbus DS) · © OpenStreetMap (ODbL)"
-  );
-  expect(siteCredit(SITES.hamburg)).toContain("LGV");
 });
 
 test("Mapillary is credited where its photos are measured, naming what it gave", () => {

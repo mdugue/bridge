@@ -474,13 +474,15 @@ screen barely shows.
 - **Statistik** — number of buildings and terrain points currently in
   view, estimated graphics memory and the frame rate.
 
-The footer credits the data sources: the Land's survey office (in
-Dresden the Saxon one) for the official datasets and OpenStreetMap
-contributors for, among others, lamps, walls and fences, platforms, bridge
-structures, shops and listed buildings (and the land cover where the Land
-publishes no Basis-DLM). Next to it, *Unterstützen* (support) leads to the
-project's Ko-fi page; it is a plain link that loads nothing from Ko-fi
-until it is clicked.
+The footer has two rows. The first names OpenStreetMap and the Land's
+survey office (in Dresden the Saxon one); a click on it folds out every
+data source with its licence — the official datasets, the OpenStreetMap
+contributors for, among others, lamps, walls and fences, platforms,
+bridge structures, shops and listed buildings (and the land cover where
+the Land publishes no Basis-DLM) and the other registers. The second
+leads to *Impressum*, *Datenschutz* (privacy) and *Wissen*, each in a new
+tab, and to *Unterstützen* (support), the project's Ko-fi page; it is a
+plain link that loads nothing from Ko-fi until it is clicked.
 
 ## Tips
 

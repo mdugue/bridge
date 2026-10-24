@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { cn } from "cn";
 
 const LINK = "underline underline-offset-2 hover:text-foreground";
@@ -7,12 +8,15 @@ const LINK = "underline underline-offset-2 hover:text-foreground";
  * The way to /impressum and /datenschutz, in every page's footer and the
  * viewer's sidebar (ADR 0045): an Impressum must be reachable from
  * everywhere, in a click or two. From the viewer they open in a new tab,
- * so the walk is still there to come back to.
+ * so the walk is still there to come back to. `children` are further
+ * links the place puts in the same row (the sidebar's Wissen).
  */
 export function LegalLinks({
+  children,
   className,
   newTab = false,
 }: {
+  children?: ReactNode;
   className?: string;
   newTab?: boolean;
 }) {
@@ -25,6 +29,7 @@ export function LegalLinks({
       <Link className={LINK} href="/datenschutz" {...target}>
         Datenschutz
       </Link>
+      {children}
     </nav>
   );
 }
