@@ -619,7 +619,11 @@ tileset under `public/data/<site>/`
    `tileset-spawn.json` over the spawn tile alone (`lib/city/tileset.ts`,
    `buildTileset`). The client picks the full one unless the scene budget
    keeps to the spawn tile — the `lite` profile of the headless e2e
-   (`city-walk-client.tsx`).
+   (`city-walk-client.tsx`). Both name the site's **ground plate**
+   (`extras.plate`: `plate.bin.gz`, every tile's 33² heights in
+   decimetres as int16, then their classes as uint8, rows from the north;
+   `bakePlate`, `lib/city/ground-plate.ts`), which the viewer draws under
+   every tile with no terrain on screen.
 4. **Publish** (below).
 
 ### The tree

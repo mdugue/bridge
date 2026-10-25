@@ -141,6 +141,20 @@ visual-variable codebook is in
   (`gridElevations`), or from the TIN's triangles.
   `scripts/bake-tiles.ts`, `lib/city/terrain-geometry.ts`, `terrain-layer.ts`
   ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)).
+- **Ground plate** `= computed` (*Bodenplatte*) — the whole site's ground
+  at a 62.5 m grid (33² vertices per tile, the edges shared with the
+  neighbours, so it has no seams), each vertex the fine ground's height
+  and the commonest land-cover class within half a cell around it, read
+  across the tile edges (so colour and shading meet without a seam too),
+  coloured by the palette at runtime. One small site file
+  (`plate.bin.gz`, 49 kB for Dresden's fifteen tiles, 21 kB gzipped)
+  fetched with the tileset; the viewer draws a tile's plate (its inner
+  vertices 1.5 m under their heights, its edges on them, so it meets a
+  landed neighbour without a step) wherever that tile has no terrain
+  level on screen yet, so a tile that never streamed, or that the cache let
+  go of, shows ground instead of the sky on a flight or a turn.
+  `lib/city/ground-plate.ts`, `scripts/prepare-data.ts` `bakePlate`,
+  `ground-plate-layer.ts` ([plan 076](./plans/076-streaming-without-holes.md)).
 - **Squares and islands from OSM** `❝ taken` (*Plätze, Inseln*) — the DLM draws many
   squares as one road area: the Albertplatz's pedestrian island, its lawns
   and fountains were grey carriageway with no kerb. The land-cover bake
