@@ -873,6 +873,16 @@ stays their measure; the tile cache counts true bytes.
   tile contents and downloads four per origin at once (`PHONE_STREAM`,
   the renderer's own queues replaced before its first update), where the
   boot asked for eleven contents in one millisecond.
+- **The ground comes before the buildings.** Both tiers' queues run in
+  our order, not the renderer's (`lib/city/stream-order.ts`,
+  `orderStreaming`): its own sorts by screen-space error, and a tile's
+  buildings carry `TILE_ERROR` so that they always show — so every
+  visible tile's full LoD2 (4 MB on average for Dresden, 7 MB at most)
+  went ahead of any ground, and a flight showed roofs over holes. Now
+  the coarse ground of every tile in view loads first, then buildings
+  and fine ground nearest first (on one tile the buildings before the
+  fine ground), and out of view last. Until the first frame the tile the
+  boot waits on goes before all of it.
   Two rules follow: an attribute read on the CPU after the dressing (the
   city's positions, index and feature ids; the TIN's index), or first
   read by a material the tile's own does not use, stays off the drop

@@ -47,6 +47,7 @@ import {
   type TreeVeto,
 } from "@/lib/city/tree-placement";
 import { unpackCrowns } from "@/lib/city/coarse-crowns";
+import { streamOrder } from "@/lib/city/stream-order";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   type CityExtras,
@@ -237,6 +238,9 @@ export interface TileStreamContext {
   /** resolves when the HUD lets the heavy dressing start (create-app's
    *  startStreaming): the first frames only wait on terrain + buildings */
   dressingGate: Promise<void>;
+  /** the site tile the boot waits on, streamed first; null once the first
+   *  frame is up (`orderStreaming`) */
+  bootTile: () => string | null;
   /** the look store: dressing lands with the current look */
   look: LookState;
   /** phones sample the ≤ 2048² class rasters */
@@ -279,7 +283,7 @@ export interface TileStreamContext {
   renderer: WebGPURenderer;
   styleResources: StyleResources;
   sunDirection: Vector3;
-  /** a phone streams fewer tiles at once (`paceStreaming`) */
+  /** a phone streams fewer tiles at once (`orderStreaming`) */
   tier: DeviceTier;
   /** a site tile's exact extent (the tileset's root extras) */
   tileBounds: (tileId: string) => TerrainBounds | undefined;
@@ -2235,22 +2239,31 @@ export function dropLoaderResult(tile: unknown): void {
 export const PHONE_STREAM = { parses: 2, downloadsPerOrigin: 4 } as const;
 
 /**
- * Gives a phone's renderer queues of its own at `PHONE_STREAM`'s limits.
- * Before its first update (the renderer takes them up then). The defaults
- * are module-wide queues every renderer shares, so they are replaced, not
- * changed: a desktop app booted after (a StrictMode remount) keeps its own.
+ * Gives the renderer queues of its own, in our order (lib/city/stream-order.ts:
+ * the coarse ground of every tile in view before any buildings, nearer
+ * before farther, the boot's tile first until its first frame), and on a
+ * phone at `PHONE_STREAM`'s limits. Before its first update (the renderer
+ * takes them up then). The defaults are module-wide queues every renderer
+ * shares, so they are replaced, not changed: a second app (a StrictMode
+ * remount) keeps its own.
  */
-export function paceStreaming(tiles: TilesRenderer, tier: DeviceTier): void {
-  if (tier !== "mobile") {
-    return;
-  }
+export function orderStreaming(
+  tiles: TilesRenderer,
+  tier: DeviceTier,
+  bootTile: () => string | null
+): void {
+  const order = streamOrder(bootTile);
   const parse = new PriorityQueue();
-  parse.maxJobs = PHONE_STREAM.parses;
-  parse.priorityCallback = tiles.parseQueue.priorityCallback;
+  parse.maxJobs =
+    tier === "mobile" ? PHONE_STREAM.parses : tiles.parseQueue.maxJobs;
+  parse.priorityCallback = order;
   tiles.parseQueue = parse;
   const download = new DownloadPriorityQueue();
-  download.maxJobsPerOrigin = PHONE_STREAM.downloadsPerOrigin;
-  download.priorityCallback = tiles.downloadQueue.priorityCallback;
+  download.maxJobsPerOrigin =
+    tier === "mobile"
+      ? PHONE_STREAM.downloadsPerOrigin
+      : tiles.downloadQueue.maxJobsPerOrigin;
+  download.priorityCallback = order;
   tiles.downloadQueue = download;
 }
 
@@ -2268,7 +2281,7 @@ export function createTileStream(
   cameras: { camera: Camera; height: number; width: number }[]
 ): TileStream {
   const tiles = new TilesRenderer(ctx.tilesetUrl);
-  paceStreaming(tiles, ctx.tier);
+  orderStreaming(tiles, ctx.tier, ctx.bootTile);
   setRasterTier(ctx.tier);
   tiles.registerPlugin(new ContentFetchPlugin());
   // The decoder's own workers: without them a tile's meshopt buffers (75 MB

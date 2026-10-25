@@ -31,7 +31,7 @@ import {
   dressingParts,
   handOverWaitMs,
   PHONE_STREAM,
-  paceStreaming,
+  orderStreaming,
   showDataLayers,
   type TileDressing,
   type TileStreamContext,
@@ -75,6 +75,7 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
     {
       // the gate never opens: nothing is built here
       dressingGate: new Promise<void>(() => undefined),
+      bootTile: () => null,
       onChange: () => {
         changes++;
       },
@@ -142,6 +143,7 @@ test("a tile that leaves while its compile runs is freed once the compile ends",
   const plugin = new DressingPlugin(
     {
       dressingGate: new Promise<void>(() => undefined),
+      bootTile: () => null,
       compile: () => compiling,
       onChange: () => undefined,
     } as unknown as TileStreamContext,
@@ -176,6 +178,7 @@ test("a tile that leaves lets go of the site's shared index at once, while its c
   const plugin = new DressingPlugin(
     {
       dressingGate: new Promise<void>(() => undefined),
+      bootTile: () => null,
       compile: () =>
         new Promise<void>((resolve) => {
           finish = resolve;
@@ -211,6 +214,7 @@ test("a city drops its normals' and places on the wall's CPU copies once its com
     const plugin = new DressingPlugin(
       {
         dressingGate: new Promise<void>(() => undefined),
+        bootTile: () => null,
         compile: () => Promise.resolve(compiled),
         onChange: () => undefined,
       } as unknown as TileStreamContext,
@@ -261,6 +265,7 @@ test("a compile the GPU had no room for is reported once, and drops nothing", as
     const plugin = new DressingPlugin(
       {
         dressingGate: new Promise<void>(() => undefined),
+        bootTile: () => null,
         compile: () => Promise.reject(error),
         onAllocationFailure: (_: unknown, where: string) =>
           failures.push(where),
@@ -299,6 +304,7 @@ test("a dressing whose build throws is reported, an allocation failure as one, a
     const allocations: [unknown, string][] = [];
     const ctx = {
       dressingGate: Promise.resolve(),
+      bootTile: () => null,
       compile: () => Promise.resolve(true),
       onAllocationFailure: (err: unknown, where: string) =>
         allocations.push([err, where]),
@@ -365,6 +371,7 @@ test("a tile released while a compile still runs is never dressed after the wait
   const plugin = new DressingPlugin(
     {
       dressingGate: Promise.resolve(),
+      bootTile: () => null,
       compile: (o: Object3D) =>
         o === blocker
           ? new Promise<boolean>(() => undefined)
@@ -418,6 +425,7 @@ function abortableLoad() {
   const plugin = new DressingPlugin(
     {
       dressingGate: new Promise<void>(() => undefined),
+      bootTile: () => null,
       compile: () => Promise.resolve(),
       onChange: () => undefined,
     } as unknown as TileStreamContext,
@@ -463,26 +471,33 @@ test("a load the renderer keeps is not freed", async () => {
   expect(freed.value).toBe(false);
 });
 
-test("a phone streams fewer contents at once, on queues of its own", () => {
+test("a phone streams fewer contents at once, on queues of their own in our order", () => {
   const phone = new TilesRenderer("https://example.com/tileset.json");
   const desktop = new TilesRenderer("https://example.com/tileset.json");
-  paceStreaming(phone, "mobile");
-  paceStreaming(desktop, "desktop");
+  orderStreaming(phone, "mobile", () => null);
+  orderStreaming(desktop, "desktop", () => null);
   expect(phone.parseQueue.maxJobs).toBe(PHONE_STREAM.parses);
   expect(phone.downloadQueue.maxJobsPerOrigin).toBe(
     PHONE_STREAM.downloadsPerOrigin
   );
-  // the renderer's own order of what loads first
-  expect(phone.parseQueue.priorityCallback).toBe(
-    DEFAULT_PARSE_QUEUE.priorityCallback
+  // a desktop keeps the renderer's limits, on queues of its own
+  expect(desktop.parseQueue).not.toBe(DEFAULT_PARSE_QUEUE);
+  expect(desktop.parseQueue.maxJobs).toBe(DEFAULT_PARSE_QUEUE.maxJobs);
+  expect(desktop.downloadQueue).not.toBe(DEFAULT_DOWNLOAD_QUEUE);
+  expect(desktop.downloadQueue.maxJobsPerOrigin).toBe(
+    DEFAULT_DOWNLOAD_QUEUE.maxJobsPerOrigin
   );
-  expect(phone.downloadQueue.priorityCallback).toBe(
-    DEFAULT_DOWNLOAD_QUEUE.priorityCallback
-  );
+  // not the renderer's error order: a tile's coarse ground before its
+  // buildings
+  const at = (depth: number) => ({
+    internal: { depth },
+    traversal: { distanceFromCamera: 0, error: 0, inFrustum: true, used: true },
+  });
+  for (const queue of [phone.parseQueue, desktop.downloadQueue]) {
+    expect(queue.priorityCallback?.(at(2), at(1))).toBe(1);
+  }
   // the module-wide defaults another renderer shares are left as they were
-  expect(desktop.parseQueue).toBe(DEFAULT_PARSE_QUEUE);
   expect(DEFAULT_PARSE_QUEUE.maxJobs).toBeGreaterThan(PHONE_STREAM.parses);
-  expect(desktop.downloadQueue).toBe(DEFAULT_DOWNLOAD_QUEUE);
   phone.dispose();
   desktop.dispose();
 });
@@ -544,6 +559,7 @@ test("a dressing whose tile leaves before its idle time never builds its ask set
     const plugin = new DressingPlugin(
       {
         dressingGate: new Promise<void>(() => undefined),
+        bootTile: () => null,
         look: createLookState(),
         night: () => 0,
         season: () => 180,

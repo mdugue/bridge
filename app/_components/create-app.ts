@@ -1272,6 +1272,9 @@ async function bootApp(
   // a recovered page's camera, or a place picked in the HUD while the page
   // was loading, stands on (lib/city/boot-start.ts).
   const { picked, restored, spawn } = startOf(opts, extras.tiles);
+  // Streamed before anything else until the first frame is up
+  // (lib/city/stream-order.ts).
+  let bootTile: string | null = spawn.id;
   const siteBounds = unionBounds(extras);
 
   // Shared world sun direction (surface→sun), kept in sync by the sun rig and
@@ -1511,6 +1514,7 @@ async function bootApp(
       },
       onCopiesDropped: () => cpuCount.changed(),
       dressingGate,
+      bootTile: () => bootTile,
       fogColor: sceneFog.color,
       heightAt,
       look: opts.look,
@@ -3507,6 +3511,7 @@ async function bootApp(
     poll();
   });
   firstFrameShown = true;
+  bootTile = null;
   lifecycle.dispatch({ kind: "firstFrame" });
   onChange();
   flushStats();
