@@ -96,19 +96,18 @@ test("every tile's coarse ground before any buildings, nearer before farther", (
   ]);
 });
 
-test("until the first frame the boot's tile goes first, whole", () => {
+test("until the first frame what it waits for goes first: the boot tile's ground and buildings", () => {
   const spawnCity = content(1, SPAWN, { distanceFromCamera: 900 });
+  const spawnCoarse = content(2, SPAWN, { distanceFromCamera: 900 });
   const spawnFine = content(3, SPAWN, { distanceFromCamera: 900 });
   const neighbourCoarse = content(2, NEIGHBOUR, { distanceFromCamera: 10 });
-  expect(runOrder([neighbourCoarse, spawnFine, spawnCity], SPAWN)).toEqual([
-    spawnCity,
-    spawnFine,
-    neighbourCoarse,
-  ]);
-  // after it, the neighbour's ground comes first
-  expect(runOrder([neighbourCoarse, spawnFine, spawnCity])[0]).toBe(
-    neighbourCoarse
-  );
+  expect(
+    runOrder([neighbourCoarse, spawnFine, spawnCity, spawnCoarse], SPAWN)
+  ).toEqual([spawnCoarse, spawnCity, neighbourCoarse, spawnFine]);
+  // after it, the nearer neighbour's ground comes first
+  expect(
+    runOrder([neighbourCoarse, spawnFine, spawnCity, spawnCoarse])[0]
+  ).toBe(neighbourCoarse);
 });
 
 test("used before unused and in view before out of view, whatever the kind", () => {

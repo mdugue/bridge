@@ -12,7 +12,9 @@
  * up everyone's ground. So the order is ours:
  *
  *   1. what the renderer marked (`priority`), used before unused,
- *   2. until the first frame, the tile the boot starts on,
+ *   2. until the first frame, what it waits for: the boot tile's coarse
+ *      ground and buildings (its fine ground parsing beside them, rasters
+ *      and all, held the first frame up by a third, headless),
  *   3. in view before out of view (the shadow camera's),
  *   4. nearer before farther, the coarse ground counted `COARSE_LEAD_M`
  *      nearer than it is: it is small (0.5 MB of glTF), and a tile with
@@ -98,13 +100,16 @@ function rankedDistance(distance: number, rank: number): number {
 export function streamOrder(
   bootTile: () => string | null
 ): (a: OrderedTile, b: OrderedTile) => number {
-  // which contents are the boot tile's: a name scan once per content
+  // which contents the first frame waits for: a name scan once per content
   let bootId: string | null = null;
   let isBoot = new WeakMap<OrderedTile, boolean>();
-  const onBootTile = (tile: OrderedTile): boolean => {
+  const forBoot = (tile: OrderedTile): boolean => {
     let known = isBoot.get(tile);
     if (known === undefined) {
-      known = bootId !== null && isTileContent(tile, bootId);
+      known =
+        bootId !== null &&
+        contentRank(tile.internal?.depth) !== CONTENT_RANK.fine &&
+        isTileContent(tile, bootId);
       isBoot.set(tile, known);
     }
     return known;
@@ -131,7 +136,7 @@ export function streamOrder(
     const db = rankedDistance(tb.distanceFromCamera, rb);
     return (
       prefer(ta.used, tb.used) ||
-      (boot === null ? 0 : prefer(onBootTile(a), onBootTile(b))) ||
+      (boot === null ? 0 : prefer(forBoot(a), forBoot(b))) ||
       prefer(ta.inFrustum, tb.inFrustum) ||
       prefer(da < db, db < da) ||
       prefer(ra < rb, rb < ra) ||
