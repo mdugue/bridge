@@ -251,7 +251,7 @@ And:
   (+ test), `app/_components/fxaa.ts`,
   `app/_components/selection-outline.ts`, `lib/city/outline.ts`,
   `app/_components/sun-rig.ts` (`OneByteShadowNode`)
-- `app/_components/tile-stream.ts` (`PHONE_STREAM`, `paceStreaming`,
+- `app/_components/tile-stream.ts` (`PHONE_STREAM`, `paceStreaming`, since `orderStreaming`,
   `dropLoaderResult`, `dropContentCopies`, `calculateBytesUsed`,
   `loadAborts`), `app/_components/terrain-layer.ts`
   (`readsSportGrounds`, `createGridShare`, `cpuDroppable`, + test),

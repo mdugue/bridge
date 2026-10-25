@@ -47,7 +47,7 @@ import {
   type TreeVeto,
 } from "@/lib/city/tree-placement";
 import { unpackCrowns } from "@/lib/city/coarse-crowns";
-import { streamOrder } from "@/lib/city/stream-order";
+import { keepOrder, streamOrder } from "@/lib/city/stream-order";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   type CityExtras,
@@ -2240,8 +2240,9 @@ export const PHONE_STREAM = { parses: 2, downloadsPerOrigin: 4 } as const;
 
 /**
  * Gives the renderer queues of its own, in our order (lib/city/stream-order.ts:
- * the coarse ground of every tile in view before any buildings, nearer
- * before farther, the boot's tile first until its first frame), and on a
+ * the coarse ground before the buildings, nearer before farther, the
+ * boot's tile first until its first frame; a full cache admits in the
+ * same order, `keepOrder`), and on a
  * phone at `PHONE_STREAM`'s limits. Before its first update (the renderer
  * takes them up then). The defaults are module-wide queues every renderer
  * shares, so they are replaced, not changed: a second app (a StrictMode
@@ -2265,7 +2266,22 @@ export function orderStreaming(
       : tiles.downloadQueue.maxJobsPerOrigin;
   download.priorityCallback = order;
   tiles.downloadQueue = download;
+  // a full cache admits loads in the order it keeps tiles: ground first
+  // there too (the cache is the renderer's module-wide one, used by no
+  // other renderer here; wrapped once)
+  const cache = tiles.lruCache as unknown as {
+    unloadPriorityCallback: KeepOrderCallback & { [KEEP_ORDER]?: true };
+  };
+  if (!cache.unloadPriorityCallback[KEEP_ORDER]) {
+    const kept = Object.assign(keepOrder(cache.unloadPriorityCallback), {
+      [KEEP_ORDER]: true as const,
+    });
+    cache.unloadPriorityCallback = kept;
+  }
 }
+
+type KeepOrderCallback = Parameters<typeof keepOrder>[0];
+const KEEP_ORDER = Symbol("keepOrder");
 
 /**
  * Starts streaming the tileset under `world` (the viewer's rotated Z-up

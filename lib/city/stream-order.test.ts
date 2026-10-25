@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import {
+  COARSE_LEAD_M,
   CONTENT_RANK,
   contentRank,
   isTileContent,
+  keepOrder,
   type OrderedTile,
   streamOrder,
 } from "./stream-order";
@@ -116,10 +118,19 @@ test("used before unused and in view before out of view, whatever the kind", () 
   expect(runOrder([unused, behind, ahead])).toEqual([ahead, behind, unused]);
 });
 
-test("the renderer's own priority still decides first", () => {
-  const plain = content(2, SPAWN);
-  const marked = { ...content(3, NEIGHBOUR), priority: 1 };
-  expect(runOrder([plain, marked])[0]).toBe(marked);
+test("the renderer's own priority still decides first, as its comparator has it", () => {
+  // a fine ground far away whose priority sorts it last runs first
+  const coarse = {
+    ...content(2, SPAWN, { distanceFromCamera: 0 }),
+    priority: 1,
+  };
+  const fine = {
+    ...content(3, NEIGHBOUR, { distanceFromCamera: 1e4 }),
+    priority: 2,
+  };
+  expect(runOrder([coarse, fine])[0]).toBe(fine);
+  // a tile without one ranks as the renderer's: Infinity
+  expect(runOrder([coarse, content(3, NEIGHBOUR)])[0]).not.toBe(coarse);
 });
 
 test("a tile without traversal state is left where it is", () => {
@@ -132,4 +143,52 @@ test("a content is a site tile's by the id in its name", () => {
   expect(isTileContent(content(2, SPAWN), SPAWN)).toBe(true);
   expect(isTileContent(content(1, NEIGHBOUR), SPAWN)).toBe(false);
   expect(isTileContent({}, SPAWN)).toBe(false);
+});
+
+test("a far tile's coarse ground waits behind the buildings under the camera", () => {
+  const here = content(1, SPAWN, { distanceFromCamera: 0 });
+  const nearCoarse = content(2, NEIGHBOUR, {
+    distanceFromCamera: COARSE_LEAD_M - 1,
+  });
+  const farCoarse = content(2, NEIGHBOUR, {
+    distanceFromCamera: COARSE_LEAD_M + 500,
+  });
+  expect(runOrder([farCoarse, here, nearCoarse])).toEqual([
+    nearCoarse,
+    here,
+    farCoarse,
+  ]);
+});
+
+test("a full cache admits a tile's ground before its buildings, and unloads it last", () => {
+  const seen = (depth: number, lastFrameVisited: number) => ({
+    internal: { depth },
+    traversal: { lastFrameVisited },
+  });
+  // the renderer's: the least recently seen first, then the deeper
+  const base = (
+    a: ReturnType<typeof seen>,
+    b: ReturnType<typeof seen>
+  ): number =>
+    a.traversal.lastFrameVisited !== b.traversal.lastFrameVisited
+      ? a.traversal.lastFrameVisited > b.traversal.lastFrameVisited
+        ? -1
+        : 1
+      : a.internal.depth > b.internal.depth
+        ? 1
+        : -1;
+  const order = keepOrder(base);
+  const city = seen(1, 10);
+  const coarse = seen(2, 10);
+  const fine = seen(3, 10);
+  const old = seen(2, 3);
+  // ascending: what is kept longest first, as the renderer admits loads
+  expect([fine, old, city, coarse].sort(order)).toEqual([
+    coarse,
+    city,
+    fine,
+    old,
+  ]);
+  // other depths are the renderer's call
+  expect(order(seen(0, 10), city)).toBe(base(seen(0, 10), city));
 });
