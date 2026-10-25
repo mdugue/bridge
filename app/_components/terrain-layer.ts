@@ -1883,7 +1883,8 @@ export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
  * Dresses a streamed terrain mesh: loads its class raster (and NDVI), paints
  * the colour splat, swaps in the land-cover material and hangs the water and
  * mist sheets under it. `toData` maps the mesh's local frame to the data
- * frame (see gridElevations). The mesh stays owned by the tile.
+ * frame (see gridElevations); it is read again after the rasters load, so
+ * it must be this level's alone. The mesh stays owned by the tile.
  */
 export async function dressTerrain(
   mesh: Mesh,
