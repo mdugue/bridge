@@ -4,6 +4,7 @@ import {
   type BakedTile,
   buildTileset,
   COARSE_TERRAIN_ERROR,
+  FAR_CITY_ERROR,
   parseTilesetExtras,
   type TilesetExtras,
   tileBox,
@@ -15,6 +16,7 @@ const tile = (id: string, e: number): BakedTile => ({
   id,
   bounds: [e, 5_656_000, e + 2000, 5_658_000],
   city: `city_${id}.glb.gz`,
+  cityFar: `city_${id}_far.glb.gz`,
   terrain: { 0: `terrain_${id}_l0.glb.gz`, 1: `terrain_${id}_l1.glb.gz` },
   zRange: [100, 200],
 });
@@ -38,7 +40,7 @@ test("a tile box is centred in the recentered frame", () => {
   ).toEqual([0, 0, 150, 1000, 0, 0, 0, 1000, 0, 0, 0, 50]);
 });
 
-test("each tile: buildings added, coarse terrain replaced by fine terrain", () => {
+test("each tile: far buildings replaced by the baked ones, coarse terrain by fine terrain", () => {
   const set = buildTileset(
     [tile("a", 412_000), tile("b", 410_000)],
     extras
@@ -54,7 +56,7 @@ test("each tile: buildings added, coarse terrain replaced by fine terrain", () =
           geometricError: number;
           refine: string;
         }[];
-        content: { uri: string };
+        content?: { uri: string };
         refine: string;
       }[];
       refine: string;
@@ -70,8 +72,13 @@ test("each tile: buildings added, coarse terrain replaced by fine terrain", () =
   ]);
   const [a] = set.root.children;
   expect(a.refine).toBe("ADD");
-  expect(a.content.uri).toBe("city_a.glb.gz");
-  const coarse = a.children[0];
+  expect(a.content).toBeUndefined();
+  const [far, coarse] = a.children;
+  expect(far.refine).toBe("REPLACE");
+  expect(far.geometricError).toBe(FAR_CITY_ERROR);
+  expect(far.content.uri).toBe("city_a_far.glb.gz");
+  expect(far.children[0].content.uri).toBe("city_a.glb.gz");
+  expect(far.children[0].geometricError).toBe(0);
   expect(coarse.refine).toBe("REPLACE");
   expect(coarse.geometricError).toBe(COARSE_TERRAIN_ERROR);
   expect(coarse.content.uri).toBe("terrain_a_l1.glb.gz");

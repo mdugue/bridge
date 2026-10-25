@@ -155,6 +155,19 @@ visual-variable codebook is in
   go of, shows ground instead of the sky on a flight or a turn.
   `lib/city/ground-plate.ts`, `scripts/prepare-data.ts` `bakePlate`,
   `ground-plate-layer.ts` ([plan 076](./plans/076-streaming-without-holes.md)).
+- **Far buildings** `= computed` (*Gebäude in der Ferne*) — each tile's
+  buildings a second time, the same glTF with every vertex its shape does
+  not need dropped (meshopt's simplifier over the written glTF, at most
+  0.5 m: 1.85 M → 0.29 M triangles and 5.0 → 2.6 MB gzipped on Dresden's
+  spawn tile; 5 cm kept 62 % of them, 20 cm 32 %), shown beyond ≈ 260 m
+  of the tile and from the air, the baked LoD2 replacing it near
+  (`FAR_CITY_ERROR` 4 m). The shape is the same but for small roof
+  detail; the windows lose the per-vertex ground samples along the walls
+  and the doors, which nothing at that distance resolves. Chosen over
+  LoD1 blocks from the footprints, the plan's first idea: blocks would
+  have cost about as many triangles (≈ 30 a building) and lost the roofs,
+  a jump at every switch. `scripts/tile-glb.ts` `simplifyGlb`,
+  `lib/city/tileset.ts` ([plan 076](./plans/076-streaming-without-holes.md)).
 - **Squares and islands from OSM** `❝ taken` (*Plätze, Inseln*) — the DLM draws many
   squares as one road area: the Albertplatz's pedestrian island, its lawns
   and fountains were grey carriageway with no kerb. The land-cover bake
@@ -657,8 +670,9 @@ visual-variable codebook is in
   into an OGC 3D Tiles 1.1 tileset (`lib/city/tileset.ts`) under
   `public/data/<site>/`, one per built site, each streamed at its own route
   (`/dresden`; `scripts/prepare-sites.ts`, ADR 0037): per site tile the
-  buildings (refine ADD, loaded whenever the tile is in view) over the two
-  terrain levels (REPLACE). 3DTilesRendererJS loads and unloads by
+  buildings (loaded whenever the tile is in view, far off simplified,
+  near as baked — REPLACE, plan 076) beside the two terrain levels
+  (REPLACE). 3DTilesRendererJS loads and unloads by
   screen-space error (16 px) from the view camera **and the sun's shadow
   camera**, so a tile casting into the view stays loaded. Only the fine level
   is dressed (vegetation, lamps, monuments, rails; its stairs and walls are

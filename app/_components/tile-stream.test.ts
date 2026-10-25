@@ -489,12 +489,17 @@ test("a phone streams fewer contents at once, on queues of their own in our orde
   );
   // not the renderer's error order: a tile's coarse ground before its
   // buildings
-  const at = (depth: number) => ({
-    internal: { depth },
+  const at = (uri: string) => ({
+    content: { uri },
     traversal: { distanceFromCamera: 0, error: 0, inFrustum: true, used: true },
   });
   for (const queue of [phone.parseQueue, desktop.downloadQueue]) {
-    expect(queue.priorityCallback?.(at(2), at(1))).toBe(1);
+    expect(
+      queue.priorityCallback?.(
+        at("terrain_a_l1.0.glb.gz"),
+        at("city_a.0.glb.gz")
+      )
+    ).toBe(1);
   }
   // the module-wide defaults another renderer shares are left as they were
   expect(DEFAULT_PARSE_QUEUE.maxJobs).toBeGreaterThan(PHONE_STREAM.parses);

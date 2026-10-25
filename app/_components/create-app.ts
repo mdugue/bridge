@@ -2503,6 +2503,13 @@ async function bootApp(
       stream.demolished.set(layer.tile, kept);
     };
     keep(picked.layer);
+    // the tile's other level (its far or its baked buildings: the same
+    // table), loaded but not shown now
+    for (const layer of stream.cities) {
+      if (layer !== picked.layer && layer.tile === picked.layer.tile) {
+        layer.demolish(picked.objectIndex);
+      }
+    }
     // the rest of its ensemble in the tiles across an edge: those loaded
     // now, and (the group kept) those that load later
     const group = picked.layer.table.group[picked.objectIndex];

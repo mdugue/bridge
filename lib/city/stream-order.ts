@@ -13,15 +13,16 @@
  *
  *   1. what the renderer marked (`priority`), used before unused,
  *   2. until the first frame, what it waits for: the boot tile's coarse
- *      ground and buildings (its fine ground parsing beside them, rasters
- *      and all, held the first frame up by a third, headless),
+ *      ground and far buildings (its fine ground parsing beside them,
+ *      rasters and all, held the first frame up by a third, headless; its
+ *      baked buildings twice the far ones' bytes),
  *   3. in view before out of view (the shadow camera's),
  *   4. nearer before farther, the coarse ground counted `COARSE_LEAD_M`
  *      nearer than it is: it is small (0.5 MB of glTF), and a tile with
  *      ground but no buildings yet reads as a plain, one with buildings
  *      but no ground as a hole — but a whole flight's worth of far coarse
  *      tiles must not hold up the buildings under the camera,
- *   5. on one tile: ground, then buildings, then the fine ground,
+ *   5. on one tile: ground, far buildings, buildings, the fine ground,
  *   6. higher error first (the renderer's own last word).
  *
  * When the tile cache is full the renderer admits new loads in the order
@@ -31,7 +32,6 @@
 /** The part of a tile the comparator reads (3DTilesRendererJS's `Tile`). */
 export interface OrderedTile {
   content?: { uri?: string } | null;
-  internal?: { depth: number } | null;
   priority?: number;
   traversal?: {
     distanceFromCamera: number;
@@ -42,24 +42,43 @@ export interface OrderedTile {
 }
 
 /**
- * What a content is, by its depth in the tileset (`buildTileset`: the root,
- * then per site tile its buildings, the coarse ground under them and the
- * fine ground under that). Lower comes first on one tile.
+ * What a content is, by its published name (`buildTileset` and
+ * scripts/prepare-data.ts: `terrain_<id>_l1`, `city_<id>_far`,
+ * `city_<id>`, `terrain_<id>_l0`, each `.<hash>.glb.gz`). Lower comes
+ * first on one tile.
  */
-export const CONTENT_RANK = { coarse: 0, city: 1, fine: 2, other: 3 } as const;
+export const CONTENT_RANK = {
+  coarse: 0,
+  cityFar: 1,
+  city: 2,
+  fine: 3,
+  other: 4,
+} as const;
 
-const RANK_AT_DEPTH: readonly number[] = [
-  CONTENT_RANK.other,
-  CONTENT_RANK.city,
-  CONTENT_RANK.coarse,
-  CONTENT_RANK.fine,
+const NAMED_RANKS: readonly [RegExp, number][] = [
+  [/^terrain_.*_l1\./, CONTENT_RANK.coarse],
+  [/^terrain_.*_l0\./, CONTENT_RANK.fine],
+  [/^city_.*_far\./, CONTENT_RANK.cityFar],
+  [/^city_/, CONTENT_RANK.city],
 ];
 
-export function contentRank(depth: number | undefined): number {
+export function contentRank(uri: string | undefined): number {
+  const name = uri?.slice(uri.lastIndexOf("/") + 1) ?? "";
   return (
-    (depth === undefined ? undefined : RANK_AT_DEPTH[depth]) ??
+    NAMED_RANKS.find(([pattern]) => pattern.test(name))?.[1] ??
     CONTENT_RANK.other
   );
+}
+
+/** A content's rank, read once per tile (a name scan). */
+const ranks = new WeakMap<object, number>();
+function rankOf(tile: { content?: { uri?: string } | null }): number {
+  let rank = ranks.get(tile);
+  if (rank === undefined) {
+    rank = contentRank(tile.content?.uri);
+    ranks.set(tile, rank);
+  }
+  return rank;
 }
 
 /**
@@ -75,6 +94,14 @@ export const COARSE_LEAD_M = 2000;
 export function isTileContent(tile: OrderedTile, tileId: string): boolean {
   return tile.content?.uri?.includes(`_${tileId}`) ?? false;
 }
+
+/** What the first frame waits for on the boot tile: its coarse ground and
+ *  its far buildings (the same shapes, a sixth of the triangles — the
+ *  baked ones follow like any near tile's). */
+const BOOT_RANKS: ReadonlySet<number> = new Set([
+  CONTENT_RANK.coarse,
+  CONTENT_RANK.cityFar,
+]);
 
 /** +1 when `a` wins, −1 when `b` does, 0 when the test does not decide. */
 function prefer(a: boolean, b: boolean): number {
@@ -108,7 +135,7 @@ export function streamOrder(
     if (known === undefined) {
       known =
         bootId !== null &&
-        contentRank(tile.internal?.depth) !== CONTENT_RANK.fine &&
+        BOOT_RANKS.has(rankOf(tile)) &&
         isTileContent(tile, bootId);
       isBoot.set(tile, known);
     }
@@ -130,8 +157,8 @@ export function streamOrder(
       bootId = boot;
       isBoot = new WeakMap();
     }
-    const ra = contentRank(a.internal?.depth);
-    const rb = contentRank(b.internal?.depth);
+    const ra = rankOf(a);
+    const rb = rankOf(b);
     const da = rankedDistance(ta.distanceFromCamera, ra);
     const db = rankedDistance(tb.distanceFromCamera, rb);
     return (
@@ -147,7 +174,7 @@ export function streamOrder(
 
 /** The part of a tile the cache's comparator reads. */
 export interface CachedTile {
-  internal?: { depth: number } | null;
+  content?: { uri?: string } | null;
   traversal?: { lastFrameVisited: number } | null;
 }
 
@@ -156,7 +183,8 @@ export interface CachedTile {
  * 1 unloads `a` first), which is also the order a full cache admits new
  * loads in, reversed. The renderer's own (`base`) decides, except that of
  * one site tile's contents last seen in the same frame the fine ground
- * goes first, then the buildings, and the coarse ground last — its own
+ * goes first, then the buildings, the far ones, and the coarse ground
+ * last — its own
  * prefers the shallower, so with the cache full a tile's buildings took
  * the last room before its ground.
  */
@@ -167,8 +195,8 @@ export function keepOrder<T extends CachedTile>(
     const fa = a.traversal?.lastFrameVisited;
     const fb = b.traversal?.lastFrameVisited;
     if (fa === fb) {
-      const ra = contentRank(a.internal?.depth);
-      const rb = contentRank(b.internal?.depth);
+      const ra = rankOf(a);
+      const rb = rankOf(b);
       if (ra !== rb && ra !== CONTENT_RANK.other && rb !== CONTENT_RANK.other) {
         return ra > rb ? 1 : -1;
       }

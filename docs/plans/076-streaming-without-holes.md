@@ -1,6 +1,6 @@
 # 076 — Streaming without holes: the ground first, a plate under everything, coarse buildings and trees from the start
 
-**Status:** IN PROGRESS (2026-10-25) — steps 1 and 2 built; 3 and 4 open.
+**Status:** IN PROGRESS (2026-10-25) — steps 1–3 built; 4 open.
 Asked by the maintainer on 2026-10-25: the spawn tile loads in full while
 others show nothing, trees come late, long flights show large holes in the
 ground; everything should be there from the start and refine smoothly,
@@ -39,11 +39,15 @@ picture.
    `ground-plate-layer.ts`, `bakePlate` in `prepare-data.ts` — one site
    file of 33² heights and classes per tile, drawn wherever a tile has no
    terrain on screen. ≈ 0.6 MB of GPU buffers for Dresden.
-3. **Coarse buildings** (open): LoD1 blocks from the footprints the minimap
-   already loads, plus a height per object, as the far level of each
-   tile's buildings (geometric error ≈ 20 m, LoD2 below it by REPLACE).
-   The phone's memory must not grow: the far tiles' LoD2 it no longer
-   loads pays for it. Then tune the distance falloff (`errorFalloff`).
+3. **Far buildings** (built): not LoD1 blocks but the LoD2 itself,
+   simplified to 0.5 m (`city_<t>_far`, `FAR_CITY_ERROR` 4 m): the baked
+   mesh carries a vertex every 2 m along each wall for the ground the
+   windows clear, so the simplifier drops five triangles in six and keeps
+   the roofs — LoD1 blocks would have cost about as many triangles and
+   lost the roofs. Only the tiles within ≈ 260 m load the baked LoD2,
+   none from the air: the phone's memory falls. The distance falloff
+   (`errorFalloff`) is not needed: the levels' screen-space error already
+   counts the distance.
 4. **Trees from the start** (open): the coarse crowns of every tile as one
    site file at boot, out of the dressing chain; the fine crowns take over
    per tile.
