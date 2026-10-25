@@ -2168,6 +2168,7 @@ async function bootApp(
     camera: activeCamera,
     cities: () => stream.visibleCities(),
     isLoaded: (layer) => stream.cities.has(layer),
+    loaded: () => stream.cities,
     groundAlong,
     outline,
     // (a tile's ask sets come in idle time; a question before builds them)
@@ -2504,9 +2505,11 @@ async function bootApp(
     };
     keep(picked.layer);
     // the tile's other level (its far or its baked buildings: the same
-    // table), loaded but not shown now
+    // table), loaded but not shown now: the same objects go
+    const sameTile = (layer: CityLayer) =>
+      layer !== picked.layer && layer.tile === picked.layer.tile;
     for (const layer of stream.cities) {
-      if (layer !== picked.layer && layer.tile === picked.layer.tile) {
+      if (sameTile(layer)) {
         layer.demolish(picked.objectIndex);
       }
     }
@@ -2518,7 +2521,11 @@ async function bootApp(
     }
     for (const layer of group ? stream.cities : []) {
       const first = layer.table.group.indexOf(group);
-      if (layer !== picked.layer && first >= 0 && layer.demolish(first)) {
+      if (
+        layer.tile !== picked.layer.tile &&
+        first >= 0 &&
+        layer.demolish(first)
+      ) {
         keep(layer);
       }
     }

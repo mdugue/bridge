@@ -1039,7 +1039,6 @@ async function bakeCity(
   // the same buildings for far off: every vertex the shape does not need
   // dropped (lib/city/tileset.ts `FAR_CITY_SIMPLIFY`)
   const farName = `city_${tile}_far.glb.gz`;
-  const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
   const farGlb = await cached(
     farName,
     cacheKey(inputs, bake, glbKey, FAR_CITY_SIMPLIFY),
@@ -1048,7 +1047,6 @@ async function bakeCity(
         await simplifyGlb(
           Bun.gunzipSync(glb as Uint8Array<ArrayBuffer>),
           FAR_CITY_SIMPLIFY,
-          Math.max(x1 - x0, y1 - y0),
           built().input.table
         )
       )

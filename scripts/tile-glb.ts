@@ -13,7 +13,13 @@
  * so shaders derive data-frame coordinates from world space, never from
  * `position`. Build-time only; no DOM.
  */
-import { Document, Logger, NodeIO, type Primitive } from "@gltf-transform/core";
+import {
+  Document,
+  getBounds,
+  Logger,
+  NodeIO,
+  type Primitive,
+} from "@gltf-transform/core";
 import {
   EXTMeshoptCompression,
   KHRMeshQuantization,
@@ -230,7 +236,6 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
 export async function simplifyGlb(
   glb: Uint8Array,
   error: number,
-  extent: number,
   table?: PropertyTable
 ): Promise<Uint8Array> {
   const nodeIO = await io();
@@ -242,10 +247,12 @@ export async function simplifyGlb(
     .setEncoderOptions({
       method: EXTMeshoptCompression.EncoderMethod.QUANTIZE,
     });
+  await doc.transform(dequantize({ pattern: QUANTIZE.pattern }), weld());
+  // meshopt's error is a share of the mesh's own extent: the scene's
+  // bounds in metres, the node's scale included
+  const { min, max } = getBounds(doc.getRoot().listScenes()[0]);
+  const extent = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
   await doc.transform(
-    dequantize({ pattern: QUANTIZE.pattern }),
-    weld(),
-    // meshopt's error is a share of the mesh's extent
     simplify({
       simplifier: MeshoptSimplifier,
       ratio: 0,

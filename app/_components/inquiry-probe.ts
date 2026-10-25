@@ -229,6 +229,9 @@ export function createInquiryProbe(deps: {
   cities: () => readonly CityLayer[];
   /** whether a layer's tile is still loaded (shown or not) */
   isLoaded: (layer: CityLayer) => boolean;
+  /** every loaded city layer, shown or not (a tile's far and baked
+   *  buildings are two, with the same objects: both carry the mark) */
+  loaded?: () => Iterable<CityLayer>;
   /** distance along the pick ray to the ground, or null within `far` */
   groundAlong: (raycaster: Raycaster, far: number) => number | null;
   /** the outline's subject: what was asked, or null when nothing is */
@@ -371,10 +374,17 @@ export function createInquiryProbe(deps: {
     unmark();
     if ("building" in hit) {
       const { parts } = building(hit.building.layer, hit.building.objectIndex);
+      const levels = [...(deps.loaded?.() ?? [])];
       for (const { layer, objects } of parts) {
+        for (const level of levels.filter(
+          (l) => l !== layer && l.tile === layer.tile
+        )) {
+          level.mark(objects);
+          marked.push(level);
+        }
         layer.mark(objects);
+        marked.push(layer);
       }
-      marked = parts.map((p) => p.layer);
       deps.outline({ building: parts });
     } else {
       deps.outline({ thing: hit.thing });
