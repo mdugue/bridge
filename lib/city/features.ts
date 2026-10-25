@@ -711,6 +711,9 @@ export interface TramFeature {
     /** a track's runs off the ground (lib/city/levels.ts), added by the
      *  build step (scripts/line-levels.ts), never committed */
     lv?: LevelRun[];
+    /** a track's profile (lib/city/line-profile.ts `encodeProfile`), added
+     *  by the build step with `lv`, never committed */
+    lz?: (number | null)[];
     name?: string;
     s?: number[];
     x?: number[];
@@ -788,9 +791,10 @@ export interface TrafficFeature {
  *  `m` the mapped catenary masts beside it ([station, offset to the left]
  *  m) — and the Basis-DLM ver03_l centrelines OSM has no track beside
  *  (`tracks` side by side, no `bridge`). `electrified`: 1 an overhead
- *  contact line, 2 a third rail, 0 none. `lv` is added by the build step
- *  (scripts/line-levels.ts), never committed: the line's runs off the
- *  ground (lib/city/levels.ts). */
+ *  contact line, 2 a third rail, 0 none. `lv` and `lz` are added by the
+ *  build step (scripts/line-levels.ts), never committed: the line's runs
+ *  off the ground (lib/city/levels.ts) and its profile
+ *  (lib/city/line-profile.ts). */
 export interface RailFeature {
   geometry: LineGeometry;
   properties: {
@@ -799,6 +803,7 @@ export interface RailFeature {
     g?: number;
     layer?: number;
     lv?: LevelRun[];
+    lz?: (number | null)[];
     m?: [number, number][];
     paved?: number;
     tracks?: number;

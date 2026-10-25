@@ -44,7 +44,11 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import type { FacadeMaterial, RoofColours } from "../lib/city/building-tint";
-import type { OsmBuildingLut, WallMaterial } from "../lib/city/city-mesh";
+import {
+  type OsmBuildingLut,
+  type WallMaterial,
+  withoutTrafficStructures,
+} from "../lib/city/city-mesh";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import type {
   CanopyFeature,
@@ -53,6 +57,7 @@ import type {
   PlinthFeature,
   DormerFeature,
   PassageFeature,
+  AreaFeature,
   FeatureCollection,
   RailFeature,
   TramFeature,
@@ -61,12 +66,15 @@ import type {
   StructureFeature,
 } from "../lib/city/features";
 import { cutWallGates } from "../lib/city/fences";
+import { AxisIndex, clearOfTracks } from "../lib/city/platform-clearance";
+import { onFormations } from "../lib/city/track-formation";
 import {
   PROVENANCE_FILE,
   type ProvenanceRecord,
   siteProvenance,
 } from "../lib/city/provenance";
 import type { Passage } from "../lib/city/passages";
+import { BED_SIDE_M, type Bed } from "../lib/city/track-beds";
 import type { LevelLine } from "../lib/city/levels";
 import { tileExtentOf } from "../lib/city/site";
 import {
@@ -180,8 +188,12 @@ import {
 import {
   levelInputs,
   type SiteLevels,
+  siteBeds,
   siteLineLevels,
   sitePassages,
+  railFeatures,
+  siteTrackAxes,
+  underDecks,
 } from "./line-levels";
 import { writeMeshGlb } from "./tile-glb";
 import {
@@ -588,6 +600,50 @@ log(`line levels: ${since(levelsStarted)} ms`);
  *  touches. */
 const passages = sitePassages(SITE, lineLevels);
 
+/** The beds the lines lie on (lib/city/track-beds.ts): the terrain bake
+ *  lays the ground under each at its profile, off the decks. */
+const beds = siteBeds(SITE, lineLevels);
+const underDeck = underDecks(SITE);
+
+/** The beds that reach into a tile's extent (with their slopes), once
+ *  per tile. */
+const tileBeds = new Map<string, Bed[]>();
+function bedsIn(tile: string): Bed[] {
+  let found = tileBeds.get(tile);
+  if (!found) {
+    const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+    found = beds.filter((b) => {
+      const r = b.half + BED_SIDE_M;
+      return b.coords.some(
+        ([x, y]) => x >= x0 - r && x <= x1 + r && y >= y0 - r && y <= y1 + r
+      );
+    });
+    tileBeds.set(tile, found);
+  }
+  return found;
+}
+
+/** A digest of what shapes a ground, for its cache keys (hashed once:
+ *  the site's beds run to megabytes). */
+function shapeDigest(shapes: unknown): string {
+  return createHash("sha256").update(JSON.stringify(shapes)).digest("hex");
+}
+
+/** What shapes a tile's ground besides its own files, for its cache keys:
+ *  the passages and beds reaching into it. */
+const tileShapes = new Map<string, string>();
+function shapedBy(tile: string): string {
+  let digest = tileShapes.get(tile);
+  if (digest === undefined) {
+    digest = shapeDigest([passagesIn(tile), bedsIn(tile)]);
+    tileShapes.set(tile, digest);
+  }
+  return digest;
+}
+
+/** What shapes every tile's ground: the fine level stands on all of it. */
+const siteShapes = shapeDigest([passages, beds]);
+
 /** The passages that reach into a tile's extent. */
 function passagesIn(tile: string): Passage[] {
   const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
@@ -604,19 +660,56 @@ function passagesIn(tile: string): Passage[] {
 
 /**
  * A tile's rail or tram file with each line's runs off the ground (`lv`,
- * lib/city/levels.ts), so the layer draws it on the level its whole run
- * says rather than deciding per sample.
+ * lib/city/levels.ts) and its profile (`lz`, lib/city/line-profile.ts), so
+ * the layer draws it on the level its whole run says, within the grade and
+ * vertical curve a track keeps, rather than on the ground sample by sample.
  */
 function publishLevels(tile: string, line: LevelLine, file: string): string {
   const src = at(sideFileSource(SITE, file));
-  const runs = lineLevels[tile]?.[line] ?? {};
-  if (Object.keys(runs).length === 0) {
+  const solved = lineLevels[tile]?.[line] ?? {};
+  if (line === "tram" && Object.keys(solved).length === 0) {
     return publish(file, readFileSync(src));
   }
   const doc = readJson<FeatureCollection<RailFeature | TramFeature>>(src);
-  const features = (doc.features ?? []).map((f, i) =>
-    runs[i] ? { ...f, properties: { ...f.properties, lv: runs[i] } } : f
+  // the rail lines as the levels were solved on (a DLM line's stretches
+  // over a platform dropped, line-levels.ts `railFeatures`)
+  const lines =
+    line === "rail" ? railFeatures(SITE, tile) : (doc.features ?? []);
+  const features = lines.map((f, i) =>
+    solved[i] ? { ...f, properties: { ...f.properties, ...solved[i] } } : f
   );
+  return publish(file, utf8({ ...doc, features }));
+}
+
+/** Every drawn track of the site, for the platforms beside them. */
+let trackAxes: AxisIndex | undefined;
+
+/**
+ * A tile's platform file with every outline cut back to its edge distance
+ * from the drawn tracks (lib/city/platform-clearance.ts): OSM's platforms
+ * beside the Basis-DLM's tracks stood over a rail where the two lie a
+ * metre apart.
+ */
+function publishPlatforms(file: string): string {
+  const src = at(sideFileSource(SITE, file));
+  trackAxes ??= new AxisIndex(siteTrackAxes(SITE, lineLevels));
+  const doc = readJson<FeatureCollection<AreaFeature>>(src);
+  let cut = 0;
+  const features = (doc.features ?? []).flatMap((f): AreaFeature[] => {
+    const g = f.geometry;
+    if (g?.type !== "Polygon" && g?.type !== "MultiPolygon") {
+      return [f];
+    }
+    const clear = clearOfTracks(g, trackAxes as AxisIndex);
+    if (clear === g) {
+      return [f];
+    }
+    cut++;
+    return clear ? [{ ...f, geometry: clear }] : [];
+  });
+  if (cut > 0) {
+    log(`${file}: ${cut} platforms cut back from the tracks`);
+  }
   return publish(file, utf8({ ...doc, features }));
 }
 
@@ -654,6 +747,13 @@ for (const tile of MODE.kind === "ground"
       existsSync(at(sideFileSource(SITE, artifact.file)))
     ) {
       names[kind] = publishLevels(tile, kind, artifact.file);
+      continue;
+    }
+    if (
+      kind === "platform" &&
+      existsSync(at(sideFileSource(SITE, artifact.file)))
+    ) {
+      names[kind] = publishPlatforms(artifact.file);
       continue;
     }
     if (artifact.bakedFrom) {
@@ -752,7 +852,19 @@ function parseCity(
   if (!existsSync(at(src.city))) {
     fail(`missing source file ${src.city}${HINT}`);
   }
-  const doc = readJson<CityJsonDocument>(at(src.city));
+  // a top a track runs on, lowered to its bed (lib/city/track-formation.ts)
+  // (the bridges' slabs left out first: bakeCityMesh drops them anyway)
+  const formed = onFormations(
+    withoutTrafficStructures(readJson<CityJsonDocument>(at(src.city))),
+    bedsIn(tile)
+  );
+  if (formed.lowered.length > 0) {
+    log(
+      `${tile}: ${formed.lowered.length} tops under tracks lowered to their beds`
+    );
+  }
+  const doc = formed.doc;
+  const lowered = new Set(formed.lowered);
   const roofColours = existsSync(at(src.roofColor))
     ? readJson<RoofColours>(at(src.roofColor))
     : undefined;
@@ -770,8 +882,12 @@ function parseCity(
     ? readJson<FeatureCollection<StructureFeature>>(at(src.structures)).features
     : undefined;
   const measured = existsSync(at(src.measuredRoofs))
-    ? readJson<FeatureCollection<MeasuredRoofFeature>>(at(src.measuredRoofs))
-        .features
+    ? readJson<FeatureCollection<MeasuredRoofFeature>>(
+        at(src.measuredRoofs)
+      ).features?.filter(
+        // a lowered top keeps its new height, not the scan's over it
+        (f) => !f.properties || !lowered.has(f.properties.id)
+      )
     : undefined;
   const plinths = existsSync(at(src.plinths))
     ? readJson<FeatureCollection<PlinthFeature>>(at(src.plinths)).features
@@ -863,8 +979,11 @@ async function bakeCity(
     // the ground's heights
     "scripts/bake-tiles.ts",
     "scripts/ground-pack.ts",
+    // the tops the tracks run on
+    "lib/city/track-formation.ts",
   ];
-  const key = cacheKey(inputs, bake, offset);
+  // the beds reaching into the tile lower the tops the tracks run on
+  const key = cacheKey(inputs, bake, offset, shapeDigest(bedsIn(tile)));
   let mesh: ReturnType<typeof cityMesh> | null = null;
   const built = () => {
     mesh ??= cityMesh(parseCity(tile, heightOver(tile, ground)));
@@ -893,7 +1012,7 @@ async function bakeCity(
   const name = `city_${tile}.glb.gz`;
   const glb = await cached(
     name,
-    cacheKey(inputs, bake, offset, extras),
+    cacheKey(inputs, bake, offset, shapeDigest(bedsIn(tile)), extras),
     async () =>
       gz(
         await writeMeshGlb({
@@ -981,6 +1100,8 @@ function waterExtras(
 /** What a tile's ground is shaped with besides its walls. */
 async function groundFeatures(tile: string): Promise<TerrainFeatures> {
   return {
+    beds: bedsIn(tile),
+    underDeck,
     passages: passagesIn(tile),
     stairs: stairLines(SITE, tile),
     terraces: terraces(SITE, tile),
@@ -1022,7 +1143,7 @@ function groundFile(tile: string): Promise<string> {
   if (!file) {
     file = cachedFile(
       `ground_${tile}.bin`,
-      cacheKey(terrainInputs(tile), GROUND_BAKE, offset, passagesIn(tile)),
+      cacheKey(terrainInputs(tile), GROUND_BAKE, offset, shapedBy(tile)),
       async () => {
         const t0 = performance.now();
         const packed = packGround(await bakeFineGround(tile));
@@ -1236,7 +1357,7 @@ async function publishCrowns(tile: string): Promise<string | undefined> {
       inputs,
       ["scripts/coarse-crowns.ts", ...GROUND_BAKE],
       offset,
-      passagesIn(tile)
+      shapedBy(tile)
     ),
     async () => {
       const fine = await shapedTerrain(tile, 0);
@@ -1304,7 +1425,7 @@ async function bakeTerrain(
   // The passages come from every tile's lines and decks (line-levels.ts);
   // the fine level's walls, kerbs, stairs and fences stand on every tile's
   // fine ground, and so on every tile's passages.
-  const opened = level === 0 ? passages : passagesIn(tile);
+  const opened = level === 0 ? siteShapes : shapedBy(tile);
   const bake = [
     ...GROUND_BAKE,
     "scripts/tile-glb.ts",

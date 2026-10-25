@@ -727,10 +727,16 @@ A bake is single-threaded, so `prepare-sites.ts` runs several
 (`os.availableParallelism()`), and their peaks together within 80 % of the
 memory — the machine's, or the container's limit where it sets a lower one
 (`process.constrainedMemory()`). By default every site is one process,
-counted at 3 GB (`SITE_PEAK`: a cold Dresden peaks at 4.3–5.7 GiB, the
-others near 1 GB), largest first: Vercel's 4-core, 8.6 GB builder bakes
-two sites at once, and a cold build of all seven takes 235 s there
-(2026-10-10), Dresden's single process the whole of it.
+largest first. Each is first asked whether it is cached (`--if-cached`,
+counted at 1.6 GB: a warm site publishes there and is done); a site that
+must bake is counted at 4.8 GB (`SITE_PEAK`). Measured cold on 2026-10-25:
+München 4.42 GiB, Leipzig 3.95 GiB, Dresden 3.6–5.7 GiB, the small
+sites near 2 GiB. Until then a site counted 3 GB, so Vercel's 4-core,
+8.6 GB builder baked two cold sites at once (235 s for all seven on
+2026-10-10, when München's peak was lower). A build that re-baked every
+site's buildings was then killed there twice for its memory, München
+beside Dresden. Now that builder bakes one cold site at a time beside the
+warm sites' runs, and CI's 16.8 GB runner bakes two.
 `PREPARE_JOBS=<n>` sets the number of bakes at once,
 `PREPARE_MEMORY_GB=<gb>` the memory they share (as on a smaller machine:
 the bakes still keep to 80 % of it).

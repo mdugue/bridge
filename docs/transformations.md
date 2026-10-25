@@ -3508,6 +3508,40 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   20). What remains: deck ends above lower ground for good, and deck tops
   DOM1 put 1.5–2 m off their embankment. *(Until then: lifted onto every
   deck under a point — 🗃️ below.)*
+- **Line profiles and beds** `◎ detected` (2026-10-24, [ADR 0052](./adr/0052-lines-lie-on-a-profile-the-ground-under-their-bed.md))
+  — on the ground a line no longer follows the DGM sample by sample: the
+  build step fits each line a **profile** (*Gradiente*) within its grade
+  (rail 4 %, tram 8 %) and a **vertical curve** of at least 2 000 m (rail,
+  EBO/Ril 800.0110) or 500 m (tram, BOStrab) — a robust (Huber 0.1 m)
+  least-squares fit to its levels, a deck's top held — with 150 m of
+  context either side (`lib/city/line-profile.ts`), published as `lz`. A
+  line on the ground crossing another a storey (≥ 3 m) below it at ≥ 20°
+  is a *span* there (the DGM kept its bridge), and so is one standing
+  ≥ 2 m over its own ground beside a line as far below (a viaduct the DGM
+  lacks). The terrain bake lays the
+  ground under every line's **bed** at its profile (ballast's width 0.1 m
+  under it, a street track's 3 cm), the ground beside it graded at 1 : 1.5
+  for ≤ 4 m, the nearest bed winning, a cut's only as a trench ≤ 0.5 m
+  deep, never a fill under a deck (`lib/city/track-beds.ts`, `shapeDgm`); the fine TIN
+  holds 3 cm under a bed (0.15 m elsewhere). The yard's ballast is draped
+  on the beds' profile to 2 cm. Measured over the seven sites in the PR;
+  Dresden's sleepers under the ballast 14.3 % → 0.05 %, its rail heads
+  under ballast or ground 1.84 % → 0.01 %, its street tram rails in the
+  road 2.6 % → 0.02 %. **And nothing lies on a track** (2026-10-25): a
+  platform outline is cut back to its edge distance from every drawn
+  track (1.65 m rail, EBO §13; 1.35 m tram; `lib/city/platform-clearance.ts`
+  `clearOfTracks`) — OSM's island at Dresden Hbf stood 0.6 m from a DLM
+  track's centre and covered its rails (Dresden 3.5 %, Leipzig 3 %, Munich
+  1.3 % of the platforms' area cut); a Basis-DLM centreline's stretches over
+  an OSM platform are dropped (`outsideAreas`, `railFeatures`: not a track,
+  the axis between a station's tracks; Dresden 503 m, Leipzig 689 m, Munich
+  55 m); and a flat LoD2 top less than 1.5 m over a track's profile where
+  the track runs on it for 20 m is lowered to the bed before the buildings
+  bake (`lib/city/track-formation.ts` `onFormations`: the formation the
+  track lies on — ALKIS 31001_9998 west of Dresden Hbf, 0.4 m over the
+  rails for a kilometre of track; in Hamburg a station building (ALKIS
+  31001_3091) a track runs on, 1.2 m; a roof on posts — ALKIS Überdachung, drawn open —
+  is never one, the track runs under it).
 - **Passages under decks** `◎ detected` (2026-10-01, ADR 0041) — a *cut* lying ≥ 30 %
   under a drawn deck (any kind, within 2 m) opens the fill in the terrain
   bake (`lib/city/passages.ts`, `shapeDgm`'s last pass, both levels): along

@@ -70,8 +70,16 @@ describe("bakeLimits", () => {
     expect(Math.floor(memory / PROCESS_PEAK)).toBeGreaterThanOrEqual(4);
   });
 
-  test("on Vercel's 4-core, 8.6 GB builder two whole sites bake at once, as before the warmers", () => {
+  test("on Vercel's 4-core, 8.6 GB builder one cold site bakes at a time, beside a cached site's run", () => {
     const { memory } = bakeLimits({ cores: 4, memory: 8.6e9 });
+    expect(Math.floor(memory / SITE_PEAK)).toBe(1);
+    expect(SITE_PEAK + PROCESS_PEAK).toBeLessThanOrEqual(memory);
+    // München's cold peak (4.42 GiB, 2026-10-25) fits its count
+    expect(4.42 * 2 ** 30).toBeLessThanOrEqual(SITE_PEAK);
+  });
+
+  test("on CI's 4-core, 16.8 GB runner two cold sites bake at once", () => {
+    const { memory } = bakeLimits({ cores: 4, memory: 16.8e9 });
     expect(Math.floor(memory / SITE_PEAK)).toBe(2);
   });
 

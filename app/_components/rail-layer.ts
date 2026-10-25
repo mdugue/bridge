@@ -69,7 +69,16 @@ import {
   TrackIndex,
   type TrackSample,
 } from "@/lib/city/platform-level";
+import { decodeProfile } from "@/lib/city/line-profile";
+import { PASSAGE_UNDER_DECK } from "@/lib/city/passages";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
+import {
+  BURIED_M,
+  type Bed,
+  BedIndex,
+  RAIL_BED_HALF_M,
+  TRACK_PITCH_M,
+} from "@/lib/city/track-beds";
 import { type DeckKind, deckMaterial, stoneMaterial } from "./bridge-surface";
 import {
   addCatenary,
@@ -167,10 +176,10 @@ const BALLAST_RAISE = 0.03; // ballast surface above the DGM: off the ground's o
 const BALLAST_DROP = 0.45; // ballast shoulder depth at the edge (m)
 const RAIL_RAISE = 0.17; // rail head above the ballast's surface, a rail deck's top too (m)
 const RAIL_PAVED_RAISE = 0.02; // rail head above the paving it is set in (m)
-const BED_HALF_M = 2.25; // half a one-track ballast bed (rail_osm.py BED_ONE) (m)
+const BED_HALF_M = RAIL_BED_HALF_M; // half a one-track ballast bed (m)
 const RAIL_WEB = 0.11; // rail vertical web depth so it reads obliquely (m)
 const GAUGE = 1.435; // standard-gauge rail spacing (m)
-const TRACK_PITCH = 4.0; // spacing between parallel track centres (m)
+const TRACK_PITCH = TRACK_PITCH_M; // spacing between parallel track centres (m)
 const RAIL_HALF = 0.075; // half-width of a drawn rail (m)
 const DECK_DEPTH = 1.1; // a line's own span deck's slab thickness (m)
 const PARAPET_H = 0.85; // a masonry bridge's ashlar parapet height (m)
@@ -2287,6 +2296,20 @@ function addMasonryPier(
  *  the ground under it anyway — so a tile's yards stay ~5·10⁴ triangles. */
 const DRAPE_M = 6;
 const DRAPE_TOLERANCE_M = 1;
+/** How finely an area is draped: its triangles split down to `step` (m)
+ *  while the surface strays from them by more than `tolerance` (m). */
+interface Drape {
+  step: number;
+  tolerance: number;
+  /** where the surface is smooth enough for `fine` instead (world x, z) */
+  fineAt?: (x: number, z: number) => boolean;
+  fine?: { step: number; tolerance: number };
+}
+const GROUND_DRAPE: Drape = { step: DRAPE_M, tolerance: DRAPE_TOLERANCE_M };
+/** On the beds the surface is the tracks' profiles — smooth, its only
+ *  creases where two beds meet: draped to the centimetres the sleepers
+ *  stand over it. */
+const BED_DRAPE = { step: 1, tolerance: 0.02 };
 /** A triangle longer than this (m) is split whatever its probes say: four
  *  probes can miss a passage under a deck. */
 const DRAPE_PROBE_M = 48;
@@ -2328,7 +2351,8 @@ function addDrapedArea(
   raise: number,
   drop: number,
   ctx: RailContext,
-  skip: (x: number, z: number) => boolean
+  skip: (x: number, z: number) => boolean,
+  how: Drape = GROUND_DRAPE
 ): void {
   const [outer, ...holes] = rings.map((r) => r.pts);
   if (!outer || outer.length < 3) {
@@ -2351,7 +2375,15 @@ function addDrapedArea(
     x: (p.x + q.x) / 2,
     z: (p.z + q.z) / 2,
   });
-  const flat = (a: XZ, b: XZ, c: XZ): boolean => {
+  const centre = (a: XZ, b: XZ, c: XZ): XZ => ({
+    x: (a.x + b.x + c.x) / 3,
+    z: (a.z + b.z + c.z) / 3,
+  });
+  const limits = (a: XZ, b: XZ, c: XZ) => {
+    const m = centre(a, b, c);
+    return how.fine && how.fineAt?.(m.x, m.z) ? how.fine : how;
+  };
+  const flat = (a: XZ, b: XZ, c: XZ, tolerance: number): boolean => {
     const ya = yAt(a.x, a.z);
     const yb = yAt(b.x, b.z);
     const yc = yAt(c.x, c.z);
@@ -2364,14 +2396,11 @@ function addDrapedArea(
       [mid(a, b), (ya + yb) / 2],
       [mid(b, c), (yb + yc) / 2],
       [mid(c, a), (yc + ya) / 2],
-      [
-        { x: (a.x + b.x + c.x) / 3, z: (a.z + b.z + c.z) / 3 },
-        (ya + yb + yc) / 3,
-      ],
+      [centre(a, b, c), (ya + yb + yc) / 3],
     ];
     return probes.every(([p, plane]) => {
       const y = yAt(p.x, p.z);
-      return y === null || Math.abs(y - plane) <= DRAPE_TOLERANCE_M;
+      return y === null || Math.abs(y - plane) <= tolerance;
     });
   };
   const emit = (a: XZ, b: XZ, c: XZ) => {
@@ -2391,7 +2420,11 @@ function addDrapedArea(
       Math.hypot(c.x - b.x, c.z - b.z),
       Math.hypot(a.x - c.x, a.z - c.z)
     );
-    if (longest <= DRAPE_M || (longest <= DRAPE_PROBE_M && flat(a, b, c))) {
+    const { step, tolerance } = limits(a, b, c);
+    if (
+      longest <= step ||
+      (longest <= DRAPE_PROBE_M && flat(a, b, c, tolerance))
+    ) {
       emit(a, b, c);
       return;
     }
@@ -2414,7 +2447,7 @@ function addDrapedArea(
   // the fascia along the outline and round the holes, facing out of the
   // area, its top on the ground every DRAPE_M
   for (const [k, raw] of [outer, ...holes].entries()) {
-    const ring = densified(raw, DRAPE_M);
+    const ring = densified(raw, Math.min((how.fine ?? how).step * 4, DRAPE_M));
     const winding = (ringWinding(ring) * (k === 0 ? 1 : -1)) as 1 | -1;
     for (let i = 0; i < ring.length; i++) {
       const p = ring[i];
@@ -2457,19 +2490,41 @@ function polygonsOf(
 /**
  * One merged ballast surface from the dissolved railway-area polygons
  * (Polygon or MultiPolygon — a yard dissolved into several parts), draped
- * on the ground (`addDrapedArea`) and left out on the rail decks, where
- * the tracks ride the deck, and where `buried` (a track the line levels
- * cut under a lid: its bed is not on the lid's top). Exported for tests.
+ * (`addDrapedArea`) on the beds its tracks lie on (`beds`: their profile,
+ * lib/city/track-beds.ts — the ground the bake laid under them) or, off
+ * every bed and without them, on the ground; left out on the rail decks,
+ * where the tracks ride the deck, and where `buried` (a track the line
+ * levels cut under a lid: its bed is not on the lid's top). Exported for
+ * tests.
  */
 export function buildBallast(
   features: AreaFeature[],
   ctx: RailContext,
   decks: DeckPoly[] = [],
-  buried: (x: number, z: number) => boolean = () => false
+  buried: (x: number, z: number) => boolean = () => false,
+  beds?: BedIndex
 ): Mesh | null {
   const acc = mesh3();
   const skip = (x: number, z: number) =>
     decksAt(decks, x, z, RIDES.rail, "decks").length > 0 || buried(x, z);
+  const surface = beds
+    ? {
+        ...ctx,
+        heightAt: (x: number, y: number) =>
+          beds.levelAt(x, y) ?? ctx.heightAt(x, y),
+      }
+    : ctx;
+  // on the beds finely, off them as the ground
+  const drape: Drape = beds
+    ? {
+        ...GROUND_DRAPE,
+        fine: BED_DRAPE,
+        fineAt: (x, z) => {
+          const e = worldToEpsg({ x, z }, ctx.offset);
+          return beds.levelAt(e.x, e.y) !== null;
+        },
+      }
+    : GROUND_DRAPE;
   for (const f of features) {
     for (const rings of polygonsOf(f.geometry)) {
       addDrapedArea(
@@ -2477,8 +2532,9 @@ export function buildBallast(
         rings.map((r) => ringToWorld(r, ctx.offset)),
         BALLAST_RAISE,
         BALLAST_DROP,
-        ctx,
-        skip
+        surface,
+        skip,
+        drape
       );
     }
   }
@@ -2494,24 +2550,40 @@ export function buildBallast(
  *  far above (a track under a deck's end). */
 const APPROACH_RIDE_M = 1.5;
 
+/** Whether a line's baked profile fits its `n` samples: the layer then
+ *  draws it on the profile (`lineLevelsAt`) and its ballast on its bed. */
+export function isProfiled(
+  baked: { lz?: (number | null)[] },
+  n: number
+): boolean {
+  return baked.lz?.length === n;
+}
+
 /**
- * The level of every sample of a line (lib/city/levels.ts): the build
- * step's runs (`lv`, scripts/line-levels.ts) where the feature has them,
- * else solved over this piece alone (with what its source says: `prefer`,
- * `below`). On the ground a sample still rides an approach ramp close
- * above it; on a deck it rides the deck top nearest the run's line. Null
- * where the ground is unknown and no level holds it (the line breaks
- * there).
+ * The level of every sample of a line (lib/city/levels.ts). Where the
+ * build step baked the line (scripts/line-levels.ts), its runs off the
+ * ground (`lv`) give each sample's mode and its profile (`lz`,
+ * lib/city/line-profile.ts) the height: the track lies on its grade and
+ * vertical curves, the ground was laid under it (lib/city/track-beds.ts).
+ * Else the line is solved over this piece alone (with what its source
+ * says: `prefer`, `below`), on the ground sample by sample, riding an
+ * approach ramp close above it; on a deck it rides the deck top nearest
+ * the run's line. Null where the ground is unknown and no level holds it
+ * (the line breaks there).
  */
 export function lineLevelsAt(
   pts: readonly Point2[],
   line: LevelLine,
-  runs: readonly LevelRun[] | undefined,
+  baked: { lv?: LevelRun[]; lz?: (number | null)[] } | undefined,
   ctx: GroundContext,
   decks: DeckPoly[],
   prefer?: "deck" | "ground",
   below?: boolean
 ): (Level | null)[] {
+  if (baked && isProfiled(baked, pts.length)) {
+    return profiledLevels(pts, baked.lv ?? [], decodeProfile(baked.lz ?? []));
+  }
+  const runs = baked?.lv;
   const d: number[] = [];
   const ground: (number | null)[] = [];
   const under: number[][] = [];
@@ -2561,6 +2633,26 @@ export function lineLevelsAt(
       ? { mode: "ground", y: g }
       : { mode: "deck", y: Math.max(ramp, g) };
   });
+}
+
+/** The levels of a baked line: each sample's mode from its run (the
+ *  ground outside every run), its height the profile's. */
+function profiledLevels(
+  pts: readonly Point2[],
+  runs: readonly LevelRun[],
+  profile: readonly (number | null)[]
+): (Level | null)[] {
+  const d: number[] = [];
+  pts.forEach(([ex, ey], i) => {
+    d.push(
+      i === 0
+        ? 0
+        : d[i - 1] + Math.hypot(ex - pts[i - 1][0], ey - pts[i - 1][1])
+    );
+  });
+  return profile.map((y, i) =>
+    y === null ? null : { mode: runLevelAt(runs, d, i)?.mode ?? "ground", y }
+  );
 }
 
 /** A span's deck reaches this far past its outermost track (m). */
@@ -2630,12 +2722,6 @@ export function spanRuns<P>(
   );
 }
 
-/** A cut this far under the ground there (m) is buried: the line runs
- *  under a lid (lib/city/levels.ts `coverCuts`) — not drawn, no ballast
- *  on the lid, no catenary over it. A cut under a deck is the passage
- *  the terrain opens, and shows. */
-const BURIED_M = 0.5;
-
 /** A rail line as the layer draws it, its levels solved once for the
  *  rails, the sleepers, the ballast's gaps, the platforms and the
  *  catenary. */
@@ -2655,6 +2741,8 @@ interface DrawnLine {
   overhead: boolean;
   /** set in the paving: no ballast, no sleepers, the rail head flush */
   paved: boolean;
+  /** its heights are the baked profile (`lz`): its ballast lies on it */
+  profiled: boolean;
   /** the samples where the line runs buried (world x, z) */
   buried: XZ[];
   tracks: number;
@@ -2686,6 +2774,36 @@ function railRaise(paved: boolean): number {
   return paved ? RAIL_PAVED_RAISE : RAIL_RAISE;
 }
 
+/**
+ * The samples of the cuts the build opens as passages under a deck (their
+ * share under a drawn deck at least PASSAGE_UNDER_DECK, as
+ * scripts/line-levels.ts `sitePassages` decides): the track shows through
+ * them. Any other cut deeper than BURIED_M runs under a lid — under a deck
+ * too, where only a stretch of a longer cut passes (a tunnel's portal
+ * under a station's bridges).
+ */
+function openedCuts(
+  levels: readonly (Level | null)[],
+  dense: readonly Point2[],
+  ctx: RailContext,
+  decks: DeckPoly[]
+): boolean[] {
+  const opened = levels.map(() => false);
+  for (const [a, b] of modeRuns(levels, "cut")) {
+    let covered = 0;
+    for (let i = a; i <= b; i++) {
+      const w = epsgToWorld(dense[i][0], dense[i][1], ctx.offset);
+      if (decksAt(decks, w.x, w.z, undefined, "all", DECK_REACH_M).length) {
+        covered++;
+      }
+    }
+    if (covered >= PASSAGE_UNDER_DECK * (b - a + 1)) {
+      opened.fill(true, a, b + 1);
+    }
+  }
+  return opened;
+}
+
 /** Every line's samples and levels; a buried sample's level is null. */
 function drawnLines(
   features: RailFeature[],
@@ -2702,7 +2820,7 @@ function drawnLines(
     const levels = lineLevelsAt(
       dense,
       "rail",
-      p.lv,
+      p,
       ctx,
       decks,
       railPrefer(f),
@@ -2711,6 +2829,7 @@ function drawnLines(
     const d: number[] = [];
     const world: XZ[] = [];
     const buried: XZ[] = [];
+    const opened = openedCuts(levels, dense, ctx, decks);
     dense.forEach(([ex, ey], i) => {
       d.push(
         i === 0
@@ -2723,9 +2842,9 @@ function drawnLines(
       const g = ctx.heightAt(ex, ey);
       if (
         level?.mode === "cut" &&
+        !opened[i] &&
         g !== null &&
-        g - level.y > BURIED_M &&
-        decksAt(decks, w.x, w.z, undefined, "all", DECK_REACH_M).length === 0
+        g - level.y > BURIED_M
       ) {
         buried.push(world[i]);
         levels[i] = null;
@@ -2739,12 +2858,56 @@ function drawnLines(
       masts: mastsAcross(p.m ?? []),
       overhead: p.electrified === 1,
       paved: p.paved === 1,
+      profiled: isProfiled(p, dense.length),
       buried,
       tracks: Math.min(Math.max(p.tracks ?? 1, 1), 3),
       world,
     });
   }
   return out;
+}
+
+/** How far past its bed's edge a yard's ballast takes the bed's level
+ *  (m): half the gap pipeline/bake/rail.py closes between two beds
+ *  (YARD_GAP_M). */
+const BED_MARGIN_M = 2;
+
+/**
+ * The beds the baked lines lie on (lib/city/track-beds.ts): each stretch
+ * on the ground at its profile, as the terrain bake laid the ground under
+ * it. Undefined when no line is baked (the ballast drapes the ground).
+ */
+function ballastBeds(lines: readonly DrawnLine[]): BedIndex | undefined {
+  const beds: Bed[] = [];
+  for (const l of lines) {
+    if (!l.profiled || l.paved) {
+      continue;
+    }
+    const shape = {
+      half: RAIL_BED_HALF_M + ((l.tracks - 1) * TRACK_PITCH) / 2,
+      drop: 0,
+    };
+    let run: { coords: Point2[]; z: number[] } = { coords: [], z: [] };
+    const flush = () => {
+      if (run.coords.length >= 2) {
+        beds.push({ ...run, ...shape });
+      }
+      run = { coords: [], z: [] };
+    };
+    l.levels.forEach((level, i) => {
+      if (level?.mode !== "ground") {
+        flush();
+        return;
+      }
+      run.coords.push(l.dense[i]);
+      run.z.push(level.y);
+    });
+    flush();
+  }
+  if (beds.length === 0) {
+    return undefined;
+  }
+  return new BedIndex(beds, BED_MARGIN_M);
 }
 
 /** Whether a point lies on the bed of a buried stretch (the bed's half
@@ -3114,7 +3277,13 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   if (rails.length > 0) {
     group.add(...rails);
   }
-  const ballast = buildBallast(features.ballast, ctx, decks, buriedTest(lines));
+  const ballast = buildBallast(
+    features.ballast,
+    ctx,
+    decks,
+    buriedTest(lines),
+    ballastBeds(lines)
+  );
   if (ballast) {
     group.add(ballast);
   }
