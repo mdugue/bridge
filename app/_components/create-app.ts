@@ -18,6 +18,7 @@ import {
 } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { fogRangeFor, streamFarFor } from "@/lib/city/atmosphere";
+import { plateOf } from "@/lib/city/ground-plate";
 import { utmToLatLng } from "@/lib/city/crs";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
 import { createBootPhases } from "@/lib/city/boot-phases";
@@ -195,6 +196,7 @@ import {
   type TileDressing,
   withinCompileWait,
 } from "./tile-stream";
+import { type GroundPlate, loadGroundPlate } from "./ground-plate-layer";
 import { createNetworkWatch } from "./tile-retry";
 import { installMainYield, whenIdle } from "./main-yield";
 import {
@@ -1275,6 +1277,15 @@ async function bootApp(
   // Streamed before anything else until the first frame is up
   // (lib/city/stream-order.ts).
   let bootTile: string | null = spawn.id;
+  // The site's ground plate (ground-plate-layer.ts): fetched now, beside
+  // the boot's first tiles, and shown under every tile without terrain.
+  const plateLoad = loadGroundPlate(
+    plateOf(extras),
+    new Set(extras.tiles.map((t) => t.id)),
+    tilesetUrl,
+    offset,
+    opts.signal
+  ).catch(() => null);
   const siteBounds = unionBounds(extras);
 
   // Shared world sun direction (surface→sun), kept in sync by the sun rig and
@@ -1409,6 +1420,8 @@ async function bootApp(
 
   // The visible terrains, fine level first (the ground reads them in order).
   let terrains: TerrainLayer[] = [];
+  // under the tiles without them (set once built)
+  let groundPlate: GroundPlate | null = null;
   const { heightAt } = siteGround;
   /** Distance along a camera ray (NDC) to the ground, or null. */
   const groundAlong = (ray: Raycaster, far: number): number | null =>
@@ -1802,6 +1815,26 @@ async function bootApp(
   );
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
+  // The plate joins once its programs are built (a few tens of kB: it is
+  // there long before the boot's tiles).
+  void plateLoad.then(async (plate) => {
+    if (!plate || disposed) {
+      plate?.dispose();
+      return;
+    }
+    await withinCompileWait(postStack.compile(plate.group)).catch(
+      () => undefined
+    );
+    if (disposed) {
+      plate.dispose();
+      return;
+    }
+    groundPlate = plate;
+    cleanups.push(() => plate.dispose());
+    // beside `world`, under Modell's Ausschnitt like the tiles' ground
+    cuts.group.add(plate.group);
+    queueChange();
+  });
   sunToStyles = postStack.setSunAltitude;
   // The data layers (lib/city/data-layers.ts, data-layers-feature.ts):
   // started with the first switch-on of any of them — the tiles' traffic
@@ -2433,6 +2466,7 @@ async function bootApp(
     }
     terrains = stream.visibleTerrains();
     siteGround.setSources(terrains);
+    groundPlate?.showUnder(new Set(terrains.map((t) => t.tile)));
     groundVersion++;
     const cut = cuts.cutOut();
     if (cut) {
