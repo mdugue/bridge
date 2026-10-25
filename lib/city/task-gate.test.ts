@@ -41,6 +41,25 @@ test("one place runs the tasks one after another, in the order they came", async
   expect(gate.running()).toBe(0);
 });
 
+test("a lower rank waits ahead of a higher one, the same rank in its order", async () => {
+  const gate = createTaskGate(1);
+  const log: string[] = [];
+  const tasks = ["a", "b", "c", "d"].map((name) => held(log, name));
+  const [a, b, c, d] = tasks;
+  const results = [
+    gate.run(a.task, undefined, 1),
+    gate.run(b.task, undefined, 1),
+    gate.run(c.task, undefined, 0),
+    gate.run(d.task, undefined, 0),
+  ];
+  for (const t of [a, c, d, b]) {
+    await settle();
+    t.finish();
+  }
+  await Promise.all(results);
+  expect(log).toEqual(["start a", "start c", "start d", "start b"]);
+});
+
 test("never more at once than the gate has places", async () => {
   const gate = createTaskGate(2);
   let now = 0;

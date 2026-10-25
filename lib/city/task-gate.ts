@@ -1,15 +1,22 @@
 /**
  * At most `limit` async tasks at once, the rest waiting in the order they
- * came: what keeps a burst of parallel work from holding all its
- * intermediate memory at the same moment (the streamed tiles' rasters,
- * app/_components/raster-upload.ts). A waiter whose signal aborts leaves the
+ * came, a lower `rank` ahead of a higher one: what keeps a burst of
+ * parallel work from holding all its intermediate memory at the same
+ * moment (the streamed tiles' rasters, app/_components/raster-upload.ts),
+ * and the tiles' dressings one at a time, the coarse levels' first
+ * (tile-stream.ts). A waiter whose signal aborts leaves the
  * line without running; a task that fails frees its place like one that
  * succeeds.
  */
 export interface TaskGate {
-  /** runs `task` once a place is free; rejects with the signal's reason
-   *  when it aborts first */
-  run: <T>(task: () => Promise<T>, signal?: AbortSignal) => Promise<T>;
+  /** runs `task` once a place is free, after every waiter of a lower or
+   *  the same `rank` (default 0); rejects with the signal's reason when it
+   *  aborts first */
+  run: <T>(
+    task: () => Promise<T>,
+    signal?: AbortSignal,
+    rank?: number
+  ) => Promise<T>;
   /** tasks running now */
   running: () => number;
   /** tasks waiting for a place */
@@ -20,6 +27,7 @@ export interface TaskGate {
 }
 
 interface Waiter {
+  rank: number;
   start: () => void;
 }
 
@@ -39,13 +47,18 @@ export function createTaskGate(initialLimit: number): TaskGate {
       line.shift()?.start();
     }
   };
-  const run = <T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> =>
+  const run = <T>(
+    task: () => Promise<T>,
+    signal?: AbortSignal,
+    rank = 0
+  ): Promise<T> =>
     new Promise<T>((resolve, reject) => {
       if (signal?.aborted) {
         reject(abortError(signal));
         return;
       }
       const waiter: Waiter = {
+        rank,
         start: () => {
           signal?.removeEventListener("abort", leave);
           running++;
@@ -68,7 +81,8 @@ export function createTaskGate(initialLimit: number): TaskGate {
         }
       };
       signal?.addEventListener("abort", leave, { once: true });
-      line.push(waiter);
+      const behind = line.findIndex((w) => w.rank > rank);
+      line.splice(behind < 0 ? line.length : behind, 0, waiter);
       next();
     });
   return {

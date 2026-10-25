@@ -909,6 +909,14 @@ stays their measure; the tile cache counts true bytes.
   whichever is shown. The phone's memory is what pays for it: only the
   tiles within reach carry the baked LoD2, the rest a third of its
   vertices.
+- **Trees before all trees.** The dressings build one at a time after
+  the boot's gate, a coarse level's (its third of the trees, its bridges)
+  ahead of any fine level's (`COARSE_DRESSING_RANK`), so every tile in
+  view has trees before the nearest has all of them. A fine level that
+  shows before its own trees hang — a phone shows it the moment it loads
+  — borrows its coarse level's crowns until they do
+  (`DressingPlugin.standInCrowns`, `coarseCrownsStandIn`): they are
+  loaded under it anyway, and move back when its own arrive.
 - **A failed allocation costs a dressing, not the page.** A compile the
   GPU had no room for (`lib/city/gpu-allocation.ts`: the
   `createAttribute` RangeError, WebKit's "Unable to …", an
