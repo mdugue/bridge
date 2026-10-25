@@ -93,16 +93,19 @@ export function bakeMode(
 export const TILE_PEAK = 3e9;
 export const PROCESS_PEAK = 1.6e9;
 /**
- * A whole site in one process, as every site is baked without the warmers:
- * counted at 3 GB whichever site it is — the largest peaks higher (a cold
- * Dresden 4.3–5.7 GiB), the others near 1 GB — so Vercel's 4-core, 8.6 GB
- * builder bakes two sites at once (main's build there: 235 s cold) and
- * CI's 4-core, 16.8 GB runner four, as before the warmers. Before them the
- * count was `floor(memory / 3 GB)` of all the memory; against
- * `MEMORY_SHARE` of it, a machine of 6–7.5, 9–11.25 or 12–15 GB bakes one
- * site fewer at once.
+ * A whole site baked cold in one process, as every site is baked without
+ * the warmers. Measured cold on 2026-10-25 (Bun 1.4.4): München 4.42 GiB
+ * (4.75 GB, on main as on a branch), Leipzig 3.95 GiB, Dresden 3.6–5.7
+ * GiB, the small sites near 2 GiB. Counted at 3 GB, Vercel's 4-core,
+ * 8.6 GB builder baked two of them at once, and a build that re-baked
+ * every site's buildings (a change to a module every city bake imports)
+ * was killed there for its memory, München beside Dresden, twice. So a site
+ * is first asked whether it is cached (`--if-cached`, at `PROCESS_PEAK`: a
+ * warm site publishes and is done), and only a site that bakes is counted
+ * at this: one at a time on Vercel's builder, beside the warm sites'
+ * runs; two on CI's 16.8 GB runner.
  */
-export const SITE_PEAK = 3e9;
+export const SITE_PEAK = 4.8e9;
 /** The share of the machine's memory the bakes may hold together. */
 export const MEMORY_SHARE = 0.8;
 
