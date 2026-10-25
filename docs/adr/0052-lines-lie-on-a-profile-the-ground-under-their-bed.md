@@ -86,6 +86,38 @@ beds meet, and only off every bed on the ground as before. Rails (0.17 m),
 sleepers (0.05 m) and ballast (0.03 m) stand on the profile; the ground
 lies 0.1 m under it and the ballast's 0.45 m fascia hides the step.
 
+**Nothing lies on a track.** Laying the ground under the tracks left
+three other things over them, each a dataset's error the build now
+corrects by the same physical fact — a train needs its clearance:
+
+- *Platforms keep their edge distance.* A platform's edge stands 1.65 m
+  from the centre of a main-line, S-Bahn or U-Bahn track (EBO §13,
+  DB Ril 813), 1.35 m from a tram's. OSM maps the platforms and the
+  Basis-DLM the tracks, up to a metre apart: at Dresden's Hauptbahnhof an
+  island's edge stood 0.6 m from a track's centre and its slab covered
+  the rails. The build cuts every outline back to that distance from
+  every drawn track (`clearOfTracks`, a line of several tracks by its
+  outer one); slivers under 0.8 m wide are dropped.
+- *A centreline is not a track.* Where OSM maps no track within 6 m the
+  bake keeps the Basis-DLM's line (rail.py `rails`) — a line's
+  centreline, which through a station runs between its tracks, over the
+  island platform. OSM's tracks never run over a platform; the DLM's
+  rests did for a fifth of their length in Dresden (503 m) and Leipzig
+  (689 m). The build drops a DLM line's stretches over a platform
+  (`railFeatures`, rests under 20 m with them), so neither the rails nor
+  the bed nor the cut platform follow it.
+- *A top a track runs on is its formation.* Nothing stands less than
+  4.3 m over a track's rails (EBO §9), so a flat LoD2 top less than
+  1.5 m over a track's profile where the track runs on it for 20 m is the
+  structure the track is laid on — an underpass's deck, an embankment
+  ALKIS keeps as a building — drawn too high. West of Dresden's
+  Hauptbahnhof the tracks ran 0.4 m under such a top (ALKIS 31001_9998,
+  159 × 166 m) for a kilometre of track. The build lowers the top to the
+  bed (`onFormations`), its walls with it, before the buildings bake (in
+  Hamburg a station building, ALKIS 31001_3091, too). A top 1.5 m or
+  more over the track stays (a hall), and so does a roof on posts (ALKIS
+  Überdachung, drawn open: the track runs under it).
+
 ## Consequences
 
 - Measured on the seven sites (drawn meshes against the fine TIN and the
@@ -140,9 +172,13 @@ lies 0.1 m under it and the ballast's 0.45 m fascia hides the step.
 
 - `lib/city/line-profile.ts`, `lib/city/track-beds.ts`,
   `lib/city/line-levels.ts` (`solvePieces`), `scripts/line-levels.ts`
-  (`siteBeds`, `underDecks`), `scripts/bake-tiles.ts` (`shapeDgm`,
-  `fineTin`), `scripts/bake-terrain-tin.ts` (`ScaledDelatin`),
-  `scripts/prepare-data.ts` (`publishLevels`, `bedsIn`)
+  (`siteBeds`, `underDecks`, `railFeatures`, `siteTrackAxes`),
+  `scripts/bake-tiles.ts` (`shapeDgm`, `fineTin`),
+  `scripts/bake-terrain-tin.ts` (`ScaledDelatin`),
+  `scripts/prepare-data.ts` (`publishLevels`, `publishPlatforms`,
+  `bedsIn`, `parseCity`)
+- `lib/city/platform-clearance.ts` (`clearOfTracks`, `outsideAreas`),
+  `lib/city/track-formation.ts` (`onFormations`)
 - `app/_components/rail-layer.ts` (`lineLevelsAt`, `ballastBeds`,
   `buildBallast`), `app/_components/tram-layer.ts`
 - Ledger: *Railway & bridges* → *Line profiles and beds*

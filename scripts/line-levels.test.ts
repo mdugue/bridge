@@ -1,6 +1,18 @@
 import { expect, test } from "bun:test";
 import { REFERENCE_SITE, SITES } from "../sites";
-import { measureJumps } from "./line-levels";
+import {
+  AxisIndex,
+  clearOfTracks,
+  outsideAreas,
+} from "../lib/city/platform-clearance";
+import type { Point2 } from "../lib/city/polyline";
+import { tileIds } from "../lib/city/tile";
+import {
+  measureJumps,
+  railFeatures,
+  sitePlatforms,
+  siteTrackAxes,
+} from "./line-levels";
 
 /**
  * The steps the reference site's rails and trams are drawn with, beyond
@@ -20,4 +32,56 @@ test("the reference site's lines are drawn without jumps beyond the budget", asy
   const r = await measureJumps(SITES[REFERENCE_SITE], undefined, STEP_M);
   expect(r.samples).toBeGreaterThan(0);
   expect(r.after).toBeLessThanOrEqual(BUDGET);
+}, 120_000);
+
+/** A polyline's length (m). */
+function length(coords: readonly Point2[]): number {
+  return coords.reduce(
+    (s, p, i) =>
+      i > 0
+        ? s + Math.hypot(p[0] - coords[i - 1][0], p[1] - coords[i - 1][1])
+        : s,
+    0
+  );
+}
+
+/**
+ * No platform of the reference site stands over a drawn track: every
+ * outline the build cuts back (lib/city/platform-clearance.ts) keeps its
+ * edge distance, and no Basis-DLM centreline runs over one (an island's
+ * outline held one at Dresden-Neustadt and the Hauptbahnhof, and the
+ * edge of one stood 0.6 m from a track's centre at the Hauptbahnhof).
+ */
+test("the reference site's platforms keep clear of its tracks", () => {
+  const site = SITES[REFERENCE_SITE];
+  const axes = siteTrackAxes(site);
+  const cut = new AxisIndex(axes);
+  // a centimetre's rounding inside the cut's own distance
+  const check = new AxisIndex(
+    axes.map((a) => ({ ...a, clear: a.clear - 0.02 }))
+  );
+  const platforms = sitePlatforms(site);
+  expect(platforms.length).toBeGreaterThan(0);
+  for (const coordinates of platforms) {
+    const cleared = clearOfTracks({ type: "Polygon", coordinates }, cut);
+    if (cleared) {
+      expect(clearOfTracks(cleared, check)).toBe(cleared);
+    }
+  }
+  for (const tile of tileIds(site)) {
+    for (const f of railFeatures(site, tile)) {
+      if (
+        f.geometry?.type === "LineString" &&
+        f.properties?.bridge === undefined
+      ) {
+        const coords = f.geometry.coordinates;
+        const parts = outsideAreas(coords, platforms, 0) ?? [coords];
+        // an end cut where the line grazes an outline moves along it with
+        // the centimetre's rounding
+        expect(
+          length(coords) - parts.reduce((s, p) => s + length(p), 0)
+        ).toBeLessThan(0.5);
+      }
+    }
+  }
 }, 120_000);

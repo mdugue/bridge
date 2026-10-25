@@ -347,7 +347,9 @@ config change.
   `line-profile.ts` (each line's profile within its grade and vertical
   curve, the `lz` the build publishes) + `track-beds.ts` (the ground the
   terrain bake lays under a line's bed, the beds the ballast drapes on;
-  ADR 0052),
+  ADR 0052), `platform-clearance.ts` (a platform cut back to its edge
+  distance from the tracks, a DLM centreline off the platforms) +
+  `track-formation.ts` (a LoD2 top a track runs on lowered to its bed),
   `passages.ts` (a cut under a deck opened in the terrain), `tile.ts` (each
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`

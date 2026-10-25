@@ -44,7 +44,11 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import type { FacadeMaterial, RoofColours } from "../lib/city/building-tint";
-import type { OsmBuildingLut, WallMaterial } from "../lib/city/city-mesh";
+import {
+  type OsmBuildingLut,
+  type WallMaterial,
+  withoutTrafficStructures,
+} from "../lib/city/city-mesh";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import type {
   CanopyFeature,
@@ -53,6 +57,7 @@ import type {
   PlinthFeature,
   DormerFeature,
   PassageFeature,
+  AreaFeature,
   FeatureCollection,
   RailFeature,
   TramFeature,
@@ -61,6 +66,8 @@ import type {
   StructureFeature,
 } from "../lib/city/features";
 import { cutWallGates } from "../lib/city/fences";
+import { AxisIndex, clearOfTracks } from "../lib/city/platform-clearance";
+import { onFormations } from "../lib/city/track-formation";
 import {
   PROVENANCE_FILE,
   type ProvenanceRecord,
@@ -184,6 +191,8 @@ import {
   siteBeds,
   siteLineLevels,
   sitePassages,
+  railFeatures,
+  siteTrackAxes,
   underDecks,
 } from "./line-levels";
 import { writeMeshGlb } from "./tile-glb";
@@ -658,13 +667,49 @@ function passagesIn(tile: string): Passage[] {
 function publishLevels(tile: string, line: LevelLine, file: string): string {
   const src = at(sideFileSource(SITE, file));
   const solved = lineLevels[tile]?.[line] ?? {};
-  if (Object.keys(solved).length === 0) {
+  if (line === "tram" && Object.keys(solved).length === 0) {
     return publish(file, readFileSync(src));
   }
   const doc = readJson<FeatureCollection<RailFeature | TramFeature>>(src);
-  const features = (doc.features ?? []).map((f, i) =>
+  // the rail lines as the levels were solved on (a DLM line's stretches
+  // over a platform dropped, line-levels.ts `railFeatures`)
+  const lines =
+    line === "rail" ? railFeatures(SITE, tile) : (doc.features ?? []);
+  const features = lines.map((f, i) =>
     solved[i] ? { ...f, properties: { ...f.properties, ...solved[i] } } : f
   );
+  return publish(file, utf8({ ...doc, features }));
+}
+
+/** Every drawn track of the site, for the platforms beside them. */
+let trackAxes: AxisIndex | undefined;
+
+/**
+ * A tile's platform file with every outline cut back to its edge distance
+ * from the drawn tracks (lib/city/platform-clearance.ts): OSM's platforms
+ * beside the Basis-DLM's tracks stood over a rail where the two lie a
+ * metre apart.
+ */
+function publishPlatforms(file: string): string {
+  const src = at(sideFileSource(SITE, file));
+  trackAxes ??= new AxisIndex(siteTrackAxes(SITE));
+  const doc = readJson<FeatureCollection<AreaFeature>>(src);
+  let cut = 0;
+  const features = (doc.features ?? []).flatMap((f): AreaFeature[] => {
+    const g = f.geometry;
+    if (g?.type !== "Polygon" && g?.type !== "MultiPolygon") {
+      return [f];
+    }
+    const clear = clearOfTracks(g, trackAxes as AxisIndex);
+    if (clear === g) {
+      return [f];
+    }
+    cut++;
+    return clear ? [{ ...f, geometry: clear }] : [];
+  });
+  if (cut > 0) {
+    log(`${file}: ${cut} platforms cut back from the tracks`);
+  }
   return publish(file, utf8({ ...doc, features }));
 }
 
@@ -702,6 +747,13 @@ for (const tile of MODE.kind === "ground"
       existsSync(at(sideFileSource(SITE, artifact.file)))
     ) {
       names[kind] = publishLevels(tile, kind, artifact.file);
+      continue;
+    }
+    if (
+      kind === "platform" &&
+      existsSync(at(sideFileSource(SITE, artifact.file)))
+    ) {
+      names[kind] = publishPlatforms(artifact.file);
       continue;
     }
     if (artifact.bakedFrom) {
@@ -800,7 +852,18 @@ function parseCity(
   if (!existsSync(at(src.city))) {
     fail(`missing source file ${src.city}${HINT}`);
   }
-  const doc = readJson<CityJsonDocument>(at(src.city));
+  // a top a track runs on, lowered to its bed (lib/city/track-formation.ts)
+  // (the bridges' slabs left out first: bakeCityMesh drops them anyway)
+  const formed = onFormations(
+    withoutTrafficStructures(readJson<CityJsonDocument>(at(src.city))),
+    bedsIn(tile)
+  );
+  if (formed.lowered.length > 0) {
+    log(
+      `${tile}: ${formed.lowered.length} tops under tracks lowered to their beds`
+    );
+  }
+  const doc = formed.doc;
   const roofColours = existsSync(at(src.roofColor))
     ? readJson<RoofColours>(at(src.roofColor))
     : undefined;
@@ -911,8 +974,11 @@ async function bakeCity(
     // the ground's heights
     "scripts/bake-tiles.ts",
     "scripts/ground-pack.ts",
+    // the tops the tracks run on
+    "lib/city/track-formation.ts",
   ];
-  const key = cacheKey(inputs, bake, offset);
+  // the beds reaching into the tile lower the tops the tracks run on
+  const key = cacheKey(inputs, bake, offset, shapeDigest(bedsIn(tile)));
   let mesh: ReturnType<typeof cityMesh> | null = null;
   const built = () => {
     mesh ??= cityMesh(parseCity(tile, heightOver(tile, ground)));
@@ -941,7 +1007,7 @@ async function bakeCity(
   const name = `city_${tile}.glb.gz`;
   const glb = await cached(
     name,
-    cacheKey(inputs, bake, offset, extras),
+    cacheKey(inputs, bake, offset, shapeDigest(bedsIn(tile)), extras),
     async () =>
       gz(
         await writeMeshGlb({

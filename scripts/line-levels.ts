@@ -16,6 +16,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { bridgeDecks, type DeckPoly, decksAt } from "../lib/city/decks";
 import type {
+  AreaFeature,
   BridgeFeature,
   RailFeature,
   TramFeature,
@@ -43,6 +44,7 @@ import {
   type Bed,
   type BedShape,
   railBed,
+  TRACK_PITCH_M,
   tramBed,
 } from "../lib/city/track-beds";
 import {
@@ -51,6 +53,12 @@ import {
   type Passage,
   passageHalf,
 } from "../lib/city/passages";
+import {
+  DLM_REST_M,
+  outsideAreas,
+  PLATFORM_EDGE_M,
+  type TrackAxis,
+} from "../lib/city/platform-clearance";
 import type { Point2 } from "../lib/city/polyline";
 import type { Site } from "../lib/city/site";
 import { sampleHeightfield } from "../lib/city/terrain-geometry";
@@ -80,6 +88,104 @@ function features<F>(path: string): F[] {
     : [];
 }
 
+/** Every platform outline of the site (OSM's, pipeline/bake/rail.py). */
+export function sitePlatforms(site: Site): Point2[][][] {
+  return tileIds(site).flatMap((tile) =>
+    features<AreaFeature>(lineFile(site, "platform", tile)).flatMap((f) => {
+      const g = f.geometry;
+      if (g?.type === "Polygon") {
+        return [g.coordinates];
+      }
+      return g?.type === "MultiPolygon" ? g.coordinates : [];
+    })
+  );
+}
+
+/** A Basis-DLM line (rail.py writes `bridge` on every OSM track, never on
+ *  the DLM's lines it keeps where OSM maps no track). */
+function isDlmLine(f: RailFeature): boolean {
+  return f.properties?.bridge === undefined;
+}
+
+/** A catenary mast belongs to the part of a split line it stands this
+ *  near (m). */
+const MAST_REACH_M = 8;
+
+/** The masts (`m`) that stand beside a part of a line. */
+function mastsBeside(
+  masts: [number, number][] | undefined,
+  part: Point2[]
+): { m?: [number, number][] } {
+  if (!masts) {
+    return {};
+  }
+  const near = masts.filter(([x, y]) =>
+    part.some(
+      (p, i) => i > 0 && distanceToSegment(x, y, part[i - 1], p) <= MAST_REACH_M
+    )
+  );
+  return near.length > 0 ? { m: near } : {};
+}
+
+/** The distance (m) from (x, y) to the segment a→b. */
+function distanceToSegment(x: number, y: number, a: Point2, b: Point2): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const l2 = dx * dx + dy * dy;
+  const t =
+    l2 > 0
+      ? Math.min(1, Math.max(0, ((x - a[0]) * dx + (y - a[1]) * dy) / l2))
+      : 0;
+  return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+}
+
+const railMemo = new Map<string, Map<string, RailFeature[]>>();
+
+/**
+ * A tile's rail lines as the build draws them: the bake's file, a
+ * Basis-DLM line's stretches over a platform dropped
+ * (lib/city/platform-clearance.ts `outsideAreas` — a line's centreline
+ * between the tracks of a station, not a track). A line split in two
+ * keeps its place with its first part; the others follow the file's
+ * lines. Every reader of the rail lines (the levels, the beds, the
+ * published file) takes them from here, so the indices agree.
+ */
+export function railFeatures(site: Site, tile: string): RailFeature[] {
+  let bySite = railMemo.get(site.id);
+  if (!bySite) {
+    bySite = new Map();
+    railMemo.set(site.id, bySite);
+  }
+  const memo = bySite.get(tile);
+  if (memo) {
+    return memo;
+  }
+  const raw = features<RailFeature>(lineFile(site, LINE_FILES.rail, tile));
+  let platforms: Point2[][][] | undefined;
+  const extra: RailFeature[] = [];
+  const kept = raw.flatMap((f): RailFeature[] => {
+    if (f.geometry?.type !== "LineString" || !isDlmLine(f)) {
+      return [f];
+    }
+    const { m, ...props } = f.properties ?? {};
+    platforms ??= sitePlatforms(site);
+    const parts = outsideAreas(f.geometry.coordinates, platforms, DLM_REST_M);
+    if (parts === null) {
+      return [f];
+    }
+    const [first, ...rest] = parts.map((coords): RailFeature => ({
+      ...f,
+      geometry: { type: "LineString", coordinates: coords },
+      properties: { ...props, ...mastsBeside(m, coords) },
+    }));
+    extra.push(...rest);
+    return first ? [first] : [];
+  });
+  const out = [...kept, ...extra];
+  bySite.set(tile, out);
+  return out;
+}
+
 /** Every file the site's levels are solved from (the cache key). */
 export function levelInputs(site: Site): string[] {
   return tileIds(site).flatMap((tile) => {
@@ -88,6 +194,7 @@ export function levelInputs(site: Site): string[] {
       at(dgm.tif),
       at(dgm.tfw),
       lineFile(site, "bridge", tile),
+      lineFile(site, "platform", tile),
       ...Object.values(LINE_FILES).map((k) => lineFile(site, k, tile)),
     ];
   });
@@ -114,25 +221,23 @@ function sitePieces(site: Site): { pieces: LinePiece[]; of: PieceOf[] } {
   const pieces: LinePiece[] = [];
   const of: PieceOf[] = [];
   for (const tile of tileIds(site)) {
-    features<RailFeature>(lineFile(site, LINE_FILES.rail, tile)).forEach(
-      (f, index) => {
-        if (f.geometry?.type === "LineString") {
-          pieces.push({
-            coords: f.geometry.coordinates,
-            line: "rail",
-            prefer: railPrefer(f),
-            below: (f.properties?.layer ?? 0) < 0,
-          });
-          of.push({
-            tile,
-            line: "rail",
-            index,
-            tracks: f.properties?.tracks ?? 1,
-            bed: railBed(f),
-          });
-        }
+    railFeatures(site, tile).forEach((f, index) => {
+      if (f.geometry?.type === "LineString") {
+        pieces.push({
+          coords: f.geometry.coordinates,
+          line: "rail",
+          prefer: railPrefer(f),
+          below: (f.properties?.layer ?? 0) < 0,
+        });
+        of.push({
+          tile,
+          line: "rail",
+          index,
+          tracks: f.properties?.tracks ?? 1,
+          bed: railBed(f),
+        });
       }
-    );
+    });
     features<TramFeature>(lineFile(site, LINE_FILES.tram, tile)).forEach(
       (f, index) => {
         if (isTrack(f) && f.geometry.type === "LineString") {
@@ -369,6 +474,31 @@ export function siteBeds(site: Site, levels: SiteLevels): Bed[] {
     flush("lay");
   });
   return out;
+}
+
+/** The rail layer draws a line of at most this many tracks
+ *  (app/_components/rail-layer.ts). */
+const MAX_TRACKS = 3;
+
+/**
+ * The site's drawn tracks as the axes a platform keeps clear of
+ * (lib/city/platform-clearance.ts): every rail and tram line above ground,
+ * a line of several tracks by its outer track's distance from its axis.
+ */
+export function siteTrackAxes(site: Site): TrackAxis[] {
+  const { pieces, of } = sitePieces(site);
+  return pieces.flatMap((piece, k): TrackAxis[] => {
+    if (piece.below) {
+      return [];
+    }
+    const { line, tracks } = of[k];
+    const n = Math.min(Math.max(tracks, 1), MAX_TRACKS);
+    const clear =
+      line === "rail"
+        ? PLATFORM_EDGE_M.rail + ((n - 1) * TRACK_PITCH_M) / 2
+        : PLATFORM_EDGE_M.tram;
+    return [{ coords: piece.coords, clear }];
+  });
 }
 
 /** The deck cell (m) of `underDecks`' index. */
