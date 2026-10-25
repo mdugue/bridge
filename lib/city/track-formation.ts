@@ -128,18 +128,83 @@ function samplesOf(beds: readonly Bed[]): Sample[] {
   return out;
 }
 
-/** What lowering one object's tops does: its vertex index → new height. */
-type Lowered = Map<number, number>;
+/** A flat top a track runs on: its outline, its height and the bed's
+ *  height it goes down to. */
+interface Formation {
+  cap: number;
+  ring: Ring2;
+  top: number;
+}
 
-/** The tops of one object the tracks run on, as the heights its vertices
- *  go down to; none when no track does. */
-function formationOf(
+/** A top is lowered only this far above its object's foot (m): a box
+ *  whose top a track runs on is never pressed flat. */
+const KEEP_M = 0.5;
+/** A vertex this close to a top's outline is on it (m). */
+const ON_M = 0.05;
+
+/** Whether (x, y) lies on or inside a ring. */
+function onOrInside(x: number, y: number, ring: Ring2): boolean {
+  if (inside(x, y, ring)) {
+    return true;
+  }
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [ax, ay] = ring[j];
+    const [bx, by] = ring[i];
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    const t =
+      len2 > 0
+        ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2))
+        : 0;
+    if (Math.hypot(x - ax - t * dx, y - ay - t * dy) <= ON_M) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** The track's run over one flat top and the bed it goes down to; null
+ *  when a track runs too far under it (a roof) or too briefly on it. */
+function capOf(
+  ring2: Ring2,
+  top: number,
+  samples: SampleGrid,
+  beds: readonly Bed[]
+): number | null {
+  const xs = ring2.map((p) => p[0]);
+  const ys = ring2.map((p) => p[1]);
+  let run = 0;
+  let cap = Infinity;
+  for (const s of samples.within(
+    Math.min(...xs),
+    Math.min(...ys),
+    Math.max(...xs),
+    Math.max(...ys)
+  )) {
+    const over = top - s.z;
+    if (over <= 0 || !inside(s.x, s.y, ring2)) {
+      continue;
+    }
+    if (over >= FORMATION_M) {
+      return null; // a top far enough over a track: a roof, kept
+    }
+    run += s.length;
+    cap = Math.min(cap, s.z - beds[s.bed].drop);
+  }
+  return run < FORMATION_RUN_M ? null : cap;
+}
+
+/** The flat tops of one object the tracks run on; none when no track
+ *  does. `foot` is the object's lowest vertex height. */
+function formationsOf(
   o: CityObject,
   vertex: (i: number) => [number, number, number],
   samples: SampleGrid,
-  beds: readonly Bed[]
-): Lowered {
-  const lowered: Lowered = new Map();
+  beds: readonly Bed[],
+  foot: number
+): Formation[] {
+  const out: Formation[] = [];
   for (const g of o.geometry ?? []) {
     for (const face of surfaces((g as { boundaries?: unknown }).boundaries)) {
       const ring = face[0];
@@ -153,34 +218,46 @@ function formationOf(
         continue;
       }
       const ring2 = pts.map((p): [number, number] => [p[0], p[1]]);
-      const xs = ring2.map((p) => p[0]);
-      const ys = ring2.map((p) => p[1]);
-      const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
-      const [y0, y1] = [Math.min(...ys), Math.max(...ys)];
-      let run = 0;
-      let cap = Infinity;
-      let conflict = false;
-      for (const s of samples.within(x0, y0, x1, y1)) {
-        const over = top - s.z;
-        if (over <= 0 || !inside(s.x, s.y, ring2)) {
-          continue;
-        }
-        if (over >= FORMATION_M) {
-          conflict = true; // a top far enough over a track: a roof, kept
-          break;
-        }
-        run += s.length;
-        cap = Math.min(cap, s.z - beds[s.bed].drop);
-      }
-      if (conflict || run < FORMATION_RUN_M) {
-        continue;
-      }
-      for (const i of ring) {
-        lowered.set(i, Math.min(lowered.get(i) ?? Infinity, cap));
+      const cap = capOf(ring2, top, samples, beds);
+      if (cap !== null && cap > foot + KEEP_M) {
+        out.push({ cap, ring: ring2, top });
       }
     }
   }
-  return lowered;
+  return out;
+}
+
+/** The height a vertex goes down to: the lowest cap of the tops it lies
+ *  at (on its outline or inside it, within the top's flat band); its own
+ *  height where it lies at none. */
+function loweredTo(
+  [x, y, z]: [number, number, number],
+  tops: readonly Formation[]
+): number {
+  let to = z;
+  for (const t of tops) {
+    if (
+      z > t.cap &&
+      z >= t.top - FLAT_M &&
+      z <= t.top + 0.01 &&
+      onOrInside(x, y, t.ring)
+    ) {
+      to = Math.min(to, t.cap);
+    }
+  }
+  return to;
+}
+
+/** Every vertex index under a geometry's boundaries. */
+function indices(b: unknown, out: Set<number> = new Set()): Set<number> {
+  if (typeof b === "number") {
+    out.add(b);
+  } else if (Array.isArray(b)) {
+    for (const c of b) {
+      indices(c, out);
+    }
+  }
+  return out;
 }
 
 /** An object's ALKIS function, or its parent's (a BuildingPart's). */
@@ -236,17 +313,24 @@ export function onFormations(
     if (isOpenRoof(functionOf(doc, o))) {
       continue; // a roof on posts is drawn open: the track runs under it
     }
-    const tops = formationOf(o, vertex, samples, beds);
-    if (tops.size === 0) {
+    const used = new Set<number>();
+    for (const g of o.geometry ?? []) {
+      indices((g as { boundaries?: unknown }).boundaries, used);
+    }
+    if (used.size === 0) {
       continue;
     }
-    // every vertex of the object at a lowered top's height goes with it
-    const band = Math.max(...[...tops.keys()].map((i) => vertex(i)[2]));
-    const cap = Math.min(...tops.values());
+    const foot = Math.min(...[...used].map((i) => vertex(i)[2]));
+    const tops = formationsOf(o, vertex, samples, beds, foot);
+    if (tops.length === 0) {
+      continue;
+    }
+    // every vertex of the object at a lowered top's height, on or inside
+    // its outline, goes down with it
     const copies = new Map<number, number>();
     const to = (i: number): number => {
-      const z = vertex(i)[2];
-      if (z <= cap || z < band - FLAT_M || z > band + 0.01) {
+      const z = loweredTo(vertex(i), tops);
+      if (z === vertex(i)[2]) {
         return i;
       }
       let k = copies.get(i);
@@ -256,7 +340,7 @@ export function onFormations(
         vertices.push([
           raw[0],
           raw[1],
-          Math.round((cap - translate[2]) / scale[2]),
+          Math.round((z - translate[2]) / scale[2]),
         ]);
         copies.set(i, k);
       }

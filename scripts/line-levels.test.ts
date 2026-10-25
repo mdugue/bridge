@@ -4,13 +4,15 @@ import {
   AxisIndex,
   clearOfTracks,
   outsideAreas,
+  ringLength,
 } from "../lib/city/platform-clearance";
-import type { Point2 } from "../lib/city/polyline";
 import { tileIds } from "../lib/city/tile";
 import {
+  isDlmLine,
   measureJumps,
   railFeatures,
   sitePlatforms,
+  siteLineLevels,
   siteTrackAxes,
 } from "./line-levels";
 
@@ -34,17 +36,6 @@ test("the reference site's lines are drawn without jumps beyond the budget", asy
   expect(r.after).toBeLessThanOrEqual(BUDGET);
 }, 120_000);
 
-/** A polyline's length (m). */
-function length(coords: readonly Point2[]): number {
-  return coords.reduce(
-    (s, p, i) =>
-      i > 0
-        ? s + Math.hypot(p[0] - coords[i - 1][0], p[1] - coords[i - 1][1])
-        : s,
-    0
-  );
-}
-
 /**
  * No platform of the reference site stands over a drawn track: every
  * outline the build cuts back (lib/city/platform-clearance.ts) keeps its
@@ -52,9 +43,9 @@ function length(coords: readonly Point2[]): number {
  * outline held one at Dresden-Neustadt and the Hauptbahnhof, and the
  * edge of one stood 0.6 m from a track's centre at the Hauptbahnhof).
  */
-test("the reference site's platforms keep clear of its tracks", () => {
+test("the reference site's platforms keep clear of its tracks", async () => {
   const site = SITES[REFERENCE_SITE];
-  const axes = siteTrackAxes(site);
+  const axes = siteTrackAxes(site, await siteLineLevels(site));
   const cut = new AxisIndex(axes);
   // a centimetre's rounding inside the cut's own distance
   const check = new AxisIndex(
@@ -70,16 +61,13 @@ test("the reference site's platforms keep clear of its tracks", () => {
   }
   for (const tile of tileIds(site)) {
     for (const f of railFeatures(site, tile)) {
-      if (
-        f.geometry?.type === "LineString" &&
-        f.properties?.bridge === undefined
-      ) {
+      if (f.geometry?.type === "LineString" && isDlmLine(f)) {
         const coords = f.geometry.coordinates;
         const parts = outsideAreas(coords, platforms, 0) ?? [coords];
         // an end cut where the line grazes an outline moves along it with
         // the centimetre's rounding
         expect(
-          length(coords) - parts.reduce((s, p) => s + length(p), 0)
+          ringLength(coords) - parts.reduce((s, p) => s + ringLength(p), 0)
         ).toBeLessThan(0.5);
       }
     }

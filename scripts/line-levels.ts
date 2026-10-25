@@ -89,7 +89,18 @@ function features<F>(path: string): F[] {
 }
 
 /** Every platform outline of the site (OSM's, pipeline/bake/rail.py). */
+const platformMemo = new Map<string, Point2[][][]>();
+
 export function sitePlatforms(site: Site): Point2[][][] {
+  let found = platformMemo.get(site.id);
+  if (!found) {
+    found = readPlatforms(site);
+    platformMemo.set(site.id, found);
+  }
+  return found;
+}
+
+function readPlatforms(site: Site): Point2[][][] {
   return tileIds(site).flatMap((tile) =>
     features<AreaFeature>(lineFile(site, "platform", tile)).flatMap((f) => {
       const g = f.geometry;
@@ -103,7 +114,7 @@ export function sitePlatforms(site: Site): Point2[][][] {
 
 /** A Basis-DLM line (rail.py writes `bridge` on every OSM track, never on
  *  the DLM's lines it keeps where OSM maps no track). */
-function isDlmLine(f: RailFeature): boolean {
+export function isDlmLine(f: RailFeature): boolean {
   return f.properties?.bridge === undefined;
 }
 
@@ -111,19 +122,31 @@ function isDlmLine(f: RailFeature): boolean {
  *  near (m). */
 const MAST_REACH_M = 8;
 
-/** The masts (`m`) that stand beside a part of a line. */
+/** How far (m) a mast stands from a part of a line. */
+function distanceToPart(x: number, y: number, part: readonly Point2[]): number {
+  let d = Infinity;
+  for (let i = 1; i < part.length; i++) {
+    d = Math.min(d, distanceToSegment(x, y, part[i - 1], part[i]));
+  }
+  return d;
+}
+
+/** The masts (`m`) that stand beside part `k` of a line: each with the
+ *  part it is nearest (one mast, one part), within MAST_REACH_M — those
+ *  beside the stretch dropped go with it. */
 function mastsBeside(
   masts: [number, number][] | undefined,
-  part: Point2[]
+  parts: readonly Point2[][],
+  k: number
 ): { m?: [number, number][] } {
   if (!masts) {
     return {};
   }
-  const near = masts.filter(([x, y]) =>
-    part.some(
-      (p, i) => i > 0 && distanceToSegment(x, y, part[i - 1], p) <= MAST_REACH_M
-    )
-  );
+  const near = masts.filter(([x, y]) => {
+    const d = parts.map((part) => distanceToPart(x, y, part));
+    const best = Math.min(...d);
+    return best <= MAST_REACH_M && d.indexOf(best) === k;
+  });
   return near.length > 0 ? { m: near } : {};
 }
 
@@ -173,10 +196,10 @@ export function railFeatures(site: Site, tile: string): RailFeature[] {
     if (parts === null) {
       return [f];
     }
-    const [first, ...rest] = parts.map((coords): RailFeature => ({
+    const [first, ...rest] = parts.map((coords, k): RailFeature => ({
       ...f,
       geometry: { type: "LineString", coordinates: coords },
-      properties: { ...props, ...mastsBeside(m, coords) },
+      properties: { ...props, ...mastsBeside(m, parts, k) },
     }));
     extra.push(...rest);
     return first ? [first] : [];
@@ -483,21 +506,29 @@ const MAX_TRACKS = 3;
 /**
  * The site's drawn tracks as the axes a platform keeps clear of
  * (lib/city/platform-clearance.ts): every rail and tram line above ground,
- * a line of several tracks by its outer track's distance from its axis.
+ * a line of several tracks by its outer track's distance from its axis,
+ * on its profile where it has one (a track crossing a platform on a
+ * bridge leaves it whole).
  */
-export function siteTrackAxes(site: Site): TrackAxis[] {
+export function siteTrackAxes(site: Site, levels: SiteLevels): TrackAxis[] {
   const { pieces, of } = sitePieces(site);
   return pieces.flatMap((piece, k): TrackAxis[] => {
     if (piece.below) {
       return [];
     }
-    const { line, tracks } = of[k];
+    const { line, tracks, tile, index } = of[k];
     const n = Math.min(Math.max(tracks, 1), MAX_TRACKS);
     const clear =
       line === "rail"
         ? PLATFORM_EDGE_M.rail + ((n - 1) * TRACK_PITCH_M) / 2
         : PLATFORM_EDGE_M.tram;
-    return [{ coords: piece.coords, clear }];
+    const lz = levels[tile]?.[line]?.[index]?.lz;
+    const z = lz ? decodeProfile(lz) : [];
+    const pts = pieceSamples(piece);
+    if (z.length !== pts.length || z.some((v) => v === null)) {
+      return [{ coords: piece.coords, clear }];
+    }
+    return [{ coords: pts, clear, z: z as number[] }];
   });
 }
 

@@ -22,11 +22,19 @@ export const PLATFORM_EDGE_M = { rail: 1.65, tram: 1.35 } as const;
 
 /** One drawn track's axis and how near a platform may come to it (m;
  *  a line of several tracks: its outer track's edge distance from the
- *  axis). */
+ *  axis), with its profile (m) where it has one. */
 export interface TrackAxis {
   clear: number;
   coords: Point2[];
+  z?: number[];
 }
+
+/** A track this far (m) over the lowest track beside it passes over the
+ *  platform there, on a bridge, and leaves it whole: a storey, as a
+ *  crossing's span (lib/city/line-levels.ts `CROSS_CLEAR_M`). */
+const OVER_M = 3;
+/** …beside it: within this (m). */
+const BESIDE_M = 15;
 
 /** A part the cut leaves smaller than this is dropped (m²)… */
 const MIN_PART_M2 = 2;
@@ -42,6 +50,8 @@ interface Segment {
   a: Point2;
   b: Point2;
   clear: number;
+  /** the lower end's profile (m), NaN where the line has none */
+  z: number;
 }
 
 /** The axes' segments by grid cell, for the platforms near them. */
@@ -57,6 +67,7 @@ export class AxisIndex {
           a: axis.coords[i - 1],
           b: axis.coords[i],
           clear: axis.clear,
+          z: axis.z ? Math.min(axis.z[i - 1], axis.z[i]) : Number.NaN,
         });
       }
     }
@@ -86,9 +97,10 @@ export class AxisIndex {
     }
   }
 
-  /** Every segment whose clearance may reach into the box. */
-  near(x0: number, y0: number, x1: number, y1: number): Segment[] {
-    const r = this.reach;
+  /** Every segment whose clearance may reach into the box, and those
+   *  `margin` (m) further. */
+  near(x0: number, y0: number, x1: number, y1: number, margin = 0): Segment[] {
+    const r = this.reach + margin;
     const found = new Set<Segment>();
     for (
       let cx = Math.floor((x0 - r) / CELL_M);
@@ -109,8 +121,14 @@ export class AxisIndex {
   }
 }
 
-/** The points within `s.clear` of a segment, as one polygon (a capsule). */
+/** The capsule's radius over the clearance: its polygon's edges, not
+ *  only its corners, at the clearance. */
+const CIRCUMSCRIBE = 1 / Math.cos(Math.PI / (2 * CAP_STEPS));
+
+/** The points within `s.clear` of a segment, as one polygon (a capsule,
+ *  circumscribed). */
 function capsule(s: Segment): ClipPolygon {
+  const r = s.clear * CIRCUMSCRIBE;
   const [ax, ay] = s.a;
   const [bx, by] = s.b;
   const len = Math.hypot(bx - ax, by - ay);
@@ -123,11 +141,11 @@ function capsule(s: Segment): ClipPolygon {
   // clockwise
   for (let k = 0; k <= CAP_STEPS; k++) {
     const t = base - Math.PI / 2 + (Math.PI * k) / CAP_STEPS;
-    ring.push([bx + s.clear * Math.cos(t), by + s.clear * Math.sin(t)]);
+    ring.push([bx + r * Math.cos(t), by + r * Math.sin(t)]);
   }
   for (let k = 0; k <= CAP_STEPS; k++) {
     const t = base + Math.PI / 2 + (Math.PI * k) / CAP_STEPS;
-    ring.push([ax + s.clear * Math.cos(t), ay + s.clear * Math.sin(t)]);
+    ring.push([ax + r * Math.cos(t), ay + r * Math.sin(t)]);
   }
   ring.push(ring[0]);
   return [ring];
@@ -151,7 +169,7 @@ function polygonArea(rings: readonly (readonly Point2[])[]): number {
 }
 
 /** A ring's perimeter, or a polyline's length (m). */
-function ringLength(ring: readonly Point2[]): number {
+export function ringLength(ring: readonly Point2[]): number {
   let l = 0;
   for (let i = 1; i < ring.length; i++) {
     l += Math.hypot(ring[i][0] - ring[i - 1][0], ring[i][1] - ring[i - 1][1]);
@@ -185,14 +203,68 @@ function reaches(
   );
 }
 
+/** The distance (m) from a point to a segment. */
+function toSegment(p: Point2, a: Point2, b: Point2): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const l2 = dx * dx + dy * dy;
+  const t =
+    l2 > 0
+      ? Math.min(1, Math.max(0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2))
+      : 0;
+  return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+}
+
+/** The distance (m) between two segments (0 where they cross). */
+function apart(s: Segment, t: Segment): number {
+  if (crossing(s.a, s.b, t.a, t.b) !== null) {
+    return 0;
+  }
+  return Math.min(
+    toSegment(s.a, t.a, t.b),
+    toSegment(s.b, t.a, t.b),
+    toSegment(t.a, s.a, s.b),
+    toSegment(t.b, s.a, s.b)
+  );
+}
+
+/** The segments that run beside the platform, not over it: a segment a
+ *  storey over the lowest one beside it crosses on a bridge. */
+function besides(segments: readonly Segment[]): Segment[] {
+  return segments.filter(
+    (s) =>
+      Number.isNaN(s.z) ||
+      !segments.some(
+        (t) => t.z < s.z - OVER_M && apart(s, t) <= BESIDE_M + s.clear
+      )
+  );
+}
+
+/** One polygon less the capsules, slivers dropped; the polygon itself
+ *  where the capsules leave it whole (or the clipper fails on it). */
+function cut(polygon: Point2[][], capsules: ClipPolygon[]): Point2[][][] {
+  let parts: Point2[][][];
+  try {
+    parts = difference(polygon, ...capsules).map((p) =>
+      p.map((ring) => ring.map(([x, y]): Point2 => [cm(x), cm(y)]))
+    );
+  } catch {
+    return [polygon]; // a degenerate outline: kept as OSM maps it
+  }
+  const before = polygonArea(polygon);
+  const after = parts.reduce((sum, p) => sum + polygonArea(p), 0);
+  return Math.abs(after - before) < 0.01 ? [polygon] : parts.filter(keeps);
+}
+
 /** A coordinate rounded to the centimetre, as the bakes write them. */
 const cm = (v: number) => Math.round(v * 100) / 100;
 
 /**
  * A platform outline cut back to its edge distance from every track
- * (`index`): the same geometry where no track comes that near, otherwise
- * what is left of it, slivers dropped (`keeps`) — null when nothing
- * is.
+ * beside it (`index`; a track a storey over the lowest beside it crosses
+ * on a bridge): the same geometry where no track comes that near,
+ * otherwise what is left of it, the slivers a cut leaves dropped
+ * (`keeps`) — null when nothing is.
  */
 export function clearOfTracks(
   g: MultiPolygonGeometry | PolygonGeometry,
@@ -207,16 +279,20 @@ export function clearOfTracks(
     Math.max(...xs),
     Math.max(...ys),
   ] as const;
-  const segments = index.near(...box).filter((s) => reaches(s, box));
+  const segments = besides(index.near(...box, BESIDE_M)).filter((s) =>
+    reaches(s, box)
+  );
   if (segments.length === 0) {
     return g;
   }
-  const before = polygons.reduce((sum, p) => sum + polygonArea(p), 0);
-  const left = difference(polygons, ...segments.map(capsule))
-    .map((p) => p.map((ring) => ring.map(([x, y]): Point2 => [cm(x), cm(y)])))
-    .filter(keeps);
-  const after = left.reduce((sum, p) => sum + polygonArea(p), 0);
-  if (Math.abs(after - before) < 0.01) {
+  const capsules = segments.map(capsule);
+  let changed = false;
+  const left = polygons.flatMap((polygon) => {
+    const parts = cut(polygon, capsules);
+    changed ||= parts.length !== 1 || parts[0] !== polygon;
+    return parts;
+  });
+  if (!changed) {
     return g; // no track came that near: the outline as it was
   }
   if (left.length === 0) {

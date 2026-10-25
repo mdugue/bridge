@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { PolygonGeometry } from "./features";
+import type { MultiPolygonGeometry, PolygonGeometry } from "./features";
 import {
   AxisIndex,
   clearOfTracks,
@@ -75,6 +75,36 @@ describe("clearOfTracks", () => {
       new AxisIndex([track(0, PLATFORM_EDGE_M.tram)])
     ) as PolygonGeometry;
     expect(ySpan(out)[0]).toBeCloseTo(1.35, 1);
+  });
+
+  test("leaves a platform whole where a track crosses over it on a bridge", () => {
+    const g = box(0, 3, 60, 10);
+    const beside = { ...track(0), z: [100, 100] };
+    const over = {
+      clear: PLATFORM_EDGE_M.rail,
+      coords: [
+        [30, -20],
+        [30, 30],
+      ] as Point2[],
+      z: [107, 107],
+    };
+    expect(clearOfTracks(g, new AxisIndex([beside, over]))).toBe(g);
+  });
+
+  test("keeps a small part no track comes near", () => {
+    const g: MultiPolygonGeometry = {
+      type: "MultiPolygon",
+      coordinates: [
+        box(0, 0.6, 40, 7).coordinates,
+        box(0, 20, 1, 21).coordinates,
+      ],
+    };
+    const out = clearOfTracks(
+      g,
+      new AxisIndex([track(0)])
+    ) as MultiPolygonGeometry;
+    expect(out.type).toBe("MultiPolygon");
+    expect(out.coordinates[1]).toBe(g.coordinates[1]);
   });
 
   test("drops a platform that lies wholly over a track", () => {

@@ -692,7 +692,7 @@ let trackAxes: AxisIndex | undefined;
  */
 function publishPlatforms(file: string): string {
   const src = at(sideFileSource(SITE, file));
-  trackAxes ??= new AxisIndex(siteTrackAxes(SITE));
+  trackAxes ??= new AxisIndex(siteTrackAxes(SITE, lineLevels));
   const doc = readJson<FeatureCollection<AreaFeature>>(src);
   let cut = 0;
   const features = (doc.features ?? []).flatMap((f): AreaFeature[] => {
@@ -864,6 +864,7 @@ function parseCity(
     );
   }
   const doc = formed.doc;
+  const lowered = new Set(formed.lowered);
   const roofColours = existsSync(at(src.roofColor))
     ? readJson<RoofColours>(at(src.roofColor))
     : undefined;
@@ -881,8 +882,12 @@ function parseCity(
     ? readJson<FeatureCollection<StructureFeature>>(at(src.structures)).features
     : undefined;
   const measured = existsSync(at(src.measuredRoofs))
-    ? readJson<FeatureCollection<MeasuredRoofFeature>>(at(src.measuredRoofs))
-        .features
+    ? readJson<FeatureCollection<MeasuredRoofFeature>>(
+        at(src.measuredRoofs)
+      ).features?.filter(
+        // a lowered top keeps its new height, not the scan's over it
+        (f) => !f.properties || !lowered.has(f.properties.id)
+      )
     : undefined;
   const plinths = existsSync(at(src.plinths))
     ? readJson<FeatureCollection<PlinthFeature>>(at(src.plinths)).features

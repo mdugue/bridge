@@ -84,6 +84,37 @@ describe("onFormations", () => {
     expect(onFormations(src, [short]).doc).toBe(src);
   });
 
+  test("keeps a low box a track runs on (no top pressed to its foot)", () => {
+    const src = boxDoc(119.0, 120.13);
+    expect(onFormations(src, [bed(-10, 50, 119.33)]).doc).toBe(src);
+  });
+
+  test("lowers only the top the track runs on, not another at its height", () => {
+    const src = boxDoc(113.87, 120.13);
+    // a second, separate top at the same height 100 m away, no track on it
+    const off = src.vertices.length;
+    for (const [x, y] of [
+      [100, 0],
+      [140, 0],
+      [140, 20],
+      [100, 20],
+    ]) {
+      src.vertices.push([x * 100, y * 100, 12_013]);
+    }
+    const g = src.CityObjects.b.geometry?.[0] as {
+      boundaries: number[][][][];
+    };
+    g.boundaries[0].push([[off, off + 1, off + 2, off + 3]]);
+    const { doc } = onFormations(src, [bed(-10, 50, 119.33)]);
+    const out = doc.CityObjects.b.geometry?.[0] as {
+      boundaries: number[][][][];
+    };
+    const far = out.boundaries[0].at(-1)?.[0] ?? [];
+    expect(far.map((i) => doc.vertices[i][2])).toEqual([
+      12_013, 12_013, 12_013, 12_013,
+    ]);
+  });
+
   test("keeps a top the track lies over", () => {
     const src = boxDoc(113.87, 119.2);
     expect(onFormations(src, [bed(-10, 50, 119.33)]).doc).toBe(src);
