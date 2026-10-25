@@ -880,6 +880,20 @@ stays their measure; the tile cache counts true bytes.
   fails; and a buffer the site shares (`markSceneShared`) is never on a
   geometry when that geometry is disposed — three would destroy it for
   every tile.
+- **The ground comes before the buildings.** Both tiers' queues run in
+  our order, not the renderer's (`lib/city/stream-order.ts`,
+  `orderStreaming`): its own sorts by screen-space error, and a tile's
+  buildings carry `TILE_ERROR` so that they always show — so every
+  visible tile's full LoD2 (4 MB on average for Dresden, 7 MB at most)
+  went ahead of any ground, and a flight showed roofs over holes. Now
+  contents in view load nearest first, the coarse ground counted a tile
+  (2 km) nearer than it is — every tile's ground near the camera before
+  the buildings, but no far flight's worth of it before the buildings
+  underfoot —, on one tile ground, buildings, fine ground, and out of
+  view last. Until the first frame the tile the boot waits on goes
+  before all of it. A full cache admits in the same order
+  (`keepOrder`: the renderer's own let a tile's buildings take the last
+  room before its ground) and unloads the other way round.
 - **A failed allocation costs a dressing, not the page.** A compile the
   GPU had no room for (`lib/city/gpu-allocation.ts`: the
   `createAttribute` RangeError, WebKit's "Unable to …", an

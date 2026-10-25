@@ -117,7 +117,8 @@ config change.
     glTF loader (`gltf-content.ts`: meshopt and the property tables, read
     by `lib/city/property-table.ts` — not the library's metadata plugin,
     which ships a classic WebGLRenderer) and the dressing plugin that
-    builds and disposes everything a tile carries; a phone's paced queues),
+    builds and disposes everything a tile carries; its queues in our order,
+    the coarse ground first — `lib/city/stream-order.ts` —, a phone's paced),
     `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount,
     given the site id; which tileset to stream), `site-context.tsx`
     (`SiteProvider`/`useSite`: the site the HUD describes),
