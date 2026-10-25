@@ -1967,7 +1967,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   the same `ndvi_<tile>.png` from its colours: the Green Leaf Index
   GLI = (2G − R − B) / (2G + R + B), mapped onto the NDVI's scale by
   `GLI_SCALE` 3.3 · GLI + `GLI_OFFSET` 0.14, clamped to 0..1 (`ndvi.py`
-  `gli_raster`). The line was fitted where both exist — Unna's two summer
+  `_gli`). The line was fitted where both exist — Unna's two summer
   DOP tiles, NRW's RGBI: r ≈ 0.7 against the NDVI, 85 % agreement on
   NDVI > 0.3; checked on Hamburg's four tiles, r 0.75–0.86. Every consumer
   (crown colour, meadow tint, the tram's lawn bed, the hedge cue) reads it

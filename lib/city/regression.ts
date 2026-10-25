@@ -2,9 +2,10 @@
  * Motion-keyed quality regression: a debounce that says "the camera is
  * moving, render cheaply". No THREE, no DOM.
  *
- * While the camera translates or turns, the two most expensive post passes
- * (SSAO contact shadows, depth-of-field bokeh) produce detail the eye cannot
- * resolve anyway — motion has already destroyed it. Regress on the first
+ * While the camera translates or turns, the depth-of-field bokeh produces
+ * detail the eye cannot resolve anyway — motion has already destroyed it
+ * (the contact shadows are never gated: skipping them blinked on every
+ * footstep). Regress on the first
  * moving frame (a late regress is a visible hitch) and recover only after the
  * camera has been still for RECOVER_MS, so a single still frame in the middle
  * of a walk does not flicker the passes back on.
@@ -29,8 +30,7 @@ export function createRegressionState(): RegressionState {
 export function stepRegression(
   state: RegressionState,
   moved: boolean,
-  dtMs: number,
-  recoverMs: number = RECOVER_MS
+  dtMs: number
 ): boolean {
   if (moved) {
     state.regressed = true;
@@ -38,7 +38,7 @@ export function stepRegression(
     return true;
   }
   state.stillMs += Math.max(dtMs, 0);
-  if (state.stillMs >= recoverMs) {
+  if (state.stillMs >= RECOVER_MS) {
     state.regressed = false;
   }
   return state.regressed;

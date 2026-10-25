@@ -1,7 +1,15 @@
 import { expect, test } from "bun:test";
 import type { CardCredits } from "./card-lines";
-import { canopyCard, furnitureCard, hedgeCard, lampCard } from "./inquiry-more";
+import {
+  canopyCard,
+  furnitureCard,
+  hedgeCard,
+  lampCard,
+  landingCard,
+  stopCard,
+} from "./inquiry-more";
 import type { Stated } from "./methods";
+import type { SiteProvenance } from "./provenance";
 
 const lines = (sources: readonly Stated[]) => sources.map((l) => l.text);
 
@@ -248,4 +256,63 @@ test("a tall mast's card names its arm, and says it is assumed", () => {
   // a post with its head on top has no arm line
   const post = lampCard({ ...lamp }, null, DRESDEN);
   expect(post.facts.some((f) => f.label === "Ausleger")).toBe(false);
+});
+
+/** An OSM record whose street-tree product is older than the extract. */
+const osmProvenance: SiteProvenance = {
+  version: 1,
+  sources: {
+    osm: {
+      label: "OpenStreetMap",
+      credit: "© OpenStreetMap-Mitwirkende",
+      licence: "ODbL",
+      stand: "2026-09-26",
+      stands: { trees: "2026-07-01" },
+    },
+  } as SiteProvenance["sources"],
+  tiles: {},
+};
+
+test("a tram stop and a landing stage credit OSM, at the edition of its point layers", () => {
+  const stop = stopCard(
+    { kind: "stop", tile: "t", position: at, name: "Albertplatz" },
+    osmProvenance
+  );
+  const landing = landingCard(
+    { kind: "landing", tile: "t", position: at, properties: { k: "pier" } },
+    osmProvenance
+  );
+  // the point layers quote the `trees` product's edition, not the extract's
+  expect(lines(stop.sources)).toEqual([
+    "Name, Lage: OpenStreetMap · Stand 01.07.2026 · © OpenStreetMap-Mitwirkende, ODbL",
+  ]);
+  expect(lines(landing.sources)).toEqual([
+    "Anlegestelle: OpenStreetMap · Stand 01.07.2026 · © OpenStreetMap-Mitwirkende, ODbL",
+  ]);
+  expect(stop.sources[0]?.method).toBe("taken");
+  // before the manifest arrives: OSM's own credit, no edition
+  const bare = stopCard(
+    { kind: "stop", tile: "t", position: at, name: "" },
+    null
+  );
+  expect(lines(bare.sources)).toEqual([
+    "Name, Lage: OpenStreetMap · © OpenStreetMap-Mitwirkende, ODbL",
+  ]);
+});
+
+test("a playground piece found in the surface model says it was measured there", () => {
+  const card = furnitureCard(
+    {
+      kind: "furniture",
+      tile: "t",
+      position: at,
+      properties: { k: "playground", src: "dom", h: 2.5 },
+    },
+    null
+  );
+  expect(card.sources).toHaveLength(1);
+  expect(card.sources[0]?.method).toBe("computed");
+  expect(card.sources[0]?.text).toBe(
+    "Lage und Höhe gemessen: Digitales Oberflächenmodell DOM1"
+  );
 });

@@ -226,17 +226,6 @@ function nearestOnAxis(
   return best;
 }
 
-/** Where a point projects onto the axis: arc length and distance, or null
- *  when it lies beyond either end. */
-export function projectOntoAxis(
-  coords: Point2[],
-  x: number,
-  y: number
-): { d: number; s: number } | null {
-  const hit = nearestOnAxis(coords, x, y);
-  return hit && !hit.beyond ? { d: hit.d, s: hit.s } : null;
-}
-
 /** Whether segments ab and cd cross. */
 function crosses(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
   const side = (p: Point2, q: Point2, r: Point2) =>

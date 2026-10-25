@@ -37,6 +37,12 @@ export interface TrailBeat {
   frames: number;
   /** frames rendered per second since the previous beat */
   fps: number;
+  /**
+   * The loop was held to a pace since the previous beat (the phone's
+   * sidebar over the scene, lib/city/frame-pace.ts): its rate is the
+   * pace's, not the device's — optional: older records lack it.
+   */
+  paced?: boolean;
   /** the scene's GPU estimate (geometry, textures, shadow map), MB */
   gpuMB: number;
   /**
@@ -344,8 +350,9 @@ export function resumedFor(trail: Trail, t: number): number | undefined {
  * (the most the page held, whatever it drew), its frame rate when the page
  * was in view and rendering — a beat before the first frame measures the
  * boot, one while hidden a paused loop, one after the render stopped no
- * loop at all: none of them is a frame rate anybody saw. A beat in view
- * that met no new frame is one: the main thread froze, 0 fps.
+ * loop at all, one paced the loop held down behind the phone's sidebar:
+ * none of them is a frame rate anybody saw. A beat in view that met no
+ * new frame is one: the main thread froze, 0 fps.
  */
 export function pushBeat(trail: Trail, beat: TrailBeat): void {
   const previous = trail.beats.at(-1);
@@ -359,7 +366,12 @@ export function pushBeat(trail: Trail, beat: TrailBeat): void {
   if (beat.cpuMB !== undefined) {
     stats.maxCpuMB = Math.max(stats.maxCpuMB ?? 0, beat.cpuMB);
   }
-  if (beat.frames === 0 || beat.stopped || trail.state === "hidden") {
+  if (
+    beat.frames === 0 ||
+    beat.stopped ||
+    beat.paced ||
+    trail.state === "hidden"
+  ) {
     return;
   }
   const stalled = previous !== undefined && beat.frames <= previous.frames;
@@ -470,7 +482,7 @@ export const round = (n: number, digits = 0) => {
 export function formatBeat(b: TrailBeat): string {
   return [
     `${round(b.t, 1)}s`,
-    `f${b.frames} ${round(b.fps)}fps`,
+    `f${b.frames} ${round(b.fps)}fps${b.paced ? " paced" : ""}`,
     memoryPart(b),
     `${b.calls}dc ${round(b.triangles / 1000)}k▲`,
     tilesPart(b),

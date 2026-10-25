@@ -1166,6 +1166,7 @@ export function buildCrownWarmup(): CrownWarmup {
  * a cone where it would stand a broadleaf crown, as tall and as wide —
  * and the broadleaf's trunk. Their cull spheres are grown like the lobed
  * crowns' (`padCrownSphere`): the material reshapes every crown.
+ * Exported for its test (the boxes), not used outside this module.
  */
 export function buildConeTiers(broad: TreeGeos): TreeGeos {
   const box = boxOf(broad.mid);
@@ -1182,6 +1183,7 @@ export function buildConeTiers(broad: TreeGeos): TreeGeos {
  * tier reshaped into the pine's flat-topped crown in its own box, so the
  * placement's matrix (its crown from `pineBase` to its top) fits either,
  * and the broadleaf's trunk. Grown like the lobed crowns' cull spheres.
+ * Exported for its test (the boxes), not used outside this module.
  */
 export function buildPineTiers(broad: TreeGeos): TreeGeos {
   return {

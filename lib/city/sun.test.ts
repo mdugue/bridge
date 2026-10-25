@@ -12,21 +12,18 @@ const LAT = 51.05;
 const LNG = 13.74;
 
 test("enuToWorld maps East=+X, Up=+Y, North=-Z", () => {
-  expect(enuToWorld({ east: 1, north: 0, up: 0 })).toEqual({
-    x: 1,
-    y: 0,
-    z: -0,
-  });
-  expect(enuToWorld({ east: 0, north: 1, up: 0 })).toEqual({
-    x: 0,
-    y: 0,
-    z: -1,
-  });
-  expect(enuToWorld({ east: 0, north: 0, up: 1 })).toEqual({
-    x: 0,
-    y: 1,
-    z: -0,
-  });
+  const expectWorld = (
+    enu: { east: number; north: number; up: number },
+    want: { x: number; y: number; z: number }
+  ) => {
+    const got = enuToWorld(enu);
+    expect(got.x).toBeCloseTo(want.x, 12);
+    expect(got.y).toBeCloseTo(want.y, 12);
+    expect(got.z).toBeCloseTo(want.z, 12);
+  };
+  expectWorld({ east: 1, north: 0, up: 0 }, { x: 1, y: 0, z: 0 });
+  expectWorld({ east: 0, north: 1, up: 0 }, { x: 0, y: 0, z: -1 });
+  expectWorld({ east: 0, north: 0, up: 1 }, { x: 0, y: 1, z: 0 });
 });
 
 test("sunDirectionEnu yields a unit vector", () => {

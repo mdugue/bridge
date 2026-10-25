@@ -1,11 +1,14 @@
 """The city's counted traffic (traffic.py): what a WFS row becomes, and the
-clip that gives every tile its own piece of a section across a seam."""
+clip that gives every tile its own piece of a section across a seam, and a
+section on a bridge where it runs along a road deck."""
 
 import json
 from pathlib import Path
 
 import pytest
+import shapely
 
+from bake import traffic
 from bake.common import Tile
 from bake.traffic import clip_sections, run, section_props
 
@@ -149,3 +152,71 @@ def test_the_site_names_its_source_and_a_site_without_one_bakes_nothing(tmp_path
     tile = Tile("t", BOUNDS, 25833, tmp_path / "raw", tmp_path / "data")
     run(tile)
     assert not (tile.data / "dlm" / "traffic_t.geojson").exists()
+
+
+EPSG = 25833
+
+
+# --- the traffic's bridges --------------------------------------------------------
+
+
+def _deck(axis, half_width=6.0) -> dict:
+    line = shapely.LineString(axis)
+    return {
+        "type": "Feature",
+        "properties": {"kind": "road", "axis": axis},
+        "geometry": shapely.geometry.mapping(line.buffer(half_width, cap_style="flat")),
+    }
+
+
+def test_a_section_runs_on_a_bridge_where_it_runs_along_a_road_deck(tmp_path):
+    path = tmp_path / "bridge_t.geojson"
+    rail = {
+        **_deck([[0, 200], [100, 200]]),
+        "properties": {"kind": "rail", "axis": [[0, 200], [100, 200]]},
+    }
+    path.write_text(json.dumps({"features": [_deck([[20, 50], [80, 50]]), rail]}))
+    decks = traffic.road_decks([path], (0, 0, 100, 300))
+    assert len(decks) == 1  # the rail deck carries no traffic
+    along = shapely.LineString([[0, 51], [100, 51]])
+    under = shapely.LineString([[50, 0], [50, 100]])  # crosses the deck: 12 m, at 90°
+    short = shapely.LineString([[0, 50], [28, 50]])  # 8 m on it
+    oblique = shapely.LineString([[30, 45], [70, 55]])  # 14° off the axis
+    assert traffic.on_deck(along, decks)
+    assert not traffic.on_deck(under, decks)
+    assert not traffic.on_deck(short, decks)
+    assert traffic.on_deck(oblique, decks)
+    # the name no longer decides where the decks are known…
+    named = {"t": 10, "n": "Albertbrücke", "br": 1}
+    assert "br" not in traffic.bridge_flag(named, under, decks)
+    assert traffic.bridge_flag({"t": 10}, along, decks)["br"] == 1
+    # …and still does where no bridge file is
+    assert traffic.bridge_flag(named, under, None)["br"] == 1
+
+
+def test_a_committed_file_is_re_flagged_without_the_counts_cache(tmp_path):
+    tile = Tile(
+        "t", (0.0, 0.0, 100.0, 100.0), EPSG, tmp_path / "raw", tmp_path / "data", traffic="dresden"
+    )
+    dlm = tile.data / "dlm"
+    dlm.mkdir(parents=True)
+    (dlm / "bridge_t.geojson").write_text(json.dumps({"features": [_deck([[20, 50], [80, 50]])]}))
+    sections = [
+        {
+            "type": "Feature",
+            "properties": {"t": 900, "f": 900, "n": "Brückenstraße"},
+            "geometry": {"type": "LineString", "coordinates": [[0, 50], [100, 50]]},
+        },
+        {
+            "type": "Feature",
+            "properties": {"t": 500, "n": "Elbbrücke", "br": 1},
+            "geometry": {"type": "LineString", "coordinates": [[50, 0], [50, 100]]},
+        },
+    ]
+    doc = {"type": "FeatureCollection", "attribution": "x", "features": sections}
+    (dlm / "traffic_t.geojson").write_text(json.dumps(doc))
+    traffic.run(tile)
+    out = json.loads((dlm / "traffic_t.geojson").read_text())
+    assert out["attribution"] == "x"
+    assert out["features"][0]["properties"] == {"t": 900, "f": 900, "n": "Brückenstraße", "br": 1}
+    assert out["features"][1]["properties"] == {"t": 500, "n": "Elbbrücke"}

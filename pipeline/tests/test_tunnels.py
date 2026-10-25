@@ -4,42 +4,23 @@ ways every terrain bake reads skip `tunnel=*`."""
 
 from __future__ import annotations
 
-import numpy as np
-import pyogrio.raw
 import shapely
 
 from bake import landcover, landcover_osm
 from bake.common import Tile
 from bake.osm import read_ways
-from tests.synthetic import SIZE, X0, Y0, osm_tile, way
-
-
-def _shapefile(path, lines, fields: dict[str, list[str]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pyogrio.raw.write(
-        path,
-        np.array([shapely.to_wkb(g) for g in lines], dtype=object),
-        [np.array(v, dtype=object) for v in fields.values()],
-        fields=list(fields),
-        crs="EPSG:25833",
-        geometry_type="LineString",
-        driver="ESRI Shapefile",
-    )
-
-
-def _line(*xy: tuple[float, float]) -> shapely.LineString:
-    return shapely.LineString([(X0 + x, Y0 + y) for x, y in xy])
+from tests.synthetic import SIZE, X0, Y0, osm_tile, shapefile, tile_line, way
 
 
 def test_a_dlm_road_axis_is_not_painted_where_a_tunnel_runs_along_it(tmp_path):
     tile = Tile("t", (X0, Y0, X0 + SIZE, Y0 + SIZE), 25833, tmp_path / "raw", tmp_path / "data")
-    road = _line((0, 100), (200, 100))
-    _shapefile(tile.dlm / "ver01_l.shp", [road], {"BRF": ["8"], "WDM": ["1303"]})
+    road = tile_line((0, 100), (200, 100))
+    shapefile(tile.dlm / "ver01_l.shp", [road], {"BRF": ["8"], "WDM": ["1303"]})
     # the tunnel on the road's own axis from x = 50 to 150; a footbridge
     # (another structure) across it changes nothing
-    _shapefile(
+    shapefile(
         tile.dlm / "ver06_l.shp",
-        [_line((50, 100), (150, 100)), _line((20, 80), (20, 120))],
+        [tile_line((50, 100), (150, 100)), tile_line((20, 80), (20, 120))],
         {"BWF": ["1870", "1800"]},
     )
     painted = shapely.union_all(landcover.road_buffers(tile))
@@ -50,10 +31,12 @@ def test_a_dlm_road_axis_is_not_painted_where_a_tunnel_runs_along_it(tmp_path):
 
 def test_a_road_only_crossing_over_a_tunnel_keeps_its_crossing(tmp_path):
     tile = Tile("t", (X0, Y0, X0 + SIZE, Y0 + SIZE), 25833, tmp_path / "raw", tmp_path / "data")
-    _shapefile(
-        tile.dlm / "ver01_l.shp", [_line((100, 0), (100, 200))], {"BRF": ["-9998"], "WDM": ["1307"]}
+    shapefile(
+        tile.dlm / "ver01_l.shp",
+        [tile_line((100, 0), (100, 200))],
+        {"BRF": ["-9998"], "WDM": ["1307"]},
     )
-    _shapefile(tile.dlm / "ver06_l.shp", [_line((0, 100), (200, 100))], {"BWF": ["1870"]})
+    shapefile(tile.dlm / "ver06_l.shp", [tile_line((0, 100), (200, 100))], {"BWF": ["1870"]})
     painted = shapely.union_all(landcover.road_buffers(tile))
     assert painted.contains(shapely.Point(X0 + 100, Y0 + 100))
 

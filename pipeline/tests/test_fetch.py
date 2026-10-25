@@ -1,14 +1,19 @@
 """Units of the fetch step that need no network: the CityGML converter, the
-provider-grid helper, the XYZ gridding, the OSM class mapping and the spec."""
+provider-grid helper, the XYZ gridding, the OSM class mapping, the flight
+dates and the spec."""
 
 import json
+from datetime import date
 from pathlib import Path
 
 import numpy as np
+import pytest
 import rasterio
 
+from bake import fetch
 from bake.citygml import convert, write_cityjson
 from bake.common import Tile
+from bake.dop_light import flight_days, flight_file
 from bake.fetch import Ctx, cells
 from bake.landcover_osm import _area_class
 from bake.providers.be import xyz_to_tif
@@ -165,12 +170,8 @@ def test_citygml_2_reads_like_1_and_an_empty_tile_is_refused(tmp_path):
     )
     doc = convert([gml], (0.0, 0.0, 2000.0, 2000.0), 25833)
     assert list(doc["CityObjects"]) == ["B1", "P1"]
-    try:
+    with pytest.raises(ValueError):  # a tile without buildings is not written
         write_cityjson([gml], (5000.0, 5000.0, 7000.0, 7000.0), 25833, tmp_path / "x.json")
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("a tile without buildings must not be written")
     assert not (tmp_path / "x.json").exists()
 
 
@@ -192,13 +193,26 @@ def test_a_site_without_a_tree_cadastre_writes_its_osm_trees(tmp_path):
     assert (tmp_path / "data" / "dlm" / "treefacts_t.json").exists()
 
 
-def test_the_cadastre_query_carries_the_sites_crs():
-    from bake.cadastre import REGISTERS
+def test_a_register_in_another_crs_than_the_tile_is_not_asked(tmp_path, monkeypatch, capsys):
+    # its bounding box would be read in the wrong CRS: a note, no request
+    from bake import cadastre
+    from bake.common import Tile, TreeCadastre
 
-    q = REGISTERS["dresden"].query(
-        "cls:L1261", (0.0, 0.0, 2000.0, 2000.0), 25832, resultType="hits"
+    def no_request(*args):
+        raise AssertionError("the register was asked")
+
+    monkeypatch.setattr(cadastre, "_open", no_request)
+    tile = Tile(
+        "t",
+        (0.0, 0.0, 2000.0, 2000.0),
+        25832,
+        tmp_path / "raw",
+        tmp_path / "data",
+        tree_cadastre=TreeCadastre("dresden", ""),
     )
-    assert "EPSG%3A%3A25832" in q and "cls%3AL1261" in q and "resultType=hits" in q
+    cadastre.fetch(tile)
+    assert "EPSG:25833" in capsys.readouterr().out
+    assert not (tmp_path / "raw" / "trees").exists()
 
 
 def test_saxony_links_come_from_the_batch_pages_current_shares(tmp_path, monkeypatch):
@@ -403,6 +417,9 @@ def _fetch_run(tmp_path, monkeypatch, fail: str, dlm: bool = False):
     monkeypatch.setattr(fetch.bridge, "fetch_wikidata", broken_wikidata)
     monkeypatch.setattr(fetch.landmarks, "fetch_wikidata", lambda *a: extras.append("landmarks"))
     monkeypatch.setattr(fetch.monuments, "fetch_wikidata", lambda *a: extras.append("monuments"))
+    monkeypatch.setattr(
+        fetch.glo30, "fetch", lambda *a: extras.append("glo30") or Path("glo30.tif")
+    )
     fetch.run(spec, spec.tiles)
     return tried, extras
 
@@ -423,7 +440,7 @@ def test_a_failed_optional_product_or_extra_is_a_note(tmp_path, monkeypatch):
     # both are a printed line, and the landmarks after it are still fetched
     tried, extras = _fetch_run(tmp_path, monkeypatch, "dop")
     assert set(tried) == {"osm", "dgm", "lod2", "dom", "dop"}
-    assert extras == ["trees", "traffic", "bridges", "landmarks", "monuments"]
+    assert extras == ["glo30", "trees", "traffic", "bridges", "landmarks", "monuments"]
 
 
 def test_a_failed_basis_dlm_or_osm_extract_fails_the_fetch_after_the_tiles(tmp_path, monkeypatch):
@@ -443,3 +460,11 @@ def test_a_failed_basis_dlm_or_osm_extract_fails_the_fetch_after_the_tiles(tmp_p
 def test_a_fetched_basis_dlm_and_osm_extract_pass(tmp_path, monkeypatch):
     tried, _ = _fetch_run(tmp_path, monkeypatch, "none", dlm=True)
     assert {"dlm", "osm"} <= set(tried)
+
+
+def test_flight_days_round_trip(tmp_path):
+    dest = flight_file(tmp_path, "t")
+    fetch.write_flight(dest, ["2025-04-04", "2025-03-28", "2025-04-04"], "sn")
+    assert flight_days(tmp_path, "t") == [date(2025, 3, 28), date(2025, 4, 4)]
+    assert flight_days(tmp_path, "missing") == []
+    assert fetch.german_dates("Bildflugdatum = '19.03.2025'") == ["2025-03-19"]

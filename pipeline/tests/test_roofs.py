@@ -140,8 +140,13 @@ def test_a_tent_over_two_blocks_becomes_the_two_blocks(tmp_path):
 def test_without_dom1_the_step_leaves_the_roofs_alone(tmp_path, capsys):
     tile = _tile(tmp_path, _dom())
     tile.raw_raster("dom1").unlink()
+    out = tile.data / "dlm"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "roofs_t.geojson").write_text('{"features": [1]}')
+    before = sorted(p.name for p in out.iterdir())
     run(tile)
-    assert not (tile.data / "dlm" / "roofs_t.geojson").exists()
+    assert (out / "roofs_t.geojson").read_text() == '{"features": [1]}'
+    assert sorted(p.name for p in out.iterdir()) == before
     assert "no DOM1" in capsys.readouterr().out
 
 

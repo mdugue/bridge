@@ -11,9 +11,7 @@ import shapely
 from bake.cadastre import REGISTERS
 from bake.common import owns, round_coords
 from bake.landcover import CLASSES
-from bake.osm import tag
 from bake.rail import buffer_line, is_platform, merge_lines
-from bake.walls import height, lines_of
 
 
 def test_fragments_merge_across_shared_endpoints_to_the_metre():
@@ -32,31 +30,18 @@ def test_a_centreline_buffers_into_a_closed_deck_outline():
     assert shapely.Polygon(ring).area == 40.0
 
 
-def test_wall_heights_come_from_the_tags_clamped():
-    assert height('"height"=>"4 m"') == 4.0
-    assert height('"est_height"=>"99"') == 30.0
-    assert height(None) is None
-    assert tag('"bridge:structure"=>"arch","x"=>"1"', "bridge:structure") == "arch"
-
-
-def test_wall_polygons_contribute_their_outer_ring_only():
-    square = shapely.Polygon(
-        [(0, 0), (1, 0), (1, 1), (0, 1)], holes=[[(0.2, 0.2), (0.4, 0.2), (0.4, 0.4)]]
-    )
-    rings = lines_of(square)
-    assert len(rings) == 1
-    assert rings[0].is_ring
-
-
 def test_coordinates_round_to_centimetres_and_drop_z():
     assert round_coords([[1.234, 5.678, 9.0]]) == [[1.23, 5.68]]
 
 
 def test_the_class_ids_are_the_client_palette_order():
-    # lib/city/landcover.ts keys its palette by these ids and names.
-    assert list(CLASSES) == list(range(10))
-    assert CLASSES[8] == "water"
-    assert CLASSES[9] == "arable"
+    # lib/city/landcover.ts keys its palette by these ids and names: a class
+    # renamed or moved on one side alone fails here, before a re-bake
+    from pathlib import Path
+
+    ts = (Path(__file__).parents[2] / "lib" / "city" / "landcover.ts").read_text()
+    client = {int(i): key for i, key in re.findall(r'\{ id: (\d+), key: "(\w+)"', ts)}
+    assert client == CLASSES
 
 
 def test_rail_without_a_dlm_leaves_committed_files_alone(tmp_path):
@@ -71,11 +56,6 @@ def test_rail_without_a_dlm_leaves_committed_files_alone(tmp_path):
     rail.run(tile)
     assert committed.read_text() == '{"features": [1]}'
     assert sorted(p.name for p in out.iterdir()) == ["rail_t.geojson"]
-
-
-def test_a_polygon_clipped_away_yields_no_wall():
-    clipped = shapely.intersection(shapely.box(10, 10, 11, 11), shapely.box(0, 0, 1, 1))
-    assert lines_of(clipped) == []
 
 
 def test_platforms_come_from_railway_or_public_transport_on_a_railway():
@@ -181,308 +161,6 @@ def test_a_monument_under_a_tree_crown_has_no_relief():
     assert measure_relief(ndom, (0.0, 40.0), point, "statue") is not None
     ndom[15:19, 17:24] = 12.0  # a crown right beside it
     assert measure_relief(ndom, (0.0, 40.0), point, "statue") is None
-
-
-def _osm_tile(tmp_path, monkeypatch, ways: str):
-    """A 200 m tile with a DGM that rises 4 m between y = 80 and y = 100 and
-    an OSM XML extract holding `ways` over nodes 1–6: the flight's ends (1, 2),
-    and the corners of a 6 m × 30 m outline around it (3–6)."""
-    import numpy as np
-    import rasterio
-    from pyproj import Transformer
-
-    from bake.common import Tile
-
-    x0, y0 = 411000.0, 5656000.0
-    tile = Tile("t", (x0, y0, x0 + 200, y0 + 200), 25833, tmp_path / "raw", tmp_path / "data")
-    tile.dgm.parent.mkdir(parents=True)
-    rows = np.arange(200)[:, None] + 0.5  # row 0 = north
-    y = 200 - rows
-    z = np.broadcast_to(100 + 4 * np.clip((y - 80) / 20, 0, 1), (200, 200)).astype("float32")
-    with rasterio.open(
-        tile.dgm,
-        "w",
-        driver="GTiff",
-        width=200,
-        height=200,
-        count=1,
-        dtype="float32",
-        crs="EPSG:25833",
-        transform=tile.transform(200),
-    ) as dst:
-        dst.write(z, 1)
-    back = Transformer.from_crs(25833, 4326, always_xy=True)
-    pts = [(100, 105), (100, 75), (97, 75), (103, 75), (103, 105), (97, 105)]
-    nodes = "".join(
-        f'<node id="{i + 1}" lat="{lat:.9f}" lon="{lon:.9f}" version="1"/>'
-        for i, (px, py) in enumerate(pts)
-        for lon, lat in [back.transform(x0 + px, y0 + py)]
-    )
-    osm = tmp_path / "raw" / "osm" / "t.osm"
-    osm.parent.mkdir(parents=True)
-    osm.write_text(f'<?xml version="1.0"?><osm version="0.6">{nodes}{ways}</osm>')
-    monkeypatch.setattr(Tile, "osm_extract", lambda self: osm)
-    return tile
-
-
-def _read(tile, name):
-    import json
-
-    return json.loads((tile.data / "dlm" / f"{name}_t.geojson").read_text())
-
-
-def test_a_flight_is_oriented_uphill_with_its_landings_and_tagged_steps(tmp_path, monkeypatch):
-    from bake import stairs
-
-    # Drawn top → bottom; 25 steps over the 4 m rise is a 16 cm riser.
-    way = (
-        '<way id="1" version="1"><nd ref="1"/><nd ref="2"/>'
-        '<tag k="highway" v="steps"/><tag k="step_count" v="25"/><tag k="width" v="3 m"/></way>'
-    )
-    tile = _osm_tile(tmp_path, monkeypatch, way)
-    stairs.run(tile)
-    doc = _read(tile, "stairs")
-    assert doc["attribution"].startswith("©")
-    [f] = doc["features"]
-    (xa, ya), (xb, yb) = f["geometry"]["coordinates"]
-    assert ya < yb  # reversed to run bottom → top
-    assert f["properties"]["w"] == 3.0
-    assert f["properties"]["n"] == 25
-    lo, hi = f["properties"]["z"]
-    assert abs(lo - 100) < 0.1 and abs(hi - 104) < 0.1
-
-
-def test_a_flight_without_a_width_takes_it_from_its_outline_and_derives_steps(
-    tmp_path, monkeypatch
-):
-    from bake import stairs
-
-    ways = (
-        '<way id="1" version="1"><nd ref="2"/><nd ref="1"/><tag k="highway" v="steps"/>'
-        '<tag k="step_count" v="3"/></way>'  # a 1.3 m riser: a typo, derived instead
-        '<way id="2" version="1"><nd ref="3"/><nd ref="4"/><nd ref="5"/><nd ref="6"/>'
-        '<nd ref="3"/><tag k="area:highway" v="steps"/></way>'
-        '<way id="3" version="1"><nd ref="3"/><nd ref="4"/><tag k="highway" v="footway"/></way>'
-    )
-    tile = _osm_tile(tmp_path, monkeypatch, ways)
-    stairs.run(tile)
-    [f] = _read(tile, "stairs")["features"]
-    assert abs(f["properties"]["w"] - 6.0) < 0.05
-    assert f["properties"]["n"] == 25
-
-
-def test_flat_indoor_and_bridge_flights_are_left_out():
-    from bake.stairs import skipped, step_count, width_of
-
-    assert skipped('"indoor"=>"yes"')
-    assert skipped('"bridge"=>"yes"')
-    assert skipped('"level"=>"-1"')
-    assert not skipped('"level"=>"0"')
-    assert not skipped(None)
-    assert step_count(1.6, None) == 10
-    line = shapely.LineString([(0, 0), (10, 0)])
-    outline = shapely.box(-1, -3, 11, 3)  # 12 m × 6 m around a 10 m axis
-    assert width_of(line, None, [outline]) == 7.2  # area / length inside
-    assert width_of(line, '"width"=>"100"', [outline]) == 30.0
-
-
-def test_cliffs_come_through_as_walls_of_their_own_kind(tmp_path, monkeypatch):
-    from bake import walls
-
-    ways = (
-        '<way id="1" version="1"><nd ref="3"/><nd ref="4"/><tag k="natural" v="cliff"/></way>'
-        '<way id="2" version="1"><nd ref="5"/><nd ref="6"/><tag k="natural" v="tree_row"/></way>'
-    )
-    tile = _osm_tile(tmp_path, monkeypatch, ways)
-    walls.run(tile)
-    [f] = _read(tile, "walls")["features"]
-    assert f["properties"] == {"kind": "cliff", "h": 3.0}
-    assert walls.kind_of(None, None, '"natural"=>"cliff"') == "cliff"
-    assert walls.kind_of("retaining_wall", None, '"natural"=>"cliff"') == "retaining_wall"
-
-
-def test_fences_follow_the_walls_and_gates_on_a_line_come_last(tmp_path, monkeypatch):
-    from bake import walls
-
-    nodes = _osm_nodes(
-        11,
-        [
-            (100.2, 75, {"barrier": "gate"}),  # 20 cm off the fence: on it
-            (100, 150, {"barrier": "gate"}),  # on no line: dropped
-            (100, 105, {"barrier": "lift_gate"}),  # on the wall
-        ],
-    )
-    ways = (
-        '<way id="1" version="1"><nd ref="3"/><nd ref="4"/><tag k="barrier" v="fence"/>'
-        '<tag k="fence_type" v="chain_link"/></way>'
-        '<way id="2" version="1"><nd ref="6"/><nd ref="5"/><tag k="barrier" v="wall"/></way>'
-    )
-    tile = _osm_tile(tmp_path, monkeypatch, nodes + ways)
-    walls.run(tile)
-    doc = _read(tile, "walls")
-    assert doc["attribution"].startswith("©")
-    wall, fence, gate_on_fence, gate_on_wall = doc["features"]
-    # no material tagged on the site: concrete (walls.DEFAULT_MATERIAL)
-    assert wall["properties"] == {"kind": "wall", "h": 1.5, "mat": "concrete"}
-    assert fence["properties"] == {"kind": "fence", "type": "mesh", "h": 1.2}
-    assert gate_on_fence["properties"] == {"kind": "gate", "w": 1.2, "on": "fence"}
-    x, y = gate_on_fence["geometry"]["coordinates"]
-    assert abs(y - 5656075) < 0.02  # snapped onto the line
-    assert gate_on_wall["properties"] == {
-        "kind": "gate",
-        "w": 4.0,
-        "on": "wall",
-        "type": "lift_gate",
-    }
-
-
-def _on_tile_edge(tile, coords) -> float:
-    """Metres of a line that run along the tile's edge."""
-    xmin, ymin, xmax, ymax = tile.bounds
-    on = 0.0
-    for (xa, ya), (xb, yb) in zip(coords, coords[1:], strict=False):
-        for axis, v in ((0, xmin), (0, xmax), (1, ymin), (1, ymax)):
-            if abs((xa, ya)[axis] - v) < 0.005 and abs((xb, yb)[axis] - v) < 0.005:
-                on += math.dist((xa, ya), (xb, yb))
-    return on
-
-
-def test_an_area_across_the_tile_edge_stands_no_fence_on_the_seam(tmp_path, monkeypatch):
-    from bake import walls
-
-    # A fenced yard and a walled garden, both 20 m wide, straddling the east
-    # edge (x = 200) of the 200 m tile; the ring starts outside the tile.
-    corners = [(210, 20), (190, 20), (190, 40), (210, 40), (210, 60), (190, 60), (190, 80)]
-    nodes = _osm_nodes(11, [(x, y, {}) for x, y in corners + [(210, 80)]])
-    ways = (
-        '<way id="1" version="1"><nd ref="11"/><nd ref="12"/><nd ref="13"/><nd ref="14"/>'
-        '<nd ref="11"/><tag k="barrier" v="fence"/><tag k="area" v="yes"/></way>'
-        '<way id="2" version="1"><nd ref="15"/><nd ref="16"/><nd ref="17"/><nd ref="18"/>'
-        '<nd ref="15"/><tag k="barrier" v="wall"/><tag k="area" v="yes"/></way>'
-    )
-    tile = _osm_tile(tmp_path, monkeypatch, nodes + ways)
-    walls.run(tile)
-    lines = [f for f in _read(tile, "walls")["features"] if f["geometry"]["type"] == "LineString"]
-    assert sorted(f["properties"]["kind"] for f in lines) == ["fence", "wall"]
-    for f in lines:
-        coords = [tuple(c) for c in f["geometry"]["coordinates"]]
-        assert _on_tile_edge(tile, coords) == 0.0
-        # One open line inside the tile, 10 + 20 + 10 m: the ring's three
-        # sides in the tile, joined across its closing vertex.
-        assert coords[0] != coords[-1]
-        assert abs(shapely.LineString(coords).length - 40.0) < 0.05
-
-
-def test_a_neighbours_gate_whose_gap_reaches_over_the_seam_cuts_here_too(tmp_path, monkeypatch):
-    from bake import walls
-
-    # A fence across the east edge (x = 200), a 4 m gate on it 1 m past the
-    # edge (the neighbour's: its gap reaches 1 m into this tile) and a 1.2 m
-    # gate 1 m past the edge (its gap stays on the neighbour's side).
-    nodes = _osm_nodes(
-        11,
-        [
-            (180, 50, {}),
-            (220, 50, {}),
-            (201, 50, {"barrier": "gate", "width": "4"}),
-            (201, 50.1, {"barrier": "gate"}),
-        ],
-    )
-    ways = '<way id="1" version="1"><nd ref="11"/><nd ref="12"/><tag k="barrier" v="fence"/></way>'
-    tile = _osm_tile(tmp_path, monkeypatch, nodes + ways)
-    walls.run(tile)
-    gates = [f for f in _read(tile, "walls")["features"] if f["properties"]["kind"] == "gate"]
-    assert [g["properties"] for g in gates] == [
-        {"kind": "gate", "w": 4.0, "on": "fence", "seam": True}
-    ]
-    assert walls.reaches_in((0, 0, 200, 200), shapely.Point(202, 50), 4.0)
-    assert not walls.reaches_in((0, 0, 200, 200), shapely.Point(202.1, 50), 4.0)
-
-
-def test_fence_types_and_heights_come_from_the_tags():
-    from bake.walls import fence_height, fence_type, gate_width
-
-    assert fence_type("fence", None) == "railing"  # Dresden's wrought iron
-    assert fence_type("fence", '"fence_type"=>"wood"') == "picket"
-    assert fence_type("fence", '"fence_type"=>"metal"') == "railing"
-    assert fence_type("fence", '"fence_type"=>"concrete"') == "railing"
-    assert fence_type("handrail", '"fence_type"=>"wire"') == "rail"
-    assert fence_height("fence", '"height"=>"1.8 m"') == 1.8
-    assert fence_height("fence", '"height"=>"25"') == 1.2  # implausible: default
-    assert fence_height("handrail", None) == 1.0
-    assert gate_width("gate", '"width"=>"3"') == 3.0
-    assert gate_width("lift_gate", None) == 4.0
-    assert gate_width("gate", None) == 1.2
-
-
-class _Bank:
-    """A DGM stub: 100 m south of y = 0, rising 4 m to y = 20 across all x."""
-
-    def at(self, x, y):
-        return 100 + 4 * min(max(y / 20, 0), 1)
-
-
-class _Flat:
-    def at(self, x, y):
-        return 112.0
-
-
-def test_an_untagged_flight_spans_the_slope_between_its_walls():
-    from bake.stairs import flight
-
-    walls = [
-        shapely.LineString([(-7, -5), (-7, 25)]),  # 7 m left
-        shapely.LineString([(11, -5), (11, 25)]),  # 11 m right
-    ]
-    f = flight(shapely.LineString([(0, 1), (0, 19)]), None, [], _Bank(), walls, [])
-    w = f["properties"]["w"]
-    assert abs(w - (18 - 0.6)) < 1e-6
-    (x0, _), (x1, _) = f["geometry"]["coordinates"]
-    assert x0 == x1 == 2.0  # re-centred between the walls
-
-
-def test_walls_too_far_or_on_one_side_leave_the_default_width():
-    from bake.stairs import DEFAULT_W, flight
-
-    line = shapely.LineString([(0, 1), (0, 19)])
-    one_side = [shapely.LineString([(-3, -5), (-3, 25)])]
-    assert flight(line, None, [], _Bank(), one_side, [])["properties"]["w"] == DEFAULT_W
-    far = [shapely.LineString([(-30, -5), (-30, 25)]), shapely.LineString([(30, -5), (30, 25)])]
-    assert flight(line, None, [], _Bank(), far, [])["properties"]["w"] == DEFAULT_W
-
-
-def test_a_flight_onto_a_raised_area_the_dgm_lacks_takes_its_tagged_rise():
-    from bake.stairs import flight
-
-    terrace = shapely.box(20, -10, 60, 10)
-    tags = '"step_count"=>"41","step:height"=>"0.15","incline"=>"up","width"=>"20"'
-    line = shapely.LineString([(0, 0), (21, 0)])  # drawn upwards, ends on the terrace
-    f = flight(line, tags, [], _Flat(), [], [terrace])
-    assert f["properties"]["z"] == [112.0, 118.15]
-    assert f["properties"]["n"] == 41
-    assert f["terrace"] is terrace
-    # Without a raised area at its top, the flight stays as flat as the DGM.
-    assert flight(line, tags, [], _Flat(), [], []) is None
-
-
-def test_only_plain_raised_areas_count_as_terraces():
-    from bake.stairs import is_raised
-
-    assert is_raised({"other_tags": '"layer"=>"1","highway"=>"pedestrian"'})
-    assert not is_raised({"other_tags": '"layer"=>"-1"'})
-    assert not is_raised({"other_tags": '"layer"=>"0"'})
-    assert not is_raised({"other_tags": '"layer"=>"1"', "building": "yes"})
-    assert not is_raised({"other_tags": '"layer"=>"1","railway"=>"platform"'})
-    assert not is_raised({"other_tags": '"layer"=>"1"', "landuse": "railway"})
-
-
-def test_a_terrace_platform_fills_the_holes_of_its_area():
-    from bake.stairs import platform
-
-    promenade = shapely.Polygon(
-        [(0, 0), (40, 0), (40, 20), (0, 20)], holes=[[(10, 5), (20, 5), (20, 15), (10, 15)]]
-    )
-    assert platform(promenade).area == 800
 
 
 def test_furniture_kinds_come_from_the_tags():
@@ -697,78 +375,6 @@ def test_a_lot_without_an_aisle_runs_along_its_long_side():
     assert frames.anchor == [(5.0, 20.0)]
 
 
-def test_edge_distances_are_signed_and_smooth_across_a_diagonal():
-    from bake.edges import distance_px, edge_field, signed_distance_px
-
-    mask = np.zeros((9, 9), dtype=bool)
-    mask[4, 4] = True
-    d = distance_px(mask, 6)
-    assert d[4, 4] == 0 and d[4, 5] == 1 and d[4, 8] == 4
-    sd = signed_distance_px(np.arange(8)[None, :].repeat(8, 0) < 4, 6)
-    assert sd[0, 3] == 0.5 and sd[0, 4] == -0.5  # the edge between cols 3 and 4
-    # A diagonal road edge: the smoothed field's 0-isoline runs straight.
-    n = 64
-    rows, cols = np.mgrid[0:n, 0:n]
-    cls = np.where(cols > rows, 7, 4).astype(np.uint8)
-    field = edge_field(cls, 7, 1.0, n)
-    diag = field[np.arange(8, 56), np.arange(8, 56)]
-    assert np.all(np.abs(diag) < 0.6)
-
-
-def test_kerb_lines_follow_the_road_edge_with_the_road_on_their_left(tmp_path):
-    from bake.common import Tile
-    from bake.edges import edge_field, kerb_lines
-
-    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
-    cls = np.full((64, 64), 4, dtype=np.uint8)
-    cls[20:30, :] = 7  # an east-west road, rows 20–29 (y 34–44 m)
-    lines = kerb_lines(tile, edge_field(cls, 7, 1.0, 64), cls)
-    assert len(lines) == 2
-    for line in lines:
-        xy = np.asarray(line.coords)
-        d = xy[-1] - xy[0]
-        left = xy[len(xy) // 2] + np.array([-d[1], d[0]]) / np.hypot(*d)
-        assert 34.0 < left[1] < 44.0  # the road is on the left
-    # Water beside the road: no kerb on that side.
-    cls[30:, :] = 8
-    assert len(kerb_lines(tile, edge_field(cls, 7, 1.0, 64), cls)) == 1
-
-
-def test_a_road_out_of_town_has_no_kerb(tmp_path):
-    from bake.common import Tile
-    from bake.edges import Roads, edge_field, kerb_lines, on_ground, out_of_town
-
-    assert out_of_town("motorway_link", None)
-    assert out_of_town("secondary", '"source:maxspeed"=>"DE:rural"')
-    assert out_of_town("secondary", '"maxspeed"=>"70"')
-    assert not out_of_town("primary", '"maxspeed"=>"70","zone:traffic"=>"DE:urban"')
-    assert not out_of_town("residential", '"maxspeed"=>"30"')
-    assert not out_of_town("tertiary", '"maxspeed"=>"walk"')
-    assert out_of_town("secondary", '"maxspeed"=>"DE:rural"')
-    assert not out_of_town("primary", '"maxspeed"=>"DE:urban"')
-    # A motorway bridge over a town street is not the street's road.
-    assert not on_ground("motorway", '"bridge"=>"yes"')
-    assert on_ground("residential", '"bridge"=>"no"')
-    assert not on_ground("footway", None)
-
-    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
-    cls = np.full((64, 64), 1, dtype=np.uint8)
-    cls[20:30, :] = 7  # an east-west road through fields, y 34–44 m
-    field = edge_field(cls, 7, 1.0, 64)
-    axis = shapely.LineString([(0, 39), (64, 39)])
-    town = Roads([axis], [False])
-    assert len(kerb_lines(tile, field, cls, town)) == 2
-    assert kerb_lines(tile, field, cls, Roads([axis], [True])) == []
-    # A town street joining it: its kerbs are the street's, not the road's.
-    street = shapely.LineString([(32, 0), (32, 34)])
-    roads = Roads([shapely.LineString([(0, 39), (24, 39)]), street], [True, False])
-    assert roads.rural_at(np.array([[2.0, 34.0], [33.0, 10.0], [200.0, 200.0]])).tolist() == [
-        True,
-        False,
-        False,
-    ]
-
-
 def test_osm_islands_carve_only_road_texels_lawn_over_walk(tmp_path, monkeypatch):
     from bake import landcover
     from bake.common import Tile
@@ -845,140 +451,21 @@ def test_the_index_raster_names_a_court_inside_a_larger_ground(tmp_path):
     assert raster[33, 1].tolist()[:3] == [0, 1, 0]  # only the wider growth
 
 
-def _osm_nodes(first_id: int, pts) -> str:
-    """OSM XML nodes at tile-local metres (the `_osm_tile` origin), with tags."""
-    from pyproj import Transformer
-
-    back = Transformer.from_crs(25833, 4326, always_xy=True)
-    out = []
-    for i, (px, py, tags) in enumerate(pts):
-        lon, lat = back.transform(411000.0 + px, 5656000.0 + py)
-        body = "".join(f'<tag k="{k}" v="{v}"/>' for k, v in tags.items())
-        out.append(
-            f'<node id="{first_id + i}" lat="{lat:.9f}" lon="{lon:.9f}" version="1">{body}</node>'
-        )
-    return "".join(out)
+# --- sports grounds (W20) -----------------------------------------------------
 
 
-def _lod2_box(first: int) -> dict:
-    """A box solid over the eight vertices from `first`: ground, roof, walls."""
-    a, b, c, d, e, f, g, k = range(first, first + 8)
-    return {
-        "type": "Solid",
-        "lod": "2",
-        "boundaries": [
-            [[[a, d, c, b]], [[e, f, g, k]], [[a, b, f, e]], [[b, c, g, f]], [[c, d, k, g]]]
-        ],
-        "semantics": {
-            "surfaces": [
-                {"type": "GroundSurface"},
-                {"type": "RoofSurface"},
-                {"type": "WallSurface"},
-            ],
-            "values": [[0, 1, 2, 2, 2]],
-        },
-    }
+def test_a_block_of_tennis_courts_is_a_court_each_with_its_net():
+    from bake.sport import COURT, TENNIS, courts
 
-
-def _lod2_city(tile, boxes: dict) -> None:
-    """A CityJSON for the `_osm_tile` tile: `boxes` maps an id to its
-    (x0, y0, x1, y1) in tile-local metres; `shop` is a part of `shop-bldg`."""
-    import json
-
-    verts, objects = [], {}
-    for oid, (x0, y0, x1, y1) in boxes.items():
-        first = len(verts)
-        ring = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
-        verts += [[411000 + x, 5656000 + y, 100] for x, y in ring]
-        verts += [[411000 + x, 5656000 + y, 110] for x, y in ring]
-        objects[oid] = {"type": "BuildingPart", "geometry": [_lod2_box(first)]}
-    objects["shop"]["parents"] = ["shop-bldg"]
-    objects["shop-bldg"] = {"type": "Building", "children": ["shop"]}
-    path = tile.data / "cityjson" / f"lod2_{tile.id}.city.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"type": "CityJSON", "vertices": verts, "CityObjects": objects}))
-
-
-def test_shops_on_the_ground_floor_and_listed_outlines_flag_the_lod2_objects(tmp_path, monkeypatch):
-    import json
-
-    from bake import osm_buildings
-
-    heritage = [(10, 10, {}), (40, 10, {}), (40, 40, {}), (10, 40, {})]
-    nodes = _osm_nodes(
-        11,
-        [
-            (150, 150, {"shop": "bakery"}),  # inside `shop`
-            (163, 150, {"amenity": "cafe"}),  # 1 m off `other`'s facade: snapped
-            (25, 25, {"shop": "clothes", "level": "1"}),  # upstairs: dropped
-            (100, 190, {"shop": "kiosk"}),  # on no building
-            *heritage,
-            # two address points on `shop`, in no particular order
-            (145, 145, {"addr:street": "Prager Straße", "addr:housenumber": "11"}),
-            (155, 145, {"addr:street": "Prager Straße", "addr:housenumber": "3"}),
-        ],
-    )
-    outline = "".join(f'<nd ref="{i}"/>' for i in (15, 16, 17, 18, 15))
-    tags = (
-        '<tag k="building" v="yes"/><tag k="heritage" v="4"/><tag k="name" v="Altes Haus"/>'
-        '<tag k="addr:street" v="Am Markt"/><tag k="addr:housenumber" v="2"/>'
-        '<tag k="building:levels" v="3"/>'
-    )
-    way = f'<way id="9" version="1">{outline}{tags}</way>'
-    tile = _osm_tile(tmp_path, monkeypatch, nodes + way)
-    _lod2_city(
-        tile,
-        {"shop": (140, 140, 160, 160), "other": (164, 140, 180, 160), "old": (15, 15, 35, 35)},
-    )
-    osm_buildings.run(tile)
-    doc = json.loads((tile.data / "dlm" / "osmbuild_t.json").read_text())
-    assert doc["attribution"].startswith("©")
-    assert doc["objects"] == {
-        # the address points, numbers in natural order; never on the root
-        "shop": {"shop": 1, "addr": "Prager Straße 3, 11"},
-        "shop-bldg": {"shop": 1},  # the part's root
-        "other": {"shop": 1},
-        # the outline covers all of it: listed, named, addressed, storeys,
-        # and its key, which every tree under it shares (ensembles.ts)
-        "old": {
-            "heritage": 1,
-            "name": "Altes Haus",
-            "addr": "Am Markt 2",
-            "levels": 3,
-            "outline": "w9",
-        },
-    }
-    assert doc["meta"]["trees_outlined"] == 1
-    assert doc["meta"]["shop_points_placed"] == 2
-    assert doc["meta"]["objects_addressed"] == 2
-
-
-def test_address_lines_group_numbers_by_street_and_storeys_parse():
-    from bake.osm_buildings import address, address_line, levels_of
-
-    assert address('"addr:street"=>"Hauptstraße","addr:housenumber"=>"1a"') == ("Hauptstraße", "1a")
-    assert address('"addr:street"=>"Hauptstraße"') is None
-    line = address_line([("Hauptstraße", "10"), ("Am Markt", "2"), ("Hauptstraße", "9")])
-    assert line == "Hauptstraße 9, 10 · Am Markt 2"
-    assert levels_of('"building:levels"=>"4"') == 4
-    assert levels_of('"building:levels"=>"2,5"') == 2
-    assert levels_of('"building:levels"=>"many"') is None
-    assert levels_of('"building:levels"=>"inf"') is None
-    assert levels_of('"building:levels"=>"nan"') is None
-    assert levels_of(None) is None
-
-
-def test_only_ground_floor_levels_count_as_street_shops():
-    from bake.osm_buildings import is_shop, on_ground_floor
-
-    assert on_ground_floor(None)
-    assert on_ground_floor('"level"=>"0"')
-    assert on_ground_floor('"level"=>"-1;0"')
-    assert on_ground_floor('"level"=>"EG"')  # unreadable: kept
-    assert not on_ground_floor('"level"=>"1"')
-    assert not on_ground_floor('"level"=>"-1"')
-    assert is_shop("bakery", None) and is_shop(None, "pub")
-    assert not is_shop("no", None) and not is_shop(None, "bench")
+    block = shapely.box(0, 0, 73.2, 36.6)  # four courts side by side
+    parts = courts(block, TENNIS)
+    assert len(parts) == 4
+    for p in parts:
+        w = p.bounds[2] - p.bounds[0]
+        h = p.bounds[3] - p.bounds[1]
+        assert abs(w - 18.3) < 0.01 and abs(h - 36.6) < 0.01
+    assert courts(shapely.box(0, 0, 36.6, 25), TENNIS) == [shapely.box(0, 0, 36.6, 25)]
+    assert len(courts(block, COURT)) == 1
 
 
 DRESDEN = REGISTERS["dresden"].fields
@@ -1259,9 +746,8 @@ def test_every_register_queries_each_of_its_feature_types_in_its_own_crs():
     for reg in REGISTERS.values():
         for type_name in reg.type_names:
             q = reg.query(type_name, (0.0, 0.0, 2000.0, 2000.0), reg.epsg, resultType="hits")
-            assert (
-                f"EPSG%3A%3A{reg.epsg}" in q and f"TypeNames={type_name.replace(':', '%3A')}" in q
-            )
+            assert f"EPSG%3A%3A{reg.epsg}" in q and "resultType=hits" in q
+            assert f"TypeNames={type_name.replace(':', '%3A')}" in q
 
 
 def test_the_registers_are_the_ones_the_site_type_names():

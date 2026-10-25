@@ -8,24 +8,14 @@ import type { CultivatedFeature, TreeFeature } from "./features";
 import { TREE_ARCHETYPES } from "./tree-inventory";
 import { TREE_GENERA } from "./tree-season";
 
-/** The colony raster's G byte: 0 none, else 1 + the plots' axis over
+/** The colony raster's G byte (decoded by the terrain's fragment pass,
+ *  cultivated-layer.ts): 0 none, else 1 + the plots' axis over
  *  0–180° in 0..126: the way the colony's mapped paths mostly run, its
  *  long axis where too few are mapped, a mapped parcel's own long axis. */
 export const COLONY_AXIS_STEPS = 126;
 /** R: 128 + this many bytes per metre of the signed distance to the garden
  *  land's edge (positive inside), 1..255; 0 farther outside. */
 export const COLONY_EDGE_SCALE = 20;
-
-/** Decodes the R byte: metres to the garden land's edge (+ inside), or
- *  null where it is farther outside than the byte holds. */
-export function colonyEdgeMetres(code: number): number | null {
-  return code <= 0 ? null : (code - 128) / COLONY_EDGE_SCALE;
-}
-
-/** Decodes the G byte: the axis (radians from east), null where none. */
-export function colonyAxis(code: number): number | null {
-  return code <= 0 ? null : ((code - 1) / COLONY_AXIS_STEPS) * Math.PI;
-}
 
 /**
  * The garden texture's measures (the shader's constants). Plots are the

@@ -3,6 +3,7 @@ import {
   TRAFFIC_HOURS,
   trafficFactor,
   trafficFactorAt,
+  trafficHourStatus,
   trafficSpeed,
 } from "./traffic-hours";
 
@@ -50,4 +51,14 @@ test("an instant reads its own day kind", () => {
 test("the light slows as the street fills", () => {
   expect(trafficSpeed(0.2)).toBe(trafficSpeed(1));
   expect(trafficSpeed(1.8)).toBeLessThan(trafficSpeed(1) * 0.6);
+});
+
+test("the HUD's hour is the scene's local time, zero-padded, with its day", () => {
+  // Sunday 4 October 2026, 07:05 local
+  const date = new Date(2026, 9, 4, 7, 5);
+  expect(trafficHourStatus(date)).toEqual({
+    kind: "sunday",
+    factor: trafficFactor(date),
+    time: "07:05",
+  });
 });

@@ -5,11 +5,27 @@ import {
   SHADOW_MAX_RADIUS,
   shadowDeadZone,
   shadowFocusAhead,
-  shadowStreamError,
   shadowStreamResolution,
-  STREAM_ERROR_TARGET,
 } from "./shadow-fit";
 import { COARSE_TERRAIN_ERROR, TILE_ERROR } from "./tileset";
+
+/** 3DTilesRendererJS's error target (px), which the viewer keeps as its
+ *  base (the memory governor scales it up, never down). */
+const STREAM_ERROR_TARGET = 16;
+
+/**
+ * The screen-space error (px) the tile renderer gives a node of
+ * `geometricError` (m) under the shadow camera at half-size `radius` (m),
+ * streamed at `px`: its pixel is the frustum's width over the resolution —
+ * the library's measure for an orthographic camera, whatever the distance.
+ */
+function shadowStreamError(
+  geometricError: number,
+  radius: number,
+  px: number
+): number {
+  return geometricError / ((2 * radius) / px);
+}
 
 test("eye level keeps the walker's radius", () => {
   expect(fitShadowRadius(1.7, SHADOW_BASE_RADIUS)).toBe(SHADOW_BASE_RADIUS);

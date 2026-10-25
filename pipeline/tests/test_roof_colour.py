@@ -1,7 +1,15 @@
-import numpy as np
+import json
+from datetime import UTC, date, datetime
 
-from bake.dop_light import sun_vector
-from bake.roof_colour import Light, median_colour, ring_slope
+import numpy as np
+import pytest
+import rasterio
+from rasterio.transform import from_origin
+
+from bake import roof_colour
+from bake.common import Tile
+from bake.dop_light import SunFit, solar_position, sun_vector
+from bake.roof_colour import Light, SunReading, median_colour, ring_slope
 
 
 def _metres(points):
@@ -564,3 +572,169 @@ def test_a_part_on_the_ground_in_shade_takes_its_buildings_roof(tmp_path):
     rgb[:, 15:30, 70:85] = np.array([30, 40, 70])[:, None, None]
     out = _run(tmp_path, top_z=0.0, rgb=rgb, city=_stacked())
     assert out["roofs"]["porch"] == out["roofs"]["b"]
+
+
+def _reading(fit, days=(date(2024, 3, 19),), counts=None):
+    return SunReading(list(days), (13.74, 51.05), fit, counts)
+
+
+def test_a_tile_whose_fit_is_a_guess_takes_its_flights(tmp_path, monkeypatch):
+    from bake.common import Tile
+
+    def tile(i):
+        return Tile(f"t{i}", (0.0, 0.0, 2000.0, 2000.0), 25833, tmp_path, tmp_path)
+
+    t0, t1, t2 = tile(0), tile(1), tile(2)
+    noon = datetime(2024, 3, 19, 11, 10, tzinfo=UTC)
+    guess = SunFit(120.0, 22.0, 0.3, 1.4)
+    sure = SunFit(180.0, 38.7, 0.5, 4.0, noon)
+    readings = {
+        "t0": _reading(guess, counts={noon: (10, 100)}),
+        "t1": _reading(sure, counts={noon: (50, 100)}),
+        # another day's flight is no peer
+        "t2": _reading(sure, days=(date(2024, 4, 7),), counts={noon: (1, 100)}),
+    }
+    monkeypatch.setattr(roof_colour, "sun_reading", lambda t, *a, **k: readings[t.id])
+    monkeypatch.setattr(
+        roof_colour, "flight_days", lambda raw, tid: readings[tid].days if tid in readings else []
+    )
+    sun, source = roof_colour.flight_sun(t0, [t0, t1, t2], np.zeros((3, 256)))
+    assert source == "pooled"
+    assert abs(sun[0] - solar_position(noon, 13.74, 51.05)[0]) < 1e-6
+    sun, source = roof_colour.flight_sun(t1, [t0, t1, t2], np.zeros((3, 256)))
+    assert source == "own" and sun == (180.0, 38.7)
+    # no day known: a guess is no sun
+    readings["t0"] = _reading(guess, days=())
+    assert roof_colour.flight_sun(t0, [t0, t1], np.zeros((3, 256))) == (None, None)
+
+
+def test_an_overcast_flight_corrects_no_slope():
+    north = (0.0, 0.707, 0.707)
+    light = Light(np.zeros((1, 1), bool), (180, 35), 1.87, "own")
+    assert light.overcast
+    assert light.gain(north) == 1.0
+    assert not light.faces_away(north)
+    assert light.gains(np.array([north])).tolist() == [1.0]
+    # the sun is still there for the lean fit
+    assert light.sun == light.lean_sun == sun_vector(180, 35)
+    sunny = Light(np.zeros((1, 1), bool), (180, 35), 6.0, "own")
+    assert not sunny.overcast and sunny.faces_away(north) and sunny.gain(north) > 1
+
+
+def test_an_unsure_fit_still_finds_the_lean_but_scales_no_face():
+    north = (0.0, 0.707, 0.707)
+    light = Light(np.zeros((1, 1), bool), None, 6.0, None, lean_sun=(240, 30))
+    assert light.sun is None and light.lean_sun == sun_vector(240, 30)
+    assert light.gains(np.array([north])).tolist() == [1.0]
+    assert not light.faces_away(north)
+    assert Light(np.zeros((1, 1), bool), None, 6.0).lean_sun is None
+
+
+# --- G5: the roof colour of the appended roofs ----------------------------------
+
+
+def test_an_appended_roof_is_read_at_its_top_a_pent_one_by_its_corners():
+    ring = [[0, 0], [4, 0], [4, 3], [0, 3], [0, 0]]
+    flat, base = roof_colour.appended_face(
+        {"z": 10.0, "h": 2.5}, {"type": "Polygon", "coordinates": [ring]}
+    )
+    assert base == 10.0 and flat[0].normal == (0.0, 0.0, 1.0)
+    assert {p[2] for p in flat[0].rings[0]} == {12.5}
+    pent, _ = roof_colour.appended_face(
+        {"z": 10.0, "h": 2.5, "hc": [2.0, 3.0, 3.0, 2.0]},
+        {"type": "Polygon", "coordinates": [ring]},
+    )
+    outer = pent[0].rings[0]
+    assert [p[2] for p in outer] == [12.0, 13.0, 13.0, 12.0, 12.0]
+    # rising to the east: its normal leans west
+    assert pent[0].normal[0] < -0.1 and pent[0].normal[2] > 0.9
+    multi, _ = roof_colour.appended_face(
+        {"z": 0.0, "h": 3.0}, {"type": "MultiPolygon", "coordinates": [[ring], [ring]]}
+    )
+    assert len(multi) == 2
+    assert roof_colour.appended_face({"z": 0.0, "h": 3.0}, {"type": "Point"}) is None
+
+
+def _colour_tile(tmp_path, rgb: np.ndarray) -> Tile:
+    """A 20 m tile with a 0.2 m DOP `rgb` (3 × 100 × 100), no LoD2 building,
+    a shed at (5–9, 5–9) and the structures file: a building at (12–17,
+    12–17), a mast and a relief."""
+    tile = Tile("t", (0.0, 0.0, 20.0, 20.0), 25833, tmp_path / "raw", tmp_path / "data")
+    dop = tile.raw_raster("dop")
+    dop.parent.mkdir(parents=True)
+    with rasterio.open(
+        dop,
+        "w",
+        driver="GTiff",
+        width=100,
+        height=100,
+        count=3,
+        dtype="uint8",
+        crs="EPSG:25833",
+        transform=from_origin(0, 20, 0.2, 0.2),
+    ) as out:
+        out.write(rgb)
+    city = {"type": "CityJSON", "vertices": [], "CityObjects": {}}
+    tile.cityjson.parent.mkdir(parents=True)
+    tile.cityjson.write_text(json.dumps(city))
+
+    def square(x0, y0, x1, y1):
+        return {
+            "type": "Polygon",
+            "coordinates": [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]],
+        }
+
+    def fc(features):
+        return json.dumps({"type": "FeatureCollection", "features": features})
+
+    dlm = tile.data / "dlm"
+    dlm.mkdir(parents=True)
+    shed = {"type": "Feature", "properties": {"z": 100.0, "h": 2.5}, "geometry": square(5, 5, 9, 9)}
+    (dlm / "smallbuild_t.geojson").write_text(fc([shed]))
+    gaps = [
+        {
+            "type": "Feature",
+            "properties": {"kind": "mast", "z": 100.0, "h": 20.0},
+            "geometry": {"type": "Point", "coordinates": [2.0, 2.0]},
+        },
+        {
+            "type": "Feature",
+            "properties": {"kind": "relief", "z": 100.0, "h": 5.0, "of": "x"},
+            "geometry": square(1, 12, 4, 15),
+        },
+        {
+            "type": "Feature",
+            "properties": {"kind": "building", "z": 100.0, "h": 9.0},
+            "geometry": square(12, 12, 17, 17),
+        },
+    ]
+    (dlm / "structures_t.geojson").write_text(fc(gaps))
+    return tile
+
+
+def test_the_scans_sheds_and_the_missing_buildings_get_their_photos_colour(tmp_path):
+    rgb = np.full((3, 100, 100), 120, np.uint8)
+    rgb[:, 55:75, 25:45] = np.array([200, 60, 50])[:, None, None]  # the shed's red
+    rgb[:, 15:40, 60:85] = np.array([140, 150, 160])[:, None, None]  # the building's zinc
+    tile = _colour_tile(tmp_path, rgb)
+    roof_colour.run(tile, erode=3)
+    out = json.loads(tile.out("dop", "roofcolor_t.json").read_text())
+    (scan,) = out["scan"]
+    assert scan[:2] == [0, 100.0]
+    # the shed's sRGB (200, 60, 50) in linear light is (0.578, 0.045, 0.032);
+    # the balance on to grey moves each by a few per cent
+    assert scan[2:] == pytest.approx([0.578, 0.045, 0.032], rel=0.08)
+    # the mast and the relief are not read, the building is (its index kept)
+    (gap,) = out["gaps"]
+    assert gap[:2] == [2, 100.0]
+    assert gap[2] < gap[4]
+    assert out["meta"]["scan_sampled"] == 1 and out["meta"]["gaps_sampled"] == 1
+
+
+def test_a_shed_in_shadow_keeps_the_palettes_roof(tmp_path):
+    rgb = np.full((3, 100, 100), 120, np.uint8)
+    rgb[:, 50:80, 20:50] = np.array([30, 40, 70])[:, None, None]  # in shade
+    tile = _colour_tile(tmp_path, rgb)
+    roof_colour.run(tile, erode=3)
+    out = json.loads(tile.out("dop", "roofcolor_t.json").read_text())
+    assert out["scan"] == []

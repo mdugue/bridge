@@ -69,11 +69,6 @@ class Anchors:
 _ANCHORS: dict[tuple[Path, Path | None, int], tuple] = {}
 
 
-def gli_raster(red: np.ndarray, green: np.ndarray, blue: np.ndarray) -> np.ndarray:
-    """The visible-band stand-in for the NDVI, on its 0..255 scale."""
-    return _byte(_gli(red, green, blue))
-
-
 def _gli(red: np.ndarray, green: np.ndarray, blue: np.ndarray) -> np.ndarray:
     gli = (2 * green - red - blue) / (2 * green + red + blue + 1.0)
     return GLI_SCALE * gli + GLI_OFFSET

@@ -136,3 +136,18 @@ test("after the visitor's no, nothing goes out", async () => {
   expect(fetched).toBe(0);
   setReportsDeclined(false);
 });
+
+// A browser that sends Global Privacy Control has said no for every site
+// (ADR 0045): no report starts, whatever the visitor's choice here says.
+test("under Global Privacy Control nothing starts and nothing goes out", async () => {
+  const { reportsState, setReportsDeclined } = await import("./report-choice");
+  const { crashReportsOn, startCrashReports } = await import("./crash-reports");
+  setReportsDeclined(false);
+  (g.navigator as { globalPrivacyControl?: boolean }).globalPrivacyControl =
+    true;
+  expect(reportsState()).toBe("gpc");
+  expect(crashReportsOn()).toBe(false);
+  expect(startCrashReports()).toBeNull();
+  expect(beacons).toEqual([]);
+  expect(fetched).toBe(0);
+});

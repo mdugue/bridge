@@ -37,7 +37,7 @@ export interface PocDebugInfo {
   ready: boolean;
   /**
    * True while the camera is moving and the post stack is running reduced
-   * (AO + DoF skipped) — see lib/city/regression.ts.
+   * (DoF skipped) — see lib/city/regression.ts.
    */
   regressed?: boolean;
   /** Frames on which the sun's shadow map was redrawn; e2e asserts it stays far below `frames` while walking. */

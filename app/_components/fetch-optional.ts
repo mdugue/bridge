@@ -69,8 +69,6 @@ export interface FetchBytesOptions {
   gunzip?: boolean;
   /** the rest of the request (`cache`, headers) */
   init?: RequestInit;
-  /** how long an attempt may go without a byte (default `STALL_MS`) */
-  stallMs?: number;
 }
 
 const NO_BYTES = new Uint8Array(0);
@@ -157,11 +155,10 @@ async function attempt(
 }> {
   const stall = new AbortController();
   const { signal, release } = eitherSignal(opts.signal, stall.signal);
-  const stallMs = opts.stallMs ?? STALL_MS;
-  let timer = setTimeout(() => stall.abort(), stallMs);
+  let timer = setTimeout(() => stall.abort(), STALL_MS);
   const touch = () => {
     clearTimeout(timer);
-    timer = setTimeout(() => stall.abort(), stallMs);
+    timer = setTimeout(() => stall.abort(), STALL_MS);
   };
   try {
     const res = await fetch(url, { ...opts.init, signal });
@@ -180,7 +177,7 @@ async function attempt(
     return { status: res.status, value: bytes };
   } catch (err) {
     if (stall.signal.aborted && !opts.signal?.aborted) {
-      throw new StalledError(url, stallMs);
+      throw new StalledError(url, STALL_MS);
     }
     throw err;
   } finally {

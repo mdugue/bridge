@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { DRESDEN } from "../../sites/dresden";
 import {
   packSportTable,
@@ -23,12 +24,10 @@ interface CommittedTable extends SportTable {
   surfaces: Record<string, string>;
 }
 
-const DLM = `${siteDataDir(DRESDEN)}/dlm`;
+const DLM = join(import.meta.dir, "../..", siteDataDir(DRESDEN), "dlm");
 const committed = readdirSync(DLM)
   .filter((f) => /^sport_.*\.json$/u.test(f))
-  .map(
-    (f) => JSON.parse(readFileSync(`${DLM}/${f}`, "utf8")) as CommittedTable
-  );
+  .map((f) => JSON.parse(readFileSync(join(DLM, f), "utf8")) as CommittedTable);
 
 const asMap = (keys: readonly string[]) =>
   Object.fromEntries(keys.map((k, i) => [String(i), k]));

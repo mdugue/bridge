@@ -11,7 +11,6 @@ import {
   type MarkingTable,
   markingKindId,
   packMarkingTable,
-  stripeCoverage,
 } from "./markings";
 import { sideFileSource, tileArtifacts, tileIds } from "./tile";
 
@@ -65,14 +64,6 @@ test("a row packs into two texels, unknown kinds as none", () => {
   expect(data[3]).toBeCloseTo(1, 9);
   expect(Array.from(data.slice(8, 12))).toEqual([5, 2, 1, 0]);
   expect(data[14]).toBe(0);
-});
-
-test("stripes average to their share of the period far off", () => {
-  expect(stripeCoverage(0.25, 0.5, 1, 0.01)).toBeCloseTo(1, 9);
-  expect(stripeCoverage(0.75, 0.5, 1, 0.01)).toBeCloseTo(0, 9);
-  for (const x of [0, 0.3, 17.7]) {
-    expect(stripeCoverage(x, 0.5, 1, 10)).toBeCloseTo(0.5, 2);
-  }
 });
 
 test("every along-street pattern divides the paving raster's period", () => {

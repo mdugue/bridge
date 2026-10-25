@@ -75,7 +75,7 @@ export function twinOf(file: string): { lang: Lang; file: string } | null {
 }
 
 /** POSIX `join` + `normalize` without node:path, for the browserless core. */
-export function joinPath(dir: string, rel: string): string {
+function joinPath(dir: string, rel: string): string {
   const out: string[] = [];
   for (const part of `${dir}/${rel}`.split("/")) {
     if (part === "" || part === ".") {

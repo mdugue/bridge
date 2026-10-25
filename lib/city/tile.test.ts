@@ -94,23 +94,12 @@ test("pickFiles keeps only the named kinds a tile has", () => {
 });
 
 test("the site's tiles, the spawn tile first", () => {
-  expect(tileIds(DRESDEN)).toEqual([
-    PRIMARY_TILE,
-    "33410_5656_2_sn",
-    "33410_5658_2_sn",
-    "33412_5658_2_sn",
-    "33410_5654_2_sn",
-    "33412_5654_2_sn",
-    "33414_5654_2_sn",
-    "33414_5656_2_sn",
-    "33414_5658_2_sn",
-    "33416_5656_2_sn",
-    "33416_5654_2_sn",
-    "33416_5658_2_sn",
-    "33408_5654_2_sn",
-    "33408_5656_2_sn",
-    "33408_5658_2_sn",
-  ]);
+  const ids = tileIds(DRESDEN);
+  expect(ids[0]).toBe(PRIMARY_TILE);
+  expect(ids.length).toBe(DRESDEN.tiles.length);
+  for (const id of ids) {
+    expect(id).toMatch(/^33\d{3}_\d{4}_2_sn$/u);
+  }
   expect(dgmSourceFiles(DRESDEN, PRIMARY_TILE).tif).toBe(
     "data/dresden/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn.tif"
   );

@@ -640,6 +640,7 @@ the safety levels 1, 2 and 3:
 | Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
 | Land-cover rasters | L0 4096², its splat 2048² (85 → 21 MiB with mips, since 2026-10-10), L1 1024² | L0 2048², L1 1024²; no sports raster | as the tier |
 | GTAO samples | 16 | 8 | 8 |
+| Frames behind the sidebar (`lib/city/frame-pace.ts`) | every frame (the panel floats beside the scene) | 12 fps while its sheet covers the scene, none while it scrolls and 250 ms after (the scene shared the GPU with the compositor drawing the scroll, and the scroll lagged the finger); the sheet's backdrop is not blurred | as the tier |
 | Rich crowns at most (`vegetation-lod.ts`) | 2 500 (≈ 3.6 M triangles) | 800 | as the tier |
 | Real lamp lights (`LAMP_LIGHTS`, every lit fragment shades each, by day too) | 3 | 1 | as the tier |
 | The walker's lantern (`lantern.ts`, one more light) | with a 512² cube shadow | no shadow | as the tier |

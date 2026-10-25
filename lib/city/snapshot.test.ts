@@ -205,20 +205,6 @@ test("unknown look keys are preserved", () => {
   }
 });
 
-test("a legacy snapshot with only the six original keys is accepted", () => {
-  const r = parseSnapshot(
-    withLook({
-      transparencyPct: 20,
-      fogPct: 30,
-      gradingPct: 40,
-      contactPct: 50,
-      grainPct: 60,
-      dof: false,
-    })
-  );
-  expect(r.ok).toBe(true);
-});
-
 test("unknown versions are accepted", () => {
   expect(parseSnapshot(JSON.stringify({ ...valid, v: 7 })).ok).toBe(true);
 });

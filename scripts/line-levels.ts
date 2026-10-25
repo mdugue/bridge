@@ -64,7 +64,7 @@ import type { Site } from "../lib/city/site";
 import { sampleHeightfield } from "../lib/city/terrain-geometry";
 import { dgmSourceFiles, sideFileSource, tileIds } from "../lib/city/tile";
 import { ownsPoint } from "../lib/city/tileset";
-import { readDgm } from "./bake-tiles";
+import { type Dgm, readDgm } from "./bake-tiles";
 
 const at = (path: string) => join(process.cwd(), path);
 
@@ -306,19 +306,28 @@ function siteBridges(site: Site): BridgeFeature[] {
   return all;
 }
 
-/** The site's ground: every tile's native DGM. */
-async function siteDgm(
-  site: Site
+/** A tile's native DGM from its TIFF and world file. */
+export type ReadDgm = (tif: string, tfw: string) => Promise<Dgm>;
+
+async function decodeDgm(tif: string, tfw: string): Promise<Dgm> {
+  const bytes = readFileSync(tif);
+  return readDgm(
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
+    "native"
+  );
+}
+
+/** The site's ground: every tile's native DGM, read by `read` (the checks
+ *  pass scripts/dgm-cache.ts's, which the build does not import). */
+export async function siteDgm(
+  site: Site,
+  read: ReadDgm = decodeDgm
 ): Promise<(x: number, y: number) => number | null> {
   const grounds = await Promise.all(
     tileIds(site).map(async (tile) => {
       const src = dgmSourceFiles(site, tile);
-      const tif = readFileSync(at(src.tif));
-      const dgm = await readDgm(
-        tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength),
-        existsSync(at(src.tfw)) ? readFileSync(at(src.tfw), "utf8") : null,
-        "native"
-      );
+      const dgm = await read(at(src.tif), at(src.tfw));
       return { bounds: dgm.bounds, field: dgm };
     })
   );
@@ -615,9 +624,10 @@ export interface JumpReport {
 export async function measureJumps(
   site: Site,
   levels?: SiteLevels,
-  minStep = LEVEL_JUMP_M
+  minStep = LEVEL_JUMP_M,
+  read?: ReadDgm
 ): Promise<JumpReport> {
-  const heightAt = await siteDgm(site);
+  const heightAt = await siteDgm(site, read);
   const solved = levels ?? (await siteLineLevels(site, heightAt));
   const decks = siteDecks(site);
   const { pieces, of } = sitePieces(site);

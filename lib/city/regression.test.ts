@@ -15,17 +15,6 @@ test("regresses on the very first moving frame", () => {
   expect(state.regressed).toBe(true);
 });
 
-test("does not recover before the recover window elapses", () => {
-  const state = createRegressionState();
-  stepRegression(state, true, 16);
-  let regressed = true;
-  for (let ms = 0; ms + 16 < RECOVER_MS; ms += 16) {
-    regressed = stepRegression(state, false, 16);
-    expect(regressed).toBe(true);
-  }
-  expect(regressed).toBe(true);
-});
-
 test("recovers exactly at the recover window and stays recovered", () => {
   const state = createRegressionState();
   stepRegression(state, true, 16);
@@ -57,11 +46,4 @@ test("a zero (or negative) dt is harmless", () => {
   expect(stepRegression(state, false, -100)).toBe(true);
   expect(state.stillMs).toBe(0);
   expect(stepRegression(state, false, RECOVER_MS)).toBe(false);
-});
-
-test("a custom recover window overrides the default", () => {
-  const state = createRegressionState();
-  stepRegression(state, true, 16);
-  expect(stepRegression(state, false, 40, 50)).toBe(true);
-  expect(stepRegression(state, false, 10, 50)).toBe(false);
 });

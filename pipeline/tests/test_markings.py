@@ -6,23 +6,37 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import shapely
 from PIL import Image
 
-from bake.common import Tile
+from bake import markings
+from bake.common import Tile, feature, geometry_json, write_geojson
 from bake.markings import (
+    CENTRE,
+    CENTRE_SOLID,
+    CYCLE,
+    CYCLE_SOLID,
+    CYCLE_WIDE,
     FURT,
+    KERB,
+    LANE_LINES,
+    RED,
     STOP,
     ZEBRA,
+    centre_bits,
     crossing_kind,
+    cycle_lane_bits,
     cycle_sides,
     has_centre_line,
     index_raster,
+    is_red_track,
     junctions,
     merge_rows,
     paint_lost,
     run,
     signal_direction,
 )
+from tests.synthetic import SIZE, dlm_tile, tile_line
 
 
 def test_crossing_paint_follows_the_markings_then_the_crossing_type():
@@ -147,8 +161,14 @@ def test_cycle_lanes_mark_their_side_and_the_centre_line_its_middle(tmp_path, mo
 def test_no_extract_leaves_the_files_alone(tmp_path, monkeypatch):
     tile = Tile("t", (0, 0, 200, 200), 25833, tmp_path / "raw", tmp_path / "data")
     monkeypatch.setattr(Tile, "osm_extract", lambda self: None)
+    out = tmp_path / "data" / "dlm"
+    out.mkdir(parents=True)
+    (out / "markings_t.json").write_text('{"features": [1]}')
+    (out / "markings_t.png").write_bytes(b"png")
     run(tile, px=200)
-    assert not (tmp_path / "data" / "dlm" / "markings_t.json").exists()
+    assert (out / "markings_t.json").read_text() == '{"features": [1]}'
+    assert (out / "markings_t.png").read_bytes() == b"png"
+    assert sorted(p.name for p in out.iterdir()) == ["markings_t.json", "markings_t.png"]
 
 
 def _seam_tiles(tmp_path, monkeypatch):
@@ -373,3 +393,154 @@ def test_a_lowered_kerb_stretch_takes_no_kerb_band():
     assert full_height(line, []) == [line]
     # a stretch to the line's end leaves nothing past it
     assert [round(p.length, 6) for p in full_height(line, [[0.0, 100.0, 0.0]])] == []
+
+
+# --- the kerb band follows the kerb lines --------------------------------------
+
+
+def test_the_kerb_bit_lies_round_a_kerb_line_out_to_its_reach(tmp_path):
+    tile = dlm_tile(tmp_path)
+    bits = markings.kerb_bits(tile, SIZE, [tile_line((20, 100), (180, 100))])
+    reach = markings.KERB_REACH_M + np.sqrt(2)
+    rows = [r for r in range(SIZE) if bits[r, 100]]
+    # row r's centre lies at y = SIZE - r - 0.5
+    ys = [SIZE - r - 0.5 for r in rows]
+    assert min(ys) >= 100 - reach and max(ys) <= 100 + reach
+    assert bits[SIZE - 101, 100] == markings.KERB  # on the line
+    assert not bits[SIZE - 101, 10] and not bits[SIZE - 101, 190]  # past its ends
+    assert not markings.kerb_bits(tile, SIZE, []).any()
+
+
+def test_the_markings_raster_carries_the_kerb_bit_only_where_edges_kept_a_kerb(
+    tmp_path, monkeypatch
+):
+    # the carriageway along y = 95–105: edges.py kept the kerb on its north
+    # side only (the south side runs out of town, say)
+    tile = _street(tmp_path, monkeypatch, '<tag k="lanes" v="2"/>')
+    x0, y0 = tile.bounds[:2]
+    kerb = shapely.LineString([(x0 + 10, y0 + 105), (x0 + 190, y0 + 105)])
+    write_geojson(tile.out("dlm", "kerbs_t.geojson"), [feature(geometry_json(kerb))], tile.epsg)
+    markings.run(tile, px=200)
+    _, raster = _outputs(tile, 200)
+    bits = raster[..., 1]
+    col = 60
+    assert bits[94, col] & markings.KERB  # y 105.5, on the north kerb
+    assert bits[97, col] & markings.KERB  # y 102.5, its gutter and shadow
+    assert not bits[105, col] & markings.KERB  # y 94.5: the south edge, no kerb
+    assert not bits[85, col] & markings.KERB  # y 114.5: far from any kerb
+    assert bits[100, col] & 4  # the lane bits are kept
+    low = np.asarray(Image.open(tile.data / "dlm" / "markings_low_t.png"))
+    low = low.reshape(100, 100, 4)[..., 1]
+    assert low[47, 30] & markings.KERB and not low[60, 30] & markings.KERB
+
+
+# --- B24 crossings ----------------------------------------------------------
+
+
+def test_a_zebra_only_where_osm_says_zebra():
+    assert crossing_kind('"crossing:markings"=>"zebra"') == ZEBRA
+    assert crossing_kind('"crossing:markings"=>"ladder:paired"') == ZEBRA
+    assert crossing_kind('"crossing"=>"uncontrolled","crossing_ref"=>"zebra"') == ZEBRA
+    assert crossing_kind('"traffic_sign"=>"DE:350"') == ZEBRA
+    assert crossing_kind('"crossing_ref"=>"zebra","crossing:markings"=>"no"') == 0
+    # marked / uncontrolled alone: mostly unmarked in the orthophotos
+    assert crossing_kind('"crossing"=>"marked"') == 0
+    assert crossing_kind('"crossing"=>"uncontrolled"') == 0
+
+
+def test_lines_and_signals_paint_the_two_line_crossing():
+    for value in ("lines", "dashes", "dots", "yes", "dashes;surface"):
+        assert crossing_kind(f'"crossing:markings"=>"{value}"') == FURT, value
+    assert crossing_kind('"crossing"=>"traffic_signals"') == FURT
+    assert crossing_kind('"crossing:signals"=>"yes"') == FURT
+    assert crossing_kind('"crossing"=>"traffic_signals","crossing:markings"=>"no"') == 0
+    assert crossing_kind('"crossing:markings"=>"surface"') == 0
+
+
+# --- B25 centre lines -------------------------------------------------------
+
+
+def test_centre_lines_solid_where_overtaking_is_forbidden():
+    assert centre_bits("secondary", '"lanes"=>"2"') == CENTRE
+    assert centre_bits("secondary", '"lanes"=>"2","overtaking"=>"no"') == CENTRE | CENTRE_SOLID
+    both = '"lanes"=>"2","overtaking:forward"=>"no","overtaking:backward"=>"no"'
+    assert centre_bits("primary", both) == CENTRE | CENTRE_SOLID
+    assert centre_bits("primary", '"lanes"=>"2","overtaking:forward"=>"no"') == CENTRE
+    assert centre_bits("primary", '"lanes"=>"2","divider"=>"solid_line"') & CENTRE_SOLID
+    # a divider that is a thing: no paint between the directions
+    assert centre_bits("primary", '"lanes"=>"2","divider"=>"kerb"') == 0
+    assert centre_bits("primary", '"lanes"=>"2","oneway"=>"yes"') == 0
+
+
+def test_four_lanes_have_lane_lines_and_a_solid_middle():
+    assert centre_bits("primary", '"lanes"=>"4"') == CENTRE | CENTRE_SOLID | LANE_LINES
+    dashed = '"lanes"=>"4","divider"=>"dashed_line"'
+    assert centre_bits("primary", dashed) == CENTRE | LANE_LINES
+    assert not centre_bits("primary", '"lanes"=>"3"') & LANE_LINES
+
+
+def _tile_with_ways(tmp_path, monkeypatch, ways: list[tuple[list[tuple[float, float]], str]]):
+    """A 200 m tile with a 10 m carriageway (class 7) along y = 95–105 and
+    the given OSM ways (points in metres from the SW corner, tag XML)."""
+    from pyproj import Transformer
+
+    x0, y0 = 411000.0, 5656000.0
+    tile = Tile("t", (x0, y0, x0 + 200, y0 + 200), 25833, tmp_path / "raw", tmp_path / "data")
+    cls = np.zeros((400, 400), np.uint8)
+    cls[190:210, :] = 7
+    (tmp_path / "data" / "dlm").mkdir(parents=True)
+    Image.fromarray(cls).save(tmp_path / "data" / "dlm" / "landcover_t.png")
+    back = Transformer.from_crs(25833, 4326, always_xy=True)
+    nodes, xml_ways, nid = [], [], 1
+    for k, (pts, tags) in enumerate(ways):
+        refs = []
+        for px_, py_ in pts:
+            lon, lat = back.transform(x0 + px_, y0 + py_)
+            nodes.append(f'<node id="{nid}" lat="{lat:.9f}" lon="{lon:.9f}" version="1"/>')
+            refs.append(f'<nd ref="{nid}"/>')
+            nid += 1
+        xml_ways.append(f'<way id="{100 + k}" version="1">{"".join(refs)}{tags}</way>')
+    osm = tmp_path / "raw" / "osm" / "t.osm"
+    osm.parent.mkdir(parents=True)
+    body = "".join(nodes) + "".join(xml_ways)
+    osm.write_text(f'<?xml version="1.0"?><osm version="0.6">{body}</osm>')
+    monkeypatch.setattr(Tile, "osm_extract", lambda self: osm)
+    return tile
+
+
+def test_no_centre_line_where_a_tram_runs_on_the_axis(tmp_path, monkeypatch):
+    road = '<tag k="highway" v="secondary"/><tag k="lanes" v="2"/>'
+    tram = '<tag k="railway" v="tram"/>'
+    tile = _tile_with_ways(
+        tmp_path,
+        monkeypatch,
+        [([(10, 100), (190, 100)], road), ([(10, 100), (100, 100)], tram)],
+    )
+    run(tile, px=200)
+    grey = np.asarray(Image.open(tile.data / "dlm" / "markings_t.png")).reshape(200, 200, 4)
+    bits = grey[..., 1].astype(int) & ~KERB
+    assert not bits[100, 60] & CENTRE  # the tram's half
+    assert bits[100, 150] & CENTRE  # past its end the line is back
+
+
+# --- B26 cycle lanes, B21 red tracks ---------------------------------------
+
+
+def test_cycle_lane_kinds_widths_and_colour():
+    assert cycle_lane_bits('"cycleway:right:lane"=>"exclusive"', "right") == CYCLE | CYCLE_SOLID
+    assert cycle_lane_bits('"cycleway:right:lane"=>"advisory"', "right") == CYCLE
+    assert cycle_lane_bits(None, "right") == CYCLE  # a lane, kind unsaid: dashed
+    assert cycle_lane_bits('"cycleway:both:lane"=>"pictogram"', "left") == 0
+    assert cycle_lane_bits('"cycleway:left:width"=>"2.25"', "left") & CYCLE_WIDE
+    assert not cycle_lane_bits('"cycleway:left:width"=>"1.6"', "left") & CYCLE_WIDE
+    assert cycle_lane_bits('"cycleway:right:surface:colour"=>"red"', "right") & RED
+    tags = '"cycleway:right"=>"lane","cycleway:right:lane"=>"exclusive"'
+    assert cycle_sides(tags) == (CYCLE | CYCLE_SOLID, 0)
+
+
+def test_a_cycle_track_is_red_only_where_osm_says():
+    assert is_red_track("cycleway", '"surface:colour"=>"red"')
+    assert is_red_track("path", '"bicycle"=>"designated","surface:colour"=>"red"')
+    assert not is_red_track("footway", '"surface:colour"=>"red"')
+    assert not is_red_track("cycleway", '"surface:colour"=>"green"')
+    assert not is_red_track("cycleway", None)

@@ -27,7 +27,6 @@ import {
   type SplatLayer,
   type SplatRasters,
   type SportRasters,
-  splatUv,
 } from "./terrain-layer";
 import { isSceneShared } from "./three-utils";
 
@@ -82,11 +81,6 @@ test("only a desktop's fine level reads the sports grounds; the rest build as ev
   // one shared graph for the variant: a tile that lands builds no shader
   expect(lean.colorNode).toBe(bare.colorNode);
   expect(pitched.colorNode).not.toBe(bare.colorNode);
-});
-
-test("the splat uv is a node over the tile's corner uniform", () => {
-  const uv = splatUv(splat());
-  expect(uv.isNode).toBe(true);
 });
 
 /** A quantised Y-up grid tile's positions (interleaved, four numbers a

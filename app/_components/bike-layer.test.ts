@@ -96,12 +96,14 @@ test("an answer the feed cannot parse is no crash: the last counts stay", async 
   const onRejection = (reason: unknown) => rejections.push(reason);
   process.on("unhandledRejection", onRejection);
   const heard: BikeCounter[][] = [];
+  let parsed = 0;
   const feed = createBikeFeed({
     bounds: [0, 0, 1, 1],
     epsg: 25_833,
     feed: {
       url: () => "/bikes",
       parse: () => {
+        parsed++;
         throw new TypeError("Cannot read properties of null");
       },
     },
@@ -111,6 +113,8 @@ test("an answer the feed cannot parse is no crash: the last counts stay", async 
     feed.start();
     await settle();
     expect(stub.calls()).toBe(1);
+    // the answer reached the parser, which threw
+    expect(parsed).toBe(1);
     expect(heard).toEqual([]);
     expect(rejections).toEqual([]);
   } finally {

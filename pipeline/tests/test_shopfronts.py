@@ -2,10 +2,11 @@ import json
 
 import numpy as np
 import pytest
-from test_facades import X0 as sf_X0
-from test_facades import Y0, _city
+import shapely
 
+from bake import shopfronts
 from bake import shopfronts as sf
+from bake.common import Tile
 from bake.facade_measure import bin_shares, ground_top
 from bake.shopfronts import (
     align,
@@ -17,6 +18,8 @@ from bake.shopfronts import (
     snap_rhythm,
     vote,
 )
+from tests.synthetic import X0 as sf_X0
+from tests.synthetic import Y0, blocks_city
 
 # A shopfront 12 m long in 0.5 m bins: piers 1 m, bays 2 m (0–1 pier,
 # 1–3 bay, 3–4 pier, …).
@@ -245,7 +248,7 @@ def test_the_glass_under_a_canopy_keeps_measured_walls():
 
 
 def test_the_tile_lists_photo_shopfronts_and_no_osm_guess(tmp_path):
-    city = _city({"A": (0, 0, 12, 10, 12), "B": (30, 0, 42, 10, 12)})
+    city = blocks_city({"A": (0, 0, 12, 10, 12), "B": (30, 0, 42, 10, 12)})
     ws = sf.walls(city)
     wa = next(w for w in ws if w["oid"] == "A" and w["L"] == pytest.approx(12.0))
     recs = [_rec("a", FRONT[:24]), _rec("b", FRONT[:24])]
@@ -273,7 +276,7 @@ def test_the_tile_lists_photo_shopfronts_and_no_osm_guess(tmp_path):
 
 
 def test_a_canopy_glazes_its_wall_and_runs_on_along_the_object(tmp_path):
-    city = _city({"A": (0, 0, 12, 10, 12)})
+    city = blocks_city({"A": (0, 0, 12, 10, 12)})
     ws = sf.walls(city)
     wa = next(w for w in ws if w["oid"] == "A" and w["L"] == pytest.approx(12.0))
     nx, ny = wa["n"]
@@ -297,3 +300,53 @@ def test_a_canopy_glazes_its_wall_and_runs_on_along_the_object(tmp_path):
     assert stats["canopy"] == 1
     sf.write(tmp_path / "s.json", out, "Quelle: GeoSN, dl-de/by-2-0")
     assert "GeoSN" in json.loads((tmp_path / "s.json").read_text())["attribution"]
+
+
+# --- G20: a passage through a shop window ------------------------------------------
+
+
+def wall(bays):
+    # a 10 m wall along the x axis, its outside to the south
+    return {
+        "oid": "o",
+        "wi": 0,
+        "a": [0.0, 0.0],
+        "b": [10.0, 0.0],
+        "L": 10.0,
+        "n": [0.0, -1.0],
+        "bays": bays,
+    }
+
+
+def test_a_bays_band_reaches_behind_the_wall_and_a_little_before_it():
+    band = shopfronts.bay_band(wall([]), 2.0, 4.0)
+    assert band.bounds == (2.0, -shopfronts.PASSAGE_OUT_M, 4.0, shopfronts.PASSAGE_IN_M)
+
+
+def test_a_passage_or_an_arcade_takes_the_bay_it_crosses():
+    buildings = {"b": [wall([[1.0, 3.0], [5.0, 7.0], [8.0, 9.5]])]}
+    ways = np.array(
+        [
+            # a passage through the ground floor at x = 6
+            shapely.LineString([(6.0, -3.0), (6.0, 12.0)]),
+            # an arcade 2 m behind the wall along its first metres
+            shapely.LineString([(0.0, 2.0), (2.0, 2.0)]),
+            # a way 6 m inside the block: no bay's
+            shapely.LineString([(8.0, 6.0), (9.5, 6.0)]),
+        ]
+    )
+    assert shopfronts.without_passages(buildings, ways) == 2
+    assert buildings["b"][0]["bays"] == [[8.0, 9.5]]
+    assert shopfronts.without_passages(buildings, np.array([], dtype=object)) == 0
+
+
+def test_without_its_photos_cache_a_tile_keeps_its_committed_shopfronts(tmp_path):
+    tile = Tile(
+        "t", (0.0, 0.0, 20.0, 20.0), 25833, tmp_path / "raw", tmp_path / "data", mapillary=True
+    )
+    out = tile.out("dlm", "shopfronts_t.json")
+    shopfronts.write(out, {"b": [wall([[1.0, 3.0]])]})
+    before = out.read_text()
+    shopfronts.run(tile)
+    # no extract: nothing crosses, nothing is emptied
+    assert json.loads(out.read_text()) == json.loads(before)

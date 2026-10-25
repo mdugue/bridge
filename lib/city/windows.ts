@@ -953,21 +953,6 @@ const squat = (spec: WindowSpec, lift: number) =>
 
 // --- the layout, as the shader draws it ------------------------------------
 
-/**
- * The axes' centres along a wall of `length`, from its middle: at the
- * spacing, centred, `WINDOW_ROWS.edge` of wall at either end beside the
- * outer windows (before a loose grid's jitter, which the shader adds by a
- * hash). The shader's count and positions (clay-windows.ts).
- */
-export function windowAxes(length: number, spec: WindowSpec): number[] {
-  const room = length - 2 * WINDOW_ROWS.edge - spec.w;
-  if (spec.axis <= 0 || room < 0) {
-    return [];
-  }
-  const n = Math.floor(room / spec.axis + 1e-4) + 1;
-  return Array.from({ length: n }, (_, k) => (k - (n - 1) / 2) * spec.axis);
-}
-
 /** The width (m) of a door slot's width class (`DOOR_SLOT`). */
 export function doorClassWidth(c: number): number {
   const { fine, w0, wideStep, wStep } = DOOR_SLOT;
@@ -1013,54 +998,6 @@ export function clearOfDoor(
     Math.abs(axis - door.at) >=
     door.w / 2 + DOOR_GAP_M + DOOR_SLOT.step / 2 + w / 2
   );
-}
-
-/**
- * The window rows over an object's base (m): per storey the sill and the
- * head, the ground floor's from the base (lifted, `WindowStyle.lift`),
- * each upper one's from its storey line, every head at most
- * `eaveH − WINDOW_ROWS.eaveClear` (a top floor's windows a little shorter
- * where they must be, none where less than `min` is left); the ground
- * floor's only where `ground` is (no shop, no shopfront on the wall) and
- * where it fits under the first storey line; none that starts less than
- * `WINDOW_ROWS.plinthGap` over `buried` (the ground in front of a wall
- * without ground-floor windows). The shader's rows (clay-windows.ts).
- */
-export function windowRows(
-  spec: WindowSpec,
-  storeyH: number,
-  eaveH: number,
-  ground = true,
-  buried = Number.NEGATIVE_INFINITY
-): [number, number][] {
-  if (spec.axis <= 0) {
-    return [];
-  }
-  const { sill, noGround, lift } = unpackStyle(spec.style);
-  const first = Math.max(storeyH, WINDOW_ROWS.firstLine);
-  const h = Math.min(spec.h, storeyH - sill - WINDOW_ROWS.lintel);
-  const top = eaveH - WINDOW_ROWS.eaveClear;
-  const out: [number, number][] = [];
-  const row = (z0: number, z1: number) => {
-    const head = Math.min(z1, top);
-    if (
-      head - z0 >= WINDOW_ROWS.min - 1e-9 &&
-      z0 >= buried + WINDOW_ROWS.plinthGap - 1e-9
-    ) {
-      out.push([z0, head]);
-    }
-  };
-  if (ground && !noGround && sill + h <= first - WINDOW_ROWS.lintel + 1e-9) {
-    row(sill + lift, sill + h);
-  }
-  for (
-    let line = first;
-    line + sill + WINDOW_ROWS.min <= top;
-    line += storeyH
-  ) {
-    row(line + sill, line + sill + h);
-  }
-  return out;
 }
 
 // --- where on the walls -----------------------------------------------------

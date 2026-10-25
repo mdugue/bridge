@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { HAMBURG } from "../../sites/hamburg";
 import { LEIPZIG } from "../../sites/leipzig";
 import {
@@ -62,7 +63,10 @@ test("a provider without an open DLM says so", () => {
 });
 
 test("the DLM layer list is the pipeline's", () => {
-  const python = readFileSync("pipeline/bake/common.py", "utf8");
+  const python = readFileSync(
+    join(import.meta.dir, "../../pipeline/bake/common.py"),
+    "utf8"
+  );
   const block = python.match(/DLM_LAYERS = \(([^)]*)\)/u)?.[1] ?? "";
   const layers = [...block.matchAll(/"(\w+)"/gu)].map((m) => m[1]);
   expect(layers).toEqual([...DLM_LAYERS]);

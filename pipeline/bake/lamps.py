@@ -197,7 +197,7 @@ class Walls:
             self.ground, self.transform = src.read(1), src.transform
 
     def ground_at(self, x: float, y: float) -> float | None:
-        c, r = (int(v) for v in ~self.transform * (x, y))
+        c, r = (int(v) for v in ~self.transform @ (x, y))
         if 0 <= r < self.ground.shape[0] and 0 <= c < self.ground.shape[1]:
             return float(self.ground[r, c])
         return None

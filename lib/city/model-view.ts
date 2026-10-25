@@ -239,7 +239,7 @@ const lerpXyz = (a: Xyz, b: Xyz, t: number): Xyz => ({
 });
 
 /** The view's axes: right, up and forward (the direction it looks). */
-export function modelAxes(
+function modelAxes(
   turnDeg: number,
   tiltDeg: number
 ): { forward: Xyz; right: Xyz; up: Xyz } {
@@ -250,15 +250,12 @@ export function modelAxes(
 }
 
 /** Half the picture's height in metres. */
-export function halfHeightOf(
-  view: ModelView,
-  viewportCssHeight: number
-): number {
+function halfHeightOf(view: ModelView, viewportCssHeight: number): number {
   return (view.metresPerPixel * Math.max(viewportCssHeight, 1)) / 2;
 }
 
 /** Where the pivot sits on screen (NDC y) for a view. */
-export function pivotNdcYOf(view: ModelView): number {
+function pivotNdcYOf(view: ModelView): number {
   return MODEL_PRESET_BY_ID[view.preset].pivotNdcY;
 }
 
@@ -350,11 +347,6 @@ export function panned(view: ModelView, dxPx: number, dyPx: number): Xyz {
   // slide the moved point back along the view onto the pivot's level
   const onGround = sub(onScreen, scale(direction, onScreen.y / direction.y));
   return sub(view.pivot, onGround);
-}
-
-/** A ground pan by a world vector in the level plane (keys, a glide). */
-export function pannedBy(view: ModelView, dx: number, dz: number): Xyz {
-  return { x: view.pivot.x + dx, y: view.pivot.y, z: view.pivot.z + dz };
 }
 
 /** The screen's right and its up, flattened onto the ground (unit, world). */

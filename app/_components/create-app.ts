@@ -27,6 +27,7 @@ import {
   memoryLimitsFor,
   type MemoryStep,
 } from "@/lib/city/memory-governor";
+import type { FramePace } from "@/lib/city/frame-pace";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import {
   type GpuLoss,
@@ -416,6 +417,12 @@ export interface CityWalkOptions {
    * seconds, so a page the browser kills leaves a trace.
    */
   trail?: CrashTrail;
+  /**
+   * The loop's pace while the HUD covers the scene (lib/city/frame-pace.ts):
+   * the HUD sets it, the loop asks it before every frame. Without one every
+   * frame draws.
+   */
+  pace?: FramePace;
   /** Every layer has streamed in (the scene is complete). */
   onLoaded?: () => void;
   /**
@@ -3029,7 +3036,9 @@ async function bootApp(
     // The 10 Hz tick (the minimap's pose, the BVHs near, the focus, the
     // tree tiers): read here, as the trees step before it is spent.
     const poseTick = elapsed >= tickDue;
-    if (dt > 0) {
+    // (not over a gap the pace held: the HUD's readout, in the very sheet
+    // that paces the loop, would read the pace)
+    if (dt > 0 && opts.pace?.heldBefore() !== true) {
       fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
     }
     // Modell owns the frame while it is on (and through its dolly zooms);
@@ -3116,6 +3125,11 @@ async function bootApp(
     if (pocFramesHeld()) {
       return;
     }
+    // Held back while the phone's sidebar covers the scene, still while it
+    // scrolls (lib/city/frame-pace.ts); the same clamp covers the gap.
+    if (opts.pace && !opts.pace.draws(time)) {
+      return;
+    }
     try {
       frame(time);
     } catch (error) {
@@ -3144,6 +3158,8 @@ async function bootApp(
       trail.beat({
         frames,
         fps: rate,
+        // a rate the pace held down is not the device's
+        paced: opts.pace?.takePaced() === true ? true : undefined,
         gpuMB: gpuBytes() / 1_048_576,
         rasterMB: trackedTextureBytes() / 1_048_576,
         heldMB: renderer.info.memory.total / 1_048_576,

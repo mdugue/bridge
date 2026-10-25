@@ -126,7 +126,7 @@ bun dev        # bakes public/data, then serves https://localhost:3000 (self-sig
   shadowed patch sits where the camera looks.
 - [ ] Past the frustum, the baked horizon (ADR 0031) takes over without a
   seam: the near band fades in over the frustum's last 20 %
-  (`nearBandWeight`); look at the hand-over ring at a low sun.
+  (`hzSunVisible`, sky-light.ts); look at the hand-over ring at a low sun.
 - [ ] Eye-level shadows clip ahead at a low sun? If long shadows visibly
   end a few tens of metres ahead, note it — the backlog's "shadow centre
   biased ahead at eye level" (README, Open work 11) is the fix to try.

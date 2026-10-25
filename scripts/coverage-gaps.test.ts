@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { coverageGaps, gapTable } from "./coverage-gaps";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { coverageGaps, gapTable, sources } from "./coverage-gaps";
 
 const LCOV = [
   "TN:",
@@ -31,5 +34,31 @@ describe("coverage gaps", () => {
     ]);
     expect(table).toContain("(2 files, 2000 lines)");
     expect(table).toContain("| `app/_components/create-app.ts` | 1600 |");
+  });
+
+  test("the routes' helpers, the site configs and our hooks are sources too, shadcn's not", () => {
+    const root = mkdtempSync(join(tmpdir(), "coverage-gaps-"));
+    for (const path of [
+      "app/_lib/built-sites.ts",
+      "app/wissen/_lib/markdown.tsx",
+      "app/wissen/_lib/markdown.test.tsx",
+      "sites/dresden.ts",
+      "hooks/use-mobile.ts",
+      "hooks/use-coarse-pointer.ts",
+      "components/ui/button.tsx",
+    ]) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), "a\nb\n");
+    }
+    expect(
+      sources(root)
+        .map((s) => s.path)
+        .sort()
+    ).toEqual([
+      "app/_lib/built-sites.ts",
+      "app/wissen/_lib/markdown.tsx",
+      "hooks/use-coarse-pointer.ts",
+      "sites/dresden.ts",
+    ]);
   });
 });

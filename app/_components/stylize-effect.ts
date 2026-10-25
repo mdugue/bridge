@@ -932,5 +932,6 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   };
 }
 
-/** The live uniforms a caller may want in tests (the pens by mode). */
+/** The pens by mode, exported for its test alone: a style that inks
+ *  without a pen would draw with the last style's lines (`setStyle`). */
 export const STYLE_PENS: Readonly<Record<number, Readonly<Pen>>> = PENS;

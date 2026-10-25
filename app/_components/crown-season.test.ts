@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, jest, test } from "bun:test";
 import {
   Color,
   IcosahedronGeometry,
@@ -9,12 +9,13 @@ import {
 import { TREE_GENERA } from "@/lib/city/tree-season";
 import {
   createSeasonClock,
+  SEASON_THROTTLE_MS,
   type CrownSeasonKey,
   crownWarmup,
   seasonCrowns,
 } from "./crown-season";
-import { Instances, isInstances } from "./instancing";
-import { buildVegetation, sceneCrowns } from "./vegetation-layer";
+import { Instances } from "./instancing";
+import { sceneCrowns } from "./vegetation-layer";
 
 const LIME = TREE_GENERA.indexOf("Tilia");
 const JAN_10 = 9;
@@ -87,44 +88,28 @@ test("autumn moves a lime's colour off its summer green; an evergreen keeps it",
   );
 });
 
-test("the canopy's crowns follow the season through the vegetation control", () => {
-  const veg = buildVegetation(
-    {
-      rows: [],
-      canopy: [0, 20, 40].map((x) => ({
-        geometry: { type: "Point" as const, coordinates: [x, 0] as const },
-        properties: { h: 12 },
-      })),
-    },
-    { offset: { cx: 0, cy: 0 }, heightAt: () => 100 }
-  );
-  expect(veg.setSeason(JUL_10)).toBe(false);
-  expect(veg.setSeason(JAN_10)).toBe(true);
-  const { bare } = sceneCrowns();
-  const crownsNow = veg.group.children.filter(
-    (c) => isInstances(c) && c.material === bare
-  );
-  expect(crownsNow).toHaveLength(3); // the mid, rich and far crowns
-});
-
-test("the clock re-seasons on a new calendar day only, throttled, the last day winning", async () => {
-  const days: number[] = [];
-  const clock = createSeasonClock(
-    new Date(2026, 6, 10, 9),
-    (d) => days.push(d),
-    40
-  );
-  expect(clock.day()).toBe(JUL_10);
-  clock.set(new Date(2026, 6, 10, 18)); // same day, later hour
-  expect(days).toEqual([]);
-  clock.set(new Date(2026, 0, 10, 12)); // applied at once
-  expect(days).toEqual([JAN_10]);
-  clock.set(new Date(2026, 9, 1, 12)); // inside the throttle
-  clock.set(new Date(2026, 9, 20, 12));
-  expect(days).toEqual([JAN_10]);
-  await new Promise((resolve) => setTimeout(resolve, 80));
-  expect(days).toEqual([JAN_10, OCT_20]);
-  clock.dispose();
+test("the clock re-seasons on a new calendar day only, throttled, the last day winning", () => {
+  jest.useFakeTimers();
+  try {
+    const days: number[] = [];
+    const clock = createSeasonClock(new Date(2026, 6, 10, 9), (d) =>
+      days.push(d)
+    );
+    expect(clock.day()).toBe(JUL_10);
+    clock.set(new Date(2026, 6, 10, 18)); // same day, later hour
+    expect(days).toEqual([]);
+    clock.set(new Date(2026, 0, 10, 12)); // applied at once
+    expect(days).toEqual([JAN_10]);
+    clock.set(new Date(2026, 9, 1, 12)); // inside the throttle
+    jest.advanceTimersByTime(SEASON_THROTTLE_MS / 2);
+    clock.set(new Date(2026, 9, 20, 12));
+    expect(days).toEqual([JAN_10]);
+    jest.advanceTimersByTime(SEASON_THROTTLE_MS / 2);
+    expect(days).toEqual([JAN_10, OCT_20]);
+    clock.dispose();
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test("the warm-up stands in for both crown variants, laid out as a crown", () => {

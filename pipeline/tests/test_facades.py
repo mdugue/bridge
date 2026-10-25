@@ -7,54 +7,7 @@ from pyproj import Transformer
 from bake import facades
 from bake.facade_measure import class_map, rotation_matrix
 from bake.facades import grade, plan, readings, signed_roots, wall_values, walls, wmedian
-
-X0, Y0 = 411000.0, 5656000.0
-
-
-def _box(x0, y0, x1, y1, z0, z1) -> tuple[list[list[float]], list]:
-    """Vertices and faces of an axis-aligned block: ground, roof, four walls."""
-    v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]]
-    v += [[x, y, z1] for x, y, _ in v]
-    faces = [[[0, 3, 2, 1]], [[4, 5, 6, 7]], [[0, 1, 5, 4]], [[1, 2, 6, 5]], [[2, 3, 7, 6]]]
-    faces += [[[3, 0, 4, 7]]]
-    return v, faces
-
-
-def _city(blocks: dict[str, tuple]) -> dict:
-    """A CityJSON of axis-aligned buildings (id → x0, y0, x1, y1, height),
-    given in metres from (X0, Y0), each a child of a root `<id>-root`."""
-    verts, objs = [], {}
-    for oid, (x0, y0, x1, y1, h) in blocks.items():
-        v, faces = _box(X0 + x0, Y0 + y0, X0 + x1, Y0 + y1, 100.0, 100.0 + h)
-        base = len(verts)
-        verts += v
-        shells = [[[i + base for i in ring] for ring in face] for face in faces]
-        objs[oid] = {
-            "type": "BuildingPart",
-            "parents": [f"{oid}-root"],
-            "geometry": [
-                {
-                    "type": "Solid",
-                    "lod": "2",
-                    "boundaries": [shells],
-                    "semantics": {
-                        "surfaces": [
-                            {"type": "GroundSurface"},
-                            {"type": "RoofSurface"},
-                            {"type": "WallSurface"},
-                        ],
-                        "values": [[0, 1, 2, 2, 2, 2]],
-                    },
-                }
-            ],
-        }
-        objs[f"{oid}-root"] = {"type": "Building", "children": [oid]}
-    return {
-        "type": "CityJSON",
-        "transform": {"scale": [0.001, 0.001, 0.001], "translate": [0, 0, 0]},
-        "CityObjects": objs,
-        "vertices": [[round(c * 1000) for c in p] for p in verts],
-    }
+from tests.synthetic import X0, Y0, blocks_city
 
 
 def test_the_weighted_median_takes_the_value_at_half_the_weight():
@@ -121,7 +74,7 @@ def test_a_wall_is_the_median_of_its_sequences_medians():
 
 
 def test_the_walls_are_outer_long_and_tall():
-    city = _city(
+    city = blocks_city(
         {
             "a": (0, 0, 20, 10, 12),  # 2 × 20 m + 2 × 10 m walls
             "b": (20, 0, 24, 10, 12),  # shares a's east wall; 4 m sides too short
@@ -154,7 +107,7 @@ def _pano(i, x, y, seq, year=2025):
 
 
 def test_the_plan_picks_frontal_panoramas_with_a_free_view():
-    city = _city({"a": (0, 0, 20, 10, 12), "far": (0, 40, 20, 50, 12)})
+    city = blocks_city({"a": (0, 0, 20, 10, 12), "far": (0, 40, 20, 50, 12)})
     images = [
         _pano(1, 10, -15, "s1"),  # 15 m in front of a's south wall
         _pano(2, 10, -12, "s1"),
@@ -176,7 +129,7 @@ def test_the_plan_picks_frontal_panoramas_with_a_free_view():
 
 
 def test_readings_join_signs_and_walls_per_building():
-    city = _city({"a": (0, 0, 20, 10, 12), "b": (40, 0, 60, 10, 12)})
+    city = blocks_city({"a": (0, 0, 20, 10, 12), "b": (40, 0, 60, 10, 12)})
     recs = [_rec("a", 0, "s1", 0.5, 0.2, length=20.0), _rec("b", 0, "s1", 0.1, 0.05)]
     sign = np.array([[X0 + 10, Y0 - 2.0]])  # 2 m in front of a's south wall
     assert signed_roots(city, sign) == {"a-root"}

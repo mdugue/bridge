@@ -108,7 +108,7 @@ class Surface:
         """The post's height at (x, y) over the ground, or over the top of
         the bridge deck it stands on (`deck`, m: the ground below is the
         river or the street the bridge spans) — None where it does not show."""
-        c, r = (int(v) for v in ~self.transform * (x, y))
+        c, r = (int(v) for v in ~self.transform @ (x, y))
         n = self.r
         if not (n <= r < self.ndom.shape[0] - n and n <= c < self.ndom.shape[1] - n):
             return None

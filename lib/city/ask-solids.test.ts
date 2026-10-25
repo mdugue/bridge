@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import {
   type AskItem,
+  type AskSet,
   askSets,
-  nearestInSets,
-  rayAabb,
+  hitsInSets,
   insideRingXz,
   nearestItem,
   rayCylinder,
@@ -59,7 +59,7 @@ test("of several things, the nearest within reach answers", () => {
   expect(nearestItem({ x: 0, y: 2, z: 0 }, east, items, 5)).toBeNull();
 });
 
-test("sets of things: the boxes a ray misses are never opened", () => {
+test("sets of things: across many sets the nearest hit within reach answers", () => {
   const items: AskItem<number>[] = Array.from({ length: 200 }, (_, i) => ({
     target: i,
     solids: [
@@ -76,10 +76,54 @@ test("sets of things: the boxes a ray misses are never opened", () => {
   }));
   const sets = askSets(items, 64);
   expect(sets.length).toBeGreaterThan(1);
-  // along the row z = 30 from the west: the first post it meets
-  const hit = nearestInSets({ x: -10, y: 2, z: 30 }, east, sets, 1000);
-  expect(hit?.target).toBe(60);
-  expect(hit?.distance).toBeCloseTo(9, 9);
-  expect(rayAabb({ x: -10, y: 50, z: 30 }, east, sets[0].box)).toBeNull();
-  expect(nearestInSets({ x: -10, y: 2, z: 30 }, east, sets, 5)).toBeNull();
+  // along the row z = 30 from the west: the first post it meets, then the
+  // rest of the row behind it, in order
+  const hits = hitsInSets({ x: -10, y: 2, z: 30 }, east, sets, 1000);
+  expect(hits[0]?.target).toBe(60);
+  expect(hits[0]?.distance).toBeCloseTo(9, 9);
+  expect(hits.map((h) => h.target)).toEqual(
+    Array.from({ length: 20 }, (_, i) => 60 + i)
+  );
+  expect(hitsInSets({ x: -10, y: 2, z: 30 }, east, sets, 5)[0]).toBeUndefined();
+});
+
+test("sets of things: a box the ray misses is never opened", () => {
+  const unopened: AskSet<string> = {
+    box: { min: { x: 0, y: 0, z: 50 }, max: { x: 100, y: 5, z: 60 } },
+    nearest: () => {
+      throw new Error("opened a box the ray misses");
+    },
+    along: () => {
+      throw new Error("opened a box the ray misses");
+    },
+  };
+  const [near] = askSets<string>([
+    { target: "post", solids: [{ cylinder: trunk }] },
+  ]);
+  const hits = hitsInSets({ x: 0, y: 2, z: 0 }, east, [unopened, near], 100);
+  expect(hits.map((h) => h.target)).toEqual(["post"]);
+});
+
+test("sets of things: hits from overlapping sets interleave nearest first, a set's along before its nearest", () => {
+  const post = (x: number) => ({ cylinder: { ...trunk, x } });
+  const a = askSets<string>([
+    { target: "a10", solids: [post(10)] },
+    { target: "a30", solids: [post(30)] },
+  ]);
+  const b = askSets<string>([
+    { target: "b20", solids: [post(20)] },
+    { target: "b40", solids: [post(40)] },
+  ]);
+  // a set without `along` gives its nearest only
+  const nearestOnly: AskSet<string> = { ...b[0], along: undefined };
+  const o = { x: 0, y: 2, z: 0 };
+  expect(hitsInSets(o, east, [...a, ...b], 100).map((h) => h.target)).toEqual([
+    "a10",
+    "b20",
+    "a30",
+    "b40",
+  ]);
+  expect(
+    hitsInSets(o, east, [...a, nearestOnly], 100).map((h) => h.target)
+  ).toEqual(["a10", "b20", "a30"]);
 });

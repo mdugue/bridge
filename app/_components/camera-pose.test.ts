@@ -169,6 +169,28 @@ test("a drag mid-glide takes the wheel: the glide stops where it is", () => {
   expect(headingAfterDrag * RAD2DEG).toBeLessThan(90);
 });
 
+test("a camera state applied mid-glide wins: the glide does not take the camera back", () => {
+  const { pose } = rig();
+  pose.flyToViewpoint(VIEW);
+  pose.step(0.5);
+  const target = {
+    mode: "fly" as const,
+    pos: { x: -40, y: 160, z: 30 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 200,
+    pitchDeg: -15,
+    fov: 55,
+  };
+  pose.applyCameraState(target);
+  settle(pose);
+  // VIEW is a walk viewpoint: a glide left running would land there on foot.
+  const s = pose.getCameraState();
+  expect(s.mode).toBe("fly");
+  expect(s.pos).toEqual(target.pos);
+  expect(s.headingDeg).toBeCloseTo(-160, 6);
+  expect(s.fov).toBe(55);
+});
+
 test("a movement key or the stick cancels the glide; other keys and a centred stick do not", () => {
   const quiet = rig();
   quiet.pose.flyToViewpoint(VIEW);
