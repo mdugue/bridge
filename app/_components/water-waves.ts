@@ -29,15 +29,15 @@ import type { F, V2, V3 } from "./shader-chunks";
  *   so no stroke runs straight and nothing repeats — no crossing sines,
  *   whose interference tiled the river from any height;
  * - `stroke`: a thin band on a crest's lee side where the field crosses
- *   one level — the water's drawn line, a light arc lit by the sky and,
- *   on the sun's path, by the sun (water-layer.ts; a basin is too small
- *   for it and reads the slope alone);
+ *   one level — the water's drawn line, which the sun lights up as dashes
+ *   on its path (water-layer.ts; a basin is too small for it and reads
+ *   the slope alone);
  * - gusts: a noise tens of metres wide that drifts with the wind and
- *   leaves calm, mirroring patches beside rough ones, where the strokes
- *   thin out (cat's paws, the unevenness that reads from afar);
+ *   leaves calm patches beside rough ones, where the strokes thin out
+ *   (cat's paws, the unevenness that reads from afar);
  * - each layer, and the strokes, fading out where its wavelength spans
- *   fewer than a few pixels (`fwidth`), so far water lies calm and mirrors
- *   the sky instead of shimmering grey.
+ *   fewer than a few pixels (`fwidth`), so far water lies calm instead of
+ *   shimmering grey.
  *
  * Three noise reads a pixel (the realistic five-octave field before it
  * took eight). Everything is a function of the position and the clock
@@ -57,7 +57,7 @@ export interface WaveScale {
   steepness: number;
   /** how much longer a crest runs than the wave is wide */
   stretch: number;
-  /** how calm the water is between gusts (0 a mirror … 1 as rough) */
+  /** how calm the water is between gusts (0 level … 1 as rough) */
   calm: number;
 }
 
