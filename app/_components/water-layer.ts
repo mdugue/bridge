@@ -57,7 +57,7 @@ import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
 import { REFLECTIONS, skyReflection } from "./sky-reflection";
 import { type SplatLayer, splatUv } from "./terrain-layer";
 import { viewDirection } from "./view-direction";
-import { RIVER_WAVES, waveNormal, waves } from "./water-waves";
+import { RIVER_WAVES, type WaveField, waveNormal, waves } from "./water-waves";
 
 /** Animated water surface, masked to the land-cover "water" class (id 8). */
 export interface WaterLayer {
@@ -79,6 +79,8 @@ const waterTime = uniform(0);
 
 /** How strongly the view-angle Fresnel tints toward the sky. */
 const FRESNEL = 0.4;
+/** How strongly a crest's drawn stroke shows (water-waves.ts `stroke`). */
+const STROKE = 0.55;
 /** The sun glitter's strength and colour (warm white). */
 const GLITTER = 0.7;
 /** How much steeper the glitter's facets are than the shading's. */
@@ -346,9 +348,10 @@ function waterColour(
   uv: V2,
   view: V3,
   n: V3,
-  gust: F,
+  field: WaveField,
   skyTint: UniformNode<"color", Color>
 ): V3 {
+  const { gust, stroke } = field;
   // Depth by distance from the bank, as on a drawn map: the coverage read
   // from a coarse mip (~30 m) is 1 mid-stream and falls toward the shore,
   // so the channel deepens in tone and the shallows lighten.
@@ -369,7 +372,15 @@ function waterColour(
     skyReflection(n, mix(0.18, 0.4, gust)),
     REFLECTIONS
   );
-  return mix(toned, sky, fresnel.mul(FRESNEL));
+  // The drawn strokes on the crests (water-waves.ts): the sky they catch,
+  // lifted toward white, over the body and its reflection alike.
+  // (only by day: at night a pale line would outshine the dark mirror)
+  const strokeColour = mix(sky, vec3(1, 1, 1), 0.45).mul(1.08);
+  return mix(
+    mix(toned, sky, fresnel.mul(FRESNEL)),
+    strokeColour,
+    stroke.mul(lampNight.oneMinus().mul(STROKE))
+  );
 }
 
 /**
@@ -441,7 +452,7 @@ export function createWaterLayer(
   material.normalNode = cameraViewMatrix.mul(vec4(n, 0)).xyz.normalize();
   const view = viewDirection().negate();
   material.colorNode = mix(
-    waterColour(texture(tint, uv).rgb, splat, uv, view, n, field.gust, skyTint),
+    waterColour(texture(tint, uv).rgb, splat, uv, view, n, field, skyTint),
     FOAM_COLOUR,
     foam.mul(FOAM)
   );
@@ -452,7 +463,10 @@ export function createWaterLayer(
   // vanishes after sunset.
   const glitterN = waveNormal(field.slope, GLITTER_TILT);
   const half = normalize(view.add(sun));
-  const spec = pow(clamp(dot(glitterN, half), 0, 1), 120);
+  const facing = clamp(dot(glitterN, half), 0, 1).toVar();
+  // the sun's glints, and on its path the strokes lit up as dashes of
+  // light
+  const spec = pow(facing, 120).add(pow(facing, 24).mul(field.stroke));
   material.emissiveNode = SUN_COLOUR.mul(
     spec.mul(GLITTER).mul(clamp(sun.y, 0, 1))
   );

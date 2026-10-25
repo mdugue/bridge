@@ -537,18 +537,22 @@ visual-variable codebook is in
   tile before). `water-layer.ts`. Missing class
   raster → no splat, no water: the tile's ground falls back to the flat
   sage.
-  *Waves* `≈ assumed` (since 2026-10-23, `water-waves.ts`): one wave
-  field for the river sheet and the fountains' basins, a function of the
-  place and the clock alone, so two tiles meet without an edge — five
-  octaves of gradient noise (8 m down to 0.7 m on the river, a 23 m swell
-  over them; 1.2 m and less in a basin), each on its own turned grid and
-  drifting its own way, their crests bent by a slower noise, the whole
-  under gusts 70 m across (5 m in a basin) that leave calm, mirroring
-  patches beside rough ones; each octave fades where its wavelength spans
-  fewer than a few pixels, so the far water neither shimmers nor turns
-  grey. The sky's reflection and the sun's glitter ride the same normal
-  (the glitter's tilted twice as far). It replaced crossing sine waves
-  (⛔ below).
+  *Waves* `≈ assumed` (since 2026-10-23, `water-waves.ts`; drawn, not
+  simulated, since 2026-10-25): one wave field for the river sheet and
+  the fountains' basins, a function of the place and the clock alone, so
+  two tiles meet without an edge — two layers of gradient noise stretched
+  2.6× along the crest (12 m and 4.4 m across on the river, 1.2 m in a
+  basin), each drifting downwind, the finer bent by the coarser, under
+  gusts 80 m across (5 m in a basin) that leave calm, mirroring patches
+  beside rough ones; where the field crosses one level a thin light
+  *stroke* rides the crests, the sky's colour lifted toward white, and on
+  the sun's path it lights up as dashes. Each layer and the strokes fade
+  where their wavelength spans fewer than a few pixels. The sky's
+  reflection and the sun's glitter ride the same normal (the glitter's
+  tilted twice as far). Three noise reads a pixel; the five-octave field
+  before it took eight, and its fine octaves faded out at the adaptive
+  resolution's coarser steps, so the water lay plain. It replaced
+  crossing sine waves (⛔ below).
   Since 2026-10-21 the land-cover bake also splits the water class into
   **bodies** (`pipeline/bake/water.py`, the legend's `water`): 4-connected
   1 m texels, cut only where OSM maps `waterway=weir|lock_gate|dam` across
