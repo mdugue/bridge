@@ -54,7 +54,6 @@ import {
 } from "@/lib/city/water-bodies";
 import { lampNight } from "./lamp-layer";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
-import { REFLECTIONS, skyReflection } from "./sky-reflection";
 import { type SplatLayer, splatUv } from "./terrain-layer";
 import { viewDirection } from "./view-direction";
 import { RIVER_WAVES, waveNormal, waves } from "./water-waves";
@@ -77,8 +76,6 @@ export interface WaterLayer {
 /** The animation clock, shared by every tile's water and mist. */
 const waterTime = uniform(0);
 
-/** How strongly the view-angle Fresnel tints toward the sky. */
-const FRESNEL = 0.4;
 /** The sun glitter's strength and colour (warm white). */
 const GLITTER = 0.7;
 /** How much steeper the glitter's facets are than the shading's. */
@@ -336,40 +333,20 @@ function foamAt(xy: V2, f: FoamUniforms): F {
   return smoothstep(0.15, 0.6, band.mul(mix(0.55, 1.15, churn)));
 }
 
-/** The sheet's diffuse colour: its body's tint (`base`), the depth tone by
- *  distance from the bank, then the Fresnel sky — mirrored, or the fog's
- *  tint — off the waves' normal `n` (Y-up world), so the sky's gradient
- *  rides the ripples; sharper where the water lies calm (`gust` 0). */
-function waterColour(
-  base: V3,
-  splat: SplatLayer,
-  uv: V2,
-  view: V3,
-  n: V3,
-  gust: F,
-  skyTint: UniformNode<"color", Color>
-): V3 {
-  // Depth by distance from the bank, as on a drawn map: the coverage read
-  // from a coarse mip (~30 m) is 1 mid-stream and falls toward the shore,
-  // so the channel deepens in tone and the shallows lighten.
+/** The sheet's diffuse colour, matte as a drawn map: its body's tint
+ *  (`base`) and the depth tone by distance from the bank. No sky mirrored
+ *  in it — the light on it is the scene's (the waves' normal tilts it a
+ *  little, so the water moves) and the sun's glints (emissive). */
+function waterColour(base: V3, splat: SplatLayer, uv: V2): V3 {
+  // Depth by distance from the bank: the coverage read from a coarse mip
+  // (~30 m) is 1 mid-stream and falls toward the shore, so the channel
+  // deepens in tone and the shallows lighten.
   const deep = smoothstep(
     0.55,
     1,
     texture(splat.colorTexture, uv).bias(float(6)).a
   );
-  const toned = base.mul(
-    mix(vec3(1.1, 1.08, 1.04), vec3(0.86, 0.92, 0.98), deep)
-  );
-  const fresnel = pow(float(1).sub(clamp(dot(view, n), 0, 1)), 4);
-  // Spiegelung (sky-reflection.ts): the sky the sheet mirrors, its
-  // gradient and the glow around the sun; below full strength, the fog's
-  // flat colour it stood in for (REFLECTIONS is 1: none).
-  const sky = mix(
-    skyTint.rgb,
-    skyReflection(n, mix(0.18, 0.4, gust)),
-    REFLECTIONS
-  );
-  return mix(toned, sky, fresnel.mul(FRESNEL));
+  return base.mul(mix(vec3(1.1, 1.08, 1.04), vec3(0.86, 0.92, 0.98), deep));
 }
 
 /**
@@ -379,12 +356,12 @@ function waterColour(
  * shadows and fog apply for free; the wind's wave field (water-waves.ts)
  * tilts its normal, uneven under drifting gusts.
  *
- * On top of the base sheet it fakes poetic water at standard-material cost
- * (no transmission): a view-angle Fresnel sky tint (the fog's colour, which
- * follows the time-of-day palette), a tight additive sun-glitter lobe that
- * fades out at night, and a feathered shoreline. The Fresnel and glitter
- * need world (Y-up) vectors, so they come from `positionWorld` and the
- * camera, NOT the shading normal.
+ * Matte, as a drawn map's water: no sky mirrored in it, only the scene's
+ * light on the moving normal (its specular a soft path toward the sun)
+ * and, additive, the sun's glints and the crests' strokes lit as dashes —
+ * fading out at night — and a feathered shoreline. The reflection needs world (Y-up)
+ * vectors, so it comes from `positionWorld` and the camera, NOT the
+ * shading normal.
  *
  * Water coverage is the ALPHA channel of the palette-painted colour splat
  * (landcover-splat.ts), a soft coverage field sampled LINEAR + mipmapped +
@@ -402,7 +379,10 @@ export function createWaterLayer(
   geometry: BufferGeometry,
   splat: SplatLayer,
   skyTint: UniformNode<"color", Color>,
-  look?: WaterLook
+  look?: WaterLook,
+  /** the mist's triangles (terrain-layer.ts `waterSheetsOf`: it reaches
+   *  farther from the water than the water's own) */
+  mistGeometry: BufferGeometry = geometry
 ): WaterLayer {
   const sun = splat.ground.sunDirection;
   const [minX, minY, maxX, maxY] = splat.bounds;
@@ -412,7 +392,10 @@ export function createWaterLayer(
 
   const material = new MeshStandardNodeMaterial({
     color: 0x7a_9e_bc,
-    roughness: 0.3,
+    // matte, but for a soft path of the sun's reflection: the standard
+    // specular off the waves' normal, so the shadows of houses and decks
+    // cover it (the emissive glints below they do not)
+    roughness: 0.6,
     metalness: 0,
     transparent: true,
     opacity: 0.9,
@@ -438,7 +421,7 @@ export function createWaterLayer(
   material.normalNode = cameraViewMatrix.mul(vec4(n, 0)).xyz.normalize();
   const view = viewDirection().negate();
   material.colorNode = mix(
-    waterColour(texture(tint, uv).rgb, splat, uv, view, n, field.gust, skyTint),
+    waterColour(texture(tint, uv).rgb, splat, uv),
     FOAM_COLOUR,
     foam.mul(FOAM)
   );
@@ -449,20 +432,23 @@ export function createWaterLayer(
   // vanishes after sunset.
   const glitterN = waveNormal(field.slope, GLITTER_TILT);
   const half = normalize(view.add(sun));
-  const spec = pow(clamp(dot(glitterN, half), 0, 1), 120);
+  const facing = clamp(dot(glitterN, half), 0, 1).toVar();
+  // the glints on the sun's path, and the crests' strokes lit up there as
+  // dashes of light
+  const spec = pow(facing, 120).add(pow(facing, 24).mul(field.stroke));
   material.emissiveNode = SUN_COLOUR.mul(
     spec.mul(GLITTER).mul(clamp(sun.y, 0, 1))
   );
 
   const mesh = new Mesh(geometry, material);
   mesh.name = "water";
-  mesh.renderOrder = 2; // after the opaque terrain fill
+  mesh.renderOrder = 2; // among the transparent, which draw after the opaque
   mesh.castShadow = false;
   mesh.receiveShadow = true;
 
   // River mist: a second masked sheet on the SAME (shared) geometry, on the
   // same clock and sky tint.
-  const mistMesh = createWaterMist(geometry, splat, size, skyTint);
+  const mistMesh = createWaterMist(mistGeometry, splat, size, skyTint);
 
   return {
     mesh,

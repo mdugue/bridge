@@ -1,4 +1,5 @@
 import {
+  Box3,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -15,6 +16,7 @@ import {
   RedFormat,
   RGBAFormat,
   RGFormat,
+  Sphere,
   Texture,
   UnsignedByteType,
   Vector2,
@@ -63,7 +65,16 @@ import {
   MEADOW_CLASS,
   ROAD_CLASS,
   srgbToLinear,
+  WATER_CLASS,
 } from "@/lib/city/landcover";
+import {
+  MIST_REACH_M,
+  reach,
+  trianglesOver,
+  WATER_REACH_M,
+  type WaterMask,
+  waterMaskOf,
+} from "@/lib/city/water-mask";
 import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import { colonyCropUv } from "@/lib/city/cultivated";
 import { type MarkingTable, packMarkingTable } from "@/lib/city/markings";
@@ -231,7 +242,12 @@ interface LoadedRaster {
   height: number;
   texture: Texture;
   width: number;
+  /** the decoded bytes, until the upload drops them (not a bitmap's) */
+  data?: Uint8Array;
 }
+
+/** Reads a raster's decoded bytes before its upload may drop them. */
+type RasterInspect = (data: Uint8Array, width: number, height: number) => void;
 
 /**
  * How a data raster is sampled: its channels (the bake interleaves them in
@@ -303,14 +319,22 @@ async function loadRasterTexture(
   url: string,
   look: RasterLook,
   renderer?: WebGPURenderer,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  inspect?: RasterInspect
 ): Promise<LoadedRaster> {
   const bytes = await fetchRasterBytes(url, signal);
   return inRasterTurn(async () => {
     const raster = await decodeRaster(bytes, look.channels, signal);
+    if (inspect && raster.data) {
+      inspect(raster.data, raster.width, raster.height);
+    }
     lookAs(raster, look);
     uploadNow(raster.texture, renderer);
-    return raster;
+    return {
+      texture: raster.texture,
+      width: raster.width,
+      height: raster.height,
+    };
   }, signal);
 }
 
@@ -352,7 +376,7 @@ async function decodeRaster(
   // them. Twelve resident copies took mobile Safari past its per-tab
   // memory limit when these were bitmaps.
   dropDataOnUpload(texture);
-  return { texture, width, height };
+  return { texture, width, height, data: raster.data };
 }
 
 /**
@@ -363,10 +387,11 @@ async function loadOptionalRaster(
   url: string,
   look: RasterLook,
   renderer?: WebGPURenderer,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  inspect?: RasterInspect
 ): Promise<LoadedRaster | null> {
   try {
-    return await loadRasterTexture(url, look, renderer, signal);
+    return await loadRasterTexture(url, look, renderer, signal, inspect);
   } catch (err) {
     if (isAbortError(err)) {
       throw err;
@@ -411,9 +436,10 @@ async function loadBitmapTexture(
 function loadSplatTexture(
   url: string,
   renderer: WebGPURenderer,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  inspect?: RasterInspect
 ): Promise<LoadedRaster | null> {
-  return loadOptionalRaster(url, idLook(1), renderer, signal);
+  return loadOptionalRaster(url, idLook(1), renderer, signal, inspect);
 }
 
 /** A class raster and the colour splat painted from it. */
@@ -422,6 +448,12 @@ export interface SplatRasters {
   painted: LandcoverSplat;
   texture: Texture;
   width: number;
+  /**
+   * Where the raster has water (lib/city/water-mask.ts), read before its
+   * bytes go: null where it has none, undefined where it could not be read
+   * (a PNG the browser decoded) — the sheets then cover the whole tile.
+   */
+  water?: WaterMask | null;
 }
 
 /**
@@ -435,7 +467,10 @@ export async function loadSplatRasters(
   renderer: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<SplatRasters | null> {
-  const raster = await loadSplatTexture(url, renderer, signal);
+  let water: WaterMask | null | undefined;
+  const raster = await loadSplatTexture(url, renderer, signal, (data, w, h) => {
+    water = waterMaskOf(data, w, h, WATER_CLASS);
+  });
   if (!raster) {
     return null;
   }
@@ -448,6 +483,7 @@ export async function loadSplatRasters(
   }
   return {
     ...raster,
+    water,
     painted: paintLandcoverSplat(
       renderer,
       texture,
@@ -1319,7 +1355,9 @@ function ownWaterIndex(
 
 /**
  * The coarse terrain's grid index and the water index made from it, one
- * copy for the whole site. Every coarse tile carries the same index byte
+ * copy for the whole site (the water index only for a class raster the
+ * browser decoded: with the raster's water cells each tile's sheets keep
+ * their own, far smaller indices — `waterSheetsOf`). Every coarse tile carries the same index byte
  * for byte (the bake triangulates every tile's grid and skirt alike) —
  * 6 MB on the GPU and as much on the CPU, its water index another 6 MB,
  * i.e. 80 % of a coarse tile's geometry. The first tile's become the
@@ -1670,6 +1708,11 @@ function splatRasters(splat: SplatLayer): Texture[] {
   return [...textures].filter((t): t is Texture => t !== undefined);
 }
 
+/** The terrain's draw order among the opaque (dressTerrain): after the
+ *  rest, at 0. (The transparent, the water sheets among them, are a list
+ *  of their own, drawn after every opaque thing whatever their order.) */
+const TERRAIN_RENDER_ORDER = 1;
+
 /** The splat's baked light as the fine level's kerbs, fences, stairs and
  *  walls bind it (the same textures and rows, by reference). */
 function groundLightOf(splat: SplatLayer): GroundLight | undefined {
@@ -1688,6 +1731,113 @@ function groundLightOf(splat: SplatLayer): GroundLight | undefined {
   };
 }
 
+/** The water and mist sheets' geometries: one, or two over the same
+ *  positions with an index each. */
+interface WaterSheets {
+  water: BufferGeometry;
+  mist: BufferGeometry;
+}
+
+/**
+ * The sheets' geometries for a terrain level. Without a mask (a class
+ * raster the browser decoded) both drape the whole level, as one
+ * geometry, its index the site's on a grid (`GridShare`); with one, each
+ * keeps the triangles within its reach of water — the mist's reaches
+ * farther — over the level's own positions, with an index of its own.
+ */
+function waterSheetsOf(
+  mesh: Mesh,
+  extras: TerrainExtras,
+  toData: Matrix4,
+  offset: { cx: number; cy: number },
+  mask: WaterMask | undefined,
+  grids: GridShare | undefined
+): WaterSheets {
+  const upFacing = extras.tin !== undefined;
+  if (!mask) {
+    const one = waterGeometryOf(
+      mesh.geometry,
+      upFacing,
+      grids && ((own, position) => grids.water(extras.n, own, position))
+    );
+    return { water: one, mist: one };
+  }
+  const cells = vertexCells(mesh, toData, offset, extras.bounds, mask.cells);
+  const [minX, , maxX] = extras.bounds;
+  const tileM = maxX - minX;
+  const position = mesh.geometry.getAttribute("position");
+  const index = mesh.geometry.getIndex();
+  // the ground's triangles with area in plan (no skirt), once for both
+  const plan = index ? ownWaterIndex(index, position).array : null;
+  const sheet = (metres: number) => {
+    const geometry = waterGeometryOf(
+      mesh.geometry,
+      upFacing,
+      () =>
+        new BufferAttribute(
+          trianglesOver(
+            plan as Uint16Array | Uint32Array,
+            cells.x,
+            cells.y,
+            reach(mask, metres, tileM)
+          ),
+          1
+        )
+    );
+    boundToIndex(geometry);
+    return geometry;
+  };
+  const water = sheet(WATER_REACH_M);
+  const mist = sheet(MIST_REACH_M);
+  // one set of normals for both (a TIN's own, up-facing)
+  mist.setAttribute("normal", water.getAttribute("normal"));
+  return { water, mist };
+}
+
+/**
+ * Bounds around a sheet's triangles, not the tile's: a sheet along one bank
+ * is culled while the camera looks across the dry rest of the tile.
+ */
+function boundToIndex(geometry: BufferGeometry): void {
+  const index = geometry.getIndex();
+  if (!index) {
+    return;
+  }
+  const position = geometry.getAttribute("position");
+  const box = new Box3();
+  const v = new Vector3();
+  for (let i = 0; i < index.count; i++) {
+    box.expandByPoint(v.fromBufferAttribute(position, index.getX(i)));
+  }
+  geometry.boundingBox = box;
+  geometry.boundingSphere = box.getBoundingSphere(new Sphere());
+}
+
+/** Each vertex's mask cell (x east, y south from the tile's north edge). */
+function vertexCells(
+  mesh: Mesh,
+  toData: Matrix4,
+  offset: { cx: number; cy: number },
+  bounds: TerrainBounds,
+  cells: number
+): { x: Uint16Array; y: Uint16Array } {
+  const position = mesh.geometry.getAttribute("position");
+  const [minX, minY, maxX, maxY] = bounds;
+  const x = new Uint16Array(position.count);
+  const y = new Uint16Array(position.count);
+  const v = new Vector3();
+  const sx = cells / (maxX - minX);
+  const sy = cells / (maxY - minY);
+  for (let i = 0; i < position.count; i++) {
+    v.fromBufferAttribute(position, i).applyMatrix4(toData);
+    const cx = Math.floor((v.x + offset.cx - minX) * sx);
+    const cy = Math.floor((maxY - (v.y + offset.cy)) * sy);
+    x[i] = Math.min(cells - 1, Math.max(0, cx));
+    y[i] = Math.min(cells - 1, Math.max(0, cy));
+  }
+  return { x, y };
+}
+
 /**
  * A dressed level's buffers that nothing reads on the CPU once its compile
  * has uploaded them (tile-stream.ts drops their CPU copies then: three.js
@@ -1697,7 +1847,8 @@ function groundLightOf(splat: SplatLayer): GroundLight | undefined {
  *   the height samplers copied what they need at dressing) and a grid's
  *   own index — not a TIN's, which its height index reads
  *   (lib/city/terrain-tin.ts `TinIndex`), nor the site's shared one;
- * - the water's own index (its positions are the ground's); not its
+ * - the water's and the mist's own indices (their positions are the
+ *   ground's); not their
  *   normals, which its material never reads, so a later material might;
  * - the stairs', walls' and kerbs' positions, normals and index, the
  *   stairs' and walls' vertex colours (they draw with them);
@@ -1718,6 +1869,9 @@ export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
     ground.getAttribute("normal"),
     layer.tin ? null : ground.getIndex(),
     layer.water?.mesh.geometry.getIndex(),
+    layer.water && layer.water.mistMesh.geometry !== layer.water.mesh.geometry
+      ? layer.water.mistMesh.geometry.getIndex()
+      : null,
     ...of(layer.stairs, ["position", "normal", "color"]),
     ...of(layer.walls, ["position", "normal", "color"]),
     ...of(layer.kerbs, ["position", "normal"]),
@@ -1729,7 +1883,8 @@ export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
  * Dresses a streamed terrain mesh: loads its class raster (and NDVI), paints
  * the colour splat, swaps in the land-cover material and hangs the water and
  * mist sheets under it. `toData` maps the mesh's local frame to the data
- * frame (see gridElevations). The mesh stays owned by the tile.
+ * frame (see gridElevations); it is read again after the rasters load, so
+ * it must be this level's alone. The mesh stays owned by the tile.
  */
 export async function dressTerrain(
   mesh: Mesh,
@@ -1775,18 +1930,39 @@ export async function dressTerrain(
   // also lets the sun rig run a much smaller shadow bias (no contact light-leak).
   mesh.castShadow = false;
   mesh.receiveShadow = true;
+  // After every other opaque thing (they sort at 0, front to back): the
+  // ground's fragment pass — the splat, the kerbs' and lawns' edges, the
+  // markings, the sports lines — is the scene's dearest, and drawn last it
+  // shades only what the buildings, trees and walls left uncovered (the
+  // early depth test rejects the rest before the shader runs — not under
+  // Modell's Ausschnitt, whose clipping is per fragment). Its tile sorted
+  // by its origin before, often in front of the buildings it lies under.
+  // (An Apple GPU removes hidden fragments itself; every other one does
+  // not.) The price: what a hill hides is shaded before the hill covers
+  // it — rarer than ground under houses and trees, and fogged far off.
+  mesh.renderOrder = TERRAIN_RENDER_ORDER;
 
   // Water re-uses the terrain geometry, masked to the water class: siblings
   // of the mesh with its (dequantising) transform, so they come and go with
   // the tile.
-  const waterGeometry = waterGeometryOf(
-    mesh.geometry,
-    extras.tin !== undefined,
-    grids && ((own, position) => grids.water(n, own, position))
-  );
-  const water = splat
-    ? createWaterLayer(waterGeometry, splat, opts.fogColor, extras.water)
-    : undefined;
+  // With the class raster's water cells (`rasters.water`) each sheet keeps
+  // only the triangles its coverage can reach (lib/city/water-mask.ts); a
+  // tile without water hangs none.
+  const mask = rasters?.water;
+  const sheets =
+    splat && mask !== null
+      ? waterSheetsOf(mesh, extras, toData, opts.offset, mask, grids)
+      : null;
+  const water =
+    splat && sheets
+      ? createWaterLayer(
+          sheets.water,
+          splat,
+          opts.fogColor,
+          extras.water,
+          sheets.mist
+        )
+      : undefined;
   if (water) {
     for (const sheet of [water.mesh, water.mistMesh]) {
       sheet.position.copy(mesh.position);
@@ -1815,7 +1991,12 @@ export async function dressTerrain(
       // Shares the tile's positions; only its own index (and normals) go —
       // not the site's (GridShare), which other tiles draw with.
       detachShared(mesh.geometry);
-      disposeGeometry(waterGeometry);
+      if (sheets) {
+        disposeGeometry(sheets.water);
+        if (sheets.mist !== sheets.water) {
+          disposeGeometry(sheets.mist);
+        }
+      }
       water?.dispose();
       free();
     },

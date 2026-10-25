@@ -14,7 +14,8 @@ import type { F, V3 } from "./shader-chunks";
 import { viewDirection } from "./view-direction";
 
 /**
- * Spiegelung: the sky in glass, gilding and water.
+ * Spiegelung: the sky in glass, gilding and fountain water (the river is
+ * matte, water-layer.ts).
  *
  * The scene has no environment map on purpose — set on the scene, one
  * would light every surface with its diffuse irradiance too and lift the

@@ -1374,7 +1374,6 @@ export class DressingPlugin {
   private gateOpen = false;
   /** tiles whose dressing was tried (see TileStream.dressingSettled) */
   readonly settled = new Set<string>();
-  private readonly toData = new Matrix4();
   private tiles: PluginTiles | null = null;
   /** the content roots whose terrain reads each raster (raster-shares.ts) */
   private readonly rasterShares = new RasterShares<Object3D>();
@@ -1679,16 +1678,20 @@ export class DressingPlugin {
     extras: TerrainExtras
   ): Promise<{ dressed?: Promise<void> }> {
     // Local → data frame: the node's dequantisation, then the content root's
-    // glTF→3D Tiles up-axis turn (the tileset frame IS the data frame).
+    // glTF→3D Tiles up-axis turn (the tileset frame IS the data frame). Each
+    // level its own: the dressing reads it again after its rasters load,
+    // when other tiles' dressings have started (one shared matrix gave the
+    // water sheets another tile's frame — their triangles chosen over dry
+    // land, the river left without them).
     scene.updateMatrix();
     mesh.updateMatrix();
-    this.toData.multiplyMatrices(scene.matrix, mesh.matrix);
+    const toData = new Matrix4().multiplyMatrices(scene.matrix, mesh.matrix);
     const own = new AbortController();
     this.loadAborts.set(scene, own);
     const either = eitherSignal(own.signal, this.lifetime.signal);
     let terrain: TerrainLayer;
     try {
-      terrain = await dressTerrain(mesh, extras, this.toData, {
+      terrain = await dressTerrain(mesh, extras, toData, {
         fileUrl: this.url,
         fogColor: this.ctx.fogColor,
         lowRasters: this.ctx.lowRasters,

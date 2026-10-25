@@ -62,7 +62,8 @@ kann, schickt er Berichte:
 - wenn ein Fehler auftritt (höchstens fünf je Besuch, dazu der eine, an dem
   der Viewer ausfällt),
 - je Besuch eine Zusammenfassung, wie er lief: Zeit bis zum ersten Bild und
-  bis alles geladen war, Bildrate, belegter Grafik- und Arbeitsspeicher,
+  bis alles geladen war, Bildrate, wie lange ein Bild den Prozessor und die
+  Grafikkarte beschäftigt, belegter Grafik- und Arbeitsspeicher,
 - Beginn und Ende des Besuchs, normal oder mit Absturz.
 
 Ein Bericht enthält Browser, Betriebssystem und Gerätetyp (User-Agent),
@@ -71,7 +72,9 @@ die Grafikschnittstelle (WebGPU oder WebGL2), wie weit der Viewer seine
 Grafik auf diesem Gerät nach früheren Abstürzen zurückgenommen hat (die
 Sparstufe, siehe unten), die
 aufgerufene Seite ohne Parameter (etwa `/dresden`), den Verlauf des Besuchs
-(Ladeschritte, Fehlermeldungen, Bildrate, Grafik- und Arbeitsspeicher, geladene und gerade
+(Ladeschritte, Fehlermeldungen, Bildrate, Rechenzeit je Bild auf Prozessor
+und Grafikkarte, gezeichnete Pixel, die höchste erreichte Bildwiederholrate
+(meist die des Bildschirms), Grafik- und Arbeitsspeicher, geladene und gerade
 ladende Kacheln, ob der Browser sich für online hält, wann die Seite im
 Hintergrund lag, Bildstil, Gehen oder Fliegen, Höhe der Kamera über dem
 Boden), Zeitpunkte – nach einem Absturz auch, wie bald darauf die Seite

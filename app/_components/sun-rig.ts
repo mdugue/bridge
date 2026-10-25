@@ -289,7 +289,7 @@ export function createSunRig(
 
   const sky = createSkyDome(scene);
   // The same dome once more, alone in a scene of its own: what glass,
-  // gilding and water mirror (sky-reflection.ts).
+  // gilding and fountain water mirror (sky-reflection.ts).
   const mirroredSky = new Scene();
   const mirrored = createSkyDome(mirroredSky);
   const reflection = renderer

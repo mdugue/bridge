@@ -1,5 +1,6 @@
 import { SINK } from "@/lib/city/ground-join";
 import {
+  Box3,
   BufferGeometry,
   CapsuleGeometry,
   CatmullRomCurve3,
@@ -15,6 +16,7 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
+  type Object3D,
   Quaternion,
   Shape,
   ShapeUtils,
@@ -793,15 +795,14 @@ interface Stood {
   piece: FurniturePiece;
 }
 
+/** One cell's pieces of a model, on the model's geometry (one per tile,
+ *  shared by its cells). */
 function instanced(
   model: FurnitureModel,
+  geo: BufferGeometry,
   stood: Stood[],
   material: Material
-): Instances | null {
-  const geo = modelGeometry(model);
-  if (!geo) {
-    return null;
-  }
+): Instances {
   const mesh = new Instances(geo, material, stood.length);
   const m = new Matrix4();
   const q = new Quaternion();
@@ -979,6 +980,78 @@ const materials = {
   flush: () => sceneMaterial("furniture-flush", flushMaterial),
 };
 
+/**
+ * The furniture's cells (m, on the site's grid, so a 2 km tile holds 16):
+ * each model's pieces are one instanced set per cell, so a cell far from
+ * the eye can be left out (`showFurnitureNear`). Whole tiles drew every
+ * bench, hoop and signal of the city they reached — 1.9 M triangles from
+ * 150 m up, each a few pixels or less, in the main pass and the shadow map.
+ */
+export const FURNITURE_CELL_M = 500;
+/**
+ * How near (m) a cell's pieces must come to the eye to draw — a bench
+ * there is two pixels tall — and how far they go before it is hidden
+ * again (a band, so a cell on the line does not flip, and redraw the
+ * shadow map, at every step).
+ */
+export const FURNITURE_IN_M = 350;
+export const FURNITURE_OUT_M = 400;
+
+/** The pieces of each cell (by their site coordinates). */
+function byCell(stood: Stood[]): Stood[][] {
+  const cells = new Map<string, Stood[]>();
+  for (const s of stood) {
+    const key = `${Math.floor(s.piece.x / FURNITURE_CELL_M)}:${Math.floor(s.piece.y / FURNITURE_CELL_M)}`;
+    const list = cells.get(key) ?? [];
+    list.push(s);
+    cells.set(key, list);
+  }
+  return [...cells.values()];
+}
+
+/** Marks a set as a cell's, with the box its pieces stand in (scene frame,
+ *  a few metres for the pieces' own size). */
+function asCell(mesh: Instances, stood: Stood[]): Instances {
+  const box = new Box3();
+  for (const s of stood) {
+    box.expandByPoint(s.at);
+  }
+  mesh.userData.furnitureCell = box.expandByScalar(3);
+  return mesh;
+}
+
+const cellBox = new Box3();
+/**
+ * Shows the furniture cells under `root` (a tile's furniture, its tram
+ * stops' signs) whose pieces are near `eye` (the scene frame), hides the
+ * far ones; none hidden without an eye (Modell: its views and exports
+ * draw the whole picture at one scale). True when any changed (the shadow
+ * map must then be redrawn).
+ */
+export function showFurnitureNear(
+  root: Object3D,
+  eye: Vector3 | null
+): boolean {
+  let changed = false;
+  root.traverse((child) => {
+    const box = child.userData.furnitureCell as Box3 | undefined;
+    if (!box) {
+      return;
+    }
+    let near = true;
+    if (eye) {
+      cellBox.copy(box).applyMatrix4(child.matrixWorld);
+      const reach = child.visible ? FURNITURE_OUT_M : FURNITURE_IN_M;
+      near = cellBox.distanceToPoint(eye) <= reach;
+    }
+    if (near !== child.visible) {
+      child.visible = near;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
 /** One tile's street furniture as instanced models on its ground. */
 export function buildFurniture(
   features: FurnitureFeature[],
@@ -1006,18 +1079,18 @@ export function buildFurniture(
   }
   for (const model of FURNITURE_MODELS) {
     const stood = byModel.get(model);
-    const mesh = stood
-      ? instanced(
-          model,
-          stood,
-          model === "columnLit" ? materials.glow() : materials.matte()
-        )
-      : null;
-    if (mesh) {
-      group.add(mesh);
-    }
-    if (stood && (model === "clock" || model === "wallClock")) {
-      group.add(clockHands(model, stood));
+    const geo = stood ? modelGeometry(model) : null;
+    for (const cell of stood && geo ? byCell(stood) : []) {
+      const mesh = instanced(
+        model,
+        geo as BufferGeometry,
+        cell,
+        model === "columnLit" ? materials.glow() : materials.matte()
+      );
+      group.add(asCell(mesh, cell));
+      if (model === "clock" || model === "wallClock") {
+        group.add(asCell(clockHands(model, cell), cell));
+      }
     }
   }
   const patches = buildPatches(areas, materials.flush(), ctx);
