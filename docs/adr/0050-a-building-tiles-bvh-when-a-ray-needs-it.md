@@ -85,3 +85,17 @@ rebuilds a BVH only where there was one.
   the memory ran out, and a desktop gains the same parse time back.
 - **`indirect: true`** (no index reorder): another Uint32 per triangle
   kept for good; the reorder is harmless (above).
+
+## Amendment (2026-10-26): the near tiles' build in a worker
+
+The worker alternative is no longer blocked: Turbopack bundles
+`new Worker(new URL("./bvh-worker.ts", import.meta.url))` as it bundles
+the ground worker (`ground-worker.ts`). The tiles within 400 m of the
+camera, built ahead of a ray in idle time until then, are built in the
+BVH worker (`bvh-client.ts`) — on a flight they were its longest stalls
+(0.8–1.6 s on the phone profile). Lazy stays: a ray that needs a tile
+now still builds it on the main thread. The positions and index are
+handed over, not copied, so the page's memory does not grow (the build's
+scratch is on the worker's heap instead of the page's); while they are
+away `bvhBuilding` holds and every CPU reader passes the tile over or
+waits (a demolish). The reorder stays as it was.

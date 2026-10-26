@@ -1244,9 +1244,17 @@ build each such tile as they reach it — a pick only up to its first hit,
 the probe and the double tap only up to the ground — while the autofocus
 passes over a tile without one; none walks a tile's triangles one by one,
 three-mesh-bvh's fallback on a mesh without a BVH. The tiles within 400 m
-of the camera are built in idle time, one at a time
-(`nearestWithoutBvh`, at the 10 Hz pose tick), so a walk into the next
-tile finds its BVH there. The spawn tile's is built by the placing on its
+of the camera are built ahead, one at a time (`nearestWithoutBvh`, at the
+10 Hz pose tick), so a walk into the next tile finds its BVH there —
+**in the BVH worker** (`bvh-client.ts`, `bvh-worker.ts`): built in idle
+time on the main thread, one dense tile was 0.2 s on a desktop and
+0.8–1.6 s on the phone profile, the longest stall of a flight once the
+ground had left it. The tile's positions and index are handed to the
+worker, not copied (35 MB for a dense tile; a phone's memory must not
+grow), and come back sorted with the BVH's nodes; meanwhile the GPU
+draws from its own buffers, the tile counts as without a BVH and as
+not to be built here (`bvhBuilding`): the rays pass it over, a demolish
+waits for it. The spawn tile's is built by the placing on its
 ground before the first frame (ADR 0032 needs it there): after its
 terrain has landed, not inside the parse that landed its buildings. The
 collider builds nothing before that placing — the frames before it stand

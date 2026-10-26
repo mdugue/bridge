@@ -188,7 +188,8 @@ config change.
     third of them, wider —, and `low-vegetation-layer.ts`, the OSM
     hedges), `city-layer.ts` (dresses a
     building tile: clay material, object table, demolish; its BVH built
-    when a ray first needs it, `ensureCityBvh`),
+    when a ray first needs it, `ensureCityBvh`, or ahead near the camera
+    in the BVH worker, `bvh-client.ts`),
     `clay-windows.ts` (every house's windows, drawn by the clay's
     fragment pass as recesses — no geometry, no glass; ADR 0049),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
@@ -807,7 +808,11 @@ triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`).
 `nearestCityHit`, `cityObjectsAlong` or the collider, which ask only the
 tiles whose box the ray enters and build (or skip) a missing BVH — a
 plain `intersectObject(city.mesh)` on a tile without one is
-three-mesh-bvh's brute-force fallback over two million triangles. The glTF extras key is **`tileId`**: the
+three-mesh-bvh's brute-force fallback over two million triangles. The
+tiles near the camera get theirs ahead in the BVH worker
+(`bvh-client.ts`): their positions and index are handed over meanwhile,
+so **nothing may read a building tile's CPU positions or index while
+`bvhBuilding` says so** — skip the tile or wait. The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The
 walk/fly camera does not stream itself: the renderer streams for its twin
 whose far plane ends where the fog does, on a phone at 2.2 km at the

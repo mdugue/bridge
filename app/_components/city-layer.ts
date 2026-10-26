@@ -13,6 +13,7 @@ import {
   Raycaster,
   Vector2,
 } from "three/webgpu";
+import { buildBvhOffThread, bvhBuilding } from "./bvh-client";
 import { rayEntry } from "./collision";
 import { streamTimings } from "./stream-timing";
 import { setPickRay } from "./view-ray";
@@ -53,11 +54,16 @@ export interface CityLayer {
   facadeReadings: (readings: FacadeReadings) => void;
   /** what the twin knows about one object (read from the table on demand) */
   facts: (objectIndex: number) => ObjectFacts;
-  /** whether the tile's BVH is built (`ensureCityBvh`) */
+  /** whether the tile's BVH is built (`ensureCityBvh`) — not while the
+   *  worker builds it (`prepareBvh`) */
   hasBvh: () => boolean;
-  /** builds the tile's BVH unless it has one (a long task: ≈75 ms for a
-   *  dense tile on a desktop, several times that on a phone) */
+  /** builds the tile's BVH here and now unless it has one or the worker
+   *  is building it (a long task: ≈0.2 s for a dense tile on a desktop,
+   *  0.8–1.6 s on the phone profile) */
   ensureBvh: () => void;
+  /** builds the tile's BVH in the BVH worker (bvh-client.ts): what the
+   *  tiles near the camera get ahead of a ray; settles once it is built */
+  prepareBvh: () => Promise<void>;
   /** marks the objects someone asks about (the clay's pencil hatch); an
    *  empty set clears the mark */
   mark: (objects: ReadonlySet<number>) => void;
@@ -233,7 +239,8 @@ function objectTexture(table: CityObjectTable): {
  * the GPU keeps the order it was given, the same triangles.
  */
 export function ensureCityBvh(mesh: Mesh): void {
-  if (!mesh.geometry.boundsTree) {
+  // (none while the worker has its positions and index: bvh-client.ts)
+  if (!(mesh.geometry.boundsTree || bvhBuilding(mesh.geometry))) {
     streamTimings.timedSync(
       "tile:bvh",
       () => mesh.geometry.computeBoundsTree(),
@@ -318,6 +325,8 @@ export function dressCity(
     rebuild();
   }
 
+  /** the worker's build of the BVH, while it runs */
+  let prepared: Promise<void> | null = null;
   // the asked objects, kept for the facade readings' repack
   let marked: ReadonlySet<number> = new Set();
   const layer: CityLayer = {
@@ -336,7 +345,12 @@ export function dressCity(
       for (const i of doomed) {
         alive[i] = 0;
       }
-      rebuild();
+      // the index is the worker's while it builds the BVH: rebuilt after
+      if (prepared) {
+        void prepared.then(rebuild, rebuild);
+      } else {
+        rebuild();
+      }
       return true;
     },
     dispose: () => {
@@ -361,6 +375,14 @@ export function dressCity(
     facts: (objectIndex) => readObjectFacts(metadata, objectIndex),
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => ensureCityBvh(mesh),
+    prepareBvh: () => {
+      prepared ??= streamTimings
+        .timed("tile:bvh-worker", () => buildBvhOffThread(geometry), tile)
+        .finally(() => {
+          prepared = null;
+        });
+      return prepared;
+    },
     mark: (next) => {
       marked = next;
       if (markObjects(objects.texture, table, marked)) {
@@ -459,7 +481,7 @@ export function nearestWithoutBvh(
   let best: CityLayer | null = null;
   let bestDistance = reach;
   for (const layer of layers) {
-    if (layer.hasBvh()) {
+    if (layer.hasBvh() || bvhBuilding(layer.mesh.geometry)) {
       continue;
     }
     const { min, max } = worldBox(layer.mesh);
