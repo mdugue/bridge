@@ -394,6 +394,14 @@ export function tinSurface(tin: TerrainTin): TinSurface {
  * barycentric tests per query — vegetation and lamps call this tens of
  * thousands of times per tile.
  */
+export interface TinBuckets {
+  cell: number;
+  cols: number;
+  rows: number;
+  items: Uint32Array;
+  start: Uint32Array;
+}
+
 export class TinIndex {
   private readonly cols: number;
   private readonly rows: number;
@@ -402,8 +410,21 @@ export class TinIndex {
   private readonly start: Uint32Array;
   private readonly surface: TinSurface;
 
-  constructor(surface: TinSurface, cell = INDEX_CELL_M) {
+  /** `built`: the buckets an index over the same surface built elsewhere
+   *  (the ground worker's, app/_components/ground-worker.ts) — taken as
+   *  they are, not built again. */
+  constructor(surface: TinSurface, cell = INDEX_CELL_M, built?: TinBuckets) {
     this.surface = surface;
+    if (built) {
+      ({
+        cell: this.cell,
+        cols: this.cols,
+        rows: this.rows,
+        items: this.items,
+        start: this.start,
+      } = built);
+      return;
+    }
     const [minX, minY, maxX, maxY] = surface.bounds;
     this.cell = cell;
     this.cols = Math.max(1, Math.ceil((maxX - minX) / cell));
@@ -465,6 +486,12 @@ export class TinIndex {
         }
       }
     }
+  }
+
+  /** The buckets, to rebuild the index from elsewhere (`built`). */
+  get buckets(): TinBuckets {
+    const { cell, cols, rows, items, start } = this;
+    return { cell, cols, rows, items, start };
   }
 
   /**

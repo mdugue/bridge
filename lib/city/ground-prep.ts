@@ -12,7 +12,7 @@
  * through three's per-vertex accessors: up to 1.4 s on a phone). No
  * THREE, no DOM.
  */
-import { planTriangles } from "./terrain-tin";
+import { planTriangles, TinIndex, type TinBuckets } from "./terrain-tin";
 import {
   MIST_REACH_M,
   reach,
@@ -65,6 +65,9 @@ export interface GroundPrep {
   /** a TIN's projected x, y per vertex and their elevations (m) */
   xy?: Float64Array;
   z?: Float32Array;
+  /** a TIN's height index over them (lib/city/terrain-tin.ts `TinIndex`),
+   *  every triangle of the level's index, skirt included */
+  tin?: TinBuckets;
   /** the water's and the mist's triangles, where the tile has water */
   water?: SheetPrep;
   mist?: SheetPrep;
@@ -248,6 +251,15 @@ export function prepareGround(input: GroundPrepInput): GroundPrep {
     }
     out.xy = xy;
     out.z = z;
+    if (input.index) {
+      // a skirt quad is vertical: no area in plan, the lookup never picks it
+      out.tin = new TinIndex({
+        bounds: [...input.bounds],
+        xy,
+        z,
+        triangles: input.index,
+      }).buckets;
+    }
     projected = (i, p) => {
       p[0] = xy[2 * i];
       p[1] = xy[2 * i + 1];
@@ -273,6 +285,8 @@ export function groundPrepTransfer(prep: GroundPrep): ArrayBuffer[] {
     prep.elevations,
     prep.xy,
     prep.z,
+    prep.tin?.items,
+    prep.tin?.start,
     prep.water?.index,
     prep.water?.box,
     prep.mist?.index,

@@ -775,8 +775,9 @@ stays their measure; the tile cache counts true bytes.
 - **A level's ground arithmetic runs in a worker**
   (`lib/city/ground-prep.ts`, `app/_components/ground-worker.ts`). Its
   heights in the data frame (a grid's elevations, a TIN's projected
-  vertices for its height index) and the sheets' triangles and boxes
-  are worked out off the main thread from the positions as stored; the
+  vertices and its height index's buckets — `TinIndex`, 0.3–0.6 s a
+  fine level on the phone profile when it was built on the page) and
+  the sheets' triangles and boxes are worked out off the main thread from the positions as stored; the
   level waits for them inside its dressing, as it waited for its
   rasters. Read through three's per-vertex accessors on the main thread
   they were the longest task of a flight: 0.2–0.7 s per terrain level on
