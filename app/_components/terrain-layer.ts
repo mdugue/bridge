@@ -67,14 +67,13 @@ import {
   srgbToLinear,
   WATER_CLASS,
 } from "@/lib/city/landcover";
-import {
-  MIST_REACH_M,
-  reach,
-  trianglesOver,
-  WATER_REACH_M,
-  type WaterMask,
-  waterMaskOf,
-} from "@/lib/city/water-mask";
+import { type WaterMask, waterMaskOf } from "@/lib/city/water-mask";
+import type {
+  GroundPositions,
+  GroundPrep,
+  GroundPrepInput,
+  SheetPrep,
+} from "@/lib/city/ground-prep";
 import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import { colonyCropUv } from "@/lib/city/cultivated";
 import { type MarkingTable, packMarkingTable } from "@/lib/city/markings";
@@ -87,6 +86,7 @@ import {
 } from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import { colonyGarden } from "./cultivated-layer";
+import { prepareGroundOffThread } from "./ground-prep-client";
 import {
   fetchOptionalJson,
   isAbortError,
@@ -136,6 +136,7 @@ import {
   type AnyAttribute,
   detachShared,
   disposeGeometry,
+  isSceneShared,
   markSceneShared,
   textureBytes,
   trackTexture,
@@ -1251,22 +1252,6 @@ export function createTerrainMaterial(
   return material;
 }
 
-/**
- * The grid's elevations in the data frame, read back from the mesh: the bake
- * wrote the n·n grid first (row 0 = north), quantised, with the node carrying
- * the dequantisation and the renderer the glTF→3D Tiles up-axis turn. `toData`
- * is that chain up to (not including) the viewer's `world` group.
- */
-function gridElevations(mesh: Mesh, n: number, toData: Matrix4): Float32Array {
-  const position = mesh.geometry.getAttribute("position");
-  const out = new Float32Array(n * n);
-  const v = new Vector3();
-  for (let i = 0; i < out.length; i++) {
-    out[i] = v.fromBufferAttribute(position, i).applyMatrix4(toData).z;
-  }
-  return out;
-}
-
 /** A level's ground height, and the bytes its lookup keeps on the CPU. */
 interface HeightLookup {
   heightAt: (x: number, y: number) => number | null;
@@ -1276,33 +1261,23 @@ interface HeightLookup {
 /**
  * Ground height over a TIN (`extras.tin`, the fine level): its surface
  * triangles indexed in the projected frame (lib/city/terrain-tin.ts
- * TinIndex), vertices read back from the mesh like `gridElevations` — so
- * the walker stands on exactly the triangles the GPU draws.
+ * TinIndex), its vertices read back from the mesh by the ground worker
+ * (`groundPrepInput`) — so the walker stands on exactly the triangles the
+ * GPU draws.
  */
 function tinHeightAt(
   mesh: Mesh,
   bounds: TerrainBounds,
-  toData: Matrix4,
-  offset: { cx: number; cy: number }
+  ground: GroundPrep
 ): HeightLookup {
-  const position = mesh.geometry.getAttribute("position");
   const index = mesh.geometry.getIndex();
-  if (!index) {
+  if (!(index && ground.xy && ground.z)) {
     return { heightAt: () => null, bytes: 0 };
-  }
-  const xy = new Float64Array(position.count * 2);
-  const z = new Float32Array(position.count);
-  const v = new Vector3();
-  for (let i = 0; i < position.count; i++) {
-    v.fromBufferAttribute(position, i).applyMatrix4(toData);
-    xy[2 * i] = v.x + offset.cx;
-    xy[2 * i + 1] = v.y + offset.cy;
-    z[i] = v.z;
   }
   const tin = new TinIndex({
     bounds,
-    xy,
-    z,
+    xy: ground.xy,
+    z: ground.z,
     // Every triangle, skirt included: a skirt quad is vertical, so its
     // triangles have no area in plan and the lookup never picks one.
     triangles: index.array,
@@ -1310,10 +1285,60 @@ function tinHeightAt(
   return { heightAt: (x, y) => tin.heightAt(x, y), bytes: tin.bytes };
 }
 
+/** The level's ground prep from the ground worker (ground-prep-client.ts). */
+function groundOf(
+  mesh: Mesh,
+  extras: TerrainExtras,
+  toData: Matrix4,
+  opts: TerrainOptions,
+  mask: WaterMask | null
+): Promise<GroundPrep> {
+  const level = mesh.geometry.getIndex();
+  return prepareGroundOffThread(
+    groundPrepInput(mesh, extras, toData, opts.offset, mask),
+    {
+      // the site's grid index (GridShare) goes to the worker once
+      shared: level && isSceneShared(level) ? level : undefined,
+      signal: opts.signal,
+    }
+  );
+}
+
+/**
+ * What the ground worker needs of a level (lib/city/ground-prep.ts): its
+ * positions as stored, its index, the local → data matrix and, where the
+ * tile has water, its water cells — the sheets' triangles are chosen
+ * there. A grid level's elevations are its first n² vertices.
+ */
+function groundPrepInput(
+  mesh: Mesh,
+  extras: TerrainExtras,
+  toData: Matrix4,
+  offset: { cx: number; cy: number },
+  mask: WaterMask | null
+): GroundPrepInput {
+  const position = mesh.geometry.getAttribute("position");
+  const raw = rawPositions(position);
+  const index = mesh.geometry.getIndex();
+  return {
+    positions: raw.array,
+    stride: raw.stride,
+    offset: raw.offset,
+    count: position.count,
+    normalized: position.normalized,
+    index: index ? (index.array as Uint16Array | Uint32Array) : null,
+    toData: toData.elements,
+    origin: offset,
+    bounds: extras.bounds,
+    grid: extras.tin ? null : extras.n,
+    mask,
+  };
+}
+
 /** A mesh's positions as the numbers they are stored as (quantised, maybe
  *  interleaved): the array, numbers per vertex, and where x sits. */
 function rawPositions(position: BufferAttribute | InterleavedBufferAttribute): {
-  array: Float32Array | Int16Array | Int8Array | Uint16Array | Uint8Array;
+  array: GroundPositions;
   offset: number;
   stride: number;
 } {
@@ -1743,18 +1768,20 @@ interface WaterSheets {
  * raster the browser decoded) both drape the whole level, as one
  * geometry, its index the site's on a grid (`GridShare`); with one, each
  * keeps the triangles within its reach of water — the mist's reaches
- * farther — over the level's own positions, with an index of its own.
+ * farther — over the level's own positions, with an index of its own:
+ * chosen by the ground worker (lib/city/ground-prep.ts), and bounded by
+ * its triangles, not the tile, so a sheet along one bank is culled while
+ * the camera looks across the dry rest of the tile.
  */
 function waterSheetsOf(
   mesh: Mesh,
   extras: TerrainExtras,
-  toData: Matrix4,
-  offset: { cx: number; cy: number },
-  mask: WaterMask | undefined,
+  ground: GroundPrep,
   grids: GridShare | undefined
 ): WaterSheets {
   const upFacing = extras.tin !== undefined;
-  if (!mask) {
+  const { water: waterPrep, mist: mistPrep } = ground;
+  if (!(waterPrep && mistPrep)) {
     const one = waterGeometryOf(
       mesh.geometry,
       upFacing,
@@ -1762,80 +1789,25 @@ function waterSheetsOf(
     );
     return { water: one, mist: one };
   }
-  const cells = vertexCells(mesh, toData, offset, extras.bounds, mask.cells);
-  const [minX, , maxX] = extras.bounds;
-  const tileM = maxX - minX;
-  const position = mesh.geometry.getAttribute("position");
-  const index = mesh.geometry.getIndex();
-  // the ground's triangles with area in plan (no skirt), once for both
-  const plan = index ? ownWaterIndex(index, position).array : null;
-  const sheet = (metres: number) => {
+  const sheet = (prep: SheetPrep) => {
     const geometry = waterGeometryOf(
       mesh.geometry,
       upFacing,
-      () =>
-        new BufferAttribute(
-          trianglesOver(
-            plan as Uint16Array | Uint32Array,
-            cells.x,
-            cells.y,
-            reach(mask, metres, tileM)
-          ),
-          1
-        )
+      () => new BufferAttribute(prep.index, 1)
     );
-    boundToIndex(geometry);
+    const box = new Box3().set(
+      new Vector3(prep.box[0], prep.box[1], prep.box[2]),
+      new Vector3(prep.box[3], prep.box[4], prep.box[5])
+    );
+    geometry.boundingBox = box;
+    geometry.boundingSphere = box.getBoundingSphere(new Sphere());
     return geometry;
   };
-  const water = sheet(WATER_REACH_M);
-  const mist = sheet(MIST_REACH_M);
+  const water = sheet(waterPrep);
+  const mist = sheet(mistPrep);
   // one set of normals for both (a TIN's own, up-facing)
   mist.setAttribute("normal", water.getAttribute("normal"));
   return { water, mist };
-}
-
-/**
- * Bounds around a sheet's triangles, not the tile's: a sheet along one bank
- * is culled while the camera looks across the dry rest of the tile.
- */
-function boundToIndex(geometry: BufferGeometry): void {
-  const index = geometry.getIndex();
-  if (!index) {
-    return;
-  }
-  const position = geometry.getAttribute("position");
-  const box = new Box3();
-  const v = new Vector3();
-  for (let i = 0; i < index.count; i++) {
-    box.expandByPoint(v.fromBufferAttribute(position, index.getX(i)));
-  }
-  geometry.boundingBox = box;
-  geometry.boundingSphere = box.getBoundingSphere(new Sphere());
-}
-
-/** Each vertex's mask cell (x east, y south from the tile's north edge). */
-function vertexCells(
-  mesh: Mesh,
-  toData: Matrix4,
-  offset: { cx: number; cy: number },
-  bounds: TerrainBounds,
-  cells: number
-): { x: Uint16Array; y: Uint16Array } {
-  const position = mesh.geometry.getAttribute("position");
-  const [minX, minY, maxX, maxY] = bounds;
-  const x = new Uint16Array(position.count);
-  const y = new Uint16Array(position.count);
-  const v = new Vector3();
-  const sx = cells / (maxX - minX);
-  const sy = cells / (maxY - minY);
-  for (let i = 0; i < position.count; i++) {
-    v.fromBufferAttribute(position, i).applyMatrix4(toData);
-    const cx = Math.floor((v.x + offset.cx - minX) * sx);
-    const cy = Math.floor((maxY - (v.y + offset.cy)) * sy);
-    x[i] = Math.min(cells - 1, Math.max(0, cx));
-    y[i] = Math.min(cells - 1, Math.max(0, cy));
-  }
-  return { x, y };
 }
 
 /**
@@ -1883,8 +1855,12 @@ export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
  * Dresses a streamed terrain mesh: loads its class raster (and NDVI), paints
  * the colour splat, swaps in the land-cover material and hangs the water and
  * mist sheets under it. `toData` maps the mesh's local frame to the data
- * frame (see gridElevations); it is read again after the rasters load, so
- * it must be this level's alone. The mesh stays owned by the tile.
+ * frame: the bake wrote a grid level's n·n grid first (row 0 = north),
+ * quantised, with the node carrying the dequantisation and the renderer
+ * the glTF→3D Tiles up-axis turn — that chain up to (not including) the
+ * viewer's `world` group. It is read after the rasters load (the ground
+ * worker's input, `groundPrepInput`), so it must be this level's alone.
+ * The mesh stays owned by the tile.
  */
 export async function dressTerrain(
   mesh: Mesh,
@@ -1900,16 +1876,25 @@ export async function dressTerrain(
   if (grids && index) {
     mesh.geometry.setIndex(grids.index(n, index));
   }
-  const elevations = extras.tin ? null : gridElevations(mesh, n, toData);
+  const { rasters, detail, free } = await loadTerrainRasters(extras, opts);
+  // the class raster's water cells: none (null) where the tile has no
+  // water, unknown (undefined) for a raster the browser decoded
+  const mask = rasters?.water;
+  let ground: GroundPrep;
+  try {
+    ground = await groundOf(mesh, extras, toData, opts, mask ?? null);
+  } catch (err) {
+    free();
+    throw err;
+  }
+  const { elevations } = ground;
   const { heightAt, bytes: heightBytes } = elevations
     ? {
         heightAt: (x: number, y: number) =>
           sampleHeightfield({ elevations, n, bounds }, x, y),
         bytes: elevations.byteLength,
       }
-    : tinHeightAt(mesh, bounds, toData, opts.offset);
-
-  const { rasters, detail, free } = await loadTerrainRasters(extras, opts);
+    : tinHeightAt(mesh, bounds, ground);
   const splat: SplatLayer | undefined = rasters
     ? {
         texture: rasters.texture,
@@ -1948,11 +1933,8 @@ export async function dressTerrain(
   // With the class raster's water cells (`rasters.water`) each sheet keeps
   // only the triangles its coverage can reach (lib/city/water-mask.ts); a
   // tile without water hangs none.
-  const mask = rasters?.water;
   const sheets =
-    splat && mask !== null
-      ? waterSheetsOf(mesh, extras, toData, opts.offset, mask, grids)
-      : null;
+    splat && mask !== null ? waterSheetsOf(mesh, extras, ground, grids) : null;
   const water =
     splat && sheets
       ? createWaterLayer(
