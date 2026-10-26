@@ -793,8 +793,8 @@ stays their measure; the tile cache counts true bytes.
   and runs of copied floats; the dressing runs each in slices of 8 ms
   (`inSlices`) and gives the main thread back between them, so input
   and frames go on while a tile dresses. Each pause costs a frame — on
-  a phone 30 ms and more — so while the camera rests (300 ms unmoved)
-  the slices are 30 ms (`setSliceBudget`, create-app.ts): the picture
+  a phone 30 ms and more — so while nothing on screen moves (the camera
+  300 ms unmoved, no data layer moving, no export) the slices are 30 ms (`setSliceBudget`, create-app.ts): the picture
   holds still, and the tile under way lands in less than half the
   time. As one task each they were the
   stutter left once the ground and the BVH had left the thread: on the

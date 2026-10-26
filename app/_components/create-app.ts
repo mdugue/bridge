@@ -260,6 +260,8 @@ const BVH_NEAR_M = 400;
 /** How long the camera stands before the dressings take longer slices
  *  (ms; lib/city/build-steps.ts). */
 const CAMERA_REST_MS = 300;
+/** How long a frame's slice budget holds without the next frame (ms). */
+const SLICE_BUDGET_HOLD_MS = 150;
 
 /** Modell's sheet: the picture style's paper (its first swatch). */
 const paperOf = (style: RenderStyle): Color =>
@@ -3317,6 +3319,8 @@ async function bootApp(
   });
   const viewMoved = watchMotion();
   let cameraMovedAt = Number.NEGATIVE_INFINITY;
+  // (the budget is the page's: a remounted scene starts from the short one)
+  cleanups.push(() => setSliceBudget(SLICE_MS));
   /**
    * After a drawn frame: whether the scene stood still in it — the camera
    * drawing it unmoved, everything loaded and nothing streaming, no data
@@ -3327,11 +3331,13 @@ async function bootApp(
     if (moved) {
       cameraMovedAt = time;
     }
-    // a resting camera's dressings are built in longer slices: the tile
-    // under way lands sooner, and the picture shows no frame missing
-    setSliceBudget(
-      time - cameraMovedAt >= CAMERA_REST_MS ? REST_SLICE_MS : SLICE_MS
-    );
+    // while nothing on screen moves, the dressings are built in longer
+    // slices: the tile under way lands sooner, and the picture shows no
+    // frame missing (renewed each frame: a loop that stops drawing falls
+    // back to the short ones)
+    const resting =
+      time - cameraMovedAt >= CAMERA_REST_MS && !exporting && !dataLayersMove;
+    setSliceBudget(resting ? REST_SLICE_MS : SLICE_MS, SLICE_BUDGET_HOLD_MS);
     if (!opts.pace) {
       return;
     }

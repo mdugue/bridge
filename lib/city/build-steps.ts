@@ -29,12 +29,23 @@ export const SLICE_MS = 8;
 export const REST_SLICE_MS = 30;
 
 let budget = SLICE_MS;
+let budgetUntil = Number.POSITIVE_INFINITY;
 
-/** The slice `inSlices` runs from its next one on (ms): the scene sets
- *  SLICE_MS while its camera moves, REST_SLICE_MS while it rests. */
-export function setSliceBudget(ms: number): void {
+/** The slice `inSlices` runs from its next one on (ms), for `holdsMs`
+ *  (back to SLICE_MS after it): the scene sets SLICE_MS while anything on
+ *  screen moves, REST_SLICE_MS while nothing does — renewed with every
+ *  frame it draws, so a loop that stops drawing (a hidden page, a sheet
+ *  that scrolls over it) leaves the short slices behind. */
+export function setSliceBudget(
+  ms: number,
+  holdsMs = Number.POSITIVE_INFINITY
+): void {
   budget = ms;
+  budgetUntil = performance.now() + holdsMs;
 }
+
+const sliceBudget = (): number =>
+  performance.now() < budgetUntil ? budget : SLICE_MS;
 
 /** Runs `steps` to its end, here and now. */
 export function finished<T>(steps: Steps<T>): T {
@@ -78,7 +89,7 @@ export async function inSlices<T>(
     if (r.done) {
       return r.value;
     }
-    if (now() - start >= (sliceMs ?? budget)) {
+    if (now() - start >= (sliceMs ?? sliceBudget())) {
       await giveBack();
       signal?.throwIfAborted();
       start = now();
