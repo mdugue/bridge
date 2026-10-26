@@ -135,6 +135,7 @@ import {
   type BakedTile,
   buildTileset,
   type CityExtras,
+  FAR_CITY_SIMPLIFY,
   TERRAIN_LEVELS,
   type TerrainExtras,
   TILESET_FILE,
@@ -204,7 +205,7 @@ import {
   siteTrackAxes,
   underDecks,
 } from "./line-levels";
-import { writeMeshGlb } from "./tile-glb";
+import { simplifyGlb, writeMeshGlb } from "./tile-glb";
 import {
   fenceLines,
   gatePoints,
@@ -961,7 +962,7 @@ function gz(bytes: Uint8Array): Uint8Array {
 /** A tile's buildings: footprints JSON + glTF, both from one parse. */
 async function bakeCity(
   tile: string
-): Promise<{ file: string; footprints: string; maxZ: number }> {
+): Promise<{ far: string; file: string; footprints: string; maxZ: number }> {
   const src = cityMeshSourceFiles(SITE, tile);
   // the ground-floor windows clear the tile's fine ground
   const ground = await groundFile(tile);
@@ -1019,19 +1020,43 @@ async function bakeCity(
     ...(facades ? { facades } : {}),
   };
   const name = `city_${tile}.glb.gz`;
-  const glb = await cached(
-    name,
-    cacheKey(inputs, bake, offset, shapeDigest(bedsIn(tile)), extras),
+  const glbKey = cacheKey(
+    inputs,
+    bake,
+    offset,
+    shapeDigest(bedsIn(tile)),
+    extras
+  );
+  const glb = await cached(name, glbKey, async () =>
+    gz(
+      await writeMeshGlb({
+        ...built().input,
+        name: "city",
+        extras: { ...extras },
+      })
+    )
+  );
+  // the same buildings for far off: every vertex the shape does not need
+  // dropped (lib/city/tileset.ts `FAR_CITY_SIMPLIFY`)
+  const farName = `city_${tile}_far.glb.gz`;
+  const farGlb = await cached(
+    farName,
+    cacheKey(inputs, bake, glbKey, FAR_CITY_SIMPLIFY),
     async () =>
       gz(
-        await writeMeshGlb({
-          ...built().input,
-          name: "city",
-          extras: { ...extras },
-        })
+        await simplifyGlb(
+          Bun.gunzipSync(glb as Uint8Array<ArrayBuffer>),
+          FAR_CITY_SIMPLIFY,
+          built().input.table
+        )
       )
   );
-  return { file: publish(name, glb), footprints, maxZ };
+  return {
+    far: publish(farName, farGlb),
+    file: publish(name, glb),
+    footprints,
+    maxZ,
+  };
 }
 
 /** The files a tile's shaped ground is baked from. */
@@ -1571,6 +1596,7 @@ for (const [i, tile] of TILES.entries()) {
     id: tile,
     bounds: tileExtentOf(SITE.tiles[i]),
     city: city.file,
+    cityFar: city.far,
     terrain: { 0: fine.file, 1: coarse.file },
     zRange: [
       Number.isFinite(minZ) ? minZ : 0,
@@ -1641,12 +1667,15 @@ async function bakePlate(): Promise<string> {
           );
         }
       }
-      // the grounds this step reads stay only while it reads them: a
-      // cold build of a large site would otherwise hold every tile's
+      // the grounds this step reads stay only while a tile still to come
+      // reads them (its own, and its neighbours' edge rows): a cold build
+      // of a large site would otherwise hold every tile's, and dropping
+      // each after its tile decoded the same neighbour up to four times
       // (the tile loop's own stay as they were)
       const held = new Set(heights.keys());
+      const boundsOf = new Map(baked.map((t) => [t.id, t.bounds]));
       const tiles = [];
-      for (const t of baked) {
+      for (const [k, t] of baked.entries()) {
         const touching = classRasters.filter((r) =>
           touches(r.bounds, t.bounds)
         );
@@ -1654,8 +1683,13 @@ async function bakePlate(): Promise<string> {
           heights: plateHeights(t.bounds, near, floor),
           classes: plateClasses(t.bounds, touching),
         });
+        const later = baked.slice(k + 1);
         for (const id of heights.keys()) {
-          if (!held.has(id)) {
+          const b = boundsOf.get(id);
+          if (
+            !held.has(id) &&
+            !(b && later.some((next) => touches(b, next.bounds)))
+          ) {
             heights.delete(id);
           }
         }

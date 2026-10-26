@@ -29,7 +29,7 @@ flowchart TB
   TILES["TilesRenderer group<br/>3D Tiles, one subtree per site tile"]
   SCENE --> WORLD
   WORLD --> TILES
-  TILES --> CITY["buildings (refine ADD)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH once a ray needs it"]
+  TILES --> CITY["buildings, far (simplified) → baked LoD2 (REPLACE)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH once a ray needs it"]
   TILES --> TER["terrain, L1 512² grid → L0 TIN (REPLACE)<br/>glTF + 30 m skirt, lowered under stairs<br/>(walls burned into L1 only)<br/>palette-painted splat, receives shadows only"]
   TER --> WAT["water + mist sheets<br/>terrain triangles near water, masked by splat alpha"]
   TER --> STAIR["L0: stairs node, baked with the ground<br/>treads, risers, cheeks per flight"]
@@ -890,11 +890,25 @@ stays their measure; the tile cache counts true bytes.
   contents in view load nearest first, the coarse ground counted a tile
   (2 km) nearer than it is — every tile's ground near the camera before
   the buildings, but no far flight's worth of it before the buildings
-  underfoot —, on one tile ground, buildings, fine ground, and out of
-  view last. Until the first frame the tile the boot waits on goes
-  before all of it. A full cache admits in the same order
+  underfoot —, on one tile ground, far buildings, buildings, fine
+  ground, and out of view last. Until the first frame the tile the boot
+  waits on goes before all of it: its coarse ground and far buildings,
+  half the bytes of its baked ones. A full cache admits in the same order
   (`keepOrder`: the renderer's own let a tile's buildings take the last
   room before its ground) and unloads the other way round.
+- **Far buildings are the same buildings, simplified.** A tile's
+  buildings come at two levels (`lib/city/tileset.ts`,
+  `FAR_CITY_ERROR`): beyond ≈ 260 m of the tile (≈ 200 m on a portrait
+  iPhone) and from the air, the baked LoD2 with every vertex its shape
+  does not need dropped — 0.5 m at most, two pixels at the switch, a
+  sixth of the triangles and half the bytes; near, as baked. What the far
+  level lacks is small roof detail and per-vertex facade detail (the
+  ground samples every 2 m along the walls the windows clear, the
+  doors), so the switch shows next to no jump. Both are `kind: "city"` with the same object table: picking,
+  demolish (on both levels at once), the inquiry and the BVH work on
+  whichever is shown. The phone's memory is what pays for it: only the
+  tiles within reach carry the baked LoD2, the rest a third of its
+  vertices.
 - **A failed allocation costs a dressing, not the page.** A compile the
   GPU had no room for (`lib/city/gpu-allocation.ts`: the
   `createAttribute` RangeError, WebKit's "Unable to …", an

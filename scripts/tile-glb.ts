@@ -13,13 +13,29 @@
  * so shaders derive data-frame coordinates from world space, never from
  * `position`. Build-time only; no DOM.
  */
-import { Document, Logger, NodeIO, type Primitive } from "@gltf-transform/core";
+import {
+  Document,
+  getBounds,
+  Logger,
+  NodeIO,
+  type Primitive,
+} from "@gltf-transform/core";
 import {
   EXTMeshoptCompression,
   KHRMeshQuantization,
 } from "@gltf-transform/extensions";
-import { quantize, reorder, weld } from "@gltf-transform/functions";
-import { MeshoptEncoder } from "meshoptimizer";
+import {
+  dequantize,
+  quantize,
+  reorder,
+  simplify,
+  weld,
+} from "@gltf-transform/functions";
+import {
+  MeshoptDecoder,
+  MeshoptEncoder,
+  MeshoptSimplifier,
+} from "meshoptimizer";
 
 /**
  * A property table column: one value (SCALAR), tuple (VEC3), string
@@ -96,11 +112,14 @@ export interface MeshInput {
 const logger = new Logger(Logger.Verbosity.WARN);
 
 async function io(): Promise<NodeIO> {
-  await MeshoptEncoder.ready;
+  await Promise.all([MeshoptEncoder.ready, MeshoptDecoder.ready]);
   return new NodeIO()
     .setLogger(logger)
     .registerExtensions([EXTMeshoptCompression, KHRMeshQuantization])
-    .registerDependencies({ "meshopt.encoder": MeshoptEncoder });
+    .registerDependencies({
+      "meshopt.encoder": MeshoptEncoder,
+      "meshopt.decoder": MeshoptDecoder,
+    });
 }
 
 /** Data frame (Z-up) → glTF (Y-up): (x, y, z) → (x, z, −y). */
@@ -156,6 +175,17 @@ function addPrimitive(
   return prim;
 }
 
+/** Only positions, normals, colours and texture coordinates are quantised:
+ *  the custom attributes are ids and flags that must stay exact (quantize
+ *  would squeeze them to 12 bits), the vectors are quantised already. */
+const QUANTIZE = {
+  pattern: /^(POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/,
+  quantizePosition: 16,
+  quantizeNormal: 8,
+  quantizeColor: 8,
+  quantizeTexcoord: 16,
+};
+
 /** The glb for one mesh (plus any `children`, each on its own node),
  *  meshopt-compressed, optionally with a feature table. */
 export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
@@ -179,18 +209,7 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
     scene.addChild(doc.createNode(child.name).setMesh(childMesh));
   }
   scene.setExtras(input.extras);
-  // Only positions, normals, colours and texture coordinates are quantised:
-  // the custom attributes are ids and flags that must stay exact (quantize
-  // would squeeze them to 12 bits), the vectors are quantised already.
-  const transforms = [
-    quantize({
-      pattern: /^(POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/,
-      quantizePosition: 16,
-      quantizeNormal: 8,
-      quantizeColor: 8,
-      quantizeTexcoord: 16,
-    }),
-  ];
+  const transforms = [quantize(QUANTIZE)];
   if (input.weld || input.reorder) {
     // Reordered for the vertex cache — and for meshopt, which compresses a
     // cache-ordered stream far better (a TIN's gzipped glTF shrinks by about
@@ -204,6 +223,46 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
   await doc.transform(...transforms);
   const glb = await (await io()).writeBinary(doc);
   return input.table ? addPropertyTable(glb, input.table) : glb;
+}
+
+/**
+ * A glb `writeMeshGlb` wrote, with every vertex its shape does not need
+ * dropped (meshopt's simplifier, no attribute weighed): none moves the
+ * surface more than `error` (m, of a mesh `extent` m across at most); the
+ * vertices left keep their attributes as they were, and `table` goes back
+ * on as it was (gltf-transform reads no EXT_structural_metadata). It reads
+ * the written glb, so the result is that file simplified and nothing else.
+ */
+export async function simplifyGlb(
+  glb: Uint8Array,
+  error: number,
+  table?: PropertyTable
+): Promise<Uint8Array> {
+  const nodeIO = await io();
+  await MeshoptSimplifier.ready;
+  const doc = (await nodeIO.readBinary(glb)).setLogger(logger);
+  doc
+    .createExtension(EXTMeshoptCompression)
+    .setRequired(true)
+    .setEncoderOptions({
+      method: EXTMeshoptCompression.EncoderMethod.QUANTIZE,
+    });
+  await doc.transform(dequantize({ pattern: QUANTIZE.pattern }), weld());
+  // meshopt's error is a share of the mesh's own extent: the scene's
+  // bounds in metres, the node's scale included
+  const { min, max } = getBounds(doc.getRoot().listScenes()[0]);
+  const extent = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+  await doc.transform(
+    simplify({
+      simplifier: MeshoptSimplifier,
+      ratio: 0,
+      error: error / extent,
+    }),
+    reorder({ encoder: MeshoptEncoder }),
+    quantize(QUANTIZE)
+  );
+  const out = await nodeIO.writeBinary(doc);
+  return table ? addPropertyTable(out, table) : out;
 }
 
 // --- EXT_structural_metadata (gltf-transform has no writer for it) ----------

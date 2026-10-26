@@ -6,11 +6,17 @@
  *
  * Tree, per site tile:
  *
- *   tile           content: buildings            refine ADD   (always, once visible)
+ *   tile           no content                     refine ADD   (always, once visible)
+ *     ├ buildings far  content: the LoD2, simplified  refine REPLACE
+ *     │   └ buildings    content: the LoD2 as baked
  *     └ terrain L1 content: 512² terrain         refine REPLACE
  *         └ terrain L0 content: TIN terrain + the tile's dressing
  *
- * The buildings of a tile load whenever the tile is in view; the terrain
+ * The buildings of a tile load whenever the tile is in view, far off as the
+ * same LoD2 simplified to half a metre (a sixth of the triangles; what goes
+ * is small roof detail and the per-vertex facade detail — windows along
+ * the ground, doors — that nothing resolves at that distance), and near as
+ * baked (`FAR_CITY_SIMPLIFY`, `FAR_CITY_ERROR`). The terrain
  * refines from the coarse level to the fine one by screen-space error, and
  * only the fine level carries vegetation, lamps, monuments, street
  * furniture, rails, walls
@@ -71,6 +77,21 @@ export const TERRAIN_LEVELS: Record<0 | 1, TerrainLevel> = {
 export const COARSE_TERRAIN_ERROR = 40;
 /** Large enough that a visible tile always refines to its terrain. */
 export const TILE_ERROR = 100_000;
+
+/**
+ * The far buildings: how far (m) the simplifier may move the surface
+ * (`FAR_CITY_SIMPLIFY`: half a metre, two pixels at the switch and fewer
+ * beyond — a sixth of the triangles, half the bytes; 5 cm kept 62 %, 20 cm
+ * 32 %, 1 m 14 % on Dresden's spawn tile), and the geometric error the
+ * level counts as (`FAR_CITY_ERROR`): beside that, it lacks the facade's
+ * per-vertex detail, the windows' rows along a sloping street and the
+ * doors. 4 m switches to the baked LoD2 within ≈ 260 m of a tile on a
+ * 1080p screen (≈ 200 m on a portrait iPhone) — the tile the camera
+ * stands in always, its neighbours as it comes near them, none from the
+ * air.
+ */
+export const FAR_CITY_SIMPLIFY = 0.5;
+export const FAR_CITY_ERROR = 4;
 
 /** The features a fine terrain tile is dressed with (published names; only
  *  the files the tile has). Which kinds these are is the artifact table's
@@ -198,6 +219,8 @@ export interface TilesetExtras {
 export interface BakedTile {
   bounds: TerrainBounds;
   city: string;
+  /** the same buildings simplified (`FAR_CITY_SIMPLIFY`) */
+  cityFar: string;
   id: string;
   /** terrain glb per level */
   terrain: Record<0 | 1, string>;
@@ -252,8 +275,16 @@ function tileNode(tile: BakedTile, offset: { cx: number; cy: number }) {
     boundingVolume,
     geometricError: TILE_ERROR,
     refine: "ADD",
-    content: { uri: tile.city },
     children: [
+      {
+        boundingVolume,
+        geometricError: FAR_CITY_ERROR,
+        refine: "REPLACE",
+        content: { uri: tile.cityFar },
+        children: [
+          { boundingVolume, geometricError: 0, content: { uri: tile.city } },
+        ],
+      },
       {
         boundingVolume,
         geometricError: COARSE_TERRAIN_ERROR,

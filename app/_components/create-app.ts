@@ -2168,6 +2168,7 @@ async function bootApp(
     camera: activeCamera,
     cities: () => stream.visibleCities(),
     isLoaded: (layer) => stream.cities.has(layer),
+    loaded: () => stream.cities,
     groundAlong,
     outline,
     // (a tile's ask sets come in idle time; a question before builds them)
@@ -2467,6 +2468,8 @@ async function bootApp(
     terrains = stream.visibleTerrains();
     siteGround.setSources(terrains);
     groundPlate?.showUnder(new Set(terrains.map((t) => t.tile)));
+    // a tile whose other building level landed or took over keeps the mark
+    probe.refresh();
     groundVersion++;
     const cut = cuts.cutOut();
     if (cut) {
@@ -2503,6 +2506,15 @@ async function bootApp(
       stream.demolished.set(layer.tile, kept);
     };
     keep(picked.layer);
+    // the tile's other level (its far or its baked buildings: the same
+    // table), loaded but not shown now: the same objects go
+    const sameTile = (layer: CityLayer) =>
+      layer !== picked.layer && layer.tile === picked.layer.tile;
+    for (const layer of stream.cities) {
+      if (sameTile(layer)) {
+        layer.demolish(picked.objectIndex);
+      }
+    }
     // the rest of its ensemble in the tiles across an edge: those loaded
     // now, and (the group kept) those that load later
     const group = picked.layer.table.group[picked.objectIndex];
@@ -2511,7 +2523,11 @@ async function bootApp(
     }
     for (const layer of group ? stream.cities : []) {
       const first = layer.table.group.indexOf(group);
-      if (layer !== picked.layer && first >= 0 && layer.demolish(first)) {
+      if (
+        layer.tile !== picked.layer.tile &&
+        first >= 0 &&
+        layer.demolish(first)
+      ) {
         keep(layer);
       }
     }
