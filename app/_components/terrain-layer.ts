@@ -69,6 +69,7 @@ import {
 } from "@/lib/city/landcover";
 import { type WaterMask, waterMaskOf } from "@/lib/city/water-mask";
 import type {
+  GroundPositions,
   GroundPrep,
   GroundPrepInput,
   SheetPrep,
@@ -135,6 +136,7 @@ import {
   type AnyAttribute,
   detachShared,
   disposeGeometry,
+  isSceneShared,
   markSceneShared,
   textureBytes,
   trackTexture,
@@ -1283,6 +1285,25 @@ function tinHeightAt(
   return { heightAt: (x, y) => tin.heightAt(x, y), bytes: tin.bytes };
 }
 
+/** The level's ground prep from the ground worker (ground-prep-client.ts). */
+function groundOf(
+  mesh: Mesh,
+  extras: TerrainExtras,
+  toData: Matrix4,
+  opts: TerrainOptions,
+  mask: WaterMask | null
+): Promise<GroundPrep> {
+  const level = mesh.geometry.getIndex();
+  return prepareGroundOffThread(
+    groundPrepInput(mesh, extras, toData, opts.offset, mask),
+    {
+      // the site's grid index (GridShare) goes to the worker once
+      shared: level && isSceneShared(level) ? level : undefined,
+      signal: opts.signal,
+    }
+  );
+}
+
 /**
  * What the ground worker needs of a level (lib/city/ground-prep.ts): its
  * positions as stored, its index, the local → data matrix and, where the
@@ -1317,7 +1338,7 @@ function groundPrepInput(
 /** A mesh's positions as the numbers they are stored as (quantised, maybe
  *  interleaved): the array, numbers per vertex, and where x sits. */
 function rawPositions(position: BufferAttribute | InterleavedBufferAttribute): {
-  array: Float32Array | Int16Array | Int8Array | Uint16Array | Uint8Array;
+  array: GroundPositions;
   offset: number;
   stride: number;
 } {
@@ -1861,22 +1882,17 @@ export async function dressTerrain(
   const mask = rasters?.water;
   let ground: GroundPrep;
   try {
-    ground = await prepareGroundOffThread(
-      groundPrepInput(mesh, extras, toData, opts.offset, mask ?? null)
-    );
+    ground = await groundOf(mesh, extras, toData, opts, mask ?? null);
   } catch (err) {
     free();
     throw err;
   }
-  const { heightAt, bytes: heightBytes } = ground.elevations
+  const { elevations } = ground;
+  const { heightAt, bytes: heightBytes } = elevations
     ? {
         heightAt: (x: number, y: number) =>
-          sampleHeightfield(
-            { elevations: ground.elevations as Float32Array, n, bounds },
-            x,
-            y
-          ),
-        bytes: ground.elevations.byteLength,
+          sampleHeightfield({ elevations, n, bounds }, x, y),
+        bytes: elevations.byteLength,
       }
     : tinHeightAt(mesh, bounds, ground);
   const splat: SplatLayer | undefined = rasters

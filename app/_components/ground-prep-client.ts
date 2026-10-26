@@ -1,4 +1,5 @@
 import {
+  type GroundIndex,
   type GroundPrep,
   type GroundPrepInput,
   prepareGround,
@@ -7,36 +8,77 @@ import {
 /**
  * A terrain level's heights and water sheets (lib/city/ground-prep.ts),
  * worked out in the ground worker (ground-worker.ts) — one for the page,
- * started at the first level, its jobs one after another. The input is
- * copied to it (the level still draws from its own buffers, and the
- * coarse levels share their index); the results come back without a copy.
- * Where no worker starts (a test, a browser that refuses it) or the worker
- * fails, the work runs here as it did before, on the main thread.
+ * started at the first level. The input is copied to it (the level still
+ * draws from its own buffers) except an index the site shares (the coarse
+ * levels' grid index, `shared`): that one is sent once and kept there.
+ * The results come back without a copy. Jobs go one at a time, so a job
+ * whose level was dropped while it queued (a flight outruns the stream)
+ * is skipped, never run. Where no worker starts (a test, a browser that
+ * refuses it) or it dies, the work runs here, on the main thread, as it
+ * did before.
  */
-interface Pending {
-  resolve: (prep: GroundPrep) => void;
-  reject: (err: Error) => void;
+interface Job {
   input: GroundPrepInput;
+  shared?: object;
+  signal?: AbortSignal;
+  resolve: (prep: GroundPrep) => void;
+  reject: (err: unknown) => void;
 }
 
 let worker: Worker | null = null;
 let broken = typeof Worker === "undefined";
-let nextId = 0;
-const pending = new Map<number, Pending>();
+/** the job the worker is on, and those waiting for it */
+let running: Job | null = null;
+const queue: Job[] = [];
+/** the shared indices the worker holds, by key, oldest first; it keeps a
+ *  few (a remounted stream shares new ones), each a coarse level's 6 MB */
+const sentShared = new Set<number>();
+const MAX_SHARED = 2;
+const sharedKeys = new WeakMap<object, number>();
+let nextKey = 0;
+const keyOf = (shared: object): number => {
+  let key = sharedKeys.get(shared);
+  if (key === undefined) {
+    key = nextKey++;
+    sharedKeys.set(shared, key);
+  }
+  return key;
+};
+
+/** Whether the ground worker is up (a test asks: the fallback answers alike). */
+export function groundWorkerUp(): boolean {
+  return worker !== null && !broken;
+}
+
+function runHere(job: Job): void {
+  try {
+    job.resolve(prepareGround(job.input));
+  } catch (err) {
+    job.reject(err);
+  }
+}
 
 /** The work done here after all: the worker failed to start or died. */
 function giveUp(): void {
   broken = true;
   worker?.terminate();
   worker = null;
-  for (const [id, job] of pending) {
-    pending.delete(id);
-    try {
-      job.resolve(prepareGround(job.input));
-    } catch (err) {
-      job.reject(err instanceof Error ? err : new Error(String(err)));
+  sentShared.clear();
+  const left = running ? [running, ...queue] : [...queue];
+  running = null;
+  queue.length = 0;
+  for (const job of left) {
+    if (job.signal?.aborted) {
+      job.reject(job.signal.reason);
+    } else {
+      runHere(job);
     }
   }
+}
+
+interface Reply {
+  prep?: GroundPrep;
+  error?: string;
 }
 
 function startWorker(): Worker | null {
@@ -52,24 +94,26 @@ function startWorker(): Worker | null {
     broken = true;
     return null;
   }
-  worker.onmessage = ({
-    data,
-  }: MessageEvent<{ id: number; prep?: GroundPrep; error?: string }>) => {
-    const job = pending.get(data.id);
-    if (!job) {
-      return;
+  worker.onmessage = ({ data }: MessageEvent<Reply>) => {
+    const job = running;
+    running = null;
+    if (job) {
+      if (data.prep) {
+        job.resolve(data.prep);
+      } else {
+        job.reject(new Error(`ground worker: ${data.error ?? "failed"}`));
+      }
     }
-    pending.delete(data.id);
-    if (data.prep) {
-      job.resolve(data.prep);
-      return;
+    next();
+  };
+  // a reply that cannot be read: that job here, the rest as before
+  worker.onmessageerror = () => {
+    const job = running;
+    running = null;
+    if (job) {
+      runHere(job);
     }
-    // the worker threw: here, then, where the same input throws the same
-    try {
-      job.resolve(prepareGround(job.input));
-    } catch (err) {
-      job.reject(err instanceof Error ? err : new Error(String(err)));
-    }
+    next();
   };
   worker.onerror = (event) => {
     event.preventDefault();
@@ -78,30 +122,70 @@ function startWorker(): Worker | null {
   return worker;
 }
 
-/** `prepareGround` in the ground worker (here where there is none). */
-export function prepareGroundOffThread(
-  input: GroundPrepInput
-): Promise<GroundPrep> {
-  const w = startWorker();
-  if (!w) {
-    return Promise.resolve().then(() => prepareGround(input));
-  }
-  const id = nextId++;
-  // Only the numbers the job reads: a glTF accessor is a view into a
-  // buffer that may hold more, and a message copies the whole buffer.
-  const sent: GroundPrepInput = {
-    ...input,
-    positions: input.positions.slice(
-      0,
-      Math.min(input.positions.length, input.count * input.stride)
-    ),
-    index: input.index?.slice() ?? null,
-  };
-  const transfer = [sent.positions.buffer, sent.index?.buffer].filter(
-    (b): b is ArrayBuffer => b instanceof ArrayBuffer
+/** Only the numbers a job reads: a glTF accessor is a view into a buffer
+ *  that may hold more, and a message copies the whole buffer. */
+function packed(job: Job): { message: unknown; transfer: Transferable[] } {
+  const { input } = job;
+  const positions = input.positions.slice(
+    0,
+    Math.min(input.positions.length, input.count * input.stride)
   );
+  const shared = job.shared ? keyOf(job.shared) : undefined;
+  const drop: number[] = [];
+  let index: GroundIndex | null = null;
+  if (input.index && !(shared !== undefined && sentShared.has(shared))) {
+    index = input.index.slice();
+    if (shared !== undefined) {
+      sentShared.add(shared);
+      for (const key of sentShared) {
+        if (sentShared.size <= MAX_SHARED) {
+          break;
+        }
+        sentShared.delete(key);
+        drop.push(key);
+      }
+    }
+  }
+  const transfer: Transferable[] = [positions.buffer];
+  if (index) {
+    transfer.push(index.buffer);
+  }
+  return {
+    message: { input: { ...input, positions, index }, shared, drop },
+    transfer,
+  };
+}
+
+function next(): void {
+  while (!running && queue.length > 0) {
+    const job = queue.shift() as Job;
+    if (job.signal?.aborted) {
+      job.reject(job.signal.reason);
+      continue;
+    }
+    const w = startWorker();
+    if (!w) {
+      runHere(job);
+      continue;
+    }
+    running = job;
+    const { message, transfer } = packed(job);
+    w.postMessage(message, transfer);
+  }
+}
+
+/**
+ * `prepareGround` in the ground worker (here where there is none).
+ * `shared` is an index attribute the site shares (`input.index` its
+ * array), sent to the worker once. Rejects with the abort when `signal`
+ * fires before the job's turn.
+ */
+export function prepareGroundOffThread(
+  input: GroundPrepInput,
+  opts: { shared?: object; signal?: AbortSignal } = {}
+): Promise<GroundPrep> {
   return new Promise<GroundPrep>((resolve, reject) => {
-    pending.set(id, { resolve, reject, input });
-    w.postMessage({ id, input: sent }, transfer);
+    queue.push({ input, ...opts, resolve, reject });
+    next();
   });
 }

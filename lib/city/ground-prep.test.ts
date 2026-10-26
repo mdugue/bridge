@@ -11,7 +11,7 @@ import {
   type GroundPrepInput,
   groundPrepTransfer,
   indexBox,
-  localPositions,
+  localReader,
   prepareGround,
 } from "./ground-prep";
 import { planTriangles } from "./terrain-tin";
@@ -148,13 +148,13 @@ describe("ground prep", () => {
       0,
       true
     );
-    const local = localPositions(input(null, null));
+    const read = localReader(input(null, null));
+    const local = new Float64Array(3);
     const v = new Vector3();
     for (let i = 0; i < count; i++) {
       v.fromBufferAttribute(position, i);
-      expect([local[3 * i], local[3 * i + 1], local[3 * i + 2]]).toEqual(
-        v.toArray()
-      );
+      read(i, local);
+      expect([...local]).toEqual(v.toArray());
     }
   });
 
@@ -164,9 +164,9 @@ describe("ground prep", () => {
     const ref = reference(mask);
     expect(prep.elevations).toBeUndefined();
     ref.data.forEach((d, i) => {
-      expect(prep.xy?.[2 * i]).toBeCloseTo(d.x + ORIGIN.cx, 9);
-      expect(prep.xy?.[2 * i + 1]).toBeCloseTo(d.y + ORIGIN.cy, 9);
-      expect(prep.z?.[i]).toBeCloseTo(d.z, 4);
+      expect(prep.xy?.[2 * i]).toBe(d.x + ORIGIN.cx);
+      expect(prep.xy?.[2 * i + 1]).toBe(d.y + ORIGIN.cy);
+      expect(prep.z?.[i]).toBe(Math.fround(d.z));
     });
   });
 
@@ -176,7 +176,7 @@ describe("ground prep", () => {
     expect(prep.elevations?.length).toBe(N * N);
     expect(prep.xy).toBeUndefined();
     for (let i = 0; i < N * N; i++) {
-      expect(prep.elevations?.[i]).toBeCloseTo(ref.data[i].z, 4);
+      expect(prep.elevations?.[i]).toBe(Math.fround(ref.data[i].z));
     }
   });
 
@@ -203,7 +203,7 @@ describe("ground prep", () => {
   });
 
   test("an empty sheet has an empty box", () => {
-    const box = indexBox(new Uint16Array(0), new Float64Array(3));
+    const box = indexBox(new Uint16Array(0), () => undefined);
     expect(box[0]).toBe(Number.POSITIVE_INFINITY);
     expect(box[3]).toBe(Number.NEGATIVE_INFINITY);
   });

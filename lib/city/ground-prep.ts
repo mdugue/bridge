@@ -90,70 +90,43 @@ function scaleOf(positions: GroundPositions, normalized: boolean): number {
   return 1;
 }
 
-/** The positions as local numbers, three per vertex, as three's
- *  `fromBufferAttribute` reads them (`denormalize`, in doubles). */
-export function localPositions(input: GroundPrepInput): Float64Array {
-  const { positions, stride, offset, count } = input;
+/** Reads a vertex's local position into `out`, as three's
+ *  `fromBufferAttribute` reads it (`denormalize`, in doubles). */
+export type VertexReader = (i: number, out: Float64Array) => void;
+
+export function localReader(input: GroundPrepInput): VertexReader {
+  const { positions, stride, offset } = input;
   const scale = scaleOf(positions, input.normalized);
-  const signed =
-    positions instanceof Int16Array || positions instanceof Int8Array;
-  const out = new Float64Array(count * 3);
-  for (let i = 0; i < count; i++) {
+  const clamp =
+    scale !== 1 &&
+    (positions instanceof Int16Array || positions instanceof Int8Array);
+  return (i, out) => {
     const at = i * stride + offset;
     for (let k = 0; k < 3; k++) {
       const v = positions[at + k] / scale;
-      out[3 * i + k] = signed && scale !== 1 ? Math.max(v, -1) : v;
+      out[k] = clamp ? Math.max(v, -1) : v;
     }
-  }
-  return out;
+  };
 }
 
-/** Local positions mapped to the data frame (x east, y north, z up). */
-export function dataPositions(
+/** A local position mapped to the data frame (x east, y north, z up) by a
+ *  column-major matrix, into `out` (three's `applyMatrix4`). */
+export function toDataFrame(
+  e: ArrayLike<number>,
   local: Float64Array,
-  toData: ArrayLike<number>
-): Float64Array {
-  const e = toData;
-  const out = new Float64Array(local.length);
-  for (let i = 0; i < local.length; i += 3) {
-    const x = local[i];
-    const y = local[i + 1];
-    const z = local[i + 2];
-    const w = e[3] * x + e[7] * y + e[11] * z + e[15] || 1;
-    out[i] = (e[0] * x + e[4] * y + e[8] * z + e[12]) / w;
-    out[i + 1] = (e[1] * x + e[5] * y + e[9] * z + e[13]) / w;
-    out[i + 2] = (e[2] * x + e[6] * y + e[10] * z + e[14]) / w;
-  }
-  return out;
-}
-
-/** Each vertex's mask cell (x east, y south from the tile's north edge). */
-export function vertexCells(
-  data: Float64Array,
-  origin: { cx: number; cy: number },
-  bounds: readonly [number, number, number, number],
-  cells: number
-): { x: Uint16Array; y: Uint16Array } {
-  const [minX, minY, maxX, maxY] = bounds;
-  const count = data.length / 3;
-  const x = new Uint16Array(count);
-  const y = new Uint16Array(count);
-  const sx = cells / (maxX - minX);
-  const sy = cells / (maxY - minY);
-  for (let i = 0; i < count; i++) {
-    const cx = Math.floor((data[3 * i] + origin.cx - minX) * sx);
-    const cy = Math.floor((maxY - (data[3 * i + 1] + origin.cy)) * sy);
-    x[i] = Math.min(cells - 1, Math.max(0, cx));
-    y[i] = Math.min(cells - 1, Math.max(0, cy));
-  }
-  return { x, y };
+  out: Float64Array
+): void {
+  const x = local[0];
+  const y = local[1];
+  const z = local[2];
+  const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15]);
+  out[0] = (e[0] * x + e[4] * y + e[8] * z + e[12]) * w;
+  out[1] = (e[1] * x + e[5] * y + e[9] * z + e[13]) * w;
+  out[2] = (e[2] * x + e[6] * y + e[10] * z + e[14]) * w;
 }
 
 /** The box (local frame) around the vertices `index` names. */
-export function indexBox(
-  index: GroundIndex,
-  local: Float64Array
-): Float64Array {
+export function indexBox(index: GroundIndex, read: VertexReader): Float64Array {
   const box = new Float64Array([
     Number.POSITIVE_INFINITY,
     Number.POSITIVE_INFINITY,
@@ -162,30 +135,56 @@ export function indexBox(
     Number.NEGATIVE_INFINITY,
     Number.NEGATIVE_INFINITY,
   ]);
+  const v = new Float64Array(3);
   for (let i = 0; i < index.length; i++) {
-    const at = 3 * index[i];
+    read(index[i], v);
     for (let k = 0; k < 3; k++) {
-      const v = local[at + k];
-      if (v < box[k]) {
-        box[k] = v;
+      if (v[k] < box[k]) {
+        box[k] = v[k];
       }
-      if (v > box[k + 3]) {
-        box[k + 3] = v;
+      if (v[k] > box[k + 3]) {
+        box[k + 3] = v[k];
       }
     }
   }
   return box;
 }
 
+/**
+ * Each vertex's mask cell (x east, y south from the tile's north edge),
+ * from its projected position (`projected`, into the scratch it is given).
+ */
+function vertexCells(
+  count: number,
+  projected: (i: number, out: Float64Array) => void,
+  bounds: readonly [number, number, number, number],
+  cells: number
+): { x: Uint16Array; y: Uint16Array } {
+  const [minX, minY, maxX, maxY] = bounds;
+  const x = new Uint16Array(count);
+  const y = new Uint16Array(count);
+  const sx = cells / (maxX - minX);
+  const sy = cells / (maxY - minY);
+  const p = new Float64Array(3);
+  for (let i = 0; i < count; i++) {
+    projected(i, p);
+    const cx = Math.floor((p[0] - minX) * sx);
+    const cy = Math.floor((maxY - p[1]) * sy);
+    x[i] = Math.min(cells - 1, Math.max(0, cx));
+    y[i] = Math.min(cells - 1, Math.max(0, cy));
+  }
+  return { x, y };
+}
+
 /** The water and mist sheets' triangles over the tile's water cells. */
 function sheetsOf(
   input: GroundPrepInput,
   index: GroundIndex,
-  local: Float64Array,
-  data: Float64Array,
+  read: VertexReader,
+  projected: (i: number, out: Float64Array) => void,
   mask: WaterMask
 ): { water: SheetPrep; mist: SheetPrep } {
-  const cells = vertexCells(data, input.origin, input.bounds, mask.cells);
+  const cells = vertexCells(input.count, projected, input.bounds, mask.cells);
   const tileM = input.bounds[2] - input.bounds[0];
   // the ground's triangles with area in plan (no skirt), once for both
   const plan = planTriangles(
@@ -201,41 +200,65 @@ function sheetsOf(
       cells.y,
       reach(mask, metres, tileM)
     );
-    return { index: kept, box: indexBox(kept, local) };
+    return { index: kept, box: indexBox(kept, read) };
   };
   return { water: sheet(WATER_REACH_M), mist: sheet(MIST_REACH_M) };
 }
 
-/** Everything above for one terrain level. */
+/**
+ * Everything above for one terrain level. Nothing the size of the mesh
+ * beyond what it returns: a grid reads its first n² vertices for their
+ * heights, a TIN keeps its projected vertices (its height index reads
+ * them), and the sheets' cells are read from those or, on a grid, from
+ * each vertex in turn.
+ */
 export function prepareGround(input: GroundPrepInput): GroundPrep {
-  const local = localPositions(input);
-  const data = dataPositions(local, input.toData);
+  const read = localReader(input);
+  const { cx, cy } = input.origin;
+  const local = new Float64Array(3);
+  const data = new Float64Array(3);
+  // vertex i in the data frame, into `data`
+  const atData = (i: number) => {
+    read(i, local);
+    toDataFrame(input.toData, local, data);
+  };
   const out: GroundPrep = {};
+  let projected: (i: number, p: Float64Array) => void;
   if (input.grid !== null) {
-    const n = input.grid;
-    const elevations = new Float32Array(n * n);
+    const elevations = new Float32Array(input.grid * input.grid);
     for (let i = 0; i < elevations.length; i++) {
-      elevations[i] = data[3 * i + 2];
+      atData(i);
+      elevations[i] = data[2];
     }
     out.elevations = elevations;
+    projected = (i, p) => {
+      atData(i);
+      p[0] = data[0] + cx;
+      p[1] = data[1] + cy;
+    };
   } else {
     const count = input.count;
     const xy = new Float64Array(count * 2);
     const z = new Float32Array(count);
     for (let i = 0; i < count; i++) {
-      xy[2 * i] = data[3 * i] + input.origin.cx;
-      xy[2 * i + 1] = data[3 * i + 1] + input.origin.cy;
-      z[i] = data[3 * i + 2];
+      atData(i);
+      xy[2 * i] = data[0] + cx;
+      xy[2 * i + 1] = data[1] + cy;
+      z[i] = data[2];
     }
     out.xy = xy;
     out.z = z;
+    projected = (i, p) => {
+      p[0] = xy[2 * i];
+      p[1] = xy[2 * i + 1];
+    };
   }
   if (input.mask && input.index) {
     const { water, mist } = sheetsOf(
       input,
       input.index,
-      local,
-      data,
+      read,
+      projected,
       input.mask
     );
     out.water = water;
