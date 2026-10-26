@@ -530,7 +530,7 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
   const now = (steps: Steps<unknown>) => Promise.resolve(finished(steps));
   const hung = dressing();
   const asks = hung.asks;
-  buildAsksWhenIdle(hung, () => true, later, now);
+  buildAsksWhenIdle(hung, () => true, { idle: later, run: now });
   expect(hung.asks).toEqual([]);
   idle.shift()?.();
   expect(hung.asks).toBe(asks);
@@ -538,15 +538,15 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
   // run once, and its features let go of
   expect(hung.buildAsks).toBeUndefined();
   const gone = dressing();
-  buildAsksWhenIdle(gone, () => false, later, now);
+  buildAsksWhenIdle(gone, () => false, { idle: later, run: now });
   idle.shift()?.();
   expect(gone.asks).toEqual([]);
   // a dressing with nothing to build waits for nothing
-  buildAsksWhenIdle({ tile: "t" }, () => true, later, now);
+  buildAsksWhenIdle({ tile: "t" }, () => true, { idle: later, run: now });
   expect(idle).toHaveLength(0);
   // a question before the idle time builds them at once, and only once
   const early = dressing();
-  buildAsksWhenIdle(early, () => true, later, now);
+  buildAsksWhenIdle(early, () => true, { idle: later, run: now });
   expect(asksOf(early)).toEqual([set]);
   expect(asksOf(early)).toEqual([set]);
   idle.shift()?.();
@@ -582,7 +582,7 @@ test("a question while the ask sets build in slices finishes them, once", async 
       });
     }
   };
-  buildAsksWhenIdle(d, () => true, later, sliced);
+  buildAsksWhenIdle(d, () => true, { idle: later, run: sliced });
   idle.shift()?.();
   expect(steps).toBe(1);
   expect(asks).toEqual([]);
@@ -985,4 +985,30 @@ test("a layer switched off while its builder comes builds nothing until it is on
   finish();
   await again;
   expect(slot.group?.visible).toBe(true);
+});
+
+test("an ask builder that throws in idle time is reported and lets the tile go", async () => {
+  const idle: (() => void)[] = [];
+  const later = (work: () => void) => {
+    idle.push(work);
+    return () => undefined;
+  };
+  function* broken(): Steps<void> {
+    yield;
+    throw new Error("bad furniture");
+  }
+  const d: TileDressing = { tile: "t", asks: [], buildAsks: broken() };
+  const failures: unknown[] = [];
+  buildAsksWhenIdle(d, () => true, {
+    idle: later,
+    run: (steps) => Promise.resolve().then(() => finished(steps)),
+    failed: (err) => failures.push(err),
+  });
+  idle.shift()?.();
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+  expect(failures).toHaveLength(1);
+  expect(d.buildAsks).toBeUndefined();
+  expect(asksOf(d)).toEqual([]);
 });

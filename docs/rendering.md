@@ -800,10 +800,16 @@ stays their measure; the tile cache counts true bytes.
   its build at the next pause (the signal; what it had built is CPU
   only, nothing uploaded). A question that comes while the ask sets
   build finishes them at once (`finished`); tests and other callers use
-  the same builders whole through their old names. A builder reads the
-  ground through the scene's `heightAt`, so a level that lands between
-  two slices is read by the later ones — as it was before by the later
-  builders.
+  the same builders whole through their old names. The cross-tile
+  builders (rails, monuments, tram, riverside) read the ground pinned at
+  the build's start (`Ground.pinned`, lib/city/ground.ts): a neighbour's
+  level that lands between two slices is not read by the later ones, so
+  one line, one yard's ballast is laid on one ground. A build that stops
+  (its tile left) frees what it had built. On the desktop profile the
+  flight's longest task went from 733 ms to 186 ms and the dressings'
+  wall time did not grow (the 1.5 s hand-over wait timed out once in the
+  flight, before and after). `?trace=1`'s dressing spans are wall time,
+  the pauses and the frames between the slices included.
 - **The stream camera.** The tile renderer streams for a twin of the
   walk/fly camera whose far plane ends where the fog does — the larger of
   the fog applied now and the look's own, × 1.1

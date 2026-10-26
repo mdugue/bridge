@@ -13,7 +13,7 @@ import {
   type AskSolid,
   askSets,
 } from "./ask-solids";
-import { finished, type Steps } from "./build-steps";
+import { finished, inRuns, type Steps } from "./build-steps";
 import { type PackedTree, packedCylinderSets } from "./ask-items";
 import type {
   CanopyFeature,
@@ -233,8 +233,9 @@ export function canopySets(
   return finished(canopySetsSteps(features, ctx, keepTree));
 }
 
-/** Trees placed per step (build-steps.ts). */
+/** Trees and rows placed per step (build-steps.ts). */
 const PLACE_RUN = 256;
+const ROW_RUN = 16;
 
 interface AskedTree {
   height?: number;
@@ -254,30 +255,35 @@ function* canopySetsSteps(
   keepTree?: TreeVeto
 ): Steps<AskSet<FeatureInquiry>[]> {
   const place = { heightAt: ctx.heightAt, offset: ctx.offset };
-  const trees: AskedTree[] = [];
   // placed one by one, as the layer places them, so each keeps its
   // measured height
-  function* measured(
+  const measured = (
     source: CanopyInquiry["source"],
     list: readonly CanopyFeature[]
-  ): Steps<void> {
-    for (let i = 0; i < list.length; i++) {
-      const f = list[i];
-      for (const p of canopyPlacements([f], place, undefined, keepTree)) {
-        trees.push({ p, source, height: f.properties?.h, leaf: leafOf(f) });
-      }
-      if ((i + 1) % PLACE_RUN === 0) {
-        yield;
-      }
-    }
-  }
-  yield* measured("dom", features.canopy);
-  yield* measured("lsc", features.scan);
-  for (const p of rowPlacements(features.rows, place, undefined, keepTree)
-    .trees) {
-    trees.push({ p, source: "row" });
-  }
-  yield;
+  ) =>
+    inRuns(list, PLACE_RUN, (run) =>
+      run.flatMap((f) =>
+        canopyPlacements([f], place, undefined, keepTree).map(
+          (p): AskedTree => ({
+            p,
+            source,
+            height: f.properties?.h,
+            leaf: leafOf(f),
+          })
+        )
+      )
+    );
+  // whole rows per run: a row's trees are seeded by their place along it
+  const rowTrees = inRuns(features.rows, ROW_RUN, (run) =>
+    rowPlacements(run, place, undefined, keepTree).trees.map(
+      (p): AskedTree => ({ p, source: "row" })
+    )
+  );
+  const trees: AskedTree[] = [
+    ...(yield* measured("dom", features.canopy)),
+    ...(yield* measured("lsc", features.scan)),
+    ...(yield* rowTrees),
+  ];
   // what a card needs, kept packed: the placements go once packed
   const sources: CanopyInquiry["source"][] = ["dom", "lsc", "row"];
   const position = new Float64Array(trees.length * 2);

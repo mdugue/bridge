@@ -23,6 +23,9 @@ export interface Ground {
   floor: () => number | null;
   /** projected (x, y) → elevation, null off every source */
   heightAt: (x: number, y: number) => number | null;
+  /** `heightAt` over the sources as they are now, whatever comes later:
+   *  one ground for a build that runs in slices (build-steps.ts) */
+  pinned: () => (x: number, y: number) => number | null;
   /** world (x, z) → elevation, null off every source */
   atWorld: (x: number, z: number) => number | null;
   /** world (x, z) → elevation, falling back to the floor (then 0) */
@@ -34,15 +37,18 @@ export interface Ground {
 export function createGround(offset: RecenterOffset): Ground {
   let sources: readonly HeightSource[] = [];
   let floor = Number.POSITIVE_INFINITY;
-  const heightAt = (x: number, y: number): number | null => {
-    for (const s of sources) {
-      const h = s.heightAt(x, y);
-      if (h !== null) {
-        return h;
+  const over =
+    (from: () => readonly HeightSource[]) =>
+    (x: number, y: number): number | null => {
+      for (const s of from()) {
+        const h = s.heightAt(x, y);
+        if (h !== null) {
+          return h;
+        }
       }
-    }
-    return null;
-  };
+      return null;
+    };
+  const heightAt = over(() => sources);
   const atWorld = (x: number, z: number): number | null => {
     const e = worldToEpsg(x, z, offset);
     return heightAt(e.x, e.y);
@@ -60,6 +66,10 @@ export function createGround(offset: RecenterOffset): Ground {
     },
     floor: () => (Number.isFinite(floor) ? floor : null),
     heightAt,
+    pinned: () => {
+      const now = sources;
+      return over(() => now);
+    },
     atWorld,
     underWorld: (x, z) => atWorld(x, z) ?? (Number.isFinite(floor) ? floor : 0),
     along: (origin, direction, far) =>

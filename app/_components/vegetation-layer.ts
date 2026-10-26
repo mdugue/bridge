@@ -1329,16 +1329,12 @@ export function* vegetationSteps(
   let seasons: SeasonalCrowns[] = [];
 
   const { ndviAt, keepTree } = features;
-  const trees: Placement[] = [];
-  const hedges: Placement[] = [];
-  // a row's trees are seeded by their place along it: whole rows per run
-  for (let i = 0; i < features.rows.length; i += ROW_RUN) {
-    const run = features.rows.slice(i, i + ROW_RUN);
-    const placed = rowPlacements(run, ctx, ndviAt, keepTree);
-    trees.push(...placed.trees);
-    hedges.push(...placed.hedges);
-    yield;
-  }
+  // whole rows per run: a row's trees are seeded by their place along it
+  const rows = yield* inRuns(features.rows, ROW_RUN, (run) => [
+    rowPlacements(run, ctx, ndviAt, keepTree),
+  ]);
+  const trees = rows.flatMap((r) => r.trees);
+  const hedges = rows.flatMap((r) => r.hedges);
   trees.push(
     ...(yield* inRuns(features.canopy, PLACEMENT_RUN, (run) =>
       canopyPlacements(run, ctx, ndviAt, keepTree)

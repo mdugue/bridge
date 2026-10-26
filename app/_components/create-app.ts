@@ -1528,6 +1528,7 @@ async function bootApp(
       bootTile: () => bootTile,
       fogColor: sceneFog.color,
       heightAt,
+      pinnedGround: siteGround.pinned,
       look: opts.look,
       lowRasters: budget.lowRasters,
       cacheBytes: tileCacheBytesFor(budget.tier, budget.safety),

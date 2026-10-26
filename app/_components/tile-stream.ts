@@ -115,6 +115,7 @@ import { whenIdle } from "./main-yield";
 import { bvhBytesUnder } from "./collision";
 import {
   finished,
+  giveBack,
   inSlices,
   onlyWhile,
   type Steps,
@@ -258,6 +259,9 @@ export interface TileStreamContext {
   fogColor: UniformNode<"color", Color>;
   /** ground height over every loaded terrain (projected coordinates) */
   heightAt: (x: number, y: number) => number | null;
+  /** `heightAt` over the terrains loaded now, whatever lands later: a
+   *  dressing built in slices reads one ground (lib/city/ground.ts) */
+  pinnedGround?: () => (x: number, y: number) => number | null;
   /** the ground's look strengths (by reference) */
   ground: GroundUniforms;
   /** the current night factor, for lamps that land later */
@@ -683,9 +687,14 @@ function buildAsksNow(dressing: TileDressing): void {
 export function buildAsksWhenIdle(
   dressing: TileDressing,
   stillHung: () => boolean,
-  idle: typeof whenIdle = whenIdle,
-  run: (steps: Steps<unknown>) => Promise<unknown> = inSlices
+  opts: {
+    /** a builder that threw: its tile has no ask sets */
+    failed?: (err: unknown) => void;
+    idle?: typeof whenIdle;
+    run?: (steps: Steps<unknown>) => Promise<unknown>;
+  } = {}
 ): void {
+  const { failed, idle = whenIdle, run = inSlices } = opts;
   const steps = dressing.buildAsks;
   if (!steps) {
     return;
@@ -703,12 +712,15 @@ export function buildAsksWhenIdle(
       return;
     }
     // in slices: a dense tile's took 0.4–0.7 s on the phone profile
-    void run(
+    run(
       (function* () {
         yield* onlyWhile(steps, pending);
         done();
       })()
-    );
+    ).catch((err: unknown) => {
+      done();
+      failed?.(err);
+    });
   }, ASKS_IDLE_MS);
 }
 
@@ -828,13 +840,13 @@ async function allNamed<T extends Record<string, Promise<unknown>>>(
 /**
  * The next builder in a later task, a frame in between (the long ones run
  * in slices of their own, lib/city/build-steps.ts). A tile that leaves
- * meanwhile stops at the next slice's pause (its signal): what was built
- * is nothing drawn or uploaded yet, and goes with the garbage.
+ * meanwhile stops there (its signal); the dressing frees what it had
+ * built.
  */
-const nextTask = () =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, 0);
-  });
+const nextTask = async (signal?: AbortSignal): Promise<void> => {
+  await giveBack();
+  signal?.throwIfAborted();
+};
 
 /** What a tile's traffic bodies are built from (traffic-layer.ts
  *  `buildTraffic`), and where the probe's ask set goes once they are. */
@@ -1043,7 +1055,11 @@ async function buildCoarseDressing(
       ? await inSlices(
           railSteps(
             { bridges, rails: [], ballast: [], platforms: [] },
-            { ...ground, owns }
+            {
+              offset,
+              heightAt: ctx.pinnedGround?.() ?? ctx.heightAt,
+              owns,
+            }
           ),
           { signal }
         )
@@ -1085,7 +1101,11 @@ async function buildCoarseDressing(
             sunDirection: ctx.sunDirection,
           }),
           { signal }
-        )
+        ).catch((err: unknown) => {
+          // the bridges built, never hung: freed with the build
+          disposeDressing({ tile, rail });
+          throw err;
+        })
       : undefined;
   return {
     asks: asks.length > 0 || flows ? asks : undefined,
@@ -1195,185 +1215,211 @@ async function buildDressing(
   const lamps = [...osmLamps, ...fromMapillary.lamps];
   const furniture = [...osmFurniture, ...fromMapillary.furniture];
   const sport = buildSport(terrain, sportTable, ctx);
-  await nextTask();
-  // Rails may run past the tile edge: they sample the ground over
-  // every loaded terrain, not this tile's alone.
-  const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
-  // Orchard trees join the cadastre as its "small" archetype, appended: an
-  // index stays the trees file's (and its facts row), the orchard's past it.
-  const trees = [...inventory, ...orchardTrees(cultivated)];
-  const ownCanopy = offMonuments(canopy, monuments);
-  const ownScan = offMonuments(scanTrees, monuments);
-  const { vegetation, keepTree } = await inSlices(
-    tileVegetationSteps(
-      {
-        rows,
-        // The laser-scan crowns outside the canopy mask join the canopy as
-        // ordinary trees (they carry the same measured `h`); the bake already
-        // dropped the ones a cadastre tree claims.
-        canopy: [...ownCanopy, ...ownScan],
-        ndviAt: ndviAt ?? undefined,
-      },
-      trees,
-      {
-        offset: ctx.offset,
-        heightAt: terrain.heightAt,
-        sunDirection: ctx.sunDirection,
-      }
-    ),
-    { signal }
-  );
-  // Born with the current look and season, not the defaults.
-  vegetation.applyLook(ctx.look.get());
-  vegetation.setSeason(ctx.season());
-  await nextTask();
-  const lowVegetation =
-    hedges.length > 0
-      ? buildLowVegetation(hedges, {
+  // what is built so far: freed if the build stops (a tile that left, a
+  // builder that threw) — never hung, but a lamp's lights and the other
+  // parts' own are still theirs to free
+  const made: TileDressing = { tile, sport };
+  try {
+    await nextTask(signal);
+    // Rails may run past the tile edge: they sample the ground over
+    // every loaded terrain, not this tile's alone — what the ask sets and
+    // the traffic, built later, read as it is then; the builders below,
+    // run in slices between frames, over the terrains loaded now: one
+    // ground for all of them, whatever lands meanwhile.
+    const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
+    const pinned = {
+      offset: ctx.offset,
+      heightAt: ctx.pinnedGround?.() ?? ctx.heightAt,
+    };
+    // Orchard trees join the cadastre as its "small" archetype, appended: an
+    // index stays the trees file's (and its facts row), the orchard's past it.
+    const trees = [...inventory, ...orchardTrees(cultivated)];
+    const ownCanopy = offMonuments(canopy, monuments);
+    const ownScan = offMonuments(scanTrees, monuments);
+    const { vegetation, keepTree } = await inSlices(
+      tileVegetationSteps(
+        {
+          rows,
+          // The laser-scan crowns outside the canopy mask join the canopy as
+          // ordinary trees (they carry the same measured `h`); the bake already
+          // dropped the ones a cadastre tree claims.
+          canopy: [...ownCanopy, ...ownScan],
+          ndviAt: ndviAt ?? undefined,
+        },
+        trees,
+        {
           offset: ctx.offset,
           heightAt: terrain.heightAt,
-        })
-      : undefined;
-  // The bake reads lamps with a margin around the tile; a lamp on or past a
-  // seam is its owner's, or two tiles would stand it twice.
-  const extent = ctx.tileBounds(tile);
-  const ownLamps = extent
-    ? lamps.filter((f) =>
-        ownsPoint(extent, f.geometry.coordinates[0], f.geometry.coordinates[1])
-      )
-    : lamps;
-  const lampControl = buildLamps(ownLamps, {
-    ...ground,
-    heightAt: terrain.heightAt,
-  });
-  lampControl.setNightFactor(ctx.night());
-  await nextTask();
-  const rail = await inSlices(
-    railSteps(
-      { rails, bridges, ballast, platforms },
-      {
-        ...ground,
-        // a deck across a seam is in both tiles' files; its owner draws it
-        owns: extent ? (x, y) => ownsPoint(extent, x, y) : undefined,
-      }
-    ),
-    { signal }
-  );
-  await nextTask();
-  // The bake writes only the monuments a tile owns; a basin that reaches
-  // past the seam samples the neighbour's ground.
-  const monumentLayer = buildMonuments(monuments, {
-    ...ground,
-  });
-  // Owned by the bake (west/south edges in): stood on this tile's ground.
-  const furnitureGroup = await inSlices(
-    furnitureSteps(furniture, {
+          sunDirection: ctx.sunDirection,
+        }
+      ),
+      { signal }
+    );
+    // Born with the current look and season, not the defaults.
+    made.vegetation = vegetation;
+    vegetation.applyLook(ctx.look.get());
+    vegetation.setSeason(ctx.season());
+    await nextTask(signal);
+    const lowVegetation =
+      hedges.length > 0
+        ? buildLowVegetation(hedges, {
+            offset: ctx.offset,
+            heightAt: terrain.heightAt,
+          })
+        : undefined;
+    made.lowVegetation = lowVegetation;
+    // The bake reads lamps with a margin around the tile; a lamp on or past a
+    // seam is its owner's, or two tiles would stand it twice.
+    const extent = ctx.tileBounds(tile);
+    const ownLamps = extent
+      ? lamps.filter((f) =>
+          ownsPoint(
+            extent,
+            f.geometry.coordinates[0],
+            f.geometry.coordinates[1]
+          )
+        )
+      : lamps;
+    const lampControl = buildLamps(ownLamps, {
       ...ground,
       heightAt: terrain.heightAt,
-    }),
-    { signal }
-  );
-  await nextTask();
-  const vines = vineRows(cultivated);
-  const vineyards =
-    vines.length > 0
-      ? buildVineyards(vines, {
-          offset: ctx.offset,
-          heightAt: terrain.heightAt,
-        })
-      : undefined;
-  // Tracks are cut at the tile edge by the bake; they and the span wires
-  // sample the ground over every loaded terrain, like the rails.
-  await nextTask();
-  const tram =
-    trams.length > 0
-      ? await inSlices(tramSteps(trams, bridges, ground), { signal })
-      : undefined;
-  // Piers and pontoons are the tile's own; a ferry line or groyne cut at
-  // the seam samples the neighbour's ground past it.
-  const riverside =
-    river.length > 0 ? buildRiverside(river, ground) : undefined;
-  // What the probe can ask, sized as drawn: the trees on the tile's own
-  // ground (as the inventory stands them), decks only where this tile
-  // draws them — built once the dressing hangs, in idle time (`buildAsks`,
-  // hangDressing), into the array the traffic's sets join too. Until then
-  // a click on the tile's trees finds nothing to ask.
-  const askCtx = {
-    ...ground,
-    tile,
-    treeHeightAt: terrain.heightAt,
-    owns: extent
-      ? (x: number, y: number) => ownsPoint(extent, x, y)
-      : undefined,
-  };
-  const asks: AskSet<FeatureInquiry>[] = [];
-  // (lazy: nothing runs before its first step)
-  function* askSteps(): Steps<void> {
-    // its span from the first step to the last, the pauses included
-    const start = streamTimings.now();
-    const own = [
-      ...treeSets(trees, askCtx),
-      ...askSets(monumentItems(monuments, askCtx)),
-    ];
-    yield;
-    const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
-    yield;
-    // every other tree, the hedges, lamps, furniture, stops and landings
-    const more = yield* moreSetsSteps(
-      {
-        canopy: ownCanopy,
-        scan: ownScan,
-        rows,
-        hedges,
-        lamps: ownLamps,
-        furniture,
-        trams,
-        river,
-      },
-      { offset: ctx.offset, heightAt: terrain.heightAt, tile },
-      keepTree
+    });
+    made.lamps = lampControl;
+    lampControl.setNightFactor(ctx.night());
+    await nextTask(signal);
+    const rail = await inSlices(
+      railSteps(
+        { rails, bridges, ballast, platforms },
+        {
+          ...pinned,
+          // a deck across a seam is in both tiles' files; its owner draws it
+          owns: extent ? (x, y) => ownsPoint(extent, x, y) : undefined,
+        }
+      ),
+      { signal }
     );
-    // all at once, in their order: a question finds the tile's sets whole
-    for (const set of [...own, ...(bridgeSet ? [bridgeSet] : []), ...more]) {
-      asks.push(set);
+    made.rail = rail;
+    await nextTask(signal);
+    // The bake writes only the monuments a tile owns; a basin that reaches
+    // past the seam samples the neighbour's ground.
+    const monumentLayer = buildMonuments(monuments, pinned);
+    made.monuments = monumentLayer;
+    // Owned by the bake (west/south edges in): stood on this tile's ground.
+    const furnitureGroup = await inSlices(
+      furnitureSteps(furniture, {
+        ...ground,
+        heightAt: terrain.heightAt,
+      }),
+      { signal }
+    );
+    made.furniture = furnitureGroup;
+    await nextTask(signal);
+    const vines = vineRows(cultivated);
+    const vineyards =
+      vines.length > 0
+        ? buildVineyards(vines, {
+            offset: ctx.offset,
+            heightAt: terrain.heightAt,
+          })
+        : undefined;
+    made.vineyards = vineyards;
+    // Tracks are cut at the tile edge by the bake; they and the span wires
+    // sample the ground over every loaded terrain, like the rails.
+    await nextTask(signal);
+    const tram =
+      trams.length > 0
+        ? await inSlices(tramSteps(trams, bridges, pinned), { signal })
+        : undefined;
+    made.tram = tram;
+    // Piers and pontoons are the tile's own; a ferry line or groyne cut at
+    // the seam samples the neighbour's ground past it.
+    const riverside =
+      river.length > 0 ? buildRiverside(river, pinned) : undefined;
+    // What the probe can ask, sized as drawn: the trees on the tile's own
+    // ground (as the inventory stands them), decks only where this tile
+    // draws them — built once the dressing hangs, in idle time (`buildAsks`,
+    // hangDressing), into the array the traffic's sets join too. Until then
+    // a click on the tile's trees finds nothing to ask.
+    const askCtx = {
+      ...ground,
+      tile,
+      treeHeightAt: terrain.heightAt,
+      owns: extent
+        ? (x: number, y: number) => ownsPoint(extent, x, y)
+        : undefined,
+    };
+    const asks: AskSet<FeatureInquiry>[] = [];
+    // (lazy: nothing runs before its first step)
+    function* askSteps(): Steps<void> {
+      // its span from the first step to the last, the pauses included
+      const start = streamTimings.now();
+      const own = [
+        ...treeSets(trees, askCtx),
+        ...askSets(monumentItems(monuments, askCtx)),
+      ];
+      yield;
+      const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
+      yield;
+      // every other tree, the hedges, lamps, furniture, stops and landings
+      const more = yield* moreSetsSteps(
+        {
+          canopy: ownCanopy,
+          scan: ownScan,
+          rows,
+          hedges,
+          lamps: ownLamps,
+          furniture,
+          trams,
+          river,
+        },
+        { offset: ctx.offset, heightAt: terrain.heightAt, tile },
+        keepTree
+      );
+      // all at once, in their order: a question finds the tile's sets whole
+      for (const set of [...own, ...(bridgeSet ? [bridgeSet] : []), ...more]) {
+        asks.push(set);
+      }
+      streamTimings.since("dressing:asks", start, tile);
     }
-    streamTimings.since("dressing:asks", start, tile);
+    const buildAsks = askSteps();
+    // Sections are cut at the tile edge by the bake; a bridge street rides
+    // the decks of this tile's bridge file (which names a seam deck in both).
+    // The counted sections are asked on their bodies, while the layer shows;
+    // the bodies (and their builder, the data layers' feature) come with
+    // the first switch-on.
+    const trafficFlows =
+      traffic.length > 0
+        ? trafficSlot({
+            load: ctx.trafficBuilder,
+            features: traffic,
+            bridges,
+            ground,
+            detail: "fine",
+            bounds: ctx.tileBounds(tile) ?? terrain.bounds,
+            tile,
+            asks,
+          })
+        : undefined;
+    return {
+      asks,
+      buildAsks,
+      tile,
+      tram,
+      riverside,
+      traffic: trafficFlows,
+      vegetation,
+      lowVegetation,
+      vineyards,
+      lamps: lampControl,
+      monuments: monumentLayer,
+      furniture: furnitureGroup,
+      rail,
+      sport,
+    };
+  } catch (err) {
+    disposeDressing(made);
+    throw err;
   }
-  const buildAsks = askSteps();
-  // Sections are cut at the tile edge by the bake; a bridge street rides
-  // the decks of this tile's bridge file (which names a seam deck in both).
-  // The counted sections are asked on their bodies, while the layer shows;
-  // the bodies (and their builder, the data layers' feature) come with
-  // the first switch-on.
-  const trafficFlows =
-    traffic.length > 0
-      ? trafficSlot({
-          load: ctx.trafficBuilder,
-          features: traffic,
-          bridges,
-          ground,
-          detail: "fine",
-          bounds: ctx.tileBounds(tile) ?? terrain.bounds,
-          tile,
-          asks,
-        })
-      : undefined;
-  return {
-    asks,
-    buildAsks,
-    tile,
-    tram,
-    riverside,
-    traffic: trafficFlows,
-    vegetation,
-    lowVegetation,
-    vineyards,
-    lamps: lampControl,
-    monuments: monumentLayer,
-    furniture: furnitureGroup,
-    rail,
-    sport,
-  };
 }
 
 /** The dressings' turns (DressingPlugin.turn): a coarse level's — the
@@ -2105,7 +2151,8 @@ export class DressingPlugin {
     this.stream.dressings.add(dressing);
     buildAsksWhenIdle(
       dressing,
-      () => !this.disposed && entry.dressing === dressing
+      () => !this.disposed && entry.dressing === dressing,
+      { failed: (err) => this.ctx.onDressingFailed?.(err, dressing.tile) }
     );
     // The traffic's bodies hang here once its layer is switched on.
     dressing.traffic?.attach({
