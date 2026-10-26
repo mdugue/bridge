@@ -387,6 +387,18 @@ export function tinSurface(tin: TerrainTin): TinSurface {
   };
 }
 
+/** A `TinIndex`'s buckets as plain numbers: what the ground worker builds
+ *  and hands back (`TinIndex.fromBuckets`). */
+export interface TinBuckets {
+  cell: number;
+  cols: number;
+  rows: number;
+  items: Uint32Array;
+  start: Uint32Array;
+  /** how many triangles of the surface they index */
+  triangles: number;
+}
+
 /**
  * Point → triangle lookup for `heightAt`: a uniform bucket grid over the tile
  * (CSR layout: `start[b] … start[b+1]` in `items`), each triangle listed in
@@ -394,14 +406,6 @@ export function tinSurface(tin: TerrainTin): TinSurface {
  * barycentric tests per query — vegetation and lamps call this tens of
  * thousands of times per tile.
  */
-export interface TinBuckets {
-  cell: number;
-  cols: number;
-  rows: number;
-  items: Uint32Array;
-  start: Uint32Array;
-}
-
 export class TinIndex {
   private readonly cols: number;
   private readonly rows: number;
@@ -410,9 +414,23 @@ export class TinIndex {
   private readonly start: Uint32Array;
   private readonly surface: TinSurface;
 
-  /** `built`: the buckets an index over the same surface built elsewhere
-   *  (the ground worker's, app/_components/ground-worker.ts) — taken as
-   *  they are, not built again. */
+  /**
+   * The index over `surface` from buckets built elsewhere (the ground
+   * worker's, app/_components/ground-worker.ts), taken as they are; throws
+   * where they do not fit it (another triangle count, a broken layout).
+   */
+  static fromBuckets(surface: TinSurface, built: TinBuckets): TinIndex {
+    const fits =
+      built.triangles === Math.floor(surface.triangles.length / 3) &&
+      built.start.length === built.cols * built.rows + 1 &&
+      built.start[built.start.length - 1] === built.items.length;
+    if (!fits) {
+      throw new Error("TinIndex: the buckets are not this surface's");
+    }
+    return new TinIndex(surface, built.cell, built);
+  }
+
+  /** (`built`: through `fromBuckets`, which checks that they fit) */
   constructor(surface: TinSurface, cell = INDEX_CELL_M, built?: TinBuckets) {
     this.surface = surface;
     if (built) {
@@ -491,7 +509,8 @@ export class TinIndex {
   /** The buckets, to rebuild the index from elsewhere (`built`). */
   get buckets(): TinBuckets {
     const { cell, cols, rows, items, start } = this;
-    return { cell, cols, rows, items, start };
+    const triangles = Math.floor(this.surface.triangles.length / 3);
+    return { cell, cols, rows, items, start, triangles };
   }
 
   /**

@@ -171,11 +171,11 @@ export function readStructuralMetadata(
         count: table.count,
         properties,
         readColumn: (name, out) => {
-          const property = properties[name];
-          const column = columns[name];
-          if (!property) {
+          if (!Object.hasOwn(properties, name)) {
             return false;
           }
+          const property = properties[name];
+          const column = columns[name];
           if (column && COMPONENTS[property.type] !== undefined) {
             if (property.array) {
               reader(name); // (throws as a row read would)
@@ -287,57 +287,20 @@ function columnReader(
   }
 }
 
-/** A SCALAR or VECn column's `count` rows into `out` at once: what
- *  `numberReader` gives row by row. */
-function fillNumbers(
-  property: ClassProperty,
-  column: TableColumn,
-  view: (index: number) => ArrayBuffer | undefined,
-  count: number,
-  out: NumberArray
-): void {
-  const n = COMPONENTS[property.type] ?? 1;
-  const type = property.componentType ?? "";
-  const values = typedArray(type, view(column.values));
-  const max = property.normalized ? INT_MAX[type] : undefined;
-  const transformed = property.normalized === true || type.startsWith("FLOAT");
-  const scale = column.scale ?? property.scale ?? 1;
-  const offset = column.offset ?? property.offset ?? 0;
-  const at = (v: number | number[], i: number): number =>
-    Array.isArray(v) ? (v[i] ?? 0) : v;
-  const scales = Array.from({ length: n }, (_, i) => at(scale, i));
-  const offsets = Array.from({ length: n }, (_, i) => at(offset, i));
-  const fallback = defaultOf(property);
-  const defaults = Array.isArray(fallback)
-    ? (fallback as number[])
-    : [Number(fallback)];
-  const noData = property.noData;
-  const noDatas = Array.isArray(noData) ? (noData as number[]) : [noData];
-  for (let row = 0; row < count; row++) {
-    const base = row * n;
-    let missing = noData !== undefined && noData !== null;
-    for (let i = 0; missing && i < n; i++) {
-      missing = values[base + i] === noDatas[i];
-    }
-    for (let i = 0; i < n; i++) {
-      if (missing) {
-        out[base + i] = defaults[i] ?? 0;
-        continue;
-      }
-      const raw = values[base + i];
-      const v = max === undefined ? raw : Math.max(raw / max, -1);
-      out[base + i] = transformed ? v * scales[i] + offsets[i] : v;
-    }
-  }
-}
-
-/** A SCALAR or VECn column: the stored numbers, normalised, scaled and
- *  offset as the schema says; the `noData` value (as stored) its default. */
-function numberReader(
+/** How a SCALAR or VECn column's stored numbers become its values: the
+ *  numbers, how many a row has, and component i of a value from its stored
+ *  number — normalised, scaled and offset as the schema says. */
+function numberDecoder(
   property: ClassProperty,
   column: TableColumn,
   view: (index: number) => ArrayBuffer | undefined
-): Read {
+): {
+  values: NumberArray;
+  n: number;
+  decode: (raw: number, i: number) => number;
+  /** whether the row from `base` on holds the `noData` value (as stored) */
+  missing: (base: number) => boolean;
+} {
   const n = COMPONENTS[property.type];
   if (n === undefined) {
     throw new Error(`property table: ${property.type} values are not read`);
@@ -346,24 +309,62 @@ function numberReader(
   const values = typedArray(type, view(column.values));
   const max = property.normalized ? INT_MAX[type] : undefined;
   const transformed = property.normalized === true || type.startsWith("FLOAT");
-  const scale = column.scale ?? property.scale ?? 1;
-  const offset = column.offset ?? property.offset ?? 0;
   const component = (v: number | number[], i: number): number =>
     Array.isArray(v) ? (v[i] ?? 0) : v;
-  const value = (raw: number, i: number): number => {
+  const scale = column.scale ?? property.scale ?? 1;
+  const offset = column.offset ?? property.offset ?? 0;
+  const scales = Array.from({ length: n }, (_, i) => component(scale, i));
+  const offsets = Array.from({ length: n }, (_, i) => component(offset, i));
+  const decode = (raw: number, i: number): number => {
     const v = max === undefined ? raw : Math.max(raw / max, -1);
-    return transformed ? v * component(scale, i) + component(offset, i) : v;
+    return transformed ? v * scales[i] + offsets[i] : v;
   };
   const noData = property.noData;
+  const missing =
+    n === 1
+      ? (base: number) => values[base] === noData
+      : (base: number) =>
+          Array.isArray(noData) &&
+          noData.every((v, i) => values[base + i] === v);
+  return { values, n, decode, missing };
+}
+
+/** A SCALAR or VECn column: the stored numbers, decoded (`numberDecoder`);
+ *  the `noData` value (as stored) its default. */
+function numberReader(
+  property: ClassProperty,
+  column: TableColumn,
+  view: (index: number) => ArrayBuffer | undefined
+): Read {
+  const { values, n, decode, missing } = numberDecoder(property, column, view);
   if (n === 1) {
-    return (id) =>
-      values[id] === noData ? defaultOf(property) : value(values[id], 0);
+    return (id) => (missing(id) ? defaultOf(property) : decode(values[id], 0));
   }
-  return (id) => {
-    const raw = Array.from(values.subarray(id * n, id * n + n));
-    if (Array.isArray(noData) && raw.every((v, i) => v === noData[i])) {
-      return defaultOf(property);
+  return (id) =>
+    missing(id * n)
+      ? defaultOf(property)
+      : Array.from(values.subarray(id * n, id * n + n), decode);
+}
+
+/** A SCALAR or VECn column's `count` rows into `out` at once, as
+ *  `numberReader` gives them row by row. */
+function fillNumbers(
+  property: ClassProperty,
+  column: TableColumn,
+  view: (index: number) => ArrayBuffer | undefined,
+  count: number,
+  out: NumberArray
+): void {
+  const { values, n, decode, missing } = numberDecoder(property, column, view);
+  const fallback = defaultOf(property);
+  const defaults = Array.isArray(fallback)
+    ? (fallback as number[])
+    : [Number(fallback)];
+  for (let row = 0; row < count; row++) {
+    const base = row * n;
+    const gone = missing(base);
+    for (let i = 0; i < n; i++) {
+      out[base + i] = gone ? (defaults[i] ?? 0) : decode(values[base + i], i);
     }
-    return raw.map(value);
-  };
+  }
 }

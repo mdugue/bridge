@@ -1275,7 +1275,7 @@ function tinHeightAt(
   if (!(index && ground.xy && ground.z && ground.tin)) {
     return { heightAt: () => null, bytes: 0 };
   }
-  const tin = new TinIndex(
+  const tin = TinIndex.fromBuckets(
     {
       bounds,
       xy: ground.xy,
@@ -1283,7 +1283,6 @@ function tinHeightAt(
       // every triangle, skirt included, as the worker indexed them
       triangles: index.array,
     },
-    ground.tin.cell,
     ground.tin
   );
   return { heightAt: (x, y) => tin.heightAt(x, y), bytes: tin.bytes };

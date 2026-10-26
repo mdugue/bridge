@@ -184,7 +184,7 @@ describe("ground prep", () => {
       triangles: level.index,
     };
     const here = new TinIndex(surface);
-    const there = new TinIndex(surface, tin.cell, tin);
+    const there = TinIndex.fromBuckets(surface, tin);
     const [minX, minY, maxX, maxY] = BOUNDS;
     for (let k = 0; k <= 40; k++) {
       const x = minX + ((maxX - minX) * k) / 40;
@@ -192,6 +192,9 @@ describe("ground prep", () => {
       expect(there.heightAt(x, y)).toBe(here.heightAt(x, y));
     }
     expect(there.bytes).toBe(here.bytes);
+    // buckets of another surface are refused
+    const fewer = { ...surface, triangles: level.index.subarray(3) };
+    expect(() => TinIndex.fromBuckets(fewer, tin)).toThrow();
     // a grid level has none
     expect(prepareGround(input(null, N)).tin).toBeUndefined();
   });

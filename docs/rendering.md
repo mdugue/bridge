@@ -779,7 +779,8 @@ stays their measure; the tile cache counts true bytes.
   fine level on the phone profile when it was built on the page) and
   the sheets' triangles and boxes are worked out off the main thread from the positions as stored; the
   level waits for them inside its dressing, as it waited for its
-  rasters. Read through three's per-vertex accessors on the main thread
+  rasters. A coarse level's job goes ahead of the fine ones queued
+  before it, as its dressing does. Read through three's per-vertex accessors on the main thread
   they were the longest task of a flight: 0.2–0.7 s per terrain level on
   a desktop, 0.5–1.4 s on the phone profile (4× throttled CPU; a fine
   level's 1 M index entries, twice). The input is copied (the level
@@ -794,8 +795,8 @@ stays their measure; the tile cache counts true bytes.
   and runs of copied floats; the dressing runs each in slices of 8 ms
   (`inSlices`) and gives the main thread back between them, so input
   and frames go on while a tile dresses. Each pause costs a frame — on
-  a phone 30 ms and more — so while the camera rests (300 ms unmoved)
-  the slices are 30 ms (`setSliceBudget`, create-app.ts): the picture
+  a phone 30 ms and more — so while nothing on screen moves (the camera
+  300 ms unmoved, no data layer moving, no export) the slices are 30 ms (`setSliceBudget`, create-app.ts): the picture
   holds still, and the tile under way lands in less than half the
   time. As one task each they were the
   stutter left once the ground and the BVH had left the thread: on the

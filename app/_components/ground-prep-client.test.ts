@@ -69,3 +69,16 @@ test("a job that cannot be sent is done here, and the queue goes on", async () =
   const after = await prepareGroundOffThread(grid(2));
   expect(after).toEqual(prepareGround(grid(2)));
 });
+
+test("a coarse level's job goes ahead of the fine ones queued before it", async () => {
+  const order: string[] = [];
+  const busy = prepareGroundOffThread(grid());
+  const fine = prepareGroundOffThread({ ...grid(1), grid: null }).then(() =>
+    order.push("fine")
+  );
+  const coarse = prepareGroundOffThread(grid(2)).then(() =>
+    order.push("coarse")
+  );
+  await Promise.all([busy, fine, coarse]);
+  expect(order).toEqual(["coarse", "fine"]);
+});
