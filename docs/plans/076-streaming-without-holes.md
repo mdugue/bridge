@@ -48,9 +48,15 @@ picture.
    none from the air: the phone's memory falls. The distance falloff
    (`errorFalloff`) is not needed: the levels' screen-space error already
    counts the distance.
-4. **Trees from the start** (open): the coarse crowns of every tile as one
-   site file at boot, out of the dressing chain; the fine crowns take over
-   per tile.
+4. **Trees from the start** (built): not a site file of every tile's
+   crowns — on a phone that held all ≈ 136 000 of Dresden's coarse crowns
+   (≈ 12 MB) for the whole visit — but the coarse crowns first and longer:
+   a coarse level's dressing goes ahead of every fine level's in the
+   dressings' turn (`COARSE_DRESSING_RANK`, `lib/city/task-gate.ts`'s
+   rank), and where a fine level shows before its own trees hang, its
+   coarse level's crowns stand in on it (`coarseCrownsStandIn`,
+   `DressingPlugin.standInCrowns`). Both levels are loaded anyway: no
+   byte more.
 
 Rejected for now: KTX2 for the rasters (data, not colour: block
 compression would change class ids), implicit tiling (15 tiles), runtime

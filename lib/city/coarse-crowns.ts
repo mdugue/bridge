@@ -330,3 +330,26 @@ export function unpackCrowns(buffer: ArrayBuffer): CoarseCrown[] | null {
   }
   return out;
 }
+
+/** What the stream knows of one tile's two terrain levels. */
+export interface TileLevelsShown {
+  /** the coarse level is on screen */
+  coarse: boolean;
+  /** the fine level is on screen */
+  fine: boolean;
+  /** the fine level's dressing hangs on it (its trees, if it has any) */
+  fineDressed: boolean;
+}
+
+/**
+ * Whether a tile's coarse crowns stand in on its fine level: while the fine
+ * level is on screen and its own trees are not — queued behind the
+ * dressings of the tiles nearer the camera, or never built because the
+ * build failed. A phone shows the fine level the moment it loads, and the
+ * tile went bare for as long as its dressing waited. The crowns are the
+ * coarse level's own, loaded with it already (the renderer keeps a shown
+ * tile's coarse level loaded): no byte more, on the GPU or the wire.
+ */
+export function coarseCrownsStandIn(t: TileLevelsShown): boolean {
+  return t.fine && !t.coarse && !t.fineDressed;
+}

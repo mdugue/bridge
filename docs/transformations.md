@@ -2128,6 +2128,17 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   its trees followed a moment later, a blink at every change of level.
   The cost of the switch: where the levels meet, a wood goes from all its
   trees to a third of them, wider.
+  Since 2026-10-25 (plan 076, step 4) a coarse level's dressing — light:
+  its crowns and bridges — goes ahead of every fine level's in the
+  dressings' one-at-a-time turn (`COARSE_DRESSING_RANK`), so every tile in
+  view has its third before the nearest has all; and where the fine level
+  shows without its own trees — a phone shows it the moment it loads, and
+  its dressing waited behind the nearer tiles' — the coarse level's crowns
+  stand in on it until they hang (`coarseCrownsStandIn`,
+  `DressingPlugin.standInCrowns`). They are the coarse level's own, kept
+  loaded under the fine one anyway: no byte more on the GPU or the wire.
+  A site file of every tile's crowns at boot (the plan's first idea) would
+  have held all ≈ 136 000 crowns on a phone for the whole visit, ≈ 12 MB.
 - **Canopy motion** `≈ assumed` — per-frame in `buildCrownMaterial`, **main pass only** (the
   shadow pass draws the rigid `castShadowPositionNode` → no shadow-pass cost, no
   extra buffers):

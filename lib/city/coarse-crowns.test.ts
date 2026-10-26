@@ -4,6 +4,7 @@ import {
   COARSE_TREE_WIDEN,
   type CoarseCrown,
   coarseCrowns,
+  coarseCrownsStandIn,
   coarseForm,
   drawnCoarse,
   packCrowns,
@@ -233,4 +234,18 @@ describe("the file", () => {
     const short = packCrowns(crowns).slice(0, 20);
     expect(unpackCrowns(short.buffer)).toBeNull();
   });
+});
+
+test("the coarse crowns stand in on a fine level until its own trees hang", () => {
+  const at = (coarse: boolean, fine: boolean, fineDressed: boolean) =>
+    coarseCrownsStandIn({ coarse, fine, fineDressed });
+  // the fine level shown bare: the coarse crowns stand in
+  expect(at(false, true, false)).toBe(true);
+  // its dressing hung: its own trees
+  expect(at(false, true, true)).toBe(false);
+  // the coarse level shown: its crowns are on screen with it already
+  expect(at(true, false, false)).toBe(false);
+  expect(at(true, true, false)).toBe(false);
+  // neither level shown: nothing to stand in for
+  expect(at(false, false, false)).toBe(false);
 });

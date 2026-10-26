@@ -876,7 +876,9 @@ tile's other level on screen waits for its dressing before it counts as
 loaded, so the renderer keeps the old level (and its trees) drawn until
 the new one is complete (`DressingPlugin.handsOver`) — on a desktop, for
 up to 1.5 s; a phone does not wait (`handOverWaitMs`: the wait holds a
-parse slot, and a phone has two), its trees arrive a moment later; the dressing is
+parse slot, and a phone has two), and its coarse level's crowns stand in
+until its own trees hang (`DressingPlugin.standInCrowns`); a coarse
+level's dressing goes ahead of every fine one's (`COARSE_DRESSING_RANK`); the dressing is
 compiled off the scene and hung on the content root at the renderer's
 `load-model`, after it has recorded the content's materials.
 `onLoaded` flips it to `ready` once the

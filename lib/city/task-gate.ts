@@ -1,15 +1,22 @@
 /**
  * At most `limit` async tasks at once, the rest waiting in the order they
- * came: what keeps a burst of parallel work from holding all its
- * intermediate memory at the same moment (the streamed tiles' rasters,
- * app/_components/raster-upload.ts). A waiter whose signal aborts leaves the
+ * came, a lower `rank` ahead of a higher one: what keeps a burst of
+ * parallel work from holding all its intermediate memory at the same
+ * moment (the streamed tiles' rasters, app/_components/raster-upload.ts),
+ * and the tiles' dressings one at a time, the coarse levels' first
+ * (tile-stream.ts). A waiter whose signal aborts leaves the
  * line without running; a task that fails frees its place like one that
  * succeeds.
  */
 export interface TaskGate {
-  /** runs `task` once a place is free; rejects with the signal's reason
-   *  when it aborts first */
-  run: <T>(task: () => Promise<T>, signal?: AbortSignal) => Promise<T>;
+  /** runs `task` once a place is free, after every waiter of a lower or
+   *  the same `rank` (default 0); rejects with the signal's reason when it
+   *  aborts first */
+  run: <T>(
+    task: () => Promise<T>,
+    signal?: AbortSignal,
+    rank?: number
+  ) => Promise<T>;
   /** tasks running now */
   running: () => number;
   /** tasks waiting for a place */
@@ -20,7 +27,30 @@ export interface TaskGate {
 }
 
 interface Waiter {
+  rank: number;
+  /** how many waiters of a lower rank went ahead of it */
+  overtaken: number;
   start: () => void;
+}
+
+/** Where a waiter of `rank` joins the line: before the first of a higher
+ *  rank, but behind every one overtaken `maxOvertakes` times already;
+ *  those it goes ahead of count one more. */
+function placeIn(line: Waiter[], rank: number, maxOvertakes: number): number {
+  let at = line.findIndex((w) => w.rank > rank);
+  if (at < 0) {
+    return line.length;
+  }
+  for (let i = line.length - 1; i >= at; i--) {
+    if (line[i].overtaken >= maxOvertakes) {
+      at = i + 1;
+      break;
+    }
+  }
+  for (let i = at; i < line.length; i++) {
+    line[i].overtaken++;
+  }
+  return at;
 }
 
 /** What a waiter rejects with when its signal fires: the abort's reason. */
@@ -30,7 +60,13 @@ function abortError(signal: AbortSignal | undefined): Error {
     : new DOMException("The operation was aborted.", "AbortError");
 }
 
-export function createTaskGate(initialLimit: number): TaskGate {
+/** `maxOvertakes`: how many waiters of a lower rank may go ahead of one
+ *  that came before them — past it, it keeps its place, so a stream of
+ *  low ranks cannot hold a higher one back for ever. */
+export function createTaskGate(
+  initialLimit: number,
+  maxOvertakes = Number.POSITIVE_INFINITY
+): TaskGate {
   let limit = initialLimit;
   let running = 0;
   const line: Waiter[] = [];
@@ -39,13 +75,19 @@ export function createTaskGate(initialLimit: number): TaskGate {
       line.shift()?.start();
     }
   };
-  const run = <T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> =>
+  const run = <T>(
+    task: () => Promise<T>,
+    signal?: AbortSignal,
+    rank = 0
+  ): Promise<T> =>
     new Promise<T>((resolve, reject) => {
       if (signal?.aborted) {
         reject(abortError(signal));
         return;
       }
       const waiter: Waiter = {
+        rank,
+        overtaken: 0,
         start: () => {
           signal?.removeEventListener("abort", leave);
           running++;
@@ -68,7 +110,7 @@ export function createTaskGate(initialLimit: number): TaskGate {
         }
       };
       signal?.addEventListener("abort", leave, { once: true });
-      line.push(waiter);
+      line.splice(placeIn(line, rank, maxOvertakes), 0, waiter);
       next();
     });
   return {

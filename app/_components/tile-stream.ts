@@ -46,8 +46,9 @@ import {
   plantedRows,
   type TreeVeto,
 } from "@/lib/city/tree-placement";
-import { unpackCrowns } from "@/lib/city/coarse-crowns";
+import { coarseCrownsStandIn, unpackCrowns } from "@/lib/city/coarse-crowns";
 import { keepOrder, streamOrder } from "@/lib/city/stream-order";
+import { createTaskGate } from "@/lib/city/task-gate";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   type CityExtras,
@@ -318,6 +319,10 @@ export interface TileStream {
   visibleTerrains: () => TerrainLayer[];
   visibleCities: () => CityLayer[];
   visibleDressings: () => TileDressing[];
+  /** the coarse crowns standing in on a fine level (DressingPlugin
+   *  `standInCrowns`): drawn, though their dressing is not shown —
+   *  their bridges and asks stay hidden with their level */
+  standingIn: () => VegetationControl[];
 }
 
 /**
@@ -338,6 +343,8 @@ export function takesOver(
 
 /** What the dressing plugin reads of the renderer it is registered on. */
 interface PluginTiles {
+  /** the renderer's group of shown content roots */
+  readonly group?: Object3D;
   recalculateBytesUsed: (tile?: object | null) => void;
   readonly visibleTiles: ReadonlySet<object>;
 }
@@ -1328,6 +1335,17 @@ async function buildDressing(
   };
 }
 
+/** The dressings' turns (DressingPlugin.turn): a coarse level's — the
+ *  bridges and a third of the trees, light to build — ahead of any fine
+ *  level's, so every tile in view has trees before the nearest has all. */
+const COARSE_DRESSING_RANK = 0;
+const FINE_DRESSING_RANK = 1;
+/** How many coarse dressings may go ahead of a fine one queued before
+ *  them: in a long flight the coarse levels keep landing, and the tile
+ *  under the camera (the boot's spawn tile, which `ready` waits for)
+ *  still gets its trees. */
+const MAX_DRESSING_OVERTAKES = 4;
+
 /**
  * The 3DTilesRendererJS plugin that dresses content as it loads. Runs inside
  * the renderer's own load (awaited before the tile is marked loaded), so a
@@ -1437,7 +1455,6 @@ export class DressingPlugin {
     // The warm-up runs beside the dressings, not ahead of them: its compile
     // may take up to COMPILE_WAIT_MS, and the spawn tile's trees need none
     // of its programs (they compile their own).
-    this.chain = ctx.dressingGate;
     ctx.dressingGate
       .then(() => {
         this.gateOpen = true;
@@ -1451,6 +1468,87 @@ export class DressingPlugin {
 
   init(tiles: PluginTiles): void {
     this.tiles = tiles;
+  }
+
+  /** Where a coarse level's crowns stand in on its fine level
+   *  (`standInCrowns`): beside the renderer's group, which only the
+   *  renderer fills, in the content roots' frame. */
+  private readonly standIns = (() => {
+    const group = new Group();
+    group.name = "coarse-crowns-stand-in";
+    group.matrixAutoUpdate = false;
+    return group;
+  })();
+
+  /**
+   * Moves each coarse level's crowns onto its tile's fine level while that
+   * shows without its own trees, and home again once they hang
+   * (lib/city/coarse-crowns.ts `coarseCrownsStandIn`). The crowns are
+   * built, compiled and weighed with the coarse level already; they leave
+   * with it (`disposeDressing` takes them from wherever they hang).
+   */
+  standInCrowns(isShown: (object: Object3D) => boolean): void {
+    const group = this.tiles?.group;
+    if (!group?.parent) {
+      return;
+    }
+    const standing: VegetationControl[] = [];
+    for (const { coarse, crowns, fine, control } of this.coarseCrownLevels()) {
+      const standIn = coarseCrownsStandIn({
+        coarse: isShown(coarse),
+        fine: fine?.terrain ? isShown(fine.terrain.mesh) : false,
+        fineDressed: fine?.dressing !== undefined,
+      });
+      if (standIn) {
+        standing.push(control);
+      }
+      const home = standIn ? this.standIns : coarse;
+      if (crowns.parent === home) {
+        continue;
+      }
+      if (standIn) {
+        // every content root carries the same matrix (no tile transforms):
+        // the renderer's up-axis turn
+        group.parent.add(this.standIns);
+        this.standIns.matrix.multiplyMatrices(group.matrix, coarse.matrix);
+        this.standIns.updateMatrixWorld(true);
+      }
+      home.add(crowns);
+      crowns.updateMatrixWorld(true);
+    }
+    this.standing = standing;
+  }
+
+  /** the controls of the crowns standing in now */
+  standing: VegetationControl[] = [];
+
+  /** Each tile whose coarse level has crowns: its content root, the
+   *  crowns, and its fine level's entry if it has one. */
+  private coarseCrownLevels(): {
+    coarse: Object3D;
+    control: VegetationControl;
+    crowns: Object3D;
+    fine?: Dressed;
+  }[] {
+    const coarse = new Map<
+      string,
+      { scene: Object3D; control: VegetationControl }
+    >();
+    const fine = new Map<string, Dressed>();
+    for (const [scene, entry] of this.dressed) {
+      const control = entry.dressing?.vegetation;
+      if (entry.terrain?.level === 0) {
+        fine.set(entry.terrain.tile, entry);
+      } else if (entry.terrain && control) {
+        coarse.set(entry.terrain.tile, { scene, control });
+      }
+    }
+    return [...coarse].map(([tile, { scene, control }]) => ({
+      coarse: scene,
+      control,
+      crowns: control.group,
+      fine: fine.get(tile),
+    }));
   }
 
   /** The renderer has marked `scene`'s tile loaded (its load-model): the
@@ -1747,7 +1845,14 @@ export class DressingPlugin {
 
   /** Dressings build one at a time, after the gate: each is a long task.
    *  The crowns' seasonal programs warm up beside them (warmCrowns). */
-  private chain: Promise<void>;
+  private readonly lane = createTaskGate(1, MAX_DRESSING_OVERTAKES);
+  /** `work` in the dressings' turn: after the gate, one at a time, the
+   *  lower rank first */
+  private turn<T>(work: () => Promise<T>, rank: number): Promise<T> {
+    return this.ctx.dressingGate.then(() =>
+      this.lane.run(work, undefined, rank)
+    );
+  }
   pending = 0;
   private warmup: CrownWarmup | null = null;
   private disposed = false;
@@ -1807,6 +1912,7 @@ export class DressingPlugin {
     this.lifetime.abort();
     this.warmup?.dispose();
     this.warmup = null;
+    this.standIns.removeFromParent();
     // (release deletes the entry it is on: a Map iterates on safely)
     for (const scene of this.dressed.keys()) {
       this.release(scene);
@@ -1838,79 +1944,80 @@ export class DressingPlugin {
     // a tile that leaves stops waiting for it at once (disposeTile)
     this.builtOf.set(scene, built);
     const queuedAt = streamTimings.now();
-    this.chain = this.chain
-      .then(() => this.ctx.dressingGate)
-      .then(async () => {
-        const entry = this.dressed.get(scene);
-        if (!entry || this.disposed) {
-          return; // the tile (or the stream) left before its turn
-        }
-        streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
-        entry.aborter = new AbortController();
-        const signal = entry.aborter.signal;
-        const dressing = await streamTimings.timed(
-          "dressing:build",
-          () => buildDressing(terrain, extras, this.ctx, this.url, signal),
-          extras.tileId
-        );
-        entry.aborter = undefined;
-        const parts = dressingParts(dressing);
-        // Compiled as the frames will draw it — in its season and at the
-        // hour (which swap crown materials) — before it hangs anywhere: a
-        // build three keys differently from what a frame asks for compiles
-        // inside that frame. (A compile starts at the drawable: where it
-        // will hang does not change its build.)
-        catchUp(dressing, this.ctx);
-        const compiled =
-          this.dressed.get(scene) === entry
-            ? this.compileUnder(
-                scene,
-                compileRepresentatives(parts),
-                `dressing ${extras.tileId}`
-              )
-            : Promise.resolve<Compiled>("not run");
-        let outcome: Compiled | undefined;
+    // the coarse levels' first: a third of the trees on every tile in view
+    // before the full set on the nearest
+    const rank = extras.dressing ? FINE_DRESSING_RANK : COARSE_DRESSING_RANK;
+    void this.turn(async () => {
+      const entry = this.dressed.get(scene);
+      if (!entry || this.disposed) {
+        return; // the tile (or the stream) left before its turn
+      }
+      streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
+      entry.aborter = new AbortController();
+      const signal = entry.aborter.signal;
+      const dressing = await streamTimings.timed(
+        "dressing:build",
+        () => buildDressing(terrain, extras, this.ctx, this.url, signal),
+        extras.tileId
+      );
+      entry.aborter = undefined;
+      const parts = dressingParts(dressing);
+      // Compiled as the frames will draw it — in its season and at the
+      // hour (which swap crown materials) — before it hangs anywhere: a
+      // build three keys differently from what a frame asks for compiles
+      // inside that frame. (A compile starts at the drawable: where it
+      // will hang does not change its build.)
+      catchUp(dressing, this.ctx);
+      const compiled =
+        this.dressed.get(scene) === entry
+          ? this.compileUnder(
+              scene,
+              compileRepresentatives(parts),
+              `dressing ${extras.tileId}`
+            )
+          : Promise.resolve<Compiled>("not run");
+      let outcome: Compiled | undefined;
+      compiled
+        .then((ended) => {
+          outcome = ended;
+        })
+        .catch(() => undefined);
+      await streamTimings.timed(
+        "dressing:compile",
+        () => withinCompileWait(compiled),
+        extras.tileId
+      );
+      built();
+      // Not before the renderer has recorded the tile's own content (see
+      // `loaded`): the dressing's materials are the scene's.
+      await this.loaded.get(scene);
+      // A dressing whose compile ran out of GPU memory stays off: the
+      // tile goes bare rather than the GPU further under. Nor does one
+      // whose tile left while a compile ran: its release waits for the
+      // compile (`compiles`), so its entry is still there.
+      if (
+        this.disposed ||
+        this.released.has(scene) ||
+        this.dressed.get(scene) !== entry ||
+        outcome === "out of memory"
+      ) {
+        // freed once its compile has ended (see `compiles`)
         compiled
-          .then((ended) => {
-            outcome = ended;
-          })
+          .then(() => this.disposeFailed(disposeDressing(dressing), scene))
           .catch(() => undefined);
-        await streamTimings.timed(
-          "dressing:compile",
-          () => withinCompileWait(compiled),
-          extras.tileId
-        );
-        built();
-        // Not before the renderer has recorded the tile's own content (see
-        // `loaded`): the dressing's materials are the scene's.
-        await this.loaded.get(scene);
-        // A dressing whose compile ran out of GPU memory stays off: the
-        // tile goes bare rather than the GPU further under. Nor does one
-        // whose tile left while a compile ran: its release waits for the
-        // compile (`compiles`), so its entry is still there.
-        if (
-          this.disposed ||
-          this.released.has(scene) ||
-          this.dressed.get(scene) !== entry ||
-          outcome === "out of memory"
-        ) {
-          // freed once its compile has ended (see `compiles`)
-          compiled
-            .then(() => this.disposeFailed(disposeDressing(dressing), scene))
-            .catch(() => undefined);
-          return;
-        }
-        this.hangDressing(scene, entry, dressing);
-        // ...and one whose compile outlasted the wait and then ran out of
-        // memory comes down again
-        compiled
-          .then((ended) => {
-            if (ended === "out of memory") {
-              this.dropDressing(scene, entry, dressing);
-            }
-          })
-          .catch(() => undefined);
-      })
+        return;
+      }
+      this.hangDressing(scene, entry, dressing);
+      // ...and one whose compile outlasted the wait and then ran out of
+      // memory comes down again
+      compiled
+        .then((ended) => {
+          if (ended === "out of memory") {
+            this.dropDressing(scene, entry, dressing);
+          }
+        })
+        .catch(() => undefined);
+    }, rank)
       .catch((err: unknown) => {
         // A dressing that fails leaves its tile bare, never the stream
         // stuck — but never silently: a builder's throw is a bug or a
@@ -1971,12 +2078,7 @@ export class DressingPlugin {
       // the dressings' own chain: a switch-on builds the loaded tiles'
       // bodies one after another, never all in one task
       turn: (work) => {
-        const run = this.chain.then(work);
-        this.chain = run.then(
-          () => undefined,
-          () => undefined
-        );
-        return run;
+        return this.turn(work, FINE_DRESSING_RANK);
       },
       freeFailed: (errors) => this.disposeFailed(errors, scene),
       gone: () =>
@@ -2320,6 +2422,8 @@ export function createTileStream(
   let version = 0;
   const changed = () => {
     version++;
+    // (the plugin is made below; the renderer calls this only later)
+    dressing.standInCrowns(isShown);
     ctx.onChange();
   };
   const memo = <T>(list: () => T[]): (() => T[]) => {
@@ -2354,6 +2458,7 @@ export function createTileStream(
     demolishedGroups: new Set(),
     pendingDressings: () => 0,
     dressingSettled: () => false,
+    standingIn: () => [],
     visibleTerrains: memo(() =>
       [...stream.terrains]
         .filter((t) => isShown(t.mesh))
@@ -2373,6 +2478,7 @@ export function createTileStream(
   const dressing = new DressingPlugin({ ...ctx, onChange: changed }, stream);
   stream.pendingDressings = () => dressing.pending;
   stream.dressingSettled = (tileId) => dressing.settled.has(tileId);
+  stream.standingIn = () => dressing.standing;
   tiles.registerPlugin(dressing);
   for (const { camera, width, height } of cameras) {
     tiles.setCamera(camera);
