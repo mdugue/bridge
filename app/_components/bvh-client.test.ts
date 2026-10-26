@@ -44,10 +44,7 @@ test("the worker builds the BVH a ray finds the same hits through", async () => 
   const there = field();
   const here = field();
   here.boundsTree = new MeshBVH(here);
-  const building = buildBvhOffThread(there);
-  // (the first build waits a turn: the arrays are still here)
-  await Promise.resolve();
-  await building;
+  await buildBvhOffThread(there);
   expect(bvhWorkerUp()).toBe(true);
   expect(bvhBuilding(there)).toBe(false);
   expect(there.boundsTree).toBeDefined();
@@ -83,4 +80,20 @@ test("while the worker builds, the geometry says so", async () => {
   await done;
   expect(geometry.getIndex()?.array.length).toBe(300 * 300 * 6);
   expect(bvhBuilding(geometry)).toBe(false);
+});
+
+test("a tile that left before its turn is not built, one that left during it gets its arrays back", async () => {
+  const before = field();
+  await buildBvhOffThread(before, () => false);
+  expect(before.boundsTree).toBeFalsy();
+  const during = field(100);
+  let there = true;
+  const done = buildBvhOffThread(during, () => there);
+  for (let i = 0; i < 10 && !bvhBuilding(during); i++) {
+    await Promise.resolve();
+  }
+  there = false;
+  await done;
+  expect(during.boundsTree).toBeFalsy();
+  expect(during.getIndex()?.array.length).toBe(100 * 100 * 6);
 });

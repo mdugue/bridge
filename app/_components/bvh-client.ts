@@ -20,8 +20,9 @@ import { MeshBVH } from "three-mesh-bvh";
  * waits or passes the tile over until they are back. The GPU draws from
  * its own buffers all along. The build sorts the index in place, as on
  * the main thread: the GPU keeps the order it was given, the same
- * triangles. An array that shares its buffer with something else is
- * copied, not handed over.
+ * triangles. A tile whose arrays share a buffer with anything else is
+ * built here (handed over, the other would go with them; copied, the
+ * page's memory would grow).
  */
 export interface BvhJob {
   id: number;
@@ -140,29 +141,26 @@ function take(geometry: BufferGeometry): Taken | null {
       : (position as BufferAttribute).array
   ) as PositionArray;
   const index = indexAttr.array as IndexArray;
-  const giveP = ownsBuffer(source);
-  const giveI = ownsBuffer(index);
-  const sentP = giveP ? source : (source.slice() as PositionArray);
-  const sentI = giveI ? index : (index.slice() as IndexArray);
+  // an array that shares its buffer could only go as a copy: the page's
+  // memory would grow by it, so that tile is built here, as before
+  if (
+    !(ownsBuffer(source) && ownsBuffer(index)) ||
+    source.buffer === index.buffer
+  ) {
+    return null;
+  }
   const restore = (reply: Pick<BvhReply, "index" | "position">) => {
-    if (giveP) {
-      if (interleaved) {
-        (position as InterleavedBufferAttribute).data.array = reply.position;
-      } else {
-        (position as BufferAttribute).array = reply.position;
-      }
-    }
-    if (giveI) {
-      indexAttr.array = reply.index;
+    if (interleaved) {
+      (position as InterleavedBufferAttribute).data.array = reply.position;
     } else {
-      // the sorted order, into the array the geometry kept
-      index.set(reply.index);
+      (position as BufferAttribute).array = reply.position;
     }
+    indexAttr.array = reply.index;
   };
   return {
     job: {
       position: {
-        array: sentP,
+        array: source,
         itemSize: position.itemSize,
         stride: interleaved
           ? (position as InterleavedBufferAttribute).data.stride
@@ -172,21 +170,23 @@ function take(geometry: BufferGeometry): Taken | null {
           : 0,
         normalized: position.normalized,
       },
-      index: sentI,
+      index,
       groups: geometry.groups.map((g) => ({ ...g })),
       drawRange: { ...geometry.drawRange },
     },
     restore,
-    transfer: [sentP.buffer, sentI.buffer].filter(
-      (b, i, all): b is ArrayBuffer =>
-        b instanceof ArrayBuffer && all.indexOf(b) === i
+    transfer: [source.buffer, index.buffer].filter(
+      (b): b is ArrayBuffer => b instanceof ArrayBuffer
     ),
   };
 }
 
 /** One build in the worker; resolves whether it built (false: the worker
  *  failed — the caller may build here). The arrays are back either way. */
-async function buildThere(geometry: BufferGeometry): Promise<boolean> {
+async function buildThere(
+  geometry: BufferGeometry,
+  wanted: () => boolean
+): Promise<boolean> {
   const w = startWorker();
   const taken = w ? take(geometry) : null;
   if (!(w && taken)) {
@@ -206,8 +206,9 @@ async function buildThere(geometry: BufferGeometry): Promise<boolean> {
     throw new Error("BVH worker lost a tile's buffers");
   }
   taken.restore(reply);
-  if (!reply.roots || geometry.boundsTree) {
-    return Boolean(geometry.boundsTree);
+  // a tile that left meanwhile gets no BVH: nothing would ray it
+  if (!reply.roots || geometry.boundsTree || !wanted()) {
+    return true;
   }
   const index = geometry.getIndex()?.array as IndexArray;
   // (`version` is read, though the types leave it out: without it the
@@ -223,14 +224,19 @@ async function buildThere(geometry: BufferGeometry): Promise<boolean> {
  * Builds `geometry`'s BVH in the worker, after the builds before it;
  * where there is no worker (or it failed), here. Resolves once the
  * geometry has its BVH back (or the build failed: a ray then builds it on
- * the main thread as before).
+ * the main thread as before). `wanted` says whether the tile is still
+ * there: one that left before its turn is not built, and one that left
+ * during it gets its arrays back but no BVH.
  */
-export function buildBvhOffThread(geometry: BufferGeometry): Promise<void> {
+export function buildBvhOffThread(
+  geometry: BufferGeometry,
+  wanted: () => boolean = () => true
+): Promise<void> {
   const run = chain.then(async () => {
-    if (geometry.boundsTree) {
+    if (geometry.boundsTree || !wanted()) {
       return;
     }
-    if (!(await buildThere(geometry))) {
+    if (!(await buildThere(geometry, wanted))) {
       geometry.computeBoundsTree();
     }
   });

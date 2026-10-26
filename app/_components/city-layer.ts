@@ -327,6 +327,7 @@ export function dressCity(
 
   /** the worker's build of the BVH, while it runs */
   let prepared: Promise<void> | null = null;
+  let disposed = false;
   // the asked objects, kept for the facade readings' repack
   let marked: ReadonlySet<number> = new Set();
   const layer: CityLayer = {
@@ -346,14 +347,21 @@ export function dressCity(
         alive[i] = 0;
       }
       // the index is the worker's while it builds the BVH: rebuilt after
+      // (unless the tile has left by then)
       if (prepared) {
-        void prepared.then(rebuild, rebuild);
+        const after = () => {
+          if (!disposed) {
+            rebuild();
+          }
+        };
+        void prepared.then(after, after);
       } else {
         rebuild();
       }
       return true;
     },
     dispose: () => {
+      disposed = true;
       geometry.disposeBoundsTree();
       objects.texture.dispose();
     },
@@ -377,7 +385,11 @@ export function dressCity(
     ensureBvh: () => ensureCityBvh(mesh),
     prepareBvh: () => {
       prepared ??= streamTimings
-        .timed("tile:bvh-worker", () => buildBvhOffThread(geometry), tile)
+        .timed(
+          "tile:bvh-worker",
+          () => buildBvhOffThread(geometry, () => !disposed),
+          tile
+        )
         .finally(() => {
           prepared = null;
         });
