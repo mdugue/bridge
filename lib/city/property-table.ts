@@ -65,6 +65,14 @@ export interface PropertyTable {
   /** one row's value: a number, a number[] (VECn), a string (STRING, an
    *  ENUM's name) or a boolean; throws for a name outside the class */
   getPropertyValue: (name: string, id: number) => unknown;
+  /**
+   * A whole numeric column (SCALAR or VECn, its components row after row)
+   * into `out`, the rows' values as `getPropertyValue` gives them: false
+   * (`out` untouched) for a name outside the class. One pass over the
+   * stored numbers — a tile's style columns were 0.3 s on the phone
+   * profile read row by row.
+   */
+  readColumn: (name: string, out: NumberArray) => boolean;
   /** the class's properties (a column the tile lacks is absent here) */
   properties: Readonly<Record<string, ClassProperty>>;
 }
@@ -78,7 +86,7 @@ export interface StructuralMetadata {
 }
 
 type Read = (id: number) => unknown;
-type NumberArray =
+export type NumberArray =
   | Float32Array
   | Float64Array
   | Int8Array
@@ -162,6 +170,30 @@ export function readStructuralMetadata(
       return {
         count: table.count,
         properties,
+        readColumn: (name, out) => {
+          const property = properties[name];
+          const column = columns[name];
+          if (!property) {
+            return false;
+          }
+          if (column && COMPONENTS[property.type] !== undefined) {
+            if (property.array) {
+              reader(name); // (throws as a row read would)
+            }
+            fillNumbers(property, column, view, table.count, out);
+            return true;
+          }
+          // no column (its default in every row), or not numbers (an ENUM,
+          // a BOOLEAN): row by row
+          const read = reader(name);
+          for (let row = 0, k = 0; row < table.count; row++) {
+            const value = read(row);
+            for (const v of Array.isArray(value) ? value : [value]) {
+              out[k++] = Number(v);
+            }
+          }
+          return true;
+        },
         getPropertyValue: (name, id) => {
           if (!Object.hasOwn(properties, name)) {
             throw new Error(`property table: no property "${name}"`);
@@ -252,6 +284,50 @@ function columnReader(
     }
     default:
       return numberReader(property, column, view);
+  }
+}
+
+/** A SCALAR or VECn column's `count` rows into `out` at once: what
+ *  `numberReader` gives row by row. */
+function fillNumbers(
+  property: ClassProperty,
+  column: TableColumn,
+  view: (index: number) => ArrayBuffer | undefined,
+  count: number,
+  out: NumberArray
+): void {
+  const n = COMPONENTS[property.type] ?? 1;
+  const type = property.componentType ?? "";
+  const values = typedArray(type, view(column.values));
+  const max = property.normalized ? INT_MAX[type] : undefined;
+  const transformed = property.normalized === true || type.startsWith("FLOAT");
+  const scale = column.scale ?? property.scale ?? 1;
+  const offset = column.offset ?? property.offset ?? 0;
+  const at = (v: number | number[], i: number): number =>
+    Array.isArray(v) ? (v[i] ?? 0) : v;
+  const scales = Array.from({ length: n }, (_, i) => at(scale, i));
+  const offsets = Array.from({ length: n }, (_, i) => at(offset, i));
+  const fallback = defaultOf(property);
+  const defaults = Array.isArray(fallback)
+    ? (fallback as number[])
+    : [Number(fallback)];
+  const noData = property.noData;
+  const noDatas = Array.isArray(noData) ? (noData as number[]) : [noData];
+  for (let row = 0; row < count; row++) {
+    const base = row * n;
+    let missing = noData !== undefined && noData !== null;
+    for (let i = 0; missing && i < n; i++) {
+      missing = values[base + i] === noDatas[i];
+    }
+    for (let i = 0; i < n; i++) {
+      if (missing) {
+        out[base + i] = defaults[i] ?? 0;
+        continue;
+      }
+      const raw = values[base + i];
+      const v = max === undefined ? raw : Math.max(raw / max, -1);
+      out[base + i] = transformed ? v * scales[i] + offsets[i] : v;
+    }
   }
 }
 

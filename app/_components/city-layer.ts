@@ -94,11 +94,6 @@ export interface CityMesh extends Mesh {
   isCityObjectMesh?: boolean;
 }
 
-const xyz = (v: unknown): number[] => {
-  const p = v as { x?: number; y?: number; z?: number } | number[];
-  return Array.isArray(p) ? p : [p.x ?? 0, p.y ?? 0, p.z ?? 0];
-};
-
 /**
  * Reads the style columns of the property table into typed columns. Column
  * by column rather than row by row: a row read would decode every fact
@@ -129,23 +124,11 @@ export function readObjectTable(
     winW: new Float32Array(count),
   };
   const accessor = metadata.tableAccessors[0];
+  // absent columns stay 0 (`source` before plan 034: LoD2)
   const scalar = (
     name: string,
     out: Float32Array | Uint8Array | Uint16Array | Uint32Array
-  ) => {
-    // absent columns stay 0 (`source` before plan 034: LoD2)
-    if (!(accessor && name in accessor.properties)) {
-      return;
-    }
-    for (let i = 0; i < count; i++) {
-      out[i] = Number(accessor.getPropertyValue(name, i));
-    }
-  };
-  const vec3 = (name: string, out: Float32Array) => {
-    for (let i = 0; i < count; i++) {
-      out.set(xyz(accessor?.getPropertyValue(name, i)), i * 3);
-    }
-  };
+  ) => accessor?.readColumn(name, out);
   scalar("baseZ", table.baseZ);
   scalar("building", table.building);
   scalar("eaveH", table.eaveH);
@@ -164,8 +147,8 @@ export function readObjectTable(
   scalar("winH", table.winH);
   scalar("winStyle", table.winStyle);
   scalar("winW", table.winW);
-  vec3("roof", table.roof);
-  vec3("tint", table.tint);
+  scalar("roof", table.roof);
+  scalar("tint", table.tint);
   return table;
 }
 
