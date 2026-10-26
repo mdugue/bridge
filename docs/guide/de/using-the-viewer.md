@@ -501,13 +501,16 @@ kann, den ein kleiner Bildschirm kaum zeigt.
 - **Statistik** — Anzahl der Gebäude und Geländepunkte, die gerade im
   Blick sind, geschätzter Grafikspeicher und die Bildrate.
 
-Die Fußzeile nennt die Datenquellen: die Landesvermessung (in Dresden
-die sächsische) für die amtlichen Datensätze und die
+Die Fußzeile hat zwei Zeilen. Die erste nennt OpenStreetMap und die
+Landesvermessung (in Dresden die sächsische); ein Klick darauf klappt alle
+Datenquellen mit ihren Lizenzen auf – die amtlichen Datensätze, die
 OpenStreetMap-Mitwirkenden unter anderem für Lampen, Mauern und Zäune,
 Bahnsteige, Brückentragwerke, Läden und Baudenkmale (und die
-Landbedeckung, wo das Land kein Basis-DLM veröffentlicht). Daneben führt
-*Unterstützen* zur Ko-fi-Seite des Projekts; es ist ein einfacher Link,
-der erst beim Klick etwas von Ko-fi lädt.
+Landbedeckung, wo das Land kein Basis-DLM veröffentlicht) und die übrigen
+Register. Die zweite führt zu *Impressum*, *Datenschutz* und *Wissen*
+(jeweils in einem neuen Tab) und zu *Unterstützen*, der Ko-fi-Seite des
+Projekts; es ist ein einfacher Link, der erst beim Klick etwas von Ko-fi
+lädt.
 
 ## Tipps
 
