@@ -14,7 +14,7 @@ import {
   localReader,
   prepareGround,
 } from "./ground-prep";
-import { planTriangles } from "./terrain-tin";
+import { planTriangles, TinIndex } from "./terrain-tin";
 import {
   MIST_REACH_M,
   reach,
@@ -170,6 +170,35 @@ describe("ground prep", () => {
     });
   });
 
+  test("a TIN's height index from its buckets answers as one built here", () => {
+    const level = input(null, null);
+    const prep = prepareGround(level);
+    const { xy, z, tin } = prep;
+    if (!(xy && z && tin && level.index)) {
+      throw new Error("no TIN index");
+    }
+    const surface = {
+      bounds: [...BOUNDS] as [number, number, number, number],
+      xy,
+      z,
+      triangles: level.index,
+    };
+    const here = new TinIndex(surface);
+    const there = TinIndex.fromBuckets(surface, tin);
+    const [minX, minY, maxX, maxY] = BOUNDS;
+    for (let k = 0; k <= 40; k++) {
+      const x = minX + ((maxX - minX) * k) / 40;
+      const y = minY + ((maxY - minY) * ((k * 7) % 41)) / 40;
+      expect(there.heightAt(x, y)).toBe(here.heightAt(x, y));
+    }
+    expect(there.bytes).toBe(here.bytes);
+    // buckets of another surface are refused
+    const fewer = { ...surface, triangles: level.index.subarray(3) };
+    expect(() => TinIndex.fromBuckets(fewer, tin)).toThrow();
+    // a grid level has none
+    expect(prepareGround(input(null, N)).tin).toBeUndefined();
+  });
+
   test("a grid level's elevations are its first n² vertices' heights", () => {
     const prep = prepareGround(input(null, N));
     const ref = reference(eastWater(16));
@@ -211,7 +240,7 @@ describe("ground prep", () => {
   test("hands every result array over, each once", () => {
     const prep = prepareGround(input(eastWater(16), null));
     const buffers = groundPrepTransfer(prep);
-    expect(buffers.length).toBe(6);
-    expect(new Set(buffers).size).toBe(6);
+    expect(buffers.length).toBe(8);
+    expect(new Set(buffers).size).toBe(8);
   });
 });

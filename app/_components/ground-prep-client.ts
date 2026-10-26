@@ -158,7 +158,10 @@ function packed(job: Job): { message: unknown; transfer: Transferable[] } {
 
 function next(): void {
   while (!running && queue.length > 0) {
-    const job = queue.shift() as Job;
+    // a coarse level first (a grid: no TIN index to build), as the stream
+    // dresses its coarse levels ahead of the fine ones
+    const coarse = queue.findIndex((j) => j.input.grid !== null);
+    const job = queue.splice(Math.max(coarse, 0), 1)[0];
     if (job.signal?.aborted) {
       job.reject(job.signal.reason);
       continue;

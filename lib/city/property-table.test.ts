@@ -101,3 +101,24 @@ test("a class property without a column answers its default; anything else outsi
   expect(() => table.getPropertyValue("winStyle", 0)).toThrow();
   expect(() => table.getPropertyValue("baseZ", 2)).toThrow();
 });
+
+test("a whole column reads as its rows do, a class property without one as its default", () => {
+  const { ext, views } = twoObjects();
+  const [table] = readStructuralMetadata(ext, (i) => views[i]).tableAccessors;
+  const rows = (name: string) =>
+    [0, 1].flatMap((id) => table.getPropertyValue(name, id) as number);
+  for (const [name, size] of [
+    ["baseZ", 2],
+    ["height", 2],
+    ["flags", 2],
+    ["tint", 6],
+    ["levels", 2],
+  ] as const) {
+    const out = new Float64Array(size);
+    expect(table.readColumn(name, out)).toBe(true);
+    expect([...out]).toEqual(rows(name));
+  }
+  const untouched = new Float32Array([7, 7]);
+  expect(table.readColumn("winStyle", untouched)).toBe(false);
+  expect([...untouched]).toEqual([7, 7]);
+});

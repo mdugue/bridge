@@ -1261,9 +1261,10 @@ interface HeightLookup {
 /**
  * Ground height over a TIN (`extras.tin`, the fine level): its surface
  * triangles indexed in the projected frame (lib/city/terrain-tin.ts
- * TinIndex), its vertices read back from the mesh by the ground worker
- * (`groundPrepInput`) — so the walker stands on exactly the triangles the
- * GPU draws.
+ * TinIndex), its vertices read back from the mesh and the index's buckets
+ * built by the ground worker (`groundPrepInput`; 0.3–0.6 s a fine level on
+ * the phone profile when built here) — so the walker stands on exactly the
+ * triangles the GPU draws.
  */
 function tinHeightAt(
   mesh: Mesh,
@@ -1271,17 +1272,19 @@ function tinHeightAt(
   ground: GroundPrep
 ): HeightLookup {
   const index = mesh.geometry.getIndex();
-  if (!(index && ground.xy && ground.z)) {
+  if (!(index && ground.xy && ground.z && ground.tin)) {
     return { heightAt: () => null, bytes: 0 };
   }
-  const tin = new TinIndex({
-    bounds,
-    xy: ground.xy,
-    z: ground.z,
-    // Every triangle, skirt included: a skirt quad is vertical, so its
-    // triangles have no area in plan and the lookup never picks one.
-    triangles: index.array,
-  });
+  const tin = TinIndex.fromBuckets(
+    {
+      bounds,
+      xy: ground.xy,
+      z: ground.z,
+      // every triangle, skirt included, as the worker indexed them
+      triangles: index.array,
+    },
+    ground.tin
+  );
   return { heightAt: (x, y) => tin.heightAt(x, y), bytes: tin.bytes };
 }
 

@@ -65,6 +65,14 @@ export interface PropertyTable {
   /** one row's value: a number, a number[] (VECn), a string (STRING, an
    *  ENUM's name) or a boolean; throws for a name outside the class */
   getPropertyValue: (name: string, id: number) => unknown;
+  /**
+   * A whole numeric column (SCALAR or VECn, its components row after row)
+   * into `out`, the rows' values as `getPropertyValue` gives them: false
+   * (`out` untouched) for a name outside the class. One pass over the
+   * stored numbers — a tile's style columns were 0.3 s on the phone
+   * profile read row by row.
+   */
+  readColumn: (name: string, out: NumberArray) => boolean;
   /** the class's properties (a column the tile lacks is absent here) */
   properties: Readonly<Record<string, ClassProperty>>;
 }
@@ -78,7 +86,7 @@ export interface StructuralMetadata {
 }
 
 type Read = (id: number) => unknown;
-type NumberArray =
+export type NumberArray =
   | Float32Array
   | Float64Array
   | Int8Array
@@ -162,6 +170,30 @@ export function readStructuralMetadata(
       return {
         count: table.count,
         properties,
+        readColumn: (name, out) => {
+          if (!Object.hasOwn(properties, name)) {
+            return false;
+          }
+          const property = properties[name];
+          const column = columns[name];
+          if (column && COMPONENTS[property.type] !== undefined) {
+            if (property.array) {
+              reader(name); // (throws as a row read would)
+            }
+            fillNumbers(property, column, view, table.count, out);
+            return true;
+          }
+          // no column (its default in every row), or not numbers (an ENUM,
+          // a BOOLEAN): row by row
+          const read = reader(name);
+          for (let row = 0, k = 0; row < table.count; row++) {
+            const value = read(row);
+            for (const v of Array.isArray(value) ? value : [value]) {
+              out[k++] = Number(v);
+            }
+          }
+          return true;
+        },
         getPropertyValue: (name, id) => {
           if (!Object.hasOwn(properties, name)) {
             throw new Error(`property table: no property "${name}"`);
@@ -255,13 +287,20 @@ function columnReader(
   }
 }
 
-/** A SCALAR or VECn column: the stored numbers, normalised, scaled and
- *  offset as the schema says; the `noData` value (as stored) its default. */
-function numberReader(
+/** How a SCALAR or VECn column's stored numbers become its values: the
+ *  numbers, how many a row has, and component i of a value from its stored
+ *  number — normalised, scaled and offset as the schema says. */
+function numberDecoder(
   property: ClassProperty,
   column: TableColumn,
   view: (index: number) => ArrayBuffer | undefined
-): Read {
+): {
+  values: NumberArray;
+  n: number;
+  decode: (raw: number, i: number) => number;
+  /** whether the row from `base` on holds the `noData` value (as stored) */
+  missing: (base: number) => boolean;
+} {
   const n = COMPONENTS[property.type];
   if (n === undefined) {
     throw new Error(`property table: ${property.type} values are not read`);
@@ -270,24 +309,62 @@ function numberReader(
   const values = typedArray(type, view(column.values));
   const max = property.normalized ? INT_MAX[type] : undefined;
   const transformed = property.normalized === true || type.startsWith("FLOAT");
-  const scale = column.scale ?? property.scale ?? 1;
-  const offset = column.offset ?? property.offset ?? 0;
   const component = (v: number | number[], i: number): number =>
     Array.isArray(v) ? (v[i] ?? 0) : v;
-  const value = (raw: number, i: number): number => {
+  const scale = column.scale ?? property.scale ?? 1;
+  const offset = column.offset ?? property.offset ?? 0;
+  const scales = Array.from({ length: n }, (_, i) => component(scale, i));
+  const offsets = Array.from({ length: n }, (_, i) => component(offset, i));
+  const decode = (raw: number, i: number): number => {
     const v = max === undefined ? raw : Math.max(raw / max, -1);
-    return transformed ? v * component(scale, i) + component(offset, i) : v;
+    return transformed ? v * scales[i] + offsets[i] : v;
   };
   const noData = property.noData;
+  const missing =
+    n === 1
+      ? (base: number) => values[base] === noData
+      : (base: number) =>
+          Array.isArray(noData) &&
+          noData.every((v, i) => values[base + i] === v);
+  return { values, n, decode, missing };
+}
+
+/** A SCALAR or VECn column: the stored numbers, decoded (`numberDecoder`);
+ *  the `noData` value (as stored) its default. */
+function numberReader(
+  property: ClassProperty,
+  column: TableColumn,
+  view: (index: number) => ArrayBuffer | undefined
+): Read {
+  const { values, n, decode, missing } = numberDecoder(property, column, view);
   if (n === 1) {
-    return (id) =>
-      values[id] === noData ? defaultOf(property) : value(values[id], 0);
+    return (id) => (missing(id) ? defaultOf(property) : decode(values[id], 0));
   }
-  return (id) => {
-    const raw = Array.from(values.subarray(id * n, id * n + n));
-    if (Array.isArray(noData) && raw.every((v, i) => v === noData[i])) {
-      return defaultOf(property);
+  return (id) =>
+    missing(id * n)
+      ? defaultOf(property)
+      : Array.from(values.subarray(id * n, id * n + n), decode);
+}
+
+/** A SCALAR or VECn column's `count` rows into `out` at once, as
+ *  `numberReader` gives them row by row. */
+function fillNumbers(
+  property: ClassProperty,
+  column: TableColumn,
+  view: (index: number) => ArrayBuffer | undefined,
+  count: number,
+  out: NumberArray
+): void {
+  const { values, n, decode, missing } = numberDecoder(property, column, view);
+  const fallback = defaultOf(property);
+  const defaults = Array.isArray(fallback)
+    ? (fallback as number[])
+    : [Number(fallback)];
+  for (let row = 0; row < count; row++) {
+    const base = row * n;
+    const gone = missing(base);
+    for (let i = 0; i < n; i++) {
+      out[base + i] = gone ? (defaults[i] ?? 0) : decode(values[base + i], i);
     }
-    return raw.map(value);
-  };
+  }
 }
