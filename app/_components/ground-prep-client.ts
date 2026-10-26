@@ -169,8 +169,19 @@ function next(): void {
       continue;
     }
     running = job;
-    const { message, transfer } = packed(job);
-    w.postMessage(message, transfer);
+    try {
+      const { message, transfer } = packed(job);
+      w.postMessage(message, transfer);
+    } catch {
+      // a message that cannot be sent (nothing went over: a clone fails
+      // before the transfer) is done here, and the queue goes on
+      running = null;
+      if (job.shared) {
+        // (sent again with the next job that shares it)
+        sentShared.delete(keyOf(job.shared));
+      }
+      runHere(job);
+    }
   }
 }
 
