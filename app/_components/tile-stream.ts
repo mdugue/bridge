@@ -1102,8 +1102,9 @@ async function buildCoarseDressing(
           }),
           { signal }
         ).catch((err: unknown) => {
-          // the bridges built, never hung: freed with the build
-          disposeDressing({ tile, rail });
+          // the bridges and the traffic's slot built, never hung: freed
+          // with the build
+          disposeDressing({ tile, rail, traffic: flows });
           throw err;
         })
       : undefined;
@@ -1335,6 +1336,7 @@ async function buildDressing(
     // the seam samples the neighbour's ground past it.
     const riverside =
       river.length > 0 ? buildRiverside(river, pinned) : undefined;
+    made.riverside = riverside;
     // What the probe can ask, sized as drawn: the trees on the tile's own
     // ground (as the inventory stands them), decks only where this tile
     // draws them — built once the dressing hangs, in idle time (`buildAsks`,
