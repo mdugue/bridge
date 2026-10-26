@@ -60,3 +60,12 @@ test("a job dropped before its turn is never run", async () => {
   }
   expect(failed).toBe(true);
 });
+
+test("a job that cannot be sent is done here, and the queue goes on", async () => {
+  // a function cannot be cloned: the message throws before anything goes
+  const unsendable = { ...grid(), cannot: () => 0 } as GroundPrepInput;
+  const here = await prepareGroundOffThread(unsendable);
+  expect(here).toEqual(prepareGround(grid()));
+  const after = await prepareGroundOffThread(grid(2));
+  expect(after).toEqual(prepareGround(grid(2)));
+});
