@@ -4,6 +4,9 @@ import {
   inRuns,
   inSlices,
   onlyWhile,
+  REST_SLICE_MS,
+  SLICE_MS,
+  setSliceBudget,
   type Steps,
 } from "./build-steps";
 
@@ -84,4 +87,23 @@ test("inSlices stops at the first pause after its signal fires", async () => {
   }
   expect((thrown as Error).name).toBe("AbortError");
   expect(log.length).toBeLessThan(100);
+});
+
+test("inSlices takes the budget the scene set", async () => {
+  // a clock that ticks 1 ms a read: the first slice holds as many steps
+  // as its budget has milliseconds
+  const firstSlice = async (ms: number) => {
+    setSliceBudget(ms);
+    const log: number[] = [];
+    let t = 0;
+    const run = inSlices(counted(100, log), { now: () => t++ });
+    const steps = log.length;
+    await run;
+    return steps;
+  };
+  const moving = await firstSlice(SLICE_MS);
+  const resting = await firstSlice(REST_SLICE_MS);
+  setSliceBudget(SLICE_MS);
+  expect(moving).toBe(SLICE_MS);
+  expect(resting).toBe(REST_SLICE_MS);
 });

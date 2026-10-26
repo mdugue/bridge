@@ -22,6 +22,19 @@ export type Steps<T> = Generator<void, T, void>;
  *  60 Hz frame — the frame's own work on a phone is the other half and
  *  more. */
 export const SLICE_MS = 8;
+/** The slice while the camera rests (ms): the picture holds still, so a
+ *  frame that comes a slice later shows nothing missing, and the tile
+ *  under way is dressed in less than half the time — on a phone a frame's own
+ *  work is 30 ms and more, and each pause costs one. */
+export const REST_SLICE_MS = 30;
+
+let budget = SLICE_MS;
+
+/** The slice `inSlices` runs from its next one on (ms): the scene sets
+ *  SLICE_MS while its camera moves, REST_SLICE_MS while it rests. */
+export function setSliceBudget(ms: number): void {
+  budget = ms;
+}
 
 /** Runs `steps` to its end, here and now. */
 export function finished<T>(steps: Steps<T>): T {
@@ -47,8 +60,8 @@ export function giveBack(): Promise<void> {
 }
 
 /**
- * Runs `steps` in slices of about `sliceMs`, the thread given back between
- * them. A step longer than a slice runs whole (the builders keep theirs
+ * Runs `steps` in slices of about `sliceMs` (the budget the scene set,
+ * `setSliceBudget`, where not given), the thread given back between them. A step longer than a slice runs whole (the builders keep theirs
  * short). Rejects with `signal`'s reason before the first slice and at
  * every pause after it fires: the build of a tile that left stops there
  * (its caller frees what was built).
@@ -57,7 +70,7 @@ export async function inSlices<T>(
   steps: Steps<T>,
   opts: { now?: () => number; signal?: AbortSignal; sliceMs?: number } = {}
 ): Promise<T> {
-  const { now = () => performance.now(), signal, sliceMs = SLICE_MS } = opts;
+  const { now = () => performance.now(), signal, sliceMs } = opts;
   signal?.throwIfAborted();
   let start = now();
   for (;;) {
@@ -65,7 +78,7 @@ export async function inSlices<T>(
     if (r.done) {
       return r.value;
     }
-    if (now() - start >= sliceMs) {
+    if (now() - start >= (sliceMs ?? budget)) {
       await giveBack();
       signal?.throwIfAborted();
       start = now();
