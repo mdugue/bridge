@@ -13,6 +13,7 @@ import {
   MeshBasicNodeMaterial,
   Object3D,
 } from "three/webgpu";
+import { finished, type Steps } from "@/lib/city/build-steps";
 import type { AskSet } from "@/lib/city/ask-solids";
 import type { TrafficFeature } from "@/lib/city/features";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
@@ -519,11 +520,17 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
   } as unknown as AskSet<FeatureInquiry>;
   const dressing = (): TileDressing => {
     const asks: AskSet<FeatureInquiry>[] = [];
-    return { tile: "t", asks, buildAsks: () => asks.push(set) };
+    function* build() {
+      yield;
+      asks.push(set);
+    }
+    return { tile: "t", asks, buildAsks: build() };
   };
+  // the slices run at once here
+  const now = (steps: Steps<unknown>) => Promise.resolve(finished(steps));
   const hung = dressing();
   const asks = hung.asks;
-  buildAsksWhenIdle(hung, () => true, later);
+  buildAsksWhenIdle(hung, () => true, later, now);
   expect(hung.asks).toEqual([]);
   idle.shift()?.();
   expect(hung.asks).toBe(asks);
@@ -531,19 +538,62 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
   // run once, and its features let go of
   expect(hung.buildAsks).toBeUndefined();
   const gone = dressing();
-  buildAsksWhenIdle(gone, () => false, later);
+  buildAsksWhenIdle(gone, () => false, later, now);
   idle.shift()?.();
   expect(gone.asks).toEqual([]);
   // a dressing with nothing to build waits for nothing
-  buildAsksWhenIdle({ tile: "t" }, () => true, later);
+  buildAsksWhenIdle({ tile: "t" }, () => true, later, now);
   expect(idle).toHaveLength(0);
   // a question before the idle time builds them at once, and only once
   const early = dressing();
-  buildAsksWhenIdle(early, () => true, later);
+  buildAsksWhenIdle(early, () => true, later, now);
   expect(asksOf(early)).toEqual([set]);
   expect(asksOf(early)).toEqual([set]);
   idle.shift()?.();
   expect(early.asks).toEqual([set]);
+});
+
+test("a question while the ask sets build in slices finishes them, once", async () => {
+  const idle: (() => void)[] = [];
+  const later = (work: () => void) => {
+    idle.push(work);
+    return () => undefined;
+  };
+  const set = {
+    box: {},
+    nearest: () => null,
+  } as unknown as AskSet<FeatureInquiry>;
+  const asks: AskSet<FeatureInquiry>[] = [];
+  let steps = 0;
+  function* build() {
+    for (let i = 0; i < 3; i++) {
+      steps++;
+      yield;
+    }
+    asks.push(set);
+  }
+  const d: TileDressing = { tile: "t", asks, buildAsks: build() };
+  // a slice is one step, and the next waits for `go`
+  let go: () => void = () => undefined;
+  const sliced = async (s: Steps<unknown>) => {
+    for (let r = s.next(); !r.done; r = s.next()) {
+      await new Promise<void>((resolve) => {
+        go = resolve;
+      });
+    }
+  };
+  buildAsksWhenIdle(d, () => true, later, sliced);
+  idle.shift()?.();
+  expect(steps).toBe(1);
+  expect(asks).toEqual([]);
+  // the question finishes what is left at once
+  expect(asksOf(d)).toEqual([set]);
+  expect(steps).toBe(3);
+  go();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(asks).toEqual([set]);
+  expect(d.buildAsks).toBeUndefined();
 });
 
 test("a dressing whose tile leaves before its idle time never builds its ask sets", () => {
@@ -583,9 +633,10 @@ test("a dressing whose tile leaves before its idle time never builds its ask set
     const dressing: TileDressing = {
       tile: "t",
       asks: [],
-      buildAsks: () => {
+      buildAsks: (function* () {
         built++;
-      },
+        yield;
+      })(),
       furniture: new Group(),
     };
     // reason: the hang is private; the test hangs a built dressing without

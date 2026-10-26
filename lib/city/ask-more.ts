@@ -13,6 +13,7 @@ import {
   type AskSolid,
   askSets,
 } from "./ask-solids";
+import { finished, type Steps } from "./build-steps";
 import { type PackedTree, packedCylinderSets } from "./ask-items";
 import type {
   CanopyFeature,
@@ -229,33 +230,54 @@ export function canopySets(
   ctx: MoreContext,
   keepTree?: TreeVeto
 ): AskSet<FeatureInquiry>[] {
+  return finished(canopySetsSteps(features, ctx, keepTree));
+}
+
+/** Trees placed per step (build-steps.ts). */
+const PLACE_RUN = 256;
+
+interface AskedTree {
+  height?: number;
+  leaf?: CanopyInquiry["evergreen"];
+  p: Placement;
+  source: CanopyInquiry["source"];
+}
+
+/** `canopySets` in steps: per run of trees placed (build-steps.ts). */
+function* canopySetsSteps(
+  features: {
+    canopy: CanopyFeature[];
+    rows: VegRowFeature[];
+    scan: CanopyFeature[];
+  },
+  ctx: MoreContext,
+  keepTree?: TreeVeto
+): Steps<AskSet<FeatureInquiry>[]> {
   const place = { heightAt: ctx.heightAt, offset: ctx.offset };
+  const trees: AskedTree[] = [];
   // placed one by one, as the layer places them, so each keeps its
   // measured height
-  const measured = (
+  function* measured(
     source: CanopyInquiry["source"],
     list: readonly CanopyFeature[]
-  ) =>
-    list.flatMap((f) =>
-      canopyPlacements([f], place, undefined, keepTree).map((p) => ({
-        p,
-        source,
-        height: f.properties?.h,
-        leaf: leafOf(f),
-      }))
-    );
-  const trees: {
-    height?: number;
-    leaf?: CanopyInquiry["evergreen"];
-    p: Placement;
-    source: CanopyInquiry["source"];
-  }[] = [
-    ...measured("dom", features.canopy),
-    ...measured("lsc", features.scan),
-    ...rowPlacements(features.rows, place, undefined, keepTree).trees.map(
-      (p) => ({ p, source: "row" as const })
-    ),
-  ];
+  ): Steps<void> {
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i];
+      for (const p of canopyPlacements([f], place, undefined, keepTree)) {
+        trees.push({ p, source, height: f.properties?.h, leaf: leafOf(f) });
+      }
+      if ((i + 1) % PLACE_RUN === 0) {
+        yield;
+      }
+    }
+  }
+  yield* measured("dom", features.canopy);
+  yield* measured("lsc", features.scan);
+  for (const p of rowPlacements(features.rows, place, undefined, keepTree)
+    .trees) {
+    trees.push({ p, source: "row" });
+  }
+  yield;
   // what a card needs, kept packed: the placements go once packed
   const sources: CanopyInquiry["source"][] = ["dom", "lsc", "row"];
   const position = new Float64Array(trees.length * 2);
@@ -523,21 +545,34 @@ export function landingItems(
 
 /** Everything of a tile beyond its trees, monuments and bridges. */
 export function moreSets(
-  features: {
-    canopy: CanopyFeature[];
-    furniture: FurnitureFeature[];
-    hedges: LowVegFeature[];
-    lamps: LampFeature[];
-    river: RiversideFeature[];
-    rows: VegRowFeature[];
-    scan: CanopyFeature[];
-    trams: TramFeature[];
-  },
+  features: MoreFeatures,
   ctx: MoreContext,
   keepTree?: TreeVeto
 ): AskSet<FeatureInquiry>[] {
+  return finished(moreSetsSteps(features, ctx, keepTree));
+}
+
+export interface MoreFeatures {
+  canopy: CanopyFeature[];
+  furniture: FurnitureFeature[];
+  hedges: LowVegFeature[];
+  lamps: LampFeature[];
+  river: RiversideFeature[];
+  rows: VegRowFeature[];
+  scan: CanopyFeature[];
+  trams: TramFeature[];
+}
+
+/** `moreSets` in steps (build-steps.ts). */
+export function* moreSetsSteps(
+  features: MoreFeatures,
+  ctx: MoreContext,
+  keepTree?: TreeVeto
+): Steps<AskSet<FeatureInquiry>[]> {
+  const canopy = yield* canopySetsSteps(features, ctx, keepTree);
+  yield;
   return [
-    ...canopySets(features, ctx, keepTree),
+    ...canopy,
     ...askSets([
       ...hedgeItems(features.hedges, features.rows, ctx),
       ...pointItems(features.lamps, features.furniture, features.trams, ctx),

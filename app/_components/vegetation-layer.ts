@@ -92,6 +92,7 @@ import {
   buildPineGeo,
   CONE_SEGMENTS,
 } from "./conifer-crown";
+import { finished, inRuns, type Steps } from "@/lib/city/build-steps";
 import { fetchOptionalBinary } from "./fetch-optional";
 import {
   instanceFloat,
@@ -1194,15 +1195,15 @@ export function buildPineTiers(broad: TreeGeos): TreeGeos {
   };
 }
 
-function buildTrees(
+function* buildTrees(
   trees: Placement[],
   extras: TreeInstance[],
   crownMats: CrownMaterials
-): {
+): Steps<{
   chunks: VegetationChunk[];
   meshes: Instances[];
   seasons: SeasonalCrowns[];
-} {
+}> {
   // Geometry is shared across all of the tile's chunks, the materials
   // across the scene; only the per-chunk instance buffers differ, so this
   // stays cheap to allocate.
@@ -1232,6 +1233,7 @@ function buildTrees(
     if (built.season) {
       seasons.push(built.season);
     }
+    yield;
   }
   // The crown and trunk materials are scene-wide: a tile's disposal
   // (disposeObject3D) frees its sets' geometry views and leaves them.
@@ -1301,6 +1303,19 @@ export function buildVegetation(
   features: VegetationFeatures,
   ctx: VegetationContext
 ): VegetationControl {
+  return finished(vegetationSteps(features, ctx));
+}
+
+/** Canopy points and rows placed per step (build-steps.ts). */
+const PLACEMENT_RUN = 256;
+const ROW_RUN = 16;
+
+/** `buildVegetation` in steps: per run of rows and canopy points, per
+ *  250 m cell of trees (build-steps.ts). */
+export function* vegetationSteps(
+  features: VegetationFeatures,
+  ctx: VegetationContext
+): Steps<VegetationControl> {
   const group = new Group();
   group.name = "vegetation";
 
@@ -1314,11 +1329,24 @@ export function buildVegetation(
   let seasons: SeasonalCrowns[] = [];
 
   const { ndviAt, keepTree } = features;
-  const { trees, hedges } = rowPlacements(features.rows, ctx, ndviAt, keepTree);
-  trees.push(...canopyPlacements(features.canopy, ctx, ndviAt, keepTree));
+  const trees: Placement[] = [];
+  const hedges: Placement[] = [];
+  // a row's trees are seeded by their place along it: whole rows per run
+  for (let i = 0; i < features.rows.length; i += ROW_RUN) {
+    const run = features.rows.slice(i, i + ROW_RUN);
+    const placed = rowPlacements(run, ctx, ndviAt, keepTree);
+    trees.push(...placed.trees);
+    hedges.push(...placed.hedges);
+    yield;
+  }
+  trees.push(
+    ...(yield* inRuns(features.canopy, PLACEMENT_RUN, (run) =>
+      canopyPlacements(run, ctx, ndviAt, keepTree)
+    ))
+  );
   const extras = features.extraTrees ?? [];
   if (trees.length + extras.length > 0) {
-    const built = buildTrees(trees, extras, crownMats);
+    const built = yield* buildTrees(trees, extras, crownMats);
     group.add(...built.meshes);
     chunks = built.chunks;
     seasons = built.seasons;

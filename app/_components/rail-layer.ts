@@ -1,7 +1,7 @@
 import {
   BufferGeometry,
   Color,
-  Float32BufferAttribute,
+  BufferAttribute,
   Group,
   type Material,
   Mesh,
@@ -79,6 +79,7 @@ import {
   RAIL_BED_HALF_M,
   TRACK_PITCH_M,
 } from "@/lib/city/track-beds";
+import { finished, type Steps } from "@/lib/city/build-steps";
 import { type DeckKind, deckMaterial, stoneMaterial } from "./bridge-surface";
 import {
   addCatenary,
@@ -332,15 +333,31 @@ function quadXYZ(
   pushTri(acc, ax, ay, az, cx, cy, cz, dx, dy, dz, nx, ny, nz);
 }
 
-function finishGeo(acc: Mesh3): BufferGeometry | null {
+/** Numbers copied into floats per step (build-steps.ts): a yard's or a
+ *  tile's tram tracks are millions. */
+const FLOAT_RUN = 1 << 16;
+
+function* floats(src: readonly number[]): Steps<Float32Array> {
+  const out = new Float32Array(src.length);
+  for (let i = 0; i < src.length; i += FLOAT_RUN) {
+    const end = Math.min(src.length, i + FLOAT_RUN);
+    for (let k = i; k < end; k++) {
+      out[k] = src[k];
+    }
+    yield;
+  }
+  return out;
+}
+
+function* finishGeo(acc: Mesh3): Steps<BufferGeometry | null> {
   if (acc.pos.length === 0) {
     return null;
   }
   const g = new BufferGeometry();
-  g.setAttribute("position", new Float32BufferAttribute(acc.pos, 3));
-  g.setAttribute("normal", new Float32BufferAttribute(acc.nrm, 3));
+  g.setAttribute("position", new BufferAttribute(yield* floats(acc.pos), 3));
+  g.setAttribute("normal", new BufferAttribute(yield* floats(acc.nrm), 3));
   if (acc.deck?.length === (acc.pos.length / 3) * 4) {
-    g.setAttribute("aDeck", new Float32BufferAttribute(acc.deck, 4));
+    g.setAttribute("aDeck", new BufferAttribute(yield* floats(acc.deck), 4));
   }
   g.computeBoundingSphere();
   return g;
@@ -1133,18 +1150,29 @@ export function addRibbon(
   }
 }
 
+interface MeshOpts {
+  cast: boolean;
+  /** a material of its own (the bridges' surfaces) instead of the plain one */
+  material?: Material;
+  offsetUnits?: number;
+  roughness?: number;
+}
+
 export function meshFrom(
   acc: Mesh3,
   color: number,
-  opts: {
-    cast: boolean;
-    /** a material of its own (the bridges' surfaces) instead of the plain one */
-    material?: Material;
-    offsetUnits?: number;
-    roughness?: number;
-  }
+  opts: MeshOpts
 ): Mesh | null {
-  const geo = finishGeo(acc);
+  return finished(meshSteps(acc, color, opts));
+}
+
+/** `meshFrom` in steps: its floats copied a run at a time. */
+export function* meshSteps(
+  acc: Mesh3,
+  color: number,
+  opts: MeshOpts
+): Steps<Mesh | null> {
+  const geo = yield* finishGeo(acc);
   if (!geo) {
     return null;
   }
@@ -1235,12 +1263,12 @@ interface SlabLine {
  * Elsewhere a face is planar, so its pieces are too; the sides stay as
  * they were (the slab's ring is split short, `onLine`).
  */
-function splitDeckTop(
+function* splitDeckTop(
   acc: Mesh3,
   first: number,
   step: number,
   slab?: SlabLine
-): void {
+): Steps<void> {
   const pos = acc.pos.splice(first * 3);
   const nrm = acc.nrm.splice(first * 3);
   for (let t = 0; t < pos.length; t += 9) {
@@ -1255,6 +1283,9 @@ function splitDeckTop(
           }
         : null;
     splitFace(acc, corners, n, n[1] >= 0.5 || onSlab ? step : 0, lift);
+    if ((t / 9 + 1) % DECK_RUN === 0) {
+      yield;
+    }
   }
 }
 
@@ -1296,6 +1327,9 @@ function splitFace(
  *  the top's DECK_FRAME_STEP, so `splitDeckTop` never splits a side the
  *  fascia does not share. */
 const DECK_RING_STEP = 0.8 * DECK_FRAME_STEP;
+
+/** Deck faces split per step (build-steps.ts). */
+const DECK_RUN = 256;
 
 /**
  * The deck's outline with a vertex every DECK_RING_STEP along each edge,
@@ -1345,11 +1379,11 @@ function onLine(
  * (`splitDeckTop`), true between them on a curved deck too. Zeros without
  * a frame (an older file): the surface keeps its plain colour.
  */
-function addDeckFrame(
+function* addDeckFrame(
   top: Mesh3,
   first: number,
   frame: BridgeFrame | null
-): void {
+): Steps<void> {
   top.deck ??= [];
   // The edges a few metres in from the abutments: at an end the outline
   // closes across the axis, and a corner there took a width of nothing —
@@ -1367,23 +1401,27 @@ function addDeckFrame(
     const inside = Math.min(Math.max(s, ends[0] + inset), ends[1] - inset);
     const { left, right } = frame.edgesAt(inside);
     top.deck.push(s, offset, left, right);
+    if ((v - first + 1) % (DECK_RUN * 8) === 0) {
+      yield;
+    }
   }
 }
 
 /** A bridge's deck: its slab `depth` deep on the measured line
  *  (`onLine`), the approaches and the frame attributes. Returns where it
  *  was laid, the frame null on an older file without an axis. */
-function drawDeck(
+function* drawDeck(
   f: BridgeFeature,
   baked: Ring2,
   bakedY: number[],
   out: BridgeMeshes,
   ctx: RailContext,
   depth: number
-): { frame: BridgeFrame | null; ring: Ring2; topY: number[] } {
+): Steps<{ frame: BridgeFrame | null; ring: Ring2; topY: number[] }> {
   const { kind } = bridgeProps(f);
   const top = out.tops[kind] ?? out.tops.other;
   const measured = bridgeFrame(f, ctx);
+  yield;
   const laid = measured ? onLine(baked, measured) : null;
   const frame = laid?.frame ?? null;
   const ring = laid?.ring ?? baked;
@@ -1394,14 +1432,15 @@ function drawDeck(
   for (const a of approaches(ring, topY, kind, frame?.ringS, ctx, out.decks)) {
     addApproach(top, out.stone, a, depth);
   }
+  yield;
   if (frame) {
-    splitDeckTop(top, first, DECK_FRAME_STEP, {
+    yield* splitDeckTop(top, first, DECK_FRAME_STEP, {
       depth,
       end: slabEnd,
       top: (x, z) => frame.deckAt(frame.project(x, z).s),
     });
   }
-  addDeckFrame(top, first, frame);
+  yield* addDeckFrame(top, first, frame);
   return { frame, ring, topY };
 }
 
@@ -1452,16 +1491,24 @@ function addParapet(
 }
 
 /** Draws one bridge: deck, parapets, whatever carries it and stands on it. */
-function drawBridge(
+function* drawBridge(
   f: BridgeFeature,
   baked: Ring2,
   bakedY: number[],
   out: BridgeMeshes,
   ctx: RailContext
-): void {
+): Steps<void> {
   const p = f.properties ?? {};
   const { depth, supports } = deckPlan(p);
-  const { frame, ring, topY } = drawDeck(f, baked, bakedY, out, ctx, depth);
+  const { frame, ring, topY } = yield* drawDeck(
+    f,
+    baked,
+    bakedY,
+    out,
+    ctx,
+    depth
+  );
+  yield;
   if (!frame) {
     // an older file: no axis, no measurements
     addParapet(out, p, { ring, topY }, false);
@@ -1469,6 +1516,7 @@ function drawBridge(
     return;
   }
   const carried = addSuperstructure(out, frame, p, depth);
+  yield;
   const deck = { ring, topY, ringS: frame.ringS };
   addParapet(out, p, deck, carried.arches.length > 0);
   if (carried.pylons) {
@@ -1495,11 +1543,11 @@ function drawBridge(
 
 /** Builds the bridges this tile draws (deck, parapets, what carries them
  *  and what stands on them). The rails' deck table is buildDeckTable's. */
-function buildBridges(
+function* buildBridges(
   features: BridgeFeature[],
   ctx: RailContext,
   decks: DeckPoly[]
-): Mesh[] {
+): Steps<Mesh[]> {
   const out: BridgeMeshes = {
     decks,
     tops: { rail: mesh3(), road: mesh3(), path: mesh3(), other: mesh3() },
@@ -1519,8 +1567,9 @@ function buildBridges(
     }
     const topY = ring.pts.map((_, i) => deck[i]);
     if (drawsDeck(coords, ctx)) {
-      drawBridge(f, ring, topY, out, ctx);
+      yield* drawBridge(f, ring, topY, out, ctx);
     }
+    yield;
   }
 
   const meshes: Mesh[] = [];
@@ -1531,7 +1580,7 @@ function buildBridges(
     other: COLORS.deckStone,
   };
   for (const kind of Object.keys(out.tops) as DeckKind[]) {
-    const m = meshFrom(out.tops[kind], topColor[kind], {
+    const m = yield* meshSteps(out.tops[kind], topColor[kind], {
       cast: true,
       material: deckMaterial(kind, topColor[kind]),
     });
@@ -1539,7 +1588,7 @@ function buildBridges(
       meshes.push(m);
     }
   }
-  const stoneMesh = meshFrom(out.stone, COLORS.deckStone, {
+  const stoneMesh = yield* meshSteps(out.stone, COLORS.deckStone, {
     cast: true,
     material: stoneMaterial(COLORS.deckStone),
   });
@@ -1547,7 +1596,7 @@ function buildBridges(
     stoneMesh.name = "bridge-stone";
     meshes.push(stoneMesh);
   }
-  const steelMesh = meshFrom(out.steel, COLORS.steel, {
+  const steelMesh = yield* meshSteps(out.steel, COLORS.steel, {
     cast: true,
   });
   if (steelMesh) {
@@ -2314,6 +2363,9 @@ const BED_DRAPE = { step: 1, tolerance: 0.02 };
  *  probes can miss a passage under a deck. */
 const DRAPE_PROBE_M = 48;
 
+/** Draped triangles per step (build-steps.ts). */
+const DRAPE_RUN = 512;
+
 type XZ = { x: number; z: number };
 
 /** A ring's points, its edges split to at most `step` apart. */
@@ -2345,7 +2397,7 @@ function densified(pts: readonly XZ[], step: number): XZ[] {
  * sheets from the embankment down to the street — the passage read as
  * closed.)
  */
-function addDrapedArea(
+function* addDrapedArea(
   acc: Mesh3,
   rings: Ring2[],
   raise: number,
@@ -2353,7 +2405,7 @@ function addDrapedArea(
   ctx: RailContext,
   skip: (x: number, z: number) => boolean,
   how: Drape = GROUND_DRAPE
-): void {
+): Steps<void> {
   const [outer, ...holes] = rings.map((r) => r.pts);
   if (!outer || outer.length < 3) {
     return;
@@ -2414,35 +2466,48 @@ function addDrapedArea(
       pushTri(acc, a.x, ya, a.z, b.x, yb, b.z, c.x, yc, c.z, 0, 1, 0);
     }
   };
-  const drape = (a: XZ, b: XZ, c: XZ) => {
-    const longest = Math.max(
-      Math.hypot(b.x - a.x, b.z - a.z),
-      Math.hypot(c.x - b.x, c.z - b.z),
-      Math.hypot(a.x - c.x, a.z - c.z)
-    );
-    const { step, tolerance } = limits(a, b, c);
-    if (
-      longest <= step ||
-      (longest <= DRAPE_PROBE_M && flat(a, b, c, tolerance))
-    ) {
-      emit(a, b, c);
-      return;
+  // each triangle split into four until it is short or flat enough —
+  // depth first, as a recursion would, on a stack of its own so that the
+  // drape can pause between triangles (a 1 m drape over a yard is a
+  // hundred thousand of them)
+  const stack: XZ[] = [];
+  function* drape(a0: XZ, b0: XZ, c0: XZ): Steps<void> {
+    stack.push(a0, b0, c0);
+    let n = 0;
+    while (stack.length > 0) {
+      const c = stack.pop() as XZ;
+      const b = stack.pop() as XZ;
+      const a = stack.pop() as XZ;
+      if (++n % DRAPE_RUN === 0) {
+        yield;
+      }
+      const longest = Math.max(
+        Math.hypot(b.x - a.x, b.z - a.z),
+        Math.hypot(c.x - b.x, c.z - b.z),
+        Math.hypot(a.x - c.x, a.z - c.z)
+      );
+      const { step, tolerance } = limits(a, b, c);
+      if (
+        longest <= step ||
+        (longest <= DRAPE_PROBE_M && flat(a, b, c, tolerance))
+      ) {
+        emit(a, b, c);
+        continue;
+      }
+      const ab = mid(a, b);
+      const bc = mid(b, c);
+      const ca = mid(c, a);
+      // last in, first out: the first of the four goes on last
+      stack.push(ab, bc, ca, ca, bc, c, ab, b, bc, a, ab, ca);
     }
-    const ab = mid(a, b);
-    const bc = mid(b, c);
-    const ca = mid(c, a);
-    drape(a, ab, ca);
-    drape(ab, b, bc);
-    drape(ca, bc, c);
-    drape(ab, bc, ca);
-  };
+  }
   const all = [outer, ...holes].flat();
   const tris = ShapeUtils.triangulateShape(
     outer.map((p) => new Vector2(p.x, p.z)),
     holes.map((h) => h.map((p) => new Vector2(p.x, p.z)))
   );
   for (const [ia, ib, ic] of tris) {
-    drape(all[ia], all[ib], all[ic]);
+    yield* drape(all[ia], all[ib], all[ic]);
   }
   // the fascia along the outline and round the holes, facing out of the
   // area, its top on the ground every DRAPE_M
@@ -2504,6 +2569,16 @@ export function buildBallast(
   buried: (x: number, z: number) => boolean = () => false,
   beds?: BedIndex
 ): Mesh | null {
+  return finished(ballastSteps(features, ctx, decks, buried, beds));
+}
+
+function* ballastSteps(
+  features: AreaFeature[],
+  ctx: RailContext,
+  decks: DeckPoly[],
+  buried: (x: number, z: number) => boolean,
+  beds?: BedIndex
+): Steps<Mesh | null> {
   const acc = mesh3();
   const skip = (x: number, z: number) =>
     decksAt(decks, x, z, RIDES.rail, "decks").length > 0 || buried(x, z);
@@ -2527,7 +2602,7 @@ export function buildBallast(
     : GROUND_DRAPE;
   for (const f of features) {
     for (const rings of polygonsOf(f.geometry)) {
-      addDrapedArea(
+      yield* addDrapedArea(
         acc,
         rings.map((r) => ringToWorld(r, ctx.offset)),
         BALLAST_RAISE,
@@ -2538,7 +2613,7 @@ export function buildBallast(
       );
     }
   }
-  return meshFrom(acc, COLORS.ballast, {
+  return yield* meshSteps(acc, COLORS.ballast, {
     cast: false,
     offsetUnits: -2,
     roughness: 1,
@@ -2805,11 +2880,11 @@ function openedCuts(
 }
 
 /** Every line's samples and levels; a buried sample's level is null. */
-function drawnLines(
+function* drawnLines(
   features: RailFeature[],
   ctx: RailContext,
   decks: DeckPoly[]
-): DrawnLine[] {
+): Steps<DrawnLine[]> {
   const out: DrawnLine[] = [];
   for (const f of features) {
     if (f.geometry?.type !== "LineString") {
@@ -2863,6 +2938,7 @@ function drawnLines(
       tracks: Math.min(Math.max(p.tracks ?? 1, 1), 3),
       world,
     });
+    yield;
   }
   return out;
 }
@@ -3109,17 +3185,18 @@ function catenaryRuns(
 /** Steel rails: one pair per track, on the level their line runs on
  *  (`lineLevelsAt`): the ground, a rail deck, a span (with its deck);
  *  the sleepers under them; the catenary over the contact lines. */
-function buildRails(
+function* buildRails(
   lines: readonly DrawnLine[],
   ctx: RailContext,
   decks: { all: DeckPoly[]; open: DeckPoly[] },
   out: RailMeshes
-): Mesh[] {
+): Steps<Mesh[]> {
   for (const line of lines) {
     addLine(out, line, ctx, decks);
+    yield;
   }
   const meshes: Mesh[] = [];
-  const rails = meshFrom(out.rail, COLORS.rail, {
+  const rails = yield* meshSteps(out.rail, COLORS.rail, {
     cast: false,
     offsetUnits: -1,
     roughness: 0.5,
@@ -3245,11 +3322,21 @@ function buildPlatforms(
  * (disposeObject3D).
  */
 export function buildRail(features: RailFeatures, ctx: RailContext): Group {
+  return finished(railSteps(features, ctx));
+}
+
+/** `buildRail` in steps: per bridge, line and draped triangle run
+ *  (build-steps.ts). */
+export function* railSteps(
+  features: RailFeatures,
+  ctx: RailContext
+): Steps<Group> {
   const group = new Group();
   group.name = "rail";
 
   const decks = buildDeckTable(features.bridges, ctx);
-  const bridgeMeshes = buildBridges(features.bridges, ctx, decks);
+  yield;
+  const bridgeMeshes = yield* buildBridges(features.bridges, ctx, decks);
   // what the inquiry probe raycasts for a bridge (bridge-ask.ts)
   for (const mesh of bridgeMeshes) {
     mesh.userData.bridge = true;
@@ -3258,7 +3345,7 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   if (bridgeMeshes.length > 0) {
     group.add(...bridgeMeshes);
   }
-  const lines = drawnLines(features.rails, ctx, decks);
+  const lines = yield* drawnLines(features.rails, ctx, decks);
   const out: RailMeshes = {
     catenary: [],
     rail: mesh3(),
@@ -3266,7 +3353,7 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
     spans: { top: mesh3(), stone: mesh3() },
     tracks: [],
   };
-  const rails = buildRails(
+  const rails = yield* buildRails(
     lines,
     ctx,
     { all: decks, open: openDecks(features.bridges, ctx) },
@@ -3277,7 +3364,7 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   if (rails.length > 0) {
     group.add(...rails);
   }
-  const ballast = buildBallast(
+  const ballast = yield* ballastSteps(
     features.ballast,
     ctx,
     decks,
@@ -3287,22 +3374,24 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   if (ballast) {
     group.add(ballast);
   }
-  const spanTop = meshFrom(out.spans.top, COLORS.deckRail, {
+  const spanTop = yield* meshSteps(out.spans.top, COLORS.deckRail, {
     cast: true,
     material: deckMaterial("rail", COLORS.deckRail),
   });
-  const spanStone = meshFrom(out.spans.stone, COLORS.deckStone, {
+  const spanStone = yield* meshSteps(out.spans.stone, COLORS.deckStone, {
     cast: true,
     material: stoneMaterial(COLORS.deckStone),
   });
+  yield;
   const platforms = buildPlatforms(
     features.platforms,
     ctx,
     new TrackIndex(out.tracks)
   );
+  yield;
   const catenary = catenaryParts(mesh3());
   addCatenary(catenary, out.catenary, ctx);
-  const masts = meshFrom(catenary.steel, COLORS.mast, {
+  const masts = yield* meshSteps(catenary.steel, COLORS.mast, {
     cast: true,
     roughness: 0.7,
   });
