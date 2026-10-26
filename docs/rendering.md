@@ -911,8 +911,10 @@ stays their measure; the tile cache counts true bytes.
   vertices.
 - **Trees before all trees.** The dressings build one at a time after
   the boot's gate, a coarse level's (its third of the trees, its bridges)
-  ahead of any fine level's (`COARSE_DRESSING_RANK`), so every tile in
-  view has trees before the nearest has all of them. A fine level that
+  ahead of any fine level's (`COARSE_DRESSING_RANK`; at most four of
+  them ahead of one fine level's, `MAX_DRESSING_OVERTAKES`, so a long
+  flight's stream of coarse levels cannot hold back the tile underfoot),
+  so every tile in view has trees before the nearest has all of them. A fine level that
   shows before its own trees hang — a phone shows it the moment it loads
   — borrows its coarse level's crowns until they do
   (`DressingPlugin.standInCrowns`, `coarseCrownsStandIn`): they are

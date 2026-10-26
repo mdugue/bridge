@@ -2744,6 +2744,10 @@ async function bootApp(
     for (const d of shown) {
       d.vegetation?.setTime(elapsed);
     }
+    // the coarse crowns standing in on a bare fine level sway too
+    for (const crowns of stream.standingIn()) {
+      crowns.setTime(elapsed);
+    }
     if (!crownTiers.due(tick, eye)) {
       return;
     }

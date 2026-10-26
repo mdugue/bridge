@@ -28,7 +28,29 @@ export interface TaskGate {
 
 interface Waiter {
   rank: number;
+  /** how many waiters of a lower rank went ahead of it */
+  overtaken: number;
   start: () => void;
+}
+
+/** Where a waiter of `rank` joins the line: before the first of a higher
+ *  rank, but behind every one overtaken `maxOvertakes` times already;
+ *  those it goes ahead of count one more. */
+function placeIn(line: Waiter[], rank: number, maxOvertakes: number): number {
+  let at = line.findIndex((w) => w.rank > rank);
+  if (at < 0) {
+    return line.length;
+  }
+  for (let i = line.length - 1; i >= at; i--) {
+    if (line[i].overtaken >= maxOvertakes) {
+      at = i + 1;
+      break;
+    }
+  }
+  for (let i = at; i < line.length; i++) {
+    line[i].overtaken++;
+  }
+  return at;
 }
 
 /** What a waiter rejects with when its signal fires: the abort's reason. */
@@ -38,7 +60,13 @@ function abortError(signal: AbortSignal | undefined): Error {
     : new DOMException("The operation was aborted.", "AbortError");
 }
 
-export function createTaskGate(initialLimit: number): TaskGate {
+/** `maxOvertakes`: how many waiters of a lower rank may go ahead of one
+ *  that came before them — past it, it keeps its place, so a stream of
+ *  low ranks cannot hold a higher one back for ever. */
+export function createTaskGate(
+  initialLimit: number,
+  maxOvertakes = Number.POSITIVE_INFINITY
+): TaskGate {
   let limit = initialLimit;
   let running = 0;
   const line: Waiter[] = [];
@@ -59,6 +87,7 @@ export function createTaskGate(initialLimit: number): TaskGate {
       }
       const waiter: Waiter = {
         rank,
+        overtaken: 0,
         start: () => {
           signal?.removeEventListener("abort", leave);
           running++;
@@ -81,8 +110,7 @@ export function createTaskGate(initialLimit: number): TaskGate {
         }
       };
       signal?.addEventListener("abort", leave, { once: true });
-      const behind = line.findIndex((w) => w.rank > rank);
-      line.splice(behind < 0 ? line.length : behind, 0, waiter);
+      line.splice(placeIn(line, rank, maxOvertakes), 0, waiter);
       next();
     });
   return {
