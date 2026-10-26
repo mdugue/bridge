@@ -11,6 +11,7 @@ import {
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 // three-mesh-bvh's wiring (computeBoundsTree, the accelerated raycast)
 import "./collision";
+import { buildBvhOffThread, bvhBuilding } from "./bvh-client";
 import {
   type CityLayer,
   cityObjectsAlong,
@@ -142,4 +143,22 @@ test("the tile built next in idle time is the nearest without a BVH within reach
   expect(nearestWithoutBvh([far, near], 0, 0, 100)).toBeNull();
   // standing inside a tile's box is distance 0
   expect(nearestWithoutBvh([far], 300, 0, 0)).toBe(far);
+});
+
+test("a pick waits for a tile whose BVH the worker builds: no answer from the building behind", async () => {
+  const near = tile("near", 20);
+  const far = tile("far", 200, true);
+  const geometry = near.mesh.geometry;
+  await buildBvhOffThread(new BoxGeometry(1, 1, 1));
+  const done = buildBvhOffThread(geometry);
+  // (its turn within a few microtasks of a worker that runs)
+  for (let i = 0; i < 20 && !bvhBuilding(geometry); i++) {
+    await Promise.resolve();
+  }
+  expect(bvhBuilding(geometry)).toBe(true);
+  expect(nearestCityHit(rayAlongX(1000), [near, far], true)).toBeNull();
+  // the autofocus passes over it, as over any tile without a BVH
+  expect(nearestCityHit(rayAlongX(1000), [near, far], false)?.layer).toBe(far);
+  await done;
+  expect(nearestCityHit(rayAlongX(1000), [near, far], true)?.layer).toBe(near);
 });

@@ -198,7 +198,7 @@ import {
 } from "./tile-stream";
 import { type GroundPlate, loadGroundPlate } from "./ground-plate-layer";
 import { createNetworkWatch } from "./tile-retry";
-import { installMainYield, whenIdle } from "./main-yield";
+import { installMainYield } from "./main-yield";
 import {
   bootFrames,
   printTrace,
@@ -250,10 +250,8 @@ const TEARDOWN_WAIT_MS = 2000;
 /** How often the memory governor looks at the GPU memory held. */
 const GOVERN_MS = 1000;
 /** How near the camera (m, in plan, to the tile's box) a building tile
- *  gets its BVH before any ray needs it, and how long that build waits
- *  for an idle main thread at most. */
+ *  gets its BVH before any ray needs it. */
 const BVH_NEAR_M = 400;
-const BVH_IDLE_MS = 1000;
 
 /** Modell's sheet: the picture style's paper (its first swatch). */
 const paperOf = (style: RenderStyle): Color =>
@@ -2534,6 +2532,17 @@ async function bootApp(
     flattened = null;
     invalidateShadows();
     scheduleStats();
+    // a tile whose index the BVH worker had takes the demolish once it is
+    // back: its shadows are drawn again then
+    const held = [...stream.cities].flatMap((l) => l.held() ?? []);
+    if (held.length > 0) {
+      void Promise.all(held).then(() => {
+        if (!disposed) {
+          flattened = null;
+          invalidateShadows();
+        }
+      });
+    }
   };
   const demolishAtCrosshair = () => demolishAt();
 
@@ -2668,10 +2677,13 @@ async function bootApp(
     postStack.setFocusTarget(hit?.point ?? null);
   };
 
-  // The building tiles near the camera get their BVH in idle time, one at
-  // a time (city-layer.ts `ensureCityBvh`): a walk into the next tile, a
-  // pick or a landing there finds it built instead of building it in the
-  // frame that needs it. The farther ones wait for a ray, or never get one.
+  // The building tiles near the camera get their BVH ahead of a ray, one
+  // at a time, built in the BVH worker (city-layer.ts `prepareBvh`): a
+  // walk into the next tile, a pick or a landing there finds it built
+  // instead of building it in the frame that needs it — and the build no
+  // longer stalls a frame of its own (0.8–1.6 s on the phone profile when
+  // it ran here in idle time). The farther ones wait for a ray, or never
+  // get one.
   let bvhPending = false;
   const prepareBvhNear = () => {
     if (!bvhOnDemand || bvhPending) {
@@ -2688,12 +2700,17 @@ async function bootApp(
       return;
     }
     bvhPending = true;
-    whenIdle(() => {
-      bvhPending = false;
-      if (!disposed && stream.cities.has(next)) {
-        next.ensureBvh();
-      }
-    }, BVH_IDLE_MS);
+    next
+      .prepareBvh()
+      // a failed build leaves the tile to the rays, which build it here
+      .catch(() => undefined)
+      .finally(() => {
+        bvhPending = false;
+        // an outline whose part the worker had is drawn now
+        if (!disposed) {
+          probe.refresh(next);
+        }
+      });
   };
 
   // Motion-keyed quality regression. Derived from the CAMERA, not the input
