@@ -48,6 +48,9 @@ export interface InquiryProbe {
   preview: (index: number | null) => void;
   /** removes the mark */
   clear: () => void;
+  /** the tiles changed: a level loaded since takes the mark, and the
+   *  outline follows the level on screen */
+  refresh: () => void;
 }
 
 /** What a question met: its candidates, nearest first, and the chosen. */
@@ -245,6 +248,8 @@ export function createInquiryProbe(deps: {
   toSite: (world: Vector3) => [number, number];
 }): InquiryProbe {
   let marked: CityLayer[] = [];
+  // the marked building's parts, as last outlined
+  let markedParts: BuildingPart[] = [];
   // the last question's candidates, as the scene knows them
   let last: { hits: ProbeHit[]; selected: number } | null = null;
   const ray = new Raycaster();
@@ -258,6 +263,7 @@ export function createInquiryProbe(deps: {
       }
     }
     marked = [];
+    markedParts = [];
   };
   const clear = () => {
     unmark();
@@ -369,22 +375,53 @@ export function createInquiryProbe(deps: {
             .parts,
         };
 
+  /** The marked parts on their tile's other loaded levels too (a tile's
+   *  far and baked buildings share the object table): the level the
+   *  renderer shows next carries the hatch. */
+  const markLevels = () => {
+    for (const level of deps.loaded?.() ?? []) {
+      const part = markedParts.find(
+        (p) => p.layer.tile === level.tile && p.layer !== level
+      );
+      if (part && !marked.includes(level)) {
+        level.mark(part.objects);
+        marked.push(level);
+      }
+    }
+  };
+
+  const refresh = () => {
+    if (markedParts.length === 0) {
+      return;
+    }
+    markLevels();
+    // the outline on the level on screen, not on one the renderer hid
+    const shown = [...deps.cities()];
+    const moved = markedParts.map((part) =>
+      shown.includes(part.layer)
+        ? part
+        : {
+            ...part,
+            layer: shown.find((l) => l.tile === part.layer.tile) ?? part.layer,
+          }
+    );
+    if (moved.some((part, i) => part.layer !== markedParts[i]?.layer)) {
+      markedParts = moved;
+      deps.outline({ building: moved });
+    }
+  };
+
   /** Marks a hit: the hatch on a building's tree, the outline round it. */
   const mark = (hit: ProbeHit) => {
     unmark();
     if ("building" in hit) {
       const { parts } = building(hit.building.layer, hit.building.objectIndex);
-      const levels = [...(deps.loaded?.() ?? [])];
+      markedParts = parts;
       for (const { layer, objects } of parts) {
-        for (const level of levels.filter(
-          (l) => l !== layer && l.tile === layer.tile
-        )) {
-          level.mark(objects);
-          marked.push(level);
-        }
         layer.mark(objects);
         marked.push(layer);
       }
+      markLevels();
       deps.outline({ building: parts });
     } else {
       deps.outline({ thing: hit.thing });
@@ -441,5 +478,5 @@ export function createInquiryProbe(deps: {
     }
   };
 
-  return { ask, clear, preview, select };
+  return { ask, clear, preview, refresh, select };
 }

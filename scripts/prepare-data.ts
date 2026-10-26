@@ -1667,12 +1667,15 @@ async function bakePlate(): Promise<string> {
           );
         }
       }
-      // the grounds this step reads stay only while it reads them: a
-      // cold build of a large site would otherwise hold every tile's
+      // the grounds this step reads stay only while a tile still to come
+      // reads them (its own, and its neighbours' edge rows): a cold build
+      // of a large site would otherwise hold every tile's, and dropping
+      // each after its tile decoded the same neighbour up to four times
       // (the tile loop's own stay as they were)
       const held = new Set(heights.keys());
+      const boundsOf = new Map(baked.map((t) => [t.id, t.bounds]));
       const tiles = [];
-      for (const t of baked) {
+      for (const [k, t] of baked.entries()) {
         const touching = classRasters.filter((r) =>
           touches(r.bounds, t.bounds)
         );
@@ -1680,8 +1683,13 @@ async function bakePlate(): Promise<string> {
           heights: plateHeights(t.bounds, near, floor),
           classes: plateClasses(t.bounds, touching),
         });
+        const later = baked.slice(k + 1);
         for (const id of heights.keys()) {
-          if (!held.has(id)) {
+          const b = boundsOf.get(id);
+          if (
+            !held.has(id) &&
+            !(b && later.some((next) => touches(b, next.bounds)))
+          ) {
             heights.delete(id);
           }
         }

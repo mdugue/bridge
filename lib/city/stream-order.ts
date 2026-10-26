@@ -70,6 +70,27 @@ export function contentRank(uri: string | undefined): number {
   );
 }
 
+/** The site tile a content belongs to, from its published name
+ *  (`city_<id>[_far].<hash>…`, `terrain_<id>_l<n>.<hash>…`); null for
+ *  anything else. */
+export function siteTileOf(uri: string | undefined): string | null {
+  const name = uri?.slice(uri.lastIndexOf("/") + 1) ?? "";
+  return (
+    /^(?:city|terrain)_(.+?)(?:_far|_l\d)?\.[^.]+\.glb/.exec(name)?.[1] ?? null
+  );
+}
+
+/** A content's site tile, read once per tile (a name scan). */
+const siteTiles = new WeakMap<object, string | null>();
+function siteTileOfTile(tile: CachedTile): string | null {
+  let id = siteTiles.get(tile);
+  if (id === undefined) {
+    id = siteTileOf(tile.content?.uri);
+    siteTiles.set(tile, id);
+  }
+  return id;
+}
+
 /** A content's rank, read once per tile (a name scan). */
 const ranks = new WeakMap<object, number>();
 function rankOf(tile: { content?: { uri?: string } | null }): number {
@@ -194,10 +215,15 @@ export function keepOrder<T extends CachedTile>(
   return (a, b) => {
     const fa = a.traversal?.lastFrameVisited;
     const fb = b.traversal?.lastFrameVisited;
-    if (fa === fb) {
+    // one site tile's contents only: across tiles the renderer's order
+    // (by distance, through the visit frame and depth) stands — ranked by
+    // kind alone, a full cache gave every far tile's coarse ground the
+    // last room before the buildings under the camera
+    const tile = siteTileOfTile(a);
+    if (fa === fb && tile !== null && tile === siteTileOfTile(b)) {
       const ra = rankOf(a);
       const rb = rankOf(b);
-      if (ra !== rb && ra !== CONTENT_RANK.other && rb !== CONTENT_RANK.other) {
+      if (ra !== rb) {
         return ra > rb ? 1 : -1;
       }
     }

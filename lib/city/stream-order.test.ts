@@ -5,6 +5,7 @@ import {
   contentRank,
   isTileContent,
   keepOrder,
+  siteTileOf,
   type OrderedTile,
   streamOrder,
 } from "./stream-order";
@@ -185,6 +186,14 @@ test("a far tile's coarse ground waits behind the buildings under the camera", (
   ]);
 });
 
+test("a content's site tile is read from its published name", () => {
+  for (const kind of ["city", "far", "coarse", "fine"] as const) {
+    expect(siteTileOf(`/data/dresden/${URIS[kind](SPAWN)}`)).toBe(SPAWN);
+  }
+  expect(siteTileOf("tileset.json")).toBeNull();
+  expect(siteTileOf(undefined)).toBeNull();
+});
+
 test("a full cache admits a tile's ground before its buildings, and unloads it last", () => {
   const DEPTH: Record<Kind, number> = { far: 2, city: 3, coarse: 2, fine: 3 };
   const seen = (kind: Kind | "root", lastFrameVisited: number) => ({
@@ -220,4 +229,12 @@ test("a full cache admits a tile's ground before its buildings, and unloads it l
   ]);
   // other contents are the renderer's call
   expect(order(seen("root", 10), city)).toBe(base(seen("root", 10), city));
+  // and so are two tiles' contents: no far tile's ground before the
+  // buildings here
+  const elsewhere = {
+    ...seen("coarse", 10),
+    content: { uri: URIS.coarse(NEIGHBOUR) },
+  };
+  expect(order(elsewhere, city)).toBe(base(elsewhere, city));
+  expect(order(city, elsewhere)).toBe(base(city, elsewhere));
 });

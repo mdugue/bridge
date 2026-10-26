@@ -2468,6 +2468,8 @@ async function bootApp(
     terrains = stream.visibleTerrains();
     siteGround.setSources(terrains);
     groundPlate?.showUnder(new Set(terrains.map((t) => t.tile)));
+    // a tile whose other building level landed or took over keeps the mark
+    probe.refresh();
     groundVersion++;
     const cut = cuts.cutOut();
     if (cut) {
