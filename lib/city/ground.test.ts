@@ -41,3 +41,12 @@ test("a ray straight down meets the ground at its height", () => {
     ground.along({ x: 0, y: 150, z: 0 }, { x: 0, y: 1, z: 0 }, 500)
   ).toBeNull();
 });
+
+test("a pinned ground keeps the sources it was pinned over", () => {
+  const ground = createGround(offset);
+  ground.setSources([coarse]);
+  const pinned = ground.pinned();
+  ground.setSources([fine, coarse]);
+  expect(ground.heightAt(1500, 2000)).toBe(110);
+  expect(pinned(1500, 2000)).toBe(100);
+});

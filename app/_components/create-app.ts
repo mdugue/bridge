@@ -30,6 +30,11 @@ import {
   memoryLimitsFor,
   type MemoryStep,
 } from "@/lib/city/memory-governor";
+import {
+  REST_SLICE_MS,
+  SLICE_MS,
+  setSliceBudget,
+} from "@/lib/city/build-steps";
 import { createStillness, type FramePace } from "@/lib/city/frame-pace";
 import { createFrameTiming } from "@/lib/city/frame-timing";
 import {
@@ -252,6 +257,11 @@ const GOVERN_MS = 1000;
 /** How near the camera (m, in plan, to the tile's box) a building tile
  *  gets its BVH before any ray needs it. */
 const BVH_NEAR_M = 400;
+/** How long the camera stands before the dressings take longer slices
+ *  (ms; lib/city/build-steps.ts). */
+const CAMERA_REST_MS = 300;
+/** How long a frame's slice budget holds without the next frame (ms). */
+const SLICE_BUDGET_HOLD_MS = 150;
 
 /** Modell's sheet: the picture style's paper (its first swatch). */
 const paperOf = (style: RenderStyle): Color =>
@@ -1528,6 +1538,7 @@ async function bootApp(
       bootTile: () => bootTile,
       fogColor: sceneFog.color,
       heightAt,
+      pinnedGround: siteGround.pinned,
       look: opts.look,
       lowRasters: budget.lowRasters,
       cacheBytes: tileCacheBytesFor(budget.tier, budget.safety),
@@ -3307,17 +3318,30 @@ async function bootApp(
     opts.pace?.setStill(false);
   });
   const viewMoved = watchMotion();
+  let cameraMovedAt = Number.NEGATIVE_INFINITY;
+  // (the budget is the page's: a remounted scene starts from the short one)
+  cleanups.push(() => setSliceBudget(SLICE_MS));
   /**
    * After a drawn frame: whether the scene stood still in it — the camera
    * drawing it unmoved, everything loaded and nothing streaming, no data
    * layer moving, no export.
    */
   const noteStill = (time: number, view: Camera, exporting: boolean) => {
+    const moved = viewMoved(view);
+    if (moved) {
+      cameraMovedAt = time;
+    }
+    // while nothing on screen moves, the dressings are built in longer
+    // slices: the tile under way lands sooner, and the picture shows no
+    // frame missing (renewed each frame: a loop that stops drawing falls
+    // back to the short ones)
+    const resting =
+      time - cameraMovedAt >= CAMERA_REST_MS && !exporting && !dataLayersMove;
+    setSliceBudget(resting ? REST_SLICE_MS : SLICE_MS, SLICE_BUDGET_HOLD_MS);
     if (!opts.pace) {
       return;
     }
-    const busy =
-      viewMoved(view) || exporting || !sceneSettled || dataLayersMove;
+    const busy = moved || exporting || !sceneSettled || dataLayersMove;
     sceneStill = stillness.frame(time, busy);
     opts.pace.setStill(sceneStill);
   };

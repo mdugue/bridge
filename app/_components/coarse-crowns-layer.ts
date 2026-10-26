@@ -26,6 +26,7 @@ import {
 import type { CrownSeasonKey, SeasonalCrowns } from "./crown-season";
 import { seasonCrowns } from "./crown-season";
 import { Instances } from "./instancing";
+import { finished, inRuns, type Steps } from "@/lib/city/build-steps";
 import { inventoryColor, registerCrownMatrix } from "./tree-inventory-layer";
 import {
   applySeasons,
@@ -152,6 +153,18 @@ export function buildCoarseCrowns(
   crowns: readonly CoarseCrown[],
   ctx: CoarseCrownContext
 ): VegetationControl {
+  return finished(coarseCrownSteps(crowns, ctx));
+}
+
+/** Crowns stood per step (build-steps.ts). */
+const STAND_RUN = 512;
+
+/** `buildCoarseCrowns` in steps: per run of crowns, per cell
+ *  (build-steps.ts). */
+export function* coarseCrownSteps(
+  crowns: readonly CoarseCrown[],
+  ctx: CoarseCrownContext
+): Steps<VegetationControl> {
   const group = new Group();
   group.name = "coarse-crowns";
   const mats = sceneCrowns(ctx.sunDirection);
@@ -166,10 +179,12 @@ export function buildCoarseCrowns(
     return forms[form];
   };
   const { cx, cy } = ctx.offset;
-  const standing = crowns.flatMap((c) => {
-    const ground = ctx.heightAt(c.x + cx, cy - c.z);
-    return ground === null ? [] : [{ ...c, ground }];
-  });
+  const standing = yield* inRuns(crowns, STAND_RUN, (run) =>
+    run.flatMap((c) => {
+      const ground = ctx.heightAt(c.x + cx, cy - c.z);
+      return ground === null ? [] : [{ ...c, ground }];
+    })
+  );
   const seasons: SeasonalCrowns[] = [];
   const m = new Matrix4();
   const col = new Color();
@@ -199,6 +214,7 @@ export function buildCoarseCrowns(
     seasons.push(
       seasonCrowns({ mid: set, rich: set }, cell.map(seasonKey), mats)
     );
+    yield;
   }
   const u = mats.uniforms;
   return {

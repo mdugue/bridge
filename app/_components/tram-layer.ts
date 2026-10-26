@@ -31,6 +31,7 @@ import {
   wireStations,
 } from "@/lib/city/tram";
 import { buildFurniture } from "./furniture-layer";
+import { finished, type Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
 import {
   addRail,
@@ -40,7 +41,7 @@ import {
   COLORS,
   lineLevelsAt,
   type Mesh3,
-  meshFrom,
+  meshSteps,
   mesh3,
   type Pt,
   quad,
@@ -607,13 +608,13 @@ function buildMasts(masts: Point2[], ctx: GroundContext): Instances | null {
   return mesh;
 }
 
-function buildTracks(
+function* buildTracks(
   tracks: TramFeature[],
   decks: DeckPoly[],
   ctx: GroundContext,
   w: Wires,
   held: WirePoint[]
-): Mesh[] {
+): Steps<Mesh[]> {
   const acc: TrackMeshes = {
     rail: mesh3(),
     streetRail: mesh3(),
@@ -638,6 +639,7 @@ function buildTracks(
     const onBridge = f.properties?.bridge === 1;
     const runs = trackRuns(f, coords, bed, decks, ctx, spans);
     laid.push({ bed: onBridge ? "street" : bed, coords, f, runs });
+    yield;
   }
   // the lawn tracks' strips, a double track's two sharing the lawn
   const lawnRuns = laid.flatMap((t) => (t.bed === "grass" ? t.runs : []));
@@ -659,6 +661,7 @@ function buildTracks(
     for (const run of runs) {
       addContactWire(w, held, thinned(run, WIRE_STRIDE), stations, ctx);
     }
+    yield;
   }
   const parts: [Mesh3, number, number][] = [
     [acc.rail, TRAM_RAIL, -1],
@@ -668,7 +671,7 @@ function buildTracks(
   ];
   const meshes: Mesh[] = [];
   for (const [part, color, offsetUnits] of parts) {
-    const m = meshFrom(part, color, {
+    const m = yield* meshSteps(part, color, {
       cast: false,
       offsetUnits,
       roughness: 0.9,
@@ -682,7 +685,7 @@ function buildTracks(
     [spans.top, COLORS.deckRoad],
     [spans.stone, COLORS.deckStone],
   ] as const) {
-    const m = meshFrom(part, color, { cast: true });
+    const m = yield* meshSteps(part, color, { cast: true });
     if (m) {
       m.name = "tram-span";
       meshes.push(m);
@@ -719,6 +722,15 @@ export function buildTram(
   bridges: BridgeFeature[],
   ctx: GroundContext
 ): Group {
+  return finished(tramSteps(features, bridges, ctx));
+}
+
+/** `buildTram` in steps: per track (build-steps.ts). */
+export function* tramSteps(
+  features: TramFeature[],
+  bridges: BridgeFeature[],
+  ctx: GroundContext
+): Steps<Group> {
   const group = new Group();
   group.name = "tram";
   const byKind = (k: string) => features.filter((f) => f.properties?.k === k);
@@ -729,7 +741,7 @@ export function buildTram(
   const decks = buildDeckTable(bridges, ctx);
   const w = wires();
   const held: WirePoint[] = [];
-  const parts: (Group | Mesh | null)[] = buildTracks(
+  const parts: (Group | Mesh | null)[] = yield* buildTracks(
     tracks,
     decks,
     ctx,
@@ -742,6 +754,7 @@ export function buildTram(
   for (const f of byKind("arm")) {
     addArm(w, f, held, ctx);
   }
+  yield;
   parts.push(
     buildMasts(
       [...byKind("mast"), ...byKind("pole")].flatMap((f) =>

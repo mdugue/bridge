@@ -35,6 +35,7 @@ import {
   reshapeCrown,
   type SilhouetteMap,
 } from "./conifer-crown";
+import { finished, inRuns, type Steps } from "@/lib/city/build-steps";
 import { Instances } from "./instancing";
 import {
   applySeasons,
@@ -203,6 +204,9 @@ export function barkTint(genus: number, evergreen: boolean): Color {
 }
 
 const Y_AXIS = new Vector3(0, 1, 0);
+
+/** Register trees placed per step (build-steps.ts). */
+const INVENTORY_RUN = 256;
 
 /** Crown matrices: the geometry's local box fitted to the tree's crown. */
 function writeCrowns(
@@ -413,6 +417,16 @@ export function buildTreeInventory(
   ctx: VegetationContext,
   ndviAt?: RasterSampler
 ): TreeInventory {
+  return finished(treeInventorySteps(features, ctx, ndviAt));
+}
+
+/** `buildTreeInventory` in steps: per run of register trees, per cell of
+ *  silhouettes (build-steps.ts). */
+export function* treeInventorySteps(
+  features: TreeFeature[],
+  ctx: VegetationContext,
+  ndviAt?: RasterSampler
+): Steps<TreeInventory> {
   const group = new Group();
   group.name = "tree-inventory";
   // The scene's crown materials and uniforms, as the canopy's (sceneCrowns).
@@ -426,13 +440,17 @@ export function buildTreeInventory(
 
   // A tree in DLM forest/copse vetoes nothing (inventoryCovers).
   const covers = inventoryCovers(features);
-  const trees = inventoryTrees(features, ctx, ndviAt);
+  yield;
+  const trees = yield* inRuns(features, INVENTORY_RUN, (run) =>
+    inventoryTrees(run, ctx, ndviAt)
+  );
   const cells: CellLod[] = [];
   const seasons: SeasonalCrowns[] = [];
   let instances: TreeInstance[] = [];
   if (trees.length > 0) {
     const geos = buildShapeGeos();
     instances = canopyInstances(trees, geos.broad);
+    yield;
     const stakes = buildTreeStakes(trees.filter((t) => ageLook(t.age).staked));
     if (stakes) {
       group.add(stakes);
@@ -457,6 +475,7 @@ export function buildTreeInventory(
         cells.push(lod);
         seasons.push(season);
       }
+      yield;
     }
   }
 

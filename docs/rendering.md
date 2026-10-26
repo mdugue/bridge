@@ -786,6 +786,34 @@ stays their measure; the tile cache counts true bytes.
   a few MB on the worker's heap for the job's length; the results come
   back without a copy. Without a worker the same code runs on the main
   thread.
+- **A dressing's builders run in slices** (`lib/city/build-steps.ts`).
+  The trees (canopy, register, coarse crowns), the rails with their
+  bridges and ballast, the tram, the street furniture and the ask sets
+  are generators that `yield` between features, cells, draped triangles
+  and runs of copied floats; the dressing runs each in slices of 8 ms
+  (`inSlices`) and gives the main thread back between them, so input
+  and frames go on while a tile dresses. Each pause costs a frame — on
+  a phone 30 ms and more — so while nothing on screen moves (the camera
+  300 ms unmoved, no data layer moving, no export) the slices are 30 ms (`setSliceBudget`, create-app.ts): the picture
+  holds still, and the tile under way lands in less than half the
+  time. As one task each they were the
+  stutter left once the ground and the BVH had left the thread: on the
+  phone profile the rails 1.3 s (a yard's ballast draped at 1 m), the
+  trees 0.8–1.3 s, the tram 0.7 s, the ask sets 0.4–0.7 s; after it no
+  builder step is longer than ≈ 0.15 s there. A tile that leaves stops
+  its build at the next pause (the signal; what it had built is CPU
+  only, nothing uploaded). A question that comes while the ask sets
+  build finishes them at once (`finished`); tests and other callers use
+  the same builders whole through their old names. The cross-tile
+  builders (rails, monuments, tram, riverside) read the ground pinned at
+  the build's start (`Ground.pinned`, lib/city/ground.ts): a neighbour's
+  level that lands between two slices is not read by the later ones, so
+  one line, one yard's ballast is laid on one ground. A build that stops
+  (its tile left) frees what it had built. On the desktop profile the
+  flight's longest task went from 733 ms to 186 ms and the dressings'
+  wall time did not grow (the 1.5 s hand-over wait timed out once in the
+  flight, before and after). `?trace=1`'s dressing spans are wall time,
+  the pauses and the frames between the slices included.
 - **The stream camera.** The tile renderer streams for a twin of the
   walk/fly camera whose far plane ends where the fog does — the larger of
   the fog applied now and the look's own, × 1.1

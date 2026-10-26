@@ -53,6 +53,7 @@ import {
 } from "@/lib/city/furniture";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
+import { finished, type Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
 import type { Live } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
@@ -1057,11 +1058,27 @@ export function buildFurniture(
   features: FurnitureFeature[],
   ctx: GroundContext
 ): Group {
+  return finished(furnitureSteps(features, ctx));
+}
+
+/** Pieces stood per step (build-steps.ts). */
+const PIECE_RUN = 256;
+
+/** `buildFurniture` in steps: per run of pieces, per model
+ *  (build-steps.ts). */
+export function* furnitureSteps(
+  features: FurnitureFeature[],
+  ctx: GroundContext
+): Steps<Group> {
   const group = new Group();
   group.name = "furniture";
   const areas = furnitureAreas(features);
   const byModel = new Map<FurnitureModel, Stood[]>();
+  let n = 0;
   for (const piece of furniturePieces(features)) {
+    if (++n % PIECE_RUN === 0) {
+      yield;
+    }
     // on a bridge, its deck's top: the ground there is the river or the road
     // the bridge spans
     const ground = piece.deck ?? ctx.heightAt(piece.x, piece.y);
@@ -1092,6 +1109,7 @@ export function buildFurniture(
         group.add(asCell(clockHands(model, cell), cell));
       }
     }
+    yield;
   }
   const patches = buildPatches(areas, materials.flush(), ctx);
   if (patches) {

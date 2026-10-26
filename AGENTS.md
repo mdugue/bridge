@@ -314,6 +314,10 @@ config change.
   `app/_components/sidebar-pace.tsx`), `fetch-retry.ts` (when a
   failed fetch is tried again and for how long — ADR 0048),
   `task-gate.ts` (a concurrency gate: the rasters' turns),
+  `build-steps.ts` (a builder as a generator of steps, run in 8 ms
+  slices between frames — `inSlices` — or whole — `finished`: the
+  dressing's trees, rails, tram, furniture and ask sets; a new builder
+  that can take more than a few ms on a phone yields too),
   `ground.ts` (the
   site's ground: terrain heights, the floor, rays — one owner for the pose,
   focus and shadow fit), `ground-join.ts` (how a part meets
