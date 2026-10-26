@@ -17,6 +17,7 @@ import {
   MeshBVH,
 } from "three-mesh-bvh";
 import { horizontalSlide } from "@/lib/city/collision";
+import { bvhBuilding } from "./bvh-client";
 
 // Global three-mesh-bvh wiring: meshes WITH a boundsTree raycast through the
 // BVH; everything else keeps the stock path. Also accelerates demolish picks.
@@ -163,7 +164,7 @@ export function createCityCollider(
    * ahead can hold a nearer hit — so a long ray (a dolly's) builds only
    * the tiles before its hit.
    */
-  const firstHit = (): Intersection | null => {
+  const firstHit = (wait = false): Intersection | "wait" | null => {
     const { ray, far } = raycaster;
     const reached: { enter: number; mesh: Mesh }[] = [];
     for (const target of getTargets()) {
@@ -178,6 +179,11 @@ export function createCityCollider(
     for (const { enter, mesh } of reached) {
       if (best && enter > best.distance) {
         break;
+      }
+      // a tile whose BVH the worker builds (bvh-client.ts) may hold the
+      // nearest hit: where `wait`, the answer waits for it
+      if (wait && bvhBuilding(mesh.geometry)) {
+        return "wait";
       }
       const hit = withBvh(mesh)
         ? raycaster.intersectObject(mesh, false)[0]
@@ -201,7 +207,12 @@ export function createCityCollider(
       origin.copy(position);
       origin.y -= drop;
       raycaster.set(origin, dir);
-      const hit = firstHit();
+      const hit = firstHit(true);
+      if (hit === "wait") {
+        // a wall straight ahead: the step waits until the tile's walls
+        // are known (a second on a phone at most), never walks through
+        return dir.clone().negate();
+      }
       if (hit?.face) {
         normalMatrix.getNormalMatrix(hit.object.matrixWorld);
         return hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
@@ -300,7 +311,8 @@ export function createCityCollider(
     along: (from, direction, far) => {
       raycaster.set(from, direction);
       raycaster.far = far;
-      return firstHit()?.distance ?? null;
+      const hit = firstHit();
+      return hit === "wait" ? null : (hit?.distance ?? null);
     },
     // Seen from inside a closed solid, the surface straight above faces up
     // (its outside is above it); from under a bridge or a balcony it faces

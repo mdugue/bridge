@@ -49,8 +49,9 @@ export interface InquiryProbe {
   /** removes the mark */
   clear: () => void;
   /** the tiles changed: a level loaded since takes the mark, and the
-   *  outline follows the level on screen */
-  refresh: () => void;
+   *  outline follows the level on screen — drawn again where a part is on
+   *  `redraw` (its index back from the BVH worker) */
+  refresh: (redraw?: CityLayer) => void;
 }
 
 /** What a question met: its candidates, nearest first, and the chosen. */
@@ -390,7 +391,7 @@ export function createInquiryProbe(deps: {
     }
   };
 
-  const refresh = () => {
+  const refresh = (redraw?: CityLayer) => {
     if (markedParts.length === 0) {
       return;
     }
@@ -405,7 +406,10 @@ export function createInquiryProbe(deps: {
             layer: shown.find((l) => l.tile === part.layer.tile) ?? part.layer,
           }
     );
-    if (moved.some((part, i) => part.layer !== markedParts[i]?.layer)) {
+    if (
+      moved.some((part, i) => part.layer !== markedParts[i]?.layer) ||
+      (redraw && moved.some((part) => part.layer === redraw))
+    ) {
       markedParts = moved;
       deps.outline({ building: moved });
     }

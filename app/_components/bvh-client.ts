@@ -4,6 +4,7 @@ import type {
   InterleavedBufferAttribute,
 } from "three/webgpu";
 import { MeshBVH } from "three-mesh-bvh";
+import { whenIdle } from "./main-yield";
 
 /**
  * A building tile's BVH built in the BVH worker (bvh-worker.ts) instead of
@@ -39,6 +40,9 @@ export interface BvhJob {
 }
 
 export interface BvhReply {
+  /** the worker's first message: its script runs (nothing is handed over
+   *  before it — a worker that fails to load would keep what it got) */
+  ready?: true;
   id: number;
   roots?: ArrayBuffer[];
   error?: string;
@@ -64,11 +68,23 @@ const lost = new WeakSet<BufferGeometry>();
 const settles = new Map<number, (reply: BvhReply | null) => void>();
 /** one build at a time: the next waits for this one */
 let chain: Promise<unknown> = Promise.resolve();
+/** settles true once the worker said it runs, false if it died first */
+let started: Promise<boolean> | null = null;
+let markStarted: ((up: boolean) => void) | null = null;
+/** How long a build here, where the worker cannot, waits for an idle main
+ *  thread at most (ms). */
+const IDLE_BUILD_MS = 1000;
 
 /** Whether `geometry`'s BVH is being built off the thread (its positions
  *  and index are away). */
 export function bvhBuilding(geometry: BufferGeometry): boolean {
   return building.has(geometry) || lost.has(geometry);
+}
+
+/** Whether a worker died with `geometry`'s positions and index: the tile
+ *  draws, but nothing on the CPU can read it again (a demolish neither). */
+export function bvhLost(geometry: BufferGeometry): boolean {
+  return lost.has(geometry);
 }
 
 /** Whether the BVH worker is up (a test asks: the fallback builds alike). */
@@ -80,6 +96,9 @@ function startWorker(): Worker | null {
   if (worker || broken) {
     return worker;
   }
+  started = new Promise<boolean>((resolve) => {
+    markStarted = resolve;
+  });
   try {
     worker = new Worker(new URL("./bvh-worker.ts", import.meta.url), {
       type: "module",
@@ -87,9 +106,14 @@ function startWorker(): Worker | null {
     });
   } catch {
     broken = true;
+    markStarted?.(false);
     return null;
   }
   worker.onmessage = ({ data }: MessageEvent<BvhReply>) => {
+    if (data.ready) {
+      markStarted?.(true);
+      return;
+    }
     const settle = settles.get(data.id);
     settles.delete(data.id);
     settle?.(data);
@@ -105,6 +129,7 @@ function startWorker(): Worker | null {
 
 function dieOut(): void {
   broken = true;
+  markStarted?.(false);
   worker?.terminate();
   worker = null;
   for (const [id, settle] of settles) {
@@ -149,6 +174,15 @@ function take(geometry: BufferGeometry): Taken | null {
   ) {
     return null;
   }
+  // what reads the positions for the tile's bounds reads them now: a box
+  // first asked while they are away would come out NaN (and every ray
+  // would miss the tile's box)
+  if (!geometry.boundingBox) {
+    geometry.computeBoundingBox();
+  }
+  if (!geometry.boundingSphere) {
+    geometry.computeBoundingSphere();
+  }
   const restore = (reply: Pick<BvhReply, "index" | "position">) => {
     if (interleaved) {
       (position as InterleavedBufferAttribute).data.array = reply.position;
@@ -188,17 +222,31 @@ async function buildThere(
   wanted: () => boolean
 ): Promise<boolean> {
   const w = startWorker();
-  const taken = w ? take(geometry) : null;
-  if (!(w && taken)) {
+  // nothing goes over before the worker runs: one whose script fails to
+  // load would take the tile's arrays with it
+  if (!(w && (await started) && worker === w)) {
+    return false;
+  }
+  const taken = take(geometry);
+  if (!taken) {
     return false;
   }
   const id = nextId++;
   building.add(geometry);
-  const reply = await new Promise<BvhReply | null>((resolve) => {
+  const reply = await new Promise<BvhReply | null | "unsent">((resolve) => {
     settles.set(id, resolve);
-    w.postMessage({ ...taken.job, id }, taken.transfer);
+    try {
+      w.postMessage({ ...taken.job, id }, taken.transfer);
+    } catch {
+      // not sent (a clone fails before the transfer): the arrays are here
+      settles.delete(id);
+      resolve("unsent");
+    }
   });
   building.delete(geometry);
+  if (reply === "unsent") {
+    return false;
+  }
   if (!reply) {
     // the worker died with the arrays: nothing to restore them from (the
     // GPU still draws the tile; no ray will read it)
@@ -237,7 +285,15 @@ export function buildBvhOffThread(
       return;
     }
     if (!(await buildThere(geometry, wanted))) {
-      geometry.computeBoundsTree();
+      // here after all, in idle time where the thread has some
+      await new Promise<void>((resolve) => {
+        whenIdle(() => {
+          if (!geometry.boundsTree && wanted()) {
+            geometry.computeBoundsTree();
+          }
+          resolve();
+        }, IDLE_BUILD_MS);
+      });
     }
   });
   chain = run.catch(() => undefined);

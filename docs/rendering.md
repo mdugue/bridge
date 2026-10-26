@@ -1253,8 +1253,10 @@ ground had left it. The tile's positions and index are handed to the
 worker, not copied (35 MB for a dense tile; a phone's memory must not
 grow), and come back sorted with the BVH's nodes; meanwhile the GPU
 draws from its own buffers, the tile counts as without a BVH and as
-not to be built here (`bvhBuilding`): the rays pass it over, a demolish
-waits for it. The spawn tile's is built by the placing on its
+not to be built here (`bvhBuilding`): a step towards it waits (the
+camera never walks through walls it cannot see yet), a pick through it
+answers nothing rather than the building behind, a demolish and the
+selection outline wait for it, and the autofocus passes it over. The spawn tile's is built by the placing on its
 ground before the first frame (ADR 0032 needs it there): after its
 terrain has landed, not inside the parse that landed its buildings. The
 collider builds nothing before that placing — the frames before it stand
