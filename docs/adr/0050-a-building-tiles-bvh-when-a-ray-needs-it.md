@@ -97,5 +97,10 @@ BVH worker (`bvh-client.ts`) — on a flight they were its longest stalls
 now still builds it on the main thread. The positions and index are
 handed over, not copied, so the page's memory does not grow (the build's
 scratch is on the worker's heap instead of the page's); while they are
-away `bvhBuilding` holds and every CPU reader passes the tile over or
-waits (a demolish). The reorder stays as it was.
+away `bvhBuilding` holds and every CPU reader waits where the tile may
+hold its answer: a step towards it stops, a pick through it answers
+nothing (never the building behind), a demolish and an outline come once
+the arrays are back; the autofocus and the vertical clearance rays pass
+it over. Nothing goes over before the worker's script runs (a worker that
+fails to load would keep the arrays), and the tile's bounds are read
+before. The reorder stays as it was.

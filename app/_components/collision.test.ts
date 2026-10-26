@@ -9,6 +9,7 @@ import {
   Vector3,
 } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { buildBvhOffThread, bvhBuilding } from "./bvh-client";
 import { bvhBytesUnder, createCityCollider, rayEntry } from "./collision";
 
 /**
@@ -185,4 +186,26 @@ test("a mesh's BVH weighs its node buffers; one without a BVH weighs nothing", (
   expect(bvhBytesUnder(twin)).toBe(nodes);
   const bare = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicNodeMaterial());
   expect(bvhBytesUnder(bare)).toBe(0);
+});
+
+test("a step towards a building whose BVH the worker builds waits: never through its walls", async () => {
+  const { collider, group } = city({ bvh: false });
+  const cube = group.children[0] as Mesh;
+  await buildBvhOffThread(new BoxGeometry(1, 1, 1));
+  const done = buildBvhOffThread(cube.geometry);
+  // (its turn within a few microtasks of a worker that runs)
+  for (let i = 0; i < 20 && !bvhBuilding(cube.geometry); i++) {
+    await Promise.resolve();
+  }
+  expect(bvhBuilding(cube.geometry)).toBe(true);
+  const at = new Vector3(94.5, 1.7, 100);
+  expect(collider.resolveStep(at, new Vector3(1, 0, 0)).length()).toBe(0);
+  await done;
+  // back: the wall itself stops it, and a step away from it passes
+  expect(collider.resolveStep(at, new Vector3(1, 0, 0)).length()).toBeCloseTo(
+    0,
+    6
+  );
+  const away = new Vector3(-1, 0, 0);
+  expect(collider.resolveStep(at, away)).toEqual(away);
 });

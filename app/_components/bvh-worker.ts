@@ -61,3 +61,6 @@ scope.onmessage = ({ data: job }) => {
     );
   }
 };
+
+// the script runs: from here the page may hand over a tile's arrays
+scope.postMessage({ ready: true, id: -1 } as BvhReply, []);

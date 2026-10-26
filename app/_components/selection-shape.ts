@@ -18,6 +18,7 @@ import {
   type Slab,
 } from "@/lib/city/ask-solids";
 import { liveTriangles } from "@/lib/city/city-mesh";
+import { bvhBuilding } from "./bvh-client";
 import type { CityLayer } from "./city-layer";
 
 /**
@@ -55,7 +56,9 @@ export function buildingShape(
   const geometry = layer.mesh.geometry;
   const ids = geometry.getAttribute("featureId");
   const index = geometry.getIndex();
-  if (!(ids && index)) {
+  // (none while the BVH worker has the tile's index: drawn again once it
+  // is back, inquiry-probe.ts `refresh`)
+  if (!(ids && index) || bvhBuilding(geometry)) {
     return new Float32Array();
   }
   const out: number[] = [];

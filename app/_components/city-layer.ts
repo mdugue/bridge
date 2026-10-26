@@ -13,7 +13,7 @@ import {
   Raycaster,
   Vector2,
 } from "three/webgpu";
-import { buildBvhOffThread, bvhBuilding } from "./bvh-client";
+import { buildBvhOffThread, bvhBuilding, bvhLost } from "./bvh-client";
 import { rayEntry } from "./collision";
 import { streamTimings } from "./stream-timing";
 import { setPickRay } from "./view-ray";
@@ -64,6 +64,9 @@ export interface CityLayer {
   /** builds the tile's BVH in the BVH worker (bvh-client.ts): what the
    *  tiles near the camera get ahead of a ray; settles once it is built */
   prepareBvh: () => Promise<void>;
+  /** a demolish the worker's build holds back, settling once it has
+   *  reached the index (null: none waits) — the shadows are drawn again then */
+  held: () => Promise<void> | null;
   /** marks the objects someone asks about (the clay's pencil hatch); an
    *  empty set clears the mark */
   mark: (objects: ReadonlySet<number>) => void;
@@ -289,12 +292,14 @@ export function dressCity(
 
   const alive = new Uint8Array(count).fill(1);
   const featureIds = geometry.getAttribute("featureId");
-  const rebuild = () => {
+  /** `again`: a BVH there was is built again now (else when a ray or the
+   *  worker gets to it) */
+  const rebuild = (again = true) => {
     const index = geometry.getIndex();
     if (!index) {
       return;
     }
-    const had = Boolean(geometry.boundsTree);
+    const had = again && Boolean(geometry.boundsTree);
     geometry.setIndex(
       new BufferAttribute(
         liveTriangles(index.array, featureIds.array, (i) => alive[i] === 1),
@@ -327,6 +332,8 @@ export function dressCity(
 
   /** the worker's build of the BVH, while it runs */
   let prepared: Promise<void> | null = null;
+  /** a demolish waiting for that build to give the index back */
+  let held: Promise<void> | null = null;
   let disposed = false;
   // the asked objects, kept for the facade readings' repack
   let marked: ReadonlySet<number> = new Set();
@@ -340,21 +347,25 @@ export function dressCity(
     alive,
     demolish: (objectIndex) => {
       const doomed = doomedObjects(table.ensemble, objectIndex);
-      if (doomed.size === 0) {
+      // (a tile a dead worker kept the index of has none to rebuild from)
+      if (doomed.size === 0 || bvhLost(geometry)) {
         return false;
       }
       for (const i of doomed) {
         alive[i] = 0;
       }
       // the index is the worker's while it builds the BVH: rebuilt after
-      // (unless the tile has left by then)
+      // (unless the tile has left by then), its BVH left to the worker
+      // again rather than built here in the frame
       if (prepared) {
         const after = () => {
           if (!disposed) {
-            rebuild();
+            rebuild(false);
           }
         };
-        void prepared.then(after, after);
+        held ??= prepared.then(after, after).finally(() => {
+          held = null;
+        });
       } else {
         rebuild();
       }
@@ -383,6 +394,7 @@ export function dressCity(
     facts: (objectIndex) => readObjectFacts(metadata, objectIndex),
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => ensureCityBvh(mesh),
+    held: () => held,
     prepareBvh: () => {
       prepared ??= streamTimings
         .timed(
@@ -449,7 +461,9 @@ function layersOnRay(
  * one. A tile without a BVH is built first where `build` (a pick, a double
  * tap: once, at a user's word) and passed over otherwise (the autofocus) —
  * never walked triangle by triangle, which three-mesh-bvh's raycast falls
- * back to on a mesh without one.
+ * back to on a mesh without one. Where `build`, a tile whose BVH the worker
+ * builds that could hold the nearest hit makes it none (null): a pick then
+ * does nothing rather than ask the building behind.
  */
 export function nearestCityHit(
   raycaster: Raycaster,
@@ -464,6 +478,11 @@ export function nearestCityHit(
   )) {
     if (best && enter > best.hit.distance) {
       break;
+    }
+    // a tile the worker has may hold the nearest hit: no answer until it
+    // is back (asked anyway, the building behind it would answer)
+    if (build && bvhBuilding(layer.mesh.geometry)) {
+      return null;
     }
     if (build) {
       layer.ensureBvh();
@@ -587,6 +606,10 @@ export function cityObjectsAlong(
     layers
   )) {
     if (enter <= first) {
+      // as in `nearestCityHit`: a tile the worker has may hold the first
+      if (bvhBuilding(layer.mesh.geometry)) {
+        return [];
+      }
       layer.ensureBvh();
     }
     const ids = layer.mesh.geometry.getAttribute("featureId");

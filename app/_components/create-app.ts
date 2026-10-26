@@ -2533,6 +2533,17 @@ async function bootApp(
     flattened = null;
     invalidateShadows();
     scheduleStats();
+    // a tile whose index the BVH worker had takes the demolish once it is
+    // back: its shadows are drawn again then
+    const held = [...stream.cities].flatMap((l) => l.held() ?? []);
+    if (held.length > 0) {
+      void Promise.all(held).then(() => {
+        if (!disposed) {
+          flattened = null;
+          invalidateShadows();
+        }
+      });
+    }
   };
   const demolishAtCrosshair = () => demolishAt();
 
@@ -2696,6 +2707,10 @@ async function bootApp(
       .catch(() => undefined)
       .finally(() => {
         bvhPending = false;
+        // an outline whose part the worker had is drawn now
+        if (!disposed) {
+          probe.refresh(next);
+        }
       });
   };
 
