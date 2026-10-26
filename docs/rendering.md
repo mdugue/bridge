@@ -772,6 +772,20 @@ stays their measure; the tile cache counts true bytes.
   across the dry rest of its tile. Each sheet's index is the tile's own (the site's
   shared water index is left only for a raster the browser decoded,
   whose bytes cannot be read).
+- **A level's ground arithmetic runs in a worker**
+  (`lib/city/ground-prep.ts`, `app/_components/ground-worker.ts`). Its
+  heights in the data frame (a grid's elevations, a TIN's projected
+  vertices for its height index) and the sheets' triangles and boxes
+  are worked out off the main thread from the positions as stored; the
+  level waits for them inside its dressing, as it waited for its
+  rasters. Read through three's per-vertex accessors on the main thread
+  they were the longest task of a flight: 0.2–0.7 s per terrain level on
+  a desktop, 0.5–1.4 s on the phone profile (4× throttled CPU; a fine
+  level's 1 M index entries, twice). The input is copied (the level
+  still draws from its buffers, the coarse levels share their index):
+  a few MB on the worker's heap for the job's length; the results come
+  back without a copy. Without a worker the same code runs on the main
+  thread.
 - **The stream camera.** The tile renderer streams for a twin of the
   walk/fly camera whose far plane ends where the fog does — the larger of
   the fog applied now and the look's own, × 1.1

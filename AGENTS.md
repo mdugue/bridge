@@ -174,7 +174,9 @@ config change.
     Sentry agent skills `sentry-debug-issue`, `sentry-setup-releases` and
     `sentry-create-alert` and the Sentry MCP server in `.mcp.json` work
     the issues — never add the SDK they otherwise set up)
-  - layers: `terrain-layer.ts` (dresses a terrain tile), `raster-upload.ts`
+  - layers: `terrain-layer.ts` (dresses a terrain tile; its heights and water
+    sheets come from `ground-worker.ts`, off the main thread —
+    `lib/city/ground-prep.ts`), `raster-upload.ts`
     (the streamed rasters decode in a site-wide turn, `setRasterTier`: a
     phone one at a time, each uploaded at once and its bytes dropped; a
     desktop five, uploaded at the compile), `landcover-splat.ts`
