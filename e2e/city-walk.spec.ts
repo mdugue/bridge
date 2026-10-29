@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { Document, WebIO } from "@gltf-transform/core";
 import { expect, type Page, test } from "@playwright/test";
 import { fromArrayBuffer } from "geotiff";
 import proj4 from "proj4";
@@ -59,6 +60,49 @@ test.use({
 interface ErrorLog {
   console: string[];
   page: string[];
+}
+
+/**
+ * A design as a planner's export: a 40 × 30 m block, 20 m high (x east,
+ * y up, z south), under a node at `at` — the Land's coordinates, NHN.
+ */
+async function designBlockGlb(at: [number, number, number]) {
+  const doc = new Document();
+  const buffer = doc.createBuffer();
+  const [x0, x1, y0, y1, z0, z1] = [-20, 20, 0, 20, -15, 15];
+  const c = [
+    [x0, y0, z0],
+    [x1, y0, z0],
+    [x1, y0, z1],
+    [x0, y0, z1],
+    [x0, y1, z0],
+    [x1, y1, z0],
+    [x1, y1, z1],
+    [x0, y1, z1],
+  ];
+  const faces = [
+    [4, 7, 6, 5],
+    [0, 1, 2, 3],
+    [3, 2, 6, 7],
+    [1, 0, 4, 5],
+    [2, 1, 5, 6],
+    [0, 3, 7, 4],
+  ];
+  const positions = faces.flatMap(([a, b, d, e]) =>
+    [a, b, d, a, d, e].flatMap((i) => c[i])
+  );
+  const accessor = doc
+    .createAccessor()
+    .setType("VEC3")
+    .setArray(new Float32Array(positions))
+    .setBuffer(buffer);
+  const mesh = doc
+    .createMesh("block")
+    .addPrimitive(doc.createPrimitive().setAttribute("POSITION", accessor));
+  doc
+    .createScene()
+    .addChild(doc.createNode("block").setTranslation(at).setMesh(mesh));
+  return new WebIO().writeBinary(doc);
 }
 
 /** Starts collecting page + console errors for the whole life of the page. */
@@ -1103,6 +1147,42 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // back where it was entered from (the pivot did not move)
     expect(after?.pos.x).toBeCloseTo(before?.pos.x ?? 0, 0);
     expect(after?.pos.z).toBeCloseTo(before?.pos.z ?? 0, 0);
+    expectNoErrors(errors);
+  });
+
+  test("a design file takes its place and sets the buildings it covers aside", async () => {
+    // A 40 × 30 m block in the Land's coordinates by the Albertplatz, on
+    // the primary tile: read on the page, placed by its own coordinates,
+    // the LoD2 buildings under it out of the index — and back once it goes.
+    const glb = await designBlockGlb([412_300, 112, -5_657_420]);
+    const before = await page.evaluate(
+      () => window.__poc?.stats?.layerStats.city.triangles ?? 0
+    );
+    const status = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "block.glb")]);
+        return design?.status() ?? null;
+      },
+      [...glb]
+    );
+    expect(status?.source).toBe("file");
+    expect(status?.placement.east).toBeCloseTo(412_300, 3);
+    expect(status?.placement.north).toBeCloseTo(5_657_420, 3);
+    expect(status?.placement.base).toBe(112);
+    expect(status?.hidden ?? 0).toBeGreaterThan(0);
+    await page.waitForFunction(
+      (n) => (window.__poc?.stats?.layerStats.city.triangles ?? 0) < n,
+      before,
+      { timeout: slow(30_000) }
+    );
+    await waitForFrames(page, 1);
+    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    await page.waitForFunction(
+      (n) => (window.__poc?.stats?.layerStats.city.triangles ?? 0) === n,
+      before,
+      { timeout: slow(30_000) }
+    );
     expectNoErrors(errors);
   });
 

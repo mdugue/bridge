@@ -495,6 +495,27 @@ und das Modell behalten ihre scharfen Linien.
   lässt sich nicht rückgängig machen. *Bild speichern* speichert die
   Ansicht als PNG mit ihren Quellen (siehe [Modell](#modell-die-stadt-als-planzeichnung)). *Immersiver Modus* fängt den
   Mauszeiger für ein Ego-Perspektive-Gefühl ein; `Esc` verlässt ihn.
+- **Entwurf** — lädt einen eigenen Entwurf in die Stadt: eine glTF-Datei
+  (`.glb`, oder `.gltf` mit ihrer `.bin` und den Texturen zusammen
+  ausgewählt), wie sie SketchUp, Rhino, Revit, Archicad, Vectorworks oder
+  Blender exportieren; auch auf das Feld ziehen. Die Datei wird nur in
+  deinem Browser gelesen und nirgends hochgeladen. Stehen Landeskoordinaten
+  (UTM, auch mit vorangestellter Zone) in der Datei, steht der Entwurf
+  gleich an seinem Ort, mit seinen NHN-Höhen, wenn sie zum Gelände passen;
+  sonst wird er vor dir aufs Gelände gesetzt — mit seinem Nullpunkt (±0),
+  wenn er ein Untergeschoss darunter hat. *Hierher holen*, *Aufs
+  Gelände*, *Ost*, *Nord*, *Höhe* und *Drehung* verschieben, setzen und
+  drehen ihn; *Lage sichern* speichert die Lage als kleine Datei
+  (`….lage.json`), die beim nächsten Mal mit dem Entwurf zusammen geladen
+  wird. Gebäude, deren Grundriss der Entwurf zu mehr als der Hälfte
+  überdeckt, treten beiseite (*Bestand im Umriss ausblenden*); flache
+  Bodenplatten am tiefsten Punkt des Entwurfs zählen dabei nicht. Der
+  Entwurf ist modellweiß, oder in den *Farben der Datei*; er wirft
+  Schatten, man läuft nicht durch ihn hindurch, und Modell und
+  Verschattungsstudie zeigen ihn mit. Auf dem Handy darf er höchstens
+  250 000 Dreiecke und 40 MB haben (am Rechner 3 Millionen und 400 MB);
+  Texturen, die nicht hineinpassen, bleiben weg. Gelände, Bäume und
+  Stadtmöbel unter dem Entwurf bleiben noch stehen.
 - **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und
   Uhrzeit, den Bildstil, den *Nebel*, den Kronen-Schalter und die
   Datenebenen als kleinen JSON-Text; einen solchen Text in das Feld
