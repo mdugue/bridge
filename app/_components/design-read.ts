@@ -105,9 +105,11 @@ export function designFormat(name: string): DesignFormat | null {
   return null;
 }
 
-/** The file of a selection that is the design, or null. */
+/** The file of a selection that is the design, or null: a bare .xml
+ *  (LandXML, or any metadata picked along) only where nothing else is. */
 export function designFile(files: readonly File[]): File | null {
-  return files.find((f) => designFormat(f.name) !== null) ?? null;
+  const read = files.filter((f) => designFormat(f.name) !== null);
+  return read.find((f) => !/\.xml$/i.test(f.name)) ?? read[0] ?? null;
 }
 
 /** The design's objects in its own frame, and what the file said about
@@ -148,8 +150,9 @@ async function parseDesign(
 }
 
 /** The design's georeference; one whose heights are not NHN (a Rhino
- *  anchor above the ground) keeps none of its base, so it is set on the
- *  ground. */
+ *  anchor above the ground, a plan laid flat at 0 with no ground loaded
+ *  under it and no heights of its own) keeps none of its base, so it is
+ *  set on the ground. */
 function georefOf(
   box: DesignBox,
   epsg: number,

@@ -8,6 +8,7 @@ import {
   type Object3D,
   SRGBColorSpace,
 } from "three/webgpu";
+import { latLngToUtm, utmToLatLng } from "@/lib/city/crs";
 import { detectGeoreference, utmZone } from "@/lib/city/design-placement";
 import { readDxf } from "@/lib/city/dxf";
 import { readLandXml } from "@/lib/city/landxml";
@@ -44,7 +45,7 @@ export const SQL_WASM_PATH = "/wasm/sql-wasm-browser.wasm";
 export class PlanError extends Error {}
 
 /** The plan formats by the main file's extension. */
-export const PLAN_FORMATS = /\.(dxf|shp|gpkg|xml|landxml)$/i;
+export const PLAN_FORMATS = /\.(dxf|shp|gpkg|landxml)$|(?<!\.(shp|aux))\.xml$/i;
 
 /** The words the panel uses for a class. */
 const CLASS_WORDS: Record<PlanClass, string> = {
@@ -87,11 +88,10 @@ function prjEpsg(wkt: string): number | null {
   return null;
 }
 
-/** A GeoPackage's feature tables as records, with their SRS. */
-async function readGpkg(file: File): Promise<{
-  layers: { name: string; records: GeoRecord[] }[];
-  epsg: number | null;
-}> {
+/** A GeoPackage's feature tables as records, each with its EPSG code. */
+async function readGpkg(
+  file: File
+): Promise<{ name: string; records: GeoRecord[]; epsg: number | null }[]> {
   const { default: initSqlJs } = await import("sql.js");
   const SQL = await initSqlJs({ locateFile: () => SQL_WASM_PATH });
   const db = new SQL.Database(new Uint8Array(await file.arrayBuffer()));
@@ -99,53 +99,97 @@ async function readGpkg(file: File): Promise<{
     const columns = db.exec(
       "SELECT c.table_name, c.column_name, s.organization, s.organization_coordsys_id FROM gpkg_geometry_columns c LEFT JOIN gpkg_spatial_ref_sys s ON s.srs_id = c.srs_id"
     )[0];
-    const layers: { name: string; records: GeoRecord[] }[] = [];
-    let epsg: number | null = null;
+    const layers: {
+      name: string;
+      records: GeoRecord[];
+      epsg: number | null;
+    }[] = [];
     for (const row of columns?.values ?? []) {
       const [table, column, organization, code] = row.map(String);
-      if (organization.toUpperCase() === "EPSG") {
-        epsg = Number(code);
-      }
       const result = db.exec(`SELECT * FROM "${table.replace(/"/g, '""')}"`)[0];
-      if (!result) {
-        continue;
-      }
-      const g = result.columns.indexOf(column);
-      const records: GeoRecord[] = [];
-      for (const values of result.values) {
-        const blob = values[g];
-        if (!(blob instanceof Uint8Array)) {
-          continue;
-        }
-        const attributes: GeoRecord["attributes"] = {};
-        result.columns.forEach((name, i) => {
-          const v = values[i];
-          if (i !== g && (typeof v === "string" || typeof v === "number")) {
-            attributes[name] = v;
-          }
+      if (result) {
+        layers.push({
+          name: table,
+          records: gpkgRecords(result, column),
+          epsg: organization.toUpperCase() === "EPSG" ? Number(code) : null,
         });
-        for (const shape of readGpkgGeometry(blob).shapes) {
-          records.push({ ...shape, attributes });
-        }
       }
-      layers.push({ name: table, records });
     }
-    return { layers, epsg };
+    return layers;
   } finally {
     db.close();
   }
 }
 
-/** The plan's features, the EPSG code it names (if it does) and a word on
- *  its layers. */
+/** A table's rows as records: its geometry column's shapes, the other
+ *  columns as attributes. */
+function gpkgRecords(
+  result: { columns: string[]; values: unknown[][] },
+  column: string
+): GeoRecord[] {
+  const g = result.columns.indexOf(column);
+  const records: GeoRecord[] = [];
+  for (const values of result.values) {
+    const blob = values[g];
+    if (!(blob instanceof Uint8Array)) {
+      continue;
+    }
+    const attributes: GeoRecord["attributes"] = {};
+    result.columns.forEach((name, i) => {
+      const v = values[i];
+      if (i !== g && (typeof v === "string" || typeof v === "number")) {
+        attributes[name] = v;
+      }
+    });
+    for (const shape of readGpkgGeometry(blob).shapes) {
+      records.push({ ...shape, attributes });
+    }
+  }
+  return records;
+}
+
+/** One layer of a plan as read: its features and the EPSG code it names. */
+interface PlanLayer {
+  name: string;
+  features: PlanFeature[];
+  epsg: number | null;
+}
+
+/** Every Shapefile picked, each with its .dbf, .cpg and .prj. */
+async function readShapefiles(files: readonly File[]): Promise<{
+  layers: PlanLayer[];
+  unclassified: string[];
+}> {
+  const layers: PlanLayer[] = [];
+  const unclassified: string[] = [];
+  for (const shp of files.filter((f) => /\.shp$/i.test(f.name))) {
+    const dbf = sibling(shp, files, ".dbf");
+    const cpg = sibling(shp, files, ".cpg");
+    const prj = sibling(shp, files, ".prj");
+    const records = readShapefile(
+      await shp.arrayBuffer(),
+      dbf ? await dbf.arrayBuffer() : null,
+      cpg ? await cpg.text() : null
+    );
+    const name = shp.name.replace(/\.shp$/i, "");
+    const { features, classes } = recordFeatures(records, name);
+    layers.push({
+      name,
+      features,
+      epsg: prj ? prjEpsg(await prj.text()) : null,
+    });
+    if (classes.has(null)) {
+      unclassified.push(name);
+    }
+  }
+  return { layers, unclassified };
+}
+
+/** The plan's layers and the names of those no class was found for. */
 async function readFeatures(
   main: File,
   files: readonly File[]
-): Promise<{
-  features: PlanFeature[];
-  epsg: number | null;
-  unclassified: string[];
-}> {
+): Promise<{ layers: PlanLayer[]; unclassified: string[] }> {
   const name = main.name.toLowerCase();
   if (name.endsWith(".dxf")) {
     const text = await main.text();
@@ -156,43 +200,34 @@ async function readFeatures(
     }
     const plan = readDxf(text);
     return {
-      features: plan.features,
-      epsg: null,
+      layers: [{ name: main.name, features: plan.features, epsg: null }],
       unclassified: plan.unclassified,
     };
   }
   if (name.endsWith(".shp")) {
-    const dbf = sibling(main, files, ".dbf");
-    const cpg = sibling(main, files, ".cpg");
-    const prj = sibling(main, files, ".prj");
-    const records = readShapefile(
-      await main.arrayBuffer(),
-      dbf ? await dbf.arrayBuffer() : null,
-      cpg ? await cpg.text() : null
-    );
-    const layer = main.name.replace(/\.shp$/i, "");
-    const { features, classes } = recordFeatures(records, layer);
-    return {
-      features,
-      epsg: prj ? prjEpsg(await prj.text()) : null,
-      unclassified: classes.has(null) ? [layer] : [],
-    };
+    return readShapefiles(files);
   }
   if (name.endsWith(".gpkg")) {
-    const { layers, epsg } = await readGpkg(main);
-    const features: PlanFeature[] = [];
+    const layers: PlanLayer[] = [];
     const unclassified: string[] = [];
-    for (const layer of layers) {
+    for (const layer of await readGpkg(main)) {
       const read = recordFeatures(layer.records, layer.name);
-      features.push(...read.features);
+      layers.push({
+        name: layer.name,
+        features: read.features,
+        epsg: layer.epsg,
+      });
       if (read.classes.has(null)) {
         unclassified.push(layer.name);
       }
     }
-    return { features, epsg, unclassified };
+    return { layers, unclassified };
   }
   const plan = readLandXml(await main.text());
-  return { features: plan.features, epsg: plan.epsg, unclassified: [] };
+  return {
+    layers: [{ name: main.name, features: plan.features, epsg: plan.epsg }],
+    unclassified: [],
+  };
 }
 
 /** Every point of the plan's features. */
@@ -212,25 +247,59 @@ function* pointsOf(features: readonly PlanFeature[]): Generator<PlanPoint> {
   }
 }
 
-/** The features with `dx` taken off every easting (a zone prefix). */
-function shiftEast(features: PlanFeature[], dx: number): PlanFeature[] {
-  if (dx === 0) {
-    return features;
-  }
-  const s = (p: PlanPoint): PlanPoint =>
-    p[2] === undefined ? [p[0] - dx, p[1]] : [p[0] - dx, p[1], p[2]];
-  return features.map((f) => {
-    if (f.kind === "tree") {
-      return { ...f, at: s(f.at) };
+/** The features with every point mapped by `f`. */
+function mapPoints(
+  features: readonly PlanFeature[],
+  f: (p: PlanPoint) => PlanPoint
+): PlanFeature[] {
+  return features.map((feature) => {
+    if (feature.kind === "tree") {
+      return { ...feature, at: f(feature.at) };
     }
-    if (f.kind === "area") {
-      return { ...f, rings: f.rings.map((r) => r.map(s)) };
+    if (feature.kind === "area") {
+      return { ...feature, rings: feature.rings.map((r) => r.map(f)) };
     }
     return {
-      ...f,
-      triangles: f.triangles.map(([a, b, c]) => [s(a), s(b), s(c)] as const),
+      ...feature,
+      triangles: feature.triangles.map(
+        ([a, b, c]) => [f(a), f(b), f(c)] as const
+      ),
     };
   });
+}
+
+/** A point of UTM zone `from` (its easting maybe zone-prefixed) in the
+ *  site's `to`; heights kept. */
+function carryOver(from: number, to: number): (p: PlanPoint) => PlanPoint {
+  const zone = utmZone(from) ?? 0;
+  return (p) => {
+    const east = p[0] > 1e6 ? p[0] - zone * 1e6 : p[0];
+    const ll = utmToLatLng(from, east, p[1]);
+    const at = ll && latLngToUtm(to, ll.lat, ll.lng);
+    return at ? [at.x, at.y, p[2]] : p;
+  };
+}
+
+/** The layers in the site's coordinates: one in the other German UTM zone
+ *  carried over, one in a CRS city walk does not read left out (named). */
+function inSite(
+  layers: readonly PlanLayer[],
+  epsg: number
+): { features: PlanFeature[]; carried: boolean; foreign: string[] } {
+  const features: PlanFeature[] = [];
+  const foreign: string[] = [];
+  let carried = false;
+  for (const layer of layers) {
+    if (layer.epsg === null || layer.epsg === epsg) {
+      features.push(...layer.features);
+    } else if (utmZone(layer.epsg) !== null) {
+      features.push(...mapPoints(layer.features, carryOver(layer.epsg, epsg)));
+      carried = true;
+    } else {
+      foreign.push(`${layer.name} (EPSG:${layer.epsg})`);
+    }
+  }
+  return { features, carried, foreign };
 }
 
 /** The plan's box in plan (x, y). */
@@ -282,7 +351,7 @@ export async function readPlan(
   files: readonly File[],
   epsg: number,
   heightAt: (x: number, y: number) => number | null
-): Promise<{ root: Object3D; note: string }> {
+): Promise<{ root: Object3D; note: string; heightsKnown: boolean }> {
   let read: Awaited<ReturnType<typeof readFeatures>>;
   try {
     read = await readFeatures(main, files);
@@ -293,15 +362,13 @@ export async function readPlan(
     const message = error instanceof Error ? error.message : String(error);
     throw new PlanError(`Der Plan ließ sich nicht lesen (${message}).`);
   }
-  if (read.epsg !== null && read.epsg !== epsg && utmZone(read.epsg) === null) {
-    throw new PlanError(
-      `Der Plan ist in EPSG:${read.epsg}; city walk liest ETRS89/UTM (EPSG:${epsg}). Bitte in EPSG:${epsg} exportieren.`
-    );
-  }
-  let features = read.features;
+  const site = inSite(read.layers, epsg);
+  let features = site.features;
   if (features.length === 0) {
     throw new PlanError(
-      "Im Plan fand sich nichts Darstellbares: keine Schraffuren, Flächen, Bäume oder Geländedreiecke."
+      site.foreign.length > 0
+        ? `Der Plan ist in ${site.foreign.join(", ")}; city walk liest ETRS89/UTM (EPSG:${epsg}). Bitte in EPSG:${epsg} exportieren.`
+        : "Im Plan fand sich nichts Darstellbares: keine Schraffuren, Flächen, Bäume oder Geländedreiecke."
     );
   }
   const box = planBox(features);
@@ -311,7 +378,7 @@ export async function readPlan(
   );
   const zone = utmZone(epsg) ?? 0;
   if (geo?.zonePrefixed) {
-    features = shiftEast(features, zone * 1e6);
+    features = mapPoints(features, (p) => [p[0] - zone * 1e6, p[1], p[2]]);
   }
   const origin: [number, number] = geo
     ? [Math.round(geo.east), Math.round(geo.north)]
@@ -340,8 +407,13 @@ export async function readPlan(
   // the plan's origin in the design frame (x east, z south); doubles
   root.matrixAutoUpdate = false;
   root.matrix.makeTranslation(origin[0], 0, -origin[1]);
-  return {
-    root,
-    note: planNote(counts, read.unclassified, geo !== null, mesh.undraped),
-  };
+  let note = planNote(counts, read.unclassified, geo !== null, mesh.undraped);
+  if (site.carried) {
+    note += ` Aus der anderen UTM-Zone nach EPSG:${epsg} umgerechnet.`;
+  }
+  if (site.foreign.length > 0) {
+    note += ` Ausgelassen (anderes Bezugssystem): ${site.foreign.join(", ")}.`;
+  }
+  // no ground under it and no heights of its own: its 0 is not NHN
+  return { root, note, heightsKnown: mesh.draped > 0 || mesh.owned > 0 };
 }

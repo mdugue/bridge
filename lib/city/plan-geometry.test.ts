@@ -234,5 +234,7 @@ describe("planClass", () => {
     expect(planClass("Betonpflaster")).toBe("paving");
     expect(planClass("Gebäude Neubau")).toBe("building");
     expect(planClass("Kante")).toBeNull();
+    expect(planClass("L-STREET-PAVING")).toBe("road");
+    expect(planClass("TREES_NEW")).toBe("tree");
   });
 });

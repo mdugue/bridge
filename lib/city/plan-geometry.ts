@@ -60,9 +60,12 @@ export interface PlanMesh {
   groups: PlanGroup[];
   /** the plan's origin in its own coordinates (x east, y north) */
   origin: [number, number];
-  /** how many vertices took the ground's height, and how many found none */
+  /** how many vertices took the ground's height, how many found none, and
+   *  how many kept the plan's own: with none of the first and the last,
+   *  its heights say nothing (design-plan.ts) */
   draped: number;
   undraped: number;
+  owned: number;
 }
 
 /** A tree's crown and height where the plan gives none (m). */
@@ -364,8 +367,18 @@ function drapeEdge(areas: readonly Area[]): number {
 class PlanGround {
   draped = 0;
   undraped = 0;
+  /** vertices that kept the plan's own height */
+  owned = 0;
   private lowest = Number.POSITIVE_INFINITY;
   constructor(private readonly heightAt: Height) {}
+  /** the plan's own height at a point, counted */
+  own(p: PlanPoint): number | null {
+    const h = ownHeight(p);
+    if (h !== null) {
+      this.owned++;
+    }
+    return h;
+  }
   /** the ground at a point, or null */
   at(p: PlanPoint): number | null {
     const h = this.heightAt(p[0], p[1]);
@@ -383,13 +396,31 @@ class PlanGround {
   }
 }
 
+/** A ring's box in plan: x0, y0, x1, y1. */
+type Box = [number, number, number, number];
+
+function boxOf(ring: readonly PlanPoint[]): Box {
+  const box: Box = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [x, y] of ring) {
+    box[0] = Math.min(box[0], x);
+    box[1] = Math.min(box[1], y);
+    box[2] = Math.max(box[2], x);
+    box[3] = Math.max(box[3], y);
+  }
+  return box;
+}
+
 /** How far an area drawn into another lies above it (m). */
 const NEST_LIFT_M = 0.1;
 
 /** How many of the larger areas (`outers` before `k`, largest first)
  *  hold area `k`: a square in a lawn lies above it, a bed in the square
  *  above both, whatever their classes. */
-function nestingDepth(outers: readonly PlanPoint[][], k: number): number {
+function nestingDepth(
+  outers: readonly PlanPoint[][],
+  boxes: readonly Box[],
+  k: number
+): number {
   const ring = outers[k];
   if (ring.length === 0) {
     return 0;
@@ -401,7 +432,15 @@ function nestingDepth(outers: readonly PlanPoint[][], k: number): number {
   const py = y + (y1 - y) * 0.01;
   let depth = 0;
   for (let i = 0; i < k; i++) {
-    if (inside(outers[i], px, py)) {
+    const b = boxes[i];
+    // the box first: a plan of thousands of hatches asks few rings
+    if (
+      px >= b[0] &&
+      px <= b[2] &&
+      py >= b[1] &&
+      py <= b[3] &&
+      inside(outers[i], px, py)
+    ) {
       depth++;
     }
   }
@@ -419,16 +458,17 @@ function writeAreas(
   const laid: { w: GroupWriter; tri: Tri; y: number[]; lift: number }[] = [];
   const sorted = [...areas].sort((a, b) => areaSize(b) - areaSize(a));
   const outers = sorted.map((f) => openRing(f.rings[0] ?? []));
+  const boxes = outers.map(boxOf);
   sorted.forEach((f, rank) => {
     const cls = f.cls ?? "other";
     const lift =
-      PLAN_LOOKS[cls].lift + nestingDepth(outers, rank) * NEST_LIFT_M;
+      PLAN_LOOKS[cls].lift + nestingDepth(outers, boxes, rank) * NEST_LIFT_M;
     const cuts: Tri[] = [];
     for (const tri of triangulate(f.rings)) {
       cut(tri, edge, cuts);
     }
     for (const tri of cuts) {
-      const y = tri.map((p) => ownHeight(p) ?? ground.at(p) ?? Number.NaN);
+      const y = tri.map((p) => ground.own(p) ?? ground.at(p) ?? Number.NaN);
       laid.push({ w: writer(cls), tri, y, lift });
     }
   });
@@ -472,7 +512,7 @@ export function planMesh(
     writer
   );
   const groundOr = (p: PlanPoint) =>
-    ownHeight(p) ?? ground.at(p) ?? ground.fallback;
+    ground.own(p) ?? ground.at(p) ?? ground.fallback;
   for (const f of areas.filter(isBlock)) {
     const low = Math.min(...openRing(f.rings[0] ?? []).map(groundOr));
     writeBuilding(writer("building"), f.rings, low, f.height ?? 0);
@@ -491,12 +531,7 @@ export function planMesh(
       const w = writer(f.cls ?? "terrain");
       for (const raw of f.triangles) {
         const t = anticlockwise(raw);
-        w.triangle(
-          t[0],
-          t[1],
-          t[2],
-          t.map((p) => p[2] ?? groundOr(p))
-        );
+        w.triangle(t[0], t[1], t[2], t.map(groundOr));
       }
     }
   }
@@ -511,5 +546,6 @@ export function planMesh(
     origin,
     draped: ground.draped,
     undraped: ground.undraped,
+    owned: ground.owned,
   };
 }
