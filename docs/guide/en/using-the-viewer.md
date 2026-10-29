@@ -382,6 +382,19 @@ The button in the corner opens a panel with three tabs.
   *Zurück* move between the stops, × ends the walk and gives the picture
   style and the time back. On a phone the card sits at the top and folds
   its text away. How they are written: [walks.md](../../walks.md).
+- **Frag die Stadt** (ask the city) — questions about the city in your
+  own words ("Who built the Frauenkirche?", "What is in front of me?",
+  "What does this look like in the evening?"). A language model searches
+  what the city model knows — the buildings' names, addresses, use and
+  height, the landmarks with what Wikidata says of them —, flies the view
+  to the place, sets the time, picture style or a data layer where it
+  helps, and answers in a few sentences with its source. Under each
+  answer it lists what it looked up and did; every answer is marked *KI*
+  (AI). It runs on your own key from a provider (Anthropic, OpenAI,
+  OpenRouter or the Vercel AI Gateway) and at your cost, mostly under a
+  cent per question; the key stays in your browser
+  ([privacy](/datenschutz#frag-die-stadt)). Also from *Fragen* in the
+  toolbar.
 - **Steuerung** ("controls") — the full controls table, folded until you
   open it (the bar over the scene shows the first few).
 

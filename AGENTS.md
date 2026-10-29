@@ -278,6 +278,20 @@ config change.
     *Spaziergänge* and the card that tells a stop — narration marked as
     Claude's, every claim with its source; the shape and the checks are
     `lib/city/walks.ts`, the writing guide `docs/walks.md`)
+  - *Frag die Stadt* (ADR 0056 — the chat on the visitor's own key):
+    `ask-city.tsx` (the card, its own chunk loaded on first open: key
+    form, conversation, each answer marked *KI* with the tools it used),
+    `ask-scene.ts` (the scene tools bound to the viewer: pose, glide,
+    time, style, data layers), `ask-key.ts` (the key in session or local
+    storage); the server is `app/api/frag/route.ts` (one stateless turn,
+    SSE; `FRAG_SECRET` signs the key check's token, `FRAG_FAKE=1` a
+    scripted model for local tests only) and `app/api/schluessel/`
+    (the key check); the shared core is `lib/city/ask-city.ts`
+    (providers, curated models, caps, the fixed prompt), `ask-tools.ts`
+    (the nine tools), `ask-knowledge.ts` (the Stadtwissen answers, read
+    from `.stadtwissen/<site>/`, which `prepare-sites.ts` copies there and
+    `next.config.ts` traces into the function), `ask-run.ts` (the agent
+    loop), `ask-token.ts`, `ask-view.ts`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers,
     `sceneMaterial` for the scene-wide shared node materials)
   - the twin (ADR 0042): `inquiry-probe.ts` (what a click, a long press
@@ -1173,7 +1187,8 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 
 ## When in doubt, ask before
 
-- Introducing a backend / stateful API route
+- Introducing a backend / stateful API route (the one server function,
+  `/api/frag`, is stateless: ADR 0056)
 - Adding a heavy dependency (map/tiling library, a second renderer)
 - Bringing back a second render path (WebGLRenderer, GLSL), or patching
   three's renderer internals: ADR 0027 decided against both

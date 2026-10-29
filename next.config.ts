@@ -22,6 +22,11 @@ const nextConfig: NextConfig = {
   // folders would ride along in every server function — seven sites are
   // ~340 MB, past a host's function size limit (Vercel: 250 MB).
   outputFileTracingExcludes: { "/**": ["public/data/*/**/*"] },
+  // ...except a copy of each site's Stadtwissen, which the chat's server
+  // tools read (ADR 0056; scripts/prepare-sites.ts writes it): a few MB a
+  // site, in that one function (the key is matched as a substring: no
+  // other route's path may contain it).
+  outputFileTracingIncludes: { "/api/frag": ["./.stadtwissen/**/*"] },
   reactCompiler: true,
   experimental: {
     // The React Compiler's Rust port, run natively inside Turbopack in place

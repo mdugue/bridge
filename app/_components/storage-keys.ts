@@ -22,10 +22,14 @@ export const STORAGE_KEYS = {
   reportsDeclined: "crash-reports.declined",
   /** the device's safety level (gpu-safety.ts, ADR 0046) */
   gpuSafety: "gpu-safety",
+  /** Frag die Stadt's key, where the visitor asked to keep it (ask-key.ts) */
+  askKey: "frag-die-stadt",
 } as const;
 
 /** Session storage: gone with the tab. */
 export const SESSION_KEYS = {
   /** the view a GPU recovery returns to (gpu-recovery.ts) */
   gpuRecovery: "gpu-recovery",
+  /** Frag die Stadt's key for this tab (ask-key.ts) */
+  askKey: "frag-die-stadt",
 } as const;

@@ -71,8 +71,8 @@ Neues Rathaus was marked as the Alte Reformierte Kirche that stood there
 until 1894. An excerpt of what Wikidata states about each landmark
 (architect, style, inception, height, heritage status, what it is named
 after …) is kept with the city's data — fetched once, not by your
-browser — as material for the walks and, later, for questions in
-words.
+browser — as material for the walks and for *Frag die Stadt*, the
+questions in words.
 
 **Landeshauptstadt Dresden** — the city itself. Its street-tree register
 (*Stadtbaumkataster*) lists about 124,000 municipal trees with species,

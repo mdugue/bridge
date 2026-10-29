@@ -17,6 +17,7 @@ import { spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
+  copyFileSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -32,6 +33,11 @@ import {
   siteDataBase,
 } from "../lib/city/site-index";
 import { siteReport } from "../lib/city/site-report";
+import {
+  SERVER_WISSEN_DIR,
+  STADTWISSEN_FILE,
+  type StadtwissenIndex,
+} from "../lib/city/stadtwissen";
 import { type DataManifest, MANIFEST_FILE, tileIds } from "../lib/city/tile";
 import { type SiteId, SITES, siteById } from "../sites";
 import {
@@ -236,6 +242,7 @@ writeFileSync(
   join(OUT_DIR, SITE_INDEX_FILE),
   `${JSON.stringify(index, null, 2)}\n`
 );
+publishServerWissen(ids);
 // Anything else at the top of public/data is a site no longer built, or the
 // single-site layout that came before (its files sat there directly).
 let pruned = 0;
@@ -248,3 +255,33 @@ for (const entry of readdirSync(OUT_DIR)) {
 log(
   `${ids.length} site(s) in public/data${pruned > 0 ? `, ${pruned} stale entries pruned` : ""}`
 );
+
+/**
+ * The Stadtwissen again, outside public/, for the chat's server tools
+ * (ADR 0056; next.config.ts traces this folder into the chat's function
+ * and no other): the index and each tile's directory under its published
+ * name. Rewritten whole, so a site no longer built leaves nothing.
+ */
+function publishServerWissen(siteIds: readonly SiteId[]): void {
+  const root = join(process.cwd(), SERVER_WISSEN_DIR);
+  rmSync(root, { recursive: true, force: true });
+  for (const id of siteIds) {
+    const from = join(OUT_DIR, id);
+    const manifest = JSON.parse(
+      readFileSync(join(from, MANIFEST_FILE), "utf8")
+    ) as DataManifest;
+    const indexFile = manifest.files[STADTWISSEN_FILE];
+    if (!indexFile) {
+      continue;
+    }
+    const to = join(root, id);
+    mkdirSync(to, { recursive: true });
+    copyFileSync(join(from, indexFile), join(to, STADTWISSEN_FILE));
+    const index = JSON.parse(
+      readFileSync(join(from, indexFile), "utf8")
+    ) as StadtwissenIndex;
+    for (const tile of index.tiles) {
+      copyFileSync(join(from, tile.file), join(to, tile.file));
+    }
+  }
+}
