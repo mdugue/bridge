@@ -107,7 +107,8 @@ async function designBlockGlb(at: [number, number, number]) {
 
 /**
  * The same block as an IFC4 export in millimetres: drawn about its own
- * origin, put at `east`/`north`/`height` by its IfcMapConversion.
+ * origin, put at `east`/`north`/`height` (metres, its map unit) by its
+ * IfcMapConversion.
  */
 function designBlockIfc(east: number, north: number, height: number) {
   const lines = [
@@ -121,7 +122,7 @@ function designBlockIfc(east: number, north: number, height: number) {
     "IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)",
     "IFCUNITASSIGNMENT((#8))",
     "IFCPROJECT('0YvctVUKr0kugbFTf53O9L',$,'Test',$,$,$,$,(#6),#9)",
-    "IFCPROJECTEDCRS('EPSG:25833',$,$,$,$,$,$)",
+    "IFCPROJECTEDCRS('EPSG:25833',$,$,$,$,$,#25)",
     `IFCMAPCONVERSION(#6,#11,${east}.,${north}.,${height}.,1.,0.,1.)`,
     "IFCLOCALPLACEMENT($,#4)",
     "IFCSITE('1YvctVUKr0kugbFTf53O9L',$,'Site',$,$,#13,$,$,.ELEMENT.,$,$,$,$,$)",
@@ -135,6 +136,8 @@ function designBlockIfc(east: number, north: number, height: number) {
     "IFCLOCALPLACEMENT(#13,#4)",
     "IFCBUILDINGELEMENTPROXY('3YvctVUKr0kugbFTf53O9L',$,'Block',$,$,#22,#21,$,$)",
     "IFCRELCONTAINEDINSPATIALSTRUCTURE('5YvctVUKr0kugbFTf53O9L',$,$,$,(#23),#14)",
+    // the map's unit: without it the eastings would be the project's mm
+    "IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.)",
   ];
   return [
     "ISO-10303-21;",

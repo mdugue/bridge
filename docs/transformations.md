@@ -4640,10 +4640,12 @@ GPU**.
   doubles. An IFC is tessellated by web-ifc (`design-ifc.ts`, its .wasm
   served by the site itself), spaces and openings left out, a material
   per element colour; its `IfcMapConversion` (`◎ detected`; the other
-  German UTM zone carried over through lat/lng, other CRSs not read) or,
-  failing that, its IfcSite's latitude and longitude turned by the
-  context's TrueNorth (`≈ assumed`: approximate, the panel says so) put
-  its origin in the Land's coordinates (`lib/city/ifc-georef.ts`). Its place is `◎ detected` from its own coordinates where they
+  German UTM zone carried over through lat/lng, other CRSs not read;
+  its values in the CRS's MapUnit, else the project's length unit) or,
+  failing that, its IfcSite's latitude and longitude at the site's own
+  placement, turned by the context's TrueNorth (`≈ assumed`: approximate, the panel says so) put
+  its origin in the Land's coordinates (`lib/city/ifc-georef.ts`);
+  geometry already in them keeps its place. Its place is `◎ detected` from its own coordinates where they
   are the site's UTM zone (an easting in X, plain or zone-prefixed, a
   northing in −Z; `lib/city/design-placement.ts`), its own Y kept as NHN
   where the ground under it agrees within 40 m; without one it is

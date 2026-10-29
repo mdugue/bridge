@@ -58,7 +58,8 @@ unannounced (ADR 0043).
 - The site raster (2 MB at most) is taken from the tile cache with the
   design, so a phone's memory does not grow.
 - An IFC's kernel memory is freed once the model is read; a phone reads
-  IFC files up to 80 MB, the tessellated model then weighed like any
+  IFC files up to 80 MB, a desktop up to 512 MB (past that web-ifc's
+  32-bit heap aborts), the tessellated model then weighed like any
   other.
 - A building hidden by a design and demolished meanwhile stays gone when
   the design leaves.

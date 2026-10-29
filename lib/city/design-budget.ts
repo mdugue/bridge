@@ -45,10 +45,13 @@ const mb = (bytes: number) =>
  * The largest file a tier parses where the reader builds the whole model
  * in memory before it is weighed — an IFC in web-ifc's heap, a Rhino file
  * in rhino3dm's (bytes): those go while reading, but a phone's tab must
- * survive them.
+ * survive them. A desktop's is half a gigabyte: the file is held twice
+ * (its bytes and their copy in the 32-bit wasm heap, at most 4 GB) beside
+ * its tessellation, and past that the read fails as a memory abort rather
+ * than with this sentence.
  */
 export const DESIGN_FILE_LIMITS: Readonly<Record<DesignTier, number>> = {
-  desktop: 1024 * MB,
+  desktop: 512 * MB,
   mobile: 80 * MB,
 };
 
