@@ -274,6 +274,10 @@ config change.
     *Verschattungsstudie*: tiles, legend strip, download); the math is
     `lib/city/model-view.ts`, `lib/city/section.ts`,
     `lib/city/image-export.ts`
+  - the walks (ADR 0053): `walk-player.tsx` (the Erkunden panel's
+    *Spaziergänge* and the card that tells a stop — narration marked as
+    Claude's, every claim with its source; the shape and the checks are
+    `lib/city/walks.ts`, the writing guide `docs/walks.md`)
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers,
     `sceneMaterial` for the scene-wide shared node materials)
   - the twin (ADR 0042): `inquiry-probe.ts` (what a click, a long press
@@ -361,7 +365,11 @@ config change.
   ADR 0052), `platform-clearance.ts` (a platform cut back to its edge
   distance from the tracks, a DLM centreline off the platforms) +
   `track-formation.ts` (a LoD2 top a track runs on lowered to its bed),
-  `passages.ts` (a cut under a deck opened in the terrain), `tile.ts` (each
+  `passages.ts` (a cut under a deck opened in the terrain),
+  `stadtwissen.ts` (what the twin knows as files for agents: the per-tile
+  directory of named buildings and monuments, the landmarks with their
+  Wikidata excerpt, search — ADR 0053) + `walks.ts` (the written walks:
+  a stop's view, today's notes, the checks), `tile.ts` (each
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`
   units alongside
@@ -450,7 +458,14 @@ config change.
   `sentry-release.ts` (after `next build`: the build's Sentry release,
   its commit and deploy — a no-op without `SENTRY_AUTH_TOKEN`),
   `render-diagrams.ts`, `docs-matrix.ts` (`bun run docs:matrix`, the
-  generated *Sources by city* pages)
+  generated *Sources by city* pages); the Stadtwissen and the walks
+  (ADR 0053): `bake-stadtwissen.ts` (run by `prepare-data.ts`),
+  `fetch-stadtwissen.ts <site>` (the committed Wikidata excerpt,
+  `data/<site>/wissen/wikidata.json`), `stadtwissen.ts <site>
+  such|nah|wahrzeichen|quellen` (search it), `walks.ts <site>
+  ground|shots|check` (a walk's DGM ground, its snapshots, its checks;
+  the walks are `data/<site>/walks/*.json`, `walks.test.ts` holds them to
+  the data)
 - `data/<site>/` — the site's data: `dgm/`, `cityjson/` (build sources),
   `dlm/`, `dop/` (derived), `provenance.json`. Dresden, Grimma, Hamburg,
   Leipzig, Meißen, München and Unna are committed (each un-ignored by name

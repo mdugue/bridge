@@ -20,6 +20,7 @@ pages follow.
 | a **developer** new to the repo | [AGENTS.md](../AGENTS.md) for stack, commands and gotchas, then [rendering.md](./rendering.md) and [data-pipeline.md](./data-pipeline.md); the current architecture is recorded in ADRs [0023](./adr/0023-land-cover-colours-painted-at-runtime.md) (runtime palette), [0024](./adr/0024-site-streams-as-3d-tiles.md) (3D Tiles streaming), [0025](./adr/0025-bakes-are-one-python-package.md) (the Python bakes), [0026](./adr/0026-one-site-config-per-build.md) (the site config) and [0027](./adr/0027-webgpu-renderer-and-tsl.md) (WebGPURenderer, TSL node materials) |
 | about to **change a data → feature transformation** | [data-flow.md](./data-flow.md) + [transformations.md](./transformations.md) (and the rule below) |
 | about to **render another place** | [portability.md](./portability.md), the site config ([ADR 0026](./adr/0026-one-site-config-per-build.md)) and [plan 017](./plans/017-germany-wide-sites.md) |
+| about to **write a walk** (the *Spaziergänge*) | [walks.md](./walks.md): what makes a walk worth taking, the file, the Stadtwissen to write from, the checks ([ADR 0053](./adr/0053-stadtwissen-and-written-walks.md)) |
 | wondering **why** something is the way it is | [adr/](./adr/README.md), the architecture decision records — including the move to WebGPU + TSL node materials ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md)) |
 | looking for **what is planned or was rejected** | [plans/](./plans/README.md), the implementation plans, backlog and audit history — open now: [019](./plans/019-gpu-verification.md) (the one GPU checklist), [021](./plans/021-wissen-astro-starlight.md) (`/wissen` on Astro Starlight) and the plans of the 2026-10-01 audit — the [index](./plans/README.md) gives their order |
 | looking for **data we do not use yet** | [data-streams.md](./data-streams.md), a measured survey of every source with a ranking |
@@ -38,6 +39,7 @@ docs/
 ├── data-flow.md           source → feature provenance diagram + feature table
 ├── transformations.md     the ledger: every transformation built / experimental / planned / discontinued, with why
 ├── portability.md         degradation matrix + porting checklist for other locations
+├── walks.md               writing a walk: what makes one worth taking, the file, the checks
 ├── data-streams.md        what the sources carry that no bake reads yet (survey, 2026-09-27)
 ├── adr/                   architecture decision records (one decision per file, numbered)
 ├── plans/                 implementation plans: open work, condensed history, backlog, audit findings

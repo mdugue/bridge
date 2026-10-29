@@ -72,7 +72,11 @@ und der Viewer färbt sie in einem gedämpften Ton dieses Materials, wo
 OpenStreetMap keines nennt. Ein Bauwerk, das Wikidata als abgerissen oder
 zerstört führt, bleibt außen vor, außer OpenStreetMap verknüpft ein
 stehendes Gebäude damit — vorher war Dresdens Neues Rathaus als die Alte
-Reformierte Kirche markiert, die bis 1894 dort stand.
+Reformierte Kirche markiert, die bis 1894 dort stand. Ein Auszug dessen,
+was Wikidata über jedes Wahrzeichen sagt (Architekt, Stil, Baubeginn,
+Höhe, Denkmalstatus, wonach es benannt ist …), liegt bei den Daten der
+Stadt — einmal abgerufen, nicht von deinem Browser — als Material für
+die Spaziergänge und später für Fragen in Worten.
 
 **Landeshauptstadt Dresden** — die Stadt selbst. Ihr Stadtbaumkataster
 verzeichnet rund 124.000 städtische Bäume mit Art, Höhe,

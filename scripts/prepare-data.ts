@@ -58,6 +58,18 @@ import {
   shrinkClassRaster,
 } from "../lib/city/ground-plate";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
+import {
+  STADTWISSEN_FILE,
+  type StadtwissenIndex,
+  WIKIDATA_FACTS_FILE,
+  type WikidataFile,
+} from "../lib/city/stadtwissen";
+import {
+  type Walk,
+  WALKS_DIR,
+  WALKS_FILE,
+  walkBundle,
+} from "../lib/city/walks";
 import { decodeGreyPng } from "../lib/city/png-raster";
 import type {
   CanopyFeature,
@@ -167,6 +179,7 @@ import {
   readLockfile,
 } from "./bake-sources";
 import { cachedEntry, writeEntry } from "./bake-cache";
+import { stadtwissenIndex, stadtwissenTile } from "./bake-stadtwissen";
 import {
   type Dgm,
   fenceMesh,
@@ -1719,21 +1732,98 @@ function readProvenance(): ProvenanceRecord {
   }
   return readJson<ProvenanceRecord>(path);
 }
-const provenanceFile = publish(
-  PROVENANCE_FILE,
-  utf8(
-    siteProvenance(
-      readProvenance(),
-      baked.map((t) => t.id),
-      SITE
-    )
-  )
+const provenance = siteProvenance(
+  readProvenance(),
+  baked.map((t) => t.id),
+  SITE
 );
+const provenanceFile = publish(PROVENANCE_FILE, utf8(provenance));
 // The trams' timetable, site-wide (pipeline/bake/transit.py): optional.
 const tramSource = at(tramTimetableSource(siteDataDir(SITE)));
 const trams = existsSync(tramSource)
   ? publish(TRAM_TIMETABLE_FILE, readFileSync(tramSource))
   : undefined;
+
+// --- the walks --------------------------------------------------------------------
+// Erzählte Spaziergänge (lib/city/walks.ts, ADR 0053): the site's written
+// walks, checked and bundled into one file the HUD loads when it lists them.
+
+const walksDir = at(`${siteDataDir(SITE)}/${WALKS_DIR}`);
+const walkFiles = existsSync(walksDir)
+  ? readdirSync(walksDir)
+      .filter((name) => name.endsWith(".json"))
+      .sort()
+  : [];
+const walks =
+  walkFiles.length > 0
+    ? publish(
+        WALKS_FILE,
+        utf8(
+          walkBundle(
+            SITE.id,
+            walkFiles.map((name) => readJson<Walk>(join(walksDir, name)))
+          )
+        )
+      )
+    : undefined;
+
+// --- the Stadtwissen ---------------------------------------------------------------
+// What the twin knows, readable without the scene (scripts/bake-stadtwissen.ts,
+// lib/city/stadtwissen.ts): each tile's directory of named, addressed and
+// listed buildings, and the site's index — its landmarks with the committed
+// Wikidata excerpt, the sources. For the walks' author and an agent's
+// tools; the viewer never loads it.
+
+const wikidataSource = at(`${siteDataDir(SITE)}/${WIKIDATA_FACTS_FILE}`);
+const wissenTiles: StadtwissenIndex["tiles"] = [];
+for (const tile of baked.map((t) => t.id)) {
+  const src = cityMeshSourceFiles(SITE, tile);
+  const monuments = at(
+    sideFileSource(SITE, tileArtifacts(tile).monuments.file)
+  );
+  const inputs = [at(src.city), at(src.osmBuild), at(src.landmarks), monuments];
+  const name = `stadtwissen_${tile}.json`;
+  const bytes = await cached(
+    name,
+    cacheKey(inputs, ["scripts/bake-stadtwissen.ts"]),
+    () =>
+      utf8(
+        stadtwissenTile({
+          tile,
+          city: readJson(at(src.city)),
+          osm: existsSync(at(src.osmBuild))
+            ? readJson<{ objects: Record<string, never> }>(at(src.osmBuild))
+                .objects
+            : {},
+          landmarks: landmarkFile(tile),
+          monuments: existsSync(monuments) ? readJson(monuments) : undefined,
+        })
+      )
+  );
+  wissenTiles.push({ id: tile, file: publish(name, bytes) });
+}
+publish(
+  STADTWISSEN_FILE,
+  utf8(
+    stadtwissenIndex({
+      site: SITE.id,
+      epsg: frame.epsg,
+      tiles: wissenTiles,
+      sources: {
+        lod2: provenance.sources.lod2,
+        osm: provenance.sources.osm,
+        wikidata: provenance.sources.wikidata,
+      },
+      landmarks: TILES.flatMap((tile) => {
+        const file = landmarkFile(tile);
+        return file ? [{ tile, file }] : [];
+      }),
+      wikidata: existsSync(wikidataSource)
+        ? readJson<WikidataFile>(wikidataSource)
+        : undefined,
+    })
+  )
+);
 
 const extras: TilesetExtras & PlateExtras = {
   site: SITE.id,
@@ -1760,6 +1850,7 @@ const extras: TilesetExtras & PlateExtras = {
     ask: pickFiles(sideFiles.get(t.id) ?? {}, ASK_KINDS),
   })),
   ...(trams ? { trams } : {}),
+  ...(walks ? { walks } : {}),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));
 publish(

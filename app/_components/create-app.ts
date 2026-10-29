@@ -374,7 +374,12 @@ function sceneBuffers(
 /** What the HUD knows of the site from the tileset alone (`onSiteInfo`). */
 export type SiteInfo = Pick<
   CityWalkHandle,
-  "landcoverTiles" | "landmarks" | "latLng" | "provenanceUrl" | "terrainBounds"
+  | "landcoverTiles"
+  | "landmarks"
+  | "latLng"
+  | "provenanceUrl"
+  | "terrainBounds"
+  | "walksUrl"
 >;
 
 export interface CityWalkOptions {
@@ -547,6 +552,9 @@ export interface CityWalkHandle {
   /** The provenance manifest (lib/city/provenance.ts), when the tileset
    *  names one: the inquiry card's source lines. */
   provenanceUrl: string | null;
+  /** The site's walks (lib/city/walks.ts), when the tileset names them:
+   *  the Erkunden panel's Spaziergänge. */
+  walksUrl: string | null;
   /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
   enterImmersive: () => void;
   /**
@@ -1358,6 +1366,7 @@ async function bootApp(
       ? new URL(extras.provenance, tilesetUrl).href
       : null,
     terrainBounds: siteBounds,
+    walksUrl: extras.walks ? new URL(extras.walks, tilesetUrl).href : null,
   };
   opts.onSiteInfo?.(siteInfo);
   const sunRig = createSunRig(
