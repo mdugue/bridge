@@ -4634,10 +4634,16 @@ GPU**.
   the site's attribution lines (`siteAttribution`) — drawn into the PNG,
   never into the scene (ADR 0042).
 - **A planner's design in the city** `❝ taken` `◎ detected` `≈ assumed` —
-  a glTF the visitor loads in the sidebar's *Entwurf* panel, read on the
-  device and never uploaded (`design-read.ts`; ADR 0054): its nodes and
+  a glTF or IFC the visitor loads in the sidebar's *Entwurf* panel, read
+  on the device and never uploaded (`design-read.ts`; ADR 0054): its nodes and
   instances flattened into one geometry about its anchor, moved there in
-  doubles. Its place is `◎ detected` from its own coordinates where they
+  doubles. An IFC is tessellated by web-ifc (`design-ifc.ts`, its .wasm
+  served by the site itself), spaces and openings left out, a material
+  per element colour; its `IfcMapConversion` (`◎ detected`; the other
+  German UTM zone carried over through lat/lng, other CRSs not read) or,
+  failing that, its IfcSite's latitude and longitude turned by the
+  context's TrueNorth (`≈ assumed`: approximate, the panel says so) put
+  its origin in the Land's coordinates (`lib/city/ifc-georef.ts`). Its place is `◎ detected` from its own coordinates where they
   are the site's UTM zone (an easting in X, plain or zone-prefixed, a
   northing in −Z; `lib/city/design-placement.ts`), its own Y kept as NHN
   where the ground under it agrees within 40 m; without one it is
