@@ -11,6 +11,9 @@ import { dirname, join } from "node:path";
 /** The served name of each module and the package file it is copied from. */
 export const WASM_FILES: Readonly<Record<string, string>> = {
   "web-ifc.wasm": "web-ifc/web-ifc.wasm",
+  // three's Rhino3dmLoader fetches both from its library path
+  "rhino3dm/rhino3dm.js": "rhino3dm/rhino3dm.js",
+  "rhino3dm/rhino3dm.wasm": "rhino3dm/rhino3dm.wasm",
 };
 
 const root = join(import.meta.dir, "..");

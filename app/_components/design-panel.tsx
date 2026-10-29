@@ -27,7 +27,8 @@ const SECTION_LABEL =
 
 /** What the files a planner may pick end in: the glTF, a .gltf's
  *  resources, a placement file. */
-const ACCEPT = ".glb,.gltf,.ifc,.bin,.png,.jpg,.jpeg,.webp,.json";
+const ACCEPT =
+  ".glb,.gltf,.ifc,.obj,.mtl,.3dm,.bin,.png,.jpg,.jpeg,.webp,.json";
 
 const SOURCE_TEXT: Record<PlacementSource, string> = {
   file: "Lage und Höhen aus der Datei (UTM, NHN).",
@@ -169,8 +170,8 @@ export function DesignPanel({
     >
       <span className={SECTION_LABEL}>Entwurf</span>
       <p className="text-[11px] text-muted-foreground leading-snug">
-        Eigenen Entwurf als glTF (.glb) oder IFC in die Stadt laden, auch
-        hierher ziehen. Die Datei bleibt auf diesem Gerät.
+        Eigenen Entwurf als glTF (.glb), IFC, OBJ oder Rhino (.3dm) in die Stadt
+        laden, auch hierher ziehen. Die Datei bleibt auf diesem Gerät.
       </p>
       <input
         accept={ACCEPT}

@@ -490,8 +490,11 @@ und das Modell behalten ihre scharfen Linien.
 - **Entwurf** — lädt einen eigenen Entwurf in die Stadt: eine glTF-Datei
   (`.glb`, oder `.gltf` mit ihrer `.bin` und den Texturen zusammen
   ausgewählt), wie sie SketchUp, Rhino, Revit, Archicad, Vectorworks oder
-  Blender exportieren, oder ein IFC-Modell (`.ifc`); auch auf das Feld
-  ziehen. Eine IFC mit Verortung (`IfcMapConversion` in ETRS89/UTM) steht
+  Blender exportieren, ein IFC-Modell (`.ifc`), ein OBJ (`.obj`, mit
+  `.mtl` und Texturen zusammen ausgewählt; gelesen als Meter, Y nach oben)
+  oder eine Rhino-Datei (`.3dm`, mit Render-Netzen gespeichert); auch auf
+  das Feld ziehen. Eine Rhino-Datei mit gesetztem Geo-Ankerpunkt steht an
+  ihrem Ort. Eine IFC mit Verortung (`IfcMapConversion` in ETRS89/UTM) steht
   von selbst an ihrem Ort; eine, die nur Breite und Länge des Grundstücks
   kennt, steht ungefähr dort, und das Feld bittet ums Prüfen. Die Datei wird nur in
   deinem Browser gelesen und nirgends hochgeladen. Stehen Landeskoordinaten

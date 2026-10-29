@@ -7,7 +7,6 @@ import {
   BufferGeometry,
   Color,
   type InstancedMesh,
-  LoadingManager,
   Matrix3,
   Matrix4,
   type Mesh,
@@ -27,12 +26,13 @@ import {
   detectGeoreference,
   type Georeference,
 } from "@/lib/city/design-placement";
+import { FormatError, pickedFiles, read3dm, readObj } from "./design-formats";
 import { IfcError, readIfc } from "./design-ifc";
 
 /**
  * Reads a design the planner dropped into the page (ADR 0054): a glTF —
- * one .glb, or a .gltf with its .bin and textures picked together — or an
- * IFC (design-ifc.ts) into
+ * one .glb, or a .gltf with its .bin and textures picked together —, an
+ * IFC (design-ifc.ts), an OBJ or a Rhino .3dm (design-formats.ts) into
  * one geometry about its anchor (design-placement.ts `designAnchor`), with
  * a group per material of the file. Everything stays on the device: the
  * file is read from the File the browser handed over, and a .gltf's
@@ -83,6 +83,8 @@ export class DesignError extends Error {}
 const FORMATS = {
   gltf: /\.(glb|gltf)$/i,
   ifc: /\.ifc$/i,
+  obj: /\.obj$/i,
+  rhino: /\.3dm$/i,
 } as const;
 type DesignFormat = keyof typeof FORMATS;
 
@@ -110,24 +112,26 @@ async function parseDesign(
   tier: DesignTier
 ): Promise<{ root: Object3D; note: string | null }> {
   const format = designFormat(main.name);
-  if (format === "ifc") {
-    const tooLarge = judgeFile(main.size, tier);
-    if (tooLarge) {
-      throw new DesignError(tooLarge);
-    }
-    try {
-      return await readIfc(main, epsg);
-    } catch (error) {
-      throw error instanceof IfcError ? new DesignError(error.message) : error;
-    }
+  if (format === "gltf") {
+    return { root: await parseGltf(main, files), note: null };
   }
-  return { root: await parseGltf(main, files), note: null };
-}
-
-/** A URL's last path part, as the picked files are named. */
-function baseName(url: string): string {
-  const path = url.split(/[?#]/)[0];
-  return decodeURIComponent(path.slice(path.lastIndexOf("/") + 1));
+  // the others are read whole before they can be weighed
+  const tooLarge = judgeFile(main.size, tier);
+  if (tooLarge) {
+    throw new DesignError(tooLarge);
+  }
+  try {
+    if (format === "ifc") {
+      return await readIfc(main, epsg);
+    }
+    return format === "rhino"
+      ? await read3dm(main, epsg)
+      : await readObj(main, files);
+  } catch (error) {
+    throw error instanceof IfcError || error instanceof FormatError
+      ? new DesignError(error.message)
+      : error;
+  }
 }
 
 /** Why the loader refused, in words; `missing`: the resources it named
@@ -151,38 +155,17 @@ async function parseGltf(
   main: File,
   files: readonly File[]
 ): Promise<Object3D> {
-  const urls = new Map<string, string>();
-  for (const f of files) {
-    if (f !== main) {
-      urls.set(f.name, URL.createObjectURL(f));
-    }
-  }
-  const missing: string[] = [];
-  const manager = new LoadingManager();
-  manager.setURLModifier((url) => {
-    if (url.startsWith("blob:") || url.startsWith("data:")) {
-      return url;
-    }
-    const picked = urls.get(baseName(url));
-    if (picked) {
-      return picked;
-    }
-    // a URL that cannot be fetched: nothing leaves the page
-    missing.push(baseName(url));
-    return `refused:${baseName(url)}`;
-  });
-  const loader = new GLTFLoader(manager);
+  const picked = pickedFiles(main, files);
+  const loader = new GLTFLoader(picked.manager);
   loader.setMeshoptDecoder(MeshoptDecoder);
   try {
     const data = await main.arrayBuffer();
     const gltf = await loader.parseAsync(data, "");
     return gltf.scene;
   } catch (error) {
-    throw new DesignError(loaderReason(error, missing));
+    throw new DesignError(loaderReason(error, picked.missing));
   } finally {
-    for (const url of urls.values()) {
-      URL.revokeObjectURL(url);
-    }
+    picked.release();
   }
 }
 
@@ -431,7 +414,7 @@ export async function readDesign(
   const main = designFile(files);
   if (!main) {
     throw new DesignError(
-      "Bitte eine .glb-, .gltf- oder .ifc-Datei wählen (Export aus SketchUp, Rhino, Revit, Archicad, Vectorworks, Blender …)."
+      "Bitte eine .glb-, .gltf-, .ifc-, .obj- oder .3dm-Datei wählen (Export aus SketchUp, Rhino, Revit, Archicad, Vectorworks, Blender …)."
     );
   }
   const { root, note } = await parseDesign(main, files, epsg, tier);

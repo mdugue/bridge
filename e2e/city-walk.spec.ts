@@ -5,6 +5,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { fromArrayBuffer } from "geotiff";
 import proj4 from "proj4";
 import type { LookValues } from "../lib/city/look-controls";
+import { utmToLatLng } from "../lib/city/crs";
 import { EYE_HEIGHT } from "../lib/city/pose";
 import { tfwToBounds } from "../lib/city/tfw";
 
@@ -152,6 +153,83 @@ function designBlockIfc(east: number, north: number, height: number) {
     "END-ISO-10303-21;",
     "",
   ].join("\n");
+}
+
+/** The block as OBJ: metres, Y up, about its own origin, no place. */
+function designBlockObj() {
+  const v = [
+    [-20, 0, -15],
+    [20, 0, -15],
+    [20, 0, 15],
+    [-20, 0, 15],
+    [-20, 20, -15],
+    [20, 20, -15],
+    [20, 20, 15],
+    [-20, 20, 15],
+  ];
+  const faces = [
+    [5, 8, 7, 6],
+    [1, 2, 3, 4],
+    [4, 3, 7, 8],
+    [2, 1, 5, 6],
+    [3, 2, 6, 7],
+    [1, 4, 8, 5],
+  ];
+  return [
+    ...v.map((p) => `v ${p.join(" ")}`),
+    ...faces.map((f) => `f ${f.join(" ")}`),
+    "",
+  ].join("\n");
+}
+
+/**
+ * The block as a Rhino .3dm in millimetres, Z up, its earth anchor at
+ * (`east`, `north`) in EPSG:25833 and `height` m.
+ */
+async function designBlock3dm(east: number, north: number, height: number) {
+  const { default: rhino3dm } = await import("rhino3dm");
+  const rhino = await rhino3dm();
+  const doc = new rhino.File3dm();
+  doc.settings().modelUnitSystem = rhino.UnitSystem.Millimeters;
+  const anchor = doc.settings().earthAnchorPoint;
+  const ll = utmToLatLng(25_833, east, north);
+  anchor.earthBasepointLatitude = ll?.lat ?? 0;
+  anchor.earthBasepointLongitude = ll?.lng ?? 0;
+  anchor.earthBasepointElevation = height;
+  anchor.modelBasePoint = [0, 0, 0];
+  anchor.modelNorth = [0, 1, 0];
+  anchor.modelEast = [1, 0, 0];
+  doc.settings().earthAnchorPoint = anchor;
+  const c = [
+    [-20_000, -15_000, 0],
+    [20_000, -15_000, 0],
+    [20_000, 15_000, 0],
+    [-20_000, 15_000, 0],
+    [-20_000, -15_000, 20_000],
+    [20_000, -15_000, 20_000],
+    [20_000, 15_000, 20_000],
+    [-20_000, 15_000, 20_000],
+  ];
+  const quads = [
+    [0, 3, 2, 1],
+    [4, 5, 6, 7],
+    [0, 1, 5, 4],
+    [1, 2, 6, 5],
+    [2, 3, 7, 6],
+    [3, 0, 4, 7],
+  ];
+  // (createFromThreejsJSON takes three's Y-up and turns it to Rhino's Z-up)
+  const array = quads.flatMap((q) =>
+    [q[0], q[1], q[2], q[0], q[2], q[3]].flatMap((i) => {
+      const [x, y, z] = c[i];
+      return [x, z, -y];
+    })
+  );
+  const mesh = rhino.Mesh.createFromThreejsJSON({
+    data: { attributes: { position: { itemSize: 3, array } } },
+  });
+  doc.objects().add(mesh, new rhino.ObjectAttributes());
+  return [...doc.toByteArray()];
 }
 
 /** Starts collecting page + console errors for the whole life of the page. */
@@ -1244,6 +1322,32 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(status?.placement.base).toBeCloseTo(112, 3);
     expect(status?.triangles).toBe(12);
     expect(status?.hidden ?? 0).toBeGreaterThan(0);
+    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    expectNoErrors(errors);
+  });
+
+  test("an OBJ without a place lands in front, a Rhino file at its earth anchor", async () => {
+    const obj = await page.evaluate(async (text) => {
+      const design = window.__poc?.handle?.design;
+      await design?.load([new File([text], "block.obj")]);
+      return design?.status() ?? null;
+    }, designBlockObj());
+    expect(obj?.source).toBe("here");
+    expect(obj?.triangles).toBe(12);
+    // three's Rhino3dmLoader with rhino3dm from the site's own /wasm/
+    const rhino = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "block.3dm")]);
+        return design?.status() ?? null;
+      },
+      await designBlock3dm(412_300, 5_657_420, 112)
+    );
+    expect(rhino?.note).toContain("Geo-Ankerpunkt");
+    expect(rhino?.placement.east).toBeCloseTo(412_300, 1);
+    expect(rhino?.placement.north).toBeCloseTo(5_657_420, 1);
+    expect(rhino?.placement.base).toBeCloseTo(112, 3);
+    expect(rhino?.hidden ?? 0).toBeGreaterThan(0);
     await page.evaluate(() => window.__poc?.handle?.design.remove());
     expectNoErrors(errors);
   });
