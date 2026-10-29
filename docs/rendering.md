@@ -498,12 +498,17 @@ of Comic, Sin City, Strich and the Schwarzplan hold still (`hand` 0).
 - *Comic* — pop art in six printing inks (`POP`: paper, black, red,
   yellow, blue, green). Each surface gets one ink from its colour under a
   3 px blur: pitched roofs red when warm, else slate blue; walls yellow
-  when saturated, else the paper; the ground paper, grass green, water
-  blue; foliage green. In shade, Ben-Day dots (32 % of a ~5 px cell):
-  blue on the paper, black on an ink, printing lighter far off; near-black
-  stays black. The sky is two flat blues, the ink heavy and even. At
-  night a navy city under black dots, the lamps' pools yellow, a lit
-  window or a lamp the paper, the sky a deep blue.
+  when saturated, else the paper; the ground paper, grass green. In
+  shade, Ben-Day dots on a ~4 px cell, larger the deeper the shade (16 to
+  42 % of the cell): blue on the paper, black on an ink, printing lighter
+  far off; a pitched roof in shade gets printed stripes instead of dots;
+  near-black stays black. Foliage and water are cut-outs, decided on a
+  wider blur (7 and 9 px) because their per-pixel shading shimmers in
+  motion: a crown flat green, a deeper green in its own shade, inked at
+  its silhouette only (no creases); the river flat blue, a deeper blue in
+  a cast shadow, no dots and no black. The sky is two flat blues, the ink
+  heavy and even. At night a navy city under black dots, the lamps' pools
+  yellow, a lit window or a lamp the paper, the sky a deep blue.
 - *Film noir* — luminance through an S-curve, crushed blacks, the distance
   lifted into grey smoke, a graduated sky; faint ink. From a sun altitude
   of ~12° down to civil dusk (−6°) the exposure opens (×1.6, ×1.25 on the
@@ -554,8 +559,10 @@ of Comic, Sin City, Strich and the Schwarzplan hold still (`hand` 0).
   the paved and built ground a light neutral, green a plan green, water a
   plan blue, paint grey); the pass keeps the cool plan hues (the sun's
   warmth on the card stays white), lays the sunlit side as the sheet and
-  hatches the shade with a technical pen's 45° lines on the world
-  (`hatch`), and draws with that pen — one CSS pixel, no wander, no
+  hatches the shade with a technical pen's lines on the world (`lines`):
+  ±45° by the wall's side, a shallower angle on a roof or the ground, a
+  cross layer only in deep shade, lighter on tops and thinning out from
+  150 m to 1.2 km so an overview does not fill up; it draws with that pen — one CSS pixel, no wander, no
   lifts, its creases held into the distance; after dusk an unshaded
   white sheet (a plan has no night).
 - *Schwarzplan* — the swap's third kind: an unlit black material for the

@@ -87,6 +87,10 @@ blocks that stand in front of each other.
 - The Sin City swap is a third swap program the first switch to it builds,
   like Papier's. `PostStack.compile` compiles the swap kinds a tile needs
   (`SWAP_KINDS`).
+- The sky is told from the depth buffer as anything past 99.5 % of the
+  camera's far plane (the sky dome writes no depth). A fixed distance
+  (4 km at first) treated the far city as sky, which drew a hard edge
+  past which nothing was stylized, and it moved with every flight.
 - A new style that cuts on light uses `inSun`, and a new screen uses
   `surfaceScreen`, never screen-space noise.
 
