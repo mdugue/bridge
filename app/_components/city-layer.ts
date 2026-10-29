@@ -25,6 +25,7 @@ import {
   appendTriangles,
   liveTriangles,
   takeTriangles,
+  wholeTrees,
   OBJECT_TEXEL_BANDS,
   OBJECT_TEXTURE_WIDTH,
   objectBandRows,
@@ -422,7 +423,10 @@ export function dressCity(
       }
       return true;
     },
-    setHidden: (next) => {
+    setHidden: (asked) => {
+      // a covered house goes with what hangs on it (its plinth, cornices,
+      // doors, parts): they have no footprint of their own
+      const next = wholeTrees(table.root, asked);
       const same =
         next.size === hidden.size && [...next].every((i) => hidden.has(i));
       if (same || bvhLost(geometry)) {
