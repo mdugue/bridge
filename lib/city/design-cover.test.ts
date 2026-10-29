@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  designMasks,
+  siteFloor,
   convexHull,
   coveredObjects,
   coveredShare,
@@ -66,6 +68,32 @@ describe("design cover", () => {
     }
     expect(inPlan(mask, 25, 25)).toBe(true);
     expect(inPlan(mask, 5, 5)).toBe(false);
+  });
+
+  test("the site takes the plate too, with the floor it lays, in at most maxSide cells a side", () => {
+    // a plate rising 0.4 m eastward over 50 m, a block on it
+    const plate = [
+      0, 0, 100, 50, 0, 100.4, 50, 50, 100.4, 0, 0, 100, 50, 50, 100.4, 0, 50,
+      100,
+    ];
+    const masks = designMasks(
+      [...plate, ...box(20, 20, 30, 30, 101, 110)],
+      null,
+      undefined,
+      { maxSide: 16 }
+    );
+    if (!masks) {
+      throw new Error("no masks");
+    }
+    const { plan, site } = masks;
+    expect(inPlan(plan, 5, 5)).toBe(false);
+    expect(inPlan(site, 5, 5)).toBe(true);
+    expect(site.cell).toBe(4);
+    expect(Math.max(site.cols, site.rows)).toBeLessThanOrEqual(16);
+    // the plate's own height under it, not its lowest corner's
+    expect(siteFloor(site, 2, 10)).toBeCloseTo(100.0, 1);
+    expect(siteFloor(site, 46, 10)).toBeCloseTo(100.38, 1);
+    expect(siteFloor(site, 80, 10)).toBeNull();
   });
 
   test("walls alone mark their lines", () => {

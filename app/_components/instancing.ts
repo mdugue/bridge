@@ -22,6 +22,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
+import { outOfDesignSite } from "./design-site";
 import type { F, V3, V4 } from "./shader-chunks";
 
 /**
@@ -223,7 +224,12 @@ export function instancePosition(local: V3 = positionLocal): V3 {
     if (builder.geometry.hasAttribute("normal")) {
       normalLocal.assign(transformNormal(normalLocal, m));
     }
-    return m.mul(vec4(local, 1)).xyz;
+    // an instance standing in a loaded design's site is folded into its
+    // foot (design-site.ts)
+    return outOfDesignSite(
+      m.mul(vec4(local, 1)).xyz,
+      m.mul(vec4(0, 0, 0, 1)).xyz
+    );
   })();
 }
 

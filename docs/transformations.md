@@ -4651,9 +4651,19 @@ GPU**.
   shadows; walked against. Its bytes come out of the tile cache; past
   250 000 triangles / 40 MB on a phone (3 M / 400 MB on a desktop) its
   textures go, then it is refused (`lib/city/design-budget.ts`).
+  Its **site** — the plan with its ground plate — clears what else stands
+  there (`design-site.ts`, one raster the vertex stages read): every
+  instanced set (trees, hedges, lamps, furniture, monuments) folds an
+  instance whose foot stands in it, and the terrain with its walls,
+  kerbs, stairs and fences is pressed under the lowest height the design
+  reaches in each cell (a sloping plate's slope, a house's lowest floor);
+  on the tiles under it the ground is also cut
+  where a triangle reaching out of the site lifts it through the plate.
+  The walked ground follows (`Ground.setCap`). A building's plinths,
+  cornices, doors and parts go with it (`wholeTrees`).
   **Fallback:** without coordinates, the player's place; without a
-  ground under it, base 0. **Not yet:** IFC, the landscape formats, the
-  terrain and the dressing under a design, asking it.
+  ground under it, the player's ground. **Not yet:** IFC, the landscape
+  formats, asking it; rails, tram tracks and water in a site stay.
 
 ## 🧪 Experimental
 

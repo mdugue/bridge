@@ -514,8 +514,11 @@ und das Modell behalten ihre scharfen Linien.
   Schatten, man läuft nicht durch ihn hindurch, und Modell und
   Verschattungsstudie zeigen ihn mit. Auf dem Handy darf er höchstens
   250 000 Dreiecke und 40 MB haben (am Rechner 3 Millionen und 400 MB);
-  Texturen, die nicht hineinpassen, bleiben weg. Gelände, Bäume und
-  Stadtmöbel unter dem Entwurf bleiben noch stehen.
+  Texturen, die nicht hineinpassen, bleiben weg. Mit den Gebäuden
+  verschwinden auch Bäume, Hecken, Laternen und Stadtmöbel im Grundriss
+  des Entwurfs (seine Bodenplatte eingeschlossen), und das Gelände, Mauern,
+  Bordsteine und Treppen liegen dort unter seinem Boden. Gleise und Wasser
+  bleiben.
 - **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und
   Uhrzeit, den Bildstil, den *Nebel*, den Kronen-Schalter und die
   Datenebenen als kleinen JSON-Text; einen solchen Text in das Feld
