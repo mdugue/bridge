@@ -73,6 +73,12 @@ export interface CityLayer {
   /** builds the tile's BVH in the BVH worker (bvh-client.ts): what the
    *  tiles near the camera get ahead of a ray; settles once it is built */
   prepareBvh: () => Promise<void>;
+  /** the index a demolish or a design's hiding set is on the GPU now (a
+   *  compile of the mesh, create-app.ts): until then the worker may not
+   *  take it — handed over before its upload, its buffer is gone when the
+   *  renderer first copies it. `index`: the one the compile drew (a
+   *  newer one set meanwhile stays fresh) */
+  indexUploaded: (index: BufferAttribute | null) => void;
   /** a demolish the worker's build holds back, settling once it has
    *  reached the index (null: none waits) — the shadows are drawn again then */
   held: () => Promise<void> | null;
@@ -283,6 +289,8 @@ export function dressCity(
   mesh.receiveShadow = true;
 
   const alive = new Uint8Array(count).fill(1);
+  /** an index set here that the GPU may not have yet (`indexUploaded`) */
+  let fresh = false;
   const featureIds = geometry.getAttribute("featureId");
   /** `again`: a BVH there was is built again now (else when a ray or the
    *  worker gets to it) */
@@ -298,6 +306,7 @@ export function dressCity(
         1
       )
     );
+    fresh = true;
     // A BVH is built over its index: a new index needs a new one — now
     // where there was one (a demolish picks through it), else when a ray
     // needs it.
@@ -341,6 +350,7 @@ export function dressCity(
       }
     }
     geometry.setIndex(new BufferAttribute(appendTriangles(kept, back), 1));
+    fresh = true;
     geometry.disposeBoundsTree();
     if (had) {
       geometry.computeBoundsTree();
@@ -425,13 +435,10 @@ export function dressCity(
           held = null;
         });
       } else {
-        // the BVH built again in the worker, not here in the frame: a
-        // design moved by hand re-hides on every settle (ADR 0050)
-        const had = Boolean(geometry.boundsTree);
+        // the BVH built again in the worker once the new index is on the
+        // GPU (`indexUploaded`), not here in the frame: a design moved by
+        // hand re-hides on every settle (ADR 0050)
         applyHidden(false);
-        if (had) {
-          void layer.prepareBvh().catch(() => undefined);
-        }
       }
       return true;
     },
@@ -459,7 +466,15 @@ export function dressCity(
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => ensureCityBvh(mesh),
     held: () => held,
+    indexUploaded: (uploaded) => {
+      if (uploaded !== null && uploaded === geometry.getIndex()) {
+        fresh = false;
+      }
+    },
     prepareBvh: () => {
+      if (fresh) {
+        return Promise.resolve();
+      }
       prepared ??= streamTimings
         .timed(
           "tile:bvh-worker",

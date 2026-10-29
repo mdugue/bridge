@@ -2558,11 +2558,34 @@ async function bootApp(
   // a file is loaded. The buildings it stands in for leave every loaded
   // level of their tile, and those of a tile that lands later as it lands
   // (`hideReplaced`, from the stream's change).
+  //
+  // A new index goes to the GPU in a compile of its tile before the BVH
+  // worker may take it (city-layer.ts `indexUploaded`): handed over first,
+  // its buffer was gone when the frame came to copy it.
+  const uploadIndex = (layer: CityLayer) => {
+    const upload = () => {
+      if (disposed || !stream.cities.has(layer)) {
+        return;
+      }
+      const index = layer.mesh.geometry.getIndex();
+      void postStack
+        .compile(layer.mesh)
+        .then(() => layer.indexUploaded(index))
+        .catch(() => undefined);
+    };
+    const held = layer.held();
+    if (held) {
+      void held.then(upload, upload);
+    } else {
+      upload();
+    }
+  };
   const hideReplaced = (): boolean => {
     let changed = false;
     for (const layer of stream.cities) {
       if (layer.setHidden(design?.hiddenFor(layer.tile) ?? new Set())) {
         changed = true;
+        uploadIndex(layer);
       }
     }
     return changed;
