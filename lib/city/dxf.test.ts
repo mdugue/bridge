@@ -197,4 +197,74 @@ describe("readDxf", () => {
       }
     }
   });
+
+  /** A hatch on "Beet" of one edge path: a line, then an arc edge. */
+  const halfDisc = (arc: (string | number)[][], extrusion = 1) =>
+    dxf(
+      [0, "SECTION"],
+      [2, "ENTITIES"],
+      [0, "HATCH"],
+      [8, "Beet"],
+      [230, extrusion],
+      [91, 1],
+      [92, 1],
+      [93, 2],
+      [72, 1],
+      [10, 5],
+      [20, 0],
+      [11, -5],
+      [21, 0],
+      [72, 2],
+      ...arc,
+      [97, 0],
+      [0, "ENDSEC"],
+      [0, "EOF"]
+    );
+
+  test("arc edges, anticlockwise and clockwise (stored mirrored), on their side", () => {
+    const ccw = [
+      [10, 0],
+      [20, 0],
+      [40, 5],
+      [50, 0],
+      [51, 180],
+      [73, 1],
+    ];
+    // the same upper half run clockwise: true angles 180 → 0, stored 180, 360
+    const cw = [
+      [10, 0],
+      [20, 0],
+      [40, 5],
+      [50, 180],
+      [51, 360],
+      [73, 0],
+    ];
+    for (const arc of [ccw, cw]) {
+      const [bed] = readDxf(halfDisc(arc)).features;
+      expect(bed?.kind).toBe("area");
+      if (bed?.kind === "area") {
+        expect(Math.min(...bed.rings[0].map((p) => p[1]))).toBeGreaterThan(
+          -1e-9
+        );
+        expect(Math.max(...bed.rings[0].map((p) => p[1]))).toBeCloseTo(5, 6);
+      }
+    }
+  });
+
+  test("a mirrored entity (extrusion 0, 0, −1) lands mirrored back", () => {
+    const text = dxf(
+      [0, "SECTION"],
+      [2, "ENTITIES"],
+      ...lwpolyline("Rasen", square(-412_310, 5_657_400, 10)),
+      [210, 0],
+      [220, 0],
+      [230, -1],
+      [0, "ENDSEC"],
+      [0, "EOF"]
+    );
+    const [lawn] = readDxf(text).features;
+    expect(lawn?.kind === "area" && lawn.rings[0][0][0]).toBeGreaterThan(
+      412_000
+    );
+  });
 });

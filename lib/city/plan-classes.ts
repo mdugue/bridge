@@ -28,11 +28,18 @@ export type PlanClass =
 /** Keywords per class, matched against the lower-cased name; the first
  *  class whose pattern matches wins, so the narrower ones come first. */
 const KEYWORDS: readonly [PlanClass, RegExp][] = [
-  ["tree", /baum|bäume|baeume|tree|gehölz.?punkt|solitär|solitaer|krone/],
+  // (not "street": "tree" only where no letter comes before it)
+  [
+    "tree",
+    /baum|bäume|baeume|(?<![a-z])trees?|gehölz.?punkt|solitär|solitaer|krone/,
+  ],
   ["gravel", /kies|schotter|splitt|wassergeb|gravel|grus|tenne|chaussierung/],
   ["water", /wasser|teich|becken|bach|fluss|pool|pond|water|brunnen|rinne/],
   ["sand", /sand|spielplatz|spielfl|play|fallschutz/],
-  ["road", /fahrbahn|straße|strasse|asphalt|road|parkpl|stellpl|zufahrt/],
+  [
+    "road",
+    /fahrbahn|straße|strasse|street|asphalt|road|parkpl|stellpl|zufahrt/,
+  ],
   ["path", /weg|pfad|path|walk|fußweg|fussweg|gehweg|radweg/],
   [
     "paving",

@@ -99,6 +99,22 @@ const num = (g: Group | undefined) => (g ? Number.parseFloat(g.value) : 0);
 const first = (e: Entity, code: number) =>
   e.groups.find((g) => g.code === code);
 
+/**
+ * Whether an entity's own coordinates (its OCS) are mirrored: AutoCAD
+ * writes a mirrored hatch, polyline or circle with the extrusion (0, 0,
+ * −1), its x then the world's −x. Other extrusions (a plan drawn on a
+ * tilted plane) are not taken.
+ */
+const mirrored = (e: Entity) => num(first(e, 230)) < 0;
+
+/** A ring of an entity's OCS in world coordinates. */
+const toWorld = (e: Entity, ring: PlanPoint[]): PlanPoint[] =>
+  mirrored(e)
+    ? ring.map((p) =>
+        p[2] === undefined ? [-p[0], p[1]] : [-p[0], p[1], p[2]]
+      )
+    : ring;
+
 /** The points a bulge (tan ¼ of the arc's angle) puts between `a` and `b`. */
 function bulgePoints(
   a: readonly [number, number],
@@ -133,7 +149,12 @@ function bulgePoints(
   return out;
 }
 
-/** Points along an arc (degrees, anticlockwise from `start` to `end`). */
+/**
+ * Points along an arc of a hatch edge (degrees), from its start to its
+ * end. An anticlockwise edge runs up from `start` to `end`; a clockwise
+ * one (73 = 0) is stored mirrored — its true angles are −start and −end —
+ * and runs down between them.
+ */
 function arcPoints(
   cx: number,
   cy: number,
@@ -142,22 +163,22 @@ function arcPoints(
   end: number,
   ccw = true
 ): [number, number][] {
-  let a0 = (start * Math.PI) / 180;
-  let a1 = (end * Math.PI) / 180;
-  if (!ccw) {
-    [a0, a1] = [-a0, -a1];
+  const a0 = ((ccw ? start : -start) * Math.PI) / 180;
+  let a1 = ((ccw ? end : -end) * Math.PI) / 180;
+  if (ccw) {
+    while (a1 <= a0) {
+      a1 += Math.PI * 2;
+    }
+  } else {
+    while (a1 >= a0) {
+      a1 -= Math.PI * 2;
+    }
   }
-  while (a1 <= a0) {
-    a1 += Math.PI * 2;
-  }
-  const steps = Math.max(2, Math.ceil((a1 - a0) / (Math.PI / 12)));
+  const steps = Math.max(2, Math.ceil(Math.abs(a1 - a0) / (Math.PI / 12)));
   const out: [number, number][] = [];
   for (let i = 0; i <= steps; i++) {
     const t = a0 + ((a1 - a0) * i) / steps;
-    out.push([
-      cx + r * Math.cos(t),
-      cy + r * (ccw ? Math.sin(t) : -Math.sin(t)),
-    ]);
+    out.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]);
   }
   return out;
 }
@@ -473,9 +494,14 @@ function readEntity(
 ): number {
   const e = entities[k];
   if (e.type === "HATCH") {
-    addArea(r, classOf(r, e), hatchRings(e));
+    addArea(
+      r,
+      classOf(r, e),
+      hatchRings(e).map((ring) => toWorld(e, ring))
+    );
   } else if (e.type === "LWPOLYLINE") {
-    const ring = lwpolyline(e);
+    const raw = lwpolyline(e);
+    const ring = raw && toWorld(e, raw);
     const cls = classOf(r, e);
     if (ring && cls && cls !== "tree") {
       addArea(r, cls, [ring]);
@@ -491,7 +517,7 @@ function readEntity(
     if (read && "triangles" in read) {
       addMesh(r, cls ?? "terrain", read.triangles);
     } else if (read && cls && cls !== "tree") {
-      addArea(r, cls, [read.ring]);
+      addArea(r, cls, [toWorld(e, read.ring)]);
     }
     return last;
   } else if (e.type === "3DFACE") {
@@ -535,6 +561,19 @@ export function readDxf(text: string): DxfPlan {
   };
 }
 
+/** A tree symbol's crown in metres: a circle's diameter, a tree block's
+ *  circle at its insert's scale; null for a point. */
+function crownOf(r: Reading, e: Entity, block: string | undefined) {
+  if (e.type === "CIRCLE") {
+    return 2 * num(first(e, 40)) * r.unit;
+  }
+  if (block && r.crowns.has(block)) {
+    const scale = Math.abs(num(first(e, 41)) || 1);
+    return 2 * (r.crowns.get(block) ?? 0) * scale * r.unit;
+  }
+  return null;
+}
+
 /** A tree from an INSERT, CIRCLE or POINT on a tree layer (or of a tree
  *  block); a circle on a surface layer is a round area. */
 function treeOrRound(r: Reading, e: Entity): void {
@@ -543,17 +582,13 @@ function treeOrRound(r: Reading, e: Entity): void {
   }
   const block = e.type === "INSERT" ? first(e, 2)?.value : undefined;
   const cls = classOf(r, e, block);
-  const x = num(first(e, 10));
+  // (a point's coordinates are the world's; a circle's and an insert's
+  // their OCS)
+  const x = num(first(e, 10)) * (e.type !== "POINT" && mirrored(e) ? -1 : 1);
   const y = num(first(e, 20));
   const z = num(first(e, 30)) || undefined;
   if (cls === "tree") {
-    let crown: number | null = null;
-    if (e.type === "CIRCLE") {
-      crown = 2 * num(first(e, 40)) * r.unit;
-    } else if (block && r.crowns.has(block)) {
-      const scale = Math.abs(num(first(e, 41)) || 1);
-      crown = 2 * (r.crowns.get(block) ?? 0) * scale * r.unit;
-    }
+    const crown = crownOf(r, e, block);
     r.features.push({
       kind: "tree",
       at: scaled(r.unit)(z === undefined ? [x, y] : [x, y, z]),

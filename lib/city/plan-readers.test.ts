@@ -118,6 +118,20 @@ describe("shapefile", () => {
     expect(record.parts[0][0][2]).toBe(112.5);
   });
 
+  test("a .dbf without a .cpg: by its language driver, else by its bytes", () => {
+    const latin = {
+      encode: (t: string) =>
+        Uint8Array.from({ length: t.length }, (_, i) => t.charCodeAt(i)),
+    } as unknown as TextEncoder;
+    const ansi = dbf(["ART"], [["Bäume"]], latin);
+    new DataView(ansi).setUint8(29, 0x57);
+    expect(readDbf(ansi, null)[0].ART).toBe("Bäume");
+    // no driver byte: not valid UTF-8, so Windows ANSI
+    const unsaid = dbf(["ART"], [["Bäume"]], latin);
+    expect(readDbf(unsaid, null)[0].ART).toBe("Bäume");
+    expect(readDbf(dbf(["ART"], [["Bäume"]]), null)[0].ART).toBe("Bäume");
+  });
+
   test("a .dbf in windows-1252 by its .cpg", () => {
     // "Gehölz" in windows-1252: ö = 0xf6
     const latin = {

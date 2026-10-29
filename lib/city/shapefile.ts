@@ -99,24 +99,54 @@ export function readShp(
   return out;
 }
 
-/** The decoder for a .cpg's code page name (UTF-8 where unsaid). */
-export function dbfDecoder(cpg: string | null): TextDecoder {
+/** The decoder for a .cpg's code page name, or null where it names
+ *  none we know. */
+export function cpgDecoder(cpg: string | null): TextDecoder | null {
   const name = (cpg ?? "").trim().toLowerCase();
-  if (/1252|latin|8859-1|ansi/.test(name)) {
-    return new TextDecoder("windows-1252");
-  }
   if (/8859-15/.test(name)) {
     return new TextDecoder("iso-8859-15");
   }
-  return new TextDecoder("utf-8");
+  if (/1252|latin|8859-1|ansi/.test(name)) {
+    return new TextDecoder("windows-1252");
+  }
+  if (/1250/.test(name)) {
+    return new TextDecoder("windows-1250");
+  }
+  if (/utf-?8/.test(name)) {
+    return new TextDecoder("utf-8");
+  }
+  return null;
+}
+
+/**
+ * The decoder a .dbf says by its language driver byte (offset 29), where
+ * no .cpg says one: Windows ANSI for a German office's ArcGIS or QGIS
+ * export, the DOS code pages as their nearest Windows one; unknown, UTF-8
+ * where the bytes are valid UTF-8, else Windows ANSI.
+ */
+function ldidDecoder(ldid: number, bytes: Uint8Array): TextDecoder {
+  if (ldid === 0xc8) {
+    return new TextDecoder("windows-1250");
+  }
+  if (ldid !== 0) {
+    return new TextDecoder("windows-1252");
+  }
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return new TextDecoder("utf-8");
+  } catch {
+    return new TextDecoder("windows-1252");
+  }
 }
 
 /** The records of a .dbf: each field's value, numbers as numbers. */
 export function readDbf(
   bytes: ArrayBuffer,
-  decoder: TextDecoder
+  given: TextDecoder | null
 ): Record<string, string | number | null>[] {
   const view = new DataView(bytes);
+  const decoder =
+    given ?? ldidDecoder(view.getUint8(29), new Uint8Array(bytes));
   const count = view.getUint32(4, true);
   const headerLength = view.getUint16(8, true);
   const recordLength = view.getUint16(10, true);
@@ -157,7 +187,7 @@ export function readShapefile(
   cpg: string | null
 ): GeoRecord[] {
   const shapes = readShp(shp);
-  const rows = dbf ? readDbf(dbf, dbfDecoder(cpg)) : [];
+  const rows = dbf ? readDbf(dbf, cpgDecoder(cpg)) : [];
   const out: GeoRecord[] = [];
   shapes.forEach((shape, i) => {
     if (shape) {
