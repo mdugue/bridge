@@ -28,6 +28,7 @@
         "remark-gfm": "^4.0.1",
         "remark-parse": "^11.0.0",
         "remark-rehype": "^11.1.2",
+        "rhino3dm": "8.32.1",
         "suncalc": "2.1.1",
         "three": "0.187.0",
         "three-mesh-bvh": "0.9.17",
@@ -1289,6 +1290,8 @@
     "restore-cursor": ["restore-cursor@5.1.0", "", { "dependencies": { "onetime": "^7.0.0", "signal-exit": "^4.1.0" } }, "sha512-oMA2dcrw6u0YfxJQXm342bFKX/E4sG9rbTzO9ptUcR/e8A33cHuvStiYOwH7fszkZlZ1z/ta9AAoPk2F4qIOHA=="],
 
     "reusify": ["reusify@1.1.0", "", {}, "sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw=="],
+
+    "rhino3dm": ["rhino3dm@8.32.1", "", {}, "sha512-Opb+WAEh41j+YoUQOhG7C8egfG1ZVIW6/pbTuOHoJULFCSTAQgIzOibHCCbRKtQfAuTOPbjm0bCiST3rK2k2sw=="],
 
     "robust-predicates": ["robust-predicates@3.0.3", "", {}, "sha512-NS3levdsRIUOmiJ8FZWCP7LG3QpJyrs/TE0Zpf1yvZu8cAJJ6QMW92H1c7kWpdIHo8RvmLxN/o2JXTKHp74lUA=="],
 

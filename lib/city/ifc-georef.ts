@@ -210,6 +210,33 @@ export function mapConversionPlacement(
 }
 
 /**
+ * The row-major matrix that puts a model's origin at (`lat`, `lng`) and
+ * `height` m in the site's `epsg`, turned so that `trueNorth` — true
+ * north's direction in the model's plan (x, y), null: its +y — points
+ * north; null where the projection does not take the point. Rhino's earth
+ * anchor says the same (design-formats.ts).
+ */
+export function latLngPlacement(
+  lat: number,
+  lng: number,
+  height: number,
+  trueNorth: readonly [number, number] | null,
+  epsg: number
+): number[] | null {
+  const at = latLngToUtm(epsg, lat, lng);
+  const convergence = gridConvergenceDeg(epsg, lat, lng);
+  if (!at || convergence === null) {
+    return null;
+  }
+  // true north's bearing in the model's plan (clockwise from its +y)
+  const [tx, ty] = trueNorth ?? [0, 1];
+  const trueNorthInModel = Math.atan2(tx, ty);
+  // a model bearing β is the true bearing β − that, the grid's + convergence
+  const turn = convergence * DEG2RAD - trueNorthInModel;
+  return placeMatrix(at.x, at.y, height, turn, 1);
+}
+
+/**
  * The model's place from IfcSite's reference point in the site's `epsg`,
  * or null where it gives none (a 0/0 the exporter wrote for "unset"
  * counts as none).
@@ -223,18 +250,16 @@ export function siteReferencePlacement(
   if (lat === null || lng === null || (lat === 0 && lng === 0)) {
     return null;
   }
-  const at = latLngToUtm(epsg, lat, lng);
-  const convergence = gridConvergenceDeg(epsg, lat, lng);
-  if (!at || convergence === null) {
+  const matrix = latLngPlacement(
+    lat,
+    lng,
+    (site.elevation ?? 0) * site.unit,
+    site.trueNorth,
+    epsg
+  );
+  if (!matrix) {
     return null;
   }
-  // true north's bearing in the model's plan (clockwise from its +y)
-  const [tx, ty] = site.trueNorth ?? [0, 1];
-  const trueNorthInModel = Math.atan2(tx, ty);
-  // a model bearing β is the true bearing β − that, the grid's + convergence
-  const turn = convergence * DEG2RAD - trueNorthInModel;
-  const height = (site.elevation ?? 0) * site.unit;
-  const matrix = placeMatrix(at.x, at.y, height, turn, 1);
   if (site.origin) {
     // the reference point is the site's, not the model's origin
     const [ox, oy, oz] = site.origin;

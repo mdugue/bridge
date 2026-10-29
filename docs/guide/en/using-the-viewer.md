@@ -471,7 +471,10 @@ The other picture styles and Modell keep their sharp lines.
 - **Entwurf** ("design") — loads a design of your own into the city: a
   glTF file (`.glb`, or a `.gltf` picked together with its `.bin` and
   textures) as SketchUp, Rhino, Revit, Archicad, Vectorworks or Blender
-  export it, or an IFC model (`.ifc`); dropping it on the panel works too.
+  export it, an IFC model (`.ifc`), an OBJ (`.obj`, with its `.mtl` and
+  textures picked together; read as metres with Y up) or a Rhino file
+  (`.3dm`, saved with its render meshes); dropping it on the panel works
+  too. A Rhino file whose earth anchor is set stands at its place.
   An IFC that carries its place (`IfcMapConversion` in ETRS89/UTM) stands
   there by itself; one with only the site's latitude and longitude stands
   roughly there, and the panel asks you to check it. The file is read in your
