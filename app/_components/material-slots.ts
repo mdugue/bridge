@@ -4,6 +4,7 @@ import {
   FloatType,
   HalfFloatType,
   type Material,
+  type Object3D,
   type Texture,
   type TextureNode,
   type UniformNode,
@@ -165,6 +166,43 @@ export function slotTexture(name: string, like: Texture): TextureNode {
     return undefined;
   };
   return node;
+}
+
+/** The slots of the object's own material — not of the one drawing it:
+ *  under `scene.overrideMaterial` (paper-scene.ts) the drawn material is
+ *  the override, and the tile's values stay on the mesh's own. */
+const ownSlots = (object: Object3D | null): Slots => {
+  const own: unknown = object && "material" in object ? object.material : null;
+  return own && !Array.isArray(own) ? slotsOf(own as Material) : {};
+};
+
+/** `slotTexture`, read from the drawn object's own material (`ownSlots`). */
+export function ownSlotTexture(name: string, like: Texture): TextureNode {
+  const stub = stubLike(like);
+  const node = texture(stub);
+  node.updateBeforeType = NodeUpdateType.OBJECT;
+  node.updateBefore = ({ object }) => {
+    node.value = (ownSlots(object)[name] as Texture | undefined) ?? stub;
+    return undefined;
+  };
+  node.updateAfterType = NodeUpdateType.OBJECT;
+  node.updateAfter = () => {
+    node.value = stub;
+    return undefined;
+  };
+  return node;
+}
+
+/** `slotUniform`, read from the drawn object's own material. */
+export function ownSlotUniform(
+  name: string,
+  initial: number
+): UniformNode<"float", number> {
+  // reason: `uniform` of a number is a float node; its declared type is looser.
+  const node = uniform(initial);
+  return node.onObjectUpdate(
+    ({ object }) => (ownSlots(object)[name] as number | undefined) ?? initial
+  );
 }
 
 /** A uniform slot; `initial` gives its type (and the value off a tile). */

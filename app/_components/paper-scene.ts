@@ -1,5 +1,9 @@
 import {
   Color,
+  DataTexture,
+  FloatType,
+  NearestFilter,
+  RGBAFormat,
   type Material,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
@@ -13,6 +17,8 @@ import {
   attribute,
   float,
   Fn,
+  int,
+  ivec2,
   materialColor,
   max,
   mix,
@@ -20,12 +26,15 @@ import {
   sin,
   smoothstep,
   step,
+  textureLoad,
   uniform,
   vec3,
 } from "three/tsl";
 import type { PaperKind } from "@/lib/city/render-style";
+import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
 import { FACADE_ROOF } from "@/lib/city/windows";
 import { instanceTint } from "./instancing";
+import { ownSlotTexture, ownSlotUniform } from "./material-slots";
 import type { Live, V3, V4 } from "./shader-chunks";
 
 /**
@@ -144,10 +153,40 @@ function figureMaterial(): MeshBasicNodeMaterial {
   return material;
 }
 
+/** A texel of the clay's object table's kind (city-layer.ts). */
+const OBJECT_TABLE_LIKE = (() => {
+  const like = new DataTexture(
+    new Float32Array(4),
+    1,
+    1,
+    RGBAFormat,
+    FloatType
+  );
+  like.magFilter = NearestFilter;
+  like.minFilter = NearestFilter;
+  return like;
+})();
+
+/** A roof vertex's colour: its face's own where the orthophoto read the
+ *  face apart (the `facade` slots, lib/city/windows.ts), else its
+ *  building's from the tile's object table — as the clay reads it
+ *  (visual-style.ts), through the mesh's own material's slots. */
+function roofColour(facade: V4): V3 {
+  const table = ownSlotTexture("clayObjects", OBJECT_TABLE_LIKE);
+  const rows = ownSlotUniform("clayRows", 1);
+  const id = int(attribute("featureId", "float").add(0.5));
+  const at = ivec2(id.mod(OBJECT_TEXTURE_WIDTH), id.div(OBJECT_TEXTURE_WIDTH));
+  // band 1: the roof's rgb (lib/city/city-mesh.ts packObjectTexels)
+  const building = textureLoad(table, at.add(ivec2(0, int(rows)))).rgb;
+  const face = vec3(facade.x, facade.y, facade.w);
+  const own = step(1e-5, face.x.add(face.y).add(face.z));
+  return mix(building, face, own);
+}
+
 /**
  * What Sin City prints a surface in, chosen per build from what the drawn
- * geometry carries: a roof face whose orthophoto colour is red (the clay's
- * `facade` slots, lib/city/windows.ts) its red, foliage (a green instance
+ * geometry carries: a roof whose colour is red (its face's or its
+ * building's, `roofColour`) its red, foliage (a green instance
  * tint or vertex colour) black, everything else the white card — so the
  * frame's light is the light alone, not the colour of a roof or a lawn.
  */
@@ -156,7 +195,9 @@ const inkColour = Fn((builder: NodeBuilder) => {
   if (geometry?.hasAttribute("facade")) {
     const facade = attribute("facade", "vec4") as unknown as V4;
     const roof = step(facade.z, float(FACADE_ROOF + 1e-3));
-    const rgb = vec3(facade.x, facade.y, facade.w);
+    const rgb = geometry.hasAttribute("featureId")
+      ? roofColour(facade)
+      : vec3(facade.x, facade.y, facade.w);
     const peak = max(rgb.x, max(rgb.y, rgb.z));
     const red = smoothstep(
       0.28,

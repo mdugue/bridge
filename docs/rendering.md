@@ -503,7 +503,7 @@ of Comic, Sin City, Strich and the Schwarzplan hold still (`hand` 0).
   42 % of the cell): blue on the paper, black on an ink, printing lighter
   far off; a pitched roof in shade gets printed stripes instead of dots;
   near-black stays black. Foliage and water are cut-outs, decided on a
-  wider blur (7 and 9 px) because their per-pixel shading shimmers in
+  wider blur (one of 8 px) because their per-pixel shading shimmers in
   motion: a crown flat green, a deeper green in its own shade, inked at
   its silhouette only (no creases); the river flat blue, a deeper blue in
   a cast shadow, no dots and no black. The sky is two flat blues, the ink
@@ -515,13 +515,16 @@ of Comic, Sin City, Strich and the Schwarzplan hold still (`hand` 0).
   sky, with a shoulder) and the curve pivots lower and flatter — a fixed
   curve crushed a darkening frame to black.
 - *Sin City* — the swap's `ink` kind: every surface white card under the
-  real light, foliage black, red roof faces red, the ground's water black
+  real light, foliage black, red roofs red (the face's colour, else its
+  building's from the object table, read through the mesh's own
+  material's slots, `ownSlotTexture`), the ground's water black
   (`paperGroundOn` = 4), the fog a smoke grey. The pass makes white what
   the sun reaches and the card shows bright, black the rest — the cast
   shadows as hard black masses —, red roofs lit or oxblood; the haze past
   the cap white smoke; rain as streaks on a grid of world directions in
   depth layers hidden behind nearer geometry; black ink on the white.
-  From 2° below the horizon the card is off (`Stylize.night`): the night
+  From ~1° below the horizon, where the pass lets go of the sun, the card
+  is off (`Stylize.night`): the night
   is cut from the scene's own frame, its lit windows, lamps and
   floodlights white on black.
 

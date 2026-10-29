@@ -59,15 +59,16 @@ Papier keep the hand.
 
 **Sin City draws on its own card.** A fourth swap kind, `ink`
 (`paper-scene.ts`), draws every surface as white card under the real
-light. Foliage is black, red roof faces (the clay's roof colours in the
-`facade` attribute) are red, and the ground's water is black
+light. Foliage is black, red roofs (a face's own colour in the `facade`
+attribute, else its building's from the tile's object table) are red,
+and the ground's water is black
 (`paperGroundOn` = 4). The fog is smoke grey. Light then means sun, which
 gives the hard black cast shadows the comic is known for.
 
 **Night is each style's own.** Past civil dusk the shadow map has nothing
 left to say. Comic prints a navy city: black dots only where the night is
 deepest, yellow where the lamps light, paper for a lit window or a lamp.
-Sin City leaves its card once the sun is 2° under the horizon
+Sin City leaves its card once the sun is ~1° under the horizon
 (`Stylize.night`). The card knows only the sun, so the night is cut from
 the scene's own frame and its lit windows, lamps and floodlights. A plan
 has no night, so Strich keeps its sheet unshaded and drops the light's
