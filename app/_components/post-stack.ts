@@ -1026,6 +1026,7 @@ export function createPostStack(
       const swap =
         style.paperScene === "ink" && stylize.night() ? null : style.paperScene;
       const restore = swap ? paperScene.begin(swap) : null;
+      stylize.captureFog();
       const view = active();
       try {
         renderer.render(scene, view);
@@ -1097,6 +1098,7 @@ export function createPostStack(
       pixel.dispose();
       outline.dispose();
       paperScene.dispose();
+      stylize.dispose();
       styleDressing.dispose();
       anchors.dispose();
       letGo();

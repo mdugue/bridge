@@ -1,4 +1,5 @@
 import {
+  Color,
   DepthTexture,
   LessEqualCompare,
   Matrix3,
@@ -179,7 +180,7 @@ const PENS: Record<number, Pen> = {
     lifts: 0.35,
     detail: 1100,
     hand: 1,
-    farInk: 0.35,
+    farInk: 0.55,
   },
   // Strich: a technical pen — one weight (a CSS pixel), no wander, never
   // lifted; every fold a line, as on a drawn plan.
@@ -371,6 +372,13 @@ export interface Stylize {
   night: () => boolean;
   /** Per frame: the camera's frame and the drawing buffer's pixels. */
   update: (pixelRatio: number, size: Vector2) => void;
+  /**
+   * Per frame, while the scene renders: the fog colour it is drawn with
+   * (a style's swap brings its own, restored before the pass runs), the
+   * colour the pass takes off again.
+   */
+  captureFog: () => void;
+  dispose: () => void;
 }
 
 export function createStylize(inputs: StylizeInputs): Stylize {
@@ -392,6 +400,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   // The shadow map is made by the first lit material, after this graph:
   // the read binds a stand-in until then, swapped for the map (a binding,
   // not a build) in `update`. The stand-in compares like the map.
+  const frameFog = uniform(new Color());
   const shadowStandIn = new DepthTexture(1, 1);
   shadowStandIn.compareFunction = LessEqualCompare;
   // every read of it, so `update` can bind the map to each
@@ -416,7 +425,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const unhaze = (c: V3, haze: F): V3 => {
     const amount = min(haze, HAZE_CAP);
     // reason: a colour uniform is a vec3 in the graph; its type says Color.
-    const smoke = fog.color as unknown as V3;
+    const smoke = frameFog as unknown as V3;
     return max(c.sub(smoke.mul(amount)).div(float(1).sub(amount)), vec3(0));
   };
 
@@ -441,27 +450,27 @@ export function createStylize(inputs: StylizeInputs): Stylize {
    * shadow map — the shadow the scene drew, exactly, whatever the colour
    * of the surface (a post pass cannot tell a dark roof in the sun from a
    * pale one in shade by its colour). Off the map's frustum (it follows
-   * the camera, a few hundred metres round) only the turn counts; below
-   * the horizon nothing is in the sun. 0..1, the map's own 2×2 filter at
-   * a shadow's edge.
+   * the camera, a few hundred metres round) the caller's `beyond` stands
+   * in — the style's guess from lightness —, faded in over the frustum's
+   * last 4 % so its edge draws no line; below the horizon nothing is in
+   * the sun. 0..1, the map's own 2×2 filter at a shadow's edge.
    */
-  const inSun = (world: V3, n: V3, z: F): F => {
+  const inSun = (world: V3, n: V3, z: F, beyond: F): F => {
     const towards = aaStep(0.02, dot(n, sunWorld));
     // off the surface a little, against its own depth's quantisation
     const lifted = world.add(n.mul(z.mul(0.0015).add(0.12)));
     const s = shadowMatrix.mul(vec4(lifted, 1));
     const c = s.xyz.div(s.w);
     const at = vec2(c.x, float(1).sub(c.y));
-    const inside = step(0, at.x)
-      .mul(step(at.x, 1))
-      .mul(step(0, at.y))
-      .mul(step(at.y, 1))
-      .mul(step(c.z, 1))
-      .mul(shadowReady);
+    const edge = min(
+      min(at.x, float(1).sub(at.x)),
+      min(at.y, float(1).sub(at.y))
+    );
+    const inside = smoothstep(0, 0.04, edge).mul(step(c.z, 1)).mul(shadowReady);
     const read = texture(shadowStandIn, at);
     shadowReads.push(read);
     const shadowed = read.compare(c.z.sub(0.0003)).x;
-    const cast = mix(1, shadowed, inside);
+    const cast = mix(beyond, shadowed, inside);
     return towards.mul(cast).mul(smoothstep(-0.02, 0.04, sunWorld.y));
   };
 
@@ -757,7 +766,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // Foliage, wherever it stands, is green.
     inkCol = mix(inkCol, POP.green, green.mul(float(1).sub(flat)));
     // Light: in the sun or not (`inSun`, the scene's own shadow).
-    const lit = inSun(world, n, z);
+    const lit = inSun(world, n, z, aaStep(0.42, l));
     const deep = float(1).sub(aaStep(0.2, l));
     const neutral = float(1).sub(step(0.05, distance(inkCol, POP.paper)));
     // The screen: on the paper blue dots, on an ink black ones.
@@ -847,9 +856,12 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   // until the haze is nearly all there is.
   const unhazed = (y: F, haze: F): F => {
     const amount = min(haze, HAZE_CAP);
+    // in linear light, where the fog was mixed in
     // reason: a colour uniform is a vec3 in the graph; its type says Color.
-    const smoke = lumaOf(toPerceptual(fog.color as unknown as V3));
-    return y.sub(smoke.mul(amount)).div(float(1).sub(amount));
+    const smoke = lumaOf(frameFog as unknown as V3);
+    const linear = pow(max(y, 0), 2.2);
+    const clear = linear.sub(smoke.mul(amount)).div(float(1).sub(amount));
+    return pow(max(clear, 0), 1 / 2.2);
   };
 
   /** Does the skyline pass through this pixel? (A neighbour two pixels
@@ -933,7 +945,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // there (foliage, the river: black shapes in any light); after dusk
     // what the lamps light. Past where the haze leaves enough light to
     // cut, the smoke: white, the far city one pale ground under the night.
-    const sunWhite = inSun(surface.world, surface.n, z).mul(aaStep(0.4, y));
+    const sunWhite = inSun(surface.world, surface.n, z, aaStep(0.55, y)).mul(
+      aaStep(0.4, y)
+    );
     const white = max(
       mix(sunWhite, aaStep(0.5, y), dusk),
       aaStep(HAZE_CAP - 0.1, haze).mul(float(1).sub(dusk))
@@ -949,6 +963,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       .mul(step(0.35, hsl.y))
       .mul(step(0.04, hsl.z))
       .mul(ground)
+      // by day the card is red on the roof faces only; by night the frame
+      // is the scene's own, and only a pitched roof may be one
+      .mul(mix(1, step(0.5, surface.roofSlope), dusk))
       .toVar();
     const lit = aaStep(0.3, lumaOf(p).mul(mix(1, 1.9, dusk))).toVar();
     const blood = mix(vec3(0.42, 0.015, 0.04), vec3(0.86, 0.05, 0.09), lit);
@@ -976,7 +993,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const model = mix(shade, paper, t).mul(mix(vec3(1), tint, 0.35));
     // ...and a little of the haze laid back over: a model's far end is
     // paler, not gone
-    return mix(mix(model, paper, haze.mul(0.35)), paper.mul(0.985), sky);
+    return mix(mix(model, paper, haze.mul(0.2)), paper.mul(0.985), sky);
   };
 
   // --- Strich: a pen drawing — lines, a hatch for the shade. ---
@@ -992,7 +1009,12 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const sheet = vec3(0.995, 0.993, 0.99);
     // in the sun or not; after dusk a plan has no night: the sheet stays
     // unshaded, lines and plan colours alone
-    const lit = mix(inSun(surface.world, surface.n, z), 1, dusk).toVar();
+    const y = unhazed(lumaOf(p), surface.haze);
+    const lit = mix(
+      inSun(surface.world, surface.n, z, aaStep(0.42, y)),
+      1,
+      dusk
+    ).toVar();
     // the surface's colour (its hue and chroma) without the light — the
     // plan's greens and blues. The warm hues (red to yellow) are the sun's
     // colour on the white card, never a plan colour: they stay white.
@@ -1070,7 +1092,18 @@ export function createStylize(inputs: StylizeInputs): Stylize {
         up,
         roofSlope,
         haze: fogFactorAt(fog, world, viewPos).mul(float(1).sub(sky)).toVar(),
-        facing: abs(dot(normal, normalize(viewPos))).toVar(),
+        // the view ray through this pixel from the projection itself:
+        // right for the parallel and the sheared camera too
+        facing: abs(
+          dot(
+            normal,
+            normalize(
+              getViewPosition(at, float(1), inverseProjection).sub(
+                getViewPosition(at, float(0), inverseProjection)
+              )
+            )
+          )
+        ).toVar(),
       };
       const inked = inkLines(at, z, up, surface.haze);
       const line = inked.line.mul(ink).toVar();
@@ -1163,6 +1196,12 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       dusk.value = t * t * (3 - 2 * t);
     },
     night: () => sunAltitude < NIGHT_ALTITUDE,
+    captureFog: () => {
+      frameFog.value.copy(fog.color.value);
+    },
+    dispose: () => {
+      shadowStandIn.dispose();
+    },
     update: (pixelRatio, size) => {
       pixelScale.value = pixelRatio;
       resolution.value.copy(size);

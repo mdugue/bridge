@@ -23,7 +23,9 @@ import type { F, V3 } from "./shader-chunks";
  * walls and lamps all take it without asking; a material opts out with
  * `fog = false` (the river mist). Three terms:
  *
- * - three's distance fog (`rangeFogFactor`, the *Nebel* slider's range);
+ * - a distance fog over the view depth (three's `rangeFogFactor`, reproduced
+ *   in `fogFactorAt` so the picture styles can take it off again; the
+ *   *Nebel* slider's range);
  * - a world-Y pool above the valley floor (*Talnebel*): the Elbe valley
  *   pools deeper haze than bridge decks and high ground at the same
  *   distance. It builds on the distance fog, never replaces it — only adds

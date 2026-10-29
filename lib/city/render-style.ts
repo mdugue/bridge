@@ -15,7 +15,9 @@ export type CrownStyle = "comic" | "paper";
 /**
  * How a style swaps the scene's materials for its frames (paper-scene.ts):
  * Papier's white card, Strich's white model on the plan-coloured ground,
- * the Schwarzplan's black buildings on white with nothing else drawn.
+ * Sin City's white card with black foliage and water and red roofs (by
+ * day), the Schwarzplan's black buildings on white with nothing else
+ * drawn.
  */
 export type PaperKind = "figure" | "ink" | "line" | "paper";
 
