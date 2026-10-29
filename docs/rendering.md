@@ -243,11 +243,11 @@ is the codebook.
 | Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, prefiltered into a 64 px PMREM (≈ 0.7 MB, as much again for the generator) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades, gilding and patina and fountain water (the river is matte since 2026-10-25), weighted by a softened Schlick; mirrors the sky, never the city | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
 | Depth of field | crosshair raycast distance; only what lies beyond the focus blurs (nearer is read as at the focus; blurring the foreground had laid a veil over the lower half — three's node still runs its near-field passes, over an empty field), focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving; always on otherwise (no switch, no manual focus); desktop only — a phone does not build it (ADR 0047) | — | `post-stack.ts` |
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `post-stack.ts` (*Papierkorn*) |
-| Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier, Strich, Schwarzplan — one post pass over the finished frame (below); Papier and Strich also swap every surface for one white paper material for the frame (Papier's ground keeps its paint and water as greys, Strich's turns plan-coloured), the Schwarzplan draws the buildings unlit black and hides everything but them and the white ground; remembered per browser | sun altitude (noir's dusk exposure) | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts`, `style-memory.ts` |
+| Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier, Strich, Schwarzplan — one post pass over the finished frame (below); Papier and Strich also swap every surface for one white paper material for the frame (Papier's ground keeps its paint and water as greys, Strich's turns plan-coloured), Sin City swaps them for a white card (foliage and water black, red roofs red), the Schwarzplan draws the buildings unlit black and hides everything but them and the white ground; light and shade from the sun's shadow map, the fog taken out before any cut, dots and hatching anchored to the world (ADR 0053); remembered per browser | sun altitude (noir's dusk exposure), the shadow map, the fog factor | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts`, `style-memory.ts` |
 | Modell's picture | a parallel camera (`model-camera.ts`, sheared for the Militärperspektive) at a scale (metres per CSS px ↔ 1 : n at 96 dpi); the post passes read it through the view lens; DoF, grading and vignette off, the distance fog open, the sky dome hidden, the background the style's paper; the shadow frustum fits the picture's footprint | the view (pivot, turn, tilt, scale) | `lib/city/model-view.ts`, `model-rig.ts`, `view-lens.ts`, ADR 0044 |
 | Schnitt | the near plane through the pivot; the clay drawn two-sided with its back faces near-black (the poché, `clayPoche`), the ground's profile along the cut as a poché strip from the terrain heights | the terrain heights | `visual-style.ts` `setClaySection`, `model-cuts.ts`, `lib/city/section.ts` |
 | Ausschnitt | the city's group in a `ClippingGroup` with the rectangle's four planes, shown once its programs are compiled and held off the frames (`holdCut`); shadows not clipped; a plinth of four poché strips from the ground down to a common base | the terrain heights | `model-cuts.ts`, `lib/city/section.ts`, `post-stack.ts` |
-| Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: comic and Papier sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; faded by the scene's fog factor | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
+| Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: Papier and Film noir sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill, the other styles' pens hold still in a flight; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; faded towards a per-style floor (`farInk`) with the fog factor, so the far city keeps its outlines | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
 | Minimap | site tile bounds + 512² class raster in the palette + the bridge decks in the colour of the class they carry (hairline edge) + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
 
 The German label in parentheses above names the term as the guide does.
@@ -485,34 +485,40 @@ sets the node's mode, a weight on the fixed *Tuschelinien*,
 *Tiefenfärbung* and *Papierkorn* strengths, the vignette, animated film
 grain and whether depth of field may run.
 
-- *Comic* — lightness (read through a small blur, so crowns and AO give
-  flat areas, not flecks) cut into four flat tones, the colour rebuilt from
-  a lifted **chroma** (HSL saturation explodes towards white), highlights
-  leaning into the paper, a 45° dot screen in the darkest band up close
-  only (gone by ~200 m), the sky an unbanded wash. In the distance, and
-  where the colour nears the fog colour, the band edges soften into the
-  wash — hard bands on a pale far field broke into white blotches.
+Since [ADR 0053](./adr/0053-picture-styles-read-the-light-and-the-world.md)
+the pass cuts on the colour with the height fog taken out again
+(`fogFactorAt`, `unhaze`, up to `HAZE_CAP` 0.8; deeper haze is each
+style's background), decides light and shade from the sun's shadow map
+(`inSun`: the map and `shadow.matrix` handed over by `sun-rig.ts`; after
+dusk lightness again) and lays its screens on the world (`surfaceScreen`:
+45° on the dominant world plane, a cell ladder doubling by metres per
+pixel, two rungs cross-faded, the mean tone at grazing angles). The pens
+of Comic, Sin City, Strich and the Schwarzplan hold still (`hand` 0).
+
+- *Comic* — pop art in six printing inks (`POP`: paper, black, red,
+  yellow, blue, green). Each surface gets one ink from its colour under a
+  3 px blur: pitched roofs red when warm, else slate blue; walls yellow
+  when saturated, else the paper; the ground paper, grass green, water
+  blue; foliage green. In shade, Ben-Day dots (32 % of a ~5 px cell):
+  blue on the paper, black on an ink, printing lighter far off; near-black
+  stays black. The sky is two flat blues, the ink heavy and even. At
+  night a navy city under black dots, the lamps' pools yellow, a lit
+  window or a lamp the paper, the sky a deep blue.
 - *Film noir* — luminance through an S-curve, crushed blacks, the distance
   lifted into grey smoke, a graduated sky; faint ink. From a sun altitude
   of ~12° down to civil dusk (−6°) the exposure opens (×1.6, ×1.25 on the
   sky, with a shoulder) and the curve pivots lower and flatter — a fixed
   curve crushed a darkening frame to black.
-- *Sin City* — masses, not contours: four inks (black, near-black,
-  near-white, white) around a threshold that leans halfway towards the
-  neighbourhood's brightness (eight taps on a ~48 px ring), so a dark park
-  or a bright square still splits into light and shade; rain as streaks on
-  a grid of world directions in depth layers hidden behind nearer
-  geometry, thinned when looking steeply down. The luminance is read
-  through a small blur before the threshold, so crowns, AO and penumbrae cannot
-  break a mass into stipple; crowns and the (faintly blue) river are pushed
-  towards black, up-facing grass is not; black sky, far things sinking into
-  the near-black; ink only on the big silhouettes (a relative depth jump
-  above ~10 %) and, up close, a building's folds, solid black; on black,
-  white cuts where the skyline or a big silhouette meets more black. Red
-  is kept on **pitched** surfaces only (the slope from the depth buffer's
-  reconstructed normal against world up), which lets the colour window be
-  wide — every terracotta, brick or rust roof turns red, lit or oxblood in
-  shade — without sand, paths or warm facades following.
+- *Sin City* — the swap's `ink` kind: every surface white card under the
+  real light, foliage black, red roof faces red, the ground's water black
+  (`paperGroundOn` = 4), the fog a smoke grey. The pass makes white what
+  the sun reaches and the card shows bright, black the rest — the cast
+  shadows as hard black masses —, red roofs lit or oxblood; the haze past
+  the cap white smoke; rain as streaks on a grid of world directions in
+  depth layers hidden behind nearer geometry; black ink on the white.
+  From 2° below the horizon the card is off (`Stylize.night`): the night
+  is cut from the scene's own frame, its lit windows, lamps and
+  floodlights white on black.
 
 - *Scene dressing* (`style-dressing.ts`) — geometry a style draws with for
   its frames only: Comic's crowns are cartoon clouds of three balls (the
@@ -546,13 +552,17 @@ grain and whether depth of field may run.
 - *Strich* — Papier's swap (the same card material and builds) with the
   ground's plan palette under the shared uniform (`paperGroundOn` = 2:
   the paved and built ground a light neutral, green a plan green, water a
-  plan blue, paint grey); the pass keeps each surface's hue, lays the
-  light out as two washes (sunlit the sheet, shade one light grey) and
-  draws with a technical pen — one CSS pixel, no wander, no lifts.
+  plan blue, paint grey); the pass keeps the cool plan hues (the sun's
+  warmth on the card stays white), lays the sunlit side as the sheet and
+  hatches the shade with a technical pen's 45° lines on the world
+  (`hatch`), and draws with that pen — one CSS pixel, no wander, no
+  lifts, its creases held into the distance; after dusk an unshaded
+  white sheet (a plan has no night).
 - *Schwarzplan* — the swap's third kind: an unlit black material for the
-  clay (`userData.figure`), the ground white (`paperGroundOn` = 3, no
-  contours), everything else hidden for its frames; one threshold in the
-  pass cuts the remaining light away. No pen.
+  clay (`userData.figure`, no fog), the ground white (`paperGroundOn` = 3,
+  no contours), everything else hidden for its frames; one threshold in
+  the pass cuts the remaining light away, and a white hairline parts two
+  blocks where one stands in front of the other.
 
 The pass reads the depth buffer at **integer** texel radii around a texel
 centre, blending two radii for the stroke weight: the buffer is sampled

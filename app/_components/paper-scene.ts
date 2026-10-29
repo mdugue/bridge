@@ -18,12 +18,15 @@ import {
   mix,
   positionWorld,
   sin,
+  smoothstep,
+  step,
   uniform,
   vec3,
 } from "three/tsl";
 import type { PaperKind } from "@/lib/city/render-style";
+import { FACADE_ROOF } from "@/lib/city/windows";
 import { instanceTint } from "./instancing";
-import type { Live, V3 } from "./shader-chunks";
+import type { Live, V3, V4 } from "./shader-chunks";
 
 /**
  * The Papier style's scene half (lib/city/render-style.ts `paperScene`):
@@ -66,6 +69,8 @@ export const PAPER_GROUND: Readonly<Record<PaperKind, number>> = {
   line: 2,
   // the Schwarzplan: plain white
   figure: 3,
+  // Sin City: white, the water black
+  ink: 4,
 };
 /** The sky and the distance: a paper a shade greyer than the model. */
 const PAPER_SKY = new Color(0xe9_e6_df);
@@ -73,6 +78,17 @@ const PAPER_SKY = new Color(0xe9_e6_df);
 const SHEET_WHITE = new Color(0xff_ff_ff);
 /** The Schwarzplan's figure. */
 const FIGURE_BLACK = new Color(0x11_11_11);
+/** Sin City's night: the sky black, the haze a pale smoke. */
+const INK_NIGHT = new Color(0x00_00_00);
+const INK_SMOKE = new Color(0xd8_d8_d8);
+/** Sin City's one colour: the red roofs (linear). */
+const INK_RED = new Color(0xc8_10_1c);
+/** A linear colour's luminance (Rec. 709). */
+const luminance = (c: Color): number =>
+  0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+
+/** Foliage in Sin City: a black shape. */
+const INK_FOLIAGE = 0.02;
 
 /**
  * A layer's own colour — vertex colours (stairs, furniture) or an instanced
@@ -117,10 +133,64 @@ function paperMaterial(): MeshStandardNodeMaterial {
 
 /**
  * The Schwarzplan's figure: one unlit black. three carries each drawn
- * material's position node over, as for the paper.
+ * material's position node over, as for the paper. No fog: a plan has no
+ * distance — a block on the horizon is as black as the one in front (the
+ * fog's white sheet had faded every building past a few hundred metres
+ * into the ground, so the plan showed a handful of houses).
  */
 function figureMaterial(): MeshBasicNodeMaterial {
-  return new MeshBasicNodeMaterial({ color: FIGURE_BLACK });
+  const material = new MeshBasicNodeMaterial({ color: FIGURE_BLACK });
+  material.fog = false;
+  return material;
+}
+
+/**
+ * What Sin City prints a surface in, chosen per build from what the drawn
+ * geometry carries: a roof face whose orthophoto colour is red (the clay's
+ * `facade` slots, lib/city/windows.ts) its red, foliage (a green instance
+ * tint or vertex colour) black, everything else the white card — so the
+ * frame's light is the light alone, not the colour of a roof or a lawn.
+ */
+const inkColour = Fn((builder: NodeBuilder) => {
+  const geometry = builder.geometry;
+  if (geometry?.hasAttribute("facade")) {
+    const facade = attribute("facade", "vec4") as unknown as V4;
+    const roof = step(facade.z, float(FACADE_ROOF + 1e-3));
+    const rgb = vec3(facade.x, facade.y, facade.w);
+    const peak = max(rgb.x, max(rgb.y, rgb.z));
+    const red = smoothstep(
+      0.28,
+      0.4,
+      rgb.x.sub(max(rgb.y, rgb.z)).div(max(peak, 1e-3))
+    )
+      .mul(step(0.06, peak))
+      .mul(roof);
+    return mix(vec3(1), vec3(INK_RED.r, INK_RED.g, INK_RED.b), step(0.5, red));
+  }
+  let own: V3 | null = null;
+  if (geometry?.hasAttribute("iColor")) {
+    own = instanceTint();
+  } else if (geometry?.hasAttribute("color")) {
+    own = attribute("color", "vec3") as unknown as V3;
+  }
+  if (!own) {
+    return vec3(1);
+  }
+  const peak = max(max(own.x, max(own.y, own.z)), 1e-3);
+  const green = smoothstep(0.04, 0.1, own.y.sub(max(own.x, own.z)).div(peak));
+  return mix(vec3(1), vec3(INK_FOLIAGE), green);
+});
+
+/** Sin City's card: Papier's, in its own two inks and red. */
+function inkMaterial(): MeshStandardNodeMaterial {
+  const material = new MeshStandardNodeMaterial({
+    color: 0xff_ff_ff,
+    roughness: 0.92,
+    metalness: 0,
+    flatShading: true,
+  });
+  material.colorNode = inkColour();
+  return material;
 }
 
 /** The materials a mesh draws with. */
@@ -241,11 +311,19 @@ export function createPaperScene(
     // and its pass differ
     line: card,
     figure: figureMaterial(),
+    ink: inkMaterial(),
   };
   const skies: Record<PaperKind, Color> = {
     paper: PAPER_SKY.clone(),
     line: SHEET_WHITE.clone(),
     figure: SHEET_WHITE.clone(),
+    ink: INK_NIGHT.clone(),
+  };
+  // the haze: the sky's colour but in Sin City, whose distance is smoke
+  // against a black night
+  const fogs: Record<PaperKind, Color> = {
+    ...skies,
+    ink: INK_SMOKE.clone(),
   };
   const savedFog = new Color();
   const hidden: Object3D[] = [];
@@ -284,7 +362,14 @@ export function createPaperScene(
     const previousOverride = scene.overrideMaterial;
     const previousBackground = scene.background;
     savedFog.copy(fogColor.value);
-    fogColor.value.copy(skies[kind]);
+    fogColor.value.copy(fogs[kind]);
+    if (kind === "ink") {
+      // Sin City's smoke dims with the scene's own haze: pale by day,
+      // a dark smoke in the night it sits in
+      fogColor.value.multiplyScalar(
+        Math.min(1, luminance(savedFog) / luminance(INK_SMOKE))
+      );
+    }
     scene.overrideMaterial = materials[kind];
     scene.background = skies[kind];
     const lists = candidates ?? gather();

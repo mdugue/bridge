@@ -17,7 +17,7 @@ export type CrownStyle = "comic" | "paper";
  * Papier's white card, Strich's white model on the plan-coloured ground,
  * the Schwarzplan's black buildings on white with nothing else drawn.
  */
-export type PaperKind = "figure" | "line" | "paper";
+export type PaperKind = "figure" | "ink" | "line" | "paper";
 
 export type RenderStyle =
   | "comic"
@@ -98,12 +98,12 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     id: "comic",
     label: "Comic",
     description:
-      "Feine, handgezogene Tuschelinien, flache Farbflächen, Raster im Schatten",
+      "Pop-Art: wenige knallige Druckfarben, kräftige schwarze Konturen, Rasterpunkte im Schatten",
     shaderMode: 1,
-    inkWeight: 1,
-    // Keeps a hint of the warm-near/cool-far cue; the flat bands carry depth.
-    gradingWeight: 0.4,
-    grainWeight: 1.2,
+    inkWeight: 1.2,
+    // Printing inks: no warm/cool grade over them.
+    gradingWeight: 0,
+    grainWeight: 0.6,
     grainAnimated: false,
     allowDof: false,
     paperScene: null,
@@ -133,17 +133,17 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     id: "sincity",
     label: "Sin City",
     description:
-      "Harte schwarze und weiße Flächen, schwarze Bäume, die Skyline weiß gegen die Nacht — nur die roten Dächer behalten Farbe",
+      "Harte Schwarzweiß-Flächen aus Sonne und Schatten, Bäume und Wasser tiefschwarz — nur die roten Dächer behalten Farbe",
     shaderMode: 3,
     inkWeight: 0.8,
     gradingWeight: 0,
-    grainWeight: 0.5,
+    grainWeight: 0.35,
     grainAnimated: true,
     allowDof: false,
-    paperScene: null,
+    paperScene: "ink",
     crowns: null,
     lampCones: false,
-    vignette: { offset: 0.25, darkness: 0.55 },
+    vignette: { offset: 0.3, darkness: 0.45 },
     swatch: ["#f4f4f0", "#c1121f"],
   },
   {
@@ -189,8 +189,8 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     description:
       "Die Gebäude schwarz, alles andere weiß, die Katasterbäume als Kronenkreise — keine Schatten; gemacht für den Lageplan",
     shaderMode: 6,
-    // the figure is the drawing: no lines
-    inkWeight: 0,
+    // the figure is the drawing: only the hairline that parts two blocks
+    inkWeight: 1,
     gradingWeight: 0,
     grainWeight: 0,
     grainAnimated: false,
