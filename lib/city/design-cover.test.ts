@@ -178,3 +178,19 @@ describe("a placed plan", () => {
     expect(inPlan(turned, 1004, 2000.5)).toBe(false);
   });
 });
+
+describe("designMasks with ground triangles", () => {
+  test("a triangle marked ground is in the site but not the plan", () => {
+    // a 10 m wall standing up: in the plan unless marked
+    const positions = [0, 0, 0, 10, 0, 0, 10, 0, 5, 0, 0, 0, 10, 0, 5, 0, 0, 5];
+    const plain = designMasks(positions, null, undefined, { cell: 1 });
+    const marked = designMasks(positions, null, undefined, {
+      cell: 1,
+      ground: [1, 1],
+    });
+    const count = (cells: Uint8Array) => cells.reduce((s, c) => s + c, 0);
+    expect(count(plain?.plan.cells ?? new Uint8Array())).toBeGreaterThan(0);
+    expect(count(marked?.plan.cells ?? new Uint8Array())).toBe(0);
+    expect(count(marked?.site.cells ?? new Uint8Array())).toBeGreaterThan(0);
+  });
+});
