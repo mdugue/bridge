@@ -8,6 +8,7 @@ import {
   floodReading,
   floodSurface,
   insidePolygon,
+  isCalendarDay,
   levelAtReference,
   riverOf,
   shadedHours,
@@ -20,8 +21,9 @@ const elbe = riverOf("dresden")!;
 const EPSG = 25_833;
 
 describe("Hochwasser", () => {
-  test("only Dresden has a river with gauges", () => {
+  test("Dresden and Meißen share the Elbe; other cities have no gauges", () => {
     expect(elbe.name).toBe("Elbe");
+    expect(riverOf("meissen")).toBe(elbe);
     expect(riverOf("hamburg")).toBeNull();
   });
 
@@ -135,4 +137,10 @@ describe("Baukörper", () => {
     expect(noon.sonnenhoehe).toBeLessThan(17);
     expect(shadedHours(hours)[0].name).toBe("Nord");
   });
+});
+
+test("a calendar day is a real one in range", () => {
+  expect(isCalendarDay("2026-12-21")).toBe(true);
+  expect(isCalendarDay("2026-02-31")).toBe(false);
+  expect(isCalendarDay("0026-06-21")).toBe(false);
 });

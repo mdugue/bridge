@@ -18,6 +18,7 @@
  * Pure: no three.js, no DOM.
  */
 import { getPosition } from "suncalc";
+import { SITE_ZONE, zonedTime } from "./bike-counts";
 import { gridConvergenceDeg, latLngToUtm, utmToLatLng } from "./crs";
 
 /** Said with every scenario result, and by the model with every answer. */
@@ -57,46 +58,54 @@ export interface River {
   sources: readonly string[];
 }
 
-/** The rivers whose floods a site can show, by site id. */
+/** The Elbe from Pirna to Meißen, read at the Dresden gauge. */
+const ELBE: River = {
+  name: "Elbe",
+  // PEGELONLINE (WSV), gauge zeros valid from 2019-11-01 (Dresden)
+  gauges: [
+    { name: "Pirna", lat: 50.964_585, lng: 13.929_755, zero: 108.026 },
+    { name: "Dresden", lat: 51.054_46, lng: 13.738_832, zero: 102.7 },
+    { name: "Meißen", lat: 51.164_406, lng: 13.475_468, zero: 94.823 },
+  ],
+  reference: "Dresden",
+  // the Landeshochwasserzentrum's "normal": about 150 cm
+  normalCm: 150,
+  events: [
+    {
+      id: "1845",
+      label: "Winterhochwasser 1845",
+      cm: 877,
+      when: "1845-03-31",
+    },
+    { id: "1890", label: "Hochwasser 1890", cm: 837, when: "1890-09" },
+    {
+      id: "2002",
+      label: "Augusthochwasser 2002",
+      cm: 940,
+      when: "2002-08-17",
+    },
+    {
+      id: "2006",
+      label: "Frühjahrshochwasser 2006",
+      cm: 749,
+      when: "2006-04-04",
+    },
+    { id: "2013", label: "Junihochwasser 2013", cm: 878, when: "2013-06-06" },
+  ],
+  sources: [
+    "Pegel und Pegelnullpunkte: WSV, PEGELONLINE (https://www.pegelonline.wsv.de), DL-DE->Zero-2.0",
+    "Scheitelwasserstände: Landeshauptstadt Dresden, Umweltatlas 4.45 (https://www.dresden.de/media/pdf/umwelt/ua_4_45_text.pdf); LfULG, Landeshochwasserzentrum",
+  ],
+};
+
+/**
+ * The rivers whose floods a site can show, by site id — kept here, not in
+ * the site's config, so they change no bake's cache key: they feed only
+ * *Frag die Stadt*. Meißen shares Dresden's Elbe and its readings.
+ */
 export const SITE_RIVERS: Readonly<Record<string, River>> = {
-  dresden: {
-    name: "Elbe",
-    // PEGELONLINE (WSV), gauge zeros valid from 2019-11-01 (Dresden)
-    gauges: [
-      { name: "Pirna", lat: 50.964_585, lng: 13.929_755, zero: 108.026 },
-      { name: "Dresden", lat: 51.054_46, lng: 13.738_832, zero: 102.7 },
-      { name: "Meißen", lat: 51.164_406, lng: 13.475_468, zero: 94.823 },
-    ],
-    reference: "Dresden",
-    // the Landeshochwasserzentrum's "normal": about 150 cm
-    normalCm: 150,
-    events: [
-      {
-        id: "1845",
-        label: "Winterhochwasser 1845",
-        cm: 877,
-        when: "1845-03-31",
-      },
-      { id: "1890", label: "Hochwasser 1890", cm: 837, when: "1890-09" },
-      {
-        id: "2002",
-        label: "Augusthochwasser 2002",
-        cm: 940,
-        when: "2002-08-17",
-      },
-      {
-        id: "2006",
-        label: "Frühjahrshochwasser 2006",
-        cm: 749,
-        when: "2006-04-04",
-      },
-      { id: "2013", label: "Junihochwasser 2013", cm: 878, when: "2013-06-06" },
-    ],
-    sources: [
-      "Pegel und Pegelnullpunkte: WSV, PEGELONLINE (https://www.pegelonline.wsv.de), DL-DE->Zero-2.0",
-      "Scheitelwasserstände: Landeshauptstadt Dresden, Umweltatlas 4.45 (https://www.dresden.de/media/pdf/umwelt/ua_4_45_text.pdf); LfULG, Landeshochwasserzentrum",
-    ],
-  },
+  dresden: ELBE,
+  meissen: ELBE,
 };
 
 /** The lowest and highest reading a scenario takes (cm). */
@@ -357,37 +366,27 @@ export function shadowOf(
   return { hull, length, towards };
 }
 
-/** Minutes the zone is ahead of UTC at `t` (Europe/Berlin). */
-function berlinOffsetMin(t: number): number {
-  const parts = BERLIN_PARTS.formatToParts(new Date(t));
-  const get = (type: string) =>
-    Number(parts.find((p) => p.type === type)?.value ?? 0);
-  const local = Date.UTC(
-    get("year"),
-    get("month") - 1,
-    get("day"),
-    get("hour"),
-    get("minute")
+/** Whether `YYYY-MM-DD` names a real day between 1900 and 2100. */
+export function isCalendarDay(day: string): boolean {
+  const [y, m, d] = day.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return (
+    y >= 1900 &&
+    y <= 2100 &&
+    t.getUTCFullYear() === y &&
+    t.getUTCMonth() === m - 1 &&
+    t.getUTCDate() === d
   );
-  return Math.round((local - t) / 60_000);
 }
 
-const BERLIN_PARTS = new Intl.DateTimeFormat("en-US", {
-  timeZone: "Europe/Berlin",
-  hourCycle: "h23",
-  year: "numeric",
-  month: "numeric",
-  day: "numeric",
-  hour: "numeric",
-  minute: "numeric",
-});
-
-/** The instant of a local hour (Europe/Berlin) on a `YYYY-MM-DD` day. */
+/** The instant of a local hour (the site's zone) on a `YYYY-MM-DD` day. */
 export function berlinInstant(day: string, hour: number): Date {
   const [y, m, d] = day.split("-").map(Number);
-  const guess = Date.UTC(y, m - 1, d, 0, Math.round(hour * 60));
-  const first = guess - berlinOffsetMin(guess) * 60_000;
-  return new Date(guess - berlinOffsetMin(first) * 60_000);
+  const minutes = Math.round(hour * 60);
+  return zonedTime(
+    [y, m, d, Math.floor(minutes / 60), minutes % 60, 0],
+    SITE_ZONE
+  );
 }
 
 /** A building the study can shade, by its centre. */
@@ -437,11 +436,17 @@ export function shadowStudy(
       sonnenhoehe: Math.round(sun.altitude),
       schattenrichtung: Math.round(shadow.towards),
       schattenlaenge: Math.round(shadow.length),
-      verschattet: neighbours
-        .filter(
-          (n) => insidePolygon(shadow.hull, n) && !insidePolygon(footprint, n)
-        )
-        .map((n) => n.name),
+      // one name once: the parts of an ensemble share it
+      verschattet: [
+        ...new Set(
+          neighbours
+            .filter(
+              (n) =>
+                insidePolygon(shadow.hull, n) && !insidePolygon(footprint, n)
+            )
+            .map((n) => n.name)
+        ),
+      ],
     });
   }
   return hours;

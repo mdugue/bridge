@@ -49,8 +49,9 @@ export interface AskScene {
   river: River | null;
   /** the river's water at `cm` on its reference gauge; null takes it away */
   setFlood: (cm: number | null) => void;
-  /** a planned volume in the scene; null takes it away */
-  setVolume: (volume: PlannedVolume | null) => void;
+  /** a planned volume in the scene, null takes it away; false where
+   *  no loaded ground lies under it */
+  setVolume: (volume: PlannedVolume | null) => boolean;
 }
 
 /** The tools the browser runs, bound to the scene. */
@@ -79,16 +80,44 @@ export function sceneTools(scene: AskScene) {
         : { ok: false, hinweis: "Diese Stadt hat diese Ebene nicht." }
     ),
     floodShowTool.client((ask) => showFlood(scene, ask)),
-    volumeTool.client(({ aus, ...volume }) => {
-      if (aus) {
-        scene.setVolume(null);
-        return { ok: true };
-      }
-      const v = clampVolume({ ...volume, drehung: volume.drehung ?? 0 });
-      scene.setVolume(v);
-      return { ok: true, baukoerper: v, hinweis: SCENARIO_NOTE };
-    })
+    volumeTool.client((ask) => placeVolume(scene, ask))
   );
+}
+
+function placeVolume(
+  scene: AskScene,
+  ask: Partial<PlannedVolume> & { aus?: boolean }
+): Record<string, unknown> {
+  if (ask.aus) {
+    scene.setVolume(null);
+    return { ok: true };
+  }
+  const { x, y, breite, tiefe, hoehe } = ask;
+  if (
+    x === undefined ||
+    y === undefined ||
+    breite === undefined ||
+    tiefe === undefined ||
+    hoehe === undefined
+  ) {
+    return { ok: false, fehler: "x, y, breite, tiefe und hoehe fehlen." };
+  }
+  const v = clampVolume({
+    x,
+    y,
+    breite,
+    tiefe,
+    hoehe,
+    drehung: ask.drehung ?? 0,
+  });
+  if (!scene.setVolume(v)) {
+    return {
+      ok: false,
+      hinweis:
+        "Dort ist das Gelände noch nicht geladen — erst mit zeige hinfliegen, dann noch einmal.",
+    };
+  }
+  return { ok: true, baukoerper: v, hinweis: SCENARIO_NOTE };
 }
 
 function showFlood(

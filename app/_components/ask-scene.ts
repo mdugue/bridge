@@ -91,7 +91,7 @@ export function useAskScene(
       setListening: (on) => pace.setListening(on),
       river: riverOf(site.id),
       setFlood: (cm) => handleRef.current?.setFlood(cm),
-      setVolume: (volume) => handleRef.current?.setVolume(volume),
+      setVolume: (volume) => handleRef.current?.setVolume(volume) ?? false,
       show: (view) => handleRef.current?.flyToViewpoint(view),
       setTime: (hour, date) => {
         const at = instantAt(hour, current(), date);

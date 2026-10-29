@@ -72,9 +72,17 @@ export function floodAffected(
     const depth = surface(b.x, b.y) - b.z;
     return plausible(depth) ? [{ b, depth }] : [];
   });
+  // deepest first, each name once (an ensemble's parts share theirs)
+  const seen = new Set<string>();
   const named = wet
     .filter(({ b }) => b.name !== undefined || b.addr !== undefined)
     .sort((a, b) => b.depth - a.depth)
+    .filter(({ b }) => {
+      const key = (b.name ?? b.addr) as string;
+      const fresh = !seen.has(key);
+      seen.add(key);
+      return fresh;
+    })
     .slice(0, ASK_LIMITS.results)
     .map(({ b, depth }) => ({
       name: b.name ?? b.addr,
@@ -114,6 +122,8 @@ export function floodAffected(
     nach_tiefe: depthBands(wet.map((w) => w.depth)),
     tiefste_benannte: named,
     wahrzeichen: landmarks.slice(0, ASK_LIMITS.results),
+    gezaehlt:
+      "Gebäude, die das Stadtwissen kennt: mit Namen, Adresse, Denkmalschutz oder als Teil eines Wahrzeichens — Schuppen, Garagen und Nebengebäude ohne Adresse fehlen.",
     annahmen:
       "Wasserspiegel zwischen den Pegeln geradlinig, Gebäude nach dem Gelände an ihrem Fuß; ohne Deiche, Schutzwände, Kanalisation und Zuflüsse (2002 kam in Dresden die Weißeritz dazu); jede Senke unter dem Spiegel gilt als nass.",
     quellen: river.sources,
@@ -150,7 +160,8 @@ export function shadowAnswer(
   const cap = ASK_LIMITS.results;
   return {
     datum: ask.datum,
-    zeitzone: "Europe/Berlin",
+    zeitzone:
+      "Ortszeit der Stadt (MEZ/MESZ); setze_zeit stellt die Uhr des Besuchers, die außerhalb Deutschlands abweichen kann",
     baukoerper: v,
     stunden: hours.map((h) => ({
       ...h,

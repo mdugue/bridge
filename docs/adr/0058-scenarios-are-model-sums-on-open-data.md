@@ -56,9 +56,19 @@ picked, walked into or stored.
 
 ## Consequences
 
-- Only a site with a river in `SITE_RIVERS` offers floods (Dresden);
-  the prompt says which events exist and that other cities have none.
-  Adding one is a few gauges and crests with their sources, not a bake.
+- Only a site with a river in `SITE_RIVERS` offers floods (Dresden and
+  Meißen, which shares Dresden's Elbe and its readings); the prompt says
+  which events exist and that other cities have none. Adding one is a
+  few gauges and crests with their sources, not a bake — and kept out of
+  `sites/`, so it changes no bake's cache key.
+- The counts are of the buildings the Stadtwissen knows (named,
+  addressed, listed or part of a landmark), and the result says so. A
+  base far below the river's bed (a fault of the data) is not counted.
+- The study's hours are the city's clock; `setze_zeit` sets the
+  visitor's, like the HUD's slider — the two differ for a visitor outside
+  Germany, and the result says so.
+- A volume needs loaded ground under it; elsewhere the tool says to fly
+  there first.
 - The water surface is wrong where the river's slope departs from its
   gauge zeros', and the counts include hollows a dyke keeps dry (and
   miss the Weißeritz, which flooded Dresden's centre in 2002). The

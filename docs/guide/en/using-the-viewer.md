@@ -403,8 +403,8 @@ The button in the corner opens a panel with three tabs.
   **scenario assistant** it works out what-ifs: "How high was the Elbe
   here in 2002?" lays a flood's water level into the model as a water
   surface and counts the buildings whose foot would stand below it (in
-  Dresden: the floods of 1845, 1890, 2002, 2006 and 2013, or any reading
-  of the gauge); "What would a 30 m house here shade in December?" puts
+  Dresden and Meißen: the floods of 1845, 1890, 2002, 2006 and 2013, or
+  any reading of the Dresden gauge); "What would a 30 m house here shade in December?" puts
   a light box there, casts its shadow at the hour set and names the
   neighbours in its shadow hour by hour. Both are a model's sums, not an
   official result — no dykes or flood walls, flat ground — and every

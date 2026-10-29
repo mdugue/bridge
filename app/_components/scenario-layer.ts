@@ -13,8 +13,9 @@
  *   (sunk by `SINK.box`), casting and receiving the sun's shadow like a
  *   building. It is not asked or walked into: rays pass it.
  *
- * Each builds its own material on first use and compiles before it shows
- * (`compile`); both are freed when replaced and on dispose. Nothing loads
+ * Their materials are scene-wide (`sceneMaterial`: one build for the
+ * site); each mesh compiles before it shows (`compile`) and its geometry
+ * is freed when replaced and on dispose. Nothing loads
  * before a scenario is asked for.
  */
 import {
@@ -34,14 +35,15 @@ import {
   type PlannedVolume,
   volumeCorners,
 } from "@/lib/city/scenario";
-import { disposeObject3D } from "./three-utils";
+import { disposeObject3D, sceneMaterial } from "./three-utils";
 
 /** Cells along the longer side of the site's flood grid. */
 export const FLOOD_GRID = 128;
 
 export interface ScenarioLayer {
   setFlood: (surface: FloodSurface | null) => void;
-  setVolume: (volume: PlannedVolume | null) => void;
+  /** false where no loaded ground lies under it: nothing is shown */
+  setVolume: (volume: PlannedVolume | null) => boolean;
   dispose: () => void;
 }
 
@@ -156,13 +158,17 @@ export function createScenarioLayer(ctx: ScenarioContext): ScenarioLayer {
       }
       const mesh = new Mesh(
         floodGeometry(ctx.bounds, ctx.offset, surface),
-        new MeshStandardNodeMaterial({
-          color: FLOOD_COLOUR,
-          roughness: 0.3,
-          metalness: 0,
-          transparent: true,
-          opacity: 0.78,
-        })
+        sceneMaterial(
+          "scenario-flood",
+          () =>
+            new MeshStandardNodeMaterial({
+              color: FLOOD_COLOUR,
+              roughness: 0.3,
+              metalness: 0,
+              transparent: true,
+              opacity: 0.78,
+            })
+        )
       );
       mesh.name = "scenario-flood";
       mesh.castShadow = false;
@@ -183,16 +189,20 @@ export function createScenarioLayer(ctx: ScenarioContext): ScenarioLayer {
       const foot = v ? volumeFoot(v, ctx.heightAt) : null;
       if (!v || foot === null) {
         ctx.changed();
-        return;
+        return !v;
       }
       const tall = v.hoehe + SINK.box;
       const mesh = new Mesh(
         new BoxGeometry(v.breite, tall, v.tiefe),
-        new MeshStandardNodeMaterial({
-          color: VOLUME_COLOUR,
-          roughness: 0.9,
-          metalness: 0,
-        })
+        sceneMaterial(
+          "scenario-volume",
+          () =>
+            new MeshStandardNodeMaterial({
+              color: VOLUME_COLOUR,
+              roughness: 0.9,
+              metalness: 0,
+            })
+        )
       );
       const at = epsgToWorld(v.x, v.y, ctx.offset);
       mesh.position.set(at.x, foot - SINK.box + tall / 2, at.z);
@@ -210,6 +220,7 @@ export function createScenarioLayer(ctx: ScenarioContext): ScenarioLayer {
           volume = m;
         }
       );
+      return true;
     },
     dispose: () => {
       disposed = true;

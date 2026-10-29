@@ -1843,7 +1843,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   cells over the site (`scenario-layer.ts`); counted on the server
   against each Stadtwissen building's base (`ask-scenario.ts`).
   Assumed: no dykes, walls or barriers, every hollow below the level
-  wet, the flood's slope the gauge zeros'. Dresden only.
+  wet, the flood's slope the gauge zeros'. Dresden and Meißen (Dresden's
+  readings).
 - **Szenario Baukörper** `= computed` `≈ assumed` — a planned box (centre,
   sides, height, turn) as a light clay-less box on the lowest ground
   under its corners, casting the sun's shadow; its shadow on flat ground

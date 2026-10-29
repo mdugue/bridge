@@ -13,7 +13,7 @@ import { z } from "zod";
 import { ASK_LIMITS } from "./ask-city";
 import { DATA_LAYERS, type DataLayerKey } from "./data-layers";
 import { RENDER_STYLES, type RenderStyle } from "./render-style";
-import { FLOOD_CM, VOLUME_LIMITS } from "./scenario";
+import { FLOOD_CM, isCalendarDay, VOLUME_LIMITS } from "./scenario";
 
 const coordinate = z.number();
 
@@ -142,7 +142,9 @@ const floodAsk = {
     .string()
     .max(12)
     .optional()
-    .describe("ein Hochwasser der Stadt aus wo_bin_ich, z. B. „2002“"),
+    .describe(
+      "ein bekanntes Hochwasser der Stadt (die Liste steht in deinen Anweisungen), z. B. „2002“"
+    ),
   pegel_cm: z
     .number()
     .min(FLOOD_CM.min)
@@ -206,6 +208,7 @@ export const shadowTool = toolDefinition({
     datum: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .refine(isCalendarDay, "kein Kalendertag zwischen 1900 und 2100")
       .describe("JJJJ-MM-TT, z. B. 2026-12-21 für den kürzesten Tag"),
   }),
 });
@@ -214,8 +217,9 @@ export const volumeTool = toolDefinition({
   name: "plane_baukoerper",
   description:
     "Stellt einen geplanten Baukörper als hellen Quader ins Stadtmodell, mit echtem Schattenwurf (die Zeit stellt setze_zeit), oder nimmt ihn mit aus wieder heraus. Bestehende Gebäude an der Stelle bleiben stehen.",
+  // every field optional: taking the box away needs only `aus`
   inputSchema: z.object({
-    ...volume,
+    ...z.object(volume).partial().shape,
     aus: z.boolean().default(false),
   }),
 });

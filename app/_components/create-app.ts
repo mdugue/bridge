@@ -592,7 +592,8 @@ export interface CityWalkHandle {
    * one shows nothing), and a planned volume; null takes either away.
    */
   setFlood: (cm: number | null) => void;
-  setVolume: (volume: PlannedVolume | null) => void;
+  /** false where no loaded ground lies under the volume (nothing shown) */
+  setVolume: (volume: PlannedVolume | null) => boolean;
   /**
    * The current pose as a vantage — what the HUD stores when you save a view,
    * so restoring it is the same animated glide as any curated one.
