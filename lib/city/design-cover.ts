@@ -1,5 +1,5 @@
 /**
- * Which existing buildings a design replaces (ADR 0053): the design's plan
+ * Which existing buildings a design replaces (ADR 0054): the design's plan
  * as a mask of 1 m cells, and the LoD2 objects whose footprint it covers
  * for the most part. The layer hides those (city-layer.ts `setHidden`) and
  * brings them back when the design moves or goes. No THREE, no DOM.

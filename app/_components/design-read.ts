@@ -28,7 +28,7 @@ import {
 } from "@/lib/city/design-placement";
 
 /**
- * Reads a design the planner dropped into the page (ADR 0053): a glTF —
+ * Reads a design the planner dropped into the page (ADR 0054): a glTF —
  * one .glb, or a .gltf with its .bin and textures picked together — into
  * one geometry about its anchor (design-placement.ts `designAnchor`), with
  * a group per material of the file. Everything stays on the device: the

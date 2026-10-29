@@ -1,5 +1,5 @@
 /**
- * Where a loaded design stands (ADR 0053): the pure half of the design
+ * Where a loaded design stands (ADR 0054): the pure half of the design
  * layer (app/_components/design-layer.ts). A design comes as a glTF in its
  * own frame — Y up, metres, and almost never a word on where in the world
  * it belongs — and lands in the site's frame by a placement: an anchor on

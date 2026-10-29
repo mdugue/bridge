@@ -24,7 +24,7 @@ import { type DesignModel, readDesign } from "./design-read";
 import { releaseRenderState, sceneMaterial } from "./three-utils";
 
 /**
- * A planner's design in the city (ADR 0053, the first stage of the
+ * A planner's design in the city (ADR 0054, the first stage of the
  * assessment "Entwürfe in city walk"): a glTF read on the device
  * (design-read.ts), placed by what its coordinates say or in front of the
  * player, turned and lifted in the sidebar's *Entwurf* panel, drawn in a

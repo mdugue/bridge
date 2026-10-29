@@ -106,7 +106,7 @@ function savePlacement(text: string, design: string): void {
 }
 
 /**
- * The sidebar's *Entwurf* (ADR 0053): a planner's glTF loaded into the
+ * The sidebar's *Entwurf* (ADR 0054): a planner's glTF loaded into the
  * city on this device, where its coordinates put it or in front of the
  * player, then moved, turned, lifted, shown in white or its own colours,
  * with the buildings it replaces stepped aside. The placement can be kept

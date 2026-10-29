@@ -4635,7 +4635,7 @@ GPU**.
   never into the scene (ADR 0042).
 - **A planner's design in the city** `❝ taken` `◎ detected` `≈ assumed` —
   a glTF the visitor loads in the sidebar's *Entwurf* panel, read on the
-  device and never uploaded (`design-read.ts`; ADR 0053): its nodes and
+  device and never uploaded (`design-read.ts`; ADR 0054): its nodes and
   instances flattened into one geometry about its anchor, moved there in
   doubles. Its place is `◎ detected` from its own coordinates where they
   are the site's UTM zone (an easting in X, plain or zone-prefixed, a
