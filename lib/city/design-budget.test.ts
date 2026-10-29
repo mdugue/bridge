@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
+  DESIGN_FILE_LIMITS,
   DESIGN_LIMITS,
   geometryBytes,
   judgeDesign,
+  judgeFile,
   textureBytesOf,
 } from "./design-budget";
 
@@ -51,5 +53,15 @@ describe("design budget", () => {
 
   test("a texture with its mips", () => {
     expect(textureBytesOf(1024, 1024)).toBe(Math.ceil(4 * MB * (4 / 3)));
+  });
+});
+
+describe("judgeFile", () => {
+  test("a phone reads files up to its limit, and says why not past it", () => {
+    expect(judgeFile(DESIGN_FILE_LIMITS.mobile, "mobile")).toBeNull();
+    expect(judgeFile(DESIGN_FILE_LIMITS.mobile + 1, "mobile")).toContain(
+      "auf dem Handy"
+    );
+    expect(judgeFile(DESIGN_FILE_LIMITS.mobile + 1, "desktop")).toBeNull();
   });
 });

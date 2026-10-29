@@ -17,16 +17,19 @@ unannounced (ADR 0043).
 
 ## Decision
 
-1. **A design is a file read in the page, never uploaded.** A .glb, or a
-   .gltf with its resources picked together; a resource from anywhere
-   else is refused, so a design never makes the page fetch. Its parts are
+1. **A design is a file read in the page, never uploaded.** A .glb, a
+   .gltf with its resources picked together, or an IFC; a resource from
+   anywhere else is refused, so a design never makes the page fetch from
+   a third party. The IFC reader (web-ifc, WebAssembly) loads only when an
+   .ifc is picked, from the site's own `/wasm/`. Its parts are
    flattened into one geometry about its anchor (the box's middle in
    plan, its lowest point), moved there in doubles before float32.
 2. **It is placed by its coordinates where they say something**, else
    ahead of the player. An easting of the site's UTM zone and a northing
-   are its place; its height is kept as NHN where the ground under it
-   agrees, else it is set on the ground (a model whose height runs
-   through 0 on its ±0). The *Entwurf* panel moves, turns and lifts it
+   are its place, and so is an IFC's `IfcMapConversion` (its IfcSite's
+   latitude and longitude roughly); its height is kept as NHN where the
+   ground under it agrees, else it is set on the ground (a model whose
+   height runs through 0 on its ±0). The *Entwurf* panel moves, turns and lifts it
    and saves the placement as a small JSON file to load with it again.
 3. **It stands in for the buildings it covers.** Each LoD2 object whose
    footprint its plan covers for at least half leaves its tile's index
@@ -54,6 +57,9 @@ unannounced (ADR 0043).
 - One design at a time.
 - The site raster (2 MB at most) is taken from the tile cache with the
   design, so a phone's memory does not grow.
+- An IFC's kernel memory is freed once the model is read; a phone reads
+  IFC files up to 80 MB, the tessellated model then weighed like any
+  other.
 - A building hidden by a design and demolished meanwhile stays gone when
   the design leaves.
 

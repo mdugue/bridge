@@ -27,7 +27,7 @@ const SECTION_LABEL =
 
 /** What the files a planner may pick end in: the glTF, a .gltf's
  *  resources, a placement file. */
-const ACCEPT = ".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp,.json";
+const ACCEPT = ".glb,.gltf,.ifc,.bin,.png,.jpg,.jpeg,.webp,.json";
 
 const SOURCE_TEXT: Record<PlacementSource, string> = {
   file: "Lage und Höhen aus der Datei (UTM, NHN).",
@@ -169,8 +169,8 @@ export function DesignPanel({
     >
       <span className={SECTION_LABEL}>Entwurf</span>
       <p className="text-[11px] text-muted-foreground leading-snug">
-        Eigenen Entwurf als glTF (.glb) in die Stadt laden, auch hierher ziehen.
-        Die Datei bleibt auf diesem Gerät.
+        Eigenen Entwurf als glTF (.glb) oder IFC in die Stadt laden, auch
+        hierher ziehen. Die Datei bleibt auf diesem Gerät.
       </p>
       <input
         accept={ACCEPT}
@@ -232,6 +232,11 @@ function DesignControlsView({
         <span className="text-[11px] text-muted-foreground leading-snug">
           {SOURCE_TEXT[status.source]}
         </span>
+        {status.note && (
+          <span className="text-[11px] text-muted-foreground leading-snug">
+            {status.note}
+          </span>
+        )}
         {status.texturesDropped && (
           <span className="text-[11px] text-muted-foreground leading-snug">
             Die Texturen passen nicht ins Speicherbudget dieses Geräts und

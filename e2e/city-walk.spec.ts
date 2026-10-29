@@ -105,6 +105,52 @@ async function designBlockGlb(at: [number, number, number]) {
   return new WebIO().writeBinary(doc);
 }
 
+/**
+ * The same block as an IFC4 export in millimetres: drawn about its own
+ * origin, put at `east`/`north`/`height` by its IfcMapConversion.
+ */
+function designBlockIfc(east: number, north: number, height: number) {
+  const lines = [
+    "IFCCARTESIANPOINT((0.,0.,0.))",
+    "IFCDIRECTION((0.,0.,1.))",
+    "IFCDIRECTION((1.,0.,0.))",
+    "IFCAXIS2PLACEMENT3D(#1,#2,#3)",
+    "IFCDIRECTION((0.,1.))",
+    "IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,#4,#5)",
+    "IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,#6,$,.MODEL_VIEW.,$)",
+    "IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)",
+    "IFCUNITASSIGNMENT((#8))",
+    "IFCPROJECT('0YvctVUKr0kugbFTf53O9L',$,'Test',$,$,$,$,(#6),#9)",
+    "IFCPROJECTEDCRS('EPSG:25833',$,$,$,$,$,$)",
+    `IFCMAPCONVERSION(#6,#11,${east}.,${north}.,${height}.,1.,0.,1.)`,
+    "IFCLOCALPLACEMENT($,#4)",
+    "IFCSITE('1YvctVUKr0kugbFTf53O9L',$,'Site',$,$,#13,$,$,.ELEMENT.,$,$,$,$,$)",
+    "IFCRELAGGREGATES('2YvctVUKr0kugbFTf53O9L',$,$,$,#10,(#14))",
+    "IFCCARTESIANPOINT((0.,0.))",
+    "IFCAXIS2PLACEMENT2D(#16,$)",
+    "IFCRECTANGLEPROFILEDEF(.AREA.,$,#17,40000.,30000.)",
+    "IFCEXTRUDEDAREASOLID(#18,#4,#2,20000.)",
+    "IFCSHAPEREPRESENTATION(#7,'Body','SweptSolid',(#19))",
+    "IFCPRODUCTDEFINITIONSHAPE($,$,(#20))",
+    "IFCLOCALPLACEMENT(#13,#4)",
+    "IFCBUILDINGELEMENTPROXY('3YvctVUKr0kugbFTf53O9L',$,'Block',$,$,#22,#21,$,$)",
+    "IFCRELCONTAINEDINSPATIALSTRUCTURE('5YvctVUKr0kugbFTf53O9L',$,$,$,(#23),#14)",
+  ];
+  return [
+    "ISO-10303-21;",
+    "HEADER;",
+    "FILE_DESCRIPTION((''),'2;1');",
+    "FILE_NAME('block.ifc','2026-10-29T00:00:00',(''),(''),'','','');",
+    "FILE_SCHEMA(('IFC4'));",
+    "ENDSEC;",
+    "DATA;",
+    ...lines.map((line, i) => `#${i + 1}=${line};`),
+    "ENDSEC;",
+    "END-ISO-10303-21;",
+    "",
+  ].join("\n");
+}
+
 /** Starts collecting page + console errors for the whole life of the page. */
 function watchErrors(page: Page): ErrorLog {
   const log: ErrorLog = { page: [], console: [] };
@@ -1175,6 +1221,27 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       before,
       { timeout: slow(30_000) }
     );
+    expectNoErrors(errors);
+  });
+
+  test("an IFC model takes the place its map conversion gives it", async () => {
+    // The block again, as IFC in millimetres about its own origin: web-ifc
+    // (its .wasm from the site's own /wasm/) reads it, IfcMapConversion
+    // puts it by the Albertplatz, and the buildings under it step aside.
+    const ifc = designBlockIfc(412_300, 5_657_420, 112);
+    const status = await page.evaluate(async (text) => {
+      const design = window.__poc?.handle?.design;
+      await design?.load([new File([text], "block.ifc")]);
+      return design?.status() ?? null;
+    }, ifc);
+    expect(status?.source).toBe("file");
+    expect(status?.note).toContain("IfcMapConversion");
+    expect(status?.placement.east).toBeCloseTo(412_300, 3);
+    expect(status?.placement.north).toBeCloseTo(5_657_420, 3);
+    expect(status?.placement.base).toBeCloseTo(112, 3);
+    expect(status?.triangles).toBe(12);
+    expect(status?.hidden ?? 0).toBeGreaterThan(0);
+    await page.evaluate(() => window.__poc?.handle?.design.remove());
     expectNoErrors(errors);
   });
 
