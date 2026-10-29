@@ -36,10 +36,13 @@ sources — so "what is that" is answered from the measured data, not the
 model's guess.
 
 **The Hörmodus rests the scene.** A switch in the card darkens the
-screen and lets the render loop draw at two frames a second
-(`FramePace.setListening`, `LISTENING_FPS`): enough for live mode's pose
-and `was_ist_da` to see the current view, a sliver of the GPU's work.
-A tap ends it; closing the card ends it.
+screen and lets the render loop draw at two frames a second while the
+scene stands still (`FramePace.setListening`, `LISTENING_FPS`): enough
+for `was_ist_da` to see the current view, a sliver of the GPU's work.
+While it moves — a glide an answer started, live mode following the
+walker — it draws at 20 (`LISTENING_MOVING_FPS`): the loop clamps its
+time step to 0.05 s, so at two frames a glide would take ten times as
+long. A tap ends it; closing the card ends it.
 
 ## Consequences
 

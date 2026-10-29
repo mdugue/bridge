@@ -17,9 +17,12 @@
  * Any input wakes it for the very next frame (`setStill(false)`).
  *
  * While the visitor only listens (*Frag die Stadt*'s Hörmodus, ADR 0057)
- * the scene draws at LISTENING_FPS: the screen is dark under the card,
- * but the pose, the live mode and the questions about the view still see
- * a current scene.
+ * the scene draws at LISTENING_FPS while it stands still: the screen is
+ * dark under the card, but the pose, the live mode and the questions about
+ * the view still see a current scene. While it moves — a glide the answer
+ * started, the live mode following the walker — it draws at
+ * LISTENING_MOVING_FPS, the slowest rate whose time step the loop does not
+ * clamp (0.05 s), so a glide arrives when it would on screen.
  *
  * Otherwise every frame draws.
  */
@@ -34,6 +37,8 @@ export const STILL_FPS = 30;
 export const STILL_AFTER_MS = 1000;
 /** frames per second the scene draws while the visitor only listens */
 export const LISTENING_FPS = 2;
+/** ...and while it moves, listened to: the loop's largest time step */
+export const LISTENING_MOVING_FPS = 20;
 
 export interface FramePace {
   /** the HUD covers the scene (on a phone: the sidebar's sheet is open) */
@@ -73,6 +78,7 @@ export function createFramePace(): FramePace {
   // and 4 ms keeps 30 fps every second frame at 60 Hz, every fourth at 120
   const stillInterval = 1000 / STILL_FPS - 4;
   const listeningInterval = 1000 / LISTENING_FPS - 8;
+  const listeningMovingInterval = 1000 / LISTENING_MOVING_FPS - 4;
   return {
     setCovered: (on) => {
       covered = on;
@@ -97,7 +103,9 @@ export function createFramePace(): FramePace {
       const draw =
         coveredDraws &&
         (!still || now - lastDrawn >= stillInterval) &&
-        (!listening || now - lastDrawn >= listeningInterval);
+        (!listening ||
+          now - lastDrawn >=
+            (still ? listeningInterval : listeningMovingInterval));
       if (draw) {
         lastDrawn = now;
         heldBefore = held;

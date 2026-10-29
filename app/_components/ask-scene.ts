@@ -72,7 +72,10 @@ export function useAskScene(
             hinweis: "In der Bildmitte steht nichts, was das Modell kennt.",
           };
         }
-        // the card the viewer opens for it, as words for the model
+        // the card the viewer opens for it, as words for the model — without
+        // the site's per-tile survey record (provenance.json) and a tree's
+        // own facts file, which the visible card fetches: the model gets
+        // the layers' credits, the card beside it the full sources
         const card = inquiryCard(asked, null, credits);
         return {
           gefunden: true,

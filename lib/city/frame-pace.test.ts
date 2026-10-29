@@ -4,6 +4,7 @@ import {
   createFramePace,
   createStillness,
   LISTENING_FPS,
+  LISTENING_MOVING_FPS,
   SCROLL_QUIET_MS,
   STILL_FPS,
 } from "./frame-pace";
@@ -117,12 +118,19 @@ describe("still pace", () => {
 });
 
 describe("listening pace", () => {
-  test("a scene the visitor only listens to draws at its rate, and every frame again after", () => {
+  test("a still scene the visitor only listens to draws at its rate, and every frame again after", () => {
     const pace = createFramePace();
+    pace.setStill(true);
     pace.setListening(true);
     expect(drawn(pace, 0, 120)).toBe(2 * LISTENING_FPS);
     pace.setListening(false);
-    expect(drawn(pace, 2000)).toBe(60);
+    expect(drawn(pace, 2000)).toBe(30);
+  });
+
+  test("a moving one draws at the loop's largest time step, so a glide keeps its speed", () => {
+    const pace = createFramePace();
+    pace.setListening(true);
+    expect(drawn(pace, 0)).toBe(LISTENING_MOVING_FPS);
   });
 });
 

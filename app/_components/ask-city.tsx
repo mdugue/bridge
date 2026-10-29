@@ -30,7 +30,7 @@ import {
   WrenchIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
@@ -71,6 +71,8 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
   // the Hörmodus (the Sprachführer, ADR 0057): the screen dark, the scene
   // barely drawn, the answers read aloud
   const [hearing, setHearing] = useState(false);
+  // read aloud: kept here, so a new key does not silence a Hörmodus
+  const [reading, setReading] = useState(false);
   useEffect(() => {
     scene.setListening(hearing);
     return () => scene.setListening(false);
@@ -137,6 +139,8 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
             onHearing={setHearing}
             key={key.token || key.key}
             onKeyProblem={() => setKey(null)}
+            reading={reading}
+            setReading={setReading}
             scene={scene}
             site={site}
           />
@@ -366,8 +370,16 @@ function errorText(error: Error): { key: boolean; text: string } {
   return { key: false, text: error.message || "Die Antwort brach ab." };
 }
 
-/** The text of an answer: its assistant messages since the last question. */
+/**
+ * The text of a finished answer: its assistant messages since the last
+ * question — empty while the last of them still waits on a tool (a scene
+ * tool's run ends at the interrupt, and the answer comes after it).
+ */
 function lastAnswer(messages: readonly UIMessage[]): string {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant" || last.parts.at(-1)?.type !== "text") {
+    return "";
+  }
   const texts: string[] = [];
   for (
     let i = messages.length - 1;
@@ -383,20 +395,31 @@ function lastAnswer(messages: readonly UIMessage[]): string {
   return texts.join(" ").trim();
 }
 
-/** Reads each finished answer aloud while `on`. */
+/**
+ * Reads each finished answer aloud while `on` — not one that broke off,
+ * failed or was stopped (the returned call, for the stop button).
+ */
 function useReadAloud(
   messages: readonly UIMessage[],
   loading: boolean,
+  failed: boolean,
   on: boolean,
   speech: Speech
-) {
+): () => void {
   const was = useRef(loading);
+  const stopped = useRef(false);
   useEffect(() => {
-    if (was.current && !loading && on) {
+    if (was.current && !loading && on && !failed && !stopped.current) {
       speech.speak(lastAnswer(messages));
     }
+    if (loading) {
+      stopped.current = false;
+    }
     was.current = loading;
-  }, [loading, on, messages, speech]);
+  }, [loading, failed, on, messages, speech]);
+  return useCallback(() => {
+    stopped.current = true;
+  }, []);
 }
 
 /** Read aloud, speak a question, the Hörmodus: where the browser can. */
@@ -416,6 +439,11 @@ function VoiceBar({
   speech: Speech;
 }) {
   const dictation = useDictation();
+  // the question goes to the conversation as it is when it is heard
+  const spoken = useRef(onSpoken);
+  useEffect(() => {
+    spoken.current = onSpoken;
+  });
   if (!(speech.supported || dictation.supported)) {
     return null;
   }
@@ -433,10 +461,10 @@ function VoiceBar({
               return;
             }
             speech.stop();
-            dictation.start((spoken) => {
+            dictation.start((question) => {
               // a spoken question gets a spoken answer
               setReading(true);
-              onSpoken(spoken);
+              spoken.current(question);
             });
           }}
           title="Frage sprechen (der Browser erkennt die Sprache)"
@@ -482,6 +510,11 @@ function VoiceBar({
           Hörmodus
         </button>
       )}
+      {dictation.problem && (
+        <span className="text-[11px] text-destructive" role="alert">
+          {dictation.problem}
+        </span>
+      )}
     </div>
   );
 }
@@ -491,18 +524,21 @@ function Conversation({
   hearing,
   onHearing,
   onKeyProblem,
+  reading,
   scene,
+  setReading,
   site,
 }: {
   askKey: AskKey;
   hearing: boolean;
   onHearing: (on: boolean) => void;
   onKeyProblem: () => void;
+  reading: boolean;
   scene: AskScene;
+  setReading: (on: boolean) => void;
   site: string;
 }) {
   const speech = useSpeech();
-  const [reading, setReading] = useState(false);
   const tools = useMemo(() => sceneTools(scene), [scene]);
   // the card remounts for another key (keyed by it), so this one is fixed
   const secret = askKey.key;
@@ -529,13 +565,21 @@ function Conversation({
       voice: reading,
     },
   });
-  useReadAloud(chat.messages, chat.isLoading, reading, speech);
+  const stopReading = useReadAloud(
+    chat.messages,
+    chat.isLoading,
+    chat.error !== undefined,
+    reading,
+    speech
+  );
   const [text, setText] = useState("");
-  const ask = (question: string) => {
+  // `voice` with the question itself: a spoken one sets `reading` in the
+  // same handler, before forwardedProps has seen it
+  const ask = (question: string, voice = reading) => {
     const q = question.trim().slice(0, ASK_LIMITS.questionChars);
     if (q && !chat.isLoading) {
       setText("");
-      void chat.sendMessage(q);
+      void chat.sendMessage(q, { body: { voice } });
     }
   };
   const failure = chat.error ? errorText(chat.error) : null;
@@ -594,7 +638,7 @@ function Conversation({
       <VoiceBar
         hearing={hearing}
         onHearing={onHearing}
-        onSpoken={ask}
+        onSpoken={(q) => ask(q, true)}
         reading={reading}
         setReading={setReading}
         speech={speech}
@@ -627,7 +671,10 @@ function Conversation({
         {chat.isLoading ? (
           <Button
             aria-label="Antwort abbrechen"
-            onClick={chat.stop}
+            onClick={() => {
+              stopReading();
+              chat.stop();
+            }}
             size="icon-sm"
             type="button"
             variant="secondary"

@@ -6,7 +6,7 @@
  * maker's servers, which the privacy page says). Where a browser has
  * neither, the card shows neither.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // reason: SpeechRecognition is not in TypeScript's DOM library yet; the
 // part used here, typed by hand.
@@ -39,11 +39,13 @@ function recognitionClass(): RecognitionClass | null {
 }
 
 /**
- * Text as it should be heard: no web links (the card shows them), no
- * list marks or Markdown stars, "m" and "m²" as words.
+ * Text as it should be heard: no web links (the card shows them; a
+ * Markdown link keeps its words), no list marks or Markdown stars, "m" and
+ * "m²" as words.
  */
 export function speakable(text: string): string {
   return text
+    .replace(/\[([^\]]+)\]\(https?:\/\/[^)]*\)/g, "$1")
     .replace(/\s?\(?https?:\/\/[^\s)]+\)?/g, "")
     .replace(/^\s*[-*•]\s+/gm, "")
     .replace(/[*_#`]/g, "")
@@ -63,7 +65,6 @@ function germanVoice(): SpeechSynthesisVoice | null {
 
 export interface Speech {
   speak: (text: string) => void;
-  speaking: boolean;
   stop: () => void;
   supported: boolean;
 }
@@ -73,12 +74,10 @@ export function useSpeech(): Speech {
   const [supported] = useState(
     () => typeof window !== "undefined" && "speechSynthesis" in window
   );
-  const [speaking, setSpeaking] = useState(false);
   const stop = useCallback(() => {
     if (supported) {
       speechSynthesis.cancel();
     }
-    setSpeaking(false);
   }, [supported]);
   const speak = useCallback(
     (text: string) => {
@@ -93,19 +92,18 @@ export function useSpeech(): Speech {
       if (voice) {
         utterance.voice = voice;
       }
-      utterance.onend = () => setSpeaking(false);
-      utterance.onerror = () => setSpeaking(false);
-      setSpeaking(true);
       speechSynthesis.speak(utterance);
     },
     [supported]
   );
   // a closed card stops talking
   useEffect(() => stop, [stop]);
-  return { speak, speaking, stop, supported };
+  return useMemo(() => ({ speak, stop, supported }), [speak, stop, supported]);
 }
 
 export interface Dictation {
+  /** why the last attempt heard nothing, in German; null when it did */
+  problem: string | null;
   listening: boolean;
   /** listens for one question and hands it over when it ends */
   start: (onText: (text: string) => void) => void;
@@ -113,10 +111,32 @@ export interface Dictation {
   supported: boolean;
 }
 
+/** What a recognition error tells the visitor; null where it is theirs. */
+export function dictationProblem(error: string): string | null {
+  switch (error) {
+    case "aborted":
+    case "no-speech":
+      // they stopped, or said nothing: nothing to explain
+      return null;
+    case "not-allowed":
+    case "service-not-allowed":
+      return "Das Mikrofon ist für diese Seite nicht freigegeben.";
+    case "audio-capture":
+      return "Kein Mikrofon gefunden.";
+    case "network":
+      return "Die Spracherkennung des Browsers ist nicht erreichbar.";
+    case "language-not-supported":
+      return "Der Browser erkennt kein Deutsch.";
+    default:
+      return "Die Spracherkennung hat nicht geklappt.";
+  }
+}
+
 /** Push to talk: one question per press, in German. */
 export function useDictation(): Dictation {
   const [supported] = useState(() => recognitionClass() !== null);
   const [listening, setListening] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   const current = useRef<Recognition | null>(null);
   const stop = useCallback(() => {
     current.current?.stop();
@@ -139,15 +159,21 @@ export function useDictation(): Dictation {
         onText(text);
       }
     };
-    r.onerror = () => undefined;
+    r.onerror = (event) => setProblem(dictationProblem(event.error));
     r.onend = () => {
       current.current = null;
       setListening(false);
     };
+    setProblem(null);
+    try {
+      r.start();
+    } catch {
+      setProblem(dictationProblem("start"));
+      return;
+    }
     current.current = r;
     setListening(true);
-    r.start();
   }, []);
   useEffect(() => () => current.current?.abort(), []);
-  return { listening, start, stop, supported };
+  return { listening, problem, start, stop, supported };
 }
