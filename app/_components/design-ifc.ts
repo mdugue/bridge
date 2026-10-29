@@ -1,5 +1,6 @@
 import type { IfcAPI } from "web-ifc";
 import {
+  Box3,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -7,7 +8,9 @@ import {
   Mesh,
   MeshStandardMaterial,
   type Object3D,
+  SRGBColorSpace,
 } from "three/webgpu";
+import { detectGeoreference } from "@/lib/city/design-placement";
 import {
   type IfcPlacement,
   type MapConversion,
@@ -34,8 +37,15 @@ import {
 /** Where the site serves web-ifc's .wasm (scripts/copy-wasm.ts). */
 export const IFC_WASM_PATH = "/wasm/";
 
-/** IFC types that carry geometry but are not drawn. */
-const UNDRAWN = new Set(["IFCSPACE", "IFCOPENINGELEMENT"]);
+/** IFC types that carry geometry but are not drawn (a room's volume, an
+ *  opening's void), by their codes. */
+function undrawnTypes(types: typeof import("web-ifc")): Set<number> {
+  return new Set([
+    types.IFCSPACE,
+    types.IFCOPENINGELEMENT,
+    types.IFCOPENINGSTANDARDCASE,
+  ]);
+}
 
 /** A value of a flattened IFC line: plain, or web-ifc's wrapper. */
 function num(v: unknown): number | null {
@@ -71,9 +81,10 @@ function numbers(v: unknown): number[] {
     : [];
 }
 
-/** Every line of `type`'s id. */
+/** Every line of `type`'s id, its subtypes' too (IfcMapConversionScaled
+ *  is an IfcMapConversion). */
 function linesOf(api: IfcAPI, model: number, type: number): number[] {
-  const ids = api.GetLineIDsWithType(model, type);
+  const ids = api.GetLineIDsWithType(model, type, true);
   const out: number[] = [];
   for (let i = 0; i < ids.size(); i++) {
     out.push(ids.get(i));
@@ -95,6 +106,31 @@ function lengthUnit(api: IfcAPI, model: number, si: number): number {
   return 1;
 }
 
+/** A named unit's factor (m) where it is an SI length, else null. */
+function siLength(unit: unknown): number | null {
+  const u = unit as {
+    UnitType?: { value?: string };
+    Name?: { value?: string };
+    Prefix?: { value?: string } | null;
+  } | null;
+  return u?.Name?.value === "METRE" ? siPrefixFactor(u.Prefix?.value) : null;
+}
+
+/** The site's placement's location in the design frame (m), or null. */
+function siteOrigin(
+  site: Record<string, unknown>,
+  unit: number
+): [number, number, number] | null {
+  const placement = site.ObjectPlacement as {
+    RelativePlacement?: { Location?: { Coordinates?: unknown } };
+  } | null;
+  const [x = 0, y = 0, z = 0] = numbers(
+    placement?.RelativePlacement?.Location?.Coordinates
+  );
+  // IFC is Z up; the design frame Y up, z south
+  return x || y || z ? [x * unit, z * unit, -y * unit] : null;
+}
+
 /** Where the file says the model stands, if it does. */
 function placementOf(
   api: IfcAPI,
@@ -102,11 +138,14 @@ function placementOf(
   types: typeof import("web-ifc"),
   epsg: number
 ): IfcPlacement | { why: string } | null {
+  const unit = lengthUnit(api, model, types.IFCSIUNIT);
   for (const id of linesOf(api, model, types.IFCMAPCONVERSION)) {
     const line = api.GetLine(model, id, true) as Record<string, unknown>;
-    const crs = line.TargetCRS as { Name?: unknown } | null;
+    const crs = line.TargetCRS as { Name?: unknown; MapUnit?: unknown } | null;
     const map: MapConversion = {
       crs: text(crs?.Name),
+      // without a MapUnit the values are in the project's length unit
+      unit: siLength(crs?.MapUnit) ?? unit,
       eastings: num(line.Eastings) ?? 0,
       northings: num(line.Northings) ?? 0,
       height: num(line.OrthogonalHeight) ?? 0,
@@ -131,9 +170,8 @@ function placementOf(
       break;
     }
   }
-  const unit = lengthUnit(api, model, types.IFCSIUNIT);
   for (const id of linesOf(api, model, types.IFCSITE)) {
-    const site = api.GetLine(model, id) as Record<string, unknown>;
+    const site = api.GetLine(model, id, true) as Record<string, unknown>;
     const placed = siteReferencePlacement(
       {
         latitude: numbers(site.RefLatitude),
@@ -141,6 +179,7 @@ function placementOf(
         elevation: num(site.RefElevation),
         unit,
         trueNorth,
+        origin: siteOrigin(site, unit),
       },
       epsg
     );
@@ -160,7 +199,8 @@ function materialFor(
   let material = materials.get(key);
   if (!material) {
     material = new MeshStandardMaterial({
-      color: new Color().setRGB(c.x, c.y, c.z),
+      // IfcColourRgb is a display colour: sRGB
+      color: new Color().setRGB(c.x, c.y, c.z, SRGBColorSpace),
       opacity: c.w,
       transparent: c.w < 0.99,
       roughness: 0.85,
@@ -223,11 +263,9 @@ export async function readIfc(
     const root = new Group();
     const geometries = new Map<number, BufferGeometry>();
     const materials = new Map<string, MeshStandardMaterial>();
+    const undrawn = undrawnTypes(types);
     api.StreamAllMeshes(model, (flat) => {
-      const type = api.GetNameFromTypeCode(
-        api.GetLineType(model, flat.expressID) as number
-      );
-      if (UNDRAWN.has(type)) {
+      if (undrawn.has(api.GetLineType(model, flat.expressID) as number)) {
         return;
       }
       for (let i = 0; i < flat.geometries.size(); i++) {
@@ -253,8 +291,18 @@ export async function readIfc(
     if (root.children.length === 0) {
       throw new IfcError("Die IFC-Datei enthält keine darstellbaren Bauteile.");
     }
-    const place = placementOf(api, model, types, epsg);
-    let note: string | null = null;
+    // geometry already in the Land's coordinates (a survey point as its
+    // origin) is not placed a second time
+    root.updateMatrixWorld(true);
+    const box = new Box3().setFromObject(root);
+    const already = detectGeoreference(
+      { min: box.min.toArray(), max: box.max.toArray() },
+      epsg
+    );
+    const place = already ? null : placementOf(api, model, types, epsg);
+    let note: string | null = already
+      ? "Lage aus den Landeskoordinaten der IFC-Geometrie."
+      : null;
     if (place && "matrix" in place) {
       root.matrixAutoUpdate = false;
       // (row-major: fromArray reads column-major)

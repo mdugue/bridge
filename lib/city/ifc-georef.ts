@@ -36,6 +36,8 @@ export interface MapConversion {
   abscissa: number | null;
   ordinate: number | null;
   scale: number | null;
+  /** the map's unit (m): MapUnit's, else the project's length unit */
+  unit: number;
 }
 
 /** IfcSite's reference point, as read. */
@@ -49,6 +51,9 @@ export interface SiteReference {
   unit: number;
   /** TrueNorth: the direction of true north in the model's plan (x, y) */
   trueNorth: readonly [number, number] | null;
+  /** where the site's own placement puts its reference point, in the
+   *  design frame (m; x, y up, z south), or null at the model's origin */
+  origin: readonly [number, number, number] | null;
 }
 
 /** What the file put the model at: a row-major 4×4 from the design frame
@@ -64,12 +69,20 @@ export interface IfcPlacement {
 const MAP_SCALE_MIN = 0.9;
 const MAP_SCALE_MAX = 1.1;
 
-const EPSG_NUMBER = /EPSG\s*:{0,2}\s*(\d{4,5})/i;
+const EPSG_NUMBER = /EPSG\s*(?::{1,2}|\/\d+\/|\s)\s*(\d{4,5})/i;
+/** ETRS89/UTM by words: `ETRS89 / UTM zone 32N`, `ETRS_1989_UTM_Zone_33N` */
+const ETRS_UTM = /ETRS.?(?:19)?89[\W_]*UTM[\W_]*(?:zone[\W_]*)?(3[23])/i;
 
-/** The EPSG code a CRS name gives (`EPSG:25833`, `urn:ogc:def:crs:EPSG::25833`), or null. */
+/** The EPSG code a CRS name gives (`EPSG:25833`,
+ *  `urn:ogc:def:crs:EPSG::25833`, `…/def/crs/EPSG/0/25833`, `ETRS89 /
+ *  UTM zone 33N`), or null. */
 export function epsgOfName(name: string | null): number | null {
   const m = name?.match(EPSG_NUMBER);
-  return m ? Number(m[1]) : null;
+  if (m) {
+    return Number(m[1]);
+  }
+  const utm = name?.match(ETRS_UTM);
+  return utm ? 25_800 + Number(utm[1]) : null;
 }
 
 /** IfcCompoundPlaneAngleMeasure (deg, min, sec, millionths) in degrees;
@@ -153,7 +166,14 @@ export function mapConversionPlacement(
   map: MapConversion,
   epsg: number
 ): IfcPlacement | { why: string } {
-  const source = epsgOfName(map.crs) ?? epsg;
+  // no name: the site's; a name that says nothing readable: not read
+  const named = map.crs?.trim() ? epsgOfName(map.crs) : epsg;
+  if (named === null) {
+    return {
+      why: `Die IFC ist in „${map.crs}“ verortet; city walk liest ETRS89/UTM. Bitte von Hand platzieren.`,
+    };
+  }
+  const source = named;
   const zone = (code: number) =>
     code >= 25_828 && code <= 25_838 ? code - 25_800 : null;
   const sourceZone = zone(source);
@@ -169,8 +189,8 @@ export function mapConversionPlacement(
   let turn = -Math.atan2(b, a);
   const s = map.scale ?? 1;
   const scale = s >= MAP_SCALE_MIN && s <= MAP_SCALE_MAX ? s : 1;
-  let east = plainEasting(map.eastings, sourceZone);
-  let north = map.northings;
+  let east = plainEasting(map.eastings * map.unit, sourceZone);
+  let north = map.northings * map.unit;
   if (source !== epsg) {
     const there = carryOver(source, epsg, east, north);
     if (!there) {
@@ -181,7 +201,7 @@ export function mapConversionPlacement(
     turn += there.turn;
   }
   return {
-    matrix: placeMatrix(east, north, map.height, turn, scale),
+    matrix: placeMatrix(east, north, map.height * map.unit, turn, scale),
     note:
       source === epsg
         ? `Lage aus der IFC (IfcMapConversion, EPSG:${source}).`
@@ -214,8 +234,17 @@ export function siteReferencePlacement(
   // a model bearing β is the true bearing β − that, the grid's + convergence
   const turn = convergence * DEG2RAD - trueNorthInModel;
   const height = (site.elevation ?? 0) * site.unit;
+  const matrix = placeMatrix(at.x, at.y, height, turn, 1);
+  if (site.origin) {
+    // the reference point is the site's, not the model's origin
+    const [ox, oy, oz] = site.origin;
+    for (const row of [0, 4, 8]) {
+      matrix[row + 3] -=
+        matrix[row] * ox + matrix[row + 1] * oy + matrix[row + 2] * oz;
+    }
+  }
   return {
-    matrix: placeMatrix(at.x, at.y, height, turn, 1),
+    matrix,
     note: "Lage ungefähr aus dem IFC-Grundstück (IfcSite, Breite/Länge). Bitte prüfen und nachschieben.",
   };
 }
