@@ -1,4 +1,4 @@
-# ADR 0053: A planner's design is loaded on the device, placed by its coordinates or by hand, and stands in for the buildings it covers
+# ADR 0054: A planner's design is loaded on the device, placed by its coordinates or by hand, and stands in for the buildings it covers
 
 - **Status:** accepted
 - **Date:** 2026-10

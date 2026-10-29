@@ -487,7 +487,7 @@ export interface CityWalkOptions {
   onInquiry?: (inquiry: Inquiry | null, along: InquiryAlong | null) => void;
   /** walk, fly or Modell (plan 055): at the start of a switch */
   onModeChange?: (mode: ViewMode) => void;
-  /** the loaded design as the *Entwurf* panel shows it (ADR 0053), null
+  /** the loaded design as the *Entwurf* panel shows it (ADR 0054), null
    *  without one */
   onDesign?: (status: DesignStatus | null) => void;
   /**
@@ -568,7 +568,7 @@ export interface CityWalkHandle {
   clearInquiry: () => void;
   demolishAtCrosshair: () => void;
   /**
-   * A planner's design in the city (design-layer.ts, ADR 0053): read on
+   * A planner's design in the city (design-layer.ts, ADR 0054): read on
    * the device, placed, turned, lifted; its status comes through
    * `onDesign`.
    */
@@ -2519,7 +2519,7 @@ async function bootApp(
     }
   }
 
-  // A planner's design (design-layer.ts, ADR 0053): nothing is built until
+  // A planner's design (design-layer.ts, ADR 0054): nothing is built until
   // a file is loaded. The buildings it stands in for leave every loaded
   // level of their tile, and those of a tile that lands later as it lands
   // (`hideReplaced`, from the stream's change).
@@ -3665,7 +3665,7 @@ async function bootApp(
   const shedding = () => budget.tier === "mobile" && document.hidden;
   const applyStep = (step: MemoryStep) => {
     stream.tiles.errorTarget = baseError * step.errorScale;
-    // a loaded design's bytes come out of the cache (ADR 0053): the page
+    // a loaded design's bytes come out of the cache (ADR 0054): the page
     // holds no more with it than without
     stream.tiles.lruCache.minBytesSize = shedding()
       ? 0

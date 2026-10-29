@@ -1,5 +1,5 @@
 /**
- * What a loaded design may hold (ADR 0053). A phone's page lives within a
+ * What a loaded design may hold (ADR 0054). A phone's page lives within a
  * line the memory governor keeps (ADR 0047), and a design must not move
  * it: its bytes are taken from the tile cache while it is loaded
  * (create-app.ts `reserveCache`), and a design past its tier's budget is

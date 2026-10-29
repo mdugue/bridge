@@ -87,7 +87,7 @@ export interface SceneStatusSlices {
   trafficHour: TrafficHourStatus | null;
   /** the player's pose (~10 Hz), for the minimap's dot */
   pose: PlayerPose | null;
-  /** the loaded design (ADR 0053), for the *Entwurf* panel */
+  /** the loaded design (ADR 0054), for the *Entwurf* panel */
   design: DesignStatus | null;
 }
 

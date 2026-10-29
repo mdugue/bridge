@@ -53,7 +53,7 @@ export interface CityLayer {
   demolish: (objectIndex: number) => boolean;
   /**
    * The objects a loaded design stands in for (design-layer.ts, ADR
-   * 0053): their triangles leave the index as a demolish's do, and come
+   * 0054): their triangles leave the index as a demolish's do, and come
    * back when they leave the set — kept aside meanwhile, not reparsed.
    * True when anything changed.
    */
