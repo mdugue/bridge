@@ -4652,7 +4652,16 @@ GPU**.
   ground level or the earth's centre, then set on the ground; hidden
   layers left out; breps by
   their saved render meshes) are read alike
-  (`design-formats.ts`). Its place is `◎ detected` from its own coordinates where they
+  (`design-formats.ts`). A **landscape plan** (DXF, Shapefile,
+  GeoPackage, LandXML; `design-plan.ts`) becomes surfaces `◎ detected`
+  by their layer's or attributes' names (`lib/city/plan-classes.ts`,
+  German and English keywords; unnamed: grey) in the city's palette, laid
+  on the loaded ground in triangles of a few metres (its own heights
+  kept), what is drawn into an area 10 cm above it; trees as
+  low-poly crowns of the plan's size (`≈ assumed` 6 m and 10 m where it
+  gives none), buildings with a height or storeys as blocks, TINs as a
+  planned ground (`lib/city/plan-geometry.ts`). Its surfaces clear the
+  site but take no house away. Its place is `◎ detected` from its own coordinates where they
   are the site's UTM zone (an easting in X, plain or zone-prefixed, a
   northing in −Z; `lib/city/design-placement.ts`), its own Y kept as NHN
   where the ground under it agrees within 40 m; without one it is

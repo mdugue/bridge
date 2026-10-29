@@ -232,6 +232,100 @@ async function designBlock3dm(east: number, north: number, height: number) {
   return [...doc.toByteArray()];
 }
 
+/**
+ * A landscape plan as DXF in the Land's coordinates (metres): a lawn
+ * hatch of 60 × 40 m south-west of `at` with a paved square in it, and
+ * two trees on a tree layer.
+ */
+function designPlanDxf([e, n]: [number, number]) {
+  const groups: (string | number)[][] = [
+    [0, "SECTION"],
+    [2, "HEADER"],
+    [9, "$INSUNITS"],
+    [70, 6],
+    [0, "ENDSEC"],
+    [0, "SECTION"],
+    [2, "ENTITIES"],
+  ];
+  const hatch = (
+    layer: string,
+    x0: number,
+    y0: number,
+    w: number,
+    h: number
+  ) => [
+    [0, "HATCH"],
+    [8, layer],
+    [91, 1],
+    [92, 2],
+    [72, 0],
+    [73, 1],
+    [93, 4],
+    [10, x0],
+    [20, y0],
+    [10, x0 + w],
+    [20, y0],
+    [10, x0 + w],
+    [20, y0 + h],
+    [10, x0],
+    [20, y0 + h],
+    [97, 0],
+  ];
+  groups.push(...hatch("L-RASEN", e - 60, n - 40, 60, 40));
+  groups.push(...hatch("L-PFLASTER", e - 40, n - 30, 15, 15));
+  for (const [x, y] of [
+    [e - 50, n - 10],
+    [e - 10, n - 30],
+  ]) {
+    groups.push([0, "CIRCLE"], [8, "BAUM NEU"], [10, x], [20, y], [40, 3]);
+  }
+  groups.push([0, "ENDSEC"], [0, "EOF"]);
+  return `${groups.flatMap(([c, v]) => [String(c), String(v)]).join("\n")}\n`;
+}
+
+/** The same lawn as a GeoPackage (one polygon layer, EPSG:25833). */
+async function designPlanGpkg([e, n]: [number, number]) {
+  const { default: initSqlJs } = await import("sql.js");
+  const SQL = await initSqlJs();
+  const db = new SQL.Database();
+  db.run(`CREATE TABLE gpkg_spatial_ref_sys (srs_name TEXT, srs_id INTEGER PRIMARY KEY,
+    organization TEXT, organization_coordsys_id INTEGER, definition TEXT);
+    INSERT INTO gpkg_spatial_ref_sys VALUES ('ETRS89 / UTM 33N', 25833, 'EPSG', 25833, '');
+    CREATE TABLE gpkg_contents (table_name TEXT PRIMARY KEY, data_type TEXT, srs_id INTEGER);
+    INSERT INTO gpkg_contents VALUES ('flaechen', 'features', 25833);
+    CREATE TABLE gpkg_geometry_columns (table_name TEXT, column_name TEXT,
+      geometry_type_name TEXT, srs_id INTEGER, z INTEGER, m INTEGER);
+    INSERT INTO gpkg_geometry_columns VALUES ('flaechen', 'geom', 'POLYGON', 25833, 0, 0);
+    CREATE TABLE flaechen (fid INTEGER PRIMARY KEY, geom BLOB, nutzung TEXT);`);
+  const ring = [
+    [e - 60, n - 40],
+    [e, n - 40],
+    [e, n],
+    [e - 60, n],
+    [e - 60, n - 40],
+  ];
+  const wkb = new DataView(
+    new ArrayBuffer(8 + 1 + 4 + 4 + 4 + ring.length * 16)
+  );
+  [0x47, 0x50, 0, 1].forEach((b, i) => wkb.setUint8(i, b));
+  wkb.setInt32(4, 25_833, true);
+  wkb.setUint8(8, 1);
+  wkb.setUint32(9, 3, true);
+  wkb.setUint32(13, 1, true);
+  wkb.setUint32(17, ring.length, true);
+  ring.forEach(([x, y], i) => {
+    wkb.setFloat64(21 + i * 16, x, true);
+    wkb.setFloat64(29 + i * 16, y, true);
+  });
+  db.run("INSERT INTO flaechen (geom, nutzung) VALUES (?, ?)", [
+    new Uint8Array(wkb.buffer),
+    "Rasen",
+  ]);
+  const bytes = db.export();
+  db.close();
+  return [...bytes];
+}
+
 /** Starts collecting page + console errors for the whole life of the page. */
 function watchErrors(page: Page): ErrorLog {
   const log: ErrorLog = { page: [], console: [] };
@@ -1356,6 +1450,39 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(rhino?.placement.north).toBeCloseTo(5_657_420, 1);
     expect(rhino?.placement.base).toBeCloseTo(112, 3);
     expect(rhino?.hidden ?? 0).toBeGreaterThan(0);
+    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    expectNoErrors(errors);
+  });
+
+  test("a landscape plan lies on the ground in its colours and takes no house away", async () => {
+    // DXF in the Land's coordinates by the Albertplatz: hatches as lawn
+    // and paving, circles on a tree layer as trees
+    const dxf = await page.evaluate(
+      async (text) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([text], "plan.dxf")]);
+        return design?.status() ?? null;
+      },
+      designPlanDxf([412_300, 5_657_420])
+    );
+    expect(dxf?.note).toContain("Landschaftsplan");
+    expect(dxf?.note).toContain("Rasen");
+    expect(dxf?.note).toContain("2 Bäume");
+    expect(dxf?.source).toBe("file");
+    expect(dxf?.placement.east).toBeCloseTo(412_270, 0);
+    expect(dxf?.fileColours).toBe(true);
+    expect(dxf?.hidden).toBe(0);
+    // a GeoPackage, read with sql.js from the site's own /wasm/
+    const gpkg = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "plan.gpkg")]);
+        return design?.status() ?? null;
+      },
+      await designPlanGpkg([412_300, 5_657_420])
+    );
+    expect(gpkg?.note).toContain("Rasen");
+    expect(gpkg?.placement.north).toBeCloseTo(5_657_400, 0);
     await page.evaluate(() => window.__poc?.handle?.design.remove());
     expectNoErrors(errors);
   });
