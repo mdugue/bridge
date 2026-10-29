@@ -274,7 +274,7 @@ config change.
     *Verschattungsstudie*: tiles, legend strip, download); the math is
     `lib/city/model-view.ts`, `lib/city/section.ts`,
     `lib/city/image-export.ts`
-  - the walks (ADR 0053): `walk-player.tsx` (the Erkunden panel's
+  - the walks (ADR 0055): `walk-player.tsx` (the Erkunden panel's
     *Spaziergänge* and the card that tells a stop — narration marked as
     Claude's, every claim with its source; the shape and the checks are
     `lib/city/walks.ts`, the writing guide `docs/walks.md`)
@@ -368,7 +368,7 @@ config change.
   `passages.ts` (a cut under a deck opened in the terrain),
   `stadtwissen.ts` (what the twin knows as files for agents: the per-tile
   directory of named buildings and monuments, the landmarks with their
-  Wikidata excerpt, search — ADR 0053) + `walks.ts` (the written walks:
+  Wikidata excerpt, search — ADR 0055) + `walks.ts` (the written walks:
   a stop's view, today's notes, the checks), `tile.ts` (each
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`
@@ -459,7 +459,7 @@ config change.
   its commit and deploy — a no-op without `SENTRY_AUTH_TOKEN`),
   `render-diagrams.ts`, `docs-matrix.ts` (`bun run docs:matrix`, the
   generated *Sources by city* pages); the Stadtwissen and the walks
-  (ADR 0053): `bake-stadtwissen.ts` (run by `prepare-data.ts`),
+  (ADR 0055): `bake-stadtwissen.ts` (run by `prepare-data.ts`),
   `fetch-stadtwissen.ts <site>` (the committed Wikidata excerpt,
   `data/<site>/wissen/wikidata.json`), `stadtwissen.ts <site>
   such|nah|wahrzeichen|quellen` (search it), `walks.ts <site>

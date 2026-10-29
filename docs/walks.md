@@ -1,7 +1,7 @@
 # Writing a walk
 
 How the *Erzählte Spaziergänge* are written, checked and shown
-([ADR 0053](./adr/0053-stadtwissen-and-written-walks.md)). A walk is a
+([ADR 0055](./adr/0055-stadtwissen-and-written-walks.md)). A walk is a
 file, `data/<site>/walks/<id>.json` (`lib/city/walks.ts` is its shape);
 the build bundles a site's walks into `walks.json`, and the viewer plays
 them from the panel's *Erkunden → Spaziergänge*.

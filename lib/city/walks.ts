@@ -8,7 +8,7 @@
  * by `prepare-data.ts` as one `walks.json`; the viewer plays them
  * (`app/_components/walk-player.tsx`). The narration is marked as written
  * by Claude wherever it shows; the facts carry their sources (ADR 0042,
- * ADR 0053). No THREE, no DOM.
+ * ADR 0055). No THREE, no DOM.
  */
 import {
   isModelPreset,

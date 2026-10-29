@@ -629,7 +629,7 @@ tileset under `public/data/<site>/`
    `scripts/bake-stadtwissen.ts`, for agents — the viewer never loads
    it) and its **walks** (`walks.json`, every `data/<site>/walks/*.json`
    checked by `walkBundle` and named by the tileset's `extras.walks`);
-   ADR 0053, [walks.md](./walks.md).
+   ADR 0055, [walks.md](./walks.md).
 
 ### The tree
 
@@ -894,7 +894,7 @@ optional one is logged and the feature is off.
 | The 2048², 1024² and 512² class rasters keep exact ids | `scripts/downsample-raster.ts` | `downsample-raster.test.ts` |
 | GeoJSON feature shapes per kind | `lib/city/features.ts` | `features.test.ts` reads **every committed file** of every tile: a bake that renames a property fails there, not as an empty layer |
 | Terrain TIN (the fine level) | `lib/city/terrain-tin.ts` (`tinFromMesher`, `buildTinGeometryData`, `TinIndex`), `TerrainExtras.tin` | `terrain-tin.test.ts`, `scripts/bake-terrain-tin.test.ts` (every grid point within the tolerance; the committed spawn DGM at its native 2000²) |
-| The Stadtwissen and the walks (ADR 0053) | `lib/city/stadtwissen.ts`, `lib/city/walks.ts`, `scripts/bake-stadtwissen.ts` | `stadtwissen.test.ts`, `walks.test.ts`; `scripts/walks.test.ts` holds every committed walk to its data (form, extent, the DGM, the Stadtwissen ids); `prepare-data.ts` refuses a walk with a problem |
+| The Stadtwissen and the walks (ADR 0055) | `lib/city/stadtwissen.ts`, `lib/city/walks.ts`, `scripts/bake-stadtwissen.ts` | `stadtwissen.test.ts`, `walks.test.ts`; `scripts/walks.test.ts` holds every committed walk to its data (form, extent, the DGM, the Stadtwissen ids); `prepare-data.ts` refuses a walk with a problem |
 | Optional-artifact fetch policy | `app/_components/fetch-optional.ts` | 404 / network / parse → `null`/`[]` (feature off); **abort always rethrows** so a torn-down instance stops building from partial data |
 
 GeoJSON allows `properties: null` and `MultiPolygon` geometries; every

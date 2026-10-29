@@ -1745,7 +1745,7 @@ const trams = existsSync(tramSource)
   : undefined;
 
 // --- the walks --------------------------------------------------------------------
-// Erzählte Spaziergänge (lib/city/walks.ts, ADR 0053): the site's written
+// Erzählte Spaziergänge (lib/city/walks.ts, ADR 0055): the site's written
 // walks, checked and bundled into one file the HUD loads when it lists them.
 
 const walksDir = at(`${siteDataDir(SITE)}/${WALKS_DIR}`);

@@ -1798,7 +1798,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   GPU.**
 
 - **Stadtwissen** `❝ taken` — what the twin knows, as files an agent
-  reads ([ADR 0053](./adr/0053-stadtwissen-and-written-walks.md)):
+  reads ([ADR 0055](./adr/0055-stadtwissen-and-written-walks.md)):
   per tile every root Building that OSM names or addresses, that is
   listed (`heritage`) or that is part of a Wikidata landmark — its
   `gml:id`, OSM name, address, storeys and shops, the ALKIS use and roof

@@ -20,7 +20,7 @@ import { cn } from "cn";
 import { useSceneStatus } from "./scene-status";
 
 /**
- * Erzählte Spaziergänge in the viewer (lib/city/walks.ts, ADR 0053): the
+ * Erzählte Spaziergänge in the viewer (lib/city/walks.ts, ADR 0055): the
  * Erkunden panel's list, and the card that tells a stop while the scene
  * shows it. The narration is Claude's and says so on every stop; each
  * claim it rests on links its source.

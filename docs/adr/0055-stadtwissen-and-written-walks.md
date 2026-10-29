@@ -1,4 +1,4 @@
-# ADR 0053: The twin's knowledge is baked as files; walks are written ahead, their narration marked, every claim sourced
+# ADR 0055: The twin's knowledge is baked as files; walks are written ahead, their narration marked, every claim sourced
 
 - **Status:** accepted
 - **Date:** 2026-10

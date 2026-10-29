@@ -17,7 +17,7 @@ import { readDgmFile } from "./dgm-cache";
 import { siteDgm } from "./line-levels";
 
 /**
- * Every committed walk (lib/city/walks.ts, ADR 0053) is checked against
+ * Every committed walk (lib/city/walks.ts, ADR 0055) is checked against
  * the data it stands on: well formed, its stops inside the site and on its
  * measured ground — the pitch of every view is reckoned from it — and every
  * Stadtwissen entry it names is one the build publishes.

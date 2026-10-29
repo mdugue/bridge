@@ -761,7 +761,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
   });
 
   test("a walk tells its stops, with their sources, and gives the style and the time back", async () => {
-    // The walks are Claude's narration (ADR 0053): the card says so on
+    // The walks are Claude's narration (ADR 0055): the card says so on
     // every stop and folds out the sources. Where the camera stood is put
     // back afterwards, so the tests after this one start where they did.
     const before = await page.evaluate(() =>
