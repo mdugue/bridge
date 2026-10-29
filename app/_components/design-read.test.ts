@@ -102,3 +102,45 @@ describe("reading a design", () => {
     expect(refused).toBeInstanceOf(DesignError);
   });
 });
+
+describe("an OBJ", () => {
+  test("an object in two materials keeps both, a missing library is named", async () => {
+    const obj = [
+      "mtllib haus.mtl fehlt.mtl",
+      "v 0 0 0",
+      "v 10 0 0",
+      "v 10 0 -10",
+      "v 0 0 -10",
+      "v 0 5 0",
+      "o haus",
+      "usemtl ziegel",
+      "f 1 2 3",
+      "usemtl glas",
+      "f 1 3 4",
+      "f 1 2 5",
+    ].join("\n");
+    const mtl = [
+      "newmtl ziegel",
+      "Kd 0.6 0.2 0.1",
+      "newmtl glas",
+      "Kd 0.2 0.4 0.6",
+    ].join("\n");
+    const model = await readDesign(
+      [new File([obj], "haus.obj"), new File([mtl], "haus.mtl")],
+      25_833,
+      "mobile"
+    );
+    // brick (red) one triangle, glass (blue) two
+    const red = model.looks.findIndex((l) => l.color.r > l.color.b);
+    const blue = model.looks.findIndex((l) => l.color.b > l.color.r);
+    expect(red).not.toBe(-1);
+    expect(blue).not.toBe(-1);
+    const count = (i: number) =>
+      model.geometry.groups
+        .filter((g) => g.materialIndex === i)
+        .reduce((n, g) => n + g.count / 3, 0);
+    expect(count(red)).toBe(1);
+    expect(count(blue)).toBe(2);
+    expect(model.note).toContain("fehlt.mtl");
+  });
+});

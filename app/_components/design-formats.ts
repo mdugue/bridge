@@ -1,6 +1,9 @@
-import { LoadingManager, Matrix4, type Object3D } from "three/webgpu";
-import { latLngPlacement } from "@/lib/city/ifc-georef";
-import { rhinoUnitMetres } from "@/lib/city/rhino-units";
+import { LoadingManager, type Object3D } from "three/webgpu";
+import {
+  rhinoFrame,
+  rhinoPlacement,
+  rhinoUnitMetres,
+} from "@/lib/city/rhino-units";
 
 /**
  * The design formats beside glTF and IFC (ADR 0054): OBJ with its MTL and
@@ -30,7 +33,12 @@ export function baseName(url: string): string {
 export function pickedFiles(
   main: File,
   files: readonly File[]
-): { manager: LoadingManager; missing: string[]; release: () => void } {
+): {
+  manager: LoadingManager;
+  missing: string[];
+  settled: () => Promise<void>;
+  release: () => void;
+} {
   const urls = new Map<string, string>();
   for (const f of files) {
     if (f !== main) {
@@ -38,7 +46,15 @@ export function pickedFiles(
     }
   }
   const missing: string[] = [];
+  let started = false;
+  let done: Promise<void> | null = null;
   const manager = new LoadingManager();
+  manager.onStart = () => {
+    started = true;
+    done ??= new Promise((resolve) => {
+      manager.onLoad = resolve;
+    });
+  };
   manager.setURLModifier((url) => {
     if (url.startsWith("blob:") || url.startsWith("data:")) {
       return url;
@@ -54,6 +70,8 @@ export function pickedFiles(
   return {
     manager,
     missing,
+    // every load the manager started has ended, failed ones too
+    settled: () => (started && done ? done : Promise.resolve()),
     release: () => {
       for (const url of urls.values()) {
         URL.revokeObjectURL(url);
@@ -62,8 +80,18 @@ export function pickedFiles(
   };
 }
 
+/** The material files an OBJ names (`mtllib a.mtl b.mtl`, one or more
+ *  lines). */
+function materialLibraries(text: string): string[] {
+  const names: string[] = [];
+  for (const [, list] of text.matchAll(/^\s*mtllib\s+(.+?)\s*$/gm)) {
+    names.push(...list.split(/\s+/).map(baseName));
+  }
+  return [...new Set(names)];
+}
+
 /**
- * Reads an OBJ, its material file (`mtllib`) and textures among the
+ * Reads an OBJ, its material files (`mtllib`) and textures among the
  * picked files. OBJ has no units and no up: taken as metres and Y up, as
  * SketchUp, Blender and Rhino write it by default.
  */
@@ -79,24 +107,34 @@ export async function readObj(
   try {
     const text = await main.text();
     const loader = new OBJLoader(picked.manager);
-    const library = /^\s*mtllib\s+(.+?)\s*$/m.exec(text)?.[1];
-    const mtl = library
-      ? files.find((f) => f.name === baseName(library))
-      : undefined;
-    if (mtl) {
+    const libraries = materialLibraries(text);
+    const mtls = files.filter((f) => libraries.includes(f.name));
+    const unpicked = libraries.filter((n) => !mtls.some((f) => f.name === n));
+    if (mtls.length > 0) {
+      const texts = await Promise.all(mtls.map((f) => f.text()));
       const materials = new MTLLoader(picked.manager).parse(
-        await mtl.text(),
+        texts.join("\n"),
         ""
       );
       materials.preload();
       loader.setMaterials(materials);
     }
     const root = loader.parse(text);
-    const note =
-      library && !mtl
-        ? `Die Materialdatei ${baseName(library)} wurde nicht mit ausgewählt; der Entwurf bleibt modellweiß.`
-        : null;
-    return { root, note };
+    // the textures load from the picked files' URLs: let them finish
+    // before those go
+    await picked.settled();
+    const notes: string[] = [];
+    if (unpicked.length > 0) {
+      notes.push(
+        `Nicht mit ausgewählt: ${unpicked.join(", ")}; ${mtls.length > 0 ? "deren Materialien bleiben" : "der Entwurf bleibt"} modellweiß.`
+      );
+    }
+    if (picked.missing.length > 0) {
+      notes.push(
+        `Texturen nicht mit ausgewählt: ${[...new Set(picked.missing)].join(", ")}.`
+      );
+    }
+    return { root, note: notes.length > 0 ? notes.join(" ") : null };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new FormatError(
@@ -129,51 +167,40 @@ function settingPoint(v: unknown): [number, number, number] | null {
 }
 
 /**
- * The matrix that turns a Rhino model (Z up, its unit) into the design
- * frame, and puts it where its earth anchor says, if it is set.
+ * The row-major matrix that turns a Rhino model (Z up, its unit) into the
+ * design frame, and puts it where its earth anchor says, if it is set
+ * (lib/city/rhino-units.ts).
  */
 function rhinoMatrix(
   settings: Record<string, unknown> | undefined,
   epsg: number
-): { matrix: Matrix4; note: string | null } {
+): { matrix: number[]; note: string | null; heightsKnown: boolean } {
   const unit = rhinoUnitMetres(settingNumber(settings?.modelUnitSystem));
-  // Z up → Y up (north, +y, to −z), in metres
-  const frame = new Matrix4()
-    .makeRotationX(-Math.PI / 2)
-    .premultiply(new Matrix4().makeScale(unit, unit, unit));
   const anchor = settings?.earthAnchorPoint as
     | Record<string, unknown>
     | undefined;
-  const lat = settingNumber(anchor?.earthBasepointLatitude);
-  const lng = settingNumber(anchor?.earthBasepointLongitude);
-  if (lat === null || lng === null || (lat === 0 && lng === 0)) {
-    return { matrix: frame, note: null };
-  }
-  const base = settingPoint(anchor?.modelBasePoint) ?? [0, 0, 0];
   const north = settingPoint(anchor?.modelNorth);
-  const place = latLngPlacement(
-    lat,
-    lng,
-    settingNumber(anchor?.earthBasepointElevation) ?? 0,
-    north ? [north[0], north[1]] : null,
+  const placed = rhinoPlacement(
+    {
+      latitude: settingNumber(anchor?.earthBasepointLatitude),
+      longitude: settingNumber(anchor?.earthBasepointLongitude),
+      elevation: settingNumber(anchor?.earthBasepointElevation),
+      elevationZero: settingNumber(anchor?.earthBasepointElevationZero),
+      base: settingPoint(anchor?.modelBasePoint),
+      north: north ? [north[0], north[1]] : null,
+    },
+    unit,
     epsg
   );
-  if (!place) {
-    return { matrix: frame, note: null };
+  if (!placed) {
+    return { matrix: rhinoFrame(unit), note: null, heightsKnown: true };
   }
-  // the base point to the origin, in the design frame
-  const toBase = new Matrix4().makeTranslation(
-    -base[0] * unit,
-    -base[2] * unit,
-    base[1] * unit
-  );
   return {
-    matrix: new Matrix4()
-      .fromArray(place)
-      .transpose()
-      .multiply(toBase)
-      .multiply(frame),
-    note: "Lage aus dem Geo-Ankerpunkt der Rhino-Datei.",
+    matrix: placed.matrix,
+    note: placed.heightsKnown
+      ? "Lage aus dem Geo-Ankerpunkt der Rhino-Datei."
+      : "Lage aus dem Geo-Ankerpunkt der Rhino-Datei; seine Höhe ist nicht über NN, der Entwurf steht auf dem Gelände.",
+    heightsKnown: placed.heightsKnown,
   };
 }
 
@@ -185,24 +212,28 @@ function rhinoMatrix(
 export async function read3dm(
   main: File,
   epsg: number
-): Promise<{ root: Object3D; note: string | null }> {
+): Promise<{ root: Object3D; note: string | null; heightsKnown: boolean }> {
   const { Rhino3dmLoader } = await import("three/addons/loaders/3DMLoader.js");
   const loader = new Rhino3dmLoader();
   loader.setLibraryPath(RHINO_LIBRARY_PATH);
   loader.setWorkerLimit(1);
   try {
+    const data = await main.arrayBuffer();
     const content = await new Promise<Object3D>((resolve, reject) => {
-      void main
-        .arrayBuffer()
-        .then((data) => loader.parse(data, resolve, reject), reject);
+      try {
+        loader.parse(data, resolve, reject);
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
     });
     const settings = content.userData.settings as
       | Record<string, unknown>
       | undefined;
-    const { matrix, note } = rhinoMatrix(settings, epsg);
+    const { matrix, note, heightsKnown } = rhinoMatrix(settings, epsg);
     content.matrixAutoUpdate = false;
-    content.matrix.copy(matrix);
-    return { root: content, note };
+    // (row-major: fromArray reads column-major)
+    content.matrix.fromArray(matrix).transpose();
+    return { root: content, note, heightsKnown };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new FormatError(
