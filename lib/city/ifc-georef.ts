@@ -223,6 +223,9 @@ export function latLngPlacement(
   trueNorth: readonly [number, number] | null,
   epsg: number
 ): number[] | null {
+  if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) {
+    return null;
+  }
   const at = latLngToUtm(epsg, lat, lng);
   const convergence = gridConvergenceDeg(epsg, lat, lng);
   if (!at || convergence === null) {
