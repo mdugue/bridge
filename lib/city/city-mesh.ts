@@ -503,6 +503,34 @@ export function doomedObjects(
 }
 
 /**
+ * Every object of the building trees `objects` belong to (by `root`): a
+ * Building with its parts and what the bake hung on it — its plinths and
+ * cornices, doors, dormers, shopfronts, passage linings —, which have no
+ * footprint of their own to be found by.
+ */
+export function wholeTrees(
+  root: ArrayLike<number>,
+  objects: ReadonlySet<number>
+): Set<number> {
+  const trees = new Set<number>();
+  for (const i of objects) {
+    if (i >= 0 && i < root.length) {
+      trees.add(root[i]);
+    }
+  }
+  const whole = new Set<number>();
+  if (trees.size === 0) {
+    return whole;
+  }
+  for (let i = 0; i < root.length; i++) {
+    if (trees.has(root[i])) {
+      whole.add(i);
+    }
+  }
+  return whole;
+}
+
+/**
  * Triangle indices without the triangles of dead objects (a triangle belongs
  * to the object of its first vertex; the bake never shares a vertex between
  * objects).
