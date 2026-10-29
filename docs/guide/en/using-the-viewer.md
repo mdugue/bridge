@@ -479,8 +479,10 @@ The other picture styles and Modell keep their sharp lines.
   it casts shadows, you cannot walk through it, and Modell and the shading
   study show it. On a phone it may have at most 250,000 triangles and
   40 MB (3 million and 400 MB on a computer); textures that do not fit
-  are left out. Ground, trees and street furniture under the design still
-  stand for now.
+  are left out. With the buildings, the trees, hedges, lamps and street
+  furniture in the design's plan (its ground plate included) go too, and
+  the ground, walls, kerbs and stairs there lie under its floor. Rails
+  and water stay.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
   the picture style, *Nebel*, the crown switch and the data layers as a
   small JSON text; paste such a text into the box and press *Anwenden* to

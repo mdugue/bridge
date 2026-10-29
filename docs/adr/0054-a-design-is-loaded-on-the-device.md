@@ -39,6 +39,12 @@ unannounced (ADR 0043).
 5. **Its bytes come out of the tile cache** while it is loaded, within a
    per-tier budget; past it the textures go first, then the design is
    refused with the numbers.
+6. **What else stands in its site goes too.** The site is the design's
+   plan with the lowest height it reaches per cell, one raster the vertex
+   stages read (`design-site.ts`): instanced sets fold away what stands
+   in it, and the ground, with what is baked into it, is pressed under
+   that height and cut where it would rise through the design's plate.
+   The walked ground follows. Rails, tram tracks and water stay.
 
 ## Consequences
 
