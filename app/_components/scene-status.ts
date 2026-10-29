@@ -35,6 +35,7 @@ import {
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { layerErrorText } from "./boot-error";
 import type { CityWalkOptions, CityWalkStats, SiteInfo } from "./create-app";
+import type { DesignStatus } from "./design-layer";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { updatePocDebug } from "./poc-debug";
 import type { TramCarsStatus } from "./tram-cars";
@@ -86,6 +87,8 @@ export interface SceneStatusSlices {
   trafficHour: TrafficHourStatus | null;
   /** the player's pose (~10 Hz), for the minimap's dot */
   pose: PlayerPose | null;
+  /** the loaded design (ADR 0053), for the *Entwurf* panel */
+  design: DesignStatus | null;
 }
 
 export type SceneStatus = SliceStore<SceneStatusSlices>;
@@ -108,6 +111,7 @@ const INITIAL: SceneStatusSlices = {
   tramStatus: null,
   trafficHour: null,
   pose: null,
+  design: null,
 };
 
 /**
@@ -138,6 +142,7 @@ export function createSceneStatus(
       modelView: dataEqual,
       tramStatus: dataEqual,
       trafficHour: dataEqual,
+      design: dataEqual,
     },
     schedule,
   });
@@ -160,6 +165,7 @@ export type SceneReports = Required<
     CityWalkOptions,
     | "onBikeCounts"
     | "onBusy"
+    | "onDesign"
     | "onError"
     | "onErrorCleared"
     | "onFatal"
@@ -255,6 +261,7 @@ export function sceneReports(
       status.set("inquiry", inquiry ? { inquiry, along } : null)
     ),
     onPose: on((pose) => status.set("pose", pose)),
+    onDesign: on((design) => status.set("design", design)),
   };
 }
 

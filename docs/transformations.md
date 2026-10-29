@@ -4633,6 +4633,27 @@ GPU**.
   (printed at 300 dpi), the north arrow from its turn, the credits from
   the site's attribution lines (`siteAttribution`) — drawn into the PNG,
   never into the scene (ADR 0042).
+- **A planner's design in the city** `❝ taken` `◎ detected` `≈ assumed` —
+  a glTF the visitor loads in the sidebar's *Entwurf* panel, read on the
+  device and never uploaded (`design-read.ts`; ADR 0053): its nodes and
+  instances flattened into one geometry about its anchor, moved there in
+  doubles. Its place is `◎ detected` from its own coordinates where they
+  are the site's UTM zone (an easting in X, plain or zone-prefixed, a
+  northing in −Z; `lib/city/design-placement.ts`), its own Y kept as NHN
+  where the ground under it agrees within 40 m; without one it is
+  `≈ assumed` on the ground ahead of the player. The panel moves, turns
+  and lifts it and saves the placement as a small JSON file. The LoD2
+  objects whose footprints its plan covers for half or more (every
+  triangle laid flat on 1 m cells, the flat ones at its lowest level left
+  out; `lib/city/design-cover.ts`) leave their tiles' index and come
+  back when it moves or goes (`CityLayer.setHidden`). Drawn in a
+  model-maker's white or the file's own colours; casts and takes
+  shadows; walked against. Its bytes come out of the tile cache; past
+  250 000 triangles / 40 MB on a phone (3 M / 400 MB on a desktop) its
+  textures go, then it is refused (`lib/city/design-budget.ts`).
+  **Fallback:** without coordinates, the player's place; without a
+  ground under it, base 0. **Not yet:** IFC, the landscape formats, the
+  terrain and the dressing under a design, asking it.
 
 ## 🧪 Experimental
 
