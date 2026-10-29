@@ -49,7 +49,8 @@ export function askAdapter(
 /**
  * A scripted model for local tests only (`FRAG_FAKE=1`, never set on a
  * deployment): it searches for the question, shows the first hit and
- * says so — the whole round trip through both kinds of tools, with no
+ * says so; asked "was ist das", it asks the view's centre — the whole
+ * round trip through both kinds of tools, with no
  * key and no provider.
  */
 export function fakeAskAdapter(): AnyTextAdapter {
@@ -59,6 +60,9 @@ export function fakeAskAdapter(): AnyTextAdapter {
     const last = messages.at(-1);
     if (last?.role !== "tool") {
       const question = lastQuestion(messages);
+      if (/was ist (das|da)|vor mir/i.test(question)) {
+        return { toolCalls: [{ name: "was_ist_da", input: {} }] };
+      }
       return {
         toolCalls: [{ name: "suche_stadt", input: { anfrage: question } }],
       };
@@ -83,7 +87,10 @@ export function fakeAskAdapter(): AnyTextAdapter {
         ],
       };
     }
-    return { text: "Testantwort: Hier ist es (Quelle: Wikidata)." };
+    const seen = /"name":"([^"]+)"/.exec(result)?.[1];
+    return {
+      text: `Testantwort: Hier ist es${seen && result.includes("gefunden") ? `, ${seen}` : ""} (Quelle: Wikidata).`,
+    };
   };
   adapter.setResponses([step, step, step]);
   return adapter;

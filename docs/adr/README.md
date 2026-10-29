@@ -64,6 +64,7 @@ each data → look transformation does and its status.
 | [0052](./0052-lines-lie-on-a-profile-the-ground-under-their-bed.md) | A rail or tram line lies on a profile within its grade and vertical-curve radius (rail 2 000 m, tram 500 m), fitted by the build step; the terrain bake lays the ground under its bed at that profile, the sides at 1 : 1.5, and the ballast drapes on the bed | accepted |
 | [0055](./0055-stadtwissen-and-written-walks.md) | What the twin knows is baked as files for agents (the Stadtwissen: named, addressed and listed buildings per tile, the landmarks with a committed Wikidata excerpt); walks are written ahead and committed, checked against the data, their narration marked as Claude's and every claim sourced; amends 0042 | accepted |
 | [0056](./0056-frag-die-stadt-runs-on-the-visitors-key.md) | *Frag die Stadt* runs on the visitor's own key (Anthropic, OpenAI, OpenRouter, Vercel AI Gateway) through one stateless server function with a fixed prompt and fixed tools — the Stadtwissen's on the server, the scene's in the browser; the key stays in the browser, the answers are marked; amends 0001, 0042, 0045 | accepted |
+| [0057](./0057-the-sprachfuehrer-speaks-with-the-browsers-voice.md) | The Sprachführer reads answers aloud and takes spoken questions with the browser's Web Speech API (no voice service of the site's); `was_ist_da` asks the twin what stands at the view's centre; the Hörmodus darkens the screen and draws the scene at 2 fps | accepted |
 
 ## Format
 

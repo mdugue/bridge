@@ -94,6 +94,7 @@ export async function POST(request: Request): Promise<Response> {
     runId: params.runId,
     threadId: params.threadId,
     today: new Date(),
+    voice: props.voice,
   });
   return toServerSentEventsResponse(scrubbed(stream, key), {
     abortController,

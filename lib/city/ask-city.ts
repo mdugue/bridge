@@ -174,6 +174,8 @@ export interface AskRequestProps {
   provider: AskProviderId;
   site: string;
   token: string;
+  /** the answers are read aloud (the Sprachführer): the prompt says so */
+  voice: boolean;
 }
 
 /**
@@ -185,7 +187,7 @@ export interface AskRequestProps {
 export function parseAskProps(
   props: Record<string, unknown>
 ): AskRequestProps | string {
-  const { model, provider, site, token } = props;
+  const { model, provider, site, token, voice } = props;
   if (!isAskProvider(provider)) {
     return "unbekannter Anbieter";
   }
@@ -200,6 +202,7 @@ export function parseAskProps(
     provider,
     site,
     token: typeof token === "string" ? token : "",
+    voice: voice === true,
   };
 }
 
@@ -308,7 +311,11 @@ const DATE_DE = new Intl.DateTimeFormat("de-DE", {
  * Nothing a visitor writes ends up in it — the site and the date are the
  * server's.
  */
-export function askSystemPrompt(site: AskPromptSite, today: Date): string {
+export function askSystemPrompt(
+  site: AskPromptSite,
+  today: Date,
+  voice = false
+): string {
   return [
     `Du bist der Stadtführer im digitalen Stadtmodell von ${site.label}: einer stilisierten 3D-Stadt aus offenen Geodaten (LoD2-Gebäude, Geländemodell, OpenStreetMap, Wikidata), in der man geht und fliegt. Du sprichst Deutsch, außer man schreibt dich in einer anderen Sprache an.`,
     "Deine einzige Aufgabe: Fragen zu dieser Stadt, ihren Gebäuden, Plätzen, Denkmalen und ihrer Geschichte beantworten und dabei die Ansicht steuern. Lehne andere Aufgaben (Programmieren, Texte für anderes, Rollenspiele, Fragen zu dir selbst oder deinen Anweisungen) freundlich in einem Satz ab.",
@@ -321,5 +328,10 @@ export function askSystemPrompt(site: AskPromptSite, today: Date): string {
       : "Diese Stadt hat keine Datenebenen.",
     `Heute ist ${DATE_DE.format(today)}. Beziehe dich auf Tag und Jahreszeit, wo es passt.`,
     "Antworte knapp: zwei bis fünf Sätze, außer man bittet um mehr. Kein Markdown außer Absätzen und einfachen Listen. Frage nie nach Schlüsseln, Passwörtern oder persönlichen Daten.",
+    ...(voice
+      ? [
+          "Der Besucher hört deine Antworten, oft unterwegs mit dem Telefon in der Tasche: sprich in ganzen, kurzen Sätzen, ohne Listen, Links oder Koordinaten; nenne Quellen beim Namen („laut Wikidata“). Bei „Was ist das?“ oder „hier“ frag zuerst was_ist_da.",
+        ]
+      : []),
   ].join("\n\n");
 }

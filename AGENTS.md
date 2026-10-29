@@ -281,14 +281,16 @@ config change.
   - *Frag die Stadt* (ADR 0056 — the chat on the visitor's own key):
     `ask-city.tsx` (the card, its own chunk loaded on first open: key
     form, conversation, each answer marked *KI* with the tools it used),
-    `ask-scene.ts` (the scene tools bound to the viewer: pose, glide,
-    time, style, data layers), `ask-key.ts` (the key in session or local
+    `ask-scene.ts` (the scene tools bound to the viewer: pose, the
+    centre's inquiry, glide, time, style, data layers, the Hörmodus's
+    pace), `ask-voice.ts` (the Sprachführer, ADR 0057: read aloud and
+    push-to-talk with the browser's Web Speech API), `ask-key.ts` (the key in session or local
     storage); the server is `app/api/frag/route.ts` (one stateless turn,
     SSE; `FRAG_SECRET` signs the key check's token, `FRAG_FAKE=1` a
     scripted model for local tests only) and `app/api/schluessel/`
     (the key check); the shared core is `lib/city/ask-city.ts`
     (providers, curated models, caps, the fixed prompt), `ask-tools.ts`
-    (the nine tools), `ask-knowledge.ts` (the Stadtwissen answers, read
+    (the ten tools), `ask-knowledge.ts` (the Stadtwissen answers, read
     from `.stadtwissen/<site>/`, which `prepare-sites.ts` copies there and
     `next.config.ts` traces into the function), `ask-run.ts` (the agent
     loop), `ask-token.ts`, `ask-view.ts`

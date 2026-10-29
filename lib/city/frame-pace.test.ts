@@ -3,6 +3,7 @@ import {
   COVERED_FPS,
   createFramePace,
   createStillness,
+  LISTENING_FPS,
   SCROLL_QUIET_MS,
   STILL_FPS,
 } from "./frame-pace";
@@ -112,6 +113,16 @@ describe("still pace", () => {
     pace.setStill(true);
     pace.setCovered(true);
     expect(drawn(pace, 0)).toBe(COVERED_FPS);
+  });
+});
+
+describe("listening pace", () => {
+  test("a scene the visitor only listens to draws at its rate, and every frame again after", () => {
+    const pace = createFramePace();
+    pace.setListening(true);
+    expect(drawn(pace, 0, 120)).toBe(2 * LISTENING_FPS);
+    pace.setListening(false);
+    expect(drawn(pace, 2000)).toBe(60);
   });
 });
 
