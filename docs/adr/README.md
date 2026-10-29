@@ -65,6 +65,7 @@ each data → look transformation does and its status.
 | [0055](./0055-stadtwissen-and-written-walks.md) | What the twin knows is baked as files for agents (the Stadtwissen: named, addressed and listed buildings per tile, the landmarks with a committed Wikidata excerpt); walks are written ahead and committed, checked against the data, their narration marked as Claude's and every claim sourced; amends 0042 | accepted |
 | [0056](./0056-frag-die-stadt-runs-on-the-visitors-key.md) | *Frag die Stadt* runs on the visitor's own key (Anthropic, OpenAI, OpenRouter, Vercel AI Gateway) through one stateless server function with a fixed prompt and fixed tools — the Stadtwissen's on the server, the scene's in the browser; the key stays in the browser, the answers are marked; amends 0001, 0042, 0045 | accepted |
 | [0057](./0057-the-sprachfuehrer-speaks-with-the-browsers-voice.md) | The Sprachführer reads answers aloud and takes spoken questions with the browser's Web Speech API (no voice service of the site's); `was_ist_da` asks the twin what stands at the view's centre; the Hörmodus darkens the screen and draws the scene at 2 fps | accepted |
+| [0058](./0058-scenarios-are-model-sums-on-open-data.md) | The Szenario-Assistent: floods (a river's gauge zeros + a reading, Dresden's Elbe) and a planned box's shadow, each a server tool for the numbers and a browser tool for the scene; every answer says it is a model sum, not an official result | accepted |
 
 ## Format
 

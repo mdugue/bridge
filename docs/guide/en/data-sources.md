@@ -74,6 +74,15 @@ after …) is kept with the city's data — fetched once, not by your
 browser — as material for the walks and for *Frag die Stadt*, the
 questions in words.
 
+**The federal waterways administration (WSV)** — its PEGELONLINE
+service gives the place and gauge zero of every Elbe gauge (Pirna,
+Dresden, Meißen). From those and the crest levels at the Dresden gauge
+that the city's Umweltatlas records, *Frag die Stadt*'s scenario
+assistant lays a flood into the model: the water level straight between
+the gauges, over the ground, without dykes or flood walls — a model's
+sum, not an official flood map (the city has those in its
+Themenstadtplan).
+
 **Landeshauptstadt Dresden** — the city itself. Its street-tree register
 (*Stadtbaumkataster*) lists about 124,000 municipal trees with species,
 height, crown width and trunk. The viewer plants those trees where they
@@ -461,6 +470,8 @@ bridge-structure files still date from earlier Overpass API queries.
 | Saxony's road census | `dl-de/by-2-0` | "Freistaat Sachsen, LASuV" |
 | NRW's Verkehrswerte | `dl-de/by-2-0` | "Straßen.NRW" |
 | GTFS timetable | *CC BY 4.0* | "DELFI e.V. via gtfs.de" |
+| Gauges and gauge zeros (PEGELONLINE, the flood scenario) | `dl-de/zero-2-0`: no credit required | given anyway: "WSV, PEGELONLINE" |
+| Historic crest levels at the Dresden gauge | facts from the city's Umweltatlas (map 4.45), cited | "Landeshauptstadt Dresden, Umweltatlas" |
 | Mapillary (detected street lamps, facade readings, shop windows, window rhythm) | *CC BY-SA 4.0* | "Mapillary" — kept in its own file, apart from the OpenStreetMap data |
 
 The viewer shows the credit of the site's provider, the OSM credit, the

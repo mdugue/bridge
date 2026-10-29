@@ -1833,6 +1833,24 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   (*Augusts Bühne*, *Narben und Nähte*, *Gold, Milch und Eigensinn*,
   *Wunder am Elbhang*); how they are written:
   [walks.md](./walks.md).
+- **Szenario Hochwasser** `= computed` `≈ assumed` — *Frag die Stadt*'s
+  flood ([ADR 0058](./adr/0058-scenarios-are-model-sums-on-open-data.md),
+  `lib/city/scenario.ts`): the Elbe's water surface at a reading of the
+  Dresden gauge, the gauge zeros of Pirna, Dresden and Meißen
+  (PEGELONLINE) joined by straight lines along their chords and raised
+  by the reading; the historic crests (1845, 1890, 2002, 2006, 2013)
+  from the city's Umweltatlas. Drawn as one see-through grid of 128
+  cells over the site (`scenario-layer.ts`); counted on the server
+  against each Stadtwissen building's base (`ask-scenario.ts`).
+  Assumed: no dykes, walls or barriers, every hollow below the level
+  wet, the flood's slope the gauge zeros'. Dresden only.
+- **Szenario Baukörper** `= computed` `≈ assumed` — a planned box (centre,
+  sides, height, turn) as a light clay-less box on the lowest ground
+  under its corners, casting the sun's shadow; its shadow on flat ground
+  every full hour of a day (suncalc, Europe/Berlin) as the convex hull
+  of footprint and roof outline cast, over the named or addressed
+  Stadtwissen buildings by their centre (`shadowStudy`). Assumed: flat
+  ground, the neighbours' own shadows not counted.
 
 ### Vegetation
 - **Cultivated land** `❝ taken` `≈ assumed` (plan 028) — OSM `landuse=allotments|orchard|vineyard`

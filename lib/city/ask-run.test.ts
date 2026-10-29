@@ -49,6 +49,8 @@ const TILE: WissenTile = {
 };
 const SITE: AskPromptSite = {
   epsg: 25_833,
+  floods: [],
+  id: "dresden",
   label: "Dresden",
   layers: [],
   styles: ["pastel: Pastell"],
@@ -118,14 +120,18 @@ describe("runAsk", () => {
           [
             "datenschicht",
             "fakten",
+            "hochwasser_betroffen",
             "in_der_naehe",
+            "plane_baukoerper",
             "quellen",
+            "schattenwurf",
             "setze_stil",
             "setze_zeit",
             "suche_stadt",
             "was_ist_da",
             "wo_bin_ich",
             "zeige",
+            "zeige_hochwasser",
           ].sort((a, b) => a.localeCompare(b))
         );
         expect(JSON.stringify(request.systemPrompts)).toContain(

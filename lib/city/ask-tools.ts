@@ -1,8 +1,10 @@
 /**
  * *Frag die Stadt*'s tools (ADR 0056), defined once for both sides: the
  * server binds the Stadtwissen ones (`suche_stadt`, `in_der_naehe`,
- * `fakten`, `quellen`), the card the scene ones (`wo_bin_ich`,
- * `was_ist_da`, `zeige`, `setze_zeit`, `setze_stil`, `datenschicht`). The server passes all of
+ * `fakten`, `quellen`) and the scenarios' sums (`hochwasser_betroffen`,
+ * `schattenwurf`, ADR 0058), the card the scene ones (`wo_bin_ich`,
+ * `was_ist_da`, `zeige`, `setze_zeit`, `setze_stil`, `datenschicht`,
+ * `zeige_hochwasser`, `plane_baukoerper`). The server passes all of
  * them to the model and never takes a tool list from the request: what
  * the model can do is fixed here.
  */
@@ -11,6 +13,7 @@ import { z } from "zod";
 import { ASK_LIMITS } from "./ask-city";
 import { DATA_LAYERS, type DataLayerKey } from "./data-layers";
 import { RENDER_STYLES, type RenderStyle } from "./render-style";
+import { FLOOD_CM, VOLUME_LIMITS } from "./scenario";
 
 const coordinate = z.number();
 
@@ -132,6 +135,91 @@ export const layerTool = toolDefinition({
   inputSchema: z.object({ schicht: z.enum(LAYER_KEYS), an: z.boolean() }),
 });
 
+// --- the Szenario-Assistent (ADR 0058) -----------------------------------------
+
+const floodAsk = {
+  ereignis: z
+    .string()
+    .max(12)
+    .optional()
+    .describe("ein Hochwasser der Stadt aus wo_bin_ich, z. B. „2002“"),
+  pegel_cm: z
+    .number()
+    .min(FLOOD_CM.min)
+    .max(FLOOD_CM.max)
+    .optional()
+    .describe("ein Wasserstand am Stadtpegel in cm, statt eines Ereignisses"),
+};
+
+export const floodTool = toolDefinition({
+  name: "hochwasser_betroffen",
+  description:
+    "Rechnet aus, welche Gebäude bei einem Wasserstand des Flusses mit dem Fuß unter dem Wasserspiegel stünden: Anzahl nach Wassertiefe, die tiefsten benannten Gebäude und Wahrzeichen. Optional nur im Umkreis eines Punkts. Ohne Deiche und Schutzwände, eine Modellrechnung — nur für Städte mit Pegeldaten.",
+  inputSchema: z.object({
+    ...floodAsk,
+    x: coordinate.optional().describe("Mittelpunkt (Rechtswert)"),
+    y: coordinate.optional().describe("Mittelpunkt (Hochwert)"),
+    radius: z
+      .number()
+      .min(50)
+      .max(3000)
+      .optional()
+      .describe("Umkreis in Metern"),
+  }),
+});
+
+export const floodShowTool = toolDefinition({
+  name: "zeige_hochwasser",
+  description:
+    "Zeigt im Stadtmodell den Wasserspiegel des Flusses bei einem Hochwasser oder Wasserstand (eine Wasserfläche über dem Gelände) oder blendet ihn mit aus aus.",
+  inputSchema: z.object({
+    ...floodAsk,
+    aus: z.boolean().default(false),
+  }),
+});
+
+const side = z.number().min(VOLUME_LIMITS.side[0]).max(VOLUME_LIMITS.side[1]);
+const volume = {
+  x: coordinate.describe("Mitte (Rechtswert)"),
+  y: coordinate.describe("Mitte (Hochwert)"),
+  breite: side.describe("Seite in Ost-West-Richtung vor der Drehung (m)"),
+  tiefe: side.describe("Seite in Nord-Süd-Richtung vor der Drehung (m)"),
+  hoehe: z
+    .number()
+    .min(VOLUME_LIMITS.height[0])
+    .max(VOLUME_LIMITS.height[1])
+    .describe("Höhe über Gelände (m); ein Geschoss sind etwa 3 m"),
+  drehung: z
+    .number()
+    .min(-360)
+    .max(360)
+    .default(0)
+    .describe("Drehung im Uhrzeigersinn (Grad)"),
+};
+
+export const shadowTool = toolDefinition({
+  name: "schattenwurf",
+  description:
+    "Rechnet für einen geplanten Baukörper (Quader) an einem Tag Stunde für Stunde Sonnenhöhe, Schattenrichtung und -länge aus und welche bekannten Nachbargebäude (nach ihrem Mittelpunkt) im Schatten liegen. Ebenes Gelände, ohne die Schatten der Nachbarn; eine Modellrechnung.",
+  inputSchema: z.object({
+    ...volume,
+    datum: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .describe("JJJJ-MM-TT, z. B. 2026-12-21 für den kürzesten Tag"),
+  }),
+});
+
+export const volumeTool = toolDefinition({
+  name: "plane_baukoerper",
+  description:
+    "Stellt einen geplanten Baukörper als hellen Quader ins Stadtmodell, mit echtem Schattenwurf (die Zeit stellt setze_zeit), oder nimmt ihn mit aus wieder heraus. Bestehende Gebäude an der Stelle bleiben stehen.",
+  inputSchema: z.object({
+    ...volume,
+    aus: z.boolean().default(false),
+  }),
+});
+
 /** The tools the browser runs, by name: the card binds each. */
 export const SCENE_TOOLS = [
   whereTool,
@@ -140,6 +228,8 @@ export const SCENE_TOOLS = [
   timeTool,
   styleTool,
   layerTool,
+  floodShowTool,
+  volumeTool,
 ] as const;
 
 /** The tools the server runs on the Stadtwissen. */
@@ -148,4 +238,6 @@ export const KNOWLEDGE_TOOLS = [
   nearTool,
   factsTool,
   sourcesTool,
+  floodTool,
+  shadowTool,
 ] as const;

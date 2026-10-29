@@ -6,16 +6,26 @@
  */
 import { clientTools } from "@tanstack/ai-client";
 import {
+  floodShowTool,
   layerTool,
   lookTool,
   showTool,
   styleTool,
   timeTool,
+  volumeTool,
   whereTool,
 } from "@/lib/city/ask-tools";
 import { type AskTarget, askView } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
+import {
+  clampVolume,
+  floodReading,
+  levelAtReference,
+  type PlannedVolume,
+  type River,
+  SCENARIO_NOTE,
+} from "@/lib/city/scenario";
 import type { ViewpointGeometry } from "@/lib/city/site";
 
 /** What the card may do to the scene: the scene tools' other half. */
@@ -35,6 +45,12 @@ export interface AskScene {
   look: () => Record<string, unknown>;
   /** the Hörmodus: the scene barely draws while the visitor listens */
   setListening: (on: boolean) => void;
+  /** the site's river with its gauges, where it has one (ADR 0058) */
+  river: River | null;
+  /** the river's water at `cm` on its reference gauge; null takes it away */
+  setFlood: (cm: number | null) => void;
+  /** a planned volume in the scene; null takes it away */
+  setVolume: (volume: PlannedVolume | null) => void;
 }
 
 /** The tools the browser runs, bound to the scene. */
@@ -61,6 +77,49 @@ export function sceneTools(scene: AskScene) {
       scene.setLayer(schicht, an)
         ? { ok: true }
         : { ok: false, hinweis: "Diese Stadt hat diese Ebene nicht." }
-    )
+    ),
+    floodShowTool.client((ask) => showFlood(scene, ask)),
+    volumeTool.client(({ aus, ...volume }) => {
+      if (aus) {
+        scene.setVolume(null);
+        return { ok: true };
+      }
+      const v = clampVolume({ ...volume, drehung: volume.drehung ?? 0 });
+      scene.setVolume(v);
+      return { ok: true, baukoerper: v, hinweis: SCENARIO_NOTE };
+    })
   );
+}
+
+function showFlood(
+  scene: AskScene,
+  ask: { aus?: boolean; ereignis?: string; pegel_cm?: number }
+): Record<string, unknown> {
+  if (ask.aus) {
+    scene.setFlood(null);
+    return { ok: true };
+  }
+  const river = scene.river;
+  if (!river) {
+    return {
+      ok: false,
+      hinweis: "Für diese Stadt hat das Stadtmodell keine Pegeldaten.",
+    };
+  }
+  const reading = floodReading(river, ask);
+  if (!reading) {
+    return {
+      ok: false,
+      ereignisse: river.events.map((e) => `${e.id}: ${e.label}`),
+    };
+  }
+  scene.setFlood(reading.cm);
+  return {
+    ok: true,
+    pegel_cm: reading.cm,
+    ...(reading.event ? { ereignis: reading.event.label } : {}),
+    wasserspiegel_am_pegel_m_nhn:
+      Math.round(levelAtReference(river, reading.cm) * 100) / 100,
+    hinweis: SCENARIO_NOTE,
+  };
 }

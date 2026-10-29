@@ -63,6 +63,13 @@ export function fakeAskAdapter(): AnyTextAdapter {
       if (/was ist (das|da)|vor mir/i.test(question)) {
         return { toolCalls: [{ name: "was_ist_da", input: {} }] };
       }
+      if (/hochwasser/i.test(question)) {
+        return {
+          toolCalls: [
+            { name: "hochwasser_betroffen", input: { ereignis: "2002" } },
+          ],
+        };
+      }
       return {
         toolCalls: [{ name: "suche_stadt", input: { anfrage: question } }],
       };
@@ -71,6 +78,17 @@ export function fakeAskAdapter(): AnyTextAdapter {
       typeof last.content === "string"
         ? last.content
         : JSON.stringify(last.content);
+    if (result.includes("gebaeude_unter_wasser")) {
+      return {
+        toolCalls: [{ name: "zeige_hochwasser", input: { ereignis: "2002" } }],
+      };
+    }
+    if (result.includes("wasserspiegel_am_pegel")) {
+      const n = /"pegel_cm":(\d+)/.exec(result)?.[1];
+      return {
+        text: `Testantwort: Wasserstand ${n ?? "?"} cm am Pegel — eine Modellrechnung, kein amtliches Ergebnis.`,
+      };
+    }
     const hit = /"name":"([^"]+)","x":(\d+),"y":(\d+)(?:,"z":(\d+))?/.exec(
       result
     );
@@ -92,6 +110,6 @@ export function fakeAskAdapter(): AnyTextAdapter {
       text: `Testantwort: Hier ist es${seen && result.includes("gefunden") ? `, ${seen}` : ""} (Quelle: Wikidata).`,
     };
   };
-  adapter.setResponses([step, step, step]);
+  adapter.setResponses([step, step, step, step]);
   return adapter;
 }

@@ -22,16 +22,22 @@ import {
   searchKnowledge,
   sourcesOf,
 } from "./ask-knowledge";
+import { floodAffected, shadowAnswer } from "./ask-scenario";
 import {
   factsTool,
+  floodTool,
   nearTool,
   SCENE_TOOLS,
   searchTool,
+  shadowTool,
   sourcesTool,
 } from "./ask-tools";
 
-/** The Stadtwissen tools, bound to one site's knowledge. */
-export function knowledgeTools(k: Knowledge) {
+/** The Stadtwissen and scenario tools, bound to one site's knowledge. */
+export function knowledgeTools(
+  k: Knowledge,
+  site: Pick<AskPromptSite, "epsg" | "id">
+) {
   return [
     searchTool.server(({ anfrage }) => {
       const hits = searchKnowledge(k, anfrage);
@@ -44,6 +50,10 @@ export function knowledgeTools(k: Knowledge) {
     })),
     factsTool.server(({ id }) => factsOf(k, id) ?? { fehler: "unbekannte id" }),
     sourcesTool.server(() => ({ quellen: sourcesOf(k) })),
+    floodTool.server((ask) => floodAffected(k, site.id, site.epsg, ask)),
+    shadowTool.server((ask) =>
+      shadowAnswer(k, site.epsg, { ...ask, drehung: ask.drehung ?? 0 })
+    ),
   ];
 }
 
@@ -76,7 +86,7 @@ export function runAsk(run: AskRun) {
     ...(run.resume ? { resume: run.resume } : {}),
     ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
     systemPrompts: [askSystemPrompt(run.site, run.today, run.voice)],
-    tools: [...knowledgeTools(run.knowledge), ...SCENE_TOOLS],
+    tools: [...knowledgeTools(run.knowledge, run.site), ...SCENE_TOOLS],
     agentLoopStrategy: maxIterations(ASK_LIMITS.iterations),
     // the prompt and the tools are the same for every request of a site:
     // the provider's cache holds them (Anthropic's cache_control, OpenAI's

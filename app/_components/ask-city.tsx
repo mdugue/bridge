@@ -77,6 +77,14 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
     scene.setListening(hearing);
     return () => scene.setListening(false);
   }, [scene, hearing]);
+  // a closed card takes its scenarios with it (ADR 0058)
+  useEffect(
+    () => () => {
+      scene.setFlood(null);
+      scene.setVolume(null);
+    },
+    [scene]
+  );
   return (
     <>
       {hearing && (

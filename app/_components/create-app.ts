@@ -48,6 +48,7 @@ import {
   shadowTilesStream,
 } from "@/lib/city/gpu-safety";
 import { bootingPose, startOf } from "@/lib/city/boot-start";
+import { floodSurface, type PlannedVolume, riverOf } from "@/lib/city/scenario";
 import { createGround } from "@/lib/city/ground";
 import {
   createPageLifecycle,
@@ -168,6 +169,7 @@ import type { TramCarsStatus } from "./tram-cars";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { pocFramesHeld, tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
+import { createScenarioLayer } from "./scenario-layer";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
 import {
@@ -584,6 +586,13 @@ export interface CityWalkHandle {
    * the instant applyCameraState), landing in the viewpoint's movement mode.
    */
   flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
+  /**
+   * The Szenario-Assistent (ADR 0058, scenario-layer.ts): the site's river
+   * at `cm` on its reference gauge (lib/city/scenario.ts; a site without
+   * one shows nothing), and a planned volume; null takes either away.
+   */
+  setFlood: (cm: number | null) => void;
+  setVolume: (volume: PlannedVolume | null) => void;
   /**
    * The current pose as a vantage — what the HUD stores when you save a view,
    * so restoring it is the same animated glide as any curated one.
@@ -1854,6 +1863,21 @@ async function bootApp(
     queueChange();
   });
   sunToStyles = postStack.setSunAltitude;
+  // what Frag die Stadt's scenarios put in the scene, under the Ausschnitt
+  // like the ground
+  const scenario = createScenarioLayer({
+    bounds: siteBounds,
+    compile: (object) => postStack.compile(object),
+    heightAt,
+    offset,
+    changed: () => {
+      invalidateShadows();
+      queueChange();
+    },
+    parent: cuts.group,
+  });
+  cleanups.push(() => scenario.dispose());
+  const river = riverOf(opts.site.id);
   // The data layers (lib/city/data-layers.ts, data-layers-feature.ts):
   // started with the first switch-on of any of them — the tiles' traffic
   // slots wait on the same start — and from then on driven by the spine's
@@ -3790,6 +3814,11 @@ async function bootApp(
         ? modelRig.centreOn(vantageTarget(view))
         : pose.flyToViewpoint(view),
     captureViewpoint: pose.captureViewpoint,
+    setFlood: (cm) =>
+      scenario.setFlood(
+        river && cm !== null ? floodSurface(river, extras.epsg, cm) : null
+      ),
+    setVolume: scenario.setVolume,
     placeAt: (view) =>
       modelRig.owns()
         ? modelRig.centreOn(groundPoint(view.epsg.x, view.epsg.y))
