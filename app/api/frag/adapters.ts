@@ -6,6 +6,7 @@
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { type FakeResponseStep, fakeText } from "@tanstack/ai/testing";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
+import { createGeminiChat } from "@tanstack/ai-gemini";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import { openaiCompatibleText } from "@tanstack/ai-openai/compatible";
 import { createOpenRouterText } from "@tanstack/ai-openrouter";
@@ -20,6 +21,7 @@ const CLIENT = { maxRetries: 1, timeout: 60_000 } as const;
 type ModelId = Parameters<typeof createAnthropicChat>[0];
 type OpenAiModel = Parameters<typeof createOpenaiChat>[0];
 type OpenRouterModel = Parameters<typeof createOpenRouterText>[0];
+type GeminiModel = Parameters<typeof createGeminiChat>[0];
 
 export function askAdapter(
   provider: AskProviderId,
@@ -31,6 +33,10 @@ export function askAdapter(
       return createAnthropicChat(model as ModelId, key, CLIENT);
     case "openai":
       return createOpenaiChat(model as OpenAiModel, key, CLIENT);
+    case "google":
+      return createGeminiChat(model as GeminiModel, key, {
+        httpOptions: { timeout: CLIENT.timeout },
+      });
     case "openrouter":
       return createOpenRouterText(model as OpenRouterModel, key, {
         timeoutMs: CLIENT.timeout,

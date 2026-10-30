@@ -18,6 +18,7 @@ describe("providers", () => {
     expect(providerForKey("sk-or-v1-abc")).toBe("openrouter");
     expect(providerForKey("sk-proj-abc")).toBe("openai");
     expect(providerForKey("vck_abc")).toBe("gateway");
+    expect(providerForKey("AIzaSyA-abc")).toBe("google");
     expect(providerForKey("  sk-ant-x ")).toBe("anthropic");
     expect(providerForKey("hello")).toBeNull();
   });
@@ -29,6 +30,20 @@ describe("providers", () => {
       expect(p.check.url.startsWith("https://")).toBe(true);
     }
     expect(isAskModel("openai", "claude-haiku-5-5")).toBe(false);
+  });
+
+  test("a gateway offers every maker's models under its maker's name", () => {
+    const direct = ASK_PROVIDERS.filter((p) => !p.id.match(/gateway|router/));
+    for (const p of ASK_PROVIDERS.filter((q) => !direct.includes(q))) {
+      expect(p.models.map((m) => m.label)).toEqual(
+        direct.flatMap((d) => d.models.map((m) => m.label))
+      );
+      for (const m of p.models) {
+        expect(m.id.startsWith(`${m.maker.toLowerCase()}/`)).toBe(true);
+      }
+    }
+    expect(isAskModel("gateway", "anthropic/claude-sonnet-5.5")).toBe(true);
+    expect(isAskModel("openrouter", "google/gemini-4-argon")).toBe(true);
   });
 
   test("only a plausible key goes anywhere", () => {

@@ -864,6 +864,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await card
         .getByTestId("ask-key")
         .fill("sk-ant-api03-0123456789abcdefghij");
+      // the key names its provider; the picker offers its fast model first
+      await expect(card.getByTestId("ask-model")).toContainText(
+        "Claude Haiku 5.5"
+      );
       await card.getByRole("button", { name: "Prüfen und loslegen" }).click();
       await expect(card.getByRole("alert")).toContainText("nicht an");
       // the refused check is the browser's logged 401, asked for above

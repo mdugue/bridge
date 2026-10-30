@@ -35,6 +35,7 @@
     "@tanstack/ai": "^1.0.1",
     "@tanstack/ai-anthropic": "^1.0.0",
     "@tanstack/ai-client": "^1.0.1",
+    "@tanstack/ai-gemini": "^1.0.1",
     "@tanstack/ai-openai": "^1.0.1",
     "@tanstack/ai-openrouter": "^1.0.1",
     "@tanstack/ai-react": "^1.0.1",

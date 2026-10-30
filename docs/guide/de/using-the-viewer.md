@@ -444,7 +444,9 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   solange sie nah genug beieinander liegen), bei „in der Nähe“ der
   genommene Umkreis mit *enger* und *weiter*, und zwei oder drei
   Folgefragen zum Antippen. Es läuft mit deinem eigenen Schlüssel eines Anbieters
-  (Anthropic, OpenAI, OpenRouter oder Vercel AI Gateway) und auf deine
+  (Anthropic, OpenAI, Google Gemini, OpenRouter oder Vercel AI Gateway;
+  die Auswahl nennt je Hersteller ein schnelles und ein gründliches
+  Modell) und auf deine
   Kosten, meist unter einem Cent je Frage; der Schlüssel bleibt in
   deinem Browser ([Datenschutz](/datenschutz#frag-die-stadt)). Auch über
   *Fragen* in der Werkzeugleiste. Als **Sprachführer**: *Sprechen* nimmt

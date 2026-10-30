@@ -13,21 +13,33 @@ import { riverOf } from "./scenario";
 import type { Site } from "./site";
 
 /** A provider the chat can run on, with the visitor's key. */
-export type AskProviderId = "anthropic" | "gateway" | "openai" | "openrouter";
+export type AskProviderId =
+  | "anthropic"
+  | "gateway"
+  | "google"
+  | "openai"
+  | "openrouter";
+
+/** Who made a model: the picker's groups. */
+export type AskMaker = "Anthropic" | "Google" | "OpenAI";
 
 export interface AskModel {
   id: string;
-  /** what the picker shows (German, like the HUD) */
+  /** its name as its maker writes it */
   label: string;
+  /** what it is good for, in a word (German, like the HUD) */
+  hint: string;
+  maker: AskMaker;
 }
 
 export interface AskProviderDef {
   /**
    * The request that proves a key, no tokens spent: the provider's list of
    * models, or its key's own record. `bearer` puts the key in an
-   * `Authorization` header, `anthropic` in Anthropic's `x-api-key`.
+   * `Authorization` header, `anthropic` in Anthropic's `x-api-key`,
+   * `google` in Google's `x-goog-api-key`.
    */
-  check: { auth: "anthropic" | "bearer"; url: string };
+  check: { auth: "anthropic" | "bearer" | "google"; url: string };
   id: AskProviderId;
   /** where a visitor makes a key */
   keysUrl: string;
@@ -38,6 +50,33 @@ export interface AskProviderDef {
   prefix: string;
 }
 
+// The curated models (October 2026): each maker's fast one first, then
+// its most thorough, every one with tool calls. A gateway names them
+// `maker/model`, with dots for Anthropic's dashes.
+const CLAUDE = [
+  { id: "claude-haiku-5-5", label: "Claude Haiku 5.5", hint: "schnell" },
+  { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", hint: "ausgewogen" },
+  { id: "claude-opus-5-5", label: "Claude Opus 5.5", hint: "gründlich" },
+].map((m) => ({ ...m, maker: "Anthropic" as const }));
+const GPT = [
+  { id: "gpt-6-luna", label: "GPT-6 Luna", hint: "schnell" },
+  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", hint: "gründlich" },
+].map((m) => ({ ...m, maker: "OpenAI" as const }));
+const GEMINI = [
+  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", hint: "schnell" },
+  { id: "gemini-4-argon", label: "Gemini 4 Argon", hint: "gründlich" },
+].map((m) => ({ ...m, maker: "Google" as const }));
+
+/** Every maker's models as a gateway names them. */
+const ROUTED: readonly AskModel[] = [
+  ...CLAUDE.map((m) => ({
+    ...m,
+    id: `anthropic/${m.id.replace(/-(\d+)-(\d+)$/, "-$1.$2")}`,
+  })),
+  ...GPT.map((m) => ({ ...m, id: `openai/${m.id}` })),
+  ...GEMINI.map((m) => ({ ...m, id: `google/${m.id}` })),
+];
+
 /** In the order the picker lists them. */
 export const ASK_PROVIDERS: readonly AskProviderDef[] = [
   {
@@ -46,10 +85,7 @@ export const ASK_PROVIDERS: readonly AskProviderDef[] = [
     prefix: "sk-ant-",
     keysUrl: "https://console.anthropic.com/settings/keys",
     check: { auth: "anthropic", url: "https://api.anthropic.com/v1/models" },
-    models: [
-      { id: "claude-haiku-5-5", label: "Claude Haiku 5.5 · schnell" },
-      { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5 · gründlich" },
-    ],
+    models: CLAUDE,
   },
   {
     id: "openai",
@@ -57,10 +93,18 @@ export const ASK_PROVIDERS: readonly AskProviderDef[] = [
     prefix: "sk-",
     keysUrl: "https://platform.openai.com/api-keys",
     check: { auth: "bearer", url: "https://api.openai.com/v1/models" },
-    models: [
-      { id: "gpt-5.4-mini", label: "GPT-5.4 mini · schnell" },
-      { id: "gpt-5.5", label: "GPT-5.5 · gründlich" },
-    ],
+    models: GPT,
+  },
+  {
+    id: "google",
+    label: "Google Gemini",
+    prefix: "AIza",
+    keysUrl: "https://aistudio.google.com/apikey",
+    check: {
+      auth: "google",
+      url: "https://generativelanguage.googleapis.com/v1beta/models",
+    },
+    models: GEMINI,
   },
   {
     id: "openrouter",
@@ -68,14 +112,7 @@ export const ASK_PROVIDERS: readonly AskProviderDef[] = [
     prefix: "sk-or-",
     keysUrl: "https://openrouter.ai/settings/keys",
     check: { auth: "bearer", url: "https://openrouter.ai/api/v1/key" },
-    models: [
-      { id: "anthropic/claude-haiku-5.5", label: "Claude Haiku 5.5 · schnell" },
-      {
-        id: "anthropic/claude-sonnet-5.5",
-        label: "Claude Sonnet 5.5 · gründlich",
-      },
-      { id: "openai/gpt-5.5", label: "GPT-5.5 · gründlich" },
-    ],
+    models: ROUTED,
   },
   {
     id: "gateway",
@@ -83,14 +120,7 @@ export const ASK_PROVIDERS: readonly AskProviderDef[] = [
     prefix: "vck_",
     keysUrl: "https://vercel.com/docs/ai-gateway/authentication",
     check: { auth: "bearer", url: "https://ai-gateway.vercel.sh/v1/credits" },
-    models: [
-      { id: "anthropic/claude-haiku-5.5", label: "Claude Haiku 5.5 · schnell" },
-      {
-        id: "anthropic/claude-sonnet-5.5",
-        label: "Claude Sonnet 5.5 · gründlich",
-      },
-      { id: "openai/gpt-5.5", label: "GPT-5.5 · gründlich" },
-    ],
+    models: ROUTED,
   },
 ];
 
