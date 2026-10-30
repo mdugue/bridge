@@ -2163,11 +2163,15 @@ async function bootApp(
     // a stand-in: the scene's surface anywhere inside it is the thing; the
     // counters' columns are glass, which writes no depth
     return {
-      // a tree drawn as the cone outlined as one (not a pine or a yew)
+      // a tree's crown as it is drawn: a cone outlined as one (not a pine
+      // or a yew), any other kind's solids as they are
       positions: solidShape(
         solids,
-        (target.kind === "tree" || target.kind === "canopy") &&
-          target.cone === true
+        target.kind === "tree" || target.kind === "canopy"
+          ? target.cone === true
+            ? "cone"
+            : "ellipsoid"
+          : null
       ),
       reach:
         target.kind === "bikes"
