@@ -7,6 +7,7 @@
  * neither, the card shows neither.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { STORAGE_KEYS } from "./storage-keys";
 
 // reason: SpeechRecognition is not in TypeScript's DOM library yet; the
 // part used here, typed by hand.
@@ -38,35 +39,209 @@ function recognitionClass(): RecognitionClass | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+const UNITS = [
+  "",
+  "ein",
+  "zwei",
+  "drei",
+  "vier",
+  "fünf",
+  "sechs",
+  "sieben",
+  "acht",
+  "neun",
+];
+const TEENS = [
+  "zehn",
+  "elf",
+  "zwölf",
+  "dreizehn",
+  "vierzehn",
+  "fünfzehn",
+  "sechzehn",
+  "siebzehn",
+  "achtzehn",
+  "neunzehn",
+];
+const TENS = [
+  "",
+  "",
+  "zwanzig",
+  "dreißig",
+  "vierzig",
+  "fünfzig",
+  "sechzig",
+  "siebzig",
+  "achtzig",
+  "neunzig",
+];
+
+/** 1–99 in German words ("eins" alone, "einund…" in a compound). */
+function below100(n: number): string {
+  if (n < 10) {
+    return n === 1 ? "eins" : UNITS[n];
+  }
+  if (n < 20) {
+    return TEENS[n - 10];
+  }
+  const unit = n % 10;
+  const tens = TENS[Math.floor(n / 10)];
+  return unit === 0 ? tens : `${UNITS[unit]}und${tens}`;
+}
+
+/**
+ * A year as German says it: 1711 "siebzehnhundertelf", 2013
+ * "zweitausenddreizehn" — a voice reading the digits says
+ * "eintausendsiebenhundertelf", which no one does. 1100–2099 only.
+ */
+export function yearWords(year: number): string {
+  const rest = year % 100;
+  const tail = rest === 0 ? "" : below100(rest);
+  if (year >= 2000) {
+    return `zweitausend${tail}`;
+  }
+  return `${TEENS[Math.floor(year / 100) - 10]}hundert${tail}`;
+}
+
+/** Shortenings a voice reads letter by letter or stumbles on. */
+const SPOKEN: [RegExp, string][] = [
+  [/\bz\. ?B\./g, "zum Beispiel"],
+  [/\bca\./g, "circa"],
+  [/\bNr\./g, "Nummer"],
+  [/\bSt\. (?=[A-ZÄÖÜ])/g, "Sankt "],
+  [/\bu\. ?a\./g, "unter anderem"],
+  [/\bv\. Chr\./g, "vor Christus"],
+  [/\bn\. Chr\./g, "nach Christus"],
+  [/(\d)\s?km\b/g, "$1 Kilometer"],
+  [/(\d)\s?%/g, "$1 Prozent"],
+];
+
+/** Words a year follows ("im Juni 1813", "seit 1990"). */
+const BEFORE_YEAR =
+  /(?:^|[\s(])(?:im|seit|bis|von|um|ab|nach|vor|anno|Jahre?|zwischen|und|oder|Ende|Anfang|Mitte|Sommer|Herbst|Winter|Frühjahr|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s$/;
+
+/** "1800 Leute", "1200 Meter": a number before a noun counts something,
+ *  unless the words before it make it a year ("im Mai 1945 Truppen"). */
+function isCount(text: string, at: number): boolean {
+  const noun = /^\s[A-ZÄÖÜ]/.test(text.slice(at + 4, at + 6));
+  return noun && !BEFORE_YEAR.test(text.slice(Math.max(0, at - 16), at));
+}
+
 /**
  * Text as it should be heard: no web links (the card shows them; a
  * Markdown link keeps its words), no list marks or Markdown stars, "m" and
- * "m²" as words.
+ * "m²" as words, years as German says them, shortenings spelled out, a
+ * dash or a bracket as the pause it is, quotation marks unspoken.
  */
 export function speakable(text: string): string {
-  return text
+  let out = text
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]*\)/g, "$1")
     .replace(/\s?\(?https?:\/\/[^\s)]+\)?/g, "")
     .replace(/^\s*[-*•]\s+/gm, "")
     .replace(/[*_#`]/g, "")
     .replace(/(\d)\s?m²/g, "$1 Quadratmeter")
-    .replace(/(\d)\s?m\b/g, "$1 Meter")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/(\d)\s?m\b/g, "$1 Meter");
+  for (const [pattern, words] of SPOKEN) {
+    out = out.replace(pattern, words);
+  }
+  return (
+    out
+      // a year alone (not 35.798, not a span's 1,5): as German says it
+      .replace(
+        /(?<![\d.,])(1[1-9]\d\d|20\d\d)(?![\d.,]\d)/g,
+        (y: string, _: string, at: number, all: string) =>
+          isCount(all, at) ? y : yearWords(Number(y))
+      )
+      .replace(/\s[–—]\s/g, ", ")
+      .replace(/[„“”"»«]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
-/** The best German voice the device has: a local one first. */
-function germanVoice(): SpeechSynthesisVoice | null {
-  const voices = speechSynthesis
-    .getVoices()
-    .filter((v) => v.lang.toLowerCase().startsWith("de"));
-  return voices.find((v) => v.localService) ?? voices[0] ?? null;
+/** A voice the card can offer: its name, and whether the text leaves. */
+export interface VoiceChoice {
+  name: string;
+  /** spoken by a service (Google's, Microsoft's): the text goes there */
+  online: boolean;
 }
+
+/** How natural a voice's name says it sounds: the better, the higher. */
+function voiceRank(v: SpeechSynthesisVoice): number {
+  const name = v.name;
+  let rank = 0;
+  if (/natural|neural|premium|enhanced|erweitert|siri/i.test(name)) {
+    rank += 4;
+  }
+  if (/google/i.test(name)) {
+    rank += 3;
+  }
+  if (/compact|espeak|kompakt/i.test(name)) {
+    rank -= 4;
+  }
+  return rank + (v.lang.toLowerCase() === "de-de" ? 1 : 0);
+}
+
+function germanVoices(): SpeechSynthesisVoice[] {
+  return speechSynthesis
+    .getVoices()
+    .filter((v) => v.lang.toLowerCase().startsWith("de"))
+    .sort((a, b) => voiceRank(b) - voiceRank(a));
+}
+
+/**
+ * The voice to read with: the visitor's choice where the device has it,
+ * else the best one on the device — an online voice only by choice (the
+ * privacy page: nothing leaves the device unless the visitor picks one).
+ * Null where the device has only online voices and none was picked: then
+ * nothing is read, since the browser's own default may be online.
+ */
+function chosenVoice(
+  chosen: string | null,
+  voices: readonly SpeechSynthesisVoice[]
+): SpeechSynthesisVoice | null {
+  return (
+    voices.find((v) => v.name === chosen) ??
+    voices.find((v) => v.localService) ??
+    null
+  );
+}
+
+function storedVoice(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.voice);
+  } catch {
+    return null;
+  }
+}
+
+/** Sentences, each its own utterance: a long one is cut off by some
+ *  voices (Chrome's online ones stop after about fifteen seconds), and a
+ *  sentence's end is where a voice should breathe anyway. */
+export function sentences(text: string): string[] {
+  return (
+    text
+      // not after an ordinal's point ("am 15. September"), after a year's
+      .split(/(?<=(?:[^\d\s]|\d{3})[.!?:;]|\d[!?:;])\s+(?=[A-ZÄÖÜ„"0-9])/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+}
+
+/** The pace the voices read at: a touch slower than their default, which
+ *  hurries a told story. */
+const RATE = 0.94;
 
 export interface Speech {
   speak: (text: string) => void;
   stop: () => void;
   supported: boolean;
+  /** the German voices the device offers, the best first */
+  voices: VoiceChoice[];
+  /** the voice reading now (its name), or null for none there */
+  voice: string | null;
+  /** picks a voice, remembered on this device */
+  setVoice: (name: string) => void;
 }
 
 /** Reading aloud, one text at a time; a new one cuts the last off. */
@@ -74,6 +249,28 @@ export function useSpeech(): Speech {
   const [supported] = useState(
     () => typeof window !== "undefined" && "speechSynthesis" in window
   );
+  const [chosen, setChosen] = useState<string | null>(() =>
+    supported ? storedVoice() : null
+  );
+  // the voices arrive late in Chrome: listed once they are there
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  useEffect(() => {
+    if (!supported) {
+      return;
+    }
+    // a list the same as before keeps its identity: a stop being read is
+    // not cut off and started again
+    const list = () =>
+      setVoices((was) => {
+        const now = germanVoices();
+        const same =
+          now.length === was.length && now.every((v, i) => v === was[i]);
+        return same ? was : now;
+      });
+    list();
+    speechSynthesis.addEventListener("voiceschanged", list);
+    return () => speechSynthesis.removeEventListener("voiceschanged", list);
+  }, [supported]);
   const stop = useCallback(() => {
     if (supported) {
       speechSynthesis.cancel();
@@ -82,23 +279,45 @@ export function useSpeech(): Speech {
   const speak = useCallback(
     (text: string) => {
       const words = speakable(text);
-      if (!(supported && words)) {
+      const voice = chosenVoice(chosen, voices);
+      if (!(voice && words)) {
         return;
       }
       speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(words);
-      utterance.lang = "de-DE";
-      const voice = germanVoice();
-      if (voice) {
+      for (const sentence of sentences(words)) {
+        const utterance = new SpeechSynthesisUtterance(sentence);
+        utterance.lang = voice.lang;
+        utterance.rate = RATE;
         utterance.voice = voice;
+        speechSynthesis.speak(utterance);
       }
-      speechSynthesis.speak(utterance);
     },
-    [supported]
+    // the first list arrives late: a text asked for before it is read
+    // once the voices are there (the caller's effect runs again)
+    [chosen, voices]
   );
+  const setVoice = useCallback((name: string) => {
+    setChosen(name);
+    try {
+      localStorage.setItem(STORAGE_KEYS.voice, name);
+    } catch {
+      // not remembered: this page still reads with it
+    }
+  }, []);
   // a closed card stops talking
   useEffect(() => stop, [stop]);
-  return useMemo(() => ({ speak, stop, supported }), [speak, stop, supported]);
+  const choices = useMemo(
+    () => voices.map((v) => ({ name: v.name, online: !v.localService })),
+    [voices]
+  );
+  const voice = useMemo(
+    () => chosenVoice(chosen, voices)?.name ?? null,
+    [voices, chosen]
+  );
+  return useMemo(
+    () => ({ speak, stop, supported, voices: choices, voice, setVoice }),
+    [speak, stop, supported, choices, voice, setVoice]
+  );
 }
 
 export interface Dictation {
