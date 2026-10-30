@@ -290,10 +290,13 @@ config change.
     scripted model for local tests only) and `app/api/schluessel/`
     (the key check); the shared core is `lib/city/ask-city.ts`
     (providers, curated models, caps, the fixed prompt), `ask-tools.ts`
-    (the fourteen tools), `ask-knowledge.ts` (the Stadtwissen answers, read
+    (the fifteen tools), `ask-knowledge.ts` (the Stadtwissen answers, read
     from `.stadtwissen/<site>/`, which `prepare-sites.ts` copies there and
     `next.config.ts` traces into the function), `ask-run.ts` (the agent
-    loop), `ask-token.ts`, `ask-view.ts`; the Szenario-Assistent (ADR
+    loop), `ask-token.ts`, `ask-view.ts` (`zeige`'s framing: the
+    view that holds every place, the best of twelve headings by size,
+    approach, sun, spread and the loaded buildings' sight lines;
+    `ask-chips.tsx` the places, reach and follow-ups under an answer); the Szenario-Assistent (ADR
     0058): `lib/city/scenario.ts` (a river's flood surface from its
     gauges, a planned box's shadow hour by hour — `SITE_RIVERS`,
     `shadowStudy`), `lib/city/ask-scenario.ts` (the server's counts) and

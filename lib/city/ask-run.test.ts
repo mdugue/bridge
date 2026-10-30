@@ -83,7 +83,11 @@ describe("runAsk", () => {
           toolCalls: [
             {
               name: "zeige",
-              input: { x: 411_803, y: 5_656_355, h: 94 },
+              input: {
+                ziele: [
+                  { name: "Frauenkirche", x: 411_803, y: 5_656_355, h: 94 },
+                ],
+              },
             },
           ],
         };
@@ -128,6 +132,7 @@ describe("runAsk", () => {
             "setze_stil",
             "setze_zeit",
             "suche_stadt",
+            "vorschlaege",
             "was_ist_da",
             "wo_bin_ich",
             "zeige",

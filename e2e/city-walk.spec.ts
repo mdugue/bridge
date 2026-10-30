@@ -823,7 +823,31 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
         delta: "Die Frauenkirche baute George Bähr (Quelle: Wikidata).",
       },
       { type: "TEXT_MESSAGE_END", messageId: "m1" },
+      // the follow-ups, a server tool: chips under the answer
+      {
+        type: "TOOL_CALL_START",
+        toolCallId: "c1",
+        toolCallName: "vorschlaege",
+      },
+      {
+        type: "TOOL_CALL_ARGS",
+        toolCallId: "c1",
+        delta: '{"fragen":["Wann wurde sie geweiht?"]}',
+      },
+      {
+        type: "TOOL_CALL_END",
+        toolCallId: "c1",
+        input: { fragen: ["Wann wurde sie geweiht?"] },
+      },
       { type: "RUN_FINISHED", runId: "r1", threadId: "t" },
+      {
+        type: "TOOL_CALL_RESULT",
+        messageId: "m1",
+        toolCallId: "c1",
+        content: '{"ok":true}',
+        role: "tool",
+      },
+      { type: "RUN_FINISHED", runId: "r2", threadId: "t" },
     ];
     await page.route("**/api/frag", (route) =>
       route.fulfill({
@@ -849,6 +873,9 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await card.getByTestId("ask-input").press("Enter");
       await expect(card).toContainText("George Bähr");
       await expect(card.getByText("KI", { exact: true })).toBeVisible();
+      await expect(
+        card.getByRole("button", { name: "Wann wurde sie geweiht?" })
+      ).toBeVisible();
       await card
         .getByRole("button", { name: "Frag die Stadt schließen" })
         .click();

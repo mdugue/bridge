@@ -57,6 +57,22 @@ are accepted (`ASK_PROVIDERS`), and a conversation keeps to caps
 (`ASK_LIMITS`: 40 messages, 60 000 characters, 1 200 per question, eight
 model turns per answer, twelve entries per tool result).
 
+**The answer shows its places.** `zeige` takes every place an answer
+is about — the rejected candidates too, the chosen one first — with the
+footprint radius and height the Stadtwissen gives (`r`, baked from the
+LoD2 extent; a landmark's from the buildings that draw it). The browser
+frames them itself (`frameTargets`, `lib/city/ask-view.ts`): from the
+air, the nearest eye that fits them into the screen as it is shaped, on
+the best of twelve headings by size, the visitor's approach, the sun
+behind the camera, the places beside each other and the sight lines the
+loaded buildings leave open; places that would need an eye more than
+900 m off are shown one at a time. The model never computes a camera.
+Under the answer (`app/_components/ask-chips.tsx`) each place is a chip,
+"nearby" shows the reach it took with a narrower and a wider one, and
+the follow-ups come from `vorschlaege`, a server tool that only takes
+them in — one model turn more per answer, cheap on the prompt cache,
+and more reliable than parsing a line of the text.
+
 **The key stays in the visitor's browser.** For the tab (session
 storage), or on the device if the visitor asks (local storage,
 `frag-die-stadt`); it is sent with each question to the site's function,

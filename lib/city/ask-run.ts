@@ -19,6 +19,7 @@ import {
   factsOf,
   type Knowledge,
   nearKnowledge,
+  nearReach,
   searchKnowledge,
   sourcesOf,
 } from "./ask-knowledge";
@@ -26,11 +27,13 @@ import { floodAffected, shadowAnswer } from "./ask-scenario";
 import {
   factsTool,
   floodTool,
+  NEAR_RADIUS,
   nearTool,
   SCENE_TOOLS,
   searchTool,
   shadowTool,
   sourcesTool,
+  suggestTool,
 } from "./ask-tools";
 
 /** The Stadtwissen and scenario tools, bound to one site's knowledge. */
@@ -45,11 +48,19 @@ export function knowledgeTools(
         ? { treffer: hits }
         : { treffer: [], hinweis: "Nichts gefunden — anders schreiben?" };
     }),
-    nearTool.server(({ x, y, radius }) => ({
-      treffer: nearKnowledge(k, x, y, radius ?? 120),
-    })),
+    nearTool.server(({ x, y, radius }) => {
+      // the reach said, so the answer can say what it took for near
+      const reach = nearReach(radius ?? NEAR_RADIUS);
+      return {
+        umkreis_m: reach.buildings,
+        wahrzeichen_bis_m: reach.landmarks,
+        treffer: nearKnowledge(k, x, y, reach.buildings),
+      };
+    }),
     factsTool.server(({ id }) => factsOf(k, id) ?? { fehler: "unbekannte id" }),
     sourcesTool.server(() => ({ quellen: sourcesOf(k) })),
+    // the chips are the card's: the server only takes them in
+    suggestTool.server(() => ({ ok: true })),
     floodTool.server((ask) => floodAffected(k, site.id, site.epsg, ask)),
     shadowTool.server((ask) =>
       shadowAnswer(k, site.epsg, { ...ask, drehung: ask.drehung ?? 0 })
