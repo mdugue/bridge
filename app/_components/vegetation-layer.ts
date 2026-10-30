@@ -189,8 +189,6 @@ export interface VegetationControl {
   group: Group;
   /** whether the look allows the rich crown (the multi-tuft toggle) */
   multiTuft: () => boolean;
-  /** advance the wind-sway animation (call per frame with elapsed seconds) */
-  setTime: (seconds: number) => void;
   /**
    * Moves the crowns to `day` (days since 1 January; lib/city/tree-season.ts):
    * autumn colour and bare crowns. Called on a date change, never per frame;
@@ -657,10 +655,19 @@ export interface CrownUniforms {
 }
 
 /** Fresh crown uniforms. */
+/** The crowns' wind clock: one node for every tile's crowns (and a later
+ *  app's), advanced once per frame by the render loop (`setCrownTime`). */
+const crownTime = uniform(0);
+
+/** Advances every crown's wind sway (elapsed seconds; once per frame). */
+export function setCrownTime(seconds: number): void {
+  crownTime.value = seconds;
+}
+
 function createCrownUniforms(): CrownUniforms {
   return {
     sunDirection: uniform(new Vector3(0, 1, 0)),
-    time: uniform(0),
+    time: crownTime,
   };
 }
 
@@ -1319,11 +1326,10 @@ export function* vegetationSteps(
   const group = new Group();
   group.name = "vegetation";
 
-  // The crown uniforms are the scene's (sceneCrowns): every tile's control
-  // writes the same nodes — the wind clock, which the render loop advances
-  // once per frame (same elapsed seconds as the water ripple).
+  // The crown uniforms are the scene's (sceneCrowns): every tile's crowns
+  // read the same nodes — the wind clock among them, which the render loop
+  // advances once per frame (`setCrownTime`, the water ripple's seconds).
   const crownMats = sceneCrowns(ctx.sunDirection);
-  const u = crownMats.uniforms;
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   let chunks: VegetationChunk[] = [];
   let seasons: SeasonalCrowns[] = [];
@@ -1358,9 +1364,6 @@ export function* vegetationSteps(
       multiTuft = look.multiTuft;
     },
     multiTuft: () => multiTuft,
-    setTime: (seconds) => {
-      u.time.value = seconds;
-    },
     setSeason: (day) => applySeasons(seasons, day),
     // The chunks' tiers are createVegetationLod's; the canopy keeps no other
     // crowns.

@@ -217,9 +217,11 @@ import {
 import { attachTouchControls } from "./touch-controls";
 import {
   createVegetationLod,
+  setCrownTime,
   type VegetationControl,
 } from "./vegetation-layer";
 import { createStyleResources, setClaySection } from "./visual-style";
+import { setWaterTime } from "./water-layer";
 import { createModelCuts } from "./model-cuts";
 import * as dataLayersModule from "./data-layers-feature";
 import {
@@ -2752,13 +2754,9 @@ async function bootApp(
     // one would spend the rich-crown budget the view needs, and its tier
     // flips redrew the shadow map for trees nobody sees.
     const shown = stream.visibleDressings();
-    for (const d of shown) {
-      d.vegetation?.setTime(elapsed);
-    }
-    // the coarse crowns standing in on a bare fine level sway too
-    for (const crowns of stream.standingIn()) {
-      crowns.setTime(elapsed);
-    }
+    // one wind clock for every crown, the coarse ones standing in on a
+    // bare fine level too
+    setCrownTime(elapsed);
     if (!crownTiers.due(tick, eye)) {
       return;
     }
@@ -3364,9 +3362,7 @@ async function bootApp(
     streamChange.flush();
     // Advance every tile's water ripple and glitter (its sky tint is the
     // fog colour's node, in lockstep with the sun by construction).
-    for (const t of terrains) {
-      t.water?.update(elapsed);
-    }
+    setWaterTime(elapsed);
     const equivalent = followView(elapsed, poseTick);
     lastEquivalent = equivalent ?? 600;
     updateCuts();

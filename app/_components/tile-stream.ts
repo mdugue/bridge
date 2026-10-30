@@ -329,10 +329,6 @@ export interface TileStream {
   visibleTerrains: () => TerrainLayer[];
   visibleCities: () => CityLayer[];
   visibleDressings: () => TileDressing[];
-  /** the coarse crowns standing in on a fine level (DressingPlugin
-   *  `standInCrowns`): drawn, though their dressing is not shown —
-   *  their bridges and asks stay hidden with their level */
-  standingIn: () => VegetationControl[];
 }
 
 /**
@@ -805,10 +801,6 @@ function* tileVegetationSteps(
     applyLook: (look) => {
       canopy.applyLook(look);
       own.applyLook(look);
-    },
-    setTime: (seconds) => {
-      canopy.setTime(seconds);
-      own.setTime(seconds);
     },
     setSeason: (day) => {
       const a = canopy.setSeason(day);
@@ -1581,16 +1573,12 @@ export class DressingPlugin {
     if (!group?.parent) {
       return;
     }
-    const standing: VegetationControl[] = [];
-    for (const { coarse, crowns, fine, control } of this.coarseCrownLevels()) {
+    for (const { coarse, crowns, fine } of this.coarseCrownLevels()) {
       const standIn = coarseCrownsStandIn({
         coarse: isShown(coarse),
         fine: fine?.terrain ? isShown(fine.terrain.mesh) : false,
         fineDressed: fine?.dressing !== undefined,
       });
-      if (standIn) {
-        standing.push(control);
-      }
       const home = standIn ? this.standIns : coarse;
       if (crowns.parent === home) {
         continue;
@@ -1605,11 +1593,7 @@ export class DressingPlugin {
       home.add(crowns);
       crowns.updateMatrixWorld(true);
     }
-    this.standing = standing;
   }
-
-  /** the controls of the crowns standing in now */
-  standing: VegetationControl[] = [];
 
   /** Each tile whose coarse level has crowns: its content root, the
    *  crowns, and its fine level's entry if it has one. */
@@ -2548,7 +2532,6 @@ export function createTileStream(
     demolishedGroups: new Set(),
     pendingDressings: () => 0,
     dressingSettled: () => false,
-    standingIn: () => [],
     visibleTerrains: memo(() =>
       [...stream.terrains]
         .filter((t) => isShown(t.mesh))
@@ -2568,7 +2551,6 @@ export function createTileStream(
   const dressing = new DressingPlugin({ ...ctx, onChange: changed }, stream);
   stream.pendingDressings = () => dressing.pending;
   stream.dressingSettled = (tileId) => dressing.settled.has(tileId);
-  stream.standingIn = () => dressing.standing;
   tiles.registerPlugin(dressing);
   for (const { camera, width, height } of cameras) {
     tiles.setCamera(camera);

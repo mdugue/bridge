@@ -216,7 +216,6 @@ export function* coarseCrownSteps(
     );
     yield;
   }
-  const u = mats.uniforms;
   return {
     group,
     chunks: [],
@@ -224,9 +223,6 @@ export function* coarseCrownSteps(
     // whichever control writes it
     applyLook: () => undefined,
     multiTuft: () => false,
-    setTime: (seconds) => {
-      u.time.value = seconds;
-    },
     setSeason: (day) => applySeasons(seasons, day),
     updateLod: () => false,
   };
