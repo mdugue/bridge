@@ -441,14 +441,17 @@ knowledge base use for them:
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
 
-Two more effects belong to the fixed look. The mist over the river
+Three more effects belong to the fixed look. The mist over the river
 drifts over the water from about 120 m ahead, denser only far off. The photographic
 depth of field blurs only what lies behind the focus (the foreground stays
 sharp), and the focus is always what lies at the centre of the view. While
 the camera moves, the blur is switched off (the eye cannot resolve it in
 motion) and comes back when you stop. Phones draw without it: the blur
 needs more graphics memory than a phone can spare for a hint a small
-screen barely shows.
+screen barely shows. And while you walk, turn or fly in the pastel look,
+the picture is smeared slightly along the camera's movement, as a camera
+with a short exposure would show it; on phones too, at no extra memory.
+The other picture styles and Modell keep their sharp lines.
 
 ### Erweitert ("Advanced")
 
