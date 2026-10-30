@@ -3,7 +3,7 @@ import { createTrail, type Trail } from "@/lib/city/crash-trail";
 import { TUNNEL_PATH } from "@/lib/city/crash-reports";
 
 /**
- * The sender's gate (ADR 0045): with a DSN in the build a problem goes
+ * The sender's gate (ADR 0043): with a DSN in the build a problem goes
  * out as an envelope beacon to the site's own path — and after the
  * visitor's no, nothing does. The browser is modelled by the few globals
  * the reports touch; the modules are imported only once the DSN is set,
@@ -138,7 +138,7 @@ test("after the visitor's no, nothing goes out", async () => {
 });
 
 // A browser that sends Global Privacy Control has said no for every site
-// (ADR 0045): no report starts, whatever the visitor's choice here says.
+// (ADR 0043): no report starts, whatever the visitor's choice here says.
 test("under Global Privacy Control nothing starts and nothing goes out", async () => {
   const { reportsState, setReportsDeclined } = await import("./report-choice");
   const { crashReportsOn, startCrashReports } = await import("./crash-reports");

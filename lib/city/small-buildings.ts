@@ -80,7 +80,7 @@ export function structureMesh(
   return out;
 }
 
-/** Where a structure stands on the ground (ADR 0035): its walls' feet all
+/** Where a structure stands on the ground (ADR 0030): its walls' feet all
  *  round its footprint, EPSG. Empty when the feature is malformed. */
 export function structureJoins(f: SmallBuildingFeature): JoinPoint[] {
   const corners = structureCorners(f);

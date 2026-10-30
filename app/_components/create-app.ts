@@ -1409,7 +1409,7 @@ async function bootApp(
   });
   // Single fixed pool of real point lights for the nearest lamps across ALL
   // tiles, built before the first render so the light count is part of
-  // every lit node build once (ADR 0020): three on a desktop, one on a
+  // every lit node build once (ADR 0009): three on a desktop, one on a
   // phone (`LAMP_LIGHTS`); each tile's lamps retarget it.
   const lampLights = createLampLights(LAMP_LIGHTS[budget.tier]);
   for (const light of lampLights.lights) {
@@ -2971,7 +2971,7 @@ async function bootApp(
   let fpsDue = 0;
   let frames = 0;
   // The page's GPU-loss, memory-emergency and resume decisions are one
-  // pure machine (lib/city/page-lifecycle.ts, ADR 0046): the renderer,
+  // pure machine (lib/city/page-lifecycle.ts, ADR 0047): the renderer,
   // the stream and the document feed it signals, and `runLifecycle`
   // carries out the effects it answers with, in the trail's order.
   // `onGpuLost` is asked once per stop; its reload waits for the effect.

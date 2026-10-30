@@ -9,7 +9,7 @@ const reports = reportBuild(process.env);
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
-  // The legal pages are MDX (app/(legal)/*/page.mdx, ADR 0045).
+  // The legal pages are MDX (app/(legal)/*/page.mdx, ADR 0043).
   pageExtensions: ["ts", "tsx", "mdx"],
   env: {
     CRASH_REPORTS_DSN: reports.dsn ?? "",

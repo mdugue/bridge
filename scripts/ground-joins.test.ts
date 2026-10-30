@@ -100,10 +100,10 @@ test("every builder's joins hold on the ground it stood on", () => {
 
 /**
  * The share of joins that miss on the spawn tile (and the parts of its
- * neighbours it reads), per part (ADR 0035): the measured state, a little
+ * neighbours it reads), per part (ADR 0030): the measured state, a little
  * above it. A change that floats a part or stands a step on the ground
  * (the kerb stood a second step on the pavement: 32 % of its joins;
- * before ADR 0035's audit the walls missed 3.5 %, the stairs 4.5 %, the
+ * before ADR 0030's audit the walls missed 3.5 %, the stairs 4.5 %, the
  * fences 1.6 %)
  * fails here. The doors' misses (0.8 % at first bake) are sills at the
  * top of a mapped flight of steps, whose ground the stairs lower; the

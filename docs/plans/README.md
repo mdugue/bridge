@@ -47,10 +47,10 @@ history. Decisions that came out of plans are written up as
 | 013 | One type-checker, suncalc 2 migration, dependency/pin hygiene, agent allowlist | DONE (overtaken by TS 7 + oxlint) | [completed.md](./completed.md#013--toolchain-and-dependency-hygiene--done-superseded-in-part) |
 | 014 | Bring AGENTS.md, the skill, `docs/`, comments and the OSM attribution in line with the code | DONE | [completed.md](./completed.md#014--knowledge-base-currency--done) |
 | 015 | Progressive first frame | DONE | [completed.md](./completed.md#015--progressive-first-frame--done) |
-| 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample | REJECTED — premise gone with ADR 0023 (no baked RGB splat) | [completed.md](./completed.md#016--bunimage-instead-of-sharp-for-the-raster-downsample--rejected-premise-gone) |
+| 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample | REJECTED — premise gone with ADR 0010 (no baked RGB splat) | [completed.md](./completed.md#016--bunimage-instead-of-sharp-for-the-raster-downsample--rejected-premise-gone) |
 | 017 | Any German city: site config, per-Land ingest adapters, NAS input, OSM land cover as a DLM substitute | **PARTIAL** — site config, Python bake package and the Saxony adapter built; plans 049 and 051 built most of phases A, C and D in their own shape (providers for SN, NW, BY, HH, BE; per-site data and provenance; OSM land cover, rails and decks; `bun run site <site>`; every site in the tests); open: B (NAS), D.1 (row-only trees without DOM1), a first run of Berlin's adapter | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
 | 018 | Stream tiles around the camera: tile manager, loader worker, 1 km near cells, KTX2 splat | REJECTED — superseded by 3D Tiles + 3DTilesRendererJS (ADR 0024) | [completed.md](./completed.md#018--stream-tiles-around-the-camera--rejected-superseded-by-adr-0024) |
-| 019 | **The one GPU checklist**: backends, palette, quantisation, LOD and seams, shadows, GTAO and sky light, picture styles, frame time and memory, phones, deploy host, and the feature plates of plans 023–039 | **TODO** — needs a GPU and two phones; rewritten 2026-10-01; section M, the phone crash fixes of 2026-10-06 (ADRs 0046–0048), added | [019-gpu-verification.md](./019-gpu-verification.md) |
+| 019 | **The one GPU checklist**: backends, palette, quantisation, LOD and seams, shadows, GTAO and sky light, picture styles, frame time and memory, phones, deploy host, and the feature plates of plans 023–039 | **TODO** — needs a GPU and two phones; rewritten 2026-10-01; section M, the phone crash fixes of 2026-10-06 (ADRs 0047, 0048), added | [019-gpu-verification.md](./019-gpu-verification.md) |
 | 020 | WebGPURenderer + TSL instead of WebGL and `onBeforeCompile`; node post instead of `postprocessing`/`n8ao` | DONE (2026-09-26) — the whole port, one path (WebGPU, its WebGL2 backend as the fallback), public API only; the spike's internal patches rejected for a top-level scene pass, `Instances` and `sceneMaterial`; look unjudged on a real GPU | [completed.md](./completed.md#020--webgpurenderer-and-tsl-node-materials--done-2026-09-26) |
 | 021 | `/wissen` on Astro Starlight instead of a hand-built Next route | **TODO** — plan only; Phase 0 awaits the maintainer | [021-wissen-astro-starlight.md](./021-wissen-astro-starlight.md) |
 | 022 | Re-bake the four original tiles from the current editions, the whole chain downstream of the land cover | **TODO** — after plan 040 step 1; re-scoped 2026-10-01 | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
@@ -60,7 +60,7 @@ history. Decisions that came out of plans are written up as
 | 026 | Road markings: zebra and signalled crossings, stop lines, cycle lanes, centre lines | DONE (2026-09-25) — look in plan 019 | [completed.md](./completed.md#026--road-markings--done-2026-09-25-look-unjudged-on-a-gpu--plan-019) |
 | 027 | Buildings from OSM: part attribute inheritance (bug), ground-floor shop glow, heritage, era (spike) | DONE (2026-09-25) — phases 0–2 built, 3 REJECTED (0.8 % dated); dusk look in plan 019 | [completed.md](./completed.md#027--what-osm-knows-about-the-buildings--done-2026-09-25-phase-3-rejected-dusk-look-unjudged-on-a-gpu--plan-019) |
 | 028 | Cultivated land: allotment colonies, orchards, vineyards | DONE (2026-09-25) — look in plan 019; open: vine rows ignore the season (backlog) | [completed.md](./completed.md#028--cultivated-land-allotments-orchards-vineyards--done-2026-09-25-look-unjudged-on-a-gpu--plan-019) |
-| 029 | Fences, railings and gates, baked into the fine terrain | DONE (2026-09-25) — restyled to one calm band, ground join per ADR 0035; look in plan 019 | [completed.md](./completed.md#029--fences-railings-and-gates--done-2026-09-25-restyled-to-one-band-look-unjudged-on-a-gpu--plan-019) |
+| 029 | Fences, railings and gates, baked into the fine terrain | DONE (2026-09-25) — restyled to one calm band, ground join per ADR 0030; look in plan 019 | [completed.md](./completed.md#029--fences-railings-and-gates--done-2026-09-25-restyled-to-one-band-look-unjudged-on-a-gpu--plan-019) |
 | 030 | More street furniture: advertising columns, traffic signals, hydrants, clocks, drinking water, stop signs | DONE (2026-09-25) — look in plan 019 | [completed.md](./completed.md#030--more-street-furniture-columns-signals-hydrants-clocks-stops--done-2026-09-25-look-unjudged-on-a-gpu--plan-019) |
 | 031 | The Elbe: landing stages, pontoons, groynes, ferry lines | DONE (2026-09-25) — look in plan 019 | [completed.md](./completed.md#031--the-elbe-landing-stages-groynes-ferries--done-2026-09-25-look-unjudged-on-a-gpu--plan-019) |
 | 032 | Street names: map lettering in fly mode, a caption on foot | REJECTED — built 2026-09-25, removed 2026-09-26 by the maintainer's decision after seeing it | [completed.md](./completed.md#032--street-names-lettering-and-the-on-foot-caption--rejected-removed-2026-09-26) |
@@ -74,7 +74,7 @@ history. Decisions that came out of plans are written up as
 | 040 | Bakes: step-major `bun run bake`, seam stair flights kept, atomic ingest + timeouts + https check, atomic `prepare-data` writes, the `/wissen` hero as tall as the site | **TODO** — P1/P2; the stairs then need a re-bake (maintainer); **drifted** (2026-10-06 audit): its step bodies cite `scripts/bake.ts`, `ingest_sn.py`, `test_ingest.py` (gone — `scripts/pipeline.ts`, `fetch.py` + `providers/`, `test_fetch.py`), the runner takes one JSON spec, step 3 is partly done (`net.py` timeouts, `.part` writes), step 5 appears done (`bake-wissen-hero.ts` `cell * rows`); refresh before executing and fold in the bake runner's order test — see the plan's amendment | [040-bake-pipeline-fixes.md](./040-bake-pipeline-fixes.md) |
 | 041 | Test net: raster shares and the aborted-load free, the collider through a real BVH, census for stairs/sport/kerbs, eye height vs the DGM, pens per style, three's real geometry key | DONE (2026-10-03) — raster shares in their own module; tree rows left allowed empty (Grimma, Munich) | [completed.md](./completed.md#041--tests-where-the-regressions-are--done-2026-10-03) |
 | 042 | Main thread while streaming: stats coalesced, footprints only when they change (no minimap repaint per tile event), footprints after the handover, the viewer chunk fetched with the manifest | DONE (2026-10-03) — the first frame and "loaded" flush the coalesced stats | [completed.md](./completed.md#042--less-main-thread-churn-while-tiles-stream--done-2026-10-03) |
-| 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **BLOCKED** (2026-10-03, re-tried 2026-10-11) — gate passed (BVH median 75 ms a tile), the worker built and tested; the first attempt read Turbopack's leftover `media/*.worker.ts` asset as the worker, but Next 16.3.7's Turbopack **does** bundle it (re-tried for the spawn tile alone, branch `claude/spawn-bvh-worker`). Stopped at the chunk instead: three's core and three-mesh-bvh shared with the worker leave the scene's scope (ADR 0051), +20.8 KB gz on the first load (904 985 → 925 796), and mobile-emulated the first frame came later, not earlier (the lite boot has nothing to overlap once its ground has landed; the worker's build ran 3× slower beside SwiftShader's frames). Five options for the maintainer in the plan's findings | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
+| 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **BLOCKED** (2026-10-03, re-tried 2026-10-11) — gate passed (BVH median 75 ms a tile), the worker built and tested; the first attempt read Turbopack's leftover `media/*.worker.ts` asset as the worker, but Next 16.3.7's Turbopack **does** bundle it (re-tried for the spawn tile alone, branch `claude/spawn-bvh-worker`). Stopped at the chunk instead: three's core and three-mesh-bvh shared with the worker leave the scene's scope (ADR 0040), +20.8 KB gz on the first load (904 985 → 925 796), and mobile-emulated the first frame came later, not earlier (the lite boot has nothing to overlap once its ground has landed; the worker's build ran 3× slower beside SwiftShader's frames). Five options for the maintainer in the plan's findings | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
 | 044 | The canopy points as a packed binary instead of a 9.5 MB GeoJSON parsed in one task | DONE (2026-10-03) — 96 ms of JSON.parse → ≈ 13 ms to unpack on the biggest tile; published pre-gzipped (`.pts.gz`) | [completed.md](./completed.md#044--the-canopy-points-packed-not-geojson--done-2026-10-03) |
 | 045 | One source for the raster decoders (the stale `surfaceHeading`) and the Python class ids; one OSM number parser; the byte scales pinned across languages | **TODO** — P3; before plan 017 phase 4 | [045-one-source-for-decoders-and-class-ids.md](./045-one-source-for-decoders-and-class-ids.md) |
 | 046 | Moves only: `rail-layer.ts` into mesh kit / deck table / bridge, telemetry and picking out of `bootApp`, a home for the TSL helpers, the terrain↔water cycle, the dead-code sweep | **TODO** — P3; after 039, 041–043; **drifted** (2026-10-06 audit): the deck table moved to `lib/city/decks.ts` on the day 046 was planned, `rail-layer.ts` is 2 485 lines with the span-deck code (ADR 0041) and two more importers (`traffic-layer.ts`, `data-overlays.ts`), `bootApp` doubled to ≈ 2 050 lines (plans 060/066 take its GPU-loss slice); refresh its drift block before executing — see the plan's amendment | [046-split-the-god-modules-and-sweep.md](./046-split-the-god-modules-and-sweep.md) |
@@ -96,7 +96,7 @@ history. Decisions that came out of plans are written up as
 | 062 | The counted traffic's bodies are built on the first switch-on, like the bikes and trams — not for every tile at every load (≈ 21 MB of GPU buffers plus CPU copies for the spawn tile's fine level, 260 k vertices, for a layer that is off at start; ≈ 50–100 MB of a phone's cache, reasoned); no vertex normals on an unlit material | **DONE** (2026-10-07) — the bodies are built on the first switch-on per tile (`TrafficSlot` in `tile-stream.ts`: a task of their own, compiled hidden, then shown, weighed and asked; kept while off, freed with the tile, nothing hung on a tile released mid-build); step 1 dropped: the glass reads the normals | [062-traffic-bodies-built-on-first-switch-on.md](./062-traffic-bodies-built-on-first-switch-on.md) |
 | 063 | The build and the fetch fail loudly and write atomically: a site without `provenance.json` builds (today `prepare-data` dies and no site is served), only a NoData grid falls back to the grid level, `bun run fetch` exits non-zero on a required product and guards the Wikidata/cadastre/traffic fetches, the Wikidata and GTFS caches go through `.part`, landmarks tie by id (not the build machine's locale) | DONE (2026-10-07) — all five steps; deviations: the provenance note is printed by `scripts/site-report.ts` (`absentSiteFiles` in `lib/city/site-report.ts`), the cache tests are a new `pipeline/tests/test_caches.py`, and an unreadable trams cache is derived again rather than kept | [063-build-and-fetch-fail-loudly.md](./063-build-and-fetch-fail-loudly.md) |
 | 064 | CI: the Next-cache key hashes the repo's sources (not `node_modules`, 11 541 files against 476), lint and typecheck check out without the 811 MB of geodata (the comment says ~130 MB), the shards re-cut with measured numbers and their date (main's run 37476256017 measured 149 / 220 / 340 s against the comment's "~100 / ~135 / ~125") | **IMPLEMENTED, awaiting PR run (2026-10-07)** — unverified: CI green (incl. the sparse checkout on a real runner) and the shard spread (est. ~93 s > the 60 s criterion); flip to DONE with the PR run's measured shard times. Next-cache key over the repo's sources (+ `types/**/*.ts`); lint/typecheck sparse checkout without `data/` (both pass locally with `data/` moved aside); shards re-cut from run 37496735478 (161 / 132 / 315 s): `@phone` moved to the HUD shard, not shard 1 as suggested (the rendering group can't be split by tag without a second boot); `grep -c sparse-checkout` is 4 (two lines per job, cone mode off is required) | [064-ci-hashes-what-it-means-and-clones-what-it-reads.md](./064-ci-hashes-what-it-means-and-clones-what-it-reads.md) |
-| 065 | The reference docs say what the code does: the skill's per-provider frame and complete bake list (`traffic`, `transit`), README's CRS and "nothing persisted", ADR 0001's storage list (`gpu-safety`), ADR 0003/0015 references, the ledger's and survey's built rows, `report-choice` under `app/_components/`, `?at`/`safety` among the URL reads; optionally a backtick-path check in `links.test.ts` | **DONE (2026-10-07)** — steps 1–6 as planned (058 had already added `#at=lat,lng` to AGENTS.md's knobs; ledger #15 marks only its built part ✅, the rest of the row stays 📋; the survey got a Status column); optional step 7 not built: its check also fails on paths that open plans (043, 045, 046, 048, 066) propose to create — its STOP condition | [065-docs-say-what-the-code-does.md](./065-docs-say-what-the-code-does.md) |
+| 065 | The reference docs say what the code does: the skill's per-provider frame and complete bake list (`traffic`, `transit`), README's CRS and "nothing persisted", ADR 0001's storage list (`gpu-safety`), ADR 0024/0010 references, the ledger's and survey's built rows, `report-choice` under `app/_components/`, `?at`/`safety` among the URL reads; optionally a backtick-path check in `links.test.ts` | **DONE (2026-10-07)** — steps 1–6 as planned (058 had already added `#at=lat,lng` to AGENTS.md's knobs; ledger #15 marks only its built part ✅, the rest of the row stays 📋; the survey got a Status column); optional step 7 not built: its check also fails on paths that open plans (043, 045, 046, 048, 066) propose to create — its STOP condition | [065-docs-say-what-the-code-does.md](./065-docs-say-what-the-code-does.md) |
 | 066 | The page's GPU-loss, memory-emergency and resume decisions as one pure machine (`lib/city/page-lifecycle.ts`, signals → effects, like `boot-phases.ts`) with the incident sequences of the 2026-10-06 fixes as its tests; `create-app.ts` keeps a binder | DONE (2026-10-07) — steps 1–5; deviations: `gpuAnswers`/`gpuFailure` are lazy thunks (the probe asked only where the closures asked it), an initial `hiddenAt` option for a page that starts hidden, `onGpuLost` is now asked inside `dispatch` (before the stop's effects run; trail-note order unchanged), 15 tests not 10; `create-app.ts` shrank by 45 lines (3 024 → 2 979), not ≥ 80 (the binder keeps the effect map and the hooks' comments); e2e `@desktop-render\|@phone` 9 passed locally | [066-page-lifecycle-as-a-pure-machine.md](./066-page-lifecycle-as-a-pure-machine.md) |
 | 067 | The data layers and the twin: a tram timetable that failed to load can be tried again (`loading` never reset), Dresden's counts judged in Europe/Berlin (today the viewer's zone: all grey in Tokyo, a dead counter lit in New York), orchard trees askable, the card credits the site's own provider and register (not GeoSN/Dresden on Hamburg), a malformed feed element left out instead of thrown, polling only in view | DONE (2026-10-07) — all six steps; deviations: the tram failure is `TramCarsStatus.failed` shown by `TramStatusLine` in `data-layers-panel.tsx` (a two-line edit, not `city-walk.tsx`); orchard trees are marked `s: "orchard"` (`cultivated.ts`, `features.ts` type, a flag bit in `ask-items.ts`, tests in `cultivated`/`ask-items`); the zone is a feed fact (`BikeFeedReader.zone`); credits via `cardCredits(site)` in `card-lines.ts`, `GEOSN_CREDIT` deleted; the bike card still formats the count time in the visitor's zone (`inquiry-traffic.ts`, out of scope); e2e `@desktop-hud` not run here (Playwright's chromium 1243 missing in the container) | [067-data-layers-and-the-twin-small-fixes.md](./067-data-layers-and-the-twin-small-fixes.md) |
 | 068 | The tile stream loads only what the fog lets you see: a stream camera whose far plane ends at the fog (`streamFarFor`), the camera keeps 6 km for the sky | DONE (2026-10-10) — steps 1–4, 6; step 5 (the boot's own fog) not built; no saving at Dresden's south-west spawn view (the site's edge is inside the reach), the gain is across the city and from the air | [completed.md](./completed.md#068--the-tile-stream-loads-only-what-the-fog-lets-you-see--done-2026-10-10) |
@@ -104,9 +104,9 @@ history. Decisions that came out of plans are written up as
 | 070 | Each tile holds a fraction of the raster memory: a 1024² coarse class raster, the sports raster on a desktop's fine level only, optionally a half-resolution desktop splat | **PARTIAL** (2026-10-10) — steps 1–4 built (step 4, the desktop's fine splat at 2048², judged on SwiftShader plates: nothing blockier, −64 MiB a fine tile; one real-GPU glance at the PR's snapshots left); step 5's GPU and phone measurements open | [070-raster-diet.md](./070-raster-diet.md) |
 | 071 | A phone renders a lean scene, a desktop a lighter one | **PARTIAL** (2026-10-10) — phone GTAO at 8 samples (not 0), a phone rich-crown budget of 800 (not *Multi-Tuft* off), no autofocus ray without a lens blur; step 4.2 (no desktop DoF) REJECTED by the maintainer; steps 3 (no shadow-camera tiles on a phone), 4.1 (desktop DPR ≤ 1.5), 5 (a phone streams to 2.2 km) and 7 built in a second pass; step 6 measured headless only — frame rates, an iPhone's memory and real-GPU plates open | [071-tier-budgets-lean-phone-lighter-desktop.md](./071-tier-budgets-lean-phone-lighter-desktop.md) |
 | 072 | A cold build bakes a site's tiles on every core | **PARTIAL** (2026-10-10) — built (steps 1, 3–6; step 2 gated out); on Vercel's 4-core, 8.6 GB builder the warmers showed no gain (322 s cold; main 232–235 s; the builders varied ≈ 1.4× in an untouched step), two tile warmers fit at once — main's parallelism already —, so they are opt-in (`PREPARE_WARMERS=1`) and the default is one process per site again, at main's CPU (local A/B); kept: atomic cache entries, each tile's fine ground as its own entry, the timing lines; manifests identical to main's | [072-parallel-site-bake.md](./072-parallel-site-bake.md) |
-| 073 | The look is fixed; the sidebar keeps only the controls people use | **DONE** (2026-10-10) — the default table: *Nebel* the one slider left, the multi-tuft switch kept, the other 25 fixed at their defaults as named constants in their owners (four keep an internal uniform a style or Modell writes); old snapshots load, their keys retired for good (`RETIRED_SNAPSHOT_KEYS`); ADR 0017 amended; ~3 kB gzip; the two edited e2e specs pass; not done: GPU plates (none in the container), the rest of the e2e (CI) | [073-freeze-the-look-table.md](./073-freeze-the-look-table.md) |
+| 073 | The look is fixed; the sidebar keeps only the controls people use | **DONE** (2026-10-10) — the default table: *Nebel* the one slider left, the multi-tuft switch kept, the other 25 fixed at their defaults as named constants in their owners (four keep an internal uniform a style or Modell writes); old snapshots load, their keys retired for good (`RETIRED_SNAPSHOT_KEYS`); ADR 0018 amended; ~3 kB gzip; the two edited e2e specs pass; not done: GPU plates (none in the container), the rest of the e2e (CI) | [073-freeze-the-look-table.md](./073-freeze-the-look-table.md) |
 | 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **PARTIAL** (2026-10-10) — part D built: the HUD's scene-status store (`lib/city/slice-store.ts`, `app/_components/scene-status.ts`), each widget reading its own slice, `create-app.ts` unchanged; over a lite boot, 30 frames standing and 30 in Modell `CityWalk` committed 4 times instead of 75 and `SceneSidebar` 4 instead of 75; part B: the seam built (`feature-seam.ts`: the spine's hooks, `lazyFeature`; the data layers start on their first switch-on, the traffic slot waits for its builder), the `import()` measured and **stopped** — the data layers as a chunk of their own made the first-load JS 22.7 KB gz larger for 10.1 KB moved (three.js lost its scope hoisting with the scene), so their code ships with the scene, and the styles and Modell were not started (the Findings); parts A and C open (each opens with a spike) | [074-architecture-deepening.md](./074-architecture-deepening.md) |
-| 075 | Window axes measured in open street photos (Panoramax, Mapillary) as fine vertical lines — the one case the window-grid veto allows | **SUPERSEDED (2026-10-09)** by ADR 0049: the photos' rhythm (spacing, size, grid, ornament) draws windows on every house (PR #143); the axes' positions stay blocked on poses (spike 2026-10-07: Panoramax ±30 m, Mapillary's drives 0.6 m apart) | [075-window-axes-from-photos.md](./075-window-axes-from-photos.md) |
+| 075 | Window axes measured in open street photos (Panoramax, Mapillary) as fine vertical lines — the one case the window-grid veto allows | **SUPERSEDED (2026-10-09)** by ADR 0010: the photos' rhythm (spacing, size, grid, ornament) draws windows on every house (PR #143); the axes' positions stay blocked on poses (spike 2026-10-07: Panoramax ±30 m, Mapillary's drives 0.6 m apart) | [075-window-axes-from-photos.md](./075-window-axes-from-photos.md) |
 | 076 | Streaming without holes: the ground before the buildings, a ground plate under every tile without terrain, LoD1 as the buildings' far level, the coarse crowns from the start — no cost in phone memory or bytes before the first picture | **IN PROGRESS** (2026-10-25) — step 1 (load order) and step 2 (ground plate) built; 3 and 4 open | [076-streaming-without-holes.md](./076-streaming-without-holes.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
@@ -309,7 +309,7 @@ S/M/L.
     (an OSM-only `trees` artifact is a small change in `trees.run`); the
     official listed-building flag (the city's WFS `L1544`, rank 1 of the
     [data-streams survey](../data-streams.md)) instead of the OSM heritage
-    join; tram tracks have no ground-join test (ADR 0035: a runtime part is
+    join; tram tracks have no ground-join test (ADR 0030: a runtime part is
     tested with `checkJoins`).
 
 ### 2026-10-10 audit (performance and stability, against `85a41b7`)
@@ -459,7 +459,7 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
   256² a tile (a re-bake and a look).
 - **A tile's fine level re-bakes when any tile's terrain inputs change**
   (plan 072's maintenance note, M): its key covers every tile's DGM,
-  walls, stairs, terraces and kerbs (ADR 0029), though its walls, kerbs,
+  walls, stairs, terraces and kerbs (ADR 0030), though its walls, kerbs,
   stairs and fences ask only the grounds near them — since plan 072 the
   site ground reads a tile's heights only once a point asks, so the bake
   could record which tiles it read and key on those alone (1–9, not 15).
@@ -862,7 +862,7 @@ the port (2026-09-26) made of it:
    *For Germany this is now [plan 017](./017-germany-wide-sites.md)*
    (LoD2 + DGM1 are near-nationwide, so no footprint extrusion is needed
    there; the site config and a Land-neutral pipeline exist since
-   ADRs 0025/0026). The OSM-only case outside Germany stays open here; the
+   ADRs 0037). The OSM-only case outside Germany stays open here; the
    CRS check still accepts only 25832/25833.
 2. **Shareable view links (S–M) — now [plan 048](./048-spike-view-links-and-qa-views.md)
    (spike), and cheaper:** the boot already restores a Snapshot string
@@ -879,14 +879,14 @@ the port (2026-09-26) made of it:
    chains them or animates the sun. A moving sun forces a shadow re-render
    per step — step it at a few Hz, not per frame.
 4. **Editing (M).** The unused insert plumbing (`insertedModelUrl`,
-   `insertAt`, the disabled `B` key) was removed with ADR 0026; demolish
+   `insertAt`, the disabled `B` key) was removed with ADR 0037; demolish
    stays and now works on every visible tile. Place/move would return as a
    glTF in the scene (or in the tileset); undo for demolish is a stack of
    removed object ids plus the per-tile index rebuild.
 5. **A user-facing quality tier (S–M).** The device tier already halves
    shadow texels and rasters on phones; a selectable `medium` tuple (DPR 1,
    2048² shadows, AO/DoF off) for weak desktops needs real-device looks.
-   Since 2026-10-06 the safety ladder's levels (ADR 0046) are such tuples:
+   Since 2026-10-06 the safety ladder's levels (ADR 0047) are such tuples:
    a menu would set the level `?safety=N` sets for QA. Since 2026-10-12
    the sidebar's *Erweitert › Qualität* shows the level, what it sets and
    when it falls, and goes back to full detail (`quality-panel.tsx`); what
@@ -899,7 +899,7 @@ the port (2026-09-26) made of it:
    card's provenance manifest, derived from it at build time (plan 052
    phase 2).
 7. **Offline repeat visits: a service worker over the tileset (S–M).**
-   [ADR 0007](../adr/0007-content-hashed-publishing-with-a-manifest.md)
+   [ADR 0024](../adr/0024-site-streams-as-3d-tiles.md)
    already makes every `/data/*` file immutable and content-hashed, with
    `manifest.json` the one `no-cache` entry, so a service-worker cache is
    bounded and updates itself: repeat visits boot from disk, a walk
@@ -919,7 +919,7 @@ the port (2026-09-26) made of it:
    worker itself. Plan 044 took the canopy's parse off (packed points,
    2026-10-03); plan 043 (the city BVH) found on 2026-10-11 that
    Turbopack does bundle a module worker, but that one importing three
-   takes three's core out of the scene chunk's scope (ADR 0051: +20.8 KB
+   takes three's core out of the scene chunk's scope (ADR 0040: +20.8 KB
    gz on the first load for three's core and three-mesh-bvh) — the cost
    this option meets too, so those findings' options apply here.
 9. **A bilingual HUD (M).** The page is `lang="de"` since 2026-09-26: the
@@ -938,7 +938,7 @@ the port (2026-09-26) made of it:
     lowers the pixel ratio, the shadow map, the tile cache and the
     governor's lines and starts the governor at a floor — one automatic
     reload per level, then a card
-    ([ADR 0046](../adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)).
+    ([ADR 0047](../adr/0047-phone-memory-budget-in-true-bytes.md)).
     The iPhone's recovery loop in Sentry (CITY-WALK-1…8) showed why the
     old cap (plan 038 step 3) was not enough: each reload replayed the
     budget that had failed.
@@ -1052,7 +1052,7 @@ the port (2026-09-26) made of it:
     dispose another tile's geometry. *One bridge deck table for rail and
     tram* — it saves microseconds per tile.
   - *Deep as they are* (architecture review): the look table, store and
-    Snapshot codec (ADR 0017); `fetch-optional.ts`; `shared-rasters.ts`;
+    Snapshot codec (ADR 0018); `fetch-optional.ts`; `shared-rasters.ts`;
     `TinIndex` (one implementation, two adapters: bake and viewer);
     `camera-pose.ts`; `city-layer.ts` with `city-mesh.ts`; the bake ↔
     viewer contract tables pinned by `features.test.ts`, `test_bakes.py`
@@ -1115,14 +1115,14 @@ prompt-injection content only (none found).
   plans condensed into [completed.md](./completed.md), decisions into
   [ADRs](../adr/README.md), open items into the backlog above, rejected
   data → look ideas into the ledger. Full texts: git history at `761d609`.
-- **2026-09-23**: plan 018 (tile streaming) and ADR 0022 (proposed) written
+- **2026-09-23**: plan 018 (tile streaming) and ADR 0024 (proposed) written
   by hand after a Q&A on adding more tiles: Next.js/Bun is not the limit,
   GPU memory, the main thread and the committed source size are.
 - **2026-09-24**: after an architecture review aimed at fewer own concepts,
-  one branch built the runtime palette (ADR 0023), the site config and plan
-  017 phases 1–2 (ADRs 0025, 0026) and 3D Tiles via 3DTilesRendererJS with
+  one branch built the runtime palette (ADR 0010), the site config and plan
+  017 phases 1–2 (ADRs 0037) and 3D Tiles via 3DTilesRendererJS with
   glTF + `EXT_mesh_features` content (ADR 0024). That superseded plan 018
-  and ADR 0022 and removed plan 016's premise. Plans 019 (GPU
+  and ADR 0024 and removed plan 016's premise. Plans 019 (GPU
   verification), 020 (WebGPU/TSL, ADR 0027 proposed) and 021 (`/wissen` on
   Starlight) were written.
 - **2026-09-25**: plans 024–035 written as one batch of data → scene
@@ -1150,7 +1150,7 @@ prompt-injection content only (none found).
   notes reconciled (item 9 and the cache weighing were already done);
   what was left out is in the "2026-10-01 audit" section and under
   "Rejected".
-- **2026-10-01, plan cleanup** (on the same PR, after merging ADR 0035):
+- **2026-10-01, plan cleanup** (on the same PR, after merging ADR 0030):
   every open plan checked against `main`. Thirteen plans condensed into
   [completed.md](./completed.md) and deleted (008, 023–031, 033–035 —
   built, or closed with the rest rejected or moved); their GPU looks
@@ -1171,7 +1171,7 @@ prompt-injection content only (none found).
   (CITY-WALK-1…8) were mapped by seven parallel analyses (textures,
   geometry, post, loss, network, three's internals, the budget) and fixed
   by five work packages on one branch: the safety ladder and the
-  recovery (ADR 0046, backlog item 11), the reports' classification and
+  recovery (ADR 0047, backlog item 11), the reports' classification and
   the heartbeat, the phone's post profile and the one-byte shadow colour
   target, the stream's memory (the shadow camera at 64 px on a phone, 128 on a
   desktop, the phone's

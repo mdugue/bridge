@@ -4,89 +4,61 @@ One file per decision that constrains future work: a dependency, a data
 format, a rendering approach, a workflow rule, or a rejected alternative
 that must not be retried blindly. ADRs record **why** the code is the way it
 is; the ledger [transformations.md](../transformations.md) records **what**
-each data → look transformation does and its status.
+each data → look transformation does, and
+[rendering.md](../rendering.md) and [data-pipeline.md](../data-pipeline.md)
+how it is built.
 
 ## Index
 
-| # | Decision | Status |
-|---|---|---|
-| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted (tiles static, streamed: 0024; a prerendered route per site: 0037); relaxed to "static where possible" 2026-09-27; crash reports where a DSN is set: 0043 |
-| [0002](./0002-imperative-threejs-in-a-react-shell.md) | Imperative three.js inside a React shell, not react-three-fiber | accepted |
-| [0003](./0003-bake-heavy-inputs-at-build-time.md) | Bake heavy inputs at build time; the browser decodes no raster and parses no CityJSON | accepted |
-| [0004](./0004-commit-derived-artifacts-not-raw-data.md) | Commit small derived artifacts, not raw bulk data; the DGM1 GeoTIFF is the one exception; no Git-LFS | accepted |
-| [0005](./0005-one-projected-crs-and-a-rotated-world-group.md) | One projected CRS (EPSG:25833) and a −90° rotated `world` group | accepted |
-| [0006](./0006-tile-block-with-one-primary-and-one-artifact-map.md) | A 2×2 tile block with one primary tile, and one artifact map shared by bake and client | superseded by 0024; its optional-artifact fetch policy amended by 0048 |
-| [0007](./0007-content-hashed-publishing-with-a-manifest.md) | Content-hashed data files with a `manifest.json` | accepted |
-| [0008](./0008-progressive-two-phase-boot.md) | Progressive two-phase boot: first frame from the primary tile, everything else streamed | accepted (second phase: 0024) |
-| [0009](./0009-shadow-recipe.md) | Shadow recipe: soft PCF, receive-only terrain, on-demand refresh with a dead zone, altitude-fitted frustum | accepted |
-| [0010](./0010-opaque-clay-buildings-only.md) | Buildings render as opaque clay only; no transmission, no outlines | accepted; outlines narrowed by 0034; the see-through slider removed 2026-10-10 |
-| [0011](./0011-motion-keyed-quality-regression.md) | Motion-keyed quality regression: DoF off while moving, SSAO never gated | accepted; phones build no DoF: 0047; no DoF switch or manual focus since 2026-10-10 |
-| [0012](./0012-openstreetmap-for-what-official-data-lacks.md) | OpenStreetMap for what the official data lacks (walls, lamps, platforms, bridge structure), from a local extract where possible | accepted (always local: 0025) |
-| [0013](./0013-rail-layer-from-dissolved-areas-and-centreline-driven-decks.md) | Rail layer from dissolved ballast areas and centreline-driven decks, built once per block | accepted (per tile: 0024; decks measured: 0033) |
-| [0014](./0014-wall-to-terrain-breakline-conflation.md) | Burn OSM wall lines into the heightfield as breaklines | accepted (at bake time: 0024); the coarse level only since 0030 |
-| [0015](./0015-roof-colour-from-orthophotos-with-vibrance-lift.md) | Roof colour from orthophotos with a hue-preserving vibrance lift | accepted |
-| [0016](./0016-land-cover-rasters-downsampled-with-alpha-as-data.md) | Land-cover rasters downsampled to 2048² with the alpha channel treated as data | superseded by 0023 |
-| [0017](./0017-look-controls-table-and-snapshot-contract.md) | Look controls declared in one table; the Snapshot is a validated, versioned contract | accepted; amended 2026-10-10 (no `max`; removed controls' keys ignored) and 2026-10 (plan 073: only *Nebel* left; the look's strengths are constants in their owners; retired keys never reused) |
-| [0018](./0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md) | Headless tests run a lite profile and assert presence; visuals are judged on a real GPU | accepted |
-| [0019](./0019-oxlint-oxfmt-and-native-typescript.md) | oxlint + oxfmt and the native TypeScript 7 compiler; no ESLint, no biome | accepted |
-| [0020](./0020-fixed-light-pool-and-static-shadow-casters.md) | A fixed pool of real point lights; animated geometry never updates the shadow map | accepted |
-| [0021](./0021-docs-published-under-wissen-with-prerendered-diagrams.md) | docs/ is published as /wissen, and its diagrams are prerendered SVG | accepted |
-| [0022](./0022-stream-tiles-around-the-camera.md) | Stream tiles around the camera with a hand-written tile manager, a loader worker and 1 km near cells | superseded by 0024 (never accepted) |
-| [0023](./0023-land-cover-colours-painted-at-runtime.md) | Land-cover colours are painted at runtime from one palette | accepted |
-| [0024](./0024-site-streams-as-3d-tiles.md) | The site streams as OGC 3D Tiles with glTF content through 3DTilesRendererJS | accepted |
-| [0025](./0025-bakes-are-one-python-package.md) | The bakes are one Python package in a uv environment; OSM comes only from a local extract | accepted |
-| [0026](./0026-one-site-config-per-build.md) | One site config per build, with an ingest adapter per data provider | accepted; one site per build superseded by 0037 (a route per site) |
-| [0027](./0027-webgpu-renderer-and-tsl.md) | WebGPURenderer and TSL node materials, one path, public API only | accepted (2026-09-26) |
-| [0028](./0028-osm-stairs-as-geometry-over-a-lowered-terrain.md) | OSM stairs as step geometry over a lowered terrain | accepted |
-| [0029](./0029-static-dressing-baked-into-the-fine-terrain.md) | Static dressing (walls, stairs) is baked into the fine terrain glTF | accepted |
-| [0030](./0030-terrain-tin-and-wall-snap.md) | The fine terrain level is an error-bounded TIN of the native DGM; walls snap to the measured step | accepted |
-| [0031](./0031-baked-horizon-map-for-far-shadows.md) | A baked horizon map casts the far field's shadows; the shadow map keeps the near field | accepted |
-| [0032](./0032-camera-never-inside-a-building.md) | The camera is never below the ground or inside a building | accepted |
-| [0033](./0033-bridges-measured-in-the-surface-model.md) | Bridges are measured in the surface model, typed by Wikidata | accepted |
-| [0034](./0034-picture-styles-as-one-post-pass.md) | Picture styles (comic, film noir, Sin City, Papier) are one optional post pass over the clay scene; Papier adds a render-time material override | accepted |
-| [0035](./0035-parts-meet-the-ground.md) | Every part meets the ground by one set of rules (feet under, edges meeting the ground, decisions smoothed along the part) and reports where it does; one check holds them to it | accepted |
-| [0036](./0036-lod2-roofs-that-miss-the-scan-are-rebuilt.md) | A LoD2 roof that misses DOM1 (the free-form roofs of complex buildings, 3 m placeholders of new ones) is rebuilt from it inside its footprint, only where that fits the scan better | accepted; drawn in the scan's form — flat levels and measured faces, no longer stepped blocks only — since 2026-10-03 |
-| [0037](./0037-sites-providers-and-per-site-data.md) | Sites pick a provider; data per site, downloads per provider; fetch → bake → build | accepted |
-| [0038](./0038-measured-and-named-additions.md) | Geometry beyond LoD2 only where a measurement (DOM1) and a name (OSM, Wikidata) agree; mapped attributes tint within the clay palette, never textures; landmarks from Wikidata, ranked per tile | accepted |
-| [0039](./0039-stand-ins-marked-per-city.md) | Where a Land publishes less, a named stand-in (OSM rails and decks, a visible-band vegetation index, a register table per city), marked per city in a generated source matrix; no per-site look switches — derived from the site's data | accepted |
-| [0040](./0040-data-layers-and-live-city-data.md) | Traffic is shown as switchable data layers (motor traffic baked per tile, bicycle counters read live from the city, trams by timetable), all off at start; the first runtime read from a server other than the site's own | accepted |
-| [0041](./0041-line-levels-along-the-whole-line.md) | A rail or tram line's level (ground, deck, span, cut) is decided along the whole line within its grade, solved by the build step with the line's context across tiles; a cut under a drawn deck opens a passage in the terrain | accepted |
-| [0042](./0042-inquiry-cards-on-demand-facts-in-the-tileset.md) | The twin answers on demand: identity, semantics and provenance ride in the tileset; text appears only in a card | accepted |
-| [0043](./0043-crash-and-page-reports-to-an-error-tracker.md) | Crashes (reported by the next load — a killed page runs no handler), caught problems and a summary per page go to an error tracker as Sentry envelopes in beacons, from the crash trail, no SDK, no position; only where the build has a DSN | accepted; an opt-out and the privacy page: 0045; aftermath, recovery deaths and tags: 0046; network boot failures: 0048 |
-| [0044](./0044-modell-parallel-projections.md) | Modell: the city in parallel projection — a real (sheared) orthographic camera read by one post pipeline through a view lens; scale, not distance; the legend on the HUD and in the export, never in the scene; Strich and Schwarzplan as picture styles | accepted |
-| [0045](./0045-legal-pages-from-the-deployment.md) | Impressum and privacy policy as static MDX pages (`@next/mdx`); the privacy page describes what the code does; reports on by default with a per-browser opt-out checked before every report | accepted |
-| [0046](./0046-a-per-device-safety-ladder-for-gpu-loss.md) | A device that lost its GPU gets a lighter page: a safety level 0–3 per device in local storage, raised by a loss, a crashed previous page or a memory emergency, one level lower every three days; recovery bounded by levels (one reload each), the old device released first, a GPU reclaimed in the background told apart | accepted |
-| [0047](./0047-phone-memory-budget-in-true-bytes.md) | A phone's memory in true bytes: a post profile per tier (no DoF, FXAA, one-byte targets, a one-byte shadow colour target), fixed costs counted, the tile cache derived from the governor's soft line, buffers shared across tiles, CPU copies dropped after upload, the shadow camera streaming at a resolution of its own (64 px on a phone, 128 on a desktop) | accepted |
-| [0048](./0048-network-failures-are-retried.md) | A network failure is retried for a budget of the page's visible time, never decided at once; a tile that gave up is healed; the boot waits a minute of a usable page; the manifest never falls back to an unhashed name; nothing decided while the page leaves | accepted |
-| [0049](./0049-windows-drawn-by-the-clay.md) | Windows are drawn by the clay's fragment shader on every house (a recess, no geometry, no glass): their rhythm per building measured where street photos saw it, else a neighbour's, else its type's; per wall vertex its place along the wall; none on party walls, doors, shopfronts or a monumental facade | accepted |
-| [0050](./0050-a-building-tiles-bvh-when-a-ray-needs-it.md) | A building tile's BVH is built when a ray first reaches it (the collider, a pick, the probe; near the camera in idle time), not as it lands; no ray walks a tile without one | accepted; its worker alternative re-tried 2026-10-11 (plan 043: bundled, but +20.8 KB gz first load, ADR 0051) — open |
-| [0051](./0051-optional-features-start-on-first-use-in-the-scene-chunk.md) | Optional features (the data layers first) start on first use and hear the spine through its hooks (`feature-seam.ts`); their code ships in the scene's chunk while they import three.js — as an `import()` chunk the data layers grew the first load by 22.7 KB gz | accepted |
-| [0052](./0052-lines-lie-on-a-profile-the-ground-under-their-bed.md) | A rail or tram line lies on a profile within its grade and vertical-curve radius (rail 2 000 m, tram 500 m), fitted by the build step; the terrain bake lays the ground under its bed at that profile, the sides at 1 : 1.5, and the ballast drapes on the bed | accepted |
-| [0053](./0053-picture-styles-read-the-light-and-the-world.md) | The picture styles cut on the colour with the fog taken out again, decide light and shade from the sun's own shadow map, lay their screens on the world (a cell ladder by metres per pixel) and keep still pens; Sin City draws on its own white card (`ink`), the Schwarzplan figure takes no fog | accepted |
+| # | Decision |
+|---|---|
+| [0001](./0001-client-only-static-app.md) | Static where possible: no database, no accounts, nothing kept about a visitor; stateless server functions only where a source or service needs one |
+| [0002](./0002-imperative-threejs-in-a-react-shell.md) | Imperative three.js inside a React shell, not react-three-fiber |
+| [0005](./0005-one-projected-crs-and-a-rotated-world-group.md) | Data stays in its provider's UTM zone, under one recenter offset and a rotated `world` group |
+| [0009](./0009-shadow-recipe.md) | Light, shadows and post: soft PCF redrawn on demand, a baked horizon for the far field, a fixed lamp pool, DoF dropped while moving, AO never |
+| [0010](./0010-opaque-clay-buildings-only.md) | The look: opaque clay on a painted ground, colours within one palette, windows drawn by the shader, detail soft, water matte |
+| [0012](./0012-openstreetmap-for-what-official-data-lacks.md) | Sources: official data first, OSM and Wikidata for what it lacks, named stand-ins marked per city, no look switch per city |
+| [0018](./0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md) | Headless tests run a lite profile and count frames; visuals are judged on a real GPU; the Snapshot is a validated contract |
+| [0021](./0021-docs-published-under-wissen-with-prerendered-diagrams.md) | docs/ is published as /wissen, and its diagrams are prerendered SVG |
+| [0024](./0024-site-streams-as-3d-tiles.md) | The build bakes each city into a 3D Tiles tileset that streams around the camera, content-hashed, first frame before the rest |
+| [0027](./0027-webgpu-renderer-and-tsl.md) | WebGPURenderer and TSL node materials, one path, public API only |
+| [0030](./0030-terrain-tin-and-wall-snap.md) | The ground: a TIN of the native DGM, its static parts baked in, every part meeting it by one set of rules |
+| [0032](./0032-camera-never-inside-a-building.md) | The camera is never below the ground or inside a building |
+| [0034](./0034-picture-styles-as-one-post-pass.md) | Picture styles are one post pass over the clay scene, reading the light and the world |
+| [0036](./0036-lod2-roofs-that-miss-the-scan-are-rebuilt.md) | Buildings are LoD2; geometry beyond it only where a measurement and a name agree; roofs that miss the scan are rebuilt in its form |
+| [0037](./0037-sites-providers-and-per-site-data.md) | Cities, providers and the pipeline: fetch, bake, build; one deployment, a route per city |
+| [0040](./0040-data-layers-and-live-city-data.md) | Data layers are switches, off at start, drawn as glass; optional features start on first use |
+| [0041](./0041-line-levels-along-the-whole-line.md) | Rails, trams and bridges: decks measured in the surface model, every line on a drivable profile solved by the build |
+| [0042](./0042-inquiry-cards-on-demand-facts-in-the-tileset.md) | The twin answers on demand: facts and provenance ride in the tileset, text appears only in a card |
+| [0043](./0043-crash-and-page-reports-to-an-error-tracker.md) | Crash and page reports go to an error tracker without an SDK; the privacy page says what the code does |
+| [0044](./0044-modell-parallel-projections.md) | Modell: the city in parallel projection, every pass reading the camera through a lens |
+| [0047](./0047-phone-memory-budget-in-true-bytes.md) | Every device gets a budget in true bytes, a phone's memory never grows, a device that lost its GPU gets a lighter page |
+| [0048](./0048-network-failures-are-retried.md) | A network failure is retried for a budget of the page's visible time, never decided at once |
+
+## Numbering
+
+Numbers missing from the index belonged to records merged into others;
+they are never reused. A new record takes the next number after the
+highest ever used (0053), checked against main and the open PRs' branches.
 
 ## Format
 
 ```markdown
 # ADR NNNN: Title (a decision, not a topic)
 
-- **Status:** proposed | accepted | superseded by ADR-NNNN | deprecated
+- **Status:** proposed | accepted
 - **Date:** when it was decided (month precision is fine)
 
-## Context        — the forces: what problem, what constraints, what was measured
-## Decision       — one paragraph, in the active voice
-## Consequences   — what becomes easier, what becomes harder, what must now be kept true
-## Alternatives   — what was considered and why it lost (so nobody retries it blindly)
-## References     — code, plans, ledger entries, commits or PRs
+## Context        — the forces, in a few sentences
+## Decision       — the rule, in the active voice and the present tense
+## Consequences   — what must now be kept true
+## Alternatives   — only what someone would otherwise retry, with the reason
 ```
 
-## Adding one
+Rules:
 
-1. Copy the format, take the next number, keep the title a decision.
-2. Link it from the index above and, where it changes a transformation,
-   from [transformations.md](../transformations.md).
-3. Superseding: add a new ADR, set the old one's status to *superseded by*,
-   and never edit the old decision text — the history is the point.
-
-The first twenty were written in September 2026 from the code, the
-[implementation plans](../plans/README.md) and the ledger, with dates taken
-from the git history where a decision predates its record.
+- An ADR states today's decision. When it changes, rewrite the text; do
+  not append an "Update" or "Amendment". The history is in git.
+- A superseded ADR is deleted; code that cited it cites its successor.
+- About a page, at most ~600 words. Measurements, constants, file lists
+  and tuning stories belong in code comments or the developer docs.

@@ -1,5 +1,5 @@
 /**
- * The viewer's load after the first frame (ADR 0008's second phase) as a
+ * The viewer's load after the first frame (ADR 0024's second phase) as a
  * pure state machine: the stream reports what it sees, the machine answers
  * with the load stages to show, the one moment the scene counts as loaded,
  * and later the busy/idle flips. create-app.ts feeds it from the tile

@@ -1606,7 +1606,7 @@ function* buildBridges(
   return meshes;
 }
 
-// --- the measured bridge (ADR 0033) -------------------------------------------------
+// --- the measured bridge (ADR 0041) -------------------------------------------------
 
 /** A bridge's axis frame: stations along it, lateral offsets across it. */
 interface BridgeFrame {

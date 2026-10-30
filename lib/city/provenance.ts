@@ -188,7 +188,7 @@ export function siteProvenance(
     },
     dop: { label: "Digitales Orthophoto", credit: official, licence },
     // a provider without a Basis-DLM (Hamburg, Berlin) has OSM in its
-    // place: the land cover, rails and bridge areas (ADR 0039)
+    // place: the land cover, rails and bridge areas (ADR 0012)
     dlm: site.provider.products.dlm
       ? { label: "Basis-DLM", credit: official, licence }
       : osm,

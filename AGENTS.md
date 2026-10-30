@@ -1,1169 +1,219 @@
 # AGENTS.md
 
-Entrypoint for coding agents working on this repo.
+Entrypoint for coding agents working on this repo. Read this, then load
+the skill the task needs (below). Decisions and their reasons are the ADRs
+in [docs/adr/](docs/adr/README.md); this file only points at them.
 
 ## What this project is
 
-A client-side, stylized **3D city walker**: you spawn into a pastel, poetic
-rendering of a German city built from open geodata and walk (or fly) through
-it. Dresden is the reference site; Leipzig, Meißen, Grimma, Hamburg, München,
-Berlin and Unna are configured too. **One deployment serves every site
-whose data is on disk at build time, each under its own route** (`/dresden`,
-`/leipzig`, …); `/` is a start page that lists the built cities (ADR 0037,
-which superseded the one-site-per-build of ADR 0026).
-Buildings come from LoD2 **CityJSON**, the ground from **DGM1** elevation
-rasters (the walked-on level an error-bounded TIN), surfaces
-(roads/water/meadow/…) from an **ATKIS Basis-DLM** land-cover class raster
-(painted with one palette at runtime), and trees from DLM hedge/tree-rows, a
-**DOM1**-derived canopy, the city's **street-tree cadastre** and laser-scan
-crowns, plus OSM hedges. The build bakes it all into an
-**OGC 3D Tiles** tileset of glTF content that the browser streams with
-**3DTilesRendererJS** and renders with **three.js**; there is no backend.
+A client-side, stylized **3D city walker**: a pastel, poetic rendering of a
+German city built from open geodata, walked, flown or viewed as a drawing
+(Modell). Dresden is the reference site; Leipzig, Meißen, Grimma, Hamburg,
+München, Berlin and Unna are configured too. One deployment serves every
+city whose data is present at build time under its own route (`/dresden`);
+`/` lists them; `/wissen` publishes `docs/`.
 
-Single-page Next.js app. The 3D scene is imperative three.js code mounted into a
-React shell; React owns the HUD/controls, three.js owns the canvas.
+The build bakes each city's LoD2 CityJSON, DGM1 and derived layers into an
+**OGC 3D Tiles** tileset of glTF; the browser streams it with
+**3DTilesRendererJS** and renders it with **three.js on WebGPURenderer**
+and TSL node materials. No database, no accounts (ADR 0001). React owns the
+HUD, three.js the canvas (ADR 0002).
 
 ## Tech stack
 
-- Next.js (App Router) + TypeScript (strict) + Tailwind v4, run with **bun**
-- **three.js r186 on `WebGPURenderer`** (`three/webgpu`: WebGPU, its WebGL2
-  backend where WebGPU is missing) with **TSL node materials** (`three/tsl`)
-  and three's node post pipeline (GTAO, DoF, SMAA; grading, grain and
-  vignette in the output node) — no GLSL anywhere (ADR 0027);
-  **`3d-tiles-renderer`** (3DTilesRendererJS — streaming, LOD, LRU, glTF
-  metadata), `three-mesh-bvh` (collision/picking)
-- Build step only: `cityjson-threejs-loader`, `geotiff`, `@gltf-transform/*`
-  and `meshoptimizer` (the client decodes neither CityJSON nor GeoTIFF; it
-  gets glTF)
-- **Python in a uv environment** (`pipeline/`: numpy, rasterio, pyogrio,
-  shapely, Pillow — GDAL ships inside the wheels) for the offline bakes
-- Playwright for e2e + the screenshot harness; `bun run test` for the `lib/`,
-  `app/_components/` and `scripts/` units
-- Deployed as a static client app; no database, no stateful API routes
+- Next.js (App Router) + TypeScript 7 (strict) + Tailwind v4, run with **bun**
+- three.js r186 `WebGPURenderer` (WebGPU, else its WebGL2 backend), TSL,
+  three's node post pipeline — no GLSL anywhere (ADR 0027);
+  `3d-tiles-renderer`, `three-mesh-bvh`
+- Build only: `cityjson-threejs-loader`, `geotiff`, `@gltf-transform/*`,
+  `meshoptimizer`
+- Offline bakes: one Python package in a uv environment (`pipeline/`:
+  numpy, rasterio, pyogrio, shapely; GDAL inside the wheels)
+- Playwright for e2e and the screenshot harness; `bun run test` for units
 
 ## Commands
 
 ```bash
 bun install
-bun dev            # prepare-sites.ts (every ready site's geodata ->
-                   # public/data/<site>/, + public/data/sites.json) then
-                   # next dev
-bun run build      # the same, then next build
-bun run verify     # lint + typecheck + unit tests — the pre-push gate
-bun lint           # oxlint (rules, type-aware via tsgolint) + oxfmt --check
-bun typecheck      # bun check (Bun's checker, tsc's errors in a seventh of
-                   # the time; `next build` still type-checks with tsc 7)
-bun run typecheck:tsc  # tsc --noEmit, the reference CI runs beside it
-bun run test       # unit tests in lib/, app/_components/ and scripts/, one
-                   # worker per core (--parallel; each file in a fresh global)
-                   # (a bare `bun test` is Bun's runner: it loads e2e/ too)
-bun run site <site>   # where the site stands, tile by tile (--all: every
-                   # site, with its size on disk)
-bun run fetch <site>  # download the site's data through its provider's
-                   # adapter (pipeline/bake/providers/): → data/_raw/<provider>/
-                   # and the build sources → data/<site>/{dgm,cityjson}
-                   # [tile…] [--lsc]
-bun run bake <site>   # offline bakes (pipeline/, Python via uv): raw → derived
-                   # data/<site>/{dlm,dop} [tile…] [--step X] [--jobs N]
-                   # (a step whose code and files are unchanged is skipped;
-                   # --force runs it)
+bun dev                 # prepare every ready site's data, then next dev
+bun run build           # the same, then next build
+bun run verify          # lint + typecheck + unit tests — the pre-push gate
+bun run fix             # format + safe autofixes; run before verify
+bun lint                # oxlint (type-aware) + oxfmt --check
+bun typecheck           # bun check; bun run typecheck:tsc is the reference
+bun run test            # units in lib/, app/_components/, scripts/
+                        # (a bare `bun test` also loads e2e/)
+bun run test:e2e        # playwright against a production build
+                        # (E2E_DEV=1: against bun dev)
+bun run shots           # real-GPU plates of shots/*.json (headed)
+bun run site <site>     # where a site stands (--all: every site)
+bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
+bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]
 bun run test:pipeline   # pytest + ruff for pipeline/
-bun scripts/ground-joins.ts <site> [tile…]   # where the baked parts miss the ground (ADR 0035)
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
-                   # (Bun.WebView + Chrome; commit the SVGs with the change)
-bun run docs:matrix     # write docs/guide/{en,de}/sources-by-city.md from
-                   # the site and provider configs (its test fails on drift)
-bun run test:e2e   # playwright (e2e/) against a production build
-E2E_DEV=1 bun run test:e2e   # ...against `bun dev` (HTTPS) instead, for spec iteration
+bun run docs:matrix     # regenerate the guide's sources-by-city pages
 ```
-
-Linting and formatting are **oxlint + oxfmt** (`.oxlintrc.json`, `.oxfmtrc.json`)
-— biome/ultracite are gone. `bun lint` runs `oxlint --max-warnings=0` then
-`oxfmt --check`; `bun run fix` formats and applies the safe autofixes.
-oxlint is **type-aware**: `options.typeAware` in `.oxlintrc.json` hands the
-`typescript/*` rules that need type information (`no-floating-promises`,
-`no-misused-promises`, `no-unsafe-*`, `no-deprecated`, `switch-exhaustiveness-
-check`, …) to `oxlint-tsgolint`, the typescript-go backend, which reads the
-same `tsconfig.json` as `tsc`. It adds well under a second here and needs no
-flag. The deliberately *unlisted* type-aware rules are `strict-boolean-
-expressions`, `no-unnecessary-condition` and `no-confusing-void-expression`:
-each reports 40–60 findings on this codebase, nearly all of them the
-`if (maybeObject)` / `onClick={() => setX()}` idioms the code uses on purpose.
-`--type-check` (tsc diagnostics inside lint) stays off — `bun typecheck` is
-the type checker and runs as its own CI job.
-Run `bun run fix` before `bun run verify` — there is no format-on-save hook
-for Claude Code (it was removed after it reformatted files carrying
-merge-conflict markers); Cursor still runs a fix hook after edits via
-`.cursor/hooks.json`. A complexity cap of 20 is enforced (`complexity`), so
-extract helpers rather than fighting it. No `console.log` in committed code.
-
-**`.oxlintrc.json` names its rules explicitly, on purpose.** oxlint's default is
-the `correctness` category alone, which on this repo reports nothing — so the
-rules ported from biome (`no-var`, `prefer-const`, `typescript/no-explicit-any`,
-`ban-ts-comment`, `no-namespace`, …) and the react/Next.js ones are listed one by
-one. Do not "simplify" that to a category: `-D suspicious -D pedantic` adds 411
-findings and `-D style` adds 6551, nearly all of them rules that do not fit this
-codebase (`react-in-jsx-scope` is obsolete under the modern JSX transform,
-`no-inline-comments` fights the commenting style, `max-lines-per-function`
-fights the scene-setup functions). Equally, ultracite's own oxlint preset is as
-opinionated as its biome one — adopting it wholesale is a style refactor, not a
-config change.
 
 ## Where things live
 
-- `app/_components/` — the viewer, grouped:
-  - spine: `create-app.ts` (scene/loop/handle), `tile-stream.ts` (the
-    3DTilesRendererJS setup: the retrying, inflating content fetch, the
-    glTF loader (`gltf-content.ts`: meshopt and the property tables, read
-    by `lib/city/property-table.ts` — not the library's metadata plugin,
-    which ships a classic WebGLRenderer) and the dressing plugin that
-    builds and disposes everything a tile carries; its queues in our order,
-    the coarse ground first — `lib/city/stream-order.ts` —, a phone's paced),
-    `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount,
-    given the site id; which tileset to stream), `site-context.tsx`
-    (`SiteProvider`/`useSite`: the site the HUD describes),
-    `scene-status.ts` (what the scene reports to the HUD — the stages,
-    the stats and frame rate, the site, the mode, Modell's view, the data
-    layers, the inquiry, the pose — as one store of slices that each
-    widget reads its own of with `useSceneStatus`, so a report re-renders
-    what shows it, not the HUD; `sceneReports` turns it into the scene's
-    callbacks; the store itself is `lib/city/slice-store.ts`; plan 074),
-    `poc-debug.ts` (the `window.__poc` test/QA hook), `stream-timing.ts`
-    (`?trace=1`: the boot's and the stream's spans by category, local
-    only), `scene-profile.ts`
-    (`?scene=lite`, `?gpu=webgl2`; the budget per tier and safety level —
-    pixel ratio, shadow map, tile cache, `postProfileFor` and
-    `shadowMapBytesFor`), `gpu-support.ts` (the WebGPU-or-WebGL2
-    preflight), `gpu-safety.ts` (the device's safety level in local
-    storage, `gpu-safety`: `pageSafety`, `raiseSafety`, `resetSafety` —
-    ADR 0046; `quality-panel.tsx`, the sidebar's *Qualität*, shows it and
-    goes back to full detail — a reload after the whole app is torn down
-    and its device gone, `disposeForReload`: the new page boots in the old
-    one's process),
-    `gpu-recovery.ts` (a lost GPU: one reload per safety level, the
-    renderer released first, back at the player's pose; a GPU reclaimed in
-    the background, or a frame that threw on a GPU still working — a bug —,
-    reloads at the same level; `keepPlaceForReload`, the place kept for
-    *Leichter weiter* and *Qualität*'s reload), `gpu-failure-card.tsx` (the
-    card past the caps: *Leichter weiter*, *Neu laden*), `instancing.ts`
-    (`Instances`: instanced sets that share one node build),
-    `fetch-optional.ts` (the one fetch/abort policy: `fetchBytes` retries a
-    network failure — and an attempt that went 30 s without a byte — for a
-    budget of the page's visible time, offline or not, ADR 0048),
-    `main-yield.ts` (WebKit's missing `scheduler.yield`, so three's async
-    compiles do not wait a frame per step), `net-gate.ts` (the page's view of the network:
-    visible, online, the budgets' clock, `pageLeaving` from pagehide),
-    `tile-retry.ts` (tiles that gave up on the network asked for again;
-    the boot waits for them), `boot-error.tsx` (the boot's
-    error in German, *Keine Verbindung zum Server*, *Erneut versuchen*),
-    `crash-trail.ts` + `crash-report.tsx` (a page the browser kills leaves
-    its boot stages, errors, lost device and heartbeats in local storage;
-    the next load offers them as text to copy, `?trail=1` always — the
-    core is `lib/city/crash-trail.ts`), `crash-reports.ts` (where the
-    build has a `NEXT_PUBLIC_SENTRY_DSN`: that crash, the problems the
-    viewer catches, each page's frame-rate and memory summary and its
-    session go to an error tracker as Sentry envelopes in beacons to
-    `/r/e`, which `next.config.ts` forwards — no SDK, no position; built
-    by `lib/city/crash-reports.ts`, whose `reportBuild` names the release
-    `bridge@<commit>` once for the page and for
-    `scripts/sentry-release.ts`, the build's last step; ADR 0043; off in
-    a browser that said no on `/datenschutz`, ADR 0045; a page's
-    aftermath — after its render stopped, while it leaves — stays a
-    breadcrumb, and every report carries the device's safety level and
-    how soon after a return from the background it came, ADR 0046. The
-    Sentry agent skills `sentry-debug-issue`, `sentry-setup-releases` and
-    `sentry-create-alert` and the Sentry MCP server in `.mcp.json` work
-    the issues — never add the SDK they otherwise set up)
-  - layers: `terrain-layer.ts` (dresses a terrain tile; its heights and water
-    sheets come from `ground-worker.ts`, off the main thread —
-    `lib/city/ground-prep.ts`), `raster-upload.ts`
-    (the streamed rasters decode in a site-wide turn, `setRasterTier`: a
-    phone one at a time, each uploaded at once and its bytes dropped; a
-    desktop five, uploaded at the compile), `landcover-splat.ts`
-    (the GPU pass that paints the class raster with the palette),
-    `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
-    the street-tree cadastre's silhouettes, `crown-season.ts`, the
-    crowns' autumn colour and bare winter stipple,
-    `coarse-crowns-layer.ts`, the coarse terrain level's trees — a
-    third of them, wider —, and `low-vegetation-layer.ts`, the OSM
-    hedges), `city-layer.ts` (dresses a
-    building tile: clay material, object table, demolish; its BVH built
-    when a ray first needs it, `ensureCityBvh`, or ahead near the camera
-    in the BVH worker, `bvh-client.ts`),
-    `clay-windows.ts` (every house's windows, drawn by the clay's
-    fragment pass as recesses — no geometry, no glass; ADR 0049),
-    `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
-    green in the terrain's fragment pass), `sport-ground.ts` (sports
-    grounds: surface and lines in the same pass), `sport-fixtures.ts`
-    (their goals, posts and nets), `rail-layer.ts` (rails, ballast,
-    platforms and the bridges: decks, the measured steel above them,
-    arches, pylons, piers — ADR 0033; `bridge-surface.ts`, their deck
-    laid out by its axis and their ashlar), `wall-layer.ts`,
-    `kerb-layer.ts`, `stair-layer.ts` and `fence-layer.ts` (only their
-    materials: walls, kerbs, stairs and fences are baked into the fine
-    terrain glTF; a fence is one low band in a muted tone — no pattern),
-    `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
-    `furniture-layer.ts` (benches, picnic tables, bins, bicycle stands,
-    bollards, post boxes, stop shelters and bus-stop signs, advertising
-    columns, traffic signals, hydrants, clocks, drinking fountains,
-    playgrounds with their mapped equipment),
-    `road-markings.ts` (crossings, stop, cycle and centre lines in the
-    terrain pass), `cultivated-layer.ts` (allotment beds in the same pass,
-    vine rows), `tram-layer.ts` (tracks in their bed, the overhead line,
-    stop signs), `riverside-layer.ts` (landing stages, groynes, ferry
-    lines) and `map-overlay.ts` (fades the ferry lines in with height,
-    widens the data layers from the air), the data layers
-    (`lib/city/data-layers.ts`, switched in the HUD, all off at start —
-    ADR 0040): `traffic-layer.ts` (the counted motor traffic as flowing
-    glass bodies, per tile), `data-overlays.ts` (the site-wide ones:
-    `bike-layer.ts`, the city's bicycle counters read live as glass
-    columns — the feed per site in `lib/city/bike-feeds.ts` —, and
-    `tram-cars.ts`, the trams by timetable with their light trails; which
-    layers a site has is its `dataLayers`), `glass.ts` (their refracting glass: one copy of the frame,
-    not `transmission`) — all started on the first switch-on of any layer
-    as one feature, `data-layers-feature.ts`, behind the spine's feature
-    seam (`feature-seam.ts`: the hooks a feature registers on — frame,
-    stream change, the look store, the scene's clock — and
-    `lazyFeature`; the tiles' traffic slot waits for its builder through
-    `TileStreamContext.trafficBuilder`); their code ships with the scene
-    (as an `import()` chunk it grew the first-load JS: three.js lost its
-    scope hoisting — ADR 0051); `traffic-flow.ts` (what the asked
-    section's outline reads of the flows without the layer: the hour's
-    uniforms, the position node, the flow mesh),
-    `shader-chunks.ts` (the shared TSL pieces: data-frame positions from
-    world space, raster uv, node types)
-  - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view
-    factor on the ambient light, the far horizon on the sun; its raster
-    shared by a tile's terrain and buildings through `shared-rasters.ts`),
-    `height-fog.ts` (the one `scene.fogNode`), `post-stack.ts` (the scene
-    pass and the node `RenderPipeline`, built per tier: no DoF and FXAA on a
-    phone — ADR 0047), `fxaa.ts` (the phone's FXAA inside the last pass, a
-    perceptual luma over the linear frame),
-    `stylize-effect.ts` (the picture styles' one node: ink lines + tone;
-    the table is `lib/city/render-style.ts`), `paper-scene.ts` (Papier's
-    render-time white material), `style-dressing.ts` (a style's own crowns
-    and noir's lamp cones, shown for its frames), `style-memory.ts`
-    (the last style, kept in local storage), `visual-style.ts`
-    (the look table is `lib/city/look-controls.ts` — *Nebel* alone, the
-    look's other strengths are named constants beside their terms, plan
-    073; the store the HUD owns and the scene subscribes to is
-    `lib/city/look-state.ts`)
-  - input/camera: `camera-pose.ts` (the one owner of where the player
-    stands and looks, walk/fly and the scenic glides; every input cancels a
-    glide; the camera is never below the ground or inside a building —
-    `lib/city/clearance.ts`, ADR 0032), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
-    `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`,
-    `altitude-stick.tsx` (the fly-mode climb control opposite it),
-    `locate-me.ts` + `locate-button.tsx` ("take me to where I am": GPS
-    fix + phone compass → `placeAt`), `live-mode.ts` (opt-in live mode:
-    view follows the compass, camera the GPS; offered only while a compass
-    reports), `hud-toolbar.tsx` (those tools + walk/fly as one foldable
-    labelled group) and
-    `device-orientation.ts` (the one orientation-event adapter both use);
-    the math is `lib/city/geolocation.ts`
-  - Modell (ADR 0044, plan 055 — the city in parallel projection, `M`):
-    `model-rig.ts` (owns the view while on: pan/zoom/turn/tilt, the
-    dolly zoom in and out, the presets), `model-camera.ts` (the ortho
-    camera, sheared for the Militärperspektive), `view-lens.ts` (what
-    every post pass reads of the camera drawing the frame),
-    `view-direction.ts` (what a material reads of the view), `view-ray.ts`
-    (pick rays for any camera), `model-cuts.ts` (the Schnitt's ground
-    profile, the Ausschnitt's clipping and plinth), `model-instruments.tsx`
-    (scale bar, north arrow), `projection-panel.tsx` (the sidebar's
-    *Projektion*), `image-export.ts` (*Bild speichern* and the
-    *Verschattungsstudie*: tiles, legend strip, download); the math is
-    `lib/city/model-view.ts`, `lib/city/section.ts`,
-    `lib/city/image-export.ts`
-  - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers,
-    `sceneMaterial` for the scene-wide shared node materials)
-  - the twin (ADR 0042): `inquiry-probe.ts` (what a click, a long press
-    or `I` under the pointer asks, and the pencil-hatch mark) and
-    `inquiry-card.tsx` (the card — the only place the scene's facts become
-    text); the
-    facts are `lib/city/object-facts.ts` (bake and read; Buildings one named OSM
-    outline joins are asked as one, across tile edges too,
-    `lib/city/ensembles.ts`), the card's lines
-    `lib/city/inquiry.ts` (buildings) and `inquiry-features.ts` (trees,
-    monuments, bridges; shared lines in `card-lines.ts`), the sources
-    `lib/city/provenance.ts`, the AdV code lists `lib/city/adv-codes.ts`;
-    the things that are not buildings are asked by rays against solids from
-    their data (`lib/city/ask-solids.ts`, `ask-items.ts`; bridges by their
-    meshes, `bridge-ask.ts`; the data layers' traffic flows by their glass,
-    `traffic-ask.ts`, and bicycle counters by their columns, `bike-ask.ts`,
-    their cards `lib/city/inquiry-traffic.ts`); every asked element is outlined along its
-    silhouette in screen pixels (`selection-outline.ts`, the post pass;
-    `selection-shape.ts`, its triangles; `lib/city/outline.ts`, the
-    numbers); a tree's facts are its tile's
-    `treefacts` file, fetched with the question (the artifact table's `ask`
-    column, `lib/city/tile.ts`)
-- `lib/brand.ts` — `SUPPORT_URL`, the Ko-fi link in the HUD footer
-  (`scene-sidebar.tsx`): a plain link, never Ko-fi's widget, so nothing
-  loads from there until it is clicked
-- `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
-  ground-clamp, polyline resampling, the pose convention + pitch/FOV
-  policy, the look table + store, the Snapshot codec, `slice-store.ts`
-  (a store of named slices: per-slice equality, one notify per burst on
-  a schedule — the HUD's scene status), `gpu-safety.ts`
-  (the safety ladder: levels, raise and decay, the recovery's caps —
-  ADR 0046; a recovered page's start tile is `boot-start.ts`'s),
-  `gpu-allocation.ts` (which
-  errors are a GPU allocation that failed), `page-lifecycle.ts` (the
-  page's GPU-loss, memory-emergency and resume decisions as effects —
-  ADR 0046), `frame-pace.ts` (the render loop's pace while the phone's
-  sidebar sheet covers the scene: 12 fps, none while it scrolls — set by
-  `app/_components/sidebar-pace.tsx`), `fetch-retry.ts` (when a
-  failed fetch is tried again and for how long — ADR 0048),
-  `task-gate.ts` (a concurrency gate: the rasters' turns),
-  `build-steps.ts` (a builder as a generator of steps, run in 8 ms
-  slices between frames — `inSlices` — or whole — `finished`: the
-  dressing's trees, rails, tram, furniture and ask sets; a new builder
-  that can take more than a few ms on a phone yields too),
-  `ground.ts` (the
-  site's ground: terrain heights, the floor, rays — one owner for the pose,
-  focus and shadow fit), `ground-join.ts` (how a part meets
-  the ground: foot depths, edges, the join contract — ADR 0035),
-  `boot-phases.ts` (the load after the
-  first frame as a pure state machine), `terrain-tin.ts`
-  (the fine level's TIN + its height index), `wall-snap.ts` (walls onto
-  the measured step), `fences.ts` (fence panels and gate gaps),
-  `tree-inventory.ts` (the cadastre's archetypes and veto),
-  `tree-placement.ts` (where the canopy and row trees stand — the layer's
-  and the build's one placement), `coarse-crowns.ts` (the coarse
-  level's third of the trees, per tile, and their file),
-  `tree-season.ts`
-  (per-genus leaf-out, autumn and leaf fall), `building-tint.ts` (the
-  per-building clay tint, storey height, roof palette), `windows.ts`
-  (each building's window rhythm — measured, a neighbour's or its
-  type's — and each wall vertex's place on its wall), `small-buildings.ts`
-  (the scan's sheds as boxes; the canopy points they veto),
-  `structures.ts` (the columns, missing buildings and roof-relief height
-  fields DOM1 shows beyond LoD2, as meshes), `landmarks.ts` (the site's
-  Wikidata landmarks for the HUD and the vantage it glides to),
-  `valley-fog.ts` (the valley haze's depth from the site's ground relief),
-  `source-matrix.ts` (the *Sources by city* table: per site and drawn
-  layer, the source and how good it is — ADR 0039), `markings.ts`,
-  `cultivated.ts`, `tram.ts` and `skyview.ts` (the pure halves
-  of those layers), `site.ts` (the
-  site type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
-  extras), `landcover.ts` (the classes and the one palette), `sport.ts`
-  (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
-  (the per-object table: packing, demolish, footprints; the LoD2 bridge
-  slabs it leaves out), `object-facts.ts` (the table's fact columns: the
-  Building's `gml:id`, use, roof, height, OSM name/address/storeys), `bridge.ts` (ribs, pylons, the arch through a
-  measured rib, piers clear of the fairway), `decks.ts` (the deck lift
-  table: which deck tops lie under a point), `levels.ts` +
-  `line-levels.ts` (which level a rail or tram line runs on — ground,
-  deck, span, cut — decided along the whole line within its grade, solved
-  by the build with each piece's context across tiles; ADR 0041),
-  `line-profile.ts` (each line's profile within its grade and vertical
-  curve, the `lz` the build publishes) + `track-beds.ts` (the ground the
-  terrain bake lays under a line's bed, the beds the ballast drapes on;
-  ADR 0052), `platform-clearance.ts` (a platform cut back to its edge
-  distance from the tracks, a DLM centreline off the platforms) +
-  `track-formation.ts` (a LoD2 top a track runs on lowered to its bed),
-  `passages.ts` (a cut under a deck opened in the terrain), `tile.ts` (each
-  tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
-  write, checked against every committed file by its test) with `bun test`
-  units alongside
-- `sites/` — one config per place (`dresden.ts`, `leipzig.ts`, …: name,
-  label, tiles, viewpoints, the provider) registered in `index.ts`, and
-  `providers.ts` — one entry per Land (CRS, licence + credit, open products,
-  OSM extract, the `land` the start page names). `REFERENCE_SITE`
-  (`dresden`: its data is committed, `/wissen` describes it, the checks
-  measure it), `siteById`, `isSiteId` and `siteFromArgs` (the CLI's first
-  argument) live in `index.ts` (ADR 0026, 0037)
-- `app/page.tsx` — the start page: a card per built city (its land-cover
-  map, Land, area, viewpoints) and the way to `/wissen`;
-  `app/[site]/page.tsx` — the viewer route, one per built site
-  (`generateStaticParams`; an unknown or unbuilt site is a 404; `/city`
-  redirects to `/dresden`); `app/_lib/built-sites.ts` reads
-  `public/data/sites.json` at build time (falling back to the reference
-  site); the index's shape is `lib/city/site-index.ts`
-- `app/(legal)/` — `/impressum` and `/datenschutz` (ADR 0045): MDX pages
-  (`impressum/page.mdx`, `datenschutz/page.mdx`) compiled by `@next/mdx`
-  (`mdx-components.tsx` at the root), linked from every footer and the
-  viewer's sidebar (`app/_components/legal-links.tsx`). `<ReportsChoice />`
-  in the privacy page is the reports' opt-out switch
-  (`app/_components/reports-choice.tsx`, kept by
-  `app/_components/report-choice.ts`)
-- `pipeline/` — the offline pipeline, one Python package in a uv environment:
-  the fetch (`bake/fetch.py`; `providers/{sn,nw,by,hh,be}.py` are the
-  per-Land adapters; `rasters.py` mosaics/clips to our tiles, `citygml.py`
-  converts LoD2 CityGML → CityJSON, `net.py` downloads incl. single members
-  of remote ZIPs) and the bakes (`landcover.py` + `landcover_osm.py`,
-  `canopy.py`, `trees.py` (+ `tree_archetypes.py`, `cadastre.py` for the
-  street-tree register), `lowveg.py` (+ `lsc.py`, the laser scan's rasters),
-  `small_buildings.py` (the sheds and garden houses LoD2 lacks, appended
-  to the city mesh), `structures.py` (DOM1 − max(DGM, LoD2 roof) where
-  OSM names it: chimneys, towers, masts, missing buildings, a landmark's
-  roof relief), `landmarks.py` (Wikidata's notable buildings matched to
-  LoD2 objects; its fetch caches the SPARQL answer), `ndvi.py`, `roof_colour.py`
-  (+ `dop_light.py`: the flight's shadows and sun, so a roof is read in sun;
-  `dop_lean.py`: how far the image leans each roof off its outline),
-  `roofs.py` (a LoD2 roof that misses DOM1 — the free-form roofs of
-  complex buildings, the 3 m placeholders of new ones — rebuilt in the
-  scan's form, flat levels and measured faces (pitched roofs, vaults,
-  domes), which the build puts in its place, `scripts/measured-roofs.ts`;
-  ADR 0036), `passages.py` (OSM's `tunnel=building_passage` ways through
-  the LoD2 footprints: the archways and drive-throughs the build cuts
-  open and lines, `lib/city/building-passages.ts`), `lamps.py`,
-  `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`, `rail.py` +
-  `bridge.py` (the deck and superstructure measured in the surface model,
-  the fairway clearance, Wikidata) + `rail_osm.py` (rails, ballast and
-  bridge ways from OSM where the provider has no Basis-DLM), `surface.py`, `edges.py`, `sport.py`, `markings.py`, `cultivated.py`,
-  `skyview.py`, `osm_buildings.py` (shops, heritage, material and
-  colours per LoD2 object; the walls' `context`, brick or plaster as the
-  neighbourhood is mapped),
-  `tram.py`, `riverside.py`,
-  `traffic.py` (the counted traffic; its sources per site in
-  `traffic_sources.py`), `transit.py` (the trams' timetable, once for the
-  site), `osm.py` (+ `osm_index.py`: the extract read once into an
-  indexed FlatGeobuf copy beside it, the driver's own answer per read);
-  `step_cache.py` (a step whose code and files are unchanged is skipped;
-  `Ledger` judges a file a later step rewrites);
-  tests in `pipeline/tests/`. Run by
-  `bun run fetch <site>` / `bun run bake <site>` (`scripts/pipeline.ts`, which hands
-  Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0037
-- `scripts/` — the build step: `prepare-sites.ts` runs `prepare-data.ts
-  <site>` for every site whose data is ready (or only the ids it is given),
-  side by side within the cores and the memory (`warmers.ts`; one process
-  per site; `PREPARE_WARMERS=1` bakes a site with more than four tiles one
-  tile per process — no gain measured on Vercel's 4-core builder, so off
-  by default; `PREPARE_JOBS`, `PREPARE_MEMORY_GB` override), writes the index
-  `public/data/sites.json`
-  and prunes the folders of sites no longer built; `prepare-data.ts` bakes
-  one site's committed
-  artifacts into `public/data/<site>/` as a **3D Tiles tileset** (`tileset.json`,
-  `tileset-spawn.json`) with glTF content under content-hashed names +
-  `manifest.json` — per tile the buildings (`bake-city-mesh.ts` runs the
-  CityJSON loader and, `cityMesh`, turns it into glTF with a per-object
-  property table) and the terrain at two levels (`bake-tiles.ts`; fine: an
-  error-bounded TIN of the native DGM, `bake-terrain-tin.ts`, the walls snapped to its
-  measured steps; coarse: the DGM resampled to 512², the wall breaklines
-  burned in), written by `tile-glb.ts` (meshopt, quantised,
-  `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
-  `pipeline.ts` (fetch/bake runner), `site-report.ts` (`bun run site`),
-  `downsample-raster.ts` (the 2048², 1024² and 512² class rasters),
-  `coarse-crowns.ts` (a tile's coarse crowns from its tree files),
-  `bake-wissen-hero.ts`
-  (the site's land-cover map, `site-map.webp`),
-  `sentry-release.ts` (after `next build`: the build's Sentry release,
-  its commit and deploy — a no-op without `SENTRY_AUTH_TOKEN`),
-  `render-diagrams.ts`, `docs-matrix.ts` (`bun run docs:matrix`, the
-  generated *Sources by city* pages)
-- `data/<site>/` — the site's data: `dgm/`, `cityjson/` (build sources),
-  `dlm/`, `dop/` (derived), `provenance.json`. Dresden, Grimma, Hamburg,
-  Leipzig, Meißen, München and Unna are committed (each un-ignored by name
-  in `.gitignore`); a new site's folder stays ignored until the maintainer
-  un-ignores it (ADR 0037). No file is near GitHub's limits (the largest,
-  a LoD2 tile, is 16 MB), so no Git-LFS. `data/_raw/<provider>/` is
-  **gitignored** bulk downloads, shared by the provider's sites (the
-  Wikidata answers too: `wikidata/{bridges,landmarks}_<tile>.json`).
-  `public/data/` is generated, gitignored. A deployment serves exactly the
-  sites whose `data/<site>/` is present where it builds.
-- `app/wissen/` — the knowledge base on the site: `docs/` prerendered as
-  pages (`[[...slug]]/page.tsx`, the entry in `_components/landing.tsx`,
-  Markdown pipeline in `_lib/markdown.tsx`, the zoom dialog in
-  `_components/diagram.tsx`, the typeset preset and diagram tokens in
-  `wissen.css`; the prose rules themselves are shadcn/typeset, vendored as
-  `app/typeset.css`); `lib/docs/` is its pure core (file → route, link
-  rewriting, menu order, diagram keys and theming),
-  `scripts/render-diagrams.ts` renders the Mermaid blocks to
-  `docs/diagrams/`, and `scripts/bake-wissen-hero.ts` bakes each site's map
-  picture (`site-map.webp`; the pages show the reference site's) inside
-  `prepare-data.ts` — see ADR 0021
-- `e2e/` — `city-walk.spec.ts` (smoke), `wissen.spec.ts` (the docs pages)
-  and `snapshot-shot.spec.ts` (QA harness)
+- `app/_components/` — the viewer. Spine: `create-app.ts` (scene, loop,
+  handle), `tile-stream.ts` (streaming and the per-tile dressing plugin),
+  `post-stack.ts`, `camera-pose.ts`, `scene-status.ts` (what the HUD
+  reads), `poc-debug.ts` (the `window.__poc` QA hook). Each layer is a
+  `*-layer.ts`; each file's head comment says what it does.
+- `lib/city/` — pure, DOM-free logic with unit tests beside it.
+- `sites/` — one config per city, `providers.ts` one entry per Land.
+- `pipeline/` — the Python fetch and bakes; adapters per Land in
+  `pipeline/bake/providers/`.
+- `scripts/` — the build step (`prepare-sites.ts`, `prepare-data.ts`,
+  the glTF bakes) and the dev CLIs.
+- `data/<site>/` — committed build sources and derived files;
+  `data/_raw/` gitignored downloads; `public/data/` generated.
+- `app/[site]/`, `app/page.tsx`, `app/wissen/`, `app/(legal)/` — the routes.
+- `docs/` — the knowledge base ([README](docs/README.md)): ADRs, plans,
+  `rendering.md`, `data-pipeline.md`, `transformations.md` (the ledger of
+  every data → look transformation), the bilingual guide.
+- `e2e/` — Playwright specs and the snapshot harness.
 
-The **`city-walker` skill** (`.claude/skills/city-walker/`) is the project's
-deep reference — scene architecture, the full shadow recipe + its dead ends,
-terrain/vegetation/surfaces, the data pipeline, and the QA harness. Load it for
-any non-trivial rendering, data, or perf work. The `.claude/skills/threejs-*`
-skills are generic three.js references. There is no `SPEC.md`; these are the
-source of truth.
+## Skills
 
-- `docs/` — the **knowledge base**. Start at [docs/README.md](docs/README.md).
-  - [rendering.md](docs/rendering.md) (scene graph, the attribute → visual
-    codebook, light/post, budgets, boot) and
-    [data-pipeline.md](docs/data-pipeline.md) (bakes, build step, artifact
-    contracts, sizes, provenance, regeneration) — the developer overviews;
-  - [data-flow.md](docs/data-flow.md) (source→feature provenance diagram),
-    [transformations.md](docs/transformations.md) (the ledger of every
-    built/experimental/planned/**discontinued** transformation),
-    [portability.md](docs/portability.md) (rendering other locations with
-    more/less data);
-  - [adr/](docs/adr/README.md) — architecture decision records: *why* the
-    load-bearing choices were made and which alternatives lost;
-  - [plans/](docs/plans/README.md) — implementation plans, the backlog and
-    the audit history. **Plans live here, not in a root `plans/`**: the
-    `improve` skill writes to `plans/` by default — move or point its output
-    to `docs/plans/` and reconcile against that README;
-  - [guide/](docs/guide/README.md) — user-facing pages in English **and
-    German** (how it works, data sources, the data's journey, using the
-    viewer, glossary). Written for non-developers; keep both languages in
-    sync when a user-visible fact changes.
+- **`city-walker`** — how the scene, the shadows, the ground, vegetation,
+  the pipeline and the QA harness are built. Load it for any non-trivial
+  rendering, data or performance work.
+- **`new-scene-layer`**, **`new-bake-step`**, **`add-city`** — the
+  checklists for the three most common additions.
+- **`docs-upkeep`** — what a change must update in `docs/`, how to write an
+  ADR.
+- **`pr-snapshots`** — the snapshots a visual PR carries.
+- `threejs-*` are generic three.js references; in this repo only their
+  WebGPU/TSL parts apply.
+- `improve` writes plans to a root `plans/` by default: point it at
+  `docs/plans/` and reconcile with that README.
 
-  Roles: AGENTS.md = orientation, skill = how it's built, `docs/` = what it
-  shows, what maps to what, why, and what is next. The site publishes
-  `docs/` under `/wissen` (guide) and `/wissen/dev` (the rest): keep writing
-  it for GitHub, and run `bun run docs:diagrams` when a Mermaid block
-  changes.
+## Hard rules
 
-## Coordinate system (read before touching geometry)
+Breaking one of these breaks something that tests may not catch.
 
-Source data is ETRS89/UTM — **EPSG:25833** for Saxony and Berlin, **25832**
-for Hamburg, Bavaria and NRW (the provider sets it) — Z-up. A parent `world` group is rotated −90° about X so
-data-Z (elevation) becomes scene-Y (up). Mapping: `x = epsgX − cx`,
-`z = −(epsgY − cy)`, `y = elevation`, where `(cx, cy)` is the shared recenter
-offset (captured at bake time from the spawn tile's CityJSON, carried in the
-tileset's extras, so all tiles align). The glTF content is Y-up; the
-renderer's up-axis turn cancels the `world` rotation, so a tile's content
-root **is** the Y-up scene frame. **Vegetation and other dressing live in the
-Y-up frame, never inside the rotated `world` group itself** — adding Y-up
-coords into the rotated group applies the transform twice (trees shoot
-skyward). Positions in the glTF are quantised (not metres): shaders that need
-data-frame coordinates derive them from world space (`shader-chunks.ts`,
-world (x, y, z) = data (x, −z, y)). Tiles are 2 km and named
-`<zone><EEE>_<NNNN>_2<suffix>` (the provider's `tileSuffix`, e.g. `_sn`);
-Dresden's spawn tile is `33412_5656_2_sn`. The viewer streams
-every tile of the site around the camera; collision, demolish and picking
-work on every loaded tile.
+**Frame.** Data stays in the provider's UTM (25833 Saxony and Berlin,
+25832 Hamburg, Bavaria, NRW). `x = E − cx`, `z = −(N − cy)`, `y` = height;
+a −90° X-rotated `world` group turns data-Z up, and tile content is Y-up.
+Dressing lives in the Y-up frame, **never inside the rotated group**. glTF
+positions are quantised: shaders derive data-frame coordinates from world
+space (`shader-chunks.ts`). The glTF extras key is `tileId`, never `tile`
+(the renderer writes `userData.tile` itself). See ADR 0005.
 
-## Data pipeline
+**Rendering** (ADR 0027; details in the `city-walker` skill):
 
-Bulk raw downloads (DLM ~5 GB, DOM1, DOP, OSM `.osm.pbf`) **must not be
-committed** — they live in `data/_raw/<provider>/{dom1,dop,dlm,osm,downloads}`
-(gitignored; `bun run fetch <site>` fills it through the provider's adapter).
-The build sources are the **DGM1 GeoTIFF per tile** and the **CityJSON**
-under `data/<site>/{dgm,cityjson}`: `prepare-data.ts` bakes terrain and
-buildings from them and the canopy/rail bakes read the DGM. Dresden's are
-committed (13–15 MB DGM per tile, as downloaded); the fetch step writes new
-ones compact (~6 MB). Committing another site's folder is the maintainer's
-call (ADR 0037). No Git-LFS. Derived per-tile artifacts
-(`data/<site>/dlm/*.png|json|geojson`, `data/<site>/dop/*.json`) are small;
-`prepare-data.ts` publishes them to `public/data/<site>/` at build. Pipeline notes:
+- Node materials on public API only: no GLSL, `onBeforeCompile`,
+  `ShaderMaterial`, prototype patches or `_` members. Import from
+  `three/webgpu`, `three/tsl`, `three/addons`; `lib/` keeps `three` for math.
+- A fixed look strength is a named constant node; anything that moves is a
+  shared uniform's `.value`. Fog is `scene.fogNode` only.
+- Never `InstancedMesh`: use `Instances` (`drawCount`, `instanceTints`).
+  A material without per-tile data is a `sceneMaterial`.
+- WebGPU draws from at most **eight vertex buffers**, and the clay is
+  **two inter-stage variables short** of sixteen. Past either a mesh
+  vanishes on WebGPU while WebGL2 (the headless e2e) still draws it.
+- A TSL `select` and a `Loop` body are scopes: in per-pixel graphs use
+  `mix`/`step`, and take what a loop reads into a `toVar()` before it.
+  A packed word or a hash seed reaches the fragment as a FLAT varying.
+- Everything a tile brings is built in the dressing plugin's
+  `processTileModel`, compiled before it shows, and freed in `disposeTile`
+  — never in `bootApp`. Freeing is on us; what a tile adds beyond its glTF
+  reaches `calculateBytesUsed`; the rules for shared buffers and dropped
+  CPU copies are in the `city-walker` skill, "Tiles".
+- Nothing reads a building tile's CPU positions or index while
+  `bvhBuilding` says so; rays against buildings go through
+  `nearestCityHit`, `cityObjectsAlong` or the collider.
+- Anything added after the first frame calls `invalidateShadows()`.
+  Animated geometry never reaches the shadow map (ADR 0009).
+- Buildings are one opaque clay; no `transmission` in the scene. Picture
+  styles are a post pass (ADR 0010, 0034).
+- A post pass reads the camera through `view-lens.ts`; a direction comes
+  from `viewDirection()`, a pick ray from `setPickRay` (ADR 0044).
+- A new streaming need registers against the stream's twin camera, not the
+  camera (ADR 0024). Nothing sets `camera.position` outside
+  `camera-pose.ts` (ADR 0032).
+- **A phone's memory must not grow with a change** (ADR 0047).
 
-- **The bakes are Python, in their own uv environment** (`pipeline/`,
-  `uv.lock`; ADR 0025). numpy, rasterio, pyogrio and shapely are there, and
-  GDAL comes inside the wheels (with the OSM driver): fix the environment,
-  don't bend the code around a missing tool. `bun run bake <site>` passes each
-  tile's extent and CRS from the site config; the steps run land cover
-  first (the canopy, lamps and street furniture are gated on it), then
-  `rail` (its bridge decks keep the canopy, furniture and tram off them). `bun run test:pipeline` and
-  CI's `pipeline` job run pytest + ruff.
-- A provider without an open Basis-DLM (Hamburg, Berlin) gets the same class
-  raster, legend and veg rows from OSM (`landcover_osm.py`), and its
-  rails, ballast and bridge decks from OSM too (`rail_osm.py`, the deck
-  heights still measured in DOM1); the statues and stones are then off.
-  A Land without an infrared DOP (Bavaria) gets a visible-band vegetation
-  index (GLI) in place of the NDVI. `Provider.products` decides which
-  steps run; the generated `docs/guide/*/sources-by-city.md` marks every
-  stand-in per city (ADR 0039). No per-site look switches: a look that
-  differs between cities (facade material, haze depth, tram gauge) is
-  derived from the city's data, not added to `Site`.
-- `landcover.py` bakes **only class ids** (4096² 8-bit PNG + legend); the
-  colours are `lib/city/landcover.ts`, painted on the GPU at runtime
-  (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
-- `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
-  them on the class raster so no tree sits on a road, bridge or water.
-- `trees.py` bakes the site's street-tree cadastre (`Site.treeCadastre`:
-  Dresden, Hamburg, Leipzig, Berlin — each a WFS and a field mapping in
-  `cadastre.py`; `bun run fetch <site>` caches the city's WFS per tile through
-  it); `lowveg.py` the OSM hedges at their laser-scan height and
-  the scan's trees outside the canopy mask, thinned against the cadastre.
-  The laser scan (`data/_raw/<provider>/lsc/<tile>.laz`) is fetched by
-  `bun run fetch <site> --lsc` where the provider's adapter reads one
-  (`products.lsc`: Saxony, and NRW, whose four 1 km files a tile are
-  merged by `lsc.merge_laz`) or put there by hand, and rasterised in
-  Python (`lsc.py`, laspy — no PDAL); without it the step is OSM only.
-- `monuments.py` takes the monuments (statues, stones, columns, named
-  fountains) from the Basis-DLM (`sie03_p`, official names) and the fountain
-  basins from OSM `amenity=fountain`; a DLM monument inside an OSM basin
-  names that fountain. A monument's form is its measured nDOM patch
-  (`relief`, when it stands clear of trees/facades), smoothed at runtime —
-  never an invented figure.
-- All OSM layers (walls, cliffs, stairs, lamps, street furniture,
-  fountains, platforms, bridge structure, paving) come from the site's
-  Geofabrik `.osm.pbf` via GDAL's OSM driver — no Overpass. `furniture.py`
-  turns a bench without a tagged `direction` towards the nearest highway line.
-  What lies below ground is not drawn on the terrain: OSM platforms and
-  tram ways under it are skipped (`osm.below_ground`, `osm.in_tunnel`),
-  and `rail.py` cuts a DLM rail that runs along a DLM tunnel (Munich's
-  U-Bahn, Leipzig's City-Tunnel).
-- Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
-  note (the runtime falls back); rail decks fall back to the DGM ramp.
-- **Every tile carries the same baked files** — `lib/city/tile-data.test.ts`
-  fails when one tile has a kind of file another lacks. The runtime treats a
-  missing optional artifact as "layer off", so without that test a tile
-  added before a new bake step (or a step run on some tiles only) ships
-  quietly poorer. After merging a new step, or adding a tile, bake it on
-  every tile the test names; a step that finds nothing writes an empty file.
-- `prepare-data.ts` downsamples the class raster to 2048² (a phone's fine
-  terrain), 1024² (the coarse terrain, every tier) and 512² (the minimap)
-  with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
-  through an image resize any more (sharp premultiplies alpha — that once
-  painted the ground black). Nor through the browser's image decoder: the
-  class and NDVI PNGs are inflated byte-exact by `lib/city/png-raster.ts`
-  (WebKit colour-manages untagged greyscale even with
-  `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
-  with neighbouring classes).
-- `prepare-data.ts` caches by content in `.cache/prepare-data` (on Vercel
-  `.next/cache/prepare-data`, the folder its build cache keeps; a cold run
-  of all seven sites 235 s on Vercel's 4-core, 8.6 GB builder, warm ≈ 3 s
-  for Dresden; CI restores it between runs; entries are written whole,
-  `bake-cache.ts`, and each tile's fine ground is one of them,
-  `ground-pack.ts`): the key covers the inputs'
-  contents, `COMMON_SOURCES` (`prepare-data.ts` itself, the site's own
-  config, `sites/providers.ts`, `patches/`), every module reachable from
-  the artifact's bake entries (`scripts/bake-sources.ts` walks the
-  imports) and what `bun.lock` resolved for the packages those modules
-  import, with their dependencies (`lockedVersions` — not the whole
-  lockfile, so a viewer-only bump re-bakes nothing). Those entries **are listed by hand** in
-  `prepare-data.ts` (`GROUND_BAKE`, each `bake` array, the `entries` passed
-  to `cacheKey`): a module it calls for an artifact must be one of them or
-  imported from one, or that artifact's cache goes stale. Another site's
-  config re-bakes nothing, a palette colour only the map picture; the glTF quantisation and meshopt settings live in
-  `scripts/tile-glb.ts`, the gzip (Bun's libdeflate) in `prepare-data.ts`.
+**Ground and lines.** Every part that stands on the ground uses
+`lib/city/ground-join.ts` and reports its `joins` (ADR 0030). A rail or
+tram line takes its level and profile from the build (`lineLevelsAt`,
+ADR 0041).
 
-## Rendering gotchas (hard-won — don't relearn these)
+**Data.**
 
-**Everything is a node material, on public API** (ADR 0027). No GLSL,
-`onBeforeCompile`, `ShaderMaterial` or custom depth material, and no patching
-of three's internals (no prototype patches, no private `_` members): a look
-term is a TSL node (`colorNode`, `normalNode`, `emissiveNode`, `aoNode`,
-`receivedShadowNode`, `maskNode`, `positionNode`, `castShadowPositionNode`),
-a fixed look strength is a constant node named after its term (`TINT`,
-`WINDOWS`, … — ADR 0017), a slider (only *Nebel* is left) or anything
-else that moves is a shared uniform node's `.value` (no rebuild), fog is
-`scene.fogNode` (`height-fog.ts`; never per material — opt out with
-`material.fog = false`). Import from `three/webgpu` (the core re-exported with
-the node materials), `three/tsl` and `three/addons`, never plain `three` in
-the viewer (lib/ keeps `three` for math). What keeps node builds (TSL → WGSL,
-main thread) out of the frames:
-- **Never `InstancedMesh`** — three builds every one separately (its uuid is
-  in the build key). Use `Instances` (`instancing.ts`): a plain `Mesh` over an
-  `InstancedBufferGeometry`, matrices and colours as named attributes, so
-  every set with the same material and layout shares one build. The material
-  applies the transform (`positionNode = instancePosition()`) and the colour
-  (`instanceTint()`); `drawCount` replaces `count` (a `count` above 1 puts the
-  uuid back), `instanceTints` replaces `instanceColor` (three multiplies any
-  object with an `instanceColor` by an InstancedMesh-only varying).
-- **A material without per-tile data is a `sceneMaterial`** (`three-utils.ts`,
-  `userData.shared`): one build for the site. `disposeMaterial` skips it.
-- **The scene renders top-level into its own target** (`post-stack.ts`) and
-  the post pipeline reads it: three keys a build by render context, and a
-  context by target *and call depth* — a scene `pass()` nested inside the
-  pipeline would never match what `compileAsync` prepared.
-- **Tiles and dressings compile before they show** (`PostStack.compile`, one
-  drawable per material and attribute layout). The shadow pass's pipelines
-  for new casters still compile in the frame that first draws them — there
-  is no public way to build them ahead (`compileAsync` skips the shadow
-  map, which is drawn one call depth below it; spiked 2026-10-11,
-  docs/plans/README.md) — and the WebGL2 backend compiles synchronously —
-  measure before adding machinery (`getRenderInfo().framedBuilds` counts
-  the builds a frame makes, the shadow pass's apart).
-- **A `ClippingGroup` switch rebuilds everything under it.** three keeps
-  one render object per drawable for both sides and keys its build by the
-  clipping, freeing the side a switch leaves; a compile that does not walk
-  through the group builds the wrong side. Modell's Ausschnitt shows only
-  once `PostStack.holdCut` holds both sides (`aloneUnder`), and leaves its
-  shadows unclipped.
-- WebGPU has no 1-component 8/16-bit vertex formats (the feature id is
-  baked as FLOAT; the roof flag rides in the windows' snorm16 `_FACADE`),
-  and draws points 1 px wide (the lamp halos are sprites).
-- **WebGPU draws from at most eight vertex buffers** (the default limit;
-  three asks for no more), and every non-interleaved attribute is one —
-  `position` and `normal` included. A ninth makes the pipeline invalid and
-  the mesh simply does not draw, while WebGL2 (sixteen, the headless e2e's
-  backend) draws it: pack scalars into vec4s (`traffic-flow.ts`
-  `TRAFFIC_ATTRIBUTES`; `traffic-layer.test.ts` holds the count).
-- **The clay is two varyings short of WebGPU's limit**: of sixteen
-  inter-stage variables, `front_facing` takes one (and the Ausschnitt's
-  clip distances one on the vertex side), and the clay passes thirteen
-  of the other fifteen. A new value per building or per vertex rides in
-  a varying it already passes; past fifteen the buildings vanish on
-  WebGPU while WebGL2 still draws them (ADR 0049).
-- **A TSL `select` is an if/else in the shader.** three builds each arm in
-  its own scope: what an arm builds first is built again where it is used
-  outside, and a derivative or texture read first built in an arm runs in
-  non-uniform control flow (three turns WGSL's uniformity check off, so
-  nothing says so). In a per-pixel graph use `mix`/`step` with safe
-  denominators; a select whose arms are constants is harmless.
-- **A `Loop`'s body is a scope too.** A node shared with the rest of the
-  graph and first built inside the loop is assigned there, so only when
-  the loop runs: the water's foam loop (no foam line on the tile: no
-  iteration) left the waves' position at 0, and the Elbe lay flat on
-  every tile without a weir beside a rippling one. Take what a loop reads
-  of the fragment into a `toVar()` before it (`foamAt`, water-layer.ts).
+- Raw downloads (`data/_raw/`) are never committed; no Git-LFS.
+- Every tile carries the same baked files (`lib/city/tile-data.test.ts`);
+  a step that finds nothing writes an empty file.
+- `prepare-data.ts` lists each artifact's bake entries **by hand**; a
+  module an artifact needs must be one of them or imported from one, or
+  its cache goes stale.
+- Nothing whose alpha or values carry data goes through an image resize or
+  the browser's image decoder; class rasters are NEAREST and decoded by
+  `lib/city/png-raster.ts`.
+- OSM only from the local extract, never Overpass; a bake reads the network
+  only at fetch time (ADR 0012).
+- No per-site look switch: derive it from the city's data (ADR 0012).
+- Attribution is part of the data: keep the credits in the HUD footer, the
+  `attribution` members, the guide's licence table and `NOTICE`.
 
-**Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
-5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈
-hard, so soft shadows require **explicitly raising `shadow.radius`**. The working recipe (see
-`sun-rig.ts`): `PCFShadowMap` + a raised `shadow.radius`; terrain
-**`castShadow = false`** (it only receives — a casting terrain self-shadows
-into triangle/staircase acne at grazing sun); `normalBias = 0` (it offsets the
-flat ground's sample toward the light → the bright peter-panning contact strip;
-safe at 0 because terrain doesn't cast and buildings/trees cast via back faces,
-so lit faces never self-acne); a small negative `bias`; and a tight,
-camera-following frustum on a right-sized map (finer texels = cleaner edges),
-its colour target one byte (`OneByteShadowNode` as `light.shadow.shadowNode`:
-keep `renderer.shadowMap.transmitted` off).
-**VSM rings** ("corduroy"/grid) on large ground planes at grazing angles — avoid
-it here. Past the frustum the ground's shadows come from a baked horizon map (two
-bands, ADR 0031); their *shapes* there (and on facades) remain a job for
-Cascaded Shadow Maps.
-
-**The shadow frustum is not fixed** (`lib/city/shadow-fit.ts`). A 121 m
-half-size is right at eye level and wrong in fly mode: from 200 m up it covers
-a patch of ground directly below the camera that is barely on screen, so the
-whole view renders unshadowed. The half-size therefore grows with altitude, in
-octaves of 110 m (220 → 880 m) with hysteresis, and the frustum is centred **on
-the ground**, pushed along the camera's world direction by a fraction of the
-extra radius. At eye level the offset is zero — turning on the spot never
-moves the frustum — and it re-centres only after the camera has drifted
-30 m (`WALK_DEAD_ZONE_M`; 18 % of the half-size above eye level and in
-Modell). That is the 110 m / 19.8 m it was until 2026-10-11, widened so the
-camera stays as far from every edge (91 m, was 90.2) with a third fewer
-redraws while walking, for texels 10 % coarser. Per-render cost is unchanged
-(same map size, same PCF); only the caster set grows. This is the cheap 90%
-of CSM, not a replacement for it.
-
-**Contact shadows (GTAO) are smoothed and never motion-gated.** GTAO
-leaves its 5×5 rotation noise to a denoiser: drawn raw it speckled every
-contact shadow and the whole horizon, so `aoSmoothed` (post-stack.ts)
-averages it out with a depth-aware 5×5 box at the AO's resolution — not
-three's DenoiseNode, which rebuilds normals per tap at full resolution. A
-0.15 m thickness keeps a leg or post from darkening the ground behind it.
- Skipping the AO pass while
-the camera moves made them blink on every footstep, which reads as a bug. The
-pass runs at half resolution (normals reconstructed from depth) — roughly
-what the skip used to save, paid every frame instead. Its sample count
-rebuilds the pass's material, so it is a **construction-time setting**
-(`aoSamplesFor`): a motion-keyed quality switch there trades a flicker for a
-rebuild hitch. DoF (desktop only: a phone does not build it, ADR 0047) is
-still dropped while moving — motion has already destroyed the bokeh — by
-switching between two prebuilt pipelines, never by
-swapping one pipeline's output node (that re-translates the whole graph).
-SMAA is the other way round: one SMAA, its input a texture binding the
-frame switches (`Antialiasing.read` in `post-stack.ts` — a bind group, not
-a build) between the lens blur's composite, the scene target (the contact
-shadows multiplied in after it) and `BeforeAA` — never a second SMAA
-(three more full-resolution targets), and nothing copies the frame for it.
-
-**Buildings are already batched.** Each tile's buildings are ONE glTF mesh
-(`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time
-and, `cityMesh`, writes it with a per-vertex feature id,
-`EXT_mesh_features`), so draw calls are already low and **BatchedMesh would
-not help** (and would break feature-id picking/demolish). Per-building data
-(tint, heights, roof colour, glow, roughness, the demolish tree) is **one row
-per object** in an `EXT_structural_metadata` property table, packed into a
-float texture the clay shader reads (`lib/city/city-mesh.ts`) — add a
-building attribute there, not as a vertex attribute. A word packed into
-bits there (the windows' style) or a value that seeds a hash (the
-roughness jitter) reaches the fragment as a **flat** varying
-(`setInterpolation(InterpolationSamplingType.FLAT)`): interpolated, even a
-value all three vertices share drifts by a few ulps, which past 2²⁰ reaches
-a word's low bits and which a hash magnifies into a new value every pixel
-(a loose grid's windows frayed at their sides). The perf bottleneck is
-**fill-rate** (post FX + shadow map), not draw calls.
-
-**Tiles come and go.** 3DTilesRendererJS loads and unloads tiles by
-screen-space error (`app/_components/tile-stream.ts`; two terrain levels,
-the coarse one's geometric error is `COARSE_TERRAIN_ERROR` in
-`lib/city/tileset.ts`). Everything a tile brings (dressing, BVH, materials,
-textures) is built in the dressing plugin's `processTileModel` and freed in
-its `disposeTile` — never in `bootApp`, or it leaks when the tile unloads.
-Before a tile or its dressing shows, its node materials are built and
-compiled with `compileAsync` against the scene pass's target
-(`PostStack.compile`, each drawable shown and unculled for the call) — add
-new per-tile objects inside that path, or they build inside a frame.
-**Freeing is on us, not on three or the tile renderer** (WebGPU keeps GPU
-state per drawable that WebGL never had). WebGPURenderer frees a
-drawable's render objects — its uniform buffers and bind groups — only on
-its material's `dispose` or its own `dispose` event, and a scene-wide
-material is never disposed; 3DTilesRenderer frees only the glTF's own
-materials (not the per-tile ones the dressing put on), and on a load it
-aborts after `processTileModel` it frees the textures alone — geometry a
-compile already uploaded would stay. So a tile's release runs
-`disposeObject3D` over its content (`releaseRenderState` dispatches the
-event), a released or aborted tile is freed by the plugin itself, and
-nothing released is compiled. Leak hunts: `handle.getGpuDebug()` sets the
-scene's buffers against three's `info.memory` (a gap that grows per visit
-to the same place is a leak; a steady one is the tile cache). What a
-tile adds beyond its glTF must reach the cache's weighing
-(`DressingPlugin.calculateBytesUsed`), and a phone's memory is watched
-by `lib/city/memory-governor.ts` — see docs/rendering.md, "GPU memory on
-a phone". A content's CPU copies go once its compile has uploaded them
-(`dropCpuCopies` over `cpuDroppable` / `cityCpuDroppable`, ADR 0047; a
-compile resolves only once every drawable under it is uploaded, those
-another compile had started too — `compile-lanes.ts`): **an
-attribute read on the CPU after the dressing, or first read by a material
-the tile's own does not use, stays off those lists** — met after the drop,
-three uploads an empty buffer. **A buffer the site shares**
-(`markSceneShared`: the coarse grid's and water's index) **is never on a geometry when
-that geometry is disposed** — three would destroy it for every tile;
-detach it first. A lost GPU reloads a safety level lighter, where the
-player stood (`gpu-recovery.ts`, ADR 0046).
-The terrain has no BVH: ground rays march the height function
-(`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
-triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`).
-**A building tile's BVH is built when a ray first needs it** (ADR 0050,
-`ensureCityBvh`), so a ray against the buildings goes through
-`nearestCityHit`, `cityObjectsAlong` or the collider, which ask only the
-tiles whose box the ray enters and build (or skip) a missing BVH — a
-plain `intersectObject(city.mesh)` on a tile without one is
-three-mesh-bvh's brute-force fallback over two million triangles. The
-tiles near the camera get theirs ahead in the BVH worker
-(`bvh-client.ts`): their positions and index are handed over meanwhile,
-so **nothing may read a building tile's CPU positions or index while
-`bvhBuilding` says so** — skip the tile or wait. The glTF extras key is **`tileId`**: the
-renderer writes `userData.tile` itself and would overwrite ours. The
-walk/fly camera does not stream itself: the renderer streams for its twin
-whose far plane ends where the fog does, on a phone at 2.2 km at the
-latest — not through Modell's dolly zooms, which back it kilometres away
-(`streamFarFor`, `lib/city/atmosphere.ts`; synced each frame
-before the update) — past the
-fog's end a tile shows nothing, and the camera's 6 km far plane loaded the
-site's every building tile in that direction as fog colour; register a new
-streaming need against that twin, not the camera. The sun's shadow camera is a second
-streaming camera while the sun is up, so tiles that cast into the view stay
-loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`;
-on a phone never, `shadowTilesStream`) — at 128 px on a desktop
-(`SHADOW_STREAM_PX`), not the map's resolution: an orthographic camera's error ignores distance, and at
-2048 px it refined the terrain under its whole frustum;
-`displayActiveTiles` keeps loaded tiles drawn while turning.
-
-**Vegetation** is chunked into 250 m cells (one `Instances` set per cell) so
-off-screen chunks frustum-cull out of both the main and shadow pass. After
-`setMatrixAt`, you **must** call `instanceMatrix.needsUpdate = true` and
-`computeBoundingSphere()` or the whole cloud gets wrongly culled when the origin
-is off-screen.
-
-**Buildings render in exactly one style: the opaque "clay"** (`visual-style.ts`
-— archviz clay plus the facade-detail shader).
-The earlier "ghost" (`MeshPhysicalMaterial.transmission`) and "standard" (the
-loader's raw LoD colours) styles were removed. Keep transmission out of the
-scene: it re-renders everything into a buffer each frame (~2× cost). The
-*picture* styles (Comic, Film noir, Sin City, Papier; the HUD's *Bildstil*,
-key `V`) are not material styles: they are one post pass over the finished
-frame (`stylize-effect.ts`, ADR 0034), off in the default pastel look.
-Papier additionally swaps every surface for one white paper material for
-its frames (`paper-scene.ts`, `scene.overrideMaterial`, restored after the
-render; three carries each drawn material's `positionNode` over, so
-instanced sets stay put); `style-dressing.ts` likewise shows a style's
-crowns (sibling `Instances` on the originals' buffers and material — a
-visibility swap, one build) and lamp cones for its frames — layers only
-tag what may be dressed (`userData.styleCrown`, `userData.styleLampHeads`);
-both gather what they touch once per stream change
-(`PostStack.sceneChanged`), not every frame. The one sanctioned exception
-is the ground: the terrain material (`userData.paperOwn`) opts out of the
-override and draws Papier's paper, paint and water itself under the
-shared `paperGroundOn` uniform node. Give a new style a row in
-`lib/city/render-style.ts` and a mode in that node — never a branch in a
-scene material. No tier warms the styles any more (`postProfileFor`
-warms only the outline: on a phone the extra pipelines cost an iPhone tab
-its memory, and on a desktop every landing tile compiled Papier's
-programs for the session); a style builds on its first frame. Where a
-profile asks for `"all"`, `PostStack.warmStyles` prepares them all once
-the scene is idle: the styled pipelines build one per frame (a pipeline
-builds its graph and its SMAA passes on its first render), and the
-dressing and the scene's own objects are compiled under the Papier swap
-with `compileAsync` — no stand-ins: the override takes each source material's
-position node, so only the real objects match what a frame builds. The
-node's only branch is on the mode (a uniform); per pixel it selects, so
-derivatives and texture reads stay in uniform control flow (WGSL), and
-its uv runs from the top-left corner (three's quad), unlike the GLSL's.
-Its depth taps stay at
-integer texel radii (the buffer is read NEAREST; a fractional radius inks
-whole grazing streets).
-
-**The boot has two phases.** `bootApp` returns (and the overlay drops) as
-soon as the spawn tile's buildings and any of its terrain levels are on
-screen; `startStreaming` then opens the dressing gate, and vegetation,
-lamps and rails are built tile by tile behind a HUD chip (stairs, walls,
-kerbs and fences are baked into the fine terrain glTF and arrive with it)
-(the streaming pill). After the gate a terrain level that replaces its
-tile's other level on screen waits for its dressing before it counts as
-loaded, so the renderer keeps the old level (and its trees) drawn until
-the new one is complete (`DressingPlugin.handsOver`) — on a desktop, for
-up to 1.5 s; a phone does not wait (`handOverWaitMs`: the wait holds a
-parse slot, and a phone has two), and its coarse level's crowns stand in
-until its own trees hang (`DressingPlugin.standInCrowns`); a coarse
-level's dressing goes ahead of every fine one's (`COARSE_DRESSING_RANK`); the dressing is
-compiled off the scene and hung on the content root at the renderer's
-`load-model`, after it has recorded the content's materials.
-`onLoaded` flips it to `ready` once the
-spawn tile is dressed, the renderer is idle and no dressing is pending.
-Anything added to the scene after the first frame must re-render the shadow
-map (`invalidateShadows()`, which the stream's change handler does) and
-respect disposal, or it shows up as a missing shadow / a leak after a
-StrictMode remount. The e2e hook distinguishes `__poc.firstFrame` from
-`__poc.ready`; the lite profile streams `tileset-spawn.json` (the spawn tile
-only), and `?scene=lite&block=1` streams the whole site in lite to exercise
-the streaming headless.
-
-**Parts meet the ground by one set of rules** (ADR 0035,
-`lib/city/ground-join.ts`). The DGM1 rounds every step — kerb, quay wall,
-flight of steps, a bridge's abutment — into a 1–2 m ramp, so anything
-standing on it meets a ground whose edge is not where its own is. Feet go
-under by a row of `SINK` (never a new constant); a top's edge on the ground
-side ends at the ground (`meetGround`) or runs on until the ground reaches
-it (`reachLevel`); per-sample decisions are smoothed along the part
-(`farthestNear`; in the bakes a majority over a window, no run shorter than
-a minimum), never taken once per whole line. A builder returns `joins`
-(feet and edges, every metre along each span), and
-`scripts/ground-joins.test.ts` holds the baked parts' misses to budgets
-over the committed tiles — list a new baked part in `JOIN_PARTS`, test a
-runtime one with `checkJoins`, and say in its doc comment what happens
-where the ground beside it is higher and where it is lower.
-`bun scripts/ground-joins.ts <site>` prints the shares and the worst places.
-
-**Lines keep to a level they can drive** (ADR 0041, `lib/city/levels.ts`).
-A rail or tram line is never lifted onto whatever deck lies under a point:
-the build step (`scripts/line-levels.ts`, run by `prepare-data.ts`) solves
-each line's level along its whole run within its grade — the ground, a
-deck, a *span* over the gap the DGM leaves beside a bridge (the layer
-draws its deck), a *cut* through the fill under one (the terrain bake
-opens it under a drawn deck, `lib/city/passages.ts`) — and publishes it
-as `lv` in the rail and tram files, with each line's profile within its
-grade and vertical curve as `lz` (ADR 0052: the layers draw a baked line
-on it, and the terrain bake lays the ground under its bed — `shapeDgm`,
-the fine TIN to 3 cm there). A new line layer takes its levels the
-same way (`lineLevelsAt` in `rail-layer.ts`); `scripts/line-levels.test.ts`
-holds the reference site's jumps to a budget, `bun scripts/line-levels-cli.ts
-<site>` prints them. Both budget checks read their DGMs through
-`scripts/dgm-cache.ts`, which keeps each decode under `.cache/dgm/` by the
-TIFF's bytes — on under `bun test` and with `DGM_CACHE=1`, off in the build
-(CI's unit job restores it: ten seconds of LZW decoding per run).
-
-**Modell reads the camera through a lens** (ADR 0044). A post pass never
-holds the real camera: it reads `view-lens.ts`'s stand-in (projection,
-matrices, `ortho`, `equivalent`), so the same pipeline draws the
-perspective and the parallel (and sheared) camera. A new pass that turns
-depth into distance goes through `lens.viewZ`/`lens.distance`, a new ray
-through `setPickRay`, a new distance-keyed look through the equivalent
-distance, a material's view direction through `viewDirection()`
-(`view-direction.ts`; `eyeDirectionView()` beside `normalView`) — reading
-`camera.fov`, `camera.position`, or TSL's `cameraPosition`,
-`positionViewDirection` or `reflectVector` for a direction is a bug in
-Modell (a Militärperspektive looks in 45° off its camera's forward). Screen passes built on
-`NodeUpdateType.FRAME` (SMAA, GTAO) render once per animation frame:
-anything that renders the frame twice in one (the export's tiles) must
-spread over frames.
-
-**Verify renders from oblique angles**, not head-on — a tree growing through a
-bridge or a misplaced layer is invisible looking straight down.
+**Privacy.** A new request to a third party, a new report field or a new
+browser-storage key is not done until `app/(legal)/datenschutz/page.mdx`
+says so (ADR 0043).
 
 ## QA: self-verify, don't ask for screenshots
 
-**A PR that changes what the viewer shows carries JSON snapshots** in its
-description — views the reviewer pastes into the preview's Snapshot panel,
-before and after as a look-key pair where the change has a control (only
-*Nebel*, the crown switch, the style and the data layers have one); a
-change to the fixed look is a code change, judged by the same snapshots
-of place and time on the preview against production. The
-**`pr-snapshots` skill** (`.claude/skills/pr-snapshots/`) says how;
-screenshots are optional there.
-
-URL knobs: `?scene=lite` (the CI profile, below), `?gpu=webgl2` (the
-WebGL2 backend where WebGPU exists), `?safety=N` (0–3: the page at that
-safety level, nothing stored — ADR 0046), `?trail=1` (the crash trail's
-card always), `?trace=1` (the boot's and the stream's timings —
-`stream-timing.ts`, plan 069: each `tile:*`, `dressing:*` and `boot:*`
-span on the browser's *Timings* track with its tile id, the long tasks
-counted, and a `console.table` of the categories once loaded and 20 s
-later; never in the trail or the reports), `#at=lat,lng` (the off-site dialog's hand-off to another
-city's page: placed there after the first frame, then dropped — a
-fragment, so it never reaches the server or the crash trail).
-
-There is a **snapshot system**: the in-app Snapshot panel copies the full
-camera pose + sun time + the look's controls as JSON (an old snapshot's
-retired keys are ignored); `__poc.handle.getCameraState()`
-/ `applyCameraState()` replay it and `__poc.look.set()` drives the controls. To check a visual change on a **real GPU**, drop
-a snapshot JSON into `shots/` and run:
-
-```bash
-bun run shots
-```
-
-It writes a clean canvas plate (HUD hidden) to `shots/<name>.png` — read it and
-iterate yourself. The shots are taken at `/dresden`; `SHOTS_SITE=<id>` takes
-them in another built city. `shots/` is gitignored. The default headless e2e uses
-SwiftShader through the renderer's WebGL2 backend (headless Chromium offers
-no WebGPU adapter), which renders shadows/AA nothing like a real GPU, so use `--headed`
-for any lighting/shadow work.
-
-**Budget the e2e specs in frames, not seconds.** Under SwiftShader every pixel
-is shaded on the CPU. At the **full** profile this scene costs ~**14 s to boot**
-and ~**4 s per frame** at 1280×720 (measured on four cores). Anything that waits
-on rendered frames — the control walk uses `waitForFrames` — walks straight into
-the per-test timeout if it spends frames carelessly. Playwright runs a single worker on CI for the same reason: parallel
-viewer pages halve each other's frame rate. CI splits the suite over **three
-runners** instead (the `e2e` matrix in `.github/workflows/ci.yml`), by tag: the
-whole site with the shell and `/wissen`; the desktop HUD group
-(`@desktop-hud`) with the phone (`@phone`); the desktop rendering group
-(`@desktop-render`). Each desktop group boots its own page. The required
-status check "E2E (Playwright)" is the small job that reports them all. A new
-spec lands in the whole-site shard unless it carries one of those tags —
-keep the shards within about 1.5 minutes of each other. They are not now:
-the whole-site shard is the longest by 2–5 minutes (426–485 s against
-184–338 s for the other two on the last three runs on main, October 2026),
-because the whole-site spec alone takes 169–415 s; a cheaper whole-site
-boot, not a re-tagging, is what would close that (the rendering group
-shares one booted page and cannot be split by tag without a second boot;
-the workflow's comment has the runs).
-
-**The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
-[`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It streams
-the **spawn tile only** (`tileset-spawn.json`; the full-site boot was
-14 s → 4.4 s, 74 MB → 18 MB when this was measured), shadow-maps at
-**512²** instead of 3072², renders at **`pixelRatio` 0.5**, and runs GTAO
-at half the samples. Same loaders,
-same layers, same node materials — a quarter
-of the world and a quarter of the pixels. The knobs it does *not* touch are the
-ones a test asserts on. Two rules when you add a spec:
-
-- Drive the viewer at `/dresden?scene=lite`; only the "serves the viewer
-  shell" spec uses the bare route `/dresden`, and it never waits for the
-  scene to load.
-- Share a booted page across assertions (`test.describe.configure({ mode:
-  "serial" })` + a `beforeAll` context) rather than booting per test — the boot
-  is the single largest fixed cost left.
-- Wrap steps that only touch the HUD (sidebar tabs, buttons, drawers) in
-  `withFramesHeld` (`e2e/city-walk.spec.ts`): it sets `__poc.hold`, and the
-  render loop skips its frames while it is set. Every Playwright action waits
-  on animation frames (a click on two), and each scene frame holds the main
-  thread for half a second or more, so a single click used to cost seconds —
-  up to ten on a runner. Never wait on frames inside it.
-- A spec that boots its own page and needs no sidebar takes a small viewport:
-  with several tiles in view a SwiftShader frame is bound by its pixels (the
-  whole-site spec reaches `ready` in 54 s at 400×300, 156 s at 800×600).
-
-Lite is for headless CI, **never for looking at pixels**: for anything visual use
-the `--headed` snapshot harness below, at the full profile, on a real GPU.
-
-## Researching three.js releases
-
-The GitHub releases **HTML page is JS-heavy and WebFetch reads it poorly** (and
-training data lags). Use authoritative sources: `registry.npmjs.org/three/latest`
-for the current version, `github.com/mrdoob/three.js/releases.atom` for the feed,
-and `raw.githubusercontent.com/wiki/mrdoob/three.js/Migration-Guide.md` for exact
-API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
+- A PR that changes what the viewer shows carries JSON snapshots in its
+  description (`pr-snapshots` skill).
+- Visual work is judged on a real GPU: drop a snapshot JSON into `shots/`
+  and run `bun run shots`; read the plate and iterate. Verify from oblique
+  angles, not head-on.
+- Headless specs run `/dresden?scene=lite` (SwiftShader through WebGL2)
+  and assert presence, never pixels (ADR 0018). Budget them in frames, share
+  one booted page per group, wrap HUD-only steps in `withFramesHeld`, and
+  give a spec without a sidebar a small viewport. An untagged spec lands
+  in the whole-site CI shard, already the longest; tag it
+  (`@desktop-hud`, `@phone`, `@desktop-render`) where it fits.
+- URL knobs: `?scene=lite`, `?gpu=webgl2`, `?safety=0…3`, `?trail=1`,
+  `?trace=1`, `#at=lat,lng`.
 
 ## Conventions
 
-- TypeScript strict. No `any` without a `// reason:` comment.
-- Version pins: exact for the three.js stack (`three`, `@types/three`,
-  `three-mesh-bvh`, `cityjson-threejs-loader`, `3d-tiles-renderer`) and the glTF build tools (`@gltf-transform/*`,
-  `meshoptimizer`; `delatin` too — `ScaledDelatin` copies its private
-  `_findCandidate`, ADR 0052), the
-  framework trio and the lint/format tools (`oxlint`, `oxlint-tsgolint`,
-  `oxfmt` — oxlint declares a `>=` peer range on tsgolint, so bump them
-  together); caret for everything else. `suncalc` is
-  pinned exactly too — its 2.0 was a units/azimuth-origin break, so a silent
-  float would rotate the sun rather than fail. The Bun version comes from
-  `packageManager` in `package.json` (CI reads it via `bun-version-file`) —
-  except on Vercel, which installs and builds with its own Bun whatever the
-  pin (1.3.14 in October 2026; `prepare-sites` names it in the build log). A
-  cold Dresden bake was byte-identical and as fast on 1.3.14, 1.4.3 and 1.4.4
-  (2026-10-23), so the build does not pin it. And
-  `.mcp.json` pins the two npm MCP servers (shadcn, next-devtools) to an
-  exact version rather than `@latest` (Sentry's is hosted, a URL with no
-  version). In Claude Code on the web,
-  `.claude/hooks/session-start.sh` (registered in `.claude/settings.json`)
-  upgrades the container's older Bun to that pin and runs
-  `bun install --frozen-lockfile`: `Bun.WebView` (`bun run docs:diagrams`)
-  needs Bun ≥ 1.4, and an older Bun rewrites `bun.lock` on install. Bump the
-  pin and the hook follows; it does nothing outside the web container.
-- **One TypeScript, and it is 7.x (the native compiler).** `next build`
-  type-checks with it; `bun typecheck` runs `bun check`, Bun's port of the
-  same checker (all cores, no incremental cache: 0.5 s where `tsc --noEmit`
-  took 3.8 s cold, measured 2026-10-23 on four cores, with the same errors on
-  a probe file of thirteen kinds). tsc stays the gate: `next build` and
-  CI's Typecheck job (`bun run typecheck:tsc` beside `bun typecheck`) run
-  it, ADR 0019; `tsconfig.json`'s `incremental` cache once kept
-  reporting an error a dependency update had removed — delete
-  `tsconfig.tsbuildinfo` when tsc disagrees with `bun check`. Note what TS 7's
-  npm package *is*: a per-platform native binary plus a `tsc` launcher. It ships
-  **no `lib/typescript.js`**, so the classic JS compiler API is gone and any
-  tool that consumes it (typescript-eslint, the old tsserver) cannot run on it.
-  That is why ESLint is no longer here — see below. If you ever need that API
-  back, `@typescript/typescript6` is the shim that provides it. The same
-  applies to the editor: `.vscode/settings.json` no longer points
-  `js/ts.tsdk.path` at `node_modules/typescript/lib`, because there is no
-  `tsserver` there any more — let the TypeScript extension supply its own.
-- **No ESLint — oxlint replaced it.** typescript-eslint hard-crashes on TS 7
-  (`Cannot read properties of undefined (reading 'Cjs')`) and no channel of it,
-  canary included, accepts `typescript >=7`. oxlint needs no TypeScript at all
-  (it has its own Rust parser), so it cannot hit that wall. Coverage was checked
-  rule by rule against the 86 rules `eslint-config-next` had enabled here, and
-  all of them are reachable except **one**:
-  `@next/next/no-location-assign-relative-destination`, which oxlint has no
-  equivalent for (no current exposure — nothing here calls `location.assign`).
-  **Careful when auditing oxlint coverage**: `oxlint --print-config` lists only
-  the *enabled* rules, and its default is the `correctness` category alone —
-  the full catalogue is 653 rules (`oxlint --print-config -D all`). Several
-  rules you would expect are present but off by default, which is why
-  `.oxlintrc.json` names `react/rules-of-hooks`, `react/display-name`,
-  `react/no-unescaped-entities`, `react/jsx-no-comment-textnodes` and
-  `import/no-anonymous-default-export` explicitly. Do not re-add ESLint to
-  recover a rule without first checking the full catalogue.
-- Do not add a type shim for `three-mesh-bvh`: the package declares its own
-  `three` augmentation (`BufferGeometry.boundsTree`, `Raycaster.firstHitOnly`,
-  and `BatchedMesh` on top).
-- `tsconfig.json`'s `allowJs: true` is **not** removable — `next build`
-  rewrites the file to put it back, which would dirty the tree on every build.
-- **Markdown and MDX are excluded from oxfmt** (`.oxfmtrc.json`). It rewrites
-  `*em*` to `_em_` and, worse, strips the indent from continuation lines
-  inside list items, which detaches them from their bullet; in MDX it also
-  turns a `{/* comment */}` into `{/_ … _/}`. Prose here stays hand-wrapped.
-- **No CSS linting any more.** biome checked `app/globals.css` (unknown at-rules,
-  unknown units, descending specificity); oxlint does not lint CSS at all. oxfmt
-  still *formats* it. Accepted knowingly — revisit if oxc ships CSS rules.
-- `components/ui/**` is vendored by `shadcn add` — regenerate, never hand-edit.
-  Adding a component adds its dependency; removing one should remove it again.
-  One deliberate exception: `components/ui/sidebar.tsx` no longer writes its
-  open state to a cookie (the site sets none, ADR 0045). A `shadcn add
-  sidebar` brings that write back — take it out again; the no-cookie test in
-  `app/_components/storage-keys.test.ts` fails until you do.
-- Class names are joined with `cn` from the **`cn` package** (shadcn's
-  replacement for `clsx` + `tailwind-merge`, set up by `shadcn migrate cn`):
-  import it as `import { cn } from "cn"`, as the generated components do.
-  `lib/utils.ts` only re-exports it for the `utils` alias in
-  `components.json`; its test pins the merge behaviour the code relies on.
-- Tailwind for styling; components in `app/_components/` (route-private) or
-  `components/` (shared, incl. shadcn `components/ui/`).
-- **Conventional Commits** (`feat:`, `fix:`, `perf:`, `refactor:`…).
-- Commit hygiene: stage specific paths you changed; never sweep up the user's
-  unrelated working-tree edits.
-- **Keep the knowledge base current.** Adding, altering, or dropping a
-  data→feature transformation isn't done until `docs/transformations.md` (with
-  the right status, incl. **why** for discontinued), `docs/data-flow.md` and
-  the codebook in `docs/rendering.md` reflect it; a decision that constrains
-  future work gets an ADR in `docs/adr/`; a new dataset or edition updates the
-  guide's data-sources page in **both** languages — see
-  [docs/README.md](docs/README.md#keeping-these-docs-current).
-- **The privacy page is part of the code.** `/datenschutz`
-  (`app/(legal)/datenschutz/page.mdx`) describes what the site does with
-  a visitor's data. A new request to a third party (a live feed, a
-  font, an embed), a new field in a report, or a new key in the
-  browser's storage is not done until that page says so (ADR 0045).
-- **Attribution is part of the data.** GeoSN products are `dl-de/by-2-0`
-  ("Quelle: GeoSN, dl-de/by-2-0"), OSM-derived layers ODbL ("© OpenStreetMap
-  contributors"); both credits live in the HUD footer (`scene-sidebar.tsx`) and
-  the OSM bakes write an `attribution` member. Keep them when you touch either.
-  A new source's licence and credit go into the guide's *Licences and
-  credits* table (both languages) and, for a new provider, into `NOTICE`:
-  the code is Apache-2.0, the data keep their own licences.
+- TypeScript strict; no `any` without a `// reason:` comment; no
+  `console.log`; complexity cap 20 — extract helpers.
+- **oxlint + oxfmt, no ESLint, no biome.** `.oxlintrc.json` names its rules
+  explicitly; do not replace them with categories, and leave
+  `strict-boolean-expressions`, `no-unnecessary-condition` and
+  `no-confusing-void-expression` off (they flag idioms used on purpose);
+  `--type-check` stays off. typescript-eslint
+  cannot run on TypeScript 7; check oxlint's full catalogue
+  (`oxlint --print-config -D all`) before reaching for ESLint. Markdown and
+  MDX are excluded from oxfmt; prose stays hand-wrapped.
+- **One TypeScript, 7.x native.** `bun check` is the fast check; tsc (in
+  `next build` and CI) is the reference. Delete `tsconfig.tsbuildinfo` when
+  they disagree. `allowJs: true` stays (`next build` puts it back).
+- Exact pins for the three.js stack, the glTF build tools, `delatin`, the
+  framework trio, the lint tools (bump `oxlint` and `oxlint-tsgolint`
+  together) and `suncalc`; caret for the rest; the npm MCP servers in
+  `.mcp.json` exactly. Bun comes from `packageManager` (≥ 1.4 for
+  `Bun.WebView`; the web session's start hook upgrades it).
+- No type shim for `three-mesh-bvh` (it augments `three` itself).
+- The Ko-fi link (`lib/brand.ts`) stays a plain link, never Ko-fi's widget.
+- `components/ui/` is vendored by `shadcn add`; regenerate, never
+  hand-edit — except that `sidebar.tsx` writes no cookie. Class names are
+  joined with `cn` from the `cn` package.
+- Conventional Commits; stage only the paths you changed.
+- A change is not done until `docs/` says so (`docs-upkeep` skill).
 
 ## When in doubt, ask before
 
-- Introducing a backend / stateful API route
-- Adding a heavy dependency (map/tiling library, a second renderer)
+- Introducing a backend, a stateful API route or a database
+- Adding a heavy dependency (a map or tiling library, a second renderer)
 - Bringing back a second render path (WebGLRenderer, GLSL), or patching
-  three's renderer internals: ADR 0027 decided against both
-- Committing raw bulk geodata, or switching on Git-LFS; committing another
-  site's `data/<site>/` (a size decision, ADR 0037)
+  three's renderer internals (ADR 0027)
+- Committing raw bulk geodata, switching on Git-LFS, or committing another
+  city's `data/<site>/` (ADR 0037)
 
 <!-- BEGIN:nextjs-agent-rules -->
 

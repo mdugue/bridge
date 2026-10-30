@@ -56,7 +56,7 @@ import { sceneMaterial } from "./three-utils";
  * ground around its foot. A counter whose count is older than three hours
  * stands grey and still. From the air the columns and their pools widen
  * with the traffic bodies (`mapWidenNode`). They stand on the ground under
- * the counter — feet a row under it (ADR 0035's 0.2 m of a box), so a
+ * the counter — feet a row under it (ADR 0030's 0.2 m of a box), so a
  * slope beside it buries the downhill side's foot rather than leaving it
  * in the air — and are placed again as the ground streams in: a counter
  * over ground not loaded yet waits. No shadow: a data mark, not a body.
@@ -70,7 +70,7 @@ const COLUMN_RADIUS = 0.75;
 const CAP_SHARE = 0.06;
 /** Half the distance between a counter's two columns (m). */
 const PAIR_HALF_M = 1.1;
-/** How far the foot goes under the ground (m; ADR 0035's box row). */
+/** How far the foot goes under the ground (m; ADR 0030's box row). */
 const FOOT_SINK_M = 0.2;
 /** The pool of light at a column's foot: its radius (m) and its lift over
  *  the ground. */
