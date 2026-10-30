@@ -70,7 +70,7 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
     // one) is checked again rather than refused at the first question
     return stored?.token && stored.expires > Date.now() ? stored : null;
   });
-  // the Hörmodus (the Sprachführer, ADR 0057): the screen dark, the scene
+  // the Hörmodus (the Sprachführer, ADR 0057): a soft vignette, the scene
   // barely drawn, the answers read aloud
   const [hearing, setHearing] = useState(false);
   // read aloud: kept here, so a new key does not silence a Hörmodus
@@ -90,15 +90,22 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
   return (
     <>
       {hearing && (
-        <button
-          aria-label="Hörmodus beenden"
-          className="pointer-events-auto absolute inset-0 z-20 flex items-end justify-center bg-black/90 pb-10 text-[12px] text-white/60"
-          data-testid="ask-hearing"
-          onClick={() => setHearing(false)}
-          type="button"
-        >
-          Hörmodus: Die Antworten werden vorgelesen. Tippen zum Beenden.
-        </button>
+        <>
+          {/* a soft vignette, not a blackout: the city stays visible */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-20 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgb(0_0_0/0.28))]"
+          />
+          <button
+            aria-label="Hörmodus beenden"
+            className="pointer-events-auto absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1.5 text-[12px] text-white/85 shadow-sm backdrop-blur-sm hover:bg-black/60"
+            data-testid="ask-hearing"
+            onClick={() => setHearing(false)}
+            type="button"
+          >
+            Hörmodus · die Antworten werden vorgelesen · beenden
+          </button>
+        </>
       )}
       <section
         aria-label="Frag die Stadt"
@@ -519,7 +526,7 @@ function VoiceBar({
             setReading(true);
             onHearing(!hearing);
           }}
-          title="Hörmodus: Bildschirm dunkel, die Szene ruht, die Antworten werden vorgelesen — für unterwegs, das Telefon in der Tasche"
+          title="Hörmodus: die Szene ruht, die Antworten werden vorgelesen — für unterwegs, das Telefon in der Tasche"
           type="button"
         >
           <EarIcon className="size-3" />
