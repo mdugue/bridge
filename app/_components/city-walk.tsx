@@ -64,6 +64,7 @@ import { type HudTool, HudToolbar } from "./hud-toolbar";
 import type { ExportContext } from "./image-export";
 import { InquiryCard } from "./inquiry-card";
 import { InquiryStrip, InquiryTapRing } from "./inquiry-strip";
+import { PickStack } from "./pick-stack";
 import { useLiveMode } from "./live-mode";
 import {
   LocateMessage,
@@ -1186,8 +1187,11 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
               )}
               <InquiryPanel
                 coarse={coarse}
+                onActivate={(i) => handleRef.current?.selectPick(i)}
+                onAdding={(on) => handleRef.current?.setAddingPicks(on)}
                 onClose={closeInquiry}
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
+                onRemove={(i) => handleRef.current?.removePick(i)}
                 onSelect={(i) => handleRef.current?.selectCandidate(i)}
               />
               <SceneOverlays
@@ -1313,19 +1317,26 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
 }
 
 /**
- * The asked thing's card and what else the ray met: on a desktop one
- * column at the left, the card over the list; on a touch screen the sheet
- * with the chips above it. The tap's ring either way.
+ * The asked thing's card, what else the ray met and the selection: on a
+ * desktop one column at the left, the selection over the card over the
+ * list; on a touch screen the sheet with the chips and the selection
+ * above it. The tap's ring either way.
  */
 function InquiryPanel({
   coarse,
+  onActivate,
+  onAdding,
   onClose,
   onPreview,
+  onRemove,
   onSelect,
 }: {
   coarse: boolean;
+  onActivate: (index: number) => void;
+  onAdding: (on: boolean) => void;
   onClose: () => void;
   onPreview: (index: number | null) => void;
+  onRemove: (index: number) => void;
   onSelect: (index: number) => void;
 }) {
   const asked = useSceneStatus("inquiry");
@@ -1333,7 +1344,19 @@ function InquiryPanel({
   if (!asked) {
     return null;
   }
-  const { along, inquiry } = asked;
+  const { along, inquiry, picked } = asked;
+  const stack = (
+    <PickStack
+      active={picked.active}
+      adding={picked.adding}
+      onActivate={onActivate}
+      onAdding={onAdding}
+      onRemove={onRemove}
+      overStrip={along !== null}
+      picks={picked.picks}
+      sheet={coarse}
+    />
+  );
   const strip = along && (
     <InquiryStrip
       along={along}
@@ -1355,11 +1378,13 @@ function InquiryPanel({
       {along && <InquiryTapRing along={along} />}
       {coarse ? (
         <>
+          {stack}
           {strip}
           {card}
         </>
       ) : (
         <div className="pointer-events-none absolute inset-y-4 left-4 z-20 flex w-[min(22rem,calc(100%-2rem))] lg:w-[min(28rem,calc(100%-2rem))] 2xl:w-[32rem] flex-col items-stretch gap-2">
+          {stack}
           {card}
           {strip}
         </div>

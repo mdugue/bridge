@@ -70,8 +70,10 @@ loaded buildings leave open; places that would need an eye more than
 Under the answer (`app/_components/ask-chips.tsx`) each place is a chip,
 "nearby" shows the reach it took with a narrower and a wider one, and
 the follow-ups come from `vorschlaege`, a server tool that only takes
-them in — one model turn more per answer, cheap on the prompt cache,
-and more reliable than parsing a line of the text.
+them in; the run ends at that call, so it costs no model turn more,
+and it is more reliable than parsing a line of the text. What `zeige`
+shows is selected as a Shift+click selects (ADR 0042): every place
+together, the chosen one alone when the others were rejected.
 
 **The key stays in the visitor's browser.** For the tab (session
 storage), or on the device if the visitor asks (local storage,

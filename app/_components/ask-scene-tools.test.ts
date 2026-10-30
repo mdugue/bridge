@@ -19,6 +19,7 @@ const STUB: AskScene = {
   setListening: () => undefined,
   setStyle: () => undefined,
   setTime: () => "",
+  select: () => undefined,
   show: () => undefined,
   where: () => ({}),
 };
@@ -74,4 +75,23 @@ test("zeige frames the places together, or the first alone when they lie too far
   expect(street.gezeigt).toEqual(["Kreuzkirche"]);
   expect(shown.at(-1)?.mode).toBe("walk");
   expect(shown.slice(0, 3).every((v) => v.mode === "fly")).toBe(true);
+});
+
+test("what an answer shows is selected: all of them, or the answer alone", () => {
+  const selected: (readonly { x: number; y: number }[])[] = [];
+  const scene = {
+    ...STUB,
+    select: (p: readonly { x: number; y: number }[]) => selected.push(p),
+  };
+  const ziele = [
+    { name: "A", x: 0, y: 0 },
+    { name: "B", x: 60, y: 0 },
+    { name: "C", x: 5000, y: 0 },
+  ];
+  showPlaces(scene, { ziele: ziele.slice(0, 2) });
+  showPlaces(scene, { ziele, alle: false });
+  // spread too far for one view: still every place selected
+  showPlaces(scene, { ziele });
+  showPlaces(scene, { ziele: ziele.slice(0, 2), aus_der_luft: false });
+  expect(selected.map((s) => s.length)).toEqual([2, 1, 3, 2]);
 });

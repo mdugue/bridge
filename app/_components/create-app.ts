@@ -128,7 +128,11 @@ import {
   nearestWithoutBvh,
   pickCityObject,
 } from "./city-layer";
-import { createInquiryProbe, type OutlineSubject } from "./inquiry-probe";
+import {
+  createInquiryProbe,
+  type OutlineSubject,
+  type Picked,
+} from "./inquiry-probe";
 import {
   bridgeShape,
   buildingShape,
@@ -244,6 +248,8 @@ const SKY_COLOR = 0x9f_b6_cc;
 const TRAIL_BEAT_MS = 2000;
 /** How often the GPU's frame time is read back (ms): a few per beat. */
 const GPU_TIME_READ_MS = 250;
+/** How long a place *Frag die Stadt* named waits for its tile to be picked. */
+const PLACES_WAIT_MS = 20_000;
 /** How long a memory emergency keeps the shadow camera from streaming. */
 const EMERGENCY_SHADOW_HOLD_MS = 120_000;
 /** Allocation failures closer together than this are one emergency. */
@@ -473,9 +479,14 @@ export interface CityWalkOptions {
   /**
    * What was asked last ("Befragen", ADR 0042): a click, a long press or
    * `I` under the pointer, or a candidate chosen from the strip; null when
-   * nothing stands there. `along`: everything the question's ray met.
+   * nothing stands there. `along`: everything the question's ray met;
+   * `picked`: the whole selection, and whether every question adds to it.
    */
-  onInquiry?: (inquiry: Inquiry | null, along: InquiryAlong | null) => void;
+  onInquiry?: (
+    inquiry: Inquiry | null,
+    along: InquiryAlong | null,
+    picked?: Picked & { adding: boolean }
+  ) => void;
   /** walk, fly or Modell (plan 055): at the start of a switch */
   onModeChange?: (mode: ViewMode) => void;
   /**
@@ -545,7 +556,20 @@ export interface CityWalkHandle {
    * Asks what stands at a screen point (NDC; the centre when omitted),
    * marks it and reports it through `onInquiry`; tests and QA call it.
    */
-  inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
+  inquireAt: (ndc?: { x: number; y: number }, add?: boolean) => Inquiry | null;
+  /** makes a pick of the selection the active one (its card) */
+  selectPick: (index: number) => void;
+  /** takes a pick out of the selection */
+  removePick: (index: number) => void;
+  /** the card's *Mehrere*: every question adds to the selection, as a
+   *  Shift+click does (a touch screen has no Shift) */
+  setAddingPicks: (on: boolean) => void;
+  /**
+   * Selects what stands at each place (EPSG): the places *Frag die Stadt*
+   * named. One whose tile is not loaded yet is picked when it arrives,
+   * for `PLACES_WAIT_MS`.
+   */
+  pickPlaces: (places: readonly { r?: number; x: number; y: number }[]) => void;
   /** Shows another candidate of the last question (the strip's click):
    *  marks it and reports it through `onInquiry`. */
   selectCandidate: (index: number) => Inquiry | null;
@@ -2155,8 +2179,36 @@ async function bootApp(
   // What the outline goes around (selection-shape.ts): a building's own
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
   // monument's shape after its data.
-  const outline = (subject: OutlineSubject | null, flash = true) => {
-    postStack.setSelection(outlineShape(subject), flash);
+  const outline = (
+    subjects: readonly OutlineSubject[] | null,
+    flash = true
+  ) => {
+    postStack.setSelection(outlineShapes(subjects), flash);
+  };
+  /** Every pick's shape in one mask (a counted flow is drawn alone: its
+   *  program is the layer's, not the triangles'). */
+  const outlineShapes = (
+    subjects: readonly OutlineSubject[] | null
+  ): OutlineSelection | null => {
+    const shapes = (subjects ?? [])
+      .map(outlineShape)
+      .filter((o): o is OutlineSelection => o !== null);
+    const flow = shapes.find((o) => "flow" in o);
+    if (flow || shapes.length <= 1) {
+      return flow ?? shapes[0] ?? null;
+    }
+    const solid = shapes as { positions: Float32Array; reach: number }[];
+    const positions = new Float32Array(
+      solid.reduce((n, o) => n + o.positions.length, 0)
+    );
+    let at = 0;
+    for (const o of solid) {
+      positions.set(o.positions, at);
+      at += o.positions.length;
+    }
+    // the most lenient stand-in's depth: a building's own triangles
+    // still meet the scene's surface where they show
+    return { positions, reach: Math.max(...solid.map((o) => o.reach)) };
   };
   const outlineShape = (
     subject: OutlineSubject | null
@@ -2276,23 +2328,49 @@ async function bootApp(
   };
   // the last question's candidates, with what the card needs of each
   let along: InquiryAlong | null = null;
-  const inquireAt = (ndc?: { x: number; y: number }): Inquiry | null => {
-    const asked = probe.ask(ndc);
+  /** What the HUD shows of the selection: every pick as its card reads. */
+  // the card's *Mehrere*: every question adds, as Shift does
+  let addingPicks = false;
+  const selection = (): Picked => {
+    const now = probe.picks();
+    return {
+      active: now.active,
+      picks: now.picks.map((p) => answered(p) ?? p),
+    };
+  };
+  const report = () => {
+    const now = selection();
+    if (now.picks.length === 0) {
+      // nothing picked: the next question starts a selection again
+      addingPicks = false;
+    }
+    opts.onInquiry?.(now.picks[now.active] ?? null, along, {
+      ...now,
+      adding: addingPicks,
+    });
+  };
+  const inquireAt = (
+    ndc?: { x: number; y: number },
+    add = false
+  ): Inquiry | null => {
+    pendingPlaces = null;
+    const asked = probe.ask(ndc, add);
     // its rays built the BVHs of what they reached, its outline a mesh
     sceneCounted();
-    along = asked
-      ? {
-          at: ndc ?? null,
-          candidates: asked.candidates.map((c) => ({
-            ...c,
-            inquiry: answered(c.inquiry) ?? c.inquiry,
-          })),
-          selected: asked.selected,
-        }
-      : null;
-    const inquiry = along?.candidates[along.selected]?.inquiry ?? null;
-    opts.onInquiry?.(inquiry, along);
-    return inquiry;
+    along =
+      asked && asked.candidates.length > 0
+        ? {
+            at: ndc ?? null,
+            candidates: asked.candidates.map((c) => ({
+              ...c,
+              inquiry: answered(c.inquiry) ?? c.inquiry,
+            })),
+            selected: asked.selected,
+          }
+        : null;
+    report();
+    const now = selection();
+    return now.picks[now.active] ?? null;
   };
   const selectCandidate = (index: number): Inquiry | null => {
     const chosen = along?.candidates[index];
@@ -2301,8 +2379,51 @@ async function bootApp(
     }
     sceneCounted();
     along = { ...along, selected: index };
-    opts.onInquiry?.(chosen.inquiry, along);
+    report();
     return chosen.inquiry;
+  };
+  const selectPick = (index: number) => {
+    probe.activate(index);
+    along = null;
+    report();
+  };
+  const removePick = (index: number) => {
+    probe.remove(index);
+    along = null;
+    report();
+  };
+  // Places *Frag die Stadt* named (site CRS): picked where their tiles are
+  // loaded, the rest again as the stream brings tiles — for a while.
+  let pendingPlaces: {
+    points: { x: number; z: number }[];
+    until: number;
+  } | null = null;
+  const pickPending = (replace: boolean) => {
+    const pending = pendingPlaces;
+    if (!pending) {
+      return;
+    }
+    const { missed } = probe.pickAt(pending.points, replace);
+    sceneCounted();
+    const left = missed.map((i) => pending.points[i]);
+    pendingPlaces =
+      left.length > 0 && performance.now() < pending.until
+        ? { ...pending, points: left }
+        : null;
+    along = null;
+    report();
+  };
+  const pickPlaces = (
+    places: readonly { r?: number; x: number; y: number }[]
+  ) => {
+    pendingPlaces = {
+      points: places.map((p) => ({
+        ...epsgToWorld(p.x, p.y, offset),
+        r: p.r,
+      })),
+      until: performance.now() + PLACES_WAIT_MS,
+    };
+    pickPending(true);
   };
   /** Modell: centres the picture on the ground under a screen point. */
   const centreAt = (ndcX: number, ndcY: number) => {
@@ -2322,14 +2443,16 @@ async function bootApp(
   const canvasControls = attachTouchControls(renderer.domElement, {
     // A click asks (a drag looks, a double click glides there); a finger's
     // tap does not — on glass a tap is too easily a missed drag.
-    onTap: (ndcX, ndcY, pointerType) => {
+    // Shift adds it to what is picked, or takes it out again.
+    onTap: (ndcX, ndcY, pointerType, shift) => {
       if (pointerType === "mouse") {
-        inquireAt({ x: ndcX, y: ndcY });
+        inquireAt({ x: ndcX, y: ndcY }, shift === true || addingPicks);
       }
     },
-    // A finger or a pen asks by holding still (the phone's way, ADR 0042).
+    // A finger or a pen asks by holding still (the phone's way, ADR 0042);
+    // with the card's *Mehrere* on, it adds.
     onLongPress: (ndcX, ndcY) => {
-      inquireAt({ x: ndcX, y: ndcY });
+      inquireAt({ x: ndcX, y: ndcY }, addingPicks);
     },
     // In Modell a drag grabs the ground; on foot and in the air it looks.
     onLook: (dx, dy) =>
@@ -2524,6 +2647,8 @@ async function bootApp(
     groundPlate?.showUnder(new Set(terrains.map((t) => t.tile)));
     // a tile whose other building level landed or took over keeps the mark
     probe.refresh();
+    // and a named place whose tile was missing may be there now
+    pickPending(false);
     groundVersion++;
     const cut = cuts.cutOut();
     if (cut) {
@@ -2656,8 +2781,8 @@ async function bootApp(
         demolish: () => demolishAt(aim()),
         // I asks under the pointer, or at the centre in pointer lock,
         // where there is no pointer to click with.
-        inquire: () => {
-          inquireAt(aim());
+        inquire: (add) => {
+          inquireAt(aim(), add === true || addingPicks);
         },
         cycleStyle: () =>
           opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
@@ -2768,6 +2893,7 @@ async function bootApp(
         // an outline whose part the worker had is drawn now
         if (!disposed) {
           probe.refresh(next);
+          pickPending(false);
         }
       });
   };
@@ -3811,9 +3937,18 @@ async function bootApp(
     setSun,
     clearInquiry: () => {
       along = null;
+      pendingPlaces = null;
+      addingPicks = false;
       probe.clear();
     },
     selectCandidate,
+    selectPick,
+    removePick,
+    pickPlaces,
+    setAddingPicks: (on) => {
+      addingPicks = on;
+      report();
+    },
     previewCandidate: probe.preview,
     demolishAtCrosshair,
     inquireAt,

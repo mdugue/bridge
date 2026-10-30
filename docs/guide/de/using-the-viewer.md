@@ -311,6 +311,16 @@ Schätzung nach einem typischen Tagesgang. Eine **Radzählstelle** nennt
 die Räder der letzten vollen Stunde je Richtung und wann sie gezählt
 wurden. Beide Karten nennen ihre Quelle mit Lizenz.
 
+**Mehreres auf einmal auswählen:** `Shift`+Klick (oder `Shift`+`I`) fügt
+das Befragte der Auswahl hinzu, statt sie zu ersetzen; ein zweites
+`Shift`+Klick auf dasselbe nimmt es wieder heraus. Auf dem Touchscreen,
+der kein `Shift` hat, schaltet *Mehrere* über der Karte das um: Dann fügt
+jedes lange Drücken hinzu. Alles Ausgewählte trägt Schraffur und Umriss,
+über der Karte steht es nummeriert als Reihe von Knöpfen — ein Tipp
+öffnet seine Karte, das × nimmt es heraus. Bis zu acht Dinge passen in
+eine Auswahl; ein neuntes verdrängt das älteste. Die Orte, die eine
+Antwort von *Frag die Stadt* zeigt, sind auf dieselbe Weise ausgewählt.
+
 ## Das Feld
 
 Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.

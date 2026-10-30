@@ -580,14 +580,21 @@ export function cityObjectsAlong(
     camera
   );
   alongRaycaster.far = Math.min(reach, far ?? reach);
+  return cityObjectsOnRay(alongRaycaster, layers);
+}
+
+/**
+ * `cityObjectsAlong` for a ray set up by the caller (its `far` the reach):
+ * a ray from above a place, for what stands there.
+ */
+export function cityObjectsOnRay(
+  ray: Raycaster,
+  layers: readonly CityLayer[]
+): { distance: number; layer: CityLayer; objectIndex: number }[] {
   const out: { distance: number; layer: CityLayer; objectIndex: number }[] = [];
   const seen = new Set<string>();
   let first = Number.POSITIVE_INFINITY;
-  for (const { enter, layer } of layersOnRay(
-    alongRaycaster.ray,
-    alongRaycaster.far,
-    layers
-  )) {
+  for (const { enter, layer } of layersOnRay(ray.ray, ray.far, layers)) {
     if (enter <= first) {
       // as in `nearestCityHit`: a tile the worker has may hold the first
       if (bvhBuilding(layer.mesh.geometry)) {
@@ -600,7 +607,7 @@ export function cityObjectsAlong(
       continue;
     }
     // An ensemble is one tile's: its hits come in this tile's order.
-    for (const hit of alongRaycaster.intersectObject(layer.mesh, false)) {
+    for (const hit of ray.intersectObject(layer.mesh, false)) {
       if (!hit.face) {
         continue;
       }

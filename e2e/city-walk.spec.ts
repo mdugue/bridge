@@ -1106,6 +1106,27 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await page.keyboard.press("i");
       await expect(card).toBeVisible();
       await expect(card).not.toContainText(centreId);
+      // Shift+click adds the centre's building: two picks, the new one's
+      // card open; its × takes it out again
+      const stack = page.getByTestId("pick-stack");
+      await page.keyboard.down("Shift");
+      await page.mouse.click(
+        (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        (box?.y ?? 0) + (box?.height ?? 0) / 2
+      );
+      await page.keyboard.up("Shift");
+      await expect(
+        stack.getByRole("button", { name: /abwählen$/ })
+      ).toHaveCount(2);
+      await expect(card).toContainText(centreId);
+      await stack
+        .getByRole("button", { name: /abwählen$/ })
+        .last()
+        .click();
+      await expect(
+        stack.getByRole("button", { name: /abwählen$/ })
+      ).toHaveCount(0);
+      await expect(card).not.toContainText(centreId);
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
     });

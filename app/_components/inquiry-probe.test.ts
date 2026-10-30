@@ -3,6 +3,7 @@ import {
   chooseSample,
   firstSolid,
   mergeCandidates,
+  nextPicks,
   type PickSample,
   ringOffsets,
 } from "./inquiry-probe";
@@ -62,4 +63,28 @@ test("the candidates: each thing once at its nearest, front to back, the chosen 
   const many = Array.from({ length: 10 }, (_, i) => s(`n${i}`, i));
   const kept = mergeCandidates(far, [...many, far], [], 4);
   expect(kept.map((c) => c.key)).toEqual(["n0", "n1", "n2", "x"]);
+});
+
+test("a plain pick stands alone, Shift adds it, toggles it out and drops the oldest past the cap", () => {
+  const p = (key: string) => ({ key });
+  const one = nextPicks([], p("a"), false);
+  expect(one).toEqual({ active: 0, picks: [p("a")] });
+  const two = nextPicks(one.picks, p("b"), true);
+  expect(two).toEqual({ active: 1, picks: [p("a"), p("b")] });
+  // a plain click replaces the whole selection
+  expect(nextPicks(two.picks, p("c"), false).picks).toEqual([p("c")]);
+  // Shift on a picked one takes it out; the one before it is shown
+  const three = nextPicks(two.picks, p("c"), true);
+  expect(nextPicks(three.picks, p("c"), true)).toEqual({
+    active: 1,
+    picks: [p("a"), p("b")],
+  });
+  expect(nextPicks(three.picks, p("a"), true)).toEqual({
+    active: 0,
+    picks: [p("b"), p("c")],
+  });
+  // past the cap the oldest goes
+  const full = nextPicks(three.picks, p("d"), true, 3);
+  expect(full.picks.map((x) => x.key)).toEqual(["b", "c", "d"]);
+  expect(full.active).toBe(2);
 });

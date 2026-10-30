@@ -306,9 +306,11 @@ config change.
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers,
     `sceneMaterial` for the scene-wide shared node materials)
   - the twin (ADR 0042): `inquiry-probe.ts` (what a click, a long press
-    or `I` under the pointer asks, and the pencil-hatch mark) and
+    or `I` under the pointer asks, the selection — Shift adds, up to
+    `MAX_PICKS`, `nextPicks` — and the pencil-hatch mark over all of it),
     `inquiry-card.tsx` (the card — the only place the scene's facts become
-    text); the
+    text) and `pick-stack.tsx` (the selection over the card, *Mehrere*
+    for a touch screen); the
     facts are `lib/city/object-facts.ts` (bake and read; Buildings one named OSM
     outline joins are asked as one, across tile edges too,
     `lib/city/ensembles.ts`), the card's lines

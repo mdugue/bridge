@@ -293,6 +293,16 @@ as one, from a typical daily curve. A **bicycle counter** says the
 bicycles of the last full hour per direction and when they were counted.
 Both cards name their source and licence.
 
+**Selecting several things at once:** `Shift`+click (or `Shift`+`I`)
+adds what you ask to the selection instead of replacing it; a second
+`Shift`+click on the same thing takes it out again. On a touch screen,
+which has no `Shift`, *Mehrere* above the card switches this on: every
+long press then adds. Everything selected carries the hatch and the
+outline, and above the card it is listed as a numbered row of buttons —
+a tap opens its card, the × takes it out. A selection holds up to eight
+things; a ninth pushes out the oldest. The places an answer of *Frag
+die Stadt* shows are selected the same way.
+
 ## The panel
 
 The button in the corner opens a panel with three tabs.

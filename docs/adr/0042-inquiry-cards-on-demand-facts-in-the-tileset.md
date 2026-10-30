@@ -122,6 +122,17 @@ only where a source offers no CORS.
   eight vertex buffers are spent), a counter on its columns as they
   stand. The card stays the only place their numbers become text.
 
+**Several at once.** A selection holds up to eight things
+(`inquiry-probe.ts`, `MAX_PICKS`): Shift+click or Shift+`I` adds or takes
+one out, the card's *Mehrere* does the same on a touch screen, and the
+places an answer of *Frag die Stadt* shows (ADR 0056) are selected by
+rays from above at their positions, those on tiles not yet loaded as the
+stream brings them. The hatch and the outline cover the whole selection;
+the outline's mask is a union of triangles, so it costs no more memory
+for eight than for one. One card is open at a time, the others a click
+away in the numbered row above it — stacked cards would cover the city
+on a phone.
+
 ## Alternatives
 
 - **Every attribute as STRING, part UUIDs included** — +9.6 % per tile for

@@ -94,6 +94,7 @@ export function useAskScene(
       setFlood: (cm) => handleRef.current?.setFlood(cm),
       setVolume: (volume) => handleRef.current?.setVolume(volume) ?? false,
       show: (view) => handleRef.current?.flyToViewpoint(view),
+      select: (places) => handleRef.current?.pickPlaces(places),
       frame: () => {
         const h = handleRef.current;
         const sun = h
