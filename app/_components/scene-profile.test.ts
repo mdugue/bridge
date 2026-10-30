@@ -142,11 +142,11 @@ test("postProfileFor leaves the costly post work to the desktop", () => {
   });
 });
 
-test("shadowMapBytesFor counts the depth map and its one-byte colour target", () => {
+test("shadowMapBytesFor counts the depth map alone", () => {
   expect(shadowMapBytesFor(shadowMapSizeFor("full", "mobile"))).toBe(
-    20 * 1024 ** 2
+    16 * 1024 ** 2
   );
-  expect(shadowMapBytesFor(512)).toBe(512 * 512 * 5);
+  expect(shadowMapBytesFor(512)).toBe(512 * 512 * 4);
 });
 
 /**
@@ -154,7 +154,7 @@ test("shadowMapBytesFor counts the depth map and its one-byte colour target", ()
  * derived for: the screen targets of the phone's post profile (24 bytes
  * per drawn pixel covers the scene's colour and depth, the one-byte AO and
  * outline targets, and a picture style's own target while one is on) and
- * the shadow map (depth plus a one-byte colour target).
+ * the shadow map (its depth).
  */
 function phoneFixedBytes(safety: (typeof SAFETY_LEVELS)[number]): number {
   const ratio = pixelRatioFor("full", "mobile", 3, safety);

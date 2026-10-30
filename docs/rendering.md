@@ -240,7 +240,7 @@ is the codebook.
 | Contact shadows | GTAO at half resolution (normals from depth, 2 m radius, 0.15 m thickness), its 5×5 noise averaged out by a depth-aware box in its own half-resolution, one-byte pass; never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, over the ground and LoD2 with its rebuilt roofs, the drawn crowns at half transmission, GLO-30 beyond the site; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2, the crowns, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
 | Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80 m–10 km — past 1 500 m the terrain alone, over GLO-30 beyond the site — and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
-| Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, prefiltered into a 64 px PMREM (≈ 0.7 MB, as much again for the generator) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades, gilding and patina and fountain water (the river is matte since 2026-10-25), weighted by a softened Schlick; mirrors the sky, never the city | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
+| Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, rendered into a 64 px cube map whose mips are the blur (≈ 0.4 MB; not three's PMREM, which since r187 takes ≈ 10 MB) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades, gilding and patina and fountain water (the river is matte since 2026-10-25), weighted by a softened Schlick; mirrors the sky, never the city | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
 | Depth of field | crosshair raycast distance; only what lies beyond the focus blurs (nearer is read as at the focus; blurring the foreground had laid a veil over the lower half — three's node still runs its near-field passes, over an empty field), focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving; always on otherwise (no switch, no manual focus); desktop only — a phone does not build it (ADR 0047) | — | `post-stack.ts` |
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `post-stack.ts` (*Papierkorn*) |
 | Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier, Strich, Schwarzplan — one post pass over the finished frame (below); Papier and Strich also swap every surface for one white paper material for the frame (Papier's ground keeps its paint and water as greys, Strich's turns plan-coloured), Sin City swaps them for a white card (foliage and water black, red roofs red), the Schwarzplan draws the buildings unlit black and hides everything but them and the white ground; light and shade from the sun's shadow map, the fog taken out before any cut, dots and hatching anchored to the world (ADR 0034); remembered per browser | sun altitude (noir's dusk exposure), the shadow map, the fog factor | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts`, `style-memory.ts` |
@@ -281,16 +281,17 @@ change, not a re-bake
   `ShadowFilterNode` spreads a 5-tap Vogel disk by radius × texel), 3072² on
   desktop, 2048² on phones, 512² in the lite profile (smaller at a raised
   safety level, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)).
-  Its colour target is **one red byte**: three's shadow pass always draws
-  into a colour texture beside the depth the filter reads, of the shadow's
-  `mapType` — RGBA, as large again as the depth — though only coloured
-  shadows sample it. `OneByteShadowNode` (`sun-rig.ts`), installed as the
-  light's `shadow.shadowNode` (the hook three's own CSM and tiled shadows
-  use: no patch, ADR 0027), makes it R8 before anything is allocated:
-  20 MiB at 2048², 45 at 3072² (`shadowMapBytesFor`, depth and colour),
-  where three's default holds 32 and 72. Keep
-  `renderer.shadowMap.transmitted` off — coloured shadows would read a
-  red-only target. Terrain **receives
+  It has **no colour target**: three's shadow map draws into a colour
+  texture beside the depth the filter reads, of the shadow's `mapType` —
+  RGBA, as large again as the depth — though only coloured shadows sample
+  it. `DepthOnlyShadowNode` (`sun-rig.ts`), installed as the light's
+  `shadow.shadowNode` (the hook three's own CSM and tiled shadows use: no
+  patch, ADR 0027), keeps three's depth texture in a render target of no
+  colour attachment (`count: 0`, both backends since three r187; up to
+  r186 the smallest it could draw into was one red byte): 16 MiB at
+  2048², 36 at 3072² (`shadowMapBytesFor`), where three's default holds
+  32 and 72. Keep `renderer.shadowMap.transmitted` off — coloured shadows
+  would read a colour target there is none of. Terrain **receives
   only**. `normalBias = 0`, a small negative `bias`. The frustum follows the
   camera, half-size 121 m at eye level growing in octaves of 110 m to 880 m
   with altitude, centred on the ground and pushed ahead along the view
@@ -380,9 +381,11 @@ AO_EXPONENT → DepthOfFieldNode (desktop; skipped while moving; in motion
 the camera's motion blur instead, pastel only) → the
 picture style → SMAANode (FXAA on a phone) → depth grading + vignette +
 paper grain + the outline → sRGB`. Rendering the scene outside the
-pipeline is what lets a tile's `compileAsync` prepare the very build its
-frames use (a build is keyed by render context, a context by target and
-call depth). The target has no MSAA (`antialias: false`); SMAA or FXAA
+pipeline lets the styles swap and dress the scene for exactly its render,
+and a tile's `compileAsync` prepare the very build its frames use (a
+build is keyed by the target's attachments and the kind of camera; up to
+three r186 also by the call depth, which a scene pass nested in the
+pipeline never matched). The target has no MSAA (`antialias: false`); SMAA or FXAA
 carries the anti-aliasing. There is no tone mapping: the look was tuned
 without it. The GTAO sample count is a construction-time setting (16;
 8 on a phone and in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
@@ -411,7 +414,8 @@ step of the memory governor can shrink them.
   composites into a target of its own; a frame runs its passes by drawing
   one pixel of its output into a 1×1 target (`pixel`, where the
   pipelines also warm — its render context is `BeforeAA`'s: three keys a
-  context by the target's attachments and the call depth, not its size).
+  context by the target's attachments, the call depth and the kind of
+  camera, not its size).
   Drawn into `BeforeAA`, both were copies of the whole frame: a standing
   frame is one full-resolution pass lighter (18 passes, as before, but one
   of them one pixel), a walking one 8 → 7, and `BeforeAA` (8 B a pixel:
@@ -1009,10 +1013,10 @@ stays their measure; the tile cache counts true bytes.
   (`disposeGeometry`), and a leaving tile whose dressing still compiles
   has its content freed by the plugin, so the tile renderer's own
   dispose never meets one. A compile that throws
-  inside three's `compileAsync` leaves three's private pre-compiling flag
-  raised until the next compile that succeeds (only
-  `ShadowNode.updateBefore` reads it): the shadow map can pause until the
-  next tile compiles.
+  inside three's `compileAsync` leaves three's private pre-compile state
+  set (`_precompilationState` since r187) until the next compile that
+  succeeds (only `ShadowNode.updateBefore` reads it): the shadow map can
+  pause until the next tile compiles.
 
 **Reading the heartbeat.** The crash trail takes a beat every 2 s; the
 crash card, every report's breadcrumbs and `crashTrail.current()` (in a
@@ -1387,7 +1391,8 @@ boot keeps waiting. One that gives up is FAILED and healed
 after 5, 15, 45, then every 120 s — by `lruCache.remove(tile)` and then
 `resetFailedTiles()`, because 3d-tiles-renderer 0.5.3's
 `resetFailedTiles()` alone never re-requests a tile still in its cache (an
-upstream bug, to be reported). A tile the cache evicted meanwhile is left
+upstream bug, to be reported: [Workarounds for upstream
+bugs](#workarounds-for-upstream-bugs)). A tile the cache evicted meanwhile is left
 alone: the renderer asks for it itself when it wants it. The HUD's pill
 about the network goes once nothing it failed is outstanding — every
 tile that gave up has landed, or the renderer's update after the heal
@@ -1467,6 +1472,80 @@ them (Chromium; Safari has none), and the page prints the table once
 loaded and 20 s later (`console.table`). The names are a contract for
 later perf work: add one rather than rename one. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
+
+## Workarounds for upstream bugs
+
+Each entry is a bug in a dependency, the code that works around it and
+what to undo once a release fixes it. The comments at those sites say
+*upstream workaround* (`grep -rni "upstream workaround" app lib`). On a
+bump of the dependency, check each entry against its release notes, and
+drop the entry with its workaround.
+
+**three r187: `compileAsync` is not re-entrant.** Since
+[#34506](https://github.com/mrdoob/three.js/pull/34506) the compile in
+progress lives on the renderer (`_precompilationState`, the call depth,
+the render context) across every await inside a build: a second compile
+in flight resumes inside the first one's state, finishes it for it, and
+the first then throws in `_finishPreCompile` (a null state) or builds
+against the wrong context. *Worked around* by queueing every compile
+behind those in flight (`compileInTurn`, compile-lanes.ts). *Once fixed:*
+`compileInTurn` starts its compile at once; the post stack's
+`releaseWhenSettled`, which lets a dropped view's and a lifted
+Ausschnitt's stand-ins go behind that queue (`dropView`, `releaseCut`),
+then waits for their own compiles instead; re-measure the boot and
+Modell's warm-up. Upstream
+plans to rework this code
+([#35086](https://github.com/mrdoob/three.js/issues/35086), the review of
+[#35092](https://github.com/mrdoob/three.js/pull/35092)); not reported
+yet.
+
+**three r187: a compile sets a stale render target.** Since
+[#35191](https://github.com/mrdoob/three.js/pull/35191) each work item of
+`compileAsync` ends by setting the target that was current when the call
+was made — also when it resumes frames later — so a target set for the
+call leaks into the frames drawn meanwhile. *Worked around* in
+`PostStack.render`: the frame sets the scene target itself and ends on
+the canvas, not on the target it found. *Once fixed:* nothing has to go
+(naming the targets stays right); only the comment's reason. Not
+reported yet.
+
+**three r187: a `compileAsync` that throws leaves its state set** (no
+`finally` around a work item): see *A failed allocation costs a
+dressing* under [the frame budget](#the-frame-budget). Nothing works
+around it; report it with the first entry.
+
+**three r187 (likely a regression): a compile builds colourless
+pipelines without a depth format.** Now and then — on a cold start, at
+the boot or as Modell is entered, a run in three or so — `compileAsync`
+builds a few casters' pipelines (crowns, ground plates, clay) for a
+render context with no colour target whose depth has no GPU format, and
+three logs `Async render pipeline creation failed …
+GPUDepthStencilState: Required member is undefined`. It is the shadow
+pass or a context like it, and not our depth-only shadow map: with
+three's own map it happens as well. The frames draw on (whether the
+failed pipeline costs a caster its shadow is not checked). Nothing works
+around it; first seen after main's
+motion blur came in (2026-10-30), never in the runs before. Not reported
+yet: find the context first (a hook on `createRenderPipelineAsync` shows
+the descriptor).
+
+**three r187: an attribute whose GPU buffer failed to allocate stays
+half made** — its entry without a buffer — and the dispose of its
+geometry throws on it midway (`destroyAttribute`). *Worked around* in
+`three-utils.ts` (`untilThrough`): the dispose is tried again past it.
+*Once fixed:* one dispose. Not looked for upstream yet.
+
+Changes in three r187 we adapted to and that are meant, not bugs: builds
+are keyed by the kind of camera
+([#35123](https://github.com/mrdoob/three.js/pull/35123); Modell's
+warm-up, `PostStack.warmView`), and PMREMs are cube targets of at least
+256 px a face (the sky reflection's own 64 px cube, `sky-reflection.ts`).
+
+**3d-tiles-renderer 0.5.3: `resetFailedTiles()` alone never asks for a
+cached tile again.** *Worked around* in `tile-retry.ts`: the heal removes
+the tile from the LRU cache first (*The network fails, and is tried
+again* under [the boot sequence](#boot-sequence)). *Once fixed:* the
+heal calls `resetFailedTiles()` alone. Not reported yet.
 
 ## Verifying a change
 
