@@ -501,7 +501,7 @@ export function box(
   }
 }
 
-/** Where a door meets the ground (ADR 0035): its sill's foot along the
+/** Where a door meets the ground (ADR 0030): its sill's foot along the
  *  surround's face, EPSG. Where the ground in front is higher than the
  *  lowest sample the sill sinks deeper; where it is lower (a step down
  *  away from the wall) the sill's foot is checked here. */

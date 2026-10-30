@@ -27,7 +27,7 @@ test("every row follows the naming conventions and boots inside its range", () =
 });
 
 test("no row takes a retired snapshot key", () => {
-  // A pasted old snapshot would otherwise set the new control (ADR 0017).
+  // A pasted old snapshot would otherwise set the new control (ADR 0018).
   expect(new Set(RETIRED_SNAPSHOT_KEYS).size).toBe(
     RETIRED_SNAPSHOT_KEYS.length
   );

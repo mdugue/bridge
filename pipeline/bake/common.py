@@ -310,7 +310,7 @@ def geometry_json(geom: shapely.Geometry, digits: int = 2) -> dict:
     return {"type": mapped["type"], "coordinates": round_coords(mapped["coordinates"], digits)}
 
 
-# --- per-sample decisions along a line (ADR 0035) ------------------------------
+# --- per-sample decisions along a line (ADR 0030) ------------------------------
 #
 # A property of a line feature that the ground under it decides (a tram
 # track's bed, …) is read per sample and smoothed along the line — never

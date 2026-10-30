@@ -1,5 +1,5 @@
 /**
- * The page's GPU-loss, memory-emergency and resume decisions (ADR 0046) as
+ * The page's GPU-loss, memory-emergency and resume decisions (ADR 0047) as
  * a pure machine, like boot-phases.ts: the page hears signals — a device
  * lost, a frame that threw, an allocation that failed, the page hidden or
  * shown, the first frame, the end — and the machine answers with the

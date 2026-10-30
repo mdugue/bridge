@@ -110,7 +110,7 @@ function alongOf(pts: Point2[]): number[] {
 }
 
 export interface KerbGeometryData {
-  /** where the stones meet the ground (ADR 0035): both feet, and the back
+  /** where the stones meet the ground (ADR 0030): both feet, and the back
    *  edge of the top, which meets the pavement */
   joins: JoinPoint[];
   normals: number[];

@@ -24,7 +24,7 @@
 
 ## Why this matters
 
-ADR 0045 makes the privacy page part of the code: "a new key in the
+ADR 0043 makes the privacy page part of the code: "a new key in the
 browser's storage is not done until that page says so", and the same for
 every request the browser makes to a third party. Today that rule is
 enforced by a reviewer's eye alone, and it has already slipped once: the
@@ -61,7 +61,7 @@ The ten keys and where they are written (all `localStorage` unless noted):
 | `crash-trail.previous` | `app/_components/crash-trail.ts:39` `PREVIOUS_KEY` | the previous page's record |
 | `crash-trail.reported` | `app/_components/crash-reports.ts:53` `REPORTED_KEY` | which previous record was reported — **not on the page** |
 | `crash-reports.declined` | `app/_components/report-choice.ts:12` `DECLINED_KEY` | the visitor's "no" |
-| `gpu-safety` | `app/_components/gpu-safety.ts:24` `KEY` | the device's safety level (ADR 0046) |
+| `gpu-safety` | `app/_components/gpu-safety.ts:24` `KEY` | the device's safety level (ADR 0047) |
 | `gpu-recovery` (**session** storage) | `app/_components/gpu-recovery.ts:28` `KEY` | the view a GPU recovery returns to |
 
 The two live-feed hosts (ADR 0040): `lib/city/bike-counts.ts:18`
@@ -185,7 +185,7 @@ Create `app/_components/storage-keys.ts`:
 
 ```ts
 /**
- * Every key the viewer keeps in the browser's storage (ADR 0045: the
+ * Every key the viewer keeps in the browser's storage (ADR 0043: the
  * privacy page, app/(legal)/datenschutz/page.mdx, names each one; its
  * test holds it to that). A new key is added here first.
  */
@@ -206,7 +206,7 @@ export const STORAGE_KEYS = {
   trailReported: "crash-trail.reported",
   /** the visitor's "no" to the reports (report-choice.ts) */
   reportsDeclined: "crash-reports.declined",
-  /** the device's safety level (gpu-safety.ts, ADR 0046) */
+  /** the device's safety level (gpu-safety.ts, ADR 0047) */
   gpuSafety: "gpu-safety",
 } as const;
 

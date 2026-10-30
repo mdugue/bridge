@@ -25,7 +25,7 @@
 
 ## Why this matters
 
-ADR 0046's safety ladder exists because a phone in a reload loop is the
+ADR 0047's safety ladder exists because a phone in a reload loop is the
 worst failure this viewer has (the Sentry CITY-WALK-1…8 series). The
 *policies* are pure and well tested — `lib/city/gpu-safety.ts`
 (`frameLoss`, `raisedSafety`, `resolveSafety`, the recovery caps),
@@ -339,7 +339,7 @@ frame, an allocation failure, a hidden or shown page lead to — are one
 pure machine, `lib/city/page-lifecycle.ts`, tested by the incident
 sequences in its test; `create-app.ts` binds its signals and effects".
 AGENTS.md `lib/city/` bullet: add "`page-lifecycle.ts` (the page's
-GPU-loss, memory-emergency and resume decisions as effects — ADR 0046)".
+GPU-loss, memory-emergency and resume decisions as effects — ADR 0047)".
 
 **Verify**: `bun test lib/docs` → pass.
 

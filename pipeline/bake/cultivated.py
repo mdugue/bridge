@@ -2,7 +2,7 @@
 the DLM burns into one class (vineyards, orchards and garden land into
 meadow, the colonies into built-up) without reading the attribute that tells
 them apart (plan 028). No new land-cover class: the palette and the class
-raster stay as they are (ADR 0023); this is dressing.
+raster stay as they are (ADR 0010); this is dressing.
 
 `cultivated_<tile>.geojson` (OSM, ODbL), in the tile's CRS:
 

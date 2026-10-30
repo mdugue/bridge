@@ -8,7 +8,7 @@
 > **Builds on** plan 034 (the scan's small structures appended to the
 > city mesh: the same append path, `source` column and footprint rules),
 > plan 027 (OSM facts per LoD2 object, `osm_buildings.py`, the `flags`
-> column) and ADR 0033 (bridges measured in DOM1, typed by Wikidata; its
+> column) and ADR 0041 (bridges measured in DOM1, typed by Wikidata; its
 > fetch-time Wikidata cache is the pattern here).
 >
 > **Drift check (run first)**:
@@ -161,7 +161,7 @@ glass with a Fresnel sky sheen on the rim slider, dimmed at night.
 
 Ledger (the five entries and four 🗃️ rows), `data-flow.md`,
 `rendering.md` codebook, `data-pipeline.md`, `portability.md`, the guide
-(data sources, using the viewer, how it works; en + de), ADR 0038.
+(data sources, using the viewer, how it works; en + de), ADR 0036.
 
 ## Phases
 
@@ -278,7 +278,7 @@ Ledger (the five entries and four 🗃️ rows), `data-flow.md`,
   veto; a cool tint and a sheen only (🗃️ ledger).
 - **Invented or imported geometry** — a stock spire, a hand-modelled
   landmark, a warehouse glTF: not repeatable, a licence each, off-style
-  (ADR 0038).
+  (ADR 0036).
 - **An absolute sitelink threshold** — it left Unna with one landmark;
   the ranking is per tile.
 - **A fixed count per tile** (the first 12) — on a dense tile it cut the
@@ -305,7 +305,7 @@ Ledger (the five entries and four 🗃️ rows), `data-flow.md`,
   tile's list (Frauenkirche, Zwinger, Semperoper, …) and so has neither
   the flag nor Wikidata's material; its OSM tags still colour it.~~
   **Resolved 2026-10-01** ([plan 051](./051-stand-ins-and-derived-looks.md),
-  ADR 0039): a tile keeps every landmark with ≥ 8 % of its most notable
+  ADR 0012): a tile keeps every landmark with ≥ 8 % of its most notable
   one's sitelinks (`NOTABLE_SHARE`, never under 2), 40 a tile only as a
   safety cap — a floor relative to the tile, not a count; re-baked on
   every site. The roof relief stays with the tile's 12 most notable

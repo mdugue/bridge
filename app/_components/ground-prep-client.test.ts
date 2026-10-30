@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import { type GroundPrepInput, prepareGround } from "@/lib/city/ground-prep";
-import { groundWorkerUp, prepareGroundOffThread } from "./ground-prep-client";
+import {
+  groundWorkerUp,
+  prepareGroundOffThread,
+  stopGroundWorker,
+} from "./ground-prep-client";
 
 /** A 3×3 grid in one buffer that holds more than the positions (as a
  *  glTF accessor's view may), water in every cell. */
@@ -81,4 +85,16 @@ test("a coarse level's job goes ahead of the fine ones queued before it", async 
   );
   await Promise.all([busy, fine, coarse]);
   expect(order).toEqual(["coarse", "fine"]);
+});
+
+test("a stopped worker ends the jobs still waiting, and the next job starts a new one", async () => {
+  const busy = prepareGroundOffThread(grid());
+  const waiting = prepareGroundOffThread(grid(1));
+  stopGroundWorker();
+  expect(groundWorkerUp()).toBe(false);
+  const ended = await Promise.allSettled([busy, waiting]);
+  expect(ended.map((r) => r.status)).toEqual(["rejected", "rejected"]);
+  const input = grid(2);
+  expect(await prepareGroundOffThread(input)).toEqual(prepareGround(input));
+  expect(groundWorkerUp()).toBe(true);
 });

@@ -851,7 +851,7 @@ export function wallShiftAt(
   return Number.isFinite(shift) ? shift : 0;
 }
 
-/** Where a shopfront meets the ground (ADR 0035): the feet of its
+/** Where a shopfront meets the ground (ADR 0030): the feet of its
  *  surrounds along their fronts, EPSG. Where the ground in front is higher
  *  than the lower end's the foot sinks deeper; where it falls away (a step
  *  down off the pavement) the foot is checked here. */

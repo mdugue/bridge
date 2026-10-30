@@ -116,7 +116,7 @@ export interface ClayDetailUniforms {
 
 // --- the fixed look ----------------------------------------------------------
 // Each facade term's strength, fixed at what its slider stood at by default
-// before the sliders went (plan 073, ADR 0017): tuning one is an edit here,
+// before the sliders went (plan 073, ADR 0018): tuning one is an edit here,
 // judged by snapshots of place and time.
 
 /** Farbvariation: the clay colour each building takes from its use and
