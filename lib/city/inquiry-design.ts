@@ -88,8 +88,9 @@ export function ifcTypeWord(type: string | null): string | null {
   return IFC_WORDS[key] ?? "Bauteil";
 }
 
-/** Where the design's place came from, as the card says it, and how. */
-const PLACED: Readonly<Record<PlacementSource, [string, Method]>> = {
+/** Where the design's place came from, as the card says it, and how
+ *  (the *Detailansicht* says the same, lib/city/lineage.ts). */
+export const PLACED: Readonly<Record<PlacementSource, [string, Method]>> = {
   file: ["aus den Landeskoordinaten der Datei", "taken"],
   "file-plan": ["Lage aus der Datei, auf das Gelände gesetzt", "detected"],
   "placement-file": ["aus der Lagedatei", "taken"],

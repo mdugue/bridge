@@ -32,7 +32,7 @@ import type {
 } from "./inquiry-features";
 import type { CanopyInquiry, MoreInquiry } from "./inquiry-more";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
-import type { DesignInquiry } from "./inquiry-design";
+import { type DesignInquiry, PLACED } from "./inquiry-design";
 import { isMeasuredRoof, type ObjectFacts } from "./object-facts";
 import {
   type OsmProduct,
@@ -577,10 +577,7 @@ function designLineage(l: Lineage, d: DesignInquiry): void {
     source: `${d.file} (deine Datei)`,
     used: [
       { text: "die Form, der Name und die Art des Bauteils", method: "taken" },
-      {
-        text: "die Lage",
-        method: d.source === "here" ? "assumed" : "taken",
-      },
+      { text: "die Lage", method: PLACED[d.source][1] },
     ],
     stand: "",
     credit: "",

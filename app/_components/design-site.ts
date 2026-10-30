@@ -177,7 +177,8 @@ export function inDesignSiteAt(x: number, z: number): boolean {
 /** Whether a thing a question met is one the design's site folded away:
  *  an instance whose foot stands in it — a hedge's piece by where the ray
  *  met it (`at`, scene), a row folds piece by piece. A bridge, a counted
- *  flow and the design itself are not instances. */
+ *  flow, the design itself and the merged meshes of monuments and
+ *  landing stages are not folded. */
 export function foldedThing(
   target: FeatureInquiry,
   at: { x: number; z: number },
@@ -188,14 +189,16 @@ export function foldedThing(
     case "design":
     case "traffic":
       return false;
+    // a fountain's basin, a relief, a pontoon are plain meshes: they stay
+    case "landing":
+    case "monument":
+      return false;
     case "hedge":
       return inDesignSiteAt(at.x, at.z);
     case "bikes":
     case "canopy":
     case "furniture":
     case "lamp":
-    case "landing":
-    case "monument":
     case "stop":
     case "tree":
       return inDesignSiteAt(

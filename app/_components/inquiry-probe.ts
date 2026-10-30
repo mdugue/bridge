@@ -321,7 +321,15 @@ export function createInquiryProbe(deps: {
         porous: porous(thing.target),
       })),
     ].sort((a, b) => a.distance - b.distance);
-    return ground === null ? hits : hits.filter((h) => h.distance <= ground);
+    // (a design stands on ground pressed under it, which the ground's
+    // rays do not know: it is never behind it)
+    return ground === null
+      ? hits
+      : hits.filter(
+          (h) =>
+            h.distance <= ground ||
+            ("thing" in h.hit && h.hit.thing.target.kind === "design")
+        );
   };
 
   /** A building's live ensemble (its tree, or the trees that are one
