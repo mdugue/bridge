@@ -1,5 +1,13 @@
-import type { Object3D } from "three/webgpu";
-import { DoubleSide, Mesh, MeshStandardNodeMaterial } from "three/webgpu";
+import type { Intersection, Object3D } from "three/webgpu";
+import {
+  Box3,
+  DoubleSide,
+  Mesh,
+  MeshStandardNodeMaterial,
+  Raycaster,
+  Vector3,
+} from "three/webgpu";
+import type { AskHit, AskSet, Xyz } from "@/lib/city/ask-solids";
 import type { DesignTier } from "@/lib/city/design-budget";
 import {
   coveredObjects,
@@ -28,7 +36,8 @@ import {
   SITE_UNDER_M,
   setDesignSite,
 } from "./design-site";
-import { type DesignModel, readDesign } from "./design-read";
+import { type DesignModel, partOfTriangle, readDesign } from "./design-read";
+import type { DesignInquiry } from "@/lib/city/inquiry-design";
 import { releaseRenderState, sceneMaterial } from "./three-utils";
 
 /**
@@ -117,6 +126,10 @@ export interface DesignLayer {
   outline: () => [number, number][] | null;
   /** what the collider walks against */
   meshes: () => Mesh[];
+  /** what a question meets of it: its parts (lib/city/ask-solids.ts) */
+  asks: () => AskSet<DesignInquiry>[];
+  /** a part's own triangles in world positions (its outline) */
+  partShape: (part: number) => Float32Array;
   status: () => DesignStatus | null;
   dispose: () => void;
 }
@@ -179,6 +192,99 @@ interface Loaded {
   mask: PlanMask | null;
   outline: [number, number][] | null;
   hidden: Map<string, Set<number>>;
+}
+
+/** A part's triangles of the loaded design in world positions. */
+function partTriangles(loaded: Loaded, part: number): Float32Array {
+  const { geometry } = loaded.mesh;
+  const index = geometry.getIndex();
+  const position = geometry.getAttribute("position");
+  const { starts, of } = loaded.model.parts;
+  if (!index) {
+    return new Float32Array();
+  }
+  const total = index.count / 3;
+  const runs: [number, number][] = [];
+  let count = 0;
+  for (let k = 0; k < starts.length; k++) {
+    if (of[k] === part) {
+      const end = k + 1 < starts.length ? starts[k + 1] : total;
+      runs.push([starts[k], end]);
+      count += end - starts[k];
+    }
+  }
+  loaded.mesh.updateWorldMatrix(true, false);
+  const out = new Float32Array(count * 9);
+  const v = new Vector3();
+  let at = 0;
+  for (const [from, to] of runs) {
+    for (let i = from * 3; i < to * 3; i++) {
+      v.fromBufferAttribute(position, index.getX(i)).applyMatrix4(
+        loaded.mesh.matrixWorld
+      );
+      out[at++] = v.x;
+      out[at++] = v.y;
+      out[at++] = v.z;
+    }
+  }
+  return out;
+}
+
+/** What a question meets of the loaded design: one ask set over its
+ *  mesh (its BVH), a hit by the part its triangle belongs to. */
+function askSet(loaded: Loaded, offset: RecenterOffset): AskSet<DesignInquiry> {
+  const { mesh, model } = loaded;
+  mesh.updateWorldMatrix(true, false);
+  const box = new Box3().setFromObject(mesh);
+  const raycaster = new Raycaster();
+
+  const hitOf = (hit: Intersection): AskHit<DesignInquiry> => {
+    const partIndex = partOfTriangle(model.parts, hit.faceIndex ?? 0);
+    return {
+      distance: hit.distance,
+      solids: [],
+      target: {
+        kind: "design",
+        file: model.name,
+        part: model.parts.info[partIndex] ?? {
+          name: null,
+          type: null,
+          id: null,
+          material: null,
+        },
+        partIndex,
+        placement: { ...loaded.placement },
+        source: loaded.source,
+        triangles: model.weight.triangles,
+        position: [hit.point.x + offset.cx, offset.cy - hit.point.z],
+      },
+    };
+  };
+  const cast = (o: Xyz, d: Xyz, far: number, first: boolean) => {
+    raycaster.set(new Vector3(o.x, o.y, o.z), new Vector3(d.x, d.y, d.z));
+    raycaster.far = far;
+    raycaster.firstHitOnly = first;
+    return raycaster.intersectObject(mesh, false);
+  };
+  return {
+    box: { min: box.min, max: box.max },
+    nearest: (o, d, far) => {
+      const [hit] = cast(o, d, far, true);
+      return hit ? hitOf(hit) : null;
+    },
+    along: (o, d, far) => {
+      const seen = new Set<number>();
+      const out: AskHit<DesignInquiry>[] = [];
+      for (const hit of cast(o, d, far, false)) {
+        const found = hitOf(hit);
+        if (!seen.has(found.target.partIndex)) {
+          seen.add(found.target.partIndex);
+          out.push(found);
+        }
+      }
+      return out;
+    },
+  };
 }
 
 export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
@@ -524,6 +630,9 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     },
     outline: () => current?.outline ?? null,
     meshes: () => (current ? [current.mesh] : []),
+    asks: () => (current ? [askSet(current, deps.offset)] : []),
+    partShape: (part) =>
+      current ? partTriangles(current, part) : new Float32Array(),
     status,
     dispose: () => {
       remove();

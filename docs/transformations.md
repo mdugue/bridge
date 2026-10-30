@@ -4678,16 +4678,24 @@ GPU**.
   Its **site** — the plan with its ground plate — clears what else stands
   there (`design-site.ts`, one raster the vertex stages read): every
   instanced set (trees, hedges, lamps, furniture, monuments) folds an
-  instance whose foot stands in it, and the terrain with its walls,
-  kerbs, stairs and fences is pressed under the lowest height the design
+  instance whose foot stands in it (and a question no longer finds it,
+  `foldedThing`), and the terrain with its walls, kerbs, stairs and
+  fences and the water are pressed under the lowest height the design
   reaches in each cell (a sloping plate's slope, a house's lowest floor);
   on the tiles under it the ground is also cut
   where a triangle reaching out of the site lifts it through the plate.
+  Rails, ballast, platforms and tram tracks within 4 m over that floor go
+  under it too (`lineUnderDesign`; a line on a bridge above it stays).
   The walked ground follows (`Ground.setCap`). A building's plinths,
-  cornices, doors and parts go with it (`wholeTrees`).
+  cornices, doors and parts go with it (`wholeTrees`). **Asked**, a
+  design answers by the part its triangle belongs to (`DesignParts`, the
+  merged triangles' runs): an IFC element's entity, Name and GlobalId, a
+  plan's class, a glTF's or OBJ's object and material names, and its
+  placement (`lib/city/inquiry-design.ts`); outlined by that part's own
+  triangles.
   **Fallback:** without coordinates, the player's place; without a
-  ground under it, the player's ground. **Not yet:** IFC, the landscape
-  formats, asking it; rails, tram tracks and water in a site stay.
+  ground under it, the player's ground. **Not yet:** the tram's
+  overhead wires and a river's mist over a site stay; sharing by link.
 
 ## 🧪 Experimental
 

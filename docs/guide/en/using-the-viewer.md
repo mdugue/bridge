@@ -496,8 +496,11 @@ The other picture styles and Modell keep their sharp lines.
   40 MB (3 million and 400 MB on a computer); textures that do not fit
   are left out. With the buildings, the trees, hedges, lamps and street
   furniture in the design's plan (its ground plate included) go too, and
-  the ground, walls, kerbs and stairs there lie under its floor. Rails
-  and water stay.
+  the ground, walls, kerbs, stairs, tracks, platforms and water there lie
+  under its floor (a line on a bridge above it stays). A click on the
+  design asks it like a building: the card names the part — an IFC
+  element with its type and GlobalId, a plan's surface by its class, a
+  glTF's or OBJ's object by its name — and where the design stands.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
   the picture style, *Nebel*, the crown switch and the data layers as a
   small JSON text; paste such a text into the box and press *Anwenden* to
