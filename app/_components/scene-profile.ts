@@ -150,8 +150,8 @@ export function shadowMapSizeFor(
   }
   // A phone's shadow map is a quarter of the desktop's texels and a quarter
   // of the per-frame depth fill; the soft PCF radius hides the coarser
-  // texel over the 121 m frustum. The map is a depth texture and a one-byte
-  // colour target (`shadowMapBytesFor`): 20 MiB at 2048², 5 MiB at 1024².
+  // texel over the 121 m frustum. The map is a depth texture alone
+  // (`shadowMapBytesFor`): 16 MiB at 2048², 4 MiB at 1024².
   return SHADOW_MAP_SIZE[tier][safety];
 }
 
@@ -256,14 +256,15 @@ const TILE_CACHE_BYTES: Record<
  * depth, the one-byte AO and outline targets and a picture style's own
  * target while one is on: on the 402×874 iPhone 18, 12.5, 8 and 6 MiB at
  * the pixel ratios 1.5, 1.25, 1.0, 0.85 of the four levels) and the
- * shadow map (`shadowMapBytesFor`: 20 MiB at 2048², 5 at 1024²): 38,
- * 32.5, 13 and 11 MiB. The 100 MiB are ~40 for the scene-wide sets (sky,
+ * shadow map (`shadowMapBytesFor`: 16 MiB at 2048², 4 at 1024²): 34,
+ * 28.5, 12 and 10 MiB. The 100 MiB are ~40 for the scene-wide sets (sky,
  * lamp pool, data layers, uniform buffers and shader text) and ~60 of
  * headroom: tiles in flight weigh nothing in the cache, it unloads only
  * past `max` and one tile over, and three counts a tree set's instance
  * matrices once per view. Against 480/432/389/350 MiB of soft line that
- * leaves 342, 299, 276 and 239 MiB: `max` is 336, 296, 272, 232. Until it
- * was derived the
+ * leaves 346, 303.5, 277 and 240 MiB: `max` is 336, 296, 272, 232 (set
+ * while the shadow map still carried a colour target; a few MiB more
+ * headroom since). Until it was derived the
  * phone's `max` was 600 MB, above the governor's own hard line (560): the
  * cache never bound anything before Safari took the GPU away, at 614 MB
  * held.
@@ -370,9 +371,9 @@ export function postProfileFor(tier: DeviceTier): PostProfile {
 
 /**
  * GPU bytes of the sun's shadow map for its edge in texels: the depth
- * texture (4 bytes a texel; depth24plus is 32-bit on Apple GPUs) and the
- * one-byte colour target three renders beside it (sun-rig.ts) — no mips.
+ * texture (4 bytes a texel; depth24plus is 32-bit on Apple GPUs), no colour
+ * target (sun-rig.ts `DepthOnlyShadowNode`), no mips.
  */
 export function shadowMapBytesFor(size: number): number {
-  return size * size * (4 + 1);
+  return size * size * 4;
 }
