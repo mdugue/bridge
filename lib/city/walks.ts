@@ -10,11 +10,6 @@
  * by Claude wherever it shows; the facts carry their sources (ADR 0042,
  * ADR 0055). No THREE, no DOM.
  */
-import {
-  isModelPreset,
-  MODEL_PRESET_BY_ID,
-  type ModelPresetId,
-} from "./model-view";
 import { isRenderStyle, type RenderStyle } from "./render-style";
 import type { MovementMode, ViewpointGeometry } from "./site";
 import type { CameraStateJson } from "./snapshot";
@@ -51,17 +46,6 @@ export interface WalkDay {
 
 export type Season = "autumn" | "spring" | "summer" | "winter";
 
-/** Modell's view of a stop (ADR 0044): the parallel camera on `at`. */
-export interface WalkModel {
-  preset: ModelPresetId;
-  /** scale denominator (1 : n at 96 dpi) */
-  scale: number;
-  /** Vogelschau's tilt (degrees below the horizon); the preset's otherwise */
-  tiltDeg?: number;
-  /** compass heading of the view (0 = looking north) */
-  turnDeg: number;
-}
-
 export interface WalkStop {
   /** what the eye looks at: site CRS x, y and the height (m a.s.l.) */
   at: [number, number, number];
@@ -87,8 +71,6 @@ export interface WalkStop {
   id: string;
   /** walk (on the ground) or fly; walk when the eye is below 3 m */
   mode?: MovementMode;
-  /** shows the stop in Modell instead of the perspective view */
-  model?: WalkModel;
   /** the Stadtwissen entries it is about (Q-ids, Building ids) */
   refs?: string[];
   /** the picture style for this stop; Pastell when absent */
@@ -143,9 +125,8 @@ export function stopView(stop: WalkStop): ViewpointGeometry {
 
 /**
  * The stop as a camera state (snapshot.ts), put in place at once: the
- * perspective pose and, for a Modell stop, Modell's pivot on `at`. The
- * player jumps with it where a glide cannot go — into Modell, or out of
- * it. World = (x − cx, z, −(y − cy)).
+ * player jumps with it out of Modell, where a glide cannot go, and the
+ * shot plates start from it. World = (x − cx, z, −(y − cy)).
  */
 export function stopCamera(
   stop: WalkStop,
@@ -153,28 +134,13 @@ export function stopCamera(
 ): CameraStateJson {
   const view = stopView(stop);
   const [fx, fy, above] = stop.from;
-  const [ax, ay, az] = stop.at;
-  const pose: CameraStateJson = {
+  return {
     epsg: { x: fx, y: fy },
     pos: { x: fx - offset.cx, y: stop.ground + above, z: -(fy - offset.cy) },
     headingDeg: view.headingDeg,
     pitchDeg: view.pitchDeg,
     fov: view.fov,
-    mode: stop.model ? "fly" : view.mode,
-  };
-  if (!stop.model) {
-    return pose;
-  }
-  return {
-    ...pose,
-    model: {
-      pivot: { x: ax - offset.cx, y: az, z: -(ay - offset.cy) },
-      preset: stop.model.preset,
-      scale: stop.model.scale,
-      tiltDeg:
-        stop.model.tiltDeg ?? MODEL_PRESET_BY_ID[stop.model.preset].tiltDeg,
-      turnDeg: stop.model.turnDeg,
-    },
+    mode: view.mode,
   };
 }
 
@@ -225,7 +191,7 @@ export function stopNotes(stop: WalkStop, today: Date): string[] {
 const MD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const SOURCE = /^(https:\/\/\S+|stadtwissen:\S+)$/;
 /** The longest narration a stop shows: a phone screen, not an essay. */
-export const STOP_TEXT_MAX = 900;
+export const STOP_TEXT_MAX = 560;
 
 const finite = (v: unknown) => typeof v === "number" && Number.isFinite(v);
 
@@ -247,8 +213,9 @@ function viewProblems(stop: WalkStop): string[] {
   if (stop.style !== undefined && !isRenderStyle(stop.style)) {
     out.push(`style ${String(stop.style)} is not a picture style`);
   }
-  if (stop.model && !isModelPreset(stop.model.preset)) {
-    out.push(`model.preset ${String(stop.model.preset)} is not a Modell view`);
+  if ("model" in stop) {
+    // a walk is seen, not drawn: Modell's jump broke the glide between stops
+    out.push("model is not a walk's view (a steep aerial shows a plan)");
   }
   return out;
 }

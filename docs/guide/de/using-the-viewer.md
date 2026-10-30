@@ -406,15 +406,20 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   von innen beleuchtet), *Strich* in Planfarben mit Tuschekante (nachts
   als warmes Licht), der *Schwarzplan* als schwarz umrandetes Band.
 - **Spaziergänge** — Rundgänge durch die Stadt, erzählt von Claude,
-  einer KI, und an jeder Station so gekennzeichnet (bisher in Dresden):
+  einer KI, und an jeder Station so gekennzeichnet. In Dresden vier:
   *Augusts Bühne* (die Altstadt als Theater der Macht), *Narben und
   Nähte* (wie die Stadt mit ihren Wunden lebt), *Gold, Milch und
   Eigensinn* (die Neustadt) und *Wunder am Elbhang* (flussaufwärts nach
-  Loschwitz). Ein Spaziergang öffnet eine Karte über der Szene: Jede
-  Station gleitet zu ihrem Blick, stellt das heutige Datum zu der Stunde
-  ein, in der sie am besten aussieht (eine Fassade im Abendlicht, ein
-  Platz bei Nacht), und, wo die Station es will, einen Bildstil oder das
-  Modell; die Karte erzählt die Station, ergänzt, was heute oder in
+  Loschwitz); in jeder anderen Stadt einer: *Messe, Musik und Montag*
+  (Leipzig), *Backstein und Wasser* (Hamburg), *Teufel, Tanz und Löwen*
+  (München), *Schloss, Dom und Porzellan* (Meißen), *Grimma an der
+  Mulde* und *Licht unter der Stadt* (Unna). Ein Spaziergang öffnet eine
+  Karte über der Szene: Jede Station gleitet langsam zu ihrem Blick,
+  stellt das heutige Datum zu der Stunde ein, in der sie am besten
+  aussieht (eine Fassade im Abendlicht, ein Platz bei Nacht), und, wo
+  die Station es will, einen Bildstil; aus dem Modell geht ein
+  Spaziergang einmal hinaus, denn erzählt wird, was man sieht. Die
+  Karte erzählt die Station schon während des Flugs dorthin, ergänzt, was heute oder in
   dieser Jahreszeit besonders ist, und nennt ein Detail, das im Bild zu
   finden ist. *Belege* klappt jede Angabe der Station mit ihrer Quelle
   auf — Wikipedia, die Seite einer Einrichtung, die Daten des

@@ -663,9 +663,10 @@ export interface CityWalkHandle {
   flyTo: (position: Xyz, lookAt: Xyz) => void;
   /**
    * Smoothly glides the camera to a curated scenic Viewpoint (animated, unlike
-   * the instant applyCameraState), landing in the viewpoint's movement mode.
+   * the instant applyCameraState), landing in the viewpoint's movement mode
+   * (in Modell: centres on it); `pace` stretches the glide.
    */
-  flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
+  flyToViewpoint: (viewpoint: ViewpointGeometry, pace?: number) => void;
   /**
    * The current pose as a vantage — what the HUD stores when you save a view,
    * so restoring it is the same animated glide as any curated one.
@@ -4150,10 +4151,10 @@ async function bootApp(
       pose.flyTo(position, lookAt);
     },
     // In Modell a place is where the picture is centred (plan 055).
-    flyToViewpoint: (view) =>
+    flyToViewpoint: (view, pace) =>
       modelRig.owns()
         ? modelRig.centreOn(vantageTarget(view))
-        : pose.flyToViewpoint(view),
+        : pose.flyToViewpoint(view, pace),
     captureViewpoint: pose.captureViewpoint,
     placeAt: (view) =>
       modelRig.owns()
