@@ -1157,6 +1157,7 @@ export function createPostStack(
       // material only, and these hold the screen-sized memory
       antialiasing.dispose();
       lensBlur?.dispose();
+      motion.dispose();
       aoTexture.dispose();
       aoPass.dispose();
       beforeAa.dispose();

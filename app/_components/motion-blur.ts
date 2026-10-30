@@ -26,8 +26,6 @@ import type { ViewLens } from "./view-lens";
 
 /** Reads along a pixel's way (a phone's FXAA reads about as many). */
 const TAPS = 8;
-/** A gap between drawn frames this long (ms) is not one frame's motion. */
-const GAP_MS = 100;
 
 export interface MotionBlur {
   /**
@@ -41,11 +39,13 @@ export interface MotionBlur {
    * once a frame, after the lens took the frame's camera. `on` false (a
    * style or Modell without the blur, a still camera) measures nothing
    * and forgets the last pose, so the next blurred frame starts from a
-   * fresh one; so does a new size or projection, or a gap between frames.
+   * fresh one; so does a new size or projection, or a page that comes
+   * back to the front.
    * `everywhere`: the blur replaces the antialiasing (lib/city/
    * motion-blur.ts `blurs`).
    */
   update: (size: Vector2, on: boolean, everywhere: boolean) => boolean;
+  dispose: () => void;
 }
 
 /**
@@ -86,7 +86,14 @@ export function createMotionBlur(
   const prevProj = new Matrix4();
   const prevSize = new Vector2();
   let held = false;
-  let lastMs = 0;
+  // A page brought back to the front: its first frame is no frame's
+  // motion (a flight went on while it was hidden). Not a time gap: a slow
+  // renderer (or the QA's held loop) draws seconds apart and still moves
+  // one frame at a time.
+  const forget = () => {
+    held = false;
+  };
+  document.addEventListener("visibilitychange", forget);
 
   return {
     over: (source, occlusion) => {
@@ -98,13 +105,10 @@ export function createMotionBlur(
       return vec4(sum.div(TAPS).mul(occlusion), 1);
     },
     update: (size, on, everywhere) => {
-      const now = performance.now();
       const fresh =
         !held ||
-        now - lastMs > GAP_MS ||
         !size.equals(prevSize) ||
         !view.projectionMatrix.equals(prevProj);
-      lastMs = now;
       if (!on || lens.isOrtho()) {
         held = false;
         return false;
@@ -131,5 +135,6 @@ export function createMotionBlur(
       held = true;
       return blurred;
     },
+    dispose: () => document.removeEventListener("visibilitychange", forget),
   };
 }

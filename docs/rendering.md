@@ -1204,7 +1204,7 @@ lens blur is off (`regressed`): on a desktop once half the samples move
 replaces the FXAA, and a far city that barely moves would keep neither.
 So a walk straight ahead stays sharp and antialiased; a turn, a strafe
 or a flight blurs. Above 600 px (a jump), after a new size or
-projection and after a gap of 100 ms between frames, a frame is drawn
+projection and when the page comes back to the front, a frame is drawn
 sharp. Where it draws, memory does not grow:
 
 - **Phone:** in the last pass, **in place of the FXAA** (8 reads against
