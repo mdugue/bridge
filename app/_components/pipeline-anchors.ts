@@ -144,7 +144,10 @@ function slotless(material: Material): Material {
   }
 }
 
-/** The anchor's key: what a build and its pipeline are keyed by. */
+/** The anchor's key: what a build and its pipeline are keyed by — the
+ *  pipeline's vertex layout by each attribute's format and step mode too
+ *  (its array's element type, per instance or per vertex), and a line
+ *  strip's by its index format: all of which `layoutStub` keeps. */
 function anchorKey(drawable: Drawable, material: Material): string {
   const geometry = drawable.geometry as BufferGeometry;
   const layout = Object.entries(geometry.attributes)
@@ -153,15 +156,29 @@ function anchorKey(drawable: Drawable, material: Material): string {
       const data = i.isInterleavedBufferAttribute
         ? `${i.data.stride}/${i.offset}`
         : "";
-      return `${name}:${a.itemSize}:${a.normalized ? "n" : ""}:${data}`;
+      const array = i.isInterleavedBufferAttribute
+        ? i.data.array
+        : (a as BufferAttribute).array;
+      // per instance or per vertex: the buffer's step mode
+      // reason: the flag is set at runtime but missing from the @types.
+      const instanced = i.isInterleavedBufferAttribute
+        ? (i.data as { isInstancedInterleavedBuffer?: boolean })
+            .isInstancedInterleavedBuffer === true
+        : (a as InstancedBufferAttribute).isInstancedBufferAttribute === true;
+      return `${name}:${a.itemSize}:${a.normalized ? "n" : ""}:${data}:${array.constructor.name}:${instanced ? "s" : ""}`;
     })
     .sort()
     .join(",");
+  // a line strip's pipeline names its index format too
+  const strip = drawable.isLine === true && drawable.isLineSegments !== true;
+  const index = geometry.index
+    ? `i${strip ? `:${geometry.index.array.constructor.name}` : ""}`
+    : "";
   return [
     material.uuid,
     drawable.type,
     layout,
-    geometry.index ? "i" : "",
+    index,
     drawable.receiveShadow,
   ].join("|");
 }
@@ -192,8 +209,9 @@ export interface PipelineAnchors {
    * one set, compiled in one call, where three (r187) builds them one after
    * the other and compiles their GPU pipelines side by side — a call per
    * stand-in waits for each pipeline in turn (compile-lanes.ts
-   * `compileInTurn`). Stand-ins only: nothing a tile frees is compiled.
-   * Not for a compile under a swap, which carries one drawable's position
+   * `compileInTurn`). Stand-ins only; a per-tile material anchored as
+   * itself (`every`) that its tile frees before the set's turn leaves the
+   * set. Not for a compile under a swap, which carries one drawable's position
    * node over (paper-scene.ts `swapped`).
    */
   anchorAll: (drawables: readonly Object3D[]) => Promise<void>;
@@ -206,8 +224,8 @@ export function createPipelineAnchors(
   /** compiles an object the way the frames draw it (PostStack) */
   compile: (object: Object3D) => Promise<void>,
   /**
-   * Anchor a per-tile material too, as itself (its anchor goes when the
-   * tile disposes it): for a hold that lasts only while it is needed, as
+   * Anchor a per-tile material too, as itself (its anchors go when the
+   * tile disposes it, `onOwnedGone`): for a hold that lasts only while it is needed, as
    * the Ausschnitt's (post-stack.ts `holdCut`), where every build matters.
    */
   every = false
@@ -230,9 +248,49 @@ export function createPipelineAnchors(
     }
     return stand;
   };
-  /** A new anchor for `object`'s build, or null: none is wanted, or one
-   *  holds it already. */
-  const standInFor = (object: Object3D): Object3D | null => {
+  // each anchor's compile, settled or in flight: a second ask for a build
+  // resolves once it is held, not as soon as its stand-in is made
+  const ready = new Map<string, Promise<void>>();
+  const track = (keys: readonly string[], compiling: Promise<void>) => {
+    const settled = compiling.catch(() => undefined);
+    for (const key of keys) {
+      ready.set(key, settled);
+    }
+    return compiling;
+  };
+  // A per-tile material anchored as itself (`every`): its anchors go when
+  // the tile disposes it — out of a set still waiting for its turn too, so
+  // nothing builds a freed material again — and hold none of it after.
+  const owned = new Map<Material, Set<string>>();
+  const onOwnedGone = (event: { target: Material }) => {
+    const material = event.target;
+    material.removeEventListener("dispose", onOwnedGone);
+    for (const key of owned.get(material) ?? []) {
+      const anchor = anchors.get(key);
+      anchors.delete(key);
+      ready.delete(key);
+      if (anchor) {
+        anchor.removeFromParent();
+        (anchor as Drawable).geometry?.dispose();
+        releaseRenderState(anchor);
+      }
+    }
+    owned.delete(material);
+  };
+  const own = (material: Material, key: string) => {
+    let keys = owned.get(material);
+    if (!keys) {
+      keys = new Set();
+      owned.set(material, keys);
+      material.addEventListener("dispose", onOwnedGone);
+    }
+    keys.add(key);
+  };
+  /** `object`'s build: its key and a new anchor for it, or no anchor (one
+   *  holds it already) — or null, none is wanted. */
+  const standInFor = (
+    object: Object3D
+  ): { key: string; anchor: Object3D | null } | null => {
     const drawable = object as Drawable;
     const { geometry } = drawable;
     if (!(geometry && drawable.material) || Array.isArray(drawable.material)) {
@@ -244,38 +302,66 @@ export function createPipelineAnchors(
     }
     const key = anchorKey(drawable, material);
     if (anchors.has(key)) {
-      return null;
+      return { key, anchor: null };
     }
     const anchor = standIn(drawable, layoutStub(geometry), material);
     anchor.name = "pipeline-anchor";
     anchor.receiveShadow = drawable.receiveShadow;
     anchor.frustumCulled = false;
     anchors.set(key, anchor);
-    return anchor;
+    if (material === drawable.material && material.userData.shared !== true) {
+      own(material, key);
+    }
+    return { key, anchor };
   };
   return {
     anchor: async (object) => {
-      const anchor = standInFor(object);
-      if (anchor) {
-        await compile(anchor);
+      const wanted = standInFor(object);
+      if (!wanted) {
+        return;
       }
+      await (wanted.anchor
+        ? track([wanted.key], compile(wanted.anchor))
+        : ready.get(wanted.key));
     },
     anchorAll: async (objects) => {
       const set = new Group();
+      const keys: string[] = [];
+      const made: Object3D[] = [];
+      // the compiles of the builds another call anchors: waited for too
+      const others = new Set<Promise<void>>();
       for (const object of objects) {
-        const anchor = standInFor(object);
-        if (anchor) {
-          set.add(anchor);
+        const wanted = standInFor(object);
+        if (wanted?.anchor) {
+          set.add(wanted.anchor);
+          keys.push(wanted.key);
+          made.push(wanted.anchor);
+        } else if (wanted) {
+          const pending = ready.get(wanted.key);
+          if (pending) {
+            others.add(pending);
+          }
         }
       }
-      if (set.children.length === 0) {
-        return;
+      if (set.children.length > 0) {
+        try {
+          await track(keys, compile(set));
+        } finally {
+          set.clear();
+          // A stand-in let go while its set compiled (`onOwnedGone`, or
+          // `dispose`): three took the set's items when the call began and
+          // builds them over several frames, so one built after it was
+          // freed holds a render object and its stub's buffers again —
+          // freed once more, now that nothing builds it.
+          made.forEach((anchor, i) => {
+            if (anchors.get(keys[i]) !== anchor) {
+              (anchor as Drawable).geometry?.dispose();
+              releaseRenderState(anchor);
+            }
+          });
+        }
       }
-      try {
-        await compile(set);
-      } finally {
-        set.clear();
-      }
+      await Promise.all(others);
     },
     count: () => anchors.size,
     dispose: () => {
@@ -284,6 +370,11 @@ export function createPipelineAnchors(
         releaseRenderState(anchor);
       }
       anchors.clear();
+      ready.clear();
+      for (const material of owned.keys()) {
+        material.removeEventListener("dispose", onOwnedGone);
+      }
+      owned.clear();
       for (const material of standIns.values()) {
         material.dispose();
       }

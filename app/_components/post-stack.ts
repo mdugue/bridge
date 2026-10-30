@@ -258,8 +258,9 @@ export interface PostStack {
    * Builds the scene's programs for `view` as well, off the frames, and
    * from then on every landing tile's: three builds a material's programs
    * per kind of camera, so Modell's parallel camera would otherwise build
-   * every material in sight inside its first frames. One drawable per
-   * build, the swaps' where Papier is wanted or on, and the outline's mask.
+   * every material in sight inside its first frames. One stand-in per
+   * pipeline (as the Ausschnitt's hold), the swaps' one drawable per build
+   * where Papier is wanted or on, and the outline's mask.
    */
   warmView: (view: Camera) => Promise<void>;
   /** Landing tiles compile for `view` no longer (Modell was left). */
@@ -830,6 +831,45 @@ export function createPostStack(
     focusRange.value = focusRangeFor(d);
   };
 
+  /** set by `dispose`: what is let go later goes at once, and what is
+   *  queued compiles nothing */
+  let stackDisposed = false;
+  // The geometries disposed while a walk over them runs (`compileAll`, a
+  // tile's `compile`).
+  const gone = new WeakSet<BufferGeometry>();
+  /** `object`'s tile left while a walk over it runs */
+  const left = (object: Object3D) => {
+    const { geometry } = object as Drawable;
+    return geometry !== undefined && gone.has(geometry);
+  };
+  /**
+   * Notes in `gone` each of `list`'s geometries disposed until the returned
+   * stop. A listener of each walk's own: three adds one function once per
+   * geometry, so a shared one taken off by the walk that ended first would
+   * no longer hear a geometry another walk still compiles.
+   */
+  const watchGone = (list: readonly Drawable[]) => {
+    const geometries = new Set(list.map((o) => o.geometry as BufferGeometry));
+    const onGone = (event: { target: BufferGeometry }) =>
+      gone.add(event.target);
+    for (const g of geometries) {
+      g.addEventListener("dispose", onGone);
+    }
+    return () => {
+      for (const g of geometries) {
+        g.removeEventListener("dispose", onGone);
+      }
+    };
+  };
+  /**
+   * `roots`' drawables as they are now, without those whose tile left: a
+   * set of stand-ins is made when it is asked for, after the awaits before
+   * it, and a tile's own material anchored as itself must not be one the
+   * tile has freed — its compile would upload the freed textures again,
+   * and nothing would free them then.
+   */
+  const present = (roots: Object3D[]) =>
+    roots.flatMap(drawablesOf).filter((d) => !left(d));
   /**
    * One drawable, shown and unculled for the call: `compileAsync` walks a
    * tree the way a frame does, skipping what is hidden or outside the view,
@@ -839,9 +879,16 @@ export function createPostStack(
    * between calls is where a frame gets in. Each call also walks the
    * scene for its lights — cheap next to one node build, and the price of
    * never blocking a frame for a whole tile. Made only in a compile's turn
-   * (compile-lanes.ts `compileInTurn`): `compileOne` queues it.
+   * (compile-lanes.ts `compileInTurn`): `compileOne` queues it. A drawable
+   * whose tile left while it waited for its turn, or a stack disposed
+   * meanwhile, compiles nothing: it would re-create the GPU buffers of a
+   * disposed geometry, and nothing would free them again (`compileAll`
+   * skips such a drawable only when it queues it).
    */
   const compileNow = (object: Object3D, view: Camera = camera) => {
+    if (stackDisposed || left(object)) {
+      return Promise.resolve();
+    }
     const previous = renderer.getRenderTarget();
     const { visible, frustumCulled } = object;
     object.visible = true;
@@ -885,12 +932,20 @@ export function createPostStack(
     (kind: PaperKind, now: (object: Object3D) => Promise<void>) =>
     (object: Object3D): Promise<void> =>
       paperScene.swapped(object, () => now(object), kind);
-  const compileSwap =
-    (kind: PaperKind, view: Camera) =>
-    (object: Drawable): Promise<void> =>
-      paperScene.drawsAsPaper(object, kind)
-        ? inTurn(swappedIn(kind, (o) => compileNow(o, view)))(object)
+  // a camera let go meanwhile (`dropView`) is compiled for no longer: the
+  // rest of a walk queued nothing behind the tiles for it, and a compile
+  // still queued when it was let go builds nothing
+  const compileSwap = (kind: PaperKind, view: Camera) => {
+    const swap = inTurn(
+      swappedIn(kind, (o) =>
+        views.includes(view) ? compileNow(o, view) : Promise.resolve()
+      )
+    );
+    return (object: Drawable): Promise<void> =>
+      paperScene.drawsAsPaper(object, kind) && views.includes(view)
+        ? swap(object)
         : Promise.resolve();
+  };
   // The swaps' own materials: Strich wears Papier's card, so its programs
   // are Papier's.
   const SWAP_KINDS = ["paper", "figure", "ink"] as const;
@@ -918,8 +973,31 @@ export function createPostStack(
   }
   let cut: CutHold | null = null;
   let releaseAfterFrame: PipelineAnchors[] = [];
-  /** set by `dispose`: what is let go later goes at once */
-  let stackDisposed = false;
+  /**
+   * Lets `held` go once the compiles queued so far — a set of their
+   * stand-ins among them, maybe — have settled, and a frame has drawn
+   * without them: freed before its turn, a queued set would build its
+   * freed stand-ins again, and nothing would free them then (the queue is
+   * an upstream workaround, `compileInTurn`: without it, wait for their
+   * own compiles). Not if `release()`, asked then, says no (taken back).
+   */
+  const releaseWhenSettled = (
+    held: PipelineAnchors[],
+    release: () => boolean = () => true
+  ) => {
+    void compileInTurn(renderer, () => Promise.resolve()).then(() => {
+      if (!release()) {
+        return;
+      }
+      if (stackDisposed) {
+        for (const a of held) {
+          a.dispose();
+        }
+      } else {
+        releaseAfterFrame.push(...held);
+      }
+    });
+  };
   /**
    * `object` compiled under `group`'s clipping (three-utils.ts
    * `aloneUnder`): the render object the call makes has the very context
@@ -930,6 +1008,9 @@ export function createPostStack(
     object: Object3D,
     view: Camera
   ) => {
+    if (stackDisposed) {
+      return Promise.resolve();
+    }
     const previous = renderer.getRenderTarget();
     renderer.setRenderTarget(target);
     try {
@@ -970,15 +1051,14 @@ export function createPostStack(
     // every drawable, not one per material and attribute names: the
     // anchors key a pipeline as three does (the buffers' strides and
     // offsets too), and a pipeline the frames come back to that no anchor
-    // holds is one built inside the frame
-    const drawables = roots.flatMap(drawablesOf);
-    // the clipped and the plain side, each set of stand-ins in one call
+    // holds is one built inside the frame; the clipped and the plain side,
+    // each set of stand-ins in one call, of the drawables still there
     for (const { a, paper } of held.anchors) {
       if (cut !== held) {
         return;
       }
       if (!paper) {
-        await a.anchorAll(drawables);
+        await a.anchorAll(present(roots));
       }
     }
     // the swap's, drawable by drawable: the swap carries one drawable's
@@ -992,7 +1072,10 @@ export function createPostStack(
         return;
       }
       for (const { a, paper } of held.anchors) {
-        if (cut !== held) {
+        // a tile that left after the clipped side's stand-in: its own
+        // material, freed, anchored as itself would hold no listener that
+        // ever fires, and its compile would upload the freed textures again
+        if (cut !== held || left(drawable)) {
           return;
         }
         if (paper) {
@@ -1000,11 +1083,11 @@ export function createPostStack(
         }
       }
     };
-    await compileAll(drawables, step, held.done);
+    await compileAll(present(roots), step, held.done);
   };
   const letGo = () => {
     if (cut) {
-      releaseAfterFrame.push(...cut.anchors.map(({ a }) => a));
+      releaseWhenSettled(cut.anchors.map(({ a }) => a));
       cut = null;
     }
   };
@@ -1030,45 +1113,73 @@ export function createPostStack(
   // of every material, while that camera is wanted: compiled a whole set
   // to the call, and nothing a tile frees is among them.
   const viewAnchors = new Map<Camera, PipelineAnchors>();
+  // A let-go camera's anchors until the compiles queued before they go have
+  // settled (`dropView`): the camera wanted again meanwhile takes them back,
+  // instead of building anew what they still hold.
+  const dropping = new Map<
+    Camera,
+    { anchors: PipelineAnchors; drop: object }
+  >();
   const anchorsOf = (view: Camera) => {
-    let a = viewAnchors.get(view);
-    if (!a) {
-      a = createPipelineAnchors(
+    const a =
+      viewAnchors.get(view) ??
+      dropping.get(view)?.anchors ??
+      createPipelineAnchors(
         inTurn((o) => compileNow(o, view)),
         true
       );
-      viewAnchors.set(view, a);
-    }
+    dropping.delete(view);
+    viewAnchors.set(view, a);
     return a;
   };
-  const gone = new WeakSet<BufferGeometry>();
-  const onGone = (event: { target: BufferGeometry }) => gone.add(event.target);
   // Papier's programs are made once the styles are warmed (where the
   // profile's `warmPaper` allows) or while Papier is on; otherwise a tile
   // compiles for the scene's own look only.
   let paperWanted = false;
   /**
-   * The builds of `list` for `view`, one drawable per build (three keys a
-   * build by the material and layout): its own — the walk/fly camera's
-   * are made drawable by drawable, which also uploads them — and the
-   * swaps', where Papier is wanted or on (the override's build is keyed by
-   * the source's material and layout).
+   * The builds of `roots` for every view (or `only`): its own — the
+   * walk/fly camera's are made drawable by drawable, which also uploads
+   * them; another camera's are anchored from every drawable, as the
+   * anchors key a pipeline (the buffers' strides and offsets too) — and
+   * the swaps', where Papier is wanted or on, one drawable per build (the
+   * override's build is keyed by the source's material and layout).
    */
-  const compileBuilds = async (view: Camera, list: Drawable[]) => {
-    // a camera let go meanwhile (`dropView`) is compiled for no longer
-    if (!views.includes(view)) {
-      return;
-    }
-    if (view !== camera) {
-      await anchorsOf(view).anchorAll(list);
-    }
-    const kind = style.paperScene;
-    if (!(paperWanted || kind) || !views.includes(view)) {
-      return;
-    }
-    const records = swapRecordsOf(view);
-    for (const k of paperWanted || !kind ? SWAP_KINDS : [swapOf(kind)]) {
-      await compileAll(list, compileSwap(k, view), records[k]);
+  const compileBuilds = async (roots: Object3D[], only?: Camera) => {
+    let representatives: Drawable[] | null = null;
+    // the representatives outlive one walk (every kind, every view): a
+    // tile that leaves between two walks is heard too, not only during one
+    let unwatch = () => {};
+    try {
+      // a copy: a view asked for or let go meanwhile does not shift the walk
+      for (const view of only ? [only] : [...views]) {
+        // a camera let go meanwhile (`dropView`) is compiled for no longer
+        if (!views.includes(view)) {
+          continue;
+        }
+        if (view !== camera) {
+          await anchorsOf(view).anchorAll(present(roots));
+        }
+        const kind = style.paperScene;
+        if (!(paperWanted || kind)) {
+          continue;
+        }
+        if (!representatives) {
+          representatives = compileRepresentatives(roots);
+          unwatch = watchGone(representatives);
+        }
+        for (const k of paperWanted || !kind ? SWAP_KINDS : [swapOf(kind)]) {
+          if (!views.includes(view)) {
+            break;
+          }
+          await compileAll(
+            representatives,
+            compileSwap(k, view),
+            swapRecordsOf(view)[k]
+          );
+        }
+      }
+    } finally {
+      unwatch();
     }
   };
 
@@ -1077,22 +1188,17 @@ export function createPostStack(
     step: (drawable: Drawable) => Promise<void>,
     done: WeakMap<Drawable, Compiling>
   ) => {
-    const geometries = new Set(list.map((o) => o.geometry as BufferGeometry));
-    for (const g of geometries) {
-      g.addEventListener("dispose", onGone);
-    }
+    const unwatch = watchGone(list);
     // One at a time per lane: a drawable whose tile left meanwhile is
     // skipped — compiling it would re-create the GPU buffers of a disposed
     // geometry, and nothing would free them again.
     try {
       await compileInLanes(list, step, done, {
         lanes: COMPILE_LANES,
-        skip: (drawable) => gone.has(drawable.geometry as BufferGeometry),
+        skip: left,
       });
     } finally {
-      for (const g of geometries) {
-        g.removeEventListener("dispose", onGone);
-      }
+      unwatch();
     }
   };
 
@@ -1119,24 +1225,27 @@ export function createPostStack(
       return;
     }
     paperWanted = true;
-    const representatives = compileRepresentatives([scene]);
-    for (const view of views) {
-      await compileBuilds(view, representatives);
-    }
+    await compileBuilds([scene]);
   };
 
   return {
     compile: async (root) => {
-      await compileAll(drawablesOf(root), compileAnchored, compiled);
-      // a tile landing under a cut that shows: its builds held before it does
-      if (cut) {
-        await holdAll(cut, [root]);
-      }
-      if (views.length > 1 || paperWanted || style.paperScene) {
-        const representatives = compileRepresentatives([root]);
-        for (const view of views) {
-          await compileBuilds(view, representatives);
+      const drawables = drawablesOf(root);
+      // a tile that leaves before its holds and other cameras' anchors are
+      // made has nothing of it anchored (`present`)
+      const unwatch = watchGone(drawables);
+      try {
+        await compileAll(drawables, compileAnchored, compiled);
+        // a tile landing under a cut that shows: its builds held before it
+        // does
+        if (cut) {
+          await holdAll(cut, [root]);
         }
+        if (views.length > 1 || paperWanted || style.paperScene) {
+          await compileBuilds([root]);
+        }
+      } finally {
+        unwatch();
       }
     },
     anchorCount: () => anchors.count(),
@@ -1148,28 +1257,41 @@ export function createPostStack(
       await holdAll(cut, roots);
     },
     warmView: async (view) => {
+      // a disposed stack takes no camera: its anchors would never be freed
+      if (stackDisposed) {
+        return;
+      }
       if (!views.includes(view)) {
         views.push(view);
       }
       await outline.compile(renderer, view);
-      await compileBuilds(view, compileRepresentatives([scene]));
+      await compileBuilds([scene], view);
     },
     dropView: (view) => {
       if (view === camera || !views.includes(view)) {
         return;
       }
       views.splice(views.indexOf(view), 1);
+      // its swaps' builds may go meanwhile: compiled again when wanted again
+      swapRecords.delete(view);
       const held = viewAnchors.get(view);
       if (held) {
         viewAnchors.delete(view);
-        // once the compiles queued so far — a set of its stand-ins among
-        // them, maybe — have settled, and a frame has drawn without them
-        void compileInTurn(renderer, () => Promise.resolve()).then(() => {
-          if (stackDisposed) {
-            held.dispose();
-          } else {
-            releaseAfterFrame.push(held);
+        const drop = {};
+        dropping.set(view, { anchors: held, drop });
+        // not if the camera took them back meanwhile (`anchorsOf`), or a
+        // later drop holds them; and a camera wanted again (`warmView`)
+        // that has not come to them yet takes them back now
+        releaseWhenSettled([held], () => {
+          if (dropping.get(view)?.drop !== drop) {
+            return false;
           }
+          dropping.delete(view);
+          if (!stackDisposed && views.includes(view)) {
+            viewAnchors.set(view, held);
+            return false;
+          }
+          return true;
         });
       }
     },
@@ -1197,6 +1319,8 @@ export function createPostStack(
       // compileAsync restores the target it was called with — so between
       // two frames the renderer may be left drawing into `target`, and the
       // last pass, which reads the scene's depth, would draw into it too.
+      // An upstream workaround (docs/rendering.md, "Workarounds for
+      // upstream bugs") that may stay once three fixes it.
       renderer.setRenderTarget(target);
       // A style's scene dressing (its crowns, lamp cones) and the Papier
       // swap are on for the scene's render only, and off right after.
@@ -1281,6 +1405,9 @@ export function createPostStack(
     },
     dispose: () => {
       stackDisposed = true;
+      // a walk still running compiles for no other camera, and makes no
+      // anchors that nothing would free
+      views.splice(1);
       for (const pre of [
         pastel.dof,
         pastel.model,

@@ -149,7 +149,6 @@ export function createSkyReflection(
     ) {
       return;
     }
-    last = sun;
     renderedAt = performance.now();
     // Every face cleared whatever the app's clear settings, as three's
     // own PMREMGenerator.fromScene does.
@@ -157,10 +156,19 @@ export function createSkyReflection(
     renderer.autoClear = true;
     renderer.autoClearColor = true;
     renderer.autoClearDepth = true;
-    camera.update(renderer, skyScene);
-    renderer.autoClear = autoClear;
-    renderer.autoClearColor = autoClearColor;
-    renderer.autoClearDepth = autoClearDepth;
+    try {
+      camera.update(renderer, skyScene);
+      // only a render that drew: one that threw is tried again next time
+      last = sun;
+    } finally {
+      renderer.autoClear = autoClear;
+      renderer.autoClearColor = autoClearColor;
+      renderer.autoClearDepth = autoClearDepth;
+      // CubeCamera.update turns the mips off for the first five faces and
+      // back on for the last: a face that threw left them off, and every
+      // render after (it keeps what it found) would never blur again
+      target.texture.mipmapsAutoUpdate = true;
+    }
   };
   const cancel = () => {
     if (timer !== null) {

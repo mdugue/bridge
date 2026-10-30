@@ -157,7 +157,11 @@ class DepthOnlyShadowNode extends ShadowNodeWithTarget {
     // three's depth texture (its name, its compare function), in a target
     // of its own without the colour — the one made with it is never
     // allocated, and goes
-    const { depthTexture } = super.setupRenderTarget(shadow, builder);
+    const made = super.setupRenderTarget(shadow, builder);
+    const { depthTexture } = made;
+    // handed over: the depth belongs to the target that draws it, which
+    // frees it with itself (a texture keeps the first target it was given)
+    made.shadowMap.depthTexture = null;
     const shadowMap = new RenderTarget(
       shadow.mapSize.width,
       shadow.mapSize.height,

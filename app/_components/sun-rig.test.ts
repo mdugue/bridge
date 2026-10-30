@@ -180,6 +180,9 @@ test("the shadow map is its depth alone, no colour target beside it", () => {
   expect(shadowMap.textures).toHaveLength(0);
   // the depth the PCF filter compares against is still the map's
   expect(shadowMap.depthTexture).toBe(depthTexture);
+  // and it is this map's own, freed with it (three frees a target's depth
+  // only where the texture names that target)
+  expect(depthTexture.renderTarget).toBe(shadowMap);
   expect(shadowMap.width).toBe(512);
   shadowMap.dispose();
 });

@@ -312,6 +312,8 @@ export function createSelectionOutline(deps: {
   // nothing has used them (performance.now())
   let held = false;
   let lastUsed = 0;
+  /** set by `dispose`: a compile still queued builds nothing */
+  let outlineDisposed = false;
 
   const spread = uniform(outlineSpread(1));
   // the flash of a new question (OUTLINE_PULSE), and when it was asked
@@ -479,10 +481,18 @@ export function createSelectionOutline(deps: {
     // like PostStack's compileOne: each compile in its turn
     // (compile-lanes.ts `compileInTurn`), the target and the shape set for
     // its call and restored right after, before a frame. Compiling against
-    // the targets allocates them: they go in time, as after a question.
+    // the targets allocates them: they go in time, as after a question —
+    // timed from the turn, not the ask (a queue longer than the keep had
+    // freed them first, and its compile then held them for good), and none
+    // once the outline is disposed.
     compile: async (renderer, camera) => {
       const inTurn = (into: RenderTarget, root: Object3D, view: Camera) =>
         compileInTurn(renderer, () => {
+          if (outlineDisposed) {
+            return Promise.resolve();
+          }
+          held = true;
+          lastUsed = performance.now();
           const previous = renderer.getRenderTarget();
           const shown = [shape.visible, flow.visible] as const;
           shape.visible = true;
@@ -495,8 +505,6 @@ export function createSelectionOutline(deps: {
             renderer.setRenderTarget(previous);
           }
         });
-      held = true;
-      lastUsed = performance.now();
       await Promise.all([
         inTurn(mask, scene, camera),
         inTurn(across, blurAcross.quad, blurAcross.quad.camera),
@@ -504,6 +512,7 @@ export function createSelectionOutline(deps: {
       ]);
     },
     dispose: () => {
+      outlineDisposed = true;
       shape.geometry.dispose();
       dropFlowGeometry(flow.geometry, flowShared);
       material.dispose();
