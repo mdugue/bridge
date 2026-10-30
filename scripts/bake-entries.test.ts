@@ -61,7 +61,9 @@ test("every module prepare-data.ts imports is in a bake's key, or says why not",
   // of its entries or imported from one, or that artifact's cache goes
   // stale without a word
   const source = readFileSync(join(ROOT, "scripts/prepare-data.ts"), "utf8");
-  const imported = [...source.matchAll(/from "(\.\.?\/[^"]+)"/gu)].map((m) => {
+  // static imports, side-effect imports and dynamic import() alike
+  const specifiers = /(?:from |import\s*\(?\s*)"(\.\.?\/[^"]+)"/gu;
+  const imported = [...source.matchAll(specifiers)].map((m) => {
     const path = m[1].replace(/^\.\.\//u, "").replace(/^\.\//u, "scripts/");
     return existsSync(join(ROOT, `${path}.ts`))
       ? `${path}.ts`

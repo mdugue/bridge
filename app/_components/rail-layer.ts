@@ -130,7 +130,7 @@ import {
  *  - Catenary: over the contact lines, masts and portals with their wires
  *    (catenary-layer.ts, lib/city/catenary.ts).
  *
- * All geometry is hand-wound to match its supplied normal (see pushTri), so every
+ * All geometry is hand-wound to match its supplied normal (mesh-kit.ts `pushTri`), so every
  * material is FrontSide. Authored in Y-up world coords → added to `scene`.
  * The materials are plain lit node materials, one per colour/finish for the
  * whole scene (`sceneMaterial`): they carry no per-tile data, and the

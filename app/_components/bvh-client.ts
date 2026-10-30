@@ -127,15 +127,21 @@ function startWorker(): Worker | null {
   return worker;
 }
 
-function dieOut(): void {
-  broken = true;
+/** Ends the worker; every build still away settles as lost. */
+function shutDown(): void {
   markStarted?.(false);
   worker?.terminate();
   worker = null;
+  started = null;
   for (const [id, settle] of settles) {
     settles.delete(id);
     settle(null);
   }
+}
+
+function dieOut(): void {
+  broken = true;
+  shutDown();
 }
 
 /**
@@ -145,17 +151,8 @@ function dieOut(): void {
  * with the scene); a later build starts a new worker.
  */
 export function stopBvhWorker(): void {
-  const stopping = worker;
-  if (!stopping) {
-    return;
-  }
-  markStarted?.(false);
-  stopping.terminate();
-  worker = null;
-  started = null;
-  for (const [id, settle] of settles) {
-    settles.delete(id);
-    settle(null);
+  if (worker) {
+    shutDown();
   }
 }
 

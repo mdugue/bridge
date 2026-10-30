@@ -58,9 +58,8 @@ function runHere(job: Job): void {
   }
 }
 
-/** The work done here after all: the worker failed to start or died. */
-function giveUp(): void {
-  broken = true;
+/** Ends the worker and hands each job it held or queued to `each`. */
+function shutDown(each: (job: Job) => void): void {
   worker?.terminate();
   worker = null;
   sentShared.clear();
@@ -68,12 +67,20 @@ function giveUp(): void {
   running = null;
   queue.length = 0;
   for (const job of left) {
+    each(job);
+  }
+}
+
+/** The work done here after all: the worker failed to start or died. */
+function giveUp(): void {
+  broken = true;
+  shutDown((job) => {
     if (job.signal?.aborted) {
       job.reject(job.signal.reason);
     } else {
       runHere(job);
     }
-  }
+  });
 }
 
 interface Reply {
@@ -195,15 +202,9 @@ function next(): void {
  * an abort (their tiles are gone); a later job starts a new worker.
  */
 export function stopGroundWorker(): void {
-  worker?.terminate();
-  worker = null;
-  sentShared.clear();
-  const left = running ? [running, ...queue] : [...queue];
-  running = null;
-  queue.length = 0;
-  for (const job of left) {
+  shutDown((job) => {
     job.reject(new DOMException("the ground worker stopped", "AbortError"));
-  }
+  });
 }
 
 /**

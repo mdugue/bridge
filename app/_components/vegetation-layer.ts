@@ -658,7 +658,6 @@ export interface CrownUniforms {
   time: Live;
 }
 
-/** Fresh crown uniforms. */
 /** The crowns' wind clock: one node for every tile's crowns (and a later
  *  app's), advanced once per frame by the render loop (`setCrownTime`). */
 const crownTime = uniform(0);
@@ -668,6 +667,7 @@ export function setCrownTime(seconds: number): void {
   crownTime.value = seconds;
 }
 
+/** Fresh crown uniforms (the wind clock is the one `crownTime`). */
 function createCrownUniforms(): CrownUniforms {
   return {
     sunDirection: uniform(new Vector3(0, 1, 0)),
@@ -1196,7 +1196,8 @@ export interface SceneCrowns extends CrownMaterials {
  * attribute layout, so every tile's crowns share one build, in the scene
  * and the shadow pass). The uniforms are made with the plain crown and ride
  * on it (`userData.crownUniforms`), so they go — and come back at the
- * look's defaults — with the scene's materials. `sunDirection`, when given,
+ * look's defaults — with the scene's materials; the wind clock alone is
+ * module-wide (`crownTime`, set every frame). `sunDirection`, when given,
  * becomes the sun uniform's value (by reference, so the sun rig's in-place
  * writes are live); the latest app's vector wins across a remount.
  */

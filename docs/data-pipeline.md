@@ -820,7 +820,8 @@ from one, or a change to it leaves the cached artifact stale.
 imports to that rule: it is reached from an entry, or it is named there
 with the reason it needs no re-bake (the orchestration, types, what is
 published uncached every run). The hashed names, the manifest and the prune
-are `scripts/publisher.ts`. Every key also carries `prepare-data.ts` itself, the site's own config,
+are `scripts/publisher.ts`. Every key also carries `prepare-data.ts`
+itself, the site's own config,
 `sites/providers.ts` and `patches/`, and — not the whole `bun.lock` — the
 lockfile's entries for the packages its modules import and everything those
 depend on (`lockedVersions`; the `@types/` packages left out: the glTF

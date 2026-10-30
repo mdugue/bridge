@@ -1599,27 +1599,22 @@ export class DressingPlugin {
    *  crowns, and its fine level's entry if it has one. */
   private coarseCrownLevels(): {
     coarse: Object3D;
-    control: VegetationControl;
     crowns: Object3D;
     fine?: Dressed;
   }[] {
-    const coarse = new Map<
-      string,
-      { scene: Object3D; control: VegetationControl }
-    >();
+    const coarse = new Map<string, { scene: Object3D; crowns: Object3D }>();
     const fine = new Map<string, Dressed>();
     for (const [scene, entry] of this.dressed) {
       const control = entry.dressing?.vegetation;
       if (entry.terrain?.level === 0) {
         fine.set(entry.terrain.tile, entry);
       } else if (entry.terrain && control) {
-        coarse.set(entry.terrain.tile, { scene, control });
+        coarse.set(entry.terrain.tile, { scene, crowns: control.group });
       }
     }
-    return [...coarse].map(([tile, { scene, control }]) => ({
+    return [...coarse].map(([tile, { scene, crowns }]) => ({
       coarse: scene,
-      control,
-      crowns: control.group,
+      crowns,
       fine: fine.get(tile),
     }));
   }

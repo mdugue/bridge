@@ -963,6 +963,7 @@ function probeGpu(renderer: WebGPURenderer): string | null {
  * same process. Settles within RELEASE_WAIT_MS either way.
  */
 function releaseGpu(renderer: WebGPURenderer): Promise<void> {
+  stopWorkers();
   let released: Promise<void>;
   try {
     released = renderer.dispose().catch(() => undefined);
@@ -1159,16 +1160,24 @@ async function teardownWhole(
   try {
     runCleanups(cleanups);
     disposeObject3D(scene);
-    stopGroundWorker();
-    stopBvhWorker();
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
     onSceneGone(renderer.info.memory);
   } catch {
     // The renderer and its device go regardless (below).
+  } finally {
+    stopWorkers();
   }
   await releaseRenderer(renderer);
+}
+
+/** Before a reload: the ground and BVH workers go, and their heaps with
+ *  them, not when the old document is collected (the new page boots in
+ *  the old one's process). A later job starts a new worker. */
+function stopWorkers(): void {
+  stopGroundWorker();
+  stopBvhWorker();
 }
 
 /** The renderer and its device (or its context), and its canvas. */
@@ -1543,7 +1552,7 @@ async function bootApp(
       onDressingFailed: (error, tile) => {
         const message = error instanceof Error ? error.message : String(error);
         opts.trail?.note("dressing failed", `${tile} ${message}`);
-        sayLayerFailed(`${message} (Kachel ${tile})`);
+        missing.layerFailed(`${message} (Kachel ${tile})`);
       },
       onCopiesDropped: () => cpuCount.changed(),
       dressingGate,
@@ -1618,12 +1627,6 @@ async function bootApp(
     clear: () => opts.onErrorCleared?.(),
     gone: () => disposed,
   });
-  // A part of the city that failed for good (no retry heals it), and a
-  // tile the network let down (asked for again, tile-retry.ts).
-  const sayLayerFailed = missing.layerFailed;
-  // The network's word goes once nothing it failed is outstanding: at a
-  // landing, or found after a heal.
-  const clearNetworkWord = missing.networkCleared;
   const network = createNetworkWatch({
     tiles: stream.tiles,
     trail: opts.trail,
@@ -1631,7 +1634,8 @@ async function bootApp(
     onBootGiveUp: (error) => {
       bootFailure ??= error;
     },
-    onClear: clearNetworkWord,
+    // the network's word goes once nothing it failed is outstanding
+    onClear: missing.networkCleared,
   });
   cleanups.push(() => network.dispose());
   stream.tiles.addEventListener("load-error", (event) => {
@@ -1662,7 +1666,7 @@ async function bootApp(
     if (lost) {
       missing.networkFailed(failure.message);
     } else {
-      sayLayerFailed(failure.message);
+      missing.layerFailed(failure.message);
     }
   });
   // The last tile the network failed is back, or no longer wanted: the
@@ -1670,7 +1674,7 @@ async function bootApp(
   // is told: the boot's network wait learns from it that its tiles came.
   stream.tiles.addEventListener("load-model", (event) => {
     if (network.landed(event.tile)) {
-      clearNetworkWord();
+      missing.networkCleared();
     }
   });
 
@@ -1868,7 +1872,7 @@ async function bootApp(
   const wantDataLayers = wantOnSwitchOn(dataLayers, (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     opts.trail?.note("feature failed", `data layers ${message}`);
-    sayLayerFailed(`Datenebenen: ${message}`);
+    missing.layerFailed(`Datenebenen: ${message}`);
   });
   postStack.setSunAltitude(sunAltitude);
 
