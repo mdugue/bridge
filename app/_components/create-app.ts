@@ -3957,10 +3957,17 @@ async function bootApp(
       pose.flyTo(position, lookAt);
     },
     // In Modell a place is where the picture is centred (plan 055).
-    flyToViewpoint: (view, pace) =>
-      modelRig.owns()
-        ? modelRig.centreOn(vantageTarget(view))
-        : pose.flyToViewpoint(view, pace),
+    flyToViewpoint: (view, pace) => {
+      if (viewMode === "model") {
+        modelRig.centreOn(vantageTarget(view));
+        return;
+      }
+      // Modell still animating out: land it at once, then glide from there
+      if (modelRig.owns()) {
+        modelRig.exitNow();
+      }
+      pose.flyToViewpoint(view, pace);
+    },
     captureViewpoint: pose.captureViewpoint,
     viewAspect: () => camera.aspect,
     sightHit: (eye, point) => {

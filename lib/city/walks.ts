@@ -178,6 +178,22 @@ export function stopNotes(stop: WalkStop, today: Date): string[] {
   return season ? [...days, season] : days;
 }
 
+/** The closer look's label, on the card and in the voice. */
+export const CLOSER_LABEL = "Genauer hingesehen";
+
+/** What the voice reads at a stop: its title, its story, today's notes
+ *  and the closer look — the sources stay on the card. */
+export function stopSpeech(stop: WalkStop, notes: readonly string[]): string {
+  return [
+    `${stop.title}.`,
+    stop.text,
+    ...notes,
+    stop.closer ? `${CLOSER_LABEL}: ${stop.closer}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 // --- checks ----------------------------------------------------------------------
 
 const MD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;

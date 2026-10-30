@@ -384,7 +384,8 @@ The button in the corner opens a panel with three tabs.
   has four: *Augusts Bühne* (the old town as a stage of power), *Narben
   und Nähte* (how the city lives with its wounds), *Gold, Milch und
   Eigensinn* (the Neustadt) and *Wunder am Elbhang* (upriver to
-  Loschwitz); every other city has one: *Messe, Musik und Montag*
+  Loschwitz); Leipzig, Hamburg, Munich, Meißen, Grimma and Unna have
+  one each: *Messe, Musik und Montag*
   (Leipzig), *Backstein und Wasser* (Hamburg), *Teufel, Tanz und Löwen*
   (Munich), *Schloss, Dom und Porzellan* (Meißen), *Grimma an der Mulde*
   and *Licht unter der Stadt* (Unna). A walk opens a card over the

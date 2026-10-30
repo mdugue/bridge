@@ -406,7 +406,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   *Augusts Bühne* (die Altstadt als Theater der Macht), *Narben und
   Nähte* (wie die Stadt mit ihren Wunden lebt), *Gold, Milch und
   Eigensinn* (die Neustadt) und *Wunder am Elbhang* (flussaufwärts nach
-  Loschwitz); in jeder anderen Stadt einer: *Messe, Musik und Montag*
+  Loschwitz); in Leipzig, Hamburg, München, Meißen, Grimma und Unna
+  je einer: *Messe, Musik und Montag*
   (Leipzig), *Backstein und Wasser* (Hamburg), *Teufel, Tanz und Löwen*
   (München), *Schloss, Dom und Porzellan* (Meißen), *Grimma an der
   Mulde* und *Licht unter der Stadt* (Unna). Ein Spaziergang öffnet eine

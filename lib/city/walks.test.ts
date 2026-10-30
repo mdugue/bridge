@@ -6,6 +6,7 @@ import {
   stopCamera,
   stopDate,
   stopNotes,
+  stopSpeech,
   stopView,
   type Walk,
   walkBundle,
@@ -39,6 +40,22 @@ test("a stop's view looks from its eye at its point", () => {
   expect(view.mode).toBe("walk");
   expect(stopView({ ...stop, from: [1100, 2100, 80] }).mode).toBe("fly");
   expect(stopView({ ...stop, from: [1100, 2100, 1.6] }).headingDeg).toBe(270);
+});
+
+test("a walk is never drawn in Modell", () => {
+  const drawn = { ...stop, model: { preset: "military" } } as WalkStop;
+  expect(walkProblems({ ...walk, stops: [drawn, stop] }).join()).toContain(
+    "model is not a walk's view"
+  );
+});
+
+test("the voice reads the title, the story, today's notes and the closer look", () => {
+  expect(stopSpeech({ ...stop, closer: "Oben." }, ["Heute."])).toBe(
+    `${stop.title}. ${stop.text} Heute. Genauer hingesehen: Oben.`
+  );
+  expect(stopSpeech({ ...stop, closer: undefined }, [])).toBe(
+    `${stop.title}. ${stop.text}`
+  );
 });
 
 test("a stop's camera is in the scene frame, never Modell", () => {
