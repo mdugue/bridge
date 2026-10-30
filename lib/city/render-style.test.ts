@@ -32,11 +32,11 @@ test("the default style is the pastel one, and it costs no pass", () => {
   expect(pastel.vignette).toEqual({ offset: 0.28, darkness: 0.5 });
 });
 
-test("every other style runs the pass; all but the Schwarzplan draw ink", () => {
+test("every other style runs the pass and draws ink", () => {
   for (const def of RENDER_STYLES.filter((d) => d.id !== "pastel")) {
     expect(def.shaderMode).toBeGreaterThan(0);
-    // the Schwarzplan's figure is the drawing: black on white, no lines
-    expect(def.inkWeight > 0).toBe(def.id !== "figure");
+    // the Schwarzplan's ink is the white hairline that parts two blocks
+    expect(def.inkWeight).toBeGreaterThan(0);
   }
 });
 

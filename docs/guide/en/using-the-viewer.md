@@ -412,12 +412,12 @@ next visit:
 | Style | What it looks like |
 |---|---|
 | *Pastell* | the default: a clay model on paper, soft light, no outlines |
-| *Comic* | ink lines as if drawn by hand — wavy, thick and thin, now and then broken, a little off the fill —, flat colour areas in a few tones, a dot screen in the deepest shade up close; the trees become round cartoon clouds of three balls; from the air and in the distance the drawing gets looser and sparser |
+| *Comic* | pop art as if printed: a few loud colours (paper white, red, yellow, blue, green, black) without gradients, bold even black outlines; whatever lies in shade gets a dot screen that sits on the surfaces and does not crawl in flight; red roofs red, others slate blue, the Elbe blue, meadows and trees green; the trees become round cartoon clouds of three balls; at night a navy city with yellow pools of lamplight and windows |
 | *Film noir* | black and white with a hard curve, a smoky distance, a sky that darkens towards the top, running film grain and a dark frame edge; a soft light cone under every street lamp — only hinted at by day, full at dusk; as it gets dark the camera opens up instead of letting everything go black |
-| *Sin City* | hard areas in four tones (black, near-black, near-white, white) that follow the brightness around them, so even a dark view stays readable; crowns and the Elbe go black, meadows stay light, the skyline and big silhouettes stand as a white edge against the black; rain falls in front of the scene; only the red tiled roofs keep their colour |
+| *Sin City* | hard black-and-white areas: white where the sun reaches, black in shade, so cast shadows fall as sharp black shapes; crowns and the Elbe deep black, the distance dissolving into white haze; rain falls in front of the scene; only the red tiled roofs keep their colour |
 | *Papier* | the city as a white paper model: every surface a slightly broken white, real sunlight and real (blue-grey) shadows, fine drawn graphite outlines; the trees become folded card polyhedra; road markings and sports lines stay as a faint grey, water as a cooler, deeper paper; lights and mist sheets drop out |
-| *Strich* ("line") | a line drawing as on a plan: the white model with every edge in one even line, the shade as one light grey wash, the ground in plan colours (pale green, pale blue water, near-white streets), the trees as folded card |
-| *Schwarzplan* ("figure-ground plan") | the buildings black, everything else white, the street-tree register's trees as crown circles with a stem dot (measured, so only those) — no shadows, no lines; made for the *Lageplan*, usable everywhere |
+| *Strich* ("line") | a line drawing as on a plan: the white model with every edge in one even line, in the distance too; the shade hatched as with a technical pen, the ground in plan colours (pale green, pale blue water, near-white streets), the trees as folded card |
+| *Schwarzplan* ("figure-ground plan") | the buildings black, everything else white, the street-tree register's trees as crown circles with a stem dot (measured, so only those) — no shadows, only a fine white line where one building stands in front of another; made for the *Lageplan*, usable everywhere |
 
 In the graphic styles *Comic*, *Sin City*, *Strich* and *Schwarzplan* the
 depth of field rests (a blurred background under crisp lines reads as a
