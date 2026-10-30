@@ -23,8 +23,8 @@
  * request is cut off `ANSWER_MS` plus its size at `MIN_RATE` after it
  * starts (`allowedMs`); `MAX_STALLS` uploads cut off end the run's uploads
  * (the fetches go on): a stalled upload stalls the ones behind it. An
- * entry the cache refuses for its size is skipped alone. Uploads run one
- * at a time behind the bake (`flush` waits for them), at most
+ * entry the cache refuses for its size is skipped alone. Uploads run
+ * `LANES` at a time behind the bake (`flush` waits for them), at most
  * `QUEUE_BYTES` waiting; a large one logs its size and time.
  */
 import { createHash } from "node:crypto";
@@ -56,6 +56,9 @@ const MAX_STALLS = 2;
 /** Failures in a row (not a miss, not a refused size) that end the run's
  *  use of the cache: a revoked token or an outage fails every request. */
 const MAX_FAILURES = 3;
+/** Uploads that run side by side: one runs at about 1 MB/s from Vercel's
+ *  build (an 11 MB glb took 11 s), slower than a site bakes. */
+const LANES = 4;
 /** The bytes that may wait for upload before a bake waits for the queue:
  *  a small share of the build machine's 8 GB. */
 const QUEUE_BYTES = 256 * 1024 ** 2;
@@ -150,8 +153,13 @@ export function sharedCache(
     `${API}/${artifactHash(name, key, runtime, from)}${query}`;
   let failures = 0;
   let stalls = 0;
-  let queue = Promise.resolve();
+  // each lane uploads one entry at a time, the lanes side by side
+  const lanes = Array.from({ length: LANES }, () => Promise.resolve());
+  let next = 0;
   let queued = 0;
+  const drained = async () => {
+    await Promise.all(lanes);
+  };
 
   const failed = (what: string, reason: string) => {
     failures += 1;
@@ -268,15 +276,16 @@ export function sharedCache(
         return;
       }
       if (queued + bytes.byteLength > QUEUE_BYTES) {
-        await queue;
+        await drained();
       }
       queued += bytes.byteLength;
-      queue = queue.then(async () => {
+      const lane = next++ % LANES;
+      lanes[lane] = lanes[lane].then(async () => {
         await upload(name, key, bytes);
         queued -= bytes.byteLength;
       });
     },
-    flush: () => queue,
+    flush: drained,
     stats: () => ({ ...counts }),
   };
   return {
