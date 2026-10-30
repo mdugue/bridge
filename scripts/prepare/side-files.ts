@@ -2,18 +2,16 @@
  * Step 1 of scripts/prepare-data.ts: each tile's side files, published as
  * they are, with the lines' levels (lines.ts), or baked (side-bakes.ts).
  * A value module (bake-entries.ts `KEY_VALUES`): the buildings and the
- * terrain read its published names and landmark files, each a value or an
- * input of their keys, and no key walks it.
+ * terrain read its published names, values their keys carry, and no key
+ * walks it.
  */
 import { existsSync, readFileSync } from "node:fs";
 import {
-  cityMeshSourceFiles,
   type TileArtifact,
   type TileArtifactKind,
   sideFileSource,
   tileArtifacts,
 } from "../../lib/city/tile";
-import type { LandmarkFile } from "../../lib/city/landmarks";
 import type { ColonyCrop } from "../crop-raster";
 import {
   HINT,
@@ -25,7 +23,6 @@ import {
   fail,
   log,
   publish,
-  readJson,
   since,
 } from "./context";
 import { publishLevels, publishPlatforms } from "./lines";
@@ -36,12 +33,6 @@ import {
 } from "./side-bakes";
 
 // --- 1. side files --------------------------------------------------------------
-
-/** A tile's landmarks (pipeline/bake/landmarks.py), or none. */
-export function landmarkFile(tile: string): LandmarkFile | undefined {
-  const path = at(cityMeshSourceFiles(SITE, tile).landmarks);
-  return existsSync(path) ? readJson<LandmarkFile>(path) : undefined;
-}
 
 /** Artifact kind → published name (absent optional files: missing), plus
  *  the phones' colony raster publishColonies derives beside

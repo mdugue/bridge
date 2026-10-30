@@ -20,12 +20,11 @@ export const KEY_PLUMBING = ["scripts/prepare/context.ts"] as const;
 /**
  * The step modules whose exports reach other bakes only as values those
  * bakes' keys carry: the frame (`offset`; the buildings' bake, which also
- * reads `spawnFrame`, lists bake-city-mesh.ts itself) and the side files'
- * published names (in the glTF `extras`) and landmark files (the
- * buildings' inputs). A bake that imports one leaves it out of its key,
+ * reads `spawnFrame`, lists frame.ts among its entries) and the side
+ * files' published names (in the glTF `extras`). A bake that imports one leaves it out of its key,
  * with what only it imports, so a change to the buildings' bake (the
  * frame's) does not re-bake the grounds; the frame still walks its own
- * imports for its own artifact (`frame`), and the side files bake nothing
+ * imports where it is an entry (`frame`, `city`), and the side files bake nothing
  * themselves (side-bakes.ts does). bake-entries.test.ts pins what each
  * exports: a function a bake would call for its bytes belongs in that
  * bake's module.
@@ -89,6 +88,9 @@ export const BAKE_ENTRIES = {
   /** a tile's buildings, on the ground's heights and the tracks' tops */
   city: [
     "scripts/prepare/city.ts",
+    // the spawn tile's frame every other tile is placed in (`spawnFrame`)
+    "scripts/prepare/frame.ts",
+    "scripts/prepare/landmarks.ts",
     "scripts/bake-city-mesh.ts",
     "scripts/tile-glb.ts",
     "scripts/measured-roofs.ts",
@@ -126,6 +128,7 @@ export const BAKE_ENTRIES = {
   /** the city in numbers (the start page) */
   siteStats: [
     "scripts/prepare/stats.ts",
+    "scripts/prepare/landmarks.ts",
     "lib/city/site-stats.ts",
     "lib/city/tile.ts",
   ],

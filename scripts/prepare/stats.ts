@@ -32,7 +32,7 @@ import {
   siteWide,
   utf8,
 } from "./context";
-import { landmarkFile } from "./side-files";
+import { landmarkFile } from "./landmarks";
 
 // --- the city in numbers ------------------------------------------------------------
 // The start page's orderings (lib/city/site-stats.ts): shares of the land

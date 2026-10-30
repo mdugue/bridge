@@ -126,12 +126,12 @@ test("failures in a row end the run's use of the cache, never throwing", async (
   }
   await cache?.put("f", "k", bytes("x"));
   await cache?.flush();
-  // three requests, then none
-  expect(api.calls).toHaveLength(3);
+  // a preview asks both scopes: two requests, two more, then none
+  expect(api.calls).toHaveLength(4);
   expect(lines.at(-1)).toContain("not asked again");
 });
 
-test("an upload cut off ends the uploads, not the fetches", async () => {
+test("uploads cut off end the uploads, not the fetches", async () => {
   const api = fakeApi();
   let puts = 0;
   const fetcher = (async (input: string | URL, init?: RequestInit) => {
@@ -145,10 +145,11 @@ test("an upload cut off ends the uploads, not the fetches", async () => {
   const cache = sharedCache(ENV, (l) => lines.push(l), RUNTIME, fetcher).cache;
   await cache?.put("a", "k", bytes("x"));
   await cache?.put("b", "k", bytes("y"));
+  await cache?.put("c", "k", bytes("z"));
   await cache?.flush();
-  expect(puts).toBe(1);
+  expect(puts).toBe(2);
   expect(lines.at(-1)).toContain("no more uploads");
-  expect(await cache?.get("c", "k")).toBeNull();
+  expect(await cache?.get("d", "k")).toBeNull();
   // both scopes asked, the fetches go on
   expect(api.calls.filter((c) => c.method === "GET")).toHaveLength(2);
 });

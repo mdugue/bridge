@@ -816,7 +816,8 @@ is in the key — and only those (`scripts/cache-keys.ts` composes the key).
 `prepare-data.ts` itself is only the order of the steps and is in no key:
 each step's bakes live in a module of `scripts/prepare/` that is the first
 entry of its artifacts' rows (`side-bakes.ts`, `lines.ts`, `frame.ts`,
-`ground.ts`, `city.ts`, `terrain.ts`, `plate.ts`, `hero.ts`, `stats.ts`),
+`ground.ts`, `city.ts`, `landmarks.ts`, `terrain.ts`, `plate.ts`,
+`hero.ts`, `stats.ts`),
 so an edit there re-bakes that step's artifacts and those of the steps
 that import it (the grounds' module is walked by the buildings, both
 terrain levels, the crowns and the plate; the lines' by every bake that
@@ -827,9 +828,9 @@ plumbing (`prepare/context.ts`: the site, the mode, the log, the cache,
 the gzip level), which every key carries whole instead and whose imports
 reach every site's config; the steps whose exports reach other bakes only
 as values the keys carry (`KEY_VALUES`: the frame's offset, the side
-files' published names in the `extras`, the landmark files among the
-buildings' inputs; the test pins what each exports, and the side files'
-step bakes nothing itself), so the buildings' bake, which the frame reads,
+files' published names in the `extras`; the test pins what each exports,
+the side files' step bakes nothing itself, and the buildings, which place
+every tile in the spawn tile's frame, list the frame among their entries), so the buildings' bake, which the frame reads,
 does not re-bake the grounds, nor the lines the side files publish the
 canopy; and `bake-entries.ts`, whose rows reach their keys as what they
 walk, so editing one row re-bakes that row's artifact alone. A module a step calls for an artifact must be one of that
@@ -870,7 +871,8 @@ the local cache sits one every branch shares (`scripts/shared-cache.ts`):
 Vercel's Remote Cache, the artifacts API Turborepo uses, under a hash of
 the entry's name, its key, the runtime that baked it (Bun's version and
 the platform: a branch that bumps Bun bakes under addresses of its own)
-and its scope. A local miss is fetched from it before it is baked, and a
+and its scope. A local miss is fetched from it before it is baked (a preview asks
+both scopes at once), and a
 baked entry is queued for upload after (one at a time behind the bake, at
 most 256 MB waiting; a run waits for the queue before it exits), so a key
 is baked once for all branches. Production trusts only itself: its builds
@@ -882,9 +884,9 @@ more itself. Each entry is stored behind its SHA-256, and one whose bytes
 do not match is a miss. Only Vercel's builds use it (the token is
 `VERCEL_ARTIFACTS_TOKEN`, which Vercel's build passes; the scope comes
 from `VERCEL_ENV`), and it is never fatal: a failed request reads as a
-miss; a request gets 30 s for its answer plus its size at 1 MB/s; three
-failures in a row end the run's use of it; an upload cut off ends the
-run's uploads (a stalled upload stalls the ones behind it); an entry
+miss; a request is cut off 30 s plus its size at 1 MiB/s after it
+starts; three failures in a row end the run's use of it; two uploads cut
+off end the run's uploads (a stalled upload stalls the ones behind it); an entry
 refused for its size is skipped alone; `BAKE_SHARED_CACHE=0` turns it
 off. Each run logs whether it is on, how long each upload over 8 MB took,
 and what it fetched and stored. Two branches starting in the same minute

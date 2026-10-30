@@ -20,8 +20,8 @@
  * Never fatal: off without Vercel's token or with `BAKE_SHARED_CACHE=0`; a
  * failed request logs a line and the bake goes on as if the entry were
  * missing; after `MAX_FAILURES` failures in a row the run stops asking. A
- * request is cut off when its answer takes `ANSWER_MS` or its bytes move
- * slower than `MIN_RATE`; an upload cut off ends the run's uploads at once
+ * request is cut off `ANSWER_MS` plus its size at `MIN_RATE` after it
+ * starts (`allowedMs`); `MAX_STALLS` uploads cut off end the run's uploads
  * (the fetches go on): a stalled upload stalls the ones behind it. An
  * entry the cache refuses for its size is skipped alone. Uploads run one
  * at a time behind the bake (`flush` waits for them), at most
@@ -45,10 +45,14 @@ const API = "https://api.vercel.com/v8/artifacts";
 /** The longest a request waits for its answer (a hit's or a miss's
  *  headers, an upload's reply beyond its bytes' time). */
 const ANSWER_MS = 30_000;
-/** The slowest the bytes may move (bytes per second): a request gets
- *  `ANSWER_MS` plus its size at this rate. Slower, sharing loses to
- *  baking. */
+/** The slowest rate (bytes per second) a request's time allows for its
+ *  size (`allowedMs`): slower, sharing loses to baking. */
 const MIN_RATE = 1024 ** 2;
+/** A fetched entry's size when its answer names none: the largest an
+ *  entry runs to. */
+const UNKNOWN_BYTES = 256 * 1024 ** 2;
+/** Uploads cut off that end the run's uploads. */
+const MAX_STALLS = 2;
 /** Failures in a row (not a miss, not a refused size) that end the run's
  *  use of the cache: a revoked token or an outage fails every request. */
 const MAX_FAILURES = 3;
@@ -145,18 +149,22 @@ export function sharedCache(
   const url = (name: string, key: string, from: string) =>
     `${API}/${artifactHash(name, key, runtime, from)}${query}`;
   let failures = 0;
-  let uploading = true;
+  let stalls = 0;
   let queue = Promise.resolve();
   let queued = 0;
 
   const failed = (what: string, reason: string) => {
     failures += 1;
+    // a preview's fetches run two at a time: one may land past the last
+    if (failures > MAX_FAILURES) {
+      return;
+    }
     log(
       `shared cache: ${what} failed (${reason})${failures === MAX_FAILURES ? ", not asked again this run" : ""}`
     );
   };
   const on = () => failures < MAX_FAILURES;
-  const storing = () => on() && uploading;
+  const storing = () => on() && stalls < MAX_STALLS;
 
   const upload = async (name: string, key: string, bytes: Uint8Array) => {
     if (!storing()) {
@@ -187,9 +195,9 @@ export function sharedCache(
       }
     } catch (error) {
       if (timedOut(error)) {
-        uploading = false;
+        stalls += 1;
         log(
-          `shared cache: storing ${name} (${bytes.byteLength} bytes) timed out, no more uploads this run`
+          `shared cache: storing ${name} (${bytes.byteLength} bytes) timed out${stalls === MAX_STALLS ? ", no more uploads this run" : ""}`
         );
         return;
       }
@@ -218,7 +226,8 @@ export function sharedCache(
         failed(`fetching ${name}`, String(res.status));
         return undefined;
       }
-      time.move(allowedMs(Number(res.headers.get("content-length") ?? 0)));
+      const length = Number(res.headers.get("content-length"));
+      time.move(allowedMs(length > 0 ? length : UNKNOWN_BYTES));
       const bytes = unsealed(new Uint8Array(await res.arrayBuffer()));
       if (!bytes) {
         failed(`fetching ${name}`, "its bytes do not match their digest");
@@ -242,16 +251,14 @@ export function sharedCache(
       if (!on()) {
         return null;
       }
-      for (const from of reads) {
-        const bytes = await fetchFrom(name, key, from);
-        if (bytes) {
-          counts.hits += 1;
-          counts.bytes += bytes.byteLength;
-          return bytes;
-        }
-        if (bytes === undefined || !on()) {
-          break;
-        }
+      // every scope at once, the first that has it in `reads`' order
+      const found = (
+        await Promise.all(reads.map((from) => fetchFrom(name, key, from)))
+      ).find((bytes) => bytes);
+      if (found) {
+        counts.hits += 1;
+        counts.bytes += found.byteLength;
+        return found;
       }
       counts.misses += 1;
       return null;

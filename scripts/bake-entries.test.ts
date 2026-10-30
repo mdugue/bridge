@@ -81,8 +81,10 @@ test("every module prepare-data.ts imports is in some bake's key, or says why no
     expect(unkeyed(path)).toEqual([]);
   }
   // and the list holds nothing that has since become a bake's, or gone
+  const importers = ["scripts/prepare-data.ts", ...KEY_VALUES];
+  const anyImported = new Set(importers.flatMap((p) => directImports(p, ROOT)));
   expect(
-    Object.keys(NOT_A_BAKE).filter((p) => keyed.has(p) || !imported.includes(p))
+    Object.keys(NOT_A_BAKE).filter((p) => keyed.has(p) || !anyImported.has(p))
   ).toEqual([]);
 });
 
@@ -116,11 +118,10 @@ const VALUE_EXPORTS: Record<string, Record<string, string>> = {
   "scripts/prepare/frame.ts": {
     frame: "the tileset's extras (uncached)",
     offset: "a value in every key that reads it",
-    spawnFrame: "the buildings' bake, whose entries list bake-city-mesh.ts",
+    spawnFrame: "the buildings' bake, whose entries list frame.ts",
   },
   "scripts/prepare/side-files.ts": {
     colonyCrops: "the terrain's extras, a value in its key",
-    landmarkFile: "reads the landmark file, an input of every key that does",
     Published: "a type",
     publishSideFiles: "the side files' own step",
     sideFiles: "published names, in the extras the keys carry",

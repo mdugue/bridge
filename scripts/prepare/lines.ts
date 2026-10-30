@@ -80,7 +80,7 @@ const DECK_REACH_M = 50;
 /** The decks that reach into a tile's extent (the decks are in the
  *  levels' zero frame: x = E, z = −N). */
 function decksIn(tile: string): DeckPoly[] {
-  const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+  const [x0, y0, x1, y1] = extentOf(tile);
   const r = DECK_REACH_M;
   return decks.filter(
     (d) =>
@@ -91,13 +91,18 @@ function decksIn(tile: string): DeckPoly[] {
   );
 }
 
+/** A tile's extent (EPSG). */
+function extentOf(tile: string): [number, number, number, number] {
+  return tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+}
+
 /** The beds that reach into a tile's extent (with their slopes), once
  *  per tile. */
 const tileBeds = new Map<string, Bed[]>();
 export function bedsIn(tile: string): Bed[] {
   let found = tileBeds.get(tile);
   if (!found) {
-    const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+    const [x0, y0, x1, y1] = extentOf(tile);
     found = beds.filter((b) => {
       const r = b.half + BED_SIDE_M;
       return b.coords.some(
@@ -132,7 +137,7 @@ export const siteShapes = shapeDigest([passages, beds, decks]);
 
 /** The passages that reach into a tile's extent. */
 export function passagesIn(tile: string): Passage[] {
-  const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+  const [x0, y0, x1, y1] = extentOf(tile);
   return passages.filter((p) =>
     p.coords.some(
       ([x, y]) =>

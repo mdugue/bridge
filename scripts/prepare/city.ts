@@ -46,7 +46,8 @@ import {
   utf8,
 } from "./context";
 import { bedsIn, shapeDigest } from "./lines";
-import { landmarkFile, sideFiles } from "./side-files";
+import { landmarkFile } from "./landmarks";
+import { sideFiles } from "./side-files";
 import { offset, spawnFrame } from "./frame";
 import { groundFile, heightOver } from "./ground";
 

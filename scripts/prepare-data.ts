@@ -80,11 +80,8 @@ import {
   started,
   utf8,
 } from "./prepare/context";
-import {
-  landmarkFile,
-  publishSideFiles,
-  sideFiles,
-} from "./prepare/side-files";
+import { landmarkFile } from "./prepare/landmarks";
+import { publishSideFiles, sideFiles } from "./prepare/side-files";
 import { frame, offset } from "./prepare/frame";
 import { groundFile } from "./prepare/ground";
 import { bakeCity } from "./prepare/city";
