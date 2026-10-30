@@ -52,6 +52,8 @@ unannounced (ADR 0043).
   design by link would need storage for the visitor's content and is not
   offered.
 - One design at a time.
+- The site raster (2 MB at most) is taken from the tile cache with the
+  design, so a phone's memory does not grow.
 - A building hidden by a design and demolished meanwhile stays gone when
   the design leaves.
 
