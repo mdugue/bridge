@@ -36,7 +36,7 @@
 - **Risk**: LOW (1, 2), LOW–MED (3), MED (4: new paper programs to warm)
 - **Depends on**: 037 (correct test command)
 - **Category**: bug
-- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0035)
+- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0030)
 
 ## Why this matters
 
@@ -74,7 +74,7 @@
 
 ### 1 — approaches (`app/_components/rail-layer.ts`, `lib/city/bridge.ts`)
 
-`lib/city/bridge.ts:639-649` (`approachLanding`, since ADR 0035 through the
+`lib/city/bridge.ts:639-649` (`approachLanding`, since ADR 0030 through the
 shared `reachLevel` of `lib/city/ground-join.ts`):
 
 ```ts

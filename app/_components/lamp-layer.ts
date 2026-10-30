@@ -27,7 +27,7 @@ import {
 } from "@/lib/city/lamps";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
-import type { Pt } from "./rail-layer";
+import type { Pt } from "./mesh-kit";
 import type { DeviceTier } from "./scene-profile";
 import type { F, Live } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";

@@ -1,5 +1,5 @@
 /**
- * How a part that stands on the ground meets it (ADR 0035). DOM-free,
+ * How a part that stands on the ground meets it (ADR 0030). DOM-free,
  * THREE-free, pure.
  *
  * The ground is the bare-earth DGM1, which rounds every step a city has —
@@ -294,7 +294,7 @@ export interface JoinReport {
  *  (m): the ground the check reads is the DGM, the part stood on the TIN. */
 const FOOT_SLACK_M = 0.02;
 
-/** Every join measured against the ground (ADR 0035). */
+/** Every join measured against the ground (ADR 0030). */
 export function checkJoins(
   joins: readonly JoinPoint[],
   heightAt: HeightAt,

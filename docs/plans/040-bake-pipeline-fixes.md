@@ -57,7 +57,7 @@
 - **Risk**: LOW
 - **Depends on**: 037 (correct test commands)
 - **Category**: bug
-- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0035)
+- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0030)
 
 ## Why this matters
 

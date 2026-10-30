@@ -5,96 +5,42 @@
 
 ## Context
 
-The fourth step of the agentic concept (ADR 0055–0057) is a scenario
-assistant inside *Frag die Stadt*: a visitor asks "what if" — how high
-the Elbe stood here in 2002, what a planned tower would shade — and the
-twin shows it and gives the numbers. The concept set three rules: the
-model fills structured parameters, heavy sums run as server tools, and
-every answer says it is no official result.
-
-Two risks shape it. A flood map or a shadow study looks authoritative,
-and the official ones (the city's flood hazard maps, a planning
-office's shadow report) rest on surveys of dykes, walls, drainage and
-terrain the twin does not have. And a model asked for numbers invents
-them unless a tool gives them.
+Inside *Frag die Stadt* (ADR 0056) a visitor asks "what if": how high the
+Elbe stood here in 2002, what a planned tower would shade. A flood map or
+a shadow study looks authoritative, but the official ones rest on surveys
+of dykes, walls and drainage the twin does not have; and a model asked
+for numbers invents them unless a tool gives them.
 
 ## Decision
 
-**Two scenarios, each a pair of tools on one shared core**
-(`lib/city/scenario.ts`, pure):
-
-- **Hochwasser.** The river's water surface at a reading of its city
-  gauge: the gauge zeros (WSV, PEGELONLINE) joined by straight lines
-  along the chords between the gauges, raised by the reading — Pirna,
-  Dresden and Meißen for Dresden's Elbe, with the crests of 1845, 1890,
-  2002, 2006 and 2013 at the Dresden gauge from the city's Umweltatlas
-  (`SITE_RIVERS`). `hochwasser_betroffen` (server) counts the
-  Stadtwissen's buildings whose base lies below it, by depth band, with
-  the deepest named ones and the landmarks; `zeige_hochwasser`
-  (browser) lays the surface into the scene as one see-through grid.
-- **Baukörper.** A planned box: centre, sides, height, turn.
-  `schattenwurf` (server) works out the sun every full hour of a day
-  (suncalc, Europe/Berlin), the shadow's outline on flat ground and the
-  named or addressed neighbours whose centre lies in it;
-  `plane_baukoerper` (browser) stands the box in the scene, where the
-  real shadow map draws its shadow at the hour `setze_zeit` sets.
-
-**The parameters are the tools' schemas.** The model passes numbers
-within fixed ranges (a reading of 0–1 500 cm, sides of 2–300 m), never
-free text the sum interprets; the server clamps them again.
-
-**Every result carries its assumptions and `SCENARIO_NOTE`** ("model
-sum of the city model, no official result"), and the system prompt
-tells the model to say so and name the assumptions in every scenario
-answer: no dykes, walls or barriers; every hollow below the level wet;
-the flood's slope the gauge zeros'; flat ground and no neighbours'
-shadows for the study.
-
-**The scene keeps what it is shown only while the card is open.**
-Closing *Frag die Stadt* takes the water and the box away; neither is
-picked, walked into or stored.
+1. **Two scenarios, each a pair of tools on one pure core**
+   (`lib/city/scenario.ts`):
+   - **Hochwasser.** The river's surface at a reading of its city gauge:
+     the gauge zeros (WSV, PEGELONLINE) joined along the river and raised
+     by the reading, with the historic crests from the city's Umweltatlas
+     (`SITE_RIVERS`). `hochwasser_betroffen` (server) counts the
+     Stadtwissen's buildings whose base lies below it, by depth band;
+     `zeige_hochwasser` (browser) lays the surface into the scene.
+   - **Baukörper.** A planned box. `schattenwurf` (server) works out the
+     sun every full hour of a day, the shadow on flat ground and the
+     named neighbours inside it; `plane_baukoerper` (browser) stands the
+     box in the scene, where the real shadow map draws its shadow.
+2. **The parameters are the tools' schemas**: numbers within fixed
+   ranges, clamped again on the server, never free text.
+3. **Every result carries its assumptions and `SCENARIO_NOTE`** ("model
+   sum of the city model, no official result"), and the prompt has the
+   model say so: no dykes or walls, every hollow below the level wet,
+   flat ground and no neighbours' shadows for the study.
+4. **The scene keeps a scenario only while the card is open**; neither
+   object is picked, walked into or stored.
 
 ## Consequences
 
 - Only a site with a river in `SITE_RIVERS` offers floods (Dresden and
-  Meißen, which shares Dresden's Elbe and its readings); the prompt says
-  which events exist and that other cities have none. Adding one is a
-  few gauges and crests with their sources, not a bake — and kept out of
-  `sites/`, so it changes no bake's cache key.
-- The counts are of the buildings the Stadtwissen knows (named,
-  addressed, listed or part of a landmark), and the result says so. A
-  base far below the river's bed (a fault of the data) is not counted.
-- The study's hours are the city's clock; `setze_zeit` sets the
-  visitor's, like the HUD's slider — the two differ for a visitor outside
-  Germany, and the result says so.
-- A volume needs loaded ground under it; elsewhere the tool says to fly
-  there first.
-- The water surface is wrong where the river's slope departs from its
-  gauge zeros', and the counts include hollows a dyke keeps dry (and
-  miss the Weißeritz, which flooded Dresden's centre in 2002). The
-  answer says so; the official flood maps stay the reference.
-- The shadow study names only buildings the Stadtwissen names or
-  addresses, by their centre; a long, low neighbour may be shaded and
-  not named.
-- Two objects can join the scene after the first frame: each compiles
-  before it shows and redraws the shadow map (`scenario-layer.ts`).
-
-## Alternatives
-
-- **A flood from the DGM by flood fill from the river** (only connected
-  ground wet): closer to reality, but it needs the whole site's DGM on
-  the server or the browser's loaded tiles only, and still knows no
-  dyke; the plain level, said so, is honest about what it is.
-- **The official flood hazard maps as a layer**: the right reference,
-  but a WMS of the city's, not open as vector data for every site, and
-  a third-party request (ADR 0045); a link in the answer is enough.
-- **Shadows counted on the GPU** (the scene's shadow map at each hour):
-  exact for what is loaded, but the server cannot run it and the
-  browser would render a day per question.
-
-## References
-
-- `lib/city/scenario.ts`, `lib/city/ask-scenario.ts`,
-  `lib/city/ask-tools.ts`, `app/_components/scenario-layer.ts`,
-  `app/_components/ask-scene-tools.ts`
-- ADR 0055, 0056, 0057
+  Meißen); another is a few gauges and crests with their sources, kept
+  out of `sites/` so no bake's cache key changes.
+- The counts cover the buildings the Stadtwissen knows, and the result
+  says so; the official flood maps stay the reference (the Weißeritz,
+  which flooded Dresden's centre in 2002, is missing).
+- A volume needs loaded ground under it. Both objects compile before they
+  show and redraw the shadow map (`scenario-layer.ts`).

@@ -32,6 +32,19 @@ export interface PocDebugInfo {
    * so each click in the sidebar cost seconds.
    */
   hold?: boolean;
+  /**
+   * While `hold` is set, the render loop still draws this many frames,
+   * one per animation frame, counting it down: a probe steps the scene
+   * frame by frame (the `flicker-probe` skill).
+   */
+  step?: number;
+  /**
+   * When set, the scene's clock advances by exactly this many ms per drawn
+   * frame instead of by the wall clock: two frames a probe takes differ by
+   * one real frame's animation (sway, ripple, grain), however long
+   * SwiftShader took to draw them.
+   */
+  frameMs?: number;
   /** The HUD's look store: `look.set(...)` is exactly what a slider does. */
   look?: LookState;
   ready: boolean;
@@ -73,7 +86,31 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
 /** True while the e2e specs hold the render loop (`hold`); never in a
  *  production build. */
 export function pocFramesHeld(): boolean {
-  return enabled && window.__poc?.hold === true;
+  const poc = enabled ? window.__poc : undefined;
+  if (poc?.hold !== true) {
+    return false;
+  }
+  // counted down by the frames drawn (`tickPocFrame`), not the ones
+  // asked for: the pace may skip one
+  return (poc.step ?? 0) <= 0;
+}
+
+let virtualMs: number | null = null;
+/** how far the probe's clock has drifted from the wall clock: kept after
+ *  `frameMs` is cleared, so the clock never runs backwards */
+let offsetMs = 0;
+
+/** The time the frame's clock reads: the wall clock's, or a probe's fixed
+ *  step (`frameMs`). Never anything but `time` in a production build. */
+export function pocFrameTime(time: number): number {
+  const frameMs = enabled ? window.__poc?.frameMs : undefined;
+  if (frameMs === undefined) {
+    virtualMs = null;
+    return time + offsetMs;
+  }
+  virtualMs = virtualMs === null ? time + offsetMs : virtualMs + frameMs;
+  offsetMs = virtualMs - time;
+  return virtualMs;
 }
 
 /** Called once per rendered frame from the animation loop. */
@@ -84,6 +121,9 @@ export function tickPocFrame(shadowRendered: boolean): void {
   const poc = window.__poc;
   if (poc) {
     poc.frames += 1;
+    if ((poc.step ?? 0) > 0) {
+      poc.step = (poc.step ?? 0) - 1;
+    }
     if (shadowRendered) {
       poc.shadowRenders += 1;
     }

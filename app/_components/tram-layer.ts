@@ -34,17 +34,19 @@ import { buildFurniture } from "./furniture-layer";
 import { finished, type Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
 import {
-  addRail,
   addRibbon,
-  buildDeckTable,
-  addSpanDeck,
-  COLORS,
-  lineLevelsAt,
   type Mesh3,
   meshSteps,
   mesh3,
   type Pt,
   quad,
+} from "./mesh-kit";
+import {
+  addRail,
+  buildDeckTable,
+  addSpanDeck,
+  COLORS,
+  lineLevelsAt,
   spanRuns,
 } from "./rail-layer";
 import { sceneMaterial } from "./three-utils";

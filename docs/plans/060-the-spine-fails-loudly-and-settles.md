@@ -678,7 +678,7 @@ Stop and report back (do not improvise) if:
   visitor can see a hole, in `onError` — step 1 is the template.
 - The report field set is unchanged (a kind is a value of `kind`, already
   described on the privacy page as "welche Fehler er abgefangen hat"); a
-  new *field* would need the page (ADR 0045).
+  new *field* would need the page (ADR 0043).
 - Plan 066 moves `stopRendering`/`onFrameFailed`/`memoryEmergency`/`onVisibility`
   into a pure machine: do this plan first, so the machine starts from the
   fixed behaviour.

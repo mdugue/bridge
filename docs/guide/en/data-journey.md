@@ -48,7 +48,7 @@ does it in one go — and nobody needs them to run the viewer.
 **The one exception** is the terrain model: its GeoTIFF is committed
 (13.6 MB per tile) because the build step in station 5 reads it directly
 and two bakes need it as well. This is a deliberate decision
-([ADR 0004](../../adr/0004-commit-derived-artifacts-not-raw-data.md)).
+([ADR 0037](../../adr/0037-sites-providers-and-per-site-data.md)).
 
 ### Station 3 — the bakes (manual, per tile)
 

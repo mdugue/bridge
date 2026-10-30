@@ -463,7 +463,7 @@ function pushQuad(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
 }
 
 export interface WallGeometryData {
-  /** where the walls meet the ground (ADR 0035): the face's foot, and the
+  /** where the walls meet the ground (ADR 0030): the face's foot, and the
    *  back edge of a snapped wall's cap, which meets the high shelf */
   joins: JoinPoint[];
   /** world-frame (Y-up, recentered) flat normals, xyz per vertex */
@@ -538,7 +538,7 @@ function columnsOf(
 }
 
 /**
- * A column held to the ground it meets (ADR 0035): its foot reaches the
+ * A column held to the ground it meets (ADR 0030): its foot reaches the
  * lowest ground along the face to its neighbours — a wall sampled every
  * 2.5 m stood its foot on the shelves either side of a dip, a ditch or the
  * water at a quay; and where the ground behind its cap lies below the cap

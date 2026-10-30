@@ -34,7 +34,7 @@
 
 - **Priority**: P3
 - **Effort**: M
-- **Risk**: MED — reverses most of ADR 0017's slider table and changes the reviewers' snapshot workflow
+- **Risk**: MED — reverses most of ADR 0018's slider table and changes the reviewers' snapshot workflow
 - **Depends on**: plan 071 (it moves the DoF and contact-shadow choices to construction time; land it first so this plan does not re-plumb them)
 - **Category**: tech-debt (simplification; small perf and bundle gain)
 - **Planned at**: commit `85a41b7`, 2026-10-10
@@ -61,7 +61,7 @@ of the settings anyway"). The honest answer, from the code:
   crossing of 0 flips the clay to a hashed-alpha build (`applyTransparency`,
   `visual-style.ts:923–947`, `clay.needsUpdate = true`) — a rebuild hitch.
 - **The plumbing is real code**: one table, a store, a versioned snapshot
-  codec (ADR 0017), the sidebar's slider groups (`scene-sidebar.tsx`,
+  codec (ADR 0018), the sidebar's slider groups (`scene-sidebar.tsx`,
   1 307 lines), each owner's `Record<…LookKey, …>` writer, and the guide
   pages in two languages that a test pins to the labels
   (`lib/docs/guide-labels.test.ts`).
@@ -140,7 +140,7 @@ left (`grep -c 'key: "' lib/city/look-controls.ts` → 1).
   (`CLAY_UNIFORM_FOR`, `applyCityLook`), `post-stack.ts:674–690` (`rows`),
   `create-app.ts:1479ff.` (`sceneRows`; the transparency hook at ~1531), `vegetation-layer.ts:1217–1250` and
   `tree-inventory-layer.ts:527–590` (`rowUniform`).
-- `lib/city/snapshot.ts` serialises one `snapshotKey` per row; ADR 0017:
+- `lib/city/snapshot.ts` serialises one `snapshotKey` per row; ADR 0018:
   "`snapshotKey` values are the persisted format: never rename one";
   "unknown look keys are accepted (forward compatibility)".
 - QA depends on it: `e2e/snapshot-shot.spec.ts:79` (`poc.look.set(patch)`),
@@ -242,7 +242,7 @@ Remove `setCityTransparency`, the `alphaHash`/`opacity` handling in
 (ignore their values) so every snapshot already pasted in a PR still
 loads; stop **writing** them. Add a test: a snapshot carrying e.g.
 `tintPct` parses `ok` and applies the camera; the look patch it yields has
-no `tint`. Follow ADR 0017's rule: never reuse a removed `snapshotKey`.
+no `tint`. Follow ADR 0018's rule: never reuse a removed `snapshotKey`.
 
 **Verify**: `bun test lib/city/snapshot.test.ts` → pass.
 
@@ -266,7 +266,7 @@ no `tint`. Follow ADR 0017's rule: never reuse a removed `snapshotKey`.
 2. Plates: spawn and a building close up at dusk, `main` vs branch, on a
    real GPU — identical except where `transparency` was non-zero (it never
    is by default).
-3. Amend ADR 0017 (status "amended 2026-10"): the table now holds the
+3. Amend ADR 0018 (status "amended 2026-10"): the table now holds the
    controls people use; tuning values live as named constants in their
    owners; removed `snapshotKey`s are read and ignored, never reused.
 4. `.claude/skills/pr-snapshots/SKILL.md` and AGENTS.md: a look change is
@@ -292,7 +292,7 @@ no `tint`. Follow ADR 0017's rule: never reuse a removed `snapshotKey`.
 - [x] `LOOK_CONTROLS` holds only the rows the decision table keeps
 - [x] `grep -n "alphaHash" app/_components/visual-style.ts` returns nothing
 - [x] An old snapshot with removed keys parses and applies (tested)
-- [x] ADR 0017 amended; pr-snapshots skill and AGENTS.md updated; both guides updated
+- [x] ADR 0018 amended; pr-snapshots skill and AGENTS.md updated; both guides updated
 - [x] Bundle sizes before/after recorded
 
 ## STOP conditions
@@ -314,7 +314,7 @@ no `tint`. Follow ADR 0017's rule: never reuse a removed `snapshotKey`.
   gain is one table, store and codec path fewer per look term.
 - Follow-up, gated on a GPU measurement (plan 019's checklist): delete or
   tier-gate the most expensive fixed terms (the clay's windows and facade
-  reading, ADR 0049; the terrain's ground detail) on phones — a
+  reading, ADR 0010; the terrain's ground detail) on phones — a
   construction-time variant per tier, like plan 071's AO.
 - Reviewer: check that every removed key is still parsed by the snapshot
   codec and never written.

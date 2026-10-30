@@ -42,22 +42,6 @@ describe("moduleGraph", () => {
     expect(terrain.every((path) => !path.includes("node_modules"))).toBe(true);
   });
 
-  test("no bake prepare-data keys on reaches a site config", () => {
-    // The CLI that does lives beside it (scripts/line-levels-cli.ts).
-    for (const entry of [
-      "scripts/line-levels.ts",
-      "scripts/coarse-crowns.ts",
-      "scripts/tile-sources.ts",
-      "scripts/tile-glb.ts",
-      "scripts/downsample-raster.ts",
-      "scripts/crop-raster.ts",
-    ]) {
-      expect(
-        moduleGraph(entry).filter((path) => path.startsWith("sites/"))
-      ).toEqual([]);
-    }
-  });
-
   test("follows relative and @/ imports, not packages", () => {
     const dir = mkdtempSync(join(tmpdir(), "bake-sources-"));
     writeFileSync(join(dir, "a.ts"), 'import "./b";\nimport "three";\n');

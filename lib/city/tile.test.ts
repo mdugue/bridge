@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { readdirSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { DRESDEN } from "../../sites/dresden";
 import {
   wallSourceFile,
@@ -7,10 +9,13 @@ import {
   type DataManifest,
   dgmSourceFiles,
   DRESSING_KINDS,
+  kerbSourceFile,
   manifestUrl,
   OSM_KINDS,
   pickFiles,
   SMALL_RASTER_PX,
+  stairSourceFile,
+  terraceSourceFile,
   tileArtifacts,
   tileIds,
 } from "./tile";
@@ -118,4 +123,60 @@ test("manifestUrl resolves hashed names and falls back to the logical one", () =
   );
   expect(manifestUrl(manifest, "other.json")).toBe("/data/other.json");
   expect(manifestUrl(null, "tileset.json", "/x")).toBe("/x/tileset.json");
+});
+
+/** Every per-tile file a bake step names (`f"<stem>_{tile.id}.<ext>"`)
+ *  outside the raw downloads, as the TypeScript side would spell it. A
+ *  stem built from a variable (`f"{name}_{tile.id}…"`) is not seen. */
+function bakeNames(): Map<string, string> {
+  const dir = join(import.meta.dir, "../../pipeline/bake");
+  const names = new Map<string, string>();
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".py"))) {
+    const lines = readFileSync(join(dir, file), "utf8").split("\n");
+    lines.forEach((line, i) => {
+      // data/_raw/<provider>/ holds the downloads and the bakes' own
+      // caches (Wikidata answers, the laser scan's research output)
+      if (/\braw\b/u.test(line.split("#")[0])) {
+        return;
+      }
+      for (const m of line.matchAll(
+        /f"([a-z0-9_]+)_\{tile\.id\}\.([a-z.]+)"/gu
+      )) {
+        names.set(`${m[1]}_${PRIMARY_TILE}.${m[2]}`, `${file}:${i + 1}`);
+      }
+    });
+  }
+  return names;
+}
+
+test("every file a bake step writes or reads is one the build knows", () => {
+  // A step that spells a name the table does not know ships as "file
+  // absent, layer off"; a rename on one side only passes every data check
+  // while the stale committed files are still there.
+  const known = new Set<string>();
+  for (const a of Object.values(tileArtifacts(PRIMARY_TILE))) {
+    known.add(a.file);
+    if (a.bakedFrom) {
+      known.add(a.bakedFrom.file);
+    }
+  }
+  const sources = [
+    ...Object.values(cityMeshSourceFiles(DRESDEN, PRIMARY_TILE)),
+    wallSourceFile(DRESDEN, PRIMARY_TILE),
+    kerbSourceFile(DRESDEN, PRIMARY_TILE),
+    stairSourceFile(DRESDEN, PRIMARY_TILE),
+    terraceSourceFile(DRESDEN, PRIMARY_TILE),
+  ];
+  for (const path of sources) {
+    known.add(basename(path));
+  }
+  // the class raster's legends: the build reads landcover's and horizon's,
+  // edges' and surface's document their rasters' channels for people
+  for (const stem of ["landcover", "horizon", "edges", "surface"]) {
+    known.add(`${stem}_${PRIMARY_TILE}.json`);
+  }
+  const names = bakeNames();
+  expect(names.size).toBeGreaterThan(40);
+  const unknown = [...names].filter(([name]) => !known.has(name));
+  expect(unknown).toEqual([]);
 });
