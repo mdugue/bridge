@@ -23,7 +23,7 @@ listens wastes its battery.
 2. **`was_ist_da` asks the twin what stands at the view's centre**
    (`inquireAt`, ADR 0042), opens its card and gives the model the card's
    lines, so "what is that" is answered from the measured data.
-3. **The Hörmodus rests the scene.** A switch darkens the screen and the
+3. **The Hörmodus rests the scene.** A switch lays a soft vignette and the
    loop draws two frames a second while the scene stands still, 20 while
    a glide or live mode moves it (`FramePace.setListening`). A tap or
    closing the card ends it.
