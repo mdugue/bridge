@@ -44,6 +44,28 @@ describe("planMesh", () => {
     expect(mesh.undraped).toBe(0);
   });
 
+  test("a ring of many vertices stays within the triangle budget", () => {
+    // a park outline: 3,000 vertices on a wobbly 400 m circle, whose
+    // triangulation is slivers the cut would split along their length
+    const ring: [number, number][] = [];
+    for (let i = 0; i < 3000; i++) {
+      const a = (i / 3000) * Math.PI * 2;
+      const r = 400 + 3 * Math.sin(i * 1.7);
+      ring.push([r * Math.cos(a), r * Math.sin(a)]);
+    }
+    const mesh = planMesh(
+      [{ kind: "area", cls: "lawn", rings: [ring] }],
+      [0, 0],
+      flatGround
+    );
+    const triangles = mesh.groups.reduce(
+      (n, g) => n + g.positions.length / 9,
+      0
+    );
+    expect(triangles).toBeLessThanOrEqual(150_000);
+    expect(triangles).toBeGreaterThan(3000);
+  });
+
   test("a large area is cut to a few metres, so it can follow the ground", () => {
     const mesh = planMesh(
       [{ kind: "area", cls: "paving", rings: [square(0, 0, 40)] }],

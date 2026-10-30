@@ -32,6 +32,10 @@ unannounced (ADR 0043).
    ground under it agrees, else it is set on the ground (a model whose
    height runs through 0 on its ±0). The *Entwurf* panel moves, turns and lifts it
    and saves the placement as a small JSON file to load with it again.
+   A place more than 2 km beyond the site's tiles, or a box far from its
+   own origin in no coordinates the site reads, is not taken: the design
+   is set down in front of the player and the panel says why. A Rhino
+   anchor whose height is unread or 0 sets it on the ground.
 3. **It stands in for the buildings it covers.** Each LoD2 object whose
    footprint its plan covers for at least half leaves its tile's index
    (`CityLayer.setHidden`), with its plinths, cornices and other parts,
@@ -53,10 +57,10 @@ unannounced (ADR 0043).
    line on a bridge over the site stays).
 7. **A landscape plan is a design too**: DXF, Shapefile, GeoPackage or
    LandXML, in the site's UTM coordinates. Its areas are land-cover
-   classes, named by their layer's, table's or attributes' words and
+   classes, named by their class-like attributes, then their layer's name and
    painted in the city's own palette (an unnamed one stays grey and the
    panel names its layer); they lie on the ground, cut fine enough to
-   follow it, or on the plan's own heights. Its trees are low-poly
+   follow it within 150 000 triangles, or on the plan's own heights. Its trees are low-poly
    crowns, a building with a height a block, a TIN a planned ground. Its
    areas clear and press the site but take no house away; only its
    buildings do. Lines are not drawn: in a plan they are edges.

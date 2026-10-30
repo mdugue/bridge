@@ -95,8 +95,10 @@ import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import {
   type Site,
   spawnViewpoint,
+  tileExtentOf,
   type ViewpointGeometry,
 } from "@/lib/city/site";
+import { beyondExtents } from "@/lib/city/design-placement";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   parseTilesetExtras,
@@ -2626,6 +2628,8 @@ async function bootApp(
     epsg: opts.site.provider.epsg,
     tier: budget.tier,
     heightAt,
+    beyondSite: (x, y) =>
+      beyondExtents(opts.site.tiles.map(tileExtentOf), x, y),
     capGround: (cap) => {
       siteGround.setCap(cap);
       // what reads the ground by its version (the Ausschnitt's plinth)

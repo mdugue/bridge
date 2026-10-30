@@ -199,7 +199,7 @@ function rhinoMatrix(
     matrix: placed.matrix,
     note: placed.heightsKnown
       ? "Lage aus dem Geo-Ankerpunkt der Rhino-Datei."
-      : "Lage aus dem Geo-Ankerpunkt der Rhino-Datei; seine Höhe ist nicht über NN, der Entwurf steht auf dem Gelände.",
+      : "Lage aus dem Geo-Ankerpunkt der Rhino-Datei; er nennt keine Höhe über NN, der Entwurf steht auf dem Gelände.",
     heightsKnown: placed.heightsKnown,
   };
 }

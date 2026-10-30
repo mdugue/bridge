@@ -75,6 +75,9 @@ export const TREE_HEIGHT_M = 10;
  *  plan's areas may become in all, its edges lengthened to stay within. */
 const DRAPE_EDGE_M = 4;
 const DRAPE_TRIANGLES = 150_000;
+/** How often cutWithin lengthens the edge (by half) before it keeps
+ *  what it has: 4 m to 100 m. */
+const CUT_ROUNDS = 8;
 /** Heights a plan's own z can take to be read as NHN (m). */
 const NHN_MIN = -10;
 const NHN_MAX = 3000;
@@ -447,6 +450,54 @@ function nestingDepth(
   return depth;
 }
 
+/** How many triangles cutting `tris` to `edge` makes, counted only as
+ *  far as `limit` (past it: limit + 1) — nothing is kept. */
+function cutCount(tris: readonly Tri[], edge: number, limit: number): number {
+  const max = edge * edge;
+  const stack: Tri[] = [...tris];
+  let count = 0;
+  while (stack.length > 0) {
+    const [a, b, c] = stack.pop() as Tri;
+    const longest = Math.max(len2(a, b), len2(b, c), len2(c, a));
+    if (longest <= max) {
+      if (++count > limit) {
+        return count;
+      }
+    } else {
+      const out: Tri[] = [];
+      cut([a, b, c], Math.sqrt(longest) * 0.99, out);
+      stack.push(...out);
+    }
+  }
+  return count;
+}
+
+/**
+ * Each area's triangles cut to `edge`, lengthened until all of them stay
+ * within DRAPE_TRIANGLES: the estimate in drapeEdge counts the areas'
+ * size, but a ring of many vertices triangulates into slivers that the
+ * cut splits along their length — four of Dresden's park outlines once
+ * became 207,000 triangles, past a phone's budget. The edge is found by
+ * counting (stopping at the budget), so the cut is made once.
+ */
+function cutWithin(areas: readonly Tri[][], edge: number): Tri[][] {
+  const all = areas.flat();
+  let length = edge;
+  for (let round = 0; round < CUT_ROUNDS; round++) {
+    if (cutCount(all, length, DRAPE_TRIANGLES) <= DRAPE_TRIANGLES) {
+      break;
+    }
+    length *= 1.5;
+  }
+  return areas.map((tris) => {
+    const out: Tri[] = [];
+    for (const tri of tris) {
+      cut(tri, length, out);
+    }
+    return out;
+  });
+}
+
 /** The areas, cut and laid on the ground: largest first, what is drawn
  *  into them a little above them. */
 function writeAreas(
@@ -454,20 +505,19 @@ function writeAreas(
   ground: PlanGround,
   writer: (cls: PlanLook) => GroupWriter
 ): void {
-  const edge = drapeEdge(areas);
   const laid: { w: GroupWriter; tri: Tri; y: number[]; lift: number }[] = [];
   const sorted = [...areas].sort((a, b) => areaSize(b) - areaSize(a));
   const outers = sorted.map((f) => openRing(f.rings[0] ?? []));
   const boxes = outers.map(boxOf);
+  const cuts = cutWithin(
+    sorted.map((f) => triangulate(f.rings)),
+    drapeEdge(areas)
+  );
   sorted.forEach((f, rank) => {
     const cls = f.cls ?? "other";
     const lift =
       PLAN_LOOKS[cls].lift + nestingDepth(outers, boxes, rank) * NEST_LIFT_M;
-    const cuts: Tri[] = [];
-    for (const tri of triangulate(f.rings)) {
-      cut(tri, edge, cuts);
-    }
-    for (const tri of cuts) {
+    for (const tri of cuts[rank]) {
       const y = tri.map((p) => ground.own(p) ?? ground.at(p) ?? Number.NaN);
       laid.push({ w: writer(cls), tri, y, lift });
     }

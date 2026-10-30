@@ -93,10 +93,10 @@ function isPlace(lat: number | null, lng: number | null): boolean {
  * in the site's `epsg` — its base point at the anchor's latitude and
  * longitude, turned to its north — or null where the anchor is unset.
  * `heightsKnown`: the elevation is taken as NHN — above mean sea level,
- * or unsaid, where the placement still trusts it only as far as the
- * ground agrees (design-placement.ts `trustedBase`); one above the
- * ground or the earth's centre is not, and the design is set on the
- * ground.
+ * or unsaid but not Rhino's default 0, where the placement still trusts
+ * it only as far as the ground agrees (design-placement.ts
+ * `trustedBase`); one above the ground or the earth's centre is not, nor
+ * an unsaid 0, and the design is set on the ground.
  */
 export function rhinoPlacement(
   anchor: RhinoAnchor,
@@ -106,9 +106,13 @@ export function rhinoPlacement(
   if (!isPlace(anchor.latitude, anchor.longitude)) {
     return null;
   }
+  // unread, an elevation of 0 is Rhino's default and says nothing: a
+  // design anchored at 0 m NHN would stand 100 m under Dresden
   const heightsKnown =
-    anchor.elevationZero !== GROUND_LEVEL &&
-    anchor.elevationZero !== EARTH_CENTRE;
+    anchor.elevationZero === null
+      ? (anchor.elevation ?? 0) !== 0
+      : anchor.elevationZero !== GROUND_LEVEL &&
+        anchor.elevationZero !== EARTH_CENTRE;
   const place = latLngPlacement(
     anchor.latitude ?? 0,
     anchor.longitude ?? 0,

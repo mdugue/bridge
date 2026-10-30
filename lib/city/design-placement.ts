@@ -11,7 +11,9 @@
  * ground sets its foot there.
  */
 
+import { distanceOutside } from "./geolocation";
 import { DEG2RAD } from "./pose";
+import type { TerrainBounds } from "./terrain-geometry";
 
 /** A design's box in its own frame (glTF: Y up, −Z north where it is
  *  north at all), computed in doubles from its nodes. */
@@ -122,6 +124,48 @@ export function trustedBase(
     return own;
   }
   return ground;
+}
+
+/** How far beyond the site's tiles a design may stand where its file
+ *  says (m): past that there is no ground and no city around it, and it
+ *  is set down in front of the player instead. */
+export const SITE_REACH_M = 2000;
+/** How far a design's box may lie from its own origin and still be drawn
+ *  about it (m): farther, the file is in another place's or another
+ *  system's coordinates (an IFC site in another Land, Gauß–Krüger). */
+export const OWN_FRAME_M = 50_000;
+
+/** How far (m) a projected point lies beyond the nearest of `extents`
+ *  ([minX, minY, maxX, maxY]); 0 inside one. */
+export function beyondExtents(
+  extents: readonly TerrainBounds[],
+  x: number,
+  y: number
+): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (const extent of extents) {
+    best = Math.min(best, distanceOutside(extent, x, y));
+  }
+  return best;
+}
+
+/** Whether a design's box lies in some other place's coordinates: far
+ *  from its own origin, and not the site's (`detectGeoreference`). */
+export function elsewhereFrame(box: DesignBox): boolean {
+  const x = (box.min[0] + box.max[0]) / 2;
+  const z = (box.min[2] + box.max[2]) / 2;
+  return Math.hypot(x, z) > OWN_FRAME_M;
+}
+
+/** The panel's line for a design the file puts somewhere it cannot
+ *  stand: `beyond` m outside the site, or (null) in coordinates of
+ *  another place or system. */
+export function elsewhereNote(beyond: number | null): string {
+  const where =
+    beyond === null
+      ? "Die Datei ist in den Koordinaten eines anderen Orts oder Systems verortet"
+      : `Laut Datei liegt der Entwurf ${Math.round(beyond / 1000).toLocaleString("de-DE")} km außerhalb dieser Stadt`;
+  return `${where}; vor dir abgesetzt, bitte platzieren.`;
 }
 
 /** The anchor in the design's own frame: its box's middle in plan, at
