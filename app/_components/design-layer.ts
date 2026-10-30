@@ -35,7 +35,7 @@ import { releaseRenderState, sceneMaterial } from "./three-utils";
  *
  * One design at a time. It lives in the Y-up scene frame under the city's
  * clipping group (Modell's Ausschnitt cuts it with the city) and is built
- * only when a file is loaded; the module ships with the scene (ADR 0051).
+ * only when a file is loaded; the module ships with the scene (ADR 0040).
  * Its bytes are taken from the tile cache while it is loaded (`reserve`,
  * lib/city/design-budget.ts), so a phone's page holds no more than before.
  */

@@ -441,7 +441,7 @@ export function dressCity(
       } else {
         // the BVH built again in the worker once the new index is on the
         // GPU (`indexUploaded`), not here in the frame: a design moved by
-        // hand re-hides on every settle (ADR 0050)
+        // hand re-hides on every settle (ADR 0024)
         applyHidden(false);
       }
       return true;
