@@ -173,7 +173,8 @@ config change.
     how soon after a return from the background it came, ADR 0046. The
     Sentry agent skills `sentry-debug-issue`, `sentry-setup-releases` and
     `sentry-create-alert` and the Sentry MCP server in `.mcp.json` work
-    the issues — never add the SDK they otherwise set up)
+    the issues, `sentry-triage` once a week across them (docs/routines.md)
+    — never add the SDK they otherwise set up)
   - layers: `terrain-layer.ts` (dresses a terrain tile; its heights and water
     sheets come from `ground-worker.ts`, off the main thread —
     `lib/city/ground-prep.ts`), `raster-upload.ts`
@@ -513,6 +514,12 @@ source of truth.
     the audit history. **Plans live here, not in a root `plans/`**: the
     `improve` skill writes to `plans/` by default — move or point its output
     to `docs/plans/` and reconcile against that README;
+  - [routines.md](docs/routines.md) — the scheduled agents (Sentry-Triage,
+    Open-Data-Wächter, OSM-Lücken, Modellfehler aus Straßenfotos): their
+    skills (`.claude/skills/sentry-triage`, `open-data-watch`, `osm-gaps`,
+    `model-faults`), scripts (`scripts/open-data-watch.ts`,
+    `scripts/osm-gaps.ts`, `scripts/street-photos.ts`) and the issue each
+    reports to; none merges, resolves or edits a third party's data;
   - [guide/](docs/guide/README.md) — user-facing pages in English **and
     German** (how it works, data sources, the data's journey, using the
     viewer, glossary). Written for non-developers; keep both languages in
