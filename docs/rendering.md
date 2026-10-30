@@ -1514,6 +1514,12 @@ reported yet.
 dressing* under [the frame budget](#the-frame-budget). Nothing works
 around it; report it with the first entry.
 
+**three r187: an attribute whose GPU buffer failed to allocate stays
+half made** — its entry without a buffer — and the dispose of its
+geometry throws on it midway (`destroyAttribute`). *Worked around* in
+`three-utils.ts` (`untilThrough`): the dispose is tried again past it.
+*Once fixed:* one dispose. Not looked for upstream yet.
+
 **3d-tiles-renderer 0.5.3: `resetFailedTiles()` alone never asks for a
 cached tile again.** *Worked around* in `tile-retry.ts`: the heal removes
 the tile from the LRU cache first (*The network fails, and is tried
