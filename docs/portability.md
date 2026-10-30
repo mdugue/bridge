@@ -15,13 +15,13 @@ surface model the trees come from the rows only, without an infrared band
 the vegetation index comes from the visible bands. Which stand-in each
 city uses is the generated
 [Sources by city](./guide/en/sources-by-city.md) page
-([ADR 0039](./adr/0039-stand-ins-marked-per-city.md)). Outside Germany (other CRS, OSM buildings, a public DEM)
+([ADR 0012](./adr/0012-openstreetmap-for-what-official-data-lacks.md)). Outside Germany (other CRS, OSM buildings, a public DEM)
 is an open direction in [plans/README.md](./plans/README.md).
 
 ## What is built
 
 **Sites and providers**
-([ADR 0026](./adr/0026-one-site-config-per-build.md),
+([ADR 0037](./adr/0037-sites-providers-and-per-site-data.md),
 [ADR 0037](./adr/0037-sites-providers-and-per-site-data.md)). A place is
 `sites/<id>.ts`, typed by `lib/city/site.ts`: its `name` and HUD `label`,
 the tiles (`{e, n}` 2 km cells, the first is the spawn), the curated
@@ -85,10 +85,10 @@ texels agree overall — water 95 %, settlement 78 %, roads 55 % (OSM draws
 centrelines; the DLM whole street spaces).
 
 **One palette, painted at runtime**
-([ADR 0023](./adr/0023-land-cover-colours-painted-at-runtime.md)). The
+([ADR 0010](./adr/0010-opaque-clay-buildings-only.md)). The
 bakes write class ids only; the colours are `lib/city/landcover.ts`.
 There are **no per-site look switches**
-([ADR 0039](./adr/0039-stand-ins-marked-per-city.md)): what differs
+([ADR 0012](./adr/0012-openstreetmap-for-what-official-data-lacks.md)): what differs
 between cities is derived from their data. A building without a mapped
 material wears brick or plaster as its OSM neighbourhood is mapped
 (`osm_buildings.py` `context`; Hamburg's former `facades: "brick"` is

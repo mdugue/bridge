@@ -115,29 +115,45 @@ export function bridgeShape(
 const placed = new Matrix4();
 const UPRIGHT = new Quaternion();
 
-/** A shape after a thing's solids: a tree's crown as an ellipsoid (a cone
- *  for a conifer) on its trunk, any other cylinder as it is, a prism. */
+/** How a tree's second solid is drawn: its crown as an ellipsoid or a
+ *  cone (a conifer). Every other kind passes none and its cylinders are
+ *  drawn as they are — a lamp's arm or a short hedge also has two. */
+export type CrownForm = "cone" | "ellipsoid" | null;
+
+/** A thing's crown form: a tree's or a canopy's, a cone where it says so. */
+export function crownFormOf(target: {
+  kind: string;
+  cone?: boolean;
+}): CrownForm {
+  if (target.kind !== "tree" && target.kind !== "canopy") {
+    return null;
+  }
+  return target.cone === true ? "cone" : "ellipsoid";
+}
+
+/** A shape after a thing's solids: a tree's crown (its second solid) as
+ *  `crown` says, any other cylinder as it is, a prism. */
 export function solidShape(
   solids: readonly AskSolid[],
-  conifer = false
+  crown: CrownForm = null
 ): Float32Array {
   const out: number[] = [];
-  const isTree = solids.length === 2;
   solids.forEach((s, k) => {
     if ("cylinder" in s) {
       const c = s.cylinder;
       const h = Math.max(c.y1 - c.y0, 0.1);
-      const crown = isTree && k === 1;
-      const geometry = crown
-        ? conifer
+      const form = k === 1 ? crown : null;
+      const geometry =
+        form === "cone"
           ? new ConeGeometry(1, 1, 24, 1)
-          : new SphereGeometry(1, 24, 16)
-        : new CylinderGeometry(1, 1, 1, 24, 1);
+          : form === "ellipsoid"
+            ? new SphereGeometry(1, 24, 16)
+            : new CylinderGeometry(1, 1, 1, 24, 1);
       // a sphere spans twice its radius; a cone or a cylinder one unit
       placed.compose(
         new Vector3(c.x, (c.y0 + c.y1) / 2, c.z),
         UPRIGHT,
-        new Vector3(c.r, crown && !conifer ? h / 2 : h, c.r)
+        new Vector3(c.r, form === "ellipsoid" ? h / 2 : h, c.r)
       );
       appendTriangles(out, geometry, placed);
       geometry.dispose();

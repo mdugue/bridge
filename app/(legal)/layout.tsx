@@ -6,7 +6,7 @@ import { LegalLinks } from "../_components/legal-links";
 import "../wissen/wissen.css";
 
 /**
- * /impressum and /datenschutz (ADR 0045): plain documents on the Wissen
+ * /impressum and /datenschutz (ADR 0043): plain documents on the Wissen
  * pages' paper and type, with the way back to the cities.
  */
 export default function LegalLayout({ children }: { children: ReactNode }) {

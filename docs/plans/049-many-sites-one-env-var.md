@@ -178,7 +178,7 @@ reviews after phases 1–3 and at the end.
   Geofabrik was unreachable there, so the OSM layers were baked from
   stand-in extracts (BBBike's Leipzig and Dresden city extracts,
   openstreetmap.fr's Arnsberg region for Unna; local only, nothing
-  committed). After main's stairs landed (ADR 0028/0029) every fetched
+  committed). After main's stairs landed (ADR 0030) every fetched
   site got its stairs and terraces too: Leipzig 203 flights, Meißen 101,
   Grimma 15, Unna 79, Hamburg 25, München 375. Main's monuments followed
   the same way: München 234 (mostly OSM fountains), Leipzig 138, Grimma 19,
@@ -260,7 +260,7 @@ attractive start page to choose the city. Done:
   `wissen-hero.webp`, now published per site), the Land (new
   `Provider.land`), district, area and first viewpoints, the map's credit
   — and the cities not built in this deployment named below.
-- ADR 0037 records the decision (it supersedes ADR 0026's
+- ADR 0037 records the decision (it replaces the earlier
   one-site-per-build part).
 - **Checked:** with main's measured bridges, checked downloads and
   Wikidata re-baked for Leipzig, Grimma, Meißen, Unna, Hamburg and

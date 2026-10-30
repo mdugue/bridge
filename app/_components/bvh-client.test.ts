@@ -9,7 +9,12 @@ import {
   Vector3,
 } from "three/webgpu";
 import { MeshBVH } from "three-mesh-bvh";
-import { buildBvhOffThread, bvhBuilding, bvhWorkerUp } from "./bvh-client";
+import {
+  buildBvhOffThread,
+  bvhBuilding,
+  bvhWorkerUp,
+  stopBvhWorker,
+} from "./bvh-client";
 import "./collision";
 
 /** A field of quantised quads (int16, four per vertex, interleaved), as a
@@ -96,4 +101,14 @@ test("a tile that left before its turn is not built, one that left during it get
   await done;
   expect(during.boundsTree).toBeFalsy();
   expect(during.getIndex()?.array.length).toBe(100 * 100 * 6);
+});
+
+test("a stopped worker starts again for the next build", async () => {
+  await buildBvhOffThread(field(4));
+  stopBvhWorker();
+  expect(bvhWorkerUp()).toBe(false);
+  const again = field(4);
+  await buildBvhOffThread(again);
+  expect(bvhWorkerUp()).toBe(true);
+  expect(again.boundsTree).toBeDefined();
 });

@@ -58,9 +58,8 @@ function runHere(job: Job): void {
   }
 }
 
-/** The work done here after all: the worker failed to start or died. */
-function giveUp(): void {
-  broken = true;
+/** Ends the worker and hands each job it held or queued to `each`. */
+function shutDown(each: (job: Job) => void): void {
   worker?.terminate();
   worker = null;
   sentShared.clear();
@@ -68,12 +67,20 @@ function giveUp(): void {
   running = null;
   queue.length = 0;
   for (const job of left) {
+    each(job);
+  }
+}
+
+/** The work done here after all: the worker failed to start or died. */
+function giveUp(): void {
+  broken = true;
+  shutDown((job) => {
     if (job.signal?.aborted) {
       job.reject(job.signal.reason);
     } else {
       runHere(job);
     }
-  }
+  });
 }
 
 interface Reply {
@@ -85,8 +92,9 @@ function startWorker(): Worker | null {
   if (worker || broken) {
     return worker;
   }
+  let w: Worker;
   try {
-    worker = new Worker(new URL("./ground-worker.ts", import.meta.url), {
+    w = new Worker(new URL("./ground-worker.ts", import.meta.url), {
       type: "module",
       name: "ground",
     });
@@ -94,7 +102,12 @@ function startWorker(): Worker | null {
     broken = true;
     return null;
   }
-  worker.onmessage = ({ data }: MessageEvent<Reply>) => {
+  worker = w;
+  // a stopped worker's last word is not about the jobs now running
+  w.onmessage = ({ data }: MessageEvent<Reply>) => {
+    if (worker !== w) {
+      return;
+    }
     const job = running;
     running = null;
     if (job) {
@@ -107,7 +120,10 @@ function startWorker(): Worker | null {
     next();
   };
   // a reply that cannot be read: that job here, the rest as before
-  worker.onmessageerror = () => {
+  w.onmessageerror = () => {
+    if (worker !== w) {
+      return;
+    }
     const job = running;
     running = null;
     if (job) {
@@ -115,11 +131,13 @@ function startWorker(): Worker | null {
     }
     next();
   };
-  worker.onerror = (event) => {
+  w.onerror = (event) => {
     event.preventDefault();
-    giveUp();
+    if (worker === w) {
+      giveUp();
+    }
   };
-  return worker;
+  return w;
 }
 
 /** Only the numbers a job reads: a glTF accessor is a view into a buffer
@@ -186,6 +204,19 @@ function next(): void {
       runHere(job);
     }
   }
+}
+
+/**
+ * Stops the worker before the page reloads (create-app.ts `stopWorkers`,
+ * once the stream is gone): its heap — a coarse level's shared indices, a
+ * job's copies — goes with it now, not when the old document is
+ * collected. The jobs still waiting end with an abort (their tiles went
+ * with the scene); a later job starts a new worker.
+ */
+export function stopGroundWorker(): void {
+  shutDown((job) => {
+    job.reject(new DOMException("the ground worker stopped", "AbortError"));
+  });
 }
 
 /**

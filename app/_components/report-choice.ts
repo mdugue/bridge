@@ -2,7 +2,7 @@ import { STORAGE_KEYS } from "./storage-keys";
 
 /**
  * Whether this browser sends crash reports (crash-reports.ts, ADR 0043),
- * and the visitor's "no" to them (ADR 0045): set on /datenschutz, kept in
+ * and the visitor's "no" to them (ADR 0043): set on /datenschutz, kept in
  * local storage, read before every report goes out — so it holds at once
  * in every open tab. Small on purpose: the privacy page's switch imports
  * it, not the reports themselves.
