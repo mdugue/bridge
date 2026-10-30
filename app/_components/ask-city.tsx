@@ -386,6 +386,12 @@ function errorText(error: Error): { key: boolean; text: string } {
   if (status === 404) {
     return { key: false, text: "Für diese Stadt gibt es kein Stadtwissen." };
   }
+  if (status === 501) {
+    return {
+      key: false,
+      text: "Frag die Stadt ist auf diesem Server nicht eingerichtet.",
+    };
+  }
   if (typeof status === "number") {
     return { key: false, text: `Der Server antwortet mit Status ${status}.` };
   }
