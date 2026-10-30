@@ -893,7 +893,7 @@ of it; two uploads cut off end the run's uploads (the link is down or
 crawling); an entry refused for its size, or whose local copy cannot be
 read back, is skipped alone. `BAKE_SHARED_CACHE=0` turns it off;
 `BAKE_SHARED_CACHE_API` points it at a stand-in API for a local trial
-(it gets the token: never set it on Vercel). Each run logs whether it is
+(ignored on Vercel, so the token goes nowhere else). Each run logs whether it is
 on, how long each upload over 8 MB took, and what it fetched and stored.
 Two branches starting in the same minute still bake the same key twice:
 neither has stored it yet.

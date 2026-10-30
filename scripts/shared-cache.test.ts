@@ -188,14 +188,38 @@ test("the address is hex and differs by name, key, runtime and scope", () => {
 
 test("uploads wait for the run's end and skip an entry gone by then", async () => {
   const api = fakeApi();
-  const cache = sharedCache(ENV, () => {}, RUNTIME, api.fetcher).cache;
-  cache?.put("a", "k", () => bytes("a"));
-  cache?.put("gone", "k", () => null);
+  const lines: string[] = [];
+  const cache = sharedCache(
+    ENV,
+    (l) => lines.push(l),
+    RUNTIME,
+    api.fetcher
+  ).cache;
   cache?.put("unreadable", "k", () => {
     throw new Error("EIO");
   });
+  cache?.put("gone", "k", () => null);
+  // more entries than lanes: the lane that met the throw goes on
+  for (const name of ["a", "b", "c", "d", "e"]) {
+    cache?.put(name, "k", () => bytes(name));
+  }
   expect(api.calls.filter((c) => c.method === "PUT")).toHaveLength(0);
   await cache?.flush();
-  expect(api.calls.filter((c) => c.method === "PUT")).toHaveLength(1);
-  expect(cache?.stats().stored).toBe(1);
+  expect(api.calls.filter((c) => c.method === "PUT")).toHaveLength(5);
+  expect(cache?.stats().stored).toBe(5);
+  expect(lines).toEqual(["shared cache: unreadable not read back (EIO)"]);
+});
+
+test("a stand-in API is ignored on Vercel", async () => {
+  const api = fakeApi();
+  const cache = sharedCache(
+    { ...ENV, BAKE_SHARED_CACHE_API: "http://elsewhere", VERCEL: "1" },
+    () => {},
+    RUNTIME,
+    api.fetcher
+  ).cache;
+  await cache?.get("a", "k");
+  expect(
+    api.calls.every((c) => c.url.startsWith("https://api.vercel.com/"))
+  ).toBe(true);
 });

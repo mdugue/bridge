@@ -39,7 +39,7 @@ export interface SharedCache {
   /** The entry's bytes, or null when the cache has none. */
   get: (name: string, key: string) => Promise<Uint8Array | null>;
   /** Notes the entry for upload at the run's end; `read` gives its bytes
-   *  then, or null when they are gone. */
+   *  then, or null (or throws) when they are gone: the entry is skipped. */
   put: (name: string, key: string, read: () => Uint8Array | null) => void;
   /** Uploads every noted entry (best effort). */
   flush: () => Promise<void>;
@@ -167,8 +167,9 @@ export function sharedCache(
   const scope = env.VERCEL_ENV === "production" ? "production" : "preview";
   const reads = scope === "production" ? [scope] : ["production", scope];
   const counts = { bytes: 0, hits: 0, misses: 0, stored: 0 };
-  // a stand-in API for a local trial of the cache (never set on Vercel)
-  const api = env.BAKE_SHARED_CACHE_API ?? API;
+  // a stand-in API for a local trial of the cache; ignored on Vercel, so
+  // its token never goes elsewhere
+  const api = env.VERCEL ? API : (env.BAKE_SHARED_CACHE_API ?? API);
   const url = (name: string, key: string, from: string) =>
     `${api}/${artifactHash(name, key, runtime, from)}${query}`;
   let failures = 0;
