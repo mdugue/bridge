@@ -39,7 +39,7 @@ the code at `4b0310a` (confirmed by reading both):
 2. `README.md` says "Source data is EPSG:25833, Z-up" (twice) and "no
    backend, no database, no accounts, nothing persisted" while its own
    reports paragraph describes the stored trail; ADR 0001's 2026-10-03
-   amendment lists the storage keys and omits `gpu-safety` (ADR 0046,
+   amendment lists the storage keys and omits `gpu-safety` (ADR 0047,
    three days later).
 3. `docs/transformations.md`'s 📋 planned #15 ("The twin, next — ask
    trees, bridges and monuments too") was built 2026-10-01 (the same
@@ -51,9 +51,9 @@ the code at `4b0310a` (confirmed by reading both):
    `app/(legal)/`; they live in `app/_components/`. The QA knobs list
    omits the arrival hand-off (`?at=` today, `#at=` after plan 058).
    Plan 048's text says "the URL reads are `scene`, `gpu`, `block` and
-   `trail`" — `safety` (ADR 0046) and `at` are missing.
-5. ADR 0003 ("accepted") points at `lib/city/heightfield.ts` and
-   `scripts/bake-heightfield.ts` (gone since ADRs 0024/0030); ADR 0015 at
+   `trail`" — `safety` (ADR 0047) and `at` are missing.
+5. ADR 0024 ("accepted") points at `lib/city/heightfield.ts` and
+   `scripts/bake-heightfield.ts` (gone since ADRs 0024/0030); ADR 0010 at
    `scripts/extract-roof-colour.sh` (now `pipeline/bake/roof_colour.py`).
    `lib/docs/links.test.ts` checks Markdown link targets only; backtick
    paths are stripped — which is why none of this fails a test.
@@ -178,16 +178,16 @@ mention 25832 beside it (`grep -c "25832" README.md` ≥ 2);
 ### Step 3: ADR 0001's list and two References notes
 
 - ADR 0001 amendment: after "the dismissed control hints" add the
-  clause `, the device's GPU safety level ([ADR 0046](./0047-phone-memory-budget-in-true-bytes.md))`
+  clause `, the device's GPU safety level ([ADR 0047](./0047-phone-memory-budget-in-true-bytes.md))`
   (a link relative to `docs/adr/`, where it lands).
-- ADR 0003 References: add a note reading "(2026-10: the heightfield
+- ADR 0024 References: add a note reading "(2026-10: the heightfield
   and `bake-heightfield.ts` are gone — the terrain is a TIN per ADR 0030,
   baked by `scripts/bake-terrain-tin.ts`; the decision — bake heavy
   inputs at build time — stands)", with "ADR 0030" as a Markdown link to
   `0030-terrain-tin-and-wall-snap.md` (relative to `docs/adr/`).
-- ADR 0015 References: "(now `pipeline/bake/roof_colour.py`, ADR 0025)".
+- ADR 0010 References: "(now `pipeline/bake/roof_colour.py`, ADR 0037)".
 
-**Verify**: `grep -n "ADR 0046" docs/adr/0001-client-only-static-app.md` → match;
+**Verify**: `grep -n "ADR 0047" docs/adr/0001-client-only-static-app.md` → match;
 `grep -n "bake-terrain-tin" docs/adr/0024-site-streams-as-3d-tiles.md` → match;
 `grep -n "roof_colour.py" docs/adr/0010-opaque-clay-buildings-only.md` → match.
 

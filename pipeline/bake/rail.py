@@ -1,4 +1,4 @@
-"""Basis-DLM (+ DOM1/DGM1, + OSM) → the rail layer's four inputs (ADR 0013):
+"""Basis-DLM (+ DOM1/DGM1, + OSM) → the rail layer's four inputs (ADR 0041):
 
 - ballast: the railway land `ver03_f` (OBJART 42010) where a track's bed
   lies on it (the baked rails by their count, off bridges and off the

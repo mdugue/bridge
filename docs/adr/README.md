@@ -35,31 +35,11 @@ how it is built.
 | [0047](./0047-phone-memory-budget-in-true-bytes.md) | Every device gets a budget in true bytes, a phone's memory never grows, a device that lost its GPU gets a lighter page |
 | [0048](./0048-network-failures-are-retried.md) | A network failure is retried for a budget of the page's visible time, never decided at once |
 
-## Retired numbers
+## Numbering
 
-The October 2026 cleanup merged related records. A number below is no
-longer a file; code comments that cite it mean the record it now lives in.
-Its history is in git.
-
-| Was | Now in |
-|---|---|
-| 0003 bake heavy inputs, 0006 tile block, 0007 hashed files, 0008 two-phase boot, 0022 hand-written tile manager, 0050 BVH on the first ray | [0024](./0024-site-streams-as-3d-tiles.md) (0050's detail: [rendering.md](../rendering.md)) |
-| 0004 what is committed, 0025 the Python bakes, 0026 the site config | [0037](./0037-sites-providers-and-per-site-data.md) |
-| 0011 motion-keyed quality, 0020 fixed light pool, 0031 horizon map | [0009](./0009-shadow-recipe.md) |
-| 0013 rail layer, 0033 bridges, 0052 line profiles | [0041](./0041-line-levels-along-the-whole-line.md) |
-| 0014 wall breaklines, 0028 stairs, 0029 baked dressing, 0035 parts meet the ground | [0030](./0030-terrain-tin-and-wall-snap.md) |
-| 0015 roof colour, 0016 raster downsampling, 0023 runtime palette, 0049 windows | [0010](./0010-opaque-clay-buildings-only.md) |
-| 0017 look table and Snapshot | [0018](./0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md) |
-| 0019 oxlint, oxfmt, TypeScript 7 | [AGENTS.md](../../AGENTS.md), "Conventions" |
-| 0038 measured and named additions | [0036](./0036-lod2-roofs-that-miss-the-scan-are-rebuilt.md) (its colour rules: [0010](./0010-opaque-clay-buildings-only.md), its sources: [0012](./0012-openstreetmap-for-what-official-data-lacks.md)) |
-| 0039 stand-ins per city | [0012](./0012-openstreetmap-for-what-official-data-lacks.md) |
-| 0045 legal pages | [0043](./0043-crash-and-page-reports-to-an-error-tracker.md) |
-| 0046 safety ladder | [0047](./0047-phone-memory-budget-in-true-bytes.md) |
-| 0051 optional features | [0040](./0040-data-layers-and-live-city-data.md) |
-| 0053 styles read the light and the world | [0034](./0034-picture-styles-as-one-post-pass.md) |
-
-New records take the next free number after the highest ever used —
-check main and the open PRs' branches before taking one.
+Numbers missing from the index belonged to records merged into others;
+they are never reused. A new record takes the next number after the
+highest ever used (0053), checked against main and the open PRs' branches.
 
 ## Format
 
@@ -79,6 +59,6 @@ Rules:
 
 - An ADR states today's decision. When it changes, rewrite the text; do
   not append an "Update" or "Amendment". The history is in git.
-- A superseded ADR is deleted and listed under *Retired numbers*.
+- A superseded ADR is deleted; code that cited it cites its successor.
 - About a page, at most ~600 words. Measurements, constants, file lists
   and tuning stories belong in code comments or the developer docs.

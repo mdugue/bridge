@@ -1,7 +1,7 @@
 # ADR 0024: The build bakes each city into a 3D Tiles tileset that streams around the camera
 
 - **Status:** accepted
-- **Date:** 2026-09, rewritten 2026-10 (absorbs ADRs 0003, 0006, 0007, 0008, 0022, 0050)
+- **Date:** 2026-09, rewritten 2026-10
 
 ## Context
 
@@ -50,7 +50,7 @@ they do.
 ## Alternatives
 
 - **A hand-written tile manager with a loader worker and 1 km cells**
-  (ADR 0022, never accepted): 1–1.5 k lines of what the library has.
+  (never accepted): 1–1.5 k lines of what the library has.
 - **CesiumJS, giro3d, iTowns:** a second renderer or a framework that owns
   the scene, against the stylised look and ADR 0002.
 - **Runtime decode with a resolution knob:** the grid size is a bake-time

@@ -1,7 +1,7 @@
 # ADR 0037: Cities, providers and the pipeline — fetch, bake, build; one deployment, a route per city
 
 - **Status:** accepted
-- **Date:** 2026-09, rewritten 2026-10 (absorbs ADRs 0004, 0025, 0026)
+- **Date:** 2026-09, rewritten 2026-10
 
 ## Context
 

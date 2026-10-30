@@ -36,8 +36,8 @@ Rules and format: [docs/adr/README.md](../../../docs/adr/README.md).
 - One present-tense decision, about a page. Constants, measurements and
   file lists go to code comments or the developer docs.
 - A changed decision is **rewritten in place** — no "Update" or
-  "Amendment" paragraphs. A superseded ADR is deleted and listed under
-  *Retired numbers*.
+  "Amendment" paragraphs. A superseded ADR is deleted, and every
+  reference to it (code comments, docs) is moved to its successor.
 - Alternatives only where someone would otherwise retry them, each with
   its reason in a sentence.
 - **Number:** the next after the highest ever used. Parallel threads have

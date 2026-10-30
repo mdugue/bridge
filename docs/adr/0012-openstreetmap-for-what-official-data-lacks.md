@@ -1,7 +1,7 @@
 # ADR 0012: Sources — official data first, OSM and Wikidata for what it lacks, named stand-ins marked per city
 
 - **Status:** accepted
-- **Date:** 2026-06, rewritten 2026-10 (absorbs ADR 0039 and the source rules of ADR 0038)
+- **Date:** 2026-06, rewritten 2026-10
 
 ## Context
 

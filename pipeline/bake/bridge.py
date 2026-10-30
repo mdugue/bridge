@@ -1,5 +1,5 @@
 """What a bridge deck learns beyond its footprint (rail.py builds the decks,
-ADR 0033):
+ADR 0041):
 
 - **the deck line** — the roadway as DOM1 sees it along the axis (the lower
   third of the surface across the deck, smoothed), held near the abutment

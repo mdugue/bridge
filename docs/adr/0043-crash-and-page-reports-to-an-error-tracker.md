@@ -1,7 +1,7 @@
 # ADR 0043: Crash and page reports go to an error tracker without an SDK, and the privacy page says what the code does
 
 - **Status:** accepted
-- **Date:** 2026-10 (absorbs ADR 0045)
+- **Date:** 2026-10
 
 ## Context
 

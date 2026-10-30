@@ -1,7 +1,7 @@
 # ADR 0030: The ground — a TIN of the native DGM, its static parts baked in, every part meeting it by one set of rules
 
 - **Status:** accepted
-- **Date:** 2026-09, rewritten 2026-10 (absorbs ADRs 0014, 0028, 0029, 0035)
+- **Date:** 2026-09, rewritten 2026-10
 
 ## Context
 

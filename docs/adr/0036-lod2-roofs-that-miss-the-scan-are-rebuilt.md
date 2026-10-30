@@ -1,7 +1,7 @@
 # ADR 0036: Buildings are LoD2; geometry beyond it only where a measurement and a name agree, and roofs that miss the scan are rebuilt in its form
 
 - **Status:** accepted
-- **Date:** 2026-09, rewritten 2026-10 (absorbs the geometry rules of ADR 0038)
+- **Date:** 2026-09, rewritten 2026-10
 
 ## Context
 

@@ -3,7 +3,7 @@
 > Numbered 075 on 2026-10-19: it was drafted as 056, then 068, and both
 > numbers went to other plans first (068 is the fog-bounded tile stream).
 
-> **Superseded (2026-10-09)** by [ADR 0049](../adr/0010-opaque-clay-buildings-only.md):
+> **Superseded (2026-10-09)** by [ADR 0010](../adr/0010-opaque-clay-buildings-only.md):
 > the photos now drive windows on every house through what does not move
 > with the camera — the rhythm, not the positions. See *What came of it*
 > at the end; this plan stays the record of why the positions are not
@@ -23,7 +23,7 @@
 - **Effort**: L (pose refinement and facade rectification are the bulk)
 - **Risk**: HIGH — a wrongly placed axis is an invented one
 - **Planned at**: 2026-10-07
-- **Status**: **SUPERSEDED** (2026-10-09, ADR 0049) — the rhythm is drawn on every house; the axes' positions stay BLOCKED on pose accuracy (Mapillary tried 2026-10-07)
+- **Status**: **SUPERSEDED** (2026-10-09, ADR 0010) — the rhythm is drawn on every house; the axes' positions stay BLOCKED on pose accuracy (Mapillary tried 2026-10-07)
 
 ## What the spike found (Panoramax, spawn tile `33412_5656_2_sn`)
 
@@ -126,7 +126,7 @@ from Mapillary's panoramas, the column profile's period (the axis
 spacing) and its peak (a regular or a loose grid), the row profile's
 period (the storey), the openings' width and proportion and ornament —
 each feature only where two sequences agree at Spearman ρ ≥ 0.6. The
-clay draws windows from that rhythm on every house (ADR 0049, PR #143):
+clay draws windows from that rhythm on every house (ADR 0010, PR #143):
 over Dresden's fifteen tiles 891 buildings carry their own measured
 rhythm, 4 823 borrow a measured neighbour's of the same roof form and
 eave, and 31 361 take their type's, whose numbers are the photos'

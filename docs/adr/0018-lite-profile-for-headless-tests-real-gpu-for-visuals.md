@@ -1,7 +1,7 @@
 # ADR 0018: Headless tests run a lite profile and count frames; visuals are judged on a real GPU through snapshots
 
 - **Status:** accepted
-- **Date:** 2026-09, rewritten 2026-10 (absorbs ADR 0017)
+- **Date:** 2026-09, rewritten 2026-10
 
 ## Context
 

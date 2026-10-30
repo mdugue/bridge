@@ -1,5 +1,5 @@
 /**
- * Every key the viewer keeps in the browser's storage (ADR 0045: the
+ * Every key the viewer keeps in the browser's storage (ADR 0043: the
  * privacy page, app/(legal)/datenschutz/page.mdx, names each one; its
  * test holds it to that). A new key is added here first.
  */
@@ -20,7 +20,7 @@ export const STORAGE_KEYS = {
   trailReported: "crash-trail.reported",
   /** the visitor's "no" to the reports (report-choice.ts) */
   reportsDeclined: "crash-reports.declined",
-  /** the device's safety level (gpu-safety.ts, ADR 0046) */
+  /** the device's safety level (gpu-safety.ts, ADR 0047) */
   gpuSafety: "gpu-safety",
 } as const;
 

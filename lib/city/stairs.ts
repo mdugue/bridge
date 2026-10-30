@@ -449,7 +449,7 @@ export function raiseTerraces(input: TerraceRaiseInput): Float32Array {
 }
 
 export interface StairGeometryData {
-  /** where the flight meets the ground (ADR 0035): its cheeks' and
+  /** where the flight meets the ground (ADR 0030): its cheeks' and
    *  Wangen's feet, a Wange's outer top edge, the top landing's edge */
   joins: JoinPoint[];
   /** per-vertex shade: 0 tread, 1 riser, 2 cheek */
@@ -578,7 +578,7 @@ class StairWriter {
   };
   constructor(private readonly offset: RecenterOffset) {}
 
-  /** A point where the flight meets the ground (ADR 0035). */
+  /** A point where the flight meets the ground (ADR 0030). */
   join(kind: JoinPoint["kind"], p: Point2, z: number): void {
     this.data.joins.push({ kind, x: p[0], y: p[1], z });
   }
@@ -735,7 +735,7 @@ function wange(
   const [ai, bi] = [at(a, half), at(b, half)];
   const [ac, bc] = [at(a, half + COPING_M), at(b, half + COPING_M)];
   const [ao, bo] = [at(a, half + WANGE_M), at(b, half + WANGE_M)];
-  // the outer edge meets the bank where it ends (ADR 0035): the bank is
+  // the outer edge meets the bank where it ends (ADR 0030): the bank is
   // read further out, and a slope is lower here than there
   const outer: [number, number] = [
     meetGround(tops[0], ctx.groundAt(ao[0], ao[1])),

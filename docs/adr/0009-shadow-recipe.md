@@ -1,7 +1,7 @@
 # ADR 0009: Light, shadows and post — soft PCF redrawn on demand, a baked horizon for the far field, a fixed lamp pool
 
 - **Status:** accepted
-- **Date:** 2026-06, rewritten 2026-10 (absorbs ADRs 0011, 0020, 0031)
+- **Date:** 2026-06, rewritten 2026-10
 
 ## Context
 

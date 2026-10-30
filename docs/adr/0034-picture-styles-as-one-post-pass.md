@@ -1,7 +1,7 @@
 # ADR 0034: Picture styles are one post pass over the clay scene, reading the light and the world
 
 - **Status:** accepted
-- **Date:** 2026-09, rewritten 2026-10 (absorbs ADR 0053 and Modell's plan styles)
+- **Date:** 2026-09, rewritten 2026-10
 
 ## Context
 

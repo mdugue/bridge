@@ -1,7 +1,7 @@
 # ADR 0041: Rails, trams and bridges — decks measured in the surface model, every line on a drivable profile solved by the build
 
 - **Status:** accepted
-- **Date:** 2026-06, rewritten 2026-10 (absorbs ADRs 0013, 0033, 0052)
+- **Date:** 2026-06, rewritten 2026-10
 
 ## Context
 

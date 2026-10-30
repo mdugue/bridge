@@ -15,7 +15,7 @@ with [three.js](https://threejs.org) (`WebGPURenderer` and TSL node
 materials) — a start page and one route per city (`/dresden`, `/leipzig`,
 …), no backend, no database, no accounts; nothing persisted but what
 the browser keeps for itself (the crash trail, the device's GPU safety
-level — ADR 0046 —, a few preferences; the full list is on `/datenschutz`).
+level — ADR 0047 —, a few preferences; the full list is on `/datenschutz`).
 
 ## Prerequisites
 
@@ -98,7 +98,7 @@ sent.
 are MDX pages, `app/(legal)/*/page.mdx` (`@next/mdx`), and name this
 deployment's operator, host (Vercel) and tracker (Sentry, EU region) —
 a deployment of your own edits them. Visitors turn the reports off on
-the privacy page ([ADR 0045](docs/adr/0043-crash-and-page-reports-to-an-error-tracker.md)).
+the privacy page ([ADR 0043](docs/adr/0043-crash-and-page-reports-to-an-error-tracker.md)).
 
 ## Data
 

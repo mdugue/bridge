@@ -1,7 +1,7 @@
 # ADR 0010: The look — opaque clay on a painted ground, colours within one palette, detail drawn softly
 
 - **Status:** accepted
-- **Date:** 2026-06, rewritten 2026-10 (absorbs ADRs 0015, 0016, 0023, 0049 and the colour rules of ADR 0038)
+- **Date:** 2026-06, rewritten 2026-10
 
 ## Context
 

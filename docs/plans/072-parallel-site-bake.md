@@ -113,7 +113,7 @@ So 87 % of a cold build is **one single-threaded process baking Dresden's
 three cores idle for its last ~280 s. And "cold" is common: the cache key
 of an artifact walks every module its bake imports (plan 061), and every
 fine terrain level's key covers **every** tile's terrain inputs
-(`prepare-data.ts:935`, `TILES.flatMap(terrainInputs)`, ADR 0029: "changing
+(`prepare-data.ts:935`, `TILES.flatMap(terrainInputs)`, ADR 0030: "changing
 one tile's walls, stairs or DGM re-bakes every tile's L0"), so any edit to
 a shared bake module (`lib/city/windows.ts`, `stairs.ts`, `walls.ts`, …)
 re-bakes all of Dresden. Splitting a site's tiles over the machine's cores
@@ -343,7 +343,7 @@ step 1's 419 s. Expected: Dresden's share falls to roughly a third.
 
 - Anything new that is site-wide (computed from every tile) must be cached
   before the warmers start, or every warmer computes it again.
-- The L0 key covering every tile's inputs stays (ADR 0029); this plan only
+- The L0 key covering every tile's inputs stays (ADR 0030); this plan only
   makes the resulting cold re-bake parallel. A finer key (a tile's L0 on
   its neighbours' inputs only) is a separate, later idea — record it in
   the backlog.

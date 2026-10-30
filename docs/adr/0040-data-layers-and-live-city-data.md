@@ -1,7 +1,7 @@
 # ADR 0040: Data layers are switches, off at start, drawn as glass; optional features start on first use
 
 - **Status:** accepted
-- **Date:** 2026-10 (absorbs ADR 0051)
+- **Date:** 2026-10
 
 ## Context
 

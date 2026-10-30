@@ -1,7 +1,7 @@
 # ADR 0047: Every device gets a budget in true bytes, a phone's memory never grows, and a device that lost its GPU gets a lighter page
 
 - **Status:** accepted
-- **Date:** 2026-10 (absorbs ADR 0046)
+- **Date:** 2026-10
 
 ## Context
 
