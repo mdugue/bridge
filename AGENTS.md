@@ -146,9 +146,10 @@ ADR 0041).
 - Raw downloads (`data/_raw/`) are never committed; no Git-LFS.
 - Every tile carries the same baked files (`lib/city/tile-data.test.ts`);
   a step that finds nothing writes an empty file.
-- `prepare-data.ts` lists each artifact's bake entries **by hand**; a
-  module an artifact needs must be one of them or imported from one, or
-  its cache goes stale.
+- Each artifact's bake entries are one table, `scripts/bake-entries.ts`;
+  a module an artifact needs must be one of them or imported from one, or
+  its cache goes stale (`bake-entries.test.ts` checks every module
+  `prepare-data.ts` imports).
 - Nothing whose alpha or values carry data goes through an image resize or
   the browser's image decoder; class rasters are NEAREST and decoded by
   `lib/city/png-raster.ts`.

@@ -808,15 +808,19 @@ on Vercel in `.next/cache/prepare-data/`, since its build cache keeps only
 one entry per output, under a key over the **contents** of its input
 files, the bake's own sources and the values it depends on (the recenter
 offset, the `extras` it names). The sources are found in two steps. The
-**entries** are a hand-kept list in `prepare-data.ts`: each artifact names
-the bake modules that make it (`GROUND_BAKE` for the shaped ground, a
-`bake` array per artifact kind, or the `entries` it passes to `cacheKey`
-directly). From those entries `scripts/bake-sources.ts` walks the relative
-and `@/` imports, so every module an entry imports, at any depth, is in the
-key — and only those. The walk cannot see a call `prepare-data.ts` makes
-itself: a module it calls for an artifact must be one of that artifact's
-entries or reachable from one, or a change to it leaves the cached artifact
-stale. Every key also carries `prepare-data.ts` itself, the site's own config,
+**entries** are one table, `scripts/bake-entries.ts`: each artifact names
+the bake modules that make it (`ground` for the shaped ground, one row per
+artifact kind). From those entries `scripts/bake-sources.ts` walks the
+relative and `@/` imports, so every module an entry imports, at any depth,
+is in the key — and only those (`scripts/cache-keys.ts` composes the key).
+The walk cannot see a call `prepare-data.ts` makes itself: a module it
+calls for an artifact must be one of that artifact's entries or reachable
+from one, or a change to it leaves the cached artifact stale.
+`scripts/bake-entries.test.ts` holds every module `prepare-data.ts`
+imports to that rule: it is reached from an entry, or it is named there
+with the reason it needs no re-bake (the orchestration, types, what is
+published uncached every run). The hashed names, the manifest and the prune
+are `scripts/publisher.ts`. Every key also carries `prepare-data.ts` itself, the site's own config,
 `sites/providers.ts` and `patches/`, and — not the whole `bun.lock` — the
 lockfile's entries for the packages its modules import and everything those
 depend on (`lockedVersions`; the `@types/` packages left out: the glTF
