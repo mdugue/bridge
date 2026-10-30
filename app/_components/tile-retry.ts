@@ -24,10 +24,11 @@ import {
  * it counts as loaded (a REPLACE parent gives way to it — a hole in the
  * ground), and its public `resetFailedTiles()` alone does not help — the
  * tile stays in the LRU cache, whose `add` refuses an item it holds, so the
- * request is never made. Removing it from the cache first runs the
- * renderer's own unload (UNLOADED, every plugin's `disposeTile`: ours finds
- * nothing dressed on a tile that never landed, or frees a content root
- * whose dressing threw), and the next `update()` asks for it again. The
+ * request is never made (an upstream workaround: docs/rendering.md,
+ * "Workarounds for upstream bugs"). Removing it from the cache first runs
+ * the renderer's own unload (UNLOADED, every plugin's `disposeTile`: ours
+ * finds nothing dressed on a tile that never landed, or frees a content
+ * root whose dressing threw), and the next `update()` asks for it again. The
  * root tileset (a load-error without a tile) comes back through
  * `resetFailedTiles()`. A tile the cache evicted before the heal is
  * UNLOADED again, and the renderer asks for it itself once it wants it:
