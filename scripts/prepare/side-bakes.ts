@@ -84,11 +84,9 @@ export async function publishColonies(
     key,
     async () => (await cut())?.low ?? new Uint8Array()
   );
-  return {
-    crop,
-    cultivatedLow: publish(lowFile, low),
-    cultivatedRaster: publish(file, full),
-  };
+  // the full raster first: the manifest lists the files in publish order
+  const cultivatedRaster = publish(file, full);
+  return { crop, cultivatedLow: publish(lowFile, low), cultivatedRaster };
 }
 
 /** Each tile's roofs, LoD2's and those of the buildings and roofs on posts
