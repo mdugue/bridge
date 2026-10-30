@@ -13,9 +13,12 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import type {
-  DesignPlacement,
-  PlacementSource,
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  type DesignPlacement,
+  type DesignUnit,
+  isDesignUnit,
+  type PlacementSource,
 } from "@/lib/city/design-placement";
 import { cn } from "cn";
 import type { DesignControls } from "./create-app";
@@ -42,6 +45,21 @@ const SOURCE_TEXT: Record<PlacementSource, string> = {
 };
 
 const MB = 1024 * 1024;
+
+/** The units the panel offers, as a planner says them. */
+const UNITS: readonly [DesignUnit, string][] = [
+  ["m", "m"],
+  ["cm", "cm"],
+  ["mm", "mm"],
+  ["in", "Zoll"],
+  ["ft", "Fuß"],
+];
+
+function sizeLabel([w, d, h]: [number, number, number]): string {
+  const m = (v: number) =>
+    v.toLocaleString("de-DE", { maximumFractionDigits: v < 10 ? 1 : 0 });
+  return `${m(w)} × ${m(d)} m, ${m(h)} m hoch`;
+}
 
 function weightLabel(status: DesignStatus): string {
   const triangles = status.triangles.toLocaleString("de-DE");
@@ -233,12 +251,20 @@ function DesignControlsView({
         <span className="text-[11px] text-muted-foreground">
           {weightLabel(status)}
         </span>
+        <span className="text-[11px] text-muted-foreground">
+          {sizeLabel(status.size)}
+        </span>
         <span className="text-[11px] text-muted-foreground leading-snug">
           {SOURCE_TEXT[status.source]}
         </span>
         {status.note && (
           <span className="text-[11px] text-muted-foreground leading-snug">
             {status.note}
+          </span>
+        )}
+        {status.scaleHint && (
+          <span className="text-[11px] text-amber-700 leading-snug dark:text-amber-400">
+            {status.scaleHint}
           </span>
         )}
         {status.texturesDropped && (
@@ -302,6 +328,7 @@ function DesignControlsView({
           value={p.rotation}
         />
       </div>
+      <ScaleControls controls={controls} ids={ids} status={status} />
       <Slider
         aria-label="Drehung"
         max={180}
@@ -364,6 +391,66 @@ function DesignControlsView({
           Entfernen
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The unit the file is read in and a factor on it: OBJ has no unit, and
+ * many exports come in centimetres or millimetres; a model at 1:100 or a
+ * game asset takes a factor. It scales about the design's foot.
+ */
+function ScaleControls({
+  controls,
+  ids,
+  status,
+}: {
+  controls: () => DesignControls | null;
+  ids: string;
+  status: DesignStatus;
+}) {
+  const { scale } = status;
+  return (
+    <div className="flex flex-col gap-1">
+      <span
+        className="font-medium text-[11px]"
+        id={`${ids}-unit`}
+        title="Die Einheit, in der die Datei gezeichnet ist"
+      >
+        Maßstab{" "}
+        <span className="text-muted-foreground">(Einheit der Datei)</span>
+      </span>
+      <ToggleGroup
+        aria-labelledby={`${ids}-unit`}
+        onValueChange={(value: string[]) => {
+          const [unit] = value;
+          if (isDesignUnit(unit)) {
+            controls()?.setScale({ ...scale, unit });
+          }
+        }}
+        size="sm"
+        spacing={1}
+        value={[scale.unit]}
+        variant="outline"
+      >
+        {UNITS.map(([unit, label]) => (
+          <ToggleGroupItem
+            className="px-2 data-[pressed]:bg-primary data-[pressed]:text-primary-foreground"
+            key={unit}
+            value={unit}
+          >
+            {label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      <NumberField
+        id={`${ids}-factor`}
+        label="Faktor"
+        onCommit={(factor) => controls()?.setScale({ ...scale, factor })}
+        step={0.01}
+        unit="×"
+        value={scale.factor}
+      />
     </div>
   );
 }
