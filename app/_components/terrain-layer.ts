@@ -1083,7 +1083,8 @@ function splatColour(splat: SplatNodes): V3 {
   })();
 }
 
-/** The Schwarzplan's ground is a plain white sheet: no contours either. */
+/** The Schwarzplan's ground is a plain white sheet, Sin City's a card:
+ *  no contours either. */
 const contourKept = select(paperGroundOn.greaterThan(2.5), 0, 1);
 
 /**
@@ -1115,13 +1116,20 @@ function paperGround(col: GroundColour, waterCoverage: F): V3 {
     PLAN_PAINT_LINEAR,
     ink.mul(0.6)
   );
+  // Sin City (by day: its night is cut from the scene's own frame): the
+  // white card, the water black
+  const inked = mix(vec3(1), vec3(0.015), step(0.5, water));
   return select(
-    paperGroundOn.greaterThan(2.5),
-    vec3(1),
+    paperGroundOn.greaterThan(3.5),
+    inked,
     select(
-      paperGroundOn.greaterThan(1.5),
-      plan,
-      select(paperGroundOn.greaterThan(0.5), papered, col.baseCol)
+      paperGroundOn.greaterThan(2.5),
+      vec3(1),
+      select(
+        paperGroundOn.greaterThan(1.5),
+        plan,
+        select(paperGroundOn.greaterThan(0.5), papered, col.baseCol)
+      )
     )
   );
 }
