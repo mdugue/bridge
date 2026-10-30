@@ -51,7 +51,7 @@ niemand braucht sie, um den Viewer zu betreiben.
 **Die eine Ausnahme** ist das Geländemodell: Sein GeoTIFF ist eingecheckt
 (13,6 MB je Kachel), weil der Build-Schritt in Station 5 es direkt liest
 und zwei Bakes es ebenfalls brauchen. Das ist eine bewusste
-Entscheidung ([ADR 0004](../../adr/0004-commit-derived-artifacts-not-raw-data.md),
+Entscheidung ([ADR 0037](../../adr/0037-sites-providers-and-per-site-data.md),
 englisch).
 
 ### Station 3 — die Bakes (manuell, je Kachel)

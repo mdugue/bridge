@@ -104,7 +104,7 @@ calls, a shared `hooks/` file that imports a route-private module.
 - **Approaches** (section comment at 708) — 711-1047: `approaches`,
   `approachFrom`, `approachPoly`, `addApproach`, `surfaceNormal`,
   `sideNormal`, `clampRing`, `worldToEpsg`.
-- **Measured bridge** (section comment "the measured bridge (ADR 0033)" at
+- **Measured bridge** (section comment "the measured bridge (ADR 0041)" at
   1345; bridge code from 1185) — `bridgeProps` … `addMasonryPier` (to
   ≈ 2063), plus `addParapetWalls` (420), `endEdges` (470), `addColumn` (487).
 - **Rail proper** — `RailContext`/`RailFeatures` (83-104), the constants

@@ -772,7 +772,7 @@ export function straightRuns(
   return out;
 }
 
-/** Where a plinth meets the ground (ADR 0035): its foot along the band's
+/** Where a plinth meets the ground (ADR 0030): its foot along the band's
  *  front face, EPSG — `PLINTH_SINK` under the lowest ground read along
  *  its piece. Where the ground in front is higher the band only sinks
  *  deeper; where it falls away from the wall (a step down, a light well)

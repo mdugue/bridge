@@ -69,7 +69,7 @@ import { trafficNow, trafficPositionNode, trafficTravel } from "./traffic-flow";
  * - From the air the bodies widen (`mapWidenNode`): a lane stays a lane
  *   from 500 m up.
  * - A body sits on the ground under its line, its feet 0.2 m under it
- *   (ADR 0035's box row), sampled every 2 m: where the ground beside it is
+ *   (ADR 0030's box row), sampled every 2 m: where the ground beside it is
  *   higher, a bank buries that flank; where it is lower, the flank stands
  *   free of it — a data body follows its line, not the kerb. A section on
  *   a street named a bridge (`br`) rides the deck and its approach ramps

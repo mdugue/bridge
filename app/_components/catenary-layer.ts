@@ -18,7 +18,7 @@ import {
   wireStations,
 } from "@/lib/city/catenary";
 import type { GroundContext } from "@/lib/city/ground-clamp";
-import type { Mesh3, P3, Pt } from "./rail-layer";
+import { type Mesh3, type P3, type Pt, quad } from "./mesh-kit";
 import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
 
 /**
@@ -134,7 +134,7 @@ function addBeam(acc: Mesh3, a: P3, b: P3, half: number): void {
     [1, -1, -1, -1, [-v[0], -v[1], -v[2]]],
   ];
   for (const [su0, sv0, su1, sv1, n] of sides) {
-    quadInto(
+    quad(
       acc,
       corner(a, su0, sv0),
       corner(b, su0, sv0),
@@ -148,7 +148,7 @@ function addBeam(acc: Mesh3, a: P3, b: P3, half: number): void {
     [b, t],
     [a, [-t[0], -t[1], -t[2]] as P3],
   ] as const) {
-    quadInto(
+    quad(
       acc,
       corner(p, 1, 1),
       corner(p, 1, -1),
@@ -156,30 +156,6 @@ function addBeam(acc: Mesh3, a: P3, b: P3, half: number): void {
       corner(p, -1, 1),
       n
     );
-  }
-}
-
-/** Two triangles p0 p1 p2, p0 p2 p3, wound to face `n`. */
-function quadInto(acc: Mesh3, p0: P3, p1: P3, p2: P3, p3: P3, n: P3): void {
-  for (const [a, b, c] of [
-    [p0, p1, p2],
-    [p0, p2, p3],
-  ] as const) {
-    const ux = b[0] - a[0];
-    const uy = b[1] - a[1];
-    const uz = b[2] - a[2];
-    const vx = c[0] - a[0];
-    const vy = c[1] - a[1];
-    const vz = c[2] - a[2];
-    const facing =
-      (uy * vz - uz * vy) * n[0] +
-      (uz * vx - ux * vz) * n[1] +
-      (ux * vy - uy * vx) * n[2];
-    const tri = facing >= 0 ? [a, b, c] : [a, c, b];
-    for (const p of tri) {
-      acc.pos.push(p[0], p[1], p[2]);
-      acc.nrm.push(n[0], n[1], n[2]);
-    }
   }
 }
 

@@ -1,252 +1,62 @@
-# ADR 0036: A LoD2 roof that misses the surface model is rebuilt from it as stepped flat blocks
+# ADR 0036: Buildings are LoD2; geometry beyond it only where a measurement and a name agree, and roofs that miss the scan are rebuilt in its form
 
-- **Status:** accepted; what is drawn in the LoD2's place follows the scan's form since the update below
-- **Date:** 2026-10 (amended 2026-10-03: measured faces; 2026-10-19: no strips, no teeth; 2026-10-20: steep flanks)
+- **Status:** accepted
+- **Date:** 2026-09, rewritten 2026-10
 
 ## Context
 
-The Westin Bellevue on the Elbe's north bank looked like a crumpled tent:
-one 160 m complex of a tall slab, lower wings and two courtyards, every
-roof flat, drawn as three huge sloping facets rising from 7 m at the eaves
-to a 25 m peak in the middle. The LoD2 is to blame, not the viewer. The
-2025 edition models a building it cannot fit to its roof catalogue as
-`tdcFreeFormRoof` (10 305 objects on the fifteen tiles), and for a complex
-building that is often a handful of non-planar polygons over the whole
-footprint; the loader triangulates them as they are. 78 % of the hotel's
-roof stands more than 2 m off DOM1.
-
-Measured against DOM1 (1 m, the laser flight of 27–30 November 2024), the
-same failure shows on department stores, theatres, clinics and office
-blocks (the Altmarkt-Galerie, the Schauspielhaus, the Staatsoperette in
-the Kraftwerk Mitte), and a second one besides it: buildings finished after
-the LoD2's roofs were measured (in 2016, for these tiles) still stand as a
-3 m placeholder slab — a new block on the Ferdinandplatz is 3 m tall in
-the LoD2 and 19 m in the scan. The footprints are right; they come from the
-cadastre.
+LoD2 is the building model: footprints from the cadastre, roofs fitted to
+a laser scan as the nearest catalogue type. It leaves out slim structures
+(chimneys, masts, towers), lags new buildings by a year or more, and draws
+complex buildings it cannot fit as a few non-planar polygons — a hotel of
+flat roofs as a crumpled tent, a new block as a 3 m placeholder. The
+surface model DOM1 sees everything that stands, but most of what it adds
+is trees, pylons and the cranes of the flight day.
 
 ## Decision
 
-**A LoD2 object whose roof misses DOM1 is drawn as stepped flat blocks
-measured in DOM1, inside its own footprint** (`pipeline/bake/roofs.py` →
-`data/<site>/dlm/roofs_<tile>.geojson`; `scripts/measured-roofs.ts`, applied in
-`scripts/bake-city-mesh.ts` `withMeasuredRoofs`).
-
-- **When:** a building (`31001_*`) whose own roof cells (no other roof
-  over them) cover ≥ 150 m², and more than 40 % of them (one cell inside
-  the edge, no crown over them by the NDVI) stand more than 2 m off DOM1.
-  Its roof is burned with each vertex's own height, as the loader draws it.
-- **What:** DOM1 over the footprint, 3 × 3-median filtered, cut into 1 m
-  bands; pieces under 20 m² join the neighbour closest in height,
-  neighbours closer than 1.5 m merge; each region's median is its roof.
-  The regions are polygonised, simplified as one coverage (1 m, shared
-  edges stay shared) and clipped to the footprint.
-- **Only when it is better:** the blocks must miss DOM1 on at most half as
-  many cells as the LoD2 and on at most 30 %. Where the scan sees open
-  ground over more than 15 % of the footprint, the footprint itself is out
-  of date (a block torn down since) and the LoD2 stays. A part that would
-  stand lower than 2 m is left out.
-- **How it is drawn:** each part a prism from the object's LoD2 base to its
-  roof, walls and roof, no floor, under the object's own id — its table
-  row, tint, roof colour, demolish, picking, collision and minimap
-  footprint stay. The eave and storey rows follow the new shape.
-
-889 of ≈ 50 000 objects on the fifteen tiles are rebuilt (3 146 parts),
-+8.4 % triangles in the city mesh. A step without DOM1 writes nothing and
-leaves the committed file alone.
+1. **New volumes need a measurement and a name.** DOM1 measures, OSM or
+   Wikidata names: a column (chimney, tower, mast, water tower) where OSM
+   maps one and the scan rises there; a missing building where OSM maps an
+   outline LoD2 barely covers and the scan fills it; a roof on posts where
+   OSM maps a roof and DOM1 shows a level surface. The shape is simple and
+   measured, never a modelled likeness. A tower LoD2 already draws is not
+   added again.
+2. **A landmark's roof relief** (a Wikidata item matched to LoD2 objects)
+   is the one gap drawn without its own outline: the measured height field
+   above its highest LoD2 roof, where the excess is large.
+3. **A LoD2 roof that misses DOM1 is rebuilt inside its own footprint**
+   (`pipeline/bake/roofs.py`), only where the rebuild fits the scan
+   clearly better and the footprint is not out of date. A LoD2 roof whose
+   form the scan confirms is kept, even when its level is off. The rebuild
+   follows the scan's form — measured faces where it slopes, flat levels
+   elsewhere, walls where parts meet — under the object's own id, so its
+   row, tint, picking and demolish stay.
+4. **Rebuilt parts are architectural, not raster-shaped:** no part
+   narrower than a few metres, outlines straight rather than on the 1 m
+   grid, steep flanks drawn as faces.
+5. **Where the scan predates a building OSM maps**, the mapped height
+   stands, guarded by OSM's date and the outline's coverage.
+6. **Every rule is general.** No list of buildings, no per-building fix.
 
 ## Consequences
 
-- The free-form complexes read as what they are; new buildings stand at
-  their height. The roofs are flat by construction: a real pitched or
-  barrel roof inside a rebuilt object becomes one level at its median, and
-  a facade's setback reads as a step at the next metre band.
-- DOM1 is now a city-mesh input (through the committed GeoJSON). A new
-  LoD2 edition or a new scan means re-running `bun run bake <site> --step roofs`.
-- The sky-view and horizon bake (`skyview.py`) reads the rebuilt roofs in
-  place of their objects, so the far shadows and the sky light agree with
-  the mesh; `roofs` runs before `skyview`, and re-baking one means
-  re-baking the other.
-- Two parts side by side each stand a full-height wall on the shared edge;
-  the lower part's is hidden inside the higher. Cutting walls to the
-  exposed band would save triangles, not change the picture.
-
-## Update (2026-10-03): the rebuilt roof keeps the scan's form
-
-Flat by construction turned out to be the wrong half of the decision. The
-gate found the right buildings, but every roof it rebuilt became a flight
-of 1 m terraces wherever the scan was not flat: the Frauenkirche's stone
-dome (its LoD2 part sits ~5 m under the scan, so it misses on every cell)
-became four stacked drums, the Hauptbahnhof's arched train shed and its
-membrane bays a staircase of 52 ledges along the hall, the
-Schauspielhaus's hipped roofs contour lines. The same lesson as the
-landmark relief
-([ADR 0038](./0038-measured-and-named-additions.md), update of 2026-09-30):
-a contour model of a smooth shape reads as a stack of plates.
-
-- **Whether** a roof is rebuilt is decided as before, on the flat model
-  (every region at its median) — the hotel and the theatre still are —
-  with one exception: **a LoD2 roof whose form the scan confirms is kept,
-  even when its level is off.** It has a form (it rises ≥ 3 m), the scan
-  follows it (Pearson r ≥ 0.85), it misses on ≤ 20 % of the cells once
-  shifted by its median offset, and that offset is smaller than the form's
-  own height. The Frauenkirche's modelled dome (r 0.90, ~5.6 m under the
-  scan) is such a roof: the scan's 1 m cells on a steep curve are no
-  better a dome than the model's 162 facets. Five objects in Dresden keep
-  their LoD2 so, two in Leipzig, ten in Munich (whose surface model is the
-  coarser DOM20); a flat roof or a 3 m placeholder has no form to keep,
-  and a tent over a flat slab does not follow the scan.
-- **What** is drawn follows the scan's form. The scan over the footprint
-  is split into its **faces** — where it rises by more than 0.15 m per
-  metre (8.5°) over a patch at least 10 m across, the ridge or valley
-  between two slopes included, never a cell beside a step of more than
-  2 m (a face ends at a step, which stays a wall) — and the rest, cut into
-  levels as before. A face is drawn on its measured surface (the scan,
-  edge-preservingly smoothed twice), a level flat at its median; walls
-  stand where the parts meet and at the footprint. A strip a cell or two
-  wide (a step's blurred flank) joins the neighbour closest in height.
-- **How:** the bake writes a face's 1 m surface grid with the part
-  (`surface`, cm from its `z`), carried on past the face on its own plane
-  so the mesh does not bend at the outline; the build makes an
-  error-bounded TIN of it (Delatin, 0.25 m), triangulates its inner
-  vertices with the outline's points where the height along the outline
-  bends (Delaunay, the outline's edges enforced), and stands the walls on
-  those same points. The face shades with normals smoothed over it, not
-  across a crease of more than 30° (a ridge stays sharp): flat-shaded, the
-  TIN's irregular facets read as a crumpled sheet. The sky-view and
-  horizon bake burns the same surface.
-- **Cost:** 886 objects rebuilt on Dresden's fifteen tiles (2 956 parts,
-  94 of them faces — the halls, vaults and broad roofs); their triangles
-  stay at 215 k (the faces' TIN costs what the terraces it replaces did);
-  the roofs files of all seven committed sites grow from 6.1 to 9.1 MB (a
-  build input, not served).
-
-Rejected on the way: **faces from 5 m across** (the Bellevue's slab and
-the Schauspielhaus's narrow slopes came out as draped blankets: at that
-width the scan's metre of blur at each edge is a fifth of the face, and
-the levels it replaces were one or two); **every 1 m cell as two
-triangles** (+70 % city-mesh triangles on the Altstadt tile); **flat
-shading** (the TIN's facets crumpled the Hauptbahnhof's vaults); **a TIN
-cut by the outline's ear-clipping
-triangles** (the slivers multiplied the pieces fourfold); **steps inside
-a face** (Delatin traced every step edge with points — a face ends at a
-step instead); **planes per region** (a dome or a vault needs a plane per
-facet, and a region of 1 m bands is a ring, not a facet).
-
-## Update (2026-10-19): no part narrower than 7 m, outlines not on the grid
-
-The rebuilt roofs still read as heaps of blocks on the Hauptbahnhof, the
-Prager Spitze and the courtyard block An der Frauenkirche 5. Two causes,
-shared by every rebuilt roof:
-
-- **Strips.** A part only had to cover 20 m² and be wider than a cell or
-  two, so the scan's 1 m bands left strips a few metres wide standing as
-  boxes of their own: the parapet run round the Prager Spitze, the
-  ledges between a vault's flank and its eaves along the station's long
-  sides, the 116–122 m terraces down the courtyard's mansard, plant rooms.
-  Now **a part must hold a disk 7 m across** (`NARROW_M`, `_narrow`); a
-  narrower one joins the neighbour closest in height — as long as that
-  neighbour lies within 3 m (`NARROW_DZ`): a narrow wing a storey or more
-  off its neighbours is a wing, not a flank, and stays (a strip a cell
-  or two wide, a steep step's blurred flank, joins whatever the height,
-  as before).
-- **Teeth.** The parts' borders were the cell edges of the 1 m grid,
-  simplified at 1 m: a border running diagonally to the grid stayed a
-  staircase of 1 m teeth, each a wall. Now the labels are smoothed by a
-  majority over a 2 m disk, twice (`_majority`), and the coverage is
-  simplified at 2 m: a border runs as straight as the scan's edge.
-
-Whether a roof is rebuilt is decided as before, on the flat model, which
-keeps every strip; only what is drawn changes. Where the merged strips
-would make the drawn roof miss DOM1 on more than `KEEP_SHARE` of its
-cells (the most a rebuild may), it is drawn with them. The same 886 objects on
-Dresden's fifteen tiles become 2 171 parts instead of 2 956 (95 faces,
-94 before). The price is fit: on the two Altstadt tiles
-(`33410_5654`, `33410_5656`) the drawn roof now misses DOM1 by more
-than 2 m on 8–9 % of a rebuilt object's cells on average, 5–7 % before
-(the strips merged were up to 3 m off their new level) — still a third of
-the share that decides a rebuild.
-
-Rejected: **merging every strip whatever the height** (no cap: the
-misses rose to 13–20 %, at worst 86 % of an object's cells: narrow
-wings sank or rose to their neighbour's level); **a cap of 2 m** (the
-misses stayed at 6–7 %, but a sixth to a quarter more parts stayed than with 3 m).
-
-### Steep flanks are faces from 5 m (2026-10-20)
-
-The Schauspielhaus still read as stacked terraces, white streaks from
-above: its roofs are hipped and mansard flanks of 30–50° but only 3–6 m
-wide, too narrow for a face, so the bands stood as levels a storey apart
-with a sunlit wall between each pair. **A slope steeper than 0.5 m per
-metre (27°, `STEEP`) is a face from a patch 5 m across**
-(`STEEP_FACE_M`); a gentler one still needs 10 m. The blankets that
-ruled out 5 m faces came from gentle slopes — the scan's blur at a slab's
-edge rises steeper than that only where it is a step (more than 2 m from
-one cell to the next, `step_cells`), which a face never crosses. On the
-two Altstadt tiles 9–18 % more cells are drawn as faces, the drawn roof fits
-the scan as well or better (misses 7.4–9.0 % of a rebuilt object's cells,
-8.1–8.9 % without), and the cells drawn as a face on flat scan stay at
-1–2 % of all face cells. Dresden's 886 objects become 2 227 parts, 221
-of them faces (95 before; a steep face narrower than `NARROW_M` is never
-merged away as a strip). Faces from 4 m: more ragged rings round
-courtyards for little more.
-
-## Update (2026-10-21): a fifth off a level roof is enough; drawn strips held to the bar
-
-The photo QA (PR #173) found the low hipped roofs the 2025 edition models
-over Leipzig's department stores standing: a 4–6 m hip over a roof the
-scan measures flat misses on only a quarter to a third of it, along the
-ridges, under the 40 % `MISS_SHARE` (`DESNATPU1000Bk2M`, 5 667 m²: 31 %).
-**Missing on more than 20 % (`LEVEL_MISS_SHARE`) is now enough where the
-scan is level under at least 60 % of the missed cells** (`LEVEL_SHARE`,
-`level_share`: rising < `SLOPE`, a step's edge aside) — a pitch or a level
-the LoD2 draws over a level roof — **unless the scan confirms the LoD2's
-pitch** (`pitch_holds`: the LoD2 rises > `SLOPE` on at least half the
-judged cells and the scan on at least half of those). Without that test
-the band flattened a row house's gable and a barrel vault, both too narrow
-for faces, for the annex the LoD2 had left out beside them (Hamburg, 22 %
-and 20 % off). The decision on the flat model is unchanged.
-
-Second, **what is drawn is held to the decision's bar**: where merging
-its narrow parts makes it miss more than half the LoD2's share (or
-`KEEP_SHARE`, as before), they stay apart. A hall's monitor roofs, 5 m
-strips 3 m over the rest, had merged into blocks that missed as much as
-the LoD2 — 5 of the 109 rebuilt objects on `33408_5654`, one worse than
-its LoD2. Where the faces then still miss more, the flat model, which met
-the bar, is drawn (13 objects over five cities; a LoD2 in München off on
-88 % would otherwise have stayed).
-
-Rebuilt objects: Dresden 887 → 1 081 (2 755 parts, 222 faces), Hamburg
-365 → 587, Leipzig 269 → 357, Unna 43 → 61, Meißen 46 → 56, Grimma
-13 → 17, München 120 → 121. Checked against the DOP on the largest new
-ones of Hamburg, Leipzig and Dresden and a random draw in Hamburg.
-Rejected: **lowering `MISS_SHARE` to 20 %** (on Leipzig's tile it also
-rebuilt right gables and a museum's pitched wings, 22–30 % off where the
-scan slopes); **judging the sloping scan the drawn roof flattens** (a flat roof's
-1 m scan rises past `SLOPE` on a quarter of its cells at parapets and
-plant rooms, so it told the store from the gable no better).
+- Free-form complexes and new buildings read as what they are; a city
+  gets its chimneys and towers from `fetch → bake → build`.
+- What OSM does not map is not drawn, even where the scan shows it.
+- A new LoD2 edition or scan means re-running `roofs` and then `skyview`.
 
 ## Alternatives
 
-- **Re-triangulate the non-planar polygons** (constrained Delaunay, a
-  fitted plane per polygon): the polygons themselves describe a tent; any
-  triangulation of them is still a tent.
-- **Rebuild every `tdcFreeFormRoof`:** most of them fit the scan (69 of
-  321 miss it on the Altstadt tile); the gate measures the fault instead of
-  trusting the label, and so also catches catalogue roofs that miss (a
-  gable over a flat-roofed hall) and the 3 m placeholders.
-- **Planes per region** (pent and gable faces fitted to DOM1): better for
-  pitched roofs, but the faults found are flat-roofed complexes; the
-  stepped model already brings them from 40–100 % of cells off to at most
-  30 % (the hotel: 78 % → 3 %). (Superseded by the measured faces of the
-  update above: the faults were not all flat-roofed.)
-- **LoD1 from the scan everywhere:** throws away the LoD2's good roofs on
-  the 98 % of objects it gets right.
-
-## References
-
-- `pipeline/bake/roofs.py`, `pipeline/tests/test_roofs.py`
-- `scripts/measured-roofs.ts`, `scripts/bake-city-mesh.ts` `withMeasuredRoofs`
-- [transformations.md](../transformations.md) — "Roofs rebuilt from DOM1"
-- [ADR 0010](./0010-opaque-clay-buildings-only.md) (the clay the parts wear),
-  [ADR 0033](./0033-bridges-measured-in-the-surface-model.md) (DOM1 measuring
-  what another model gets wrong, there the bridges)
+- **Every gap from the surface model alone:** cranes, pylons and crowns
+  become towers.
+- **Hand-modelled landmarks or models from 3D warehouses:** not
+  repeatable, licensed per model, and a detailed look the clay cannot
+  absorb.
+- **Re-triangulating LoD2's non-planar polygons:** they describe a tent.
+- **Rebuilding every `tdcFreeFormRoof`:** most fit the scan; the gate
+  measures the fault instead of trusting the label.
+- **Stepped flat blocks or 1 m cells:** contour terraces on every dome and
+  vault, or a mesh 70 % larger.
+- **LoD1 from the scan everywhere:** throws away the 98 % of roofs LoD2
+  gets right.

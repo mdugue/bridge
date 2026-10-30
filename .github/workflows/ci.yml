@@ -53,7 +53,7 @@ jobs:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
       # bun check (fast, all cores) and the tsc that next build type-checks
-      # with: the job is green only where both agree (ADR 0019).
+      # with: the job is green only where both agree (AGENTS.md, Conventions).
       - run: bun typecheck
       - run: bun run typecheck:tsc
 

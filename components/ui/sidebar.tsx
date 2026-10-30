@@ -80,7 +80,7 @@ function SidebarProvider({
         _setOpen(openState);
       }
 
-      // No sidebar_state cookie: the site sets no cookies (ADR 0045).
+      // No sidebar_state cookie: the site sets no cookies (ADR 0043).
     },
     [setOpenProp, open]
   );

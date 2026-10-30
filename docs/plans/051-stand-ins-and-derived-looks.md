@@ -8,8 +8,8 @@
 >
 > **Builds on** ADR 0037 (sites, providers, per-tile steps read from the
 > site config), plan 050 (landmarks, the roof relief, OSM materials) and
-> ADR 0033 (bridges measured in DOM1). The decisions are
-> [ADR 0039](../adr/0039-stand-ins-marked-per-city.md).
+> ADR 0041 (bridges measured in DOM1). The decisions are
+> [ADR 0012](../adr/0012-openstreetmap-for-what-official-data-lacks.md).
 >
 > **Drift check (run first)**:
 > `git log --oneline -5 -- pipeline/bake/rail_osm.py pipeline/bake/ndvi.py pipeline/bake/osm_buildings.py lib/city/valley-fog.ts lib/city/source-matrix.ts`
@@ -36,7 +36,7 @@ Generalise the one-off fixes so that **every city benefits**. A city
 added under ADR 0037 got exactly what its Land publishes, and a step
 whose source was missing wrote an empty file; some looks were tuned on
 Dresden and applied everywhere, or set per site by hand. Two rules came
-out of it (ADR 0039):
+out of it (ADR 0012):
 
 1. Where a Land or a city lacks the best source, read a **named
    stand-in** that measures or maps the same thing — and mark it per
@@ -176,4 +176,4 @@ visible bands*, *Facade context*, the haze depth under *Height-term
 fog*, the tram gauge, the relief floor, the landmark floor, five 🗃️
 rows), `data-flow.md` (both diagrams), the `rendering.md` codebook,
 `data-pipeline.md`, `portability.md`, the guide's data sources (en + de)
-and the generated *Sources by city*, ADR 0039, AGENTS.md.
+and the generated *Sources by city*, ADR 0012, AGENTS.md.

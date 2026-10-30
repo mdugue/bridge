@@ -3,12 +3,12 @@
 > **Executor instructions**: A **design spike with a small build**: part A
 > (the link) ends in a decision note and a prototype; part B (the QA view
 > catalogue) is small enough to build. Append findings under "Findings".
-> Do not change the Snapshot format's meaning (ADR 0017) — only add a
+> Do not change the Snapshot format's meaning (ADR 0018) — only add a
 > transport for it. When done, update this plan's row in
 > `docs/plans/README.md` (and annotate Direction option 2 there).
 >
 > **Drift check (run first)**:
-> `git diff --stat a28de75..HEAD -- lib/city/snapshot.ts app/_components/city-walk.tsx app/_components/scene-sidebar.tsx e2e/snapshot-shot.spec.ts .gitignore docs/adr/0017-look-controls-table-and-snapshot-contract.md`
+> `git diff --stat a28de75..HEAD -- lib/city/snapshot.ts app/_components/city-walk.tsx app/_components/scene-sidebar.tsx e2e/snapshot-shot.spec.ts .gitignore docs/adr/0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md`
 
 ## Status
 
@@ -23,7 +23,7 @@
 
 **A — links.** "This corner at 08:00 on 21 December in Film noir" is today
 a JSON blob to copy into a text field. The Snapshot codec is versioned and
-validated (`lib/city/snapshot.ts`, ADR 0017), and the viewer already
+validated (`lib/city/snapshot.ts`, ADR 0018), and the viewer already
 restores a Snapshot string right after its first frame — that is how a
 page recovers from a lost GPU (`city-walk.tsx`, `recovery.current.restore`).
 A `?snap=` parameter is a second source for the same hook; "Link kopieren"
@@ -65,7 +65,7 @@ makes those checks repeatable.
   sidebar's Snapshot section (`scene-sidebar.tsx:≈923-947`) has *Kopieren*
   and *Anwenden*.
 - URL parameters read today: `scene`, `gpu`, `block` (`scene-profile.ts`),
-  `safety` (`lib/city/gpu-safety.ts`, ADR 0046), `trail` (`crash-report.tsx`), and
+  `safety` (`lib/city/gpu-safety.ts`, ADR 0047), `trail` (`crash-report.tsx`), and
   the fragment `#at=lat,lng` (the arrival hand-off, `lib/city/geolocation.ts`
   `ARRIVAL_PARAM` — the spike should extend that read rather than add a
   parallel one). None reaches a sink beyond literal
@@ -111,7 +111,7 @@ restore must reset the look to `LOOK_DEFAULTS` first, then apply).
 ### A3: Open questions for the maintainer (write in "Findings")
 
 - ADR 0001 says the app persists nothing; a link is not persistence, but
-  ADR 0017 (the Snapshot contract) should get a line on the URL transport
+  ADR 0018 (the Snapshot contract) should get a line on the URL transport
   and its version handling — write the proposed ADR text, do not merge it
   without the maintainer.
 - Should a link also carry the picture style only (`?style=noir`) as a
@@ -138,7 +138,7 @@ GPU, say so).
 
 ## Findings
 
-(Executor: lengths from A1, decisions, open questions, the ADR 0017 draft.)
+(Executor: lengths from A1, decisions, open questions, the ADR 0018 draft.)
 
 ## Done criteria
 

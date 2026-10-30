@@ -72,6 +72,13 @@ export interface RenderStyleDef {
    * which is what keeps the default style free.
    */
   shaderMode: number;
+  /**
+   * How far the tree crowns sway in the wind (0..1; vegetation-layer.ts
+   * `crownSwayShare`). A style whose shade is a pen's hatch laid on the
+   * world holds its crowns still: a swaying crown slides under the hatch,
+   * and every line on it crawls.
+   */
+  sway: number;
   /** two perceptual swatches for the picker: paper and ink */
   swatch: readonly [string, string];
   /** the vignette (postprocessing VignetteEffect offset/darkness) */
@@ -90,6 +97,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 1,
     grainAnimated: false,
     allowDof: true,
+    sway: 1,
     paperScene: null,
     crowns: null,
     lampCones: false,
@@ -108,6 +116,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 0.6,
     grainAnimated: false,
     allowDof: false,
+    sway: 1,
     paperScene: null,
     crowns: "comic",
     lampCones: false,
@@ -125,6 +134,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 1.6,
     grainAnimated: true,
     allowDof: true,
+    sway: 1,
     paperScene: null,
     crowns: null,
     lampCones: true,
@@ -142,6 +152,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 0.35,
     grainAnimated: true,
     allowDof: false,
+    sway: 1,
     paperScene: "ink",
     crowns: null,
     lampCones: false,
@@ -161,6 +172,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainAnimated: false,
     // A shallow focus on a white model reads as a miniature — welcome here.
     allowDof: true,
+    sway: 1,
     paperScene: "paper",
     crowns: "paper",
     lampCones: false,
@@ -179,6 +191,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 0.3,
     grainAnimated: false,
     allowDof: false,
+    sway: 0,
     paperScene: "line",
     crowns: "paper",
     lampCones: false,
@@ -197,6 +210,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 0,
     grainAnimated: false,
     allowDof: false,
+    sway: 0,
     paperScene: "figure",
     crowns: null,
     lampCones: false,
