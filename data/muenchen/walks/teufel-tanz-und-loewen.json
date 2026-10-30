@@ -78,7 +78,11 @@
       ],
       "refs": [
         "Q152979"
-      ]
+      ],
+      "photo": {
+        "file": "Figuren am Neuen Rathaus München.jpg",
+        "caption": "Die Figuren des Glockenspiels"
+      }
     },
     {
       "id": "asamkirche",
@@ -164,7 +168,7 @@
         532.7
       ],
       "hour": 17,
-      "text": "Zum Schluss die Residenz, von 1508 bis 1918 Sitz der Wittelsbacher, mit zehn Innenhöfen und dem Antiquarium, dem größten Renaissancesaal nördlich der Alpen. An den Eingängen zum Kaiserhof und zum Kapellenhof sitzen je zwei große Bronzelöwen. Sie halten Schilde mit kleinen Löwenköpfen, und deren Schnauzen glänzen golden: Wer sie berührt, soll Glück haben. Man sieht genau, welche Höhe die Hände der Münchner am liebsten erreichen.",
+      "text": "Zum Schluss die Residenz, von 1508 bis 1918 Sitz der Wittelsbacher, mit zehn Innenhöfen und dem Antiquarium, dem größten Renaissancesaal nördlich der Alpen. An den Eingängen zum Kaiserhof und zum Kapellenhof sitzen je zwei große Bronzelöwen. Sie halten Schilde mit kleinen Löwenköpfen, und deren Schnauzen glänzen golden: Wer sie berührt, soll Glück haben. Auf dem Foto sieht man genau, welche Höhe die Hände der Münchner am liebsten erreichen.",
       "closer": "Die Löwen sitzen an den Portalen zu Kaiserhof und Kapellenhof.",
       "facts": [
         {
@@ -182,7 +186,11 @@
       ],
       "refs": [
         "Q686548"
-      ]
+      ],
+      "photo": {
+        "file": "Einer der 4 Löwen vor dem Eingang zur Residenz München.jpg",
+        "caption": "Einer der Bronzelöwen am Eingang"
+      }
     }
   ]
 }

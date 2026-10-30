@@ -121,6 +121,34 @@ test("a walk's problems are named", () => {
   expect(() => walkBundle("probe", [broken])).toThrow("probe walks");
 });
 
+test("a look is sent to the photo, never to a detail the model lacks", () => {
+  const looking = { ...stop, closer: "Schau auf die Krone." };
+  expect(
+    walkProblems({ ...walk, stops: [looking, { ...stop, id: "zwei" }] })
+  ).toHaveLength(1);
+  const photo = {
+    author: "A",
+    file: "Krone.jpg",
+    h: 600,
+    licence: "CC BY 4.0",
+    page: "https://commons.wikimedia.org/wiki/File:Krone.jpg",
+    w: 800,
+  };
+  const onPhoto = {
+    ...looking,
+    closer: "Schau auf dem Foto auf die Krone.",
+    photo,
+  };
+  expect(
+    walkProblems({ ...walk, stops: [onPhoto, { ...stop, id: "zwei" }] })
+  ).toEqual([]);
+  // without a photo, naming one is no help
+  const noPhoto = { ...onPhoto, photo: undefined };
+  expect(
+    walkProblems({ ...walk, stops: [noPhoto, { ...stop, id: "zwei" }] })
+  ).toHaveLength(1);
+});
+
 test("a bundle is recognised by its shape", () => {
   expect(isWalkBundle(walkBundle("probe", [walk]))).toBe(true);
   expect(isWalkBundle({ site: "probe" })).toBe(false);

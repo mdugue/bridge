@@ -22,7 +22,7 @@
       ],
       "hour": 12,
       "text": "Von 2004 an war dieses Tal Welterbe: Wiesen, Hänge, Schlösser, eine Kulturlandschaft mitten in der Großstadt. 2005 stimmten die Dresdner in einem Bürgerentscheid für eine Brücke genau hier, die Waldschlößchenbrücke. Die UNESCO setzte das Tal 2006 auf die Rote Liste und strich es im Juni 2009, als erste Kulturstätte überhaupt. Die Brücke ging 2013 in Betrieb. Eine Umfrage fand 2009 übrigens 57 Prozent, die den Titel für verzichtbar hielten. Da vorn läuft sie über die Wiesen. Entscheide selbst.",
-      "closer": "Rechts oben auf dem Hang reihen sich drei weiße Schlösser. Zu einem davon geht es als Nächstes.",
+      "closer": "Rechts oben auf dem Hang reihen sich drei Schlösser. Zu einem davon geht es als Nächstes.",
       "days": [
         {
           "from": "06-20",
@@ -51,7 +51,11 @@
       ],
       "refs": [
         "Q2541853"
-      ]
+      ],
+      "photo": {
+        "file": "Waldschlösschenbrücke Dresden 2024 Luftbild Toni Klemm 2500px.jpg",
+        "caption": "Die Waldschlößchenbrücke über den Elbwiesen, 2024"
+      }
     },
     {
       "id": "lingnerschloss",
@@ -92,7 +96,16 @@
       "refs": [
         "Q1826549",
         "Q882139"
-      ]
+      ],
+      "photo": {
+        "file": "Lingnerschloss Dresden Frühling.jpg",
+        "author": "Ruben Gläser",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Lingnerschloss_Dresden_Fr%C3%BChling.jpg",
+        "w": 800,
+        "h": 450
+      }
     },
     {
       "id": "blaues-wunder",
@@ -143,7 +156,16 @@
       ],
       "refs": [
         "Q567518"
-      ]
+      ],
+      "photo": {
+        "file": "Blaues Wunder.jpg",
+        "author": "Nikater",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+        "page": "https://commons.wikimedia.org/wiki/File:Blaues_Wunder.jpg",
+        "w": 800,
+        "h": 533
+      }
     },
     {
       "id": "schillerhaeuschen",
@@ -186,7 +208,11 @@
       ],
       "refs": [
         "m416830_5656910"
-      ]
+      ],
+      "photo": {
+        "file": "Schillerhäuschen in Loschwitz 1.jpg",
+        "caption": "Das Schillerhäuschen am Hang"
+      }
     },
     {
       "id": "standseilbahn",
@@ -228,7 +254,11 @@
           "claim": "Bei Luftalarm wurden die Wagen in die Tunnel gefahren und blieben so im Februar 1945 unbeschädigt.",
           "source": "https://de.wikipedia.org/wiki/Standseilbahn_Dresden"
         }
-      ]
+      ],
+      "photo": {
+        "file": "051030-Standseilbahn-Dresden-Talfahrt-Begegnung-Viadukt.jpg",
+        "caption": "Die beiden Wagen weichen sich auf dem Viadukt aus"
+      }
     },
     {
       "id": "schwebebahn",
@@ -274,7 +304,11 @@
       ],
       "refs": [
         "DESNATPU1000GMdW"
-      ]
+      ],
+      "photo": {
+        "file": "Dresden-Loschwitz,Schwebebahn 13.jpg",
+        "caption": "Ein Wagen unter dem Stahlgerüst"
+      }
     },
     {
       "id": "oberloschwitz",

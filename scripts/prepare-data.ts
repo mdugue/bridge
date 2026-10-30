@@ -62,6 +62,7 @@ import {
   WALKS_DIR,
   WALKS_FILE,
   walkBundle,
+  walkPhotoFile,
 } from "../lib/city/walks";
 import { decodeGreyPng } from "../lib/city/png-raster";
 import type {
@@ -1613,6 +1614,30 @@ const walkFiles = existsSync(walksDir)
       .filter((name) => name.endsWith(".json"))
       .sort()
   : [];
+/** A walk with each stop's photo published beside it (`photo.src`). A
+ *  missing copy stops the build: the story may point at the photo. */
+function withPhotos(walk: Walk): Walk {
+  return {
+    ...walk,
+    stops: walk.stops.map((stop) => {
+      if (!stop.photo) {
+        return stop;
+      }
+      const file = join(walksDir, walkPhotoFile(walk.id, stop.id));
+      if (!existsSync(file)) {
+        throw new Error(
+          `${walk.id}/${stop.id}: no photo copy (bun scripts/walks.ts ${SITE.id} photos)`
+        );
+      }
+      const src = publish(
+        `walk-photo_${walk.id}--${stop.id}.webp`,
+        readFileSync(file)
+      );
+      return { ...stop, photo: { ...stop.photo, src } };
+    }),
+  };
+}
+
 const walks =
   walkFiles.length > 0
     ? publish(
@@ -1620,7 +1645,9 @@ const walks =
         utf8(
           walkBundle(
             SITE.id,
-            walkFiles.map((name) => readJson<Walk>(join(walksDir, name)))
+            walkFiles.map((name) =>
+              withPhotos(readJson<Walk>(join(walksDir, name)))
+            )
           )
         )
       )

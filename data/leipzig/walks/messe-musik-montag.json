@@ -66,7 +66,7 @@
         123.1
       ],
       "hour": 13,
-      "text": "Das lange Haus am Markt wurde in einem einzigen Jahr gebaut: von März bis November 1556, unter Bürgermeister Hieronymus Lotter. Sieh dir den Turm an. Er steht nicht in der Mitte, sondern seitlich nach links versetzt. Unter dem Dach läuft eine Inschrift rund um das ganze Haus, etwa 220 Meter lang. Die Stadt regiert hier längst nicht mehr, seit 1905 sitzt sie im Neuen Rathaus. Drinnen ist das Stadtgeschichtliche Museum.",
+      "text": "Das lange Haus am Markt wurde in einem einzigen Jahr gebaut: von März bis November 1556, unter Bürgermeister Hieronymus Lotter. Der Turm steht nicht in der Mitte, sondern seitlich nach links versetzt. Unter dem Dach läuft eine Inschrift rund um das ganze Haus, etwa 220 Meter lang. Die Stadt regiert hier längst nicht mehr, seit 1905 sitzt sie im Neuen Rathaus. Drinnen ist das Stadtgeschichtliche Museum.",
       "closer": "Der Turm: Miss mit dem Auge, wie weit er links aus der Mitte gerückt ist.",
       "facts": [
         {
@@ -105,7 +105,7 @@
         121.7
       ],
       "hour": 18,
-      "text": "Unter der Mädlerpassage liegt der Keller, den Goethe weltberühmt gemacht hat: In „Faust“ trinken hier Studenten, und Mephisto zaubert ihnen Wein aus dem Tisch. Die Szene geht auf eine Sage zurück, überliefert um 1525: Der historische Faust soll hier auf einem Fass die Treppe hinauf geritten sein. Am Eingang stehen zwei Bronzegruppen von Mathieu Molitor, Faust mit Mephisto und die verzauberten Studenten. Man sagt, wer Fausts Fuß berührt, kommt wieder. Belegt ist nur, dass er sehr blank ist.",
+      "text": "Unter der Mädlerpassage liegt der Keller, den Goethe weltberühmt gemacht hat: In „Faust“ trinken hier Studenten, und Mephisto zaubert ihnen Wein aus dem Tisch. Die Szene geht auf eine Sage zurück, überliefert um 1525: Der historische Faust soll hier auf einem Fass die Treppe hinauf geritten sein. Am Eingang stehen zwei Bronzegruppen, eine davon auf dem Foto,, eine davon auf dem Foto, von Mathieu Molitor, Faust mit Mephisto und die verzauberten Studenten. Man sagt, wer Fausts Fuß berührt, kommt wieder. Belegt ist nur, dass er sehr blank ist.",
       "closer": "Die Passage darüber ist ein Durchgang, kein Gebäude: Sie verbindet zwei Straßen wie eine überdachte Gasse.",
       "facts": [
         {
@@ -128,7 +128,11 @@
       "refs": [
         "Q523117",
         "Q1491479"
-      ]
+      ],
+      "photo": {
+        "file": "Fotothek df ps 0000785 Mephisto verzaubert die Studenten.jpg",
+        "caption": "Molitors Bronzegruppe: Mephisto verzaubert die Studenten"
+      }
     },
     {
       "id": "nikolaikirche",
@@ -145,8 +149,8 @@
         142.5
       ],
       "hour": 17.5,
-      "text": "Von außen eine gewöhnliche Stadtkirche. Drinnen stehen Säulen, die oben in hellgrünen Palmblättern enden, klassizistisch umgebaut 1784 bis 1797 von Johann Carl Friedrich Dauthe. Seit Anfang der 1980er Jahre trafen sich hier montags Menschen zum Friedensgebet, erst wenige, Ende der Achtziger zehntausende. Von hier aus zogen sie über den Ring, und im Herbst 1989 kippte das Land. Vor der Kirche steht seit 1999 eine Kopie einer dieser Palmensäulen, draußen auf dem Platz, als hätte sie sich hinausgewagt.",
-      "closer": "Auf dem Platz westlich der Kirche: die einzelne Säule mit Palmenkrone.",
+      "text": "Von außen eine gewöhnliche Stadtkirche. Drinnen, auf dem Foto, stehen Säulen, die oben in hellgrünen Palmblättern enden, klassizistisch umgebaut 1784 bis 1797 von Johann Carl Friedrich Dauthe. Seit Anfang der 1980er Jahre trafen sich hier montags Menschen zum Friedensgebet, erst wenige, Ende der Achtziger zehntausende. Von hier aus zogen sie über den Ring, und im Herbst 1989 kippte das Land. Vor der Kirche steht seit 1999 eine Kopie einer dieser Palmensäulen, draußen auf dem Platz, als hätte sie sich hinausgewagt.",
+      "closer": "Die Säule draußen steht auf dem Platz westlich der Kirche.",
       "days": [
         {
           "from": "10-01",
@@ -170,7 +174,11 @@
       ],
       "refs": [
         "Q694286"
-      ]
+      ],
+      "photo": {
+        "file": "Nikolaikirche Leipzig Blick Richtung Altar 03.JPG",
+        "caption": "Die Säulen mit den Palmenkronen"
+      }
     },
     {
       "id": "paulinum",

@@ -91,7 +91,7 @@
         147.6
       ],
       "hour": 17.5,
-      "text": "Unten am Markt die Frauenkirche, und in ihrem Turm etwas, das man hören muss: das erste stimmbare Glockenspiel aus Porzellan der Welt, 37 Glocken, eingebaut 1929 zur Tausendjahrfeier der Stadt. Hör hin, wie anders es klingt als Bronze. Sechsmal am Tag spielt es einen Choral, um 6:30, 8:30, 11:30, 14:30, 17:30 und 20:30 Uhr, dazwischen schlägt es die Viertelstunden. Wenn du um halb sechs hier bist, hörst du den Ton, aus dem die Stadt gemacht ist.",
+      "text": "Unten am Markt die Frauenkirche, und in ihrem Turm etwas, das man hören muss: das erste stimmbare Glockenspiel aus Porzellan der Welt, 37 Glocken, eingebaut 1929 zur Tausendjahrfeier der Stadt. Das Foto zeigt die weißen Glocken; hör hin, wie anders sie klingen als Bronze. Sechsmal am Tag spielt es einen Choral, um 6:30, 8:30, 11:30, 14:30, 17:30 und 20:30 Uhr, dazwischen schlägt es die Viertelstunden. Wenn du um halb sechs hier bist, hörst du den Ton, aus dem die Stadt gemacht ist.",
       "facts": [
         {
           "claim": "Das Porzellanglockenspiel von 1929, zur 1000-Jahr-Feier eingebaut, ist das erste stimmbare Porzellanglockenspiel der Welt.",
@@ -108,7 +108,11 @@
       ],
       "refs": [
         "Q1451777"
-      ]
+      ],
+      "photo": {
+        "file": "Porzellanglockenspiel Meißen.jpg",
+        "caption": "Die Porzellanglocken im Turm"
+      }
     }
   ]
 }

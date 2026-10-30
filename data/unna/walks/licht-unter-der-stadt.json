@@ -22,7 +22,7 @@
       ],
       "hour": 20.5,
       "text": "Hier wurde Bier gebraut, in der Lindenbrauerei. Seit 2001 zeigt das Gelände etwas ganz anderes: Das Zentrum für Internationale Lichtkunst ist nach eigenem Anspruch das einzige Museum der Welt, das nur Lichtkunst zeigt. Die Werke liegen unter der Erde, in alten Gängen, Kühlräumen und Gärbecken, wo es sonst dunkel wäre. James Turrell hat dort eine Camera obscura gebaut, Olafur Eliasson einen Raum. Und oben auf dem Schornstein leuchtet eine Zahlenreihe von Mario Merz: die Fibonacci-Folge.",
-      "closer": "Der Schornstein: Die Ziffern laufen an ihm hinauf, jede die Summe der zwei davor.",
+      "closer": "Die Ziffern laufen am Schornstein hinauf, jede die Summe der zwei davor.",
       "facts": [
         {
           "claim": "Das Zentrum für Internationale Lichtkunst eröffnete 2001 in den Gebäuden der ehemaligen Lindenbrauerei.",
@@ -40,7 +40,11 @@
       "refs": [
         "Q191212",
         "Q1145709"
-      ]
+      ],
+      "photo": {
+        "file": "Lindenbrauerei Unna Kamin 2008 IMGP6397 wp.jpg",
+        "caption": "Der Schornstein der Lindenbrauerei"
+      }
     },
     {
       "id": "stadtkirche",

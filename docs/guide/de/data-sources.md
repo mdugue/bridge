@@ -470,6 +470,7 @@ Overpass-API.
 | Geoportal Berlin | `dl-de/zero-2-0`: kein Vermerk nötig | trotzdem: „Geoportal Berlin, dl-de/zero-2-0“ |
 | OpenStreetMap | *Open Database License* (ODbL) | „© OpenStreetMap-Mitwirkende“ |
 | Wikidata | *CC0* (gemeinfrei) | keiner erforderlich |
+| Wikimedia Commons (die Fotos der Spaziergänge) | je Datei die Lizenz ihrer Commons-Seite (meist *CC BY-SA* oder gemeinfrei) | Urheber, Lizenz und Link auf der Karte der Station |
 | Copernicus DEM GLO-30 (das Land jenseits der Kacheln) | *Licence for the use of the Copernicus WorldDEM-30*: kostenlos für jede Nutzung; ein verändertes Produkt trägt den Vermerk, sein Impressum den Haftungssatz | „Gelände im Umland: produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved“; dazu: „Die nach Gesetz oder im Auftrag für das Copernicus-Programm zuständigen Organisationen haften nicht für jegliche Nutzung des Copernicus WorldDEM-30.“ |
 | DWD-Phänologie (die Beobachtungen der Jahresmelder an Wildpflanzen, 2010–2023) | `dl-de/by-2-0` | „Quelle: Deutscher Wetterdienst“ |
 | Stadtbaumkataster | `dl-de/by-2-0` | „Landeshauptstadt Dresden“ |

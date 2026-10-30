@@ -21,7 +21,7 @@
         140
       ],
       "hour": 14,
-      "text": "Schau dir die Fassade an, bevor du etwas darüber liest. Sie ist gefleckt: helle Steine, dazwischen dunkle. Die dunklen sind die alten. Nach dem Einsturz am 15. Februar 1945 lag die Kirche fast fünfzig Jahre als Trümmerberg mitten in der Stadt. Beim Wiederaufbau ab 1994 wurden die Trümmer wie ein Puzzle sortiert; 3539 alte Steine sitzen wieder in der Außenwand, dunkel vom oxidierten Eisen im Sandstein. Man hat sie nicht angeglichen. Die neuen werden nachdunkeln, und irgendwann sieht man die Narbe nicht mehr.",
+      "text": "Schau dir die Fassade auf dem Foto an, bevor du weiterliest; das Modell zeigt sie einfarbig. Sie ist gefleckt: helle Steine, dazwischen dunkle. Die dunklen sind die alten. Nach dem Einsturz am 15. Februar 1945 lag die Kirche fast fünfzig Jahre als Trümmerberg mitten in der Stadt. Beim Wiederaufbau ab 1994 wurden die Trümmer wie ein Puzzle sortiert; 3539 alte Steine sitzen wieder in der Außenwand, dunkel vom oxidierten Eisen im Sandstein. Man hat sie nicht angeglichen. Die neuen werden nachdunkeln, und irgendwann sieht man die Narbe nicht mehr.",
       "closer": "Nördlich der Kirche liegt ein großer Brocken auf dem Pflaster: ein Fragment der alten Kuppel.",
       "days": [
         {
@@ -56,7 +56,17 @@
       "refs": [
         "Q157229",
         "m411789_5656393"
-      ]
+      ],
+      "photo": {
+        "file": "100130 150006 Dresden Frauenkirche winter blue sky-2.jpg",
+        "author": "Netopyr",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:100130_150006_Dresden_Frauenkirche_winter_blue_sky-2.jpg",
+        "w": 800,
+        "h": 1186,
+        "caption": "Helle neue und dunkle alte Steine"
+      }
     },
     {
       "id": "turmkreuz",
@@ -74,7 +84,7 @@
       ],
       "hour": 12,
       "fov": 22,
-      "text": "Zoom ganz nach oben, auf das goldene Kreuz über der Laterne. Es wurde in London geschmiedet, von Alan Smith. Sein Vater war einer der britischen Piloten, die Dresden bombardiert hatten. Bezahlt hat es der Dresden Trust, eine britische Stiftung, aufgesetzt wurde es am 22. Juni 2004. Das alte, verbogene Kreuz fand man 1993 im Schutt. Wenn du einen einzigen Gegenstand suchst, der erzählt, was Versöhnung praktisch bedeutet, dann ist es dieses Stück Metall, 91 Meter über dem Platz.",
+      "text": "Ganz oben, über der Laterne, sitzt ein goldenes Kreuz. Es wurde in London geschmiedet, von Alan Smith. Sein Vater war einer der britischen Piloten, die Dresden bombardiert hatten. Bezahlt hat es der Dresden Trust, eine britische Stiftung, aufgesetzt wurde es am 22. Juni 2004. Das alte, verbogene Kreuz auf dem Foto fand man 1993 im Schutt. Wenn du einen einzigen Gegenstand suchst, der erzählt, was Versöhnung praktisch bedeutet, dann ist es dieses Stück Metall, 91 Meter über dem Platz.",
       "days": [
         {
           "from": "06-18",
@@ -98,7 +108,11 @@
       ],
       "refs": [
         "Q157229"
-      ]
+      ],
+      "photo": {
+        "file": "Dresden - Frauenkirche - Turmkreuz.jpg",
+        "caption": "Das alte Turmkreuz, gefunden 1993 im Schutt"
+      }
     },
     {
       "id": "kulturpalast",
@@ -115,7 +129,7 @@
         124
       ],
       "hour": 16,
-      "text": "Ein Sprung in eine andere Zeit, ohne den Ort zu wechseln. Der Kulturpalast von Wolfgang Hänsch, eröffnet 1969, war das Haus, das die DDR an den Altmarkt setzte. An der Westseite hängt „Der Weg der roten Fahne“, 30 mal 10,5 Meter Betonplatten mit Glassplitt. Man hätte es nach 1990 abschlagen können; stattdessen steht es seit 2001 unter Denkmalschutz. Drinnen spielt seit 2017 die Philharmonie in einem neuen Saal. Dresden hat eine unbequeme Schicht nicht weggeputzt, sondern zur Fassade eines Konzerthauses gemacht.",
+      "text": "Ein Sprung in eine andere Zeit, ohne den Ort zu wechseln. Der Kulturpalast von Wolfgang Hänsch, eröffnet 1969, war das Haus, das die DDR an den Altmarkt setzte. An der Westseite hängt „Der Weg der roten Fahne“ (auf dem Foto), das Bild auf dem Foto, 30 mal 10,5 Meter Betonplatten mit Glassplitt. Man hätte es nach 1990 abschlagen können; stattdessen steht es seit 2001 unter Denkmalschutz. Drinnen spielt seit 2017 die Philharmonie in einem neuen Saal. Dresden hat eine unbequeme Schicht nicht weggeputzt, sondern zur Fassade eines Konzerthauses gemacht.",
       "closer": "An den fünf Bronzetüren des Haupteingangs erzählt Gerd Jaeger die Stadtgeschichte vom Fischerdorf bis zur Großstadt.",
       "facts": [
         {
@@ -137,7 +151,11 @@
       ],
       "refs": [
         "Q1791798"
-      ]
+      ],
+      "photo": {
+        "file": "Der Weg der roten Fahne - Wandmosaik (DDR) - Kulturpalast Dresden - Bild 001.jpg",
+        "caption": "„Der Weg der roten Fahne“ an der Westseite"
+      }
     },
     {
       "id": "kreuzkirche",
@@ -203,7 +221,11 @@
       ],
       "refs": [
         "Q301607"
-      ]
+      ],
+      "photo": {
+        "file": "20070106135DR Dresden Kreuzkirche Emporen.jpg",
+        "caption": "Der Innenraum im grauen Rauputz"
+      }
     },
     {
       "id": "sophienkirche",
@@ -221,7 +243,7 @@
       ],
       "hour": 13,
       "text": "Hier stand bis 1963 eine gotische Kirche, die den Krieg als Ruine überlebt hatte, der letzte in seiner Substanz erhaltene gotische Kirchenbau der Stadt. Die SED-Führung ließ sie trotzdem abtragen, gegen Proteste von Denkmalpflegern und Architekten, am 1. Mai 1963 fiel das letzte Stück Wand. Seit 2020 steht im Glaskubus die wieder aufgebaute Busmannkapelle, der „DenkRaum Sophienkirche“. Das Glas ist die Naht: Es zeigt, wo etwas fehlt, ohne so zu tun, als wäre es nie weg gewesen.",
-      "closer": "Achte auf das Pflaster: Rote Granitsteine zeichnen den Grundriss der Kirche nach.",
+      "closer": "Im Pflaster zeichnen rote Granitsteine den Grundriss der alten Kirche nach.",
       "facts": [
         {
           "claim": "Die Ruine war zur Zeit des Abrisses der letzte in seiner Grundsubstanz erhaltene gotische Kirchenbau der Stadt.",
@@ -242,7 +264,17 @@
       ],
       "refs": [
         "Q1497529"
-      ]
+      ],
+      "photo": {
+        "file": "Dresden, Sophienstraße 2, Denkraum Sophienkirche, 17.6.2.40-060454.jpg",
+        "author": "Albrecht Voß",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden,_Sophienstra%C3%9Fe_2,_Denkraum_Sophienkirche,_17.6.2.40-060454.jpg",
+        "w": 800,
+        "h": 533,
+        "caption": "Der Glaskubus des DenkRaums"
+      }
     },
     {
       "id": "neue-synagoge",
@@ -292,7 +324,16 @@
       ],
       "refs": [
         "Q670209"
-      ]
+      ],
+      "photo": {
+        "file": "Synagoge - Panorama, Dresden.jpg",
+        "author": "Maros M r a z (Maros)",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Synagoge_-_Panorama,_Dresden.jpg",
+        "w": 800,
+        "h": 428
+      }
     },
     {
       "id": "frauenkirche-nacht",

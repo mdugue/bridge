@@ -777,6 +777,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await expect(card).toBeVisible();
       await expect(card).toContainText("Station 1 von 9");
       await expect(card).toContainText("Erzählt von Claude (KI)");
+      // the detail the model lacks is on the stop's photo, with its credit
+      const photo = card.getByTestId("walk-photo");
+      await expect(photo.locator("img")).toBeVisible();
+      await expect(photo).toContainText("Wikimedia Commons");
       const first = await card.getByRole("heading").textContent();
       await card.getByTestId("walk-next").click();
       await expect(card).toContainText("Station 2 von 9");
