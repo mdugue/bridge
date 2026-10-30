@@ -570,6 +570,7 @@ export type DesignControls = Pick<
   | "setOnGround"
   | "setPlacement"
   | "setReplaceExisting"
+  | "setScale"
   | "status"
 >;
 
@@ -4011,6 +4012,7 @@ async function bootApp(
       setOnGround: () => design?.setOnGround(),
       setPlacement: (patch) => design?.setPlacement(patch),
       setReplaceExisting: (on) => design?.setReplaceExisting(on),
+      setScale: (scale) => design?.setScale(scale),
       status: () => design?.status() ?? null,
     },
     inquireAt,

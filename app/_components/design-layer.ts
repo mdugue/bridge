@@ -18,14 +18,21 @@ import {
 } from "@/lib/city/design-cover";
 import {
   type DesignPlacement,
+  type DesignScale,
+  designSize,
   elsewhereNote,
   groundBase,
   normalizeRotation,
   type PlacementSource,
   parsePlacementFile,
   placeAhead,
+  METRES,
   placementFile,
+  scaleBox,
+  scaleHint,
+  scaleMetres,
   SITE_REACH_M,
+  validFactor,
   standingBase,
   trustedBase,
 } from "@/lib/city/design-placement";
@@ -77,6 +84,12 @@ export interface DesignStatus {
   source: PlacementSource;
   /** the LoD2 objects it stands in for */
   hidden: number;
+  /** the unit its file is read in, times a factor */
+  scale: DesignScale;
+  /** its size as scaled (m): width, depth, height */
+  size: [number, number, number];
+  /** its size suggests another unit (`scaleHint`), null where not */
+  scaleHint: string | null;
   replaceExisting: boolean;
   fileColours: boolean;
   /** the file carries textures or colours of its own */
@@ -116,6 +129,8 @@ export interface DesignLayer {
   applyPlacementFile: (text: string) => string | null;
   /** moves, turns or lifts it */
   setPlacement: (patch: Partial<DesignPlacement>) => void;
+  /** reads it in another unit, or times a factor, about its foot */
+  setScale: (scale: DesignScale) => void;
   /** sets it down in front of the player, on the ground */
   placeHere: () => void;
   /** sets its lowest point on the ground under it */
@@ -200,6 +215,8 @@ interface Loaded {
   /** why it is not where its file says (the panel's note in place of
    *  the reader's), null where it is or the file says nothing */
   placeNote: string | null;
+  /** the scale its geometry and box are in now (read in metres) */
+  scale: DesignScale;
   files: MeshStandardNodeMaterial[] | null;
   fileColours: boolean;
   mask: PlanMask | null;
@@ -352,6 +369,9 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       placement: { ...current.placement },
       source: current.source,
       hidden,
+      scale: { ...current.scale },
+      size: designSize(current.model.box),
+      scaleHint: scaleHint(current.model.box),
       replaceExisting,
       fileColours: current.fileColours,
       hasLooks: hasLooks(current.model),
@@ -429,6 +449,22 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       deps.changed();
       report();
     }
+  };
+
+  /** its geometry and box in `scale`, about its foot (the geometry is
+   *  about its anchor, design-read.ts): one uniform scale of the CPU copy
+   *  the plan and the collider read, its BVH refitted, not rebuilt */
+  const rescale = (loaded: Loaded, scale: DesignScale) => {
+    const f = scaleMetres(scale) / scaleMetres(loaded.scale);
+    loaded.scale = { ...scale };
+    if (f === 1) {
+      return;
+    }
+    const g = loaded.model.geometry;
+    g.scale(f, f, f);
+    g.boundsTree?.refit();
+    loaded.model.box = scaleBox(loaded.model.box, f);
+    loaded.ask = null;
   };
 
   /** the ground where the player stands: a design over ground not loaded
@@ -523,6 +559,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       return parsed.error;
     }
     if (current) {
+      rescale(current, parsed.scale);
       current.placement = parsed.placement;
       current.source = "placement-file";
       current.placeNote = null;
@@ -593,6 +630,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
         outline: null,
         hidden: new Map(),
         ask: null,
+        scale: { ...METRES },
       };
       pose(loaded);
       await deps.compile(mesh);
@@ -607,6 +645,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
         return;
       }
       if (parsed && "placement" in parsed) {
+        rescale(loaded, parsed.scale);
         loaded.placement = parsed.placement;
         loaded.source = "placement-file";
         loaded.placeNote = null;
@@ -635,6 +674,13 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       current.source = "manual";
       current.placeNote = null;
       moved();
+    },
+    setScale: (scale) => {
+      if (!current || !validFactor(scale.factor)) {
+        return;
+      }
+      rescale(current, scale);
+      moved(true);
     },
     placeHere: () => {
       if (!current) {
@@ -679,7 +725,12 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     setFileColours,
     placementText: () =>
       current
-        ? placementFile(current.placement, deps.epsg, current.model.name)
+        ? placementFile(
+            current.placement,
+            deps.epsg,
+            current.model.name,
+            current.scale
+          )
         : null,
     remove,
     hiddenFor: (tile) => current?.hidden.get(tile) ?? NONE,

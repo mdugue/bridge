@@ -499,7 +499,10 @@ The other picture styles and Modell keep their sharp lines.
   origin (±0) where it has a basement below that. *Hierher
   holen* (bring here), *Aufs Gelände* (onto the ground), *Ost*, *Nord*,
   *Höhe* and *Drehung* (east, north, height, turn) move, set and turn it;
-  *Lage sichern* saves the placement as a small file (`….lage.json`) to
+  *Maßstab* (scale) reads the file in another unit (m, cm, mm, inch,
+  foot) and times a factor — for an OBJ, which has no unit, or a model at
+  1:100; a design under 4 m or over 3 km gets the panel's suggestion.
+  *Lage sichern* saves the placement, with its scale, as a small file (`….lage.json`) to
   load with the design next time. Buildings whose footprint the design
   covers for more than half step aside (*Bestand im Umriss ausblenden*);
   flat plates at the design's lowest point do not count. The design is

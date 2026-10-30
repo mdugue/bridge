@@ -291,7 +291,8 @@ export const PLACEMENT_FORMAT = "city-walk-entwurf/1";
 export function placementFile(
   placement: DesignPlacement,
   epsg: number,
-  design: string
+  design: string,
+  scale: DesignScale = METRES
 ): string {
   const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
   return `${JSON.stringify(
@@ -303,6 +304,9 @@ export function placementFile(
       north: round(placement.north, 3),
       base: round(placement.base, 3),
       rotation: round(placement.rotation, 2),
+      // (a file without them is in metres, as before they were kept)
+      unit: scale.unit,
+      factor: scale.factor,
     },
     null,
     2
@@ -316,7 +320,7 @@ export function placementFile(
 export function parsePlacementFile(
   text: string,
   epsg: number
-): { placement: DesignPlacement } | { error: string } {
+): { placement: DesignPlacement; scale: DesignScale } | { error: string } {
   let json: unknown;
   try {
     json = JSON.parse(text);
@@ -341,7 +345,91 @@ export function parsePlacementFile(
   if (east === null || north === null || base === null || rotation === null) {
     return { error: "Der Lagedatei fehlen Koordinaten, Höhe oder Drehung." };
   }
+  const unit = o.unit ?? "m";
+  const factor = num("factor") ?? 1;
+  if (!isDesignUnit(unit) || !validFactor(factor)) {
+    return { error: "Die Lagedatei nennt einen ungültigen Maßstab." };
+  }
   return {
     placement: { east, north, base, rotation: normalizeRotation(rotation) },
+    scale: { unit, factor },
   };
+}
+
+/** The units a design's file may be drawn in, in metres. */
+export const DESIGN_UNITS = {
+  m: 1,
+  cm: 0.01,
+  mm: 0.001,
+  in: 0.0254,
+  ft: 0.3048,
+} as const;
+export type DesignUnit = keyof typeof DESIGN_UNITS;
+
+/** A design's scale: the unit its file is drawn in, times a factor (a
+ *  model built at 1:100, a game asset in its own units). */
+export interface DesignScale {
+  unit: DesignUnit;
+  factor: number;
+}
+export const METRES: DesignScale = { unit: "m", factor: 1 };
+
+/** The factors the panel takes: from a hundredth to a thousandfold. */
+const FACTOR_MIN = 0.01;
+const FACTOR_MAX = 1000;
+
+export function isDesignUnit(v: unknown): v is DesignUnit {
+  return typeof v === "string" && Object.hasOwn(DESIGN_UNITS, v);
+}
+
+export function validFactor(v: number): boolean {
+  return Number.isFinite(v) && v >= FACTOR_MIN && v <= FACTOR_MAX;
+}
+
+/** How many metres one of the file's units is. */
+export function scaleMetres(scale: DesignScale): number {
+  return DESIGN_UNITS[scale.unit] * scale.factor;
+}
+
+/** A design's box scaled by `f` about its anchor (the middle in plan, at
+ *  its lowest point), which stays where it is. */
+export function scaleBox(box: DesignBox, f: number): DesignBox {
+  const a = designAnchor(box);
+  const at = (v: number, i: number) => a[i] + (v - a[i]) * f;
+  return {
+    min: [at(box.min[0], 0), at(box.min[1], 1), at(box.min[2], 2)],
+    max: [at(box.max[0], 0), at(box.max[1], 1), at(box.max[2], 2)],
+  };
+}
+
+/** A design's size (m): width east–west, depth, height. */
+export function designSize(box: DesignBox): [number, number, number] {
+  return [
+    box.max[0] - box.min[0],
+    box.max[2] - box.min[2],
+    box.max[1] - box.min[1],
+  ];
+}
+
+/** Below this a design is likely in centimetres or a game's own units
+ *  (m: a 2.9 m "skyscraper"); above, in millimetres (m: 30 km). */
+const SMALL_M = 4;
+const LARGE_M = 3000;
+
+/**
+ * A line for the panel where a design's size suggests its file is not in
+ * metres — a model of a few metres or of kilometres —, null otherwise.
+ * Only a hint: a bench is small, a landscape plan large.
+ */
+export function scaleHint(box: DesignBox): string | null {
+  const longest = Math.max(...designSize(box));
+  const m = (v: number) =>
+    v.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+  if (longest < SMALL_M) {
+    return `Nur ${m(longest)} m groß: ist die Datei in Zentimetern oder eigenen Einheiten? Den Maßstab unten einstellen.`;
+  }
+  if (longest > LARGE_M) {
+    return `${m(longest / 1000)} km groß: ist die Datei in Millimetern oder Zentimetern? Den Maßstab unten einstellen.`;
+  }
+  return null;
 }

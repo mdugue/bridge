@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  designSize,
+  scaleBox,
+  scaleHint,
+  scaleMetres,
   beyondExtents,
   elsewhereFrame,
   elsewhereNote,
@@ -155,6 +159,7 @@ describe("design placement", () => {
         base: 113.205,
         rotation: 12.35,
       },
+      scale: { unit: "m", factor: 1 },
     });
     expect("error" in parsePlacementFile(text, 25_832)).toBe(true);
     expect("error" in parsePlacementFile("{", 25_833)).toBe(true);
@@ -190,5 +195,54 @@ describe("a place the file gives that no one would see", () => {
   test("the note says how far", () => {
     expect(elsewhereNote(412_000)).toContain("412 km außerhalb");
     expect(elsewhereNote(null)).toContain("anderen Orts");
+  });
+});
+
+describe("a design's scale", () => {
+  test("a placement file keeps the unit and factor, an old one is metres", () => {
+    const placement = {
+      east: 411_000,
+      north: 5_657_000,
+      base: 110,
+      rotation: 0,
+    };
+    const text = placementFile(placement, 25_833, "haus.obj", {
+      unit: "cm",
+      factor: 2,
+    });
+    const back = parsePlacementFile(text, 25_833);
+    expect("scale" in back && back.scale).toEqual({ unit: "cm", factor: 2 });
+    const old = text.replace(/,\s*"unit": "cm",\s*"factor": 2/, "");
+    const before = parsePlacementFile(old, 25_833);
+    expect("scale" in before && before.scale).toEqual({ unit: "m", factor: 1 });
+    const bad = text.replace('"cm"', '"furlong"');
+    expect("error" in parsePlacementFile(bad, 25_833)).toBe(true);
+  });
+
+  test("a unit and factor in metres", () => {
+    expect(scaleMetres({ unit: "mm", factor: 1 })).toBe(0.001);
+    expect(scaleMetres({ unit: "cm", factor: 10 })).toBeCloseTo(0.1, 12);
+  });
+
+  test("a box scales about its foot, which stays", () => {
+    const box: DesignBox = { min: [10, 100, -4], max: [14, 103, 0] };
+    const big = scaleBox(box, 10);
+    expect(big.min[1]).toBe(100);
+    expect((big.min[0] + big.max[0]) / 2).toBe(12);
+    expect((big.min[2] + big.max[2]) / 2).toBe(-2);
+    expect(designSize(big)).toEqual([40, 40, 30]);
+  });
+
+  test("a size far from a building's says so", () => {
+    // Kenney's skyscraper in its own units: 1.4 × 1.4 × 2.9
+    const kenney: DesignBox = {
+      min: [-0.68, 0, -0.68],
+      max: [0.68, 2.88, 0.68],
+    };
+    expect(scaleHint(kenney)).toContain("2,9 m");
+    // a 30 m house in millimetres
+    const mm: DesignBox = { min: [0, 0, 0], max: [30_000, 12_000, 20_000] };
+    expect(scaleHint(mm)).toContain("30 km");
+    expect(scaleHint({ min: [0, 0, 0], max: [30, 12, 20] })).toBeNull();
   });
 });
