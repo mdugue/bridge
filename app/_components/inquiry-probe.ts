@@ -631,8 +631,15 @@ export function createInquiryProbe(deps: {
     if (!(q && hit && pick)) {
       return null;
     }
-    // the pick is now that candidate: its question goes with it
     const key = q.keys[index];
+    // a candidate already picked is not picked twice: its card opens
+    const other = picks.findIndex((p, i) => i !== active && p.key === key);
+    if (other >= 0) {
+      active = other;
+      mark(false);
+      return describe(picks[other].hit);
+    }
+    // the pick is now that candidate: its question goes with it
     asks.delete(pick.key);
     picks[active] = { ...pick, hit, key };
     asks.set(key, { ...q, selected: index });

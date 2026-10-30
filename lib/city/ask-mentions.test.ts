@@ -35,3 +35,16 @@ test("a text without the places is one run", () => {
   ]);
   expect(mentionRuns("", places, "Dresden")).toEqual([]);
 });
+
+test("a place is linked once across an answer's paragraphs", () => {
+  const linked = new Set<number>();
+  const first = mentionRuns("Die Kreuzkirche.", places, "Dresden", linked);
+  const second = mentionRuns(
+    "Wieder die Kreuzkirche.",
+    places,
+    "Dresden",
+    linked
+  );
+  expect(first.filter((r) => "place" in r)).toHaveLength(1);
+  expect(second).toEqual([{ text: "Wieder die Kreuzkirche." }]);
+});

@@ -3,7 +3,8 @@
  * the text split into plain runs and mentions, so the card can make each
  * mention a link that flies there. A place is found by its name or by its
  * name without the city's ("Residenzschloss Dresden" → "Residenzschloss");
- * each place is linked once, where the text first names it.
+ * each place is linked once, where the answer first names it (`linked`
+ * carries that across an answer's paragraphs).
  */
 
 /** A run of an answer's text: plain, or a mention of `places[place]`. */
@@ -31,8 +32,11 @@ function findWord(
   text: string,
   alias: string
 ): { at: number; end: number } | null {
-  const lower = text.toLowerCase();
-  const a = alias.toLowerCase();
+  // a letter whose lower case is longer ("İ") would shift every index:
+  // then only the name as written is found
+  const folds = text.toLowerCase().length === text.length;
+  const lower = folds ? text.toLowerCase() : text;
+  const a = folds ? alias.toLowerCase() : alias;
   for (let i = lower.indexOf(a); i >= 0; i = lower.indexOf(a, i + 1)) {
     const end = ENDING.exec(text.slice(i + a.length));
     // a name inside a longer word ("Domplatz" for "Dom") is not it
@@ -43,14 +47,19 @@ function findWord(
   return null;
 }
 
-/** `text` split into runs, each place's first mention its own. */
+/** `text` split into runs, each place's first mention its own; the places
+ *  in `linked` are linked already, and those linked here join them. */
 export function mentionRuns(
   text: string,
   places: readonly { name: string }[],
-  city: string
+  city: string,
+  linked: Set<number> = new Set()
 ): MentionRun[] {
   const hits: { at: number; end: number; place: number }[] = [];
   places.forEach((p, place) => {
+    if (linked.has(place)) {
+      return;
+    }
     for (const alias of aliasesOf(p.name, city)) {
       const hit = findWord(text, alias);
       if (hit) {
@@ -71,6 +80,7 @@ export function mentionRuns(
       runs.push({ text: text.slice(pos, h.at) });
     }
     runs.push({ text: text.slice(h.at, h.end), place: h.place });
+    linked.add(h.place);
     pos = h.end;
   }
   if (pos < text.length) {

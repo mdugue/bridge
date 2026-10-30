@@ -46,7 +46,7 @@ import {
   providerForKey,
 } from "@/lib/city/ask-city";
 import { nearReach } from "@/lib/city/ask-knowledge";
-import { mentionRuns } from "@/lib/city/ask-mentions";
+import { type MentionRun, mentionRuns } from "@/lib/city/ask-mentions";
 import { starterQuestions } from "@/lib/city/ask-starters";
 import { NEAR_RADIUS } from "@/lib/city/ask-tools";
 import { Button } from "@/components/ui/button";
@@ -680,7 +680,11 @@ function Conversation({
                         onPlace={
                           chat.isLoading
                             ? null
-                            : (place) => showPlaces(scene, { ziele: [place] })
+                            : (place) =>
+                                showPlaces(scene, {
+                                  ziele: [place],
+                                  aus_der_luft: !chips?.onFoot,
+                                })
                         }
                         pending={pending}
                         places={chips?.places ?? []}
@@ -964,38 +968,57 @@ function Steps({ calls, working }: { calls: CallPart[]; working: boolean }) {
   );
 }
 
-/** Text with its web links clickable and the places the answer showed as
- *  buttons that fly there; nothing else is interpreted. */
+/** A paragraph's pieces: a web link, or text runs with place mentions. */
+type Piece = { url: string } | { runs: MentionRun[] };
+
+/** An answer's paragraphs as pieces, each place linked where the answer
+ *  first names it; nothing else is interpreted. */
+function piecesOf(
+  texts: readonly string[],
+  places: readonly AskPlace[],
+  city: string
+): Piece[][] {
+  const linked = new Set<number>();
+  return texts.map((text) =>
+    // a sentence's closing punctuation after a link is not part of it
+    text
+      .split(/(https:\/\/[^\s)\]]*[^\s)\].,;:!?»“”"'])/g)
+      .map((part) =>
+        part.startsWith("https://")
+          ? { url: part }
+          : { runs: mentionRuns(part, places, city, linked) }
+      )
+  );
+}
+
+/** A paragraph with its web links clickable and the places the answer
+ *  showed as buttons that fly there. */
 function Linked({
-  city,
   onPlace,
+  pieces,
   places,
-  text,
 }: {
-  city: string;
   onPlace: ((place: AskPlace) => void) | null;
+  pieces: readonly Piece[];
   places: readonly AskPlace[];
-  text: string;
 }) {
-  // a sentence's closing punctuation after a link is not part of it
-  const parts = text.split(/(https:\/\/[^\s)\]]*[^\s)\].,;:!?»“”"'])/g);
   return (
     <>
-      {parts.map((part, i) =>
-        part.startsWith("https://") ? (
+      {pieces.map((piece, i) =>
+        "url" in piece ? (
           <a
             className="break-all underline underline-offset-2"
             // the same link may stand twice in an answer: its place keys it
-            // reason: parts never reorder, the index is stable
-            key={`${i}:${part}`}
-            href={part}
+            // reason: pieces never reorder, the index is stable
+            key={`${i}:${piece.url}`}
+            href={piece.url}
             rel="noreferrer"
             target="_blank"
           >
-            {part}
+            {piece.url}
           </a>
         ) : (
-          mentionRuns(part, places, city).map((run, j) =>
+          piece.runs.map((run, j) =>
             "place" in run ? (
               <button
                 className="rounded-sm font-medium text-primary underline decoration-primary/30 decoration-dotted underline-offset-[3px] hover:decoration-solid disabled:cursor-default disabled:text-inherit disabled:no-underline"
@@ -1059,6 +1082,7 @@ function Answer({
   const tail = parts.at(-1);
   const working =
     pending && !(tail?.type === "text" && tail.content.trim() !== "");
+  const pieces = piecesOf(texts, places, city);
   return (
     <Message>
       <MessageContent>
@@ -1067,13 +1091,13 @@ function Answer({
         </span>
         {calls.length > 0 && <Steps calls={calls} working={working} />}
         {pending && texts.length === 0 && calls.length === 0 && <Waiting />}
-        {texts.map((t, i) => (
+        {pieces.map((p, i) => (
           <p
             className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/90"
             // reason: a message's parts never reorder
             key={`t${i}`}
           >
-            <Linked city={city} onPlace={onPlace} places={places} text={t} />
+            <Linked onPlace={onPlace} pieces={p} places={places} />
           </p>
         ))}
       </MessageContent>

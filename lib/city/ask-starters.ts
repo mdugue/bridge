@@ -196,7 +196,7 @@ function seasonQuestions(now: Date): string[] {
   const d = now.getDate();
   if ((m === 12 && d >= 18) || (m === 1 && d <= 2)) {
     return [
-      "Wie kurz ist der Schatten hier am kürzesten Tag?",
+      "Wie lang ist der Schatten hier am kürzesten Tag?",
       "Zeig mir den Platz am 21. Dezember um 15 Uhr.",
     ];
   }

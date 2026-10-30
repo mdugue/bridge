@@ -57,6 +57,12 @@ export function PickStack({
     [picks, site]
   );
   const several = picks.length > 1;
+  // the others, nearest the open one first
+  const behind = picks
+    .map((_, i) => i)
+    .filter((i) => i !== active)
+    .sort((a, b) => Math.abs(a - active) - Math.abs(b - active));
+  const hidden = Math.max(0, behind.length - PEEKS);
   const tools = (
     <div className="pointer-events-auto flex items-center gap-1 text-[11px]">
       <button
@@ -90,13 +96,20 @@ export function PickStack({
           {picks.length} ausgewählt
         </span>
       )}
+      {!sheet && hidden > 0 && (
+        // the picks beyond the peeking cards: a click brings the next
+        // forward, so every pick stays a few clicks away
+        <button
+          className="rounded-full px-1 text-muted-foreground hover:text-foreground"
+          onClick={() => onActivate(behind[PEEKS])}
+          title={`${labels[behind[PEEKS]]} öffnen`}
+          type="button"
+        >
+          + {hidden} weitere
+        </button>
+      )}
     </div>
   );
-  // the others, nearest the open one first
-  const behind = picks
-    .map((_, i) => i)
-    .filter((i) => i !== active)
-    .sort((a, b) => Math.abs(a - active) - Math.abs(b - active));
   const pickCard = (i: number, depth: number) => (
     <div
       className={cn(
@@ -176,11 +189,6 @@ export function PickStack({
         style={{ marginTop: peek }}
       >
         {shown.map((i, depth) => pickCard(i, depth))}
-        {behind.length > PEEKS && (
-          <span className="absolute -top-5 right-3 z-10 text-[10px] text-muted-foreground">
-            + {behind.length - PEEKS} weitere
-          </span>
-        )}
         {/* the open card in front, numbered like the rest */}
         <div className="relative z-10 flex min-h-0 shrink flex-col">
           {several && (
