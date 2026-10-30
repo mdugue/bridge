@@ -1514,11 +1514,32 @@ reported yet.
 dressing* under [the frame budget](#the-frame-budget). Nothing works
 around it; report it with the first entry.
 
+**three r187 (likely a regression): a compile builds colourless
+pipelines without a depth format.** Now and then — on a cold start, at
+the boot or as Modell is entered, a run in three or so — `compileAsync`
+builds a few casters' pipelines (crowns, ground plates, clay) for a
+render context with no colour target whose depth has no GPU format, and
+three logs `Async render pipeline creation failed …
+GPUDepthStencilState: Required member is undefined`. It is the shadow
+pass or a context like it, and not our depth-only shadow map: with
+three's own map it happens as well. The frames draw on (whether the
+failed pipeline costs a caster its shadow is not checked). Nothing works
+around it; first seen after main's
+motion blur came in (2026-10-30), never in the runs before. Not reported
+yet: find the context first (a hook on `createRenderPipelineAsync` shows
+the descriptor).
+
 **three r187: an attribute whose GPU buffer failed to allocate stays
 half made** — its entry without a buffer — and the dispose of its
 geometry throws on it midway (`destroyAttribute`). *Worked around* in
 `three-utils.ts` (`untilThrough`): the dispose is tried again past it.
 *Once fixed:* one dispose. Not looked for upstream yet.
+
+Changes in three r187 we adapted to and that are meant, not bugs: builds
+are keyed by the kind of camera
+([#35123](https://github.com/mrdoob/three.js/pull/35123); Modell's
+warm-up, `PostStack.warmView`), and PMREMs are cube targets of at least
+256 px a face (the sky reflection's own 64 px cube, `sky-reflection.ts`).
 
 **3d-tiles-renderer 0.5.3: `resetFailedTiles()` alone never asks for a
 cached tile again.** *Worked around* in `tile-retry.ts`: the heal removes
