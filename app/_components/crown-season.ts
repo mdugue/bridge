@@ -18,10 +18,13 @@ import {
   mat3,
   max,
   min,
+  mix,
   positionGeometry,
   select,
   sin,
+  smoothstep,
   step,
+  uniform,
   varying,
   vec2,
   vec3,
@@ -75,6 +78,9 @@ export interface CrownSeasonKey {
 export const CROWN_BASE_COLOR = 0xa6_bf_92;
 /** Twig colour of a bare crown: the trunk's grey-brown, a little paler. */
 const TWIG_COLOR = 0x9a_8f_80;
+/** What a bare crown drawn whole shows for its stipple's gaps: a pale
+ *  haze of the pastel ground and sky behind it (`veil`). */
+export const VEIL_COLOR = 0xd8_d6_cc;
 /** Fraction of a bare crown's surface kept as twigs. */
 const TWIG_DENSITY = 0.25;
 /**
@@ -88,6 +94,19 @@ const TWIG_DENSITY = 0.25;
  * sparkle far away.
  */
 const HASH_PIXELS = 1.25;
+/** The crown geometry's units a pixel spans where its stipple begins to
+ *  give way to the whole crown, and where it is gone (the generic crown's
+ *  radius is 2.1: from ~23 to ~12 pixels across it). */
+const WHOLE_FROM = 0.18;
+const WHOLE_AT = 0.35;
+/**
+ * 1 while the crowns are printed: Comic's frames (post-stack.ts). A bare
+ * crown is drawn whole, at any size — the stipple came out as a dark,
+ * fussy mass of tiny inked holes — and every crown wears a marker ink the
+ * Comic pass prints flat (`buildCrownMaterial`). One uniform for the
+ * scene, so the switch builds nothing.
+ */
+export const crownsPrinted = uniform(0);
 /** Below this `aBare` a crown counts as in full leaf. */
 const BARE_EPS = 0.002;
 
@@ -148,6 +167,10 @@ export interface CrownSeasonNodes {
   /** the twig colour (linear, as `new Color(hex)` holds it), mixed in by
    *  `twig` */
   twigColour: V3;
+  /** how much of a crown drawn whole is the gaps its stipple would have
+   *  shown: mixed towards `VEIL_COLOR`, so it reads as light as the
+   *  stipple did, not as a dark solid of twigs */
+  veil: F;
 }
 
 /**
@@ -177,13 +200,29 @@ export function crownSeasonNodes(): CrownSeasonNodes {
   const origin = instanceMatrix().mul(vec4(0, 0, 0, 1));
   const seed = varying(fract(origin.xz.mul(0.0137)).mul(97));
   const cellH = crownThreshold(cell, vec3(seed, 0)).toVar("crownCellH");
+  // A crown small on the screen is drawn whole, in the stipple's mean:
+  // there its cells are a pixel of a crown a few pixels across, and the
+  // faintest sway or step sets them sparkling (a distant row of autumn
+  // trees twinkled in a still frame). The mean is its kept cells' leaf
+  // and twig colours over its cover, the rest the pale veil.
+  const footprint = max(length(dFdx(cell)), length(dFdy(cell)));
+  const whole = max(smoothstep(WHOLE_FROM, WHOLE_AT, footprint), crownsPrinted);
   const leafy = float(1).sub(bare);
   const isBare = bare.greaterThan(BARE_EPS);
   const twig = new Color(TWIG_COLOR);
+  // the stipple's cover, and the twigs' share of it
+  const cover = max(leafy, TWIG_DENSITY);
   return {
-    keep: isBare.not().or(cellH.lessThan(max(leafy, TWIG_DENSITY))),
-    twig: select(isBare, step(leafy, cellH), float(0)),
+    keep: isBare
+      .not()
+      .or(cellH.lessThan(max(leafy, mix(float(TWIG_DENSITY), 1, whole)))),
+    twig: select(
+      isBare,
+      mix(step(leafy, cellH), cover.sub(leafy).div(cover), whole),
+      float(0)
+    ),
     twigColour: vec3(twig.r, twig.g, twig.b),
+    veil: select(isBare, float(1).sub(cover).mul(whole), float(0)),
   };
 }
 

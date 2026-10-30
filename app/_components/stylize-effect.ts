@@ -300,6 +300,8 @@ const POP = {
   nightSky: vec3(0.05, 0.07, 0.2),
   red: vec3(0.89, 0.12, 0.14),
   yellow: vec3(1, 0.84, 0.13),
+  orange: vec3(0.93, 0.52, 0.12),
+  paperShade: vec3(0.74, 0.81, 0.9),
   blue: vec3(0.13, 0.36, 0.72),
   green: vec3(0.16, 0.62, 0.3),
   greenDeep: vec3(0.05, 0.36, 0.2),
@@ -308,6 +310,9 @@ const POP = {
   skyHigh: vec3(0.3, 0.62, 0.9),
 };
 
+/** A step this many device pixels tall (from, to) begins to draw its
+ *  line, and draws it whole (`edgeAxis`, `low`). */
+const LOW_STEP_PX = { x: 1.2, y: 2.6 };
 /** A dot of the screen spans about this many CSS pixels, at any distance. */
 const DOT_CSS = 4;
 /** The sun's world height (sin of its altitude) where `inSun` has faded
@@ -317,6 +322,9 @@ const SUN_GONE_Y = -0.02;
  *  left to cut (`Stylize.night`): where `inSun` lets go of the sun, so
  *  the card is never drawn without one (≈ −1.1°). */
 const NIGHT_ALTITUDE = (Math.asin(SUN_GONE_Y) * 180) / Math.PI;
+/** The sky screen's finest cell (rad): a whole fraction of the circle,
+ *  as is every coarser one (`skyDots`). */
+const SKY_CELL = (2 * Math.PI) / 8192;
 /** Strich's hatch lines lie this many CSS pixels apart. */
 const HATCH_CSS = 6;
 /** The finest screen's cell (m); each coarser one doubles it. */
@@ -539,7 +547,19 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const l0 = floor(level);
     const blend = smoothstep(0.3, 0.7, level.sub(l0));
     const cell0 = exp2(l0).mul(SCREEN_BASE_M).toVar();
-    const at = (cell: F): F => pattern(fract(q.div(cell)), mpp.div(cell));
+    // the pixel's longer axis, in metres: across a grazing street it is
+    // many times `mpp`
+    const major = max(fwidth(q.x), fwidth(q.y)).toVar();
+    // A cell the pixel's long axis spans half of or more is sampled too
+    // coarsely to draw: its dots or lines beat against the pixels and
+    // crawl with every step. It gives way to its mean tone before then,
+    // the way a mip level would.
+    const at = (cell: F): F =>
+      mix(
+        pattern(fract(q.div(cell)), mpp.div(cell)),
+        mean,
+        smoothstep(0.3, 0.6, major.div(cell))
+      );
     // Seen at a grazing angle a screen is squeezed to nothing across the
     // view and beats against the pixels: there it gives way to its mean
     // tone, as a print does at a distance.
@@ -561,14 +581,15 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       n,
       DOT_CSS,
       (cell, pixel) => {
-        const aa = pixel.mul(0.8);
-        const dot = float(1).sub(
-          smoothstep(radius.sub(aa), aa.add(radius), length(cell.sub(0.5)))
-        );
+        // Anti-aliased over the pixel's footprint across the edge, not its
+        // mean size: on a foreshortened plane the two differ many times.
+        const r = length(cell.sub(0.5));
+        const aa = max(fwidth(r), pixel.mul(0.5)).mul(0.8);
+        const dot = float(1).sub(smoothstep(radius.sub(aa), aa.add(radius), r));
+        const x = abs(cell.x.sub(0.5));
+        const ax = max(fwidth(x), pixel.mul(0.5)).mul(0.8);
         const w = max(half, pixel.mul(0.5));
-        const stripe = float(1).sub(
-          smoothstep(w.sub(aa), w.add(aa), abs(cell.x.sub(0.5)))
-        );
+        const stripe = float(1).sub(smoothstep(w.sub(ax), w.add(ax), x));
         return mix(dot, stripe, stripes);
       },
       fill.mul(mix(1, 0.8, stripes)),
@@ -594,7 +615,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       (cell, pixel) => {
         const d = abs(cell.x.sub(0.5));
         const half = max(fill.mul(0.5), pixel.mul(0.5));
-        const aa = pixel.mul(0.7);
+        const aa = max(fwidth(d), pixel.mul(0.5)).mul(0.7);
         return float(1).sub(smoothstep(half.sub(aa), half.add(aa), d));
       },
       fill,
@@ -602,12 +623,34 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       turn
     );
 
+  /** The metres a device pixel spans at view distance `z`. */
+  const metresPerPixel = (z: F): F =>
+    select(ortho, float(1), z).mul(projScale.y.mul(2)).div(resolution.y);
+
   /** One axis of the stencil: (silhouette, crease) in 0..1. The caller
    *  widens the silhouette ramp with distance, so far away only big jumps
-   *  (a building over the street) are inked, not every crown on a lawn. */
-  const edgeAxis = (at: V2, s: V2, w0: F, norm: F, sil: V2): V2 => {
-    const wa = metric(viewDistance(at.sub(s)));
-    const wb = metric(viewDistance(at.add(s)));
+   *  (a building over the street) are inked, not every crown on a lawn.
+   *
+   *  `low` lets a low step give way: where the two taps lie less than a
+   *  couple of pixels apart in height, the jump is a rail, a kerb or a
+   *  track's bed hiding the ground behind it — a step a pixel or two
+   *  tall, whose raster flips from frame to frame in a move and drew a
+   *  crawling, pixelated line. The level axis never gives way: across a
+   *  vertical edge the taps sit at one height. */
+  const edgeAxis = (
+    at: V2,
+    s: V2,
+    w0: F,
+    norm: F,
+    sil: V2,
+    low: boolean
+  ): V2 => {
+    const da = texture(inputs.depth, at.sub(s)).r;
+    const db = texture(inputs.depth, at.add(s)).r;
+    const za = lens.distance(da);
+    const zb = lens.distance(db);
+    const wa = metric(za);
+    const wb = metric(zb);
     const lap = abs(wa.add(wb).sub(w0.mul(2)));
     const grad = max(abs(wb.sub(w0)), abs(w0.sub(wa)));
     const jump = lap.div(norm);
@@ -616,7 +659,27 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const crease = smoothstep(0.35, 0.8, fold).mul(
       smoothstep(0.0004, 0.0016, jump)
     );
-    return vec2(silhouette, crease);
+    if (!low) {
+      return vec2(silhouette, crease);
+    }
+    const ya = viewToWorld.mul(
+      getViewPosition(at.sub(s), da, inverseProjection)
+    ).y;
+    const yb = viewToWorld.mul(
+      getViewPosition(at.add(s), db, inverseProjection)
+    ).y;
+    // (heights from the eye; both in pixels at the nearer tap)
+    const mpp = metresPerPixel(min(za, zb));
+    const stepPx = abs(ya.sub(yb)).div(mpp);
+    // Seen level, a step at the eye's height has its taps at one height
+    // too, whatever its size: only a step well under the horizon gives way.
+    const underPx = max(ya, yb).negate().div(mpp);
+    const keep = mix(
+      1,
+      smoothstep(LOW_STEP_PX.x, LOW_STEP_PX.y, stepPx),
+      smoothstep(3, 5, underPx)
+    );
+    return vec2(silhouette, crease).mul(keep);
   };
 
   /** The four-axis stencil at an integer texel radius around a texel
@@ -630,8 +693,14 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const sd = texel.mul(r);
     const sa = vec2(texel.x, texel.y.negate()).mul(r);
     return max(
-      max(edgeAxis(p, sx, w0, norm, sil), edgeAxis(p, sy, w0, norm, sil)),
-      max(edgeAxis(p, sd, w0, norm, sil), edgeAxis(p, sa, w0, norm, sil))
+      max(
+        edgeAxis(p, sx, w0, norm, sil, false),
+        edgeAxis(p, sy, w0, norm, sil, true)
+      ),
+      max(
+        edgeAxis(p, sd, w0, norm, sil, true),
+        edgeAxis(p, sa, w0, norm, sil, true)
+      )
     );
   };
 
@@ -756,6 +825,40 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     return sum.div(10);
   };
 
+  /**
+   * Comic's sky screen: pale dots on the sky's blue, filling 42 % of the
+   * cell at the horizon and none from ~15° up. Laid on the view
+   * direction's azimuth and elevation, so a turn carries them like the
+   * sky (it is infinitely far: a step does not move it); the cell keeps
+   * about `DOT_CSS` on screen through a ladder of cells that halve, each
+   * a whole fraction of the circle, so the azimuth wraps without a seam.
+   * A parallel view looks along one direction: there its mean tone.
+   */
+  const skyDots = (at: V2): F => {
+    const ray = viewRayWorld(at);
+    const el = asin(clamp(ray.y, -1, 1)).toVar();
+    const q = vec2(atan(ray.z, ray.x), el).toVar();
+    const fill = mix(0.42, 0, smoothstep(0, 0.26, el)).toVar();
+    const radius = sqrt(fill.div(Math.PI)).toVar();
+    // radians a device pixel spans (the elevation's: the azimuth's
+    // derivative jumps where it wraps)
+    const rpp = max(fwidth(el), 1e-5).toVar();
+    const level = log2(rpp.mul(pixelScale.mul(DOT_CSS)).div(SKY_CELL));
+    const l0 = floor(level);
+    const blend = smoothstep(0.3, 0.7, level.sub(l0));
+    const cell0 = exp2(l0).mul(SKY_CELL).toVar();
+    const dotAt = (cell: F): F => {
+      const c = q.div(cell);
+      // the 45° screen: every other row shifted half a cell
+      const shifted = vec2(c.x.add(floor(c.y).mul(0.5)), c.y);
+      const d = length(fract(shifted).sub(0.5));
+      const aa = rpp.div(cell).mul(0.8);
+      return float(1).sub(smoothstep(radius.sub(aa), radius.add(aa), d));
+    };
+    const dots = mix(dotAt(cell0), dotAt(cell0.mul(2)), blend);
+    return select(ortho, fill, dots);
+  };
+
   // --- Comic: pop art — a few printing inks, Ben-Day dots, black. ---
   //
   // Every surface is printed in ONE ink picked from what it is (the depth
@@ -850,9 +953,27 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     let day = mix(shaded, inkCol, lit);
     day = mix(day, POP.black, deep.mul(0.85));
     day = mix(day, crown, foliage);
+    // A crown that wears its marker ink (vegetation-layer.ts
+    // `printedCrown`): saturated as nothing else in the clay, its season in
+    // the hue, its light in the value. Printed flat — green, an autumn one
+    // yellow, a bare one the paper — and shaded in one step, never dotted:
+    // a screen on a swaying crown shimmers.
+    const printed = smoothstep(0.62, 0.8, saturation).toVar();
+    const crownLit = aaStep(0.3, hcv.z);
+    const printInk = mix(
+      mix(
+        mix(POP.paperShade, POP.paper, crownLit),
+        mix(POP.orange, POP.yellow, crownLit),
+        step(0.1, hue)
+      ),
+      mix(POP.greenDeep, POP.green, crownLit),
+      step(0.2, hue)
+    );
+    day = mix(day, printInk, printed);
     day = mix(day, mix(POP.blueDeep, POP.blue, lit), water);
-    // The sky: flat blue, paler to the horizon in one step.
-    const daySky = mix(POP.sky, POP.skyHigh, aaStep(0.2, viewRayWorld(at).y));
+    // The sky: one blue, printed lighter towards the horizon with dots of
+    // the pale blue (`skyDots`) — a printed gradient, no band.
+    const daySky = mix(POP.skyHigh, POP.sky, skyDots(at));
     // Deep in the haze, where too little of the colour is left to tell
     // its ink, the paper. Faded in over a wide band of the haze, not cut
     // in one step: a cut is a hard line across the far city that slides
@@ -880,7 +1001,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const col = mix(day, nightHazed, dusk);
     return {
       col: mix(col, mix(daySky, POP.nightSky, dusk), sky),
-      foliage: foliage.mul(float(1).sub(sky)),
+      foliage: max(foliage, printed).mul(float(1).sub(sky)),
     };
   };
 

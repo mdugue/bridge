@@ -35,7 +35,14 @@ edges. ADR 0010 closed the path of one material per style.
    (dots, hatching) are laid on the world's dominant plane with a cell
    size chosen by metres per pixel; pens that must hold still in a flight
    have no sway. Night is each style's own.
-5. **No style is warmed ahead** (only the selection outline is); a style
+5. **A still view is still, a move moves smoothly.** Nothing a style
+   draws may change between two frames of a still camera, or flip in a
+   sub-pixel step: a screen too fine for its pixel gives way to its mean
+   tone, a step a pixel or two tall draws no line, and no screen slides
+   over moving geometry — a crown is printed flat, or the style holds it
+   still (`sway`). Measured, not judged by eye (the `flicker-probe`
+   skill).
+6. **No style is warmed ahead** (only the selection outline is); a style
    builds on its first frame.
 
 ## Consequences
@@ -62,3 +69,6 @@ edges. ADR 0010 closed the path of one material per style.
 - **Screen-anchored dots and hatching:** they swim on every turn.
 - **Warming every style's programs at idle:** cost an iPhone tab its
   memory and compiled Papier for every landing tile on a desktop.
+- **A history buffer (temporal antialiasing) against the flicker:** a
+  full-resolution target more on a phone (ADR 0047), and it smears the
+  ink in a move.
