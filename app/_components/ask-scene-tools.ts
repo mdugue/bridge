@@ -32,6 +32,7 @@ import {
   SCENARIO_NOTE,
 } from "@/lib/city/scenario";
 import type { ViewpointGeometry } from "@/lib/city/site";
+import type { StarterContext } from "@/lib/city/ask-starters";
 
 /** What the card may do to the scene: the scene tools' other half. */
 export interface AskScene {
@@ -50,6 +51,8 @@ export interface AskScene {
   /** what the framing reads of the moment: the screen, the sun, the
    *  loaded buildings' sight lines (lib/city/ask-view.ts) */
   frame: () => Omit<FrameContext, "from">;
+  /** what the first questions read of the moment (plan 081) */
+  moment: () => StarterContext;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
   /** asks what stands at the centre of the view (and opens its card) */

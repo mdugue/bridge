@@ -876,6 +876,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await expect(
         card.getByRole("button", { name: "Wann wurde sie geweiht?" })
       ).toBeVisible();
+      // a new conversation clears the card and draws new first questions
+      await card.getByTestId("ask-new").click();
+      await expect(card).not.toContainText("George Bähr");
+      await expect(card.getByTestId("ask-starter")).toHaveCount(4);
       await card
         .getByRole("button", { name: "Frag die Stadt schließen" })
         .click();

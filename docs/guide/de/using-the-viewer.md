@@ -315,9 +315,12 @@ wurden. Beide Karten nennen ihre Quelle mit Lizenz.
 das Befragte der Auswahl hinzu, statt sie zu ersetzen; ein zweites
 `Shift`+Klick auf dasselbe nimmt es wieder heraus. Auf dem Touchscreen,
 der kein `Shift` hat, schaltet *Mehrere* über der Karte das um: Dann fügt
-jedes lange Drücken hinzu. Alles Ausgewählte trägt Schraffur und Umriss,
-über der Karte steht es nummeriert als Reihe von Knöpfen — ein Tipp
-öffnet seine Karte, das × nimmt es heraus. Bis zu acht Dinge passen in
+jedes lange Drücken hinzu. Alles Ausgewählte trägt Schraffur und Umriss
+und liegt als Stapel leicht gedrehter, nummerierter Karten hinter der
+offenen (auf dem Telefon als kleine Karten über dem Blatt) — ein Klick
+holt eine nach vorn, das × nimmt sie heraus, *Alle zeigen* stellt die
+Kamera so, dass alles Ausgewählte im Bild ist. Jede Karte behält ihr
+*Hier auch*. Bis zu acht Dinge passen in
 eine Auswahl; ein neuntes verdrängt das älteste. Die Orte, die eine
 Antwort von *Frag die Stadt* zeigt, sind auf dieselbe Weise ausgewählt.
 
@@ -418,13 +421,17 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   [walks.md](../../walks.md).
 - **Frag die Stadt** — Fragen zur Stadt in eigenen Worten („Wer hat
   die Frauenkirche gebaut?“, „Was steht hier vor mir?“, „Wie sieht es
-  hier am Abend aus?“). Ein Sprachmodell sucht im Wissen des
+  hier am Abend aus?“). Die vier ersten Vorschläge sind bei jedem neuen
+  Gespräch neu gezogen und lesen den Moment: das Wahrzeichen, auf das du
+  blickst, die eingestellte Uhrzeit, die Jahreszeit, den Fluss oder die
+  Datenebenen der Stadt; der Stift oben beginnt ein neues Gespräch. Ein Sprachmodell sucht im Wissen des
   Stadtmodells — Namen, Adressen, Nutzung und Höhe der Gebäude, die
   Wahrzeichen mit dem, was Wikidata über sie sagt —, fliegt die Ansicht
   zum Ort, stellt bei Bedarf Uhrzeit, Bildstil oder eine Datenebene ein
-  und antwortet in wenigen Sätzen mit ihrer Quelle. Unter jeder Antwort
-  steht, was es nachgeschlagen und getan hat; jede Antwort ist als *KI*
-  gekennzeichnet. Die Kamera rahmt die genannten Orte selbst, meist von
+  und antwortet in wenigen Sätzen mit ihrer Quelle. Über jeder Antwort
+  steht in einer Zeile, was es nachgeschlagen und getan hat (ein Klick
+  listet jeden Schritt); jede Antwort ist als *KI* gekennzeichnet, und
+  die Orte, die sie zeigt, sind im Text selbst Knöpfe, die hinfliegen. Die Kamera rahmt die genannten Orte selbst, meist von
   schräg oben, so dass sie ganz zu sehen sind; darunter steht jeder Ort
   als Knopf (ein Klick fliegt hin, *Alle zeigen* zeigt sie zusammen,
   solange sie nah genug beieinander liegen), bei „in der Nähe“ der

@@ -12,6 +12,13 @@ const STUB: AskScene = {
   from: () => null,
   frame: () => ({ aspect: 1.5 }),
   look: () => ({}),
+  moment: () => ({
+    at: null,
+    now: new Date(),
+    landmarks: [],
+    river: null,
+    layers: [],
+  }),
   river: null,
   setFlood: () => undefined,
   setVolume: () => true,

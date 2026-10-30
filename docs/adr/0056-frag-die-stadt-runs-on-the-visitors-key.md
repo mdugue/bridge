@@ -37,7 +37,8 @@ load into the browser.
    provider and scrubs it from any error it sends back.
 4. **The answer is marked.** The card (`app/_components/ask-city.tsx`, its
    own chunk) labels every answer *KI*, says it is generated and can be
-   wrong, and lists the tools the model used.
+   wrong, and lists the tools the model used (one line above the
+   answer, each step a click away).
 5. **The answer shows its places.** `zeige` takes every place an answer
    is about (the rejected candidates too, the chosen one first) with the
    Stadtwissen's height and footprint radius; the browser frames them
@@ -50,7 +51,9 @@ load into the browser.
    its reach with a narrower and a wider one, and the follow-ups come
    from `vorschlaege`, a server tool the run ends at. What `zeige` shows
    is selected as a Shift+click selects (ADR 0042): every place
-   together, the chosen one alone when the others were rejected.
+   together, the chosen one alone when the others were rejected. Where
+   the text names a place `zeige` took, the name is a link that flies
+   there (`lib/city/ask-mentions.ts`).
 
 ## Consequences
 

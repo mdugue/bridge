@@ -298,8 +298,11 @@ adds what you ask to the selection instead of replacing it; a second
 `Shift`+click on the same thing takes it out again. On a touch screen,
 which has no `Shift`, *Mehrere* above the card switches this on: every
 long press then adds. Everything selected carries the hatch and the
-outline, and above the card it is listed as a numbered row of buttons —
-a tap opens its card, the × takes it out. A selection holds up to eight
+outline, and lies as a stack of slightly turned, numbered cards behind
+the open one (on a phone as small cards above the sheet) — a click
+brings one to the front, the × takes it out, and *Alle zeigen* ("show
+all") sets the camera so that everything selected is in view. Each card
+keeps its *Hier auch* ("here too"). A selection holds up to eight
 things; a ninth pushes out the oldest. The places an answer of *Frag
 die Stadt* shows are selected the same way.
 
@@ -394,13 +397,18 @@ The button in the corner opens a panel with three tabs.
   its text away. How they are written: [walks.md](../../walks.md).
 - **Frag die Stadt** (ask the city) — questions about the city in your
   own words ("Who built the Frauenkirche?", "What is in front of me?",
-  "What does this look like in the evening?"). A language model searches
+  "What does this look like in the evening?"). The four first
+  suggestions are drawn anew for each conversation and read the moment:
+  the landmark you look at, the time set, the season, the city's river
+  or data layers; the pen at the top starts a new conversation. A
+  language model searches
   what the city model knows — the buildings' names, addresses, use and
   height, the landmarks with what Wikidata says of them —, flies the view
   to the place, sets the time, picture style or a data layer where it
-  helps, and answers in a few sentences with its source. Under each
-  answer it lists what it looked up and did; every answer is marked *KI*
-  (AI). The camera frames the places it names itself, mostly from
+  helps, and answers in a few sentences with its source. Above each
+  answer one line says what it looked up and did (a click lists every
+  step); every answer is marked *KI* (AI), and the places it shows are
+  buttons in the text itself that fly there. The camera frames the places it names itself, mostly from
   above at a slant, so they are seen whole; under the answer each place
   is a button (a click flies there, *Alle zeigen* shows them together
   while they lie close enough), "nearby" shows the reach it took with
