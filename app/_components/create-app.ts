@@ -107,6 +107,8 @@ import {
   PHONE_RICH_TREE_BUDGET,
   RICH_TREE_BUDGET,
 } from "@/lib/city/vegetation-lod";
+import { stopBvhWorker } from "./bvh-client";
+import { stopGroundWorker } from "./ground-prep-client";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import {
   createModelRig,
@@ -1149,6 +1151,8 @@ async function teardownWhole(
   try {
     runCleanups(cleanups);
     disposeObject3D(scene);
+    stopGroundWorker();
+    stopBvhWorker();
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });

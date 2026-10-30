@@ -189,6 +189,24 @@ function next(): void {
 }
 
 /**
+ * Stops the worker before the page reloads (`disposeForReload`): its heap
+ * — a coarse level's shared indices, a job's copies — goes with it now,
+ * not when the old document is collected. The jobs still waiting end with
+ * an abort (their tiles are gone); a later job starts a new worker.
+ */
+export function stopGroundWorker(): void {
+  worker?.terminate();
+  worker = null;
+  sentShared.clear();
+  const left = running ? [running, ...queue] : [...queue];
+  running = null;
+  queue.length = 0;
+  for (const job of left) {
+    job.reject(new DOMException("the ground worker stopped", "AbortError"));
+  }
+}
+
+/**
  * `prepareGround` in the ground worker (here where there is none).
  * `shared` is an index attribute the site shares (`input.index` its
  * array), sent to the worker once. Rejects with the abort when `signal`

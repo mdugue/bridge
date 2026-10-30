@@ -138,6 +138,27 @@ function dieOut(): void {
   }
 }
 
+/**
+ * Stops the worker before the page reloads (`disposeForReload`): the
+ * building tiles' arrays in its heap go now, not when the old document
+ * is collected. A build still away settles as lost (its tile is going
+ * with the scene); a later build starts a new worker.
+ */
+export function stopBvhWorker(): void {
+  const stopping = worker;
+  if (!stopping) {
+    return;
+  }
+  markStarted?.(false);
+  stopping.terminate();
+  worker = null;
+  started = null;
+  for (const [id, settle] of settles) {
+    settles.delete(id);
+    settle(null);
+  }
+}
+
 /** Whether a typed array is all of its buffer (can be handed over). */
 const ownsBuffer = (a: ArrayBufferView): boolean =>
   a.byteOffset === 0 && a.byteLength === a.buffer.byteLength;
