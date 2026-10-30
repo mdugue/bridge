@@ -899,7 +899,7 @@ the port (2026-09-26) made of it:
    card's provenance manifest, derived from it at build time (plan 052
    phase 2).
 7. **Offline repeat visits: a service worker over the tileset (S–M).**
-   [ADR 0007](../adr/0007-content-hashed-publishing-with-a-manifest.md)
+   [ADR 0007](../adr/0024-site-streams-as-3d-tiles.md)
    already makes every `/data/*` file immutable and content-hashed, with
    `manifest.json` the one `no-cache` entry, so a service-worker cache is
    bounded and updates itself: repeat visits boot from disk, a walk
@@ -938,7 +938,7 @@ the port (2026-09-26) made of it:
     lowers the pixel ratio, the shadow map, the tile cache and the
     governor's lines and starts the governor at a floor — one automatic
     reload per level, then a card
-    ([ADR 0046](../adr/0046-a-per-device-safety-ladder-for-gpu-loss.md)).
+    ([ADR 0046](../adr/0047-phone-memory-budget-in-true-bytes.md)).
     The iPhone's recovery loop in Sentry (CITY-WALK-1…8) showed why the
     old cap (plan 038 step 3) was not enough: each reload replayed the
     budget that had failed.

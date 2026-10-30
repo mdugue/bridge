@@ -8,7 +8,7 @@
 > `docs/plans/README.md` (and annotate Direction option 2 there).
 >
 > **Drift check (run first)**:
-> `git diff --stat a28de75..HEAD -- lib/city/snapshot.ts app/_components/city-walk.tsx app/_components/scene-sidebar.tsx e2e/snapshot-shot.spec.ts .gitignore docs/adr/0017-look-controls-table-and-snapshot-contract.md`
+> `git diff --stat a28de75..HEAD -- lib/city/snapshot.ts app/_components/city-walk.tsx app/_components/scene-sidebar.tsx e2e/snapshot-shot.spec.ts .gitignore docs/adr/0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md`
 
 ## Status
 

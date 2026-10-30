@@ -1,77 +1,63 @@
-# ADR 0030: The fine terrain level is an error-bounded TIN of the native DGM; walls snap to the measured step
+# ADR 0030: The ground — a TIN of the native DGM, its static parts baked in, every part meeting it by one set of rules
 
-- **Status:** accepted (supersedes [ADR 0014](./0014-wall-to-terrain-breakline-conflation.md) for the fine level)
-- **Date:** 2026-09
+- **Status:** accepted
+- **Date:** 2026-09, rewritten 2026-10 (absorbs ADRs 0014, 0028, 0029, 0035)
 
 ## Context
 
-The fine terrain level (ADR 0024) was the 1 m DGM1 resampled to a 1024²
-grid, with the OSM wall lines burned in as breaklines (ADR 0014). The
-terrain study (`scripts/terrain-study/`, ledger "Terrain TIN") measured both
-against held-out laser-scan ground: most of the "wall smear" was our
-resample, not the data (the native DGM1 steps within ~1.7 m, the 1024² grid
-within ~2.9 m), and the burn *tripled* the error in the 20 m band around
-walls (0.43 → 0.76 m RMSE) — it flattens terraced walls into one cliff and
-puts the step on the OSM line, which misses the measured edge. A Delatin TIN
-of the native DGM1 at ±0.15 m matched or beat the grid on every metric with
-a seventh of its triangles.
+The ground is the bare-earth DGM1. It rounds every step a city has — a
+kerb, a quay wall, a flight of steps, a bridge abutment — into a ramp one
+to two metres wide, and models nothing built on it. Measured against
+held-out laser ground, most of the "wall smear" was a resample of ours,
+and burning OSM walls into the ground tripled the error around them.
+Layers that each solved "how do I stand on this" on their own failed the
+same way in five places at once.
 
 ## Decision
 
-`prepare-data.ts` bakes each tile's **fine level** as an error-bounded TIN
-of its committed DGM GeoTIFF read at native resolution
-(`scripts/bake-terrain-tin.ts`, `FINE_TIN_MAX_ERROR` = ±0.15 m), written as
-the same glTF content (`terrain_<tile>_l0.glb.gz`) with
-`TerrainExtras.tin` set:
-
-- The raised areas (terraces) and the stair burn of ADR 0028 are shaped in
-  before the refinement; the stairs `maxError` deeper, so no triangle that
-  only approximates the burned grid pierces a tread. **The walls are not
-  burned in.**
-- The earth-retaining wall ribbons baked beside it (ADR 0029) **snap to the
-  step the TIN measures** (`lib/city/wall-snap.ts`: face just in front of
-  the ramp foot, a coping cap back to its crest); walls without a
-  measurable step keep the OSM-line placement.
-- The glTF is reordered for the vertex cache and meshopt (nothing reads a
-  TIN's order). The viewer indexes its triangles for `heightAt`
-  (`lib/city/terrain-tin.ts` `TinIndex`, the skirt skipped as vertical),
-  and gives the water an up-facing normal twin of the mesh.
-- The **coarse level stays the 512² grid** with the walls burned in: it is
-  backdrop beyond ~1.2 km, where a 4 m grid smears any wall anyway.
-- A DGM with NoData keeps the grid for its fine level (a TIN has no holes).
+1. **The fine level is an error-bounded TIN of the native DGM** (±0.15 m,
+   finer under track beds, ADR 0041); the coarse level is a regular grid
+   with the walls burned in, where a 4 m cell smears any wall anyway. The
+   walker stands on exactly the triangles the GPU draws.
+2. **The ground is shaped only where nothing else works:** raised
+   terraces a flight's tagged rise proves, the ground under stairs, line
+   beds and passages (ADR 0041). Walls are not burned in; their ribbons
+   snap to the step the TIN measures.
+3. **Static parts are baked into the fine terrain glTF** as named nodes
+   beside the ground: stairs (OSM `highway=steps` as stone blocks), walls,
+   kerbs, fences. Built by the same step from the same file as the ground
+   under them, they cannot disagree, and the browser computes nothing.
+4. **Every part meets the ground by one set of rules**
+   (`lib/city/ground-join.ts`): feet go under by a row of `SINK`; a top's
+   edge on the ground side ends at the ground (`meetGround`) or runs on
+   until the ground reaches it (`reachLevel`); per-sample decisions are
+   smoothed along the part, never taken once per line and never left raw.
+5. **Every part reports where it meets the ground** (`joins`), and
+   `scripts/ground-joins.test.ts` holds the baked parts' misses to budgets
+   over the committed tiles. A new part lists itself in `JOIN_PARTS` or
+   tests its joins with `checkJoins`, and says in its doc comment what
+   happens where the ground beside it is higher and where it is lower.
 
 ## Consequences
 
-- The walker stands on exactly the triangles the GPU draws; the walls stand
-  on them too, at bake time, over every tile's fine level.
-- The fine level shrinks from 2 M to 0.30–0.49 M triangles per tile and
-  its gzipped glTF by 20–27 % (1.6–2.0 MB vs 2.15–2.45 MB); the bake adds
-  about 30 s for the site, cold.
-- Fine and coarse levels differ at walls (the coarse one has the burned
-  step): visible only at the switch distance.
-- Two TINs meet at a seam with different border vertices; the skirt hides
-  the crack (checked on a real GPU across the Brühlsche Terrasse, before
-  the move to glTF — re-check per plan 019).
-- Open: constrained breaklines (a vertical face needs two vertices at one
-  xy), crease-angle normals, the sub-metre spikes at some wall feet.
+- Ground and parts arrive with the fine terrain, not behind the dressing
+  gate. A change to one tile's walls, stairs or DGM re-bakes every fine
+  level that probes it.
+- Fine and coarse levels differ at walls; visible only at the switch.
+- A budget is the measured state; lowering one follows a fix, raising one
+  needs a reason in the commit.
 
 ## Alternatives
 
-- **Keep the grid + conflation (ADR 0014):** measurably worse at walls,
-  seven times the triangles, larger on the wire.
-- **Native 2000² grid:** accurate but 8 M triangles per tile.
-- **A laser-scan DTM (0.5 m) or its TIN:** better only at the sharpest quay
-  walls, for 2–4× the triangles and a committed LSC-derived artifact.
-- **Burn the conflation into the TIN:** sharp steps, but the same tripled
-  wall-band error as the grid burn.
-- **The TIN's own binary payload** (as first prototyped: header + gzipped
-  planes): smaller still, but a private format again (ADR 0024 chose glTF).
-
-## References
-
-- Ledger "Terrain TIN" and "Wall → terrain conflation"
-  ([transformations.md](../transformations.md)); ADRs 0014, 0024, 0028,
-  0029.
-- `lib/city/terrain-tin.ts`, `lib/city/wall-snap.ts`, `lib/city/walls.ts`,
-  `scripts/bake-terrain-tin.ts`, `scripts/bake-tiles.ts`
-  (`tinTerrainMesh`), `app/_components/terrain-layer.ts` (`tinHeightAt`).
+- **Burning walls into the ground (grid or TIN):** sharp steps, but the
+  step lands on the OSM line, misses the measured edge, and flattens
+  terraced walls into one cliff.
+- **A native 1 m grid:** accurate, eight million triangles a tile.
+- **A laser-scan DTM:** better only at the sharpest quay walls, for 2–4×
+  the triangles.
+- **Building stairs and walls in the browser:** two sources of truth, and
+  walls standing on whichever level happened to be loaded.
+- **Reshaping the terrain at every part:** every reshaping changes the
+  ground the other parts read.
+- **Fixing each place by its snapshot:** the next layer breaks the same
+  rule and someone finds it on a phone months later.

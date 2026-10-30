@@ -7,7 +7,7 @@
 > this plan in `docs/plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat 4b0310a..HEAD -- .claude/skills/city-walker/SKILL.md AGENTS.md README.md docs/transformations.md docs/data-streams.md docs/adr/0001-client-only-static-app.md docs/adr/0003-bake-heavy-inputs-at-build-time.md docs/adr/0015-roof-colour-from-orthophotos-with-vibrance-lift.md docs/plans/048-spike-view-links-and-qa-views.md lib/docs/links.test.ts`
+> `git diff --stat 4b0310a..HEAD -- .claude/skills/city-walker/SKILL.md AGENTS.md README.md docs/transformations.md docs/data-streams.md docs/adr/0001-client-only-static-app.md docs/adr/0024-site-streams-as-3d-tiles.md docs/adr/0010-opaque-clay-buildings-only.md docs/plans/048-spike-view-links-and-qa-views.md lib/docs/links.test.ts`
 > If any of these changed since this plan was written, re-check each
 > step's "today" sentence against the live file; a sentence already fixed
 > is skipped, not re-done.
@@ -178,7 +178,7 @@ mention 25832 beside it (`grep -c "25832" README.md` ≥ 2);
 ### Step 3: ADR 0001's list and two References notes
 
 - ADR 0001 amendment: after "the dismissed control hints" add the
-  clause `, the device's GPU safety level ([ADR 0046](./0046-a-per-device-safety-ladder-for-gpu-loss.md))`
+  clause `, the device's GPU safety level ([ADR 0046](./0047-phone-memory-budget-in-true-bytes.md))`
   (a link relative to `docs/adr/`, where it lands).
 - ADR 0003 References: add a note reading "(2026-10: the heightfield
   and `bake-heightfield.ts` are gone — the terrain is a TIN per ADR 0030,
@@ -188,8 +188,8 @@ mention 25832 beside it (`grep -c "25832" README.md` ≥ 2);
 - ADR 0015 References: "(now `pipeline/bake/roof_colour.py`, ADR 0025)".
 
 **Verify**: `grep -n "ADR 0046" docs/adr/0001-client-only-static-app.md` → match;
-`grep -n "bake-terrain-tin" docs/adr/0003-bake-heavy-inputs-at-build-time.md` → match;
-`grep -n "roof_colour.py" docs/adr/0015-roof-colour-from-orthophotos-with-vibrance-lift.md` → match.
+`grep -n "bake-terrain-tin" docs/adr/0024-site-streams-as-3d-tiles.md` → match;
+`grep -n "roof_colour.py" docs/adr/0010-opaque-clay-buildings-only.md` → match.
 
 ### Step 4: The ledger and the survey
 

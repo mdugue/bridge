@@ -39,7 +39,7 @@ the PR evolves), under `## Snapshots`:
    `true`), so the reviewer flips between them in the same preview. Only
    *Nebel*, the crown switch, the picture style and the data layers are
    controls; the rest of the look is fixed — named constants in the code
-   (ADR 0017, plan 073) — so a change to it has no look key: say that
+   (ADR 0018, plan 073) — so a change to it has no look key: say that
    *before* is the same snapshot on the production site or the base PR's
    preview.
 5. On a stacked PR, say which preview shows the base.

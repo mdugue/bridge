@@ -3,7 +3,7 @@
 > Numbered 075 on 2026-10-19: it was drafted as 056, then 068, and both
 > numbers went to other plans first (068 is the fog-bounded tile stream).
 
-> **Superseded (2026-10-09)** by [ADR 0049](../adr/0049-windows-drawn-by-the-clay.md):
+> **Superseded (2026-10-09)** by [ADR 0049](../adr/0010-opaque-clay-buildings-only.md):
 > the photos now drive windows on every house through what does not move
 > with the camera — the rhythm, not the positions. See *What came of it*
 > at the end; this plan stays the record of why the positions are not

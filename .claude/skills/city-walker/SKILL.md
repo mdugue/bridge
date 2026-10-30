@@ -36,7 +36,7 @@ clock — a watched value a late starter reads first); a tile's traffic
 slot waits for their builder. The picture styles and Modell are still
 wired by hand. The data layers' code stays in the scene chunk: the first `import()` chunk that imports three.js costs the first
 load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
-data layers moved (ADR 0051) — measure before splitting one off.
+data layers moved (ADR 0040) — measure before splitting one off.
 
 **The renderer** is three r186's `WebGPURenderer` — its WebGPU backend, or
 its WebGL2 backend where the browser has no WebGPU (`?gpu=webgl2` forces it:
@@ -99,12 +99,12 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   and the water gets an up-facing normal twin. Nothing is burned into it;
   the wall ribbons in its `walls` node snap to the measured step at bake
   time (`lib/city/wall-snap.ts`, ADR 0030). The coarse level is the 512²
-  grid with the wall breaklines burned in (ADR 0014), heights read back
+  grid with the wall breaklines burned in (ADR 0030), heights read back
   from its first n·n vertices. Both are shaped under OSM stairs and
-  terraces at bake time (`scripts/bake-tiles.ts`, ADR 0028); study and
+  terraces at bake time (`scripts/bake-tiles.ts`, ADR 0030); study and
   numbers in the ledger's "Terrain TIN" entry.
 - `landcover-splat.ts` — paints the class raster with the one palette
-  (`lib/city/landcover.ts`) into the colour splat on the GPU (ADR 0023).
+  (`lib/city/landcover.ts`) into the colour splat on the GPU (ADR 0010).
 - `water-layer.ts` — sheets over the terrain geometry, masked by the splat's
   alpha (water coverage), animated normal wobble.
 - `vegetation-layer.ts` — instanced trees (`Instances`; rows + DOM1 canopy + the
@@ -147,8 +147,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   ink from the second difference of `1/z` (zero on planes; relative to `w`
   = silhouette, relative to slope = fold), tone bands / monochrome curves
   on the colour; the mode and the pen are uniforms. Read depth only at
-  integer texel radii around a texel centre. Papier (`paper-scene.ts`) is
-  the one style that touches the scene: a per-frame
+  integer texel radii around a texel centre. Sin City, Papier, Strich and
+  Schwarzplan touch the scene (`paper-scene.ts`, the row's `paperScene`
+  kind); Papier, for example, sets a per-frame
   `scene.overrideMaterial` (white, flat-shaded node material; three carries
   each material's `positionNode` over) with sprites and see-through sheets
   hidden, restored after the render. QA the styles on a handful of views
@@ -181,8 +182,8 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   (a LoD2 roof that misses DOM1 — the free-form roofs of complex buildings —
   replaced by what `pipeline/bake/roofs.py` measures: flat levels, and
   faces on the scan's surface where it slopes or curves, each an
-  error-bounded TIN cut to its outline; ADR 0036 and its update).
-- Beyond LoD2 (plan 050, ADR 0038): geometry is added only where DOM1
+  error-bounded TIN cut to its outline; ADR 0036).
+- Beyond LoD2 (plan 050, ADR 0036): geometry is added only where DOM1
   measures it **and** OSM (or, for a landmark's roof relief, Wikidata)
   names it — never from the surface model alone (cranes). `structures.py`
   → `lib/city/structures.ts` lathes chimneys/towers/masts, extrudes
@@ -356,6 +357,34 @@ and therefore what keeps builds out of frames:
 - 3DTilesRendererJS loads fine under `WebGPURenderer`; its fade and overlay
   plugins patch GLSL and stay unused.
 
+More traps, each found the hard way:
+
+- **A `ClippingGroup` switch rebuilds everything under it.** three keeps
+  one render object per drawable for both sides and keys its build by the
+  clipping, freeing the side a switch leaves; a compile that does not walk
+  through the group builds the wrong side. Modell's Ausschnitt shows only
+  once `PostStack.holdCut` holds both sides (`aloneUnder`), and leaves its
+  shadows unclipped.
+- **The clay is two varyings short of WebGPU's limit**: of sixteen
+  inter-stage variables, `front_facing` takes one (and the Ausschnitt's
+  clip distances one on the vertex side), and the clay passes thirteen
+  of the other fifteen. A new value per building or per vertex rides in
+  a varying it already passes; past fifteen the buildings vanish on
+  WebGPU while WebGL2 still draws them (ADR 0010).
+- **A TSL `select` is an if/else in the shader.** three builds each arm in
+  its own scope: what an arm builds first is built again where it is used
+  outside, and a derivative or texture read first built in an arm runs in
+  non-uniform control flow (three turns WGSL's uniformity check off, so
+  nothing says so). In a per-pixel graph use `mix`/`step` with safe
+  denominators; a select whose arms are constants is harmless.
+- **A `Loop`'s body is a scope too.** A node shared with the rest of the
+  graph and first built inside the loop is assigned there, so only when
+  the loop runs: the water's foam loop (no foam line on the tile: no
+  iteration) left the waves' position at 0, and the Elbe lay flat on
+  every tile without a weir beside a rippling one. Take what a loop reads
+  of the fragment into a `toVar()` before it (`foamAt`, water-layer.ts).
+
+
 Unit tests assert the node setup (a node material, the expected slots set,
 the uniforms shared, instances written), not shader strings; node materials
 and their node graphs construct without a GPU under `bun test`.
@@ -398,7 +427,7 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | casters' depth | the material itself | no custom depth materials: the shadow pass draws `castShadowPositionNode ?? positionNode` and honours `maskNode` |
 | `shadow.bias` | ~−0.0003 | small constant bias, residual cleanup |
 | terrain `castShadow` | **false** | a casting terrain self-shadows into triangle/staircase acne at grazing sun; ground only receives |
-| shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 (phones 2048; smaller at a raised safety level, ADR 0046) | soft radius lets 3072 look like 4096 at ~44% less fill |
+| shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 (phones 2048; smaller at a raised safety level, ADR 0047) | soft radius lets 3072 look like 4096 at ~44% less fill |
 | the map's colour target | one red byte (`OneByteShadowNode`, set as `sun.shadow.shadowNode`) | three's shadow pass draws into a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
 | frustum half-size (`lib/city/shadow-fit.ts`) | 121 m at eye level, growing in octaves of 110 m to 880 m with altitude | camera-following, texel-snapped; small = fine texels, but a fixed 110 m leaves a fly-over entirely unshadowed |
 | `shadow.autoUpdate` | false | re-render only when the frustum centre leaves a dead zone (30 m on foot — 110 m and 19.8 m until 2026-10-11, the walker as far from every edge now, 91 m; 18% of the half-size above eye level and in Modell), when the half-size re-fits, when the sun moves, or when a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
@@ -452,11 +481,10 @@ multiplies into the indirect light only (after the lights; the sun is
 untouched), on the terrain and the clay facades (`createClaySky`: sampled
 2.5 m outside the wall, doubled, faded out toward the eaves); cells under a
 roof carry the nearest open value in both rasters (no dark bleed through
-LINEAR/mipmaps). Rows *Himmelslicht* and *Ferne Schatten*; 0 = the old
-picture. Unjudged on a GPU — watch for SVF + GTAO reading as dirt in
+LINEAR/mipmaps). Unjudged on a GPU — watch for SVF + GTAO reading as dirt in
 courtyards (weaken the contact shadows there first) and the hand-over at
 the frustum's edge.
-[ADR 0031](../../../docs/adr/0031-baked-horizon-map-for-far-shadows.md).
+[ADR 0009](../../../docs/adr/0009-shadow-recipe.md).
 
 Dead ends (don't repeat): large `normalBias` (peter-panning), VSM at any blur
 (rings/grid on lit faces), a bigger frustum *at eye level* (coarser texels →
@@ -484,7 +512,7 @@ shoreline). The terrain shader samples it `LinearFilter` + mipmaps +
 **anisotropy 16** (GPU AA at grazing angles — kills the NEAREST staircase);
 water reads the alpha and `smoothstep`s it for a crisp shoreline. Edge
 sharpness is bounded by the class raster's resolution, not the GPU filter.
-A colour change is a look change, never a re-bake (ADR 0023).
+A colour change is a look change, never a re-bake (ADR 0010).
 
 The terrain's colour node (`terrain-layer.ts` `splatColour`) composes its
 terms in a fixed order over one shared set of inputs (`GroundInputs`) and
@@ -539,7 +567,7 @@ exactly (`rmStripes`), and along-street periods divide 165 m.
 (`cultivated.py`) in jittered-Voronoi plots — no colony in the fifteen tiles
 maps its parcels, so keep it faint.
 
-## Parts meet the ground (ADR 0035)
+## Parts meet the ground (ADR 0030)
 
 The DGM1 rounds every real step into a 1–2 m ramp, so whatever stands on
 the ground meets an edge that is not where its own is. Five layers got it
@@ -659,7 +687,7 @@ backlight shimmer and the LOD-gated multi-tuft crown are in
 `aesthetic-sandbox.html` at the repo root is the historical playground those
 were ported from; the layer file, not the sandbox, is the source of truth.
 
-## Bridges (ADR 0013, ADR 0033)
+## Bridges (ADR 0041)
 
 Decks come from the Basis-DLM (`ver06_l` centrelines, `ver06_f` outlines),
 built per fine terrain tile by `rail-layer.ts`; **only the tile owning a
@@ -716,10 +744,95 @@ tram layer's. OSM platforms below ground (`osm.below_ground`: tunnel,
 tunnel (`osm.in_tunnel`) are skipped. A tram's `street` bed is any
 pavement: road, path (squares, pedestrian zones) or built-up.
 
+## Tiles: batching, lifetime, freeing, rays, streaming
+
+**Buildings are already batched.** Each tile's buildings are ONE glTF mesh
+(`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time
+and, `cityMesh`, writes it with a per-vertex feature id,
+`EXT_mesh_features`), so draw calls are already low and **BatchedMesh would
+not help** (and would break feature-id picking/demolish). Per-building data
+(tint, heights, roof colour, glow, roughness, the demolish tree) is **one row
+per object** in an `EXT_structural_metadata` property table, packed into a
+float texture the clay shader reads (`lib/city/city-mesh.ts`) — add a
+building attribute there, not as a vertex attribute. A word packed into
+bits there (the windows' style) or a value that seeds a hash (the
+roughness jitter) reaches the fragment as a **flat** varying
+(`setInterpolation(InterpolationSamplingType.FLAT)`): interpolated, even a
+value all three vertices share drifts by a few ulps, which past 2²⁰ reaches
+a word's low bits and which a hash magnifies into a new value every pixel
+(a loose grid's windows frayed at their sides). The perf bottleneck is
+**fill-rate** (post FX + shadow map), not draw calls.
+
+**Tiles come and go.** 3DTilesRendererJS loads and unloads tiles by
+screen-space error (`app/_components/tile-stream.ts`; two terrain levels,
+the coarse one's geometric error is `COARSE_TERRAIN_ERROR` in
+`lib/city/tileset.ts`). Everything a tile brings (dressing, BVH, materials,
+textures) is built in the dressing plugin's `processTileModel` and freed in
+its `disposeTile` — never in `bootApp`, or it leaks when the tile unloads.
+Before a tile or its dressing shows, its node materials are built and
+compiled with `compileAsync` against the scene pass's target
+(`PostStack.compile`, each drawable shown and unculled for the call) — add
+new per-tile objects inside that path, or they build inside a frame.
+**Freeing is on us, not on three or the tile renderer** (WebGPU keeps GPU
+state per drawable that WebGL never had). WebGPURenderer frees a
+drawable's render objects — its uniform buffers and bind groups — only on
+its material's `dispose` or its own `dispose` event, and a scene-wide
+material is never disposed; 3DTilesRenderer frees only the glTF's own
+materials (not the per-tile ones the dressing put on), and on a load it
+aborts after `processTileModel` it frees the textures alone — geometry a
+compile already uploaded would stay. So a tile's release runs
+`disposeObject3D` over its content (`releaseRenderState` dispatches the
+event), a released or aborted tile is freed by the plugin itself, and
+nothing released is compiled. Leak hunts: `handle.getGpuDebug()` sets the
+scene's buffers against three's `info.memory` (a gap that grows per visit
+to the same place is a leak; a steady one is the tile cache). What a
+tile adds beyond its glTF must reach the cache's weighing
+(`DressingPlugin.calculateBytesUsed`), and a phone's memory is watched
+by `lib/city/memory-governor.ts` — see docs/rendering.md, "GPU memory on
+a phone". A content's CPU copies go once its compile has uploaded them
+(`dropCpuCopies` over `cpuDroppable` / `cityCpuDroppable`, ADR 0047; a
+compile resolves only once every drawable under it is uploaded, those
+another compile had started too — `compile-lanes.ts`): **an
+attribute read on the CPU after the dressing, or first read by a material
+the tile's own does not use, stays off those lists** — met after the drop,
+three uploads an empty buffer. **A buffer the site shares**
+(`markSceneShared`: the coarse grid's and water's index) **is never on a geometry when
+that geometry is disposed** — three would destroy it for every tile;
+detach it first. A lost GPU reloads a safety level lighter, where the
+player stood (`gpu-recovery.ts`, ADR 0047).
+The terrain has no BVH: ground rays march the height function
+(`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
+triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`).
+**A building tile's BVH is built when a ray first needs it** (ADR 0024,
+`ensureCityBvh`), so a ray against the buildings goes through
+`nearestCityHit`, `cityObjectsAlong` or the collider, which ask only the
+tiles whose box the ray enters and build (or skip) a missing BVH — a
+plain `intersectObject(city.mesh)` on a tile without one is
+three-mesh-bvh's brute-force fallback over two million triangles. The
+tiles near the camera get theirs ahead in the BVH worker
+(`bvh-client.ts`): their positions and index are handed over meanwhile,
+so **nothing may read a building tile's CPU positions or index while
+`bvhBuilding` says so** — skip the tile or wait. The glTF extras key is **`tileId`**: the
+renderer writes `userData.tile` itself and would overwrite ours. The
+walk/fly camera does not stream itself: the renderer streams for its twin
+whose far plane ends where the fog does, on a phone at 2.2 km at the
+latest — not through Modell's dolly zooms, which back it kilometres away
+(`streamFarFor`, `lib/city/atmosphere.ts`; synced each frame
+before the update) — past the
+fog's end a tile shows nothing, and the camera's 6 km far plane loaded the
+site's every building tile in that direction as fog colour; register a new
+streaming need against that twin, not the camera. The sun's shadow camera is a second
+streaming camera while the sun is up, so tiles that cast into the view stay
+loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`;
+on a phone never, `shadowTilesStream`) — at 128 px on a desktop
+(`SHADOW_STREAM_PX`), not the map's resolution: an orthographic camera's error ignores distance, and at
+2048 px it refined the terrain under its whole frustum;
+`displayActiveTiles` keeps loaded tiles drawn while turning.
+
+
 ## Performance model
 
-Buildings are already merged (low draw calls) — **BatchedMesh is moot** and
-would break objectid picking. The bottleneck is **fill-rate**: the post
+The bottleneck is **fill-rate**: the post
 pipeline (GTAO is the priciest) and the shadow-map render — which is why
 **DoF** is skipped while the camera moves (`lib/city/regression.ts`; a
 phone does not build it at all — its targets were the cost there, not its
@@ -765,7 +878,7 @@ Headless e2e uses SwiftShader through the renderer's WebGL2 backend (headless
 Chromium has no WebGPU adapter) — shadows/AA look nothing like a real GPU, so
 use `--headed` for any lighting work. To check the fallback on a GPU, add
 `?gpu=webgl2` (`SHOTS_QUERY=gpu=webgl2`); to see a lighter page of the
-safety ladder, `?safety=1`–`3` (ADR 0046: pixel ratio, shadow map, tile
+safety ladder, `?safety=1`–`3` (ADR 0047: pixel ratio, shadow map, tile
 cache and governor a step down; nothing stored). Verify from **oblique** angles (a tree through
 a bridge is invisible looking straight down). Snapshot JSON shape:
 
@@ -776,6 +889,22 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
   "date": "2026-06-15T08:30:00.000Z",
   "look": { "fogPct":35,"multiTuft":true,"style":"pastel" } }
 ```
+
+**Budget the e2e specs in frames, not seconds.** Under SwiftShader every pixel
+is shaded on the CPU. At the **full** profile this scene costs ~**14 s to boot**
+and ~**4 s per frame** at 1280×720 (measured on four cores). Anything that waits
+on rendered frames — the control walk uses `waitForFrames` — walks straight into
+the per-test timeout if it spends frames carelessly. Playwright runs a single worker on CI for the same reason: parallel
+viewer pages halve each other's frame rate. CI splits the suite over **three
+runners** instead (the `e2e` matrix in `.github/workflows/ci.yml`), by tag: the
+whole site with the shell and `/wissen`; the desktop HUD group
+(`@desktop-hud`) with the phone (`@phone`); the desktop rendering group
+(`@desktop-render`). Each desktop group boots its own page. The required
+status check "E2E (Playwright)" is the small job that reports them all. A new
+spec lands in the whole-site shard unless it carries one of those tags —
+keep the shards within about 1.5 minutes of each other (the workflow's
+comment has the measured runs).
+
 
 ### The `lite` scene profile (headless e2e only)
 
@@ -816,7 +945,7 @@ site's folder is a maintainer decision. `bun run fetch <site>` downloads everyth
 provider's adapter (`pipeline/bake/providers/<id>.py`) and converts the LoD2
 CityGML itself (`citygml.py`); `bun run site <site>` says what is missing.
 
-**Stage 1, the offline bakes** (ADR 0025): one Python package,
+**Stage 1, the offline bakes** (ADR 0037): one Python package,
 `pipeline/bake/`, in a uv environment (numpy, rasterio, pyogrio, shapely,
 Pillow, scipy, scikit-image; GDAL inside the wheels, with the OSM driver;
 laspy for the laser scan — no PDAL). If a tool is missing,
@@ -828,13 +957,9 @@ CRS, land cover first:
 bun run fetch dresden                  # download what the site needs (its provider's adapter)
 bun run bake dresden                   # every tile, every step
 bun run bake dresden 33412_5656_2_sn   # one tile, all steps
-bun run bake dresden --step canopy     # one step (STEPS in pipeline/bake/__main__.py, in this order):
-                                       #   landcover islands rail ndvi canopy trees roof-colour
-                                       #   osm-buildings lamps monuments furniture walls stairs surface edges
-                                       #   markings sport tram riverside traffic roofs skyview
-                                       #   lowveg cultivated small-buildings
-                                       #   landmarks structures
-                                       # `transit` runs once for the site after every tile (SITE_STEPS)
+bun run bake dresden --step canopy     # one step; the order is STEPS in pipeline/bake/__main__.py,
+                                       # each entry's comment says what it must follow;
+                                       # `transit` runs once for the site (SITE_STEPS)
 bun run test:pipeline                  # pytest + ruff
 ```
 
@@ -848,7 +973,7 @@ site. Without a Basis-DLM (Hamburg, Berlin) `rail` reads OSM
 (`rail_osm.py`: rails, ballast beds, bridge ways merged per bridge and
 level) — it runs before `canopy`, which keeps crowns off those decks.
 Stand-ins are marked per city in the generated
-`docs/guide/*/sources-by-city.md` (`bun run docs:matrix`, ADR 0039). `rasters.py`
+`docs/guide/*/sources-by-city.md` (`bun run docs:matrix`, ADR 0012). `rasters.py`
 refuses a height mosaic flatter than 0.5 m (1–99 %) — Hamburg's DGM was
 once committed as 0 m everywhere and every house floated; the pipeline
 tests hold every committed DGM to ≥ 2 m. The laser scan (`--lsc`) is read

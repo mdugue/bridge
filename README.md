@@ -98,7 +98,7 @@ sent.
 are MDX pages, `app/(legal)/*/page.mdx` (`@next/mdx`), and name this
 deployment's operator, host (Vercel) and tracker (Sentry, EU region) —
 a deployment of your own edits them. Visitors turn the reports off on
-the privacy page ([ADR 0045](docs/adr/0045-legal-pages-from-the-deployment.md)).
+the privacy page ([ADR 0045](docs/adr/0043-crash-and-page-reports-to-an-error-tracker.md)).
 
 ## Data
 
@@ -218,8 +218,8 @@ changing that hook means updating [`e2e/`](e2e).
 - [docs/guide](docs/guide/README.md) — for users and non-developers, in
   English and German: how it works, where the data comes from, the data's
   journey to the browser, using the viewer, and a glossary.
-- [AGENTS.md](AGENTS.md) — orientation: stack, commands, conventions, the
-  coordinate frame, and the rendering gotchas worth not relearning.
+- [AGENTS.md](AGENTS.md) — orientation: stack, commands, conventions and
+  the hard rules (the coordinate frame, the rendering traps).
 - [docs/](docs/README.md) — the knowledge base: how data becomes pixels
   ([rendering](docs/rendering.md)), the bakes and the build step
   ([data-pipeline](docs/data-pipeline.md)), what maps to what

@@ -1,58 +1,57 @@
-# ADR 0012: OpenStreetMap for what the official data lacks, read from a local extract where possible
+# ADR 0012: Sources — official data first, OSM and Wikidata for what it lacks, named stand-ins marked per city
 
-- **Status:** accepted; "where possible" tightened to "always" by [ADR 0025](./0025-bakes-are-one-python-package.md)
-- **Date:** 2026-06 (lamps, platforms), 2026-09 (walls from a local extract)
+- **Status:** accepted
+- **Date:** 2026-06, rewritten 2026-10 (absorbs ADR 0039 and the source rules of ADR 0038)
 
 ## Context
 
-The official datasets model no street furniture and no platforms, and the
-monumental retaining walls of the old town (Brühlsche Terrasse) are in
-none of them as a wall: DGM1, DOM1 and the classified laser ground all turn
-it into a ramp (1–2 m wide in DGM1, ~0.75 m in the laser returns; the
-"gentle bank" the viewer showed was mostly its 1024² resample — corrected
-2026-09, ledger "Terrain TIN"), and it is not a building in
-the LoD2 model, so it "went missing". OpenStreetMap has all of these as
-tagged vector features, including wall heights and bridge structure types,
-under the ODbL. Overpass, the public query API, rate-limits bursts with an
-HTML 429 page.
+The official products (DGM1, DOM1, LoD2, DOP, Basis-DLM, laser scan) are
+measured and licensed openly, but they lack street furniture, walls,
+stairs, platforms, building names and uses, and nothing in them says which
+buildings are a city's landmarks. Länder publish different subsets:
+Hamburg and Berlin have no open Basis-DLM, Bavaria's orthophoto has no
+infrared band, a street-tree register is a city's, not a Land's.
 
 ## Decision
 
-OSM is the source for street lamps (`highway=street_lamp`), station
-platforms (`railway=platform`), retaining / city walls and embankments
-(`barrier=*`, `man_made=embankment` with `height`), and the
-`bridge:structure` tag that decides between arches and box piers. Small
-point queries go through Overpass with the raw response cached and
-validated as JSON before reuse. Walls are read from a local Geofabrik
-`.osm.pbf` extract via GDAL's OSM driver (both the `lines` and
-`multipolygons` layers, because GDAL routes closed ways with an area key
-into the latter) — no rate limits, reproducible, one pass for the whole
-block; verified feature-for-feature identical to the previous Overpass
-bake. The ODbL credit is carried in the HUD footer, the README and as an
-`attribution` member in the emitted GeoJSON.
+1. **The best open source per layer.** Official data where it exists;
+   OpenStreetMap for what it does not model; Wikidata (CC0) for what is
+   notable (landmarks, bridge types, materials); open street photos
+   (Mapillary, Panoramax — never Google Street View) for what only a
+   facade shows. Sources under different licences stay in separate files
+   (Mapillary's CC BY-SA output is never merged into an ODbL file). Every
+   source's licence and credit travels with the data (HUD footer, `attribution` members, the
+   guide's licence table, `NOTICE`).
+2. **OSM is read only from a local extract** (`.osm.pbf` through GDAL's OSM
+   driver, indexed once per bake), Wikidata only from the fetch's cached
+   answer. No Overpass, no live query in a bake.
+3. **Where a Land lacks a source, a named stand-in where one measures or
+   maps the same thing; otherwise the layer is off and the matrix says so;
+   never an invention:** land cover, rails and bridge ways from OSM where
+   there is no Basis-DLM; a visible-band vegetation index where the DOP
+   has no infrared; a register mapping per city for street trees.
+4. **The stand-ins are visible per city.** The guide's *Sources by city*
+   pages are generated from the site and provider configs
+   (`lib/city/source-matrix.ts`, `bun run docs:matrix`); a test fails when
+   they drift.
+5. **No look switch per city.** A look that differs between cities (facade
+   material, haze depth, tram gauge, how many landmarks a tile has) is
+   derived from the city's own data in the bake or build, never added to
+   `Site`.
 
 ## Consequences
 
-- Four layers depend on volunteer data whose completeness varies; the
-  loaders treat an empty or missing file as "feature off".
-- Heights default per wall kind (city_wall 6 m, retaining_wall 3 m, wall
-  1.5 m, embankment 2.5 m) when untagged, clamped 0.5–30 m.
-- Re-baking OSM layers means deleting the cached Overpass responses and,
-  for walls, downloading a fresh extract; the extract date should be
-  recorded (guide: dataset editions).
-- The attribution must stay wherever OSM-derived geometry is shown.
+- What a city shows depends on its data, and the guide says so.
+- OSM layers are as complete as the mappers made them; an empty or missing
+  file means "layer off".
+- A new look parameter that differs between cities is a derivation, not a
+  config field.
 
 ## Alternatives
 
-- **Overpass for walls too:** the original bake; rejected for rate limits
-  and irreproducibility.
-- **Model the walls by hand or derive them from the laser point cloud:**
-  the wall is not in the point-cloud ground either; hand modelling is out of
-  scope.
-- **ALKIS building-parts for platforms:** not available in the tiles.
-
-## References
-
-- `scripts/extract-lamps.sh`, `extract-walls.sh`, `extract-rail.sh`;
-  ledger "Street lamps", "Station platforms", "Bridge arches", "Walls";
-  plan 014 (attribution audit, finding #58).
+- **Overpass at bake time:** rate limits and no reproducibility.
+- **Leaving a layer out where a stand-in exists:** a city of bridges
+  without bridges reads as broken.
+- **Per-site switches** (`facades: "brick"`): one more thing to tune per
+  city, and one value cannot follow the quarters inside a city.
+- **A hand-written source table:** drifts with the first new product.

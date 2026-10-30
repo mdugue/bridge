@@ -1,76 +1,54 @@
-# ADR 0018: Headless tests run a lite profile and assert presence; visuals are judged on a real GPU
+# ADR 0018: Headless tests run a lite profile and count frames; visuals are judged on a real GPU through snapshots
 
 - **Status:** accepted
-- **Date:** 2026-09 (plans 001, 008; the lite profile)
+- **Date:** 2026-09, rewritten 2026-10 (absorbs ADR 0017)
 
 ## Context
 
-Headless Chromium renders WebGL through SwiftShader: every pixel is shaded
-on the CPU. At the full profile the scene took ~14 s to boot and ~4 s per
-frame at 1280×720 on four cores, so specs that waited in seconds walked
-into timeouts, and a green run proved little: the suite once *skipped* when
-WebGL was missing, asserted a flag set unconditionally at boot, and checked
-no layer beyond terrain and buildings while every loader swallowed failures
-into an empty group. Shadows and anti-aliasing under SwiftShader look
-nothing like a GPU.
+Headless Chromium has no WebGPU adapter and shades every pixel on the CPU
+(SwiftShader through the WebGL2 backend): seconds per frame at the full
+profile, and shadows and antialiasing nothing like a GPU. A green run once
+proved little — it skipped without WebGL and checked no layer. A reviewer
+needs to see a visual change at a place and time, reproducibly.
 
 ## Decision
 
-- **Budget in frames, not seconds.** The animation loop counts rendered
-  frames on `__poc.frames`; specs wait with `waitForFrames`, never
-  `waitForTimeout`.
-- **The viewer specs run `?scene=lite`** (`scene-profile.ts`): primary
-  tile only (`&block=1` keeps the block to exercise streaming), a 512²
-  shadow map, pixel ratio 0.5 and N8AO's Performance mode — the four knobs
-  that cost seconds per frame — while loaders, layers, shader programs and
-  HUD wiring are identical to `full`. Boot 14 s → ~4.4 s, 74 MB → 18 MB.
-  Specs share one booted page (`serial` + `beforeAll`).
-- **On CI, missing WebGL fails, never skips.** Layers are verified by a
-  per-layer scene census (`__poc.stats.layerStats`: meshes, instances,
-  triangles); demolish must shrink the city triangle count; `afterAll`
-  checks for page errors; failure leaves a screenshot and a trace.
-- **Anything visual is judged on a real GPU** with the snapshot harness:
-  a Snapshot JSON in `shots/` and `bun run shots` (`SHOTS=1`, `--headed`,
-  full profile). The harness is excluded from the default e2e run so it
-  can never overwrite real-GPU plates with SwiftShader renders.
-- `bun run verify` (lint + typecheck + unit) is the pre-push gate and
-  mirrors CI; unit tests are invoked with explicit directories because a
-  bare `bun test` would load the Playwright specs.
+1. **Specs are budgeted in frames, not seconds** (`__poc.frames`,
+   `waitForFrames`), and share one booted page per group.
+2. **The viewer specs run `?scene=lite`**: the spawn tile only, a small
+   shadow map, a low pixel ratio, fewer AO samples — the knobs that cost
+   seconds per frame — with the same loaders, layers and materials as the
+   full profile. Lite is never used to look at pixels.
+3. **On CI a missing WebGL fails, never skips.** Layers are checked by a
+   scene census, not by pixels.
+4. **Anything visual is judged on a real GPU** with the snapshot harness
+   (`bun run shots`, headed, full profile).
+5. **The Snapshot is a validated contract** (`lib/city/snapshot.ts`): the
+   camera pose, the sun's time and the look's few controls (*Nebel*, the
+   crown switch, the style, the data layers — one table,
+   `lib/city/look-controls.ts`). Parsing never throws, rejects non-finite
+   numbers and clamps ranges. A snapshot key is never renamed; a removed
+   control's key is retired for good (`RETIRED_SNAPSHOT_KEYS`), ignored on
+   read and never reused.
+6. **The look's fixed strengths are named constants** in their owners,
+   not controls. Tuning one is a code change judged by snapshots of place
+   and time against production.
+7. **A PR that changes what the viewer shows carries snapshots** in its
+   description (the `pr-snapshots` skill).
 
 ## Consequences
 
-- Lite is never used to look at pixels; the AO quality is keyed on the
-  profile, not on `navigator.webdriver`, so the headed harness renders the
-  product's AO.
-- Adding a layer requires a `LayerName`, a census line and an e2e
-  assertion; adding a GeoJSON artifact requires a contract row in
-  `lib/city/features.ts`.
-- Perf mechanisms are asserted by counters (`shadowRenders < frames / 2`
-  while walking, `regressed`), not profilers.
-- Open from plan 008: the CI e2e path gate does not yet include
-  `scripts/`, `data/`, `patches/`; no shader-anchor tests pin the
-  `onBeforeCompile` chunk names; coverage is not published.
+- A new spec drives `/dresden?scene=lite`; untagged it lands in the
+  whole-site CI shard.
+- A new control is a table row plus its owner's entry; a row without an
+  owner is a type error.
+- `bun run verify` (lint, typecheck, unit tests) is the pre-push gate.
 
 ## Alternatives
 
-- **Full profile headless:** minutes per spec; rejected.
-- **Skip when WebGL is missing:** hides a broken Chromium/Playwright
-  bump; rejected.
-- **Pixel-diff screenshots in CI:** SwiftShader output is not the
-  product; rejected.
-
-## Update (2026-09, ADR 0027)
-
-Headless Chromium offers no WebGPU adapter, so the e2e runs on
-`WebGPURenderer`'s WebGL2 backend over SwiftShader: the same node
-materials as on a GPU, compiled synchronously. The lite profile's fourth
-knob is now GTAO at 8 samples instead of 16 (`aoSamplesFor`; N8AO's
-Performance mode is gone with N8AO), still keyed on the profile. The
-preflight is `gpu-support.ts` (WebGPU or WebGL2). The open shader-anchor
-tests are moot: there are no `onBeforeCompile` chunk names left to pin.
-
-## References
-
-- plans 001, 008; AGENTS.md "QA: self-verify"; the skill's "The `lite`
-  scene profile"; `app/_components/scene-profile.ts`,
-  `app/_components/scene-census.ts`, `e2e/`.
+- **The full profile headless:** minutes per spec.
+- **Skipping when WebGL is missing:** hides a broken browser bump.
+- **Pixel diffs in CI:** SwiftShader output is not the product.
+- **A slider for every look term:** each cost a table row, a store value,
+  a snapshot key and a guide line in two languages, and the maintainer did
+  not need the look tunable.

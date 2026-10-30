@@ -9,7 +9,7 @@
 > **Builds on** ADR 0037 (sites, providers, per-tile steps read from the
 > site config), plan 050 (landmarks, the roof relief, OSM materials) and
 > ADR 0033 (bridges measured in DOM1). The decisions are
-> [ADR 0039](../adr/0039-stand-ins-marked-per-city.md).
+> [ADR 0039](../adr/0012-openstreetmap-for-what-official-data-lacks.md).
 >
 > **Drift check (run first)**:
 > `git log --oneline -5 -- pipeline/bake/rail_osm.py pipeline/bake/ndvi.py pipeline/bake/osm_buildings.py lib/city/valley-fog.ts lib/city/source-matrix.ts`

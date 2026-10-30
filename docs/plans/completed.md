@@ -96,7 +96,7 @@ also re-runs when its own source files change. The e2e minimap-teleport
 assertion (≈412,500 E / 5,657,500 N) fails if bounds or row order are
 wrong — fix the data, not the test.
 
-See [ADR 0003](../adr/0003-bake-heavy-inputs-at-build-time.md).
+See [ADR 0003](../adr/0024-site-streams-as-3d-tiles.md).
 
 ## 005 — Input and collision correctness · DONE (PR #25)
 
@@ -158,7 +158,7 @@ resolution; only DoF is dropped. `regressed` is on `__poc`.
 reallocates every render target, so it needs a ~1 s hold before restoring
 and a real-GPU look.
 
-See [ADR 0011](../adr/0011-motion-keyed-quality-regression.md).
+See [ADR 0011](../adr/0009-shadow-recipe.md).
 
 ## 008 — The verification net · DONE in part (2026-09-24; step 7 moot; closed: the rest moved to plans 037 (coverage) and 041 (fixture checks))
 
@@ -263,7 +263,7 @@ shared recentre offset must come from the primary's matrix before any
 neighbour is parsed. `TextureLoader.loadAsync` cannot take an
 `AbortSignal` — splat textures are not abortable.
 
-See [ADR 0006](../adr/0006-tile-block-with-one-primary-and-one-artifact-map.md).
+See [ADR 0006](../adr/0024-site-streams-as-3d-tiles.md).
 
 ## 011 — Six confirmed defects · DONE
 
@@ -310,7 +310,7 @@ look as a boot-effect dependency would reboot the renderer per slider move.
 slider DOM ids and labels are the e2e contract; `lib/city` stays three-
 and DOM-free because the spec imports it.
 
-See [ADR 0017](../adr/0017-look-controls-table-and-snapshot-contract.md).
+See [ADR 0017](../adr/0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md).
 
 ## 013 — Toolchain and dependency hygiene · DONE (superseded in part)
 
@@ -333,7 +333,7 @@ re-adds it); every lockfile change ships with its manifest change; only a
 human bumps `packageManager`. Not done: `.editorconfig`; closing the
 superseded Dependabot PRs is a maintainer action.
 
-See [ADR 0019](../adr/0019-oxlint-oxfmt-and-native-typescript.md).
+See [ADR 0019](../../AGENTS.md).
 
 ## 014 — Knowledge-base currency · DONE
 
@@ -370,8 +370,8 @@ into every program; the fog far plane is clamped to ~1.1 km until the
 block is complete. `__poc.firstFrame` vs `__poc.ready`;
 `?scene=lite&block=1` exercises the streaming headless.
 
-See [ADR 0008](../adr/0008-progressive-two-phase-boot.md) and
-[ADR 0020](../adr/0020-fixed-light-pool-and-static-shadow-casters.md).
+See [ADR 0008](../adr/0024-site-streams-as-3d-tiles.md) and
+[ADR 0020](../adr/0009-shadow-recipe.md).
 
 ## Aesthetic and visual fine-tuning roadmap · DONE except motes
 
@@ -401,7 +401,7 @@ selective bloom.
 **Numbers.** 6,169 lamps in Dresden on 2026-06-15; default lamp height
 5 m; `MAX_REAL_LAMPS = 3`; `nightFactor = smoothstep(2°, −6°)`.
 
-See [ADR 0020](../adr/0020-fixed-light-pool-and-static-shadow-casters.md).
+See [ADR 0020](../adr/0009-shadow-recipe.md).
 
 ## 016 — `Bun.Image` instead of sharp for the raster downsample · REJECTED (premise gone)
 
@@ -410,7 +410,7 @@ one downsample, and its premultiplied-alpha resize had painted the ground
 black when the RGB splat's alpha carried water coverage (fixed in #29 by
 resizing colour and alpha separately).
 
-**Outcome.** Overtaken by [ADR 0023](../adr/0023-land-cover-colours-painted-at-runtime.md):
+**Outcome.** Overtaken by [ADR 0023](../adr/0010-opaque-clay-buildings-only.md):
 the RGB splat is no longer baked, so no raster whose alpha is data goes
 through an image tool. The trap, the split-resize workaround and its
 AGENTS.md paragraph are gone. What is left of sharp is a nearest-neighbour
@@ -632,9 +632,9 @@ Moved: the GPU look and frame time to plan 019; the DLM `sie02_f` split
 and LSC intensity to the [data-streams survey](../data-streams.md) (ledger 📋 #12); trees inside the
 carved parks to plan 022's canopy re-bake after land cover.
 
-See [ADR 0029](../adr/0029-static-dressing-baked-into-the-fine-terrain.md),
+See [ADR 0029](../adr/0030-terrain-tin-and-wall-snap.md),
 [ADR 0030](../adr/0030-terrain-tin-and-wall-snap.md),
-[ADR 0035](../adr/0035-parts-meet-the-ground.md), the
+[ADR 0035](../adr/0030-terrain-tin-and-wall-snap.md), the
 [ledger](../transformations.md) (*Kerbs and lawn edges*, *Paving
 materials*, *Parking*, *Urban green*) and plan
 [019](./019-gpu-verification.md).
@@ -688,7 +688,7 @@ within 8 m of a shelter, a bus-stop sign or another tram sign.
 - The bed thresholds stood the plan's check: Albertplatz 87 % street /
   5 % grass, Hauptstraße 100 % street (the > 10 % STOP not hit).
 
-See [ADR 0035](../adr/0035-parts-meet-the-ground.md), the ledger's
+See [ADR 0035](../adr/0030-terrain-tin-and-wall-snap.md), the ledger's
 *Trams* ([transformations](../transformations.md)) and plan
 [019](./019-gpu-verification.md).
 
@@ -892,7 +892,7 @@ Open: vine rows ignore the season — plan 025's plumbing now exists
 date; bare canes in winter, leaf-out with the calendar (S).
 
 See the [ledger](../transformations.md) (*Cultivated land*, 🗃️
-*Allotment bed bands*), [ADR 0023](../adr/0023-land-cover-colours-painted-at-runtime.md)
+*Allotment bed bands*), [ADR 0023](../adr/0010-opaque-clay-buildings-only.md)
 and [plan 019](./019-gpu-verification.md).
 
 ## 029 — Fences, railings and gates · DONE (2026-09-25; restyled to one band, look unjudged on a GPU — plan 019)
@@ -949,8 +949,8 @@ lines are not shifted; the verdict is visual. A pattern returns only
 with a calm real-GPU plate at walking height and from 150 m; a dithered
 shadow would be the material's `maskNode`.
 
-See [ADR 0029](../adr/0029-static-dressing-baked-into-the-fine-terrain.md),
-[ADR 0035](../adr/0035-parts-meet-the-ground.md), the
+See [ADR 0029](../adr/0030-terrain-tin-and-wall-snap.md),
+[ADR 0035](../adr/0030-terrain-tin-and-wall-snap.md), the
 [ledger](../transformations.md) (*Fences, railings and gates*, 🗃️
 *Drawn fence panels*) and [plan 019](./019-gpu-verification.md).
 
@@ -1079,7 +1079,7 @@ LoD2 surfaces burned on top (`lowveg.py`'s one CityJSON walk,
   ground's value 2.5 m outside the wall, doubled, faded to 1 toward the
   eaves. One raster per tile shared by terrain and buildings, refcounted
   (`shared-rasters.ts`).
-- *Horizon shade* (*Ferne Schatten*, default 0.8; [ADR 0031](../adr/0031-baked-horizon-map-for-far-shadows.md)):
+- *Horizon shade* (*Ferne Schatten*, default 0.8; [ADR 0031](../adr/0009-shadow-recipe.md)):
   `horizon_<tile>.png`, 256² (≈8 m) × 16 azimuths × two bands — far
   occluders 80–1 500 m (0–45°), near 8–80 m (0–90°) — in one greyscale PNG
   read by `png-raster.ts`; 0.69–1.35 MB. The ground's `receivedShadowNode`
@@ -1107,7 +1107,7 @@ LoD2 surfaces burned on top (`lowveg.py`'s one CityJSON walk,
   retune or retire it against the sky view on the plates.
 - Both defaults are conservative stand-ins until the plates.
 
-See [ADR 0031](../adr/0031-baked-horizon-map-for-far-shadows.md), the
+See [ADR 0031](../adr/0009-shadow-recipe.md), the
 ledger's *Sky-view factor* and *Horizon shade* rows
 ([transformations.md](../transformations.md)) and plan 019.
 
@@ -1166,7 +1166,7 @@ centroid; a box over ground falling > 1.5 m dropped; of two overlapping
   --lsc` per tile.
 
 See the ledger's *Small structures from the laser scan* row
-([transformations.md](../transformations.md)), [ADR 0035](../adr/0035-parts-meet-the-ground.md)
+([transformations.md](../transformations.md)), [ADR 0035](../adr/0030-terrain-tin-and-wall-snap.md)
 (the box's ground join) and plan 019.
 
 ## 035 — A hidden soundscape · REJECTED (removed 2026-10-10)
