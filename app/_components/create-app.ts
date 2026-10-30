@@ -2225,7 +2225,9 @@ async function bootApp(
     const { target, solids } = subject.thing;
     if (target.kind === "design") {
       return {
-        positions: design?.partShape(target.partIndex) ?? new Float32Array(),
+        positions:
+          design?.partShape(target.file, target.partIndex) ??
+          new Float32Array(),
         reach: 0,
       };
     }

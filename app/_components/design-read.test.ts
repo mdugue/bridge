@@ -3,7 +3,7 @@ import { Document, WebIO } from "@gltf-transform/core";
 import {
   DesignError,
   designFile,
-  partOfTriangle,
+  partOfVertex,
   readDesign,
 } from "./design-read";
 
@@ -149,7 +149,7 @@ describe("an OBJ", () => {
     expect(model.note).toContain("fehlt.mtl");
     // a question finds the object by its triangles
     const parts = model.geometry.groups.map((g) =>
-      partOfTriangle(model.parts, g.start / 3)
+      partOfVertex(model.parts, model.geometry.index?.getX(g.start) ?? 0)
     );
     expect(parts.map((p) => model.parts.info[p].name)).toEqual([
       "haus",

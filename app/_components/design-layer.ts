@@ -36,7 +36,12 @@ import {
   SITE_UNDER_M,
   setDesignSite,
 } from "./design-site";
-import { type DesignModel, partOfTriangle, readDesign } from "./design-read";
+import {
+  type DesignModel,
+  type DesignParts,
+  partOfVertex,
+  readDesign,
+} from "./design-read";
 import type { DesignInquiry } from "@/lib/city/inquiry-design";
 import { releaseRenderState, sceneMaterial } from "./three-utils";
 
@@ -128,8 +133,9 @@ export interface DesignLayer {
   meshes: () => Mesh[];
   /** what a question meets of it: its parts (lib/city/ask-solids.ts) */
   asks: () => AskSet<DesignInquiry>[];
-  /** a part's own triangles in world positions (its outline) */
-  partShape: (part: number) => Float32Array;
+  /** a part's own triangles in world positions (its outline): none when
+   *  another design came since it was asked (`file`) */
+  partShape: (file: string, part: number) => Float32Array;
   status: () => DesignStatus | null;
   dispose: () => void;
 }
@@ -192,6 +198,9 @@ interface Loaded {
   mask: PlanMask | null;
   outline: [number, number][] | null;
   hidden: Map<string, Set<number>>;
+  /** what a question meets of it, made on the first question after a
+   *  pose (`askSet`) */
+  ask: AskSet<DesignInquiry> | null;
 }
 
 /** A part's triangles of the loaded design in world positions. */
@@ -199,27 +208,30 @@ function partTriangles(loaded: Loaded, part: number): Float32Array {
   const { geometry } = loaded.mesh;
   const index = geometry.getIndex();
   const position = geometry.getAttribute("position");
-  const { starts, of } = loaded.model.parts;
   if (!index) {
     return new Float32Array();
   }
-  const total = index.count / 3;
-  const runs: [number, number][] = [];
-  let count = 0;
-  for (let k = 0; k < starts.length; k++) {
-    if (of[k] === part) {
-      const end = k + 1 < starts.length ? starts[k + 1] : total;
-      runs.push([starts[k], end]);
-      count += end - starts[k];
+  // the triangles whose vertices are the part's (the BVH reordered them)
+  const mine: number[] = [];
+  let first = -1;
+  let last = -1;
+  let own = false;
+  for (let i = 0; i < index.count; i += 3) {
+    const v = index.getX(i);
+    if (v < first || v >= last) {
+      [first, last, own] = partRun(loaded.model.parts, v, part);
+    }
+    if (own) {
+      mine.push(i);
     }
   }
   loaded.mesh.updateWorldMatrix(true, false);
-  const out = new Float32Array(count * 9);
+  const out = new Float32Array(mine.length * 9);
   const v = new Vector3();
   let at = 0;
-  for (const [from, to] of runs) {
-    for (let i = from * 3; i < to * 3; i++) {
-      v.fromBufferAttribute(position, index.getX(i)).applyMatrix4(
+  for (const t of mine) {
+    for (let k = 0; k < 3; k++) {
+      v.fromBufferAttribute(position, index.getX(t + k)).applyMatrix4(
         loaded.mesh.matrixWorld
       );
       out[at++] = v.x;
@@ -228,6 +240,27 @@ function partTriangles(loaded: Loaded, part: number): Float32Array {
     }
   }
   return out;
+}
+
+/** The run of vertices `vertex` lies in, and whether it is `part`'s. */
+function partRun(
+  parts: DesignParts,
+  vertex: number,
+  part: number
+): [number, number, boolean] {
+  const { starts, of } = parts;
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= vertex) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  const end = lo + 1 < starts.length ? starts[lo + 1] : Number.MAX_SAFE_INTEGER;
+  return [starts[lo] ?? 0, end, of[lo] === part];
 }
 
 /** What a question meets of the loaded design: one ask set over its
@@ -239,7 +272,8 @@ function askSet(loaded: Loaded, offset: RecenterOffset): AskSet<DesignInquiry> {
   const raycaster = new Raycaster();
 
   const hitOf = (hit: Intersection): AskHit<DesignInquiry> => {
-    const partIndex = partOfTriangle(model.parts, hit.faceIndex ?? 0);
+    const vertex = mesh.geometry.index?.getX((hit.faceIndex ?? 0) * 3) ?? 0;
+    const partIndex = partOfVertex(model.parts, vertex);
     return {
       distance: hit.distance,
       solids: [],
@@ -328,6 +362,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     );
     loaded.mesh.rotation.set(0, -rotation * DEG2RAD, 0);
     loaded.mesh.updateMatrixWorld(true);
+    loaded.ask = null;
   };
 
   /** the plan and what it covers, now */
@@ -537,6 +572,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
         mask: null,
         outline: null,
         hidden: new Map(),
+        ask: null,
       };
       pose(loaded);
       await deps.compile(mesh);
@@ -630,9 +666,17 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     },
     outline: () => current?.outline ?? null,
     meshes: () => (current ? [current.mesh] : []),
-    asks: () => (current ? [askSet(current, deps.offset)] : []),
-    partShape: (part) =>
-      current ? partTriangles(current, part) : new Float32Array(),
+    asks: () => {
+      if (!current) {
+        return [];
+      }
+      current.ask ??= askSet(current, deps.offset);
+      return [current.ask];
+    },
+    partShape: (file, part) =>
+      current?.model.name === file
+        ? partTriangles(current, part)
+        : new Float32Array(),
     status,
     dispose: () => {
       remove();

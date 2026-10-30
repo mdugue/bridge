@@ -521,7 +521,7 @@ function mergePieces(
       if (piece.material !== material) {
         continue;
       }
-      parts.add(triangle, piece.part);
+      parts.add(vertex, piece.part);
       writePiece(piece, toAnchor, out, vertex, triangle);
       vertex += piece.geometry.getAttribute("position").count;
       triangle += triangleCount(piece.geometry);
@@ -537,8 +537,10 @@ function mergePieces(
   return { geometry: merged, parts: parts.done() };
 }
 
-/** The design's parts and, for each run of the merged triangles, whose
- *  they are: `starts[k]` the run's first triangle, `of[k]` its part. */
+/** The design's parts and, for each run of the merged vertices, whose
+ *  they are: `starts[k]` the run's first vertex, `of[k]` its part. By
+ *  vertex, not triangle: the BVH reorders the index (three-mesh-bvh),
+ *  never the vertices, and each piece's vertices are written as one run. */
 export interface DesignParts {
   info: DesignPartInfo[];
   starts: Uint32Array;
@@ -553,7 +555,7 @@ function partsRecorder() {
   const starts: number[] = [];
   const of: number[] = [];
   return {
-    add: (triangle: number, part: DesignPartInfo) => {
+    add: (vertex: number, part: DesignPartInfo) => {
       let k = index.get(part);
       if (k === undefined) {
         k = info.length;
@@ -561,7 +563,7 @@ function partsRecorder() {
         index.set(part, k);
       }
       if (of.at(-1) !== k) {
-        starts.push(triangle);
+        starts.push(vertex);
         of.push(k);
       }
     },
@@ -573,13 +575,13 @@ function partsRecorder() {
   };
 }
 
-/** The part a triangle of the merged geometry belongs to (its index). */
-export function partOfTriangle(parts: DesignParts, triangle: number): number {
+/** The part a vertex of the merged geometry belongs to (its index). */
+export function partOfVertex(parts: DesignParts, vertex: number): number {
   let lo = 0;
   let hi = parts.starts.length - 1;
   while (lo < hi) {
     const mid = (lo + hi + 1) >> 1;
-    if (parts.starts[mid] <= triangle) {
+    if (parts.starts[mid] <= vertex) {
       lo = mid;
     } else {
       hi = mid - 1;
