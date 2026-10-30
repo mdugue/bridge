@@ -112,7 +112,7 @@ test("the bake writes the bits and the offset scale the shader reads", () => {
   expect(Number(scale)).toBe(MARKING_OFFSET_SCALE);
   const bits = new Map<string, number>();
   for (const line of python.split("\n")) {
-    const m = line.match(/^([A-Z_, ]+) = ([\d, ]+)$/u);
+    const m = line.match(/^([A-Z_, ]+) = ([\d, ]+?)\s*(?:#.*)?$/u);
     if (!m) {
       continue;
     }

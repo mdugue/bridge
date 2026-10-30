@@ -1175,8 +1175,9 @@ async function teardownWhole(
 
 /** Before a reload: the ground and BVH workers go for good, and their
  *  heaps with them, not when the old document is collected (the new page
- *  boots in the old one's process); a job the stream still sends is done
- *  on this thread. */
+ *  boots in the old one's process). The render has stopped, so the stream
+ *  asks for nothing new: only the tiles already parsing still send a job,
+ *  done on this thread, and nothing casts a ray at a building any more. */
 function stopWorkers(): void {
   stopGroundWorker();
   stopBvhWorker();

@@ -22,9 +22,14 @@ test("the spec carries exactly the keys pipeline/bake/spec.py reads", () => {
 
 test("every provider's products are fields pipeline/bake/common.py takes", () => {
   const python = readFileSync(join(PYTHON, "common.py"), "utf8");
-  const block = python.match(/class Products:\n([\s\S]*?)\n\n\n/u)?.[1] ?? "";
-  const fields = [...block.matchAll(/^ {4}(\w+): [^=\n]+?( = |$)/gmu)];
-  const required = fields.filter((m) => m[2] !== " = ").map((m) => m[1]);
+  const block = (
+    python.match(/class Products:\n([\s\S]*?)\n\n\n/u)?.[1] ?? ""
+  ).replace(/"""[\s\S]*?"""/gu, "");
+  // `name: type`, `name: type = default` (spaced or not), a comment after
+  const fields = [
+    ...block.matchAll(/^ {4}(\w+): [^=#\n]+?(\s*=|\s*(?:#.*)?$)/gmu),
+  ];
+  const required = fields.filter((m) => !m[2].includes("=")).map((m) => m[1]);
   const all = new Set(fields.map((m) => m[1]));
   expect(required.length).toBeGreaterThan(0);
   for (const site of Object.values(SITES)) {

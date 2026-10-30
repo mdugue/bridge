@@ -136,7 +136,7 @@ function bakeNames(): Map<string, string> {
     lines.forEach((line, i) => {
       // data/_raw/<provider>/ holds the downloads and the bakes' own
       // caches (Wikidata answers, the laser scan's research output)
-      if (/\braw\b/u.test(line)) {
+      if (/\braw\b/u.test(line.split("#")[0])) {
         return;
       }
       for (const m of line.matchAll(
