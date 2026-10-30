@@ -64,7 +64,7 @@ die Szene steht.
 | `↑` `↓` / `←` `→` | vor und zurück gehen / nach links und rechts drehen |
 | `Shift` | sprinten |
 | `F` | zwischen Gehen und Fliegen wechseln (abheben / landen) |
-| `Leertaste` / `Shift` (oder `E` / `Q`) | hoch / runter im Flug |
+| `Leertaste` / `C` (oder `E` / `Q`) | hoch / runter im Flug |
 | `1` – `9` | zum ersten bis neunten Aussichtspunkt gleiten |
 | Mausrad (oder Zwei-Finger-Geste auf dem Trackpad, auch Aufziehen) | zu der Stelle unter dem Mauszeiger (im immersiven Modus: dem Fadenkreuz) hin oder von ihr weg: zu Fuß den Boden entlang, im Flug auf der Linie zu ihr, die Stelle bleibt unter dem Zeiger; jeder Schritt legt den Großteil des restlichen Wegs zurück, nie über sie hinaus, und über dem Himmel bleibt der Flug waagerecht |
 | `Alt` + Mausrad | zoomen (Blickwinkel enger oder weiter) |
