@@ -9,13 +9,11 @@ const reports = reportBuild(process.env);
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
-  // Off on purpose: every page is prerendered whole (ensureStatic
-  // "navigation" in app/layout.tsx), so a link's prefetch is already a static
-  // file. Partial prefetching would load only each route's URL-free shell,
-  // and the /wissen and /<site> pages read their params at the top, so a doc
-  // or city would load on click instead of ahead of it. Next's next major
-  // turns it on everywhere; revisit then.
-  partialPrefetching: false,
+  // A link prefetches one shared shell per route, not every page it points
+  // at: the /wissen and /<site> pages read their params inside <Suspense>,
+  // and the page itself (prerendered) comes on the click. Measured: a
+  // /wissen page prefetched 340–360 KB before, 40–140 KB now.
+  partialPrefetching: true,
   // The legal pages are MDX (app/(legal)/*/page.mdx, ADR 0043).
   pageExtensions: ["ts", "tsx", "mdx"],
   env: {

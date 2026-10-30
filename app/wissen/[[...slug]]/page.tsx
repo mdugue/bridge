@@ -8,6 +8,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import {
   Card,
   CardDescription,
@@ -105,7 +106,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function WissenPage({ params }: Props) {
+// The page is read inside the boundary, so a link prefetches one shell for
+// the whole knowledge base (partialPrefetching) instead of every page it
+// shows; the page itself, prerendered, comes on the click. The fallback
+// keeps the footer below the fold meanwhile.
+export default function WissenPage({ params }: Props) {
+  return (
+    <Suspense fallback={<div className="min-h-dvh" />}>
+      <WissenBody params={params} />
+    </Suspense>
+  );
+}
+
+async function WissenBody({ params }: Props) {
   const file = await fileOf(params);
   if (!file) {
     notFound();
