@@ -1,10 +1,30 @@
 "use client";
 
-import { LayersIcon, ScanEyeIcon, XIcon } from "lucide-react";
-import { type ReactNode, useMemo } from "react";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  LayersIcon,
+  ScanEyeIcon,
+  XIcon,
+} from "lucide-react";
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from "motion/react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { cn } from "cn";
 import { cardCredits } from "@/lib/city/card-lines";
 import { type Inquiry, inquiryCard } from "@/lib/city/inquiry";
+import { deckBehind, stepped, swipeStep } from "@/lib/city/pick-swipe";
 import { useSite } from "./site-context";
 
 /** The most cards that peek out behind the open one; more still count. */
@@ -13,17 +33,62 @@ const PEEKS = 4;
 const PEEK_PX = 26;
 /** Each card behind turns a little, alternating, as a stack in a hand. */
 const TILT_DEG = [-2.2, 1.8, -1.4, 2.6];
+/** How a card settles: quick, with a little give. */
+const SPRING = { type: "spring", stiffness: 420, damping: 34 } as const;
+/** How far a card leafed on flies off (px), how it turns with its pull
+ *  (°), and how fast it goes. */
+const FLY_PX = 420;
+const FLY_DEG = 12;
+const FLY_OUT = { duration: 0.18, ease: "easeIn" } as const;
 
 /**
- * The selection as a stack of cards: the open card in front, the other
+ * A swipe across `children` leafs through the picks (−1 back, +1 on) —
+ * the touch screen's sheet, which is drawn apart from the stack. It adds
+ * no box of its own (`display: contents`): it only listens.
+ */
+export function PickSwipe({
+  children,
+  enabled,
+  onStep,
+}: {
+  children: ReactNode;
+  enabled: boolean;
+  onStep: (step: -1 | 1) => void;
+}) {
+  if (!enabled) {
+    return children;
+  }
+  return (
+    <motion.div
+      className="contents"
+      onPanEnd={(_, info) => {
+        // a mostly sideways swipe; a scroll of the sheet is not one
+        if (Math.abs(info.offset.x) > Math.abs(info.offset.y) * 1.5) {
+          const step = swipeStep(info.offset.x, info.velocity.x);
+          if (step !== 0) {
+            onStep(step);
+          }
+        }
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * The selection as a deck of cards: the open card in front, the next
  * picks behind it, each a little turned and peeking out above with its
- * number and title — a click brings one to the front, × takes it out.
+ * number and title — a click brings one to the front, × takes it out. The
+ * front card is leafed through: swiped or flicked aside (it flies off and
+ * the next comes forward, round the deck), the arrows beside the count,
+ * or ← and → while the deck has the focus.
  * Over the stack: *Mehrere* (every question adds, as Shift+click and
  * Shift+I do — the touch screen's way, which has no Shift) and, for
  * several picks, *Alle zeigen* (one view that holds them all).
  *
- * On a touch screen the sheet is the card; the others are small tilted
- * cards in a row above it.
+ * On a touch screen the sheet is the card (`PickSwipe` leafs it); the
+ * others are small tilted cards in a row above it.
  */
 export function PickStack({
   active,
@@ -56,12 +121,82 @@ export function PickStack({
     () => picks.map((p) => inquiryCard(p, null, cardCredits(site)).title),
     [picks, site]
   );
+  const reduced = useReducedMotion() ?? false;
   const several = picks.length > 1;
-  // the others, nearest the open one first
-  const behind = picks
-    .map((_, i) => i)
-    .filter((i) => i !== active)
-    .sort((a, b) => Math.abs(a - active) - Math.abs(b - active));
+  // the front card is one card throughout: a step flies it off to the
+  // side it goes, and the next card's content comes in from the deck
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-240, 240], [-FLY_DEG, FLY_DEG]);
+  const y = useMotionValue(0);
+  const scale = useMotionValue(1);
+  const opacity = useMotionValue(1);
+  const flying = useRef(false);
+  const step = (by: -1 | 1) => {
+    const next = stepped(active, by, picks.length);
+    if (reduced) {
+      onActivate(next);
+      return;
+    }
+    if (flying.current) {
+      return;
+    }
+    flying.current = true;
+    // a step on (to the left, as a swipe on goes) leaves to the left
+    void Promise.all([
+      animate(x, -by * FLY_PX, FLY_OUT),
+      animate(opacity, 0, FLY_OUT),
+    ]).then(() => {
+      flying.current = false;
+      // it comes back in at once, as the next card (or as itself, where
+      // the selection changed meanwhile and there was none to go to)
+      entered.current = true;
+      enter();
+      onActivate(next);
+    });
+  };
+  const pick = (i: number) => onActivate(i);
+  /** The front card comes in from the deck's top. */
+  const enter = () => {
+    x.jump(0);
+    if (reduced) {
+      opacity.jump(1);
+      return;
+    }
+    y.jump(-PEEK_PX);
+    scale.jump(0.97);
+    opacity.jump(0.4);
+    void animate(y, 0, SPRING);
+    void animate(scale, 1, SPRING);
+    void animate(opacity, 1, { duration: 0.15 });
+  };
+  // whichever way a pick came forward: a flight brought it in already
+  const entered = useRef(false);
+  const shownKey = `${active}:${labels[active]}`;
+  const lastKey = useRef(shownKey);
+  useEffect(() => {
+    if (lastKey.current === shownKey) {
+      return;
+    }
+    lastKey.current = shownKey;
+    if (entered.current) {
+      entered.current = false;
+      return;
+    }
+    enter();
+  });
+  const keys = (event: KeyboardEvent) => {
+    const by =
+      event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    const typing = (event.target as HTMLElement).closest(
+      "input, textarea, select, [contenteditable]"
+    );
+    if (several && by !== 0 && !typing) {
+      event.preventDefault();
+      step(by);
+    }
+  };
+  // the others, the next first: the deck goes round
+  const behind = deckBehind(active, picks.length);
   const hidden = Math.max(0, behind.length - PEEKS);
   const tools = (
     <div className="pointer-events-auto flex items-center gap-1 text-[11px]">
@@ -92,8 +227,28 @@ export function PickStack({
         </button>
       )}
       {several && (
-        <span className="px-1 text-muted-foreground tabular-nums">
-          {picks.length} ausgewählt
+        <span className="flex items-center text-muted-foreground tabular-nums">
+          <button
+            aria-label="Vorige Auswahl"
+            className="rounded-full p-1 hover:text-foreground"
+            data-testid="pick-prev"
+            onClick={() => step(-1)}
+            type="button"
+          >
+            <ChevronLeftIcon aria-hidden className="size-3.5" />
+          </button>
+          <span data-testid="pick-count">
+            {active + 1} / {picks.length}
+          </span>
+          <button
+            aria-label="Nächste Auswahl"
+            className="rounded-full p-1 hover:text-foreground"
+            data-testid="pick-next"
+            onClick={() => step(1)}
+            type="button"
+          >
+            <ChevronRightIcon aria-hidden className="size-3.5" />
+          </button>
         </span>
       )}
       {!sheet && hidden > 0 && (
@@ -101,7 +256,7 @@ export function PickStack({
         // forward, so every pick stays a few clicks away
         <button
           className="rounded-full px-1 text-muted-foreground hover:text-foreground"
-          onClick={() => onActivate(behind[PEEKS])}
+          onClick={() => pick(behind[PEEKS])}
           title={`${labels[behind[PEEKS]]} öffnen`}
           type="button"
         >
@@ -110,32 +265,36 @@ export function PickStack({
       )}
     </div>
   );
+  const tilt = (depth: number) => TILT_DEG[depth % TILT_DEG.length];
   const pickCard = (i: number, depth: number) => (
-    <div
-      className={cn(
-        "group pointer-events-auto flex items-start gap-1.5 bg-card text-card-foreground shadow-md ring-1 ring-foreground/10 transition-transform duration-200 ease-out",
+    <motion.div
+      animate={
         sheet
-          ? "h-9 shrink-0 items-center rounded-lg px-2 hover:-translate-y-0.5"
-          : "absolute inset-x-2 top-0 h-24 rounded-lg px-3 pt-1.5 hover:-translate-y-1.5"
-      )}
-      data-testid="pick-card"
-      // reason: a pick's place in the order is what it is called by
-      key={`${i}:${labels[i]}`}
-      style={
-        sheet
-          ? { rotate: `${TILT_DEG[depth % TILT_DEG.length]}deg` }
+          ? { rotate: tilt(depth) }
           : {
-              translate: `0 ${-(depth + 1) * PEEK_PX}px`,
-              rotate: `${TILT_DEG[depth % TILT_DEG.length]}deg`,
-              zIndex: PEEKS - depth,
+              y: -(depth + 1) * PEEK_PX,
+              rotate: tilt(depth),
               // the farther back, the paler: a stack, not a list
               filter: `brightness(${1 - depth * 0.03})`,
             }
       }
+      className={cn(
+        "group pointer-events-auto flex items-start gap-1.5 bg-card text-card-foreground shadow-md ring-1 ring-foreground/10",
+        sheet
+          ? "h-9 shrink-0 items-center rounded-lg px-2"
+          : "absolute inset-x-2 top-0 h-24 rounded-lg px-3 pt-1.5"
+      )}
+      data-testid="pick-card"
+      initial={false}
+      // reason: a pick's place in the order is what it is called by
+      key={`${i}:${labels[i]}`}
+      style={sheet ? undefined : { zIndex: PEEKS - depth }}
+      transition={reduced ? { duration: 0 } : SPRING}
+      whileHover={sheet ? { y: -2 } : { y: -(depth + 1) * PEEK_PX - 6 }}
     >
       <button
         className="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 text-left text-[12px] leading-tight outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        onClick={() => onActivate(i)}
+        onClick={() => pick(i)}
         title={`${labels[i]} öffnen`}
         type="button"
       >
@@ -154,7 +313,7 @@ export function PickStack({
       >
         <XIcon className="size-3" />
       </button>
-    </div>
+    </motion.div>
   );
   if (sheet) {
     return (
@@ -189,15 +348,37 @@ export function PickStack({
         style={{ marginTop: peek }}
       >
         {shown.map((i, depth) => pickCard(i, depth))}
-        {/* the open card in front, numbered like the rest */}
-        <div className="relative z-10 flex min-h-0 shrink flex-col">
+        {/* the open card in front, numbered like the rest: pulled aside
+            it turns, let go far or fast enough it flies off and the next
+            comes forward from the deck */}
+        <motion.div
+          className={cn(
+            "relative z-10 flex min-h-0 shrink flex-col",
+            several && "touch-pan-y"
+          )}
+          data-testid="pick-front"
+          drag={several ? "x" : false}
+          dragDirectionLock
+          // let go, it springs back or flies on: ours to animate
+          dragMomentum={false}
+          onDragEnd={(_, info) => {
+            const by = swipeStep(info.offset.x, info.velocity.x);
+            if (by === 0) {
+              void animate(x, 0, SPRING);
+            } else {
+              step(by);
+            }
+          }}
+          onKeyDown={keys}
+          style={{ x, y, rotate, scale, opacity }}
+        >
           {several && (
             <span className="pointer-events-none absolute -top-2 -left-2 z-20 flex size-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground tabular-nums shadow-sm">
               {active + 1}
             </span>
           )}
           {children}
-        </div>
+        </motion.div>
       </div>
     </div>
   );

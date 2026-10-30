@@ -1125,7 +1125,13 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await page.keyboard.up("Shift");
       // the first pick waits behind the open card, a little turned
       await expect(stack.getByTestId("pick-card")).toHaveCount(1);
-      await expect(stack).toContainText("2 ausgewählt");
+      await expect(stack.getByTestId("pick-count")).toHaveText("2 / 2");
+      await expect(card).toContainText(centreId);
+      // the arrows leaf through the deck, round it
+      await stack.getByTestId("pick-next").click();
+      await expect(stack.getByTestId("pick-count")).toHaveText("1 / 2");
+      await expect(card).not.toContainText(centreId);
+      await stack.getByTestId("pick-next").click();
       await expect(card).toContainText(centreId);
       // a click brings it to the front, the centre's building behind
       await stack.getByTestId("pick-card").getByRole("button").first().click();
