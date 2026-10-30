@@ -8,8 +8,10 @@
  * a test drives it with a scripted adapter (`@tanstack/ai/testing`).
  */
 import {
+  type AgentLoopStrategy,
   type AnyTextAdapter,
   chat,
+  combineStrategies,
   maxIterations,
   type StreamChunk,
 } from "@tanstack/ai";
@@ -68,6 +70,19 @@ export function knowledgeTools(
   ];
 }
 
+/**
+ * A turn whose only tool calls are the follow-ups (`vorschlaege`) ends
+ * the answer: the chips need no reply, and another model turn would
+ * only cost the visitor's key a round trip to acknowledge them.
+ */
+export const endsAtSuggestions: AgentLoopStrategy = ({ messages }) => {
+  const last = messages.findLast((m) => m.role === "assistant");
+  const calls = last?.toolCalls ?? [];
+  return !(
+    calls.length > 0 && calls.every((c) => c.function.name === suggestTool.name)
+  );
+};
+
 export interface AskRun {
   adapter: AnyTextAdapter;
   abortController?: AbortController;
@@ -98,7 +113,10 @@ export function runAsk(run: AskRun) {
     ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
     systemPrompts: [askSystemPrompt(run.site, run.today, run.voice)],
     tools: [...knowledgeTools(run.knowledge, run.site), ...SCENE_TOOLS],
-    agentLoopStrategy: maxIterations(ASK_LIMITS.iterations),
+    agentLoopStrategy: combineStrategies([
+      maxIterations(ASK_LIMITS.iterations),
+      endsAtSuggestions,
+    ]),
     // the prompt and the tools are the same for every request of a site:
     // the provider's cache holds them (Anthropic's cache_control, OpenAI's
     // automatic prefix cache), the conversation's thread is the key

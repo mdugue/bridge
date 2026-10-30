@@ -743,7 +743,7 @@ function argText(value: unknown): string {
 }
 
 /** What a tool call says it did, in the trace under an answer. */
-function toolLine(name: string, input: unknown): string {
+function toolLine(name: string, input: unknown, output?: unknown): string {
   const args = (input ?? {}) as Record<string, unknown>;
   switch (name) {
     case "suche_stadt":
@@ -759,11 +759,14 @@ function toolLine(name: string, input: unknown): string {
     case "was_ist_da":
       return "Fragt, was in der Bildmitte steht";
     case "zeige": {
-      const n = Array.isArray(args.ziele) ? args.ziele.length : 1;
       if (args.aus_der_luft === false) {
         return "Geht hin";
       }
-      return n > 1 && args.alle !== false ? `Zeigt ${n} Orte` : "Fliegt hin";
+      // what it showed, once the browser has run it: the places together,
+      // or the first alone when they lie too far apart
+      const shown = (output as { gezeigt?: unknown } | undefined)?.gezeigt;
+      const n = Array.isArray(shown) ? shown.length : 1;
+      return n > 1 ? `Zeigt ${n} Orte` : "Fliegt hin";
     }
     case "setze_zeit":
       return `Stellt die Uhr auf ${argText(args.stunde)} Uhr`;
@@ -858,7 +861,7 @@ function ChatMessage({
                 }
               >
                 <TraceIcon>{toolIcon(c.name)}</TraceIcon>
-                <TraceTitle>{toolLine(c.name, c.input)}</TraceTitle>
+                <TraceTitle>{toolLine(c.name, c.input, c.output)}</TraceTitle>
               </TraceLine>
             ))}
           </Trace>

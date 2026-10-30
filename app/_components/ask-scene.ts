@@ -100,7 +100,9 @@ export function useAskScene(
           ? sunDirectionEnu(current(), h.latLng.lat, h.latLng.lng)
           : null;
         return {
-          aspect: window.innerWidth / Math.max(window.innerHeight, 1),
+          aspect: h
+            ? h.viewAspect()
+            : window.innerWidth / Math.max(window.innerHeight, 1),
           sun: sun && sun.up > 0 ? { east: sun.east, north: sun.north } : null,
           ...(h ? { sightHit: h.sightHit } : {}),
         };

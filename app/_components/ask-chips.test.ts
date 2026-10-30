@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { UIMessage } from "@tanstack/ai-react";
 import { ASK_LIMITS } from "@/lib/city/ask-city";
-import { answerChips, reachSteps } from "./ask-chips";
+import { answerChips, reachQuestion, reachSteps } from "./ask-chips";
 
 const call = (name: string, input: unknown) => ({
   type: "tool-call" as const,
@@ -34,7 +34,9 @@ const answer = [
     role: "assistant",
     parts: [
       { type: "text", content: "Die Kreuzkirche." },
-      call("vorschlaege", { fragen: ["Wer baute sie?", " ", 3] }),
+      call("vorschlaege", {
+        fragen: ["Wer baute sie?", " ", 3, "Wer baute sie?"],
+      }),
     ],
   },
 ] as unknown as UIMessage[];
@@ -46,13 +48,15 @@ test("an answer's chips come from its own tool calls, across its messages", () =
     "Frauenkirche",
   ]);
   expect(chips.places[0]).toMatchObject({ h: 90, r: 30 });
-  expect(chips.reach).toBe(300);
+  expect(chips.near).toEqual({ reach: 300, x: 1, y: 2 });
+  expect(reachQuestion(chips.near!, 150)).toContain("(x 1, y 2)");
   expect(chips.questions).toEqual(["Wer baute sie?"]);
   // a question has none
   expect(answerChips(answer, 0)).toEqual({
     places: [],
     questions: [],
-    reach: null,
+    onFoot: false,
+    near: null,
   });
 });
 

@@ -110,10 +110,6 @@ export function fakeAskAdapter(): AnyTextAdapter {
         ],
       };
     }
-    if (result === '{"ok":true}') {
-      // the follow-ups were taken in: the answer is complete
-      return { text: "" };
-    }
     const seen = /"name":"([^"]+)"/.exec(result)?.[1];
     return {
       text: `Testantwort: Hier ist es${seen && result.includes("gefunden") ? `, ${seen}` : ""} (Quelle: Wikidata).`,

@@ -18,8 +18,10 @@ export interface AnswerChips {
   questions: string[];
   /** the places the last `zeige` named, the most important first */
   places: AskPlace[];
-  /** the reach of the last neighbourhood asked (m), where one was */
-  reach: number | null;
+  /** that `zeige` stood on the street: so do the chips */
+  onFoot: boolean;
+  /** the last neighbourhood asked: its centre and reach (m) */
+  near: { reach: number; x: number; y: number } | null;
 }
 
 interface ToolCallPart {
@@ -68,20 +70,35 @@ export function answerChips(
   messages: readonly UIMessage[],
   end: number
 ): AnswerChips {
-  const out: AnswerChips = { questions: [], places: [], reach: null };
+  const out: AnswerChips = {
+    questions: [],
+    places: [],
+    onFoot: false,
+    near: null,
+  };
   for (const call of callsOf(messages, end)) {
     const input = (call.input ?? {}) as Record<string, unknown>;
     if (call.name === "zeige" && Array.isArray(input.ziele)) {
       out.places = input.ziele
         .map(placeOf)
         .filter((p): p is AskPlace => p !== null);
-    } else if (call.name === "in_der_naehe") {
+      out.onFoot = input.aus_der_luft === false;
+    } else if (
+      call.name === "in_der_naehe" &&
+      typeof input.x === "number" &&
+      typeof input.y === "number"
+    ) {
       const radius =
         typeof input.radius === "number" ? input.radius : NEAR_RADIUS;
-      out.reach = nearReach(radius).buildings;
+      out.near = {
+        reach: nearReach(radius).buildings,
+        x: Math.round(input.x),
+        y: Math.round(input.y),
+      };
     } else if (call.name === "vorschlaege" && Array.isArray(input.fragen)) {
       out.questions = input.fragen
         .filter((q): q is string => typeof q === "string" && q.trim() !== "")
+        .filter((q, i, all) => all.indexOf(q) === i)
         .slice(0, 3);
     }
   }
@@ -101,8 +118,96 @@ export function reachSteps(reach: number): {
   };
 }
 
+/** The question a reach chip asks: the same, round the same centre —
+ *  the camera has flown on since, so "here" would be elsewhere. */
+export function reachQuestion(
+  near: NonNullable<AnswerChips["near"]>,
+  reach: number
+): string {
+  return `Dasselbe noch einmal um denselben Punkt (x ${near.x}, y ${near.y}), im Umkreis von ${reach} m.`;
+}
+
 const CHIP =
   "rounded-full border px-2.5 py-0.5 text-left text-[11px] hover:bg-accent disabled:opacity-50";
+
+function PlaceRow({
+  busy,
+  chips,
+  scene,
+}: {
+  busy: boolean;
+  chips: AnswerChips;
+  scene: AskScene;
+}) {
+  const { places } = chips;
+  // on foot when the answer stood on the street; not while an answer's
+  // own glide may still be on its way
+  const air = !chips.onFoot;
+  return (
+    <fieldset aria-label="Orte" className="flex flex-wrap gap-1">
+      {places.map((p, i) => (
+        <button
+          className={`${CHIP} flex items-center gap-1`}
+          disabled={busy}
+          // reason: the places never reorder within an answer
+          key={`${i}:${p.name}`}
+          onClick={() => showPlaces(scene, { ziele: [p], aus_der_luft: air })}
+          title={`Zu ${p.name}`}
+          type="button"
+        >
+          <MapPinIcon aria-hidden className="size-3" />
+          {i + 1} {p.name}
+        </button>
+      ))}
+      {places.length > 1 && (
+        <button
+          className={CHIP}
+          disabled={busy}
+          onClick={() => showPlaces(scene, { ziele: places, alle: true })}
+          title="Alle Orte in einer Ansicht (zu weit verstreut: den ersten)"
+          type="button"
+        >
+          Alle zeigen
+        </button>
+      )}
+    </fieldset>
+  );
+}
+
+function ReachRow({
+  ask,
+  busy,
+  near,
+}: {
+  ask: (question: string) => void;
+  busy: boolean;
+  near: NonNullable<AnswerChips["near"]>;
+}) {
+  const steps = reachSteps(near.reach);
+  const step = (reach: number | null, label: string) =>
+    reach === null ? null : (
+      <button
+        className={CHIP}
+        disabled={busy}
+        onClick={() => ask(reachQuestion(near, reach))}
+        type="button"
+      >
+        {label} ({reach} m)
+      </button>
+    );
+  return (
+    <fieldset
+      aria-label="Umkreis"
+      className="flex flex-wrap items-center gap-1"
+    >
+      <span className="text-[11px] text-muted-foreground">
+        Umkreis {near.reach} m
+      </span>
+      {step(steps.narrower, "enger")}
+      {step(steps.wider, "weiter")}
+    </fieldset>
+  );
+}
 
 export function AnswerChipRows({
   ask,
@@ -111,83 +216,21 @@ export function AnswerChipRows({
   scene,
 }: {
   ask: (question: string) => void;
-  /** an answer is on its way: no new question */
+  /** an answer is on its way: no new question, no glide */
   busy: boolean;
   chips: AnswerChips;
   scene: AskScene;
 }) {
-  const { places, questions, reach } = chips;
-  const steps = reach === null ? null : reachSteps(reach);
-  if (places.length === 0 && questions.length === 0 && reach === null) {
+  const { near, places, questions } = chips;
+  if (places.length === 0 && questions.length === 0 && near === null) {
     return null;
   }
   return (
     <div className="flex flex-col gap-1.5 pt-1" data-testid="ask-chips">
       {places.length > 0 && (
-        <fieldset aria-label="Orte" className="flex flex-wrap gap-1">
-          {places.map((p, i) => (
-            <button
-              className={`${CHIP} flex items-center gap-1`}
-              // reason: the places never reorder within an answer
-              key={`${i}:${p.name}`}
-              onClick={() => showPlaces(scene, { ziele: [p] })}
-              title={`Zu ${p.name} fliegen`}
-              type="button"
-            >
-              <MapPinIcon aria-hidden className="size-3" />
-              {i + 1} {p.name}
-            </button>
-          ))}
-          {places.length > 1 && (
-            <button
-              className={CHIP}
-              onClick={() => showPlaces(scene, { ziele: places, alle: true })}
-              title="Alle Orte in einer Ansicht (zu weit verstreut: den ersten)"
-              type="button"
-            >
-              Alle zeigen
-            </button>
-          )}
-        </fieldset>
+        <PlaceRow busy={busy} chips={chips} scene={scene} />
       )}
-      {steps && reach !== null && (
-        <fieldset
-          aria-label="Umkreis"
-          className="flex flex-wrap items-center gap-1"
-        >
-          <span className="text-[11px] text-muted-foreground">
-            Umkreis {reach} m
-          </span>
-          {steps.narrower !== null && (
-            <button
-              className={CHIP}
-              disabled={busy}
-              onClick={() =>
-                ask(
-                  `Dasselbe noch einmal um denselben Punkt, im Umkreis von ${steps.narrower} m.`
-                )
-              }
-              type="button"
-            >
-              enger ({steps.narrower} m)
-            </button>
-          )}
-          {steps.wider !== null && (
-            <button
-              className={CHIP}
-              disabled={busy}
-              onClick={() =>
-                ask(
-                  `Dasselbe noch einmal um denselben Punkt, im Umkreis von ${steps.wider} m.`
-                )
-              }
-              type="button"
-            >
-              weiter ({steps.wider} m)
-            </button>
-          )}
-        </fieldset>
-      )}
+      {near && <ReachRow ask={ask} busy={busy} near={near} />}
       {questions.length > 0 && (
         <fieldset aria-label="Weiterfragen" className="flex flex-wrap gap-1">
           {questions.map((q) => (

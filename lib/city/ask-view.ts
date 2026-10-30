@@ -103,8 +103,13 @@ export interface Framed {
 
 /** How many headings are tried, evenly round the compass. */
 const HEADINGS = 12;
-/** Room around the places: the fitted distance times this. */
+/** Room around the places: the lens's half-width over theirs. */
 const MARGIN = 1.15;
+/** The nearest a place's point comes to the eye (m). */
+const NEAR_PLANE = 10;
+/** How many of the best headings have their sight lines drawn: each
+ *  costs a ray per place's top and middle, on the main thread. */
+const SIGHT_CANDIDATES = 4;
 /** The nearest an aerial eye comes (m): a fountain is not seen from 5 m. */
 const MIN_DISTANCE = 60;
 /** A place without a known height is framed as if it had this (m). */
@@ -130,7 +135,9 @@ interface Sample {
 }
 
 /** Each place's points the view must hold: foot and top, at its centre
- *  and round its footprint. Places without a ground take the others'. */
+ *  and round its footprint. Places without a ground take the others' —
+ *  a guess the frame survives, a sight line does not: theirs are not
+ *  drawn. */
 function samples(targets: readonly AskTarget[]): Sample[] {
   const known = targets.filter((t) => t.z !== undefined);
   const ground =
@@ -147,9 +154,10 @@ function samples(targets: readonly AskTarget[]): Sample[] {
       [0, r],
       [0, -r],
     ];
+    const sight = t.z !== undefined;
     return [
-      { i, sight: true, x: t.x, y: t.y, z: z + h },
-      { i, sight: true, x: t.x, y: t.y, z: z + h * 0.6 },
+      { i, sight, x: t.x, y: t.y, z: z + h },
+      { i, sight, x: t.x, y: t.y, z: z + h * 0.6 },
       ...ring.flatMap(([dx, dy]) => [
         { i, sight: false, x: t.x + dx, y: t.y + dy, z },
         { i, sight: false, x: t.x + dx, y: t.y + dy, z: z + h },
@@ -221,7 +229,8 @@ function candidate(
   aspect: number
 ): Candidate {
   const { f, r, u } = axes(heading, pitch);
-  const tanV = Math.tan((ASK_FOV / 2) * RAD);
+  // the lens narrowed by the margin: room round the places on every side
+  const tanV = Math.tan((ASK_FOV / 2) * RAD) / MARGIN;
   const tanH = tanV * Math.max(aspect, 0.2);
   let distance = 0;
   let across = 0;
@@ -231,14 +240,16 @@ function candidate(
     const x = dot(q, r);
     const y = dot(q, u);
     const z = dot(q, f);
+    // the point lies `distance + z` before the eye: it fits once that
+    // depth spans its offset across the lens
     distance = Math.max(
       distance,
-      z + Math.max(Math.abs(x) / tanH, Math.abs(y) / tanV)
+      Math.max(Math.abs(x) / tanH, Math.abs(y) / tanV, NEAR_PLANE) - z
     );
     across = Math.max(across, Math.abs(x));
     deep = Math.max(deep, Math.abs(z));
   }
-  distance = Math.max(distance * MARGIN, MIN_DISTANCE);
+  distance = Math.max(distance, MIN_DISTANCE);
   return {
     heading,
     distance,
@@ -260,6 +271,14 @@ function towards(
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy);
   return len < 1 ? null : [dx / len, dy / len];
+}
+
+/** How far two plan directions agree, 0 (opposed) to 1; ½ without one. */
+function agreement(
+  a: readonly [number, number] | number[],
+  b: readonly [number, number] | null
+): number {
+  return b ? (1 + a[0] * b[0] + a[1] * b[1]) / 2 : 0.5;
 }
 
 /** The share of the places' sight lines no other building cuts. */
@@ -315,25 +334,28 @@ export function frameTargets(
   const sun = context.sun
     ? towards({ x: 0, y: 0 }, { x: context.sun.east, y: context.sun.north })
     : null;
-  const scored = candidates.map((c) => {
-    // where the eye stands, seen from the aim
-    const back = towards(aim, c.eye) ?? [0, -1];
-    const score =
-      WEIGHTS.near * (nearest / c.distance) +
-      WEIGHTS.from *
-        (comeFrom
-          ? (1 + back[0] * comeFrom[0] + back[1] * comeFrom[1]) / 2
-          : 0.5) +
-      WEIGHTS.sun *
-        (sun ? (1 + back[0] * sun[0] + back[1] * sun[1]) / 2 : 0.5) +
-      WEIGHTS.beside * (targets.length > 1 ? c.beside : 0.5) +
-      WEIGHTS.seen *
-        (context.sightHit
-          ? seenShare(c, points, targets, context.sightHit)
-          : 1);
-    return { c, score };
-  });
-  const best = scored.reduce((a, b) => (b.score > a.score ? b : a)).c;
+  const scored = candidates
+    .map((c) => {
+      // where the eye stands, seen from the aim
+      const back = towards(aim, c.eye) ?? [0, -1];
+      const score =
+        WEIGHTS.near * (nearest / c.distance) +
+        WEIGHTS.from * agreement(back, comeFrom) +
+        WEIGHTS.sun * agreement(back, sun) +
+        WEIGHTS.beside * (targets.length > 1 ? c.beside : 0.5);
+      return { c, score };
+    })
+    .sort((a, b) => b.score - a.score);
+  // the sight lines weigh most and cost most: drawn for the best few
+  // headings only, which then compete on them
+  const sightHit = context.sightHit;
+  const finalists = scored.slice(0, sightHit ? SIGHT_CANDIDATES : 1);
+  if (sightHit) {
+    for (const s of finalists) {
+      s.score += WEIGHTS.seen * seenShare(s.c, points, targets, sightHit);
+    }
+  }
+  const best = finalists.reduce((a, b) => (b.score > a.score ? b : a)).c;
   const ground = Math.min(...points.map((p) => p.z));
   return {
     distance: Math.round(best.distance),

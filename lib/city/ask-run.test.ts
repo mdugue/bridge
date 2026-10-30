@@ -113,6 +113,31 @@ describe("runAsk", () => {
     expect(names).toEqual(["suche_stadt", "zeige"]);
   });
 
+  test("an answer ends at its follow-ups, without a turn to acknowledge them", async () => {
+    const adapter = fakeText();
+    adapter.setResponses([
+      {
+        text: "Die Frauenkirche.",
+        toolCalls: [
+          { name: "vorschlaege", input: { fragen: ["Wer baute sie?"] } },
+        ],
+      },
+      { text: "nie gefragt" },
+    ]);
+    const chunks = await collect(
+      runAsk({
+        adapter,
+        knowledge: knowledgeOf(INDEX, [TILE]),
+        messages: [{ role: "user", content: "Was ist das?" }],
+        site: SITE,
+        threadId: "t3",
+        today: new Date(2026, 9, 29),
+      })
+    );
+    expect(adapter.state.callCount).toBe(1);
+    expect(chunks.map((c) => c.type)).toContain("TOOL_CALL_RESULT");
+  });
+
   test("the fixed prompt and tools reach the model, whatever the request", async () => {
     const adapter = fakeText();
     adapter.setResponses([

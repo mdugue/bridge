@@ -82,9 +82,16 @@ const square: AskTarget[] = [
   { x: -250, y: -60, z: 108, h: 18, r: 12 },
 ];
 
+// a tower and two low halls on one side: no symmetry to hide an error
+const lopsided: AskTarget[] = [
+  { x: 0, y: 0, z: 100, h: 150, r: 10 },
+  { x: 0, y: 200, z: 100, h: 8, r: 40 },
+  { x: 120, y: -30, z: 100, h: 8, r: 40 },
+];
+
 test("from the air every place stands whole inside the lens", () => {
-  for (const aspect of [16 / 9, 0.46]) {
-    for (const targets of [[church], square]) {
+  for (const aspect of [16 / 9, 0.46, 1.5]) {
+    for (const targets of [[church], square, lopsided]) {
       const framed = frameTargets(targets, {
         aspect,
         from: { x: 0, y: -2000 },

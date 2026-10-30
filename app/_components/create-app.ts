@@ -606,6 +606,8 @@ export interface CityWalkHandle {
    * (lib/city/ask-view.ts). Only tiles with a BVH are asked.
    */
   sightHit: (eye: SitePoint, point: SitePoint) => SitePoint | null;
+  /** the walk/fly camera's width over its height (the canvas's shape) */
+  viewAspect: () => number;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState: () => CameraState;
   /**
@@ -3827,6 +3829,7 @@ async function bootApp(
         ? modelRig.centreOn(vantageTarget(view))
         : pose.flyToViewpoint(view),
     captureViewpoint: pose.captureViewpoint,
+    viewAspect: () => camera.aspect,
     sightHit: (eye, point) => {
       const a = epsgToWorld(eye.x, eye.y, offset);
       const b = epsgToWorld(point.x, point.y, offset);
