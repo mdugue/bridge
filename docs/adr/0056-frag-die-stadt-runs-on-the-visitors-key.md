@@ -82,7 +82,10 @@ to the view.
 - The privacy page names the chat: what is sent, to whom (the site's
   host, the chosen provider), and the storage key (ADR 0045).
 - `FRAG_SECRET` must be set on a deployment (Preview and Production), or
-  the chat answers that it is not set up;
+  the key check and the chat answer 501 that it is not set up (not 503,
+  which the chat client retries as an outage); every refusal logs its
+  status and a reason code (`[frag] 501 no-secret`), never the key or the
+  conversation;
   `FRAG_FAKE=1` swaps the model for a scripted one in local tests and
   must never be set on one.
 - Amends ADR 0001 (one stateless function), ADR 0042 (generated answers
