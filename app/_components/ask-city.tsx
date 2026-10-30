@@ -87,7 +87,9 @@ interface Props {
 export default function AskCity({ coarse, onClose, scene, site }: Props) {
   const [key, setKey] = useState<AskKey | null>(() => {
     const stored = readAskKey();
-    return stored && stored.expires > Date.now() ? stored : null;
+    // a key checked without a token (a server not yet set up, or a local
+    // one) is checked again rather than refused at the first question
+    return stored?.token && stored.expires > Date.now() ? stored : null;
   });
   return (
     <section
