@@ -27,11 +27,17 @@ import { siteKnowledge } from "./knowledge";
 
 export const maxDuration = 60;
 
-const refuse = (status: number, message: string) =>
-  Response.json(
-    { message },
+/**
+ * A refused request: its reason as a code in the log (never the key, the
+ * token or the conversation) and as words for the visitor.
+ */
+function refuse(status: number, code: string, message: string): Response {
+  console.warn(`[frag] ${status} ${code}`);
+  return Response.json(
+    { code, message },
     { status, headers: { "Cache-Control": "no-store" } }
   );
+}
 
 export async function POST(request: Request): Promise<Response> {
   const fake = process.env.FRAG_FAKE === "1";
@@ -40,19 +46,24 @@ export async function POST(request: Request): Promise<Response> {
   try {
     params = await chatParamsFromRequestBody(await request.json());
   } catch {
-    return refuse(400, "Die Anfrage ist unvollständig.");
+    return refuse(400, "bad-request", "Die Anfrage ist unvollständig.");
   }
   const props = parseAskProps(params.forwardedProps);
   if (typeof props === "string") {
-    return refuse(400, props);
+    return refuse(400, "bad-props", props);
   }
   if (!fake && !plausibleKey(key)) {
-    return refuse(401, "Ohne Schlüssel geht es nicht.");
+    return refuse(401, "no-key", "Ohne Schlüssel geht es nicht.");
   }
   const secret = process.env.FRAG_SECRET;
   // on the host the key check must hold: without its secret, no relay
   if (!(fake || secret) && process.env.VERCEL) {
-    return refuse(503, "Frag die Stadt ist hier nicht eingerichtet.");
+    // 501, not 503: the client retries a 503 as a passing outage
+    return refuse(
+      501,
+      "no-secret",
+      "Frag die Stadt ist auf diesem Server nicht eingerichtet."
+    );
   }
   if (
     !fake &&
@@ -65,19 +76,23 @@ export async function POST(request: Request): Promise<Response> {
       Date.now()
     ))
   ) {
-    return refuse(401, "Der Schlüssel muss neu geprüft werden.");
+    return refuse(401, "bad-token", "Der Schlüssel muss neu geprüft werden.");
   }
   const problem = conversationProblem(
     params.messages,
     lastQuestion(params.messages)
   );
   if (problem) {
-    return refuse(413, problem);
+    return refuse(413, "too-long", problem);
   }
   const site = siteById(props.site);
   const knowledge = site ? await siteKnowledge(site.id) : null;
   if (!(site && knowledge)) {
-    return refuse(404, "Für diese Stadt gibt es kein Stadtwissen.");
+    return refuse(
+      404,
+      "no-knowledge",
+      "Für diese Stadt gibt es kein Stadtwissen."
+    );
   }
   const abortController = new AbortController();
   request.signal.addEventListener("abort", () => abortController.abort());
