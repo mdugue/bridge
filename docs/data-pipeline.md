@@ -813,17 +813,31 @@ the bake modules that make it (`ground` for the shaped ground, one row per
 artifact kind). From those entries `scripts/bake-sources.ts` walks the
 relative and `@/` imports, so every module an entry imports, at any depth,
 is in the key — and only those (`scripts/cache-keys.ts` composes the key).
-The walk cannot see a call `prepare-data.ts` makes itself: a module it
-calls for an artifact must be one of that artifact's entries or reachable
-from one, or a change to it leaves the cached artifact stale.
-`scripts/bake-entries.test.ts` holds every module `prepare-data.ts`
-imports to half that rule: it is reached from some entry, or it is named
-there with the reason it needs no re-bake (the orchestration, what is
-published uncached every run). Whether it is reached from the entries of
-the artifact that needs it, the test cannot know. The hashed names, the
-manifest and the prune are `scripts/publisher.ts`. Every key also carries
-`prepare-data.ts` itself, the site's own config, `sites/providers.ts` and
-`patches/`, and — not the whole `bun.lock` — the
+`prepare-data.ts` itself is only the order of the steps and is in no key:
+each step's bakes live in a module of `scripts/prepare/` that is the first
+entry of its artifacts' rows (`side-files.ts`, `lines.ts`, `frame.ts`,
+`ground.ts`, `city.ts`, `terrain.ts`, `plate.ts`, `site-wide.ts`), so an
+edit there re-bakes that step's artifacts and nothing else, and an edit to
+the orchestration (a new artifact, a log line) re-bakes nothing. The walk
+stops at two kinds of module (`KEY_STOPS`): the plumbing
+(`prepare/context.ts`: the site, the mode, the log, the cache, the gzip
+level), which every key carries whole and whose imports reach every site's
+config; and the steps whose exports reach other bakes only as values the
+keys carry (`KEY_VALUES`: the frame's offset, the lines' beds and passages
+digested into the keys, the side files' published names in the `extras`),
+so the buildings' bake, which the frame reads, does not re-bake the
+grounds. A module a step calls for an artifact must be one of that
+artifact's entries or reachable from one, or a change to it leaves the
+cached artifact stale. `scripts/bake-entries.test.ts` holds
+`prepare-data.ts` to calling no cache itself, every step module it imports
+to being an entry, every other module it imports to being reached from
+some entry or named with the reason it needs no re-bake (what is published
+uncached every run), and the plumbing to importing nothing that bakes.
+Whether a module is reached from the entries of the artifact that needs
+it, the test cannot know. The hashed names, the manifest and the prune
+are `scripts/publisher.ts`. Every key also carries `prepare/context.ts`,
+the site's own config, `sites/providers.ts` and `patches/`, and — not the
+whole `bun.lock` — the
 lockfile's entries for the packages its modules import and everything those
 depend on (`lockedVersions`; the `@types/` packages left out: the glTF
 tools', three's, geotiff's, sharp's versions shape the output). Another
