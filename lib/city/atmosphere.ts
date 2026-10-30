@@ -27,18 +27,25 @@ interface Stop extends AtmospherePalette {
  * physical sky dome already reddens at low sun, so the whole frame tints with no
  * shader cost. Saturated stops sit close to their neighbours so the linear-RGB
  * interpolation doesn't wash them muddy.
+ *
+ * The day's sky fill, from the golden hour on, keeps only a hint of blue (two fifths of the sky's
+ * chroma, its lightness unchanged): a wall in the shade is lit by it alone,
+ * and a full sky blue cancelled a cream render or a sandstone to grey —
+ * a backlit skyline (the Altstadt from the Neustadt bank all morning) read
+ * as uncoloured. The shade stays cooler than the sunlit side.
  */
 const STOPS: Stop[] = [
   { alt: -18, fog: "#0a0e18", hemiSky: "#16203a", hemiGround: "#0b0d11" },
   { alt: -4, fog: "#2a3050", hemiSky: "#3a4a74", hemiGround: "#23242a" },
   { alt: -2, fog: "#4a4a78", hemiSky: "#586aa4", hemiGround: "#2c2d3b" }, // blue hour
   { alt: 1, fog: "#e2b489", hemiSky: "#8497bb", hemiGround: "#54493c" },
-  { alt: 6, fog: "#f0c79a", hemiSky: "#aab2cb", hemiGround: "#5f5238" }, // golden hour
-  { alt: 12, fog: "#dadfe7", hemiSky: "#b5cbdf", hemiGround: "#5a6350" },
-  { alt: 60, fog: "#dfe7ee", hemiSky: "#c8dbeb", hemiGround: "#616b55" },
+  { alt: 6, fog: "#f0c79a", hemiSky: "#b2b5bf", hemiGround: "#5f5238" }, // golden hour
+  { alt: 12, fog: "#dadfe7", hemiSky: "#c2cbd3", hemiGround: "#5a6350" },
+  { alt: 60, fog: "#dfe7ee", hemiSky: "#d3dae1", hemiGround: "#616b55" },
 ];
 
-function channel(hex: string, i: number): number {
+/** One channel (0 r, 1 g, 2 b) of a `#rrggbb` colour, 0–255. */
+export function channel(hex: string, i: number): number {
   return Number.parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
 }
 

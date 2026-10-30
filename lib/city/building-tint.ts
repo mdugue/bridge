@@ -13,9 +13,10 @@ import { clamp01 } from "./math";
  *     so semantics alone would leave almost everything identical; the hash gives
  *     each building a stable, well-spread place in its palette family instead.
  *  2. The ALKIS `function` code picks the palette *family* (warm render for
- *     housing, neutral greige for commerce, cool stone for civic/special), and
- *     `measuredHeight` nudges warm→cool with height (tall = stonier). Both are
- *     gentle: the families overlap so neighbours never clash.
+ *     housing, neutral greige for commerce, warm stone for civic, cool grey
+ *     for structures), and `measuredHeight` nudges with height: a low house
+ *     a touch warmer, a tall one a touch stonier — paler in chroma, never
+ *     bluer. Both are gentle: the families overlap so neighbours never clash.
  *
  * Every swatch is a muted, high-value earth tone (a variation *of* the clay), so
  * the result stays inside the watercolour art direction even at full strength —
@@ -36,7 +37,7 @@ export type TintRgb = [number, number, number];
  * without a mapped material of its own — a brick quarter's schools,
  * offices and warehouses are brick too (Hamburg's: the Kaispeicher, the
  * schools of the clinker quarters). Structures that are no building
- * (non-`31001`: tanks, canopies, towers) keep their cool stone.
+ * (non-`31001`: tanks, canopies, towers) keep their cool grey.
  */
 export type FacadeMaterial = "brick" | "render";
 
@@ -57,10 +58,20 @@ const FAMILIES = {
     [217, 213, 204],
     [210, 214, 196],
   ],
-  // Civic / special structures — cooler stone + pale slate.
+  // Civic buildings and mapped stone — the sandstone and limestone of
+  // churches, palaces, museums and town halls: pale, warm greige. Not
+  // slate: the skyline a city is seen by from afar is these buildings
+  // (and the tall ones), and a blue-grey palette left it uncoloured beside
+  // the warm houses, the more so in the shade's cool sky light.
+  stone: [
+    [224, 214, 194],
+    [215, 207, 190],
+    [208, 202, 189],
+  ],
+  // Structures that are no building, glass and metal — cool grey.
   cool: [
-    [217, 213, 204],
-    [207, 210, 206],
+    [212, 213, 213],
+    [205, 209, 210],
     [199, 205, 210],
   ],
   // Brick cities — the clinker of the Kontorhäuser and the Speicherstadt,
@@ -80,11 +91,21 @@ const FAMILIES = {
 
 type FamilyKey = keyof typeof FAMILIES;
 
-/** Height (m) at which the warm→cool shift starts and saturates. */
-const COOL_START_M = 6;
-const COOL_END_M = 30;
-/** Max channel push of the height-driven warm/cool shift (sRGB units). */
-const COOL_SHIFT = 0.05;
+/** Height (m) at which the height nudge starts and saturates. */
+const HEIGHT_NUDGE_FROM_M = 6;
+const HEIGHT_NUDGE_TO_M = 30;
+/** Max channel push of the height nudge's warm half (sRGB units): a low
+ *  house warmer by this. */
+const WARM_SHIFT = 0.05;
+/** The share of its chroma the tallest building gives up (its stony half):
+ *  paler, not bluer — a blue push turned a tall sandstone church slate. */
+const STONE_FADE = 0.3;
+/** The families the height nudge applies to. */
+const HEIGHT_NUDGED: ReadonlySet<FamilyKey> = new Set([
+  "warm",
+  "neutral",
+  "stone",
+]);
 /** Max per-building lightness jitter (sRGB units), from a decorrelated hash. */
 const LIGHT_JITTER = 0.03;
 
@@ -118,12 +139,13 @@ function familyOf(fn: string | undefined): FamilyKey {
     return "neutral";
   }
   if (minor.startsWith("3")) {
-    return "cool";
+    return "stone";
   }
   return "warm";
 }
 
-function srgbChannelToLinear(c: number): number {
+/** One sRGB channel (0–1) in linear light. */
+export function srgbChannelToLinear(c: number): number {
   return c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
@@ -141,7 +163,7 @@ export interface OsmLook {
  *  also set a flag the clay shows (a cool sheen, lib/city/city-mesh.ts). */
 const MATERIAL_FAMILY: Record<string, FamilyKey> = {
   brick: "brick",
-  stone: "cool",
+  stone: "stone",
   concrete: "neutral",
   glass: "cool",
   metal: "cool",
@@ -308,7 +330,8 @@ export function buildingTint(
       return own;
     }
   }
-  const family = FAMILIES[wallFamily(attrs, facades, look).family];
+  const familyKey = wallFamily(attrs, facades, look).family;
+  const family = FAMILIES[familyKey];
   const pick =
     family[
       Math.min(family.length - 1, Math.floor(hash01(objectId) * family.length))
@@ -318,14 +341,23 @@ export function buildingTint(
   let g = pick[1] / 255;
   let b = pick[2] / 255;
 
-  // Taller buildings drift cooler (less red, more blue) — a soft "stone vs.
-  // plaster" cue. Centred so mid-height blocks are untouched.
+  // A soft "stone vs. plaster" cue by height, centred so mid-height blocks
+  // are untouched: a low house a touch warmer, a tall one a touch paler in
+  // chroma around its own grey (never bluer). Render and stone only: brick
+  // keeps its clinker at any height, the cool grey stays cool.
   const height = readNumber(attrs.measuredHeight);
-  if (height !== undefined) {
-    const t = clamp01((height - COOL_START_M) / (COOL_END_M - COOL_START_M));
-    const shift = (t - 0.5) * 2 * COOL_SHIFT;
-    r = clamp01(r - shift);
-    b = clamp01(b + shift);
+  if (height !== undefined && HEIGHT_NUDGED.has(familyKey)) {
+    const t = clamp01(
+      (height - HEIGHT_NUDGE_FROM_M) / (HEIGHT_NUDGE_TO_M - HEIGHT_NUDGE_FROM_M)
+    );
+    const warm = Math.max(0, 1 - 2 * t) * WARM_SHIFT;
+    r = clamp01(r + warm);
+    b = clamp01(b - warm);
+    const keep = 1 - Math.max(0, 2 * t - 1) * STONE_FADE;
+    const grey = (r + g + b) / 3;
+    r = grey + (r - grey) * keep;
+    g = grey + (g - grey) * keep;
+    b = grey + (b - grey) * keep;
   }
 
   // Decorrelated lightness jitter so same-family neighbours still separate.
