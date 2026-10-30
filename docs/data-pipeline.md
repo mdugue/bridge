@@ -872,10 +872,11 @@ Vercel's Remote Cache, the artifacts API Turborepo uses, under a hash of
 the entry's name, its key, the runtime that baked it (Bun's version and
 the platform: a branch that bumps Bun bakes under addresses of its own)
 and its scope. A local miss is fetched from it before it is baked (a
-preview asks both scopes at once), and a baked entry is queued for upload
-after (four at a time behind the bake, one runs at about 1 MB/s; at most
-64 MB waiting; a run waits for the queue before it exits), so a key is
-baked once for all branches. Production trusts only itself: its builds
+preview asks both scopes at once), and a baked entry is uploaded at the
+run's end (read back from the local cache, four at a time, one at about
+1 MB/s; never beside the bake, whose peak leaves no memory for it and
+beside which Vercel's builds went silent in München), so a key is baked
+once for all branches. Production trusts only itself: its builds
 store under the production scope and read only that; a preview reads
 production's, then the previews' scope, and stores under the previews'.
 A key that misses an input thus never brings an unmerged branch's bytes

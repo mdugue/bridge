@@ -135,15 +135,13 @@ async function fromShared(
     : null;
 }
 
-/** A baked entry, written to the local cache and queued for the shared one
- *  (`settleShared` waits for the queue). */
-async function store(
-  name: string,
-  key: string,
-  bytes: Uint8Array
-): Promise<string> {
+/** A baked entry, written to the local cache and noted for the shared one
+ *  (`settleShared` uploads it, read back from the local cache). */
+function store(name: string, key: string, bytes: Uint8Array): string {
   const path = writeEntry(CACHE_DIR, name, key, bytes);
-  await SHARED.cache?.put(name, key, bytes);
+  SHARED.cache?.put(name, key, () =>
+    existsSync(path) ? readFileSync(path) : null
+  );
   return path;
 }
 
@@ -172,7 +170,7 @@ export async function cached(
   }
   mayBake(name);
   const bytes = await bake();
-  await store(name, key, bytes);
+  store(name, key, bytes);
   return bytes;
 }
 
@@ -202,8 +200,8 @@ export function gz(bytes: Uint8Array): Uint8Array {
   });
 }
 
-/** Waits for the shared cache's uploads, then logs what this run took from
- *  and gave to it: a run's last step before it exits. */
+/** Uploads what this run baked to the shared cache, then logs what the run
+ *  took from and gave to it: a run's last step before it exits. */
 export async function settleShared(): Promise<void> {
   await SHARED.cache?.flush();
   const stats = SHARED.cache?.stats();

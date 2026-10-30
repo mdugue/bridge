@@ -55,7 +55,7 @@ test("an entry stored by one branch is fetched by another", async () => {
   const api = fakeApi();
   const first = sharedCache(ENV, () => {}, RUNTIME, api.fetcher).cache;
   expect(await first?.get("city_a.glb.gz", "k1")).toBeNull();
-  await first?.put("city_a.glb.gz", "k1", bytes("baked"));
+  first?.put("city_a.glb.gz", "k1", () => bytes("baked"));
   await first?.flush();
   expect(first?.stats().stored).toBe(1);
 
@@ -72,7 +72,7 @@ test("an entry stored by one branch is fetched by another", async () => {
 test("another runtime bakes under addresses of its own", async () => {
   const api = fakeApi();
   const old = sharedCache(ENV, () => {}, RUNTIME, api.fetcher).cache;
-  await old?.put("a", "k", bytes("x"));
+  old?.put("a", "k", () => bytes("x"));
   await old?.flush();
   const bumped = sharedCache(
     ENV,
@@ -106,8 +106,8 @@ test("an entry refused for its size is skipped alone", async () => {
   let n = 0;
   const api = fakeApi({ putStatus: () => (n++ === 0 ? 413 : 202) });
   const cache = sharedCache(ENV, () => {}, RUNTIME, api.fetcher).cache;
-  await cache?.put("big", "k", bytes("x".repeat(100)));
-  await cache?.put("small", "k", bytes("y"));
+  cache?.put("big", "k", () => bytes("x".repeat(100)));
+  cache?.put("small", "k", () => bytes("y"));
   await cache?.flush();
   expect(cache?.stats().stored).toBe(1);
 });
@@ -124,7 +124,7 @@ test("failures in a row end the run's use of the cache, never throwing", async (
   for (const name of ["a", "b", "c", "d", "e"]) {
     expect(await cache?.get(name, "k")).toBeNull();
   }
-  await cache?.put("f", "k", bytes("x"));
+  cache?.put("f", "k", () => bytes("x"));
   await cache?.flush();
   // a preview asks both scopes: two requests, two more, then none
   expect(api.calls).toHaveLength(4);
@@ -144,7 +144,7 @@ test("uploads cut off end the uploads, not the fetches", async () => {
   const lines: string[] = [];
   const cache = sharedCache(ENV, (l) => lines.push(l), RUNTIME, fetcher).cache;
   for (const name of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
-    await cache?.put(name, "k", bytes(name));
+    cache?.put(name, "k", () => bytes(name));
   }
   await cache?.flush();
   // two cut off, at most the four lanes' first uploads in flight, then none
@@ -160,11 +160,11 @@ test("production reads only what production stored", async () => {
   const api = fakeApi();
   const PROD = { ...ENV, VERCEL_ENV: "production" };
   const preview = sharedCache(ENV, () => {}, RUNTIME, api.fetcher).cache;
-  await preview?.put("a", "k", bytes("preview"));
+  preview?.put("a", "k", () => bytes("preview"));
   await preview?.flush();
   const prod = sharedCache(PROD, () => {}, RUNTIME, api.fetcher).cache;
   expect(await prod?.get("a", "k")).toBeNull();
-  await prod?.put("b", "k", bytes("main"));
+  prod?.put("b", "k", () => bytes("main"));
   await prod?.flush();
   // a preview takes production's entries and its own
   const next = sharedCache(ENV, () => {}, RUNTIME, api.fetcher).cache;
@@ -184,4 +184,15 @@ test("the address is hex and differs by name, key, runtime and scope", () => {
   expect(artifactHash("a", "j", RUNTIME, "preview")).not.toBe(a);
   expect(artifactHash("a", "k", "bun 1.4.4 linux-x64", "preview")).not.toBe(a);
   expect(artifactHash("a", "k", RUNTIME, "production")).not.toBe(a);
+});
+
+test("uploads wait for the run's end and skip an entry gone by then", async () => {
+  const api = fakeApi();
+  const cache = sharedCache(ENV, () => {}, RUNTIME, api.fetcher).cache;
+  cache?.put("a", "k", () => bytes("a"));
+  cache?.put("gone", "k", () => null);
+  expect(api.calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+  await cache?.flush();
+  expect(api.calls.filter((c) => c.method === "PUT")).toHaveLength(1);
+  expect(cache?.stats().stored).toBe(1);
 });

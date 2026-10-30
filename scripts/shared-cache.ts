@@ -23,19 +23,23 @@
  * request is cut off `ANSWER_MS` plus its size at `MIN_RATE` after it
  * starts (`allowedMs`); `MAX_STALLS` uploads cut off end the run's uploads
  * (the fetches go on): a stalled upload stalls the ones behind it. An
- * entry the cache refuses for its size is skipped alone. Uploads run
- * `LANES` at a time behind the bake (`flush` waits for them), at most
- * `QUEUE_BYTES` waiting; a large one logs its size and time.
+ * entry the cache refuses for its size is skipped alone. Uploads wait
+ * for the run's end (`flush`), then run `LANES` at a time, each entry read
+ * back from the local cache as it goes; a large one logs its size and
+ * time. Not beside the bake: Vercel's builds went silent in München
+ * whenever uploads ran beside its bake (twice, at the same tile; the same
+ * bake alone, and locally with them beside it, ran through), and a queue
+ * of bytes beside a bake's peak is memory the build machine lacks.
  */
 import { createHash } from "node:crypto";
 
 export interface SharedCache {
   /** The entry's bytes, or null when the cache has none. */
   get: (name: string, key: string) => Promise<Uint8Array | null>;
-  /** Queues the entry's upload (best effort); waits only while the queue
-   *  is full. */
-  put: (name: string, key: string, bytes: Uint8Array) => Promise<void>;
-  /** Waits for every queued upload. */
+  /** Notes the entry for upload at the run's end; `read` gives its bytes
+   *  then, or null when they are gone. */
+  put: (name: string, key: string, read: () => Uint8Array | null) => void;
+  /** Uploads every noted entry (best effort). */
   flush: () => Promise<void>;
   /** What this run fetched and stored, for the closing log line. */
   stats: () => { hits: number; misses: number; stored: number; bytes: number };
@@ -57,12 +61,8 @@ const MAX_STALLS = 2;
  *  use of the cache: a revoked token or an outage fails every request. */
 const MAX_FAILURES = 3;
 /** Uploads that run side by side: one runs at about 1 MB/s from Vercel's
- *  build (an 11 MB glb took 11 s), slower than a site bakes. */
+ *  build (an 11 MB glb took 7–11 s). */
 const LANES = 4;
-/** The bytes that may wait for upload before a bake waits for the queue:
- *  a small share of the build machine's 8 GB, beside the bakes' own peaks
- *  (prepare-sites.ts admits bakes by those). */
-const QUEUE_BYTES = 64 * 1024 ** 2;
 /** An upload this large logs its size and time. */
 const LOG_BYTES = 8 * 1024 ** 2;
 /** The size of the digest stored before an entry's bytes. */
@@ -164,17 +164,17 @@ export function sharedCache(
   const scope = env.VERCEL_ENV === "production" ? "production" : "preview";
   const reads = scope === "production" ? [scope] : ["production", scope];
   const counts = { bytes: 0, hits: 0, misses: 0, stored: 0 };
+  // a stand-in API for a local trial of the cache (never set on Vercel)
+  const api = env.BAKE_SHARED_CACHE_API ?? API;
   const url = (name: string, key: string, from: string) =>
-    `${API}/${artifactHash(name, key, runtime, from)}${query}`;
+    `${api}/${artifactHash(name, key, runtime, from)}${query}`;
   let failures = 0;
   let stalls = 0;
-  // each lane uploads one entry at a time, the lanes side by side
-  const lanes = Array.from({ length: LANES }, () => Promise.resolve());
-  let next = 0;
-  let queued = 0;
-  const drained = async () => {
-    await Promise.all(lanes);
-  };
+  /** The entries this run baked, uploaded by `flush`. */
+  const noted = new Map<
+    string,
+    { key: string; name: string; read: () => Uint8Array | null }
+  >();
 
   const failed = (what: string, reason: string) => {
     failures += 1;
@@ -295,21 +295,23 @@ export function sharedCache(
       counts.misses += 1;
       return null;
     },
-    async put(name, key, bytes) {
-      if (!storing()) {
-        return;
-      }
-      if (queued + bytes.byteLength > QUEUE_BYTES) {
-        await drained();
-      }
-      queued += bytes.byteLength;
-      const lane = next++ % LANES;
-      lanes[lane] = lanes[lane].then(async () => {
-        await upload(name, key, bytes);
-        queued -= bytes.byteLength;
-      });
+    put(name, key, read) {
+      noted.set(`${name}\n${key}`, { key, name, read });
     },
-    flush: drained,
+    async flush() {
+      const entries = [...noted.values()];
+      noted.clear();
+      // each lane uploads one entry at a time, the lanes side by side
+      const lane = async () => {
+        for (let e = entries.shift(); e; e = entries.shift()) {
+          const bytes = storing() ? e.read() : null;
+          if (bytes) {
+            await upload(e.name, e.key, bytes);
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: LANES }, lane));
+    },
     stats: () => ({ ...counts }),
   };
   return {
