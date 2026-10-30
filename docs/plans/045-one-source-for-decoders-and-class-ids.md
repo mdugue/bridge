@@ -31,7 +31,7 @@
 - **Risk**: LOW (steps 1, 2, 4), MED (step 3 changes tag parsing)
 - **Depends on**: 037 (test commands); do **before** plan 017 phase 4 (OSM land cover renumbers/adds classes)
 - **Category**: tech-debt
-- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0035: `pipeline/bake/common.py` now also holds `label_line`/`smooth_labels`/`absorb_short`, moved out of `tram.py` — the shared-helper home this plan uses too)
+- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0030: `pipeline/bake/common.py` now also holds `label_line`/`smooth_labels`/`absorb_short`, moved out of `tram.py` — the shared-helper home this plan uses too)
 
 ## Why this matters
 

@@ -37,7 +37,7 @@ import { STORAGE_KEYS } from "./storage-keys";
  * inlines it), off for a visitor whose browser sends Global Privacy
  * Control, and off in a browser that said no on /datenschutz
  * (report-choice.ts — checked before every report, so it holds at once in
- * a tab already open; ADR 0045). Each report is a beacon to the site's own
+ * a tab already open; ADR 0043). Each report is a beacon to the site's own
  * origin (`TUNNEL_PATH`, forwarded to the tracker by next.config.ts): no
  * SDK, nothing loaded from the tracker, and a beacon outlives the page
  * that sends it.

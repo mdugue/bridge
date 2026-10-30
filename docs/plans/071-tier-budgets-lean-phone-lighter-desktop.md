@@ -140,7 +140,7 @@ each is a construction-time choice per tier.
   blur: `city-walk.tsx:1241` passes `lensBlur={postProfileFor(budget.tier).dof}`;
   `scene-sidebar.tsx:985, 1100` read it.
 
-Context to keep: phones' crashes are GPU memory (ADR 0046/0047); the
+Context to keep: phones' crashes are GPU memory (ADR 0047); the
 memory governor and safety ladder stay as they are — this plan lowers what
 level 0 asks for.
 

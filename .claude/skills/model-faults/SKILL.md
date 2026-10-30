@@ -51,7 +51,7 @@ For each building both show, note what differs, by category:
 - **Höhe / Geschosse** (count the storeys in the photo);
 - **Fassade**: colour (plaster vs brick, ADR: OSM `building:colour`,
   the neighbourhood's `context`), material, the window rhythm (the
-  windows' columns — only from photos, ADR 0049);
+  windows' columns — only from photos, ADR 0010);
 - **Fehlt / zu viel**: a building, a tree, a wall, a kiosk the twin lacks
   or invents; **Lage** (an object metres off).
 

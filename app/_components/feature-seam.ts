@@ -12,7 +12,7 @@ import type { LookState } from "@/lib/city/look-state";
  * A feature's code still ships with the scene: as a chunk of its own
  * (`import()`), the data layers made the viewer's first-load JS 22.7 KB
  * gz larger while moving 10.1 KB out — three.js, imported by both chunks,
- * lost its scope hoisting with the scene's code (ADR 0051). The importer
+ * lost its scope hoisting with the scene's code (ADR 0040). The importer
  * create-app.ts hands `lazyFeature` is where an `import()` would go.
  */
 

@@ -35,7 +35,7 @@ import {
   mesh3,
   type Pt,
   quad,
-} from "./rail-layer";
+} from "./mesh-kit";
 import { type Ring2, ringToWorld } from "@/lib/city/decks";
 import type { F } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";

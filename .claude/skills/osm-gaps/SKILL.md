@@ -8,7 +8,7 @@ description: "OSM-Lücken als Aufgaben, run monthly by a scheduled task (or by h
 The viewer reads names, addresses, storeys and listing from OSM and
 heights and footprints from the official LoD2. Where the two disagree or
 OSM is silent, the viewer guesses (storeys and windows from the height,
-ADR 0049) or shows a nameless building. Those gaps are tasks for mappers
+ADR 0010) or shows a nameless building. Those gaps are tasks for mappers
 — people who look on site or on sources OSM may use. **This skill finds
 and lists them; it never edits OSM**, not even an obvious one: OSM's
 import and automated-edits rules forbid it, and a hint is not a survey.

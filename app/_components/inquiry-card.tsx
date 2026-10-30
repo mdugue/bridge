@@ -35,7 +35,7 @@ type DrawerSnapPoint = DrawerPrimitive.Root.SnapPoint;
 
 /**
  * One fetch per URL for the page's life (the files are content-hashed and
- * immutable, ADR 0007); a failed one is not kept, so the next card tries
+ * immutable, ADR 0024); a failed one is not kept, so the next card tries
  * again.
  */
 function cachedFetch<T>(

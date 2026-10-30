@@ -438,11 +438,11 @@ zuletzt gewählten Stil für den nächsten Besuch:
 | Bildstil | So sieht er aus |
 |---|---|
 | *Pastell* | der Grundstil: Tonmodell auf Papier, weiches Licht, keine Umrisse |
-| *Comic* | Pop-Art wie aus dem Druck: wenige knallige Farben (Papierweiß, Rot, Gelb, Blau, Grün, Schwarz) ohne Verläufe, kräftige gleichmäßige schwarze Konturen; was im Schatten liegt, bekommt Rasterpunkte, die fest auf den Flächen sitzen und beim Fliegen nicht wandern; rote Dächer rot, andere schieferblau, die Elbe blau, Wiesen und Bäume grün; die Bäume werden runde Comic-Wolken aus drei Kugeln; nachts eine nachtblaue Stadt mit gelben Lichtkegeln und Fenstern |
+| *Comic* | Pop-Art wie aus dem Druck: wenige knallige Farben (Papierweiß, Rot, Gelb, Blau, Grün, Schwarz) ohne Verläufe, kräftige gleichmäßige schwarze Konturen; was im Schatten liegt, bekommt Rasterpunkte, die fest auf den Flächen sitzen und beim Fliegen nicht wandern; rote Dächer rot, andere schieferblau, die Elbe blau, Wiesen und Bäume grün (ein Herbstbaum gelb, ein kahler oder blühender weiß); die Bäume werden runde Comic-Wolken aus drei Kugeln, flach gedruckt; der Himmel ein Blau, zum Horizont hin heller gepunktet; nachts eine nachtblaue Stadt mit gelben Lichtkegeln und Fenstern |
 | *Film noir* | Schwarzweiß mit harter Gradation, rauchige Ferne, ein Himmel, der nach oben dunkel wird, laufendes Filmkorn und ein dunkler Bildrand; unter jeder Straßenlaterne ein weicher Lichtkegel — am Tag nur angedeutet, in der Dämmerung voll; wenn es dunkel wird, blendet die Kamera auf, statt alles schwarz werden zu lassen |
 | *Sin City* | harte Schwarzweiß-Flächen: weiß, was die Sonne trifft, schwarz der Schatten, so fallen die Schlagschatten als scharfe schwarze Formen; Baumkronen und die Elbe tiefschwarz, die Ferne verschwindet in weißem Dunst; Regen fällt vor der Szene; nur die roten Ziegeldächer behalten Farbe |
 | *Papier* | die Stadt als weißes Papiermodell: jede Fläche aus leicht gebrochenem Weiß, echtes Sonnenlicht und echte Schatten (bläulich-grau), feine gezeichnete Graphitkonturen; die Bäume werden gefaltete Karton-Polyeder; Fahrbahnmarkierungen und Sportplatzlinien bleiben als zartes Grau, Wasser als etwas kühleres, tieferes Papier; Lichter und Nebelschleier fallen weg |
-| *Strich* | Strichzeichnung wie im Plan: das weiße Modell mit jeder Kante in einer gleich starken Linie, auch in der Ferne; der Schatten schraffiert wie mit dem Tuschestift, das Gelände in Planfarben (zartes Grün, hellblaues Wasser, fast weiße Straßen), die Bäume aus gefaltetem Karton |
+| *Strich* | Strichzeichnung wie im Plan: das weiße Modell mit jeder Kante in einer gleich starken Linie, auch in der Ferne; der Schatten schraffiert wie mit dem Tuschestift, das Gelände in Planfarben (zartes Grün, hellblaues Wasser, fast weiße Straßen), die Bäume aus gefaltetem Karton, der im Wind stillhält, damit die Schraffur darauf nicht wandert |
 | *Schwarzplan* | die Gebäude schwarz, alles andere weiß, die Bäume des Baumkatasters als Kronenkreise mit Stammpunkt (gemessen, darum nur sie) — keine Schatten, nur eine feine weiße Linie, wo ein Gebäude vor einem anderen steht; gemacht für den *Lageplan*, überall wählbar |
 
 In den grafischen Stilen *Comic*, *Sin City*, *Strich* und *Schwarzplan*
@@ -483,7 +483,7 @@ Code und Wissensbasis für sie verwenden:
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
 
-Zwei weitere Effekte gehören zum festen Look. Der Nebel über dem Fluss
+Drei weitere Effekte gehören zum festen Look. Der Nebel über dem Fluss
 treibt erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der
 Ferne.
 Die fotografische Tiefenschärfe macht nur unscharf, was hinter dem Fokus
@@ -492,7 +492,11 @@ Bildmitte liegt. Solange sich die Kamera bewegt, ist die Unschärfe
 abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
 zurück, sobald du stehst. Telefone zeichnen ohne sie: Die Unschärfe
 braucht mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen
-kann, den ein kleiner Bildschirm kaum zeigt.
+kann, den ein kleiner Bildschirm kaum zeigt. Und solange du im
+Pastell-Look gehst, dich drehst oder fliegst, verwischt das Bild leicht
+entlang der Kamerabewegung, wie bei einer Kamera mit kurzer Belichtung;
+auch auf Telefonen, ohne zusätzlichen Speicher. Die anderen Bildstile
+und das Modell behalten ihre scharfen Linien.
 
 ### Erweitert
 

@@ -26,7 +26,7 @@ import {
   vec4,
   viewportSize,
 } from "three/tsl";
-import type { Pt } from "./rail-layer";
+import type { Pt } from "./mesh-kit";
 import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 

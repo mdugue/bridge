@@ -49,7 +49,7 @@ provider (`data/_raw/<provider>/`), provenance per site
 open as Shape (phase C); `bun run site <site>` (phase D's `site:check`);
 tests over every site; one deployment with a route per site.
 [Plan 051](./051-stand-ins-and-derived-looks.md) and
-[ADR 0039](../adr/0039-stand-ins-marked-per-city.md) added phase C.2: OSM
+[ADR 0012](../adr/0012-openstreetmap-for-what-official-data-lacks.md) added phase C.2: OSM
 rails and bridge decks (`rail_osm.py`) for providers without a DLM. Still
 open: NAS input (phase B) and row-only trees without DOM1 (phase D.1).
 
@@ -60,11 +60,11 @@ open: NAS input (phase B) and row-only trees without DOM1 (phase D.1).
   tiles as `{e, n}` km cells, fallback lat/lng, attribution, viewpoints,
   the ingest adapter) plus `tileIdOf` / `tileExtentOf` / `utmZoneOf`;
   `sites/dresden.ts` is the one site and `SITE` picks it at build time
-  ([ADR 0026](../adr/0026-one-site-config-per-build.md)). There is no tile
+  ([ADR 0037](../adr/0037-sites-providers-and-per-site-data.md)). There is no tile
   block any more: the site streams as a 3D Tiles tileset
   ([ADR 0024](../adr/0024-site-streams-as-3d-tiles.md)).
 - **One Python bake package** (`pipeline/bake/`, uv;
-  [ADR 0025](../adr/0025-bakes-are-one-python-package.md)), run by
+  [ADR 0037](../adr/0037-sites-providers-and-per-site-data.md)), run by
   `bun run bake [tile] [--ingest] [--step X]` with the site's extent and
   CRS. Canonical raw layout: `data/_raw/<site>/{dom1,dop,dlm,osm,lsc,downloads}`;
   the DGM1 and the CityJSON stay committed under `data/`.
@@ -74,7 +74,7 @@ open: NAS input (phase B) and row-only trees without DOM1 (phase D.1).
   fifteen tiles from a local Geofabrik extract.
 - **The class table is data** at the top of `pipeline/bake/landcover.py`
   (`CLASSES`, the burn order, `ROAD_HALF_WIDTH`); the colours are the
-  client's alone ([ADR 0023](../adr/0023-land-cover-colours-painted-at-runtime.md)).
+  client's alone ([ADR 0010](../adr/0010-opaque-clay-buildings-only.md)).
 - **Optional inputs, partly:** without DOM1 or DOP the canopy, NDVI and
   roof-colour steps skip with a note; rail decks fall back to the DGM ramp.
   `docs/portability.md` separates what is built from what is planned.

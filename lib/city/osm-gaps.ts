@@ -9,7 +9,7 @@
  *   is no building outline: left out).
  * - **Geschosse fehlen** — a named or addressed building at least
  *   MIN_LEVELS_HEIGHT_M tall whose outline has no `building:levels` (the
- *   viewer's storeys and windows then guess, ADR 0049); not a landmark's
+ *   viewer's storeys and windows then guess, ADR 0010); not a landmark's
  *   part, a church, a hall or a tower, whose storeys mean little.
  * - **Denkmal ohne Namen und Adresse** — a listed building (`heritage`)
  *   OSM neither names nor addresses.

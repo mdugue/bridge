@@ -448,7 +448,7 @@ node — never a branch in a scene material:
 `mode` stays `walk | fly` and `pos`/`headingDeg`/`pitchDeg`/`fov` hold the
 perspective pose Modell would leave to. A v1 reader without `model`
 therefore shows the nearest perspective view — no version bump
-(ADR 0017's contract: add, never change a meaning).
+(ADR 0018's contract: add, never change a meaning).
 
 ### Sections and elevations (phase 3)
 
