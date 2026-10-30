@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   type CSSProperties,
+  type ReactNode,
   type RefObject,
   useCallback,
   useEffect,
@@ -90,6 +91,7 @@ import {
 import { SceneSidebar } from "./scene-sidebar";
 import { WalkCard } from "./walk-player";
 import { useAskScene } from "./ask-scene";
+import { frameTargets } from "@/lib/city/ask-view";
 
 /**
  * *Frag die Stadt* (ADR 0056): the chat client, its tool schemas and the
@@ -737,6 +739,17 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   // one ends the other.
   const [asking, setAsking] = useState(false);
   const askScene = useAskScene(handleRef, look, time, site, pace);
+  // the selection's *Alle zeigen*: one view from the air that holds every
+  // pick, framed as an answer's places are (lib/city/ask-view.ts)
+  const showAllPicks = useCallback(() => {
+    const targets = handleRef.current?.pickTargets() ?? [];
+    if (targets.length > 0) {
+      askScene.show(
+        frameTargets(targets, { ...askScene.frame(), from: askScene.from() })
+          .view
+      );
+    }
+  }, [askScene]);
   const toggleAsk = () => {
     if (!asking && walking) {
       endWalk();
@@ -1193,6 +1206,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
                 onRemove={(i) => handleRef.current?.removePick(i)}
                 onSelect={(i) => handleRef.current?.selectCandidate(i)}
+                onShowAll={showAllPicks}
               />
               <SceneOverlays
                 asking={asking}
@@ -1330,6 +1344,7 @@ function InquiryPanel({
   onPreview,
   onRemove,
   onSelect,
+  onShowAll,
 }: {
   coarse: boolean;
   onActivate: (index: number) => void;
@@ -1338,6 +1353,7 @@ function InquiryPanel({
   onPreview: (index: number | null) => void;
   onRemove: (index: number) => void;
   onSelect: (index: number) => void;
+  onShowAll: () => void;
 }) {
   const asked = useSceneStatus("inquiry");
   const provenanceUrl = useSceneStatus("site")?.provenanceUrl ?? null;
@@ -1345,17 +1361,20 @@ function InquiryPanel({
     return null;
   }
   const { along, inquiry, picked } = asked;
-  const stack = (
+  const stack = (card?: ReactNode) => (
     <PickStack
       active={picked.active}
       adding={picked.adding}
       onActivate={onActivate}
       onAdding={onAdding}
       onRemove={onRemove}
+      onShowAll={onShowAll}
       overStrip={along !== null}
       picks={picked.picks}
       sheet={coarse}
-    />
+    >
+      {card}
+    </PickStack>
   );
   const strip = along && (
     <InquiryStrip
@@ -1378,14 +1397,13 @@ function InquiryPanel({
       {along && <InquiryTapRing along={along} />}
       {coarse ? (
         <>
-          {stack}
+          {stack()}
           {strip}
           {card}
         </>
       ) : (
         <div className="pointer-events-none absolute inset-y-4 left-4 z-20 flex w-[min(22rem,calc(100%-2rem))] lg:w-[min(28rem,calc(100%-2rem))] 2xl:w-[32rem] flex-col items-stretch gap-2">
-          {stack}
-          {card}
+          {stack(card)}
           {strip}
         </div>
       )}

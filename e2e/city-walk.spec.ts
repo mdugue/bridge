@@ -1115,17 +1115,16 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
         (box?.y ?? 0) + (box?.height ?? 0) / 2
       );
       await page.keyboard.up("Shift");
-      await expect(
-        stack.getByRole("button", { name: /abwählen$/ })
-      ).toHaveCount(2);
+      // the first pick waits behind the open card, a little turned
+      await expect(stack.getByTestId("pick-card")).toHaveCount(1);
+      await expect(stack).toContainText("2 ausgewählt");
       await expect(card).toContainText(centreId);
-      await stack
-        .getByRole("button", { name: /abwählen$/ })
-        .last()
-        .click();
-      await expect(
-        stack.getByRole("button", { name: /abwählen$/ })
-      ).toHaveCount(0);
+      // a click brings it to the front, the centre's building behind
+      await stack.getByTestId("pick-card").getByRole("button").first().click();
+      await expect(card).not.toContainText(centreId);
+      // × takes the centre's building out: one pick, no stack
+      await stack.getByRole("button", { name: /abwählen$/ }).click();
+      await expect(stack.getByTestId("pick-card")).toHaveCount(0);
       await expect(card).not.toContainText(centreId);
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();

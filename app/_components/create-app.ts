@@ -96,7 +96,11 @@ import {
   spawnViewpoint,
   type ViewpointGeometry,
 } from "@/lib/city/site";
-import type { SitePoint } from "@/lib/city/ask-view";
+import {
+  type AskTarget,
+  boundsTarget,
+  type SitePoint,
+} from "@/lib/city/ask-view";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   parseTilesetExtras,
@@ -572,6 +576,9 @@ export interface CityWalkHandle {
   selectPick: (index: number) => void;
   /** takes a pick out of the selection */
   removePick: (index: number) => void;
+  /** every pick as a place to frame (site CRS; its foot, height and
+   *  footprint radius), in the selection's order */
+  pickTargets: () => AskTarget[];
   /** the card's *Mehrere*: every question adds to the selection, as a
    *  Shift+click does (a touch screen has no Shift) */
   setAddingPicks: (on: boolean) => void;
@@ -2314,8 +2321,20 @@ async function bootApp(
         return asked;
     }
   };
-  // the last question's candidates, with what the card needs of each
-  let along: InquiryAlong | null = null;
+  /** The active pick's candidates (the strip), as the card reads each. */
+  const alongNow = (): InquiryAlong | null => {
+    const asked = probe.candidates();
+    return asked.candidates.length > 0
+      ? {
+          at: asked.at,
+          candidates: asked.candidates.map((c) => ({
+            ...c,
+            inquiry: answered(c.inquiry) ?? c.inquiry,
+          })),
+          selected: asked.selected,
+        }
+      : null;
+  };
   /** What the HUD shows of the selection: every pick as its card reads. */
   // the card's *Mehrere*: every question adds, as Shift does
   let addingPicks = false;
@@ -2332,7 +2351,7 @@ async function bootApp(
       // nothing picked: the next question starts a selection again
       addingPicks = false;
     }
-    opts.onInquiry?.(now.picks[now.active] ?? null, along, {
+    opts.onInquiry?.(now.picks[now.active] ?? null, alongNow(), {
       ...now,
       adding: addingPicks,
     });
@@ -2342,48 +2361,45 @@ async function bootApp(
     add = false
   ): Inquiry | null => {
     pendingPlaces = null;
-    const asked = probe.ask(ndc, add);
+    probe.ask(ndc, add);
     // its rays built the BVHs of what they reached, its outline a mesh
     sceneCounted();
-    along =
-      asked && asked.candidates.length > 0
-        ? {
-            at: ndc ?? null,
-            candidates: asked.candidates.map((c) => ({
-              ...c,
-              inquiry: answered(c.inquiry) ?? c.inquiry,
-            })),
-            selected: asked.selected,
-          }
-        : null;
     report();
     const now = selection();
     return now.picks[now.active] ?? null;
   };
   const selectCandidate = (index: number): Inquiry | null => {
-    const chosen = along?.candidates[index];
-    if (!(along && chosen && probe.select(index))) {
+    const chosen = probe.select(index);
+    if (!chosen) {
       return null;
     }
     sceneCounted();
-    along = { ...along, selected: index };
     report();
-    return chosen.inquiry;
+    return answered(chosen) ?? chosen;
   };
   const selectPick = (index: number) => {
     probe.activate(index);
-    along = null;
     report();
   };
+  const pickTargets = (): AskTarget[] =>
+    probe.subjects().flatMap((subject) => {
+      const shape = outlineShape(subject);
+      const b =
+        shape && "positions" in shape ? boundsTarget(shape.positions) : null;
+      if (!b) {
+        return [];
+      }
+      const e = worldToEpsg(b.x, b.z, offset);
+      return [{ x: e.x, y: e.y, z: b.foot, h: b.h, r: b.r }];
+    });
   const removePick = (index: number) => {
     probe.remove(index);
-    along = null;
     report();
   };
   // Places *Frag die Stadt* named (site CRS): picked where their tiles are
   // loaded, the rest again as the stream brings tiles — for a while.
   let pendingPlaces: {
-    points: { x: number; z: number }[];
+    points: { r?: number; x: number; z: number }[];
     until: number;
   } | null = null;
   const pickPending = (replace: boolean) => {
@@ -2398,7 +2414,6 @@ async function bootApp(
       left.length > 0 && performance.now() < pending.until
         ? { ...pending, points: left }
         : null;
-    along = null;
     report();
   };
   const pickPlaces = (
@@ -3918,7 +3933,6 @@ async function bootApp(
   return {
     setSun,
     clearInquiry: () => {
-      along = null;
       pendingPlaces = null;
       addingPicks = false;
       probe.clear();
@@ -3926,6 +3940,7 @@ async function bootApp(
     selectCandidate,
     selectPick,
     removePick,
+    pickTargets,
     pickPlaces,
     setAddingPicks: (on) => {
       addingPicks = on;

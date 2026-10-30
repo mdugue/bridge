@@ -57,6 +57,11 @@ export interface InquiryProbe {
   refresh: (redraw?: CityLayer) => void;
   /** what is picked, in order, and which of them is the active one */
   picks: () => Picked;
+  /** the active pick's candidates (what else its click met; none for a
+   *  pick an answer made), and where it was clicked */
+  candidates: () => Asked & { at: { x: number; y: number } | null };
+  /** each pick's subject as outlined, in the selection's order */
+  subjects: () => readonly OutlineSubject[];
   /** makes a pick the active one */
   activate: (index: number) => void;
   /** takes a pick out of the selection */
@@ -103,6 +108,15 @@ export function nextPicks<T extends { key: string }>(
   }
   const next = [...picks, pick].slice(-max);
   return { active: next.length - 1, picks: next };
+}
+
+/** A pick's question: what its ray met, nearest first, the chosen one. */
+interface PickAsk {
+  at: { x: number; y: number } | null;
+  distances: number[];
+  hits: ProbeHit[];
+  keys: string[];
+  selected: number;
 }
 
 /** What a question met: its candidates, nearest first, and the chosen. */
@@ -317,12 +331,23 @@ export function createInquiryProbe(deps: {
   let marked: CityLayer[] = [];
   // each pick's subject as last outlined (a building's parts per tile)
   let outlined: OutlineSubject[] = [];
-  // what is picked, in order; the active one's candidates are `last`'s
+  // what is picked, in order
   let picks: PickSample<ProbeHit>[] = [];
   let active = 0;
-  // the last question's candidates, as the scene knows them
-  let last: { hits: ProbeHit[]; keys: string[]; selected: number } | null =
-    null;
+  // each pick's question: what else its ray met, by the pick's key — so
+  // "Hier auch" follows whichever pick's card is open
+  const asks = new Map<string, PickAsk>();
+  /** The active pick's question, if it was asked by a click. */
+  const lastAsk = (): PickAsk | undefined => asks.get(picks[active]?.key ?? "");
+  /** Forgets the questions of what is no longer picked. */
+  const prune = () => {
+    const live = new Set(picks.map((p) => p.key));
+    for (const key of asks.keys()) {
+      if (!live.has(key)) {
+        asks.delete(key);
+      }
+    }
+  };
   const ray = new Raycaster();
 
   const unmark = () => {
@@ -340,7 +365,7 @@ export function createInquiryProbe(deps: {
     unmark();
     picks = [];
     active = 0;
-    last = null;
+    asks.clear();
     deps.outline(null);
   };
 
@@ -569,40 +594,54 @@ export function createInquiryProbe(deps: {
     const selected = kept.indexOf(chosen);
     ({ picks, active } = nextPicks(picks, chosen, add));
     const taken = !picks.includes(chosen);
-    last = taken
-      ? null
-      : {
-          hits: kept.map((k) => k.hit),
-          keys: kept.map((k) => k.key),
-          selected,
-        };
+    prune();
+    if (!taken) {
+      asks.set(chosen.key, {
+        at: ndc ?? null,
+        distances: kept.map((k) => k.distance),
+        hits: kept.map((k) => k.hit),
+        keys: kept.map((k) => k.key),
+        selected,
+      });
+    }
     mark();
-    return taken
-      ? { candidates: [], selected: -1 }
-      : {
-          candidates: kept.map((k) => ({
-            distance: k.distance,
-            inquiry: describe(k.hit),
-            key: k.key,
+    return taken ? { candidates: [], selected: -1 } : candidates();
+  };
+
+  /** The active pick's candidates, as the strip lists them. */
+  const candidates = (): Asked & { at: { x: number; y: number } | null } => {
+    const q = lastAsk();
+    return q
+      ? {
+          at: q.at,
+          candidates: q.hits.map((hit, i) => ({
+            distance: q.distances[i],
+            inquiry: describe(hit),
+            key: q.keys[i],
           })),
-          selected,
-        };
+          selected: q.selected,
+        }
+      : { at: null, candidates: [], selected: -1 };
   };
 
   const select = (index: number): Inquiry | null => {
-    const hit = last?.hits[index];
+    const q = lastAsk();
+    const hit = q?.hits[index];
     const pick = picks[active];
-    if (!(last && hit && pick)) {
+    if (!(q && hit && pick)) {
       return null;
     }
-    last.selected = index;
-    picks[active] = { ...pick, hit, key: last.keys[index] };
+    // the pick is now that candidate: its question goes with it
+    const key = q.keys[index];
+    asks.delete(pick.key);
+    picks[active] = { ...pick, hit, key };
+    asks.set(key, { ...q, selected: index });
     mark();
     return describe(hit);
   };
 
   const preview = (index: number | null) => {
-    const hit = index === null ? null : last?.hits[index];
+    const hit = index === null ? null : lastAsk()?.hits[index];
     // a hover only points: no flash (selection-outline.ts)
     if (hit) {
       deps.outline(
@@ -615,10 +654,8 @@ export function createInquiryProbe(deps: {
   };
 
   const activate = (index: number) => {
-    if (index >= 0 && index < picks.length && index !== active) {
+    if (index >= 0 && index < picks.length) {
       active = index;
-      // the strip's candidates were the last question's, of another pick
-      last = null;
     }
   };
 
@@ -632,7 +669,7 @@ export function createInquiryProbe(deps: {
       return;
     }
     active = Math.min(active > index ? active - 1 : active, picks.length - 1);
-    last = null;
+    prune();
     mark(false);
   };
 
@@ -682,7 +719,7 @@ export function createInquiryProbe(deps: {
         }
       }
       active = Math.max(0, Math.min(active, picks.length - 1));
-      last = null;
+      prune();
       mark();
     }
     return { missed };
@@ -691,6 +728,8 @@ export function createInquiryProbe(deps: {
   return {
     ask,
     activate,
+    candidates,
+    subjects: () => outlined,
     clear,
     pickAt,
     picks: current,

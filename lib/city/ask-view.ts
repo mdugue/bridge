@@ -373,3 +373,37 @@ export function frameTargets(
 function round1(v: number): number {
   return Math.round(v * 10) / 10;
 }
+
+/**
+ * A place to frame from its triangles in the scene's Y-up world (x, y up,
+ * z): the centre of its footprint, its foot and height, its footprint's
+ * radius — what a selection's "Alle zeigen" frames by. Null for none.
+ */
+export function boundsTarget(
+  positions: ArrayLike<number>
+): { x: number; z: number; foot: number; h: number; r: number } | null {
+  if (positions.length < 3) {
+    return null;
+  }
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = minX;
+  let minZ = minX;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = maxX;
+  let maxZ = maxX;
+  for (let i = 0; i + 2 < positions.length; i += 3) {
+    minX = Math.min(minX, positions[i]);
+    maxX = Math.max(maxX, positions[i]);
+    minY = Math.min(minY, positions[i + 1]);
+    maxY = Math.max(maxY, positions[i + 1]);
+    minZ = Math.min(minZ, positions[i + 2]);
+    maxZ = Math.max(maxZ, positions[i + 2]);
+  }
+  return {
+    x: (minX + maxX) / 2,
+    z: (minZ + maxZ) / 2,
+    foot: minY,
+    h: maxY - minY,
+    r: Math.hypot(maxX - minX, maxZ - minZ) / 2,
+  };
+}
