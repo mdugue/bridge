@@ -22,14 +22,16 @@
  * missing; after `MAX_FAILURES` failures in a row the run stops asking. A
  * request is cut off `ANSWER_MS` plus its size at `MIN_RATE` after it
  * starts (`allowedMs`); `MAX_STALLS` uploads cut off end the run's uploads
- * (the fetches go on): a stalled upload stalls the ones behind it. An
- * entry the cache refuses for its size is skipped alone. Uploads wait
- * for the run's end (`flush`), then run `LANES` at a time, each entry read
- * back from the local cache as it goes; a large one logs its size and
- * time. Not beside the bake: Vercel's builds went silent in München
- * whenever uploads ran beside its bake (twice, at the same tile; the same
- * bake alone, and locally with them beside it, ran through), and a queue
- * of bytes beside a bake's peak is memory the build machine lacks.
+ * (the fetches go on): the link is down or crawling, and every lane would
+ * wait out its deadline. An entry the cache refuses for its size is
+ * skipped alone; one whose local copy cannot be read back is skipped too.
+ * Uploads wait for the run's end (`flush`), then run `LANES` at a time,
+ * each entry read back from the local cache as it goes; a large one logs
+ * its size and time. Not beside the bake: Vercel's builds went silent in
+ * München whenever uploads ran beside its bake (twice, at the same tile;
+ * the same bake alone, and locally with them beside it, ran through), and
+ * a queue of bytes beside a bake's peak is memory the build machine lacks.
+ * The price: a run that dies shares nothing it baked.
  */
 import { createHash } from "node:crypto";
 
@@ -60,8 +62,9 @@ const MAX_STALLS = 2;
 /** Failures in a row (not a miss, not a refused size) that end the run's
  *  use of the cache: a revoked token or an outage fails every request. */
 const MAX_FAILURES = 3;
-/** Uploads that run side by side: one runs at about 1 MB/s from Vercel's
- *  build (an 11 MB glb took 7–11 s). */
+/** Uploads that run side by side (at the run's end a 13 MB entry took
+ *  under half a second from Vercel's build; beside the bake, an 11 MB one
+ *  took 7–11 s). */
 const LANES = 4;
 /** An upload this large logs its size and time. */
 const LOG_BYTES = 8 * 1024 ** 2;
@@ -278,6 +281,19 @@ export function sharedCache(
     }
   };
 
+  /** An entry's bytes for upload, or null when its local copy is gone or
+   *  unreadable: the run's bake is done, its upload is best effort. */
+  const readBack = (e: { name: string; read: () => Uint8Array | null }) => {
+    try {
+      return e.read();
+    } catch (error) {
+      log(
+        `shared cache: ${e.name} not read back (${(error as Error).message})`
+      );
+      return null;
+    }
+  };
+
   const cache: SharedCache = {
     async get(name, key) {
       if (!on()) {
@@ -304,7 +320,7 @@ export function sharedCache(
       // each lane uploads one entry at a time, the lanes side by side
       const lane = async () => {
         for (let e = entries.shift(); e; e = entries.shift()) {
-          const bytes = storing() ? e.read() : null;
+          const bytes = storing() ? readBack(e) : null;
           if (bytes) {
             await upload(e.name, e.key, bytes);
           }

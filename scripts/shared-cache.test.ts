@@ -191,6 +191,9 @@ test("uploads wait for the run's end and skip an entry gone by then", async () =
   const cache = sharedCache(ENV, () => {}, RUNTIME, api.fetcher).cache;
   cache?.put("a", "k", () => bytes("a"));
   cache?.put("gone", "k", () => null);
+  cache?.put("unreadable", "k", () => {
+    throw new Error("EIO");
+  });
   expect(api.calls.filter((c) => c.method === "PUT")).toHaveLength(0);
   await cache?.flush();
   expect(api.calls.filter((c) => c.method === "PUT")).toHaveLength(1);

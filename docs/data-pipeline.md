@@ -873,26 +873,30 @@ the entry's name, its key, the runtime that baked it (Bun's version and
 the platform: a branch that bumps Bun bakes under addresses of its own)
 and its scope. A local miss is fetched from it before it is baked (a
 preview asks both scopes at once), and a baked entry is uploaded at the
-run's end (read back from the local cache, four at a time, one at about
-1 MB/s; never beside the bake, whose peak leaves no memory for it and
-beside which Vercel's builds went silent in München), so a key is baked
-once for all branches. Production trusts only itself: its builds
-store under the production scope and read only that; a preview reads
-production's, then the previews' scope, and stores under the previews'.
-A key that misses an input thus never brings an unmerged branch's bytes
-to production; production bakes the keys a merged branch changed once
-more itself. Each entry is stored behind its SHA-256, and one whose bytes
-do not match is a miss. Only Vercel's builds use it (the token is
-`VERCEL_ARTIFACTS_TOKEN`, which Vercel's build passes; the scope comes
-from `VERCEL_ENV`), and it is never fatal: a failed request reads as a
-miss; a request is given up 30 s plus its size at 1 MiB/s after it
+run's end (read back from the local cache, four at a time; a 13 MB entry
+takes under half a second then). Never beside the bake: its peak leaves
+no memory for a queue of bytes, and beside it Vercel's builds went
+silent in München; the price is that a run that dies shares nothing it
+baked. So a key is baked once for all branches. Production trusts only
+itself: its builds store under the production scope and read only that;
+a preview reads production's, then the previews' scope, and stores under
+the previews'. A key that misses an input thus never brings an unmerged
+branch's bytes to production; production bakes the keys a merged branch
+changed once more itself. Each entry is stored behind its SHA-256, and
+one whose bytes do not match is a miss. Only Vercel's builds use it (the
+token is `VERCEL_ARTIFACTS_TOKEN`, which Vercel's build passes; the scope
+comes from `VERCEL_ENV`), and it is never fatal: a failed request reads
+as a miss; a request is given up 30 s plus its size at 1 MiB/s after it
 starts, whether or not the fetch heeds its abort (a run exits once done,
 an open socket left behind); three failures in a row end the run's use
-of it; two uploads cut off end the run's uploads (a stalled upload
-stalls the ones behind it); an entry refused for its size is skipped
-alone; `BAKE_SHARED_CACHE=0` turns it off. Each run logs whether it is on, how long each upload over 8 MB took,
-and what it fetched and stored. Two branches starting in the same minute
-still bake the same key twice: neither has stored it yet.
+of it; two uploads cut off end the run's uploads (the link is down or
+crawling); an entry refused for its size, or whose local copy cannot be
+read back, is skipped alone. `BAKE_SHARED_CACHE=0` turns it off;
+`BAKE_SHARED_CACHE_API` points it at a stand-in API for a local trial
+(it gets the token: never set it on Vercel). Each run logs whether it is
+on, how long each upload over 8 MB took, and what it fetched and stored.
+Two branches starting in the same minute still bake the same key twice:
+neither has stored it yet.
 
 Each tile's **fine ground** is an entry of its own
 (`ground_<t>.bin`, `scripts/ground-pack.ts`: the TIN, or the shaped grid
