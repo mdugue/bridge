@@ -9,6 +9,11 @@ const reports = reportBuild(process.env);
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  // A link prefetches one shared shell per route, not every page it points
+  // at: the /wissen and /<site> pages read their params inside <Suspense>,
+  // and the page itself (prerendered) comes on the click. Measured: a
+  // /wissen page prefetched 340–360 KB before, 40–140 KB now.
+  partialPrefetching: true,
   // The legal pages are MDX (app/(legal)/*/page.mdx, ADR 0043).
   pageExtensions: ["ts", "tsx", "mdx"],
   env: {
