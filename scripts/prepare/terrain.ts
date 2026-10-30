@@ -72,7 +72,7 @@ import {
  *  where it has nothing to say; every tile's bodies' colours pooled across
  *  the seams (`siteWaterTints`) once for the site. */
 let waterTints: Map<string, number[]> | undefined;
-export function waterExtras(
+function waterExtras(
   tile: string,
   level: 0 | 1
 ): Pick<TerrainExtras, "water"> | Record<string, never> {
@@ -96,11 +96,11 @@ export function waterExtras(
 /** A tile's shaped terrain at one level (memoised until the tile is baked:
  *  `dropTerrain`). The fine level is the cached ground meshed (`groundFile`),
  *  the coarse one the resampled grid. */
-export const terrains = new Map<
+const terrains = new Map<
   string,
   Promise<TerrainMesh & { bounds: TerrainBounds }>
 >();
-export function shapedTerrain(
+function shapedTerrain(
   tile: string,
   level: 0 | 1
 ): Promise<TerrainMesh & { bounds: TerrainBounds }> {
@@ -141,7 +141,7 @@ export function dropTerrain(tile: string): void {
  *  walls, its kerb stones and its fences (the flights' handrails among
  *  them), standing on every tile's shaped ground. Gates cut the fences and
  *  the freestanding walls. */
-export async function fineChildren(
+async function fineChildren(
   tile: string,
   bounds: TerrainExtras["bounds"]
 ): Promise<NonNullable<Parameters<typeof writeMeshGlb>[0]["children"]>> {
@@ -171,7 +171,7 @@ export async function fineChildren(
 /** The fine level's allotment colonies (plan 028) and road markings (plan
  *  026) and both levels' baked light (plan 033): only the rasters the tile
  *  has. */
-export function paintAndLight(
+function paintAndLight(
   names: Published,
   level: 0 | 1,
   crop: ColonyCrop | undefined
@@ -204,7 +204,7 @@ export function paintAndLight(
  * trees on its own ground, a third of them. Pre-gzipped like the packed
  * canopy.
  */
-export async function publishCrowns(tile: string): Promise<string | undefined> {
+async function publishCrowns(tile: string): Promise<string | undefined> {
   const a = tileArtifacts(tile);
   const side = (kind: TileArtifactKind) => {
     const path = at(sideFileSource(SITE, a[kind].file));
@@ -362,7 +362,7 @@ export async function bakeTerrain(
 
 /** The ground's heights on a coarse grid over the tile (the valley haze's
  *  relief: lib/city/valley-fog.ts). */
-export function groundSamples(m: {
+function groundSamples(m: {
   bounds: TerrainBounds;
   heightAt: (x: number, y: number) => number | null;
 }): number[] {

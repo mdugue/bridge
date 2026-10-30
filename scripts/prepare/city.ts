@@ -57,7 +57,7 @@ import { groundFile, heightOver } from "./ground";
  * landmark's objects is marked, and takes the wall material Wikidata names
  * where OSM names none.
  */
-export function withLandmarks(
+function withLandmarks(
   lut: OsmBuildingLut | undefined,
   file: LandmarkFile | undefined
 ): OsmBuildingLut | undefined {
@@ -82,7 +82,7 @@ export function withLandmarks(
   return out;
 }
 
-export function parseCity(
+function parseCity(
   tile: string,
   groundAt?: (x: number, y: number) => number | null
 ): BakedCityMesh {

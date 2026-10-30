@@ -817,16 +817,17 @@ is in the key — and only those (`scripts/cache-keys.ts` composes the key).
 each step's bakes live in a module of `scripts/prepare/` that is the first
 entry of its artifacts' rows (`side-files.ts`, `lines.ts`, `frame.ts`,
 `ground.ts`, `city.ts`, `terrain.ts`, `plate.ts`, `site-wide.ts`), so an
-edit there re-bakes that step's artifacts and nothing else, and an edit to
-the orchestration (a new artifact, a log line) re-bakes nothing. The walk
-stops at two kinds of module (`KEY_STOPS`): the plumbing
-(`prepare/context.ts`: the site, the mode, the log, the cache, the gzip
-level), which every key carries whole and whose imports reach every site's
-config; and the steps whose exports reach other bakes only as values the
-keys carry (`KEY_VALUES`: the frame's offset, the lines' beds and passages
-digested into the keys, the side files' published names in the `extras`),
-so the buildings' bake, which the frame reads, does not re-bake the
-grounds. A module a step calls for an artifact must be one of that
+edit there re-bakes that step's artifacts and those of the steps that
+import it (the grounds' module is walked by the buildings, both terrain
+levels, the crowns and the plate; the lines' by every bake that reads the
+beds), and an edit to the orchestration (a new artifact, a log line)
+re-bakes nothing. The walk stops at two kinds of module (`KEY_STOPS`): the
+plumbing (`prepare/context.ts`: the site, the mode, the log, the cache,
+the gzip level), which every key carries whole and whose imports reach
+every site's config; and the steps whose exports reach other bakes only as
+values the keys carry (`KEY_VALUES`: the frame's offset, the side files'
+published names in the `extras`; the test pins what each exports), so the
+buildings' bake, which the frame reads, does not re-bake the grounds. A module a step calls for an artifact must be one of that
 artifact's entries or reachable from one, or a change to it leaves the
 cached artifact stale. `scripts/bake-entries.test.ts` holds
 `prepare-data.ts` to calling no cache itself, every step module it imports
@@ -861,14 +862,20 @@ branch's last build (production's for a new branch), so branches rebased
 onto the same main each baked the same entries cold, side by side. Behind
 the local cache sits one every branch shares (`scripts/shared-cache.ts`):
 Vercel's Remote Cache, the artifacts API Turborepo uses, under a hash of
-the entry's name and key. A local miss is fetched from it before it is
-baked, and a baked entry is uploaded after, so a key is baked once for all
-branches. It runs where a token is set (`VERCEL_ARTIFACTS_TOKEN`, which
-Vercel's build passes, or `TURBO_TOKEN`) and is never fatal: a failed
-request reads as a miss, the first failed upload ends the run's uploads,
-and `BAKE_SHARED_CACHE=0` turns it off. Each run logs whether it is on and
-what it fetched and stored. Two branches starting in the same minute still
-bake the same key twice: neither has stored it yet.
+the entry's name, its key and the runtime that baked it (Bun's version and
+the platform: a branch that bumps Bun bakes under addresses of its own). A
+local miss is fetched from it before it is baked, and a baked entry is
+queued for upload after (one at a time behind the bake, at most 256 MB
+waiting; a run waits for the queue before it exits), so a key is baked
+once for all branches. Each entry is stored behind its SHA-256, and one
+whose bytes do not match is a miss. Only Vercel's builds use it (the token
+is `VERCEL_ARTIFACTS_TOKEN`, which Vercel's build passes), and it is never
+fatal: a failed request reads as a miss, a request is cut off after two
+minutes, three failures in a row end the run's use of it, an entry refused
+for its size is skipped alone, and `BAKE_SHARED_CACHE=0` turns it off. Each
+run logs whether it is on and what it fetched and stored. Two branches
+starting in the same minute still bake the same key twice: neither has
+stored it yet.
 
 Each tile's **fine ground** is an entry of its own
 (`ground_<t>.bin`, `scripts/ground-pack.ts`: the TIN, or the shaped grid

@@ -285,7 +285,7 @@ function sitePieces(site: Site): { pieces: LinePiece[]; of: PieceOf[] } {
 
 /** The site's decks: every tile's bridges, each deck once (a deck across
  *  a seam is in both tiles' files). */
-function siteDecks(site: Site): DeckPoly[] {
+export function siteDecks(site: Site): DeckPoly[] {
   return bridgeDecks(siteBridges(site), OFFSET);
 }
 

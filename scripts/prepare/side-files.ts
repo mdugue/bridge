@@ -81,7 +81,7 @@ export const colonyCrops = new Map<string, ColonyCrop>();
  * The colony raster cropped to its colonies, and the half-resolution twin
  * phones read (`cultivatedLow`); a tile without a colony publishes neither.
  */
-export async function publishColonies(
+async function publishColonies(
   tile: string,
   file: string,
   names: Published
@@ -119,8 +119,8 @@ export async function publishColonies(
 
 /** Each tile's roofs, LoD2's and those of the buildings and roofs on posts
  *  it lacks (structures.py), read once for its canopy and scan crowns. */
-export const tileRoofs = new Map<string, RoofFootprint[]>();
-export function roofsOf(tile: string): RoofFootprint[] {
+const tileRoofs = new Map<string, RoofFootprint[]>();
+function roofsOf(tile: string): RoofFootprint[] {
   let roofs = tileRoofs.get(tile);
   if (!roofs) {
     const city = at(cityMeshSourceFiles(SITE, tile).city);
@@ -146,10 +146,7 @@ export function roofsOf(tile: string): RoofFootprint[] {
  * the points that are a LoD2 roof (lib/city/roof-trees.ts): a hall on what
  * the Basis-DLM still files as park.
  */
-export async function publishCanopy(
-  tile: string,
-  file: string
-): Promise<string> {
+async function publishCanopy(tile: string, file: string): Promise<string> {
   const src = at(sideFileSource(SITE, file));
   const sheds = at(cityMeshSourceFiles(SITE, tile).smallBuild);
   const city = at(cityMeshSourceFiles(SITE, tile).city);

@@ -28,6 +28,7 @@ import {
   sitePassages,
   railFeatures,
   siteTrackAxes,
+  siteDecks,
   underDecks,
 } from "../line-levels";
 import {
@@ -47,8 +48,8 @@ import {
 /** The levels of the site's rail and tram lines, solved over whole lines on
  *  every tile's DGM (scripts/line-levels.ts): each tile's file publishes
  *  with them. */
-export const levelsStarted = performance.now();
-export const lineLevels = parse<SiteLevels>(
+const levelsStarted = performance.now();
+const lineLevels = parse<SiteLevels>(
   await cached(
     `line-levels-${SITE.id}.json`,
     cacheKey(levelInputs(SITE), BAKE_ENTRIES.lineLevels),
@@ -60,16 +61,19 @@ log(`line levels: ${since(levelsStarted)} ms`);
 /** The passages the lines open through the fill under the decks
  *  (lib/city/passages.ts): the terrain bake opens each in the tiles it
  *  touches. */
-export const passages = sitePassages(SITE, lineLevels);
+const passages = sitePassages(SITE, lineLevels);
 
 /** The beds the lines lie on (lib/city/track-beds.ts): the terrain bake
  *  lays the ground under each at its profile, off the decks. */
-export const beds = siteBeds(SITE, lineLevels);
+const beds = siteBeds(SITE, lineLevels);
 export const underDeck = underDecks(SITE);
+/** The decks `underDeck` reads, digested into every ground's key: a deck
+ *  moved keeps the levels, but not the ground under it. */
+const decks = shapeDigest(siteDecks(SITE));
 
 /** The beds that reach into a tile's extent (with their slopes), once
  *  per tile. */
-export const tileBeds = new Map<string, Bed[]>();
+const tileBeds = new Map<string, Bed[]>();
 export function bedsIn(tile: string): Bed[] {
   let found = tileBeds.get(tile);
   if (!found) {
@@ -92,19 +96,19 @@ export function shapeDigest(shapes: unknown): string {
 }
 
 /** What shapes a tile's ground besides its own files, for its cache keys:
- *  the passages and beds reaching into it. */
-export const tileShapes = new Map<string, string>();
+ *  the passages and beds reaching into it, and the site's decks. */
+const tileShapes = new Map<string, string>();
 export function shapedBy(tile: string): string {
   let digest = tileShapes.get(tile);
   if (digest === undefined) {
-    digest = shapeDigest([passagesIn(tile), bedsIn(tile)]);
+    digest = shapeDigest([passagesIn(tile), bedsIn(tile), decks]);
     tileShapes.set(tile, digest);
   }
   return digest;
 }
 
 /** What shapes every tile's ground: the fine level stands on all of it. */
-export const siteShapes = shapeDigest([passages, beds]);
+export const siteShapes = shapeDigest([passages, beds, decks]);
 
 /** The passages that reach into a tile's extent. */
 export function passagesIn(tile: string): Passage[] {

@@ -75,7 +75,7 @@ import {
   publish,
   publisher,
   readJson,
-  sharedStats,
+  settleShared,
   since,
   started,
   utf8,
@@ -109,8 +109,8 @@ function valleyRims(): ValleyRim[] {
 }
 
 /** A warmer's last line: what it cached, how long it took, its peak. */
-function warmed(what: string): never {
-  sharedStats();
+async function warmed(what: string): Promise<never> {
+  await settleShared();
   log(
     `warmed ${what} in ${since(started)} ms, peak RSS ${(process.resourceUsage().maxRSS / 1024 ** 2).toFixed(2)} GiB (published nothing)`
   );
@@ -124,7 +124,7 @@ if (MODE.kind === "ground") {
     await groundFile(tile);
     Bun.gc(true);
   }
-  warmed(`the fine ground of ${MODE.tiles.join(", ")}`);
+  await warmed(`the fine ground of ${MODE.tiles.join(", ")}`);
 }
 
 const baked: BakedTile[] = [];
@@ -167,7 +167,7 @@ for (const [i, tile] of TILES.entries()) {
   Bun.gc(true);
 }
 if (WARMING) {
-  warmed(`${baked.map((t) => t.id).join(", ")} (buildings + terrain)`);
+  await warmed(`${baked.map((t) => t.id).join(", ")} (buildings + terrain)`);
 }
 log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
@@ -253,7 +253,7 @@ const { artifacts, written, pruned } = publisher.finish();
 log(
   `${artifacts} artifacts in public/data/${SITE.id} (${written} new, ${pruned} pruned)`
 );
-sharedStats();
+await settleShared();
 // resourceUsage's maxRSS is in KiB
 log(
   `done in ${since(started)} ms, peak RSS ${(process.resourceUsage().maxRSS / 1024 ** 2).toFixed(2)} GiB`

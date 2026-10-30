@@ -19,18 +19,17 @@ export const KEY_PLUMBING = ["scripts/prepare/context.ts"] as const;
 
 /**
  * The step modules whose exports reach other bakes only as values those
- * bakes' keys carry: the frame (`offset`), the lines' beds and passages
- * (`bedsIn`, `shapedBy`, digested into the keys) and the side files'
- * published names (in the glTF `extras`). A bake that imports one walks
- * nothing beyond it, so a change to the buildings' bake (the frame's) does
- * not re-bake the grounds; each still walks its own imports for its own
- * artifact (`frame`, `lineLevels`, the side files' entries). A function
- * added to one that a bake calls for its bytes, not for a keyed value,
- * belongs in that bake's module instead.
+ * bakes' keys carry: the frame (`offset`; the buildings' bake, which also
+ * reads `spawnFrame`, lists bake-city-mesh.ts itself) and the side files'
+ * published names (in the glTF `extras`) and landmark files (the
+ * buildings' inputs). A bake that imports one walks nothing beyond it, so
+ * a change to the buildings' bake (the frame's) does not re-bake the
+ * grounds; each still walks its own imports for its own artifact (`frame`,
+ * the side files' entries). bake-entries.test.ts pins what each exports: a
+ * function a bake would call for its bytes belongs in that bake's module.
  */
 export const KEY_VALUES = [
   "scripts/prepare/frame.ts",
-  "scripts/prepare/lines.ts",
   "scripts/prepare/side-files.ts",
 ] as const;
 

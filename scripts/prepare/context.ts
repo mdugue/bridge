@@ -20,7 +20,7 @@ import { createPublisher } from "../publisher";
 /** On Vercel the cache lives under `.next/cache`, the one folder (with
  *  node_modules) its Next.js builds carry from one deployment to the next;
  *  elsewhere under `.cache`, so clearing `.next` keeps a local bake. */
-export const CACHE_DIR = join(
+const CACHE_DIR = join(
   process.cwd(),
   process.env.VERCEL ? ".next/cache/prepare-data" : ".cache/prepare-data"
 );
@@ -80,7 +80,7 @@ export const publish = publisher.publish;
  *  `entries`). Each must exist: the hasher reads a missing file as
  *  "absent" (an optional input's right answer), which would drop it from
  *  every key without a word. */
-export const COMMON_SOURCES = [
+const COMMON_SOURCES = [
   ...KEY_PLUMBING,
   `sites/${SITE.id}.ts`,
   "sites/providers.ts",
@@ -96,11 +96,11 @@ export const COMMON_SOURCES = [
 
 /** The lockfile: a key carries what it resolved for the packages the
  *  key's modules import (cache-keys.ts). */
-export const LOCKFILE = "bun.lock";
+const LOCKFILE = "bun.lock";
 if (!existsSync(at(LOCKFILE))) {
   fail(`missing ${LOCKFILE} — every cache key carries the versions it holds`);
 }
-export const keys = createKeyMaker({
+const keys = createKeyMaker({
   root: process.cwd(),
   common: COMMON_SOURCES,
   stop: KEY_STOPS,
@@ -117,20 +117,27 @@ export const cacheKey = keys.key;
 export const siteWide = (name: string) => `${SITE.id}.${name}`;
 
 /** Every branch's bake cache, behind the local one (shared-cache.ts). */
-export const SHARED = sharedCache(process.env, log);
+const SHARED = sharedCache(
+  process.env,
+  log,
+  `bun ${Bun.version} ${process.platform}-${process.arch}`
+);
 log(`shared bake cache: ${SHARED.reason}`);
 
 /** The entry from the shared cache, written to the local one, or null. */
-export async function fromShared(
+async function fromShared(
   name: string,
   key: string
-): Promise<string | null> {
+): Promise<{ bytes: Uint8Array; path: string } | null> {
   const bytes = await SHARED.cache?.get(name, key);
-  return bytes ? writeEntry(CACHE_DIR, name, key, bytes) : null;
+  return bytes
+    ? { bytes, path: writeEntry(CACHE_DIR, name, key, bytes) }
+    : null;
 }
 
-/** A baked entry, written to the local cache and offered to the shared one. */
-export async function store(
+/** A baked entry, written to the local cache and queued for the shared one
+ *  (`settleShared` waits for the queue). */
+async function store(
   name: string,
   key: string,
   bytes: Uint8Array
@@ -141,7 +148,7 @@ export async function store(
 }
 
 /** `--if-cached` (warmers.ts) stops at the first entry it would bake. */
-export function mayBake(name: string): void {
+function mayBake(name: string): void {
   if (MODE.kind === "publish" && MODE.ifCached) {
     log(`${name} is not cached: the warmers bake the site`);
     process.exit(NOT_CACHED);
@@ -155,10 +162,13 @@ export async function cached(
   key: string,
   bake: () => Promise<Uint8Array> | Uint8Array
 ): Promise<Uint8Array> {
-  const path =
-    cachedEntry(CACHE_DIR, name, key) ?? (await fromShared(name, key));
+  const path = cachedEntry(CACHE_DIR, name, key);
   if (path) {
     return readFileSync(path);
+  }
+  const shared = await fromShared(name, key);
+  if (shared) {
+    return shared.bytes;
   }
   mayBake(name);
   const bytes = await bake();
@@ -174,7 +184,7 @@ export async function cachedFile(
   bake: () => Promise<Uint8Array> | Uint8Array
 ): Promise<string> {
   const path =
-    cachedEntry(CACHE_DIR, name, key) ?? (await fromShared(name, key));
+    cachedEntry(CACHE_DIR, name, key) ?? (await fromShared(name, key))?.path;
   if (path) {
     return path;
   }
@@ -192,8 +202,10 @@ export function gz(bytes: Uint8Array): Uint8Array {
   });
 }
 
-/** What this run took from and gave to the shared cache. */
-export function sharedStats(): void {
+/** Waits for the shared cache's uploads, then logs what this run took from
+ *  and gave to it: a run's last step before it exits. */
+export async function settleShared(): Promise<void> {
+  await SHARED.cache?.flush();
   const stats = SHARED.cache?.stats();
   if (stats && stats.hits + stats.misses + stats.stored > 0) {
     log(

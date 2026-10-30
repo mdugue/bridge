@@ -80,15 +80,15 @@ export async function tileDgm(
 
 /** A tile's water as its legend has it (lib/city/water-bodies.ts), read
  *  once; its lifts decoded once. */
-export const waterMembers = new Map<string, WaterMember | null>();
+const waterMembers = new Map<string, WaterMember | null>();
 export function waterOf(tile: string): WaterMember | null {
   if (!waterMembers.has(tile)) {
     waterMembers.set(tile, waterMember(SITE, tile));
   }
   return waterMembers.get(tile) ?? null;
 }
-export const waterLifts = new Map<string, Promise<WaterLift | null>>();
-export function waterLiftOf(tile: string): Promise<WaterLift | null> {
+const waterLifts = new Map<string, Promise<WaterLift | null>>();
+function waterLiftOf(tile: string): Promise<WaterLift | null> {
   let lift = waterLifts.get(tile);
   if (!lift) {
     const bounds = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
@@ -112,7 +112,7 @@ export async function groundFeatures(tile: string): Promise<TerrainFeatures> {
 
 /** A tile's fine ground: a TIN over the native DGM (bake-terrain-tin.ts),
  *  unless the DGM has holes; then the grid. */
-export async function bakeFineGround(tile: string): Promise<FineGround> {
+async function bakeFineGround(tile: string): Promise<FineGround> {
   const walls = wallLines(SITE, tile);
   const tin = fineTin(
     await tileDgm(tile, "native"),
@@ -138,7 +138,7 @@ export async function bakeFineGround(tile: string): Promise<FineGround> {
  * a process baking some of the site's tiles (prepare-sites.ts' warmers)
  * reads the others' grounds instead of refining their TINs again.
  */
-export const groundFiles = new Map<string, Promise<string>>();
+const groundFiles = new Map<string, Promise<string>>();
 export function groundFile(tile: string): Promise<string> {
   let file = groundFiles.get(tile);
   if (!file) {

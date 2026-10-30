@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { BAKE_ENTRIES, KEY_PLUMBING, KEY_STOPS } from "./bake-entries";
+import {
+  BAKE_ENTRIES,
+  KEY_PLUMBING,
+  KEY_STOPS,
+  KEY_VALUES,
+} from "./bake-entries";
 import { directImports, moduleGraph } from "./bake-sources";
 
 const ROOT = join(import.meta.dir, "..");
@@ -93,5 +98,36 @@ test("the plumbing imports nothing that bakes", () => {
   for (const plumbing of KEY_PLUMBING) {
     const imported = directImports(plumbing, ROOT);
     expect(imported.filter((p) => !PLUMBING_IMPORTS.has(p))).toEqual([]);
+  }
+});
+
+/** What each value module exports, and how it reaches a key: no walk goes
+ *  past these modules (`KEY_VALUES`), so a new export is reviewed here. */
+const VALUE_EXPORTS: Record<string, Record<string, string>> = {
+  "scripts/prepare/frame.ts": {
+    frame: "the tileset's extras (uncached)",
+    offset: "a value in every key that reads it",
+    spawnFrame: "the buildings' bake, whose entries list bake-city-mesh.ts",
+  },
+  "scripts/prepare/side-files.ts": {
+    colonyCrops: "the terrain's extras, a value in its key",
+    landmarkFile: "reads the landmark file, an input of every key that does",
+    Published: "a type",
+    publishSideFiles: "the side files' own step",
+    sideFiles: "published names, in the extras the keys carry",
+  },
+};
+
+test("a value module exports only what reaches keys as values", () => {
+  for (const path of KEY_VALUES) {
+    const source = readFileSync(join(ROOT, path), "utf8");
+    const exported = [
+      ...source.matchAll(
+        /^export (?:async )?(?:function|const|let|type|interface) ([\w$]+)/gmu
+      ),
+    ].map((m) => m[1]);
+    expect(exported.toSorted()).toEqual(
+      Object.keys(VALUE_EXPORTS[path] ?? {}).toSorted()
+    );
   }
 });
