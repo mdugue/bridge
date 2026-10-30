@@ -57,6 +57,8 @@ import {
   type RenderStyleDef,
 } from "@/lib/city/render-style";
 import { compileInLanes, type Compiling } from "./compile-lanes";
+import { crownsPrinted } from "./crown-season";
+import { crownSwayShare } from "./vegetation-layer";
 import { fxaa } from "./fxaa";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
@@ -751,6 +753,9 @@ export function createPostStack(
     finishing.vignetteDarkness.value = model ? 0 : style.vignette.darkness;
     stylize.setInk(INK * style.inkWeight);
     stylize.setStyle(style);
+    // Comic prints its crowns flat, a bare one whole (crown-season.ts)
+    crownsPrinted.value = style.crowns === "comic" ? 1 : 0;
+    crownSwayShare.value = style.sway;
   };
   applyStyleWeights();
 

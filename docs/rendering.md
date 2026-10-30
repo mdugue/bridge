@@ -164,7 +164,7 @@ is the codebook.
 | Tree position and height | canopy point + `h` (3–45 m): as tall as measured, crown 0.58 × h wide (the cadastre's measured median; a scan crown 2r within 0.4–0.75 × h, r its watershed share of the scan's crown mass); rows: DOM1's crown peaks along `veg04_l`, as tall as measured, every 9 m only without DOM1; crown base clamp(0.15 + 0.012 · h, 0.22, 0.6) · h, at least 3 m over a carriageway (`c: 1`) | DOM1−DGM1, LSC, Basis-DLM | `vegetation-layer.ts`, `lib/city/tree-placement.ts` |
 | Tree gate | none on a path or water (classes 6, 8), a carriageway or a track bed, near a bridge or on a building's roof; on road/rail land no bare plane (a heap, a shed roof: 3 × 3 plane residual ≤ 0.25 m, index < 0.1) | Basis-DLM, OSM ways and building outlines | `pipeline/bake/canopy.py`, `pipeline/bake/ways.py` |
 | Crown colour | NDVI 5×5 footprint max, recentred on the median; where the DOP has no near-IR (Munich) the GLI from its RGB, mapped onto the NDVI's scale | DOP | `crownColor` (+ hash sage fallback) |
-| Crown motion | wind sway (vertex); the crown brightens leaning into the gust and dims rocking back (× (1 ± 0.09 · gust), fixed) | — | `crownSway`, `crownLight` |
+| Crown motion | wind sway (vertex), full within 120 m of the eye and gone by 260 m (a fraction of a pixel far off is no motion, only a shimmer), times the picture style's `sway` share; the crown brightens leaning into the gust and dims rocking back (× (1 ± 0.09 · gust), fixed) | — | `crownSway`, `crownSwayShare`, `crownLight` |
 | Crown silhouette | every tree its own crown: the shared geometry pushed in and out by three broad waves over the direction from the crown's centre, their phases from where the tree stands, and its top leaned a little — in the vertex stage, the cast shadow too; no draw call or build added | where the tree stands | `vegetation-layer.ts` `crownShape` |
 | Crown detail | three tiers per 250 m chunk, decided over the whole site on the 10 Hz pose tick (and in the frame the tiles in view or the crown switch change, or the eye jumps more than 25 m): rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `createVegetationLod` (*Multi-Tuft-Kronen (nah)*) |
 | Conifer crown | a canopy evergreen (`l: "e"`) or a register conifer → a three-tier lathe cone in the lobed crown's box; a canopy evergreen read as a pine (`pine: 1`) or a register pine → the pine's high, flat-topped crown (the lobed crown reshaped, starting at 0.55 h; a chunk set of its own, the same node build); a yew → the lobed crown down to the ground (on the same trunk; the coarse level a six-sided cone of one skirt), its own chunk set sharing the broad crowns' node build, an evergreen in the blue-green (`evergreenColor`), no season (a register larch keeps its leaf type's year); asked, outlined as its cone | Basis-DLM forest kind (`VEG`) / OSM `leaf_type`, DOP (leaf-off), cadastre | `conifer-crown.ts`, `vegetation-layer.ts`, `tree-inventory-layer.ts`, `coarse-crowns-layer.ts` |
@@ -173,7 +173,7 @@ is the codebook.
 | Tree family | genus `gn` → family (`lib/city/tree-family.ts`): a lean of the summer green (HSL offsets on the NDVI colour, not on cultivars or evergreens), bark colour as the trunk's per-instance tint (`TreeInstance.bark`); eight genera flower (`Phenology.bloom`: cherries pink in April, pears/apples/hawthorn white, …), the crown mixed toward the blossom and kept full while in flower | Stadtbaumkataster (genus) | `tree-family.ts`, `tree-inventory-layer.ts` `inventoryColor`/`barkTint`, `crown-season.ts` `bloomTargets` |
 | Tree age | planting year `y` → age (`lib/city/tree-age.ts`): under 15 years (unmeasured) a thinner trunk, under 5 years three stakes and two rails (`tree-stakes.ts`), past 80 years (unmeasured) a thicker trunk; the crown lighter when young, deeper when old (fine level); height and crown size as measured | Stadtbaumkataster (age / planting year) | `tree-age.ts`, `tree-inventory-layer.ts`, `tree-stakes.ts` |
 | Plan trees | a register tree's crown width → a circle (line 8 % of the radius) with a stem dot, 0.4 m over its foot; shown only in the Schwarzplan's frames (`userData.planOnly`), drawn in the figure's black | Stadtbaumkataster | `tree-plan.ts`, `paper-scene.ts` |
-| Crown season | scene date (calendar day) + genus `gn` (± 6 days per tree) → `{ leaf, autumn }` (`lib/city/tree-season.ts`); `autumn` mixes the per-instance colour toward the genus hue, `aBare` = 1 − leaf discards the crown down to a 25 % grey-brown twig stipple (a hashed alpha test in crown space, ~1.25 px cells at every distance) and thins the shadow through the same discard in a custom depth material; evergreens constant (the register's, and the canopy's crowns in a needle forest or green on a leaf-off mixed forest's photo, `l: "e"` in `canopy_<t>.geojson`), the other canopy/row trees a generic curve; the day warped by the city's climate (`climateDay`, DWD phenology) before the curves read it; written on a day change, never per frame | Stadtbaumkataster (genus), OSM | `crown-season.ts`, `vegetation-layer.ts` `buildCrownMaterial(…, bare)` |
+| Crown season | scene date (calendar day) + genus `gn` (± 6 days per tree) → `{ leaf, autumn }` (`lib/city/tree-season.ts`); `autumn` mixes the per-instance colour toward the genus hue, `aBare` = 1 − leaf discards the crown down to a 25 % grey-brown twig stipple (a hashed alpha test in crown space, ~1.25 px cells at every distance; a crown under ~20 px across, or any in Comic, drawn whole in the stipple's mean — its leaf and twig colours over its cover, the gaps a pale veil (`VEIL_COLOR`) — where the cells would sparkle) and thins the shadow through the stipple's own discard (`maskShadowNode`: never drawn whole, so a crown drawn whole still casts its thin shadow); evergreens constant (the register's, and the canopy's crowns in a needle forest or green on a leaf-off mixed forest's photo, `l: "e"` in `canopy_<t>.geojson`), the other canopy/row trees a generic curve; the day warped by the city's climate (`climateDay`, DWD phenology) before the curves read it; written on a day change, never per frame | Stadtbaumkataster (genus), OSM | `crown-season.ts`, `vegetation-layer.ts` `buildCrownMaterial(…, bare)` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100`, minus where OSM maps one within 2 m | Basis-DLM (+ OSM) | `vegetation-layer.ts` |
 | Allotment gardens | OSM `landuse=allotments`: a soft, slightly wandering edge (the baked distance to the garden land, LINEAR — paths, roads, rail and water cut out); inside, analytic plots ≈15 × 24 m (a jittered Voronoi in the colony's axis frame — the prevailing direction of its mapped paths, meandering borders drawn as thin soft paths), each a lawn in one of a few soft greens — a third with warm vegetable beds, some with sparse pastel flower dots, the rest with darker shrub mottles — and a faint hedge green inside the rim; box-filtered, fading to the plots' tones and then to one calm tone with distance (0.85 of *Bodendetail*; no colony maps its parcels, so the plots are invented) | OSM | `cultivated-layer.ts`, `cultivated_<t>.png` |
 | Orchard tree | OSM `landuse=orchard`: DOM1's crown peaks 2–12 m up, as tall as measured, crown 0.85 × h; without DOM1 the mapped trees, else an 8 m grid along the long axis; genus from `trees=*` (a Christmas-tree plantation's conifers); less the spots a canopy, scan or inventory tree fills (4 m, or its crown), as the cadastre's "small" archetype | OSM, DOM1 | `tile-stream.ts` → `tree-inventory-layer.ts` |
@@ -247,7 +247,7 @@ is the codebook.
 | Modell's picture | a parallel camera (`model-camera.ts`, sheared for the Militärperspektive) at a scale (metres per CSS px ↔ 1 : n at 96 dpi); the post passes read it through the view lens; DoF, grading and vignette off, the distance fog open, the sky dome hidden, the background the style's paper; the shadow frustum fits the picture's footprint | the view (pivot, turn, tilt, scale) | `lib/city/model-view.ts`, `model-rig.ts`, `view-lens.ts`, ADR 0044 |
 | Schnitt | the near plane through the pivot; the clay drawn two-sided with its back faces near-black (the poché, `clayPoche`), the ground's profile along the cut as a poché strip from the terrain heights | the terrain heights | `visual-style.ts` `setClaySection`, `model-cuts.ts`, `lib/city/section.ts` |
 | Ausschnitt | the city's group in a `ClippingGroup` with the rectangle's four planes, shown once its programs are compiled and held off the frames (`holdCut`); shadows not clipped; a plinth of four poché strips from the ground down to a common base | the terrain heights | `model-cuts.ts`, `lib/city/section.ts`, `post-stack.ts` |
-| Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: Papier and Film noir sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill, the other styles' pens hold still in a flight; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; faded towards a per-style floor (`farInk`) with the fog factor, so the far city keeps its outlines | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
+| Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: Papier and Film noir sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill, the other styles' pens hold still in a flight; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; a step under ~3 px tall well below the horizon (a rail, a kerb, a track's bed hiding the ground behind it) draws no line, measured as the height between the taps in pixels on every axis but the level one — such a step's raster flips in a move; faded towards a per-style floor (`farInk`) with the fog factor, so the far city keeps its outlines | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
 | Minimap | site tile bounds + 512² class raster in the palette + the bridge decks in the colour of the class they carry (hairline edge) + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
 
 The German label in parentheses above names the term as the guide does.
@@ -492,8 +492,15 @@ style's background), decides light and shade from the sun's shadow map
 (`inSun`: the map and `shadow.matrix` handed over by `sun-rig.ts`; after
 dusk lightness again) and lays its screens on the world (`surfaceScreen`:
 45° on the dominant world plane, a cell ladder doubling by metres per
-pixel, two rungs cross-faded, the mean tone at grazing angles). The pens
-of Comic, Sin City, Strich and the Schwarzplan hold still (`hand` 0).
+pixel, two rungs cross-faded, antialiased over the pixel's footprint
+across the edge (`fwidth` of the distance), the mean tone at grazing
+angles and wherever the pixel's long axis spans half a cell or more — an
+under-sampled screen beats against the pixels and crawls in a move). The
+pens of Comic, Sin City, Strich and the Schwarzplan hold still (`hand`
+0). The crowns sway by the style's `sway` share (`crownSwayShare`): Strich
+holds them still, since a swaying crown slides under its hatch. Every
+change here is measured with the `flicker-probe` skill: still pairs and
+sub-pixel steps on a held, fixed-step loop, diffed.
 
 - *Comic* — pop art in six printing inks (`POP`: paper, black, red,
   yellow, blue, green). Each surface gets one ink from its colour under a
@@ -502,12 +509,19 @@ of Comic, Sin City, Strich and the Schwarzplan hold still (`hand` 0).
   shade, Ben-Day dots on a ~4 px cell, larger the deeper the shade (16 to
   42 % of the cell): blue on the paper, black on an ink, printing lighter
   far off; a pitched roof in shade gets printed stripes instead of dots;
-  near-black stays black. Foliage and water are cut-outs, decided on a
-  wider blur (one of 8 px) because their per-pixel shading shimmers in
-  motion: a crown flat green, a deeper green in its own shade, inked at
-  its silhouette only (no creases); the river flat blue, a deeper blue in
-  a cast shadow, no dots and no black. The sky is two flat blues, the ink
-  heavy and even. At night a navy city under black dots, the lamps' pools
+  near-black stays black. Foliage and water are cut-outs because their
+  per-pixel shading shimmers in motion. The crowns wear marker inks for
+  Comic's frames (`crownsPrinted`, `printedCrown` in
+  `vegetation-layer.ts`: saturated as nothing else in the clay, one
+  channel zero, so the light keeps them saturated); the pass prints a
+  marked crown flat by the marker's hue — green, an autumn crown yellow,
+  a mostly bare or blossoming one the paper — in two steps of its light, never dotted,
+  inked at its silhouette only, and a bare crown is drawn whole, not as
+  its twig stipple. Other green (hedges, lawns) is told on the colour, a
+  wider blur (8 px) deciding its shade. The river flat blue, a deeper blue
+  in a cast shadow, no dots and no black. The sky is one blue, printed
+  lighter towards the horizon with pale dots on the view direction
+  (`skyDots`: none above ~15°), the ink heavy and even. At night a navy city under black dots, the lamps' pools
   yellow, a lit window or a lamp the paper, the sky a deep blue.
 - *Film noir* — luminance through an S-curve, crushed blacks, the distance
   lifted into grey smoke, a graduated sky; faint ink. From a sun altitude
