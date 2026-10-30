@@ -11,6 +11,7 @@
  * ground sets its foot there.
  */
 
+import { decimal, metres } from "./card-lines";
 import { distanceOutside } from "./geolocation";
 import { DEG2RAD } from "./pose";
 import type { TerrainBounds } from "./terrain-geometry";
@@ -285,7 +286,9 @@ export function normalizeRotation(deg: number): number {
 }
 
 /** The placement file's format tag. */
-export const PLACEMENT_FORMAT = "city-walk-entwurf/1";
+export const PLACEMENT_FORMAT = "city-walk-entwurf/2";
+/** The format before the scale was kept: read as one without it. */
+const PLACEMENT_FORMAT_1 = "city-walk-entwurf/1";
 
 /** The placement as a file to keep beside the design. */
 export function placementFile(
@@ -304,7 +307,8 @@ export function placementFile(
       north: round(placement.north, 3),
       base: round(placement.base, 3),
       rotation: round(placement.rotation, 2),
-      // (a file without them is in metres, as before they were kept)
+      // (/2: a /1 file has none, and an older viewer refuses this one
+      // rather than place it at the wrong size)
       unit: scale.unit,
       factor: scale.factor,
     },
@@ -320,7 +324,9 @@ export function placementFile(
 export function parsePlacementFile(
   text: string,
   epsg: number
-): { placement: DesignPlacement; scale: DesignScale } | { error: string } {
+):
+  | { placement: DesignPlacement; scale: DesignScale | null }
+  | { error: string } {
   let json: unknown;
   try {
     json = JSON.parse(text);
@@ -328,7 +334,7 @@ export function parsePlacementFile(
     return { error: "Die Lagedatei ist kein gültiges JSON." };
   }
   const o = json as Record<string, unknown> | null;
-  if (o?.format !== PLACEMENT_FORMAT) {
+  if (o?.format !== PLACEMENT_FORMAT && o?.format !== PLACEMENT_FORMAT_1) {
     return { error: "Das ist keine Lagedatei von city walk." };
   }
   if (o.epsg !== epsg) {
@@ -345,15 +351,22 @@ export function parsePlacementFile(
   if (east === null || north === null || base === null || rotation === null) {
     return { error: "Der Lagedatei fehlen Koordinaten, Höhe oder Drehung." };
   }
+  const placement = {
+    east,
+    north,
+    base,
+    rotation: normalizeRotation(rotation),
+  };
+  // a file that says nothing of its scale leaves the design's as it is
+  if (o.unit === undefined && o.factor === undefined) {
+    return { placement, scale: null };
+  }
   const unit = o.unit ?? "m";
   const factor = num("factor") ?? 1;
   if (!isDesignUnit(unit) || !validFactor(factor)) {
     return { error: "Die Lagedatei nennt einen ungültigen Maßstab." };
   }
-  return {
-    placement: { east, north, base, rotation: normalizeRotation(rotation) },
-    scale: { unit, factor },
-  };
+  return { placement, scale: { unit, factor } };
 }
 
 /** The units a design's file may be drawn in, in metres. */
@@ -375,8 +388,8 @@ export interface DesignScale {
 export const METRES: DesignScale = { unit: "m", factor: 1 };
 
 /** The factors the panel takes: from a hundredth to a thousandfold. */
-const FACTOR_MIN = 0.01;
-const FACTOR_MAX = 1000;
+export const FACTOR_MIN = 0.01;
+export const FACTOR_MAX = 1000;
 
 export function isDesignUnit(v: unknown): v is DesignUnit {
   return typeof v === "string" && Object.hasOwn(DESIGN_UNITS, v);
@@ -419,17 +432,15 @@ const LARGE_M = 3000;
 /**
  * A line for the panel where a design's size suggests its file is not in
  * metres — a model of a few metres or of kilometres —, null otherwise.
- * Only a hint: a bench is small, a landscape plan large.
+ * Only a hint, worded as one: a bench is small, and rightly so.
  */
 export function scaleHint(box: DesignBox): string | null {
   const longest = Math.max(...designSize(box));
-  const m = (v: number) =>
-    v.toLocaleString("de-DE", { maximumFractionDigits: 1 });
   if (longest < SMALL_M) {
-    return `Nur ${m(longest)} m groß: ist die Datei in Zentimetern oder eigenen Einheiten? Den Maßstab unten einstellen.`;
+    return `Nur ${metres(longest)} groß. Ist die Datei in Zentimetern oder eigenen Einheiten gezeichnet, den Maßstab unten einstellen.`;
   }
   if (longest > LARGE_M) {
-    return `${m(longest / 1000)} km groß: ist die Datei in Millimetern oder Zentimetern? Den Maßstab unten einstellen.`;
+    return `${decimal.format(longest / 1000)} km groß. Ist die Datei in Millimetern oder Zentimetern gezeichnet, den Maßstab unten einstellen.`;
   }
   return null;
 }

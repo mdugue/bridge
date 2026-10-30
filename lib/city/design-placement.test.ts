@@ -199,7 +199,7 @@ describe("a place the file gives that no one would see", () => {
 });
 
 describe("a design's scale", () => {
-  test("a placement file keeps the unit and factor, an old one is metres", () => {
+  test("a placement file keeps the unit and factor, an old one none", () => {
     const placement = {
       east: 411_000,
       north: 5_657_000,
@@ -212,9 +212,12 @@ describe("a design's scale", () => {
     });
     const back = parsePlacementFile(text, 25_833);
     expect("scale" in back && back.scale).toEqual({ unit: "cm", factor: 2 });
-    const old = text.replace(/,\s*"unit": "cm",\s*"factor": 2/, "");
+    // a file from before the scale was kept leaves the design's as it is
+    const old = text
+      .replace(/,\s*"unit": "cm",\s*"factor": 2/, "")
+      .replace("entwurf/2", "entwurf/1");
     const before = parsePlacementFile(old, 25_833);
-    expect("scale" in before && before.scale).toEqual({ unit: "m", factor: 1 });
+    expect("scale" in before && before.scale).toBeNull();
     const bad = text.replace('"cm"', '"furlong"');
     expect("error" in parsePlacementFile(bad, 25_833)).toBe(true);
   });

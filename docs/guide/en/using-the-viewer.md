@@ -501,7 +501,8 @@ The other picture styles and Modell keep their sharp lines.
   *Höhe* and *Drehung* (east, north, height, turn) move, set and turn it;
   *Maßstab* (scale) reads the file in another unit (m, cm, mm, inch,
   foot) and times a factor — for an OBJ, which has no unit, or a model at
-  1:100; a design under 4 m or over 3 km gets the panel's suggestion.
+  1:100; a design under 4 m or over 3 km gets the panel's suggestion
+  (landscape plans have none: their coordinates say it).
   *Lage sichern* saves the placement, with its scale, as a small file (`….lage.json`) to
   load with the design next time. Buildings whose footprint the design
   covers for more than half step aside (*Bestand im Umriss ausblenden*);

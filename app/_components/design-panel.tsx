@@ -17,9 +17,12 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   type DesignPlacement,
   type DesignUnit,
+  FACTOR_MAX,
+  FACTOR_MIN,
   isDesignUnit,
   type PlacementSource,
 } from "@/lib/city/design-placement";
+import { decimal, metres } from "@/lib/city/card-lines";
 import { cn } from "cn";
 import type { DesignControls } from "./create-app";
 import type { DesignStatus } from "./design-layer";
@@ -56,9 +59,7 @@ const UNITS: readonly [DesignUnit, string][] = [
 ];
 
 function sizeLabel([w, d, h]: [number, number, number]): string {
-  const m = (v: number) =>
-    v.toLocaleString("de-DE", { maximumFractionDigits: v < 10 ? 1 : 0 });
-  return `${m(w)} × ${m(d)} m, ${m(h)} m hoch`;
+  return `${decimal.format(w)} × ${metres(d)}, ${metres(h)} hoch`;
 }
 
 function weightLabel(status: DesignStatus): string {
@@ -69,6 +70,7 @@ function weightLabel(status: DesignStatus): string {
 
 /** A number typed in, taken on Enter or when the field is left. */
 function NumberField({
+  digits,
   id,
   label,
   onCommit,
@@ -76,6 +78,8 @@ function NumberField({
   unit,
   value,
 }: {
+  /** the decimals shown; a number's own up to 4 where unset by `step` */
+  digits?: number;
   id: string;
   label: string;
   onCommit: (value: number) => void;
@@ -83,7 +87,10 @@ function NumberField({
   unit: string;
   value: number;
 }) {
-  const shown = value.toFixed(step < 1 ? 2 : 0);
+  const shown =
+    digits === undefined
+      ? value.toFixed(step < 1 ? 2 : 0)
+      : String(Number(value.toFixed(digits)));
   const [text, setText] = useState<string | null>(null);
   const commit = () => {
     const v = Number((text ?? shown).replace(",", "."));
@@ -263,7 +270,7 @@ function DesignControlsView({
           </span>
         )}
         {status.scaleHint && (
-          <span className="text-[11px] text-amber-700 leading-snug dark:text-amber-400">
+          <span className="text-[11px] text-muted-foreground leading-snug">
             {status.scaleHint}
           </span>
         )}
@@ -328,7 +335,6 @@ function DesignControlsView({
           value={p.rotation}
         />
       </div>
-      <ScaleControls controls={controls} ids={ids} status={status} />
       <Slider
         aria-label="Drehung"
         max={180}
@@ -339,6 +345,9 @@ function DesignControlsView({
         step={1}
         value={[p.rotation]}
       />
+      {status.scalable && (
+        <ScaleControls controls={controls} ids={ids} status={status} />
+      )}
       <Field orientation="horizontal">
         <FieldLabel className="font-medium text-xs" htmlFor={`${ids}-replace`}>
           Bestand im Umriss ausblenden
@@ -446,7 +455,13 @@ function ScaleControls({
       <NumberField
         id={`${ids}-factor`}
         label="Faktor"
-        onCommit={(factor) => controls()?.setScale({ ...scale, factor })}
+        digits={4}
+        onCommit={(factor) =>
+          controls()?.setScale({
+            ...scale,
+            factor: Math.min(FACTOR_MAX, Math.max(FACTOR_MIN, factor)),
+          })
+        }
         step={0.01}
         unit="×"
         value={scale.factor}
