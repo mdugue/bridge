@@ -133,6 +133,7 @@ import { createInquiryProbe, type OutlineSubject } from "./inquiry-probe";
 import {
   bridgeShape,
   buildingShape,
+  crownFormOf,
   solidShape,
   standInDepth,
   trafficTriangles,
@@ -562,8 +563,7 @@ export interface CityWalkHandle {
   /**
    * The page is about to reload after the render stopped (the failure
    * card's buttons): frees the GPU — three's renderer and its device —
-   * and settles within RELEASE_WAIT_MS; the ground and BVH workers go
-   * first. Nothing draws after it.
+   * and settles within RELEASE_WAIT_MS. Nothing draws after it.
    */
   releaseGpu: () => Promise<void>;
   /**
@@ -964,7 +964,6 @@ function probeGpu(renderer: WebGPURenderer): string | null {
  * same process. Settles within RELEASE_WAIT_MS either way.
  */
 function releaseGpu(renderer: WebGPURenderer): Promise<void> {
-  stopWorkers();
   let released: Promise<void>;
   try {
     released = renderer.dispose().catch(() => undefined);
@@ -1173,11 +1172,12 @@ async function teardownWhole(
   await releaseRenderer(renderer);
 }
 
-/** Before a reload: the ground and BVH workers go for good, and their
- *  heaps with them, not when the old document is collected (the new page
- *  boots in the old one's process). The render has stopped, so the stream
- *  asks for nothing new: only the tiles already parsing still send a job,
- *  done on this thread, and nothing casts a ray at a building any more. */
+/** Before a reload, once the stream is gone: the ground and BVH workers
+ *  go, and their heaps with them, not when the old document is collected
+ *  (the new page boots in the old one's process). Not in `releaseGpu`:
+ *  there the stream lives on (the tiles still parsing send their jobs),
+ *  so a stop there would start them again or, latched, move that work
+ *  onto this thread; the workers then go with the old document. */
 function stopWorkers(): void {
   stopGroundWorker();
   stopBvhWorker();
@@ -2156,14 +2156,7 @@ async function bootApp(
     return {
       // a tree's crown as it is drawn: a cone outlined as one (not a pine
       // or a yew), any other kind's solids as they are
-      positions: solidShape(
-        solids,
-        target.kind === "tree" || target.kind === "canopy"
-          ? target.cone === true
-            ? "cone"
-            : "ellipsoid"
-          : null
-      ),
+      positions: solidShape(solids, crownFormOf(target)),
       reach:
         target.kind === "bikes"
           ? Number.POSITIVE_INFINITY

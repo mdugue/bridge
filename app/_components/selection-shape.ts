@@ -120,6 +120,17 @@ const UPRIGHT = new Quaternion();
  *  drawn as they are — a lamp's arm or a short hedge also has two. */
 export type CrownForm = "cone" | "ellipsoid" | null;
 
+/** A thing's crown form: a tree's or a canopy's, a cone where it says so. */
+export function crownFormOf(target: {
+  kind: string;
+  cone?: boolean;
+}): CrownForm {
+  if (target.kind !== "tree" && target.kind !== "canopy") {
+    return null;
+  }
+  return target.cone === true ? "cone" : "ellipsoid";
+}
+
 /** A shape after a thing's solids: a tree's crown (its second solid) as
  *  `crown` says, any other cylinder as it is, a prism. */
 export function solidShape(

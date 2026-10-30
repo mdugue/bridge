@@ -1352,7 +1352,11 @@ selection outline wait for it, and the autofocus passes it over. The spawn tile'
 ground before the first frame (ADR 0032 needs it there): after its
 terrain has landed, not inside the parse that landed its buildings. The
 collider builds nothing before that placing — the frames before it stand
-over a floor that is not there.
+over a floor that is not there. Before a reload to a heavier page
+(`disposeForReload`), once the stream is gone, this worker and the ground
+worker are terminated, and their heaps go with them rather than with the
+old document (create-app.ts `stopWorkers`); the reloads after a lost GPU
+keep them, since their stream still sends jobs.
 Whatever moves the camera — walking, flying, a glide on its way, a double
 tap, a snapshot, a GPS fix, a tile landing — it ends up neither below the
 ground nor inside a building: `camera-pose.ts` sets a walker out beside a

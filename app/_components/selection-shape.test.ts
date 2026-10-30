@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { AskSolid } from "@/lib/city/ask-solids";
-import { solidShape } from "./selection-shape";
+import { crownFormOf, solidShape } from "./selection-shape";
 
 const post: AskSolid = { cylinder: { r: 0.1, x: 0, y0: 0, y1: 5, z: 0 } };
 const head: AskSolid = { cylinder: { r: 0.3, x: 1, y0: 4.6, y1: 5, z: 0 } };
@@ -20,4 +20,12 @@ test("a tree's second solid is its crown, drawn as the crown form says", () => {
   // the first solid, the trunk, stays a cylinder whatever the crown
   const trunkOnly = solidShape([post], "ellipsoid");
   expect(trunkOnly.length).toBe(solidShape([post]).length);
+});
+
+test("only a tree or a canopy has a crown form, a cone where it says so", () => {
+  expect(crownFormOf({ kind: "tree" })).toBe("ellipsoid");
+  expect(crownFormOf({ kind: "tree", cone: true })).toBe("cone");
+  expect(crownFormOf({ kind: "canopy", cone: false })).toBe("ellipsoid");
+  expect(crownFormOf({ kind: "lamp" })).toBeNull();
+  expect(crownFormOf({ kind: "hedge", cone: true })).toBeNull();
 });

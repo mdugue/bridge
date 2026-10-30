@@ -87,8 +87,7 @@ test("a coarse level's job goes ahead of the fine ones queued before it", async 
   expect(order).toEqual(["coarse", "fine"]);
 });
 
-// last: a stopped worker stays stopped for the module's life
-test("a stopped worker ends the jobs still waiting, and the next job is done here", async () => {
+test("a stopped worker ends the jobs still waiting, and the next job starts a new one", async () => {
   const busy = prepareGroundOffThread(grid());
   const waiting = prepareGroundOffThread(grid(1));
   stopGroundWorker();
@@ -97,5 +96,5 @@ test("a stopped worker ends the jobs still waiting, and the next job is done her
   expect(ended.map((r) => r.status)).toEqual(["rejected", "rejected"]);
   const input = grid(2);
   expect(await prepareGroundOffThread(input)).toEqual(prepareGround(input));
-  expect(groundWorkerUp()).toBe(false);
+  expect(groundWorkerUp()).toBe(true);
 });
