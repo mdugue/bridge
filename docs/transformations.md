@@ -2418,7 +2418,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   mean per style, with one new mark. *Pastell*, *Film noir*, *Sin City*:
   everything (families, blossom, age, stakes). *Comic*: its cloud
   crowns copy every per-instance attribute (`style-dressing.ts`), so they
-  turn and flower with the season. *Papier* and *Strich*: the paper
+  turn and flower with the season, printed in marker inks (green, an
+  autumn crown yellow, a bare or blossoming one the paper;
+  `printedCrown`), a bare one whole. *Papier* and *Strich*: the paper
   override has no mask, so their card crowns stay closed outlines (a
   plan's cloud, not a noise). *Schwarzplan*: until now no trees; now the register's trees as
   a site plan draws them (`tree-plan.ts`: the measured crown as a circle,

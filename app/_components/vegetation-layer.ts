@@ -25,6 +25,8 @@ import {
   length,
   materialColor,
   max,
+  min,
+  modelWorldMatrix,
   mix,
   normalize,
   positionGeometry,
@@ -32,6 +34,7 @@ import {
   pow,
   sin,
   smoothstep,
+  step,
   uniform,
   varying,
   vec2,
@@ -72,6 +75,7 @@ import {
   type CrownMaterials,
   type CrownSeasonKey,
   crownSeasonNodes,
+  crownsPrinted,
   type CrownWarmup,
   crownWarmup,
   type SeasonalCrowns,
@@ -677,6 +681,14 @@ const instanceColumn = (i: number): V4 =>
     vec4(i === 0 ? 1 : 0, i === 1 ? 1 : 0, i === 2 ? 1 : 0, i === 3 ? 1 : 0)
   );
 
+/** Within this distance (m) a crown sways fully; past `SWAY_FAR_M` not
+ *  at all. */
+const SWAY_NEAR_M = 120;
+const SWAY_FAR_M = 260;
+/** The share of the sway the picture style lets the crowns have
+ *  (RenderStyleDef.sway, set by post-stack.ts); one uniform for the scene. */
+export const crownSwayShare = uniform(1);
+
 /**
  * The wind sway: the crown bent in its own space, before the instance
  * transform — stiff at the base (where it meets the trunk) and loose at the
@@ -690,10 +702,18 @@ function crownSway(time: Live, base: V3): { gust: F; local: V3 } {
   const phase = dot(instanceColumn(3).xz, vec2(0.07, 0.11));
   const k0 = clamp(base.y.div(7), 0, 1);
   const k = k0.mul(k0).mul(0.16);
-  const gust = sin(time.mul(0.38).add(phase)).add(
-    sin(time.mul(0.8).add(phase.mul(1.7))).mul(0.5)
-  );
-  const side = sin(time.mul(0.31).add(phase).add(1.7)).mul(0.6);
+  // Far off the sway is a fraction of a pixel: it cannot be seen as
+  // motion, only as the crown's edge and stipple hitting other pixels each
+  // frame — a shimmer over the whole distance. It, and the brightness
+  // pulse on it, fade out with the tree's distance from the eye.
+  const at = modelWorldMatrix.mul(vec4(instanceColumn(3).xyz, 1)).xyz;
+  const near = float(1)
+    .sub(smoothstep(SWAY_NEAR_M, SWAY_FAR_M, distance(at, cameraPosition)))
+    .mul(crownSwayShare);
+  const gust = sin(time.mul(0.38).add(phase))
+    .add(sin(time.mul(0.8).add(phase.mul(1.7))).mul(0.5))
+    .mul(near);
+  const side = sin(time.mul(0.31).add(phase).add(1.7)).mul(0.6).mul(near);
   return {
     gust,
     local: base.add(vec3(gust.mul(k), 0, side.mul(k))),
@@ -829,26 +849,62 @@ export function buildCrownMaterial(
   m.positionNode = instancePosition(sway.local);
   m.castShadowPositionNode = instancePosition(shape);
   const crownScale = varying(length(instanceColumn(1).xyz));
-  const gust = varying(sway.gust);
+  // (a printed crown has no brightness pulse: its light is cut in two
+  // steps, and the pulse would flip it between them)
+  const gust = varying(sway.gust.mul(float(1).sub(crownsPrinted)));
   const tinted = materialColor.mul(instanceTint());
   if (!bare) {
-    const lit = crownLight(u, tinted, gust, crownScale);
+    const lit = crownLight(
+      u,
+      printedCrown(tinted, tinted, float(0)),
+      gust,
+      crownScale
+    );
     m.colorNode = lit.colour;
-    m.emissiveNode = lit.emissive;
+    m.emissiveNode = lit.emissive.mul(float(1).sub(crownsPrinted));
     return m;
   }
   const season = crownSeasonNodes();
   m.maskNode = season.keep;
+  m.maskShadowNode = season.keepShadow;
+  const kept = mix(tinted, season.twigColour, season.twig);
   const lit = crownLight(
     u,
-    mix(tinted, season.twigColour, season.twig),
+    printedCrown(mix(kept, season.veilColour, season.veil), kept, season.twig),
     gust,
     crownScale
   );
   m.colorNode = lit.colour;
   // Twigs of a bare crown neither shimmer nor glow.
-  m.emissiveNode = lit.emissive.mul(float(1).sub(season.twig));
+  m.emissiveNode = lit.emissive
+    .mul(float(1).sub(season.twig))
+    .mul(float(1).sub(crownsPrinted));
   return m;
+}
+
+/**
+ * Marker inks for Comic's crowns (`crownsPrinted`): fully saturated, one
+ * channel at zero, so the light (which multiplies) keeps them saturated
+ * and the Comic pass tells a crown from anything else in the clay scene by
+ * the saturation alone, its season by the hue and its light by the value
+ * (all three peak near 0.9; stylize-effect.ts, `comic`). Told on the colour, an autumn crown read as a yellow
+ * wall and got the wall's dot screen, which shimmered with every sway.
+ */
+const MARK_LEAFY = vec3(0, 0.9, 0.24);
+const MARK_AUTUMN = vec3(0.95, 0.72, 0);
+const MARK_BARE = vec3(0.9, 0.2, 0);
+
+/** The crown's colour `shown`, or its marker ink while the crowns are
+ *  printed, told on its kept cells' colour (`kept`, before any veil): an
+ *  autumn crown (red over green) yellow; a mostly bare one, or one in
+ *  blossom (pale, blue over green: pink or white), the paper's ink. */
+function printedCrown(shown: V3, kept: V3, twig: F): V3 {
+  const leaf = mix(MARK_LEAFY, MARK_AUTUMN, step(kept.y, kept.x));
+  // (blossom is pale: a copper beech, blue over green too, is dark)
+  const blossom = step(kept.y, kept.z).mul(step(0.45, min(kept.x, kept.y)));
+  const pale = max(step(0.5, twig), blossom);
+  const mark = mix(leaf, MARK_BARE, pale);
+  return mix(shown, mark, crownsPrinted);
 }
 
 /**

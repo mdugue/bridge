@@ -85,6 +85,7 @@ bun run docs:matrix     # regenerate the guide's sources-by-city pages
 - **`docs-upkeep`** — what a change must update in `docs/`, how to write an
   ADR.
 - **`pr-snapshots`** — the snapshots a visual PR carries.
+- **`flicker-probe`** — find and prove flicker by diffing held frames.
 - `threejs-*` are generic three.js references; in this repo only their
   WebGPU/TSL parts apply.
 - `improve` writes plans to a root `plans/` by default: point it at
