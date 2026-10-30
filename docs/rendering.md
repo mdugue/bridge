@@ -376,7 +376,8 @@ The full recipe with its rejected alternatives (VSM rings, large
 The scene renders **top-level into its own half-float target** with a
 depth texture (`post-stack.ts`), and three's node `RenderPipeline` reads
 colour and depth from it: `GTAO (half resolution, normals from depth) ^
-AO_EXPONENT → DepthOfFieldNode (desktop; skipped while moving) → the
+AO_EXPONENT → DepthOfFieldNode (desktop; skipped while moving; in motion
+the camera's motion blur instead, pastel only) → the
 picture style → SMAANode (FXAA on a phone) → depth grading + vignette +
 paper grain + the outline → sRGB`. Rendering the scene outside the
 pipeline is what lets a tile's `compileAsync` prepare the very build its
@@ -1188,6 +1189,33 @@ On a desktop, while the camera moves, DoF is dropped and restored after
 not its memory — its targets are held either way, which was the cost on a
 phone, so a phone does not build it. The contact shadows stay on because
 gating them made them blink on every step.
+
+**Motion blur** (`motion-blur.ts`, `lib/city/motion-blur.ts`, pastel
+only, perspective only). Each pixel's point is rebuilt from depth,
+taken into the last frame's view (`viewToPrev`, the last view matrix
+times the camera's world matrix) and projected there; half the way
+between (a 180° shutter), at most 32 px, is averaged in 8 reads of the
+scene target, the contact shadows multiplied in once. The camera's
+motion only: there is no velocity output (the clay is out of inter-stage
+variables) and no history, only three matrices. The CPU measures the
+frame's motion on a 3×3 grid at 3 m and 1 km and blurs only while the
+lens blur is off (`regressed`): on a desktop once half the samples move
+2 px (a smear of 1 px), on a phone once all of them do — there the blur
+replaces the FXAA, and a far city that barely moves would keep neither.
+So a walk straight ahead stays sharp and antialiased; a turn, a strafe
+or a flight blurs. Above 600 px (a jump), after a new size or
+projection and when the page comes back to the front, a frame is drawn
+sharp. Where it draws, memory does not grow:
+
+- **Phone:** in the last pass, **in place of the FXAA** (8 reads against
+  FXAA's up to ~20); a smear of a pixel or more hides the stairs.
+- **Desktop:** one full-resolution pass into the lens blur's own input
+  copy, which lies idle while the camera moves, and SMAA reads it there.
+  A moving frame is that one pass heavier than before, still well under
+  a standing frame with its depth of field.
+
+The graphic styles keep their crisp lines and draw without it; Modell
+too.
 
 ## Boot sequence
 

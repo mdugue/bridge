@@ -60,6 +60,7 @@ import { compileInLanes, type Compiling } from "./compile-lanes";
 import { crownsPrinted } from "./crown-season";
 import { crownSwayShare } from "./vegetation-layer";
 import { fxaa } from "./fxaa";
+import { createMotionBlur } from "./motion-blur";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
 import {
@@ -372,6 +373,8 @@ function lensBlurOf(lit: V4, viewZ: F, focusDistance: Live, focusRange: Live) {
     focused: nodeObject(node) as unknown as V4,
     /** the target the blur composites the frame into, each frame it runs */
     composite: output.getTextureNode().value,
+    /** the frame copy it blurs, idle while it does not run */
+    input: input.renderTarget as RenderTarget,
     dispose: () => {
       node.dispose();
       input.dispose();
@@ -516,7 +519,10 @@ const COMPILE_LANES = 4;
  * frame copies nothing for SMAA either (`Antialiasing.read`): standing, it
  * reads the lens blur's composite; walking, the scene target, the contact
  * shadows multiplied in after it; only Modell's frame is drawn into
- * `beforeAa` first.
+ * `beforeAa` first. A pastel frame in motion is blurred along the
+ * camera's way (motion-blur.ts) without a target of its own: on a phone
+ * in the last pass in place of the FXAA, on a desktop into the lens
+ * blur's input copy, idle while the camera moves.
  */
 export function createPostStack(
   renderer: WebGPURenderer,
@@ -576,6 +582,7 @@ export function createPostStack(
   const lensBlur = profile.dof
     ? lensBlurOf(lit, viewZ, focusDistance, focusRange)
     : null;
+  const motion = createMotionBlur(depthTexture, lens);
 
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
   const stylize = createStylize({
@@ -647,9 +654,14 @@ export function createPostStack(
     p.outputColorTransform = false;
     return p;
   };
+  // The pastel frame in motion under FXAA: the motion blur in the last
+  // pass, in place of the FXAA — about as many reads, no target; a smear
+  // of a pixel or more hides the stairs FXAA would have smoothed.
   const finished = {
     afterPre: finishedOf(antialiasing.afterPre),
     direct: antialiasing.direct && finishedOf(antialiasing.direct),
+    moving:
+      antialiasing.direct && finishedOf(motion.over(target.texture, occlusion)),
   };
   // A pipeline renders into the current target (`Pre.into`).
   const pipelineOf = (node: V4) => {
@@ -683,6 +695,16 @@ export function createPostStack(
     // keep the contact shadows under the antialiasing, as they always had
     model: readsInPlace ? preOf(pipelineOf(lit)) : null,
     plain: null,
+    // In motion under SMAA: the frame blurred into the lens blur's own
+    // copy, which lies idle while the camera moves (`regressed`), and
+    // antialiased where it lies — no target of its own.
+    motion:
+      readsInPlace && lensBlur
+        ? preOf(
+            pipelineOf(motion.over(target.texture, occlusion)),
+            lensBlur.input
+          )
+        : null,
   };
   const styled = {
     dof: lensBlur && preOf(pipelineOf(stylize.node(lensBlur.focused))),
@@ -696,9 +718,21 @@ export function createPostStack(
   // it), Modell `model` — recovery from one never overrides another.
   let regressed = false;
   let model = false;
+  // the camera moved enough this frame to draw the pastel frame blurred
+  // (motion-blur.ts), where this tier has a way to draw it
+  let blurred = false;
+  // ...and how: before SMAA on a desktop, in place of the FXAA on a phone
+  const moving = pastel.motion
+    ? { pre: pastel.motion, finished: finished.afterPre }
+    : finished.moving
+      ? { pre: null, finished: finished.moving }
+      : null;
   /** What draws before the antialiasing this frame (null: nothing), and
    *  the last pass. */
   const frame = () => {
+    if (blurred && moving) {
+      return moving;
+    }
     const pair = style.shaderMode > 0 ? styled : pastel;
     const lensOn = style.allowDof && !regressed && !model;
     const pre =
@@ -714,9 +748,15 @@ export function createPostStack(
   // first render, so each is rendered once, one per frame, into the pixel
   // ahead of the one the frame shows. The pastel ones go first — those
   // frames are under the load screen.
-  const toWarm: RenderPipeline[] = [pastel.dof, pastel.model].flatMap((p) =>
-    p ? [p.pipeline] : []
-  );
+  const toWarm: RenderPipeline[] = [
+    pastel.dof,
+    pastel.model,
+    pastel.motion,
+  ].flatMap((p) => (p ? [p.pipeline] : []));
+  // The phone's blurred last pass draws to the canvas, a render context
+  // the pixel does not share: it warms there, once, under the frame that
+  // overdraws it.
+  let warmMoving = finished.moving;
   // whether `beforeAa` holds its memory (a frame that draws elsewhere lets
   // it go)
   let preHeld = false;
@@ -1049,11 +1089,21 @@ export function createPostStack(
       }
       outline.update(renderer.getPixelRatio());
       outline.renderMask(renderer, view);
+      // `regressed`: the lens blur is off, and its copy free to draw into
+      blurred = motion.update(
+        size,
+        moving !== null && style.shaderMode === 0 && !model && regressed,
+        moving?.pre === null
+      );
       const shown = frame();
       // the input named before anything is drawn or let go: `beforeAa`
       // may be freed below, and SMAA must not still be bound to it then
       antialiasing.read(shown.pre?.reads ?? target.texture, shown.pre === null);
       drawPre(shown.pre);
+      if (warmMoving && shown.finished !== warmMoving) {
+        warmMoving.render();
+      }
+      warmMoving = null;
       shown.finished.render();
     },
     getFocusInfo: () => ({
@@ -1065,6 +1115,9 @@ export function createPostStack(
       renderer.getDrawingBufferSize(size);
       target.setSize(size.x, size.y);
       beforeAa.setSize(size.x, size.y);
+      // the lens blur sizes its copy when it runs; the motion blur draws
+      // there while it does not
+      lensBlur?.input.setSize(size.x, size.y);
       antialiasing.setSize(size);
       outline.setSize(size.x, size.y);
     },
@@ -1088,15 +1141,23 @@ export function createPostStack(
       }
     },
     dispose: () => {
-      for (const pre of [pastel.dof, pastel.model, styled.dof, styled.plain]) {
+      for (const pre of [
+        pastel.dof,
+        pastel.model,
+        pastel.motion,
+        styled.dof,
+        styled.plain,
+      ]) {
         pre?.pipeline.dispose();
       }
       finished.afterPre.dispose();
       finished.direct?.dispose();
+      finished.moving?.dispose();
       // the passes' own targets and materials: a pipeline frees its quad's
       // material only, and these hold the screen-sized memory
       antialiasing.dispose();
       lensBlur?.dispose();
+      motion.dispose();
       aoTexture.dispose();
       aoPass.dispose();
       beforeAa.dispose();

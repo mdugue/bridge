@@ -465,7 +465,7 @@ Code und Wissensbasis für sie verwenden:
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
 
-Zwei weitere Effekte gehören zum festen Look. Der Nebel über dem Fluss
+Drei weitere Effekte gehören zum festen Look. Der Nebel über dem Fluss
 treibt erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der
 Ferne.
 Die fotografische Tiefenschärfe macht nur unscharf, was hinter dem Fokus
@@ -474,7 +474,11 @@ Bildmitte liegt. Solange sich die Kamera bewegt, ist die Unschärfe
 abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
 zurück, sobald du stehst. Telefone zeichnen ohne sie: Die Unschärfe
 braucht mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen
-kann, den ein kleiner Bildschirm kaum zeigt.
+kann, den ein kleiner Bildschirm kaum zeigt. Und solange du im
+Pastell-Look gehst, dich drehst oder fliegst, verwischt das Bild leicht
+entlang der Kamerabewegung, wie bei einer Kamera mit kurzer Belichtung;
+auch auf Telefonen, ohne zusätzlichen Speicher. Die anderen Bildstile
+und das Modell behalten ihre scharfen Linien.
 
 ### Erweitert
 
