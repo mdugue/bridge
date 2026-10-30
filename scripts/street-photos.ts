@@ -19,7 +19,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gridConvergenceDeg, latLngToUtm, utmToLatLng } from "../lib/city/crs";
-import { tileExtentOf } from "../lib/city/site";
+import { siteExtentOf } from "../lib/city/site";
 import { siteFromArgs } from "../sites";
 import { readDgmFile } from "./dgm-cache";
 import { siteDgm } from "./line-levels";
@@ -109,46 +109,116 @@ export function shuffled<T>(items: readonly T[], seed: string): T[] {
   return out;
 }
 
-/** The newest usable photo per cell, the cells in the seed's order. */
-export function pickPhotos(
-  items: readonly (PanoramaxItem & { x: number; y: number })[],
-  n: number,
+/** A cell of the site's grid, [minX, minY, maxX, maxY] in the CRS. */
+export type Cell = [number, number, number, number];
+
+/** The site's 400 m cells over its extent, in the seed's order. */
+export function cellsInOrder(
+  extent: [number, number, number, number],
   seed: string
-) {
-  const newest = new Map<string, PanoramaxItem & { x: number; y: number }>();
-  for (const item of items) {
-    const cell = `${Math.floor(item.x / CELL_M)}_${Math.floor(item.y / CELL_M)}`;
-    const held = newest.get(cell);
-    if (!held || item.properties.datetime > held.properties.datetime) {
-      newest.set(cell, item);
+): Cell[] {
+  const cells: Cell[] = [];
+  for (let x = extent[0]; x < extent[2]; x += CELL_M) {
+    for (let y = extent[1]; y < extent[3]; y += CELL_M) {
+      cells.push([
+        x,
+        y,
+        Math.min(x + CELL_M, extent[2]),
+        Math.min(y + CELL_M, extent[3]),
+      ]);
     }
   }
-  return shuffled(
-    [...newest.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, v]) => v),
-    seed
-  ).slice(0, n);
+  return shuffled(cells, seed);
 }
 
-async function search(bbox: number[]): Promise<PanoramaxItem[]> {
-  const items: PanoramaxItem[] = [];
-  let url: string | undefined =
-    `${API}/search?bbox=${bbox.join(",")}&limit=500&datetime=2023-01-01T00:00:00Z/..`;
-  // a few pages: enough to spread over a site, not the whole catalogue
-  for (let page = 0; url && page < 6; page++) {
-    const r = await fetch(url, { signal: AbortSignal.timeout(60_000) });
-    if (!r.ok) {
-      throw new Error(`Panoramax: HTTP ${r.status}`);
-    }
-    const body = (await r.json()) as {
-      features: PanoramaxItem[];
-      links?: { rel: string; href: string }[];
-    };
-    items.push(...body.features);
-    url = body.links?.find((l) => l.rel === "next")?.href;
+/** The lat/lon box around a CRS box: all four corners (the grid is
+ *  turned against the meridians, so two corners would cut strips off). */
+export function lonLatBox(epsg: number, cell: Cell): number[] | null {
+  const corners = [
+    utmToLatLng(epsg, cell[0], cell[1]),
+    utmToLatLng(epsg, cell[0], cell[3]),
+    utmToLatLng(epsg, cell[2], cell[1]),
+    utmToLatLng(epsg, cell[2], cell[3]),
+  ];
+  if (corners.some((c) => c === null)) {
+    return null;
   }
-  return items;
+  const lons = corners.map((c) => c!.lng);
+  const lats = corners.map((c) => c!.lat);
+  return [
+    Math.min(...lons),
+    Math.min(...lats),
+    Math.max(...lons),
+    Math.max(...lats),
+  ];
+}
+
+/** The newest of a cell's usable photos inside it, or null. */
+export function newestIn<T extends PanoramaxItem & { x: number; y: number }>(
+  items: readonly T[],
+  cell: Cell
+): T | null {
+  let best: T | null = null;
+  for (const item of items) {
+    const inside =
+      item.x >= cell[0] &&
+      item.x < cell[2] &&
+      item.y >= cell[1] &&
+      item.y < cell[3];
+    if (
+      inside &&
+      usable(item) &&
+      (!best || item.properties.datetime > best.properties.datetime)
+    ) {
+      best = item;
+    }
+  }
+  return best;
+}
+
+/** One cell's photos since 2023 (a page: a cell rarely holds more). */
+async function searchCell(bbox: number[]): Promise<PanoramaxItem[]> {
+  const r = await fetch(
+    `${API}/search?bbox=${bbox.join(",")}&limit=200&datetime=2023-01-01T00:00:00Z/..`,
+    { signal: AbortSignal.timeout(60_000) }
+  );
+  if (!r.ok) {
+    throw new Error(`Panoramax: HTTP ${r.status}`);
+  }
+  return ((await r.json()) as { features: PanoramaxItem[] }).features;
+}
+
+/** The cells' newest photos, in the seed's order, until `n` are found. */
+async function pickPhotos(
+  epsg: number,
+  cells: readonly Cell[],
+  n: number
+): Promise<{
+  picked: (PanoramaxItem & { x: number; y: number })[];
+  looked: number;
+}> {
+  const picked: (PanoramaxItem & { x: number; y: number })[] = [];
+  let looked = 0;
+  for (const cell of cells) {
+    if (picked.length >= n) {
+      break;
+    }
+    const bbox = lonLatBox(epsg, cell);
+    if (!bbox) {
+      continue;
+    }
+    looked++;
+    const items = (await searchCell(bbox)).flatMap((item) => {
+      const [lon, lat] = item.geometry.coordinates;
+      const p = latLngToUtm(epsg, lat, lon);
+      return p ? [{ ...item, ...p }] : [];
+    });
+    const best = newestIn(items, cell);
+    if (best) {
+      picked.push(best);
+    }
+  }
+  return { picked, looked };
 }
 
 async function main() {
@@ -160,28 +230,11 @@ async function main() {
   const n = Number(flag("--n") ?? 8);
   const seed = flag("--seed") ?? isoWeek(new Date());
   const epsg = site.provider.epsg;
-  const extents = site.tiles.map(tileExtentOf);
-  const [x0, y0, x1, y1] = [
-    Math.min(...extents.map((e) => e[0])),
-    Math.min(...extents.map((e) => e[1])),
-    Math.max(...extents.map((e) => e[2])),
-    Math.max(...extents.map((e) => e[3])),
-  ];
-  const sw = utmToLatLng(epsg, x0, y0);
-  const ne = utmToLatLng(epsg, x1, y1);
-  if (!(sw && ne)) {
-    throw new Error(`EPSG:${epsg} is not supported`);
-  }
-  const found = (await search([sw.lng, sw.lat, ne.lng, ne.lat]))
-    .filter(usable)
-    .flatMap((item) => {
-      const [lon, lat] = item.geometry.coordinates;
-      const p = latLngToUtm(epsg, lat, lon);
-      return p && p.x > x0 && p.x < x1 && p.y > y0 && p.y < y1
-        ? [{ ...item, ...p }]
-        : [];
-    });
-  const picked = pickPhotos(found, n, seed);
+  const { picked, looked } = await pickPhotos(
+    epsg,
+    cellsInOrder(siteExtentOf(site), seed),
+    n
+  );
   const heightAt = await siteDgm(site, (tif, tfw) =>
     readDgmFile(tif, tfw, "native")
   );
@@ -259,7 +312,7 @@ async function main() {
     `${JSON.stringify({ seed, pairs }, null, 2)}\n`
   );
   process.stdout.write(
-    `${pairs.length} Fotos (von ${found.length} brauchbaren) für ${site.name}, Woche ${seed}: street-photos/${site.id}/pairs.json\n`
+    `${pairs.length} Fotos aus ${looked} Zellen für ${site.name}, Woche ${seed}: street-photos/${site.id}/pairs.json\n`
   );
 }
 

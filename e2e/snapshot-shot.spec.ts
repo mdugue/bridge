@@ -8,8 +8,19 @@ import {
   snapshotInstant,
 } from "../lib/city/snapshot";
 
-// Big crisp canvas for inspecting shadow/edge artifacts.
-test.use({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
+/**
+ * Big crisp canvas for inspecting shadow/edge artifacts — or, with
+ * `SHOTS_SMALL=1`, 800 × 500 at 1× (the same 16:10) and five minutes to
+ * load: what a software-rendered container (the routines' street-photo
+ * check, docs/routines.md) can draw, with `SHOTS_QUERY=scene=lite&block=1`.
+ */
+const SHOTS_SMALL = Boolean(process.env.SHOTS_SMALL);
+const READY_MS = SHOTS_SMALL ? 300_000 : 120_000;
+test.use(
+  SHOTS_SMALL
+    ? { viewport: { width: 800, height: 500 }, deviceScaleFactor: 1 }
+    : { viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 }
+);
 
 /**
  * Snapshot screenshot harness — NOT a smoke test. Reproduces an exact view
@@ -49,7 +60,7 @@ function snapshotFiles(): string[] {
 for (const file of snapshotFiles()) {
   const name = file.replace(/\.json$/, "");
   test(`snapshot: ${name}`, async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(READY_MS + 150_000);
     // Validate before rendering: a broken shot fails loudly instead of
     // silently rendering the defaults.
     const parsed = parseSnapshot(readFileSync(join(SHOTS_DIR, file), "utf8"));
@@ -60,7 +71,7 @@ for (const file of snapshotFiles()) {
 
     await page.goto(`/${SHOTS_SITE}${SHOTS_QUERY ? `?${SHOTS_QUERY}` : ""}`);
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
-      timeout: 120_000,
+      timeout: READY_MS,
     });
 
     // The same codec (and the same minute-floored instant) the HUD's Apply

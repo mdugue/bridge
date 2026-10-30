@@ -35,7 +35,8 @@ and editions no record holds yet).
    `bun run fetch <site> <tile…>` (plus `--lsc` where the provider has
    it), `bun run bake <site> <tile…>`, `bun run test:pipeline`,
    `bun run verify`, then update `data/<site>/provenance.json` (the new
-   `Stand` and the date) and the guide's dataset table in both languages.
+   `Stand` and the date; after a new Basis-DLM, its `lastModified` day
+   under `geosn["Basis-DLM"]`, which the check compares against) and the guide's dataset table in both languages.
    Open a **draft PR**; it changes what the viewer shows, so it carries
    snapshots (the `pr-snapshots` skill) of the changed tiles. A fetch
    that fails (the service is down, the raw data is gigabytes the

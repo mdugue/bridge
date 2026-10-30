@@ -29,11 +29,15 @@ import type {
 /** A building this tall without storeys is worth a mapper's look (m). */
 export const MIN_LEVELS_HEIGHT_M = 8;
 
-/** Uses whose storeys mean little (a nave, a hall, a tower): no task. */
-const NO_STOREYS = /kirche|kapelle|dom\b|turm|halle|bahnhof|stadion|brücke/i;
+/** An official use whose storeys mean little (a nave, a hall, a tower). */
+const NO_STOREYS_USE = /kirche|kapelle|turm|halle|bahnhof|stadion/i;
+/** A name that says the same: it ends so ("Kreuzkirche", "Hausmannsturm"). */
+const NO_STOREYS_NAME = /(kirche|kapelle|dom|turm|halle|bahnhof|stadion)$/i;
 
-/** A landmark that is not a building OSM draws as one (a bridge). */
+/** What Wikidata calls a structure OSM draws as no building outline. */
 const NOT_A_BUILDING = /brücke|bridge|viadukt|steg\b/i;
+/** A name that says so where Wikidata says nothing ("Albertbrücke"). */
+const BRIDGE_NAME = /brücke$/i;
 
 export type GapKind =
   | "wahrzeichen-ohne-name"
@@ -89,27 +93,47 @@ const describe = (b: WissenBuilding) =>
     ? `${b.use} (ohne Namen)`
     : "Gebäude ohne Namen");
 
-/** A landmark none of whose OSM outlines is named (bridges left out). */
+/** A landmark that is a bridge, not a building outline. */
+function isBridge(lm: WissenLandmark): boolean {
+  const kinds = (lm.facts?.claims.P31 ?? []).map((v) => v.v);
+  return kinds.length > 0
+    ? kinds.some((k) => NOT_A_BUILDING.test(k))
+    : BRIDGE_NAME.test(lm.name);
+}
+
+/**
+ * A landmark none of whose OSM outlines is named. Its buildings are those
+ * the directory ties to it (`wd`, across tiles — its `objects` are often
+ * BuildingParts, which the directory folds into their root) and its
+ * `objects` the directory lists.
+ */
 function namelessLandmark(
   lm: WissenLandmark,
+  byWd: ReadonlyMap<string, WissenBuilding[]>,
   byId: ReadonlyMap<string, WissenBuilding>
 ): boolean {
-  const kinds = (lm.facts?.claims.P31 ?? []).map((v) => v.v).join(" ");
-  if (NOT_A_BUILDING.test(`${lm.name} ${kinds}`)) {
+  if (isBridge(lm)) {
     return false;
   }
-  const parts = lm.objects.flatMap((id) => byId.get(id) ?? []);
+  const parts = [
+    ...(byWd.get(lm.id) ?? []),
+    ...lm.objects.flatMap((id) => byId.get(id) ?? []),
+  ];
   return parts.length > 0 && parts.every((b) => b.name === undefined);
 }
 
 /** A building's own gap, if it has one. */
 function buildingGap(b: WissenBuilding): GapKind | null {
   const known = b.name !== undefined || b.addr !== undefined;
+  if (b.wd !== undefined) {
+    // a landmark's part: its landmark is the task
+    return null;
+  }
   if (b.heritage && !known) {
     return "denkmal-ohne-name";
   }
   const storeysMatter =
-    b.wd === undefined && !NO_STOREYS.test(`${b.name ?? ""} ${b.use ?? ""}`);
+    !NO_STOREYS_USE.test(b.use ?? "") && !NO_STOREYS_NAME.test(b.name ?? "");
   return known &&
     b.levels === undefined &&
     (b.h ?? 0) >= MIN_LEVELS_HEIGHT_M &&
@@ -123,8 +147,15 @@ export function osmGaps(
   index: StadtwissenIndex,
   tiles: readonly WissenTile[]
 ): GapTask[] {
-  const buildings = tiles.flatMap((t) => t.buildings);
-  const byId = new Map(buildings.map((b) => [b.id, b]));
+  // a building on a tile seam is in both tiles' directories: once here
+  const byId = new Map(tiles.flatMap((t) => t.buildings).map((b) => [b.id, b]));
+  const buildings = [...byId.values()];
+  const byWd = new Map<string, WissenBuilding[]>();
+  for (const b of buildings) {
+    if (b.wd !== undefined) {
+      byWd.set(b.wd, [...(byWd.get(b.wd) ?? []), b]);
+    }
+  }
   const tasks: GapTask[] = [];
   const push = (task: Omit<GapTask, "lat" | "lon">, x: number, y: number) => {
     const p = at(index.epsg, x, y);
@@ -132,7 +163,9 @@ export function osmGaps(
       tasks.push({ ...task, ...p });
     }
   };
-  for (const lm of index.landmarks.filter((l) => namelessLandmark(l, byId))) {
+  for (const lm of index.landmarks.filter((l) =>
+    namelessLandmark(l, byWd, byId)
+  )) {
     push(
       {
         kind: "wahrzeichen-ohne-name",

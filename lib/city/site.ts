@@ -263,6 +263,17 @@ export function tileExtentOf(cell: TileCell): [number, number, number, number] {
   return [minX, minY, minX + size, minY + size];
 }
 
+/** A site's extent over all its tiles, [minX, minY, maxX, maxY] (m). */
+export function siteExtentOf(site: Site): [number, number, number, number] {
+  const extents = site.tiles.map(tileExtentOf);
+  return [
+    Math.min(...extents.map((e) => e[0])),
+    Math.min(...extents.map((e) => e[1])),
+    Math.max(...extents.map((e) => e[2])),
+    Math.max(...extents.map((e) => e[3])),
+  ];
+}
+
 /** The page title. */
 export function siteTitle(site: Site): string {
   return `City Walk — ${site.name}`;

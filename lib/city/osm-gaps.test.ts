@@ -36,6 +36,16 @@ const INDEX: StadtwissenIndex = {
       objects: ["b", "c"],
     },
     {
+      id: "Q4",
+      name: "Nur Teile",
+      tile: "t",
+      x: X,
+      y: Y,
+      h: 20,
+      links: 3,
+      objects: ["part-of-j"],
+    },
+    {
       id: "Q3",
       name: "Neue Brücke",
       tile: "t",
@@ -67,15 +77,24 @@ const TILE: WissenTile = {
     { id: "g", wd: "Q3", x: X, y: Y, z: 110 },
     { id: "h", name: "Kreuzkirche", x: X, y: Y, z: 110, h: 90 },
     { id: "i", addr: "Gezählt 3", levels: 5, x: X, y: Y, z: 110, h: 20 },
+    // tied to its landmark by wd only (the landmark lists its parts)
+    { id: "j", wd: "Q4", x: X, y: Y, z: 110, h: 20 },
   ],
 };
 
 test("the gaps are a nameless landmark, a tall house without storeys and a nameless listed building", () => {
-  const gaps = osmGaps(INDEX, [TILE]);
+  // the seam's building is in both tiles' directories: one task
+  const seam: WissenTile = {
+    tile: "u",
+    monuments: [],
+    buildings: [TILE.buildings[3]],
+  };
+  const gaps = osmGaps(INDEX, [TILE, seam]);
   expect(gaps.map((g) => `${g.kind}:${g.id}`)).toEqual([
     "denkmal-ohne-name:f",
     "geschosse-fehlen:d",
     "wahrzeichen-ohne-name:Q1",
+    "wahrzeichen-ohne-name:Q4",
   ]);
   const near = gaps[0];
   expect(near.lat).toBeCloseTo(51.04, 1);

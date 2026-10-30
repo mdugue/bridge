@@ -19,18 +19,23 @@ places it would touch — not "make Hauptstraße 5 red".
 
 ```bash
 bun scripts/street-photos.ts dresden --n 8      # the week's photos + snapshots
-SHOTS=1 bunx playwright test e2e/snapshot-shot.spec.ts -g "foto-dresden"
+NEXT_PUBLIC_POC_DEBUG=1 bunx next build && bunx next start -p 3000 &
+# a real GPU (headed):
+SHOTS=1 bunx playwright test e2e/snapshot-shot.spec.ts --headed -g "foto-dresden"
+# the cloud container (SwiftShader, small, the whole site in lite):
+SHOTS=1 SHOTS_SMALL=1 SHOTS_QUERY="scene=lite&block=1" \
+  bunx playwright test e2e/snapshot-shot.spec.ts --workers=1 -g "foto-dresden"
 ```
 
-The first picks the newest usable Panoramax photo in each of eight
-400 m cells (a new set each ISO week; `--seed` to repeat one), writes a
+The first walks the site's 400 m cells in an order the ISO week draws
+(`--seed` to repeat one) and takes the newest usable Panoramax photo of
+each until it has N: flat, aimed, placed within 6 m. It writes a
 snapshot at each photo's pose to `shots/foto-<site>-<n>.json` and the
 photo to `street-photos/<site>/` with `pairs.json` (author, licence,
 link). The second renders the snapshots to `shots/foto-<site>-<n>.png`.
-It needs the site built with `NEXT_PUBLIC_POC_DEBUG=1` and its server
-running; in the cloud container it renders with SwiftShader (headless):
-good for geometry and colour, wrong for light and shadow — never judge
-shading from it.
+SwiftShader is good for geometry and colour, wrong for light and shadow
+— never judge shading from it; a lite render is coarse (half the pixel
+ratio), enough for roofs, heights and storeys.
 
 ## Compare
 

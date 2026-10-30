@@ -6,12 +6,13 @@
  * - **Editions** — for Saxony, the download-links service's `Stand` per
  *   2 km tile and product (DGM1, DOM1, LoD2, DOP) against the one
  *   `data/<site>/provenance.json` records; the statewide Basis-DLM's
- *   `Last-Modified` against its recorded date. Where a site records no
+ *   `Last-Modified` against the recorded one. Where a site records no
  *   edition, the current one is listed to record.
  * - **Services** — each provider's download endpoints, answered or not
- *   (one request each, a 20 s budget).
- * - **OSM** — how old the latest OSM date in the site's provenance is,
- *   and the BBBike city extract's `Last-Modified` where there is one.
+ *   (one request each, a 20 s budget, all at once).
+ * - **OSM** — how old the OSM data the bakes used is (the `dataAsOf` days
+ *   in the site's provenance), and the BBBike city extract's
+ *   `Last-Modified` where there is one.
  *
  * It downloads no data and changes nothing: it prints a report (German
  * Markdown, or JSON) for the scheduled task to turn into an issue or a
@@ -19,13 +20,16 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { tileExtentOf, tileIdOf } from "../lib/city/site";
+import { siteExtentOf, tileIdOf } from "../lib/city/site";
 import { isSiteId, SITES, type SiteId } from "../sites";
 
 const ROOT = join(import.meta.dir, "..");
 const TIMEOUT_MS = 20_000;
 /** OSM data older than this is a finding (days). */
 export const OSM_STALE_DAYS = 60;
+/** The Basis-DLM package current at the last download (Last-Modified,
+ *  docs/data-pipeline.md), where no provenance records `lastModified`. */
+const BASIS_DLM_FALLBACK = "2026-07-28";
 
 /** GeoSN's download-links service: one feature per tile and product. */
 const SN_LINKS =
@@ -43,7 +47,7 @@ export const SERVICES: Record<string, { name: string; url: string }[]> = {
       url: "https://www.geodaten.sachsen.de/batch-download-4719.html",
     },
     { name: "Download-Links-Dienst", url: `${SN_LINKS}?f=json` },
-    { name: "GeoCloud (Basis-DLM)", url: SN_BASIS_DLM },
+    // the GeoCloud is probed with the Basis-DLM's edition (basisDlmFinding)
   ],
   nw: [
     {
@@ -63,8 +67,9 @@ export const SERVICES: Record<string, { name: string; url: string }[]> = {
   ],
   hh: [
     {
-      name: "Transparenzportal Hamburg",
-      url: "https://www.daten-hamburg.de/opendata/",
+      // the folder answers 403; the LoD2 package the adapter reads does not
+      name: "Transparenzportal Hamburg (LoD2)",
+      url: "https://www.daten-hamburg.de/opendata/3d_stadtmodell_lod2/LoD2-DE_HH_2026-04-28.zip",
     },
   ],
   be: [{ name: "GDI Berlin (Atom)", url: "https://gdi.berlin.de/data/" }],
@@ -84,10 +89,33 @@ export function snKachel(cell: { e: number; n: number }): string {
   return `${cell.e}${cell.n}`;
 }
 
-/** The latest YYYY-MM-DD anywhere in a JSON value, or null. */
-export function latestDate(value: unknown): string | null {
-  const dates = JSON.stringify(value ?? null).match(/\b20\d\d-\d\d-\d\d\b/g);
-  return dates ? dates.sort().at(-1)! : null;
+/**
+ * The OSM data the bakes use, by the first day of every `dataAsOf` in the
+ * record (the day of the data, not of a re-bake), past the `overpass`
+ * history: the oldest and the newest, or null where none is recorded.
+ */
+export function osmDataDays(
+  record: unknown
+): { newest: string; oldest: string } | null {
+  const days: string[] = [];
+  const walk = (value: unknown, key: string) => {
+    if (key === "overpass") {
+      return;
+    }
+    if (key === "dataAsOf" && typeof value === "string") {
+      const day = /\b20\d\d-\d\d-\d\d\b/.exec(value)?.[0];
+      if (day) {
+        days.push(day);
+      }
+    } else if (value && typeof value === "object") {
+      for (const [k, v] of Object.entries(value)) {
+        walk(v, k);
+      }
+    }
+  };
+  walk(record, "");
+  days.sort((a, b) => a.localeCompare(b));
+  return days.length > 0 ? { oldest: days[0], newest: days.at(-1)! } : null;
 }
 
 /** Whole days from `from` (YYYY-MM-DD) to `now`. */
@@ -97,20 +125,40 @@ export function daysSince(from: string, now: Date): number {
   );
 }
 
-/** A recorded `Stand` ("2024-11-27, 2024-11-30") is older than the current one. */
+/**
+ * The edition a `Stand` names: the latest of its days ("2024-11-27,
+ * 2024-11-30"), or the year it starts with (LoD2's "2024( LSC: 2016, …)",
+ * whose inner years are its sources', not its own).
+ */
+export function standEdition(stand: string): string {
+  if (/^\s*\d{4}-\d\d-\d\d/.test(stand)) {
+    const days = stand.match(/\b\d{4}-\d\d-\d\d\b/g) ?? [];
+    return days.sort((a, b) => a.localeCompare(b)).at(-1)!;
+  }
+  return /^\s*(\d{4})/.exec(stand)?.[1] ?? stand.trim();
+}
+
+/** A recorded `Stand` is older than the current one. */
 export function newerStand(
   recorded: string | undefined,
   current: string
 ): boolean {
-  if (!recorded) {
-    return false;
-  }
-  const last = (s: string) => s.split(/,\s*/).sort().at(-1) ?? s;
-  return last(current) > last(recorded);
+  return (
+    recorded !== undefined && standEdition(current) > standEdition(recorded)
+  );
+}
+
+/** An HTTP date as YYYY-MM-DD, or null where it does not parse. */
+export function httpDay(header: string | null): string | null {
+  const t = header ? Date.parse(header) : Number.NaN;
+  return Number.isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
 }
 
 interface Provenance {
-  geosn?: Record<string, { tiles?: Record<string, { stand?: string }> }>;
+  geosn?: Record<
+    string,
+    { lastModified?: string; tiles?: Record<string, { stand?: string }> }
+  >;
   openstreetmap?: unknown;
 }
 
@@ -149,24 +197,22 @@ async function probe(url: string): Promise<Response | Error> {
   return r;
 }
 
-async function serviceFindings(providers: Set<string>): Promise<Finding[]> {
-  const out: Finding[] = [];
-  for (const id of providers) {
-    for (const s of SERVICES[id] ?? []) {
-      const r = await probe(s.url);
-      const ok = !(r instanceof Error) && r.status < 400;
-      out.push({
-        kind: "service",
-        act: !ok,
-        text: `${id.toUpperCase()} · ${s.name}: ${
-          r instanceof Error
-            ? `keine Antwort (${r.message})`
-            : `HTTP ${r.status}`
-        }`,
-      });
-    }
-  }
-  return out;
+const answer = (r: Response | Error) =>
+  r instanceof Error ? `keine Antwort (${r.message})` : `HTTP ${r.status}`;
+
+function serviceFindings(providers: Set<string>): Promise<Finding[]> {
+  return Promise.all(
+    [...providers].flatMap((id) =>
+      (SERVICES[id] ?? []).map(async (s): Promise<Finding> => {
+        const r = await probe(s.url);
+        return {
+          kind: "service",
+          act: r instanceof Error || r.status >= 400,
+          text: `${id.toUpperCase()} · ${s.name}: ${answer(r)}`,
+        };
+      })
+    )
+  );
 }
 
 async function snStands(
@@ -210,77 +256,90 @@ function provenanceOf(site: SiteId): Provenance | null {
     : null;
 }
 
-async function editionFindings(site: SiteId): Promise<Finding[]> {
+/** One product's editions over a site: what is new, what is unrecorded. */
+function productFindings(
+  site: SiteId,
+  product: string,
+  stands: Map<string, string>
+): Finding[] {
   const config = SITES[site];
-  if (config.provider.id !== "sn") {
-    return [];
-  }
-  const record = provenanceOf(site)?.geosn;
-  // one query per product over the site's whole extent
-  const extents = config.tiles.map(tileExtentOf);
-  const extent: [number, number, number, number] = [
-    Math.min(...extents.map((e) => e[0])),
-    Math.min(...extents.map((e) => e[1])),
-    Math.max(...extents.map((e) => e[2])),
-    Math.max(...extents.map((e) => e[3])),
-  ];
+  const record = provenanceOf(site)?.geosn?.[product]?.tiles;
   const out: Finding[] = [];
-  for (const [product, layer] of Object.entries(SN_LAYERS)) {
-    const stands = await snStands(extent, layer);
-    if (stands instanceof Error) {
-      out.push({
-        site,
-        kind: "service",
-        act: true,
-        text: `${product}: Download-Links-Dienst antwortet nicht (${stands.message})`,
-      });
+  // the editions no record holds: one line per edition, not one a tile
+  const unrecorded = new Map<string, number>();
+  for (const cell of config.tiles) {
+    const tile = tileIdOf(config, cell);
+    const current = stands.get(snKachel(cell));
+    const recorded = record?.[tile]?.stand;
+    if (!current) {
       continue;
     }
-    // the editions no record holds, per product: one line, not one a tile
-    const unrecorded = new Map<string, number>();
-    for (const cell of config.tiles) {
-      const tile = tileIdOf(config, cell);
-      const current = stands.get(snKachel(cell));
-      if (!current) {
-        continue;
-      }
-      const recorded = record?.[product]?.tiles?.[tile]?.stand;
-      if (newerStand(recorded, current)) {
-        out.push({
-          site,
-          kind: "edition",
-          act: true,
-          text: `${product} ${tile}: neuer Stand ${current} (eingecheckt: ${recorded})`,
-        });
-      } else if (!recorded) {
-        unrecorded.set(current, (unrecorded.get(current) ?? 0) + 1);
-      }
-    }
-    for (const [stand, tiles] of unrecorded) {
+    if (newerStand(recorded, current)) {
       out.push({
         site,
-        kind: "record",
-        act: false,
-        text: `${product}: Stand ${stand} (${tiles} ${tiles === 1 ? "Kachel" : "Kacheln"}, nicht in provenance.json)`,
+        kind: "edition",
+        act: true,
+        text: `${product} ${tile}: neuer Stand ${current} (eingecheckt: ${recorded})`,
       });
+    } else if (!recorded) {
+      unrecorded.set(current, (unrecorded.get(current) ?? 0) + 1);
     }
+  }
+  for (const [stand, tiles] of unrecorded) {
+    out.push({
+      site,
+      kind: "record",
+      act: false,
+      text: `${product}: Stand ${stand} (${tiles} ${tiles === 1 ? "Kachel" : "Kacheln"}, nicht in provenance.json)`,
+    });
   }
   return out;
 }
 
+async function editionFindings(site: SiteId): Promise<Finding[]> {
+  if (SITES[site].provider.id !== "sn") {
+    return [];
+  }
+  const extent = siteExtentOf(SITES[site]);
+  const per = await Promise.all(
+    Object.entries(SN_LAYERS).map(async ([product, layer]) => {
+      const stands = await snStands(extent, layer);
+      return stands instanceof Error
+        ? [
+            {
+              site,
+              kind: "service" as const,
+              act: true,
+              text: `${product}: Download-Links-Dienst antwortet nicht (${stands.message})`,
+            },
+          ]
+        : productFindings(site, product, stands);
+    })
+  );
+  return per.flat();
+}
+
+/** The Basis-DLM package the bakes used: the latest `lastModified` any
+ *  site's provenance records, else the fallback. */
+function recordedBasisDlm(): string {
+  const days = (Object.keys(SITES) as SiteId[]).flatMap((site) => {
+    const day = provenanceOf(site)?.geosn?.["Basis-DLM"]?.lastModified;
+    return day ? [day] : [];
+  });
+  return days.sort((a, b) => a.localeCompare(b)).at(-1) ?? BASIS_DLM_FALLBACK;
+}
+
 async function basisDlmFinding(): Promise<Finding> {
   const r = await probe(SN_BASIS_DLM);
-  if (r instanceof Error) {
+  if (r instanceof Error || r.status >= 400) {
     return {
       kind: "service",
       act: true,
-      text: `SN · Basis-DLM: keine Antwort (${r.message})`,
+      text: `SN · GeoCloud (Basis-DLM): ${answer(r)}`,
     };
   }
-  const modified = r.headers.get("last-modified");
-  const day = modified ? new Date(modified).toISOString().slice(0, 10) : null;
-  // the edition recorded in docs/data-pipeline.md and providers/sn.py
-  const recorded = "2026-07-28";
+  const day = httpDay(r.headers.get("last-modified"));
+  const recorded = recordedBasisDlm();
   return {
     kind: "edition",
     act: day !== null && day > recorded,
@@ -290,21 +349,21 @@ async function basisDlmFinding(): Promise<Finding> {
 
 async function osmFindings(site: SiteId, now: Date): Promise<Finding[]> {
   const out: Finding[] = [];
-  const latest = latestDate(provenanceOf(site)?.openstreetmap);
-  if (latest) {
-    const age = daysSince(latest, now);
+  const days = osmDataDays(provenanceOf(site)?.openstreetmap);
+  if (days) {
+    const age = daysSince(days.oldest, now);
     out.push({
       site,
       kind: "osm",
       act: age > OSM_STALE_DAYS,
-      text: `OSM-Stand der Bakes: ${latest} (${age} Tage alt)`,
+      text: `OSM-Daten der Bakes: ältester Stand ${days.oldest} (${age} Tage alt), neuester ${days.newest}`,
     });
   } else {
     out.push({
       site,
       kind: "osm",
       act: false,
-      text: "OSM-Stand: in provenance.json kein Datum",
+      text: "OSM-Stand: in provenance.json kein dataAsOf",
     });
   }
   const city = BBBIKE[site];
@@ -313,14 +372,14 @@ async function osmFindings(site: SiteId, now: Date): Promise<Finding[]> {
       `https://download.bbbike.org/osm/bbbike/${city}/${city}.osm.pbf`,
       { method: "HEAD" }
     );
+    const down = r instanceof Error || r.status >= 400;
     out.push({
       site,
       kind: "osm",
-      act: r instanceof Error || r.status >= 400,
-      text:
-        r instanceof Error || r.status >= 400
-          ? `BBBike-Auszug ${city}: nicht erreichbar`
-          : `BBBike-Auszug ${city}: ${r.headers.get("last-modified") ?? "ohne Datum"}`,
+      act: down,
+      text: down
+        ? `BBBike-Auszug ${city}: nicht erreichbar`
+        : `BBBike-Auszug ${city}: ${httpDay(r.headers.get("last-modified")) ?? "ohne Datum"}`,
     });
   }
   return out;
@@ -358,16 +417,16 @@ async function main() {
     existsSync(join(ROOT, "data", s, "provenance.json"))
   ) as SiteId[];
   const now = new Date();
-  const findings: Finding[] = [];
   const providers = new Set(sites.map((s) => SITES[s].provider.id));
-  findings.push(...(await serviceFindings(providers)));
-  if (providers.has("sn")) {
-    findings.push(await basisDlmFinding());
-  }
-  for (const site of sites) {
-    findings.push(...(await editionFindings(site)));
-    findings.push(...(await osmFindings(site, now)));
-  }
+  const parts = await Promise.all([
+    serviceFindings(providers),
+    providers.has("sn") ? basisDlmFinding().then((f) => [f]) : [],
+    ...sites.map(async (site) => [
+      ...(await editionFindings(site)),
+      ...(await osmFindings(site, now)),
+    ]),
+  ]);
+  const findings = parts.flat();
   process.stdout.write(
     json ? `${JSON.stringify(findings, null, 2)}\n` : report(findings, now)
   );

@@ -41,7 +41,10 @@ there is nothing to say, and never merges, resolves or deletes.
   listed buildings without name or address. Writes `osm-gaps/<site>/`.
 - `bun scripts/street-photos.ts <site> [--n N] [--seed S]` — the newest
   usable Panoramax photo in each of N 400 m cells (flat, aimed, placed
-  within 6 m; a new draw each ISO week) as a snapshot at its pose and the
-  photo, `shots/foto-<site>-<n>.json` and `street-photos/<site>/`.
+  within 6 m; the cells in an order each ISO week draws anew) as a
+  snapshot at its pose and the photo, `shots/foto-<site>-<n>.json` and
+  `street-photos/<site>/`. `SHOTS_SMALL=1` makes the snapshot harness
+  (`e2e/snapshot-shot.spec.ts`) render at 800 × 500 with five minutes to
+  load, what a software-rendered container can do.
 
 `osm-gaps/`, `street-photos/` and `shots/` are gitignored.
