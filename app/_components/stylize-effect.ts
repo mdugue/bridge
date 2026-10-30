@@ -676,7 +676,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       smoothstep(LOW_STEP_PX.x, LOW_STEP_PX.y, stepPx),
       smoothstep(3, 5, underPx)
     );
-    return vec2(silhouette, crease).mul(keep);
+    // (the silhouette only: a crease is a fold of one surface, and at a
+    // thin pen the wall's foot or an eave has its taps a few pixels apart)
+    return vec2(silhouette.mul(keep), crease);
   };
 
   /** The four-axis stencil at an integer texel radius around a texel

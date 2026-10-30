@@ -25,6 +25,7 @@ import {
   length,
   materialColor,
   max,
+  min,
   modelWorldMatrix,
   mix,
   normalize,
@@ -841,7 +842,9 @@ export function buildCrownMaterial(
   m.positionNode = instancePosition(sway.local);
   m.castShadowPositionNode = instancePosition(shape);
   const crownScale = varying(length(instanceColumn(1).xyz));
-  const gust = varying(sway.gust);
+  // (a printed crown has no brightness pulse: its light is cut in two
+  // steps, and the pulse would flip it between them)
+  const gust = varying(sway.gust.mul(float(1).sub(crownsPrinted)));
   const tinted = materialColor.mul(instanceTint());
   if (!bare) {
     const lit = crownLight(
@@ -887,10 +890,12 @@ const MARK_BARE = vec3(0.9, 0.2, 0);
 /** The crown's colour `shown`, or its marker ink while the crowns are
  *  printed, told on its kept cells' colour (`kept`, before any veil): an
  *  autumn crown (red over green) yellow; a mostly bare one, or one in
- *  blossom (blue over green: pink or white), the paper's ink. */
+ *  blossom (pale, blue over green: pink or white), the paper's ink. */
 function printedCrown(shown: V3, kept: V3, twig: F): V3 {
   const leaf = mix(MARK_LEAFY, MARK_AUTUMN, step(kept.y, kept.x));
-  const pale = max(step(0.5, twig), step(kept.y, kept.z));
+  // (blossom is pale: a copper beech, blue over green too, is dark)
+  const blossom = step(kept.y, kept.z).mul(step(0.45, min(kept.x, kept.y)));
+  const pale = max(step(0.5, twig), blossom);
   const mark = mix(leaf, MARK_BARE, pale);
   return mix(shown, mark, crownsPrinted);
 }

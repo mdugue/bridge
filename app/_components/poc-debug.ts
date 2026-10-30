@@ -96,6 +96,9 @@ export function pocFramesHeld(): boolean {
 }
 
 let virtualMs: number | null = null;
+/** how far the probe's clock has drifted from the wall clock: kept after
+ *  `frameMs` is cleared, so the clock never runs backwards */
+let offsetMs = 0;
 
 /** The time the frame's clock reads: the wall clock's, or a probe's fixed
  *  step (`frameMs`). Never anything but `time` in a production build. */
@@ -103,9 +106,10 @@ export function pocFrameTime(time: number): number {
   const frameMs = enabled ? window.__poc?.frameMs : undefined;
   if (frameMs === undefined) {
     virtualMs = null;
-    return time;
+    return time + offsetMs;
   }
-  virtualMs = virtualMs === null ? time : virtualMs + frameMs;
+  virtualMs = virtualMs === null ? time + offsetMs : virtualMs + frameMs;
+  offsetMs = virtualMs - time;
   return virtualMs;
 }
 
