@@ -1,5 +1,4 @@
 import {
-  type Camera,
   type DepthTexture,
   Matrix4,
   type Texture,
@@ -23,9 +22,12 @@ import {
   SHUTTER,
 } from "@/lib/city/motion-blur";
 import type { F, V3, V4 } from "./shader-chunks";
+import type { ViewLens } from "./view-lens";
 
 /** Reads along a pixel's way (a phone's FXAA reads about as many). */
 const TAPS = 8;
+/** A gap between drawn frames this long (ms) is not one frame's motion. */
+const GAP_MS = 100;
 
 export interface MotionBlur {
   /**
@@ -36,11 +38,14 @@ export interface MotionBlur {
   /**
    * Measures the camera's motion since the last frame and sets the
    * uniforms for it: true while the frame is to be drawn blurred. Call it
-   * once a frame, after the scene drew with `view`; `on` false (a style
-   * or Modell without the blur) measures nothing and forgets the last
-   * pose, so the next blurred frame starts from a fresh one.
+   * once a frame, after the lens took the frame's camera. `on` false (a
+   * style or Modell without the blur, a still camera) measures nothing
+   * and forgets the last pose, so the next blurred frame starts from a
+   * fresh one; so does a new size or projection, or a gap between frames.
+   * `everywhere`: the blur replaces the antialiasing (lib/city/
+   * motion-blur.ts `blurs`).
    */
-  update: (view: Camera, size: Vector2, on: boolean) => boolean;
+  update: (size: Vector2, on: boolean, everywhere: boolean) => boolean;
 }
 
 /**
@@ -54,8 +59,13 @@ export interface MotionBlur {
  * three matrices. It draws inside a pass that is drawn anyway or in place
  * of one (post-stack.ts), never in a target of its own.
  */
-export function createMotionBlur(depth: DepthTexture): MotionBlur {
-  const projectionInverse = uniform(new Matrix4());
+export function createMotionBlur(
+  depth: DepthTexture,
+  lens: ViewLens
+): MotionBlur {
+  const view = lens.camera;
+  // the lens's own matrix, written in place every frame
+  const projectionInverse = uniform(view.projectionMatrixInverse);
   const viewToPrev = uniform(new Matrix4());
   const prevProjection = uniform(new Matrix4());
   const pixels = uniform(new Vector2(1, 1));
@@ -74,7 +84,9 @@ export function createMotionBlur(depth: DepthTexture): MotionBlur {
 
   const prevView = new Matrix4();
   const prevProj = new Matrix4();
+  const prevSize = new Vector2();
   let held = false;
+  let lastMs = 0;
 
   return {
     over: (source, occlusion) => {
@@ -85,18 +97,22 @@ export function createMotionBlur(depth: DepthTexture): MotionBlur {
       }
       return vec4(sum.div(TAPS).mul(occlusion), 1);
     },
-    update: (view, size, on) => {
-      const perspective = (view as Camera & { isPerspectiveCamera?: boolean })
-        .isPerspectiveCamera;
-      if (!on || perspective !== true) {
+    update: (size, on, everywhere) => {
+      const now = performance.now();
+      const fresh =
+        !held ||
+        now - lastMs > GAP_MS ||
+        !size.equals(prevSize) ||
+        !view.projectionMatrix.equals(prevProj);
+      lastMs = now;
+      if (!on || lens.isOrtho()) {
         held = false;
         return false;
       }
       let blurred = false;
-      if (held) {
+      if (!fresh) {
         viewToPrev.value.multiplyMatrices(prevView, view.matrixWorld);
         prevProjection.value.copy(prevProj);
-        projectionInverse.value.copy(view.projectionMatrixInverse);
         pixels.value.copy(size);
         blurred = blurs(
           motionPixels(
@@ -105,11 +121,13 @@ export function createMotionBlur(depth: DepthTexture): MotionBlur {
             prevProj.elements,
             size.x,
             size.y
-          )
+          ),
+          everywhere
         );
       }
       prevView.copy(view.matrixWorldInverse);
       prevProj.copy(view.projectionMatrix);
+      prevSize.copy(size);
       held = true;
       return blurred;
     },

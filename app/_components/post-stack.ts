@@ -582,7 +582,7 @@ export function createPostStack(
   const lensBlur = profile.dof
     ? lensBlurOf(lit, viewZ, focusDistance, focusRange)
     : null;
-  const motion = createMotionBlur(depthTexture);
+  const motion = createMotionBlur(depthTexture, lens);
 
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
   const stylize = createStylize({
@@ -721,17 +721,17 @@ export function createPostStack(
   // the camera moved enough this frame to draw the pastel frame blurred
   // (motion-blur.ts), where this tier has a way to draw it
   let blurred = false;
-  const blurrable = pastel.motion !== null || finished.moving !== null;
+  // ...and how: before SMAA on a desktop, in place of the FXAA on a phone
+  const moving = pastel.motion
+    ? { pre: pastel.motion, finished: finished.afterPre }
+    : finished.moving
+      ? { pre: null, finished: finished.moving }
+      : null;
   /** What draws before the antialiasing this frame (null: nothing), and
    *  the last pass. */
   const frame = () => {
-    if (blurred) {
-      return {
-        pre: pastel.motion,
-        finished: pastel.motion
-          ? finished.afterPre
-          : (finished.moving ?? finished.afterPre),
-      };
+    if (blurred && moving) {
+      return moving;
     }
     const pair = style.shaderMode > 0 ? styled : pastel;
     const lensOn = style.allowDof && !regressed && !model;
@@ -749,11 +749,14 @@ export function createPostStack(
   // ahead of the one the frame shows. The pastel ones go first — those
   // frames are under the load screen.
   const toWarm: RenderPipeline[] = [
-    ...[pastel.dof, pastel.model, pastel.motion].flatMap((p) =>
-      p ? [p.pipeline] : []
-    ),
-    ...(finished.moving ? [finished.moving] : []),
-  ];
+    pastel.dof,
+    pastel.model,
+    pastel.motion,
+  ].flatMap((p) => (p ? [p.pipeline] : []));
+  // The phone's blurred last pass draws to the canvas, a render context
+  // the pixel does not share: it warms there, once, under the frame that
+  // overdraws it.
+  let warmMoving = finished.moving;
   // whether `beforeAa` holds its memory (a frame that draws elsewhere lets
   // it go)
   let preHeld = false;
@@ -1086,16 +1089,21 @@ export function createPostStack(
       }
       outline.update(renderer.getPixelRatio());
       outline.renderMask(renderer, view);
+      // `regressed`: the lens blur is off, and its copy free to draw into
       blurred = motion.update(
-        view,
         size,
-        blurrable && style.shaderMode === 0 && !model
+        moving !== null && style.shaderMode === 0 && !model && regressed,
+        moving?.pre === null
       );
       const shown = frame();
       // the input named before anything is drawn or let go: `beforeAa`
       // may be freed below, and SMAA must not still be bound to it then
       antialiasing.read(shown.pre?.reads ?? target.texture, shown.pre === null);
       drawPre(shown.pre);
+      if (warmMoving && shown.finished !== warmMoving) {
+        warmMoving.render();
+      }
+      warmMoving = null;
       shown.finished.render();
     },
     getFocusInfo: () => ({

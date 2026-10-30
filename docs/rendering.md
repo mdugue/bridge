@@ -1198,9 +1198,14 @@ between (a 180° shutter), at most 32 px, is averaged in 8 reads of the
 scene target, the contact shadows multiplied in once. The camera's
 motion only: there is no velocity output (the clay is out of inter-stage
 variables) and no history, only three matrices. The CPU measures the
-frame's motion on a 3×3 grid at 3 m and 1 km: below 2 px the frame
-keeps its antialiasing, above 600 px (a jump) it is drawn sharp. Where
-it draws, memory does not grow:
+frame's motion on a 3×3 grid at 3 m and 1 km and blurs only while the
+lens blur is off (`regressed`): on a desktop once half the samples move
+2 px (a smear of 1 px), on a phone once all of them do — there the blur
+replaces the FXAA, and a far city that barely moves would keep neither.
+So a walk straight ahead stays sharp and antialiased; a turn, a strafe
+or a flight blurs. Above 600 px (a jump), after a new size or
+projection and after a gap of 100 ms between frames, a frame is drawn
+sharp. Where it draws, memory does not grow:
 
 - **Phone:** in the last pass, **in place of the FXAA** (8 reads against
   FXAA's up to ~20); a smear of a pixel or more hides the stairs.
