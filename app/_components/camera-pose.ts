@@ -196,9 +196,15 @@ export interface CameraPose {
   /**
    * Smoothly glides the camera to a curated scenic Viewpoint (animated, unlike
    * the instant applyCameraState), landing in the viewpoint's movement mode;
-   * `pace` stretches the glide (camera-flight.ts).
+   * `pace` stretches the glide (camera-flight.ts). With `lookAround` a
+   * drag on the way looks about and the glide carries on (a walk's long
+   * glide), as in the player's own glides; without, it stops the glide.
    */
-  flyToViewpoint: (viewpoint: ViewpointGeometry, pace?: number) => void;
+  flyToViewpoint: (
+    viewpoint: ViewpointGeometry,
+    pace?: number,
+    lookAround?: boolean
+  ) => void;
   /**
    * The pose as a vantage the glide can fly back to. Height is captured
    * ABOVE THE TERRAIN, like the curated viewpoints, so the saved view still
@@ -837,14 +843,14 @@ export function createCameraPose(
         mode: movement.getMode(),
       };
     },
-    flyToViewpoint: (viewpoint, pace) => {
+    flyToViewpoint: (viewpoint, pace, lookAround = false) => {
       endFollow();
       // Fly during the glide so the ground clamp can't fight the vertical arc;
       // pendingMode restores walk (and snaps to the ground) once it settles.
       settle("fly");
       flight.start(targetOf(viewpoint), glideFloor, { pace });
       pendingMode = viewpoint.mode;
-      ownGlide = false;
+      ownGlide = lookAround;
     },
     placeAt: (viewpoint) => {
       cancelGlide();
