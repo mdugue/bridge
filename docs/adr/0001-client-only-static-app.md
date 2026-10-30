@@ -17,6 +17,8 @@ without CORS, or a model called with a visitor's own key.
 - Every page is prerendered: a start page, a route per built city, the
   knowledge base and the legal pages. `next build` fails when a page reads
   request-time data (`ensureStatic = "navigation"` in `app/layout.tsx`).
+  Links prefetch one shared shell per route (`partialPrefetching`); a page
+  reads its params inside `<Suspense>` and loads, prerendered, on the click.
 - All data is static files under `/data`, baked ahead of time. The browser
   does all computation.
 - A **stateless server function or rewrite** is allowed where a source or

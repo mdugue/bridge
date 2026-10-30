@@ -37,6 +37,12 @@
       "skillPath": "skills/modern-web-guidance/SKILL.md",
       "computedHash": "8e91867cc20dda14251c78c8d905847314c8c196557e1181d586a456cddcb5dc"
     },
+    "next-partial-prefetching-adoption": {
+      "source": "vercel/next.js",
+      "sourceType": "github",
+      "skillPath": "skills/next-partial-prefetching-adoption/SKILL.md",
+      "computedHash": "e523f1aec1789b3a1f4ca881898d99416427f9d853b3b1841f0e13657bc38f77"
+    },
     "sentry-create-alert": {
       "source": "getsentry/plugin-claude",
       "sourceType": "github",

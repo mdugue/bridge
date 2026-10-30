@@ -1547,8 +1547,9 @@ visual-variable codebook is in
   glass and metal set object flags (4, 8; a part takes its root's): the
   clay turns a little cooler (×(0.93, 0.99, 1.07), metal at 60 %) and
   smoother (roughness 0.42 glass, 0.5 metal), and glass mirrors the sky
-  (*Spiegelung*, `sky-reflection.ts`: a PMREM of the sky dome, 10 % face
-  on to all of it at a grazing view; metal a third as much; fixed at full,
+  (*Spiegelung*, `sky-reflection.ts`: a mipmapped cube map of the sky
+  dome, 10 % face on to all of it at a grazing view; metal a third as
+  much; fixed at full,
   `REFLECTIONS` — below it the old pale Fresnel³ sheen at the rim's
   strength would show). No panes, no mullions, no texture
   and no drawn windows (*Windows on every house* leaves glass and metal
@@ -4324,7 +4325,8 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   buildings and coarse ground, tiles in use the memory governor cannot
   free): at a seam with the sun behind the player, the neighbour's
   buildings cast no shadow until the view loads that tile;
-  the map's colour target is one byte (`OneByteShadowNode`). Full recipe and dead-ends in the
+  the map has no colour target (`DepthOnlyShadowNode`, three r187's
+  depth-only render target). Full recipe and dead-ends in the
   [city-walker skill](../.claude/skills/city-walker/SKILL.md).
 - **Sky-view factor** `= computed` (*Himmelslicht*, plan 033) — the committed DGM1 with
   every non-vertical LoD2 surface burned on top (max over its triangles,
