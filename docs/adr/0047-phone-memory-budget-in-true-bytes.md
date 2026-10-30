@@ -20,7 +20,9 @@ just failed, in a loop, until a frozen canvas.
 2. **A budget per device tier and safety level**, in one table
    (`scene-profile.ts`): pixel ratio, shadow map, tile cache, post profile.
    A phone builds no depth of field and antialiases with FXAA; every tier
-   uses one-byte targets where a channel suffices.
+   uses one-byte targets where a channel suffices. The camera's motion
+   blur holds no target: it draws in place of the FXAA on a phone and
+   into the lens blur's idle copy on a desktop.
 3. **Fixed costs are counted**, and a phone's tile cache is derived from
    the memory governor's soft line minus them.
 4. **Fewer bytes a tile:** buffers the site shares are one copy; CPU copies
@@ -61,3 +63,7 @@ just failed, in a loop, until a frozen canvas.
   would end up plain.
 - **Dropping every CPU copy:** collision, picking and the height samplers
   read them.
+- **Motion blur from a velocity buffer or a frame history (TAA):** a
+  screen-sized target, and a velocity output costs the clay inter-stage
+  variables it does not have; the camera's own motion, rebuilt from depth,
+  needs three matrices.
