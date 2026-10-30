@@ -6,6 +6,7 @@ import { SURFACE_ALONG_PERIOD } from "./landcover";
 import {
   cycleLineFromKerb,
   LANE_BITS,
+  MARKING_OFFSET_SCALE,
   MARKING_KINDS,
   MARKING_PATTERN,
   type MarkingTable,
@@ -102,4 +103,33 @@ test("the lane bits are one bit each and keep the kerb's", () => {
   expect(LANE_BITS.kerb).toBe(8);
   expect(LANE_BITS.centre).toBe(4);
   expect(LANE_BITS.cycle).toBe(1);
+});
+
+test("the bake writes the bits and the offset scale the shader reads", () => {
+  // pipeline/bake/markings.py packs them into the raster's G and B channels
+  const python = readFileSync(join(ROOT, "pipeline/bake/markings.py"), "utf8");
+  const scale = python.match(/^EDGE_SCALE = ([\d.]+)/mu)?.[1];
+  expect(Number(scale)).toBe(MARKING_OFFSET_SCALE);
+  const bits = new Map<string, number>();
+  for (const line of python.split("\n")) {
+    const m = line.match(/^([A-Z_, ]+) = ([\d, ]+?)\s*(?:#.*)?$/u);
+    if (!m) {
+      continue;
+    }
+    const names = m[1].split(",").map((n) => n.trim());
+    const values = m[2].split(",").map((v) => Number(v.trim()));
+    if (names.length === values.length) {
+      names.forEach((n, i) => bits.set(n, values[i]));
+    }
+  }
+  expect({
+    cycle: bits.get("CYCLE"),
+    cycleSolid: bits.get("CYCLE_SOLID"),
+    centre: bits.get("CENTRE"),
+    kerb: bits.get("KERB"),
+    centreSolid: bits.get("CENTRE_SOLID"),
+    laneLines: bits.get("LANE_LINES"),
+    red: bits.get("RED"),
+    cycleWide: bits.get("CYCLE_WIDE"),
+  }).toEqual({ ...LANE_BITS });
 });

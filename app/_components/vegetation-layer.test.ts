@@ -29,6 +29,7 @@ import {
   buildVegetation,
   sceneCrowns,
   createVegetationLod,
+  setCrownTime,
   TRUNK_H,
   type VegetationContext,
 } from "./vegetation-layer";
@@ -100,7 +101,6 @@ test("the control accepts the look and reports a crown tier change", () => {
   expect(lod([built], new Vector3(5, 100, 0))).toBe(true);
   expect(built.chunks[0].tier).toBe("rich");
   expect(lod([built], new Vector3(5, 100, 0))).toBe(false);
-  built.setTime(1);
 });
 
 test("a pass after a tile left plans the tiles still there, from their own tiers", () => {
@@ -207,8 +207,8 @@ test("every tile wears the scene's crown and trunk materials; the warm-up carrie
   expect(leafy.userData.shared).toBe(true);
   // the sun uniform holds the rig's vector by reference
   expect(uniforms.sunDirection.value).toBe(sun);
-  // the clock writes the shared uniform
-  b.setTime(12.5);
+  // one wind clock for every tile's crowns
+  setCrownTime(12.5);
   expect(uniforms.time.value).toBe(12.5);
   const warm = buildCrownWarmup();
   expect(warm.main.map((m) => m.material)).toEqual([bare, leafy]);

@@ -90,6 +90,11 @@ bun run docs:matrix     # regenerate the guide's sources-by-city pages
   WebGPU/TSL parts apply.
 - `improve` writes plans to a root `plans/` by default: point it at
   `docs/plans/` and reconcile with that README.
+- `domain-modeling`, `codebase-design`, `grilling` and
+  `improve-codebase-architecture` are generic; an ADR they call for is
+  written the way `docs-upkeep` and `docs/adr/README.md` say (numbered
+  from main's `docs/adr/`, a superseded one deleted), not in their own
+  format.
 
 ## Hard rules
 
@@ -147,9 +152,11 @@ ADR 0041).
 - Raw downloads (`data/_raw/`) are never committed; no Git-LFS.
 - Every tile carries the same baked files (`lib/city/tile-data.test.ts`);
   a step that finds nothing writes an empty file.
-- `prepare-data.ts` lists each artifact's bake entries **by hand**; a
-  module an artifact needs must be one of them or imported from one, or
-  its cache goes stale.
+- Each artifact's bake entries are one table, `scripts/bake-entries.ts`;
+  a module an artifact needs must be one of them or imported from one, or
+  its cache goes stale (`bake-entries.test.ts` holds every module
+  `prepare-data.ts` imports to being in some bake's key or excused; which
+  artifact needs it is yours to get right).
 - Nothing whose alpha or values carry data goes through an image resize or
   the browser's image decoder; class rasters are NEAREST and decoded by
   `lib/city/png-raster.ts`.

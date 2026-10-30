@@ -23,6 +23,7 @@ import { utmToLatLng } from "@/lib/city/crs";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
 import { createBootPhases } from "@/lib/city/boot-phases";
 import { createCoalescer } from "@/lib/city/coalesce";
+import { createMissingPartWord } from "@/lib/city/missing-part-word";
 import { createRecount } from "@/lib/city/recount";
 import {
   createMemoryGovernor,
@@ -107,6 +108,8 @@ import {
   PHONE_RICH_TREE_BUDGET,
   RICH_TREE_BUDGET,
 } from "@/lib/city/vegetation-lod";
+import { stopBvhWorker } from "./bvh-client";
+import { stopGroundWorker } from "./ground-prep-client";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import {
   createModelRig,
@@ -130,6 +133,7 @@ import { createInquiryProbe, type OutlineSubject } from "./inquiry-probe";
 import {
   bridgeShape,
   buildingShape,
+  crownFormOf,
   solidShape,
   standInDepth,
   trafficTriangles,
@@ -219,9 +223,11 @@ import {
 import { attachTouchControls } from "./touch-controls";
 import {
   createVegetationLod,
+  setCrownTime,
   type VegetationControl,
 } from "./vegetation-layer";
 import { createStyleResources, setClaySection } from "./visual-style";
+import { setWaterTime } from "./water-layer";
 import { createModelCuts } from "./model-cuts";
 import * as dataLayersModule from "./data-layers-feature";
 import {
@@ -1160,8 +1166,21 @@ async function teardownWhole(
     onSceneGone(renderer.info.memory);
   } catch {
     // The renderer and its device go regardless (below).
+  } finally {
+    stopWorkers();
   }
   await releaseRenderer(renderer);
+}
+
+/** Before a reload, once the stream is gone: the ground and BVH workers
+ *  go, and their heaps with them, not when the old document is collected
+ *  (the new page boots in the old one's process). Not in `releaseGpu`:
+ *  there the stream lives on (the tiles still parsing send their jobs),
+ *  so a stop there would start them again or, latched, move that work
+ *  onto this thread; the workers then go with the old document. */
+function stopWorkers(): void {
+  stopGroundWorker();
+  stopBvhWorker();
 }
 
 /** The renderer and its device (or its context), and its canvas. */
@@ -1536,7 +1555,7 @@ async function bootApp(
       onDressingFailed: (error, tile) => {
         const message = error instanceof Error ? error.message : String(error);
         opts.trail?.note("dressing failed", `${tile} ${message}`);
-        sayLayerFailed(`${message} (Kachel ${tile})`);
+        missing.layerFailed(`${message} (Kachel ${tile})`);
       },
       onCopiesDropped: () => cpuCount.changed(),
       dressingGate,
@@ -1601,50 +1620,16 @@ async function bootApp(
   // tile is asked for again (tile-retry.ts), its hole closes, and the boot
   // waits for it — failing only after a minute of a usable page without
   // it. A page on its way out (pagehide) decides and reports nothing.
-  // The HUD's word about a missing part, latched per cause: a network
-  // word (the healer clears it once its tiles are back) or a layer word (a
-  // part gone for good, which no landing clears). A network failure
-  // replaces a layer word, which waits behind it (`layerWord`) and comes
-  // back when the network's clears; a second failure of a shown cause
-  // stays silent.
-  let shownWord: "none" | "network" | "layer" = "none";
-  let layerWord: string | null = null;
+  // The HUD's word about a missing part, latched per cause
+  // (lib/city/missing-part-word.ts): a network word the healer clears once
+  // its tiles are back, a layer word no landing clears.
   let firstFrameShown = false;
   let bootFailure: Error | null = null;
-  // A part of the city that failed for good (no retry heals it): the
-  // HUD's layer word, once.
-  const sayLayerFailed = (message: string) => {
-    if (disposed || layerWord !== null) {
-      return;
-    }
-    layerWord = message;
-    if (shownWord === "none") {
-      shownWord = "layer";
-      opts.onError?.(message);
-    }
-  };
-  // A tile the network let down: asked for again (tile-retry.ts).
-  const sayNetworkFailed = (message: string) => {
-    if (!disposed && shownWord !== "network") {
-      shownWord = "network";
-      opts.onError?.(message);
-    }
-  };
-  // The HUD's word about the network goes once nothing it failed is
-  // outstanding (tile-retry.ts): at a landing, or found after a heal. A
-  // layer word it covered shows again.
-  const clearNetworkWord = () => {
-    if (shownWord !== "network" || disposed) {
-      return;
-    }
-    if (layerWord !== null) {
-      shownWord = "layer";
-      opts.onError?.(layerWord);
-      return;
-    }
-    shownWord = "none";
-    opts.onErrorCleared?.();
-  };
+  const missing = createMissingPartWord({
+    say: (message) => opts.onError?.(message),
+    clear: () => opts.onErrorCleared?.(),
+    gone: () => disposed,
+  });
   const network = createNetworkWatch({
     tiles: stream.tiles,
     trail: opts.trail,
@@ -1652,7 +1637,8 @@ async function bootApp(
     onBootGiveUp: (error) => {
       bootFailure ??= error;
     },
-    onClear: clearNetworkWord,
+    // the network's word goes once nothing it failed is outstanding
+    onClear: missing.networkCleared,
   });
   cleanups.push(() => network.dispose());
   stream.tiles.addEventListener("load-error", (event) => {
@@ -1681,9 +1667,9 @@ async function bootApp(
       return;
     }
     if (lost) {
-      sayNetworkFailed(failure.message);
+      missing.networkFailed(failure.message);
     } else {
-      sayLayerFailed(failure.message);
+      missing.layerFailed(failure.message);
     }
   });
   // The last tile the network failed is back, or no longer wanted: the
@@ -1691,7 +1677,7 @@ async function bootApp(
   // is told: the boot's network wait learns from it that its tiles came.
   stream.tiles.addEventListener("load-model", (event) => {
     if (network.landed(event.tile)) {
-      clearNetworkWord();
+      missing.networkCleared();
     }
   });
 
@@ -1889,7 +1875,7 @@ async function bootApp(
   const wantDataLayers = wantOnSwitchOn(dataLayers, (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     opts.trail?.note("feature failed", `data layers ${message}`);
-    sayLayerFailed(`Datenebenen: ${message}`);
+    missing.layerFailed(`Datenebenen: ${message}`);
   });
   postStack.setSunAltitude(sunAltitude);
 
@@ -2168,12 +2154,9 @@ async function bootApp(
     // a stand-in: the scene's surface anywhere inside it is the thing; the
     // counters' columns are glass, which writes no depth
     return {
-      // a tree drawn as the cone outlined as one (not a pine or a yew)
-      positions: solidShape(
-        solids,
-        (target.kind === "tree" || target.kind === "canopy") &&
-          target.cone === true
-      ),
+      // a tree's crown as it is drawn: a cone outlined as one (not a pine
+      // or a yew), any other kind's solids as they are
+      positions: solidShape(solids, crownFormOf(target)),
       reach:
         target.kind === "bikes"
           ? Number.POSITIVE_INFINITY
@@ -2772,20 +2755,16 @@ async function bootApp(
   /** `eye`: where the tiers are measured from (Modell: above the pivot);
    *  `tick`: the frame's pose tick is due. */
   const stepVegetation = (elapsed: number, eye: Vector3, tick: boolean) => {
+    // one wind clock for every crown, the coarse ones standing in on a
+    // bare fine level too
+    setCrownTime(elapsed);
+    if (!crownTiers.due(tick, eye)) {
+      return;
+    }
     // The shown tiles only: a cached tile or the hidden level of a shown
     // one would spend the rich-crown budget the view needs, and its tier
     // flips redrew the shadow map for trees nobody sees.
     const shown = stream.visibleDressings();
-    for (const d of shown) {
-      d.vegetation?.setTime(elapsed);
-    }
-    // the coarse crowns standing in on a bare fine level sway too
-    for (const crowns of stream.standingIn()) {
-      crowns.setTime(elapsed);
-    }
-    if (!crownTiers.due(tick, eye)) {
-      return;
-    }
     vegetationControls.length = 0;
     let lodChanged = false;
     for (const d of shown) {
@@ -3388,9 +3367,7 @@ async function bootApp(
     streamChange.flush();
     // Advance every tile's water ripple and glitter (its sky tint is the
     // fog colour's node, in lockstep with the sun by construction).
-    for (const t of terrains) {
-      t.water?.update(elapsed);
-    }
+    setWaterTime(elapsed);
     const equivalent = followView(elapsed, poseTick);
     lastEquivalent = equivalent ?? 600;
     updateCuts();
