@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { type Compiling, compileInLanes } from "./compile-lanes";
+import { type Compiling, compileInLanes, compileInTurn } from "./compile-lanes";
 
 interface Item {
   id: string;
@@ -108,4 +108,31 @@ test("a drawable left out (its tile left) gets no step", async () => {
     { lanes: 4, skip: (item) => item.id === "gone" }
   );
   expect(ran).toEqual(["kept"]);
+});
+
+test("the compiles on one renderer run in turn, each once the one before has settled, failed or not", async () => {
+  const renderer = {};
+  const { started, step, end, fail } = heldSteps();
+  const item = (id: string): Item => ({ id, material: "m" });
+  const first = watch(compileInTurn(renderer, () => step(item("a"))));
+  const second = watch(compileInTurn(renderer, () => step(item("b"))));
+  const third = watch(compileInTurn(renderer, () => step(item("c"))));
+  // another renderer's (a second app's) compile does not wait for these
+  const other = watch(compileInTurn({}, () => step(item("other"))));
+  await settle();
+  expect(started).toEqual(["a", "other"]);
+  const lost = new RangeError("Allocation failure.");
+  fail("a", lost);
+  await settle();
+  expect(first).toEqual({ settled: true, error: lost });
+  expect(started).toEqual(["a", "other", "b"]);
+  end("b");
+  await settle();
+  expect(second.settled).toBe(true);
+  expect(started).toEqual(["a", "other", "b", "c"]);
+  end("c");
+  end("other");
+  await settle();
+  expect(third).toEqual({ settled: true, error: undefined });
+  expect(other.settled).toBe(true);
 });

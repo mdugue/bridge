@@ -780,7 +780,7 @@ const TRANSLUCENCY = float(0.5);
  * The GLSL crown gated both on the sun's shadow map sampled 2 m toward the
  * sun (so a building behind the tree killed the glow while the crown's own
  * self-shadow did not). Node lights keep their
- * shadow map to themselves: r186's public TSL offers only `shadow(light)`,
+ * shadow map to themselves: three's public TSL offers only `shadow(light)`,
  * which builds a second shadow node that renders its own map, and the
  * scene's shadow node is the light node's, reachable only from inside the
  * lighting pass. So the gate is the daylight ramp alone — the sun's own

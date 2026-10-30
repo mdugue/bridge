@@ -38,7 +38,7 @@ wired by hand. The data layers' code stays in the scene chunk: the first `import
 load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
 data layers moved (ADR 0040) — measure before splitting one off.
 
-**The renderer** is three r186's `WebGPURenderer` — its WebGPU backend, or
+**The renderer** is three r187's `WebGPURenderer` — its WebGPU backend, or
 its WebGL2 backend where the browser has no WebGPU (`?gpu=webgl2` forces it:
 `scene-profile.ts` `forceWebGL`; the preflight is `gpu-support.ts`). One
 path: every material is a **TSL node material**, there is no GLSL, no
@@ -269,11 +269,13 @@ fine. Inside `If`/branches read textures with an explicit `.level(0)` or
 What three keys a node build (TSL → WGSL/GLSL, **on the main thread**) by,
 and therefore what keeps builds out of frames:
 
-- **Never `InstancedMesh`.** three puts an InstancedMesh's uuid in the
-  render object's cache key (its instancing node binds that mesh's matrix
-  buffer), so a tile's hundreds of vegetation cells, furniture models and
-  lamp parts were hundreds of identical builds, in the scene and in the
-  shadow pass. `Instances` (`instancing.ts`) is a plain `Mesh` over an
+- **Never `InstancedMesh`.** Up to r186 three put an InstancedMesh's uuid
+  in the render object's cache key (its instancing node binds that mesh's
+  matrix buffer), so a tile's hundreds of vegetation cells, furniture
+  models and lamp parts were hundreds of identical builds, in the scene
+  and in the shadow pass. (r187 shares InstancedMesh builds; every layer's
+  nodes, shared buffers and anchors are written for `Instances`, and
+  moving back buys nothing measured.) `Instances` (`instancing.ts`) is a plain `Mesh` over an
   `InstancedBufferGeometry` view; the matrices travel as named
   instance-stepped attributes (`iMat0`…`iMat3`, colours `iColor`), so every
   set with the same material and attribute layout shares **one** build.
@@ -302,17 +304,39 @@ and therefore what keeps builds out of frames:
   material with textures bound per draw (`onObjectUpdate`) was tried and
   failed (grey ground, untinted clay).
 - **The scene renders top-level into its own target** (`post-stack.ts`),
-  and the `RenderPipeline` reads that target's colour and depth. three
-  keys a build by render context, and a context by target *and* call
-  depth: a scene `pass()` nested inside the pipeline sits one level deeper
-  than any `compileAsync` call and never finds what it prepared.
+  and the `RenderPipeline` reads that target's colour and depth; the
+  styles' swap and dressing wrap exactly that render. A build is keyed by
+  the target's attachments and the **kind of camera** (r187; up to r186
+  also by the call depth, so a scene `pass()` nested in the pipeline never
+  found what `compileAsync` prepared). The frame names every target it
+  draws into and ends on the canvas, never on the one it found set: a
+  compile in flight sets the target it was called with again after each
+  build it resumes (a three r187 bug: `docs/rendering.md`, "Workarounds
+  for upstream bugs").
 - **Compile ahead.** `PostStack.compile(object)` builds and compiles each
-  drawable against the scene target (shown and unculled for the call, four
-  lanes); tiles await it in `processTileModel`, dressings compile one
+  drawable against the scene target (shown and unculled for the call);
+  tiles await it in `processTileModel`, dressings compile one
   representative per material + draw kind + attribute layout
   (`compileRepresentatives` in `tile-stream.ts`), both capped at
   `COMPILE_WAIT_MS`. The crowns a date change may switch to are warmed by
-  stand-ins (`crownWarmup`). `compileAsync` primes the **main pass only**:
+  stand-ins (`crownWarmup`). **One compile at a time**: every
+  `compileAsync` goes through `compileInTurn` (compile-lanes.ts) — r187
+  keeps a compile's state (target, call depth, render context) on the
+  renderer around every await inside it, and two in flight resume into
+  each other's state and throw (an upstream bug, worked around until a
+  release fixes it: `docs/rendering.md`, "Workarounds for upstream
+  bugs"). Within one call three compiles the GPU
+  pipelines side by side, so a whole set of stand-ins goes in one call
+  (`PipelineAnchors.anchorAll`: the Ausschnitt's holds, Modell's warm-up)
+  — never real tile objects, which a tile may free mid-call. A queued
+  compile may start frames later: a drawable whose tile left while it
+  waited compiles nothing (`left`, post-stack.ts), and a tile's own
+  material anchored as itself leaves its set when the tile frees it
+  (`onOwnedGone`, pipeline-anchors.ts). **Modell's
+  parallel camera has builds of its own** (r187: a parallel view's light
+  comes from one fixed direction): `PostStack.warmView` builds them while
+  the dolly zoom in runs and for every tile landing while Modell shows;
+  `holdCut` holds for Modell's camera. `compileAsync` primes the **main pass only**:
   the shadow pass's pipelines for new casters still build in the frame that
   first draws them, and the WebGL2 backend compiles synchronously — the
   price of public API. Measure with a flight before adding machinery.
@@ -352,7 +376,7 @@ and therefore what keeps builds out of frames:
   `setup*` is the last resort; prefer a slot. The spike's render guard,
   shared-instancing patch and render-context override were rejected.
 - Things a node material cannot reach, found in the port: the sun's shadow
-  map from inside another material (r186's public `shadow(light)` builds a
+  map from inside another material (three's public `shadow(light)` builds a
   second shadow node with its own map) — the crown shimmer's gate is the
   sun's daylight ramp now; `SkyMesh`'s own cloud horizon fade (inside its
   colour node) — the haze band covers it.
@@ -430,7 +454,7 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | `shadow.bias` | ~−0.0003 | small constant bias, residual cleanup |
 | terrain `castShadow` | **false** | a casting terrain self-shadows into triangle/staircase acne at grazing sun; ground only receives |
 | shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 (phones 2048; smaller at a raised safety level, ADR 0047) | soft radius lets 3072 look like 4096 at ~44% less fill |
-| the map's colour target | one red byte (`OneByteShadowNode`, set as `sun.shadow.shadowNode`) | three's shadow pass draws into a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
+| the map's colour target | none (`DepthOnlyShadowNode`, set as `sun.shadow.shadowNode`: three's depth texture in a `count: 0` target, r187) | three's shadow map carries a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
 | frustum half-size (`lib/city/shadow-fit.ts`) | 121 m at eye level, growing in octaves of 110 m to 880 m with altitude | camera-following, texel-snapped; small = fine texels, but a fixed 110 m leaves a fly-over entirely unshadowed |
 | `shadow.autoUpdate` | false | re-render only when the frustum centre leaves a dead zone (30 m on foot — 110 m and 19.8 m until 2026-10-11, the walker as far from every edge now, 91 m; 18% of the half-size above eye level and in Modell), when the half-size re-fits, when the sun moves, or when a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
 
@@ -1015,3 +1039,5 @@ Authoritative: `registry.npmjs.org/three/latest` (version),
 `github.com/mrdoob/three.js/releases.atom` (feed),
 `raw.githubusercontent.com/wiki/mrdoob/three.js/Migration-Guide.md` (API
 changes). Confirm shader/behaviour claims in `node_modules/three/src`.
+On a bump, go through *Workarounds for upstream bugs* in
+`docs/rendering.md` and drop what the release fixed.

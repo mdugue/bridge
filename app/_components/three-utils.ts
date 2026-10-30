@@ -142,11 +142,13 @@ export function disposeMaterial(
 /**
  * Runs `dispose` until it goes through, at most `attempts` times, and
  * returns what it threw on the way (empty when the first try went
- * through). three r186 leaves an attribute whose GPU buffer failed to
+ * through). three (r187) leaves an attribute whose GPU buffer failed to
  * allocate half made — its entry, no buffer — and a later dispose of its
  * geometry throws on it midway, the rest of the geometry's attributes
  * still held and its listener still on. The throw has removed that entry,
- * so the next try goes on past it: one try per attribute at most.
+ * so the next try goes on past it: one try per attribute at most. An
+ * upstream workaround (docs/rendering.md, "Workarounds for upstream
+ * bugs").
  */
 function untilThrough(dispose: () => void, attempts: number): unknown[] {
   const errors: unknown[] = [];

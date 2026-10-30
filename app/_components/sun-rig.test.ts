@@ -4,11 +4,9 @@ import {
   Color,
   type DepthTexture,
   DirectionalLight,
-  RedFormat,
   RenderTarget,
   Scene,
   type ShadowNode,
-  UnsignedByteType,
   Vector3,
 } from "three/webgpu";
 import { uniform } from "three/tsl";
@@ -162,7 +160,7 @@ test("airborne, the frustum is pushed toward what the camera looks at", () => {
   expect(Math.abs(sun.target.position.z)).toBeLessThan(1);
 });
 
-test("the shadow map's colour target is one byte a texel beside its depth", () => {
+test("the shadow map is its depth alone, no colour target beside it", () => {
   const { sun } = rig(512);
   // reason: three reads the light's shadow node from an undeclared member
   const node = (sun.shadow as unknown as { shadowNode?: ShadowNode })
@@ -179,10 +177,12 @@ test("the shadow map's colour target is one byte a texel beside its depth", () =
     createRenderTarget: (width: number, height: number) =>
       new RenderTarget(width, height),
   });
-  expect(shadowMap.texture.format).toBe(RedFormat);
-  expect(shadowMap.texture.type).toBe(UnsignedByteType);
+  expect(shadowMap.textures).toHaveLength(0);
   // the depth the PCF filter compares against is still the map's
   expect(shadowMap.depthTexture).toBe(depthTexture);
+  // and it is this map's own, freed with it (three frees a target's depth
+  // only where the texture names that target)
+  expect(depthTexture.renderTarget).toBe(shadowMap);
   expect(shadowMap.width).toBe(512);
   shadowMap.dispose();
 });
@@ -190,8 +190,8 @@ test("the shadow map's colour target is one byte a texel beside its depth", () =
 test("the shadow map takes the size it is given (lite = 512²)", () => {
   const { sunRig, sun } = rig(512);
   expect(sun.shadow.mapSize.x).toBe(512);
-  // the depth's four bytes and the colour target's one
-  expect(sunRig.shadowMapBytes).toBe(512 * 512 * 5);
+  // the depth's four bytes
+  expect(sunRig.shadowMapBytes).toBe(512 * 512 * 4);
   // Coarser texel (0.47 m over the 242 m frustum): the re-centre still snaps
   // to it, so the frustum lands within one texel of the point.
   walkTo(sunRig, 0, 0);
