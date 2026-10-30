@@ -840,7 +840,23 @@ map picture, the stats) carry the site's id. An entry is written whole
 (`scripts/bake-cache.ts`): to a part file, renamed into place, the name's
 stale keys dropped first — never the entry itself nor another process's
 part file — so processes baking side by side never read half an entry nor
-delete each other's. Each tile's **fine ground** is an entry of its own
+delete each other's.
+
+**Shared cache.** Vercel restores each branch's build cache from that
+branch's last build (production's for a new branch), so branches rebased
+onto the same main each baked the same entries cold, side by side. Behind
+the local cache sits one every branch shares (`scripts/shared-cache.ts`):
+Vercel's Remote Cache, the artifacts API Turborepo uses, under a hash of
+the entry's name and key. A local miss is fetched from it before it is
+baked, and a baked entry is uploaded after, so a key is baked once for all
+branches. It runs where a token is set (`VERCEL_ARTIFACTS_TOKEN`, which
+Vercel's build passes, or `TURBO_TOKEN`) and is never fatal: a failed
+request reads as a miss, the first failed upload ends the run's uploads,
+and `BAKE_SHARED_CACHE=0` turns it off. Each run logs whether it is on and
+what it fetched and stored. Two branches starting in the same minute still
+bake the same key twice: neither has stored it yet.
+
+Each tile's **fine ground** is an entry of its own
 (`ground_<t>.bin`, `scripts/ground-pack.ts`: the TIN, or the shaped grid
 where the DGM has NoData, as its typed arrays), keyed on the tile's
 terrain inputs, its passages and the ground bake: every fine level's

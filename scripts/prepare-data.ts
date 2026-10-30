@@ -153,6 +153,7 @@ import { readLockfile } from "./bake-sources";
 import { cachedEntry, writeEntry } from "./bake-cache";
 import { BAKE_ENTRIES } from "./bake-entries";
 import { createKeyMaker } from "./cache-keys";
+import { sharedCache } from "./shared-cache";
 import { createPublisher } from "./publisher";
 import {
   type Dgm,
@@ -309,6 +310,27 @@ const cacheKey = keys.key;
  */
 const siteWide = (name: string) => `${SITE.id}.${name}`;
 
+/** Every branch's bake cache, behind the local one (shared-cache.ts). */
+const SHARED = sharedCache(process.env, log);
+log(`shared bake cache: ${SHARED.reason}`);
+
+/** The entry from the shared cache, written to the local one, or null. */
+async function fromShared(name: string, key: string): Promise<string | null> {
+  const bytes = await SHARED.cache?.get(name, key);
+  return bytes ? writeEntry(CACHE_DIR, name, key, bytes) : null;
+}
+
+/** A baked entry, written to the local cache and offered to the shared one. */
+async function store(
+  name: string,
+  key: string,
+  bytes: Uint8Array
+): Promise<string> {
+  const path = writeEntry(CACHE_DIR, name, key, bytes);
+  await SHARED.cache?.put(name, key, bytes);
+  return path;
+}
+
 /** `--if-cached` (warmers.ts) stops at the first entry it would bake. */
 function mayBake(name: string): void {
   if (MODE.kind === "publish" && MODE.ifCached) {
@@ -324,13 +346,14 @@ async function cached(
   key: string,
   bake: () => Promise<Uint8Array> | Uint8Array
 ): Promise<Uint8Array> {
-  const path = cachedEntry(CACHE_DIR, name, key);
+  const path =
+    cachedEntry(CACHE_DIR, name, key) ?? (await fromShared(name, key));
   if (path) {
     return readFileSync(path);
   }
   mayBake(name);
   const bytes = await bake();
-  writeEntry(CACHE_DIR, name, key, bytes);
+  await store(name, key, bytes);
   return bytes;
 }
 
@@ -341,12 +364,13 @@ async function cachedFile(
   key: string,
   bake: () => Promise<Uint8Array> | Uint8Array
 ): Promise<string> {
-  const path = cachedEntry(CACHE_DIR, name, key);
+  const path =
+    cachedEntry(CACHE_DIR, name, key) ?? (await fromShared(name, key));
   if (path) {
     return path;
   }
   mayBake(name);
-  return writeEntry(CACHE_DIR, name, key, await bake());
+  return store(name, key, await bake());
 }
 
 // --- 1. side files --------------------------------------------------------------
@@ -1420,8 +1444,19 @@ function valleyRims(): ValleyRim[] {
   });
 }
 
+/** What this run took from and gave to the shared cache. */
+function sharedStats(): void {
+  const stats = SHARED.cache?.stats();
+  if (stats && stats.hits + stats.misses + stats.stored > 0) {
+    log(
+      `shared bake cache: ${stats.hits} fetched (${(stats.bytes / 1024 ** 2).toFixed(1)} MB), ${stats.misses} missing, ${stats.stored} stored`
+    );
+  }
+}
+
 /** A warmer's last line: what it cached, how long it took, its peak. */
 function warmed(what: string): never {
+  sharedStats();
   log(
     `warmed ${what} in ${since(started)} ms, peak RSS ${(process.resourceUsage().maxRSS / 1024 ** 2).toFixed(2)} GiB (published nothing)`
   );
@@ -1747,6 +1782,7 @@ const { artifacts, written, pruned } = publisher.finish();
 log(
   `${artifacts} artifacts in public/data/${SITE.id} (${written} new, ${pruned} pruned)`
 );
+sharedStats();
 // resourceUsage's maxRSS is in KiB
 log(
   `done in ${since(started)} ms, peak RSS ${(process.resourceUsage().maxRSS / 1024 ** 2).toFixed(2)} GiB`

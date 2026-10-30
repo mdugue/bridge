@@ -17,6 +17,7 @@ const NOT_A_BAKE: Record<string, string> = {
   "sites/index.ts":
     "the site registry: the site's own config is a common source",
   "scripts/bake-cache.ts": "the cache store",
+  "scripts/shared-cache.ts": "the cache store every branch shares",
   "scripts/bake-sources.ts": "the key's own machinery",
   "scripts/bake-entries.ts": "this table",
   "scripts/cache-keys.ts": "the key's own machinery",
