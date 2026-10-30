@@ -207,12 +207,14 @@ function next(): void {
 }
 
 /**
- * Stops the worker before the page reloads (`disposeForReload`): its heap
- * — a coarse level's shared indices, a job's copies — goes with it now,
- * not when the old document is collected. The jobs still waiting end with
- * an abort (their tiles are gone); a later job starts a new worker.
+ * Stops the worker for good, right before the page reloads (create-app.ts
+ * `stopWorkers`): its heap — a coarse level's shared indices, a job's
+ * copies — goes with it now, not when the old document is collected. The
+ * jobs still waiting end with an abort (nothing draws them any more); a
+ * later job is done here, so no new worker grows in the dying page.
  */
 export function stopGroundWorker(): void {
+  broken = true;
   shutDown((job) => {
     job.reject(new DOMException("the ground worker stopped", "AbortError"));
   });

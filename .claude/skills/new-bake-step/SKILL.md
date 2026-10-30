@@ -32,8 +32,9 @@ ADR 0037 (fetch → bake → build). Deep reference: the `city-walker` skill,
    (checked against every committed file by its test) and an entry in
    `lib/city/tile.ts` (`ARTIFACTS`).
 6. **If the build reads it**, list the module that bakes it in the artifact's
-   bake entries in `prepare-data.ts` (they are listed by hand — a missing
-   entry leaves a stale cache).
+   row of `scripts/bake-entries.ts` (a missing entry leaves a stale cache;
+   `bake-entries.test.ts` catches a module `prepare-data.ts` imports that
+   no bake's key holds, not one filed under the wrong artifact).
 7. **OSM output** carries an `attribution` member; a new source's licence
    and credit go into the guide's licence table (both languages) and, for a
    new provider, `NOTICE`.

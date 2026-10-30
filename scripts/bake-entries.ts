@@ -2,10 +2,10 @@
  * The bake modules each cached artifact of scripts/prepare-data.ts is made
  * by: its cache key walks every module these import (bake-sources.ts
  * `moduleGraph`), so a change to any of them re-bakes that artifact and
- * nothing else. The rule (AGENTS.md, "the bake's cache"): a module
+ * nothing else. The rule (AGENTS.md, Hard rules, Data): a module
  * prepare-data calls to make an artifact is one of its entries or is
  * imported from one — bake-entries.test.ts holds every module
- * prepare-data imports to it.
+ * prepare-data imports to being in some bake's key.
  */
 
 /** The modules a tile's shaped ground is baked by (`shapedTerrain`): the

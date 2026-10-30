@@ -562,8 +562,8 @@ export interface CityWalkHandle {
   /**
    * The page is about to reload after the render stopped (the failure
    * card's buttons): frees the GPU — three's renderer and its device —
-   * and settles within RELEASE_WAIT_MS, the ground and BVH workers
-   * stopped last. Nothing draws after it.
+   * and settles within RELEASE_WAIT_MS; the ground and BVH workers go
+   * first. Nothing draws after it.
    */
   releaseGpu: () => Promise<void>;
   /**
@@ -964,6 +964,7 @@ function probeGpu(renderer: WebGPURenderer): string | null {
  * same process. Settles within RELEASE_WAIT_MS either way.
  */
 function releaseGpu(renderer: WebGPURenderer): Promise<void> {
+  stopWorkers();
   let released: Promise<void>;
   try {
     released = renderer.dispose().catch(() => undefined);
@@ -1172,10 +1173,10 @@ async function teardownWhole(
   await releaseRenderer(renderer);
 }
 
-/** Right before a reload: the ground and BVH workers go, and their heaps
- *  with them, not when the old document is collected (the new page boots
- *  in the old one's process). Not at the start of `releaseGpu`: the stream
- *  still runs while the GPU goes, and its next job would start them again. */
+/** Before a reload: the ground and BVH workers go for good, and their
+ *  heaps with them, not when the old document is collected (the new page
+ *  boots in the old one's process); a job the stream still sends is done
+ *  on this thread. */
 function stopWorkers(): void {
   stopGroundWorker();
   stopBvhWorker();
@@ -2991,12 +2992,7 @@ async function bootApp(
     reload: () => {
       const reload = reloadNow;
       if (reload) {
-        void releaseGpu(renderer).then(() =>
-          whenVisible(() => {
-            stopWorkers();
-            reload();
-          })
-        );
+        void releaseGpu(renderer).then(() => whenVisible(reload));
       }
     },
     fatal: (e) => {
@@ -3764,7 +3760,7 @@ async function bootApp(
     demolishAtCrosshair,
     inquireAt,
     enterImmersive: canvasControls.lockPointer,
-    releaseGpu: () => releaseGpu(renderer).then(stopWorkers),
+    releaseGpu: () => releaseGpu(renderer),
     flyTo: (position, lookAt) => {
       modelRig.exitNow();
       pose.flyTo(position, lookAt);

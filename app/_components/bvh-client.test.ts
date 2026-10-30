@@ -103,12 +103,13 @@ test("a tile that left before its turn is not built, one that left during it get
   expect(during.getIndex()?.array.length).toBe(100 * 100 * 6);
 });
 
-test("a stopped worker starts again for the next build", async () => {
+// last: a stopped worker stays stopped for the module's life
+test("a stopped worker stays stopped: the next build is done here", async () => {
   await buildBvhOffThread(field(4));
   stopBvhWorker();
   expect(bvhWorkerUp()).toBe(false);
   const again = field(4);
   await buildBvhOffThread(again);
-  expect(bvhWorkerUp()).toBe(true);
+  expect(bvhWorkerUp()).toBe(false);
   expect(again.boundsTree).toBeDefined();
 });

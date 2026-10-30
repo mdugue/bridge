@@ -157,15 +157,14 @@ function dieOut(): void {
 }
 
 /**
- * Stops the worker before the page reloads (`disposeForReload`): the
- * building tiles' arrays in its heap go now, not when the old document
- * is collected. A build still away settles as lost (its tile is going
- * with the scene); a later build starts a new worker.
+ * Stops the worker for good, right before the page reloads (create-app.ts
+ * `stopWorkers`): the building tiles' arrays in its heap go now, not when
+ * the old document is collected. A build still away settles as lost
+ * (nothing casts a ray at it any more); a later build is done here, so no
+ * new worker grows in the dying page.
  */
 export function stopBvhWorker(): void {
-  if (worker) {
-    shutDown();
-  }
+  dieOut();
 }
 
 /** Whether a typed array is all of its buffer (can be handed over). */
