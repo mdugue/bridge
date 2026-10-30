@@ -74,7 +74,7 @@ history. Decisions that came out of plans are written up as
 | 040 | Bakes: step-major `bun run bake`, seam stair flights kept, atomic ingest + timeouts + https check, atomic `prepare-data` writes, the `/wissen` hero as tall as the site | **TODO** — P1/P2; the stairs then need a re-bake (maintainer); **drifted** (2026-10-06 audit): its step bodies cite `scripts/bake.ts`, `ingest_sn.py`, `test_ingest.py` (gone — `scripts/pipeline.ts`, `fetch.py` + `providers/`, `test_fetch.py`), the runner takes one JSON spec, step 3 is partly done (`net.py` timeouts, `.part` writes), step 5 appears done (`bake-wissen-hero.ts` `cell * rows`); refresh before executing and fold in the bake runner's order test — see the plan's amendment | [040-bake-pipeline-fixes.md](./040-bake-pipeline-fixes.md) |
 | 041 | Test net: raster shares and the aborted-load free, the collider through a real BVH, census for stairs/sport/kerbs, eye height vs the DGM, pens per style, three's real geometry key | DONE (2026-10-03) — raster shares in their own module; tree rows left allowed empty (Grimma, Munich) | [completed.md](./completed.md#041--tests-where-the-regressions-are--done-2026-10-03) |
 | 042 | Main thread while streaming: stats coalesced, footprints only when they change (no minimap repaint per tile event), footprints after the handover, the viewer chunk fetched with the manifest | DONE (2026-10-03) — the first frame and "loaded" flush the coalesced stats | [completed.md](./completed.md#042--less-main-thread-churn-while-tiles-stream--done-2026-10-03) |
-| 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **BLOCKED** (2026-10-03, re-tried 2026-10-11) — gate passed (BVH median 75 ms a tile), the worker built and tested; the first attempt read Turbopack's leftover `media/*.worker.ts` asset as the worker, but Next 16.3.7's Turbopack **does** bundle it (re-tried for the spawn tile alone, branch `claude/spawn-bvh-worker`). Stopped at the chunk instead: three's core and three-mesh-bvh shared with the worker leave the scene's scope (ADR 0040), +20.8 KB gz on the first load (904 985 → 925 796), and mobile-emulated the first frame came later, not earlier (the lite boot has nothing to overlap once its ground has landed; the worker's build ran 3× slower beside SwiftShader's frames). Five options for the maintainer in the plan's findings | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
+| 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **BUILT in another shape** (2026-10-26, 038d55a: the near tiles' BVH in `bvh-client.ts`'s worker, the rest when a ray first needs one; its chunk cost not re-measured since). Earlier: **BLOCKED** (2026-10-03, re-tried 2026-10-11) — gate passed (BVH median 75 ms a tile), the worker built and tested; the first attempt read Turbopack's leftover `media/*.worker.ts` asset as the worker, but Next 16.3.7's Turbopack **does** bundle it (re-tried for the spawn tile alone, branch `claude/spawn-bvh-worker`). Stopped at the chunk instead: three's core and three-mesh-bvh shared with the worker leave the scene's scope (ADR 0040), +20.8 KB gz on the first load (904 985 → 925 796), and mobile-emulated the first frame came later, not earlier (the lite boot has nothing to overlap once its ground has landed; the worker's build ran 3× slower beside SwiftShader's frames). Five options for the maintainer in the plan's findings | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
 | 044 | The canopy points as a packed binary instead of a 9.5 MB GeoJSON parsed in one task | DONE (2026-10-03) — 96 ms of JSON.parse → ≈ 13 ms to unpack on the biggest tile; published pre-gzipped (`.pts.gz`) | [completed.md](./completed.md#044--the-canopy-points-packed-not-geojson--done-2026-10-03) |
 | 045 | One source for the raster decoders (the stale `surfaceHeading`) and the Python class ids; one OSM number parser; the byte scales pinned across languages | **TODO** — P3; before plan 017 phase 4 | [045-one-source-for-decoders-and-class-ids.md](./045-one-source-for-decoders-and-class-ids.md) |
 | 046 | Moves only: `rail-layer.ts` into mesh kit / deck table / bridge, telemetry and picking out of `bootApp`, a home for the TSL helpers, the terrain↔water cycle, the dead-code sweep | **TODO** — P3; after 039, 041–043; **drifted** (2026-10-06 audit): the deck table moved to `lib/city/decks.ts` on the day 046 was planned, `rail-layer.ts` is 2 485 lines with the span-deck code (ADR 0041) and two more importers (`traffic-layer.ts`, `data-overlays.ts`), `bootApp` doubled to ≈ 2 050 lines (plans 060/066 take its GPU-loss slice); refresh its drift block before executing — see the plan's amendment | [046-split-the-god-modules-and-sweep.md](./046-split-the-god-modules-and-sweep.md) |
@@ -257,9 +257,11 @@ S/M/L.
     (`sceneCrowns`), and module-level nodes for the lamps' night, the
     fountains, the furniture and the map overlay (the old
     `FOUNTAIN_UNIFORMS`/`FURNITURE_UNIFORMS`/`MAP_OVERLAY_UNIFORMS`
-    objects). Left: `create-app.ts` still loops over every dressing on a
-    change (the lamps' night, the vegetation's look and per-frame clock),
-    now writing the same nodes once per tile, and `catchUp`
+    objects). The per-frame clock is one write a frame since 2026-10-30
+    (`setCrownTime`, `setWaterTime`). Left: `create-app.ts` still loops
+    over every dressing on a change (the lamps' night — which also flips
+    each tile's glow and pool visibility, so it is no plain node write —,
+    the vegetation's look), and `catchUp`
     (`tile-stream.ts`) still brings a dressing that was compiling up to the
     present (season, look, night). One environment object bound once
     would delete the loops and shrink `catchUp` to the per-dressing state
@@ -268,8 +270,11 @@ S/M/L.
     Seven triangle-soup writers decide the winding rule in four ways
     (rail's `pushTri` auto-winds to the normal, furniture's `addSlab`,
     `kerbs.ts` reorders, `walls.ts` is double-sided, `fences.ts`,
-    `stairs.ts`, `small-buildings.ts`), and `rail-layer.ts` is the geometry
-    library of `tram-layer.ts` and `riverside-layer.ts`. One pure module
+    `stairs.ts`, `small-buildings.ts`). The runtime half is built
+    (2026-10-30): `app/_components/mesh-kit.ts` is the soup accumulator the
+    rail, tram, riverside and catenary layers share, its winding guarantee
+    tested on its own (`mesh-kit.test.ts`); the catenary's copy of `quad`
+    went with the import cycle that forced it. Left: one pure module
     (soup accumulator with one winding rule, ribbons, footprints, columns,
     the resamplers) used by the runtime layers and the bakes. Deferred on
     2026-09-26 until the WebGPU port had rewritten those files (done);
