@@ -186,6 +186,9 @@ export function stopNotes(stop: WalkStop, today: Date): string[] {
   return season ? [...days, season] : days;
 }
 
+/** The closer look's label on the card. */
+export const CLOSER_LABEL = "Genauer hingesehen";
+
 // --- checks ----------------------------------------------------------------------
 
 const MD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;

@@ -13,6 +13,7 @@ import { Newsreader } from "next/font/google";
 import { useEffect, useState } from "react";
 import {
   isWalkBundle,
+  CLOSER_LABEL,
   stopNotes,
   type Walk,
   type WalkFact,
@@ -206,7 +207,7 @@ function Facts({ facts }: { facts: WalkFact[] }) {
 function StopBody({ notes, stop }: { notes: string[]; stop: WalkStop }) {
   return (
     <>
-      <p className="text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
+      <p className="flow-root text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
         {stop.text}
       </p>
       {notes.map((note) => (
@@ -225,7 +226,7 @@ function StopBody({ notes, stop }: { notes: string[]; stop: WalkStop }) {
         <aside className="mt-3.5 rounded-lg bg-primary/[0.06] px-3 py-2.5">
           <span className="flex items-center gap-1.5 font-sans text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
             <EyeIcon aria-hidden className="size-3" />
-            Genauer hingesehen
+            {CLOSER_LABEL}
           </span>
           <p className="mt-1 text-[14.5px] leading-snug text-foreground/90">
             {stop.closer}

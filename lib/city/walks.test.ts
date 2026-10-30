@@ -41,6 +41,13 @@ test("a stop's view looks from its eye at its point", () => {
   expect(stopView({ ...stop, from: [1100, 2100, 1.6] }).headingDeg).toBe(270);
 });
 
+test("a walk is never drawn in Modell", () => {
+  const drawn = { ...stop, model: { preset: "military" } } as WalkStop;
+  expect(walkProblems({ ...walk, stops: [drawn, stop] }).join()).toContain(
+    "model is not a walk's view"
+  );
+});
+
 test("a stop's camera is in the scene frame, never Modell", () => {
   const offset = { cx: 900, cy: 1900 };
   const plain = stopCamera(stop, offset);
