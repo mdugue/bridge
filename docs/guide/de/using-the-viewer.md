@@ -425,8 +425,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   deinem Browser ([Datenschutz](/datenschutz#frag-die-stadt)). Auch über
   *Fragen* in der Werkzeugleiste. Als **Sprachführer**: *Sprechen* nimmt
   eine Frage per Mikrofon an (wo der Browser Sprache erkennt),
-  *Vorlesen* liest die Antworten vor, und der *Hörmodus* macht den
-  Bildschirm dunkel und lässt die Szene ruhen — für unterwegs, das
+  *Vorlesen* liest die Antworten vor, und der *Hörmodus* dunkelt die
+  Ränder leicht ab und lässt die Szene ruhen — für unterwegs, das
   Telefon in der Tasche, zusammen mit *Live* in der Werkzeugleiste.
   „Was ist das da vorne?“ fragt das Stadtmodell nach dem, was in der
   Bildmitte steht, und öffnet dessen Karte. Als **Szenario-Assistent**
