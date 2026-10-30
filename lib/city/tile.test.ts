@@ -126,7 +126,8 @@ test("manifestUrl resolves hashed names and falls back to the logical one", () =
 });
 
 /** Every per-tile file a bake step names (`f"<stem>_{tile.id}.<ext>"`)
- *  outside the raw downloads, as the TypeScript side would spell it. */
+ *  outside the raw downloads, as the TypeScript side would spell it. A
+ *  stem built from a variable (`f"{name}_{tile.id}…"`) is not seen. */
 function bakeNames(): Map<string, string> {
   const dir = join(import.meta.dir, "../../pipeline/bake");
   const names = new Map<string, string>();
@@ -138,7 +139,9 @@ function bakeNames(): Map<string, string> {
       if (/\braw\b/u.test(line)) {
         return;
       }
-      for (const m of line.matchAll(/f"([a-z_]+)_\{tile\.id\}\.([a-z.]+)"/gu)) {
+      for (const m of line.matchAll(
+        /f"([a-z0-9_]+)_\{tile\.id\}\.([a-z.]+)"/gu
+      )) {
         names.set(`${m[1]}_${PRIMARY_TILE}.${m[2]}`, `${file}:${i + 1}`);
       }
     });

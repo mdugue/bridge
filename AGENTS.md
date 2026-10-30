@@ -90,6 +90,11 @@ bun run docs:matrix     # regenerate the guide's sources-by-city pages
   WebGPU/TSL parts apply.
 - `improve` writes plans to a root `plans/` by default: point it at
   `docs/plans/` and reconcile with that README.
+- `domain-modeling`, `codebase-design`, `grilling` and
+  `improve-codebase-architecture` are generic; an ADR they call for is
+  written the way `docs-upkeep` and `docs/adr/README.md` say (numbered
+  from main's `docs/adr/`, a superseded one deleted), not in their own
+  format.
 
 ## Hard rules
 
