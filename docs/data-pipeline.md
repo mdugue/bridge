@@ -874,7 +874,7 @@ the platform: a branch that bumps Bun bakes under addresses of its own)
 and its scope. A local miss is fetched from it before it is baked (a
 preview asks both scopes at once), and a baked entry is queued for upload
 after (four at a time behind the bake, one runs at about 1 MB/s; at most
-256 MB waiting; a run waits for the queue before it exits), so a key is
+64 MB waiting; a run waits for the queue before it exits), so a key is
 baked once for all branches. Production trusts only itself: its builds
 store under the production scope and read only that; a preview reads
 production's, then the previews' scope, and stores under the previews'.
@@ -884,11 +884,12 @@ more itself. Each entry is stored behind its SHA-256, and one whose bytes
 do not match is a miss. Only Vercel's builds use it (the token is
 `VERCEL_ARTIFACTS_TOKEN`, which Vercel's build passes; the scope comes
 from `VERCEL_ENV`), and it is never fatal: a failed request reads as a
-miss; a request is cut off 30 s plus its size at 1 MiB/s after it
-starts; three failures in a row end the run's use of it; two uploads cut
-off end the run's uploads (a stalled upload stalls the ones behind it); an entry
-refused for its size is skipped alone; `BAKE_SHARED_CACHE=0` turns it
-off. Each run logs whether it is on, how long each upload over 8 MB took,
+miss; a request is given up 30 s plus its size at 1 MiB/s after it
+starts, whether or not the fetch heeds its abort (a run exits once done,
+an open socket left behind); three failures in a row end the run's use
+of it; two uploads cut off end the run's uploads (a stalled upload
+stalls the ones behind it); an entry refused for its size is skipped
+alone; `BAKE_SHARED_CACHE=0` turns it off. Each run logs whether it is on, how long each upload over 8 MB took,
 and what it fetched and stored. Two branches starting in the same minute
 still bake the same key twice: neither has stored it yet.
 

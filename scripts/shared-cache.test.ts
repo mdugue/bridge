@@ -143,13 +143,15 @@ test("uploads cut off end the uploads, not the fetches", async () => {
   }) as typeof fetch;
   const lines: string[] = [];
   const cache = sharedCache(ENV, (l) => lines.push(l), RUNTIME, fetcher).cache;
-  await cache?.put("a", "k", bytes("x"));
-  await cache?.put("b", "k", bytes("y"));
-  await cache?.put("c", "k", bytes("z"));
+  for (const name of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
+    await cache?.put(name, "k", bytes(name));
+  }
   await cache?.flush();
-  expect(puts).toBe(2);
-  expect(lines.at(-1)).toContain("no more uploads");
-  expect(await cache?.get("d", "k")).toBeNull();
+  // two cut off, at most the four lanes' first uploads in flight, then none
+  expect(puts).toBeGreaterThanOrEqual(2);
+  expect(puts).toBeLessThanOrEqual(4);
+  expect(lines.some((l) => l.includes("no more uploads"))).toBe(true);
+  expect(await cache?.get("z", "k")).toBeNull();
   // both scopes asked, the fetches go on
   expect(api.calls.filter((c) => c.method === "GET")).toHaveLength(2);
 });

@@ -256,3 +256,5 @@ await settleShared();
 log(
   `done in ${since(started)} ms, peak RSS ${(process.resourceUsage().maxRSS / 1024 ** 2).toFixed(2)} GiB`
 );
+// a request the shared cache gave up on may still hold a socket open
+process.exit(0);

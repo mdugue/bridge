@@ -60,8 +60,9 @@ const MAX_FAILURES = 3;
  *  build (an 11 MB glb took 11 s), slower than a site bakes. */
 const LANES = 4;
 /** The bytes that may wait for upload before a bake waits for the queue:
- *  a small share of the build machine's 8 GB. */
-const QUEUE_BYTES = 256 * 1024 ** 2;
+ *  a small share of the build machine's 8 GB, beside the bakes' own peaks
+ *  (prepare-sites.ts admits bakes by those). */
+const QUEUE_BYTES = 64 * 1024 ** 2;
 /** An upload this large logs its size and time. */
 const LOG_BYTES = 8 * 1024 ** 2;
 /** The size of the digest stored before an entry's bytes. */
@@ -105,17 +106,31 @@ export function unsealed(stored: Uint8Array): Uint8Array | null {
 export const allowedMs = (bytes: number) =>
   ANSWER_MS + Math.ceil((bytes / MIN_RATE) * 1000);
 
-/** A request's deadline, moved once its size is known. */
+/**
+ * A request's deadline, moved once its size is known. It aborts the
+ * request and, so a fetch that ignores its signal (a body stalled on the
+ * socket) cannot hold the run, rejects whatever `race` waits on.
+ */
 function deadline(ms: number) {
   const controller = new AbortController();
-  const cut = () =>
-    controller.abort(new DOMException("timed out", "TimeoutError"));
-  let timer = setTimeout(cut, ms);
+  let reject: (error: Error) => void = () => {};
+  const cut = new Promise<never>((_, no) => {
+    reject = no;
+  });
+  // only `race` waits on it
+  cut.catch(() => {});
+  const fire = () => {
+    const error = new DOMException("timed out", "TimeoutError");
+    controller.abort(error);
+    reject(error);
+  };
+  let timer = setTimeout(fire, ms);
   return {
     signal: controller.signal,
+    race: <T>(work: Promise<T>) => Promise.race([work, cut]),
     move(next: number) {
       clearTimeout(timer);
-      timer = setTimeout(cut, next);
+      timer = setTimeout(fire, next);
     },
     clear: () => clearTimeout(timer),
   };
@@ -179,19 +194,25 @@ export function sharedCache(
       return;
     }
     const t0 = performance.now();
+    const time = deadline(allowedMs(bytes.byteLength));
     try {
-      const res = await fetcher(url(name, key, scope), {
-        body: sealed(bytes),
-        headers: { ...headers, "Content-Type": "application/octet-stream" },
-        method: "PUT",
-        signal: AbortSignal.timeout(allowedMs(bytes.byteLength)),
-      });
+      const res = await time.race(
+        fetcher(url(name, key, scope), {
+          body: sealed(bytes),
+          headers: { ...headers, "Content-Type": "application/octet-stream" },
+          method: "PUT",
+          signal: time.signal,
+        })
+      );
       if (res.status === 413) {
         log(`shared cache: ${name} (${bytes.byteLength} bytes) is too large`);
         return;
       }
       if (!res.ok) {
-        failed(`storing ${name}`, `${res.status} ${await res.text()}`.trim());
+        failed(
+          `storing ${name}`,
+          `${res.status} ${await time.race(res.text())}`.trim()
+        );
         return;
       }
       failures = 0;
@@ -210,6 +231,8 @@ export function sharedCache(
         return;
       }
       failed(`storing ${name}`, (error as Error).message);
+    } finally {
+      time.clear();
     }
   };
 
@@ -222,10 +245,9 @@ export function sharedCache(
   ): Promise<Uint8Array | null | undefined> => {
     const time = deadline(ANSWER_MS);
     try {
-      const res = await fetcher(url(name, key, from), {
-        headers,
-        signal: time.signal,
-      });
+      const res = await time.race(
+        fetcher(url(name, key, from), { headers, signal: time.signal })
+      );
       if (res.status === 404) {
         failures = 0;
         return null;
@@ -236,7 +258,9 @@ export function sharedCache(
       }
       const length = Number(res.headers.get("content-length"));
       time.move(allowedMs(length > 0 ? length : UNKNOWN_BYTES));
-      const bytes = unsealed(new Uint8Array(await res.arrayBuffer()));
+      const bytes = unsealed(
+        new Uint8Array(await time.race(res.arrayBuffer()))
+      );
       if (!bytes) {
         failed(`fetching ${name}`, "its bytes do not match their digest");
         return undefined;
