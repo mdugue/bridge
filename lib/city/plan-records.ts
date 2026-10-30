@@ -2,8 +2,9 @@
  * A GIS plan's records as plan features (ADR 0054): Shapefile and
  * GeoPackage give shapes with attributes, and an office keeps its classes
  * in an attribute ("Nutzung", "Belag", "Art", "typ") or in the layer's
- * own name. The class is the first that one of the record's text values,
- * then the layer's name, speaks of (plan-classes.ts); a tree's crown and
+ * own name. The class is the first that the record's class-like values,
+ * its other values, the layer's name, then its names, speak of
+ * (plan-classes.ts, `recordClass`); a tree's crown and
  * height and a building's height come from attributes named so. No
  * THREE, no DOM.
  */
@@ -32,15 +33,39 @@ function numberNamed(
   return null;
 }
 
-/** A record's class: its text values first, then the layer's name. */
+/** Attributes that say what a surface is, and those that name a place. */
+const CLASS_KEY =
+  /^(nutzung|nutzungsart|art|typ|type|klasse|class|kategorie|category|belag|oberfl|surface|material|objektart|funktion|landuse|kind|layer|ebene)/i;
+const NAME_KEY =
+  /^(name|bez|bezeichnung|ort|lage|standort|adress|address|str|stra(ß|ss)e|street|antrag|url|link|bemerkung|comment|notiz)/i;
+
+/**
+ * A record's class: what its class-like attributes say ("Nutzung",
+ * "Belag", "Art"), then its other text values, then the layer's name,
+ * and only then its names and addresses — a city's "Alaunplatz" or
+ * "Kamenzer Straße" is where the lawn lies, not what it is. A link is
+ * never read.
+ */
 export function recordClass(
   record: GeoRecord,
   layer: string
 ): PlanClass | null {
-  const texts = Object.values(record.attributes).filter(
-    (v): v is string => typeof v === "string"
-  );
-  return planClassOf([...texts, layer]);
+  const classLike: string[] = [];
+  const other: string[] = [];
+  const names: string[] = [];
+  for (const [key, value] of Object.entries(record.attributes)) {
+    if (typeof value !== "string" || /^[a-z]+:\/\//i.test(value)) {
+      continue;
+    }
+    if (CLASS_KEY.test(key)) {
+      classLike.push(value);
+    } else if (NAME_KEY.test(key)) {
+      names.push(value);
+    } else {
+      other.push(value);
+    }
+  }
+  return planClassOf([...classLike, ...other, layer, ...names]);
 }
 
 /** The records of one layer as plan features. Lines are not drawn: in a

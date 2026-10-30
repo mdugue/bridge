@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  beyondExtents,
+  elsewhereFrame,
+  elsewhereNote,
   type DesignBox,
   designAnchor,
   detectGeoreference,
@@ -14,6 +17,7 @@ import {
   trustedBase,
   utmZone,
 } from "./design-placement";
+import type { TerrainBounds } from "./terrain-geometry";
 
 const local: DesignBox = { min: [-10, 0, -5], max: [10, 12, 5] };
 
@@ -155,5 +159,36 @@ describe("design placement", () => {
     expect("error" in parsePlacementFile(text, 25_832)).toBe(true);
     expect("error" in parsePlacementFile("{", 25_833)).toBe(true);
     expect("error" in parsePlacementFile('{"format":"x"}', 25_833)).toBe(true);
+  });
+});
+
+describe("a place the file gives that no one would see", () => {
+  test("how far a point lies beyond the nearest tile", () => {
+    const tiles: TerrainBounds[] = [
+      [412_000, 5_656_000, 414_000, 5_658_000],
+      [414_000, 5_656_000, 416_000, 5_658_000],
+    ];
+    expect(beyondExtents(tiles, 413_000, 5_657_000)).toBe(0);
+    expect(beyondExtents(tiles, 417_000, 5_657_000)).toBe(1000);
+    // the HHS office's IfcSite, read in zone 33
+    expect(beyondExtents(tiles, 245_799, 5_336_744)).toBeGreaterThan(300_000);
+  });
+
+  test("a box far from its own origin is in another place's coordinates", () => {
+    expect(elsewhereFrame({ min: [-10, 0, -10], max: [10, 9, 10] })).toBe(
+      false
+    );
+    // Karlsruhe's FZK-Haus, placed by its IfcSite in zone 33
+    expect(
+      elsewhereFrame({
+        min: [-38_000, 110, -5_430_000],
+        max: [-37_990, 120, -5_429_990],
+      })
+    ).toBe(true);
+  });
+
+  test("the note says how far", () => {
+    expect(elsewhereNote(412_000)).toContain("412 km außerhalb");
+    expect(elsewhereNote(null)).toContain("anderen Orts");
   });
 });

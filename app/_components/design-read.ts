@@ -24,6 +24,7 @@ import {
   type DesignBox,
   designAnchor,
   detectGeoreference,
+  elsewhereFrame,
   type Georeference,
 } from "@/lib/city/design-placement";
 import type { DesignPartInfo } from "@/lib/city/inquiry-design";
@@ -69,6 +70,9 @@ export interface DesignModel {
   /** the design's box in its own frame */
   box: DesignBox;
   georef: Georeference | null;
+  /** its box lies in another place's or system's coordinates, not the
+   *  site's and not about its own origin (`elsewhereFrame`) */
+  elsewhere: boolean;
   weight: DesignWeight;
   /** what it holds (bytes), its textures dropped where the budget says */
   bytes: number;
@@ -635,6 +639,7 @@ export async function readDesign(
     throw new DesignError(verdict.reason);
   }
   const box = boxOf(pieces);
+  const georef = georefOf(box, epsg, heightsKnown ?? true);
   const { geometry, parts } = mergePieces(pieces, materials, designAnchor(box));
   const plan = materials.some((m) => m.userData.planGround !== undefined);
   // what the file held besides: its own geometries, materials, textures
@@ -656,7 +661,9 @@ export async function readDesign(
     geometry,
     looks,
     box,
-    georef: georefOf(box, epsg, heightsKnown ?? true),
+    georef,
+    // (a plan's reader says so itself, with its classes)
+    elsewhere: !georef && !plan && elsewhereFrame(box),
     weight,
     bytes: verdict.bytes,
     texturesDropped: !verdict.keepTextures && weight.textureBytes > 0,

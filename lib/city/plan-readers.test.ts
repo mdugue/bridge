@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readLandXml } from "./landxml";
-import { recordFeatures } from "./plan-records";
+import { recordClass, recordFeatures } from "./plan-records";
 import { readDbf, readShapefile } from "./shapefile";
 import { readGpkgGeometry } from "./wkb";
 
@@ -199,5 +199,33 @@ describe("LandXML", () => {
     expect(mesh.kind === "mesh" && mesh.triangles[0][1]).toEqual([
       412_310, 5_657_420, 112.5,
     ]);
+  });
+});
+
+describe("a record's class", () => {
+  const polygon = (attributes: Record<string, string | number | null>) => ({
+    kind: "polygon" as const,
+    parts: [],
+    attributes,
+  });
+
+  test("a place's name does not make a park paving or road", () => {
+    // Dresden's Park- und Grünanlagen: the place in `ort`, a form's link
+    const park = polygon({
+      ort: "Alaunplatz - Parkerweiterung Kamenzer Straße",
+      anlage: "Park- und Grünanlagen",
+      antrag: "http://www.dresden.de/media/pdf/formulare/Antrag.pdf",
+    });
+    expect(recordClass(park, "gruenanlagen")).toBe("lawn");
+  });
+
+  test("a class-like attribute speaks first, a name only last", () => {
+    expect(
+      recordClass(polygon({ name: "Rasenplatz", belag: "Pflaster" }), "x")
+    ).toBe("paving");
+    expect(recordClass(polygon({ name: "Kiesweg" }), "Flaechen")).toBe(
+      "gravel"
+    );
+    expect(recordClass(polygon({ name: "Hofgarten" }), "Rasen")).toBe("lawn");
   });
 });

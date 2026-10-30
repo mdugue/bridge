@@ -72,4 +72,14 @@ describe("rhinoPlacement", () => {
     const at = latLngToUtm(25_833, ll.lat, ll.lng)!;
     expect(apply(p.matrix, [1000, 2000, 0])[0]).toBeCloseTo(at.x, 3);
   });
+
+  test("an unread zero with Rhino's default elevation 0 is not NHN", () => {
+    const unread = { ...anchor, elevationZero: null };
+    expect(
+      rhinoPlacement({ ...unread, elevation: 0 }, 1, 25_833)!.heightsKnown
+    ).toBe(false);
+    expect(
+      rhinoPlacement({ ...unread, elevation: 112 }, 1, 25_833)!.heightsKnown
+    ).toBe(true);
+  });
 });

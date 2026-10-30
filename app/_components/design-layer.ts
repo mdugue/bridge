@@ -18,12 +18,14 @@ import {
 } from "@/lib/city/design-cover";
 import {
   type DesignPlacement,
+  elsewhereNote,
   groundBase,
   normalizeRotation,
   type PlacementSource,
   parsePlacementFile,
   placeAhead,
   placementFile,
+  SITE_REACH_M,
   standingBase,
   trustedBase,
 } from "@/lib/city/design-placement";
@@ -89,6 +91,8 @@ export interface DesignLayerDeps {
   tier: DesignTier;
   /** the ground's elevation at EPSG (x, y), where a tile has it */
   heightAt: (x: number, y: number) => number | null;
+  /** how far (m) EPSG (x, y) lies beyond the site's tiles; 0 on one */
+  beyondSite: (x: number, y: number) => number;
   /** caps the walked ground (projected x, y → m NHN, null: not there) */
   capGround: (cap: ((x: number, y: number) => number | null) | null) => void;
   pose: () => PlayerPose;
@@ -193,6 +197,9 @@ interface Loaded {
   mesh: Mesh;
   placement: DesignPlacement;
   source: PlacementSource;
+  /** why it is not where its file says (the panel's note in place of
+   *  the reader's), null where it is or the file says nothing */
+  placeNote: string | null;
   files: MeshStandardNodeMaterial[] | null;
   fileColours: boolean;
   mask: PlanMask | null;
@@ -341,7 +348,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       triangles: current.model.weight.triangles,
       bytes: current.model.bytes,
       texturesDropped: current.model.texturesDropped,
-      note: current.model.note,
+      note: current.placeNote ?? current.model.note,
       placement: { ...current.placement },
       source: current.source,
       hidden,
@@ -434,9 +441,14 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
   /** where a design without a placement file lands, and why */
   const firstPlacement = (
     model: DesignModel
-  ): { placement: DesignPlacement; source: PlacementSource } => {
+  ): {
+    placement: DesignPlacement;
+    source: PlacementSource;
+    placeNote: string | null;
+  } => {
     const geo = model.georef;
-    if (geo) {
+    const beyond = geo ? deps.beyondSite(geo.east, geo.north) : 0;
+    if (geo && beyond <= SITE_REACH_M) {
       const at = { east: geo.east, north: geo.north, rotation: 0 };
       const ground = groundBase(at, model.box, deps.heightAt);
       const base = trustedBase(
@@ -446,6 +458,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       return {
         placement: { ...at, base: base ?? playerGround() },
         source: base === geo.base ? "file" : "file-plan",
+        placeNote: null,
       };
     }
     const at = placeAhead(deps.pose(), model.box);
@@ -456,6 +469,12 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
         base: standingBase(model.box, ground ?? playerGround()),
       },
       source: "here",
+      // a place the file gives that no one would see it at
+      placeNote: geo
+        ? elsewhereNote(beyond)
+        : model.elsewhere
+          ? elsewhereNote(null)
+          : null,
     };
   };
 
@@ -506,6 +525,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     if (current) {
       current.placement = parsed.placement;
       current.source = "placement-file";
+      current.placeNote = null;
       moved(true);
     }
     return null;
@@ -589,6 +609,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       if (parsed && "placement" in parsed) {
         loaded.placement = parsed.placement;
         loaded.source = "placement-file";
+        loaded.placeNote = null;
         pose(loaded);
       }
       current = loaded;
@@ -612,6 +633,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       next.rotation = normalizeRotation(next.rotation);
       current.placement = next;
       current.source = "manual";
+      current.placeNote = null;
       moved();
     },
     placeHere: () => {
@@ -627,6 +649,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
           ground === null ? current.placement.base : standingBase(box, ground),
       };
       current.source = "here";
+      current.placeNote = null;
       moved(true);
     },
     setOnGround: () => {
@@ -641,6 +664,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
           base: standingBase(box, ground),
         };
         current.source = "manual";
+        current.placeNote = null;
         moved(true);
       }
     },

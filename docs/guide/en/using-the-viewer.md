@@ -466,19 +466,24 @@ The other picture styles and Modell keep their sharp lines.
   export it, an IFC model (`.ifc`), an OBJ (`.obj`, with its `.mtl` and
   textures picked together; read as metres with Y up) or a Rhino file
   (`.3dm`, saved with its render meshes); dropping it on the panel works
-  too. A Rhino file whose earth anchor is set stands at its place.
+  too. A Rhino file whose earth anchor is set stands at its place (on the
+  ground, where the anchor gives no height or Rhino's default 0).
   Landscape plans load the same way: an ASCII DXF, a Shapefile (pick the
   `.shp` with its `.dbf`, `.prj` and `.cpg`), a GeoPackage (`.gpkg`) or
   LandXML (`.xml`). Their hatches and areas become lawn, beds, paving,
   paths, water, sand or gravel by their layer's or attributes' names
-  (German or English, e.g. "Rasen", "Pflaster", "Staudenbeet"), drawn in
+  (German or English, e.g. "Rasen", "Pflaster", "Staudenbeet"; an
+  attribute such as *Nutzung*, *Art* or *Belag* first, a name or address
+  last, so a "Kamenzer Straße" park stays lawn), drawn in
   the city's colours on the ground; tree symbols become trees of the
   drawn crown size, a TIN a planned ground. A layer whose name says
   nothing stays grey, and the panel names it. A plan in UTM coordinates
   lies at its place on the ground already loaded there.
   An IFC that carries its place (`IfcMapConversion` in ETRS89/UTM) stands
   there by itself; one with only the site's latitude and longitude stands
-  roughly there, and the panel asks you to check it. The file is read in your
+  roughly there, and the panel asks you to check it. A design whose file
+  puts it more than 2 km beyond the city's tiles, or in another place's
+  coordinates, is set down in front of you, and the panel says why. The file is read in your
   browser only and uploaded nowhere. Where it carries the Land's
   coordinates (UTM, with or without the zone in front), the design stands
   at its place straight away, at its NHN heights where they agree with the

@@ -4649,14 +4649,19 @@ GPU**.
   OBJ (metres, Y up, its MTL and textures from the picked files) and a
   Rhino .3dm (its unit, Z up turned to Y up, placed `◎ detected` by its
   earth anchor where one is set — its elevation as NHN unless it says
-  ground level or the earth's centre, then set on the ground; hidden
+  ground level or the earth's centre, or is unread and Rhino's default
+  0, then set on the ground; hidden
   layers left out; breps by
   their saved render meshes) are read alike
-  (`design-formats.ts`). A **landscape plan** (DXF, Shapefile,
+  (`design-formats.ts`). A place more than 2 km beyond the site's tiles,
+  or in another place's coordinates, is not taken: `≈ assumed` in front
+  of the player, the panel saying why. A **landscape plan** (DXF, Shapefile,
   GeoPackage, LandXML; `design-plan.ts`) becomes surfaces `◎ detected`
   by their layer's or attributes' names (`lib/city/plan-classes.ts`,
-  German and English keywords; unnamed: grey) in the city's palette, laid
-  on the loaded ground in triangles of a few metres (its own heights
+  German and English keywords; class-like attributes first, names and
+  addresses last; unnamed: grey) in the city's palette, laid
+  on the loaded ground in triangles of a few metres, at most 150 000 in
+  all (its own heights
   kept), what is drawn into an area 10 cm above it; trees as
   low-poly crowns of the plan's size (`≈ assumed` 6 m and 10 m where it
   gives none), buildings with a height or storeys as blocks, TINs as a
