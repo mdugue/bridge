@@ -27,7 +27,8 @@ memory and first load must not grow (ADR 0047).
    it.
 2. **Walks are written ahead and committed** (`data/<site>/walks/*.json`,
    `lib/city/walks.ts`, the guide `docs/walks.md`): stops with an eye on
-   the measured ground, the hour, an optional Modell view or style, the
+   the measured ground, the hour, an optional picture style (never
+   Modell: a walk is seen, and the jump into it broke the glide), the
    narration, notes for days and seasons, and the facts it rests on —
    each a sentence with an https source or a Stadtwissen id.
    `walks.test.ts` holds them to the data; the build bundles them into
@@ -36,6 +37,10 @@ memory and first load must not grow (ADR 0047).
    says it was told by Claude (KI) and when, and folds the claims out with
    their sources. A legend is told as a legend; a claim in `facts` is one
    a source states.
+4. **A walk is told on the way.** Each stop glides at 2.2× the usual
+   pace, and the card can read the stop aloud from the start of the
+   glide (the browser's voice, as in ADR 0057); a stop's text fits a
+   phone screen (560 characters).
 
 ## Consequences
 

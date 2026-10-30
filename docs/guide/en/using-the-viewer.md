@@ -380,14 +380,20 @@ The button in the corner opens a panel with three tabs.
   From the air the flows, columns and trails widen and thicken so they
   stay legible.
 - **Spaziergänge** ("walks") — guided walks through the city, written by
-  Claude, an AI, and marked as such on every stop (so far in Dresden, in
-  German): *Augusts Bühne* (the old town as a stage of power), *Narben
+  Claude, an AI, and marked as such on every stop (in German). Dresden
+  has four: *Augusts Bühne* (the old town as a stage of power), *Narben
   und Nähte* (how the city lives with its wounds), *Gold, Milch und
   Eigensinn* (the Neustadt) and *Wunder am Elbhang* (upriver to
-  Loschwitz). A walk opens a card over the scene: each stop glides to
-  its view, sets today's date at the hour the stop is best seen (a
-  facade in evening light, a square at night) and, where the stop asks,
-  a picture style or the Modell view; the card tells the stop, adds what
+  Loschwitz); every other city has one: *Messe, Musik und Montag*
+  (Leipzig), *Backstein und Wasser* (Hamburg), *Teufel, Tanz und Löwen*
+  (Munich), *Schloss, Dom und Porzellan* (Meißen), *Grimma an der Mulde*
+  and *Licht unter der Stadt* (Unna). A walk opens a card over the
+  scene: each stop glides slowly to its view, sets today's date at the
+  hour the stop is best seen (a facade in evening light, a square at
+  night) and, where the stop asks, a picture style; a walk leaves Modell
+  once, since it tells what you see. The speaker at the top reads each
+  stop aloud, already during the glide there (with the browser's
+  voice). The card tells the stop, adds what
   is special about today or this season, and names one detail to find in
   the picture. *Belege* ("sources") folds out every claim the stop makes
   with the source it comes from — Wikipedia, an institution's page, the

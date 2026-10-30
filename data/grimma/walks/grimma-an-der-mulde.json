@@ -1,0 +1,124 @@
+{
+  "id": "grimma-an-der-mulde",
+  "title": "Grimma an der Mulde",
+  "teaser": "Eine kleine Stadt an einem launischen Fluss: eine Brücke, die gesprengt, weggespült und wieder gebaut wurde, eine Schule für Fürstensöhne und ein Mann, der von hier zu Fuß nach Sizilien ging.",
+  "by": "Claude",
+  "written": "2026-10-30",
+  "minutes": 10,
+  "stops": [
+    {
+      "id": "poeppelmannbruecke",
+      "title": "Eine Brücke, die zurückkam",
+      "from": [
+        341680,
+        5678456,
+        90
+      ],
+      "ground": 123.9,
+      "at": [
+        341792,
+        5678766,
+        142
+      ],
+      "hour": 12,
+      "text": "Am 1. Juli 1716 wurde der Grundstein gelegt, im Januar 1719 rollten die ersten Wagen über die Mulde, nach Plänen von Matthäus Daniel Pöppelmann, dem sächsischen Oberlandbaumeister. Am 15. April 1945 sprengte die Wehrmacht das Mittelstück. Und am 13. August 2002 kam die Flut: Treibgut staute sich, das Wasser unterspülte die Pfeiler, die Brücke stürzte teilweise ein. Am 20. August 2012 öffnete sie wieder. Beim nächsten Hochwasser, im Juni 2013, hielt sie stand.",
+      "closer": "Zähl die Bögen am rechten Ufer: Von drei zerstörten historischen wurde nur einer wieder gebaut.",
+      "days": [
+        {
+          "from": "08-10",
+          "to": "08-20",
+          "text": "Mitte August 2002 stand die Mulde so hoch wie nie in Grimma."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Der Grundstein wurde am 1. Juli 1716 gelegt, im Januar 1719 ging die Brücke nach Entwurf und unter Leitung von Matthäus Daniel Pöppelmann in Betrieb.",
+          "source": "https://de.wikipedia.org/wiki/Pöppelmannbrücke_(Grimma)"
+        },
+        {
+          "claim": "Am 15. April 1945 sprengte die Wehrmacht den stählernen Brückenteil.",
+          "source": "https://de.wikipedia.org/wiki/Pöppelmannbrücke_(Grimma)"
+        },
+        {
+          "claim": "Das Hochwasser vom 13. August 2002 führte zum Teileinsturz; am 20. August 2012 wurde die Brücke wiedereröffnet.",
+          "source": "https://de.wikipedia.org/wiki/Pöppelmannbrücke_(Grimma)"
+        },
+        {
+          "claim": "Beim Hochwasser am 3. Juni 2013 hielt der Neubau stand.",
+          "source": "https://de.wikipedia.org/wiki/Pöppelmannbrücke_(Grimma)"
+        }
+      ],
+      "refs": [
+        "Q2120789"
+      ]
+    },
+    {
+      "id": "fuerstenschule",
+      "title": "Eine Schule für Fürstensöhne",
+      "from": [
+        341801,
+        5678277,
+        80
+      ],
+      "ground": 161.4,
+      "at": [
+        341558,
+        5678417,
+        143.6
+      ],
+      "hour": 10,
+      "text": "1550 gründete Moritz von Sachsen im leer gewordenen Kloster der Augustiner eine Fürstenschule, heute das Gymnasium St. Augustin. Ihr bekanntester Schüler war der Liederdichter Paul Gerhardt, von 1622 bis 1627 hier. Auch der Völkerrechtler Samuel von Pufendorf lernte hier. Das Hauptgebäude steht direkt am Ufer der Mulde, und das bekam es 2002 zu spüren: 6,7 Millionen Euro Schaden am Bau, dazu 1,2 Millionen an der Einrichtung.",
+      "facts": [
+        {
+          "claim": "Die Schule wurde 1550 von Moritz von Sachsen als Fürstenschule im funktionslos gewordenen Kloster Grimma gegründet.",
+          "source": "https://de.wikipedia.org/wiki/Gymnasium_St._Augustin_zu_Grimma"
+        },
+        {
+          "claim": "Paul Gerhardt besuchte sie von 1622 bis 1627, Samuel von Pufendorf von 1645 bis 1650.",
+          "source": "https://de.wikipedia.org/wiki/Gymnasium_St._Augustin_zu_Grimma"
+        },
+        {
+          "claim": "Beim Hochwasser im August 2002 entstand am Hauptgebäude ein Schaden von 6,7 Millionen Euro, dazu 1,2 Millionen an der Ausstattung.",
+          "source": "https://de.wikipedia.org/wiki/Gymnasium_St._Augustin_zu_Grimma"
+        }
+      ],
+      "refs": [
+        "Q14537082"
+      ]
+    },
+    {
+      "id": "seume",
+      "title": "Zu Fuß nach Syrakus",
+      "from": [
+        341281,
+        5678505,
+        70
+      ],
+      "ground": 128.9,
+      "at": [
+        341489,
+        5678625,
+        141
+      ],
+      "hour": 16,
+      "text": "In diesem Haus wohnte und arbeitete Johann Gottfried Seume, als Korrektor beim Verleger Göschen. Seume hatte schon ein Leben hinter sich: 1781 griffen ihn hessische Werber auf, und der Landgraf vermietete ihn an England, als Soldat für den Krieg in Amerika. 1801 brach er wieder auf, diesmal freiwillig, und ging bis nach Sizilien und zurück, rund 6000 Kilometer, große Teile davon zu Fuß. Das Buch darüber heißt „Spaziergang nach Syrakus“. Gemessen daran ist dieser hier sehr kurz.",
+      "facts": [
+        {
+          "claim": "Ab 1797 arbeitete Seume als Korrektor für den Verleger Georg Joachim Göschen in Grimma.",
+          "source": "https://de.wikipedia.org/wiki/Johann_Gottfried_Seume"
+        },
+        {
+          "claim": "1781 wurde er von hessischen Werbern aufgegriffen; der Landgraf von Hessen-Kassel vermietete ihn an England für den Amerikanischen Unabhängigkeitskrieg.",
+          "source": "https://de.wikipedia.org/wiki/Johann_Gottfried_Seume"
+        },
+        {
+          "claim": "Die Reise 1801/1802 umfasste rund 6000 Kilometer, große Teile zu Fuß; das Buch „Spaziergang nach Syrakus im Jahre 1802“ erschien 1803.",
+          "source": "https://de.wikipedia.org/wiki/Johann_Gottfried_Seume"
+        }
+      ],
+      "refs": [
+        "Q107585173"
+      ]
+    }
+  ]
+}

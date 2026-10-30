@@ -1,13 +1,18 @@
 "use client";
 
 import {
+  CalendarDaysIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  EyeIcon,
   FootprintsIcon,
   MessageCircleQuestionIcon,
   RouteIcon,
+  Volume2Icon,
+  VolumeXIcon,
   XIcon,
 } from "lucide-react";
+import { Newsreader } from "next/font/google";
 import { useEffect, useState } from "react";
 import {
   isWalkBundle,
@@ -18,6 +23,7 @@ import {
 } from "@/lib/city/walks";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "cn";
+import { useSpeech } from "./ask-voice";
 import { useSceneStatus } from "./scene-status";
 
 /**
@@ -26,6 +32,16 @@ import { useSceneStatus } from "./scene-status";
  * shows it. The narration is Claude's and says so on every stop; each
  * claim it rests on links its source.
  */
+
+/** The walk's book face: a told story reads as print, not as a HUD. Not
+ *  preloaded: the file comes with the first walk card, not with the page
+ *  (self-hosted by the build, no request to Google). */
+const story = Newsreader({
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  axes: ["opsz"],
+  preload: false,
+});
 
 const SECTION_LABEL =
   "font-semibold text-[11px] uppercase leading-none tracking-widest text-muted-foreground";
@@ -236,30 +252,53 @@ function Facts({ facts }: { facts: WalkFact[] }) {
 }
 
 /** What the stop says: its narration, today's notes, the closer look. */
-function StopBody({ stop, today }: { stop: WalkStop; today: Date }) {
-  const notes = stopNotes(stop, today);
+function StopBody({ notes, stop }: { notes: string[]; stop: WalkStop }) {
   return (
     <>
-      <p className="text-[13px] leading-relaxed text-foreground/90">
+      <p className="text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
         {stop.text}
       </p>
       {notes.map((note) => (
         <p
-          className="mt-2 border-primary/60 border-l-2 pl-2.5 text-[13px] leading-relaxed text-foreground/90"
+          className="mt-3 flex gap-2 text-[14.5px] italic leading-snug text-foreground/85"
           key={note}
         >
+          <CalendarDaysIcon
+            aria-hidden
+            className="mt-0.5 size-3.5 shrink-0 text-primary not-italic"
+          />
           {note}
         </p>
       ))}
       {stop.closer && (
-        <p className="mt-2 text-[13px] leading-relaxed text-foreground/90">
-          <span className="font-medium">Genauer hingesehen: </span>
-          {stop.closer}
-        </p>
+        <aside className="mt-3.5 rounded-lg bg-primary/[0.06] px-3 py-2.5">
+          <span className="flex items-center gap-1.5 font-sans text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
+            <EyeIcon aria-hidden className="size-3" />
+            Genauer hingesehen
+          </span>
+          <p className="mt-1 text-[14.5px] leading-snug text-foreground/90">
+            {stop.closer}
+          </p>
+        </aside>
       )}
-      <Facts facts={stop.facts} />
+      <div className="font-sans">
+        <Facts facts={stop.facts} />
+      </div>
     </>
   );
+}
+
+/** What the voice reads at a stop: its title, its story, today's notes
+ *  and the closer look — the sources stay on the card. */
+export function stopSpeech(stop: WalkStop, notes: readonly string[]): string {
+  return [
+    `${stop.title}.`,
+    stop.text,
+    ...notes,
+    stop.closer ? `Genauer hingesehen: ${stop.closer}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 /**
@@ -283,8 +322,21 @@ export function WalkCard({
   const [folded, setFolded] = useState(false);
   // the visitor's day: the notes for today and the season
   const [today] = useState(() => new Date());
+  // read aloud: each stop from the start of its glide (the browser's own
+  // voice, ADR 0057); a closed card stops talking
+  const speech = useSpeech();
+  const [reading, setReading] = useState(false);
   const { isMobile, openMobile } = useSidebar();
   const stop = walk.stops[index];
+  const notes = stop ? stopNotes(stop, today) : [];
+  const said = stop && reading ? stopSpeech(stop, notes) : "";
+  useEffect(() => {
+    if (said) {
+      speech.speak(said);
+    } else {
+      speech.stop();
+    }
+  }, [said, speech]);
   // the phone's panel sheet covers the scene, and the card with it
   if (!stop || (isMobile && openMobile)) {
     return null;
@@ -303,16 +355,55 @@ export function WalkCard({
     >
       <header className="flex items-start gap-2 px-4 pt-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
-            {walk.title} · {index + 1}/{walk.stops.length}
+          <p className="flex items-center gap-2 text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
+            <span className="truncate">{walk.title}</span>
+            {/* where in the walk: one dot a stop */}
+            <span className="sr-only">
+              Station {index + 1} von {walk.stops.length}
+            </span>
+            <span aria-hidden className="flex shrink-0 items-center gap-1">
+              {walk.stops.map((s, i) => (
+                <span
+                  className={cn(
+                    "block h-1 rounded-full transition-all",
+                    i === index
+                      ? "w-3 bg-primary"
+                      : i < index
+                        ? "w-1 bg-primary/60"
+                        : "w-1 bg-foreground/15"
+                  )}
+                  key={s.id}
+                />
+              ))}
+            </span>
           </p>
           <h2
             aria-live="polite"
-            className="font-heading text-lg leading-tight text-balance"
+            className={cn(
+              story.className,
+              "mt-1 text-[1.45rem] font-medium italic leading-[1.12] tracking-[-0.01em] text-balance"
+            )}
           >
             {stop.title}
           </h2>
         </div>
+        {speech.supported && (
+          <button
+            aria-label="Vorlesen"
+            aria-pressed={reading}
+            className="-mt-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground aria-pressed:bg-primary/10 aria-pressed:text-primary"
+            data-testid="walk-read"
+            onClick={() => setReading((r) => !r)}
+            title={reading ? "Nicht mehr vorlesen" : "Vorlesen, schon im Flug"}
+            type="button"
+          >
+            {reading ? (
+              <Volume2Icon className="size-4" />
+            ) : (
+              <VolumeXIcon className="size-4" />
+            )}
+          </button>
+        )}
         <button
           aria-label="Spaziergang beenden"
           className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -325,11 +416,14 @@ export function WalkCard({
       </header>
       {!(coarse && folded) && (
         <div
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-1.5"
+          className={cn(
+            story.className,
+            "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-2"
+          )}
           key={`${walk.id}/${stop.id}`}
         >
-          <StopBody stop={stop} today={today} />
-          <p className="mt-3 pb-1 text-[10px] text-muted-foreground leading-snug">
+          <StopBody notes={notes} stop={stop} />
+          <p className="mt-3 pb-1 font-sans text-[10px] text-muted-foreground leading-snug">
             <FootprintsIcon aria-hidden className="mr-1 inline size-3" />
             Erzählt von {walk.by} (KI), {walk.written}. Die Erzählung ist
             generiert; die Angaben stehen unter „Belege“ mit ihrer Quelle.

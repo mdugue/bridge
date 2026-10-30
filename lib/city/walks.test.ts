@@ -41,18 +41,11 @@ test("a stop's view looks from its eye at its point", () => {
   expect(stopView({ ...stop, from: [1100, 2100, 1.6] }).headingDeg).toBe(270);
 });
 
-test("a stop's camera is in the scene frame, with Modell where it asks", () => {
+test("a stop's camera is in the scene frame, never Modell", () => {
   const offset = { cx: 900, cy: 1900 };
   const plain = stopCamera(stop, offset);
   expect(plain.pos).toEqual({ x: 100, y: 111.6, z: -100 });
   expect(plain.model).toBeUndefined();
-  const model = stopCamera(
-    { ...stop, model: { preset: "military", scale: 1500, turnDeg: 45 } },
-    offset
-  );
-  expect(model.model?.pivot).toEqual({ x: 100, y: 211.6, z: -200 });
-  expect(model.model?.tiltDeg).toBe(90);
-  expect(model.mode).toBe("fly");
 });
 
 test("a stop is shown today at its hour", () => {
