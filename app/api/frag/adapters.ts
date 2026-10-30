@@ -35,7 +35,11 @@ export function askAdapter(
       return createOpenaiChat(model as OpenAiModel, key, CLIENT);
     case "google":
       return createGeminiChat(model as GeminiModel, key, {
-        httpOptions: { timeout: CLIENT.timeout },
+        httpOptions: {
+          timeout: CLIENT.timeout,
+          // the original and one retry, as the other providers
+          retryOptions: { attempts: CLIENT.maxRetries + 1 },
+        },
       });
     case "openrouter":
       return createOpenRouterText(model as OpenRouterModel, key, {

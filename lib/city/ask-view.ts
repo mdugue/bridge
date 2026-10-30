@@ -407,6 +407,10 @@ export function frameTargets(
     : null;
   const scored = candidates
     .map((c) => {
+      // the ground's cut is cheap (a few height lookups): every heading
+      const ground = groundAt
+        ? seenShare(c, points, targets, groundAt, undefined)
+        : 0;
       // where the eye stands, seen from the aim
       const back = towards(aim, c.eye) ?? [0, -1];
       const score =
@@ -414,11 +418,8 @@ export function frameTargets(
         WEIGHTS.from * agreement(back, comeFrom) +
         WEIGHTS.sun * agreement(back, sun) +
         WEIGHTS.beside * (targets.length > 1 ? c.beside : 0.5) +
-        // the ground's cut is cheap (a few height lookups): every heading
-        (groundAt
-          ? WEIGHTS.seen * seenShare(c, points, targets, groundAt, undefined)
-          : 0);
-      return { c, score };
+        WEIGHTS.seen * ground;
+      return { c, score, ground };
     })
     .sort((a, b) => b.score - a.score);
   // the buildings' sight lines weigh as much and cost most: drawn for the
@@ -427,22 +428,25 @@ export function frameTargets(
   const finalists = scored.slice(0, sightHit ? SIGHT_CANDIDATES : 1);
   if (sightHit) {
     for (const s of finalists) {
-      const groundOnly = groundAt
-        ? seenShare(s.c, points, targets, groundAt, undefined)
-        : 0;
       s.score +=
         WEIGHTS.seen *
-        (seenShare(s.c, points, targets, groundAt, sightHit) - groundOnly);
+        (seenShare(s.c, points, targets, groundAt, sightHit) - s.ground);
     }
   }
   const best = finalists.reduce((a, b) => (b.score > a.score ? b : a)).c;
   const foot = Math.min(...points.map((p) => p.z));
-  const under = groundAt?.(best.eye.x, best.eye.y) ?? foot;
+  const under = groundAt?.(best.eye.x, best.eye.y) ?? null;
+  // an eye the back-off could not lift clear of a steep slope still
+  // stands clear over the ground beneath it (the glide sets it there)
+  const above =
+    under === null
+      ? best.eye.z - foot
+      : Math.max(best.eye.z - under, CLEARANCE);
   return {
     distance: Math.round(best.distance),
     view: {
       epsg: { x: round1(best.eye.x), y: round1(best.eye.y) },
-      aboveGround: Math.round(best.eye.z - under),
+      aboveGround: Math.round(above),
       headingDeg: best.heading,
       pitchDeg: -round1(pitch),
       fov: ASK_FOV,

@@ -12,19 +12,23 @@ import {
   motion,
   useMotionValue,
   useReducedMotion,
+  useDragControls,
   useTransform,
 } from "motion/react";
 import {
   type KeyboardEvent,
   type ReactNode,
+  type PointerEvent,
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import { cn } from "cn";
 import { cardCredits } from "@/lib/city/card-lines";
 import { type Inquiry, inquiryCard } from "@/lib/city/inquiry";
 import { deckBehind, stepped, swipeStep } from "@/lib/city/pick-swipe";
+import { isControlKey, isTextEntry } from "./keyboard-controls";
 import { useSite } from "./site-context";
 
 /** The most cards that peek out behind the open one; more still count. */
@@ -42,9 +46,26 @@ const FLY_DEG = 12;
 const FLY_OUT = { duration: 0.18, ease: "easeIn" } as const;
 
 /**
+ * Whether a pointer pressed here means a control or, with a mouse, the
+ * card's text (a fact's value, an id to copy) rather than the card.
+ */
+function grabsText(event: PointerEvent): boolean {
+  const el = event.target as HTMLElement;
+  return (
+    el.closest(
+      "button, a, input, textarea, select, [role=slider], [contenteditable]"
+    ) !== null ||
+    (event.pointerType === "mouse" && el.closest("dd, code, p") !== null)
+  );
+}
+
+/**
  * A swipe across `children` leafs through the picks (−1 back, +1 on) —
- * the touch screen's sheet, which is drawn apart from the stack. It adds
- * no box of its own (`display: contents`): it only listens.
+ * the touch screen's sheet, which is drawn apart from the stack, in a
+ * portal: React's pointer events still bubble here through it, the
+ * browser's do not. It adds no box of its own (`display: contents`) and
+ * stays in place whether it listens or not, so the sheet is never
+ * mounted anew.
  */
 export function PickSwipe({
   children,
@@ -55,24 +76,39 @@ export function PickSwipe({
   enabled: boolean;
   onStep: (step: -1 | 1) => void;
 }) {
-  if (!enabled) {
-    return children;
-  }
+  const start = useRef<{ t: number; x: number; y: number } | null>(null);
   return (
-    <motion.div
+    <div
       className="contents"
-      onPanEnd={(_, info) => {
-        // a mostly sideways swipe; a scroll of the sheet is not one
-        if (Math.abs(info.offset.x) > Math.abs(info.offset.y) * 1.5) {
-          const step = swipeStep(info.offset.x, info.velocity.x);
-          if (step !== 0) {
-            onStep(step);
+      onPointerCancel={() => {
+        start.current = null;
+      }}
+      onPointerDown={(event) => {
+        start.current =
+          enabled && event.isPrimary
+            ? { t: event.timeStamp, x: event.clientX, y: event.clientY }
+            : null;
+      }}
+      onPointerUp={(event) => {
+        const from = start.current;
+        start.current = null;
+        if (!from) {
+          return;
+        }
+        const dx = event.clientX - from.x;
+        const dy = event.clientY - from.y;
+        const seconds = Math.max((event.timeStamp - from.t) / 1000, 0.016);
+        // a mostly sideways swipe; a scroll or pull of the sheet is not one
+        if (Math.abs(dx) > Math.abs(dy) * 1.5) {
+          const by = swipeStep(dx, dx / seconds);
+          if (by !== 0) {
+            onStep(by);
           }
         }
       }}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 
@@ -127,34 +163,24 @@ export function PickStack({
   // side it goes, and the next card's content comes in from the deck
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-240, 240], [-FLY_DEG, FLY_DEG]);
+  const drag = useDragControls();
   const y = useMotionValue(0);
   const scale = useMotionValue(1);
   const opacity = useMotionValue(1);
-  const flying = useRef(false);
-  const step = (by: -1 | 1) => {
-    const next = stepped(active, by, picks.length);
-    if (reduced) {
-      onActivate(next);
-      return;
-    }
-    if (flying.current) {
-      return;
-    }
-    flying.current = true;
-    // a step on (to the left, as a swipe on goes) leaves to the left
-    void Promise.all([
-      animate(x, -by * FLY_PX, FLY_OUT),
-      animate(opacity, 0, FLY_OUT),
-    ]).then(() => {
-      flying.current = false;
-      // it comes back in at once, as the next card (or as itself, where
-      // the selection changed meanwhile and there was none to go to)
-      entered.current = true;
-      enter();
-      onActivate(next);
-    });
-  };
-  const pick = (i: number) => onActivate(i);
+  const [flying, setFlying] = useState(false);
+  // where the deck stands now: a flight lands on what is there when it
+  // lands, not on what was there when it took off
+  const latest = useRef({ active, count: picks.length });
+  const alive = useRef(true);
+  useEffect(() => {
+    latest.current = { active, count: picks.length };
+  });
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    []
+  );
   /** The front card comes in from the deck's top. */
   const enter = () => {
     x.jump(0);
@@ -169,29 +195,56 @@ export function PickStack({
     void animate(scale, 1, SPRING);
     void animate(opacity, 1, { duration: 0.15 });
   };
-  // whichever way a pick came forward: a flight brought it in already
-  const entered = useRef(false);
+  const step = (by: -1 | 1) => {
+    if (reduced) {
+      onActivate(stepped(active, by, picks.length));
+      return;
+    }
+    if (flying) {
+      return;
+    }
+    setFlying(true);
+    // a step on (to the left, as a swipe on goes) leaves to the left
+    void Promise.all([
+      animate(x, -by * FLY_PX, FLY_OUT),
+      animate(opacity, 0, FLY_OUT),
+    ]).then(() => {
+      if (!alive.current) {
+        return;
+      }
+      setFlying(false);
+      const now = latest.current;
+      const next = stepped(now.active, by, now.count);
+      if (next === now.active) {
+        // nothing to go to any more (the selection shrank): it comes back
+        enter();
+      } else {
+        onActivate(next);
+      }
+    });
+  };
+  const pick = (i: number) => onActivate(i);
+  // whichever way a pick came forward, it comes in from the deck's top
   const shownKey = `${active}:${labels[active]}`;
   const lastKey = useRef(shownKey);
   useEffect(() => {
-    if (lastKey.current === shownKey) {
-      return;
+    if (lastKey.current !== shownKey) {
+      lastKey.current = shownKey;
+      enter();
     }
-    lastKey.current = shownKey;
-    if (entered.current) {
-      entered.current = false;
-      return;
-    }
-    enter();
   });
   const keys = (event: KeyboardEvent) => {
     const by =
       event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-    const typing = (event.target as HTMLElement).closest(
-      "input, textarea, select, [contenteditable]"
-    );
-    if (several && by !== 0 && !typing) {
+    if (
+      several &&
+      by !== 0 &&
+      !isTextEntry(event.target) &&
+      !isControlKey(event.code, event.target)
+    ) {
       event.preventDefault();
+      // the arrows leaf the deck here, they do not also turn the camera
+      event.stopPropagation();
       step(by);
     }
   };
@@ -357,8 +410,10 @@ export function PickStack({
             several && "touch-pan-y"
           )}
           data-testid="pick-front"
-          drag={several ? "x" : false}
+          drag={several && !flying ? "x" : false}
+          dragControls={drag}
           dragDirectionLock
+          dragListener={false}
           // let go, it springs back or flies on: ours to animate
           dragMomentum={false}
           onDragEnd={(_, info) => {
@@ -370,6 +425,12 @@ export function PickStack({
             }
           }}
           onKeyDown={keys}
+          onPointerDown={(event) => {
+            // not from a control, nor from the text a mouse selects
+            if (!grabsText(event)) {
+              drag.start(event);
+            }
+          }}
           style={{ x, y, rotate, scale, opacity }}
         >
           {several && (

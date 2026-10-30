@@ -320,8 +320,12 @@ export function createCameraPose(
   const dir = new Vector3();
   const euler = new Euler(0, 0, 0, "YXZ");
 
+  // where a tile's terrain has not landed, the plate's coarse ground,
+  // then the lowest terrain so far
   const groundAt = (epsgX: number, epsgY: number): number =>
-    opts.heightAt(epsgX, epsgY) ?? opts.groundFloor();
+    opts.heightAt(epsgX, epsgY) ??
+    opts.coarseHeightAt?.(epsgX, epsgY) ??
+    opts.groundFloor();
   const groundWorld = (x: number, z: number): number => {
     const epsg = worldToEpsg(x, z, offset);
     return groundAt(epsg.x, epsg.y);
@@ -545,10 +549,8 @@ export function createCameraPose(
   const targetOf = (viewpoint: ViewpointGeometry): FlightTarget => {
     const { x, y } = viewpoint.epsg;
     const w = epsgToWorld(x, y, offset);
-    const under =
-      opts.heightAt(x, y) ?? opts.coarseHeightAt?.(x, y) ?? opts.groundFloor();
     const { pos } = clearOf(
-      { x: w.x, y: under + viewpoint.aboveGround, z: w.z },
+      { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
       viewpoint.mode === "walk"
     );
     return {

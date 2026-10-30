@@ -5,18 +5,21 @@
 
 /** How far a card is pulled before it counts as a swipe (px). */
 export const SWIPE_PX = 80;
-/** How fast a flick counts as a swipe however short (px/s). */
+/** How fast a flick counts as a swipe however short (px/s) — past a
+ *  twitch: a tap that drifts a few pixels is fast but goes nowhere. */
 export const FLICK_PX_S = 500;
+const FLICK_MIN_PX = 24;
 
 /**
  * A drag's end as a step through the cards: +1 (to the left: the next), −1
  * (to the right: the one before), 0 (let go: the card springs back).
  */
 export function swipeStep(offsetX: number, velocityX: number): -1 | 0 | 1 {
-  if (offsetX <= -SWIPE_PX || velocityX <= -FLICK_PX_S) {
+  const flick = Math.abs(offsetX) >= FLICK_MIN_PX;
+  if (offsetX <= -SWIPE_PX || (flick && velocityX <= -FLICK_PX_S)) {
     return 1;
   }
-  if (offsetX >= SWIPE_PX || velocityX >= FLICK_PX_S) {
+  if (offsetX >= SWIPE_PX || (flick && velocityX >= FLICK_PX_S)) {
     return -1;
   }
   return 0;

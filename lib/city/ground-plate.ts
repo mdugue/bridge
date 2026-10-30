@@ -349,12 +349,31 @@ export function plateGround(
     const edge = i === 0 || j === 0 || i === n - 1 || j === n - 1;
     return positions[(j * n + i) * 3 + 1] + (edge ? 0 : PLATE_SINK_M);
   };
+  // the tiles are one grid: a point finds its tile by its cell, not by
+  // asking every tile (the framing asks thousands of times)
+  const [first] = tiles;
+  const w = first ? first.bounds[2] - first.bounds[0] : 1;
+  const h = first ? first.bounds[3] - first.bounds[1] : 1;
+  const cell = (x: number, y: number) =>
+    `${Math.floor(x / w)},${Math.floor(y / h)}`;
+  const byCell = new Map(
+    tiles.map((t) => [
+      cell((t.bounds[0] + t.bounds[2]) / 2, (t.bounds[1] + t.bounds[3]) / 2),
+      t,
+    ])
+  );
+  const holds = (b: TerrainBounds, x: number, y: number) =>
+    x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3];
   return (x, y) => {
-    for (const { bounds, positions } of tiles) {
+    const near = byCell.get(cell(x, y));
+    // on a cell's north or east edge the cell beyond may hold nothing
+    const tile =
+      near && holds(near.bounds, x, y)
+        ? near
+        : tiles.find((t) => holds(t.bounds, x, y));
+    if (tile) {
+      const { bounds, positions } = tile;
       const [x0, y0, x1, y1] = bounds;
-      if (x < x0 || x > x1 || y < y0 || y > y1) {
-        continue;
-      }
       // column from the west, row from the north
       const u = ((x - x0) / (x1 - x0)) * (n - 1);
       const v = ((y1 - y) / (y1 - y0)) * (n - 1);
