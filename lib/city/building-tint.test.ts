@@ -49,27 +49,38 @@ test("missing/garbage attributes fall back to the housing family, never throw", 
   ).toBe(true);
 });
 
-test("public/special function reads cooler (more blue) than housing", () => {
-  // Same id so only the family differs; civic stone should be bluer-than-red
-  // relative to the warm housing swatch.
+test("civic stone reads warm greige, special structures cool grey", () => {
+  // Same id so only the family differs: a church's sandstone is warm (red
+  // over blue) and paler in chroma than a house's render; a structure that
+  // is no building keeps its cool grey.
   const housing = buildingTint("same-id", { function: "31001_9998" });
   const civic = buildingTint("same-id", { function: "31001_3021" });
   const special = buildingTint("same-id", { function: "53001_1800" });
   const blueBias = (c: number[]) => c[2] - c[0];
-  expect(blueBias(civic)).toBeGreaterThan(blueBias(housing));
+  expect(blueBias(civic)).toBeLessThan(0);
   expect(blueBias(special)).toBeGreaterThan(blueBias(housing));
+  expect(blueBias(special)).toBeGreaterThan(blueBias(civic));
 });
 
-test("taller buildings drift cooler than short ones of the same id/family", () => {
-  const short = buildingTint("h", {
-    function: "31001_9998",
-    measuredHeight: 6,
-  });
-  const tall = buildingTint("h", {
-    function: "31001_9998",
-    measuredHeight: 30,
-  });
-  expect(tall[2] - tall[0]).toBeGreaterThan(short[2] - short[0]);
+test("mapped stone is warm, never slate", () => {
+  for (const id of ["a", "b", "c", "d", "e"]) {
+    const c = buildingTint(id, { measuredHeight: 40 }, "render", {
+      material: "stone",
+    });
+    expect(c[0]).toBeGreaterThan(c[2]);
+  }
+});
+
+test("taller buildings grow paler in chroma, never bluer", () => {
+  const chroma = (c: number[]) => Math.max(...c) - Math.min(...c);
+  for (const fn of ["31001_9998", "31001_3021"]) {
+    const short = buildingTint("h", { function: fn, measuredHeight: 6 });
+    const mid = buildingTint("h", { function: fn, measuredHeight: 18 });
+    const tall = buildingTint("h", { function: fn, measuredHeight: 30 });
+    expect(chroma(tall)).toBeLessThan(chroma(mid));
+    expect(short[0] - short[2]).toBeGreaterThan(mid[0] - mid[2]);
+    expect(tall[2]).toBeLessThanOrEqual(tall[0]);
+  }
 });
 
 test("roofTint: pitched/tiled roofs are warmer (R>B) than flat/slate roofs", () => {

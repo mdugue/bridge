@@ -1040,6 +1040,14 @@ visual-variable codebook is in
 ### Building detailing (all keyed off CityJSON attrs + the loader's `surfacetype`)
 - **Per-building clay tint** `≈ assumed` (*Farbvariation*) — deterministic `hash(objectid)` +
   `function` family + `measuredHeight` nudge → muted per-building wall colour.
+  **Families:** warm render for housing, neutral greige for commerce, warm
+  stone greige for civic buildings (`31001_3xxx`) and mapped or Wikidata
+  `stone` (sandstone, limestone), cool grey for structures, glass and metal.
+  The nudge makes a low house a touch warmer and a tall one up to 30 %
+  paler in chroma, never bluer (2026-10-30: civic and stone were slate and
+  tall buildings drifted blue, so the skyline a city is seen by from afar —
+  its churches, palaces, museums and tall blocks — read uncoloured in
+  Pastell, the more so in the shade's cool sky light).
   **Source preference:** real per-building colour *(planned: DOP)* would replace
   the hash; the hash exists precisely so the look survives when `function` is 86 %
   "unspecified". **Palette:** `"render"` (sand, ochre, soft terracotta
@@ -1048,7 +1056,7 @@ visual-variable codebook is in
   brick, civic ones too — Hamburg's schools, the Kaispeicher: 471 objects,
   Dresden 14, München 9; 2026-10-21, G24/G25 —, while structures that are
   no building, a non-`31001` function — tanks, canopies, towers — keep
-  their cool stone), chosen per building by its **facade context** (below) — no longer per
+  their cool grey), chosen per building by its **facade context** (below) — no longer per
   site. The brick swatches are saturated because the shader mixes them
   60 % into the pale clay in linear light, where they land on a washed,
   dusty brick. `lib/city/building-tint.ts` (at bake time, into the
@@ -4393,7 +4401,10 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 - **Drifting clouds** `≈ assumed` — `SkyMesh`'s procedural clouds drift on TSL `time`
   (slow `cloudSpeed`), lit by the sun instant. `sun-rig.ts`.
 - **Golden/blue-hour palette stops** `= computed` `≈ assumed` — sun altitude → sky/fog/hemisphere colours
-  from a palette with stops at −2° (blue hour) and +6° (golden hour).
+  from a palette with stops at −2° (blue hour) and +6° (golden hour). By
+  day the hemisphere's sky fill keeps two fifths of the sky's chroma at its
+  lightness (2026-10-30): with the full blue, a shaded cream or sandstone
+  wall turned grey, and a backlit skyline read uncoloured.
   `lib/city/atmosphere.ts` `STOPS`.
 - **Meadow mottle** `≈ assumed` — DLM class 1 (farmland/meadow) → a low-frequency
   colour + normal mottle so grass reads as ground, not paint. `terrain-layer.ts`

@@ -111,3 +111,17 @@ test("streamFarFor: Modell's dolly zoom streams as far on a phone as on a deskto
   // walking or flying, the same fog would still be capped
   expect(streamFarFor(opened, cameraFar, "mobile")).toBe(PHONE_STREAM_FAR_M);
 });
+
+test("the day's sky fill keeps a shaded cream wall warm", () => {
+  // a cream render (sRGB 233, 222, 201) lit by the sky fill alone stays
+  // red over blue: the shade cools a wall, it does not turn it grey-blue
+  const lin = (c: number) => (c / 255) ** 2.2;
+  const wall = [233, 222, 201].map(lin);
+  for (const alt of [12, 30, 60]) {
+    const hex = atmosphereAt(alt).hemiSky;
+    const sky = [1, 3, 5].map((i) =>
+      lin(Number.parseInt(hex.slice(i, i + 2), 16))
+    );
+    expect(wall[0] * sky[0]).toBeGreaterThan(wall[2] * sky[2]);
+  }
+});
