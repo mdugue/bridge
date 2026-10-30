@@ -123,6 +123,12 @@ export interface CameraPoseOptions {
   groundFloor: () => number;
   /** ground elevation (world Y) at EPSG (x, y); null = off every tile */
   heightAt: (epsgX: number, epsgY: number) => number | null;
+  /**
+   * A coarser ground where `heightAt` has none yet (the site's plate):
+   * what a vantage's height above the ground is taken over before its
+   * tile has landed, so a glide to a hill ends over the hill.
+   */
+  coarseHeightAt?: (epsgX: number, epsgY: number) => number | null;
   offset: RecenterOffset;
   /**
    * Live mode ended because the player took over by hand — looked around,
@@ -539,8 +545,10 @@ export function createCameraPose(
   const targetOf = (viewpoint: ViewpointGeometry): FlightTarget => {
     const { x, y } = viewpoint.epsg;
     const w = epsgToWorld(x, y, offset);
+    const under =
+      opts.heightAt(x, y) ?? opts.coarseHeightAt?.(x, y) ?? opts.groundFloor();
     const { pos } = clearOf(
-      { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
+      { x: w.x, y: under + viewpoint.aboveGround, z: w.z },
       viewpoint.mode === "walk"
     );
     return {

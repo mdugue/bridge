@@ -333,3 +333,43 @@ export function plateHeightIndex(
   }
   return (x, y) => at.get(`${Math.round(x * 10)},${Math.round(y * 10)}`);
 }
+
+/**
+ * The plate's heights as a ground (EPSG → m a.s.l., null off every
+ * tile), bilinear over each tile's vertex grid as drawn (`positions`, the
+ * Y-up frame of `platePositions`): where a tile's terrain has not landed
+ * yet, a vantage still knows the hill it stands on. It reads the meshes'
+ * own arrays, keeping nothing of its own.
+ */
+export function plateGround(
+  tiles: readonly { bounds: TerrainBounds; positions: ArrayLike<number> }[],
+  n: number
+): (x: number, y: number) => number | null {
+  const heightOf = (positions: ArrayLike<number>, i: number, j: number) => {
+    const edge = i === 0 || j === 0 || i === n - 1 || j === n - 1;
+    return positions[(j * n + i) * 3 + 1] + (edge ? 0 : PLATE_SINK_M);
+  };
+  return (x, y) => {
+    for (const { bounds, positions } of tiles) {
+      const [x0, y0, x1, y1] = bounds;
+      if (x < x0 || x > x1 || y < y0 || y > y1) {
+        continue;
+      }
+      // column from the west, row from the north
+      const u = ((x - x0) / (x1 - x0)) * (n - 1);
+      const v = ((y1 - y) / (y1 - y0)) * (n - 1);
+      const i = Math.min(Math.floor(u), n - 2);
+      const j = Math.min(Math.floor(v), n - 2);
+      const fu = u - i;
+      const fv = v - j;
+      const top =
+        heightOf(positions, i, j) * (1 - fu) +
+        heightOf(positions, i + 1, j) * fu;
+      const bottom =
+        heightOf(positions, i, j + 1) * (1 - fu) +
+        heightOf(positions, i + 1, j + 1) * fu;
+      return top * (1 - fv) + bottom * fv;
+    }
+    return null;
+  };
+}
