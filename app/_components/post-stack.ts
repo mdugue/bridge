@@ -72,7 +72,7 @@ import type { PostProfile } from "./scene-profile";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
-import { createStylize } from "./stylize-effect";
+import { createStylize, type SunShadowMap } from "./stylize-effect";
 import type { ViewLens } from "./view-lens";
 
 /** Initial focus distance before the first crosshair raycast lands. */
@@ -530,7 +530,12 @@ export function createPostStack(
   /** the scene's fog (height-fog.ts): the styles read and paper it */
   fog: SceneFog,
   /** what the tier builds and warms (scene-profile.ts `postProfileFor`) */
-  profile: PostProfile
+  profile: PostProfile,
+  /** towards the sun, world space, kept current by the sun rig: the
+   *  graphic styles decide light and shade by it */
+  sunDirection: Vector3,
+  /** the sun's shadow map (sun-rig.ts `shadowMap`): ...and by it */
+  sunShadow: SunShadowMap
 ): PostStack {
   const size = renderer.getDrawingBufferSize(new Vector2());
   const depthTexture = new DepthTexture(size.x, size.y);
@@ -571,7 +576,14 @@ export function createPostStack(
     : null;
 
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
-  const stylize = createStylize({ lens, depth: depthTexture, fog, litAt });
+  const stylize = createStylize({
+    lens,
+    depth: depthTexture,
+    fog,
+    litAt,
+    sunDirection,
+    sunShadow,
+  });
   const paperScene = createPaperScene(scene, fog.color);
   const styleDressing = createStyleDressing(scene);
 
@@ -793,8 +805,17 @@ export function createPostStack(
       paperScene.drawsAsPaper(object, kind)
         ? paperScene.swapped(object, () => compileOne(object), kind)
         : Promise.resolve();
-  const compilePaper = compileSwap("paper");
-  const compileFigure = compileSwap("figure");
+  // The swaps' own materials: Strich wears Papier's card, so its programs
+  // are Papier's.
+  const SWAP_KINDS = ["paper", "figure", "ink"] as const;
+  type SwapKind = (typeof SWAP_KINDS)[number];
+  const swapOf = (kind: PaperKind): SwapKind =>
+    kind === "line" ? "paper" : kind;
+  const compileSwapOf: Record<SwapKind, (d: Drawable) => Promise<void>> = {
+    paper: compileSwap("paper"),
+    figure: compileSwap("figure"),
+    ink: compileSwap("ink"),
+  };
   // The Ausschnitt (model-cuts.ts) is a ClippingGroup around the city.
   // three keeps ONE render object per drawable on both sides of it and
   // keys the drawable's build by the clipping: switching the group swaps
@@ -879,8 +900,16 @@ export function createPostStack(
   // scene at boot, walks the same objects) — and a walk resolves only once
   // the steps another walk started on its drawables have (compile-lanes.ts).
   const compiled = new WeakMap<Drawable, Compiling>();
-  const compiledPaper = new WeakMap<Drawable, Compiling>();
-  const compiledFigure = new WeakMap<Drawable, Compiling>();
+  const compiledSwap: Record<SwapKind, WeakMap<Drawable, Compiling>> = {
+    paper: new WeakMap(),
+    figure: new WeakMap(),
+    ink: new WeakMap(),
+  };
+  const compileSwaps = async (list: Drawable[], kinds: readonly SwapKind[]) => {
+    for (const kind of kinds) {
+      await compileAll(list, compileSwapOf[kind], compiledSwap[kind]);
+    }
+  };
   const gone = new WeakSet<BufferGeometry>();
   const onGone = (event: { target: BufferGeometry }) => gone.add(event.target);
   // Papier's programs are made once the styles are warmed (where the
@@ -936,8 +965,7 @@ export function createPostStack(
     }
     paperWanted = true;
     const representatives = compileRepresentatives([scene]);
-    await compileAll(representatives, compilePaper, compiledPaper);
-    await compileAll(representatives, compileFigure, compiledFigure);
+    await compileSwaps(representatives, SWAP_KINDS);
   };
 
   return {
@@ -952,12 +980,10 @@ export function createPostStack(
       const kind = style.paperScene;
       if (paperWanted || kind) {
         const representatives = compileRepresentatives([root]);
-        if (paperWanted || kind !== "figure") {
-          await compileAll(representatives, compilePaper, compiledPaper);
-        }
-        if (paperWanted || kind === "figure") {
-          await compileAll(representatives, compileFigure, compiledFigure);
-        }
+        await compileSwaps(
+          representatives,
+          paperWanted || !kind ? SWAP_KINDS : [swapOf(kind)]
+        );
       }
     },
     anchorCount: () => anchors.count(),
@@ -997,9 +1023,10 @@ export function createPostStack(
               lampCones: style.lampCones,
             })
           : null;
-      const restore = style.paperScene
-        ? paperScene.begin(style.paperScene)
-        : null;
+      const swap =
+        style.paperScene === "ink" && stylize.night() ? null : style.paperScene;
+      const restore = swap ? paperScene.begin(swap) : null;
+      stylize.captureFog();
       const view = active();
       try {
         renderer.render(scene, view);
@@ -1071,6 +1098,7 @@ export function createPostStack(
       pixel.dispose();
       outline.dispose();
       paperScene.dispose();
+      stylize.dispose();
       styleDressing.dispose();
       anchors.dispose();
       letGo();

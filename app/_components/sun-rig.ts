@@ -7,6 +7,7 @@ import {
   HemisphereLight,
   type Light,
   type LightShadow,
+  type Matrix4,
   type Node,
   type NodeBuilder,
   RedFormat,
@@ -104,6 +105,13 @@ export interface SunRig {
   shadowReach: Vector3;
   /** True when the next render will redraw the shadow map. */
   shadowPending: () => boolean;
+  /**
+   * The sun's shadow map as a post pass may read it: its depth (null until
+   * the first lit material made it) and the world → map matrix three keeps
+   * current (`LightShadow.matrix`). The picture styles test a pixel's
+   * world point against it (stylize-effect.ts): in the sun or not.
+   */
+  shadowMap: { depth: () => DepthTexture | null; matrix: Matrix4 };
   /** Re-aims sun, sky dome, fog and fill light for the given instant. */
   update: (date: Date, preview?: boolean) => SunState;
 }
@@ -145,8 +153,11 @@ const ShadowNodeWithTarget = ShadowNode as unknown as new (
  * through — so nothing of three is patched (ADR 0027).
  */
 class OneByteShadowNode extends ShadowNodeWithTarget {
+  /** the map's depth, once the first lit material made it */
+  depth: DepthTexture | null = null;
   setupRenderTarget(shadow: LightShadow, builder: NodeBuilder): ShadowTargets {
     const targets = super.setupRenderTarget(shadow, builder);
+    this.depth = targets.depthTexture;
     // before anything is allocated: the target is made, not yet drawn into
     targets.shadowMap.texture.format = RedFormat;
     targets.shadowMap.texture.type = UnsignedByteType;
@@ -546,6 +557,7 @@ export function createSunRig(
     shadowMapBytes: shadowMapBytesFor(shadowMapSize),
     shadowReach,
     shadowCamera: sun.shadow.camera,
+    shadowMap: { depth: () => shadowNode.depth, matrix: sun.shadow.matrix },
     dispose: () => {
       cancelShadowWait();
       reflection?.dispose();

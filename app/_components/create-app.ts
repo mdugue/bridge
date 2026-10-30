@@ -1829,7 +1829,9 @@ async function bootApp(
     lens,
     aoSamplesFor(budget.profile, budget.tier),
     sceneFog,
-    postProfileFor(budget.tier)
+    postProfileFor(budget.tier),
+    sunDirection,
+    sunRig.shadowMap
   );
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
