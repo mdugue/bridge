@@ -123,10 +123,11 @@ space (`shader-chunks.ts`). The glTF extras key is `tileId`, never `tile`
 - A TSL `select` and a `Loop` body are scopes: in per-pixel graphs use
   `mix`/`step`, and take what a loop reads into a `toVar()` before it.
   A packed word or a hash seed reaches the fragment as a FLAT varying.
-- Every `compileAsync` runs in its turn (`compileInTurn`): two in flight
-  corrupt each other's state in three r187. A frame names the targets it
-  draws into. Builds are per kind of camera: Modell's parallel camera has
-  its own (`PostStack.warmView`).
+- Every `compileAsync` runs in its turn (`compileInTurn`), and a frame
+  names the targets it draws into — workarounds for three r187 bugs
+  (`docs/rendering.md`, "Workarounds for upstream bugs"). Builds are per
+  kind of camera: Modell's parallel camera has its own
+  (`PostStack.warmView`).
 - Everything a tile brings is built in the dressing plugin's
   `processTileModel`, compiled before it shows, and freed in `disposeTile`
   — never in `bootApp`. Freeing is on us; what a tile adds beyond its glTF

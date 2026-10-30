@@ -28,14 +28,17 @@ const turns = new WeakMap<object, Promise<void>>();
  * synchronous half (the target, a swap, a clipping group) and puts back
  * right after.
  *
- * Two compiles must never be in flight at once: three's `compileAsync`
- * (r187) holds the compile in progress as renderer state — the target,
- * the call depth, the render context — and takes it out and puts it back
- * around every await inside a build, so a second compile resumes inside
- * the first one's state, finishes it for it, and the first then throws
- * (`_finishPreCompile` of a null state) or builds against the wrong
- * context. Within one call three still compiles the GPU pipelines side by
- * side.
+ * Two compiles must never be in flight at once — an upstream workaround
+ * (docs/rendering.md, "Workarounds for upstream bugs"): three's
+ * `compileAsync` (r187) holds the compile in progress as renderer state —
+ * the target, the call depth, the render context — and takes it out and
+ * puts it back around every await inside a build, so a second compile
+ * resumes inside the first one's state, finishes it for it, and the first
+ * then throws (`_finishPreCompile` of a null state) or builds against the
+ * wrong context. Within one call three still compiles the GPU pipelines
+ * side by side. Once three fixes it, `start` runs at once (and the post
+ * stack's `releaseWhenSettled` waits for the anchors' own compiles
+ * instead).
  */
 export function compileInTurn(
   renderer: object,

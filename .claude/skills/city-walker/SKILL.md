@@ -311,7 +311,8 @@ and therefore what keeps builds out of frames:
   found what `compileAsync` prepared). The frame names every target it
   draws into and ends on the canvas, never on the one it found set: a
   compile in flight sets the target it was called with again after each
-  build it resumes.
+  build it resumes (a three r187 bug: `docs/rendering.md`, "Workarounds
+  for upstream bugs").
 - **Compile ahead.** `PostStack.compile(object)` builds and compiles each
   drawable against the scene target (shown and unculled for the call);
   tiles await it in `processTileModel`, dressings compile one
@@ -322,10 +323,16 @@ and therefore what keeps builds out of frames:
   `compileAsync` goes through `compileInTurn` (compile-lanes.ts) — r187
   keeps a compile's state (target, call depth, render context) on the
   renderer around every await inside it, and two in flight resume into
-  each other's state and throw. Within one call three compiles the GPU
+  each other's state and throw (an upstream bug, worked around until a
+  release fixes it: `docs/rendering.md`, "Workarounds for upstream
+  bugs"). Within one call three compiles the GPU
   pipelines side by side, so a whole set of stand-ins goes in one call
   (`PipelineAnchors.anchorAll`: the Ausschnitt's holds, Modell's warm-up)
-  — never real tile objects, which a tile may free mid-call. **Modell's
+  — never real tile objects, which a tile may free mid-call. A queued
+  compile may start frames later: a drawable whose tile left while it
+  waited compiles nothing (`left`, post-stack.ts), and a tile's own
+  material anchored as itself leaves its set when the tile frees it
+  (`onOwnedGone`, pipeline-anchors.ts). **Modell's
   parallel camera has builds of its own** (r187: a parallel view's light
   comes from one fixed direction): `PostStack.warmView` builds them while
   the dolly zoom in runs and for every tile landing while Modell shows;
@@ -1032,3 +1039,5 @@ Authoritative: `registry.npmjs.org/three/latest` (version),
 `github.com/mrdoob/three.js/releases.atom` (feed),
 `raw.githubusercontent.com/wiki/mrdoob/three.js/Migration-Guide.md` (API
 changes). Confirm shader/behaviour claims in `node_modules/three/src`.
+On a bump, go through *Workarounds for upstream bugs* in
+`docs/rendering.md` and drop what the release fixed.

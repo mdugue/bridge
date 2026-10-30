@@ -1391,7 +1391,8 @@ boot keeps waiting. One that gives up is FAILED and healed
 after 5, 15, 45, then every 120 s — by `lruCache.remove(tile)` and then
 `resetFailedTiles()`, because 3d-tiles-renderer 0.5.3's
 `resetFailedTiles()` alone never re-requests a tile still in its cache (an
-upstream bug, to be reported). A tile the cache evicted meanwhile is left
+upstream bug, to be reported: [Workarounds for upstream
+bugs](#workarounds-for-upstream-bugs)). A tile the cache evicted meanwhile is left
 alone: the renderer asks for it itself when it wants it. The HUD's pill
 about the network goes once nothing it failed is outstanding — every
 tile that gave up has landed, or the renderer's update after the heal
@@ -1471,6 +1472,53 @@ them (Chromium; Safari has none), and the page prints the table once
 loaded and 20 s later (`console.table`). The names are a contract for
 later perf work: add one rather than rename one. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
+
+## Workarounds for upstream bugs
+
+Each entry is a bug in a dependency, the code that works around it and
+what to undo once a release fixes it. The comments at those sites say
+*upstream workaround* (`grep -rni "upstream workaround" app lib`). On a
+bump of the dependency, check each entry against its release notes, and
+drop the entry with its workaround.
+
+**three r187: `compileAsync` is not re-entrant.** Since
+[#34506](https://github.com/mrdoob/three.js/pull/34506) the compile in
+progress lives on the renderer (`_precompilationState`, the call depth,
+the render context) across every await inside a build: a second compile
+in flight resumes inside the first one's state, finishes it for it, and
+the first then throws in `_finishPreCompile` (a null state) or builds
+against the wrong context. *Worked around* by queueing every compile
+behind those in flight (`compileInTurn`, compile-lanes.ts). *Once fixed:*
+`compileInTurn` starts its compile at once; the post stack's
+`releaseWhenSettled`, which lets a dropped view's and a lifted
+Ausschnitt's stand-ins go behind that queue (`dropView`, `releaseCut`),
+then waits for their own compiles instead; re-measure the boot and
+Modell's warm-up. Upstream
+plans to rework this code
+([#35086](https://github.com/mrdoob/three.js/issues/35086), the review of
+[#35092](https://github.com/mrdoob/three.js/pull/35092)); not reported
+yet.
+
+**three r187: a compile sets a stale render target.** Since
+[#35191](https://github.com/mrdoob/three.js/pull/35191) each work item of
+`compileAsync` ends by setting the target that was current when the call
+was made — also when it resumes frames later — so a target set for the
+call leaks into the frames drawn meanwhile. *Worked around* in
+`PostStack.render`: the frame sets the scene target itself and ends on
+the canvas, not on the target it found. *Once fixed:* nothing has to go
+(naming the targets stays right); only the comment's reason. Not
+reported yet.
+
+**three r187: a `compileAsync` that throws leaves its state set** (no
+`finally` around a work item): see *A failed allocation costs a
+dressing* under [the frame budget](#the-frame-budget). Nothing works
+around it; report it with the first entry.
+
+**3d-tiles-renderer 0.5.3: `resetFailedTiles()` alone never asks for a
+cached tile again.** *Worked around* in `tile-retry.ts`: the heal removes
+the tile from the LRU cache first (*The network fails, and is tried
+again* under [the boot sequence](#boot-sequence)). *Once fixed:* the
+heal calls `resetFailedTiles()` alone. Not reported yet.
 
 ## Verifying a change
 

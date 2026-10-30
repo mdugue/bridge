@@ -39,10 +39,12 @@ kept misbehaving.
 - The shadow pass's pipelines for new casters still build in the frame
   that first draws them, and the WebGL2 backend compiles synchronously —
   the price of public API. Measure before adding machinery.
-- Compiles run one at a time (`compileInTurn`): three r187 keeps a
-  compile's state on the renderer around every await inside it, and two
-  in flight resume into each other's. A frame names the targets it draws
-  into: a compile restores the target it was called with.
+- Compiles run one at a time (`compileInTurn`), and a frame names the
+  targets it draws into: three r187's `compileAsync` keeps its state on
+  the renderer around every await inside it, so two in flight resume into
+  each other's, and it restores the target it was called with. Both are
+  upstream bugs, worked around until a release fixes them
+  ([rendering.md](../rendering.md#workarounds-for-upstream-bugs)).
 - A material builds once per kind of camera (r187: a parallel view's
   light has one fixed direction): Modell's builds are made while its dolly
   zoom in runs.
