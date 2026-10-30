@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { siteTitle } from "@/lib/city/site";
 import { builtSite, builtSites } from "../_lib/built-sites";
@@ -36,7 +37,19 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default async function SitePage({ params }: Props) {
+// The site is read inside the boundary: a link prefetches one shell for
+// every city (partialPrefetching), the viewer itself comes on the click.
+export default function SitePage({ params }: Props) {
+  return (
+    <main className="h-dvh w-full">
+      <Suspense fallback={null}>
+        <Viewer params={params} />
+      </Suspense>
+    </main>
+  );
+}
+
+async function Viewer({ params }: Props) {
   // A site this build did not prepare has no data to stream: 404 rather
   // than a viewer that fails to load.
   const built = builtSite((await params).site);
@@ -44,11 +57,9 @@ export default async function SitePage({ params }: Props) {
     notFound();
   }
   return (
-    <main className="h-dvh w-full">
-      <CityWalkClient
-        builtIds={builtSites().map((b) => b.site.id)}
-        siteId={built.site.id}
-      />
-    </main>
+    <CityWalkClient
+      builtIds={builtSites().map((b) => b.site.id)}
+      siteId={built.site.id}
+    />
   );
 }

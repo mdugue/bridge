@@ -1,16 +1,17 @@
 /**
  * `scheduler.yield()` where the browser lacks it — every WebKit browser,
- * and with it every browser on an iPhone. three's asynchronous compiles
- * (`compileAsync`, the node builder's stages) yield to the main thread
- * between their steps with it, and fall back to `requestAnimationFrame`
- * without it (three/src/utils.js `yieldToMain`): there each node build
- * waited for nine frames — three stages for each of three shader stages —
- * whatever its own cost, so a tile's compile or the dressing's took as many
- * frames as it had materials times nine, and a phone's slow boot frames
- * made that seconds. A message-channel task gives the event loop back as
- * Chromium's own `scheduler.yield` does (input and frames run between the
- * steps) without waiting for a frame; the compiles then run as they do in
- * Chromium.
+ * and with it every browser on an iPhone. The dressing's builders give the
+ * main thread back between their slices with it (lib/city/build-steps.ts
+ * `giveBack`), and fall back to a timer without it, which the browser
+ * clamps; three yields with it where no frame is drawn (a hidden page,
+ * three/src/utils.js `yieldToMain`), and falls back to
+ * `requestAnimationFrame` there, which a hidden page never runs. A
+ * message-channel task gives the event loop back as Chromium's own
+ * `scheduler.yield` does (input and frames run between the steps) without
+ * waiting for a frame. (Up to r186 three's compiles yielded through it
+ * between every node-build stage — nine frames a build on WebKit; since
+ * r187 a compile works through a time budget and waits for a drawn frame
+ * after it, the same in every browser.)
  *
  * Installed once, before the renderer exists; a browser with the real API
  * keeps it.
