@@ -23,7 +23,7 @@ import {
  * point inside a deck's outline drew 230 of them beyond a metre (ADR
  * 0041); the levels alone still left 16 beyond a metre and 100 beyond
  * 0.3 m — deck ends above lower ground, the DGM's bumps. Drawn on its
- * profile (ADR 0052) a line keeps its grade by construction: none.
+ * profile (ADR 0041) a line keeps its grade by construction: none.
  * Raising the budget needs a reason in the commit. `bun
  * scripts/line-levels-cli.ts <site> [step]` prints the count and the worst
  * places.

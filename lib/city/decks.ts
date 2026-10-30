@@ -1,6 +1,6 @@
 /**
  * The bridge decks as a lift table: which deck tops lie under a point
- * (`decksAt`), from the baked decks (pipeline/bake/rail.py, ADR 0013/0033).
+ * (`decksAt`), from the baked decks (pipeline/bake/rail.py, ADR 0041).
  * DOM-free, THREE-free, pure — shared by the rail and tram layers (which add
  * the approach ramps, app/_components/rail-layer.ts `buildDeckTable`) and
  * the build step's line levels (scripts/line-levels.ts).

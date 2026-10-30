@@ -34,7 +34,7 @@ import { clamp } from "@/lib/city/math";
  * close), so the artifact holds only what this layer draws.
  *
  * Kept apart from vegetation-layer.ts on purpose: nothing here animates (a
- * trimmed hedge does not sway, and ADR 0020 keeps casters static anyway), so
+ * trimmed hedge does not sway, and ADR 0009 keeps casters static anyway), so
  * it needs none of the crown material (only its value noise), and the tree
  * layer stays untouched.
  *
@@ -180,7 +180,7 @@ function hedgeMaterial(): MeshStandardNodeMaterial {
     // foliage mottle: leaf-clump-sized (~0.4 m) and bush-sized (~1.3 m)
     // value noise in world space, so neighbouring pieces never repeat; the
     // bright clumps lean a touch yellow — a watercolour wash, not a
-    // texture. Static: nothing here moves (ADR 0020).
+    // texture. Static: nothing here moves (ADR 0009).
     const uv = positionWorld.xz.add(positionWorld.y.mul(vec2(0.63, -0.41)));
     const mottle = leafNoise(uv.mul(2.6))
       .mul(0.6)

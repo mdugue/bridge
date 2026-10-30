@@ -4,7 +4,7 @@
  * the line: a flat, double-sided quad per ≤ 2.5 m, following the ground.
  * DOM-free, THREE-free, pure — the terrain bake (scripts/bake-tiles.ts
  * `fenceMesh`) writes them into the fine terrain glTF beside the walls
- * (ADR 0029), and `fence-layer.ts` gives them their material: one muted
+ * (ADR 0030), and `fence-layer.ts` gives them their material: one muted
  * tone per kind, a lighter top edge, no pattern.
  *
  * Stylised, not drawn: a fence is see-through, so the band stands lower than
@@ -95,7 +95,7 @@ export function bandHeight(h: number): number {
 
 export interface FenceGeometryData {
   indices: number[];
-  /** where the bands stand on the ground (ADR 0035): their feet */
+  /** where the bands stand on the ground (ADR 0030): their feet */
   joins: JoinPoint[];
   /** world-frame (Y-up, recentered) normals, xyz per vertex */
   normals: number[];

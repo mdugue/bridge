@@ -144,7 +144,7 @@ const LEAVING_PROBLEMS: ReadonlySet<string> = new Set([
   "boot failed",
 ]);
 /**
- * The signs of a GPU the system took (ADR 0046): a device lost, or an
+ * The signs of a GPU the system took (ADR 0047): a device lost, or an
  * allocation refused, while the page is hidden or just after a long
  * absence — what create-app's resume guard calls a reclaim. It notes
  * `gpu reclaimed` only as it stops the render, after the device's own

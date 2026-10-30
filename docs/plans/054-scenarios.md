@@ -34,7 +34,7 @@ static fill, not a hydraulic model — the card says so.
 
 ### 2. Sun hours (M) — Besonnung for a date
 
-From the baked horizon map (ADR 0031, plan 033): per ground texel, the
+From the baked horizon map (ADR 0009, plan 033): per ground texel, the
 hours of direct sun on the chosen date, sampled at 15 min steps against
 the eight horizon directions. Drawn as a hatch density (more hatch = more
 shade) or a warm wash, on the terrain only (facades need CSM). A CPU pass
@@ -53,7 +53,7 @@ Demolish exists; undo is a stack of removed object ids plus the per-tile
 index rebuild. A placed glTF (a planned building, dropped at a spot, its
 height from a slider) in clay with the pencil hatch, casting shadows —
 together with phase 2 it answers "whose sun does it take?". The inserted
-building removed with ADR 0026 is the history; the transformations ledger
+building removed with ADR 0037 is the history; the transformations ledger
 names this use as its revival condition.
 
 ## Not in scope

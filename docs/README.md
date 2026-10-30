@@ -17,14 +17,14 @@ pages follow.
 | You are… | Read |
 |---|---|
 | a **user** or a curious non-developer | the [guide](./guide/README.md) — in English and German: [how it works](./guide/en/how-it-works.md), [where the data comes from](./guide/en/data-sources.md), [from download to browser](./guide/en/data-journey.md), [using the viewer](./guide/en/using-the-viewer.md), [glossary](./guide/en/glossary.md) |
-| a **developer** new to the repo | [AGENTS.md](../AGENTS.md) for stack, commands and gotchas, then [rendering.md](./rendering.md) and [data-pipeline.md](./data-pipeline.md); the current architecture is recorded in ADRs [0023](./adr/0023-land-cover-colours-painted-at-runtime.md) (runtime palette), [0024](./adr/0024-site-streams-as-3d-tiles.md) (3D Tiles streaming), [0025](./adr/0025-bakes-are-one-python-package.md) (the Python bakes), [0026](./adr/0026-one-site-config-per-build.md) (the site config) and [0027](./adr/0027-webgpu-renderer-and-tsl.md) (WebGPURenderer, TSL node materials) |
+| a **developer** new to the repo | [AGENTS.md](../AGENTS.md) for stack, commands and the hard rules, then [rendering.md](./rendering.md) and [data-pipeline.md](./data-pipeline.md); the architecture's decisions are the [ADRs](./adr/README.md), starting with [0024](./adr/0024-site-streams-as-3d-tiles.md) (the tileset), [0027](./adr/0027-webgpu-renderer-and-tsl.md) (WebGPURenderer, TSL), [0037](./adr/0037-sites-providers-and-per-site-data.md) (cities and the pipeline) and [0010](./adr/0010-opaque-clay-buildings-only.md) (the look) |
 | about to **change a data → feature transformation** | [data-flow.md](./data-flow.md) + [transformations.md](./transformations.md) (and the rule below) |
-| about to **render another place** | [portability.md](./portability.md), the site config ([ADR 0026](./adr/0026-one-site-config-per-build.md)) and [plan 017](./plans/017-germany-wide-sites.md) |
+| about to **render another place** | [portability.md](./portability.md), the site config ([ADR 0037](./adr/0037-sites-providers-and-per-site-data.md)) and [plan 017](./plans/017-germany-wide-sites.md) |
 | about to **write a walk** (the *Spaziergänge*) | [walks.md](./walks.md): what makes a walk worth taking, the file, the Stadtwissen to write from, the checks ([ADR 0055](./adr/0055-stadtwissen-and-written-walks.md)) |
 | wondering **why** something is the way it is | [adr/](./adr/README.md), the architecture decision records — including the move to WebGPU + TSL node materials ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md)) |
 | looking for **what is planned or was rejected** | [plans/](./plans/README.md), the implementation plans, backlog and audit history — open now: [019](./plans/019-gpu-verification.md) (the one GPU checklist), [021](./plans/021-wissen-astro-starlight.md) (`/wissen` on Astro Starlight) and the plans of the 2026-10-01 audit — the [index](./plans/README.md) gives their order |
 | looking for **data we do not use yet** | [data-streams.md](./data-streams.md), a measured survey of every source with a ranking |
-| a **coding agent** doing rendering, data or perf work | the [city-walker skill](../.claude/skills/city-walker/SKILL.md) |
+| a **coding agent** doing rendering, data or perf work | the [city-walker skill](../.claude/skills/city-walker/SKILL.md); for a new layer, bake step or city the checklists in [new-scene-layer](../.claude/skills/new-scene-layer/SKILL.md), [new-bake-step](../.claude/skills/new-bake-step/SKILL.md), [add-city](../.claude/skills/add-city/SKILL.md) |
 
 ## Map
 
@@ -39,16 +39,17 @@ docs/
 ├── data-flow.md           source → feature provenance diagram + feature table
 ├── transformations.md     the ledger: every transformation built / experimental / planned / discontinued, with why
 ├── portability.md         degradation matrix + porting checklist for other locations
-├── walks.md               writing a walk: what makes one worth taking, the file, the checks
 ├── data-streams.md        what the sources carry that no bake reads yet (survey, 2026-09-27)
 ├── adr/                   architecture decision records (one decision per file, numbered)
 ├── plans/                 implementation plans: open work, condensed history, backlog, audit findings
 └── diagrams/              the Mermaid blocks above, rendered to SVG (generated: bun run docs:diagrams)
 ```
 
-Roles at a glance: **AGENTS.md** = orientation for developers and agents,
-the **skill** = how the tricky parts are built (recipes and dead ends),
-**docs/** = what it shows, what maps to what, why, and what is next. Personal
+Roles at a glance: **AGENTS.md** = orientation and the hard rules, the
+**skills** = how the tricky parts are built and the checklists for common
+additions, **ADRs** = the decisions and why, the rest of **docs/** = what it
+shows, what maps to what, and what is next. Each fact has one home; the
+`docs-upkeep` skill lists them. Personal
 agent memory is a scratchpad; anything durable belongs here.
 
 ## Keeping these docs current
@@ -74,7 +75,7 @@ Docs are only useful if they do not rot. Treat them as part of "done":
 
 > A change that **adds or reshapes a part that stands on the ground**
 > (a kerb, a wall, a deck, a shed, a bench …) follows
-> [ADR 0035](./adr/0035-parts-meet-the-ground.md): its feet and edges come
+> [ADR 0030](./adr/0030-terrain-tin-and-wall-snap.md): its feet and edges come
 > from `lib/city/ground-join.ts`, its builder reports its joins, and
 > `scripts/ground-joins.test.ts` (baked parts) or its own unit test
 > (runtime parts) checks them.
@@ -88,7 +89,7 @@ Docs are only useful if they do not rot. Treat them as part of "done":
 > the browser to a third party (a live feed, a font, an embed), a new field
 > in the crash reports, a new key in the browser's storage — updates the
 > site's privacy page, `app/(legal)/datenschutz/page.mdx`
-> ([ADR 0045](./adr/0045-legal-pages-from-the-deployment.md)).
+> ([ADR 0043](./adr/0043-crash-and-page-reports-to-an-error-tracker.md)).
 
 > A decision that **constrains future work** (a dependency, a format, a
 > rendering approach, a rejected alternative) gets an

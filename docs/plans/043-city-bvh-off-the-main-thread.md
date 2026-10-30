@@ -279,13 +279,13 @@ Options for the maintainer (each a design decision):
 ## Findings (2026-10-11, the spawn tile only, after plan 069): bundled, then stopped at the chunk
 
 Re-tried for the one build that still sits on the boot's path since plan
-069 made the BVH lazy (ADR 0050): the spawn tile's, which `placeStart`
+069 made the BVH lazy (ADR 0024): the spawn tile's, which `placeStart`
 built synchronously (`boot:place`). Branch `claude/spawn-bvh-worker`
 (based on `main` at 7cf7d2f, pushed, no PR): `city-bvh.worker.ts` +
 `city-bvh-job.ts` (the job) + `city-bvh.ts` (the client), the spawn tile
 lent to the worker once its content's compile has uploaded it
 (`TileStream.cityUploaded`) and the worker has loaded, after the tile's
-ground has landed (as ADR 0050 placed the build), awaited in `boot:place`
+ground has landed (as ADR 0024 placed the build), awaited in `boot:place`
 (`boot:bvh-wait`, `tile:bvh-worker`), every failure falling back to the
 synchronous build.
 
@@ -313,9 +313,9 @@ synchronous build.
   the tile; bounds are taken before the loan; a worker that never loads is
   never lent anything, one that dies with the arrays leaves the tile
   without a BVH rather than with one over empty arrays.
-- **STOP: the chunk (ADR 0051).** The worker imports `three` (its core)
+- **STOP: the chunk (ADR 0040).** The worker imports `three` (its core)
   and three-mesh-bvh, which the scene imports too: both left the scene
-  chunk's scope for a chunk the two groups share. Measured as ADR 0051's
+  chunk's scope for a chunk the two groups share. Measured as ADR 0040's
   protocol (POC production builds, headless Chromium at
   `/dresden?scene=lite` 800×600, every `/_next/static/*.js` until
   `__poc.ready`, `gzip -9` from each build's `.next/static`):
@@ -325,7 +325,7 @@ synchronous build.
   | main (7cf7d2f) | **904 985** | 2 803 803 | 493 512 | 193 | – |
   | branch | **925 796** (+20 811) | 2 890 201 | 410 518 + 103 736 shared | 401 | 5 436 (+ the shared chunk, a cache hit) |
 
-  Smaller than ADR 0051's 33 KB because only three's core and the BVH are
+  Smaller than ADR 0040's 33 KB because only three's core and the BVH are
   shared, not `three/webgpu` and `three/tsl`.
 - **And it did not bring the first frame forward here.** Mobile-emulated
   as plan 069's Findings (Playwright `devices['iPhone 13']`, headless
@@ -374,5 +374,5 @@ Options for the maintainer (each a decision; none built):
 5. **Start it earlier**, at the city's upload, beside the terrain's
    download and parse — the one overlap the lite boot has — which brings
    the BVH's transient (≈ 50 MB, in the worker but in the same process)
-   back beside the parse ADR 0050 moved it away from for the iPhones; and
+   back beside the parse ADR 0024 moved it away from for the iPhones; and
    perhaps hold the veiled frames while the boot waits.

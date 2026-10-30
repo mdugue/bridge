@@ -1,6 +1,6 @@
 /**
  * Where every part baked into the fine terrain meets the ground, measured
- * over the committed tiles (ADR 0035): the kerb stones, the walls, the
+ * over the committed tiles (ADR 0030): the kerb stones, the walls, the
  * flights of steps and the fences, built from the committed sources on the
  * shaped native DGM exactly as prepare-data.ts builds them on the TIN (which
  * stays within FINE_TIN_MAX_ERROR of it), each reporting its joins

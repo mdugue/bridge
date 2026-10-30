@@ -1,55 +1,33 @@
 # ADR 0002: Imperative three.js inside a React shell, not react-three-fiber
 
 - **Status:** accepted
-- **Date:** 2026-06 (initial architecture), confirmed by a feasibility check 2026-09-18
+- **Date:** 2026-06, confirmed 2026-09
 
 ## Context
 
-React owns the HUD (sidebar, sliders, minimap, loading screen). The scene
-is a large imperative three.js program: custom `onBeforeCompile` shader
-patches on nearly every material, instanced vegetation chunked by hand, a
-shadow rig that re-renders on demand, and a QA hook (`window.__poc`) that
-tests drive. react-three-fiber (r3f) was evaluated when adaptive quality
-under motion was planned, because r3f ships a `regress()` mechanism.
+React owns the HUD (sidebar, cards, minimap, loading screen). The scene is
+a large imperative program: streamed tiles dressed by a plugin, instanced
+sets, a shadow rig redrawn on demand, and a QA hook (`window.__poc`) the
+tests drive.
 
 ## Decision
 
-`app/_components/create-app.ts` builds the scene imperatively and returns
-a handle of setters; `city-walk.tsx` mounts it and forwards HUD state into
-the handle. Pure, DOM-free logic lives in `lib/city/` with unit tests; the
-WebGL glue lives in `app/_components/`. r3f is not used.
+`app/_components/create-app.ts` builds the scene and returns a handle;
+`city-walk.tsx` mounts it and talks to it through the handle and the
+scene-status store. React never touches a three.js object. Pure, DOM-free
+logic lives in `lib/city/` with unit tests (`lib/city/purity.test.ts`
+keeps it free of the DOM and the renderer).
 
 ## Consequences
 
-- The scene has one owner (`create-app.ts` plus the layer modules); React
-  never touches three objects directly.
-- Sliders are wired through one table (ADR 0017) instead of React state
-  per uniform.
-- `lib/city` must stay free of `three` and the DOM (enforced by
-  `lib/city/purity.test.ts`) so its math is testable under `bun test`.
-- Anyone porting to r3f would rebuild every `onBeforeCompile` patch as an
-  escape hatch and the `__poc` handle on a store — the reasons it lost.
+- The scene has one owner; a HUD change cannot rebuild the renderer.
+- `lib/city` stays testable under `bun test`.
 
 ## Alternatives
 
-- **react-three-fiber:** rejected 2026-09-18. Its frame loop is a bare
-  `requestAnimationFrame`, frame-for-frame identical to
-  `renderer.setAnimationLoop`; its scheduling win is time-slicing component
-  mounts, useless to imperative loaders; a static-after-load scene is r3f's
-  weakest case; every custom shader becomes an escape hatch.
-- **Render-on-demand loop:** rejected — continuous input needs continuous
-  frames, and it would break the frame-counted e2e waits (ADR 0018).
-
-## Update (2026-09, ADR 0027)
-
-The scene has no `onBeforeCompile` patches any more: every look is a TSL
-node material on `WebGPURenderer`, and `app/_components/` holds the
-renderer and node glue. The decision stands; r3f's escape-hatch argument
-is weaker (node materials would fit r3f), its frame-loop and `__poc`
-arguments are unchanged.
-
-## References
-
-- [plans/README.md](../plans/README.md#history) (plan 007 feasibility
-  check, rejected list).
-- README.md "Architecture"; AGENTS.md "Where things live".
+- **react-three-fiber:** its frame loop is a bare `requestAnimationFrame`,
+  its scheduling win (time-sliced mounts) is useless to imperative
+  loaders, and the `__poc` handle would move onto a store. Rejected
+  2026-09-18.
+- **A render-on-demand loop:** continuous input needs continuous frames,
+  and the e2e waits count frames (ADR 0018).

@@ -68,13 +68,17 @@ export interface WaterLayer {
   tint: DataTexture;
   /** Frees what the sheets own beyond the content (the tint texture). */
   dispose: () => void;
-  /** Advance the ripple, glitter and mist animation (elapsed seconds). The
-   *  sky tint is the fog's colour node itself: nothing to copy per frame. */
-  update: (seconds: number) => void;
 }
 
 /** The animation clock, shared by every tile's water and mist. */
 const waterTime = uniform(0);
+
+/** Advances every tile's ripple, glitter and mist (elapsed seconds; once
+ *  per frame). The sky tint is the fog's colour node itself: nothing to
+ *  copy per frame. */
+export function setWaterTime(seconds: number): void {
+  waterTime.value = seconds;
+}
 
 /** The sun glitter's strength and colour (warm white). */
 const GLITTER = 0.7;
@@ -455,8 +459,5 @@ export function createWaterLayer(
     mistMesh,
     tint,
     dispose: () => tint.dispose(),
-    update: (seconds) => {
-      waterTime.value = seconds;
-    },
   };
 }
