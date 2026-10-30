@@ -54,6 +54,20 @@ function resolveImport(
   throw new Error(`bake-sources: cannot resolve "${spec}" from ${from}`);
 }
 
+/** The source files `file` imports itself through relative and `@/`
+ *  imports, as paths relative to `root`, sorted. */
+export function directImports(file: string, root = process.cwd()): string[] {
+  const from = resolve(root, file);
+  const out = new Set<string>();
+  for (const path of importsOf(from, transpilerFor(from))) {
+    const next = resolveImport(from, path, resolve(root));
+    if (next) {
+      out.add(relative(root, next));
+    }
+  }
+  return [...out].toSorted();
+}
+
 /**
  * Every source file reachable from `entry` through relative and `@/` imports,
  * `entry` included, as paths relative to `root`, sorted.

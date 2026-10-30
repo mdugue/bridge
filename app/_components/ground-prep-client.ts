@@ -92,8 +92,9 @@ function startWorker(): Worker | null {
   if (worker || broken) {
     return worker;
   }
+  let w: Worker;
   try {
-    worker = new Worker(new URL("./ground-worker.ts", import.meta.url), {
+    w = new Worker(new URL("./ground-worker.ts", import.meta.url), {
       type: "module",
       name: "ground",
     });
@@ -101,7 +102,12 @@ function startWorker(): Worker | null {
     broken = true;
     return null;
   }
-  worker.onmessage = ({ data }: MessageEvent<Reply>) => {
+  worker = w;
+  // a stopped worker's last word is not about the jobs now running
+  w.onmessage = ({ data }: MessageEvent<Reply>) => {
+    if (worker !== w) {
+      return;
+    }
     const job = running;
     running = null;
     if (job) {
@@ -114,7 +120,10 @@ function startWorker(): Worker | null {
     next();
   };
   // a reply that cannot be read: that job here, the rest as before
-  worker.onmessageerror = () => {
+  w.onmessageerror = () => {
+    if (worker !== w) {
+      return;
+    }
     const job = running;
     running = null;
     if (job) {
@@ -122,11 +131,13 @@ function startWorker(): Worker | null {
     }
     next();
   };
-  worker.onerror = (event) => {
+  w.onerror = (event) => {
     event.preventDefault();
-    giveUp();
+    if (worker === w) {
+      giveUp();
+    }
   };
-  return worker;
+  return w;
 }
 
 /** Only the numbers a job reads: a glTF accessor is a view into a buffer

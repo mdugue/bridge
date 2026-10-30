@@ -1,15 +1,15 @@
 import { expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { BAKE_ENTRIES } from "./bake-entries";
-import { moduleGraph } from "./bake-sources";
+import { directImports, moduleGraph } from "./bake-sources";
 
 const ROOT = join(import.meta.dir, "..");
 
 /**
  * What prepare-data.ts imports that no bake's key needs: the orchestration
- * itself (every key carries prepare-data.ts, `COMMON_SOURCES`), types, and
- * what it publishes on every run without a cache (the tileset, the
+ * itself (every key carries prepare-data.ts, `COMMON_SOURCES`) and what
+ * it publishes on every run without a cache (the tileset, the
  * provenance, the trams' timetable, the site index). A module added here
  * says why its changes need no re-bake.
  */
@@ -22,8 +22,6 @@ const NOT_A_BAKE: Record<string, string> = {
   "scripts/cache-keys.ts": "the key's own machinery",
   "scripts/publisher.ts": "the hashed names and the manifest",
   "scripts/warmers.ts": "the run's mode",
-  "lib/city/types.ts": "types",
-  "lib/city/features.ts": "types",
   "lib/city/provenance.ts": "published uncached every run",
   "lib/city/tram-timetable.ts": "published uncached every run",
   "lib/city/landmarks.ts": "the tileset's extras, built uncached every run",
@@ -56,23 +54,18 @@ test("every bake entry exists and reaches no site config", () => {
   }
 });
 
-test("every module prepare-data.ts imports is in a bake's key, or says why not", () => {
+test("every module prepare-data.ts imports is in some bake's key, or says why not", () => {
   // AGENTS.md: a module prepare-data calls to make an artifact must be one
   // of its entries or imported from one, or that artifact's cache goes
-  // stale without a word
-  const source = readFileSync(join(ROOT, "scripts/prepare-data.ts"), "utf8");
-  // static imports, side-effect imports and dynamic import() alike
-  const specifiers = /(?:from |import\s*\(?\s*)"(\.\.?\/[^"]+)"/gu;
-  const imported = [...source.matchAll(specifiers)].map((m) => {
-    const path = m[1].replace(/^\.\.\//u, "").replace(/^\.\//u, "scripts/");
-    return existsSync(join(ROOT, `${path}.ts`))
-      ? `${path}.ts`
-      : `${path}/index.ts`;
-  });
+  // stale without a word. Which artifact needs it the test cannot know: it
+  // holds each import to being in some bake's key, or excused below
+  const imported = directImports("scripts/prepare-data.ts", ROOT);
   expect(imported.length).toBeGreaterThan(30);
   const keyed = reached();
   const unkeyed = imported.filter((p) => !keyed.has(p) && !(p in NOT_A_BAKE));
   expect(unkeyed).toEqual([]);
-  // and the list holds nothing that has since become a bake's
-  expect(Object.keys(NOT_A_BAKE).filter((p) => keyed.has(p))).toEqual([]);
+  // and the list holds nothing that has since become a bake's, or gone
+  expect(
+    Object.keys(NOT_A_BAKE).filter((p) => keyed.has(p) || !imported.includes(p))
+  ).toEqual([]);
 });

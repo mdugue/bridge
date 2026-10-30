@@ -963,7 +963,6 @@ function probeGpu(renderer: WebGPURenderer): string | null {
  * same process. Settles within RELEASE_WAIT_MS either way.
  */
 function releaseGpu(renderer: WebGPURenderer): Promise<void> {
-  stopWorkers();
   let released: Promise<void>;
   try {
     released = renderer.dispose().catch(() => undefined);
@@ -1172,9 +1171,10 @@ async function teardownWhole(
   await releaseRenderer(renderer);
 }
 
-/** Before a reload: the ground and BVH workers go, and their heaps with
- *  them, not when the old document is collected (the new page boots in
- *  the old one's process). A later job starts a new worker. */
+/** Before a reload, once the stream is gone: the ground and BVH workers
+ *  go, and their heaps with them, not when the old document is collected
+ *  (the new page boots in the old one's process). Not in `releaseGpu`:
+ *  there the stream still runs, and its next job would start them again. */
 function stopWorkers(): void {
   stopGroundWorker();
   stopBvhWorker();
@@ -2759,16 +2759,16 @@ async function bootApp(
   /** `eye`: where the tiers are measured from (Modell: above the pivot);
    *  `tick`: the frame's pose tick is due. */
   const stepVegetation = (elapsed: number, eye: Vector3, tick: boolean) => {
-    // The shown tiles only: a cached tile or the hidden level of a shown
-    // one would spend the rich-crown budget the view needs, and its tier
-    // flips redrew the shadow map for trees nobody sees.
-    const shown = stream.visibleDressings();
     // one wind clock for every crown, the coarse ones standing in on a
     // bare fine level too
     setCrownTime(elapsed);
     if (!crownTiers.due(tick, eye)) {
       return;
     }
+    // The shown tiles only: a cached tile or the hidden level of a shown
+    // one would spend the rich-crown budget the view needs, and its tier
+    // flips redrew the shadow map for trees nobody sees.
+    const shown = stream.visibleDressings();
     vegetationControls.length = 0;
     let lodChanged = false;
     for (const d of shown) {
