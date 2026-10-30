@@ -447,7 +447,7 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | `shadow.bias` | ~−0.0003 | small constant bias, residual cleanup |
 | terrain `castShadow` | **false** | a casting terrain self-shadows into triangle/staircase acne at grazing sun; ground only receives |
 | shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 (phones 2048; smaller at a raised safety level, ADR 0047) | soft radius lets 3072 look like 4096 at ~44% less fill |
-| the map's colour target | one red byte (`OneByteShadowNode`, set as `sun.shadow.shadowNode`) | three's shadow pass draws into a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
+| the map's colour target | none (`DepthOnlyShadowNode`, set as `sun.shadow.shadowNode`: three's depth texture in a `count: 0` target, r187) | three's shadow map carries a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
 | frustum half-size (`lib/city/shadow-fit.ts`) | 121 m at eye level, growing in octaves of 110 m to 880 m with altitude | camera-following, texel-snapped; small = fine texels, but a fixed 110 m leaves a fly-over entirely unshadowed |
 | `shadow.autoUpdate` | false | re-render only when the frustum centre leaves a dead zone (30 m on foot — 110 m and 19.8 m until 2026-10-11, the walker as far from every edge now, 91 m; 18% of the half-size above eye level and in Modell), when the half-size re-fits, when the sun moves, or when a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
 

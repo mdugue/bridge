@@ -281,16 +281,17 @@ change, not a re-bake
   `ShadowFilterNode` spreads a 5-tap Vogel disk by radius × texel), 3072² on
   desktop, 2048² on phones, 512² in the lite profile (smaller at a raised
   safety level, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)).
-  Its colour target is **one red byte**: three's shadow pass always draws
-  into a colour texture beside the depth the filter reads, of the shadow's
-  `mapType` — RGBA, as large again as the depth — though only coloured
-  shadows sample it. `OneByteShadowNode` (`sun-rig.ts`), installed as the
-  light's `shadow.shadowNode` (the hook three's own CSM and tiled shadows
-  use: no patch, ADR 0027), makes it R8 before anything is allocated:
-  20 MiB at 2048², 45 at 3072² (`shadowMapBytesFor`, depth and colour),
-  where three's default holds 32 and 72. Keep
-  `renderer.shadowMap.transmitted` off — coloured shadows would read a
-  red-only target. Terrain **receives
+  It has **no colour target**: three's shadow map draws into a colour
+  texture beside the depth the filter reads, of the shadow's `mapType` —
+  RGBA, as large again as the depth — though only coloured shadows sample
+  it. `DepthOnlyShadowNode` (`sun-rig.ts`), installed as the light's
+  `shadow.shadowNode` (the hook three's own CSM and tiled shadows use: no
+  patch, ADR 0027), keeps three's depth texture in a render target of no
+  colour attachment (`count: 0`, both backends since three r187; up to
+  r186 the smallest it could draw into was one red byte): 16 MiB at
+  2048², 36 at 3072² (`shadowMapBytesFor`), where three's default holds
+  32 and 72. Keep `renderer.shadowMap.transmitted` off — coloured shadows
+  would read a colour target there is none of. Terrain **receives
   only**. `normalBias = 0`, a small negative `bias`. The frustum follows the
   camera, half-size 121 m at eye level growing in octaves of 110 m to 880 m
   with altitude, centred on the ground and pushed ahead along the view

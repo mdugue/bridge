@@ -10,11 +10,9 @@ import {
   type Matrix4,
   type Node,
   type NodeBuilder,
-  RedFormat,
-  type RenderTarget,
+  RenderTarget,
   Scene,
   ShadowNode,
-  UnsignedByteType,
   Vector3,
 } from "three/webgpu";
 import { SkyMesh } from "three/addons/objects/SkyMesh.js";
@@ -96,8 +94,8 @@ export interface SunRig {
   /** The sun's shadow camera: the tile stream loads what it sees too, so a
    *  building behind the player still casts into the view. */
   shadowCamera: Camera;
-  /** GPU bytes of the shadow map: a 32-bit depth texture and its one-byte
-   *  colour target, no mipmaps (scene-profile.ts `shadowMapBytesFor`). */
+  /** GPU bytes of the shadow map: a 32-bit depth texture, no colour
+   *  target, no mipmaps (scene-profile.ts `shadowMapBytesFor`). */
   shadowMapBytes: number;
   /** The shadow frustum on the ground, kept current: its centre in the data
    *  frame (x east, y north: world x, −z) and its half-size (z, m). The
@@ -141,27 +139,33 @@ const ShadowNodeWithTarget = ShadowNode as unknown as new (
 };
 
 /**
- * three's shadow node, its map's colour target one byte a texel. The map is
- * a render target, and three gives it a colour texture of the shadow's
- * `mapType` (RGBA, four bytes) beside the depth the PCF filter reads — as
- * large again as the depth (16 MB at a phone's 2048²) for a colour only
- * coloured shadows sample (`renderer.shadowMap.transmitted`, never on
- * here). A render pass needs no colour target in WebGPU, but three's
- * shadow pass always draws into one: the smallest it can draw into is one
- * red byte, renderable on both backends. Installed as the light's
- * `shadow.shadowNode` — what three's own CSM and tiled shadows plug in
- * through — so nothing of three is patched (ADR 0027).
+ * three's shadow node, its map the depth alone. three's own map is a render
+ * target with a colour texture of the shadow's `mapType` (RGBA, four bytes)
+ * beside the depth the PCF filter reads — as large again as the depth (16
+ * MB at a phone's 2048²) for a colour only coloured shadows sample
+ * (`renderer.shadowMap.transmitted`, never on here). Since r187 a render
+ * target may have no colour attachment (`count: 0`, both backends), as
+ * three's tiled shadows draw theirs: this one keeps three's depth texture
+ * and drops the colour. Installed as the light's `shadow.shadowNode` — what
+ * three's own CSM and tiled shadows plug in through — so nothing of three
+ * is patched (ADR 0027).
  */
-class OneByteShadowNode extends ShadowNodeWithTarget {
+class DepthOnlyShadowNode extends ShadowNodeWithTarget {
   /** the map's depth, once the first lit material made it */
   depth: DepthTexture | null = null;
   setupRenderTarget(shadow: LightShadow, builder: NodeBuilder): ShadowTargets {
-    const targets = super.setupRenderTarget(shadow, builder);
-    this.depth = targets.depthTexture;
-    // before anything is allocated: the target is made, not yet drawn into
-    targets.shadowMap.texture.format = RedFormat;
-    targets.shadowMap.texture.type = UnsignedByteType;
-    return targets;
+    // three's depth texture (its name, its compare function), in a target
+    // of its own without the colour — the one made with it is never
+    // allocated, and goes
+    const { depthTexture } = super.setupRenderTarget(shadow, builder);
+    const shadowMap = new RenderTarget(
+      shadow.mapSize.width,
+      shadow.mapSize.height,
+      { count: 0 }
+    );
+    shadowMap.depthTexture = depthTexture;
+    this.depth = depthTexture;
+    return { shadowMap, depthTexture };
   }
 }
 
@@ -368,7 +372,7 @@ export function createSunRig(
   // edges are a soft penumbra that hides the texel staircase — without VSM's
   // grid.
   sun.shadow.radius = 5;
-  const shadowNode = new OneByteShadowNode(sun, sun.shadow);
+  const shadowNode = new DepthOnlyShadowNode(sun, sun.shadow);
   // reason: `shadowNode` is read by three's AnalyticLightNode but missing
   // from LightShadow's @types.
   (sun.shadow as LightShadow & { shadowNode?: Node }).shadowNode = shadowNode;

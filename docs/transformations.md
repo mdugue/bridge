@@ -4265,7 +4265,8 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   buildings and coarse ground, tiles in use the memory governor cannot
   free): at a seam with the sun behind the player, the neighbour's
   buildings cast no shadow until the view loads that tile;
-  the map's colour target is one byte (`OneByteShadowNode`). Full recipe and dead-ends in the
+  the map has no colour target (`DepthOnlyShadowNode`, three r187's
+  depth-only render target). Full recipe and dead-ends in the
   [city-walker skill](../.claude/skills/city-walker/SKILL.md).
 - **Sky-view factor** `= computed` (*Himmelslicht*, plan 033) — the committed DGM1 with
   every non-vertical LoD2 surface burned on top (max over its triangles,
