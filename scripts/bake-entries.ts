@@ -22,19 +22,32 @@ export const KEY_PLUMBING = ["scripts/prepare/context.ts"] as const;
  * bakes' keys carry: the frame (`offset`; the buildings' bake, which also
  * reads `spawnFrame`, lists bake-city-mesh.ts itself) and the side files'
  * published names (in the glTF `extras`) and landmark files (the
- * buildings' inputs). A bake that imports one walks nothing beyond it, so
- * a change to the buildings' bake (the frame's) does not re-bake the
- * grounds; each still walks its own imports for its own artifact (`frame`,
- * the side files' entries). bake-entries.test.ts pins what each exports: a
- * function a bake would call for its bytes belongs in that bake's module.
+ * buildings' inputs). A bake that imports one leaves it out of its key,
+ * with what only it imports, so a change to the buildings' bake (the
+ * frame's) does not re-bake the grounds; the frame still walks its own
+ * imports for its own artifact (`frame`), and the side files bake nothing
+ * themselves (side-bakes.ts does). bake-entries.test.ts pins what each
+ * exports: a function a bake would call for its bytes belongs in that
+ * bake's module.
  */
 export const KEY_VALUES = [
   "scripts/prepare/frame.ts",
   "scripts/prepare/side-files.ts",
 ] as const;
 
-/** Where no key's walk goes on (bake-sources.ts `moduleGraph`). */
-export const KEY_STOPS: readonly string[] = [...KEY_PLUMBING, ...KEY_VALUES];
+/** This table: every step module imports it for its row, and each row
+ *  reaches its key as the modules it walks, so a row's edit re-bakes that
+ *  row's artifact alone. */
+const KEY_TABLE = "scripts/bake-entries.ts";
+
+/** What no key holds or walks past, unless it is the key's own entry
+ *  (bake-sources.ts `moduleGraph`); the plumbing reaches every key whole
+ *  instead. */
+export const KEY_STOPS: readonly string[] = [
+  ...KEY_PLUMBING,
+  ...KEY_VALUES,
+  KEY_TABLE,
+];
 
 /** The modules a tile's shaped ground is baked by (`shapedTerrain`): the
  *  DGM reader and meshers, the TIN's tolerance, the stair, terrace and wall
@@ -54,10 +67,10 @@ const GROUND = [
 
 export const BAKE_ENTRIES = {
   /** a tile's colony raster, cropped to its colonies, and its phone twin */
-  colonies: ["scripts/prepare/side-files.ts", "scripts/crop-raster.ts"],
+  colonies: ["scripts/prepare/side-bakes.ts", "scripts/crop-raster.ts"],
   /** the canopy points packed (and thinned under roofs and sheds) */
   canopy: [
-    "scripts/prepare/side-files.ts",
+    "scripts/prepare/side-bakes.ts",
     "lib/city/point-pack.ts",
     "lib/city/roof-trees.ts",
     "lib/city/small-buildings.ts",
@@ -67,7 +80,7 @@ export const BAKE_ENTRIES = {
   lineLevels: ["scripts/prepare/lines.ts", "scripts/line-levels.ts"],
   /** a class raster downsampled; the artifact table names its size */
   classRaster: [
-    "scripts/prepare/side-files.ts",
+    "scripts/prepare/side-bakes.ts",
     "scripts/downsample-raster.ts",
     "lib/city/tile.ts",
   ],
@@ -109,10 +122,10 @@ export const BAKE_ENTRIES = {
     "lib/city/png-raster.ts",
   ],
   /** the /wissen map picture; it imports the palette */
-  hero: ["scripts/prepare/site-wide.ts", "scripts/bake-wissen-hero.ts"],
+  hero: ["scripts/prepare/hero.ts", "scripts/bake-wissen-hero.ts"],
   /** the city in numbers (the start page) */
   siteStats: [
-    "scripts/prepare/site-wide.ts",
+    "scripts/prepare/stats.ts",
     "lib/city/site-stats.ts",
     "lib/city/tile.ts",
   ],

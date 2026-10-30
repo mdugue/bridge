@@ -71,8 +71,8 @@ export function directImports(file: string, root = process.cwd()): string[] {
 /**
  * Every source file reachable from `entry` through relative and `@/` imports,
  * `entry` included, as paths relative to `root`, sorted. A module in `stop`
- * (relative to `root`) other than `entry` is listed but its imports are not
- * walked (bake-entries.ts `KEY_STOPS`).
+ * (relative to `root`) other than `entry` is left out, and so are the
+ * imports only it reaches (bake-entries.ts `KEY_STOPS`).
  */
 export function moduleGraph(
   entry: string,
@@ -88,10 +88,10 @@ export function moduleGraph(
     if (seen.has(file)) {
       continue;
     }
-    seen.add(file);
     if (file !== start && stopped.has(file)) {
       continue;
     }
+    seen.add(file);
     for (const path of importsOf(file, transpilerFor(file))) {
       const next = resolveImport(file, path, resolve(root));
       if (next && !seen.has(next)) {

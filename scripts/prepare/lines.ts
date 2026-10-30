@@ -16,6 +16,7 @@ import type {
 import { AxisIndex, clearOfTracks } from "../../lib/city/platform-clearance";
 import type { Passage } from "../../lib/city/passages";
 import { BED_SIDE_M, type Bed } from "../../lib/city/track-beds";
+import type { DeckPoly } from "../../lib/city/decks";
 import type { LevelLine } from "../../lib/city/levels";
 import { tileExtentOf } from "../../lib/city/site";
 import { sideFileSource } from "../../lib/city/tile";
@@ -66,10 +67,29 @@ const passages = sitePassages(SITE, lineLevels);
 /** The beds the lines lie on (lib/city/track-beds.ts): the terrain bake
  *  lays the ground under each at its profile, off the decks. */
 const beds = siteBeds(SITE, lineLevels);
-export const underDeck = underDecks(SITE);
-/** The decks `underDeck` reads, digested into every ground's key: a deck
+/** The site's decks: no bed is burned under one (`underDeck`), so each
+ *  tile's ground keys on those that reach into it (`shapedBy`): a deck
  *  moved keeps the levels, but not the ground under it. */
-const decks = shapeDigest(siteDecks(SITE));
+const decks = siteDecks(SITE);
+export const underDeck = underDecks(decks);
+/** How far beyond a tile's extent a deck still shapes its ground: a bed
+ *  reaches `half + BED_SIDE_M` out (`bedsIn`), and the burn stays on the
+ *  tile's grid; a margin past both. */
+const DECK_REACH_M = 50;
+
+/** The decks that reach into a tile's extent (the decks are in the
+ *  levels' zero frame: x = E, z = −N). */
+function decksIn(tile: string): DeckPoly[] {
+  const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+  const r = DECK_REACH_M;
+  return decks.filter(
+    (d) =>
+      d.maxX >= x0 - r &&
+      d.minX <= x1 + r &&
+      -d.minZ >= y0 - r &&
+      -d.maxZ <= y1 + r
+  );
+}
 
 /** The beds that reach into a tile's extent (with their slopes), once
  *  per tile. */
@@ -96,12 +116,12 @@ export function shapeDigest(shapes: unknown): string {
 }
 
 /** What shapes a tile's ground besides its own files, for its cache keys:
- *  the passages and beds reaching into it, and the site's decks. */
+ *  the passages, beds and decks reaching into it. */
 const tileShapes = new Map<string, string>();
 export function shapedBy(tile: string): string {
   let digest = tileShapes.get(tile);
   if (digest === undefined) {
-    digest = shapeDigest([passagesIn(tile), bedsIn(tile), decks]);
+    digest = shapeDigest([passagesIn(tile), bedsIn(tile), decksIn(tile)]);
     tileShapes.set(tile, digest);
   }
   return digest;

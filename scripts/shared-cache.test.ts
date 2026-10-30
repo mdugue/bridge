@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { artifactHash, sealed, sharedCache, unsealed } from "./shared-cache";
+import {
+  allowedMs,
+  artifactHash,
+  sealed,
+  sharedCache,
+  unsealed,
+} from "./shared-cache";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 const text = (b: Uint8Array | null | undefined) =>
@@ -80,7 +86,7 @@ test("another runtime bakes under addresses of its own", async () => {
 test("bytes that do not match their digest are a miss", async () => {
   const api = fakeApi();
   api.store.set(
-    artifactHash("a", "k", RUNTIME),
+    artifactHash("a", "k", RUNTIME, "production"),
     new Uint8Array([...sealed(bytes("good")).subarray(0, 32), ...bytes("evil")])
   );
   const lines: string[] = [];
@@ -125,10 +131,54 @@ test("failures in a row end the run's use of the cache, never throwing", async (
   expect(lines.at(-1)).toContain("not asked again");
 });
 
-test("the address is hex and differs by name, key and runtime", () => {
-  const a = artifactHash("a", "k", RUNTIME);
+test("an upload cut off ends the uploads, not the fetches", async () => {
+  const api = fakeApi();
+  let puts = 0;
+  const fetcher = (async (input: string | URL, init?: RequestInit) => {
+    if (init?.method === "PUT") {
+      puts++;
+      throw new DOMException("The operation timed out.", "TimeoutError");
+    }
+    return api.fetcher(input, init);
+  }) as typeof fetch;
+  const lines: string[] = [];
+  const cache = sharedCache(ENV, (l) => lines.push(l), RUNTIME, fetcher).cache;
+  await cache?.put("a", "k", bytes("x"));
+  await cache?.put("b", "k", bytes("y"));
+  await cache?.flush();
+  expect(puts).toBe(1);
+  expect(lines.at(-1)).toContain("no more uploads");
+  expect(await cache?.get("c", "k")).toBeNull();
+  // both scopes asked, the fetches go on
+  expect(api.calls.filter((c) => c.method === "GET")).toHaveLength(2);
+});
+
+test("production reads only what production stored", async () => {
+  const api = fakeApi();
+  const PROD = { ...ENV, VERCEL_ENV: "production" };
+  const preview = sharedCache(ENV, () => {}, RUNTIME, api.fetcher).cache;
+  await preview?.put("a", "k", bytes("preview"));
+  await preview?.flush();
+  const prod = sharedCache(PROD, () => {}, RUNTIME, api.fetcher).cache;
+  expect(await prod?.get("a", "k")).toBeNull();
+  await prod?.put("b", "k", bytes("main"));
+  await prod?.flush();
+  // a preview takes production's entries and its own
+  const next = sharedCache(ENV, () => {}, RUNTIME, api.fetcher).cache;
+  expect(text(await next?.get("b", "k"))).toBe("main");
+  expect(text(await next?.get("a", "k"))).toBe("preview");
+});
+
+test("a request gets its answer's time plus its bytes' at the slowest rate", () => {
+  expect(allowedMs(0)).toBe(30_000);
+  expect(allowedMs(60 * 1024 ** 2)).toBe(90_000);
+});
+
+test("the address is hex and differs by name, key, runtime and scope", () => {
+  const a = artifactHash("a", "k", RUNTIME, "preview");
   expect(a).toMatch(/^[0-9a-f]{64}$/u);
-  expect(artifactHash("b", "k", RUNTIME)).not.toBe(a);
-  expect(artifactHash("a", "j", RUNTIME)).not.toBe(a);
-  expect(artifactHash("a", "k", "bun 1.4.4 linux-x64")).not.toBe(a);
+  expect(artifactHash("b", "k", RUNTIME, "preview")).not.toBe(a);
+  expect(artifactHash("a", "j", RUNTIME, "preview")).not.toBe(a);
+  expect(artifactHash("a", "k", "bun 1.4.4 linux-x64", "preview")).not.toBe(a);
+  expect(artifactHash("a", "k", RUNTIME, "production")).not.toBe(a);
 });

@@ -10,15 +10,22 @@
  *
  * Only Vercel's builds read and write it: they share one runtime, and the
  * address carries it (`artifactHash`), so a branch that bumps Bun bakes
- * under addresses of its own. Each entry is stored behind its SHA-256: a
- * fetched entry whose bytes do not match is a miss.
+ * under addresses of its own. Production trusts only itself: its builds
+ * store under a scope of their own and read only that one; a preview reads
+ * production's scope, then the previews' one, and stores under the
+ * previews'. A key that misses an input (a gap no test caught) thus never
+ * brings an unmerged branch's bytes to production. Each entry is stored
+ * behind its SHA-256: a fetched entry whose bytes do not match is a miss.
  *
  * Never fatal: off without Vercel's token or with `BAKE_SHARED_CACHE=0`; a
  * failed request logs a line and the bake goes on as if the entry were
- * missing; a request that hangs is cut off (`TIMEOUT_MS`); after
- * `MAX_FAILURES` failures in a row the run stops asking. An entry the
- * cache refuses for its size is skipped alone. Uploads run one at a time
- * behind the bake (`flush` waits for them), at most `QUEUE_BYTES` waiting.
+ * missing; after `MAX_FAILURES` failures in a row the run stops asking. A
+ * request is cut off when its answer takes `ANSWER_MS` or its bytes move
+ * slower than `MIN_RATE`; an upload cut off ends the run's uploads at once
+ * (the fetches go on): a stalled upload stalls the ones behind it. An
+ * entry the cache refuses for its size is skipped alone. Uploads run one
+ * at a time behind the bake (`flush` waits for them), at most
+ * `QUEUE_BYTES` waiting; a large one logs its size and time.
  */
 import { createHash } from "node:crypto";
 
@@ -35,26 +42,34 @@ export interface SharedCache {
 }
 
 const API = "https://api.vercel.com/v8/artifacts";
-/** A request that takes longer is cut off (a large glb uploads in seconds). */
-const TIMEOUT_MS = 120_000;
+/** The longest a request waits for its answer (a hit's or a miss's
+ *  headers, an upload's reply beyond its bytes' time). */
+const ANSWER_MS = 30_000;
+/** The slowest the bytes may move (bytes per second): a request gets
+ *  `ANSWER_MS` plus its size at this rate. Slower, sharing loses to
+ *  baking. */
+const MIN_RATE = 1024 ** 2;
 /** Failures in a row (not a miss, not a refused size) that end the run's
  *  use of the cache: a revoked token or an outage fails every request. */
 const MAX_FAILURES = 3;
 /** The bytes that may wait for upload before a bake waits for the queue:
  *  a small share of the build machine's 8 GB. */
 const QUEUE_BYTES = 256 * 1024 ** 2;
+/** An upload this large logs its size and time. */
+const LOG_BYTES = 8 * 1024 ** 2;
 /** The size of the digest stored before an entry's bytes. */
 const DIGEST = 32;
 
-/** The entry's address: hex, as the API's path expects; the runtime the
- *  bytes were baked on is part of it. */
+/** The entry's address: hex, as the API's path expects; the scope that
+ *  stored it and the runtime its bytes were baked on are part of it. */
 export function artifactHash(
   name: string,
   key: string,
-  runtime: string
+  runtime: string,
+  scope: string
 ): string {
   return createHash("sha256")
-    .update(`prepare-data\n${runtime}\n${name}\n${key}`)
+    .update(`prepare-data\n${scope}\n${runtime}\n${name}\n${key}`)
     .digest("hex");
 }
 
@@ -79,10 +94,34 @@ export function unsealed(stored: Uint8Array): Uint8Array | null {
   return digest.every((b, i) => b === stored[i]) ? bytes : null;
 }
 
+/** The time a request of `bytes` gets (`ANSWER_MS`, `MIN_RATE`). */
+export const allowedMs = (bytes: number) =>
+  ANSWER_MS + Math.ceil((bytes / MIN_RATE) * 1000);
+
+/** A request's deadline, moved once its size is known. */
+function deadline(ms: number) {
+  const controller = new AbortController();
+  const cut = () =>
+    controller.abort(new DOMException("timed out", "TimeoutError"));
+  let timer = setTimeout(cut, ms);
+  return {
+    signal: controller.signal,
+    move(next: number) {
+      clearTimeout(timer);
+      timer = setTimeout(cut, next);
+    },
+    clear: () => clearTimeout(timer),
+  };
+}
+
+const timedOut = (error: unknown) =>
+  (error as Error | undefined)?.name === "TimeoutError";
+
 /**
  * The shared cache for this environment, or null with the reason it is off.
- * `VERCEL_ARTIFACTS_TOKEN` / `VERCEL_ARTIFACTS_OWNER` are what Vercel's
- * build sets; `runtime` names what bakes (Bun's version and the platform).
+ * `VERCEL_ARTIFACTS_TOKEN` / `VERCEL_ARTIFACTS_OWNER` / `VERCEL_ENV` are
+ * what Vercel's build sets; `runtime` names what bakes (Bun's version and
+ * the platform).
  */
 export function sharedCache(
   env: Record<string, string | undefined>,
@@ -100,10 +139,13 @@ export function sharedCache(
   const owner = env.VERCEL_ARTIFACTS_OWNER;
   const query = owner ? `?teamId=${encodeURIComponent(owner)}` : "";
   const headers = { Authorization: `Bearer ${token}` };
+  const scope = env.VERCEL_ENV === "production" ? "production" : "preview";
+  const reads = scope === "production" ? [scope] : ["production", scope];
   const counts = { bytes: 0, hits: 0, misses: 0, stored: 0 };
-  const url = (name: string, key: string) =>
-    `${API}/${artifactHash(name, key, runtime)}${query}`;
+  const url = (name: string, key: string, from: string) =>
+    `${API}/${artifactHash(name, key, runtime, from)}${query}`;
   let failures = 0;
+  let uploading = true;
   let queue = Promise.resolve();
   let queued = 0;
 
@@ -114,17 +156,19 @@ export function sharedCache(
     );
   };
   const on = () => failures < MAX_FAILURES;
+  const storing = () => on() && uploading;
 
   const upload = async (name: string, key: string, bytes: Uint8Array) => {
-    if (!on()) {
+    if (!storing()) {
       return;
     }
+    const t0 = performance.now();
     try {
-      const res = await fetcher(url(name, key), {
+      const res = await fetcher(url(name, key, scope), {
         body: sealed(bytes),
         headers: { ...headers, "Content-Type": "application/octet-stream" },
         method: "PUT",
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(allowedMs(bytes.byteLength)),
       });
       if (res.status === 413) {
         log(`shared cache: ${name} (${bytes.byteLength} bytes) is too large`);
@@ -136,8 +180,60 @@ export function sharedCache(
       }
       failures = 0;
       counts.stored += 1;
+      if (bytes.byteLength >= LOG_BYTES) {
+        log(
+          `shared cache: stored ${name} (${(bytes.byteLength / 1024 ** 2).toFixed(1)} MB) in ${Math.round(performance.now() - t0)} ms`
+        );
+      }
     } catch (error) {
+      if (timedOut(error)) {
+        uploading = false;
+        log(
+          `shared cache: storing ${name} (${bytes.byteLength} bytes) timed out, no more uploads this run`
+        );
+        return;
+      }
       failed(`storing ${name}`, (error as Error).message);
+    }
+  };
+
+  /** One scope's entry: its bytes, null for a miss, undefined when the
+   *  request failed. */
+  const fetchFrom = async (
+    name: string,
+    key: string,
+    from: string
+  ): Promise<Uint8Array | null | undefined> => {
+    const time = deadline(ANSWER_MS);
+    try {
+      const res = await fetcher(url(name, key, from), {
+        headers,
+        signal: time.signal,
+      });
+      if (res.status === 404) {
+        failures = 0;
+        return null;
+      }
+      if (!res.ok) {
+        failed(`fetching ${name}`, String(res.status));
+        return undefined;
+      }
+      time.move(allowedMs(Number(res.headers.get("content-length") ?? 0)));
+      const bytes = unsealed(new Uint8Array(await res.arrayBuffer()));
+      if (!bytes) {
+        failed(`fetching ${name}`, "its bytes do not match their digest");
+        return undefined;
+      }
+      failures = 0;
+      return bytes;
+    } catch (error) {
+      failed(
+        `fetching ${name}`,
+        timedOut(error) ? "timed out" : (error as Error).message
+      );
+      return undefined;
+    } finally {
+      time.clear();
     }
   };
 
@@ -146,39 +242,22 @@ export function sharedCache(
       if (!on()) {
         return null;
       }
-      try {
-        const res = await fetcher(url(name, key), {
-          headers,
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-        if (res.status === 404) {
-          failures = 0;
-          counts.misses += 1;
-          return null;
+      for (const from of reads) {
+        const bytes = await fetchFrom(name, key, from);
+        if (bytes) {
+          counts.hits += 1;
+          counts.bytes += bytes.byteLength;
+          return bytes;
         }
-        if (!res.ok) {
-          failed(`fetching ${name}`, String(res.status));
-          counts.misses += 1;
-          return null;
+        if (bytes === undefined || !on()) {
+          break;
         }
-        const bytes = unsealed(new Uint8Array(await res.arrayBuffer()));
-        if (!bytes) {
-          failed(`fetching ${name}`, "its bytes do not match their digest");
-          counts.misses += 1;
-          return null;
-        }
-        failures = 0;
-        counts.hits += 1;
-        counts.bytes += bytes.byteLength;
-        return bytes;
-      } catch (error) {
-        failed(`fetching ${name}`, (error as Error).message);
-        counts.misses += 1;
-        return null;
       }
+      counts.misses += 1;
+      return null;
     },
     async put(name, key, bytes) {
-      if (!on()) {
+      if (!storing()) {
         return;
       }
       if (queued + bytes.byteLength > QUEUE_BYTES) {
@@ -193,5 +272,8 @@ export function sharedCache(
     flush: () => queue,
     stats: () => ({ ...counts }),
   };
-  return { cache, reason: owner ? `on (team ${owner})` : "on" };
+  return {
+    cache,
+    reason: `on (${scope}${owner ? `, team ${owner}` : ""})`,
+  };
 }

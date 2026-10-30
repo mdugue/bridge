@@ -90,7 +90,8 @@ import { groundFile } from "./prepare/ground";
 import { bakeCity } from "./prepare/city";
 import { bakeTerrain, dropTerrain } from "./prepare/terrain";
 import { bakePlate } from "./prepare/plate";
-import { publishHero, publishStats } from "./prepare/site-wide";
+import { publishHero } from "./prepare/hero";
+import { publishStats } from "./prepare/stats";
 
 /** The valley's rim around each tile, where the sky-view bake read the
  *  land beyond the site (pipeline/bake/glo30.py `rims`, in the horizon

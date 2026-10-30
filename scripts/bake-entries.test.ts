@@ -66,12 +66,20 @@ test("every module prepare-data.ts imports is in some bake's key, or says why no
   // AGENTS.md: a module prepare-data calls to make an artifact must be one
   // of its entries or imported from one, or that artifact's cache goes
   // stale without a word. Which artifact needs it the test cannot know: it
-  // holds each import to being in some bake's key, or excused below
+  // holds each import to being in some bake's key, or excused below; the
+  // plumbing and the value modules reach no walk (`KEY_STOPS`), so what a
+  // value module imports is held to the same
+  const keyed = reached();
+  const unkeyed = (from: string) =>
+    directImports(from, ROOT).filter(
+      (p) => !keyed.has(p) && !(p in NOT_A_BAKE) && !KEY_STOPS.includes(p)
+    );
   const imported = directImports("scripts/prepare-data.ts", ROOT);
   expect(imported.length).toBeGreaterThan(10);
-  const keyed = reached();
-  const unkeyed = imported.filter((p) => !keyed.has(p) && !(p in NOT_A_BAKE));
-  expect(unkeyed).toEqual([]);
+  expect(unkeyed("scripts/prepare-data.ts")).toEqual([]);
+  for (const path of KEY_VALUES) {
+    expect(unkeyed(path)).toEqual([]);
+  }
   // and the list holds nothing that has since become a bake's, or gone
   expect(
     Object.keys(NOT_A_BAKE).filter((p) => keyed.has(p) || !imported.includes(p))
@@ -85,11 +93,12 @@ test("prepare-data.ts orders the steps and bakes nothing itself", () => {
   for (const step of directImports("scripts/prepare-data.ts", ROOT).filter(
     (p) => p.startsWith("scripts/prepare/") && !p.endsWith("/context.ts")
   )) {
-    // every step module is some bake's entry
+    // every step module is some bake's entry, or a value module
     expect(
-      Object.values(BAKE_ENTRIES).some((e) =>
-        (e as readonly string[]).includes(step)
-      )
+      (KEY_VALUES as readonly string[]).includes(step) ||
+        Object.values(BAKE_ENTRIES).some((e) =>
+          (e as readonly string[]).includes(step)
+        )
     ).toBe(true);
   }
 });
@@ -120,13 +129,13 @@ const VALUE_EXPORTS: Record<string, Record<string, string>> = {
 
 test("a value module exports only what reaches keys as values", () => {
   for (const path of KEY_VALUES) {
+    // the transpiler's list holds every form of export, the types aside
     const source = readFileSync(join(ROOT, path), "utf8");
-    const exported = [
-      ...source.matchAll(
-        /^export (?:async )?(?:function|const|let|type|interface) ([\w$]+)/gmu
-      ),
+    const { exports } = new Bun.Transpiler({ loader: "ts" }).scan(source);
+    const types = [
+      ...source.matchAll(/^export (?:type|interface) ([\w$]+)/gmu),
     ].map((m) => m[1]);
-    expect(exported.toSorted()).toEqual(
+    expect([...exports, ...types].toSorted()).toEqual(
       Object.keys(VALUE_EXPORTS[path] ?? {}).toSorted()
     );
   }
