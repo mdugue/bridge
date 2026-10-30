@@ -1043,7 +1043,7 @@ visual-variable codebook is in
   **Families:** warm render for housing, neutral greige for commerce, warm
   stone greige for civic buildings (`31001_3xxx`) and mapped or Wikidata
   `stone` (sandstone, limestone), cool grey for structures, glass and metal.
-  The nudge makes a low house a touch warmer and a tall one up to 30 %
+  The nudge (render and stone families only) makes a low house a touch warmer and a tall one up to 30 %
   paler in chroma, never bluer (2026-10-30: civic and stone were slate and
   tall buildings drifted blue, so the skyline a city is seen by from afar —
   its churches, palaces, museums and tall blocks — read uncoloured in
@@ -4401,8 +4401,8 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 - **Drifting clouds** `≈ assumed` — `SkyMesh`'s procedural clouds drift on TSL `time`
   (slow `cloudSpeed`), lit by the sun instant. `sun-rig.ts`.
 - **Golden/blue-hour palette stops** `= computed` `≈ assumed` — sun altitude → sky/fog/hemisphere colours
-  from a palette with stops at −2° (blue hour) and +6° (golden hour). By
-  day the hemisphere's sky fill keeps two fifths of the sky's chroma at its
+  from a palette with stops at −2° (blue hour) and +6° (golden hour). From
+  the golden hour on the hemisphere's sky fill keeps two fifths of the sky's chroma at its
   lightness (2026-10-30): with the full blue, a shaded cream or sandstone
   wall turned grey, and a backlit skyline read uncoloured.
   `lib/city/atmosphere.ts` `STOPS`.

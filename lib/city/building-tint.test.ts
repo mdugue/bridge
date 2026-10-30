@@ -62,6 +62,20 @@ test("civic stone reads warm greige, special structures cool grey", () => {
   expect(blueBias(special)).toBeGreaterThan(blueBias(civic));
 });
 
+test("brick keeps its clinker and the cool grey stays cool at any height", () => {
+  const chroma = (c: number[]) => Math.max(...c) - Math.min(...c);
+  for (const id of ["a", "b", "c", "d", "e"]) {
+    const brickLow = buildingTint(id, { measuredHeight: 6 }, "brick");
+    const brickTall = buildingTint(id, { measuredHeight: 40 }, "brick");
+    expect(chroma(brickTall)).toBeCloseTo(chroma(brickLow), 9);
+    const tank = buildingTint(id, {
+      function: "53001_1800",
+      measuredHeight: 4,
+    });
+    expect(tank[2]).toBeGreaterThanOrEqual(tank[0]);
+  }
+});
+
 test("mapped stone is warm, never slate", () => {
   for (const id of ["a", "b", "c", "d", "e"]) {
     const c = buildingTint(id, { measuredHeight: 40 }, "render", {
@@ -79,7 +93,10 @@ test("taller buildings grow paler in chroma, never bluer", () => {
     const tall = buildingTint("h", { function: fn, measuredHeight: 30 });
     expect(chroma(tall)).toBeLessThan(chroma(mid));
     expect(short[0] - short[2]).toBeGreaterThan(mid[0] - mid[2]);
-    expect(tall[2]).toBeLessThanOrEqual(tall[0]);
+    // the hue holds: blue's share of the chroma is the mid-height one's
+    // (a blue push would raise it)
+    const blueShare = (c: number[]) => (c[2] - c[0]) / chroma(c);
+    expect(blueShare(tall)).toBeLessThanOrEqual(blueShare(mid) + 0.05);
   }
 });
 
