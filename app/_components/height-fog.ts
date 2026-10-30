@@ -10,13 +10,12 @@ import {
   min,
   positionView,
   positionWorld,
-  rangeFogFactor,
   smoothstep,
   uniform,
   vec3,
 } from "three/tsl";
 import type { Node, NodeBuilder, UniformNode } from "three/webgpu";
-import type { F } from "./shader-chunks";
+import type { F, V3 } from "./shader-chunks";
 
 /**
  * The scene's fog: one node for every material (`scene.fogNode`), so
@@ -24,7 +23,9 @@ import type { F } from "./shader-chunks";
  * walls and lamps all take it without asking; a material opts out with
  * `fog = false` (the river mist). Three terms:
  *
- * - three's distance fog (`rangeFogFactor`, the *Nebel* slider's range);
+ * - a distance fog over the view depth (three's `rangeFogFactor`, reproduced
+ *   in `fogFactorAt` so the picture styles can take it off again; the
+ *   *Nebel* slider's range);
  * - a world-Y pool above the valley floor (*Talnebel*): the Elbe valley
  *   pools deeper haze than bridge decks and high ground at the same
  *   distance. It builds on the distance fog, never replaces it — only adds
@@ -96,26 +97,31 @@ export function createSceneFog(
 
 /** How much of the fog colour a fragment takes (0..1). */
 export function fogFactor(f: SceneFog): F {
-  const distance = rangeFogFactor(f.near, f.far);
+  return fogFactorAt(f, positionWorld, positionView);
+}
+
+/**
+ * The same at any world point, `view` its view-space position — what the
+ * picture styles read to take the haze off a frame again
+ * (stylize-effect.ts), so they cut light and colour as they were under it.
+ * three's distance fog is a smoothstep on the view depth.
+ */
+export function fogFactorAt(f: SceneFog, world: V3, view: V3): F {
+  const depth = view.z.negate();
+  const distance = smoothstep(f.near, f.far, depth);
   const pool = float(1)
-    .sub(
-      smoothstep(
-        f.heightStart,
-        f.heightStart.add(f.heightFalloff),
-        positionWorld.y
-      )
-    )
-    .mul(smoothstep(VALLEY_NEAR_M[0], VALLEY_NEAR_M[1], length(positionView)));
+    .sub(smoothstep(f.heightStart, f.heightStart.add(f.heightFalloff), world.y))
+    .mul(smoothstep(VALLEY_NEAR_M[0], VALLEY_NEAR_M[1], length(view)));
   const pooled = clamp(
     distance.add(f.heightStrength.mul(pool).mul(float(1).sub(distance))),
     0,
     1
   );
-  const xz = positionWorld.xz;
+  const xz = world.xz;
   const edgeD = min(xz.sub(f.siteRect.xy), f.siteRect.zw.sub(xz));
   const edge = float(1)
     .sub(smoothstep(0, SITE_EDGE_FADE_M, min(edgeD.x, edgeD.y)))
-    .mul(smoothstep(60, 600, positionView.z.negate()));
+    .mul(smoothstep(60, 600, depth));
   return max(pooled, edge.mul(edge).mul(float(3).sub(edge.mul(2))));
 }
 
