@@ -9,6 +9,7 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
   NodeMaterial,
+  type Object3D,
   OneFactor,
   QuadMesh,
   RGFormat,
@@ -51,6 +52,7 @@ import {
   outlineKernel,
   outlineSpread,
 } from "@/lib/city/outline";
+import { compileInTurn } from "./compile-lanes";
 import type { F, V4 } from "./shader-chunks";
 import { TRAFFIC_ATTRIBUTES, trafficPositionNode } from "./traffic-flow";
 import type { ViewLens } from "./view-lens";
@@ -474,32 +476,32 @@ export function createSelectionOutline(deps: {
       texel.value.set(1 / halved(width), 1 / halved(height));
       clean = false;
     },
-    // like PostStack's compileOne: each call builds its program before it
-    // returns, so the target and the shape are restored before a frame.
-    // Compiling against the targets allocates them: they go in time, as
-    // after a question.
+    // like PostStack's compileOne: each compile in its turn
+    // (compile-lanes.ts `compileInTurn`), the target and the shape set for
+    // its call and restored right after, before a frame. Compiling against
+    // the targets allocates them: they go in time, as after a question.
     compile: async (renderer, camera) => {
-      const previous = renderer.getRenderTarget();
-      const shown = [shape.visible, flow.visible] as const;
-      shape.visible = true;
-      flow.visible = true;
-      const builds: Promise<void>[] = [];
-      try {
-        renderer.setRenderTarget(mask);
-        builds.push(renderer.compileAsync(scene, camera));
-        renderer.setRenderTarget(across);
-        builds.push(
-          renderer.compileAsync(blurAcross.quad, blurAcross.quad.camera)
-        );
-        renderer.setRenderTarget(blurred);
-        builds.push(renderer.compileAsync(blurDown.quad, blurDown.quad.camera));
-      } finally {
-        [shape.visible, flow.visible] = shown;
-        renderer.setRenderTarget(previous);
-      }
+      const inTurn = (into: RenderTarget, root: Object3D, view: Camera) =>
+        compileInTurn(renderer, () => {
+          const previous = renderer.getRenderTarget();
+          const shown = [shape.visible, flow.visible] as const;
+          shape.visible = true;
+          flow.visible = true;
+          renderer.setRenderTarget(into);
+          try {
+            return renderer.compileAsync(root, view);
+          } finally {
+            [shape.visible, flow.visible] = shown;
+            renderer.setRenderTarget(previous);
+          }
+        });
       held = true;
       lastUsed = performance.now();
-      await Promise.all(builds);
+      await Promise.all([
+        inTurn(mask, scene, camera),
+        inTurn(across, blurAcross.quad, blurAcross.quad.camera),
+        inTurn(blurred, blurDown.quad, blurDown.quad.camera),
+      ]);
     },
     dispose: () => {
       shape.geometry.dispose();

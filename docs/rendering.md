@@ -240,7 +240,7 @@ is the codebook.
 | Contact shadows | GTAO at half resolution (normals from depth, 2 m radius, 0.15 m thickness), its 5×5 noise averaged out by a depth-aware box in its own half-resolution, one-byte pass; never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, over the ground and LoD2 with its rebuilt roofs, the drawn crowns at half transmission, GLO-30 beyond the site; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2, the crowns, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
 | Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80 m–10 km — past 1 500 m the terrain alone, over GLO-30 beyond the site — and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
-| Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, prefiltered into a 64 px PMREM (≈ 0.7 MB, as much again for the generator) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades, gilding and patina and fountain water (the river is matte since 2026-10-25), weighted by a softened Schlick; mirrors the sky, never the city | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
+| Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, rendered into a 64 px cube map whose mips are the blur (≈ 0.4 MB; not three's PMREM, which since r187 takes ≈ 10 MB) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades, gilding and patina and fountain water (the river is matte since 2026-10-25), weighted by a softened Schlick; mirrors the sky, never the city | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
 | Depth of field | crosshair raycast distance; only what lies beyond the focus blurs (nearer is read as at the focus; blurring the foreground had laid a veil over the lower half — three's node still runs its near-field passes, over an empty field), focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving; always on otherwise (no switch, no manual focus); desktop only — a phone does not build it (ADR 0047) | — | `post-stack.ts` |
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `post-stack.ts` (*Papierkorn*) |
 | Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier, Strich, Schwarzplan — one post pass over the finished frame (below); Papier and Strich also swap every surface for one white paper material for the frame (Papier's ground keeps its paint and water as greys, Strich's turns plan-coloured), Sin City swaps them for a white card (foliage and water black, red roofs red), the Schwarzplan draws the buildings unlit black and hides everything but them and the white ground; light and shade from the sun's shadow map, the fog taken out before any cut, dots and hatching anchored to the world (ADR 0034); remembered per browser | sun altitude (noir's dusk exposure), the shadow map, the fog factor | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts`, `style-memory.ts` |
@@ -380,9 +380,11 @@ AO_EXPONENT → DepthOfFieldNode (desktop; skipped while moving; in motion
 the camera's motion blur instead, pastel only) → the
 picture style → SMAANode (FXAA on a phone) → depth grading + vignette +
 paper grain + the outline → sRGB`. Rendering the scene outside the
-pipeline is what lets a tile's `compileAsync` prepare the very build its
-frames use (a build is keyed by render context, a context by target and
-call depth). The target has no MSAA (`antialias: false`); SMAA or FXAA
+pipeline lets the styles swap and dress the scene for exactly its render,
+and a tile's `compileAsync` prepare the very build its frames use (a
+build is keyed by the target's attachments and the kind of camera; up to
+three r186 also by the call depth, which a scene pass nested in the
+pipeline never matched). The target has no MSAA (`antialias: false`); SMAA or FXAA
 carries the anti-aliasing. There is no tone mapping: the look was tuned
 without it. The GTAO sample count is a construction-time setting (16;
 8 on a phone and in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
@@ -411,7 +413,8 @@ step of the memory governor can shrink them.
   composites into a target of its own; a frame runs its passes by drawing
   one pixel of its output into a 1×1 target (`pixel`, where the
   pipelines also warm — its render context is `BeforeAA`'s: three keys a
-  context by the target's attachments and the call depth, not its size).
+  context by the target's attachments, the call depth and the kind of
+  camera, not its size).
   Drawn into `BeforeAA`, both were copies of the whole frame: a standing
   frame is one full-resolution pass lighter (18 passes, as before, but one
   of them one pixel), a walking one 8 → 7, and `BeforeAA` (8 B a pixel:
@@ -1009,10 +1012,10 @@ stays their measure; the tile cache counts true bytes.
   (`disposeGeometry`), and a leaving tile whose dressing still compiles
   has its content freed by the plugin, so the tile renderer's own
   dispose never meets one. A compile that throws
-  inside three's `compileAsync` leaves three's private pre-compiling flag
-  raised until the next compile that succeeds (only
-  `ShadowNode.updateBefore` reads it): the shadow map can pause until the
-  next tile compiles.
+  inside three's `compileAsync` leaves three's private pre-compile state
+  set (`_precompilationState` since r187) until the next compile that
+  succeeds (only `ShadowNode.updateBefore` reads it): the shadow map can
+  pause until the next tile compiles.
 
 **Reading the heartbeat.** The crash trail takes a beat every 2 s; the
 crash card, every report's breadcrumbs and `crashTrail.current()` (in a

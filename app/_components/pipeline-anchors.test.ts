@@ -108,3 +108,37 @@ test("a hold of every build anchors a tile's own material too, as itself", async
   expect((compiled[0] as Mesh).material).toBe(material);
   anchors.dispose();
 });
+
+test("anchorAll compiles the new stand-ins in one call and takes them out of its set again", async () => {
+  const release = retainSceneMaterials();
+  const shared = sceneMaterial(
+    "anchor-all-test",
+    () => new MeshBasicNodeMaterial()
+  );
+  const compiled: { object: Object3D; children: Object3D[] }[] = [];
+  const anchors = createPipelineAnchors((object) => {
+    compiled.push({ object, children: [...object.children] });
+    return Promise.resolve();
+  });
+  const a = new Mesh(new BoxGeometry(), shared);
+  const b = new Mesh(new BoxGeometry(), shared);
+  const receiving = new Mesh(new BoxGeometry(), shared);
+  receiving.receiveShadow = true;
+  const own = new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial());
+  const points = new Points(new BoxGeometry(), shared);
+  await anchors.anchorAll([a, b, receiving, own, points]);
+  // one call: a and b share a key, own is per-tile
+  expect(compiled).toHaveLength(1);
+  const [{ object, children }] = compiled;
+  expect(children.map((c) => c.type)).toEqual(["Mesh", "Mesh", "Points"]);
+  expect(object.children).toHaveLength(0);
+  for (const c of children) {
+    expect(c.parent).toBeNull();
+  }
+  expect(anchors.count()).toBe(3);
+  // nothing new: no call
+  await anchors.anchorAll([b, points]);
+  expect(compiled).toHaveLength(1);
+  anchors.dispose();
+  release();
+});

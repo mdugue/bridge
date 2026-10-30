@@ -1,6 +1,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  Group,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
   InstancedInterleavedBuffer,
@@ -26,8 +27,9 @@ import { releaseRenderState } from "./three-utils";
  *
  * An anchor is a three-vertex stand-in with a drawable's material, attribute
  * layout and shadow receipt — what three keys a build and its pipeline by
- * (the geometry's part of the key is structural: attribute names, strides,
- * offsets, item sizes; see RenderObject.getGeometryCacheKey). It is
+ * (the geometry's part is structural: attribute names and item sizes for
+ * the build, RenderObject.getGeometryCacheKey; the buffers' strides and
+ * offsets too for the pipeline, its vertex buffer layout). It is
  * compiled once, never added to the scene and never drawn: its render
  * object holds the pipeline. Scene-wide materials are anchored as they are.
  * A per-tile material that is one user of a shared build (material-slots.ts
@@ -185,6 +187,16 @@ function standIn(
 export interface PipelineAnchors {
   /** Anchors the drawable's pipelines if its material is scene-wide. */
   anchor: (drawable: Object3D) => Promise<void>;
+  /**
+   * Anchors the builds of all of `drawables` at once: their stand-ins in
+   * one set, compiled in one call, where three (r187) builds them one after
+   * the other and compiles their GPU pipelines side by side — a call per
+   * stand-in waits for each pipeline in turn (compile-lanes.ts
+   * `compileInTurn`). Stand-ins only: nothing a tile frees is compiled.
+   * Not for a compile under a swap, which carries one drawable's position
+   * node over (paper-scene.ts `swapped`).
+   */
+  anchorAll: (drawables: readonly Object3D[]) => Promise<void>;
   /** How many anchors hold pipelines (diagnostics). */
   count: () => number;
   dispose: () => void;
@@ -218,30 +230,52 @@ export function createPipelineAnchors(
     }
     return stand;
   };
+  /** A new anchor for `object`'s build, or null: none is wanted, or one
+   *  holds it already. */
+  const standInFor = (object: Object3D): Object3D | null => {
+    const drawable = object as Drawable;
+    const { geometry } = drawable;
+    if (!(geometry && drawable.material) || Array.isArray(drawable.material)) {
+      return null;
+    }
+    const material = anchorMaterial(drawable.material);
+    if (!material) {
+      return null;
+    }
+    const key = anchorKey(drawable, material);
+    if (anchors.has(key)) {
+      return null;
+    }
+    const anchor = standIn(drawable, layoutStub(geometry), material);
+    anchor.name = "pipeline-anchor";
+    anchor.receiveShadow = drawable.receiveShadow;
+    anchor.frustumCulled = false;
+    anchors.set(key, anchor);
+    return anchor;
+  };
   return {
     anchor: async (object) => {
-      const drawable = object as Drawable;
-      const { geometry } = drawable;
-      if (
-        !(geometry && drawable.material) ||
-        Array.isArray(drawable.material)
-      ) {
+      const anchor = standInFor(object);
+      if (anchor) {
+        await compile(anchor);
+      }
+    },
+    anchorAll: async (objects) => {
+      const set = new Group();
+      for (const object of objects) {
+        const anchor = standInFor(object);
+        if (anchor) {
+          set.add(anchor);
+        }
+      }
+      if (set.children.length === 0) {
         return;
       }
-      const material = anchorMaterial(drawable.material);
-      if (!material) {
-        return;
+      try {
+        await compile(set);
+      } finally {
+        set.clear();
       }
-      const key = anchorKey(drawable, material);
-      if (anchors.has(key)) {
-        return;
-      }
-      const anchor = standIn(drawable, layoutStub(geometry), material);
-      anchor.name = "pipeline-anchor";
-      anchor.receiveShadow = drawable.receiveShadow;
-      anchor.frustumCulled = false;
-      anchors.set(key, anchor);
-      await compile(anchor);
     },
     count: () => anchors.size,
     dispose: () => {

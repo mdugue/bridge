@@ -22,7 +22,7 @@ HUD, three.js the canvas (ADR 0002).
 ## Tech stack
 
 - Next.js (App Router) + TypeScript 7 (strict) + Tailwind v4, run with **bun**
-- three.js r186 `WebGPURenderer` (WebGPU, else its WebGL2 backend), TSL,
+- three.js r187 `WebGPURenderer` (WebGPU, else its WebGL2 backend), TSL,
   three's node post pipeline — no GLSL anywhere (ADR 0027);
   `3d-tiles-renderer`, `three-mesh-bvh`
 - Build only: `cityjson-threejs-loader`, `geotiff`, `@gltf-transform/*`,
@@ -123,6 +123,10 @@ space (`shader-chunks.ts`). The glTF extras key is `tileId`, never `tile`
 - A TSL `select` and a `Loop` body are scopes: in per-pixel graphs use
   `mix`/`step`, and take what a loop reads into a `toVar()` before it.
   A packed word or a hash seed reaches the fragment as a FLAT varying.
+- Every `compileAsync` runs in its turn (`compileInTurn`): two in flight
+  corrupt each other's state in three r187. A frame names the targets it
+  draws into. Builds are per kind of camera: Modell's parallel camera has
+  its own (`PostStack.warmView`).
 - Everything a tile brings is built in the dressing plugin's
   `processTileModel`, compiled before it shows, and freed in `disposeTile`
   — never in `bootApp`. Freeing is on us; what a tile adds beyond its glTF
@@ -225,7 +229,7 @@ says so (ADR 0043).
 
 <!-- BEGIN:nextjs-agent-rules -->
 
-# This is NOT the Next.js you know
+## This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 

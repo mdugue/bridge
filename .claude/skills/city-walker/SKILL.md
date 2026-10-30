@@ -38,7 +38,7 @@ wired by hand. The data layers' code stays in the scene chunk: the first `import
 load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
 data layers moved (ADR 0040) — measure before splitting one off.
 
-**The renderer** is three r186's `WebGPURenderer` — its WebGPU backend, or
+**The renderer** is three r187's `WebGPURenderer` — its WebGPU backend, or
 its WebGL2 backend where the browser has no WebGPU (`?gpu=webgl2` forces it:
 `scene-profile.ts` `forceWebGL`; the preflight is `gpu-support.ts`). One
 path: every material is a **TSL node material**, there is no GLSL, no
@@ -269,11 +269,13 @@ fine. Inside `If`/branches read textures with an explicit `.level(0)` or
 What three keys a node build (TSL → WGSL/GLSL, **on the main thread**) by,
 and therefore what keeps builds out of frames:
 
-- **Never `InstancedMesh`.** three puts an InstancedMesh's uuid in the
-  render object's cache key (its instancing node binds that mesh's matrix
-  buffer), so a tile's hundreds of vegetation cells, furniture models and
-  lamp parts were hundreds of identical builds, in the scene and in the
-  shadow pass. `Instances` (`instancing.ts`) is a plain `Mesh` over an
+- **Never `InstancedMesh`.** Up to r186 three put an InstancedMesh's uuid
+  in the render object's cache key (its instancing node binds that mesh's
+  matrix buffer), so a tile's hundreds of vegetation cells, furniture
+  models and lamp parts were hundreds of identical builds, in the scene
+  and in the shadow pass. (r187 shares InstancedMesh builds; every layer's
+  nodes, shared buffers and anchors are written for `Instances`, and
+  moving back buys nothing measured.) `Instances` (`instancing.ts`) is a plain `Mesh` over an
   `InstancedBufferGeometry` view; the matrices travel as named
   instance-stepped attributes (`iMat0`…`iMat3`, colours `iColor`), so every
   set with the same material and attribute layout shares **one** build.
@@ -302,17 +304,32 @@ and therefore what keeps builds out of frames:
   material with textures bound per draw (`onObjectUpdate`) was tried and
   failed (grey ground, untinted clay).
 - **The scene renders top-level into its own target** (`post-stack.ts`),
-  and the `RenderPipeline` reads that target's colour and depth. three
-  keys a build by render context, and a context by target *and* call
-  depth: a scene `pass()` nested inside the pipeline sits one level deeper
-  than any `compileAsync` call and never finds what it prepared.
+  and the `RenderPipeline` reads that target's colour and depth; the
+  styles' swap and dressing wrap exactly that render. A build is keyed by
+  the target's attachments and the **kind of camera** (r187; up to r186
+  also by the call depth, so a scene `pass()` nested in the pipeline never
+  found what `compileAsync` prepared). The frame names every target it
+  draws into and ends on the canvas, never on the one it found set: a
+  compile in flight sets the target it was called with again after each
+  build it resumes.
 - **Compile ahead.** `PostStack.compile(object)` builds and compiles each
-  drawable against the scene target (shown and unculled for the call, four
-  lanes); tiles await it in `processTileModel`, dressings compile one
+  drawable against the scene target (shown and unculled for the call);
+  tiles await it in `processTileModel`, dressings compile one
   representative per material + draw kind + attribute layout
   (`compileRepresentatives` in `tile-stream.ts`), both capped at
   `COMPILE_WAIT_MS`. The crowns a date change may switch to are warmed by
-  stand-ins (`crownWarmup`). `compileAsync` primes the **main pass only**:
+  stand-ins (`crownWarmup`). **One compile at a time**: every
+  `compileAsync` goes through `compileInTurn` (compile-lanes.ts) — r187
+  keeps a compile's state (target, call depth, render context) on the
+  renderer around every await inside it, and two in flight resume into
+  each other's state and throw. Within one call three compiles the GPU
+  pipelines side by side, so a whole set of stand-ins goes in one call
+  (`PipelineAnchors.anchorAll`: the Ausschnitt's holds, Modell's warm-up)
+  — never real tile objects, which a tile may free mid-call. **Modell's
+  parallel camera has builds of its own** (r187: a parallel view's light
+  comes from one fixed direction): `PostStack.warmView` builds them while
+  the dolly zoom in runs and for every tile landing while Modell shows;
+  `holdCut` holds for Modell's camera. `compileAsync` primes the **main pass only**:
   the shadow pass's pipelines for new casters still build in the frame that
   first draws them, and the WebGL2 backend compiles synchronously — the
   price of public API. Measure with a flight before adding machinery.
@@ -352,7 +369,7 @@ and therefore what keeps builds out of frames:
   `setup*` is the last resort; prefer a slot. The spike's render guard,
   shared-instancing patch and render-context override were rejected.
 - Things a node material cannot reach, found in the port: the sun's shadow
-  map from inside another material (r186's public `shadow(light)` builds a
+  map from inside another material (three's public `shadow(light)` builds a
   second shadow node with its own map) — the crown shimmer's gate is the
   sun's daylight ramp now; `SkyMesh`'s own cloud horizon fade (inside its
   colour node) — the haze band covers it.

@@ -1079,8 +1079,8 @@ function siteLatLng(
 export async function createCityWalkApp(
   opts: CityWalkOptions
 ): Promise<CityWalkHandle> {
-  // before the first compile: WebKit's compiles otherwise wait a frame
-  // per step (main-yield.ts)
+  // before the first build: WebKit's slices otherwise wait for a clamped
+  // timer (main-yield.ts)
   installMainYield();
   const renderer = await createRenderer(
     opts.container,
@@ -1960,6 +1960,22 @@ async function bootApp(
   let viewMode: ViewMode = "walk";
   const modeChanged = (mode: ViewMode) => {
     viewMode = mode;
+    // Modell's parallel camera draws with programs of its own: built while
+    // the dolly zoom in runs, and for the tiles that land while it shows.
+    if (rig && mode === "model") {
+      const asked = performance.now();
+      void postStack
+        .warmView(rig.camera)
+        .then(() =>
+          opts.trail?.note(
+            "model warm",
+            `${Math.round(performance.now() - asked)} ms`
+          )
+        )
+        .catch(() => undefined);
+    } else if (rig) {
+      postStack.dropView(rig.camera);
+    }
     opts.onModeChange?.(mode);
   };
   const pose = createCameraPose(camera, {
@@ -2888,7 +2904,7 @@ async function bootApp(
       return;
     }
     postStack
-      .holdCut(cuts.group, [cuts.group])
+      .holdCut(cuts.group, [cuts.group], modelRig.camera)
       .then(() => {
         if (request === cutRequest && !disposed) {
           cuts.reveal();

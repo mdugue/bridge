@@ -1,15 +1,13 @@
 import {
-  CubeUVReflectionMapping,
+  CubeCamera,
+  CubeRenderTarget,
   HalfFloatType,
-  LinearFilter,
+  LinearMipmapLinearFilter,
   LinearSRGBColorSpace,
-  PMREMGenerator,
-  RenderTarget,
-  RGBAFormat,
   type Scene,
   type WebGPURenderer,
 } from "three/webgpu";
-import { dot, float, pmremTexture, reflect } from "three/tsl";
+import { cubeTexture, dot, float, reflect } from "three/tsl";
 import type { F, V3 } from "./shader-chunks";
 import { viewDirection } from "./view-direction";
 
@@ -20,11 +18,15 @@ import { viewDirection } from "./view-direction";
  * The scene has no environment map on purpose — set on the scene, one
  * would light every surface with its diffuse irradiance too and lift the
  * clay out of its matte look. So the reflection is a term of its own,
- * sampled only by the few materials that mirror: a PMREM of the sky dome
- * alone (the sun rig keeps a second `SkyMesh` in a scene of its own,
- * fed the same sun and haze), 64 px a cube face — the sky is a soft
- * gradient, a larger map would only cost memory (336 × 256 half float,
- * ≈ 0.7 MB, and the generator's ping-pong target as much again).
+ * sampled only by the few materials that mirror: a cube map of the sky
+ * dome alone (the sun rig keeps a second `SkyMesh` in a scene of its own,
+ * fed the same sun and haze), 64 px a face, its mip chain the blur.
+ *
+ * Not three's PMREMGenerator: since r187 it renders cube targets of at
+ * least 256 px a face plus a source cube as large (≈ 10 MB), where the
+ * mirrors read a soft gradient at roughness 0.15–0.3 — a GGX lobe a few
+ * texels wide, which the box-filtered mips of a small cube match. This
+ * one holds 6 × 64² half floats with mips and a depth buffer, ≈ 0.4 MB.
  *
  * It mirrors the sky only, never the city: what lies across the street
  * would take screen-space reflections or baked probes, both far dearer.
@@ -41,30 +43,22 @@ import { viewDirection } from "./view-direction";
 /** Cube face edge in texels. */
 const CUBE_SIZE = 64;
 
-function createTarget(): RenderTarget {
-  // As PMREMGenerator allocates its own (its _createRenderTarget), so the
-  // generator renders into it and PMREMNode reads it as a ready PMREM.
-  const target = new RenderTarget(
-    3 * Math.max(CUBE_SIZE, 16 * 7),
-    4 * CUBE_SIZE,
-    {
-      magFilter: LinearFilter,
-      minFilter: LinearFilter,
-      generateMipmaps: false,
-      type: HalfFloatType,
-      format: RGBAFormat,
-      colorSpace: LinearSRGBColorSpace,
-      depthBuffer: true,
-    }
-  );
-  target.texture.mapping = CubeUVReflectionMapping;
+/**
+ * The mip a roughness of 1 reads: three's PMREM convention, whose
+ * roughest level is 8 px a face (log2 64 − 3), so a roughness maps to
+ * the same blur it did through PMREMNode (`roughnessToMip`).
+ */
+const MAX_LOD = Math.log2(CUBE_SIZE) - 3;
+
+function createTarget(): CubeRenderTarget {
+  const target = new CubeRenderTarget(CUBE_SIZE, {
+    minFilter: LinearMipmapLinearFilter,
+    generateMipmaps: true,
+    type: HalfFloatType,
+    colorSpace: LinearSRGBColorSpace,
+    depthBuffer: true,
+  });
   target.texture.name = "SkyReflection";
-  // reason: PMREMNode takes a texture flagged so as a finished PMREM;
-  // the flag is missing from Texture's @types.
-  (
-    target.texture as typeof target.texture & { isPMREMTexture: boolean }
-  ).isPMREMTexture = true;
-  target.scissorTest = true;
   return target;
 }
 
@@ -74,8 +68,10 @@ const target = createTarget();
  *  reads: the full sky, fixed since its slider went (plan 073). */
 export const REFLECTIONS: F = float(1);
 
-/** GPU bytes the reflection holds: its map and the generator's ping-pong. */
-export const SKY_REFLECTION_BYTES = 2 * target.width * target.height * 8;
+/** GPU bytes the reflection holds: six faces of half-float RGBA with
+ *  their mips (a third more) and a 32-bit depth buffer. */
+export const SKY_REFLECTION_BYTES =
+  6 * CUBE_SIZE * CUBE_SIZE * ((8 * 4) / 3 + 4);
 
 /**
  * The sky seen in a mirror with world normal `n`, blurred by `roughness`
@@ -84,8 +80,12 @@ export const SKY_REFLECTION_BYTES = 2 * target.width * target.height * 8;
  */
 export function skyReflection(n: V3, roughness: F | number): V3 {
   const incident = viewDirection();
-  const level = typeof roughness === "number" ? float(roughness) : roughness;
-  return pmremTexture(target.texture, reflect(incident, n), level);
+  const r = (
+    typeof roughness === "number" ? float(roughness) : roughness
+  ).clamp(0, 1);
+  return cubeTexture(target.texture, reflect(incident, n)).level(
+    r.mul(float(2).sub(r)).mul(MAX_LOD)
+  ).rgb;
 }
 
 /**
@@ -105,8 +105,8 @@ const MIN_TURN = (0.5 * Math.PI) / 180;
 /**
  * Least time (ms) between two renders while the time of day is dragged:
  * a drag turns the sun by degrees a step, and each render is the dome on
- * six faces and the generator's blur, some twenty passes — four a second
- * keep the mirrors moving with the sky.
+ * six faces and their mips — four a second keep the mirrors moving with
+ * the sky.
  */
 const PREVIEW_INTERVAL_MS = 250;
 
@@ -128,12 +128,14 @@ export interface SkyReflection {
   dispose: () => void;
 }
 
-/** The app's reflection: a generator over the module's one target. */
+/** The app's reflection: a cube camera over the module's one target. */
 export function createSkyReflection(
   renderer: WebGPURenderer,
   skyScene: Scene
 ): SkyReflection {
-  const generator = new PMREMGenerator(renderer);
+  // The dome sits at the cube camera (its own onBeforeRender), 4.5 km
+  // across: near and far keep it whole.
+  const camera = new CubeCamera(1, 10_000, target);
   let last: Direction | null = null;
   let next: Direction = { x: 0, y: 1, z: 0 };
   let renderedAt = Number.NEGATIVE_INFINITY;
@@ -149,12 +151,16 @@ export function createSkyReflection(
     }
     last = sun;
     renderedAt = performance.now();
-    // The dome sits at the cube camera (its own onBeforeRender), 4.5 km
-    // across: near and far keep it whole.
-    generator.fromScene(skyScene, 0, 1, 10_000, {
-      size: CUBE_SIZE,
-      renderTarget: target,
-    });
+    // Every face cleared whatever the app's clear settings, as three's
+    // own PMREMGenerator.fromScene does.
+    const { autoClear, autoClearColor, autoClearDepth } = renderer;
+    renderer.autoClear = true;
+    renderer.autoClearColor = true;
+    renderer.autoClearDepth = true;
+    camera.update(renderer, skyScene);
+    renderer.autoClear = autoClear;
+    renderer.autoClearColor = autoClearColor;
+    renderer.autoClearDepth = autoClearDepth;
   };
   const cancel = () => {
     if (timer !== null) {
@@ -185,7 +191,6 @@ export function createSkyReflection(
     },
     dispose: () => {
       cancel();
-      generator.dispose();
       target.dispose();
     },
   };

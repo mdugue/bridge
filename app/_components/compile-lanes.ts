@@ -16,6 +16,40 @@
  * walk that waits for it — none of them uploaded that drawable.
  */
 
+/**
+ * The compiles in flight on each renderer, the last one queued.
+ */
+const turns = new WeakMap<object, Promise<void>>();
+
+/**
+ * Runs `start` once every compile queued before it on `renderer` has
+ * settled, and resolves as the compile it starts does. `start` makes the
+ * `compileAsync` call itself, with whatever it sets up for the call's
+ * synchronous half (the target, a swap, a clipping group) and puts back
+ * right after.
+ *
+ * Two compiles must never be in flight at once: three's `compileAsync`
+ * (r187) holds the compile in progress as renderer state — the target,
+ * the call depth, the render context — and takes it out and puts it back
+ * around every await inside a build, so a second compile resumes inside
+ * the first one's state, finishes it for it, and the first then throws
+ * (`_finishPreCompile` of a null state) or builds against the wrong
+ * context. Within one call three still compiles the GPU pipelines side by
+ * side.
+ */
+export function compileInTurn(
+  renderer: object,
+  start: () => Promise<void>
+): Promise<void> {
+  const before = turns.get(renderer) ?? Promise.resolve();
+  const compiling = before.then(start);
+  turns.set(
+    renderer,
+    compiling.catch(() => undefined)
+  );
+  return compiling;
+}
+
 /** A drawable's step as the record holds it: the material it compiled
  *  for, and the step itself. */
 export interface Compiling {

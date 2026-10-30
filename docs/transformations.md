@@ -1547,8 +1547,9 @@ visual-variable codebook is in
   glass and metal set object flags (4, 8; a part takes its root's): the
   clay turns a little cooler (×(0.93, 0.99, 1.07), metal at 60 %) and
   smoother (roughness 0.42 glass, 0.5 metal), and glass mirrors the sky
-  (*Spiegelung*, `sky-reflection.ts`: a PMREM of the sky dome, 10 % face
-  on to all of it at a grazing view; metal a third as much; fixed at full,
+  (*Spiegelung*, `sky-reflection.ts`: a mipmapped cube map of the sky
+  dome, 10 % face on to all of it at a grazing view; metal a third as
+  much; fixed at full,
   `REFLECTIONS` — below it the old pale Fresnel³ sheen at the rim's
   strength would show). No panes, no mullions, no texture
   and no drawn windows (*Windows on every house* leaves glass and metal
