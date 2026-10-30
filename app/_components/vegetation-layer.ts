@@ -79,7 +79,6 @@ import {
   crownWarmup,
   type SeasonalCrowns,
   seasonCrowns,
-  VEIL_COLOR,
 } from "./crown-season";
 import {
   type ChunkLodState,
@@ -845,17 +844,23 @@ export function buildCrownMaterial(
   const gust = varying(sway.gust);
   const tinted = materialColor.mul(instanceTint());
   if (!bare) {
-    const lit = crownLight(u, printedCrown(tinted, float(0)), gust, crownScale);
+    const lit = crownLight(
+      u,
+      printedCrown(tinted, tinted, float(0)),
+      gust,
+      crownScale
+    );
     m.colorNode = lit.colour;
     m.emissiveNode = lit.emissive.mul(float(1).sub(crownsPrinted));
     return m;
   }
   const season = crownSeasonNodes();
   m.maskNode = season.keep;
+  m.maskShadowNode = season.keepShadow;
   const kept = mix(tinted, season.twigColour, season.twig);
   const lit = crownLight(
     u,
-    printedCrown(mix(kept, VEIL, season.veil), season.twig),
+    printedCrown(mix(kept, season.veilColour, season.veil), kept, season.twig),
     gust,
     crownScale
   );
@@ -876,18 +881,18 @@ export function buildCrownMaterial(
  * wall and got the wall's dot screen, which shimmered with every sway.
  */
 const MARK_LEAFY = vec3(0, 0.9, 0.24);
-const VEIL = vec3(...new Color(VEIL_COLOR).toArray());
 const MARK_AUTUMN = vec3(0.95, 0.72, 0);
-const MARK_BARE = vec3(0.9, 0.4, 0);
+const MARK_BARE = vec3(0.9, 0.2, 0);
 
-/** The crown's colour, or its marker ink while the crowns are printed: an
+/** The crown's colour `shown`, or its marker ink while the crowns are
+ *  printed, told on its kept cells' colour (`kept`, before any veil): an
  *  autumn crown (red over green) yellow; a mostly bare one, or one in
  *  blossom (blue over green: pink or white), the paper's ink. */
-function printedCrown(colour: V3, twig: F): V3 {
-  const leaf = mix(MARK_LEAFY, MARK_AUTUMN, step(colour.y, colour.x));
-  const pale = max(step(0.5, twig), step(colour.y, colour.z));
+function printedCrown(shown: V3, kept: V3, twig: F): V3 {
+  const leaf = mix(MARK_LEAFY, MARK_AUTUMN, step(kept.y, kept.x));
+  const pale = max(step(0.5, twig), step(kept.y, kept.z));
   const mark = mix(leaf, MARK_BARE, pale);
-  return mix(colour, mark, crownsPrinted);
+  return mix(shown, mark, crownsPrinted);
 }
 
 /**

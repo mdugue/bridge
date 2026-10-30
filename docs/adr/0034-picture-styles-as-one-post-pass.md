@@ -38,7 +38,7 @@ edges. ADR 0010 closed the path of one material per style.
 5. **A still view is still, a move moves smoothly.** Nothing a style
    draws may change between two frames of a still camera, or flip in a
    sub-pixel step: a screen too fine for its pixel gives way to its mean
-   tone, a step a pixel or two tall draws no line, and no screen slides
+   tone, a step a few pixels tall draws no line, and no screen slides
    over moving geometry — a crown is printed flat, or the style holds it
    still (`sway`). Measured, not judged by eye (the `flicker-probe`
    skill).

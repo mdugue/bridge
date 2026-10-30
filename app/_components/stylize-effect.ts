@@ -312,7 +312,7 @@ const POP = {
 
 /** A step this many device pixels tall (from, to) begins to draw its
  *  line, and draws it whole (`edgeAxis`, `low`). */
-const LOW_STEP_PX = { x: 1.2, y: 2.6 };
+const LOW_STEP_PX = { x: 1.8, y: 3.6 };
 /** A dot of the screen spans about this many CSS pixels, at any distance. */
 const DOT_CSS = 4;
 /** The sun's world height (sin of its altitude) where `inSun` has faded
@@ -549,7 +549,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const cell0 = exp2(l0).mul(SCREEN_BASE_M).toVar();
     // the pixel's longer axis, in metres: across a grazing street it is
     // many times `mpp`
-    const major = max(fwidth(q.x), fwidth(q.y)).toVar();
+    const major = max(length(dFdx(q)), length(dFdy(q))).toVar();
     // A cell the pixel's long axis spans half of or more is sampled too
     // coarsely to draw: its dots or lines beat against the pixels and
     // crawl with every step. It gives way to its mean tone before then,
@@ -662,12 +662,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     if (!low) {
       return vec2(silhouette, crease);
     }
-    const ya = viewToWorld.mul(
-      getViewPosition(at.sub(s), da, inverseProjection)
-    ).y;
-    const yb = viewToWorld.mul(
-      getViewPosition(at.add(s), db, inverseProjection)
-    ).y;
+    // (the world's up in view space: no full turn into the world)
+    const ya = dot(getViewPosition(at.sub(s), da, inverseProjection), upView);
+    const yb = dot(getViewPosition(at.add(s), db, inverseProjection), upView);
     // (heights from the eye; both in pixels at the nearer tap)
     const mpp = metresPerPixel(min(za, zb));
     const stepPx = abs(ya.sub(yb)).div(mpp);
@@ -958,13 +955,13 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // the hue, its light in the value. Printed flat — green, an autumn one
     // yellow, a bare one the paper — and shaded in one step, never dotted:
     // a screen on a swaying crown shimmers.
-    const printed = smoothstep(0.62, 0.8, saturation).toVar();
+    const printed = smoothstep(0.82, 0.92, saturation).toVar();
     const crownLit = aaStep(0.3, hcv.z);
     const printInk = mix(
       mix(
         mix(POP.paperShade, POP.paper, crownLit),
         mix(POP.orange, POP.yellow, crownLit),
-        step(0.1, hue)
+        step(0.08, hue)
       ),
       mix(POP.greenDeep, POP.green, crownLit),
       step(0.2, hue)

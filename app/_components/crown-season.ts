@@ -80,7 +80,7 @@ export const CROWN_BASE_COLOR = 0xa6_bf_92;
 const TWIG_COLOR = 0x9a_8f_80;
 /** What a bare crown drawn whole shows for its stipple's gaps: a pale
  *  haze of the pastel ground and sky behind it (`veil`). */
-export const VEIL_COLOR = 0xd8_d6_cc;
+const VEIL_COLOR = 0xd8_d6_cc;
 /** Fraction of a bare crown's surface kept as twigs. */
 const TWIG_DENSITY = 0.25;
 /**
@@ -159,8 +159,12 @@ export function crownThreshold(p: V3, seed: V3): F {
 /** The seasonal crown's nodes (crownSeasonNodes). */
 export interface CrownSeasonNodes {
   /** false where the leaf cover drops the fragment: the material's
-   *  `maskNode`, which the shadow pass honours too */
+   *  `maskNode` */
   keep: Node<"bool">;
+  /** the stipple's own mask, never drawn whole: the material's
+   *  `maskShadowNode`, so a crown drawn whole on the screen still casts
+   *  its thin shadow, whatever the style or the shadow camera's texel */
+  keepShadow: Node<"bool">;
   /** how much of the fragment is twig (0 leaf or 1 twig): the lit pass
    *  tints it grey-brown and takes its shimmer away */
   twig: F;
@@ -168,9 +172,11 @@ export interface CrownSeasonNodes {
    *  `twig` */
   twigColour: V3;
   /** how much of a crown drawn whole is the gaps its stipple would have
-   *  shown: mixed towards `VEIL_COLOR`, so it reads as light as the
+   *  shown: mixed towards `veilColour`, so it reads as light as the
    *  stipple did, not as a dark solid of twigs */
   veil: F;
+  /** the veil's colour (linear) */
+  veilColour: V3;
 }
 
 /**
@@ -206,16 +212,21 @@ export function crownSeasonNodes(): CrownSeasonNodes {
   // trees twinkled in a still frame). The mean is its kept cells' leaf
   // and twig colours over its cover, the rest the pale veil.
   const footprint = max(length(dFdx(cell)), length(dFdy(cell)));
-  const whole = max(smoothstep(WHOLE_FROM, WHOLE_AT, footprint), crownsPrinted);
+  const whole = max(
+    smoothstep(WHOLE_FROM, WHOLE_AT, footprint),
+    crownsPrinted
+  ).toVar("crownWhole");
   const leafy = float(1).sub(bare);
   const isBare = bare.greaterThan(BARE_EPS);
   const twig = new Color(TWIG_COLOR);
+  const veil = new Color(VEIL_COLOR);
   // the stipple's cover, and the twigs' share of it
   const cover = max(leafy, TWIG_DENSITY);
   return {
     keep: isBare
       .not()
       .or(cellH.lessThan(max(leafy, mix(float(TWIG_DENSITY), 1, whole)))),
+    keepShadow: isBare.not().or(cellH.lessThan(max(leafy, TWIG_DENSITY))),
     twig: select(
       isBare,
       mix(step(leafy, cellH), cover.sub(leafy).div(cover), whole),
@@ -223,6 +234,7 @@ export function crownSeasonNodes(): CrownSeasonNodes {
     ),
     twigColour: vec3(twig.r, twig.g, twig.b),
     veil: select(isBare, float(1).sub(cover).mul(whole), float(0)),
+    veilColour: vec3(veil.r, veil.g, veil.b),
   };
 }
 
