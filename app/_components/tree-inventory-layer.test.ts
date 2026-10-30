@@ -186,7 +186,6 @@ test("empty input builds nothing and vetoes nothing; the control still works", (
   expect(() => built.control.applyLook(LOOK_DEFAULTS)).not.toThrow();
   expect(built.control.updateLod(new Vector3(5, 100, 0))).toBe(true);
   expect(built.control.updateLod(new Vector3(5, 100, 0))).toBe(false);
-  built.control.setTime(1);
 });
 
 test("a deciduous silhouette bares in winter, a conifer never", () => {

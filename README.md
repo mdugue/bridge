@@ -15,7 +15,7 @@ with [three.js](https://threejs.org) (`WebGPURenderer` and TSL node
 materials) — a start page and one route per city (`/dresden`, `/leipzig`,
 …), no backend, no database, no accounts; nothing persisted but what
 the browser keeps for itself (the crash trail, the device's GPU safety
-level — ADR 0046 —, a few preferences; the full list is on `/datenschutz`).
+level — ADR 0047 —, a few preferences; the full list is on `/datenschutz`).
 
 ## Prerequisites
 
@@ -98,7 +98,7 @@ sent.
 are MDX pages, `app/(legal)/*/page.mdx` (`@next/mdx`), and name this
 deployment's operator, host (Vercel) and tracker (Sentry, EU region) —
 a deployment of your own edits them. Visitors turn the reports off on
-the privacy page ([ADR 0045](docs/adr/0045-legal-pages-from-the-deployment.md)).
+the privacy page ([ADR 0043](docs/adr/0043-crash-and-page-reports-to-an-error-tracker.md)).
 
 ## Data
 
@@ -218,8 +218,8 @@ changing that hook means updating [`e2e/`](e2e).
 - [docs/guide](docs/guide/README.md) — for users and non-developers, in
   English and German: how it works, where the data comes from, the data's
   journey to the browser, using the viewer, and a glossary.
-- [AGENTS.md](AGENTS.md) — orientation: stack, commands, conventions, the
-  coordinate frame, and the rendering gotchas worth not relearning.
+- [AGENTS.md](AGENTS.md) — orientation: stack, commands, conventions and
+  the hard rules (the coordinate frame, the rendering traps).
 - [docs/](docs/README.md) — the knowledge base: how data becomes pixels
   ([rendering](docs/rendering.md)), the bakes and the build step
   ([data-pipeline](docs/data-pipeline.md)), what maps to what

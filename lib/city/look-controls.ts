@@ -42,7 +42,7 @@ export interface LookControlDef {
  * show them), the two controls that are not percent sliders, and one flag
  * per data layer (data-layers.ts). The look's other terms have no control:
  * each is a named constant in its owner, fixed at what its slider stood at
- * by default (ADR 0017, amended 2026-10).
+ * by default (ADR 0018).
  */
 export interface LookValues
   extends Record<LookKey, number>, Record<DataLayerKey, boolean> {

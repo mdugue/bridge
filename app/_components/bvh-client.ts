@@ -99,8 +99,9 @@ function startWorker(): Worker | null {
   started = new Promise<boolean>((resolve) => {
     markStarted = resolve;
   });
+  let w: Worker;
   try {
-    worker = new Worker(new URL("./bvh-worker.ts", import.meta.url), {
+    w = new Worker(new URL("./bvh-worker.ts", import.meta.url), {
       type: "module",
       name: "bvh",
     });
@@ -109,7 +110,12 @@ function startWorker(): Worker | null {
     markStarted?.(false);
     return null;
   }
-  worker.onmessage = ({ data }: MessageEvent<BvhReply>) => {
+  worker = w;
+  // a stopped worker's last word is not about the one now running
+  w.onmessage = ({ data }: MessageEvent<BvhReply>) => {
+    if (worker !== w) {
+      return;
+    }
     if (data.ready) {
       markStarted?.(true);
       return;
@@ -119,23 +125,46 @@ function startWorker(): Worker | null {
     settle?.(data);
   };
   // the arrays of a reply that cannot be read are lost: so is the worker
-  worker.onmessageerror = () => dieOut();
-  worker.onerror = (event) => {
-    event.preventDefault();
-    dieOut();
+  w.onmessageerror = () => {
+    if (worker === w) {
+      dieOut();
+    }
   };
-  return worker;
+  w.onerror = (event) => {
+    event.preventDefault();
+    if (worker === w) {
+      dieOut();
+    }
+  };
+  return w;
 }
 
-function dieOut(): void {
-  broken = true;
+/** Ends the worker; every build still away settles as lost. */
+function shutDown(): void {
   markStarted?.(false);
   worker?.terminate();
   worker = null;
+  started = null;
   for (const [id, settle] of settles) {
     settles.delete(id);
     settle(null);
   }
+}
+
+function dieOut(): void {
+  broken = true;
+  shutDown();
+}
+
+/**
+ * Stops the worker before the page reloads (create-app.ts `stopWorkers`,
+ * once the stream is gone): the building tiles' arrays in its heap go
+ * now, not when the old document is collected. A build still away
+ * settles as lost (its tile went with the scene); a later build starts a
+ * new worker.
+ */
+export function stopBvhWorker(): void {
+  shutDown();
 }
 
 /** Whether a typed array is all of its buffer (can be handed over). */

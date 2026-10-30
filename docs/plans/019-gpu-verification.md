@@ -16,7 +16,7 @@
 
 ## Status
 
-- **Priority**: P1 — everything since the 3D Tiles switch (ADRs 0023–0035)
+- **Priority**: P1 — everything since the 3D Tiles switch (ADRs 0009–0041)
   was verified headless only (SwiftShader through the WebGL2 backend, lite
   profile)
 - **Effort**: M (one to two days of looking, plus the tuning it finds);
@@ -34,7 +34,7 @@
 
 The viewer is WebGPU-first with TSL node materials (ADR 0027), streams the
 site as 3D Tiles with a TIN fine terrain (ADRs 0024, 0030), lights the
-ground from a baked sky view and horizon (ADR 0031), draws picture styles
+ground from a baked sky view and horizon (ADR 0009), draws picture styles
 in one post pass (ADR 0034), and keeps phones alive with a memory governor
 and a GPU-loss reload. None of it has been looked at on a real GPU: the CI
 renders through SwiftShader's WebGL2 backend, which shows shadows,
@@ -85,7 +85,7 @@ bun dev        # bakes public/data, then serves https://localhost:3000 (self-sig
   mirrored — fixed in `6b9343f`, re-check; contour ink; water).
 - Knob: none — a difference is a bug; report it with both plates.
 
-### B. Palette (ADR 0023)
+### B. Palette (ADR 0010)
 
 - [ ] `shore-eye`, `meadow-eye`: the class colours read as intended at eye
   level; the shoreline feather is soft (the water alpha is a 3×3 tent over
@@ -124,7 +124,7 @@ bun dev        # bakes public/data, then serves https://localhost:3000 (self-sig
 - [ ] Fly up from eye level to 600 m: the shadow frustum grows in octaves
   (`lib/city/shadow-fit.ts`, 110 → 880 m) without visible jumps; the
   shadowed patch sits where the camera looks.
-- [ ] Past the frustum, the baked horizon (ADR 0031) takes over without a
+- [ ] Past the frustum, the baked horizon (ADR 0009) takes over without a
   seam: the near band fades in over the frustum's last 20 %
   (`hzSunVisible`, sky-light.ts); look at the hand-over ring at a low sun.
 - [ ] Eye-level shadows clip ahead at a low sun? If long shadows visibly
@@ -141,7 +141,7 @@ bun dev        # bakes public/data, then serves https://localhost:3000 (self-sig
 - [ ] GTAO's contact shadows at feet, kerbs, benches and facades: present,
   smooth (the 5×5 depth-aware box, `post-stack.ts` `aoSmoothed`), no
   speckle; compare with the plates of the WebGPU spike if you have them.
-- [ ] Sky view (ADR 0031) and GTAO together: no double darkening in narrow
+- [ ] Sky view (ADR 0009) and GTAO together: no double darkening in narrow
   courtyards and street canyons; decide whether *Boden-Verlauf* (`uAO`,
   `app/_components/visual-style.ts`) is still needed next to the sky view,
   or retire it.
@@ -194,7 +194,7 @@ On the dev server over the LAN (`bun dev` serves HTTPS for exactly this):
   `scene-profile.ts`).
 - [ ] A forced GPU loss (background the tab under memory pressure, or a
   heavy flight) reloads in place, a safety level lighter, and restores the
-  view; it does not loop (ADR 0046 — the details are section M).
+  view; it does not loop (ADR 0047 — the details are section M).
 - [ ] Locate me and live mode with the compass; a minimap jump ends live
   mode (plan 038 step 5).
 
@@ -229,7 +229,7 @@ with *Bodendetail* at 0, 0.7 (default) and 1.
 - [ ] **Asphalt road with a lawn** — 413 456 / 5 657 131 (33412_5656). Kerb
   width and contrast, the lawn lip, any parking lane with its bays. Good:
   the kerb stone (12 cm, 24 cm wide) meets the pavement without a second
-  step and its foot does not float over the gutter (ADR 0035); the lawn
+  step and its foot does not float over the gutter (ADR 0030); the lawn
   edge is a soft lip, not a dark line; parking bays faint and straight.
   Tune kerb width/contrast and the gutter darkening if it reads as a
   stripe.
@@ -446,7 +446,7 @@ the date in the HUD (the Snapshot carries it).
   9.7 % over the DLM road class, which includes pavements.)
 - [ ] **Ground join** (the worst places `bun scripts/ground-joins.ts` prints
   for fences; oblique, walking height): the band's foot never floats
-  over a dip or ends in the air on a slope (ADR 0035); a seam of tile
+  over a dip or ends in the air on a slope (ADR 0030); a seam of tile
   edges shows no ruler-straight fence along it.
 - [ ] **Phone** (a real phone, walking height and fly mode): the band stays
   calm — the drawn panels failed exactly here.
@@ -629,7 +629,7 @@ atmospheric motes (7), the geometry kit's winding unification (21, plan
 046's maintenance note: needs a headed before/after comparison), and a
 user-facing quality tier (Direction 5).
 
-### M. The phone crash fixes (2026-10-06, ADRs 0046–0048)
+### M. The phone crash fixes (2026-10-06, ADRs 0047–0048)
 
 Built and unit-tested headless only (SwiftShader, WebGL2): nothing below
 has run on WebGPU or on a phone. On the iPhone keep a cabled Web Inspector
@@ -713,7 +713,7 @@ desktop use Chrome with WebGPU and repeat with `?gpu=webgl2`.
   the plates of both backends.
 - GPU memory keeps climbing across repeated flights.
 - A phone reloads more than once per safety level, or loses its GPU again
-  at the next level for the same view (ADR 0046).
+  at the next level for the same view (ADR 0047).
 
 ## Findings
 

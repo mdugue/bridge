@@ -431,7 +431,6 @@ export function* treeInventorySteps(
   group.name = "tree-inventory";
   // The scene's crown materials and uniforms, as the canopy's (sceneCrowns).
   const crownMats = sceneCrowns(ctx.sunDirection);
-  const u = crownMats.uniforms;
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   const counts = Object.fromEntries(CROWN_SHAPES.map((k) => [k, 0])) as Record<
     CrownShape,
@@ -491,9 +490,6 @@ export function* treeInventorySteps(
       multiTuft: () => multiTuft,
       applyLook: (look) => {
         multiTuft = look.multiTuft;
-      },
-      setTime: (seconds) => {
-        u.time.value = seconds;
       },
       setSeason: (day) => applySeasons(seasons, day),
       // Same rule as the canopy (vegetation-layer.ts swapCrownLod).

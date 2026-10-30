@@ -19,7 +19,7 @@
  * lower one's is inside the higher, the higher one's shows above the lower
  * roof — the step. Ground beside the building higher than the base: the
  * walls run into it, as the LoD2 walls did; lower: the base is the LoD2's,
- * which already reached the lowest ground under the footprint (ADR 0035).
+ * which already reached the lowest ground under the footprint (ADR 0030).
  */
 import Delatin from "delatin";
 import Delaunator from "delaunator";

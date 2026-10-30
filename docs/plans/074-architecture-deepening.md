@@ -43,7 +43,7 @@ about ten static parts on the main thread inside `buildDressing`
 (`tile-stream.ts`): rails, tram, riverside, bridge decks and their
 superstructure, furniture, monuments, lamps, sport fixtures, cultivated
 rows, hedges — and then compiles them. None of it depends on the viewer's
-state beyond the look's uniforms. ADR 0029 already moved walls, kerbs,
+state beyond the look's uniforms. ADR 0030 already moved walls, kerbs,
 stairs and fences into the fine glTF and named rails as the next
 candidate once deck heights were solved by the build — ADR 0041 did that
 (`scripts/line-levels.ts`).
@@ -148,7 +148,7 @@ of `SceneSidebar` while streaming, before and after.
 Per part: its spike's numbers recorded in this file's Findings; the part
 built or rejected with the reason; `bun run verify` and the e2e suite
 green; docs (`docs/rendering.md`, `docs/data-pipeline.md`, AGENTS.md "Where
-things live", ADR 0029 amended for part A) current.
+things live", ADR 0030 amended for part A) current.
 
 ## Findings
 
@@ -199,7 +199,7 @@ factory with a prologue of injected functions, a bigger framework than
 the three features need.
 
 **What was kept** (`refactor(scene)`, byte-neutral as measured: +97 B
-gz; the decision is ADR 0051): the seam itself. `feature-seam.ts` — the
+gz; the decision is ADR 0040): the seam itself. `feature-seam.ts` — the
 spine's hooks (`frame`, `streamChange`, the look store, the scene's
 clock as a watched value a late starter reads first), `lazyFeature` (starts once, on first want;
 never after the spine is gone; a failed load asked for again — by the

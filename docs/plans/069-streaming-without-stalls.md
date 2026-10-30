@@ -432,7 +432,7 @@ out to need more than these filters, STOP and report.
       counted, step 7 ungated): `crash-trail.ts`/`crash-reports.ts` (lib),
       `terrain-tin.ts`, `terrain-layer.ts`, `three-utils.ts`,
       `collision.ts`, `city-layer.ts`'s picks, `inquiry-probe.ts`,
-      `main-yield.ts`, the privacy page, ADR 0050
+      `main-yield.ts`, the privacy page, ADR 0024
 
 ## STOP conditions
 
@@ -612,6 +612,6 @@ build (branch 2: 7.2 s of it); otherwise the lite boot has nothing left on
 the main thread after its ground lands (`boot:scene-compile` 0.02–0.04 s),
 and the build ran 3× slower in the worker beside the frames that keep
 rendering on SwiftShader's CPU meanwhile. The worker also costs the first
-load 20.8 KB gz (ADR 0051's chunk effect: three's core and three-mesh-bvh
+load 20.8 KB gz (ADR 0040's chunk effect: three's core and three-mesh-bvh
 left the scene's scope). Stopped there: plan 043's 2026-10-11 findings
 have the numbers, the five options and the rest.

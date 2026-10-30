@@ -23,7 +23,7 @@
 
 ## Why this matters
 
-The privacy page (`/datenschutz`, which ADR 0045 makes part of the code)
+The privacy page (`/datenschutz`, which ADR 0043 makes part of the code)
 says "Dein Standort verlässt dein Gerät nie" and, under *Standort und
 Kompass*, "nie an mich oder Dritte gesendet; auch die Fehlerberichte
 enthalten es nicht". The guide repeats it in both languages, and
@@ -364,7 +364,7 @@ Stop and report back (do not improvise) if:
 ## Maintenance notes
 
 - Anything that ever puts a *position* in a URL again must use the
-  fragment and must be named on the privacy page (ADR 0045) — this plan is
+  fragment and must be named on the privacy page (ADR 0043) — this plan is
   the precedent.
 - `TRAIL_QUERY` is the one list of query knobs the trail records; a new
   `?knob` worth seeing in a crash record is added there, with its name on
