@@ -12,7 +12,12 @@ import { latLngToUtm, utmToLatLng } from "@/lib/city/crs";
 import { detectGeoreference, utmZone } from "@/lib/city/design-placement";
 import { readDxf } from "@/lib/city/dxf";
 import { readLandXml } from "@/lib/city/landxml";
-import { PLAN_LOOKS, type PlanClass } from "@/lib/city/plan-classes";
+import type { DesignPartInfo } from "@/lib/city/inquiry-design";
+import {
+  PLAN_LOOKS,
+  type PlanClass,
+  type PlanLook,
+} from "@/lib/city/plan-classes";
 import {
   type PlanFeature,
   type PlanPoint,
@@ -62,6 +67,14 @@ const CLASS_WORDS: Record<PlanClass, string> = {
   tree: "Bäume",
   terrain: "Gelände",
 };
+
+/** A look's word on a question's card. */
+function lookWord(look: PlanLook): string {
+  if (look === "tree" || look === "trunk") {
+    return "Baum";
+  }
+  return look === "other" ? "Fläche ohne Zuordnung" : CLASS_WORDS[look];
+}
 
 /** A file picked with `main` by its extension (same name first). */
 function sibling(main: File, files: readonly File[], ext: string) {
@@ -402,7 +415,15 @@ export async function readPlan(
     material.name = group.cls;
     // ground: it does not stand in for a house (design-cover.ts)
     material.userData.planGround = group.cls !== "building";
-    root.add(new Mesh(geometry, material));
+    const mesh = new Mesh(geometry, material);
+    // what a question's card calls it (lib/city/inquiry-design.ts)
+    mesh.userData.designPart = {
+      name: null,
+      type: lookWord(group.cls),
+      id: null,
+      material: null,
+    } satisfies DesignPartInfo;
+    root.add(mesh);
   }
   // the plan's origin in the design frame (x east, z south); doubles
   root.matrixAutoUpdate = false;

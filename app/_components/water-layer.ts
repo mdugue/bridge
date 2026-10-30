@@ -52,6 +52,7 @@ import {
   WATER_SHEET,
   type WaterLook,
 } from "@/lib/city/water-bodies";
+import { groundUnderDesign } from "./design-site";
 import { lampNight } from "./lamp-layer";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
 import { type SplatLayer, splatUv } from "./terrain-layer";
@@ -408,6 +409,8 @@ export function createWaterLayer(
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1,
   });
+  // under a planner's design, with the ground (design-site.ts)
+  material.positionNode = groundUnderDesign;
   // A widened, feathered band dissolves the bank instead of stair-stepping.
   const wcov = smoothstep(0.28, 0.72, texture(splat.colorTexture, uv).a);
   material.maskNode = wcov.greaterThan(0.001);

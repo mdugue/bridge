@@ -20,6 +20,7 @@ import {
 } from "three/tsl";
 import type { SiteMask } from "@/lib/city/design-cover";
 import type { RecenterOffset } from "@/lib/city/ground-clamp";
+import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import type { F, V2, V3 } from "./shader-chunks";
 
 /**
@@ -33,10 +34,13 @@ import type { F, V2, V3 } from "./shader-chunks";
  *   furniture, monuments, …) folds an instance standing in it into its
  *   foot, drawn as nothing and casting nothing;
  * - the ground and what is baked into it (terrain, walls, kerbs, stairs,
- *   fences) is pressed down to just under the design there — a sloping
- *   plate's slope, a house's lowest floor —, so no hump, wall or step
- *   comes through it; the tiles under it also cut what a triangle
- *   reaching out of the site lifts through it (`groundKeptUnderDesign`).
+ *   fences) and the water are pressed down to just under the design
+ *   there — a sloping plate's slope, a house's lowest floor —, so no
+ *   hump, wall, step or river comes through it; the tiles under it also
+ *   cut what a triangle reaching out of the site lifts through it
+ *   (`groundKeptUnderDesign`);
+ * - the tracks, their ballast and platforms likewise, where they lie
+ *   near its floor (a line on a bridge over it stays).
  *
  * One set of uniforms for the site, read behind a uniform branch: without
  * a design the vertex stages pay one comparison. The raster is made when
@@ -109,16 +113,37 @@ export function outOfDesignSite(placed: V3, origin: V3): V3 {
   return mix(placed, origin, inDesignSite(foot.xz));
 }
 
-/** The ground's vertex pressed under the design where it reaches (its
- *  lowest height there; the mesh's own frame in, and out: a quantised
- *  glTF's too) — one node for every ground material. */
-export const groundUnderDesign = Fn(() => {
-  const world = modelWorldMatrix.mul(vec4(positionLocal, 1)).xyz.toVar();
-  const texel = siteTexel(world.xz);
-  const pressed = min(world.y, texel.x.sub(SITE_UNDER_M));
-  const y = mix(world.y, pressed, step(0.25, texel.y));
-  return modelWorldMatrixInverse.mul(vec4(vec3(world.x, y, world.z), 1)).xyz;
-})() as unknown as V3;
+/** How high over the design's floor a line's vertex may lie and still be
+ *  pressed under it (m): a track on the ground or an embankment goes, one
+ *  on a bridge's deck over the site stays. */
+export const LINE_REACH_M = 4;
+
+/** The vertex pressed under the design where it reaches (its lowest
+ *  height there; the mesh's own frame in, and out: a quantised glTF's
+ *  too) — only a vertex within `reach` m over that floor, where given. */
+function pressedUnderDesign(reach: number | null): V3 {
+  return Fn(() => {
+    const world = modelWorldMatrix.mul(vec4(positionLocal, 1)).xyz.toVar();
+    const texel = siteTexel(world.xz);
+    const pressed = min(world.y, texel.x.sub(SITE_UNDER_M));
+    let press = step(0.25, texel.y);
+    if (reach !== null) {
+      press = press.mul(step(world.y, texel.x.add(reach)));
+    }
+    const y = mix(world.y, pressed, press);
+    return modelWorldMatrixInverse.mul(vec4(vec3(world.x, y, world.z), 1)).xyz;
+  })();
+}
+
+/** The ground's vertex pressed under the design — one node for every
+ *  ground material (terrain, its baked walls, kerbs, stairs, fences) and
+ *  the water. */
+export const groundUnderDesign = pressedUnderDesign(null);
+
+/** A line's vertex pressed under the design (rail-layer.ts: rails,
+ *  ballast, platforms, the tram's tracks) where it lies within
+ *  `LINE_REACH_M` of its floor. */
+export const lineUnderDesign = pressedUnderDesign(LINE_REACH_M);
 
 /**
  * The ground's fragments to keep: none in the site's core above the
@@ -132,6 +157,53 @@ export const groundKeptUnderDesign = Fn(() => {
   const above = step(texel.x.sub(SITE_UNDER_M / 2), positionWorld.y);
   return step(0.75, texel.y).mul(above).lessThan(0.5);
 })();
+
+/** Whether scene (x, z) lies in the design's site, as the vertex stages
+ *  read it (`inDesignSite`): an instance whose foot stands there is
+ *  folded away, so a question must not find it (inquiry-probe.ts). */
+export function inDesignSiteAt(x: number, z: number): boolean {
+  if (site.on.value < 0.5 || !raster) {
+    return false;
+  }
+  const c = Math.floor((x - site.x0.value) / site.cell.value);
+  const r = Math.floor((site.z0.value - z) / site.cell.value);
+  if (c < 0 || r < 0 || c >= site.cols.value || r >= site.rows.value) {
+    return false;
+  }
+  const data = raster.image.data as Float32Array;
+  return data[(r * SITE_SIDE + c) * 2 + 1] >= 0.25;
+}
+
+/** Whether a thing a question met is one the design's site folded away:
+ *  an instance whose foot stands in it — a hedge's piece by where the ray
+ *  met it (`at`, scene), a row folds piece by piece. A bridge, a counted
+ *  flow and the design itself are not instances. */
+export function foldedThing(
+  target: FeatureInquiry,
+  at: { x: number; z: number },
+  offset: RecenterOffset
+): boolean {
+  switch (target.kind) {
+    case "bridge":
+    case "design":
+    case "traffic":
+      return false;
+    case "hedge":
+      return inDesignSiteAt(at.x, at.z);
+    case "bikes":
+    case "canopy":
+    case "furniture":
+    case "lamp":
+    case "landing":
+    case "monument":
+    case "stop":
+    case "tree":
+      return inDesignSiteAt(
+        target.position[0] - offset.cx,
+        offset.cy - target.position[1]
+      );
+  }
+}
 
 /** The projected box of the design's site, or null (none loaded). */
 let siteBox: [number, number, number, number] | null = null;

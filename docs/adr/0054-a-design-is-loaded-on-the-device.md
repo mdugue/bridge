@@ -48,7 +48,9 @@ unannounced (ADR 0043).
    stages read (`design-site.ts`): instanced sets fold away what stands
    in it, and the ground, with what is baked into it, is pressed under
    that height and cut where it would rise through the design's plate.
-   The walked ground follows. Rails, tram tracks and water stay.
+   The walked ground follows. Water is pressed with the ground, and so
+   are rails, platforms and tram tracks within 4 m over the floor (a
+   line on a bridge over the site stays).
 7. **A landscape plan is a design too**: DXF, Shapefile, GeoPackage or
    LandXML, in the site's UTM coordinates. Its areas are land-cover
    classes, named by their layer's, table's or attributes' words and
@@ -58,6 +60,11 @@ unannounced (ADR 0043).
    crowns, a building with a height a block, a TIN a planned ground. Its
    areas clear and press the site but take no house away; only its
    buildings do. Lines are not drawn: in a plan they are edges.
+8. **A design is asked like any thing.** A ray meets its mesh, the
+   triangle names its part (an IFC element's entity, name and GlobalId;
+   a plan's class; else the object's and material's names), and the card
+   says only what the file and its placement say. What the site folded
+   away is not found any more.
 
 ## Consequences
 

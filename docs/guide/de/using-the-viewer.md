@@ -533,8 +533,12 @@ und das Modell behalten ihre scharfen Linien.
   Texturen, die nicht hineinpassen, bleiben weg. Mit den Gebäuden
   verschwinden auch Bäume, Hecken, Laternen und Stadtmöbel im Grundriss
   des Entwurfs (seine Bodenplatte eingeschlossen), und das Gelände, Mauern,
-  Bordsteine und Treppen liegen dort unter seinem Boden. Gleise und Wasser
-  bleiben.
+  Bordsteine, Treppen, Gleise, Bahnsteige und Wasser liegen dort unter
+  seinem Boden (eine Strecke auf einer Brücke darüber bleibt). Ein Klick
+  auf den Entwurf befragt ihn wie ein Gebäude: Die Karte nennt das
+  Bauteil — ein IFC-Element mit Typ und GlobalId, eine Fläche des Plans
+  nach ihrer Art, ein Objekt aus glTF oder OBJ mit seinem Namen — und wo
+  der Entwurf steht.
 - **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und
   Uhrzeit, den Bildstil, den *Nebel*, den Kronen-Schalter und die
   Datenebenen als kleinen JSON-Text; einen solchen Text in das Feld
