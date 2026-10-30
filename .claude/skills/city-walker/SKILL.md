@@ -154,7 +154,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   each material's `positionNode` over) with sprites and see-through sheets
   hidden, restored after the render. QA the styles on a handful of views
   (aerial, roof sea, half-long building shot, street, river) — lite at
-  pixel ratio 0.5 hides the stroke widths, so judge them at ≥ 1.
+  pixel ratio 0.5 hides the stroke widths, so judge them at ≥ 1. Flicker
+  and crawling (a still view that changes, a step that flips pixels) is
+  measured, not judged: the `flicker-probe` skill.
 - `visual-style.ts` — the one building style: opaque archviz clay + facade
   detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
   glow) as a `MeshStandardNodeMaterial`, always opaque (the see-through

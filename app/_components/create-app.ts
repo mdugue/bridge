@@ -166,7 +166,12 @@ import {
 import { setMapAltitude } from "./map-overlay";
 import type { TramCarsStatus } from "./tram-cars";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
-import { pocFramesHeld, tickPocFrame, updatePocDebug } from "./poc-debug";
+import {
+  pocFramesHeld,
+  pocFrameTime,
+  tickPocFrame,
+  updatePocDebug,
+} from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
@@ -3349,7 +3354,7 @@ async function bootApp(
   };
   const frame = (time: number) => {
     const frameStart = streamTimings.now();
-    timer.update(time);
+    timer.update(pocFrameTime(time));
     const dt = Math.min(timer.getDelta(), 0.05);
     const elapsed = timer.getElapsed();
     // The 10 Hz tick (the minimap's pose, the BVHs near, the focus, the
