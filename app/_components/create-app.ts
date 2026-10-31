@@ -111,6 +111,7 @@ import {
 import { stopBvhWorker } from "./bvh-client";
 import { stopGroundWorker } from "./ground-prep-client";
 import { createCameraPose, type FollowAim } from "./camera-pose";
+import { canvasSizeFor } from "./canvas-size";
 import {
   createModelRig,
   type ModelHud,
@@ -2638,16 +2639,22 @@ async function bootApp(
   );
 
   const resizeObserver = new ResizeObserver(() => {
+    // a container without area keeps the last size (canvas-size.ts)
+    const canvasSize = canvasSizeFor(container);
+    if (!canvasSize) {
+      return;
+    }
+    const { width, height } = canvasSize;
     wakeStill();
-    camera.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setSize(width, height);
     postStack.setSize();
     modelRig.resize();
     stream.tiles.setResolution(
       modelRig.parallel() ? modelRig.camera : streamCamera,
-      container.clientWidth,
-      container.clientHeight
+      width,
+      height
     );
   });
   resizeObserver.observe(container);
