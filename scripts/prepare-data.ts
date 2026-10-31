@@ -51,6 +51,7 @@ import {
   type Walk,
   WALKS_DIR,
   WALKS_FILE,
+  photoCredited,
   walkBundle,
   walkPhotoFile,
   type WalksExtras,
@@ -222,8 +223,8 @@ const walkFiles = existsSync(walksDir)
       .sort()
   : [];
 /** A walk with each stop's photo published beside it (`photo.src`). A
- *  stop whose copy is missing shows none, so a preview still builds; the
- *  walks' unit test fails until the copy is committed. */
+ *  stop whose copy or credit is missing shows none, so a preview still
+ *  builds; the walks' unit test fails until both are committed. */
 function withPhotos(walk: Walk): Walk {
   return {
     ...walk,
@@ -232,9 +233,9 @@ function withPhotos(walk: Walk): Walk {
         return stop;
       }
       const file = join(walksDir, walkPhotoFile(walk.id, stop.id));
-      if (!existsSync(file)) {
+      if (!(existsSync(file) && photoCredited(stop.photo))) {
         log(
-          `${walk.id}/${stop.id}: no photo copy, shown without (bun scripts/walks.ts ${SITE.id} photos)`
+          `${walk.id}/${stop.id}: no photo copy or credit, shown without (bun scripts/walks.ts ${SITE.id} photos)`
         );
         const { photo: _missing, ...rest } = stop;
         return rest;

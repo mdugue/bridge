@@ -314,13 +314,18 @@ function lookProblems(stop: WalkStop): string[] {
     .map((s) => `"${s.slice(0, 40)}…" points at what the model may not show`);
 }
 
+/** Whether a stop's photo carries the credit it is shown with. */
+export function photoCredited(p: NonNullable<WalkStop["photo"]>): boolean {
+  return Boolean(p.author && p.licence && p.page.startsWith("https://"));
+}
+
 /** A photo carries its credit, or it is not shown. */
 function photoProblems(stop: WalkStop): string[] {
   const p = stop.photo;
   if (!p) {
     return [];
   }
-  if (!(p.author && p.licence && p.page.startsWith("https://"))) {
+  if (!photoCredited(p)) {
     return [
       `photo ${p.file} has no credit (bun scripts/walks.ts <site> photos)`,
     ];
