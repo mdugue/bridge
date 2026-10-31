@@ -19,7 +19,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gridConvergenceDeg, latLngToUtm, utmToLatLng } from "../lib/city/crs";
-import { siteExtentOf } from "../lib/city/site";
+import { siteExtentOf } from "../lib/city/site-extent";
 import { siteFromArgs } from "../sites";
 import { readDgmFile } from "./dgm-cache";
 import { siteDgm } from "./line-levels";

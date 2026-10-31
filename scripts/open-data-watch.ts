@@ -20,7 +20,8 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { siteExtentOf, tileIdOf } from "../lib/city/site";
+import { siteExtentOf } from "../lib/city/site-extent";
+import { tileIdOf } from "../lib/city/site";
 import { isSiteId, SITES, type SiteId } from "../sites";
 
 const ROOT = join(import.meta.dir, "..");
