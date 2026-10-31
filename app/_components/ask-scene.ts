@@ -116,7 +116,7 @@ export function useAskScene(
             ? h.viewAspect()
             : window.innerWidth / Math.max(window.innerHeight, 1),
           sun: sun && sun.up > 0 ? { east: sun.east, north: sun.north } : null,
-          ...(h ? { sightHit: h.sightHit } : {}),
+          ...(h ? { sightHit: h.sightHit, groundAt: h.groundAt } : {}),
         };
       },
       setTime: (hour, date) => {

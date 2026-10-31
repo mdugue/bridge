@@ -658,6 +658,9 @@ export interface CityWalkHandle {
    * (lib/city/ask-view.ts). Only tiles with a BVH are asked.
    */
   sightHit: (eye: SitePoint, point: SitePoint) => SitePoint | null;
+  /** the terrain's height at a point of the site (EPSG, m a.s.l.), or
+   *  null where no ground is loaded — the framing's slopes */
+  groundAt: (x: number, y: number) => number | null;
   /** the walk/fly camera's width over its height (the canvas's shape) */
   viewAspect: () => number;
   /** Captures the full camera pose for a reproducible snapshot. */
@@ -2095,6 +2098,7 @@ async function bootApp(
   const pose = createCameraPose(camera, {
     groundFloor: () => siteGround.floor() ?? 0,
     heightAt,
+    coarseHeightAt: (x, y) => groundPlate?.heightAt(x, y) ?? null,
     offset,
     resolveStep: collider.resolveStep,
     solids: collider,
@@ -4039,6 +4043,8 @@ async function bootApp(
     },
     captureViewpoint: pose.captureViewpoint,
     viewAspect: () => camera.aspect,
+    groundAt: (x, y) =>
+      siteGround.heightAt(x, y) ?? groundPlate?.heightAt(x, y) ?? null,
     sightHit: (eye, point) => {
       const a = epsgToWorld(eye.x, eye.y, offset);
       const b = epsgToWorld(point.x, point.y, offset);

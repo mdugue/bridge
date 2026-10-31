@@ -300,8 +300,11 @@ which has no `Shift`, *Mehrere* above the card switches this on: every
 long press then adds. Everything selected carries the hatch and the
 outline, and lies as a stack of slightly turned, numbered cards behind
 the open one (on a phone as small cards above the sheet) — a click
-brings one to the front, the × takes it out, and *Alle zeigen* ("show
-all") sets the camera so that everything selected is in view. Each card
+brings one to the front, the × takes it out. You leaf through the
+stack by swiping or flicking the front card aside (it flies off and the
+next moves up, round and round), with the arrows beside the count
+("2 / 5") or with ← and →; on a phone, swipe across the sheet. *Alle
+zeigen* ("show all") sets the camera so that everything selected is in view. Each card
 keeps its *Hier auch* ("here too"). A selection holds up to eight
 things; a ninth pushes out the oldest. The places an answer of *Frag
 die Stadt* shows are selected the same way.
@@ -426,7 +429,8 @@ The button in the corner opens a panel with three tabs.
   while they lie close enough), "nearby" shows the reach it took with
   *enger* (narrower) and *weiter* (wider), and two or three follow-up
   questions wait to be tapped. It runs on your own key from a provider (Anthropic, OpenAI,
-  OpenRouter or the Vercel AI Gateway) and at your cost, mostly under a
+  Google Gemini, OpenRouter or the Vercel AI Gateway; the picker offers
+  a fast and a thorough model per maker) and at your cost, mostly under a
   cent per question; the key stays in your browser
   ([privacy](/datenschutz#frag-die-stadt)). Also from *Fragen* in the
   toolbar. As a **voice guide**: *Sprechen* takes a question by

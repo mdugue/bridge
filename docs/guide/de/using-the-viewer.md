@@ -318,7 +318,11 @@ der kein `Shift` hat, schaltet *Mehrere* über der Karte das um: Dann fügt
 jedes lange Drücken hinzu. Alles Ausgewählte trägt Schraffur und Umriss
 und liegt als Stapel leicht gedrehter, nummerierter Karten hinter der
 offenen (auf dem Telefon als kleine Karten über dem Blatt) — ein Klick
-holt eine nach vorn, das × nimmt sie heraus, *Alle zeigen* stellt die
+holt eine nach vorn, das × nimmt sie heraus. Durch den Stapel blätterst
+du, indem du die vordere Karte zur Seite wischst oder schnippst (sie
+fliegt hinaus, die nächste rückt nach, immer rundherum), mit den Pfeilen
+neben der Zählung („2 / 5“) oder mit ← und →; auf dem Telefon wischt
+man quer über das Blatt. *Alle zeigen* stellt die
 Kamera so, dass alles Ausgewählte im Bild ist. Jede Karte behält ihr
 *Hier auch*. Bis zu acht Dinge passen in
 eine Auswahl; ein neuntes verdrängt das älteste. Die Orte, die eine
@@ -449,7 +453,9 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   solange sie nah genug beieinander liegen), bei „in der Nähe“ der
   genommene Umkreis mit *enger* und *weiter*, und zwei oder drei
   Folgefragen zum Antippen. Es läuft mit deinem eigenen Schlüssel eines Anbieters
-  (Anthropic, OpenAI, OpenRouter oder Vercel AI Gateway) und auf deine
+  (Anthropic, OpenAI, Google Gemini, OpenRouter oder Vercel AI Gateway;
+  die Auswahl nennt je Hersteller ein schnelles und ein gründliches
+  Modell) und auf deine
   Kosten, meist unter einem Cent je Frage; der Schlüssel bleibt in
   deinem Browser ([Datenschutz](/datenschutz#frag-die-stadt)). Auch über
   *Fragen* in der Werkzeugleiste. Als **Sprachführer**: *Sprechen* nimmt

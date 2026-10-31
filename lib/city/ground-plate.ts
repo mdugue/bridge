@@ -333,3 +333,62 @@ export function plateHeightIndex(
   }
   return (x, y) => at.get(`${Math.round(x * 10)},${Math.round(y * 10)}`);
 }
+
+/**
+ * The plate's heights as a ground (EPSG → m a.s.l., null off every
+ * tile), bilinear over each tile's vertex grid as drawn (`positions`, the
+ * Y-up frame of `platePositions`): where a tile's terrain has not landed
+ * yet, a vantage still knows the hill it stands on. It reads the meshes'
+ * own arrays, keeping nothing of its own.
+ */
+export function plateGround(
+  tiles: readonly { bounds: TerrainBounds; positions: ArrayLike<number> }[],
+  n: number
+): (x: number, y: number) => number | null {
+  const heightOf = (positions: ArrayLike<number>, i: number, j: number) => {
+    const edge = i === 0 || j === 0 || i === n - 1 || j === n - 1;
+    return positions[(j * n + i) * 3 + 1] + (edge ? 0 : PLATE_SINK_M);
+  };
+  // the tiles are one grid: a point finds its tile by its cell, not by
+  // asking every tile (the framing asks thousands of times)
+  const [first] = tiles;
+  const w = first ? first.bounds[2] - first.bounds[0] : 1;
+  const h = first ? first.bounds[3] - first.bounds[1] : 1;
+  const cell = (x: number, y: number) =>
+    `${Math.floor(x / w)},${Math.floor(y / h)}`;
+  const byCell = new Map(
+    tiles.map((t) => [
+      cell((t.bounds[0] + t.bounds[2]) / 2, (t.bounds[1] + t.bounds[3]) / 2),
+      t,
+    ])
+  );
+  const holds = (b: TerrainBounds, x: number, y: number) =>
+    x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3];
+  return (x, y) => {
+    const near = byCell.get(cell(x, y));
+    // on a cell's north or east edge the cell beyond may hold nothing
+    const tile =
+      near && holds(near.bounds, x, y)
+        ? near
+        : tiles.find((t) => holds(t.bounds, x, y));
+    if (tile) {
+      const { bounds, positions } = tile;
+      const [x0, y0, x1, y1] = bounds;
+      // column from the west, row from the north
+      const u = ((x - x0) / (x1 - x0)) * (n - 1);
+      const v = ((y1 - y) / (y1 - y0)) * (n - 1);
+      const i = Math.min(Math.floor(u), n - 2);
+      const j = Math.min(Math.floor(v), n - 2);
+      const fu = u - i;
+      const fv = v - j;
+      const top =
+        heightOf(positions, i, j) * (1 - fu) +
+        heightOf(positions, i + 1, j) * fu;
+      const bottom =
+        heightOf(positions, i, j + 1) * (1 - fu) +
+        heightOf(positions, i + 1, j + 1) * fu;
+      return top * (1 - fv) + bottom * fv;
+    }
+    return null;
+  };
+}
