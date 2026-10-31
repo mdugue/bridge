@@ -1279,7 +1279,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const skyHatch = (at: V2): F => {
     const ray = viewRayWorld(at);
     const el = asin(clamp(ray.y, -1, 1)).toVar();
-    const fill = mix(0.08, 0.3, smoothstep(0.02, 0.7, el)).toVar();
+    const fill = mix(0.16, 0.5, smoothstep(0.02, 0.7, el)).toVar();
     const rpp = max(fwidth(el), 1e-5).toVar();
     const level = log2(rpp.mul(pixelScale.mul(HATCH_CSS)).div(SKY_CELL));
     const l0 = floor(level);
@@ -1312,14 +1312,19 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   // ruled, and only what a lamp or a lit window lights is left white,
   // under a wash of warm yellow. The sheet stays the light, as by day.
   const strich = (p: V3, at: V2, z: F, sky: F, surface: Surface): V3 => {
+    // (a plan has no night: in Modell's parallel view the sheet stays the
+    // day's, lines and plan colours; the nocturne is the perspective's)
+    const plan = step(0.5, lens.ortho);
+    const nightHere = night.mul(float(1).sub(plan)).toVar();
     const sheet = vec3(0.995, 0.993, 0.99);
     const y = unhazed(p, surface.haze).toVar();
     // by day in the sun or not; by night under a lamp or not
     const lamp = nightLight(p, y.mul(STRICH_NIGHT_GAIN)).toVar();
+    // (a plan at night: an unshaded sheet, as one with no sun)
     const lit = mix(
-      inSun(surface.world, surface.n, z, aaStep(0.42, y)),
-      lamp,
-      night
+      mix(inSun(surface.world, surface.n, z, aaStep(0.42, y)), lamp, nightHere),
+      1,
+      night.mul(plan)
     ).toVar();
     // the surface's colour (its hue and chroma) without the light — the
     // plan's greens and blues. The warm hues (red to yellow) are the sun's
@@ -1332,7 +1337,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // (by night the sky's own blue is all the hue left: no plan colour)
     const planned = smoothstep(0.03, 0.08, hcv.y)
       .mul(cool)
-      .mul(float(1).sub(night));
+      .mul(float(1).sub(nightHere));
     const tint = mix(vec3(1), hue, planned.mul(mix(0.35, 0.85, lit)));
     const pen = vec3(0.2, 0.21, 0.24);
     // The hatch as a draughtsman lays it: each face of a block at its own
@@ -1365,7 +1370,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       float(1)
         .sub(smoothstep(0.03, 0.12, y.mul(STRICH_NIGHT_GAIN)))
         .mul(float(1).sub(top)),
-      night
+      nightHere
     );
     const across = lines(
       surface.world,
@@ -1375,19 +1380,21 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       turn.add(Math.PI / 2),
       HATCH_CSS
     ).mul(deep);
-    const strength = mix(mix(0.6, 0.35, top), mix(0.72, 0.5, top), night).mul(
-      mix(1, 0.45, smoothstep(150, 1200, z))
-    );
+    const strength = mix(
+      mix(0.6, 0.35, top),
+      mix(0.72, 0.5, top),
+      nightHere
+    ).mul(mix(1, 0.45, smoothstep(150, 1200, z)));
     const hatched = mix(tint, pen, max(first, across).mul(strength));
     // what the night lights: the sheet under a warm wash
-    const lamplit = mix(tint, NIGHT_WASH, lamp.mul(night));
+    const lamplit = mix(tint, NIGHT_WASH, lamp.mul(nightHere));
     let col = mix(hatched, lamplit, lit);
     // the near-black stays black: the Schnitt's poché, not a shade
     const fill = float(1)
       .sub(smoothstep(0.2, 0.28, lumaOf(p)))
-      .mul(float(1).sub(night));
+      .mul(float(1).sub(nightHere));
     col = mix(col, vec3(0.11), fill);
-    const ruled = mix(sheet, pen, skyHatch(at).mul(0.75).mul(night));
+    const ruled = mix(sheet, pen, skyHatch(at).mul(0.85).mul(nightHere));
     return mix(col, ruled, sky);
   };
 
