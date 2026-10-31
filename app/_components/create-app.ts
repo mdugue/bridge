@@ -1942,11 +1942,12 @@ async function bootApp(
         sunRig.setParallel(true, paperOf(look.style));
       }
       // A picture style may draw its own crowns (style-dressing.ts), and the
-      // crowns cast: the shadow map is redrawn with the new ones.
-      invalidateShadows();
-      // …and may draw at its own instant, or give it back
+      // crowns cast: the shadow map is redrawn with the new ones — by
+      // `relight` when the style draws at its own instant or gives it back
       if (ownLight) {
         relight(shownSun);
+      } else {
+        invalidateShadows();
       }
     }
     for (const key of Object.keys(sceneRows) as LookKey[]) {

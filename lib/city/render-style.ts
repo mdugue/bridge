@@ -282,7 +282,7 @@ export function styleInstant(style: RenderStyleDef, asked: Date): Date {
     return asked;
   }
   return new Date(
-    Date.UTC(asked.getFullYear(), own.month, own.day, 0, own.minutes)
+    Date.UTC(asked.getUTCFullYear(), own.month, own.day, 0, own.minutes)
   );
 }
 
