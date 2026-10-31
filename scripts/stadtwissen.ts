@@ -9,37 +9,21 @@
  *   wahrzeichen [words…]  the landmarks with Wikidata's facts, most notable first
  *   quellen               who publishes the facts, under which licence
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   matchesQuery,
   nearby,
-  STADTWISSEN_FILE,
-  type StadtwissenIndex,
   WIKIDATA_PROPERTIES,
   type WikidataProperty,
   type WissenBuilding,
   type WissenLandmark,
   type WissenMonument,
-  type WissenTile,
   wikipediaUrl,
 } from "../lib/city/stadtwissen";
 import { siteFromArgs } from "../sites";
+import { loadStadtwissen } from "./stadtwissen-files";
 
 const { site, rest } = siteFromArgs(process.argv.slice(2));
-const dir = join(import.meta.dir, "..", "public", "data", site.id);
-const manifest = JSON.parse(
-  readFileSync(join(dir, "manifest.json"), "utf8")
-) as { files: Record<string, string> };
-const read = <T>(file: string): T =>
-  JSON.parse(readFileSync(join(dir, file), "utf8")) as T;
-const indexFile = manifest.files[STADTWISSEN_FILE];
-if (!indexFile) {
-  throw new Error(`no ${STADTWISSEN_FILE} for ${site.id}: run bun dev first`);
-}
-const index = read<StadtwissenIndex>(indexFile);
-const tiles = (): WissenTile[] =>
-  index.tiles.map((t) => read<WissenTile>(t.file));
+const { index, tiles } = loadStadtwissen(site.id);
 const buildings = (): WissenBuilding[] => tiles().flatMap((t) => t.buildings);
 const monuments = (): WissenMonument[] => tiles().flatMap((t) => t.monuments);
 const monument = (m: WissenMonument & { d?: number }) =>

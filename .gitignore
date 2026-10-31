@@ -75,3 +75,7 @@ __pycache__/
 .ruff_cache/
 
 certificates
+
+# the routines' outputs (docs/routines.md)
+/osm-gaps/
+/street-photos/

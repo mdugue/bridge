@@ -89,6 +89,10 @@ bun run docs:matrix     # regenerate the guide's sources-by-city pages
   ADR.
 - **`pr-snapshots`** — the snapshots a visual PR carries.
 - **`flicker-probe`** — find and prove flicker by diffing held frames.
+- **`sentry-triage`**, **`open-data-watch`**, **`osm-gaps`**,
+  **`model-faults`** — the scheduled routines ([docs/routines.md](docs/routines.md)):
+  each reports to its GitHub issue and never merges, resolves or edits a
+  third party's data.
 - `threejs-*` are generic three.js references; in this repo only their
   WebGPU/TSL parts apply.
 - `improve` writes plans to a root `plans/` by default: point it at

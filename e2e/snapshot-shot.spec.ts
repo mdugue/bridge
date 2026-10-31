@@ -1,15 +1,30 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { utmToLatLng } from "../lib/city/crs";
+import { arrivalHref } from "../lib/city/geolocation";
 import {
   decodeLook,
   parseSnapshot,
   type Snapshot,
   snapshotInstant,
 } from "../lib/city/snapshot";
+import { siteById } from "../sites";
 
-// Big crisp canvas for inspecting shadow/edge artifacts.
-test.use({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
+/**
+ * Big crisp canvas for inspecting shadow/edge artifacts — or, with
+ * `SHOTS_SMALL=1`, 800 × 500 at 1× (the same 16:10) and fifteen minutes to
+ * load: what a software-rendered container (the routines' street-photo
+ * check, docs/routines.md) can draw, with `SHOTS_QUERY=scene=lite&block=1`.
+ * Dresden's `lite` boot took 7–11 minutes there (2026-10-31).
+ */
+const SHOTS_SMALL = Boolean(process.env.SHOTS_SMALL);
+const READY_MS = SHOTS_SMALL ? 900_000 : 120_000;
+test.use(
+  SHOTS_SMALL
+    ? { viewport: { width: 800, height: 500 }, deviceScaleFactor: 1 }
+    : { viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 }
+);
 
 /**
  * Snapshot screenshot harness — NOT a smoke test. Reproduces an exact view
@@ -37,6 +52,53 @@ const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/, "");
 /** The city the shots are taken in (its route): `SHOTS_SITE=leipzig`. */
 const SHOTS_SITE = process.env.SHOTS_SITE ?? "dresden";
 const SHOTS_TAG = process.env.SHOTS_TAG ?? "";
+/**
+ * `SHOTS_AT=1`: boot the page at the snapshot's own place (`#at=lat,lng`
+ * from its `camera.epsg`) instead of the site's spawn. The `lite` scene
+ * streams only around where it booted, so a pose a kilometre from the
+ * spawn would otherwise show the wrong part of the city — the street
+ * photos are spread over the whole site.
+ */
+const SHOTS_AT = Boolean(process.env.SHOTS_AT);
+
+/** The page a snapshot is taken on: the site, its query, its place. */
+function shotUrl(snap: Snapshot): string {
+  const query = SHOTS_QUERY ? `?${SHOTS_QUERY}` : "";
+  const epsg = siteById(SHOTS_SITE)?.provider.epsg;
+  const at =
+    SHOTS_AT && snap.camera.epsg && epsg
+      ? utmToLatLng(epsg, snap.camera.epsg.x, snap.camera.epsg.y)
+      : null;
+  if (!at) {
+    return `/${SHOTS_SITE}${query}`;
+  }
+  const [path, hash] = arrivalHref(SHOTS_SITE, at).split("#");
+  return `${path}${query}#${hash}`;
+}
+
+/** Hide every HUD/control overlay so the shot is a clean render plate:
+ *  keep only the canvas and its DOM ancestors visible. */
+function hideOverlays(): void {
+  const canvas = document.querySelector("canvas[data-engine]");
+  if (!canvas) {
+    return;
+  }
+  const keep = new Set<Element>();
+  for (let el: Element | null = canvas; el; el = el.parentElement) {
+    keep.add(el);
+  }
+  for (const node of keep) {
+    const parent = node.parentElement;
+    if (!parent) {
+      continue;
+    }
+    for (const child of Array.from(parent.children)) {
+      if (!keep.has(child)) {
+        (child as HTMLElement).style.visibility = "hidden";
+      }
+    }
+  }
+}
 
 function snapshotFiles(): string[] {
   try {
@@ -49,7 +111,7 @@ function snapshotFiles(): string[] {
 for (const file of snapshotFiles()) {
   const name = file.replace(/\.json$/, "");
   test(`snapshot: ${name}`, async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(READY_MS + 150_000);
     // Validate before rendering: a broken shot fails loudly instead of
     // silently rendering the defaults.
     const parsed = parseSnapshot(readFileSync(join(SHOTS_DIR, file), "utf8"));
@@ -58,9 +120,9 @@ for (const file of snapshotFiles()) {
     }
     const snap: Snapshot = parsed.snapshot;
 
-    await page.goto(`/${SHOTS_SITE}${SHOTS_QUERY ? `?${SHOTS_QUERY}` : ""}`);
+    await page.goto(shotUrl(snap));
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
-      timeout: 120_000,
+      timeout: READY_MS,
     });
 
     // The same codec (and the same minute-floored instant) the HUD's Apply
@@ -83,29 +145,7 @@ for (const file of snapshotFiles()) {
       [snap.camera, instant, lookPatch] as const
     );
 
-    // Hide every HUD/control overlay so the shot is a clean render plate:
-    // keep only the canvas and its DOM ancestors visible.
-    await page.evaluate(() => {
-      const canvas = document.querySelector("canvas[data-engine]");
-      if (!canvas) {
-        return;
-      }
-      const keep = new Set<Element>();
-      for (let el: Element | null = canvas; el; el = el.parentElement) {
-        keep.add(el);
-      }
-      for (const node of keep) {
-        const parent = node.parentElement;
-        if (!parent) {
-          continue;
-        }
-        for (const child of Array.from(parent.children)) {
-          if (!keep.has(child)) {
-            (child as HTMLElement).style.visibility = "hidden";
-          }
-        }
-      }
-    });
+    await page.evaluate(hideOverlays);
 
     // Let the shadow map re-render for the new pose and sun, the motion
     // regression lift (DoF is off for RECOVER_MS after the move) and grading
@@ -127,6 +167,9 @@ for (const file of snapshotFiles()) {
       { timeout: 120_000 }
     );
 
+    // Again: a notice raised after the move ("Umgebung lädt") was not
+    // there to hide the first time.
+    await page.evaluate(hideOverlays);
     const canvas = page.locator("canvas[data-engine]");
     await expect(canvas).toBeVisible();
     const tag = SHOTS_TAG ? `.${SHOTS_TAG}` : "";
