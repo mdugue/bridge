@@ -1069,9 +1069,10 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       mix(POP.yellow, POP.paper, aaStep(0.72, l)),
       lamp
     );
-    // (a data mark keeps its pop ink at night: printed over the plate)
+    // (a data mark keeps its pop ink at night: printed over the plate —
+    // a mark is lit, a night-blue surface as saturated is not)
     const nightHazed = mix(
-      mix(nightInk, dataInk, dataPrinted),
+      mix(nightInk, dataInk, dataPrinted.mul(aaStep(0.25, l))),
       POP.nightHaze,
       toPaper
     );

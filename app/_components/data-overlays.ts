@@ -271,7 +271,10 @@ function tramOverlay(
       // its group out of the scene
       if (built) {
         built.dispose();
-        opts.onMarksMoved?.();
+        // (a page gone takes its post stack with it: nothing to gather)
+        if (alive()) {
+          opts.onMarksMoved?.();
+        }
       }
       loading = false;
     }
