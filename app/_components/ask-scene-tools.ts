@@ -15,7 +15,12 @@ import {
   volumeTool,
   whereTool,
 } from "@/lib/city/ask-tools";
-import { type AskTarget, askView } from "@/lib/city/ask-view";
+import {
+  type AskTarget,
+  type FrameContext,
+  frameTargets,
+  streetView,
+} from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import {
@@ -39,6 +44,9 @@ export interface AskScene {
    *  the instant it set, as text */
   setTime: (hour: number, date?: string) => string;
   show: (view: ViewpointGeometry) => void;
+  /** what the framing reads of the moment: the screen, the sun, the
+   *  loaded buildings' sight lines (lib/city/ask-view.ts) */
+  frame: () => Omit<FrameContext, "from">;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
   /** asks what stands at the centre of the view (and opens its card) */
@@ -59,13 +67,7 @@ export function sceneTools(scene: AskScene) {
   return clientTools(
     whereTool.client(() => scene.where()),
     lookTool.client(() => scene.look()),
-    showTool.client((input) => {
-      const target: AskTarget = input;
-      scene.show(
-        askView(target, scene.from() ?? target, input.aus_der_luft ?? false)
-      );
-      return { ok: true };
-    }),
+    showTool.client((input) => showPlaces(scene, input)),
     timeTool.client(({ stunde, datum }) => ({
       ok: true,
       zeit: scene.setTime(stunde, datum),
@@ -82,6 +84,58 @@ export function sceneTools(scene: AskScene) {
     floodShowTool.client((ask) => showFlood(scene, ask)),
     volumeTool.client((ask) => placeVolume(scene, ask))
   );
+}
+
+/** A place `zeige` names: where it is, what it is called. */
+export type AskPlace = AskTarget & { name: string };
+
+/**
+ * The farthest an aerial view of several places stands off them (m):
+ * beyond it a 20 m house is a few pixels on a phone and the fog nears
+ * (on a phone the stream ends at 2.2 km). Further spread places are
+ * shown one at a time, from their chips.
+ */
+export const AERIAL_REACH = 900;
+
+/**
+ * Flies to `places` — every one in one view, or the first alone (`alle`
+ * false, or spread too far for one) — and says what it showed. On foot
+ * the walker stands before the first.
+ */
+export function showPlaces(
+  scene: AskScene,
+  ask: { alle?: boolean; aus_der_luft?: boolean; ziele: readonly AskPlace[] }
+): Record<string, unknown> {
+  const [first] = ask.ziele;
+  const from = scene.from();
+  if (ask.aus_der_luft === false) {
+    scene.show(streetView(first, from ?? first));
+    return { ok: true, gezeigt: [first.name] };
+  }
+  const context = { ...scene.frame(), from };
+  const all = ask.alle !== false && ask.ziele.length > 1;
+  const framed = all ? frameTargets(ask.ziele, context) : null;
+  if (framed && framed.distance <= AERIAL_REACH) {
+    scene.show(framed.view);
+    return {
+      ok: true,
+      gezeigt: ask.ziele.map((p) => p.name),
+      abstand_m: framed.distance,
+    };
+  }
+  const alone = frameTargets([first], context);
+  scene.show(alone.view);
+  return {
+    ok: true,
+    gezeigt: [first.name],
+    abstand_m: alone.distance,
+    ...(framed
+      ? {
+          hinweis:
+            "Die Orte liegen zu weit auseinander für eine Ansicht: gezeigt ist der erste, die anderen stehen als Knöpfe unter der Antwort.",
+        }
+      : {}),
+  };
 }
 
 function placeVolume(

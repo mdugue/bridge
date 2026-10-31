@@ -174,6 +174,7 @@ function directoryEntry(
     y: round1((ext[1] + ext[4]) / 2),
     z: round1(ext[2]),
     ...(h ? { h } : {}),
+    r: round1(Math.hypot(ext[3] - ext[0], ext[4] - ext[1]) / 2),
     ...(use ? { use } : {}),
     ...(roof ? { roof } : {}),
     ...(levels ? { levels: Math.round(levels) } : {}),

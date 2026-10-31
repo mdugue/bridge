@@ -38,6 +38,17 @@ load into the browser.
 4. **The answer is marked.** The card (`app/_components/ask-city.tsx`, its
    own chunk) labels every answer *KI*, says it is generated and can be
    wrong, and lists the tools the model used.
+5. **The answer shows its places.** `zeige` takes every place an answer
+   is about (the rejected candidates too, the chosen one first) with the
+   Stadtwissen's height and footprint radius; the browser frames them
+   itself (`frameTargets`, `lib/city/ask-view.ts`): from the air, the
+   nearest eye that fits them on screen, the best of twelve headings by
+   size, approach, sun, spread and the loaded buildings' sight lines;
+   places that need an eye more than 900 m off are shown one at a time.
+   The model never computes a camera. Under the answer
+   (`app/_components/ask-chips.tsx`) each place is a chip, "nearby" says
+   its reach with a narrower and a wider one, and the follow-ups come
+   from `vorschlaege`, a server tool the run ends at.
 
 ## Consequences
 

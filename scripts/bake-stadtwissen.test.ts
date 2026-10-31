@@ -74,6 +74,7 @@ test("a tile's directory: named, addressed, listed and landmark Buildings", () =
       y: 5,
       z: 112,
       h: 14,
+      r: 7.1,
       use: "Wohngebäude",
       levels: 4,
       heritage: true,
@@ -85,6 +86,7 @@ test("a tile's directory: named, addressed, listed and landmark Buildings", () =
       y: 230,
       z: 110,
       h: 91.2,
+      r: 36.1,
       use: "Gebäude für religiöse Zwecke",
       roof: "Satteldach",
       wd: "Q1",
@@ -122,7 +124,7 @@ test("without a geographicalExtent the box comes from its and its parts' vertice
     osm: { haus: { name: "Speicher" } },
   });
   expect(tile.buildings).toEqual([
-    { id: "haus", name: "Speicher", x: 1010, y: 2005, z: 10, h: 18 },
+    { id: "haus", name: "Speicher", r: 11.2, x: 1010, y: 2005, z: 10, h: 18 },
   ]);
 });
 
