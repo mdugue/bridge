@@ -450,12 +450,15 @@ const STUDY_CHIP =
  */
 function ShadowStudy({
   day,
+  disabled,
   minutes,
   onStudy,
   ready,
   updateSun,
 }: {
   day: Date;
+  /** the picture style draws at its own instant: no study to make */
+  disabled: boolean;
   minutes: number;
   onStudy: () => void;
   /** the scene is up: there is a picture to save */
@@ -472,6 +475,7 @@ function ShadowStudy({
       <ToggleGroup
         aria-label="Stichtag"
         className="grid w-full grid-cols-3 gap-1"
+        disabled={disabled}
         onValueChange={(value: string[]) => {
           const d = STUDY_DATES.find((s) => dateKey(s) === value[0]);
           if (d) {
@@ -497,6 +501,7 @@ function ShadowStudy({
       <ToggleGroup
         aria-label="Uhrzeit"
         className="grid w-full grid-cols-4 gap-1"
+        disabled={disabled}
         onValueChange={(value: string[]) => {
           const hour = Number(value[0]);
           if (hour) {
@@ -521,7 +526,7 @@ function ShadowStudy({
       <button
         className="flex min-h-8 items-center gap-2.5 rounded-lg border bg-background px-2.5 py-1.5 text-left font-medium text-xs hover:border-ring disabled:pointer-events-none disabled:opacity-50"
         data-testid="export-study"
-        disabled={!ready}
+        disabled={disabled || !ready}
         onClick={onStudy}
         title="Dieselbe Ansicht um 9, 12, 15 und 18 Uhr am 21. März, 21. Juni und 21. Dezember — als ein Blatt"
         type="button"
@@ -542,6 +547,7 @@ function SunControls({
   minutes,
   onDefaultTime,
   onStudy,
+  ownLight,
   previewSun,
   ready,
   sun,
@@ -550,6 +556,9 @@ function SunControls({
   day: Date;
   latLng: { lat: number; lng: number } | null;
   minutes: number;
+  /** the picture style draws at its own instant (render-style.ts
+   *  `OwnLight`): why the time does not apply, and the controls rest */
+  ownLight: string | null;
   onDefaultTime: () => void;
   onStudy: () => void;
   previewSun: (day: Date, minutes: number) => void;
@@ -584,6 +593,7 @@ function SunControls({
       window.removeEventListener("touchcancel", cancel);
     };
   }, [dragging, day, updateSun]);
+  const resting = ownLight !== null;
   const times = latLng ? sunTimesOn(day, latLng.lat, latLng.lng) : null;
   const sunrise = times?.sunrise;
   const sunset = times?.sunset;
@@ -604,7 +614,8 @@ function SunControls({
         <span className={SECTION_LABEL}>Sonne &amp; Zeit</span>
         {/* Same affordance as Darstellung's reset, one section down. */}
         <button
-          className="text-[11px] text-primary hover:underline"
+          className="text-[11px] text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
+          disabled={resting}
           onClick={onDefaultTime}
           title="Zurück auf 14:00 — die Tageszeit, mit der die Szene startet und auf die ihr Licht abgestimmt ist"
           type="button"
@@ -620,6 +631,7 @@ function SunControls({
             render={
               <Button
                 className="h-7.5 justify-start font-normal text-xs"
+                disabled={resting}
                 id="sun-date"
                 size="sm"
                 variant="outline"
@@ -644,6 +656,7 @@ function SunControls({
       <Slider
         aria-label="Tageszeit"
         className="[&_[data-slot=slider-range]]:bg-transparent [&_[data-slot=slider-track]]:bg-[image:var(--sun-gradient)]"
+        disabled={resting}
         id="sun-time"
         max={24 * 60 - 1}
         min={0}
@@ -673,13 +686,23 @@ function SunControls({
         <span>{sunTimeLabel("↓", sunset)}</span>
         <span>24:00</span>
       </div>
-      <span className="text-[11px] text-muted-foreground">
-        {sun
-          ? `Sonnenhöhe ${sun.altitudeDeg.toFixed(0)}°${sun.aboveHorizon ? "" : " · unter dem Horizont"}`
-          : "Sonnenstand unbekannt"}
-      </span>
+      {ownLight ? (
+        <p
+          className="rounded-md bg-muted px-2.5 py-1.5 text-[11px] text-muted-foreground leading-snug"
+          data-testid="own-light"
+        >
+          {ownLight}
+        </p>
+      ) : (
+        <span className="text-[11px] text-muted-foreground">
+          {sun
+            ? `Sonnenhöhe ${sun.altitudeDeg.toFixed(0)}°${sun.aboveHorizon ? "" : " · unter dem Horizont"}`
+            : "Sonnenstand unbekannt"}
+        </span>
+      )}
       <ShadowStudy
         day={day}
+        disabled={resting}
         minutes={minutes}
         onStudy={onStudy}
         ready={ready}
@@ -950,6 +973,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
               onStudy={props.onStudy}
               latLng={info?.latLng ?? null}
               minutes={props.minutes}
+              ownLight={RENDER_STYLE_BY_ID[look.style].ownLight?.note ?? null}
               previewSun={props.previewSun}
               ready={props.ready}
               sun={props.sun}

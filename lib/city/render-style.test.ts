@@ -5,6 +5,7 @@ import {
   nextRenderStyle,
   RENDER_STYLE_BY_ID,
   RENDER_STYLES,
+  styleInstant,
 } from "./render-style";
 
 test("every style has a unique id and a unique shader mode", () => {
@@ -65,4 +66,22 @@ test("isRenderStyle accepts the ids only", () => {
   expect(isRenderStyle("ghost")).toBe(false);
   expect(isRenderStyle(3)).toBe(false);
   expect(isRenderStyle(undefined)).toBe(false);
+});
+
+test("a style with its own light draws at its own instant, in the asked year", () => {
+  const asked = new Date(2027, 0, 3, 22, 15);
+  expect(styleInstant(RENDER_STYLE_BY_ID.pastel, asked)).toBe(asked);
+  for (const def of RENDER_STYLES) {
+    const light = def.ownLight;
+    if (!light) {
+      continue;
+    }
+    const own = styleInstant(def, asked);
+    expect(own.getFullYear()).toBe(2027);
+    expect(own.getMonth()).toBe(light.month);
+    expect(own.getHours() * 60 + own.getMinutes()).toBe(light.minutes);
+  }
+  // Sin City's masses are cut from the sun: its instant is a day's
+  expect(RENDER_STYLE_BY_ID.sincity.ownLight).not.toBeNull();
+  expect(RENDER_STYLE_BY_ID.figure.ownLight).not.toBeNull();
 });

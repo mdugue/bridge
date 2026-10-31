@@ -65,6 +65,7 @@ import {
   nextRenderStyle,
   RENDER_STYLE_BY_ID,
   type RenderStyle,
+  styleInstant,
 } from "@/lib/city/render-style";
 import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
@@ -1715,7 +1716,13 @@ async function bootApp(
       stream.tiles.deleteCamera(shadow);
     }
   };
-  const setSun = (date: Date, preview = false): SunState => {
+  // The instant the HUD asked for; the scene draws at it, or at the
+  // picture style's own (render-style.ts `styleInstant`: Sin City's sun,
+  // the Schwarzplan's no light), and again at it once the style changes.
+  let askedDate = opts.initialDate;
+  const setSun = (asked: Date, preview = false): SunState => {
+    askedDate = asked;
+    const date = styleInstant(RENDER_STYLE_BY_ID[opts.look.get().style], asked);
     const state = sunRig.update(date, preview);
     streamShadowTiles(state.aboveHorizon);
     currentNight = state.nightFactor;
@@ -1908,6 +1915,7 @@ async function bootApp(
   const applyLook = (look: LookValues) => {
     wakeStill();
     if (look.style !== lastStyle) {
+      const ownLightBefore = RENDER_STYLE_BY_ID[lastStyle].ownLight !== null;
       lastStyle = look.style;
       opts.trail?.note("style", look.style);
       // Modell's paper is the style's sheet
@@ -1917,6 +1925,10 @@ async function bootApp(
       // A picture style may draw its own crowns (style-dressing.ts), and the
       // crowns cast: the shadow map is redrawn with the new ones.
       invalidateShadows();
+      // …and may draw at its own instant (or no longer): the sun moves
+      if (RENDER_STYLE_BY_ID[look.style].ownLight || ownLightBefore) {
+        setSun(askedDate);
+      }
     }
     for (const key of Object.keys(sceneRows) as LookKey[]) {
       sceneRows[key](look[key]);

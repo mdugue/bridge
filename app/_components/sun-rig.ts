@@ -70,6 +70,13 @@ function smoothstepDown(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
+/** The night factor at a sun altitude (°): 0 by day, 1 from civil dusk
+ *  (−6°) — what lights the lamps, and what the picture styles' nights
+ *  follow (stylize-effect.ts, paper-scene.ts). */
+export function nightFactorAt(altitudeDeg: number): number {
+  return smoothstepDown(2, -6, altitudeDeg);
+}
+
 export interface SunRig {
   /** Frees the shadow map — a render target disposeObject3D never reaches. */
   dispose: () => void;
@@ -751,7 +758,7 @@ export function createSunRig(
     const altitudeDeg =
       (Math.asin(Math.min(Math.max(dir.y, -1), 1)) * 180) / Math.PI;
     // Civil-dusk ignition curve: 0 by day, 1 once the sun is well below.
-    const nightFactor = smoothstepDown(2, -6, altitudeDeg);
+    const nightFactor = nightFactorAt(altitudeDeg);
     // Generous daytime fill, but crushed at night so the warm lamp pools have
     // dark contrast to read against.
     hemisphere.intensity =

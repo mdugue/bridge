@@ -62,7 +62,7 @@ import { crownSwayShare } from "./vegetation-layer";
 import { fxaa } from "./fxaa";
 import { createMotionBlur } from "./motion-blur";
 import type { SceneFog } from "./height-fog";
-import { createPaperScene } from "./paper-scene";
+import { createPaperScene, paperNight } from "./paper-scene";
 import {
   createSelectionOutline,
   type OutlineSelection,
@@ -76,6 +76,7 @@ import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
 import { createStylize, type SunShadowMap } from "./stylize-effect";
+import { nightFactorAt } from "./sun-rig";
 import type { ViewLens } from "./view-lens";
 
 /** Initial focus distance before the first crosshair raycast lands. */
@@ -1309,7 +1310,10 @@ export function createPostStack(
       paperScene.sceneChanged();
       styleDressing.sceneChanged();
     },
-    setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
+    setSunAltitude: (altitudeDeg) => {
+      stylize.setSunAltitude(altitudeDeg);
+      paperNight.value = nightFactorAt(altitudeDeg);
+    },
     render: () => {
       updateFocus();
       stylize.update(renderer.getPixelRatio(), size);
@@ -1331,8 +1335,7 @@ export function createPostStack(
               lampCones: style.lampCones,
             })
           : null;
-      const swap =
-        style.paperScene === "ink" && stylize.night() ? null : style.paperScene;
+      const swap = style.paperScene;
       const restore = swap ? paperScene.begin(swap) : null;
       stylize.captureFog();
       const view = active();

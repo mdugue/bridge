@@ -1,6 +1,7 @@
 import {
   Color,
   DataTexture,
+  InterpolationSamplingType,
   FloatType,
   NearestFilter,
   RGBAFormat,
@@ -12,9 +13,12 @@ import {
   type Scene,
   type NodeBuilder,
   type UniformNode,
+  Vector3,
 } from "three/webgpu";
 import {
+  abs,
   attribute,
+  cameraWorldMatrix,
   float,
   Fn,
   int,
@@ -22,20 +26,27 @@ import {
   materialColor,
   max,
   mix,
+  normalFlat,
+  normalize,
   positionWorld,
   sin,
   smoothstep,
   step,
   textureLoad,
   uniform,
+  varying,
   vec3,
+  vec4,
 } from "three/tsl";
 import type { PaperKind } from "@/lib/city/render-style";
 import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
-import { FACADE_ROOF } from "@/lib/city/windows";
+import { FACADE_ROOF, NO_DOOR } from "@/lib/city/windows";
+import { clayWindows } from "./clay-windows";
 import { instanceTint } from "./instancing";
 import { ownSlotTexture, ownSlotUniform } from "./material-slots";
-import type { Live, V3, V4 } from "./shader-chunks";
+import { dataPosition, type Live, type V3, type V4 } from "./shader-chunks";
+import { viewDirection } from "./view-direction";
+import { shopOf, wallEaveUp } from "./visual-style";
 
 /**
  * The Papier style's scene half (lib/city/render-style.ts `paperScene`):
@@ -58,6 +69,14 @@ import type { Live, V3, V4 } from "./shader-chunks";
  * dome's inside is culled by the front-sided material, so the paper-toned
  * background shows there.
  */
+
+/**
+ * How far into the night the card is (0 by day, 1 once the lamps are all
+ * lit: the sun rig's night factor, post-stack.ts): Papier's and Strich's
+ * card lights its windows by it, and Papier's sky and haze darken to the
+ * night's card.
+ */
+export const paperNight: Live = uniform(0);
 
 /** Warm off-white: the sheet the model is cut from. */
 export const PAPER_HEX = 0xf4_f0_e8;
@@ -83,6 +102,15 @@ export const PAPER_GROUND: Readonly<Record<PaperKind, number>> = {
 };
 /** The sky and the distance: a paper a shade greyer than the model. */
 const PAPER_SKY = new Color(0xe9_e6_df);
+/** …and at night: the dark blue card the night is drawn on (the pass
+ *  draws its sky; this is the haze the far city fades into). */
+const PAPER_NIGHT_SKY = new Color(0x24_2b_40);
+const PAPER_DUSK_SKY = new Color(0x99_88_99);
+/** A smoothstep on numbers. */
+function smoothstepUp(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
+  return t * t * (3 - 2 * t);
+}
 /** Strich's and the Schwarzplan's sheet: white. */
 const SHEET_WHITE = new Color(0xff_ff_ff);
 /** The Schwarzplan's figure. */
@@ -119,6 +147,57 @@ const ownColour = Fn((builder: NodeBuilder) => {
   return mix(vec3(1), own.div(peak), 0.1);
 });
 
+/**
+ * The clay's lit windows on the card, for the night (`paperNight`): the
+ * windows' rhythm read from the drawn building tile's own object table
+ * (its slots), as the clay reads it (visual-style.ts `clayGraph`) — only
+ * the light in them, none of the clay's other terms. A paper model lit
+ * from inside: the openings glow through the card, and the far city keeps
+ * its lights as the windows' mean. Per build: what carries no facade (no
+ * building tile) gets none.
+ */
+const windowGlow = Fn((builder: NodeBuilder) => {
+  const geometry = builder.geometry;
+  if (
+    !(geometry?.hasAttribute("facade") && geometry.hasAttribute("featureId"))
+  ) {
+    return vec3(0);
+  }
+  const table = ownSlotTexture("clayObjects", OBJECT_TABLE_LIKE);
+  const rows = ownSlotUniform("clayRows", 1);
+  const id = int(attribute("featureId", "float").add(0.5));
+  const at = ivec2(id.mod(OBJECT_TEXTURE_WIDTH), id.div(OBJECT_TEXTURE_WIDTH));
+  // the object's texels (lib/city/city-mesh.ts packObjectTexels)
+  const band = (k: number) =>
+    textureLoad(table, at.add(ivec2(0, int(rows).mul(k))));
+  const a = band(0);
+  const b = band(1);
+  const c = band(2);
+  const facade = attribute("facade", "vec4") as unknown as V4;
+  const roof = step(facade.z, float(FACADE_ROOF + 1e-3));
+  const wn = normalize(cameraWorldMatrix.mul(vec4(normalFlat, 0)).xyz);
+  const windows = clayWindows({
+    eave: varying(b.w.add(wallEaveUp(facade, roof))),
+    facade: varying(mix(facade, vec4(0, 0, FACADE_ROOF, NO_DOOR), roof)),
+    h: max(varying(dataPosition().z.sub(a.w)), 0),
+    // flat: they seed and pack (visual-style.ts)
+    seed: varying(c.z).setInterpolation(InterpolationSamplingType.FLAT),
+    shop: shopOf(varying(c.w)),
+    spec: varying(band(3)).setInterpolation(InterpolationSamplingType.FLAT),
+    storey: varying(c.x),
+    strength: float(1),
+    sun: windowSun,
+    view: viewDirection(),
+    wall: float(1)
+      .sub(smoothstep(0.5, 0.7, abs(wn.y)))
+      .mul(float(1).sub(roof)),
+    wn,
+  });
+  return windows.glow;
+});
+/** The windows' recess reads a sun; at night the glow needs none. */
+const windowSun = uniform(new Vector3(0, 1, 0));
+
 function paperMaterial(): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial({
     color: PAPER,
@@ -137,8 +216,14 @@ function paperMaterial(): MeshStandardNodeMaterial {
   material.colorNode = vec3(materialColor)
     .mul(ownColour())
     .mul(vec3(0.012, 0.004, -0.014).mul(sheet).add(float(1)));
+  // at night the windows glow through the card
+  material.emissiveNode = windowGlow().mul(paperNight.mul(WINDOW_LIGHT));
   return material;
 }
+/** A lit window's light on the card at night (the clay's is 0.5 of its
+ *  glow, visual-style.ts `DUSK_GLOW`; the card is paler, so a little more
+ *  reads as warm light, not as a pale patch). */
+const WINDOW_LIGHT = 0.9;
 
 /**
  * The Schwarzplan's figure: one unlit black. three carries each drawn
@@ -367,6 +452,7 @@ export function createPaperScene(
     ink: INK_SMOKE.clone(),
   };
   const savedFog = new Color();
+  const nightSky = new Color();
   const hidden: Object3D[] = [];
   const shown: Object3D[] = [];
   // What the swap does not draw, gathered once per scene change rather than
@@ -413,6 +499,18 @@ export function createPaperScene(
     }
     scene.overrideMaterial = materials[kind];
     scene.background = skies[kind];
+    if (kind === "paper") {
+      // Papier's night is drawn on dark card: its sky and its haze
+      // (through a mauve dusk: halfway, day paper and night card met in
+      // a dull grey)
+      const night = paperNight.value;
+      nightSky
+        .copy(PAPER_SKY)
+        .lerp(PAPER_DUSK_SKY, smoothstepUp(0, 0.5, night))
+        .lerp(PAPER_NIGHT_SKY, smoothstepUp(0.5, 1, night));
+      fogColor.value.copy(nightSky);
+      scene.background = nightSky;
+    }
     const lists = candidates ?? gather();
     const list = kind === "figure" ? lists.figure : lists.paper;
     for (const m of ownPaper) {

@@ -30,6 +30,23 @@ export type RenderStyle =
   | "pastel"
   | "sincity";
 
+/**
+ * The instant a style always draws at, whatever the HUD's date and time
+ * (`styleInstant`): a style whose picture is cut from one light of its own
+ * (Sin City's hard afternoon sun) or knows no light at all (the
+ * Schwarzplan) would only break under another one. The HUD keeps its date
+ * and greys its sun controls out with `note` while the style is on.
+ */
+export interface OwnLight {
+  /** month, 0-based like Date's */
+  month: number;
+  day: number;
+  /** minutes of the (local) day */
+  minutes: number;
+  /** why the time does not apply (German, like the HUD) */
+  note: string;
+}
+
 export interface RenderStyleDef {
   /**
    * May the photographic depth of field run under this style? A graphic
@@ -67,6 +84,8 @@ export interface RenderStyleDef {
   label: string;
   /** Soft light cones under the street lamps (style-dressing.ts). */
   lampCones: boolean;
+  /** the style's own instant, or null to follow the HUD's (`OwnLight`) */
+  ownLight: OwnLight | null;
   /**
    * The stylize pass's shader mode (stylize-effect.ts); 0 = the pass is off,
    * which is what keeps the default style free.
@@ -100,6 +119,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 1,
     paperScene: null,
     crowns: null,
+    ownLight: null,
     lampCones: false,
     vignette: { offset: 0.28, darkness: 0.5 },
     swatch: ["#efe6d8", "#b9c7d6"],
@@ -119,6 +139,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 1,
     paperScene: null,
     crowns: "comic",
+    ownLight: null,
     lampCones: false,
     vignette: { offset: 0.35, darkness: 0.22 },
     swatch: ["#f6ecd2", "#e0674f"],
@@ -137,6 +158,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 1,
     paperScene: null,
     crowns: null,
+    ownLight: null,
     lampCones: true,
     vignette: { offset: 0.12, darkness: 0.9 },
     swatch: ["#c9c9c4", "#1b1b1d"],
@@ -155,6 +177,12 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 1,
     paperScene: "ink",
     crowns: null,
+    ownLight: {
+      month: 8,
+      day: 15,
+      minutes: 16 * 60 + 30,
+      note: "Sin City zeichnet immer im selben harten Nachmittagslicht: Datum und Uhrzeit gelten wieder, sobald du den Stil wechselst.",
+    },
     lampCones: false,
     vignette: { offset: 0.3, darkness: 0.45 },
     swatch: ["#f4f4f0", "#c1121f"],
@@ -175,6 +203,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 1,
     paperScene: "paper",
     crowns: "paper",
+    ownLight: null,
     lampCones: false,
     vignette: { offset: 0.32, darkness: 0.28 },
     swatch: ["#f4f0e8", "#7a8092"],
@@ -194,6 +223,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 0,
     paperScene: "line",
     crowns: "paper",
+    ownLight: null,
     lampCones: false,
     vignette: { offset: 0.5, darkness: 0 },
     swatch: ["#fbfaf7", "#2b2d33"],
@@ -213,6 +243,12 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 0,
     paperScene: "figure",
     crowns: null,
+    ownLight: {
+      month: 5,
+      day: 21,
+      minutes: 13 * 60,
+      note: "Der Schwarzplan kennt weder Licht noch Schatten: Datum und Uhrzeit gelten wieder, sobald du den Stil wechselst.",
+    },
     lampCones: false,
     vignette: { offset: 0.5, darkness: 0 },
     swatch: ["#ffffff", "#111111"],
@@ -232,6 +268,19 @@ export function isRenderStyle(value: unknown): value is RenderStyle {
     typeof value === "string" &&
     RENDER_STYLES.some((def) => def.id === (value as RenderStyle))
   );
+}
+
+/**
+ * The instant the scene draws at under `style`: the HUD's `asked` one, or
+ * the style's own (`OwnLight`) in the same year, in local time like the
+ * HUD's.
+ */
+export function styleInstant(style: RenderStyleDef, asked: Date): Date {
+  const own = style.ownLight;
+  if (!own) {
+    return asked;
+  }
+  return new Date(asked.getFullYear(), own.month, own.day, 0, own.minutes);
 }
 
 /** The style after `current` in picker order, wrapping around (the V key). */
