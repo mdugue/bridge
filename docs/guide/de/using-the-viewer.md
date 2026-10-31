@@ -519,7 +519,11 @@ und das Modell behalten ihre scharfen Linien.
   sonst wird er vor dir aufs Gelände gesetzt — mit seinem Nullpunkt (±0),
   wenn er ein Untergeschoss darunter hat. *Hierher holen*, *Aufs
   Gelände*, *Ost*, *Nord*, *Höhe* und *Drehung* verschieben, setzen und
-  drehen ihn; *Lage sichern* speichert die Lage als kleine Datei
+  drehen ihn; *Maßstab* liest die Datei in einer anderen Einheit (m, cm,
+  mm, Zoll, Fuß) und mit einem Faktor, etwa für ein OBJ, das keine
+  Einheit kennt, oder ein Modell im Maßstab 1:100; ist ein Entwurf kleiner
+  als 4 m oder größer als 3 km, schlägt das Feld das vor (Landschaftspläne
+  haben keinen Maßstab: ihre Koordinaten sagen ihn). *Lage sichern* speichert die Lage samt Maßstab als kleine Datei
   (`….lage.json`), die beim nächsten Mal mit dem Entwurf zusammen geladen
   wird. Gebäude, deren Grundriss der Entwurf zu mehr als der Hälfte
   überdeckt, treten beiseite (*Bestand im Umriss ausblenden*); flache

@@ -1451,6 +1451,17 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     }, designBlockObj());
     expect(obj?.source).toBe("here");
     expect(obj?.triangles).toBe(12);
+    expect(obj?.size).toEqual([40, 30, 20]);
+    // read in centimetres it shrinks about its foot, which stays
+    const cm = await page.evaluate(() => {
+      const design = window.__poc?.handle?.design;
+      design?.setScale({ unit: "cm", factor: 1 });
+      return design?.status() ?? null;
+    });
+    expect(cm?.scale).toEqual({ unit: "cm", factor: 1 });
+    expect(cm?.size[2]).toBeCloseTo(0.2, 6);
+    expect(cm?.placement.base).toBe(obj?.placement.base);
+    expect(cm?.scaleHint).toContain("Zentimetern");
     // three's Rhino3dmLoader with rhino3dm from the site's own /wasm/
     const rhino = await page.evaluate(
       async (bytes) => {

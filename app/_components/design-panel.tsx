@@ -13,10 +13,16 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import type {
-  DesignPlacement,
-  PlacementSource,
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  type DesignPlacement,
+  type DesignUnit,
+  FACTOR_MAX,
+  FACTOR_MIN,
+  isDesignUnit,
+  type PlacementSource,
 } from "@/lib/city/design-placement";
+import { decimal, metres } from "@/lib/city/card-lines";
 import { cn } from "cn";
 import type { DesignControls } from "./create-app";
 import type { DesignStatus } from "./design-layer";
@@ -43,6 +49,19 @@ const SOURCE_TEXT: Record<PlacementSource, string> = {
 
 const MB = 1024 * 1024;
 
+/** The units the panel offers, as a planner says them. */
+const UNITS: readonly [DesignUnit, string][] = [
+  ["m", "m"],
+  ["cm", "cm"],
+  ["mm", "mm"],
+  ["in", "Zoll"],
+  ["ft", "Fuß"],
+];
+
+function sizeLabel([w, d, h]: [number, number, number]): string {
+  return `${decimal.format(w)} × ${metres(d)}, ${metres(h)} hoch`;
+}
+
 function weightLabel(status: DesignStatus): string {
   const triangles = status.triangles.toLocaleString("de-DE");
   const mb = Math.max(1, Math.round(status.bytes / MB));
@@ -51,6 +70,7 @@ function weightLabel(status: DesignStatus): string {
 
 /** A number typed in, taken on Enter or when the field is left. */
 function NumberField({
+  digits,
   id,
   label,
   onCommit,
@@ -58,6 +78,8 @@ function NumberField({
   unit,
   value,
 }: {
+  /** the decimals shown; a number's own up to 4 where unset by `step` */
+  digits?: number;
   id: string;
   label: string;
   onCommit: (value: number) => void;
@@ -65,7 +87,10 @@ function NumberField({
   unit: string;
   value: number;
 }) {
-  const shown = value.toFixed(step < 1 ? 2 : 0);
+  const shown =
+    digits === undefined
+      ? value.toFixed(step < 1 ? 2 : 0)
+      : String(Number(value.toFixed(digits)));
   const [text, setText] = useState<string | null>(null);
   const commit = () => {
     const v = Number((text ?? shown).replace(",", "."));
@@ -233,12 +258,20 @@ function DesignControlsView({
         <span className="text-[11px] text-muted-foreground">
           {weightLabel(status)}
         </span>
+        <span className="text-[11px] text-muted-foreground">
+          {sizeLabel(status.size)}
+        </span>
         <span className="text-[11px] text-muted-foreground leading-snug">
           {SOURCE_TEXT[status.source]}
         </span>
         {status.note && (
           <span className="text-[11px] text-muted-foreground leading-snug">
             {status.note}
+          </span>
+        )}
+        {status.scaleHint && (
+          <span className="text-[11px] text-muted-foreground leading-snug">
+            {status.scaleHint}
           </span>
         )}
         {status.texturesDropped && (
@@ -312,6 +345,9 @@ function DesignControlsView({
         step={1}
         value={[p.rotation]}
       />
+      {status.scalable && (
+        <ScaleControls controls={controls} ids={ids} status={status} />
+      )}
       <Field orientation="horizontal">
         <FieldLabel className="font-medium text-xs" htmlFor={`${ids}-replace`}>
           Bestand im Umriss ausblenden
@@ -364,6 +400,72 @@ function DesignControlsView({
           Entfernen
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The unit the file is read in and a factor on it: OBJ has no unit, and
+ * many exports come in centimetres or millimetres; a model at 1:100 or a
+ * game asset takes a factor. It scales about the design's foot.
+ */
+function ScaleControls({
+  controls,
+  ids,
+  status,
+}: {
+  controls: () => DesignControls | null;
+  ids: string;
+  status: DesignStatus;
+}) {
+  const { scale } = status;
+  return (
+    <div className="flex flex-col gap-1">
+      <span
+        className="font-medium text-[11px]"
+        id={`${ids}-unit`}
+        title="Die Einheit, in der die Datei gezeichnet ist"
+      >
+        Maßstab{" "}
+        <span className="text-muted-foreground">(Einheit der Datei)</span>
+      </span>
+      <ToggleGroup
+        aria-labelledby={`${ids}-unit`}
+        onValueChange={(value: string[]) => {
+          const [unit] = value;
+          if (isDesignUnit(unit)) {
+            controls()?.setScale({ ...scale, unit });
+          }
+        }}
+        size="sm"
+        spacing={1}
+        value={[scale.unit]}
+        variant="outline"
+      >
+        {UNITS.map(([unit, label]) => (
+          <ToggleGroupItem
+            className="px-2 data-[pressed]:bg-primary data-[pressed]:text-primary-foreground"
+            key={unit}
+            value={unit}
+          >
+            {label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      <NumberField
+        id={`${ids}-factor`}
+        label="Faktor"
+        digits={4}
+        onCommit={(factor) =>
+          controls()?.setScale({
+            ...scale,
+            factor: Math.min(FACTOR_MAX, Math.max(FACTOR_MIN, factor)),
+          })
+        }
+        step={0.01}
+        unit="×"
+        value={scale.factor}
+      />
     </div>
   );
 }
