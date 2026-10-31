@@ -103,7 +103,9 @@ export const PROCESS_PEAK = 1.6e9;
  * is first asked whether it is cached (`--if-cached`, at `PROCESS_PEAK`: a
  * warm site publishes and is done), and only a site that bakes is counted
  * at this: one at a time on Vercel's builder, beside the warm sites'
- * runs; two on CI's 16.8 GB runner.
+ * runs; two on CI's 16.8 GB runner. München had grown to 6.1 GiB by
+ * 2026-10-31 (garbage the buildings' appends left), 4.47 GiB since
+ * bake-city-mesh.ts collects after each.
  */
 export const SITE_PEAK = 4.8e9;
 /** The share of the machine's memory the bakes may hold together. */
