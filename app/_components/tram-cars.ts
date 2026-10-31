@@ -39,7 +39,7 @@ import {
   type TramOperator,
   type TramTimetable,
 } from "@/lib/city/tram-timetable";
-import { dataMarkColour } from "./glass";
+import { dataMarkAlpha, dataMarkColour } from "./glass";
 import { Instances, instancePosition, instanceTint } from "./instancing";
 import { mapWidenNode } from "./map-overlay";
 import { type DeckPoly, deckLift } from "@/lib/city/decks";
@@ -170,9 +170,10 @@ function trailMaterial(): MeshBasicNodeMaterial {
       scale: float(0.5),
       light: fade.pow(6),
       edge: float(0),
+      ink: float(1),
       backdrop: false,
     });
-    m.colorNode = vec4(styled, fade.pow(1.4).mul(float(0.85)));
+    m.colorNode = vec4(styled, dataMarkAlpha(fade.pow(1.4).mul(0.85)));
     m.userData.paperOwn = true;
     return m;
   });

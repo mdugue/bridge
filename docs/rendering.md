@@ -643,15 +643,18 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   `dataMarks`, one shared uniform, `glass.ts` `dataMarkColour`): Pastell
   the glass; Comic a marker ink on hues clear of the crowns' (0.55–0.95),
   printed flat by the pass in blue, yellow or red by the mark's place on
-  its scale (the traffic's load), its light white, its edge black; Film
-  noir a long exposure, dark glass with white streaks; Sin City oxblood
-  with bright red light; Papier coloured tissue paper (the pass keeps
-  more hue where the frame is saturated), lit from inside at night;
-  Strich a plan colour (blue to violet) edged with the pen, at night a
-  warm light the etching leaves white; the Schwarzplan white, edged in
-  black (a pool a ring) — a fill would fall under its
-  threshold. The marks draw themselves through a swap (`paperOwn`;
-  `hiddenInPaper` keeps a see-through material that does).
+  its scale (the traffic's load), its light white, its edge black (a
+  blended mark — a pool, a trail — opaque or gone, `dataMarkAlpha`: a
+  half-blended ink falls out of the print); Film noir a long exposure,
+  dark glass with white streaks; Sin City oxblood with bright red light;
+  Papier coloured tissue paper (the pass keeps more hue where the frame
+  is saturated), lit from inside at night; Strich a plan colour (blue to
+  violet) edged with the pen, at night a warm light the etching leaves
+  white; the Schwarzplan white, edged in black (a pool a ring, a tram's
+  trail one black line) — a fill would fall under its threshold. The
+  marks draw themselves through a swap (`paperOwn`; `hiddenInPaper`
+  keeps a see-through material that does), gathered again whenever a
+  layer adds its marks.
 
 The pass reads the depth buffer at **integer** texel radii around a texel
 centre, blending two radii for the stroke weight: the buffer is sampled

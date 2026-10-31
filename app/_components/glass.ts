@@ -179,10 +179,29 @@ export interface DataMarkInputs {
   edge?: F;
   /** 0..1, its ridge — the middle of a band (default: none) */
   ridge?: F;
+  /** 0..1, what of it the Schwarzplan inks black (default: its edge, wider
+   *  than `edge`'s; a thin mark, a tram's trail, is one black line) */
+  ink?: F;
   /** false for a mark its alpha blends over the scene (a tram's trail):
    *  it reads no copy of the scene, so none is made for it alone — its
    *  blend lays it over what is behind (default true) */
   backdrop?: boolean;
+}
+
+/** 1 while the marks draw as `kind`, else 0 — a mix per kind, not a
+ *  select: a select's arms are scopes, and a node first built in one arm
+ *  is not there in the next. */
+export function dataMarksAre(kind: DataMarks): F {
+  return step(abs(dataMarks.sub(DATA_MARKS[kind])), 0.5);
+}
+
+/**
+ * A blended mark's alpha under the style: Comic prints only what reaches
+ * the frame as a full marker ink, so there it is opaque or gone (a
+ * half-blended ink falls out of the pass's print and is drawn as clay).
+ */
+export function dataMarkAlpha(alpha: F): F {
+  return mix(alpha, step(0.3, alpha), dataMarksAre("print"));
 }
 
 /** A fully saturated colour of hue `h` (0..1) at value 0.9, one channel
@@ -267,14 +286,11 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
     vec3(1),
     vec3(0),
     max(
-      i.edge ?? smoothstep(0.5, 0.7, glassGrazing()),
+      i.ink ?? i.edge ?? smoothstep(0.5, 0.7, glassGrazing()),
       step(0.5, light).mul(i.ridge ?? 0)
     )
   );
-  // a mix per kind, not a select: a select's arms are scopes, and a node
-  // first built in one arm is not there in the next
-  const is = (kind: DataMarks): F =>
-    step(abs(dataMarks.sub(DATA_MARKS[kind])), 0.5);
+  const is = dataMarksAre;
   let col = i.glass;
   col = mix(col, printed, is("print"));
   col = mix(col, exposure, is("light"));

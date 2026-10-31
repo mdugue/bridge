@@ -10,14 +10,12 @@ import {
   Vector2,
 } from "three/webgpu";
 import {
-  abs,
   float,
   fract,
   mix,
   positionLocal,
   positionWorld,
   smoothstep,
-  step,
   uv,
   vec3,
   vec4,
@@ -34,9 +32,9 @@ import {
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { fetchOptionalJson } from "./fetch-optional";
 import {
-  DATA_MARKS,
+  dataMarkAlpha,
   dataMarkColour,
-  dataMarks,
+  dataMarksAre,
   dataTime,
   glassColour,
   glassGrazing,
@@ -194,8 +192,14 @@ function poolMaterial(): MeshBasicNodeMaterial {
       // (blended over the scene by its alpha, as the trails)
       backdrop: false,
     });
-    const outline = step(abs(dataMarks.sub(DATA_MARKS.outline)), 0.5);
-    m.colorNode = vec4(colour, mix(fall.mul(fall).mul(0.55), ring, outline));
+    m.colorNode = vec4(
+      colour,
+      mix(
+        dataMarkAlpha(fall.mul(fall).mul(0.55)),
+        ring,
+        dataMarksAre("outline")
+      )
+    );
     m.userData.paperOwn = true;
     return m;
   });
