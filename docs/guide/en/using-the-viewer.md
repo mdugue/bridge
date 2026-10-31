@@ -237,8 +237,8 @@ ground beside it; close up it is an inscription at the plinth; from far
 off only the name. It moves aside when another building would hide it
 or a panel covers it, shows as a pale outline where the city still
 covers it, and is set in each picture style's own type — in Comic in a
-yellow caption box, in Schwarzplan on the ground like a plan's
-lettering. You need not hit a small house exactly:
+yellow caption box, in Schwarzplan, seen from above, on the ground
+like a plan's lettering. You need not hit a small house exactly:
 when nothing stands right under your finger, the building most of the
 ground around it belongs to answers. On a phone the card is a sheet at
 the bottom: folded it says what the building is and where; swipe it up

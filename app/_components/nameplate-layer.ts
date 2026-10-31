@@ -705,15 +705,17 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       const cam = plateCamera(camera, viewport);
       if (now - chosenAt >= CHOOSE_MS && !(hold && layout)) {
         chosenAt = now;
-        // Schwarzplan letters the ground from every view: its ground
-        // places are the ones weighed
+        // Schwarzplan letters the ground whenever the camera is above the
+        // building (its ground places are the ones weighed); from the
+        // street the ground beside it is hidden, so it stands upright
+        const onGround = type().onGround && cam.position[1] > body.top;
         const chosen = chooseNameplate(
           body,
           layout,
           block(),
           range(),
           placeScene(camera, cam),
-          type().onGround ? "air" : undefined
+          onGround ? "air" : undefined
         );
         if (layout === null) {
           layout = chosen;

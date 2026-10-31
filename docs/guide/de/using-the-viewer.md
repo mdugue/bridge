@@ -249,8 +249,8 @@ er neben ihm auf dem Boden; ganz nah ist er eine Inschrift am Sockel; von
 weit nur der Name. Er weicht aus, wenn ein anderes Gebäude ihn verdecken
 oder ein Bedienfeld ihn überdecken würde, erscheint als blasse Kontur, wo
 die Stadt ihn doch verdeckt, und ist in jedem Darstellungsstil anders
-gesetzt — im Comic in einem gelben Erzählkasten, im Schwarzplan auf dem
-Boden wie die Beschriftung eines Plans. Ein kleines Haus musst du
+gesetzt — im Comic in einem gelben Erzählkasten, im Schwarzplan, von oben
+gesehen, auf dem Boden wie die Beschriftung eines Plans. Ein kleines Haus musst du
 nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
 Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
 die Karte ein Blatt am unteren Rand: eingeklappt sagt es, was das Gebäude

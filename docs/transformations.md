@@ -1833,7 +1833,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   facts, Comic a caption box (Bangers, yellow, a hard shadow and a tail
   to the building), Noir and Sin City a condensed grotesque (Oswald) with
   a monospaced line, Strich spaced capitals with a dimension line,
-  Schwarzplan always on the ground like a plan's lettering; by night the
+  Schwarzplan on the ground like a plan's lettering from anywhere above
+  the building; by night the
   ink turns light on a dark halo and dims a little. Drawn after the frame
   (`nameplate-layer.ts`, rendering.md). **Not yet judged on a real GPU.**
 

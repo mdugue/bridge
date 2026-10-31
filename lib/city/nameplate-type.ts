@@ -3,8 +3,8 @@
  * and by night: its faces, cases and tracking, its ink and halo, the
  * comic's caption box, the leader's kind. The plate itself is placed the
  * same in every style (lib/city/nameplate-place.ts); only Schwarzplan
- * lays it on the ground from every view, the plan's own place for
- * lettering. Colours are sRGB (0…1): the plate is drawn after the output
+ * lays it on the ground from every view above the building, the plan's
+ * own place for lettering. Colours are sRGB (0…1): the plate is drawn after the output
  * transform. No THREE, no DOM.
  */
 import type { NameplateRank } from "./nameplate";
@@ -68,7 +68,7 @@ export interface NameplateType {
   leader: "hair" | "dimension" | "tail";
   /** the small lines' setting and ink */
   lines: NameplateSetting & { ink: DayNight; size: number };
-  /** laid on the ground from every view */
+  /** laid on the ground from every view above the building */
   onGround: boolean;
   title: NameplateSetting;
 }
