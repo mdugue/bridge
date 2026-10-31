@@ -40,7 +40,6 @@ import {
   IF_CACHED_RUN,
   NOT_CACHED,
   SITE_PEAK,
-  WARM_ABOVE,
   warmersOn,
   warmSteps,
 } from "./warmers";
@@ -97,14 +96,13 @@ function machineMemory(): number {
  * Bakes the sites, every bake a process of its own, several at a time
  * (`bakeLimits`: as many as the cores, their peaks within the memory): a
  * bake is single-threaded, so one after the other a cold build waited for
- * every site in turn. Each site is one process: first asked whether it is
- * cached (`--if-cached`, a small peak; a warm site publishes there), and
- * only when it is not baked, counted at `SITE_PEAK` — largest first so it
- * never starts last. With `warm`, a site with more
- * tiles than `WARM_ABOVE` is baked by warmers (warmers.ts), one tile each,
- * which fill every slot the smaller sites leave: those go first, largest
- * first, since each is one process that cannot be split — started late, it
- * would be the build's tail.
+ * every site in turn. Each site is first asked whether it is cached
+ * (`--if-cached`, a small peak; a warm site publishes there). One that is
+ * not is baked by warmers (warmers.ts), one tile each, so the tiles of
+ * every site share the slots — largest site first, its first warmer
+ * started ahead of the smaller sites waiting. With `warm` off
+ * (`PREPARE_WARMERS=0`) a cold site is one process, counted at
+ * `SITE_PEAK`.
  */
 async function prepareAll(
   ids: readonly SiteId[],
@@ -115,7 +113,7 @@ async function prepareAll(
   const failed: SiteId[] = [];
   const bakeSite = async (id: SiteId): Promise<boolean> => {
     const tiles = tileIds(SITES[id]);
-    if (!warm || tiles.length <= WARM_ABOVE) {
+    if (!warm || tiles.length === 0) {
       // a cached site publishes at a small peak; only a cold one is
       // counted at a whole site's (warmers.ts SITE_PEAK)
       const probe = await slots.run(0, IF_CACHED_RUN.peak, () =>

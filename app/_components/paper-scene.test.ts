@@ -160,3 +160,22 @@ test("what only the plan draws shows in the Schwarzplan's frames alone", () => {
   figure();
   expect(plan.visible).toBe(false);
 });
+
+test("a data mark's glass draws itself through every swap", () => {
+  const w = world();
+  const glass = new MeshBasicNodeMaterial({ transparent: true });
+  glass.userData.paperOwn = true;
+  const mark = new Mesh(new BoxGeometry(), glass);
+  w.scene.add(mark);
+  const paper = createPaperScene(w.scene, w.fog);
+  for (const kind of ["paper", "line", "ink", "figure"] as const) {
+    const restore = paper.begin(kind);
+    // shown, in its own material: a see-through sheet that is not the
+    // marks' stays hidden
+    expect(mark.visible).toBe(true);
+    expect(glass.allowOverride).toBe(false);
+    expect(w.sheet.visible).toBe(false);
+    restore();
+    expect(glass.allowOverride).toBe(true);
+  }
+});
