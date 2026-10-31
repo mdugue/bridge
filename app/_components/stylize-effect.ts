@@ -1357,9 +1357,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       turn,
       HATCH_CSS
     );
-    // deep shade by day; by night the dark of a wall or a roof the sky's
-    // light leaves (the open ground keeps one layer: crossed all over, it
-    // read as a fence)
+    // deep shade by day; by night the dark of a wall the sky's light
+    // leaves (what faces up — the ground, a roof under 45° — keeps one
+    // layer: crossed all over, the ground read as a fence)
     const deep = mix(
       smoothstep(0.3, 0.12, y),
       float(1)

@@ -1716,12 +1716,12 @@ async function bootApp(
       stream.tiles.deleteCamera(shadow);
     }
   };
-  // The instant the HUD asked for; the scene draws at it, or at the
-  // picture style's own (render-style.ts `styleInstant`: Sin City's sun,
-  // the Schwarzplan's no light), and again at it once the style changes.
-  let askedDate = opts.initialDate;
+  // The light falls at the instant the HUD asked for, or at the picture
+  // style's own (render-style.ts `styleInstant`: Sin City's sun, the
+  // Schwarzplan's no light; the HUD sets the sun again when the style
+  // changes, city-walk.tsx). The clocks, the seasons and the data layers'
+  // hour keep the asked instant: a style changes the light, not the day.
   const setSun = (asked: Date, preview = false): SunState => {
-    askedDate = asked;
     const date = styleInstant(RENDER_STYLE_BY_ID[opts.look.get().style], asked);
     const state = sunRig.update(date, preview);
     streamShadowTiles(state.aboveHorizon);
@@ -1734,12 +1734,12 @@ async function bootApp(
     lampLights.setNightFactor(state.nightFactor);
     lantern.setNight(state.nightFactor);
     setFountainNight(state.nightFactor);
-    setFountainSeason(date);
+    setFountainSeason(asked);
     setFurnitureNight(state.nightFactor);
-    setClockTime(date);
+    setClockTime(asked);
     clayNight.value = state.nightFactor;
-    seasonClock.set(date);
-    sceneClock.set({ date, atMs: performance.now() });
+    seasonClock.set(asked);
+    sceneClock.set({ date: asked, atMs: performance.now() });
     // The sun's move has asked for the map already; a drag's step leaves
     // it to the rig's pace.
     if (!preview) {
@@ -1915,7 +1915,6 @@ async function bootApp(
   const applyLook = (look: LookValues) => {
     wakeStill();
     if (look.style !== lastStyle) {
-      const ownLightBefore = RENDER_STYLE_BY_ID[lastStyle].ownLight !== null;
       lastStyle = look.style;
       opts.trail?.note("style", look.style);
       // Modell's paper is the style's sheet
@@ -1925,10 +1924,6 @@ async function bootApp(
       // A picture style may draw its own crowns (style-dressing.ts), and the
       // crowns cast: the shadow map is redrawn with the new ones.
       invalidateShadows();
-      // …and may draw at its own instant (or no longer): the sun moves
-      if (RENDER_STYLE_BY_ID[look.style].ownLight || ownLightBefore) {
-        setSun(askedDate);
-      }
     }
     for (const key of Object.keys(sceneRows) as LookKey[]) {
       sceneRows[key](look[key]);
