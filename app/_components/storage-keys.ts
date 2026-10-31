@@ -24,6 +24,8 @@ export const STORAGE_KEYS = {
   gpuSafety: "gpu-safety",
   /** Frag die Stadt's key, where the visitor asked to keep it (ask-key.ts) */
   askKey: "frag-die-stadt",
+  /** the voice the visitor picked for reading aloud (ask-voice.ts) */
+  voice: "vorlese-stimme",
 } as const;
 
 /** Session storage: gone with the tab. */

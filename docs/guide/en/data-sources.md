@@ -457,6 +457,7 @@ bridge-structure files still date from earlier Overpass API queries.
 | Geoportal Berlin | `dl-de/zero-2-0`: no credit required | given anyway: "Geoportal Berlin, dl-de/zero-2-0" |
 | OpenStreetMap | *Open Database License* (ODbL) | "© OpenStreetMap contributors" |
 | Wikidata | *CC0* (public domain) | none required |
+| Wikimedia Commons (the walks' photos) | each file's licence as its Commons page states (mostly *CC BY-SA* or public domain) | author, licence and link on the stop's card |
 | Copernicus DEM GLO-30 (the land beyond the tiles) | *Licence for the use of the Copernicus WorldDEM-30*: free of charge for any use; a modified product carries the credit, and its legal notice the liability sentence | "Gelände im Umland: produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved"; and: "The organisations in charge of the Copernicus programme by law or by delegation do not incur any liability for any use of the Copernicus WorldDEM-30." |
 | DWD phenology (the annual reporters' observations of wild plants, 2010–2023) | `dl-de/by-2-0` | "Quelle: Deutscher Wetterdienst" |
 | Stadtbaumkataster | `dl-de/by-2-0` | "Landeshauptstadt Dresden" |

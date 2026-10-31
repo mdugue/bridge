@@ -22,7 +22,7 @@
       ],
       "hour": 12,
       "text": "Am 1. Juli 1716 wurde der Grundstein gelegt, im Januar 1719 rollten die ersten Wagen über die Mulde, nach Plänen von Matthäus Daniel Pöppelmann, dem sächsischen Oberlandbaumeister. Am 15. April 1945 sprengte die Wehrmacht das Mittelstück. Und am 13. August 2002 kam die Flut: Treibgut staute sich, das Wasser unterspülte die Pfeiler, die Brücke stürzte teilweise ein. Am 20. August 2012 öffnete sie wieder. Beim nächsten Hochwasser, im Juni 2013, hielt sie stand.",
-      "closer": "Zähl die Bögen am rechten Ufer: Von drei zerstörten historischen wurde nur einer wieder gebaut.",
+      "closer": "Am rechten Ufer waren drei historische Bögen zerstört; nur einer davon wurde wieder gebaut.",
       "days": [
         {
           "from": "08-10",
@@ -50,7 +50,16 @@
       ],
       "refs": [
         "Q2120789"
-      ]
+      ],
+      "photo": {
+        "file": "GrimmaPöppelmNeu.JPG",
+        "author": "Jwaller",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:GrimmaP%C3%B6ppelmNeu.JPG",
+        "h": 595,
+        "w": 800
+      }
     },
     {
       "id": "fuerstenschule",
@@ -84,7 +93,16 @@
       ],
       "refs": [
         "Q14537082"
-      ]
+      ],
+      "photo": {
+        "file": "Grimma Klosterkirche.jpg",
+        "author": "Joeb07",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Grimma_Klosterkirche.jpg",
+        "h": 1067,
+        "w": 800
+      }
     },
     {
       "id": "seume",
@@ -118,7 +136,16 @@
       ],
       "refs": [
         "Q107585173"
-      ]
+      ],
+      "photo": {
+        "file": "Fotothek df roe-neg 0006344 010 \"Seume-Haus\" in Grimma.jpg",
+        "author": "Roger Rössing / Renate Rössing",
+        "licence": "CC BY-SA 3.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Fotothek_df_roe-neg_0006344_010_%22Seume-Haus%22_in_Grimma.jpg",
+        "h": 1109,
+        "w": 800
+      }
     }
   ]
 }

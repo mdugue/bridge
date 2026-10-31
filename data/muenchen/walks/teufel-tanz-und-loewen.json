@@ -43,7 +43,16 @@
       ],
       "refs": [
         "Q167193"
-      ]
+      ],
+      "photo": {
+        "file": "Frauenkirche Munich - View from Peterskirche Tower.jpg",
+        "author": "Diliff",
+        "licence": "CC BY 2.5",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.5",
+        "page": "https://commons.wikimedia.org/wiki/File:Frauenkirche_Munich_-_View_from_Peterskirche_Tower.jpg",
+        "h": 499,
+        "w": 800
+      }
     },
     {
       "id": "glockenspiel",
@@ -78,7 +87,17 @@
       ],
       "refs": [
         "Q152979"
-      ]
+      ],
+      "photo": {
+        "file": "Figuren am Neuen Rathaus München.jpg",
+        "caption": "Die Figuren des Glockenspiels",
+        "author": "MarcelBuehner",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Figuren_am_Neuen_Rathaus_M%C3%BCnchen.jpg",
+        "h": 600,
+        "w": 800
+      }
     },
     {
       "id": "asamkirche",
@@ -113,7 +132,16 @@
       ],
       "refs": [
         "Q152973"
-      ]
+      ],
+      "photo": {
+        "file": "St. Nepomuk retusche.jpg",
+        "author": "Wikiolo, derivative work Lämpel",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:St._Nepomuk_retusche.jpg",
+        "h": 642,
+        "w": 800
+      }
     },
     {
       "id": "hofbraeuhaus",
@@ -147,7 +175,16 @@
       ],
       "refs": [
         "Q152971"
-      ]
+      ],
+      "photo": {
+        "file": "2023-02-03 Hofbräuhaus am Platzl 07.jpg",
+        "author": "Burkhard Mücke",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:2023-02-03_Hofbr%C3%A4uhaus_am_Platzl_07.jpg",
+        "h": 600,
+        "w": 800
+      }
     },
     {
       "id": "residenz-loewen",
@@ -164,7 +201,7 @@
         532.7
       ],
       "hour": 17,
-      "text": "Zum Schluss die Residenz, von 1508 bis 1918 Sitz der Wittelsbacher, mit zehn Innenhöfen und dem Antiquarium, dem größten Renaissancesaal nördlich der Alpen. An den Eingängen zum Kaiserhof und zum Kapellenhof sitzen je zwei große Bronzelöwen. Sie halten Schilde mit kleinen Löwenköpfen, und deren Schnauzen glänzen golden: Wer sie berührt, soll Glück haben. Man sieht genau, welche Höhe die Hände der Münchner am liebsten erreichen.",
+      "text": "Zum Schluss die Residenz, von 1508 bis 1918 Sitz der Wittelsbacher, mit zehn Innenhöfen und dem Antiquarium, dem größten Renaissancesaal nördlich der Alpen. An den Eingängen zum Kaiserhof und zum Kapellenhof sitzen je zwei große Bronzelöwen. Sie halten Schilde mit kleinen Löwenköpfen, und deren Schnauzen glänzen golden: Wer sie berührt, soll Glück haben. Auf dem Foto sieht man genau, welche Höhe die Hände der Münchner am liebsten erreichen.",
       "closer": "Die Löwen sitzen an den Portalen zu Kaiserhof und Kapellenhof.",
       "facts": [
         {
@@ -182,7 +219,17 @@
       ],
       "refs": [
         "Q686548"
-      ]
+      ],
+      "photo": {
+        "file": "Einer der 4 Löwen vor dem Eingang zur Residenz München.jpg",
+        "caption": "Einer der Bronzelöwen am Eingang",
+        "author": "Peermucl",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Einer_der_4_L%C3%B6wen_vor_dem_Eingang_zur_Residenz_M%C3%BCnchen.jpg",
+        "h": 1203,
+        "w": 800
+      }
     }
   ]
 }

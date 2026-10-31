@@ -426,9 +426,15 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   die Station es will, einen Bildstil; aus dem Modell geht ein
   Spaziergang einmal hinaus, denn erzählt wird, was man sieht. Der
   Lautsprecher oben liest jede Station vor, schon während des Flugs
-  dorthin (mit der Stimme des Browsers). Die Karte erzählt die Station, ergänzt, was heute oder in
-  dieser Jahreszeit besonders ist, und nennt ein Detail, das im Bild zu
-  finden ist. *Belege* klappt jede Angabe der Station mit ihrer Quelle
+  dorthin; während des Flugs kannst du dich umschauen, er landet trotzdem
+  an der Station. Vorgelesen wird mit der besten Stimme deines Geräts;
+  daneben lässt sich eine andere wählen, Online-Stimmen sind als solche
+  markiert ([Datenschutz](/datenschutz#frag-die-stadt)). Die Karte
+  erzählt die Station, ergänzt, was heute oder in dieser Jahreszeit
+  besonders ist, und nennt ein Detail, das im Bild zu finden ist. Was das
+  Modell nicht zeigt — eine Statue, ein Relief, eine Inschrift, ein
+  Innenraum —, zeigt ein Foto von Wikimedia Commons oben in der Karte,
+  mit Urheber und Lizenz; es liegt auf dieser Seite, nicht bei Wikimedia. *Belege* klappt jede Angabe der Station mit ihrer Quelle
   auf — Wikipedia, die Seite einer Einrichtung, die Daten des
   Stadtmodells selbst; Legenden werden als Legenden erzählt. *Weiter*
   und *Zurück* gehen von Station zu Station, ✕ beendet den Spaziergang

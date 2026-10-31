@@ -734,7 +734,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     if (h.getViewMode() === "model") {
       h.applyCameraState(stopCamera(stop, h.offset));
     } else {
-      h.flyToViewpoint(stopView(stop), WALK_PACE);
+      // a slow glide the visitor looks about in while the text is read:
+      // a drag on the way turns the view, it does not stop the walk
+      h.flyToViewpoint(stopView(stop), WALK_PACE, true);
     }
     time.setInstant(stopDate(stop, today()));
     look.set({ style: stop.style ?? "pastel" });

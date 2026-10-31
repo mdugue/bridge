@@ -24,6 +24,11 @@ data and stays under the licence of its source:
 
   - Wikidata: CC0 1.0.
 
+  - The walks' photos (data/<site>/walks/photos/): Wikimedia Commons
+    files, each under the licence its Commons page states and credited
+    with its author, licence and page in the walk's file (photo) and on
+    the stop's card. Reduced to 800 px and re-encoded as WebP.
+
   - The cities' and Länder's street-tree cadastres, traffic counts and
     cycle counters: dl-de/by-2-0 or dl-de/zero-2-0, credited to the city
     or Land that publishes them.
