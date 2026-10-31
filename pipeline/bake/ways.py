@@ -13,7 +13,8 @@ left out; Dresden 1.6 % and 3.9 %.
   burns); without one OSM's roads at the class raster's widths
   (`landcover_osm.road_buffers`);
 - track beds: the baked rails (`rail_<tile>.geojson`, the DLM's or OSM's,
-  with their track count) and every OSM track above ground — sidings, the
+  with their track count; not a monorail's beam, which stands on supports)
+  and every OSM track above ground — sidings, the
   yards' fans, trams in their own bed — one track bed wide each, at the
   width the drawn ballast has (`rail_osm.bed`).
 
@@ -40,6 +41,9 @@ def track_beds(tile: Tile) -> list[shapely.Geometry]:
     baked = tile.out("dlm", f"rail_{tile.id}.geojson")
     if baked.exists():
         for f in json.loads(baked.read_text())["features"]:
+            # a monorail's beam (rail_osm.py `monorails`) has no bed
+            if (f["properties"] or {}).get("mono"):
+                continue
             tracks = int((f["properties"] or {}).get("tracks") or 1)
             line = shapely.geometry.shape(f["geometry"])
             out.append(rail_osm.bed(line, tracks))

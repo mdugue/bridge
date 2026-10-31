@@ -3591,6 +3591,28 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   rails for a kilometre of track; in Hamburg a station building (ALKIS
   31001_3091) a track runs on, 1.2 m; a roof on posts — ALKIS Überdachung, drawn open —
   is never one, the track runs under it).
+- **Funiculars and monorails** `❝ taken` `= computed` `≈ assumed`
+  (2026-10-31, [ADR 0041](./adr/0041-line-levels-along-the-whole-line.md))
+  — OSM's `railway=funicular` is a track like a railway's, marked `steep`
+  (`rail_osm.rails`; no catenary, a cable hauls it): its level and profile
+  are solved at 100 % grade with vertical curves of ≥ 100 m
+  (`STEEP_GRADE`, `STEEP_RADIUS`), its context only through other steep
+  pieces, and a deck it runs on is a rail deck measured within 100 %
+  grade — Dresden's Standseilbahn climbs 17–29 % on the ground and over
+  its Gerüstviadukt (until then a path deck, its line flattened), Meißen's
+  Panoramaaufzug 65 %. OSM's `railway=monorail` is no track but a beam
+  (`rail_osm.monorails`, in the rails' file as `mono` with `bz`): its
+  underside is the upper hull of the DGM + 5.5 m for cars hanging under
+  it (`monorail=hanging`), 4.5 m for cars on top, over the whole chain —
+  straight across a hollow, bent over a crest; the rail layer draws a
+  closed girder (2.6 m wide for two tracks, 1.4 m deep) and every 8 m a
+  steel portal (legs 1.5 m outside the cars' way, a crossbeam on the
+  girder) or, for a beam ridden on top, a column; none where the beam
+  runs within 2 m of the ground, each foot `SINK.wall` deep
+  (`lib/city/monorail.ts`, `monorail-beam.ts`). In the model Dresden's
+  Schwebebahn runs up to 18 m over its hollow. The clearance, the
+  section and the supports' spacing are assumed; no cars (they would
+  move, ADR 0009). Before: both missing, as neither railway kind was read.
 - **Passages under decks** `◎ detected` (2026-10-01, ADR 0041) — a *cut* lying ≥ 30 %
   under a drawn deck (any kind, within 2 m) opens the fill in the terrain
   bake (`lib/city/passages.ts`, `shapeDgm`'s last pass, both levels): along

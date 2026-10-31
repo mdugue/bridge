@@ -23,19 +23,21 @@ import type {
 } from "../lib/city/features";
 import { epsgToWorld } from "../lib/city/ground-clamp";
 import {
-  LEVEL_GRADE,
   LEVEL_JUMP_M,
   type LevelLine,
   type LevelRun,
+  lineGrade,
   runLevelAt,
 } from "../lib/city/levels";
 import {
   DECK_REACH_M,
+  isMonorail,
   type LevelGround,
   type LinePiece,
   pieceSamples,
   RIDES,
   railPrefer,
+  railSteep,
   solvePieces,
 } from "../lib/city/line-levels";
 import { decodeProfile, encodeProfile } from "../lib/city/line-profile";
@@ -113,9 +115,10 @@ function readPlatforms(site: Site): Point2[][][] {
 }
 
 /** A Basis-DLM line (rail.py writes `bridge` on every OSM track, never on
- *  the DLM's lines it keeps where OSM maps no track). */
+ *  the DLM's lines it keeps where OSM maps no track; a monorail's beam has
+ *  none either, and is no line). */
 export function isDlmLine(f: RailFeature): boolean {
-  return f.properties?.bridge === undefined;
+  return f.properties?.bridge === undefined && !isMonorail(f);
 }
 
 /** A catenary mast belongs to the part of a split line it stands this
@@ -245,12 +248,14 @@ function sitePieces(site: Site): { pieces: LinePiece[]; of: PieceOf[] } {
   const of: PieceOf[] = [];
   for (const tile of tileIds(site)) {
     railFeatures(site, tile).forEach((f, index) => {
-      if (f.geometry?.type === "LineString") {
+      // a monorail's beam has no track to lay (lib/city/monorail.ts)
+      if (f.geometry?.type === "LineString" && !isMonorail(f)) {
         pieces.push({
           coords: f.geometry.coordinates,
           line: "rail",
           prefer: railPrefer(f),
           below: (f.properties?.layer ?? 0) < 0,
+          steep: railSteep(f),
         });
         of.push({
           tile,
@@ -665,7 +670,8 @@ export async function measureJumps(
       if (a === null || b === null) {
         return 0;
       }
-      const by = Math.abs(b - a) - LEVEL_GRADE[line] * (d[i] - d[i - 1]) - 0.35;
+      const grade = lineGrade(line, piece.steep);
+      const by = Math.abs(b - a) - grade * (d[i] - d[i - 1]) - 0.35;
       return by >= minStep ? by : 0;
     };
     for (let i = 1; i < pts.length; i++) {

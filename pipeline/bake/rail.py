@@ -4,9 +4,10 @@
   lies on it (the baked rails by their count, off bridges and off the
   paving), one non-overlapping surface clipped to the tile;
 - rails: OSM's every track, one by one (rail_osm.rails: `bridge`, `layer`,
-  `paved`, the catenary masts `m`), and heavy-rail `ver03_l` (SPW 1000)
-  with `tracks` and `electrified` only where OSM has no track within 6 m,
-  fragments merged by shared endpoints (1 m snap);
+  `paved`, `steep` for a funicular, the catenary masts `m`), and
+  heavy-rail `ver03_l` (SPW 1000) with `tracks` and `electrified` only
+  where OSM has no track within 6 m, fragments merged by shared endpoints
+  (1 m snap); and OSM's monorails as beams (rail_osm.monorails, `mono`);
 - bridge decks, driven by every `ver06_l` centreline (BWF 1800): snapped to a
   `ver06_f` footprint within 50 m, else buffered by kind width; per-ring-vertex
   deck height = the abutment ramp lifted to the DOM surface, on a mosaic of
@@ -15,7 +16,9 @@
   centreline; `structure` from the nearest OSM `man_made=bridge` within
   60 m, else the OSM bridge ways on the deck (their `bridge:structure`, or
   an arch for one built before 1850), or Wikidata; a deck the DLM leaves
-  unnamed takes the name of its OSM bridge ways; the DOM1 superstructure,
+  unnamed takes the name of its OSM bridge ways; a deck a funicular runs
+  on is a rail deck measured within the funicular's grade
+  (rail_osm.STEEP_DECK_GRADE); the DOM1 superstructure,
   the fairway clearance and the main span (bridge.py);
 - platforms: OSM `railway=platform`, with their height above the rail top
   by the trains they serve.
@@ -580,14 +583,17 @@ def ramp_line(ground: Ground, axis):
     return lambda t: h0 + (h1 - h0) * t + camber * math.sin(math.pi * t)
 
 
-def deck_line(ground: Ground, ring: list[tuple[float, float]], axis, kind: str = "road"):
+def deck_line(
+    ground: Ground, ring: list[tuple[float, float]], axis, kind: str = "road", steep: bool = False
+):
     """The deck height along the axis, t ∈ [0, 1]: the roadway DOM1 measures,
-    held near the abutment ramp and within the kind's grade
-    (bridge.measured_deck). None without ground."""
+    held near the abutment ramp and within the kind's grade — a
+    funicular's (`steep`) far past a railway's (bridge.measured_deck). None
+    without ground."""
     ramp = ramp_line(ground, axis)
     if ramp is None:
         return None
-    grade = RAIL_GRADE if kind == "rail" else MAX_GRADE
+    grade = rail_osm.STEEP_DECK_GRADE if steep else RAIL_GRADE if kind == "rail" else MAX_GRADE
     return measured_deck(ground, ring, ramp, grade, axis)
 
 
@@ -702,6 +708,7 @@ class BridgeWay(NamedTuple):
     structure: str  # `bridge:structure`, or "arch" by its year
     dated: bool  # the structure is the year's guess, not a tag
     wikidata: str | None
+    steep: bool = False  # a funicular runs on it (rail_osm.STEEP)
 
 
 class BridgeWays:
@@ -725,11 +732,13 @@ class BridgeWays:
         ]
 
 
-def bridge_way(line: shapely.Geometry, name: str | None, other: str | None) -> BridgeWay | None:
+def bridge_way(
+    line: shapely.Geometry, name: str | None, other: str | None, railway: str | None = None
+) -> BridgeWay | None:
     """What an OSM way on a bridge says of it: its own name (`bridge:name`,
     else a `name` that names a bridge), its structure (`bridge:structure`,
     else an arch for a `start_date` before MASONRY_BEFORE) or its Wikidata
-    item. Nothing: None."""
+    item; or that a funicular runs on it (`steep`). Nothing: None."""
     if line is None or line.is_empty or tag(other, "bridge") in (None, "no"):
         return None
     own = tag(other, "bridge:name") or (name if name and BRIDGE_NAME.search(name.strip()) else None)
@@ -738,7 +747,10 @@ def bridge_way(line: shapely.Geometry, name: str | None, other: str | None) -> B
     if not structure and year and int(year.group(0)) < MASONRY_BEFORE:
         structure, dated = "arch", True
     qid = tag(other, "wikidata")
-    return BridgeWay(line, own, structure, dated, qid) if own or structure or qid else None
+    steep = (railway or tag(other, "railway")) in rail_osm.STEEP
+    if own or structure or qid or steep:
+        return BridgeWay(line, own, structure, dated, qid, steep)
+    return None
 
 
 def osm_bridge_ways(tile: Tile) -> BridgeWays:
@@ -747,10 +759,14 @@ def osm_bridge_ways(tile: Tile) -> BridgeWays:
     if tile.osm_extract() is None:
         return BridgeWays([])
     geoms, fields = read_osm(
-        tile, "lines", "other_tags LIKE '%\"bridge\"=>%'", ["name", "other_tags"]
+        tile, "lines", "other_tags LIKE '%\"bridge\"=>%'", ["name", "railway", "other_tags"]
     )
     names, others = column(fields, "name", geoms), column(fields, "other_tags", geoms)
-    found = (bridge_way(*way) for way in zip(geoms, names, others, strict=True))
+    railways = column(fields, "railway", geoms)
+    found = (
+        bridge_way(g, name, other, railway)
+        for g, name, other, railway in zip(geoms, names, others, railways, strict=True)
+    )
     return BridgeWays([w for w in found if w is not None])
 
 
@@ -767,14 +783,18 @@ def bridge_properties(
     the DLM bridge line the deck was built from, if any; `ways` OSM's
     bridge ways (`osm_bridge_ways`)."""
     axis = deck_axis(ring, centre)
-    line = deck_line(ground, ring, axis, kind)
+    outline = shapely.Polygon(ring)
+    on = ways.on(outline) if ways is not None else []
+    # a funicular's deck (Dresden's Gerüstviadukt): a rail deck, as steep
+    steep = any(w.steep for w in on)
+    if steep:
+        kind = "rail"
+    line = deck_line(ground, ring, axis, kind, steep)
     if line is None:
         return None
     cx = sum(x for x, _ in ring) / len(ring)
     cy = sum(y for _, y in ring) / len(ring)
     around = near(structures, cx, cy)
-    outline = shapely.Polygon(ring)
-    on = ways.on(outline) if ways is not None else []
     tagged = next((st for _, st, _ in around if st), "") or next(
         (w.structure for w in on if w.structure and not w.dated), ""
     )
@@ -1274,7 +1294,8 @@ def run(tile: Tile) -> None:
     write_geojson(
         tile.out("dlm", f"railarea_{tile.id}.geojson"), ballast(tile, lines), tile.epsg, credit
     )
-    write_geojson(tile.out("dlm", f"rail_{tile.id}.geojson"), lines, tile.epsg, credit)
+    beams = rail_osm.monorails(tile) if yards else []
+    write_geojson(tile.out("dlm", f"rail_{tile.id}.geojson"), lines + beams, tile.epsg, credit)
     has_osm = has_extract(tile, "bridge structure and platforms")
     structures = osm_structures(tile) if has_osm else []
     marks = fairway_marks(tile) if has_osm else []
@@ -1303,7 +1324,12 @@ def run_osm(tile: Tile) -> None:
         tile.epsg,
         OSM_ATTRIBUTION,
     )
-    write_geojson(tile.out("dlm", f"rail_{tile.id}.geojson"), lines, tile.epsg, OSM_ATTRIBUTION)
+    write_geojson(
+        tile.out("dlm", f"rail_{tile.id}.geojson"),
+        lines + rail_osm.monorails(tile),
+        tile.epsg,
+        OSM_ATTRIBUTION,
+    )
     ground = Ground(tile, rail_osm.networks(tile))
     found = decks(
         ground,
