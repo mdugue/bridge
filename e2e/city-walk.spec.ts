@@ -802,6 +802,72 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     expectNoErrors(errors);
   });
 
+  test("Frag die Stadt checks a key and marks its answer as generated", async () => {
+    // ADR 0056: the key check and the answer are the server's and the
+    // provider's; the spec answers for both, so CI needs no key and no
+    // provider. A key the provider refuses says so; a checked one opens
+    // the conversation, whose answer is labelled KI.
+    let checks = 0;
+    await page.route("**/api/schluessel", (route) => {
+      checks++;
+      return route.fulfill(
+        checks === 1
+          ? {
+              status: 401,
+              json: {
+                ok: false,
+                message: "Anthropic nimmt diesen Schlüssel nicht an.",
+              },
+            }
+          : { json: { ok: true, token: "", expires: Date.now() + 60_000 } }
+      );
+    });
+    const events = [
+      { type: "RUN_STARTED", runId: "r1", threadId: "t" },
+      { type: "TEXT_MESSAGE_START", messageId: "m1", role: "assistant" },
+      {
+        type: "TEXT_MESSAGE_CONTENT",
+        messageId: "m1",
+        delta: "Die Frauenkirche baute George Bähr (Quelle: Wikidata).",
+      },
+      { type: "TEXT_MESSAGE_END", messageId: "m1" },
+      { type: "RUN_FINISHED", runId: "r1", threadId: "t" },
+    ];
+    await page.route("**/api/frag", (route) =>
+      route.fulfill({
+        contentType: "text/event-stream",
+        body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(""),
+      })
+    );
+    await withFramesHeld(page, async () => {
+      await openSidebar(page);
+      await page.getByRole("tab", { name: "Erkunden" }).click();
+      await page.getByTestId("ask-open").click();
+      const card = page.getByTestId("ask-card");
+      await expect(card).toBeVisible();
+      await card
+        .getByTestId("ask-key")
+        .fill("sk-ant-api03-0123456789abcdefghij");
+      await card.getByRole("button", { name: "Prüfen und loslegen" }).click();
+      await expect(card.getByRole("alert")).toContainText("nicht an");
+      // the refused check is the browser's logged 401, asked for above
+      errors.console.length = 0;
+      await card.getByRole("button", { name: "Prüfen und loslegen" }).click();
+      await card.getByTestId("ask-input").fill("Wer baute die Frauenkirche?");
+      await card.getByTestId("ask-input").press("Enter");
+      await expect(card).toContainText("George Bähr");
+      await expect(card.getByText("KI", { exact: true })).toBeVisible();
+      await card
+        .getByRole("button", { name: "Frag die Stadt schließen" })
+        .click();
+      await expect(card).toHaveCount(0);
+    });
+    await page.unroute("**/api/schluessel");
+    await page.unroute("**/api/frag");
+    await page.evaluate(() => sessionStorage.clear());
+    expectNoErrors(errors);
+  });
+
   test("the data layers switch on and off from the sidebar", async () => {
     // The live bicycle counts come from the city's WFS; the spec answers
     // for it (two counters on the spawn tile), so CI never waits on the

@@ -411,6 +411,19 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   und stellt Bildstil und Uhrzeit zurück. Auf dem Telefon steht die
   Karte oben und klappt ihren Text ein. Wie sie geschrieben werden:
   [walks.md](../../walks.md).
+- **Frag die Stadt** — Fragen zur Stadt in eigenen Worten („Wer hat
+  die Frauenkirche gebaut?“, „Was steht hier vor mir?“, „Wie sieht es
+  hier am Abend aus?“). Ein Sprachmodell sucht im Wissen des
+  Stadtmodells — Namen, Adressen, Nutzung und Höhe der Gebäude, die
+  Wahrzeichen mit dem, was Wikidata über sie sagt —, fliegt die Ansicht
+  zum Ort, stellt bei Bedarf Uhrzeit, Bildstil oder eine Datenebene ein
+  und antwortet in wenigen Sätzen mit ihrer Quelle. Unter jeder Antwort
+  steht, was es nachgeschlagen und getan hat; jede Antwort ist als *KI*
+  gekennzeichnet. Es läuft mit deinem eigenen Schlüssel eines Anbieters
+  (Anthropic, OpenAI, OpenRouter oder Vercel AI Gateway) und auf deine
+  Kosten, meist unter einem Cent je Frage; der Schlüssel bleibt in
+  deinem Browser ([Datenschutz](/datenschutz#frag-die-stadt)). Auch über
+  *Fragen* in der Werkzeugleiste.
 - **Steuerung** — die vollständige Tastentabelle, eingeklappt, bis du
   sie öffnest (die Leiste über der Szene zeigt die ersten Tasten).
 
