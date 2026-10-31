@@ -448,10 +448,10 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | Setting | Value | Why |
 |---|---|---|
 | `renderer.shadowMap.type` | `PCFShadowMap` | only soft option that doesn't ring (VSM "corduroy"-rings on grazing ground) |
-| `shadow.radius` | ~5 | the actual softness knob; hides the texel staircase / fraying |
+| `shadow.radius` | ~5 (3 for the warped map from the air) | the actual softness knob; hides the texel staircase / fraying |
 | `shadow.normalBias` | **0** | a positive normalBias offsets the flat ground sample → bright peter-panning contact strip. Safe at 0 because terrain doesn't cast and solids cast via back faces (lit faces never self-acne) |
 | casters' depth | the material itself | no custom depth materials: the shadow pass draws `castShadowPositionNode ?? positionNode` and honours `maskNode` |
-| `shadow.bias` | ~−0.0003 | small constant bias, residual cleanup |
+| `shadow.bias` | ~−0.0003 (warped: 0.15 m at the nearest ground, per fit) | small constant bias, residual cleanup |
 | terrain `castShadow` | **false** | a casting terrain self-shadows into triangle/staircase acne at grazing sun; ground only receives |
 | shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 (phones 2048; smaller at a raised safety level, ADR 0047) | soft radius lets 3072 look like 4096 at ~44% less fill |
 | the map's colour target | none (`DepthOnlyShadowNode`, set as `sun.shadow.shadowNode`: three's depth texture in a `count: 0` target, r187) | three's shadow map carries a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
@@ -484,6 +484,23 @@ above the terrain that should be shadowed. Cost per re-render is unchanged (same
 map size, same 5-tap PCF); only the caster set inside the frustum grows. This is
 the cheap 90% of CSM: texels coarsen exactly where a far cascade would coarsen
 them anyway.
+
+### From the air: the warped map (`shadow-warp.ts`, ADR 0009)
+
+Above 30 m over the ground (back below 20 m) the square keeps only the
+tile stream (`sunRig.shadowCamera`); the map itself is a light-space
+perspective shadow map fitted to the view: `fitWarpedShadow` cuts the
+view (widened 12°, out to 80 % of the fog) to the receivers' height band,
+puts the shadow camera's `up` along the view's *heading* as the sun sees
+it (the look direction put the axis askew with the sun behind and to the
+side: 2–3 × the texels), and returns a warp matrix that
+`WarpedShadowCamera` applies after its ortho box in every
+`updateProjectionMatrix` (three calls it when the backend sets the
+coordinate system). Three's lookup divides by w, the style pass
+(`stylize-effect.ts`) too, so nothing else changes. `warpCovers` keeps the
+map until the view leaves it; the sun turning fits it anew. Never read
+`sun.shadow.camera.left/right` as metres from the air: they are warped
+coordinates.
 
 ### The far field: baked horizon + sky view (plan 033)
 

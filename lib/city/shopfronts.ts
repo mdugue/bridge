@@ -29,7 +29,7 @@
  * and own colour, with an absolute roughness in its `rough` column.
  * Pure, no THREE.
  */
-import { rayHit, type V3 } from "./doors";
+import { rayHit, trianglesOnRays, type V3 } from "./doors";
 import type { DoorFeature, ShopfrontWall } from "./features";
 import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
 
@@ -836,15 +836,26 @@ export function wallShiftAt(
   triangles: readonly number[]
 ): number {
   const { at, n } = wallFrame(w, offset);
+  const rays = [
+    span[0] + 0.05,
+    (span[0] + span[1]) / 2,
+    span[1] - 0.05,
+  ].flatMap((s) =>
+    [1, 2.5].map((c) => at(s, SHOPFRONT_WALL_REACH, groundAt(w, s) + c))
+  );
+  const near = trianglesOnRays(
+    rays,
+    n,
+    2 * SHOPFRONT_WALL_REACH,
+    positions,
+    triangles
+  );
   let shift = Number.NEGATIVE_INFINITY;
-  for (const s of [span[0] + 0.05, (span[0] + span[1]) / 2, span[1] - 0.05]) {
-    for (const c of [1, 2.5]) {
-      const o = at(s, SHOPFRONT_WALL_REACH, groundAt(w, s) + c);
-      for (const t of triangles) {
-        const hit = rayHit(o, n, positions, t);
-        if (hit !== undefined && hit <= 2 * SHOPFRONT_WALL_REACH) {
-          shift = Math.max(shift, SHOPFRONT_WALL_REACH - hit);
-        }
+  for (const o of rays) {
+    for (const t of near) {
+      const hit = rayHit(o, n, positions, t);
+      if (hit !== undefined && hit <= 2 * SHOPFRONT_WALL_REACH) {
+        shift = Math.max(shift, SHOPFRONT_WALL_REACH - hit);
       }
     }
   }

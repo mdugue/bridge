@@ -35,9 +35,10 @@ export const { MODE, SITE } = (() => {
 })();
 export const OUT_DIR = join(process.cwd(), "public/data", SITE.id);
 export const TILES = tileIds(SITE);
-/** A warmer (warmers.ts; prepare-sites.ts runs them only with
- *  PREPARE_WARMERS=1) only fills the cache for its own tiles: it publishes
- *  nothing — no file under public/data, no manifest, no prune. */
+/** A warmer (warmers.ts; prepare-sites.ts bakes every cold site with
+ *  them unless PREPARE_WARMERS=0) only fills the cache for its own tiles:
+ *  it publishes nothing — no file under public/data, no manifest, no
+ *  prune. */
 export const WARMING = MODE.kind !== "publish";
 /** The tiles this run bakes. */
 export const OWN = new Set(MODE.kind === "publish" ? TILES : MODE.tiles);
