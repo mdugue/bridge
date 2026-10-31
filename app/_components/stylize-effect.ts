@@ -1329,15 +1329,21 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // unshaded, its lines alone; the nocturne is the perspective's)
     const plan = step(0.5, lens.ortho);
     const nightHere = night.mul(float(1).sub(plan)).toVar();
+    // The light fades long before the night: from a sun at 12° to civil
+    // dusk (`dusk`) the whole sheet lies in shade and the scene's light
+    // dims under it. What is deep shade and what is poché is read on that
+    // dimming light, not the day's — else a sunset hatches the sheet
+    // crossed all over and blacks it in before the nocturne begins.
+    const evening = dusk.mul(float(1).sub(plan)).toVar();
     const sheet = vec3(0.995, 0.993, 0.99);
     const y = unhazed(p, surface.haze).toVar();
     // by day in the sun or not; by night under a lamp or not
     const lamp = nightLight(p, y.mul(STRICH_NIGHT_GAIN)).toVar();
-    // (a plan at night: an unshaded sheet, as one with no sun)
+    // (a plan from a low sun on: an unshaded sheet, as one with no sun)
     const lit = mix(
       mix(inSun(surface.world, surface.n, z, aaStep(0.42, y)), lamp, nightHere),
       1,
-      night.mul(plan)
+      dusk.mul(plan)
     ).toVar();
     // the surface's colour (its hue and chroma) without the light — the
     // plan's greens and blues. The warm hues (red to yellow) are the sun's
@@ -1379,7 +1385,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       turn,
       HATCH_CSS
     );
-    // deep shade by day; by night the dark of a wall the sky's light
+    // deep shade by day; from dusk on the dark of a wall the sky's light
     // leaves (what faces up — the ground, a roof under 45° — keeps one
     // layer: crossed all over, the ground read as a fence)
     const deep = mix(
@@ -1387,7 +1393,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       float(1)
         .sub(smoothstep(0.03, 0.12, y.mul(STRICH_NIGHT_GAIN)))
         .mul(float(1).sub(top)),
-      nightHere
+      evening
     );
     const across = lines(
       surface.world,
@@ -1414,10 +1420,10 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const lamplit = mix(tint, NIGHT_WASH, lamp.mul(nightHere));
     let col = mix(hatched, lamplit, lit);
     // the near-black stays black: the Schnitt's poché, not a shade
-    // (by night, in Modell's plan too: the night's dark is no poché)
+    // (from dusk on, in Modell's plan too: the evening's dark is no poché)
     const fill = float(1)
       .sub(smoothstep(0.2, 0.28, lumaOf(p)))
-      .mul(float(1).sub(night));
+      .mul(float(1).sub(dusk));
     col = mix(col, vec3(0.11), fill);
     const el = viewRayWorld(at).y;
     const tone = mix(
