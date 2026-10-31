@@ -105,6 +105,8 @@ test("the prompt names the site, the date and the rules", () => {
   const prompt = askSystemPrompt(
     {
       epsg: 25_833,
+      floods: [],
+      id: "dresden",
       label: "Dresden",
       layers: [],
       styles: ["pastel (Pastell)"],

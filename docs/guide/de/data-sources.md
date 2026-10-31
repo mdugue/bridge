@@ -78,6 +78,15 @@ Höhe, Denkmalstatus, wonach es benannt ist …), liegt bei den Daten der
 Stadt — einmal abgerufen, nicht von deinem Browser — als Material für
 die Spaziergänge und für *Frag die Stadt*, die Fragen in Worten.
 
+**Wasserstraßen- und Schifffahrtsverwaltung des Bundes (WSV)** — ihr
+Dienst PEGELONLINE nennt Lage und Pegelnullpunkt jedes Elbpegels
+(Pirna, Dresden, Meißen). Daraus und aus den Scheitelwasserständen am
+Pegel Dresden, die der Umweltatlas der Stadt verzeichnet, legt der
+Szenario-Assistent von *Frag die Stadt* ein Hochwasser ins Modell: den
+Wasserspiegel zwischen den Pegeln geradlinig, über dem Gelände, ohne
+Deiche und Schutzwände — eine Modellrechnung, keine amtliche
+Überschwemmungskarte (die hat die Stadt im Themenstadtplan).
+
 **Landeshauptstadt Dresden** — die Stadt selbst. Ihr Stadtbaumkataster
 verzeichnet rund 124.000 städtische Bäume mit Art, Höhe,
 Kronen- und Stammdurchmesser. Der Viewer pflanzt diese Bäume dort, wo sie
@@ -474,6 +483,8 @@ Overpass-API.
 | Straßenverkehrszählung Sachsen | `dl-de/by-2-0` | „Freistaat Sachsen, LASuV“ |
 | Verkehrswerte NRW | `dl-de/by-2-0` | „Straßen.NRW“ |
 | GTFS-Fahrplan | *CC BY 4.0* | „DELFI e.V. via gtfs.de“ |
+| Pegel und Pegelnullpunkte (PEGELONLINE, Szenario Hochwasser) | `dl-de/zero-2-0`: kein Vermerk nötig | trotzdem: „WSV, PEGELONLINE“ |
+| Historische Scheitelwasserstände am Pegel Dresden | Fakten aus dem Umweltatlas der Stadt (Karte 4.45), zitiert | „Landeshauptstadt Dresden, Umweltatlas“ |
 | Mapillary (erkannte Straßenlampen, Fassadenbild, Schaufenster, Fensterrhythmus) | *CC BY-SA 4.0* | „Mapillary“ — in einer eigenen Datei, getrennt von den OpenStreetMap-Daten |
 
 Der Viewer zeigt den Vermerk des Anbieters des Orts, den OSM-Vermerk, den

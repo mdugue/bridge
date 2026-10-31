@@ -429,7 +429,17 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   Ränder leicht ab und lässt die Szene ruhen — für unterwegs, das
   Telefon in der Tasche, zusammen mit *Live* in der Werkzeugleiste.
   „Was ist das da vorne?“ fragt das Stadtmodell nach dem, was in der
-  Bildmitte steht, und öffnet dessen Karte.
+  Bildmitte steht, und öffnet dessen Karte. Als **Szenario-Assistent**
+  rechnet es Was-wäre-wenn: „Wie hoch stand die Elbe 2002 hier?“ legt
+  den Wasserspiegel eines Hochwassers als Wasserfläche ins Modell und
+  zählt, welche Gebäude mit dem Fuß darunter stünden (in Dresden und
+  Meißen: die Hochwasser 1845, 1890, 2002, 2006 und 2013 oder ein
+  Wasserstand am Pegel Dresden); „Was verschattet ein 30 m hohes Haus hier im Dezember?“ stellt
+  einen hellen Quader hin, wirft seinen Schatten zur gewählten Stunde und
+  nennt Stunde für Stunde die Nachbarn im Schatten. Beides ist eine
+  Modellrechnung, kein amtliches Ergebnis — ohne Deiche und Schutzwände,
+  auf ebenem Gelände —, und jede Antwort sagt das. Schließt du die
+  Karte, verschwinden Wasser und Quader wieder.
 - **Steuerung** — die vollständige Tastentabelle, eingeklappt, bis du
   sie öffnest (die Leiste über der Szene zeigt die ersten Tasten).
 

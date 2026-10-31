@@ -9,6 +9,7 @@
  */
 import { siteDataLayers } from "./data-layers";
 import { RENDER_STYLES } from "./render-style";
+import { riverOf } from "./scenario";
 import type { Site } from "./site";
 
 /** A provider the chat can run on, with the visitor's key. */
@@ -279,6 +280,10 @@ export function conversationProblem(
 
 export interface AskPromptSite {
   epsg: number;
+  /** the floods the Szenario-Assistent knows, `id: label, cm` (ADR 0058) */
+  floods: readonly string[];
+  /** the site id */
+  id: string;
   label: string;
   /** the data layers it has, by their German labels */
   layers: readonly string[];
@@ -288,8 +293,15 @@ export interface AskPromptSite {
 
 /** What the prompt says of a site: its name, CRS, layers and styles. */
 export function askPromptSite(site: Site): AskPromptSite {
+  const river = riverOf(site.id);
   return {
     epsg: site.provider.epsg,
+    floods: river
+      ? river.events.map(
+          (e) => `${e.id} (${e.label}, ${e.cm} cm am Pegel ${river.reference})`
+        )
+      : [],
+    id: site.id,
     label: site.name,
     layers: siteDataLayers(site.dataLayers).map((d) => `${d.key} (${d.label})`),
     styles: RENDER_STYLES.map((s) => `${s.id} (${s.label})`),
@@ -326,6 +338,9 @@ export function askSystemPrompt(
     site.layers.length > 0
       ? `Datenebenen dieser Stadt: ${site.layers.join(", ")}.`
       : "Diese Stadt hat keine Datenebenen.",
+    site.floods.length > 0
+      ? `Szenarien: Hochwasser der ${riverOf(site.id)?.name ?? "Flüsse"} mit hochwasser_betroffen (Zahlen) und zeige_hochwasser (Wasserfläche im Modell) — bekannte Ereignisse: ${site.floods.join(", ")}; geplante Baukörper mit schattenwurf (Verschattung Stunde für Stunde) und plane_baukoerper (Quader im Modell, dann setze_zeit für den Schatten). Jede Antwort zu einem Szenario sagt ausdrücklich, dass es eine Modellrechnung und kein amtliches Ergebnis ist, und nennt die Annahmen kurz.`
+      : "Szenarien: geplante Baukörper mit schattenwurf (Verschattung Stunde für Stunde) und plane_baukoerper (Quader im Modell, dann setze_zeit für den Schatten); Hochwasser lässt sich für diese Stadt nicht rechnen. Jede Antwort zu einem Szenario sagt ausdrücklich, dass es eine Modellrechnung und kein amtliches Ergebnis ist, und nennt die Annahmen kurz.",
     `Heute ist ${DATE_DE.format(today)}. Beziehe dich auf Tag und Jahreszeit, wo es passt.`,
     "Antworte knapp: zwei bis fünf Sätze, außer man bittet um mehr. Kein Markdown außer Absätzen und einfachen Listen. Frage nie nach Schlüsseln, Passwörtern oder persönlichen Daten.",
     ...(voice
