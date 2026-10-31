@@ -18,6 +18,7 @@ import {
   positionLocal,
   positionWorld,
   smoothstep,
+  step,
   uv,
   vec3,
   vec4,
@@ -161,7 +162,9 @@ function columnMaterial(): MeshBasicNodeMaterial {
       tint,
       scale: directionScale(tint),
       muted: staleOf(tint),
-      light: ring.mul(rate.min(1)),
+      // (a ring whole wherever bicycles came, however few: the styles
+      // that step on the light print it or not)
+      light: ring.mul(step(1e-3, rate)),
     });
     m.userData.paperOwn = true;
     return m;
