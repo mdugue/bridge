@@ -346,6 +346,18 @@ const NIGHT_LIGHT = { from: 0.32, to: 0.6 };
 /** Strich's gain on the night's light, and the warm wash under a lamp. */
 const STRICH_NIGHT_GAIN = 2;
 const NIGHT_WASH = vec3(1, 0.9, 0.62);
+/**
+ * Strich's night as an etcher prints it: an aquatint's tone under the
+ * hatch — the ground's, a dark wall's, the sky's from the horizon to the
+ * zenith — and the pen's black, so what a lamp leaves white stands out.
+ */
+const AQUATINT = {
+  ground: vec3(0.42, 0.43, 0.5),
+  deep: vec3(0.27, 0.28, 0.34),
+  horizon: vec3(0.38, 0.39, 0.46),
+  zenith: vec3(0.16, 0.17, 0.23),
+  pen: vec3(0.05, 0.055, 0.07),
+};
 /** Strich's hatch lines lie this many CSS pixels apart. */
 const HATCH_CSS = 6;
 /** The finest screen's cell (m); each coarser one doubles it. */
@@ -1307,10 +1319,11 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   // put in a flight. That is the whole difference to Papier's tonal card
   // model: there the light is a tone, here it is a line.
   //
-  // The night is an etcher's nocturne: the dark is hatched — once where
-  // the sky's light still reaches, crossed where it does not — the sky is
-  // ruled, and only what a lamp or a lit window lights is left white,
-  // under a wash of warm yellow. The sheet stays the light, as by day.
+  // The night is an etcher's nocturne: the dark lies in an aquatint's
+  // tone and is hatched over it — once where the sky's light still
+  // reaches, crossed where it does not — the sky is a darker tone, ruled,
+  // and only what a lamp or a lit window lights is left white, under a
+  // wash of warm yellow.
   const strich = (p: V3, at: V2, z: F, sky: F, surface: Surface): V3 => {
     // (a plan has no night: in Modell's parallel view the sheet stays the
     // day's, lines and plan colours; the nocturne is the perspective's)
@@ -1339,7 +1352,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       .mul(cool)
       .mul(float(1).sub(nightHere));
     const tint = mix(vec3(1), hue, planned.mul(mix(0.35, 0.85, lit)));
-    const pen = vec3(0.2, 0.21, 0.24);
+    const pen = mix(vec3(0.2, 0.21, 0.24), AQUATINT.pen, nightHere).toVar();
     // The hatch as a draughtsman lays it: each face of a block at its own
     // angle (the two wall directions crossed, the ground and the roofs
     // nearly level), a second layer across only where the shade is deep,
@@ -1385,7 +1398,14 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       mix(0.72, 0.5, top),
       nightHere
     ).mul(mix(1, 0.45, smoothstep(150, 1200, z)));
-    const hatched = mix(tint, pen, max(first, across).mul(strength));
+    // by night the hatch lies on the aquatint's tone, deeper where it is
+    // crossed
+    const ground = mix(
+      tint,
+      mix(AQUATINT.ground, AQUATINT.deep, deep),
+      nightHere
+    );
+    const hatched = mix(ground, pen, max(first, across).mul(strength));
     // what the night lights: the sheet under a warm wash
     const lamplit = mix(tint, NIGHT_WASH, lamp.mul(nightHere));
     let col = mix(hatched, lamplit, lit);
@@ -1394,7 +1414,13 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       .sub(smoothstep(0.2, 0.28, lumaOf(p)))
       .mul(float(1).sub(nightHere));
     col = mix(col, vec3(0.11), fill);
-    const ruled = mix(sheet, pen, skyHatch(at).mul(0.85).mul(nightHere));
+    const el = viewRayWorld(at).y;
+    const tone = mix(
+      sheet,
+      mix(AQUATINT.horizon, AQUATINT.zenith, smoothstep(0, 0.5, el)),
+      nightHere
+    );
+    const ruled = mix(tone, pen, skyHatch(at).mul(0.6).mul(nightHere));
     return mix(col, ruled, sky);
   };
 
