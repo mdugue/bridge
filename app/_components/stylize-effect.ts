@@ -1348,10 +1348,13 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       float(1).sub(smoothstep(0.85, 0.92, hcv.x))
     );
     // (by night the light's own blue is all the hue left: no plan colour,
-    // in Modell's plan too — its night is the bare sheet)
+    // in Modell's plan too — its night is the bare sheet — but what is
+    // saturated under it, a data mark's plan colour)
     const planned = smoothstep(0.03, 0.08, hcv.y)
       .mul(cool)
-      .mul(float(1).sub(night));
+      .mul(
+        float(1).sub(night.mul(float(1).sub(smoothstep(0.25, 0.45, hcv.y))))
+      );
     const tint = mix(vec3(1), hue, planned.mul(mix(0.35, 0.85, lit)));
     const pen = mix(vec3(0.2, 0.21, 0.24), AQUATINT.pen, nightHere).toVar();
     // The hatch as a draughtsman lays it: each face of a block at its own

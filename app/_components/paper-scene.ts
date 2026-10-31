@@ -2,6 +2,7 @@ import {
   Color,
   DataTexture,
   InterpolationSamplingType,
+  MathUtils,
   FloatType,
   NearestFilter,
   RGBAFormat,
@@ -104,11 +105,6 @@ const PAPER_SKY = new Color(0xe9_e6_df);
  *  draws its sky; this is the haze the far city fades into). */
 const PAPER_NIGHT_SKY = new Color(0x24_2b_40);
 const PAPER_DUSK_SKY = new Color(0x99_88_99);
-/** A smoothstep on numbers. */
-function smoothstepUp(edge0: number, edge1: number, x: number): number {
-  const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
-  return t * t * (3 - 2 * t);
-}
 /** Strich's and the Schwarzplan's sheet: white. */
 const SHEET_WHITE = new Color(0xff_ff_ff);
 /** The Schwarzplan's figure. */
@@ -504,8 +500,8 @@ export function createPaperScene(
       const night = paperNight.value;
       nightSky
         .copy(PAPER_SKY)
-        .lerp(PAPER_DUSK_SKY, smoothstepUp(0, 0.5, night))
-        .lerp(PAPER_NIGHT_SKY, smoothstepUp(0.5, 1, night));
+        .lerp(PAPER_DUSK_SKY, MathUtils.smoothstep(night, 0, 0.5))
+        .lerp(PAPER_NIGHT_SKY, MathUtils.smoothstep(night, 0.5, 1));
       fogColor.value.copy(nightSky);
       scene.background = nightSky;
     }

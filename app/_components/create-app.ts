@@ -1726,9 +1726,11 @@ async function bootApp(
   // Schwarzplan's no light; `applyLook` sets the sun again when the style
   // takes or gives back its own). The clocks, the seasons and the data
   // layers' hour keep the asked instant: a style changes the light, not
-  // the day.
-  let askedSun = opts.initialDate;
+  // the day — the same instant asked again (a style's switch) lets them
+  // run on.
+  let askedSun: Date | null = null;
   const setSun = (asked: Date, preview = false): SunState => {
+    const again = asked.getTime() === askedSun?.getTime();
     // (a drag's step is not yet asked for)
     if (!preview) {
       askedSun = asked;
@@ -1745,13 +1747,15 @@ async function bootApp(
     lampLights.setNightFactor(state.nightFactor);
     lantern.setNight(state.nightFactor);
     setFountainNight(state.nightFactor);
-    setFountainSeason(asked);
     setFurnitureNight(state.nightFactor);
-    setClockTime(asked);
     clayNight.value = state.nightFactor;
     styleNight.value = state.nightFactor;
-    seasonClock.set(asked);
-    sceneClock.set({ date: asked, atMs: performance.now() });
+    if (!again) {
+      setFountainSeason(asked);
+      setClockTime(asked);
+      seasonClock.set(asked);
+      sceneClock.set({ date: asked, atMs: performance.now() });
+    }
     // The sun's move has asked for the map already; a drag's step leaves
     // it to the rig's pace.
     if (!preview) {
@@ -1940,7 +1944,7 @@ async function bootApp(
       // crowns cast: the shadow map is redrawn with the new ones.
       invalidateShadows();
       // …and may draw at its own instant, or give it back
-      if (ownLight) {
+      if (ownLight && askedSun) {
         setSun(askedSun);
       }
     }
