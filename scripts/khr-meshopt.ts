@@ -14,7 +14,7 @@
  * Build-time only; no DOM.
  */
 import { MeshoptDecoder, MeshoptEncoder } from "meshoptimizer";
-import { readGlb, writeGlb, pad } from "./glb-container";
+import { ownBuffer, pad, readGlb, writeGlb } from "./glb-container";
 
 const EXT = "EXT_meshopt_compression";
 const KHR = "KHR_meshopt_compression";
@@ -75,7 +75,9 @@ const gzipped = (bytes: Uint8Array): number =>
  * cache-ordered and smooth, gzip a little better in v0.
  */
 function reencode(ext: MeshoptView, source: Uint8Array): Uint8Array {
-  if (ext.mode !== "ATTRIBUTES") {
+  // (a filtered stream keeps its bytes: decoding applies the filter, and
+  // the view would name it for a stream that no longer has it)
+  if (ext.mode !== "ATTRIBUTES" || (ext.filter ?? "NONE") !== "NONE") {
     return source;
   }
   const raw = new Uint8Array(ext.count * ext.byteStride);
@@ -108,10 +110,10 @@ export function toKhrMeshopt(glb: Uint8Array): Uint8Array {
   if (!(json.extensionsUsed ?? []).includes(EXT)) {
     return glb;
   }
-  // the glb's own buffer: no uri, and not a meshopt fallback
-  const own = (json.buffers ?? []).findIndex(
-    (b) => b.uri === undefined && b.extensions?.[EXT] === undefined
-  );
+  const own = ownBuffer(json);
+  if (own === -1) {
+    return glb;
+  }
   const chunks: Uint8Array[] = [];
   let length = 0;
   const append = (bytes: Uint8Array): number => {
@@ -134,9 +136,7 @@ export function toKhrMeshopt(glb: Uint8Array): Uint8Array {
   }
   const total = pad(length, 4);
   chunks.push(new Uint8Array(total - length));
-  if (own !== -1) {
-    (json.buffers ?? [])[own].byteLength = total;
-  }
+  (json.buffers ?? [])[own].byteLength = total;
   rename(json, EXT, KHR);
   return writeGlb(json, chunks);
 }

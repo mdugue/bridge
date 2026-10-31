@@ -37,7 +37,7 @@ import {
   MeshoptEncoder,
   MeshoptSimplifier,
 } from "meshoptimizer";
-import { pad, readGlb, writeGlb } from "./glb-container";
+import { ownBuffer, pad, readGlb, writeGlb } from "./glb-container";
 import { weldExact } from "./glb-weld";
 import { toExtMeshopt, toKhrMeshopt } from "./khr-meshopt";
 
@@ -286,7 +286,11 @@ export async function simplifyGlb(
 
 interface GltfJson {
   bufferViews?: { buffer: number; byteLength: number; byteOffset?: number }[];
-  buffers?: { byteLength: number; extensions?: object; uri?: string }[];
+  buffers?: {
+    byteLength: number;
+    extensions?: Record<string, unknown>;
+    uri?: string;
+  }[];
   extensions?: Record<string, unknown>;
   extensionsUsed?: string[];
   meshes?: { primitives: { extensions?: Record<string, unknown> }[] }[];
@@ -365,10 +369,7 @@ export function addPropertyTable(
   table: PropertyTable
 ): Uint8Array {
   const { json, bin } = readGlb<GltfJson>(glb);
-  // The glb's own buffer: the one without a uri that is not a meshopt fallback.
-  const bufferIndex = (json.buffers ?? []).findIndex(
-    (b) => b.uri === undefined && b.extensions === undefined
-  );
+  const bufferIndex = ownBuffer(json);
   if (bufferIndex === -1) {
     throw new Error("glb: no embedded buffer");
   }

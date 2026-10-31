@@ -1639,6 +1639,16 @@ are keyed by the kind of camera
 warm-up, `PostStack.warmView`), and PMREMs are cube targets of at least
 256 px a face (the sky reflection's own 64 px cube, `sky-reflection.ts`).
 
+**three r187: `ClusteredLighting` assumes a centred perspective camera.**
+`ClusteredLightsNode` bounds each cluster in view space by
+`ndc · (−z) / projection[0][0]` and ignores the projection's off-centre
+terms, so Modell's parallel camera and the image export's frustum slide
+(`setViewOffset`) would shade lights in the wrong clusters or not at
+all. The lamps therefore keep their fixed pool (ADR 0009) rather than
+48 clustered lights on a desktop (tried 2026-10-31: the perspective view
+was right). *Once fixed:* revisit, with the pool's lights fading by rank.
+Not reported yet.
+
 **3d-tiles-renderer 0.5.3: `resetFailedTiles()` alone never asks for a
 cached tile again.** *Worked around* in `tile-retry.ts`: the heal removes
 the tile from the LRU cache first (*The network fails, and is tried

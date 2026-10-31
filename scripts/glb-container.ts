@@ -31,6 +31,9 @@ export function readGlb<J>(glb: Uint8Array): GlbParts<J> {
     new TextDecoder().decode(glb.subarray(20, 20 + jsonLength))
   ) as J;
   const binAt = 20 + jsonLength;
+  if (binAt + 8 > glb.byteLength) {
+    throw new Error("glb: no BIN chunk");
+  }
   const binLength = view.getUint32(binAt, true);
   if (view.getUint32(binAt + 4, true) !== BIN_CHUNK) {
     throw new Error("glb: second chunk is not BIN");
@@ -62,4 +65,20 @@ export function writeGlb(json: unknown, chunks: Uint8Array[]): Uint8Array {
     at += chunk.length;
   }
   return out;
+}
+
+/** A glTF's buffers, as far as `ownBuffer` reads them. */
+interface WithBuffers {
+  buffers?: { extensions?: Record<string, unknown>; uri?: string }[];
+}
+
+/** The index of the glb's own buffer (the BIN chunk): the one without a
+ *  uri that is not a meshopt fallback (EXT or KHR); −1 without one. */
+export function ownBuffer(json: WithBuffers): number {
+  return (json.buffers ?? []).findIndex(
+    (b) =>
+      b.uri === undefined &&
+      b.extensions?.EXT_meshopt_compression === undefined &&
+      b.extensions?.KHR_meshopt_compression === undefined
+  );
 }
