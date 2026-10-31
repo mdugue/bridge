@@ -4649,14 +4649,19 @@ GPU**.
   OBJ (metres, Y up, its MTL and textures from the picked files) and a
   Rhino .3dm (its unit, Z up turned to Y up, placed `◎ detected` by its
   earth anchor where one is set — its elevation as NHN unless it says
-  ground level or the earth's centre, then set on the ground; hidden
+  ground level or the earth's centre, or is unread and Rhino's default
+  0, then set on the ground; hidden
   layers left out; breps by
   their saved render meshes) are read alike
-  (`design-formats.ts`). A **landscape plan** (DXF, Shapefile,
+  (`design-formats.ts`). A place more than 2 km beyond the site's tiles,
+  or in another place's coordinates, is not taken: `≈ assumed` in front
+  of the player, the panel saying why. A **landscape plan** (DXF, Shapefile,
   GeoPackage, LandXML; `design-plan.ts`) becomes surfaces `◎ detected`
   by their layer's or attributes' names (`lib/city/plan-classes.ts`,
-  German and English keywords; unnamed: grey) in the city's palette, laid
-  on the loaded ground in triangles of a few metres (its own heights
+  German and English keywords; class-like attributes first, names and
+  addresses last; unnamed: grey) in the city's palette, laid
+  on the loaded ground in triangles of a few metres, at most 150 000 in
+  all (its own heights
   kept), what is drawn into an area 10 cm above it; trees as
   low-poly crowns of the plan's size (`≈ assumed` 6 m and 10 m where it
   gives none), buildings with a height or storeys as blocks, TINs as a
@@ -4678,16 +4683,24 @@ GPU**.
   Its **site** — the plan with its ground plate — clears what else stands
   there (`design-site.ts`, one raster the vertex stages read): every
   instanced set (trees, hedges, lamps, furniture, monuments) folds an
-  instance whose foot stands in it, and the terrain with its walls,
-  kerbs, stairs and fences is pressed under the lowest height the design
+  instance whose foot stands in it (and a question no longer finds it,
+  `foldedThing`), and the terrain with its walls, kerbs, stairs and
+  fences and the water are pressed under the lowest height the design
   reaches in each cell (a sloping plate's slope, a house's lowest floor);
   on the tiles under it the ground is also cut
   where a triangle reaching out of the site lifts it through the plate.
+  Rails, ballast, platforms and tram tracks within 4 m over that floor go
+  under it too (`lineUnderDesign`; a line on a bridge above it stays).
   The walked ground follows (`Ground.setCap`). A building's plinths,
-  cornices, doors and parts go with it (`wholeTrees`).
+  cornices, doors and parts go with it (`wholeTrees`). **Asked**, a
+  design answers by the part its triangle belongs to (`DesignParts`, the
+  merged triangles' runs): an IFC element's entity, Name and GlobalId, a
+  plan's class, a glTF's or OBJ's object and material names, and its
+  placement (`lib/city/inquiry-design.ts`); outlined by that part's own
+  triangles.
   **Fallback:** without coordinates, the player's place; without a
-  ground under it, the player's ground. **Not yet:** IFC, the landscape
-  formats, asking it; rails, tram tracks and water in a site stay.
+  ground under it, the player's ground. **Not yet:** the tram's
+  overhead wires and a river's mist over a site stay; sharing by link.
 
 ## 🧪 Experimental
 

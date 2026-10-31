@@ -22,6 +22,7 @@ import {
 } from "three/webgpu";
 import { finished, type Steps } from "@/lib/city/build-steps";
 import type { Ring2 } from "@/lib/city/decks";
+import { lineUnderDesign } from "./design-site";
 import { sceneMaterial } from "./three-utils";
 
 /** Accumulates a non-indexed triangle soup (positions + per-vertex normals). */
@@ -180,6 +181,8 @@ export function material(
       color: new Color(color),
       roughness,
     });
+    // under a planner's design (design-site.ts)
+    m.positionNode = lineUnderDesign;
     if (offsetUnits) {
       m.polygonOffset = true;
       m.polygonOffsetFactor = -1;

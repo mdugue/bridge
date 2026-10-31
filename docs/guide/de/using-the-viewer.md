@@ -494,19 +494,25 @@ und das Modell behalten ihre scharfen Linien.
   `.mtl` und Texturen zusammen ausgewählt; gelesen als Meter, Y nach oben)
   oder eine Rhino-Datei (`.3dm`, mit Render-Netzen gespeichert); auch auf
   das Feld ziehen. Eine Rhino-Datei mit gesetztem Geo-Ankerpunkt steht an
-  ihrem Ort. Landschaftspläne lädt man genauso: ein ASCII-DXF, ein
+  ihrem Ort (auf dem Gelände, wenn der Anker keine Höhe oder Rhinos
+  Voreinstellung 0 nennt). Landschaftspläne lädt man genauso: ein ASCII-DXF, ein
   Shapefile (die `.shp` mit `.dbf`, `.prj` und `.cpg` zusammen
   auswählen), ein GeoPackage (`.gpkg`) oder LandXML (`.xml`). Schraffuren
   und Flächen werden nach dem Namen ihres Layers oder ihren Attributen
   zu Rasen, Beet, Pflaster, Weg, Wasser, Sand oder Kies (deutsch oder
-  englisch, etwa „Rasen“, „Pflaster“, „Staudenbeet“), in den Farben der
+  englisch, etwa „Rasen“, „Pflaster“, „Staudenbeet“; ein Attribut wie
+  *Nutzung*, *Art* oder *Belag* zuerst, Namen und Adressen zuletzt, damit
+  ein Park an der „Kamenzer Straße“ Rasen bleibt), in den Farben der
   Stadt aufs Gelände gelegt; Baumsymbole werden Bäume in der gezeichneten
   Kronengröße, ein DGM ein geplantes Gelände. Ein Layer, dessen Name
   nichts sagt, bleibt grau, und das Feld nennt ihn. Ein Plan in
   UTM-Koordinaten liegt an seinem Ort auf dem dort schon geladenen
   Gelände. Eine IFC mit Verortung (`IfcMapConversion` in ETRS89/UTM) steht
   von selbst an ihrem Ort; eine, die nur Breite und Länge des Grundstücks
-  kennt, steht ungefähr dort, und das Feld bittet ums Prüfen. Die Datei wird nur in
+  kennt, steht ungefähr dort, und das Feld bittet ums Prüfen. Liegt der
+  Ort aus der Datei mehr als 2 km außerhalb der Kacheln der Stadt oder in
+  den Koordinaten eines anderen Orts, wird der Entwurf vor dir abgesetzt,
+  und das Feld sagt warum. Die Datei wird nur in
   deinem Browser gelesen und nirgends hochgeladen. Stehen Landeskoordinaten
   (UTM, auch mit vorangestellter Zone) in der Datei, steht der Entwurf
   gleich an seinem Ort, mit seinen NHN-Höhen, wenn sie zum Gelände passen;
@@ -525,8 +531,12 @@ und das Modell behalten ihre scharfen Linien.
   Texturen, die nicht hineinpassen, bleiben weg. Mit den Gebäuden
   verschwinden auch Bäume, Hecken, Laternen und Stadtmöbel im Grundriss
   des Entwurfs (seine Bodenplatte eingeschlossen), und das Gelände, Mauern,
-  Bordsteine und Treppen liegen dort unter seinem Boden. Gleise und Wasser
-  bleiben.
+  Bordsteine, Treppen, Gleise, Bahnsteige und Wasser liegen dort unter
+  seinem Boden (eine Strecke auf einer Brücke darüber bleibt). Ein Klick
+  auf den Entwurf befragt ihn wie ein Gebäude: Die Karte nennt das
+  Bauteil — ein IFC-Element mit Typ und GlobalId, eine Fläche des Plans
+  nach ihrer Art, ein Objekt aus glTF oder OBJ mit seinem Namen — und wo
+  der Entwurf steht.
 - **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und
   Uhrzeit, den Bildstil, den *Nebel*, den Kronen-Schalter und die
   Datenebenen als kleinen JSON-Text; einen solchen Text in das Feld

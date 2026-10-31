@@ -94,8 +94,10 @@ import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import {
   type Site,
   spawnViewpoint,
+  tileExtentOf,
   type ViewpointGeometry,
 } from "@/lib/city/site";
+import { beyondExtents } from "@/lib/city/design-placement";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   parseTilesetExtras,
@@ -148,7 +150,7 @@ import {
   type DesignLayer,
   type DesignStatus,
 } from "./design-layer";
-import { cutsGround, groundKeptUnderDesign } from "./design-site";
+import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
 import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
@@ -2188,6 +2190,14 @@ async function bootApp(
       return { positions, reach: 0 };
     }
     const { target, solids } = subject.thing;
+    if (target.kind === "design") {
+      return {
+        positions:
+          design?.partShape(target.file, target.partIndex) ??
+          new Float32Array(),
+        reach: 0,
+      };
+    }
     const first = solids[0];
     if (target.kind === "bridge" && first && "slab" in first) {
       // on the level that answered: a tile's fine and coarse terrain each
@@ -2234,12 +2244,16 @@ async function bootApp(
     things: () => [
       ...stream.visibleDressings().flatMap(asksOf),
       ...(dataLayers.current()?.asks() ?? []),
+      ...(design?.asks() ?? []),
     ],
     viewport: () => ({
       width: renderer.domElement.clientWidth || 1,
       height: renderer.domElement.clientHeight || 1,
     }),
     toSite: (p) => [p.x + offset.cx, offset.cy - p.z],
+    // an instance a design's site folded away is not there to be asked
+    // (a hedge's by where the ray met it: a row folds piece by piece)
+    folded: ({ target }, at) => foldedThing(target, at, offset),
   });
   // A tree's card fetches what the register says about it (ADR 0042).
   const treeFactsUrl = (tile: string) => {
@@ -2252,32 +2266,22 @@ async function bootApp(
   // (a section is asked only on bodies the data layers built: they are here)
   const trafficHour = () => dataLayers.current()?.trafficHour();
   const answered = (asked: Inquiry | null): Inquiry | null => {
-    switch (asked?.kind) {
-      case "tree": {
-        const factsUrl = treeFactsUrl(asked.tile);
-        return factsUrl ? { ...asked, factsUrl } : asked;
-      }
-      case "traffic":
-        return {
-          ...asked,
-          credit: layerSources?.traffic?.credit,
-          hour: trafficHour(),
-        };
-      case "bikes":
-        return { ...asked, credit: layerSources?.bikes?.credit };
-      case undefined:
-        return null;
-      case "building":
-      case "bridge":
-      case "monument":
-      case "canopy":
-      case "furniture":
-      case "hedge":
-      case "lamp":
-      case "landing":
-      case "stop":
-        return asked;
+    if (asked?.kind === "tree") {
+      const factsUrl = treeFactsUrl(asked.tile);
+      return factsUrl ? { ...asked, factsUrl } : asked;
     }
+    if (asked?.kind === "traffic") {
+      return {
+        ...asked,
+        credit: layerSources?.traffic?.credit,
+        hour: trafficHour(),
+      };
+    }
+    if (asked?.kind === "bikes") {
+      return { ...asked, credit: layerSources?.bikes?.credit };
+    }
+    // the others carry all their card needs
+    return asked;
   };
   // the last question's candidates, with what the card needs of each
   let along: InquiryAlong | null = null;
@@ -2589,6 +2593,8 @@ async function bootApp(
     epsg: opts.site.provider.epsg,
     tier: budget.tier,
     heightAt,
+    beyondSite: (x, y) =>
+      beyondExtents(opts.site.tiles.map(tileExtentOf), x, y),
     capGround: (cap) => {
       siteGround.setCap(cap);
       // what reads the ground by its version (the Ausschnitt's plinth)

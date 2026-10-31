@@ -11,6 +11,7 @@ import {
   SRGBColorSpace,
 } from "three/webgpu";
 import { detectGeoreference } from "@/lib/city/design-placement";
+import type { DesignPartInfo } from "@/lib/city/inquiry-design";
 import {
   type IfcPlacement,
   type MapConversion,
@@ -265,9 +266,21 @@ export async function readIfc(
     const materials = new Map<string, MeshStandardMaterial>();
     const undrawn = undrawnTypes(types);
     api.StreamAllMeshes(model, (flat) => {
-      if (undrawn.has(api.GetLineType(model, flat.expressID) as number)) {
+      const type = api.GetLineType(model, flat.expressID) as number;
+      if (undrawn.has(type)) {
         return;
       }
+      const line = api.GetLine(model, flat.expressID) as Record<
+        string,
+        unknown
+      >;
+      // what a question's card calls it (lib/city/inquiry-design.ts)
+      const part: DesignPartInfo = {
+        name: text(line.Name) ?? text(line.ObjectType),
+        type: api.GetNameFromTypeCode(type),
+        id: text(line.GlobalId),
+        material: null,
+      };
       for (let i = 0; i < flat.geometries.size(); i++) {
         const placed = flat.geometries.get(i);
         let geometry = geometries.get(placed.geometryExpressID);
@@ -282,6 +295,7 @@ export async function readIfc(
         }
         if (geometry.index?.count) {
           const mesh = new Mesh(geometry, materialFor(materials, placed.color));
+          mesh.userData.designPart = part;
           mesh.matrixAutoUpdate = false;
           mesh.matrix.fromArray(placed.flatTransformation);
           root.add(mesh);

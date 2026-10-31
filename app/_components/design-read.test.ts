@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { Document, WebIO } from "@gltf-transform/core";
-import { DesignError, designFile, readDesign } from "./design-read";
+import {
+  DesignError,
+  designFile,
+  partOfVertex,
+  readDesign,
+} from "./design-read";
 
 /** A glb of one 20 × 10 × 6 m box (x east, y up, z south) under a node at
  *  `at`, in two materials (its top and its sides). */
@@ -142,5 +147,18 @@ describe("an OBJ", () => {
     expect(count(red)).toBe(1);
     expect(count(blue)).toBe(2);
     expect(model.note).toContain("fehlt.mtl");
+    // a question finds the object by its triangles
+    const parts = model.geometry.groups.map((g) =>
+      partOfVertex(model.parts, model.geometry.index?.getX(g.start) ?? 0)
+    );
+    expect(parts.map((p) => model.parts.info[p].name)).toEqual([
+      "haus",
+      "haus",
+    ]);
+    expect(
+      parts
+        .map((p) => model.parts.info[p].material)
+        .sort((a, b) => String(a).localeCompare(String(b)))
+    ).toEqual(["glas", "ziegel"]);
   });
 });
