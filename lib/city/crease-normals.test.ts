@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { creaseNormals } from "./crease-normals";
+import { creaseNormals, forEachPoint } from "./crease-normals";
 
 /** A vertical wall strip of `sides` facets round a ring of radius 10, the
  *  facets from angle 0 to `arc` (degrees), each two triangles, 5 m tall. */
@@ -135,5 +135,54 @@ describe("creaseNormals", () => {
     const n = creaseNormals(p, new Float64Array(p.length / 3));
     expect(heading(n, 1)).toBeCloseTo(20, 1);
     expect(heading(n, 6)).toBeCloseTo(20, 1);
+  });
+});
+
+describe("forEachPoint", () => {
+  test("visits each point's live corners in rising order, colliding buckets split", () => {
+    // 3 000 vertices on a coarse grid, three groups, a quarter dead: many
+    // shared points, and buckets that hold more than one
+    let seed = 7;
+    const rand = () => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed / 2_147_483_648;
+    };
+    const n = 3000;
+    const positions = new Float32Array(3 * n);
+    const groups = new Float64Array(n);
+    const dead = new Set<number>();
+    for (let v = 0; v < n; v++) {
+      for (let c = 0; c < 3; c++) {
+        // −0 and +0 are one coordinate
+        const q = Math.floor(rand() * 4) - 2;
+        positions[3 * v + c] = q === 0 && rand() < 0.5 ? -0 : q * 0.5;
+      }
+      groups[v] = Math.floor(rand() * 3);
+      if (rand() < 0.25) {
+        dead.add(v);
+      }
+    }
+    const seen: number[][] = [];
+    forEachPoint(
+      positions,
+      groups,
+      (v) => !dead.has(v),
+      (corners) => {
+        seen.push(corners);
+      }
+    );
+    const expected = new Map<string, number[]>();
+    for (let v = 0; v < n; v++) {
+      if (!dead.has(v)) {
+        const p = [0, 1, 2].map((c) => positions[3 * v + c] + 0);
+        const key = `${p.join(",")}|${groups[v]}`;
+        expected.set(key, [...(expected.get(key) ?? []), v]);
+      }
+    }
+    const shared = [...expected.values()].filter((c) => c.length > 1);
+    const byFirst = (a: number[], b: number[]) => a[0] - b[0];
+    expect(seen.filter((c) => c.length > 1).sort(byFirst)).toEqual(
+      shared.sort(byFirst)
+    );
   });
 });

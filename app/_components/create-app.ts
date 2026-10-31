@@ -66,6 +66,7 @@ import {
   nextRenderStyle,
   RENDER_STYLE_BY_ID,
   type RenderStyle,
+  styleInstant,
 } from "@/lib/city/render-style";
 import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
@@ -118,6 +119,7 @@ import {
 import { stopBvhWorker } from "./bvh-client";
 import { stopGroundWorker } from "./ground-prep-client";
 import { createCameraPose, type FollowAim } from "./camera-pose";
+import { canvasSizeFor } from "./canvas-size";
 import {
   createModelRig,
   type ModelHud,
@@ -199,7 +201,13 @@ import {
   shadowMapSizeFor,
   tileCacheBytesFor,
 } from "./scene-profile";
-import { createSunRig, type SunState } from "./sun-rig";
+import {
+  type AirView,
+  createSunRig,
+  styleNight,
+  type SunState,
+  sunStateAt,
+} from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
   type AnyAttribute,
@@ -1479,9 +1487,9 @@ async function bootApp(
     invalidateLanternShadow(lantern);
   };
 
-  // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk; clayNight
-  // gates the clay dusk glow by reference.
-  const clayNight = uniform(0);
+  // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk; the
+  // styles' night uniform (sun-rig.ts `styleNight`) gates the clay dusk
+  // glow by reference too.
   let currentNight = 0;
   // The picture styles follow the sun too (Film noir's dusk exposure); the
   // post stack is built after the first setSun, so it catches up there.
@@ -1505,7 +1513,7 @@ async function bootApp(
   cleanups.push(() => lampLights.dispose());
 
   // The facades share the ground's sun (the same node).
-  const styleResources = createStyleResources(clayNight, ground.sunDirection);
+  const styleResources = createStyleResources(styleNight, ground.sunDirection);
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: () => void = () => undefined;
@@ -1777,7 +1785,16 @@ async function bootApp(
       stream.tiles.deleteCamera(shadow);
     }
   };
-  const setSun = (date: Date, preview = false): SunState => {
+  // The light falls at the instant the HUD asked for, or at the picture
+  // style's own (render-style.ts `styleInstant`: Sin City's sun, the
+  // Schwarzplan's no light; `applyLook` relights when the style takes or
+  // gives back its own). The clocks, the seasons and the data layers' hour
+  // keep the asked instant: a style changes the light, not the day.
+  // (what the light shows: a drag's step too, so a switch mid-drag keeps
+  // the dragged hour)
+  let shownSun = opts.initialDate;
+  const relight = (asked: Date, preview = false): SunState => {
+    const date = styleInstant(RENDER_STYLE_BY_ID[opts.look.get().style], asked);
     const state = sunRig.update(date, preview);
     streamShadowTiles(state.aboveHorizon);
     currentNight = state.nightFactor;
@@ -1789,18 +1806,26 @@ async function bootApp(
     lampLights.setNightFactor(state.nightFactor);
     lantern.setNight(state.nightFactor);
     setFountainNight(state.nightFactor);
-    setFountainSeason(date);
     setFurnitureNight(state.nightFactor);
-    setClockTime(date);
-    clayNight.value = state.nightFactor;
-    seasonClock.set(date);
-    sceneClock.set({ date, atMs: performance.now() });
+    styleNight.value = state.nightFactor;
     // The sun's move has asked for the map already; a drag's step leaves
     // it to the rig's pace.
     if (!preview) {
       invalidateShadows();
     }
     return state;
+  };
+  const setSun = (asked: Date, preview = false): SunState => {
+    shownSun = asked;
+    const state = relight(asked, preview);
+    setFountainSeason(asked);
+    setClockTime(asked);
+    seasonClock.set(asked);
+    sceneClock.set({ date: asked, atMs: performance.now() });
+    // the HUD reads where the sun stands at the instant it asked for
+    return RENDER_STYLE_BY_ID[opts.look.get().style].ownLight
+      ? sunStateAt(asked, latLng)
+      : state;
   };
   setSun(opts.initialDate);
 
@@ -1937,6 +1962,9 @@ async function bootApp(
         ground: { offset, heightAt },
         onBikeCounts: opts.onBikeCounts,
         onChange: () => scheduleStats(),
+        // a layer's marks draw themselves through a style's swap: it
+        // gathers them again (paper-scene.ts)
+        onMarksMoved: () => postStack.sceneChanged(),
         onTramStatus: opts.onTramStatus,
         onTrafficHour: opts.onTrafficHour,
         parent: scene,
@@ -1985,6 +2013,9 @@ async function bootApp(
   const applyLook = (look: LookValues) => {
     wakeStill();
     if (look.style !== lastStyle) {
+      const ownLight =
+        RENDER_STYLE_BY_ID[lastStyle].ownLight !== null ||
+        RENDER_STYLE_BY_ID[look.style].ownLight !== null;
       lastStyle = look.style;
       opts.trail?.note("style", look.style);
       // Modell's paper is the style's sheet
@@ -1992,8 +2023,13 @@ async function bootApp(
         sunRig.setParallel(true, paperOf(look.style));
       }
       // A picture style may draw its own crowns (style-dressing.ts), and the
-      // crowns cast: the shadow map is redrawn with the new ones.
-      invalidateShadows();
+      // crowns cast: the shadow map is redrawn with the new ones — by
+      // `relight` when the style draws at its own instant or gives it back
+      if (ownLight) {
+        relight(shownSun);
+      } else {
+        invalidateShadows();
+      }
     }
     for (const key of Object.keys(sceneRows) as LookKey[]) {
       sceneRows[key](look[key]);
@@ -2825,16 +2861,22 @@ async function bootApp(
   );
 
   const resizeObserver = new ResizeObserver(() => {
+    // a container without area keeps the last size (canvas-size.ts)
+    const canvasSize = canvasSizeFor(container);
+    if (!canvasSize) {
+      return;
+    }
+    const { width, height } = canvasSize;
     wakeStill();
-    camera.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setSize(width, height);
     postStack.setSize();
     modelRig.resize();
     stream.tiles.setResolution(
       modelRig.parallel() ? modelRig.camera : streamCamera,
-      container.clientWidth,
-      container.clientHeight
+      width,
+      height
     );
   });
   resizeObserver.observe(container);
@@ -3010,13 +3052,21 @@ async function bootApp(
    * pose tick is due (the tree tiers').
    */
   const eye = new Vector3();
+  // what the warped shadow map reads of the site (sun-rig.ts `AirView`):
+  // its ground's 2nd and 90th height percentile, the fog's end per frame
+  const airView: AirView = {
+    fogEnd: sceneFog.far.value,
+    groundLow: extras.ground?.[0] ?? Number.POSITIVE_INFINITY,
+    groundHigh: extras.ground?.[1] ?? Number.NEGATIVE_INFINITY,
+  };
   const followView = (elapsed: number, tick: boolean): number | null => {
     const target = modelRig.owns() ? modelRig.targetView() : null;
     if (!target) {
       // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
       camera.getWorldDirection(shadowViewDir);
       const ground = groundUnderCamera();
-      sunRig.follow(camera.position, shadowViewDir, ground);
+      airView.fogEnd = sceneFog.far.value;
+      sunRig.follow(camera, shadowViewDir, ground, airView);
       // The map's own marks (the ferry lines) show from the air.
       setMapAltitude(camera.position.y - ground);
       // Repoint the shared real lamp lights at the nearest heads.

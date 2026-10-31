@@ -378,7 +378,12 @@ The button in the corner opens a panel with three tabs.
     many are out.
 
   From the air the flows, columns and trails widen and thicken so they
-  stay legible.
+  stay legible. Each picture style draws them its own way: *Pastell* as
+  glass, *Comic* in printing inks (blue, yellow, red by the amount) with a
+  black contour, *Film noir* as light trails of a long exposure, *Sin
+  City* red, *Papier* as coloured tissue paper (lit from inside at night),
+  *Strich* in plan colours with a pen's edge (a warm light at night), the
+  *Schwarzplan* as a band outlined in black.
 - **Spaziergänge** ("walks") — guided walks through the city, written by
   Claude, an AI, and marked as such on every stop (in German). Dresden
   has four: *Augusts Bühne* (the old town as a stage of power), *Narben
@@ -455,6 +460,9 @@ The button in the corner opens a panel with three tabs.
   current view at all twelve instants and saves them as one sheet — a row
   per date, a column per hour — with the legend under it (in Modell with
   scale bar and north arrow). The hours are your device's local time.
+  In *Sin City* and the *Schwarzplan* the date, the time and the study
+  rest (they draw in their own light); a note says so, and switching the
+  style back brings the time set back.
 - **Darstellung** ("look") — the **Bildstil** (picture style) on top,
   then the one slider left, *Nebel* (the distance haze, a percentage),
   and the *Multi-Tuft-Kronen (nah)* switch (rich multi-tuft crowns near
@@ -469,12 +477,12 @@ next visit:
 | Style | What it looks like |
 |---|---|
 | *Pastell* | the default: a clay model on paper, soft light, no outlines |
-| *Comic* | pop art as if printed: a few loud colours (paper white, red, yellow, blue, green, black) without gradients, bold even black outlines; whatever lies in shade gets a dot screen that sits on the surfaces and does not crawl in flight; red roofs red, others slate blue, the Elbe blue, meadows and trees green (an autumn tree yellow, a bare or blossoming one white); the trees become round cartoon clouds of three balls, printed flat; the sky one blue, dotted lighter towards the horizon; at night a navy city with yellow pools of lamplight and windows |
+| *Comic* | pop art as if printed: a few loud colours (paper white, red, yellow, blue, green, black) without gradients, bold even black outlines; whatever lies in shade gets a dot screen that sits on the surfaces and does not crawl in flight; red roofs red, others slate blue, the Elbe blue, meadows and trees green (an autumn tree yellow, a bare or blossoming one white); the trees become round cartoon clouds of three balls, printed flat; the sky one blue, dotted lighter towards the horizon; at night (once the lamps come on) a navy city with yellow pools of lamplight and windows |
 | *Film noir* | black and white with a hard curve, a smoky distance, a sky that darkens towards the top, running film grain and a dark frame edge; a soft light cone under every street lamp — only hinted at by day, full at dusk; as it gets dark the camera opens up instead of letting everything go black |
-| *Sin City* | hard black-and-white areas: white where the sun reaches, black in shade, so cast shadows fall as sharp black shapes; crowns and the Elbe deep black, the distance dissolving into white haze; rain falls in front of the scene; only the red tiled roofs keep their colour |
-| *Papier* | the city as a white paper model: every surface a slightly broken white, real sunlight and real (blue-grey) shadows, fine drawn graphite outlines; the trees become folded card polyhedra; road markings and sports lines stay as a faint grey, water as a cooler, deeper paper; lights and mist sheets drop out |
-| *Strich* ("line") | a line drawing as on a plan: the white model with every edge in one even line, in the distance too; the shade hatched as with a technical pen, the ground in plan colours (pale green, pale blue water, near-white streets), the trees as folded card that holds still in the wind, so the hatch on it does not crawl |
-| *Schwarzplan* ("figure-ground plan") | the buildings black, everything else white, the street-tree register's trees as crown circles with a stem dot (measured, so only those) — no shadows, only a fine white line where one building stands in front of another; made for the *Lageplan*, usable everywhere |
+| *Sin City* | hard black-and-white areas: white where the sun reaches, black in shade, so cast shadows fall as sharp black shapes; crowns and the Elbe deep black, the distance dissolving into white haze; rain falls in front of the scene; only the red tiled roofs keep their colour. Sin City always draws in the same hard afternoon light (15 September, 16:30): the date and time rest while it is on |
+| *Papier* | the city as a white paper model: every surface a slightly broken white, real sunlight and real (blue-grey) shadows, fine drawn graphite outlines; the trees become folded card polyhedra; road markings and sports lines stay as a faint grey, water as a cooler, deeper paper; lights and mist sheets drop out. At night the model stands on dark blue card: its windows glow warm through the card, lamplight lies warm on streets and walls, drawn with a white pencil |
+| *Strich* ("line") | a line drawing as on a plan: the white model with every edge in one even line, in the distance too; the shade hatched as with a technical pen, the ground in plan colours (pale green, pale blue water, near-white streets), the trees as folded card that holds still in the wind, so the hatch on it does not crawl. At night an etching: the dark hatched (crossed on walls and roofs), the sky ruled with level lines, only what lamps and windows light left white under a yellow wash |
+| *Schwarzplan* ("figure-ground plan") | the buildings black, everything else white, the street-tree register's trees as crown circles with a stem dot (measured, so only those) — no shadows, only a fine white line where one building stands in front of another; made for the *Lageplan*, usable everywhere. It knows no time of day: the date and time rest while it is on |
 
 In the graphic styles *Comic*, *Sin City*, *Strich* and *Schwarzplan* the
 depth of field rests (a blurred background under crisp lines reads as a
