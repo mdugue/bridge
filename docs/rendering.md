@@ -605,7 +605,8 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   The pass lays the light out as a duotone (shade blue-grey, light paper)
   under a fine graphite pen. At night (the sun rig's night factor,
   `nightFactorAt`) the model stands on dark blue card: the swap's sky and
-  haze darken to it (`paperNight`), the card's windows glow through it
+  haze darken to it (`paper-scene.ts` `begin`, through
+  `PAPER_DUSK_SKY` to `PAPER_NIGHT_SKY`), the card's windows glow through it
   (`windowGlow`: the clay's lit windows, `clayWindows`, read through the
   mesh's own object table), and the pass opens the dim light up (×2) and
   sorts it into the card's own deep blue, a slate where the night sky

@@ -438,6 +438,7 @@ export function createPaperScene(
     figure: figureMaterial(),
     ink: inkMaterial(),
   };
+  // (Papier's is set for each frame from the night: `begin`)
   const skies: Record<PaperKind, Color> = {
     paper: PAPER_SKY.clone(),
     line: SHEET_WHITE.clone(),
@@ -451,7 +452,6 @@ export function createPaperScene(
     ink: INK_SMOKE.clone(),
   };
   const savedFog = new Color();
-  const nightSky = new Color();
   const hidden: Object3D[] = [];
   const shown: Object3D[] = [];
   // What the swap does not draw, gathered once per scene change rather than
@@ -488,22 +488,20 @@ export function createPaperScene(
     const previousOverride = scene.overrideMaterial;
     const previousBackground = scene.background;
     savedFog.copy(fogColor.value);
-    // (Sin City's smoke is its afternoon's: the style has no night)
-    fogColor.value.copy(fogs[kind]);
-    scene.overrideMaterial = materials[kind];
-    scene.background = skies[kind];
     if (kind === "paper") {
       // Papier's night is drawn on dark card: its sky and its haze
       // (through a mauve dusk: halfway, day paper and night card met in
       // a dull grey)
       const night = styleNight.value;
-      nightSky
+      skies.paper
         .copy(PAPER_SKY)
         .lerp(PAPER_DUSK_SKY, MathUtils.smoothstep(night, 0, 0.5))
         .lerp(PAPER_NIGHT_SKY, MathUtils.smoothstep(night, 0.5, 1));
-      fogColor.value.copy(nightSky);
-      scene.background = nightSky;
     }
+    // (Sin City's smoke is its afternoon's: the style has no night)
+    fogColor.value.copy(fogs[kind]);
+    scene.overrideMaterial = materials[kind];
+    scene.background = skies[kind];
     const lists = candidates ?? gather();
     const list = kind === "figure" ? lists.figure : lists.paper;
     for (const m of ownPaper) {
