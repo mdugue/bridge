@@ -62,6 +62,8 @@ export interface AskRun {
   site: AskPromptSite;
   threadId: string;
   today: Date;
+  /** the answers are read aloud */
+  voice?: boolean;
 }
 
 /** The answer as a stream of AG-UI events, for an SSE response. */
@@ -73,7 +75,7 @@ export function runAsk(run: AskRun) {
     ...(run.runId ? { runId: run.runId } : {}),
     ...(run.resume ? { resume: run.resume } : {}),
     ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
-    systemPrompts: [askSystemPrompt(run.site, run.today)],
+    systemPrompts: [askSystemPrompt(run.site, run.today, run.voice)],
     tools: [...knowledgeTools(run.knowledge), ...SCENE_TOOLS],
     agentLoopStrategy: maxIterations(ASK_LIMITS.iterations),
     // the prompt and the tools are the same for every request of a site:

@@ -399,7 +399,12 @@ The button in the corner opens a panel with three tabs.
   OpenRouter or the Vercel AI Gateway) and at your cost, mostly under a
   cent per question; the key stays in your browser
   ([privacy](/datenschutz#frag-die-stadt)). Also from *Fragen* in the
-  toolbar.
+  toolbar. As a **voice guide**: *Sprechen* takes a question by
+  microphone (where the browser recognises speech), *Vorlesen* reads the
+  answers aloud, and the *Hörmodus* softly darkens the edges and lets
+  the scene rest — for walking with the phone in your pocket, together with
+  *Live* in the toolbar. "What is that up ahead?" asks the city model
+  what stands at the centre of the view and opens its card.
 - **Steuerung** ("controls") — the full controls table, folded until you
   open it (the bar over the scene shows the first few).
 

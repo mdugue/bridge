@@ -36,6 +36,7 @@ how it is built.
 | [0048](./0048-network-failures-are-retried.md) | A network failure is retried for a budget of the page's visible time, never decided at once |
 | [0055](./0055-stadtwissen-and-written-walks.md) | What the twin knows is baked as files for agents; walks are written ahead, checked against the data, their narration marked as Claude's |
 | [0056](./0056-frag-die-stadt-runs-on-the-visitors-key.md) | *Frag die Stadt* runs on the visitor's own key through one stateless function with a fixed prompt and fixed tools; the key stays in the browser, the answers are marked |
+| [0057](./0057-the-sprachfuehrer-speaks-with-the-browsers-voice.md) | The Sprachführer speaks and listens with the browser's own voice, and the scene rests while it does |
 
 ## Numbering
 

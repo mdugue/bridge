@@ -5,10 +5,13 @@
  * same stores the HUD uses, so the panel's controls show it.
  */
 import { type RefObject, useMemo } from "react";
+import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
+import type { FramePace } from "@/lib/city/frame-pace";
+import { inquiryCard } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
 import type { Site } from "@/lib/city/site";
-import type { AskScene } from "./ask-city";
+import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
 import type { SceneTime } from "./scene-time";
 
@@ -30,11 +33,13 @@ export function useAskScene(
   handleRef: RefObject<CityWalkHandle | null>,
   look: LookState,
   time: SceneTime,
-  site: Site
+  site: Site,
+  pace: FramePace
 ): AskScene {
   const { current, setInstant } = time;
   return useMemo(() => {
     const offered = new Set(siteDataLayers(site.dataLayers).map((d) => d.key));
+    const credits = cardCredits(site);
     return {
       from: () => {
         const c = handleRef.current?.getCameraState();
@@ -59,6 +64,30 @@ export function useAskScene(
           ebenen: activeDataLayers(values).map((d) => d.key),
         };
       },
+      look: () => {
+        const asked = handleRef.current?.inquireAt();
+        if (!asked) {
+          return {
+            gefunden: false,
+            hinweis: "In der Bildmitte steht nichts, was das Modell kennt.",
+          };
+        }
+        // the card the viewer opens for it, as words for the model — without
+        // the site's per-tile survey record (provenance.json) and a tree's
+        // own facts file, which the visible card fetches: the model gets
+        // the layers' credits, the card beside it the full sources
+        const card = inquiryCard(asked, null, credits);
+        return {
+          gefunden: true,
+          art: card.kicker,
+          name: card.title,
+          ...(card.address ? { adresse: card.address } : {}),
+          ...(card.id ? { [card.idLabel || "kennung"]: card.id } : {}),
+          fakten: Object.fromEntries(card.facts.map((f) => [f.label, f.value])),
+          quellen: card.sources.map((s) => s.text),
+        };
+      },
+      setListening: (on) => pace.setListening(on),
       show: (view) => handleRef.current?.flyToViewpoint(view),
       setTime: (hour, date) => {
         const at = instantAt(hour, current(), date);
@@ -74,5 +103,5 @@ export function useAskScene(
         return true;
       },
     } satisfies AskScene;
-  }, [handleRef, look, current, setInstant, site]);
+  }, [handleRef, look, current, setInstant, site, pace]);
 }
