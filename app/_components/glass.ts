@@ -179,6 +179,10 @@ export interface DataMarkInputs {
   edge?: F;
   /** 0..1, its ridge — the middle of a band (default: none) */
   ridge?: F;
+  /** false for a mark its alpha blends over the scene (a tram's trail):
+   *  it reads no copy of the scene, so none is made for it alone — its
+   *  blend lays it over what is behind (default true) */
+  backdrop?: boolean;
 }
 
 /** A fully saturated colour of hue `h` (0..1) at value 0.9, one channel
@@ -215,14 +219,24 @@ export const DATA_HUE = { from: 0.55, to: 0.95 } as const;
  */
 export function dataMarkColour(i: DataMarkInputs): V3 {
   const edge = i.edge ?? smoothstep(0.72, 0.9, glassGrazing());
-  const behind = backdrop.sample(screenUV).rgb;
+  const behind =
+    i.backdrop === false ? null : backdrop.sample(screenUV).rgb.toVar();
   const light = i.light.clamp(0, 1);
+  // (its light decided whole: a half-white marker is no longer a marker
+  // ink to the pass, and printed as clay — a speckled halo)
   const printed = mix(
-    mix(marker(mix(DATA_HUE.from, DATA_HUE.to, i.scale)), vec3(1), light),
+    mix(
+      marker(mix(DATA_HUE.from, DATA_HUE.to, i.scale)),
+      vec3(1),
+      step(0.5, light)
+    ),
     vec3(0.02),
     edge
   );
-  const exposure = behind.mul(0.55).add(vec3(1, 0.97, 0.9).mul(light.mul(1.4)));
+  // (a blended mark: a dark glass, and a tissue over the white card)
+  const exposure = (behind?.mul(0.55) ?? vec3(0)).add(
+    vec3(1, 0.97, 0.9).mul(light.mul(1.4))
+  );
   const red = mix(vec3(0.55, 0.012, 0.03), vec3(1, 0.36, 0.36), light);
   // (the tints are pastel: the tissue's colour is the tint, twice as
   // vivid, so it stays a colour on the white card)
@@ -232,7 +246,8 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
     2.2
   ).clamp(0, 1);
   const pale = mix(vec3(1), vivid, 0.75);
-  const tissue = mix(behind, behind.mul(pale).add(pale.mul(0.12)), 0.8)
+  const card = behind ?? vec3(1);
+  const tissue = mix(card, card.mul(pale).add(pale.mul(0.12)), 0.8)
     .add(i.tint.mul(lampNight.mul(0.35)))
     .add(light.mul(0.25));
   const plan = mix(

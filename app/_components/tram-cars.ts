@@ -170,6 +170,7 @@ function trailMaterial(): MeshBasicNodeMaterial {
       scale: float(0.5),
       light: fade.pow(6),
       edge: float(0),
+      backdrop: false,
     });
     m.colorNode = vec4(styled, fade.pow(1.4).mul(float(0.85)));
     m.userData.paperOwn = true;

@@ -1034,7 +1034,12 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       mix(printInk, dataInk, step(DATA_HUE.from - 0.05, hue)),
       printed
     );
-    day = mix(day, mix(POP.blueDeep, POP.blue, lit), water);
+    // (a marker ink is no river: a blue data mark lies flat, faces up)
+    day = mix(
+      day,
+      mix(POP.blueDeep, POP.blue, lit),
+      water.mul(float(1).sub(printed))
+    );
     // The sky: one blue, printed lighter towards the horizon with dots of
     // the pale blue (`skyDots`) — a printed gradient, no band.
     const daySky = mix(POP.skyHigh, POP.sky, skyDots(at));
