@@ -369,6 +369,9 @@ export interface SunShadowMap {
   depth: () => DepthTexture | null;
   /** world → map ([0, 1]³), kept current by three */
   matrix: Matrix4;
+  /** the depth bias the scene's own lookup adds (three's `shadow.bias`):
+   *  a fixed one on foot, one per fit of the warped map from the air */
+  bias: () => number;
 }
 
 export interface Stylize {
@@ -429,6 +432,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   // every read of it, so `update` can bind the map to each
   const shadowReads: ReturnType<typeof texture>[] = [];
   const shadowMatrix = uniform(inputs.sunShadow.matrix);
+  const shadowBias = uniform(0).onRenderUpdate(() => inputs.sunShadow.bias());
   const shadowReady = uniform(0);
   const pen = {
     sil: uniform(new Vector2(0.012, 0.045)),
@@ -492,7 +496,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const inside = smoothstep(0, 0.04, edge).mul(step(c.z, 1)).mul(shadowReady);
     const read = texture(shadowStandIn, at);
     shadowReads.push(read);
-    const shadowed = read.compare(c.z.sub(0.0003)).x;
+    const shadowed = read.compare(c.z.add(shadowBias)).x;
     const cast = mix(beyond, shadowed, inside);
     return towards.mul(cast).mul(smoothstep(SUN_GONE_Y, 0.04, sunWorld.y));
   };
