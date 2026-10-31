@@ -626,6 +626,7 @@ function SunControls({
       <div className="grid grid-cols-[1fr_auto] items-center gap-2">
         <Popover>
           <PopoverTrigger
+            disabled={resting}
             onFocus={preloadCalendar}
             onPointerEnter={preloadCalendar}
             render={

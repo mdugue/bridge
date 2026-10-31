@@ -628,8 +628,8 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   on a cell ladder like the sky dots), and what a lamp or a lit window
   lights left white under a warm yellow wash; the plan colours rest (the
   night's blue would be all the hue left). Modell's parallel view has no
-  night: a plan stays the day's unshaded sheet (hatched whole, it read as
-  a grey wash).
+  night: a plan stays an unshaded sheet with its lines (hatched whole, it
+  read as a grey wash).
 - *Schwarzplan* — the swap's third kind: an unlit black material for the
   clay (`userData.figure`, no fog), the ground white (`paperGroundOn` = 3,
   no contours), everything else hidden for its frames; one threshold in

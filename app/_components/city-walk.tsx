@@ -4,7 +4,7 @@ import { createFramePace } from "@/lib/city/frame-pace";
 import { arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site } from "@/lib/city/site";
-import { RENDER_STYLE_BY_ID, styleInstant } from "@/lib/city/render-style";
+import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
 import {
   BoxIcon,
   LocateFixedIcon,
@@ -997,8 +997,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     hud.say(busy, true);
     what(h, {
       site,
-      // the instant drawn: a style with its own light draws at its own
-      date: styleInstant(RENDER_STYLE_BY_ID[look.get().style], time.current()),
+      date: time.current(),
       model: h.getModelHud(),
       style: look.get().style,
     })

@@ -154,7 +154,11 @@ function legendLines(
   return [
     info.site.label,
     scale ? `${view} · ${scale}` : view,
-    heading ?? format(info.date, "d. MMMM yyyy · HH:mm 'Uhr'", { locale: de }),
+    heading ??
+      // (a style with its own light draws at no time the HUD set)
+      (RENDER_STYLE_BY_ID[info.style].ownLight
+        ? "im eigenen Licht des Stils"
+        : format(info.date, "d. MMMM yyyy · HH:mm 'Uhr'", { locale: de })),
   ];
 }
 

@@ -1325,8 +1325,8 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   // and only what a lamp or a lit window lights is left white, under a
   // wash of warm yellow.
   const strich = (p: V3, at: V2, z: F, sky: F, surface: Surface): V3 => {
-    // (a plan has no night: in Modell's parallel view the sheet stays the
-    // day's, lines and plan colours; the nocturne is the perspective's)
+    // (a plan has no night: in Modell's parallel view the sheet stays
+    // unshaded, its lines alone; the nocturne is the perspective's)
     const plan = step(0.5, lens.ortho);
     const nightHere = night.mul(float(1).sub(plan)).toVar();
     const sheet = vec3(0.995, 0.993, 0.99);
@@ -1347,7 +1347,8 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const cool = smoothstep(0.19, 0.24, hcv.x).mul(
       float(1).sub(smoothstep(0.85, 0.92, hcv.x))
     );
-    // (by night the sky's own blue is all the hue left: no plan colour)
+    // (by night the light's own blue is all the hue left: no plan colour,
+    // in Modell's plan too — its night is the bare sheet)
     const planned = smoothstep(0.03, 0.08, hcv.y)
       .mul(cool)
       .mul(float(1).sub(night));
