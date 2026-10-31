@@ -49,7 +49,7 @@ import {
 import type { RenderStyleDef } from "@/lib/city/render-style";
 import { fogFactorAt, type SceneFog } from "./height-fog";
 import type { F, V2, V3, V4 } from "./shader-chunks";
-import { nightFactorAt } from "./sun-rig";
+import { styleNight } from "./sun-rig";
 import type { ViewLens } from "./view-lens";
 
 /**
@@ -441,9 +441,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const mode = uniform(1);
   const ink = uniform(0.7);
   const dusk = uniform(0);
-  // the sun rig's night factor (sun-rig.ts `nightFactorAt`): the nights
-  // of Papier and Strich follow the lamps, not the fading sun
-  const night = uniform(0);
+  // the sun rig's night factor (sun-rig.ts `styleNight`): the nights of
+  // Papier and Strich follow the lamps, not the fading sun
+  const night = styleNight;
   const pixelScale = uniform(1);
   const resolution = uniform(new Vector2(1, 1));
   const upView = uniform(new Vector3(0, 1, 0));
@@ -1350,7 +1350,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // (by night the sky's own blue is all the hue left: no plan colour)
     const planned = smoothstep(0.03, 0.08, hcv.y)
       .mul(cool)
-      .mul(float(1).sub(nightHere));
+      .mul(float(1).sub(night));
     const tint = mix(vec3(1), hue, planned.mul(mix(0.35, 0.85, lit)));
     const pen = mix(vec3(0.2, 0.21, 0.24), AQUATINT.pen, nightHere).toVar();
     // The hatch as a draughtsman lays it: each face of a block at its own
@@ -1410,9 +1410,10 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const lamplit = mix(tint, NIGHT_WASH, lamp.mul(nightHere));
     let col = mix(hatched, lamplit, lit);
     // the near-black stays black: the Schnitt's poché, not a shade
+    // (by night, in Modell's plan too: the night's dark is no poché)
     const fill = float(1)
       .sub(smoothstep(0.2, 0.28, lumaOf(p)))
-      .mul(float(1).sub(nightHere));
+      .mul(float(1).sub(night));
     col = mix(col, vec3(0.11), fill);
     const el = viewRayWorld(at).y;
     const tone = mix(
@@ -1576,7 +1577,6 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     setSunAltitude: (altitudeDeg) => {
       const t = Math.min(Math.max((12 - altitudeDeg) / 18, 0), 1);
       dusk.value = t * t * (3 - 2 * t);
-      night.value = nightFactorAt(altitudeDeg);
     },
     captureFog: () => {
       frameFog.value.copy(fog.color.value);

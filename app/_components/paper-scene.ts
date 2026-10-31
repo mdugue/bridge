@@ -45,6 +45,7 @@ import { clayWindows } from "./clay-windows";
 import { instanceTint } from "./instancing";
 import { ownSlotTexture, ownSlotUniform } from "./material-slots";
 import { dataPosition, type Live, type V3, type V4 } from "./shader-chunks";
+import { styleNight } from "./sun-rig";
 import { viewDirection } from "./view-direction";
 import { shopOf, wallEaveUp } from "./visual-style";
 
@@ -70,13 +71,10 @@ import { shopOf, wallEaveUp } from "./visual-style";
  * background shows there.
  */
 
-/**
- * How far into the night the card is (0 by day, 1 once the lamps are all
- * lit: the sun rig's night factor, post-stack.ts): Papier's and Strich's
- * card lights its windows by it, and Papier's sky and haze darken to the
- * night's card.
- */
-export const paperNight: Live = uniform(0);
+/** How far into the night the card is (sun-rig.ts `styleNight`): it
+ *  lights its windows by it, and Papier's sky and haze darken to the
+ *  night's card. */
+const paperNight = styleNight;
 
 /** Warm off-white: the sheet the model is cut from. */
 export const PAPER_HEX = 0xf4_f0_e8;

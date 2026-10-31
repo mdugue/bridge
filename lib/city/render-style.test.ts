@@ -77,9 +77,10 @@ test("a style with its own light draws at its own instant, in the asked year", (
       continue;
     }
     const own = styleInstant(def, asked);
-    expect(own.getFullYear()).toBe(2027);
-    expect(own.getMonth()).toBe(light.month);
-    expect(own.getHours() * 60 + own.getMinutes()).toBe(light.minutes);
+    expect(own.getUTCFullYear()).toBe(2027);
+    expect(own.getUTCMonth()).toBe(light.month);
+    expect(own.getUTCDate()).toBe(light.day);
+    expect(own.getUTCHours() * 60 + own.getUTCMinutes()).toBe(light.minutes);
   }
   // Sin City's masses are cut from the sun: its instant is a day's
   expect(RENDER_STYLE_BY_ID.sincity.ownLight).not.toBeNull();

@@ -41,7 +41,9 @@ export interface OwnLight {
   /** month, 0-based like Date's */
   month: number;
   day: number;
-  /** minutes of the (local) day */
+  /** minutes of the day in UTC: the sun must stand where the style
+   *  needs it over the site (every site is in Germany, 2 h ahead in
+   *  summer), wherever the viewer is */
   minutes: number;
   /** why the time does not apply (German, like the HUD) */
   note: string;
@@ -180,7 +182,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     ownLight: {
       month: 8,
       day: 15,
-      minutes: 16 * 60 + 30,
+      minutes: 14 * 60 + 30,
       note: "Sin City zeichnet immer im selben harten Nachmittagslicht: Datum und Uhrzeit gelten wieder, sobald du den Stil wechselst.",
     },
     lampCones: false,
@@ -246,7 +248,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     ownLight: {
       month: 5,
       day: 21,
-      minutes: 13 * 60,
+      minutes: 11 * 60,
       note: "Der Schwarzplan kennt weder Licht noch Schatten: Datum und Uhrzeit gelten wieder, sobald du den Stil wechselst.",
     },
     lampCones: false,
@@ -272,15 +274,16 @@ export function isRenderStyle(value: unknown): value is RenderStyle {
 
 /**
  * The instant the scene draws at under `style`: the HUD's `asked` one, or
- * the style's own (`OwnLight`) in the same year, in local time like the
- * HUD's.
+ * the style's own (`OwnLight`) in the same year.
  */
 export function styleInstant(style: RenderStyleDef, asked: Date): Date {
   const own = style.ownLight;
   if (!own) {
     return asked;
   }
-  return new Date(asked.getFullYear(), own.month, own.day, 0, own.minutes);
+  return new Date(
+    Date.UTC(asked.getFullYear(), own.month, own.day, 0, own.minutes)
+  );
 }
 
 /** The style after `current` in picker order, wrapping around (the V key). */

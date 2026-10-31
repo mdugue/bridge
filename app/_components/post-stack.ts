@@ -62,7 +62,7 @@ import { crownSwayShare } from "./vegetation-layer";
 import { fxaa } from "./fxaa";
 import { createMotionBlur } from "./motion-blur";
 import type { SceneFog } from "./height-fog";
-import { createPaperScene, paperNight } from "./paper-scene";
+import { createPaperScene } from "./paper-scene";
 import {
   createSelectionOutline,
   type OutlineSelection,
@@ -76,7 +76,7 @@ import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
 import { createStylize, type SunShadowMap } from "./stylize-effect";
-import { nightFactorAt } from "./sun-rig";
+import { nightFactorAt, styleNight } from "./sun-rig";
 import type { ViewLens } from "./view-lens";
 
 /** Initial focus distance before the first crosshair raycast lands. */
@@ -1312,7 +1312,7 @@ export function createPostStack(
     },
     setSunAltitude: (altitudeDeg) => {
       stylize.setSunAltitude(altitudeDeg);
-      paperNight.value = nightFactorAt(altitudeDeg);
+      styleNight.value = nightFactorAt(altitudeDeg);
     },
     render: () => {
       updateFocus();
