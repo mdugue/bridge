@@ -1331,8 +1331,7 @@ export function createPostStack(
               lampCones: style.lampCones,
             })
           : null;
-      const swap =
-        style.paperScene === "ink" && stylize.night() ? null : style.paperScene;
+      const swap = style.paperScene;
       const restore = swap ? paperScene.begin(swap) : null;
       stylize.captureFog();
       const view = active();

@@ -65,6 +65,7 @@ import {
   nextRenderStyle,
   RENDER_STYLE_BY_ID,
   type RenderStyle,
+  styleInstant,
 } from "@/lib/city/render-style";
 import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
@@ -188,7 +189,13 @@ import {
   shadowMapSizeFor,
   tileCacheBytesFor,
 } from "./scene-profile";
-import { type AirView, createSunRig, type SunState } from "./sun-rig";
+import {
+  type AirView,
+  createSunRig,
+  styleNight,
+  type SunState,
+  sunStateAt,
+} from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
   type AnyAttribute,
@@ -1417,9 +1424,9 @@ async function bootApp(
     invalidateLanternShadow(lantern);
   };
 
-  // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk; clayNight
-  // gates the clay dusk glow by reference.
-  const clayNight = uniform(0);
+  // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk; the
+  // styles' night uniform (sun-rig.ts `styleNight`) gates the clay dusk
+  // glow by reference too.
   let currentNight = 0;
   // The picture styles follow the sun too (Film noir's dusk exposure); the
   // post stack is built after the first setSun, so it catches up there.
@@ -1443,7 +1450,7 @@ async function bootApp(
   cleanups.push(() => lampLights.dispose());
 
   // The facades share the ground's sun (the same node).
-  const styleResources = createStyleResources(clayNight, ground.sunDirection);
+  const styleResources = createStyleResources(styleNight, ground.sunDirection);
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: () => void = () => undefined;
@@ -1715,7 +1722,16 @@ async function bootApp(
       stream.tiles.deleteCamera(shadow);
     }
   };
-  const setSun = (date: Date, preview = false): SunState => {
+  // The light falls at the instant the HUD asked for, or at the picture
+  // style's own (render-style.ts `styleInstant`: Sin City's sun, the
+  // Schwarzplan's no light; `applyLook` relights when the style takes or
+  // gives back its own). The clocks, the seasons and the data layers' hour
+  // keep the asked instant: a style changes the light, not the day.
+  // (what the light shows: a drag's step too, so a switch mid-drag keeps
+  // the dragged hour)
+  let shownSun = opts.initialDate;
+  const relight = (asked: Date, preview = false): SunState => {
+    const date = styleInstant(RENDER_STYLE_BY_ID[opts.look.get().style], asked);
     const state = sunRig.update(date, preview);
     streamShadowTiles(state.aboveHorizon);
     currentNight = state.nightFactor;
@@ -1727,18 +1743,26 @@ async function bootApp(
     lampLights.setNightFactor(state.nightFactor);
     lantern.setNight(state.nightFactor);
     setFountainNight(state.nightFactor);
-    setFountainSeason(date);
     setFurnitureNight(state.nightFactor);
-    setClockTime(date);
-    clayNight.value = state.nightFactor;
-    seasonClock.set(date);
-    sceneClock.set({ date, atMs: performance.now() });
+    styleNight.value = state.nightFactor;
     // The sun's move has asked for the map already; a drag's step leaves
     // it to the rig's pace.
     if (!preview) {
       invalidateShadows();
     }
     return state;
+  };
+  const setSun = (asked: Date, preview = false): SunState => {
+    shownSun = asked;
+    const state = relight(asked, preview);
+    setFountainSeason(asked);
+    setClockTime(asked);
+    seasonClock.set(asked);
+    sceneClock.set({ date: asked, atMs: performance.now() });
+    // the HUD reads where the sun stands at the instant it asked for
+    return RENDER_STYLE_BY_ID[opts.look.get().style].ownLight
+      ? sunStateAt(asked, latLng)
+      : state;
   };
   setSun(opts.initialDate);
 
@@ -1908,6 +1932,9 @@ async function bootApp(
   const applyLook = (look: LookValues) => {
     wakeStill();
     if (look.style !== lastStyle) {
+      const ownLight =
+        RENDER_STYLE_BY_ID[lastStyle].ownLight !== null ||
+        RENDER_STYLE_BY_ID[look.style].ownLight !== null;
       lastStyle = look.style;
       opts.trail?.note("style", look.style);
       // Modell's paper is the style's sheet
@@ -1915,8 +1942,13 @@ async function bootApp(
         sunRig.setParallel(true, paperOf(look.style));
       }
       // A picture style may draw its own crowns (style-dressing.ts), and the
-      // crowns cast: the shadow map is redrawn with the new ones.
-      invalidateShadows();
+      // crowns cast: the shadow map is redrawn with the new ones — by
+      // `relight` when the style draws at its own instant or gives it back
+      if (ownLight) {
+        relight(shownSun);
+      } else {
+        invalidateShadows();
+      }
     }
     for (const key of Object.keys(sceneRows) as LookKey[]) {
       sceneRows[key](look[key]);

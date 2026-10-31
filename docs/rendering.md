@@ -570,10 +570,10 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   shadows as hard black masses —, red roofs lit or oxblood; the haze past
   the cap white smoke; rain as streaks on a grid of world directions in
   depth layers hidden behind nearer geometry; black ink on the white.
-  From ~1° below the horizon, where the pass lets go of the sun, the card
-  is off (`Stylize.night`): the night
-  is cut from the scene's own frame, its lit windows, lamps and
-  floodlights white on black.
+  Its masses are the sun's, so it always draws at its own instant (the
+  style's `ownLight`: 15 September, 16:30 — a low afternoon sun from the
+  south-west); the HUD rests its date and time with a note while it is
+  on (`styleInstant`, `create-app.ts` `setSun`).
 
 - *Scene dressing* (`style-dressing.ts`) — geometry a style draws with for
   its frames only: Comic's crowns are cartoon clouds of three balls (the
@@ -603,7 +603,16 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   sports lines in a light pencil grey, the water's extent (the splat's
   alpha) a cool, deeper paper — with its own light, sky view and contours.
   The pass lays the light out as a duotone (shade blue-grey, light paper)
-  under a fine graphite pen.
+  under a fine graphite pen. At night (the sun rig's night factor,
+  `nightFactorAt`) the model stands on dark blue card: the swap's sky and
+  haze darken to it (`paper-scene.ts` `begin`, through
+  `PAPER_DUSK_SKY` to `PAPER_NIGHT_SKY`), the card's windows glow through it
+  (`windowGlow`: the clay's lit windows, `clayWindows`, read through the
+  mesh's own object table), and the pass opens the dim light up (×2) and
+  sorts it into the card's own deep blue, a slate where the night sky
+  reaches, and a warm glow where a lamp or a window lights it
+  (`nightLight`: bright and warm); the sky the card, paler towards the
+  horizon; the pen a white pencil.
 - *Strich* — Papier's swap (the same card material and builds) with the
   ground's plan palette under the shared uniform (`paperGroundOn` = 2:
   the paved and built ground a light neutral, green a plan green, water a
@@ -613,13 +622,22 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   ±45° by the wall's side, a shallower angle on a roof or the ground, a
   cross layer only in deep shade, lighter on tops and thinning out from
   150 m to 1.2 km so an overview does not fill up; it draws with that pen — one CSS pixel, no wander, no
-  lifts, its creases held into the distance; after dusk an unshaded
-  white sheet (a plan has no night).
+  lifts, its creases held into the distance. At night an etcher's
+  nocturne: what no lamp or window lights is hatched — crossed where the
+  night sky's light does not reach either —, the sky ruled with level
+  lines of the view's elevation (`skyHatch`, denser towards the zenith,
+  on a cell ladder like the sky dots), and what a lamp or a lit window
+  lights left white under a warm yellow wash; the plan colours rest (the
+  night's blue would be all the hue left). Modell's parallel view has no
+  night: a plan stays an unshaded sheet with its lines (hatched whole, it
+  read as a grey wash).
 - *Schwarzplan* — the swap's third kind: an unlit black material for the
   clay (`userData.figure`, no fog), the ground white (`paperGroundOn` = 3,
   no contours), everything else hidden for its frames; one threshold in
   the pass cuts the remaining light away, and a white hairline parts two
-  blocks where one stands in front of the other.
+  blocks where one stands in front of the other. It knows no light, so
+  it draws at its own instant (21 June, 13:00): at night the lit ground
+  fell under the threshold and the plan went black.
 
 The pass reads the depth buffer at **integer** texel radii around a texel
 centre, blending two radii for the stroke weight: the buffer is sampled

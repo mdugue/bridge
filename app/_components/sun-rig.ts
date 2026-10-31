@@ -55,7 +55,7 @@ import {
 import { sunDirectionWorld } from "@/lib/city/sun";
 import { shadowMapBytesFor } from "./scene-profile";
 import { createSkyReflection } from "./sky-reflection";
-import type { V3, V4 } from "./shader-chunks";
+import type { Live, V3, V4 } from "./shader-chunks";
 
 export interface SunState {
   aboveHorizon: boolean;
@@ -68,6 +68,40 @@ export interface SunState {
 function smoothstepDown(edge0: number, edge1: number, x: number): number {
   const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
   return t * t * (3 - 2 * t);
+}
+
+/** The night factor at a sun altitude (°): 0 by day, 1 from civil dusk
+ *  (−6°) — what lights the lamps, and what the picture styles' nights
+ *  follow (stylize-effect.ts, paper-scene.ts). */
+export function nightFactorAt(altitudeDeg: number): number {
+  return smoothstepDown(2, -6, altitudeDeg);
+}
+
+/**
+ * The night factor as the picture styles read it in their graphs — the
+ * stylize pass, Papier's and Strich's card: one shared uniform, written
+ * with the sun (create-app.ts `relight`, from the rig's `nightFactor`).
+ */
+export const styleNight: Live = uniform(0);
+
+/** The sun's altitude (°) from its world direction's height. */
+function altitudeOf(y: number): number {
+  return (Math.asin(Math.min(Math.max(y, -1), 1)) * 180) / Math.PI;
+}
+
+/** Where the sun stands at `date` over `latLng`, without moving the rig:
+ *  what the HUD shows for the instant it asked for. */
+export function sunStateAt(
+  date: Date,
+  latLng: { lat: number; lng: number }
+): SunState {
+  const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
+  const altitudeDeg = altitudeOf(d.y);
+  return {
+    aboveHorizon: d.y > 0,
+    altitudeDeg,
+    nightFactor: nightFactorAt(altitudeDeg),
+  };
 }
 
 export interface SunRig {
@@ -748,10 +782,9 @@ export function createSunRig(
     }
     // Quick ramp after sunrise, flat during the day.
     sun.intensity = SUN_INTENSITY * Math.min(1, Math.max(dir.y, 0) * 5);
-    const altitudeDeg =
-      (Math.asin(Math.min(Math.max(dir.y, -1), 1)) * 180) / Math.PI;
+    const altitudeDeg = altitudeOf(dir.y);
     // Civil-dusk ignition curve: 0 by day, 1 once the sun is well below.
-    const nightFactor = smoothstepDown(2, -6, altitudeDeg);
+    const nightFactor = nightFactorAt(altitudeDeg);
     // Generous daytime fill, but crushed at night so the warm lamp pools have
     // dark contrast to read against.
     hemisphere.intensity =
