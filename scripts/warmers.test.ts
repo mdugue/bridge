@@ -70,7 +70,16 @@ describe("bakeLimits", () => {
     expect(Math.floor(memory / PROCESS_PEAK)).toBeGreaterThanOrEqual(4);
   });
 
-  test("on Vercel's 4-core, 8.6 GB builder one cold site bakes at a time, beside a cached site's run", () => {
+  test("on Vercel's 4-core, 8.6 GB builder two tile warmers bake at once", () => {
+    const { memory } = bakeLimits({ cores: 4, memory: 8.6e9 });
+    expect(Math.floor(memory / TILE_PEAK)).toBe(2);
+    // the heaviest tile's cold peak (München 32690_5334, 2.40 GiB on
+    // 2026-10-31) fits its count with Vercel's Bun's 15 % more, and 5 %
+    // to spare
+    expect(1.05 * 1.15 * 2.4 * 2 ** 30).toBeLessThanOrEqual(TILE_PEAK);
+  });
+
+  test("without the warmers, Vercel's builder bakes one cold site at a time, beside a cached site's run", () => {
     const { memory } = bakeLimits({ cores: 4, memory: 8.6e9 });
     expect(Math.floor(memory / SITE_PEAK)).toBe(1);
     expect(SITE_PEAK + PROCESS_PEAK).toBeLessThanOrEqual(memory);
@@ -78,8 +87,9 @@ describe("bakeLimits", () => {
     expect(4.42 * 2 ** 30).toBeLessThanOrEqual(SITE_PEAK);
   });
 
-  test("on CI's 4-core, 16.8 GB runner two cold sites bake at once", () => {
+  test("on CI's 4-core, 16.8 GB runner four tile warmers bake at once, two cold sites without them", () => {
     const { memory } = bakeLimits({ cores: 4, memory: 16.8e9 });
+    expect(Math.floor(memory / TILE_PEAK)).toBe(4);
     expect(Math.floor(memory / SITE_PEAK)).toBe(2);
   });
 
@@ -108,11 +118,11 @@ describe("bakeLimits", () => {
 });
 
 describe("warmersOn", () => {
-  test("off unless PREPARE_WARMERS=1, and a stray value fails", () => {
-    expect(warmersOn({})).toBe(false);
-    expect(warmersOn({ PREPARE_WARMERS: "" })).toBe(false);
-    expect(warmersOn({ PREPARE_WARMERS: "0" })).toBe(false);
+  test("on unless PREPARE_WARMERS=0, and a stray value fails", () => {
+    expect(warmersOn({})).toBe(true);
+    expect(warmersOn({ PREPARE_WARMERS: "" })).toBe(true);
     expect(warmersOn({ PREPARE_WARMERS: "1" })).toBe(true);
+    expect(warmersOn({ PREPARE_WARMERS: "0" })).toBe(false);
     expect(() => warmersOn({ PREPARE_WARMERS: "yes" })).toThrow(
       "PREPARE_WARMERS"
     );

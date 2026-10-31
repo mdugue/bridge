@@ -16,6 +16,13 @@
 
 ## Status
 
+- **Status (2026-10-31)**: **DONE — the warmers are the default, for every
+  site** (`PREPARE_WARMERS=0` turns them off). By then a whole cold site
+  peaked at 4.5–6.1 GiB in one process, so Vercel's builder baked one cold
+  site at a time on one of its four cores; two tile warmers at once took
+  all seven sites from 11:07 to 5:19 min on a box held to that builder
+  (`PREPARE_MEMORY_GB=8.6`), manifests identical (`docs/data-pipeline.md`,
+  "Bakes side by side"). The 2026-10-10 status below is the history.
 - **Status (2026-10-10)**: **PARTIAL — the warmers showed no gain on
   Vercel and are opt-in** (`PREPARE_WARMERS=1`). Built: steps 1, 3–6 on
   `266bb89` (the performance PR's base); step 2 skipped by its gate.

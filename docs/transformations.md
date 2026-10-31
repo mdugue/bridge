@@ -4742,6 +4742,10 @@ research that produced them):
    plan 020 in [completed.md](./plans/completed.md)) three's
    `CSMShadowNode` is available without shader patching — still a depth
    pass per cascade on every sun or camera move, and its own decision.
+   *Amended 2026-10-31:* from the air the one map is warped over the view
+   (LiSPSM, [ADR 0009](./adr/0009-shadow-recipe.md)) and casts shapes
+   out to most of the fog's reach, facades included, without a second
+   map; on foot the limit stands.
 8. **Adaptive resolution while moving** — *partly shipped*: DoF is skipped
    while the camera moves (`lib/city/regression.ts`, plan 007; a phone
    builds no DoF at all, ADR 0047). AO is **not**
