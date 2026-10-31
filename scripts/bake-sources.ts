@@ -70,14 +70,25 @@ export function directImports(file: string, root = process.cwd()): string[] {
 
 /**
  * Every source file reachable from `entry` through relative and `@/` imports,
- * `entry` included, as paths relative to `root`, sorted.
+ * `entry` included, as paths relative to `root`, sorted. A module in `stop`
+ * (relative to `root`) other than `entry` is left out, and so are the
+ * imports only it reaches (bake-entries.ts `KEY_STOPS`).
  */
-export function moduleGraph(entry: string, root = process.cwd()): string[] {
+export function moduleGraph(
+  entry: string,
+  root = process.cwd(),
+  stop: readonly string[] = []
+): string[] {
+  const stopped = new Set(stop.map((p) => resolve(root, p)));
   const seen = new Set<string>();
-  const queue = [resolve(root, entry)];
+  const start = resolve(root, entry);
+  const queue = [start];
   while (queue.length > 0) {
     const file = queue.pop() as string;
     if (seen.has(file)) {
+      continue;
+    }
+    if (file !== start && stopped.has(file)) {
       continue;
     }
     seen.add(file);

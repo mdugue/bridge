@@ -51,6 +51,9 @@ describe("moduleGraph", () => {
     writeFileSync(join(dir, "b.ts"), 'import "@/d";\nexport const b = 1;\n');
     writeFileSync(join(dir, "d.ts"), "");
     expect(moduleGraph("a.ts", dir)).toEqual(["a.ts", "b.ts", "d.ts"]);
+    // a stop is left out with what only it reaches, unless it is the entry
+    expect(moduleGraph("a.ts", dir, ["b.ts"])).toEqual(["a.ts"]);
+    expect(moduleGraph("b.ts", dir, ["b.ts"])).toEqual(["b.ts", "d.ts"]);
   });
 });
 
