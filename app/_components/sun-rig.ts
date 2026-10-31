@@ -84,6 +84,22 @@ export function nightFactorAt(altitudeDeg: number): number {
  */
 export const styleNight: Live = uniform(0);
 
+/** Where the sun stands at `date` over `latLng`, without moving the rig:
+ *  what the HUD shows for the instant it asked for. */
+export function sunStateAt(
+  date: Date,
+  latLng: { lat: number; lng: number }
+): SunState {
+  const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
+  const altitudeDeg =
+    (Math.asin(Math.min(Math.max(d.y, -1), 1)) * 180) / Math.PI;
+  return {
+    aboveHorizon: d.y > 0,
+    altitudeDeg,
+    nightFactor: nightFactorAt(altitudeDeg),
+  };
+}
+
 export interface SunRig {
   /** Frees the shadow map — a render target disposeObject3D never reaches. */
   dispose: () => void;

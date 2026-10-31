@@ -4,7 +4,6 @@ import { createFramePace } from "@/lib/city/frame-pace";
 import { arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site } from "@/lib/city/site";
-import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
 import {
   BoxIcon,
   LocateFixedIcon,
@@ -580,18 +579,11 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     let remembered = look.get().style;
     return look.subscribe((values) => {
       if (values.style !== remembered) {
-        // a style with its own light (Sin City, the Schwarzplan) gave the
-        // scene's sun back (create-app.ts `applyLook`): the HUD reads it
-        // again, its sun was the style's
-        const ownLight = RENDER_STYLE_BY_ID[remembered].ownLight !== null;
         remembered = values.style;
         writeStoredStyle(values.style);
-        if (ownLight) {
-          syncTime();
-        }
       }
     });
-  }, [look, syncTime]);
+  }, [look]);
   // Befragen (ADR 0042): the card closes, and the scene's mark with it.
   const closeInquiry = useCallback(() => {
     handleRef.current?.clearInquiry();

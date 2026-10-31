@@ -36,6 +36,7 @@ import {
   textureLoad,
   uniform,
   varying,
+  vec2,
   vec3,
   vec4,
 } from "three/tsl";
@@ -114,10 +115,6 @@ const INK_NIGHT = new Color(0x00_00_00);
 const INK_SMOKE = new Color(0xd8_d8_d8);
 /** Sin City's one colour: the red roofs (linear). */
 const INK_RED = new Color(0xc8_10_1c);
-/** A linear colour's luminance (Rec. 709). */
-const luminance = (c: Color): number =>
-  0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-
 /** Foliage in Sin City: a black shape. */
 const INK_FOLIAGE = 0.02;
 
@@ -170,21 +167,34 @@ const windowGlow = Fn((builder: NodeBuilder) => {
   const facade = attribute("facade", "vec4") as unknown as V4;
   const roof = step(facade.z, float(FACADE_ROOF + 1e-3));
   const wn = normalize(cameraWorldMatrix.mul(vec4(normalFlat, 0)).xyz);
+  // packed as the clay packs them (visual-style.ts `clayGraph`): the card
+  // carries the standard material's varyings beside these
+  const build = varying(
+    vec4(
+      roof,
+      c.x,
+      b.w.add(wallEaveUp(facade, roof)),
+      dataPosition().z.sub(a.w)
+    )
+  );
+  // flat: they seed and pack
+  const word = varying(vec2(c.z, c.w)).setInterpolation(
+    InterpolationSamplingType.FLAT
+  );
   const windows = clayWindows({
-    eave: varying(b.w.add(wallEaveUp(facade, roof))),
+    eave: build.z,
     facade: varying(mix(facade, vec4(0, 0, FACADE_ROOF, NO_DOOR), roof)),
-    h: max(varying(dataPosition().z.sub(a.w)), 0),
-    // flat: they seed and pack (visual-style.ts)
-    seed: varying(c.z).setInterpolation(InterpolationSamplingType.FLAT),
-    shop: shopOf(varying(c.w)),
+    h: max(build.w, 0),
+    seed: word.x,
+    shop: shopOf(word.y),
     spec: varying(band(3)).setInterpolation(InterpolationSamplingType.FLAT),
-    storey: varying(c.x),
+    storey: build.y,
     strength: float(1),
     sun: windowSun,
     view: viewDirection(),
     wall: float(1)
       .sub(smoothstep(0.5, 0.7, abs(wn.y)))
-      .mul(float(1).sub(roof)),
+      .mul(float(1).sub(build.x)),
     wn,
   });
   return windows.glow;
@@ -483,14 +493,8 @@ export function createPaperScene(
     const previousOverride = scene.overrideMaterial;
     const previousBackground = scene.background;
     savedFog.copy(fogColor.value);
+    // (Sin City's smoke is its afternoon's: the style has no night)
     fogColor.value.copy(fogs[kind]);
-    if (kind === "ink") {
-      // Sin City's smoke dims with the scene's own haze: pale by day,
-      // a dark smoke in the night it sits in
-      fogColor.value.multiplyScalar(
-        Math.min(1, luminance(savedFog) / luminance(INK_SMOKE))
-      );
-    }
     scene.overrideMaterial = materials[kind];
     scene.background = skies[kind];
     if (kind === "paper") {

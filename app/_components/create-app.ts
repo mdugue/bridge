@@ -194,6 +194,7 @@ import {
   createSunRig,
   styleNight,
   type SunState,
+  sunStateAt,
 } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
@@ -1424,8 +1425,9 @@ async function bootApp(
   };
 
   // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk; clayNight
-  // gates the clay dusk glow by reference.
-  const clayNight = uniform(0);
+  // gates the clay dusk glow by reference — the styles' night uniform
+  // (sun-rig.ts `styleNight`), one value for both.
+  const clayNight = styleNight;
   let currentNight = 0;
   // The picture styles follow the sun too (Film noir's dusk exposure); the
   // post stack is built after the first setSun, so it catches up there.
@@ -1723,18 +1725,11 @@ async function bootApp(
   };
   // The light falls at the instant the HUD asked for, or at the picture
   // style's own (render-style.ts `styleInstant`: Sin City's sun, the
-  // Schwarzplan's no light; `applyLook` sets the sun again when the style
-  // takes or gives back its own). The clocks, the seasons and the data
-  // layers' hour keep the asked instant: a style changes the light, not
-  // the day — the same instant asked again (a style's switch) lets them
-  // run on.
-  let askedSun: Date | null = null;
-  const setSun = (asked: Date, preview = false): SunState => {
-    const again = asked.getTime() === askedSun?.getTime();
-    // (a drag's step is not yet asked for)
-    if (!preview) {
-      askedSun = asked;
-    }
+  // Schwarzplan's no light; `applyLook` relights when the style takes or
+  // gives back its own). The clocks, the seasons and the data layers' hour
+  // keep the asked instant: a style changes the light, not the day.
+  let askedSun = opts.initialDate;
+  const relight = (asked: Date, preview = false): SunState => {
     const date = styleInstant(RENDER_STYLE_BY_ID[opts.look.get().style], asked);
     const state = sunRig.update(date, preview);
     streamShadowTiles(state.aboveHorizon);
@@ -1748,20 +1743,28 @@ async function bootApp(
     lantern.setNight(state.nightFactor);
     setFountainNight(state.nightFactor);
     setFurnitureNight(state.nightFactor);
-    clayNight.value = state.nightFactor;
     styleNight.value = state.nightFactor;
-    if (!again) {
-      setFountainSeason(asked);
-      setClockTime(asked);
-      seasonClock.set(asked);
-      sceneClock.set({ date: asked, atMs: performance.now() });
-    }
     // The sun's move has asked for the map already; a drag's step leaves
     // it to the rig's pace.
     if (!preview) {
       invalidateShadows();
     }
     return state;
+  };
+  const setSun = (asked: Date, preview = false): SunState => {
+    // (a drag's step is not yet asked for)
+    if (!preview) {
+      askedSun = asked;
+    }
+    const state = relight(asked, preview);
+    setFountainSeason(asked);
+    setClockTime(asked);
+    seasonClock.set(asked);
+    sceneClock.set({ date: asked, atMs: performance.now() });
+    // the HUD reads where the sun stands at the instant it asked for
+    return RENDER_STYLE_BY_ID[opts.look.get().style].ownLight
+      ? sunStateAt(asked, latLng)
+      : state;
   };
   setSun(opts.initialDate);
 
@@ -1944,8 +1947,8 @@ async function bootApp(
       // crowns cast: the shadow map is redrawn with the new ones.
       invalidateShadows();
       // …and may draw at its own instant, or give it back
-      if (ownLight && askedSun) {
-        setSun(askedSun);
+      if (ownLight) {
+        relight(askedSun);
       }
     }
     for (const key of Object.keys(sceneRows) as LookKey[]) {
