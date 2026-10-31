@@ -463,7 +463,10 @@ The other picture styles and Modell keep their sharp lines.
 - **Entwurf** ("design") — loads a design of your own into the city: a
   glTF file (`.glb`, or a `.gltf` picked together with its `.bin` and
   textures) as SketchUp, Rhino, Revit, Archicad, Vectorworks or Blender
-  export it; dropping it on the panel works too. The file is read in your
+  export it, or an IFC model (`.ifc`); dropping it on the panel works too.
+  An IFC that carries its place (`IfcMapConversion` in ETRS89/UTM) stands
+  there by itself; one with only the site's latitude and longitude stands
+  roughly there, and the panel asks you to check it. The file is read in your
   browser only and uploaded nowhere. Where it carries the Land's
   coordinates (UTM, with or without the zone in front), the design stands
   at its place straight away, at its NHN heights where they agree with the

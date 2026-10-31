@@ -55,6 +55,8 @@ export interface DesignStatus {
   /** what it holds (bytes), taken from the tile cache */
   bytes: number;
   texturesDropped: boolean;
+  /** what the file said about its place (design-read.ts) */
+  note: string | null;
   placement: DesignPlacement;
   source: PlacementSource;
   /** the LoD2 objects it stands in for */
@@ -199,6 +201,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       triangles: current.model.weight.triangles,
       bytes: current.model.bytes,
       texturesDropped: current.model.texturesDropped,
+      note: current.model.note,
       placement: { ...current.placement },
       source: current.source,
       hidden,

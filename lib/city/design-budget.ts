@@ -41,6 +41,30 @@ const count = (n: number) => n.toLocaleString("de-DE");
 const mb = (bytes: number) =>
   `${Math.ceil(bytes / MB).toLocaleString("de-DE")} MB`;
 
+/**
+ * The largest file a tier parses where the reader builds the whole model
+ * in memory before it is weighed — an IFC in web-ifc's heap, a Rhino file
+ * in rhino3dm's (bytes): those go while reading, but a phone's tab must
+ * survive them. A desktop's is half a gigabyte: the file is held twice
+ * (its bytes and their copy in the 32-bit wasm heap, at most 4 GB) beside
+ * its tessellation, and past that the read fails as a memory abort rather
+ * than with this sentence.
+ */
+export const DESIGN_FILE_LIMITS: Readonly<Record<DesignTier, number>> = {
+  desktop: 512 * MB,
+  mobile: 80 * MB,
+};
+
+/** Why a file is too large to read on this tier, or null. */
+export function judgeFile(bytes: number, tier: DesignTier): string | null {
+  const limit = DESIGN_FILE_LIMITS[tier];
+  if (bytes <= limit) {
+    return null;
+  }
+  const where = tier === "mobile" ? "auf dem Handy" : "hier";
+  return `Die Datei ist ${mb(bytes)} groß, ${where} gehen ${mb(limit)}. Bitte nur den Entwurf ohne Umgebung exportieren.`;
+}
+
 /** Whether a design fits its tier's budget, and with its textures. */
 export function judgeDesign(
   weight: DesignWeight,

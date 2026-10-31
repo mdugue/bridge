@@ -18,6 +18,7 @@ import {
   type DesignWeight,
   geometryBytes,
   judgeDesign,
+  judgeFile,
   textureBytesOf,
 } from "@/lib/city/design-budget";
 import {
@@ -26,10 +27,12 @@ import {
   detectGeoreference,
   type Georeference,
 } from "@/lib/city/design-placement";
+import { IfcError, readIfc } from "./design-ifc";
 
 /**
  * Reads a design the planner dropped into the page (ADR 0054): a glTF —
- * one .glb, or a .gltf with its .bin and textures picked together — into
+ * one .glb, or a .gltf with its .bin and textures picked together — or an
+ * IFC (design-ifc.ts) into
  * one geometry about its anchor (design-placement.ts `designAnchor`), with
  * a group per material of the file. Everything stays on the device: the
  * file is read from the File the browser handed over, and a .gltf's
@@ -68,16 +71,57 @@ export interface DesignModel {
   /** what it holds (bytes), its textures dropped where the budget says */
   bytes: number;
   texturesDropped: boolean;
+  /** what the file said about its place, for the panel (null: nothing
+   *  beyond its coordinates) */
+  note: string | null;
 }
 
 /** A design that could not be read, in words for the panel. */
 export class DesignError extends Error {}
 
-const GLTF_NAME = /\.(glb|gltf)$/i;
+/** The formats a design can come in, by the main file's extension. */
+const FORMATS = {
+  gltf: /\.(glb|gltf)$/i,
+  ifc: /\.ifc$/i,
+} as const;
+type DesignFormat = keyof typeof FORMATS;
+
+/** The design's format by its file's name, or null. */
+export function designFormat(name: string): DesignFormat | null {
+  for (const [format, pattern] of Object.entries(FORMATS)) {
+    if (pattern.test(name)) {
+      return format as DesignFormat;
+    }
+  }
+  return null;
+}
 
 /** The file of a selection that is the design, or null. */
 export function designFile(files: readonly File[]): File | null {
-  return files.find((f) => GLTF_NAME.test(f.name)) ?? null;
+  return files.find((f) => designFormat(f.name) !== null) ?? null;
+}
+
+/** The design's objects in its own frame, and what the file said about
+ *  its place. */
+async function parseDesign(
+  main: File,
+  files: readonly File[],
+  epsg: number,
+  tier: DesignTier
+): Promise<{ root: Object3D; note: string | null }> {
+  const format = designFormat(main.name);
+  if (format === "ifc") {
+    const tooLarge = judgeFile(main.size, tier);
+    if (tooLarge) {
+      throw new DesignError(tooLarge);
+    }
+    try {
+      return await readIfc(main, epsg);
+    } catch (error) {
+      throw error instanceof IfcError ? new DesignError(error.message) : error;
+    }
+  }
+  return { root: await parseGltf(main, files), note: null };
 }
 
 /** A URL's last path part, as the picked files are named. */
@@ -387,10 +431,10 @@ export async function readDesign(
   const main = designFile(files);
   if (!main) {
     throw new DesignError(
-      "Bitte eine .glb- oder .gltf-Datei wählen (Export aus SketchUp, Rhino, Revit, Archicad, Blender …)."
+      "Bitte eine .glb-, .gltf- oder .ifc-Datei wählen (Export aus SketchUp, Rhino, Revit, Archicad, Vectorworks, Blender …)."
     );
   }
-  const root = await parseGltf(main, files);
+  const { root, note } = await parseDesign(main, files, epsg, tier);
   const pieces = piecesOf(root);
   if (pieces.length === 0) {
     throw new DesignError("Die Datei enthält keine Flächen.");
@@ -437,5 +481,6 @@ export async function readDesign(
     weight,
     bytes: verdict.bytes,
     texturesDropped: !verdict.keepTextures && weight.textureBytes > 0,
+    note,
   };
 }
