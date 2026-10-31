@@ -37,22 +37,19 @@ export const COVER_SHARE = 0.5;
  *  the cell grows. */
 const MAX_CELLS = 16_000_000;
 
-/**
- * The plan of a design's triangles: `positions` three per vertex — x, y
- * (EPSG) and z (NHN), or the design's own about its anchor with `place` —
- * and `index` three per triangle (none: in order). A Float64 copy of the
- * placed vertices lives for the call (a phone's design: 3 MB at most).
- */
-export function planMask(
+/** A design's site: its plan with its ground plate (every triangle laid
+ *  flat), and per cell the lowest height the design reaches there (m NHN;
+ *  NaN where it reaches none) — where the ground has to go under it. */
+export interface SiteMask extends PlanMask {
+  floors: Float32Array;
+}
+
+/** The design's vertices placed (x, y EPSG, z NHN), in doubles. */
+function placedVertices(
   positions: ArrayLike<number>,
-  index: ArrayLike<number> | null,
-  place?: DesignPlacement,
-  cell = PLAN_CELL_M
-): PlanMask | null {
+  place?: DesignPlacement
+): Float64Array {
   const vertices = Math.floor(positions.length / 3);
-  if (vertices < 3) {
-    return null;
-  }
   // `place`: the positions are the design's own about its anchor (x east,
   // y up, z south), placed as `placePoint` does
   const turn = (place?.rotation ?? 0) * DEG2RAD;
@@ -73,33 +70,58 @@ export function planMask(
       xy[v * 3 + 2] = pz;
     }
   }
+  return xy;
+}
+
+/** An empty mask over the placed vertices' box, its cell grown from
+ *  `cell` until it fits `MAX_CELLS` and `maxSide`. */
+function emptyMask(
+  xy: Float64Array,
+  cell: number,
+  maxSide: number
+): { mask: PlanMask; minZ: number } {
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
   let minZ = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
-  for (let v = 0; v < vertices; v++) {
-    minX = Math.min(minX, xy[v * 3]);
-    maxX = Math.max(maxX, xy[v * 3]);
-    minY = Math.min(minY, xy[v * 3 + 1]);
-    maxY = Math.max(maxY, xy[v * 3 + 1]);
-    minZ = Math.min(minZ, xy[v * 3 + 2]);
+  for (let v = 0; v < xy.length; v += 3) {
+    minX = Math.min(minX, xy[v]);
+    maxX = Math.max(maxX, xy[v]);
+    minY = Math.min(minY, xy[v + 1]);
+    maxY = Math.max(maxY, xy[v + 1]);
+    minZ = Math.min(minZ, xy[v + 2]);
   }
   let size = cell;
-  while (((maxX - minX) / size + 2) * ((maxY - minY) / size + 2) > MAX_CELLS) {
+  while (
+    ((maxX - minX) / size + 2) * ((maxY - minY) / size + 2) > MAX_CELLS ||
+    Math.max(maxX - minX, maxY - minY) / size + 1 > maxSide
+  ) {
     size *= 2;
   }
   const cols = Math.ceil((maxX - minX) / size) + 1;
   const rows = Math.ceil((maxY - minY) / size) + 1;
-  const mask: PlanMask = {
-    x0: minX,
-    y0: minY,
-    cell: size,
-    cols,
-    rows,
-    cells: new Uint8Array(cols * rows),
+  return {
+    mask: {
+      x0: minX,
+      y0: minY,
+      cell: size,
+      cols,
+      rows,
+      cells: new Uint8Array(cols * rows),
+    },
+    minZ,
   };
-  const triangles = (index ? index.length : vertices) / 3;
+}
+
+/** Calls `each` with every triangle's three placed corners. */
+function eachTriangle(
+  xy: Float64Array,
+  index: ArrayLike<number> | null,
+  each: (p: readonly number[]) => void
+): void {
+  const vertices = xy.length / 3;
+  const triangles = Math.floor((index ? index.length : vertices) / 3);
   const at = (t: number, k: number) => (index ? index[t * 3 + k] : t * 3 + k);
   const p = [0, 0, 0, 0, 0, 0, 0, 0, 0];
   for (let t = 0; t < triangles; t++) {
@@ -109,11 +131,57 @@ export function planMask(
       p[k * 3 + 1] = xy[v * 3 + 1];
       p[k * 3 + 2] = xy[v * 3 + 2];
     }
-    if (!isGround(p, minZ)) {
-      markTriangle(mask, p);
-    }
+    each(p);
   }
-  return mask;
+}
+
+/**
+ * The plan of a design's triangles: `positions` three per vertex — x, y
+ * (EPSG) and z (NHN), or the design's own about its anchor with `place` —
+ * and `index` three per triangle (none: in order). A Float64 copy of the
+ * placed vertices lives for the call (a phone's design: 3 MB at most).
+ */
+export function planMask(
+  positions: ArrayLike<number>,
+  index: ArrayLike<number> | null,
+  place?: DesignPlacement,
+  cell = PLAN_CELL_M
+): PlanMask | null {
+  return designMasks(positions, index, place, { cell })?.plan ?? null;
+}
+
+/**
+ * The design's plan (`planMask`) and its site in one pass over its
+ * triangles: the site takes the flat ones at its lowest level too, on
+ * cells of at least `cell` and at most `maxSide` a side, with the lowest
+ * height the design reaches in each (`SiteMask`).
+ */
+export function designMasks(
+  positions: ArrayLike<number>,
+  index: ArrayLike<number> | null,
+  place?: DesignPlacement,
+  {
+    cell = PLAN_CELL_M,
+    maxSide = Number.POSITIVE_INFINITY,
+  }: { cell?: number; maxSide?: number } = {}
+): { plan: PlanMask; site: SiteMask } | null {
+  if (Math.floor(positions.length / 3) < 3) {
+    return null;
+  }
+  const xy = placedVertices(positions, place);
+  const { mask: plan, minZ } = emptyMask(xy, cell, Number.POSITIVE_INFINITY);
+  const { mask: siteCells } = emptyMask(xy, cell, maxSide);
+  const site: SiteMask = {
+    ...siteCells,
+    floors: new Float32Array(siteCells.cols * siteCells.rows).fill(Number.NaN),
+  };
+  eachTriangle(xy, index, (p) => {
+    if (!isGround(p, minZ)) {
+      markTriangle(plan, p);
+    }
+    markTriangle(site, p, site.floors);
+  });
+  return { plan, site };
 }
 
 /** Whether a triangle lies flat at the design's lowest level. */
@@ -136,9 +204,15 @@ function isGround(p: readonly number[], minZ: number): boolean {
 
 /**
  * Marks the cells a triangle laid flat touches: those whose middle it
- * covers, and those its edges cross (a wall laid flat is all edge).
+ * covers, and those its edges cross (a wall laid flat is all edge). With
+ * `floors`, each marked cell keeps the lowest height the triangle has
+ * there (at the cell's middle, or where an edge crosses it).
  */
-function markTriangle(mask: PlanMask, p: readonly number[]): void {
+function markTriangle(
+  mask: PlanMask,
+  p: readonly number[],
+  floors?: Float32Array
+): void {
   const { x0, y0, cell, cols, rows, cells } = mask;
   const cx = (x: number) => (x - x0) / cell;
   const cy = (y: number) => (y - y0) / cell;
@@ -148,21 +222,36 @@ function markTriangle(mask: PlanMask, p: readonly number[]): void {
   const by = cy(p[4]);
   const qx = cx(p[6]);
   const qy = cy(p[7]);
-  const set = (c: number, r: number) => {
+  const set = (c: number, r: number, z: number) => {
     if (c >= 0 && r >= 0 && c < cols && r < rows) {
-      cells[r * cols + c] = 1;
+      const i = r * cols + c;
+      cells[i] = 1;
+      if (floors && !(floors[i] <= z)) {
+        floors[i] = z;
+      }
     }
   };
-  const line = (x1: number, y1: number, x2: number, y2: number) => {
+  const line = (
+    x1: number,
+    y1: number,
+    z1: number,
+    x2: number,
+    y2: number,
+    z2: number
+  ) => {
     const steps = Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * 2);
     for (let i = 0; i <= steps; i++) {
       const f = steps === 0 ? 0 : i / steps;
-      set(Math.floor(x1 + (x2 - x1) * f), Math.floor(y1 + (y2 - y1) * f));
+      set(
+        Math.floor(x1 + (x2 - x1) * f),
+        Math.floor(y1 + (y2 - y1) * f),
+        z1 + (z2 - z1) * f
+      );
     }
   };
-  line(ax, ay, bx, by);
-  line(bx, by, qx, qy);
-  line(qx, qy, ax, ay);
+  line(ax, ay, p[2], bx, by, p[5]);
+  line(bx, by, p[5], qx, qy, p[8]);
+  line(qx, qy, p[8], ax, ay, p[2]);
   const area = (bx - ax) * (qy - ay) - (qx - ax) * (by - ay);
   if (Math.abs(area) < 1e-9) {
     return;
@@ -179,10 +268,23 @@ function markTriangle(mask: PlanMask, p: readonly number[]): void {
       const w1 = (qx - x) * (ay - y) - (ax - x) * (qy - y);
       const w2 = (ax - x) * (by - y) - (bx - x) * (ay - y);
       if ((w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0)) {
-        cells[r * cols + c] = 1;
+        // the height at the middle, by the corners' weights
+        set(c, r, (w0 * p[2] + w1 * p[5] + w2 * p[8]) / (w0 + w1 + w2));
       }
     }
   }
+}
+
+/** The lowest height the design reaches at EPSG (x, y), or null where its
+ *  site does not reach. */
+export function siteFloor(site: SiteMask, x: number, y: number): number | null {
+  const c = Math.floor((x - site.x0) / site.cell);
+  const r = Math.floor((y - site.y0) / site.cell);
+  if (c < 0 || r < 0 || c >= site.cols || r >= site.rows) {
+    return null;
+  }
+  const z = site.floors[r * site.cols + c];
+  return Number.isNaN(z) ? null : z;
 }
 
 /** Whether EPSG (x, y) lies in a cell the plan marks. */

@@ -3,9 +3,10 @@ import { DoubleSide, Mesh, MeshStandardNodeMaterial } from "three/webgpu";
 import type { DesignTier } from "@/lib/city/design-budget";
 import {
   coveredObjects,
+  designMasks,
   type PlanMask,
   planHull,
-  planMask,
+  siteFloor,
 } from "@/lib/city/design-cover";
 import {
   type DesignPlacement,
@@ -20,6 +21,13 @@ import {
 } from "@/lib/city/design-placement";
 import type { RecenterOffset } from "@/lib/city/ground-clamp";
 import { DEG2RAD, type PlayerPose } from "@/lib/city/pose";
+import {
+  releaseDesignSite,
+  SITE_BYTES,
+  SITE_SIDE,
+  SITE_UNDER_M,
+  setDesignSite,
+} from "./design-site";
 import { type DesignModel, readDesign } from "./design-read";
 import { releaseRenderState, sceneMaterial } from "./three-utils";
 
@@ -65,6 +73,8 @@ export interface DesignLayerDeps {
   tier: DesignTier;
   /** the ground's elevation at EPSG (x, y), where a tile has it */
   heightAt: (x: number, y: number) => number | null;
+  /** caps the walked ground (projected x, y → m NHN, null: not there) */
+  capGround: (cap: ((x: number, y: number) => number | null) | null) => void;
   pose: () => PlayerPose;
   /** builds an object's programs before it shows (PostStack.compile) */
   compile: (object: Object3D) => Promise<void>;
@@ -219,12 +229,26 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       return;
     }
     const g = loaded.model.geometry;
-    loaded.mask = planMask(
+    const masks = designMasks(
       g.getAttribute("position").array,
       g.getIndex()?.array ?? null,
-      loaded.placement
+      loaded.placement,
+      { maxSide: SITE_SIDE }
     );
+    loaded.mask = masks?.plan ?? null;
     loaded.outline = loaded.mask ? planHull(loaded.mask) : null;
+    // the trees, lamps, furniture and the ground's humps under it go
+    // with the buildings (design-site.ts), and the walked ground with them
+    const site = replaceExisting ? (masks?.site ?? null) : null;
+    setDesignSite(site, deps.offset);
+    deps.capGround(
+      site
+        ? (x, y) => {
+            const floor = siteFloor(site, x, y);
+            return floor === null ? null : floor - SITE_UNDER_M;
+          }
+        : null
+    );
     loaded.hidden = new Map();
     const mask = loaded.mask;
     if (mask && replaceExisting) {
@@ -323,6 +347,8 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     current = null;
     loaded.mesh.removeFromParent();
     discard(loaded.model, loaded.mesh, loaded.files);
+    releaseDesignSite();
+    deps.capGround(null);
     deps.reserve(0);
     deps.changed();
     report();
@@ -390,7 +416,8 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
         pose(loaded);
       }
       current = loaded;
-      deps.reserve(model.bytes);
+      // (its site's raster with it: made with the first replan)
+      deps.reserve(model.bytes + SITE_BYTES);
       deps.parent.add(mesh);
       moved(true);
       if (parsed && "error" in parsed) {
