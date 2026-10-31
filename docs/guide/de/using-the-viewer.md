@@ -438,7 +438,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   Modell nicht zeigt — eine Statue, ein Relief, eine Inschrift, ein
   Innenraum —, zeigt ein Foto von Wikimedia Commons in der Karte, mit
   Urheber und Lizenz: ein Querformat oben über die ganze Breite, ein
-  Hochformat neben dem Text; ein Klick zeigt es ganz. Es liegt auf
+  Hochformat neben dem Text (auf dem Handy darüber); ein Klick zeigt es
+  ganz. Es liegt auf
   dieser Seite, nicht bei Wikimedia. Nennt der Text ein Gebäude oder
   Denkmal der Station, ist der Name ein Knopf, der es auswählt und seine
   Karte öffnet; was der Text nur zeigt, steht darunter unter *Im Bild*. *Belege* klappt jede Angabe der Station mit ihrer Quelle

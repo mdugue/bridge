@@ -427,16 +427,17 @@ function PhotoCredit({ photo }: { photo: WalkPhoto }) {
 
 /** The photo whole, over the scene: the card crops it, this does not. */
 function PhotoView({
-  base,
   onOpenChange,
   open,
   photo,
+  src,
   title,
 }: {
-  base: string;
   onOpenChange: (open: boolean) => void;
   open: boolean;
-  photo: WalkPhoto & { src: string };
+  photo: WalkPhoto;
+  /** the published copy's URL */
+  src: string;
   title: string;
 }) {
   return (
@@ -450,7 +451,7 @@ function PhotoView({
           alt={photo.caption ?? `Foto: ${title}`}
           className="mx-auto block h-auto max-h-[calc(100dvh-8rem)] w-auto max-w-full object-contain"
           height={photo.h}
-          src={new URL(photo.src, base).href}
+          src={src}
           unoptimized
           width={photo.w}
         />
@@ -505,12 +506,18 @@ function PhotoButton({
   );
 }
 
+/** Whether a stop's photo stands beside its story (`photoIsTall`), not
+ *  over it: on a phone's narrow card the story would be left a sliver. */
+function besideStory(photo: WalkPhoto | undefined, coarse: boolean) {
+  return photo !== undefined && !coarse && photoIsTall(photo);
+}
+
 /**
  * The stop's photograph: what the model cannot draw (a gilded rider, a
  * relief, a room). A wide one spans the card above the story at its own
  * proportion, cut only past a height and then round its `focus`, its
  * caption and credit laid on its lower edge; a tall one stands beside the
- * story, which flows round it (`photoIsTall`). A click shows it whole.
+ * story, which flows round it (`besideStory`). A click shows it whole.
  * Served by the site itself (ADR 0043: no request to Wikimedia from the
  * visitor's browser), with its credit.
  */
@@ -529,7 +536,8 @@ function StopPhoto({
   if (!(base && photo.src)) {
     return null;
   }
-  const tall = photoIsTall(photo);
+  const tall = besideStory(photo, coarse);
+  const src = new URL(photo.src, base).href;
   const image = (
     // a small published WebP: not resized again (unoptimized)
     <Image
@@ -540,12 +548,12 @@ function StopPhoto({
         tall
           ? "max-h-[20rem] rounded-lg"
           : coarse
-            ? "max-h-40"
+            ? "max-h-32"
             : "max-h-[17rem]"
       )}
       height={photo.h}
       loading="lazy"
-      src={new URL(photo.src, base).href}
+      src={src}
       style={{ objectPosition: photoPosition(photo) }}
       unoptimized
       width={photo.w}
@@ -553,20 +561,17 @@ function StopPhoto({
   );
   const view = (
     <PhotoView
-      base={base}
       onOpenChange={setOpen}
       open={open}
-      photo={{ ...photo, src: photo.src }}
+      photo={photo}
+      src={src}
       title={title}
     />
   );
   if (tall) {
     return (
       <figure
-        className={cn(
-          "float-right m-0 mt-1 mb-2 ml-4",
-          coarse ? "w-[38%]" : "w-[42%]"
-        )}
+        className="float-right m-0 mt-1 mb-2 ml-4 w-[42%]"
         data-testid="walk-photo"
       >
         <PhotoButton
@@ -727,11 +732,14 @@ export function WalkCard({
   const { isMobile, openMobile } = useSidebar();
   const walksUrl = useSceneStatus("site")?.walksUrl ?? null;
   const stop = walk.stops[index];
-  const notes = stop ? stopNotes(stop, today) : [];
+  const notes = useMemo(
+    () => (stop ? stopNotes(stop, today) : []),
+    [stop, today]
+  );
   // the parts once a stop: a render of the card does not start it again
   const said = useMemo(
-    () => (stop && reading ? stopSpeech(stop, stopNotes(stop, today)) : null),
-    [stop, reading, today]
+    () => (stop && reading ? stopSpeech(stop, notes) : null),
+    [stop, reading, notes]
   );
   useEffect(() => {
     if (said) {
@@ -745,6 +753,7 @@ export function WalkCard({
     return null;
   }
   const last = index === walk.stops.length - 1;
+  const beside = besideStory(stop.photo, coarse);
   return (
     <section
       aria-label={`Spaziergang: ${walk.title}`}
@@ -757,7 +766,7 @@ export function WalkCard({
       data-testid="walk-card"
     >
       <Card className="min-h-0 flex-1 gap-0 rounded-2xl bg-background/95 py-0 shadow-xl ring-foreground/[0.07] backdrop-blur-lg">
-        {stop.photo && !photoIsTall(stop.photo) && !(coarse && folded) && (
+        {stop.photo && !beside && !(coarse && folded) && (
           <StopPhoto
             base={walksUrl}
             coarse={coarse}
@@ -812,7 +821,7 @@ export function WalkCard({
           >
             <StopBody
               aside={
-                stop.photo && photoIsTall(stop.photo) ? (
+                stop.photo && beside ? (
                   <StopPhoto
                     base={walksUrl}
                     coarse={coarse}

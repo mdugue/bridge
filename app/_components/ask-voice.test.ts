@@ -3,6 +3,7 @@ import {
   dictationProblem,
   sentences,
   speakable,
+  lineDeadline,
   spokenLines,
   yearWords,
 } from "./ask-voice";
@@ -97,4 +98,12 @@ test("a told text is read in its tones: the title slower and higher, a pause aft
   expect(title.pause).toBeGreaterThan(last.pause);
   expect(aside.text).toBe("Oben.");
   expect(spokenLines([{ tone: "story", text: "  " }])).toEqual([]);
+});
+
+test("a line's end counts as lost only well past its time", () => {
+  const short = lineDeadline({ rate: 1, text: "Hier." });
+  const long = lineDeadline({ rate: 0.84, text: "x".repeat(260) });
+  expect(short).toBeGreaterThanOrEqual(2000);
+  // 260 characters at rate 0.84 take some 24 s: lost only past ~36 s
+  expect(long).toBeGreaterThan((260 / 13 / 0.84) * 1000 * 1.4);
 });

@@ -41,13 +41,9 @@ export function tweenMinutes(from: number, to: number, t: number): number {
   return Math.round(from + (to - from) * e);
 }
 
-/** Whether the visitor asked for less motion: the hour then jumps. */
-function reducedMotion(): boolean {
-  return (
-    typeof matchMedia === "function" &&
-    matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
+/** How often a glide of the hour shows its minute in the HUD (ms): the
+ *  scene follows every frame, the sidebar and the card need not. */
+export const GLIDE_HUD_MS = 250;
 
 export interface FrameGate {
   /** runs now, or once the frame that already ran it is over */
@@ -115,11 +111,13 @@ export interface SceneTime {
   /** moves the scene to an instant (to the minute the sliders can show) */
   setInstant: (date: Date) => void;
   /**
-   * Moves the scene to an instant over `seconds`: the day at once, the
-   * hour gliding there (a walk's stop, while the camera flies to it). Any
-   * other change of the time ends the glide where it is.
+   * Moves the scene to an instant along a camera's glide: the day at once,
+   * the hour by the returned step, which takes the glide's progress (0…1,
+   * camera-flight.ts `onProgress`) — so the light stops where the camera
+   * stops, an export's held frames too — and lands at 1. Any other change
+   * of the time ends the glide where it is; its step then does nothing.
    */
-  glideTo: (date: Date, seconds: number) => void;
+  glideTo: (date: Date) => (t: number) => void;
   /** tells a (new) scene the current instant */
   sync: () => void;
   /** the current instant, for a scene that boots */
@@ -146,10 +144,18 @@ export function useSceneTime(
 
   // A drag's steps reach the scene through the gate, and the scene's answer
   // reaches the HUD as a transition: one sun a frame, no HUD render in one.
-  const previewed = useRef({ day: initialDay, minutes: INITIAL_MINUTES });
+  // A glide's steps reach the HUD only now and then (`hud`).
+  const previewed = useRef({
+    day: initialDay,
+    hud: true,
+    minutes: INITIAL_MINUTES,
+  });
   const toScene = useCallback(() => {
     const state = applyRef.current(now.current, true);
     const step = previewed.current;
+    if (!step.hud) {
+      return;
+    }
     startTransition(() => {
       setDay(step.day);
       setMinutes(step.minutes);
@@ -168,14 +174,12 @@ export function useSceneTime(
     };
   }, [toScene]);
 
-  // A glide of the hour: a step a frame through the drag's path (the
-  // shadows and the sky refresh as in a drag), the last through `set`'s.
-  const glide = useRef<number | null>(null);
+  // A glide of the hour: its steps through the drag's path (the shadows
+  // and the sky refresh as in a drag), the last through `set`'s. A glide is
+  // its own object: a later one, or any other change, retires it.
+  const glide = useRef<object | null>(null);
   const endGlide = useCallback(() => {
-    if (glide.current !== null) {
-      cancelAnimationFrame(glide.current);
-      glide.current = null;
-    }
+    glide.current = null;
   }, []);
   useEffect(() => endGlide, [endGlide]);
 
@@ -191,9 +195,9 @@ export function useSceneTime(
     }
   }, []);
   const previewNow = useCallback(
-    (nextDay: Date, nextMinutes: number) => {
+    (nextDay: Date, nextMinutes: number, hud = true) => {
       now.current = composeDate(nextDay, nextMinutes);
-      previewed.current = { day: nextDay, minutes: nextMinutes };
+      previewed.current = { day: nextDay, hud, minutes: nextMinutes };
       if (gate.current) {
         gate.current.request();
       } else {
@@ -224,29 +228,37 @@ export function useSceneTime(
     [set]
   );
   const glideTo = useCallback(
-    (instant: Date, seconds: number) => {
-      endGlide();
+    (instant: Date) => {
+      const mine = {};
+      glide.current = mine;
       const to = splitDate(instant);
       const from = splitDate(now.current);
-      if (seconds <= 0 || from.minutes === to.minutes || reducedMotion()) {
-        setNow(to.day, to.minutes);
-        return;
-      }
-      let start: number | null = null;
-      const step = (at: number) => {
-        start ??= at;
-        const t = (at - start) / (seconds * 1000);
+      let shown = from.minutes;
+      let hudAt = -Infinity;
+      return (t: number) => {
+        if (glide.current !== mine) {
+          return;
+        }
         if (t >= 1) {
           glide.current = null;
           setNow(to.day, to.minutes);
           return;
         }
-        previewNow(to.day, tweenMinutes(from.minutes, to.minutes, t));
-        glide.current = requestAnimationFrame(step);
+        const minutes = tweenMinutes(from.minutes, to.minutes, t);
+        // the camera held (an export), or the minute not yet moved
+        if (minutes === shown) {
+          return;
+        }
+        shown = minutes;
+        const at = performance.now();
+        const hud = at - hudAt >= GLIDE_HUD_MS;
+        if (hud) {
+          hudAt = at;
+        }
+        previewNow(to.day, minutes, hud);
       };
-      glide.current = requestAnimationFrame(step);
     },
-    [endGlide, setNow, previewNow]
+    [setNow, previewNow]
   );
   const sync = useCallback(() => {
     const state = applyRef.current(now.current);

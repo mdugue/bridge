@@ -412,7 +412,8 @@ The button in the corner opens a panel with three tabs.
   find in the picture. What the model does not show — a statue, a
   relief, an inscription, an interior — a Wikimedia Commons photo in the
   card shows, with its author and licence: a wide one across the top, a
-  tall one beside the text; a click shows it whole. It is served by this
+  tall one beside the text (above it on a phone); a click shows it
+  whole. It is served by this
   site, not by Wikimedia. Where the text names a building or monument of
   the stop, the name is a button that picks it and opens its card; what
   the text only points at is listed below it under *Im Bild*. *Belege* ("sources") folds out every claim the stop makes

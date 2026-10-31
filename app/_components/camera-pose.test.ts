@@ -171,7 +171,7 @@ test("a drag mid-glide takes the wheel: the glide stops where it is", () => {
 
 test("a walk's glide lets a drag look about and still lands on its stop", () => {
   const { camera, pose } = rig();
-  pose.flyToViewpoint(VIEW, 2.2, true);
+  pose.flyToViewpoint(VIEW, { lookAround: true, pace: 2.2 });
   pose.step(0.5);
   pose.turn(40, 0);
   const headingAfterDrag = pose.getPose().heading;

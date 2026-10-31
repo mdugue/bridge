@@ -261,6 +261,16 @@ export interface SpokenLine {
   text: string;
 }
 
+/** About how many characters a German voice says a second at rate 1. */
+const CHARS_PER_SECOND = 13;
+
+/** How long a line may take before its end counts as lost (ms): half as
+ *  long again as a voice would need, and two seconds more. */
+export function lineDeadline(line: { rate: number; text: string }): number {
+  const speaking = (line.text.length / (CHARS_PER_SECOND * line.rate)) * 1000;
+  return Math.round(speaking * 1.5 + 2000);
+}
+
 /** The parts as the voice reads them: sentence by sentence, each with
  *  its tone's pace and pitch, a longer pause after a part's last one. */
 export function spokenLines(parts: readonly SpokenPart[]): SpokenLine[] {
@@ -354,7 +364,17 @@ export function useSpeech(): Speech {
         utterance.rate = line.rate;
         utterance.pitch = line.pitch;
         utterance.voice = voice;
+        // once per line: a browser may send both an error and an end
+        let done = false;
+        let watch: ReturnType<typeof setTimeout> | null = null;
         const next = () => {
+          if (done) {
+            return;
+          }
+          done = true;
+          if (watch !== null) {
+            clearTimeout(watch);
+          }
           if (run.current === mine) {
             wait.current = setTimeout(() => say(i + 1), line.pause);
           }
@@ -362,6 +382,23 @@ export function useSpeech(): Speech {
         utterance.onend = next;
         // a line the voice could not say does not end the reading
         utterance.onerror = next;
+        // An end that never comes (Chrome's online voices drop it, or hang
+        // with `speaking` on): past its time (`lineDeadline`) a silent voice
+        // has finished the line; one still busy gets that time once more,
+        // then it is stopped, so the next line is heard.
+        const late = lineDeadline(line);
+        const check = (again: boolean) => {
+          if (done || run.current !== mine) {
+            return;
+          }
+          if (again && (speechSynthesis.speaking || speechSynthesis.pending)) {
+            watch = setTimeout(() => check(false), late);
+            return;
+          }
+          speechSynthesis.cancel();
+          next();
+        };
+        watch = setTimeout(() => check(true), late);
         speaking.current = utterance;
         speechSynthesis.speak(utterance);
       };

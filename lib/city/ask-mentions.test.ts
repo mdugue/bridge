@@ -81,3 +81,48 @@ test("a text may name a place by its short name or its noun", () => {
     { text: "Hofkirche", place: 1 },
   ]);
 });
+
+test("a noun names no place another place or another name could mean", () => {
+  const link = (text: string, places: { name: string }[]) =>
+    mentionRuns(text, places, "Leipzig")
+      .filter((r) => "place" in r)
+      .map((r) => r.text);
+  // two Rathäuser: neither is called by the bare noun
+  expect(
+    link("Das Alte Rathaus steht am Markt, das Neue Rathaus am Ring.", [
+      { name: "Neues Rathaus" },
+      { name: "Altes Rathaus" },
+    ])
+  ).toEqual(["Alte Rathaus", "Neue Rathaus"]);
+  // one Rathaus, but the text means the other
+  expect(
+    link("Am Alten Rathaus beginnt der Weg.", [{ name: "Neues Rathaus" }])
+  ).toEqual([]);
+  expect(
+    link("Am Alten Rathaus beginnt der Weg.", [{ name: "Altes Rathaus" }])
+  ).toEqual(["Alten Rathaus"]);
+  expect(link("Das neue Rathaus", [{ name: "Neues Rathaus" }])).toEqual([
+    "neue Rathaus",
+  ]);
+  expect(
+    link("Vor dem prächtigen Rathaus", [{ name: "Neues Rathaus" }])
+  ).toEqual(["Rathaus"]);
+  // a name that goes on is another name
+  expect(
+    link("Vom Bahnhof Mitte fährt die S-Bahn.", [
+      { name: "Neustädter Bahnhof" },
+    ])
+  ).toEqual([]);
+  // nouns and names in -er are no adjectives
+  expect(link("Der Wilhelm stand hier.", [{ name: "Kaiser Wilhelm" }])).toEqual(
+    []
+  );
+  // linked where the text first names it, by whichever name
+  expect(
+    mentionRuns(
+      "Die Hofkirche, die Katholische Hofkirche, ist die größte Kirche.",
+      [{ name: "Katholische Hofkirche" }],
+      "Dresden"
+    ).find((r) => "place" in r)
+  ).toEqual({ text: "Hofkirche", place: 0 });
+});

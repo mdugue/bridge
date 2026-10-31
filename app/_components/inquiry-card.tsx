@@ -144,7 +144,12 @@ export function InquiryCard({
   );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isTextEntry(e.target)) {
+      // a dialog over the scene (a walk photo shown whole) closes itself
+      // first: its Escape leaves the card open
+      const inDialog =
+        e.target instanceof Element &&
+        e.target.closest('[data-slot="dialog-content"]') !== null;
+      if (e.key === "Escape" && !isTextEntry(e.target) && !inDialog) {
         onClose();
       }
     };
