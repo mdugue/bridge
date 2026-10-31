@@ -1,7 +1,6 @@
 import { FramebufferTexture, HalfFloatType, LinearFilter } from "three/webgpu";
 import {
   abs,
-  cameraProjectionMatrix,
   cameraWorldMatrix,
   clamp,
   dot,
@@ -20,14 +19,13 @@ import {
   uniform,
   vec2,
   vec3,
-  vec4,
   viewportTexture,
 } from "three/tsl";
 import { type DataMarks } from "@/lib/city/render-style";
 import { mapFadeNode } from "./map-overlay";
 import type { F, Live, V3 } from "./shader-chunks";
 import { styleNight } from "./sun-rig";
-import { eyeDirectionView } from "./view-direction";
+import { eyeDirectionView, viewParallel } from "./view-direction";
 
 /**
  * The data layers' glass (ADR 0040): bodies that tint and bend what lies
@@ -279,10 +277,8 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
   );
   const glowing = vec3(1, 0.82, 0.5).mul(light.mul(0.6).add(0.55));
   // (a plan — Modell's parallel view — has no night: its marks keep their
-  // plan colours; a parallel projection's w row is 0 0 0 1)
-  const planNight = styleNight.mul(
-    cameraProjectionMatrix.mul(vec4(0, 0, 1, 0)).w.negate()
-  );
+  // plan colours)
+  const planNight = styleNight.mul(float(1).sub(viewParallel));
   const planned = mix(
     mix(plan, glowing, planNight),
     vec3(0.08),

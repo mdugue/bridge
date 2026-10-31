@@ -1029,8 +1029,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       POP.red,
       step(2 / 3, dataT)
     );
-    const dataPrinted = printed.mul(step(DATA_HUE.from - 0.05, hue)).toVar();
-    day = mix(day, mix(printInk, dataInk, dataPrinted), printed);
+    const isData = step(DATA_HUE.from - 0.05, hue);
+    const dataPrinted = printed.mul(isData).toVar();
+    day = mix(day, mix(printInk, dataInk, isData), printed);
     // (a marker ink is no river: a blue data mark lies flat, faces up)
     day = mix(
       day,

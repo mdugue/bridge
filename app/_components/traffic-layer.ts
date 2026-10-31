@@ -173,6 +173,10 @@ function trafficMaterial(): MeshBasicNodeMaterial {
     const light = mix(tint, vec3(1), 0.35).mul(
       pulse.mul(core).mul(ramp.load.mul(0.45).add(0.2))
     );
+    // a pen's width along the crown, whatever the body's size on screen
+    // (never a zero-width step: an undefined smoothstep's NaN would reach
+    // every style through the mix)
+    const px = fwidth(rise).max(1e-4);
     // Under a picture style the flow takes the style's reading of a mark
     // (glass.ts `dataMarkColour`): its place on the scale, its comets as
     // the light — along the crown, where a head- or tail-light would be.
@@ -181,15 +185,8 @@ function trafficMaterial(): MeshBasicNodeMaterial {
       tint,
       scale: ramp.load,
       light: pulse.mul(smoothstep(0.35, 0.9, rise)),
-      // a pen's width along the crown, whatever the body's size on screen
-      // (never a zero-width step: an undefined smoothstep's NaN would
-      // reach every style through the mix)
       ridge: float(1).sub(
-        smoothstep(
-          fwidth(rise).max(1e-4).mul(0.6),
-          fwidth(rise).max(1e-4).mul(1.6),
-          float(1).sub(rise)
-        )
+        smoothstep(px.mul(0.6), px.mul(1.6), float(1).sub(rise))
       ),
     });
     m.userData.paperOwn = true;
