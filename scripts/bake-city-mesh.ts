@@ -92,7 +92,7 @@ import {
   wallShiftAlong,
   wallShiftKnots,
 } from "../lib/city/doors";
-import { dormerMesh } from "../lib/city/dormers";
+import { chimneyMesh, dormerMesh } from "../lib/city/dormers";
 import {
   type BandKind,
   bandMeshes,
@@ -2406,8 +2406,8 @@ function shopHost(
 }
 
 /**
- * The dormers the surface model shows on the pitched LoD2 roofs (pipeline/
- * bake/dormers.py), appended as part of the object they sit on: one object
+ * The dormers and chimneys the surface model shows on the LoD2 roofs
+ * (pipeline/bake/dormers.py), appended as part of the object they sit on: one object
  * per host, in the host's tint and roof colour, the host's building tree
  * (asking or demolishing a dormer takes the building), no footprint, `source`
  * 4. Its walls carry no storey band, eave line, plinth or shop zone (its
@@ -2440,7 +2440,10 @@ export function appendDormers(
     let base = Number.POSITIVE_INFINITY;
     let top = Number.NEGATIVE_INFINITY;
     for (const f of list) {
-      const mesh = dormerMesh(f, baked.offset);
+      const mesh =
+        f.properties?.k === "chimney"
+          ? chimneyMesh(f, baked.offset)
+          : dormerMesh(f, baked.offset);
       positions.push(...mesh.positions);
       isRoof.push(...mesh.isRoof);
       for (let i = 0; i < mesh.isRoof.length; i++) {

@@ -1429,12 +1429,29 @@ visual-variable codebook is in
   building bake, so a cut piece keeps its wall's place in `_FACADE`.
   Dresden: 482 passages on fifteen tiles (106 on the Zwinger's), Leipzig
   245, München 763, Hamburg 353, Meißen 10, Unna 12, Grimma none.
-- **Dormers** `◎ detected` — what DOM1 shows over a pitched LoD2 roof (25–62°) that
+- **Dormers and chimneys** `◎ detected` — what DOM1 shows over a LoD2 roof that
   LoD2 leaves out (`pipeline/bake/dormers.py`): the excess `DOM − roof`
-  against its own 9 m median, blobs 0.7 m and more over it, 3–30 m² and
-  compact, their top 0.9–3.5 m over the roof and under the object's
-  ridge, clear of every tree point — a chimney is too small, a crown
-  overhanging the roof irregular or too high. Each becomes a front facing
+  against its own 9 m median, every blob 0.7 m and more over it, at any
+  size and spacing (2026-10-31; until then 3–30 m², no side over 8 m),
+  clear of every tree point. On a pitched roof (25–62°, a mansard —
+  LoD2's `roofType` 3400 — to 80°) a dormer: its top 0.9–3.5 m over the
+  roof and under the object's ridge, compact, at most 8 m down the slope
+  and as wide across it as it runs; dormers the 1 m cells join are parted
+  at their cores ≥ 1.2 m over the roof; none along a seam of the LoD2
+  roof (a ridge, hip, valley or step drawn half a metre off reads as a
+  band: on Dresden's 33410_5656 a third of the dormers drawn until then
+  were such bands in hipped roofs' valleys). A **chimney**: a blob of one
+  or two cells reaching within 0.5 m of the ridge (one as small lower
+  down is a small dormer), up to four cells over the ridge, or one or two
+  on a flat roof clear of its outline and seams; 0.8–5 m over the roof
+  (1.2 m on a seam), at most 3 m over the ridge; on a flat roof not one
+  of three within 4 m (masts on a platform roof, a plant room's ducts),
+  on a pitched roof every stack, however close. Checked against
+  the 20 cm orthophoto: rows of small gabled dormers now in; DOM1 still
+  misses the smallest, and a roof LoD2 drew flat over a pitched one has
+  none. A chimney is a box 0.6 m a cell (at most 1.6 m) from under the
+  roof to its highest measured point, along the roof's fall or the
+  footprint's longer side (`chimneyMesh`). Each dormer becomes a front facing
   down the slope, two cheeks and a roof running back into the main roof:
   flat at the measured top, or a **shed dormer** (*Schleppgaube*) falling
   with the main roof (`lib/city/dormers.ts`). Its fall (`tf`) is read
@@ -1448,9 +1465,15 @@ visual-variable codebook is in
   2026-10-21 (G11): 8–25 % shed dormers per tile (Meißen 15.6, Grimma
   16–25, Leipzig 12, Dresden 11–14, Hamburg 8–10, München 21, Unna
   11–13 %); about half the blobs are under 3 m deep and stay flat. A
-  host's dormers are appended as one object in its tint and roof colour
-  (`source` 4), no storey band, eave line, plinth or shop zone on it. No window in the front: the veto
-  stands. Dresden: 10 514 on fifteen tiles, 862 on the spawn tile.
+  host's dormers and chimneys are appended as one object in its tint and
+  roof colour (`source` 4), no storey band, eave line, plinth or shop zone
+  on it. No window in the front: the veto stands. Dresden: 13 321 dormers (10 399
+  before) and 19 117 chimneys on fifteen tiles; Leipzig 6 879 and 9 881,
+  München 7 132 (10 233 before: the edges of flat roofs and the roof
+  terraces it had drawn as dormers are gone; checked on the 20 cm
+  orthophoto, where small Altstadt dormers stand under 0.5 m out of
+  DOM1 and stay undrawn) and 4 768, Hamburg 1 764 and 7 231, Unna 2 074
+  and 3 519, Meißen 1 813 and 1 514, Grimma 1 425 and 1 642.
 - **Eave line** `= computed` (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
   (geometry-derived; the attribute is ~4 %).
 - **Night light on facades** `❝ taken` `≈ assumed` (*Abendlicht*) — after dark

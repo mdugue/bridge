@@ -1,11 +1,12 @@
 /**
- * The dormers DOM1 shows on the pitched LoD2 roofs (pipeline/bake/
+ * The dormers and chimneys DOM1 shows on the LoD2 roofs (pipeline/bake/
  * dormers.py) as geometry the building bake appends to the tile's mesh
  * (scripts/bake-city-mesh.ts): per dormer a front wall facing down the
  * slope, two cheeks and a roof reaching back until the main roof rises to
  * meet it — flat at the measured top, or for a shed dormer (`tf`, its
  * measured fall) falling from that top line down to its front, at least
- * `MIN_FRONT` over the main roof there. No window in the front (the
+ * `MIN_FRONT` over the main roof there; per chimney (`k`) a box from
+ * under the roof to its measured top. No window in the front (the
  * window-grid veto); the clay's own look. Pure, no THREE.
  */
 import type { DormerFeature } from "./features";
@@ -31,6 +32,59 @@ export interface DormerMesh {
 }
 
 type V3 = [number, number, number];
+
+/**
+ * A chimney's triangles (the mesh frame of `dormerMesh`): a box `w` across
+ * and `d` along its axis (`ax`, `ay`, down the slope), its four sides from
+ * DORMER_SINK under the roof's lowest point under it (the roof falls
+ * `slope` along the axis) up to its measured top, and its top; all walls
+ * (`isRoof` 0), brick or plaster in the host's tint.
+ */
+export function chimneyMesh(
+  f: DormerFeature,
+  offset: { cx: number; cy: number }
+): DormerMesh {
+  const out: DormerMesh = { isRoof: [], positions: [], base: 0 };
+  const p = f.properties;
+  if (!p) {
+    return out;
+  }
+  const slope = Math.min(Math.max(p.slope, 0), 80);
+  const tan = Math.tan((slope * Math.PI) / 180);
+  const low = p.z - (tan * p.d) / 2 - DORMER_SINK;
+  const top = Math.max(p.top, p.z + MIN_FRONT);
+  out.base = low;
+  const [ex, ey] = f.geometry.coordinates;
+  // a across the axis, b along it, c up (absolute)
+  const at = (a: number, b: number, c: number): V3 => [
+    ex - offset.cx + p.ay * a + p.ax * b,
+    ey - offset.cy - p.ax * a + p.ay * b,
+    c,
+  ];
+  const quad = (q0: V3, q1: V3, q2: V3, q3: V3) => {
+    for (const q of [q0, q1, q2, q0, q2, q3]) {
+      out.positions.push(...q);
+      out.isRoof.push(0);
+    }
+  };
+  const a = p.w / 2;
+  const b = p.d / 2;
+  // round its foot counter-clockwise seen from above (a runs to the
+  // right of the axis): each side then faces out
+  const ring: [number, number][] = [
+    [-a, -b],
+    [a, -b],
+    [a, b],
+    [-a, b],
+  ];
+  for (let i = 0; i < 4; i++) {
+    const [a0, b0] = ring[i];
+    const [a1, b1] = ring[(i + 1) % 4];
+    quad(at(a0, b0, low), at(a1, b1, low), at(a1, b1, top), at(a0, b0, top));
+  }
+  quad(at(-a, -b, top), at(a, -b, top), at(a, b, top), at(-a, b, top));
+  return out;
+}
 
 /**
  * A dormer's triangles (mesh frame: x = epsgX − cx, y = epsgY − cy, z up),

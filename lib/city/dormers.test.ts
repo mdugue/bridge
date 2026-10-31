@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { dormerMesh, DORMER_SINK, MIN_FRONT } from "./dormers";
+import { chimneyMesh, dormerMesh, DORMER_SINK, MIN_FRONT } from "./dormers";
 import type { DormerFeature } from "./features";
 
 /** A dormer on a 45° roof falling towards +x, its roof at z 20 there;
@@ -119,5 +119,54 @@ describe("dormerMesh", () => {
     // a fall as steep as the roof's: shallower, still meeting it behind
     const steep = dormerMesh(dormer(1, 0, 60), offset);
     expect(steep.positions.every(Number.isFinite)).toBe(true);
+  });
+});
+
+describe("chimneyMesh", () => {
+  /** A 0.6 × 1.6 m chimney on the 45° roof, its top 1.5 m over the roof
+   *  at its centre. */
+  const chimney: DormerFeature = {
+    geometry: { type: "Point", coordinates: [100, 200] },
+    properties: {
+      of: "a",
+      k: "chimney",
+      ax: 1,
+      ay: 0,
+      w: 0.6,
+      d: 1.6,
+      z: 20,
+      top: 21.5,
+      slope: 45,
+    },
+  };
+
+  test("a closed box from under the roof's lowest point to its top", () => {
+    const m = chimneyMesh(chimney, offset);
+    // four sides and a top, two triangles each
+    expect(m.positions.length).toBe(5 * 2 * 9);
+    expect(m.isRoof.every((r) => r === 0)).toBe(true);
+    const zs = m.positions.filter((_, i) => i % 3 === 2);
+    // the roof falls 0.8 m to its downslope side, and the box reaches under
+    expect(Math.min(...zs)).toBeCloseTo(20 - 0.8 - DORMER_SINK);
+    expect(m.base).toBeCloseTo(20 - 0.8 - DORMER_SINK);
+    expect(Math.max(...zs)).toBeCloseTo(21.5);
+    const xs = m.positions.filter((_, i) => i % 3 === 0);
+    const ys = m.positions.filter((_, i) => i % 3 === 1);
+    // d along the axis (x), w across it
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(1.6);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(0.6);
+  });
+
+  test("every face looks outwards", () => {
+    const m = chimneyMesh(chimney, offset);
+    const n = unitNormals(m.positions);
+    for (let t = 0; t < n.length; t++) {
+      const tri = m.positions.slice(t * 9, t * 9 + 9);
+      const cx = (tri[0] + tri[3] + tri[6]) / 3 - 100;
+      const cy = (tri[1] + tri[4] + tri[7]) / 3 - 200;
+      const cz = (tri[2] + tri[5] + tri[8]) / 3 - (m.base + 21.5) / 2;
+      // from the box's middle out through the face
+      expect(n[t][0] * cx + n[t][1] * cy + n[t][2] * cz).toBeGreaterThan(0);
+    }
   });
 });

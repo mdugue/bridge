@@ -53,9 +53,15 @@ zur Regel passt.
   Dachfläche, baut der Viewer das Dach aus der Messung neu — schon bei einem
   Fünftel, wo die Oberfläche dort eben ist und das Dach des Modells sich
   neigt, wo die Oberfläche es nicht tut (ein flaches Walmdach, das über ein
-  Kaufhaus mit Flachdach gezeichnet ist). Eine Höhe über
-  dem Gebäudemodell wird nur ein Schornstein oder Turm, wo OpenStreetMap ihn
-  nennt.
+  Kaufhaus mit Flachdach gezeichnet ist). Eine große Höhe
+  über dem Gebäudemodell wird nur ein Schornstein oder Turm, wo
+  OpenStreetMap ihn nennt. Das Kleine auf dem Dach kommt allein aus dem
+  Oberflächenmodell: jede Erhebung über einem geneigten Dach ist eine
+  Gaube, gleich wie klein und wie dicht an der nächsten; eine kleine am
+  First oder auf einem Flachdach ist ein Hausschornstein — außer sie liegt
+  entlang eines Firsts oder einer Kehle, die das Gebäudemodell etwas
+  daneben gezeichnet hat, oder steht auf einem Flachdach in einer Reihe mit
+  anderen (Masten auf einem Bahnsteigdach).
 - **Brückentragwerk:** Was entlang der Brückenachse mindestens 3 m über dem
   Deck steht, auf mindestens 25 m Länge, wird ein Bogen oder ein Fachwerk.
 - **Zuordnungen:** Ein Laden aus OpenStreetMap gehört zu dem Gebäude, in
@@ -90,7 +96,8 @@ Vegetationsindex nur mäßig überein (r ≈ 0,7), deshalb steht München in
 | Grün von Wiesen und Laub | Luftbild, Infrarot (München: sichtbare Farben) | `= berechnet` |
 | Grundriss, Höhe und Dachform der Gebäude | 3D-Gebäudemodell LoD2 | `❝ übernommen` |
 | Dächer, wo das Modell sie verfehlt | Oberflächenmodell DOM1 | `◎ erkannt` |
-| Schornsteine, Türme, jüngere Gebäude, Gauben | DOM1, bestätigt durch OpenStreetMap | `◎ erkannt` |
+| Schornsteine, Türme, jüngere Gebäude | DOM1, bestätigt durch OpenStreetMap | `◎ erkannt` |
+| Gauben und Hausschornsteine | DOM1 über dem Dach des Gebäudemodells | `◎ erkannt` |
 | Bahnsteigdächer, Carports, Unterstände | DOM1, bestätigt durch OpenStreetMap | `◎ erkannt` |
 | Schuppen und Lauben | Laserscan | `◎ erkannt` |
 | Dachfarbe | Luftbild | `= berechnet` |

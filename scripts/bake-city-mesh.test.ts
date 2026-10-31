@@ -540,6 +540,43 @@ test("dormers join their host as one object, roof-flagged on top, source 4", () 
   expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 2 * 3);
 });
 
+test("a chimney joins its host with the dormers as a box, all wall", () => {
+  const at = (x: number, k?: "chimney"): DormerFeature => ({
+    geometry: { type: "Point", coordinates: [412_000 + x, 5_656_005] },
+    properties: {
+      of: "house",
+      ax: 1,
+      ay: 0,
+      w: k ? 0.6 : 2,
+      d: k ? 0.6 : 2,
+      z: 110,
+      top: 111.5,
+      slope: 45,
+      ...(k ? { k } : {}),
+    },
+  });
+  const lod2 = bakeCityMesh("t", fixture(), undefined, null);
+  const baked = bakeCityMesh(
+    "t",
+    fixture(),
+    undefined,
+    null,
+    undefined,
+    undefined,
+    "render",
+    undefined,
+    undefined,
+    { dormers: [at(43), at(47, "chimney")] }
+  );
+  // one object for the host's dormer and chimney
+  expect(baked.objects.length).toBe(lod2.objects.length + 1);
+  const added = baked.vertices.isRoof.length - lod2.vertices.isRoof.length;
+  // the dormer's 6 triangles, the chimney's four sides and top
+  expect(added).toBe((6 + 5 * 2) * 3);
+  const roofs = Array.from(baked.vertices.isRoof.slice(-added));
+  expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 3);
+});
+
 test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
   // the house's south wall (x 40–50 m, y 0), facing −y
   const front = (oid = "house"): ShopfrontWall => ({
