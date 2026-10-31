@@ -720,6 +720,11 @@ export interface CityWalkHandle {
   terrainBounds: TerrainBounds;
 }
 
+/** The reversed depth buffer, unless the page asks for `?depth=standard`. */
+export function reversedDepthRequested(search: string): boolean {
+  return new URLSearchParams(search).get("depth") !== "standard";
+}
+
 /**
  * three's WebGPURenderer: WebGPU where the browser has it, its WebGL2
  * backend otherwise (or on `?gpu=webgl2`, scene-profile.ts). One renderer,
@@ -742,6 +747,15 @@ async function createRenderer(
     // three asks for `timestamp-query` only where the adapter has it
     // (Chromium; not Safari) and writes two timestamps per pass.
     trackTimestamp: timed && !budget.forceWebGL,
+    // Depth from 1 at the near plane to 0 at the far one, in floats: the
+    // float's precision then grows with the distance the 1/z mapping loses,
+    // so surfaces kilometres off stop fighting. three turns the depth test,
+    // the clear, the polygon offsets, the shadow maps and its depth helpers
+    // round itself, and falls back to the plain buffer on a WebGL2 without
+    // EXT_clip_control; what reads raw depth here asks
+    // `reversedDepthBuffer` (stylize-effect.ts, view-ray.ts). `?depth=standard`
+    // draws with the plain buffer, to compare.
+    reversedDepthBuffer: reversedDepthRequested(window.location.search),
   });
   try {
     await renderer.init();
@@ -1122,9 +1136,7 @@ export async function createCityWalkApp(
   // `?inspect=1`: three's Inspector over the canvas (inspector.ts)
   if (inspectRequested(window.location.search)) {
     // a QA aid: a chunk that fails to load leaves the boot as it was
-    cleanups.push(
-      await attachInspector(renderer).catch(() => () => undefined)
-    );
+    cleanups.push(await attachInspector(renderer).catch(() => () => undefined));
   }
   try {
     return await bootApp(opts, renderer, scene, cleanups);

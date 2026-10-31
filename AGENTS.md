@@ -142,6 +142,8 @@ space (`shader-chunks.ts`). The glTF extras key is `tileId`, never `tile`
   styles are a post pass (ADR 0010, 0034).
 - A post pass reads the camera through `view-lens.ts`; a direction comes
   from `viewDirection()`, a pick ray from `setPickRay` (ADR 0044).
+- The depth buffer runs reversed (1 near, 0 far): read depth through
+  three's helpers or the lens; raw depth asks `reversedDepthBuffer`.
 - A new streaming need registers against the stream's twin camera, not the
   camera (ADR 0024). Nothing sets `camera.position` outside
   `camera-pose.ts` (ADR 0032).
@@ -190,7 +192,7 @@ says so (ADR 0043).
   in the whole-site CI shard, already the longest; tag it
   (`@desktop-hud`, `@phone`, `@desktop-render`) where it fits.
 - URL knobs: `?scene=lite`, `?gpu=webgl2`, `?safety=0…3`, `?trail=1`,
-  `?trace=1`, `?inspect=1`, `#at=lat,lng`.
+  `?trace=1`, `?inspect=1`, `?depth=standard`, `#at=lat,lng`.
 
 ## Conventions
 

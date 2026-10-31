@@ -419,6 +419,23 @@ without it. The GTAO sample count is a construction-time setting (16;
 8 on a phone and in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
 GLSL and stay unused.
 
+**The depth runs reversed** (three's `reversedDepthBuffer`,
+`create-app.ts`): 1 at the near plane, 0 at the far one, stored as floats
+(`depth32float`, the four bytes a pixel the 24-bit buffer takes). With a
+0.3 m near plane and a 6 km far one, the plain buffer spent almost all its
+precision on the first metres and let roofs, kerbs and decals fight
+kilometres off; the float's exponent gives the far range back. three turns
+the depth test, the clear, the polygon offsets, the shadow maps (their
+compare function and bias) and its depth helpers (`getViewPosition`,
+`perspectiveDepthToViewZ`, GTAO) round itself, and a camera it has drawn
+into the buffer carries `reversedDepth` and a projection to match. What
+reads raw depth on its own must ask: the styles' sky test and their
+shadow lookup (`stylize-effect.ts`, `StylizeInputs.reversedDepth`), the
+parallel view's pick ray (`view-ray.ts`), the scene target's depth type
+(`post-stack.ts`). A WebGL2 without `EXT_clip_control` keeps the plain
+buffer (three falls back and says so). `?depth=standard` draws with the
+plain buffer, to compare.
+
 **What the stack builds follows the device tier** (`postProfileFor` in
 `scene-profile.ts`,
 [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)): its
@@ -1607,6 +1624,14 @@ half made** — its entry without a buffer — and the dispose of its
 geometry throws on it midway (`destroyAttribute`). *Worked around* in
 `three-utils.ts` (`untilThrough`): the dispose is tried again past it.
 *Once fixed:* one dispose. Not looked for upstream yet.
+
+**three r187: SkyMesh ignores a reversed depth buffer.** Its vertex
+node pins the dome to the far plane by `z = w`, which is depth 1, the
+near plane of a reversed buffer. The dome draws after the opaque clay
+without depth write, so it passed the depth test everywhere and painted
+walls, kerbs and river walls sky-blue. *Worked around* in `sun-rig.ts`
+(`createSkyDome`): under `reversedDepthBuffer` the dome's z is 0. *Once
+fixed:* the vertex node stays SkyMesh's own. Not reported yet.
 
 Changes in three r187 we adapted to and that are meant, not bugs: builds
 are keyed by the kind of camera

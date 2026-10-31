@@ -307,6 +307,18 @@ function createSkyDome(scene: Scene): SkyDome & { mesh: SkyMesh } {
     sky.position.setFromMatrixPosition(camera.matrixWorld);
     sky.updateMatrixWorld();
   };
+  // Upstream workaround: SkyMesh pins the dome to the far plane by
+  // `z = w`, depth 1, which a reversed depth buffer (create-app.ts) reads
+  // as the NEAR plane: the dome, drawn without depth write after the
+  // opaque clay, passed the depth test over everything and painted walls
+  // and kerbs sky-blue. Under a reversed buffer the far plane is z = 0
+  // (docs/rendering.md, "Workarounds for upstream bugs").
+  const placed = sky.material.vertexNode as V4;
+  sky.material.vertexNode = Fn((builder: NodeBuilder) =>
+    builder.renderer.reversedDepthBuffer
+      ? vec4(placed.x, placed.y, float(0), placed.w)
+      : placed
+  )();
   // Moderate haze and a small Mie lobe: more of either blows the sky around
   // the sun (and with it half the horizon) out to flat white.
   sky.turbidity.value = 4.5;

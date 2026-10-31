@@ -50,6 +50,7 @@ const TRAIL_QUERY = [
   "trail",
   "trace",
   "inspect",
+  "depth",
 ] as const;
 
 /** The path plus the known knobs of `search`, in TRAIL_QUERY's order. */
