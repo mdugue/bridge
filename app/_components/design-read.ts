@@ -7,7 +7,6 @@ import {
   BufferGeometry,
   Color,
   type InstancedMesh,
-  LoadingManager,
   Matrix3,
   Matrix4,
   type Mesh,
@@ -27,12 +26,13 @@ import {
   detectGeoreference,
   type Georeference,
 } from "@/lib/city/design-placement";
+import { FormatError, pickedFiles, read3dm, readObj } from "./design-formats";
 import { IfcError, readIfc } from "./design-ifc";
 
 /**
  * Reads a design the planner dropped into the page (ADR 0054): a glTF —
- * one .glb, or a .gltf with its .bin and textures picked together — or an
- * IFC (design-ifc.ts) into
+ * one .glb, or a .gltf with its .bin and textures picked together —, an
+ * IFC (design-ifc.ts), an OBJ or a Rhino .3dm (design-formats.ts) into
  * one geometry about its anchor (design-placement.ts `designAnchor`), with
  * a group per material of the file. Everything stays on the device: the
  * file is read from the File the browser handed over, and a .gltf's
@@ -83,6 +83,8 @@ export class DesignError extends Error {}
 const FORMATS = {
   gltf: /\.(glb|gltf)$/i,
   ifc: /\.ifc$/i,
+  obj: /\.obj$/i,
+  rhino: /\.3dm$/i,
 } as const;
 type DesignFormat = keyof typeof FORMATS;
 
@@ -108,26 +110,40 @@ async function parseDesign(
   files: readonly File[],
   epsg: number,
   tier: DesignTier
-): Promise<{ root: Object3D; note: string | null }> {
+): Promise<{ root: Object3D; note: string | null; heightsKnown?: boolean }> {
   const format = designFormat(main.name);
-  if (format === "ifc") {
-    const tooLarge = judgeFile(main.size, tier);
-    if (tooLarge) {
-      throw new DesignError(tooLarge);
-    }
-    try {
-      return await readIfc(main, epsg);
-    } catch (error) {
-      throw error instanceof IfcError ? new DesignError(error.message) : error;
-    }
+  if (format === "gltf") {
+    return { root: await parseGltf(main, files), note: null };
   }
-  return { root: await parseGltf(main, files), note: null };
+  // the others are read whole before they can be weighed
+  const tooLarge = judgeFile(main.size, tier);
+  if (tooLarge) {
+    throw new DesignError(tooLarge);
+  }
+  try {
+    if (format === "ifc") {
+      return await readIfc(main, epsg);
+    }
+    return format === "rhino"
+      ? await read3dm(main, epsg)
+      : await readObj(main, files);
+  } catch (error) {
+    throw error instanceof IfcError || error instanceof FormatError
+      ? new DesignError(error.message)
+      : error;
+  }
 }
 
-/** A URL's last path part, as the picked files are named. */
-function baseName(url: string): string {
-  const path = url.split(/[?#]/)[0];
-  return decodeURIComponent(path.slice(path.lastIndexOf("/") + 1));
+/** The design's georeference; one whose heights are not NHN (a Rhino
+ *  anchor above the ground) keeps none of its base, so it is set on the
+ *  ground. */
+function georefOf(
+  box: DesignBox,
+  epsg: number,
+  heightsKnown: boolean
+): Georeference | null {
+  const geo = detectGeoreference(box, epsg);
+  return geo && !heightsKnown ? { ...geo, base: null } : geo;
 }
 
 /** Why the loader refused, in words; `missing`: the resources it named
@@ -151,38 +167,17 @@ async function parseGltf(
   main: File,
   files: readonly File[]
 ): Promise<Object3D> {
-  const urls = new Map<string, string>();
-  for (const f of files) {
-    if (f !== main) {
-      urls.set(f.name, URL.createObjectURL(f));
-    }
-  }
-  const missing: string[] = [];
-  const manager = new LoadingManager();
-  manager.setURLModifier((url) => {
-    if (url.startsWith("blob:") || url.startsWith("data:")) {
-      return url;
-    }
-    const picked = urls.get(baseName(url));
-    if (picked) {
-      return picked;
-    }
-    // a URL that cannot be fetched: nothing leaves the page
-    missing.push(baseName(url));
-    return `refused:${baseName(url)}`;
-  });
-  const loader = new GLTFLoader(manager);
+  const picked = pickedFiles(main, files);
+  const loader = new GLTFLoader(picked.manager);
   loader.setMeshoptDecoder(MeshoptDecoder);
   try {
     const data = await main.arrayBuffer();
     const gltf = await loader.parseAsync(data, "");
     return gltf.scene;
   } catch (error) {
-    throw new DesignError(loaderReason(error, missing));
+    throw new DesignError(loaderReason(error, picked.missing));
   } finally {
-    for (const url of urls.values()) {
-      URL.revokeObjectURL(url);
-    }
+    picked.release();
   }
 }
 
@@ -193,35 +188,114 @@ interface Piece {
   matrix: Matrix4;
 }
 
-/** Every piece under `root`, its matrix in the design's frame. */
+/** The part of `geometry` one of its groups draws, as its own geometry
+ *  (position, normal, uv; compact). */
+function groupGeometry(
+  geometry: BufferGeometry,
+  start: number,
+  count: number
+): BufferGeometry {
+  const index = geometry.index;
+  // the source vertex of each output vertex
+  const sources: number[] = [];
+  const remap = new Map<number, number>();
+  const triangles: number[] = [];
+  for (let i = start; i < start + count; i++) {
+    const v = index ? index.getX(i) : i;
+    let to = remap.get(v);
+    if (to === undefined) {
+      to = sources.length;
+      remap.set(v, to);
+      sources.push(v);
+    }
+    triangles.push(to);
+  }
+  const out = new BufferGeometry();
+  for (const name of ["position", "normal", "uv"]) {
+    const from = geometry.getAttribute(name);
+    if (!from) {
+      continue;
+    }
+    const size = from.itemSize;
+    const array = new Float32Array(sources.length * size);
+    sources.forEach((v, i) => {
+      for (let c = 0; c < size; c++) {
+        array[i * size + c] = from.getComponent(v, c);
+      }
+    });
+    out.setAttribute(name, new BufferAttribute(array, size));
+  }
+  out.setIndex(triangles);
+  return out;
+}
+
+/** A mesh's geometries, one per material it draws: GLTFLoader gives a
+ *  mesh per primitive, one material each; OBJLoader one per object with
+ *  a material per `usemtl` and a group each. */
+function materialParts(
+  mesh: Mesh
+): { geometry: BufferGeometry; material: Material }[] {
+  if (!Array.isArray(mesh.material)) {
+    return [{ geometry: mesh.geometry, material: mesh.material }];
+  }
+  const materials = mesh.material;
+  const groups = mesh.geometry.groups;
+  if (groups.length === 0) {
+    return [{ geometry: mesh.geometry, material: materials[0] }];
+  }
+  const drawn =
+    mesh.geometry.index?.count ?? mesh.geometry.getAttribute("position").count;
+  return groups
+    .filter((g) => materials[g.materialIndex ?? 0] && g.count > 0)
+    .map((g) => ({
+      geometry: groupGeometry(
+        mesh.geometry,
+        g.start,
+        Math.min(g.count, drawn - g.start)
+      ),
+      material: materials[g.materialIndex ?? 0],
+    }));
+}
+
+/** Every piece under `root` that is shown (a Rhino file's hidden layers
+ *  are not), its matrix in the design's frame. */
 function piecesOf(root: Object3D): Piece[] {
   root.updateMatrixWorld(true);
   const out: Piece[] = [];
   const instance = new Matrix4();
-  root.traverse((object) => {
+  root.traverseVisible((object) => {
     const mesh = object as Mesh;
     if (!mesh.isMesh || !mesh.geometry.getAttribute("position")) {
       return;
     }
-    // (GLTFLoader gives a mesh per primitive, one material each)
-    const material = Array.isArray(mesh.material)
-      ? mesh.material[0]
-      : mesh.material;
-    const instanced = mesh as InstancedMesh;
-    if (instanced.isInstancedMesh) {
-      for (let i = 0; i < instanced.count; i++) {
-        instanced.getMatrixAt(i, instance);
-        out.push({
-          geometry: mesh.geometry,
-          material,
-          matrix: mesh.matrixWorld.clone().multiply(instance),
-        });
-      }
-    } else {
-      out.push({ geometry: mesh.geometry, material, matrix: mesh.matrixWorld });
+    for (const part of materialParts(mesh)) {
+      piecesOfPart(mesh, part.geometry, part.material, instance, out);
     }
   });
   return out;
+}
+
+/** One geometry of `mesh` as pieces: once, or once per instance. */
+function piecesOfPart(
+  mesh: Mesh,
+  geometry: BufferGeometry,
+  material: Material,
+  instance: Matrix4,
+  out: Piece[]
+): void {
+  const instanced = mesh as InstancedMesh;
+  if (!instanced.isInstancedMesh) {
+    out.push({ geometry, material, matrix: mesh.matrixWorld });
+    return;
+  }
+  for (let i = 0; i < instanced.count; i++) {
+    instanced.getMatrixAt(i, instance);
+    out.push({
+      geometry,
+      material,
+      matrix: mesh.matrixWorld.clone().multiply(instance),
+    });
+  }
 }
 
 const triangleCount = (g: BufferGeometry) =>
@@ -431,10 +505,15 @@ export async function readDesign(
   const main = designFile(files);
   if (!main) {
     throw new DesignError(
-      "Bitte eine .glb-, .gltf- oder .ifc-Datei wählen (Export aus SketchUp, Rhino, Revit, Archicad, Vectorworks, Blender …)."
+      "Bitte eine .glb-, .gltf-, .ifc-, .obj- oder .3dm-Datei wählen (Export aus SketchUp, Rhino, Revit, Archicad, Vectorworks, Blender …)."
     );
   }
-  const { root, note } = await parseDesign(main, files, epsg, tier);
+  const { root, note, heightsKnown } = await parseDesign(
+    main,
+    files,
+    epsg,
+    tier
+  );
   const pieces = piecesOf(root);
   if (pieces.length === 0) {
     throw new DesignError("Die Datei enthält keine Flächen.");
@@ -477,7 +556,7 @@ export async function readDesign(
     geometry,
     looks,
     box,
-    georef: detectGeoreference(box, epsg),
+    georef: georefOf(box, epsg, heightsKnown ?? true),
     weight,
     bytes: verdict.bytes,
     texturesDropped: !verdict.keepTextures && weight.textureBytes > 0,

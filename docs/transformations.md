@@ -4645,7 +4645,14 @@ GPU**.
   failing that, its IfcSite's latitude and longitude at the site's own
   placement, turned by the context's TrueNorth (`≈ assumed`: approximate, the panel says so) put
   its origin in the Land's coordinates (`lib/city/ifc-georef.ts`);
-  geometry already in them keeps its place. Its place is `◎ detected` from its own coordinates where they
+  geometry already in them keeps its place. An
+  OBJ (metres, Y up, its MTL and textures from the picked files) and a
+  Rhino .3dm (its unit, Z up turned to Y up, placed `◎ detected` by its
+  earth anchor where one is set — its elevation as NHN unless it says
+  ground level or the earth's centre, then set on the ground; hidden
+  layers left out; breps by
+  their saved render meshes) are read alike
+  (`design-formats.ts`). Its place is `◎ detected` from its own coordinates where they
   are the site's UTM zone (an easting in X, plain or zone-prefixed, a
   northing in −Z; `lib/city/design-placement.ts`), its own Y kept as NHN
   where the ground under it agrees within 40 m; without one it is
