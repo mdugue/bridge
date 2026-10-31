@@ -1059,8 +1059,11 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // The dots only up close and where the night is deepest: from the air
     // a city of dots on blue is a blur.
     const nightDots = dots.mul(float(1).sub(smoothstep(120, 500, z)));
-    // (a lamp's light is warm: the dusk sky's on a wall is not a lamp)
-    const lamp = aaStep(0.3, l).mul(smoothstep(0.05, 0.25, warmth(b)));
+    // (a lamp's light is warm: the dusk sky's on a wall is not a lamp —
+    // but a white light is one, a data mark's comet or head)
+    const lamp = aaStep(0.3, l).mul(
+      max(smoothstep(0.05, 0.25, warmth(b)), aaStep(0.8, l))
+    );
     const nightInk = mix(
       mix(mix(nightTone, POP.black, nightDots), nightTone, aaStep(0.12, l)),
       mix(POP.yellow, POP.paper, aaStep(0.72, l)),
