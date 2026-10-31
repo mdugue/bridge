@@ -313,7 +313,10 @@ function createSkyDome(scene: Scene): SkyDome & { mesh: SkyMesh } {
   // opaque clay, passed the depth test over everything and painted walls
   // and kerbs sky-blue. Under a reversed buffer the far plane is z = 0
   // (docs/rendering.md, "Workarounds for upstream bugs").
-  const placed = sky.material.vertexNode as V4;
+  const placed = sky.material.vertexNode as V4 | null;
+  if (!placed) {
+    throw new Error("SkyMesh no longer sets its vertexNode: drop the z = 0");
+  }
   sky.material.vertexNode = Fn((builder: NodeBuilder) =>
     builder.renderer.reversedDepthBuffer
       ? vec4(placed.x, placed.y, float(0), placed.w)

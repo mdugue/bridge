@@ -187,6 +187,7 @@ import {
   pixelRatioFor,
   type SceneBudget,
   shadowMapSizeFor,
+  reversedDepthFromSearch,
   tileCacheBytesFor,
 } from "./scene-profile";
 import {
@@ -720,11 +721,6 @@ export interface CityWalkHandle {
   terrainBounds: TerrainBounds;
 }
 
-/** The reversed depth buffer, unless the page asks for `?depth=standard`. */
-export function reversedDepthRequested(search: string): boolean {
-  return new URLSearchParams(search).get("depth") !== "standard";
-}
-
 /**
  * three's WebGPURenderer: WebGPU where the browser has it, its WebGL2
  * backend otherwise (or on `?gpu=webgl2`, scene-profile.ts). One renderer,
@@ -755,7 +751,7 @@ async function createRenderer(
     // EXT_clip_control; what reads raw depth here asks
     // `reversedDepthBuffer` (stylize-effect.ts, view-ray.ts). `?depth=standard`
     // draws with the plain buffer, to compare.
-    reversedDepthBuffer: reversedDepthRequested(window.location.search),
+    reversedDepthBuffer: reversedDepthFromSearch(window.location.search),
   });
   try {
     await renderer.init();
@@ -3291,9 +3287,13 @@ async function bootApp(
     isWebGPUBackend?: boolean;
     trackTimestamp?: boolean;
   };
+  // Not under three's Inspector (`?inspect=1`): it turns the timestamps on
+  // and resolves them every frame itself, so a readback here would get its
+  // leftovers and steer the resolution by them.
   const timesGpu =
     timedBackend.isWebGPUBackend === true &&
-    timedBackend.trackTimestamp === true;
+    timedBackend.trackTimestamp === true &&
+    !inspectRequested(window.location.search);
   let gpuReadDue = 0;
   let gpuReading = false;
   // three hands back its last value when nothing new resolved (the map
