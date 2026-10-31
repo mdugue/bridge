@@ -4655,7 +4655,9 @@ GPU**.
   their saved render meshes) are read alike
   (`design-formats.ts`). A place more than 2 km beyond the site's tiles,
   or in another place's coordinates, is not taken: `≈ assumed` in front
-  of the player, the panel saying why. A **landscape plan** (DXF, Shapefile,
+  of the player, the panel saying why. Its scale is `❝ taken` from the
+  panel's unit and factor (metres unless set; a hint under 4 m or over
+  3 km) and kept in the placement file. A **landscape plan** (DXF, Shapefile,
   GeoPackage, LandXML; `design-plan.ts`) becomes surfaces `◎ detected`
   by their layer's or attributes' names (`lib/city/plan-classes.ts`,
   German and English keywords; class-like attributes first, names and

@@ -30,7 +30,9 @@ export interface InquiryCard {
   title: string;
 }
 
-const decimal = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
+export const decimal = new Intl.NumberFormat("de-DE", {
+  maximumFractionDigits: 1,
+});
 export const whole = new Intl.NumberFormat("de-DE", {
   maximumFractionDigits: 0,
 });
