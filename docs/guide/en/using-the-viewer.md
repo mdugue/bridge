@@ -226,7 +226,19 @@ finger still for half a second); `I` asks what stands under the
 mouse pointer (in immersive mode, which hides the pointer, what stands at
 the centre; only there a dot marks it). The building gets a fine hatch and a line round its outline,
 both in the controls' pink accent, and a card opens; a
-click on nothing closes it again. You need not hit a small house exactly:
+click on nothing closes it again. Beside the building its **name** now
+stands in the city itself, as long as the question does: a landmark's
+large, with when it was built and by whom, when it was rebuilt and how
+tall it is (from Wikidata) underneath; a named building with its
+address; an ordinary house just its address, small. From the street the
+name stands upright over or beside the building, turned to the facade
+you see best, with a fine line to it; from the air it lies on the
+ground beside it; close up it is an inscription at the plinth; from far
+off only the name. It moves aside when another building would hide it
+or a panel covers it, shows as a pale outline where the city still
+covers it, and is set in each picture style's own type — in Comic in a
+yellow caption box, in Schwarzplan on the ground like a plan's
+lettering. You need not hit a small house exactly:
 when nothing stands right under your finger, the building most of the
 ground around it belongs to answers. On a phone the card is a sheet at
 the bottom: folded it says what the building is and where; swipe it up

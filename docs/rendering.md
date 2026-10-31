@@ -684,6 +684,47 @@ halo is HDR). The only branch in the node is on the mode (a uniform);
 per pixel it selects, so every derivative and texture read stays in
 uniform control flow, as WGSL requires.
 
+### The nameplate: the thing asked, named beside it
+
+What the inquiry card's title says is also set in the scene while the
+question stands ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md);
+what it says and where it stands: transformations.md, *The nameplate*).
+It is drawn **after the frame, onto the canvas** (`PostStack.setOverlay`,
+`nameplate-layer.ts`): no screen-sized target of its own, and the post
+pipelines, the picture styles and the outline stay as they were. For its
+render the renderer's tone mapping is off and its output colour space
+linear — the plate's colours are sRGB already — and both are restored
+after; its programs are compiled in `warmView`/`warmStyles` after the
+outline's, each in its turn (`compileInTurn`).
+
+- **Lettering.** Signed distance fields of the glyphs the plate needs, no
+  more: rasterised from the self-hosted faces (`app/[site]/nameplate-fonts.ts`,
+  next/font, not preloaded: they load with the first question) at 64 px
+  for the title and 40 px for the lines, an exact Euclidean distance
+  transform each (`lib/city/sdf.ts`, 8 px reach), packed into one R8 atlas
+  ≤ 512 × 1024 (≤ 0.5 MB), freed when the question goes. Kerning from the
+  canvas's own measure of each prefix; tracking per style.
+- **One material, three kinds of quad** (`uvk`: atlas uv and a kind): a
+  glyph (fill at 0.5, halo outward to a share of the reach, antialiased by
+  `fwidth`), a solid (the comic box, its edge and shadow, the leader's
+  strokes, antialiased by their uv), a disc (the leader's dot). Colour and
+  halo ride per vertex (`ink`, `halo`), three vertex buffers and two
+  varyings past position; a fade uniform carries the arrival and the
+  cross-fades.
+- **Occlusion** per pixel: the fragment's view depth against the scene's
+  (the scene target's depth texture through `view-lens.ts`); behind the
+  city it keeps 0.45 of its outline only, so a plate the placing could
+  not keep clear reads as a ghost, never as text over a facade. Depth
+  test and write are off; it is no part of the shadow map.
+- **The plate** is one mesh placed by a matrix (right, up and normal
+  scaled by the capital height, the block's corner as origin); the leader
+  is a second small mesh rebuilt in world space per frame.
+- **Choosing** runs every 250 ms on the CPU (`lib/city/nameplate-place.ts`):
+  per candidate 9 points against the buildings' BVHs (`cityHides` in
+  `nameplate-ask.ts`, `nearestCityHit` with `build = false`) and the
+  HUD's panels marked `data-scene-cover`. While an image is exported the
+  place is held.
+
 ## Modell: the parallel camera
 
 Modell ([ADR 0044](./adr/0044-modell-parallel-projections.md), plan 055)
