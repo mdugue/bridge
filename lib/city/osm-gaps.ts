@@ -39,6 +39,10 @@ const NOT_A_BUILDING = /brücke|bridge|viadukt|steg\b/i;
 /** A name that says so where Wikidata says nothing ("Albertbrücke"). */
 const BRIDGE_NAME = /brücke$/i;
 
+/** A name without the place Wikidata disambiguates it by:
+ *  "Pöppelmannbrücke (Grimma)" → "Pöppelmannbrücke". */
+const bareName = (name: string): string => name.replace(/\s*\([^)]*\)$/, "");
+
 export type GapKind =
   | "wahrzeichen-ohne-name"
   | "geschosse-fehlen"
@@ -98,7 +102,7 @@ function isBridge(lm: WissenLandmark): boolean {
   const kinds = (lm.facts?.claims.P31 ?? []).map((v) => v.v);
   return kinds.length > 0
     ? kinds.some((k) => NOT_A_BUILDING.test(k))
-    : BRIDGE_NAME.test(lm.name);
+    : BRIDGE_NAME.test(bareName(lm.name));
 }
 
 /**
@@ -133,7 +137,8 @@ function buildingGap(b: WissenBuilding): GapKind | null {
     return "denkmal-ohne-name";
   }
   const storeysMatter =
-    !NO_STOREYS_USE.test(b.use ?? "") && !NO_STOREYS_NAME.test(b.name ?? "");
+    !NO_STOREYS_USE.test(b.use ?? "") &&
+    !NO_STOREYS_NAME.test(bareName(b.name ?? ""));
   return known &&
     b.levels === undefined &&
     (b.h ?? 0) >= MIN_LEVELS_HEIGHT_M &&

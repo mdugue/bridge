@@ -47,7 +47,7 @@ const INDEX: StadtwissenIndex = {
     },
     {
       id: "Q3",
-      name: "Neue Brücke",
+      name: "Pöppelmannbrücke (Grimma)",
       tile: "t",
       x: X,
       y: Y,
