@@ -25,8 +25,61 @@ interface CityObject {
   attributes?: Record<string, unknown>;
   children?: string[];
   geographicalExtent?: number[];
+  geometry?: { boundaries: unknown }[];
   parents?: string[];
   type: string;
+}
+
+/** The parts of a CityJSON file the directory reads. */
+interface CityFile {
+  CityObjects: Record<string, CityObject>;
+  transform?: { scale: number[]; translate: number[] };
+  vertices?: number[][];
+}
+
+/** Every vertex index in a geometry's nested boundaries. */
+function boundaryIndices(b: unknown, out: number[]): void {
+  if (typeof b === "number") {
+    out.push(b);
+  } else if (Array.isArray(b)) {
+    for (const x of b) {
+      boundaryIndices(x, out);
+    }
+  }
+}
+
+/** A Building's extent [minX, minY, minZ, maxX, maxY, maxZ] in the data's
+ *  CRS: its own `geographicalExtent`, else the box of its and its parts'
+ *  vertices (Hamburg's, München's and Unna's files carry no extent). */
+function extentOf(obj: CityObject, city: CityFile): number[] | undefined {
+  if (obj.geographicalExtent) {
+    return obj.geographicalExtent;
+  }
+  const indices: number[] = [];
+  for (const o of [
+    obj,
+    ...(obj.children ?? []).map((c) => city.CityObjects[c]),
+  ]) {
+    for (const g of o?.geometry ?? []) {
+      boundaryIndices(g.boundaries, indices);
+    }
+  }
+  const vertices = city.vertices ?? [];
+  const scale = city.transform?.scale ?? [1, 1, 1];
+  const shift = city.transform?.translate ?? [0, 0, 0];
+  const ext = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+  for (const i of indices) {
+    const v = vertices[i];
+    if (!v) {
+      continue;
+    }
+    for (let k = 0; k < 3; k++) {
+      const c = v[k] * scale[k] + shift[k];
+      ext[k] = Math.min(ext[k], c);
+      ext[k + 3] = Math.max(ext[k + 3], c);
+    }
+  }
+  return Number.isFinite(ext[0]) ? ext : undefined;
 }
 
 /** What OSM's per-object file says (osm_buildings.py; values as strings). */
@@ -60,7 +113,8 @@ function osmOf(
 /** The tallest measured height of a Building or its parts. */
 function heightOf(
   obj: CityObject,
-  all: Readonly<Record<string, CityObject>>
+  all: Readonly<Record<string, CityObject>>,
+  ext: number[]
 ): number | undefined {
   const own = positive(obj.attributes?.measuredHeight);
   const parts = (obj.children ?? [])
@@ -70,8 +124,7 @@ function heightOf(
   if (top > 0) {
     return round1(top);
   }
-  const ext = obj.geographicalExtent;
-  return ext ? positive(round1(ext[5] - ext[2])) : undefined;
+  return positive(round1(ext[5] - ext[2]));
 }
 
 function roofOf(
@@ -94,20 +147,24 @@ const attributeText = (v: unknown): string =>
 function directoryEntry(
   id: string,
   obj: CityObject,
-  all: Readonly<Record<string, CityObject>>,
+  city: CityFile,
   row: OsmRow,
   wd: string | undefined
 ): WissenBuilding | undefined {
-  const ext = obj.geographicalExtent;
+  const all = city.CityObjects;
   const name = row.name ? String(row.name) : undefined;
   const addr = row.addr ? String(row.addr) : undefined;
   const heritage = Number(row.heritage) > 0;
-  if (!ext || !(name || addr || heritage || wd)) {
+  if (!(name || addr || heritage || wd)) {
+    return undefined;
+  }
+  const ext = extentOf(obj, city);
+  if (!ext) {
     return undefined;
   }
   const use = BUILDING_FUNCTION[attributeText(obj.attributes?.function)];
   const roof = roofOf(obj, all);
-  const h = heightOf(obj, all);
+  const h = heightOf(obj, all, ext);
   const levels = positive(row.levels);
   return {
     id,
@@ -188,7 +245,7 @@ export function monumentsOf(
  * is listed, or that is part of a landmark — its parts folded into it.
  */
 export function stadtwissenTile(input: {
-  city: { CityObjects: Record<string, CityObject> };
+  city: CityFile;
   landmarks?: LandmarkFile;
   monuments?: MonumentCollection;
   osm: Readonly<Record<string, OsmRow | undefined>>;
@@ -210,7 +267,7 @@ export function stadtwissenTile(input: {
     const entry = directoryEntry(
       id,
       obj,
-      all,
+      input.city,
       osmOf(id, obj, input.osm),
       landmarkOf.get(id)
     );
