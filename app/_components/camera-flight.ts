@@ -70,13 +70,13 @@ export interface CameraFlight {
    * Begins gliding the camera from its current pose to `target`. With
    * `floorAt` — the lowest height the camera may pass at over world (x, z)
    * — the path climbs over whatever stands between the two poses instead
-   * of cutting through it.
+   * of cutting through it. Returns how long it takes (s).
    */
   start: (
     target: FlightTarget,
     floorAt?: (x: number, z: number) => number,
     shape?: FlightShape
-  ) => void;
+  ) => number;
   /**
    * Advances the active flight by `dt` seconds, driving the camera. Returns
    * true while a flight owns the camera (so the caller suspends player input).
@@ -152,6 +152,7 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
         elapsed: 0,
         lookFree: false,
       };
+      return flight.duration;
     },
     update: (dt) => {
       if (!flight) {

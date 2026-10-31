@@ -47,7 +47,11 @@
         "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
         "page": "https://commons.wikimedia.org/wiki/File:Albrechtsburg-2007.jpg",
         "h": 538,
-        "w": 800
+        "w": 800,
+        "focus": [
+          0.5,
+          0.3
+        ]
       }
     },
     {
@@ -91,7 +95,11 @@
         "licenceUrl": "http://artlibre.org/licence/lal/en",
         "page": "https://commons.wikimedia.org/wiki/File:Mei%C3%9Fen_Burgberg_asv2025-03_img1.jpg",
         "h": 533,
-        "w": 800
+        "w": 800,
+        "focus": [
+          0.5,
+          0.35
+        ]
       }
     },
     {

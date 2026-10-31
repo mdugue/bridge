@@ -2,10 +2,13 @@ import { expect, test } from "bun:test";
 import {
   inDaySpan,
   isWalkBundle,
+  photoIsTall,
+  photoPosition,
   seasonOf,
   stopCamera,
   stopDate,
   stopNotes,
+  stopPlaces,
   stopSpeech,
   stopView,
   type Walk,
@@ -50,12 +53,16 @@ test("a walk is never drawn in Modell", () => {
 });
 
 test("the voice reads the title, the story, today's notes and the closer look", () => {
-  expect(stopSpeech({ ...stop, closer: "Oben." }, ["Heute."])).toBe(
-    `${stop.title}. ${stop.text} Heute. Genauer hingesehen: Oben.`
-  );
-  expect(stopSpeech({ ...stop, closer: undefined }, [])).toBe(
-    `${stop.title}. ${stop.text}`
-  );
+  expect(stopSpeech({ ...stop, closer: "Oben." }, ["Heute."])).toEqual([
+    { tone: "title", text: `${stop.title}.` },
+    { tone: "story", text: stop.text },
+    { tone: "aside", text: "Heute." },
+    { tone: "label", text: "Genauer hingesehen." },
+    { tone: "aside", text: "Oben." },
+  ]);
+  expect(
+    stopSpeech({ ...stop, closer: undefined }, []).map((p) => p.tone)
+  ).toEqual(["title", "story"]);
 });
 
 test("a stop's camera is in the scene frame, never Modell", () => {
@@ -153,4 +160,44 @@ test("a bundle is recognised by its shape", () => {
   expect(isWalkBundle(walkBundle("probe", [walk]))).toBe(true);
   expect(isWalkBundle({ site: "probe" })).toBe(false);
   expect(isWalkBundle(null)).toBe(false);
+});
+
+test("a tall photo stands beside the story, its focus kept in a crop", () => {
+  expect(photoIsTall({ w: 800, h: 1200 })).toBe(true);
+  expect(photoIsTall({ w: 800, h: 808 })).toBe(false);
+  expect(photoIsTall({ w: 800, h: 335 })).toBe(false);
+  expect(photoPosition({})).toBe("50% 50%");
+  expect(photoPosition({ focus: [0.45, 0.3] })).toBe("45% 30%");
+  const photo = {
+    author: "A",
+    file: "K.jpg",
+    h: 600,
+    licence: "CC0",
+    page: "https://commons.wikimedia.org/wiki/File:K.jpg",
+    w: 800,
+  };
+  const at = (focus: [number, number]) =>
+    walkProblems({
+      ...walk,
+      stops: [
+        { ...stop, photo: { ...photo, focus } },
+        { ...stop, id: "zwei" },
+      ],
+    });
+  expect(at([0.5, 0.3])).toEqual([]);
+  expect(at([0.5, 1.3]).join()).toContain("focus must be");
+});
+
+test("a stop's refs become the places the twin knows by name", () => {
+  const known: Record<
+    string,
+    { name: string; r?: number; x: number; y: number }
+  > = {
+    Q1: { name: "Frauenkirche", r: 30, x: 1, y: 2 },
+    b: { name: "", x: 3, y: 4 },
+  };
+  expect(
+    stopPlaces({ refs: ["Q1", "b", "nope", "Q1"] }, (id) => known[id] ?? null)
+  ).toEqual([{ id: "Q1", name: "Frauenkirche", r: 30, x: 1, y: 2 }]);
+  expect(stopPlaces({}, () => null)).toEqual([]);
 });

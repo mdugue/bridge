@@ -167,7 +167,11 @@
         "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
         "page": "https://commons.wikimedia.org/wiki/File:Dresden_Semperoper_Panther_Quadriga_01.JPG",
         "h": 600,
-        "w": 800
+        "w": 800,
+        "focus": [
+          0.45,
+          0.3
+        ]
       }
     },
     {

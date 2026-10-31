@@ -10,13 +10,48 @@
 /** A run of an answer's text: plain, or a mention of `places[place]`. */
 export type MentionRun = { text: string } | { text: string; place: number };
 
-/** The ways the text may name a place, the longest first. */
+/**
+ * A place's name as a reader says it: without what Wikidata adds to tell
+ * it apart — a subtitle after a dash ("Kügelgenhaus – Museum der
+ * Dresdner Romantik"), the place in brackets ("Pöppelmannbrücke
+ * (Grimma)") or after a comma ("Frauenkirche, München") — and without
+ * the city's name at its end ("Residenzschloss Dresden").
+ */
+export function placeLabel(name: string, city: string): string {
+  const bare = name
+    .trim()
+    .replace(/\s+[–—-]\s.*$/, "")
+    .replace(/\s*\([^)]*\)$/, "")
+    .replace(/,\s[^,]*$/, "");
+  const c = city.trim().toLowerCase();
+  const words = bare.split(/\s+/);
+  return c !== "" && words.length > 1 && words.at(-1)?.toLowerCase() === c
+    ? words.slice(0, -1).join(" ")
+    : bare;
+}
+
+/** A German adjective before a noun ("Katholische", "Altes", "Hamburger"). */
+const ADJECTIVE = /^[A-ZÄÖÜ][a-zäöüß]+(?:e|es|er|en)$/;
+/** The shortest noun that stands for the whole name ("Hofkirche"). */
+const NOUN_MIN = 7;
+
+/** The ways the text may name a place, the longest first: its name, as a
+ *  reader says it, and its noun where an adjective comes before it
+ *  ("diese Hofkirche" for the Katholische Hofkirche). */
 function aliasesOf(name: string, city: string): string[] {
   const out = [name.trim()];
-  const c = city.trim().toLowerCase();
-  const words = name.trim().split(/\s+/);
-  if (c !== "" && words.length > 1 && words.at(-1)?.toLowerCase() === c) {
-    out.push(words.slice(0, -1).join(" "));
+  const label = placeLabel(name, city);
+  if (label !== out[0]) {
+    out.push(label);
+  }
+  const words = label.split(/\s+/);
+  const noun = words[1] ?? "";
+  if (
+    words.length === 2 &&
+    ADJECTIVE.test(words[0]) &&
+    noun.length >= NOUN_MIN
+  ) {
+    out.push(noun);
   }
   // too short to be a name in running text
   return out.filter((a) => a.length >= 4);

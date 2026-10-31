@@ -19,14 +19,20 @@ listens wastes its battery.
    per press). A browser without either shows neither. A spoken
    question turns reading aloud on and tells the server (`voice`), whose
    prompt then asks for short spoken sentences.
-2. **Read as German says it, on the device unless chosen otherwise.**
-   The text is prepared for the ear first (`speakable`: years as words,
-   shortenings spelled out, dashes as pauses; links, list marks and
-   Markdown left out) and read sentence by sentence, a touch slower than
-   the voice's default. The best German voice on the device reads; the
-   card lists the others, an online one (Google's in Chrome, Microsoft's
-   in Edge, `localService` false) marked as such, and reads with it only
-   when the visitor picks it, remembered in `vorlese-stimme`.
+2. **Read as German says it, with Google Deutsch where the browser has
+   it.** The text is prepared for the ear first (`speakable`: years as
+   words, shortenings spelled out, dashes as pauses; links, list marks
+   and Markdown left out) and read sentence by sentence, a touch slower
+   than the voice's default. A told text comes in parts with a tone
+   (`SpokenPart`): a walk stop's title slower and a little higher, its
+   notes and closer look a little lower after their label, a pause after
+   each part (`spokenLines`; the API has pace, pitch and the wait between
+   utterances, no emphasis of single words). The visitor's pick reads;
+   without one, Chrome's online "Google Deutsch" — the one voice that
+   reads a story well (maintainer's call, 2026-10-31) —, else the best
+   German voice on the device. The card lists them all, online ones
+   (Google's, Microsoft's, `localService` false) marked as such; the
+   pick is remembered in `vorlese-stimme`.
 3. **`was_ist_da` asks the twin what stands at the view's centre**
    (`inquireAt`, ADR 0042), opens its card and gives the model the card's
    lines, so "what is that" is answered from the measured data.
@@ -37,8 +43,9 @@ listens wastes its battery.
 
 ## Consequences
 
-- An online voice sends the text it reads to its maker; the privacy page
-  says so, and nothing is sent unless the visitor chose that voice.
+- An online voice sends the text it reads to its maker. In Chrome that
+  is Google, by default, once reading aloud is switched on; the privacy
+  page says so, and picking a device voice keeps the text on the device.
 - Dictation goes through the browser maker (Chrome and Safari send the
   audio to Google's and Apple's servers); the privacy page says so. The
   site only ever gets the recognised text.

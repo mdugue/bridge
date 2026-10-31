@@ -86,7 +86,11 @@ Cullen, *Townscape* (1961); Forbidden Vancouver,
     "seasons": { "winter": "…" },
     "facts": [{ "claim": "…", "source": "https://…" }],
     "refs": ["Q4176", "m411594_5656615"],
-    "photo": { "file": "Kronentor (Zwinger, Dresden).jpg", "caption": "…" }
+    "photo": {
+      "file": "Kronentor (Zwinger, Dresden).jpg",
+      "caption": "…",
+      "focus": [0.5, 0.3]             // optional: what a crop keeps in sight
+    }
   }]
 }
 ```
@@ -94,6 +98,30 @@ Cullen, *Townscape* (1961); Forbidden Vancouver,
 A `source` is an https URL (Wikipedia, an institution's page, a paper) or
 `stadtwissen:<id>` — a Q-id, a building's gml:id or a monument's
 `m<x>_<y>` from the Stadtwissen.
+
+## How the card shows it
+
+- **The photo** keeps its proportion. A wide one spans the card above
+  the story, cut only past a height (17rem, 10rem on a phone) and then
+  round its `focus` (shares of width and height from the top left, the
+  centre when absent); its caption and credit lie on its lower edge. A
+  tall one (narrower than 0.85 of its height, `photoIsTall`) stands
+  beside the story, which flows round it. A click shows it whole.
+- **The places.** The build turns each `refs` id the Stadtwissen knows
+  into a place (`places`: name, position, footprint radius;
+  `stopPlaces`). Where the story or the closer look names one — by its
+  name, its name without Wikidata's subtitle or place ("Kügelgenhaus",
+  "Pöppelmannbrücke"), or its noun after an adjective ("diese
+  Hofkirche") — the name is a button that picks it in the scene and
+  opens its card, as in *Frag die Stadt*. The ones the text only points
+  at ("das Opernhaus vor dir") stand in a row, *Im Bild*, under it.
+- **The hour** turns with the glide: the light travels from the last
+  stop's hour to this one's while the camera flies (`glideTo`), eased as
+  the glide is; with reduced motion it jumps.
+- **The voice** reads the title as its own sentence, slower and a little
+  higher, then a pause; the story; today's notes and the closer look
+  after its label, each set off by a pause and said a little lower
+  (`stopSpeech`, `spokenLines`).
 
 ## Writing one
 
