@@ -212,9 +212,16 @@ function poolMaterial(): MeshBasicNodeMaterial {
     // the ring is drawn whole; the Schwarzplan's pool is the ring alone
     const pool = dataMarkAlpha(fall.mul(fall).mul(0.55));
     const contoured = dataMarksAre("print").add(dataMarksAre("plan"));
+    // (Comic's contour whole or gone, as the pool: a half-blended ink
+    // prints as clay)
+    const contour = dataMarkAlpha(ring);
     m.colorNode = vec4(
       colour,
-      mix(mix(pool, max(pool, ring), contoured), ring, dataMarksAre("outline"))
+      mix(
+        mix(pool, max(pool, contour), contoured),
+        ring,
+        dataMarksAre("outline")
+      )
     );
     m.userData.paperOwn = true;
     return m;

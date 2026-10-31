@@ -174,9 +174,10 @@ function trafficMaterial(): MeshBasicNodeMaterial {
       pulse.mul(core).mul(ramp.load.mul(0.45).add(0.2))
     );
     // a pen's width along the crown, whatever the body's size on screen
-    // (never a zero-width step: an undefined smoothstep's NaN would reach
-    // every style through the mix)
-    const px = fwidth(rise).max(1e-4);
+    // (never narrower than a fiftieth of the flank: on the crown the
+    // tent's two flanks cancel in a pixel quad's difference, and a
+    // zero-width smoothstep's NaN would reach every style through the mix)
+    const px = fwidth(rise).max(0.02);
     // Under a picture style the flow takes the style's reading of a mark
     // (glass.ts `dataMarkColour`): its place on the scale, its comets as
     // the light — along the crown, where a head- or tail-light would be.

@@ -1272,11 +1272,11 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // of a hue the card never carries: a data mark's tissue paper.
     const tint = p.div(max(y, 1e-3));
     const hcv = rgbToHcv(p);
-    // (a cool hue only: a low sun's or a lit window's warmth on the card
-    // keeps its whisper)
-    const saturated = smoothstep(0.3, 0.5, hcv.y.div(max(hcv.z, 1e-3))).mul(
-      float(1).sub(smoothstep(0.12, 0.45, warmth(p)))
-    );
+    // (a cool hue only, and by day: a low sun's or a lit window's warmth
+    // on the card, and the blue hour's sky light, keep their whisper)
+    const saturated = smoothstep(0.3, 0.5, hcv.y.div(max(hcv.z, 1e-3)))
+      .mul(float(1).sub(smoothstep(0.12, 0.45, warmth(p))))
+      .mul(float(1).sub(dusk));
     const model = mix(shade, paper, t).mul(
       mix(vec3(1), tint, mix(0.35, 0.8, saturated))
     );
