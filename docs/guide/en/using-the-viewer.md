@@ -460,6 +460,27 @@ The other picture styles and Modell keep their sharp lines.
   not undoable. *Bild speichern* saves the view as a PNG with its sources
   (see [Modell](#modell-the-city-as-a-planner-draws-it)). *Immersiver Modus* locks the mouse pointer
   for a first-person feel; `Esc` leaves it.
+- **Entwurf** ("design") — loads a design of your own into the city: a
+  glTF file (`.glb`, or a `.gltf` picked together with its `.bin` and
+  textures) as SketchUp, Rhino, Revit, Archicad, Vectorworks or Blender
+  export it; dropping it on the panel works too. The file is read in your
+  browser only and uploaded nowhere. Where it carries the Land's
+  coordinates (UTM, with or without the zone in front), the design stands
+  at its place straight away, at its NHN heights where they agree with the
+  ground; otherwise it is set on the ground in front of you — at its
+  origin (±0) where it has a basement below that. *Hierher
+  holen* (bring here), *Aufs Gelände* (onto the ground), *Ost*, *Nord*,
+  *Höhe* and *Drehung* (east, north, height, turn) move, set and turn it;
+  *Lage sichern* saves the placement as a small file (`….lage.json`) to
+  load with the design next time. Buildings whose footprint the design
+  covers for more than half step aside (*Bestand im Umriss ausblenden*);
+  flat plates at the design's lowest point do not count. The design is
+  model-maker's white, or in the file's own colours (*Farben der Datei*);
+  it casts shadows, you cannot walk through it, and Modell and the shading
+  study show it. On a phone it may have at most 250,000 triangles and
+  40 MB (3 million and 400 MB on a computer); textures that do not fit
+  are left out. Ground, trees and street furniture under the design still
+  stand for now.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
   the picture style, *Nebel*, the crown switch and the data layers as a
   small JSON text; paste such a text into the box and press *Anwenden* to

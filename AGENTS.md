@@ -174,7 +174,8 @@ ADR 0041).
 
 **Privacy.** A new request to a third party, a new report field or a new
 browser-storage key is not done until `app/(legal)/datenschutz/page.mdx`
-says so (ADR 0043).
+says so (ADR 0043). A visitor's design is read in the page and never
+uploaded; nothing it names is fetched (ADR 0054).
 
 ## QA: self-verify, don't ask for screenshots
 
