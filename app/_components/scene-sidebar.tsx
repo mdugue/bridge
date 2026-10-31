@@ -86,6 +86,7 @@ import { PlacesList } from "./places-list";
 import { hintsFor } from "./control-hints";
 import { LegalLinks } from "./legal-links";
 import type { ViewMode } from "./model-rig";
+import { DesignPanel } from "./design-panel";
 import { ProjectionPanel } from "./projection-panel";
 import { QualityPanel } from "./quality-panel";
 import type { SceneBudget } from "./scene-profile";
@@ -1048,6 +1049,11 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 )}
               </div>
             </div>
+
+            <DesignPanel
+              controls={() => handleRef.current?.design ?? null}
+              ready={props.ready}
+            />
 
             <div className="flex flex-col gap-2 border-t px-4 pt-3 pb-3.5">
               <div className="flex items-center justify-between">

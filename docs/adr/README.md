@@ -34,12 +34,13 @@ how it is built.
 | [0044](./0044-modell-parallel-projections.md) | Modell: the city in parallel projection, every pass reading the camera through a lens |
 | [0047](./0047-phone-memory-budget-in-true-bytes.md) | Every device gets a budget in true bytes, a phone's memory never grows, a device that lost its GPU gets a lighter page |
 | [0048](./0048-network-failures-are-retried.md) | A network failure is retried for a budget of the page's visible time, never decided at once |
+| [0054](./0054-a-design-is-loaded-on-the-device.md) | A planner's design is read on the device, never uploaded, placed by its coordinates or by hand, and stands in for the buildings it covers |
 
 ## Numbering
 
 Numbers missing from the index belonged to records merged into others;
 they are never reused. A new record takes the next number after the
-highest ever used (0053), checked against main and the open PRs' branches.
+highest ever used (0054), checked against main and the open PRs' branches.
 
 ## Format
 
