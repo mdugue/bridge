@@ -641,7 +641,7 @@ sub-pixel steps on a held, fixed-step loop, diffed.
 - *Data marks* — the data layers' traffic flows, bicycle columns and
   pools, and tram trails take the style's reading of a mark (the row's
   `dataMarks`, one shared uniform, `glass.ts` `dataMarkColour`): Pastell
-  the glass; Comic a marker ink on hues clear of the crowns' (0.55–0.95),
+  the glass; Comic a marker ink on hues clear of the crowns' (0.55–0.9),
   printed flat by the pass in blue, yellow or red by the mark's place on
   its scale (the traffic's load), its light white, its edge black (a
   blended mark — a pool, a trail — opaque or gone, `dataMarkAlpha`, here

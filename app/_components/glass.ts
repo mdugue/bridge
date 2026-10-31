@@ -225,8 +225,9 @@ function marker(h: F): V3 {
 }
 
 /** Where on the marker hues Comic's data inks lie (stylize-effect.ts
- *  `DATA_HUE`): blue (low) to rose (high), clear of the crowns'. */
-export const DATA_HUE = { from: 0.55, to: 0.95 } as const;
+ *  `DATA_HUE`): blue (low) to magenta (high), clear of the crowns' and of
+ *  the wrap to red, which a blur with a red roof would cross. */
+export const DATA_HUE = { from: 0.55, to: 0.9 } as const;
 
 /**
  * A data mark's colour under the picture style (`dataMarks`) — the
