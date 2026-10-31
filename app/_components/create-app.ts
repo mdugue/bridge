@@ -2638,6 +2638,12 @@ async function bootApp(
   );
 
   const resizeObserver = new ResizeObserver(() => {
+    // A container with no area (the page hidden or collapsed) would hand
+    // WebGPU a 0 × 0 swapchain and zero-size targets; keep the last size,
+    // the observer fires again once the container has one.
+    if (container.clientWidth === 0 || container.clientHeight === 0) {
+      return;
+    }
     wakeStill();
     camera.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
     camera.updateProjectionMatrix();
