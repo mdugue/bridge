@@ -12,6 +12,7 @@ import {
 import {
   float,
   fract,
+  max,
   mix,
   positionLocal,
   positionWorld,
@@ -192,13 +193,13 @@ function poolMaterial(): MeshBasicNodeMaterial {
       // (blended over the scene by its alpha, as the trails)
       backdrop: false,
     });
+    // Comic's and Strich's contour shows where the soft pool has faded:
+    // the ring is drawn whole; the Schwarzplan's pool is the ring alone
+    const pool = dataMarkAlpha(fall.mul(fall).mul(0.55));
+    const contoured = dataMarksAre("print").add(dataMarksAre("plan"));
     m.colorNode = vec4(
       colour,
-      mix(
-        dataMarkAlpha(fall.mul(fall).mul(0.55)),
-        ring,
-        dataMarksAre("outline")
-      )
+      mix(mix(pool, max(pool, ring), contoured), ring, dataMarksAre("outline"))
     );
     m.userData.paperOwn = true;
     return m;

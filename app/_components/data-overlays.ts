@@ -88,6 +88,8 @@ export interface DataOverlayOptions {
   onBikeCounts?: (counters: BikeCounter[]) => void;
   /** something a layer draws changed (the stats follow) */
   onChange?: () => void;
+  /** a layer put its marks into the scene (a style's swap gathers them) */
+  onAdded?: () => void;
   /** the traffic's hour, about once a second while its layer is on; null
    *  when it is switched off */
   onTrafficHour?: (status: TrafficHourStatus | null) => void;
@@ -150,6 +152,7 @@ function bikeOverlay(
           layer = createBikeLayer(opts.ground);
           layer.group.visible = false;
           opts.parent.add(layer.group);
+          opts.onAdded?.();
         }
         layer.group.visible = compiled;
         feed.start();
@@ -247,6 +250,7 @@ function tramOverlay(
       built = createTramCars(timetable, decks, opts.ground);
       built.group.visible = false;
       opts.parent.add(built.group);
+      opts.onAdded?.();
       built.update(clock(performance.now()));
       await opts.compile(built.group);
       if (!alive()) {
