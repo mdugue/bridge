@@ -124,7 +124,7 @@ test("without a geographicalExtent the box comes from its and its parts' vertice
     osm: { haus: { name: "Speicher" } },
   });
   expect(tile.buildings).toEqual([
-    { id: "haus", name: "Speicher", x: 1010, y: 2005, z: 10, h: 18 },
+    { id: "haus", name: "Speicher", r: 11.2, x: 1010, y: 2005, z: 10, h: 18 },
   ]);
 });
 
