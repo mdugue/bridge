@@ -200,12 +200,17 @@ export function dataMarksAre(kind: DataMarks): F {
 }
 
 /**
- * A blended mark's alpha under the style: Comic prints only what reaches
- * the frame as a full marker ink, so there it is opaque or gone (a
- * half-blended ink falls out of the pass's print and is drawn as clay).
+ * A blended mark's alpha under the style: the styles whose pass cuts the
+ * frame by a threshold take a mark opaque or not at all — Comic prints
+ * only a full marker ink (a half-blended one is drawn as clay), the
+ * Schwarzplan's luma cut drops a half-black line, Sin City's red takes a
+ * faint pink tail for a full red one.
  */
-export function dataMarkAlpha(alpha: F): F {
-  return mix(alpha, step(0.3, alpha), dataMarksAre("print"));
+export function dataMarkAlpha(alpha: F, at: F | number = 0.3): F {
+  const cut = dataMarksAre("print")
+    .add(dataMarksAre("outline"))
+    .add(dataMarksAre("red"));
+  return mix(alpha, step(at, alpha), cut);
 }
 
 /** A fully saturated colour of hue `h` (0..1) at value 0.9, one channel
