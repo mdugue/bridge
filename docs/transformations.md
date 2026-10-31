@@ -153,7 +153,7 @@ visual-variable codebook is in
   landed neighbour without a step) wherever that tile has no terrain
   level on screen yet, so a tile that never streamed, or that the cache let
   go of, shows ground instead of the sky on a flight or a turn.
-  `lib/city/ground-plate.ts`, `scripts/prepare-data.ts` `bakePlate`,
+  `lib/city/ground-plate.ts`, `scripts/prepare/plate.ts` `bakePlate`,
   `ground-plate-layer.ts` ([plan 076](./plans/076-streaming-without-holes.md)).
 - **Far buildings** `= computed` (*Gebäude in der Ferne*) — each tile's
   buildings a second time, the same glTF with every vertex its shape does
@@ -688,7 +688,7 @@ visual-variable codebook is in
   one tile at a time, each landing re-rendering the shadow map. Until the site
   has first loaded the fog far plane is clamped to ~1.1 km so tiles still in
   flight read as haze ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)).
-- **Rasters at 2048²** `= computed` — `prepare-data.ts` downsamples the 4096² class raster
+- **Rasters at 2048²** `= computed` — `scripts/prepare/side-bakes.ts` downsamples the 4096² class raster
   NEAREST, one band (`scripts/downsample-raster.ts` `downsampleClassRaster`),
   to a quarter of the texture memory: for the fine level on phones
   (`MOBILE_RASTER_PX`, chosen by the client per device tier); a 1024² one
@@ -2033,7 +2033,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   covered rail approach; one tree loses one cell), none in Grimma, Unna
   and Hamburg; 33 of the 37 Saxon removals were no tree.)*
   `pipeline/bake/canopy.py`. At build time
-  (`scripts/prepare-data.ts`, `treesOffStructures` in
+  (`scripts/prepare/side-bakes.ts`, `treesOffStructures` in
   `lib/city/small-buildings.ts`) a canopy or laser-scan point in or within
   0.5 m of one of the tile's small structures is dropped: DOM1 reads a
   shed's roof as a 3–4 m tree (859 canopy points stood in 636 sheds, 807

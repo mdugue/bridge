@@ -626,7 +626,8 @@ tileset under `public/data/<site>/`
    every tile with no terrain on screen.
 4. **Publish** (below). Beside the tiles: the site's **Stadtwissen**
    (`stadtwissen_<t>.json` per tile and the index `stadtwissen.json`,
-   `scripts/bake-stadtwissen.ts`, for agents — the viewer never loads
+   `scripts/prepare/stadtwissen.ts` with `scripts/bake-stadtwissen.ts`,
+   for agents — the viewer never loads
    it) and its **walks** (`walks.json`, every `data/<site>/walks/*.json`
    checked by `walkBundle` and named by the tileset's `extras.walks`);
    ADR 0055, [walks.md](./walks.md).
@@ -818,17 +819,39 @@ the bake modules that make it (`ground` for the shaped ground, one row per
 artifact kind). From those entries `scripts/bake-sources.ts` walks the
 relative and `@/` imports, so every module an entry imports, at any depth,
 is in the key — and only those (`scripts/cache-keys.ts` composes the key).
-The walk cannot see a call `prepare-data.ts` makes itself: a module it
-calls for an artifact must be one of that artifact's entries or reachable
-from one, or a change to it leaves the cached artifact stale.
-`scripts/bake-entries.test.ts` holds every module `prepare-data.ts`
-imports to half that rule: it is reached from some entry, or it is named
-there with the reason it needs no re-bake (the orchestration, what is
-published uncached every run). Whether it is reached from the entries of
-the artifact that needs it, the test cannot know. The hashed names, the
-manifest and the prune are `scripts/publisher.ts`. Every key also carries
-`prepare-data.ts` itself, the site's own config, `sites/providers.ts` and
-`patches/`, and — not the whole `bun.lock` — the
+`prepare-data.ts` itself is only the order of the steps and is in no key:
+each step's bakes live in a module of `scripts/prepare/` that is the first
+entry of its artifacts' rows (`side-bakes.ts`, `lines.ts`, `frame.ts`,
+`ground.ts`, `city.ts`, `landmarks.ts`, `terrain.ts`, `plate.ts`,
+`hero.ts`, `stats.ts`, `stadtwissen.ts`),
+so an edit there re-bakes that step's artifacts and those of the steps
+that import it (the grounds' module is walked by the buildings, both
+terrain levels, the crowns and the plate; the lines' by every bake that
+reads the beds), and an edit to the orchestration (a new artifact, a log
+line) re-bakes nothing. Three kinds of module are in no walk unless they
+are its entry (`KEY_STOPS`), and neither is what only they import: the
+plumbing (`prepare/context.ts`: the site, the mode, the log, the cache,
+the gzip level), which every key carries whole instead and whose imports
+reach every site's config; the steps whose exports reach other bakes only
+as values the keys carry (`KEY_VALUES`: the frame's offset, the side
+files' published names in the `extras`; the test pins what each exports,
+the side files' step bakes nothing itself, and the buildings, which place
+every tile in the spawn tile's frame, list the frame among their entries), so the buildings' bake, which the frame reads,
+does not re-bake the grounds, nor the lines the side files publish the
+canopy; and `bake-entries.ts`, whose rows reach their keys as what they
+walk, so editing one row re-bakes that row's artifact alone. A module a step calls for an artifact must be one of that
+artifact's entries or reachable from one, or a change to it leaves the
+cached artifact stale. `scripts/bake-entries.test.ts` holds
+`prepare-data.ts` to calling no cache itself, every step module it imports
+to being an entry or a value module, every other module it or a value
+module imports to being reached from some entry or named with the reason
+it needs no re-bake (what is published uncached every run), and the
+plumbing to importing nothing that bakes.
+Whether a module is reached from the entries of the artifact that needs
+it, the test cannot know. The hashed names, the manifest and the prune
+are `scripts/publisher.ts`. Every key also carries `prepare/context.ts`,
+the site's own config, `sites/providers.ts` and `patches/`, and — not the
+whole `bun.lock` — the
 lockfile's entries for the packages its modules import and everything those
 depend on (`lockedVersions`; the `@types/` packages left out: the glTF
 tools', three's, geotiff's, sharp's versions shape the output). Another
@@ -845,7 +868,43 @@ map picture, the stats) carry the site's id. An entry is written whole
 (`scripts/bake-cache.ts`): to a part file, renamed into place, the name's
 stale keys dropped first — never the entry itself nor another process's
 part file — so processes baking side by side never read half an entry nor
-delete each other's. Each tile's **fine ground** is an entry of its own
+delete each other's.
+
+**Shared cache.** Vercel restores each branch's build cache from that
+branch's last build (production's for a new branch), so branches rebased
+onto the same main each baked the same entries cold, side by side. Behind
+the local cache sits one every branch shares (`scripts/shared-cache.ts`):
+Vercel's Remote Cache, the artifacts API Turborepo uses, under a hash of
+the entry's name, its key, the runtime that baked it (Bun's version and
+the platform: a branch that bumps Bun bakes under addresses of its own)
+and its scope. A local miss is fetched from it before it is baked (a
+preview asks both scopes at once), and a baked entry is uploaded at the
+run's end (read back from the local cache, four at a time; a 13 MB entry
+takes under half a second then). Never beside the bake: its peak leaves
+no memory for a queue of bytes, and beside it Vercel's builds went
+silent in München; the price is that a run that dies shares nothing it
+baked. So a key is baked once for all branches. Production trusts only
+itself: its builds store under the production scope and read only that;
+a preview reads production's, then the previews' scope, and stores under
+the previews'. A key that misses an input thus never brings an unmerged
+branch's bytes to production; production bakes the keys a merged branch
+changed once more itself. Each entry is stored behind its SHA-256, and
+one whose bytes do not match is a miss. Only Vercel's builds use it (the
+token is `VERCEL_ARTIFACTS_TOKEN`, which Vercel's build passes; the scope
+comes from `VERCEL_ENV`), and it is never fatal: a failed request reads
+as a miss; a request is given up 30 s plus its size at 1 MiB/s after it
+starts, whether or not the fetch heeds its abort (a run exits once done,
+an open socket left behind); three failures in a row end the run's use
+of it; two uploads cut off end the run's uploads (the link is down or
+crawling); an entry refused for its size, or whose local copy cannot be
+read back, is skipped alone. `BAKE_SHARED_CACHE=0` turns it off;
+`BAKE_SHARED_CACHE_API` points it at a stand-in API for a local trial
+(ignored on Vercel, so the token goes nowhere else). Each run logs whether it is
+on, how long each upload over 8 MB took, and what it fetched and stored.
+Two branches starting in the same minute still bake the same key twice:
+neither has stored it yet.
+
+Each tile's **fine ground** is an entry of its own
 (`ground_<t>.bin`, `scripts/ground-pack.ts`: the TIN, or the shaped grid
 where the DGM has NoData, as its typed arrays), keyed on the tile's
 terrain inputs, its passages and the ground bake: every fine level's
