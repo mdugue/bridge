@@ -73,11 +73,6 @@ import { shopOf, wallEaveUp } from "./visual-style";
  * background shows there.
  */
 
-/** How far into the night the card is (sun-rig.ts `styleNight`): it
- *  lights its windows by it, and Papier's sky and haze darken to the
- *  night's card. */
-const paperNight = styleNight;
-
 /** Warm off-white: the sheet the model is cut from. */
 export const PAPER_HEX = 0xf4_f0_e8;
 const PAPER = new Color(PAPER_HEX);
@@ -139,7 +134,7 @@ const ownColour = Fn((builder: NodeBuilder) => {
 });
 
 /**
- * The clay's lit windows on the card, for the night (`paperNight`): the
+ * The clay's lit windows on the card, for the night (`styleNight`): the
  * windows' rhythm read from the drawn building tile's own object table
  * (its slots), as the clay reads it (visual-style.ts `clayGraph`) — only
  * the light in them, none of the clay's other terms. A paper model lit
@@ -221,7 +216,7 @@ function paperMaterial(): MeshStandardNodeMaterial {
     .mul(ownColour())
     .mul(vec3(0.012, 0.004, -0.014).mul(sheet).add(float(1)));
   // at night the windows glow through the card
-  material.emissiveNode = windowGlow().mul(paperNight.mul(WINDOW_LIGHT));
+  material.emissiveNode = windowGlow().mul(styleNight.mul(WINDOW_LIGHT));
   return material;
 }
 /** A lit window's light on the card at night (the clay's is 0.5 of its
@@ -501,7 +496,7 @@ export function createPaperScene(
       // Papier's night is drawn on dark card: its sky and its haze
       // (through a mauve dusk: halfway, day paper and night card met in
       // a dull grey)
-      const night = paperNight.value;
+      const night = styleNight.value;
       nightSky
         .copy(PAPER_SKY)
         .lerp(PAPER_DUSK_SKY, MathUtils.smoothstep(night, 0, 0.5))

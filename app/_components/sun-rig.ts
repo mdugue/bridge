@@ -84,6 +84,11 @@ export function nightFactorAt(altitudeDeg: number): number {
  */
 export const styleNight: Live = uniform(0);
 
+/** The sun's altitude (°) from its world direction's height. */
+function altitudeOf(y: number): number {
+  return (Math.asin(Math.min(Math.max(y, -1), 1)) * 180) / Math.PI;
+}
+
 /** Where the sun stands at `date` over `latLng`, without moving the rig:
  *  what the HUD shows for the instant it asked for. */
 export function sunStateAt(
@@ -91,8 +96,7 @@ export function sunStateAt(
   latLng: { lat: number; lng: number }
 ): SunState {
   const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
-  const altitudeDeg =
-    (Math.asin(Math.min(Math.max(d.y, -1), 1)) * 180) / Math.PI;
+  const altitudeDeg = altitudeOf(d.y);
   return {
     aboveHorizon: d.y > 0,
     altitudeDeg,
@@ -778,8 +782,7 @@ export function createSunRig(
     }
     // Quick ramp after sunrise, flat during the day.
     sun.intensity = SUN_INTENSITY * Math.min(1, Math.max(dir.y, 0) * 5);
-    const altitudeDeg =
-      (Math.asin(Math.min(Math.max(dir.y, -1), 1)) * 180) / Math.PI;
+    const altitudeDeg = altitudeOf(dir.y);
     // Civil-dusk ignition curve: 0 by day, 1 once the sun is well below.
     const nightFactor = nightFactorAt(altitudeDeg);
     // Generous daytime fill, but crushed at night so the warm lamp pools have

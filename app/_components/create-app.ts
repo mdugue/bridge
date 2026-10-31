@@ -1424,10 +1424,9 @@ async function bootApp(
     invalidateLanternShadow(lantern);
   };
 
-  // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk; clayNight
-  // gates the clay dusk glow by reference — the styles' night uniform
-  // (sun-rig.ts `styleNight`), one value for both.
-  const clayNight = styleNight;
+  // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk; the
+  // styles' night uniform (sun-rig.ts `styleNight`) gates the clay dusk
+  // glow by reference too.
   let currentNight = 0;
   // The picture styles follow the sun too (Film noir's dusk exposure); the
   // post stack is built after the first setSun, so it catches up there.
@@ -1451,7 +1450,7 @@ async function bootApp(
   cleanups.push(() => lampLights.dispose());
 
   // The facades share the ground's sun (the same node).
-  const styleResources = createStyleResources(clayNight, ground.sunDirection);
+  const styleResources = createStyleResources(styleNight, ground.sunDirection);
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: () => void = () => undefined;
@@ -1728,7 +1727,9 @@ async function bootApp(
   // Schwarzplan's no light; `applyLook` relights when the style takes or
   // gives back its own). The clocks, the seasons and the data layers' hour
   // keep the asked instant: a style changes the light, not the day.
-  let askedSun = opts.initialDate;
+  // (what the light shows: a drag's step too, so a switch mid-drag keeps
+  // the dragged hour)
+  let shownSun = opts.initialDate;
   const relight = (asked: Date, preview = false): SunState => {
     const date = styleInstant(RENDER_STYLE_BY_ID[opts.look.get().style], asked);
     const state = sunRig.update(date, preview);
@@ -1752,10 +1753,7 @@ async function bootApp(
     return state;
   };
   const setSun = (asked: Date, preview = false): SunState => {
-    // (a drag's step is not yet asked for)
-    if (!preview) {
-      askedSun = asked;
-    }
+    shownSun = asked;
     const state = relight(asked, preview);
     setFountainSeason(asked);
     setClockTime(asked);
@@ -1948,7 +1946,7 @@ async function bootApp(
       invalidateShadows();
       // …and may draw at its own instant, or give it back
       if (ownLight) {
-        relight(askedSun);
+        relight(shownSun);
       }
     }
     for (const key of Object.keys(sceneRows) as LookKey[]) {
