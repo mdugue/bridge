@@ -809,7 +809,21 @@ triangles whose box its reach meets (`doors.ts` `trianglesOnRays`), and
 `rayHit` reads the mesh without allocating; the rounded normals bucket
 only the vertices that take part, and a point's corners are read in one
 pass (`crease-normals.ts`). Every tile 15 % faster, its peak 15–25 %
-lower.
+lower. The welds are ours too, the same vertices in the same order
+(`scripts/glb-weld.ts` `weldExact`): gltf-transform's table copies every
+vertex byte by byte into a scratch buffer to hash it, ours reads each
+attribute as 32-bit words through Murmur3's mixing (a plain multiply
+never carries the empty low bits of whole-metre floats and axis normals
+into the bucket: five times slower on such a grid). Since a vertex goes
+to the first equal one and the merged vertices are numbered as they first
+occur, the remap does not depend on the hash; gltf-transform's
+`compactPrimitive` applies it. A primitive whose attributes are not whole
+words, points or morph targets go to `weldPrimitive`; a document with an
+empty primitive or mesh, or primitive restart, to `weld`. 3.1 → ≈ 1.5 s on
+that tile. The rest is libraries
+whose work is already compact: the simplifier is meshopt's WASM, gzip is
+native, and gltf-transform's quantising and writing (≈ 2 s) are not worth
+a copy that has to match their rounding, bounds and pruning byte for byte.
 
 ### Cache and publish
 
