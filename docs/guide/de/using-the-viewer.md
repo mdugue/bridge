@@ -387,7 +387,12 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
     darunter, wie viele gerade unterwegs sind.
 
   Aus der Luft werden Ströme, Säulen und Spuren breiter und satter, damit
-  sie lesbar bleiben.
+  sie lesbar bleiben. Jeder Bildstil zeichnet sie auf seine Art: *Pastell*
+  als Glas, *Comic* in Druckfarben (blau, gelb, rot nach der Menge) mit
+  schwarzer Kontur, *Film noir* als Lichtspuren wie bei langer
+  Belichtung, *Sin City* rot, *Papier* als farbiges Seidenpapier (nachts
+  von innen beleuchtet), *Strich* in Planfarben mit Tuschekante (nachts
+  als warmes Licht), der *Schwarzplan* als schwarz umrandetes Band.
 - **Spaziergänge** — Rundgänge durch die Stadt, erzählt von Claude,
   einer KI, und an jeder Station so gekennzeichnet (bisher in Dresden):
   *Augusts Bühne* (die Altstadt als Theater der Macht), *Narben und
@@ -436,7 +441,10 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   aktuelle Ansicht zu allen zwölf Zeitpunkten und speichert sie als ein
   Blatt — eine Zeile je Tag, eine Spalte je Uhrzeit — mit der Legende
   darunter (im Modell mit Maßstabsleiste und Nordpfeil). Die Uhrzeiten
-  sind die Ortszeit deines Geräts.
+  sind die Ortszeit deines Geräts. In *Sin City* und im *Schwarzplan*
+  ruhen Datum, Uhrzeit und Studie (sie zeichnen in ihrem eigenen Licht);
+  ein Hinweis sagt es, und beim Wechsel des Stils gilt die eingestellte
+  Zeit wieder.
 - **Darstellung** — ganz oben der **Bildstil**, darunter der eine
   verbliebene Regler, *Nebel* (der Entfernungsdunst, eine Prozentzahl),
   und der Schalter *Multi-Tuft-Kronen (nah)* (reiche Mehrbüschel-Kronen
@@ -451,12 +459,12 @@ zuletzt gewählten Stil für den nächsten Besuch:
 | Bildstil | So sieht er aus |
 |---|---|
 | *Pastell* | der Grundstil: Tonmodell auf Papier, weiches Licht, keine Umrisse |
-| *Comic* | Pop-Art wie aus dem Druck: wenige knallige Farben (Papierweiß, Rot, Gelb, Blau, Grün, Schwarz) ohne Verläufe, kräftige gleichmäßige schwarze Konturen; was im Schatten liegt, bekommt Rasterpunkte, die fest auf den Flächen sitzen und beim Fliegen nicht wandern; rote Dächer rot, andere schieferblau, die Elbe blau, Wiesen und Bäume grün (ein Herbstbaum gelb, ein kahler oder blühender weiß); die Bäume werden runde Comic-Wolken aus drei Kugeln, flach gedruckt; der Himmel ein Blau, zum Horizont hin heller gepunktet; nachts eine nachtblaue Stadt mit gelben Lichtkegeln und Fenstern |
+| *Comic* | Pop-Art wie aus dem Druck: wenige knallige Farben (Papierweiß, Rot, Gelb, Blau, Grün, Schwarz) ohne Verläufe, kräftige gleichmäßige schwarze Konturen; was im Schatten liegt, bekommt Rasterpunkte, die fest auf den Flächen sitzen und beim Fliegen nicht wandern; rote Dächer rot, andere schieferblau, die Elbe blau, Wiesen und Bäume grün (ein Herbstbaum gelb, ein kahler oder blühender weiß); die Bäume werden runde Comic-Wolken aus drei Kugeln, flach gedruckt; der Himmel ein Blau, zum Horizont hin heller gepunktet; nachts (sobald die Laternen angehen) eine nachtblaue Stadt mit gelben Lichtkegeln und Fenstern |
 | *Film noir* | Schwarzweiß mit harter Gradation, rauchige Ferne, ein Himmel, der nach oben dunkel wird, laufendes Filmkorn und ein dunkler Bildrand; unter jeder Straßenlaterne ein weicher Lichtkegel — am Tag nur angedeutet, in der Dämmerung voll; wenn es dunkel wird, blendet die Kamera auf, statt alles schwarz werden zu lassen |
-| *Sin City* | harte Schwarzweiß-Flächen: weiß, was die Sonne trifft, schwarz der Schatten, so fallen die Schlagschatten als scharfe schwarze Formen; Baumkronen und die Elbe tiefschwarz, die Ferne verschwindet in weißem Dunst; Regen fällt vor der Szene; nur die roten Ziegeldächer behalten Farbe |
-| *Papier* | die Stadt als weißes Papiermodell: jede Fläche aus leicht gebrochenem Weiß, echtes Sonnenlicht und echte Schatten (bläulich-grau), feine gezeichnete Graphitkonturen; die Bäume werden gefaltete Karton-Polyeder; Fahrbahnmarkierungen und Sportplatzlinien bleiben als zartes Grau, Wasser als etwas kühleres, tieferes Papier; Lichter und Nebelschleier fallen weg |
-| *Strich* | Strichzeichnung wie im Plan: das weiße Modell mit jeder Kante in einer gleich starken Linie, auch in der Ferne; der Schatten schraffiert wie mit dem Tuschestift, das Gelände in Planfarben (zartes Grün, hellblaues Wasser, fast weiße Straßen), die Bäume aus gefaltetem Karton, der im Wind stillhält, damit die Schraffur darauf nicht wandert |
-| *Schwarzplan* | die Gebäude schwarz, alles andere weiß, die Bäume des Baumkatasters als Kronenkreise mit Stammpunkt (gemessen, darum nur sie) — keine Schatten, nur eine feine weiße Linie, wo ein Gebäude vor einem anderen steht; gemacht für den *Lageplan*, überall wählbar |
+| *Sin City* | harte Schwarzweiß-Flächen: weiß, was die Sonne trifft, schwarz der Schatten, so fallen die Schlagschatten als scharfe schwarze Formen; Baumkronen und die Elbe tiefschwarz, die Ferne verschwindet in weißem Dunst; Regen fällt vor der Szene; nur die roten Ziegeldächer behalten Farbe. Sin City zeichnet immer im selben harten Nachmittagslicht (15. September, 16:30): Datum und Uhrzeit ruhen, solange der Stil an ist |
+| *Papier* | die Stadt als weißes Papiermodell: jede Fläche aus leicht gebrochenem Weiß, echtes Sonnenlicht und echte Schatten (bläulich-grau), feine gezeichnete Graphitkonturen; die Bäume werden gefaltete Karton-Polyeder; Fahrbahnmarkierungen und Sportplatzlinien bleiben als zartes Grau, Wasser als etwas kühleres, tieferes Papier; Lichter und Nebelschleier fallen weg. Nachts steht das Modell auf dunkelblauem Tonpapier: die Fenster leuchten warm durch die Pappe, Laternenlicht liegt warm auf Straßen und Wänden, gezeichnet mit weißem Stift |
+| *Strich* | Strichzeichnung wie im Plan: das weiße Modell mit jeder Kante in einer gleich starken Linie, auch in der Ferne; der Schatten schraffiert wie mit dem Tuschestift, das Gelände in Planfarben (zartes Grün, hellblaues Wasser, fast weiße Straßen), die Bäume aus gefaltetem Karton, der im Wind stillhält, damit die Schraffur darauf nicht wandert. Nachts eine Radierung: das Dunkel schraffiert (an Wänden und Dächern gekreuzt), der Himmel mit waagrechten Linien, nur was Laternen und Fenster beleuchten bleibt weiß unter einer gelben Lasur |
+| *Schwarzplan* | die Gebäude schwarz, alles andere weiß, die Bäume des Baumkatasters als Kronenkreise mit Stammpunkt (gemessen, darum nur sie) — keine Schatten, nur eine feine weiße Linie, wo ein Gebäude vor einem anderen steht; gemacht für den *Lageplan*, überall wählbar. Er kennt keine Tageszeit: Datum und Uhrzeit ruhen, solange er an ist |
 
 In den grafischen Stilen *Comic*, *Sin City*, *Strich* und *Schwarzplan*
 ruht die Tiefenschärfe (ein unscharfer Hintergrund unter scharfen Linien
