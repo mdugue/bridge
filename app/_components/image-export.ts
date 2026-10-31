@@ -22,7 +22,11 @@ import {
   scaleBarFor,
   scaleLabel,
 } from "@/lib/city/model-view";
-import { RENDER_STYLE_BY_ID, type RenderStyle } from "@/lib/city/render-style";
+import {
+  RENDER_STYLE_BY_ID,
+  type RenderStyle,
+  styleInstant,
+} from "@/lib/city/render-style";
 import { type Site, siteAttribution } from "@/lib/city/site";
 import type { CapturedImage, CityWalkHandle } from "./create-app";
 import type { ModelHud } from "./model-rig";
@@ -291,9 +295,14 @@ export async function saveImage(
   info: ExportContext
 ): Promise<void> {
   const image = await h.captureImage();
+  // (named for the instant it shows: a style's own, if it has one)
   await download(
     withLegend(image, info),
-    exportFileName(info.site.id, viewName(info), info.date)
+    exportFileName(
+      info.site.id,
+      viewName(info),
+      styleInstant(RENDER_STYLE_BY_ID[info.style], info.date)
+    )
   );
 }
 
@@ -310,6 +319,12 @@ export async function saveShadowStudy(
   info: ExportContext,
   onProgress?: (done: number, total: number) => void
 ): Promise<void> {
+  // A style with its own light draws every panel at its one instant: no
+  // study (the HUD greys its button; this holds for every other way in)
+  const own = RENDER_STYLE_BY_ID[info.style].ownLight;
+  if (own) {
+    throw new Error(own.note);
+  }
   const panels = studyPanels(info.date.getFullYear());
   const cols = STUDY_HOURS.length;
   const rows = STUDY_DATES.length;

@@ -449,6 +449,7 @@ export function createPaperScene(
   // against a black night
   const fogs: Record<PaperKind, Color> = {
     ...skies,
+    paper: PAPER_SKY.clone(),
     ink: INK_SMOKE.clone(),
   };
   const savedFog = new Color();
@@ -497,6 +498,7 @@ export function createPaperScene(
         .copy(PAPER_SKY)
         .lerp(PAPER_DUSK_SKY, MathUtils.smoothstep(night, 0, 0.5))
         .lerp(PAPER_NIGHT_SKY, MathUtils.smoothstep(night, 0.5, 1));
+      fogs.paper.copy(skies.paper);
     }
     // (Sin City's smoke is its afternoon's: the style has no night)
     fogColor.value.copy(fogs[kind]);
