@@ -1029,11 +1029,8 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       POP.red,
       step(2 / 3, dataT)
     );
-    day = mix(
-      day,
-      mix(printInk, dataInk, step(DATA_HUE.from - 0.05, hue)),
-      printed
-    );
+    const dataPrinted = printed.mul(step(DATA_HUE.from - 0.05, hue)).toVar();
+    day = mix(day, mix(printInk, dataInk, dataPrinted), printed);
     // (a marker ink is no river: a blue data mark lies flat, faces up)
     day = mix(
       day,
@@ -1068,7 +1065,12 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       mix(POP.yellow, POP.paper, aaStep(0.72, l)),
       lamp
     );
-    const nightHazed = mix(nightInk, POP.nightHaze, toPaper);
+    // (a data mark keeps its pop ink at night: printed over the plate)
+    const nightHazed = mix(
+      mix(nightInk, dataInk, dataPrinted),
+      POP.nightHaze,
+      toPaper
+    );
     // The night plate is printed once the lamps are all lit (the sun rig's
     // night factor, at civil dusk), over a short step: earlier, the dusk
     // sky's light on a wall printed as lamp yellow. Until then the blue
