@@ -97,6 +97,37 @@ test("a tile's directory: named, addressed, listed and landmark Buildings", () =
   ]);
 });
 
+test("without a geographicalExtent the box comes from its and its parts' vertices", () => {
+  // Hamburg's files: integer vertices under a transform, no extents
+  const tile = stadtwissenTile({
+    tile: "t",
+    city: {
+      transform: { scale: [0.01, 0.01, 0.01], translate: [1000, 2000, 0] },
+      vertices: [
+        [0, 0, 1000],
+        [2000, 1000, 1000],
+        [1000, 500, 2800],
+      ],
+      CityObjects: {
+        haus: {
+          type: "Building",
+          children: ["haus-1"],
+          geometry: [{ boundaries: [[[[0, 1]]]] }],
+        },
+        "haus-1": {
+          type: "BuildingPart",
+          parents: ["haus"],
+          geometry: [{ boundaries: [[[[2]]]] }],
+        },
+      },
+    },
+    osm: { haus: { name: "Speicher" } },
+  });
+  expect(tile.buildings).toEqual([
+    { id: "haus", name: "Speicher", r: 11.2, x: 1010, y: 2005, z: 10, h: 18 },
+  ]);
+});
+
 test("the index lists each landmark once, most notable first, with its facts", () => {
   const entry = (id: string, links: number) => ({
     id,
