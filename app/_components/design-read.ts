@@ -28,6 +28,7 @@ import {
 } from "@/lib/city/design-placement";
 import { FormatError, pickedFiles, read3dm, readObj } from "./design-formats";
 import { IfcError, readIfc } from "./design-ifc";
+import { PLAN_FORMATS, PlanError, readPlan } from "./design-plan";
 
 /**
  * Reads a design the planner dropped into the page (ADR 0054): a glTF —
@@ -74,6 +75,11 @@ export interface DesignModel {
   /** what the file said about its place, for the panel (null: nothing
    *  beyond its coordinates) */
   note: string | null;
+  /** a landscape plan's: 1 for each triangle that is ground — it clears
+   *  and presses the site but takes no building away; null: none is */
+  groundTriangles: Uint8Array | null;
+  /** shown in its own colours from the start (a plan's classes) */
+  prefersColours: boolean;
 }
 
 /** A design that could not be read, in words for the panel. */
@@ -82,6 +88,7 @@ export class DesignError extends Error {}
 /** The formats a design can come in, by the main file's extension. */
 const FORMATS = {
   gltf: /\.(glb|gltf)$/i,
+  plan: PLAN_FORMATS,
   ifc: /\.ifc$/i,
   obj: /\.obj$/i,
   rhino: /\.3dm$/i,
@@ -98,9 +105,11 @@ export function designFormat(name: string): DesignFormat | null {
   return null;
 }
 
-/** The file of a selection that is the design, or null. */
+/** The file of a selection that is the design, or null: a bare .xml
+ *  (LandXML, or any metadata picked along) only where nothing else is. */
 export function designFile(files: readonly File[]): File | null {
-  return files.find((f) => designFormat(f.name) !== null) ?? null;
+  const read = files.filter((f) => designFormat(f.name) !== null);
+  return read.find((f) => !/\.xml$/i.test(f.name)) ?? read[0] ?? null;
 }
 
 /** The design's objects in its own frame, and what the file said about
@@ -109,7 +118,8 @@ async function parseDesign(
   main: File,
   files: readonly File[],
   epsg: number,
-  tier: DesignTier
+  tier: DesignTier,
+  heightAt: (x: number, y: number) => number | null
 ): Promise<{ root: Object3D; note: string | null; heightsKnown?: boolean }> {
   const format = designFormat(main.name);
   if (format === "gltf") {
@@ -124,19 +134,25 @@ async function parseDesign(
     if (format === "ifc") {
       return await readIfc(main, epsg);
     }
+    if (format === "plan") {
+      return await readPlan(main, files, epsg, heightAt);
+    }
     return format === "rhino"
       ? await read3dm(main, epsg)
       : await readObj(main, files);
   } catch (error) {
-    throw error instanceof IfcError || error instanceof FormatError
+    throw error instanceof IfcError ||
+      error instanceof FormatError ||
+      error instanceof PlanError
       ? new DesignError(error.message)
       : error;
   }
 }
 
 /** The design's georeference; one whose heights are not NHN (a Rhino
- *  anchor above the ground) keeps none of its base, so it is set on the
- *  ground. */
+ *  anchor above the ground, a plan laid flat at 0 with no ground loaded
+ *  under it and no heights of its own) keeps none of its base, so it is
+ *  set on the ground. */
 function georefOf(
   box: DesignBox,
   epsg: number,
@@ -500,19 +516,21 @@ function mergePieces(
 export async function readDesign(
   files: readonly File[],
   epsg: number,
-  tier: DesignTier
+  tier: DesignTier,
+  heightAt: (x: number, y: number) => number | null = () => null
 ): Promise<DesignModel> {
   const main = designFile(files);
   if (!main) {
     throw new DesignError(
-      "Bitte eine .glb-, .gltf-, .ifc-, .obj- oder .3dm-Datei wählen (Export aus SketchUp, Rhino, Revit, Archicad, Vectorworks, Blender …)."
+      "Bitte eine .glb-, .gltf-, .ifc-, .obj- oder .3dm-Datei wählen (Export aus SketchUp, Rhino, Revit, Archicad, Vectorworks, Blender …), oder einen Landschaftsplan als .dxf, .shp, .gpkg oder LandXML."
     );
   }
   const { root, note, heightsKnown } = await parseDesign(
     main,
     files,
     epsg,
-    tier
+    tier,
+    heightAt
   );
   const pieces = piecesOf(root);
   if (pieces.length === 0) {
@@ -537,6 +555,7 @@ export async function readDesign(
   }
   const box = boxOf(pieces);
   const geometry = mergePieces(pieces, materials, designAnchor(box));
+  const plan = materials.some((m) => m.userData.planGround !== undefined);
   // what the file held besides: its own geometries, materials, textures
   const kept = new Set(verdict.keepTextures ? looks.map((l) => l.map) : []);
   for (const piece of pieces) {
@@ -561,5 +580,22 @@ export async function readDesign(
     bytes: verdict.bytes,
     texturesDropped: !verdict.keepTextures && weight.textureBytes > 0,
     note,
+    groundTriangles: plan ? groundTriangles(geometry, materials) : null,
+    prefersColours: plan,
   };
+}
+
+/** 1 for each triangle of a plan's ground (`userData.planGround`): it is
+ *  the site, not a building's plan (design-cover.ts). */
+function groundTriangles(
+  geometry: BufferGeometry,
+  materials: readonly Material[]
+): Uint8Array {
+  const out = new Uint8Array((geometry.index?.count ?? 0) / 3);
+  for (const g of geometry.groups) {
+    if (materials[g.materialIndex ?? 0]?.userData.planGround) {
+      out.fill(1, g.start / 3, (g.start + g.count) / 3);
+    }
+  }
+  return out;
 }

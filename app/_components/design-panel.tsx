@@ -27,8 +27,11 @@ const SECTION_LABEL =
 
 /** What the files a planner may pick end in: the glTF, a .gltf's
  *  resources, a placement file. */
-const ACCEPT =
-  ".glb,.gltf,.ifc,.obj,.mtl,.3dm,.bin,.png,.jpg,.jpeg,.webp,.json";
+const ACCEPT = [
+  ".glb,.gltf,.bin,.ifc,.obj,.mtl,.3dm,.png,.jpg,.jpeg,.webp,.json",
+  // landscape plans
+  ".dxf,.shp,.shx,.dbf,.prj,.cpg,.gpkg,.xml,.landxml",
+].join(",");
 
 const SOURCE_TEXT: Record<PlacementSource, string> = {
   file: "Lage und Höhen aus der Datei (UTM, NHN).",

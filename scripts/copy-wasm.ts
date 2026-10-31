@@ -14,6 +14,8 @@ export const WASM_FILES: Readonly<Record<string, string>> = {
   // three's Rhino3dmLoader fetches both from its library path
   "rhino3dm/rhino3dm.js": "rhino3dm/rhino3dm.js",
   "rhino3dm/rhino3dm.wasm": "rhino3dm/rhino3dm.wasm",
+  // the browser build's (the package's `browser` export)
+  "sql-wasm-browser.wasm": "sql.js/dist/sql-wasm-browser.wasm",
 };
 
 const root = join(import.meta.dir, "..");
