@@ -30,6 +30,9 @@ export function createKeyMaker(opts: {
   root: string;
   /** absolute paths every key carries */
   common: readonly string[];
+  /** modules (relative to `root`) whose imports no key walks beyond
+   *  (bake-entries.ts `KEY_STOPS`) */
+  stop?: readonly string[];
   lockfile: LockedPackages;
 }): KeyMaker {
   const hashOf = createContentHasher();
@@ -40,7 +43,9 @@ export function createKeyMaker(opts: {
   const sourcesOf = (entry: string): string[] => {
     let graph = graphs.get(entry);
     if (!graph) {
-      graph = moduleGraph(entry, opts.root).map((p) => join(opts.root, p));
+      graph = moduleGraph(entry, opts.root, opts.stop).map((p) =>
+        join(opts.root, p)
+      );
       graphs.set(entry, graph);
     }
     return graph;

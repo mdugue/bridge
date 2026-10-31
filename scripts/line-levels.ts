@@ -285,7 +285,7 @@ function sitePieces(site: Site): { pieces: LinePiece[]; of: PieceOf[] } {
 
 /** The site's decks: every tile's bridges, each deck once (a deck across
  *  a seam is in both tiles' files). */
-function siteDecks(site: Site): DeckPoly[] {
+export function siteDecks(site: Site): DeckPoly[] {
   return bridgeDecks(siteBridges(site), OFFSET);
 }
 
@@ -544,10 +544,11 @@ export function siteTrackAxes(site: Site, levels: SiteLevels): TrackAxis[] {
 /** The deck cell (m) of `underDecks`' index. */
 const DECK_CELL_M = 32;
 
-/** Whether a point (EPSG) lies on any of the site's decks: the ground
+/** Whether a point (EPSG) lies on any of `decks` (`siteDecks`): the ground
  *  there is the passage's, never a bed's. */
-export function underDecks(site: Site): (x: number, y: number) => boolean {
-  const decks = siteDecks(site);
+export function underDecks(
+  decks: readonly DeckPoly[]
+): (x: number, y: number) => boolean {
   const cells = new Map<string, DeckPoly[]>();
   for (const d of decks) {
     for (
