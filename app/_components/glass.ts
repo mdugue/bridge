@@ -7,6 +7,7 @@ import {
   dot,
   float,
   fract,
+  luminance,
   max,
   mix,
   normalView,
@@ -265,11 +266,7 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
   const red = mix(vec3(0.55, 0.012, 0.03), vec3(1, 0.36, 0.36), light);
   // (the tints are pastel: the tissue's colour is the tint, twice as
   // vivid, so it stays a colour on the white card)
-  const vivid = mix(
-    vec3(dot(i.tint, vec3(0.2126, 0.7152, 0.0722))),
-    i.tint,
-    2.2
-  ).clamp(0, 1);
+  const vivid = mix(vec3(luminance(i.tint)), i.tint, 2.2).clamp(0, 1);
   const pale = mix(vec3(1), vivid, 0.75);
   const card = behind ?? vec3(1);
   const tissue = mix(card, card.mul(pale).add(pale.mul(0.12)), 0.8)
@@ -310,6 +307,6 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
   col = mix(col, planned, is("plan"));
   col = mix(col, outlined, is("outline"));
   // stale data: the style's mark without its colour
-  const grey = vec3(dot(col, vec3(0.2126, 0.7152, 0.0722)));
+  const grey = vec3(luminance(col));
   return mix(col, grey, (i.muted ?? float(0)).mul(float(1).sub(is("glass"))));
 }
