@@ -80,7 +80,7 @@ export function nightFactorAt(altitudeDeg: number): number {
 /**
  * The night factor as the picture styles read it in their graphs — the
  * stylize pass, Papier's and Strich's card: one shared uniform, written
- * with the sun (post-stack.ts `setSunAltitude`).
+ * with the sun (create-app.ts `setSun`, from the rig's `nightFactor`).
  */
 export const styleNight: Live = uniform(0);
 

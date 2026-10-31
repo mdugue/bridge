@@ -76,7 +76,6 @@ import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
 import { createStylize, type SunShadowMap } from "./stylize-effect";
-import { nightFactorAt, styleNight } from "./sun-rig";
 import type { ViewLens } from "./view-lens";
 
 /** Initial focus distance before the first crosshair raycast lands. */
@@ -1310,10 +1309,7 @@ export function createPostStack(
       paperScene.sceneChanged();
       styleDressing.sceneChanged();
     },
-    setSunAltitude: (altitudeDeg) => {
-      stylize.setSunAltitude(altitudeDeg);
-      styleNight.value = nightFactorAt(altitudeDeg);
-    },
+    setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
     render: () => {
       updateFocus();
       stylize.update(renderer.getPixelRatio(), size);

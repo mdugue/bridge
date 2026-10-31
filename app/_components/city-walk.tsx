@@ -580,12 +580,10 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     let remembered = look.get().style;
     return look.subscribe((values) => {
       if (values.style !== remembered) {
-        // a style with its own light (Sin City, the Schwarzplan) draws at
-        // its own instant, or gives it back: the scene's sun is set again
-        // (create-app.ts `setSun`) and the HUD reads it
-        const ownLight =
-          RENDER_STYLE_BY_ID[values.style].ownLight !== null ||
-          RENDER_STYLE_BY_ID[remembered].ownLight !== null;
+        // a style with its own light (Sin City, the Schwarzplan) gave the
+        // scene's sun back (create-app.ts `applyLook`): the HUD reads it
+        // again, its sun was the style's
+        const ownLight = RENDER_STYLE_BY_ID[remembered].ownLight !== null;
         remembered = values.style;
         writeStoredStyle(values.style);
         if (ownLight) {

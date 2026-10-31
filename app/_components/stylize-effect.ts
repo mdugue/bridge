@@ -1306,7 +1306,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     };
     const ruled = mix(lineAt(cell0), lineAt(cell0.mul(2)), blend);
     // (a parallel view's background is the sheet round the plan, no sky)
-    return select(ortho, float(0), ruled);
+    return ruled.mul(float(1).sub(step(0.5, lens.ortho)));
   };
 
   // --- Strich: a pen drawing — lines, a hatch for the shade. ---
