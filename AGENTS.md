@@ -65,8 +65,8 @@ bun run docs:matrix     # regenerate the guide's sources-by-city pages
 - `sites/` — one config per city, `providers.ts` one entry per Land.
 - `pipeline/` — the Python fetch and bakes; adapters per Land in
   `pipeline/bake/providers/`.
-- `scripts/` — the build step (`prepare-sites.ts`, `prepare-data.ts`,
-  the glTF bakes) and the dev CLIs.
+- `scripts/` — the build step (`prepare-sites.ts`, `prepare-data.ts` and
+  its steps in `scripts/prepare/`, the glTF bakes) and the dev CLIs.
 - `data/<site>/` — committed build sources and derived files;
   `data/_raw/` gitignored downloads; `public/data/` generated.
 - `data/<site>/walks/*.json` — the written walks (`docs/walks.md`,
@@ -164,7 +164,8 @@ ADR 0041).
   a module an artifact needs must be one of them or imported from one, or
   its cache goes stale (`bake-entries.test.ts` holds every module
   `prepare-data.ts` imports to being in some bake's key or excused; which
-  artifact needs it is yours to get right).
+  artifact needs it is yours to get right). `prepare-data.ts` is in no
+  key: a bake lives in its step's module in `scripts/prepare/`, never there.
 - Nothing whose alpha or values carry data goes through an image resize or
   the browser's image decoder; class rasters are NEAREST and decoded by
   `lib/city/png-raster.ts`.
