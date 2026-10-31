@@ -22,15 +22,17 @@ import {
   countBuildings as countLiveBuildings,
   shaderFlags,
   doomedObjects,
-  appendTriangles,
   liveTriangles,
-  takeTriangles,
-  wholeTrees,
   OBJECT_TEXEL_BANDS,
   OBJECT_TEXTURE_WIDTH,
   objectBandRows,
   packObjectTexels,
 } from "@/lib/city/city-mesh";
+import {
+  appendTriangles,
+  takeTriangles,
+  wholeTrees,
+} from "@/lib/city/hidden-triangles";
 import { type ObjectFacts, readFacts } from "@/lib/city/object-facts";
 import type { StructuralMetadata } from "@/lib/city/property-table";
 import {
