@@ -16,8 +16,9 @@ memory and first load must not grow (ADR 0047).
 1. **The Stadtwissen is baked, not served.** `prepare-data.ts` publishes
    per tile a directory of every root Building that OSM names or
    addresses, that is listed or part of a landmark (gml:id, name,
-   address, decoded use and roof, height, storeys, position, footprint radius, Q-id) and
-   the tile's named monuments (`stadtwissen_<tile>.json`, `scripts/bake-stadtwissen.ts`), and a site
+   address, decoded use and roof, height, storeys, position, footprint
+   radius, Q-id) and the tile's named monuments (`stadtwissen_<tile>.json`,
+   `scripts/prepare/stadtwissen.ts`), and a site
    index `stadtwissen.json`: the landmarks, an excerpt of Wikidata's
    statements about each in words, the sources with their licences. The
    excerpt is fetched once (`bun scripts/fetch-stadtwissen.ts <site>`,

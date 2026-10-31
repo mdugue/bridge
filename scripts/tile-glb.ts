@@ -107,9 +107,22 @@ export interface MeshInput {
   weld?: boolean;
 }
 
+/** Extensions gltf-transform cannot read: `simplifyGlb` reads a glb that
+ *  carries them and puts the table back itself (`addPropertyTable`). */
+const PUT_BACK = new Set(["EXT_mesh_features", "EXT_structural_metadata"]);
+
 /** Warnings only: at INFO every transform logs a line per glTF ("prune:
- *  Removed types…"), a hundred lines of noise in each build log. */
-const logger = new Logger(Logger.Verbosity.WARN);
+ *  Removed types…"), a hundred lines of noise in each build log; nor the
+ *  warning that it drops the extensions `simplifyGlb` puts back. */
+class BakeLogger extends Logger {
+  override warn(text: string): void {
+    const missing = /^Missing optional extension, "(.+)"\.$/u.exec(text);
+    if (!missing || !PUT_BACK.has(missing[1])) {
+      super.warn(text);
+    }
+  }
+}
+const logger = new BakeLogger(Logger.Verbosity.WARN);
 
 async function io(): Promise<NodeIO> {
   await Promise.all([MeshoptEncoder.ready, MeshoptDecoder.ready]);
