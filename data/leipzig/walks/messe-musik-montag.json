@@ -49,7 +49,16 @@
       ],
       "refs": [
         "Q170402"
-      ]
+      ],
+      "photo": {
+        "file": "St. Thomas Church, Leipzig.jpg",
+        "author": "User:Zarafa",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+        "page": "https://commons.wikimedia.org/wiki/File:St._Thomas_Church,_Leipzig.jpg",
+        "h": 1069,
+        "w": 800
+      }
     },
     {
       "id": "altes-rathaus",
@@ -88,7 +97,16 @@
       ],
       "refs": [
         "Q439431"
-      ]
+      ],
+      "photo": {
+        "file": "Leipzig - Ancien Hotel de Ville.jpg",
+        "author": "Jean-Christophe BENOIST",
+        "licence": "CC BY 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Leipzig_-_Ancien_Hotel_de_Ville.jpg",
+        "h": 422,
+        "w": 800
+      }
     },
     {
       "id": "auerbachs-keller",
