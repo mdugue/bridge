@@ -635,9 +635,10 @@ export interface CityWalkHandle {
   flyTo: (position: Xyz, lookAt: Xyz) => void;
   /**
    * Smoothly glides the camera to a curated scenic Viewpoint (animated, unlike
-   * the instant applyCameraState), landing in the viewpoint's movement mode.
+   * the instant applyCameraState), landing in the viewpoint's movement mode
+   * (in Modell: centres on it); `pace` stretches the glide.
    */
-  flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
+  flyToViewpoint: (viewpoint: ViewpointGeometry, pace?: number) => void;
   /**
    * The Szenario-Assistent (ADR 0058, scenario-layer.ts): the site's river
    * at `cm` on its reference gauge (lib/city/scenario.ts; a site without
@@ -4025,10 +4026,17 @@ async function bootApp(
       pose.flyTo(position, lookAt);
     },
     // In Modell a place is where the picture is centred (plan 055).
-    flyToViewpoint: (view) =>
-      modelRig.owns()
-        ? modelRig.centreOn(vantageTarget(view))
-        : pose.flyToViewpoint(view),
+    flyToViewpoint: (view, pace) => {
+      if (viewMode === "model") {
+        modelRig.centreOn(vantageTarget(view));
+        return;
+      }
+      // Modell still animating out: land it at once, then glide from there
+      if (modelRig.owns()) {
+        modelRig.exitNow();
+      }
+      pose.flyToViewpoint(view, pace);
+    },
     captureViewpoint: pose.captureViewpoint,
     viewAspect: () => camera.aspect,
     sightHit: (eye, point) => {

@@ -36,6 +36,8 @@ export interface FlightShape {
   arc?: number;
   /** s; default from the distance */
   duration?: number;
+  /** stretches the duration (a told walk glides slower: 2) */
+  pace?: number;
 }
 
 interface ActiveFlight {
@@ -141,12 +143,12 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
         endFov: target.fov,
         arc: shape.arc ?? Math.min(dist * ARC_RATIO, MAX_ARC),
         duration:
-          shape.duration ??
-          clamp(
-            BASE_DURATION + dist * SECONDS_PER_METRE,
-            MIN_DURATION,
-            MAX_DURATION
-          ),
+          (shape.duration ??
+            clamp(
+              BASE_DURATION + dist * SECONDS_PER_METRE,
+              MIN_DURATION,
+              MAX_DURATION
+            )) * (shape.pace ?? 1),
         elapsed: 0,
         lookFree: false,
       };

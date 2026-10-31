@@ -21,7 +21,7 @@
         131
       ],
       "hour": 10,
-      "text": "Bevor du hier etwas bewunderst, eine Frage: Was ist ein Zwinger? Kein Prunkbau, sondern ein Festungswort. So hieß der Streifen zwischen äußerer und innerer Stadtmauer. Als August der Starke ab 1711 von Pöppelmann und Permoser diesen Hof bauen ließ, gab es die innere Mauer schon nicht mehr, der Name blieb trotzdem. Gedacht war das Ganze als Orangerie, Festplatz und Sammlungsbau: eine Kulisse für Feste, bei denen der Hof sich selbst zusah. Vor dir, auf der anderen Seite des Hofs, steht das Kronentor. Es ist kein Tor in eine Stadt, sondern eine Botschaft an Besucher: Oben tragen vier polnische Adler eine Krone. Das ist die Krone, für die August einiges aufgegeben hat. Was er dafür gab, erfährst du an der Hofkirche.",
+      "text": "Bevor du hier etwas bewunderst: Was ist ein Zwinger? Kein Prunkbau, sondern ein Festungswort, der Streifen zwischen äußerer und innerer Stadtmauer. Als August der Starke ab 1711 von Pöppelmann und Permoser diesen Hof bauen ließ, war die innere Mauer längst fort, der Name blieb. Gedacht war das Ganze als Orangerie, Festplatz und Sammlungsbau, eine Kulisse, in der der Hof sich selbst zusah. Gegenüber steht das Kronentor: Vier polnische Adler tragen eine Krone. Für sie hat August einiges aufgegeben. Was, erfährst du an der Hofkirche.",
       "closer": "Schau auf die Spitze der Zwiebelhaube: Die Krone dort oben ist eine Nachbildung der polnischen Königskrone.",
       "days": [
         {
@@ -74,13 +74,8 @@
         108
       ],
       "hour": 12,
-      "model": {
-        "preset": "military",
-        "scale": 1500,
-        "turnDeg": 45
-      },
-      "text": "Von oben, in Militärperspektive, sieht man, was man unten nur ahnt: Der Zwinger ist ein Vorhof. Gedacht war er als Hof einer neuen barocken Residenz, die nie gebaut wurde. Darum wirkt die Anlage so seltsam offen, wie eine Bühne, hinter der das Haus fehlt. Lange stand die Elbseite tatsächlich offen. Erst Gottfried Semper schloss sie mit seiner Gemäldegalerie, Grundstein 1847, eröffnet 1855. Semper selbst hat die Eröffnung nicht in Dresden erlebt. Nach dem Maiaufstand von 1849, bei dem er auf den Barrikaden stand, musste er fliehen. Merk dir den Namen, er kommt gleich wieder.",
-      "closer": "Rechts oben im Bild schließt der lange Bau der Sempergalerie den Hof. Das ist der jüngste Teil der Anlage.",
+      "text": "Von oben sieht man, was man unten nur ahnt: Der Zwinger ist ein Vorhof. Gedacht war er als Hof einer neuen barocken Residenz, die nie gebaut wurde. Darum wirkt die Anlage so seltsam offen, wie eine Bühne, hinter der das Haus fehlt. Lange stand die Elbseite tatsächlich offen. Erst Gottfried Semper schloss sie mit seiner Gemäldegalerie, Grundstein 1847, eröffnet 1855. Die Eröffnung erlebte er nicht in Dresden: Nach dem Maiaufstand 1849 stand er auf den Barrikaden und musste fliehen. Merk dir den Namen.",
+      "closer": "Am fernen Ende, zur Elbe hin, schließt der lange Bau der Sempergalerie den Hof. Das ist der jüngste Teil der Anlage.",
       "facts": [
         {
           "claim": "Das Reiterstandbild Augusts des Starken war ursprünglich für den Hof einer neuen barocken Residenz neben dem Zwinger geplant.",
@@ -115,7 +110,7 @@
         124
       ],
       "hour": 15.5,
-      "text": "Das Opernhaus vor dir ist das dritte an diesem Platz, und zwei davon tragen denselben Namen. Gottfried Semper baute das erste von 1838 bis 1841. Am 21. September 1869 brannte es ab. Für das zweite war Semper selbst noch aus Sachsen verbannt, also baute sein Sohn Manfred nach den Plänen des Vaters, eröffnet 1878. Dazwischen spielte man in einer Bretterbude, gebaut in rund sechs Wochen, für 1800 Leute. Im Februar 1945 brannte das Haus aus. Wiedereröffnet wurde es am 13. Februar 1985, genau 40 Jahre nach der Zerstörung, mit dem „Freischütz“. Mit genau diesem Stück hatte das Haus am 31. August 1944 geschlossen. Die Vorstellung ging also gewissermaßen nach 40 Jahren Pause weiter.",
+      "text": "Das Opernhaus vor dir ist das dritte an diesem Platz. Gottfried Semper baute das erste 1838 bis 1841, am 21. September 1869 brannte es ab. Das zweite baute sein Sohn Manfred nach den Plänen des noch verbannten Vaters, eröffnet 1878. Dazwischen spielte man in einer Bretterbude für 1800 Leute, gebaut in rund sechs Wochen. Im Februar 1945 brannte das Haus aus. Am 13. Februar 1985, genau 40 Jahre später, öffnete es wieder mit dem „Freischütz“, dem Stück, mit dem es 1944 geschlossen hatte.",
       "closer": "Über dem Portal zieht ein Viergespann Dionysos und Ariadne. Schau genau: Es sind Panther, keine Pferde.",
       "days": [
         {
@@ -170,7 +165,7 @@
         132
       ],
       "hour": 11,
-      "text": "Eine katholische Kathedrale mitten im lutherischen Kernland, wie kommt die hierher? Durch einen Tausch. Wer König von Polen werden wollte, musste katholisch sein. August der Starke trat 1697 über und bekam die Krone. Sein Sohn ließ ab 1739 diese Hofkirche bauen, als Gegenstück zur protestantischen Frauenkirche. Das Land blieb lutherisch und machte es der Kirche nicht leicht. Prozessionen unter freiem Himmel waren verboten, also baute man einen Umgang im Inneren, damit die Prozession drinnen um das Schiff ziehen konnte. Und eine Glocke durfte die Kirche zunächst auch nicht haben. Auf der Balustrade stehen 78 Heilige und schauen auf eine Stadt, die nicht ihre Konfession teilte.",
+      "text": "Eine katholische Kathedrale im lutherischen Kernland? Ein Tausch. Wer König von Polen werden wollte, musste katholisch sein. August der Starke trat 1697 über und bekam die Krone. Sein Sohn ließ ab 1739 diese Hofkirche bauen, als Gegenstück zur Frauenkirche. Das Land machte es ihr nicht leicht: Prozessionen unter freiem Himmel waren verboten, also zieht ein Umgang drinnen um das Schiff, und eine Glocke durfte sie zunächst nicht haben. Oben auf der Balustrade stehen 78 Heilige und schauen auf eine Stadt anderer Konfession.",
       "closer": "Im Inneren, in der Stiftergruft, liegt in einer Kapsel das Herz Augusts des Starken. Sein Körper ruht in der Königsgruft der Wawel-Kathedrale in Krakau.",
       "facts": [
         {
@@ -217,7 +212,7 @@
         124
       ],
       "hour": 15,
-      "text": "Das Palais gegenüber wurde ab 1705 für eine Frau gebaut, die August mehr versprochen hatte als ein Haus: Anna Constantia, Gräfin Cosel. Im Dezember 1705 gab er ihr schriftlich, sie zur Frau zur Linken zu machen, sollte die Kurfürstin sterben. 1713 fiel sie in Ungnade. Sie floh 1715 nach Berlin, um dieses Papier zu holen, wurde in Halle verhaftet und kam an Heiligabend 1716 auf die Burg Stolpen. Dort lebte sie die restlichen 48 Jahre ihres Lebens. Das Palais wurde später „Türkisches Palais“, Kronprinzensitz, nach 1945 fast ein halbes Jahrhundert Ruine und 1995 Sachsens erstes Fünf-Sterne-Hotel.",
+      "text": "Das Palais gegenüber wurde ab 1705 für Anna Constantia gebaut, Gräfin Cosel. August hatte ihr schriftlich versprochen, sie zur Frau zur Linken zu machen, sollte die Kurfürstin sterben. 1713 fiel sie in Ungnade, floh 1715 nach Berlin, um das Papier zu holen, wurde in Halle verhaftet und kam an Heiligabend 1716 auf die Burg Stolpen. Dort blieb sie 48 Jahre, bis zu ihrem Tod. Das Palais wurde Kronprinzensitz, nach 1945 ein halbes Jahrhundert Ruine und 1995 Sachsens erstes Fünf-Sterne-Hotel.",
       "closer": "Im Keller des heutigen Baus stecken Reste eines Wohnturms aus dem 13. Jahrhundert.",
       "facts": [
         {
@@ -306,7 +301,7 @@
         109
       ],
       "hour": 14,
-      "text": "Jetzt etwas, das du im Modell nicht sehen wirst, weil es kleiner ist als alles, was die Vermessung erfasst: Am Landpfeiler der Augustusbrücke, flussabwärts gewandt, hockt das Brückenmännchen. Es soll Matthaeus Focius darstellen, den Baumeister der ersten Elbbrücke. Handwerksgesellen auf der Walz mussten es kennen. Die Brücke selbst ist die älteste der Stadt, auch wenn niemand genau weiß, ob ihre erste Steinbrücke 1169, 1173 oder 1175 begonnen wurde. Seit 2022 gehört sie Straßenbahnen, Fußgängern und Radfahrern. Und zu DDR-Zeiten hieß sie Dimitroffbrücke, was der Volksmund sofort zu „die mit droff“ verdrehte.",
+      "text": "Jetzt etwas, das du im Stadtmodell nicht siehst, weil es kleiner ist als alles, was die Vermessung erfasst: Am Landpfeiler der Augustusbrücke hockt das Brückenmännchen. Es soll Matthaeus Focius darstellen, den Baumeister der ersten Elbbrücke, und Gesellen auf der Walz mussten es kennen. Die Brücke ist die älteste der Stadt, ob 1169, 1173 oder 1175 begonnen, weiß niemand genau. Seit 2022 gehört sie Bahnen, Fußgängern und Rädern. Zu DDR-Zeiten hieß sie Dimitroffbrücke, im Volksmund „die mit droff“.",
       "closer": "Das Männchen ist eine Kopie: Das Original ging 1813 unter, als französische Truppen die Brücke sprengten.",
       "facts": [
         {
@@ -353,7 +348,7 @@
         128
       ],
       "hour": 15.5,
-      "text": "Die Terrasse unter deinen Füßen war Festungswall, dann Privatgarten des Grafen Brühl. Die Dresdner kamen erst 1814 herauf, als der russische Generalgouverneur Repnin-Wolkonski sie öffnen ließ. Die Freitreppe hinter dir entstand dafür in rund vier Monaten. Seit dem frühen 19. Jahrhundert heißt das Ganze „Balkon Europas“. Zwei Geschichten hängen am Geländer. Ein Fingerabdruck darin soll von August dem Starken stammen, nur ist das Geländer um 1900 gebaut, lange nach seinem Tod. Und eine weiße Frau soll von hier in die Elbe springen. Für beide gilt: schön erzählt, nicht passiert.",
+      "text": "Die Terrasse unter deinen Füßen war Festungswall, dann Privatgarten des Grafen Brühl. Die Dresdner kamen erst 1814 herauf, als der russische Generalgouverneur Repnin-Wolkonski sie öffnen ließ; die Freitreppe hinter dir entstand dafür in rund vier Monaten. Seither heißt sie „Balkon Europas“. Zwei Geschichten hängen am Geländer: ein Fingerabdruck Augusts des Starken, nur ist das Geländer um 1900 gebaut, und eine weiße Frau, die in die Elbe springt. Schön erzählt, nicht passiert.",
       "closer": "Auf der Treppe stehen Schillings vier Tageszeiten: Morgen, Mittag, Abend, Nacht.",
       "facts": [
         {
@@ -394,7 +389,7 @@
       ],
       "hour": 16.5,
       "fov": 50,
-      "text": "Zum Schluss wechselst du das Ufer. Von hier, unterhalb der Augustusbrücke auf der Neustädter Seite, malte Bernardo Bellotto 1748 die Stadt. Man nannte ihn Canaletto, wie seinen berühmteren Onkel, und so heißt dieser Blick bis heute Canaletto-Blick. Auf seinem Bild ist der Turm der Hofkirche erst ein Gerüst, gebaut wurde er 1752 bis 1754. Und die Frauenkirche hat er kleiner gemalt, als sie ist, damit das Bild tiefer wirkt. Was du jetzt siehst, ist also ein Bild, das älter ist als sein Motiv. Und eine Stadt, die nach 1945 ein zweites Mal so gebaut wurde, dass dieser Blick wieder stimmt.",
+      "text": "Zum Schluss wechselst du das Ufer. Von hier, auf der Neustädter Seite, malte Bernardo Bellotto 1748 die Stadt. Man nannte ihn Canaletto wie seinen Onkel, und so heißt der Blick bis heute. Auf seinem Bild ist der Turm der Hofkirche erst ein Gerüst, gebaut wurde er 1752 bis 1754, und die Frauenkirche malte er kleiner, damit das Bild tiefer wirkt. Du siehst also ein Bild, das älter ist als sein Motiv, und eine Stadt, die nach 1945 so wieder gebaut wurde, dass dieser Blick wieder stimmt.",
       "closer": "Das Gemälde hängt in der Gemäldegalerie Alte Meister, im Zwinger, wo dieser Spaziergang begann.",
       "facts": [
         {

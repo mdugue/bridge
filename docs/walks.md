@@ -73,8 +73,7 @@ Cullen, *Townscape* (1961); Forbidden Vancouver,
     "fov": 60,                      // optional lens
     "hour": 10.5,                   // today at 10:30
     "style": "pastel",              // optional picture style
-    "model": { "preset": "military", "scale": 1500, "turnDeg": 45 }, // optional Modell view
-    "text": "…",                    // ≤ 900 characters
+    "text": "…",                    // ≤ 560 characters, a phone screen
     "closer": "…",                  // the detail to find
     "days": [{ "from": "10-25", "to": "11-04", "text": "…" }],
     "seasons": { "winter": "…" },
@@ -115,7 +114,7 @@ A `source` is an https URL (Wikipedia, an institution's page, a paper) or
 
 `scripts/walks.test.ts`, over every committed walk: well formed
 (`walkProblems`: ids, a fact per stop, a checkable source per fact, the
-hour, the style, the Modell preset, MM-DD days, the text's length);
+hour, the style, no Modell view, MM-DD days, the text's length);
 every eye and target inside the site's tiles; every `ground` within
 0.2 m of the DGM1; every Stadtwissen id named one the build publishes.
 `prepare-data.ts` refuses to bundle a walk with a problem.
