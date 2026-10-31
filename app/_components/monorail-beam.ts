@@ -3,18 +3,18 @@
  * rail layer's steel (rail-layer.ts): the girder a closed box along the
  * baked line (`bz`, its underside per vertex), and every few metres a
  * portal round the hanging cars' way or a column under a beam ridden on
- * top, each foot SINK.wall into the ground (ADR 0030). No car: they move,
- * and nothing that moves reaches the shadow map (ADR 0009).
+ * top, each foot on the lowest ground under it and SINK.box into it
+ * (`supportFeet`, ADR 0030). No car: they move, and nothing that moves
+ * reaches the shadow map (ADR 0009).
  */
 import type { RailFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
-import { SINK } from "@/lib/city/ground-join";
 import {
   type MonorailShape,
   type MonorailSupport,
   monorailShape,
   monorailSupports,
-  SUPPORT_MIN_M,
+  supportFeet,
 } from "@/lib/city/monorail";
 import {
   addColumn,
@@ -26,8 +26,6 @@ import {
   tangentsXZ,
 } from "./mesh-kit";
 
-const LEG_HALF = 0.22; // a portal leg's half-section (m)
-const COLUMN_HALF = 0.4; // a column's half-section (m)
 const CAP_HALF = 0.25; // a portal's crossbeam half-section, on the girder (m)
 
 /** Adds one monorail feature's beam and supports to `acc`; false for a
@@ -53,6 +51,7 @@ export function addMonorail(
   });
   addRibbon(acc, top, 0, shape.half, shape.depth);
   addUnderside(acc, top, shape.half, shape.depth);
+  addEnds(acc, top, shape.half, shape.depth);
   for (const s of monorailSupports(coords, bz)) {
     addSupport(acc, s, shape, ctx);
   }
@@ -91,39 +90,72 @@ function addUnderside(acc: Mesh3, top: Pt[], half: number, depth: number) {
   }
 }
 
+/** The girder's two end faces, so its box is closed where it ends (at a
+ *  tile's seam the two ends meet face to face inside the girder). */
+function addEnds(acc: Mesh3, top: Pt[], half: number, depth: number) {
+  const tan = tangentsXZ(top);
+  const last = top.length - 1;
+  for (const [i, out] of [
+    [0, -1],
+    [last, 1],
+  ]) {
+    const p = top[i];
+    const t = tan[i];
+    // the side offset, as `addRibbon` takes it, and the face's outward way
+    const sx = -t.y * half;
+    const sz = t.x * half;
+    const nx = t.x * out;
+    const nz = t.y * out;
+    const lo = p.y - depth;
+    // counter-clockwise seen from outside: + side first at the start, the
+    // − side first at the end
+    const s = out < 0 ? 1 : -1;
+    quadXYZ(
+      acc,
+      p.x + sx * s,
+      p.y,
+      p.z + sz * s,
+      p.x - sx * s,
+      p.y,
+      p.z - sz * s,
+      p.x - sx * s,
+      lo,
+      p.z - sz * s,
+      p.x + sx * s,
+      lo,
+      p.z + sz * s,
+      nx,
+      0,
+      nz
+    );
+  }
+}
+
 /** One support: a column under the axis, or a portal — two legs either
- *  side and a crossbeam over the girder. None where the beam runs low
- *  over the ground (a station) or a foot's ground is unknown. */
+ *  side and a crossbeam over the girder; none where `supportFeet` finds no
+ *  ground for it. */
 function addSupport(
   acc: Mesh3,
   s: MonorailSupport,
   shape: MonorailShape,
   ctx: GroundContext
 ): void {
-  const top = s.under + shape.depth;
-  if (shape.legs === 0) {
-    const g = ctx.heightAt(s.at[0], s.at[1]);
-    if (g !== null && s.under - g >= SUPPORT_MIN_M) {
-      const w = epsgToWorld(s.at[0], s.at[1], ctx.offset);
-      addColumn(acc, w.x, w.z, g - SINK.wall, s.under, COLUMN_HALF);
-    }
+  const feet = supportFeet(s, shape, ctx.heightAt);
+  if (!feet) {
     return;
   }
-  // a foot on the map's left of the heading, and one on its right
-  const feet: { x: number; z: number; g: number }[] = [];
-  for (const side of [1, -1]) {
-    const x = s.at[0] - s.dir[1] * shape.legs * side;
-    const y = s.at[1] + s.dir[0] * shape.legs * side;
-    const g = ctx.heightAt(x, y);
-    if (g === null || s.under - g < SUPPORT_MIN_M) {
-      return;
-    }
-    feet.push({ ...epsgToWorld(x, y, ctx.offset), g });
+  if (shape.legs === 0) {
+    const [foot] = feet;
+    const w = epsgToWorld(foot.at[0], foot.at[1], ctx.offset);
+    addColumn(acc, w.x, w.z, foot.base, s.under, foot.half);
+    return;
   }
-  const cap = top + CAP_HALF;
-  for (const { x, z, g } of feet) {
-    addColumn(acc, x, z, g - SINK.wall, cap + CAP_HALF, LEG_HALF);
-  }
-  const [l, r] = feet;
+  const cap = s.under + shape.depth + CAP_HALF;
+  const ends = feet.map((foot) => {
+    const w = epsgToWorld(foot.at[0], foot.at[1], ctx.offset);
+    addColumn(acc, w.x, w.z, foot.base, cap + CAP_HALF, foot.half);
+    return w;
+  });
+  const [l, r] = ends;
   addStrut(acc, [l.x, cap, l.z], [r.x, cap, r.z], CAP_HALF);
 }

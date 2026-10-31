@@ -253,6 +253,23 @@ def test_a_monorails_beam_clears_the_ground_everywhere_and_crosses_a_hollow_stra
     assert max(z for *_, z in over) == 115.5
 
 
+def test_a_monorails_beam_over_a_long_gentle_crest_stays_near_its_hull():
+    # a dome 400 m long, 4 m high: every sample bends the beam by less than
+    # the tolerance, but leaving all of them out would sag it metres
+    line = shapely.LineString([(0, 0), (400, 0)])
+
+    def dome(x: float, _y: float) -> float:
+        return 100.0 + 4.0 * (1.0 - ((x - 200.0) / 200.0) ** 2)
+
+    beam = rail_osm.beam_samples(line, dome, 5.5)
+    assert beam is not None and len(beam) > 2
+    xs = np.array([x for x, *_ in beam])
+    zs = np.array([z for *_, z in beam])
+    for x in np.arange(0.0, 400.0, 1.0):
+        drawn = float(np.interp(x, xs, zs))
+        assert drawn >= dome(x, 0) + 5.5 - 2 * rail_osm.BEAM_TOLERANCE_M
+
+
 def test_a_monorails_beam_is_cut_at_the_tile_with_its_heights():
     beam = [(0.0, 0.0, 100.0), (200.0, 0.0, 140.0)]
     box = shapely.box(50, -10, 250, 10)

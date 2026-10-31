@@ -1,7 +1,8 @@
 /**
  * Where every part baked into the fine terrain meets the ground, measured
  * over the committed tiles (ADR 0030): the kerb stones, the walls, the
- * flights of steps and the fences, built from the committed sources on the
+ * flights of steps and the fences (and the monorails' supports, which the
+ * rail layer stands on the ground at runtime), built from the committed sources on the
  * shaped native DGM exactly as prepare-data.ts builds them on the TIN (which
  * stays within FINE_TIN_MAX_ERROR of it), each reporting its joins
  * (lib/city/ground-join.ts), each join checked against that ground.
@@ -21,6 +22,7 @@ import { plinthJoins } from "../lib/city/plinths";
 import type {
   DoorFeature,
   PlinthFeature,
+  RailFeature,
   ShopfrontFile,
   ShopfrontWall,
   SmallBuildingFeature,
@@ -33,6 +35,8 @@ import {
   type JoinReport,
 } from "../lib/city/ground-join";
 import { kerbGeometry } from "../lib/city/kerbs";
+import { isMonorail } from "../lib/city/line-levels";
+import { monorailJoins } from "../lib/city/monorail";
 import { axisMiddle, stairGeometry } from "../lib/city/stairs";
 import {
   sampleHeightfield,
@@ -49,6 +53,7 @@ import { REFERENCE_SITE, SITES, siteFromArgs } from "../sites";
 import { FINE_TIN_MAX_ERROR } from "./bake-terrain-tin";
 import { shapeDgm, stairRailLines } from "./bake-tiles";
 import { readDgmFile } from "./dgm-cache";
+import { LINE_FILES, lineFile } from "./line-levels";
 import {
   fenceLines,
   gatePoints,
@@ -70,6 +75,7 @@ export const JOIN_PARTS = [
   "doors",
   "shopfronts",
   "plinths",
+  "monorails",
 ] as const;
 export type JoinPart = (typeof JOIN_PARTS)[number];
 
@@ -167,6 +173,20 @@ function smallBuildings(site: Site, tile: string): SmallBuildingFeature[] {
     : [];
 }
 
+/** The monorails in a tile's rail file (pipeline/bake/rail_osm.py). */
+function monorails(site: Site, tile: string): RailFeature[] {
+  const path = lineFile(site, LINE_FILES.rail, tile);
+  return existsSync(path)
+    ? (
+        (
+          JSON.parse(readFileSync(path, "utf8")) as {
+            features?: RailFeature[];
+          }
+        ).features ?? []
+      ).filter(isMonorail)
+    : [];
+}
+
 /** The joins each part of one tile reports, on the site's ground. */
 function tileJoins(
   site: Site,
@@ -207,6 +227,7 @@ function tileJoins(
       shopfrontWallJoins(w, doors(site, tile))
     ),
     plinths: plinths(site, tile).flatMap(plinthJoins),
+    monorails: monorails(site, tile).flatMap((f) => monorailJoins(f, heightAt)),
   };
 }
 

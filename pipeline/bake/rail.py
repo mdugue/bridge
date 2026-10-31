@@ -386,11 +386,13 @@ class Ground:
         }
         self.road_width = list(networks.get("road_width", []))
         # what a deck learns of its surroundings (bridge.py): the water under
-        # it, the ways under it (read once a deck asks), the bridges beside it
+        # it, the ways under it (read once a deck asks), the bridges beside it,
+        # OSM's ways on the bridges (a funicular's deck is measured steep)
         self.tile = tile
         self.wet = Wet(tile)
         self._under: UnderWays | None = None
         self.beside: Beside | None = None
+        self.ways: BridgeWays | None = None
 
     def _mask(self, geoms, buffer: float):
         if len(geoms) == 0:
@@ -944,6 +946,7 @@ def decks(
                 kind = given or ground.classify(coords)
                 members.append(Member(part, name, kind, width, level))
     ground.beside = Beside([m.line for m in members], [p[4] for p in polys])
+    ground.ways = ways
     on: dict[int, list[Member]] = defaultdict(list)
     loose = []
     for m in members:
@@ -1016,12 +1019,14 @@ def band(ground, coords, kind: str, fallback: float, outline=None):
     `measured_halves`; a bridge beside it stops them, `Beside`) offset from
     the line, the side DOM1 lost mirrored, the total WIDTH_MIN..WIDTH_MAX
     (`deck_halves`). None without DOM1 or where it sees neither side. The
-    kind's width drew the Elbe's road bridges at half theirs."""
+    kind's width drew the Elbe's road bridges at half theirs. The sides are
+    read at the deck's height, a funicular's within its own grade."""
     if ground.dom is None:
         return None
     first = buffer_line(coords, fallback / 2)
     axis = deck_axis(first, coords)
-    line = deck_line(ground, first, axis, kind)
+    on = ground.ways.on(shapely.Polygon(first)) if ground.ways is not None else []
+    line = deck_line(ground, first, axis, kind, any(w.steep for w in on))
     if line is None or axis.length <= 0:
         return None
     own = shapely.LineString(axis.pts)

@@ -3607,10 +3607,14 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   straight across a hollow, bent over a crest; the rail layer draws a
   closed girder (2.6 m wide for two tracks, 1.4 m deep) and every 8 m a
   steel portal (legs 1.5 m outside the cars' way, a crossbeam on the
-  girder) or, for a beam ridden on top, a column; none where the beam
-  runs within 2 m of the ground, each foot `SINK.wall` deep
-  (`lib/city/monorail.ts`, `monorail-beam.ts`). In the model Dresden's
-  Schwebebahn runs up to 18 m over its hollow. The clearance, the
+  girder) or, for a beam ridden on top, a column, each foot `SINK.box`
+  under the lowest ground at its corners and reporting its joins
+  (`monorailJoins`, scripts/ground-joins.ts: 32 portals, no miss); none
+  over unknown ground or a leg under 2 m (`lib/city/monorail.ts`,
+  `monorail-beam.ts`). The hull spans the whole chain, right for a short
+  line (the Schwebebahn's 274 m, the sites' only one); a long line over
+  hills would need its spans limited. In the model Dresden's Schwebebahn
+  runs up to 18 m over its hollow. The clearance, the
   section and the supports' spacing are assumed; no cars (they would
   move, ADR 0009). Before: both missing, as neither railway kind was read.
 - **Passages under decks** `◎ detected` (2026-10-01, ADR 0041) — a *cut* lying ≥ 30 %

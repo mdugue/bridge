@@ -504,14 +504,18 @@ def under_ways(tile: Tile) -> list[tuple[shapely.Geometry, float]]:
 
 # A monorail's beam: its foot this far over the ground at the least (m) —
 # over a hanging car's 3 m and the headroom below it, or under the beam a
-# car rides on top of — sampled every BEAM_STEP_M, read over the whole way
-# within MONORAIL_MARGIN (deg) around the tile, so neighbours agree.
+# car rides on top of — sampled every BEAM_STEP_M, read over the whole
+# chain of ways within MONORAIL_MARGIN (deg, ~3.5 km) around the tile: two
+# neighbours agree on a chain that lies within it from both, as Dresden's
+# 274 m Schwebebahn does (the only monorail of the sites). The upper hull
+# spans the whole chain, right for a short line; a long one over hills
+# would need its spans limited.
 HANGING_CLEARANCE_M = 5.5
 TOP_CLEARANCE_M = 4.5
 BEAM_STEP_M = 2.0
-MONORAIL_MARGIN = 0.01
-# A sample that bends the beam less than this (in plan and in height, m)
-# is left out.
+MONORAIL_MARGIN = 0.05
+# The beam leaves out samples while every one left out stays within this of
+# the straight line that replaces it (in plan and in height, m).
 BEAM_TOLERANCE_M = 0.02
 
 
@@ -557,9 +561,9 @@ def beam_samples(
     line: shapely.LineString, ground: Callable[[float, float], float | None], clearance: float
 ) -> list[tuple[float, float, float]] | None:
     """(x, y, foot height) along a monorail: every BEAM_STEP_M and at its
-    vertices, the upper hull of the ground plus the clearance, the samples
-    that bend it by less than BEAM_TOLERANCE_M left out. None where the
-    ground is unknown along it."""
+    vertices, the upper hull of the ground plus the clearance, a sample left
+    out while every one left out stays within BEAM_TOLERANCE_M of the line
+    that replaces it. None where the ground is unknown along it."""
     stations = sorted(
         {i * BEAM_STEP_M for i in range(int(line.length // BEAM_STEP_M) + 1)}
         | {line.length}
@@ -571,12 +575,16 @@ def beam_samples(
         return None
     feet = upper_hull(stations, [h + clearance for h in heights])  # type: ignore[operator]
     out = [(p.x, p.y, z) for p, z in zip(pts, feet, strict=True)]
-    keep = [out[0]]
+    keep = [0]
     for i in range(1, len(out) - 1):
-        if _off_chord(keep[-1], out[i], out[i + 1]) > BEAM_TOLERANCE_M:
-            keep.append(out[i])
-    keep.append(out[-1])
-    return keep
+        # out[i] goes while every sample since the last kept one stays near
+        # the line from it to the next: checked against only its own chord,
+        # the error left out over a long crest adds up
+        a, c = out[keep[-1]], out[i + 1]
+        if any(_off_chord(a, out[j], c) > BEAM_TOLERANCE_M for j in range(keep[-1] + 1, i + 1)):
+            keep.append(i)
+    keep.append(len(out) - 1)
+    return [out[k] for k in keep]
 
 
 def _clipped_beam(
@@ -654,16 +662,21 @@ def monorails(tile: Tile) -> list[dict]:
             if isinstance(line, shapely.LineString) and line.length >= 0.5:
                 groups[key].append([(x, y) for x, y, *_ in line.coords])
     box = shapely.box(*tile.bounds)
+    chains = [
+        (kind, tracks, shapely.LineString(chain))
+        for (kind, tracks), lines in sorted(groups.items())
+        for chain in merge_lines(lines)
+    ]
+    chains = [c for c in chains if c[2].intersects(box)]
+    if not chains:
+        return []
+    # one read of the DGM for every chain on the tile
+    xmin, ymin, xmax, ymax = shapely.MultiLineString([c[2] for c in chains]).bounds
+    ground = dgm_ground(tile, (xmin - 5, ymin - 5, xmax + 5, ymax + 5))
     features = []
-    for (kind, tracks), lines in sorted(groups.items()):
+    for kind, tracks, whole in chains:
         clearance = HANGING_CLEARANCE_M if kind == "hanging" else TOP_CLEARANCE_M
-        for chain in merge_lines(lines):
-            whole = shapely.LineString(chain)
-            if not whole.intersects(box):
-                continue
-            xmin, ymin, xmax, ymax = whole.bounds
-            ground = dgm_ground(tile, (xmin - 5, ymin - 5, xmax + 5, ymax + 5))
-            beam = beam_samples(whole, ground, clearance)
-            if beam is not None:
-                features += _clipped_beam(beam, box, kind, tracks)
+        beam = beam_samples(whole, ground, clearance)
+        if beam is not None:
+            features += _clipped_beam(beam, box, kind, tracks)
     return features

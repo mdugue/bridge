@@ -9,8 +9,17 @@
  * module lays out what the rail layer draws of it (rail-layer.ts): the
  * beam along that line, and a support every SUPPORT_EVERY_M — a portal
  * whose legs stand either side of the hanging cars' way, or a column
- * under a beam the cars ride on top of.
+ * under a beam the cars ride on top of —, each foot on the lowest ground
+ * under its corners and SINK.box into it, reporting where it meets the
+ * ground (`monorailJoins`, ADR 0030).
  */
+import type { RailFeature } from "./features";
+import {
+  type HeightAt,
+  type JoinPoint,
+  lowestGround,
+  SINK,
+} from "./ground-join";
 import type { Point2 } from "./polyline";
 
 export type MonorailKind = "hanging" | "top";
@@ -28,9 +37,13 @@ export interface MonorailShape {
 
 /** A support every this many metres along the beam. */
 export const SUPPORT_EVERY_M = 8;
-/** No support where the beam's underside is this close over the ground
- *  (m): in a station, where the beam enters its hall. */
+/** No support whose leg would be shorter than this (m): the beam rests on
+ *  what stands under it there. The bake keeps the beam a car's clearance
+ *  over the DGM, so only a ground other than the bake's comes this close. */
 export const SUPPORT_MIN_M = 2;
+/** A portal leg's and a column's half-section (m). */
+export const LEG_HALF_M = 0.22;
+export const COLUMN_HALF_M = 0.4;
 /** A hanging car's half-width with the gap to a leg (m). */
 const CAR_HALF_M = 1.5;
 /** The beam carries its tracks this far apart (m). */
@@ -96,4 +109,73 @@ export function monorailSupports(
     start += len;
   }
   return out;
+}
+
+/** A support's foot: where it stands (EPSG), its half-section (m) and how
+ *  low it reaches (m, absolute). */
+export interface MonorailFoot {
+  at: Point2;
+  half: number;
+  base: number;
+}
+
+/** The four corners of a foot of half-section `half` at `at` (EPSG): a
+ *  square on the grid's axes, as the rail layer draws it (`addColumn`). */
+export function footCorners(at: Point2, half: number): Point2[] {
+  const [x, y] = at;
+  return [
+    [x - half, y - half],
+    [x + half, y - half],
+    [x + half, y + half],
+    [x - half, y + half],
+  ];
+}
+
+/**
+ * Where a support stands: one column under the axis, or a portal's two
+ * legs either side of it (`shape.legs` off the axis, square to the
+ * heading), each foot SINK.box under the lowest ground at its corners.
+ * None where the ground under a foot is unknown or comes within
+ * SUPPORT_MIN_M of the beam's underside.
+ */
+export function supportFeet(
+  s: MonorailSupport,
+  shape: MonorailShape,
+  heightAt: HeightAt
+): MonorailFoot[] | null {
+  const half = shape.legs === 0 ? COLUMN_HALF_M : LEG_HALF_M;
+  const sides = shape.legs === 0 ? [0] : [1, -1];
+  const feet: MonorailFoot[] = [];
+  for (const side of sides) {
+    const at: Point2 = [
+      s.at[0] - s.dir[1] * shape.legs * side,
+      s.at[1] + s.dir[0] * shape.legs * side,
+    ];
+    const low = lowestGround(heightAt, footCorners(at, half));
+    if (low === null || s.under - low < SUPPORT_MIN_M) {
+      return null;
+    }
+    feet.push({ at, half, base: low - SINK.box });
+  }
+  return feet;
+}
+
+/** Where a monorail's supports meet the ground (ADR 0030): every foot's
+ *  corners at its base, EPSG. Empty for a feature that is no monorail. */
+export function monorailJoins(f: RailFeature, heightAt: HeightAt): JoinPoint[] {
+  const p = f.properties;
+  if (f.geometry?.type !== "LineString" || !p?.mono || !p.bz) {
+    return [];
+  }
+  const shape = monorailShape(p.mono, p.tracks ?? 1);
+  return monorailSupports(f.geometry.coordinates, p.bz).flatMap((s) =>
+    (supportFeet(s, shape, heightAt) ?? []).flatMap((foot) =>
+      footCorners(foot.at, foot.half).map(([x, y]): JoinPoint => ({
+        kind: "foot",
+        x,
+        y,
+        z: foot.base,
+      }))
+    )
+  );
 }

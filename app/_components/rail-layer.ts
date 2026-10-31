@@ -2820,15 +2820,6 @@ function buildPlatforms(
   return mesh;
 }
 
-/**
- * Builds the WHOLE tile block's rails, bridges, ballast and platforms (one
- * call, cross-tile heightAt) as stylized geometry on the Y-up scene. Bridges
- * build first so the rails can ride their decks; the rails' levels next,
- * so the ballast leaves out where a track runs buried and the platforms
- * stand on their track's level; the catenary over the contact lines last.
- * Empty inputs yield an empty group; the group is freed with the scene
- * (disposeObject3D).
- */
 /** The monorails' beams and supports (monorail-beam.ts), in painted
  *  steel; null where the tile has none. */
 function* monorailsMesh(
@@ -2850,6 +2841,16 @@ function* monorailsMesh(
   return mesh;
 }
 
+/**
+ * Builds the WHOLE tile block's rails, bridges, ballast and platforms (one
+ * call, cross-tile heightAt) as stylized geometry on the Y-up scene. Bridges
+ * build first so the rails can ride their decks; the rails' levels next,
+ * so the ballast leaves out where a track runs buried and the platforms
+ * stand on their track's level; the catenary over the contact lines and
+ * the monorails' beams last.
+ * Empty inputs yield an empty group; the group is freed with the scene
+ * (disposeObject3D).
+ */
 export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   return finished(railSteps(features, ctx));
 }
