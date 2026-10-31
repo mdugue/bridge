@@ -53,9 +53,12 @@ export function creaseNormals(
   const n = positions.length / 3;
   const faces = faceNormals(positions);
   const out = new Float32Array(positions.length);
+  const fn = faces.normal;
   for (let v = 0; v < n; v++) {
-    const t = Math.floor(v / 3);
-    out.set(faces.normal.subarray(3 * t, 3 * t + 3), 3 * v);
+    const t = 3 * Math.floor(v / 3);
+    out[3 * v] = fn[t];
+    out[3 * v + 1] = fn[t + 1];
+    out[3 * v + 2] = fn[t + 2];
   }
   const cos = Math.cos(((options.creaseDeg ?? CREASE_DEG) * Math.PI) / 180);
   const skip = options.skip ?? (() => false);
@@ -169,8 +172,11 @@ function cornerAngle(p: Float32Array, at: number, b: number, c: number) {
 }
 
 /** Each point's corners: the vertices of `live` triangles at exactly the
- *  same position in the same group, bucketed by a hash of their bits. */
-function forEachPoint(
+ *  same position in the same group, bucketed by a hash of their bits, in
+ *  rising order. Only live vertices are bucketed (a tile's stream holds
+ *  millions that are not), and a bucket of one point, the common case, is
+ *  visited as it is. */
+export function forEachPoint(
   positions: Float32Array,
   groups: ArrayLike<number>,
   live: (v: number) => boolean,
@@ -184,27 +190,42 @@ function forEachPoint(
   );
   // −0 and +0 are one coordinate
   const key = (i: number) => (bits[i] === 0x80000000 ? 0 : bits[i]);
+  const mask = new Uint8Array(n);
+  let m = 0;
+  for (let v = 0; v < n; v++) {
+    if (live(v)) {
+      mask[v] = 1;
+      m++;
+    }
+  }
+  const alive = new Uint32Array(m);
+  for (let v = 0, k = 0; v < n; v++) {
+    if (mask[v] === 1) {
+      alive[k++] = v;
+    }
+  }
   let size = 1;
-  while (size < 2 * n) {
+  while (size < 2 * m) {
     size *= 2;
   }
-  const hash = new Uint32Array(n);
+  const hash = new Uint32Array(m);
   const start = new Uint32Array(size + 1);
-  for (let v = 0; v < n; v++) {
+  for (let k = 0; k < m; k++) {
+    const v = alive[k];
     let h = Math.imul(key(3 * v) ^ 0x9e3779b9, 0x85ebca6b);
     h = Math.imul(h ^ key(3 * v + 1) ^ (h >>> 15), 0xc2b2ae35);
     h = Math.imul(h ^ key(3 * v + 2) ^ (h >>> 13), 0x27d4eb2f);
     h = Math.imul(h ^ (groups[v] | 0) ^ (h >>> 16), 0x165667b1);
-    hash[v] = (h ^ (h >>> 15)) & (size - 1);
-    start[hash[v] + 1]++;
+    hash[k] = (h ^ (h >>> 15)) & (size - 1);
+    start[hash[k] + 1]++;
   }
   for (let b = 0; b < size; b++) {
     start[b + 1] += start[b];
   }
   const fill = start.slice(0, size);
-  const order = new Uint32Array(n);
-  for (let v = 0; v < n; v++) {
-    order[fill[hash[v]]++] = v;
+  const order = new Uint32Array(m);
+  for (let k = 0; k < m; k++) {
+    order[fill[hash[k]]++] = alive[k];
   }
   const same = (a: number, b: number) =>
     key(3 * a) === key(3 * b) &&
@@ -217,15 +238,21 @@ function forEachPoint(
     if (to - from < 2) {
       continue;
     }
+    const first = order[from];
+    let one = true;
+    for (let k = from + 1; k < to && one; k++) {
+      one = same(order[k], first);
+    }
+    if (one) {
+      visit(Array.from(order.subarray(from, to)));
+      continue;
+    }
     // a bucket may hold more than one point (a collision): split it
-    const left = Array.from(order.subarray(from, to)).filter(live);
+    let left = Array.from(order.subarray(from, to));
     while (left.length > 0) {
-      const first = left[0];
-      const corners = left.filter((v) => same(v, first));
-      visit(corners);
-      const rest = left.filter((v) => !same(v, first));
-      left.length = 0;
-      left.push(...rest);
+      const head = left[0];
+      visit(left.filter((v) => same(v, head)));
+      left = left.filter((v) => !same(v, head));
     }
   }
 }

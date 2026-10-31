@@ -39,6 +39,7 @@ import {
   type TramOperator,
   type TramTimetable,
 } from "@/lib/city/tram-timetable";
+import { dataMarkAlpha, dataMarkColour } from "./glass";
 import { Instances, instancePosition, instanceTint } from "./instancing";
 import { mapWidenNode } from "./map-overlay";
 import { type DeckPoly, deckLift } from "@/lib/city/decks";
@@ -160,7 +161,20 @@ function trailMaterial(): MeshBasicNodeMaterial {
     m.positionNode = positionLocal.add(across.mul(mapWidenNode().sub(1)));
     // Warm white at the car, the line's gold behind, gone at the end.
     const glow = mix(color(TRAIL), vec3(1, 0.98, 0.9), fade.pow(6)) as V3;
-    m.colorNode = vec4(glow, fade.pow(1.4).mul(float(0.85)));
+    // Under a picture style, the style's mark (glass.ts): the middle of
+    // its scale, the car's end of the trail as its light.
+    const styled = dataMarkColour({
+      glass: glow,
+      // reason: a colour node is a vec3 in the graph; its type says Color.
+      tint: color(TRAIL) as unknown as V3,
+      scale: float(0.5),
+      light: fade.pow(6),
+      edge: float(0),
+      ink: float(1),
+      backdrop: false,
+    });
+    m.colorNode = vec4(styled, dataMarkAlpha(fade.pow(1.4).mul(0.85)));
+    m.userData.paperOwn = true;
     return m;
   });
 }

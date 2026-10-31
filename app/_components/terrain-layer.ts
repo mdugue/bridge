@@ -1116,8 +1116,8 @@ function paperGround(col: GroundColour, waterCoverage: F): V3 {
     PLAN_PAINT_LINEAR,
     ink.mul(0.6)
   );
-  // Sin City (by day: its night is cut from the scene's own frame): the
-  // white card, the water black
+  // Sin City (always in its own afternoon light): the white card, the
+  // water black
   const inked = mix(vec3(1), vec3(0.015), step(0.5, water));
   return select(
     paperGroundOn.greaterThan(3.5),
