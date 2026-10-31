@@ -253,6 +253,10 @@ export async function bakeCity(
         )
       )
   );
+  // the simplifier's copies, gone before the tile's terrain is written
+  if (mesh) {
+    Bun.gc(true);
+  }
   return {
     far: publish(farName, farGlb),
     file: publish(name, glb),

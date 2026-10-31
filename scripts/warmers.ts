@@ -1,11 +1,10 @@
 /**
  * How prepare-sites.ts spreads a cold build over the machine. Every bake is
- * a prepare-data.ts process, and single-threaded, so the sites run side by
- * side, each in one process — as many at once as the cores allow and
- * `SITE_PEAK` fits in the memory. With `PREPARE_WARMERS=1` a site with more
- * tiles than `WARM_ABOVE` is split further: prepare-data.ts runs as
- * **warmers** that only fill the bake cache for one of its tiles, before
- * one plain run finds everything cached and publishes.
+ * a prepare-data.ts process, and single-threaded, so a cold build runs
+ * several side by side — as many at once as the cores allow and their
+ * peaks fit in the memory. A site is baked by **warmers**, prepare-data.ts
+ * runs that only fill the bake cache for one of its tiles, before one plain
+ * run finds everything cached and publishes:
  *
  *  0. the plain run with `--if-cached`: when every entry is cached it
  *     publishes, and that is all (a warm build runs no warmer); at the
@@ -21,27 +20,20 @@
  *  4. the plain run: all cache hits; it publishes.
  *
  * Each step waits for the one before it; a warmer publishes nothing. One
- * tile per warmer: a process's memory grows with every tile it bakes (a
- * cold Dresden in one process peaked at 4.3 GiB, its heaviest tile alone at
- * 2.7 GB), and a free slot takes the next tile, so a slot that frees late
- * still finds work.
+ * tile per warmer: a process's memory grows with every tile it bakes, and
+ * a whole cold site in one process peaks near twice its heaviest tile
+ * (München 4.47 GiB, its heaviest tile alone 2.4), so Vercel's 4-core,
+ * 8.6 GB builder holds one cold site at a time but two tiles; and a free
+ * slot takes the next tile, so a slot that frees late still finds work.
  *
- * The warmers are off by default: on Vercel's 4-core, 8.6 GB builder they
- * showed no gain (2026-10-10, cold builds of all seven sites). With them
- * `prepare-sites` took 322 s; main took 232–235 s, and this module's
- * default 387 s — but those builders differed by about 1.4× in a step none
- * of this touches (Next's static pages: 7.5–8.7 s in main's builds,
- * 11.3–11.9 s in these), so single builds there cannot settle it. What is
- * structural: `TILE_PEAK` lets two tile warmers run at once in that memory,
- * the parallelism main already gets from baking two sites side by side,
- * and the warmers' processes add ≈ 10 % CPU. On one box, alternating, the
- * default costs main's CPU (Grimma 28.6/28.7 s, Hamburg 59.7/60.1 s). They
- * may pay on a machine with the cores and memory for four or more tile
- * warmers at once (not measured).
+ * Measured cold on 2026-10-31, all seven sites on a box held to Vercel's
+ * builder (4 cores, `PREPARE_MEMORY_GB=8.6`): one process per site, one
+ * cold site at a time, 11:07 min; the warmers, two tiles at once, 5:19.
+ * `PREPARE_WARMERS=0` bakes every site in one process (counted at
+ * `SITE_PEAK`), as before 2026-10-31. Until then the warmers were opt-in,
+ * for Dresden alone: on 2026-10-10 two cold sites still fitted side by
+ * side, the parallelism two tile warmers give, and they showed no gain.
  */
-
-/** A site with more tiles than this is baked by warmers. */
-export const WARM_ABOVE = 4;
 
 const WARM_GROUND = "--warm-ground=";
 const WARM_TILES = "--warm=";
@@ -83,14 +75,16 @@ export function bakeMode(
 }
 
 /**
- * The most resident memory one bake process reaches, measured on the
- * committed sites (2026-10-10, Bun 1.4.2) with a margin: a tile warmer's is
- * its buildings' (Dresden's heaviest tile, 33414_5654: 2.7 GB); every other
- * process stays under `PROCESS_PEAK` (a small site's plain run, a ground
- * warmer, a large site's publishing run: 1.43 GB at most — München's, and
- * the first ground warmer, which solves the line levels on every DGM).
+ * The most resident memory one bake process reaches, with a margin: a tile
+ * warmer's is its buildings' — measured cold on 2026-10-31 (Bun 1.4.4),
+ * München's heaviest tile, 32690_5334, 2.40 GiB (2.58 GB), the others
+ * 0.4–2.2 GiB; Vercel's Bun 1.3.14 took about 15 % more for a whole site,
+ * which puts that tile near 2.96 GB there. Two at once still fit Vercel's
+ * 8.6 GB builder (80 %: 6.9 GB), four CI's 16.8 GB runner. Every other
+ * process stays under `PROCESS_PEAK` (a ground warmer 0.6 GiB at most, a
+ * site's publishing run 1.12 GiB — Dresden's —, a small site's plain run).
  */
-export const TILE_PEAK = 3e9;
+export const TILE_PEAK = 3.2e9;
 export const PROCESS_PEAK = 1.6e9;
 /**
  * A whole site baked cold in one process, as every site is baked without
@@ -121,7 +115,7 @@ export interface BakeRun {
 /** Step 0: the plain run, if every entry is cached. */
 export const IF_CACHED_RUN: BakeRun = { args: [IF_CACHED], peak: PROCESS_PEAK };
 
-/** A large site's bake after step 0, step by step; a step's runs may go
+/** A cold site's bake after step 0, step by step; a step's runs may go
  *  side by side. */
 export function warmSteps(tiles: readonly string[]): BakeRun[][] {
   const [first, ...rest] = tiles;
@@ -137,14 +131,14 @@ export function warmSteps(tiles: readonly string[]): BakeRun[][] {
   ];
 }
 
-/** Whether `PREPARE_WARMERS=1` asks for the warmers (off by default, see
- *  the module's comment). */
+/** Whether the warmers bake the sites: on unless `PREPARE_WARMERS=0`
+ *  (see the module's comment). */
 export function warmersOn(env: { PREPARE_WARMERS?: string }): boolean {
   const value = env.PREPARE_WARMERS ?? "";
   if (value !== "" && value !== "0" && value !== "1") {
     throw new Error(`PREPARE_WARMERS must be 0 or 1, got "${value}"`);
   }
-  return value === "1";
+  return value !== "0";
 }
 
 /** A number above 0 from an environment override (PREPARE_JOBS: a whole

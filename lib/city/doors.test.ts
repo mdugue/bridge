@@ -3,6 +3,9 @@ import {
   DOOR_SURROUND,
   doorMesh,
   eaveAlong,
+  rayHit,
+  trianglesOnRays,
+  type V3,
   wallShift,
   wallShiftAlong,
   wallShiftKnots,
@@ -188,4 +191,49 @@ test("wallShiftKnots follows a wall that bends, where one line would cut it", ()
   expect(s[10]).toBeCloseTo(0.2, 6);
   expect(s[0]).toBeCloseTo(0.05 + 0.015 * 0.1, 6);
   expect(s[5]).toBeCloseTo(0.125, 6);
+});
+
+test("trianglesOnRays keeps every triangle a ray meets within its reach, in order", () => {
+  let seed = 11;
+  const rand = () => {
+    seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+    return seed / 2_147_483_648;
+  };
+  // 400 small triangles scattered over a 20 m box, most of them walls
+  const positions = new Float32Array(9 * 400);
+  for (let t = 0; t < 400; t++) {
+    const [x, y, z] = [rand() * 20, rand() * 20, rand() * 10];
+    const a = rand() * 2 * Math.PI;
+    const [dx, dy] = [Math.cos(a), Math.sin(a)];
+    positions.set(
+      [x, y, z, x + 2 * dx, y + 2 * dy, z, x + 2 * dx, y + 2 * dy, z + 3],
+      9 * t
+    );
+  }
+  const triangles = Array.from({ length: 400 }, (_, t) => 3 * t);
+  let met = 0;
+  for (let trial = 0; trial < 200; trial++) {
+    const a = rand() * 2 * Math.PI;
+    const n: V3 = [Math.cos(a), Math.sin(a), 0];
+    const origins: V3[] = [0, 1, 2].map(() => [
+      rand() * 20,
+      rand() * 20,
+      rand() * 10,
+    ]);
+    const reach = 3;
+    const near = trianglesOnRays(origins, n, reach, positions, triangles);
+    // in the triangles' own order
+    expect(near).toEqual([...near].sort((p, q) => p - q));
+    for (const o of origins) {
+      for (const t of triangles) {
+        const hit = rayHit(o, n, positions, t);
+        if (hit !== undefined && hit <= reach) {
+          met++;
+          expect(near).toContain(t);
+        }
+      }
+    }
+  }
+  // the rays did meet walls: the test tested something
+  expect(met).toBeGreaterThan(20);
 });
