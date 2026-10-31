@@ -47,6 +47,7 @@ import {
   vec4,
 } from "three/tsl";
 import type { RenderStyleDef } from "@/lib/city/render-style";
+import { DATA_HUE } from "./glass";
 import { fogFactorAt, type SceneFog } from "./height-fog";
 import type { F, V2, V3, V4 } from "./shader-chunks";
 import { styleNight } from "./sun-rig";
@@ -1019,7 +1020,20 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       mix(POP.greenDeep, POP.green, crownLit),
       step(0.2, hue)
     );
-    day = mix(day, printInk, printed);
+    // A data mark wears a marker ink too (glass.ts `dataMarkColour`), on
+    // hues clear of the crowns': printed in a pop ink by its place on its
+    // scale — blue, yellow, red — flat, its light left white.
+    const dataT = hue.sub(DATA_HUE.from).div(DATA_HUE.to - DATA_HUE.from);
+    const dataInk = mix(
+      mix(POP.blue, POP.yellow, step(1 / 3, dataT)),
+      POP.red,
+      step(2 / 3, dataT)
+    );
+    day = mix(
+      day,
+      mix(printInk, dataInk, step(DATA_HUE.from - 0.05, hue)),
+      printed
+    );
     day = mix(day, mix(POP.blueDeep, POP.blue, lit), water);
     // The sky: one blue, printed lighter towards the horizon with dots of
     // the pale blue (`skyDots`) — a printed gradient, no band.
@@ -1243,9 +1257,14 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // Sunlit card is the paper itself; only true shade turns blue-grey.
     const t = smoothstep(0.08, 0.6, y);
     const shade = vec3(0.55, 0.58, 0.67);
-    // Keep the whisper of hue the paper material lets through.
+    // Keep the whisper of hue the paper material lets through — and more
+    // of a hue the card never carries: a data mark's tissue paper.
     const tint = p.div(max(y, 1e-3));
-    const model = mix(shade, paper, t).mul(mix(vec3(1), tint, 0.35));
+    const hcv = rgbToHcv(p);
+    const saturated = smoothstep(0.3, 0.5, hcv.y.div(max(hcv.z, 1e-3)));
+    const model = mix(shade, paper, t).mul(
+      mix(vec3(1), tint, mix(0.35, 0.8, saturated))
+    );
     // ...and a little of the haze laid back over: a model's far end is
     // paler, not gone
     // the sky through the dusk: the day's paper, a mauve card, the night's

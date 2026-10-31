@@ -21,6 +21,22 @@ export type CrownStyle = "comic" | "paper";
  */
 export type PaperKind = "figure" | "ink" | "line" | "paper";
 
+/**
+ * How a style draws the data layers' marks — the traffic flows, the
+ * bicycle columns, the trams' trails (app/_components/glass.ts
+ * `dataMarkColour`): Pastell's glass, Comic's printed inks, Film noir's
+ * long-exposure light, Sin City's red, Papier's tissue paper, Strich's
+ * plan colours, the Schwarzplan's outline.
+ */
+export type DataMarks =
+  | "glass"
+  | "light"
+  | "outline"
+  | "plan"
+  | "print"
+  | "red"
+  | "tissue";
+
 export type RenderStyle =
   | "comic"
   | "figure"
@@ -63,6 +79,8 @@ export interface RenderStyleDef {
    * for the scene's own lumpy crowns.
    */
   crowns: CrownStyle | null;
+  /** how the data layers' marks draw under it (`DataMarks`) */
+  dataMarks: DataMarks;
   /** one line for the picker (German, like the rest of the HUD) */
   description: string;
   /** weight on the depth grading (warm near / cool far; post-stack.ts
@@ -121,6 +139,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 1,
     paperScene: null,
     crowns: null,
+    dataMarks: "glass",
     ownLight: null,
     lampCones: false,
     vignette: { offset: 0.28, darkness: 0.5 },
@@ -141,6 +160,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 1,
     paperScene: null,
     crowns: "comic",
+    dataMarks: "print",
     ownLight: null,
     lampCones: false,
     vignette: { offset: 0.35, darkness: 0.22 },
@@ -160,6 +180,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 1,
     paperScene: null,
     crowns: null,
+    dataMarks: "light",
     ownLight: null,
     lampCones: true,
     vignette: { offset: 0.12, darkness: 0.9 },
@@ -179,6 +200,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 1,
     paperScene: "ink",
     crowns: null,
+    dataMarks: "red",
     ownLight: {
       month: 8,
       day: 15,
@@ -205,6 +227,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 1,
     paperScene: "paper",
     crowns: "paper",
+    dataMarks: "tissue",
     ownLight: null,
     lampCones: false,
     vignette: { offset: 0.32, darkness: 0.28 },
@@ -225,6 +248,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 0,
     paperScene: "line",
     crowns: "paper",
+    dataMarks: "plan",
     ownLight: null,
     lampCones: false,
     vignette: { offset: 0.5, darkness: 0 },
@@ -245,6 +269,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     sway: 0,
     paperScene: "figure",
     crowns: null,
+    dataMarks: "outline",
     ownLight: {
       month: 5,
       day: 21,

@@ -10,12 +10,14 @@ import {
   Vector2,
 } from "three/webgpu";
 import {
+  abs,
   float,
   fract,
   mix,
   positionLocal,
   positionWorld,
   smoothstep,
+  step,
   uv,
   vec3,
   vec4,
@@ -31,7 +33,14 @@ import {
 } from "@/lib/city/bike-counts";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { fetchOptionalJson } from "./fetch-optional";
-import { dataTime, glassColour, glassGrazing } from "./glass";
+import {
+  DATA_MARKS,
+  dataMarkColour,
+  dataMarks,
+  dataTime,
+  glassColour,
+  glassGrazing,
+} from "./glass";
 import {
   Instances,
   instanceFloat,
@@ -39,6 +48,7 @@ import {
   instanceTint,
 } from "./instancing";
 import { mapWidenNode } from "./map-overlay";
+import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
 /**
@@ -99,6 +109,13 @@ function columnGeometry(): LatheGeometry {
   return new LatheGeometry(points, 24);
 }
 
+/** A column's place on the marks' scale (glass.ts `DataMarkInputs`): the
+ *  first direction's teal low, the second's lilac high, by how much red
+ *  the tint has over green. */
+function directionScale(tint: V3): F {
+  return smoothstep(-0.25, 0.15, tint.x.sub(tint.y));
+}
+
 function columnMaterial(): MeshBasicNodeMaterial {
   return sceneMaterial("bike-glass", () => {
     const m = new MeshBasicNodeMaterial({
@@ -127,7 +144,16 @@ function columnMaterial(): MeshBasicNodeMaterial {
     const light = mix(tint, vec3(1), 0.4).mul(
       ring.mul(float(1).sub(glassGrazing().mul(0.6))).mul(0.55)
     );
-    m.colorNode = glass.add(light);
+    // Under a picture style, the style's mark (glass.ts): the two
+    // directions apart on its scale (teal low, lilac high), the rings as
+    // its light.
+    m.colorNode = dataMarkColour({
+      glass: glass.add(light),
+      tint,
+      scale: directionScale(tint),
+      light: ring.mul(rate.min(1)),
+    });
+    m.userData.paperOwn = true;
     return m;
   });
 }
@@ -152,7 +178,23 @@ function poolMaterial(): MeshBasicNodeMaterial {
     );
     const r = uv().sub(0.5).length().mul(2);
     const fall = float(1).sub(smoothstep(0.15, 1, r));
-    m.colorNode = vec4(instanceTint(), fall.mul(fall).mul(0.55));
+    const tint = instanceTint();
+    // Under a picture style, the style's mark: a pool reads as the
+    // column's own colour there, and as a ring where the style draws
+    // marks as lines (the Schwarzplan's outline).
+    const ring = smoothstep(0.78, 0.84, r).mul(
+      float(1).sub(smoothstep(0.9, 0.96, r))
+    );
+    const colour = dataMarkColour({
+      glass: tint,
+      tint,
+      scale: directionScale(tint),
+      light: float(0),
+      edge: ring,
+    });
+    const outline = step(abs(dataMarks.sub(DATA_MARKS.outline)), 0.5);
+    m.colorNode = vec4(colour, mix(fall.mul(fall).mul(0.55), ring, outline));
+    m.userData.paperOwn = true;
     return m;
   });
 }

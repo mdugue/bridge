@@ -387,7 +387,12 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
     darunter, wie viele gerade unterwegs sind.
 
   Aus der Luft werden Ströme, Säulen und Spuren breiter und satter, damit
-  sie lesbar bleiben.
+  sie lesbar bleiben. Jeder Bildstil zeichnet sie auf seine Art: *Pastell*
+  als Glas, *Comic* in Druckfarben (blau, gelb, rot nach der Menge) mit
+  schwarzer Kontur, *Film noir* als Lichtspuren wie bei langer
+  Belichtung, *Sin City* rot, *Papier* als farbiges Seidenpapier (nachts
+  von innen beleuchtet), *Strich* in Planfarben mit Tuschekante (nachts
+  als warmes Licht), der *Schwarzplan* als schwarz umrandetes Band.
 - **Steuerung** — die vollständige Tastentabelle, eingeklappt, bis du
   sie öffnest (die Leiste über der Szene zeigt die ersten Tasten).
 
