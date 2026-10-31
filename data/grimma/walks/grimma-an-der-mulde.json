@@ -50,7 +50,16 @@
       ],
       "refs": [
         "Q2120789"
-      ]
+      ],
+      "photo": {
+        "file": "GrimmaPöppelmNeu.JPG",
+        "author": "Jwaller",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:GrimmaP%C3%B6ppelmNeu.JPG",
+        "h": 595,
+        "w": 800
+      }
     },
     {
       "id": "fuerstenschule",
@@ -84,7 +93,16 @@
       ],
       "refs": [
         "Q14537082"
-      ]
+      ],
+      "photo": {
+        "file": "Grimma Klosterkirche.jpg",
+        "author": "Joeb07",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Grimma_Klosterkirche.jpg",
+        "h": 1067,
+        "w": 800
+      }
     },
     {
       "id": "seume",
@@ -118,7 +136,16 @@
       ],
       "refs": [
         "Q107585173"
-      ]
+      ],
+      "photo": {
+        "file": "Fotothek df roe-neg 0006344 010 \"Seume-Haus\" in Grimma.jpg",
+        "author": "Roger Rössing / Renate Rössing",
+        "licence": "CC BY-SA 3.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Fotothek_df_roe-neg_0006344_010_%22Seume-Haus%22_in_Grimma.jpg",
+        "h": 1109,
+        "w": 800
+      }
     }
   ]
 }

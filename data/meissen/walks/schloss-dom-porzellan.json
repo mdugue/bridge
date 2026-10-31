@@ -39,7 +39,16 @@
       ],
       "refs": [
         "Q679009"
-      ]
+      ],
+      "photo": {
+        "file": "Albrechtsburg-2007.jpg",
+        "author": "Stephan Hoppe",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+        "page": "https://commons.wikimedia.org/wiki/File:Albrechtsburg-2007.jpg",
+        "h": 538,
+        "w": 800
+      }
     },
     {
       "id": "dom",
@@ -74,7 +83,16 @@
       ],
       "refs": [
         "Q322853"
-      ]
+      ],
+      "photo": {
+        "file": "Meißen Burgberg asv2025-03 img1.jpg",
+        "author": "A.Savin",
+        "licence": "FAL",
+        "licenceUrl": "http://artlibre.org/licence/lal/en",
+        "page": "https://commons.wikimedia.org/wiki/File:Mei%C3%9Fen_Burgberg_asv2025-03_img1.jpg",
+        "h": 533,
+        "w": 800
+      }
     },
     {
       "id": "porzellanglocken",
@@ -111,7 +129,13 @@
       ],
       "photo": {
         "file": "Porzellanglockenspiel Meißen.jpg",
-        "caption": "Die Porzellanglocken im Turm"
+        "caption": "Die Porzellanglocken im Turm",
+        "author": "Numiscontrol (Diskussion) 22:54, 14. Nov. 2017 (CET)",
+        "licence": "CC BY-SA 3.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Porzellanglockenspiel_Mei%C3%9Fen.jpg",
+        "h": 1203,
+        "w": 800
       }
     }
   ]

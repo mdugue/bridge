@@ -43,7 +43,13 @@
       ],
       "photo": {
         "file": "Lindenbrauerei Unna Kamin 2008 IMGP6397 wp.jpg",
-        "caption": "Der Schornstein der Lindenbrauerei"
+        "caption": "Der Schornstein der Lindenbrauerei",
+        "author": "smial (talk)",
+        "licence": "FAL",
+        "licenceUrl": "http://artlibre.org/licence/lal/en",
+        "page": "https://commons.wikimedia.org/wiki/File:Lindenbrauerei_Unna_Kamin_2008_IMGP6397_wp.jpg",
+        "h": 1105,
+        "w": 800
       }
     },
     {
@@ -82,7 +88,16 @@
       ],
       "refs": [
         "Q14906631"
-      ]
+      ],
+      "photo": {
+        "file": "Stadtkirche Unna1.JPG",
+        "author": "Chris06",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Stadtkirche_Unna1.JPG",
+        "h": 1602,
+        "w": 800
+      }
     }
   ]
 }

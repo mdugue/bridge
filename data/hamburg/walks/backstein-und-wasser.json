@@ -43,7 +43,16 @@
       ],
       "refs": [
         "Q673223"
-      ]
+      ],
+      "photo": {
+        "file": "2019-05-10 Elbphilharmonie Hamburg.jpg",
+        "author": "Burkhard Mücke",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:2019-05-10_Elbphilharmonie_Hamburg.jpg",
+        "h": 450,
+        "w": 800
+      }
     },
     {
       "id": "chilehaus",
@@ -82,7 +91,16 @@
       ],
       "refs": [
         "Q542783"
-      ]
+      ],
+      "photo": {
+        "file": "Chilehaus - Hamburg.jpg",
+        "author": "Esther Westerveld from Haarlemmermeer, Nederland",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Chilehaus_-_Hamburg.jpg",
+        "h": 808,
+        "w": 800
+      }
     },
     {
       "id": "st-nikolai",
@@ -124,7 +142,16 @@
       ],
       "refs": [
         "Q425622"
-      ]
+      ],
+      "photo": {
+        "file": "St Nikolai.jpg",
+        "author": "LuxTonnerre",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "page": "https://commons.wikimedia.org/wiki/File:St_Nikolai.jpg",
+        "h": 1264,
+        "w": 800
+      }
     },
     {
       "id": "rathaus",
@@ -162,7 +189,13 @@
       ],
       "photo": {
         "file": "Hamburg - Rathaus - Hygieia-Brunnen 01.jpg",
-        "caption": "Der Hygieia-Brunnen im Innenhof"
+        "caption": "Der Hygieia-Brunnen im Innenhof",
+        "author": "Llez",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Hamburg_-_Rathaus_-_Hygieia-Brunnen_01.jpg",
+        "h": 654,
+        "w": 800
       }
     },
     {
@@ -198,7 +231,16 @@
       ],
       "refs": [
         "Q674472"
-      ]
+      ],
+      "photo": {
+        "file": "Sankt-Michaelis-Kirche Hamburg.jpg",
+        "author": "Thomas Wolf, www.foto-tw.de",
+        "licence": "CC BY-SA 3.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Sankt-Michaelis-Kirche_Hamburg.jpg",
+        "h": 1291,
+        "w": 800
+      }
     },
     {
       "id": "alter-elbtunnel",
@@ -236,7 +278,13 @@
       ],
       "photo": {
         "file": "Alter Elbtunnel Roehre.jpg",
-        "caption": "Eine der beiden Röhren unter der Elbe"
+        "caption": "Eine der beiden Röhren unter der Elbe",
+        "author": "Alexander Sölch (Aliosos)",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Alter_Elbtunnel_Roehre.jpg",
+        "h": 658,
+        "w": 800
       }
     }
   ]

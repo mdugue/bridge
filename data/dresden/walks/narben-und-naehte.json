@@ -111,7 +111,13 @@
       ],
       "photo": {
         "file": "Dresden - Frauenkirche - Turmkreuz.jpg",
-        "caption": "Das alte Turmkreuz, gefunden 1993 im Schutt"
+        "caption": "Das alte Turmkreuz, gefunden 1993 im Schutt",
+        "author": "Fototravel",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden_-_Frauenkirche_-_Turmkreuz.jpg",
+        "h": 1202,
+        "w": 800
       }
     },
     {
@@ -154,7 +160,13 @@
       ],
       "photo": {
         "file": "Der Weg der roten Fahne - Wandmosaik (DDR) - Kulturpalast Dresden - Bild 001.jpg",
-        "caption": "„Der Weg der roten Fahne“ an der Westseite"
+        "caption": "„Der Weg der roten Fahne“ an der Westseite",
+        "author": "Lupus in Saxonia",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Der_Weg_der_roten_Fahne_-_Wandmosaik_(DDR)_-_Kulturpalast_Dresden_-_Bild_001.jpg",
+        "h": 450,
+        "w": 800
       }
     },
     {
@@ -224,7 +236,13 @@
       ],
       "photo": {
         "file": "20070106135DR Dresden Kreuzkirche Emporen.jpg",
-        "caption": "Der Innenraum im grauen Rauputz"
+        "caption": "Der Innenraum im grauen Rauputz",
+        "author": "Jörg Blobelt",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:20070106135DR_Dresden_Kreuzkirche_Emporen.jpg",
+        "h": 599,
+        "w": 800
       }
     },
     {

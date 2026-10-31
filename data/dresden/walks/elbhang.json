@@ -54,7 +54,13 @@
       ],
       "photo": {
         "file": "Waldschlösschenbrücke Dresden 2024 Luftbild Toni Klemm 2500px.jpg",
-        "caption": "Die Waldschlößchenbrücke über den Elbwiesen, 2024"
+        "caption": "Die Waldschlößchenbrücke über den Elbwiesen, 2024",
+        "author": "Toniklemm",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Waldschl%C3%B6sschenbr%C3%BCcke_Dresden_2024_Luftbild_Toni_Klemm_2500px.jpg",
+        "h": 533,
+        "w": 800
       }
     },
     {
@@ -211,7 +217,13 @@
       ],
       "photo": {
         "file": "Schillerhäuschen in Loschwitz 1.jpg",
-        "caption": "Das Schillerhäuschen am Hang"
+        "caption": "Das Schillerhäuschen am Hang",
+        "author": "Brücke-Osteuropa",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Schillerh%C3%A4uschen_in_Loschwitz_1.jpg",
+        "h": 600,
+        "w": 800
       }
     },
     {
@@ -257,7 +269,13 @@
       ],
       "photo": {
         "file": "051030-Standseilbahn-Dresden-Talfahrt-Begegnung-Viadukt.jpg",
-        "caption": "Die beiden Wagen weichen sich auf dem Viadukt aus"
+        "caption": "Die beiden Wagen weichen sich auf dem Viadukt aus",
+        "author": "Martin Röll Martinroell",
+        "licence": "CC BY-SA 2.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:051030-Standseilbahn-Dresden-Talfahrt-Begegnung-Viadukt.jpg",
+        "h": 533,
+        "w": 800
       }
     },
     {
@@ -307,7 +325,13 @@
       ],
       "photo": {
         "file": "Dresden-Loschwitz,Schwebebahn 13.jpg",
-        "caption": "Ein Wagen unter dem Stahlgerüst"
+        "caption": "Ein Wagen unter dem Stahlgerüst",
+        "author": "Bybbisch94; Christian Gebhardt",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden-Loschwitz,Schwebebahn_13.jpg",
+        "h": 533,
+        "w": 800
       }
     },
     {

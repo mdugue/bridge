@@ -149,7 +149,13 @@
       ],
       "photo": {
         "file": "Fotothek df ps 0000785 Mephisto verzaubert die Studenten.jpg",
-        "caption": "Molitors Bronzegruppe: Mephisto verzaubert die Studenten"
+        "caption": "Molitors Bronzegruppe: Mephisto verzaubert die Studenten",
+        "author": "Richard Peter",
+        "licence": "CC BY-SA 3.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Fotothek_df_ps_0000785_Mephisto_verzaubert_die_Studenten.jpg",
+        "h": 1153,
+        "w": 800
       }
     },
     {
@@ -195,7 +201,13 @@
       ],
       "photo": {
         "file": "Nikolaikirche Leipzig Blick Richtung Altar 03.JPG",
-        "caption": "Die Säulen mit den Palmenkronen"
+        "caption": "Die Säulen mit den Palmenkronen",
+        "author": "DerHHO",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Nikolaikirche_Leipzig_Blick_Richtung_Altar_03.JPG",
+        "h": 533,
+        "w": 800
       }
     },
     {
@@ -238,7 +250,16 @@
       ],
       "refs": [
         "Q2063901"
-      ]
+      ],
+      "photo": {
+        "file": "Paulinum72012.JPG",
+        "author": "Concord",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Paulinum72012.JPG",
+        "h": 1425,
+        "w": 800
+      }
     },
     {
       "id": "uniriese",
@@ -276,7 +297,16 @@
       ],
       "refs": [
         "Q471329"
-      ]
+      ],
+      "photo": {
+        "file": "Rainbowflash 2013 Leipzig (4).jpg",
+        "author": "Rot-Braun Magdeburg",
+        "licence": "CC BY-SA 3.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Rainbowflash_2013_Leipzig_(4).jpg",
+        "h": 1067,
+        "w": 800
+      }
     }
   ]
 }

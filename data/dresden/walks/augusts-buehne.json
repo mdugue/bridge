@@ -60,7 +60,13 @@
       ],
       "photo": {
         "file": "00 234 Dresden - Zwinger (Kronentor).jpg",
-        "caption": "Das Kronentor mit Adlern und Krone"
+        "caption": "Das Kronentor mit Adlern und Krone",
+        "author": "W. Bulach",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:00_234_Dresden_-_Zwinger_(Kronentor).jpg",
+        "h": 1200,
+        "w": 800
       }
     },
     {
@@ -155,7 +161,13 @@
       ],
       "photo": {
         "file": "Dresden Semperoper Panther Quadriga 01.JPG",
-        "caption": "Die Pantherquadriga über dem Portal"
+        "caption": "Die Pantherquadriga über dem Portal",
+        "author": "Ad Meskens",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden_Semperoper_Panther_Quadriga_01.JPG",
+        "h": 600,
+        "w": 800
       }
     },
     {
@@ -312,7 +324,13 @@
       ],
       "photo": {
         "file": "Dresden Germany Fürstenzug-04.jpg",
-        "caption": "Ein Ausschnitt des Fürstenzugs, Porzellan aus Meißen"
+        "caption": "Ein Ausschnitt des Fürstenzugs, Porzellan aus Meißen",
+        "author": "CEphoto, Uwe Aranas",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden_Germany_F%C3%BCrstenzug-04.jpg",
+        "h": 544,
+        "w": 800
       }
     },
     {
@@ -363,7 +381,12 @@
       ],
       "photo": {
         "file": "Brückenmännchen (Augustusbrücke).jpg",
-        "caption": "Das Brückenmännchen am Landpfeiler"
+        "caption": "Das Brückenmännchen am Landpfeiler",
+        "author": "Willy Nagel",
+        "licence": "Public domain",
+        "page": "https://commons.wikimedia.org/wiki/File:Br%C3%BCckenm%C3%A4nnchen_(Augustusbr%C3%BCcke).jpg",
+        "h": 1427,
+        "w": 800
       }
     },
     {
@@ -407,7 +430,13 @@
       ],
       "photo": {
         "file": "Freitreppe Brühlsche Terrasse 2013.jpg",
-        "caption": "Die Freitreppe mit Schillings Tageszeiten"
+        "caption": "Die Freitreppe mit Schillings Tageszeiten",
+        "author": "VSchagow",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Freitreppe_Br%C3%BChlsche_Terrasse_2013.jpg",
+        "h": 533,
+        "w": 800
       }
     },
     {
@@ -452,7 +481,12 @@
       ],
       "photo": {
         "file": "Bellotto - Dresden vom rechten Elbufer unterhalb der Augustusbrücke, 1748, Gal.-Nr. 606.jpg",
-        "caption": "Bernardo Bellotto: Dresden vom rechten Elbufer unterhalb der Augustusbrücke, 1748"
+        "caption": "Bernardo Bellotto: Dresden vom rechten Elbufer unterhalb der Augustusbrücke, 1748",
+        "author": "Bernardo Bellotto",
+        "licence": "Public domain",
+        "page": "https://commons.wikimedia.org/wiki/File:Bellotto_-_Dresden_vom_rechten_Elbufer_unterhalb_der_Augustusbr%C3%BCcke,_1748,_Gal.-Nr._606.jpg",
+        "h": 443,
+        "w": 800
       }
     }
   ]
