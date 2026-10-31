@@ -53,15 +53,22 @@ export function wallShift(
   }
   const { at, n } = doorFrame(f, offset);
   const reach = p.w / 2 + DOOR_SURROUND.width;
+  const rays = [-reach, 0, reach].flatMap((a) =>
+    [0.6, p.h * 0.8].map((c) => at(a, DOOR_WALL_REACH, c))
+  );
+  const near = trianglesOnRays(
+    rays,
+    n,
+    2 * DOOR_WALL_REACH,
+    positions,
+    triangles
+  );
   let shift = Number.NEGATIVE_INFINITY;
-  for (const a of [-reach, 0, reach]) {
-    for (const c of [0.6, p.h * 0.8]) {
-      const o = at(a, DOOR_WALL_REACH, c);
-      for (const t of triangles) {
-        const hit = rayHit(o, n, positions, t);
-        if (hit !== undefined && hit <= 2 * DOOR_WALL_REACH) {
-          shift = Math.max(shift, DOOR_WALL_REACH - hit);
-        }
+  for (const o of rays) {
+    for (const t of near) {
+      const hit = rayHit(o, n, positions, t);
+      if (hit !== undefined && hit <= 2 * DOOR_WALL_REACH) {
+        shift = Math.max(shift, DOOR_WALL_REACH - hit);
       }
     }
   }
@@ -207,15 +214,12 @@ function trianglesNear(
   triangles: readonly number[]
 ): number[] {
   const r = DOOR_WALL_REACH;
-  const [x0, x1] = [Math.min(a[0], b[0]) - r, Math.max(a[0], b[0]) + r];
-  const [y0, y1] = [Math.min(a[1], b[1]) - r, Math.max(a[1], b[1]) + r];
-  return triangles.filter((t) => {
-    const at = (i: number, c: number) => positions[3 * (t + i) + c];
-    const out = (c: number, lo: number, hi: number) =>
-      Math.max(at(0, c), at(1, c), at(2, c)) < lo ||
-      Math.min(at(0, c), at(1, c), at(2, c)) > hi;
-    return !(out(0, x0, x1) || out(1, y0, y1) || out(2, z0, z1));
-  });
+  return trianglesInBox(
+    [Math.min(a[0], b[0]) - r, Math.min(a[1], b[1]) - r, z0],
+    [Math.max(a[0], b[0]) + r, Math.max(a[1], b[1]) + r, z1],
+    positions,
+    triangles
+  );
 }
 
 /** Knots no ray met, read off the line through their nearest neighbours
@@ -366,45 +370,127 @@ function lineThrough(read: readonly [number, number][]): [number, number] {
 }
 
 /** Where a ray from `o` along −n meets the triangle facing it (its first
- *  vertex at `t`), as the distance along the ray; undefined if it misses. */
+ *  vertex at `t`), as the distance along the ray; undefined if it misses.
+ *  Every wall a stretch, a door or a shopfront reads casts its rays here,
+ *  millions a tile: written out on numbers, in the order of the vector
+ *  form (e1 = p1 − p0, e2 = p2 − p0, d = −n, q = d × e2, s = o − p0,
+ *  r = s × e1), so it allocates nothing and gives the same bits. */
 export function rayHit(
   o: V3,
   n: V3,
   positions: ArrayLike<number>,
   t: number
 ): number | undefined {
-  const v = (i: number): V3 => [
-    positions[3 * (t + i)],
-    positions[3 * (t + i) + 1],
-    positions[3 * (t + i) + 2],
-  ];
-  const [p0, p1, p2] = [v(0), v(1), v(2)];
-  const e1 = sub(p1, p0);
-  const e2 = sub(p2, p0);
-  const d: V3 = [-n[0], -n[1], -n[2]];
+  const i = 3 * t;
+  const p0x = positions[i];
+  const p0y = positions[i + 1];
+  const p0z = positions[i + 2];
+  const e1x = positions[i + 3] - p0x;
+  const e1y = positions[i + 4] - p0y;
+  const e1z = positions[i + 5] - p0z;
+  const e2x = positions[i + 6] - p0x;
+  const e2y = positions[i + 7] - p0y;
+  const e2z = positions[i + 8] - p0z;
+  const [nx, ny, nz] = n;
   // a face that turns from the door (its back, a side wall) is no wall
-  const face = cross(e1, e2);
-  if (dot(face, n) <= 0.7 * Math.hypot(...face)) {
+  const fx = e1y * e2z - e1z * e2y;
+  const fy = e1z * e2x - e1x * e2z;
+  const fz = e1x * e2y - e1y * e2x;
+  if (fx * nx + fy * ny + fz * nz <= 0.7 * Math.hypot(fx, fy, fz)) {
     return undefined;
   }
-  const q = cross(d, e2);
-  const det = dot(e1, q);
+  const dx = -nx;
+  const dy = -ny;
+  const dz = -nz;
+  const qx = dy * e2z - dz * e2y;
+  const qy = dz * e2x - dx * e2z;
+  const qz = dx * e2y - dy * e2x;
+  const det = e1x * qx + e1y * qy + e1z * qz;
   if (Math.abs(det) < 1e-12) {
     return undefined;
   }
-  const s = sub(o, p0);
-  const u = dot(s, q) / det;
-  const r = cross(s, e1);
-  const w = dot(d, r) / det;
+  const sx = o[0] - p0x;
+  const sy = o[1] - p0y;
+  const sz = o[2] - p0z;
+  const u = (sx * qx + sy * qy + sz * qz) / det;
+  const rx = sy * e1z - sz * e1y;
+  const ry = sz * e1x - sx * e1z;
+  const rz = sx * e1y - sy * e1x;
+  const w = (dx * rx + dy * ry + dz * rz) / det;
   if (u < 0 || w < 0 || u + w > 1) {
     return undefined;
   }
-  const dist = dot(e2, r) / det;
+  const dist = (e2x * rx + e2y * ry + e2z * rz) / det;
   return dist >= 0 ? dist : undefined;
 }
 
+/** Slack on `trianglesOnRays`' box (m): far more than a hit's rounding. */
+const RAY_BOX_SLACK = 0.01;
+
+/**
+ * The triangles (first vertex indices, in their order) whose box reaches
+ * the box round the rays from `origins` along −n up to `reach`: a hit no
+ * further than `reach` lies in both, so only these can give one. A host's
+ * every triangle against every ray was most of a tile's dressing time.
+ */
+export function trianglesOnRays(
+  origins: readonly V3[],
+  n: V3,
+  reach: number,
+  positions: ArrayLike<number>,
+  triangles: readonly number[]
+): number[] {
+  const lo: V3 = [
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+  ];
+  const hi: V3 = [
+    Number.NEGATIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+  ];
+  for (const o of origins) {
+    for (const k of [0, reach]) {
+      for (let c = 0; c < 3; c++) {
+        lo[c] = Math.min(lo[c], o[c] - n[c] * k);
+        hi[c] = Math.max(hi[c], o[c] - n[c] * k);
+      }
+    }
+  }
+  return trianglesInBox(
+    [lo[0] - RAY_BOX_SLACK, lo[1] - RAY_BOX_SLACK, lo[2] - RAY_BOX_SLACK],
+    [hi[0] + RAY_BOX_SLACK, hi[1] + RAY_BOX_SLACK, hi[2] + RAY_BOX_SLACK],
+    positions,
+    triangles
+  );
+}
+
+/** The triangles (first vertex indices, in their order) whose box reaches
+ *  the box `lo`–`hi` (mesh frame). */
+function trianglesInBox(
+  lo: readonly number[],
+  hi: readonly number[],
+  positions: ArrayLike<number>,
+  triangles: readonly number[]
+): number[] {
+  const out: number[] = [];
+  outer: for (const t of triangles) {
+    const i = 3 * t;
+    for (let c = 0; c < 3; c++) {
+      const p = positions[i + c];
+      const q = positions[i + 3 + c];
+      const r = positions[i + 6 + c];
+      if (Math.max(p, q, r) < lo[c] || Math.min(p, q, r) > hi[c]) {
+        continue outer;
+      }
+    }
+    out.push(t);
+  }
+  return out;
+}
+
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const dot = (a: V3, b: V3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: V3, b: V3): V3 => [
   a[1] * b[2] - a[2] * b[1],
   a[2] * b[0] - a[0] * b[2],

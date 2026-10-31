@@ -29,13 +29,13 @@ import {
   quantize,
   reorder,
   simplify,
-  weld,
 } from "@gltf-transform/functions";
 import {
   MeshoptDecoder,
   MeshoptEncoder,
   MeshoptSimplifier,
 } from "meshoptimizer";
+import { weldExact } from "./glb-weld";
 
 /**
  * A property table column: one value (SCALAR), tuple (VEC3), string
@@ -231,7 +231,7 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
     transforms.unshift(reorder({ encoder: MeshoptEncoder }));
   }
   if (input.weld) {
-    transforms.unshift(weld());
+    transforms.unshift(weldExact());
   }
   await doc.transform(...transforms);
   const glb = await (await io()).writeBinary(doc);
@@ -260,7 +260,7 @@ export async function simplifyGlb(
     .setEncoderOptions({
       method: EXTMeshoptCompression.EncoderMethod.QUANTIZE,
     });
-  await doc.transform(dequantize({ pattern: QUANTIZE.pattern }), weld());
+  await doc.transform(dequantize({ pattern: QUANTIZE.pattern }), weldExact());
   // meshopt's error is a share of the mesh's own extent: the scene's
   // bounds in metres, the node's scale included
   const { min, max } = getBounds(doc.getRoot().listScenes()[0]);

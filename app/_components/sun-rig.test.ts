@@ -4,15 +4,17 @@ import {
   Color,
   type DepthTexture,
   DirectionalLight,
+  PerspectiveCamera,
   RenderTarget,
   Scene,
   type ShadowNode,
   Vector3,
+  Vector4,
 } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { SHADOW_BASE_RADIUS, SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
 import { shadowMapSizeFor } from "./scene-profile";
-import { createSunRig } from "./sun-rig";
+import { type AirView, createSunRig } from "./sun-rig";
 
 // Dresden — the primary tile's latitude/longitude.
 const DRESDEN = { lat: 51.05, lng: 13.74 };
@@ -41,6 +43,43 @@ function rig(shadowMapSize = shadowMapSizeFor("full")) {
 /** Looking due north and level — the horizontal part of a world direction. */
 const LEVEL_NORTH = new Vector3(0, 0, -1);
 
+/** A site whose ground lies between 90 and 140 m, the fog ending at 2.6 km. */
+const AIR: AirView = { fogEnd: 2600, groundLow: 90, groundHigh: 140 };
+
+/** The walk/fly camera at `position`, looking along `direction`. */
+function eyeAt(position: Vector3, direction: Vector3): PerspectiveCamera {
+  const camera = new PerspectiveCamera(55, 16 / 9, 0.3, 6000);
+  camera.position.copy(position);
+  if (Math.abs(direction.y) > 0.999) {
+    // looking straight down: north is up on the screen
+    camera.up.set(0, 0, -1);
+  }
+  camera.lookAt(position.clone().add(direction));
+  camera.updateMatrixWorld();
+  return camera;
+}
+
+/** follow() for a camera at `position` looking along `direction`. */
+function followAt(
+  sunRig: ReturnType<typeof createSunRig>,
+  position: Vector3,
+  direction: Vector3,
+  ground: number
+) {
+  const d = direction.clone().normalize();
+  sunRig.follow(eyeAt(position, d), d, ground, AIR);
+}
+
+/** Where the square the sun's camera streams for is centred (world). */
+function squareCentre(sunRig: ReturnType<typeof createSunRig>): Vector3 {
+  const cam = sunRig.shadowCamera as PerspectiveCamera;
+  const look = cam.getWorldDirection(new Vector3());
+  const mid = (cam.near + cam.far) / 2;
+  return new Vector3()
+    .setFromMatrixPosition(cam.matrixWorld)
+    .addScaledVector(look, mid);
+}
+
 /**
  * follow() at eye height above ground: the base-radius case, i.e. everything
  * the rig did before the frustum learned to grow.
@@ -51,7 +90,7 @@ function walkTo(
   z: number,
   ground = 100
 ) {
-  sunRig.follow(new Vector3(x, ground + 1.7, z), LEVEL_NORTH, ground);
+  followAt(sunRig, new Vector3(x, ground + 1.7, z), LEVEL_NORTH, ground);
 }
 
 test("the map is marked for redraw once at construction", () => {
@@ -118,46 +157,53 @@ test("turning on the spot at eye level never moves the frustum", () => {
         Math.sin(pitch),
         -Math.cos(a) * Math.cos(pitch)
       );
-      sunRig.follow(new Vector3(0, 101.7, 0), dir, 100);
+      followAt(sunRig, new Vector3(0, 101.7, 0), dir, 100);
     }
   }
   expect(sun.shadow.needsUpdate).toBe(false);
   expect(sun.target.position).toEqual(centre);
 });
 
-test("climbing straight up re-fits the frustum and redraws", () => {
+test("climbing straight up re-fits the stream's square and redraws", () => {
   const { sunRig, sun } = rig();
   walkTo(sunRig, 0, 0);
-  const half = () => sun.shadow.camera.right;
+  const square = sunRig.shadowCamera as unknown as {
+    far: number;
+    near: number;
+    right: number;
+  };
+  const half = () => square.right;
   expect(half()).toBe(SHADOW_BASE_RADIUS);
+  expect(sun.shadow.camera.right).toBe(SHADOW_BASE_RADIUS);
   sun.shadow.needsUpdate = false;
-  // 110 m above the same spot, looking level: the frustum grows an octave and
+  // 110 m above the same spot, looking level: the square grows an octave and
   // the map redraws even though x/z never changed.
-  sunRig.follow(new Vector3(0, 210, 0), LEVEL_NORTH, 100);
+  followAt(sunRig, new Vector3(0, 210, 0), LEVEL_NORTH, 100);
   expect(sun.shadow.needsUpdate).toBe(true);
   expect(half()).toBeGreaterThan(SHADOW_BASE_RADIUS);
   expect(half()).toBeLessThanOrEqual(SHADOW_MAX_RADIUS);
-  // The shadow camera's depth range keeps its 1.2x margin around the light
+  // The square's depth range keeps its 1.2x margin around the light
   // distance, so the widened frustum still brackets the ground it covers.
-  const cam = sun.shadow.camera;
-  expect(cam.near).toBeCloseTo(half() * 2 - half() * 1.2, 5);
-  expect(cam.far).toBeCloseTo(half() * 2 + half() * 1.2, 5);
-  // Back down to eye level: the tight street-level frustum returns.
+  expect(square.near).toBeCloseTo(half() * 2 - half() * 1.2, 5);
+  expect(square.far).toBeCloseTo(half() * 2 + half() * 1.2, 5);
+  // Back down to eye level: the tight street-level frustum returns, and the
+  // map is the square again.
   walkTo(sunRig, 0, 0);
   expect(half()).toBe(SHADOW_BASE_RADIUS);
+  expect(sun.shadow.camera.right).toBe(SHADOW_BASE_RADIUS);
 });
 
-test("airborne, the frustum is pushed toward what the camera looks at", () => {
-  const { sunRig, sun } = rig();
-  // 300 m up, looking level to the north: the frustum centre must lead the
+test("airborne, the square is pushed toward what the camera looks at", () => {
+  const { sunRig } = rig();
+  // 300 m up, looking level to the north: the square's centre must lead the
   // camera along -Z instead of sitting under it, and sit ON the ground.
-  sunRig.follow(new Vector3(0, 400, 0), LEVEL_NORTH, 100);
-  expect(sun.target.position.z).toBeLessThan(-50);
-  expect(sun.target.position.y).toBeCloseTo(100, 0);
+  followAt(sunRig, new Vector3(0, 400, 0), LEVEL_NORTH, 100);
+  expect(squareCentre(sunRig).z).toBeLessThan(-50);
+  expect(squareCentre(sunRig).y).toBeCloseTo(100, 0);
   // Looking straight down from the same spot, the horizontal part of the view
-  // direction vanishes and the frustum centres under the camera again.
-  sunRig.follow(new Vector3(0, 400, 0), new Vector3(0, -1, 0), 100);
-  expect(Math.abs(sun.target.position.z)).toBeLessThan(1);
+  // direction vanishes and the square centres under the camera again.
+  followAt(sunRig, new Vector3(0, 400, 0), new Vector3(0, -1, 0), 100);
+  expect(Math.abs(squareCentre(sunRig).z)).toBeLessThan(1);
 });
 
 test("the shadow map is its depth alone, no colour target beside it", () => {
@@ -314,4 +360,82 @@ test("a drag's steps redraw the shadow map at most every 100 ms", () => {
   } finally {
     jest.useRealTimers();
   }
+});
+
+/** Where a world point lands on the shadow map (x, y in 0…1 on it). */
+function onMap(sun: DirectionalLight, p: Vector3): { x: number; y: number } {
+  const q = new Vector4(p.x, p.y, p.z, 1).applyMatrix4(sun.shadow.matrix);
+  return { x: q.x / q.w, y: q.y / q.w };
+}
+
+const inside = ({ x, y }: { x: number; y: number }) =>
+  x >= 0 && x <= 1 && y >= 0 && y <= 1;
+
+/** 150 m over the ground, looking north and 25° down. */
+const FLYING = new Vector3(0, 250, 0);
+const LOOK = new Vector3(0, -Math.sin(Math.PI / 7.2), -Math.cos(Math.PI / 7.2));
+
+test("from the air the map is warped over the view, out to the fog", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
+  followAt(sunRig, FLYING, LOOK, 100);
+  // the square of old reached ~600 m ahead; the warped map reaches the
+  // ground 1.8 km out, and still holds the ground under the view's bottom
+  for (const z of [-200, -600, -1200, -1800]) {
+    expect(inside(onMap(sun, new Vector3(0, 100, z)))).toBe(true);
+  }
+  // behind the camera, out of view, it holds nothing
+  expect(inside(onMap(sun, new Vector3(0, 100, 600)))).toBe(false);
+  // the stream's square is the one it was
+  expect((sunRig.shadowCamera as unknown as { right: number }).right).toBe(440);
+  // the horizon's near band takes over where the map ends
+  expect(sunRig.shadowReach.z).toBeGreaterThan(1800);
+});
+
+test("turning a little from the air keeps the map; turning on redraws it", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
+  followAt(sunRig, FLYING, LOOK, 100);
+  expect(sun.shadow.needsUpdate).toBe(true);
+  sun.shadow.needsUpdate = false;
+  const turned = (deg: number) =>
+    LOOK.clone().applyAxisAngle(new Vector3(0, 1, 0), (deg * Math.PI) / 180);
+  followAt(sunRig, FLYING, turned(6), 100);
+  followAt(sunRig, FLYING.clone().add(new Vector3(5, 0, -40)), LOOK, 100);
+  expect(sun.shadow.needsUpdate).toBe(false);
+  followAt(sunRig, FLYING, turned(40), 100);
+  expect(sun.shadow.needsUpdate).toBe(true);
+});
+
+test("the sun moving fits the warp to it anew", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
+  followAt(sunRig, FLYING, LOOK, 100);
+  const before = sun.shadow.matrix.clone();
+  sun.shadow.needsUpdate = false;
+  sunRig.update(new Date("2026-06-21T15:00:00+02:00"));
+  expect(sun.shadow.needsUpdate).toBe(true);
+  expect(sun.shadow.matrix.equals(before)).toBe(false);
+  expect(inside(onMap(sun, new Vector3(0, 100, -1200)))).toBe(true);
+});
+
+test("landing, and Modell, give the map back to the square", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
+  followAt(sunRig, FLYING, LOOK, 100);
+  expect(sun.shadow.camera.right).not.toBe(440);
+  // 25 m up is still in the air (the switch has a hysteresis) …
+  followAt(sunRig, new Vector3(0, 125, 0), LOOK, 100);
+  expect(sun.shadow.camera.right).not.toBe(SHADOW_BASE_RADIUS);
+  // … on the ground it is the walker's square
+  sun.shadow.needsUpdate = false;
+  walkTo(sunRig, 0, 0);
+  expect(sun.shadow.needsUpdate).toBe(true);
+  expect(sun.shadow.camera.right).toBe(SHADOW_BASE_RADIUS);
+  expect(sun.shadow.bias).toBe(-0.0003);
+  // Modell fits the square to its picture
+  followAt(sunRig, FLYING, LOOK, 100);
+  sunRig.followFootprint(0, 100, -300, 200, 880);
+  expect(sun.shadow.camera.right).toBe(sun.shadow.camera.top);
+  expect(inside(onMap(sun, new Vector3(0, 100, -300)))).toBe(true);
 });

@@ -709,6 +709,14 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       // and the crowns' switch are left, in plain view.
       await expect(page.locator("#atmosphere")).toBeVisible();
       await expect(page.locator("#tree-multituft")).toBeVisible();
+      // A style that draws in its own light rests the date and time, and
+      // says why; leaving it brings them back.
+      await page.evaluate(() => window.__poc?.look?.set({ style: "figure" }));
+      await expect(page.getByTestId("own-light")).toBeVisible();
+      await expect(page.locator("#sun-date")).toBeDisabled();
+      await page.evaluate(() => window.__poc?.look?.set({ style: "pastel" }));
+      await expect(page.getByTestId("own-light")).toHaveCount(0);
+      await expect(page.locator("#sun-date")).toBeEnabled();
 
       await page.getByRole("tab", { name: "Erweitert" }).click();
       await expect(page.getByText("Statistik")).toBeVisible();
