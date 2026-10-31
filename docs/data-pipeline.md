@@ -859,7 +859,11 @@ site's config re-bakes nothing; a palette colour re-bakes only the map
 picture; a bump of a package only the viewer imports (React, Next.js,
 3DTilesRendererJS) re-bakes nothing, and a building module's change no
 terrain (`bake-tiles.ts` meshes the ground, `bake-city-mesh.ts` the
-buildings).
+buildings). A key hashes a module's text, so even a type or a comment in a
+module every ground walks (`lib/city/tileset.ts`, `lib/city/site.ts`,
+`lib/city/tile.ts`) re-bakes every site cold — on Vercel past its build
+time. Something only the viewer or another bake reads goes in its own
+module (the walks' `extras` field is `WalksExtras` in `lib/city/walks.ts`).
 A changed input, a changed bake or a renamed side file re-bakes; a checkout
 or a touch alone does not; anything else is a cache
 read. Every site shares the directory, and it keeps one entry per name: a
