@@ -213,9 +213,6 @@ export interface TilesetExtras {
   /** the trams' timetable (lib/city/tram-timetable.ts), site-wide; absent
    *  where the site has none */
   trams?: string;
-  /** the site's walks (lib/city/walks.ts), relative to the tileset;
-   *  absent where it has none */
-  walks?: string;
 }
 
 /** Everything the bake knows about one tile when it writes the tree. */

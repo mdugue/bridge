@@ -24,6 +24,14 @@ export const WALKS_FILE = "walks.json";
 /** Where a site's walks are written, relative to its data folder. */
 export const WALKS_DIR = "walks";
 
+/** What the tileset's `extras` add for the walks. Kept here, not in
+ *  tileset.ts's `TilesetExtras`: that module is in every ground's bake key
+ *  (bake-entries.ts `GROUND`), and the walks re-bake nothing. */
+export interface WalksExtras {
+  /** the site's walks, relative to the tileset; absent where it has none */
+  walks?: string;
+}
+
 /** A claim a stop makes, and where it can be checked. */
 export interface WalkFact {
   /** one sentence, as the stop tells it */
