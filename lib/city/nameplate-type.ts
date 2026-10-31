@@ -103,7 +103,7 @@ const SERIF_LINES = {
 export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
   pastel: {
     title: SERIF_TITLE,
-    lines: { ...SERIF_LINES, size: 0.3, ink: dn(0x5b_52_4a, 0xe2_d6_c2) },
+    lines: { ...SERIF_LINES, size: 0.42, ink: dn(0x5b_52_4a, 0xe2_d6_c2) },
     ink: dn(0x3d_38_33, 0xf4_ea_d8),
     halo: { ...dn(0xf6_ef_e4, 0x1d_24_33), alpha: 0.85, width: 0.55 },
     accent: ACCENT,
@@ -117,7 +117,7 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
       weight: 400,
       upper: true,
       tracking: 0.05,
-      size: 0.36,
+      size: 0.45,
       ink: dn(0x1d_3f_8f, 0xf3_ea_d0),
     },
     ink: dn(0x11_11_11, 0xff_d2_3f),
@@ -140,7 +140,7 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
       weight: 400,
       upper: false,
       tracking: 0.02,
-      size: 0.28,
+      size: 0.4,
       ink: dn(0xd6_d6_d6, 0xd6_d6_d6),
     },
     ink: dn(0xf4_f4_f4, 0xf4_f4_f4),
@@ -156,7 +156,7 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
       weight: 500,
       upper: true,
       tracking: 0.14,
-      size: 0.3,
+      size: 0.4,
       ink: dn(0xff_ff_ff, 0xff_ff_ff),
     },
     ink: dn(0xff_ff_ff, 0xff_ff_ff),
@@ -167,7 +167,7 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
   },
   paper: {
     title: SERIF_TITLE,
-    lines: { ...SERIF_LINES, size: 0.3, ink: dn(0x4a_4f_57, 0xdc_dd_e0) },
+    lines: { ...SERIF_LINES, size: 0.42, ink: dn(0x4a_4f_57, 0xdc_dd_e0) },
     ink: dn(0x2b_2f_36, 0xf2_f0_ea),
     halo: { ...dn(0xfb_fa_f6, 0x22_26_30), alpha: 0.7, width: 0.45 },
     accent: ACCENT,
@@ -181,7 +181,7 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
       weight: 400,
       upper: true,
       tracking: 0.1,
-      size: 0.3,
+      size: 0.4,
       ink: dn(0x3a_3a_3a, 0xe6_e2_d8),
     },
     ink: dn(0x1a_1a_1a, 0xf2_ee_e4),
@@ -197,7 +197,7 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
       weight: 400,
       upper: true,
       tracking: 0.16,
-      size: 0.32,
+      size: 0.42,
       ink: dn(0xc2_26_1f, 0xc2_26_1f),
     },
     ink: dn(0x11_11_11, 0x11_11_11),
@@ -214,15 +214,16 @@ export const NAMEPLATE_CAPS: Record<
   NameplateRank,
   { desktop: CapRange; phone: CapRange }
 > = {
-  landmark: { desktop: { min: 22, max: 72 }, phone: { min: 18, max: 48 } },
+  landmark: { desktop: { min: 26, max: 72 }, phone: { min: 22, max: 48 } },
   named: { desktop: { min: 16, max: 40 }, phone: { min: 14, max: 30 } },
   address: { desktop: { min: 11, max: 22 }, phone: { min: 10, max: 18 } },
 };
 
 /** The small lines' size against the title's, by rank (an address has
- *  none; a name's one line is a little larger than a landmark's facts). */
+ *  none; a name's one line is a little larger than a landmark's facts):
+ *  at the smallest landmark plate the facts stay above ~11 CSS px. */
 export function linesSize(type: NameplateType, rank: NameplateRank): number {
-  return rank === "named" ? type.lines.size * 1.35 : type.lines.size;
+  return rank === "named" ? type.lines.size * 1.2 : type.lines.size;
 }
 
 /** A colour at the scene's night factor (0 day … 1 night). */
