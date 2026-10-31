@@ -190,7 +190,11 @@ export async function bakeCity(
   const key = cacheKey(inputs, bake, offset, shapeDigest(bedsIn(tile)));
   let mesh: ReturnType<typeof cityMesh> | null = null;
   const built = () => {
-    mesh ??= cityMesh(parseCity(tile, heightOver(tile, ground)));
+    if (!mesh) {
+      mesh = cityMesh(parseCity(tile, heightOver(tile, ground)));
+      // the parse's documents and dressing, gone before the glb is written
+      Bun.gc(true);
+    }
     return mesh;
   };
   const footprintsFile = `footprints_${tile}.json`;
@@ -230,6 +234,10 @@ export async function bakeCity(
       })
     )
   );
+  // the glb's writer's copies, gone before the far glb is simplified
+  if (mesh) {
+    Bun.gc(true);
+  }
   // the same buildings for far off: every vertex the shape does not need
   // dropped (lib/city/tileset.ts `FAR_CITY_SIMPLIFY`)
   const farName = `city_${tile}_far.glb.gz`;

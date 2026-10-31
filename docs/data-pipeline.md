@@ -750,7 +750,16 @@ sites near 2 GiB. Until then a site counted 3 GB, so Vercel's 4-core,
 2026-10-10, when München's peak was lower). A build that re-baked every
 site's buildings was then killed there twice for its memory, München
 beside Dresden. Now that builder bakes one cold site at a time beside the
-warm sites' runs, and CI's 16.8 GB runner bakes two.
+warm sites' runs, and CI's 16.8 GB runner bakes two. By 2026-10-31
+München's cold peak had grown to 6.1 GiB (Dresden's 5.05): the buildings'
+bake appends six kinds of parts (scan structures, gaps, plinths and
+bands, shopfronts, doors, dormers), each copying the vertex stream and
+leaving its parts' plain arrays behind, and Bun's lazy collector let them
+pile up — past what the 8 GB builder holds beside its own build, where
+München went silent at its second tile until the 45-minute limit. A
+collection after each append, after the mesh and before the far glb
+(`bake-city-mesh.ts` `appendBeyondLod2`, `prepare/city.ts`) brings
+München to 4.47 GiB and Dresden to 3.81, the bytes unchanged.
 `PREPARE_JOBS=<n>` sets the number of bakes at once,
 `PREPARE_MEMORY_GB=<gb>` the memory they share (as on a smaller machine:
 the bakes still keep to 80 % of it).
