@@ -88,6 +88,9 @@ export interface DataOverlayOptions {
   onBikeCounts?: (counters: BikeCounter[]) => void;
   /** something a layer draws changed (the stats follow) */
   onChange?: () => void;
+  /** a layer put its marks into the scene or took them out (a style's
+   *  swap gathers them again) */
+  onMarksMoved?: () => void;
   /** the traffic's hour, about once a second while its layer is on; null
    *  when it is switched off */
   onTrafficHour?: (status: TrafficHourStatus | null) => void;
@@ -150,6 +153,7 @@ function bikeOverlay(
           layer = createBikeLayer(opts.ground);
           layer.group.visible = false;
           opts.parent.add(layer.group);
+          opts.onMarksMoved?.();
         }
         layer.group.visible = compiled;
         feed.start();
@@ -247,6 +251,7 @@ function tramOverlay(
       built = createTramCars(timetable, decks, opts.ground);
       built.group.visible = false;
       opts.parent.add(built.group);
+      opts.onMarksMoved?.();
       built.update(clock(performance.now()));
       await opts.compile(built.group);
       if (!alive()) {
@@ -264,7 +269,13 @@ function tramOverlay(
     } finally {
       // not the layer's (a throw, a rejected compile, a page gone): freed,
       // its group out of the scene
-      built?.dispose();
+      if (built) {
+        built.dispose();
+        // (a page gone takes its post stack with it: nothing to gather)
+        if (alive()) {
+          opts.onMarksMoved?.();
+        }
+      }
       loading = false;
     }
   };
