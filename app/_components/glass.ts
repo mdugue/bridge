@@ -21,9 +21,9 @@ import {
   viewportTexture,
 } from "three/tsl";
 import { type DataMarks } from "@/lib/city/render-style";
-import { lampNight } from "./lamp-layer";
 import { mapFadeNode } from "./map-overlay";
 import type { F, Live, V3 } from "./shader-chunks";
+import { styleNight } from "./sun-rig";
 import { eyeDirectionView } from "./view-direction";
 
 /**
@@ -248,7 +248,7 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
   const pale = mix(vec3(1), vivid, 0.75);
   const card = behind ?? vec3(1);
   const tissue = mix(card, card.mul(pale).add(pale.mul(0.12)), 0.8)
-    .add(i.tint.mul(lampNight.mul(0.35)))
+    .add(i.tint.mul(styleNight.mul(0.35)))
     .add(light.mul(0.25));
   const plan = mix(
     mix(vec3(0.55, 0.63, 0.88), vec3(0.42, 0.24, 0.62), i.scale),
@@ -257,9 +257,9 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
   );
   const glowing = vec3(1, 0.82, 0.5).mul(light.mul(0.6).add(0.55));
   const planned = mix(
-    mix(plan, glowing, lampNight),
+    mix(plan, glowing, styleNight),
     vec3(0.08),
-    edge.mul(float(1).sub(lampNight))
+    edge.mul(float(1).sub(styleNight))
   );
   // (its own, wider edge: a plan's band is two lines, its light a dashed
   // line along its ridge — a dash as wide as the band read as a blot)

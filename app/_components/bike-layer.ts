@@ -191,6 +191,8 @@ function poolMaterial(): MeshBasicNodeMaterial {
       scale: directionScale(tint),
       light: float(0),
       edge: ring,
+      // (blended over the scene by its alpha, as the trails)
+      backdrop: false,
     });
     const outline = step(abs(dataMarks.sub(DATA_MARKS.outline)), 0.5);
     m.colorNode = vec4(colour, mix(fall.mul(fall).mul(0.55), ring, outline));
