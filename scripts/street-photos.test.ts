@@ -43,6 +43,15 @@ test("a 360° picture, one without heading or one badly placed is no use", () =>
   ).toBe(false);
 });
 
+test("a close-up from MapComplete's account is no street photo", () => {
+  expect(
+    usable(item("m", 0, 0, "2025", { "geovisio:producer": "mapcomplete" }))
+  ).toBe(false);
+  expect(usable(item("s", 0, 0, "2025", { "geovisio:producer": "scai" }))).toBe(
+    true
+  );
+});
+
 test("the photo's width fits the 16:10 shot", () => {
   expect(verticalFov(65)).toBeCloseTo(43.4, 1);
   expect(verticalFov(90, 1)).toBeCloseTo(90, 5);

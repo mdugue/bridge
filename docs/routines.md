@@ -40,12 +40,15 @@ there is nothing to say, and never merges, resolves or deletes.
   `building:levels` (not churches, halls, towers or a landmark's parts),
   listed buildings without name or address. Writes `osm-gaps/<site>/`.
 - `bun scripts/street-photos.ts <site> [--n N] [--seed S]` — the newest
-  usable Panoramax photo in each of N 400 m cells (flat, aimed, placed
-  within 6 m; the cells in an order each ISO week draws anew) as a
+  usable Panoramax photo in each of N 400 m cells (a street, not
+  MapComplete's close-ups; flat, aimed, placed within 6 m; the cells in an
+  order each ISO week draws anew; needs the site prepared) as a
   snapshot at its pose and the photo, `shots/foto-<site>-<n>.json` and
   `street-photos/<site>/`. `SHOTS_SMALL=1` makes the snapshot harness
-  (`e2e/snapshot-shot.spec.ts`) render at 800 × 500 with five minutes to
-  load, what a software-rendered container can do.
+  (`e2e/snapshot-shot.spec.ts`) render at 800 × 500 with fifteen minutes
+  to load, what a software-rendered container can do; `SHOTS_AT=1` boots
+  each shot at its own place, and `PW_CHROMIUM` names a browser
+  installed outside Playwright's store (the container's).
 
 `osm-gaps/`, `street-photos/` and `shots/` are gitignored.
 
@@ -73,7 +76,8 @@ times in Europe/Berlin. The prompts, as the tasks carry them:
   Never edit OpenStreetMap, never commit the generated files.“
 - **Modellfehler aus Straßenfotos**, Thursday 13:38: „Weekly model-faults
   run for mdugue/bridge. Follow `.claude/skills/model-faults/SKILL.md`
-  exactly, Dresden, 6–8 photos, rendered with `SHOTS_SMALL`. Propose
+  exactly, Dresden, 6–8 photos, rendered with `SHOTS_SMALL` and
+  `SHOTS_AT`. Propose
   changes to general heuristics only, never a fix for one building; never
   commit photos or renders. Report in German as one comment on the open
   issue labelled `model-faults`.“

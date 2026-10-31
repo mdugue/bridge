@@ -18,21 +18,40 @@ places it would touch — not "make Hauptstraße 5 red".
 ## Make the pairs
 
 ```bash
+bun scripts/prepare-sites.ts dresden            # a fresh session has no public/data (≈ 9 min)
 bun scripts/street-photos.ts dresden --n 8      # the week's photos + snapshots
-NEXT_PUBLIC_POC_DEBUG=1 bunx next build && bunx next start -p 3000 &
+NEXT_PUBLIC_POC_DEBUG=1 bunx next build && (bunx next start -p 3000 &)
+until curl -sf -o /dev/null localhost:3000/dresden; do sleep 2; done
 # a real GPU (headed):
-SHOTS=1 bunx playwright test e2e/snapshot-shot.spec.ts --headed -g "foto-dresden"
-# the cloud container (SwiftShader, small, the whole site in lite):
-SHOTS=1 SHOTS_SMALL=1 SHOTS_QUERY="scene=lite&block=1" \
+SHOTS=1 SHOTS_AT=1 bunx playwright test e2e/snapshot-shot.spec.ts --headed -g "foto-dresden"
+# the cloud container (SwiftShader, small, lite booted at each photo):
+PW_CHROMIUM=/opt/pw-browsers/chromium SHOTS=1 SHOTS_SMALL=1 SHOTS_AT=1 \
+  SHOTS_QUERY="scene=lite&block=1" \
   bunx playwright test e2e/snapshot-shot.spec.ts --workers=1 -g "foto-dresden"
 ```
 
 The first walks the site's 400 m cells in an order the ISO week draws
 (`--seed` to repeat one) and takes the newest usable Panoramax photo of
-each until it has N: flat, aimed, placed within 6 m. It writes a
+each until it has N: a street (not MapComplete's point-of-interest
+close-ups), flat, aimed, placed within 6 m. It writes a
 snapshot at each photo's pose to `shots/foto-<site>-<n>.json` and the
 photo to `street-photos/<site>/` with `pairs.json` (author, licence,
 link). The second renders the snapshots to `shots/foto-<site>-<n>.png`.
+
+Wait for the server to answer before Playwright starts: a port that is
+still closed makes Playwright run its own build and server, which rebuilds
+`.next` under the running one and starves the render. In the container:
+`prepare-sites` with one site prunes the others'
+`public/data` (fine here). `PW_CHROMIUM` points Playwright at the
+container's own Chromium, which the repository's Playwright pin does not
+find by itself. `SHOTS_AT=1` boots each page at its photo (`#at=lat,lng`):
+`lite` streams only around where it booted, so a pose a kilometre from the
+spawn would show the wrong part of town. A shot takes 7–11 minutes
+there (`SHOTS_SMALL` waits up to 15 for the scene); eight are over an hour,
+so start the render in the background and read the photos meanwhile.
+Look at the photos first and render only the pairs that show a building
+or a street (move the other snapshots out of `shots/`): a close-up or a
+photo of a hedge is skipped, not rendered.
 SwiftShader is good for geometry and colour, wrong for light and shadow
 — never judge shading from it; a lite render is coarse (half the pixel
 ratio), enough for roofs, heights and storeys.

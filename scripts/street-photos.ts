@@ -16,7 +16,7 @@
  * the repository. Panoramax only (ADR: no Google Street View; Mapillary's
  * poses were off by ~0.6 m in 2026-10).
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gridConvergenceDeg, latLngToUtm, utmToLatLng } from "../lib/city/crs";
 import { siteExtentOf } from "../lib/city/site-extent";
@@ -52,11 +52,21 @@ export interface PanoramaxItem {
   assets: { sd?: { href: string } };
 }
 
-/** Whether a photo can stand beside a render: flat, aimed, well placed. */
+/**
+ * Accounts whose photos show one thing up close, not a street: MapComplete
+ * uploads every app user's point-of-interest photo (a charger, a shop
+ * window, a café's tables) under its own account. Three of the first run's
+ * eight photos were these (2026-10-31), none showing a building whole.
+ */
+const CLOSE_UP_PRODUCERS = new Set(["mapcomplete"]);
+
+/** Whether a photo can stand beside a render: a street, flat, aimed,
+ *  well placed. */
 export function usable(item: PanoramaxItem): boolean {
   const p = item.properties;
   const fov = p["pers:interior_orientation"]?.field_of_view;
   return (
+    !CLOSE_UP_PRODUCERS.has(p["geovisio:producer"] ?? "") &&
     p["view:azimuth"] !== undefined &&
     item.assets.sd !== undefined &&
     (fov === undefined || fov < 180) &&
@@ -229,6 +239,12 @@ async function main() {
   };
   const n = Number(flag("--n") ?? 8);
   const seed = flag("--seed") ?? isoWeek(new Date());
+  const manifestPath = join(ROOT, "public/data", site.id, "manifest.json");
+  if (!existsSync(manifestPath)) {
+    throw new Error(
+      `${site.id} is not prepared (no public/data/${site.id}): run \`bun scripts/prepare-sites.ts ${site.id}\` first`
+    );
+  }
   const epsg = site.provider.epsg;
   const { picked, looked } = await pickPhotos(
     epsg,
@@ -238,9 +254,9 @@ async function main() {
   const heightAt = await siteDgm(site, (tif, tfw) =>
     readDgmFile(tif, tfw, "native")
   );
-  const manifest = JSON.parse(
-    readFileSync(join(ROOT, "public/data", site.id, "manifest.json"), "utf8")
-  ) as { files: Record<string, string> };
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    files: Record<string, string>;
+  };
   const tileset = JSON.parse(
     readFileSync(
       join(ROOT, "public/data", site.id, manifest.files["tileset.json"]),
