@@ -34,7 +34,9 @@ ADR 0037 (fetch → bake → build). Deep reference: the `city-walker` skill,
 6. **If the build reads it**, list the module that bakes it in the artifact's
    row of `scripts/bake-entries.ts` (a missing entry leaves a stale cache;
    `bake-entries.test.ts` catches a module `prepare-data.ts` imports that
-   no bake's key holds, not one filed under the wrong artifact).
+   no bake's key holds, not one filed under the wrong artifact). The code
+   that reads it goes into its step's module in `scripts/prepare/`, never
+   into `prepare-data.ts`, which no key carries.
 7. **OSM output** carries an `attribution` member; a new source's licence
    and credit go into the guide's licence table (both languages) and, for a
    new provider, `NOTICE`.
