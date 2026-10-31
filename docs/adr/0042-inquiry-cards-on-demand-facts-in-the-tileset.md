@@ -30,6 +30,13 @@ server.
    a label.
 5. **An ensemble is asked as one:** LoD2 objects under one named OSM
    outline answer together, across tile edges.
+6. **Several things can be asked at once.** A selection holds up to eight
+   (`MAX_PICKS`): Shift+click or Shift+`I` adds or takes one out, the
+   card's *Mehrere* does so on a touch screen, and the places an answer
+   of *Frag die Stadt* shows (ADR 0056) are selected by rays from above.
+   The hatch and the outline cover the whole selection (the outline's mask
+   is a union of triangles: no more memory for eight than for one); one
+   card is open at a time, the others a click away above it.
 
 ## Consequences
 

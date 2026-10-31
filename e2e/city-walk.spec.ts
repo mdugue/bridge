@@ -884,6 +884,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await expect(
         card.getByRole("button", { name: "Wann wurde sie geweiht?" })
       ).toBeVisible();
+      // a new conversation clears the card and draws new first questions
+      await card.getByTestId("ask-new").click();
+      await expect(card).not.toContainText("George Bähr");
+      await expect(card.getByTestId("ask-starter")).toHaveCount(4);
       await card
         .getByRole("button", { name: "Frag die Stadt schließen" })
         .click();
@@ -1113,6 +1117,26 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       );
       await page.keyboard.press("i");
       await expect(card).toBeVisible();
+      await expect(card).not.toContainText(centreId);
+      // Shift+click adds the centre's building: two picks, the new one's
+      // card open; its × takes it out again
+      const stack = page.getByTestId("pick-stack");
+      await page.keyboard.down("Shift");
+      await page.mouse.click(
+        (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        (box?.y ?? 0) + (box?.height ?? 0) / 2
+      );
+      await page.keyboard.up("Shift");
+      // the first pick waits behind the open card, a little turned
+      await expect(stack.getByTestId("pick-card")).toHaveCount(1);
+      await expect(stack).toContainText("2 ausgewählt");
+      await expect(card).toContainText(centreId);
+      // a click brings it to the front, the centre's building behind
+      await stack.getByTestId("pick-card").getByRole("button").first().click();
+      await expect(card).not.toContainText(centreId);
+      // × takes the centre's building out: one pick, no stack
+      await stack.getByRole("button", { name: /abwählen$/ }).click();
+      await expect(stack.getByTestId("pick-card")).toHaveCount(0);
       await expect(card).not.toContainText(centreId);
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();

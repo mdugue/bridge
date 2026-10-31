@@ -11,6 +11,7 @@ import {
   buildingKey,
   type CityLayer,
   cityObjectsAlong,
+  cityObjectsOnRay,
   groupObjects,
 } from "./city-layer";
 import { setPickRay } from "./view-ray";
@@ -39,12 +40,14 @@ import { setPickRay } from "./view-ray";
  */
 export interface InquiryProbe {
   /** asks at a screen point (NDC; the centre when omitted) and marks
-   *  what it chose */
-  ask: (ndc?: { x: number; y: number }) => Asked | null;
-  /** marks another candidate of the last question; its inquiry */
+   *  what it chose — alone, or (`add`) beside what is picked already,
+   *  taking it out again when it was picked */
+  ask: (ndc?: { x: number; y: number }, add?: boolean) => Asked | null;
+  /** puts another candidate of the last question in the active pick's
+   *  place; its inquiry */
   select: (index: number) => Inquiry | null;
   /** outlines a candidate of the last question for a moment (null: the
-   *  chosen one again) */
+   *  picks again) */
   preview: (index: number | null) => void;
   /** removes the mark */
   clear: () => void;
@@ -52,6 +55,68 @@ export interface InquiryProbe {
    *  outline follows the level on screen — drawn again where a part is on
    *  `redraw` (its index back from the BVH worker) */
   refresh: (redraw?: CityLayer) => void;
+  /** what is picked, in order, and which of them is the active one */
+  picks: () => Picked;
+  /** the active pick's candidates (what else its click met; none for a
+   *  pick an answer made), and where it was clicked */
+  candidates: () => Asked & { at: { x: number; y: number } | null };
+  /** each pick's subject as outlined, in the selection's order */
+  subjects: () => readonly OutlineSubject[];
+  /** makes a pick the active one */
+  activate: (index: number) => void;
+  /** takes a pick out of the selection */
+  remove: (index: number) => void;
+  /**
+   * Picks what stands at each world point (x, z; from above): a place
+   * *Frag die Stadt* named. A point where nothing loaded stands yet, or
+   * whose tile's BVH is with the worker, is `missed` — asked again once
+   * the tiles change.
+   */
+  pickAt: (
+    points: readonly { r?: number; x: number; z: number }[],
+    replace: boolean
+  ) => { missed: number[] };
+}
+
+/** The selection: its picks in order and the active one's index. */
+export interface Picked {
+  active: number;
+  picks: Inquiry[];
+}
+
+/** The most things one selection holds. */
+export const MAX_PICKS = 8;
+
+/**
+ * The selection after a pick with key `key`: alone (a plain question),
+ * or added (`add`) — taken out again when it was in, the oldest dropped
+ * past `max`. The active one is the pick, or the one before a removed.
+ */
+export function nextPicks<T extends { key: string }>(
+  picks: readonly T[],
+  pick: T,
+  add: boolean,
+  max = MAX_PICKS
+): { active: number; picks: T[] } {
+  if (!add) {
+    return { active: 0, picks: [pick] };
+  }
+  const at = picks.findIndex((p) => p.key === pick.key);
+  if (at >= 0) {
+    const rest = picks.filter((_, i) => i !== at);
+    return { active: Math.max(0, Math.min(at, rest.length) - 1), picks: rest };
+  }
+  const next = [...picks, pick].slice(-max);
+  return { active: next.length - 1, picks: next };
+}
+
+/** A pick's question: what its ray met, nearest first, the chosen one. */
+interface PickAsk {
+  at: { x: number; y: number } | null;
+  distances: number[];
+  hits: ProbeHit[];
+  keys: string[];
+  selected: number;
 }
 
 /** What a question met: its candidates, nearest first, and the chosen. */
@@ -225,6 +290,18 @@ function porous(t: FeatureInquiry): boolean {
 /** How far a ray looks for a thing when no building stops it (m). */
 const FAR = 6000;
 const CENTRE = new Vector2(0, 0);
+/** Where a ray from above a place starts (m, world y) and how far below
+ *  sea level it may reach: above every German city's roofs. */
+const ABOVE = 3000;
+const DEPTH = 200;
+const DOWN = new Vector3(0, -1, 0);
+/** Where a place's footprint is tried when its point stands on nothing. */
+const RING_STEPS = [
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+  [0, -1],
+] as const;
 
 export function createInquiryProbe(deps: {
   /** the camera the frame is drawn with (Modell's parallel one, or walk/fly's) */
@@ -238,9 +315,12 @@ export function createInquiryProbe(deps: {
   loaded?: () => Iterable<CityLayer>;
   /** distance along the pick ray to the ground, or null within `far` */
   groundAlong: (raycaster: Raycaster, far: number) => number | null;
-  /** the outline's subject: what was asked, or null when nothing is */
-  /** a hover over a candidate passes `flash` false (selection-outline.ts) */
-  outline: (subject: OutlineSubject | null, flash?: boolean) => void;
+  /** the outline's subjects: what is picked, or null when nothing is; a
+   *  hover over a candidate passes `flash` false (selection-outline.ts) */
+  outline: (
+    subjects: readonly OutlineSubject[] | null,
+    flash?: boolean
+  ) => void;
   /** the trees, monuments and decks on screen now (lib/city/ask-items.ts) */
   things: () => Iterable<AskSet<FeatureInquiry>>;
   /** the canvas size in CSS px, for the tolerance rings */
@@ -249,10 +329,25 @@ export function createInquiryProbe(deps: {
   toSite: (world: Vector3) => [number, number];
 }): InquiryProbe {
   let marked: CityLayer[] = [];
-  // the marked building's parts, as last outlined
-  let markedParts: BuildingPart[] = [];
-  // the last question's candidates, as the scene knows them
-  let last: { hits: ProbeHit[]; selected: number } | null = null;
+  // each pick's subject as last outlined (a building's parts per tile)
+  let outlined: OutlineSubject[] = [];
+  // what is picked, in order
+  let picks: PickSample<ProbeHit>[] = [];
+  let active = 0;
+  // each pick's question: what else its ray met, by the pick's key — so
+  // "Hier auch" follows whichever pick's card is open
+  const asks = new Map<string, PickAsk>();
+  /** The active pick's question, if it was asked by a click. */
+  const lastAsk = (): PickAsk | undefined => asks.get(picks[active]?.key ?? "");
+  /** Forgets the questions of what is no longer picked. */
+  const prune = () => {
+    const live = new Set(picks.map((p) => p.key));
+    for (const key of asks.keys()) {
+      if (!live.has(key)) {
+        asks.delete(key);
+      }
+    }
+  };
   const ray = new Raycaster();
 
   const unmark = () => {
@@ -264,32 +359,23 @@ export function createInquiryProbe(deps: {
       }
     }
     marked = [];
-    markedParts = [];
+    outlined = [];
   };
   const clear = () => {
     unmark();
-    last = null;
+    picks = [];
+    active = 0;
+    asks.clear();
     deps.outline(null);
   };
 
-  /** One ray: everything it meets before the ground, nearest first. */
-  const along = (
-    ndc: { x: number; y: number } | undefined
+  /** What the ray `ray` is set to meets before the ground, nearest
+   *  first; `camera` gives the buildings' pick ray where it is one. */
+  const met = (
+    buildings: { distance: number; layer: CityLayer; objectIndex: number }[],
+    reach: number,
+    ground: number | null
   ): PickSample<ProbeHit>[] => {
-    const camera = deps.camera();
-    const reach = Math.max(
-      setPickRay(ray, ndc ? new Vector2(ndc.x, ndc.y) : CENTRE, camera),
-      FAR
-    );
-    // The ground first: a building tile behind it needs no BVH for this
-    // question (city-layer.ts builds the ones the ray reaches before).
-    const ground = deps.groundAlong(ray, reach);
-    const buildings = cityObjectsAlong(
-      camera,
-      deps.cities(),
-      ndc,
-      ground ?? undefined
-    );
     const things = hitsInSets(
       ray.ray.origin,
       ray.ray.direction,
@@ -318,6 +404,36 @@ export function createInquiryProbe(deps: {
     return ground === null ? hits : hits.filter((h) => h.distance <= ground);
   };
 
+  /** One ray: everything it meets before the ground, nearest first. */
+  const along = (
+    ndc: { x: number; y: number } | undefined
+  ): PickSample<ProbeHit>[] => {
+    const camera = deps.camera();
+    const reach = Math.max(
+      setPickRay(ray, ndc ? new Vector2(ndc.x, ndc.y) : CENTRE, camera),
+      FAR
+    );
+    // The ground first: a building tile behind it needs no BVH for this
+    // question (city-layer.ts builds the ones the ray reaches before).
+    const ground = deps.groundAlong(ray, reach);
+    const buildings = cityObjectsAlong(
+      camera,
+      deps.cities(),
+      ndc,
+      ground ?? undefined
+    );
+    return met(buildings, reach, ground);
+  };
+
+  /** A ray straight down onto a world point: what stands there. */
+  const fromAbove = (x: number, z: number): PickSample<ProbeHit>[] => {
+    ray.set(new Vector3(x, ABOVE, z), DOWN);
+    ray.far = ABOVE + DEPTH;
+    const ground = deps.groundAlong(ray, ray.far);
+    ray.far = ground ?? ray.far;
+    const buildings = cityObjectsOnRay(ray, deps.cities());
+    return met(buildings, ray.far, ground);
+  };
   /** A building's live ensemble (its tree, or the trees that are one
    *  building — in this tile and, by its group, in the others on screen):
    *  its parts and its inquiry (unmarked); `at` where it was asked
@@ -380,60 +496,81 @@ export function createInquiryProbe(deps: {
    *  far and baked buildings share the object table): the level the
    *  renderer shows next carries the hatch. */
   const markLevels = () => {
+    const parts = outlined.flatMap((o) => ("building" in o ? o.building : []));
     for (const level of deps.loaded?.() ?? []) {
-      const part = markedParts.find(
+      const part = parts.find(
         (p) => p.layer.tile === level.tile && p.layer !== level
       );
       if (part && !marked.includes(level)) {
-        level.mark(part.objects);
+        level.mark(
+          new Set(
+            parts
+              .filter((p) => p.layer === part.layer)
+              .flatMap((p) => [...p.objects])
+          )
+        );
         marked.push(level);
       }
     }
   };
 
   const refresh = (redraw?: CityLayer) => {
-    if (markedParts.length === 0) {
+    if (!outlined.some((o) => "building" in o)) {
       return;
     }
     markLevels();
     // the outline on the level on screen, not on one the renderer hid
     const shown = [...deps.cities()];
-    const moved = markedParts.map((part) =>
-      shown.includes(part.layer)
-        ? part
-        : {
-            ...part,
-            layer: shown.find((l) => l.tile === part.layer.tile) ?? part.layer,
-          }
-    );
-    if (
-      moved.some((part, i) => part.layer !== markedParts[i]?.layer) ||
-      (redraw && moved.some((part) => part.layer === redraw))
-    ) {
-      markedParts = moved;
-      deps.outline({ building: moved });
-    }
-  };
-
-  /** Marks a hit: the hatch on a building's tree, the outline round it. */
-  const mark = (hit: ProbeHit) => {
-    unmark();
-    if ("building" in hit) {
-      const { parts } = building(hit.building.layer, hit.building.objectIndex);
-      markedParts = parts;
-      for (const { layer, objects } of parts) {
-        layer.mark(objects);
-        marked.push(layer);
+    let changed = false;
+    const moved = outlined.map((o) => {
+      if (!("building" in o)) {
+        return o;
       }
-      markLevels();
-      deps.outline({ building: parts });
-    } else {
-      deps.outline({ thing: hit.thing });
+      const parts = o.building.map((part) => {
+        const layer = shown.includes(part.layer)
+          ? part.layer
+          : (shown.find((l) => l.tile === part.layer.tile) ?? part.layer);
+        changed ||= layer !== part.layer || part.layer === redraw;
+        return layer === part.layer ? part : { ...part, layer };
+      });
+      return { building: parts };
+    });
+    if (changed) {
+      outlined = moved;
+      deps.outline(moved);
     }
   };
 
-  const ask = (ndc?: { x: number; y: number }): Asked | null => {
-    clear();
+  /** Marks the picks: the hatch on each building's tree, the outline
+   *  round all of them. */
+  const mark = (flash = true) => {
+    unmark();
+    outlined = picks.map((p) => subject(p.hit));
+    // one hatch set per tile level: every pick's objects on it
+    const byLayer = new Map<CityLayer, Set<number>>();
+    for (const o of outlined) {
+      for (const { layer, objects } of "building" in o ? o.building : []) {
+        const set = byLayer.get(layer) ?? new Set<number>();
+        for (const i of objects) {
+          set.add(i);
+        }
+        byLayer.set(layer, set);
+      }
+    }
+    for (const [layer, objects] of byLayer) {
+      layer.mark(objects);
+      marked.push(layer);
+    }
+    markLevels();
+    deps.outline(outlined.length > 0 ? outlined : null, flash);
+  };
+
+  const current = (): Picked => ({
+    active,
+    picks: picks.map((p) => describe(p.hit)),
+  });
+
+  const ask = (ndc?: { x: number; y: number }, add = false): Asked | null => {
     const exact = along(ndc);
     const rings = ndc
       ? ringOffsets(TOLERANCE_PX, deps.viewport()).map((d) =>
@@ -448,39 +585,164 @@ export function createInquiryProbe(deps: {
           .filter((h): h is PickSample<ProbeHit> => h !== null)
       );
     if (!chosen) {
+      if (!add) {
+        clear();
+      }
       return null;
     }
     const kept = mergeCandidates(chosen, exact, rings);
     const selected = kept.indexOf(chosen);
-    last = { hits: kept.map((k) => k.hit), selected };
-    mark(chosen.hit);
-    return {
-      candidates: kept.map((k) => ({
-        distance: k.distance,
-        inquiry: describe(k.hit),
-        key: k.key,
-      })),
-      selected,
-    };
+    ({ picks, active } = nextPicks(picks, chosen, add));
+    const taken = !picks.includes(chosen);
+    prune();
+    if (!taken) {
+      asks.set(chosen.key, {
+        at: ndc ?? null,
+        distances: kept.map((k) => k.distance),
+        hits: kept.map((k) => k.hit),
+        keys: kept.map((k) => k.key),
+        selected,
+      });
+    }
+    mark();
+    return taken ? { candidates: [], selected: -1 } : candidates();
+  };
+
+  /** The active pick's candidates, as the strip lists them. */
+  const candidates = (): Asked & { at: { x: number; y: number } | null } => {
+    const q = lastAsk();
+    return q
+      ? {
+          at: q.at,
+          candidates: q.hits.map((hit, i) => ({
+            distance: q.distances[i],
+            inquiry: describe(hit),
+            key: q.keys[i],
+          })),
+          selected: q.selected,
+        }
+      : { at: null, candidates: [], selected: -1 };
   };
 
   const select = (index: number): Inquiry | null => {
-    const hit = last?.hits[index];
-    if (!(last && hit)) {
+    const q = lastAsk();
+    const hit = q?.hits[index];
+    const pick = picks[active];
+    if (!(q && hit && pick)) {
       return null;
     }
-    last.selected = index;
-    mark(hit);
+    const key = q.keys[index];
+    // a candidate already picked is not picked twice: its card opens
+    const other = picks.findIndex((p, i) => i !== active && p.key === key);
+    if (other >= 0) {
+      active = other;
+      mark(false);
+      return describe(picks[other].hit);
+    }
+    // the pick is now that candidate: its question goes with it
+    asks.delete(pick.key);
+    picks[active] = { ...pick, hit, key };
+    asks.set(key, { ...q, selected: index });
+    mark();
     return describe(hit);
   };
 
   const preview = (index: number | null) => {
-    const hit = last?.hits[index ?? last.selected];
+    const hit = index === null ? null : lastAsk()?.hits[index];
+    // a hover only points: no flash (selection-outline.ts)
     if (hit) {
-      // a hover only points: no flash (selection-outline.ts)
-      deps.outline(subject(hit), false);
+      deps.outline(
+        outlined.map((o, i) => (i === active ? subject(hit) : o)),
+        false
+      );
+    } else if (outlined.length > 0) {
+      deps.outline(outlined, false);
     }
   };
 
-  return { ask, clear, preview, refresh, select };
+  const activate = (index: number) => {
+    if (index >= 0 && index < picks.length) {
+      active = index;
+    }
+  };
+
+  const remove = (index: number) => {
+    if (index < 0 || index >= picks.length) {
+      return;
+    }
+    picks = picks.filter((_, i) => i !== index);
+    if (picks.length === 0) {
+      clear();
+      return;
+    }
+    active = Math.min(active > index ? active - 1 : active, picks.length - 1);
+    prune();
+    mark(false);
+  };
+
+  /** What stands at a place: under its point, or — a courtyard, a
+   *  cloister — under its footprint's ring halfway out (`r`). */
+  const standingAt = (p: {
+    r?: number;
+    x: number;
+    z: number;
+  }): PickSample<ProbeHit> | null => {
+    const centre = firstSolid(fromAbove(p.x, p.z));
+    if (centre || !p.r) {
+      return centre;
+    }
+    const d = p.r / 2;
+    for (const [dx, dz] of RING_STEPS) {
+      const hit = firstSolid(fromAbove(p.x + dx * d, p.z + dz * d));
+      if (hit) {
+        return hit;
+      }
+    }
+    return null;
+  };
+
+  const pickAt = (
+    points: readonly { r?: number; x: number; z: number }[],
+    replace: boolean
+  ) => {
+    const missed: number[] = [];
+    const found: PickSample<ProbeHit>[] = [];
+    points.forEach((p, i) => {
+      const hit = standingAt(p);
+      if (!hit) {
+        missed.push(i);
+      } else if (!found.some((f) => f.key === hit.key)) {
+        found.push(hit);
+      }
+    });
+    if (replace) {
+      picks = [];
+      active = 0;
+    }
+    if (found.length > 0 || replace) {
+      for (const hit of found) {
+        if (!picks.some((p) => p.key === hit.key)) {
+          picks = [...picks, hit].slice(-MAX_PICKS);
+        }
+      }
+      active = Math.max(0, Math.min(active, picks.length - 1));
+      prune();
+      mark();
+    }
+    return { missed };
+  };
+
+  return {
+    ask,
+    activate,
+    candidates,
+    subjects: () => outlined,
+    clear,
+    pickAt,
+    picks: current,
+    preview,
+    refresh,
+    remove,
+    select,
+  };
 }

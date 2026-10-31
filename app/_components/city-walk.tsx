@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   type CSSProperties,
+  type ReactNode,
   type RefObject,
   useCallback,
   useEffect,
@@ -64,6 +65,7 @@ import { type HudTool, HudToolbar } from "./hud-toolbar";
 import type { ExportContext } from "./image-export";
 import { InquiryCard } from "./inquiry-card";
 import { InquiryStrip, InquiryTapRing } from "./inquiry-strip";
+import { PickStack } from "./pick-stack";
 import { useLiveMode } from "./live-mode";
 import {
   LocateMessage,
@@ -89,6 +91,7 @@ import {
 import { SceneSidebar } from "./scene-sidebar";
 import { WalkCard } from "./walk-player";
 import { useAskScene } from "./ask-scene";
+import { frameTargets } from "@/lib/city/ask-view";
 
 /**
  * *Frag die Stadt* (ADR 0056): the chat client, its tool schemas and the
@@ -736,6 +739,17 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   // one ends the other.
   const [asking, setAsking] = useState(false);
   const askScene = useAskScene(handleRef, look, time, site, pace);
+  // the selection's *Alle zeigen*: one view from the air that holds every
+  // pick, framed as an answer's places are (lib/city/ask-view.ts)
+  const showAllPicks = useCallback(() => {
+    const targets = handleRef.current?.pickTargets() ?? [];
+    if (targets.length > 0) {
+      askScene.show(
+        frameTargets(targets, { ...askScene.frame(), from: askScene.from() })
+          .view
+      );
+    }
+  }, [askScene]);
   const toggleAsk = () => {
     if (!asking && walking) {
       endWalk();
@@ -1186,9 +1200,13 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
               )}
               <InquiryPanel
                 coarse={coarse}
+                onActivate={(i) => handleRef.current?.selectPick(i)}
+                onAdding={(on) => handleRef.current?.setAddingPicks(on)}
                 onClose={closeInquiry}
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
+                onRemove={(i) => handleRef.current?.removePick(i)}
                 onSelect={(i) => handleRef.current?.selectCandidate(i)}
+                onShowAll={showAllPicks}
               />
               <SceneOverlays
                 asking={asking}
@@ -1313,27 +1331,51 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
 }
 
 /**
- * The asked thing's card and what else the ray met: on a desktop one
- * column at the left, the card over the list; on a touch screen the sheet
- * with the chips above it. The tap's ring either way.
+ * The asked thing's card, what else the ray met and the selection: on a
+ * desktop one column at the left, the selection over the card over the
+ * list; on a touch screen the sheet with the chips and the selection
+ * above it. The tap's ring either way.
  */
 function InquiryPanel({
   coarse,
+  onActivate,
+  onAdding,
   onClose,
   onPreview,
+  onRemove,
   onSelect,
+  onShowAll,
 }: {
   coarse: boolean;
+  onActivate: (index: number) => void;
+  onAdding: (on: boolean) => void;
   onClose: () => void;
   onPreview: (index: number | null) => void;
+  onRemove: (index: number) => void;
   onSelect: (index: number) => void;
+  onShowAll: () => void;
 }) {
   const asked = useSceneStatus("inquiry");
   const provenanceUrl = useSceneStatus("site")?.provenanceUrl ?? null;
   if (!asked) {
     return null;
   }
-  const { along, inquiry } = asked;
+  const { along, inquiry, picked } = asked;
+  const stack = (card?: ReactNode) => (
+    <PickStack
+      active={picked.active}
+      adding={picked.adding}
+      onActivate={onActivate}
+      onAdding={onAdding}
+      onRemove={onRemove}
+      onShowAll={onShowAll}
+      overStrip={along !== null}
+      picks={picked.picks}
+      sheet={coarse}
+    >
+      {card}
+    </PickStack>
+  );
   const strip = along && (
     <InquiryStrip
       along={along}
@@ -1355,12 +1397,13 @@ function InquiryPanel({
       {along && <InquiryTapRing along={along} />}
       {coarse ? (
         <>
+          {stack()}
           {strip}
           {card}
         </>
       ) : (
         <div className="pointer-events-none absolute inset-y-4 left-4 z-20 flex w-[min(22rem,calc(100%-2rem))] lg:w-[min(28rem,calc(100%-2rem))] 2xl:w-[32rem] flex-col items-stretch gap-2">
-          {card}
+          {stack(card)}
           {strip}
         </div>
       )}
