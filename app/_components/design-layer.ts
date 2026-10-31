@@ -1,5 +1,13 @@
-import type { Object3D } from "three/webgpu";
-import { DoubleSide, Mesh, MeshStandardNodeMaterial } from "three/webgpu";
+import type { Intersection, Object3D } from "three/webgpu";
+import {
+  Box3,
+  DoubleSide,
+  Mesh,
+  MeshStandardNodeMaterial,
+  Raycaster,
+  Vector3,
+} from "three/webgpu";
+import type { AskHit, AskSet, Xyz } from "@/lib/city/ask-solids";
 import type { DesignTier } from "@/lib/city/design-budget";
 import {
   coveredObjects,
@@ -10,12 +18,14 @@ import {
 } from "@/lib/city/design-cover";
 import {
   type DesignPlacement,
+  elsewhereNote,
   groundBase,
   normalizeRotation,
   type PlacementSource,
   parsePlacementFile,
   placeAhead,
   placementFile,
+  SITE_REACH_M,
   standingBase,
   trustedBase,
 } from "@/lib/city/design-placement";
@@ -28,7 +38,13 @@ import {
   SITE_UNDER_M,
   setDesignSite,
 } from "./design-site";
-import { type DesignModel, readDesign } from "./design-read";
+import {
+  type DesignModel,
+  type DesignParts,
+  partOfVertex,
+  readDesign,
+} from "./design-read";
+import type { DesignInquiry } from "@/lib/city/inquiry-design";
 import { releaseRenderState, sceneMaterial } from "./three-utils";
 
 /**
@@ -75,6 +91,8 @@ export interface DesignLayerDeps {
   tier: DesignTier;
   /** the ground's elevation at EPSG (x, y), where a tile has it */
   heightAt: (x: number, y: number) => number | null;
+  /** how far (m) EPSG (x, y) lies beyond the site's tiles; 0 on one */
+  beyondSite: (x: number, y: number) => number;
   /** caps the walked ground (projected x, y → m NHN, null: not there) */
   capGround: (cap: ((x: number, y: number) => number | null) | null) => void;
   pose: () => PlayerPose;
@@ -117,6 +135,11 @@ export interface DesignLayer {
   outline: () => [number, number][] | null;
   /** what the collider walks against */
   meshes: () => Mesh[];
+  /** what a question meets of it: its parts (lib/city/ask-solids.ts) */
+  asks: () => AskSet<DesignInquiry>[];
+  /** a part's own triangles in world positions (its outline): none when
+   *  another design came since it was asked (`file`) */
+  partShape: (file: string, part: number) => Float32Array;
   status: () => DesignStatus | null;
   dispose: () => void;
 }
@@ -174,11 +197,135 @@ interface Loaded {
   mesh: Mesh;
   placement: DesignPlacement;
   source: PlacementSource;
+  /** why it is not where its file says (the panel's note in place of
+   *  the reader's), null where it is or the file says nothing */
+  placeNote: string | null;
   files: MeshStandardNodeMaterial[] | null;
   fileColours: boolean;
   mask: PlanMask | null;
   outline: [number, number][] | null;
   hidden: Map<string, Set<number>>;
+  /** what a question meets of it, made on the first question after a
+   *  pose (`askSet`) */
+  ask: AskSet<DesignInquiry> | null;
+}
+
+/** A part's triangles of the loaded design in world positions. */
+function partTriangles(loaded: Loaded, part: number): Float32Array {
+  const { geometry } = loaded.mesh;
+  const index = geometry.getIndex();
+  const position = geometry.getAttribute("position");
+  if (!index) {
+    return new Float32Array();
+  }
+  // the triangles whose vertices are the part's (the BVH reordered them)
+  const mine: number[] = [];
+  let first = -1;
+  let last = -1;
+  let own = false;
+  for (let i = 0; i < index.count; i += 3) {
+    const v = index.getX(i);
+    if (v < first || v >= last) {
+      [first, last, own] = partRun(loaded.model.parts, v, part);
+    }
+    if (own) {
+      mine.push(i);
+    }
+  }
+  loaded.mesh.updateWorldMatrix(true, false);
+  const out = new Float32Array(mine.length * 9);
+  const v = new Vector3();
+  let at = 0;
+  for (const t of mine) {
+    for (let k = 0; k < 3; k++) {
+      v.fromBufferAttribute(position, index.getX(t + k)).applyMatrix4(
+        loaded.mesh.matrixWorld
+      );
+      out[at++] = v.x;
+      out[at++] = v.y;
+      out[at++] = v.z;
+    }
+  }
+  return out;
+}
+
+/** The run of vertices `vertex` lies in, and whether it is `part`'s. */
+function partRun(
+  parts: DesignParts,
+  vertex: number,
+  part: number
+): [number, number, boolean] {
+  const { starts, of } = parts;
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= vertex) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  const end = lo + 1 < starts.length ? starts[lo + 1] : Number.MAX_SAFE_INTEGER;
+  return [starts[lo] ?? 0, end, of[lo] === part];
+}
+
+/** What a question meets of the loaded design: one ask set over its
+ *  mesh (its BVH), a hit by the part its triangle belongs to. */
+function askSet(loaded: Loaded, offset: RecenterOffset): AskSet<DesignInquiry> {
+  const { mesh, model } = loaded;
+  mesh.updateWorldMatrix(true, false);
+  const box = new Box3().setFromObject(mesh);
+  const raycaster = new Raycaster();
+
+  const hitOf = (hit: Intersection): AskHit<DesignInquiry> => {
+    const vertex = mesh.geometry.index?.getX((hit.faceIndex ?? 0) * 3) ?? 0;
+    const partIndex = partOfVertex(model.parts, vertex);
+    return {
+      distance: hit.distance,
+      solids: [],
+      target: {
+        kind: "design",
+        file: model.name,
+        part: model.parts.info[partIndex] ?? {
+          name: null,
+          type: null,
+          id: null,
+          material: null,
+        },
+        partIndex,
+        placement: { ...loaded.placement },
+        source: loaded.source,
+        triangles: model.weight.triangles,
+        position: [hit.point.x + offset.cx, offset.cy - hit.point.z],
+      },
+    };
+  };
+  const cast = (o: Xyz, d: Xyz, far: number, first: boolean) => {
+    raycaster.set(new Vector3(o.x, o.y, o.z), new Vector3(d.x, d.y, d.z));
+    raycaster.far = far;
+    raycaster.firstHitOnly = first;
+    return raycaster.intersectObject(mesh, false);
+  };
+  return {
+    box: { min: box.min, max: box.max },
+    nearest: (o, d, far) => {
+      const [hit] = cast(o, d, far, true);
+      return hit ? hitOf(hit) : null;
+    },
+    along: (o, d, far) => {
+      const seen = new Set<number>();
+      const out: AskHit<DesignInquiry>[] = [];
+      for (const hit of cast(o, d, far, false)) {
+        const found = hitOf(hit);
+        if (!seen.has(found.target.partIndex)) {
+          seen.add(found.target.partIndex);
+          out.push(found);
+        }
+      }
+      return out;
+    },
+  };
 }
 
 export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
@@ -201,7 +348,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       triangles: current.model.weight.triangles,
       bytes: current.model.bytes,
       texturesDropped: current.model.texturesDropped,
-      note: current.model.note,
+      note: current.placeNote ?? current.model.note,
       placement: { ...current.placement },
       source: current.source,
       hidden,
@@ -222,6 +369,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     );
     loaded.mesh.rotation.set(0, -rotation * DEG2RAD, 0);
     loaded.mesh.updateMatrixWorld(true);
+    loaded.ask = null;
   };
 
   /** the plan and what it covers, now */
@@ -293,9 +441,14 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
   /** where a design without a placement file lands, and why */
   const firstPlacement = (
     model: DesignModel
-  ): { placement: DesignPlacement; source: PlacementSource } => {
+  ): {
+    placement: DesignPlacement;
+    source: PlacementSource;
+    placeNote: string | null;
+  } => {
     const geo = model.georef;
-    if (geo) {
+    const beyond = geo ? deps.beyondSite(geo.east, geo.north) : 0;
+    if (geo && beyond <= SITE_REACH_M) {
       const at = { east: geo.east, north: geo.north, rotation: 0 };
       const ground = groundBase(at, model.box, deps.heightAt);
       const base = trustedBase(
@@ -305,6 +458,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       return {
         placement: { ...at, base: base ?? playerGround() },
         source: base === geo.base ? "file" : "file-plan",
+        placeNote: null,
       };
     }
     const at = placeAhead(deps.pose(), model.box);
@@ -315,6 +469,12 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
         base: standingBase(model.box, ground ?? playerGround()),
       },
       source: "here",
+      // a place the file gives that no one would see it at
+      placeNote: geo
+        ? elsewhereNote(beyond)
+        : model.elsewhere
+          ? elsewhereNote(null)
+          : null,
     };
   };
 
@@ -365,6 +525,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     if (current) {
       current.placement = parsed.placement;
       current.source = "placement-file";
+      current.placeNote = null;
       moved(true);
     }
     return null;
@@ -431,6 +592,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
         mask: null,
         outline: null,
         hidden: new Map(),
+        ask: null,
       };
       pose(loaded);
       await deps.compile(mesh);
@@ -447,6 +609,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       if (parsed && "placement" in parsed) {
         loaded.placement = parsed.placement;
         loaded.source = "placement-file";
+        loaded.placeNote = null;
         pose(loaded);
       }
       current = loaded;
@@ -470,6 +633,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       next.rotation = normalizeRotation(next.rotation);
       current.placement = next;
       current.source = "manual";
+      current.placeNote = null;
       moved();
     },
     placeHere: () => {
@@ -485,6 +649,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
           ground === null ? current.placement.base : standingBase(box, ground),
       };
       current.source = "here";
+      current.placeNote = null;
       moved(true);
     },
     setOnGround: () => {
@@ -499,6 +664,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
           base: standingBase(box, ground),
         };
         current.source = "manual";
+        current.placeNote = null;
         moved(true);
       }
     },
@@ -524,6 +690,17 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     },
     outline: () => current?.outline ?? null,
     meshes: () => (current ? [current.mesh] : []),
+    asks: () => {
+      if (!current) {
+        return [];
+      }
+      current.ask ??= askSet(current, deps.offset);
+      return [current.ask];
+    },
+    partShape: (file, part) =>
+      current?.model.name === file
+        ? partTriangles(current, part)
+        : new Float32Array(),
     status,
     dispose: () => {
       remove();

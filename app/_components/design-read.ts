@@ -24,8 +24,10 @@ import {
   type DesignBox,
   designAnchor,
   detectGeoreference,
+  elsewhereFrame,
   type Georeference,
 } from "@/lib/city/design-placement";
+import type { DesignPartInfo } from "@/lib/city/inquiry-design";
 import { FormatError, pickedFiles, read3dm, readObj } from "./design-formats";
 import { IfcError, readIfc } from "./design-ifc";
 import { PLAN_FORMATS, PlanError, readPlan } from "./design-plan";
@@ -68,6 +70,9 @@ export interface DesignModel {
   /** the design's box in its own frame */
   box: DesignBox;
   georef: Georeference | null;
+  /** its box lies in another place's or system's coordinates, not the
+   *  site's and not about its own origin (`elsewhereFrame`) */
+  elsewhere: boolean;
   weight: DesignWeight;
   /** what it holds (bytes), its textures dropped where the budget says */
   bytes: number;
@@ -80,6 +85,8 @@ export interface DesignModel {
   groundTriangles: Uint8Array | null;
   /** shown in its own colours from the start (a plan's classes) */
   prefersColours: boolean;
+  /** its parts as the file names them, by triangle (a question's card) */
+  parts: DesignParts;
 }
 
 /** A design that could not be read, in words for the panel. */
@@ -202,6 +209,27 @@ interface Piece {
   geometry: BufferGeometry;
   material: Material;
   matrix: Matrix4;
+  part: DesignPartInfo;
+}
+
+/** What the file says of a mesh's part: what its reader put on it
+ *  (`userData.designPart`: an IFC element, a plan's class), else its own
+ *  or its nearest named parent's name and its material's. */
+function partInfo(mesh: Mesh, material: Material): DesignPartInfo {
+  const given = mesh.userData.designPart as DesignPartInfo | undefined;
+  if (given) {
+    return given;
+  }
+  let name: string | null = null;
+  for (let o: Object3D | null = mesh; o && !name; o = o.parent) {
+    name = o.name.trim() || null;
+  }
+  return {
+    name,
+    type: null,
+    id: null,
+    material: material.name.trim() || null,
+  };
 }
 
 /** The part of `geometry` one of its groups draws, as its own geometry
@@ -299,9 +327,10 @@ function piecesOfPart(
   instance: Matrix4,
   out: Piece[]
 ): void {
+  const part = partInfo(mesh, material);
   const instanced = mesh as InstancedMesh;
   if (!instanced.isInstancedMesh) {
-    out.push({ geometry, material, matrix: mesh.matrixWorld });
+    out.push({ geometry, material, matrix: mesh.matrixWorld, part });
     return;
   }
   for (let i = 0; i < instanced.count; i++) {
@@ -310,6 +339,7 @@ function piecesOfPart(
       geometry,
       material,
       matrix: mesh.matrixWorld.clone().multiply(instance),
+      part,
     });
   }
 }
@@ -467,7 +497,7 @@ function mergePieces(
   pieces: readonly Piece[],
   materials: readonly Material[],
   anchor: readonly [number, number, number]
-): BufferGeometry {
+): { geometry: BufferGeometry; parts: DesignParts } {
   let vertices = 0;
   let triangles = 0;
   for (const { geometry } of pieces) {
@@ -486,6 +516,7 @@ function mergePieces(
     -anchor[2]
   );
   const merged = new BufferGeometry();
+  const parts = partsRecorder();
   let vertex = 0;
   let triangle = 0;
   materials.forEach((material, group) => {
@@ -494,6 +525,7 @@ function mergePieces(
       if (piece.material !== material) {
         continue;
       }
+      parts.add(vertex, piece.part);
       writePiece(piece, toAnchor, out, vertex, triangle);
       vertex += piece.geometry.getAttribute("position").count;
       triangle += triangleCount(piece.geometry);
@@ -506,7 +538,60 @@ function mergePieces(
   merged.setIndex(new BufferAttribute(out.index, 1));
   merged.computeBoundingBox();
   merged.computeBoundingSphere();
-  return merged;
+  return { geometry: merged, parts: parts.done() };
+}
+
+/** The design's parts and, for each run of the merged vertices, whose
+ *  they are: `starts[k]` the run's first vertex, `of[k]` its part. By
+ *  vertex, not triangle: the BVH reorders the index (three-mesh-bvh),
+ *  never the vertices, and each piece's vertices are written as one run. */
+export interface DesignParts {
+  info: DesignPartInfo[];
+  starts: Uint32Array;
+  of: Uint32Array;
+}
+
+/** Collects the runs as the pieces are written, a part's index by its
+ *  info (a piece's instances share one). */
+function partsRecorder() {
+  const info: DesignPartInfo[] = [];
+  const index = new Map<DesignPartInfo, number>();
+  const starts: number[] = [];
+  const of: number[] = [];
+  return {
+    add: (vertex: number, part: DesignPartInfo) => {
+      let k = index.get(part);
+      if (k === undefined) {
+        k = info.length;
+        info.push(part);
+        index.set(part, k);
+      }
+      if (of.at(-1) !== k) {
+        starts.push(vertex);
+        of.push(k);
+      }
+    },
+    done: (): DesignParts => ({
+      info,
+      starts: Uint32Array.from(starts),
+      of: Uint32Array.from(of),
+    }),
+  };
+}
+
+/** The part a vertex of the merged geometry belongs to (its index). */
+export function partOfVertex(parts: DesignParts, vertex: number): number {
+  let lo = 0;
+  let hi = parts.starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (parts.starts[mid] <= vertex) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return parts.of[lo] ?? 0;
 }
 
 /**
@@ -554,7 +639,8 @@ export async function readDesign(
     throw new DesignError(verdict.reason);
   }
   const box = boxOf(pieces);
-  const geometry = mergePieces(pieces, materials, designAnchor(box));
+  const georef = georefOf(box, epsg, heightsKnown ?? true);
+  const { geometry, parts } = mergePieces(pieces, materials, designAnchor(box));
   const plan = materials.some((m) => m.userData.planGround !== undefined);
   // what the file held besides: its own geometries, materials, textures
   const kept = new Set(verdict.keepTextures ? looks.map((l) => l.map) : []);
@@ -575,13 +661,16 @@ export async function readDesign(
     geometry,
     looks,
     box,
-    georef: georefOf(box, epsg, heightsKnown ?? true),
+    georef,
+    // (a plan's reader says so itself, with its classes)
+    elsewhere: !georef && !plan && elsewhereFrame(box),
     weight,
     bytes: verdict.bytes,
     texturesDropped: !verdict.keepTextures && weight.textureBytes > 0,
     note,
     groundTriangles: plan ? groundTriangles(geometry, materials) : null,
     prefersColours: plan,
+    parts,
   };
 }
 

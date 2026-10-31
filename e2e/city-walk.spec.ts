@@ -1424,6 +1424,29 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(status?.placement.base).toBeCloseTo(112, 3);
     expect(status?.triangles).toBe(12);
     expect(status?.hidden ?? 0).toBeGreaterThan(0);
+    // asked like a building: its element's card, with its GlobalId
+    await page.evaluate(() => {
+      const api = window.__poc?.handle;
+      if (!api) {
+        throw new Error("scene handle not published");
+      }
+      api.teleportTo(412_300, 5_657_420 - 90);
+      const x = 412_300 - api.offset.cx;
+      const z = -(5_657_420 - api.offset.cy);
+      api.flyTo({ x, y: 140, z: z + 90 }, { x, y: 122, z });
+    });
+    await waitForFrames(page, 1);
+    const asked = await page.evaluate(() => window.__poc?.handle?.inquireAt());
+    expect(asked?.kind).toBe("design");
+    await withFramesHeld(page, async () => {
+      const card = page.getByTestId("inquiry-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Entwurf");
+      await expect(card).toContainText("Bauteil (IfcBuildingElementProxy)");
+      await expect(card).toContainText("3YvctVUKr0kugbFTf53O9L");
+      await page.keyboard.press("Escape");
+      await expect(card).toBeHidden();
+    });
     await page.evaluate(() => window.__poc?.handle?.design.remove());
     expectNoErrors(errors);
   });
