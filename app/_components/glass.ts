@@ -1,6 +1,7 @@
 import { FramebufferTexture, HalfFloatType, LinearFilter } from "three/webgpu";
 import {
   abs,
+  cameraProjectionMatrix,
   cameraWorldMatrix,
   clamp,
   dot,
@@ -18,6 +19,7 @@ import {
   uniform,
   vec2,
   vec3,
+  vec4,
   viewportTexture,
 } from "three/tsl";
 import { type DataMarks } from "@/lib/city/render-style";
@@ -182,6 +184,9 @@ export interface DataMarkInputs {
   /** 0..1, what of it the Schwarzplan inks black (default: its edge, wider
    *  than `edge`'s; a thin mark, a tram's trail, is one black line) */
   ink?: F;
+  /** 0..1, how stale the mark's data is: a style draws it without its
+   *  colour (Pastell's own tint already says so) */
+  muted?: F;
   /** false for a mark its alpha blends over the scene (a tram's trail):
    *  it reads no copy of the scene, so none is made for it alone — its
    *  blend lays it over what is behind (default true) */
@@ -250,7 +255,8 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
       step(0.5, light)
     ),
     vec3(0.02),
-    edge
+    // (whole, as the light: a half-black marker is no ink to the pass)
+    step(0.5, edge)
   );
   // (a blended mark: a dark glass, and a tissue over the white card)
   const exposure = (behind?.mul(0.55) ?? vec3(0)).add(
@@ -275,10 +281,15 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
     light.mul(0.6)
   );
   const glowing = vec3(1, 0.82, 0.5).mul(light.mul(0.6).add(0.55));
+  // (a plan — Modell's parallel view — has no night: its marks keep their
+  // plan colours; a parallel projection's w row is 0 0 0 1)
+  const planNight = styleNight.mul(
+    cameraProjectionMatrix.mul(vec4(0, 0, 1, 0)).w.negate()
+  );
   const planned = mix(
-    mix(plan, glowing, styleNight),
+    mix(plan, glowing, planNight),
     vec3(0.08),
-    edge.mul(float(1).sub(styleNight))
+    edge.mul(float(1).sub(planNight))
   );
   // (its own, wider edge: a plan's band is two lines, its light a dashed
   // line along its ridge — a dash as wide as the band read as a blot)
@@ -297,5 +308,8 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
   col = mix(col, red, is("red"));
   col = mix(col, tissue, is("tissue"));
   col = mix(col, planned, is("plan"));
-  return mix(col, outlined, is("outline"));
+  col = mix(col, outlined, is("outline"));
+  // stale data: the style's mark without its colour
+  const grey = vec3(dot(col, vec3(0.2126, 0.7152, 0.0722)));
+  return mix(col, grey, (i.muted ?? float(0)).mul(float(1).sub(is("glass"))));
 }

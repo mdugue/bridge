@@ -13,6 +13,7 @@ import {
   float,
   fract,
   max,
+  min,
   mix,
   positionLocal,
   positionWorld,
@@ -115,6 +116,15 @@ function directionScale(tint: V3): F {
   return smoothstep(-0.25, 0.15, tint.x.sub(tint.y));
 }
 
+/** 1 for a stale counter's grey tint (`BIKE_STALE_TINT`, nearly no
+ *  chroma), 0 for a direction's: the styles draw it without colour. */
+function staleOf(tint: V3): F {
+  const chroma = max(max(tint.x, tint.y), tint.z).sub(
+    min(min(tint.x, tint.y), tint.z)
+  );
+  return float(1).sub(smoothstep(0.1, 0.2, chroma));
+}
+
 function columnMaterial(): MeshBasicNodeMaterial {
   return sceneMaterial("bike-glass", () => {
     const m = new MeshBasicNodeMaterial({
@@ -150,6 +160,7 @@ function columnMaterial(): MeshBasicNodeMaterial {
       glass: glass.add(light),
       tint,
       scale: directionScale(tint),
+      muted: staleOf(tint),
       light: ring.mul(rate.min(1)),
     });
     m.userData.paperOwn = true;
@@ -188,6 +199,7 @@ function poolMaterial(): MeshBasicNodeMaterial {
       glass: tint,
       tint,
       scale: directionScale(tint),
+      muted: staleOf(tint),
       light: float(0),
       edge: ring,
       // (blended over the scene by its alpha, as the trails)
