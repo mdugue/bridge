@@ -262,31 +262,15 @@ export function warpDistance(
   return Number.isFinite(n) ? Math.min(n, 1e6) : 1e6;
 }
 
-/** World → light view for a light at `light` with basis x, y, z. */
+/** World → light view for a light at `light` with basis x, y, z: the
+ *  inverse of the light's world matrix, as three's lookAt builds it. */
 function lightView(
   light: Vector3,
   x: Vector3,
   y: Vector3,
   z: Vector3
 ): Matrix4 {
-  return new Matrix4().set(
-    x.x,
-    x.y,
-    x.z,
-    -x.dot(light),
-    y.x,
-    y.y,
-    y.z,
-    -y.dot(light),
-    z.x,
-    z.y,
-    z.z,
-    -z.dot(light),
-    0,
-    0,
-    0,
-    1
-  );
+  return new Matrix4().makeBasis(x, y, z).setPosition(light).invert();
 }
 
 /** The ranges a body takes in the warped coordinates. */
@@ -437,8 +421,10 @@ export function fitWarpedShadow(view: WarpView, sun: Vector3): WarpFit | null {
 
 /**
  * Whether `fit` still serves `view`: every receiver the view sees (without
- * the margin) lies on the map, and the nearest of them is about as near
- * as it was fitted for. Else the map is fitted anew — one depth pass.
+ * the margin) lies on the map — across it and within its depth, so a view
+ * over lower ground than the fit's is fitted anew too — and the nearest of
+ * them is about as near as it was fitted for. Else the map is fitted anew:
+ * one depth pass.
  */
 export function warpCovers(fit: WarpFit, view: WarpView): boolean {
   const seen = viewBody({ ...view, reach: view.reach * COVER_REACH }, 0);
@@ -453,8 +439,12 @@ export function warpCovers(fit: WarpFit, view: WarpView): boolean {
   const q = new Vector4();
   return seen.body.every((p) => {
     q.set(p.x, p.y, p.z, 1).applyMatrix4(fit.clip);
+    const edge = q.w * 1.0001;
     return (
-      q.w > 0 && Math.abs(q.x) <= q.w * 1.0001 && Math.abs(q.y) <= q.w * 1.0001
+      q.w > 0 &&
+      Math.abs(q.x) <= edge &&
+      Math.abs(q.y) <= edge &&
+      Math.abs(q.z) <= edge
     );
   });
 }

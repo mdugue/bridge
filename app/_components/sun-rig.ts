@@ -133,7 +133,11 @@ export interface SunRig {
    * current (`LightShadow.matrix`). The picture styles test a pixel's
    * world point against it (stylize-effect.ts): in the sun or not.
    */
-  shadowMap: { depth: () => DepthTexture | null; matrix: Matrix4 };
+  shadowMap: {
+    bias: () => number;
+    depth: () => DepthTexture | null;
+    matrix: Matrix4;
+  };
   /** Re-aims sun, sky dome, fog and fill light for the given instant. */
   update: (date: Date, preview?: boolean) => SunState;
 }
@@ -143,8 +147,11 @@ const SUN_INTENSITY = 2.4;
 /** Receivers lie this far under the site's low ground (m: a river bed, a
  *  cutting) … */
 const RECEIVER_DIP_M = 20;
-/** … and this far over its high ground (m: the roofs on it). */
-const RECEIVER_RISE_M = 80;
+/** … and this far over its high ground (m: the hills above it, and the
+ *  roofs on them — the band is the site's 90th height percentile, and a
+ *  slope above the band would be neither on the map nor, within its
+ *  reach, under the horizon's near band). */
+const RECEIVER_RISE_M = 250;
 
 /** What the warped map needs to know of the view beyond the camera. */
 export interface AirView {
@@ -442,16 +449,18 @@ export function createSunRig(
     square.far = shadowDistance + radius * 1.2;
     square.updateProjectionMatrix();
   };
-  /** The map's frustum is the square's (on foot, in Modell). */
-  const squareToMap = () => {
-    cam.left = square.left;
-    cam.right = square.right;
-    cam.top = square.top;
-    cam.bottom = square.bottom;
-    cam.near = square.near;
-    cam.far = square.far;
+  /** The map's ortho box (with the warp, if any, applied after it). */
+  const setBox = (box: WarpFit["box"]) => {
+    cam.left = box.left;
+    cam.right = box.right;
+    cam.top = box.top;
+    cam.bottom = box.bottom;
+    cam.near = box.near;
+    cam.far = box.far;
     cam.updateProjectionMatrix();
   };
+  /** The map's frustum is the square's (on foot, in Modell). */
+  const squareToMap = () => setBox(square);
   resizeFrustum(radius);
   squareToMap();
   // normalBias = 0 kills the peter-panning contact strip (it would offset the
@@ -504,14 +513,8 @@ export function createSunRig(
   const applyWarp = (fit: WarpFit, redraw: boolean) => {
     warpFit = fit;
     cam.up.copy(fit.up);
-    cam.left = fit.box.left;
-    cam.right = fit.box.right;
-    cam.top = fit.box.top;
-    cam.bottom = fit.box.bottom;
-    cam.near = fit.box.near;
-    cam.far = fit.box.far;
     cam.warp = fit.warp;
-    cam.updateProjectionMatrix();
+    setBox(fit.box);
     sun.shadow.bias = fit.bias;
     sun.shadow.radius = WARP_PCF_RADIUS;
     sun.target.position.copy(fit.target);
@@ -607,7 +610,6 @@ export function createSunRig(
     reposition();
   };
 
-  const upOf = new Vector3();
   const follow = (
     camera: PerspectiveCamera,
     direction: Vector3,
@@ -627,24 +629,39 @@ export function createSunRig(
     if (!airborne) {
       return;
     }
-    const view: WarpView = {
+    const reach = Math.min(air.fogEnd * WARP_REACH_OF_FOG, WARP_MAX_REACH_M);
+    const fov = camera.getEffectiveFOV();
+    // a camera standing still (most frames) asks nothing new of the map
+    if (
+      warpFit &&
+      warpView &&
+      warpView.eye.equals(position) &&
+      warpView.forward.distanceToSquared(direction) < 1e-12 &&
+      warpView.groundY === groundY &&
+      warpView.reach === reach &&
+      warpView.fovDeg === fov &&
+      warpView.aspect === camera.aspect
+    ) {
+      return;
+    }
+    // the view as it is now: a turn of the sun fits the map to it (update)
+    warpView = {
       aspect: camera.aspect,
       ceilingY: Math.max(groundY, air.groundHigh) + RECEIVER_RISE_M,
       eye: position.clone(),
       floorY: Math.min(groundY, air.groundLow) - RECEIVER_DIP_M,
       forward: direction.clone().normalize(),
-      fovDeg: camera.getEffectiveFOV(),
+      fovDeg: fov,
       groundY,
-      reach: Math.min(air.fogEnd * WARP_REACH_OF_FOG, WARP_MAX_REACH_M),
-      up: upOf.setFromMatrixColumn(camera.matrixWorld, 1).normalize().clone(),
+      reach,
+      up: new Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize(),
     };
-    if (warpFit && warpCovers(warpFit, view)) {
+    if (warpFit && warpCovers(warpFit, warpView)) {
       return;
     }
     // looking at the sky (no receiver in view) keeps what the map holds
-    const fit = fitWarpedShadow(view, dir);
+    const fit = fitWarpedShadow(warpView, dir);
     if (fit) {
-      warpView = view;
       applyWarp(fit, true);
     }
   };
@@ -771,7 +788,11 @@ export function createSunRig(
     shadowMapBytes: shadowMapBytesFor(shadowMapSize),
     shadowReach,
     shadowCamera: square,
-    shadowMap: { depth: () => shadowNode.depth, matrix: sun.shadow.matrix },
+    shadowMap: {
+      bias: () => sun.shadow.bias,
+      depth: () => shadowNode.depth,
+      matrix: sun.shadow.matrix,
+    },
     dispose: () => {
       cancelShadowWait();
       reflection?.dispose();

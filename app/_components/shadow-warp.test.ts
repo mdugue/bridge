@@ -191,3 +191,16 @@ test("the warp's matrix is invertible and keeps w positive on the body", () => {
   const back = clipOf(fit, p).applyMatrix4(inverse);
   expect(back.distanceTo(p)).toBeLessThan(0.05);
 });
+
+test("a view over lower ground than the fit's is fitted anew", () => {
+  const v = view(150, 25);
+  const fit = fitWarpedShadow(v, SUN);
+  expect(fit).not.toBeNull();
+  if (!fit) {
+    return;
+  }
+  // the same camera over a valley 150 m deeper: its receivers lie past the
+  // map's depth, though across it they are on it
+  const deeper = { ...view(150, 25), floorY: v.floorY - 150 };
+  expect(warpCovers(fit, deeper)).toBe(false);
+});

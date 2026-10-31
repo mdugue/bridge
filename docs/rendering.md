@@ -321,7 +321,7 @@ change, not a re-bake
   puts a perspective along it, half LiSPSM's n_opt behind the nearest
   ground. Its box holds the view widened by 12° on every side, out to
   80 % of the fog's end (at most 2.5 km), cut to the site's receivers
-  (its ground's 2nd percentile − 20 m to the 90th + 80 m), its depth
+  (its ground's 2nd percentile − 20 m to the 90th + 250 m), its depth
   stretched toward the sun to casters 120 m over that. Texels at 3072²
   from 100 m up: ~0.2–0.45 m at 100 m ahead, ~0.8–1.3 m at 800 m (the
   square: 0.14 m to 275 m, then none); from 200 m up the near texels are
@@ -332,8 +332,11 @@ change, not a re-bake
   within a factor 1.6 (`warpCovers`); a turn of the sun fits it anew. A
   simulated flight redraws it 8 times over 2 km straight (the square:
   13–67 by altitude) and ~27 times over a full turn (the square: 1–14).
-  The tile stream keeps streaming for the square (`shadowCamera`), so
-  what loads and a phone's memory are unchanged. The horizon's near band
+  The picture styles' own sun test reads the map's current bias
+  (`shadowMap.bias`). The tile stream keeps streaming for the square
+  (`shadowCamera`), so what loads and a phone's memory are unchanged; a
+  caster outside both the view and the square casts nothing until a
+  view loads its tile. The horizon's near band
   takes over at the warp's reach (`shadowReach`).
 - **The shadow camera streams on a desktop, at a resolution of its
   own.** The sun's shadow camera is registered with the tiles renderer
