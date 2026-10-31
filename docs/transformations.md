@@ -1798,6 +1798,43 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   replaced the pencil loop (🗃️ below). **Not yet judged on a real
   GPU.**
 
+- **Stadtwissen** `❝ taken` — what the twin knows, as files an agent
+  reads ([ADR 0055](./adr/0055-stadtwissen-and-written-walks.md)):
+  per tile every root Building that OSM names or addresses, that is
+  listed (`heritage`) or that is part of a Wikidata landmark — its
+  `gml:id`, OSM name, address, storeys and shops, the ALKIS use and roof
+  form decoded (`adv-codes.ts`), the height (the largest
+  `measuredHeight` of the Building and its parts), its position (the
+  extent's centre and base) and Q-id —, and the tile's named monuments
+  (`stadtwissen_<tile>.json`, `scripts/bake-stadtwissen.ts`); and per
+  site the landmarks with an excerpt of Wikidata's statements in words
+  (instance of, architect, style, named after, location, creator,
+  material, commemorates, inception, dissolved, significant event,
+  visitors, heritage status, motto, opening, height, current use), the
+  German article and the sources with their licences
+  (`stadtwissen.json`). The excerpt is fetched once
+  (`bun scripts/fetch-stadtwissen.ts <site>`, `wbgetentities`, CC0) and
+  committed (`data/<site>/wissen/wikidata.json`). Dresden: 15 tiles of
+  150–360 kB, the index 168 kB, 238 of 238 landmarks with facts. No look:
+  the viewer never loads it; `bun scripts/stadtwissen.ts <site>
+  such|nah|wahrzeichen|quellen` searches it.
+- **Erzählte Spaziergänge** `❝ taken` (the facts; the narration is none
+  of the four methods — generated text, marked as such wherever it shows) — walks written ahead by Claude from the Stadtwissen and the
+  sources each claim names, committed as `data/<site>/walks/<id>.json`
+  (`lib/city/walks.ts`) and bundled into `walks.json` by the build. A
+  stop is a view (eye in the site CRS on the DGM's ground, the point it
+  looks at, lens, hour, Modell preset or picture style), a narration of
+  at most 900 characters, a closer look, notes for days of the year and
+  seasons, and its facts with an https source or a Stadtwissen id each.
+  The walk card (`walk-player.tsx`) glides there, sets today at the
+  stop's hour and the style, tells the stop and today's notes, folds out
+  the sources, and says on every stop that the narration is Claude's.
+  `scripts/walks.test.ts` holds every walk to its data (form, extent,
+  ground within 0.2 m, references). Dresden: four walks, 31 stops
+  (*Augusts Bühne*, *Narben und Nähte*, *Gold, Milch und Eigensinn*,
+  *Wunder am Elbhang*); how they are written:
+  [walks.md](./walks.md).
+
 ### Vegetation
 - **Cultivated land** `❝ taken` `≈ assumed` (plan 028) — OSM `landuse=allotments|orchard|vineyard`
   (and `leisure=garden` plots inside a colony) → `pipeline/bake/cultivated.py`:
@@ -4364,7 +4401,7 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   (a shop pane at sRGB 102/105/108 against 56/61/65 without it), and
   full from 90 m it laid one flat veil over the river and the meadows in
   the lower half of the start view, the same at 200 m as at 2 km. **Depth from the site's relief** (2026-10-01, ADR
-  0039): the pool's fade height (`heightFalloff`) was Dresden's
+  0012): the pool's fade height (`heightFalloff`) was Dresden's
   Elbe-to-rim 28 m everywhere, which hazed flat Hamburg and Munich from
   the river to the rooftops. `prepare-data.ts` samples each tile's coarse
   ground on a 32 × 32 grid and writes the site's 2nd and 90th height

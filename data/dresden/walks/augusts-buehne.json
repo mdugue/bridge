@@ -1,0 +1,423 @@
+{
+  "id": "augusts-buehne",
+  "title": "Augusts Bühne",
+  "teaser": "Die Altstadt als Theater der Macht: ein Festplatz ohne Schloss, eine Oper, die zweimal brannte, ein Glaubenswechsel für eine Krone und ein Porzellanfries, der das Feuer überstand.",
+  "by": "Claude",
+  "written": "2026-10-29",
+  "minutes": 25,
+  "stops": [
+    {
+      "id": "zwinger-hof",
+      "title": "Ein Hof zwischen zwei Mauern",
+      "from": [
+        411268,
+        5656486,
+        1.7
+      ],
+      "ground": 110.5,
+      "at": [
+        411197,
+        5656449,
+        131
+      ],
+      "hour": 10,
+      "text": "Bevor du hier etwas bewunderst, eine Frage: Was ist ein Zwinger? Kein Prunkbau, sondern ein Festungswort. So hieß der Streifen zwischen äußerer und innerer Stadtmauer. Als August der Starke ab 1711 von Pöppelmann und Permoser diesen Hof bauen ließ, gab es die innere Mauer schon nicht mehr, der Name blieb trotzdem. Gedacht war das Ganze als Orangerie, Festplatz und Sammlungsbau: eine Kulisse für Feste, bei denen der Hof sich selbst zusah. Vor dir, auf der anderen Seite des Hofs, steht das Kronentor. Es ist kein Tor in eine Stadt, sondern eine Botschaft an Besucher: Oben tragen vier polnische Adler eine Krone. Das ist die Krone, für die August einiges aufgegeben hat. Was er dafür gab, erfährst du an der Hofkirche.",
+      "closer": "Schau auf die Spitze der Zwiebelhaube: Die Krone dort oben ist eine Nachbildung der polnischen Königskrone.",
+      "days": [
+        {
+          "from": "09-10",
+          "to": "09-20",
+          "text": "Am 15. September 1719 feierte der Hof hier das „Fest der vier Elemente“, zur Hochzeit des Kurprinzen. Der Zwinger tat damals genau das, wofür er gebaut war."
+        }
+      ],
+      "seasons": {
+        "summer": "Seit Mai 2017 stehen im Sommer wieder Pomeranzenbäume im Hof, zum ersten Mal seit 1880. Die Orangerie spielt also wieder ein wenig sich selbst."
+      },
+      "facts": [
+        {
+          "claim": "„Zwinger“ bezeichnete im Mittelalter den Raum zwischen äußerer und innerer Festungsmauer; der Name blieb, obwohl es beim Bau keine innere Mauer mehr gab.",
+          "source": "https://de.wikipedia.org/wiki/Dresdner_Zwinger"
+        },
+        {
+          "claim": "Der Zwinger entstand 1711 bis 1728 unter August dem Starken nach Plänen von Matthäus Daniel Pöppelmann, mit Skulpturen von Balthasar Permoser, als Orangerie, Festplatz und Sammlungsbau.",
+          "source": "https://de.wikipedia.org/wiki/Dresdner_Zwinger"
+        },
+        {
+          "claim": "Auf dem Kronentor tragen vier polnische Adler eine Nachbildung der polnischen Krone.",
+          "source": "https://de.wikipedia.org/wiki/Dresdner_Zwinger"
+        },
+        {
+          "claim": "Am 15. September 1719 fand im Zwinger zur Hochzeit Friedrich Augusts II. das „Fest der vier Elemente“ statt.",
+          "source": "https://de.wikipedia.org/wiki/Dresdner_Zwinger"
+        },
+        {
+          "claim": "Im Mai 2017 wurden 76 Pomeranzenbäume im Hof aufgestellt, die ersten seit 1880.",
+          "source": "https://de.wikipedia.org/wiki/Dresdner_Zwinger"
+        }
+      ],
+      "refs": [
+        "Q155107"
+      ]
+    },
+    {
+      "id": "zwinger-plan",
+      "title": "Ein Vorhof ohne Schloss",
+      "from": [
+        411130,
+        5656380,
+        300
+      ],
+      "ground": 111.3,
+      "at": [
+        411265,
+        5656490,
+        108
+      ],
+      "hour": 12,
+      "model": {
+        "preset": "military",
+        "scale": 1500,
+        "turnDeg": 45
+      },
+      "text": "Von oben, in Militärperspektive, sieht man, was man unten nur ahnt: Der Zwinger ist ein Vorhof. Gedacht war er als Hof einer neuen barocken Residenz, die nie gebaut wurde. Darum wirkt die Anlage so seltsam offen, wie eine Bühne, hinter der das Haus fehlt. Lange stand die Elbseite tatsächlich offen. Erst Gottfried Semper schloss sie mit seiner Gemäldegalerie, Grundstein 1847, eröffnet 1855. Semper selbst hat die Eröffnung nicht in Dresden erlebt. Nach dem Maiaufstand von 1849, bei dem er auf den Barrikaden stand, musste er fliehen. Merk dir den Namen, er kommt gleich wieder.",
+      "closer": "Rechts oben im Bild schließt der lange Bau der Sempergalerie den Hof. Das ist der jüngste Teil der Anlage.",
+      "facts": [
+        {
+          "claim": "Das Reiterstandbild Augusts des Starken war ursprünglich für den Hof einer neuen barocken Residenz neben dem Zwinger geplant.",
+          "source": "https://de.wikipedia.org/wiki/Goldener_Reiter_(Reiterstandbild)"
+        },
+        {
+          "claim": "Die Elbseite blieb lange offen; Gottfried Semper begann die abschließende Galerie (Grundstein 23. Juli 1847), Karl Moritz Haenel vollendete sie nach Sempers Flucht 1849; eröffnet am 25. September 1855.",
+          "source": "https://de.wikipedia.org/wiki/Dresdner_Zwinger"
+        },
+        {
+          "claim": "Semper floh 1849 nach seiner Beteiligung am Maiaufstand aus Sachsen.",
+          "source": "https://de.wikipedia.org/wiki/Semperoper"
+        }
+      ],
+      "refs": [
+        "Q155107",
+        "Q878784"
+      ]
+    },
+    {
+      "id": "semperoper",
+      "title": "Zweimal Semper, dreimal gebaut",
+      "from": [
+        411446,
+        5656560,
+        1.7
+      ],
+      "ground": 111.6,
+      "at": [
+        411355,
+        5656640,
+        124
+      ],
+      "hour": 15.5,
+      "text": "Das Opernhaus vor dir ist das dritte an diesem Platz, und zwei davon tragen denselben Namen. Gottfried Semper baute das erste von 1838 bis 1841. Am 21. September 1869 brannte es ab. Für das zweite war Semper selbst noch aus Sachsen verbannt, also baute sein Sohn Manfred nach den Plänen des Vaters, eröffnet 1878. Dazwischen spielte man in einer Bretterbude, gebaut in rund sechs Wochen, für 1800 Leute. Im Februar 1945 brannte das Haus aus. Wiedereröffnet wurde es am 13. Februar 1985, genau 40 Jahre nach der Zerstörung, mit dem „Freischütz“. Mit genau diesem Stück hatte das Haus am 31. August 1944 geschlossen. Die Vorstellung ging also gewissermaßen nach 40 Jahren Pause weiter.",
+      "closer": "Über dem Portal zieht ein Viergespann Dionysos und Ariadne. Schau genau: Es sind Panther, keine Pferde.",
+      "days": [
+        {
+          "from": "02-10",
+          "to": "02-16",
+          "text": "Um diese Tage jährt sich die Wiedereröffnung von 1985. Sie fiel bewusst auf den Jahrestag der Zerstörung."
+        },
+        {
+          "from": "09-18",
+          "to": "09-24",
+          "text": "Am 21. September 1869 brannte das erste Semperhaus ab."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Der erste Bau Gottfried Sempers entstand 1838 bis 1841 und brannte am 21. September 1869 ab.",
+          "source": "https://de.wikipedia.org/wiki/Semperoper"
+        },
+        {
+          "claim": "Ein Interimstheater für etwa 1800 Besucher entstand in rund sechs Wochen und eröffnete am 2. Dezember 1869.",
+          "source": "https://de.wikipedia.org/wiki/Semperoper"
+        },
+        {
+          "claim": "Den zweiten Bau leitete ab 1871 Manfred Semper, weil sein Vater noch aus Sachsen verbannt war; eröffnet am 2. Februar 1878.",
+          "source": "https://de.wikipedia.org/wiki/Semperoper"
+        },
+        {
+          "claim": "Wiedereröffnung am 13. Februar 1985 mit dem „Freischütz“, demselben Werk, mit dem das Haus am 31. August 1944 geschlossen hatte.",
+          "source": "https://de.wikipedia.org/wiki/Semperoper"
+        },
+        {
+          "claim": "Eine Pantherquadriga von Johannes Schilling mit Dionysos und Ariadne krönt das Hauptportal.",
+          "source": "https://de.wikipedia.org/wiki/Semperoper"
+        }
+      ],
+      "refs": [
+        "Q127097"
+      ]
+    },
+    {
+      "id": "hofkirche",
+      "title": "Eine Krone ist eine Messe wert",
+      "from": [
+        411585,
+        5656565,
+        1.7
+      ],
+      "ground": 113.5,
+      "at": [
+        411505,
+        5656532,
+        132
+      ],
+      "hour": 11,
+      "text": "Eine katholische Kathedrale mitten im lutherischen Kernland, wie kommt die hierher? Durch einen Tausch. Wer König von Polen werden wollte, musste katholisch sein. August der Starke trat 1697 über und bekam die Krone. Sein Sohn ließ ab 1739 diese Hofkirche bauen, als Gegenstück zur protestantischen Frauenkirche. Das Land blieb lutherisch und machte es der Kirche nicht leicht. Prozessionen unter freiem Himmel waren verboten, also baute man einen Umgang im Inneren, damit die Prozession drinnen um das Schiff ziehen konnte. Und eine Glocke durfte die Kirche zunächst auch nicht haben. Auf der Balustrade stehen 78 Heilige und schauen auf eine Stadt, die nicht ihre Konfession teilte.",
+      "closer": "Im Inneren, in der Stiftergruft, liegt in einer Kapsel das Herz Augusts des Starken. Sein Körper ruht in der Königsgruft der Wawel-Kathedrale in Krakau.",
+      "facts": [
+        {
+          "claim": "August der Starke konvertierte 1697 zum Katholizismus, um die polnische Krone zu erlangen.",
+          "source": "https://de.wikipedia.org/wiki/Katholische_Hofkirche"
+        },
+        {
+          "claim": "Die Hofkirche wurde 1739 bis 1755 nach Plänen von Gaetano Chiaveri gebaut, als Gegenstück zur Frauenkirche.",
+          "source": "https://de.wikipedia.org/wiki/Katholische_Hofkirche"
+        },
+        {
+          "claim": "Der Prozessionsumgang im Inneren entstand, weil katholische Prozessionen im Freien im protestantischen Sachsen verboten waren; Glocken waren zunächst nicht erlaubt.",
+          "source": "https://de.wikipedia.org/wiki/Katholische_Hofkirche"
+        },
+        {
+          "claim": "78 Heiligenfiguren stehen an Fassade und Balustraden.",
+          "source": "https://de.wikipedia.org/wiki/Katholische_Hofkirche"
+        },
+        {
+          "claim": "Das Herz Augusts des Starken liegt in einer Kapsel in der Stiftergruft.",
+          "source": "https://de.wikipedia.org/wiki/Katholische_Hofkirche"
+        },
+        {
+          "claim": "August der Starke wurde in der Wawel-Kathedrale in Krakau beigesetzt.",
+          "source": "https://de.wikipedia.org/wiki/August_der_Starke"
+        }
+      ],
+      "refs": [
+        "Q666935"
+      ]
+    },
+    {
+      "id": "taschenbergpalais",
+      "title": "Ein Palais für die Gräfin",
+      "from": [
+        411402,
+        5656440,
+        1.7
+      ],
+      "ground": 111.7,
+      "at": [
+        411366,
+        5656392,
+        124
+      ],
+      "hour": 15,
+      "text": "Das Palais gegenüber wurde ab 1705 für eine Frau gebaut, die August mehr versprochen hatte als ein Haus: Anna Constantia, Gräfin Cosel. Im Dezember 1705 gab er ihr schriftlich, sie zur Frau zur Linken zu machen, sollte die Kurfürstin sterben. 1713 fiel sie in Ungnade. Sie floh 1715 nach Berlin, um dieses Papier zu holen, wurde in Halle verhaftet und kam an Heiligabend 1716 auf die Burg Stolpen. Dort lebte sie die restlichen 48 Jahre ihres Lebens. Das Palais wurde später „Türkisches Palais“, Kronprinzensitz, nach 1945 fast ein halbes Jahrhundert Ruine und 1995 Sachsens erstes Fünf-Sterne-Hotel.",
+      "closer": "Im Keller des heutigen Baus stecken Reste eines Wohnturms aus dem 13. Jahrhundert.",
+      "facts": [
+        {
+          "claim": "Der Bau begann 1705; ab 1707 war das Palais für Gräfin Cosel bestimmt.",
+          "source": "https://de.wikipedia.org/wiki/Taschenbergpalais"
+        },
+        {
+          "claim": "Im Dezember 1705 versprach August ihr schriftlich, sie im Fall des Todes der Kurfürstin zur Frau zur Linken zu machen.",
+          "source": "https://de.wikipedia.org/wiki/Anna_Constantia_von_Cosel"
+        },
+        {
+          "claim": "Sie wurde nach ihrer Flucht verhaftet, am 24. Dezember 1716 auf Burg Stolpen gebracht und lebte dort bis zu ihrem Tod 1765, 48 Jahre lang.",
+          "source": "https://de.wikipedia.org/wiki/Anna_Constantia_von_Cosel"
+        },
+        {
+          "claim": "Das Palais war nach 1945 fast ein halbes Jahrhundert Ruine und eröffnete am 31. März 1995 als erstes Fünf-Sterne-Hotel Sachsens; im Keller sind Reste eines Wohnturms aus dem 13. Jahrhundert erhalten.",
+          "source": "https://de.wikipedia.org/wiki/Taschenbergpalais"
+        }
+      ],
+      "refs": [
+        "Q267390"
+      ]
+    },
+    {
+      "id": "fuerstenzug",
+      "title": "102 Meter Porzellan",
+      "from": [
+        411676,
+        5656414,
+        1.7
+      ],
+      "ground": 112.2,
+      "at": [
+        411590,
+        5656466,
+        119
+      ],
+      "hour": 10,
+      "text": "Schau die Wand entlang: ein Reiterzug von 102 Metern Länge, die Herrscher aus dem Haus Wettin, 35 an der Zahl, dazu Gefolge, Kinder, Hunde. Wilhelm Walther malte ihn 1873 bis 1876 als Sgraffito. Das verwitterte, also übertrug Meißen ihn auf rund 23.000 Porzellanfliesen, 1907 fertig angebracht. Diese Entscheidung hat den Fries gerettet: Im Februar 1945 brannte ringsum alles, das Porzellan hielt die Hitze aus. Ganz am Ende des Zuges, unter den Zuschauern, hat sich Walther selbst gemalt. Und jetzt such die Rose.",
+      "closer": "Unter dem Huf von Augusts Pferd liegt eine zertretene Rose. Man liest sie gern als Anspielung auf die Gräfin Cosel, aber das ist eine Deutung, kein Beleg.",
+      "days": [
+        {
+          "from": "07-28",
+          "to": "08-05",
+          "text": "Am 2. August 1907 war die letzte Fliese angebracht."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Der Fürstenzug ist etwa 102 Meter lang und besteht aus rund 23.000 Meißner Porzellanfliesen.",
+          "source": "https://de.wikipedia.org/wiki/F%C3%BCrstenzug"
+        },
+        {
+          "claim": "Wilhelm Walther schuf 1873 bis 1876 ein Sgraffito; die Fliesen wurden 1904 bis 1906 bemalt und vom 15. April bis 2. August 1907 angebracht.",
+          "source": "https://de.wikipedia.org/wiki/F%C3%BCrstenzug"
+        },
+        {
+          "claim": "Der Zug zeigt 35 Herrscher des Hauses Wettin; Walther stellte sich selbst als letzte Figur dar.",
+          "source": "https://de.wikipedia.org/wiki/F%C3%BCrstenzug"
+        },
+        {
+          "claim": "Das Porzellan überstand die Bombardierung im Februar 1945 weitgehend unbeschädigt.",
+          "source": "https://de.wikipedia.org/wiki/F%C3%BCrstenzug"
+        },
+        {
+          "claim": "Unter dem Huf von Augusts Pferd liegt eine zertretene Rose, oft als Anspielung auf die Gräfin Cosel gedeutet.",
+          "source": "https://de.wikipedia.org/wiki/F%C3%BCrstenzug"
+        }
+      ],
+      "refs": [
+        "DESNATPU1000CcR0"
+      ]
+    },
+    {
+      "id": "brueckenmaennchen",
+      "title": "Der Kleinste am Fluss",
+      "from": [
+        411556,
+        5656636,
+        1.7
+      ],
+      "ground": 107.9,
+      "at": [
+        411596,
+        5656614,
+        109
+      ],
+      "hour": 14,
+      "text": "Jetzt etwas, das du im Modell nicht sehen wirst, weil es kleiner ist als alles, was die Vermessung erfasst: Am Landpfeiler der Augustusbrücke, flussabwärts gewandt, hockt das Brückenmännchen. Es soll Matthaeus Focius darstellen, den Baumeister der ersten Elbbrücke. Handwerksgesellen auf der Walz mussten es kennen. Die Brücke selbst ist die älteste der Stadt, auch wenn niemand genau weiß, ob ihre erste Steinbrücke 1169, 1173 oder 1175 begonnen wurde. Seit 2022 gehört sie Straßenbahnen, Fußgängern und Radfahrern. Und zu DDR-Zeiten hieß sie Dimitroffbrücke, was der Volksmund sofort zu „die mit droff“ verdrehte.",
+      "closer": "Das Männchen ist eine Kopie: Das Original ging 1813 unter, als französische Truppen die Brücke sprengten.",
+      "facts": [
+        {
+          "claim": "Die sandsteinerne Figur sitzt im Landpfeiler auf der Altstädter Seite, flussabwärts gewandt; sie soll Matthaeus Focius darstellen, den Erbauer der ersten Elbbrücke.",
+          "source": "https://de.wikipedia.org/wiki/Augustusbr%C3%BCcke"
+        },
+        {
+          "claim": "Wandergesellen mussten das Brückenmännchen als Dresdner Wahrzeichen kennen.",
+          "source": "https://de.wikipedia.org/wiki/Augustusbr%C3%BCcke"
+        },
+        {
+          "claim": "Das Original wurde 1813 bei der Sprengung durch napoleonische Truppen zerstört und ein Jahr später ersetzt.",
+          "source": "https://de.wikipedia.org/wiki/Augustusbr%C3%BCcke"
+        },
+        {
+          "claim": "Der Baubeginn der ersten Steinbrücke ist umstritten (1169, 1173 oder 1175).",
+          "source": "https://de.wikipedia.org/wiki/Augustusbr%C3%BCcke"
+        },
+        {
+          "claim": "Ab 1949 hieß sie Georgij-Dimitroff-Brücke; seit 28. Januar 2022 ist sie für Autos gesperrt.",
+          "source": "https://de.wikipedia.org/wiki/Augustusbr%C3%BCcke"
+        },
+        {
+          "claim": "Die Basis-DLM verzeichnet das Brückenmännchen an dieser Stelle.",
+          "source": "stadtwissen:m411594_5656615"
+        }
+      ],
+      "refs": [
+        "m411594_5656615"
+      ]
+    },
+    {
+      "id": "bruehlsche-terrasse",
+      "title": "Der Balkon, den einer aufschloss",
+      "from": [
+        411672,
+        5656528,
+        1.7
+      ],
+      "ground": 112.6,
+      "at": [
+        411880,
+        5656462,
+        128
+      ],
+      "hour": 15.5,
+      "text": "Die Terrasse unter deinen Füßen war Festungswall, dann Privatgarten des Grafen Brühl. Die Dresdner kamen erst 1814 herauf, als der russische Generalgouverneur Repnin-Wolkonski sie öffnen ließ. Die Freitreppe hinter dir entstand dafür in rund vier Monaten. Seit dem frühen 19. Jahrhundert heißt das Ganze „Balkon Europas“. Zwei Geschichten hängen am Geländer. Ein Fingerabdruck darin soll von August dem Starken stammen, nur ist das Geländer um 1900 gebaut, lange nach seinem Tod. Und eine weiße Frau soll von hier in die Elbe springen. Für beide gilt: schön erzählt, nicht passiert.",
+      "closer": "Auf der Treppe stehen Schillings vier Tageszeiten: Morgen, Mittag, Abend, Nacht.",
+      "facts": [
+        {
+          "claim": "1814 ließ Generalgouverneur Repnin-Wolkonski die Terrasse öffentlich zugänglich machen; Thormeyer baute die Freitreppe in etwa vier Monaten.",
+          "source": "https://de.wikipedia.org/wiki/Br%C3%BChlsche_Terrasse"
+        },
+        {
+          "claim": "Der Beiname „Balkon Europas“ stammt aus dem frühen 19. Jahrhundert.",
+          "source": "https://de.wikipedia.org/wiki/Br%C3%BChlsche_Terrasse"
+        },
+        {
+          "claim": "Ein Fingerabdruck im Geländer soll von August dem Starken stammen; das Geländer entstand aber um 1900.",
+          "source": "https://de.wikipedia.org/wiki/Br%C3%BChlsche_Terrasse"
+        },
+        {
+          "claim": "Die Sage von der weißen Frau knüpft an die Sängerin Teresa Albuzzi-Todeschini an, deren Selbstmord nicht stattfand.",
+          "source": "https://de.wikipedia.org/wiki/Br%C3%BChlsche_Terrasse"
+        },
+        {
+          "claim": "Johannes Schillings Gruppe „Die vier Tageszeiten“ steht auf der Freitreppe; seit 1908 als Bronzeabgüsse.",
+          "source": "https://de.wikipedia.org/wiki/Br%C3%BChlsche_Terrasse"
+        }
+      ]
+    },
+    {
+      "id": "canaletto-blick",
+      "title": "Der Blick, den Bellotto malte",
+      "from": [
+        411520,
+        5656862,
+        1.7
+      ],
+      "ground": 104.2,
+      "at": [
+        411640,
+        5656470,
+        124
+      ],
+      "hour": 16.5,
+      "fov": 50,
+      "text": "Zum Schluss wechselst du das Ufer. Von hier, unterhalb der Augustusbrücke auf der Neustädter Seite, malte Bernardo Bellotto 1748 die Stadt. Man nannte ihn Canaletto, wie seinen berühmteren Onkel, und so heißt dieser Blick bis heute Canaletto-Blick. Auf seinem Bild ist der Turm der Hofkirche erst ein Gerüst, gebaut wurde er 1752 bis 1754. Und die Frauenkirche hat er kleiner gemalt, als sie ist, damit das Bild tiefer wirkt. Was du jetzt siehst, ist also ein Bild, das älter ist als sein Motiv. Und eine Stadt, die nach 1945 ein zweites Mal so gebaut wurde, dass dieser Blick wieder stimmt.",
+      "closer": "Das Gemälde hängt in der Gemäldegalerie Alte Meister, im Zwinger, wo dieser Spaziergang begann.",
+      "facts": [
+        {
+          "claim": "Bernardo Bellotto, genannt Canaletto, malte „Dresden vom rechten Elbufer unterhalb der Augustusbrücke“ 1748; Standpunkt war das Neustädter Elbufer nahe dem heutigen Hotel Bellevue.",
+          "source": "https://de.wikipedia.org/wiki/Dresden_vom_rechten_Elbufer_unterhalb_der_Augustusbr%C3%BCcke"
+        },
+        {
+          "claim": "1748 war der Turm der Hofkirche nur bis zum unteren Geschoss gebaut; Bellotto deutete ihn mit einem gerüstartigen Rahmen an. Gebaut wurde er 1752 bis 1754.",
+          "source": "https://de.wikipedia.org/wiki/Dresden_vom_rechten_Elbufer_unterhalb_der_Augustusbr%C3%BCcke"
+        },
+        {
+          "claim": "Die Frauenkirche ist kleiner gemalt als in Wirklichkeit, um Tiefe zu erzeugen.",
+          "source": "https://de.wikipedia.org/wiki/Dresden_vom_rechten_Elbufer_unterhalb_der_Augustusbr%C3%BCcke"
+        },
+        {
+          "claim": "Das Gemälde hängt in der Gemäldegalerie Alte Meister (Katalognummer 606).",
+          "source": "https://de.wikipedia.org/wiki/Dresden_vom_rechten_Elbufer_unterhalb_der_Augustusbr%C3%BCcke"
+        }
+      ],
+      "refs": [
+        "Q666935",
+        "Q157229"
+      ]
+    }
+  ]
+}

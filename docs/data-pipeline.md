@@ -624,7 +624,13 @@ tileset under `public/data/<site>/`
    decimetres as int16, then their classes as uint8, rows from the north;
    `bakePlate`, `lib/city/ground-plate.ts`), which the viewer draws under
    every tile with no terrain on screen.
-4. **Publish** (below).
+4. **Publish** (below). Beside the tiles: the site's **Stadtwissen**
+   (`stadtwissen_<t>.json` per tile and the index `stadtwissen.json`,
+   `scripts/prepare/stadtwissen.ts` with `scripts/bake-stadtwissen.ts`,
+   for agents — the viewer never loads
+   it) and its **walks** (`walks.json`, every `data/<site>/walks/*.json`
+   checked by `walkBundle` and named by the tileset's `extras.walks`);
+   ADR 0055, [walks.md](./walks.md).
 
 ### The tree
 
@@ -842,7 +848,7 @@ is in the key — and only those (`scripts/cache-keys.ts` composes the key).
 each step's bakes live in a module of `scripts/prepare/` that is the first
 entry of its artifacts' rows (`side-bakes.ts`, `lines.ts`, `frame.ts`,
 `ground.ts`, `city.ts`, `landmarks.ts`, `terrain.ts`, `plate.ts`,
-`hero.ts`, `stats.ts`),
+`hero.ts`, `stats.ts`, `stadtwissen.ts`),
 so an edit there re-bakes that step's artifacts and those of the steps
 that import it (the grounds' module is walked by the buildings, both
 terrain levels, the crowns and the plate; the lines' by every bake that
@@ -878,7 +884,11 @@ site's config re-bakes nothing; a palette colour re-bakes only the map
 picture; a bump of a package only the viewer imports (React, Next.js,
 3DTilesRendererJS) re-bakes nothing, and a building module's change no
 terrain (`bake-tiles.ts` meshes the ground, `bake-city-mesh.ts` the
-buildings).
+buildings). A key hashes a module's text, so even a type or a comment in a
+module every ground walks (`lib/city/tileset.ts`, `lib/city/site.ts`,
+`lib/city/tile.ts`) re-bakes every site cold — on Vercel past its build
+time. Something only the viewer or another bake reads goes in its own
+module (the walks' `extras` field is `WalksExtras` in `lib/city/walks.ts`).
 A changed input, a changed bake or a renamed side file re-bakes; a checkout
 or a touch alone does not; anything else is a cache
 read. Every site shares the directory, and it keeps one entry per name: a
@@ -978,6 +988,7 @@ optional one is logged and the feature is off.
 | The 2048², 1024² and 512² class rasters keep exact ids | `scripts/downsample-raster.ts` | `downsample-raster.test.ts` |
 | GeoJSON feature shapes per kind | `lib/city/features.ts` | `features.test.ts` reads **every committed file** of every tile: a bake that renames a property fails there, not as an empty layer |
 | Terrain TIN (the fine level) | `lib/city/terrain-tin.ts` (`tinFromMesher`, `buildTinGeometryData`, `TinIndex`), `TerrainExtras.tin` | `terrain-tin.test.ts`, `scripts/bake-terrain-tin.test.ts` (every grid point within the tolerance; the committed spawn DGM at its native 2000²) |
+| The Stadtwissen and the walks (ADR 0055) | `lib/city/stadtwissen.ts`, `lib/city/walks.ts`, `scripts/bake-stadtwissen.ts` | `stadtwissen.test.ts`, `walks.test.ts`; `scripts/walks.test.ts` holds every committed walk to its data (form, extent, the DGM, the Stadtwissen ids); `prepare-data.ts` refuses a walk with a problem |
 | Optional-artifact fetch policy | `app/_components/fetch-optional.ts` | 404 / network / parse → `null`/`[]` (feature off); **abort always rethrows** so a torn-down instance stops building from partial data |
 
 GeoJSON allows `properties: null` and `MultiPolygon` geometries; every

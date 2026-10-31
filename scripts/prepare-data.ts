@@ -37,7 +37,8 @@
  * Writes public/data/<site>/ (gitignored), the folder the route /<site>
  * streams from.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { PLATE_N, type PlateExtras } from "../lib/city/ground-plate";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import {
@@ -46,6 +47,13 @@ import {
   siteProvenance,
 } from "../lib/city/provenance";
 import { tileExtentOf } from "../lib/city/site";
+import {
+  type Walk,
+  WALKS_DIR,
+  WALKS_FILE,
+  walkBundle,
+  type WalksExtras,
+} from "../lib/city/walks";
 import { groundRelief, type ValleyRim } from "../lib/city/valley-fog";
 import {
   ASK_KINDS,
@@ -89,6 +97,7 @@ import { bakeTerrain, dropTerrain } from "./prepare/terrain";
 import { bakePlate } from "./prepare/plate";
 import { publishHero } from "./prepare/hero";
 import { publishStats } from "./prepare/stats";
+import { publishStadtwissen } from "./prepare/stadtwissen";
 
 /** The valley's rim around each tile, where the sky-view bake read the
  *  land beyond the site (pipeline/bake/glo30.py `rims`, in the horizon
@@ -189,23 +198,48 @@ function readProvenance(): ProvenanceRecord {
   }
   return readJson<ProvenanceRecord>(path);
 }
-const provenanceFile = publish(
-  PROVENANCE_FILE,
-  utf8(
-    siteProvenance(
-      readProvenance(),
-      baked.map((t) => t.id),
-      SITE
-    )
-  )
+const provenance = siteProvenance(
+  readProvenance(),
+  baked.map((t) => t.id),
+  SITE
 );
+const provenanceFile = publish(PROVENANCE_FILE, utf8(provenance));
 // The trams' timetable, site-wide (pipeline/bake/transit.py): optional.
 const tramSource = at(tramTimetableSource(siteDataDir(SITE)));
 const trams = existsSync(tramSource)
   ? publish(TRAM_TIMETABLE_FILE, readFileSync(tramSource))
   : undefined;
 
-const extras: TilesetExtras & PlateExtras = {
+// --- the walks --------------------------------------------------------------------
+// Erzählte Spaziergänge (lib/city/walks.ts, ADR 0055): the site's written
+// walks, checked and bundled into one file the HUD loads when it lists them.
+
+const walksDir = at(`${siteDataDir(SITE)}/${WALKS_DIR}`);
+const walkFiles = existsSync(walksDir)
+  ? readdirSync(walksDir)
+      .filter((name) => name.endsWith(".json"))
+      .sort()
+  : [];
+const walks =
+  walkFiles.length > 0
+    ? publish(
+        WALKS_FILE,
+        utf8(
+          walkBundle(
+            SITE.id,
+            walkFiles.map((name) => readJson<Walk>(join(walksDir, name)))
+          )
+        )
+      )
+    : undefined;
+
+await publishStadtwissen(
+  baked.map((t) => t.id),
+  frame.epsg,
+  provenance.sources
+);
+
+const extras: TilesetExtras & PlateExtras & WalksExtras = {
   site: SITE.id,
   landmarks: siteLandmarks(
     TILES.map(landmarkFile).filter((f): f is LandmarkFile => f !== undefined)
@@ -230,6 +264,7 @@ const extras: TilesetExtras & PlateExtras = {
     ask: pickFiles(sideFiles.get(t.id) ?? {}, ASK_KINDS),
   })),
   ...(trams ? { trams } : {}),
+  ...(walks ? { walks } : {}),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));
 publish(

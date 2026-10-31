@@ -125,6 +125,12 @@ export const BAKE_ENTRIES = {
   ],
   /** the /wissen map picture; it imports the palette */
   hero: ["scripts/prepare/hero.ts", "scripts/bake-wissen-hero.ts"],
+  /** a tile's Stadtwissen directory (ADR 0055) */
+  stadtwissen: [
+    "scripts/prepare/stadtwissen.ts",
+    "scripts/bake-stadtwissen.ts",
+    "scripts/prepare/landmarks.ts",
+  ],
   /** the city in numbers (the start page) */
   siteStats: [
     "scripts/prepare/stats.ts",

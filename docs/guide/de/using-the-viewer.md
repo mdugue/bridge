@@ -393,6 +393,24 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   Belichtung, *Sin City* rot, *Papier* als farbiges Seidenpapier (nachts
   von innen beleuchtet), *Strich* in Planfarben mit Tuschekante (nachts
   als warmes Licht), der *Schwarzplan* als schwarz umrandetes Band.
+- **Spaziergänge** — Rundgänge durch die Stadt, erzählt von Claude,
+  einer KI, und an jeder Station so gekennzeichnet (bisher in Dresden):
+  *Augusts Bühne* (die Altstadt als Theater der Macht), *Narben und
+  Nähte* (wie die Stadt mit ihren Wunden lebt), *Gold, Milch und
+  Eigensinn* (die Neustadt) und *Wunder am Elbhang* (flussaufwärts nach
+  Loschwitz). Ein Spaziergang öffnet eine Karte über der Szene: Jede
+  Station gleitet zu ihrem Blick, stellt das heutige Datum zu der Stunde
+  ein, in der sie am besten aussieht (eine Fassade im Abendlicht, ein
+  Platz bei Nacht), und, wo die Station es will, einen Bildstil oder das
+  Modell; die Karte erzählt die Station, ergänzt, was heute oder in
+  dieser Jahreszeit besonders ist, und nennt ein Detail, das im Bild zu
+  finden ist. *Belege* klappt jede Angabe der Station mit ihrer Quelle
+  auf — Wikipedia, die Seite einer Einrichtung, die Daten des
+  Stadtmodells selbst; Legenden werden als Legenden erzählt. *Weiter*
+  und *Zurück* gehen von Station zu Station, ✕ beendet den Spaziergang
+  und stellt Bildstil und Uhrzeit zurück. Auf dem Telefon steht die
+  Karte oben und klappt ihren Text ein. Wie sie geschrieben werden:
+  [walks.md](../../walks.md).
 - **Steuerung** — die vollständige Tastentabelle, eingeklappt, bis du
   sie öffnest (die Leiste über der Szene zeigt die ersten Tasten).
 

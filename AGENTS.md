@@ -69,6 +69,9 @@ bun run docs:matrix     # regenerate the guide's sources-by-city pages
   its steps in `scripts/prepare/`, the glTF bakes) and the dev CLIs.
 - `data/<site>/` — committed build sources and derived files;
   `data/_raw/` gitignored downloads; `public/data/` generated.
+- `data/<site>/walks/*.json` — the written walks (`docs/walks.md`,
+  ADR 0055); `bun scripts/stadtwissen.ts <site> such|nah|…` searches
+  what the twin knows, `bun scripts/walks.ts <site> check` checks a walk.
 - `app/[site]/`, `app/page.tsx`, `app/wissen/`, `app/(legal)/` — the routes.
 - `docs/` — the knowledge base ([README](docs/README.md)): ADRs, plans,
   `rendering.md`, `data-pipeline.md`, `transformations.md` (the ledger of

@@ -768,6 +768,40 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     expectNoErrors(errors);
   });
 
+  test("a walk tells its stops, with their sources, and gives the style and the time back", async () => {
+    // The walks are Claude's narration (ADR 0055): the card says so on
+    // every stop and folds out the sources. Where the camera stood is put
+    // back afterwards, so the tests after this one start where they did.
+    const before = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    await withFramesHeld(page, async () => {
+      await openSidebar(page);
+      await page.getByRole("tab", { name: "Erkunden" }).click();
+      const walks = page.getByRole("region", { name: "Spaziergänge" });
+      await expect(walks).toBeVisible({ timeout: slow(15_000) });
+      await walks.locator('[data-walk="augusts-buehne"]').click();
+      const card = page.getByTestId("walk-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("1/9");
+      await expect(card).toContainText("Erzählt von Claude (KI)");
+      const first = await card.getByRole("heading").textContent();
+      await card.getByTestId("walk-next").click();
+      await expect(card).toContainText("2/9");
+      await expect(card.getByRole("heading")).not.toHaveText(first ?? "");
+      await card.getByText(/^Belege \(\d+\)$/).click();
+      await expect(card.locator('a[href^="https://"]').first()).toBeVisible();
+      await card.getByRole("button", { name: "Spaziergang beenden" }).click();
+      await expect(card).toHaveCount(0);
+    });
+    await page.evaluate((camera) => {
+      if (camera) {
+        window.__poc?.handle?.applyCameraState(camera);
+      }
+    }, before);
+    expectNoErrors(errors);
+  });
+
   test("the data layers switch on and off from the sidebar", async () => {
     // The live bicycle counts come from the city's WFS; the spec answers
     // for it (two counters on the spawn tile), so CI never waits on the

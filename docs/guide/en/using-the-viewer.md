@@ -371,6 +371,22 @@ The button in the corner opens a panel with three tabs.
   City* red, *Papier* as coloured tissue paper (lit from inside at night),
   *Strich* in plan colours with a pen's edge (a warm light at night), the
   *Schwarzplan* as a band outlined in black.
+- **Spaziergänge** ("walks") — guided walks through the city, written by
+  Claude, an AI, and marked as such on every stop (so far in Dresden, in
+  German): *Augusts Bühne* (the old town as a stage of power), *Narben
+  und Nähte* (how the city lives with its wounds), *Gold, Milch und
+  Eigensinn* (the Neustadt) and *Wunder am Elbhang* (upriver to
+  Loschwitz). A walk opens a card over the scene: each stop glides to
+  its view, sets today's date at the hour the stop is best seen (a
+  facade in evening light, a square at night) and, where the stop asks,
+  a picture style or the Modell view; the card tells the stop, adds what
+  is special about today or this season, and names one detail to find in
+  the picture. *Belege* ("sources") folds out every claim the stop makes
+  with the source it comes from — Wikipedia, an institution's page, the
+  city model's own data; legends are told as legends. *Weiter* and
+  *Zurück* move between the stops, × ends the walk and gives the picture
+  style and the time back. On a phone the card sits at the top and folds
+  its text away. How they are written: [walks.md](../../walks.md).
 - **Steuerung** ("controls") — the full controls table, folded until you
   open it (the bar over the scene shows the first few).
 

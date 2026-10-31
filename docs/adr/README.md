@@ -34,6 +34,7 @@ how it is built.
 | [0044](./0044-modell-parallel-projections.md) | Modell: the city in parallel projection, every pass reading the camera through a lens |
 | [0047](./0047-phone-memory-budget-in-true-bytes.md) | Every device gets a budget in true bytes, a phone's memory never grows, a device that lost its GPU gets a lighter page |
 | [0048](./0048-network-failures-are-retried.md) | A network failure is retried for a budget of the page's visible time, never decided at once |
+| [0055](./0055-stadtwissen-and-written-walks.md) | What the twin knows is baked as files for agents; walks are written ahead, checked against the data, their narration marked as Claude's |
 
 ## Numbering
 

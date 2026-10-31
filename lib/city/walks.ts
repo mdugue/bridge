@@ -1,0 +1,333 @@
+/**
+ * Erzählte Spaziergänge: a walk is a sequence of stops, each a view (where
+ * the eye stands, what it looks at, at which hour, in which picture style),
+ * a narration and the facts it rests on with their sources. Walks are
+ * written ahead — by Claude, from the Stadtwissen (lib/city/stadtwissen.ts)
+ * and the sources each fact names — committed as
+ * `data/<site>/walks/<id>.json`, checked by `walks.test.ts` and published
+ * by `prepare-data.ts` as one `walks.json`; the viewer plays them
+ * (`app/_components/walk-player.tsx`). The narration is marked as written
+ * by Claude wherever it shows; the facts carry their sources (ADR 0042,
+ * ADR 0055). No THREE, no DOM.
+ */
+import {
+  isModelPreset,
+  MODEL_PRESET_BY_ID,
+  type ModelPresetId,
+} from "./model-view";
+import { isRenderStyle, type RenderStyle } from "./render-style";
+import type { MovementMode, ViewpointGeometry } from "./site";
+import type { CameraStateJson } from "./snapshot";
+
+/** The published bundle under `public/data/<site>/`. */
+export const WALKS_FILE = "walks.json";
+/** Where a site's walks are written, relative to its data folder. */
+export const WALKS_DIR = "walks";
+
+/** What the tileset's `extras` add for the walks. Kept here, not in
+ *  tileset.ts's `TilesetExtras`: that module is in every ground's bake key
+ *  (bake-entries.ts `GROUND`), and the walks re-bake nothing. */
+export interface WalksExtras {
+  /** the site's walks, relative to the tileset; absent where it has none */
+  walks?: string;
+}
+
+/** A claim a stop makes, and where it can be checked. */
+export interface WalkFact {
+  /** one sentence, as the stop tells it */
+  claim: string;
+  /** an https URL, or `stadtwissen:<id>` (a Building's gml:id or a Q-id) */
+  source: string;
+}
+
+/** A paragraph a stop adds on and around certain days of the year. */
+export interface WalkDay {
+  /** first day, "MM-DD" */
+  from: string;
+  /** last day, "MM-DD" (may wrap past the year's end) */
+  to: string;
+  text: string;
+}
+
+export type Season = "autumn" | "spring" | "summer" | "winter";
+
+/** Modell's view of a stop (ADR 0044): the parallel camera on `at`. */
+export interface WalkModel {
+  preset: ModelPresetId;
+  /** scale denominator (1 : n at 96 dpi) */
+  scale: number;
+  /** Vogelschau's tilt (degrees below the horizon); the preset's otherwise */
+  tiltDeg?: number;
+  /** compass heading of the view (0 = looking north) */
+  turnDeg: number;
+}
+
+export interface WalkStop {
+  /** what the eye looks at: site CRS x, y and the height (m a.s.l.) */
+  at: [number, number, number];
+  /** a paragraph for this time of year */
+  seasons?: Partial<Record<Season, string>>;
+  /** a closer look: the detail to find in the picture */
+  closer?: string;
+  /** paragraphs for certain days of the year */
+  days?: WalkDay[];
+  facts: WalkFact[];
+  /** lens (degrees, vertical); 60 when absent */
+  fov?: number;
+  /** where the eye stands: site CRS x, y and metres above the ground there */
+  from: [number, number, number];
+  /**
+   * The ground under `from` (m a.s.l., the DGM1): the stop's pitch is
+   * reckoned from it. Written by `bun scripts/walks.ts <site> ground`,
+   * checked against the DGM by walks.test.ts.
+   */
+  ground: number;
+  /** the hour of the visitor's day to show it at (today's date) */
+  hour: number;
+  id: string;
+  /** walk (on the ground) or fly; walk when the eye is below 3 m */
+  mode?: MovementMode;
+  /** shows the stop in Modell instead of the perspective view */
+  model?: WalkModel;
+  /** the Stadtwissen entries it is about (Q-ids, Building ids) */
+  refs?: string[];
+  /** the picture style for this stop; Pastell when absent */
+  style?: RenderStyle;
+  /** the narration, written by Claude */
+  text: string;
+  title: string;
+}
+
+export interface Walk {
+  /** who wrote the narration (shown on every stop) */
+  by: string;
+  id: string;
+  /** about how long the walk takes to read and look, minutes */
+  minutes: number;
+  stops: WalkStop[];
+  /** one sentence: what the walk is about */
+  teaser: string;
+  title: string;
+  /** when it was written, YYYY-MM-DD */
+  written: string;
+}
+
+/** What the viewer loads: the site's walks in their order. */
+export interface WalkBundle {
+  site: string;
+  walks: Walk[];
+}
+
+const DEG = 180 / Math.PI;
+/** The eye height up to which a stop stands on the ground. */
+const WALK_EYE_MAX = 3;
+
+/** The stop's view as a glide target. */
+export function stopView(stop: WalkStop): ViewpointGeometry {
+  const [fx, fy, above] = stop.from;
+  const [ax, ay, az] = stop.at;
+  const dx = ax - fx;
+  const dy = ay - fy;
+  const run = Math.hypot(dx, dy);
+  const heading = (Math.atan2(dx, dy) * DEG + 360) % 360;
+  const pitch = Math.atan2(az - (stop.ground + above), Math.max(run, 1)) * DEG;
+  return {
+    epsg: { x: fx, y: fy },
+    aboveGround: above,
+    headingDeg: Math.round(heading * 10) / 10,
+    pitchDeg: Math.round(pitch * 10) / 10,
+    fov: stop.fov ?? 60,
+    mode: stop.mode ?? (above <= WALK_EYE_MAX ? "walk" : "fly"),
+  };
+}
+
+/**
+ * The stop as a camera state (snapshot.ts), put in place at once: the
+ * perspective pose and, for a Modell stop, Modell's pivot on `at`. The
+ * player jumps with it where a glide cannot go — into Modell, or out of
+ * it. World = (x − cx, z, −(y − cy)).
+ */
+export function stopCamera(
+  stop: WalkStop,
+  offset: { cx: number; cy: number }
+): CameraStateJson {
+  const view = stopView(stop);
+  const [fx, fy, above] = stop.from;
+  const [ax, ay, az] = stop.at;
+  const pose: CameraStateJson = {
+    epsg: { x: fx, y: fy },
+    pos: { x: fx - offset.cx, y: stop.ground + above, z: -(fy - offset.cy) },
+    headingDeg: view.headingDeg,
+    pitchDeg: view.pitchDeg,
+    fov: view.fov,
+    mode: stop.model ? "fly" : view.mode,
+  };
+  if (!stop.model) {
+    return pose;
+  }
+  return {
+    ...pose,
+    model: {
+      pivot: { x: ax - offset.cx, y: az, z: -(ay - offset.cy) },
+      preset: stop.model.preset,
+      scale: stop.model.scale,
+      tiltDeg:
+        stop.model.tiltDeg ?? MODEL_PRESET_BY_ID[stop.model.preset].tiltDeg,
+      turnDeg: stop.model.turnDeg,
+    },
+  };
+}
+
+/** The stop's hour on the visitor's day (local time). */
+export function stopDate(stop: WalkStop, today: Date): Date {
+  const minutes = Math.round(stop.hour * 60);
+  return new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+    Math.floor(minutes / 60),
+    minutes % 60
+  );
+}
+
+/** The meteorological season of a date (Northern Hemisphere). */
+export function seasonOf(date: Date): Season {
+  const m = date.getMonth();
+  if (m < 2 || m === 11) {
+    return "winter";
+  }
+  if (m < 5) {
+    return "spring";
+  }
+  return m < 8 ? "summer" : "autumn";
+}
+
+const monthDay = (date: Date) =>
+  `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+/** Whether "MM-DD" `day` lies in [from, to], the span wrapping past 12-31. */
+export function inDaySpan(day: string, from: string, to: string): boolean {
+  return from <= to ? day >= from && day <= to : day >= from || day <= to;
+}
+
+/** The paragraphs a stop adds today: its days' first, then its season's. */
+export function stopNotes(stop: WalkStop, today: Date): string[] {
+  const md = monthDay(today);
+  const days = (stop.days ?? [])
+    .filter((d) => inDaySpan(md, d.from, d.to))
+    .map((d) => d.text);
+  const season = stop.seasons?.[seasonOf(today)];
+  return season ? [...days, season] : days;
+}
+
+// --- checks ----------------------------------------------------------------------
+
+const MD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+const SOURCE = /^(https:\/\/\S+|stadtwissen:\S+)$/;
+/** The longest narration a stop shows: a phone screen, not an essay. */
+export const STOP_TEXT_MAX = 900;
+
+const finite = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+
+/** Where the stop stands, looks and when: the view's own numbers. */
+function viewProblems(stop: WalkStop): string[] {
+  const out: string[] = [];
+  if (!(stop.from?.length === 3 && stop.from.every(finite))) {
+    out.push("from must be [x, y, above]");
+  }
+  if (!(stop.at?.length === 3 && stop.at.every(finite))) {
+    out.push("at must be [x, y, z]");
+  }
+  if (!finite(stop.ground)) {
+    out.push("ground is missing (bun scripts/walks.ts <site> ground)");
+  }
+  if (!(finite(stop.hour) && stop.hour >= 0 && stop.hour < 24)) {
+    out.push("hour must be within the day");
+  }
+  if (stop.style !== undefined && !isRenderStyle(stop.style)) {
+    out.push(`style ${String(stop.style)} is not a picture style`);
+  }
+  if (stop.model && !isModelPreset(stop.model.preset)) {
+    out.push(`model.preset ${String(stop.model.preset)} is not a Modell view`);
+  }
+  return out;
+}
+
+/** What the stop says and what it rests on. */
+function textProblems(stop: WalkStop): string[] {
+  const out: string[] = [];
+  if (!(stop.title && stop.text)) {
+    out.push("title and text are required");
+  } else if (stop.text.length > STOP_TEXT_MAX) {
+    out.push(
+      `text is ${stop.text.length} characters (at most ${STOP_TEXT_MAX})`
+    );
+  }
+  if (stop.facts.length === 0) {
+    out.push("a stop rests on at least one fact");
+  }
+  for (const f of stop.facts) {
+    if (!SOURCE.test(f.source)) {
+      out.push(`fact "${f.claim.slice(0, 40)}…" has no checkable source`);
+    }
+  }
+  for (const d of stop.days ?? []) {
+    if (!(MD.test(d.from) && MD.test(d.to))) {
+      out.push(`days ${d.from}–${d.to} must be MM-DD`);
+    }
+  }
+  return out;
+}
+
+function stopProblems(stop: WalkStop, where: string): string[] {
+  return [...viewProblems(stop), ...textProblems(stop)].map(
+    (p) => `${where}: ${p}`
+  );
+}
+
+/** Everything wrong with a walk (empty when it is fine). */
+export function walkProblems(walk: Walk): string[] {
+  const out: string[] = [];
+  if (!/^[a-z0-9-]+$/.test(walk.id)) {
+    out.push(`${walk.id}: id must be kebab-case`);
+  }
+  if (!walk.title || !walk.teaser || !walk.by) {
+    out.push(`${walk.id}: title, teaser and by are required`);
+  }
+  if (walk.stops.length < 2) {
+    out.push(`${walk.id}: a walk has at least two stops`);
+  }
+  const ids = new Set<string>();
+  walk.stops.forEach((stop, i) => {
+    if (ids.has(stop.id)) {
+      out.push(`${walk.id}: stop id ${stop.id} twice`);
+    }
+    ids.add(stop.id);
+    out.push(...stopProblems(stop, `${walk.id} #${i + 1} ${stop.id}`));
+  });
+  return out;
+}
+
+/**
+ * The published bundle: the site's walks in file order, each checked —
+ * a walk with a problem fails the build instead of shipping a broken stop.
+ */
+export function walkBundle(site: string, walks: Walk[]): WalkBundle {
+  const problems = walks.flatMap(walkProblems);
+  if (problems.length > 0) {
+    throw new Error(`${site} walks:\n${problems.join("\n")}`);
+  }
+  return { site, walks };
+}
+
+/** Whether a fetched value is a walk bundle the player can show. */
+export function isWalkBundle(value: unknown): value is WalkBundle {
+  const v = value as Partial<WalkBundle> | null;
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    typeof v.site === "string" &&
+    Array.isArray(v.walks) &&
+    v.walks.every((w) => Array.isArray(w?.stops) && typeof w.title === "string")
+  );
+}

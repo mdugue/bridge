@@ -103,6 +103,7 @@ import {
   tileTopsOf,
 } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
+import type { WalksExtras } from "@/lib/city/walks";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import {
   createLodSchedule,
@@ -393,7 +394,12 @@ function sceneBuffers(
 /** What the HUD knows of the site from the tileset alone (`onSiteInfo`). */
 export type SiteInfo = Pick<
   CityWalkHandle,
-  "landcoverTiles" | "landmarks" | "latLng" | "provenanceUrl" | "terrainBounds"
+  | "landcoverTiles"
+  | "landmarks"
+  | "latLng"
+  | "provenanceUrl"
+  | "terrainBounds"
+  | "walksUrl"
 >;
 
 export interface CityWalkOptions {
@@ -566,6 +572,9 @@ export interface CityWalkHandle {
   /** The provenance manifest (lib/city/provenance.ts), when the tileset
    *  names one: the inquiry card's source lines. */
   provenanceUrl: string | null;
+  /** The site's walks (lib/city/walks.ts), when the tileset names them:
+   *  the Erkunden panel's Spaziergänge. */
+  walksUrl: string | null;
   /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
   enterImmersive: () => void;
   /**
@@ -1308,6 +1317,8 @@ async function bootApp(
   const tilesetUrl = new URL(opts.tilesetUrl, window.location.href).href;
   const tileset = await fetchRequiredJson<unknown>(tilesetUrl, opts.signal);
   const extras = parseTilesetExtras(tileset);
+  // the walks name their file beside the tileset's own extras (WalksExtras)
+  const walksFile = (extras as WalksExtras).walks;
   ensureAlive();
   const { offset } = extras;
   // The tile the boot starts on and waits for: the spawn tile, or the one
@@ -1390,6 +1401,7 @@ async function bootApp(
       ? new URL(extras.provenance, tilesetUrl).href
       : null,
     terrainBounds: siteBounds,
+    walksUrl: walksFile ? new URL(walksFile, tilesetUrl).href : null,
   };
   opts.onSiteInfo?.(siteInfo);
   const sunRig = createSunRig(
