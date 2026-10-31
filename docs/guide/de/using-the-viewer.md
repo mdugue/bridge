@@ -498,7 +498,10 @@ und das Modell behalten ihre scharfen Linien.
 - **Entwurf** — lädt einen eigenen Entwurf in die Stadt: eine glTF-Datei
   (`.glb`, oder `.gltf` mit ihrer `.bin` und den Texturen zusammen
   ausgewählt), wie sie SketchUp, Rhino, Revit, Archicad, Vectorworks oder
-  Blender exportieren; auch auf das Feld ziehen. Die Datei wird nur in
+  Blender exportieren, oder ein IFC-Modell (`.ifc`); auch auf das Feld
+  ziehen. Eine IFC mit Verortung (`IfcMapConversion` in ETRS89/UTM) steht
+  von selbst an ihrem Ort; eine, die nur Breite und Länge des Grundstücks
+  kennt, steht ungefähr dort, und das Feld bittet ums Prüfen. Die Datei wird nur in
   deinem Browser gelesen und nirgends hochgeladen. Stehen Landeskoordinaten
   (UTM, auch mit vorangestellter Zone) in der Datei, steht der Entwurf
   gleich an seinem Ort, mit seinen NHN-Höhen, wenn sie zum Gelände passen;
