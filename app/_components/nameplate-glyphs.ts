@@ -53,9 +53,19 @@ export const KIND = { glyph: 0, solid: 1, disc: 2 } as const;
 
 export type Align = "left" | "center" | "right";
 
-export interface PlateGeometry {
+/** A plate's letters rasterised once for its text and type: the field
+ *  atlas and each line's glyphs, laid out by `layPlate` for any alignment
+ *  without rasterising again. */
+export interface PlateRaster {
   /** the field atlas (R8) */
   atlas: { data: Uint8Array; height: number; width: number };
+  lineCap: number;
+  lines: SetLine[];
+  title: SetLine;
+  type: NameplateType;
+}
+
+export interface PlateGeometry {
   /** the block's size in title caps (the box's included) */
   block: { height: number; width: number };
   index: Uint16Array;
@@ -261,16 +271,14 @@ class Builder {
 }
 
 /**
- * The plate's geometry for its text in a type, aligned within the block;
- * null where the page cannot draw letters (no canvas) or they do not fit
- * the atlas.
+ * The plate's letters for its text in a type; null where the page cannot
+ * draw letters (no canvas) or they do not fit the atlas.
  */
-export function buildPlate(
+export function rasterPlate(
   text: NameplateText,
   type: NameplateType,
-  align: Align,
   from: Element
-): PlateGeometry | null {
+): PlateRaster | null {
   const ctx = context(256, 256);
   if (!ctx) {
     return null;
@@ -308,6 +316,27 @@ export function buildPlate(
       );
     }
   }
+  return {
+    atlas: { data: atlas, width: ATLAS_WIDTH, height: packed.height },
+    lineCap,
+    lines,
+    title,
+    type,
+  };
+}
+
+/**
+ * The plate's geometry, aligned within its block: with its small lines,
+ * or the title alone (from far).
+ */
+export function layPlate(
+  raster: PlateRaster,
+  align: Align,
+  withLines: boolean
+): PlateGeometry {
+  const { title, lineCap, type } = raster;
+  const lines = withLines ? raster.lines : [];
+  const atlasHeight = raster.atlas.height;
   // baselines from the foot up: the last line first
   const baselines: number[] = [];
   let y = FOOT * (lines.length > 0 ? lineCap : 1);
@@ -364,9 +393,9 @@ export function buildPlate(
         y1,
         [
           g.ax / ATLAS_WIDTH,
-          (g.ay + g.bh) / packed.height,
+          (g.ay + g.bh) / atlasHeight,
           (g.ax + g.bw) / ATLAS_WIDTH,
-          g.ay / packed.height,
+          g.ay / atlasHeight,
         ],
         KIND.glyph,
         l.paint
@@ -398,7 +427,6 @@ export function buildPlate(
     }
   }
   return {
-    atlas: { data: atlas, width: ATLAS_WIDTH, height: packed.height },
     block: { width: width + 2 * pad, height: height + pad },
     index: new Uint16Array(b.index),
     paint: new Uint8Array(b.paint),

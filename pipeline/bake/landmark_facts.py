@@ -153,13 +153,11 @@ def cache_path(raw: Path, site: str) -> Path:
     return raw / "wikidata" / f"landmark_facts_{site}.json"
 
 
-def landmark_ids(raw: Path, data: Path) -> list[str]:
-    """Every item the site's landmark caches and committed files name."""
+def landmark_ids(data: Path) -> list[str]:
+    """Every item the site's committed landmark files name (the provider's
+    raw caches are shared by every city of the Land: not read)."""
     ids: set[str] = set()
-    for path in [
-        *(raw / "wikidata").glob("landmarks_*.json"),
-        *(data / "dlm").glob("landmarks_*.json"),
-    ]:
+    for path in (data / "dlm").glob("landmarks_*.json"):
         doc = json.loads(path.read_text())
         ids.update(i["id"] for i in doc.get("landmarks", []) if "id" in i)
     return sorted(ids)
@@ -167,17 +165,28 @@ def landmark_ids(raw: Path, data: Path) -> list[str]:
 
 def fetch_wikidata(raw: Path, data: Path, site: str) -> None:
     """Asks Wikidata for the facts of the site's landmarks (fetch time
-    only) and caches the answer."""
-    ids = landmark_ids(raw, data)
+    only) and caches the answer; a rerun asks only for the items the cache
+    has not asked for yet."""
+    ids = landmark_ids(data)
     if not ids:
         print(f"{site}: no landmarks known yet — the landmark facts are not fetched")
         return
+    dest = cache_path(raw, site)
     items: dict[str, list[dict]] = {}
-    for k in range(0, len(ids), BATCH):
-        batch = ids[k : k + BATCH]
+    asked: set[str] = set()
+    if dest.exists():
+        cached = json.loads(dest.read_text())
+        items = cached.get("items", {})
+        asked = set(cached.get("ids", []))
+    missing = [i for i in ids if i not in asked]
+    if not missing:
+        print(f"{site}: Wikidata facts cached for all {len(ids)} landmarks")
+        return
+    for k in range(0, len(missing), BATCH):
+        batch = missing[k : k + BATCH]
         rows = _post(QUERY % {"ids": " ".join(f"wd:{i}" for i in batch)})
         items.update(rows_by_item(rows))
-    dest = cache_path(raw, site)
+    ids = sorted(asked | set(ids))
     dest.parent.mkdir(parents=True, exist_ok=True)
     doc = {"source": ATTRIBUTION, "query": SPARQL, "ids": ids, "items": items}
     part = dest.with_name(dest.name + ".part")
@@ -247,7 +256,9 @@ def facts_of(records: list[dict]) -> dict:
     r_start = min(rebuilt_from) if rebuilt_from else None
     r_end = max(rebuilt_to + rebuilt_at) if (rebuilt_to or rebuilt_at) else None
     if r_end is not None:
-        out["rebuilt"] = _span(r_start, r_end) or [r_end]
+        # a stated end is the rebuild's year; its start only where it fits
+        fits = r_start is not None and 0 < r_end - r_start <= MAX_BUILD_YEARS
+        out["rebuilt"] = [r_start, r_end] if fits else [r_end]
     elif r_start is not None:
         # begun, its end not stated: "from"
         out["rebuiltFrom"] = r_start

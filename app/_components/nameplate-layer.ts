@@ -69,10 +69,15 @@ import {
   type NameplatePose,
   type NameplateScene,
   type Vec3,
+  add,
   chooseNameplate,
+  cross,
+  dot,
   nameplateBody,
   nameplatePose,
   sameLayout,
+  scale,
+  sub,
 } from "@/lib/city/nameplate-place";
 import {
   NAMEPLATE_CAPS,
@@ -89,8 +94,10 @@ import {
   KIND,
   PAINT,
   type PlateGeometry,
-  buildPlate,
+  type PlateRaster,
+  layPlate,
   loadFaces,
+  rasterPlate,
 } from "./nameplate-glyphs";
 import type { Live } from "./shader-chunks";
 import type { ViewLens } from "./view-lens";
@@ -338,10 +345,14 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   let subject: NameplateSubject | null = null;
   let body: NameplateBody | null = null;
   let geometry: PlateGeometry | null = null;
+  /** the letters, rasterised once per text and style (and faces) */
+  let raster: PlateRaster | null = null;
+  let rasterFor: { style: RenderStyle; text: NameplateText } | null = null;
+  /** the geometry laid out from them, per alignment and far or not */
   let builtFor: {
     align: Align;
-    style: RenderStyle;
-    text: NameplateText;
+    lines: boolean;
+    raster: PlateRaster;
   } | null = null;
   let layout: NameplateLayout | null = null;
   let pending: NameplateLayout | null = null;
@@ -385,30 +396,56 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     haloWidth.value = type().halo.width;
   };
 
-  /** (Re)builds the plate's letters for the text, style and alignment. */
-  const rebuild = (align: Align) => {
+  /** The letters for the text and style, rasterised again only when
+   *  either changed (or the faces arrived); null where none can be drawn. */
+  const letters = (): PlateRaster | null => {
     const s = subject;
     const from = deps.fonts();
     if (!(s && from)) {
-      return;
+      return null;
     }
+    if (rasterFor?.text === s.text && rasterFor.style === style) {
+      return raster;
+    }
+    raster = rasterPlate(s.text, type(), from);
+    rasterFor = { text: s.text, style };
+    if (raster) {
+      atlas.dispose();
+      atlas = atlasTexture(
+        raster.atlas.data,
+        raster.atlas.width,
+        raster.atlas.height
+      );
+      atlasNode.value = atlas;
+    }
+    return raster;
+  };
+
+  /** Lays the plate out for the current layout: its alignment, and its
+   *  small lines unless seen from far. Cheap: the letters are kept. */
+  const rebuild = () => {
+    const r = letters();
+    const align = alignFor(layout);
+    const lines = layout?.mode !== "far";
     if (
-      builtFor &&
-      builtFor.text === s.text &&
-      builtFor.style === style &&
-      builtFor.align === align
+      r &&
+      builtFor?.raster === r &&
+      builtFor.align === align &&
+      builtFor.lines === lines
     ) {
       return;
     }
-    const g = buildPlate(s.text, type(), align, from);
-    builtFor = { text: s.text, style, align };
-    geometry = g;
     plate.geometry.dispose();
-    if (!g) {
+    if (!r) {
+      builtFor = null;
+      geometry = null;
       plate.geometry = emptyGeometry();
       plate.visible = false;
       return;
     }
+    const g = layPlate(r, align, lines);
+    builtFor = { raster: r, align, lines };
+    geometry = g;
     const geo = new BufferGeometry();
     geo.setAttribute("position", new Float32BufferAttribute(g.positions, 3));
     geo.setAttribute("uvk", new Float32BufferAttribute(g.uvk, 3));
@@ -423,9 +460,6 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     );
     geo.setIndex(new Uint16BufferAttribute(g.index, 1));
     plate.geometry = geo;
-    atlas.dispose();
-    atlas = atlasTexture(g.atlas.data, g.atlas.width, g.atlas.height);
-    atlasNode.value = atlas;
     recolour();
   };
 
@@ -441,8 +475,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       if (disposed || asked !== generation) {
         return;
       }
-      builtFor = null;
-      rebuild(alignFor(layout));
+      rasterFor = null;
+      rebuild();
     });
   };
 
@@ -456,29 +490,15 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       return;
     }
     const b = block();
-    const at = (s: number, u: number): Vec3 => [
-      p.origin[0] + p.right[0] * s * p.cap + p.up[0] * u * p.cap,
-      p.origin[1] + p.right[1] * s * p.cap + p.up[1] * u * p.cap,
-      p.origin[2] + p.right[2] * s * p.cap + p.up[2] * u * p.cap,
-    ];
+    const at = (s: number, u: number): Vec3 =>
+      add(p.origin, add(scale(p.right, s * p.cap), scale(p.up, u * p.cap)));
     // the leader leaves the plate's foot on the side nearest the anchor
-    const rel = [
-      anchor[0] - p.origin[0],
-      anchor[1] - p.origin[1],
-      anchor[2] - p.origin[2],
-    ];
-    const along =
-      (rel[0] * p.right[0] + rel[1] * p.right[1] + rel[2] * p.right[2]) / p.cap;
+    const along = dot(sub(anchor, p.origin), p.right) / p.cap;
     const footS = Math.min(Math.max(along, 0.15), b.width - 0.15);
     const foot = at(footS, 0.05);
     const distance = camera.ortho
       ? 1
-      : Math.max(
-          (anchor[0] - camera.position[0]) * camera.forward[0] +
-            (anchor[1] - camera.position[1]) * camera.forward[1] +
-            (anchor[2] - camera.position[2]) * camera.forward[2],
-          0.5
-        );
+      : Math.max(dot(sub(anchor, camera.position), camera.forward), 0.5);
     const minW = (LEADER_MIN_PX * distance) / camera.pxPerM;
     const w = Math.max(LEADER_CAPS * p.cap, minW) / 2;
     const pos: number[] = [];
@@ -513,11 +533,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       const edge = atNight(t.box.edge, night);
       const fill = atNight(t.box.fill, night);
       const grow = 0.09 * p.cap;
-      const out = (q: Vec3, s: number): Vec3 => [
-        q[0] + r[0] * s,
-        q[1] + r[1] * s,
-        q[2] + r[2] * s,
-      ];
+      const out = (q: Vec3, s: number): Vec3 => add(q, scale(r, s));
       const solid = [
         [0.5, 0.5],
         [0.5, 0.5],
@@ -533,25 +549,11 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         width: number,
         c: readonly [number, number, number]
       ) => {
-        // across the line, in the plate's plane
-        const d = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+        // the plate's normal × the line: across it, in the plate's plane
+        const d = sub(to, from);
         const l = Math.hypot(d[0], d[1], d[2]) || 1;
-        // the plate's normal × the line: across it in the plane
-        const n = [
-          p.right[1] * p.up[2] - p.right[2] * p.up[1],
-          p.right[2] * p.up[0] - p.right[0] * p.up[2],
-          p.right[0] * p.up[1] - p.right[1] * p.up[0],
-        ];
-        const x: Vec3 = [
-          (n[1] * d[2] - n[2] * d[1]) / l,
-          (n[2] * d[0] - n[0] * d[2]) / l,
-          (n[0] * d[1] - n[1] * d[0]) / l,
-        ];
-        const o = (q: Vec3, s: number): Vec3 => [
-          q[0] + x[0] * s,
-          q[1] + x[1] * s,
-          q[2] + x[2] * s,
-        ];
+        const x = scale(cross(cross(p.right, p.up), d), 1 / l);
+        const o = (q: Vec3, s: number): Vec3 => add(q, scale(x, s));
         push(
           [o(from, -width), o(from, width), o(to, width), o(to, -width)],
           [
@@ -568,21 +570,14 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       if (t.leader === "dimension") {
         // ticks across both ends, a drawn dimension line
         const tick = 0.35 * p.cap;
-        const o = (q: Vec3, s: number): Vec3 => [
-          q[0] + r[0] * s,
-          q[1] + r[1] * s,
-          q[2] + r[2] * s,
-        ];
+        const o = (q: Vec3, s: number): Vec3 => add(q, scale(r, s));
         quad(o(foot, -tick), o(foot, tick), w, line);
         quad(o(anchor, -tick), o(anchor, tick), w, line);
       } else {
         const d = DOT_CAPS * p.cap;
         const u = p.up;
-        const q = (sx: number, sy: number): Vec3 => [
-          anchor[0] + r[0] * sx * d + u[0] * sy * d,
-          anchor[1] + r[1] * sx * d + u[1] * sy * d,
-          anchor[2] + r[2] * sx * d + u[2] * sy * d,
-        ];
+        const q = (sx: number, sy: number): Vec3 =>
+          add(anchor, add(scale(r, sx * d), scale(u, sy * d)));
         push(
           [q(-1, -1), q(1, -1), q(1, 1), q(-1, 1)],
           [
@@ -646,24 +641,30 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     const caps = NAMEPLATE_CAPS[subject?.text.rank ?? "address"];
     return deps.phone ? caps.phone : caps.desktop;
   };
-  const forStyle = (l: NameplateLayout): NameplateLayout =>
-    type().onGround && l.mode !== "air"
-      ? { ...l, mode: "air", spot: "front" }
-      : l;
+  /** A new place from scratch: nothing chosen, nothing pending, the plate
+   *  hidden until the next choice. */
+  const forget = () => {
+    layout = null;
+    pending = null;
+    pose = null;
+    chosenAt = Number.NEGATIVE_INFINITY;
+    plate.visible = false;
+    leader.visible = false;
+  };
 
   return {
     set: (next) => {
+      if (disposed) {
+        return;
+      }
       subject = next;
       body = next ? nameplateBody(next.positions) : null;
-      layout = null;
-      pending = null;
-      pose = null;
+      forget();
       builtFor = null;
-      chosenAt = Number.NEGATIVE_INFINITY;
       askedAt = performance.now();
       if (!(next && body)) {
-        plate.visible = false;
-        leader.visible = false;
+        raster = null;
+        rasterFor = null;
         geometry = null;
         plate.geometry.dispose();
         plate.geometry = emptyGeometry();
@@ -673,7 +674,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         generation++;
         return;
       }
-      rebuild("center");
+      rebuild();
       withFaces();
     },
     applyLook: (next) => {
@@ -681,10 +682,9 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         return;
       }
       style = next;
-      builtFor = null;
-      layout = null;
+      forget();
       if (subject) {
-        rebuild(alignFor(layout));
+        rebuild();
         withFaces();
       }
     },
@@ -705,18 +705,19 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       const cam = plateCamera(camera, viewport);
       if (now - chosenAt >= CHOOSE_MS && !(hold && layout)) {
         chosenAt = now;
-        const chosen = forStyle(
-          chooseNameplate(
-            body,
-            layout,
-            block(),
-            range(),
-            placeScene(camera, cam)
-          )
+        // Schwarzplan letters the ground from every view: its ground
+        // places are the ones weighed
+        const chosen = chooseNameplate(
+          body,
+          layout,
+          block(),
+          range(),
+          placeScene(camera, cam),
+          type().onGround ? "air" : undefined
         );
         if (layout === null) {
           layout = chosen;
-          rebuild(alignFor(layout));
+          rebuild();
         } else if (
           !sameLayout(chosen, layout) &&
           !sameLayout(chosen, pending)
@@ -733,7 +734,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
           layout = pending;
           pending = null;
           crossAt = now;
-          rebuild(alignFor(layout));
+          rebuild();
           crossFade = 0;
         } else {
           crossFade = 1 - t;
@@ -745,11 +746,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         return;
       }
       pose = nameplatePose(body, layout, cam, block(), range(), deps.groundAt);
-      const n: Vec3 = [
-        pose.right[1] * pose.up[2] - pose.right[2] * pose.up[1],
-        pose.right[2] * pose.up[0] - pose.right[0] * pose.up[2],
-        pose.right[0] * pose.up[1] - pose.right[1] * pose.up[0],
-      ];
+      const n = cross(pose.right, pose.up);
       const c = pose.cap;
       matrix.set(
         pose.right[0] * c,

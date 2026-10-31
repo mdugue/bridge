@@ -55,6 +55,22 @@ def test_spans_and_rebuilds_with_start_and_end():
     assert facts == {"built": [1838, 1841], "rebuilt": [1977, 1985]}
 
 
+def test_a_rebuild_keeps_its_stated_end():
+    # a start at or after the end, or a century before it: the end alone
+    for start, end in (("1950", "1950"), ("1880", "1990")):
+        facts = lf.facts_of(
+            [
+                {
+                    "p": "event",
+                    "ev": "Q1370468",
+                    "s": f"{start}-01-01T00:00:00Z",
+                    "e": f"{end}-01-01T00:00:00Z",
+                }
+            ]
+        )
+        assert facts == {"rebuilt": [int(end)]}
+
+
 def test_a_rebuild_only_begun():
     facts = lf.facts_of([{"p": "event", "ev": "Q1370468", "s": "1945-01-01T00:00:00Z"}])
     assert facts == {"rebuiltFrom": 1945}

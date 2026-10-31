@@ -99,8 +99,6 @@ export interface NameplatePose {
   origin: Vec3;
   /** along the text, unit */
   right: Vec3;
-  /** whether the small lines show (not from far) */
-  lines: boolean;
   /** up the text, unit (in the plate's plane) */
   up: Vec3;
 }
@@ -121,9 +119,12 @@ const STAND_OFF_M = 1.5;
 /** An inscription's foot above the ground (m). */
 const NEAR_FOOT_M = 2.5;
 /** The plate fades out this near (m) to its plane, and is gone nearer
- *  than `FADE_GONE_M`. */
+ *  than `FADE_GONE_M`; an inscription, read close up, only as one walks
+ *  into it. */
 const FADE_FULL_M = 6;
 const FADE_GONE_M = 4;
+const NEAR_FADE_FULL_M = 2.5;
+const NEAR_FADE_GONE_M = 1;
 /** A ground plate floats this high (m): above the kerbs and markings. */
 const GROUND_LIFT_M = 0.4;
 /** A candidate's score: what it pays per share of the plate off screen,
@@ -148,10 +149,28 @@ const SCREEN_MARGIN = 0.92;
 
 // --- small vector helpers ------------------------------------------------
 
-const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const scale = (a: Vec3, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s];
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export const add = (a: Vec3, b: Vec3): Vec3 => [
+  a[0] + b[0],
+  a[1] + b[1],
+  a[2] + b[2],
+];
+export const scale = (a: Vec3, s: number): Vec3 => [
+  a[0] * s,
+  a[1] * s,
+  a[2] * s,
+];
+export const sub = (a: Vec3, b: Vec3): Vec3 => [
+  a[0] - b[0],
+  a[1] - b[1],
+  a[2] - b[2],
+];
+export const dot = (a: Vec3, b: Vec3) =>
+  a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export const cross = (a: Vec3, b: Vec3): Vec3 => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
 const len = (a: Vec3) => Math.hypot(a[0], a[1], a[2]);
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
@@ -459,7 +478,8 @@ export function nameplatePose(
   const probe = add(face, [0, (body.top - body.base) * 0.6, 0]);
   const cap = capHeight(body, camera, probe, range);
   const w = block.width * cap;
-  const h = (layout.mode === "far" ? 1 : block.height) * cap;
+  // from far the block is the title alone (the layer lays it out so)
+  const h = block.height * cap;
   const gap = GAP_CAPS * cap;
   const height = body.top - body.base;
   let origin: Vec3;
@@ -505,8 +525,10 @@ export function nameplatePose(
     up,
     cap,
     anchor,
-    lines: layout.mode !== "far",
-    fade: smooth(FADE_GONE_M, FADE_FULL_M, camToPlane),
+    fade:
+      layout.mode === "near"
+        ? smooth(NEAR_FADE_GONE_M, NEAR_FADE_FULL_M, camToPlane)
+        : smooth(FADE_GONE_M, FADE_FULL_M, camToPlane),
   };
 }
 
@@ -547,7 +569,7 @@ function groundPose(
     [centre[0], y, centre[2]],
     add(scale(right, -w / 2), scale(up, -h / 2))
   );
-  return { origin, right, up, cap, anchor: null, lines: true, fade: 1 };
+  return { origin, right, up, cap, anchor: null, fade: 1 };
 }
 
 // --- choosing ----------------------------------------------------------------
@@ -570,7 +592,7 @@ export function platePoints(
   block: NameplateBlock
 ): { corners: Vec3[]; grid: Vec3[] } {
   const w = block.width * pose.cap;
-  const h = (pose.lines ? block.height : 1) * pose.cap;
+  const h = block.height * pose.cap;
   const at = (s: number, t: number) =>
     add(pose.origin, add(scale(pose.right, s * w), scale(pose.up, t * h)));
   const grid: Vec3[] = [];
@@ -674,15 +696,18 @@ export function nameplateCost(
   return cost;
 }
 
-/** The best layout for the view: the laying, the facade, the place. */
+/** The best layout for the view: the laying (unless `mode` forces one),
+ *  the facade, the place. */
 export function chooseNameplate(
   body: NameplateBody,
   previous: NameplateLayout | null,
   block: NameplateBlock,
   range: CapRange,
-  scene: NameplateScene
+  scene: NameplateScene,
+  force?: NameplateMode
 ): NameplateLayout {
-  const mode = nameplateMode(body, scene.camera, previous?.mode ?? null);
+  const mode =
+    force ?? nameplateMode(body, scene.camera, previous?.mode ?? null);
   const side = nameplateSide(body, scene.camera, previous?.side ?? null);
   let best: NameplateLayout = { mode, side, spot: NAMEPLATE_SPOTS[mode][0] };
   let bestCost = Number.POSITIVE_INFINITY;

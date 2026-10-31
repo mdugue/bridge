@@ -53,12 +53,17 @@ export function createNameplateAsk(deps: {
       return Promise.resolve(null);
     }
     facts ??= fetch(url, { signal: deps.signal })
-      .then((r) => (r.ok ? (r.json() as Promise<unknown>) : null))
+      .then((r) => {
+        if (!r.ok) {
+          throw new Error(`landmark facts: ${r.status}`);
+        }
+        return r.json() as Promise<unknown>;
+      })
       .then((json) =>
         isLandmarkFactsFile(json) ? indexLandmarkFacts(json) : null
       )
       .catch(() => {
-        // not kept: the next landmark asks again
+        // a failed fetch is not kept: the next landmark asks again
         facts = null;
         return null;
       });
@@ -73,7 +78,7 @@ export function createNameplateAsk(deps: {
       }
       const card = inquiryCard(inquiry, null, credits);
       const show = (index: LandmarkFactsIndex | null) => {
-        if (token !== asked) {
+        if (token !== asked || deps.signal?.aborted) {
           return;
         }
         const text = nameplateText(
