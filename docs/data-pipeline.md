@@ -746,27 +746,21 @@ A bake is single-threaded, so `prepare-sites.ts` runs several
 (`scripts/warmers.ts` `bakeLimits`, logged first): as many as the cores
 (`os.availableParallelism()`), and their peaks together within 80 % of the
 memory — the machine's, or the container's limit where it sets a lower one
-(`process.constrainedMemory()`). By default every site is one process,
-largest first. Each is first asked whether it is cached (`--if-cached`,
-counted at 1.6 GB: a warm site publishes there and is done); a site that
-must bake is counted at 4.8 GB (`SITE_PEAK`). Measured cold on 2026-10-25:
-München 4.42 GiB, Leipzig 3.95 GiB, Dresden 3.6–5.7 GiB, the small
-sites near 2 GiB. Until then a site counted 3 GB, so Vercel's 4-core,
-8.6 GB builder baked two cold sites at once (235 s for all seven on
-2026-10-10, when München's peak was lower). A build that re-baked every
-site's buildings was then killed there twice for its memory, München
-beside Dresden. Now that builder bakes one cold site at a time beside the
-warm sites' runs, and CI's 16.8 GB runner bakes two.
-`PREPARE_JOBS=<n>` sets the number of bakes at once,
+(`process.constrainedMemory()`). Each site is first asked whether it is
+cached (`--if-cached`, counted at 1.6 GB: a warm site publishes there and
+is done); a site that must bake is baked tile by tile, by warmers (below),
+largest site first. `PREPARE_JOBS=<n>` sets the number of bakes at once,
 `PREPARE_MEMORY_GB=<gb>` the memory they share (as on a smaller machine:
 the bakes still keep to 80 % of it).
 
-**Warmers (`PREPARE_WARMERS=1`, off by default).** A site with more than four tiles (Dresden) is split further, one tile per
-process: `prepare-data.ts <site>` runs as **warmers**, which only fill the
-cache, before one plain run finds everything cached and publishes. A tile
-warmer counts as 3 GB (its buildings are the peak, Dresden's heaviest tile
-`33414_5654` 2.3–2.7 GB), every other bake as 1.6 GB (1.43 GB at most:
-München's, and the warmer that solves Dresden's line levels).
+**Warmers** (off with `PREPARE_WARMERS=0`). One tile per process:
+`prepare-data.ts <site>` runs as **warmers**, which only fill the cache,
+before one plain run finds everything cached and publishes. A tile warmer
+counts as 3.2 GB (its buildings are the peak: München's heaviest tile
+`32690_5334` 2.40 GiB on 2026-10-31, the others 0.4–2.2 GiB; Vercel's
+Bun 1.3.14 took about 15 % more for a whole site), every other bake as
+1.6 GB (a ground warmer 0.6 GiB at most, a site's publishing run 1.12 GiB,
+Dresden's).
 
 0. `--if-cached`: the plain run, which publishes when every entry is
    cached — a warm build runs no warmer — and stops at the first entry it
@@ -785,26 +779,57 @@ München's, and the warmer that solves Dresden's line levels).
 Each step waits for the one before it. A warmer publishes nothing — no
 file under `public/data/`, no manifest, no prune — so it can never remove
 what another process wrote. One tile per warmer because a process's memory
-grows with every tile it bakes (all fifteen of Dresden's in one: 4.3 GiB),
-and a slot that frees late still finds a tile to take. The smaller sites go
-first, largest first: each is one process that cannot be split, and
-started late it would be the build's tail; the warmers fill every slot
-they leave. Anything new that is computed from every tile must be cached
-by step 1, or every warmer computes it again.
+grows with every tile it bakes: a whole cold site in one process peaks
+near twice its heaviest tile (München 4.47 GiB), so Vercel's 4-core,
+8.6 GB builder holds one cold site at a time but two tiles, CI's 16.8 GB
+runner four. A slot that frees late still finds a tile to take. Anything
+new that is computed from every tile must be cached by step 1, or every
+warmer computes it again.
 
-They are off by default because they showed no gain where it counts. On
-Vercel's builder (4 cores, 8.6 GB) a cold build of all seven sites took
-322 s with them; main's took 232–235 s and the default schedule 387 s on
-the same branch — but the builders differed by about 1.4× in a step the
-warmers do not touch (Next's static pages: 7.5–8.7 s in main's builds,
-11.3–11.9 s in the branch's), so single builds there cannot settle a
-difference of that size (2026-10-10). What is structural: 8.6 GB lets two
-tile warmers run at once, the parallelism main already gets from baking two
-sites side by side, and the warmers' processes add ≈ 10 % CPU. On one box,
-alternating, the default schedule costs main's CPU (Grimma 28.6 and
-28.7 s, Hamburg 59.7 and 60.1 s of user time). They may pay on a machine
-with the cores and memory for four or more tile warmers at once; that has
-not been measured.
+Measured cold on 2026-10-31, all seven sites on a box held to Vercel's
+builder (4 cores, `PREPARE_MEMORY_GB=8.6`): one process per site, one cold
+site at a time (`PREPARE_WARMERS=0`, the default until then), 11:07 min;
+the warmers 5:19; with the buildings' bake made faster (below) 4:40. Until
+then the warmers were opt-in and split Dresden alone: on 2026-10-10 two
+cold sites still fitted side by side on Vercel's builder, the parallelism
+two tile warmers give, and they showed no gain there. By 2026-10-31
+München's cold peak in one process had grown to 6.1 GiB (Dresden's 5.05):
+the buildings' bake appends six kinds of parts (scan structures, gaps,
+plinths and bands, shopfronts, doors, dormers), each copying the vertex
+stream and leaving its parts' plain arrays behind, and Bun's lazy
+collector let them pile up — past what the 8 GB builder holds beside its
+own build, where München went silent at its second tile until the
+45-minute limit. A collection after each append, after the mesh, before
+the far glb and after it (`bake-city-mesh.ts` `appendBeyondLod2`,
+`prepare/city.ts`) brings München to 4.47 GiB and Dresden to 3.81, the
+bytes unchanged.
+
+**Where a tile's time goes.** The buildings are nearly all of a cold
+bake (the ground and side files a few seconds a tile). München's heaviest
+tile (3.7 M triangles, 33 s on 2026-10-31): the walls' rays — where a
+door, a band or a shopfront meets its host's wall — 4.8 s, the rounded
+normals 5.3 s, gltf-transform's welds 3.1 s, meshopt's simplifier for the
+far glb 3.2 s, quantising, writing and gzip ≈ 4 s. Two of those are ours
+and now cheap, the bytes unchanged: a wall ray tries only the host's
+triangles whose box its reach meets (`doors.ts` `trianglesOnRays`), and
+`rayHit` reads the mesh without allocating; the rounded normals bucket
+only the vertices that take part, and a point's corners are read in one
+pass (`crease-normals.ts`). Every tile 15 % faster, its peak 15–25 %
+lower. The welds are ours too, the same vertices in the same order
+(`scripts/glb-weld.ts` `weldExact`): gltf-transform's table copies every
+vertex byte by byte into a scratch buffer to hash it, ours reads each
+attribute as 32-bit words through Murmur3's mixing (a plain multiply
+never carries the empty low bits of whole-metre floats and axis normals
+into the bucket: five times slower on such a grid). Since a vertex goes
+to the first equal one and the merged vertices are numbered as they first
+occur, the remap does not depend on the hash; gltf-transform's
+`compactPrimitive` applies it. A primitive whose attributes are not whole
+words, points or morph targets go to `weldPrimitive`; a document with an
+empty primitive or mesh, or primitive restart, to `weld`. 3.1 → ≈ 1.5 s on
+that tile. The rest is libraries
+whose work is already compact: the simplifier is meshopt's WASM, gzip is
+native, and gltf-transform's quantising and writing (≈ 2 s) are not worth
+a copy that has to match their rounding, bounds and pruning byte for byte.
 
 ### Cache and publish
 

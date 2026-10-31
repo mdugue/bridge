@@ -386,7 +386,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
  *  code in its second door slot (lib/city/windows.ts `WALL_EAVE`,
  *  `slotWallEave`); 0 on a door's code, `NO_DOOR` and every roof vertex
  *  (whose slots hold its colour). */
-function wallEaveUp(facade: V4, roof: F): F {
+export function wallEaveUp(facade: V4, roof: F): F {
   const code = floor(facade.w.mul(32_767).add(0.5));
   const own = step(WALL_EAVE.code0 - 0.5, code)
     .mul(step(code, WALL_EAVE.top + 0.5))
@@ -583,7 +583,7 @@ function readingOf(flags: F): { busy: F; dark: F; shop: F } {
 
 /** A shop on the ground floor: OSM's (flag 1), or a shop sign the street
  *  photos saw (on Fassadenbild's strength). */
-function shopOf(flags: F): F {
+export function shopOf(flags: F): F {
   return max(
     mod(floor(flags.add(0.5)), 2),
     readingOf(flags).shop.mul(FACADE_READING)

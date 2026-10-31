@@ -58,6 +58,7 @@ import {
 } from "@/lib/city/render-style";
 import { compileInLanes, compileInTurn, type Compiling } from "./compile-lanes";
 import { crownsPrinted } from "./crown-season";
+import { DATA_MARKS, dataMarks } from "./glass";
 import { crownSwayShare } from "./vegetation-layer";
 import { fxaa } from "./fxaa";
 import { createMotionBlur } from "./motion-blur";
@@ -817,6 +818,7 @@ export function createPostStack(
     stylize.setStyle(style);
     // Comic prints its crowns flat, a bare one whole (crown-season.ts)
     crownsPrinted.value = style.crowns === "comic" ? 1 : 0;
+    dataMarks.value = DATA_MARKS[style.dataMarks];
     crownSwayShare.value = style.sway;
   };
   applyStyleWeights();
@@ -1331,8 +1333,7 @@ export function createPostStack(
               lampCones: style.lampCones,
             })
           : null;
-      const swap =
-        style.paperScene === "ink" && stylize.night() ? null : style.paperScene;
+      const swap = style.paperScene;
       const restore = swap ? paperScene.begin(swap) : null;
       stylize.captureFog();
       const view = active();

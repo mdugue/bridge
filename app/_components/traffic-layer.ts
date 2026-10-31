@@ -11,6 +11,7 @@ import {
   float,
   floor,
   fract,
+  fwidth,
   hash,
   log,
   mix,
@@ -32,7 +33,7 @@ import {
   type TrafficLane,
   trafficLanes,
 } from "@/lib/city/traffic";
-import { glassColour, glassGrazing } from "./glass";
+import { dataMarkColour, glassColour, glassGrazing } from "./glass";
 import { type DeckPoly, deckLift } from "@/lib/city/decks";
 import { buildDeckTable } from "./rail-layer";
 import type { F, V3, V4 } from "./shader-chunks";
@@ -172,7 +173,24 @@ function trafficMaterial(): MeshBasicNodeMaterial {
     const light = mix(tint, vec3(1), 0.35).mul(
       pulse.mul(core).mul(ramp.load.mul(0.45).add(0.2))
     );
-    m.colorNode = glass.add(light);
+    // a pen's width along the crown, whatever the body's size on screen
+    // (never narrower than a fiftieth of the flank: on the crown the
+    // tent's two flanks cancel in a pixel quad's difference, and a
+    // zero-width smoothstep's NaN would reach every style through the mix)
+    const px = fwidth(rise).max(0.02);
+    // Under a picture style the flow takes the style's reading of a mark
+    // (glass.ts `dataMarkColour`): its place on the scale, its comets as
+    // the light — along the crown, where a head- or tail-light would be.
+    m.colorNode = dataMarkColour({
+      glass: glass.add(light),
+      tint,
+      scale: ramp.load,
+      light: pulse.mul(smoothstep(0.35, 0.9, rise)),
+      ridge: float(1).sub(
+        smoothstep(px.mul(0.6), px.mul(1.6), float(1).sub(rise))
+      ),
+    });
+    m.userData.paperOwn = true;
     return m;
   });
 }

@@ -71,7 +71,7 @@ What is left is the subject of this plan.
 | `lantern.setNight(nf)` | the lantern's light and the derived `nightShadowFree` (`lantern.ts`) | real subscriber | stays |
 | `setFountainNight(nf)`, `setFountainSeason(date)` | module setters in `monument-layer.ts` (≈ 696, 701): `fountainNight`, `fountainSeason` | uniform writes | into the environment (step 3) |
 | `setFurnitureNight(nf)`, `setClockTime(date)` | module setters in `furniture-layer.ts` (≈ 669, 678): `furnitureNight`, `clockMinutes` | uniform writes | into the environment (step 3) |
-| `clayNight.value = nf` | a per-boot `uniform(0)` (≈ 1418) handed to `createStyleResources` (≈ 1442) | uniform write | becomes the shared night node (step 1) |
+| `styleNight.value = nf` | the shared uniform in `sun-rig.ts`, written in `relight`, read by `createStyleResources` and the stylize pass | uniform write | becomes the shared night node (step 1) |
 | `seasonClock.set(date)` | `createSeasonClock` (`crown-season.ts` ≈ 504): throttled (`SEASON_THROTTLE_MS`), calls back on a new calendar day; the callback (≈ 1479) loops over `stream.dressings` calling `vegetation.setSeason(climateDay(…))` and invalidates the shadow map if any crown changed | per-dressing instance state | the environment's season watch (step 1); the dressings follow it themselves (step 4) |
 | `sceneClock.set({ date, atMs })` | the data layers' watched clock (≈ 1427) | watch | into the environment (step 1) |
 | `invalidateShadows()` (unless `preview`) | the sun moved | real subscriber | stays |
@@ -81,7 +81,7 @@ per-dressing state.
 
 ### 2. Four night nodes hold one value
 
-`clayNight` (create-app.ts), `lampNight` (`lamp-layer.ts` ≈ 140),
+`styleNight` (`sun-rig.ts`), `lampNight` (`lamp-layer.ts` ≈ 140),
 `fountainNight` (`monument-layer.ts` ≈ 677) and `furnitureNight`
 (`furniture-layer.ts` ≈ 664) all carry `SunState.nightFactor`, clamped to
 [0, 1]. `nightFactor` is a `smoothstepDown` (`sun-rig.ts` ≈ 58), so it is
@@ -313,13 +313,13 @@ Before any change, on `6c2a70ba` (or the drift-checked HEAD):
    `seasonClock` is built today (≈ 1478), after `invalidateShadows`
    (≈ 1411), with `climate: seasonShiftFor(opts.site.id)`,
    `look: opts.look`, `castersChanged: invalidateShadows`. Delete
-   `clayNight` (≈ 1418), `currentNight`, `sceneClock` (≈ 1427) and
-   `seasonClock`; pass `sceneNight` to `createStyleResources` (≈ 1442);
+   `currentNight`, `sceneClock` (≈ 1427) and `seasonClock`; `sceneNight`
+   takes the place of `styleNight` (`sun-rig.ts`);
    `hooks.clock = env.clock` (≈ 1521). Keep, for this step only, a
    subscription to `env.season` that does what the season callback did
    (loop over `stream.dressings`, `setSeason(day)`, invalidate if any
    changed). `cleanups.push(env.dispose)`.
-3. `setSun`: replace `clayNight.value = …`, `seasonClock.set`,
+3. `relight` and `setSun`: replace `styleNight.value = …`, `seasonClock.set`,
    `sceneClock.set` and `currentNight = …` with `env.set(state, date)`.
    Everything else stays for now.
 4. `TileStreamContext` (`tile-stream.ts` ≈ 238): replace `look`,
