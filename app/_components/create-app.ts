@@ -5,6 +5,7 @@ import {
   Color,
   Group,
   Matrix4,
+  type MeshStandardNodeMaterial,
   type Object3D,
   PCFShadowMap,
   PerspectiveCamera,
@@ -148,6 +149,8 @@ import {
   type DesignLayer,
   type DesignStatus,
 } from "./design-layer";
+import { cutsGround, groundKeptUnderDesign } from "./design-site";
+import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
 import { climateDay, seasonShiftFor } from "@/lib/city/tree-season";
@@ -2580,7 +2583,32 @@ async function bootApp(
       upload();
     }
   };
+  // The ground under a design's site is cut where a triangle reaching out
+  // of it lifts the ground through its plate (design-site.ts): on the
+  // tiles under the site only — the cut costs the ground its early depth
+  // test.
+  const cutGround = () => {
+    for (const t of stream.terrains) {
+      const material = t.mesh.material as MeshStandardNodeMaterial;
+      const want = cutsGround(t.bounds);
+      if ((material.maskNode !== null) !== want) {
+        material.maskNode = want ? groundKeptUnderDesign : null;
+        // its own shared build (pipeline-anchors.ts keys stand-ins by it)
+        const graph = graphOf(material);
+        if (graph !== undefined) {
+          setGraph(
+            material,
+            want ? `${graph}|design-cut` : graph.replace(/\|design-cut$/, "")
+          );
+        }
+        material.needsUpdate = true;
+        // built off the frame where it can be
+        void postStack.compile(t.mesh).catch(() => undefined);
+      }
+    }
+  };
   const hideReplaced = (): boolean => {
+    cutGround();
     let changed = false;
     for (const layer of stream.cities) {
       if (layer.setHidden(design?.hiddenFor(layer.tile) ?? new Set())) {
@@ -2596,6 +2624,15 @@ async function bootApp(
     epsg: opts.site.provider.epsg,
     tier: budget.tier,
     heightAt,
+    capGround: (cap) => {
+      siteGround.setCap(cap);
+      // what reads the ground by its version (the Ausschnitt's plinth)
+      groundVersion++;
+      const cut = cuts.cutOut();
+      if (cut) {
+        cuts.setCutOut(cut, siteGround.atWorld, groundVersion);
+      }
+    },
     pose: () => pose.getPose(),
     compile: (object) => postStack.compile(object),
     footprints: () => footprints,
