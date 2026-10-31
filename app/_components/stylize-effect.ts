@@ -1299,8 +1299,13 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       PAPER_NIGHT.sky,
       smoothstep(0, 0.5, el)
     );
+    // (a data mark's cool tissue stays its colour, lit from inside — a
+    // warm one glows like a lamp)
+    const tissue = saturated.mul(
+      float(1).sub(smoothstep(0.12, 0.45, warmth(p)))
+    );
     const nightCol = mix(
-      mix(card, PAPER_NIGHT.horizon, haze.mul(0.6)),
+      mix(mix(card, model, tissue), PAPER_NIGHT.horizon, haze.mul(0.6)),
       nightSky,
       sky
     );

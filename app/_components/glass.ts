@@ -209,12 +209,14 @@ export function dataMarkAlpha(alpha: F): F {
 }
 
 /** A fully saturated colour of hue `h` (0..1) at value 0.9, one channel
- *  at zero: what Comic's pass reads as a marker ink (stylize-effect.ts). */
+ *  at zero: what Comic's pass reads as a marker ink (stylize-effect.ts).
+ *  Laid out in the perceptual space the pass reads hues in, so its hue
+ *  there is `h` (two lit channels would shift under the gamma). */
 function marker(h: F): V3 {
   const k = fract(vec3(h).add(vec3(0, 2 / 3, 1 / 3)))
     .mul(6)
     .sub(3);
-  return abs(k).sub(1).clamp(0, 1).mul(0.9);
+  return pow(abs(k).sub(1).clamp(0, 1).mul(0.9), vec3(2.2));
 }
 
 /** Where on the marker hues Comic's data inks lie (stylize-effect.ts
