@@ -118,7 +118,8 @@ A `source` is an https URL (Wikipedia, an institution's page, a paper) or
    scripts/walks.ts dresden photos` copies it as an 800 px WebP into
    `walks/photos/` and writes the credit (author, licence, page); `--refs`
    suggests the first ref's Wikidata image for stops that name none,
-   `--force` fetches again. Commit the WebP with the walk.
+   `--force` fetches again. Commit the WebP with the walk: without it the
+   build shows the stop without a photo and the walks' unit test fails.
 7. **Look at it:** `bun scripts/walks.ts dresden shots [walk]` writes a
    snapshot per stop into `shots/` (today's date at the stop's hour, its
    style), `bun run shots` renders them on a real GPU. Move `from`/`at`

@@ -222,7 +222,8 @@ const walkFiles = existsSync(walksDir)
       .sort()
   : [];
 /** A walk with each stop's photo published beside it (`photo.src`). A
- *  missing copy stops the build: the story may point at the photo. */
+ *  stop whose copy is missing shows none, so a preview still builds; the
+ *  walks' unit test fails until the copy is committed. */
 function withPhotos(walk: Walk): Walk {
   return {
     ...walk,
@@ -232,9 +233,11 @@ function withPhotos(walk: Walk): Walk {
       }
       const file = join(walksDir, walkPhotoFile(walk.id, stop.id));
       if (!existsSync(file)) {
-        throw new Error(
-          `${walk.id}/${stop.id}: no photo copy (bun scripts/walks.ts ${SITE.id} photos)`
+        log(
+          `${walk.id}/${stop.id}: no photo copy, shown without (bun scripts/walks.ts ${SITE.id} photos)`
         );
+        const { photo: _missing, ...rest } = stop;
+        return rest;
       }
       const src = publish(
         `walk-photo_${walk.id}--${stop.id}.webp`,
