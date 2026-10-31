@@ -103,6 +103,7 @@ import {
   tileTopsOf,
 } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
+import type { WalksExtras } from "@/lib/city/walks";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import {
   createLodSchedule,
@@ -1318,6 +1319,8 @@ async function bootApp(
   const tilesetUrl = new URL(opts.tilesetUrl, window.location.href).href;
   const tileset = await fetchRequiredJson<unknown>(tilesetUrl, opts.signal);
   const extras = parseTilesetExtras(tileset);
+  // the walks name their file beside the tileset's own extras (WalksExtras)
+  const walksFile = (extras as WalksExtras).walks;
   ensureAlive();
   const { offset } = extras;
   // The tile the boot starts on and waits for: the spawn tile, or the one
@@ -1400,7 +1403,7 @@ async function bootApp(
       ? new URL(extras.provenance, tilesetUrl).href
       : null,
     terrainBounds: siteBounds,
-    walksUrl: extras.walks ? new URL(extras.walks, tilesetUrl).href : null,
+    walksUrl: walksFile ? new URL(walksFile, tilesetUrl).href : null,
   };
   opts.onSiteInfo?.(siteInfo);
   const sunRig = createSunRig(
