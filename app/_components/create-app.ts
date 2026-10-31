@@ -188,7 +188,7 @@ import {
   shadowMapSizeFor,
   tileCacheBytesFor,
 } from "./scene-profile";
-import { createSunRig, type SunState } from "./sun-rig";
+import { type AirView, createSunRig, type SunState } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
   type AnyAttribute,
@@ -2826,13 +2826,21 @@ async function bootApp(
    * pose tick is due (the tree tiers').
    */
   const eye = new Vector3();
+  // what the warped shadow map reads of the site (sun-rig.ts `AirView`):
+  // its ground's 2nd and 90th height percentile, the fog's end per frame
+  const airView: AirView = {
+    fogEnd: sceneFog.far.value,
+    groundLow: extras.ground?.[0] ?? Number.POSITIVE_INFINITY,
+    groundHigh: extras.ground?.[1] ?? Number.NEGATIVE_INFINITY,
+  };
   const followView = (elapsed: number, tick: boolean): number | null => {
     const target = modelRig.owns() ? modelRig.targetView() : null;
     if (!target) {
       // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
       camera.getWorldDirection(shadowViewDir);
       const ground = groundUnderCamera();
-      sunRig.follow(camera.position, shadowViewDir, ground);
+      airView.fogEnd = sceneFog.far.value;
+      sunRig.follow(camera, shadowViewDir, ground, airView);
       // The map's own marks (the ferry lines) show from the air.
       setMapAltitude(camera.position.y - ground);
       // Repoint the shared real lamp lights at the nearest heads.
