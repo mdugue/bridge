@@ -189,6 +189,9 @@ import {
   updatePocDebug,
 } from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
+import { createNameplate } from "./nameplate-layer";
+import { cityHides, coverBoxes, createNameplateAsk } from "./nameplate-ask";
+import { landmarkFactsUrl } from "@/lib/city/landmark-facts";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
 import {
@@ -594,6 +597,9 @@ export interface CityWalkHandle {
    * marks it and reports it through `onInquiry`; tests and QA call it.
    */
   inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
+  /** What the nameplate sets in the city and where (nameplate-layer.ts),
+   *  null while nothing is named; tests and QA read it. */
+  nameplateShown: () => { title: string; mode: string; spot: string } | null;
   /** Shows another candidate of the last question (the strip's click):
    *  marks it and reports it through `onInquiry`. */
   selectCandidate: (index: number) => Inquiry | null;
@@ -1893,6 +1899,29 @@ async function bootApp(
   );
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
+  // The thing asked, named in the city beside it (nameplate-layer.ts):
+  // drawn after the frame, onto the canvas.
+  const nameplate = createNameplate({
+    lens,
+    depthTexture: postStack.sceneDepth,
+    fonts: () => opts.container,
+    hidden: (view, points) => cityHides(view, points, stream.visibleCities()),
+    groundAt: (x, z) => siteGround.underWorld(x, z),
+    hud: () => coverBoxes(renderer.domElement),
+    phone: budget.tier === "mobile",
+  });
+  postStack.setOverlay(nameplate);
+  cleanups.push(() => {
+    postStack.setOverlay(null);
+    nameplate.dispose();
+  });
+  const factsFile = landmarkFactsUrl(extras);
+  const plateAsk = createNameplateAsk({
+    plate: nameplate,
+    site: opts.site,
+    factsUrl: factsFile ? new URL(factsFile, tilesetUrl).href : null,
+    signal: opts.signal,
+  });
   // The plate joins once its programs are built (a few tens of kB: it is
   // there long before the boot's tiles).
   void plateLoad.then(async (plate) => {
@@ -2008,6 +2037,7 @@ async function bootApp(
       sceneRows[key](look[key]);
     }
     postStack.applyLook(look);
+    nameplate.applyLook(look.style);
     for (const d of stream.dressings) {
       d.vegetation?.applyLook(look);
       showDataLayers(d, look);
@@ -2217,8 +2247,15 @@ async function bootApp(
   // What the outline goes around (selection-shape.ts): a building's own
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
   // monument's shape after its data.
+  // the asked thing's triangles, as last outlined for a question (a
+  // hover's outline is a moment's: the nameplate stays with the question)
+  let askedShape: Float32Array | null = null;
   const outline = (subject: OutlineSubject | null, flash = true) => {
-    postStack.setSelection(outlineShape(subject), flash);
+    const shape = outlineShape(subject);
+    if (flash) {
+      askedShape = shape && "positions" in shape ? shape.positions : null;
+    }
+    postStack.setSelection(shape, flash);
   };
   const outlineShape = (
     subject: OutlineSubject | null
@@ -2352,6 +2389,7 @@ async function bootApp(
         }
       : null;
     const inquiry = along?.candidates[along.selected]?.inquiry ?? null;
+    plateAsk.ask(inquiry, askedShape);
     opts.onInquiry?.(inquiry, along);
     return inquiry;
   };
@@ -2362,6 +2400,7 @@ async function bootApp(
     }
     sceneCounted();
     along = { ...along, selected: index };
+    plateAsk.ask(chosen.inquiry, askedShape);
     opts.onInquiry?.(chosen.inquiry, along);
     return chosen.inquiry;
   };
@@ -3666,6 +3705,15 @@ async function bootApp(
     // loop's own reset also ran on held frames, which read back as zero).
     renderer.info.reset();
     const renderStart = streamTimings.now();
+    nameplate.setNight(currentNight);
+    nameplate.update(
+      view,
+      {
+        width: renderer.domElement.clientWidth || 1,
+        height: renderer.domElement.clientHeight || 1,
+      },
+      exporting
+    );
     framedBuilds.draw(postStack.render);
     const renderEnd = streamTimings.now();
     takeCaptureTile();
@@ -4017,6 +4065,7 @@ async function bootApp(
     clearInquiry: () => {
       along = null;
       probe.clear();
+      plateAsk.ask(null, null);
     },
     selectCandidate,
     previewCandidate: probe.preview,
@@ -4036,6 +4085,7 @@ async function bootApp(
       status: () => design?.status() ?? null,
     },
     inquireAt,
+    nameplateShown: () => nameplate.shown(),
     enterImmersive: canvasControls.lockPointer,
     releaseGpu: () => releaseGpu(renderer),
     flyTo: (position, lookAt) => {

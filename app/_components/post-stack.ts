@@ -241,6 +241,14 @@ export interface PostStack {
    * antialiasing, under the paper grain.
    */
   setSelection: (selection: OutlineSelection | null, flash?: boolean) => void;
+  /** The scene pass's depth (the nameplate reads what stands in front). */
+  readonly sceneDepth: DepthTexture;
+  /**
+   * What is drawn onto the canvas after the finished frame (the nameplate,
+   * nameplate-layer.ts): over every picture style, its own antialiasing,
+   * no target of its own. Compiled with the outline, for every camera.
+   */
+  setOverlay: (overlay: Overlay | null) => void;
   /** How many pipeline anchors hold scene-wide pipelines (diagnostics). */
   anchorCount: () => number;
   /**
@@ -287,6 +295,12 @@ export interface PostStack {
    * on the first frame that shows it there.
    */
   warmStyles: () => Promise<void>;
+}
+
+/** Something drawn onto the canvas after the frame (`setOverlay`). */
+export interface Overlay {
+  render: (renderer: WebGPURenderer, camera: Camera) => void;
+  compile: (renderer: WebGPURenderer, camera: Camera) => Promise<void>;
 }
 
 /** A cheap 2D hash for the paper grain. */
@@ -665,6 +679,8 @@ export function createPostStack(
   );
   // The asked element's outline: its own antialiasing (a smooth band of a
   // blurred mask), so after SMAA, and under the paper grain like the ink.
+  // drawn after the frame, onto the canvas (`setOverlay`)
+  let overlay: Overlay | null = null;
   const outline = createSelectionOutline({
     lens,
     depthTexture,
@@ -1274,6 +1290,7 @@ export function createPostStack(
         views.push(view);
       }
       await outline.compile(renderer, view);
+      await overlay?.compile(renderer, view);
       await compileBuilds([scene], view);
     },
     dropView: (view) => {
@@ -1310,6 +1327,7 @@ export function createPostStack(
       // question builds nothing
       stylesWarm ??= outline
         .compile(renderer, camera)
+        .then(() => overlay?.compile(renderer, camera))
         .then(warmStyles)
         .catch(() => undefined);
       return stylesWarm;
@@ -1376,6 +1394,7 @@ export function createPostStack(
       }
       warmMoving = null;
       shown.finished.render();
+      overlay?.render(renderer, view);
     },
     getFocusInfo: () => ({
       focusDistance: focusDistance.value,
@@ -1393,6 +1412,10 @@ export function createPostStack(
       outline.setSize(size.x, size.y);
     },
     setSelection: (selection, flash) => outline.set(selection, flash),
+    sceneDepth: depthTexture,
+    setOverlay: (next) => {
+      overlay = next;
+    },
     setModel: (on) => {
       model = on;
       applyStyleWeights();

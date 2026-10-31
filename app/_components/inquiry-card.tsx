@@ -170,6 +170,7 @@ export function InquiryCard({
     <aside
       aria-labelledby="inquiry-title"
       className="pointer-events-auto flex min-h-0 shrink flex-col rounded-lg bg-card text-card-foreground shadow-lg ring-1 ring-foreground/10 select-text"
+      data-scene-cover=""
       data-testid="inquiry-card"
       data-variant="card"
     >
@@ -283,6 +284,7 @@ function InquirySheet({
       <DrawerContent
         // closed, unanimated, until the fold is measured (useSheetEntrance)
         className="not-data-[sheet-entered]:transform-(--closed-transform) not-data-[sheet-entered]:duration-0"
+        data-scene-cover=""
         data-sheet-entered={entered ? "" : undefined}
         data-testid="inquiry-card"
         data-variant="sheet"
