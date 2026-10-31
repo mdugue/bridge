@@ -41,14 +41,18 @@ edges. ADR 0010 closed the path of one material per style.
    City's afternoon sun) or from none (the Schwarzplan) draws at its own
    instant (`ownLight`), and the HUD rests its date and time with a note
    while it is on.
-6. **A still view is still, a move moves smoothly.** Nothing a style
+6. **Data marks draw in every style, in the style's reading**
+   (`dataMarks`): one shared uniform picks it in each mark's material
+   (`glass.ts` `dataMarkColour`), and the marks draw themselves through a
+   swap (`paperOwn`).
+7. **A still view is still, a move moves smoothly.** Nothing a style
    draws may change between two frames of a still camera, or flip in a
    sub-pixel step: a screen too fine for its pixel gives way to its mean
    tone, a step a few pixels tall draws no line, and no screen slides
    over moving geometry — a crown is printed flat, or the style holds it
    still (`sway`). Measured, not judged by eye (the `flicker-probe`
    skill).
-7. **No style is warmed ahead** (only the selection outline is); a style
+8. **No style is warmed ahead** (only the selection outline is); a style
    builds on its first frame.
 
 ## Consequences

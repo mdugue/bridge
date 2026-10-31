@@ -368,7 +368,8 @@ function hiddenInPaper(object: Object3D): boolean {
     return false;
   }
   const materials = Array.isArray(o.material) ? o.material : [o.material];
-  return materials.every((m) => m.transparent);
+  // (a see-through material that draws itself, a data mark, stays)
+  return materials.every((m) => m.transparent && m.userData.paperOwn !== true);
 }
 
 /**

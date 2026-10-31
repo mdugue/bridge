@@ -47,6 +47,7 @@ import {
   vec4,
 } from "three/tsl";
 import type { RenderStyleDef } from "@/lib/city/render-style";
+import { DATA_HUE } from "./glass";
 import { fogFactorAt, type SceneFog } from "./height-fog";
 import type { F, V2, V3, V4 } from "./shader-chunks";
 import { styleNight } from "./sun-rig";
@@ -1019,8 +1020,24 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       mix(POP.greenDeep, POP.green, crownLit),
       step(0.2, hue)
     );
-    day = mix(day, printInk, printed);
-    day = mix(day, mix(POP.blueDeep, POP.blue, lit), water);
+    // A data mark wears a marker ink too (glass.ts `dataMarkColour`), on
+    // hues clear of the crowns': printed in a pop ink by its place on its
+    // scale — blue, yellow, red — flat, its light left white.
+    const dataT = hue.sub(DATA_HUE.from).div(DATA_HUE.to - DATA_HUE.from);
+    const dataInk = mix(
+      mix(POP.blue, POP.yellow, step(1 / 3, dataT)),
+      POP.red,
+      step(2 / 3, dataT)
+    );
+    const isData = step(DATA_HUE.from - 0.05, hue);
+    const dataPrinted = printed.mul(isData).toVar();
+    day = mix(day, mix(printInk, dataInk, isData), printed);
+    // (a marker ink is no river: a blue data mark lies flat, faces up)
+    day = mix(
+      day,
+      mix(POP.blueDeep, POP.blue, lit),
+      water.mul(float(1).sub(printed))
+    );
     // The sky: one blue, printed lighter towards the horizon with dots of
     // the pale blue (`skyDots`) — a printed gradient, no band.
     const daySky = mix(POP.skyHigh, POP.sky, skyDots(at));
@@ -1042,14 +1059,23 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // The dots only up close and where the night is deepest: from the air
     // a city of dots on blue is a blur.
     const nightDots = dots.mul(float(1).sub(smoothstep(120, 500, z)));
-    // (a lamp's light is warm: the dusk sky's on a wall is not a lamp)
-    const lamp = aaStep(0.3, l).mul(smoothstep(0.05, 0.25, warmth(b)));
+    // (a lamp's light is warm: the dusk sky's on a wall is not a lamp —
+    // but a white light is one, a data mark's comet or head)
+    const lamp = aaStep(0.3, l).mul(
+      max(smoothstep(0.05, 0.25, warmth(b)), aaStep(0.8, l))
+    );
     const nightInk = mix(
       mix(mix(nightTone, POP.black, nightDots), nightTone, aaStep(0.12, l)),
       mix(POP.yellow, POP.paper, aaStep(0.72, l)),
       lamp
     );
-    const nightHazed = mix(nightInk, POP.nightHaze, toPaper);
+    // (a data mark keeps its pop ink at night: printed over the plate —
+    // a mark is lit, a night-blue surface as saturated is not)
+    const nightHazed = mix(
+      mix(nightInk, dataInk, dataPrinted.mul(aaStep(0.25, l))),
+      POP.nightHaze,
+      toPaper
+    );
     // The night plate is printed once the lamps are all lit (the sun rig's
     // night factor, at civil dusk), over a short step: earlier, the dusk
     // sky's light on a wall printed as lamp yellow. Until then the blue
@@ -1243,9 +1269,18 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // Sunlit card is the paper itself; only true shade turns blue-grey.
     const t = smoothstep(0.08, 0.6, y);
     const shade = vec3(0.55, 0.58, 0.67);
-    // Keep the whisper of hue the paper material lets through.
+    // Keep the whisper of hue the paper material lets through — and more
+    // of a hue the card never carries: a data mark's tissue paper.
     const tint = p.div(max(y, 1e-3));
-    const model = mix(shade, paper, t).mul(mix(vec3(1), tint, 0.35));
+    const hcv = rgbToHcv(p);
+    // (a cool hue only, and by day: a low sun's or a lit window's warmth
+    // on the card, and the blue hour's sky light, keep their whisper)
+    const saturated = smoothstep(0.3, 0.5, hcv.y.div(max(hcv.z, 1e-3)))
+      .mul(float(1).sub(smoothstep(0.12, 0.45, warmth(p))))
+      .mul(float(1).sub(dusk));
+    const model = mix(shade, paper, t).mul(
+      mix(vec3(1), tint, mix(0.35, 0.8, saturated))
+    );
     // ...and a little of the haze laid back over: a model's far end is
     // paler, not gone
     // the sky through the dusk: the day's paper, a mauve card, the night's
@@ -1272,6 +1307,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       PAPER_NIGHT.sky,
       smoothstep(0, 0.5, el)
     );
+    // (the card at night knows no hue but a lamp's: the night light is
+    // as blue as a cool tissue, so a data mark reads as lit card — and a
+    // warm one glows like a lamp)
     const nightCol = mix(
       mix(card, PAPER_NIGHT.horizon, haze.mul(0.6)),
       nightSky,

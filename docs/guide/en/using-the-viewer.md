@@ -365,7 +365,12 @@ The button in the corner opens a panel with three tabs.
     many are out.
 
   From the air the flows, columns and trails widen and thicken so they
-  stay legible.
+  stay legible. Each picture style draws them its own way: *Pastell* as
+  glass, *Comic* in printing inks (blue, yellow, red by the amount) with a
+  black contour, *Film noir* as light trails of a long exposure, *Sin
+  City* red, *Papier* as coloured tissue paper (lit from inside at night),
+  *Strich* in plan colours with a pen's edge (a warm light at night), the
+  *Schwarzplan* as a band outlined in black.
 - **Steuerung** ("controls") — the full controls table, folded until you
   open it (the bar over the scene shows the first few).
 

@@ -1884,6 +1884,9 @@ async function bootApp(
         ground: { offset, heightAt },
         onBikeCounts: opts.onBikeCounts,
         onChange: () => scheduleStats(),
+        // a layer's marks draw themselves through a style's swap: it
+        // gathers them again (paper-scene.ts)
+        onMarksMoved: () => postStack.sceneChanged(),
         onTramStatus: opts.onTramStatus,
         onTrafficHour: opts.onTrafficHour,
         parent: scene,
