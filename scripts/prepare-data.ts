@@ -53,6 +53,7 @@ import {
   WALKS_FILE,
   walkBundle,
   walkPhotoFile,
+  type WalksExtras,
 } from "../lib/city/walks";
 import { groundRelief, type ValleyRim } from "../lib/city/valley-fog";
 import {
@@ -265,7 +266,7 @@ await publishStadtwissen(
   provenance.sources
 );
 
-const extras: TilesetExtras & PlateExtras = {
+const extras: TilesetExtras & PlateExtras & WalksExtras = {
   site: SITE.id,
   landmarks: siteLandmarks(
     TILES.map(landmarkFile).filter((f): f is LandmarkFile => f !== undefined)
