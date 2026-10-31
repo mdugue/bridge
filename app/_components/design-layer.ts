@@ -236,7 +236,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       g.getAttribute("position").array,
       g.getIndex()?.array ?? null,
       loaded.placement,
-      { maxSide: SITE_SIDE }
+      { maxSide: SITE_SIDE, ground: loaded.model.groundTriangles }
     );
     loaded.mask = masks?.plan ?? null;
     loaded.outline = loaded.mask ? planHull(loaded.mask) : null;
@@ -370,10 +370,41 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     return null;
   };
 
+  const setFileColours = async (on: boolean) => {
+    const loaded = current;
+    if (!loaded || loaded.fileColours === on) {
+      return;
+    }
+    if (on && !loaded.files) {
+      const files = fileMaterials(loaded.model);
+      // built off the frames, on a stand-in that shares the geometry
+      // (its render state let go after: the pipelines stay cached)
+      const standIn = new Mesh(loaded.model.geometry, files);
+      await deps.compile(standIn);
+      releaseRenderState(standIn);
+      if (current !== loaded) {
+        for (const m of files) {
+          m.dispose();
+        }
+        return;
+      }
+      loaded.files = files;
+    }
+    loaded.fileColours = on;
+    loaded.mesh.material = on && loaded.files ? loaded.files : whiteMaterial();
+    deps.changed();
+    report();
+  };
+
   return {
     load: async (files) => {
       const load = ++loads;
-      const model = await readDesign(files, deps.epsg, deps.tier);
+      const model = await readDesign(
+        files,
+        deps.epsg,
+        deps.tier,
+        deps.heightAt
+      );
       if (load !== loads) {
         model.geometry.dispose();
         for (const look of model.looks) {
@@ -423,6 +454,9 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       deps.reserve(model.bytes + SITE_BYTES);
       deps.parent.add(mesh);
       moved(true);
+      if (model.prefersColours) {
+        await setFileColours(true);
+      }
       if (parsed && "error" in parsed) {
         throw new Error(parsed.error);
       }
@@ -476,32 +510,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
         report();
       }
     },
-    setFileColours: async (on) => {
-      const loaded = current;
-      if (!loaded || loaded.fileColours === on) {
-        return;
-      }
-      if (on && !loaded.files) {
-        const files = fileMaterials(loaded.model);
-        // built off the frames, on a stand-in that shares the geometry
-        // (its render state let go after: the pipelines stay cached)
-        const standIn = new Mesh(loaded.model.geometry, files);
-        await deps.compile(standIn);
-        releaseRenderState(standIn);
-        if (current !== loaded) {
-          for (const m of files) {
-            m.dispose();
-          }
-          return;
-        }
-        loaded.files = files;
-      }
-      loaded.fileColours = on;
-      loaded.mesh.material =
-        on && loaded.files ? loaded.files : whiteMaterial();
-      deps.changed();
-      report();
-    },
+    setFileColours,
     placementText: () =>
       current
         ? placementFile(current.placement, deps.epsg, current.model.name)

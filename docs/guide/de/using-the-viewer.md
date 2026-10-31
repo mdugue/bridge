@@ -494,7 +494,17 @@ und das Modell behalten ihre scharfen Linien.
   `.mtl` und Texturen zusammen ausgewählt; gelesen als Meter, Y nach oben)
   oder eine Rhino-Datei (`.3dm`, mit Render-Netzen gespeichert); auch auf
   das Feld ziehen. Eine Rhino-Datei mit gesetztem Geo-Ankerpunkt steht an
-  ihrem Ort. Eine IFC mit Verortung (`IfcMapConversion` in ETRS89/UTM) steht
+  ihrem Ort. Landschaftspläne lädt man genauso: ein ASCII-DXF, ein
+  Shapefile (die `.shp` mit `.dbf`, `.prj` und `.cpg` zusammen
+  auswählen), ein GeoPackage (`.gpkg`) oder LandXML (`.xml`). Schraffuren
+  und Flächen werden nach dem Namen ihres Layers oder ihren Attributen
+  zu Rasen, Beet, Pflaster, Weg, Wasser, Sand oder Kies (deutsch oder
+  englisch, etwa „Rasen“, „Pflaster“, „Staudenbeet“), in den Farben der
+  Stadt aufs Gelände gelegt; Baumsymbole werden Bäume in der gezeichneten
+  Kronengröße, ein DGM ein geplantes Gelände. Ein Layer, dessen Name
+  nichts sagt, bleibt grau, und das Feld nennt ihn. Ein Plan in
+  UTM-Koordinaten liegt an seinem Ort auf dem dort schon geladenen
+  Gelände. Eine IFC mit Verortung (`IfcMapConversion` in ETRS89/UTM) steht
   von selbst an ihrem Ort; eine, die nur Breite und Länge des Grundstücks
   kennt, steht ungefähr dort, und das Feld bittet ums Prüfen. Die Datei wird nur in
   deinem Browser gelesen und nirgends hochgeladen. Stehen Landeskoordinaten

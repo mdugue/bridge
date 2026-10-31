@@ -118,7 +118,7 @@ function emptyMask(
 function eachTriangle(
   xy: Float64Array,
   index: ArrayLike<number> | null,
-  each: (p: readonly number[]) => void
+  each: (p: readonly number[], t: number) => void
 ): void {
   const vertices = xy.length / 3;
   const triangles = Math.floor((index ? index.length : vertices) / 3);
@@ -131,7 +131,7 @@ function eachTriangle(
       p[k * 3 + 1] = xy[v * 3 + 1];
       p[k * 3 + 2] = xy[v * 3 + 2];
     }
-    each(p);
+    each(p, t);
   }
 }
 
@@ -163,7 +163,14 @@ export function designMasks(
   {
     cell = PLAN_CELL_M,
     maxSide = Number.POSITIVE_INFINITY,
-  }: { cell?: number; maxSide?: number } = {}
+    ground = null,
+  }: {
+    cell?: number;
+    maxSide?: number;
+    /** 1 for each triangle that is ground whatever its form (a landscape
+     *  plan's surfaces, design-plan.ts): in the site, not in the plan */
+    ground?: ArrayLike<number> | null;
+  } = {}
 ): { plan: PlanMask; site: SiteMask } | null {
   if (Math.floor(positions.length / 3) < 3) {
     return null;
@@ -175,8 +182,8 @@ export function designMasks(
     ...siteCells,
     floors: new Float32Array(siteCells.cols * siteCells.rows).fill(Number.NaN),
   };
-  eachTriangle(xy, index, (p) => {
-    if (!isGround(p, minZ)) {
+  eachTriangle(xy, index, (p, t) => {
+    if (!ground?.[t] && !isGround(p, minZ)) {
       markTriangle(plan, p);
     }
     markTriangle(site, p, site.floors);

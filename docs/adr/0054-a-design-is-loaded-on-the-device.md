@@ -49,6 +49,15 @@ unannounced (ADR 0043).
    in it, and the ground, with what is baked into it, is pressed under
    that height and cut where it would rise through the design's plate.
    The walked ground follows. Rails, tram tracks and water stay.
+7. **A landscape plan is a design too**: DXF, Shapefile, GeoPackage or
+   LandXML, in the site's UTM coordinates. Its areas are land-cover
+   classes, named by their layer's, table's or attributes' words and
+   painted in the city's own palette (an unnamed one stays grey and the
+   panel names its layer); they lie on the ground, cut fine enough to
+   follow it, or on the plan's own heights. Its trees are low-poly
+   crowns, a building with a height a block, a TIN a planned ground. Its
+   areas clear and press the site but take no house away; only its
+   buildings do. Lines are not drawn: in a plan they are edges.
 
 ## Consequences
 
