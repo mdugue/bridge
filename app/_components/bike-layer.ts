@@ -12,10 +12,13 @@ import {
 import {
   float,
   fract,
+  max,
+  min,
   mix,
   positionLocal,
   positionWorld,
   smoothstep,
+  step,
   uv,
   vec3,
   vec4,
@@ -31,7 +34,14 @@ import {
 } from "@/lib/city/bike-counts";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { fetchOptionalJson } from "./fetch-optional";
-import { dataTime, glassColour, glassGrazing } from "./glass";
+import {
+  dataMarkAlpha,
+  dataMarkColour,
+  dataMarksAre,
+  dataTime,
+  glassColour,
+  glassGrazing,
+} from "./glass";
 import {
   Instances,
   instanceFloat,
@@ -39,6 +49,7 @@ import {
   instanceTint,
 } from "./instancing";
 import { mapWidenNode } from "./map-overlay";
+import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
 /**
@@ -99,6 +110,22 @@ function columnGeometry(): LatheGeometry {
   return new LatheGeometry(points, 24);
 }
 
+/** A column's place on the marks' scale (glass.ts `DataMarkInputs`): the
+ *  first direction's teal low, the second's lilac high, by how much red
+ *  the tint has over green. */
+function directionScale(tint: V3): F {
+  return smoothstep(-0.25, 0.15, tint.x.sub(tint.y));
+}
+
+/** 1 for a stale counter's grey tint (`BIKE_STALE_TINT`, nearly no
+ *  chroma), 0 for a direction's: the styles draw it without colour. */
+function staleOf(tint: V3): F {
+  const chroma = max(max(tint.x, tint.y), tint.z).sub(
+    min(min(tint.x, tint.y), tint.z)
+  );
+  return float(1).sub(smoothstep(0.1, 0.2, chroma));
+}
+
 function columnMaterial(): MeshBasicNodeMaterial {
   return sceneMaterial("bike-glass", () => {
     const m = new MeshBasicNodeMaterial({
@@ -127,7 +154,19 @@ function columnMaterial(): MeshBasicNodeMaterial {
     const light = mix(tint, vec3(1), 0.4).mul(
       ring.mul(float(1).sub(glassGrazing().mul(0.6))).mul(0.55)
     );
-    m.colorNode = glass.add(light);
+    // Under a picture style, the style's mark (glass.ts): the two
+    // directions apart on its scale (teal low, lilac high), the rings as
+    // its light.
+    m.colorNode = dataMarkColour({
+      glass: glass.add(light),
+      tint,
+      scale: directionScale(tint),
+      muted: staleOf(tint),
+      // (a ring whole wherever bicycles came, however few: the styles
+      // that step on the light print it or not)
+      light: ring.mul(step(1e-3, rate)),
+    });
+    m.userData.paperOwn = true;
     return m;
   });
 }
@@ -152,7 +191,39 @@ function poolMaterial(): MeshBasicNodeMaterial {
     );
     const r = uv().sub(0.5).length().mul(2);
     const fall = float(1).sub(smoothstep(0.15, 1, r));
-    m.colorNode = vec4(instanceTint(), fall.mul(fall).mul(0.55));
+    const tint = instanceTint();
+    // Under a picture style, the style's mark: a pool reads as the
+    // column's own colour there, and as a ring where the style draws
+    // marks as lines (the Schwarzplan's outline).
+    const ring = smoothstep(0.78, 0.84, r).mul(
+      float(1).sub(smoothstep(0.9, 0.96, r))
+    );
+    const colour = dataMarkColour({
+      glass: tint,
+      tint,
+      scale: directionScale(tint),
+      muted: staleOf(tint),
+      light: float(0),
+      edge: ring,
+      // (blended over the scene by its alpha, as the trails)
+      backdrop: false,
+    });
+    // Comic's and Strich's contour shows where the soft pool has faded:
+    // the ring is drawn whole; the Schwarzplan's pool is the ring alone
+    const pool = dataMarkAlpha(fall.mul(fall).mul(0.55));
+    const contoured = dataMarksAre("print").add(dataMarksAre("plan"));
+    // (the contour whole or gone where the pass cuts, at the step its
+    // colour turns black: no band of marker ink beside it)
+    const contour = dataMarkAlpha(ring, 0.5);
+    m.colorNode = vec4(
+      colour,
+      mix(
+        mix(pool, max(pool, contour), contoured),
+        contour,
+        dataMarksAre("outline")
+      )
+    );
+    m.userData.paperOwn = true;
     return m;
   });
 }

@@ -1783,8 +1783,15 @@ function appendBeyondLod2(
     scan?: readonly SmallBuildingFeature[];
   }
 ): void {
+  // Each append copies the whole vertex stream and leaves its parts' plain
+  // arrays behind: Bun's lazy collector let them pile up over the six, and
+  // a München tile's bands alone left 2.5 GiB (its cold bake peaked at
+  // 6.1 GiB, past what Vercel's 8 GB builder holds). Collected after each,
+  // the tile stays near one append's peak.
+  const appended = () => Bun.gc(true);
   if (extra.scan) {
     appendScanStructures(tile, baked, extra.scan, extra.roofColours?.scan);
+    appended();
   }
   const objectIndex = new Map(keys.map((id, i) => [id, i]));
   if (extra.gaps) {
@@ -1796,19 +1803,24 @@ function appendBeyondLod2(
       objectIndex,
       extra.roofColours?.gaps
     );
+    appended();
   }
   if (extra.plinths) {
     appendPlinths(baked, extra.plinths, objectIndex);
+    appended();
   }
   if (extra.shopfronts) {
     // before the doors: a bay is cut at a door, which the doors then draw
     appendShopfronts(baked, extra.shopfronts, extra.doors ?? [], objectIndex);
+    appended();
   }
   if (extra.doors) {
     appendDoors(baked, extra.doors, objectIndex);
+    appended();
   }
   if (extra.dormers) {
     appendDormers(baked, extra.dormers, objectIndex);
+    appended();
   }
 }
 

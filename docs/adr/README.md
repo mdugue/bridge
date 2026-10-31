@@ -15,7 +15,7 @@ how it is built.
 | [0001](./0001-client-only-static-app.md) | Static where possible: no database, no accounts, nothing kept about a visitor; stateless server functions only where a source or service needs one |
 | [0002](./0002-imperative-threejs-in-a-react-shell.md) | Imperative three.js inside a React shell, not react-three-fiber |
 | [0005](./0005-one-projected-crs-and-a-rotated-world-group.md) | Data stays in its provider's UTM zone, under one recenter offset and a rotated `world` group |
-| [0009](./0009-shadow-recipe.md) | Light, shadows and post: soft PCF redrawn on demand, a baked horizon for the far field, a fixed lamp pool, DoF dropped while moving, AO never |
+| [0009](./0009-shadow-recipe.md) | Light, shadows and post: soft PCF redrawn on demand, warped over the view from the air, a baked horizon for the far field, a fixed lamp pool, DoF dropped while moving, AO never |
 | [0010](./0010-opaque-clay-buildings-only.md) | The look: opaque clay on a painted ground, colours within one palette, windows drawn by the shader, detail soft, water matte |
 | [0012](./0012-openstreetmap-for-what-official-data-lacks.md) | Sources: official data first, OSM and Wikidata for what it lacks, named stand-ins marked per city, no look switch per city |
 | [0018](./0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md) | Headless tests run a lite profile and count frames; visuals are judged on a real GPU; the Snapshot is a validated contract |

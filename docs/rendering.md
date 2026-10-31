@@ -240,6 +240,7 @@ is the codebook.
 | Contact shadows | GTAO at half resolution (normals from depth, 2 m radius, 0.15 m thickness), its 5×5 noise averaged out by a depth-aware box in its own half-resolution, one-byte pass; never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, over the ground and LoD2 with its rebuilt roofs, the drawn crowns at half transmission, GLO-30 beyond the site; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2, the crowns, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
 | Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80 m–10 km — past 1 500 m the terrain alone, over GLO-30 beyond the site — and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
+| Shadows from the air | above 30 m over the ground (back below 20 m) the sun's one map is warped over the view (LiSPSM along the view's heading as the sun sees it): fine near the camera, coarse far off, out to 80 % of the fog's end; redrawn when the view leaves it, not per frame | sun, camera | `shadow-warp.ts`, `sun-rig.ts` (`WarpedShadowCamera`) |
 | Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, rendered into a 64 px cube map whose mips are the blur (≈ 0.4 MB; not three's PMREM, which since r187 takes ≈ 10 MB) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades, gilding and patina and fountain water (the river is matte since 2026-10-25), weighted by a softened Schlick; mirrors the sky, never the city | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
 | Depth of field | crosshair raycast distance; only what lies beyond the focus blurs (nearer is read as at the focus; blurring the foreground had laid a veil over the lower half — three's node still runs its near-field passes, over an empty field), focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving; always on otherwise (no switch, no manual focus); desktop only — a phone does not build it (ADR 0047) | — | `post-stack.ts` |
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `post-stack.ts` (*Papierkorn*) |
@@ -310,6 +311,33 @@ change, not a re-bake
   3072², 0.118 at 2048²) and 17 redraws over a straight 500 m instead of
   26. The horizon's near band starts to fade in at 80 % of the half-size,
   at worst 66.8 m ahead (68.2 before).
+- **From the air the map is warped over the view** (`shadow-warp.ts`,
+  ADR 0009). The square above reached 275 m ahead from 100 m up and
+  1265 m from 400 m; past it only the horizon cast, on the ground alone.
+  Above 30 m over the ground (back below 20 m) the same map takes a
+  light-space perspective (LiSPSM): the shadow camera's `up` is the view's
+  heading as the sun sees it, and a warp matrix after its ortho box
+  (`WarpedShadowCamera`, which three's `updateProjectionMatrix` keeps)
+  puts a perspective along it, half LiSPSM's n_opt behind the nearest
+  ground. Its box holds the view widened by 12° on every side, out to
+  80 % of the fog's end (at most 2.5 km), cut to the site's receivers
+  (its ground's 2nd percentile − 20 m to the 90th + 250 m), its depth
+  stretched toward the sun to casters 120 m over that. Texels at 3072²
+  from 100 m up: ~0.2–0.45 m at 100 m ahead, ~0.8–1.3 m at 800 m (the
+  square: 0.14 m to 275 m, then none); from 200 m up the near texels are
+  the square's, from 400 m up finer. The depth bias is 0.15 m at the
+  nearest ground and grows with the distance, the PCF spread 3 texels
+  (the square's 5). The map stands while the view, without the margin
+  and to 85 % of its reach, lies on it and the nearest ground stays
+  within a factor 1.6 (`warpCovers`); a turn of the sun fits it anew. A
+  simulated flight redraws it 8 times over 2 km straight (the square:
+  13–67 by altitude) and ~27 times over a full turn (the square: 1–14).
+  The picture styles' own sun test reads the map's current bias
+  (`shadowMap.bias`). The tile stream keeps streaming for the square
+  (`shadowCamera`), so what loads and a phone's memory are unchanged; a
+  caster outside both the view and the square casts nothing until a
+  view loads its tile. The horizon's near band
+  takes over at the warp's reach (`shadowReach`).
 - **The shadow camera streams on a desktop, at a resolution of its
   own.** The sun's shadow camera is registered with the tiles renderer
   as a second camera, so a tile that casts into the view stays loaded
@@ -542,10 +570,10 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   shadows as hard black masses —, red roofs lit or oxblood; the haze past
   the cap white smoke; rain as streaks on a grid of world directions in
   depth layers hidden behind nearer geometry; black ink on the white.
-  From ~1° below the horizon, where the pass lets go of the sun, the card
-  is off (`Stylize.night`): the night
-  is cut from the scene's own frame, its lit windows, lamps and
-  floodlights white on black.
+  Its masses are the sun's, so it always draws at its own instant (the
+  style's `ownLight`: 15 September, 16:30 — a low afternoon sun from the
+  south-west); the HUD rests its date and time with a note while it is
+  on (`styleInstant`, `create-app.ts` `setSun`).
 
 - *Scene dressing* (`style-dressing.ts`) — geometry a style draws with for
   its frames only: Comic's crowns are cartoon clouds of three balls (the
@@ -575,7 +603,16 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   sports lines in a light pencil grey, the water's extent (the splat's
   alpha) a cool, deeper paper — with its own light, sky view and contours.
   The pass lays the light out as a duotone (shade blue-grey, light paper)
-  under a fine graphite pen.
+  under a fine graphite pen. At night (the sun rig's night factor,
+  `nightFactorAt`) the model stands on dark blue card: the swap's sky and
+  haze darken to it (`paper-scene.ts` `begin`, through
+  `PAPER_DUSK_SKY` to `PAPER_NIGHT_SKY`), the card's windows glow through it
+  (`windowGlow`: the clay's lit windows, `clayWindows`, read through the
+  mesh's own object table), and the pass opens the dim light up (×2) and
+  sorts it into the card's own deep blue, a slate where the night sky
+  reaches, and a warm glow where a lamp or a window lights it
+  (`nightLight`: bright and warm); the sky the card, paler towards the
+  horizon; the pen a white pencil.
 - *Strich* — Papier's swap (the same card material and builds) with the
   ground's plan palette under the shared uniform (`paperGroundOn` = 2:
   the paved and built ground a light neutral, green a plan green, water a
@@ -585,13 +622,40 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   ±45° by the wall's side, a shallower angle on a roof or the ground, a
   cross layer only in deep shade, lighter on tops and thinning out from
   150 m to 1.2 km so an overview does not fill up; it draws with that pen — one CSS pixel, no wander, no
-  lifts, its creases held into the distance; after dusk an unshaded
-  white sheet (a plan has no night).
+  lifts, its creases held into the distance. At night an etcher's
+  nocturne: what no lamp or window lights is hatched — crossed where the
+  night sky's light does not reach either —, the sky ruled with level
+  lines of the view's elevation (`skyHatch`, denser towards the zenith,
+  on a cell ladder like the sky dots), and what a lamp or a lit window
+  lights left white under a warm yellow wash; the plan colours rest (the
+  night's blue would be all the hue left). Modell's parallel view has no
+  night: a plan stays an unshaded sheet with its lines (hatched whole, it
+  read as a grey wash).
 - *Schwarzplan* — the swap's third kind: an unlit black material for the
   clay (`userData.figure`, no fog), the ground white (`paperGroundOn` = 3,
   no contours), everything else hidden for its frames; one threshold in
   the pass cuts the remaining light away, and a white hairline parts two
-  blocks where one stands in front of the other.
+  blocks where one stands in front of the other. It knows no light, so
+  it draws at its own instant (21 June, 13:00): at night the lit ground
+  fell under the threshold and the plan went black.
+- *Data marks* — the data layers' traffic flows, bicycle columns and
+  pools, and tram trails take the style's reading of a mark (the row's
+  `dataMarks`, one shared uniform, `glass.ts` `dataMarkColour`): Pastell
+  the glass; Comic a marker ink on hues clear of the crowns' (0.55–0.9),
+  printed flat by the pass in blue, yellow or red by the mark's place on
+  its scale (the traffic's load), its light white, its edge black (a
+  blended mark — a pool, a trail — opaque or gone, `dataMarkAlpha`, here
+  and in every style whose pass cuts by a threshold: a half-blended ink
+  falls out of the print); Film noir a long exposure,
+  dark glass with white streaks; Sin City oxblood with bright red light;
+  Papier coloured tissue paper (the pass keeps more hue where the frame
+  is saturated, by day), at night lit card on the dark card; Strich a plan colour (blue to
+  violet) edged with the pen, at night a warm light the etching leaves
+  white; the Schwarzplan white, edged in black (a pool a ring, a tram's
+  trail one black line) — a fill would fall under its threshold. The
+  marks draw themselves through a swap (`paperOwn`; `hiddenInPaper`
+  keeps a see-through material that does), gathered again whenever a
+  layer adds its marks.
 
 The pass reads the depth buffer at **integer** texel radii around a texel
 centre, blending two radii for the stroke weight: the buffer is sampled
@@ -696,7 +760,7 @@ the safety levels 1, 2 and 3:
 | Land-cover rasters | L0 4096², its splat 2048² (85 → 21 MiB with mips, since 2026-10-10), L1 1024² | L0 2048², L1 1024²; no sports raster | as the tier |
 | GTAO samples | 16 | 8 | 8 |
 | Frames behind the sidebar (`lib/city/frame-pace.ts`) | every frame (the panel floats beside the scene) | 12 fps while its sheet covers the scene, none while it scrolls and 250 ms after (the scene shared the GPU with the compositor drawing the scroll, and the scroll lagged the finger); the sheet's backdrop is not blurred | as the tier |
-| Frames while the scene stands still (`frame-pace.ts`, `createStillness`) | 30 fps once the camera has not moved for 1 s, everything is loaded and neither the traffic nor the trams run; any input on the page (a pointer moving over the canvas only), a look change, a resize or a stream wakes it for the next frame. The resolution scale steps up there by the GPU's time alone, and the HUD's fps readout keeps the last moving rate | same | as the tier (a SwiftShader frame takes longer than the pace's interval, so it holds none) |
+| Frames while the scene stands still (`frame-pace.ts`, `createStillness`) | 30 fps once the camera has not moved for 1 s, everything is loaded and neither the traffic nor the trams run; any input on the page (a pointer moving over the canvas only), a look change, a resize or a stream wakes it for the next frame (a resize to a container without area is skipped: the canvas keeps its last size, `canvas-size.ts`, since WebGPU fails a 0 × 0 swap chain). The resolution scale steps up there by the GPU's time alone, and the HUD's fps readout keeps the last moving rate | same | as the tier (a SwiftShader frame takes longer than the pace's interval, so it holds none) |
 | Rich crowns at most (`vegetation-lod.ts`) | 2 500 (≈ 3.6 M triangles) | 800 | as the tier |
 | Real lamp lights (`LAMP_LIGHTS`, every lit fragment shades each, by day too) | 3 | 1 | as the tier |
 | The walker's lantern (`lantern.ts`, one more light) | with a 512² cube shadow | no shadow | as the tier |
