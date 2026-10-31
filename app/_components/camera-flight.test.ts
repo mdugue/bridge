@@ -85,3 +85,18 @@ test("given the floor on its way, the path itself climbs over a tower between", 
   expect(camera.position.x).toBeCloseTo(200, 6);
   expect(camera.position.y).toBeCloseTo(1.7, 6);
 });
+
+test("a glide says how long it takes, stretched by its pace", () => {
+  const flight = createCameraFlight(makeCamera());
+  const target = {
+    pos: { x: 100, y: 50, z: 0 },
+    headingDeg: 90,
+    pitchDeg: 0,
+    fov: 55,
+  };
+  const plain = flight.start(target);
+  const slow = flight.start(target, undefined, { pace: 2 });
+  expect(plain).toBeGreaterThan(1);
+  expect(slow).toBeCloseTo(plain * 2, 6);
+  expect(flight.start(target, undefined, { duration: 3 })).toBe(3);
+});

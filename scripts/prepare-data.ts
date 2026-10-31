@@ -39,6 +39,7 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { hitOf, knowledgeOf } from "../lib/city/ask-knowledge";
 import { PLATE_N, type PlateExtras } from "../lib/city/ground-plate";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import {
@@ -52,6 +53,7 @@ import {
   WALKS_DIR,
   WALKS_FILE,
   photoCredited,
+  stopPlaces,
   walkBundle,
   walkPhotoFile,
   type WalksExtras,
@@ -222,6 +224,18 @@ const walkFiles = existsSync(walksDir)
       .filter((name) => name.endsWith(".json"))
       .sort()
   : [];
+/** A walk with each stop's refs as places (`places`): the ones the
+ *  baked Stadtwissen knows by name. */
+function withPlaces(walk: Walk): Walk {
+  return {
+    ...walk,
+    stops: walk.stops.map((stop) => {
+      const places = stopPlaces(stop, (id) => hitOf(knowledge, id));
+      return places.length > 0 ? { ...stop, places } : stop;
+    }),
+  };
+}
+
 /** A walk with each stop's photo published beside it (`photo.src`). A
  *  stop whose copy or credit is missing shows none, so a preview still
  *  builds; the walks' unit test fails until both are committed. */
@@ -249,6 +263,14 @@ function withPhotos(walk: Walk): Walk {
   };
 }
 
+// The Stadtwissen before the walks: a stop's refs become places the card
+// can pick by name (lib/city/walks.ts `stopPlaces`).
+const wissen = await publishStadtwissen(
+  baked.map((t) => t.id),
+  frame.epsg,
+  provenance.sources
+);
+const knowledge = knowledgeOf(wissen.index, wissen.tiles);
 const walks =
   walkFiles.length > 0
     ? publish(
@@ -257,18 +279,12 @@ const walks =
           walkBundle(
             SITE.id,
             walkFiles.map((name) =>
-              withPhotos(readJson<Walk>(join(walksDir, name)))
+              withPlaces(withPhotos(readJson<Walk>(join(walksDir, name))))
             )
           )
         )
       )
     : undefined;
-
-await publishStadtwissen(
-  baked.map((t) => t.id),
-  frame.epsg,
-  provenance.sources
-);
 
 const extras: TilesetExtras & PlateExtras & WalksExtras = {
   site: SITE.id,

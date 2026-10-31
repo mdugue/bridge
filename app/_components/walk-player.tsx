@@ -6,6 +6,8 @@ import {
   ChevronRightIcon,
   EyeIcon,
   FootprintsIcon,
+  MapPinIcon,
+  Maximize2Icon,
   MessageCircleQuestionIcon,
   RouteIcon,
   Volume2Icon,
@@ -14,15 +16,23 @@ import {
 } from "lucide-react";
 import { Newsreader } from "next/font/google";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type MentionRun,
+  mentionRuns,
+  placeLabel,
+} from "@/lib/city/ask-mentions";
 import {
   isWalkBundle,
   CLOSER_LABEL,
+  photoIsTall,
+  photoPosition,
   stopNotes,
   stopSpeech,
   type Walk,
   type WalkFact,
   type WalkPhoto,
+  type WalkPlace,
   type WalkStop,
 } from "@/lib/city/walks";
 import { Button } from "@/components/ui/button";
@@ -32,10 +42,17 @@ import {
   CardFooter,
   CardHeader,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "cn";
 import { useSpeech } from "./ask-voice";
 import { useSceneStatus } from "./scene-status";
+import { useSite } from "./site-context";
 import { VoicePicker } from "./voice-picker";
 
 /**
@@ -264,12 +281,100 @@ function Facts({ facts }: { facts: WalkFact[] }) {
   );
 }
 
-/** What the stop says: its narration, today's notes, the closer look. */
-function StopBody({ notes, stop }: { notes: string[]; stop: WalkStop }) {
+/**
+ * A text with the names of the stop's places as buttons (lib/city/
+ * ask-mentions.ts, as in *Frag die Stadt*'s answers): a click picks the
+ * place in the scene and opens its card.
+ */
+function named(
+  runs: readonly MentionRun[],
+  places: readonly WalkPlace[],
+  onPlace: (place: WalkPlace) => void
+): ReactNode {
+  return runs.map((run, i) =>
+    "place" in run ? (
+      <button
+        className="rounded-sm text-primary underline decoration-primary/35 decoration-dotted underline-offset-[3px] hover:decoration-solid"
+        data-testid="walk-mention"
+        // reason: runs never reorder, the index is stable
+        key={i}
+        onClick={() => onPlace(places[run.place])}
+        title={`${places[run.place].name} auswählen`}
+        type="button"
+      >
+        {run.text}
+      </button>
+    ) : (
+      // reason: runs never reorder, the index is stable
+      <span key={i}>{run.text}</span>
+    )
+  );
+}
+
+/** The places the story points at without naming them ("das Opernhaus
+ *  vor dir"): a row of their names to pick. */
+function OtherPlaces({
+  city,
+  onPlace,
+  places,
+}: {
+  city: string;
+  onPlace: (place: WalkPlace) => void;
+  places: readonly WalkPlace[];
+}) {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-1.5 font-sans">
+      <span className="text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+        Im Bild
+      </span>
+      {places.map((place) => (
+        <button
+          className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/[0.04] px-2 py-0.5 text-[11.5px] text-primary hover:bg-primary/10"
+          data-testid="walk-place"
+          key={place.id}
+          onClick={() => onPlace(place)}
+          title={`${place.name} auswählen`}
+          type="button"
+        >
+          <MapPinIcon aria-hidden className="size-3" />
+          {placeLabel(place.name, city)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** What the stop says: its narration, today's notes, the closer look,
+ *  the places it shows. A tall photo stands beside it, the text flowing
+ *  round it. */
+function StopBody({
+  aside,
+  notes,
+  onPlace,
+  stop,
+}: {
+  aside: ReactNode;
+  notes: string[];
+  onPlace: ((place: WalkPlace) => void) | null;
+  stop: WalkStop;
+}) {
+  const city = useSite().name;
+  const places = onPlace ? (stop.places ?? []) : [];
+  // each place a button once, where the stop first names it: one set for
+  // the story and the closer look; the ones never named go in a row
+  const linked = new Set<number>();
+  const story = mentionRuns(stop.text, places, city, linked);
+  const closer = stop.closer
+    ? mentionRuns(stop.closer, places, city, linked)
+    : [];
+  const others = places.filter((_, i) => !linked.has(i));
+  const say = (runs: MentionRun[], text: string) =>
+    onPlace ? named(runs, places, onPlace) : text;
   return (
     <>
-      <p className="flow-root text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
-        {stop.text}
+      {aside}
+      <p className="text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
+        {say(story, stop.text)}
       </p>
       {notes.map((note) => (
         <p
@@ -284,17 +389,20 @@ function StopBody({ notes, stop }: { notes: string[]; stop: WalkStop }) {
         </p>
       ))}
       {stop.closer && (
-        <aside className="mt-3.5 rounded-lg bg-primary/[0.06] px-3 py-2.5">
+        <aside className="mt-3.5 flow-root rounded-lg bg-primary/[0.06] px-3 py-2.5">
           <span className="flex items-center gap-1.5 font-sans text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
             <EyeIcon aria-hidden className="size-3" />
             {CLOSER_LABEL}
           </span>
           <p className="mt-1 text-[14.5px] leading-snug text-foreground/90">
-            {stop.closer}
+            {say(closer, stop.closer)}
           </p>
         </aside>
       )}
-      <div className="font-sans">
+      {onPlace && others.length > 0 && (
+        <OtherPlaces city={city} onPlace={onPlace} places={others} />
+      )}
+      <div className="clear-both font-sans">
         <Facts facts={stop.facts} />
       </div>
     </>
@@ -317,10 +425,94 @@ function PhotoCredit({ photo }: { photo: WalkPhoto }) {
   );
 }
 
+/** The photo whole, over the scene: the card crops it, this does not. */
+function PhotoView({
+  base,
+  onOpenChange,
+  open,
+  photo,
+  title,
+}: {
+  base: string;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  photo: WalkPhoto & { src: string };
+  title: string;
+}) {
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent
+        className="w-auto max-w-[min(calc(100vw-2rem),64rem)] gap-0 overflow-hidden bg-black p-0 text-white ring-white/10 sm:max-w-[min(calc(100vw-2rem),64rem)]"
+        data-testid="walk-photo-view"
+      >
+        {/* the published copy at its own size: not resized again */}
+        <Image
+          alt={photo.caption ?? `Foto: ${title}`}
+          className="mx-auto block h-auto max-h-[calc(100dvh-8rem)] w-auto max-w-full object-contain"
+          height={photo.h}
+          src={new URL(photo.src, base).href}
+          unoptimized
+          width={photo.w}
+        />
+        <div className="flex flex-col gap-0.5 px-4 py-2.5 font-sans">
+          <DialogTitle className="text-[13px] font-normal text-white/95">
+            {photo.caption ?? title}
+          </DialogTitle>
+          <DialogDescription className="text-[10.5px] text-white/65">
+            <PhotoCredit photo={photo} />
+          </DialogDescription>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** The photo's button: a click shows it whole; the corner says so. */
+function PhotoButton({
+  children,
+  className,
+  coarse,
+  onOpen,
+}: {
+  children: ReactNode;
+  className?: string;
+  coarse: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      aria-label="Foto groß zeigen"
+      className={cn(
+        "group/photo relative block w-full cursor-zoom-in overflow-hidden focus-visible:outline-2 focus-visible:outline-primary",
+        className
+      )}
+      onClick={onOpen}
+      type="button"
+    >
+      {children}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute top-2 right-2 rounded-full bg-black/40 p-1.5 text-white backdrop-blur-sm transition-opacity",
+          coarse
+            ? "opacity-80"
+            : "opacity-0 group-hover/photo:opacity-100 group-focus-visible/photo:opacity-100"
+        )}
+      >
+        <Maximize2Icon className="size-3.5" />
+      </span>
+    </button>
+  );
+}
+
 /**
- * The stop's photograph, above its story: what the model cannot draw (a
- * gilded rider, a relief, a room). Served by the site itself (ADR 0043:
- * no request to Wikimedia from the visitor's browser), with its credit.
+ * The stop's photograph: what the model cannot draw (a gilded rider, a
+ * relief, a room). A wide one spans the card above the story at its own
+ * proportion, cut only past a height and then round its `focus`, its
+ * caption and credit laid on its lower edge; a tall one stands beside the
+ * story, which flows round it (`photoIsTall`). A click shows it whole.
+ * Served by the site itself (ADR 0043: no request to Wikimedia from the
+ * visitor's browser), with its credit.
  */
 function StopPhoto({
   base,
@@ -333,33 +525,83 @@ function StopPhoto({
   photo: WalkPhoto;
   title: string;
 }) {
+  const [open, setOpen] = useState(false);
   if (!(base && photo.src)) {
     return null;
   }
-  return (
-    <figure className="m-0 shrink-0" data-testid="walk-photo">
-      {/* a small published WebP: not resized again (unoptimized) */}
-      <Image
-        // the story points at the photo: never a decorative one
-        alt={photo.caption ?? `Foto: ${title}`}
+  const tall = photoIsTall(photo);
+  const image = (
+    // a small published WebP: not resized again (unoptimized)
+    <Image
+      // the story points at the photo: never a decorative one
+      alt={photo.caption ?? `Foto: ${title}`}
+      className={cn(
+        "block h-auto w-full bg-muted object-cover",
+        tall
+          ? "max-h-[20rem] rounded-lg"
+          : coarse
+            ? "max-h-40"
+            : "max-h-[17rem]"
+      )}
+      height={photo.h}
+      loading="lazy"
+      src={new URL(photo.src, base).href}
+      style={{ objectPosition: photoPosition(photo) }}
+      unoptimized
+      width={photo.w}
+    />
+  );
+  const view = (
+    <PhotoView
+      base={base}
+      onOpenChange={setOpen}
+      open={open}
+      photo={{ ...photo, src: photo.src }}
+      title={title}
+    />
+  );
+  if (tall) {
+    return (
+      <figure
         className={cn(
-          "block w-full bg-muted object-cover",
-          coarse ? "max-h-32" : "max-h-56"
+          "float-right m-0 mt-1 mb-2 ml-4",
+          coarse ? "w-[38%]" : "w-[42%]"
         )}
-        height={photo.h}
-        loading="lazy"
-        src={new URL(photo.src, base).href}
-        unoptimized
-        width={photo.w}
-      />
-      <figcaption className="flex flex-col gap-0.5 px-6 pt-2 font-sans text-[10px] text-muted-foreground leading-snug">
+        data-testid="walk-photo"
+      >
+        <PhotoButton
+          className="rounded-lg"
+          coarse={coarse}
+          onOpen={() => setOpen(true)}
+        >
+          {image}
+        </PhotoButton>
+        <figcaption className="mt-1.5 flex flex-col gap-0.5 font-sans text-[10px] text-muted-foreground leading-snug">
+          {photo.caption && (
+            <span className="text-[11.5px] text-foreground/75">
+              {photo.caption}
+            </span>
+          )}
+          <PhotoCredit photo={photo} />
+        </figcaption>
+        {view}
+      </figure>
+    );
+  }
+  return (
+    <figure className="relative m-0 shrink-0" data-testid="walk-photo">
+      <PhotoButton coarse={coarse} onOpen={() => setOpen(true)}>
+        {image}
+      </PhotoButton>
+      <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-0.5 bg-linear-to-t from-black/70 via-black/35 to-transparent px-6 pt-10 pb-2 font-sans text-[10px] text-white/75 leading-snug [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]">
         {photo.caption && (
-          <span className="text-[11.5px] text-foreground/75">
-            {photo.caption}
-          </span>
+          <span className="text-[12px] text-white/95">{photo.caption}</span>
         )}
-        <PhotoCredit photo={photo} />
+        <span className="pointer-events-auto self-start">
+          <PhotoCredit photo={photo} />
+        </span>
       </figcaption>
+      {view}
     </figure>
   );
 }
@@ -464,12 +706,15 @@ export function WalkCard({
   index,
   onClose,
   onIndex,
+  onPlace,
   walk,
 }: {
   coarse: boolean;
   index: number;
   onClose: () => void;
   onIndex: (index: number) => void;
+  /** picks a place the story names and opens its card; null: names stay text */
+  onPlace: ((place: WalkPlace) => void) | null;
   walk: Walk;
 }) {
   const [folded, setFolded] = useState(false);
@@ -483,10 +728,14 @@ export function WalkCard({
   const walksUrl = useSceneStatus("site")?.walksUrl ?? null;
   const stop = walk.stops[index];
   const notes = stop ? stopNotes(stop, today) : [];
-  const said = stop && reading ? stopSpeech(stop, notes) : "";
+  // the parts once a stop: a render of the card does not start it again
+  const said = useMemo(
+    () => (stop && reading ? stopSpeech(stop, stopNotes(stop, today)) : null),
+    [stop, reading, today]
+  );
   useEffect(() => {
     if (said) {
-      speech.speak(said);
+      speech.speakParts(said);
       // a new stop, or reading switched off, cuts this one off
       return speech.stop;
     }
@@ -508,7 +757,7 @@ export function WalkCard({
       data-testid="walk-card"
     >
       <Card className="min-h-0 flex-1 gap-0 rounded-2xl bg-background/95 py-0 shadow-xl ring-foreground/[0.07] backdrop-blur-lg">
-        {stop.photo && !(coarse && folded) && (
+        {stop.photo && !photoIsTall(stop.photo) && !(coarse && folded) && (
           <StopPhoto
             base={walksUrl}
             coarse={coarse}
@@ -561,7 +810,21 @@ export function WalkCard({
             )}
             key={`${walk.id}/${stop.id}`}
           >
-            <StopBody notes={notes} stop={stop} />
+            <StopBody
+              aside={
+                stop.photo && photoIsTall(stop.photo) ? (
+                  <StopPhoto
+                    base={walksUrl}
+                    coarse={coarse}
+                    photo={stop.photo}
+                    title={stop.title}
+                  />
+                ) : null
+              }
+              notes={notes}
+              onPlace={onPlace}
+              stop={stop}
+            />
             <p className="mt-4 pb-2 font-sans text-[10.5px] text-muted-foreground leading-snug">
               <FootprintsIcon aria-hidden className="mr-1 inline size-3" />
               Erzählt von {walk.by} (KI), {walk.written}. Die Erzählung ist

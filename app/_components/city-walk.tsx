@@ -718,7 +718,8 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   /**
    * Shows a walk's stop: a slow glide to its view (the card can be read,
    * or heard, on the way) — a jump only out of Modell, which no glide
-   * leaves —, today at the stop's hour, in its picture style.
+   * leaves —, today at the stop's hour, the light turning to it over the
+   * glide, in its picture style.
    */
   const showStop = (walk: Walk, index: number) => {
     const stop = walk.stops[index];
@@ -731,14 +732,16 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     }
     setAsking(false);
     setWalking({ index, walk });
+    let glide = 0;
     if (h.getViewMode() === "model") {
       h.applyCameraState(stopCamera(stop, h.offset));
     } else {
       // a slow glide the visitor looks about in while the text is read:
       // a drag on the way turns the view, it does not stop the walk
-      h.flyToViewpoint(stopView(stop), WALK_PACE, true);
+      glide = h.flyToViewpoint(stopView(stop), WALK_PACE, true);
     }
-    time.setInstant(stopDate(stop, today()));
+    // the sun travels with the camera: no jump from one hour to the next
+    time.glideTo(stopDate(stop, today()), glide);
     look.set({ style: stop.style ?? "pastel" });
   };
   // Frag die Stadt (ask-city.tsx): its card in the walk card's place, so
@@ -1201,6 +1204,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
                   index={walking.index}
                   onClose={endWalk}
                   onIndex={(i) => showStop(walking.walk, i)}
+                  onPlace={(place) => handleRef.current?.pickPlaces([place])}
                   walk={walking.walk}
                 />
               )}

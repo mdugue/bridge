@@ -30,6 +30,25 @@ export function splitDate(date: Date): { day: Date; minutes: number } {
   };
 }
 
+/**
+ * The minute of day a glide of the hour shows at share `t` (0–1) of its
+ * way: eased as the camera's glide is (smootherstep, camera-flight.ts),
+ * so light and camera arrive together; whole minutes, as the slider.
+ */
+export function tweenMinutes(from: number, to: number, t: number): number {
+  const k = Math.min(Math.max(t, 0), 1);
+  const e = k * k * k * (k * (k * 6 - 15) + 10);
+  return Math.round(from + (to - from) * e);
+}
+
+/** Whether the visitor asked for less motion: the hour then jumps. */
+function reducedMotion(): boolean {
+  return (
+    typeof matchMedia === "function" &&
+    matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 export interface FrameGate {
   /** runs now, or once the frame that already ran it is over */
   request: () => void;
@@ -95,6 +114,12 @@ export interface SceneTime {
   preview: (day: Date, minutes: number) => void;
   /** moves the scene to an instant (to the minute the sliders can show) */
   setInstant: (date: Date) => void;
+  /**
+   * Moves the scene to an instant over `seconds`: the day at once, the
+   * hour gliding there (a walk's stop, while the camera flies to it). Any
+   * other change of the time ends the glide where it is.
+   */
+  glideTo: (date: Date, seconds: number) => void;
   /** tells a (new) scene the current instant */
   sync: () => void;
   /** the current instant, for a scene that boots */
@@ -143,7 +168,18 @@ export function useSceneTime(
     };
   }, [toScene]);
 
-  const set = useCallback((nextDay: Date, nextMinutes: number) => {
+  // A glide of the hour: a step a frame through the drag's path (the
+  // shadows and the sky refresh as in a drag), the last through `set`'s.
+  const glide = useRef<number | null>(null);
+  const endGlide = useCallback(() => {
+    if (glide.current !== null) {
+      cancelAnimationFrame(glide.current);
+      glide.current = null;
+    }
+  }, []);
+  useEffect(() => endGlide, [endGlide]);
+
+  const setNow = useCallback((nextDay: Date, nextMinutes: number) => {
     gate.current?.cancel();
     setDay(nextDay);
     setMinutes(nextMinutes);
@@ -154,7 +190,7 @@ export function useSceneTime(
       setSun(state);
     }
   }, []);
-  const preview = useCallback(
+  const previewNow = useCallback(
     (nextDay: Date, nextMinutes: number) => {
       now.current = composeDate(nextDay, nextMinutes);
       previewed.current = { day: nextDay, minutes: nextMinutes };
@@ -166,12 +202,51 @@ export function useSceneTime(
     },
     [toScene]
   );
+  const set = useCallback(
+    (nextDay: Date, nextMinutes: number) => {
+      endGlide();
+      setNow(nextDay, nextMinutes);
+    },
+    [endGlide, setNow]
+  );
+  const preview = useCallback(
+    (nextDay: Date, nextMinutes: number) => {
+      endGlide();
+      previewNow(nextDay, nextMinutes);
+    },
+    [endGlide, previewNow]
+  );
   const setInstant = useCallback(
     (instant: Date) => {
       const parts = splitDate(instant);
       set(parts.day, parts.minutes);
     },
     [set]
+  );
+  const glideTo = useCallback(
+    (instant: Date, seconds: number) => {
+      endGlide();
+      const to = splitDate(instant);
+      const from = splitDate(now.current);
+      if (seconds <= 0 || from.minutes === to.minutes || reducedMotion()) {
+        setNow(to.day, to.minutes);
+        return;
+      }
+      let start: number | null = null;
+      const step = (at: number) => {
+        start ??= at;
+        const t = (at - start) / (seconds * 1000);
+        if (t >= 1) {
+          glide.current = null;
+          setNow(to.day, to.minutes);
+          return;
+        }
+        previewNow(to.day, tweenMinutes(from.minutes, to.minutes, t));
+        glide.current = requestAnimationFrame(step);
+      };
+      glide.current = requestAnimationFrame(step);
+    },
+    [endGlide, setNow, previewNow]
   );
   const sync = useCallback(() => {
     const state = applyRef.current(now.current);
@@ -188,6 +263,7 @@ export function useSceneTime(
     set,
     preview,
     setInstant,
+    glideTo,
     sync,
     current,
   };

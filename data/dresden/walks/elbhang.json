@@ -60,7 +60,11 @@
         "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
         "page": "https://commons.wikimedia.org/wiki/File:Waldschl%C3%B6sschenbr%C3%BCcke_Dresden_2024_Luftbild_Toni_Klemm_2500px.jpg",
         "h": 533,
-        "w": 800
+        "w": 800,
+        "focus": [
+          0.5,
+          0.65
+        ]
       }
     },
     {
@@ -170,7 +174,11 @@
         "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
         "page": "https://commons.wikimedia.org/wiki/File:Blaues_Wunder.jpg",
         "w": 800,
-        "h": 533
+        "h": 533,
+        "focus": [
+          0.5,
+          0.4
+        ]
       }
     },
     {
@@ -275,7 +283,11 @@
         "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0/de/deed.en",
         "page": "https://commons.wikimedia.org/wiki/File:051030-Standseilbahn-Dresden-Talfahrt-Begegnung-Viadukt.jpg",
         "h": 533,
-        "w": 800
+        "w": 800,
+        "focus": [
+          0.6,
+          0.5
+        ]
       }
     },
     {

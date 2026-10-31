@@ -195,7 +195,11 @@
         "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
         "page": "https://commons.wikimedia.org/wiki/File:Hamburg_-_Rathaus_-_Hygieia-Brunnen_01.jpg",
         "h": 654,
-        "w": 800
+        "w": 800,
+        "focus": [
+          0.5,
+          0.6
+        ]
       }
     },
     {
