@@ -228,6 +228,7 @@ import {
   streamTimings,
   traceRequested,
 } from "./stream-timing";
+import { attachInspector, inspectRequested } from "./inspector";
 import { attachTouchControls } from "./touch-controls";
 import {
   createVegetationLod,
@@ -1117,6 +1118,13 @@ export async function createCityWalkApp(
   const tracing = traceRequested(window.location.search);
   if (tracing) {
     cleanups.push(startTrace());
+  }
+  // `?inspect=1`: three's Inspector over the canvas (inspector.ts)
+  if (inspectRequested(window.location.search)) {
+    // a QA aid: a chunk that fails to load leaves the boot as it was
+    cleanups.push(
+      await attachInspector(renderer).catch(() => () => undefined)
+    );
   }
   try {
     return await bootApp(opts, renderer, scene, cleanups);

@@ -1537,6 +1537,15 @@ loaded and 20 s later (`console.table`). The names are a contract for
 later perf work: add one rather than rename one. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
 
+**The renderer itself: `?inspect=1`** (`inspector.ts`) puts three's own
+Inspector (`three/addons/inspector`) over the canvas: time per pass (GPU
+timestamps where the adapter has them — Chromium; on Safari only CPU
+time), memory by kind (geometries, textures, render targets), draw calls
+and the node graphs. The module loads only on that knob, so no other page
+carries it; it keeps its panel layout under `threejs-inspector` in local
+storage (the privacy page names it). Use it beside `?trace=1`, which times
+the stream, not the passes.
+
 ## Workarounds for upstream bugs
 
 Each entry is a bug in a dependency, the code that works around it and

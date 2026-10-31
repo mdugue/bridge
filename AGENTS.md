@@ -190,7 +190,7 @@ says so (ADR 0043).
   in the whole-site CI shard, already the longest; tag it
   (`@desktop-hud`, `@phone`, `@desktop-render`) where it fits.
 - URL knobs: `?scene=lite`, `?gpu=webgl2`, `?safety=0…3`, `?trail=1`,
-  `?trace=1`, `#at=lat,lng`.
+  `?trace=1`, `?inspect=1`, `#at=lat,lng`.
 
 ## Conventions
 
