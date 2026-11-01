@@ -1,7 +1,9 @@
 /**
  * Writes the glTF binaries the viewer streams (lib/city/tileset.ts): one
  * terrain mesh per tile and level, one building mesh per tile. Standard glTF
- * 2.0 with EXT_meshopt_compression, so any glTF tool can open them, and the
+ * 2.0 with KHR_meshopt_compression (khr-meshopt.ts: gltf-transform writes
+ * EXT, the last step renames it and packs the attributes in meshopt's v1
+ * codec), so any glTF tool that reads KHR can open them, and the
  * buildings carry their per-object style table the standard way —
  * EXT_mesh_features (a feature id per vertex) pointing into an
  * EXT_structural_metadata property table.
@@ -35,7 +37,9 @@ import {
   MeshoptEncoder,
   MeshoptSimplifier,
 } from "meshoptimizer";
+import { ownBuffer, pad, readGlb, writeGlb } from "./glb-container";
 import { weldExact } from "./glb-weld";
+import { toExtMeshopt, toKhrMeshopt } from "./khr-meshopt";
 
 /**
  * A property table column: one value (SCALAR), tuple (VEC3), string
@@ -235,7 +239,7 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
   }
   await doc.transform(...transforms);
   const glb = await (await io()).writeBinary(doc);
-  return input.table ? addPropertyTable(glb, input.table) : glb;
+  return toKhrMeshopt(input.table ? addPropertyTable(glb, input.table) : glb);
 }
 
 /**
@@ -253,7 +257,7 @@ export async function simplifyGlb(
 ): Promise<Uint8Array> {
   const nodeIO = await io();
   await MeshoptSimplifier.ready;
-  const doc = (await nodeIO.readBinary(glb)).setLogger(logger);
+  const doc = (await nodeIO.readBinary(toExtMeshopt(glb))).setLogger(logger);
   doc
     .createExtension(EXTMeshoptCompression)
     .setRequired(true)
@@ -275,23 +279,22 @@ export async function simplifyGlb(
     quantize(QUANTIZE)
   );
   const out = await nodeIO.writeBinary(doc);
-  return table ? addPropertyTable(out, table) : out;
+  return toKhrMeshopt(table ? addPropertyTable(out, table) : out);
 }
 
 // --- EXT_structural_metadata (gltf-transform has no writer for it) ----------
 
-const JSON_CHUNK = 0x4e_4f_53_4a;
-const BIN_CHUNK = 0x00_4e_49_42;
-
 interface GltfJson {
   bufferViews?: { buffer: number; byteLength: number; byteOffset?: number }[];
-  buffers?: { byteLength: number; extensions?: object; uri?: string }[];
+  buffers?: {
+    byteLength: number;
+    extensions?: Record<string, unknown>;
+    uri?: string;
+  }[];
   extensions?: Record<string, unknown>;
   extensionsUsed?: string[];
   meshes?: { primitives: { extensions?: Record<string, unknown> }[] }[];
 }
-
-const pad = (n: number, to: number) => Math.ceil(n / to) * to;
 
 /** The enum name that stands for "no code" (the property's `noData`). */
 export const ENUM_NONE = "NONE";
@@ -365,24 +368,8 @@ export function addPropertyTable(
   glb: Uint8Array,
   table: PropertyTable
 ): Uint8Array {
-  const view = new DataView(glb.buffer, glb.byteOffset, glb.byteLength);
-  const jsonLength = view.getUint32(12, true);
-  if (view.getUint32(16, true) !== JSON_CHUNK) {
-    throw new Error("glb: first chunk is not JSON");
-  }
-  const json = JSON.parse(
-    new TextDecoder().decode(glb.subarray(20, 20 + jsonLength))
-  ) as GltfJson;
-  const binAt = 20 + jsonLength;
-  const binLength = view.getUint32(binAt, true);
-  if (view.getUint32(binAt + 4, true) !== BIN_CHUNK) {
-    throw new Error("glb: second chunk is not BIN");
-  }
-  const bin = glb.subarray(binAt + 8, binAt + 8 + binLength);
-  // The glb's own buffer: the one without a uri that is not a meshopt fallback.
-  const bufferIndex = (json.buffers ?? []).findIndex(
-    (b) => b.uri === undefined && b.extensions === undefined
-  );
+  const { json, bin } = readGlb<GltfJson>(glb);
+  const bufferIndex = ownBuffer(json);
   if (bufferIndex === -1) {
     throw new Error("glb: no embedded buffer");
   }
@@ -480,24 +467,5 @@ export function addPropertyTable(
     ]),
   ];
 
-  const jsonBytes = new TextEncoder().encode(JSON.stringify(json));
-  const jsonPadded = pad(jsonBytes.length, 4);
-  const out = new Uint8Array(12 + 8 + jsonPadded + 8 + total);
-  const o = new DataView(out.buffer);
-  o.setUint32(0, 0x46_54_6c_67, true); // "glTF"
-  o.setUint32(4, 2, true);
-  o.setUint32(8, out.length, true);
-  o.setUint32(12, jsonPadded, true);
-  o.setUint32(16, JSON_CHUNK, true);
-  out.set(jsonBytes, 20);
-  out.fill(0x20, 20 + jsonBytes.length, 20 + jsonPadded);
-  const binStart = 20 + jsonPadded;
-  o.setUint32(binStart, total, true);
-  o.setUint32(binStart + 4, BIN_CHUNK, true);
-  let at = binStart + 8;
-  for (const chunk of chunks) {
-    out.set(chunk, at);
-    at += chunk.length;
-  }
-  return out;
+  return writeGlb(json, chunks);
 }
