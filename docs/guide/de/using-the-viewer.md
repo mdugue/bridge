@@ -435,7 +435,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   und *Zurück* gehen von Station zu Station, ✕ beendet den Spaziergang
   und stellt Bildstil und Uhrzeit zurück. Auf dem Telefon ist die
   Karte ein Blatt am unteren Rand, das eingeklappt beginnt: Antippen oder
-  Hochziehen am Griff öffnet es, Herunterziehen klappt es wieder ein. Wie sie geschrieben werden:
+  Hochziehen am Griff öffnet es, Herunterziehen klappt es wieder ein;
+  Joystick und Werkzeugleiste weichen ihm, solange der Spaziergang läuft. Wie sie geschrieben werden:
   [walks.md](../../walks.md).
 - **Steuerung** — die vollständige Tastentabelle, eingeklappt, bis du
   sie öffnest (die Leiste über der Szene zeigt die ersten Tasten).

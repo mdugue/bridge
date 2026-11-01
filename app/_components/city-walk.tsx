@@ -1151,17 +1151,21 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
                 onSelect={(i) => handleRef.current?.selectCandidate(i)}
               />
-              <SceneOverlays
-                coarse={coarse}
-                live={live}
-                locate={locate}
-                onClimb={(v) => handleRef.current?.setClimbInput(v)}
-                onMovementMode={(m) => handleRef.current?.setMovementMode(m)}
-                onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
-                onNorth={() => handleRef.current?.turnModelTo(0)}
-                onToggleModel={() => handleRef.current?.toggleModel()}
-                onTurn={(deg) => handleRef.current?.turnModel(deg)}
-              />
+              {/* a phone's walk sheet owns the bottom: the stick and the
+                  toolbar would stand under it (a drag still looks about) */}
+              {!(coarse && walking) && (
+                <SceneOverlays
+                  coarse={coarse}
+                  live={live}
+                  locate={locate}
+                  onClimb={(v) => handleRef.current?.setClimbInput(v)}
+                  onMovementMode={(m) => handleRef.current?.setMovementMode(m)}
+                  onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
+                  onNorth={() => handleRef.current?.turnModelTo(0)}
+                  onToggleModel={() => handleRef.current?.toggleModel()}
+                  onTurn={(deg) => handleRef.current?.turnModel(deg)}
+                />
+              )}
             </>
           )}
         </div>
