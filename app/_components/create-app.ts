@@ -50,6 +50,7 @@ import {
   shadowTilesStream,
 } from "@/lib/city/gpu-safety";
 import { bootingPose, startOf } from "@/lib/city/boot-start";
+import { floodSurface, type PlannedVolume, riverOf } from "@/lib/city/scenario";
 import { createGround } from "@/lib/city/ground";
 import {
   createPageLifecycle,
@@ -201,6 +202,7 @@ import {
   createNameplateAsk,
   landmarkFactsHref,
 } from "./nameplate-ask";
+import { createScenarioLayer } from "./scenario-layer";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
 import {
@@ -674,6 +676,14 @@ export interface CityWalkHandle {
     viewpoint: ViewpointGeometry,
     glide?: GlideOptions
   ) => number;
+  /**
+   * The Szenario-Assistent (ADR 0058, scenario-layer.ts): the site's river
+   * at `cm` on its reference gauge (lib/city/scenario.ts; a site without
+   * one shows nothing), and a planned volume; null takes either away.
+   */
+  setFlood: (cm: number | null) => void;
+  /** false where no loaded ground lies under the volume (nothing shown) */
+  setVolume: (volume: PlannedVolume | null) => boolean;
   /**
    * The current pose as a vantage — what the HUD stores when you save a view,
    * so restoring it is the same animated glide as any curated one.
@@ -1987,6 +1997,21 @@ async function bootApp(
     queueChange();
   });
   sunToStyles = postStack.setSunAltitude;
+  // what Frag die Stadt's scenarios put in the scene, under the Ausschnitt
+  // like the ground
+  const scenario = createScenarioLayer({
+    bounds: siteBounds,
+    compile: (object) => postStack.compile(object),
+    heightAt,
+    offset,
+    changed: () => {
+      invalidateShadows();
+      queueChange();
+    },
+    parent: cuts.group,
+  });
+  cleanups.push(() => scenario.dispose());
+  const river = riverOf(opts.site.id);
   // The data layers (lib/city/data-layers.ts, data-layers-feature.ts):
   // started with the first switch-on of any of them — the tiles' traffic
   // slots wait on the same start — and from then on driven by the spine's
@@ -4171,6 +4196,11 @@ async function bootApp(
       return pose.flyToViewpoint(view, glide);
     },
     captureViewpoint: pose.captureViewpoint,
+    setFlood: (cm) =>
+      scenario.setFlood(
+        river && cm !== null ? floodSurface(river, extras.epsg, cm) : null
+      ),
+    setVolume: scenario.setVolume,
     placeAt: (view) =>
       modelRig.owns()
         ? modelRig.centreOn(groundPoint(view.epsg.x, view.epsg.y))

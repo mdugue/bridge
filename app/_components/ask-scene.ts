@@ -10,6 +10,7 @@ import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { FramePace } from "@/lib/city/frame-pace";
 import { inquiryCard } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
+import { riverOf } from "@/lib/city/scenario";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
@@ -88,6 +89,9 @@ export function useAskScene(
         };
       },
       setListening: (on) => pace.setListening(on),
+      river: riverOf(site.id),
+      setFlood: (cm) => handleRef.current?.setFlood(cm),
+      setVolume: (volume) => handleRef.current?.setVolume(volume) ?? false,
       show: (view) => handleRef.current?.flyToViewpoint(view),
       setTime: (hour, date) => {
         const at = instantAt(hour, current(), date);
