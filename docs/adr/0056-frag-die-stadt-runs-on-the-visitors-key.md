@@ -56,8 +56,10 @@ load into the browser.
    itself (`frameTargets`, `lib/city/ask-view.ts`): from the air, the
    nearest eye that fits them on screen, the best of twelve headings by
    size, approach, sun, spread and the loaded buildings' sight lines;
-   places spread wider than 900 m are shown one at a time, and the
-   server's answer to `zeige` says so with the same rule.
+   places that need an eye more than 900 m off on the visitor's screen
+   are shown one at a time — the browser sends the screen's aspect with
+   the pose, so the server's answer to `zeige` says so by the same rule
+   (`fitsOneView`).
    The model never computes a camera. Under the answer
    (`app/_components/ask-chips.tsx`) each place is a chip, "nearby" says
    its reach with a narrower and a wider one, and the follow-ups come
