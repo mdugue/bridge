@@ -106,6 +106,8 @@ import {
   tileTopsOf,
 } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
+import { isLandmarkInquiry } from "@/lib/city/nameplate";
+import { type NameplateBody, nameplateBody } from "@/lib/city/nameplate-place";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import {
   createLodSchedule,
@@ -190,6 +192,13 @@ import {
   updatePocDebug,
 } from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
+import { createNameplate } from "./nameplate-layer";
+import {
+  cityHides,
+  coverBoxes,
+  createNameplateAsk,
+  landmarkFactsHref,
+} from "./nameplate-ask";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
 import {
@@ -599,6 +608,9 @@ export interface CityWalkHandle {
    * marks it and reports it through `onInquiry`; tests and QA call it.
    */
   inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
+  /** What the nameplate sets in the city and where (nameplate-layer.ts),
+   *  null while nothing is named; tests and QA read it. */
+  nameplateShown: () => { title: string; mode: string; spot: string } | null;
   /** Shows another candidate of the last question (the strip's click):
    *  marks it and reports it through `onInquiry`. */
   selectCandidate: (index: number) => Inquiry | null;
@@ -1903,6 +1915,31 @@ async function bootApp(
   );
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
+  // The thing asked, named in the city beside it (nameplate-layer.ts):
+  // drawn after the frame, onto the canvas.
+  const nameplate = createNameplate({
+    lens,
+    depthTexture: postStack.sceneDepth,
+    fonts: () => opts.container,
+    hidden: (view, points) => cityHides(view, points, stream.visibleCities()),
+    groundAt: (x, z) => siteGround.underWorld(x, z),
+    hud: () => coverBoxes(renderer.domElement),
+    phone: budget.tier === "mobile",
+  });
+  postStack.setOverlay(nameplate);
+  cleanups.push(() => {
+    postStack.setOverlay(null);
+    nameplate.dispose();
+  });
+  const landmarkFactsUrl = landmarkFactsHref(extras, tilesetUrl);
+  // the canvas's CSS size for the plate's placing (`renderer.getSize`)
+  const plateSize = new Vector2();
+  const plateAsk = createNameplateAsk({
+    plate: nameplate,
+    site: opts.site,
+    factsUrl: landmarkFactsUrl,
+    signal: opts.signal,
+  });
   // The plate joins once its programs are built (a few tens of kB: it is
   // there long before the boot's tiles).
   void plateLoad.then(async (plate) => {
@@ -2018,6 +2055,7 @@ async function bootApp(
       sceneRows[key](look[key]);
     }
     postStack.applyLook(look);
+    nameplate.applyLook(look.style);
     for (const d of stream.dressings) {
       d.vegetation?.applyLook(look);
       showDataLayers(d, look);
@@ -2227,8 +2265,28 @@ async function bootApp(
   // What the outline goes around (selection-shape.ts): a building's own
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
   // monument's shape after its data.
-  const outline = (subject: OutlineSubject | null, flash = true) => {
-    postStack.setSelection(outlineShape(subject), flash);
+  // the asked thing's body (`nameplateBody` of its outline's triangles),
+  // as last outlined for a question (a hover's outline is a moment's: the
+  // nameplate stays with the question). The probe outlines before it
+  // answers, so a question reads it after `probe.ask`/`select`; a redraw
+  // of the same question (`probe.refresh`: another level of its tile
+  // shows) moves the plate with it. Only the body is kept, not the
+  // triangles (the outline holds its own copy).
+  let askedBody: NameplateBody | null = null;
+  const outline = (
+    subject: OutlineSubject | null,
+    flash = true,
+    redraw = false
+  ) => {
+    const shape = outlineShape(subject);
+    if (flash) {
+      askedBody =
+        shape && "positions" in shape ? nameplateBody(shape.positions) : null;
+      if (redraw) {
+        plateAsk.reshape(askedBody);
+      }
+    }
+    postStack.setSelection(shape, flash);
   };
   const outlineShape = (
     subject: OutlineSubject | null
@@ -2342,6 +2400,10 @@ async function bootApp(
     if (asked?.kind === "bikes") {
       return { ...asked, credit: layerSources?.bikes?.credit };
     }
+    if (asked?.kind === "building" && landmarkFactsUrl) {
+      // the card lists what the nameplate says under the name
+      return isLandmarkInquiry(asked) ? { ...asked, landmarkFactsUrl } : asked;
+    }
     // the others carry all their card needs
     return asked;
   };
@@ -2362,6 +2424,7 @@ async function bootApp(
         }
       : null;
     const inquiry = along?.candidates[along.selected]?.inquiry ?? null;
+    plateAsk.ask(inquiry, askedBody);
     opts.onInquiry?.(inquiry, along);
     return inquiry;
   };
@@ -2372,6 +2435,7 @@ async function bootApp(
     }
     sceneCounted();
     along = { ...along, selected: index };
+    plateAsk.ask(chosen.inquiry, askedBody);
     opts.onInquiry?.(chosen.inquiry, along);
     return chosen.inquiry;
   };
@@ -3675,6 +3739,19 @@ async function bootApp(
     // The counters cover this frame's passes only (autoReset is off: the
     // loop's own reset also ran on held frames, which read back as zero).
     renderer.info.reset();
+    // the plate's placing (its rays, a few times a second) is CPU work
+    // before the render, not render time
+    nameplate.setNight(currentNight);
+    // the canvas's CSS size as the renderer was last sized (no layout
+    // read in the frame), and only while a plate is asked
+    nameplate.update(
+      view,
+      () => {
+        const css = renderer.getSize(plateSize);
+        return { width: css.x || 1, height: css.y || 1 };
+      },
+      exporting
+    );
     const renderStart = streamTimings.now();
     framedBuilds.draw(postStack.render);
     const renderEnd = streamTimings.now();
@@ -4027,6 +4104,7 @@ async function bootApp(
     clearInquiry: () => {
       along = null;
       probe.clear();
+      plateAsk.ask(null, null);
     },
     selectCandidate,
     previewCandidate: probe.preview,
@@ -4046,6 +4124,7 @@ async function bootApp(
       status: () => design?.status() ?? null,
     },
     inquireAt,
+    nameplateShown: () => nameplate.shown(),
     enterImmersive: canvasControls.lockPointer,
     releaseGpu: () => releaseGpu(renderer),
     flyTo: (position, lookAt) => {

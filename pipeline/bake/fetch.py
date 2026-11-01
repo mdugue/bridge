@@ -19,6 +19,7 @@ already there, so a rerun only fetches what is missing:
     data/_raw/<provider>/wikidata/bridges_<tile>.json    the bridges Wikidata knows
     data/_raw/<provider>/wikidata/landmarks_<tile>.json  its notable buildings and structures
     data/_raw/<provider>/wikidata/monuments_<tile>.json  the monuments it knows the material of
+    data/_raw/<provider>/wikidata/landmark_facts_<site>.json  the landmarks' dates and makers
     data/_raw/<provider>/lsc/<tile>.laz                  laser scan (`--lsc` only)
     data/_raw/<provider>/murals/{items,photos}.json      the murals' items and photos (murals.py)
     data/_raw/<provider>/murals/photos/*                 the photo each mural's rule chose
@@ -53,6 +54,7 @@ from . import (
     cadastre,
     facades,
     glo30,
+    landmark_facts,
     landmarks,
     mapillary,
     monuments,
@@ -355,6 +357,11 @@ def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
     if lsc and not spec.products.lsc:
         print(f"--lsc: the {spec.provider} adapter reads no laser scan — skipped")
     failures = {tile.id: fetch_tile(spec, tile, source, lsc) for tile in tiles}
+    # after the tiles' landmark caches: the facts of every item they name
+    try:
+        landmark_facts.fetch_wikidata(spec.raw, spec.data, spec.site, [t.id for t in tiles])
+    except Exception as err:  # noqa: BLE001 — optional: the nameplates show the name alone
+        print(f"{spec.site}: the landmarks' facts not fetched ({type(err).__name__}: {err})")
     if not site_failed:
         fetch_murals(spec)
     failures = {tid: what for tid, what in failures.items() if what}

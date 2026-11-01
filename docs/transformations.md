@@ -1857,6 +1857,55 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   before the output transform, so every picture style shows it). It
   replaced the pencil loop (🗃️ below). **Not yet judged on a real
   GPU.**
+- **The nameplate: the thing asked, named in the city** `❝ taken` (2026-10-31)
+  — what the card's title and address say, set as lettering in the
+  scene beside it (`lib/city/nameplate.ts`): a Wikidata landmark (flag 16)
+  by its name large, with up to two lines of facts under it — "erbaut
+  1726–1734 · George Bähr", "wiederaufgebaut 2005 · 91 m" (each fact
+  where Wikidata has one, the card's height where it has none,
+  `factLines` in `lib/city/landmark-facts.ts`); a named building, bridge
+  or monument by its name with its address or kind; an ordinary house by
+  its address, small; nothing for a house without one, a tree, a lamp.
+  The facts are a site file baked once (`landmark-facts.json`, Wikidata
+  CC0: inception P571 or opening P1619, architect P84, height P2048, and
+  the P793 events that begin, end or span the building's construction
+  or its reconstruction, each with its own dates — years only where
+  Wikidata states the year, not a decade or a century; an end more than
+  100 years after the start left out; a rebuild with no end stated reads
+  "wiederaufgebaut ab"), matched to the Buildings through the landmark
+  tiles' objects, fetched with the first landmark asked (an
+  organisation's inception, often its founding, stands back where
+  construction events date the building). Where several
+  items share the asked Buildings, the one the card's title names, else
+  none. The card lists the
+  same facts as rows (Bauzeit, Architekt, Wiederaufbau, Höhe laut
+  Wikidata) with Wikidata as their source, so the plate never says what
+  the card does not. **Where it stands** follows the camera
+  (`lib/city/nameplate-place.ts`), in multiples of the building's size
+  S (its height, at least half its long side): from above (1.5 S over its
+  top, a pitch over 35°, or Modell) it lies flat on the ground beside the
+  footprint, reading along the footprint's axis nearest the screen's;
+  in the street it stands upright 1.5 m before the facade the camera
+  faces best (kept until that facade is seen flatter than 25°), over the
+  highest point or beside the building, with a hairline to a dot at the
+  facade; within 1 S it is an inscription at the plinth; beyond 8 S its
+  name alone. Thresholds hold 20 % of hysteresis; the place is chosen
+  every 250 ms among its candidates by what of it would be off screen,
+  hidden by the city (rays through the buildings' BVHs, never a tile
+  whose BVH is being built), under the HUD's panels (`data-scene-cover`)
+  or over its own building, and a change cross-fades. Its capitals are 7 %
+  of the footprint's long side, kept on screen between a size per rank (a
+  landmark 26–72 CSS px, 22–48 on a phone; its facts at 0.4–0.45 of that). Where the city covers it
+  anyway, it shows as a pale outline (the scene's depth). **How it is
+  set** follows the picture style (`lib/city/nameplate-type.ts`): Pastell
+  and Papier a book serif (Cormorant Garamond) with small caps for the
+  facts, Comic a caption box (Bangers, yellow, a hard shadow and a tail
+  to the building), Noir and Sin City a condensed grotesque (Oswald) with
+  a monospaced line, Strich spaced capitals with a dimension line,
+  Schwarzplan on the ground like a plan's lettering from anywhere above
+  the building; by night the
+  ink turns light on a dark halo and dims a little. Drawn after the frame
+  (`nameplate-layer.ts`, rendering.md). **Not yet judged on a real GPU.**
 
 ### Vegetation
 - **Cultivated land** `❝ taken` `≈ assumed` (plan 028) — OSM `landuse=allotments|orchard|vineyard`
@@ -1932,7 +1981,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   judged on a GPU** (the chessboard check is the plan's other STOP).
 - **Tree/hedge rows** `❝ taken` `◎ detected` `≈ assumed` — Basis-DLM (or OSM) hedge & tree-row lines → instanced sets
   (`Instances`), chunked into 250 m cells for frustum culling. `pipeline/bake/landcover.py`
-  (`vegrows_<tile>.geojson`) → `vegetation-layer.ts`, per fine terrain tile.
+  (`vegrows_<tile>.geojson`) → `vegetation-layer.ts` (the tree rows) and
+  `low-vegetation-layer.ts` (the hedges, since 2026-11-01 drawn like the
+  OSM hedges at the size their card states, 1.6 m × 1.2 m — they were
+  dark 0.9 m boxes every 1.1 m), per fine terrain tile.
   **Where DOM1 exists the canopy step places a row's trees itself**
   (2026-10-21, P7, `canopy.py` `row_trees`): DOM1's crown peaks within 3 m
   of the line (nDOM smoothed 1 m, over 3 m, off LoD2 and the traffic),
@@ -1940,7 +1992,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   none within 4.5 m of a canopy or scan crown; written into
   `canopy_<t>.geojson` as `row: 1` with a `rows` member, which the pack
   carries as `ROWS_MEASURED` (`lib/city/point-pack.ts`), and the viewer
-  then plants only the hedges from `vegrows`. Without DOM1 the trees stand
+  then draws only the hedges from `vegrows`. Without DOM1 the trees stand
   every 9 m along the line as before. Row trees: Dresden's 33408_5656
   1 176 → 540 (doubles 26 % → 2 trees, standing on a crown 80 → 97 %),
   33412_5656 927 → 274, Leipzig's 33316_5688 1 378 → 408, Unna 904 → 85
@@ -2514,6 +2566,19 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   bake still finds them (`bun run bake <site> --step lowveg --research`
   writes every candidate under `data/_raw/` for research), but the
   committed `lowveg_<tile>.geojson` holds only what renders.
+  **Drawn** (`low-vegetation-layer.ts`, 2026-11-01): a trimmed hedge —
+  tapered flanks, rounded shoulders, a flattish top, square-cut ends — one
+  instance per ≤ 2.5 m piece, the pieces meeting end to end, mitred at a
+  bend (a closed ring at its closing corner too) and sheared to the
+  ground's slope, so a run reads as one hedge, not a row of sausages.
+  Leafy lumps (~0.8 m, ±9 cm) and a slow rise and fall of the top (~6 m,
+  ±14 cm) are pushed out in the vertex stage by a world-space noise, so
+  pieces agree at every joint; the same noise lights the lumps' crests and
+  shades their hollows. The sage drifts over ~40 m in world space, never
+  per piece or per line, so a tile seam does not show. In Comic the hedge
+  wears a dimmed leafy marker ink and prints in the deep green. *Why:* the
+  old chain of soft blocks pinched at every join and the DLM's hedges
+  were boxes (Manuel, 2026-11-01).
   - *Why:* the canopy bake (`canopy.py`) keeps nothing under `MIN_H = 3 m` and only
     forest/copse/sport-and-leisure areas, so courtyard and garden trees are
     dropped at any height; the Basis-DLM carries a hedge only when it is
