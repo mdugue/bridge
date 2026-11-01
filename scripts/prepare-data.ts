@@ -42,6 +42,15 @@ import { join } from "node:path";
 import { PLATE_N, type PlateExtras } from "../lib/city/ground-plate";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import {
+  type MuralExtras,
+  type MuralFile,
+  MURALS_FILE,
+  muralCredit,
+  muralFileSource,
+  muralsSource,
+  parseMurals,
+} from "../lib/city/murals";
+import {
   PROVENANCE_FILE,
   type ProvenanceRecord,
   siteProvenance,
@@ -222,6 +231,34 @@ const landmarkFacts = existsSync(factsSource)
 const trams = existsSync(tramSource)
   ? publish(TRAM_TIMETABLE_FILE, readFileSync(tramSource))
   : undefined;
+// The murals on their walls, site-wide (pipeline/bake/murals.py): optional,
+// each drawing's pen lines and wash under their own published names, the
+// file naming them so.
+const muralsDir = siteDataDir(SITE);
+const muralsPath = at(muralsSource(muralsDir));
+const muralFile = existsSync(muralsPath)
+  ? readJson<Partial<MuralFile>>(muralsPath)
+  : null;
+const muralPath = (name: string) => at(muralFileSource(muralsDir, name));
+const murals = (parseMurals(muralFile) ?? [])
+  .filter(
+    (m) => existsSync(muralPath(m.lines)) && existsSync(muralPath(m.wash))
+  )
+  .map((m) => ({
+    ...m,
+    lines: publish(
+      `mural-${m.id}.lines.webp`,
+      readFileSync(muralPath(m.lines))
+    ),
+    wash: publish(`mural-${m.id}.wash.webp`, readFileSync(muralPath(m.wash))),
+  }));
+const muralsFile =
+  murals.length > 0
+    ? publish(
+        MURALS_FILE,
+        utf8({ attribution: muralFile?.attribution ?? "", murals })
+      )
+    : undefined;
 
 // --- the walks --------------------------------------------------------------------
 // Erzählte Spaziergänge (lib/city/walks.ts, ADR 0055): the site's written
@@ -284,6 +321,7 @@ await publishStadtwissen(
 type SiteExtras = TilesetExtras &
   PlateExtras &
   LandmarkFactsExtras &
+  MuralExtras &
   WalksExtras;
 
 const extras: SiteExtras = {
@@ -313,6 +351,9 @@ const extras: SiteExtras = {
   ...(trams ? { trams } : {}),
   ...(walks ? { walks } : {}),
   ...(landmarkFacts ? { landmarkFacts } : {}),
+  ...(muralsFile
+    ? { murals: { credits: murals.map(muralCredit), file: muralsFile } }
+    : {}),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));
 publish(
