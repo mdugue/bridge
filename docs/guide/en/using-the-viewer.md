@@ -420,7 +420,12 @@ The button in the corner opens a panel with three tabs.
   to the place, sets the time, picture style or a data layer where it
   helps, and answers in a few sentences with its source. Under each
   answer it lists what it looked up and did; every answer is marked *KI*
-  (AI). It runs on your own key from a provider (Anthropic, OpenAI,
+  (AI). The camera frames the places it names itself, mostly from
+  above at a slant, so they are seen whole; under the answer each place
+  is a button (a click flies there, *Alle zeigen* shows them together
+  while they lie close enough), "nearby" shows the reach it took with
+  *enger* (narrower) and *weiter* (wider), and two or three follow-up
+  questions wait to be tapped. It runs on your own key from a provider (Anthropic, OpenAI,
   OpenRouter or the Vercel AI Gateway) and at your cost, mostly under a
   cent per question; the key stays in your browser
   ([privacy](/datenschutz#frag-die-stadt)). Also from *Fragen* in the

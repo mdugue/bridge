@@ -446,7 +446,12 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   zum Ort, stellt bei Bedarf Uhrzeit, Bildstil oder eine Datenebene ein
   und antwortet in wenigen Sätzen mit ihrer Quelle. Unter jeder Antwort
   steht, was es nachgeschlagen und getan hat; jede Antwort ist als *KI*
-  gekennzeichnet. Es läuft mit deinem eigenen Schlüssel eines Anbieters
+  gekennzeichnet. Die Kamera rahmt die genannten Orte selbst, meist von
+  schräg oben, so dass sie ganz zu sehen sind; darunter steht jeder Ort
+  als Knopf (ein Klick fliegt hin, *Alle zeigen* zeigt sie zusammen,
+  solange sie nah genug beieinander liegen), bei „in der Nähe“ der
+  genommene Umkreis mit *enger* und *weiter*, und zwei oder drei
+  Folgefragen zum Antippen. Es läuft mit deinem eigenen Schlüssel eines Anbieters
   (Anthropic, OpenAI, OpenRouter oder Vercel AI Gateway) und auf deine
   Kosten, meist unter einem Cent je Frage; der Schlüssel bleibt in
   deinem Browser ([Datenschutz](/datenschutz#frag-die-stadt)). Auch über
