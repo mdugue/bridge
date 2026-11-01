@@ -242,7 +242,12 @@ export function createInquiryProbe(deps: {
   groundAlong: (raycaster: Raycaster, far: number) => number | null;
   /** the outline's subject: what was asked, or null when nothing is */
   /** a hover over a candidate passes `flash` false (selection-outline.ts) */
-  outline: (subject: OutlineSubject | null, flash?: boolean) => void;
+  /** `redraw`: the same question's outline again (another level shows) */
+  outline: (
+    subject: OutlineSubject | null,
+    flash?: boolean,
+    redraw?: boolean
+  ) => void;
   /** the trees, monuments and decks on screen now (lib/city/ask-items.ts) */
   things: () => Iterable<AskSet<FeatureInquiry>>;
   /** the canvas size in CSS px, for the tolerance rings */
@@ -425,7 +430,7 @@ export function createInquiryProbe(deps: {
       (redraw && moved.some((part) => part.layer === redraw))
     ) {
       markedParts = moved;
-      deps.outline({ building: moved });
+      deps.outline({ building: moved }, true, true);
     }
   };
 

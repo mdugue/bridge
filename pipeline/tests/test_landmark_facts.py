@@ -208,3 +208,33 @@ def test_a_new_site_reads_the_tiles_raw_caches(tmp_path):
         json.dumps({"landmarks": [{"id": "Q8"}]})
     )
     assert lf.landmark_ids(data, raw, ["t1"]) == ["Q7"]
+
+
+def test_each_architect_once_in_their_order():
+    facts = lf.facts_of(
+        [
+            {"p": "architect", "a": "Q1", "v": "Zacharias", "lang": "de", "o": "1"},
+            {"p": "architect", "a": "Q1", "v": "Zachary", "lang": "en", "o": "1"},
+            {"p": "architect", "a": "Q2", "v": "Bertha", "lang": "en"},
+            {"p": "architect", "a": "Q3", "v": "Anna", "lang": "de"},
+        ]
+    )
+    # Q1 first by its ordinal, its German label; then by name, whatever
+    # language each has
+    assert facts == {"architects": ["Zacharias", "Anna"]}
+
+
+def test_an_old_cache_is_asked_anew(tmp_path, monkeypatch):
+    raw, data = tmp_path / "raw", tmp_path / "data"
+    (data / "dlm").mkdir(parents=True)
+    (data / "dlm" / "landmarks_t1.json").write_text(json.dumps({"landmarks": [{"id": "Q1"}]}))
+    cache = lf.cache_path(raw, "x")
+    cache.parent.mkdir(parents=True)
+    cache.write_text(json.dumps({"ids": ["Q1"], "items": {}}))
+    asked = []
+    monkeypatch.setattr(lf, "_post", lambda q: asked.append(q) or [])
+    lf.fetch_wikidata(raw, data, "x")
+    assert len(asked) == 1
+    assert json.loads(cache.read_text())["version"] == lf.CACHE_VERSION
+    lf.fetch_wikidata(raw, data, "x")
+    assert len(asked) == 1

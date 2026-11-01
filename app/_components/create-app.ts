@@ -107,6 +107,7 @@ import {
 } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { isLandmarkInquiry } from "@/lib/city/nameplate";
+import { type NameplateBody, nameplateBody } from "@/lib/city/nameplate-place";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import {
   createLodSchedule,
@@ -2252,17 +2253,26 @@ async function bootApp(
   // What the outline goes around (selection-shape.ts): a building's own
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
   // monument's shape after its data.
-  // the asked thing's triangles, as last outlined for a question (a
-  // hover's outline is a moment's: the nameplate stays with the question).
-  // The probe outlines before it answers, so a question reads them after
-  // `probe.ask`/`select`; a redraw of the same question (`probe.refresh`:
-  // another level of its tile shows) moves the plate's body with it.
-  let askedShape: Float32Array | null = null;
-  const outline = (subject: OutlineSubject | null, flash = true) => {
+  // the asked thing's body (`nameplateBody` of its outline's triangles),
+  // as last outlined for a question (a hover's outline is a moment's: the
+  // nameplate stays with the question). The probe outlines before it
+  // answers, so a question reads it after `probe.ask`/`select`; a redraw
+  // of the same question (`probe.refresh`: another level of its tile
+  // shows) moves the plate with it. Only the body is kept, not the
+  // triangles (the outline holds its own copy).
+  let askedBody: NameplateBody | null = null;
+  const outline = (
+    subject: OutlineSubject | null,
+    flash = true,
+    redraw = false
+  ) => {
     const shape = outlineShape(subject);
     if (flash) {
-      askedShape = shape && "positions" in shape ? shape.positions : null;
-      plateAsk.reshape(askedShape);
+      askedBody =
+        shape && "positions" in shape ? nameplateBody(shape.positions) : null;
+      if (redraw) {
+        plateAsk.reshape(askedBody);
+      }
     }
     postStack.setSelection(shape, flash);
   };
@@ -2402,7 +2412,7 @@ async function bootApp(
         }
       : null;
     const inquiry = along?.candidates[along.selected]?.inquiry ?? null;
-    plateAsk.ask(inquiry, askedShape);
+    plateAsk.ask(inquiry, askedBody);
     opts.onInquiry?.(inquiry, along);
     return inquiry;
   };
@@ -2413,7 +2423,7 @@ async function bootApp(
     }
     sceneCounted();
     along = { ...along, selected: index };
-    plateAsk.ask(chosen.inquiry, askedShape);
+    plateAsk.ask(chosen.inquiry, askedBody);
     opts.onInquiry?.(chosen.inquiry, along);
     return chosen.inquiry;
   };
@@ -3717,7 +3727,8 @@ async function bootApp(
     // The counters cover this frame's passes only (autoReset is off: the
     // loop's own reset also ran on held frames, which read back as zero).
     renderer.info.reset();
-    const renderStart = streamTimings.now();
+    // the plate's placing (its rays, a few times a second) is CPU work
+    // before the render, not render time
     nameplate.setNight(currentNight);
     nameplate.update(
       view,
@@ -3727,6 +3738,7 @@ async function bootApp(
       },
       exporting
     );
+    const renderStart = streamTimings.now();
     framedBuilds.draw(postStack.render);
     const renderEnd = streamTimings.now();
     takeCaptureTile();

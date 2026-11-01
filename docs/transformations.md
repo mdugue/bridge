@@ -1831,7 +1831,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   hidden by the city (rays through the buildings' BVHs, never a tile
   whose BVH is being built), under the HUD's panels (`data-scene-cover`)
   or over its own building, and a change cross-fades. Its capitals are 7 %
-  of the footprint's width, kept on screen between a size per rank (a
+  of the footprint's long side, kept on screen between a size per rank (a
   landmark 26–72 CSS px, 22–48 on a phone; its facts at 0.4–0.45 of that). Where the city covers it
   anyway, it shows as a pale outline (the scene's depth). **How it is
   set** follows the picture style (`lib/city/nameplate-type.ts`): Pastell

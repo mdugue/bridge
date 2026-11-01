@@ -51,6 +51,7 @@ import {
 import { parseLod2Stand, type SiteProvenance } from "./provenance";
 import type { WindowSpec } from "./windows";
 import {
+  factBuildings,
   factsFor,
   landmarkCardFacts,
   type LandmarkFactsIndex,
@@ -422,8 +423,9 @@ function withLandmarkFacts(
   inquiry: BuildingInquiry,
   landmarks: LandmarkFactsIndex | null
 ): InquiryCard {
-  const buildings = [...new Set(inquiry.tree.map((o) => o.facts.buildingId))];
-  const entry = landmarks ? factsFor(landmarks, buildings, card.title) : null;
+  const entry = landmarks
+    ? factsFor(landmarks, factBuildings(inquiry.tree), card.title)
+    : null;
   const rows = entry ? landmarkCardFacts(entry) : [];
   if (!entry || rows.length === 0) {
     return card;

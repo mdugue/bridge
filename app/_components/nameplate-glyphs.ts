@@ -234,8 +234,12 @@ function setLine(
   const glyphs: Glyph[] = [];
   let prefix = "";
   for (const [i, ch] of chars.entries()) {
-    pens.push(ctx.measureText(prefix).width + i * tracking);
+    // the pen where the letter starts with its kern to the one before:
+    // the run through it, less its own advance
     prefix += ch;
+    pens.push(
+      ctx.measureText(prefix).width - ctx.measureText(ch).width + i * tracking
+    );
     const key = `${font}\u0000${ch}`;
     let g = cache.get(key);
     if (!g) {

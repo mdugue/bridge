@@ -19,7 +19,8 @@
  *   near    nearer than `NEAR` S: an inscription in front of its plinth
  *   far     beyond `FAR` S: as `street`, the name alone
  *
- * A laying changes only past its threshold by `HYSTERESIS`; the facade
+ * A laying is entered at its threshold and left only past it moved by
+ * `HYSTERESIS` (a band, so nothing flips at the line); the facade
  * only when the view along the current one is flatter than
  * `TURN_ANGLE_DEG`. Which candidate place: `chooseNameplate` (a few times
  * a second; it casts rays through `seen`), how large and where exactly:
@@ -111,8 +112,9 @@ export const NEAR = 1;
 export const FAR = 8;
 export const HYSTERESIS = 0.2;
 export const TURN_ANGLE_DEG = 25;
-/** The title's capitals: this share of the facade's width (m), then
- *  clamped on screen (`CapRange`). */
+/** The title's capitals: this share of the footprint's long side (m),
+ *  whichever side the plate is on (its size does not jump when the facade
+ *  turns), then clamped on screen (`CapRange`). */
 export const CAP_SHARE = 0.07;
 /** Gaps between the plate and the building, in cap heights. */
 const GAP_CAPS = 0.8;
@@ -493,12 +495,38 @@ function groundPose(
     case "front":
       centre = add(c, scale(up, -(across + gap + h / 2)));
   }
-  const y = groundAt(centre[0], centre[2]) + GROUND_LIFT_M;
+  // over the highest ground under it, so no corner sinks into a slope
+  // (a level sheet of lettering, not a part standing on the ground: it
+  // joins nothing, ADR 0030)
+  const y =
+    highestGround(centre, right, up, w / 2, h / 2, groundAt) + GROUND_LIFT_M;
   const origin = add(
     [centre[0], y, centre[2]],
     add(scale(right, -w / 2), scale(up, -h / 2))
   );
   return { origin, right, up, cap, anchor: null, fade: 1 };
+}
+
+/** The ground's height at a rectangle's centre and corners, the highest. */
+function highestGround(
+  centre: Vec3,
+  right: Vec3,
+  up: Vec3,
+  halfW: number,
+  halfH: number,
+  groundAt: (x: number, z: number) => number
+): number {
+  let top = groundAt(centre[0], centre[2]);
+  for (const [a, b] of [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ] as const) {
+    const p = add(centre, add(scale(right, a * halfW), scale(up, b * halfH)));
+    top = Math.max(top, groundAt(p[0], p[2]));
+  }
+  return top;
 }
 
 // --- choosing ----------------------------------------------------------------

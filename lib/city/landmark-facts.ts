@@ -116,6 +116,14 @@ export function indexLandmarkFacts(
   return index;
 }
 
+/** The Buildings a building question spans (its ensemble's objects'),
+ *  each once: what the card and the nameplate both look its facts up by. */
+export function factBuildings(
+  tree: readonly { facts: { buildingId: string } }[]
+): string[] {
+  return [...new Set(tree.map((o) => o.facts.buildingId))];
+}
+
 const nameKey = (name: string) =>
   name
     .normalize("NFC")

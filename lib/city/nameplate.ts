@@ -9,7 +9,11 @@
 import type { InquiryCard } from "./card-lines";
 import { OBJECT_FLAG_LANDMARK } from "./city-mesh";
 import type { Inquiry } from "./inquiry";
-import { factLines, type LandmarkFactsEntry } from "./landmark-facts";
+import {
+  factBuildings,
+  factLines,
+  type LandmarkFactsEntry,
+} from "./landmark-facts";
 import { NO_FACT } from "./object-facts";
 
 /** How much the plate says, and how large: a landmark's name and facts,
@@ -37,7 +41,7 @@ export function inquiryBuildings(inquiry: Inquiry): string[] {
   if (inquiry.kind !== "building") {
     return [];
   }
-  return [...new Set(inquiry.tree.map((o) => o.facts.buildingId))];
+  return factBuildings(inquiry.tree);
 }
 
 function buildingPlate(

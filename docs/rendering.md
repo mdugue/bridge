@@ -711,9 +711,10 @@ outline's, each in its turn (`compileInTurn`).
   glyph (fill at 0.5, halo outward to a share of the reach, antialiased by
   `fwidth`), a solid (the comic box, its edge and shadow, the leader's
   strokes, antialiased by their uv), a disc (the leader's dot). Colour and
-  halo ride per vertex (`ink`, `halo`), three vertex buffers and two
-  varyings past position; a fade uniform carries the arrival and the
-  cross-fades.
+  halo ride per vertex (`ink`, `halo`): three vertex buffers past
+  position, four inter-stage variables (`uvk`, `ink`, `halo` and the view
+  position the depth test reads); a fade uniform carries the arrival and
+  the cross-fades.
 - **Occlusion** per pixel: the fragment's view depth against the scene's
   (the scene target's depth texture through `view-lens.ts`, whose
 three helpers follow the reversed buffer); behind the
@@ -1634,6 +1635,20 @@ plans to rework this code
 ([#35086](https://github.com/mrdoob/three.js/issues/35086), the review of
 [#35092](https://github.com/mrdoob/three.js/pull/35092)); not reported
 yet.
+
+**three r187: a canvas pipeline is keyed by the output colour space when
+`compileAsync` builds it.** The work items run after its first await, and
+`getCurrentColorSpace` reads `renderer.outputColorSpace` then, not when the
+compile was called. The nameplate draws onto the canvas with its own
+output settings (linear, no tone mapping): set back synchronously after
+the call, its warmed pipeline was the wrong one and the first plate built
+its own inside the frame. *Worked around* in its compile
+(`nameplate-layer.ts`, *upstream workaround*): the settings stay its own
+until the compile has settled, and the post stack draws no frame
+meanwhile (`Overlay.holdsOutput`; a few milliseconds while its two small
+programs build). *Once fixed* (the compile takes the output settings with
+its render context): set them back synchronously and drop
+`holdsOutput`.
 
 **three r187: a compile sets a stale render target.** Since
 [#35191](https://github.com/mrdoob/three.js/pull/35191) each work item of

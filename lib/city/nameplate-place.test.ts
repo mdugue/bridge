@@ -81,7 +81,8 @@ test("the laying follows the camera, with hysteresis", () => {
   expect(nameplateMode(BODY, look([0, 500, 1], [0, 0, 0], true), null)).toBe(
     "air"
   );
-  // just past the far threshold (8 S = 240 m): street holds, far holds
+  // just past the far threshold (8 S = 240 m) it is far, from street too;
+  // just inside it far holds (it is left only within 0.8 × 8 S)
   const edge = look([0, 15, 255], [0, 15, 0]);
   expect(nameplateMode(BODY, edge, null)).toBe("far");
   expect(nameplateMode(BODY, edge, "street")).toBe("far");

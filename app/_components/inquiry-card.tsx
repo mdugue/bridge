@@ -22,18 +22,14 @@ import {
   inquiryCard,
 } from "@/lib/city/inquiry";
 import type { TreeFactsFile } from "@/lib/city/features";
-import {
-  indexLandmarkFacts,
-  isLandmarkFactsFile,
-  type LandmarkFactsFile,
-  type LandmarkFactsIndex,
-} from "@/lib/city/landmark-facts";
+import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
 import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
 import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { cardCredits } from "@/lib/city/card-lines";
 import { InquiryData } from "./inquiry-data";
 import { isTextEntry } from "./keyboard-controls";
+import { loadLandmarkFacts } from "./landmark-facts-load";
 import { MethodMark } from "./method-badge";
 import { useSite } from "./site-context";
 
@@ -101,18 +97,30 @@ const isTreeFacts = (json: unknown): json is TreeFactsFile =>
   Array.isArray((json as Partial<TreeFactsFile>).known) &&
   Array.isArray((json as Partial<TreeFactsFile>).names);
 
-const landmarkFactsFetches = new Map<
-  string,
-  Promise<LandmarkFactsFile | null>
->();
-
-/** The site's landmark facts (fetched with the first landmark asked, as
- *  the nameplate fetches them), indexed by Building; null until then. */
+/** The site's landmark facts (loaded with the first landmark asked, the
+ *  same index the nameplate reads), or null until they have arrived. */
 function useLandmarkFacts(inquiry: Inquiry): LandmarkFactsIndex | null {
   const url =
     inquiry.kind === "building" ? inquiry.landmarkFactsUrl : undefined;
-  const file = useFetched(landmarkFactsFetches, url, isLandmarkFactsFile);
-  return useMemo(() => (file ? indexLandmarkFacts(file) : null), [file]);
+  const [loaded, setLoaded] = useState<{
+    index: LandmarkFactsIndex | null;
+    url: string;
+  } | null>(null);
+  useEffect(() => {
+    if (!url) {
+      return;
+    }
+    let live = true;
+    void loadLandmarkFacts(url).then((index) => {
+      if (live) {
+        setLoaded({ url, index });
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [url]);
+  return url && loaded?.url === url ? loaded.index : null;
 }
 
 /**

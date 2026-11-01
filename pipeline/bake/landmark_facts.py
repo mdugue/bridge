@@ -28,7 +28,8 @@ Which statements count (`facts_of`):
   rebuilt   P793 Wiederaufbau / Rekonstruktion: its start and end, or its
             point in time (its end); `rebuiltFrom` where only its start is
             stated
-  architects  P84, German labels, at most `MAX_ARCHITECTS`
+  architects  P84, each by its German label (else mul, en), in their series
+            ordinal where stated, at most `MAX_ARCHITECTS`
   height    P2048 in metres (normalised), the largest
 """
 
@@ -62,6 +63,9 @@ BATCH = 300
 RETRY_S = 61
 RETRIES = 4
 MAX_BUILD_YEARS = 100
+# What the cache's records carry (2: time precisions, architects' items
+# and series ordinals, no deprecated statements; 3: best ranks only).
+CACHE_VERSION = 3
 MAX_ARCHITECTS = 2
 
 # P793 (significant event) items, by what they say about the building.
@@ -91,23 +95,29 @@ REBUILDS = {
 
 # Times come with their precision (`?vp`, `?tp`, `?sp`, `?ep`: 9 = year,
 # 8 = decade, 7 = century): a decade or a century is no year to print.
-# Deprecated statements are left out, as `wdt:` would.
+# Inception, opening, architects and height take the best-ranked
+# statements only (`wikibase:BestRank`, what `wdt:` gives: a preferred one
+# over the rest); the events every statement but a deprecated one (each
+# event is its own statement).
 QUERY = """
-SELECT ?i ?p ?v ?vp ?lang ?ev ?t ?tp ?s ?sp ?e ?ep WHERE {
+SELECT ?i ?p ?v ?vp ?lang ?a ?o ?ev ?t ?tp ?s ?sp ?e ?ep WHERE {
   VALUES ?i { %(ids)s }
   {
-    ?i p:P571 ?st . ?st psv:P571 [ wikibase:timeValue ?v ; wikibase:timePrecision ?vp ] .
-    ?st wikibase:rank ?r . FILTER(?r != wikibase:DeprecatedRank)
+    ?i p:P571 ?st . ?st a wikibase:BestRank .
+    ?st psv:P571 [ wikibase:timeValue ?v ; wikibase:timePrecision ?vp ] .
     BIND("inception" AS ?p)
   } UNION {
-    ?i p:P1619 ?st . ?st psv:P1619 [ wikibase:timeValue ?v ; wikibase:timePrecision ?vp ] .
-    ?st wikibase:rank ?r . FILTER(?r != wikibase:DeprecatedRank)
+    ?i p:P1619 ?st . ?st a wikibase:BestRank .
+    ?st psv:P1619 [ wikibase:timeValue ?v ; wikibase:timePrecision ?vp ] .
     BIND("opening" AS ?p)
   } UNION {
-    ?i wdt:P84 ?a . ?a rdfs:label ?v . BIND(LANG(?v) AS ?lang)
-    FILTER(?lang IN ("de", "mul", "en")) BIND("architect" AS ?p)
+    ?i p:P84 ?st . ?st a wikibase:BestRank . ?st ps:P84 ?a .
+    ?a rdfs:label ?v . BIND(LANG(?v) AS ?lang) FILTER(?lang IN ("de", "mul", "en"))
+    OPTIONAL { ?st pq:P1545 ?o . }
+    BIND("architect" AS ?p)
   } UNION {
-    ?i p:P2048/psn:P2048/wikibase:quantityAmount ?v . BIND("height" AS ?p)
+    ?i p:P2048 ?st . ?st a wikibase:BestRank . ?st psn:P2048/wikibase:quantityAmount ?v .
+    BIND("height" AS ?p)
   } UNION {
     ?i p:P793 ?st . ?st ps:P793 ?ev . BIND("event" AS ?p)
     ?st wikibase:rank ?r . FILTER(?r != wikibase:DeprecatedRank)
@@ -172,11 +182,13 @@ def rows_by_item(rows: list[dict]) -> dict[str, list[dict]]:
         if not qid:
             continue
         rec = {"p": _value(r, "p")}
-        for key in ("v", "vp", "lang", "t", "tp", "s", "sp", "e", "ep"):
+        for key in ("v", "vp", "lang", "o", "t", "tp", "s", "sp", "e", "ep"):
             if (val := _value(r, key)) is not None:
                 rec[key] = val
         if (ev := _qid(_value(r, "ev"))) is not None:
             rec["ev"] = ev
+        if (a := _qid(_value(r, "a"))) is not None:
+            rec["a"] = a
         out.setdefault(qid, []).append(rec)
     return out
 
@@ -216,23 +228,36 @@ def fetch_wikidata(raw: Path, data: Path, site: str, tiles: Iterable[str] = ()) 
     asked: set[str] = set()
     if dest.exists():
         cached = json.loads(dest.read_text())
-        items = cached.get("items", {})
-        asked = set(cached.get("ids", []))
+        # a cache of an older query lacks what this one reads: asked anew
+        if cached.get("version") == CACHE_VERSION:
+            items = cached.get("items", {})
+            asked = set(cached.get("ids", []))
     missing = [i for i in ids if i not in asked]
     if not missing:
         print(f"{site}: Wikidata facts cached for all {len(ids)} landmarks")
         return
+    dest.parent.mkdir(parents=True, exist_ok=True)
     for k in range(0, len(missing), BATCH):
         batch = missing[k : k + BATCH]
         rows = _post(QUERY % {"ids": " ".join(f"wd:{i}" for i in batch)})
         items.update(rows_by_item(rows))
-    ids = sorted(asked | set(ids))
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    doc = {"source": ATTRIBUTION, "query": SPARQL, "ids": ids, "items": items}
+        asked |= set(batch)
+        # each batch kept as it lands: a later one failing keeps it
+        _write_cache(dest, asked, items)
+    print(f"{site}: Wikidata facts for {len(items)} of {len(asked)} landmarks")
+
+
+def _write_cache(dest: Path, asked: set[str], items: dict[str, list[dict]]) -> None:
+    doc = {
+        "source": ATTRIBUTION,
+        "query": SPARQL,
+        "version": CACHE_VERSION,
+        "ids": sorted(asked),
+        "items": items,
+    }
     part = dest.with_name(dest.name + ".part")
     part.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
     part.replace(dest)
-    print(f"{site}: Wikidata facts for {len(items)} of {len(ids)} landmarks")
 
 
 YEAR_PRECISION = 9
@@ -280,12 +305,45 @@ def _rebuild(events: list[tuple[int | None, int | None]]) -> dict:
     return {"rebuiltFrom": max(starts)} if starts else {}
 
 
+LANGS = ("de", "mul", "en")
+
+
+def _ordinal(value: str | None) -> float:
+    return int(value) if value and value.isdigit() else math.inf
+
+
+def _architects(records: list[dict]) -> list[str]:
+    """Each architect (P84 item) once, by its German label, else its
+    multilingual or English one; in the statements' series ordinal (P1545)
+    where stated, else by name; at most `MAX_ARCHITECTS`. Records without
+    the item (a cache of an older query) count each label as one."""
+    best: dict[str, tuple[int, float, str]] = {}
+    for r in records:
+        lang = r.get("lang", "")
+        if lang not in LANGS:
+            continue
+        key = r.get("a") or f"{lang}:{r['v']}"
+        rank = (LANGS.index(lang), _ordinal(r.get("o")), r["v"])
+        if key not in best or rank < best[key]:
+            best[key] = rank
+    if not any(r.get("a") for r in records):
+        # no items to tell who is who: the first language's labels
+        first = min((rank[0] for rank in best.values()), default=0)
+        best = {k: v for k, v in best.items() if v[0] == first}
+    ordered = sorted(best.values(), key=lambda rank: (rank[1], rank[2]))
+    names: list[str] = []
+    for _, _, name in ordered:
+        if name not in names:
+            names.append(name)
+    return names[:MAX_ARCHITECTS]
+
+
 def facts_of(records: list[dict]) -> dict:
     """The nameplate's facts from one item's cached records."""
     starts: list[int] = []
     ends: list[int] = []
     rebuilds: list[tuple[int | None, int | None]] = []
-    names: dict[str, list[str]] = {}
+    makers: list[dict] = []
     heights: list[float] = []
     for r in records:
         p = r.get("p")
@@ -294,7 +352,7 @@ def facts_of(records: list[dict]) -> dict:
         elif p == "opening" and (y := year(r.get("v"), r.get("vp"))) is not None:
             ends.append(y)
         elif p == "architect" and r.get("v"):
-            names.setdefault(r.get("lang", ""), []).append(r["v"])
+            makers.append(r)
         elif p == "height":
             with contextlib.suppress(KeyError, ValueError):
                 heights.append(float(r["v"]))
@@ -321,10 +379,8 @@ def facts_of(records: list[dict]) -> dict:
     if (built := _span(start, end)) is not None:
         out["built"] = built
     out.update(_rebuild(rebuilds))
-    for lang in ("de", "mul", "en"):
-        if names.get(lang):
-            out["architects"] = sorted(set(names[lang]))[:MAX_ARCHITECTS]
-            break
+    if architects := _architects(makers):
+        out["architects"] = architects
     if heights:
         out["height"] = round(max(heights), 1)
     return out

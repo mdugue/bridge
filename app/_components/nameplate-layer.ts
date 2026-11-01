@@ -74,7 +74,6 @@ import {
   chooseNameplate,
   cross,
   dot,
-  nameplateBody,
   nameplatePose,
   sameLayout,
   scale,
@@ -128,8 +127,9 @@ const DOT_CAPS = 0.16;
 /** What is asked, and what the plate is to say of it. */
 export interface NameplateSubject {
   text: NameplateText;
-  /** the thing's triangles, world space (the selection outline's) */
-  positions: Float32Array;
+  /** the thing's body (`nameplateBody` of the outline's triangles: the
+   *  triangles themselves are not kept) */
+  body: NameplateBody;
 }
 
 /** What the plate asks of the scene. */
@@ -151,9 +151,9 @@ export interface NameplateDeps {
 
 export interface Nameplate {
   set: (subject: NameplateSubject | null) => void;
-  /** the same thing's triangles again (its outline moved to the level the
+  /** the same thing's body again (its outline moved to the level the
    *  renderer shows): the plate keeps its words and its place's choice */
-  reshape: (positions: Float32Array) => void;
+  reshape: (body: NameplateBody) => void;
   applyLook: (style: RenderStyle) => void;
   setNight: (factor: number) => void;
   /** places the plate for this frame's camera; `hold` keeps its place
@@ -166,6 +166,8 @@ export interface Nameplate {
   /** draws it onto the canvas, after the frame */
   render: (renderer: WebGPURenderer, camera: Camera) => void;
   compile: (renderer: WebGPURenderer, camera: Camera) => Promise<void>;
+  /** true while its compile holds the renderer's output settings */
+  holdsOutput: () => boolean;
   /** whether a plate shows (QA) */
   shown: () => { title: string; mode: string; spot: string } | null;
   dispose: () => void;
@@ -378,6 +380,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   let pose: NameplatePose | null = null;
   let generation = 0;
   let disposed = false;
+  let holding = false;
 
   const type = () => NAMEPLATE_TYPES[style];
   const alignFor = (l: NameplateLayout | null): Align =>
@@ -488,13 +491,20 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
 
   /** Loads the style's faces, then sets the letters again (a face that
    *  arrived late would leave the fallback's shapes). */
+  /** Sets the letters once their faces are there: the first question
+   *  in a style waits for them (not set twice, no swap on the plate). */
   const withFaces = () => {
     const from = deps.fonts();
     const asked = ++generation;
-    // set in its faces already: nothing to set again
     if (!from || facesReady(type(), from)) {
+      rebuild();
       return;
     }
+    builtFor = null;
+    geometry = null;
+    plate.geometry.dispose();
+    plate.geometry = emptyGeometry();
+    plate.visible = false;
     void loadFaces(type(), from).then(() => {
       if (disposed || asked !== generation) {
         return;
@@ -762,7 +772,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         return;
       }
       subject = next;
-      body = next ? nameplateBody(next.positions) : null;
+      body = next?.body ?? null;
       forget();
       builtFor = null;
       askedAt = performance.now();
@@ -778,15 +788,13 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         generation++;
         return;
       }
-      rebuild();
       withFaces();
     },
-    reshape: (positions) => {
-      const next = subject ? nameplateBody(positions) : null;
-      if (disposed || !(subject && next)) {
+    reshape: (next) => {
+      if (disposed || !subject) {
         return;
       }
-      subject = { ...subject, positions };
+      subject = { ...subject, body: next };
       body = next;
     },
     applyLook: (next) => {
@@ -796,7 +804,6 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       style = next;
       forget();
       if (subject) {
-        rebuild();
         withFaces();
       }
     },
@@ -817,7 +824,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       }
       const now = performance.now();
       const cam = plateCamera(camera, viewport);
-      if (now - chosenAt >= CHOOSE_MS && !hold) {
+      // no new choice while a cross-fade runs: it finishes first
+      if (now - chosenAt >= CHOOSE_MS && !hold && !pending) {
         chosenAt = now;
         choose(body, camera, cam, now);
       }
@@ -860,10 +868,17 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         renderer.setRenderTarget(previous);
       }
     },
+    // An upstream workaround (docs/rendering.md, "Workarounds for upstream
+    // bugs"). The output settings stay the plate's until the compile has settled:
+    // three r187 keys a canvas pipeline by the renderer's output colour
+    // space when it builds it, after compileAsync's first await, so set
+    // back synchronously the warmed pipeline would be the wrong one and
+    // the first plate would build its own in the frame. Meanwhile the
+    // stack draws no frame (`holdsOutput`).
     compile: (renderer, camera) =>
-      compileInTurn(renderer, () => {
+      compileInTurn(renderer, async () => {
         if (disposed) {
-          return Promise.resolve();
+          return;
         }
         const shown = [plate.visible, leader.visible] as const;
         const previous = renderer.getRenderTarget();
@@ -874,15 +889,18 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         renderer.setRenderTarget(null);
         renderer.toneMapping = NoToneMapping;
         renderer.outputColorSpace = LinearSRGBColorSpace;
+        holding = true;
         try {
-          return renderer.compileAsync(scene, camera);
+          await renderer.compileAsync(scene, camera);
         } finally {
+          holding = false;
           [plate.visible, leader.visible] = shown;
           renderer.outputColorSpace = colorSpace;
           renderer.toneMapping = toneMapping;
           renderer.setRenderTarget(previous);
         }
       }),
+    holdsOutput: () => holding,
     shown: () =>
       plate.visible && subject && layout
         ? { title: subject.text.title, mode: layout.mode, spot: layout.spot }
