@@ -190,8 +190,12 @@ import {
 } from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
 import { createNameplate } from "./nameplate-layer";
-import { cityHides, coverBoxes, createNameplateAsk } from "./nameplate-ask";
-import { landmarkFactsUrl } from "@/lib/city/landmark-facts";
+import {
+  cityHides,
+  coverBoxes,
+  createNameplateAsk,
+  landmarkFactsHref,
+} from "./nameplate-ask";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
 import {
@@ -1915,11 +1919,10 @@ async function bootApp(
     postStack.setOverlay(null);
     nameplate.dispose();
   });
-  const factsFile = landmarkFactsUrl(extras);
   const plateAsk = createNameplateAsk({
     plate: nameplate,
     site: opts.site,
-    factsUrl: factsFile ? new URL(factsFile, tilesetUrl).href : null,
+    factsUrl: landmarkFactsHref(extras, tilesetUrl),
     signal: opts.signal,
   });
   // The plate joins once its programs are built (a few tens of kB: it is

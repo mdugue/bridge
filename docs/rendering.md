@@ -712,7 +712,8 @@ outline's, each in its turn (`compileInTurn`).
   varyings past position; a fade uniform carries the arrival and the
   cross-fades.
 - **Occlusion** per pixel: the fragment's view depth against the scene's
-  (the scene target's depth texture through `view-lens.ts`); behind the
+  (the scene target's depth texture through `view-lens.ts`, whose
+three helpers follow the reversed buffer); behind the
   city it keeps 0.45 of its outline only, so a plate the placing could
   not keep clear reads as a ghost, never as text over a facade. Depth
   test and write are off; it is no part of the shadow map.

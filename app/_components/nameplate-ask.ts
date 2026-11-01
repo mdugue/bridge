@@ -15,6 +15,7 @@ import {
   indexLandmarkFacts,
   isLandmarkFactsFile,
   type LandmarkFactsIndex,
+  landmarkFactsUrl,
 } from "@/lib/city/landmark-facts";
 import {
   inquiryBuildings,
@@ -31,6 +32,16 @@ import type { Nameplate } from "./nameplate-layer";
 const RAY_SHORT_M = 1;
 /** A parallel camera's rays start this far back (m). */
 const ORTHO_BACK_M = 5000;
+
+/** The site's landmark facts file, absolute, from the tileset's extras;
+ *  null where it names none. */
+export function landmarkFactsHref(
+  extras: unknown,
+  tilesetUrl: string
+): string | null {
+  const file = landmarkFactsUrl(extras);
+  return file ? new URL(file, tilesetUrl).href : null;
+}
 
 export interface NameplateAsk {
   /** a question answered (or nothing asked), with the outline's triangles */
