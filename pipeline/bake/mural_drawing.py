@@ -35,6 +35,7 @@ import numpy as np
 # 1. calming
 LIGHT_SIGMA = 0.5  # × the image's height: the photo's own light
 LIGHT_KEEP = 0.3  # of those swings kept
+LIGHT_PX = 64  # the light is read off a copy this high (it varies slowly)
 GUIDE_R = 2  # px
 GUIDE_EPS = 0.004
 # 2. the pen lines
@@ -49,6 +50,7 @@ SPECK = 5  # a fleck with fewer ink pixels than this around it (5 × 5) goes
 COLOURS = 5
 KMEANS_SAMPLE = 60_000
 KMEANS_ITERATIONS = 25
+LABEL_CHUNK = 250_000  # pixels sorted into their fields at a time
 SEED = 0
 MODAL_PX = 5
 WASH_L = (64.0, 96.0)  # CIELAB lightness the fields span
@@ -179,18 +181,21 @@ def xdog(gray: np.ndarray) -> np.ndarray:
 
 
 def kmeans(px: np.ndarray, k: int) -> np.ndarray:
-    """k-means (k-means++ seeding, a fixed seed) of a sample: the centres."""
+    """k-means (k-means++ seeding, a fixed seed) of a sample: the centres —
+    fewer than `k` where the photo has fewer colours than that."""
     rng = np.random.default_rng(SEED)
     sample = px[rng.choice(len(px), size=min(len(px), KMEANS_SAMPLE), replace=False)]
     centres = [sample[rng.integers(len(sample))]]
     for _ in range(1, k):
         d = np.min([((sample - c) ** 2).sum(1) for c in centres], axis=0)
+        if d.sum() <= 0:  # every colour is a centre already
+            break
         centres.append(sample[rng.choice(len(sample), p=d / d.sum())])
     c = np.array(centres)
     for _ in range(KMEANS_ITERATIONS):
-        near = ((sample[:, None, :] - c[None]) ** 2).sum(2).argmin(1)
+        near = nearest(sample, c)
         moved = np.array(
-            [sample[near == i].mean(0) if (near == i).any() else c[i] for i in range(k)]
+            [sample[near == i].mean(0) if (near == i).any() else c[i] for i in range(len(c))]
         )
         if np.allclose(moved, c):
             break
@@ -199,7 +204,12 @@ def kmeans(px: np.ndarray, k: int) -> np.ndarray:
 
 
 def nearest(px: np.ndarray, centres: np.ndarray) -> np.ndarray:
-    return ((px[:, None, :] - centres[None]) ** 2).sum(2).argmin(1)
+    """Each pixel's nearest centre, `LABEL_CHUNK` pixels at a time."""
+    out = np.empty(len(px), dtype=np.intp)
+    for i in range(0, len(px), LABEL_CHUNK):
+        part = px[i : i + LABEL_CHUNK]
+        out[i : i + LABEL_CHUNK] = ((part[:, None, :] - centres[None]) ** 2).sum(2).argmin(1)
+    return out
 
 
 def modal(labels: np.ndarray, k: int, size: int) -> np.ndarray:
@@ -215,8 +225,7 @@ def drawing(rgb: np.ndarray, px_per_m: float) -> Drawing:
     im = rgb.astype(float) / 255
     h, w = im.shape[:2]
     lab = to_lab(im)
-    low = gaussian(lab[..., 0], LIGHT_SIGMA * h)
-    lab[..., 0] -= (1 - LIGHT_KEEP) * (low - low.mean())
+    lab[..., 0] -= (1 - LIGHT_KEEP) * own_light(lab[..., 0])
     lightness = np.clip(lab[..., 0] / 100, 0, 1)
     calm = guided(lightness, GUIDE_R, GUIDE_EPS)
 
@@ -232,13 +241,14 @@ def drawing(rgb: np.ndarray, px_per_m: float) -> Drawing:
         calm_lab[..., c] = guided(lab[..., c] / 100, GUIDE_R, GUIDE_EPS) * 100
     flat = calm_lab.reshape(-1, 3)
     centres = kmeans(flat, COLOURS)
-    labels = modal(nearest(flat, centres).reshape(h, w), COLOURS, MODAL_PX)
+    k = len(centres)
+    labels = modal(nearest(flat, centres).reshape(h, w), k, MODAL_PX)
     wash_colours = WASH_PAPER * CLAY + (1 - WASH_PAPER) * to_rgb(
         lifted(centres, WASH_L, WASH_CHROMA)
     )
-    weights = np.stack([gaussian((labels == i).astype(float), 1.6) for i in range(COLOURS)])
+    weights = np.stack([gaussian((labels == i).astype(float), 1.6) for i in range(k)])
     wash = np.einsum("khw,kc->hwc", weights / weights.sum(0), wash_colours)
-    wash = shrink(wash, max(1, round(w * WASH_PX_PER_M / px_per_m)))
+    wash = under_paper(shrink(wash, min(w, max(1, round(w * WASH_PX_PER_M / px_per_m)))))
 
     ink = to_rgb(lifted(centres[np.argmin(centres[:, 0])], INK_L, INK_CHROMA))
     return Drawing(
@@ -248,10 +258,41 @@ def drawing(rgb: np.ndarray, px_per_m: float) -> Drawing:
     )
 
 
+def own_light(lightness: np.ndarray) -> np.ndarray:
+    """The photo's own light: its lightness's large swings about their
+    mean, read off a copy `LIGHT_PX` high and stretched back."""
+    h, w = lightness.shape
+    small = shrink(lightness[..., None], min(w, max(1, round(w * LIGHT_PX / h))))[..., 0]
+    low = gaussian(small, LIGHT_SIGMA * small.shape[0])
+    return grow(low - low.mean(), h, w)
+
+
+def grow(img: np.ndarray, h: int, w: int) -> np.ndarray:
+    """Bilinear upscale of a 2-D array to h × w (pixel centres aligned)."""
+    sh, sw = img.shape
+    y = np.clip((np.arange(h) + 0.5) * sh / h - 0.5, 0, sh - 1)
+    x = np.clip((np.arange(w) + 0.5) * sw / w - 0.5, 0, sw - 1)
+    y0, x0 = np.floor(y).astype(int), np.floor(x).astype(int)
+    y1, x1 = np.minimum(y0 + 1, sh - 1), np.minimum(x0 + 1, sw - 1)
+    fy, fx = (y - y0)[:, None], (x - x0)[None, :]
+    top = img[y0][:, x0] * (1 - fx) + img[y0][:, x1] * fx
+    bottom = img[y1][:, x0] * (1 - fx) + img[y1][:, x1] * fx
+    return top * (1 - fy) + bottom * fy
+
+
+def under_paper(wash: np.ndarray) -> np.ndarray:
+    """No wash lighter than the paper in any channel: the viewer glazes the
+    wall by wash ÷ paper, and a channel over one would be cut alone and
+    turn the hue. Scaled whole, the hue stays."""
+    over = (wash / CLAY).max(-1, keepdims=True)
+    return wash / np.maximum(over, 1)
+
+
 def shrink(img: np.ndarray, width: int) -> np.ndarray:
-    """Area-averaged downscale to `width` (the height in proportion)."""
+    """Area-averaged downscale to `width` (≤ the image's; the height in
+    proportion)."""
     h, w = img.shape[:2]
-    height = max(1, round(h * width / w))
+    height = min(h, max(1, round(h * width / w)))
     ys = np.linspace(0, h, height + 1).astype(int)
     xs = np.linspace(0, w, width + 1).astype(int)
     rows = np.add.reduceat(img, ys[:-1], axis=0) / np.diff(ys)[:, None, None]

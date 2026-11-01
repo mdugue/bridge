@@ -1,5 +1,8 @@
 """The pen-and-wash drawing a mural's photo is redrawn as (mural_drawing.py)."""
 
+import re
+from pathlib import Path
+
 import numpy as np
 
 from bake import mural_drawing as md
@@ -61,3 +64,34 @@ def test_the_guided_filter_keeps_an_edge_and_calms_grain():
     out = md.guided(noisy, md.GUIDE_R, md.GUIDE_EPS)
     assert out[:, 10:20].std() < noisy[:, 10:20].std()
     assert out[:, 25].mean() < 0.3 and out[:, 35].mean() > 0.7
+
+
+def test_a_coarse_photo_keeps_its_wash_no_larger_than_itself():
+    rgb = np.random.default_rng(3).integers(0, 255, (40, 200, 3)).astype(np.uint8)
+    with np.errstate(all="raise"):
+        d = md.drawing(rgb, 8)  # fewer pixels a metre than WASH_PX_PER_M
+    assert d.wash.shape[1] <= 200 and d.wash.shape[0] <= 40
+    assert d.wash.max() < 255
+
+
+def test_a_photo_of_fewer_colours_than_fields_still_draws():
+    rgb = np.zeros((60, 120, 3), np.uint8)
+    rgb[:, 60:] = (200, 40, 40)
+    d = md.drawing(rgb, 40)
+    assert d.lines[:, 58:62].min() < 128
+
+
+def test_no_wash_is_lighter_than_the_paper_in_any_channel():
+    rgb = np.full((60, 120, 3), 250, np.uint8)
+    rgb[:, :40] = (150, 190, 250)  # a pale blue a channel over the clay's
+    d = md.drawing(rgb, 40)
+    paper = np.round(md.CLAY * 255)
+    assert (d.wash <= paper + 1).all()
+
+
+def test_the_paper_is_the_viewers_clay():
+    """The viewer divides by CLAY_BASE (visual-style.ts): the bake's paper
+    must be the same colour."""
+    ts = (Path(__file__).parents[2] / "app/_components/visual-style.ts").read_text()
+    hexa = re.search(r"export const CLAY_BASE = 0x([0-9a-f_]+);", ts).group(1).replace("_", "")
+    assert np.allclose(md.CLAY * 255, [int(hexa[i : i + 2], 16) for i in (0, 2, 4)])

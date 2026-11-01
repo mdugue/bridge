@@ -45,8 +45,9 @@ import {
   RGBAFormat,
   SRGBColorSpace,
   type Texture,
+  Vector3,
 } from "three/webgpu";
-import { min, mix, texture, uv, vec3, vec4 } from "three/tsl";
+import { min, mix, texture, uniform, uv, vec3, vec4 } from "three/tsl";
 import {
   type Mural,
   muralBytes,
@@ -63,6 +64,10 @@ import { CLAY_BASE } from "./visual-style";
 
 /** How sharp a drawing stays along a wall seen at a slant. */
 const MURAL_ANISOTROPY = 8;
+/** First among the see-through: a glaze multiplies what the target holds,
+ *  and must find the wall there, not a lamp's halo or a pane in front of
+ *  it drawn before (the water sheet and what floats on it come at 2–4). */
+const MURAL_RENDER_ORDER = -1;
 
 /** The site's murals by tile, fetched once on the first tile that asks. */
 export interface MuralSource {
@@ -116,7 +121,10 @@ export interface MuralLayer {
 }
 
 /** An image's texels, top row first, at `texels`, RGBA: decoded by the
- *  browser and read back once; null where it could not be. */
+ *  browser and read back once, its values as stored (no colour
+ *  conversion); null where it could not be. The pen lines are a picture
+ *  too — ink coverage, which a resize and the GPU's mipmaps filter as they
+ *  would any drawing — not a class or a measure. */
 async function decodeImage(
   bytes: ArrayBuffer,
   [width, height]: readonly [number, number]
@@ -126,6 +134,7 @@ async function decodeImage(
     bitmap = await createImageBitmap(
       new Blob([bytes], { type: "image/webp" }),
       {
+        colorSpaceConversion: "none",
         imageOrientation: "none",
         premultiplyAlpha: "none",
         resizeWidth: width,
@@ -199,8 +208,10 @@ async function loadLayer(
   return layer;
 }
 
-/** The clay's base colour in the working (linear) space: the paper. */
-const PAPER = new Color(CLAY_BASE);
+/** The clay's base colour in the working (linear) space: the paper, one
+ *  node every mural's glaze shares. */
+const PAPER_RGB = new Color(CLAY_BASE);
+const PAPER = vec3(PAPER_RGB.r, PAPER_RGB.g, PAPER_RGB.b);
 
 /** The strip of one mural, glazed with its drawing. */
 function muralMesh(
@@ -218,17 +229,16 @@ function muralMesh(
   geometry.computeBoundingSphere();
   const material = new MeshBasicNodeMaterial({ side: FrontSide });
   const [r, g, b] = mural.ink;
-  const ink = new Color().setRGB(r / 255, g / 255, b / 255, SRGBColorSpace);
-  // the drawing over the paper; the paper multiplies the wall by one
-  const drawn = mix(
-    vec3(ink.r, ink.g, ink.b),
-    texture(wash, uv()).rgb,
-    texture(lines, uv()).r
+  // a uniform: every mural's glaze is one program
+  const ink = uniform(
+    new Vector3().setFromColor(
+      new Color().setRGB(r / 255, g / 255, b / 255, SRGBColorSpace)
+    )
   );
-  material.colorNode = vec4(
-    min(drawn.div(vec3(PAPER.r, PAPER.g, PAPER.b)), vec3(1)),
-    1
-  );
+  // the drawing over the paper; the paper multiplies the wall by one (the
+  // bake keeps the wash under it, mural_drawing.py `under_paper`)
+  const drawn = mix(ink, texture(wash, uv()).rgb, texture(lines, uv()).r);
+  material.colorNode = vec4(min(drawn.div(PAPER), vec3(1)), 1);
   // a glaze: the wall's lit colour times the drawing (dst × src)
   material.blending = MultiplyBlending;
   material.premultipliedAlpha = true;
@@ -241,6 +251,7 @@ function muralMesh(
   material.name = "mural";
   const mesh = new Mesh(geometry, material);
   mesh.name = `mural:${mural.id}`;
+  mesh.renderOrder = MURAL_RENDER_ORDER;
   // the wall's light and shadow are under it already
   mesh.castShadow = false;
   mesh.receiveShadow = false;

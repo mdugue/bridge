@@ -139,7 +139,9 @@ export function fogFactorAt(f: SceneFog, world: V3, view: V3): F {
  * halos would glow grey rather than drown in the haze — and for a glaze
  * (MultiplyBlending: a mural's drawing on its wall, mural-layer.ts), which
  * fades to white, the colour that multiplies nothing: the wall under it
- * is fogged already.
+ * is fogged already. Not exact — the glaze then darkens the fog over it
+ * too, by the fog's share — but a mural shows on the near LoD2 only,
+ * where the haze is thin.
  */
 function fogColourFor(f: SceneFog): Node {
   return Fn((builder: NodeBuilder) => {
