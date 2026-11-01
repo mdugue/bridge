@@ -141,7 +141,7 @@ def test_run_site_climbs_to_buildings(tmp_path):
     )
     cache = lf.cache_path(raw, "x")
     cache.parent.mkdir(parents=True)
-    cache.write_text(json.dumps({"items": {"Q1": FRAUENKIRCHE}}))
+    cache.write_text(json.dumps({"version": lf.CACHE_VERSION, "items": {"Q1": FRAUENKIRCHE}}))
     lf.run_site(raw, data, "x")
     doc = json.loads((data / "landmark-facts.json").read_text())
     assert doc["attribution"] == "Wikidata (CC0)"
@@ -238,3 +238,13 @@ def test_an_old_cache_is_asked_anew(tmp_path, monkeypatch):
     assert json.loads(cache.read_text())["version"] == lf.CACHE_VERSION
     lf.fetch_wikidata(raw, data, "x")
     assert len(asked) == 1
+
+
+def test_run_site_refuses_an_older_cache(tmp_path):
+    raw, data = tmp_path / "raw", tmp_path / "data"
+    (data / "dlm").mkdir(parents=True)
+    cache = lf.cache_path(raw, "x")
+    cache.parent.mkdir(parents=True)
+    cache.write_text(json.dumps({"items": {"Q1": FRAUENKIRCHE}}))
+    lf.run_site(raw, data, "x")
+    assert not (data / "landmark-facts.json").exists()

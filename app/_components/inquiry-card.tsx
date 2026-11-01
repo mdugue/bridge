@@ -142,8 +142,9 @@ function useTreeFacts(inquiry: Inquiry): TreeFacts | null {
 
 /**
  * The card of the "Befragen" mode (ADR 0042): what the data says
- * about the building someone asked, on demand only — the scene itself
- * carries no text (plan 032's lettering was removed for that reason). A
+ * about the building someone asked, on demand only — the scene carries
+ * no text unasked, only the asked thing's nameplate (nameplate-layer.ts),
+ * which says nothing the card does not. A
  * non-modal landmark, not a dialog: the city stays live behind it, and the
  * next click asks the next building. Esc or the × closes it and clears
  * the mark in the scene (the hatch, the outline). It looks like the HUD's other cards (the

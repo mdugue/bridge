@@ -326,7 +326,8 @@ export function nameplateSide(
     dot(sideFrame(body, side).normal, flat) / l;
   if (
     previous !== null &&
-    facing(previous) > Math.sin((TURN_ANGLE_DEG * Math.PI) / 180)
+    facing(previous) > Math.sin((TURN_ANGLE_DEG * Math.PI) / 180) &&
+    (mode === "air" || beforePlate(body, previous, camera.position))
   ) {
     return previous;
   }
@@ -337,6 +338,19 @@ export function nameplateSide(
     }
   }
   return best;
+}
+
+/** Whether a point stands in front of a street plate's plane on `side`
+ *  (its facade's depth plus the stand-off): behind it, on a deep
+ *  footprint, the lettering would read mirrored. */
+function beforePlate(
+  body: NameplateBody,
+  side: NameplateSide,
+  point: Vec3
+): boolean {
+  const { normal, depth } = sideFrame(body, side);
+  const out: Vec3 = [point[0] - body.center[0], 0, point[2] - body.center[1]];
+  return dot(out, normal) > depth + STAND_OFF_M;
 }
 
 /** The ground plate's text direction: along the side the screen's foot

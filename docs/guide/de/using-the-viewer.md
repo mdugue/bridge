@@ -230,7 +230,7 @@ Quellenvermerken.
 
 ## Ein Gebäude befragen
 
-Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
+Die Stadt trägt keine Beschriftung, bis du fragst. Frag sie:
 Mit der Maus genügt ein **Klick** auf ein Gebäude, auf einem Touchscreen
 **langes Drücken** (den Finger eine halbe Sekunde ruhig halten); `I`
 fragt, was unter dem Mauszeiger steht (im immersiven Modus, der den

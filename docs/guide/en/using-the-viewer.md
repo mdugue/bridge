@@ -220,7 +220,7 @@ the frame as you see it, with the credits.
 
 ## Asking a building
 
-The city itself carries no text. Ask it instead: with a mouse, a
+The city carries no labels until you ask. Ask it: with a mouse, a
 **click** on a building; on a touch screen, a **long press** (hold a
 finger still for half a second); `I` asks what stands under the
 mouse pointer (in immersive mode, which hides the pointer, what stands at

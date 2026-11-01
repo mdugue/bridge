@@ -21,9 +21,9 @@ server.
 2. **Provenance is published** as `provenance.json` per site: label,
    credit, licence per source, edition per tile. The card fetches it with
    its first question.
-3. **Text appears only on demand, in one place.** A click, a long press or
-   `I` asks what is under the pointer; the answer is a non-modal card in
-   the HUD (a bottom sheet on touch). It shows only measured or mapped
+3. **Text appears only on demand.** A click, a long press or `I` asks
+   what is under the pointer; the answer is a non-modal card in the HUD
+   (a bottom sheet on touch), its name repeated in the scene (point 4). It shows only measured or mapped
    facts, never an estimate, with a source line per source.
 4. **The scene is wordless until asked.** The asked element is marked in
    the scene — a pencil hatch in the clay and an outline along its

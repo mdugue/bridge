@@ -1640,15 +1640,15 @@ yet.
 `compileAsync` builds it.** The work items run after its first await, and
 `getCurrentColorSpace` reads `renderer.outputColorSpace` then, not when the
 compile was called. The nameplate draws onto the canvas with its own
-output settings (linear, no tone mapping): set back synchronously after
-the call, its warmed pipeline was the wrong one and the first plate built
-its own inside the frame. *Worked around* in its compile
-(`nameplate-layer.ts`, *upstream workaround*): the settings stay its own
-until the compile has settled, and the post stack draws no frame
-meanwhile (`Overlay.holdsOutput`; a few milliseconds while its two small
-programs build). *Once fixed* (the compile takes the output settings with
-its render context): set them back synchronously and drop
-`holdsOutput`.
+output settings (linear, no tone mapping) and sets them back as its
+compile call returns — held across the await, every frame drawn meanwhile
+would take them (wrong colours, the final pass rebuilt). So its warm-up
+builds the plate's programs and shader modules, and on WebGPU the first
+plate still makes its pipeline object from them inside its frame.
+*Accepted*, no workaround (`nameplate-layer.ts`, *upstream workaround*
+names the place). *Once fixed* (the compile takes the output settings
+with its render context): nothing to undo; the first plate builds
+nothing.
 
 **three r187: a compile sets a stale render target.** Since
 [#35191](https://github.com/mrdoob/three.js/pull/35191) each work item of

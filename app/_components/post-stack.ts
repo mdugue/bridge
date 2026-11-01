@@ -301,10 +301,6 @@ export interface PostStack {
 export interface Overlay {
   render: (renderer: WebGPURenderer, camera: Camera) => void;
   compile: (renderer: WebGPURenderer, camera: Camera) => Promise<void>;
-  /** true while its compile holds the renderer's output settings (its
-   *  own, for the canvas): no frame is drawn meanwhile, it would be
-   *  drawn with them */
-  holdsOutput: () => boolean;
 }
 
 /** A cheap 2D hash for the paper grain. */
@@ -1342,11 +1338,6 @@ export function createPostStack(
     },
     setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
     render: () => {
-      if (overlay?.holdsOutput()) {
-        // a few milliseconds while the plate's programs build: the canvas
-        // keeps the last frame
-        return;
-      }
       updateFocus();
       stylize.update(renderer.getPixelRatio(), size);
       // The frame names its targets and ends on the canvas, never on the

@@ -217,3 +217,14 @@ test("from above, the ground plate's side follows the screen's foot, with hyster
   // turned 80°: it takes the side along x
   expect(nameplateSide(BODY, yawed(80), side, "air") % 2).toBe(0);
 });
+
+test("a kept facade turns once the camera is behind its plate", () => {
+  // 80 × 60 m: the plate on +u stands 41.5 m out
+  const deep = nameplateBody(box(-40, 40, -30, 30, 20)) as NameplateBody;
+  const side = nameplateSide(deep, look([150, 1.7, 0], [0, 10, 0]), null);
+  expect(side).toBe(0);
+  // at (25, 45): +u still faces it within the turn angle, but the camera
+  // stands behind the plate's plane
+  const behind = look([25, 1.7, 45], [0, 10, 0]);
+  expect(nameplateSide(deep, behind, side)).not.toBe(side);
+});

@@ -91,7 +91,6 @@ import { compileInTurn } from "./compile-lanes";
 import { dropDataOnUpload } from "./raster-upload";
 import {
   type Align,
-  FIELD_RADIUS,
   KIND,
   PAINT,
   type PlateGeometry,
@@ -166,12 +165,17 @@ export interface Nameplate {
   /** draws it onto the canvas, after the frame */
   render: (renderer: WebGPURenderer, camera: Camera) => void;
   compile: (renderer: WebGPURenderer, camera: Camera) => Promise<void>;
-  /** true while its compile holds the renderer's output settings */
-  holdsOutput: () => boolean;
   /** whether a plate shows (QA) */
   shown: () => { title: string; mode: string; spot: string } | null;
   dispose: () => void;
 }
+
+/** Whether two plates say the same (rank, title and lines). */
+const sameText = (a: NameplateText, b: NameplateText): boolean =>
+  a.rank === b.rank &&
+  a.title === b.title &&
+  a.lines.length === b.lines.length &&
+  a.lines.every((line, i) => line === b.lines[i]);
 
 const isOrtho = (c: Camera): c is OrthographicCamera =>
   (c as OrthographicCamera).isOrthographicCamera === true;
@@ -380,7 +384,6 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   let pose: NameplatePose | null = null;
   let generation = 0;
   let disposed = false;
-  let holding = false;
 
   const type = () => NAMEPLATE_TYPES[style];
   const alignFor = (l: NameplateLayout | null): Align =>
@@ -489,8 +492,6 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     recolour();
   };
 
-  /** Loads the style's faces, then sets the letters again (a face that
-   *  arrived late would leave the fallback's shapes). */
   /** Sets the letters once their faces are there: the first question
    *  in a style waits for them (not set twice, no swap on the plate). */
   const withFaces = () => {
@@ -771,6 +772,12 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       if (disposed) {
         return;
       }
+      if (next && subject && sameText(next.text, subject.text)) {
+        // the same words asked again: it keeps its place, no new arrival
+        subject = next;
+        body = next.body;
+        return;
+      }
       subject = next;
       body = next?.body ?? null;
       forget();
@@ -868,17 +875,18 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         renderer.setRenderTarget(previous);
       }
     },
-    // An upstream workaround (docs/rendering.md, "Workarounds for upstream
-    // bugs"). The output settings stay the plate's until the compile has settled:
-    // three r187 keys a canvas pipeline by the renderer's output colour
-    // space when it builds it, after compileAsync's first await, so set
-    // back synchronously the warmed pipeline would be the wrong one and
-    // the first plate would build its own in the frame. Meanwhile the
-    // stack draws no frame (`holdsOutput`).
+    // The output settings are set back as the call returns, so a frame
+    // drawn while it compiles keeps its own. three r187 keys a canvas
+    // pipeline by the output colour space when the compile's work runs,
+    // after its first await: the programs and shader modules warmed here
+    // are the plate's, but on WebGPU the first plate makes its pipeline
+    // object from them in its frame (an upstream workaround note:
+    // docs/rendering.md, "Workarounds for
+    // upstream bugs").
     compile: (renderer, camera) =>
-      compileInTurn(renderer, async () => {
+      compileInTurn(renderer, () => {
         if (disposed) {
-          return;
+          return Promise.resolve();
         }
         const shown = [plate.visible, leader.visible] as const;
         const previous = renderer.getRenderTarget();
@@ -889,18 +897,15 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         renderer.setRenderTarget(null);
         renderer.toneMapping = NoToneMapping;
         renderer.outputColorSpace = LinearSRGBColorSpace;
-        holding = true;
         try {
-          await renderer.compileAsync(scene, camera);
+          return renderer.compileAsync(scene, camera);
         } finally {
-          holding = false;
           [plate.visible, leader.visible] = shown;
           renderer.outputColorSpace = colorSpace;
           renderer.toneMapping = toneMapping;
           renderer.setRenderTarget(previous);
         }
       }),
-    holdsOutput: () => holding,
     shown: () =>
       plate.visible && subject && layout
         ? { title: subject.text.title, mode: layout.mode, spot: layout.spot }
@@ -914,5 +919,3 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     },
   };
 }
-
-export { FIELD_RADIUS };

@@ -60,42 +60,67 @@ export function createNameplateAsk(deps: {
   // the asked thing's body as last outlined: a redraw while the facts
   // load reaches the plate when it shows
   let body: NameplateBody | null = null;
+  // a question asked before its outline had a body: answered once a
+  // redraw brings one
+  let waiting: Inquiry | null = null;
+  // the building the plate names now, so asking it again keeps the plate
+  let named: string | null = null;
+  const ask = (inquiry: Inquiry | null, next: NameplateBody | null) => {
+    const token = ++asked;
+    body = next;
+    waiting = inquiry && !next ? inquiry : null;
+    if (!(inquiry && next)) {
+      named = null;
+      deps.plate.set(null);
+      return;
+    }
+    const card = inquiryCard(inquiry, null, credits);
+    const key = plateKey(inquiry);
+    const show = (index: LandmarkFactsIndex | null) => {
+      if (token !== asked || deps.signal?.aborted || !body) {
+        return;
+      }
+      const text = nameplateText(
+        inquiry,
+        card,
+        index ? factsFor(index, inquiryBuildings(inquiry), card.title) : null
+      );
+      named = text ? key : null;
+      deps.plate.set(text ? { text, body } : null);
+    };
+    if (isLandmarkInquiry(inquiry) && deps.factsUrl) {
+      // the last plate goes at once where it named another thing
+      if (key === null || key !== named) {
+        named = null;
+        deps.plate.set(null);
+      }
+      void loadLandmarkFacts(deps.factsUrl).then(show);
+    } else {
+      show(null);
+    }
+  };
   return {
     reshape: (next) => {
       if (!next) {
         return;
       }
+      if (waiting) {
+        ask(waiting, next);
+        return;
+      }
       body = next;
       deps.plate.reshape(next);
     },
-    ask: (inquiry, next) => {
-      const token = ++asked;
-      body = next;
-      if (!(inquiry && next)) {
-        deps.plate.set(null);
-        return;
-      }
-      const card = inquiryCard(inquiry, null, credits);
-      const show = (index: LandmarkFactsIndex | null) => {
-        if (token !== asked || deps.signal?.aborted || !body) {
-          return;
-        }
-        const text = nameplateText(
-          inquiry,
-          card,
-          index ? factsFor(index, inquiryBuildings(inquiry), card.title) : null
-        );
-        deps.plate.set(text ? { text, body } : null);
-      };
-      if (isLandmarkInquiry(inquiry) && deps.factsUrl) {
-        // the last plate goes at once: it named another thing
-        deps.plate.set(null);
-        void loadLandmarkFacts(deps.factsUrl).then(show);
-      } else {
-        show(null);
-      }
-    },
+    ask,
   };
+}
+
+/** A building question's identity (its tile and Buildings); null for
+ *  anything else. */
+function plateKey(inquiry: Inquiry): string | null {
+  return inquiry.kind === "building"
+    ? `${inquiry.tile}:${inquiryBuildings(inquiry).join(",")}`
+    : null;
 }
 
 const raycaster = new Raycaster();

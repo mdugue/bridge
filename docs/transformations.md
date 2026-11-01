@@ -1802,7 +1802,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   scene beside it (`lib/city/nameplate.ts`): a Wikidata landmark (flag 16)
   by its name large, with up to two lines of facts under it — "erbaut
   1726–1734 · George Bähr", "wiederaufgebaut 2005 · 91 m" (each fact
-  where Wikidata has one, the model's height where it has none,
+  where Wikidata has one, the card's height where it has none,
   `factLines` in `lib/city/landmark-facts.ts`); a named building, bridge
   or monument by its name with its address or kind; an ordinary house by
   its address, small; nothing for a house without one, a tree, a lamp.

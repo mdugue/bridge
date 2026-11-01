@@ -8,7 +8,7 @@
  */
 import type { InquiryCard } from "./card-lines";
 import { OBJECT_FLAG_LANDMARK } from "./city-mesh";
-import type { Inquiry } from "./inquiry";
+import { cardHeight, type Inquiry } from "./inquiry";
 import {
   factBuildings,
   factLines,
@@ -51,12 +51,9 @@ function buildingPlate(
 ): NameplateText | null {
   const named = inquiry.tree.some((o) => o.facts.name !== "");
   if (isLandmarkInquiry(inquiry) && named) {
-    // the model's height where Wikidata has none: the tallest object's
-    const drawn = Math.max(
-      ...inquiry.tree.map((o) =>
-        o.facts.height === NO_FACT ? 0 : o.facts.height
-      )
-    );
+    // the card's height where Wikidata has none
+    const height = cardHeight(inquiry);
+    const drawn = height === NO_FACT ? 0 : height;
     return {
       rank: "landmark",
       title: card.title,

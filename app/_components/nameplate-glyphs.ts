@@ -111,8 +111,6 @@ export function faceFamily(face: NameplateFace, from: Element): string {
 const fontOf = (s: NameplateSetting, px: number, from: Element) =>
   `${s.weight} ${px}px ${faceFamily(s.face, from)}`;
 
-/** Loads the faces a type sets (the browser fetches a face on first use:
- *  the page only declares them). */
 /** Whether the type's faces are loaded already (the letters set now are
  *  their own, not a fallback's). */
 export function facesReady(type: NameplateType, from: Element): boolean {
@@ -125,6 +123,8 @@ export function facesReady(type: NameplateType, from: Element): boolean {
   ].every((f) => document.fonts.check(f));
 }
 
+/** Loads the faces a type sets (the browser fetches a face on first use:
+ *  the page only declares them). */
 export async function loadFaces(
   type: NameplateType,
   from: Element

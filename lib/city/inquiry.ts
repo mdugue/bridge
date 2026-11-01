@@ -296,6 +296,12 @@ function once(buildings: readonly InquiryObject[]): InquiryObject[] {
   });
 }
 
+/** The height a building's card states (its leads', else its tallest
+ *  object's), NO_FACT where none is known: the nameplate quotes it. */
+export function cardHeight(inquiry: BuildingInquiry): number {
+  return mergedFacts(inquiry).height;
+}
+
 function mergedFacts(inquiry: BuildingInquiry) {
   const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
   const facts = all.map((o) => o.facts);

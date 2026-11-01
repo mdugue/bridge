@@ -238,6 +238,9 @@ def fetch_wikidata(raw: Path, data: Path, site: str, tiles: Iterable[str] = ()) 
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
     for k in range(0, len(missing), BATCH):
+        if k > 0:
+            # at most one query a minute: the endpoint answers a burst with 429
+            time.sleep(RETRY_S)
         batch = missing[k : k + BATCH]
         rows = _post(QUERY % {"ids": " ".join(f"wd:{i}" for i in batch)})
         items.update(rows_by_item(rows))
@@ -401,7 +404,12 @@ def run_site(raw: Path, data: Path, site: str) -> None:
     if not cache.exists():
         print(f"{site}: no Wikidata facts cached ({cache}) — run bun run fetch")
         return
-    items = json.loads(cache.read_text()).get("items", {})
+    cached = json.loads(cache.read_text())
+    if cached.get("version") != CACHE_VERSION:
+        # an older query's records: its rules are not these
+        print(f"{site}: the Wikidata facts cache is of an older query — run bun run fetch")
+        return
+    items = cached.get("items", {})
     entries = []
     for path in sorted((data / "dlm").glob("landmarks_*.json")):
         landmarks = json.loads(path.read_text()).get("landmarks", [])
