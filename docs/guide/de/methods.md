@@ -100,6 +100,9 @@ Vegetationsindex nur mäßig überein (r ≈ 0,7), deshalb steht München in
 | Haustüren | OpenStreetMap, die Eingänge | `❝ übernommen` |
 | Durchgänge durch Gebäude, ihre Breite | OpenStreetMap, die Durchgänge (`tunnel=building_passage`) | `❝ übernommen` |
 | Höhe eines Durchgangs, wo keine eingetragen ist, seine rechteckige Öffnung | der Viewer, aus dem Erdgeschoss | `≈ angenommen` |
+| Das Bild eines Wandbilds | Wikimedia Commons, ein Foto, das das ganze Bild gerade von vorn zeigt | `❝ übernommen` |
+| Größe eines Wandbilds und sein Platz an der Wand | OpenStreetMap (sonst Wikidata), an der nächsten Wand des Gebäudemodells | `= berechnet` |
+| Wie hoch ein Wandbild beginnt, wo OpenStreetMap es nicht sagt | der Viewer, ein Geschoss hoch | `≈ angenommen` |
 | Laden oder Gastronomie im Erdgeschoss | OpenStreetMap, dem Gebäude zugeordnet | `◎ erkannt` |
 | Wahrzeichen | Wikidata, den Gebäudeteilen zugeordnet | `◎ erkannt` |
 | Mehrere Gebäude des Stadtmodells als ein Bau (das Residenzschloss mit dem Hausmannsturm) | OpenStreetMap, ein benannter Gebäudeumriss über mehreren Gebäuden, auch über Kachelgrenzen | `◎ erkannt` |

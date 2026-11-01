@@ -24,6 +24,11 @@ data and stays under the licence of its source:
 
   - Wikidata: CC0 1.0.
 
+  - Wikimedia Commons (the murals' photos, data/<site>/murals/*.webp,
+    resized): each under its own free licence, credited with its author
+    and licence in data/<site>/murals/murals.json and in the viewer's
+    sources.
+
   - The cities' and Länder's street-tree cadastres, traffic counts and
     cycle counters: dl-de/by-2-0 or dl-de/zero-2-0, credited to the city
     or Land that publishes them.

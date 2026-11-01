@@ -1117,17 +1117,19 @@ export function SceneSidebar(props: SceneSidebarProps) {
 
 /**
  * The footer, two rows high: the one-line credit (OpenStreetMap and the
- * Land's survey) folds every source with its licence out above itself, so
- * the trigger does not move; below it the way to Impressum, Datenschutz and
+ * Land's survey) folds every source with its licence out above itself —
+ * the murals' photos with them — so the trigger does not move; below it the way to Impressum, Datenschutz and
  * /wissen — in a new tab, so the walk stays — and the one call to action.
  */
 function SourcesFooter() {
   const site = useSite();
+  // the murals' photos (mural-layer.ts), each credited as its licence asks
+  const photos = useSceneStatus("site")?.photoCredits ?? [];
   return (
     <Collapsible>
       <CollapsibleContent>
         <ul className="flex flex-col gap-1 pb-2">
-          {siteAttribution(site).map((line) => (
+          {[...siteAttribution(site), ...photos].map((line) => (
             <li key={line}>{line}</li>
           ))}
         </ul>

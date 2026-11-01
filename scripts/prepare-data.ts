@@ -41,6 +41,15 @@ import { existsSync, readFileSync } from "node:fs";
 import { PLATE_N, type PlateExtras } from "../lib/city/ground-plate";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import {
+  type MuralExtras,
+  type MuralFile,
+  MURALS_FILE,
+  muralCredit,
+  muralImageSource,
+  muralsSource,
+  parseMurals,
+} from "../lib/city/murals";
+import {
   PROVENANCE_FILE,
   type ProvenanceRecord,
   siteProvenance,
@@ -204,8 +213,31 @@ const tramSource = at(tramTimetableSource(siteDataDir(SITE)));
 const trams = existsSync(tramSource)
   ? publish(TRAM_TIMETABLE_FILE, readFileSync(tramSource))
   : undefined;
+// The murals on their walls, site-wide (pipeline/bake/murals.py): optional,
+// each photo under its own published name, the file naming them so.
+const muralsDir = siteDataDir(SITE);
+const muralsPath = at(muralsSource(muralsDir));
+const muralFile = existsSync(muralsPath)
+  ? readJson<Partial<MuralFile>>(muralsPath)
+  : null;
+const murals = (parseMurals(muralFile) ?? [])
+  .filter((m) => existsSync(at(muralImageSource(muralsDir, m.image))))
+  .map((m) => ({
+    ...m,
+    image: publish(
+      `mural-${m.id}.webp`,
+      readFileSync(at(muralImageSource(muralsDir, m.image)))
+    ),
+  }));
+const muralsFile =
+  murals.length > 0
+    ? publish(
+        MURALS_FILE,
+        utf8({ attribution: muralFile?.attribution ?? "", murals })
+      )
+    : undefined;
 
-const extras: TilesetExtras & PlateExtras = {
+const extras: TilesetExtras & PlateExtras & MuralExtras = {
   site: SITE.id,
   landmarks: siteLandmarks(
     TILES.map(landmarkFile).filter((f): f is LandmarkFile => f !== undefined)
@@ -230,6 +262,9 @@ const extras: TilesetExtras & PlateExtras = {
     ask: pickFiles(sideFiles.get(t.id) ?? {}, ASK_KINDS),
   })),
   ...(trams ? { trams } : {}),
+  ...(muralsFile
+    ? { murals: { credits: murals.map(muralCredit), file: muralsFile } }
+    : {}),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));
 publish(

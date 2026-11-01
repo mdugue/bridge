@@ -32,6 +32,7 @@ from . import (
     mapillary,
     markings,
     monuments,
+    murals,
     ndvi,
     osm_buildings,
     passages,
@@ -146,8 +147,8 @@ STEPS = {
 
 
 # Run once for the site, after every tile (they read the tiles' files: the
-# timetable trams ride the tram tracks).
-SITE_STEPS = ("transit",)
+# timetable trams ride the tram tracks; the murals hang on the LoD2 walls).
+SITE_STEPS = ("transit", "murals")
 
 
 def site_extent(spec) -> tuple[float, float, float, float]:
@@ -166,6 +167,8 @@ def run_site_step(spec, step: str) -> None:
             print(f"{spec.site}: the site runs no timetable trams — skipping transit")
             return
         transit.run_site(spec.raw, spec.data, site_extent(spec), spec.epsg)
+    elif step == "murals":
+        murals.run_site(spec)
 
 
 def run_tile(step: str, tile, site_tiles, research: bool = False) -> None:

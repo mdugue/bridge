@@ -1429,6 +1429,49 @@ visual-variable codebook is in
   building bake, so a cut piece keeps its wall's place in `_FACADE`.
   Dresden: 482 passages on fifteen tiles (106 on the Zwinger's), Leipzig
   245, München 763, Hamburg 353, Meißen 10, Unna 12, Grimma none.
+- **Murals as photographs** (*Wandbilder*, 2026-11-01) `❝ taken`
+  `= computed` `≈ assumed` — a mural OSM maps (`tourism=artwork`,
+  `artwork_type` mural, mosaic, graffiti or sgraffito; a node, or a way
+  drawn along its wall, never an area) is drawn as a photograph of itself
+  on its LoD2 wall where three things are known
+  (`pipeline/bake/murals.py`): its **size** — OSM `width` and `height`, a
+  way's length along the wall, else its Wikidata item's P2049 / P2048
+  (the item of `wikidata`, never `subject:wikidata`, which names whom it
+  shows); a **free photo** on Wikimedia Commons — OSM `image` or
+  `wikimedia_commons`, else the item's P18; and that the photo shows it
+  **straight on** — its aspect within 15 % of the size's (`FIT`), or, for
+  a way, wider than that and showing at least half its height
+  (`BAND_MIN`): the band of its whole length the photo shows, as tall as
+  the length over the photo's aspect. A slanted shot, a detail, a drawing
+  or a photo of another size fits neither, and the mural is left out: the
+  rule never guesses what a mural shows. The wall is `= computed`: the
+  outline of the LoD2 building within 3 m — a way follows the ring between
+  its ends' projections the shorter way round, a node is centred on the
+  straight stretch of the outline nearest it and kept on the wall — 3 cm
+  in front of it, its outside on the right (the photo reads from the
+  street), corner stubs under 0.6 m trimmed. Its height: OSM `min_height`
+  where mapped; else `≈ assumed` one storey (3 m) above the highest ground
+  0.8 m in front of it, lower where the wall has no room, none where the
+  mural stands more than 1 m taller than its wall (a mapping error). The
+  photo is fetched once by `bun run fetch` (at a standard thumbnail width:
+  upload.wikimedia.org refuses the originals), resized to 64 px a metre
+  (at most 3 840) and committed as WebP beside
+  `data/<site>/murals/murals.json`; its author and licence are listed in
+  the HUD's sources. The viewer (`mural-layer.ts`) draws each as one strip
+  under the scene's sun, shadows and fog — paint, never a glow; at night
+  as dark as its wall (a floodlit wall's light does not reach it) — on
+  the full LoD2 only (the far level's walls are simplified by half a
+  metre), decoded at 32 px a metre on a phone, its bytes on its tile's
+  cache budget, hidden with its building (`CityLayer.hang`); Papier draws
+  it as paper. Dresden: the Fürstenzug (the band of its 102 m frieze its
+  photo shows, 6.3 m of the 10.5 m mapped with the window zone, a storey
+  up) and *Der Weg der Roten Fahne* on the Kulturpalast (30 × 10.5 m; it
+  starts lower than a storey up — about 2 m too high until OSM maps its
+  `min_height`) — 2 of the 37 murals Dresden maps. No other city has one
+  that passes: Leipzig maps 4 murals, Hamburg 24, München 15, none with both a size and a fitting
+  photo (Georg Elser's 23 m graffito has its size, its photos are
+  slanted); Meißen, Grimma and Unna map none. A site without the file
+  draws its walls as before.
 - **Dormers** `◎ detected` — what DOM1 shows over a pitched LoD2 roof (25–62°) that
   LoD2 leaves out (`pipeline/bake/dormers.py`): the excess `DOM − roof`
   against its own 9 m median, blobs 0.7 m and more over it, 3–30 m² and

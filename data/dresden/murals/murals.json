@@ -1,0 +1,75 @@
+{
+ "attribution": "© OpenStreetMap contributors (ODbL); Wikidata (CC0); photos: Wikimedia Commons, each under its own licence",
+ "murals": [
+  {
+   "id": "n5978926932",
+   "name": "Der Weg der Roten Fahne",
+   "kind": "mural",
+   "tile": "33410_5656_2_sn",
+   "building": "DESNATPU1000Fh0f",
+   "path": [
+    [
+     411527.53,
+     5656286.18
+    ],
+    [
+     411521.05,
+     5656256.89
+    ]
+   ],
+   "bottom": 116.34,
+   "top": 126.84,
+   "size": [
+    30.0,
+    10.5
+   ],
+   "how": "whole",
+   "image": "n5978926932.webp",
+   "px": [
+    1280,
+    448
+   ],
+   "photo": {
+    "title": "File:Weg der Roten Fahne, version a.jpg",
+    "author": "Heiko S",
+    "licence": "CC BY 2.0",
+    "url": "https://commons.wikimedia.org/wiki/File:Weg_der_Roten_Fahne,_version_a.jpg"
+   }
+  },
+  {
+   "id": "w106540348",
+   "name": "Fürstenzug",
+   "kind": "mural",
+   "tile": "33410_5656_2_sn",
+   "building": "DESNATPU1000CcR0",
+   "path": [
+    [
+     411657.99,
+     5656420.16
+    ],
+    [
+     411573.54,
+     5656477.26
+    ]
+   ],
+   "bottom": 115.18,
+   "top": 121.47,
+   "size": [
+    101.94,
+    6.3
+   ],
+   "how": "band",
+   "image": "w106540348.webp",
+   "px": [
+    3840,
+    237
+   ],
+   "photo": {
+    "title": "File:Dresden-Fuerstenzug3.jpg",
+    "author": "User:Kolossos",
+    "licence": "CC BY-SA 3.0",
+    "url": "https://commons.wikimedia.org/wiki/File:Dresden-Fuerstenzug3.jpg"
+   }
+  }
+ ]
+}
