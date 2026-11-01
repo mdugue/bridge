@@ -198,6 +198,7 @@ import {
   pixelRatioFor,
   type SceneBudget,
   shadowMapSizeFor,
+  reversedDepthFromSearch,
   tileCacheBytesFor,
 } from "./scene-profile";
 import {
@@ -239,6 +240,7 @@ import {
   streamTimings,
   traceRequested,
 } from "./stream-timing";
+import { attachInspector, inspectRequested } from "./inspector";
 import { attachTouchControls } from "./touch-controls";
 import {
   createVegetationLod,
@@ -781,6 +783,15 @@ async function createRenderer(
     // three asks for `timestamp-query` only where the adapter has it
     // (Chromium; not Safari) and writes two timestamps per pass.
     trackTimestamp: timed && !budget.forceWebGL,
+    // Depth from 1 at the near plane to 0 at the far one, in floats: the
+    // float's precision then grows with the distance the 1/z mapping loses,
+    // so surfaces kilometres off stop fighting. three turns the depth test,
+    // the clear, the polygon offsets, the shadow maps and its depth helpers
+    // round itself, and falls back to the plain buffer on a WebGL2 without
+    // EXT_clip_control; what reads raw depth here asks
+    // `reversedDepthBuffer` (stylize-effect.ts, view-ray.ts). `?depth=standard`
+    // draws with the plain buffer, to compare.
+    reversedDepthBuffer: reversedDepthFromSearch(window.location.search),
   });
   try {
     await renderer.init();
@@ -1157,6 +1168,11 @@ export async function createCityWalkApp(
   const tracing = traceRequested(window.location.search);
   if (tracing) {
     cleanups.push(startTrace());
+  }
+  // `?inspect=1`: three's Inspector over the canvas (inspector.ts)
+  if (inspectRequested(window.location.search)) {
+    // a QA aid: a chunk that fails to load leaves the boot as it was
+    cleanups.push(await attachInspector(renderer).catch(() => () => undefined));
   }
   try {
     return await bootApp(opts, renderer, scene, cleanups);
@@ -3453,9 +3469,13 @@ async function bootApp(
     isWebGPUBackend?: boolean;
     trackTimestamp?: boolean;
   };
+  // Not under three's Inspector (`?inspect=1`): it turns the timestamps on
+  // and resolves them every frame itself, so a readback here would get its
+  // leftovers and steer the resolution by them.
   const timesGpu =
     timedBackend.isWebGPUBackend === true &&
-    timedBackend.trackTimestamp === true;
+    timedBackend.trackTimestamp === true &&
+    !inspectRequested(window.location.search);
   let gpuReadDue = 0;
   let gpuReading = false;
   // three hands back its last value when nothing new resolved (the map

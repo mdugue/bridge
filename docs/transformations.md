@@ -135,7 +135,7 @@ visual-variable codebook is in
   The coarse GeoTIFF is resampled **at build time** (`scripts/bake-tiles.ts`
   `readDgm`, bilinear, NoData → NaN → the quads touching it are left out),
   the wall breaklines are burned in (below), normals computed, and the mesh
-  written as glTF (`EXT_meshopt_compression` + `KHR_mesh_quantization`,
+  written as glTF (`KHR_meshopt_compression` + `KHR_mesh_quantization`,
   pre-gzipped `terrain_<tile>_l0|l1.glb.gz`). The browser never decodes the
   DGM: it reads ground height back from the grid vertices
   (`gridElevations`), or from the TIN's triangles.
