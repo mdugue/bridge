@@ -1813,8 +1813,11 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   Wikidata states the year, not a decade or a century; an end more than
   100 years after the start left out; a rebuild with no end stated reads
   "wiederaufgebaut ab"), matched to the Buildings through the landmark
-  tiles' objects, fetched with the first landmark asked. Where two items
-  share a Building, the one the card's title names. The card lists the
+  tiles' objects, fetched with the first landmark asked (an
+  organisation's inception, often its founding, stands back where
+  construction events date the building). Where several
+  items share the asked Buildings, the one the card's title names, else
+  none. The card lists the
   same facts as rows (Bauzeit, Architekt, Wiederaufbau, Höhe laut
   Wikidata) with Wikidata as their source, so the plate never says what
   the card does not. **Where it stands** follows the camera

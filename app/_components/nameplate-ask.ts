@@ -137,9 +137,14 @@ function sameText(a: NameplateText, b: NameplateText | null): boolean {
 /** A building question's identity (its tile and Buildings); null for
  *  anything else. */
 function plateKey(inquiry: Inquiry): string | null {
-  return inquiry.kind === "building"
-    ? `${inquiry.tile}:${inquiryBuildings(inquiry).join(",")}`
-    : null;
+  if (inquiry.kind !== "building") {
+    return null;
+  }
+  // a structure LoD2 lacks has no Building id: its object, then
+  const ids = inquiryBuildings(inquiry).filter((id) => id !== "");
+  return ids.length > 0
+    ? `${inquiry.tile}:${ids.join(",")}`
+    : `${inquiry.tile}#${inquiry.picked.objectIndex}`;
 }
 
 const raycaster = new Raycaster();

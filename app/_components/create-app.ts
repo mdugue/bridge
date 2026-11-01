@@ -3730,12 +3730,14 @@ async function bootApp(
     // the plate's placing (its rays, a few times a second) is CPU work
     // before the render, not render time
     nameplate.setNight(currentNight);
+    // the canvas's CSS size read only while a plate is asked (a layout
+    // read in the frame otherwise for nothing)
     nameplate.update(
       view,
-      {
+      () => ({
         width: renderer.domElement.clientWidth || 1,
         height: renderer.domElement.clientHeight || 1,
-      },
+      }),
       exporting
     );
     const renderStart = streamTimings.now();

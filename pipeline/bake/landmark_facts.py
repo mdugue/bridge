@@ -17,7 +17,8 @@ landmarks the `landmarks` step matched to what the viewer draws.
 
 Which statements count (`facts_of`):
 
-  built     the first year of P571 (inception) and of the events that begin
+  built     the first year of P571 (inception; an organisation's, often its
+            founding, only where no construction event dates it) and of the events that begin
             a building (P793: Baubeginn, Grundsteinlegung, Spatenstich,
             Bauausführung's start), to the last of those that end it (P1619
             opening; P793: Bauende, Einweihung, Kirchweihe,
@@ -62,10 +63,12 @@ BATCH = 300
 # again after that long (at least this), this many times.
 RETRY_S = 61
 RETRIES = 4
+RETRY_CODES = {429, 500, 502, 503, 504}
 MAX_BUILD_YEARS = 100
 # What the cache's records carry (2: time precisions, architects' items
-# and series ordinals, no deprecated statements; 3: best ranks only).
-CACHE_VERSION = 3
+# and series ordinals, no deprecated statements; 3: best ranks only;
+# 4: whether the item is an organisation).
+CACHE_VERSION = 4
 MAX_ARCHITECTS = 2
 
 # P793 (significant event) items, by what they say about the building.
@@ -100,7 +103,7 @@ REBUILDS = {
 # over the rest); the events every statement but a deprecated one (each
 # event is its own statement).
 QUERY = """
-SELECT ?i ?p ?v ?vp ?lang ?a ?o ?ev ?t ?tp ?s ?sp ?e ?ep WHERE {
+SELECT DISTINCT ?i ?p ?v ?vp ?lang ?a ?o ?ev ?t ?tp ?s ?sp ?e ?ep WHERE {
   VALUES ?i { %(ids)s }
   {
     ?i p:P571 ?st . ?st a wikibase:BestRank .
@@ -118,6 +121,9 @@ SELECT ?i ?p ?v ?vp ?lang ?a ?o ?ev ?t ?tp ?s ?sp ?e ?ep WHERE {
   } UNION {
     ?i p:P2048 ?st . ?st a wikibase:BestRank . ?st psn:P2048/wikibase:quantityAmount ?v .
     BIND("height" AS ?p)
+  } UNION {
+    ?i wdt:P31 ?c . ?c wdt:P279* wd:Q43229 . hint:Prior hint:gearing "forward" .
+    BIND("institution" AS ?p)
   } UNION {
     ?i p:P793 ?st . ?st ps:P793 ?ev . BIND("event" AS ?p)
     ?st wikibase:rank ?r . FILTER(?r != wikibase:DeprecatedRank)
@@ -140,10 +146,11 @@ def _post(query: str) -> list[dict]:
             with urllib.request.urlopen(req, timeout=120) as res:
                 return json.load(res)["results"]["bindings"]
         except urllib.error.HTTPError as err:
-            if err.code != 429 or attempt == RETRIES:
+            # rate-limited, or the endpoint busy (it answers load with 5xx)
+            if err.code not in RETRY_CODES or attempt == RETRIES:
                 raise
             wait = max(RETRY_S, retry_after(err.headers.get("Retry-After")))
-            print(f"Wikidata asks to wait {wait} s (429)")
+            print(f"Wikidata asks to wait {wait} s ({err.code})")
             time.sleep(wait)
     raise AssertionError("unreachable")
 
@@ -351,10 +358,15 @@ def facts_of(records: list[dict]) -> dict:
     rebuilds: list[tuple[int | None, int | None]] = []
     makers: list[dict] = []
     heights: list[float] = []
+    # an organisation's inception may be its founding rather than its
+    # building's (a gallery, a collection housed in a palace): it stands
+    # back where construction events date the building
+    institution = any(r.get("p") == "institution" for r in records)
+    founded: list[int] = []
     for r in records:
         p = r.get("p")
         if p == "inception" and (y := year(r.get("v"), r.get("vp"))) is not None:
-            starts.append(y)
+            (founded if institution else starts).append(y)
         elif p == "opening" and (y := year(r.get("v"), r.get("vp"))) is not None:
             ends.append(y)
         elif p == "architect" and r.get("v"):
@@ -375,11 +387,17 @@ def facts_of(records: list[dict]) -> dict:
             elif ev in REBUILDS:
                 rebuilds.append((s, e if e is not None else at))
     out: dict = {}
-    start = min(starts) if starts else None
-    # the last end that belongs to the building: a consecration centuries
-    # on does not hide its opening (no start: the latest opening)
-    fitting = (y for y in ends if start is None or start < y <= start + MAX_BUILD_YEARS)
-    end = max(fitting, default=None)
+    # an organisation dated by no construction event: its inception after all
+    # (the sole date there is; mostly the building's: a works, a school)
+    start = min(starts or founded) if (starts or founded) else None
+    if start is None:
+        # no start to measure by: the first opening (a later one is a
+        # reopening, which a rebuild states)
+        end = min(ends, default=None)
+    else:
+        # the last end that belongs to the building: a consecration
+        # centuries on does not hide its opening
+        end = max((y for y in ends if start < y <= start + MAX_BUILD_YEARS), default=None)
     if (built := _span(start, end)) is not None:
         out["built"] = built
     out.update(_rebuild(rebuilds))

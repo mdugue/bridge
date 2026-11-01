@@ -111,23 +111,29 @@ export function faceFamily(face: NameplateFace, from: Element): string {
 const fontOf = (s: NameplateSetting, px: number, from: Element) =>
   `${s.weight} ${px}px ${faceFamily(s.face, from)}`;
 
-/** Whether the type's faces are loaded already (the letters set now are
- *  their own, not a fallback's). */
-export function facesReady(type: NameplateType, from: Element): boolean {
+/** Whether the type's faces are loaded already for `text` (the letters
+ *  set now are their own, not a fallback's; a face comes in parts by
+ *  script, Latin Extended for a Polish or Czech name). */
+export function facesReady(
+  type: NameplateType,
+  from: Element,
+  text: string
+): boolean {
   if (typeof document === "undefined" || !("fonts" in document)) {
     return true;
   }
   return [
     fontOf(type.title, TITLE_PX, from),
     fontOf(type.lines, LINES_PX, from),
-  ].every((f) => document.fonts.check(f));
+  ].every((f) => document.fonts.check(f, text));
 }
 
 /** Loads the faces a type sets (the browser fetches a face on first use:
  *  the page only declares them). */
 export async function loadFaces(
   type: NameplateType,
-  from: Element
+  from: Element,
+  text: string
 ): Promise<void> {
   if (typeof document === "undefined" || !("fonts" in document)) {
     return;
@@ -136,7 +142,7 @@ export async function loadFaces(
     [
       fontOf(type.title, TITLE_PX, from),
       fontOf(type.lines, LINES_PX, from),
-    ].map((f) => document.fonts.load(f).catch(() => []))
+    ].map((f) => document.fonts.load(f, text).catch(() => []))
   );
 }
 

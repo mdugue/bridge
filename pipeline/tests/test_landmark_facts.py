@@ -248,3 +248,26 @@ def test_run_site_refuses_an_older_cache(tmp_path):
     cache.write_text(json.dumps({"items": {"Q1": FRAUENKIRCHE}}))
     lf.run_site(raw, data, "x")
     assert not (data / "landmark-facts.json").exists()
+
+
+def test_an_organisations_founding_stands_back_for_construction_events():
+    founded = [
+        {"p": "institution"},
+        {"p": "inception", "v": "1560-01-01T00:00:00Z", "vp": "9"},
+    ]
+    building = [
+        {"p": "event", "ev": "Q385378", "s": "1847-01-01T00:00:00Z", "e": "1855-01-01T00:00:00Z"}
+    ]
+    assert lf.facts_of(founded + building) == {"built": [1847, 1855]}
+    # no construction event: the inception is the only date there is
+    assert lf.facts_of(founded) == {"built": [1560]}
+
+
+def test_without_a_start_the_first_opening():
+    facts = lf.facts_of(
+        [
+            {"p": "event", "ev": "Q25640113", "t": "1726-01-01T00:00:00Z"},
+            {"p": "event", "ev": "Q25640113", "t": "2005-01-01T00:00:00Z"},
+        ]
+    )
+    assert facts == {"built": [1726]}

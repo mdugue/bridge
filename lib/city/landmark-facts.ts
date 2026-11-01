@@ -133,10 +133,10 @@ const nameKey = (name: string) =>
 
 /**
  * The facts of the landmark among `buildings` (a picked ensemble's every
- * Building) the plate names: the one whose name is the card's `title`
- * where one is, else the one with the most to say; null where none has
- * facts. The name decides first, so an institution housed in a palace
- * never lends the palace its founding year.
+ * Building) the plate names: the one whose name is the card's `title`;
+ * else the only one there is; null where several are and none is named
+ * so, or none has facts. An institution housed in a palace never lends
+ * the palace its founding year.
  */
 export function factsFor(
   index: LandmarkFactsIndex,
@@ -144,19 +144,21 @@ export function factsFor(
   title = ""
 ): LandmarkFactsEntry | null {
   const wanted = nameKey(title);
-  let best: LandmarkFactsEntry | null = null;
-  let bestScore = 0;
-  for (const b of buildings) {
-    for (const entry of index.get(b) ?? []) {
-      const named = wanted !== "" && nameKey(entry.name) === wanted;
-      const score = (named ? 100 : 0) + factCount(entry);
-      if (score > bestScore) {
-        best = entry;
-        bestScore = score;
-      }
-    }
+  const entries = new Set(buildings.flatMap((b) => index.get(b) ?? []));
+  const named = [...entries].find(
+    (e) => wanted !== "" && nameKey(e.name) === wanted
+  );
+  if (named) {
+    return named;
   }
-  return best;
+  // several items and none the card's name (an institution in a palace
+  // part the card calls by the part's name): whose facts would be a
+  // guess, so none
+  if (entries.size !== 1) {
+    return null;
+  }
+  const [only] = entries;
+  return only && factCount(only) > 0 ? only : null;
 }
 
 function factCount(e: LandmarkFactsEntry): number {

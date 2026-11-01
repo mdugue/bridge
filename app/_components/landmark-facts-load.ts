@@ -3,7 +3,8 @@
  * fetched once for the page by whoever asks first — the nameplate or the
  * inquiry card — and indexed once: both read the same index, so they
  * cannot disagree. A fetch that fails or takes longer than
- * `FACTS_TIMEOUT_MS` is not kept: the next landmark asks again.
+ * `FACTS_TIMEOUT_MS` is not kept: the next landmark asks again; a file
+ * that is not one is kept as none.
  */
 import {
   indexLandmarkFacts,
@@ -30,16 +31,18 @@ export function loadLandmarkFacts(
         }
         return r.json() as Promise<unknown>;
       })
-      .then((json) =>
-        isLandmarkFactsFile(json) ? indexLandmarkFacts(json) : null
-      )
+      // a file that arrived but is not one is kept as none: asking again
+      // would fetch the same; a failed or late fetch is not kept
+      .then((json) => ({
+        index: isLandmarkFactsFile(json) ? indexLandmarkFacts(json) : null,
+      }))
       .catch(() => null)
-      .then((index) => {
+      .then((loaded) => {
         clearTimeout(timer);
-        if (!index) {
+        if (!loaded) {
           loads.delete(url);
         }
-        return index;
+        return loaded?.index ?? null;
       });
     loads.set(url, pending);
   }

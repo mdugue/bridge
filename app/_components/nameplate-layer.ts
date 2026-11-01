@@ -89,6 +89,7 @@ import {
 import type { RenderStyle } from "@/lib/city/render-style";
 import { compileInTurn } from "./compile-lanes";
 import { dropDataOnUpload } from "./raster-upload";
+import { trackTexture } from "./three-utils";
 import {
   type Align,
   KIND,
@@ -159,7 +160,7 @@ export interface Nameplate {
    *  (an export's tiles each see a part of the picture) */
   update: (
     camera: Camera,
-    viewport: { width: number; height: number },
+    viewport: () => { width: number; height: number },
     hold?: boolean
   ) => void;
   /** draws it onto the canvas, after the frame */
@@ -181,8 +182,10 @@ function atlasTexture(data: Uint8Array, width: number, height: number) {
   t.colorSpace = "";
   t.needsUpdate = true;
   t.name = "NameplateAtlas";
-  // the GPU holds it: no CPU copy kept (ADR 0047)
+  // the GPU holds it: no CPU copy kept (ADR 0047); counted in the
+  // rasters' readout while it is
   dropDataOnUpload(t);
+  trackTexture(t, width * height);
   return t;
 }
 
@@ -490,7 +493,10 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const withFaces = () => {
     const from = deps.fonts();
     const asked = ++generation;
-    if (!from || facesReady(type(), from)) {
+    const text = subject
+      ? [subject.text.title, ...subject.text.lines].join(" ")
+      : "";
+    if (!from || facesReady(type(), from, text)) {
       rebuild();
       return;
     }
@@ -499,7 +505,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     plate.geometry.dispose();
     plate.geometry = emptyGeometry();
     plate.visible = false;
-    void loadFaces(type(), from).then(() => {
+    void loadFaces(type(), from, text).then(() => {
       if (disposed || asked !== generation) {
         return;
       }
@@ -817,7 +823,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         return;
       }
       const now = performance.now();
-      const cam = plateCamera(camera, viewport);
+      const cam = plateCamera(camera, viewport());
       // no new choice while a cross-fade runs: it finishes first
       if (now - chosenAt >= CHOOSE_MS && !hold && !pending) {
         chosenAt = now;

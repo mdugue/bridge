@@ -43,7 +43,7 @@ test("the model's height stands in where Wikidata has none", () => {
   expect(factLines(FRAUENKIRCHE, 60)).toContain("wiederaufgebaut 2005 · 91 m");
 });
 
-test("an ensemble takes the landmark with the most to say", () => {
+test("an ensemble takes the landmark the card names, else its only one", () => {
   const thin: LandmarkFactsEntry = {
     id: "Q2",
     name: "Museum",
@@ -54,7 +54,11 @@ test("an ensemble takes the landmark with the most to say", () => {
     attribution: "Wikidata (CC0)",
     landmarks: [{ ...FRAUENKIRCHE, buildings: ["DESN_b"] }, thin],
   });
-  expect(factsFor(index, ["DESN_a", "DESN_b"])?.id).toBe("Q157229");
+  expect(factsFor(index, ["DESN_a", "DESN_b"], "Frauenkirche")?.id).toBe(
+    "Q157229"
+  );
+  // two items, neither named so: no guess
+  expect(factsFor(index, ["DESN_a", "DESN_b"], "Georgenbau")).toBeNull();
   expect(factsFor(index, ["DESN_a"])?.id).toBe("Q2");
   expect(factsFor(index, ["DESN_none"])).toBeNull();
 });
@@ -76,8 +80,8 @@ test("the item named as the card names it wins on a shared Building", () => {
   expect(index.get("DESN_fk")?.length).toBe(2);
   expect(factsFor(index, ["DESN_fk"], "Frauenkirche")?.id).toBe("Q157229");
   expect(factsFor(index, ["DESN_fk"], " frauenkirche ")?.id).toBe("Q157229");
-  // no name to go by: the one with the most to say
-  expect(factsFor(index, ["DESN_fk"])?.id).toBe("Q9");
+  // no name to go by: whose facts would be a guess
+  expect(factsFor(index, ["DESN_fk"])).toBeNull();
 });
 
 test("the file is checked before it is read", () => {
