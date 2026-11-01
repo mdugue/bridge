@@ -375,7 +375,8 @@ def facts_of(records: list[dict]) -> dict:
     fitting = (y for y in ends if start is None or start < y <= start + MAX_BUILD_YEARS)
     end = max(fitting, default=None)
     if start is None and ends:
-        end = min(ends)
+        # no start to measure by: the latest opening, the building that stands
+        end = max(ends)
     if (built := _span(start, end)) is not None:
         out["built"] = built
     out.update(_rebuild(rebuilds))
