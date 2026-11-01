@@ -93,3 +93,15 @@ test("a manifest of another version is not read", () => {
   expect(isSiteProvenance({ version: 2, sources: {}, tiles: {} })).toBe(false);
   expect(isSiteProvenance(null)).toBe(false);
 });
+
+test("Unna's OSM stand comes from its openstreetmap.fr extract", () => {
+  const unnaRecord = JSON.parse(
+    readFileSync(
+      join(import.meta.dir, "..", "..", "data", "unna", "provenance.json"),
+      "utf8"
+    )
+  ) as ProvenanceRecord;
+  const unna = siteProvenance(unnaRecord, tileIds(UNNA), UNNA);
+  expect(unna.sources.osm.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(unna.sources.osm.stands?.buildings).toBe(unna.sources.osm.stand);
+});
