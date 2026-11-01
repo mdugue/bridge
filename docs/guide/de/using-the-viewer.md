@@ -450,7 +450,13 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   (Anthropic, OpenAI, OpenRouter oder Vercel AI Gateway) und auf deine
   Kosten, meist unter einem Cent je Frage; der Schlüssel bleibt in
   deinem Browser ([Datenschutz](/datenschutz#frag-die-stadt)). Auch über
-  *Fragen* in der Werkzeugleiste.
+  *Fragen* in der Werkzeugleiste. Als **Sprachführer**: *Sprechen* nimmt
+  eine Frage per Mikrofon an (wo der Browser Sprache erkennt),
+  *Vorlesen* liest die Antworten vor, und der *Hörmodus* dunkelt die
+  Ränder leicht ab und lässt die Szene ruhen — für unterwegs, das
+  Telefon in der Tasche, zusammen mit *Live* in der Werkzeugleiste.
+  „Was ist das da vorne?“ fragt das Stadtmodell nach dem, was in der
+  Bildmitte steht, und öffnet dessen Karte.
 - **Steuerung** — die vollständige Tastentabelle, eingeklappt, bis du
   sie öffnest (die Leiste über der Szene zeigt die ersten Tasten).
 

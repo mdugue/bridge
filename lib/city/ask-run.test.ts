@@ -123,6 +123,7 @@ describe("runAsk", () => {
             "setze_stil",
             "setze_zeit",
             "suche_stadt",
+            "was_ist_da",
             "wo_bin_ich",
             "zeige",
           ].sort((a, b) => a.localeCompare(b))

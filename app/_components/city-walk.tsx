@@ -746,7 +746,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   // Frag die Stadt (ask-city.tsx): its card in the walk card's place, so
   // one ends the other.
   const [asking, setAsking] = useState(false);
-  const askScene = useAskScene(handleRef, look, time, site);
+  const askScene = useAskScene(handleRef, look, time, site, pace);
   const toggleAsk = () => {
     if (!asking && walking) {
       endWalk();

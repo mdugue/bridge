@@ -11,23 +11,26 @@
  * what it did to the view.
  */
 import {
-  clientTools,
   fetchServerSentEvents,
   type UIMessage,
   useChat,
 } from "@tanstack/ai-react";
 import {
+  EarIcon,
   KeyRoundIcon,
   LoaderIcon,
   MapPinIcon,
   MessageCircleQuestionIcon,
+  MicIcon,
   SearchIcon,
   SendIcon,
   SquareIcon,
+  Volume2Icon,
+  VolumeXIcon,
   WrenchIcon,
   XIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
@@ -38,17 +41,6 @@ import {
   plausibleKey,
   providerForKey,
 } from "@/lib/city/ask-city";
-import {
-  layerTool,
-  showTool,
-  styleTool,
-  timeTool,
-  whereTool,
-} from "@/lib/city/ask-tools";
-import { type AskTarget, askView } from "@/lib/city/ask-view";
-import type { DataLayerKey } from "@/lib/city/data-layers";
-import type { RenderStyle } from "@/lib/city/render-style";
-import type { ViewpointGeometry } from "@/lib/city/site";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
 import {
@@ -61,21 +53,8 @@ import {
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { cn } from "cn";
 import { type AskKey, clearAskKey, readAskKey, writeAskKey } from "./ask-key";
-
-/** What the card may do to the scene: the scene tools' other half. */
-export interface AskScene {
-  /** where the camera stands now (site CRS), or null before the scene */
-  from: () => { x: number; y: number } | null;
-  /** switches a data layer; false where the site has none of that kind */
-  setLayer: (key: DataLayerKey, on: boolean) => boolean;
-  setStyle: (style: RenderStyle) => void;
-  /** the scene's time to `hour` (of `date`, YYYY-MM-DD, or today's day);
-   *  the instant it set, as text */
-  setTime: (hour: number, date?: string) => string;
-  show: (view: ViewpointGeometry) => void;
-  /** the player's pose, mode, time, style and layers, for the model */
-  where: () => Record<string, unknown>;
-}
+import { type AskScene, sceneTools } from "./ask-scene-tools";
+import { type Speech, useDictation, useSpeech } from "./ask-voice";
 
 interface Props {
   coarse: boolean;
@@ -91,66 +70,99 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
     // one) is checked again rather than refused at the first question
     return stored?.token && stored.expires > Date.now() ? stored : null;
   });
+  // the Hörmodus (the Sprachführer, ADR 0057): a soft vignette, the scene
+  // barely drawn, the answers read aloud
+  const [hearing, setHearing] = useState(false);
+  // read aloud: kept here, so a new key does not silence a Hörmodus
+  const [reading, setReading] = useState(false);
+  useEffect(() => {
+    scene.setListening(hearing);
+    return () => scene.setListening(false);
+  }, [scene, hearing]);
   return (
-    <section
-      aria-label="Frag die Stadt"
-      className={cn(
-        "pointer-events-auto absolute z-30 flex flex-col rounded-xl bg-background/95 shadow-xl backdrop-blur-lg",
-        coarse
-          ? "top-3 right-16 left-3 max-h-[55dvh]"
-          : "bottom-6 left-4 h-[min(34rem,calc(100%-3rem))] w-[min(24rem,calc(100%-2rem))] lg:w-[26rem]"
-      )}
-      data-testid="ask-card"
-    >
-      <header className="flex items-start gap-2 px-4 pt-3 pb-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
-            Frag die Stadt
-          </p>
-          <h2 className="font-heading text-base leading-tight">
-            {key
-              ? `${ASK_PROVIDER_BY_ID[key.provider].label} · ${ASK_PROVIDER_BY_ID[key.provider].models.find((m) => m.id === key.model)?.label ?? key.model}`
-              : "Mit deinem eigenen Schlüssel"}
-          </h2>
-        </div>
-        {key && (
+    <>
+      {hearing && (
+        <>
+          {/* a soft vignette, not a blackout: the city stays visible */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-20 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgb(0_0_0/0.28))]"
+          />
           <button
-            aria-label="Schlüssel ändern"
-            className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-            onClick={() => setKey(null)}
-            title={`Schlüssel ${maskedKey(key.key)} ändern`}
+            aria-label="Hörmodus beenden"
+            className="pointer-events-auto absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1.5 text-[12px] text-white/85 shadow-sm backdrop-blur-sm hover:bg-black/60"
+            data-testid="ask-hearing"
+            onClick={() => setHearing(false)}
             type="button"
           >
-            <KeyRoundIcon className="size-4" />
+            Hörmodus · die Antworten werden vorgelesen · beenden
           </button>
-        )}
-        <button
-          aria-label="Frag die Stadt schließen"
-          className="-mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          onClick={onClose}
-          title="Schließen"
-          type="button"
-        >
-          <XIcon className="size-4" />
-        </button>
-      </header>
-      {key ? (
-        <Conversation
-          askKey={key}
-          key={key.token || key.key}
-          onKeyProblem={() => setKey(null)}
-          scene={scene}
-          site={site}
-        />
-      ) : (
-        <KeyForm
-          onKey={(k) => {
-            writeAskKey(k);
-            setKey(k);
-          }}
-        />
+        </>
       )}
-    </section>
+      <section
+        aria-label="Frag die Stadt"
+        className={cn(
+          "pointer-events-auto absolute z-30 flex flex-col rounded-xl bg-background/95 shadow-xl backdrop-blur-lg",
+          coarse
+            ? "top-3 right-16 left-3 max-h-[55dvh]"
+            : "bottom-6 left-4 h-[min(34rem,calc(100%-3rem))] w-[min(24rem,calc(100%-2rem))] lg:w-[26rem]"
+        )}
+        data-testid="ask-card"
+      >
+        <header className="flex items-start gap-2 px-4 pt-3 pb-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
+              Frag die Stadt
+            </p>
+            <h2 className="font-heading text-base leading-tight">
+              {key
+                ? `${ASK_PROVIDER_BY_ID[key.provider].label} · ${ASK_PROVIDER_BY_ID[key.provider].models.find((m) => m.id === key.model)?.label ?? key.model}`
+                : "Mit deinem eigenen Schlüssel"}
+            </h2>
+          </div>
+          {key && (
+            <button
+              aria-label="Schlüssel ändern"
+              className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={() => setKey(null)}
+              title={`Schlüssel ${maskedKey(key.key)} ändern`}
+              type="button"
+            >
+              <KeyRoundIcon className="size-4" />
+            </button>
+          )}
+          <button
+            aria-label="Frag die Stadt schließen"
+            className="-mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={onClose}
+            title="Schließen"
+            type="button"
+          >
+            <XIcon className="size-4" />
+          </button>
+        </header>
+        {key ? (
+          <Conversation
+            askKey={key}
+            hearing={hearing}
+            onHearing={setHearing}
+            key={key.token || key.key}
+            onKeyProblem={() => setKey(null)}
+            reading={reading}
+            setReading={setReading}
+            scene={scene}
+            site={site}
+          />
+        ) : (
+          <KeyForm
+            onKey={(k) => {
+              writeAskKey(k);
+              setKey(k);
+            }}
+          />
+        )}
+      </section>
+    </>
   );
 }
 
@@ -346,33 +358,6 @@ const SUGGESTIONS = [
   "Wie sieht es hier am Abend aus?",
 ];
 
-/** The tools the browser runs, bound to the scene. */
-function sceneTools(scene: AskScene) {
-  return clientTools(
-    whereTool.client(() => scene.where()),
-    showTool.client((input) => {
-      const target: AskTarget = input;
-      scene.show(
-        askView(target, scene.from() ?? target, input.aus_der_luft ?? false)
-      );
-      return { ok: true };
-    }),
-    timeTool.client(({ stunde, datum }) => ({
-      ok: true,
-      zeit: scene.setTime(stunde, datum),
-    })),
-    styleTool.client(({ stil }) => {
-      scene.setStyle(stil);
-      return { ok: true };
-    }),
-    layerTool.client(({ schicht, an }) =>
-      scene.setLayer(schicht, an)
-        ? { ok: true }
-        : { ok: false, hinweis: "Diese Stadt hat diese Ebene nicht." }
-    )
-  );
-}
-
 /** A failed answer in words, by the status the server sent. */
 function errorText(error: Error): { key: boolean; text: string } {
   const status = (error as { status?: unknown }).status;
@@ -400,17 +385,175 @@ function errorText(error: Error): { key: boolean; text: string } {
   return { key: false, text: error.message || "Die Antwort brach ab." };
 }
 
+/**
+ * The text of a finished answer: its assistant messages since the last
+ * question — empty while the last of them still waits on a tool (a scene
+ * tool's run ends at the interrupt, and the answer comes after it).
+ */
+function lastAnswer(messages: readonly UIMessage[]): string {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant" || last.parts.at(-1)?.type !== "text") {
+    return "";
+  }
+  const texts: string[] = [];
+  for (
+    let i = messages.length - 1;
+    i >= 0 && messages[i].role !== "user";
+    i--
+  ) {
+    texts.unshift(
+      messages[i].parts
+        .map((p) => (p.type === "text" ? p.content : ""))
+        .join(" ")
+    );
+  }
+  return texts.join(" ").trim();
+}
+
+/**
+ * Reads each finished answer aloud while `on` — not one that broke off,
+ * failed or was stopped (the returned call, for the stop button).
+ */
+function useReadAloud(
+  messages: readonly UIMessage[],
+  loading: boolean,
+  failed: boolean,
+  on: boolean,
+  speech: Speech
+): () => void {
+  const was = useRef(loading);
+  const stopped = useRef(false);
+  useEffect(() => {
+    if (was.current && !loading && on && !failed && !stopped.current) {
+      speech.speak(lastAnswer(messages));
+    }
+    if (loading) {
+      stopped.current = false;
+    }
+    was.current = loading;
+  }, [loading, failed, on, messages, speech]);
+  return useCallback(() => {
+    stopped.current = true;
+  }, []);
+}
+
+/** Read aloud, speak a question, the Hörmodus: where the browser can. */
+function VoiceBar({
+  hearing,
+  onHearing,
+  onSpoken,
+  reading,
+  setReading,
+  speech,
+}: {
+  hearing: boolean;
+  onHearing: (on: boolean) => void;
+  onSpoken: (text: string) => void;
+  reading: boolean;
+  setReading: (on: boolean) => void;
+  speech: Speech;
+}) {
+  const dictation = useDictation();
+  // the question goes to the conversation as it is when it is heard
+  const spoken = useRef(onSpoken);
+  useEffect(() => {
+    spoken.current = onSpoken;
+  });
+  if (!(speech.supported || dictation.supported)) {
+    return null;
+  }
+  const chip =
+    "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] hover:bg-accent aria-pressed:bg-primary aria-pressed:text-primary-foreground";
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 px-3 pt-2">
+      {dictation.supported && (
+        <button
+          aria-pressed={dictation.listening}
+          className={chip}
+          onClick={() => {
+            if (dictation.listening) {
+              dictation.stop();
+              return;
+            }
+            speech.stop();
+            dictation.start((question) => {
+              // a spoken question gets a spoken answer
+              setReading(true);
+              spoken.current(question);
+            });
+          }}
+          title="Frage sprechen (der Browser erkennt die Sprache)"
+          type="button"
+        >
+          <MicIcon className="size-3" />
+          {dictation.listening ? "Ich höre …" : "Sprechen"}
+        </button>
+      )}
+      {speech.supported && (
+        <button
+          aria-pressed={reading}
+          className={chip}
+          onClick={() => {
+            if (reading) {
+              speech.stop();
+            }
+            setReading(!reading);
+          }}
+          title="Antworten vorlesen"
+          type="button"
+        >
+          {reading ? (
+            <Volume2Icon className="size-3" />
+          ) : (
+            <VolumeXIcon className="size-3" />
+          )}
+          Vorlesen
+        </button>
+      )}
+      {speech.supported && (
+        <button
+          aria-pressed={hearing}
+          className={chip}
+          onClick={() => {
+            setReading(true);
+            onHearing(!hearing);
+          }}
+          title="Hörmodus: die Szene ruht, die Antworten werden vorgelesen — für unterwegs, das Telefon in der Tasche"
+          type="button"
+        >
+          <EarIcon className="size-3" />
+          Hörmodus
+        </button>
+      )}
+      {dictation.problem && (
+        <span className="text-[11px] text-destructive" role="alert">
+          {dictation.problem}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function Conversation({
   askKey,
+  hearing,
+  onHearing,
   onKeyProblem,
+  reading,
   scene,
+  setReading,
   site,
 }: {
   askKey: AskKey;
+  hearing: boolean;
+  onHearing: (on: boolean) => void;
   onKeyProblem: () => void;
+  reading: boolean;
   scene: AskScene;
+  setReading: (on: boolean) => void;
   site: string;
 }) {
+  const speech = useSpeech();
   const tools = useMemo(() => sceneTools(scene), [scene]);
   // the card remounts for another key (keyed by it), so this one is fixed
   const secret = askKey.key;
@@ -434,14 +577,24 @@ function Conversation({
       provider: askKey.provider,
       model: askKey.model,
       token: askKey.token,
+      voice: reading,
     },
   });
+  const stopReading = useReadAloud(
+    chat.messages,
+    chat.isLoading,
+    chat.error !== undefined,
+    reading,
+    speech
+  );
   const [text, setText] = useState("");
-  const ask = (question: string) => {
+  // `voice` with the question itself: a spoken one sets `reading` in the
+  // same handler, before forwardedProps has seen it
+  const ask = (question: string, voice = reading) => {
     const q = question.trim().slice(0, ASK_LIMITS.questionChars);
     if (q && !chat.isLoading) {
       setText("");
-      void chat.sendMessage(q);
+      void chat.sendMessage(q, { body: { voice } });
     }
   };
   const failure = chat.error ? errorText(chat.error) : null;
@@ -497,6 +650,14 @@ function Conversation({
           </MessageScrollerViewport>
         </MessageScroller>
       </MessageScrollerProvider>
+      <VoiceBar
+        hearing={hearing}
+        onHearing={onHearing}
+        onSpoken={(q) => ask(q, true)}
+        reading={reading}
+        setReading={setReading}
+        speech={speech}
+      />
       <form
         className="flex items-end gap-2 border-t px-3 py-2"
         onSubmit={(e) => {
@@ -525,7 +686,10 @@ function Conversation({
         {chat.isLoading ? (
           <Button
             aria-label="Antwort abbrechen"
-            onClick={chat.stop}
+            onClick={() => {
+              stopReading();
+              chat.stop();
+            }}
             size="icon-sm"
             type="button"
             variant="secondary"
@@ -573,6 +737,8 @@ function toolLine(name: string, input: unknown): string {
       return "Liest die Quellen";
     case "wo_bin_ich":
       return "Schaut, wo du stehst";
+    case "was_ist_da":
+      return "Fragt, was in der Bildmitte steht";
     case "zeige":
       return args.aus_der_luft ? "Fliegt hin" : "Geht hin";
     case "setze_zeit":
