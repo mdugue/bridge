@@ -39,7 +39,20 @@
       ],
       "refs": [
         "Q679009"
-      ]
+      ],
+      "photo": {
+        "file": "Albrechtsburg-2007.jpg",
+        "author": "Stephan Hoppe",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+        "page": "https://commons.wikimedia.org/wiki/File:Albrechtsburg-2007.jpg",
+        "h": 538,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.3
+        ]
+      }
     },
     {
       "id": "dom",
@@ -74,7 +87,20 @@
       ],
       "refs": [
         "Q322853"
-      ]
+      ],
+      "photo": {
+        "file": "Meißen Burgberg asv2025-03 img1.jpg",
+        "author": "A.Savin",
+        "licence": "FAL",
+        "licenceUrl": "http://artlibre.org/licence/lal/en",
+        "page": "https://commons.wikimedia.org/wiki/File:Mei%C3%9Fen_Burgberg_asv2025-03_img1.jpg",
+        "h": 533,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.35
+        ]
+      }
     },
     {
       "id": "porzellanglocken",
@@ -91,7 +117,7 @@
         147.6
       ],
       "hour": 17.5,
-      "text": "Unten am Markt die Frauenkirche, und in ihrem Turm etwas, das man hören muss: das erste stimmbare Glockenspiel aus Porzellan der Welt, 37 Glocken, eingebaut 1929 zur Tausendjahrfeier der Stadt. Hör hin, wie anders es klingt als Bronze. Sechsmal am Tag spielt es einen Choral, um 6:30, 8:30, 11:30, 14:30, 17:30 und 20:30 Uhr, dazwischen schlägt es die Viertelstunden. Wenn du um halb sechs hier bist, hörst du den Ton, aus dem die Stadt gemacht ist.",
+      "text": "Unten am Markt die Frauenkirche, und in ihrem Turm etwas, das man hören muss: das erste stimmbare Glockenspiel aus Porzellan der Welt, 37 Glocken, eingebaut 1929 zur Tausendjahrfeier der Stadt. Das Foto zeigt die weißen Glocken; hör hin, wie anders sie klingen als Bronze. Sechsmal am Tag spielt es einen Choral, um 6:30, 8:30, 11:30, 14:30, 17:30 und 20:30 Uhr, dazwischen schlägt es die Viertelstunden. Wenn du um halb sechs hier bist, hörst du den Ton, aus dem die Stadt gemacht ist.",
       "facts": [
         {
           "claim": "Das Porzellanglockenspiel von 1929, zur 1000-Jahr-Feier eingebaut, ist das erste stimmbare Porzellanglockenspiel der Welt.",
@@ -108,7 +134,17 @@
       ],
       "refs": [
         "Q1451777"
-      ]
+      ],
+      "photo": {
+        "file": "Porzellanglockenspiel Meißen.jpg",
+        "caption": "Die Porzellanglocken im Turm",
+        "author": "Numiscontrol (Diskussion) 22:54, 14. Nov. 2017 (CET)",
+        "licence": "CC BY-SA 3.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Porzellanglockenspiel_Mei%C3%9Fen.jpg",
+        "h": 1203,
+        "w": 800
+      }
     }
   ]
 }
