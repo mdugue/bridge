@@ -86,6 +86,11 @@ import {
 } from "./data-layers-panel";
 import { SceneSidebar } from "./scene-sidebar";
 import { WalkCard } from "./walk-player";
+/** A walk's glides take this much longer than a jump to a place: the
+ *  stop's story starts on the way. */
+const WALK_PACE = 2.2;
+/** The visitor's day, read when a walk's stop is shown (not in a render). */
+const today = () => new Date();
 import { SidebarPace } from "./sidebar-pace";
 import {
   afterTask,
@@ -676,9 +681,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   );
   const beforeWalk = useRef<{ at: Date; style: RenderStyle } | null>(null);
   /**
-   * Shows a walk's stop: a glide to its view — a jump where Modell is
-   * entered or left, which no glide does —, today at the stop's hour, in
-   * its picture style.
+   * Shows a walk's stop: a slow glide to its view (the card can be read,
+   * or heard, on the way) — a jump only out of Modell, which no glide
+   * leaves —, today at the stop's hour, in its picture style.
    */
   const showStop = (walk: Walk, index: number) => {
     const stop = walk.stops[index];
@@ -690,12 +695,20 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       beforeWalk.current = { at: time.current(), style: look.get().style };
     }
     setWalking({ index, walk });
-    if (stop.model || h.getViewMode() === "model") {
+    // the sun travels with the camera: no jump from one hour to the next
+    const hour = time.glideTo(stopDate(stop, today()));
+    if (h.getViewMode() === "model") {
       h.applyCameraState(stopCamera(stop, h.offset));
+      hour(1);
     } else {
-      h.flyToViewpoint(stopView(stop));
+      // a slow glide the visitor looks about in while the text is read:
+      // a drag on the way turns the view, it does not stop the walk
+      h.flyToViewpoint(stopView(stop), {
+        lookAround: true,
+        onProgress: hour,
+        pace: WALK_PACE,
+      });
     }
-    time.setInstant(stopDate(stop, new Date()));
     look.set({ style: stop.style ?? "pastel" });
   };
   const endWalk = () => {

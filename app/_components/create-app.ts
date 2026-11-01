@@ -117,6 +117,7 @@ import {
 } from "@/lib/city/vegetation-lod";
 import { stopBvhWorker } from "./bvh-client";
 import { stopGroundWorker } from "./ground-prep-client";
+import type { GlideOptions } from "./camera-flight";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { canvasSizeFor } from "./canvas-size";
 import {
@@ -663,9 +664,16 @@ export interface CityWalkHandle {
   flyTo: (position: Xyz, lookAt: Xyz) => void;
   /**
    * Smoothly glides the camera to a curated scenic Viewpoint (animated, unlike
-   * the instant applyCameraState), landing in the viewpoint's movement mode.
+   * the instant applyCameraState), landing in the viewpoint's movement mode
+   * (in Modell: centres on it); `glide` paces it, lets a drag look about
+   * on the way and hears its progress (camera-pose.ts). Returns how long
+   * the glide takes (s; 0 in Modell, which centres at once and tells
+   * `onProgress` 1).
    */
-  flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
+  flyToViewpoint: (
+    viewpoint: ViewpointGeometry,
+    glide?: GlideOptions
+  ) => number;
   /**
    * The current pose as a vantage — what the HUD stores when you save a view,
    * so restoring it is the same animated glide as any curated one.
@@ -4150,10 +4158,18 @@ async function bootApp(
       pose.flyTo(position, lookAt);
     },
     // In Modell a place is where the picture is centred (plan 055).
-    flyToViewpoint: (view) =>
-      modelRig.owns()
-        ? modelRig.centreOn(vantageTarget(view))
-        : pose.flyToViewpoint(view),
+    flyToViewpoint: (view, glide) => {
+      if (viewMode === "model") {
+        modelRig.centreOn(vantageTarget(view));
+        glide?.onProgress?.(1);
+        return 0;
+      }
+      // Modell still animating out: land it at once, then glide from there
+      if (modelRig.owns()) {
+        modelRig.exitNow();
+      }
+      return pose.flyToViewpoint(view, glide);
+    },
     captureViewpoint: pose.captureViewpoint,
     placeAt: (view) =>
       modelRig.owns()
