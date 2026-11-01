@@ -9,8 +9,9 @@ matched to what the viewer draws of it
   id, German label, position, sitelinks, height (P2048), materials (P186),
   whether it is a building, and whether it still stands (`fetch_status`:
   P576, the date it was dissolved or demolished, and P5816, its state of
-  conservation — asked apart, so a cache from before them is completed by
-  the next fetch). The bake never goes to the network.
+  conservation) and whether it is a bridge (P31/P279* Q12280) — asked
+  apart, so a cache from before them is completed by the next fetch. The
+  bake never goes to the network.
 - The bake (`run`) finds the LoD2 objects that are the landmark: those an
   OSM outline tagged `wikidata=<id>` covers by half, else, for a building,
   the LoD2 building under its point (its root and every part), or the
@@ -21,7 +22,13 @@ matched to what the viewer draws of it
   where another building stands now (the Alte Reformierte Kirche under the
   Neues Rathaus, the Gothic Frauenkirche under the new one, the Opernhaus
   am Zwinger), and its point found that one. A landmark that matches
-  nothing drawn — a district, a street, a harbour — is left out. Written:
+  nothing drawn — a district, a street, a harbour — is left out. So is a
+  bridge that is not a building (`is_bridge`): the rail layer draws and
+  names it from the Basis-DLM, OSM and Wikidata's bridges, and the LoD2
+  objects its outline covers are the ALKIS slabs the city mesh leaves out
+  (`TRAFFIC_STRUCTURE`, lib/city/city-mesh.ts) or a weir under a
+  footbridge — München's LoD2 carries every Isar bridge as such a slab.
+  Those slabs are never matched to any landmark (`drawn_footprints`). Written:
   `data/<site>/dlm/landmarks_<tile>.json`, ranked by sitelinks, owned by
   the tile under the landmark's point.
 
@@ -134,10 +141,12 @@ def query_box(
 
 STATUS_QUERY = """
 SELECT ?i (MIN(?end) AS ?dissolved) (GROUP_CONCAT(DISTINCT ?st; separator="|") AS ?states)
+       (MAX(?b) AS ?bridge)
 WHERE {
   VALUES ?i { %(ids)s }
   OPTIONAL { ?i wdt:P576 ?end . }
   OPTIONAL { ?i wdt:P5816 ?st . }
+  OPTIONAL { ?i wdt:P31/wdt:P279* wd:Q12280 . BIND(1 AS ?b) }
 } GROUP BY ?i
 """
 STATUS_BATCH = 200
@@ -158,7 +167,8 @@ def _ask(query: str) -> list[dict]:
 
 def fetch_status(ids: list[str]) -> dict[str, dict]:
     """Whether each item still stands, as Wikidata states it: `dissolved`
-    (P576, the earliest date, or None) and `states` (P5816's items)."""
+    (P576, the earliest date, or None) and `states` (P5816's items); and
+    `bridge`, whether it is one (an instance of a subclass of Q12280)."""
     out: dict[str, dict] = {}
     for k in range(0, len(ids), STATUS_BATCH):
         batch = ids[k : k + STATUS_BATCH]
@@ -170,13 +180,15 @@ def fetch_status(ids: list[str]) -> dict[str, dict]:
                 # a date, or a blank node where Wikidata knows only that it ended
                 "dissolved": (end[:10] if end[:4].isdigit() else "unknown") if end else None,
                 "states": sorted(s.rsplit("/", 1)[-1] for s in states.split("|") if s),
+                "bridge": "bridge" in r,
             }
     return out
 
 
 def _with_status(items: list[dict]) -> list[dict]:
     status = fetch_status([i["id"] for i in items])
-    return [{**i, **status.get(i["id"], {"dissolved": None, "states": []})} for i in items]
+    unknown = {"dissolved": None, "states": [], "bridge": False}
+    return [{**i, **status.get(i["id"], unknown)} for i in items]
 
 
 def _write(dest: Path, ranked: list[dict]) -> None:
@@ -190,10 +202,11 @@ def _write(dest: Path, ranked: list[dict]) -> None:
 
 
 def complete_status(dest: Path) -> bool:
-    """Adds `fetch_status` to a cache fetched before it; True when it did."""
+    """Adds `fetch_status` to a cache fetched before it (or before its
+    `bridge` member); True when it did."""
     doc = json.loads(dest.read_text())
     items = doc.get("landmarks", [])
-    if all("states" in i for i in items):
+    if all("states" in i and "bridge" in i for i in items):
         return False
     _write(dest, _with_status(items))
     return True
@@ -274,6 +287,33 @@ def gone(item: dict) -> bool | None:
     if DEMOLISHED in states:
         return True
     return bool(item.get("dissolved")) and not states & STANDING
+
+
+def is_bridge(item: dict) -> bool:
+    """A bridge that is not a building: the rail layer's, never a landmark
+    (a bridge house or a covered landing stage Wikidata knows as a building
+    stays one)."""
+    return bool(item.get("bridge")) and not item["building"]
+
+
+# ALKIS "Bauwerk im Verkehrsbereich": the bridge slabs the city mesh leaves
+# out (`isTrafficStructure`, lib/city/city-mesh.ts).
+TRAFFIC_STRUCTURE = "53001_"
+
+
+def drawn_footprints(city: dict) -> tuple[list[str], list[shapely.Geometry]]:
+    """`footprints` of the objects the city mesh draws: without the traffic
+    structures and their parts."""
+    objects = city["CityObjects"]
+    left_out = {
+        oid
+        for oid, o in objects.items()
+        if str((o.get("attributes") or {}).get("function", "")).startswith(TRAFFIC_STRUCTURE)
+    }
+    left_out |= {c for oid in left_out for c in objects[oid].get("children") or []}
+    ids, polys = footprints(city)
+    kept = [(i, p) for i, p in zip(ids, polys, strict=True) if i not in left_out]
+    return [i for i, _ in kept], [p for _, p in kept]
 
 
 # Words that name a kind of building, not this one: "Altes Rathaus" is not
@@ -407,18 +447,20 @@ def run(tile: Tile) -> None:
     if not tile.cityjson.exists() or not has_extract(tile, "the landmarks"):
         return
     city = json.loads(tile.cityjson.read_text())
-    ids, polys = footprints(city)
+    ids, polys = drawn_footprints(city)
     tree = shapely.STRtree(polys)
     outlines = tagged_outlines(tile)
     heights = object_heights(city)
     names = osm_names(tile)
-    if any(gone(i) is None for i in items):
+    if any(gone(i) is None or "bridge" not in i for i in items):
         print(f"{tile.id}: the Wikidata cache predates the buildings' state — run bun run fetch")
     landmarks = []
     floor = notable_floor(items)
     for item in items:
         if len(landmarks) >= MAX_PER_TILE or item["links"] < floor:
             break
+        if is_bridge(item):
+            continue
         objects = matched_objects(item, city, ids, polys, tree, outlines, names)
         if not objects:
             continue
