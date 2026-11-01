@@ -30,19 +30,23 @@
   },
   "openstreetmap": {
     "licence": "Open Database License (ODbL); credit: © OpenStreetMap contributors",
-    "extract": "data/_raw/hh/osm/hamburg-latest.osm.pbf (Geofabrik extract), retrieved 2026-09-24",
+    "extract": "a stand-in: BBBike city extract Hamburg.osm.pbf (download.bbbike.org), because download.geofabrik.de was unreachable from the build container",
     "usedFor": "land cover (no open Basis-DLM) and every OSM layer",
     "bbbike": {
       "products": {
         "osmBuildings": {
-          "dataAsOf": "2026-10-17 (re-baked 2026-10-19 from the BBBike city extract Hamburg.osm.pbf, Last-Modified 2026-10-17: shops, heritage, looks, and now the names, addresses, storeys and named outlines per building tree, lib/city/ensembles.ts)"
+          "dataAsOf": "2026-10-31 (re-baked 2026-11-01 with every step from the BBBike city extract Hamburg.osm.pbf, Last-Modified 2026-10-31 16:45 UTC)"
+        },
+        "all": {
+          "dataAsOf": "2026-10-31 (re-baked 2026-11-01 with every step from the BBBike city extract Hamburg.osm.pbf, Last-Modified 2026-10-31 16:45 UTC)"
         }
       }
     }
   },
   "wikidata": {
     "licence": "CC0",
-    "usedFor": "bridge names and types, cached per tile under data/_raw/hh/wikidata/"
+    "usedFor": "bridge names and types, cached per tile under data/_raw/hh/wikidata/",
+    "dataAsOf": "2026-11-01 (fetched again for the re-bake)"
   },
   "dataLayers": {
     "traffic": {
