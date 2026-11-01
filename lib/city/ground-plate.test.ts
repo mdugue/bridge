@@ -10,6 +10,7 @@ import {
   plateIndex,
   plateNormals,
   plateOf,
+  plateGround,
   platePositions,
   plateVertex,
   shrinkClassRaster,
@@ -183,4 +184,40 @@ test("the extras' plate is read only when well-formed", () => {
   expect(plateOf({})).toBeUndefined();
   expect(plateOf(null)).toBeUndefined();
   expect(plateOf({ plate: { file: 3 } })).toBeUndefined();
+});
+
+test("the plate's ground reads its drawn heights back, bilinear, null off it", () => {
+  const n = 5;
+  // two tiles side by side; a ramp rising 1 m per metre east and 0.5 m
+  // per metre north
+  const tiles = [
+    [1000, 2000, 1400, 2400],
+    [1400, 2000, 1800, 2400],
+  ].map((b) => {
+    const bounds = b as TerrainBounds;
+    const heights = new Float32Array(n * n).map((_, v) => {
+      const [x, y] = plateVertex(bounds, n, v % n, Math.floor(v / n));
+      return x - 900 + (y - 2000) / 2;
+    });
+    const tile = { id: "t", bounds, classes: new Uint8Array(n * n), heights };
+    return {
+      bounds,
+      positions: platePositions(tile, n, { cx: 1000, cy: 2000 }),
+    };
+  });
+  const at = plateGround(tiles, n);
+  const ramp = (x: number, y: number) => x - 900 + (y - 2000) / 2;
+  // corners, inner vertices (their sink undone), between them, both tiles
+  for (const [x, y] of [
+    [1000, 2400],
+    [1200, 2200],
+    [1250, 2130],
+    [1400, 2000],
+    [1650, 2370],
+    [1800, 2400],
+  ]) {
+    expect(at(x, y)).toBeCloseTo(ramp(x, y), 4);
+  }
+  expect(at(999, 2200)).toBeNull();
+  expect(at(1200, 2401)).toBeNull();
 });

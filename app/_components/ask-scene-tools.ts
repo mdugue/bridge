@@ -119,7 +119,7 @@ export function showPlaces(
   const all = ask.alle !== false && ask.ziele.length > 1;
   scene.select(all ? ask.ziele : [first]);
   if (ask.aus_der_luft === false) {
-    scene.show(streetView(first, from ?? first));
+    scene.show(streetView(first, from ?? first, scene.frame().groundAt));
     return { ok: true, gezeigt: [first.name] };
   }
   const context = { ...scene.frame(), from };

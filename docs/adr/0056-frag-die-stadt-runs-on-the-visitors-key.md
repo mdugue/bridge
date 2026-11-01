@@ -19,7 +19,8 @@ load into the browser.
    (`app/api/frag/route.ts`) takes the conversation, the key in the
    `x-frag-key` header and the chosen provider and model, builds that
    provider's adapter for the request (TanStack AI: Anthropic, OpenAI,
-   OpenRouter, the Vercel AI Gateway) and streams the answer as
+   Google Gemini, OpenRouter, the Vercel AI Gateway; the curated models
+   in `ask-city.ts`, a fast and a thorough one per maker) and streams the answer as
    server-sent events. It keeps no conversation, no key and no log of
    either. `POST /api/schluessel` checks a key once without spending
    tokens and returns a token (an HMAC with the site's `FRAG_SECRET`,

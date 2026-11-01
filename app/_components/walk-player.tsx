@@ -203,7 +203,8 @@ export function AskEntry({
         </span>
       </button>
       <p className="text-[10px] text-muted-foreground leading-snug">
-        Mit deinem eigenen KI-Schlüssel (Anthropic, OpenAI, OpenRouter, Vercel).
+        Mit deinem eigenen KI-Schlüssel (Anthropic, OpenAI, Google, OpenRouter,
+        Vercel).
       </p>
     </section>
   );
